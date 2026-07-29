@@ -1,10 +1,22 @@
 2026-07-29 12:25:20,406 - GetDBConn
-System.Net.WebException: Невозможно соединиться с удаленным сервером ---> System.Net.Sockets.SocketException: Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера 172.17.100.1:80
-   в System.Net.Sockets.Socket.DoConnect(EndPoint endPointSnapshot, SocketAddress socketAddress)
-   в System.Net.ServicePoint.ConnectSocketInternal(Boolean connectFailure, Socket s4, Socket s6, Socket& socket, IPAddress& address, ConnectSocketState state, IAsyncResult asyncResult, Exception& exception)
-   --- Конец трассировки внутреннего стека исключений ---
-   в System.Net.WebClient.DownloadDataInternal(Uri address, WebRequest& request)
-   в System.Net.WebClient.DownloadString(Uri address)
-   в GlobalObjectsManager.GetDBConn(String name) в c:\ETRANPROCESSING\licensebilling\App_Code\GlobalObjectsManager.cs:строка 37
+System.Net.WebException: ГЌГҐГўГ®Г§Г¬Г®Г¦Г­Г® Г±Г®ГҐГ¤ГЁГ­ГЁГІГјГ±Гї Г± ГіГ¤Г Г«ГҐГ­Г­Г»Г¬ Г±ГҐГ°ГўГҐГ°Г®Г¬ ---> System.Net.Sockets.SocketException: ГЏГ®ГЇГ»ГІГЄГ  ГіГ±ГІГ Г­Г®ГўГЁГІГј Г±Г®ГҐГ¤ГЁГ­ГҐГ­ГЁГҐ ГЎГ»Г«Г  ГЎГҐГ§ГіГ±ГЇГҐГёГ­Г®Г©, ГІ.ГЄ. Г®ГІ Г¤Г°ГіГЈГ®ГЈГ® ГЄГ®Г¬ГЇГјГѕГІГҐГ°Г  Г§Г  ГІГ°ГҐГЎГіГҐГ¬Г®ГҐ ГўГ°ГҐГ¬Гї Г­ГҐ ГЇГ®Г«ГіГ·ГҐГ­ Г­ГіГ¦Г­Г»Г© Г®ГІГЄГ«ГЁГЄ, ГЁГ«ГЁ ГЎГ»Г«Г® Г°Г Г§Г®Г°ГўГ Г­Г® ГіГ¦ГҐ ГіГ±ГІГ Г­Г®ГўГ«ГҐГ­Г­Г®ГҐ Г±Г®ГҐГ¤ГЁГ­ГҐГ­ГЁГҐ ГЁГ§-Г§Г  Г­ГҐГўГҐГ°Г­Г®ГЈГ® Г®ГІГЄГ«ГЁГЄГ  ГіГ¦ГҐ ГЇГ®Г¤ГЄГ«ГѕГ·ГҐГ­Г­Г®ГЈГ® ГЄГ®Г¬ГЇГјГѕГІГҐГ°Г  172.17.100.1:80
+   Гў System.Net.Sockets.Socket.DoConnect(EndPoint endPointSnapshot, SocketAddress socketAddress)
+   Гў System.Net.ServicePoint.ConnectSocketInternal(Boolean connectFailure, Socket s4, Socket s6, Socket& socket, IPAddress& address, ConnectSocketState state, IAsyncResult asyncResult, Exception& exception)
+   --- ГЉГ®Г­ГҐГ¶ ГІГ°Г Г±Г±ГЁГ°Г®ГўГЄГЁ ГўГ­ГіГІГ°ГҐГ­Г­ГҐГЈГ® Г±ГІГҐГЄГ  ГЁГ±ГЄГ«ГѕГ·ГҐГ­ГЁГ© ---
+   Гў System.Net.WebClient.DownloadDataInternal(Uri address, WebRequest& request)
+   Гў System.Net.WebClient.DownloadString(Uri address)
+   Гў GlobalObjectsManager.GetDBConn(String name) Гў c:\ETRANPROCESSING\licensebilling\App_Code\GlobalObjectsManager.cs:Г±ГІГ°Г®ГЄГ  37
 2026-07-29 12:25:30,249 - DbConnectionString: server=db.corepay.local;Trusted_Connection=false;uid=platerra_bl;pwd=gkfnthhf_,k;database=Service;Connect Timeout=300;max pool size=10000;Pooling=True
 2026-07-29 12:25:30,249 - DbConnectionString: server=db.corepay.local;Trusted_Connection=false;uid=platerra_bl;pwd=gkfnthhf_,k;database=Service;Connect Timeout=300;max pool size=10000;Pooling=True
+
+2026-07-29 16:29:54,688 - /licensebilling/
+2026-07-29 16:29:54,688 - POST: function=check&Signature=TUI9MSBUbyBiZSBmaWxsZWQgYnkgTy5FLk0ufENQVT0xIEJGRUJGQkZGMDAwMzA2QTk=
+2026-07-29 16:29:54,688 - =============
+2026-07-29 16:29:54,688 - SerialNumber: 11318
+2026-07-29 16:29:54,688 - =============
+2026-07-29 16:29:54,688 - hash:
+2026-07-29 16:29:54,688 - info:
+2026-07-29 16:29:54,688 - state:0
+2026-07-29 16:29:54,688 - balance:75693624
+2026-07-29 16:29:54,688 - DONE OK
+2026-07-29 16:29:54,688 - REQUEST PROCESSING DONE
