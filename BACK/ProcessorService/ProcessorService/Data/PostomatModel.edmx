@@ -1,0 +1,226 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<edmx:Edmx Version="3.0" xmlns:edmx="http://schemas.microsoft.com/ado/2009/11/edmx">
+  <!-- EF Runtime content -->
+  <edmx:Runtime>
+    <!-- SSDL content -->
+    <edmx:StorageModels>
+      <Schema Namespace="Хранилище PostomatsModel" Provider="System.Data.SqlClient" ProviderManifestToken="2012" Alias="Self" xmlns:store="http://schemas.microsoft.com/ado/2007/12/edm/EntityStoreSchemaGenerator" xmlns:customannotation="http://schemas.microsoft.com/ado/2013/11/edm/customannotation" xmlns="http://schemas.microsoft.com/ado/2009/11/edm/ssdl">
+        <EntityType Name="tb_Messages">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="Phone" Type="nvarchar" MaxLength="100" Nullable="false" />
+          <Property Name="Text" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="StatusId" Type="int" Nullable="false" />
+          <Property Name="StatusDateTime" Type="datetime" Nullable="false" />
+          <Property Name="StatusUserId" Type="int" Nullable="false" />
+          <Property Name="StatusComment" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="DateTimeAdd" Type="datetime" Nullable="false" />
+          <Property Name="MessageTemplateId" Type="int" />
+          <Property Name="SourceTypeId" Type="int" />
+          <Property Name="SourceId" Type="int" />
+        </EntityType>
+        <EntityType Name="tb_Payments">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="PaymExtId" Type="nvarchar" MaxLength="50" Nullable="false" />
+          <Property Name="SourceTypeId" Type="int" Nullable="false" />
+          <Property Name="SourceId" Type="int" Nullable="false" />
+          <Property Name="Sum" Type="money" Nullable="false" />
+          <Property Name="StatusId" Type="int" Nullable="false" />
+          <Property Name="StatusDateTime" Type="datetime" Nullable="false" />
+          <Property Name="StatusUserId" Type="int" Nullable="false" />
+          <Property Name="StatusComment" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="Phone" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="PaymentPurposeId" Type="int" Nullable="false" />
+          <Property Name="PayTypeId" Type="int" Nullable="false" />
+          <Property Name="DateTimeCreate" Type="datetime" Nullable="false" />
+          <Property Name="PostomatId" Type="int" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_Tsp">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" Nullable="false" />
+          <Property Name="Code" Type="int" Nullable="false" />
+          <Property Name="ShortName" Type="varchar" MaxLength="255" Nullable="false" />
+          <Property Name="Fullname" Type="varchar" MaxLength="255" Nullable="false" />
+          <Property Name="Inn" Type="varchar" MaxLength="255" Nullable="false" />
+          <Property Name="Dogovor" Type="varchar" MaxLength="255" Nullable="false" />
+          <Property Name="IsActive" Type="bit" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_TspPayParameters">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" Nullable="false" />
+          <Property Name="TspId" Type="int" Nullable="false" />
+          <Property Name="Code" Type="int" Nullable="false" />
+          <Property Name="Description" Type="nvarchar(max)" Nullable="false" />
+        </EntityType>
+        <EntityContainer Name="Хранилище PostomatsModelContainer">
+          <EntitySet Name="tb_Messages" EntityType="Self.tb_Messages" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_Payments" EntityType="Self.tb_Payments" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_Tsp" EntityType="Self.tb_Tsp" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_TspPayParameters" EntityType="Self.tb_TspPayParameters" Schema="dbo" store:Type="Tables" />
+        </EntityContainer>
+      </Schema>
+    </edmx:StorageModels>
+    <!-- CSDL content -->
+    <edmx:ConceptualModels>
+      <Schema Namespace="PostomatsModel" Alias="Self" annotation:UseStrongSpatialTypes="false" xmlns:annotation="http://schemas.microsoft.com/ado/2009/02/edm/annotation" xmlns:customannotation="http://schemas.microsoft.com/ado/2013/11/edm/customannotation" xmlns="http://schemas.microsoft.com/ado/2009/11/edm">
+        <EntityType Name="tb_Messages">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="Phone" Type="String" MaxLength="100" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Text" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="StatusId" Type="Int32" Nullable="false" />
+          <Property Name="StatusDateTime" Type="DateTime" Nullable="false" Precision="3" />
+          <Property Name="StatusUserId" Type="Int32" Nullable="false" />
+          <Property Name="StatusComment" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="DateTimeAdd" Type="DateTime" Nullable="false" Precision="3" />
+          <Property Name="MessageTemplateId" Type="Int32" />
+          <Property Name="SourceTypeId" Type="Int32" />
+          <Property Name="SourceId" Type="Int32" />
+        </EntityType>
+        <EntityType Name="tb_Payments">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="PaymExtId" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="SourceTypeId" Type="Int32" Nullable="false" />
+          <Property Name="SourceId" Type="Int32" Nullable="false" />
+          <Property Name="Sum" Type="Decimal" Precision="19" Scale="4" Nullable="false" />
+          <Property Name="StatusId" Type="Int32" Nullable="false" />
+          <Property Name="StatusDateTime" Type="DateTime" Nullable="false" Precision="3" />
+          <Property Name="StatusUserId" Type="Int32" Nullable="false" />
+          <Property Name="StatusComment" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Phone" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="PaymentPurposeId" Type="Int32" Nullable="false" />
+          <Property Name="PayTypeId" Type="Int32" Nullable="false" />
+          <Property Name="DateTimeCreate" Type="DateTime" Nullable="false" Precision="3" />
+          <Property Name="PostomatId" Type="Int32" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_Tsp">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" />
+          <Property Name="Code" Type="Int32" Nullable="false" />
+          <Property Name="ShortName" Type="String" MaxLength="255" FixedLength="false" Unicode="false" Nullable="false" />
+          <Property Name="Fullname" Type="String" MaxLength="255" FixedLength="false" Unicode="false" Nullable="false" />
+          <Property Name="Inn" Type="String" MaxLength="255" FixedLength="false" Unicode="false" Nullable="false" />
+          <Property Name="Dogovor" Type="String" MaxLength="255" FixedLength="false" Unicode="false" Nullable="false" />
+          <Property Name="IsActive" Type="Boolean" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_TspPayParameters">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" />
+          <Property Name="TspId" Type="Int32" Nullable="false" />
+          <Property Name="Code" Type="Int32" Nullable="false" />
+          <Property Name="Description" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+        </EntityType>
+        <EntityContainer Name="PostomatsEntities" annotation:LazyLoadingEnabled="true">
+          <EntitySet Name="tb_Messages" EntityType="Self.tb_Messages" />
+          <EntitySet Name="tb_Payments" EntityType="Self.tb_Payments" />
+          <EntitySet Name="tb_Tsp" EntityType="Self.tb_Tsp" />
+          <EntitySet Name="tb_TspPayParameters" EntityType="Self.tb_TspPayParameters" />
+        </EntityContainer>
+      </Schema>
+    </edmx:ConceptualModels>
+    <!-- C-S mapping content -->
+    <edmx:Mappings>
+      <Mapping Space="C-S" xmlns="http://schemas.microsoft.com/ado/2009/11/mapping/cs">
+        <EntityContainerMapping StorageEntityContainer="Хранилище PostomatsModelContainer" CdmEntityContainer="PostomatsEntities">
+          <EntitySetMapping Name="tb_Messages">
+            <EntityTypeMapping TypeName="PostomatsModel.tb_Messages">
+              <MappingFragment StoreEntitySet="tb_Messages">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="Phone" ColumnName="Phone" />
+                <ScalarProperty Name="Text" ColumnName="Text" />
+                <ScalarProperty Name="StatusId" ColumnName="StatusId" />
+                <ScalarProperty Name="StatusDateTime" ColumnName="StatusDateTime" />
+                <ScalarProperty Name="StatusUserId" ColumnName="StatusUserId" />
+                <ScalarProperty Name="StatusComment" ColumnName="StatusComment" />
+                <ScalarProperty Name="DateTimeAdd" ColumnName="DateTimeAdd" />
+                <ScalarProperty Name="MessageTemplateId" ColumnName="MessageTemplateId" />
+                <ScalarProperty Name="SourceTypeId" ColumnName="SourceTypeId" />
+                <ScalarProperty Name="SourceId" ColumnName="SourceId" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_Payments">
+            <EntityTypeMapping TypeName="PostomatsModel.tb_Payments">
+              <MappingFragment StoreEntitySet="tb_Payments">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="PaymExtId" ColumnName="PaymExtId" />
+                <ScalarProperty Name="SourceTypeId" ColumnName="SourceTypeId" />
+                <ScalarProperty Name="SourceId" ColumnName="SourceId" />
+                <ScalarProperty Name="Sum" ColumnName="Sum" />
+                <ScalarProperty Name="StatusId" ColumnName="StatusId" />
+                <ScalarProperty Name="StatusDateTime" ColumnName="StatusDateTime" />
+                <ScalarProperty Name="StatusUserId" ColumnName="StatusUserId" />
+                <ScalarProperty Name="StatusComment" ColumnName="StatusComment" />
+                <ScalarProperty Name="Phone" ColumnName="Phone" />
+                <ScalarProperty Name="PaymentPurposeId" ColumnName="PaymentPurposeId" />
+                <ScalarProperty Name="PayTypeId" ColumnName="PayTypeId" />
+                <ScalarProperty Name="DateTimeCreate" ColumnName="DateTimeCreate" />
+                <ScalarProperty Name="PostomatId" ColumnName="PostomatId" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_Tsp">
+            <EntityTypeMapping TypeName="PostomatsModel.tb_Tsp">
+              <MappingFragment StoreEntitySet="tb_Tsp">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="Code" ColumnName="Code" />
+                <ScalarProperty Name="ShortName" ColumnName="ShortName" />
+                <ScalarProperty Name="Fullname" ColumnName="Fullname" />
+                <ScalarProperty Name="Inn" ColumnName="Inn" />
+                <ScalarProperty Name="Dogovor" ColumnName="Dogovor" />
+                <ScalarProperty Name="IsActive" ColumnName="IsActive" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_TspPayParameters">
+            <EntityTypeMapping TypeName="PostomatsModel.tb_TspPayParameters">
+              <MappingFragment StoreEntitySet="tb_TspPayParameters">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="TspId" ColumnName="TspId" />
+                <ScalarProperty Name="Code" ColumnName="Code" />
+                <ScalarProperty Name="Description" ColumnName="Description" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+        </EntityContainerMapping>
+      </Mapping>
+    </edmx:Mappings>
+  </edmx:Runtime>
+  <!-- EF Designer content (DO NOT EDIT MANUALLY BELOW HERE) -->
+  <Designer xmlns="http://schemas.microsoft.com/ado/2009/11/edmx">
+    <Connection>
+      <DesignerInfoPropertySet>
+        <DesignerProperty Name="MetadataArtifactProcessing" Value="EmbedInOutputAssembly" />
+      </DesignerInfoPropertySet>
+    </Connection>
+    <Options>
+      <DesignerInfoPropertySet>
+        <DesignerProperty Name="ValidateOnBuild" Value="true" />
+        <DesignerProperty Name="EnablePluralization" Value="false" />
+        <DesignerProperty Name="IncludeForeignKeysInModel" Value="true" />
+        <DesignerProperty Name="UseLegacyProvider" Value="false" />
+        <DesignerProperty Name="CodeGenerationStrategy" Value="Нет" />
+      </DesignerInfoPropertySet>
+    </Options>
+    <!-- Diagram content (shape and connector positions) -->
+    <Diagrams></Diagrams>
+  </Designer>
+</edmx:Edmx>

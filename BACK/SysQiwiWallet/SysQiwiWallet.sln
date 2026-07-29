@@ -1,0 +1,42 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.27428.2043
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{E24C65DC-7377-472B-9ABA-BC803B73C61A}") = "SysQiwiWallet", ".", "{766E4835-EB15-4244-9113-5C4F6946D41E}"
+	ProjectSection(WebsiteProperties) = preProject
+		TargetFrameworkMoniker = ".NETFramework,Version%3Dv4.0"
+		Debug.AspNetCompiler.VirtualPath = "/SysQiwiWallet"
+		Debug.AspNetCompiler.PhysicalPath = "..\SysQiwiWallet\"
+		Debug.AspNetCompiler.TargetPath = "PrecompiledWeb\SysQiwiWallet\"
+		Debug.AspNetCompiler.Updateable = "true"
+		Debug.AspNetCompiler.ForceOverwrite = "true"
+		Debug.AspNetCompiler.FixedNames = "false"
+		Debug.AspNetCompiler.Debug = "True"
+		Release.AspNetCompiler.VirtualPath = "/SysQiwiWallet"
+		Release.AspNetCompiler.PhysicalPath = "..\SysQiwiWallet\"
+		Release.AspNetCompiler.TargetPath = "PrecompiledWeb\SysQiwiWallet\"
+		Release.AspNetCompiler.Updateable = "true"
+		Release.AspNetCompiler.ForceOverwrite = "true"
+		Release.AspNetCompiler.FixedNames = "false"
+		Release.AspNetCompiler.Debug = "False"
+		VWDPort = "4578"
+		SlnRelativePath = "..\SysQiwiWallet\"
+		DefaultWebSiteLanguage = "Visual C#"
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|.NET = Debug|.NET
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{766E4835-EB15-4244-9113-5C4F6946D41E}.Debug|.NET.ActiveCfg = Debug|Any CPU
+		{766E4835-EB15-4244-9113-5C4F6946D41E}.Debug|.NET.Build.0 = Debug|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {69D02A63-22D6-453E-90CA-1E40AC2ADDC0}
+	EndGlobalSection
+EndGlobal

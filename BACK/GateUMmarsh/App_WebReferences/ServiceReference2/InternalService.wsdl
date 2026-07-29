@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="utf-8"?>
+<wsdl:definitions xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" xmlns:sch="http://umarsh.ru/sdp/service/internal/pojo" xmlns:tns="http://umarsh.ru/sdp/service/internal/pojo" targetNamespace="http://umarsh.ru/sdp/service/internal/pojo" xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/">
+  <wsdl:types>
+    <xs:schema attributeFormDefault="unqualified" elementFormDefault="qualified" targetNamespace="http://umarsh.ru/sdp/service/internal/pojo" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+      <xs:element name="ApplyTransactionRequest">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="sysNum" type="xs:int" />
+            <xs:element name="counter" type="xs:int" />
+            <xs:element name="operationSum" type="xs:int" />
+            <xs:element minOccurs="0" name="tariffId" type="xs:string" />
+            <xs:element name="result" type="xs:int" />
+            <xs:element name="userId" type="xs:long" />
+            <xs:element name="source" type="tns:SrcTransactionState" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="ApplyTransactionResponse">
+        <xs:complexType>
+          <xs:complexContent mixed="false">
+            <xs:extension base="tns:BaseResponse">
+              <xs:sequence>
+                <xs:element name="ApplyTransactionInformation" type="tns:ApplyTransactionInfo" />
+              </xs:sequence>
+            </xs:extension>
+          </xs:complexContent>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="AllTransactionsRequest">
+        <xs:complexType>
+          <xs:sequence />
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="AllTransactionsResponse">
+        <xs:complexType>
+          <xs:complexContent mixed="false">
+            <xs:extension base="tns:BaseResponse">
+              <xs:sequence>
+                <xs:element name="TransactionsInformation" type="tns:AllTransactionsInfo" />
+              </xs:sequence>
+            </xs:extension>
+          </xs:complexContent>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="TransactionsRequest">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="sysNum" type="xs:int" />
+            <xs:element minOccurs="0" name="series" type="xs:int" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="TransactionsResponse">
+        <xs:complexType>
+          <xs:complexContent mixed="false">
+            <xs:extension base="tns:BaseResponse">
+              <xs:sequence>
+                <xs:element name="TransactionsInformation" type="tns:TransactionsInfo" />
+              </xs:sequence>
+            </xs:extension>
+          </xs:complexContent>
+        </xs:complexType>
+      </xs:element>
+      <xs:complexType name="BaseResponse">
+        <xs:sequence>
+          <xs:element name="Result" type="tns:Result" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="Result">
+        <xs:sequence>
+          <xs:element name="resultCode" type="xs:int" />
+          <xs:element minOccurs="0" name="resultCodeText" type="xs:string" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="ApplyTransactionInfo" type="tns:ApplyTransactionInfo" />
+      <xs:complexType name="ApplyTransactionInfo">
+        <xs:sequence />
+      </xs:complexType>
+      <xs:element name="AllTransactionsInfo" type="tns:AllTransactionsInfo" />
+      <xs:complexType name="AllTransactionsInfo">
+        <xs:sequence>
+          <xs:element name="rollValue" type="xs:int" />
+          <xs:element name="maxOperation" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="unbounded" name="transactions" nillable="true" type="tns:FullTransaction" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="FullTransaction" type="tns:FullTransaction" />
+      <xs:complexType name="FullTransaction">
+        <xs:sequence>
+          <xs:element name="sysNum" type="xs:int" />
+          <xs:element name="date" type="xs:dateTime" />
+          <xs:element name="counter" type="xs:int" />
+          <xs:element name="paymentSum" type="xs:int" />
+          <xs:element name="tariffId" type="xs:int" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="TransactionsInfo" type="tns:TransactionsInfo" />
+      <xs:complexType name="TransactionsInfo">
+        <xs:sequence>
+          <xs:element name="sysNum" type="xs:int" />
+          <xs:element name="rollValue" type="xs:int" />
+          <xs:element name="maxOperation" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="unbounded" name="transactions" nillable="true" type="tns:Transaction" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="Transaction" type="tns:Transaction" />
+      <xs:complexType name="Transaction">
+        <xs:sequence>
+          <xs:element name="id" type="xs:long" />
+          <xs:element name="date" type="xs:dateTime" />
+          <xs:element name="counter" type="xs:int" />
+          <xs:element name="paymentSum" type="xs:int" />
+          <xs:element name="tariffId" type="xs:int" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:simpleType name="SrcTransactionState">
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="Manual" />
+          <xs:enumeration value="TicketServer" />
+          <xs:enumeration value="Terminal" />
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:schema>
+  </wsdl:types>
+  <wsdl:message name="ApplyTransactionRequest">
+    <wsdl:part name="ApplyTransactionRequest" element="tns:ApplyTransactionRequest" />
+  </wsdl:message>
+  <wsdl:message name="ApplyTransactionResponse">
+    <wsdl:part name="ApplyTransactionResponse" element="tns:ApplyTransactionResponse" />
+  </wsdl:message>
+  <wsdl:message name="AllTransactionsResponse">
+    <wsdl:part name="AllTransactionsResponse" element="tns:AllTransactionsResponse" />
+  </wsdl:message>
+  <wsdl:message name="TransactionsResponse">
+    <wsdl:part name="TransactionsResponse" element="tns:TransactionsResponse" />
+  </wsdl:message>
+  <wsdl:message name="TransactionsRequest">
+    <wsdl:part name="TransactionsRequest" element="tns:TransactionsRequest" />
+  </wsdl:message>
+  <wsdl:message name="AllTransactionsRequest">
+    <wsdl:part name="AllTransactionsRequest" element="tns:AllTransactionsRequest" />
+  </wsdl:message>
+  <wsdl:portType name="InternalService">
+    <wsdl:operation name="ApplyTransaction">
+      <wsdl:input name="ApplyTransactionRequest" message="tns:ApplyTransactionRequest" />
+      <wsdl:output name="ApplyTransactionResponse" message="tns:ApplyTransactionResponse" />
+    </wsdl:operation>
+    <wsdl:operation name="AllTransactions">
+      <wsdl:input name="AllTransactionsRequest" message="tns:AllTransactionsRequest" />
+      <wsdl:output name="AllTransactionsResponse" message="tns:AllTransactionsResponse" />
+    </wsdl:operation>
+    <wsdl:operation name="Transactions">
+      <wsdl:input name="TransactionsRequest" message="tns:TransactionsRequest" />
+      <wsdl:output name="TransactionsResponse" message="tns:TransactionsResponse" />
+    </wsdl:operation>
+  </wsdl:portType>
+  <wsdl:binding name="InternalServiceSoap11" type="tns:InternalService">
+    <soap:binding transport="http://schemas.xmlsoap.org/soap/http" />
+    <wsdl:operation name="ApplyTransaction">
+      <soap:operation soapAction="" />
+      <wsdl:input name="ApplyTransactionRequest">
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="ApplyTransactionResponse">
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="AllTransactions">
+      <soap:operation soapAction="" />
+      <wsdl:input name="AllTransactionsRequest">
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="AllTransactionsResponse">
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="Transactions">
+      <soap:operation soapAction="" />
+      <wsdl:input name="TransactionsRequest">
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="TransactionsResponse">
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:service name="InternalServices">
+    <wsdl:port name="InternalServiceSoap11" binding="tns:InternalServiceSoap11">
+      <soap:address location="http://195.182.143.218:8888/SDPServer/Internalendpoints" />
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>

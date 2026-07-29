@@ -1,0 +1,27 @@
+{
+  "count": 1,
+  "data": [
+    {
+      "id": 46105155,
+      "name": "Евгений",
+      "phone": "+79031346090",
+      "email": "",
+      "card": "",
+      "birth_date": null,
+      "comment": "",
+      "discount": 0,
+      "visits": 1,
+      "sex_id": 0,
+      "sex": "Неизвестно",
+      "sms_check": 0,
+      "sms_bot": 0,
+      "spent": 0,
+      "paid": 0,
+      "balance": 0,
+      "importance_id": 0,
+      "importance": "Без класса важности",
+      "categories": [],
+      "custom_fields": {}
+    }
+  ]
+}

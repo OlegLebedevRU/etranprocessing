@@ -1,0 +1,35 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 10.00
+# Visual Studio 2008
+Project("{E24C65DC-7377-472B-9ABA-BC803B73C61A}") = "Gate_GIBDDServicePays", ".", "{5CFC034E-64B3-4389-9130-FFBD6B0C7256}"
+	ProjectSection(WebsiteProperties) = preProject
+		TargetFramework = "2.0"
+		Debug.AspNetCompiler.VirtualPath = "/Gate_GIBDDServicePays"
+		Debug.AspNetCompiler.PhysicalPath = "Gate_GIBDDServicePays\"
+		Debug.AspNetCompiler.TargetPath = "PrecompiledWeb\Gate_GIBDDServicePays\"
+		Debug.AspNetCompiler.Updateable = "true"
+		Debug.AspNetCompiler.ForceOverwrite = "true"
+		Debug.AspNetCompiler.FixedNames = "false"
+		Debug.AspNetCompiler.Debug = "True"
+		Release.AspNetCompiler.VirtualPath = "/Gate_GIBDDServicePays"
+		Release.AspNetCompiler.PhysicalPath = "Gate_GIBDDServicePays\"
+		Release.AspNetCompiler.TargetPath = "PrecompiledWeb\Gate_GIBDDServicePays\"
+		Release.AspNetCompiler.Updateable = "true"
+		Release.AspNetCompiler.ForceOverwrite = "true"
+		Release.AspNetCompiler.FixedNames = "false"
+		Release.AspNetCompiler.Debug = "False"
+		VWDPort = "34301"
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|.NET = Debug|.NET
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{5CFC034E-64B3-4389-9130-FFBD6B0C7256}.Debug|.NET.ActiveCfg = Debug|.NET
+		{5CFC034E-64B3-4389-9130-FFBD6B0C7256}.Debug|.NET.Build.0 = Debug|.NET
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

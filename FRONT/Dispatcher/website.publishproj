@@ -1,0 +1,85 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+
+***********************************************************************************************
+website.publishproj
+
+ПРЕДУПРЕЖДЕНИЕ. НЕ ИЗМЕНЯЙТЕ этот файл, он используется для процесса веб-публикации.
+
+ (C) Корпорация Майкрософт. Все права защищены.
+
+***********************************************************************************************
+-->
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProductVersion>10.0.30319</ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{ffef08c2-f8d4-4074-942d-150150a078bc}</ProjectGuid>
+    <SourceWebPhysicalPath>$(MSBuildThisFileDirectory)</SourceWebPhysicalPath>
+    <SourceWebVirtualPath>/Dispatcher</SourceWebVirtualPath>
+    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <SourceWebProject>
+    </SourceWebProject>
+    <SourceWebMetabasePath>
+    </SourceWebMetabasePath>
+  </PropertyGroup>
+  <PropertyGroup>
+    <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">10.0</VisualStudioVersion>
+    <!-- for VS2010 we need to use 10.5 but for VS2012+ we should use VisualStudioVersion -->
+    <WebPublishTargetsVersion Condition=" '$(WebPublishTargetsVersion)' =='' and '$(VisualStudioVersion)' == 10.0 ">10.5</WebPublishTargetsVersion>
+    <WebPublishTargetsVersion Condition=" '$(WebPublishTargetsVersion)'=='' ">$(VisualStudioVersion)</WebPublishTargetsVersion>
+    <VSToolsPath Condition="'$(VSToolsPath)' == ''">$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(WebPublishTargetsVersion)</VSToolsPath>
+    <_WebPublishTargetsPath Condition=" '$(_WebPublishTargetsPath)'=='' ">$(VSToolsPath)</_WebPublishTargetsPath>
+    <AssemblyFileVersion Condition="'$(AssemblyFileVersion)' == ''">1.0.0.0</AssemblyFileVersion>
+    <AssemblyVersion Condition="'$(AssemblyVersion)' == ''">1.0.0.0</AssemblyVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <AssemblyAttributes Include="AssemblyFileVersion">
+      <Value>$(AssemblyFileVersion)</Value>
+    </AssemblyAttributes>
+    <AssemblyAttributes Include="AssemblyVersion">
+      <Value>$(AssemblyVersion)</Value>
+    </AssemblyAttributes>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\PlaterraSoft\Shared\Platerra.Common\Platerra.Common.csproj">
+      <Project>{B739C328-1A0A-424F-A8F0-1230807B078E}</Project>
+      <Name>Platerra.Common</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\PlaterraSoft\Terminal\Platerra.Terminal.Common.ESV\Platerra.Terminal.Common.ESV.csproj">
+      <Project>{1DA19A37-32F0-4A88-9139-93152B3B8A16}</Project>
+      <Name>Platerra.Terminal.Common.ESV</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\PlaterraSoft\Terminal\Platerra.Terminal.Common\Platerra.Terminal.Common.csproj">
+      <Project>{8B9FE68B-CB92-4057-97D7-4C7CC8038C1E}</Project>
+      <Name>Platerra.Terminal.Common</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\CommonLibs\BarcodeLib\BarcodeLib.csproj">
+      <Project>{F8646414-0C9C-49BB-9DA3-3923BF78A398}</Project>
+      <Name>BarcodeLib</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\CommonLibs\DbAttachmentLib\DbAttachmentLib.csproj">
+      <Project>{9BD4CF56-67C7-429C-B180-C31228F8B739}</Project>
+      <Name>DbAttachmentLib</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\CommonLibs\FoNetLib\FoNetLib.csproj">
+      <Project>{F4B89F03-86AA-4F52-875C-AADE0197B12D}</Project>
+      <Name>FoNetLib</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\CommonLibs\PdfCommon\PdfCommon.csproj">
+      <Project>{4EF79601-7AA7-4632-9F6E-F4D979A82D71}</Project>
+      <Name>PdfCommon</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\CommonLibs\TextSharpLib\TextSharpLib.csproj">
+      <Project>{EBE848B8-431C-4791-A982-7ED3B8998289}</Project>
+      <Name>TextSharpLib</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\DispatcherCommon\DispatcherCommon.csproj">
+      <Project>{4E852925-03E3-4870-AAD4-0CF5DF0BF440}</Project>
+      <Name>DispatcherCommon</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(_WebPublishTargetsPath)\Web\Microsoft.WebSite.Publishing.targets" />
+</Project>

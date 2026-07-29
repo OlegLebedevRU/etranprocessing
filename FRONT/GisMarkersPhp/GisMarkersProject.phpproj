@@ -1,0 +1,36 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Name>GisMarkersProject</Name>
+    <ProjectGuid>0a732685-903a-4a89-8e43-8c13397fc4cb</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>GisMarkersProject</RootNamespace>
+    <ProjectTypeGuids>{A0786B88-2ADB-4C21-ABE8-AA2D79766269}</ProjectTypeGuids>
+    <AssemblyName>GisMarkersProject</AssemblyName>
+    <SaveServerSettingsInUserFile>False</SaveServerSettingsInUserFile>
+    <Server>PHPDev</Server>
+    <PublishEvent>None</PublishEvent>
+    <PHPDevAutoPort>True</PHPDevAutoPort>
+    <PHPDevPort>9976</PHPDevPort>
+    <PHPDevHostName>localhost</PHPDevHostName>
+    <IISProjectUrl>http://localhost:9976/</IISProjectUrl>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <IncludeDebugInformation>true</IncludeDebugInformation>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+    <IncludeDebugInformation>false</IncludeDebugInformation>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="addmetki-cat.php" />
+    <Compile Include="bd.php" />
+    <Compile Include="info.php" />
+    <Compile Include="vivodpointsmap-cat.php" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="geo.html" />
+    <Content Include="geolocation_service.js" />
+    <Content Include="index.php" />
+  </ItemGroup>
+</Project>

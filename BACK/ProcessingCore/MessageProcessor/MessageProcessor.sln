@@ -1,0 +1,40 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2013
+VisualStudioVersion = 12.0.21005.1
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MessageProcessor", "MessageProcessor.csproj", "{2263662C-6B30-4899-BB5B-12979424DFAF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Estylesoft.DALC", "..\Estylesoft.DALC\Estylesoft.DALC.csproj", "{6A1C726E-CECF-42FD-BE2C-6540049FC7DF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EtranApi", "..\EtranApi\EtranApi.csproj", "{1BCABA2D-D39A-4A67-B922-07C4AC178E88}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EtranDispatcher", "..\EtranDispatcher\EtranDispatcher.csproj", "{806BEC91-5621-4700-86B4-9FFD946F7FB1}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{2263662C-6B30-4899-BB5B-12979424DFAF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2263662C-6B30-4899-BB5B-12979424DFAF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2263662C-6B30-4899-BB5B-12979424DFAF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2263662C-6B30-4899-BB5B-12979424DFAF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6A1C726E-CECF-42FD-BE2C-6540049FC7DF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6A1C726E-CECF-42FD-BE2C-6540049FC7DF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6A1C726E-CECF-42FD-BE2C-6540049FC7DF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6A1C726E-CECF-42FD-BE2C-6540049FC7DF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1BCABA2D-D39A-4A67-B922-07C4AC178E88}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1BCABA2D-D39A-4A67-B922-07C4AC178E88}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1BCABA2D-D39A-4A67-B922-07C4AC178E88}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1BCABA2D-D39A-4A67-B922-07C4AC178E88}.Release|Any CPU.Build.0 = Release|Any CPU
+		{806BEC91-5621-4700-86B4-9FFD946F7FB1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{806BEC91-5621-4700-86B4-9FFD946F7FB1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{806BEC91-5621-4700-86B4-9FFD946F7FB1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{806BEC91-5621-4700-86B4-9FFD946F7FB1}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

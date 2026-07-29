@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TspExtraParams>
+  <tsp>
+    <tsp Id="707">
+      <Terminals>
+        <terminal Id=",175,193,">
+          <add>
+            <item Id="2001" Name="ORGNAME">УФК по РБ (МВД по РБ)</item>
+            <item Id="2002" Name="INN">0275006462</item>
+            <item Id="2003" Name="ACCOUNT">37||80701000</item>
+          </add>
+        </terminal>
+        <terminal Id=",192,73,76,308,">
+          <add>
+            <item Id="2001" Name="ORGNAME">УФК по РБ (УМВД России по городу Уфе)</item>
+            <item Id="2002" Name="INN">0276011698</item>
+            <item Id="2003" Name="ACCOUNT">37||80701000</item>
+          </add>
+        </terminal>
+      </Terminals>
+    </tsp>
+  </tsp>
+</TspExtraParams>

@@ -1,0 +1,112 @@
+﻿Добрый день
+
+Сценарий, если пользователь зарегистрирован
+
+    попытка получить код авторизации
+
+    ---- XML request: ----
+    <?xml version="1.0" encoding="utf-8"?>
+    <request>
+     <request-type>491</request-type>
+     <phone>9031811737</phone>
+     <client-id>PALTTERA</client-id>
+    </request>
+    ---- XML response: ----
+    <response><result-code fatal="true">860</result-code></response>
+
+860 код - пользователь зареген, нужен пароль для получения кода авторизации.
+
+    еще раз тот же запрос, но уже с паролем:
+
+    ---- XML request: ----
+    <?xml version="1.0" encoding="utf-8"?>
+    <request>
+     <request-type>491</request-type>
+     <phone>9031811737</phone>
+     <password>qweDSAzx12~</password>
+     <client-id>PALTTERA</client-id>
+    </request>
+    ---- XML response: ----
+    <?xml version="1.0" encoding="utf-8"?>
+    <response>
+    <result-code>0</result-code>
+    <code>6d6fd68df7b07622712998f11d69e6b5</code>
+    </response>
+
+    сode - код авторизации. по нему вместе с одноразовым паролем можно получить токен.
+
+    после этого запроса пользователю приходит СМС с одноразовым паролем (vcode)
+
+    передаем код авторизации и одноразовый пароль - получаем токен:
+
+    ---- XML request: ----
+    <?xml version="1.0" encoding="utf-8"?>
+    <request>
+     <request-type>491</request-type>
+     <phone>9031811737</phone>
+     <code>6d6fd68df7b07622712998f11d69e6b5</code>
+     <client-id>PALTTERA</client-id>
+            <vcode>oeAVW</vcode> <!-- одноразовый пароль -->
+    </request>
+    ---- XML response: ----
+    <?xml version="1.0" encoding="utf-8"?>
+    <response>
+    <result-code>0</result-code>
+    <access-token>5cae37b44bec7e455bfb53e9572083bd</access-token>
+    </response>
+
+Сценарий, если пользователь не зарегистрирован
+
+    получение кода авторизации (без пароля)
+
+    ---- XML request: ----
+    <?xml version="1.0" encoding="utf-8"?>
+    <request>
+     <request-type>491</request-type>
+     <phone>8888888910</phone>
+     <client-id>PALTTERA</client-id></request>
+    ---- XML response: ----
+    <?xml version="1.0" encoding="utf-8"?>
+    <response>
+    <result-code>0</result-code>
+    <code>fce2f916f374092598e6cb5fd37b3b</code>
+    </response>
+
+    после этого запроса пользователю высылается реальный пароль. вместе с кодом авторизации по нему можно получить токен.
+
+    получение токена
+
+    ---- XML request: ----
+    <?xml version="1.0" encoding="utf-8"?>
+    <request>
+     <request-type>491</request-type>
+     <phone>8888888910</phone>
+     <code>fce2f916f374092598e6cb5fd37b3b</code>
+     <client-id>PALTTERA</client-id>
+            <vcode>oauth_test_pass</vcode> <!-- реальный пароль -->
+    </request>
+    ---- XML response: ----
+    <?xml version="1.0" encoding="utf-8"?>
+    <response>
+    <result-code>0</result-code>
+    <access-token>916eeecf4c7f93c5f0a5b323817fa669</access-token>
+    </response>
+
+
+Ошибки:
+
+861	 неверный одноразовый пароль (например, первый раз ввел пароль неверно)
+862	 истекло время действия токена (возникает только при запросах с токеном, при получении токена не возвращается). пользователю надо заново пройти весь процесс получения токена
+863	 нельзя использовать код авторизации (истекло время действия кода авторизации; либо уже успешно был использован; либо было более 3 попыток получить токен с этим кодом и с неверным одноразовым паролем; либо истекло время действия). пользователю надо еще раз повторить весь процесс по получению одноразового пароля, т.к. попытка не удалась
+
+Запросы с токеном:
+Убираем пароль <extra name="password">  и добавляем<extra name="token">
+добавляем тег client-software в xml-PALTTERA v1
+Запрос баланса будет таким:
+
+<?xml version="1.0" encoding="utf-8"?>
+<request><request-type>3</request-type>
+<extra name="client-software">xml-PALTTERA v1</extra>
+<terminal-id>9031234567</terminal-id>
+<extra name="token">***</extra>
+</request>      

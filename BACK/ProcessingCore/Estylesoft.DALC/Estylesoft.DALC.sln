@@ -1,0 +1,20 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 9.00
+# Visual Studio 2005
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Estylesoft.DALC", "Estylesoft.DALC.csproj", "{6A1C726E-CECF-42FD-BE2C-6540049FC7DF}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{6A1C726E-CECF-42FD-BE2C-6540049FC7DF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6A1C726E-CECF-42FD-BE2C-6540049FC7DF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6A1C726E-CECF-42FD-BE2C-6540049FC7DF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6A1C726E-CECF-42FD-BE2C-6540049FC7DF}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

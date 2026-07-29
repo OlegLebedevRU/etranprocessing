@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="windows-1251"?>
+<response>
+<code>0</code>
+<add>
+<ls>16211</ls>
+<phone>958201</phone>
+<bal_date>23.05.15</bal_date>
+<pact>
+<id_pact>0000019666</id_pact>
+<pact_name>Телефон 6666 от 14.11.07</pact_name>
+<amount>0.00</amount>
+<detail>Денег на счету:0.00#Рекомендуемый аванс:0.00#Оплачено в текущем месяце:0.00</detail>
+</pact>
+<pact>
+<id_pact>0000044060</id_pact>
+<pact_name>Ростелеком</pact_name>
+<amount>0.00</amount>
+<detail>Денег на счету:0.00#Рекомендуемый аванс:0.00#Оплачено в текущем месяце:0.00</detail>
+</pact>
+<pact>
+<id_pact>0000044061</id_pact>
+<pact_name>МТТ</pact_name>
+<amount>0.00</amount>
+<detail>Денег на счету:0.00#Рекомендуемый аванс:0.00#Оплачено в текущем месяце:0.00</detail>
+</pact>
+<pact>
+<id_pact>0000044062</id_pact>
+<pact_name>МТС</pact_name>
+<amount>0.00</amount>
+<detail>Денег на счету:0.00#Рекомендуемый аванс:0.00#Оплачено в текущем месяце:0.00</detail>
+</pact>
+<pact>
+<id_pact>0000044063</id_pact>
+<pact_name>Интернет + TV</pact_name>
+<amount>300.00</amount>
+<detail>Денег на счету:-150.00#Рекомендуемый аванс:150.00#Оплачено в текущем месяце:0.00</detail>
+</pact>
+<pact>
+<id_pact>0000045801</id_pact>
+<pact_name>Телефон 101011010 от 01.04.11</pact_name>
+<amount>0.00</amount>
+<detail>Денег на счету:0.00#Рекомендуемый аванс:0.00#Оплачено в текущем месяце:0.00</detail>
+</pact>
+<pact>
+<id_pact>0000045802</id_pact>
+<pact_name>Хостинг 999999-х от 01.04.11</pact_name>
+<amount>0.00</amount>
+<detail>Денег на счету:0.00#Рекомендуемый аванс:0.00#Оплачено в текущем месяце:0.00</detail>
+</pact>
+<pact>
+<id_pact>0000047103</id_pact>
+<pact_name>Цифровые каналы 9999999999999999999999 от 09.11.11</pact_name>
+<amount>0.00</amount>
+<detail>Денег на счету:0.00#Рекомендуемый аванс:0.00#Оплачено в текущем месяце:0.00</detail>
+</pact>
+<pact>
+<id_pact>0000062305</id_pact>
+<pact_name>Телефон 7676767 от 01.04.15</pact_name>
+<amount>0.00</amount>
+<detail>Денег на счету:0.00#Рекомендуемый аванс:0.00#Оплачено в текущем месяце:0.00</detail>
+</pact>
+</add>
+</response>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Document_Market4X>
+  <Key>1987</Key>
+  <Type>Основной договор аренды торговых площадей</Type>
+  <Symbol>ТР-168/2016</Symbol>
+  <Date_entry>28.08.2016</Date_entry>
+  <Client>Индивидуальный предприниматель Алавердян Армен Камоевич</Client>
+  <Legal_Address></Legal_Address>
+  <Object>Торговые ряды</Object>
+  <Places>
+    <Place>
+      <Building>Торговые ряды</Building>
+      <Location>1-й этаж</Location>
+      <Number>Р-23</Number>
+      <Type>Острова</Type>
+    </Place>
+    <Place>
+      <Building>Торговые ряды</Building>
+      <Location>1-й этаж</Location>
+      <Number>Р-24</Number>
+      <Type>Острова</Type>
+    </Place>
+  </Places>
+</Document_Market4X>

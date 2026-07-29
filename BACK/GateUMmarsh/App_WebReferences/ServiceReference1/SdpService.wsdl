@@ -1,0 +1,351 @@
+<?xml version="1.0" encoding="utf-8"?>
+<wsdl:definitions xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" xmlns:sch="http://umarsh.ru/sdp/servicepojo" xmlns:tns="http://umarsh.ru/sdp/servicepojo" targetNamespace="http://umarsh.ru/sdp/servicepojo" xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/">
+  <wsdl:types>
+    <xs:schema attributeFormDefault="unqualified" elementFormDefault="qualified" targetNamespace="http://umarsh.ru/sdp/servicepojo" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+      <xs:element name="CardInfoRequest">
+        <xs:complexType>
+          <xs:complexContent mixed="false">
+            <xs:extension base="tns:CardInfoBaseRequest">
+              <xs:sequence />
+            </xs:extension>
+          </xs:complexContent>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="CardInfoResponse">
+        <xs:complexType>
+          <xs:complexContent mixed="false">
+            <xs:extension base="tns:BaseResponse">
+              <xs:sequence>
+                <xs:element minOccurs="0" name="CardInformation" type="tns:CardInfo" />
+              </xs:sequence>
+            </xs:extension>
+          </xs:complexContent>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="CardTicketsInfoRequest">
+        <xs:complexType>
+          <xs:complexContent mixed="false">
+            <xs:extension base="tns:CardInfoBaseRequest">
+              <xs:sequence />
+            </xs:extension>
+          </xs:complexContent>
+        </xs:complexType>
+      </xs:element>
+      <xs:complexType name="CardInfoBaseRequest">
+        <xs:complexContent mixed="false">
+          <xs:extension base="tns:baseRequest">
+            <xs:sequence>
+              <xs:element name="sysNum" type="tns:sysNumReg" />
+              <xs:element name="regionId" type="xs:int" />
+              <xs:element minOccurs="0" name="deviceId" type="xs:string" />
+            </xs:sequence>
+          </xs:extension>
+        </xs:complexContent>
+      </xs:complexType>
+      <xs:element name="CardTicketsInfoResponse">
+        <xs:complexType>
+          <xs:complexContent mixed="false">
+            <xs:extension base="tns:BaseResponse">
+              <xs:sequence>
+                <xs:element minOccurs="0" name="CardInformation" type="tns:CardTicketsInfo" />
+              </xs:sequence>
+            </xs:extension>
+          </xs:complexContent>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="PaymentCheckSumRequest">
+        <xs:complexType>
+          <xs:complexContent mixed="false">
+            <xs:extension base="tns:baseRequest">
+              <xs:sequence>
+                <xs:element name="sessionId" type="xs:string" />
+                <xs:element name="tariffId" type="xs:string" />
+                <xs:element name="paymentSum" type="xs:int" />
+              </xs:sequence>
+            </xs:extension>
+          </xs:complexContent>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="PaymentCheckSumResponse">
+        <xs:complexType>
+          <xs:complexContent mixed="false">
+            <xs:extension base="tns:BaseResponse">
+              <xs:sequence>
+                <xs:element name="PaymentCheckInfo" type="tns:PaymentCheckInfo" />
+              </xs:sequence>
+            </xs:extension>
+          </xs:complexContent>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="CardPaymentRequest">
+        <xs:complexType>
+          <xs:complexContent mixed="false">
+            <xs:extension base="tns:CardPaymentBaseRequest">
+              <xs:sequence />
+            </xs:extension>
+          </xs:complexContent>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="CardTicketPaymentRequest">
+        <xs:complexType>
+          <xs:complexContent mixed="false">
+            <xs:extension base="tns:CardPaymentBaseRequest">
+              <xs:sequence>
+                <xs:element name="series" type="xs:int" />
+              </xs:sequence>
+            </xs:extension>
+          </xs:complexContent>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="CardPaymentResponse">
+        <xs:complexType>
+          <xs:complexContent mixed="false">
+            <xs:extension base="tns:BaseResponse">
+              <xs:sequence>
+                <xs:element name="CardPaymentInformation" type="tns:CardPayment" />
+              </xs:sequence>
+            </xs:extension>
+          </xs:complexContent>
+        </xs:complexType>
+      </xs:element>
+      <xs:complexType name="CardPaymentBaseRequest">
+        <xs:complexContent mixed="false">
+          <xs:extension base="tns:baseRequest">
+            <xs:sequence>
+              <xs:element name="sessionId">
+                <xs:simpleType>
+                  <xs:restriction base="xs:string">
+                    <xs:minLength value="1" />
+                  </xs:restriction>
+                </xs:simpleType>
+              </xs:element>
+              <xs:element name="tariffId">
+                <xs:simpleType>
+                  <xs:restriction base="xs:string">
+                    <xs:minLength value="1" />
+                  </xs:restriction>
+                </xs:simpleType>
+              </xs:element>
+              <xs:element name="paymentSum">
+                <xs:simpleType>
+                  <xs:restriction base="xs:int">
+                    <xs:minInclusive value="0" />
+                  </xs:restriction>
+                </xs:simpleType>
+              </xs:element>
+              <xs:element name="paymentInfo" nillable="true" type="xs:string" />
+            </xs:sequence>
+          </xs:extension>
+        </xs:complexContent>
+      </xs:complexType>
+      <xs:complexType name="BaseResponse">
+        <xs:sequence>
+          <xs:element name="Result" type="tns:Result" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="baseMsg">
+        <xs:sequence>
+          <xs:element minOccurs="0" name="sessionId" type="xs:string" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="Result">
+        <xs:sequence>
+          <xs:element name="resultCode" type="xs:int" />
+          <xs:element minOccurs="0" name="resultCodeText" type="xs:string" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="baseRequest">
+        <xs:sequence>
+          <xs:element name="agentId" type="tns:digString" />
+          <xs:element name="salepointId" type="tns:digString" />
+          <xs:element name="version" type="xs:string" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="CardInfo" type="tns:CardInfo" />
+      <xs:complexType name="CardInfo">
+        <xs:complexContent mixed="false">
+          <xs:extension base="tns:baseMsg">
+            <xs:sequence>
+              <xs:element minOccurs="0" name="tariff" type="tns:Tariff" />
+              <xs:element minOccurs="0" name="company" type="tns:Company" />
+              <xs:element minOccurs="0" name="info" type="tns:CardCheck" />
+              <xs:element minOccurs="0" maxOccurs="unbounded" name="warningMsg" nillable="true" type="xs:string" />
+            </xs:sequence>
+          </xs:extension>
+        </xs:complexContent>
+      </xs:complexType>
+      <xs:element name="CardTicketsInfo" type="tns:CardTicketsInfo" />
+      <xs:complexType name="CardTicketsInfo">
+        <xs:complexContent mixed="false">
+          <xs:extension base="tns:baseMsg">
+            <xs:sequence>
+              <xs:element minOccurs="0" maxOccurs="unbounded" name="ticket" nillable="true" type="tns:Ticket" />
+              <xs:element minOccurs="0" name="company" type="tns:Company" />
+            </xs:sequence>
+          </xs:extension>
+        </xs:complexContent>
+      </xs:complexType>
+      <xs:complexType name="Ticket">
+        <xs:sequence>
+          <xs:element name="series" type="xs:int" />
+          <xs:element minOccurs="0" maxOccurs="unbounded" name="tariff" nillable="true" type="tns:Tariff" />
+          <xs:element minOccurs="0" name="info" type="tns:CardCheck" />
+          <xs:element minOccurs="0" maxOccurs="unbounded" name="warningMsg" nillable="true" type="xs:string" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:element name="CardPayment" type="tns:CardPayment" />
+      <xs:complexType name="CardPayment">
+        <xs:complexContent mixed="false">
+          <xs:extension base="tns:baseMsg">
+            <xs:sequence>
+              <xs:element minOccurs="0" name="cheq" type="xs:string" />
+              <xs:element name="fullSum" type="xs:int" />
+            </xs:sequence>
+          </xs:extension>
+        </xs:complexContent>
+      </xs:complexType>
+      <xs:element name="PaymentCheckInfo" type="tns:PaymentCheckInfo" />
+      <xs:complexType name="PaymentCheckInfo">
+        <xs:complexContent mixed="false">
+          <xs:extension base="tns:baseMsg">
+            <xs:sequence />
+          </xs:extension>
+        </xs:complexContent>
+      </xs:complexType>
+      <xs:complexType name="Tariff">
+        <xs:sequence>
+          <xs:element name="id" type="xs:string" />
+          <xs:element name="text" type="xs:string" />
+          <xs:element name="minSumInt" type="xs:int" />
+          <xs:element name="maxSumInt" type="xs:int" />
+          <xs:element minOccurs="0" name="unaccountedResidueInfo" type="xs:string" />
+          <xs:element name="unaccountedResidueSum" type="xs:int" />
+          <xs:element minOccurs="0" name="autoPaymentSum" type="xs:int" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="CardCheck">
+        <xs:sequence>
+          <xs:element name="otype" type="xs:int" />
+          <xs:element name="text" type="xs:string" />
+          <xs:element minOccurs="0" name="unaccountedResidueInfo" type="xs:string" />
+          <xs:element name="unaccountedResidueSum" type="xs:int" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:complexType name="Company">
+        <xs:sequence>
+          <xs:element minOccurs="0" name="name" type="xs:string" />
+          <xs:element minOccurs="0" name="address" type="xs:string" />
+          <xs:element minOccurs="0" name="phone" type="xs:string" />
+        </xs:sequence>
+      </xs:complexType>
+      <xs:simpleType name="digString">
+        <xs:restriction base="xs:string">
+          <xs:pattern value="[0-9]{1,4}" />
+        </xs:restriction>
+      </xs:simpleType>
+      <xs:simpleType name="sysNumReg">
+        <xs:restriction base="xs:string">
+          <xs:pattern value="[0-9]{1,9}|[0-9]{19}" />
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:schema>
+  </wsdl:types>
+  <wsdl:message name="CardTicketPaymentRequest">
+    <wsdl:part name="CardTicketPaymentRequest" element="tns:CardTicketPaymentRequest" />
+  </wsdl:message>
+  <wsdl:message name="CardTicketsInfoResponse">
+    <wsdl:part name="CardTicketsInfoResponse" element="tns:CardTicketsInfoResponse" />
+  </wsdl:message>
+  <wsdl:message name="PaymentCheckSumRequest">
+    <wsdl:part name="PaymentCheckSumRequest" element="tns:PaymentCheckSumRequest" />
+  </wsdl:message>
+  <wsdl:message name="CardPaymentRequest">
+    <wsdl:part name="CardPaymentRequest" element="tns:CardPaymentRequest" />
+  </wsdl:message>
+  <wsdl:message name="CardInfoResponse">
+    <wsdl:part name="CardInfoResponse" element="tns:CardInfoResponse" />
+  </wsdl:message>
+  <wsdl:message name="CardPaymentResponse">
+    <wsdl:part name="CardPaymentResponse" element="tns:CardPaymentResponse" />
+  </wsdl:message>
+  <wsdl:message name="PaymentCheckSumResponse">
+    <wsdl:part name="PaymentCheckSumResponse" element="tns:PaymentCheckSumResponse" />
+  </wsdl:message>
+  <wsdl:message name="CardInfoRequest">
+    <wsdl:part name="CardInfoRequest" element="tns:CardInfoRequest" />
+  </wsdl:message>
+  <wsdl:message name="CardTicketsInfoRequest">
+    <wsdl:part name="CardTicketsInfoRequest" element="tns:CardTicketsInfoRequest" />
+  </wsdl:message>
+  <wsdl:portType name="SdpService">
+    <wsdl:operation name="CardTicketPayment">
+      <wsdl:input name="CardTicketPaymentRequest" message="tns:CardTicketPaymentRequest" />
+    </wsdl:operation>
+    <wsdl:operation name="CardTicketsInfo">
+      <wsdl:input name="CardTicketsInfoRequest" message="tns:CardTicketsInfoRequest" />
+      <wsdl:output name="CardTicketsInfoResponse" message="tns:CardTicketsInfoResponse" />
+    </wsdl:operation>
+    <wsdl:operation name="PaymentCheckSum">
+      <wsdl:input name="PaymentCheckSumRequest" message="tns:PaymentCheckSumRequest" />
+      <wsdl:output name="PaymentCheckSumResponse" message="tns:PaymentCheckSumResponse" />
+    </wsdl:operation>
+    <wsdl:operation name="CardPayment">
+      <wsdl:input name="CardPaymentRequest" message="tns:CardPaymentRequest" />
+      <wsdl:output name="CardPaymentResponse" message="tns:CardPaymentResponse" />
+    </wsdl:operation>
+    <wsdl:operation name="CardInfo">
+      <wsdl:input name="CardInfoRequest" message="tns:CardInfoRequest" />
+      <wsdl:output name="CardInfoResponse" message="tns:CardInfoResponse" />
+    </wsdl:operation>
+  </wsdl:portType>
+  <wsdl:binding name="SdpServiceSoap11" type="tns:SdpService">
+    <soap:binding transport="http://schemas.xmlsoap.org/soap/http" />
+    <wsdl:operation name="CardTicketPayment">
+      <soap:operation soapAction="" />
+      <wsdl:input name="CardTicketPaymentRequest">
+        <soap:body use="literal" />
+      </wsdl:input>
+    </wsdl:operation>
+    <wsdl:operation name="CardTicketsInfo">
+      <soap:operation soapAction="" />
+      <wsdl:input name="CardTicketsInfoRequest">
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="CardTicketsInfoResponse">
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="PaymentCheckSum">
+      <soap:operation soapAction="" />
+      <wsdl:input name="PaymentCheckSumRequest">
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="PaymentCheckSumResponse">
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="CardPayment">
+      <soap:operation soapAction="" />
+      <wsdl:input name="CardPaymentRequest">
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="CardPaymentResponse">
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="CardInfo">
+      <soap:operation soapAction="" />
+      <wsdl:input name="CardInfoRequest">
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="CardInfoResponse">
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:service name="SdpServices">
+    <wsdl:port name="SdpServiceSoap11" binding="tns:SdpServiceSoap11">
+      <soap:address location="http://195.182.143.218:8888/SDPServer/SDPendpoints" />
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>

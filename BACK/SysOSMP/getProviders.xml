@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="windows-1251"?>
+<request>
+<auth login="vadimsotex6" sign="EA76125126752E8235025580C3749512" signAlg="MD5" />
+<client terminal="9808694" software="Dealer v0" />
+<providers>
+<getProviders>
+</getProviders>
+</providers>
+</request>

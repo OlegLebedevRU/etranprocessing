@@ -1,0 +1,118 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+Этот файл используется в процессе публикации или упаковки вашего веб-проекта. Вы можете настроить поведение процесса,
+изменив этот файл MSBuild. Дополнительные сведения см. по адресу http://go.microsoft.com/fwlink/?LinkID=208121. 
+-->
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <TimeStampOfAssociatedLegacyPublishXmlFile />
+    <_PublishTargetUrl>C:\PUB\</_PublishTargetUrl>
+  </PropertyGroup>
+  <ItemGroup>
+    <File Include="bin/EntityFramework.dll">
+      <publishTime>06/10/2014 17:29:24</publishTime>
+    </File>
+    <File Include="bin/EntityFramework.SqlServer.dll">
+      <publishTime>06/10/2014 17:29:24</publishTime>
+    </File>
+    <File Include="bin/GisMarkers.dll">
+      <publishTime>06/06/2016 12:09:59</publishTime>
+    </File>
+    <File Include="bin/log4net.dll">
+      <publishTime>03/20/2016 00:40:38</publishTime>
+    </File>
+    <File Include="bin/Microsoft.Web.Infrastructure.dll">
+      <publishTime>07/25/2012 11:48:56</publishTime>
+    </File>
+    <File Include="bin/Microsoft.Web.Mvc.FixedDisplayModes.dll">
+      <publishTime>09/14/2012 15:06:22</publishTime>
+    </File>
+    <File Include="bin/Newtonsoft.Json.dll">
+      <publishTime>11/20/2012 22:45:56</publishTime>
+    </File>
+    <File Include="bin/ru/EntityFramework.resources.dll">
+      <publishTime>06/10/2014 17:29:38</publishTime>
+    </File>
+    <File Include="bin/ru/EntityFramework.SqlServer.resources.dll">
+      <publishTime>06/10/2014 17:29:38</publishTime>
+    </File>
+    <File Include="bin/ru/System.Net.Http.Formatting.resources.dll">
+      <publishTime>05/07/2013 13:11:38</publishTime>
+    </File>
+    <File Include="bin/ru/System.Web.Helpers.resources.dll">
+      <publishTime>05/07/2013 13:11:42</publishTime>
+    </File>
+    <File Include="bin/ru/System.Web.Http.resources.dll">
+      <publishTime>05/07/2013 13:11:40</publishTime>
+    </File>
+    <File Include="bin/ru/System.Web.Http.WebHost.resources.dll">
+      <publishTime>05/07/2013 13:11:40</publishTime>
+    </File>
+    <File Include="bin/ru/System.Web.Mvc.resources.dll">
+      <publishTime>05/07/2013 13:11:38</publishTime>
+    </File>
+    <File Include="bin/ru/System.Web.Razor.resources.dll">
+      <publishTime>05/07/2013 13:11:38</publishTime>
+    </File>
+    <File Include="bin/ru/System.Web.WebPages.Deployment.resources.dll">
+      <publishTime>05/07/2013 13:11:42</publishTime>
+    </File>
+    <File Include="bin/ru/System.Web.WebPages.Razor.resources.dll">
+      <publishTime>05/07/2013 13:11:42</publishTime>
+    </File>
+    <File Include="bin/ru/System.Web.WebPages.resources.dll">
+      <publishTime>05/07/2013 13:11:42</publishTime>
+    </File>
+    <File Include="bin/System.Net.Http.Formatting.dll">
+      <publishTime>05/07/2013 13:09:16</publishTime>
+    </File>
+    <File Include="bin/System.Web.Helpers.dll">
+      <publishTime>05/07/2013 13:09:18</publishTime>
+    </File>
+    <File Include="bin/System.Web.Http.dll">
+      <publishTime>05/07/2013 13:09:16</publishTime>
+    </File>
+    <File Include="bin/System.Web.Http.WebHost.dll">
+      <publishTime>05/07/2013 13:09:18</publishTime>
+    </File>
+    <File Include="bin/System.Web.Mvc.dll">
+      <publishTime>05/07/2013 13:09:14</publishTime>
+    </File>
+    <File Include="bin/System.Web.Razor.dll">
+      <publishTime>05/20/2013 08:04:52</publishTime>
+    </File>
+    <File Include="bin/System.Web.WebPages.Deployment.dll">
+      <publishTime>05/07/2013 13:09:18</publishTime>
+    </File>
+    <File Include="bin/System.Web.WebPages.dll">
+      <publishTime>05/07/2013 13:09:18</publishTime>
+    </File>
+    <File Include="bin/System.Web.WebPages.Razor.dll">
+      <publishTime>05/07/2013 13:09:18</publishTime>
+    </File>
+    <File Include="GisMarkersDb.edmx.diagram">
+      <publishTime>03/20/2016 00:44:32</publishTime>
+    </File>
+    <File Include="Global.asax">
+      <publishTime>03/20/2016 00:44:32</publishTime>
+    </File>
+    <File Include="packages.config">
+      <publishTime>03/20/2016 00:44:32</publishTime>
+    </File>
+    <File Include="Scripts/geolocation_service.js">
+      <publishTime>03/20/2016 00:44:32</publishTime>
+    </File>
+    <File Include="Views/Gis/Index.cshtml">
+      <publishTime>03/20/2016 00:44:32</publishTime>
+    </File>
+    <File Include="Views/Test/Index.cshtml">
+      <publishTime>03/29/2015 10:51:19</publishTime>
+    </File>
+    <File Include="Views/Web.config">
+      <publishTime>03/20/2016 00:44:32</publishTime>
+    </File>
+    <File Include="Web.config">
+      <publishTime>06/06/2016 12:09:59</publishTime>
+    </File>
+  </ItemGroup>
+</Project>

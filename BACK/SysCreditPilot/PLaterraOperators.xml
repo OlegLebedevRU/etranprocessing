@@ -1,0 +1,3333 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<kp-dealer version="2.0">
+  <provider>
+    <id platerra="548">879287322</id>
+    <name>пополнение visa\mc рф (contact)</name>
+    <providerid>89554363</providerid>
+    <companyid>1</companyid>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>15</version>
+    <params>
+      <param>
+        <minlength>16</minlength>
+        <title>Карта</title>
+        <maxlength>16</maxlength>
+        <pattern>^\d{16}$</pattern>
+        <type>numeric</type>
+        <patterndesc>16 цифр</patterndesc>
+        <comments>Карта</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="716">915380536</id>
+    <name>Info-Lan (СПб)</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>5</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>1</version>
+    <params>
+      <param>
+        <minlength>4</minlength>
+        <title>№ Договора</title>
+        <maxlength>6</maxlength>
+        <pattern>^\d{4,6}$</pattern>
+        <type>numeric</type>
+        <patterndesc>№ Договора</patterndesc>
+        <comments>№ Договора</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="715">477216551</id>
+    <name>Мультибанк (2)</name>
+    <providerid>621759624</providerid>
+    <companyid>1</companyid>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>1598</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>130</version>
+    <params>
+      <param>
+        <minlength>20</minlength>
+        <title>№ счета (20 цифр)</title>
+        <maxlength>20</maxlength>
+        <pattern>^\d{20}$</pattern>
+        <type>numeric</type>
+        <patterndesc>№ счета (20 цифр)</patterndesc>
+        <comments>№ счета (20 цифр)</comments>
+      </param>
+      <param platerra="2" name="bik">
+        <title>БИК банка</title>
+        <type>text</type>
+        <pattern>^\d{9}$</pattern>
+        <patterndesc>Бик Банка получателя</patterndesc>
+      </param>
+      <param platerra="3" name="agreement">
+        <title>№ договора (если нет,то: "бн")</title>
+        <type>text</type>
+        <pattern>.*</pattern>
+        <patterndesc>№ договора</patterndesc>
+      </param>
+      <param platerra="4" name="lastname">
+        <title>Фамилия Получателя</title>
+        <type>text</type>
+        <pattern>.*</pattern>
+        <patterndesc>Фамилия Палучателя</patterndesc>
+      </param>
+      <param platerra="5" name="name">
+        <title>Имя Получателя</title>
+        <type>text</type>
+        <pattern>.*</pattern>
+        <patterndesc>Имя Получателя</patterndesc>
+      </param>
+      <param platerra="6" name="surname">
+        <title>Отчество Получателя</title>
+        <type>text</type>
+        <pattern>.*</pattern>
+        <patterndesc>Отчество Получателя</patterndesc>
+      </param>
+      <param platerra="7" name="contact">
+        <title>№ телефона (10 цифр)</title>
+        <type>text</type>
+        <pattern>^\d{10}$</pattern>
+        <patterndesc>№ телефона (10 цифр)</patterndesc>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="714">777262315</id>
+    <name>Tinco (СПб)</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>50</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>12</version>
+    <params>
+      <param>
+        <minlength>7</minlength>
+        <title>Договор</title>
+        <maxlength>7</maxlength>
+        <pattern>^\d{2}\.\d{4}$</pattern>
+        <type>text</type>
+        <patterndesc>7 символов</patterndesc>
+        <comments>Договор</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="713">646299516</id>
+    <name>Homenet (СПб)</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>1</version>
+    <params>
+      <param>
+        <minlength>3</minlength>
+        <title>№ Договора</title>
+        <maxlength>4</maxlength>
+        <pattern>^\d{3,4}$</pattern>
+        <type>numeric</type>
+        <patterndesc>№ Договора</patterndesc>
+        <comments>№ Договора</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="711">629254804</id>
+    <name>Билайн (домашний телефон) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>2</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>16</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="712">297427670</id>
+    <name>Билайн (домашний телефон) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>2</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>14</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="709">847900639</id>
+    <name>Астра Ореол (Гатчина)</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>13</version>
+    <params>
+      <param>
+        <minlength>3</minlength>
+        <title>Договор</title>
+        <maxlength>6</maxlength>
+        <pattern>^\d{3,6}$</pattern>
+        <type>numeric</type>
+        <patterndesc>3-6 цифр</patterndesc>
+        <comments>Договор</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="710">261922625</id>
+    <name>Астра Ореол (СПб)</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>14</version>
+    <params>
+      <param>
+        <minlength>3</minlength>
+        <title>№ договора (3-6 цифр)</title>
+        <maxlength>6</maxlength>
+        <pattern>^\d{3,6}$</pattern>
+        <type>numeric</type>
+        <patterndesc>№ договора (3-6 цифр)</patterndesc>
+        <comments>№ договора (3-6 цифр)</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="707">722452895</id>
+    <name>Interzet (СПб) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>5</version>
+    <params>
+      <param>
+        <minlength>1</minlength>
+        <title>№ Договора</title>
+        <maxlength>6</maxlength>
+        <pattern>^\d{1,6}$</pattern>
+        <type>numeric</type>
+        <patterndesc>№ Договора</patterndesc>
+        <comments>№ Договора</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="552">842578427</id>
+    <name>Interzet (СПб) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>37</version>
+    <params>
+      <param>
+        <minlength>1</minlength>
+        <title>Договор</title>
+        <maxlength>12</maxlength>
+        <pattern>^\d{1,12}$</pattern>
+        <type>numeric</type>
+        <patterndesc>1-12 цифр</patterndesc>
+        <comments>Договор</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="557">229321919</id>
+    <name>Дом.Ru Комплексное Предложение</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>1</version>
+    <params>
+      <param>
+        <minlength>12</minlength>
+        <title>Договор\Лицевой счёт</title>
+        <maxlength>12</maxlength>
+        <pattern>^\d{12}$</pattern>
+        <type>numeric</type>
+        <patterndesc>12 цифр</patterndesc>
+        <comments>Договор\Лицевой счёт</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="802">205987528</id>
+    <name>НТВ Плюс</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>1</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>№ Договора</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>№ Договора</patterndesc>
+        <comments>№ Договора</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="699">712698259</id>
+    <name>баZа Мобильная</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>1</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>№ Телефона</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>№ Телефона</patterndesc>
+        <comments>№ Телефона</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="698">354955893</id>
+    <name>Сотел (Башкортостан)</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>1</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>№ Телефона</title>
+        <maxlength>10</maxlength>
+        <pattern>^901\d{7}$</pattern>
+        <type>numeric</type>
+        <patterndesc>№ Телефона</patterndesc>
+        <comments>№ Телефона</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="697">943421938</id>
+    <name>Смартс Ярославль GSM без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>100</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>3</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Номер телефона (10 цифр)</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <mask>(***)***-**-**</mask>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Номер телефона (10 цифр)</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="38">669989459</id>
+    <name>Смартс Ярославль GSM с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>2</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>№ Телефона</title>
+        <maxlength>10</maxlength>
+        <pattern>^(90222\d{5}|90233[0-4]\d{4}|95128\d{5})$</pattern>
+        <mask>(***)***-**-**</mask>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>№ Телефона</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="696">932262659</id>
+    <name>Смартс Чебоксары без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>100</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>33</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>5</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="39">220792487</id>
+    <name>Смартс Чебоксары с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>33</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>7</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="695">530065951</id>
+    <name>Смартс (Уфа) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>6</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="694">920806987</id>
+    <name>Смартс (Пенза) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>100</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>37</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>7</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="47">373547680</id>
+    <name>Смартс (Пенза) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>37</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>6</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id  platerra="693">258971733</id>
+    <name>Смартс (Астрахань) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>10</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="40">277964811</id>
+    <name>Смартс (Астрахань) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>0</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>6</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="692">545502054</id>
+    <name>Связной Мобайл</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>1</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>№ Телефона\Счёта</title>
+        <maxlength>12</maxlength>
+        <pattern>^(\d{10}|\d{12})$</pattern>
+        <type>numeric</type>
+        <patterndesc>№ Телефона\Счёта</patterndesc>
+        <comments>№ Телефона\Счёта</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="691">101694953</id>
+    <name>Ростелеком (моб.связь) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>9</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="545">952475505</id>
+    <name>Ростелеком (моб.связь) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>0</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>7</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="690">173935496</id>
+    <name>Мотив без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>0</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>14</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="29">820777846</id>
+    <name>Мотив с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>0</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>11</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="689">937086039</id>
+    <name>Летай Мобильная связь / Таттелеком</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>1</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>№ Телефона</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>№ Телефона</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="688">653188789</id>
+    <name>Легкий Роуминг</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>12</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="687">797244608</id>
+    <name>Мобильная Связь без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>4</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <mask>(***)***-**-**</mask>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="686">193464579</id>
+    <name>Мобильная Связь с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>4</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <mask>(***)***-**-**</mask>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="684">354046137</id>
+    <name>Мегафон без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>13</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>13</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>№ Телефона</title>
+        <maxlength>10</maxlength>
+        <pattern>^((6|9)\d{9}|\d{10})$</pattern>
+        <type>numeric</type>
+        <patterndesc>№ Телефона</patterndesc>
+        <comments>№ Телефона</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="685">68047804</id>
+    <name>Мегафон с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>13</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>1</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>№ Телефона</title>
+        <maxlength>10</maxlength>
+        <pattern>^((6|9)\d{9}|\d{10})$</pattern>
+        <type>numeric</type>
+        <patterndesc>№ Телефона</patterndesc>
+        <comments>№ Телефона</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="566">678263203</id>
+    <name>Яндекс без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>16</version>
+    <params>
+      <param>
+        <minlength>1</minlength>
+        <title>Счёт</title>
+        <maxlength>32</maxlength>
+        <pattern>^\d{1,32}$</pattern>
+        <type>numeric</type>
+        <patterndesc>1-32 чифры</patterndesc>
+        <comments>Счёт</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="1003">70552852</id>
+    <name>Яндекс с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>0</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>14</version>
+    <params>
+      <param>
+        <minlength>1</minlength>
+        <title>Телефон\Лицевой счёт</title>
+        <maxlength>32</maxlength>
+        <pattern>^\d{1,32}$</pattern>
+        <type>numeric</type>
+        <patterndesc>1-32 цифры</patterndesc>
+        <comments>Телефон\Лицевой счёт</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="1027">586059394</id>
+    <name>ГудЛайн</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>1</version>
+    <params>
+      <param>
+        <minlength>11</minlength>
+        <title>№ телефона (11 цифр)</title>
+        <maxlength>11</maxlength>
+        <pattern>^372\d{8}$</pattern>
+        <type>numeric</type>
+        <patterndesc>№ телефона (11 цифр)</patterndesc>
+        <comments>№ телефона (11 цифр)</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="306">979512608</id>
+    <name>Алло Инкогнито</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>1</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>№ Телефона</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>№ Телефона</patterndesc>
+        <comments>№ Телефона</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="524">857997811</id>
+    <name>Yota (моб.связь) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>3</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>11</maxlength>
+        <pattern>^\d{10,11}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10-11 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="539">361357912</id>
+    <name>Yota (моб.связь) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>5</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>11</maxlength>
+        <pattern>^\d{10,11}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10-11 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="683">977451616</id>
+    <name>Win mobile (Крым) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>16</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="682">974850180</id>
+    <name>Win mobile (Крым) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>18</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="681">951002202</id>
+    <name>Teletie.Бизнес</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>6</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="680">500231116</id>
+    <name>Teletie.Travel</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>8</version>
+    <params>
+      <param>
+        <minlength>11</minlength>
+        <title>Телефон</title>
+        <maxlength>11</maxlength>
+        <pattern>^371\d{8}$</pattern>
+        <type>numeric</type>
+        <patterndesc>11 цифр (371хххххххх)</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="233">262092827</id>
+    <name>Tele2 без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>1</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>№ Телефона</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>№ Телефона</patterndesc>
+        <comments>№ Телефона</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="133">742476721</id>
+    <name>Tele2 с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>29</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>1</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>№ Телефона</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>№ Телефона</patterndesc>
+        <comments>№ Телефона</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="679">243042501</id>
+    <name>SvyaznoiFon</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>1</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>№ Телефона</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>№ Телефона</patterndesc>
+        <comments>№ Телефона</comments>
+      </param>
+      <param name="2">
+        <title>ФИО Плательщика</title>
+        <type>text</type>
+        <pattern>^.{1,150}$</pattern>
+        <patterndesc>ФИО Плательщика</patterndesc>
+      </param>
+      <param name="3">
+        <title>Тип Документа (вид:01 -пасопрт РФ)</title>
+        <type>text</type>
+        <pattern>^(0[1-9]|1[0-4]|2[1-367]|91)$</pattern>
+        <patterndesc>Тип Документа (01- Паспорт РФ)</patterndesc>
+      </param>
+      <param name="4">
+        <title>Серия и № Документа</title>
+        <type>text</type>
+        <pattern>^[A-ZА-ЯЁ0-9 -]{4,64}$</pattern>
+        <patterndesc>Серия и № Документа</patterndesc>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="678">635392197</id>
+    <name>Smartsim</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>12</version>
+    <params>
+      <param>
+        <minlength>11</minlength>
+        <title>Телефон</title>
+        <maxlength>12</maxlength>
+        <pattern>^\d{11,12}$</pattern>
+        <type>numeric</type>
+        <patterndesc>11-12 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="594">453285184</id>
+    <name>Skylink (Екатеринбург) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>64</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>15</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="595">988409765</id>
+    <name>Skylink (Екатеринбург) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>0</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>17</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="596">707780198</id>
+    <name>Skylink (Калуга) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>9</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="597">625127715</id>
+    <name>Skylink (Калуга) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>0</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>17</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="598">116514363</id>
+    <name>Skylink (Кемерово) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>13</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="599">47738820</id>
+    <name>Skylink (Кемерово) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>0</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>18</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="600">516446228</id>
+    <name>Skylink (Киров) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>6</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="616">523337931</id>
+    <name>Skylink (Киров) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>0</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>6</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="642">789166488</id>
+    <name>Skylink (Краснодар) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>12</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="643">711629800</id>
+    <name>Skylink (Краснодар) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>0</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>15</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="652">485070228</id>
+    <name>Skylink (Москва) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>11</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="104">936763092</id>
+    <name>Skylink (Москва) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>0</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>17</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="593">649922272</id>
+    <name>Skylink (Дагестан) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>0</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>16</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="592">806854727</id>
+    <name>Skylink (Дагестан) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>10</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+
+
+  <provider>
+    <id platerra="591">133362357</id>
+    <name>Skylink (Воронеж) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>0</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>6</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="590">517220500</id>
+    <name>Skylink (Воронеж) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>6</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>№ Телефона</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>№ Телефона</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="589">528097001</id>
+    <name>Skylink (Волгоград) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>0</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>13</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="588">97161479</id>
+    <name>Skylink (Волгоград) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>15</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>№ Телефона</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>№ Телефона</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="586">600181774</id>
+    <name>Skylink (Владимир) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>21</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="587">41464893</id>
+    <name>Skylink (Владимир) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>0</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>14</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="653">313596019</id>
+    <name>Skylink (Нижний Новгород) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>8</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="71">641501873</id>
+    <name>Skylink (Нижний Новгород) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>0</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>6</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="654">348339</id>
+    <name>Skylink (Новосибирск) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>66</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>15</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="655">421463499</id>
+    <name>Skylink (Новосибирск) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>0</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>16</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="656">208165499</id>
+    <name>Skylink (Омск) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>6</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="657">226445858</id>
+    <name>Skylink (Омск) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>0</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>6</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="658">668731712</id>
+    <name>Skylink (Ростов-на-Дону) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>8</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="659">482629092</id>
+    <name>Skylink (Ростов-на-Дону) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>0</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>6</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="660">504058779</id>
+    <name>Skylink (Рязань) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>212</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>15</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="661">690796437</id>
+    <name>Skylink (Рязань) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>0</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>212</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>13</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="663">512160792</id>
+    <name>Skylink (Саратов) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>0</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>212</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>17</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+
+
+  <provider>
+    <id platerra="662">811670113</id>
+    <name>Skylink (Саратов) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>0</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>212</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>17</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="664">355778087</id>
+    <name>Skylink (Северная Осетия) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>15</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="665">649718451</id>
+    <name>Skylink (Северная Осетия) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>15</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="666">941730352</id>
+    <name>Skylink (Северо-Запад) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>13</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="667">414746613</id>
+    <name>Skylink (Северо-Запад) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>0</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>14</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="668">389639730</id>
+    <name>Skylink (Тверь) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>5</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="669">855879098</id>
+    <name>Skylink (Тверь) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>0</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>3</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="670">860028222</id>
+    <name>Skylink (Удмуртия) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>12</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="671">67527293</id>
+    <name>Skylink (Удмуртия) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>0</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>18</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="672">375620303</id>
+    <name>Skylink (Ульяновск) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>8</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="673">100753897</id>
+    <name>Skylink (Ульяновск) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>0</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>6</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="674">388075690</id>
+    <name>Skylink (Хабаровск) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>8</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="675">648623177</id>
+    <name>Skylink (Хабаровск) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>0</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>5</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="677">51430946</id>
+    <name>Skylink (Челябинск) без комиссии</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>7</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="676">265916737</id>
+    <name>Skylink (Челябинск) с комиссией</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>8</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Телефон</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>10 цифр</patterndesc>
+        <comments>Телефон</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="585">663857639</id>
+    <name>SimTravel</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>1</version>
+    <params>
+      <param>
+        <minlength>11</minlength>
+        <title>№ Телефона</title>
+        <maxlength>11</maxlength>
+        <pattern>^372\d{8}$</pattern>
+        <type>numeric</type>
+        <patterndesc>№ Телефона</patterndesc>
+        <comments>№ Телефона</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="584">180226546</id>
+    <name>Polar1</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>1</version>
+    <params>
+      <param>
+        <minlength>9</minlength>
+        <title>№ Карты</title>
+        <maxlength>9</maxlength>
+        <pattern>^\d{9}$</pattern>
+        <type>numeric</type>
+        <patterndesc>№ Карты</patterndesc>
+        <comments>№ Карты</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="583">651953676</id>
+    <name>Matrix mobile</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>5</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>12</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>1</version>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>№ Телефона</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>№ Телефона</patterndesc>
+        <comments>№ Телефона</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="351">783928829</id>
+    <name>GlobalSim</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>100</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>1</version>
+    <params>
+      <param>
+        <minlength>11</minlength>
+        <title>№ Телефона (11 цифр)</title>
+        <maxlength>11</maxlength>
+        <pattern>^372\d{8}$</pattern>
+        <type>numeric</type>
+        <patterndesc>11 цифр 372********</patterndesc>
+        <comments>№ Телефона</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>       
+    <id platerra="582">731801448</id>
+    <name>МТС по номеру счета с комиссией</name>
+    <providerid>254055389</providerid>
+    <companyid>1</companyid>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <inn>7740000076</inn>
+    <jurname>ОАО "Мобильные ТелеСистемы"</jurname>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>1</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>1</version>
+    <params>
+      <param>
+        <minlength>12</minlength>
+        <title>Номер лицевого счета</title>
+        <maxlength>12</maxlength>
+        <pattern>^\d{12}$</pattern>
+        <type>numeric</type>
+        <patterndesc>Номер лицевого счета</patterndesc>
+        <comments>Номер лицевого счета</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="579">17730330</id>
+    <name>Триколор ТВ</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>22</version>
+    <params>
+      <param>
+        <minlength>12</minlength>
+        <title>№ Договора\Оборудования</title>
+        <maxlength>14</maxlength>
+        <pattern>^\d{12,14}$</pattern>
+        <type>numeric</type>
+        <patterndesc>12-14 цифр</patterndesc>
+        <comments>№ Договора\Оборудования</comments>
+      </param>
+      <param name="type">
+        <title>Тип Платежа</title>
+        <type>enum</type>
+        <elements>
+          <item platerra="579" value="0">пополнение лицевого счета</item>
+          <item value="2">оплата пакета «Ночной» год</item>
+          <item value="5">оплата пакета «Наш футбол» месяц</item>
+          <item value="16">оплата пакета «Детский» год</item>
+          <item value="21">оплата пакета «Единый / Единый Мульти»</item>
+          <item value="24">оплата пакета «Мультирум»</item>
+          <item value="26">оплата пакета «Наш Футбол» 6 мес</item>
+          <item value="27">оплата пакета «Детский» месяц</item>
+          <item value="31">оплата пакета «Ночной» месяц</item>
+          <item value="43">----</item>
+          <item value="44">----</item>
+        </elements>
+        <pattern>.*</pattern>
+        <patterndesc>Тип Платежа</patterndesc>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="578">410520368</id>
+    <name>Курьер Такси (Элиста)</name>
+    <providerid>507696488</providerid>
+    <companyid>1</companyid>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <countries>
+      <country code="643" desc="RUS" />
+    </countries>
+    <version>11</version>
+    <params>
+      <param>
+        <minlength>4</minlength>
+        <title>Идентификтор Водителя</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{4,10}$</pattern>
+        <type>numeric</type>
+        <patterndesc>4-10 цифр</patterndesc>
+        <comments>Идентификтор Водителя</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="513">344588009</id>
+    <name>Тинькофф Банк ОнЛайн Пополнение Карты (29)</name>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>№ договора/карты (10/16 цифр)</title>
+        <maxlength>16</maxlength>
+        <pattern>^(\d{10}|\d{16})$</pattern>
+        <type>numeric</type>
+        <patterndesc>№ договора/карты (10/16 цифр)</patterndesc>
+        <comments>№ договора/карты (10/16 цифр)</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra=",109,113,122,123,126,127,128,129,134,">68047804</id>
+    <name>МегаФон с комиссией</name>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <inn>6454028103</inn>
+    <jurname>ОАО "МСС-Поволжье" </jurname>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>13</dpsprovider>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Номер телефона</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <mask>(***)***-**-**</mask>
+        <type>numeric</type>
+        <patterndesc>10-ти значный федеральный или прямой номер</patterndesc>
+        <comments>Введите 10-ти значный номер</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id>354046137</id>
+    <name>МегаФон без комиссии</name>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <inn>6454028103</inn>
+    <jurname>ОАО "МСС-Поволжье"</jurname>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>13</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>№ телефона (10 цифр)</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <mask>***-***-**-**</mask>
+        <type>numeric</type>
+        <patterndesc>№ телефона (10 цифр)</patterndesc>
+        <comments>№ телефона (10 цифр)</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="101">879621998</id>
+    <name>Билайн с комиссией</name>
+    <minsum>2</minsum>
+    <maxsum>15000</maxsum>
+    <inn>7713076301</inn>
+    <jurname>ОАО "Вымпел Коммуникации"</jurname>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>7</dpsprovider>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Номер телефона</title>
+        <maxlength>10</maxlength>
+        <pattern>^[0,9]\d{9}$</pattern>
+        <mask>(***)***-**-**</mask>
+        <type>numeric</type>
+        <patterndesc>10-ти значный федеральный номер</patterndesc>
+        <comments>Введите 10-ти значный номер</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="97">411492871</id>
+    <name>Билайн без комиссии</name>
+    <minsum>2</minsum>
+    <maxsum>15000</maxsum>
+    <inn>7713076301</inn>
+    <jurname>ОАО "Вымпел Коммуникации"</jurname>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>7</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>№ телефона (10 цифр)</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <mask>(***)***-**-**</mask>
+        <type>numeric</type>
+        <patterndesc>№ телефона (10 цифр)</patterndesc>
+        <comments>№ телефона (10 цифр)</comments>
+      </param>
+    </params>
+  </provider>
+
+
+  <provider>
+    <id platerra="100">346964807</id>
+    <name>МТС с комиссией</name>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <inn>7740000076</inn>
+    <jurname>ОАО "МТС"</jurname>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>1</dpsprovider>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Номер телефона</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <mask>(***)***-**-**</mask>
+        <type>numeric</type>
+        <patterndesc>10-ти значный федеральный или прямой номер</patterndesc>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id>540792152</id>
+    <name>МТС без комиссии</name>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <inn>7740000076</inn>
+    <jurname>ОАО "МТС"</jurname>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>1</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>№ телефона (10 цифр)</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <mask>***-***-**-**</mask>
+        <type>numeric</type>
+        <patterndesc>№ телефона (10 цифр)</patterndesc>
+        <comments>№ телефона (10 цифр)</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="511">800043458</id>
+    <name>Азия Такси (Элиста) (29)</name>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <params>
+      <param>
+        <minlength>4</minlength>
+        <title>Account (4 символа)</title>
+        <maxlength>4</maxlength>
+        <pattern>^.{4}$</pattern>
+        <patterndesc>Account (4 символа)</patterndesc>
+        <comments>Account (4 символа)</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="633">504831250</id>
+    <name>Oriflame (24)</name>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0.5" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <params>
+      <param>
+        <minlength>5</minlength>
+        <title>Рег.Номер (5-8 цифр)</title>
+        <maxlength>8</maxlength>
+        <pattern>^\d{5,8}$</pattern>
+        <type>numeric</type>
+        <patterndesc>от 5 до 8 цифр</patterndesc>
+        <comments>Рег.Номер (5-8 цифр)</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="488">958277659</id>
+    <name>Платеж через QIWI-кошелек</name>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <params>
+      <param>
+        <pattern>^\d{10}</pattern>
+      </param>
+      <param name="remoteServiceId">
+        <title>remoteServiceId</title>
+        <type>text</type>
+        <pattern>^\d+</pattern>
+        <patterndesc>remoteServiceId</patterndesc>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="430">827709301</id>
+    <name>Пополнение MasterCard Российских Банков - до 2500 руб (2)</name>
+    <minsum>50</minsum>
+    <maxsum>2500</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <params>
+      <param>
+        <minlength>10</minlength>
+        <title>Номер телефона</title>
+        <maxlength>10</maxlength>
+        <pattern>^\d{10}$</pattern>
+        <mask>(***)***-**-**</mask>
+        <type>numeric</type>
+        <patterndesc>Номер телефона</patterndesc>
+      </param>
+      <param name="card">
+        <title>№ Карты</title>
+        <type>text</type>
+        <pattern>^\d{16}$</pattern>
+        <patterndesc>№ Карты: 16 цифр</patterndesc>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="429">370667532</id>
+    <name>МТС Банк ОнЛайн Пополнение Карты (24)</name>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <params>
+      <param>
+        <minlength>16</minlength>
+        <title>№ карты (16 цифр)</title>
+        <maxlength>16</maxlength>
+        <pattern>^[0-9*]{12}[0-9]{4}$</pattern>
+        <type>numeric</type>
+        <patterndesc>№ карты (16 цифр)</patterndesc>
+        <comments>№ карты (16 цифр)</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="428">832512393</id>
+    <name>ЕИС Бриз (29)</name>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <params>
+      <param>
+        <minlength>4</minlength>
+        <title>№ карты или телефона (4-6 или 10 цифр)</title>
+        <maxlength>10</maxlength>
+        <pattern>^(\d{4,6}|\d{10})$</pattern>
+        <type>numeric</type>
+        <patterndesc>от 4 до 6 цифр или 10 цифр</patterndesc>
+        <comments>№ карты или телефона (4-6 или 10 цифр)</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="427">420630149</id>
+    <name>ОТП Банк (2)</name>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <params>
+      <param>
+        <minlength>20</minlength>
+        <title>№ счета (20 цифр)</title>
+        <maxlength>20</maxlength>
+        <pattern>^\d{20}$</pattern>
+        <type>numeric</type>
+        <patterndesc>№ счета (20 цифр)</patterndesc>
+        <comments>№ счета (20 цифр)</comments>
+      </param>
+      <param name="lastname">
+        <title>Фамилия Получателя:</title>
+        <type>text</type>
+        <pattern>.*</pattern>
+        <patterndesc>Фамилия:ёЁа-яА-Я</patterndesc>
+      </param>
+      <param name="name">
+        <title>Имя Получателя:</title>
+        <type>text</type>
+        <pattern>.*</pattern>
+        <patterndesc>Имя</patterndesc>
+      </param>
+      <param name="surname">
+        <title>Отчество Получателя:</title>
+        <type>text</type>
+        <pattern>.*</pattern>
+        <patterndesc>Отчество</patterndesc>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="426">43750480</id>
+    <name>Fonbet Букмекерская Контора (3)</name>
+    <minsum>100</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <params>
+      <param>
+        <minlength>2</minlength>
+        <title>Рег.Номер (2-6 цифр)</title>
+        <maxlength>6</maxlength>
+        <pattern>^\d{2,6}$</pattern>
+        <type>numeric</type>
+        <patterndesc>Рег.Номер (2-6 цифр)</patterndesc>
+        <comments>Рег.Номер (2-6 цифр)</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="415">671607153</id>
+    <name>Альфа Банк ОнЛайн по № карты (2)</name>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <params>
+      <param>
+        <minlength>16</minlength>
+        <title>№ карты (16 цифр)</title>
+        <maxlength>16</maxlength>
+        <pattern>^\d{16}$</pattern>
+        <type>numeric</type>
+        <patterndesc>№ карты (16 цифр)</patterndesc>
+        <comments>№ карты (16 цифр)</comments>
+      </param>
+      <param name="valid">
+        <title>Срок действия (вид: ГГММ)</title>
+        <type>text</type>
+        <pattern>^\d{4}$</pattern>
+        <patterndesc>Срок действия (вид: ГГММ)</patterndesc>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="416">345026240</id>
+    <name>Альфа Банк ОнЛайн по № счета (2)</name>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <params>
+      <param>
+        <minlength>20</minlength>
+        <title>№ счёта (20 цифр):</title>
+        <maxlength>20</maxlength>
+        <pattern>^\d{20}$</pattern>
+        <type>numeric</type>
+        <patterndesc>20 цифр</patterndesc>
+        <comments>№ счёта (20 цифр):</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="418">642431052</id>
+    <name>Русский Стандарт Банк ОнЛайн (29)</name>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <params>
+      <param>
+        <minlength>8</minlength>
+        <title>№ Счета/Договора/Карты:</title>
+        <maxlength>20</maxlength>
+        <pattern>^(\d{20}|\d{8,9}|\d{15,16})$</pattern>
+        <type>numeric</type>
+        <patterndesc>№ счёта- 20 цифр или № договора-8 цифр, или от № карты-15-16 цифр</patterndesc>
+        <comments>Номер счета/номер договора/номер карты</comments>
+      </param>
+    </params>
+  </provider>
+
+  <provider>
+    <id platerra="413">344588009</id>
+    <name>Тинькофф Банк ОнЛайн по № договора (2)</name>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <params>
+      <param>
+        <minlength>5</minlength>
+        <title>№ договора (5-20 цифр):</title>
+        <maxlength>20</maxlength>
+        <pattern>^\d{5,20}$</pattern>
+        <type>numeric</type>
+        <patterndesc>№ договора (5-20 цифр):</patterndesc>
+        <comments>№ договора (5-20 цифр):</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="414">344588009</id>
+    <name>Тинькофф Банк ОнЛайн по № карты (2)</name>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="false" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <params>
+      <param>
+        <minlength>16</minlength>
+        <title>№ карты (16 цифр):</title>
+        <maxlength>16</maxlength>
+        <pattern>^\d{16}$</pattern>
+        <type>numeric</type>
+        <patterndesc>№ карты (16 цифр):</patterndesc>
+        <comments>№ карты (16 цифр):</comments>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="609">403478143</id>
+    <name>WebMoney</name>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <inn>7702594855</inn>
+    <jurname>ООО "Гарантийное Бюро"</jurname>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>311</dpsprovider>
+    <params>
+      <param>
+        <minlength>12</minlength>
+        <title>Номер счета</title>
+        <maxlength>12</maxlength>
+        <mask>R****-****-****</mask>
+        <type>numeric</type>
+        <patterndesc>12-ти значный номер кошелька. Мобильный телефон - 10 цифр.</patterndesc>
+        <comments>тест123</comments>
+      </param>
+      <param name="mobile">
+        <title>Мобильный телефон</title>
+        <type>text</type>
+        <pattern>^\d{10}$</pattern>
+        <patterndesc>Мобильный телефон</patterndesc>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra="83">514637647</id>
+    <name>Радуга ТВ(ДалГеоКом) (3)</name>
+    <minsum>1</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="5" />
+    <dpsprovider>1402</dpsprovider>
+    <params>
+      <param>
+        <minlength>11</minlength>
+        <title>Номер счета</title>
+        <maxlength>11</maxlength>
+        <pattern>^\d{11}$</pattern>
+        <type>numeric</type>
+        <patterndesc>11-значный номер карты</patterndesc>
+      </param>
+    </params>
+  </provider>
+  <provider>
+    <id platerra=",141,146,108,">332644280</id>
+    <name>Триколор ТВ (29)</name>
+    <minsum>10</minsum>
+    <maxsum>15000</maxsum>
+    <additpercent allow="true" max="0" />
+    <dpsprovider>0</dpsprovider>
+    <isAmountFixed>false</isAmountFixed>
+    <params>
+      <param>
+        <minlength>1</minlength>
+        <title>№ агент.договора или приёмного оборудования (1-14 цифр)</title>
+        <maxlength>14</maxlength>
+        <pattern>^\d{1,14}$</pattern>
+        <type>text</type>
+        <patterndesc>№ агент.договора или приёмного оборудования (1-14 цифр)</patterndesc>
+        <comments>№ агент.договора или приёмного оборудования (1-14 цифр)</comments>
+      </param>
+      <param name="578">
+        <title>Тип платежа</title>
+        <type>enum</type>
+        <elements>
+          <item value="0">Пополнение личного счета</item>
+          <item platerra="141" value="21">Пакет ОПТИМУМ / МАКСИМУМ HD</item>
+          <item platerra="146" value="2">Пакет Ночной</item>
+          <item platerra="108" value="5">Наш футбол 149руб</item>
+          <item value="6">Кинозалы</item>
+          <item value="14">РадиоПакет</item>
+          <item value="16">Детский</item>
+          <item value="17">Наш футбол 1500руб</item>
+          <item value="20">СуперКино HD 5400руб./год</item>
+          <item value="23">Золотая карта. Всё включено</item>
+          <item value="22">Музыкальный</item>
+          <item value="не выбирать">не выбирать</item>
+        </elements>
+        <pattern>^([0256]|1[467]|2[0123])$</pattern>
+        <patterndesc>Тип платежа</patterndesc>
+      </param>
+    </params>
+  </provider>
+</kp-dealer>

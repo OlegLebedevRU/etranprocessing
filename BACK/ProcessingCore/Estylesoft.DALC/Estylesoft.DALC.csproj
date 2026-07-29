@@ -1,0 +1,207 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="12.0">
+  <PropertyGroup>
+    <ProjectType>Local</ProjectType>
+    <ProductVersion>8.0.50727</ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{6A1C726E-CECF-42FD-BE2C-6540049FC7DF}</ProjectGuid>
+    <SccProjectName>
+    </SccProjectName>
+    <SccLocalPath>
+    </SccLocalPath>
+    <SccProvider>
+    </SccProvider>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ApplicationIcon>
+    </ApplicationIcon>
+    <AssemblyKeyContainerName>
+    </AssemblyKeyContainerName>
+    <AssemblyName>Estylesoft.DALC</AssemblyName>
+    <AssemblyOriginatorKeyFile>
+    </AssemblyOriginatorKeyFile>
+    <DefaultClientScript>JScript</DefaultClientScript>
+    <DefaultHTMLPageLayout>Grid</DefaultHTMLPageLayout>
+    <DefaultTargetSchema>IE50</DefaultTargetSchema>
+    <DelaySign>false</DelaySign>
+    <OutputType>Library</OutputType>
+    <RootNamespace>Estylesoft.DALC</RootNamespace>
+    <RunPostBuildEvent>OnBuildSuccess</RunPostBuildEvent>
+    <StartupObject>
+    </StartupObject>
+    <FileUpgradeFlags>
+    </FileUpgradeFlags>
+    <SccAuxPath>
+    </SccAuxPath>
+    <UpgradeBackupLocation>
+    </UpgradeBackupLocation>
+    <TargetFrameworkVersion>v2.0</TargetFrameworkVersion>
+    <OldToolsVersion>2.0</OldToolsVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <OutputPath>bin\Debug\</OutputPath>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <BaseAddress>285212672</BaseAddress>
+    <CheckForOverflowUnderflow>false</CheckForOverflowUnderflow>
+    <ConfigurationOverrideFile>
+    </ConfigurationOverrideFile>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <DocumentationFile>Estylesoft.DALC.xml</DocumentationFile>
+    <DebugSymbols>true</DebugSymbols>
+    <FileAlignment>4096</FileAlignment>
+    <NoStdLib>false</NoStdLib>
+    <NoWarn>
+    </NoWarn>
+    <Optimize>false</Optimize>
+    <RegisterForComInterop>false</RegisterForComInterop>
+    <RemoveIntegerChecks>false</RemoveIntegerChecks>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <WarningLevel>4</WarningLevel>
+    <DebugType>full</DebugType>
+    <ErrorReport>prompt</ErrorReport>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <OutputPath>bin\Release\</OutputPath>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <BaseAddress>285212672</BaseAddress>
+    <CheckForOverflowUnderflow>false</CheckForOverflowUnderflow>
+    <ConfigurationOverrideFile>
+    </ConfigurationOverrideFile>
+    <DefineConstants>TRACE</DefineConstants>
+    <DocumentationFile>Estylesoft.MIR.DALC.xml</DocumentationFile>
+    <DebugSymbols>false</DebugSymbols>
+    <FileAlignment>4096</FileAlignment>
+    <NoStdLib>false</NoStdLib>
+    <NoWarn>
+    </NoWarn>
+    <Optimize>true</Optimize>
+    <RegisterForComInterop>false</RegisterForComInterop>
+    <RemoveIntegerChecks>false</RemoveIntegerChecks>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <WarningLevel>4</WarningLevel>
+    <DebugType>none</DebugType>
+    <ErrorReport>prompt</ErrorReport>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System">
+      <Name>System</Name>
+    </Reference>
+    <Reference Include="System.Data">
+      <Name>System.Data</Name>
+    </Reference>
+    <Reference Include="System.Drawing">
+      <Name>System.Drawing</Name>
+    </Reference>
+    <Reference Include="System.Windows.Forms">
+      <Name>System.Windows.Forms</Name>
+    </Reference>
+    <Reference Include="System.Xml">
+      <Name>System.XML</Name>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="AssemblyInfo.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DbCollectionBase.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DbCommand\DbCommand.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DbCommand\DbParameter.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DbCommand\DbParametersCollection.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DbCommand\SqlHelperParameterCache.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DbConnection.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DbConnectionsManager.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DbDataReader.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DbExecutor.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DbIsolationLevel.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DbManager.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DbNullDataTransformer.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DbProvider\IDbExceptionProvider.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DbProvider\IDbProvider.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DbProvider\OleDbProvider.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DbProvider\SqlExceptionProvider.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DbProvider\SqlProvider.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DbRealConnection.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DbTransactionalExecutor.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DbTransactionOption.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DeclarativeTransaction\DbTransactionalComponentAttribute.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DeclarativeTransaction\DbTransactionAttribute.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DeclarativeTransaction\TransactionalComponentBase.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DeclarativeTransaction\TransactionMessageSink.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Exception\DbBusinessException.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Exception\DbException.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Exception\DbTransactionManagerException.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="IDbNullDataTransformer.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="TransactionContext.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="TransactionManager.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Utils.cs">
+      <SubType>Code</SubType>
+    </Compile>
+  </ItemGroup>
+  <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
+  <PropertyGroup>
+    <PreBuildEvent>
+    </PreBuildEvent>
+    <PostBuildEvent>
+    </PostBuildEvent>
+  </PropertyGroup>
+</Project>

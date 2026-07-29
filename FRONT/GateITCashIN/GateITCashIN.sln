@@ -1,0 +1,38 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 14
+VisualStudioVersion = 14.0.24720.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{E24C65DC-7377-472B-9ABA-BC803B73C61A}") = "GateITCashIN", ".", "{A5B395D3-CA65-414B-8954-22B099D0472F}"
+	ProjectSection(WebsiteProperties) = preProject
+		TargetFrameworkMoniker = ".NETFramework,Version%3Dv2.0"
+		Debug.AspNetCompiler.VirtualPath = "/localhost_53278"
+		Debug.AspNetCompiler.PhysicalPath = "..\GateITCashIN\"
+		Debug.AspNetCompiler.TargetPath = "PrecompiledWeb\localhost_53278\"
+		Debug.AspNetCompiler.Updateable = "true"
+		Debug.AspNetCompiler.ForceOverwrite = "true"
+		Debug.AspNetCompiler.FixedNames = "false"
+		Debug.AspNetCompiler.Debug = "True"
+		Release.AspNetCompiler.VirtualPath = "/localhost_53278"
+		Release.AspNetCompiler.PhysicalPath = "..\GateITCashIN\"
+		Release.AspNetCompiler.TargetPath = "PrecompiledWeb\localhost_53278\"
+		Release.AspNetCompiler.Updateable = "true"
+		Release.AspNetCompiler.ForceOverwrite = "true"
+		Release.AspNetCompiler.FixedNames = "false"
+		Release.AspNetCompiler.Debug = "False"
+		VWDPort = "53278"
+		SlnRelativePath = "..\GateITCashIN\"
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A5B395D3-CA65-414B-8954-22B099D0472F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A5B395D3-CA65-414B-8954-22B099D0472F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

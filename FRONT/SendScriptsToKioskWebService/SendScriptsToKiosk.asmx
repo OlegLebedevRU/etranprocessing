@@ -1,0 +1,1 @@
+﻿<%@ WebService Language="C#" CodeBehind="SendScriptsToKiosk.asmx.cs" Class="SendScriptsToKioskWebService.SendScriptsToKiosk" %>

@@ -1,0 +1,106 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<edmx:Edmx Version="3.0" xmlns:edmx="http://schemas.microsoft.com/ado/2009/11/edmx">
+  <!-- EF Runtime content -->
+  <edmx:Runtime>
+    <!-- SSDL content -->
+    <edmx:StorageModels>
+      <Schema Namespace="Хранилище FileStoreModel" Provider="System.Data.SqlClient" ProviderManifestToken="2008" Alias="Self" xmlns:store="http://schemas.microsoft.com/ado/2007/12/edm/EntityStoreSchemaGenerator" xmlns:customannotation="http://schemas.microsoft.com/ado/2013/11/edm/customannotation" xmlns="http://schemas.microsoft.com/ado/2009/11/edm/ssdl">
+        <EntityType Name="tblAttachments">
+          <Key>
+            <PropertyRef Name="id" />
+          </Key>
+          <Property Name="id" Type="uniqueidentifier" Nullable="false" />
+          <Property Name="fileName" Type="nvarchar" MaxLength="250" />
+          <Property Name="fileSize" Type="int" />
+          <Property Name="attachment" Type="varbinary(max)" />
+        </EntityType>
+        <EntityType Name="tblImages">
+          <Key>
+            <PropertyRef Name="id" />
+          </Key>
+          <Property Name="id" Type="uniqueidentifier" Nullable="false" />
+          <Property Name="fileName" Type="nvarchar" MaxLength="250" />
+          <Property Name="fileSize" Type="int" />
+          <Property Name="attachment" Type="varbinary(max)" />
+        </EntityType>
+        <EntityContainer Name="Хранилище FileStoreModelContainer">
+          <EntitySet Name="tblAttachments" EntityType="Self.tblAttachments" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tblImages" EntityType="Self.tblImages" Schema="dbo" store:Type="Tables" />
+        </EntityContainer>
+      </Schema>
+    </edmx:StorageModels>
+    <!-- CSDL content -->
+    <edmx:ConceptualModels>
+      <Schema Namespace="FileStoreModel" Alias="Self" annotation:UseStrongSpatialTypes="false" xmlns:annotation="http://schemas.microsoft.com/ado/2009/02/edm/annotation" xmlns:customannotation="http://schemas.microsoft.com/ado/2013/11/edm/customannotation" xmlns="http://schemas.microsoft.com/ado/2009/11/edm">
+        <EntityType Name="tblAttachments">
+          <Key>
+            <PropertyRef Name="id" />
+          </Key>
+          <Property Name="id" Type="Guid" Nullable="false" />
+          <Property Name="fileName" Type="String" MaxLength="250" FixedLength="false" Unicode="true" />
+          <Property Name="fileSize" Type="Int32" />
+          <Property Name="attachment" Type="Binary" MaxLength="Max" FixedLength="false" />
+        </EntityType>
+        <EntityType Name="tblImages">
+          <Key>
+            <PropertyRef Name="id" />
+          </Key>
+          <Property Name="id" Type="Guid" Nullable="false" />
+          <Property Name="fileName" Type="String" MaxLength="250" FixedLength="false" Unicode="true" />
+          <Property Name="fileSize" Type="Int32" />
+          <Property Name="attachment" Type="Binary" MaxLength="Max" FixedLength="false" />
+        </EntityType>
+        <EntityContainer Name="FileStoreEntities" annotation:LazyLoadingEnabled="true">
+          <EntitySet Name="tblAttachments" EntityType="Self.tblAttachments" />
+          <EntitySet Name="tblImages" EntityType="Self.tblImages" />
+        </EntityContainer>
+      </Schema>
+    </edmx:ConceptualModels>
+    <!-- C-S mapping content -->
+    <edmx:Mappings>
+      <Mapping Space="C-S" xmlns="http://schemas.microsoft.com/ado/2009/11/mapping/cs">
+        <EntityContainerMapping StorageEntityContainer="Хранилище FileStoreModelContainer" CdmEntityContainer="FileStoreEntities">
+          <EntitySetMapping Name="tblAttachments">
+            <EntityTypeMapping TypeName="FileStoreModel.tblAttachments">
+              <MappingFragment StoreEntitySet="tblAttachments">
+                <ScalarProperty Name="id" ColumnName="id" />
+                <ScalarProperty Name="fileName" ColumnName="fileName" />
+                <ScalarProperty Name="fileSize" ColumnName="fileSize" />
+                <ScalarProperty Name="attachment" ColumnName="attachment" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tblImages">
+            <EntityTypeMapping TypeName="FileStoreModel.tblImages">
+              <MappingFragment StoreEntitySet="tblImages">
+                <ScalarProperty Name="id" ColumnName="id" />
+                <ScalarProperty Name="fileName" ColumnName="fileName" />
+                <ScalarProperty Name="fileSize" ColumnName="fileSize" />
+                <ScalarProperty Name="attachment" ColumnName="attachment" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+        </EntityContainerMapping>
+      </Mapping>
+    </edmx:Mappings>
+  </edmx:Runtime>
+  <!-- EF Designer content (DO NOT EDIT MANUALLY BELOW HERE) -->
+  <Designer xmlns="http://schemas.microsoft.com/ado/2009/11/edmx">
+    <Connection>
+      <DesignerInfoPropertySet>
+        <DesignerProperty Name="MetadataArtifactProcessing" Value="EmbedInOutputAssembly" />
+      </DesignerInfoPropertySet>
+    </Connection>
+    <Options>
+      <DesignerInfoPropertySet>
+        <DesignerProperty Name="ValidateOnBuild" Value="true" />
+        <DesignerProperty Name="EnablePluralization" Value="false" />
+        <DesignerProperty Name="IncludeForeignKeysInModel" Value="true" />
+        <DesignerProperty Name="UseLegacyProvider" Value="false" />
+        <DesignerProperty Name="CodeGenerationStrategy" Value="Нет" />
+      </DesignerInfoPropertySet>
+    </Options>
+    <!-- Diagram content (shape and connector positions) -->
+    <Diagrams></Diagrams>
+  </Designer>
+</edmx:Edmx>

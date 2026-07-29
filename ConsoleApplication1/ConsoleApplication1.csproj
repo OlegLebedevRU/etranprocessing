@@ -1,0 +1,97 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{225A2105-577D-4B31-9BD0-ABFFB09C6B5D}</ProjectGuid>
+    <OutputType>Exe</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>ConsoleApplication1</RootNamespace>
+    <AssemblyName>ConsoleApplication1</AssemblyName>
+    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <TargetFrameworkProfile />
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Web" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\PlaterraSoft\Terminal\Platerra.Terminal.Common.ESV\Platerra.Terminal.Common.ESV.csproj">
+      <Project>{1DA19A37-32F0-4A88-9139-93152B3B8A16}</Project>
+      <Name>Platerra.Terminal.Common.ESV</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\CommonLibs\BarcodeLib\BarcodeLib.csproj">
+      <Project>{f8646414-0c9c-49bb-9da3-3923bf78a398}</Project>
+      <Name>BarcodeLib</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\CommonLibs\DbAttachmentLib\DbAttachmentLib.csproj">
+      <Project>{9bd4cf56-67c7-429c-b180-c31228f8b739}</Project>
+      <Name>DbAttachmentLib</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\CommonLibs\FoNetLib\FoNetLib.csproj">
+      <Project>{F4B89F03-86AA-4F52-875C-AADE0197B12D}</Project>
+      <Name>FoNetLib</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\CommonLibs\PdfCommon\PdfCommon.csproj">
+      <Project>{4ef79601-7aa7-4632-9f6e-f4d979a82d71}</Project>
+      <Name>PdfCommon</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\CommonLibs\TextSharpLib\TextSharpLib.csproj">
+      <Project>{ebe848b8-431c-4791-a982-7ed3b8998289}</Project>
+      <Name>TextSharpLib</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\FRONT\DispatcherCommon\DispatcherCommon.csproj">
+      <Project>{4e852925-03e3-4870-aad4-0cf5df0bf440}</Project>
+      <Name>DispatcherCommon</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Veksel.xslt">
+      <SubType>Designer</SubType>
+    </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app.config" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+       Other similar extension points exist, see Microsoft.Common.targets.
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+  -->
+</Project>

@@ -1,0 +1,70 @@
+<response>
+  <result-code fatal="false">0</result-code>
+  <payments-list date-from="06.07.2011 00:00:00" date-to="07.07.2011 23:59:59">
+    <payment>
+      <status>60</status>
+      <transaction-number>764035554</transaction-number>
+      <txn-date>06.07.2011 14:51:13</txn-date>
+      <from>
+        <amount>1.00</amount>
+      </from>
+      <to>
+        <service-id>1</service-id>
+        <amount>1.00</amount>
+        <account-number>9162376067</account-number>
+      </to>
+    </payment>
+    <payment>
+      <status>60</status>
+      <transaction-number>764035555</transaction-number>
+      <txn-date>06.07.2011 14:58:12</txn-date>
+      <from>
+        <amount>1.50</amount>
+      </from>
+      <to>
+        <service-id>1</service-id>
+        <amount>1.50</amount>
+        <account-number>9162376067</account-number>
+      </to>
+    </payment>
+    <payment>
+      <status>60</status>
+      <transaction-number>768164324</transaction-number>
+      <txn-date>06.07.2011 15:05:39</txn-date>
+      <from>
+        <amount>1.00</amount>
+      </from>
+      <to>
+        <service-id>1</service-id>
+        <amount>1.00</amount>
+        <account-number>9162376067</account-number>
+      </to>
+    </payment>
+    <payment>
+      <status>60</status>
+      <transaction-number>764035549</transaction-number>
+      <txn-date>06.07.2011 15:11:28</txn-date>
+      <from>
+        <amount>2.00</amount>
+      </from>
+      <to>
+        <service-id>1</service-id>
+        <amount>2.00</amount>
+        <account-number>9162376067</account-number>
+      </to>
+    </payment>
+    <payment>
+      <status>60</status>
+      <transaction-number>768164318</transaction-number>
+      <txn-date>06.07.2011 15:13:05</txn-date>
+      <from>
+        <amount>1.50</amount>
+      </from>
+      <to>
+        <service-id>1</service-id>
+        <amount>1.50</amount>
+        <account-number>9162376067</account-number>
+      </to>
+    </payment>
+  </payments-list>
+</response>

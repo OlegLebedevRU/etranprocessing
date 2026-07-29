@@ -1,0 +1,1 @@
+<%@ WebService Language="C#" CodeBehind="MessageProcessor.asmx.cs" Class="MessageProcessor.MessageProcessor" %>

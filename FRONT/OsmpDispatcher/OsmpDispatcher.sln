@@ -1,0 +1,41 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2012
+Project("{E24C65DC-7377-472B-9ABA-BC803B73C61A}") = "OsmpDispatcher", ".", "{9CC66EF1-B31F-44DC-9E05-547E1D764AED}"
+	ProjectSection(WebsiteProperties) = preProject
+		TargetFrameworkMoniker = ".NETFramework,Version%3Dv2.0"
+		Debug.AspNetCompiler.VirtualPath = "/OsmpDispatcher"
+		Debug.AspNetCompiler.PhysicalPath = "OsmpDispatcher\"
+		Debug.AspNetCompiler.TargetPath = "PrecompiledWeb\OsmpDispatcher\"
+		Debug.AspNetCompiler.Updateable = "true"
+		Debug.AspNetCompiler.ForceOverwrite = "true"
+		Debug.AspNetCompiler.FixedNames = "false"
+		Debug.AspNetCompiler.Debug = "True"
+		Release.AspNetCompiler.VirtualPath = "/OsmpDispatcher"
+		Release.AspNetCompiler.PhysicalPath = "OsmpDispatcher\"
+		Release.AspNetCompiler.TargetPath = "PrecompiledWeb\OsmpDispatcher\"
+		Release.AspNetCompiler.Updateable = "true"
+		Release.AspNetCompiler.ForceOverwrite = "true"
+		Release.AspNetCompiler.FixedNames = "false"
+		Release.AspNetCompiler.Debug = "False"
+		VWDPort = "28781"
+		DefaultWebSiteLanguage = "Visual C#"
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{425C337F-80F4-4D3A-86BA-F424F8E4CF96}"
+	ProjectSection(SolutionItems) = preProject
+		request.xml = request.xml
+		TechInfo.xml = TechInfo.xml
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|.NET = Debug|.NET
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{9CC66EF1-B31F-44DC-9E05-547E1D764AED}.Debug|.NET.ActiveCfg = Debug|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

@@ -1,0 +1,866 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<info>
+  <services>
+    <service>
+      <code platerra="553">230</code>
+      <name>Триколор ТВ  Центр  Оптимум</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="488">2091</code>
+      <name>QIWI Кошелек</name>
+      <params>
+        <param name="1" description="Номер (NUMBER): 10 цифр" />
+      </params>
+    </service>
+
+    <service>
+      <code platerra="555">297</code>
+      <name>Akado(Р2) Интернет</name>
+      <params>
+        <param name="1" description="3-5 цифры" />
+      </params>
+    </service>
+
+    <service>
+      <code platerra="513">388</code>
+      <name>Банк ОнЛайн</name>
+      <params>
+        <param name="1" description="№ договора/карты (10/16 цифр)" />
+      </params>
+    </service>
+    <service>
+      <code platerra="548">2084</code>
+      <name>Пополнение карт VISA</name>
+      <params>
+        <param name="1" description="Номер телефона" />
+        <param name="2" description="Номер карты" />
+      </params>
+    </service>
+
+    <service>
+      <code platerra="549">2081</code>
+      <name>Пополнение карт MASTERCARD</name>
+      <params>
+        <param name="1" description="Номер телефона" />
+        <param name="2" description="Номер карты" />
+      </params>
+    </service>
+
+    <service>
+      <code platerra="0">0</code>
+      <name>сотовая связь</name>
+      <params>
+        <param name="1" description="Номер телефона" />
+      </params>
+    </service>
+    <service>
+      <code platerra="544">157</code>
+      <name>Комм.платежи СПб</name>
+      <params>
+        <param name="1" description="Номер телефона" />
+        <param name="2" description="Номер счета" />
+        <param name="3" description="Сумма" />
+      </params>
+    </service>
+    <service>
+      <code platerra="802">160</code>
+      <name> НТВ-плюс</name>
+      <params>
+        <param name="1" description="Номер счета (ACCOUNT): 10 цифр (вместе с префиксом)" />
+      </params>
+    </service>
+    <service>
+      <code platerra="552">192</code>
+      <name>ИнтерЗет</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="432">194</code>
+      <name>Озерки.NET(Цифра)</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="13">195</code>
+      <name>МГТС</name>
+      <params>
+        <param name="1" description="Номер телефона" />
+        <param name="2" description="Номер квартиры" />
+      </params>
+    </service>
+    <service>
+      <code platerra="433">196</code>
+      <name>А-тел (Арктел)</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="546">204</code>
+      <name>Ростелеком (фиксированная связь)</name>
+      <params>
+        <param name="1" description="Номер телефона" />
+        <param name="2" description="Номер для зачисления" />
+        <param name="3" description="Сумма" />
+      </params>
+    </service>
+    <service>
+      <code platerra="547">207</code>
+      <name>Твой интернет</name>
+      <params>
+        <param name="1" description="Номер договора (NUMBER): (от 4 до 15 цифр, возможен знак '/')" />
+      </params>
+    </service>
+    <service>
+      <code platerra="554">206</code>
+      <name>Твоё TV</name>
+      <params>
+        <param name="1" description="Тип платежа: '1' - Твоё TV '2' - Твой Интернет '3' - Твой телефон. Местная связь '4' - Твой телефон. Междугородняя, международная, внутризоновая связь '5' -Твой Умный Дом." />
+        <param name="2" description="Номер договора (NUMBER): (от 4 до 15 цифр, возможен знак '/')" />
+      </params>
+    </service>
+    <service>
+      <code platerra="78">210</code>
+      <name>RU-CENTER</name>
+      <params>
+        <param name="1" description="Номер договора (NUMBER): цифры до 12 символов, далее .100 для клиентом с номером договора, оканчивающимся на NIC-D, и .110 для клиентов с номером договора, оканчивающихся на NIC-REG" />
+      </params>
+    </service>
+    <service>
+      <code platerra="525">211</code>
+      <name>Корбина Телеком</name>
+      <params>
+        <param name="1" description="Лицевой счет" />
+      </params>
+    </service>
+    <service>
+      <code platerra="435">212</code>
+      <name>RTVC (ЗАО «ЭкспрессТелеком» )</name>
+      <params>
+        <param name="1" description="Номер (NUMBER): 9 цифр" />
+      </params>
+    </service>
+    <service>
+      <code platerra="436">213</code>
+      <name>RuWeb</name>
+      <params>
+        <param name="1" description="Лицевой счет" />
+      </params>
+    </service>
+    <service>
+      <code platerra="347">214</code>
+      <name>RusLink</name>
+      <params>
+        <param name="1" description="Лицевой счет" />
+      </params>
+    </service>
+    <service>
+      <code platerra="1027">215</code>
+      <name>Гудлайн (ООО Ворлд Трэвел Телеком)</name>
+      <params>
+        <param name="1" description="Номер телефона" />
+      </params>
+    </service>
+    <service>
+      <code platerra="216">216</code>
+      <name>QWERTY (ОАО "Центр.телеграф")</name>
+      <params>
+        <param name="1" description="Номер договора" />
+      </params>
+    </service>
+    <service>
+      <code platerra="437">217</code>
+      <name>COMILFON</name>
+      <params>
+        <param name="1" description="Номер(NUMBER): 7 цифр" />
+      </params>
+    </service>
+    <service>
+      <code platerra="88">218</code>
+      <name>Comutator (ООО «Сипнет»)</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="613">219</code>
+      <name>Enter</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="438">220</code>
+      <name>Ветеранов.нет</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="439">221</code>
+      <name>Арбитал (Стайл-Ком ООО)</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="1013">222</code>
+      <name>Golden WiFi</name>
+      <params>
+        <param name="1" description="Идентификатор пользователя" />
+      </params>
+    </service>
+    <service>
+      <code platerra="94">223</code>
+      <name>Golden Telecom</name>
+      <params>
+        <param name="1" description="ID пользователя (NUMBER) - номер телефона или счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="607">224</code>
+      <name>Goodline (ООО Е-Лайт-Телеком)</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="440">225</code>
+      <name>Inet-Lan</name>
+      <params>
+        <param name="1" description="Номер (NUMBER): 4 цифры" />
+      </params>
+    </service>
+    <service>
+      <code platerra="3">226</code>
+      <name>Матрикс-Телеком</name>
+      <params>
+        <param name="1" description="Лицевой счет" />
+      </params>
+    </service>
+    <service>
+      <code platerra="441">227</code>
+      <name>Вэб Плас</name>
+      <params>
+        <param name="1" description="Номер договора (NUMBER): от 7 до 11 цифр" />
+      </params>
+    </service>
+    <service>
+      <code platerra="12">228</code>
+      <name>Зебра Телеком</name>
+      <params>
+        <param name="1" description="Номер карты" />
+      </params>
+    </service>
+    <service>
+      <code platerra="442">229</code>
+      <name>Невалинк (Санкт-Петербург)</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="141">230</code>
+      <name>Триколор ТВ  Центр  Оптимум</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="443">232</code>
+      <name>Сумма Телеком</name>
+      <params>
+        <param name="1" description="Номер (NUMBER): 11 цифр" />
+      </params>
+    </service>
+    <service>
+      <code platerra="146">233</code>
+      <name>Триколор ТВ Центр  Ночной</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="559">235</code>
+      <name>Скайнет</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="444">236</code>
+      <name>Апполо ООО</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="515">239</code>
+      <name>Yota</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="3">244</code>
+      <name>Матрикс Интернет Клуб (Карты)</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="644">245</code>
+      <name>Matrix Telecom(ПСКБ)</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="1003">246</code>
+      <name>Яндекс.Деньги</name>
+      <params>
+        <param name="1" description="Номер кошелька" />
+        <param name="2" description="Номер телефона" />
+      </params>
+    </service>
+    <service>
+      <code platerra="445">264</code>
+      <name>Эленет</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="446">267</code>
+      <name>Астра-Ореол</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="447">272</code>
+      <name>Вест Колл пополнение карты</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="448">274</code>
+      <name>РТС</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="449">300</code>
+      <name>Tiera Contect Provider</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="450">301</code>
+      <name>Телеинтерфон(VMB-Сервис ЗАО)</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="451">306</code>
+      <name>АирНет (Санкт-Петербургские комп сети ООО)</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="452">311</code>
+      <name>Нью Лайн Телеком</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="453">312</code>
+      <name>Петерстар - интернет</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="8">313</code>
+      <name>Цезарь Сателлит Северо-Запад</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="454">315</code>
+      <name>Смарт-телеком</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="455">316</code>
+      <name>МСС-Поволжье</name>
+      <params>
+        <param name="1" description="Номер телефона" />
+      </params>
+    </service>
+    <service>
+      <code platerra="456">317</code>
+      <name>ЭЛТЕЛ (Домашние сети ЗАО «Элтел»)</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="457">319</code>
+      <name>Пулнет</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="458">320</code>
+      <name>Лайн-Р</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="459">335</code>
+      <name>Скай Линк по счету</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="609">341</code>
+      <name>WebMoney (рубли)</name>
+      <params>
+        <param name="1" description="Номер R-кошелька" />
+        <param name="2" description="Номер телефона" />
+      </params>
+    </service>
+    <service>
+      <code platerra="460">355</code>
+      <name>ТИЕРА ЦЕНТР</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="557">384</code>
+      <name>Дом.Ру Комплексное предложение</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="33">388</code>
+      <name>Мультибанковский кредитный шлюз</name>
+      <params>
+        <param name="1" description="Номер счета (20  цифр)" />
+        <param name="2" description="Номер договора (последние 8 цифр договора)" />
+        <param name="3" description="БИК" />
+        <param name="4" description="Фамилия" />
+        <param name="5" description="Имя" />
+        <param name="6" description="Отчество" />
+        <param name="7" description="Номер телефона для связи" />
+      </params>
+    </service>
+    <service>
+      <code platerra="73">397</code>
+      <name>Триколор - Пополнение личного счета</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="76">398</code>
+      <name>Триколор - Наш футбол</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="84">399</code>
+      <name>Петерстар - за услуги связи (телефония)</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="92">400</code>
+      <name>Петерстар - за услуги связи (ADSL)</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="98">2010</code>
+      <name>Дом.Ру Оплата кабельного ТВ</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="556">2011</code>
+      <name>Дом.Ру Оплата Интернет</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="421">2012</code>
+      <name>Дом.Ру Оплата услуг связи</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="461">2016</code>
+      <name>Пополнение платежной книжки Киберплат</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="463">2017</code>
+      <name>Интеграл Сервис (Интернет)</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="464">2018</code>
+      <name>Интеграл Сервис (КТВ)</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="558">2019</code>
+      <name>Инфолан (ООО Информ.сеть)</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="466">2020</code>
+      <name>Билайн Казахстан</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="467">2021</code>
+      <name>Билайн Кыргызстан</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="468">2022</code>
+      <name>Билайн-Грузия (Мобител)beeline_georgia</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="469">2023</code>
+      <name>Билайн-Таджикистан (ТАКОМ)</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="470">2024</code>
+      <name>Билайн-Узбекистан (UNITEL)</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="471">2025</code>
+      <name>МТС-Беларусь</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="472">2028</code>
+      <name>Тестовый</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="473">2029</code>
+      <name>Билайн-тест</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="551">2030</code>
+      <name>ООО Кактус</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="475">2033</code>
+      <name>Мегафон Таджикистан (TT-Mobile)</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="545">2034</code>
+      <name>Ростелеком (мобильная связь)</name>
+      <params>
+        <param name="1" description="Номер телефона" />
+      </params>
+    </service>
+    <service>
+      <code platerra="477">2036</code>
+      <name>Мегафон по счету</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="478">2037</code>
+      <name>АрменТел (мобильная связь)</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="479">2038</code>
+      <name>МТС-Армения (VivaCell)</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="480">2039</code>
+      <name>Денежные переводы</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="481">2041</code>
+      <name>МТС-Украина</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="483">2042</code>
+      <name>Билайн-Украина</name>
+      <params>
+        <param name="1" description="Номер счета" />
+      </params>
+    </service>
+    <service>
+      <code platerra="485">2043</code>
+      <name>Юнистрим-переводы в Россию</name>
+      <params>
+        <param name="1" description="Номер телефона отправителя (NUMBER): 10 цифр" />
+        <param name="2" description="ФИО отправителя" />
+        <param name="3" description="ФИО получателя" />
+      </params>
+    </service>
+    <service>
+      <code platerra="486">2044</code>
+      <name>Юнистрим-переводы в Армению</name>
+      <params>
+        <param name="1" description="Номер телефона отправителя (NUMBER): 10 цифр" />
+        <param name="2" description="ФИО отправителя" />
+        <param name="3" description="ФИО получателя" />
+      </params>
+    </service>
+    <service>
+      <code platerra="487">2045</code>
+      <name>Юнистрим-переводы в Беларусь</name>
+      <params>
+        <param name="1" description="Номер телефона отправителя (NUMBER): 10 цифр" />
+        <param name="2" description="ФИО отправителя" />
+        <param name="3" description="ФИО получателя" />
+      </params>
+    </service>
+    <service>
+      <code platerra="489">2046</code>
+      <name>Юнистрим-переводы в Грузию</name>
+      <params>
+        <param name="1" description="Номер телефона отправителя (NUMBER): 10 цифр" />
+        <param name="2" description="ФИО отправителя" />
+        <param name="3" description="ФИО получателя" />
+      </params>
+    </service>
+    <service>
+      <code platerra="490">2047</code>
+      <name>Юнистрим-переводы в Молдову</name>
+      <params>
+        <param name="1" description="Номер телефона отправителя (NUMBER): 10 цифр" />
+        <param name="2" description="ФИО отправителя" />
+        <param name="3" description="ФИО получателя" />
+      </params>
+    </service>
+    <service>
+      <code platerra="491">2048</code>
+      <name>Юнистрим-переводы в Казахстан</name>
+      <params>
+        <param name="1" description="Номер телефона отправителя (NUMBER): 10 цифр" />
+        <param name="2" description="ФИО отправителя" />
+        <param name="3" description="ФИО получателя" />
+      </params>
+    </service>
+    <service>
+      <code platerra="492">2049</code>
+      <name>Юнистрим-переводы в Кыргистан</name>
+      <params>
+        <param name="1" description="Номер телефона отправителя (NUMBER): 10 цифр" />
+        <param name="2" description="ФИО отправителя" />
+        <param name="3" description="ФИО получателя" />
+      </params>
+    </service>
+    <service>
+      <code platerra="493">2050</code>
+      <name>Юнистрим-переводы в Таджикистан</name>
+      <params>
+        <param name="1" description="Номер телефона отправителя (NUMBER): 10 цифр" />
+        <param name="2" description="ФИО отправителя" />
+        <param name="3" description="ФИО получателя" />
+      </params>
+    </service>
+    <service>
+      <code platerra="494">2051</code>
+      <name>Юнистрим-переводы в Узбекистан</name>
+      <params>
+        <param name="1" description="Номер телефона отправителя (NUMBER): 10 цифр" />
+        <param name="2" description="ФИО отправителя" />
+        <param name="3" description="ФИО получателя" />
+      </params>
+    </service>
+    <service>
+      <code platerra="495">2052</code>
+      <name>Юнистрим-переводы в Украину</name>
+      <params>
+        <param name="1" description="Номер телефона отправителя (NUMBER): 10 цифр" />
+        <param name="2" description="ФИО отправителя" />
+        <param name="3" description="ФИО получателя" />
+      </params>
+    </service>
+    <service>
+      <code platerra="496">2056</code>
+      <name>ГИБДД он-лайн штрафы по РФ (Федеральное Казначейство)</name>
+      <params>
+        <param name="1" description="ФИО" />
+        <param name="2" description="номер постановления" />
+        <param name="3" description="дата вынесения постановления (формат DD.MM.YYYY)" />
+        <param name="4" description="контактный номер телефона" />
+      </params>
+    </service>
+    <service>
+      <code platerra="497">2069</code>
+      <name>Contact-переводы в Россию</name>
+      <params>
+        <param name="1" description="Номер телефона отправителя (NUMBER): 10 цифр" />
+        <param name="2" description="ФИО отправителя" />
+        <param name="3" description="ФИО получателя" />
+      </params>
+    </service>
+    <service>
+      <code platerra="497">2070</code>
+      <name>Contact-переводы в Армению</name>
+      <params>
+        <param name="1" description="Номер телефона отправителя (NUMBER): 10 цифр" />
+        <param name="2" description="ФИО отправителя" />
+        <param name="3" description="ФИО получателя" />
+      </params>
+    </service>
+    <service>
+      <code platerra="509">2071</code>
+      <name>Contact-переводы в Беларусь</name>
+      <params>
+        <param name="1" description="Номер телефона отправителя (NUMBER): 10 цифр" />
+        <param name="2" description="ФИО отправителя" />
+        <param name="3" description="ФИО получателя" />
+      </params>
+    </service>
+    <service>
+      <code platerra="510">2072</code>
+      <name>Contact-переводы в Грузию</name>
+      <params>
+        <param name="1" description="Номер телефона отправителя (NUMBER): 10 цифр" />
+        <param name="2" description="ФИО отправителя" />
+        <param name="3" description="ФИО получателя" />
+      </params>
+    </service>
+    <service>
+      <code platerra="499">2073</code>
+      <name>Contact-переводы в Молдову</name>
+      <params>
+        <param name="1" description="Номер телефона отправителя (NUMBER): 10 цифр" />
+        <param name="2" description="ФИО отправителя" />
+        <param name="3" description="ФИО получателя" />
+      </params>
+    </service>
+    <service>
+      <code platerra="503">2074</code>
+      <name>Contact-переводы в Казахстан</name>
+      <params>
+        <param name="1" description="Номер телефона отправителя (NUMBER): 10 цифр" />
+        <param name="2" description="ФИО отправителя" />
+        <param name="3" description="ФИО получателя" />
+      </params>
+    </service>
+    <service>
+      <code platerra="504">2075</code>
+      <name>Contact-переводы в Кыргистан</name>
+      <params>
+        <param name="1" description="Номер телефона отправителя (NUMBER): 10 цифр" />
+        <param name="2" description="ФИО отправителя" />
+        <param name="3" description="ФИО получателя" />
+      </params>
+    </service>
+    <service>
+      <code platerra="505">2076</code>
+      <name>Contact-переводы в Таджикистан</name>
+      <params>
+        <param name="1" description="Номер телефона отправителя (NUMBER): 10 цифр" />
+        <param name="2" description="ФИО отправителя" />
+        <param name="3" description="ФИО получателя" />
+      </params>
+    </service>
+    <service>
+      <code platerra="506">2077</code>
+      <name>Contact-переводы в Узбекистан</name>
+      <params>
+        <param name="1" description="Номер телефона отправителя (NUMBER): 10 цифр" />
+        <param name="2" description="ФИО отправителя" />
+        <param name="3" description="ФИО получателя" />
+      </params>
+    </service>
+    <service>
+      <code platerra="507">2078</code>
+      <name>Contact-переводы в Украину</name>
+      <params>
+        <param name="1" description="Номер телефона отправителя (NUMBER): 10 цифр" />
+        <param name="2" description="ФИО отправителя" />
+        <param name="3" description="ФИО получателя" />
+      </params>
+    </service>
+  </services>
+</info>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="windows-1251"?>
+<request>
+<protocol-version>4.00</protocol-version>
+<request-type>3</request-type>
+<terminal-id>5</terminal-id>
+<from/>
+<to/>
+<extra name="login">138724</extra>
+<extra name="password">138724</extra>
+<extra name="device-status">0;0;0;0;0;0;0;16;0;0;0;0;0.00;0;0;0;0;0;0;0;0;0;0;’ђ€•-Њ€Ќ€-”ђ-Љ;ICT U70-RU56;SIM300D;MiniPay.Os.1.1.1020;0;0;0;0;0;0;0;0;0;20x4;MiniPay.Osmp.1.1.1003;0;0;0;0;0;0;0;0;RU</extra>
+<extra name="multicash"/>
+<extra name="client-software">ShtrihMobilePAY v1</extra>
+</request>

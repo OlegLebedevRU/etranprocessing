@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<edmx:Edmx Version="3.0" xmlns:edmx="http://schemas.microsoft.com/ado/2009/11/edmx">
+ <!-- EF Designer content (DO NOT EDIT MANUALLY BELOW HERE) -->
+  <edmx:Designer xmlns="http://schemas.microsoft.com/ado/2009/11/edmx">
+    <!-- Diagram content (shape and connector positions) -->
+    <edmx:Diagrams>
+      <Diagram DiagramId="eaf46d2e4fa9429fb482283a33eb77c8" Name="Diagram1">
+        <EntityTypeShape EntityType="EBSModel.tb_Accounts" Width="1.5" PointX="5.25" PointY="17" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_Actions" Width="1.5" PointX="8.25" PointY="29" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_BillAllowances" Width="1.5" PointX="12.75" PointY="20" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_BillProfits" Width="1.5" PointX="15" PointY="23.5" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_Bills" Width="1.5" PointX="12.75" PointY="25" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_Blogs" Width="1.5" PointX="5.25" PointY="20.25" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_BuyoutRequest" Width="1.5" PointX="15" PointY="26.25" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_ClientDocuments" Width="1.5" PointX="5.25" PointY="24" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_Clients" Width="1.5" PointX="3" PointY="32.125" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_Counters" Width="1.5" PointX="0.75" PointY="0.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_EBS_KioskEmissions" Width="1.5" PointX="2.75" PointY="0.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_EmissionAddPercent" Width="1.5" PointX="12.75" PointY="31.875" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_EmissionDocs" Width="1.5" PointX="12.75" PointY="34.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_Emissioners" Width="1.5" PointX="5.25" PointY="27.125" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_EmissionRequest" Width="1.5" PointX="12.75" PointY="37.5" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_Emissions" Width="1.5" PointX="10.5" PointY="25.125" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_EmissionYield" Width="1.5" PointX="12.75" PointY="40.625" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_Experts" Width="1.5" PointX="0.75" PointY="3.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_ExternalAccounts" Width="1.5" PointX="5.25" PointY="29.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_Investors" Width="1.5" PointX="5.25" PointY="34.625" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_Locations" Width="1.5" PointX="10.5" PointY="21" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_News" Width="1.5" PointX="2.75" PointY="3.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_Operations" Width="1.5" PointX="7.5" PointY="22.875" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_Organizations" Width="1.5" PointX="5.25" PointY="37" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_PayIn" Width="1.5" PointX="5.25" PointY="42.625" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_Payments" Width="1.5" PointX="15" PointY="29.5" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_ReferrerReward" Width="1.5" PointX="12.75" PointY="43.375" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_Referrers" Width="1.5" PointX="4.75" PointY="0.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_RolesRights" Width="1.5" PointX="5.25" PointY="52.625" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_Settings" Width="1.5" PointX="4.75" PointY="2.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_Shifts" Width="1.5" PointX="4.75" PointY="5.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_StatusJournal" Width="1.5" PointX="6.75" PointY="0.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_Users" Width="1.5" PointX="5.25" PointY="45.375" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.tb_UsersRoles" Width="1.5" PointX="7.5" PointY="49.125" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.ts_AccountTypes" Width="1.5" PointX="0.75" PointY="6.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.ts_ClientDocumentTypes" Width="1.5" PointX="6.75" PointY="4.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.ts_ClientTypes" Width="1.5" PointX="0.75" PointY="34.875" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.ts_CurrencyTypes" Width="1.5" PointX="6.75" PointY="7.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.ts_ExternalAccountTypes" Width="1.5" PointX="8.75" PointY="0.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.ts_LocationTypes" Width="1.5" PointX="8.75" PointY="3.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.ts_OperationSourceTypes" Width="1.5" PointX="5.25" PointY="14.25" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.ts_OperationTypes" Width="1.5" PointX="5.25" PointY="10.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.ts_PaymentTypes" Width="1.5" PointX="8.75" PointY="6.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.ts_PropertyCategories" Width="1.5" PointX="0.75" PointY="9.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.ts_RightObjects" Width="1.5" PointX="0.75" PointY="46.5" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.ts_Rights" Width="1.5" PointX="3" PointY="47.375" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.ts_RightTypes" Width="1.5" PointX="0.75" PointY="49" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.ts_Roles" Width="1.5" PointX="3" PointY="52.5" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.ts_Statuses" Width="1.5" PointX="8.75" PointY="9.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="EBSModel.ts_StatusTypes" Width="1.5" PointX="10.75" PointY="0.75" IsExpanded="true" />
+        <AssociationConnector Association="EBSModel.FK_tb_Accounts_tb_Clients" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_Operations_tb_Accounts" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_Operations_tb_Accounts1" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_Emissions_tb_EmissionActions" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_BillAllowances_tb_Emissions" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_BillProfits_tb_Bills" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_Bills_tb_Emissions" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_Bills_tb_Investors" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_Bills_tb_Locations" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_BuyoutRequest_tb_Bills" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_Operations_tb_Bills" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_Payments_tb_Bills" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_Blogs_tb_Clients" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_ClientDocuments_tb_Clients" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_Clients_ts_ClientTypes" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_Emissioners_tb_Clients" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_ExternalAccountDetails_tb_Clients" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_Investors_tb_Clients" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_Organizations_tb_Clients" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_PayIn_tb_Clients" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_Users_tb_Clients" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_EmissionAddPercent_tb_Emissions" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_EmissionDocs_tb_Emissions" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_Emissions_tb_Emissioners" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_EmissionRequest_tb_Emissions" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_EmissionYield_tb_Emissions" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_ReferrerReward_tb_Emissions" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_Operations_tb_ExternalAccounts" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_Operations_tb_Payments" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_Operations_ts_OperationSourceTypes" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_Operations_ts_OperationTypes" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_RolesRights_ts_Rights" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_RolesRights_ts_Roles" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_UsersRoles_tb_Users" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_tb_UsersRoles_ts_Roles" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_ts_Roles_ts_ClientTypes" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_ts_Rights_ts_RightObjects" ManuallyRouted="false" />
+        <AssociationConnector Association="EBSModel.FK_ts_Rights_ts_RightTypes" ManuallyRouted="false" />
+      </Diagram>
+    </edmx:Diagrams>
+  </edmx:Designer>
+</edmx:Edmx>

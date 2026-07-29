@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="windows-1251"?>
+<response result="0">
+  <providers>
+    <addOfflinePayment result="0">
+      <payment date="2015-05-28T23:38:26+03:00" fatal="false" id="8426" result="0" status="1" uid="16872999000006">
+        <extras PARSER_HOST="s1069.qiwi.com" />
+      </payment>
+    </addOfflinePayment>
+  </providers>
+</response>

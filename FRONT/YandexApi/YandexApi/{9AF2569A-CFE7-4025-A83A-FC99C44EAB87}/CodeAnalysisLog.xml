@@ -1,0 +1,244 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet type="text/xsl" href="c:\program files (x86)\microsoft visual studio 14.0\team tools\static analysis tools\fxcop\Xml\CodeAnalysisReport.xsl"?>
+<FxCopReport Version="14.0">
+ <Targets>
+  <Target Name="C:\Users\admin\AppData\Local\Temp\tmp82DD.tmp.cadir\bin\App_Code.dll">
+   <Modules>
+    <Module Name="app_code.dll">
+     <Namespaces>
+      <Namespace Name="Dispatcher">
+       <Types>
+        <Type Name="Dispatcher" Kind="Class" Accessibility="Public" ExternallyVisible="True">
+         <Members>
+          <Member Name="#ProcessRequest(System.Web.HttpContext)" Kind="Method" Static="False" Accessibility="Public" ExternallyVisible="True">
+           <Messages>
+            <Message TypeName="Do not dispose objects multiple times" Category="Microsoft.Usage" CheckId="CA2202" Status="Active" Created="2017-11-02 10:38:56Z" FixCategory="DependsOnFix">
+             <Issue Certainty="75" Level="Warning" Path="c:\PlaterraSvn\PROCESSING\FRONT\YandexApi\App_Code" File="Dispatcher.cs" Line="45">Object 'body' can be disposed more than once in method 'Dispatcher.ProcessRequest(HttpContext)'. To avoid generating a System.ObjectDisposedException you should not call Dispose more than one time on an object.: Lines: 45</Issue>
+            </Message>
+           </Messages>
+          </Member>
+         </Members>
+        </Type>
+       </Types>
+      </Namespace>
+      <Namespace Name="EtranLib.Data">
+       <Types>
+        <Type Name="DBManager" Kind="Class" Accessibility="Public" ExternallyVisible="True">
+         <Messages>
+          <Message TypeName="TypesThatOwnDisposableFieldsShouldBeDisposable" Category="Microsoft.Design" CheckId="CA1001" Status="Active" Created="2017-11-02 10:38:56Z" FixCategory="DependsOnFix">
+           <Issue Name="DependsOnFix" Certainty="95" Level="CriticalError">Implement IDisposable on 'DBManager' because it creates members of the following IDisposable types: 'SqlConnection', 'SqlCommand'. If 'DBManager' has previously shipped, adding new members that implement IDisposable to this type is considered a breaking change to existing consumers.</Issue>
+          </Message>
+         </Messages>
+         <Members>
+          <Member Name="#.ctor(System.String)" Kind="Method" Static="False" Accessibility="Public" ExternallyVisible="True">
+           <Messages>
+            <Message TypeName="Review SQL queries for security vulnerabilities" Category="Microsoft.Security" CheckId="CA2100" Status="Active" Created="2017-11-02 10:38:56Z" FixCategory="DependsOnFix">
+             <Issue Name="WithNonLiterals" Certainty="75" Level="Warning" Path="c:\PlaterraSvn\PROCESSING\FRONT\YandexApi\App_Code" File="EtranLib.cs" Line="342">The query string passed to 'SqlCommand.SqlCommand(string, SqlConnection)' in 'DBManager.DBManager(string)' could contain the following variables 'this.constr'. If any of these variables could come from user input, consider using a stored procedure or a parameterized SQL query instead of building the query with string concatenations.</Issue>
+            </Message>
+           </Messages>
+          </Member>
+          <Member Name="#Execute(System.String,System.Data.CommandType,EtranLib.Data.DBManager+DataReadType,System.Collections.Specialized.NameValueCollection,System.Object[])" Kind="Method" Static="False" Accessibility="Public" ExternallyVisible="True">
+           <Messages>
+            <Message TypeName="Review SQL queries for security vulnerabilities" Category="Microsoft.Security" CheckId="CA2100" Status="Active" Created="2017-11-02 10:38:56Z" FixCategory="DependsOnFix">
+             <Issue Name="WithNonLiterals" Certainty="75" Level="Warning" Path="c:\PlaterraSvn\PROCESSING\FRONT\YandexApi\App_Code" File="EtranLib.cs" Line="371">The query string passed to 'SqlCommand.CommandText.set(string)' in 'DBManager.Execute(string, CommandType, DBManager.DataReadType, NameValueCollection, params object[])' could contain the following variables 'sp_name'. If any of these variables could come from user input, consider using a stored procedure or a parameterized SQL query instead of building the query with string concatenations.</Issue>
+            </Message>
+           </Messages>
+          </Member>
+         </Members>
+        </Type>
+       </Types>
+      </Namespace>
+      <Namespace Name="EtranLib.RandomAndPassword">
+       <Types>
+        <Type Name="PasswordGenerator" Kind="Class" Accessibility="Public" ExternallyVisible="True">
+         <Messages>
+          <Message TypeName="TypesThatOwnDisposableFieldsShouldBeDisposable" Category="Microsoft.Design" CheckId="CA1001" Status="Active" Created="2017-11-02 10:38:56Z" FixCategory="DependsOnFix">
+           <Issue Name="DependsOnFix" Certainty="95" Level="CriticalError">Implement IDisposable on 'PasswordGenerator' because it creates members of the following IDisposable types: 'RNGCryptoServiceProvider'. If 'PasswordGenerator' has previously shipped, adding new members that implement IDisposable to this type is considered a breaking change to existing consumers.</Issue>
+          </Message>
+         </Messages>
+        </Type>
+       </Types>
+      </Namespace>
+      <Namespace Name="EtranLib.ScheduleTimer">
+       <Types>
+        <Type Name="ScheduleTimer" Kind="Class" Accessibility="Public" ExternallyVisible="True">
+         <Messages>
+          <Message TypeName="TypesThatOwnDisposableFieldsShouldBeDisposable" Category="Microsoft.Design" CheckId="CA1001" Status="Active" Created="2017-11-02 10:38:56Z" FixCategory="DependsOnFix">
+           <Issue Name="DependsOnFix" Certainty="95" Level="CriticalError">Implement IDisposable on 'ScheduleTimer' because it creates members of the following IDisposable types: 'Timer'. If 'ScheduleTimer' has previously shipped, adding new members that implement IDisposable to this type is considered a breaking change to existing consumers.</Issue>
+          </Message>
+         </Messages>
+        </Type>
+       </Types>
+      </Namespace>
+      <Namespace Name="EtranLib.СуммаПрописью">
+       <Types>
+        <Type Name="ЕдиницаИзмерения" Kind="Class" Accessibility="Public" ExternallyVisible="True">
+         <Members>
+          <Member Name="#EtranLib.СуммаПрописью.IЕдиницаИзмерения.ИменЕдин" Kind="Property" Static="False" Accessibility="Private" ExternallyVisible="True">
+           <Accessors>
+            <Accessor Name="#EtranLib.СуммаПрописью.IЕдиницаИзмерения.get_ИменЕдин()" Kind="Method" Static="False" Accessibility="Private" ExternallyVisible="True">
+             <Messages>
+              <Message TypeName="InterfaceMethodsShouldBeCallableByChildTypes" Category="Microsoft.Design" CheckId="CA1033" Status="Active" Created="2017-11-02 10:38:56Z" FixCategory="NonBreaking">
+               <Issue Certainty="95" Level="Error" Path="c:\PlaterraSvn\PROCESSING\FRONT\YandexApi\App_Code" File="EtranLib.cs" Line="2418">Make 'ЕдиницаИзмерения' sealed (a breaking change if this class has previously shipped), implement the method non-explicitly, or implement a new method that exposes the functionality of 'IЕдиницаИзмерения.ИменЕдин.get()' and is visible to derived classes.</Issue>
+              </Message>
+             </Messages>
+            </Accessor>
+           </Accessors>
+          </Member>
+          <Member Name="#EtranLib.СуммаПрописью.IЕдиницаИзмерения.РодЕдин" Kind="Property" Static="False" Accessibility="Private" ExternallyVisible="True">
+           <Accessors>
+            <Accessor Name="#EtranLib.СуммаПрописью.IЕдиницаИзмерения.get_РодЕдин()" Kind="Method" Static="False" Accessibility="Private" ExternallyVisible="True">
+             <Messages>
+              <Message TypeName="InterfaceMethodsShouldBeCallableByChildTypes" Category="Microsoft.Design" CheckId="CA1033" Status="Active" Created="2017-11-02 10:38:56Z" FixCategory="NonBreaking">
+               <Issue Certainty="95" Level="Error" Path="c:\PlaterraSvn\PROCESSING\FRONT\YandexApi\App_Code" File="EtranLib.cs" Line="2423">Make 'ЕдиницаИзмерения' sealed (a breaking change if this class has previously shipped), implement the method non-explicitly, or implement a new method that exposes the functionality of 'IЕдиницаИзмерения.РодЕдин.get()' and is visible to derived classes.</Issue>
+              </Message>
+             </Messages>
+            </Accessor>
+           </Accessors>
+          </Member>
+          <Member Name="#EtranLib.СуммаПрописью.IЕдиницаИзмерения.РодМнож" Kind="Property" Static="False" Accessibility="Private" ExternallyVisible="True">
+           <Accessors>
+            <Accessor Name="#EtranLib.СуммаПрописью.IЕдиницаИзмерения.get_РодМнож()" Kind="Method" Static="False" Accessibility="Private" ExternallyVisible="True">
+             <Messages>
+              <Message TypeName="InterfaceMethodsShouldBeCallableByChildTypes" Category="Microsoft.Design" CheckId="CA1033" Status="Active" Created="2017-11-02 10:38:56Z" FixCategory="NonBreaking">
+               <Issue Certainty="95" Level="Error" Path="c:\PlaterraSvn\PROCESSING\FRONT\YandexApi\App_Code" File="EtranLib.cs" Line="2428">Make 'ЕдиницаИзмерения' sealed (a breaking change if this class has previously shipped), implement the method non-explicitly, or implement a new method that exposes the functionality of 'IЕдиницаИзмерения.РодМнож.get()' and is visible to derived classes.</Issue>
+              </Message>
+             </Messages>
+            </Accessor>
+           </Accessors>
+          </Member>
+          <Member Name="#EtranLib.СуммаПрописью.IЕдиницаИзмерения.РодЧисло" Kind="Property" Static="False" Accessibility="Private" ExternallyVisible="True">
+           <Accessors>
+            <Accessor Name="#EtranLib.СуммаПрописью.IЕдиницаИзмерения.get_РодЧисло()" Kind="Method" Static="False" Accessibility="Private" ExternallyVisible="True">
+             <Messages>
+              <Message TypeName="InterfaceMethodsShouldBeCallableByChildTypes" Category="Microsoft.Design" CheckId="CA1033" Status="Active" Created="2017-11-02 10:38:56Z" FixCategory="NonBreaking">
+               <Issue Certainty="95" Level="Error" Path="c:\PlaterraSvn\PROCESSING\FRONT\YandexApi\App_Code" File="EtranLib.cs" Line="2433">Make 'ЕдиницаИзмерения' sealed (a breaking change if this class has previously shipped), implement the method non-explicitly, or implement a new method that exposes the functionality of 'IЕдиницаИзмерения.РодЧисло.get()' and is visible to derived classes.</Issue>
+              </Message>
+             </Messages>
+            </Accessor>
+           </Accessors>
+          </Member>
+         </Members>
+        </Type>
+        <Type Name="РодЧисло" Kind="Class" Accessibility="Public" ExternallyVisible="True">
+         <Members>
+          <Member Name="#EtranLib.СуммаПрописью.IЕдиницаИзмерения.ИменЕдин" Kind="Property" Static="False" Accessibility="Private" ExternallyVisible="True">
+           <Accessors>
+            <Accessor Name="#EtranLib.СуммаПрописью.IЕдиницаИзмерения.get_ИменЕдин()" Kind="Method" Static="False" Accessibility="Private" ExternallyVisible="True">
+             <Messages>
+              <Message TypeName="InterfaceMethodsShouldBeCallableByChildTypes" Category="Microsoft.Design" CheckId="CA1033" Status="Active" Created="2017-11-02 10:38:56Z" FixCategory="NonBreaking">
+               <Issue Certainty="95" Level="Error" Path="c:\PlaterraSvn\PROCESSING\FRONT\YandexApi\App_Code" File="EtranLib.cs" Line="2506">Make 'РодЧисло' sealed (a breaking change if this class has previously shipped), implement the method non-explicitly, or implement a new method that exposes the functionality of 'IЕдиницаИзмерения.ИменЕдин.get()' and is visible to derived classes.</Issue>
+              </Message>
+             </Messages>
+            </Accessor>
+           </Accessors>
+          </Member>
+          <Member Name="#EtranLib.СуммаПрописью.IЕдиницаИзмерения.РодЕдин" Kind="Property" Static="False" Accessibility="Private" ExternallyVisible="True">
+           <Accessors>
+            <Accessor Name="#EtranLib.СуммаПрописью.IЕдиницаИзмерения.get_РодЕдин()" Kind="Method" Static="False" Accessibility="Private" ExternallyVisible="True">
+             <Messages>
+              <Message TypeName="InterfaceMethodsShouldBeCallableByChildTypes" Category="Microsoft.Design" CheckId="CA1033" Status="Active" Created="2017-11-02 10:38:56Z" FixCategory="NonBreaking">
+               <Issue Certainty="95" Level="Error" Path="c:\PlaterraSvn\PROCESSING\FRONT\YandexApi\App_Code" File="EtranLib.cs" Line="2511">Make 'РодЧисло' sealed (a breaking change if this class has previously shipped), implement the method non-explicitly, or implement a new method that exposes the functionality of 'IЕдиницаИзмерения.РодЕдин.get()' and is visible to derived classes.</Issue>
+              </Message>
+             </Messages>
+            </Accessor>
+           </Accessors>
+          </Member>
+          <Member Name="#EtranLib.СуммаПрописью.IЕдиницаИзмерения.РодМнож" Kind="Property" Static="False" Accessibility="Private" ExternallyVisible="True">
+           <Accessors>
+            <Accessor Name="#EtranLib.СуммаПрописью.IЕдиницаИзмерения.get_РодМнож()" Kind="Method" Static="False" Accessibility="Private" ExternallyVisible="True">
+             <Messages>
+              <Message TypeName="InterfaceMethodsShouldBeCallableByChildTypes" Category="Microsoft.Design" CheckId="CA1033" Status="Active" Created="2017-11-02 10:38:56Z" FixCategory="NonBreaking">
+               <Issue Certainty="95" Level="Error" Path="c:\PlaterraSvn\PROCESSING\FRONT\YandexApi\App_Code" File="EtranLib.cs" Line="2516">Make 'РодЧисло' sealed (a breaking change if this class has previously shipped), implement the method non-explicitly, or implement a new method that exposes the functionality of 'IЕдиницаИзмерения.РодМнож.get()' and is visible to derived classes.</Issue>
+              </Message>
+             </Messages>
+            </Accessor>
+           </Accessors>
+          </Member>
+          <Member Name="#EtranLib.СуммаПрописью.IЕдиницаИзмерения.РодЧисло" Kind="Property" Static="False" Accessibility="Private" ExternallyVisible="True">
+           <Accessors>
+            <Accessor Name="#EtranLib.СуммаПрописью.IЕдиницаИзмерения.get_РодЧисло()" Kind="Method" Static="False" Accessibility="Private" ExternallyVisible="True">
+             <Messages>
+              <Message TypeName="InterfaceMethodsShouldBeCallableByChildTypes" Category="Microsoft.Design" CheckId="CA1033" Status="Active" Created="2017-11-02 10:38:56Z" FixCategory="NonBreaking">
+               <Issue Certainty="95" Level="Error" Path="c:\PlaterraSvn\PROCESSING\FRONT\YandexApi\App_Code" File="EtranLib.cs" Line="2501">Make 'РодЧисло' sealed (a breaking change if this class has previously shipped), implement the method non-explicitly, or implement a new method that exposes the functionality of 'IЕдиницаИзмерения.РодЧисло.get()' and is visible to derived classes.</Issue>
+              </Message>
+             </Messages>
+            </Accessor>
+           </Accessors>
+          </Member>
+         </Members>
+        </Type>
+       </Types>
+      </Namespace>
+     </Namespaces>
+    </Module>
+   </Modules>
+  </Target>
+ </Targets>
+ <Rules>
+  <Rule TypeName="Do not dispose objects multiple times" Category="Microsoft.Usage" CheckId="CA2202">
+   <Name>Do not dispose objects multiple times</Name>
+   <Description>A correctly implemented Dispose method can be called multiple times without throwing an exception. However, this is not guaranteed and to avoid generating a System.ObjectDisposedException you should not call Dispose more than one time on an object.</Description>
+   <Resolution Name="Default">Object {0} can be disposed more than once in method {1}. To avoid generating a System.ObjectDisposedException you should not call Dispose more than one time on an object.: Lines: 45</Resolution>
+   <Owner>RuleOwner</Owner>
+   <Url>http://msdn.microsoft.com/library/ms182334.aspx</Url>
+   <Email />
+   <MessageLevel Certainty="75">Warning</MessageLevel>
+   <File Name="dataflowrules.dll" Version="14.0.0.0" />
+  </Rule>
+  <Rule TypeName="InterfaceMethodsShouldBeCallableByChildTypes" Category="Microsoft.Design" CheckId="CA1033">
+   <Name>Interface methods should be callable by child types</Name>
+   <Description>Explicit method implementations are defined with private accessibility. Classes that derive from classes with explicit method implementations and choose to re-declare them on the class will not be able to call into the base class implementation unless the base class has provided an alternate method with appropriate accessibility. When overriding a base class method that has been hidden by explicit interface implementation, in order to call into the base class implementation, a derived class must cast the base pointer to the relevant interface. When calling through this reference, however, the derived class implementation will actually be invoked, resulting in recursion and an eventual stack overflow.</Description>
+   <Resolution Name="Default">Make {0} sealed (a breaking change if this class has previously shipped), implement the method non-explicitly, or implement a new method that exposes the functionality of {1} and is visible to derived classes.</Resolution>
+   <Owner />
+   <Url>http://msdn.microsoft.com/library/ms182153.aspx</Url>
+   <Email>[none]</Email>
+   <MessageLevel Certainty="95">Error</MessageLevel>
+   <File Name="designrules.dll" Version="14.0.0.0" />
+  </Rule>
+  <Rule TypeName="Review SQL queries for security vulnerabilities" Category="Microsoft.Security" CheckId="CA2100">
+   <Name>Review SQL queries for security vulnerabilities</Name>
+   <Description>A SQL command string built from user input is vulnerable to SQL injection attacks. Microsoft SQL Server and other database servers support stored procedures and parameterized SQL queries, which reduce the risk of injection attacks.</Description>
+   <Resolution Name="WithNonLiterals">The query string passed to {0} in {1} could contain the following variables {2}. If any of these variables could come from user input, consider using a stored procedure or a parameterized SQL query instead of building the query with string concatenations.</Resolution>
+   <Owner>RuleOwner</Owner>
+   <Url>http://msdn.microsoft.com/library/ms182310.aspx</Url>
+   <Email />
+   <MessageLevel Certainty="75">Warning</MessageLevel>
+   <File Name="dataflowrules.dll" Version="14.0.0.0" />
+  </Rule>
+  <Rule TypeName="TypesThatOwnDisposableFieldsShouldBeDisposable" Category="Microsoft.Design" CheckId="CA1001">
+   <Name>Types that own disposable fields should be disposable</Name>
+   <Description>Types that declare disposable members should also implement IDisposable. If the type does not own any unmanaged resources, do not implement a finalizer on it.</Description>
+   <Resolution Name="DependsOnFix">Implement IDisposable on {0} because it creates members of the following IDisposable types: {1}. If {0} has previously shipped, adding new members that implement IDisposable to this type is considered a breaking change to existing consumers.</Resolution>
+   <Owner />
+   <Url>http://msdn.microsoft.com/library/ms182172.aspx</Url>
+   <Email>[none]</Email>
+   <MessageLevel Certainty="95">CriticalError</MessageLevel>
+   <File Name="designrules.dll" Version="14.0.0.0" />
+  </Rule>
+ </Rules>
+ <Localized>
+  <String Key="Category">Category</String>
+  <String Key="Certainty">Certainty</String>
+  <String Key="CollapseAll">Collapse All</String>
+  <String Key="CheckId">Check Id</String>
+  <String Key="Error">Error</String>
+  <String Key="Errors">error(s)</String>
+  <String Key="ExpandAll">Expand All</String>
+  <String Key="Help">Help</String>
+  <String Key="Line">Line</String>
+  <String Key="Messages">message(s)</String>
+  <String Key="LocationNotStoredInPdb">[Location not stored in Pdb]</String>
+  <String Key="Project">Project</String>
+  <String Key="Resolution">Resolution</String>
+  <String Key="Rule">Rule</String>
+  <String Key="RuleFile">Rule File</String>
+  <String Key="RuleDescription">Rule Description</String>
+  <String Key="Source">Source</String>
+  <String Key="Status">Status</String>
+  <String Key="Target">Target</String>
+  <String Key="Warning">Warning</String>
+  <String Key="Warnings">warning(s)</String>
+  <String Key="ReportTitle">Code Analysis Report</String>
+ </Localized>
+</FxCopReport>

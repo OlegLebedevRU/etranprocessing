@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="WINDOWS-1251"?>
+
+<Root>
+
+<VUZ name="РГУ им. С.А. Есенина" code="1">
+
+<Payment name="Обучение" code="1">
+<Purpose name="Факультет иностранных языков" description="Плата за обучение (факультет иностранных языков)" code= "1"/>
+<Purpose name="Факультет педагогики и психологии" description="Плата за обучение (факультет педагогики и психологии)" code= "2"/>
+<Purpose name=" Другие факультеты" description="Плата за обучение" code= "3"/>
+
+</Payment>
+
+<Payment name="Дополнительное образование" code="2">
+<Purpose name="Дополнительное образование" description="Плата за обучение (факультет дополнительного образования)" code= "1"/>
+</Payment>
+
+<Payment name="Тестирование и ЕГЭ/ЕА" code="3">
+<Purpose name="Репетиционный ЕГЭ" description="Плата за репетиционный ЕГЭ" code= "1"/>
+<Purpose name="ЕА" description="Плата за ЕА" code= "2"/>
+<Purpose name="Тестирование" description="Плата за тестирование" code= "3"/>
+</Payment>
+
+<Payment name="Подготовительные курсы" code="4">
+<Purpose name="Подготовительные курсы " description="Плата за подготовительные курсы" code= "1"/>
+</Payment>
+
+<Payment name="Аспирантура" code="5">
+<Purpose name="За вступительный экзамен в аспирантуру" description="Плата за вступительный экзамен в аспирантуру" code= "1"/>
+<Purpose name="За кандидатский экзамен" description="Плата за кандидатский экзамен" code= "2"/>
+<Purpose name="За обучение в аспирантуре" description="Плата за обучение в аспирантуре" code= "3"/>
+
+</Payment>
+
+
+</VUZ>
+
+<VUZ name="РГАТУ им. П.А. Костычева" code="2">
+</VUZ>
+</Root>

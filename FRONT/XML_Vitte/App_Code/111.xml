@@ -1,0 +1,10 @@
+<request>
+<protocol-version>4.00</protocol-version>
+<request-type>10</request-type>
+<terminal-id>882</terminal-id>
+<extra name="login">>894627</extra>
+<extra name="password">>894627</extra>
+<extra name="client-software">DATL v1.30</extra>
+<auth count="1" to-amount="10.00">
+<payment> <transaction-number>1036845397</transaction-number><from><amount>10.00</amount></from><to><amount>5.00</amount><service-id>101</service-id><account-number>9613996633</account-number></to><receipt><datetime>20121024164159</datetime><receipt-number>1</receipt-number></receipt></payment>
+</auth></request>

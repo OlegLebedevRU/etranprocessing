@@ -1,0 +1,3090 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<edmx:Edmx Version="3.0" xmlns:edmx="http://schemas.microsoft.com/ado/2009/11/edmx">
+  <!-- EF Runtime content -->
+  <edmx:Runtime>
+    <!-- SSDL content -->
+    <edmx:StorageModels>
+      <Schema Namespace="Хранилище EBSModel" Provider="System.Data.SqlClient" ProviderManifestToken="2008" Alias="Self" xmlns:store="http://schemas.microsoft.com/ado/2007/12/edm/EntityStoreSchemaGenerator" xmlns:customannotation="http://schemas.microsoft.com/ado/2013/11/edm/customannotation" xmlns="http://schemas.microsoft.com/ado/2009/11/edm/ssdl">
+        <EntityType Name="tb_Accounts">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="CurrencyTypeId" Type="int" Nullable="false" />
+          <Property Name="ClientId" Type="int" Nullable="false" />
+          <Property Name="AccountTypeId" Type="int" Nullable="false" />
+          <Property Name="Balance" Type="money" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_Actions">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="Name" Type="nvarchar" MaxLength="255" Nullable="false" />
+          <Property Name="Description" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="BannerImage" Type="uniqueidentifier" Nullable="false" />
+          <Property Name="Percent" Type="tinyint" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_BillAllowances">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="EmissionId" Type="int" Nullable="false" />
+          <Property Name="MinBillSum" Type="money" Nullable="false" />
+          <Property Name="Percent" Type="tinyint" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_BillProfits">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="BillId" Type="int" Nullable="false" />
+          <Property Name="ProfitDateTime" Type="datetime2" Precision="7" Nullable="false" />
+          <Property Name="Sum" Type="money" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_Bills">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="EmissionId" Type="int" Nullable="false" />
+          <Property Name="InvestorId" Type="int" Nullable="false" />
+          <Property Name="Number" Type="int" Nullable="false" />
+          <Property Name="Nominal" Type="money" Nullable="false" />
+          <Property Name="StatusId" Type="int" Nullable="false" />
+          <Property Name="StatusDateTime" Type="datetime" Nullable="false" />
+          <Property Name="StatusUserId" Type="int" Nullable="false" />
+          <Property Name="StatusComment" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="ReferrerId" Type="int" />
+          <Property Name="ParticipationInAction" Type="bit" Nullable="false" />
+          <Property Name="DocumentAttachment" Type="uniqueidentifier" />
+          <Property Name="LocationId" Type="int" Nullable="false" />
+          <Property Name="Code" Type="nvarchar" MaxLength="100" Nullable="false" />
+          <Property Name="ActivateDateTime" Type="datetime" />
+          <Property Name="KillDateTime" Type="datetime" />
+        </EntityType>
+        <EntityType Name="tb_Blogs">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="CreateDateTime" Type="datetime" Nullable="false" />
+          <Property Name="Header" Type="nvarchar" MaxLength="255" Nullable="false" />
+          <Property Name="Text" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="StatusId" Type="int" Nullable="false" />
+          <Property Name="StatusDateTime" Type="datetime" Nullable="false" />
+          <Property Name="StatusUserId" Type="int" Nullable="false" />
+          <Property Name="StatusComment" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="ClientId" Type="int" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_BuyoutRequest">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="BillId" Type="int" Nullable="false" />
+          <Property Name="BuyoutSumm" Type="money" Nullable="false" />
+          <Property Name="StatusId" Type="int" Nullable="false" />
+          <Property Name="StatusDateTime" Type="datetime" Nullable="false" />
+          <Property Name="StatusUserId" Type="int" Nullable="false" />
+          <Property Name="StatusComment" Type="nvarchar(max)" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_ClientDocuments">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="ClientId" Type="int" Nullable="false" />
+          <Property Name="Name" Type="nvarchar" MaxLength="255" Nullable="false" />
+          <Property Name="Description" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="ClientDocumentTypeId" Type="int" Nullable="false" />
+          <Property Name="Image" Type="uniqueidentifier" />
+        </EntityType>
+        <EntityType Name="tb_Clients">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="Description" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="ClientTypeId" Type="int" Nullable="false" />
+          <Property Name="IsJuridical" Type="bit" Nullable="false" />
+          <Property Name="StatusId" Type="int" Nullable="false" />
+          <Property Name="StatusDateTime" Type="datetime" Nullable="false" />
+          <Property Name="StatusUserId" Type="int" Nullable="false" />
+          <Property Name="StatusComment" Type="nvarchar(max)" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_Counters">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="NameObj" Type="nvarchar" MaxLength="255" Nullable="false" />
+          <Property Name="NumValue" Type="int" Nullable="false" />
+          <Property Name="NumYear" Type="int" />
+          <Property Name="Description" Type="nvarchar(max)" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_EBS_KioskEmissions">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="KioskId" Type="int" Nullable="false" />
+          <Property Name="EmissionId" Type="int" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_EmissionAddPercent">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="EmissionId" Type="int" Nullable="false" />
+          <Property Name="MinSumm" Type="money" Nullable="false" />
+          <Property Name="MaxSumm" Type="money" Nullable="false" />
+          <Property Name="AddPercent" Type="money" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_EmissionDocs">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="EmissionId" Type="int" Nullable="false" />
+          <Property Name="DocumentName" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="FileId" Type="uniqueidentifier" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_Emissioners">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" Nullable="false" />
+          <Property Name="Domen" Type="nvarchar" MaxLength="50" Nullable="false" />
+          <Property Name="DigitalSign" Type="nvarchar" MaxLength="100" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_EmissionRequest">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="bigint" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="EmissionId" Type="int" Nullable="false" />
+          <Property Name="EconomicState" Type="int" />
+          <Property Name="LegalState" Type="int" />
+          <Property Name="Data" Type="datetime" Nullable="false" />
+          <Property Name="Description" Type="nvarchar(max)" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_Emissions">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="EmissionerId" Type="int" Nullable="false" />
+          <Property Name="AheadOfTimePercent" Type="tinyint" Nullable="false" />
+          <Property Name="Limit" Type="money" Nullable="false" />
+          <Property Name="SaleSum" Type="money" Nullable="false" />
+          <Property Name="MinBillSum" Type="money" Nullable="false" />
+          <Property Name="MaxBillSum" Type="money" Nullable="false" />
+          <Property Name="StatusId" Type="int" Nullable="false" />
+          <Property Name="StatusDateTime" Type="datetime" Nullable="false" />
+          <Property Name="StatusUserId" Type="int" Nullable="false" />
+          <Property Name="StatusComment" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="Comment" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="TurnOnReferrers" Type="bit" Nullable="false" />
+          <Property Name="BillPeriodInMonths" Type="tinyint" Nullable="false" />
+          <Property Name="Image" Type="uniqueidentifier" />
+          <Property Name="ActionId" Type="int" />
+        </EntityType>
+        <EntityType Name="tb_EmissionYield">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="EmissionId" Type="int" Nullable="false" />
+          <Property Name="MonthNumber" Type="tinyint" Nullable="false" />
+          <Property Name="Percent" Type="tinyint" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_Experts">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_ExternalAccounts">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="ClientId" Type="int" Nullable="false" />
+          <Property Name="IsCurrent" Type="int" Nullable="false" />
+          <Property Name="IsActive" Type="bit" Nullable="false" />
+          <Property Name="ExternalAccountTypeId" Type="int" Nullable="false" />
+          <Property Name="CurrencyTypeId" Type="int" Nullable="false" />
+          <Property Name="AccountNumber" Type="nvarchar" MaxLength="50" Nullable="false" />
+          <Property Name="Bank" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="BIK" Type="nvarchar" MaxLength="50" Nullable="false" />
+          <Property Name="KorAccountNumber" Type="nvarchar" MaxLength="50" Nullable="false" />
+          <Property Name="SWIFTCode" Type="nvarchar" MaxLength="50" Nullable="false" />
+          <Property Name="CorrespondentBank" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="SWIFTCorrespondentBank" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="CorrespondentAccount" Type="nvarchar" MaxLength="50" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_Investors">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_Locations">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="Address" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="Description" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="CoordX" Type="nvarchar" MaxLength="50" Nullable="false" />
+          <Property Name="CoordY" Type="nvarchar" MaxLength="50" Nullable="false" />
+          <Property Name="LocationTypeId" Type="int" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_News">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="bigint" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="Data" Type="datetime" Nullable="false" />
+          <Property Name="Title" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="Desscription" Type="nvarchar(max)" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_Operations">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="OperationSourceId" Type="int" Nullable="false" />
+          <Property Name="OperationSourceTypeId" Type="int" Nullable="false" />
+          <Property Name="SourceAccountId" Type="int" />
+          <Property Name="DestinationAccountId" Type="int" />
+          <Property Name="ExternalAccountId" Type="int" />
+          <Property Name="DateTime" Type="datetime" Nullable="false" />
+          <Property Name="Sum" Type="money" Nullable="false" />
+          <Property Name="OperationTypeId" Type="int" Nullable="false" />
+          <Property Name="StatusId" Type="int" Nullable="false" />
+          <Property Name="StatusDateTime" Type="datetime" Nullable="false" />
+          <Property Name="StatusUserId" Type="int" Nullable="false" />
+          <Property Name="StatusComment" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="Description" Type="nvarchar(max)" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_Organizations">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" Nullable="false" />
+          <Property Name="PropertyCategoryId" Type="int" Nullable="false" />
+          <Property Name="Name" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="INN" Type="nvarchar" MaxLength="50" Nullable="false" />
+          <Property Name="BIK" Type="nvarchar" MaxLength="50" Nullable="false" />
+          <Property Name="JurAddress" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="FactAddress" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="PostAddress" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="Site" Type="nvarchar" MaxLength="100" Nullable="false" />
+          <Property Name="Description" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="DirectorLastName" Type="nvarchar" MaxLength="50" Nullable="false" />
+          <Property Name="DirectorFirstName" Type="nvarchar" MaxLength="50" Nullable="false" />
+          <Property Name="DirectorSurName" Type="nvarchar" MaxLength="50" Nullable="false" />
+          <Property Name="Phone" Type="nvarchar" MaxLength="100" Nullable="false" />
+          <Property Name="Email" Type="nvarchar" MaxLength="100" Nullable="false" />
+          <Property Name="OGRN" Type="nvarchar" MaxLength="50" Nullable="false" />
+          <Property Name="Bank" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="Ras" Type="nvarchar" MaxLength="50" Nullable="false" />
+          <Property Name="LogoImage" Type="uniqueidentifier" />
+        </EntityType>
+        <EntityType Name="tb_PayIn">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="bigint" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="ClientId" Type="int" Nullable="false" />
+          <Property Name="Summa" Type="money" Nullable="false" />
+          <Property Name="IsPayd" Type="bit" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_Payments">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="BillId" Type="int" Nullable="false" />
+          <Property Name="DateTime" Type="datetime2" Precision="7" Nullable="false" />
+          <Property Name="Sum" Type="money" Nullable="false" />
+          <Property Name="PaymentTypeId" Type="int" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_ReferrerReward">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="bigint" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="EmissionId" Type="int" />
+          <Property Name="BonusFix" Type="money" Nullable="false" />
+          <Property Name="BonusPercent" Type="money" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_Referrers">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_RolesRights">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="RoleId" Type="int" Nullable="false" />
+          <Property Name="RightId" Type="int" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_Settings">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="SettingsName" Type="nvarchar" MaxLength="50" Nullable="false" />
+          <Property Name="SettingsValueString" Type="nvarchar(max)" />
+          <Property Name="SettingsValueDecimal" Type="money" />
+        </EntityType>
+        <EntityType Name="tb_Shifts">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="OpenDateTime" Type="datetime" Nullable="false" />
+          <Property Name="CloseDateTime" Type="datetime" />
+          <Property Name="UserId" Type="int" Nullable="false" />
+          <Property Name="KioskId" Type="int" />
+          <Property Name="InkassExtId" Type="nvarchar" MaxLength="50" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_StatusJournal">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="SourceId" Type="int" Nullable="false" />
+          <Property Name="StatusTypeId" Type="int" Nullable="false" />
+          <Property Name="StatusId" Type="int" Nullable="false" />
+          <Property Name="UserId" Type="int" Nullable="false" />
+          <Property Name="DateTime" Type="datetime" Nullable="false" />
+          <Property Name="Description" Type="nvarchar(max)" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_Users">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="Description" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="Login" Type="nvarchar" MaxLength="50" Nullable="false" />
+          <Property Name="EMail" Type="nvarchar" MaxLength="50" Nullable="false" />
+          <Property Name="Phone" Type="nvarchar" MaxLength="50" Nullable="false" />
+          <Property Name="Password" Type="nvarchar" MaxLength="100" Nullable="false" />
+          <Property Name="LastName" Type="nvarchar" MaxLength="50" Nullable="false" />
+          <Property Name="FirstName" Type="nvarchar" MaxLength="50" Nullable="false" />
+          <Property Name="SurName" Type="nvarchar" MaxLength="50" Nullable="false" />
+          <Property Name="StatusId" Type="int" Nullable="false" />
+          <Property Name="StatusDateTime" Type="datetime" Nullable="false" />
+          <Property Name="StatusUserId" Type="int" Nullable="false" />
+          <Property Name="StatusComment" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="Avatar" Type="varbinary(max)" />
+          <Property Name="ClientId" Type="int" Nullable="false" />
+          <Property Name="NickName" Type="nvarchar" MaxLength="50" Nullable="false" />
+          <Property Name="RegistrationAddress" Type="nvarchar" MaxLength="255" Nullable="false" />
+          <Property Name="IsDirector" Type="bit" Nullable="false" />
+          <Property Name="WarrantyNumber" Type="nvarchar" MaxLength="50" Nullable="false" />
+          <Property Name="WarrantyDate" Type="datetime" />
+          <Property Name="PassportPrefix" Type="nvarchar" MaxLength="10" Nullable="false" />
+          <Property Name="PassportNumber" Type="nchar" MaxLength="20" Nullable="false" />
+          <Property Name="PassportIssueInfo" Type="nvarchar" MaxLength="255" Nullable="false" />
+          <Property Name="PassportIssueDate" Type="datetime" />
+          <Property Name="PassportIssueCode" Type="nvarchar" MaxLength="20" Nullable="false" />
+          <Property Name="TokenKey" Type="nvarchar" MaxLength="100" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_UsersRoles">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="UserId" Type="int" Nullable="false" />
+          <Property Name="RoleId" Type="int" Nullable="false" />
+        </EntityType>
+        <EntityType Name="ts_AccountTypes">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" Nullable="false" />
+          <Property Name="Name" Type="nvarchar" MaxLength="255" Nullable="false" />
+          <Property Name="Description" Type="nvarchar(max)" Nullable="false" />
+        </EntityType>
+        <EntityType Name="ts_ClientDocumentTypes">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" Nullable="false" />
+          <Property Name="Name" Type="nvarchar" MaxLength="255" Nullable="false" />
+          <Property Name="Description" Type="nvarchar(max)" Nullable="false" />
+        </EntityType>
+        <EntityType Name="ts_ClientTypes">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" Nullable="false" />
+          <Property Name="Name" Type="nvarchar" MaxLength="255" Nullable="false" />
+          <Property Name="Description" Type="nvarchar(max)" Nullable="false" />
+        </EntityType>
+        <EntityType Name="ts_CurrencyTypes">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" Nullable="false" />
+          <Property Name="Name" Type="nvarchar" MaxLength="255" Nullable="false" />
+          <Property Name="Description" Type="nvarchar(max)" Nullable="false" />
+        </EntityType>
+        <EntityType Name="ts_ExternalAccountTypes">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" Nullable="false" />
+          <Property Name="Name" Type="nvarchar" MaxLength="255" Nullable="false" />
+          <Property Name="Description" Type="nvarchar(max)" Nullable="false" />
+        </EntityType>
+        <EntityType Name="ts_LocationTypes">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" Nullable="false" />
+          <Property Name="Name" Type="nvarchar" MaxLength="100" Nullable="false" />
+          <Property Name="Description" Type="nvarchar(max)" Nullable="false" />
+        </EntityType>
+        <EntityType Name="ts_OperationSourceTypes">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" Nullable="false" />
+          <Property Name="Name" Type="nvarchar" MaxLength="100" Nullable="false" />
+          <Property Name="Description" Type="nvarchar(max)" Nullable="false" />
+        </EntityType>
+        <EntityType Name="ts_OperationTypes">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" Nullable="false" />
+          <Property Name="Name" Type="nvarchar" MaxLength="100" Nullable="false" />
+          <Property Name="Description" Type="nvarchar(max)" Nullable="false" />
+        </EntityType>
+        <EntityType Name="ts_PaymentTypes">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" Nullable="false" />
+          <Property Name="Name" Type="nvarchar" MaxLength="100" Nullable="false" />
+          <Property Name="Description" Type="nvarchar(max)" Nullable="false" />
+        </EntityType>
+        <EntityType Name="ts_PropertyCategories">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" Nullable="false" />
+          <Property Name="Name" Type="nvarchar" MaxLength="50" Nullable="false" />
+          <Property Name="Description" Type="nvarchar(max)" Nullable="false" />
+        </EntityType>
+        <EntityType Name="ts_RightObjects">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" Nullable="false" />
+          <Property Name="Name" Type="nvarchar" MaxLength="50" Nullable="false" />
+          <Property Name="Description" Type="nvarchar(max)" Nullable="false" />
+        </EntityType>
+        <EntityType Name="ts_Rights">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" Nullable="false" />
+          <Property Name="Name" Type="nvarchar" MaxLength="255" Nullable="false" />
+          <Property Name="Description" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="RightObjectId" Type="int" Nullable="false" />
+          <Property Name="RightTypeId" Type="int" Nullable="false" />
+        </EntityType>
+        <EntityType Name="ts_RightTypes">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" Nullable="false" />
+          <Property Name="Name" Type="nvarchar" MaxLength="50" Nullable="false" />
+          <Property Name="Description" Type="nvarchar(max)" Nullable="false" />
+        </EntityType>
+        <EntityType Name="ts_Roles">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" Nullable="false" />
+          <Property Name="Name" Type="nvarchar" MaxLength="255" Nullable="false" />
+          <Property Name="Description" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="ClientTypeId" Type="int" Nullable="false" />
+        </EntityType>
+        <EntityType Name="ts_Statuses">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" Nullable="false" />
+          <Property Name="Name" Type="nvarchar" MaxLength="255" Nullable="false" />
+          <Property Name="Description" Type="nvarchar(max)" Nullable="false" />
+          <Property Name="StatusTypeId" Type="int" Nullable="false" />
+        </EntityType>
+        <EntityType Name="ts_StatusTypes">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="int" Nullable="false" />
+          <Property Name="Name" Type="nvarchar" MaxLength="255" Nullable="false" />
+          <Property Name="Description" Type="nvarchar(max)" Nullable="false" />
+        </EntityType>
+        <Association Name="FK_EmissionAddPercent_tb_Emissions">
+          <End Role="tb_Emissions" Type="Self.tb_Emissions" Multiplicity="1" />
+          <End Role="tb_EmissionAddPercent" Type="Self.tb_EmissionAddPercent" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Emissions">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_EmissionAddPercent">
+              <PropertyRef Name="EmissionId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Accounts_tb_Clients">
+          <End Role="tb_Clients" Type="Self.tb_Clients" Multiplicity="1" />
+          <End Role="tb_Accounts" Type="Self.tb_Accounts" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Clients">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Accounts">
+              <PropertyRef Name="ClientId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_BillAllowances_tb_Emissions">
+          <End Role="tb_Emissions" Type="Self.tb_Emissions" Multiplicity="1" />
+          <End Role="tb_BillAllowances" Type="Self.tb_BillAllowances" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Emissions">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_BillAllowances">
+              <PropertyRef Name="EmissionId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_BillProfits_tb_Bills">
+          <End Role="tb_Bills" Type="Self.tb_Bills" Multiplicity="1" />
+          <End Role="tb_BillProfits" Type="Self.tb_BillProfits" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Bills">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_BillProfits">
+              <PropertyRef Name="BillId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Bills_tb_Emissions">
+          <End Role="tb_Emissions" Type="Self.tb_Emissions" Multiplicity="1" />
+          <End Role="tb_Bills" Type="Self.tb_Bills" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Emissions">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Bills">
+              <PropertyRef Name="EmissionId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Bills_tb_Investors">
+          <End Role="tb_Investors" Type="Self.tb_Investors" Multiplicity="1" />
+          <End Role="tb_Bills" Type="Self.tb_Bills" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Investors">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Bills">
+              <PropertyRef Name="InvestorId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Bills_tb_Locations">
+          <End Role="tb_Locations" Type="Self.tb_Locations" Multiplicity="1" />
+          <End Role="tb_Bills" Type="Self.tb_Bills" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Locations">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Bills">
+              <PropertyRef Name="LocationId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Blogs_tb_Clients">
+          <End Role="tb_Clients" Type="Self.tb_Clients" Multiplicity="1" />
+          <End Role="tb_Blogs" Type="Self.tb_Blogs" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Clients">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Blogs">
+              <PropertyRef Name="ClientId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_BuyoutRequest_tb_Bills">
+          <End Role="tb_Bills" Type="Self.tb_Bills" Multiplicity="1" />
+          <End Role="tb_BuyoutRequest" Type="Self.tb_BuyoutRequest" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Bills">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_BuyoutRequest">
+              <PropertyRef Name="BillId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_ClientDocuments_tb_Clients">
+          <End Role="tb_Clients" Type="Self.tb_Clients" Multiplicity="1" />
+          <End Role="tb_ClientDocuments" Type="Self.tb_ClientDocuments" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Clients">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_ClientDocuments">
+              <PropertyRef Name="ClientId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Clients_ts_ClientTypes">
+          <End Role="ts_ClientTypes" Type="Self.ts_ClientTypes" Multiplicity="1" />
+          <End Role="tb_Clients" Type="Self.tb_Clients" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="ts_ClientTypes">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Clients">
+              <PropertyRef Name="ClientTypeId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_EmissionDocs_tb_Emissions">
+          <End Role="tb_Emissions" Type="Self.tb_Emissions" Multiplicity="1" />
+          <End Role="tb_EmissionDocs" Type="Self.tb_EmissionDocs" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Emissions">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_EmissionDocs">
+              <PropertyRef Name="EmissionId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Emissioners_tb_Clients">
+          <End Role="tb_Clients" Type="Self.tb_Clients" Multiplicity="1" />
+          <End Role="tb_Emissioners" Type="Self.tb_Emissioners" Multiplicity="0..1" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Clients">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Emissioners">
+              <PropertyRef Name="Id" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_EmissionRequest_tb_Emissions">
+          <End Role="tb_Emissions" Type="Self.tb_Emissions" Multiplicity="1" />
+          <End Role="tb_EmissionRequest" Type="Self.tb_EmissionRequest" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Emissions">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_EmissionRequest">
+              <PropertyRef Name="EmissionId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Emissions_tb_EmissionActions">
+          <End Role="tb_Actions" Type="Self.tb_Actions" Multiplicity="0..1" />
+          <End Role="tb_Emissions" Type="Self.tb_Emissions" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Actions">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Emissions">
+              <PropertyRef Name="ActionId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Emissions_tb_Emissioners">
+          <End Role="tb_Emissioners" Type="Self.tb_Emissioners" Multiplicity="1" />
+          <End Role="tb_Emissions" Type="Self.tb_Emissions" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Emissioners">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Emissions">
+              <PropertyRef Name="EmissionerId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_EmissionYield_tb_Emissions">
+          <End Role="tb_Emissions" Type="Self.tb_Emissions" Multiplicity="1" />
+          <End Role="tb_EmissionYield" Type="Self.tb_EmissionYield" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Emissions">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_EmissionYield">
+              <PropertyRef Name="EmissionId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_ExternalAccountDetails_tb_Clients">
+          <End Role="tb_Clients" Type="Self.tb_Clients" Multiplicity="1" />
+          <End Role="tb_ExternalAccounts" Type="Self.tb_ExternalAccounts" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Clients">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_ExternalAccounts">
+              <PropertyRef Name="ClientId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Investors_tb_Clients">
+          <End Role="tb_Clients" Type="Self.tb_Clients" Multiplicity="1" />
+          <End Role="tb_Investors" Type="Self.tb_Investors" Multiplicity="0..1" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Clients">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Investors">
+              <PropertyRef Name="Id" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Operations_tb_Accounts">
+          <End Role="tb_Accounts" Type="Self.tb_Accounts" Multiplicity="0..1" />
+          <End Role="tb_Operations" Type="Self.tb_Operations" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Accounts">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Operations">
+              <PropertyRef Name="SourceAccountId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Operations_tb_Accounts1">
+          <End Role="tb_Accounts" Type="Self.tb_Accounts" Multiplicity="0..1" />
+          <End Role="tb_Operations" Type="Self.tb_Operations" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Accounts">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Operations">
+              <PropertyRef Name="DestinationAccountId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Operations_tb_Bills">
+          <End Role="tb_Bills" Type="Self.tb_Bills" Multiplicity="1" />
+          <End Role="tb_Operations" Type="Self.tb_Operations" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Bills">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Operations">
+              <PropertyRef Name="OperationSourceId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Operations_tb_ExternalAccounts">
+          <End Role="tb_ExternalAccounts" Type="Self.tb_ExternalAccounts" Multiplicity="0..1" />
+          <End Role="tb_Operations" Type="Self.tb_Operations" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_ExternalAccounts">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Operations">
+              <PropertyRef Name="ExternalAccountId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Operations_tb_Payments">
+          <End Role="tb_Payments" Type="Self.tb_Payments" Multiplicity="1" />
+          <End Role="tb_Operations" Type="Self.tb_Operations" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Payments">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Operations">
+              <PropertyRef Name="OperationSourceId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Operations_ts_OperationSourceTypes">
+          <End Role="ts_OperationSourceTypes" Type="Self.ts_OperationSourceTypes" Multiplicity="1" />
+          <End Role="tb_Operations" Type="Self.tb_Operations" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="ts_OperationSourceTypes">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Operations">
+              <PropertyRef Name="OperationSourceTypeId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Operations_ts_OperationTypes">
+          <End Role="ts_OperationTypes" Type="Self.ts_OperationTypes" Multiplicity="1" />
+          <End Role="tb_Operations" Type="Self.tb_Operations" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="ts_OperationTypes">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Operations">
+              <PropertyRef Name="OperationTypeId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Organizations_tb_Clients">
+          <End Role="tb_Clients" Type="Self.tb_Clients" Multiplicity="1" />
+          <End Role="tb_Organizations" Type="Self.tb_Organizations" Multiplicity="0..1" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Clients">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Organizations">
+              <PropertyRef Name="Id" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_PayIn_tb_Clients">
+          <End Role="tb_Clients" Type="Self.tb_Clients" Multiplicity="1" />
+          <End Role="tb_PayIn" Type="Self.tb_PayIn" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Clients">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_PayIn">
+              <PropertyRef Name="ClientId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Payments_tb_Bills">
+          <End Role="tb_Bills" Type="Self.tb_Bills" Multiplicity="1" />
+          <End Role="tb_Payments" Type="Self.tb_Payments" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Bills">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Payments">
+              <PropertyRef Name="BillId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_ReferrerReward_tb_Emissions">
+          <End Role="tb_Emissions" Type="Self.tb_Emissions" Multiplicity="0..1" />
+          <End Role="tb_ReferrerReward" Type="Self.tb_ReferrerReward" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Emissions">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_ReferrerReward">
+              <PropertyRef Name="EmissionId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_RolesRights_ts_Rights">
+          <End Role="ts_Rights" Type="Self.ts_Rights" Multiplicity="1" />
+          <End Role="tb_RolesRights" Type="Self.tb_RolesRights" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="ts_Rights">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_RolesRights">
+              <PropertyRef Name="RightId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_RolesRights_ts_Roles">
+          <End Role="ts_Roles" Type="Self.ts_Roles" Multiplicity="1" />
+          <End Role="tb_RolesRights" Type="Self.tb_RolesRights" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="ts_Roles">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_RolesRights">
+              <PropertyRef Name="RoleId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Users_tb_Clients">
+          <End Role="tb_Clients" Type="Self.tb_Clients" Multiplicity="1" />
+          <End Role="tb_Users" Type="Self.tb_Users" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Clients">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Users">
+              <PropertyRef Name="ClientId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_UsersRoles_tb_Users">
+          <End Role="tb_Users" Type="Self.tb_Users" Multiplicity="1" />
+          <End Role="tb_UsersRoles" Type="Self.tb_UsersRoles" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Users">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_UsersRoles">
+              <PropertyRef Name="UserId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_UsersRoles_ts_Roles">
+          <End Role="ts_Roles" Type="Self.ts_Roles" Multiplicity="1" />
+          <End Role="tb_UsersRoles" Type="Self.tb_UsersRoles" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="ts_Roles">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_UsersRoles">
+              <PropertyRef Name="RoleId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_ts_Rights_ts_RightObjects">
+          <End Role="ts_RightObjects" Type="Self.ts_RightObjects" Multiplicity="1" />
+          <End Role="ts_Rights" Type="Self.ts_Rights" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="ts_RightObjects">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="ts_Rights">
+              <PropertyRef Name="RightObjectId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_ts_Rights_ts_RightTypes">
+          <End Role="ts_RightTypes" Type="Self.ts_RightTypes" Multiplicity="1" />
+          <End Role="ts_Rights" Type="Self.ts_Rights" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="ts_RightTypes">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="ts_Rights">
+              <PropertyRef Name="RightTypeId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_ts_Roles_ts_ClientTypes">
+          <End Role="ts_ClientTypes" Type="Self.ts_ClientTypes" Multiplicity="1" />
+          <End Role="ts_Roles" Type="Self.ts_Roles" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="ts_ClientTypes">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="ts_Roles">
+              <PropertyRef Name="ClientTypeId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <EntityContainer Name="Хранилище EBSModelContainer">
+          <EntitySet Name="tb_Accounts" EntityType="Self.tb_Accounts" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_Actions" EntityType="Self.tb_Actions" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_BillAllowances" EntityType="Self.tb_BillAllowances" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_BillProfits" EntityType="Self.tb_BillProfits" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_Bills" EntityType="Self.tb_Bills" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_Blogs" EntityType="Self.tb_Blogs" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_BuyoutRequest" EntityType="Self.tb_BuyoutRequest" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_ClientDocuments" EntityType="Self.tb_ClientDocuments" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_Clients" EntityType="Self.tb_Clients" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_Counters" EntityType="Self.tb_Counters" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_EBS_KioskEmissions" EntityType="Self.tb_EBS_KioskEmissions" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_EmissionAddPercent" EntityType="Self.tb_EmissionAddPercent" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_EmissionDocs" EntityType="Self.tb_EmissionDocs" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_Emissioners" EntityType="Self.tb_Emissioners" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_EmissionRequest" EntityType="Self.tb_EmissionRequest" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_Emissions" EntityType="Self.tb_Emissions" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_EmissionYield" EntityType="Self.tb_EmissionYield" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_Experts" EntityType="Self.tb_Experts" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_ExternalAccounts" EntityType="Self.tb_ExternalAccounts" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_Investors" EntityType="Self.tb_Investors" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_Locations" EntityType="Self.tb_Locations" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_News" EntityType="Self.tb_News" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_Operations" EntityType="Self.tb_Operations" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_Organizations" EntityType="Self.tb_Organizations" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_PayIn" EntityType="Self.tb_PayIn" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_Payments" EntityType="Self.tb_Payments" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_ReferrerReward" EntityType="Self.tb_ReferrerReward" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_Referrers" EntityType="Self.tb_Referrers" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_RolesRights" EntityType="Self.tb_RolesRights" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_Settings" EntityType="Self.tb_Settings" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_Shifts" EntityType="Self.tb_Shifts" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_StatusJournal" EntityType="Self.tb_StatusJournal" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_Users" EntityType="Self.tb_Users" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="tb_UsersRoles" EntityType="Self.tb_UsersRoles" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="ts_AccountTypes" EntityType="Self.ts_AccountTypes" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="ts_ClientDocumentTypes" EntityType="Self.ts_ClientDocumentTypes" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="ts_ClientTypes" EntityType="Self.ts_ClientTypes" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="ts_CurrencyTypes" EntityType="Self.ts_CurrencyTypes" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="ts_ExternalAccountTypes" EntityType="Self.ts_ExternalAccountTypes" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="ts_LocationTypes" EntityType="Self.ts_LocationTypes" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="ts_OperationSourceTypes" EntityType="Self.ts_OperationSourceTypes" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="ts_OperationTypes" EntityType="Self.ts_OperationTypes" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="ts_PaymentTypes" EntityType="Self.ts_PaymentTypes" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="ts_PropertyCategories" EntityType="Self.ts_PropertyCategories" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="ts_RightObjects" EntityType="Self.ts_RightObjects" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="ts_Rights" EntityType="Self.ts_Rights" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="ts_RightTypes" EntityType="Self.ts_RightTypes" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="ts_Roles" EntityType="Self.ts_Roles" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="ts_Statuses" EntityType="Self.ts_Statuses" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="ts_StatusTypes" EntityType="Self.ts_StatusTypes" Schema="dbo" store:Type="Tables" />
+          <AssociationSet Name="FK_EmissionAddPercent_tb_Emissions" Association="Self.FK_EmissionAddPercent_tb_Emissions">
+            <End Role="tb_Emissions" EntitySet="tb_Emissions" />
+            <End Role="tb_EmissionAddPercent" EntitySet="tb_EmissionAddPercent" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Accounts_tb_Clients" Association="Self.FK_tb_Accounts_tb_Clients">
+            <End Role="tb_Clients" EntitySet="tb_Clients" />
+            <End Role="tb_Accounts" EntitySet="tb_Accounts" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_BillAllowances_tb_Emissions" Association="Self.FK_tb_BillAllowances_tb_Emissions">
+            <End Role="tb_Emissions" EntitySet="tb_Emissions" />
+            <End Role="tb_BillAllowances" EntitySet="tb_BillAllowances" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_BillProfits_tb_Bills" Association="Self.FK_tb_BillProfits_tb_Bills">
+            <End Role="tb_Bills" EntitySet="tb_Bills" />
+            <End Role="tb_BillProfits" EntitySet="tb_BillProfits" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Bills_tb_Emissions" Association="Self.FK_tb_Bills_tb_Emissions">
+            <End Role="tb_Emissions" EntitySet="tb_Emissions" />
+            <End Role="tb_Bills" EntitySet="tb_Bills" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Bills_tb_Investors" Association="Self.FK_tb_Bills_tb_Investors">
+            <End Role="tb_Investors" EntitySet="tb_Investors" />
+            <End Role="tb_Bills" EntitySet="tb_Bills" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Bills_tb_Locations" Association="Self.FK_tb_Bills_tb_Locations">
+            <End Role="tb_Locations" EntitySet="tb_Locations" />
+            <End Role="tb_Bills" EntitySet="tb_Bills" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Blogs_tb_Clients" Association="Self.FK_tb_Blogs_tb_Clients">
+            <End Role="tb_Clients" EntitySet="tb_Clients" />
+            <End Role="tb_Blogs" EntitySet="tb_Blogs" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_BuyoutRequest_tb_Bills" Association="Self.FK_tb_BuyoutRequest_tb_Bills">
+            <End Role="tb_Bills" EntitySet="tb_Bills" />
+            <End Role="tb_BuyoutRequest" EntitySet="tb_BuyoutRequest" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_ClientDocuments_tb_Clients" Association="Self.FK_tb_ClientDocuments_tb_Clients">
+            <End Role="tb_Clients" EntitySet="tb_Clients" />
+            <End Role="tb_ClientDocuments" EntitySet="tb_ClientDocuments" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Clients_ts_ClientTypes" Association="Self.FK_tb_Clients_ts_ClientTypes">
+            <End Role="ts_ClientTypes" EntitySet="ts_ClientTypes" />
+            <End Role="tb_Clients" EntitySet="tb_Clients" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_EmissionDocs_tb_Emissions" Association="Self.FK_tb_EmissionDocs_tb_Emissions">
+            <End Role="tb_Emissions" EntitySet="tb_Emissions" />
+            <End Role="tb_EmissionDocs" EntitySet="tb_EmissionDocs" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Emissioners_tb_Clients" Association="Self.FK_tb_Emissioners_tb_Clients">
+            <End Role="tb_Clients" EntitySet="tb_Clients" />
+            <End Role="tb_Emissioners" EntitySet="tb_Emissioners" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_EmissionRequest_tb_Emissions" Association="Self.FK_tb_EmissionRequest_tb_Emissions">
+            <End Role="tb_Emissions" EntitySet="tb_Emissions" />
+            <End Role="tb_EmissionRequest" EntitySet="tb_EmissionRequest" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Emissions_tb_EmissionActions" Association="Self.FK_tb_Emissions_tb_EmissionActions">
+            <End Role="tb_Actions" EntitySet="tb_Actions" />
+            <End Role="tb_Emissions" EntitySet="tb_Emissions" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Emissions_tb_Emissioners" Association="Self.FK_tb_Emissions_tb_Emissioners">
+            <End Role="tb_Emissioners" EntitySet="tb_Emissioners" />
+            <End Role="tb_Emissions" EntitySet="tb_Emissions" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_EmissionYield_tb_Emissions" Association="Self.FK_tb_EmissionYield_tb_Emissions">
+            <End Role="tb_Emissions" EntitySet="tb_Emissions" />
+            <End Role="tb_EmissionYield" EntitySet="tb_EmissionYield" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_ExternalAccountDetails_tb_Clients" Association="Self.FK_tb_ExternalAccountDetails_tb_Clients">
+            <End Role="tb_Clients" EntitySet="tb_Clients" />
+            <End Role="tb_ExternalAccounts" EntitySet="tb_ExternalAccounts" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Investors_tb_Clients" Association="Self.FK_tb_Investors_tb_Clients">
+            <End Role="tb_Clients" EntitySet="tb_Clients" />
+            <End Role="tb_Investors" EntitySet="tb_Investors" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Operations_tb_Accounts" Association="Self.FK_tb_Operations_tb_Accounts">
+            <End Role="tb_Accounts" EntitySet="tb_Accounts" />
+            <End Role="tb_Operations" EntitySet="tb_Operations" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Operations_tb_Accounts1" Association="Self.FK_tb_Operations_tb_Accounts1">
+            <End Role="tb_Accounts" EntitySet="tb_Accounts" />
+            <End Role="tb_Operations" EntitySet="tb_Operations" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Operations_tb_Bills" Association="Self.FK_tb_Operations_tb_Bills">
+            <End Role="tb_Bills" EntitySet="tb_Bills" />
+            <End Role="tb_Operations" EntitySet="tb_Operations" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Operations_tb_ExternalAccounts" Association="Self.FK_tb_Operations_tb_ExternalAccounts">
+            <End Role="tb_ExternalAccounts" EntitySet="tb_ExternalAccounts" />
+            <End Role="tb_Operations" EntitySet="tb_Operations" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Operations_tb_Payments" Association="Self.FK_tb_Operations_tb_Payments">
+            <End Role="tb_Payments" EntitySet="tb_Payments" />
+            <End Role="tb_Operations" EntitySet="tb_Operations" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Operations_ts_OperationSourceTypes" Association="Self.FK_tb_Operations_ts_OperationSourceTypes">
+            <End Role="ts_OperationSourceTypes" EntitySet="ts_OperationSourceTypes" />
+            <End Role="tb_Operations" EntitySet="tb_Operations" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Operations_ts_OperationTypes" Association="Self.FK_tb_Operations_ts_OperationTypes">
+            <End Role="ts_OperationTypes" EntitySet="ts_OperationTypes" />
+            <End Role="tb_Operations" EntitySet="tb_Operations" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Organizations_tb_Clients" Association="Self.FK_tb_Organizations_tb_Clients">
+            <End Role="tb_Clients" EntitySet="tb_Clients" />
+            <End Role="tb_Organizations" EntitySet="tb_Organizations" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_PayIn_tb_Clients" Association="Self.FK_tb_PayIn_tb_Clients">
+            <End Role="tb_Clients" EntitySet="tb_Clients" />
+            <End Role="tb_PayIn" EntitySet="tb_PayIn" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Payments_tb_Bills" Association="Self.FK_tb_Payments_tb_Bills">
+            <End Role="tb_Bills" EntitySet="tb_Bills" />
+            <End Role="tb_Payments" EntitySet="tb_Payments" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_ReferrerReward_tb_Emissions" Association="Self.FK_tb_ReferrerReward_tb_Emissions">
+            <End Role="tb_Emissions" EntitySet="tb_Emissions" />
+            <End Role="tb_ReferrerReward" EntitySet="tb_ReferrerReward" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_RolesRights_ts_Rights" Association="Self.FK_tb_RolesRights_ts_Rights">
+            <End Role="ts_Rights" EntitySet="ts_Rights" />
+            <End Role="tb_RolesRights" EntitySet="tb_RolesRights" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_RolesRights_ts_Roles" Association="Self.FK_tb_RolesRights_ts_Roles">
+            <End Role="ts_Roles" EntitySet="ts_Roles" />
+            <End Role="tb_RolesRights" EntitySet="tb_RolesRights" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Users_tb_Clients" Association="Self.FK_tb_Users_tb_Clients">
+            <End Role="tb_Clients" EntitySet="tb_Clients" />
+            <End Role="tb_Users" EntitySet="tb_Users" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_UsersRoles_tb_Users" Association="Self.FK_tb_UsersRoles_tb_Users">
+            <End Role="tb_Users" EntitySet="tb_Users" />
+            <End Role="tb_UsersRoles" EntitySet="tb_UsersRoles" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_UsersRoles_ts_Roles" Association="Self.FK_tb_UsersRoles_ts_Roles">
+            <End Role="ts_Roles" EntitySet="ts_Roles" />
+            <End Role="tb_UsersRoles" EntitySet="tb_UsersRoles" />
+          </AssociationSet>
+          <AssociationSet Name="FK_ts_Rights_ts_RightObjects" Association="Self.FK_ts_Rights_ts_RightObjects">
+            <End Role="ts_RightObjects" EntitySet="ts_RightObjects" />
+            <End Role="ts_Rights" EntitySet="ts_Rights" />
+          </AssociationSet>
+          <AssociationSet Name="FK_ts_Rights_ts_RightTypes" Association="Self.FK_ts_Rights_ts_RightTypes">
+            <End Role="ts_RightTypes" EntitySet="ts_RightTypes" />
+            <End Role="ts_Rights" EntitySet="ts_Rights" />
+          </AssociationSet>
+          <AssociationSet Name="FK_ts_Roles_ts_ClientTypes" Association="Self.FK_ts_Roles_ts_ClientTypes">
+            <End Role="ts_ClientTypes" EntitySet="ts_ClientTypes" />
+            <End Role="ts_Roles" EntitySet="ts_Roles" />
+          </AssociationSet>
+        </EntityContainer>
+      </Schema>
+    </edmx:StorageModels>
+    <!-- CSDL content -->
+    <edmx:ConceptualModels>
+      <Schema Namespace="EBSModel" Alias="Self" annotation:UseStrongSpatialTypes="false" xmlns:annotation="http://schemas.microsoft.com/ado/2009/02/edm/annotation" xmlns:customannotation="http://schemas.microsoft.com/ado/2013/11/edm/customannotation" xmlns="http://schemas.microsoft.com/ado/2009/11/edm">
+        <EntityType Name="tb_Accounts">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="CurrencyTypeId" Type="Int32" Nullable="false" />
+          <Property Name="ClientId" Type="Int32" Nullable="false" />
+          <Property Name="AccountTypeId" Type="Int32" Nullable="false" />
+          <Property Name="Balance" Type="Decimal" Precision="19" Scale="4" Nullable="false" />
+          <NavigationProperty Name="tb_Clients" Relationship="Self.FK_tb_Accounts_tb_Clients" FromRole="tb_Accounts" ToRole="tb_Clients" />
+          <NavigationProperty Name="tb_Operations" Relationship="Self.FK_tb_Operations_tb_Accounts" FromRole="tb_Accounts" ToRole="tb_Operations" />
+          <NavigationProperty Name="tb_Operations1" Relationship="Self.FK_tb_Operations_tb_Accounts1" FromRole="tb_Accounts" ToRole="tb_Operations" />
+        </EntityType>
+        <EntityType Name="tb_Actions">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="Name" Type="String" MaxLength="255" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Description" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="BannerImage" Type="Guid" Nullable="false" />
+          <Property Name="Percent" Type="Byte" Nullable="false" />
+          <NavigationProperty Name="tb_Emissions" Relationship="Self.FK_tb_Emissions_tb_EmissionActions" FromRole="tb_Actions" ToRole="tb_Emissions" />
+        </EntityType>
+        <EntityType Name="tb_BillAllowances">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="EmissionId" Type="Int32" Nullable="false" />
+          <Property Name="MinBillSum" Type="Decimal" Precision="19" Scale="4" Nullable="false" />
+          <Property Name="Percent" Type="Byte" Nullable="false" />
+          <NavigationProperty Name="tb_Emissions" Relationship="Self.FK_tb_BillAllowances_tb_Emissions" FromRole="tb_BillAllowances" ToRole="tb_Emissions" />
+        </EntityType>
+        <EntityType Name="tb_BillProfits">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="BillId" Type="Int32" Nullable="false" />
+          <Property Name="ProfitDateTime" Type="DateTime" Nullable="false" Precision="7" />
+          <Property Name="Sum" Type="Decimal" Precision="19" Scale="4" Nullable="false" />
+          <NavigationProperty Name="tb_Bills" Relationship="Self.FK_tb_BillProfits_tb_Bills" FromRole="tb_BillProfits" ToRole="tb_Bills" />
+        </EntityType>
+        <EntityType Name="tb_Bills">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="EmissionId" Type="Int32" Nullable="false" />
+          <Property Name="InvestorId" Type="Int32" Nullable="false" />
+          <Property Name="Number" Type="Int32" Nullable="false" />
+          <Property Name="Nominal" Type="Decimal" Precision="19" Scale="4" Nullable="false" />
+          <Property Name="StatusId" Type="Int32" Nullable="false" />
+          <Property Name="StatusDateTime" Type="DateTime" Nullable="false" Precision="3" />
+          <Property Name="StatusUserId" Type="Int32" Nullable="false" />
+          <Property Name="StatusComment" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="ReferrerId" Type="Int32" />
+          <Property Name="ParticipationInAction" Type="Boolean" Nullable="false" />
+          <Property Name="DocumentAttachment" Type="Guid" />
+          <Property Name="LocationId" Type="Int32" Nullable="false" />
+          <Property Name="Code" Type="String" MaxLength="100" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="ActivateDateTime" Type="DateTime" Precision="3" />
+          <Property Name="KillDateTime" Type="DateTime" Precision="3" />
+          <NavigationProperty Name="tb_BillProfits" Relationship="Self.FK_tb_BillProfits_tb_Bills" FromRole="tb_Bills" ToRole="tb_BillProfits" />
+          <NavigationProperty Name="tb_Emissions" Relationship="Self.FK_tb_Bills_tb_Emissions" FromRole="tb_Bills" ToRole="tb_Emissions" />
+          <NavigationProperty Name="tb_Investors" Relationship="Self.FK_tb_Bills_tb_Investors" FromRole="tb_Bills" ToRole="tb_Investors" />
+          <NavigationProperty Name="tb_Locations" Relationship="Self.FK_tb_Bills_tb_Locations" FromRole="tb_Bills" ToRole="tb_Locations" />
+          <NavigationProperty Name="tb_BuyoutRequest" Relationship="Self.FK_tb_BuyoutRequest_tb_Bills" FromRole="tb_Bills" ToRole="tb_BuyoutRequest" />
+          <NavigationProperty Name="tb_Operations" Relationship="Self.FK_tb_Operations_tb_Bills" FromRole="tb_Bills" ToRole="tb_Operations" />
+          <NavigationProperty Name="tb_Payments" Relationship="Self.FK_tb_Payments_tb_Bills" FromRole="tb_Bills" ToRole="tb_Payments" />
+        </EntityType>
+        <EntityType Name="tb_Blogs">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="CreateDateTime" Type="DateTime" Nullable="false" Precision="3" />
+          <Property Name="Header" Type="String" MaxLength="255" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Text" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="StatusId" Type="Int32" Nullable="false" />
+          <Property Name="StatusDateTime" Type="DateTime" Nullable="false" Precision="3" />
+          <Property Name="StatusUserId" Type="Int32" Nullable="false" />
+          <Property Name="StatusComment" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="ClientId" Type="Int32" Nullable="false" />
+          <NavigationProperty Name="tb_Clients" Relationship="Self.FK_tb_Blogs_tb_Clients" FromRole="tb_Blogs" ToRole="tb_Clients" />
+        </EntityType>
+        <EntityType Name="tb_BuyoutRequest">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="BillId" Type="Int32" Nullable="false" />
+          <Property Name="BuyoutSumm" Type="Decimal" Precision="19" Scale="4" Nullable="false" />
+          <Property Name="StatusId" Type="Int32" Nullable="false" />
+          <Property Name="StatusDateTime" Type="DateTime" Nullable="false" Precision="3" />
+          <Property Name="StatusUserId" Type="Int32" Nullable="false" />
+          <Property Name="StatusComment" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <NavigationProperty Name="tb_Bills" Relationship="Self.FK_tb_BuyoutRequest_tb_Bills" FromRole="tb_BuyoutRequest" ToRole="tb_Bills" />
+        </EntityType>
+        <EntityType Name="tb_ClientDocuments">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="ClientId" Type="Int32" Nullable="false" />
+          <Property Name="Name" Type="String" MaxLength="255" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Description" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="ClientDocumentTypeId" Type="Int32" Nullable="false" />
+          <Property Name="Image" Type="Guid" />
+          <NavigationProperty Name="tb_Clients" Relationship="Self.FK_tb_ClientDocuments_tb_Clients" FromRole="tb_ClientDocuments" ToRole="tb_Clients" />
+        </EntityType>
+        <EntityType Name="tb_Clients">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="Description" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="ClientTypeId" Type="Int32" Nullable="false" />
+          <Property Name="IsJuridical" Type="Boolean" Nullable="false" />
+          <Property Name="StatusId" Type="Int32" Nullable="false" />
+          <Property Name="StatusDateTime" Type="DateTime" Nullable="false" Precision="3" />
+          <Property Name="StatusUserId" Type="Int32" Nullable="false" />
+          <Property Name="StatusComment" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <NavigationProperty Name="tb_Accounts" Relationship="Self.FK_tb_Accounts_tb_Clients" FromRole="tb_Clients" ToRole="tb_Accounts" />
+          <NavigationProperty Name="tb_Blogs" Relationship="Self.FK_tb_Blogs_tb_Clients" FromRole="tb_Clients" ToRole="tb_Blogs" />
+          <NavigationProperty Name="tb_ClientDocuments" Relationship="Self.FK_tb_ClientDocuments_tb_Clients" FromRole="tb_Clients" ToRole="tb_ClientDocuments" />
+          <NavigationProperty Name="ts_ClientTypes" Relationship="Self.FK_tb_Clients_ts_ClientTypes" FromRole="tb_Clients" ToRole="ts_ClientTypes" />
+          <NavigationProperty Name="tb_Emissioners" Relationship="Self.FK_tb_Emissioners_tb_Clients" FromRole="tb_Clients" ToRole="tb_Emissioners" />
+          <NavigationProperty Name="tb_ExternalAccounts" Relationship="Self.FK_tb_ExternalAccountDetails_tb_Clients" FromRole="tb_Clients" ToRole="tb_ExternalAccounts" />
+          <NavigationProperty Name="tb_Investors" Relationship="Self.FK_tb_Investors_tb_Clients" FromRole="tb_Clients" ToRole="tb_Investors" />
+          <NavigationProperty Name="tb_Organizations" Relationship="Self.FK_tb_Organizations_tb_Clients" FromRole="tb_Clients" ToRole="tb_Organizations" />
+          <NavigationProperty Name="tb_PayIn" Relationship="Self.FK_tb_PayIn_tb_Clients" FromRole="tb_Clients" ToRole="tb_PayIn" />
+          <NavigationProperty Name="tb_Users" Relationship="Self.FK_tb_Users_tb_Clients" FromRole="tb_Clients" ToRole="tb_Users" />
+        </EntityType>
+        <EntityType Name="tb_Counters">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="NameObj" Type="String" MaxLength="255" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="NumValue" Type="Int32" Nullable="false" />
+          <Property Name="NumYear" Type="Int32" />
+          <Property Name="Description" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_EBS_KioskEmissions">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="KioskId" Type="Int32" Nullable="false" />
+          <Property Name="EmissionId" Type="Int32" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_EmissionAddPercent">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="EmissionId" Type="Int32" Nullable="false" />
+          <Property Name="MinSumm" Type="Decimal" Precision="19" Scale="4" Nullable="false" />
+          <Property Name="MaxSumm" Type="Decimal" Precision="19" Scale="4" Nullable="false" />
+          <Property Name="AddPercent" Type="Decimal" Precision="19" Scale="4" Nullable="false" />
+          <NavigationProperty Name="tb_Emissions" Relationship="Self.FK_EmissionAddPercent_tb_Emissions" FromRole="tb_EmissionAddPercent" ToRole="tb_Emissions" />
+        </EntityType>
+        <EntityType Name="tb_EmissionDocs">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="EmissionId" Type="Int32" Nullable="false" />
+          <Property Name="DocumentName" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="FileId" Type="Guid" Nullable="false" />
+          <NavigationProperty Name="tb_Emissions" Relationship="Self.FK_tb_EmissionDocs_tb_Emissions" FromRole="tb_EmissionDocs" ToRole="tb_Emissions" />
+        </EntityType>
+        <EntityType Name="tb_Emissioners">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" />
+          <Property Name="Domen" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="DigitalSign" Type="String" MaxLength="100" FixedLength="false" Unicode="true" Nullable="false" />
+          <NavigationProperty Name="tb_Clients" Relationship="Self.FK_tb_Emissioners_tb_Clients" FromRole="tb_Emissioners" ToRole="tb_Clients" />
+          <NavigationProperty Name="tb_Emissions" Relationship="Self.FK_tb_Emissions_tb_Emissioners" FromRole="tb_Emissioners" ToRole="tb_Emissions" />
+        </EntityType>
+        <EntityType Name="tb_EmissionRequest">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int64" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="EmissionId" Type="Int32" Nullable="false" />
+          <Property Name="EconomicState" Type="Int32" />
+          <Property Name="LegalState" Type="Int32" />
+          <Property Name="Data" Type="DateTime" Nullable="false" Precision="3" />
+          <Property Name="Description" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <NavigationProperty Name="tb_Emissions" Relationship="Self.FK_tb_EmissionRequest_tb_Emissions" FromRole="tb_EmissionRequest" ToRole="tb_Emissions" />
+        </EntityType>
+        <EntityType Name="tb_Emissions">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="EmissionerId" Type="Int32" Nullable="false" />
+          <Property Name="AheadOfTimePercent" Type="Byte" Nullable="false" />
+          <Property Name="Limit" Type="Decimal" Precision="19" Scale="4" Nullable="false" />
+          <Property Name="SaleSum" Type="Decimal" Precision="19" Scale="4" Nullable="false" />
+          <Property Name="MinBillSum" Type="Decimal" Precision="19" Scale="4" Nullable="false" />
+          <Property Name="MaxBillSum" Type="Decimal" Precision="19" Scale="4" Nullable="false" />
+          <Property Name="StatusId" Type="Int32" Nullable="false" />
+          <Property Name="StatusDateTime" Type="DateTime" Nullable="false" Precision="3" />
+          <Property Name="StatusUserId" Type="Int32" Nullable="false" />
+          <Property Name="StatusComment" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Comment" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="TurnOnReferrers" Type="Boolean" Nullable="false" />
+          <Property Name="BillPeriodInMonths" Type="Byte" Nullable="false" />
+          <Property Name="Image" Type="Guid" />
+          <Property Name="ActionId" Type="Int32" />
+          <NavigationProperty Name="tb_Actions" Relationship="Self.FK_tb_Emissions_tb_EmissionActions" FromRole="tb_Emissions" ToRole="tb_Actions" />
+          <NavigationProperty Name="tb_BillAllowances" Relationship="Self.FK_tb_BillAllowances_tb_Emissions" FromRole="tb_Emissions" ToRole="tb_BillAllowances" />
+          <NavigationProperty Name="tb_Bills" Relationship="Self.FK_tb_Bills_tb_Emissions" FromRole="tb_Emissions" ToRole="tb_Bills" />
+          <NavigationProperty Name="tb_EmissionAddPercent" Relationship="Self.FK_EmissionAddPercent_tb_Emissions" FromRole="tb_Emissions" ToRole="tb_EmissionAddPercent" />
+          <NavigationProperty Name="tb_EmissionDocs" Relationship="Self.FK_tb_EmissionDocs_tb_Emissions" FromRole="tb_Emissions" ToRole="tb_EmissionDocs" />
+          <NavigationProperty Name="tb_Emissioners" Relationship="Self.FK_tb_Emissions_tb_Emissioners" FromRole="tb_Emissions" ToRole="tb_Emissioners" />
+          <NavigationProperty Name="tb_EmissionRequest" Relationship="Self.FK_tb_EmissionRequest_tb_Emissions" FromRole="tb_Emissions" ToRole="tb_EmissionRequest" />
+          <NavigationProperty Name="tb_EmissionYield" Relationship="Self.FK_tb_EmissionYield_tb_Emissions" FromRole="tb_Emissions" ToRole="tb_EmissionYield" />
+          <NavigationProperty Name="tb_ReferrerReward" Relationship="Self.FK_tb_ReferrerReward_tb_Emissions" FromRole="tb_Emissions" ToRole="tb_ReferrerReward" />
+        </EntityType>
+        <EntityType Name="tb_EmissionYield">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="EmissionId" Type="Int32" Nullable="false" />
+          <Property Name="MonthNumber" Type="Byte" Nullable="false" />
+          <Property Name="Percent" Type="Byte" Nullable="false" />
+          <NavigationProperty Name="tb_Emissions" Relationship="Self.FK_tb_EmissionYield_tb_Emissions" FromRole="tb_EmissionYield" ToRole="tb_Emissions" />
+        </EntityType>
+        <EntityType Name="tb_Experts">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_ExternalAccounts">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="ClientId" Type="Int32" Nullable="false" />
+          <Property Name="IsCurrent" Type="Int32" Nullable="false" />
+          <Property Name="IsActive" Type="Boolean" Nullable="false" />
+          <Property Name="ExternalAccountTypeId" Type="Int32" Nullable="false" />
+          <Property Name="CurrencyTypeId" Type="Int32" Nullable="false" />
+          <Property Name="AccountNumber" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Bank" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="BIK" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="KorAccountNumber" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="SWIFTCode" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="CorrespondentBank" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="SWIFTCorrespondentBank" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="CorrespondentAccount" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <NavigationProperty Name="tb_Clients" Relationship="Self.FK_tb_ExternalAccountDetails_tb_Clients" FromRole="tb_ExternalAccounts" ToRole="tb_Clients" />
+          <NavigationProperty Name="tb_Operations" Relationship="Self.FK_tb_Operations_tb_ExternalAccounts" FromRole="tb_ExternalAccounts" ToRole="tb_Operations" />
+        </EntityType>
+        <EntityType Name="tb_Investors">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" />
+          <NavigationProperty Name="tb_Bills" Relationship="Self.FK_tb_Bills_tb_Investors" FromRole="tb_Investors" ToRole="tb_Bills" />
+          <NavigationProperty Name="tb_Clients" Relationship="Self.FK_tb_Investors_tb_Clients" FromRole="tb_Investors" ToRole="tb_Clients" />
+        </EntityType>
+        <EntityType Name="tb_Locations">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="Address" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Description" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="CoordX" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="CoordY" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="LocationTypeId" Type="Int32" Nullable="false" />
+          <NavigationProperty Name="tb_Bills" Relationship="Self.FK_tb_Bills_tb_Locations" FromRole="tb_Locations" ToRole="tb_Bills" />
+        </EntityType>
+        <EntityType Name="tb_News">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int64" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="Data" Type="DateTime" Nullable="false" Precision="3" />
+          <Property Name="Title" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Desscription" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_Operations">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="OperationSourceId" Type="Int32" Nullable="false" />
+          <Property Name="OperationSourceTypeId" Type="Int32" Nullable="false" />
+          <Property Name="SourceAccountId" Type="Int32" />
+          <Property Name="DestinationAccountId" Type="Int32" />
+          <Property Name="ExternalAccountId" Type="Int32" />
+          <Property Name="DateTime" Type="DateTime" Nullable="false" Precision="3" />
+          <Property Name="Sum" Type="Decimal" Precision="19" Scale="4" Nullable="false" />
+          <Property Name="OperationTypeId" Type="Int32" Nullable="false" />
+          <Property Name="StatusId" Type="Int32" Nullable="false" />
+          <Property Name="StatusDateTime" Type="DateTime" Nullable="false" Precision="3" />
+          <Property Name="StatusUserId" Type="Int32" Nullable="false" />
+          <Property Name="StatusComment" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Description" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <NavigationProperty Name="tb_Accounts" Relationship="Self.FK_tb_Operations_tb_Accounts" FromRole="tb_Operations" ToRole="tb_Accounts" />
+          <NavigationProperty Name="tb_Accounts1" Relationship="Self.FK_tb_Operations_tb_Accounts1" FromRole="tb_Operations" ToRole="tb_Accounts" />
+          <NavigationProperty Name="tb_Bills" Relationship="Self.FK_tb_Operations_tb_Bills" FromRole="tb_Operations" ToRole="tb_Bills" />
+          <NavigationProperty Name="tb_ExternalAccounts" Relationship="Self.FK_tb_Operations_tb_ExternalAccounts" FromRole="tb_Operations" ToRole="tb_ExternalAccounts" />
+          <NavigationProperty Name="tb_Payments" Relationship="Self.FK_tb_Operations_tb_Payments" FromRole="tb_Operations" ToRole="tb_Payments" />
+          <NavigationProperty Name="ts_OperationSourceTypes" Relationship="Self.FK_tb_Operations_ts_OperationSourceTypes" FromRole="tb_Operations" ToRole="ts_OperationSourceTypes" />
+          <NavigationProperty Name="ts_OperationTypes" Relationship="Self.FK_tb_Operations_ts_OperationTypes" FromRole="tb_Operations" ToRole="ts_OperationTypes" />
+        </EntityType>
+        <EntityType Name="tb_Organizations">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" />
+          <Property Name="PropertyCategoryId" Type="Int32" Nullable="false" />
+          <Property Name="Name" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="INN" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="BIK" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="JurAddress" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="FactAddress" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="PostAddress" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Site" Type="String" MaxLength="100" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Description" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="DirectorLastName" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="DirectorFirstName" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="DirectorSurName" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Phone" Type="String" MaxLength="100" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Email" Type="String" MaxLength="100" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="OGRN" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Bank" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Ras" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="LogoImage" Type="Guid" />
+          <NavigationProperty Name="tb_Clients" Relationship="Self.FK_tb_Organizations_tb_Clients" FromRole="tb_Organizations" ToRole="tb_Clients" />
+        </EntityType>
+        <EntityType Name="tb_PayIn">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int64" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="ClientId" Type="Int32" Nullable="false" />
+          <Property Name="Summa" Type="Decimal" Precision="19" Scale="4" Nullable="false" />
+          <Property Name="IsPayd" Type="Boolean" Nullable="false" />
+          <NavigationProperty Name="tb_Clients" Relationship="Self.FK_tb_PayIn_tb_Clients" FromRole="tb_PayIn" ToRole="tb_Clients" />
+        </EntityType>
+        <EntityType Name="tb_Payments">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="BillId" Type="Int32" Nullable="false" />
+          <Property Name="DateTime" Type="DateTime" Nullable="false" Precision="7" />
+          <Property Name="Sum" Type="Decimal" Precision="19" Scale="4" Nullable="false" />
+          <Property Name="PaymentTypeId" Type="Int32" Nullable="false" />
+          <NavigationProperty Name="tb_Bills" Relationship="Self.FK_tb_Payments_tb_Bills" FromRole="tb_Payments" ToRole="tb_Bills" />
+          <NavigationProperty Name="tb_Operations" Relationship="Self.FK_tb_Operations_tb_Payments" FromRole="tb_Payments" ToRole="tb_Operations" />
+        </EntityType>
+        <EntityType Name="tb_ReferrerReward">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int64" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="EmissionId" Type="Int32" />
+          <Property Name="BonusFix" Type="Decimal" Precision="19" Scale="4" Nullable="false" />
+          <Property Name="BonusPercent" Type="Decimal" Precision="19" Scale="4" Nullable="false" />
+          <NavigationProperty Name="tb_Emissions" Relationship="Self.FK_tb_ReferrerReward_tb_Emissions" FromRole="tb_ReferrerReward" ToRole="tb_Emissions" />
+        </EntityType>
+        <EntityType Name="tb_Referrers">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_RolesRights">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="RoleId" Type="Int32" Nullable="false" />
+          <Property Name="RightId" Type="Int32" Nullable="false" />
+          <NavigationProperty Name="ts_Rights" Relationship="Self.FK_tb_RolesRights_ts_Rights" FromRole="tb_RolesRights" ToRole="ts_Rights" />
+          <NavigationProperty Name="ts_Roles" Relationship="Self.FK_tb_RolesRights_ts_Roles" FromRole="tb_RolesRights" ToRole="ts_Roles" />
+        </EntityType>
+        <EntityType Name="tb_Settings">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="SettingsName" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="SettingsValueString" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" />
+          <Property Name="SettingsValueDecimal" Type="Decimal" Precision="19" Scale="4" />
+        </EntityType>
+        <EntityType Name="tb_Shifts">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="OpenDateTime" Type="DateTime" Nullable="false" Precision="3" />
+          <Property Name="CloseDateTime" Type="DateTime" Precision="3" />
+          <Property Name="UserId" Type="Int32" Nullable="false" />
+          <Property Name="KioskId" Type="Int32" />
+          <Property Name="InkassExtId" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_StatusJournal">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="SourceId" Type="Int32" Nullable="false" />
+          <Property Name="StatusTypeId" Type="Int32" Nullable="false" />
+          <Property Name="StatusId" Type="Int32" Nullable="false" />
+          <Property Name="UserId" Type="Int32" Nullable="false" />
+          <Property Name="DateTime" Type="DateTime" Nullable="false" Precision="3" />
+          <Property Name="Description" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+        </EntityType>
+        <EntityType Name="tb_Users">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="Description" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Login" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="EMail" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Phone" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Password" Type="String" MaxLength="100" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="LastName" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="FirstName" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="SurName" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="StatusId" Type="Int32" Nullable="false" />
+          <Property Name="StatusDateTime" Type="DateTime" Nullable="false" Precision="3" />
+          <Property Name="StatusUserId" Type="Int32" Nullable="false" />
+          <Property Name="StatusComment" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Avatar" Type="Binary" MaxLength="Max" FixedLength="false" />
+          <Property Name="ClientId" Type="Int32" Nullable="false" />
+          <Property Name="NickName" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="RegistrationAddress" Type="String" MaxLength="255" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="IsDirector" Type="Boolean" Nullable="false" />
+          <Property Name="WarrantyNumber" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="WarrantyDate" Type="DateTime" Precision="3" />
+          <Property Name="PassportPrefix" Type="String" MaxLength="10" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="PassportNumber" Type="String" MaxLength="20" FixedLength="true" Unicode="true" Nullable="false" />
+          <Property Name="PassportIssueInfo" Type="String" MaxLength="255" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="PassportIssueDate" Type="DateTime" Precision="3" />
+          <Property Name="PassportIssueCode" Type="String" MaxLength="20" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="TokenKey" Type="String" MaxLength="100" FixedLength="false" Unicode="true" Nullable="false" />
+          <NavigationProperty Name="tb_Clients" Relationship="Self.FK_tb_Users_tb_Clients" FromRole="tb_Users" ToRole="tb_Clients" />
+          <NavigationProperty Name="tb_UsersRoles" Relationship="Self.FK_tb_UsersRoles_tb_Users" FromRole="tb_Users" ToRole="tb_UsersRoles" />
+        </EntityType>
+        <EntityType Name="tb_UsersRoles">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="UserId" Type="Int32" Nullable="false" />
+          <Property Name="RoleId" Type="Int32" Nullable="false" />
+          <NavigationProperty Name="tb_Users" Relationship="Self.FK_tb_UsersRoles_tb_Users" FromRole="tb_UsersRoles" ToRole="tb_Users" />
+          <NavigationProperty Name="ts_Roles" Relationship="Self.FK_tb_UsersRoles_ts_Roles" FromRole="tb_UsersRoles" ToRole="ts_Roles" />
+        </EntityType>
+        <EntityType Name="ts_AccountTypes">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" />
+          <Property Name="Name" Type="String" MaxLength="255" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Description" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+        </EntityType>
+        <EntityType Name="ts_ClientDocumentTypes">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" />
+          <Property Name="Name" Type="String" MaxLength="255" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Description" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+        </EntityType>
+        <EntityType Name="ts_ClientTypes">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" />
+          <Property Name="Name" Type="String" MaxLength="255" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Description" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <NavigationProperty Name="tb_Clients" Relationship="Self.FK_tb_Clients_ts_ClientTypes" FromRole="ts_ClientTypes" ToRole="tb_Clients" />
+          <NavigationProperty Name="ts_Roles" Relationship="Self.FK_ts_Roles_ts_ClientTypes" FromRole="ts_ClientTypes" ToRole="ts_Roles" />
+        </EntityType>
+        <EntityType Name="ts_CurrencyTypes">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" />
+          <Property Name="Name" Type="String" MaxLength="255" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Description" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+        </EntityType>
+        <EntityType Name="ts_ExternalAccountTypes">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" />
+          <Property Name="Name" Type="String" MaxLength="255" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Description" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+        </EntityType>
+        <EntityType Name="ts_LocationTypes">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" />
+          <Property Name="Name" Type="String" MaxLength="100" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Description" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+        </EntityType>
+        <EntityType Name="ts_OperationSourceTypes">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" />
+          <Property Name="Name" Type="String" MaxLength="100" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Description" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <NavigationProperty Name="tb_Operations" Relationship="Self.FK_tb_Operations_ts_OperationSourceTypes" FromRole="ts_OperationSourceTypes" ToRole="tb_Operations" />
+        </EntityType>
+        <EntityType Name="ts_OperationTypes">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" />
+          <Property Name="Name" Type="String" MaxLength="100" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Description" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <NavigationProperty Name="tb_Operations" Relationship="Self.FK_tb_Operations_ts_OperationTypes" FromRole="ts_OperationTypes" ToRole="tb_Operations" />
+        </EntityType>
+        <EntityType Name="ts_PaymentTypes">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" />
+          <Property Name="Name" Type="String" MaxLength="100" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Description" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+        </EntityType>
+        <EntityType Name="ts_PropertyCategories">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" />
+          <Property Name="Name" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Description" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+        </EntityType>
+        <EntityType Name="ts_RightObjects">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" />
+          <Property Name="Name" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Description" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <NavigationProperty Name="ts_Rights" Relationship="Self.FK_ts_Rights_ts_RightObjects" FromRole="ts_RightObjects" ToRole="ts_Rights" />
+        </EntityType>
+        <EntityType Name="ts_Rights">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" />
+          <Property Name="Name" Type="String" MaxLength="255" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Description" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="RightObjectId" Type="Int32" Nullable="false" />
+          <Property Name="RightTypeId" Type="Int32" Nullable="false" />
+          <NavigationProperty Name="tb_RolesRights" Relationship="Self.FK_tb_RolesRights_ts_Rights" FromRole="ts_Rights" ToRole="tb_RolesRights" />
+          <NavigationProperty Name="ts_RightObjects" Relationship="Self.FK_ts_Rights_ts_RightObjects" FromRole="ts_Rights" ToRole="ts_RightObjects" />
+          <NavigationProperty Name="ts_RightTypes" Relationship="Self.FK_ts_Rights_ts_RightTypes" FromRole="ts_Rights" ToRole="ts_RightTypes" />
+        </EntityType>
+        <EntityType Name="ts_RightTypes">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" />
+          <Property Name="Name" Type="String" MaxLength="50" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Description" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <NavigationProperty Name="ts_Rights" Relationship="Self.FK_ts_Rights_ts_RightTypes" FromRole="ts_RightTypes" ToRole="ts_Rights" />
+        </EntityType>
+        <EntityType Name="ts_Roles">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" />
+          <Property Name="Name" Type="String" MaxLength="255" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Description" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="ClientTypeId" Type="Int32" Nullable="false" />
+          <NavigationProperty Name="tb_RolesRights" Relationship="Self.FK_tb_RolesRights_ts_Roles" FromRole="ts_Roles" ToRole="tb_RolesRights" />
+          <NavigationProperty Name="tb_UsersRoles" Relationship="Self.FK_tb_UsersRoles_ts_Roles" FromRole="ts_Roles" ToRole="tb_UsersRoles" />
+          <NavigationProperty Name="ts_ClientTypes" Relationship="Self.FK_ts_Roles_ts_ClientTypes" FromRole="ts_Roles" ToRole="ts_ClientTypes" />
+        </EntityType>
+        <EntityType Name="ts_Statuses">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" />
+          <Property Name="Name" Type="String" MaxLength="255" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Description" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="StatusTypeId" Type="Int32" Nullable="false" />
+        </EntityType>
+        <EntityType Name="ts_StatusTypes">
+          <Key>
+            <PropertyRef Name="Id" />
+          </Key>
+          <Property Name="Id" Type="Int32" Nullable="false" />
+          <Property Name="Name" Type="String" MaxLength="255" FixedLength="false" Unicode="true" Nullable="false" />
+          <Property Name="Description" Type="String" MaxLength="Max" FixedLength="false" Unicode="true" Nullable="false" />
+        </EntityType>
+        <Association Name="FK_tb_Accounts_tb_Clients">
+          <End Role="tb_Clients" Type="Self.tb_Clients" Multiplicity="1" />
+          <End Role="tb_Accounts" Type="Self.tb_Accounts" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Clients">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Accounts">
+              <PropertyRef Name="ClientId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Operations_tb_Accounts">
+          <End Role="tb_Accounts" Type="Self.tb_Accounts" Multiplicity="0..1" />
+          <End Role="tb_Operations" Type="Self.tb_Operations" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Accounts">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Operations">
+              <PropertyRef Name="SourceAccountId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Operations_tb_Accounts1">
+          <End Role="tb_Accounts" Type="Self.tb_Accounts" Multiplicity="0..1" />
+          <End Role="tb_Operations" Type="Self.tb_Operations" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Accounts">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Operations">
+              <PropertyRef Name="DestinationAccountId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Emissions_tb_EmissionActions">
+          <End Role="tb_Actions" Type="Self.tb_Actions" Multiplicity="0..1" />
+          <End Role="tb_Emissions" Type="Self.tb_Emissions" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Actions">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Emissions">
+              <PropertyRef Name="ActionId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_BillAllowances_tb_Emissions">
+          <End Role="tb_Emissions" Type="Self.tb_Emissions" Multiplicity="1" />
+          <End Role="tb_BillAllowances" Type="Self.tb_BillAllowances" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Emissions">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_BillAllowances">
+              <PropertyRef Name="EmissionId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_BillProfits_tb_Bills">
+          <End Role="tb_Bills" Type="Self.tb_Bills" Multiplicity="1" />
+          <End Role="tb_BillProfits" Type="Self.tb_BillProfits" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Bills">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_BillProfits">
+              <PropertyRef Name="BillId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Bills_tb_Emissions">
+          <End Role="tb_Emissions" Type="Self.tb_Emissions" Multiplicity="1" />
+          <End Role="tb_Bills" Type="Self.tb_Bills" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Emissions">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Bills">
+              <PropertyRef Name="EmissionId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Bills_tb_Investors">
+          <End Role="tb_Investors" Type="Self.tb_Investors" Multiplicity="1" />
+          <End Role="tb_Bills" Type="Self.tb_Bills" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Investors">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Bills">
+              <PropertyRef Name="InvestorId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Bills_tb_Locations">
+          <End Role="tb_Locations" Type="Self.tb_Locations" Multiplicity="1" />
+          <End Role="tb_Bills" Type="Self.tb_Bills" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Locations">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Bills">
+              <PropertyRef Name="LocationId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_BuyoutRequest_tb_Bills">
+          <End Role="tb_Bills" Type="Self.tb_Bills" Multiplicity="1" />
+          <End Role="tb_BuyoutRequest" Type="Self.tb_BuyoutRequest" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Bills">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_BuyoutRequest">
+              <PropertyRef Name="BillId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Operations_tb_Bills">
+          <End Role="tb_Bills" Type="Self.tb_Bills" Multiplicity="1" />
+          <End Role="tb_Operations" Type="Self.tb_Operations" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Bills">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Operations">
+              <PropertyRef Name="OperationSourceId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Payments_tb_Bills">
+          <End Role="tb_Bills" Type="Self.tb_Bills" Multiplicity="1" />
+          <End Role="tb_Payments" Type="Self.tb_Payments" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Bills">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Payments">
+              <PropertyRef Name="BillId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Blogs_tb_Clients">
+          <End Role="tb_Clients" Type="Self.tb_Clients" Multiplicity="1" />
+          <End Role="tb_Blogs" Type="Self.tb_Blogs" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Clients">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Blogs">
+              <PropertyRef Name="ClientId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_ClientDocuments_tb_Clients">
+          <End Role="tb_Clients" Type="Self.tb_Clients" Multiplicity="1" />
+          <End Role="tb_ClientDocuments" Type="Self.tb_ClientDocuments" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Clients">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_ClientDocuments">
+              <PropertyRef Name="ClientId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Clients_ts_ClientTypes">
+          <End Role="ts_ClientTypes" Type="Self.ts_ClientTypes" Multiplicity="1" />
+          <End Role="tb_Clients" Type="Self.tb_Clients" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="ts_ClientTypes">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Clients">
+              <PropertyRef Name="ClientTypeId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Emissioners_tb_Clients">
+          <End Role="tb_Clients" Type="Self.tb_Clients" Multiplicity="1" />
+          <End Role="tb_Emissioners" Type="Self.tb_Emissioners" Multiplicity="0..1" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Clients">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Emissioners">
+              <PropertyRef Name="Id" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_ExternalAccountDetails_tb_Clients">
+          <End Role="tb_Clients" Type="Self.tb_Clients" Multiplicity="1" />
+          <End Role="tb_ExternalAccounts" Type="Self.tb_ExternalAccounts" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Clients">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_ExternalAccounts">
+              <PropertyRef Name="ClientId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Investors_tb_Clients">
+          <End Role="tb_Clients" Type="Self.tb_Clients" Multiplicity="1" />
+          <End Role="tb_Investors" Type="Self.tb_Investors" Multiplicity="0..1" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Clients">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Investors">
+              <PropertyRef Name="Id" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Organizations_tb_Clients">
+          <End Role="tb_Clients" Type="Self.tb_Clients" Multiplicity="1" />
+          <End Role="tb_Organizations" Type="Self.tb_Organizations" Multiplicity="0..1" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Clients">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Organizations">
+              <PropertyRef Name="Id" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_PayIn_tb_Clients">
+          <End Role="tb_Clients" Type="Self.tb_Clients" Multiplicity="1" />
+          <End Role="tb_PayIn" Type="Self.tb_PayIn" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Clients">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_PayIn">
+              <PropertyRef Name="ClientId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Users_tb_Clients">
+          <End Role="tb_Clients" Type="Self.tb_Clients" Multiplicity="1" />
+          <End Role="tb_Users" Type="Self.tb_Users" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Clients">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Users">
+              <PropertyRef Name="ClientId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_EmissionAddPercent_tb_Emissions">
+          <End Role="tb_Emissions" Type="Self.tb_Emissions" Multiplicity="1" />
+          <End Role="tb_EmissionAddPercent" Type="Self.tb_EmissionAddPercent" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Emissions">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_EmissionAddPercent">
+              <PropertyRef Name="EmissionId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_EmissionDocs_tb_Emissions">
+          <End Role="tb_Emissions" Type="Self.tb_Emissions" Multiplicity="1" />
+          <End Role="tb_EmissionDocs" Type="Self.tb_EmissionDocs" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Emissions">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_EmissionDocs">
+              <PropertyRef Name="EmissionId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Emissions_tb_Emissioners">
+          <End Role="tb_Emissioners" Type="Self.tb_Emissioners" Multiplicity="1" />
+          <End Role="tb_Emissions" Type="Self.tb_Emissions" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Emissioners">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Emissions">
+              <PropertyRef Name="EmissionerId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_EmissionRequest_tb_Emissions">
+          <End Role="tb_Emissions" Type="Self.tb_Emissions" Multiplicity="1" />
+          <End Role="tb_EmissionRequest" Type="Self.tb_EmissionRequest" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Emissions">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_EmissionRequest">
+              <PropertyRef Name="EmissionId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_EmissionYield_tb_Emissions">
+          <End Role="tb_Emissions" Type="Self.tb_Emissions" Multiplicity="1" />
+          <End Role="tb_EmissionYield" Type="Self.tb_EmissionYield" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Emissions">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_EmissionYield">
+              <PropertyRef Name="EmissionId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_ReferrerReward_tb_Emissions">
+          <End Role="tb_Emissions" Type="Self.tb_Emissions" Multiplicity="0..1" />
+          <End Role="tb_ReferrerReward" Type="Self.tb_ReferrerReward" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Emissions">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_ReferrerReward">
+              <PropertyRef Name="EmissionId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Operations_tb_ExternalAccounts">
+          <End Role="tb_ExternalAccounts" Type="Self.tb_ExternalAccounts" Multiplicity="0..1" />
+          <End Role="tb_Operations" Type="Self.tb_Operations" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_ExternalAccounts">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Operations">
+              <PropertyRef Name="ExternalAccountId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Operations_tb_Payments">
+          <End Role="tb_Payments" Type="Self.tb_Payments" Multiplicity="1" />
+          <End Role="tb_Operations" Type="Self.tb_Operations" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Payments">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Operations">
+              <PropertyRef Name="OperationSourceId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Operations_ts_OperationSourceTypes">
+          <End Role="ts_OperationSourceTypes" Type="Self.ts_OperationSourceTypes" Multiplicity="1" />
+          <End Role="tb_Operations" Type="Self.tb_Operations" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="ts_OperationSourceTypes">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Operations">
+              <PropertyRef Name="OperationSourceTypeId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_Operations_ts_OperationTypes">
+          <End Role="ts_OperationTypes" Type="Self.ts_OperationTypes" Multiplicity="1" />
+          <End Role="tb_Operations" Type="Self.tb_Operations" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="ts_OperationTypes">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_Operations">
+              <PropertyRef Name="OperationTypeId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_RolesRights_ts_Rights">
+          <End Role="ts_Rights" Type="Self.ts_Rights" Multiplicity="1" />
+          <End Role="tb_RolesRights" Type="Self.tb_RolesRights" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="ts_Rights">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_RolesRights">
+              <PropertyRef Name="RightId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_RolesRights_ts_Roles">
+          <End Role="ts_Roles" Type="Self.ts_Roles" Multiplicity="1" />
+          <End Role="tb_RolesRights" Type="Self.tb_RolesRights" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="ts_Roles">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_RolesRights">
+              <PropertyRef Name="RoleId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_UsersRoles_tb_Users">
+          <End Role="tb_Users" Type="Self.tb_Users" Multiplicity="1" />
+          <End Role="tb_UsersRoles" Type="Self.tb_UsersRoles" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="tb_Users">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_UsersRoles">
+              <PropertyRef Name="UserId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_tb_UsersRoles_ts_Roles">
+          <End Role="ts_Roles" Type="Self.ts_Roles" Multiplicity="1" />
+          <End Role="tb_UsersRoles" Type="Self.tb_UsersRoles" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="ts_Roles">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="tb_UsersRoles">
+              <PropertyRef Name="RoleId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_ts_Roles_ts_ClientTypes">
+          <End Role="ts_ClientTypes" Type="Self.ts_ClientTypes" Multiplicity="1" />
+          <End Role="ts_Roles" Type="Self.ts_Roles" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="ts_ClientTypes">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="ts_Roles">
+              <PropertyRef Name="ClientTypeId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_ts_Rights_ts_RightObjects">
+          <End Role="ts_RightObjects" Type="Self.ts_RightObjects" Multiplicity="1" />
+          <End Role="ts_Rights" Type="Self.ts_Rights" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="ts_RightObjects">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="ts_Rights">
+              <PropertyRef Name="RightObjectId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <Association Name="FK_ts_Rights_ts_RightTypes">
+          <End Role="ts_RightTypes" Type="Self.ts_RightTypes" Multiplicity="1" />
+          <End Role="ts_Rights" Type="Self.ts_Rights" Multiplicity="*" />
+          <ReferentialConstraint>
+            <Principal Role="ts_RightTypes">
+              <PropertyRef Name="Id" />
+            </Principal>
+            <Dependent Role="ts_Rights">
+              <PropertyRef Name="RightTypeId" />
+            </Dependent>
+          </ReferentialConstraint>
+        </Association>
+        <EntityContainer Name="EBSEntities" annotation:LazyLoadingEnabled="true">
+          <EntitySet Name="tb_Accounts" EntityType="Self.tb_Accounts" />
+          <EntitySet Name="tb_Actions" EntityType="Self.tb_Actions" />
+          <EntitySet Name="tb_BillAllowances" EntityType="Self.tb_BillAllowances" />
+          <EntitySet Name="tb_BillProfits" EntityType="Self.tb_BillProfits" />
+          <EntitySet Name="tb_Bills" EntityType="Self.tb_Bills" />
+          <EntitySet Name="tb_Blogs" EntityType="Self.tb_Blogs" />
+          <EntitySet Name="tb_BuyoutRequest" EntityType="Self.tb_BuyoutRequest" />
+          <EntitySet Name="tb_ClientDocuments" EntityType="Self.tb_ClientDocuments" />
+          <EntitySet Name="tb_Clients" EntityType="Self.tb_Clients" />
+          <EntitySet Name="tb_Counters" EntityType="Self.tb_Counters" />
+          <EntitySet Name="tb_EBS_KioskEmissions" EntityType="Self.tb_EBS_KioskEmissions" />
+          <EntitySet Name="tb_EmissionAddPercent" EntityType="Self.tb_EmissionAddPercent" />
+          <EntitySet Name="tb_EmissionDocs" EntityType="Self.tb_EmissionDocs" />
+          <EntitySet Name="tb_Emissioners" EntityType="Self.tb_Emissioners" />
+          <EntitySet Name="tb_EmissionRequest" EntityType="Self.tb_EmissionRequest" />
+          <EntitySet Name="tb_Emissions" EntityType="Self.tb_Emissions" />
+          <EntitySet Name="tb_EmissionYield" EntityType="Self.tb_EmissionYield" />
+          <EntitySet Name="tb_Experts" EntityType="Self.tb_Experts" />
+          <EntitySet Name="tb_ExternalAccounts" EntityType="Self.tb_ExternalAccounts" />
+          <EntitySet Name="tb_Investors" EntityType="Self.tb_Investors" />
+          <EntitySet Name="tb_Locations" EntityType="Self.tb_Locations" />
+          <EntitySet Name="tb_News" EntityType="Self.tb_News" />
+          <EntitySet Name="tb_Operations" EntityType="Self.tb_Operations" />
+          <EntitySet Name="tb_Organizations" EntityType="Self.tb_Organizations" />
+          <EntitySet Name="tb_PayIn" EntityType="Self.tb_PayIn" />
+          <EntitySet Name="tb_Payments" EntityType="Self.tb_Payments" />
+          <EntitySet Name="tb_ReferrerReward" EntityType="Self.tb_ReferrerReward" />
+          <EntitySet Name="tb_Referrers" EntityType="Self.tb_Referrers" />
+          <EntitySet Name="tb_RolesRights" EntityType="Self.tb_RolesRights" />
+          <EntitySet Name="tb_Settings" EntityType="Self.tb_Settings" />
+          <EntitySet Name="tb_Shifts" EntityType="Self.tb_Shifts" />
+          <EntitySet Name="tb_StatusJournal" EntityType="Self.tb_StatusJournal" />
+          <EntitySet Name="tb_Users" EntityType="Self.tb_Users" />
+          <EntitySet Name="tb_UsersRoles" EntityType="Self.tb_UsersRoles" />
+          <EntitySet Name="ts_AccountTypes" EntityType="Self.ts_AccountTypes" />
+          <EntitySet Name="ts_ClientDocumentTypes" EntityType="Self.ts_ClientDocumentTypes" />
+          <EntitySet Name="ts_ClientTypes" EntityType="Self.ts_ClientTypes" />
+          <EntitySet Name="ts_CurrencyTypes" EntityType="Self.ts_CurrencyTypes" />
+          <EntitySet Name="ts_ExternalAccountTypes" EntityType="Self.ts_ExternalAccountTypes" />
+          <EntitySet Name="ts_LocationTypes" EntityType="Self.ts_LocationTypes" />
+          <EntitySet Name="ts_OperationSourceTypes" EntityType="Self.ts_OperationSourceTypes" />
+          <EntitySet Name="ts_OperationTypes" EntityType="Self.ts_OperationTypes" />
+          <EntitySet Name="ts_PaymentTypes" EntityType="Self.ts_PaymentTypes" />
+          <EntitySet Name="ts_PropertyCategories" EntityType="Self.ts_PropertyCategories" />
+          <EntitySet Name="ts_RightObjects" EntityType="Self.ts_RightObjects" />
+          <EntitySet Name="ts_Rights" EntityType="Self.ts_Rights" />
+          <EntitySet Name="ts_RightTypes" EntityType="Self.ts_RightTypes" />
+          <EntitySet Name="ts_Roles" EntityType="Self.ts_Roles" />
+          <EntitySet Name="ts_Statuses" EntityType="Self.ts_Statuses" />
+          <EntitySet Name="ts_StatusTypes" EntityType="Self.ts_StatusTypes" />
+          <AssociationSet Name="FK_tb_Accounts_tb_Clients" Association="Self.FK_tb_Accounts_tb_Clients">
+            <End Role="tb_Clients" EntitySet="tb_Clients" />
+            <End Role="tb_Accounts" EntitySet="tb_Accounts" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Operations_tb_Accounts" Association="Self.FK_tb_Operations_tb_Accounts">
+            <End Role="tb_Accounts" EntitySet="tb_Accounts" />
+            <End Role="tb_Operations" EntitySet="tb_Operations" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Operations_tb_Accounts1" Association="Self.FK_tb_Operations_tb_Accounts1">
+            <End Role="tb_Accounts" EntitySet="tb_Accounts" />
+            <End Role="tb_Operations" EntitySet="tb_Operations" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Emissions_tb_EmissionActions" Association="Self.FK_tb_Emissions_tb_EmissionActions">
+            <End Role="tb_Actions" EntitySet="tb_Actions" />
+            <End Role="tb_Emissions" EntitySet="tb_Emissions" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_BillAllowances_tb_Emissions" Association="Self.FK_tb_BillAllowances_tb_Emissions">
+            <End Role="tb_Emissions" EntitySet="tb_Emissions" />
+            <End Role="tb_BillAllowances" EntitySet="tb_BillAllowances" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_BillProfits_tb_Bills" Association="Self.FK_tb_BillProfits_tb_Bills">
+            <End Role="tb_Bills" EntitySet="tb_Bills" />
+            <End Role="tb_BillProfits" EntitySet="tb_BillProfits" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Bills_tb_Emissions" Association="Self.FK_tb_Bills_tb_Emissions">
+            <End Role="tb_Emissions" EntitySet="tb_Emissions" />
+            <End Role="tb_Bills" EntitySet="tb_Bills" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Bills_tb_Investors" Association="Self.FK_tb_Bills_tb_Investors">
+            <End Role="tb_Investors" EntitySet="tb_Investors" />
+            <End Role="tb_Bills" EntitySet="tb_Bills" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Bills_tb_Locations" Association="Self.FK_tb_Bills_tb_Locations">
+            <End Role="tb_Locations" EntitySet="tb_Locations" />
+            <End Role="tb_Bills" EntitySet="tb_Bills" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_BuyoutRequest_tb_Bills" Association="Self.FK_tb_BuyoutRequest_tb_Bills">
+            <End Role="tb_Bills" EntitySet="tb_Bills" />
+            <End Role="tb_BuyoutRequest" EntitySet="tb_BuyoutRequest" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Operations_tb_Bills" Association="Self.FK_tb_Operations_tb_Bills">
+            <End Role="tb_Bills" EntitySet="tb_Bills" />
+            <End Role="tb_Operations" EntitySet="tb_Operations" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Payments_tb_Bills" Association="Self.FK_tb_Payments_tb_Bills">
+            <End Role="tb_Bills" EntitySet="tb_Bills" />
+            <End Role="tb_Payments" EntitySet="tb_Payments" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Blogs_tb_Clients" Association="Self.FK_tb_Blogs_tb_Clients">
+            <End Role="tb_Clients" EntitySet="tb_Clients" />
+            <End Role="tb_Blogs" EntitySet="tb_Blogs" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_ClientDocuments_tb_Clients" Association="Self.FK_tb_ClientDocuments_tb_Clients">
+            <End Role="tb_Clients" EntitySet="tb_Clients" />
+            <End Role="tb_ClientDocuments" EntitySet="tb_ClientDocuments" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Clients_ts_ClientTypes" Association="Self.FK_tb_Clients_ts_ClientTypes">
+            <End Role="ts_ClientTypes" EntitySet="ts_ClientTypes" />
+            <End Role="tb_Clients" EntitySet="tb_Clients" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Emissioners_tb_Clients" Association="Self.FK_tb_Emissioners_tb_Clients">
+            <End Role="tb_Clients" EntitySet="tb_Clients" />
+            <End Role="tb_Emissioners" EntitySet="tb_Emissioners" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_ExternalAccountDetails_tb_Clients" Association="Self.FK_tb_ExternalAccountDetails_tb_Clients">
+            <End Role="tb_Clients" EntitySet="tb_Clients" />
+            <End Role="tb_ExternalAccounts" EntitySet="tb_ExternalAccounts" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Investors_tb_Clients" Association="Self.FK_tb_Investors_tb_Clients">
+            <End Role="tb_Clients" EntitySet="tb_Clients" />
+            <End Role="tb_Investors" EntitySet="tb_Investors" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Organizations_tb_Clients" Association="Self.FK_tb_Organizations_tb_Clients">
+            <End Role="tb_Clients" EntitySet="tb_Clients" />
+            <End Role="tb_Organizations" EntitySet="tb_Organizations" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_PayIn_tb_Clients" Association="Self.FK_tb_PayIn_tb_Clients">
+            <End Role="tb_Clients" EntitySet="tb_Clients" />
+            <End Role="tb_PayIn" EntitySet="tb_PayIn" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Users_tb_Clients" Association="Self.FK_tb_Users_tb_Clients">
+            <End Role="tb_Clients" EntitySet="tb_Clients" />
+            <End Role="tb_Users" EntitySet="tb_Users" />
+          </AssociationSet>
+          <AssociationSet Name="FK_EmissionAddPercent_tb_Emissions" Association="Self.FK_EmissionAddPercent_tb_Emissions">
+            <End Role="tb_Emissions" EntitySet="tb_Emissions" />
+            <End Role="tb_EmissionAddPercent" EntitySet="tb_EmissionAddPercent" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_EmissionDocs_tb_Emissions" Association="Self.FK_tb_EmissionDocs_tb_Emissions">
+            <End Role="tb_Emissions" EntitySet="tb_Emissions" />
+            <End Role="tb_EmissionDocs" EntitySet="tb_EmissionDocs" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Emissions_tb_Emissioners" Association="Self.FK_tb_Emissions_tb_Emissioners">
+            <End Role="tb_Emissioners" EntitySet="tb_Emissioners" />
+            <End Role="tb_Emissions" EntitySet="tb_Emissions" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_EmissionRequest_tb_Emissions" Association="Self.FK_tb_EmissionRequest_tb_Emissions">
+            <End Role="tb_Emissions" EntitySet="tb_Emissions" />
+            <End Role="tb_EmissionRequest" EntitySet="tb_EmissionRequest" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_EmissionYield_tb_Emissions" Association="Self.FK_tb_EmissionYield_tb_Emissions">
+            <End Role="tb_Emissions" EntitySet="tb_Emissions" />
+            <End Role="tb_EmissionYield" EntitySet="tb_EmissionYield" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_ReferrerReward_tb_Emissions" Association="Self.FK_tb_ReferrerReward_tb_Emissions">
+            <End Role="tb_Emissions" EntitySet="tb_Emissions" />
+            <End Role="tb_ReferrerReward" EntitySet="tb_ReferrerReward" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Operations_tb_ExternalAccounts" Association="Self.FK_tb_Operations_tb_ExternalAccounts">
+            <End Role="tb_ExternalAccounts" EntitySet="tb_ExternalAccounts" />
+            <End Role="tb_Operations" EntitySet="tb_Operations" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Operations_tb_Payments" Association="Self.FK_tb_Operations_tb_Payments">
+            <End Role="tb_Payments" EntitySet="tb_Payments" />
+            <End Role="tb_Operations" EntitySet="tb_Operations" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Operations_ts_OperationSourceTypes" Association="Self.FK_tb_Operations_ts_OperationSourceTypes">
+            <End Role="ts_OperationSourceTypes" EntitySet="ts_OperationSourceTypes" />
+            <End Role="tb_Operations" EntitySet="tb_Operations" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_Operations_ts_OperationTypes" Association="Self.FK_tb_Operations_ts_OperationTypes">
+            <End Role="ts_OperationTypes" EntitySet="ts_OperationTypes" />
+            <End Role="tb_Operations" EntitySet="tb_Operations" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_RolesRights_ts_Rights" Association="Self.FK_tb_RolesRights_ts_Rights">
+            <End Role="ts_Rights" EntitySet="ts_Rights" />
+            <End Role="tb_RolesRights" EntitySet="tb_RolesRights" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_RolesRights_ts_Roles" Association="Self.FK_tb_RolesRights_ts_Roles">
+            <End Role="ts_Roles" EntitySet="ts_Roles" />
+            <End Role="tb_RolesRights" EntitySet="tb_RolesRights" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_UsersRoles_tb_Users" Association="Self.FK_tb_UsersRoles_tb_Users">
+            <End Role="tb_Users" EntitySet="tb_Users" />
+            <End Role="tb_UsersRoles" EntitySet="tb_UsersRoles" />
+          </AssociationSet>
+          <AssociationSet Name="FK_tb_UsersRoles_ts_Roles" Association="Self.FK_tb_UsersRoles_ts_Roles">
+            <End Role="ts_Roles" EntitySet="ts_Roles" />
+            <End Role="tb_UsersRoles" EntitySet="tb_UsersRoles" />
+          </AssociationSet>
+          <AssociationSet Name="FK_ts_Roles_ts_ClientTypes" Association="Self.FK_ts_Roles_ts_ClientTypes">
+            <End Role="ts_ClientTypes" EntitySet="ts_ClientTypes" />
+            <End Role="ts_Roles" EntitySet="ts_Roles" />
+          </AssociationSet>
+          <AssociationSet Name="FK_ts_Rights_ts_RightObjects" Association="Self.FK_ts_Rights_ts_RightObjects">
+            <End Role="ts_RightObjects" EntitySet="ts_RightObjects" />
+            <End Role="ts_Rights" EntitySet="ts_Rights" />
+          </AssociationSet>
+          <AssociationSet Name="FK_ts_Rights_ts_RightTypes" Association="Self.FK_ts_Rights_ts_RightTypes">
+            <End Role="ts_RightTypes" EntitySet="ts_RightTypes" />
+            <End Role="ts_Rights" EntitySet="ts_Rights" />
+          </AssociationSet>
+        </EntityContainer>
+      </Schema>
+    </edmx:ConceptualModels>
+    <!-- C-S mapping content -->
+    <edmx:Mappings>
+      <Mapping Space="C-S" xmlns="http://schemas.microsoft.com/ado/2009/11/mapping/cs">
+        <EntityContainerMapping StorageEntityContainer="Хранилище EBSModelContainer" CdmEntityContainer="EBSEntities">
+          <EntitySetMapping Name="tb_Accounts">
+            <EntityTypeMapping TypeName="EBSModel.tb_Accounts">
+              <MappingFragment StoreEntitySet="tb_Accounts">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="CurrencyTypeId" ColumnName="CurrencyTypeId" />
+                <ScalarProperty Name="ClientId" ColumnName="ClientId" />
+                <ScalarProperty Name="AccountTypeId" ColumnName="AccountTypeId" />
+                <ScalarProperty Name="Balance" ColumnName="Balance" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_Actions">
+            <EntityTypeMapping TypeName="EBSModel.tb_Actions">
+              <MappingFragment StoreEntitySet="tb_Actions">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="Name" ColumnName="Name" />
+                <ScalarProperty Name="Description" ColumnName="Description" />
+                <ScalarProperty Name="BannerImage" ColumnName="BannerImage" />
+                <ScalarProperty Name="Percent" ColumnName="Percent" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_BillAllowances">
+            <EntityTypeMapping TypeName="EBSModel.tb_BillAllowances">
+              <MappingFragment StoreEntitySet="tb_BillAllowances">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="EmissionId" ColumnName="EmissionId" />
+                <ScalarProperty Name="MinBillSum" ColumnName="MinBillSum" />
+                <ScalarProperty Name="Percent" ColumnName="Percent" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_BillProfits">
+            <EntityTypeMapping TypeName="EBSModel.tb_BillProfits">
+              <MappingFragment StoreEntitySet="tb_BillProfits">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="BillId" ColumnName="BillId" />
+                <ScalarProperty Name="ProfitDateTime" ColumnName="ProfitDateTime" />
+                <ScalarProperty Name="Sum" ColumnName="Sum" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_Bills">
+            <EntityTypeMapping TypeName="EBSModel.tb_Bills">
+              <MappingFragment StoreEntitySet="tb_Bills">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="EmissionId" ColumnName="EmissionId" />
+                <ScalarProperty Name="InvestorId" ColumnName="InvestorId" />
+                <ScalarProperty Name="Number" ColumnName="Number" />
+                <ScalarProperty Name="Nominal" ColumnName="Nominal" />
+                <ScalarProperty Name="StatusId" ColumnName="StatusId" />
+                <ScalarProperty Name="StatusDateTime" ColumnName="StatusDateTime" />
+                <ScalarProperty Name="StatusUserId" ColumnName="StatusUserId" />
+                <ScalarProperty Name="StatusComment" ColumnName="StatusComment" />
+                <ScalarProperty Name="ReferrerId" ColumnName="ReferrerId" />
+                <ScalarProperty Name="ParticipationInAction" ColumnName="ParticipationInAction" />
+                <ScalarProperty Name="DocumentAttachment" ColumnName="DocumentAttachment" />
+                <ScalarProperty Name="LocationId" ColumnName="LocationId" />
+                <ScalarProperty Name="Code" ColumnName="Code" />
+                <ScalarProperty Name="ActivateDateTime" ColumnName="ActivateDateTime" />
+                <ScalarProperty Name="KillDateTime" ColumnName="KillDateTime" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_Blogs">
+            <EntityTypeMapping TypeName="EBSModel.tb_Blogs">
+              <MappingFragment StoreEntitySet="tb_Blogs">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="CreateDateTime" ColumnName="CreateDateTime" />
+                <ScalarProperty Name="Header" ColumnName="Header" />
+                <ScalarProperty Name="Text" ColumnName="Text" />
+                <ScalarProperty Name="StatusId" ColumnName="StatusId" />
+                <ScalarProperty Name="StatusDateTime" ColumnName="StatusDateTime" />
+                <ScalarProperty Name="StatusUserId" ColumnName="StatusUserId" />
+                <ScalarProperty Name="StatusComment" ColumnName="StatusComment" />
+                <ScalarProperty Name="ClientId" ColumnName="ClientId" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_BuyoutRequest">
+            <EntityTypeMapping TypeName="EBSModel.tb_BuyoutRequest">
+              <MappingFragment StoreEntitySet="tb_BuyoutRequest">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="BillId" ColumnName="BillId" />
+                <ScalarProperty Name="BuyoutSumm" ColumnName="BuyoutSumm" />
+                <ScalarProperty Name="StatusId" ColumnName="StatusId" />
+                <ScalarProperty Name="StatusDateTime" ColumnName="StatusDateTime" />
+                <ScalarProperty Name="StatusUserId" ColumnName="StatusUserId" />
+                <ScalarProperty Name="StatusComment" ColumnName="StatusComment" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_ClientDocuments">
+            <EntityTypeMapping TypeName="EBSModel.tb_ClientDocuments">
+              <MappingFragment StoreEntitySet="tb_ClientDocuments">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="ClientId" ColumnName="ClientId" />
+                <ScalarProperty Name="Name" ColumnName="Name" />
+                <ScalarProperty Name="Description" ColumnName="Description" />
+                <ScalarProperty Name="ClientDocumentTypeId" ColumnName="ClientDocumentTypeId" />
+                <ScalarProperty Name="Image" ColumnName="Image" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_Clients">
+            <EntityTypeMapping TypeName="EBSModel.tb_Clients">
+              <MappingFragment StoreEntitySet="tb_Clients">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="Description" ColumnName="Description" />
+                <ScalarProperty Name="ClientTypeId" ColumnName="ClientTypeId" />
+                <ScalarProperty Name="IsJuridical" ColumnName="IsJuridical" />
+                <ScalarProperty Name="StatusId" ColumnName="StatusId" />
+                <ScalarProperty Name="StatusDateTime" ColumnName="StatusDateTime" />
+                <ScalarProperty Name="StatusUserId" ColumnName="StatusUserId" />
+                <ScalarProperty Name="StatusComment" ColumnName="StatusComment" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_Counters">
+            <EntityTypeMapping TypeName="EBSModel.tb_Counters">
+              <MappingFragment StoreEntitySet="tb_Counters">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="NameObj" ColumnName="NameObj" />
+                <ScalarProperty Name="NumValue" ColumnName="NumValue" />
+                <ScalarProperty Name="NumYear" ColumnName="NumYear" />
+                <ScalarProperty Name="Description" ColumnName="Description" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_EBS_KioskEmissions">
+            <EntityTypeMapping TypeName="EBSModel.tb_EBS_KioskEmissions">
+              <MappingFragment StoreEntitySet="tb_EBS_KioskEmissions">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="KioskId" ColumnName="KioskId" />
+                <ScalarProperty Name="EmissionId" ColumnName="EmissionId" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_EmissionAddPercent">
+            <EntityTypeMapping TypeName="EBSModel.tb_EmissionAddPercent">
+              <MappingFragment StoreEntitySet="tb_EmissionAddPercent">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="EmissionId" ColumnName="EmissionId" />
+                <ScalarProperty Name="MinSumm" ColumnName="MinSumm" />
+                <ScalarProperty Name="MaxSumm" ColumnName="MaxSumm" />
+                <ScalarProperty Name="AddPercent" ColumnName="AddPercent" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_EmissionDocs">
+            <EntityTypeMapping TypeName="EBSModel.tb_EmissionDocs">
+              <MappingFragment StoreEntitySet="tb_EmissionDocs">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="EmissionId" ColumnName="EmissionId" />
+                <ScalarProperty Name="DocumentName" ColumnName="DocumentName" />
+                <ScalarProperty Name="FileId" ColumnName="FileId" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_Emissioners">
+            <EntityTypeMapping TypeName="EBSModel.tb_Emissioners">
+              <MappingFragment StoreEntitySet="tb_Emissioners">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="Domen" ColumnName="Domen" />
+                <ScalarProperty Name="DigitalSign" ColumnName="DigitalSign" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_EmissionRequest">
+            <EntityTypeMapping TypeName="EBSModel.tb_EmissionRequest">
+              <MappingFragment StoreEntitySet="tb_EmissionRequest">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="EmissionId" ColumnName="EmissionId" />
+                <ScalarProperty Name="EconomicState" ColumnName="EconomicState" />
+                <ScalarProperty Name="LegalState" ColumnName="LegalState" />
+                <ScalarProperty Name="Data" ColumnName="Data" />
+                <ScalarProperty Name="Description" ColumnName="Description" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_Emissions">
+            <EntityTypeMapping TypeName="EBSModel.tb_Emissions">
+              <MappingFragment StoreEntitySet="tb_Emissions">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="EmissionerId" ColumnName="EmissionerId" />
+                <ScalarProperty Name="AheadOfTimePercent" ColumnName="AheadOfTimePercent" />
+                <ScalarProperty Name="Limit" ColumnName="Limit" />
+                <ScalarProperty Name="SaleSum" ColumnName="SaleSum" />
+                <ScalarProperty Name="MinBillSum" ColumnName="MinBillSum" />
+                <ScalarProperty Name="MaxBillSum" ColumnName="MaxBillSum" />
+                <ScalarProperty Name="StatusId" ColumnName="StatusId" />
+                <ScalarProperty Name="StatusDateTime" ColumnName="StatusDateTime" />
+                <ScalarProperty Name="StatusUserId" ColumnName="StatusUserId" />
+                <ScalarProperty Name="StatusComment" ColumnName="StatusComment" />
+                <ScalarProperty Name="Comment" ColumnName="Comment" />
+                <ScalarProperty Name="TurnOnReferrers" ColumnName="TurnOnReferrers" />
+                <ScalarProperty Name="BillPeriodInMonths" ColumnName="BillPeriodInMonths" />
+                <ScalarProperty Name="Image" ColumnName="Image" />
+                <ScalarProperty Name="ActionId" ColumnName="ActionId" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_EmissionYield">
+            <EntityTypeMapping TypeName="EBSModel.tb_EmissionYield">
+              <MappingFragment StoreEntitySet="tb_EmissionYield">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="EmissionId" ColumnName="EmissionId" />
+                <ScalarProperty Name="MonthNumber" ColumnName="MonthNumber" />
+                <ScalarProperty Name="Percent" ColumnName="Percent" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_Experts">
+            <EntityTypeMapping TypeName="EBSModel.tb_Experts">
+              <MappingFragment StoreEntitySet="tb_Experts">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_ExternalAccounts">
+            <EntityTypeMapping TypeName="EBSModel.tb_ExternalAccounts">
+              <MappingFragment StoreEntitySet="tb_ExternalAccounts">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="ClientId" ColumnName="ClientId" />
+                <ScalarProperty Name="IsCurrent" ColumnName="IsCurrent" />
+                <ScalarProperty Name="IsActive" ColumnName="IsActive" />
+                <ScalarProperty Name="ExternalAccountTypeId" ColumnName="ExternalAccountTypeId" />
+                <ScalarProperty Name="CurrencyTypeId" ColumnName="CurrencyTypeId" />
+                <ScalarProperty Name="AccountNumber" ColumnName="AccountNumber" />
+                <ScalarProperty Name="Bank" ColumnName="Bank" />
+                <ScalarProperty Name="BIK" ColumnName="BIK" />
+                <ScalarProperty Name="KorAccountNumber" ColumnName="KorAccountNumber" />
+                <ScalarProperty Name="SWIFTCode" ColumnName="SWIFTCode" />
+                <ScalarProperty Name="CorrespondentBank" ColumnName="CorrespondentBank" />
+                <ScalarProperty Name="SWIFTCorrespondentBank" ColumnName="SWIFTCorrespondentBank" />
+                <ScalarProperty Name="CorrespondentAccount" ColumnName="CorrespondentAccount" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_Investors">
+            <EntityTypeMapping TypeName="EBSModel.tb_Investors">
+              <MappingFragment StoreEntitySet="tb_Investors">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_Locations">
+            <EntityTypeMapping TypeName="EBSModel.tb_Locations">
+              <MappingFragment StoreEntitySet="tb_Locations">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="Address" ColumnName="Address" />
+                <ScalarProperty Name="Description" ColumnName="Description" />
+                <ScalarProperty Name="CoordX" ColumnName="CoordX" />
+                <ScalarProperty Name="CoordY" ColumnName="CoordY" />
+                <ScalarProperty Name="LocationTypeId" ColumnName="LocationTypeId" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_News">
+            <EntityTypeMapping TypeName="EBSModel.tb_News">
+              <MappingFragment StoreEntitySet="tb_News">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="Data" ColumnName="Data" />
+                <ScalarProperty Name="Title" ColumnName="Title" />
+                <ScalarProperty Name="Desscription" ColumnName="Desscription" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_Operations">
+            <EntityTypeMapping TypeName="EBSModel.tb_Operations">
+              <MappingFragment StoreEntitySet="tb_Operations">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="OperationSourceId" ColumnName="OperationSourceId" />
+                <ScalarProperty Name="OperationSourceTypeId" ColumnName="OperationSourceTypeId" />
+                <ScalarProperty Name="SourceAccountId" ColumnName="SourceAccountId" />
+                <ScalarProperty Name="DestinationAccountId" ColumnName="DestinationAccountId" />
+                <ScalarProperty Name="ExternalAccountId" ColumnName="ExternalAccountId" />
+                <ScalarProperty Name="DateTime" ColumnName="DateTime" />
+                <ScalarProperty Name="Sum" ColumnName="Sum" />
+                <ScalarProperty Name="OperationTypeId" ColumnName="OperationTypeId" />
+                <ScalarProperty Name="StatusId" ColumnName="StatusId" />
+                <ScalarProperty Name="StatusDateTime" ColumnName="StatusDateTime" />
+                <ScalarProperty Name="StatusUserId" ColumnName="StatusUserId" />
+                <ScalarProperty Name="StatusComment" ColumnName="StatusComment" />
+                <ScalarProperty Name="Description" ColumnName="Description" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_Organizations">
+            <EntityTypeMapping TypeName="EBSModel.tb_Organizations">
+              <MappingFragment StoreEntitySet="tb_Organizations">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="PropertyCategoryId" ColumnName="PropertyCategoryId" />
+                <ScalarProperty Name="Name" ColumnName="Name" />
+                <ScalarProperty Name="INN" ColumnName="INN" />
+                <ScalarProperty Name="BIK" ColumnName="BIK" />
+                <ScalarProperty Name="JurAddress" ColumnName="JurAddress" />
+                <ScalarProperty Name="FactAddress" ColumnName="FactAddress" />
+                <ScalarProperty Name="PostAddress" ColumnName="PostAddress" />
+                <ScalarProperty Name="Site" ColumnName="Site" />
+                <ScalarProperty Name="Description" ColumnName="Description" />
+                <ScalarProperty Name="DirectorLastName" ColumnName="DirectorLastName" />
+                <ScalarProperty Name="DirectorFirstName" ColumnName="DirectorFirstName" />
+                <ScalarProperty Name="DirectorSurName" ColumnName="DirectorSurName" />
+                <ScalarProperty Name="Phone" ColumnName="Phone" />
+                <ScalarProperty Name="Email" ColumnName="Email" />
+                <ScalarProperty Name="OGRN" ColumnName="OGRN" />
+                <ScalarProperty Name="Bank" ColumnName="Bank" />
+                <ScalarProperty Name="Ras" ColumnName="Ras" />
+                <ScalarProperty Name="LogoImage" ColumnName="LogoImage" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_PayIn">
+            <EntityTypeMapping TypeName="EBSModel.tb_PayIn">
+              <MappingFragment StoreEntitySet="tb_PayIn">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="ClientId" ColumnName="ClientId" />
+                <ScalarProperty Name="Summa" ColumnName="Summa" />
+                <ScalarProperty Name="IsPayd" ColumnName="IsPayd" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_Payments">
+            <EntityTypeMapping TypeName="EBSModel.tb_Payments">
+              <MappingFragment StoreEntitySet="tb_Payments">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="BillId" ColumnName="BillId" />
+                <ScalarProperty Name="DateTime" ColumnName="DateTime" />
+                <ScalarProperty Name="Sum" ColumnName="Sum" />
+                <ScalarProperty Name="PaymentTypeId" ColumnName="PaymentTypeId" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_ReferrerReward">
+            <EntityTypeMapping TypeName="EBSModel.tb_ReferrerReward">
+              <MappingFragment StoreEntitySet="tb_ReferrerReward">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="EmissionId" ColumnName="EmissionId" />
+                <ScalarProperty Name="BonusFix" ColumnName="BonusFix" />
+                <ScalarProperty Name="BonusPercent" ColumnName="BonusPercent" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_Referrers">
+            <EntityTypeMapping TypeName="EBSModel.tb_Referrers">
+              <MappingFragment StoreEntitySet="tb_Referrers">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_RolesRights">
+            <EntityTypeMapping TypeName="EBSModel.tb_RolesRights">
+              <MappingFragment StoreEntitySet="tb_RolesRights">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="RoleId" ColumnName="RoleId" />
+                <ScalarProperty Name="RightId" ColumnName="RightId" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_Settings">
+            <EntityTypeMapping TypeName="EBSModel.tb_Settings">
+              <MappingFragment StoreEntitySet="tb_Settings">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="SettingsName" ColumnName="SettingsName" />
+                <ScalarProperty Name="SettingsValueString" ColumnName="SettingsValueString" />
+                <ScalarProperty Name="SettingsValueDecimal" ColumnName="SettingsValueDecimal" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_Shifts">
+            <EntityTypeMapping TypeName="EBSModel.tb_Shifts">
+              <MappingFragment StoreEntitySet="tb_Shifts">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="OpenDateTime" ColumnName="OpenDateTime" />
+                <ScalarProperty Name="CloseDateTime" ColumnName="CloseDateTime" />
+                <ScalarProperty Name="UserId" ColumnName="UserId" />
+                <ScalarProperty Name="KioskId" ColumnName="KioskId" />
+                <ScalarProperty Name="InkassExtId" ColumnName="InkassExtId" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_StatusJournal">
+            <EntityTypeMapping TypeName="EBSModel.tb_StatusJournal">
+              <MappingFragment StoreEntitySet="tb_StatusJournal">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="SourceId" ColumnName="SourceId" />
+                <ScalarProperty Name="StatusTypeId" ColumnName="StatusTypeId" />
+                <ScalarProperty Name="StatusId" ColumnName="StatusId" />
+                <ScalarProperty Name="UserId" ColumnName="UserId" />
+                <ScalarProperty Name="DateTime" ColumnName="DateTime" />
+                <ScalarProperty Name="Description" ColumnName="Description" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_Users">
+            <EntityTypeMapping TypeName="EBSModel.tb_Users">
+              <MappingFragment StoreEntitySet="tb_Users">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="Description" ColumnName="Description" />
+                <ScalarProperty Name="Login" ColumnName="Login" />
+                <ScalarProperty Name="EMail" ColumnName="EMail" />
+                <ScalarProperty Name="Phone" ColumnName="Phone" />
+                <ScalarProperty Name="Password" ColumnName="Password" />
+                <ScalarProperty Name="LastName" ColumnName="LastName" />
+                <ScalarProperty Name="FirstName" ColumnName="FirstName" />
+                <ScalarProperty Name="SurName" ColumnName="SurName" />
+                <ScalarProperty Name="StatusId" ColumnName="StatusId" />
+                <ScalarProperty Name="StatusDateTime" ColumnName="StatusDateTime" />
+                <ScalarProperty Name="StatusUserId" ColumnName="StatusUserId" />
+                <ScalarProperty Name="StatusComment" ColumnName="StatusComment" />
+                <ScalarProperty Name="Avatar" ColumnName="Avatar" />
+                <ScalarProperty Name="ClientId" ColumnName="ClientId" />
+                <ScalarProperty Name="NickName" ColumnName="NickName" />
+                <ScalarProperty Name="RegistrationAddress" ColumnName="RegistrationAddress" />
+                <ScalarProperty Name="IsDirector" ColumnName="IsDirector" />
+                <ScalarProperty Name="WarrantyNumber" ColumnName="WarrantyNumber" />
+                <ScalarProperty Name="WarrantyDate" ColumnName="WarrantyDate" />
+                <ScalarProperty Name="PassportPrefix" ColumnName="PassportPrefix" />
+                <ScalarProperty Name="PassportNumber" ColumnName="PassportNumber" />
+                <ScalarProperty Name="PassportIssueInfo" ColumnName="PassportIssueInfo" />
+                <ScalarProperty Name="PassportIssueDate" ColumnName="PassportIssueDate" />
+                <ScalarProperty Name="PassportIssueCode" ColumnName="PassportIssueCode" />
+                <ScalarProperty Name="TokenKey" ColumnName="TokenKey" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="tb_UsersRoles">
+            <EntityTypeMapping TypeName="EBSModel.tb_UsersRoles">
+              <MappingFragment StoreEntitySet="tb_UsersRoles">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="UserId" ColumnName="UserId" />
+                <ScalarProperty Name="RoleId" ColumnName="RoleId" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="ts_AccountTypes">
+            <EntityTypeMapping TypeName="EBSModel.ts_AccountTypes">
+              <MappingFragment StoreEntitySet="ts_AccountTypes">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="Name" ColumnName="Name" />
+                <ScalarProperty Name="Description" ColumnName="Description" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="ts_ClientDocumentTypes">
+            <EntityTypeMapping TypeName="EBSModel.ts_ClientDocumentTypes">
+              <MappingFragment StoreEntitySet="ts_ClientDocumentTypes">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="Name" ColumnName="Name" />
+                <ScalarProperty Name="Description" ColumnName="Description" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="ts_ClientTypes">
+            <EntityTypeMapping TypeName="EBSModel.ts_ClientTypes">
+              <MappingFragment StoreEntitySet="ts_ClientTypes">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="Name" ColumnName="Name" />
+                <ScalarProperty Name="Description" ColumnName="Description" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="ts_CurrencyTypes">
+            <EntityTypeMapping TypeName="EBSModel.ts_CurrencyTypes">
+              <MappingFragment StoreEntitySet="ts_CurrencyTypes">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="Name" ColumnName="Name" />
+                <ScalarProperty Name="Description" ColumnName="Description" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="ts_ExternalAccountTypes">
+            <EntityTypeMapping TypeName="EBSModel.ts_ExternalAccountTypes">
+              <MappingFragment StoreEntitySet="ts_ExternalAccountTypes">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="Name" ColumnName="Name" />
+                <ScalarProperty Name="Description" ColumnName="Description" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="ts_LocationTypes">
+            <EntityTypeMapping TypeName="EBSModel.ts_LocationTypes">
+              <MappingFragment StoreEntitySet="ts_LocationTypes">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="Name" ColumnName="Name" />
+                <ScalarProperty Name="Description" ColumnName="Description" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="ts_OperationSourceTypes">
+            <EntityTypeMapping TypeName="EBSModel.ts_OperationSourceTypes">
+              <MappingFragment StoreEntitySet="ts_OperationSourceTypes">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="Name" ColumnName="Name" />
+                <ScalarProperty Name="Description" ColumnName="Description" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="ts_OperationTypes">
+            <EntityTypeMapping TypeName="EBSModel.ts_OperationTypes">
+              <MappingFragment StoreEntitySet="ts_OperationTypes">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="Name" ColumnName="Name" />
+                <ScalarProperty Name="Description" ColumnName="Description" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="ts_PaymentTypes">
+            <EntityTypeMapping TypeName="EBSModel.ts_PaymentTypes">
+              <MappingFragment StoreEntitySet="ts_PaymentTypes">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="Name" ColumnName="Name" />
+                <ScalarProperty Name="Description" ColumnName="Description" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="ts_PropertyCategories">
+            <EntityTypeMapping TypeName="EBSModel.ts_PropertyCategories">
+              <MappingFragment StoreEntitySet="ts_PropertyCategories">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="Name" ColumnName="Name" />
+                <ScalarProperty Name="Description" ColumnName="Description" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="ts_RightObjects">
+            <EntityTypeMapping TypeName="EBSModel.ts_RightObjects">
+              <MappingFragment StoreEntitySet="ts_RightObjects">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="Name" ColumnName="Name" />
+                <ScalarProperty Name="Description" ColumnName="Description" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="ts_Rights">
+            <EntityTypeMapping TypeName="EBSModel.ts_Rights">
+              <MappingFragment StoreEntitySet="ts_Rights">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="Name" ColumnName="Name" />
+                <ScalarProperty Name="Description" ColumnName="Description" />
+                <ScalarProperty Name="RightObjectId" ColumnName="RightObjectId" />
+                <ScalarProperty Name="RightTypeId" ColumnName="RightTypeId" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="ts_RightTypes">
+            <EntityTypeMapping TypeName="EBSModel.ts_RightTypes">
+              <MappingFragment StoreEntitySet="ts_RightTypes">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="Name" ColumnName="Name" />
+                <ScalarProperty Name="Description" ColumnName="Description" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="ts_Roles">
+            <EntityTypeMapping TypeName="EBSModel.ts_Roles">
+              <MappingFragment StoreEntitySet="ts_Roles">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="Name" ColumnName="Name" />
+                <ScalarProperty Name="Description" ColumnName="Description" />
+                <ScalarProperty Name="ClientTypeId" ColumnName="ClientTypeId" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="ts_Statuses">
+            <EntityTypeMapping TypeName="EBSModel.ts_Statuses">
+              <MappingFragment StoreEntitySet="ts_Statuses">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="Name" ColumnName="Name" />
+                <ScalarProperty Name="Description" ColumnName="Description" />
+                <ScalarProperty Name="StatusTypeId" ColumnName="StatusTypeId" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="ts_StatusTypes">
+            <EntityTypeMapping TypeName="EBSModel.ts_StatusTypes">
+              <MappingFragment StoreEntitySet="ts_StatusTypes">
+                <ScalarProperty Name="Id" ColumnName="Id" />
+                <ScalarProperty Name="Name" ColumnName="Name" />
+                <ScalarProperty Name="Description" ColumnName="Description" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+        </EntityContainerMapping>
+      </Mapping>
+    </edmx:Mappings>
+  </edmx:Runtime>
+  <!-- EF Designer content (DO NOT EDIT MANUALLY BELOW HERE) -->
+  <Designer xmlns="http://schemas.microsoft.com/ado/2009/11/edmx">
+    <Connection>
+      <DesignerInfoPropertySet>
+        <DesignerProperty Name="MetadataArtifactProcessing" Value="EmbedInOutputAssembly" />
+      </DesignerInfoPropertySet>
+    </Connection>
+    <Options>
+      <DesignerInfoPropertySet>
+        <DesignerProperty Name="ValidateOnBuild" Value="true" />
+        <DesignerProperty Name="EnablePluralization" Value="false" />
+        <DesignerProperty Name="IncludeForeignKeysInModel" Value="true" />
+        <DesignerProperty Name="UseLegacyProvider" Value="false" />
+        <DesignerProperty Name="CodeGenerationStrategy" Value="Нет" />
+      </DesignerInfoPropertySet>
+    </Options>
+    <!-- Diagram content (shape and connector positions) -->
+    <Diagrams></Diagrams>
+  </Designer>
+</edmx:Edmx>

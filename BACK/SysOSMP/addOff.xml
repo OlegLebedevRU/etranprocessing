@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="windows-1251"?>
+<request>
+<auth login="vadimsotex6" sign="EA76125126752E8235025580C3749512" signAlg="MD5" />
+<client terminal="9808694" software="Dealer v0" />
+<providers>
+<addOfflinePayment>
+<payment id="8426">
+<from amount="1.00" currency="643" />
+<to service="1" account="9164157143" amount="1.00" currency="643" />
+<receipt id="8426" date="2015-05-28T23:36:40" />
+</payment>
+</addOfflinePayment>
+</providers>
+</request>

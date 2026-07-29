@@ -1,0 +1,14 @@
+https://testwebmis.creditcall.com/registration.php
+Q1w2e3r4
+
+REGISTRATION COMPLETE
+
+Please keep this information in a safe place as it will be required to use the system.
+
+Name	Dmitry Kosov
+Company	Platerra
+Country	Russia - MSK
+Telephone Number	+79162376067
+Terminal ID	99962823
+Transaction Key	23Nsdb4ugMNmRr2Z
+Login to Creditcall WebMIS

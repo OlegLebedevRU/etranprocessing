@@ -1,0 +1,1 @@
+<%@ WebService Language="C#" CodeBehind="EtranDispatcher.asmx.cs" Class="EtranDispatcher.EtranDispatcher" %>

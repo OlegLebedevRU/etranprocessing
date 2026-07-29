@@ -1,0 +1,1031 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<response>
+  <response-codes>
+    <response-code id="569">
+    Неверный формат поля Дата налогового платежа
+  </response-code>
+    <response-code id="780">
+    Проведение платежа запрещено СБ
+  </response-code>
+    <response-code id="411">
+    Запрос на завершение резервирования уже отработан
+  </response-code>
+    <response-code id="20">
+    Ошибка банка
+  </response-code>
+    <response-code id="767">
+    Превышен суточный лимит по сумме на 1 отправителя
+  </response-code>
+    <response-code id="540">
+    Неверный БИК получателя
+  </response-code>
+    <response-code id="650">
+    Номер кошелька не принадлежит оператору, с баланса которого производится оплата
+  </response-code>
+    <response-code id="501">
+    Истек срок действия ключа отправителя
+  </response-code>
+    <response-code id="549">
+    Неверный номер договора получателя
+  </response-code>
+    <response-code id="142">
+    Платеж отменен в МТС
+  </response-code>
+    <response-code id="312">
+    Сессия с таким номером не существует
+  </response-code>
+    <response-code id="319">
+    Нет прав у агента
+  </response-code>
+    <response-code id="237">
+    Нет связи с Билайном
+  </response-code>
+    <response-code id="274" fatal="1">
+    Сумма платежа должна быть целым числом
+  </response-code>
+    <response-code id="795">
+    Платеж обрабатывается банком без проверки статуса
+  </response-code>
+    <response-code id="535">
+    Отсутствует код платежной системы
+  </response-code>
+    <response-code id="455">
+    Не пройден фрод-контроль по минимальному неснижаемому остатку на счете Абонента
+  </response-code>
+    <response-code id="402">
+    Отказ в предоставлении услуги абоненту
+  </response-code>
+    <response-code id="347">
+    Ошибка concert.ru
+  </response-code>
+    <response-code id="306">
+    Неправильный код дилера
+  </response-code>
+    <response-code id="816">
+    Не удалось получить адрес для подтверждения платежа в банке (ошибка банка).
+  </response-code>
+    <response-code id="13">
+    Сервер занят, повторите запрос через минуту
+  </response-code>
+    <response-code id="522">
+    Неверный номер или срок действия карты получателя
+  </response-code>
+    <response-code id="665">
+    Не удовлетворены ограничения на платёж
+  </response-code>
+    <response-code id="461">
+    Истечение тайм-аута, данное на подтверждение покупки Абонентом
+  </response-code>
+    <response-code id="783">
+    Недопустимая дополнительная комиссия
+  </response-code>
+    <response-code id="554">
+    Неверный формат поля комиссия
+  </response-code>
+    <response-code id="220">
+    Недостаточно средств 
+  </response-code>
+    <response-code id="769">
+    Оплата с банковской карты недоступна при данном типе входа
+  </response-code>
+    <response-code id="244">
+    Терминал не зарегистрирован у оператора
+  </response-code>
+    <response-code id="555">
+    Сумма комиссии больше суммы платежа
+  </response-code>
+    <response-code id="801">
+    Для указанных ИНН и ОКАТО не найдены реквизиты платежа
+  </response-code>
+    <response-code id="1004">
+    Не удалось создать баланс в выбранной валюте
+  </response-code>
+    <response-code id="751">
+    Оплата со счета МТС с вашего номера недоступна
+  </response-code>
+    <response-code id="560">
+    Отвергнут оператором банка отправителя
+  </response-code>
+    <response-code id="301">
+    Неверный формат кода подтверждения
+  </response-code>
+    <response-code id="150">
+    Неверный пароль
+  </response-code>
+    <response-code id="664">
+    Платёж отменён по истечении времени ожидания подтверждения абонентом
+  </response-code>
+    <response-code id="236">
+    Договор с БиЛайн не зарегистрирован
+  </response-code>
+    <response-code id="313">
+    Запрос сделан с другого IP
+  </response-code>
+    <response-code id="345">
+    Отменено службой безопасности
+  </response-code>
+    <response-code id="534">
+    Отсутствует наименование агента терминала
+  </response-code>
+    <response-code id="572">
+    Неверный тип платежа
+  </response-code>
+    <response-code id="776">
+    Ошибка допинформации платежа
+  </response-code>
+    <response-code id="804">
+    Не удалось купить билет
+  </response-code>
+    <response-code id="768">
+    Превышен суточный лимит по сумме на 1 получателя
+  </response-code>
+    <response-code id="579">
+    Не заполнено или ошибочно значение поля Статус налогового органа
+  </response-code>
+    <response-code id="766">
+    Превышен установленный лимит по количеству платежей от 1 отправителя
+  </response-code>
+    <response-code id="548">
+    Истек срок действия карты получателя
+  </response-code>
+    <response-code id="235">
+    Ошибка Корбины
+  </response-code>
+    <response-code id="452">
+    Не пройден фрод-контроль по количеству транзакций за настроенное количество суток
+  </response-code>
+    <response-code id="500">
+    По техническим причинам данная операция не может быть выполнена. Для осуществления платежа обратитесь, пожалуйста, в свой обслуживающий банк
+  </response-code>
+    <response-code id="537">
+    Неверный формат поля дата рождения
+  </response-code>
+    <response-code id="231">
+    Неизвестная ошибка БиЛайн
+  </response-code>
+    <response-code id="553"  fatal="1">
+    Неверный формат поля сумма платежа
+  </response-code>
+    <response-code id="299">
+    Пользователь уже зарегистрирован
+  </response-code>
+    <response-code id="250">
+    Ошибка Матрикса
+  </response-code>
+    <response-code id="245">
+    Неверный тип терминала
+  </response-code>
+    <response-code id="454">
+    Не пройден фрод-контроль по трансфер-балансу
+  </response-code>
+    <response-code id="651">
+    Платеж отменен в Мегафоне
+  </response-code>
+    <response-code id="330">
+    Ошибка шифрования
+  </response-code>
+    <response-code id="850">
+    Платеж с использованием заемных средств не найден или отменен
+  </response-code>
+    <response-code id="335">
+    Требуется PIN-код
+  </response-code>
+    <response-code id="541">
+    Неверно указауказаны реквизиты платежа. Пожалуйста, проверьте введенные данные или обратитесь за уточнением реквизитов в свой обслуживающий банк
+  </response-code>
+    <response-code id="309">
+    Неправильный формат кода сессии
+  </response-code>
+    <response-code id="275" fatal="1">
+    Некорректная сумма платежа
+  </response-code>
+    <response-code id="101">
+    Нет такого файла для загрузки
+  </response-code>
+    <response-code id="502">
+    Ключ отправителя не зарегистрирован
+  </response-code>
+    <response-code id="592">
+    Истек срок действия подарочного сертификата
+  </response-code>
+    <response-code id="421">
+    Ошибка при получении информации об абоненте на биллинге
+  </response-code>
+    <response-code id="365">
+    Отменен при сверке
+  </response-code>
+    <response-code id="547">
+    Ошибка в сроке действия карты получателя
+  </response-code>
+    <response-code id="260">
+    Сонет: ошибка сервера
+  </response-code>
+    <response-code id="888">
+    Ведутся технические работы, повторите запрос позже
+  </response-code>
+    <response-code id="338">
+    ЛК отключен
+  </response-code>
+    <response-code id="556">
+    Превышен суточный лимит суммы платежей на один номер счета/карты/договора
+  </response-code>
+    <response-code id="533">
+    Отсутствует или неверный номер агента терминала
+  </response-code>
+    <response-code id="809">
+    Нет подтверждения от Банка
+  </response-code>
+    <response-code id="800">
+    Номер постановления не найден
+  </response-code>
+    <response-code id="761">
+    Превышен установленный лимит по сумме от 1 отправителя
+  </response-code>
+    <response-code id="350">
+    Неверный магазин
+  </response-code>
+    <response-code id="342">
+    Неправильная станция
+  </response-code>
+    <response-code id="759">
+    Возврат по этой карте невозможен
+  </response-code>
+    <response-code id="561">
+    Отвергнут оператором банка получателя
+  </response-code>
+    <response-code id="591">
+    Платеж не возможно отменить
+  </response-code>
+    <response-code id="246">
+    Неверный PIN-код
+  </response-code>
+    <response-code id="523">
+    Неверный ИНН плательщика
+  </response-code>
+    <response-code id="754">
+    Система приема платежей в МТС временно не доступна. Пожалуйста, повторите платеж позже.
+  </response-code>
+    <response-code id="532">
+    Отсутствует aдрес терминала
+  </response-code>
+    <response-code id="752">
+    Одновременно можно проводить только 1 платеж со счета МТС
+  </response-code>
+    <response-code id="81">
+    Не найдено описание клиента
+  </response-code>
+    <response-code id="298">
+    Агента не существует в системе
+  </response-code>
+    <response-code id="249">
+    Номер Матрикс Мобайл
+  </response-code>
+    <response-code id="589">
+    Платеж принят на исполнение. Ожидается подтверждение
+  </response-code>
+    <response-code id="803">
+    Не удалось сверить стоимость билета
+  </response-code>
+    <response-code id="314">
+    Не прошел CyberCheck (списание средств со счета дилера)
+  </response-code>
+    <response-code id="538">
+    Неверный формат поля дата учета платежа
+  </response-code>
+    <response-code id="503">
+    Ключ отправителя блокирован
+  </response-code>
+    <response-code id="785">
+    Обрабатывается РИК
+  </response-code>
+    <response-code id="659">
+    Ошибка при запросе информации о клиенте у оператора
+  </response-code>
+    <response-code id="574">
+    Не заполнено или ошибочно значение поля КБК
+  </response-code>
+    <response-code id="303">
+    Неверный номер телефона
+  </response-code>
+    <response-code id="73">
+    Домашний оператор не доступен
+  </response-code>
+    <response-code id="308">
+    Неправильный код оператора
+  </response-code>
+    <response-code id="310">
+    Неправильная ЭЦП
+  </response-code>
+    <response-code id="202">
+    Ошибка данных запроса
+  </response-code>
+    <response-code id="272">
+    Временно нет связи с провайдером
+  </response-code>
+    <response-code id="510">
+    Необрабатываемый тип сообщения
+  </response-code>
+    <response-code id="115">
+    PL/SQL - ошибка при создании запроса МТС
+  </response-code>
+    <response-code id="212" fatal="1">
+    Не задана сумма платежа (или лимит терминала)
+  </response-code>
+    <response-code id="652">
+    Платёж отменён по инициативе абонента
+  </response-code>
+    <response-code id="315">
+    Не было запроса из банка на создание агента
+  </response-code>
+    <response-code id="8">
+    Прием платежа запрещен по техническим причинам
+  </response-code>
+    <response-code id="667">
+    Отказано в списании средств со счета абонента у оператора
+  </response-code>
+    <response-code id="82">
+    Провайдер запретип прием платежа процессинговому центру
+  </response-code>
+    <response-code id="660">
+    Не удалось произвести списание средств со счета абонента у оператора
+  </response-code>
+    <response-code id="791">
+    Платеж обработан банком
+  </response-code>
+    <response-code id="777">
+    Невозможно выполнить операцию. Одноразовый пароль.
+  </response-code>
+    <response-code id="1">
+    Провайдер временно недоступен
+  </response-code>
+    <response-code id="333">
+    Пользователь не ответил на звонок
+  </response-code>
+    <response-code id="232">
+    Не авторизовано Билайном
+  </response-code>
+    <response-code id="234">
+    Не прошло в Билайне
+  </response-code>
+    <response-code id="130">
+    Работа с данным провайдером не реализована
+  </response-code>
+    <response-code id="252">
+    Необходима повторная регистрация
+  </response-code>
+    <response-code id="580">
+    Не заполнено назначение платежа
+  </response-code>
+    <response-code id="806">
+    Превышено количество попыток ввода информации по данному платежу
+  </response-code>
+    <response-code id="760">
+    CVV2 не заполнен либо введен неверно
+  </response-code>
+    <response-code id="546">
+    Карта получателя блокирована
+  </response-code>
+    <response-code id="364">
+    Отменен касиром
+  </response-code>
+    <response-code id="778">
+    Невозможно выполнить операцию. Неодноразовый пароль.
+  </response-code>
+    <response-code id="200">
+    JSP - неверное значение R
+  </response-code>
+    <response-code id="84" fatal="1">
+    Номер не принадлежит оператору.
+  </response-code>
+    <response-code id="300">
+    Техническая ошибка
+  </response-code>
+    <response-code id="525">
+    Счет плательщика блокирован
+  </response-code>
+    <response-code id="509">
+    По техническим причинам данная операция не может быть выполнена. Для осуществления платежа обратитесь, пожалуйста, в свой обслуживающий банк
+  </response-code>
+    <response-code id="280">
+    Недостаток средств у агента выше
+  </response-code>
+    <response-code id="818">
+    Время оплаты заказа истекло. Обратитесь в службу бронирования ОАО "Аэрофлот"
+  </response-code>
+    <response-code id="72">
+    Счет платежной системы не доступен
+  </response-code>
+    <response-code id="116">
+    Истекло время ожидания (Технические проблемы в МТС)
+  </response-code>
+    <response-code id="658">
+    Ошибка при запросе баланса у оператора
+  </response-code>
+    <response-code id="343">
+    Нет поездов
+  </response-code>
+    <response-code id="247">
+    Ошибка при отправке запроса в Индиго
+  </response-code>
+    <response-code id="784">
+    Обработано РИК
+  </response-code>
+    <response-code id="203">
+    Транзакция не найдена в базе данных
+  </response-code>
+    <response-code id="753">
+    Неверный источник платежа
+  </response-code>
+    <response-code id="573">
+    Не заполнено или ошибочно значение поля КПП
+  </response-code>
+    <response-code id="758">
+    В ФИО плательщика недопустимые символы
+  </response-code>
+    <response-code id="297">
+    Не правельный код подтверждения
+  </response-code>
+    <response-code id="813">
+    По данному платежу документ еще не создан. Попробуйте запросить его позднее.
+  </response-code>
+    <response-code id="74">
+    Процессинговый центр не может принимать платежи.
+  </response-code>
+    <response-code id="211">
+    Неверный статус транзакции
+  </response-code>
+    <response-code id="12">
+    Платеж не подтвержен клиентом
+  </response-code>
+    <response-code id="666">
+    Вам запрещено использование услуги. Пожалуйста, обратитесь в информационно-справочную службу Мегафон по телефону 0500 (звонок бесплатный)
+  </response-code>
+    <response-code id="9">
+    Превышено время ожидания от провайдера
+  </response-code>
+    <response-code id="505">
+    Ключ плательщика блокирован
+  </response-code>
+    <response-code id="355">
+    Бесплатное восстановление пароля доступно только 1 раз в день
+  </response-code>
+    <response-code id="862">
+    Истек срок действия кода подтверждения
+  </response-code>
+    <response-code id="797">
+    Платёж отменён
+  </response-code>
+    <response-code id="653">
+    Оферта не подтверждена
+  </response-code>
+    <response-code id="772">
+    Устаревшая версия клиентского приложения
+  </response-code>
+    <response-code id="352">
+    Пользователь уже есть в системе
+  </response-code>
+    <response-code id="661">
+    Номер не поддерживается оператором
+  </response-code>
+    <response-code id="792">
+    Ошибка обработки платежа банком
+  </response-code>
+    <response-code id="530">
+    Отсутствует ФИО,  дата и или дата рождения получателя
+  </response-code>
+    <response-code id="811">
+    Уже есть активная карта
+  </response-code>
+    <response-code id="490">
+    Лимит количества СМС от пользователя
+  </response-code>
+    <response-code id="757">
+    Превышен установленный лимит по количеству платежей
+  </response-code>
+    <response-code id="590">
+    Платеж принят на обработку
+  </response-code>
+    <response-code id="316">
+    Блокировка на 24 часа
+  </response-code>
+    <response-code id="0">
+    Ок
+  </response-code>
+    <response-code id="83">
+    В настоящее время прием платежа невозможен
+  </response-code>
+    <response-code id="539">
+    Не заполнено поле  oper_type
+  </response-code>
+    <response-code id="550">
+    Неверное ФИО получателя
+  </response-code>
+    <response-code id="756">
+    Превышен суточный лимит по количеству платежей
+  </response-code>
+    <response-code id="233">
+    Повторный платеж в течении часа
+  </response-code>
+    <response-code id="805">
+    Код подтверждения не применим для этой карты
+  </response-code>
+    <response-code id="519">
+    Пополнение валютных счетов и карт запрещено
+  </response-code>
+    <response-code id="654">
+    Профиль абонента блокирован
+  </response-code>
+    <response-code id="210">
+    Нет такой транзакции в базе
+  </response-code>
+    <response-code id="794">
+    Невозможно отправить платеж в банк
+  </response-code>
+    <response-code id="810">
+    Оплата принята Аэрофлотом, однако билет не был выпущен. Обратитесь в отделение Аэрофлота.
+  </response-code>
+    <response-code id="812">
+    Нельзя получить данные документа по этому платежу
+  </response-code>
+    <response-code id="861">
+    Неверный код подтверждения
+  </response-code>
+    <response-code id="786">
+    Документ проверен ОСМП
+  </response-code>
+    <response-code id="771">
+    Отправка реквизитов карты доступна только 1 раз в день.
+  </response-code>
+    <response-code id="241">
+    Сумма меньше минимальной
+  </response-code>
+    <response-code id="79">
+    Счет абонента не активен
+  </response-code>
+    <response-code id="317">
+    SMS с PIN-кодом уже было отослано
+  </response-code>
+    <response-code id="551">
+    Сумма слишком мала
+  </response-code>
+    <response-code id="770">
+    Процессинг банка эмитента карты недоступен. Попробуйте выполнить операцию позднее
+  </response-code>
+    <response-code id="100">
+    Ошибка сервера - JSP Error
+  </response-code>
+    <response-code id="340">
+    Не подтвердили платежом из ОСМП
+  </response-code>
+    <response-code id="336">
+    PIN-код был выслан ранее
+  </response-code>
+    <response-code id="90">
+    Проведение платежа не окончено
+  </response-code>
+    <response-code id="349">
+    Требуется PIN-код для входа
+  </response-code>
+    <response-code id="80">
+    VIP счет. Прием платежа запрешен.
+  </response-code>
+    <response-code id="750">
+    Базовый платеж отменен
+  </response-code>
+    <response-code id="201">
+    Слишком много запросов с терминала. Подождите.
+  </response-code>
+    <response-code id="524">
+    Неверный идентификатор плательщика
+  </response-code>
+    <response-code id="305">
+    Пользователь с другим номером карты зарегистрирован
+  </response-code>
+    <response-code id="339">
+    Не пройден IP-фильтр
+  </response-code>
+    <response-code id="808">
+    Невозможно оплатить бронь, стоимость которой указана не в рублях.
+  </response-code>
+    <response-code id="581">
+    Платеж невозможно отменить
+  </response-code>
+    <response-code id="3">
+    Техническая ошибка, нельзя отправить запрос провайдеру
+  </response-code>
+    <response-code id="6">
+    Прием платежа запрещен, обратитесь в банк
+  </response-code>
+    <response-code id="367">
+    Звонок не состоялся
+  </response-code>
+    <response-code id="755">
+    Перевод на эту карту невозможен
+  </response-code>
+    <response-code id="799">
+    Нет подтверждения от Мегафона
+  </response-code>
+    <response-code id="296">
+    Неверный владелец
+  </response-code>
+    <response-code id="155">
+    Прием платежа для данного провайдера запрещен
+  </response-code>
+    <response-code id="412">
+    Запрос на завершение покупки уже отработан
+  </response-code>
+    <response-code id="819">
+    Истекло время жизни счета
+  </response-code>
+    <response-code id="575">
+    Не заполнено или ошибочно значение поля ОКАТО
+  </response-code>
+    <response-code id="526">
+    Карта плательщика блокирована
+  </response-code>
+    <response-code id="141">
+    Ошибка при отправке платежа в МТС
+  </response-code>
+    <response-code id="531">
+    Отсутствует или неверный номер терминала
+  </response-code>
+    <response-code id="504">
+    ЭЦП плательщика неверна
+  </response-code>
+    <response-code id="410">
+    Превышение максимального значения таймаута при резервировании
+  </response-code>
+    <response-code id="240">
+    Не проведена
+  </response-code>
+    <response-code id="270">
+    Ошибка от провайдера
+  </response-code>
+    <response-code id="511">
+    Неверный тип документа
+  </response-code>
+    <response-code id="406">
+    Явный отказ абонента от покупки
+  </response-code>
+    <response-code id="796">
+    Обрабатывается банком
+  </response-code>
+    <response-code id="318">
+    Пользователь с таким номером не зарегистрирован
+  </response-code>
+    <response-code id="790">
+    Запрещенный запрос
+  </response-code>
+    <response-code id="788">
+    Платеж на шлюз без комиссии ОСМП
+  </response-code>
+    <response-code id="668">
+    Не активирована услуга "Возврат средств на счет ПЦ"
+  </response-code>
+    <response-code id="133">
+    Нет прав на прием платежей
+  </response-code>
+    <response-code id="351">
+    Истек скрок действия карточки
+  </response-code>
+    <response-code id="366">
+    Уже запланирован со счета Билайн
+  </response-code>
+    <response-code id="559">
+    Невозможно идентифицировать получателя платежа
+  </response-code>
+    <response-code id="302">
+    Слишком простой пароль
+  </response-code>
+    <response-code id="215">
+    Транзакция с таким номером уже есть в базе
+  </response-code>
+    <response-code id="451">
+    Не пройден фрод-контроль по сумме платежей за настроенное количество суток
+  </response-code>
+    <response-code id="472">
+    На основном балансе Абонента недостаточно средств для списания
+  </response-code>
+    <response-code id="787">
+    Невозможно отправить в РИК
+  </response-code>
+    <response-code id="453">
+    Не пройден фрод-контроль по минимальному количеству времени между транзакциями
+  </response-code>
+    <response-code id="2">
+    Превышено число попыток
+  </response-code>
+    <response-code id="576">
+    Не заполнено или ошибочно значение поля Основание платежа
+  </response-code>
+    <response-code id="545">
+    Счет получателя блокирован
+  </response-code>
+    <response-code id="527">
+    Ошибка в сроке действия карты получателя
+  </response-code>
+    <response-code id="779">
+    Персона временно заблокирована. 10 неудачных попыток пароля.
+  </response-code>
+    <response-code id="542">
+    Неверный номер карты получателя
+  </response-code>
+    <response-code id="16">
+    Превышен суточный лимит
+  </response-code>
+    <response-code id="140">
+    Прием платежа невозможен из-за технического сбоя. Повторите позже
+  </response-code>
+    <response-code id="807">
+    Номер брони не найден.
+  </response-code>
+    <response-code id="354">
+    Текст не соответствует изображению
+  </response-code>
+    <response-code id="271">
+    Ошибка в ответе провайдера
+  </response-code>
+    <response-code id="507">
+    ЭЦП отправителя неверна
+  </response-code>
+    <response-code id="348">
+    Ошибка суммы заказа
+  </response-code>
+    <response-code id="864">
+    Не найден курс для указанной валюты.
+  </response-code>
+    <response-code id="802">
+    Игра не найдена
+  </response-code>
+    <response-code id="815">
+    Нет подтверждения платежа от МТС.
+  </response-code>
+    <response-code id="557" fatal="1">
+    Сумма платежа = 0
+  </response-code>
+    <response-code id="78">
+    Провайдер не может провести платеж
+  </response-code>
+    <response-code id="331">
+    Нет задолженности за выбранный период
+  </response-code>
+    <response-code id="7" fatal="1">
+    Прием платежа запрещен, обратитесь к оператору
+  </response-code>
+    <response-code id="290">
+    Ошибка блокировки баланса для списания средств
+  </response-code>
+    <response-code id="403">
+    Уведомление об истечении timeOut при покупке и резервировании
+  </response-code>
+    <response-code id="544">
+    Неверный Идентификатор получателя
+  </response-code>
+    <response-code id="276">
+    Коррекция! НЕ ПЕРЕПРОВОДИТЬ!
+  </response-code>
+    <response-code id="337">
+    Неверный формат PIN-кода
+  </response-code>
+    <response-code id="656">
+    Услуга для Вас недоступна. При возникновении вопросов обратитесь в службу сервиса по телефону 0500 (звонок бесплатный)
+  </response-code>
+    <response-code id="134">
+    Нет прав кассира
+  </response-code>
+    <response-code id="600">
+    Отмена бронирования
+  </response-code>
+    <response-code id="798">
+    Платёж отменён через отдел отмен
+  </response-code>
+    <response-code id="765">
+    Превышен установленный лимит по количеству платежей на 1 получателя
+  </response-code>
+    <response-code id="223">
+    Не заведен номер счета в БелБанке в системе
+  </response-code>
+    <response-code id="209">
+    Ошибка авторизации
+  </response-code>
+    <response-code id="334">
+    Не найден ключ
+  </response-code>
+    <response-code id="774">
+    Персона временно заблокирована
+  </response-code>
+    <response-code id="552">
+    Сумма слишком велика/Превышен лимит платежей в день
+  </response-code>
+    <response-code id="512">
+    Неверный тип платежа
+  </response-code>
+    <response-code id="473">
+    На специальном авансовом счете Абонента недостаточно средств, а списание с основного счета невозможно
+  </response-code>
+    <response-code id="450">
+    Не пройден фрод-контроль по максимальной сумме покупки
+  </response-code>
+    <response-code id="762">
+    Превышен установленный лимит по сумме на 1 получателя
+  </response-code>
+    <response-code id="86">
+    Не определено состояние платежа
+  </response-code>
+    <response-code id="304">
+    Неверный номер карты
+  </response-code>
+    <response-code id="851">
+    Пополнение отменено, т.к. платеж не прошел
+  </response-code>
+    <response-code id="239">
+    Некоммерческий клиент
+  </response-code>
+    <response-code id="332">
+    Пользователь отменил звонком
+  </response-code>
+    <response-code id="506">
+    Неверный логин/пароль при подключении к серверу
+  </response-code>
+    <response-code id="408">
+    Отмена транзакции по причине появления новой
+  </response-code>
+    <response-code id="10">
+    Дублирование платежа
+  </response-code>
+    <response-code id="222">
+    Ошибка при запроса баланса в БелБанке
+  </response-code>
+    <response-code id="528">
+    Истек срок действия карты получателя
+  </response-code>
+    <response-code id="5" fatal="1">
+    Номер не принадлежит оператору
+  </response-code>
+    <response-code id="578">
+    Не заполнено или ошибочно значение поля Тип налогового платежа
+  </response-code>
+    <response-code id="599">
+    Помещен в архив
+  </response-code>
+    <response-code id="110">
+    Ошибка сервера - PL/SQL Error
+  </response-code>
+    <response-code id="261">
+    Сонет: ошибка связи
+  </response-code>
+    <response-code id="543">
+    Неверный ИНН получателя
+  </response-code>
+    <response-code id="521">
+    Неверный счет или БИК плательщика
+  </response-code>
+    <response-code id="135">
+    Нельзя списывать средства с чужого счета
+  </response-code>
+    <response-code id="311">
+    Неправильный формат документа
+  </response-code>
+    <response-code id="814">
+    Не заполнен или неверен номер(формат) телефона получателя
+  </response-code>
+    <response-code id="77">
+    Прием платежа запрещен провайдером
+  </response-code>
+    <response-code id="242">
+    Сумма больше максимальной
+  </response-code>
+    <response-code id="471">
+    Неустановленная ошибка при списании денег с основного баланса
+  </response-code>
+    <response-code id="558">
+    Превышен установленный лимит по сумме
+  </response-code>
+    <response-code id="4">
+    Неверный формат счета/телефона
+  </response-code>
+    <response-code id="216">
+    Ошибка при сохранении транзакции на сервере
+  </response-code>
+    <response-code id="655">
+    Профиль абонента не найден
+  </response-code>
+    <response-code id="764">
+    Превышен суточный лимит по количеству платежей на 1 получателя
+  </response-code>
+    <response-code id="700">
+    Превышен лимит на операции
+  </response-code>
+    <response-code id="71">
+    Домашний оператор не может принять платеж
+  </response-code>
+    <response-code id="793">
+    Отсутствуют необходимые данные для обработки платежа
+  </response-code>
+    <response-code id="789">
+    Ошибка при блокировке баланса
+  </response-code>
+    <response-code id="15">
+    Истекло время ожидания платежа в очереди на отправку провайдеру
+  </response-code>
+    <response-code id="85">
+    Отмена платежа невозможна
+  </response-code>
+    <response-code id="662">
+    Приём платежей приостановлен по техническим причинам
+  </response-code>
+    <response-code id="243">
+    Невозможно проверить состояние счета
+  </response-code>
+    <response-code id="657">
+    Ошибка при проверке платежеспособности в банке
+  </response-code>
+    <response-code id="773">
+    Принято неправильно зашифрованное сообщение.
+  </response-code>
+    <response-code id="353">
+    Метод авторизации отключен
+  </response-code>
+    <response-code id="341">
+    Техническая ошибка
+  </response-code>
+    <response-code id="536">
+    Отсутствует внутренний номер платежа
+  </response-code>
+    <response-code id="238">
+    Номер телефона находится в неактивном состоянии
+  </response-code>
+    <response-code id="368">
+    Сервис временно не доступен
+  </response-code>
+    <response-code id="346">
+    Ошибка ufs
+  </response-code>
+    <response-code id="307">
+    Неправильный код точки приема
+  </response-code>
+    <response-code id="763">
+    Превышен суточный лимит по количеству платежей от 1 отправителя
+  </response-code>
+    <response-code id="262">
+    Сонет: отказ
+  </response-code>
+    <response-code id="860">
+    Требуется пароль
+  </response-code>
+    <response-code id="571">
+    Неверный номер счета/договора получателя
+  </response-code>
+    <response-code id="529">
+    Неверный номер договора плательщика
+  </response-code>
+    <response-code id="817">
+    Ваш заказ не может быть оплачен. Обратитесь в службу бронирования ОАО "Аэрофлот"
+  </response-code>
+    <response-code id="230">
+    Ошибка при отправке запроса в МегаФон
+  </response-code>
+    <response-code id="278">
+    Превышение максимального периода
+  </response-code>
+    <response-code id="663">
+    В структуре меню получателей платежей произошли изменения. Пожалуйста, попробуйте найти нужного получателя через пункт "Оплата услуг"
+  </response-code>
+    <response-code id="221">
+    Недостаточно средств на счете в банке
+  </response-code>
+    <response-code id="213">
+    Не задана сумма списания
+  </response-code>
+    <response-code id="775">
+    Ошибка при регистрации терминала
+  </response-code>
+    <response-code id="407">
+    Уведомление о недостаточности средств у абонента
+  </response-code>
+    <response-code id="782">
+    Превышена максимальная сумма оплаты для терминала
+  </response-code>
+    <response-code id="344">
+    Нет подтверждения
+  </response-code>
+    <response-code id="577">
+    Не заполнено или ошибочно значение поля Налоговый период
+  </response-code>
+    <response-code id="251">
+    Отказ от Матрикса
+  </response-code>
+    <response-code id="520">
+    Неверный БИК плательщика
+  </response-code>
+    <response-code id="75">
+    Провайдер не идентифицировал процессинговый центр
+  </response-code>
+    <response-code id="76">
+    Платеж запрещен провайдером
+  </response-code>
+    <response-code id="781">
+    Одинаковые номера терминальной транзакции в пакете
+  </response-code>
+  </response-codes>
+</response>

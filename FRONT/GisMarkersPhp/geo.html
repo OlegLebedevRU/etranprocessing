@@ -1,0 +1,60 @@
+﻿<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <title>Примеры. Создание карты с местоположением пользователя.</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <link href="//yandex.st/bootstrap/3.0.0/css/bootstrap.min.css" rel="stylesheet" />
+    <script src="http://api-maps.yandex.ru/2.0/?load=package.full&lang=ru-RU" type="text/javascript"></script>
+    <script src="http://yandex.st/jquery/1.6.4/jquery.min.js" type="text/javascript"></script>
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <!--<link href="/examples/add-users-ymapsapi2/css/bootstrap.min.css" rel="stylesheet" />-->
+
+
+    <script src="geolocation_service.js" type="text/javascript"></script>
+
+    <style type="text/css">
+        #YMapsID {
+            width: 500px;
+            height: 400px;
+        }
+    </style>
+
+    <script  type="text/javascript">
+        
+        ymaps.ready(function () {
+            var myMap,
+                service = new GeolocationService(),
+                myLocation = service.getLocation({
+                    // Режим получения наиболее точных данных.
+                    enableHighAccuracy: true,
+                    // Максимальное время ожидания ответа (в миллисекундах).
+                    timeout: 10000,
+                    // Максимальное время жизни полученных данных (в миллисекундах).
+                    maximumAge: 1000
+                });
+
+            myLocation.then(function (loc) {
+                var myCoords = [loc.latitude, loc.longitude],
+                    myPlacemark = new ymaps.Placemark(myCoords, {}, {preset: "twirl#redIcon", draggable: true
+                    });
+
+                myMap = new ymaps.Map('YMapsID', {
+                    center: myCoords,
+                    zoom: loc.zoom || 9,
+                    behaviors: ['default', 'scrollZoom']
+                });
+
+                myMap.geoObjects.add(myPlacemark);
+            });
+        });
+    </script>
+</head>
+<body>
+    <div class="hero-unit">
+        <div class="container">
+            <div id="YMapsID"></div>
+        </div>
+    </div>
+</body>
+</html>
