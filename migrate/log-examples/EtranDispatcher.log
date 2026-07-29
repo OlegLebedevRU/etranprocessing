@@ -1,0 +1,32 @@
+2026-07-29 07:26:17,969 - 87.255.26.214 https://iot-processing.ru/payment/etran.ashx
+2026-07-29 07:26:17,969 - encoding.CodePage: 1251
+2026-07-29 07:26:17,969 - POST: function=payment&PaymExtId=0281_040626_18253597&PaymSubjTp=10001&Amount=260000&Params=1+4&TotalSum=2600,0000&PayTypeId=1&Signature=TUI9MSAxMjEyMDU2MjcyMDE4NjN8Q1BVPTEgQkZFQkZCRkYwMDAyMDZBNw==
+2026-07-29 07:26:17,969 - Signature START...
+2026-07-29 07:26:17,969 - _tohash: MB=1 121205627201863|CPU=1 BFEBFBFF000206A7EtranSignOK
+2026-07-29 07:26:17,969 - md5hash: 2C123EFC2E5A2642094364F692726F21
+2026-07-29 07:26:17,969 - sign: 2C123EFC2E5A2642094364F692726F21 CN: 2C123EFC2E5A2642094364F692726F21
+2026-07-29 07:26:17,969 - SerialNumber: 11667, Function: payment, PaymExtId: 0281_040626_18253597, PaymSubjTp:10001, Amount: 260000, Params: 1 4, TotalSum: 2600,0000, kopeks 0, Subject: C=ru, S=msk, L=1133, O=429, OU=281, CN=2C123EFC2E5A2642094364F692726F21, E=1.terminal@forpay.ru, Signature: OK payTypeId: 1
+2026-07-29 07:26:17,969 -  PaymSubjTp: 10001 TotalSum: 2600
+2026-07-29 07:26:17,969 - При проведении платежа возникла системная ошибка:
+System.Net.WebException: Базовое соединение закрыто: Непредвиденная ошибка при передаче. ---> System.IO.IOException: Не удается записать данные в транспортное соединение: Удаленный хост принудительно разорвал существующее подключение. ---> System.Net.Sockets.SocketException: Удаленный хост принудительно разорвал существующее подключение
+   в System.Net.Sockets.NetworkStream.Write(Byte[] buffer, Int32 offset, Int32 size)
+   --- Конец трассировки внутреннего стека исключений ---
+   в System.Net.Sockets.NetworkStream.Write(Byte[] buffer, Int32 offset, Int32 size)
+   в System.Net.ConnectStream.WriteHeaders(Boolean async)
+   --- Конец трассировки внутреннего стека исключений ---
+   в System.Web.Services.Protocols.WebClientProtocol.GetWebResponse(WebRequest request)
+   в System.Web.Services.Protocols.HttpWebClientProtocol.GetWebResponse(WebRequest request)
+   в System.Web.Services.Protocols.SoapHttpClientProtocol.Invoke(String methodName, Object[] parameters)
+   в MessageProcessor.ProcessMessage(String Function, String PaymExtId, String PaymSubjTp, String Amount, String Params, String Serial, String TotalSum, String Signature, String userid, String PaymState, String kopeks, String payTypeId) в C:\PlaterraSvn\PROCESSING\BACK\ProcessingCore\EtranDispatcher\src\MessageProcessor.cs:строка 241
+   в EtranDispatcher.Dispatcher.ProcessRequest(HttpContext Context) в C:\PlaterraSvn\PROCESSING\BACK\ProcessingCore\EtranDispatcher\src\Dispatcher.cs:строка 338
+
+2026-07-29 15:00:26,263 - 193.33.88.28 https://iot-processing.ru/payment/etran.ashx
+2026-07-29 15:00:26,263 - encoding.CodePage: 1251
+2026-07-29 15:00:26,263 - POST: function=payment&PaymExtId=1288_210726_12551703&PaymSubjTp=830&Amount=150000&Params=1+16260%3b2+%cb%e8%e7%e0+%cf%e0%f5%f0%e0%e4%fb%ed%ee%e2%ed%e0+%c0.&TotalSum=1500,0000&PayTypeId=1&Signature=TUI9MSBUbyBiZSBmaWxsZWQgYnkgTy5FLk0ufENQVT0xIDAwNzAwRjAxMTc4QkZCRkY=
+2026-07-29 15:00:26,263 - Signature START...
+2026-07-29 15:00:26,263 - _tohash: MB=1 To be filled by O.E.M.|CPU=1 00700F01178BFBFFEtranSignOK
+2026-07-29 15:00:26,263 - md5hash: B45F51B0369DB722E629ADA63A25411E
+2026-07-29 15:00:26,263 - sign: B45F51B0369DB722E629ADA63A25411E CN: B45F51B0369DB722E629ADA63A25411E
+2026-07-29 15:00:26,263 - SerialNumber: 11555, Function: payment, PaymExtId: 1288_210726_12551703, PaymSubjTp:830, Amount: 150000, Params: 1 16260;2 Лиза Пахрадыновна А., TotalSum: 1500,0000, kopeks 0, Subject: C=ru, S=msk, L=991, O=340, OU=1288, CN=B45F51B0369DB722E629ADA63A25411E, E=1.terminal@forpay.ru, Signature: OK payTypeId: 1
+2026-07-29 15:00:26,263 -  PaymSubjTp: 830 TotalSum: 1500
+2026-07-29 15:00:26,278 - PaymExtId: 1288_210726_12551703 RET: <?xml version="1.0" encoding="windows-1251"?><Response><Result>Error</Result><PaymNumb></PaymNumb><PaymState>3</PaymState><PaymExtId>1288_210726_12551703</PaymExtId><Description>Платеж вызвал ошибку и не может быть проведен. : Системная ошибка.</Description></Response>

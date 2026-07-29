@@ -1,0 +1,10 @@
+2026-07-29 12:25:20,406 - GetDBConn
+System.Net.WebException: Ќевозможно соединитьс€ с удаленным сервером ---> System.Net.Sockets.SocketException: ѕопытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое врем€ не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера 172.17.100.1:80
+   в System.Net.Sockets.Socket.DoConnect(EndPoint endPointSnapshot, SocketAddress socketAddress)
+   в System.Net.ServicePoint.ConnectSocketInternal(Boolean connectFailure, Socket s4, Socket s6, Socket& socket, IPAddress& address, ConnectSocketState state, IAsyncResult asyncResult, Exception& exception)
+   ---  онец трассировки внутреннего стека исключений ---
+   в System.Net.WebClient.DownloadDataInternal(Uri address, WebRequest& request)
+   в System.Net.WebClient.DownloadString(Uri address)
+   в GlobalObjectsManager.GetDBConn(String name) в c:\ETRANPROCESSING\licensebilling\App_Code\GlobalObjectsManager.cs:строка 37
+2026-07-29 12:25:30,249 - DbConnectionString: server=db.corepay.local;Trusted_Connection=false;uid=platerra_bl;pwd=gkfnthhf_,k;database=Service;Connect Timeout=300;max pool size=10000;Pooling=True
+2026-07-29 12:25:30,249 - DbConnectionString: server=db.corepay.local;Trusted_Connection=false;uid=platerra_bl;pwd=gkfnthhf_,k;database=Service;Connect Timeout=300;max pool size=10000;Pooling=True

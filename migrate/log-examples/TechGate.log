@@ -1,0 +1,43 @@
+2026-07-29 10:12:05,492 - URL: https://iot-processing.ru/techgate/etran.ashx
+2026-07-29 10:12:05,492 - POST: function=inkass&InkassId=187&InkassExtId=0257_290726_09200778&PaymExtId=0257_290726_09085257&Note0=0&Note1=0&Note2=0&Note3=5&Note4=33&Note5=4&Note6=0&Note7=0&Note8=1&Note9=0&TotalNoteSum=5750&TotalNoteCount=43&Coin0=0&Coin1=0&Coin2=0&Coin3=0&Coin4=0&Coin5=0&Coin6=0&Coin7=0&Coin8=0&Coin9=0&TotalCoinSum=0&TotalCoinCount=0&TotalSum=5750&TotalCount=43&InkassDateTime=29.07.2026 9:20:07&Currency=1&TransactCount=74&TransactSum=48575&LastSumInkass=3450&cntInkass=204&cntInkassSum=866621&cntTransact=11328&cntTotalSum=1426494&cassetteNum=0&Inkassator=&Signature=TUI9MSAxNDAyMjIwMTg2MTA3OTd8Q1BVPTEgQkZFQkZCRkYwMDAzMDZDMw==
+2026-07-29 10:12:05,492 - InkassProcessor serial_number:11349
+2026-07-29 10:12:05,492 - InkassProcessor cntTotalSum: 1426494
+2026-07-29 10:12:05,492 - InkassProcessor FIX cntTotalSum: 1426494
+2026-07-29 10:12:47,519 - GetDBConn
+System.Net.WebException: Ќевозможно соединитьс€ с удаленным сервером ---> System.Net.Sockets.SocketException: ѕопытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое врем€ не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера 172.17.100.1:80
+   в System.Net.Sockets.Socket.DoConnect(EndPoint endPointSnapshot, SocketAddress socketAddress)
+   в System.Net.ServicePoint.ConnectSocketInternal(Boolean connectFailure, Socket s4, Socket s6, Socket& socket, IPAddress& address, ConnectSocketState state, IAsyncResult asyncResult, Exception& exception)
+   ---  онец трассировки внутреннего стека исключений ---
+   в System.Net.WebClient.DownloadDataInternal(Uri address, WebRequest& request)
+   в System.Net.WebClient.DownloadString(Uri address)
+   в GlobalObjectsManager.GetDBConn(String name) в c:\ETRANPROCESSING\TechGate\App_Code\GlobalObjectsManager.cs:строка 45
+2026-07-29 10:12:47,519 - ѕри проведении платежа возникла системна€ ошибка:
+System.InvalidOperationException: —войство ConnectionString не инициализировано.
+   в System.Data.SqlClient.SqlConnection.PermissionDemand()
+   в System.Data.SqlClient.SqlConnectionFactory.PermissionDemand(DbConnection outerConnection)
+   в System.Data.ProviderBase.DbConnectionInternal.TryOpenConnectionInternal(DbConnection outerConnection, DbConnectionFactory connectionFactory, TaskCompletionSource`1 retry, DbConnectionOptions userOptions)
+   в System.Data.SqlClient.SqlConnection.TryOpenInner(TaskCompletionSource`1 retry)
+   в System.Data.SqlClient.SqlConnection.TryOpen(TaskCompletionSource`1 retry)
+   в System.Data.SqlClient.SqlConnection.Open()
+   в EtranLib.Data.DBManager..ctor(String _constr) в c:\ETRANPROCESSING\TechGate\App_Code\EtranLib.cs:строка 341
+   в TechGate.InkassProcessor.ProcessMessage(NameValueCollection qparams, HttpContext& Context) в c:\ETRANPROCESSING\TechGate\App_Code\InkassProcessor.cs:строка 70
+   в TechGate.TechGate.ProcessRequest(HttpContext Context) в c:\ETRANPROCESSING\TechGate\App_Code\TechGate.cs:строка 81
+2026-07-29 12:37:04,005 - Init...
+2026-07-29 12:43:04,378 - Init...
+2026-07-29 12:43:04,534 - URL: https://iot-processing.ru/techgate/etran.ashx
+2026-07-29 12:43:04,534 - POST: function=closeshift2&ShiftExtId=0165_280726194430_02022personId=09996364885&fio=саша&phone=9996364885&last=0165_280726_19245427&dt=28.07.26 19:44&paymCount=4&totalSum=2700&Signature=TUI9MSBUbyBiZSBmaWxsZWQgYnkgTy5FLk0ufENQVT0xIEJGRUJGQkZGMDAwMjA2QTc=
+2026-07-29 12:43:04,534 - POST FIX: function=closeshift2&ShiftExtId=0165_280726194430_02022&personId=09996364885&fio=саша&phone=9996364885&last=0165_280726_19245427&dt=28.07.26 19:44&paymCount=4&totalSum=2700&Signature=TUI9MSBUbyBiZSBmaWxsZWQgYnkgTy5FLk0ufENQVT0xIEJGRUJGQkZGMDAwMjA2QTc=
+2026-07-29 12:43:04,534 - Subject:C=ru, S=msk, L=1048, O=435, OU=165, CN=DD437F549BA7FB5383C9700D69A96C7F, E=1.terminal@forpay.ru
+2026-07-29 12:43:04,534 - serial: 11746
+2026-07-29 12:43:05,501 -  RET: OK
+2026-07-29 12:44:39,166 - URL: https://iot-processing.ru/techgate/etran.ashx
+2026-07-29 12:44:39,166 - POST: function=inkass&InkassId=2671&InkassExtId=0273_290726_08001565&PaymExtId=0273_290726_07554663&Note0=0&Note1=0&Note2=1&Note3=33&Note4=148&Note5=67&Note6=204&Note7=88&Note8=4&Note9=14&TotalNoteSum=722760&TotalNoteCount=559&Coin0=0&Coin1=0&Coin2=0&Coin3=0&Coin4=0&Coin5=0&Coin6=0&Coin7=0&Coin8=0&Coin9=0&TotalCoinSum=0&TotalCoinCount=0&TotalSum=722760&TotalCount=559&InkassDateTime=29.07.2026 8:00:15&Currency=1&TransactCount=61&TransactSum=722760&LastSumInkass=557550&cntInkass=2696&cntInkassSum=1704077851&cntTransact=130475&cntTotalSum=1704578574&cassetteNum=0&Inkassator=&Signature=TUI9MSBCVFdWMDE5MDA1Vkx8Q1BVPTEgQkZFQkZCRkYwMDAxMDY3QQ==
+2026-07-29 12:44:39,198 - InkassProcessor serial_number:11575
+2026-07-29 12:44:39,198 - InkassProcessor cntTotalSum: 1704578574
+2026-07-29 12:44:39,198 - InkassProcessor FIX cntTotalSum: 1704578574
+2026-07-29 12:44:39,198 - InkassProcessor TRY EXEC INKASS_PUT6
+2026-07-29 12:44:39,276 - InkassProcessor INKASS_PUT6 OK
+2026-07-29 12:44:39,276 - InkassProcessor INKASS_PUT5 return ID 476866
+2026-07-29 12:44:39,276 - InkassProcessor find Coins...
+2026-07-29 12:44:39,276 - InkassProcessor 0 TotalCoinSum 0
+2026-07-29 12:44:39,276 -  RET: OK

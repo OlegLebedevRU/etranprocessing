@@ -1,0 +1,728 @@
+2026-07-28 23:00:33,291 - CASerial: 4E6A2E9ABFBE189E423FE1BDD554D1ED
+2026-07-28 23:00:33,462 - GetDBConn
+System.Net.WebException: Базовое соединение закрыто: Непредвиденная ошибка при приеме. ---> System.IO.IOException: Не удается прочитать данные из транспортного соединения: Удаленный хост принудительно разорвал существующее подключение. ---> System.Net.Sockets.SocketException: Удаленный хост принудительно разорвал существующее подключение
+   в System.Net.Sockets.Socket.Receive(Byte[] buffer, Int32 offset, Int32 size, SocketFlags socketFlags)
+   в System.Net.Sockets.NetworkStream.Read(Byte[] buffer, Int32 offset, Int32 size)
+   --- Конец трассировки внутреннего стека исключений ---
+   в System.Net.Sockets.NetworkStream.Read(Byte[] buffer, Int32 offset, Int32 size)
+   в System.Net.PooledStream.Read(Byte[] buffer, Int32 offset, Int32 size)
+   в System.Net.Connection.SyncRead(HttpWebRequest request, Boolean userRetrievedStream, Boolean probeRead)
+   --- Конец трассировки внутреннего стека исключений ---
+   в System.Net.WebClient.DownloadDataInternal(Uri address, WebRequest& request)
+   в System.Net.WebClient.DownloadString(Uri address)
+   в System.Net.WebClient.DownloadString(String address)
+   в GlobalObjectsManager.GetDBConn(String name) в c:\ETRANPROCESSING\Certificates\App_Code\GlobalObjectsManager.cs:строка 36
+2026-07-28 23:00:33,618 - Приложение запущено.
+2026-07-28 23:00:33,618 - /certificates/Dispatcher.ashx?function=check&pin=P43KT8&tosign=TUI9MSAxMjExMDUxMjEyMTg1MDV8Q1BVPTEgQkZFQkZCRkYwMDAyMDZBNw==
+2026-07-28 23:00:33,618 - check
+2026-07-28 23:00:33,696 - При проведении платежа возникла системная ошибка:
+System.InvalidOperationException: Свойство ConnectionString не инициализировано.
+   в System.Data.SqlClient.SqlConnection.PermissionDemand()
+   в System.Data.SqlClient.SqlConnectionFactory.PermissionDemand(DbConnection outerConnection)
+   в System.Data.ProviderBase.DbConnectionClosed.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   в System.Data.SqlClient.SqlConnection.Open()
+   в EtranLib.Data.DBManager..ctor(String _constr) в c:\ETRANPROCESSING\Certificates\App_Code\EtranLib.cs:строка 341
+   в DBInterface.Autho(String pin, String sign) в c:\ETRANPROCESSING\Certificates\App_Code\DBInterface.cs:строка 21
+   в XEnrollService.Dispatcher.ProcessRequest(HttpContext Context) в c:\ETRANPROCESSING\Certificates\App_Code\Dispatcher.cs:строка 122
+2026-07-28 23:01:03,679 - /certificates/Dispatcher.ashx?function=check&pin=P43KT8&tosign=TUI9MSAxMjExMDUxMjEyMTg1MDV8Q1BVPTEgQkZFQkZCRkYwMDAyMDZBNw==
+2026-07-28 23:01:03,679 - check
+2026-07-28 23:01:03,679 - При проведении платежа возникла системная ошибка:
+System.InvalidOperationException: Свойство ConnectionString не инициализировано.
+   в System.Data.SqlClient.SqlConnection.PermissionDemand()
+   в System.Data.SqlClient.SqlConnectionFactory.PermissionDemand(DbConnection outerConnection)
+   в System.Data.ProviderBase.DbConnectionClosed.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   в System.Data.SqlClient.SqlConnection.Open()
+   в EtranLib.Data.DBManager..ctor(String _constr) в c:\ETRANPROCESSING\Certificates\App_Code\EtranLib.cs:строка 341
+   в DBInterface.Autho(String pin, String sign) в c:\ETRANPROCESSING\Certificates\App_Code\DBInterface.cs:строка 21
+   в XEnrollService.Dispatcher.ProcessRequest(HttpContext Context) в c:\ETRANPROCESSING\Certificates\App_Code\Dispatcher.cs:строка 122
+2026-07-28 23:03:35,558 - /certificates/Dispatcher.ashx?function=check&pin=P43KT8&tosign=TUI9MSAxMjExMDUxMjEyMTg1MDV8Q1BVPTEgQkZFQkZCRkYwMDAyMDZBNw==
+2026-07-28 23:03:35,558 - check
+2026-07-28 23:03:35,558 - При проведении платежа возникла системная ошибка:
+System.InvalidOperationException: Свойство ConnectionString не инициализировано.
+   в System.Data.SqlClient.SqlConnection.PermissionDemand()
+   в System.Data.SqlClient.SqlConnectionFactory.PermissionDemand(DbConnection outerConnection)
+   в System.Data.ProviderBase.DbConnectionClosed.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   в System.Data.SqlClient.SqlConnection.Open()
+   в EtranLib.Data.DBManager..ctor(String _constr) в c:\ETRANPROCESSING\Certificates\App_Code\EtranLib.cs:строка 341
+   в DBInterface.Autho(String pin, String sign) в c:\ETRANPROCESSING\Certificates\App_Code\DBInterface.cs:строка 21
+   в XEnrollService.Dispatcher.ProcessRequest(HttpContext Context) в c:\ETRANPROCESSING\Certificates\App_Code\Dispatcher.cs:строка 122
+2026-07-28 23:24:34,037 - Приложение завершается.
+2026-07-29 00:37:30,811 - CASerial: 4E6A2E9ABFBE189E423FE1BDD554D1ED
+2026-07-29 00:37:30,858 - GetDBConn
+System.Net.WebException: Базовое соединение закрыто: Непредвиденная ошибка при передаче. ---> System.IO.IOException: Не удается записать данные в транспортное соединение: Удаленный хост принудительно разорвал существующее подключение. ---> System.Net.Sockets.SocketException: Удаленный хост принудительно разорвал существующее подключение
+   в System.Net.Sockets.Socket.Send(Byte[] buffer, Int32 offset, Int32 size, SocketFlags socketFlags)
+   в System.Net.Sockets.NetworkStream.Write(Byte[] buffer, Int32 offset, Int32 size)
+   --- Конец трассировки внутреннего стека исключений ---
+   в System.Net.Sockets.NetworkStream.Write(Byte[] buffer, Int32 offset, Int32 size)
+   в System.Net.PooledStream.Write(Byte[] buffer, Int32 offset, Int32 size)
+   в System.Net.ConnectStream.WriteHeaders(Boolean async)
+   --- Конец трассировки внутреннего стека исключений ---
+   в System.Net.WebClient.DownloadDataInternal(Uri address, WebRequest& request)
+   в System.Net.WebClient.DownloadString(Uri address)
+   в System.Net.WebClient.DownloadString(String address)
+   в GlobalObjectsManager.GetDBConn(String name) в c:\ETRANPROCESSING\Certificates\App_Code\GlobalObjectsManager.cs:строка 36
+2026-07-29 00:37:30,873 - Приложение запущено.
+2026-07-29 00:37:30,889 - /certificates/Dispatcher.ashx?function=check&pin=D53QE0&tosign=TUI9MSAxMjExMDUxMjEyMTg1MDV8Q1BVPTEgQkZFQkZCRkYwMDAyMDZBNw==
+2026-07-29 00:37:30,889 - check
+2026-07-29 00:37:30,889 - При проведении платежа возникла системная ошибка:
+System.InvalidOperationException: Свойство ConnectionString не инициализировано.
+   в System.Data.SqlClient.SqlConnection.PermissionDemand()
+   в System.Data.SqlClient.SqlConnectionFactory.PermissionDemand(DbConnection outerConnection)
+   в System.Data.ProviderBase.DbConnectionClosed.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   в System.Data.SqlClient.SqlConnection.Open()
+   в EtranLib.Data.DBManager..ctor(String _constr) в c:\ETRANPROCESSING\Certificates\App_Code\EtranLib.cs:строка 341
+   в DBInterface.Autho(String pin, String sign) в c:\ETRANPROCESSING\Certificates\App_Code\DBInterface.cs:строка 21
+   в XEnrollService.Dispatcher.ProcessRequest(HttpContext Context) в c:\ETRANPROCESSING\Certificates\App_Code\Dispatcher.cs:строка 122
+2026-07-29 00:38:06,504 - /certificates/Dispatcher.ashx?function=check&pin=P43KT8&tosign=TUI9MSAxMjExMDUxMjEyMTg1MDV8Q1BVPTEgQkZFQkZCRkYwMDAyMDZBNw==
+2026-07-29 00:38:06,504 - check
+2026-07-29 00:38:06,504 - При проведении платежа возникла системная ошибка:
+System.InvalidOperationException: Свойство ConnectionString не инициализировано.
+   в System.Data.SqlClient.SqlConnection.PermissionDemand()
+   в System.Data.SqlClient.SqlConnectionFactory.PermissionDemand(DbConnection outerConnection)
+   в System.Data.ProviderBase.DbConnectionClosed.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   в System.Data.SqlClient.SqlConnection.Open()
+   в EtranLib.Data.DBManager..ctor(String _constr) в c:\ETRANPROCESSING\Certificates\App_Code\EtranLib.cs:строка 341
+   в DBInterface.Autho(String pin, String sign) в c:\ETRANPROCESSING\Certificates\App_Code\DBInterface.cs:строка 21
+   в XEnrollService.Dispatcher.ProcessRequest(HttpContext Context) в c:\ETRANPROCESSING\Certificates\App_Code\Dispatcher.cs:строка 122
+2026-07-29 00:38:33,180 - /certificates/Dispatcher.ashx?function=check&pin=P43KT8&tosign=TUI9MSAxMjExMDUxMjEyMTg1MDV8Q1BVPTEgQkZFQkZCRkYwMDAyMDZBNw==
+2026-07-29 00:38:33,180 - check
+2026-07-29 00:38:33,180 - При проведении платежа возникла системная ошибка:
+System.InvalidOperationException: Свойство ConnectionString не инициализировано.
+   в System.Data.SqlClient.SqlConnection.PermissionDemand()
+   в System.Data.SqlClient.SqlConnectionFactory.PermissionDemand(DbConnection outerConnection)
+   в System.Data.ProviderBase.DbConnectionClosed.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   в System.Data.SqlClient.SqlConnection.Open()
+   в EtranLib.Data.DBManager..ctor(String _constr) в c:\ETRANPROCESSING\Certificates\App_Code\EtranLib.cs:строка 341
+   в DBInterface.Autho(String pin, String sign) в c:\ETRANPROCESSING\Certificates\App_Code\DBInterface.cs:строка 21
+   в XEnrollService.Dispatcher.ProcessRequest(HttpContext Context) в c:\ETRANPROCESSING\Certificates\App_Code\Dispatcher.cs:строка 122
+2026-07-29 00:59:31,551 - Приложение завершается.
+2026-07-29 08:35:40,860 - CASerial: 4E6A2E9ABFBE189E423FE1BDD554D1ED
+2026-07-29 08:35:40,891 - GetDBConn
+System.Net.WebException: Базовое соединение закрыто: Непредвиденная ошибка при передаче. ---> System.IO.IOException: Не удается записать данные в транспортное соединение: Удаленный хост принудительно разорвал существующее подключение. ---> System.Net.Sockets.SocketException: Удаленный хост принудительно разорвал существующее подключение
+   в System.Net.Sockets.Socket.Send(Byte[] buffer, Int32 offset, Int32 size, SocketFlags socketFlags)
+   в System.Net.Sockets.NetworkStream.Write(Byte[] buffer, Int32 offset, Int32 size)
+   --- Конец трассировки внутреннего стека исключений ---
+   в System.Net.Sockets.NetworkStream.Write(Byte[] buffer, Int32 offset, Int32 size)
+   в System.Net.PooledStream.Write(Byte[] buffer, Int32 offset, Int32 size)
+   в System.Net.ConnectStream.WriteHeaders(Boolean async)
+   --- Конец трассировки внутреннего стека исключений ---
+   в System.Net.WebClient.DownloadDataInternal(Uri address, WebRequest& request)
+   в System.Net.WebClient.DownloadString(Uri address)
+   в System.Net.WebClient.DownloadString(String address)
+   в GlobalObjectsManager.GetDBConn(String name) в c:\ETRANPROCESSING\Certificates\App_Code\GlobalObjectsManager.cs:строка 36
+2026-07-29 08:35:40,907 - Приложение запущено.
+2026-07-29 08:35:40,922 - /certificates/Dispatcher.ashx?function=check&pin=P43KT8&tosign=TUI9MSAxMjExMDUxMjEyMTg1MDV8Q1BVPTEgQkZFQkZCRkYwMDAyMDZBNw==
+2026-07-29 08:35:40,922 - check
+2026-07-29 08:35:40,922 - При проведении платежа возникла системная ошибка:
+System.InvalidOperationException: Свойство ConnectionString не инициализировано.
+   в System.Data.SqlClient.SqlConnection.PermissionDemand()
+   в System.Data.SqlClient.SqlConnectionFactory.PermissionDemand(DbConnection outerConnection)
+   в System.Data.ProviderBase.DbConnectionClosed.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   в System.Data.SqlClient.SqlConnection.Open()
+   в EtranLib.Data.DBManager..ctor(String _constr) в c:\ETRANPROCESSING\Certificates\App_Code\EtranLib.cs:строка 341
+   в DBInterface.Autho(String pin, String sign) в c:\ETRANPROCESSING\Certificates\App_Code\DBInterface.cs:строка 21
+   в XEnrollService.Dispatcher.ProcessRequest(HttpContext Context) в c:\ETRANPROCESSING\Certificates\App_Code\Dispatcher.cs:строка 122
+2026-07-29 08:50:22,055 - /certificates/Dispatcher.ashx?function=check&pin=P43KT8&tosign=TUI9MSAxMjExMDUxMjEyMTg1MDV8Q1BVPTEgQkZFQkZCRkYwMDAyMDZBNw==
+2026-07-29 08:50:22,055 - check
+2026-07-29 08:50:22,055 - При проведении платежа возникла системная ошибка:
+System.InvalidOperationException: Свойство ConnectionString не инициализировано.
+   в System.Data.SqlClient.SqlConnection.PermissionDemand()
+   в System.Data.SqlClient.SqlConnectionFactory.PermissionDemand(DbConnection outerConnection)
+   в System.Data.ProviderBase.DbConnectionClosed.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   в System.Data.SqlClient.SqlConnection.Open()
+   в EtranLib.Data.DBManager..ctor(String _constr) в c:\ETRANPROCESSING\Certificates\App_Code\EtranLib.cs:строка 341
+   в DBInterface.Autho(String pin, String sign) в c:\ETRANPROCESSING\Certificates\App_Code\DBInterface.cs:строка 21
+   в XEnrollService.Dispatcher.ProcessRequest(HttpContext Context) в c:\ETRANPROCESSING\Certificates\App_Code\Dispatcher.cs:строка 122
+2026-07-29 08:51:41,132 - /certificates/Dispatcher.ashx?function=check&pin=DEMO&tosign=TUI9MSBCQkhFNTMyMUI0MDAxNDkwfENQVT0xIEJGRUJGQkZGMDAwODA2QzE=
+2026-07-29 08:51:41,132 - check
+2026-07-29 08:51:41,132 - При проведении платежа возникла системная ошибка:
+System.InvalidOperationException: Свойство ConnectionString не инициализировано.
+   в System.Data.SqlClient.SqlConnection.PermissionDemand()
+   в System.Data.SqlClient.SqlConnectionFactory.PermissionDemand(DbConnection outerConnection)
+   в System.Data.ProviderBase.DbConnectionClosed.OpenConnection(DbConnection outerConnection, DbConnectionFactory connectionFactory)
+   в System.Data.SqlClient.SqlConnection.Open()
+   в EtranLib.Data.DBManager..ctor(String _constr) в c:\ETRANPROCESSING\Certificates\App_Code\EtranLib.cs:строка 341
+   в DBInterface.Autho(String pin, String sign) в c:\ETRANPROCESSING\Certificates\App_Code\DBInterface.cs:строка 21
+   в XEnrollService.Dispatcher.ProcessRequest(HttpContext Context) в c:\ETRANPROCESSING\Certificates\App_Code\Dispatcher.cs:строка 122
+2026-07-29 08:58:47,375 - Приложение завершается.
+2026-07-29 12:27:50,230 - CASerial: 4E6A2E9ABFBE189E423FE1BDD554D1ED
+2026-07-29 12:27:50,417 - Приложение запущено.
+2026-07-29 12:27:50,604 - /certificates/Dispatcher.ashx?function=check&pin=DEMO&tosign=TUI9MSBCQkhFNTMyMUI0MDAxNDkwfENQVT0xIEJGRUJGQkZGMDAwODA2QzE=
+2026-07-29 12:27:50,604 - check
+2026-07-29 12:27:50,838 - EXEC SP: certman_front_auth_new
+2026-07-29 12:27:51,041 - ok
+2026-07-29 12:27:51,041 - tosign ...
+2026-07-29 12:27:51,041 - _tohash: MB=1 BBHE5321B4001490|CPU=1 BFEBFBFF000806C1EtranSignOK
+2026-07-29 12:27:51,041 - md5hash: A99D2F18001ECC93DF5CBE27F442C8FA
+2026-07-29 12:27:51,041 - RET: <catype>SubCA</catype><prov>Microsoft Enhanced Cryptographic Provider v1.0</prov><dn>CN=14624432,O=223,OU=9904,S=msk,C=ru,L=2107,E=1.terminal@forpay.ru</dn><pin>OUHF2X</pin><sign>A99D2F18001ECC93DF5CBE27F442C8FA</sign>
+2026-07-29 12:27:52,429 - /certificates/Dispatcher.ashx?function=setup&pin=OUHF2X&cpserial=A99D2F18001ECC93DF5CBE27F442C8FA
+2026-07-29 12:27:52,523 - START SETUP PIN: OUHF2X
+2026-07-29 12:27:52,539 - GetCertificate login:  pwd:  pin: OUHF2X pkcs10: MIIC/jCCAmcCAQAwgZcxIzAhBgkqhkiG9w0BCQEWFDEudGVybWluYWxAZm9ycGF5
+LnJ1MQ0wCwYDVQQHDAQyMTA3MQswCQYDVQQGEwJydTEMMAoGA1UECAwDbXNrMQ0w
+CwYDVQQLDAQ5OTA0MQwwCgYDVQQKDAMyMjMxKTAnBgNVBAMMIEE5OUQyRjE4MDAx
+RUNDOTNERjVDQkUyN0Y0NDJDOEZBMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKB
+gQDZC9t0VVQVMcIOicNyrsuWbR08GoMuxn71EKbvXm8ryDt0BMCHy0sOOmBr7XR1
+Gt2f0uoTGqrNBaZVs5brAUHiRMNFc3GQ9NU93FiKKRs6qZrpU0GGi+d2FE6ZZHpU
+4zhkumkA40ZxLtk9+LaG8NKPVX/uVqhmirDNRmdEbqXi8QIDAQABoIIBJDAaBgor
+BgEEAYI3DQIDMQwWCjYuMi45MjAwLjIwPgYJKoZIhvcNAQkOMTEwLzAdBgNVHQ4E
+FgQUWQmPl8naf23vCWN+fV0/IWPn+RYwDgYDVR0PAQH/BAQDAgUgMFAGCSsGAQQB
+gjcVFDFDMEECAQUMD0xBUFRPUC1VU0ZUUkM0OAwVTEFQVE9QLVVTRlRSQzQ4XG9s
+ZWdfDBRQbGF0ZXJyYVRlcm1pbmFsLmV4ZTB0BgorBgEEAYI3DQICMWYwZAIBAR5c
+AE0AaQBjAHIAbwBzAG8AZgB0ACAARQBuAGgAYQBuAGMAZQBkACAAQwByAHkAcAB0
+AG8AZwByAGEAcABoAGkAYwAgAFAAcgBvAHYAaQBkAGUAcgAgAHYAMQAuADADAQAw
+DQYJKoZIhvcNAQEFBQADgYEAmMeTVKP2NEFp3c61lVCmllSRuIYQTgMeFsO0opJM
+SSZf5nxGVcKGGBkqY1Mm55kzKjnPJhAyqBkfmCyjy2fYJHrFW/k+PFPBg1oJXqvR
+lxY+wiDlxBIDLYzXyoulcCNYwTgp540X/FOwS5t3XeBRGucfNcHNL/tglt/3ItR1
+23M=
+ cpserial: A99D2F18001ECC93DF5CBE27F442C8FA tosign: 
+2026-07-29 12:27:52,539 - EXEC SP: certman_front_auth3
+2026-07-29 12:27:52,570 - GetCertificate db_res: ok
+2026-07-29 12:27:52,570 - CACertIssue START...
+2026-07-29 12:27:52,585 - config: db.corepay.local\certsrv
+2026-07-29 12:27:52,897 - result submit: 3
+2026-07-29 12:27:52,929 - cert: MIIJZwYJKoZIhvcNAQcCoIIJWDCCCVQCAQExADALBgkqhkiG9w0BBwGgggk8MIIE
+4zCCA8ugAwIBAgIKYQNrDwAEAAAuAzANBgkqhkiG9w0BAQUFADBCMRUwEwYKCZIm
+iZPyLGQBGRYFbG9jYWwxFzAVBgoJkiaJk/IsZAEZFgdjb3JlcGF5MRAwDgYDVQQD
+EwdjZXJ0c3J2MB4XDTI2MDcyOTA5MTc1MloXDTI3MDcyOTA5Mjc1MlowgZcxCzAJ
+BgNVBAYTAnJ1MQwwCgYDVQQIEwNtc2sxDTALBgNVBAcTBDIxMDcxDDAKBgNVBAoT
+AzIyMzENMAsGA1UECxMEOTkwNDEpMCcGA1UEAxMgQTk5RDJGMTgwMDFFQ0M5M0RG
+NUNCRTI3RjQ0MkM4RkExIzAhBgkqhkiG9w0BCQEWFDEudGVybWluYWxAZm9ycGF5
+LnJ1MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDZC9t0VVQVMcIOicNyrsuW
+bR08GoMuxn71EKbvXm8ryDt0BMCHy0sOOmBr7XR1Gt2f0uoTGqrNBaZVs5brAUHi
+RMNFc3GQ9NU93FiKKRs6qZrpU0GGi+d2FE6ZZHpU4zhkumkA40ZxLtk9+LaG8NKP
+VX/uVqhmirDNRmdEbqXi8QIDAQABo4ICBzCCAgMwHQYDVR0OBBYEFFkJj5fJ2n9t
+7wljfn1dPyFj5/kWMAsGA1UdDwQEAwIBhjAfBgNVHSMEGDAWgBTrnqs1A2Kmmx4L
+vpkTSjQN4SL0SjCBsQYDVR0fBIGpMIGmMIGjoIGgoIGdhmtsZGFwOi8vL0NOPWNl
+cnRzcnYsQ049ZGIsQ049Q0RQLENOPVB1YmxpYyUyMEtleSUyMFNlcnZpY2VzLENO
+PVNlcnZpY2VzLENOPUNvbmZpZ3VyYXRpb24sREM9Y29yZXBheSxEQz1sb2NhbIYu
+aHR0cDovL2RiLmNvcmVwYXkubG9jYWwvQ2VydEVucm9sbC9jZXJ0c3J2LmNybDCB
+0wYIKwYBBQUHAQEEgcYwgcMwcQYIKwYBBQUHMAKGZWxkYXA6Ly8vQ049Y2VydHNy
+dixDTj1BSUEsQ049UHVibGljJTIwS2V5JTIwU2VydmljZXMsQ049U2VydmljZXMs
+Q049Q29uZmlndXJhdGlvbixEQz1jb3JlcGF5LERDPWxvY2FsME4GCCsGAQUFBzAC
+hkJodHRwOi8vZGIuY29yZXBheS5sb2NhbC9DZXJ0RW5yb2xsL2RiLmNvcmVwYXku
+bG9jYWxfY2VydHNydigxKS5jcnQwGQYJKwYBBAGCNxQCBAweCgBTAHUAYgBDAEEw
+DwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQUFAAOCAQEAe64h9Yx+Sp1XlWQw
+7Z9petI+r3EqU/ARFCBdvANc4SpLCeBgb18XbMif1Gq9a4VPJRPkwIkN9Yk7TUHJ
+Tj7+5WN2WdM3IEadS2Gk+uF3BBBmHkWW6OP1RkFqH4tJsJAoqBKjUKTy3RUof3ML
+MRp555OiEKNbb5ygUyhwVKqTgzmSH7kQwyBHlTUkLg9l5l6ZDe3/uMD+tzu8WMP1
+0aknTp3+iA9SuISn2Pyq16WdEsQS0PZ7IyHBNhofzvRCZOTbTc6z84QlN+QQmfrY
+X/8jzbIA+4yczQIqF+SQjKdDc5QBWUrufEEeghoxgqysaileEv4TFJ48zgtOGsEO
+hxNnKTCCBFEwggM5oAMCAQICEAS4EZREPJaST6e/JyTVv1owDQYJKoZIhvcNAQEF
+BQAwQjEVMBMGCgmSJomT8ixkARkWBWxvY2FsMRcwFQYKCZImiZPyLGQBGRYHY29y
+ZXBheTEQMA4GA1UEAxMHY2VydHNydjAeFw0wNjA0MTIxMDQyMDBaFw0zMDAzMTIx
+MTUxMjdaMEIxFTATBgoJkiaJk/IsZAEZFgVsb2NhbDEXMBUGCgmSJomT8ixkARkW
+B2NvcmVwYXkxEDAOBgNVBAMTB2NlcnRzcnYwggEiMA0GCSqGSIb3DQEBAQUAA4IB
+DwAwggEKAoIBAQDrTqaXcKOfni+/t0y4hUu5cBAnZNoOaFYb0i8PLOt7tTSInj6i
+rjwOgt8QX+y930xAypbiTicakjs+KPm8YLA1g6qj++KoZpRzU9GutRgElsGWzZs6
+OaXzDy9TTl+V4kVn7uzLA5vVf9UiEGvSenmJcl+IIiRLywrlLG9F/XEEnTfXyvkj
+M4hURJIvj3/MQ6s1+5xB0pLwdzFmSHwBQE/btKWPcpt1Q9lqIpLrDn4WYm6Y/+Mh
+iNSaof8lzGibp3BKhJOiEY92jV8PURB43uMIH8v4rUejQq269PFC3BHOn++Y8Rec
+rByzAg6aXRGbNZEWSsliGk6Ha4QgfsAyCKxJAgMBAAGjggFBMIIBPTATBgkrBgEE
+AYI3FAIEBh4EAEMAQTALBgNVHQ8EBAMCAYYwDwYDVR0TAQH/BAUwAwEB/zAdBgNV
+HQ4EFgQU656rNQNippseC76ZE0o0DeEi9EowgbEGA1UdHwSBqTCBpjCBo6CBoKCB
+nYZrbGRhcDovLy9DTj1jZXJ0c3J2LENOPWRiLENOPUNEUCxDTj1QdWJsaWMlMjBL
+ZXklMjBTZXJ2aWNlcyxDTj1TZXJ2aWNlcyxDTj1Db25maWd1cmF0aW9uLERDPWNv
+cmVwYXksREM9bG9jYWyGLmh0dHA6Ly9kYi5jb3JlcGF5LmxvY2FsL0NlcnRFbnJv
+bGwvY2VydHNydi5jcmwwEAYJKwYBBAGCNxUBBAMCAQQwIwYJKwYBBAGCNxUCBBYE
+FM3r10wtDTVPs+2DJZQeyk9I0AugMA0GCSqGSIb3DQEBBQUAA4IBAQBt0BXnWj1q
+rqX0Axf+9XyZ7gvvIJgCWgNm4TwdlLombUHGHHceOVSNSo8GCSrTfPZLJbXXm5c9
+v/psE0ydF3KT9esduRW6yO8XUP1CEXPvr0j3WzW/oRPYYvpTswwy6NuaWoJYBnL/
+IRpuNMSkhd4a5+QWFoyC2GrFm/Hkgk9Xj+s6kekUDgHsOIIBbJOS1hRq5x9VhZXR
+WyME6iXZfIDjXY9nf7RdTi0c+GU3HOcleohk07VJZ4v0N6POIwkk+0JYLeke86Oy
+uCj5rNwwy2dzCK1e8ZMI4XYrmUlx/ewZyI2N9u9R0IueK1xUDrK3Qw3gCIWDKC+Z
+Sg7amSpWXqj3MQA=
+
+2026-07-29 12:27:52,929 - serial_number: 11779
+2026-07-29 12:27:53,100 - pin: OUHF2X RET: <?xml version = "1.0" encoding = "windows-1251"?><Response><Result>OK</Result><code>0</code><CERTDATA>MIIJZwYJKoZIhvcNAQcCoIIJWDCCCVQCAQExADALBgkqhkiG9w0BBwGgggk8MIIE
+4zCCA8ugAwIBAgIKYQNrDwAEAAAuAzANBgkqhkiG9w0BAQUFADBCMRUwEwYKCZIm
+iZPyLGQBGRYFbG9jYWwxFzAVBgoJkiaJk/IsZAEZFgdjb3JlcGF5MRAwDgYDVQQD
+EwdjZXJ0c3J2MB4XDTI2MDcyOTA5MTc1MloXDTI3MDcyOTA5Mjc1MlowgZcxCzAJ
+BgNVBAYTAnJ1MQwwCgYDVQQIEwNtc2sxDTALBgNVBAcTBDIxMDcxDDAKBgNVBAoT
+AzIyMzENMAsGA1UECxMEOTkwNDEpMCcGA1UEAxMgQTk5RDJGMTgwMDFFQ0M5M0RG
+NUNCRTI3RjQ0MkM4RkExIzAhBgkqhkiG9w0BCQEWFDEudGVybWluYWxAZm9ycGF5
+LnJ1MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDZC9t0VVQVMcIOicNyrsuW
+bR08GoMuxn71EKbvXm8ryDt0BMCHy0sOOmBr7XR1Gt2f0uoTGqrNBaZVs5brAUHi
+RMNFc3GQ9NU93FiKKRs6qZrpU0GGi+d2FE6ZZHpU4zhkumkA40ZxLtk9+LaG8NKP
+VX/uVqhmirDNRmdEbqXi8QIDAQABo4ICBzCCAgMwHQYDVR0OBBYEFFkJj5fJ2n9t
+7wljfn1dPyFj5/kWMAsGA1UdDwQEAwIBhjAfBgNVHSMEGDAWgBTrnqs1A2Kmmx4L
+vpkTSjQN4SL0SjCBsQYDVR0fBIGpMIGmMIGjoIGgoIGdhmtsZGFwOi8vL0NOPWNl
+cnRzcnYsQ049ZGIsQ049Q0RQLENOPVB1YmxpYyUyMEtleSUyMFNlcnZpY2VzLENO
+PVNlcnZpY2VzLENOPUNvbmZpZ3VyYXRpb24sREM9Y29yZXBheSxEQz1sb2NhbIYu
+aHR0cDovL2RiLmNvcmVwYXkubG9jYWwvQ2VydEVucm9sbC9jZXJ0c3J2LmNybDCB
+0wYIKwYBBQUHAQEEgcYwgcMwcQYIKwYBBQUHMAKGZWxkYXA6Ly8vQ049Y2VydHNy
+dixDTj1BSUEsQ049UHVibGljJTIwS2V5JTIwU2VydmljZXMsQ049U2VydmljZXMs
+Q049Q29uZmlndXJhdGlvbixEQz1jb3JlcGF5LERDPWxvY2FsME4GCCsGAQUFBzAC
+hkJodHRwOi8vZGIuY29yZXBheS5sb2NhbC9DZXJ0RW5yb2xsL2RiLmNvcmVwYXku
+bG9jYWxfY2VydHNydigxKS5jcnQwGQYJKwYBBAGCNxQCBAweCgBTAHUAYgBDAEEw
+DwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQUFAAOCAQEAe64h9Yx+Sp1XlWQw
+7Z9petI+r3EqU/ARFCBdvANc4SpLCeBgb18XbMif1Gq9a4VPJRPkwIkN9Yk7TUHJ
+Tj7+5WN2WdM3IEadS2Gk+uF3BBBmHkWW6OP1RkFqH4tJsJAoqBKjUKTy3RUof3ML
+MRp555OiEKNbb5ygUyhwVKqTgzmSH7kQwyBHlTUkLg9l5l6ZDe3/uMD+tzu8WMP1
+0aknTp3+iA9SuISn2Pyq16WdEsQS0PZ7IyHBNhofzvRCZOTbTc6z84QlN+QQmfrY
+X/8jzbIA+4yczQIqF+SQjKdDc5QBWUrufEEeghoxgqysaileEv4TFJ48zgtOGsEO
+hxNnKTCCBFEwggM5oAMCAQICEAS4EZREPJaST6e/JyTVv1owDQYJKoZIhvcNAQEF
+BQAwQjEVMBMGCgmSJomT8ixkARkWBWxvY2FsMRcwFQYKCZImiZPyLGQBGRYHY29y
+ZXBheTEQMA4GA1UEAxMHY2VydHNydjAeFw0wNjA0MTIxMDQyMDBaFw0zMDAzMTIx
+MTUxMjdaMEIxFTATBgoJkiaJk/IsZAEZFgVsb2NhbDEXMBUGCgmSJomT8ixkARkW
+B2NvcmVwYXkxEDAOBgNVBAMTB2NlcnRzcnYwggEiMA0GCSqGSIb3DQEBAQUAA4IB
+DwAwggEKAoIBAQDrTqaXcKOfni+/t0y4hUu5cBAnZNoOaFYb0i8PLOt7tTSInj6i
+rjwOgt8QX+y930xAypbiTicakjs+KPm8YLA1g6qj++KoZpRzU9GutRgElsGWzZs6
+OaXzDy9TTl+V4kVn7uzLA5vVf9UiEGvSenmJcl+IIiRLywrlLG9F/XEEnTfXyvkj
+M4hURJIvj3/MQ6s1+5xB0pLwdzFmSHwBQE/btKWPcpt1Q9lqIpLrDn4WYm6Y/+Mh
+iNSaof8lzGibp3BKhJOiEY92jV8PURB43uMIH8v4rUejQq269PFC3BHOn++Y8Rec
+rByzAg6aXRGbNZEWSsliGk6Ha4QgfsAyCKxJAgMBAAGjggFBMIIBPTATBgkrBgEE
+AYI3FAIEBh4EAEMAQTALBgNVHQ8EBAMCAYYwDwYDVR0TAQH/BAUwAwEB/zAdBgNV
+HQ4EFgQU656rNQNippseC76ZE0o0DeEi9EowgbEGA1UdHwSBqTCBpjCBo6CBoKCB
+nYZrbGRhcDovLy9DTj1jZXJ0c3J2LENOPWRiLENOPUNEUCxDTj1QdWJsaWMlMjBL
+ZXklMjBTZXJ2aWNlcyxDTj1TZXJ2aWNlcyxDTj1Db25maWd1cmF0aW9uLERDPWNv
+cmVwYXksREM9bG9jYWyGLmh0dHA6Ly9kYi5jb3JlcGF5LmxvY2FsL0NlcnRFbnJv
+bGwvY2VydHNydi5jcmwwEAYJKwYBBAGCNxUBBAMCAQQwIwYJKwYBBAGCNxUCBBYE
+FM3r10wtDTVPs+2DJZQeyk9I0AugMA0GCSqGSIb3DQEBBQUAA4IBAQBt0BXnWj1q
+rqX0Axf+9XyZ7gvvIJgCWgNm4TwdlLombUHGHHceOVSNSo8GCSrTfPZLJbXXm5c9
+v/psE0ydF3KT9esduRW6yO8XUP1CEXPvr0j3WzW/oRPYYvpTswwy6NuaWoJYBnL/
+IRpuNMSkhd4a5+QWFoyC2GrFm/Hkgk9Xj+s6kekUDgHsOIIBbJOS1hRq5x9VhZXR
+WyME6iXZfIDjXY9nf7RdTi0c+GU3HOcleohk07VJZ4v0N6POIwkk+0JYLeke86Oy
+uCj5rNwwy2dzCK1e8ZMI4XYrmUlx/ewZyI2N9u9R0IueK1xUDrK3Qw3gCIWDKC+Z
+Sg7amSpWXqj3MQA=
+</CERTDATA></Response>
+2026-07-29 12:27:53,100 - RET: <?xml version = "1.0" encoding = "windows-1251"?><Response><Result>OK</Result><code>0</code><CERTDATA>MIIJZwYJKoZIhvcNAQcCoIIJWDCCCVQCAQExADALBgkqhkiG9w0BBwGgggk8MIIE
+4zCCA8ugAwIBAgIKYQNrDwAEAAAuAzANBgkqhkiG9w0BAQUFADBCMRUwEwYKCZIm
+iZPyLGQBGRYFbG9jYWwxFzAVBgoJkiaJk/IsZAEZFgdjb3JlcGF5MRAwDgYDVQQD
+EwdjZXJ0c3J2MB4XDTI2MDcyOTA5MTc1MloXDTI3MDcyOTA5Mjc1MlowgZcxCzAJ
+BgNVBAYTAnJ1MQwwCgYDVQQIEwNtc2sxDTALBgNVBAcTBDIxMDcxDDAKBgNVBAoT
+AzIyMzENMAsGA1UECxMEOTkwNDEpMCcGA1UEAxMgQTk5RDJGMTgwMDFFQ0M5M0RG
+NUNCRTI3RjQ0MkM4RkExIzAhBgkqhkiG9w0BCQEWFDEudGVybWluYWxAZm9ycGF5
+LnJ1MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDZC9t0VVQVMcIOicNyrsuW
+bR08GoMuxn71EKbvXm8ryDt0BMCHy0sOOmBr7XR1Gt2f0uoTGqrNBaZVs5brAUHi
+RMNFc3GQ9NU93FiKKRs6qZrpU0GGi+d2FE6ZZHpU4zhkumkA40ZxLtk9+LaG8NKP
+VX/uVqhmirDNRmdEbqXi8QIDAQABo4ICBzCCAgMwHQYDVR0OBBYEFFkJj5fJ2n9t
+7wljfn1dPyFj5/kWMAsGA1UdDwQEAwIBhjAfBgNVHSMEGDAWgBTrnqs1A2Kmmx4L
+vpkTSjQN4SL0SjCBsQYDVR0fBIGpMIGmMIGjoIGgoIGdhmtsZGFwOi8vL0NOPWNl
+cnRzcnYsQ049ZGIsQ049Q0RQLENOPVB1YmxpYyUyMEtleSUyMFNlcnZpY2VzLENO
+PVNlcnZpY2VzLENOPUNvbmZpZ3VyYXRpb24sREM9Y29yZXBheSxEQz1sb2NhbIYu
+aHR0cDovL2RiLmNvcmVwYXkubG9jYWwvQ2VydEVucm9sbC9jZXJ0c3J2LmNybDCB
+0wYIKwYBBQUHAQEEgcYwgcMwcQYIKwYBBQUHMAKGZWxkYXA6Ly8vQ049Y2VydHNy
+dixDTj1BSUEsQ049UHVibGljJTIwS2V5JTIwU2VydmljZXMsQ049U2VydmljZXMs
+Q049Q29uZmlndXJhdGlvbixEQz1jb3JlcGF5LERDPWxvY2FsME4GCCsGAQUFBzAC
+hkJodHRwOi8vZGIuY29yZXBheS5sb2NhbC9DZXJ0RW5yb2xsL2RiLmNvcmVwYXku
+bG9jYWxfY2VydHNydigxKS5jcnQwGQYJKwYBBAGCNxQCBAweCgBTAHUAYgBDAEEw
+DwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQUFAAOCAQEAe64h9Yx+Sp1XlWQw
+7Z9petI+r3EqU/ARFCBdvANc4SpLCeBgb18XbMif1Gq9a4VPJRPkwIkN9Yk7TUHJ
+Tj7+5WN2WdM3IEadS2Gk+uF3BBBmHkWW6OP1RkFqH4tJsJAoqBKjUKTy3RUof3ML
+MRp555OiEKNbb5ygUyhwVKqTgzmSH7kQwyBHlTUkLg9l5l6ZDe3/uMD+tzu8WMP1
+0aknTp3+iA9SuISn2Pyq16WdEsQS0PZ7IyHBNhofzvRCZOTbTc6z84QlN+QQmfrY
+X/8jzbIA+4yczQIqF+SQjKdDc5QBWUrufEEeghoxgqysaileEv4TFJ48zgtOGsEO
+hxNnKTCCBFEwggM5oAMCAQICEAS4EZREPJaST6e/JyTVv1owDQYJKoZIhvcNAQEF
+BQAwQjEVMBMGCgmSJomT8ixkARkWBWxvY2FsMRcwFQYKCZImiZPyLGQBGRYHY29y
+ZXBheTEQMA4GA1UEAxMHY2VydHNydjAeFw0wNjA0MTIxMDQyMDBaFw0zMDAzMTIx
+MTUxMjdaMEIxFTATBgoJkiaJk/IsZAEZFgVsb2NhbDEXMBUGCgmSJomT8ixkARkW
+B2NvcmVwYXkxEDAOBgNVBAMTB2NlcnRzcnYwggEiMA0GCSqGSIb3DQEBAQUAA4IB
+DwAwggEKAoIBAQDrTqaXcKOfni+/t0y4hUu5cBAnZNoOaFYb0i8PLOt7tTSInj6i
+rjwOgt8QX+y930xAypbiTicakjs+KPm8YLA1g6qj++KoZpRzU9GutRgElsGWzZs6
+OaXzDy9TTl+V4kVn7uzLA5vVf9UiEGvSenmJcl+IIiRLywrlLG9F/XEEnTfXyvkj
+M4hURJIvj3/MQ6s1+5xB0pLwdzFmSHwBQE/btKWPcpt1Q9lqIpLrDn4WYm6Y/+Mh
+iNSaof8lzGibp3BKhJOiEY92jV8PURB43uMIH8v4rUejQq269PFC3BHOn++Y8Rec
+rByzAg6aXRGbNZEWSsliGk6Ha4QgfsAyCKxJAgMBAAGjggFBMIIBPTATBgkrBgEE
+AYI3FAIEBh4EAEMAQTALBgNVHQ8EBAMCAYYwDwYDVR0TAQH/BAUwAwEB/zAdBgNV
+HQ4EFgQU656rNQNippseC76ZE0o0DeEi9EowgbEGA1UdHwSBqTCBpjCBo6CBoKCB
+nYZrbGRhcDovLy9DTj1jZXJ0c3J2LENOPWRiLENOPUNEUCxDTj1QdWJsaWMlMjBL
+ZXklMjBTZXJ2aWNlcyxDTj1TZXJ2aWNlcyxDTj1Db25maWd1cmF0aW9uLERDPWNv
+cmVwYXksREM9bG9jYWyGLmh0dHA6Ly9kYi5jb3JlcGF5LmxvY2FsL0NlcnRFbnJv
+bGwvY2VydHNydi5jcmwwEAYJKwYBBAGCNxUBBAMCAQQwIwYJKwYBBAGCNxUCBBYE
+FM3r10wtDTVPs+2DJZQeyk9I0AugMA0GCSqGSIb3DQEBBQUAA4IBAQBt0BXnWj1q
+rqX0Axf+9XyZ7gvvIJgCWgNm4TwdlLombUHGHHceOVSNSo8GCSrTfPZLJbXXm5c9
+v/psE0ydF3KT9esduRW6yO8XUP1CEXPvr0j3WzW/oRPYYvpTswwy6NuaWoJYBnL/
+IRpuNMSkhd4a5+QWFoyC2GrFm/Hkgk9Xj+s6kekUDgHsOIIBbJOS1hRq5x9VhZXR
+WyME6iXZfIDjXY9nf7RdTi0c+GU3HOcleohk07VJZ4v0N6POIwkk+0JYLeke86Oy
+uCj5rNwwy2dzCK1e8ZMI4XYrmUlx/ewZyI2N9u9R0IueK1xUDrK3Qw3gCIWDKC+Z
+Sg7amSpWXqj3MQA=
+</CERTDATA></Response>
+2026-07-29 12:37:00,650 - Приложение завершается.
+2026-07-29 12:51:07,836 - CASerial: 4E6A2E9ABFBE189E423FE1BDD554D1ED
+2026-07-29 12:51:08,070 - Приложение запущено.
+2026-07-29 12:51:08,226 - /certificates/Dispatcher.ashx?function=check&pin=P43KT8&tosign=TUI9MSAxMjExMDUxMjEyMTg1MDV8Q1BVPTEgQkZFQkZCRkYwMDAyMDZBNw==
+2026-07-29 12:51:08,226 - check
+2026-07-29 12:51:08,429 - EXEC SP: certman_front_auth_new
+2026-07-29 12:51:08,460 - ok
+2026-07-29 12:51:08,475 - tosign ...
+2026-07-29 12:51:08,475 - _tohash: MB=1 121105121218505|CPU=1 BFEBFBFF000206A7EtranSignOK
+2026-07-29 12:51:08,475 - md5hash: C195AAE14A75A922EADECB6DBF16E1F5
+2026-07-29 12:51:08,475 - RET: <catype>SubCA</catype><prov>Microsoft Enhanced Cryptographic Provider v1.0</prov><dn>CN=25493610,O=389,OU=106,S=msk,C=ru,L=948,E=1.terminal@forpay.ru</dn><pin>P43KT8</pin><sign>C195AAE14A75A922EADECB6DBF16E1F5</sign>
+2026-07-29 12:51:09,349 - /certificates/Dispatcher.ashx?function=setup&pin=P43KT8&cpserial=C195AAE14A75A922EADECB6DBF16E1F5
+2026-07-29 12:51:09,365 - START SETUP PIN: P43KT8
+2026-07-29 12:51:09,380 - GetCertificate login:  pwd:  pin: P43KT8 pkcs10: MIIC6TCCAlICAQAwgZUxIzAhBgkqhkiG9w0BCQEWFDEudGVybWluYWxAZm9ycGF5
+LnJ1MQwwCgYDVQQHDAM5NDgxCzAJBgNVBAYTAnJ1MQwwCgYDVQQIDANtc2sxDDAK
+BgNVBAsMAzEwNjEMMAoGA1UECgwDMzg5MSkwJwYDVQQDDCBDMTk1QUFFMTRBNzVB
+OTIyRUFERUNCNkRCRjE2RTFGNTCBnzANBgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEA
+uuKEIciTNbz8MOO7nPUaebQQkilHIlQH8vJDieCOqPskyM2WBKkOo1EJnaf6mFmT
+RnUDP8B3n5CtM+efGSMPaDus/qpwn6uUXY2nDBHNqWsnBPRY1h0CrKeT887uBi/t
+4LCGPmRxEIInIVCuG/EewsGJVyJbByLRPqGUGl3wY+8CAwEAAaCCAREwGgYKKwYB
+BAGCNw0CAzEMFgo2LjEuNzYwMS4yMD0GCSsGAQQBgjcVFDEwMC4CAQUMBzMwLdCf
+0JoMCjMwLdCf0JpcMzAMFFBsYXRlcnJhVGVybWluYWwuZXhlMD4GCSqGSIb3DQEJ
+DjExMC8wHQYDVR0OBBYEFNzFjj5YSNUkZ27fgw97N23s/qMoMA4GA1UdDwEB/wQE
+AwIFIDB0BgorBgEEAYI3DQICMWYwZAIBAR5cAE0AaQBjAHIAbwBzAG8AZgB0ACAA
+RQBuAGgAYQBuAGMAZQBkACAAQwByAHkAcAB0AG8AZwByAGEAcABoAGkAYwAgAFAA
+cgBvAHYAaQBkAGUAcgAgAHYAMQAuADADAQAwDQYJKoZIhvcNAQEFBQADgYEAYxHr
+Pi9c2tqWx+3617n/u0PsWRxtXZgGgwLDlBxsPLwiyZT0mD22uOMJYvX6THIjkeNK
+BICyOP7RIm8vEvDp/Ri7O8WfGE9pnN2sXd+vQsPoO9bAkuGxmf6CJN/XXPG6NEPL
+qSDv7F9HdL+7GY9sBjnWT6srdk4lNec378kGpbc=
+ cpserial: C195AAE14A75A922EADECB6DBF16E1F5 tosign: 
+2026-07-29 12:51:09,380 - EXEC SP: certman_front_auth3
+2026-07-29 12:51:09,380 - GetCertificate db_res: ok
+2026-07-29 12:51:09,380 - CACertIssue START...
+2026-07-29 12:51:09,396 - config: db.corepay.local\certsrv
+2026-07-29 12:51:09,489 - result submit: 3
+2026-07-29 12:51:09,505 - cert: MIIJZQYJKoZIhvcNAQcCoIIJVjCCCVICAQExADALBgkqhkiG9w0BBwGgggk6MIIE
+4TCCA8mgAwIBAgIKYRi7+AAEAAAuBDANBgkqhkiG9w0BAQUFADBCMRUwEwYKCZIm
+iZPyLGQBGRYFbG9jYWwxFzAVBgoJkiaJk/IsZAEZFgdjb3JlcGF5MRAwDgYDVQQD
+EwdjZXJ0c3J2MB4XDTI2MDcyOTA5NDEwOVoXDTI3MDcyOTA5NTEwOVowgZUxCzAJ
+BgNVBAYTAnJ1MQwwCgYDVQQIEwNtc2sxDDAKBgNVBAcTAzk0ODEMMAoGA1UEChMD
+Mzg5MQwwCgYDVQQLEwMxMDYxKTAnBgNVBAMTIEMxOTVBQUUxNEE3NUE5MjJFQURF
+Q0I2REJGMTZFMUY1MSMwIQYJKoZIhvcNAQkBFhQxLnRlcm1pbmFsQGZvcnBheS5y
+dTCBnzANBgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEAuuKEIciTNbz8MOO7nPUaebQQ
+kilHIlQH8vJDieCOqPskyM2WBKkOo1EJnaf6mFmTRnUDP8B3n5CtM+efGSMPaDus
+/qpwn6uUXY2nDBHNqWsnBPRY1h0CrKeT887uBi/t4LCGPmRxEIInIVCuG/EewsGJ
+VyJbByLRPqGUGl3wY+8CAwEAAaOCAgcwggIDMB0GA1UdDgQWBBTcxY4+WEjVJGdu
+34MPezdt7P6jKDALBgNVHQ8EBAMCAYYwHwYDVR0jBBgwFoAU656rNQNippseC76Z
+E0o0DeEi9EowgbEGA1UdHwSBqTCBpjCBo6CBoKCBnYZrbGRhcDovLy9DTj1jZXJ0
+c3J2LENOPWRiLENOPUNEUCxDTj1QdWJsaWMlMjBLZXklMjBTZXJ2aWNlcyxDTj1T
+ZXJ2aWNlcyxDTj1Db25maWd1cmF0aW9uLERDPWNvcmVwYXksREM9bG9jYWyGLmh0
+dHA6Ly9kYi5jb3JlcGF5LmxvY2FsL0NlcnRFbnJvbGwvY2VydHNydi5jcmwwgdMG
+CCsGAQUFBwEBBIHGMIHDMHEGCCsGAQUFBzAChmVsZGFwOi8vL0NOPWNlcnRzcnYs
+Q049QUlBLENOPVB1YmxpYyUyMEtleSUyMFNlcnZpY2VzLENOPVNlcnZpY2VzLENO
+PUNvbmZpZ3VyYXRpb24sREM9Y29yZXBheSxEQz1sb2NhbDBOBggrBgEFBQcwAoZC
+aHR0cDovL2RiLmNvcmVwYXkubG9jYWwvQ2VydEVucm9sbC9kYi5jb3JlcGF5Lmxv
+Y2FsX2NlcnRzcnYoMSkuY3J0MBkGCSsGAQQBgjcUAgQMHgoAUwB1AGIAQwBBMA8G
+A1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQEFBQADggEBAHBmADgB7NGzordRZQs2
+5477Yuv7456UH2LBgznKz1WRaaHEKt8fhGcoEBjTwYQmfo4F7CXQph3BWudxshfM
+viLw3dl0psIiDV+PmTKy821k3Lv2nReIGcm19ZRqG4xToCfzHEjGZTfP4osslFbu
+833ncP0av7pp2bijyFWfzI6GRYoS/c95Zxlu66Wx1uXo2VvnS0RKtQOybtnbuZcz
+FST+opGiBbhsDDwBx7c5WN03z6xmHF1rRTXofsDV5EwgcWcAfv+lBDcZazsnbi0/
+AMqshYyoBqyqilCHSgEYbae37GoVN5DJwFuipmMhPBrkKv81elv47QnYlifMfjhv
+YTcwggRRMIIDOaADAgECAhAEuBGURDyWkk+nvyck1b9aMA0GCSqGSIb3DQEBBQUA
+MEIxFTATBgoJkiaJk/IsZAEZFgVsb2NhbDEXMBUGCgmSJomT8ixkARkWB2NvcmVw
+YXkxEDAOBgNVBAMTB2NlcnRzcnYwHhcNMDYwNDEyMTA0MjAwWhcNMzAwMzEyMTE1
+MTI3WjBCMRUwEwYKCZImiZPyLGQBGRYFbG9jYWwxFzAVBgoJkiaJk/IsZAEZFgdj
+b3JlcGF5MRAwDgYDVQQDEwdjZXJ0c3J2MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A
+MIIBCgKCAQEA606ml3Cjn54vv7dMuIVLuXAQJ2TaDmhWG9IvDyzre7U0iJ4+oq48
+DoLfEF/svd9MQMqW4k4nGpI7Pij5vGCwNYOqo/viqGaUc1PRrrUYBJbBls2bOjml
+8w8vU05fleJFZ+7sywOb1X/VIhBr0np5iXJfiCIkS8sK5SxvRf1xBJ0318r5IzOI
+VESSL49/zEOrNfucQdKS8HcxZkh8AUBP27Slj3KbdUPZaiKS6w5+FmJumP/jIYjU
+mqH/Jcxom6dwSoSTohGPdo1fD1EQeN7jCB/L+K1Ho0KtuvTxQtwRzp/vmPEXnKwc
+swIOml0RmzWRFkrJYhpOh2uEIH7AMgisSQIDAQABo4IBQTCCAT0wEwYJKwYBBAGC
+NxQCBAYeBABDAEEwCwYDVR0PBAQDAgGGMA8GA1UdEwEB/wQFMAMBAf8wHQYDVR0O
+BBYEFOueqzUDYqabHgu+mRNKNA3hIvRKMIGxBgNVHR8EgakwgaYwgaOggaCggZ2G
+a2xkYXA6Ly8vQ049Y2VydHNydixDTj1kYixDTj1DRFAsQ049UHVibGljJTIwS2V5
+JTIwU2VydmljZXMsQ049U2VydmljZXMsQ049Q29uZmlndXJhdGlvbixEQz1jb3Jl
+cGF5LERDPWxvY2Fshi5odHRwOi8vZGIuY29yZXBheS5sb2NhbC9DZXJ0RW5yb2xs
+L2NlcnRzcnYuY3JsMBAGCSsGAQQBgjcVAQQDAgEEMCMGCSsGAQQBgjcVAgQWBBTN
+69dMLQ01T7PtgyWUHspPSNALoDANBgkqhkiG9w0BAQUFAAOCAQEAbdAV51o9aq6l
+9AMX/vV8me4L7yCYAloDZuE8HZS6Jm1Bxhx3HjlUjUqPBgkq03z2SyW115uXPb/6
+bBNMnRdyk/XrHbkVusjvF1D9QhFz769I91s1v6ET2GL6U7MMMujbmlqCWAZy/yEa
+bjTEpIXeGufkFhaMgthqxZvx5IJPV4/rOpHpFA4B7DiCAWyTktYUaucfVYWV0Vsj
+BOol2XyA412PZ3+0XU4tHPhlNxznJXqIZNO1SWeL9DejziMJJPtCWC3pHvOjsrgo
++azcMMtncwitXvGTCOF2K5lJcf3sGciNjfbvUdCLnitcVA6yt0MN4AiFgygvmUoO
+2pkqVl6o9zEA
+
+2026-07-29 12:51:09,521 - serial_number: 11780
+2026-07-29 12:51:09,536 - pin: P43KT8 RET: <?xml version = "1.0" encoding = "windows-1251"?><Response><Result>OK</Result><code>0</code><CERTDATA>MIIJZQYJKoZIhvcNAQcCoIIJVjCCCVICAQExADALBgkqhkiG9w0BBwGgggk6MIIE
+4TCCA8mgAwIBAgIKYRi7+AAEAAAuBDANBgkqhkiG9w0BAQUFADBCMRUwEwYKCZIm
+iZPyLGQBGRYFbG9jYWwxFzAVBgoJkiaJk/IsZAEZFgdjb3JlcGF5MRAwDgYDVQQD
+EwdjZXJ0c3J2MB4XDTI2MDcyOTA5NDEwOVoXDTI3MDcyOTA5NTEwOVowgZUxCzAJ
+BgNVBAYTAnJ1MQwwCgYDVQQIEwNtc2sxDDAKBgNVBAcTAzk0ODEMMAoGA1UEChMD
+Mzg5MQwwCgYDVQQLEwMxMDYxKTAnBgNVBAMTIEMxOTVBQUUxNEE3NUE5MjJFQURF
+Q0I2REJGMTZFMUY1MSMwIQYJKoZIhvcNAQkBFhQxLnRlcm1pbmFsQGZvcnBheS5y
+dTCBnzANBgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEAuuKEIciTNbz8MOO7nPUaebQQ
+kilHIlQH8vJDieCOqPskyM2WBKkOo1EJnaf6mFmTRnUDP8B3n5CtM+efGSMPaDus
+/qpwn6uUXY2nDBHNqWsnBPRY1h0CrKeT887uBi/t4LCGPmRxEIInIVCuG/EewsGJ
+VyJbByLRPqGUGl3wY+8CAwEAAaOCAgcwggIDMB0GA1UdDgQWBBTcxY4+WEjVJGdu
+34MPezdt7P6jKDALBgNVHQ8EBAMCAYYwHwYDVR0jBBgwFoAU656rNQNippseC76Z
+E0o0DeEi9EowgbEGA1UdHwSBqTCBpjCBo6CBoKCBnYZrbGRhcDovLy9DTj1jZXJ0
+c3J2LENOPWRiLENOPUNEUCxDTj1QdWJsaWMlMjBLZXklMjBTZXJ2aWNlcyxDTj1T
+ZXJ2aWNlcyxDTj1Db25maWd1cmF0aW9uLERDPWNvcmVwYXksREM9bG9jYWyGLmh0
+dHA6Ly9kYi5jb3JlcGF5LmxvY2FsL0NlcnRFbnJvbGwvY2VydHNydi5jcmwwgdMG
+CCsGAQUFBwEBBIHGMIHDMHEGCCsGAQUFBzAChmVsZGFwOi8vL0NOPWNlcnRzcnYs
+Q049QUlBLENOPVB1YmxpYyUyMEtleSUyMFNlcnZpY2VzLENOPVNlcnZpY2VzLENO
+PUNvbmZpZ3VyYXRpb24sREM9Y29yZXBheSxEQz1sb2NhbDBOBggrBgEFBQcwAoZC
+aHR0cDovL2RiLmNvcmVwYXkubG9jYWwvQ2VydEVucm9sbC9kYi5jb3JlcGF5Lmxv
+Y2FsX2NlcnRzcnYoMSkuY3J0MBkGCSsGAQQBgjcUAgQMHgoAUwB1AGIAQwBBMA8G
+A1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQEFBQADggEBAHBmADgB7NGzordRZQs2
+5477Yuv7456UH2LBgznKz1WRaaHEKt8fhGcoEBjTwYQmfo4F7CXQph3BWudxshfM
+viLw3dl0psIiDV+PmTKy821k3Lv2nReIGcm19ZRqG4xToCfzHEjGZTfP4osslFbu
+833ncP0av7pp2bijyFWfzI6GRYoS/c95Zxlu66Wx1uXo2VvnS0RKtQOybtnbuZcz
+FST+opGiBbhsDDwBx7c5WN03z6xmHF1rRTXofsDV5EwgcWcAfv+lBDcZazsnbi0/
+AMqshYyoBqyqilCHSgEYbae37GoVN5DJwFuipmMhPBrkKv81elv47QnYlifMfjhv
+YTcwggRRMIIDOaADAgECAhAEuBGURDyWkk+nvyck1b9aMA0GCSqGSIb3DQEBBQUA
+MEIxFTATBgoJkiaJk/IsZAEZFgVsb2NhbDEXMBUGCgmSJomT8ixkARkWB2NvcmVw
+YXkxEDAOBgNVBAMTB2NlcnRzcnYwHhcNMDYwNDEyMTA0MjAwWhcNMzAwMzEyMTE1
+MTI3WjBCMRUwEwYKCZImiZPyLGQBGRYFbG9jYWwxFzAVBgoJkiaJk/IsZAEZFgdj
+b3JlcGF5MRAwDgYDVQQDEwdjZXJ0c3J2MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A
+MIIBCgKCAQEA606ml3Cjn54vv7dMuIVLuXAQJ2TaDmhWG9IvDyzre7U0iJ4+oq48
+DoLfEF/svd9MQMqW4k4nGpI7Pij5vGCwNYOqo/viqGaUc1PRrrUYBJbBls2bOjml
+8w8vU05fleJFZ+7sywOb1X/VIhBr0np5iXJfiCIkS8sK5SxvRf1xBJ0318r5IzOI
+VESSL49/zEOrNfucQdKS8HcxZkh8AUBP27Slj3KbdUPZaiKS6w5+FmJumP/jIYjU
+mqH/Jcxom6dwSoSTohGPdo1fD1EQeN7jCB/L+K1Ho0KtuvTxQtwRzp/vmPEXnKwc
+swIOml0RmzWRFkrJYhpOh2uEIH7AMgisSQIDAQABo4IBQTCCAT0wEwYJKwYBBAGC
+NxQCBAYeBABDAEEwCwYDVR0PBAQDAgGGMA8GA1UdEwEB/wQFMAMBAf8wHQYDVR0O
+BBYEFOueqzUDYqabHgu+mRNKNA3hIvRKMIGxBgNVHR8EgakwgaYwgaOggaCggZ2G
+a2xkYXA6Ly8vQ049Y2VydHNydixDTj1kYixDTj1DRFAsQ049UHVibGljJTIwS2V5
+JTIwU2VydmljZXMsQ049U2VydmljZXMsQ049Q29uZmlndXJhdGlvbixEQz1jb3Jl
+cGF5LERDPWxvY2Fshi5odHRwOi8vZGIuY29yZXBheS5sb2NhbC9DZXJ0RW5yb2xs
+L2NlcnRzcnYuY3JsMBAGCSsGAQQBgjcVAQQDAgEEMCMGCSsGAQQBgjcVAgQWBBTN
+69dMLQ01T7PtgyWUHspPSNALoDANBgkqhkiG9w0BAQUFAAOCAQEAbdAV51o9aq6l
+9AMX/vV8me4L7yCYAloDZuE8HZS6Jm1Bxhx3HjlUjUqPBgkq03z2SyW115uXPb/6
+bBNMnRdyk/XrHbkVusjvF1D9QhFz769I91s1v6ET2GL6U7MMMujbmlqCWAZy/yEa
+bjTEpIXeGufkFhaMgthqxZvx5IJPV4/rOpHpFA4B7DiCAWyTktYUaucfVYWV0Vsj
+BOol2XyA412PZ3+0XU4tHPhlNxznJXqIZNO1SWeL9DejziMJJPtCWC3pHvOjsrgo
++azcMMtncwitXvGTCOF2K5lJcf3sGciNjfbvUdCLnitcVA6yt0MN4AiFgygvmUoO
+2pkqVl6o9zEA
+</CERTDATA></Response>
+2026-07-29 12:51:09,536 - RET: <?xml version = "1.0" encoding = "windows-1251"?><Response><Result>OK</Result><code>0</code><CERTDATA>MIIJZQYJKoZIhvcNAQcCoIIJVjCCCVICAQExADALBgkqhkiG9w0BBwGgggk6MIIE
+4TCCA8mgAwIBAgIKYRi7+AAEAAAuBDANBgkqhkiG9w0BAQUFADBCMRUwEwYKCZIm
+iZPyLGQBGRYFbG9jYWwxFzAVBgoJkiaJk/IsZAEZFgdjb3JlcGF5MRAwDgYDVQQD
+EwdjZXJ0c3J2MB4XDTI2MDcyOTA5NDEwOVoXDTI3MDcyOTA5NTEwOVowgZUxCzAJ
+BgNVBAYTAnJ1MQwwCgYDVQQIEwNtc2sxDDAKBgNVBAcTAzk0ODEMMAoGA1UEChMD
+Mzg5MQwwCgYDVQQLEwMxMDYxKTAnBgNVBAMTIEMxOTVBQUUxNEE3NUE5MjJFQURF
+Q0I2REJGMTZFMUY1MSMwIQYJKoZIhvcNAQkBFhQxLnRlcm1pbmFsQGZvcnBheS5y
+dTCBnzANBgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEAuuKEIciTNbz8MOO7nPUaebQQ
+kilHIlQH8vJDieCOqPskyM2WBKkOo1EJnaf6mFmTRnUDP8B3n5CtM+efGSMPaDus
+/qpwn6uUXY2nDBHNqWsnBPRY1h0CrKeT887uBi/t4LCGPmRxEIInIVCuG/EewsGJ
+VyJbByLRPqGUGl3wY+8CAwEAAaOCAgcwggIDMB0GA1UdDgQWBBTcxY4+WEjVJGdu
+34MPezdt7P6jKDALBgNVHQ8EBAMCAYYwHwYDVR0jBBgwFoAU656rNQNippseC76Z
+E0o0DeEi9EowgbEGA1UdHwSBqTCBpjCBo6CBoKCBnYZrbGRhcDovLy9DTj1jZXJ0
+c3J2LENOPWRiLENOPUNEUCxDTj1QdWJsaWMlMjBLZXklMjBTZXJ2aWNlcyxDTj1T
+ZXJ2aWNlcyxDTj1Db25maWd1cmF0aW9uLERDPWNvcmVwYXksREM9bG9jYWyGLmh0
+dHA6Ly9kYi5jb3JlcGF5LmxvY2FsL0NlcnRFbnJvbGwvY2VydHNydi5jcmwwgdMG
+CCsGAQUFBwEBBIHGMIHDMHEGCCsGAQUFBzAChmVsZGFwOi8vL0NOPWNlcnRzcnYs
+Q049QUlBLENOPVB1YmxpYyUyMEtleSUyMFNlcnZpY2VzLENOPVNlcnZpY2VzLENO
+PUNvbmZpZ3VyYXRpb24sREM9Y29yZXBheSxEQz1sb2NhbDBOBggrBgEFBQcwAoZC
+aHR0cDovL2RiLmNvcmVwYXkubG9jYWwvQ2VydEVucm9sbC9kYi5jb3JlcGF5Lmxv
+Y2FsX2NlcnRzcnYoMSkuY3J0MBkGCSsGAQQBgjcUAgQMHgoAUwB1AGIAQwBBMA8G
+A1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQEFBQADggEBAHBmADgB7NGzordRZQs2
+5477Yuv7456UH2LBgznKz1WRaaHEKt8fhGcoEBjTwYQmfo4F7CXQph3BWudxshfM
+viLw3dl0psIiDV+PmTKy821k3Lv2nReIGcm19ZRqG4xToCfzHEjGZTfP4osslFbu
+833ncP0av7pp2bijyFWfzI6GRYoS/c95Zxlu66Wx1uXo2VvnS0RKtQOybtnbuZcz
+FST+opGiBbhsDDwBx7c5WN03z6xmHF1rRTXofsDV5EwgcWcAfv+lBDcZazsnbi0/
+AMqshYyoBqyqilCHSgEYbae37GoVN5DJwFuipmMhPBrkKv81elv47QnYlifMfjhv
+YTcwggRRMIIDOaADAgECAhAEuBGURDyWkk+nvyck1b9aMA0GCSqGSIb3DQEBBQUA
+MEIxFTATBgoJkiaJk/IsZAEZFgVsb2NhbDEXMBUGCgmSJomT8ixkARkWB2NvcmVw
+YXkxEDAOBgNVBAMTB2NlcnRzcnYwHhcNMDYwNDEyMTA0MjAwWhcNMzAwMzEyMTE1
+MTI3WjBCMRUwEwYKCZImiZPyLGQBGRYFbG9jYWwxFzAVBgoJkiaJk/IsZAEZFgdj
+b3JlcGF5MRAwDgYDVQQDEwdjZXJ0c3J2MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A
+MIIBCgKCAQEA606ml3Cjn54vv7dMuIVLuXAQJ2TaDmhWG9IvDyzre7U0iJ4+oq48
+DoLfEF/svd9MQMqW4k4nGpI7Pij5vGCwNYOqo/viqGaUc1PRrrUYBJbBls2bOjml
+8w8vU05fleJFZ+7sywOb1X/VIhBr0np5iXJfiCIkS8sK5SxvRf1xBJ0318r5IzOI
+VESSL49/zEOrNfucQdKS8HcxZkh8AUBP27Slj3KbdUPZaiKS6w5+FmJumP/jIYjU
+mqH/Jcxom6dwSoSTohGPdo1fD1EQeN7jCB/L+K1Ho0KtuvTxQtwRzp/vmPEXnKwc
+swIOml0RmzWRFkrJYhpOh2uEIH7AMgisSQIDAQABo4IBQTCCAT0wEwYJKwYBBAGC
+NxQCBAYeBABDAEEwCwYDVR0PBAQDAgGGMA8GA1UdEwEB/wQFMAMBAf8wHQYDVR0O
+BBYEFOueqzUDYqabHgu+mRNKNA3hIvRKMIGxBgNVHR8EgakwgaYwgaOggaCggZ2G
+a2xkYXA6Ly8vQ049Y2VydHNydixDTj1kYixDTj1DRFAsQ049UHVibGljJTIwS2V5
+JTIwU2VydmljZXMsQ049U2VydmljZXMsQ049Q29uZmlndXJhdGlvbixEQz1jb3Jl
+cGF5LERDPWxvY2Fshi5odHRwOi8vZGIuY29yZXBheS5sb2NhbC9DZXJ0RW5yb2xs
+L2NlcnRzcnYuY3JsMBAGCSsGAQQBgjcVAQQDAgEEMCMGCSsGAQQBgjcVAgQWBBTN
+69dMLQ01T7PtgyWUHspPSNALoDANBgkqhkiG9w0BAQUFAAOCAQEAbdAV51o9aq6l
+9AMX/vV8me4L7yCYAloDZuE8HZS6Jm1Bxhx3HjlUjUqPBgkq03z2SyW115uXPb/6
+bBNMnRdyk/XrHbkVusjvF1D9QhFz769I91s1v6ET2GL6U7MMMujbmlqCWAZy/yEa
+bjTEpIXeGufkFhaMgthqxZvx5IJPV4/rOpHpFA4B7DiCAWyTktYUaucfVYWV0Vsj
+BOol2XyA412PZ3+0XU4tHPhlNxznJXqIZNO1SWeL9DejziMJJPtCWC3pHvOjsrgo
++azcMMtncwitXvGTCOF2K5lJcf3sGciNjfbvUdCLnitcVA6yt0MN4AiFgygvmUoO
+2pkqVl6o9zEA
+</CERTDATA></Response>
+2026-07-29 13:12:05,677 - Приложение завершается.
+2026-07-29 13:42:05,798 - CASerial: 4E6A2E9ABFBE189E423FE1BDD554D1ED
+2026-07-29 13:42:05,845 - Приложение запущено.
+2026-07-29 13:42:05,845 - /certificates/Dispatcher.ashx?function=check&pin=R41WB5&tosign=TUI9MSBEZWZhdWx0IHN0cmluZ3xDUFU9MSBCRkVCRkJGRjAwMDMwNjc4
+2026-07-29 13:42:05,845 - check
+2026-07-29 13:42:05,876 - EXEC SP: certman_front_auth_new
+2026-07-29 13:42:05,923 - ok
+2026-07-29 13:42:05,923 - tosign ...
+2026-07-29 13:42:05,923 - _tohash: MB=1 Default string|CPU=1 BFEBFBFF00030678EtranSignOK
+2026-07-29 13:42:05,923 - md5hash: AE386143FBD78BBFBABFF4B72A84ED5A
+2026-07-29 13:42:05,923 - RET: <catype>SubCA</catype><prov>Microsoft Enhanced Cryptographic Provider v1.0</prov><dn>CN=22222989,O=339,OU=6285,S=msk,C=ru,L=2732,E=1.terminal@forpay.ru</dn><pin>R41WB5</pin><sign>AE386143FBD78BBFBABFF4B72A84ED5A</sign>
+2026-07-29 13:42:07,156 - /certificates/Dispatcher.ashx?function=setup&pin=R41WB5&cpserial=AE386143FBD78BBFBABFF4B72A84ED5A
+2026-07-29 13:42:07,187 - START SETUP PIN: R41WB5
+2026-07-29 13:42:07,187 - GetCertificate login:  pwd:  pin: R41WB5 pkcs10: MIIC7zCCAlgCAQAwgZcxIzAhBgkqhkiG9w0BCQEWFDEudGVybWluYWxAZm9ycGF5
+LnJ1MQ0wCwYDVQQHDAQyNzMyMQswCQYDVQQGEwJydTEMMAoGA1UECAwDbXNrMQ0w
+CwYDVQQLDAQ2Mjg1MQwwCgYDVQQKDAMzMzkxKTAnBgNVBAMMIEFFMzg2MTQzRkJE
+NzhCQkZCQUJGRjRCNzJBODRFRDVBMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKB
+gQDkwIoD5gHQkQMishv6suIibfRQsqGLNT1CKjdJazQoLI/gadHItRQcB4xECatR
+dnrVYoKDP4Pnfv+h6FsSaTJCS9DjMJ6CR7buS1CN4I52QPRL9WS1azGaOHcVcKrF
+unsom7StKZJD99u+XMKabxvSFiTa+R67gxdkf3iQt853sQIDAQABoIIBFTAaBgor
+BgEEAYI3DQIDMQwWCjYuMi45MjAwLjIwPgYJKoZIhvcNAQkOMTEwLzAdBgNVHQ4E
+FgQUhPYuLgE86F/xdxyKYPo3tv75/vowDgYDVR0PAQH/BAQDAgUgMEEGCSsGAQQB
+gjcVFDE0MDICAQUMCFZpb2xhbnRhDA1WSU9MQU5UQVxVc2VyDBRQbGF0ZXJyYVRl
+cm1pbmFsLmV4ZTB0BgorBgEEAYI3DQICMWYwZAIBAR5cAE0AaQBjAHIAbwBzAG8A
+ZgB0ACAARQBuAGgAYQBuAGMAZQBkACAAQwByAHkAcAB0AG8AZwByAGEAcABoAGkA
+YwAgAFAAcgBvAHYAaQBkAGUAcgAgAHYAMQAuADADAQAwDQYJKoZIhvcNAQEFBQAD
+gYEApMJjMakT00b/s8FetYhIV/RdbAsuSAXPhdMp+y3z2GmMOGBm5hliBX5Vexy5
+47qv4tIcN+uu35zpKShslNCp+FIqh0dseP9nOCTSJu9ViMFfMtPu2ZNbcxFoJ40E
+98TIvJr9F9BGKa1WwEFNQQFYYAedWUo6ar3prIkvbV59Cu8=
+ cpserial: AE386143FBD78BBFBABFF4B72A84ED5A tosign: 
+2026-07-29 13:42:07,187 - EXEC SP: certman_front_auth3
+2026-07-29 13:42:07,234 - GetCertificate db_res: ok
+2026-07-29 13:42:07,234 - CACertIssue START...
+2026-07-29 13:42:07,234 - config: db.corepay.local\certsrv
+2026-07-29 13:42:07,436 - result submit: 3
+2026-07-29 13:42:07,468 - cert: MIIJZwYJKoZIhvcNAQcCoIIJWDCCCVQCAQExADALBgkqhkiG9w0BBwGgggk8MIIE
+4zCCA8ugAwIBAgIKYUdlWAAEAAAuBTANBgkqhkiG9w0BAQUFADBCMRUwEwYKCZIm
+iZPyLGQBGRYFbG9jYWwxFzAVBgoJkiaJk/IsZAEZFgdjb3JlcGF5MRAwDgYDVQQD
+EwdjZXJ0c3J2MB4XDTI2MDcyOTEwMzIwN1oXDTI3MDcyOTEwNDIwN1owgZcxCzAJ
+BgNVBAYTAnJ1MQwwCgYDVQQIEwNtc2sxDTALBgNVBAcTBDI3MzIxDDAKBgNVBAoT
+AzMzOTENMAsGA1UECxMENjI4NTEpMCcGA1UEAxMgQUUzODYxNDNGQkQ3OEJCRkJB
+QkZGNEI3MkE4NEVENUExIzAhBgkqhkiG9w0BCQEWFDEudGVybWluYWxAZm9ycGF5
+LnJ1MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDkwIoD5gHQkQMishv6suIi
+bfRQsqGLNT1CKjdJazQoLI/gadHItRQcB4xECatRdnrVYoKDP4Pnfv+h6FsSaTJC
+S9DjMJ6CR7buS1CN4I52QPRL9WS1azGaOHcVcKrFunsom7StKZJD99u+XMKabxvS
+FiTa+R67gxdkf3iQt853sQIDAQABo4ICBzCCAgMwHQYDVR0OBBYEFIT2Li4BPOhf
+8XccimD6N7b++f76MAsGA1UdDwQEAwIBhjAfBgNVHSMEGDAWgBTrnqs1A2Kmmx4L
+vpkTSjQN4SL0SjCBsQYDVR0fBIGpMIGmMIGjoIGgoIGdhmtsZGFwOi8vL0NOPWNl
+cnRzcnYsQ049ZGIsQ049Q0RQLENOPVB1YmxpYyUyMEtleSUyMFNlcnZpY2VzLENO
+PVNlcnZpY2VzLENOPUNvbmZpZ3VyYXRpb24sREM9Y29yZXBheSxEQz1sb2NhbIYu
+aHR0cDovL2RiLmNvcmVwYXkubG9jYWwvQ2VydEVucm9sbC9jZXJ0c3J2LmNybDCB
+0wYIKwYBBQUHAQEEgcYwgcMwcQYIKwYBBQUHMAKGZWxkYXA6Ly8vQ049Y2VydHNy
+dixDTj1BSUEsQ049UHVibGljJTIwS2V5JTIwU2VydmljZXMsQ049U2VydmljZXMs
+Q049Q29uZmlndXJhdGlvbixEQz1jb3JlcGF5LERDPWxvY2FsME4GCCsGAQUFBzAC
+hkJodHRwOi8vZGIuY29yZXBheS5sb2NhbC9DZXJ0RW5yb2xsL2RiLmNvcmVwYXku
+bG9jYWxfY2VydHNydigxKS5jcnQwGQYJKwYBBAGCNxQCBAweCgBTAHUAYgBDAEEw
+DwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQUFAAOCAQEAIccas93TK2vE8UHy
+kgV7wbKCSLQCEq5YHeCTQm6l/lRgPQD6nYSxgLdkJWUwPGfNr1RQ+Kg+bLcCJTIr
+0NZazozJjbi1CbGrc8nNMV/Nu2EofGnubJrlILu6c0EtbztLfcFhm0ia17R80oA/
+g1pBldbrgDb9ad2yrsdBte4OUEnCDTpf/uQVOhcfnFpKq6IEOJ8lB2/2kZN4Vtmd
+I+kYKjCbCFakMcitavlozOYiZ7PAR7ajJDrQGAerwPdij/mlOFbPDua7HRXDSWyC
+i6nyRAzwlzYXHhPkz1Ec12WCtMFL88/AvGj2cfzmKvY6WgbwmGJy7HP19iVw1plN
+6IqlcDCCBFEwggM5oAMCAQICEAS4EZREPJaST6e/JyTVv1owDQYJKoZIhvcNAQEF
+BQAwQjEVMBMGCgmSJomT8ixkARkWBWxvY2FsMRcwFQYKCZImiZPyLGQBGRYHY29y
+ZXBheTEQMA4GA1UEAxMHY2VydHNydjAeFw0wNjA0MTIxMDQyMDBaFw0zMDAzMTIx
+MTUxMjdaMEIxFTATBgoJkiaJk/IsZAEZFgVsb2NhbDEXMBUGCgmSJomT8ixkARkW
+B2NvcmVwYXkxEDAOBgNVBAMTB2NlcnRzcnYwggEiMA0GCSqGSIb3DQEBAQUAA4IB
+DwAwggEKAoIBAQDrTqaXcKOfni+/t0y4hUu5cBAnZNoOaFYb0i8PLOt7tTSInj6i
+rjwOgt8QX+y930xAypbiTicakjs+KPm8YLA1g6qj++KoZpRzU9GutRgElsGWzZs6
+OaXzDy9TTl+V4kVn7uzLA5vVf9UiEGvSenmJcl+IIiRLywrlLG9F/XEEnTfXyvkj
+M4hURJIvj3/MQ6s1+5xB0pLwdzFmSHwBQE/btKWPcpt1Q9lqIpLrDn4WYm6Y/+Mh
+iNSaof8lzGibp3BKhJOiEY92jV8PURB43uMIH8v4rUejQq269PFC3BHOn++Y8Rec
+rByzAg6aXRGbNZEWSsliGk6Ha4QgfsAyCKxJAgMBAAGjggFBMIIBPTATBgkrBgEE
+AYI3FAIEBh4EAEMAQTALBgNVHQ8EBAMCAYYwDwYDVR0TAQH/BAUwAwEB/zAdBgNV
+HQ4EFgQU656rNQNippseC76ZE0o0DeEi9EowgbEGA1UdHwSBqTCBpjCBo6CBoKCB
+nYZrbGRhcDovLy9DTj1jZXJ0c3J2LENOPWRiLENOPUNEUCxDTj1QdWJsaWMlMjBL
+ZXklMjBTZXJ2aWNlcyxDTj1TZXJ2aWNlcyxDTj1Db25maWd1cmF0aW9uLERDPWNv
+cmVwYXksREM9bG9jYWyGLmh0dHA6Ly9kYi5jb3JlcGF5LmxvY2FsL0NlcnRFbnJv
+bGwvY2VydHNydi5jcmwwEAYJKwYBBAGCNxUBBAMCAQQwIwYJKwYBBAGCNxUCBBYE
+FM3r10wtDTVPs+2DJZQeyk9I0AugMA0GCSqGSIb3DQEBBQUAA4IBAQBt0BXnWj1q
+rqX0Axf+9XyZ7gvvIJgCWgNm4TwdlLombUHGHHceOVSNSo8GCSrTfPZLJbXXm5c9
+v/psE0ydF3KT9esduRW6yO8XUP1CEXPvr0j3WzW/oRPYYvpTswwy6NuaWoJYBnL/
+IRpuNMSkhd4a5+QWFoyC2GrFm/Hkgk9Xj+s6kekUDgHsOIIBbJOS1hRq5x9VhZXR
+WyME6iXZfIDjXY9nf7RdTi0c+GU3HOcleohk07VJZ4v0N6POIwkk+0JYLeke86Oy
+uCj5rNwwy2dzCK1e8ZMI4XYrmUlx/ewZyI2N9u9R0IueK1xUDrK3Qw3gCIWDKC+Z
+Sg7amSpWXqj3MQA=
+
+2026-07-29 13:42:07,468 - serial_number: 11781
+2026-07-29 13:42:07,577 - pin: R41WB5 RET: <?xml version = "1.0" encoding = "windows-1251"?><Response><Result>OK</Result><code>0</code><CERTDATA>MIIJZwYJKoZIhvcNAQcCoIIJWDCCCVQCAQExADALBgkqhkiG9w0BBwGgggk8MIIE
+4zCCA8ugAwIBAgIKYUdlWAAEAAAuBTANBgkqhkiG9w0BAQUFADBCMRUwEwYKCZIm
+iZPyLGQBGRYFbG9jYWwxFzAVBgoJkiaJk/IsZAEZFgdjb3JlcGF5MRAwDgYDVQQD
+EwdjZXJ0c3J2MB4XDTI2MDcyOTEwMzIwN1oXDTI3MDcyOTEwNDIwN1owgZcxCzAJ
+BgNVBAYTAnJ1MQwwCgYDVQQIEwNtc2sxDTALBgNVBAcTBDI3MzIxDDAKBgNVBAoT
+AzMzOTENMAsGA1UECxMENjI4NTEpMCcGA1UEAxMgQUUzODYxNDNGQkQ3OEJCRkJB
+QkZGNEI3MkE4NEVENUExIzAhBgkqhkiG9w0BCQEWFDEudGVybWluYWxAZm9ycGF5
+LnJ1MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDkwIoD5gHQkQMishv6suIi
+bfRQsqGLNT1CKjdJazQoLI/gadHItRQcB4xECatRdnrVYoKDP4Pnfv+h6FsSaTJC
+S9DjMJ6CR7buS1CN4I52QPRL9WS1azGaOHcVcKrFunsom7StKZJD99u+XMKabxvS
+FiTa+R67gxdkf3iQt853sQIDAQABo4ICBzCCAgMwHQYDVR0OBBYEFIT2Li4BPOhf
+8XccimD6N7b++f76MAsGA1UdDwQEAwIBhjAfBgNVHSMEGDAWgBTrnqs1A2Kmmx4L
+vpkTSjQN4SL0SjCBsQYDVR0fBIGpMIGmMIGjoIGgoIGdhmtsZGFwOi8vL0NOPWNl
+cnRzcnYsQ049ZGIsQ049Q0RQLENOPVB1YmxpYyUyMEtleSUyMFNlcnZpY2VzLENO
+PVNlcnZpY2VzLENOPUNvbmZpZ3VyYXRpb24sREM9Y29yZXBheSxEQz1sb2NhbIYu
+aHR0cDovL2RiLmNvcmVwYXkubG9jYWwvQ2VydEVucm9sbC9jZXJ0c3J2LmNybDCB
+0wYIKwYBBQUHAQEEgcYwgcMwcQYIKwYBBQUHMAKGZWxkYXA6Ly8vQ049Y2VydHNy
+dixDTj1BSUEsQ049UHVibGljJTIwS2V5JTIwU2VydmljZXMsQ049U2VydmljZXMs
+Q049Q29uZmlndXJhdGlvbixEQz1jb3JlcGF5LERDPWxvY2FsME4GCCsGAQUFBzAC
+hkJodHRwOi8vZGIuY29yZXBheS5sb2NhbC9DZXJ0RW5yb2xsL2RiLmNvcmVwYXku
+bG9jYWxfY2VydHNydigxKS5jcnQwGQYJKwYBBAGCNxQCBAweCgBTAHUAYgBDAEEw
+DwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQUFAAOCAQEAIccas93TK2vE8UHy
+kgV7wbKCSLQCEq5YHeCTQm6l/lRgPQD6nYSxgLdkJWUwPGfNr1RQ+Kg+bLcCJTIr
+0NZazozJjbi1CbGrc8nNMV/Nu2EofGnubJrlILu6c0EtbztLfcFhm0ia17R80oA/
+g1pBldbrgDb9ad2yrsdBte4OUEnCDTpf/uQVOhcfnFpKq6IEOJ8lB2/2kZN4Vtmd
+I+kYKjCbCFakMcitavlozOYiZ7PAR7ajJDrQGAerwPdij/mlOFbPDua7HRXDSWyC
+i6nyRAzwlzYXHhPkz1Ec12WCtMFL88/AvGj2cfzmKvY6WgbwmGJy7HP19iVw1plN
+6IqlcDCCBFEwggM5oAMCAQICEAS4EZREPJaST6e/JyTVv1owDQYJKoZIhvcNAQEF
+BQAwQjEVMBMGCgmSJomT8ixkARkWBWxvY2FsMRcwFQYKCZImiZPyLGQBGRYHY29y
+ZXBheTEQMA4GA1UEAxMHY2VydHNydjAeFw0wNjA0MTIxMDQyMDBaFw0zMDAzMTIx
+MTUxMjdaMEIxFTATBgoJkiaJk/IsZAEZFgVsb2NhbDEXMBUGCgmSJomT8ixkARkW
+B2NvcmVwYXkxEDAOBgNVBAMTB2NlcnRzcnYwggEiMA0GCSqGSIb3DQEBAQUAA4IB
+DwAwggEKAoIBAQDrTqaXcKOfni+/t0y4hUu5cBAnZNoOaFYb0i8PLOt7tTSInj6i
+rjwOgt8QX+y930xAypbiTicakjs+KPm8YLA1g6qj++KoZpRzU9GutRgElsGWzZs6
+OaXzDy9TTl+V4kVn7uzLA5vVf9UiEGvSenmJcl+IIiRLywrlLG9F/XEEnTfXyvkj
+M4hURJIvj3/MQ6s1+5xB0pLwdzFmSHwBQE/btKWPcpt1Q9lqIpLrDn4WYm6Y/+Mh
+iNSaof8lzGibp3BKhJOiEY92jV8PURB43uMIH8v4rUejQq269PFC3BHOn++Y8Rec
+rByzAg6aXRGbNZEWSsliGk6Ha4QgfsAyCKxJAgMBAAGjggFBMIIBPTATBgkrBgEE
+AYI3FAIEBh4EAEMAQTALBgNVHQ8EBAMCAYYwDwYDVR0TAQH/BAUwAwEB/zAdBgNV
+HQ4EFgQU656rNQNippseC76ZE0o0DeEi9EowgbEGA1UdHwSBqTCBpjCBo6CBoKCB
+nYZrbGRhcDovLy9DTj1jZXJ0c3J2LENOPWRiLENOPUNEUCxDTj1QdWJsaWMlMjBL
+ZXklMjBTZXJ2aWNlcyxDTj1TZXJ2aWNlcyxDTj1Db25maWd1cmF0aW9uLERDPWNv
+cmVwYXksREM9bG9jYWyGLmh0dHA6Ly9kYi5jb3JlcGF5LmxvY2FsL0NlcnRFbnJv
+bGwvY2VydHNydi5jcmwwEAYJKwYBBAGCNxUBBAMCAQQwIwYJKwYBBAGCNxUCBBYE
+FM3r10wtDTVPs+2DJZQeyk9I0AugMA0GCSqGSIb3DQEBBQUAA4IBAQBt0BXnWj1q
+rqX0Axf+9XyZ7gvvIJgCWgNm4TwdlLombUHGHHceOVSNSo8GCSrTfPZLJbXXm5c9
+v/psE0ydF3KT9esduRW6yO8XUP1CEXPvr0j3WzW/oRPYYvpTswwy6NuaWoJYBnL/
+IRpuNMSkhd4a5+QWFoyC2GrFm/Hkgk9Xj+s6kekUDgHsOIIBbJOS1hRq5x9VhZXR
+WyME6iXZfIDjXY9nf7RdTi0c+GU3HOcleohk07VJZ4v0N6POIwkk+0JYLeke86Oy
+uCj5rNwwy2dzCK1e8ZMI4XYrmUlx/ewZyI2N9u9R0IueK1xUDrK3Qw3gCIWDKC+Z
+Sg7amSpWXqj3MQA=
+</CERTDATA></Response>
+2026-07-29 13:42:07,577 - RET: <?xml version = "1.0" encoding = "windows-1251"?><Response><Result>OK</Result><code>0</code><CERTDATA>MIIJZwYJKoZIhvcNAQcCoIIJWDCCCVQCAQExADALBgkqhkiG9w0BBwGgggk8MIIE
+4zCCA8ugAwIBAgIKYUdlWAAEAAAuBTANBgkqhkiG9w0BAQUFADBCMRUwEwYKCZIm
+iZPyLGQBGRYFbG9jYWwxFzAVBgoJkiaJk/IsZAEZFgdjb3JlcGF5MRAwDgYDVQQD
+EwdjZXJ0c3J2MB4XDTI2MDcyOTEwMzIwN1oXDTI3MDcyOTEwNDIwN1owgZcxCzAJ
+BgNVBAYTAnJ1MQwwCgYDVQQIEwNtc2sxDTALBgNVBAcTBDI3MzIxDDAKBgNVBAoT
+AzMzOTENMAsGA1UECxMENjI4NTEpMCcGA1UEAxMgQUUzODYxNDNGQkQ3OEJCRkJB
+QkZGNEI3MkE4NEVENUExIzAhBgkqhkiG9w0BCQEWFDEudGVybWluYWxAZm9ycGF5
+LnJ1MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDkwIoD5gHQkQMishv6suIi
+bfRQsqGLNT1CKjdJazQoLI/gadHItRQcB4xECatRdnrVYoKDP4Pnfv+h6FsSaTJC
+S9DjMJ6CR7buS1CN4I52QPRL9WS1azGaOHcVcKrFunsom7StKZJD99u+XMKabxvS
+FiTa+R67gxdkf3iQt853sQIDAQABo4ICBzCCAgMwHQYDVR0OBBYEFIT2Li4BPOhf
+8XccimD6N7b++f76MAsGA1UdDwQEAwIBhjAfBgNVHSMEGDAWgBTrnqs1A2Kmmx4L
+vpkTSjQN4SL0SjCBsQYDVR0fBIGpMIGmMIGjoIGgoIGdhmtsZGFwOi8vL0NOPWNl
+cnRzcnYsQ049ZGIsQ049Q0RQLENOPVB1YmxpYyUyMEtleSUyMFNlcnZpY2VzLENO
+PVNlcnZpY2VzLENOPUNvbmZpZ3VyYXRpb24sREM9Y29yZXBheSxEQz1sb2NhbIYu
+aHR0cDovL2RiLmNvcmVwYXkubG9jYWwvQ2VydEVucm9sbC9jZXJ0c3J2LmNybDCB
+0wYIKwYBBQUHAQEEgcYwgcMwcQYIKwYBBQUHMAKGZWxkYXA6Ly8vQ049Y2VydHNy
+dixDTj1BSUEsQ049UHVibGljJTIwS2V5JTIwU2VydmljZXMsQ049U2VydmljZXMs
+Q049Q29uZmlndXJhdGlvbixEQz1jb3JlcGF5LERDPWxvY2FsME4GCCsGAQUFBzAC
+hkJodHRwOi8vZGIuY29yZXBheS5sb2NhbC9DZXJ0RW5yb2xsL2RiLmNvcmVwYXku
+bG9jYWxfY2VydHNydigxKS5jcnQwGQYJKwYBBAGCNxQCBAweCgBTAHUAYgBDAEEw
+DwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQUFAAOCAQEAIccas93TK2vE8UHy
+kgV7wbKCSLQCEq5YHeCTQm6l/lRgPQD6nYSxgLdkJWUwPGfNr1RQ+Kg+bLcCJTIr
+0NZazozJjbi1CbGrc8nNMV/Nu2EofGnubJrlILu6c0EtbztLfcFhm0ia17R80oA/
+g1pBldbrgDb9ad2yrsdBte4OUEnCDTpf/uQVOhcfnFpKq6IEOJ8lB2/2kZN4Vtmd
+I+kYKjCbCFakMcitavlozOYiZ7PAR7ajJDrQGAerwPdij/mlOFbPDua7HRXDSWyC
+i6nyRAzwlzYXHhPkz1Ec12WCtMFL88/AvGj2cfzmKvY6WgbwmGJy7HP19iVw1plN
+6IqlcDCCBFEwggM5oAMCAQICEAS4EZREPJaST6e/JyTVv1owDQYJKoZIhvcNAQEF
+BQAwQjEVMBMGCgmSJomT8ixkARkWBWxvY2FsMRcwFQYKCZImiZPyLGQBGRYHY29y
+ZXBheTEQMA4GA1UEAxMHY2VydHNydjAeFw0wNjA0MTIxMDQyMDBaFw0zMDAzMTIx
+MTUxMjdaMEIxFTATBgoJkiaJk/IsZAEZFgVsb2NhbDEXMBUGCgmSJomT8ixkARkW
+B2NvcmVwYXkxEDAOBgNVBAMTB2NlcnRzcnYwggEiMA0GCSqGSIb3DQEBAQUAA4IB
+DwAwggEKAoIBAQDrTqaXcKOfni+/t0y4hUu5cBAnZNoOaFYb0i8PLOt7tTSInj6i
+rjwOgt8QX+y930xAypbiTicakjs+KPm8YLA1g6qj++KoZpRzU9GutRgElsGWzZs6
+OaXzDy9TTl+V4kVn7uzLA5vVf9UiEGvSenmJcl+IIiRLywrlLG9F/XEEnTfXyvkj
+M4hURJIvj3/MQ6s1+5xB0pLwdzFmSHwBQE/btKWPcpt1Q9lqIpLrDn4WYm6Y/+Mh
+iNSaof8lzGibp3BKhJOiEY92jV8PURB43uMIH8v4rUejQq269PFC3BHOn++Y8Rec
+rByzAg6aXRGbNZEWSsliGk6Ha4QgfsAyCKxJAgMBAAGjggFBMIIBPTATBgkrBgEE
+AYI3FAIEBh4EAEMAQTALBgNVHQ8EBAMCAYYwDwYDVR0TAQH/BAUwAwEB/zAdBgNV
+HQ4EFgQU656rNQNippseC76ZE0o0DeEi9EowgbEGA1UdHwSBqTCBpjCBo6CBoKCB
+nYZrbGRhcDovLy9DTj1jZXJ0c3J2LENOPWRiLENOPUNEUCxDTj1QdWJsaWMlMjBL
+ZXklMjBTZXJ2aWNlcyxDTj1TZXJ2aWNlcyxDTj1Db25maWd1cmF0aW9uLERDPWNv
+cmVwYXksREM9bG9jYWyGLmh0dHA6Ly9kYi5jb3JlcGF5LmxvY2FsL0NlcnRFbnJv
+bGwvY2VydHNydi5jcmwwEAYJKwYBBAGCNxUBBAMCAQQwIwYJKwYBBAGCNxUCBBYE
+FM3r10wtDTVPs+2DJZQeyk9I0AugMA0GCSqGSIb3DQEBBQUAA4IBAQBt0BXnWj1q
+rqX0Axf+9XyZ7gvvIJgCWgNm4TwdlLombUHGHHceOVSNSo8GCSrTfPZLJbXXm5c9
+v/psE0ydF3KT9esduRW6yO8XUP1CEXPvr0j3WzW/oRPYYvpTswwy6NuaWoJYBnL/
+IRpuNMSkhd4a5+QWFoyC2GrFm/Hkgk9Xj+s6kekUDgHsOIIBbJOS1hRq5x9VhZXR
+WyME6iXZfIDjXY9nf7RdTi0c+GU3HOcleohk07VJZ4v0N6POIwkk+0JYLeke86Oy
+uCj5rNwwy2dzCK1e8ZMI4XYrmUlx/ewZyI2N9u9R0IueK1xUDrK3Qw3gCIWDKC+Z
+Sg7amSpWXqj3MQA=
+</CERTDATA></Response>
+2026-07-29 13:42:58,198 - /certificates/Dispatcher.ashx?function=check&pin=R41WB5&tosign=TUI9MSBEZWZhdWx0IHN0cmluZ3xDUFU9MSBCRkVCRkJGRjAwMDMwNjc4
+2026-07-29 13:42:58,214 - check
+2026-07-29 13:42:58,214 - EXEC SP: certman_front_auth_new
+2026-07-29 13:42:58,214 - RET: сертификат установлен или отозван
+2026-07-29 14:03:06,295 - Приложение завершается.
