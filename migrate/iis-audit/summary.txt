@@ -1,0 +1,13 @@
+IIS inventory summary
+ComputerName: SRV08
+CollectedAt: 2026-07-29T10:21:13
+Sites: 3
+Applications: 49
+VirtualDirectories: 0
+AppPools: 13
+Certificates: 46
+RewriteRules(Global): 0
+RequestFiltering entries: 3
+HttpRedirect entries: 3
+Authorization entries: 3
+ARR entries: 1
