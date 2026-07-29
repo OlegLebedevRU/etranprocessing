@@ -1,0 +1,4 @@
+﻿"Name","Id","State","PhysicalPath","ApplicationPool"
+"Default Web Site","1","Started","%SystemDrive%\inetpub\wwwroot","DefaultAppPool"
+"etranprocessing.ru","2","Started","C:\ETRANPROCESSING","etranprocessing.ru"
+"ETRANPROCESSING.LOCAL","3","Started","C:\ETRANPROCESSING.LOCAL","ETRANPROCESSING.LOCAL"

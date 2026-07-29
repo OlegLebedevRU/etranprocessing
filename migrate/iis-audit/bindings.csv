@@ -1,0 +1,5 @@
+﻿"SiteName","Protocol","BindingInformation","IPAddress","Port","HostHeader","CertificateHash","CertificateStore","SslFlags"
+"Default Web Site","http","*:8080:","*","8080","",,"","0"
+"etranprocessing.ru","http","*:80:","*","80","",,"","0"
+"etranprocessing.ru","https","*:443:","*","443","",,"My","0"
+"ETRANPROCESSING.LOCAL","http","*:8081:","*","8081","",,"","0"
