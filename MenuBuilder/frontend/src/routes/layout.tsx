@@ -55,7 +55,7 @@ export default function AppLayout() {
           onClick={({ key }) => navigate(key === "terminals" ? "/" : `/${key}`)}
           items={[
             { key: "terminals", icon: <MobileOutlined />, label: "Терминалы" },
-            { key: "variants", icon: <AppstoreOutlined />, label: "Варианты" },
+            { key: "variants", icon: <AppstoreOutlined />, label: "Варианты меню" },
           ]}
         />
       </Sider>

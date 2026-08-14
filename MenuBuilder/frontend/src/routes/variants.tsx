@@ -249,7 +249,6 @@ export default function VariantsPage() {
       title: "TSP",
       dataIndex: "tsp_code",
       key: "tsp_code",
-      width: 50,
       render: (v: number) => <Tag color="blue" style={{ margin: 0, fontSize: 10 }}>{v}</Tag>,
     },
     {
@@ -270,14 +269,12 @@ export default function VariantsPage() {
       title: "₽",
       dataIndex: "price",
       key: "price",
-      width: 48,
       align: "right" as const,
       render: (v: number) => v ? <Text style={{ fontSize: 12 }}>{v}</Text> : <Text type="secondary" style={{ fontSize: 11 }}>—</Text>,
     },
     {
       title: "",
       key: "actions",
-      width: 48,
       render: (_: any, record: Service) => (
         <Space size={0}>
           <Button type="text" size="small" icon={<EditOutlined />} onClick={() => { setEditService(record); setServiceFormOpen(true); }} />
@@ -418,6 +415,7 @@ export default function VariantsPage() {
             rowKey="id"
             loading={servicesLoading}
             size="small"
+            tableLayout="auto"
             pagination={false}
             locale={{ emptyText: "Нет услуг" }}
           />

@@ -14,8 +14,6 @@ import {
   LinkOutlined,
   DisconnectOutlined,
   EditOutlined,
-  FolderOutlined,
-  AppstoreOutlined,
 } from "@ant-design/icons";
 import {
   getTerminals,
@@ -42,7 +40,6 @@ export default function TerminalsPage() {
   const [variants, setVariants] = useState<MenuVariant[]>([]);
   const [statsMap, setStatsMap] = useState<Record<number, VariantStats>>({});
 
-  // Modal
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTerminal, setModalTerminal] = useState<TerminalInfo | null>(null);
   const [modalVariantId, setModalVariantId] = useState<number | null>(null);
@@ -56,7 +53,6 @@ export default function TerminalsPage() {
       setTotal(termRes.data.total);
       setVariants(varRes.data);
 
-      // Load stats for variants that are bound to terminals (deduplicated)
       const boundVariantIds = [...new Set(termRes.data.items.filter(t => t.menu_variant_id).map(t => t.menu_variant_id!))];
       const newStats: Record<number, VariantStats> = {};
       await Promise.all(
@@ -115,29 +111,18 @@ export default function TerminalsPage() {
       title: "ID",
       dataIndex: "device_id",
       key: "device_id",
-      width: 52,
       render: (v: number) => <Text strong style={{ fontSize: 12 }}>{v}</Text>,
     },
     {
       title: "SN",
       dataIndex: "sn",
       key: "sn",
-      ellipsis: true,
       render: (v: string) => <Text code style={{ fontSize: 10 }}>{v}</Text>,
-    },
-    {
-      title: "Org",
-      dataIndex: "org_id",
-      key: "org_id",
-      width: 40,
-      align: "center" as const,
-      render: (v: number) => <Text style={{ fontSize: 12 }}>{v}</Text>,
     },
     {
       title: "",
       dataIndex: "is_active",
       key: "active",
-      width: 24,
       render: (v: boolean) => (
         <span style={{ color: v ? "#52c41a" : "#ff4d4f", fontSize: 14 }}>●</span>
       ),
@@ -153,9 +138,7 @@ export default function TerminalsPage() {
             <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>{record.menu_variant_name}</Tag>
             {stats && (
               <Text type="secondary" style={{ fontSize: 10, whiteSpace: "nowrap" }}>
-                <FolderOutlined style={{ fontSize: 10 }} />{stats.groups}
-                <span style={{ margin: "0 2px" }}>·</span>
-                <AppstoreOutlined style={{ fontSize: 10 }} />{stats.services}
+                Групп: {stats.groups} / Услуг: {stats.services}
               </Text>
             )}
           </Space>
@@ -165,7 +148,6 @@ export default function TerminalsPage() {
     {
       title: "",
       key: "actions",
-      width: 52,
       render: (_: any, record: TerminalInfo) => (
         <Space size={0}>
           <Button
@@ -197,6 +179,7 @@ export default function TerminalsPage() {
           rowKey="terminal_id"
           loading={loading}
           size="small"
+          tableLayout="auto"
           pagination={{
             current: page,
             pageSize,
@@ -223,7 +206,6 @@ export default function TerminalsPage() {
         {modalTerminal && (
           <div style={{ marginBottom: 10, fontSize: 12 }}>
             <p style={{ margin: "2px 0" }}><Text type="secondary">SN:</Text> <Text code style={{ fontSize: 11 }}>{modalTerminal.sn}</Text></p>
-            <p style={{ margin: "2px 0" }}><Text type="secondary">Org:</Text> {modalTerminal.org_id}</p>
             <p style={{ margin: "2px 0" }}>
               <Text type="secondary">Статус:</Text>{" "}
               {modalTerminal.is_active ? <Tag color="success" style={{ fontSize: 11 }}>Активен</Tag> : <Tag color="error" style={{ fontSize: 11 }}>Неактивен</Tag>}
