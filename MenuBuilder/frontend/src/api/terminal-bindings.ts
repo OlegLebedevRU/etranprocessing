@@ -1,11 +1,21 @@
 import client from "./client";
 
-export interface TerminalBinding {
-  id: number;
+export interface TerminalInfo {
+  terminal_id: number;
   device_id: number;
-  menu_variant_id: number;
+  sn: string;
+  org_id: number;
+  is_active: boolean;
+  binding_id: number | null;
+  menu_variant_id: number | null;
   menu_variant_name: string | null;
-  created_at: string;
+}
+
+export interface TerminalsResponse {
+  total: number;
+  page: number;
+  page_size: number;
+  items: TerminalInfo[];
 }
 
 export interface TerminalBindingCreate {
@@ -13,11 +23,11 @@ export interface TerminalBindingCreate {
   menu_variant_id: number;
 }
 
-export const getTerminalBindings = () =>
-  client.get<TerminalBinding[]>("/terminal-bindings");
+export const getTerminals = (page = 1, pageSize = 20) =>
+  client.get<TerminalsResponse>("/terminals", { params: { page, page_size: pageSize } });
 
 export const createOrUpdateBinding = (data: TerminalBindingCreate) =>
-  client.post<TerminalBinding>("/terminal-bindings", data);
+  client.post("/bindings", data);
 
-export const deleteBinding = (id: number) =>
-  client.delete(`/terminal-bindings/${id}`);
+export const deleteBinding = (bindingId: number) =>
+  client.delete(`/bindings/${bindingId}`);

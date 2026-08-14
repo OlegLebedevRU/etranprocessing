@@ -31,7 +31,7 @@ app.add_middleware(
 app.include_router(groups.router, prefix="/api/groups", tags=["groups"])
 app.include_router(services.router, prefix="/api/services", tags=["services"])
 app.include_router(menu_variants.router, prefix="/api/menu-variants", tags=["menu-variants"])
-app.include_router(terminal_bindings.router, prefix="/api/terminal-bindings", tags=["terminal-bindings"])
+app.include_router(terminal_bindings.router, prefix="/api", tags=["terminals"])
 
 
 def _build_menu_tree(groups_list, services_list):

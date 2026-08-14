@@ -2,73 +2,84 @@ import { useEffect, useState, useCallback } from "react";
 import {
   Button,
   Card,
-  Empty,
-  InputNumber,
   message,
-  Popconfirm,
+  Modal,
   Select,
   Space,
-  Spin,
   Table,
+  Tag,
   Typography,
 } from "antd";
-import { LinkOutlined, DeleteOutlined, PlusOutlined } from "@ant-design/icons";
+import { LinkOutlined, DisconnectOutlined } from "@ant-design/icons";
 import {
-  getTerminalBindings,
+  getTerminals,
   createOrUpdateBinding,
   deleteBinding,
-  TerminalBinding,
+  TerminalInfo,
 } from "../api/terminal-bindings";
 import { getMenuVariants, MenuVariant } from "../api/menu-variants";
 
 const { Title, Text } = Typography;
 
 export default function TerminalsPage() {
-  const [bindings, setBindings] = useState<TerminalBinding[]>([]);
-  const [variants, setVariants] = useState<MenuVariant[]>([]);
+  const [terminals, setTerminals] = useState<TerminalInfo[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(true);
+  const [variants, setVariants] = useState<MenuVariant[]>([]);
 
-  // Form state
-  const [deviceId, setDeviceId] = useState<number | null>(null);
-  const [selectedVariant, setSelectedVariant] = useState<number | null>(null);
-  const [attaching, setAttaching] = useState(false);
+  // Modal state
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalTerminal, setModalTerminal] = useState<TerminalInfo | null>(null);
+  const [modalVariantId, setModalVariantId] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  const load = useCallback(() => {
+  const load = useCallback(async () => {
     setLoading(true);
-    Promise.all([getTerminalBindings(), getMenuVariants()])
-      .then(([b, v]) => {
-        setBindings(b.data);
-        setVariants(v.data);
-      })
-      .catch(() => message.error("Ошибка загрузки"))
-      .finally(() => setLoading(false));
-  }, []);
+    try {
+      const [termRes, varRes] = await Promise.all([getTerminals(page, pageSize), getMenuVariants()]);
+      setTerminals(termRes.data.items);
+      setTotal(termRes.data.total);
+      setVariants(varRes.data);
+    } catch {
+      message.error("Ошибка загрузки");
+    } finally {
+      setLoading(false);
+    }
+  }, [page, pageSize]);
 
   useEffect(() => { load(); }, [load]);
 
-  const handleAttach = async () => {
-    if (!deviceId || !selectedVariant) {
-      message.warning("Укажите device_id и выберите вариант меню");
+  const openBindModal = (terminal: TerminalInfo) => {
+    setModalTerminal(terminal);
+    setModalVariantId(terminal.menu_variant_id);
+    setModalOpen(true);
+  };
+
+  const handleSave = async () => {
+    if (!modalTerminal || !modalVariantId) {
+      message.warning("Выберите вариант меню");
       return;
     }
-    setAttaching(true);
+    setSaving(true);
     try {
-      await createOrUpdateBinding({ device_id: deviceId, menu_variant_id: selectedVariant });
-      message.success(`Терминал ${deviceId} привязан`);
-      setDeviceId(null);
-      setSelectedVariant(null);
+      await createOrUpdateBinding({ device_id: modalTerminal.device_id, menu_variant_id: modalVariantId });
+      message.success(`Терминал ${modalTerminal.device_id} привязан`);
+      setModalOpen(false);
       load();
     } catch (e: any) {
       message.error(e.message);
     } finally {
-      setAttaching(false);
+      setSaving(false);
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleUnbind = async (terminal: TerminalInfo) => {
+    if (!terminal.binding_id) return;
     try {
-      await deleteBinding(id);
-      message.success("Привязка удалена");
+      await deleteBinding(terminal.binding_id);
+      message.success(`Привязка терминала ${terminal.device_id} снята`);
       load();
     } catch (e: any) {
       message.error(e.message);
@@ -80,32 +91,61 @@ export default function TerminalsPage() {
       title: "Device ID",
       dataIndex: "device_id",
       key: "device_id",
-      sorter: (a: TerminalBinding, b: TerminalBinding) => a.device_id - b.device_id,
+      width: 100,
+    },
+    {
+      title: "SN",
+      dataIndex: "sn",
+      key: "sn",
+      ellipsis: true,
+    },
+    {
+      title: "Org",
+      dataIndex: "org_id",
+      key: "org_id",
+      width: 60,
+    },
+    {
+      title: "Активен",
+      dataIndex: "is_active",
+      key: "is_active",
+      width: 90,
+      render: (v: boolean) => v ? <Tag color="green">Да</Tag> : <Tag color="red">Нет</Tag>,
     },
     {
       title: "Вариант меню",
-      dataIndex: "menu_variant_name",
-      key: "menu_variant_name",
-      render: (v: string | null) => v || "—",
-    },
-    {
-      title: "ID варианта",
-      dataIndex: "menu_variant_id",
-      key: "menu_variant_id",
+      key: "variant",
+      render: (_: any, record: TerminalInfo) =>
+        record.menu_variant_name ? (
+          <Tag color="blue">{record.menu_variant_name}</Tag>
+        ) : (
+          <Tag>Не привязан</Tag>
+        ),
     },
     {
       title: "",
       key: "actions",
-      width: 60,
-      render: (_: any, record: TerminalBinding) => (
-        <Popconfirm
-          title="Отвязать терминал?"
-          onConfirm={() => handleDelete(record.id)}
-          okText="Да"
-          cancelText="Нет"
-        >
-          <Button type="text" danger icon={<DeleteOutlined />} />
-        </Popconfirm>
+      width: 120,
+      render: (_: any, record: TerminalInfo) => (
+        <Space>
+          <Button
+            type="link"
+            size="small"
+            icon={<LinkOutlined />}
+            onClick={() => openBindModal(record)}
+          >
+            {record.binding_id ? "Изменить" : "Привязать"}
+          </Button>
+          {record.binding_id && (
+            <Button
+              type="link"
+              size="small"
+              danger
+              icon={<DisconnectOutlined />}
+              onClick={() => handleUnbind(record)}
+            />
+          )}
+        </Space>
       ),
     },
   ];
@@ -116,54 +156,58 @@ export default function TerminalsPage() {
         <Title level={3} style={{ margin: 0 }}>
           Терминалы
         </Title>
+        <Text type="secondary">{total} шт.</Text>
       </div>
 
-      <Card style={{ marginBottom: 16 }}>
-        <Title level={5} style={{ marginBottom: 12 }}>
-          <LinkOutlined /> Прикрепить терминал к меню
-        </Title>
-        <Space wrap>
-          <InputNumber
-            placeholder="Device ID"
-            value={deviceId}
-            onChange={(v) => setDeviceId(v)}
-            min={1}
-            style={{ width: 160 }}
-          />
+      <Card>
+        <Table
+          dataSource={terminals}
+          columns={columns}
+          rowKey="terminal_id"
+          loading={loading}
+          pagination={{
+            current: page,
+            pageSize,
+            total,
+            showSizeChanger: true,
+            pageSizeOptions: ["10", "20", "50", "100"],
+            onChange: (p, ps) => { setPage(p); setPageSize(ps); },
+          }}
+        />
+      </Card>
+
+      <Modal
+        title={`Терминал ${modalTerminal?.device_id}`}
+        open={modalOpen}
+        onCancel={() => setModalOpen(false)}
+        onOk={handleSave}
+        confirmLoading={saving}
+        okText="Прикрепить"
+        cancelText="Отмена"
+      >
+        {modalTerminal && (
+          <div style={{ marginBottom: 16 }}>
+            <p><Text type="secondary">SN:</Text> {modalTerminal.sn}</p>
+            <p><Text type="secondary">Org:</Text> {modalTerminal.org_id}</p>
+            <p>
+              <Text type="secondary">Статус:</Text>{" "}
+              {modalTerminal.is_active ? <Tag color="green">Активен</Tag> : <Tag color="red">Неактивен</Tag>}
+            </p>
+          </div>
+        )}
+        <div>
+          <Text strong style={{ display: "block", marginBottom: 8 }}>Вариант меню:</Text>
           <Select
-            placeholder="Вариант меню"
-            value={selectedVariant}
-            onChange={setSelectedVariant}
-            style={{ width: 280 }}
+            placeholder="Выберите вариант"
+            value={modalVariantId}
+            onChange={setModalVariantId}
+            style={{ width: "100%" }}
             options={variants.map((v) => ({ value: v.id, label: v.name }))}
             showSearch
             optionFilterProp="label"
           />
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            loading={attaching}
-            onClick={handleAttach}
-          >
-            Прикрепить
-          </Button>
-        </Space>
-      </Card>
-
-      <Card>
-        {loading ? (
-          <Spin style={{ display: "block", margin: "40px auto" }} />
-        ) : bindings.length === 0 ? (
-          <Empty description="Нет привязок" />
-        ) : (
-          <Table
-            dataSource={bindings}
-            columns={columns}
-            rowKey="id"
-            pagination={false}
-          />
-        )}
-      </Card>
+        </div>
+      </Modal>
     </>
   );
 }

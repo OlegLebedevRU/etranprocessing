@@ -95,3 +95,14 @@ class TerminalBindingRead(BaseModel):
 class TerminalBindingCreate(BaseModel):
     device_id: int
     menu_variant_id: int
+
+
+class TerminalInfo(BaseModel):
+    terminal_id: int
+    device_id: int
+    sn: str
+    org_id: int
+    is_active: bool
+    binding_id: int | None = None
+    menu_variant_id: int | None = None
+    menu_variant_name: str | None = None
