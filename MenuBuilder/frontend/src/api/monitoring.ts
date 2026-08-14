@@ -6,7 +6,15 @@ export interface MonitoringTerminal {
   sn: string;
   org_id: number;
   is_active: boolean;
-  slots: boolean[]; // 12 slots, 10-min each, last 2 hours
+  slots: boolean[];
+  lastnumconn: number;
+  validator_state: string;
+  validator_type: number;
+  cash_amount: number;
+  printer_state: string;
+  printer_fr: number;
+  printer_check_counter: number;
+  soft_version: string;
 }
 
 export interface MonitoringResponse {

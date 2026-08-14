@@ -134,8 +134,9 @@ async def get_stats(variant_id: int | None = None):
 
 @app.get("/api/monitoring")
 async def get_monitoring():
-    """Terminal monitoring: connection history from GateGauge records.
-    Returns last 2 hours in 10-min intervals (12 slots per terminal)."""
+    """Terminal monitoring: connection history + GateGauge data.
+    Returns last 2 hours in 10-min intervals (12 slots per terminal)
+    plus latest device state from gauge_data."""
     from datetime import datetime, timedelta, timezone
     from sqlalchemy import text
 
@@ -148,7 +149,7 @@ async def get_monitoring():
             text("SELECT id, device_id, sn, org_id, is_active FROM terminals ORDER BY device_id")
         )).fetchall()
 
-        # Get GateGauge records for last 2 hours
+        # Get GateGauge records for last 2 hours (for slots)
         records = (await session.execute(
             text("""
                 SELECT device_id, created_at
@@ -159,25 +160,68 @@ async def get_monitoring():
             {"start": start},
         )).fetchall()
 
-    # Build interval map: for each device, which 10-min slots have data
-    slot_duration = timedelta(minutes=10)
-    device_slots: dict[int, list[bool]] = {}
+        # Get latest gauge_data per terminal (for device state)
+        latest = (await session.execute(
+            text("""
+                SELECT DISTINCT ON (device_id) device_id, gauge_data
+                FROM gate_gauge_records
+                ORDER BY device_id, created_at DESC
+            """),
+        )).fetchall()
 
+    # Build latest gauge map
+    gauge_map: dict[int, dict] = {}
+    for r in latest:
+        gauge_map[r[0]] = r[1] if r[1] else {}
+
+    # Build interval map
+    device_slots: dict[int, list[bool]] = {}
     for r in records:
         dev_id = r[0]
         ts = r[1]
         if dev_id not in device_slots:
             device_slots[dev_id] = [False] * 12
-        # Which slot? 0 = oldest (2h ago), 11 = most recent
         delta = now - ts
         slot_index = 11 - int(delta.total_seconds() // 600)
         if 0 <= slot_index < 12:
             device_slots[dev_id][slot_index] = True
 
+    def fmt_soft_version(raw: str) -> str:
+        if not raw or raw == "0":
+            return "—"
+        if "." in raw:
+            return raw
+        if len(raw) > 2:
+            return raw[:-2] + "." + raw[-2:]
+        return "0." + raw.zfill(2)
+
     items = []
     for t in terminals:
         dev_id = t[1]
         slots = device_slots.get(dev_id, [False] * 12)
+        gauge = gauge_map.get(dev_id, {})
+
+        # lastnumconn: count trailing false in slots
+        lastnumconn = 0
+        for s in reversed(slots):
+            if not s:
+                lastnumconn += 1
+            else:
+                break
+
+        # Extract resource codes from gauge_data (keys are strings in JSONB)
+        def g(key: str) -> str:
+            return str(gauge.get(key, ""))
+
+        validator_type_raw = g("112")
+        # Resource 112 can be a name like "CCNET" or a numeric code
+        validator_type_map = {"WBA003": 1, "CCNET": 2, "ICT U70": 4}
+        validator_type = validator_type_map.get(validator_type_raw, 0)
+        try:
+            validator_type = int(validator_type_raw)
+        except (ValueError, TypeError):
+            pass  # keep mapped value
+
         items.append({
             "terminal_id": t[0],
             "device_id": dev_id,
@@ -185,6 +229,14 @@ async def get_monitoring():
             "org_id": t[3],
             "is_active": t[4],
             "slots": slots,
+            "lastnumconn": lastnumconn,
+            "validator_state": g("102"),
+            "validator_type": validator_type,
+            "cash_amount": int(g("109") or "0"),
+            "printer_state": g("121"),
+            "printer_fr": int(g("124") or "0"),
+            "printer_check_counter": int(g("120") or "0"),
+            "soft_version": fmt_soft_version(g("130")),
         })
 
     return {"start": start.isoformat(), "now": now.isoformat(), "items": items}
