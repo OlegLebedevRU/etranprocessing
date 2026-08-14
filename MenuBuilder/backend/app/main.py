@@ -130,3 +130,61 @@ async def get_stats(variant_id: int | None = None):
         "tsp_codes": tsp_count or 0,
         "avg_price": round(float(avg_price or 0), 2),
     }
+
+
+@app.get("/api/monitoring")
+async def get_monitoring():
+    """Terminal monitoring: connection history from GateGauge records.
+    Returns last 2 hours in 10-min intervals (12 slots per terminal)."""
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import text
+
+    now = datetime.now(timezone.utc)
+    start = now - timedelta(hours=2)
+
+    async with async_session() as session:
+        # Get all terminals
+        terminals = (await session.execute(
+            text("SELECT id, device_id, sn, org_id, is_active FROM terminals ORDER BY device_id")
+        )).fetchall()
+
+        # Get GateGauge records for last 2 hours
+        records = (await session.execute(
+            text("""
+                SELECT device_id, created_at
+                FROM gate_gauge_records
+                WHERE created_at >= :start
+                ORDER BY device_id, created_at
+            """),
+            {"start": start},
+        )).fetchall()
+
+    # Build interval map: for each device, which 10-min slots have data
+    slot_duration = timedelta(minutes=10)
+    device_slots: dict[int, list[bool]] = {}
+
+    for r in records:
+        dev_id = r[0]
+        ts = r[1]
+        if dev_id not in device_slots:
+            device_slots[dev_id] = [False] * 12
+        # Which slot? 0 = oldest (2h ago), 11 = most recent
+        delta = now - ts
+        slot_index = 11 - int(delta.total_seconds() // 600)
+        if 0 <= slot_index < 12:
+            device_slots[dev_id][slot_index] = True
+
+    items = []
+    for t in terminals:
+        dev_id = t[1]
+        slots = device_slots.get(dev_id, [False] * 12)
+        items.append({
+            "terminal_id": t[0],
+            "device_id": dev_id,
+            "sn": t[2],
+            "org_id": t[3],
+            "is_active": t[4],
+            "slots": slots,
+        })
+
+    return {"start": start.isoformat(), "now": now.isoformat(), "items": items}

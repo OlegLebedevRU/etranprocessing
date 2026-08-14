@@ -4,6 +4,7 @@ import { Layout, Menu, theme } from "antd";
 import {
   MobileOutlined,
   AppstoreOutlined,
+  DashboardOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
 } from "@ant-design/icons";
@@ -56,6 +57,7 @@ export default function AppLayout() {
           items={[
             { key: "terminals", icon: <MobileOutlined />, label: "Терминалы" },
             { key: "variants", icon: <AppstoreOutlined />, label: "Варианты меню" },
+            { key: "monitoring", icon: <DashboardOutlined />, label: "Мониторинг" },
           ]}
         />
       </Sider>
