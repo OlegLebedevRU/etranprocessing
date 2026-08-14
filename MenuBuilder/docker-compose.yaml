@@ -1,0 +1,32 @@
+services:
+  menubuilder-backend:
+    build: ./backend
+    container_name: menubuilder-backend
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://etran:etran@pg:5432/etranprocessing
+      - CORS_ORIGINS=["http://localhost:3000","https://dev.leo4.ru:4443"]
+    networks:
+      - pg_network
+      - menubuilder_net
+
+  menubuilder-frontend:
+    image: nginx:alpine
+    container_name: menubuilder-frontend
+    restart: always
+    ports:
+      - "3000:80"
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - menubuilder_net
+    depends_on:
+      - menubuilder-backend
+
+networks:
+  pg_network:
+    external: true
+    name: iot-rpc-rest-app_pg_network
+  menubuilder_net:
+    driver: bridge

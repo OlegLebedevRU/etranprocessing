@@ -1,0 +1,15 @@
+[Unit]
+Description=MenuBuilder FastAPI Backend
+After=network.target
+
+[Service]
+Type=simple
+User=user1
+WorkingDirectory=/home/user1/MenuBuilder/backend
+ExecStart=/home/user1/MenuBuilder/backend/venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+Environment=DATABASE_URL=postgresql+asyncpg://etran:etran@localhost:5432/etranprocessing
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,30 @@
+services:
+  processing-backend:
+    build: ./backend
+    container_name: processing-backend
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://etran:etran@pg:5432/etranprocessing
+    networks:
+      - pg_network
+      - processing_net
+
+  processing-frontend:
+    image: nginx:alpine
+    container_name: processing-frontend
+    restart: always
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - processing_net
+    depends_on:
+      - processing-backend
+
+networks:
+  pg_network:
+    external: true
+    name: iot-rpc-rest-app_pg_network
+  processing_net:
+    driver: bridge

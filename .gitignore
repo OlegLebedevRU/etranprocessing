@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+node_modules/
+.env
+.env.*
+!.env.example
+.mimocode/
+*.egg-info/
+dist/
+build/
+.DS_Store
+Thumbs.db
+*.log
+tmp_upload/
