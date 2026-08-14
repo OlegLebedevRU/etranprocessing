@@ -249,22 +249,35 @@ export default function VariantsPage() {
       title: "TSP",
       dataIndex: "tsp_code",
       key: "tsp_code",
-      width: 55,
-      render: (v: number) => <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>{v}</Tag>,
+      width: 50,
+      render: (v: number) => <Tag color="blue" style={{ margin: 0, fontSize: 10 }}>{v}</Tag>,
     },
-    { title: "Название", dataIndex: "name", key: "name", ellipsis: true },
-    { title: "Печать", dataIndex: "printname", key: "printname", ellipsis: true, render: (v: string | null) => v || "—" },
     {
-      title: "Цена",
+      title: "Название для кнопки",
+      dataIndex: "name",
+      key: "name",
+      ellipsis: true,
+      render: (v: string) => <Text style={{ fontSize: 12 }}>{v}</Text>,
+    },
+    {
+      title: "Наименование для чека",
+      dataIndex: "printname",
+      key: "printname",
+      ellipsis: true,
+      render: (v: string | null) => v ? <Text style={{ fontSize: 12 }}>{v}</Text> : <Text type="secondary" style={{ fontSize: 11 }}>—</Text>,
+    },
+    {
+      title: "₽",
       dataIndex: "price",
       key: "price",
-      width: 60,
-      render: (v: number) => v ? `${v}₽` : "—",
+      width: 48,
+      align: "right" as const,
+      render: (v: number) => v ? <Text style={{ fontSize: 12 }}>{v}</Text> : <Text type="secondary" style={{ fontSize: 11 }}>—</Text>,
     },
     {
       title: "",
       key: "actions",
-      width: 50,
+      width: 48,
       render: (_: any, record: Service) => (
         <Space size={0}>
           <Button type="text" size="small" icon={<EditOutlined />} onClick={() => { setEditService(record); setServiceFormOpen(true); }} />
@@ -283,7 +296,7 @@ export default function VariantsPage() {
         size="small"
         style={{ width: 180, flexShrink: 0, overflow: "auto" }}
         styles={{ body: { padding: "8px 6px" } }}
-        title={<Text strong style={{ fontSize: 12 }}>Варианты</Text>}
+        title={<Text strong style={{ fontSize: 12 }}>Варианты меню</Text>}
         extra={
           <Space size={0}>
             <Button type="text" size="small" icon={<PlusOutlined />} onClick={handleCreateVariant} />
@@ -390,7 +403,7 @@ export default function VariantsPage() {
         }
         extra={
           selectedGroup && (
-            <Button type="text" size="small" icon={<PlusOutlined />} onClick={() => { setEditService(null); setServiceFormOpen(true); }}>
+            <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => { setEditService(null); setServiceFormOpen(true); }}>
               Добавить
             </Button>
           )

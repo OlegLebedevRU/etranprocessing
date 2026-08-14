@@ -6,7 +6,6 @@ import {
   Modal,
   Select,
   Space,
-  Statistic,
   Table,
   Tag,
   Typography,
@@ -17,7 +16,6 @@ import {
   EditOutlined,
   FolderOutlined,
   AppstoreOutlined,
-  MobileOutlined,
 } from "@ant-design/icons";
 import {
   getTerminals,
@@ -30,9 +28,7 @@ import { getStats } from "../api/stats";
 
 const { Text } = Typography;
 
-interface VariantStat {
-  id: number;
-  name: string;
+interface VariantStats {
   groups: number;
   services: number;
 }
@@ -44,7 +40,7 @@ export default function TerminalsPage() {
   const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(true);
   const [variants, setVariants] = useState<MenuVariant[]>([]);
-  const [variantStats, setVariantStats] = useState<VariantStat[]>([]);
+  const [statsMap, setStatsMap] = useState<Record<number, VariantStats>>({});
 
   // Modal
   const [modalOpen, setModalOpen] = useState(false);
@@ -60,18 +56,19 @@ export default function TerminalsPage() {
       setTotal(termRes.data.total);
       setVariants(varRes.data);
 
-      // Load stats per variant
-      const stats = await Promise.all(
-        varRes.data.map(async (v) => {
+      // Load stats for variants that are bound to terminals (deduplicated)
+      const boundVariantIds = [...new Set(termRes.data.items.filter(t => t.menu_variant_id).map(t => t.menu_variant_id!))];
+      const newStats: Record<number, VariantStats> = {};
+      await Promise.all(
+        boundVariantIds.map(async (vid) => {
+          if (statsMap[vid]) { newStats[vid] = statsMap[vid]; return; }
           try {
-            const s = await getStats(v.id);
-            return { id: v.id, name: v.name, groups: s.data.groups, services: s.data.services };
-          } catch {
-            return { id: v.id, name: v.name, groups: 0, services: 0 };
-          }
+            const s = await getStats(vid);
+            newStats[vid] = { groups: s.data.groups, services: s.data.services };
+          } catch { /* ignore */ }
         })
       );
-      setVariantStats(stats);
+      setStatsMap((prev) => ({ ...prev, ...newStats }));
     } catch {
       message.error("Ошибка загрузки");
     } finally {
@@ -113,55 +110,62 @@ export default function TerminalsPage() {
     }
   };
 
-  // Count bound terminals per variant
-  const boundCounts = terminals.reduce<Record<number, number>>((acc, t) => {
-    if (t.menu_variant_id) acc[t.menu_variant_id] = (acc[t.menu_variant_id] || 0) + 1;
-    return acc;
-  }, {});
-
   const columns = [
     {
       title: "ID",
       dataIndex: "device_id",
       key: "device_id",
-      width: 70,
-      render: (v: number) => <Text strong>{v}</Text>,
+      width: 52,
+      render: (v: number) => <Text strong style={{ fontSize: 12 }}>{v}</Text>,
     },
     {
       title: "SN",
       dataIndex: "sn",
       key: "sn",
       ellipsis: true,
-      render: (v: string) => <Text code style={{ fontSize: 11 }}>{v}</Text>,
+      render: (v: string) => <Text code style={{ fontSize: 10 }}>{v}</Text>,
     },
     {
       title: "Org",
       dataIndex: "org_id",
       key: "org_id",
-      width: 50,
+      width: 40,
       align: "center" as const,
+      render: (v: number) => <Text style={{ fontSize: 12 }}>{v}</Text>,
     },
     {
       title: "",
       dataIndex: "is_active",
       key: "active",
-      width: 30,
-      render: (v: boolean) => v ? <Tag color="success" style={{ margin: 0 }}>●</Tag> : <Tag color="error" style={{ margin: 0 }}>●</Tag>,
+      width: 24,
+      render: (v: boolean) => (
+        <span style={{ color: v ? "#52c41a" : "#ff4d4f", fontSize: 14 }}>●</span>
+      ),
     },
     {
       title: "Меню",
       key: "variant",
-      render: (_: any, record: TerminalInfo) =>
-        record.menu_variant_name ? (
-          <Tag color="blue" style={{ margin: 0 }}>{record.menu_variant_name}</Tag>
-        ) : (
-          <Text type="secondary" style={{ fontSize: 11 }}>—</Text>
-        ),
+      render: (_: any, record: TerminalInfo) => {
+        if (!record.menu_variant_name) return <Text type="secondary" style={{ fontSize: 11 }}>—</Text>;
+        const stats = record.menu_variant_id ? statsMap[record.menu_variant_id] : null;
+        return (
+          <Space size={4} style={{ flexWrap: "nowrap" }}>
+            <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>{record.menu_variant_name}</Tag>
+            {stats && (
+              <Text type="secondary" style={{ fontSize: 10, whiteSpace: "nowrap" }}>
+                <FolderOutlined style={{ fontSize: 10 }} />{stats.groups}
+                <span style={{ margin: "0 2px" }}>·</span>
+                <AppstoreOutlined style={{ fontSize: 10 }} />{stats.services}
+              </Text>
+            )}
+          </Space>
+        );
+      },
     },
     {
       title: "",
       key: "actions",
-      width: 90,
+      width: 52,
       render: (_: any, record: TerminalInfo) => (
         <Space size={0}>
           <Button
@@ -186,32 +190,6 @@ export default function TerminalsPage() {
 
   return (
     <>
-      {/* Variant summary cards */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-        {variantStats.map((vs) => (
-          <Card
-            key={vs.id}
-            size="small"
-            style={{ flex: "1 1 160px", maxWidth: 220, borderTop: "2px solid #1677ff" }}
-            styles={{ body: { padding: "8px 12px" } }}
-          >
-            <Text strong style={{ fontSize: 13, display: "block", marginBottom: 4 }}>{vs.name}</Text>
-            <div style={{ display: "flex", gap: 12 }}>
-              <span style={{ fontSize: 11, color: "#888" }}>
-                <FolderOutlined /> {vs.groups} гр.
-              </span>
-              <span style={{ fontSize: 11, color: "#888" }}>
-                <AppstoreOutlined /> {vs.services} усл.
-              </span>
-              <span style={{ fontSize: 11, color: "#888" }}>
-                <MobileOutlined /> {boundCounts[vs.id] || 0} терм.
-              </span>
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      {/* Terminals table */}
       <Card styles={{ body: { padding: 0 } }}>
         <Table
           dataSource={terminals}
@@ -226,13 +204,12 @@ export default function TerminalsPage() {
             showSizeChanger: true,
             pageSizeOptions: ["10", "20", "50", "100"],
             size: "small",
-            showTotal: (t) => <Text type="secondary" style={{ fontSize: 12 }}>{t} терм.</Text>,
+            showTotal: (t) => <Text type="secondary" style={{ fontSize: 11 }}>{t} терм.</Text>,
             onChange: (p, ps) => { setPage(p); setPageSize(ps); },
           }}
         />
       </Card>
 
-      {/* Bind modal */}
       <Modal
         title={`Терминал ${modalTerminal?.device_id}`}
         open={modalOpen}
@@ -241,15 +218,15 @@ export default function TerminalsPage() {
         confirmLoading={saving}
         okText="Прикрепить"
         cancelText="Отмена"
-        width={360}
+        width={340}
       >
         {modalTerminal && (
-          <div style={{ marginBottom: 12, fontSize: 12 }}>
-            <p style={{ margin: "4px 0" }}><Text type="secondary">SN:</Text> <Text code>{modalTerminal.sn}</Text></p>
-            <p style={{ margin: "4px 0" }}><Text type="secondary">Org:</Text> {modalTerminal.org_id}</p>
-            <p style={{ margin: "4px 0" }}>
+          <div style={{ marginBottom: 10, fontSize: 12 }}>
+            <p style={{ margin: "2px 0" }}><Text type="secondary">SN:</Text> <Text code style={{ fontSize: 11 }}>{modalTerminal.sn}</Text></p>
+            <p style={{ margin: "2px 0" }}><Text type="secondary">Org:</Text> {modalTerminal.org_id}</p>
+            <p style={{ margin: "2px 0" }}>
               <Text type="secondary">Статус:</Text>{" "}
-              {modalTerminal.is_active ? <Tag color="success">Активен</Tag> : <Tag color="error">Неактивен</Tag>}
+              {modalTerminal.is_active ? <Tag color="success" style={{ fontSize: 11 }}>Активен</Tag> : <Tag color="error" style={{ fontSize: 11 }}>Неактивен</Tag>}
             </p>
           </div>
         )}
