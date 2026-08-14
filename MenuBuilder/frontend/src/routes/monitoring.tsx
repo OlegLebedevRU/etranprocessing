@@ -13,10 +13,9 @@ function SlotBar({ slots }: { slots: boolean[] }) {
           key={i}
           style={{
             width: 3,
-            height: active ? 14 : 4,
+            height: active ? 14 : 10,
             borderRadius: 1,
-            background: active ? "#52c41a" : "#ff4d4f",
-            opacity: active ? 1 : 0.4,
+            background: active ? "#52c41a" : "#cf1322",
           }}
         />
       ))}
@@ -78,20 +77,17 @@ export default function MonitoringPage() {
       title: "ID",
       dataIndex: "device_id",
       key: "device_id",
-      width: 56,
-      render: (v: number) => <Text strong style={{ fontSize: 12 }}>{v}</Text>,
+      render: (v: number) => <Text strong style={{ fontSize: 12 }}>{String(v).padStart(8, "\u00A0")}</Text>,
     },
     {
       title: "Связь",
       key: "slots",
-      width: 60,
       render: (_: any, record: MonitoringTerminal) => <SlotBar slots={record.slots} />,
     },
     {
       title: "Обмен",
       dataIndex: "lastnumconn",
       key: "lastnumconn",
-      width: 48,
       align: "center" as const,
       render: (v: number) => (
         <Tooltip title={lastnumTooltip(v)}>
@@ -105,7 +101,6 @@ export default function MonitoringPage() {
       title: "Валид.",
       dataIndex: "validator_state",
       key: "validator_state",
-      width: 42,
       align: "center" as const,
       render: (v: string) => {
         const n = parseInt(v);
@@ -120,7 +115,6 @@ export default function MonitoringPage() {
       title: "Принт.",
       dataIndex: "printer_state",
       key: "printer_state",
-      width: 42,
       align: "center" as const,
       render: (v: string) => {
         const n = parseInt(v);
@@ -135,7 +129,6 @@ export default function MonitoringPage() {
       title: "ПО",
       dataIndex: "soft_version",
       key: "soft_version",
-      width: 80,
       render: (v: string) => <Text style={{ fontSize: 11 }}>{v}</Text>,
     },
     {
@@ -155,7 +148,6 @@ export default function MonitoringPage() {
       title: "",
       dataIndex: "is_active",
       key: "active",
-      width: 24,
       render: (v: boolean) => (
         <span style={{ color: v ? "#52c41a" : "#ff4d4f", fontSize: 14 }}>●</span>
       ),
@@ -165,24 +157,24 @@ export default function MonitoringPage() {
   return (
     <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <Text strong style={{ fontSize: 14 }}>Мониторинг</Text>
-        <Space size={8}>
-          {lastUpdate && <Text type="secondary" style={{ fontSize: 11 }}>Обновлено: {lastUpdate}</Text>}
+        <Space size={8} align="center">
+          <Text strong style={{ fontSize: 14 }}>Мониторинг</Text>
           <ReloadOutlined
-            style={{ fontSize: 14, cursor: "pointer", color: "#1677ff" }}
+            style={{ fontSize: 13, cursor: "pointer", color: "#1677ff" }}
             onClick={load}
           />
+          {lastUpdate && <Text type="secondary" style={{ fontSize: 10 }}>{lastUpdate}</Text>}
         </Space>
       </div>
 
-      <Card styles={{ body: { padding: 0 } }}>
+      <Card styles={{ body: { padding: 0 } }} style={{ width: "fit-content" }}>
         <Table
           dataSource={terminals}
           columns={columns}
           rowKey="terminal_id"
           loading={loading}
           size="small"
-          tableLayout="fixed"
+          tableLayout="auto"
           pagination={false}
         />
       </Card>
