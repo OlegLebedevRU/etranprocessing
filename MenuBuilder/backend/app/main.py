@@ -248,3 +248,120 @@ async def get_monitoring():
         })
 
     return {"start": start.isoformat(), "now": now.isoformat(), "items": items}
+
+
+@app.get("/api/reports/inkass")
+async def get_inkass_report(
+    date_from: str | None = None,
+    date_to: str | None = None,
+    device_ids: str | None = None,
+    page: int = Query(1, ge=1),
+    size: int = Query(100, ge=10, le=500),
+):
+    """Inkassation report from TechGate records."""
+    from datetime import datetime, timezone
+    from sqlalchemy import text
+
+    async with async_session() as session:
+        # Build filters
+        conditions = ["r.function_name = 'inkass'"]
+        params: dict = {}
+
+        if date_from:
+            conditions.append("r.created_at >= :date_from")
+            params["date_from"] = date_from
+        if date_to:
+            conditions.append("r.created_at < (:date_to::date + interval '1 day')")
+            params["date_to"] = date_to
+        if device_ids:
+            ids = [int(x.strip()) for x in device_ids.split(",") if x.strip().isdigit()]
+            if ids:
+                placeholders = ",".join(f":did_{i}" for i in range(len(ids)))
+                conditions.append(f"r.device_id IN ({placeholders})")
+                for i, did in enumerate(ids):
+                    params[f"did_{i}"] = did
+
+        where = " AND ".join(conditions)
+
+        # Count
+        count_row = (await session.execute(
+            text(f"SELECT count(*) FROM tech_gate_records r WHERE {where}"),
+            params,
+        )).scalar()
+
+        # Fetch page
+        offset = (page - 1) * size
+        rows = (await session.execute(
+            text(f"""
+                SELECT r.id, r.device_id, r.sn, r.created_at, r.request_data
+                FROM tech_gate_records r
+                WHERE {where}
+                ORDER BY r.created_at DESC
+                LIMIT :limit OFFSET :offset
+            """),
+            {**params, "limit": size, "offset": offset},
+        )).fetchall()
+
+        # Get terminal org_ids
+        dev_ids = list(set(r[1] for r in rows))
+        org_map: dict[int, int] = {}
+        if dev_ids:
+            ph = ",".join(f":oid_{i}" for i in range(len(dev_ids)))
+            org_rows = (await session.execute(
+                text(f"SELECT device_id, org_id FROM terminals WHERE device_id IN ({ph})"),
+                {f"oid_{i}": did for i, did in enumerate(dev_ids)},
+            )).fetchall()
+            org_map = {r[0]: r[1] for r in org_rows}
+
+    def jint(d: dict, key: str) -> int:
+        v = d.get(key, "0")
+        try:
+            return int(v)
+        except (ValueError, TypeError):
+            return 0
+
+    def parse_dt(s: str) -> str:
+        """Parse DD.MM.YYYY HH:MM:SS to ISO-like string."""
+        if not s:
+            return ""
+        try:
+            dt = datetime.strptime(s, "%d.%m.%Y %H:%M:%S")
+            return dt.strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            return s
+
+    items = []
+    for r in rows:
+        d = r[4] if r[4] else {}
+        notes = [jint(d, f"Note{i}") for i in range(10)]
+        coins = [jint(d, f"Coin{i}") for i in range(10)]
+        items.append({
+            "id": r[0],
+            "device_id": r[1],
+            "sn": r[2] or "",
+            "org_id": org_map.get(r[1], 0),
+            "inkass_datetime": parse_dt(d.get("InkassDateTime", "")),
+            "server_datetime": r[3].strftime("%Y-%m-%d %H:%M:%S") if r[3] else "",
+            "total_sum": jint(d, "TotalSum"),
+            "total_count": jint(d, "TotalCount"),
+            "total_note_sum": jint(d, "TotalNoteSum"),
+            "total_note_count": jint(d, "TotalNoteCount"),
+            "total_coin_sum": jint(d, "TotalCoinSum"),
+            "total_coin_count": jint(d, "TotalCoinCount"),
+            "notes": notes,
+            "coins": coins,
+            "inkassator": d.get("Inkassator", ""),
+            "inkass_ext_id": d.get("InkassExtId", ""),
+            "paym_ext_id": d.get("PaymExtId", ""),
+            "inkass_id": d.get("InkassId", ""),
+            "cassette_num": d.get("cassetteNum", ""),
+            "cnt_inkass": jint(d, "cntInkass"),
+            "cnt_inkass_sum": jint(d, "cntInkassSum"),
+            "cnt_transact": jint(d, "cntTransact"),
+            "cnt_total_sum": jint(d, "cntTotalSum"),
+            "transact_count": jint(d, "TransactCount"),
+            "last_sum_inkass": jint(d, "LastSumInkass"),
+            "currency": jint(d, "Currency"),
+        })
+
+    return {"items": items, "total": count_row or 0}

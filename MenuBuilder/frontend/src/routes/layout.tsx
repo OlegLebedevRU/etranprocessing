@@ -5,6 +5,7 @@ import {
   MobileOutlined,
   AppstoreOutlined,
   DashboardOutlined,
+  FileTextOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
 } from "@ant-design/icons";
@@ -58,6 +59,7 @@ export default function AppLayout() {
             { key: "terminals", icon: <MobileOutlined />, label: "Терминалы" },
             { key: "variants", icon: <AppstoreOutlined />, label: "Варианты меню" },
             { key: "monitoring", icon: <DashboardOutlined />, label: "Мониторинг" },
+            { key: "reports", icon: <FileTextOutlined />, label: "Отчёты" },
           ]}
         />
       </Sider>
