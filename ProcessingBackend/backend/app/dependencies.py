@@ -29,54 +29,65 @@ async def get_current_terminal(
 ) -> Terminal:
     """
     Extract terminal identity from nginx TLS headers.
+    Authentication by sn (CN from cert) + cert_serial — both must match.
+    OU is optional for quick device_id lookup but not used for auth.
+
     Nginx-mutual forwards:
-    - X-Client-Cert-DN: 'CN=serial_number,O=org_id'
-    - X-Client-Cert-Serial: hex serial number (e.g. '607E7D40000400002BE9')
-    - X-SSL-Client-Verify: SUCCESS/FAILED/NONE
+    - X-Client-Cert-DN: 'emailAddress=...,CN=A99D2F...,OU=773,O=1,L=...,ST=...,C=ru'
+    - X-Client-Cert-Serial: hex serial without colons (e.g. '52B8E528000400002E2D')
     """
 
-    # Try DN-based lookup first (CN = terminal SN)
     subject = request.headers.get("X-Client-Cert-DN", "")
     if not subject:
         subject = request.headers.get("X-SSL-Client-Cert-Subject", "")
 
     cert_serial = request.headers.get("X-Client-Cert-Serial", "")
-    logger.info(f"Cert DN: '{subject}', Serial: '{cert_serial}'")
 
-    # Strategy 1: Look up by OU (terminal number) from DN
-    if subject:
-        parsed = parse_cert_subject(subject)
-        ou = parsed.get("OU", "")
-        if ou:
-            try:
-                device_id = int(ou)
-                result = await db.execute(select(Terminal).where(Terminal.device_id == device_id))
-                terminal = result.scalar_one_or_none()
-                if terminal and terminal.is_active:
-                    return terminal
-            except ValueError:
-                pass
+    if not subject or not cert_serial:
+        logger.warning(f"Missing cert headers. DN='{subject}', Serial='{cert_serial}'")
+        raise HTTPException(status_code=401, detail="Missing client certificate headers")
 
-    # Strategy 2: Look up by CN from DN
-    if subject:
-        parsed = parse_cert_subject(subject)
-        cn = parsed.get("CN", "")
-        if cn:
-            result = await db.execute(select(Terminal).where(Terminal.sn == cn))
-            terminal = result.scalar_one_or_none()
-            if terminal and terminal.is_active:
-                return terminal
+    parsed = parse_cert_subject(subject)
+    cn = parsed.get("CN", "")
+    ou = parsed.get("OU", "")
 
-    # Strategy 3: Look up by cert serial
-    if cert_serial:
-        result = await db.execute(select(Terminal).where(Terminal.cert_serial == cert_serial))
-        terminal = result.scalar_one_or_none()
-        if terminal and terminal.is_active:
-            return terminal
+    logger.info(f"Cert DN: '{subject}', CN: '{cn}', OU: '{ou}', Serial: '{cert_serial}'")
 
-    # Not found
-    logger.warning(f"Terminal not found. DN='{subject}', Serial='{cert_serial}', headers={dict(request.headers)}")
-    raise HTTPException(status_code=401, detail=f"Terminal not found. DN='{subject}', Serial='{cert_serial}'")
+    if not cn:
+        raise HTTPException(status_code=401, detail="CN not found in certificate subject")
+
+    # Primary auth: sn (CN) + cert_serial — both must match
+    result = await db.execute(
+        select(Terminal).where(
+            Terminal.sn == cn,
+            Terminal.cert_serial == cert_serial,
+        )
+    )
+    terminal = result.scalar_one_or_none()
+
+    if not terminal:
+        logger.warning(f"Terminal not found by sn+serial. CN='{cn}', Serial='{cert_serial}'")
+        raise HTTPException(
+            status_code=401,
+            detail=f"Terminal not found. CN='{cn}', Serial='{cert_serial}'",
+        )
+
+    if not terminal.is_active:
+        raise HTTPException(status_code=403, detail="Terminal is deactivated")
+
+    # OU is informational — log mismatch but don't block
+    if ou:
+        try:
+            ou_device_id = int(ou)
+            if terminal.device_id != ou_device_id:
+                logger.warning(
+                    f"OU mismatch: cert OU={ou_device_id}, db device_id={terminal.device_id} "
+                    f"(terminal sn={cn})"
+                )
+        except ValueError:
+            pass
+
+    return terminal
 
 
 async def check_license(
