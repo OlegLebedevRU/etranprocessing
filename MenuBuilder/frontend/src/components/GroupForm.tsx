@@ -6,12 +6,13 @@ interface Props {
   open: boolean;
   group: Group | null;
   parentId: number | null;
+  menuVariantId: number | null;
   groups: Group[];
   onClose: () => void;
   onSaved: () => void;
 }
 
-export default function GroupForm({ open, group, parentId, groups, onClose, onSaved }: Props) {
+export default function GroupForm({ open, group, parentId, menuVariantId, groups, onClose, onSaved }: Props) {
   const [form] = Form.useForm();
   const [saving, setSaving] = useState(false);
 
@@ -35,7 +36,14 @@ export default function GroupForm({ open, group, parentId, groups, onClose, onSa
         await updateGroup(group.id, data);
         message.success("Группа обновлена");
       } else {
-        const data: GroupCreate = { org_id: 1, name: values.name, parent_id: values.parent_id || null, number: values.number || 0 };
+        if (!menuVariantId) { message.error("Выберите вариант меню"); return; }
+        const data: GroupCreate = {
+          menu_variant_id: menuVariantId,
+          org_id: 1,
+          name: values.name,
+          parent_id: values.parent_id || null,
+          number: values.number || 0,
+        };
         await createGroup(data);
         message.success("Группа создана");
       }

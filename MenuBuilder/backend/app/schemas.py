@@ -1,7 +1,31 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
+# --- MenuVariant ---
+
+class MenuVariantCreate(BaseModel):
+    name: str
+
+
+class MenuVariantRead(BaseModel):
+    id: int
+    name: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class MenuVariantDuplicate(BaseModel):
+    source_variant_id: int
+    new_name: str | None = None  # auto-generated if omitted
+
+
+# --- Group ---
+
 class GroupCreate(BaseModel):
+    menu_variant_id: int
     org_id: int
     name: str
     parent_id: int | None = None
@@ -16,6 +40,7 @@ class GroupUpdate(BaseModel):
 
 class GroupRead(BaseModel):
     id: int
+    menu_variant_id: int
     org_id: int
     number: int
     name: str
@@ -23,6 +48,8 @@ class GroupRead(BaseModel):
 
     model_config = {"from_attributes": True}
 
+
+# --- Service ---
 
 class ServiceCreate(BaseModel):
     group_id: int
@@ -42,6 +69,7 @@ class ServiceUpdate(BaseModel):
 
 class ServiceRead(BaseModel):
     id: int
+    menu_variant_id: int
     group_id: int
     tsp_code: int
     name: str
@@ -50,3 +78,20 @@ class ServiceRead(BaseModel):
     protypenumber: int
 
     model_config = {"from_attributes": True}
+
+
+# --- Terminal binding ---
+
+class TerminalBindingRead(BaseModel):
+    id: int
+    device_id: int
+    menu_variant_id: int
+    menu_variant_name: str | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class TerminalBindingCreate(BaseModel):
+    device_id: int
+    menu_variant_id: int

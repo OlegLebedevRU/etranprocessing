@@ -47,11 +47,14 @@ async def create_service(data: ServiceCreate, db: AsyncSession = Depends(get_db)
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
     existing = await db.scalar(
-        select(Service).where(Service.tsp_code == data.tsp_code)
+        select(Service).where(
+            Service.tsp_code == data.tsp_code,
+            Service.menu_variant_id == group.menu_variant_id,
+        )
     )
     if existing:
-        raise HTTPException(status_code=409, detail=f"tsp_code {data.tsp_code} already in use")
-    service = Service(**data.model_dump())
+        raise HTTPException(status_code=409, detail=f"tsp_code {data.tsp_code} already in use in this menu variant")
+    service = Service(**data.model_dump(), menu_variant_id=group.menu_variant_id)
     db.add(service)
     await db.commit()
     await db.refresh(service)

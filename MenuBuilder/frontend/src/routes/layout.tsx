@@ -5,6 +5,7 @@ import {
   DashboardOutlined,
   FolderOutlined,
   MenuOutlined,
+  MobileOutlined,
 } from "@ant-design/icons";
 
 const { Sider, Header, Content } = Layout;
@@ -50,6 +51,7 @@ export default function AppLayout() {
           items={[
             { key: "dashboard", icon: <DashboardOutlined />, label: "Дашборд" },
             { key: "groups", icon: <FolderOutlined />, label: "Группы" },
+            { key: "terminals", icon: <MobileOutlined />, label: "Терминалы" },
           ]}
         />
       </Sider>

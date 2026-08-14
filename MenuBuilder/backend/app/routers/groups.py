@@ -11,11 +11,13 @@ router = APIRouter()
 
 
 @router.get("", response_model=list[GroupRead])
-async def list_groups(org_id: int | None = None, db: AsyncSession = Depends(get_db)):
-    stmt = select(Group).options(selectinload(Group.children))
-    if org_id is not None:
-        stmt = stmt.where(Group.org_id == org_id)
-    stmt = stmt.order_by(Group.number)
+async def list_groups(menu_variant_id: int, db: AsyncSession = Depends(get_db)):
+    stmt = (
+        select(Group)
+        .where(Group.menu_variant_id == menu_variant_id)
+        .options(selectinload(Group.children))
+        .order_by(Group.number)
+    )
     result = await db.execute(stmt)
     return result.scalars().all()
 
@@ -32,7 +34,10 @@ async def get_group(group_id: int, db: AsyncSession = Depends(get_db)):
 async def create_group(data: GroupCreate, db: AsyncSession = Depends(get_db)):
     if data.number == 0:
         max_num = await db.scalar(
-            select(Group.number).where(Group.org_id == data.org_id).order_by(Group.number.desc()).limit(1)
+            select(Group.number)
+            .where(Group.menu_variant_id == data.menu_variant_id, Group.org_id == data.org_id)
+            .order_by(Group.number.desc())
+            .limit(1)
         )
         data.number = (max_num or 0) + 1
     group = Group(**data.model_dump())

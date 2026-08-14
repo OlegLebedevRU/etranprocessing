@@ -2,6 +2,7 @@ import client from "./client";
 
 export interface Group {
   id: number;
+  menu_variant_id: number;
   org_id: number;
   number: number;
   name: string;
@@ -9,6 +10,7 @@ export interface Group {
 }
 
 export interface GroupCreate {
+  menu_variant_id: number;
   org_id: number;
   name: string;
   parent_id?: number | null;
@@ -21,8 +23,8 @@ export interface GroupUpdate {
   number?: number;
 }
 
-export const getGroups = (orgId?: number) =>
-  client.get<Group[]>("/groups", { params: orgId ? { org_id: orgId } : {} });
+export const getGroups = (menuVariantId: number) =>
+  client.get<Group[]>("/groups", { params: { menu_variant_id: menuVariantId } });
 
 export const getGroup = (id: number) =>
   client.get<Group>(`/groups/${id}`);

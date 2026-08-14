@@ -2,6 +2,7 @@ import client from "./client";
 
 export interface Service {
   id: number;
+  menu_variant_id: number;
   group_id: number;
   tsp_code: number;
   name: string;
