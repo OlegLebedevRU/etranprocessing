@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Drawer, Form, Input, InputNumber, message, Select, Space, Button } from "antd";
+import { Drawer, Form, Input, InputNumber, message, Select, Space, Button, Typography } from "antd";
 import {
   Service,
   ServiceCreate,
@@ -8,6 +8,8 @@ import {
   updateService,
   getFreeTsp,
 } from "../api/services";
+
+const { Text } = Typography;
 
 interface Props {
   open: boolean;
@@ -53,7 +55,7 @@ export default function ServiceForm({ open, service, groupId, onClose, onSaved }
           protypenumber: values.protypenumber,
         };
         await updateService(service.id, data);
-        message.success("Услуга обновлена");
+        message.success("Обновлено");
       } else {
         const data: ServiceCreate = {
           group_id: groupId,
@@ -64,7 +66,7 @@ export default function ServiceForm({ open, service, groupId, onClose, onSaved }
           protypenumber: values.protypenumber || 0,
         };
         await createService(data);
-        message.success("Услуга создана");
+        message.success("Создано");
       }
       onSaved();
     } catch (e: any) {
@@ -76,47 +78,42 @@ export default function ServiceForm({ open, service, groupId, onClose, onSaved }
 
   return (
     <Drawer
-      title={service ? "Редактировать услугу" : "Новая услуга"}
+      title={service ? "Редактировать" : "Новая услуга"}
       open={open}
       onClose={onClose}
-      width={400}
+      width={320}
       extra={
         <Space>
-          <Button onClick={onClose}>Отмена</Button>
-          <Button type="primary" loading={saving} onClick={handleOk}>
-            Сохранить
-          </Button>
+          <Button size="small" onClick={onClose}>Отмена</Button>
+          <Button size="small" type="primary" loading={saving} onClick={handleOk}>OK</Button>
         </Space>
       }
     >
-      <Form form={form} layout="vertical">
-        <Form.Item
-          name="tsp_code"
-          label="TSP-код"
-          rules={[{ required: true, message: "Выберите TSP-код" }]}
-        >
+      <Form form={form} layout="vertical" size="small">
+        <Form.Item name="tsp_code" label="TSP-код" rules={[{ required: true }]}>
           {service ? (
-            <Input disabled />
+            <Input disabled size="small" />
           ) : (
             <Select
               showSearch
-              placeholder="Выберите код"
-              options={freeTsp.map((t) => ({ value: t.tsp_code, label: t.tsp_code.toString() }))}
+              placeholder="Код"
+              size="small"
+              options={freeTsp.map((t) => ({ value: t.tsp_code, label: String(t.tsp_code) }))}
               optionFilterProp="label"
             />
           )}
         </Form.Item>
-        <Form.Item name="name" label="Название" rules={[{ required: true, message: "Введите название" }]}>
-          <Input />
+        <Form.Item name="name" label="Название" rules={[{ required: true }]}>
+          <Input size="small" />
         </Form.Item>
         <Form.Item name="printname" label="Печатное имя">
-          <Input />
+          <Input size="small" />
         </Form.Item>
         <Form.Item name="price" label="Цена">
-          <InputNumber min={0} style={{ width: "100%" }} addonAfter="₽" />
+          <InputNumber min={0} size="small" style={{ width: "100%" }} addonAfter="₽" />
         </Form.Item>
         <Form.Item name="protypenumber" label="Тип номера">
-          <InputNumber min={0} style={{ width: "100%" }} />
+          <InputNumber min={0} size="small" style={{ width: "100%" }} />
         </Form.Item>
       </Form>
     </Drawer>
