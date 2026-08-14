@@ -174,17 +174,25 @@ async def get_monitoring():
     for r in latest:
         gauge_map[r[0]] = r[1] if r[1] else {}
 
-    # Build interval map
+    # Build interval map with overlap buffer to avoid false red on boundary shift
+    SLOT_DURATION = 600      # 10 minutes
+    SLOT_OVERLAP = 60        # 1 minute buffer on each side of boundary
     device_slots: dict[int, list[bool]] = {}
     for r in records:
         dev_id = r[0]
         ts = r[1]
         if dev_id not in device_slots:
             device_slots[dev_id] = [False] * 12
-        delta = now - ts
-        slot_index = 11 - int(delta.total_seconds() // 600)
+        delta_sec = (now - ts).total_seconds()
+        slot_index = 11 - int(delta_sec // SLOT_DURATION)
         if 0 <= slot_index < 12:
             device_slots[dev_id][slot_index] = True
+            # If near boundary, also mark adjacent slot to prevent false red on recalculation
+            offset_in_slot = delta_sec % SLOT_DURATION
+            if offset_in_slot < SLOT_OVERLAP and slot_index > 0:
+                device_slots[dev_id][slot_index - 1] = True
+            elif offset_in_slot > SLOT_DURATION - SLOT_OVERLAP and slot_index < 11:
+                device_slots[dev_id][slot_index + 1] = True
 
     def fmt_soft_version(raw: str) -> str:
         if not raw or raw == "0":
