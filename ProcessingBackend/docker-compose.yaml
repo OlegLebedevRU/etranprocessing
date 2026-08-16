@@ -3,8 +3,10 @@ services:
     build: ./backend
     container_name: processing-backend
     restart: always
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://etran:etran@pg:5432/etranprocessing
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./log:/app/log
     networks:
       - pg_network
       - processing_net

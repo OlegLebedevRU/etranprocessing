@@ -1,4 +1,3 @@
-import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -6,8 +5,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import engine
-
-logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
 
 
 @asynccontextmanager
@@ -31,9 +28,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from app.routers import health, licensebilling, gate_gauge, tech_gate
+from app.routers import health, licensebilling, gate_gauge, tech_gate, payment
 
 app.include_router(health.router, prefix="/api", tags=["health"])
 app.include_router(licensebilling.router, prefix="/api/licensebilling", tags=["licensebilling"])
 app.include_router(gate_gauge.router, prefix="/api/gategauge", tags=["gategauge"])
 app.include_router(tech_gate.router, prefix="/api/techgate", tags=["techgate"])
+app.include_router(payment.router, prefix="/api/payment", tags=["payment"])

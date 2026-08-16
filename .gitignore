@@ -1,17 +1,75 @@
+# Python
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environment
 .venv/
 venv/
-node_modules/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment variables
 .env
-.env.*
+.env.local
+.env.*.local
+
+# Logs
+log/
+*.log
+
+# Docker
+.docker/
+
+# Temporary scripts (deployment helpers)
+create_*.py
+fix_*.sh
+update_*.py
+update_*.sh
+run_migration.sh
+import_*.py
+import_*.sql
+list_*.py
+check_*.py
+add_*.py
+*_location.conf
+*_and_*.conf
+internal_ssl.conf
+nginx_payment.conf
+nginx_locations.conf
+
+# Keep docs and config templates
+!docs/
 !.env.example
-.mimocode/
-*.egg-info/
-dist/
-build/
+!.gitignore
+!.dockerignore
+
+# Node
+node_modules/
+package-lock.json
+
+# OS
 .DS_Store
 Thumbs.db
-*.log
-tmp_upload/
