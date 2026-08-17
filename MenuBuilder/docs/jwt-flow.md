@@ -131,10 +131,11 @@ server {
         ...
     }
 
-    # MCP — JWT включён (наследуется от server), извлекаем jti
+    # MCP — JWT терминируется на nginx, backend получает только jti
     location /api/mcp/ {
         auth_jwt_extract_var_claims jti;
         proxy_set_header X-Auth-Jti $jwt_claim_jti;
+        proxy_set_header Authorization "";  # Убираем JWT — терминация на nginx!
         proxy_pass http://menubuilder-backend:8000;
         proxy_read_timeout 300s;
         ...
