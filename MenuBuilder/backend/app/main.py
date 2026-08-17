@@ -503,3 +503,153 @@ async def get_payments_report(
         })
 
     return {"items": items, "total": count_row or 0}
+
+
+def _parse_int_day(date_str: str) -> int | None:
+    """Convert YYYY-MM-DD to yyyyMMdd integer for balance_terminal_tsp.int_day."""
+    try:
+        parts = date_str.split("-")
+        if len(parts) == 3:
+            return int(parts[0]) * 10000 + int(parts[1]) * 100 + int(parts[2])
+    except (ValueError, IndexError):
+        pass
+    return None
+
+
+@app.get("/api/reports/balance-by-terminal")
+async def get_balance_by_terminal(
+    user: dict = Depends(get_current_user),
+    date_from: str | None = None,
+    date_to: str | None = None,
+    device_ids: str | None = None,
+    tsp_code: int | None = None,
+):
+    """Balance statistics grouped by terminal. Tenant-scoped."""
+    from sqlalchemy import text
+
+    org_id = user.get("org_id")
+    if not org_id:
+        return {"items": []}
+
+    async with async_session() as session:
+        conditions = ["b.org_id = :org_id"]
+        params: dict = {"org_id": org_id}
+
+        if date_from:
+            day_from = _parse_int_day(date_from)
+            if day_from is not None:
+                conditions.append("b.int_day >= :day_from")
+                params["day_from"] = day_from
+        if date_to:
+            day_to = _parse_int_day(date_to)
+            if day_to is not None:
+                conditions.append("b.int_day <= :day_to")
+                params["day_to"] = day_to
+        if device_ids:
+            ids = [int(x.strip()) for x in device_ids.split(",") if x.strip().isdigit()]
+            if ids:
+                placeholders = ",".join(f":did_{i}" for i in range(len(ids)))
+                conditions.append(f"t.device_id IN ({placeholders})")
+                for i, did in enumerate(ids):
+                    params[f"did_{i}"] = did
+        if tsp_code is not None:
+            conditions.append("ts.tsp_code = :tsp_code")
+            params["tsp_code"] = tsp_code
+
+        where = " AND ".join(conditions)
+
+        rows = (await session.execute(
+            text(f"""
+                SELECT t.device_id, t.sn, t.id AS terminal_id,
+                       COUNT(*) AS tsp_count,
+                       SUM(b.count) AS total_count,
+                       SUM(b.amount) AS total_amount
+                FROM balance_terminal_tsp b
+                JOIN terminals t ON t.id = b.terminal_id
+                JOIN tsp ts ON ts.tsp_id = b.tsp_id
+                WHERE {where}
+                GROUP BY t.device_id, t.sn, t.id
+                ORDER BY total_amount DESC
+            """),
+            params,
+        )).fetchall()
+
+    items = []
+    for r in rows:
+        items.append({
+            "device_id": r[0],
+            "sn": (r[1] or "").strip(),
+            "terminal_id": r[2],
+            "tsp_count": r[3],
+            "total_count": r[4],
+            "total_amount": r[5],
+        })
+
+    return {"items": items}
+
+
+@app.get("/api/reports/balance-by-tsp")
+async def get_balance_by_tsp(
+    user: dict = Depends(get_current_user),
+    date_from: str | None = None,
+    date_to: str | None = None,
+    device_ids: str | None = None,
+):
+    """Balance statistics grouped by TSP. Tenant-scoped."""
+    from sqlalchemy import text
+
+    org_id = user.get("org_id")
+    if not org_id:
+        return {"items": []}
+
+    async with async_session() as session:
+        conditions = ["b.org_id = :org_id"]
+        params: dict = {"org_id": org_id}
+
+        if date_from:
+            day_from = _parse_int_day(date_from)
+            if day_from is not None:
+                conditions.append("b.int_day >= :day_from")
+                params["day_from"] = day_from
+        if date_to:
+            day_to = _parse_int_day(date_to)
+            if day_to is not None:
+                conditions.append("b.int_day <= :day_to")
+                params["day_to"] = day_to
+        if device_ids:
+            ids = [int(x.strip()) for x in device_ids.split(",") if x.strip().isdigit()]
+            if ids:
+                placeholders = ",".join(f":did_{i}" for i in range(len(ids)))
+                conditions.append(f"t.device_id IN ({placeholders})")
+                for i, did in enumerate(ids):
+                    params[f"did_{i}"] = did
+
+        where = " AND ".join(conditions)
+
+        rows = (await session.execute(
+            text(f"""
+                SELECT ts.tsp_code, ts.tsp_name,
+                       COUNT(DISTINCT b.terminal_id) AS terminal_count,
+                       SUM(b.count) AS total_count,
+                       SUM(b.amount) AS total_amount
+                FROM balance_terminal_tsp b
+                JOIN terminals t ON t.id = b.terminal_id
+                JOIN tsp ts ON ts.tsp_id = b.tsp_id
+                WHERE {where}
+                GROUP BY ts.tsp_code, ts.tsp_name
+                ORDER BY total_amount DESC
+            """),
+            params,
+        )).fetchall()
+
+    items = []
+    for r in rows:
+        items.append({
+            "tsp_code": r[0],
+            "tsp_name": (r[1] or "").strip(),
+            "terminal_count": r[2],
+            "total_count": r[3],
+            "total_amount": r[4],
+        })
+
+    return {"items": items}

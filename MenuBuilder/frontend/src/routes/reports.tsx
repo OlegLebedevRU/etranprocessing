@@ -13,6 +13,7 @@ import {
 import {
   FileTextOutlined,
   DollarOutlined,
+  BarChartOutlined,
   ReloadOutlined,
   SearchOutlined,
 } from "@ant-design/icons";
@@ -22,6 +23,10 @@ import {
   type InkassRecord,
   getPayments,
   type PaymentRecord,
+  getBalanceByTerminal,
+  type BalanceByTerminalRecord,
+  getBalanceByTsp,
+  type BalanceByTspRecord,
 } from "../api/reports";
 
 const { Sider, Content } = Layout;
@@ -29,6 +34,8 @@ const { Sider, Content } = Layout;
 const REPORTS = [
   { key: "inkass", icon: <FileTextOutlined />, label: "Инкассация" },
   { key: "payments", icon: <DollarOutlined />, label: "Платежи" },
+  { key: "balance-terminal", icon: <BarChartOutlined />, label: "По терминалам" },
+  { key: "balance-tsp", icon: <BarChartOutlined />, label: "По ТСП" },
 ];
 
 function fmtMoney(v: number): string {
@@ -100,6 +107,23 @@ export default function ReportsPage() {
   const [payState, setPayState] = useState<number>(-1);
   const [payTop, setPayTop] = useState(100);
 
+  // --- Balance by terminal state ---
+  const [btItems, setBtItems] = useState<BalanceByTerminalRecord[]>([]);
+  const [btLoading, setBtLoading] = useState(false);
+  const [btDateFrom, setBtDateFrom] = useState("");
+  const [btDateTo, setBtDateTo] = useState("");
+  const [btTermInput, setBtTermInput] = useState("");
+  const [btDeviceIds, setBtDeviceIds] = useState<number[]>([]);
+  const [btTspCode, setBtTspCode] = useState<number | undefined>();
+
+  // --- Balance by TSP state ---
+  const [btsItems, setBtsItems] = useState<BalanceByTspRecord[]>([]);
+  const [btsLoading, setBtsLoading] = useState(false);
+  const [btsDateFrom, setBtsDateFrom] = useState("");
+  const [btsDateTo, setBtsDateTo] = useState("");
+  const [btsTermInput, setBtsTermInput] = useState("");
+  const [btsDeviceIds, setBtsDeviceIds] = useState<number[]>([]);
+
   // --- Inkass fetch ---
   const fetchInkass = useCallback(async () => {
     setInkLoading(true);
@@ -160,6 +184,61 @@ export default function ReportsPage() {
       .map((s) => parseInt(s.trim(), 10))
       .filter((n) => !isNaN(n));
     setPayDeviceIds(ids);
+  };
+
+  // --- Balance by terminal fetch ---
+  const fetchBalanceByTerminal = useCallback(async () => {
+    setBtLoading(true);
+    try {
+      const resp = await getBalanceByTerminal({
+        date_from: btDateFrom || undefined,
+        date_to: btDateTo || undefined,
+        device_ids: btDeviceIds.length ? btDeviceIds : undefined,
+        tsp_code: btTspCode,
+      });
+      setBtItems(resp.items);
+    } finally {
+      setBtLoading(false);
+    }
+  }, [btDateFrom, btDateTo, btDeviceIds, btTspCode]);
+
+  useEffect(() => {
+    if (activeReport === "balance-terminal") fetchBalanceByTerminal();
+  }, [fetchBalanceByTerminal, activeReport]);
+
+  const handleBtTermSearch = () => {
+    const ids = btTermInput
+      .split(",")
+      .map((s) => parseInt(s.trim(), 10))
+      .filter((n) => !isNaN(n));
+    setBtDeviceIds(ids);
+  };
+
+  // --- Balance by TSP fetch ---
+  const fetchBalanceByTsp = useCallback(async () => {
+    setBtsLoading(true);
+    try {
+      const resp = await getBalanceByTsp({
+        date_from: btsDateFrom || undefined,
+        date_to: btsDateTo || undefined,
+        device_ids: btsDeviceIds.length ? btsDeviceIds : undefined,
+      });
+      setBtsItems(resp.items);
+    } finally {
+      setBtsLoading(false);
+    }
+  }, [btsDateFrom, btsDateTo, btsDeviceIds]);
+
+  useEffect(() => {
+    if (activeReport === "balance-tsp") fetchBalanceByTsp();
+  }, [fetchBalanceByTsp, activeReport]);
+
+  const handleBtsTermSearch = () => {
+    const ids = btsTermInput
+      .split(",")
+      .map((s) => parseInt(s.trim(), 10))
+      .filter((n) => !isNaN(n));
+    setBtsDeviceIds(ids);
   };
 
   // --- Inkass columns ---
@@ -306,6 +385,89 @@ export default function ReportsPage() {
       title: "Тип оплаты",
       dataIndex: "pay_type_label",
       width: 100,
+    },
+  ];
+
+  // --- Balance by terminal columns ---
+  const balanceTerminalColumns: ColumnsType<BalanceByTerminalRecord> = [
+    {
+      title: "Терминал",
+      dataIndex: "device_id",
+      width: 90,
+      sorter: (a, b) => a.device_id - b.device_id,
+    },
+    {
+      title: "SN",
+      dataIndex: "sn",
+      width: 120,
+      ellipsis: true,
+      render: (v: string) => (
+        <span title={v}>{v ? v.substring(0, 12) + "…" : "—"}</span>
+      ),
+    },
+    {
+      title: "TSP (кол-во)",
+      dataIndex: "tsp_count",
+      width: 100,
+      align: "right",
+      sorter: (a, b) => a.tsp_count - b.tsp_count,
+    },
+    {
+      title: "Платежей",
+      dataIndex: "total_count",
+      width: 100,
+      align: "right",
+      render: fmtInt,
+      sorter: (a, b) => a.total_count - b.total_count,
+    },
+    {
+      title: "Сумма",
+      dataIndex: "total_amount",
+      width: 130,
+      align: "right",
+      render: (v: number) => fmtMoney(v),
+      sorter: (a, b) => a.total_amount - b.total_amount,
+      defaultSortOrder: "descend",
+    },
+  ];
+
+  // --- Balance by TSP columns ---
+  const balanceTspColumns: ColumnsType<BalanceByTspRecord> = [
+    {
+      title: "TSP код",
+      dataIndex: "tsp_code",
+      width: 90,
+      sorter: (a, b) => a.tsp_code - b.tsp_code,
+    },
+    {
+      title: "Название",
+      dataIndex: "tsp_name",
+      width: 200,
+      ellipsis: true,
+    },
+    {
+      title: "Терминалов",
+      dataIndex: "terminal_count",
+      width: 100,
+      align: "right",
+      sorter: (a, b) => a.terminal_count - b.terminal_count,
+    },
+    {
+      title: "Платежей",
+      dataIndex: "total_count",
+      width: 100,
+      align: "right",
+      render: fmtInt,
+      sorter: (a, b) => a.total_count - b.total_count,
+    },
+    {
+      title: "Сумма",
+      dataIndex: "total_amount",
+      width: 130,
+      align: "right",
+      render: (v: number) => fmtMoney(v),
+      sorter: (a, b) => a.total_amount - b.total_amount,
+      defaultSortOrder: "descend",
     },
   ];
 
@@ -621,6 +783,142 @@ export default function ReportsPage() {
                   </div>
                 ),
               }}
+            />
+          </div>
+        )}
+
+        {/* ====== Balance by terminal report ====== */}
+        {activeReport === "balance-terminal" && (
+          <div
+            style={{ background: "#fff", borderRadius: 8, padding: 12 }}
+          >
+            <Space
+              style={{
+                marginBottom: 12,
+                display: "flex",
+                justifyContent: "space-between",
+              }}
+            >
+              <Space wrap>
+                <DatePicker
+                  placeholder="Дата с"
+                  size="small"
+                  onChange={(d) =>
+                    setBtDateFrom(d ? d.format("YYYY-MM-DD") : "")
+                  }
+                />
+                <DatePicker
+                  placeholder="Дата по"
+                  size="small"
+                  onChange={(d) =>
+                    setBtDateTo(d ? d.format("YYYY-MM-DD") : "")
+                  }
+                />
+                <Input
+                  placeholder="ID терминалов через запятую"
+                  size="small"
+                  style={{ width: 200 }}
+                  value={btTermInput}
+                  onChange={(e) => setBtTermInput(e.target.value)}
+                  onPressEnter={handleBtTermSearch}
+                />
+                <Button
+                  size="small"
+                  icon={<SearchOutlined />}
+                  onClick={handleBtTermSearch}
+                >
+                  Найти
+                </Button>
+                <Input
+                  placeholder="TSP код"
+                  size="small"
+                  style={{ width: 90 }}
+                  value={btTspCode ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value.trim();
+                    setBtTspCode(v ? Number(v) : undefined);
+                  }}
+                />
+              </Space>
+              <Button
+                size="small"
+                icon={<ReloadOutlined />}
+                onClick={fetchBalanceByTerminal}
+              />
+            </Space>
+
+            <Table<BalanceByTerminalRecord>
+              rowKey="terminal_id"
+              columns={balanceTerminalColumns}
+              dataSource={btItems}
+              loading={btLoading}
+              size="small"
+              tableLayout="auto"
+              pagination={false}
+              scroll={{ x: 500 }}
+            />
+          </div>
+        )}
+
+        {/* ====== Balance by TSP report ====== */}
+        {activeReport === "balance-tsp" && (
+          <div
+            style={{ background: "#fff", borderRadius: 8, padding: 12 }}
+          >
+            <Space
+              style={{
+                marginBottom: 12,
+                display: "flex",
+                justifyContent: "space-between",
+              }}
+            >
+              <Space wrap>
+                <DatePicker
+                  placeholder="Дата с"
+                  size="small"
+                  onChange={(d) =>
+                    setBtsDateFrom(d ? d.format("YYYY-MM-DD") : "")
+                  }
+                />
+                <DatePicker
+                  placeholder="Дата по"
+                  size="small"
+                  onChange={(d) =>
+                    setBtsDateTo(d ? d.format("YYYY-MM-DD") : "")
+                  }
+                />
+                <Input
+                  placeholder="ID терминалов через запятую"
+                  size="small"
+                  style={{ width: 200 }}
+                  value={btsTermInput}
+                  onChange={(e) => setBtsTermInput(e.target.value)}
+                  onPressEnter={handleBtsTermSearch}
+                />
+                <Button
+                  size="small"
+                  icon={<SearchOutlined />}
+                  onClick={handleBtsTermSearch}
+                >
+                  Найти
+                </Button>
+              </Space>
+              <Button
+                size="small"
+                icon={<ReloadOutlined />}
+                onClick={fetchBalanceByTsp}
+              />
+            </Space>
+
+            <Table<BalanceByTspRecord>
+              rowKey="tsp_code"
+              columns={balanceTspColumns}
+              dataSource={btsItems}
+              loading={btsLoading}
+              size="small"
+              tableLayout="auto"
+              pagination={false}
+              scroll={{ x: 600 }}
             />
           </div>
         )}

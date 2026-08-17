@@ -92,3 +92,53 @@ export async function getPayments(params: {
   });
   return data;
 }
+
+// --- Balance by terminal ---
+
+export interface BalanceByTerminalRecord {
+  device_id: number;
+  sn: string;
+  terminal_id: number;
+  tsp_count: number;
+  total_count: number;
+  total_amount: number;
+}
+
+export async function getBalanceByTerminal(params: {
+  date_from?: string;
+  date_to?: string;
+  device_ids?: number[];
+  tsp_code?: number;
+}): Promise<{ items: BalanceByTerminalRecord[] }> {
+  const { data } = await axios.get("/reports/balance-by-terminal", {
+    params: {
+      ...params,
+      device_ids: params.device_ids?.join(","),
+    },
+  });
+  return data;
+}
+
+// --- Balance by TSP ---
+
+export interface BalanceByTspRecord {
+  tsp_code: number;
+  tsp_name: string;
+  terminal_count: number;
+  total_count: number;
+  total_amount: number;
+}
+
+export async function getBalanceByTsp(params: {
+  date_from?: string;
+  date_to?: string;
+  device_ids?: number[];
+}): Promise<{ items: BalanceByTspRecord[] }> {
+  const { data } = await axios.get("/reports/balance-by-tsp", {
+    params: {
+      ...params,
+      device_ids: params.device_ids?.join(","),
+    },
+  });
+  return data;
+}
