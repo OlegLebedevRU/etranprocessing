@@ -1,6 +1,6 @@
 import hashlib
 import hmac
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -25,14 +25,18 @@ def find_user(username: str) -> dict | None:
 
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_expire_minutes)
-    to_encode.update({"exp": expire, "iat": datetime.now(timezone.utc)})
-    return jwt.encode(to_encode, settings.jwt_secret_bytes, algorithm=settings.jwt_algorithm)
+    expire = datetime.now(UTC) + timedelta(minutes=settings.jwt_expire_minutes)
+    to_encode.update({"exp": expire, "iat": datetime.now(UTC)})
+    return jwt.encode(
+        to_encode, settings.jwt_secret_bytes, algorithm=settings.jwt_algorithm
+    )
 
 
 def decode_token(token: str) -> dict:
     try:
-        payload = jwt.decode(token, settings.jwt_secret_bytes, algorithms=[settings.jwt_algorithm])
+        payload = jwt.decode(
+            token, settings.jwt_secret_bytes, algorithms=[settings.jwt_algorithm]
+        )
         return payload
     except JWTError:
         raise HTTPException(

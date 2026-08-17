@@ -48,7 +48,7 @@ async def post_gauge(
     gauge_raw = ""
     for param in raw_text.split("&"):
         if param.startswith("GaugePack="):
-            gauge_raw = param[len("GaugePack="):]
+            gauge_raw = param[len("GaugePack=") :]
             break
 
     if not gauge_raw:
@@ -70,8 +70,4 @@ async def post_gauge(
     db.add(record)
     await db.commit()
 
-    return xml_response(
-        "<Response>"
-        "<Result>OK</Result>"
-        "</Response>"
-    )
+    return xml_response("<Response><Result>OK</Result></Response>")

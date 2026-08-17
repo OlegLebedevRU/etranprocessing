@@ -10,7 +10,9 @@ router = APIRouter()
 
 
 @router.get("", response_model=list[ServiceRead])
-async def list_services(group_id: int | None = None, db: AsyncSession = Depends(get_db)):
+async def list_services(
+    group_id: int | None = None, db: AsyncSession = Depends(get_db)
+):
     stmt = select(Service)
     if group_id is not None:
         stmt = stmt.where(Service.group_id == group_id)
@@ -53,7 +55,10 @@ async def create_service(data: ServiceCreate, db: AsyncSession = Depends(get_db)
         )
     )
     if existing:
-        raise HTTPException(status_code=409, detail=f"tsp_code {data.tsp_code} already in use in this menu variant")
+        raise HTTPException(
+            status_code=409,
+            detail=f"tsp_code {data.tsp_code} already in use in this menu variant",
+        )
     service = Service(**data.model_dump(), menu_variant_id=group.menu_variant_id)
     db.add(service)
     await db.commit()
@@ -62,7 +67,9 @@ async def create_service(data: ServiceCreate, db: AsyncSession = Depends(get_db)
 
 
 @router.put("/{service_id}", response_model=ServiceRead)
-async def update_service(service_id: int, data: ServiceUpdate, db: AsyncSession = Depends(get_db)):
+async def update_service(
+    service_id: int, data: ServiceUpdate, db: AsyncSession = Depends(get_db)
+):
     service = await db.get(Service, service_id)
     if not service:
         raise HTTPException(status_code=404, detail="Service not found")

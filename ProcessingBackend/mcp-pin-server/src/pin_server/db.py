@@ -14,17 +14,21 @@ class Database:
             await self.pool.close()
 
     async def fetch(self, query: str, *args) -> list[asyncpg.Record]:
+        assert self.pool is not None
         async with self.pool.acquire() as conn:
             return await conn.fetch(query, *args)
 
     async def fetchrow(self, query: str, *args) -> asyncpg.Record | None:
+        assert self.pool is not None
         async with self.pool.acquire() as conn:
             return await conn.fetchrow(query, *args)
 
     async def fetchval(self, query: str, *args):
+        assert self.pool is not None
         async with self.pool.acquire() as conn:
             return await conn.fetchval(query, *args)
 
     async def execute(self, query: str, *args) -> str:
+        assert self.pool is not None
         async with self.pool.acquire() as conn:
             return await conn.execute(query, *args)

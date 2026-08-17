@@ -1,7 +1,6 @@
-import json
+from datetime import UTC, datetime
 
 import httpx
-from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from sqlalchemy import text
@@ -17,11 +16,15 @@ async def _validate_jti(request: Request) -> str:
     """Validate JWT jti from nginx header. Returns jti or raises 401."""
     jti = request.headers.get("X-Auth-Jti")
     if not jti:
-        raise HTTPException(status_code=401, detail="Missing token ID (X-Auth-Jti header)")
+        raise HTTPException(
+            status_code=401, detail="Missing token ID (X-Auth-Jti header)"
+        )
 
     async with async_session() as session:
         result = await session.execute(
-            text("SELECT jti, user_id, expires_at, revoked_at FROM api_tokens WHERE jti = :jti"),
+            text(
+                "SELECT jti, user_id, expires_at, revoked_at FROM api_tokens WHERE jti = :jti"
+            ),
             {"jti": jti},
         )
         row = result.fetchone()
@@ -32,7 +35,7 @@ async def _validate_jti(request: Request) -> str:
     if row[3] is not None:  # revoked_at
         raise HTTPException(status_code=401, detail="Token has been revoked")
 
-    if row[2] < datetime.now(timezone.utc):  # expires_at
+    if row[2] < datetime.now(UTC):  # expires_at
         raise HTTPException(status_code=401, detail="Token has expired")
 
     # Update last_used_at
@@ -94,7 +97,7 @@ async def mcp_proxy(request: Request):
                 status_code=502,
                 detail="MCP server is not available. Check if mcp-pin-server container is running.",
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             raise HTTPException(status_code=502, detail=f"MCP server error: {e}")
 
 
@@ -112,7 +115,7 @@ async def mcp_tools_list(request: Request):
         )
         row = result.fetchone()
 
-    if not row or row[0] is not None or row[1] < datetime.now(timezone.utc):
+    if not row or row[0] is not None or row[1] < datetime.now(UTC):
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
     async with httpx.AsyncClient() as client:
@@ -120,7 +123,10 @@ async def mcp_tools_list(request: Request):
             resp = await client.post(
                 f"{MCP_SERVER_URL}/mcp",
                 json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
-                headers={"Content-Type": "application/json", "Accept": "application/json, text/event-stream"},
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json, text/event-stream",
+                },
                 timeout=10.0,
             )
 

@@ -21,6 +21,19 @@ Deploys MenuBuilder backend (FastAPI) and frontend (React/Vite) to the productio
 
 ## Instructions
 
+### Step 0: Code quality checks (mandatory)
+
+Before deploying, run all checks locally. If any fail, fix them before proceeding.
+
+```bash
+cd D:\repo\platerra\Public\etranprocessing\MenuBuilder\backend
+uv run ruff check --fix app/
+uv run ruff format app/
+uv run pyright app/
+```
+
+All three must report zero errors. If pyright reports errors, fix type issues in the source code.
+
 ### Step 1: Upload backend (full rebuild)
 
 Upload pyproject.toml, Dockerfile, and app code:

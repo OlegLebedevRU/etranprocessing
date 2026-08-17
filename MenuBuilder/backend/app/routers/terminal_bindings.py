@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
 
 from app.database import get_db
 from app.models import MenuVariant, TerminalMenuBinding
@@ -59,13 +58,17 @@ async def list_terminals(
 
 
 @router.post("/bindings", response_model=TerminalBindingRead, status_code=201)
-async def create_or_update_binding(data: TerminalBindingCreate, db: AsyncSession = Depends(get_db)):
+async def create_or_update_binding(
+    data: TerminalBindingCreate, db: AsyncSession = Depends(get_db)
+):
     variant = await db.get(MenuVariant, data.menu_variant_id)
     if not variant:
         raise HTTPException(status_code=404, detail="Menu variant not found")
 
     existing = await db.scalar(
-        select(TerminalMenuBinding).where(TerminalMenuBinding.device_id == data.device_id)
+        select(TerminalMenuBinding).where(
+            TerminalMenuBinding.device_id == data.device_id
+        )
     )
     if existing:
         existing.menu_variant_id = data.menu_variant_id
@@ -79,7 +82,9 @@ async def create_or_update_binding(data: TerminalBindingCreate, db: AsyncSession
             created_at=existing.created_at,
         )
 
-    binding = TerminalMenuBinding(device_id=data.device_id, menu_variant_id=data.menu_variant_id)
+    binding = TerminalMenuBinding(
+        device_id=data.device_id, menu_variant_id=data.menu_variant_id
+    )
     db.add(binding)
     await db.commit()
     await db.refresh(binding)

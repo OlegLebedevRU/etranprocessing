@@ -76,7 +76,7 @@ def _validate_pin_format(pin: str) -> None:
 async def generate_pin(
     terminal_identifier: str,
     pin_code: str | None = None,
-    ctx: Context = None,
+    ctx: Context | None = None,
 ) -> dict:
     """Generate a PIN code for a terminal to install a certificate.
 
@@ -84,6 +84,7 @@ async def generate_pin(
         terminal_identifier: device_id (number), sn (serial string), or database id
         pin_code: Optional custom 6-digit PIN; auto-generated if not provided
     """
+    assert ctx is not None
     db: Database = ctx.lifespan_context["db"]
     terminal = await _resolve_terminal(db, terminal_identifier)
 
@@ -104,6 +105,7 @@ async def generate_pin(
         pin_code,
         terminal["id"],
     )
+    assert result is not None
 
     return {
         "pin": result["pin"],
@@ -119,7 +121,7 @@ async def generate_pin(
 async def list_terminals(
     search: str | None = None,
     include_pins: bool = True,
-    ctx: Context = None,
+    ctx: Context | None = None,
 ) -> list:
     """List terminals, optionally filtered by search term.
 
@@ -129,6 +131,7 @@ async def list_terminals(
         search: Filter by SN (ILIKE), device_id, or org_id
         include_pins: Include PIN summary (default true)
     """
+    assert ctx is not None
     db: Database = ctx.lifespan_context["db"]
 
     if search and search.isdigit():
@@ -176,13 +179,14 @@ async def list_terminals(
 @mcp.tool
 async def terminal_status(
     terminal_identifier: str,
-    ctx: Context = None,
+    ctx: Context | None = None,
 ) -> dict:
     """Get detailed status of a terminal including all PINs (pending and used).
 
     Args:
         terminal_identifier: device_id (number), sn (serial string), or database id
     """
+    assert ctx is not None
     db: Database = ctx.lifespan_context["db"]
     terminal = await _resolve_terminal(db, terminal_identifier)
     pins = await db.fetch(
@@ -211,12 +215,13 @@ async def terminal_status(
 
 
 @mcp.tool
-async def revoke_pin(pin: str, ctx: Context = None) -> dict:
+async def revoke_pin(pin: str, ctx: Context | None = None) -> dict:
     """Revoke a pending PIN code. Used PINs cannot be revoked.
 
     Args:
         pin: The 6-digit PIN to revoke
     """
+    assert ctx is not None
     db: Database = ctx.lifespan_context["db"]
     _validate_pin_format(pin)
     existing = await db.fetchrow(
@@ -231,7 +236,11 @@ async def revoke_pin(pin: str, ctx: Context = None) -> dict:
         "UPDATE certificate_pins SET status = 'revoked' WHERE pin = $1 AND status = 'pending'",
         pin,
     )
-    return {"pin": existing["pin"], "terminal_id": existing["terminal_id"], "status": "revoked"}
+    return {
+        "pin": existing["pin"],
+        "terminal_id": existing["terminal_id"],
+        "status": "revoked",
+    }
 
 
 # === Report Tools ===
@@ -245,7 +254,7 @@ async def report_payments_tool(
     tsp_code: int | None = None,
     paym_state: int | None = None,
     top: int = 100,
-    ctx: Context = None,
+    ctx: Context | None = None,
 ) -> dict:
     """Query payments report. Returns payments with details.
 
@@ -259,8 +268,11 @@ async def report_payments_tool(
         paym_state: Payment state (0=New, 1=Processing, 2=Paid, 3=Not paid, 4=Stopped, 5=Restart, 6=Quarantine)
         top: Max results (10-1000, default 100)
     """
+    assert ctx is not None
     db: Database = ctx.lifespan_context["db"]
-    return await report_payments(db, date_from, date_to, device_ids, tsp_code, paym_state, top)
+    return await report_payments(
+        db, date_from, date_to, device_ids, tsp_code, paym_state, top
+    )
 
 
 @mcp.tool
@@ -269,7 +281,7 @@ async def report_balance_by_terminal_tool(
     date_to: str | None = None,
     device_ids: str | None = None,
     tsp_code: int | None = None,
-    ctx: Context = None,
+    ctx: Context | None = None,
 ) -> dict:
     """Balance report aggregated by terminal. All amounts in kopecks.
 
@@ -279,8 +291,11 @@ async def report_balance_by_terminal_tool(
         device_ids: Comma-separated device IDs
         tsp_code: Filter by TSP code
     """
+    assert ctx is not None
     db: Database = ctx.lifespan_context["db"]
-    return await report_balance_by_terminal(db, date_from, date_to, device_ids, tsp_code)
+    return await report_balance_by_terminal(
+        db, date_from, date_to, device_ids, tsp_code
+    )
 
 
 @mcp.tool
@@ -288,7 +303,7 @@ async def report_balance_by_tsp_tool(
     date_from: str | None = None,
     date_to: str | None = None,
     device_ids: str | None = None,
-    ctx: Context = None,
+    ctx: Context | None = None,
 ) -> dict:
     """Balance report aggregated by TSP (service provider). All amounts in kopecks.
 
@@ -297,6 +312,7 @@ async def report_balance_by_tsp_tool(
         date_to: End date (YYYY-MM-DD)
         device_ids: Comma-separated device IDs
     """
+    assert ctx is not None
     db: Database = ctx.lifespan_context["db"]
     return await report_balance_by_tsp(db, date_from, date_to, device_ids)
 
@@ -308,7 +324,7 @@ async def report_inkass_tool(
     device_ids: str | None = None,
     page: int = 1,
     size: int = 100,
-    ctx: Context = None,
+    ctx: Context | None = None,
 ) -> dict:
     """Inkassation (cash collection) report. All amounts in kopecks.
 
@@ -319,6 +335,7 @@ async def report_inkass_tool(
         page: Page number (default 1)
         size: Page size (10-500, default 100)
     """
+    assert ctx is not None
     db: Database = ctx.lifespan_context["db"]
     return await report_inkass(db, date_from, date_to, device_ids, page, size)
 

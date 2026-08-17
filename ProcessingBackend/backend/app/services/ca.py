@@ -16,7 +16,9 @@ DEFAULT_VALIDITY_DAYS = int(os.getenv("CERT_VALIDITY_DAYS", "365"))
 class CAResponse:
     """Parsed response from external CA."""
 
-    def __init__(self, cert_pem: str, ca_pem: str, serial_number: str, not_valid_after: str):
+    def __init__(
+        self, cert_pem: str, ca_pem: str, serial_number: str, not_valid_after: str
+    ):
         self.cert_pem = cert_pem
         self.ca_pem = ca_pem
         self.serial_number = serial_number
@@ -66,5 +68,9 @@ async def sign_csr(
         not_valid_after=body.get("not_valid_after", ""),
     )
 
-    logger.info("CA response: serial=%s, valid_until=%s", result.serial_number, result.not_valid_after)
+    logger.info(
+        "CA response: serial=%s, valid_until=%s",
+        result.serial_number,
+        result.not_valid_after,
+    )
     return result

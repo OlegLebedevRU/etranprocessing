@@ -10,22 +10,22 @@ Auth is PIN-based (not nginx headers). PIN is pre-allocated in certificate_pins 
 import base64
 import hashlib
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+from cryptography.utils import int_to_bytes
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
 from sqlalchemy import select
+from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.logging_config import cert_logger
 from app.models import CertificatePin, Terminal
 from app.services.ca import sign_csr
-
-from cryptography import x509
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
-from cryptography.utils import int_to_bytes
 
 router = APIRouter()
 
@@ -60,6 +60,7 @@ TAG_CONTEXT = 0xA0
 # XML helpers (legacy format, windows-1251 encoding)
 # ---------------------------------------------------------------------------
 
+
 def xml_response(content: str) -> Response:
     return Response(
         content=f'<?xml version="1.0" encoding="{ENCODING}"?>\n{content}',
@@ -85,11 +86,14 @@ def error_response(description: str, code: int = 1) -> Response:
 # PIN lookup
 # ---------------------------------------------------------------------------
 
-async def _find_terminal_by_pin(pin: str, db: AsyncSession) -> tuple[Terminal, CertificatePin] | None:
+
+async def _find_terminal_by_pin(
+    pin: str, db: AsyncSession
+) -> Row[tuple[Terminal, CertificatePin]] | None:
     """Look up terminal via certificate_pins table. Returns (terminal, pin_row) or None."""
     result = await db.execute(
-        select(CertificatePin, Terminal)
-        .join(Terminal, CertificatePin.terminal_id == Terminal.id)
+        select(Terminal, CertificatePin)
+        .join(CertificatePin, CertificatePin.terminal_id == Terminal.id)
         .where(CertificatePin.pin == pin, CertificatePin.status == "pending")
     )
     row = result.one_or_none()
@@ -99,6 +103,7 @@ async def _find_terminal_by_pin(pin: str, db: AsyncSession) -> tuple[Terminal, C
 # ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
+
 
 @router.get("")
 @router.post("")
@@ -112,7 +117,8 @@ async def certificates_handler(request: Request, db: AsyncSession = Depends(get_
 
     body = await request.body()
     if body:
-        from urllib.parse import unquote_plus, parse_qs
+        from urllib.parse import parse_qs, unquote_plus
+
         raw = unquote_plus(body.decode(ENCODING, errors="replace"))
         for k, v in parse_qs(raw, keep_blank_values=True).items():
             params[k] = v[0]
@@ -131,6 +137,7 @@ async def certificates_handler(request: Request, db: AsyncSession = Depends(get_
 # CHECK
 # ---------------------------------------------------------------------------
 
+
 async def _handle_check(params: dict, db: AsyncSession) -> Response:
     """PIN → terminal → return DN + sign."""
     pin = params.get("pin", "").strip()
@@ -144,16 +151,18 @@ async def _handle_check(params: dict, db: AsyncSession) -> Response:
         cert_logger.warning("CHECK: pin not found: %s", pin)
         return error_response("Пин-код не существует", code=2)
 
-    pin_row, terminal = found
+    _pin_row, terminal = found
 
     # sign = MD5(decode_base64(tosign) + SignKey)
     sign = ""
     if tosign:
         try:
             decoded = base64.b64decode(tosign).decode(ENCODING, errors="replace")
-            sign = hashlib.md5((decoded + SIGN_KEY).encode(ENCODING)).hexdigest().upper()
-        except Exception:
-            pass
+            sign = (
+                hashlib.md5((decoded + SIGN_KEY).encode(ENCODING)).hexdigest().upper()
+            )
+        except ValueError, UnicodeDecodeError:
+            cert_logger.warning("CHECK: failed to decode/tosign for pin=%s", pin)
 
     dn = (
         f"CN={terminal.sn}"
@@ -167,7 +176,14 @@ async def _handle_check(params: dict, db: AsyncSession) -> Response:
     v = params.get("v", "")
     prov = CNG_PROVIDER if v == "26" else LEGACY_PROVIDER
 
-    cert_logger.info("CHECK: pin=%s, sn=%s, device=%d, org=%d, v=%s", pin, terminal.sn, terminal.device_id, terminal.org_id, v)
+    cert_logger.info(
+        "CHECK: pin=%s, sn=%s, device=%d, org=%d, v=%s",
+        pin,
+        terminal.sn,
+        terminal.device_id,
+        terminal.org_id,
+        v,
+    )
 
     inner = (
         f"<catype>SubCA</catype>"
@@ -183,6 +199,7 @@ async def _handle_check(params: dict, db: AsyncSession) -> Response:
 # SETUP
 # ---------------------------------------------------------------------------
 
+
 async def _handle_setup(params: dict, request: Request, db: AsyncSession) -> Response:
     """PIN lookup → CA sign → PKCS#7 chain → terminal."""
     pin = params.get("pin", "").strip()
@@ -196,7 +213,7 @@ async def _handle_setup(params: dict, request: Request, db: AsyncSession) -> Res
         cert_logger.warning("SETUP: pin not found: %s", pin)
         return error_response("Пин-код не существует", code=2)
 
-    pin_row, terminal = found
+    cert_pin, terminal = found
 
     body = await request.body()
     if not body:
@@ -217,16 +234,21 @@ async def _handle_setup(params: dict, request: Request, db: AsyncSession) -> Res
             sign=cpserial,
             cn=terminal.sn,
         )
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         cert_logger.error("SETUP: CA failed: %s", e, exc_info=True)
         return error_response(f"Ошибка выпуска сертификата: {e}", code=1)
 
     terminal.cert_serial = ca_result.serial_number
-    pin_row.status = "used"
-    pin_row.used_at = datetime.now(timezone.utc)
+    cert_pin.status = "used"
+    cert_pin.used_at = datetime.now(UTC)
     await db.commit()
 
-    cert_logger.info("SETUP OK: pin=%s, serial=%s, valid_until=%s", pin, ca_result.serial_number, ca_result.not_valid_after)
+    cert_logger.info(
+        "SETUP OK: pin=%s, serial=%s, valid_until=%s",
+        pin,
+        ca_result.serial_number,
+        ca_result.not_valid_after,
+    )
 
     pkcs7_b64 = _build_pkcs7_chain(ca_result.cert_pem, ca_result.ca_pem)
     return ok_response(pkcs7_b64)
@@ -235,6 +257,7 @@ async def _handle_setup(params: dict, request: Request, db: AsyncSession) -> Res
 # ---------------------------------------------------------------------------
 # PKCS#7 degenerate (certificates-only) builder
 # ---------------------------------------------------------------------------
+
 
 def _der_len(data: bytes) -> bytes:
     """DER length encoding."""
@@ -300,14 +323,16 @@ def _build_pkcs7_chain(cert_pem: str, ca_pem: str) -> str:
     leaf = x509.load_pem_x509_certificate(cert_pem.encode(), default_backend())
     ca = x509.load_pem_x509_certificate(ca_pem.encode(), default_backend())
 
-    certs_der = leaf.public_bytes(serialization.Encoding.DER) + ca.public_bytes(serialization.Encoding.DER)
+    certs_der = leaf.public_bytes(serialization.Encoding.DER) + ca.public_bytes(
+        serialization.Encoding.DER
+    )
 
     signed_data = _der_seq(
-        _der_int(1),                              # version
-        _der_set(),                                # digestAlgorithms (empty)
-        _der_seq(_der_oid(OID_DATA)),              # encapContentInfo (empty data)
-        _der_ctx(0, certs_der),                    # certificates [0]
-        _der_set(),                                # signerInfos (empty)
+        _der_int(1),  # version
+        _der_set(),  # digestAlgorithms (empty)
+        _der_seq(_der_oid(OID_DATA)),  # encapContentInfo (empty data)
+        _der_ctx(0, certs_der),  # certificates [0]
+        _der_set(),  # signerInfos (empty)
     )
 
     content_info = _der_seq(

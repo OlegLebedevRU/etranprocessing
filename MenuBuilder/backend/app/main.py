@@ -1,15 +1,23 @@
 from contextlib import asynccontextmanager
+from datetime import UTC
 
 from fastapi import Depends, FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
-from app.config import settings
-from app.database import Base, engine, async_session
-from app.models import Group, MenuVariant, Service, TerminalMenuBinding
 from app.auth import get_current_user
-from app.routers import groups, menu_variants, services, terminal_bindings, auth, profile, mcp_proxy
+from app.config import settings
+from app.database import Base, async_session, engine
+from app.models import Group, MenuVariant, Service, TerminalMenuBinding
+from app.routers import (
+    auth,
+    groups,
+    mcp_proxy,
+    menu_variants,
+    profile,
+    services,
+    terminal_bindings,
+)
 
 
 @asynccontextmanager
@@ -32,7 +40,9 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api", tags=["auth"])
 app.include_router(groups.router, prefix="/api/groups", tags=["groups"])
 app.include_router(services.router, prefix="/api/services", tags=["services"])
-app.include_router(menu_variants.router, prefix="/api/menu-variants", tags=["menu-variants"])
+app.include_router(
+    menu_variants.router, prefix="/api/menu-variants", tags=["menu-variants"]
+)
 app.include_router(terminal_bindings.router, prefix="/api", tags=["terminals"])
 app.include_router(profile.router, prefix="/api", tags=["profile"])
 app.include_router(mcp_proxy.router, prefix="/api", tags=["mcp"])
@@ -53,7 +63,11 @@ def _build_menu_tree(groups_list, services_list):
             node = {"name": g.name}
             child_items = build(g.id)
             for s in sorted(services_by_group.get(g.id, []), key=lambda x: x.tsp_code):
-                svc = {"name": s.name, "code": s.tsp_code, "prototypeid": s.protypenumber}
+                svc = {
+                    "name": s.name,
+                    "code": s.tsp_code,
+                    "prototypeid": s.protypenumber,
+                }
                 if s.printname:
                     svc["printname"] = s.printname
                 if s.price:
@@ -71,8 +85,13 @@ def _build_menu_tree(groups_list, services_list):
 
 @app.get("/api/ListMenuFile")
 async def list_menu_file(
-    variant_id: int | None = Query(None, description="Menu variant ID. If omitted, uses terminal binding or first variant."),
-    device_id: int | None = Query(None, description="Terminal device_id. Used to look up assigned variant."),
+    variant_id: int | None = Query(
+        None,
+        description="Menu variant ID. If omitted, uses terminal binding or first variant.",
+    ),
+    device_id: int | None = Query(
+        None, description="Terminal device_id. Used to look up assigned variant."
+    ),
 ):
     async with async_session() as session:
         # Resolve variant
@@ -81,26 +100,34 @@ async def list_menu_file(
             variant = await session.get(MenuVariant, variant_id)
         elif device_id:
             binding = await session.scalar(
-                select(TerminalMenuBinding).where(TerminalMenuBinding.device_id == device_id)
+                select(TerminalMenuBinding).where(
+                    TerminalMenuBinding.device_id == device_id
+                )
             )
             if binding:
                 variant = await session.get(MenuVariant, binding.menu_variant_id)
 
         if not variant:
             # Fallback: first variant
-            variant = await session.scalar(select(MenuVariant).order_by(MenuVariant.id).limit(1))
+            variant = await session.scalar(
+                select(MenuVariant).order_by(MenuVariant.id).limit(1)
+            )
 
         if not variant:
             return {"name": "root", "items": []}
 
         groups_result = await session.execute(
-            select(Group).where(Group.menu_variant_id == variant.id).order_by(Group.number)
+            select(Group)
+            .where(Group.menu_variant_id == variant.id)
+            .order_by(Group.number)
         )
         groups_list = groups_result.scalars().all()
 
         group_ids = [g.id for g in groups_list]
         services_result = await session.execute(
-            select(Service).where(Service.group_id.in_(group_ids)).order_by(Service.tsp_code)
+            select(Service)
+            .where(Service.group_id.in_(group_ids))
+            .order_by(Service.tsp_code)
         )
         services_list = services_result.scalars().all()
 
@@ -119,7 +146,9 @@ async def get_stats(variant_id: int | None = None):
 
         if variant_id:
             groups_q = groups_q.where(Group.menu_variant_id == variant_id)
-            services_q = services_q.join(Group).where(Group.menu_variant_id == variant_id)
+            services_q = services_q.join(Group).where(
+                Group.menu_variant_id == variant_id
+            )
             tsp_q = tsp_q.join(Group).where(Group.menu_variant_id == variant_id)
             avg_q = avg_q.join(Group).where(Group.menu_variant_id == variant_id)
 
@@ -141,37 +170,46 @@ async def get_monitoring():
     """Terminal monitoring: connection history + GateGauge data.
     Returns last 2 hours in 10-min intervals (12 slots per terminal)
     plus latest device state from gauge_data."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
+
     from sqlalchemy import text
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     start = now - timedelta(hours=2)
 
     async with async_session() as session:
         # Get all terminals
-        terminals = (await session.execute(
-            text("SELECT id, device_id, sn, org_id, is_active FROM terminals ORDER BY device_id")
-        )).fetchall()
+        terminals = (
+            await session.execute(
+                text(
+                    "SELECT id, device_id, sn, org_id, is_active FROM terminals ORDER BY device_id"
+                )
+            )
+        ).fetchall()
 
         # Get GateGauge records for last 2 hours (for slots)
-        records = (await session.execute(
-            text("""
+        records = (
+            await session.execute(
+                text("""
                 SELECT device_id, created_at
                 FROM gate_gauge_records
                 WHERE created_at >= :start
                 ORDER BY device_id, created_at
             """),
-            {"start": start},
-        )).fetchall()
+                {"start": start},
+            )
+        ).fetchall()
 
         # Get latest gauge_data per terminal (for device state)
-        latest = (await session.execute(
-            text("""
+        latest = (
+            await session.execute(
+                text("""
                 SELECT DISTINCT ON (device_id) device_id, gauge_data
                 FROM gate_gauge_records
                 ORDER BY device_id, created_at DESC
             """),
-        )).fetchall()
+            )
+        ).fetchall()
 
     # Build latest gauge map
     gauge_map: dict[int, dict] = {}
@@ -179,8 +217,8 @@ async def get_monitoring():
         gauge_map[r[0]] = r[1] if r[1] else {}
 
     # Build interval map with overlap buffer to avoid false red on boundary shift
-    SLOT_DURATION = 600      # 10 minutes
-    SLOT_OVERLAP = 60        # 1 minute buffer on each side of boundary
+    SLOT_DURATION = 600  # 10 minutes
+    SLOT_OVERLAP = 60  # 1 minute buffer on each side of boundary
     device_slots: dict[int, list[bool]] = {}
     for r in records:
         dev_id = r[0]
@@ -222,8 +260,8 @@ async def get_monitoring():
                 break
 
         # Extract resource codes from gauge_data (keys are strings in JSONB)
-        def g(key: str) -> str:
-            return str(gauge.get(key, ""))
+        def g(key: str, _gauge: dict = gauge) -> str:
+            return str(_gauge.get(key, ""))
 
         validator_type_raw = g("112")
         # Resource 112 can be a name like "CCNET" or a numeric code
@@ -231,25 +269,27 @@ async def get_monitoring():
         validator_type = validator_type_map.get(validator_type_raw, 0)
         try:
             validator_type = int(validator_type_raw)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             pass  # keep mapped value
 
-        items.append({
-            "terminal_id": t[0],
-            "device_id": dev_id,
-            "sn": t[2],
-            "org_id": t[3],
-            "is_active": t[4],
-            "slots": slots,
-            "lastnumconn": lastnumconn,
-            "validator_state": g("102"),
-            "validator_type": validator_type,
-            "cash_amount": int(g("109") or "0"),
-            "printer_state": g("121"),
-            "printer_fr": int(g("124") or "0"),
-            "printer_check_counter": int(g("120") or "0"),
-            "soft_version": fmt_soft_version(g("130")),
-        })
+        items.append(
+            {
+                "terminal_id": t[0],
+                "device_id": dev_id,
+                "sn": t[2],
+                "org_id": t[3],
+                "is_active": t[4],
+                "slots": slots,
+                "lastnumconn": lastnumconn,
+                "validator_state": g("102"),
+                "validator_type": validator_type,
+                "cash_amount": int(g("109") or "0"),
+                "printer_state": g("121"),
+                "printer_fr": int(g("124") or "0"),
+                "printer_check_counter": int(g("120") or "0"),
+                "soft_version": fmt_soft_version(g("130")),
+            }
+        )
 
     return {"start": start.isoformat(), "now": now.isoformat(), "items": items}
 
@@ -263,7 +303,8 @@ async def get_inkass_report(
     size: int = Query(100, ge=10, le=500),
 ):
     """Inkassation report from TechGate records."""
-    from datetime import datetime, timezone
+    from datetime import datetime
+
     from sqlalchemy import text
 
     async with async_session() as session:
@@ -288,40 +329,48 @@ async def get_inkass_report(
         where = " AND ".join(conditions)
 
         # Count
-        count_row = (await session.execute(
-            text(f"SELECT count(*) FROM tech_gate_records r WHERE {where}"),
-            params,
-        )).scalar()
+        count_row = (
+            await session.execute(
+                text(f"SELECT count(*) FROM tech_gate_records r WHERE {where}"),
+                params,
+            )
+        ).scalar()
 
         # Fetch page
         offset = (page - 1) * size
-        rows = (await session.execute(
-            text(f"""
+        rows = (
+            await session.execute(
+                text(f"""
                 SELECT r.id, r.device_id, r.sn, r.created_at, r.request_data
                 FROM tech_gate_records r
                 WHERE {where}
                 ORDER BY r.created_at DESC
                 LIMIT :limit OFFSET :offset
             """),
-            {**params, "limit": size, "offset": offset},
-        )).fetchall()
+                {**params, "limit": size, "offset": offset},
+            )
+        ).fetchall()
 
         # Get terminal org_ids
-        dev_ids = list(set(r[1] for r in rows))
+        dev_ids = list({r[1] for r in rows})
         org_map: dict[int, int] = {}
         if dev_ids:
             ph = ",".join(f":oid_{i}" for i in range(len(dev_ids)))
-            org_rows = (await session.execute(
-                text(f"SELECT device_id, org_id FROM terminals WHERE device_id IN ({ph})"),
-                {f"oid_{i}": did for i, did in enumerate(dev_ids)},
-            )).fetchall()
+            org_rows = (
+                await session.execute(
+                    text(
+                        f"SELECT device_id, org_id FROM terminals WHERE device_id IN ({ph})"
+                    ),
+                    {f"oid_{i}": did for i, did in enumerate(dev_ids)},
+                )
+            ).fetchall()
             org_map = {r[0]: r[1] for r in org_rows}
 
     def jint(d: dict, key: str) -> int:
         v = d.get(key, "0")
         try:
             return int(v)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return 0
 
     def parse_dt(s: str) -> str:
@@ -329,7 +378,7 @@ async def get_inkass_report(
         if not s:
             return ""
         try:
-            dt = datetime.strptime(s, "%d.%m.%Y %H:%M:%S")
+            dt = datetime.strptime(s, "%d.%m.%Y %H:%M:%S").replace(tzinfo=UTC)
             return dt.strftime("%Y-%m-%d %H:%M:%S")
         except ValueError:
             return s
@@ -339,34 +388,36 @@ async def get_inkass_report(
         d = r[4] if r[4] else {}
         notes = [jint(d, f"Note{i}") for i in range(10)]
         coins = [jint(d, f"Coin{i}") for i in range(10)]
-        items.append({
-            "id": r[0],
-            "device_id": r[1],
-            "sn": r[2] or "",
-            "org_id": org_map.get(r[1], 0),
-            "inkass_datetime": parse_dt(d.get("InkassDateTime", "")),
-            "server_datetime": r[3].strftime("%Y-%m-%d %H:%M:%S") if r[3] else "",
-            "total_sum": jint(d, "TotalSum"),
-            "total_count": jint(d, "TotalCount"),
-            "total_note_sum": jint(d, "TotalNoteSum"),
-            "total_note_count": jint(d, "TotalNoteCount"),
-            "total_coin_sum": jint(d, "TotalCoinSum"),
-            "total_coin_count": jint(d, "TotalCoinCount"),
-            "notes": notes,
-            "coins": coins,
-            "inkassator": d.get("Inkassator", ""),
-            "inkass_ext_id": d.get("InkassExtId", ""),
-            "paym_ext_id": d.get("PaymExtId", ""),
-            "inkass_id": d.get("InkassId", ""),
-            "cassette_num": d.get("cassetteNum", ""),
-            "cnt_inkass": jint(d, "cntInkass"),
-            "cnt_inkass_sum": jint(d, "cntInkassSum"),
-            "cnt_transact": jint(d, "cntTransact"),
-            "cnt_total_sum": jint(d, "cntTotalSum"),
-            "transact_count": jint(d, "TransactCount"),
-            "last_sum_inkass": jint(d, "LastSumInkass"),
-            "currency": jint(d, "Currency"),
-        })
+        items.append(
+            {
+                "id": r[0],
+                "device_id": r[1],
+                "sn": r[2] or "",
+                "org_id": org_map.get(r[1], 0),
+                "inkass_datetime": parse_dt(d.get("InkassDateTime", "")),
+                "server_datetime": r[3].strftime("%Y-%m-%d %H:%M:%S") if r[3] else "",
+                "total_sum": jint(d, "TotalSum"),
+                "total_count": jint(d, "TotalCount"),
+                "total_note_sum": jint(d, "TotalNoteSum"),
+                "total_note_count": jint(d, "TotalNoteCount"),
+                "total_coin_sum": jint(d, "TotalCoinSum"),
+                "total_coin_count": jint(d, "TotalCoinCount"),
+                "notes": notes,
+                "coins": coins,
+                "inkassator": d.get("Inkassator", ""),
+                "inkass_ext_id": d.get("InkassExtId", ""),
+                "paym_ext_id": d.get("PaymExtId", ""),
+                "inkass_id": d.get("InkassId", ""),
+                "cassette_num": d.get("cassetteNum", ""),
+                "cnt_inkass": jint(d, "cntInkass"),
+                "cnt_inkass_sum": jint(d, "cntInkassSum"),
+                "cnt_transact": jint(d, "cntTransact"),
+                "cnt_total_sum": jint(d, "cntTotalSum"),
+                "transact_count": jint(d, "TransactCount"),
+                "last_sum_inkass": jint(d, "LastSumInkass"),
+                "currency": jint(d, "Currency"),
+            }
+        )
 
     return {"items": items, "total": count_row or 0}
 
@@ -434,19 +485,22 @@ async def get_payments_report(
         where = " AND ".join(conditions)
 
         # Count
-        count_row = (await session.execute(
-            text(f"""
+        count_row = (
+            await session.execute(
+                text(f"""
                 SELECT count(*)
                 FROM payments p
                 JOIN terminals t ON t.id = p.terminal_id
                 WHERE {where}
             """),
-            params,
-        )).scalar()
+                params,
+            )
+        ).scalar()
 
         # Fetch payments
-        rows = (await session.execute(
-            text(f"""
+        rows = (
+            await session.execute(
+                text(f"""
                 SELECT p.paym_id, p.paym_datetime, p.paym_amount, p.paym_ext_id,
                        p.paym_tsp_code, p.paym_state, p.pay_type_id,
                        t.device_id, t.sn
@@ -456,8 +510,9 @@ async def get_payments_report(
                 ORDER BY p.paym_datetime DESC
                 LIMIT :top
             """),
-            {**params, "top": top},
-        )).fetchall()
+                {**params, "top": top},
+            )
+        ).fetchall()
 
         if not rows:
             return {"items": [], "total": count_row or 0}
@@ -466,43 +521,49 @@ async def get_payments_report(
 
         # Fetch params for all payments in one query
         ph = ",".join(f":pid_{i}" for i in range(len(paym_ids)))
-        param_rows = (await session.execute(
-            text(f"""
+        param_rows = (
+            await session.execute(
+                text(f"""
                 SELECT pp.paym_id, tpc.parameter_code, tpc.code_description, pp.param_value
                 FROM payment_params pp
                 JOIN tsp_parameter_codes tpc ON tpc.param_id = pp.param_id
                 WHERE pp.paym_id IN ({ph})
                 ORDER BY pp.paym_id, tpc.parameter_code
             """),
-            {f"pid_{i}": pid for i, pid in enumerate(paym_ids)},
-        )).fetchall()
+                {f"pid_{i}": pid for i, pid in enumerate(paym_ids)},
+            )
+        ).fetchall()
 
         # Group params by paym_id
         params_map: dict[int, list[dict]] = {}
         for pr in param_rows:
-            params_map.setdefault(pr[0], []).append({
-                "code": pr[1],
-                "description": pr[2] or "",
-                "value": pr[3] or "",
-            })
+            params_map.setdefault(pr[0], []).append(
+                {
+                    "code": pr[1],
+                    "description": pr[2] or "",
+                    "value": pr[3] or "",
+                }
+            )
 
     items = []
     for r in rows:
         paym_id = r[0]
-        items.append({
-            "paym_id": paym_id,
-            "paym_datetime": r[1].strftime("%Y-%m-%d %H:%M:%S") if r[1] else "",
-            "paym_amount": r[2],
-            "paym_ext_id": (r[3] or "").strip(),
-            "paym_tsp_code": r[4],
-            "paym_state": r[5],
-            "paym_state_label": PAYM_STATE_LABELS.get(r[5], str(r[5])),
-            "pay_type_id": r[6],
-            "pay_type_label": PAY_TYPE_LABELS.get(r[6], str(r[6])),
-            "device_id": r[7],
-            "sn": r[8] or "",
-            "params": params_map.get(paym_id, []),
-        })
+        items.append(
+            {
+                "paym_id": paym_id,
+                "paym_datetime": r[1].strftime("%Y-%m-%d %H:%M:%S") if r[1] else "",
+                "paym_amount": r[2],
+                "paym_ext_id": (r[3] or "").strip(),
+                "paym_tsp_code": r[4],
+                "paym_state": r[5],
+                "paym_state_label": PAYM_STATE_LABELS.get(r[5], str(r[5])),
+                "pay_type_id": r[6],
+                "pay_type_label": PAY_TYPE_LABELS.get(r[6], str(r[6])),
+                "device_id": r[7],
+                "sn": r[8] or "",
+                "params": params_map.get(paym_id, []),
+            }
+        )
 
     return {"items": items, "total": count_row or 0}
 
@@ -513,7 +574,7 @@ def _parse_int_day(date_str: str) -> int | None:
         parts = date_str.split("-")
         if len(parts) == 3:
             return int(parts[0]) * 10000 + int(parts[1]) * 100 + int(parts[2])
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         pass
     return None
 
@@ -560,8 +621,9 @@ async def get_balance_by_terminal(
 
         where = " AND ".join(conditions)
 
-        rows = (await session.execute(
-            text(f"""
+        rows = (
+            await session.execute(
+                text(f"""
                 SELECT t.device_id, t.sn, t.id AS terminal_id,
                        COUNT(*) AS tsp_count,
                        SUM(b.count) AS total_count,
@@ -573,19 +635,22 @@ async def get_balance_by_terminal(
                 GROUP BY t.device_id, t.sn, t.id
                 ORDER BY total_amount DESC
             """),
-            params,
-        )).fetchall()
+                params,
+            )
+        ).fetchall()
 
     items = []
     for r in rows:
-        items.append({
-            "device_id": r[0],
-            "sn": (r[1] or "").strip(),
-            "terminal_id": r[2],
-            "tsp_count": r[3],
-            "total_count": r[4],
-            "total_amount": r[5],
-        })
+        items.append(
+            {
+                "device_id": r[0],
+                "sn": (r[1] or "").strip(),
+                "terminal_id": r[2],
+                "tsp_count": r[3],
+                "total_count": r[4],
+                "total_amount": r[5],
+            }
+        )
 
     return {"items": items}
 
@@ -628,8 +693,9 @@ async def get_balance_by_tsp(
 
         where = " AND ".join(conditions)
 
-        rows = (await session.execute(
-            text(f"""
+        rows = (
+            await session.execute(
+                text(f"""
                 SELECT ts.tsp_code, ts.tsp_name,
                        COUNT(DISTINCT b.terminal_id) AS terminal_count,
                        SUM(b.count) AS total_count,
@@ -641,17 +707,20 @@ async def get_balance_by_tsp(
                 GROUP BY ts.tsp_code, ts.tsp_name
                 ORDER BY total_amount DESC
             """),
-            params,
-        )).fetchall()
+                params,
+            )
+        ).fetchall()
 
     items = []
     for r in rows:
-        items.append({
-            "tsp_code": r[0],
-            "tsp_name": (r[1] or "").strip(),
-            "terminal_count": r[2],
-            "total_count": r[3],
-            "total_amount": r[4],
-        })
+        items.append(
+            {
+                "tsp_code": r[0],
+                "tsp_name": (r[1] or "").strip(),
+                "terminal_count": r[2],
+                "total_count": r[3],
+                "total_amount": r[4],
+            }
+        )
 
     return {"items": items}

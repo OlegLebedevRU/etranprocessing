@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from jose import jwt
@@ -34,12 +34,19 @@ async def create_token(
 ):
     """Create a long-lived API token (returned once as JWT)."""
     jti = str(uuid.uuid4())
-    expires_at = datetime.now(timezone.utc) + timedelta(days=req.expires_days)
+    expires_at = datetime.now(UTC) + timedelta(days=req.expires_days)
 
     async with async_session() as session:
         await session.execute(
-            text("INSERT INTO api_tokens (jti, user_id, name, expires_at) VALUES (:jti, :user_id, :name, :expires_at)"),
-            {"jti": jti, "user_id": user["username"], "name": req.name, "expires_at": expires_at},
+            text(
+                "INSERT INTO api_tokens (jti, user_id, name, expires_at) VALUES (:jti, :user_id, :name, :expires_at)"
+            ),
+            {
+                "jti": jti,
+                "user_id": user["username"],
+                "name": req.name,
+                "expires_at": expires_at,
+            },
         )
         await session.commit()
 
@@ -48,9 +55,11 @@ async def create_token(
         "org_id": user["org_id"],
         "jti": jti,
         "exp": expires_at,
-        "iat": datetime.now(timezone.utc),
+        "iat": datetime.now(UTC),
     }
-    token = jwt.encode(payload, settings.jwt_secret_bytes, algorithm=settings.jwt_algorithm)
+    token = jwt.encode(
+        payload, settings.jwt_secret_bytes, algorithm=settings.jwt_algorithm
+    )
 
     return {
         "token": token,
@@ -68,7 +77,9 @@ async def list_tokens(
     """List API tokens for the current user."""
     async with async_session() as session:
         result = await session.execute(
-            text("SELECT jti, name, expires_at, created_at, last_used_at, revoked_at FROM api_tokens WHERE user_id = :user_id ORDER BY created_at DESC"),
+            text(
+                "SELECT jti, name, expires_at, created_at, last_used_at, revoked_at FROM api_tokens WHERE user_id = :user_id ORDER BY created_at DESC"
+            ),
             {"user_id": user["username"]},
         )
         rows = result.fetchall()
@@ -97,14 +108,18 @@ async def revoke_token(
     """Revoke an API token."""
     async with async_session() as session:
         result = await session.execute(
-            text("UPDATE api_tokens SET revoked_at = NOW() WHERE jti = :jti AND user_id = :user_id AND revoked_at IS NULL RETURNING jti"),
+            text(
+                "UPDATE api_tokens SET revoked_at = NOW() WHERE jti = :jti AND user_id = :user_id AND revoked_at IS NULL RETURNING jti"
+            ),
             {"jti": jti, "user_id": user["username"]},
         )
         row = result.fetchone()
         await session.commit()
 
     if not row:
-        raise HTTPException(status_code=404, detail="Token not found or already revoked")
+        raise HTTPException(
+            status_code=404, detail="Token not found or already revoked"
+        )
 
     return {"jti": jti, "status": "revoked"}
 

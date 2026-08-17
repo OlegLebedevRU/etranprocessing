@@ -1,5 +1,4 @@
 import json
-from datetime import datetime
 
 from pin_server.db import Database
 
@@ -118,9 +117,13 @@ async def report_payments(
                 "paym_ext_id": r["paym_ext_id"],
                 "paym_tsp_code": r["paym_tsp_code"],
                 "paym_state": r["paym_state"],
-                "paym_state_label": PAYMENT_STATES.get(r["paym_state"], str(r["paym_state"])),
+                "paym_state_label": PAYMENT_STATES.get(
+                    r["paym_state"], str(r["paym_state"])
+                ),
                 "pay_type_id": r["pay_type_id"],
-                "pay_type_label": PAY_TYPES.get(r["pay_type_id"], str(r["pay_type_id"])),
+                "pay_type_label": PAY_TYPES.get(
+                    r["pay_type_id"], str(r["pay_type_id"])
+                ),
                 "device_id": r["device_id"],
                 "sn": r["sn"],
                 "params": params_map.get(r["paym_id"], []),
@@ -292,7 +295,7 @@ async def report_inkass(
     rows = await db.fetch(query, *params_with_limit)
 
     # Lookup org_id for device_ids
-    device_id_list = list(set(r["device_id"] for r in rows))
+    device_id_list = list({r["device_id"] for r in rows})
     org_map = {}
     if device_id_list:
         placeholders = ", ".join(f"${i + 1}" for i in range(len(device_id_list)))

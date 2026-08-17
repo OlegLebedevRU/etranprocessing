@@ -35,7 +35,10 @@ async def create_group(data: GroupCreate, db: AsyncSession = Depends(get_db)):
     if data.number == 0:
         max_num = await db.scalar(
             select(Group.number)
-            .where(Group.menu_variant_id == data.menu_variant_id, Group.org_id == data.org_id)
+            .where(
+                Group.menu_variant_id == data.menu_variant_id,
+                Group.org_id == data.org_id,
+            )
             .order_by(Group.number.desc())
             .limit(1)
         )
@@ -48,7 +51,9 @@ async def create_group(data: GroupCreate, db: AsyncSession = Depends(get_db)):
 
 
 @router.put("/{group_id}", response_model=GroupRead)
-async def update_group(group_id: int, data: GroupUpdate, db: AsyncSession = Depends(get_db)):
+async def update_group(
+    group_id: int, data: GroupUpdate, db: AsyncSession = Depends(get_db)
+):
     group = await db.get(Group, group_id)
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
@@ -61,13 +66,23 @@ async def update_group(group_id: int, data: GroupUpdate, db: AsyncSession = Depe
 
 @router.delete("/{group_id}")
 async def delete_group(group_id: int, db: AsyncSession = Depends(get_db)):
-    group = await db.get(Group, group_id, options=[selectinload(Group.services), selectinload(Group.children)])
+    group = await db.get(
+        Group,
+        group_id,
+        options=[selectinload(Group.services), selectinload(Group.children)],
+    )
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
     if group.services:
-        raise HTTPException(status_code=409, detail="Cannot delete group with services. Remove services first.")
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot delete group with services. Remove services first.",
+        )
     if group.children:
-        raise HTTPException(status_code=409, detail="Cannot delete group with subgroups. Remove subgroups first.")
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot delete group with subgroups. Remove subgroups first.",
+        )
     await db.delete(group)
     await db.commit()
     return {"ok": True}

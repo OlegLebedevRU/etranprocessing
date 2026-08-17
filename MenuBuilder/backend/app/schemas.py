@@ -2,8 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-
 # --- MenuVariant ---
+
 
 class MenuVariantCreate(BaseModel):
     name: str
@@ -23,6 +23,7 @@ class MenuVariantDuplicate(BaseModel):
 
 
 # --- Group ---
+
 
 class GroupCreate(BaseModel):
     menu_variant_id: int
@@ -50,6 +51,7 @@ class GroupRead(BaseModel):
 
 
 # --- Service ---
+
 
 class ServiceCreate(BaseModel):
     group_id: int
@@ -81,6 +83,7 @@ class ServiceRead(BaseModel):
 
 
 # --- Terminal binding ---
+
 
 class TerminalBindingRead(BaseModel):
     id: int

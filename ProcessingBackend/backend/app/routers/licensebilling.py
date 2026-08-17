@@ -39,11 +39,11 @@ async def license_check(
             f"<balance>{license_.balance}</balance>"
             "</Response>"
         )
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return xml_response(
             "<Response>"
             "<Result>ERROR</Result>"
             "<state>error</state>"
-            f"<description>{str(e)}</description>"
+            f"<description>{e!s}</description>"
             "</Response>"
         )

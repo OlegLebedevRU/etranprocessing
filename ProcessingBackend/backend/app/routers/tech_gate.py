@@ -49,7 +49,9 @@ async def techgate_dispatch(
     function_name = params.get("function", "").lower()
 
     if function_name not in FUNCTION_MAP:
-        raise HTTPException(status_code=400, detail=f"Unknown function: {function_name}")
+        raise HTTPException(
+            status_code=400, detail=f"Unknown function: {function_name}"
+        )
 
     await save_tech_gate_record(db, terminal, function_name, params, str(params))
 
@@ -93,18 +95,10 @@ async def techgate_dispatch(
         )
     elif function_name == "kiosk":
         return xml_response(
-            "<Response>"
-            "<Result>OK</Result>"
-            "<Kiosk24>0</Kiosk24>"
-            "</Response>"
+            "<Response><Result>OK</Result><Kiosk24>0</Kiosk24></Response>"
         )
     elif function_name == "tsplist":
-        return xml_response(
-            "<Response>"
-            "<Result>OK</Result>"
-            "<TspList/>"
-            "</Response>"
-        )
+        return xml_response("<Response><Result>OK</Result><TspList/></Response>")
     else:
         return xml_response("<Response><Result>OK</Result></Response>")
 
@@ -154,11 +148,7 @@ async def devicestatus(
 
     await save_tech_gate_record(db, terminal, "devicestatus", params, str(params))
 
-    return xml_response(
-        "<Response>"
-        "<Result>OK</Result>"
-        "</Response>"
-    )
+    return xml_response("<Response><Result>OK</Result></Response>")
 
 
 @router.get("/inkass")
@@ -319,12 +309,7 @@ async def kiosk(
 
     await save_tech_gate_record(db, terminal, "kiosk", params, str(params))
 
-    return xml_response(
-        "<Response>"
-        "<Result>OK</Result>"
-        "<Kiosk24>0</Kiosk24>"
-        "</Response>"
-    )
+    return xml_response("<Response><Result>OK</Result><Kiosk24>0</Kiosk24></Response>")
 
 
 @router.get("/tsplist")
@@ -345,9 +330,4 @@ async def tsplist(
 
     await save_tech_gate_record(db, terminal, "tsplist", params, str(params))
 
-    return xml_response(
-        "<Response>"
-        "<Result>OK</Result>"
-        "<TspList/>"
-        "</Response>"
-    )
+    return xml_response("<Response><Result>OK</Result><TspList/></Response>")

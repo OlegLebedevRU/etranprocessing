@@ -30,7 +30,9 @@ async def get_variant(variant_id: int, db: AsyncSession = Depends(get_db)):
 async def create_variant(data: MenuVariantCreate, db: AsyncSession = Depends(get_db)):
     existing = await db.scalar(select(MenuVariant).where(MenuVariant.name == data.name))
     if existing:
-        raise HTTPException(status_code=409, detail=f"Variant '{data.name}' already exists")
+        raise HTTPException(
+            status_code=409, detail=f"Variant '{data.name}' already exists"
+        )
     variant = MenuVariant(name=data.name)
     db.add(variant)
     await db.commit()
@@ -49,7 +51,9 @@ async def delete_variant(variant_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/duplicate", response_model=MenuVariantRead, status_code=201)
-async def duplicate_variant(data: MenuVariantDuplicate, db: AsyncSession = Depends(get_db)):
+async def duplicate_variant(
+    data: MenuVariantDuplicate, db: AsyncSession = Depends(get_db)
+):
     source = await db.get(
         MenuVariant,
         data.source_variant_id,
@@ -73,7 +77,9 @@ async def duplicate_variant(data: MenuVariantDuplicate, db: AsyncSession = Depen
 
     existing = await db.scalar(select(MenuVariant).where(MenuVariant.name == new_name))
     if existing:
-        raise HTTPException(status_code=409, detail=f"Variant '{new_name}' already exists")
+        raise HTTPException(
+            status_code=409, detail=f"Variant '{new_name}' already exists"
+        )
 
     new_variant = MenuVariant(name=new_name)
     db.add(new_variant)

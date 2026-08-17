@@ -1,6 +1,5 @@
 import logging
-import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy import select
@@ -45,16 +44,22 @@ async def get_current_terminal(
 
     if not subject or not cert_serial:
         logger.warning(f"Missing cert headers. DN='{subject}', Serial='{cert_serial}'")
-        raise HTTPException(status_code=401, detail="Missing client certificate headers")
+        raise HTTPException(
+            status_code=401, detail="Missing client certificate headers"
+        )
 
     parsed = parse_cert_subject(subject)
     cn = parsed.get("CN", "")
     ou = parsed.get("OU", "")
 
-    logger.info(f"Cert DN: '{subject}', CN: '{cn}', OU: '{ou}', Serial: '{cert_serial}'")
+    logger.info(
+        f"Cert DN: '{subject}', CN: '{cn}', OU: '{ou}', Serial: '{cert_serial}'"
+    )
 
     if not cn:
-        raise HTTPException(status_code=401, detail="CN not found in certificate subject")
+        raise HTTPException(
+            status_code=401, detail="CN not found in certificate subject"
+        )
 
     # Primary auth: sn (CN) + cert_serial — both must match
     result = await db.execute(
@@ -66,7 +71,9 @@ async def get_current_terminal(
     terminal = result.scalar_one_or_none()
 
     if not terminal:
-        logger.warning(f"Terminal not found by sn+serial. CN='{cn}', Serial='{cert_serial}'")
+        logger.warning(
+            f"Terminal not found by sn+serial. CN='{cn}', Serial='{cert_serial}'"
+        )
         raise HTTPException(
             status_code=401,
             detail=f"Terminal not found. CN='{cn}', Serial='{cert_serial}'",
@@ -105,7 +112,7 @@ async def check_license(
     if not license_:
         raise HTTPException(status_code=403, detail="No active license")
 
-    if license_.expires_at < datetime.now(timezone.utc):
+    if license_.expires_at < datetime.now(UTC):
         raise HTTPException(status_code=403, detail="License expired")
 
     return license_
