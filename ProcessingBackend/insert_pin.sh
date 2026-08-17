@@ -1,0 +1,1 @@
+ssh -o ConnectTimeout=10 user1@176.108.247.249 -i d:\.ssh\free-tier-cloud_ru "sudo docker exec iot-rpc-rest-app-pg-1 psql -U etran -d etranprocessing -c \"INSERT INTO certificate_pins (pin, terminal_id, status) VALUES ('773773', 1, 'pending') ON CONFLICT DO NOTHING\""

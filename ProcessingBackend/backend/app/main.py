@@ -28,10 +28,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from app.routers import health, licensebilling, gate_gauge, tech_gate, payment
+from app.routers import health, licensebilling, gate_gauge, tech_gate, payment, certificates
 
 app.include_router(health.router, prefix="/api", tags=["health"])
 app.include_router(licensebilling.router, prefix="/api/licensebilling", tags=["licensebilling"])
 app.include_router(gate_gauge.router, prefix="/api/gategauge", tags=["gategauge"])
 app.include_router(tech_gate.router, prefix="/api/techgate", tags=["techgate"])
 app.include_router(payment.router, prefix="/api/payment", tags=["payment"])
+app.include_router(certificates.router, prefix="/api/certificates", tags=["certificates"])

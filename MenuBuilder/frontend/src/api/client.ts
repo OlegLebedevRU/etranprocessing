@@ -16,6 +16,13 @@ client.interceptors.request.use((config) => {
 client.interceptors.response.use(
   (res) => res,
   (err) => {
+    if (err.response?.status === 401) {
+      localStorage.removeItem("mb_token");
+      localStorage.removeItem("mb_user");
+      if (window.location.pathname !== "/login") {
+        window.location.href = "/login";
+      }
+    }
     const msg =
       err.response?.data?.detail || err.message || "Unknown error";
     return Promise.reject(new Error(msg));
