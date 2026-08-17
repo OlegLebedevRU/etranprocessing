@@ -16,9 +16,8 @@ services:
     build: ./mcp-pin-server
     container_name: mcp-pin-server
     restart: unless-stopped
-    environment:
-      - DATABASE_URL=postgresql://etran:etran@pg:5432/etranprocessing
-      - MCP_PORT=8001
+    env_file:
+      - ./mcp-pin-server/.env
     networks:
       - pg_network
     depends_on:

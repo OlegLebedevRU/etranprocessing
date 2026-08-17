@@ -33,7 +33,7 @@ router = APIRouter()
 # Constants
 # ---------------------------------------------------------------------------
 
-SIGN_KEY = os.getenv("SIGN_KEY", "EtranSignOK")
+SIGN_KEY = os.environ["SIGN_KEY"]
 LEGACY_PROVIDER = "Microsoft Enhanced Cryptographic Provider v1.0"
 CNG_PROVIDER = "Microsoft Software Key Storage Provider"
 
