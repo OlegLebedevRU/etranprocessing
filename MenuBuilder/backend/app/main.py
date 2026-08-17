@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Query
+from fastapi import Depends, FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -8,7 +8,8 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.database import Base, engine, async_session
 from app.models import Group, MenuVariant, Service, TerminalMenuBinding
-from app.routers import groups, menu_variants, services, terminal_bindings
+from app.auth import get_current_user
+from app.routers import groups, menu_variants, services, terminal_bindings, auth
 
 
 @asynccontextmanager
@@ -28,6 +29,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router, prefix="/api", tags=["auth"])
 app.include_router(groups.router, prefix="/api/groups", tags=["groups"])
 app.include_router(services.router, prefix="/api/services", tags=["services"])
 app.include_router(menu_variants.router, prefix="/api/menu-variants", tags=["menu-variants"])
@@ -362,6 +364,142 @@ async def get_inkass_report(
             "transact_count": jint(d, "TransactCount"),
             "last_sum_inkass": jint(d, "LastSumInkass"),
             "currency": jint(d, "Currency"),
+        })
+
+    return {"items": items, "total": count_row or 0}
+
+
+PAYM_STATE_LABELS = {
+    0: "Новый",
+    1: "В обработке",
+    2: "Оплачен",
+    3: "Не оплачен",
+    4: "Остановлен",
+    5: "Перезапуск",
+    6: "Карантин",
+}
+
+PAY_TYPE_LABELS = {
+    0: "—",
+    1: "Наличные",
+    2: "Карта",
+    3: "СБП",
+    4: "Комбо",
+}
+
+
+@app.get("/api/reports/payments")
+async def get_payments_report(
+    user: dict = Depends(get_current_user),
+    date_from: str | None = None,
+    date_to: str | None = None,
+    device_ids: str | None = None,
+    tsp_code: int | None = None,
+    paym_state: int | None = None,
+    top: int = Query(100, ge=10, le=1000),
+):
+    """Payments report with expandable params. Tenant-scoped by org_id."""
+    from sqlalchemy import text
+
+    org_id = user.get("org_id")
+    if not org_id:
+        return {"items": [], "total": 0}
+
+    async with async_session() as session:
+        conditions = ["p.org_id = :org_id"]
+        params: dict = {"org_id": org_id}
+
+        if date_from:
+            conditions.append("p.paym_datetime >= :date_from")
+            params["date_from"] = date_from
+        if date_to:
+            conditions.append("p.paym_datetime < (:date_to::date + interval '1 day')")
+            params["date_to"] = date_to
+        if device_ids:
+            ids = [int(x.strip()) for x in device_ids.split(",") if x.strip().isdigit()]
+            if ids:
+                placeholders = ",".join(f":did_{i}" for i in range(len(ids)))
+                conditions.append(f"t.device_id IN ({placeholders})")
+                for i, did in enumerate(ids):
+                    params[f"did_{i}"] = did
+        if tsp_code is not None:
+            conditions.append("p.paym_tsp_code = :tsp_code")
+            params["tsp_code"] = tsp_code
+        if paym_state is not None:
+            conditions.append("p.paym_state = :paym_state")
+            params["paym_state"] = paym_state
+
+        where = " AND ".join(conditions)
+
+        # Count
+        count_row = (await session.execute(
+            text(f"""
+                SELECT count(*)
+                FROM payments p
+                JOIN terminals t ON t.id = p.terminal_id
+                WHERE {where}
+            """),
+            params,
+        )).scalar()
+
+        # Fetch payments
+        rows = (await session.execute(
+            text(f"""
+                SELECT p.paym_id, p.paym_datetime, p.paym_amount, p.paym_ext_id,
+                       p.paym_tsp_code, p.paym_state, p.pay_type_id,
+                       t.device_id, t.sn
+                FROM payments p
+                JOIN terminals t ON t.id = p.terminal_id
+                WHERE {where}
+                ORDER BY p.paym_datetime DESC
+                LIMIT :top
+            """),
+            {**params, "top": top},
+        )).fetchall()
+
+        if not rows:
+            return {"items": [], "total": count_row or 0}
+
+        paym_ids = [r[0] for r in rows]
+
+        # Fetch params for all payments in one query
+        ph = ",".join(f":pid_{i}" for i in range(len(paym_ids)))
+        param_rows = (await session.execute(
+            text(f"""
+                SELECT pp.paym_id, tpc.parameter_code, tpc.code_description, pp.param_value
+                FROM payment_params pp
+                JOIN tsp_parameter_codes tpc ON tpc.param_id = pp.param_id
+                WHERE pp.paym_id IN ({ph})
+                ORDER BY pp.paym_id, tpc.parameter_code
+            """),
+            {f"pid_{i}": pid for i, pid in enumerate(paym_ids)},
+        )).fetchall()
+
+        # Group params by paym_id
+        params_map: dict[int, list[dict]] = {}
+        for pr in param_rows:
+            params_map.setdefault(pr[0], []).append({
+                "code": pr[1],
+                "description": pr[2] or "",
+                "value": pr[3] or "",
+            })
+
+    items = []
+    for r in rows:
+        paym_id = r[0]
+        items.append({
+            "paym_id": paym_id,
+            "paym_datetime": r[1].strftime("%Y-%m-%d %H:%M:%S") if r[1] else "",
+            "paym_amount": r[2],
+            "paym_ext_id": (r[3] or "").strip(),
+            "paym_tsp_code": r[4],
+            "paym_state": r[5],
+            "paym_state_label": PAYM_STATE_LABELS.get(r[5], str(r[5])),
+            "pay_type_id": r[6],
+            "pay_type_label": PAY_TYPE_LABELS.get(r[6], str(r[6])),
+            "device_id": r[7],
+            "sn": r[8] or "",
+            "params": params_map.get(paym_id, []),
         })
 
     return {"items": items, "total": count_row or 0}
