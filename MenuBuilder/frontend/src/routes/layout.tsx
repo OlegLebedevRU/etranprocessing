@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router";
-import { Layout, Menu, theme } from "antd";
+import { Layout, Menu, Button, theme } from "antd";
 import {
   MobileOutlined,
   AppstoreOutlined,
@@ -8,6 +8,8 @@ import {
   FileTextOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  LogoutOutlined,
+  UserOutlined,
 } from "@ant-design/icons";
 
 const { Sider, Header, Content } = Layout;
@@ -60,6 +62,7 @@ export default function AppLayout() {
             { key: "variants", icon: <AppstoreOutlined />, label: "Варианты меню" },
             { key: "monitoring", icon: <DashboardOutlined />, label: "Мониторинг" },
             { key: "reports", icon: <FileTextOutlined />, label: "Отчёты" },
+            { key: "profile", icon: <UserOutlined />, label: "Профиль" },
           ]}
         />
       </Sider>
@@ -86,6 +89,21 @@ export default function AppLayout() {
               onClick={() => setCollapsed(true)}
             />
           )}
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 13, color: token.colorTextSecondary }}>
+              {localStorage.getItem("mb_user")}
+            </span>
+            <Button
+              type="text"
+              icon={<LogoutOutlined />}
+              onClick={() => {
+                localStorage.removeItem("mb_token");
+                localStorage.removeItem("mb_user");
+                window.location.href = "/login";
+              }}
+              title="Выйти"
+            />
+          </div>
         </Header>
         <Content style={{ padding: 12 }}>
           <Outlet />

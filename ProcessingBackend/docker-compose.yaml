@@ -7,9 +7,22 @@ services:
       - ./backend/.env
     volumes:
       - ./log:/app/log
+      - ./keys:/function/storage/keys:ro
     networks:
       - pg_network
       - processing_net
+
+  mcp-pin-server:
+    build: ./mcp-pin-server
+    container_name: mcp-pin-server
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://etran:etran@pg:5432/etranprocessing
+      - MCP_PORT=8001
+    networks:
+      - pg_network
+    depends_on:
+      - processing-backend
 
   processing-frontend:
     image: nginx:alpine

@@ -6,19 +6,25 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://etran:etran@pg:5432/etranprocessing
       - CORS_ORIGINS=["http://localhost:3000","https://dev.leo4.ru:3000"]
+      - JWT_SECRET_HEX=${JWT_SECRET_HEX}
+      - AUTH_USERS=${AUTH_USERS}
     networks:
       - pg_network
       - menubuilder_net
 
   menubuilder-frontend:
-    image: nginx:alpine
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
     container_name: menubuilder-frontend
     restart: always
     ports:
       - "3000:443"
+    environment:
+      - JWT_SECRET_HEX=${JWT_SECRET_HEX}
     volumes:
       - ./frontend/dist:/usr/share/nginx/html:ro
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf.template:ro
       - /home/user1/iot-rpc-rest-app/certbot/conf/live/dev.leo4.ru/fullchain.pem:/etc/nginx/ssl/fullchain.pem:ro
       - /home/user1/iot-rpc-rest-app/certbot/conf/live/dev.leo4.ru/privkey.pem:/etc/nginx/ssl/privkey.pem:ro
     networks:

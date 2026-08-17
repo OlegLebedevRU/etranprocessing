@@ -9,7 +9,7 @@ from app.config import settings
 from app.database import Base, engine, async_session
 from app.models import Group, MenuVariant, Service, TerminalMenuBinding
 from app.auth import get_current_user
-from app.routers import groups, menu_variants, services, terminal_bindings, auth
+from app.routers import groups, menu_variants, services, terminal_bindings, auth, profile, mcp_proxy
 
 
 @asynccontextmanager
@@ -34,6 +34,8 @@ app.include_router(groups.router, prefix="/api/groups", tags=["groups"])
 app.include_router(services.router, prefix="/api/services", tags=["services"])
 app.include_router(menu_variants.router, prefix="/api/menu-variants", tags=["menu-variants"])
 app.include_router(terminal_bindings.router, prefix="/api", tags=["terminals"])
+app.include_router(profile.router, prefix="/api", tags=["profile"])
+app.include_router(mcp_proxy.router, prefix="/api", tags=["mcp"])
 
 
 def _build_menu_tree(groups_list, services_list):

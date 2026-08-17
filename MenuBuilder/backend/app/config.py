@@ -1,9 +1,25 @@
+import json
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://etran:etran@localhost:5432/etranprocessing"
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+
+    # JWT secret in hex format (shared with nginx)
+    jwt_secret_hex: str = ""
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 480  # 8 hours
+
+    # Auth — JSON array of users: [{"username":"...","md5_password":"...","org_id":1}]
+    auth_users: str = "[]"
+
+    def get_users(self) -> list[dict]:
+        return json.loads(self.auth_users)
+
+    @property
+    def jwt_secret_bytes(self) -> bytes:
+        return bytes.fromhex(self.jwt_secret_hex)
 
     class Config:
         env_file = ".env"

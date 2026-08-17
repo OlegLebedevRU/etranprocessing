@@ -217,3 +217,39 @@ class BalanceTerminalTsp(Base):
         Index("idx_balance_tsp_id", "tsp_id"),
         Index("idx_balance_org_id", "org_id"),
     )
+
+
+class CertificatePin(Base):
+    __tablename__ = "certificate_pins"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    pin: Mapped[str] = mapped_column(String(10), unique=True, nullable=False)
+    terminal_id: Mapped[int] = mapped_column(Integer, ForeignKey("terminals.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    terminal: Mapped["Terminal"] = relationship()
+
+    __table_args__ = (
+        Index("idx_cert_pins_terminal", "terminal_id"),
+        Index("idx_cert_pins_status", "status"),
+    )
+
+
+class ApiToken(Base):
+    __tablename__ = "api_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    jti: Mapped[str] = mapped_column(String(36), unique=True, nullable=False)
+    user_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("idx_api_tokens_user", "user_id"),
+        Index("idx_api_tokens_jti", "jti"),
+    )
