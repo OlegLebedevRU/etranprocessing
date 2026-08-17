@@ -3,9 +3,9 @@ services:
     build: ./backend
     container_name: menubuilder-backend
     restart: always
+    env_file:
+      - ./backend/.env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://etran:etran@pg:5432/etranprocessing
-      - CORS_ORIGINS=["http://localhost:3000","https://dev.leo4.ru:3000"]
       - JWT_SECRET_HEX=${JWT_SECRET_HEX}
       - AUTH_USERS=${AUTH_USERS}
     networks:

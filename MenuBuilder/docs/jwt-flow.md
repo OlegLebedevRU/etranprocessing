@@ -262,9 +262,8 @@ services:
 
   mcp-pin-server:
     build: ./mcp-pin-server
-    environment:
-      - DATABASE_URL=postgresql://etran:etran@pg:5432/etranprocessing
-      - MCP_PORT=8001
+    env_file:
+      - ./mcp-pin-server/.env  # must contain DATABASE_URL, MCP_PORT
     networks:
       - pg_network      # доступ к PostgreSQL
 ```

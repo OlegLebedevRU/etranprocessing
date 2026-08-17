@@ -20,9 +20,9 @@ Deploys ProcessingBackend (FastAPI) and mcp-pin-server to the production server 
 
 ## Instructions
 
-### Step 0: Code quality checks (mandatory)
+### Step 0: Pre-deploy checks (mandatory)
 
-Before deploying, run all checks locally. If any fail, fix them before proceeding.
+**0a. Code quality — all must pass with zero errors:**
 
 ```bash
 cd D:\repo\platerra\Public\etranprocessing\ProcessingBackend\backend
@@ -38,7 +38,26 @@ uv run ruff format src/
 uv run pyright src/
 ```
 
-All checks must report zero errors. If pyright reports errors, fix type issues in the source code.
+**0b. Secrets scan — must find zero matches:**
+
+Check that no secrets, credentials, or internal URLs leaked into tracked files:
+
+```bash
+# DB URLs with credentials
+grep -rn "postgresql://.*:.*@" ProcessingBackend/ --include="*.py" --include="*.yaml" --include="*.yml" --include="*.toml"
+
+# Hardcoded secrets/keys/tokens (non-empty defaults in getenv)
+grep -rn 'os\.getenv(.*,\s*"[^"]\{8,\}")' ProcessingBackend/ --include="*.py"
+
+# Production URLs in code (not in .env)
+grep -rn "https://dev\.\|https://api\.\|https://prod\." ProcessingBackend/ --include="*.py"
+```
+
+If any match is found, move the value to `.env` and reference it via `os.environ` or `pydantic-settings`. Defaults must be empty or localhost only.
+
+**0c. Deploy skill self-check:**
+
+Verify that this SKILL.md and all `.md` files under `.claude/` contain no credentials, passwords, tokens, or DB URLs. Infrastructure references (server IP, SSH key path) are acceptable; secret values are not.
 
 ### Step 1: Upload backend
 
