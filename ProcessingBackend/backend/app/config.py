@@ -14,6 +14,7 @@ class Settings(BaseSettings):
 
     # Certificate PIN billing
     cert_pin_ttl_hours: int = 24
+    cert_expiring_soon_days: int = 30
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

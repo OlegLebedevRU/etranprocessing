@@ -45,6 +45,9 @@ export interface BillingTerminal {
   cert_not_valid_after: string | null;
   tenant_pin_creation_enabled: boolean;
   cert_serial: string | null;
+  cert_pin_price_minor: number;
+  cert_operation: string;
+  cert_expiring_soon: boolean;
 }
 
 export interface DeactivateResponse {
@@ -64,6 +67,8 @@ export interface CancelDeactivationResponse {
 export interface CheckoutItemRequest {
   terminal_id: number;
   advance_periods: number;
+  include_license?: boolean;
+  include_cert_pin?: boolean;
 }
 
 export interface CheckoutRequest {
@@ -72,10 +77,11 @@ export interface CheckoutRequest {
 
 export interface CheckoutItemResponse {
   terminal_id: number;
+  operation: string;
   periods_due: number;
   advance_periods: number;
   amount_minor: number;
-  new_expires_at: string;
+  new_expires_at: string | null;
 }
 
 export interface CheckoutResponse {

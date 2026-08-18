@@ -66,6 +66,9 @@ class BillingTerminalRead(BaseModel):
     cert_serial: str | None = None
     cert_not_valid_after: datetime | None = None
     tenant_pin_creation_enabled: bool = False
+    cert_pin_price_minor: int = 0
+    cert_operation: str = "primary_issue"
+    cert_expiring_soon: bool = False
 
 
 class DeactivateTerminalResponse(BaseModel):
@@ -85,6 +88,8 @@ class CancelDeactivationResponse(BaseModel):
 class CheckoutItemRequest(BaseModel):
     terminal_id: int
     advance_periods: int = 0  # 0, 1, or 2
+    include_license: bool = True
+    include_cert_pin: bool = False
 
 
 class CheckoutRequest(BaseModel):
@@ -93,10 +98,11 @@ class CheckoutRequest(BaseModel):
 
 class CheckoutItemResponse(BaseModel):
     terminal_id: int
+    operation: str = "renewal"
     periods_due: int
     advance_periods: int
     amount_minor: int
-    new_expires_at: datetime
+    new_expires_at: datetime | None = None
 
 
 class CheckoutResponse(BaseModel):

@@ -38,8 +38,11 @@ from app.schemas.certificate_pin import PaymentRequiredResponse, PinReadyRespons
 from app.services.billing import (
     BillingStatus,
     TerminalBillingInfo,
+    add_months_from_anchor,
     build_org_summary_data,
     compute_terminal_billing,
+    is_license_lapsed,
+    project_expiration_after_payment,
 )
 from app.services.cert_billing import (
     build_cert_policy_snapshot,
@@ -86,6 +89,15 @@ async def _get_terminal_for_org(
     return terminal
 
 
+def _resolve_cert_pricing(
+    org_settings: OrgBillingSettings, cert_serial: str | None
+) -> tuple[int, str]:
+    """Effective cert PIN price and operation type for a terminal's current state."""
+    policy = resolve_cert_policy(org_settings)
+    operation = resolve_operation_type(cert_serial)
+    return resolve_effective_price(policy, operation), operation.value
+
+
 async def _get_terminal_billing_data(
     db: AsyncSession,
     terminal: Terminal,
@@ -99,6 +111,9 @@ async def _get_terminal_billing_data(
         )
     )
     license_ = result.scalar_one_or_none()
+    cert_price, cert_operation = _resolve_cert_pricing(
+        org_settings, terminal.cert_serial
+    )
 
     return TerminalBillingInfo(
         terminal_id=terminal.id,
@@ -120,6 +135,8 @@ async def _get_terminal_billing_data(
         cert_serial=terminal.cert_serial,
         cert_not_valid_after=terminal.cert_not_valid_after,
         tenant_pin_creation_enabled=org_settings.tenant_pin_creation_enabled,
+        cert_pin_price_minor=cert_price,
+        cert_operation=cert_operation,
     )
 
 
@@ -148,6 +165,9 @@ async def _get_all_terminal_billing(
 
     infos = []
     for terminal, license_ in result.all():
+        cert_price, cert_operation = _resolve_cert_pricing(
+            org_settings, terminal.cert_serial
+        )
         infos.append(
             TerminalBillingInfo(
                 terminal_id=terminal.id,
@@ -169,6 +189,8 @@ async def _get_all_terminal_billing(
                 cert_serial=terminal.cert_serial,
                 cert_not_valid_after=terminal.cert_not_valid_after,
                 tenant_pin_creation_enabled=org_settings.tenant_pin_creation_enabled,
+                cert_pin_price_minor=cert_price,
+                cert_operation=cert_operation,
             )
         )
     return infos
@@ -185,7 +207,12 @@ async def get_billing_summary(
 
     infos = await _get_all_terminal_billing(db, user.org_id, org_settings, as_of)
     results = [
-        compute_terminal_billing(info, as_of, settings.billing_due_soon_days)
+        compute_terminal_billing(
+            info,
+            as_of,
+            settings.billing_due_soon_days,
+            settings.cert_expiring_soon_days,
+        )
         for info in infos
     ]
 
@@ -223,7 +250,12 @@ async def get_billing_terminals(
 
     infos = await _get_all_terminal_billing(db, user.org_id, org_settings, as_of)
     results = [
-        compute_terminal_billing(info, as_of, settings.billing_due_soon_days)
+        compute_terminal_billing(
+            info,
+            as_of,
+            settings.billing_due_soon_days,
+            settings.cert_expiring_soon_days,
+        )
         for info in infos
     ]
 
@@ -285,7 +317,9 @@ async def deactivate_terminal(
     if not license_.renewal_enabled:
         org_settings = await _get_org_settings(db, user.org_id)
         info = await _get_terminal_billing_data(db, terminal, org_settings)
-        billing = compute_terminal_billing(info, now, settings.billing_due_soon_days)
+        billing = compute_terminal_billing(
+            info, now, settings.billing_due_soon_days, settings.cert_expiring_soon_days
+        )
         return DeactivateTerminalResponse(
             terminal_id=terminal.id,
             status=billing.billing_status,
@@ -309,7 +343,9 @@ async def deactivate_terminal(
 
     org_settings = await _get_org_settings(db, user.org_id)
     info = await _get_terminal_billing_data(db, terminal, org_settings)
-    billing = compute_terminal_billing(info, now, settings.billing_due_soon_days)
+    billing = compute_terminal_billing(
+        info, now, settings.billing_due_soon_days, settings.cert_expiring_soon_days
+    )
 
     return DeactivateTerminalResponse(
         terminal_id=terminal.id,
@@ -375,7 +411,9 @@ async def cancel_deactivation(
 
     org_settings = await _get_org_settings(db, user.org_id)
     info = await _get_terminal_billing_data(db, terminal, org_settings)
-    billing = compute_terminal_billing(info, now, settings.billing_due_soon_days)
+    billing = compute_terminal_billing(
+        info, now, settings.billing_due_soon_days, settings.cert_expiring_soon_days
+    )
 
     return CancelDeactivationResponse(
         terminal_id=terminal.id,
@@ -410,66 +448,108 @@ async def create_checkout(
                 detail=f"advance_periods must be 0, 1, or 2 for terminal {item.terminal_id}",
             )
 
-        terminal = await _get_terminal_for_org(db, item.terminal_id, user.org_id)
-        info = await _get_terminal_billing_data(db, terminal, org_settings)
-        billing = compute_terminal_billing(info, as_of, settings.billing_due_soon_days)
-
-        if billing.billing_status == BillingStatus.DISABLED:
+        if not item.include_license and not item.include_cert_pin:
             raise HTTPException(
                 status_code=400,
-                detail=f"Terminal {item.terminal_id} is disabled. Use reactivation checkout.",
+                detail=f"Nothing selected to pay for terminal {item.terminal_id}",
             )
+
+        terminal = await _get_terminal_for_org(db, item.terminal_id, user.org_id)
+        info = await _get_terminal_billing_data(db, terminal, org_settings)
+        billing = compute_terminal_billing(
+            info,
+            as_of,
+            settings.billing_due_soon_days,
+            settings.cert_expiring_soon_days,
+        )
+
         if billing.billing_status == BillingStatus.ADMIN_DISABLED:
             raise HTTPException(
                 status_code=400,
                 detail=f"Terminal {item.terminal_id} is administratively disabled.",
             )
 
-        # Calculate periods
-        periods_due = billing.periods_due
-        total_periods = periods_due + item.advance_periods
+        if item.include_license:
+            # A lapsed license (expired, disabled or missing) always restarts today
+            # for exactly one period; an active one extends from its expiry date.
+            lapsed = is_license_lapsed(billing.license_expires_at, as_of)
+            periods_due = 1 if lapsed else 0
+            total_periods = periods_due + item.advance_periods
 
-        if total_periods == 0:
-            raise HTTPException(
-                status_code=400,
-                detail=f"No periods to pay for terminal {item.terminal_id}",
+            if total_periods == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"No periods to pay for terminal {item.terminal_id}",
+                )
+
+            amount = total_periods * billing.period_price_minor
+            total_amount += amount
+
+            if lapsed:
+                new_expires_at = add_months_from_anchor(
+                    as_of, billing.billing_period_months * total_periods
+                )
+            else:
+                assert billing.license_expires_at is not None
+                new_expires_at = project_expiration_after_payment(
+                    billing.license_expires_at,
+                    billing.billing_period_months,
+                    total_periods,
+                    as_of,
+                    mode="renewal",
+                )
+
+            checkout_items.append(
+                {
+                    "terminal_id": item.terminal_id,
+                    "operation": "reactivation" if lapsed else "renewal",
+                    "periods_due": periods_due,
+                    "advance_periods": item.advance_periods,
+                    "amount_minor": amount,
+                    "new_expires_at": new_expires_at,
+                    "billing_period_months": billing.billing_period_months,
+                    "monthly_price_minor": billing.monthly_price_minor,
+                    "old_expires_at": billing.license_expires_at,
+                    "cert_policy_snapshot": None,
+                }
             )
 
-        amount = total_periods * billing.period_price_minor
-        total_amount += amount
+        if item.include_cert_pin:
+            if not org_settings.tenant_pin_creation_enabled:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Tenant self-service PIN creation is not enabled "
+                    "for this organization",
+                )
 
-        # Project new expiry
-        from app.services.billing import (
-            add_months_from_anchor,
-            project_expiration_after_payment,
-        )
+            cert_price = billing.cert_pin_price_minor
+            if cert_price <= 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Certificate PIN for terminal {item.terminal_id} is free — "
+                    "request it directly instead of paying for it",
+                )
 
-        if billing.license_expires_at:
-            new_expires_at = project_expiration_after_payment(
-                billing.license_expires_at,
-                billing.billing_period_months,
-                total_periods,
-                as_of,
-                mode="renewal",
+            total_amount += cert_price
+            policy = resolve_cert_policy(org_settings)
+            operation = resolve_operation_type(billing.cert_serial)
+
+            checkout_items.append(
+                {
+                    "terminal_id": item.terminal_id,
+                    "operation": "cert_pin",
+                    "periods_due": 0,
+                    "advance_periods": 0,
+                    "amount_minor": cert_price,
+                    "new_expires_at": as_of,
+                    "billing_period_months": 1,
+                    "monthly_price_minor": cert_price,
+                    "old_expires_at": as_of,
+                    "cert_policy_snapshot": build_cert_policy_snapshot(
+                        policy, operation, cert_price
+                    ),
+                }
             )
-        else:
-            new_expires_at = add_months_from_anchor(
-                as_of, billing.billing_period_months * total_periods
-            )
-
-        checkout_items.append(
-            {
-                "terminal_id": item.terminal_id,
-                "periods_due": periods_due,
-                "advance_periods": item.advance_periods,
-                "amount_minor": amount,
-                "new_expires_at": new_expires_at,
-                "billing_period_months": billing.billing_period_months,
-                "monthly_price_minor": billing.monthly_price_minor,
-                "old_expires_at": billing.license_expires_at,
-                "period_price_minor": billing.period_price_minor,
-            }
-        )
 
     # M3: Idempotency guard — check for existing pending orders
     from app.models import BillingOrderItem as BOItem
@@ -515,7 +595,7 @@ async def create_checkout(
         item = BillingOrderItem(
             order_id=order_id,
             terminal_id=ci["terminal_id"],
-            operation="renewal",
+            operation=ci["operation"],
             periods_due=ci["periods_due"],
             advance_periods=ci["advance_periods"],
             billing_period_months=ci["billing_period_months"],
@@ -523,6 +603,7 @@ async def create_checkout(
             amount_minor=ci["amount_minor"],
             old_expires_at=ci["old_expires_at"] or as_of,
             new_expires_at=ci["new_expires_at"],
+            cert_policy_snapshot=ci["cert_policy_snapshot"],
         )
         db.add(item)
 
@@ -557,10 +638,13 @@ async def create_checkout(
         items=[
             CheckoutItemResponse(
                 terminal_id=ci["terminal_id"],
+                operation=ci["operation"],
                 periods_due=ci["periods_due"],
                 advance_periods=ci["advance_periods"],
                 amount_minor=ci["amount_minor"],
-                new_expires_at=ci["new_expires_at"],
+                new_expires_at=None
+                if ci["operation"] == "cert_pin"
+                else ci["new_expires_at"],
             )
             for ci in checkout_items
         ],

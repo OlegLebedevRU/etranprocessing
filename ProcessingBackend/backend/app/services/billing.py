@@ -62,6 +62,8 @@ class TerminalBillingInfo:
     cert_serial: str | None = None
     cert_not_valid_after: datetime | None = None
     tenant_pin_creation_enabled: bool = False
+    cert_pin_price_minor: int = 0
+    cert_operation: str = "primary_issue"
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,6 +94,9 @@ class TerminalBillingResult:
     cert_serial: str | None = None
     cert_not_valid_after: datetime | None = None
     tenant_pin_creation_enabled: bool = False
+    cert_pin_price_minor: int = 0
+    cert_operation: str = "primary_issue"
+    cert_expiring_soon: bool = False
 
 
 def add_billing_months(expires_at: datetime, months: int) -> datetime:
@@ -151,15 +156,18 @@ def calculate_terminal_debt(
     period_price: int,
     as_of: datetime,
 ) -> int:
-    """Calculate the overdue amount for a terminal."""
+    """Calculate the amount required to bring a terminal back into service.
+
+    A lapsed license is always charged exactly one billing period starting from
+    `as_of` — missed periods are never billed retroactively.
+    """
     if not renewal_enabled:
         return 0
     if expires_at is None:
         return 0
     if expires_at > as_of:
         return 0
-    periods = calculate_periods_due(expires_at, as_of, billing_period_months)
-    return periods * period_price
+    return period_price
 
 
 def project_expiration_after_payment(
@@ -174,13 +182,43 @@ def project_expiration_after_payment(
 
     mode="renewal": extends from expires_at (continuous subscription).
       New date = expires_at + periods * months. Anchor day preserved.
-    mode="reactivation": extends from as_of (fresh start after downtime).
-      New date = as_of + 1 period. periods_to_add ignored (always 1).
+    mode="reactivation": the license has lapsed, so the new term starts today.
+      New date = as_of + periods * months (periods_to_add is at least 1).
     """
     if mode == "reactivation":
-        return add_months_from_anchor(as_of, billing_period_months)
+        periods = max(periods_to_add, 1)
+        return add_months_from_anchor(as_of, billing_period_months * periods)
     # renewal: extend from original expires_at, preserving anchor day
     return add_months_from_anchor(expires_at, billing_period_months * periods_to_add)
+
+
+def is_license_lapsed(expires_at: datetime | None, as_of: datetime) -> bool:
+    """Whether the license is absent or already expired (needs a fresh term)."""
+    return expires_at is None or expires_at <= as_of
+
+
+def resolve_payment_mode(expires_at: datetime | None, as_of: datetime) -> str:
+    """Pick the expiry projection mode for a terminal's current license state."""
+    return "reactivation" if is_license_lapsed(expires_at, as_of) else "renewal"
+
+
+def is_cert_expiring_soon(
+    cert_serial: str | None,
+    cert_not_valid_after: datetime | None,
+    as_of: datetime,
+    days: int,
+) -> bool:
+    """Whether the certificate should be offered for (re)issue by default.
+
+    True when no certificate has ever been issued, or when the known expiry is
+    within `days`. A legacy certificate with an unknown expiry is not flagged —
+    there is no evidence it is about to lapse.
+    """
+    if cert_serial is None:
+        return True
+    if cert_not_valid_after is None:
+        return False
+    return cert_not_valid_after <= as_of + relativedelta(days=days)
 
 
 def _forecast_end(forecast_months: list[str]) -> datetime:
@@ -234,6 +272,7 @@ def compute_terminal_billing(
     info: TerminalBillingInfo,
     as_of: datetime,
     due_soon_days: int = 30,
+    cert_expiring_soon_days: int = 30,
 ) -> TerminalBillingResult:
     """Compute all billing data for a single terminal."""
     monthly_price = resolve_monthly_price(
@@ -252,14 +291,12 @@ def compute_terminal_billing(
         has_license=info.license_id is not None,
     )
 
-    # Debt calculation
+    # A lapsed license always costs exactly one period, starting from today.
     periods_due = 0
     overdue_amount = 0
-    if billing_status == BillingStatus.OVERDUE and info.license_expires_at is not None:
-        periods_due = calculate_periods_due(
-            info.license_expires_at, as_of, info.billing_period_months
-        )
-        overdue_amount = periods_due * period_price
+    if billing_status == BillingStatus.OVERDUE:
+        periods_due = 1
+        overdue_amount = period_price
 
     # Next payment
     next_payment_at: datetime | None = None
@@ -271,18 +308,10 @@ def compute_terminal_billing(
         next_payment_at = info.license_expires_at
         next_payment_amount = period_price
 
-    # Projected expiry after debt payment
-    # For overdue active terminals: renewal mode (extend from expires_at)
-    # For disabled/reactivation: reactivation mode (extend from as_of)
+    # Projected expiry after paying the outstanding period: the term restarts today.
     projected_expires_at: datetime | None = None
-    if billing_status == BillingStatus.OVERDUE and info.license_expires_at is not None:
-        projected_expires_at = project_expiration_after_payment(
-            info.license_expires_at,
-            info.billing_period_months,
-            periods_due,
-            as_of,
-            mode="renewal",
-        )
+    if billing_status == BillingStatus.OVERDUE:
+        projected_expires_at = add_months_from_anchor(as_of, info.billing_period_months)
 
     # Capability flags
     can_deactivate = (
@@ -331,6 +360,14 @@ def compute_terminal_billing(
         cert_serial=info.cert_serial,
         cert_not_valid_after=info.cert_not_valid_after,
         tenant_pin_creation_enabled=info.tenant_pin_creation_enabled,
+        cert_pin_price_minor=info.cert_pin_price_minor,
+        cert_operation=info.cert_operation,
+        cert_expiring_soon=is_cert_expiring_soon(
+            info.cert_serial,
+            info.cert_not_valid_after,
+            as_of,
+            cert_expiring_soon_days,
+        ),
     )
 
 

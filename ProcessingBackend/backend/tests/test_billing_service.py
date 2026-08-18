@@ -320,15 +320,27 @@ def test_h2_chain_preserves_31st():
 
 
 def test_h3_reactivation_starts_from_payment_date():
-    """H3: Reactivation always extends 1 period from as_of."""
+    """H3: Reactivation restarts the term from as_of, ignoring the lapsed date."""
     new_exp = project_expiration_after_payment(
         _dt(2024, 8, 10),  # long-expired
         1,  # period months
-        25,  # periods_to_add (ignored for reactivation)
+        1,  # periods to add
         _dt(2026, 8, 18),  # as_of
         mode="reactivation",
     )
     assert new_exp == _dt(2026, 9, 18)
+
+
+def test_reactivation_honours_advance_periods():
+    """Advance periods stack on top of the restarted term."""
+    new_exp = project_expiration_after_payment(
+        _dt(2024, 8, 10),
+        1,
+        3,  # 1 due + 2 advance
+        _dt(2026, 8, 18),
+        mode="reactivation",
+    )
+    assert new_exp == _dt(2026, 11, 18)
 
 
 def test_h3_renewal_extends_from_expiry():
@@ -397,3 +409,74 @@ def test_m2_no_license_in_compute():
     assert result.billing_status == BillingStatus.NO_LICENSE
     assert result.overdue_amount_minor == 0
     assert result.included_in_forecast is False
+
+
+# === Lapsed licenses always cost exactly one period from today ===
+
+
+def test_long_overdue_charges_single_period():
+    """Three months overdue still costs one period, not three."""
+    info = _info(license_expires_at=_dt(2026, 5, 18))
+    result = compute_terminal_billing(info, _dt(2026, 8, 18))
+    assert result.billing_status == BillingStatus.OVERDUE
+    assert result.periods_due == 1
+    assert result.overdue_amount_minor == 300000
+
+
+def test_overdue_projected_expiry_restarts_today():
+    """The new term starts from as_of, not from the lapsed expiry date."""
+    info = _info(license_expires_at=_dt(2026, 5, 18))
+    result = compute_terminal_billing(info, _dt(2026, 8, 18))
+    assert result.projected_expires_at_after_debt_payment == _dt(2026, 9, 18)
+
+
+def test_overdue_multi_month_period_charges_one_period():
+    """A quarterly plan overdue by a year costs a single quarter."""
+    info = _info(license_expires_at=_dt(2025, 8, 18), billing_period_months=3)
+    result = compute_terminal_billing(info, _dt(2026, 8, 18))
+    assert result.overdue_amount_minor == 900000
+    assert result.projected_expires_at_after_debt_payment == _dt(2026, 11, 18)
+
+
+def test_debt_helper_ignores_missed_periods():
+    """calculate_terminal_debt follows the same single-period rule."""
+    debt = calculate_terminal_debt(_dt(2026, 2, 18), True, 1, 300000, _dt(2026, 8, 18))
+    assert debt == 300000
+
+
+def test_deactivating_overdue_terminal_clears_debt():
+    """Turning renewal off drops an overdue terminal's debt and forecast entry."""
+    info = _info(license_expires_at=_dt(2026, 5, 18), renewal_enabled=False)
+    result = compute_terminal_billing(info, _dt(2026, 8, 18))
+    assert result.billing_status == BillingStatus.DISABLED
+    assert result.overdue_amount_minor == 0
+    assert result.included_in_forecast is False
+    assert result.can_reactivate is True
+
+
+# === Certificate expiry hints ===
+
+
+def test_cert_expiring_soon_when_never_issued():
+    info = _info(cert_serial=None)
+    result = compute_terminal_billing(info, _dt(2026, 8, 18))
+    assert result.cert_expiring_soon is True
+
+
+def test_cert_expiring_soon_when_within_threshold():
+    info = _info(cert_serial="AB12", cert_not_valid_after=_dt(2026, 9, 1))
+    result = compute_terminal_billing(info, _dt(2026, 8, 18))
+    assert result.cert_expiring_soon is True
+
+
+def test_cert_not_expiring_soon_when_far_away():
+    info = _info(cert_serial="AB12", cert_not_valid_after=_dt(2027, 8, 18))
+    result = compute_terminal_billing(info, _dt(2026, 8, 18))
+    assert result.cert_expiring_soon is False
+
+
+def test_cert_with_unknown_expiry_is_not_flagged():
+    """A legacy cert with no recorded expiry is not assumed to be lapsing."""
+    info = _info(cert_serial="AB12", cert_not_valid_after=None)
+    result = compute_terminal_billing(info, _dt(2026, 8, 18))
+    assert result.cert_expiring_soon is False

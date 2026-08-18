@@ -37,6 +37,8 @@ def _make_terminal(id: int = 1, org_id: int = 1, is_active: bool = True) -> Magi
     t.sn = f"SN{id}"
     t.org_id = org_id
     t.is_active = is_active
+    t.cert_serial = None
+    t.cert_not_valid_after = None
     return t
 
 
@@ -67,6 +69,11 @@ def _make_org_settings(org_id: int = 1) -> MagicMock:
     settings.org_id = org_id
     settings.monthly_price_minor = 300000
     settings.currency = "RUB"
+    settings.cert_billing_mode = "none"
+    settings.cert_price_minor = None
+    settings.tenant_pin_creation_enabled = False
+    settings.cert_charge_primary_issue = True
+    settings.cert_charge_reissue = True
     return settings
 
 
@@ -319,3 +326,209 @@ def _async_gen_mock_db_none_order():
         yield mock_db
 
     return override
+
+
+def _checkout_db_mock(terminal, license_, org_settings, added: list):
+    """Mock DB for /checkout: no pending orders, captures created order items."""
+    mock_db = AsyncMock()
+
+    def execute_side_effect(stmt):
+        stmt_str = str(stmt)
+        result = MagicMock()
+        if "org_billing_settings" in stmt_str:
+            result.scalar_one_or_none.return_value = org_settings
+        elif "billing_orders" in stmt_str:
+            result.scalar_one_or_none.return_value = None
+        elif "licenses" in stmt_str:
+            result.scalar_one_or_none.return_value = license_
+        elif "terminals" in stmt_str:
+            result.scalar_one_or_none.return_value = terminal
+        else:
+            result.scalar_one_or_none.return_value = None
+        return result
+
+    mock_db.execute = AsyncMock(side_effect=execute_side_effect)
+    mock_db.commit = AsyncMock()
+    mock_db.flush = AsyncMock()
+    mock_db.add = MagicMock(side_effect=added.append)
+
+    async def override_get_db():
+        yield mock_db
+
+    return override_get_db
+
+
+def _paid_org_settings():
+    org_settings = _make_org_settings()
+    org_settings.cert_billing_mode = "per_operation"
+    org_settings.cert_price_minor = 300000
+    org_settings.tenant_pin_creation_enabled = True
+    return org_settings
+
+
+async def _post_checkout(user, terminal, license_, org_settings, items, added):
+    app.dependency_overrides[get_db] = _checkout_db_mock(
+        terminal, license_, org_settings, added
+    )
+    from app.dependencies import get_current_user_jwt
+
+    app.dependency_overrides[get_current_user_jwt] = lambda: user
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        return await client.post("/api/billing/checkout", json={"items": items})
+
+
+@pytest.mark.anyio
+async def test_checkout_combines_license_and_cert_pin():
+    """One order carries both a renewal item and a cert_pin item."""
+    added: list = []
+    resp = await _post_checkout(
+        _make_user(),
+        _make_terminal(),
+        _make_license(expires_at=datetime.now(UTC) + timedelta(days=45)),
+        _paid_org_settings(),
+        [{"terminal_id": 1, "advance_periods": 1, "include_cert_pin": True}],
+        added,
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["amount_minor"] == 600000
+    operations = sorted(i["operation"] for i in data["items"])
+    assert operations == ["cert_pin", "renewal"]
+
+
+@pytest.mark.anyio
+async def test_checkout_cert_pin_only():
+    """A terminal with nothing to renew can still pay for a certificate."""
+    added: list = []
+    resp = await _post_checkout(
+        _make_user(),
+        _make_terminal(),
+        _make_license(expires_at=datetime.now(UTC) + timedelta(days=45)),
+        _paid_org_settings(),
+        [
+            {
+                "terminal_id": 1,
+                "advance_periods": 0,
+                "include_license": False,
+                "include_cert_pin": True,
+            }
+        ],
+        added,
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["amount_minor"] == 300000
+    assert [i["operation"] for i in data["items"]] == ["cert_pin"]
+
+
+@pytest.mark.anyio
+async def test_checkout_overdue_charges_one_period_from_today():
+    """A long-overdue license costs one period and restarts today."""
+    added: list = []
+    resp = await _post_checkout(
+        _make_user(),
+        _make_terminal(),
+        _make_license(expires_at=datetime.now(UTC) - timedelta(days=95)),
+        _make_org_settings(),
+        [{"terminal_id": 1, "advance_periods": 0}],
+        added,
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["amount_minor"] == 300000
+    item = data["items"][0]
+    assert item["operation"] == "reactivation"
+    assert item["periods_due"] == 1
+    new_expires = datetime.fromisoformat(item["new_expires_at"])
+    assert new_expires > datetime.now(UTC) + timedelta(days=27)
+
+
+@pytest.mark.anyio
+async def test_checkout_accepts_disabled_terminal():
+    """Disabled terminals rejoin through the regular checkout."""
+    added: list = []
+    resp = await _post_checkout(
+        _make_user(),
+        _make_terminal(),
+        _make_license(
+            expires_at=datetime.now(UTC) - timedelta(days=10), renewal_enabled=False
+        ),
+        _make_org_settings(),
+        [{"terminal_id": 1, "advance_periods": 0}],
+        added,
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["items"][0]["operation"] == "reactivation"
+
+
+@pytest.mark.anyio
+async def test_checkout_cert_pin_requires_tenant_flag():
+    """Cert PIN cannot be bought when self-service is disabled for the org."""
+    added: list = []
+    org_settings = _paid_org_settings()
+    org_settings.tenant_pin_creation_enabled = False
+
+    resp = await _post_checkout(
+        _make_user(),
+        _make_terminal(),
+        _make_license(expires_at=datetime.now(UTC) + timedelta(days=45)),
+        org_settings,
+        [
+            {
+                "terminal_id": 1,
+                "include_license": False,
+                "include_cert_pin": True,
+            }
+        ],
+        added,
+    )
+
+    assert resp.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_checkout_rejects_free_cert_pin():
+    """A free certificate must be requested directly, not paid for."""
+    added: list = []
+    org_settings = _make_org_settings()
+    org_settings.tenant_pin_creation_enabled = True
+
+    resp = await _post_checkout(
+        _make_user(),
+        _make_terminal(),
+        _make_license(expires_at=datetime.now(UTC) + timedelta(days=45)),
+        org_settings,
+        [
+            {
+                "terminal_id": 1,
+                "include_license": False,
+                "include_cert_pin": True,
+            }
+        ],
+        added,
+    )
+
+    assert resp.status_code == 400
+    assert "free" in resp.json()["detail"].lower()
+
+
+@pytest.mark.anyio
+async def test_checkout_rejects_empty_selection():
+    """Neither license nor certificate selected → 400."""
+    added: list = []
+    resp = await _post_checkout(
+        _make_user(),
+        _make_terminal(),
+        _make_license(),
+        _make_org_settings(),
+        [{"terminal_id": 1, "include_license": False, "include_cert_pin": False}],
+        added,
+    )
+
+    assert resp.status_code == 400

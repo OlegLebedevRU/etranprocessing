@@ -3,16 +3,16 @@
  */
 
 /**
- * Format minor units (kopecks) to display currency.
- * 300000 → "3 000,00 ₽", 30050 → "300,50 ₽"
+ * Format minor units (kopecks) to display currency, dropping kopecks entirely.
+ * 300000 → "3 000 ₽", 30050 → "300 ₽"
  */
 export function formatMoneyMinor(value: number, currency = "RUB"): string {
-  const major = value / 100;
+  const major = Math.trunc(value / 100);
   return new Intl.NumberFormat("ru-RU", {
     style: "currency",
     currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   }).format(major);
 }
 

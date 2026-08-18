@@ -1,27 +1,29 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   Card,
+  Checkbox,
   Col,
   Row,
   Table,
   Tag,
   Button,
+  Segmented,
   Space,
   Modal,
   Tabs,
   Input,
   Spin,
+  Tooltip,
   message,
   Typography,
 } from "antd";
 import {
-  DollarOutlined,
   WarningOutlined,
   CalendarOutlined,
-  StopOutlined,
   ReloadOutlined,
   SearchOutlined,
   SafetyCertificateOutlined,
+  ShoppingCartOutlined,
 } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -29,13 +31,11 @@ import {
   getBillingTerminals,
   deactivateTerminal,
   cancelDeactivation,
-  createCheckout,
-  createReactivationCheckout,
-  confirmPayment,
   type BillingSummary,
   type BillingTerminal,
 } from "../api/billing";
 import CertificatePinModal from "../components/CertificatePinModal";
+import CheckoutModal, { type CartLine } from "../components/CheckoutModal";
 import {
   formatMoneyMinor,
   formatDebt,
@@ -49,18 +49,62 @@ import {
 const { Text } = Typography;
 
 const STATUS_TABS = [
+  { key: "all", label: "Все" },
   { key: "attention", label: "Требуют внимания" },
   { key: "active", label: "Активные" },
   { key: "deactivation", label: "Отключение запланировано" },
   { key: "disabled", label: "Отключённые" },
 ];
 
+interface Selection {
+  license: boolean;
+  cert: boolean;
+}
+
+/** A license that has expired or was never issued restarts from today. */
+function isLicenseLapsed(t: BillingTerminal): boolean {
+  return !t.license_expires_at || new Date(t.license_expires_at) <= new Date();
+}
+
+/** Whether a license payment can be made for this terminal right now. */
+function isLicensePayable(t: BillingTerminal, advancePeriods: number): boolean {
+  if (t.billing_status === "admin_disabled") return false;
+  return isLicenseLapsed(t) || advancePeriods > 0;
+}
+
+/** Whether a paid certificate PIN can be bought for this terminal. */
+function isCertPayable(t: BillingTerminal): boolean {
+  return t.tenant_pin_creation_enabled && t.cert_pin_price_minor > 0;
+}
+
+function licenseAmountMinor(t: BillingTerminal, advancePeriods: number): number {
+  const periods = (isLicenseLapsed(t) ? 1 : 0) + advancePeriods;
+  return periods * t.period_price_minor;
+}
+
+/** Date the license will run until once the selected periods are paid. */
+function projectedExpiry(
+  t: BillingTerminal,
+  advancePeriods: number,
+): string | null {
+  const periods = (isLicenseLapsed(t) ? 1 : 0) + advancePeriods;
+  if (periods === 0) return null;
+  const anchor = isLicenseLapsed(t)
+    ? new Date()
+    : new Date(t.license_expires_at as string);
+  const projected = new Date(anchor);
+  projected.setMonth(projected.getMonth() + periods * t.billing_period_months);
+  return projected.toISOString();
+}
+
 export default function BillingPage() {
   const [summary, setSummary] = useState<BillingSummary | null>(null);
   const [terminals, setTerminals] = useState<BillingTerminal[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [activeTab, setActiveTab] = useState("attention");
+  const [activeTab, setActiveTab] = useState("all");
+  const [advancePeriods, setAdvancePeriods] = useState(0);
+  const [selection, setSelection] = useState<Record<number, Selection>>({});
   const [deactivateModal, setDeactivateModal] = useState<{
     open: boolean;
     terminal: BillingTerminal | null;
@@ -70,6 +114,7 @@ export default function BillingPage() {
     open: boolean;
     terminal: BillingTerminal | null;
   }>({ open: false, terminal: null });
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -80,6 +125,21 @@ export default function BillingPage() {
       ]);
       setSummary(s);
       setTerminals(t);
+      // Preselect everything that needs paying: lapsed licenses and
+      // certificates that are missing or about to expire.
+      setSelection(
+        Object.fromEntries(
+          t.map((term) => [
+            term.terminal_id,
+            {
+              license:
+                term.billing_status !== "admin_disabled" &&
+                isLicenseLapsed(term),
+              cert: isCertPayable(term) && term.cert_expiring_soon,
+            },
+          ]),
+        ),
+      );
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Ошибка загрузки";
       message.error(msg);
@@ -119,44 +179,15 @@ export default function BillingPage() {
     }
   };
 
-  const handlePayOverdue = async (terminal: BillingTerminal) => {
-    try {
-      setConfirmLoading(true);
-      const checkout = await createCheckout({
-        items: [{ terminal_id: terminal.terminal_id, advance_periods: 0 }],
-      });
-      await confirmPayment(checkout.order_id);
-      message.success("Оплата прошла успешно");
-      fetchData();
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Ошибка оплаты";
-      message.error(msg);
-    } finally {
-      setConfirmLoading(false);
-    }
+  const toggle = (terminalId: number, field: keyof Selection, on: boolean) => {
+    setSelection((prev) => ({
+      ...prev,
+      [terminalId]: { ...prev[terminalId], [field]: on },
+    }));
   };
 
-  const handleReactivate = async (terminal: BillingTerminal) => {
-    try {
-      setConfirmLoading(true);
-      const checkout = await createReactivationCheckout(
-        terminal.terminal_id,
-        { advance_periods: 1 },
-      );
-      await confirmPayment(checkout.order_id);
-      message.success("Терминал подключён");
-      fetchData();
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Ошибка подключения";
-      message.error(msg);
-    } finally {
-      setConfirmLoading(false);
-    }
-  };
-
-  // Filter terminals by tab
+  // Filter terminals by tab and search
   const filteredTerminals = terminals.filter((t) => {
-    // Search filter
     if (search) {
       const s = search.toLowerCase();
       if (!String(t.device_id).includes(s) && !t.sn.toLowerCase().includes(s)) {
@@ -165,29 +196,86 @@ export default function BillingPage() {
     }
 
     switch (activeTab) {
+      case "all":
+        return true;
       case "attention":
-        return t.billing_status === "overdue" || t.billing_status === "due_soon" || t.billing_status === "no_license";
+        return (
+          t.billing_status === "overdue" ||
+          t.billing_status === "due_soon" ||
+          t.billing_status === "no_license"
+        );
       case "active":
         return t.billing_status === "active" || t.billing_status === "due_soon";
       case "deactivation":
         return t.billing_status === "deactivation_scheduled";
       case "disabled":
-        return t.billing_status === "disabled" || t.billing_status === "admin_disabled" || t.billing_status === "no_license";
+        return (
+          t.billing_status === "disabled" ||
+          t.billing_status === "admin_disabled" ||
+          t.billing_status === "no_license"
+        );
       default:
         return true;
     }
   });
 
+  // Cart lines are built from every terminal, not just the visible tab, so
+  // switching tabs never silently drops something the user already selected.
+  const cartLines: CartLine[] = useMemo(() => {
+    return terminals
+      .map((t) => {
+        const sel = selection[t.terminal_id];
+        const license =
+          Boolean(sel?.license) && isLicensePayable(t, advancePeriods);
+        const cert = Boolean(sel?.cert) && isCertPayable(t);
+        if (!license && !cert) return null;
+        return {
+          terminal: t,
+          license,
+          cert,
+          licenseAmountMinor: license
+            ? licenseAmountMinor(t, advancePeriods)
+            : 0,
+          certAmountMinor: cert ? t.cert_pin_price_minor : 0,
+          newExpiresAt: license ? projectedExpiry(t, advancePeriods) : null,
+        };
+      })
+      .filter((l): l is CartLine => l !== null);
+  }, [terminals, selection, advancePeriods]);
+
+  const totalMinor = cartLines.reduce(
+    (sum, l) => sum + l.licenseAmountMinor + l.certAmountMinor,
+    0,
+  );
+  const licenseCount = cartLines.filter((l) => l.license).length;
+  const certCount = cartLines.filter((l) => l.cert).length;
+
+  const setAllVisible = (on: boolean) => {
+    setSelection((prev) => {
+      const next = { ...prev };
+      for (const t of filteredTerminals) {
+        next[t.terminal_id] = {
+          license: on && isLicensePayable(t, advancePeriods),
+          cert: on && isCertPayable(t),
+        };
+      }
+      return next;
+    });
+  };
+
   // Counters
-  const overdueCount = terminals.filter((t) => t.billing_status === "overdue").length;
+  const overdueCount = terminals.filter(
+    (t) => t.billing_status === "overdue",
+  ).length;
   const activeCount = terminals.filter(
-    (t) => t.billing_status === "active" || t.billing_status === "due_soon"
+    (t) => t.billing_status === "active" || t.billing_status === "due_soon",
   ).length;
   const deactivationCount = terminals.filter(
-    (t) => t.billing_status === "deactivation_scheduled"
+    (t) => t.billing_status === "deactivation_scheduled",
   ).length;
   const disabledCount = terminals.filter(
-    (t) => t.billing_status === "disabled" || t.billing_status === "admin_disabled"
+    (t) =>
+      t.billing_status === "disabled" || t.billing_status === "admin_disabled",
   ).length;
 
   const columns: ColumnsType<BillingTerminal> = [
@@ -195,44 +283,96 @@ export default function BillingPage() {
       title: "Терминал",
       dataIndex: "device_id",
       key: "device_id",
+      width: 100,
       sorter: (a, b) => a.device_id - b.device_id,
-    },
-    {
-      title: "SN",
-      dataIndex: "sn",
-      key: "sn",
-      ellipsis: true,
     },
     {
       title: "Статус",
       dataIndex: "billing_status",
       key: "status",
+      width: 150,
       render: (status: string) => (
-        <Tag color={billingStatusColor(status)}>{billingStatusLabel(status)}</Tag>
+        <Tag color={billingStatusColor(status)}>
+          {billingStatusLabel(status)}
+        </Tag>
       ),
     },
     {
-      title: "Лицензия до",
-      dataIndex: "license_expires_at",
-      key: "expires",
-      render: (v: string | null) => formatDate(v),
+      title: "Лицензия",
+      key: "license",
+      width: 215,
+      render: (_: unknown, r: BillingTerminal) => {
+        const payable = isLicensePayable(r, advancePeriods);
+        const lapsed = isLicenseLapsed(r);
+        const checked = Boolean(selection[r.terminal_id]?.license) && payable;
+        const checkbox = (
+          <Checkbox
+            checked={checked}
+            disabled={!payable}
+            onChange={(e) => toggle(r.terminal_id, "license", e.target.checked)}
+          >
+            <Space direction="vertical" size={0}>
+              <Text type={lapsed ? "danger" : undefined}>
+                {r.license_expires_at
+                  ? formatDate(r.license_expires_at)
+                  : "нет лицензии"}
+              </Text>
+              {payable && (
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {formatMoneyMinor(licenseAmountMinor(r, advancePeriods))}
+                  {checked &&
+                    ` → ${formatDate(projectedExpiry(r, advancePeriods))}`}
+                </Text>
+              )}
+            </Space>
+          </Checkbox>
+        );
+        return payable ? (
+          checkbox
+        ) : (
+          <Tooltip title="Лицензия действует — выберите «Оплатить вперёд», чтобы продлить заранее">
+            {checkbox}
+          </Tooltip>
+        );
+      },
     },
     {
       title: "Сертификат",
-      dataIndex: "cert_not_valid_after",
-      key: "cert_expires",
-      render: (v: string | null, r: BillingTerminal) => {
-        if (!r.cert_serial) {
-          return <Text type="secondary">не выпущен</Text>;
-        }
-        if (!v) {
-          // Legacy certificate issued before this app started tracking expiry.
-          return <Text type="secondary">выпущен (дата неизвестна)</Text>;
-        }
-        return (
-          <Text type={new Date(v) < new Date() ? "danger" : "secondary"}>
-            {formatDate(v)}
+      key: "cert",
+      width: 215,
+      render: (_: unknown, r: BillingTerminal) => {
+        const label = !r.cert_serial ? (
+          <Text type="warning">не выпущен</Text>
+        ) : !r.cert_not_valid_after ? (
+          <Text type="secondary">выпущен (дата неизвестна)</Text>
+        ) : (
+          <Text
+            type={
+              new Date(r.cert_not_valid_after) < new Date()
+                ? "danger"
+                : r.cert_expiring_soon
+                  ? "warning"
+                  : "secondary"
+            }
+          >
+            {formatDate(r.cert_not_valid_after)}
           </Text>
+        );
+
+        if (!isCertPayable(r)) return label;
+
+        return (
+          <Checkbox
+            checked={Boolean(selection[r.terminal_id]?.cert)}
+            onChange={(e) => toggle(r.terminal_id, "cert", e.target.checked)}
+          >
+            <Space direction="vertical" size={0}>
+              {label}
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {formatMoneyMinor(r.cert_pin_price_minor)}
+              </Text>
+            </Space>
+          </Checkbox>
         );
       },
     },
@@ -241,6 +381,7 @@ export default function BillingPage() {
       dataIndex: "monthly_price_minor",
       key: "tariff",
       align: "right",
+      width: 130,
       render: (v: number, r) => (
         <span>
           {formatMoneyMinor(v)}/{formatBillingPeriod(r.billing_period_months)}
@@ -252,6 +393,7 @@ export default function BillingPage() {
       dataIndex: "overdue_amount_minor",
       key: "debt",
       align: "right",
+      width: 130,
       render: (v: number) =>
         v > 0 ? (
           <Text type="danger" strong>
@@ -265,6 +407,7 @@ export default function BillingPage() {
       title: "Следующий платёж",
       key: "next",
       align: "right",
+      width: 140,
       render: (_: unknown, r: BillingTerminal) => {
         if (r.billing_status === "overdue") return "после погашения";
         if (r.next_payment_amount_minor > 0)
@@ -275,18 +418,9 @@ export default function BillingPage() {
     {
       title: "Действия",
       key: "actions",
+      width: 210,
       render: (_: unknown, r: BillingTerminal) => (
-        <Space size="small">
-          {r.billing_status === "overdue" && r.overdue_amount_minor > 0 && (
-            <Button
-              size="small"
-              type="primary"
-              loading={confirmLoading}
-              onClick={() => handlePayOverdue(r)}
-            >
-              Оплатить {formatDebt(r.overdue_amount_minor)}
-            </Button>
-          )}
+        <Space size="small" wrap>
           {r.can_deactivate && (
             <Button
               size="small"
@@ -305,26 +439,30 @@ export default function BillingPage() {
               Отменить отключение
             </Button>
           )}
-          {r.can_reactivate && (
-            <Button
-              size="small"
-              type="default"
-              loading={confirmLoading}
-              onClick={() => handleReactivate(r)}
-            >
-              Подключить
-            </Button>
-          )}
           {r.tenant_pin_creation_enabled && (
-            <Button
-              size="small"
-              icon={<SafetyCertificateOutlined />}
-              onClick={() => setPinModal({ open: true, terminal: r })}
-            >
-              {r.cert_serial ? "Перевыпустить сертификат" : "Получить PIN"}
-            </Button>
+            <Tooltip title="Запросить PIN отдельно, не добавляя в общий счёт">
+              <Button
+                size="small"
+                icon={<SafetyCertificateOutlined />}
+                onClick={() => setPinModal({ open: true, terminal: r })}
+              />
+            </Tooltip>
           )}
         </Space>
+      ),
+    },
+    {
+      title: "SN",
+      dataIndex: "sn",
+      key: "sn",
+      width: 110,
+      ellipsis: true,
+      render: (v: string) => (
+        <Tooltip title={v}>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {v}
+          </Text>
+        </Tooltip>
       ),
     },
   ];
@@ -338,15 +476,44 @@ export default function BillingPage() {
   }
 
   const deactivationTerminal = deactivateModal.terminal;
-  const isExpiredDeactivation =
-    deactivationTerminal?.license_expires_at
-      ? new Date(deactivationTerminal.license_expires_at) <= new Date()
-      : true;
+  const isExpiredDeactivation = deactivationTerminal?.license_expires_at
+    ? new Date(deactivationTerminal.license_expires_at) <= new Date()
+    : true;
 
   return (
     <div>
       {/* Summary cards */}
       <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
+        <Col xs={24} sm={12} md={6}>
+          <Card
+            size="small"
+            style={{
+              borderColor: totalMinor > 0 ? "#1677ff" : undefined,
+              borderWidth: totalMinor > 0 ? 2 : 1,
+            }}
+          >
+            <Space direction="vertical" size={2} style={{ width: "100%" }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                <ShoppingCartOutlined /> Сумма к оплате
+              </Text>
+              <div style={{ fontSize: 22, fontWeight: 700 }}>
+                {formatMoneyMinor(totalMinor)}
+              </div>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                лицензии: {licenseCount} · сертификаты: {certCount}
+              </Text>
+              <Button
+                type="primary"
+                block
+                size="small"
+                disabled={totalMinor <= 0}
+                onClick={() => setCheckoutOpen(true)}
+              >
+                Перейти к оплате
+              </Button>
+            </Space>
+          </Card>
+        </Col>
         <Col xs={24} sm={12} md={6}>
           <Card size="small">
             <Space direction="vertical" size={0} style={{ width: "100%" }}>
@@ -388,7 +555,7 @@ export default function BillingPage() {
       </Row>
 
       {/* Counters */}
-      <Space style={{ marginBottom: 8 }} size="middle">
+      <Space style={{ marginBottom: 8 }} size="middle" wrap>
         <Tag color="red">Просрочено: {overdueCount}</Tag>
         <Tag color="green">Активных: {activeCount}</Tag>
         <Tag color="blue">Отключение: {deactivationCount}</Tag>
@@ -400,13 +567,32 @@ export default function BillingPage() {
         size="small"
         title="Терминалы"
         extra={
-          <Space>
+          <Space wrap>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              Оплатить вперёд
+            </Text>
+            <Segmented
+              size="small"
+              value={advancePeriods}
+              onChange={(v) => setAdvancePeriods(v as number)}
+              options={[
+                { label: "0", value: 0 },
+                { label: "+1", value: 1 },
+                { label: "+2", value: 2 },
+              ]}
+            />
+            <Button size="small" onClick={() => setAllVisible(true)}>
+              Отметить всё
+            </Button>
+            <Button size="small" onClick={() => setAllVisible(false)}>
+              Снять всё
+            </Button>
             <Input
               placeholder="Поиск..."
               prefix={<SearchOutlined />}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              style={{ width: 200 }}
+              style={{ width: 180 }}
               size="small"
             />
             <Button
@@ -434,7 +620,7 @@ export default function BillingPage() {
           size="small"
           tableLayout="auto"
           pagination={false}
-          scroll={{ x: 900 }}
+          scroll={{ x: 1200 }}
         />
       </Card>
 
@@ -445,7 +631,11 @@ export default function BillingPage() {
         onCancel={() => setDeactivateModal({ open: false, terminal: null })}
         onOk={handleDeactivate}
         confirmLoading={confirmLoading}
-        okText={isExpiredDeactivation ? "Отключить терминал" : "Отключить после окончания лицензии"}
+        okText={
+          isExpiredDeactivation
+            ? "Отключить терминал"
+            : "Отключить после окончания лицензии"
+        }
         cancelText="Отмена"
         okButtonProps={{ danger: true }}
       >
@@ -457,6 +647,15 @@ export default function BillingPage() {
           </p>
         )}
       </Modal>
+
+      {/* Combined checkout modal */}
+      <CheckoutModal
+        open={checkoutOpen}
+        lines={cartLines}
+        advancePeriods={advancePeriods}
+        onClose={() => setCheckoutOpen(false)}
+        onPaid={fetchData}
+      />
 
       {/* Certificate PIN issuance modal */}
       <CertificatePinModal
