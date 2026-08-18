@@ -99,11 +99,13 @@ async def generate_pin(
         pin_code = await generate_unique_pin(db)
 
     result = await db.fetchrow(
-        "INSERT INTO certificate_pins (pin, terminal_id, status) "
-        "VALUES ($1, $2, 'pending') "
+        "INSERT INTO certificate_pins "
+        "(pin, terminal_id, org_id, status, creation_source) "
+        "VALUES ($1, $2, $3, 'pending', 'global_admin') "
         "RETURNING id, pin, terminal_id, status, created_at",
         pin_code,
         terminal["id"],
+        terminal["org_id"],
     )
     assert result is not None
 
