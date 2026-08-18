@@ -108,14 +108,45 @@ async def _get_all_terminal_billing(
     org_settings: OrgBillingSettings,
     as_of: datetime,
 ) -> list[TerminalBillingInfo]:
-    """Get billing info for all terminals of an organization."""
-    result = await db.execute(select(Terminal).where(Terminal.org_id == org_id))
-    terminals = result.scalars().all()
+    """Get billing info for all terminals of an organization.
+
+    Uses a single query with LEFT JOIN instead of N+1 per-terminal queries.
+    """
+    from sqlalchemy.orm import aliased
+
+    active_license = aliased(License)
+    result = await db.execute(
+        select(Terminal, active_license)
+        .outerjoin(
+            active_license,
+            (active_license.terminal_id == Terminal.id)
+            & (active_license.is_active == True),
+        )
+        .where(Terminal.org_id == org_id)
+    )
 
     infos = []
-    for terminal in terminals:
-        info = await _get_terminal_billing_data(db, terminal, org_settings)
-        infos.append(info)
+    for terminal, license_ in result.all():
+        infos.append(
+            TerminalBillingInfo(
+                terminal_id=terminal.id,
+                device_id=terminal.device_id,
+                sn=terminal.sn,
+                terminal_is_active=terminal.is_active,
+                license_id=license_.id if license_ else None,
+                license_expires_at=license_.expires_at if license_ else None,
+                renewal_enabled=license_.renewal_enabled if license_ else True,
+                deactivation_requested_at=license_.deactivation_requested_at
+                if license_
+                else None,
+                billing_period_months=license_.billing_period_months if license_ else 1,
+                monthly_price_override_minor=license_.monthly_price_override_minor
+                if license_
+                else None,
+                org_monthly_price_minor=org_settings.monthly_price_minor,
+                org_currency=org_settings.currency,
+            )
+        )
     return infos
 
 
@@ -149,7 +180,9 @@ async def get_billing_summary(
         disabled_terminal_count=summary.disabled_terminal_count,
         admin_disabled_terminal_count=summary.admin_disabled_terminal_count,
         nearest_required_payment_at=summary.nearest_required_payment_at,
-        forecast=[BillingForecastMonthRead.model_validate(fm) for fm in summary.forecast],
+        forecast=[
+            BillingForecastMonthRead.model_validate(fm) for fm in summary.forecast
+        ],
     )
 
 
@@ -242,6 +275,14 @@ async def deactivate_terminal(
     license_.deactivation_requested_at = now
     await db.commit()
 
+    logger.info(
+        "billing.deactivate org=%d terminal=%d user=%s expires_at=%s",
+        user.org_id,
+        terminal_id,
+        user.username,
+        license_.expires_at,
+    )
+
     org_settings = await _get_org_settings(db, user.org_id)
     info = await _get_terminal_billing_data(db, terminal, org_settings)
     billing = compute_terminal_billing(info, now, settings.billing_due_soon_days)
@@ -300,6 +341,13 @@ async def cancel_deactivation(
     license_.renewal_enabled = True
     license_.deactivation_requested_at = None
     await db.commit()
+
+    logger.info(
+        "billing.cancel_deactivation org=%d terminal=%d user=%s",
+        user.org_id,
+        terminal_id,
+        user.username,
+    )
 
     org_settings = await _get_org_settings(db, user.org_id)
     info = await _get_terminal_billing_data(db, terminal, org_settings)
@@ -367,23 +415,23 @@ async def create_checkout(
         total_amount += amount
 
         # Project new expiry
-        if billing.license_expires_at:
-            from app.services.billing import project_expiration_after_payment
+        from app.services.billing import (
+            add_months_from_anchor,
+            project_expiration_after_payment,
+        )
 
+        if billing.license_expires_at:
             new_expires_at = project_expiration_after_payment(
                 billing.license_expires_at,
                 billing.billing_period_months,
                 total_periods,
                 as_of,
+                mode="renewal",
             )
         else:
-            from app.services.billing import add_billing_months
-
-            new_expires_at = as_of
-            for _ in range(total_periods):
-                new_expires_at = add_billing_months(
-                    new_expires_at, billing.billing_period_months
-                )
+            new_expires_at = add_months_from_anchor(
+                as_of, billing.billing_period_months * total_periods
+            )
 
         checkout_items.append(
             {
@@ -397,6 +445,27 @@ async def create_checkout(
                 "old_expires_at": billing.license_expires_at,
                 "period_price_minor": billing.period_price_minor,
             }
+        )
+
+    # M3: Idempotency guard — check for existing pending orders
+    from app.models import BillingOrderItem as BOItem
+
+    terminal_ids = [ci["terminal_id"] for ci in checkout_items]
+    existing = await db.execute(
+        select(BillingOrder.id)
+        .join(BOItem, BOItem.order_id == BillingOrder.id)
+        .where(
+            BillingOrder.org_id == user.org_id,
+            BillingOrder.status == "pending",
+            BOItem.terminal_id.in_(terminal_ids),
+        )
+        .limit(1)
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=409,
+            detail="A pending order already exists for one of these terminals. "
+            "Confirm or wait for it to expire before creating a new one.",
         )
 
     # Create order
@@ -434,25 +503,27 @@ async def create_checkout(
         db.add(item)
 
     # Get payment URL from provider
-    payment_url = None
-    if provider:
-        try:
-            payment_url = await provider.create_checkout(
-                amount_minor=total_amount,
-                currency=org_settings.currency,
-                order_id=str(order_id),
-            )
-            order.payment_url = payment_url
-        except Exception:
-            logger.exception("Payment provider error")
-            raise HTTPException(status_code=502, detail="Payment provider error")
-    else:
-        raise HTTPException(
-            status_code=501,
-            detail="Payment provider is not configured",
+    try:
+        payment_url = await provider.create_checkout(
+            amount_minor=total_amount,
+            currency=org_settings.currency,
+            order_id=str(order_id),
         )
+        order.payment_url = payment_url
+    except Exception:
+        logger.exception("Payment provider error")
+        raise HTTPException(status_code=502, detail="Payment provider error")
 
     await db.commit()
+
+    logger.info(
+        "billing.checkout org=%d user=%s order=%s amount=%d items=%d",
+        user.org_id,
+        user.username,
+        order_id,
+        total_amount,
+        len(checkout_items),
+    )
 
     return CheckoutResponse(
         order_id=str(order_id),
@@ -483,13 +554,20 @@ async def create_reactivation_checkout(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a checkout for reactivating a disabled terminal."""
-    from app.services.billing import add_billing_months
     from app.services.payment_provider import get_payment_provider
 
     if body.advance_periods < 1 or body.advance_periods > 2:
         raise HTTPException(status_code=400, detail="advance_periods must be 1 or 2")
 
     terminal = await _get_terminal_for_org(db, terminal_id, user.org_id)
+
+    # H5: Admin-disabled terminals cannot be reactivated by users
+    if not terminal.is_active:
+        raise HTTPException(
+            status_code=403,
+            detail="Terminal is administratively disabled. Contact support.",
+        )
+
     org_settings = await _get_org_settings(db, user.org_id)
 
     result = await db.execute(
@@ -526,10 +604,12 @@ async def create_reactivation_checkout(
 
     total_amount = body.advance_periods * period_price
 
-    # New expiry starts from now
-    new_expires_at = now
-    for _ in range(body.advance_periods):
-        new_expires_at = add_billing_months(new_expires_at, billing_period_months)
+    # New expiry starts from now (reactivation mode)
+    from app.services.billing import add_months_from_anchor
+
+    new_expires_at = add_months_from_anchor(
+        now, billing_period_months * body.advance_periods
+    )
 
     # Create order
     import uuid
@@ -563,23 +643,16 @@ async def create_reactivation_checkout(
     )
     db.add(item)
 
-    payment_url = None
-    if provider:
-        try:
-            payment_url = await provider.create_checkout(
-                amount_minor=total_amount,
-                currency=org_settings.currency,
-                order_id=str(order_id),
-            )
-            order.payment_url = payment_url
-        except Exception:
-            logger.exception("Payment provider error")
-            raise HTTPException(status_code=502, detail="Payment provider error")
-    else:
-        raise HTTPException(
-            status_code=501,
-            detail="Payment provider is not configured",
+    try:
+        payment_url = await provider.create_checkout(
+            amount_minor=total_amount,
+            currency=org_settings.currency,
+            order_id=str(order_id),
         )
+        order.payment_url = payment_url
+    except Exception:
+        logger.exception("Payment provider error")
+        raise HTTPException(status_code=502, detail="Payment provider error")
 
     await db.commit()
 
@@ -590,4 +663,104 @@ async def create_reactivation_checkout(
         months=body.advance_periods * billing_period_months,
         new_expires_at=new_expires_at,
         payment_url=payment_url,
+    )
+
+
+@router.post("/orders/{order_id}/confirm")
+async def confirm_payment(
+    order_id: str,
+    user: JwtUser = Depends(get_current_user_jwt),
+    db: AsyncSession = Depends(get_db),
+):
+    """Confirm a pending payment. Updates license.expires_at for each item.
+
+    With mock provider this is called directly by the frontend after checkout.
+    With a real provider this would be called by the provider's webhook.
+    """
+    from uuid import UUID
+
+    from app.models import BillingOrderItem
+    from app.schemas.billing import ConfirmPaymentResponse, OrderStatus
+    from app.services.payment_provider import get_payment_provider
+
+    try:
+        order_uuid = UUID(order_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid order ID format")
+
+    # Find the order
+    result = await db.execute(
+        select(BillingOrder).where(
+            BillingOrder.id == order_uuid,
+            BillingOrder.org_id == user.org_id,
+        )
+    )
+    order = result.scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if order.status != OrderStatus.PENDING:
+        return ConfirmPaymentResponse(
+            order_id=str(order.id),
+            status=OrderStatus(order.status),
+            paid_at=order.paid_at,
+            items_updated=0,
+        )
+
+    # Verify payment with provider
+    provider = get_payment_provider()
+    if not await provider.verify_payment(str(order.id)):
+        raise HTTPException(status_code=402, detail="Payment verification failed")
+
+    # Load order items
+    result = await db.execute(
+        select(BillingOrderItem).where(BillingOrderItem.order_id == order_uuid)
+    )
+    items = result.scalars().all()
+
+    now = datetime.now(UTC)
+
+    # Apply each item: update license expires_at and re-enable renewal
+    for item in items:
+        result = await db.execute(
+            select(License).where(
+                License.terminal_id == item.terminal_id,
+                License.is_active == True,
+            )
+        )
+        license_ = result.scalar_one_or_none()
+
+        if license_ is None:
+            # Create new license for terminal without one
+            license_ = License(
+                terminal_id=item.terminal_id,
+                org_id=order.org_id,
+                expires_at=item.new_expires_at,
+                billing_period_months=item.billing_period_months,
+                renewal_enabled=True,
+            )
+            db.add(license_)
+        else:
+            license_.expires_at = item.new_expires_at
+            license_.renewal_enabled = True
+            license_.deactivation_requested_at = None
+
+    # Mark order as paid
+    order.status = OrderStatus.PAID
+    order.paid_at = now
+
+    await db.commit()
+
+    logger.info(
+        "Payment confirmed: order=%s org=%d items=%d",
+        order.id,
+        order.org_id,
+        len(items),
+    )
+
+    return ConfirmPaymentResponse(
+        order_id=str(order.id),
+        status=OrderStatus.PAID,
+        paid_at=now,
+        items_updated=len(items),
     )

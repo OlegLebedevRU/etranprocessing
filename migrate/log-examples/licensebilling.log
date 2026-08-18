@@ -6,8 +6,8 @@ System.Net.WebException: Íåâîçìîæíî ñîåäèíèòüñÿ ñ óäàë
    â System.Net.WebClient.DownloadDataInternal(Uri address, WebRequest& request)
    â System.Net.WebClient.DownloadString(Uri address)
    â GlobalObjectsManager.GetDBConn(String name) â c:\ETRANPROCESSING\licensebilling\App_Code\GlobalObjectsManager.cs:ñòðîêà 37
-2026-07-29 12:25:30,249 - DbConnectionString: server=db.corepay.local;Trusted_Connection=false;uid=platerra_bl;pwd=gkfnthhf_,k;database=Service;Connect Timeout=300;max pool size=10000;Pooling=True
-2026-07-29 12:25:30,249 - DbConnectionString: server=db.corepay.local;Trusted_Connection=false;uid=platerra_bl;pwd=gkfnthhf_,k;database=Service;Connect Timeout=300;max pool size=10000;Pooling=True
+2026-07-29 12:25:30,249 - DbConnectionString: [REDACTED — credentials removed from tracked files]
+2026-07-29 12:25:30,249 - DbConnectionString: [REDACTED — credentials removed from tracked files]
 
 2026-07-29 16:29:54,688 - /licensebilling/
 2026-07-29 16:29:54,688 - POST: function=check&Signature=TUI9MSBUbyBiZSBmaWxsZWQgYnkgTy5FLk0ufENQVT0xIEJGRUJGQkZGMDAwMzA2QTk=

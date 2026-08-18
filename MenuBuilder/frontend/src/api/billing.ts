@@ -145,3 +145,17 @@ export async function createReactivationCheckout(
   );
   return res.data;
 }
+
+export interface ConfirmPaymentResponse {
+  order_id: string;
+  status: string;
+  paid_at: string | null;
+  items_updated: number;
+}
+
+export async function confirmPayment(
+  orderId: string,
+): Promise<ConfirmPaymentResponse> {
+  const res = await client.post(`/billing/orders/${orderId}/confirm`);
+  return res.data;
+}

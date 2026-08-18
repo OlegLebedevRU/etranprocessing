@@ -107,6 +107,9 @@ class License(Base):
         CheckConstraint(
             "monthly_price_override_minor >= 0", name="ck_license_price_non_negative"
         ),
+        CheckConstraint(
+            "billing_period_months > 0", name="ck_billing_period_months_positive"
+        ),
     )
 
 

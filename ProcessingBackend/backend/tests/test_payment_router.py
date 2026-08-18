@@ -10,7 +10,7 @@ class TestPaymentRouter:
         """Test that payment endpoint exists."""
         from app.main import app
 
-        client = TestClient(app)
+        TestClient(app)
         # Just verify the app can be created
         assert app is not None
 
@@ -18,14 +18,14 @@ class TestPaymentRouter:
         """Test that check endpoint exists."""
         from app.main import app
 
-        client = TestClient(app)
+        TestClient(app)
         assert app is not None
 
     def test_update_endpoint_exists(self):
         """Test that update endpoint exists."""
         from app.main import app
 
-        client = TestClient(app)
+        TestClient(app)
         assert app is not None
 
 

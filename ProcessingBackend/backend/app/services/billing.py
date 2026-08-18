@@ -19,6 +19,7 @@ class BillingStatus(StrEnum):
     DEACTIVATION_SCHEDULED = "deactivation_scheduled"
     DISABLED = "disabled"
     ADMIN_DISABLED = "admin_disabled"
+    NO_LICENSE = "no_license"
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,6 +93,15 @@ def add_billing_months(expires_at: datetime, months: int) -> datetime:
     return expires_at + relativedelta(months=months)
 
 
+def add_months_from_anchor(anchor: datetime, total_months: int) -> datetime:
+    """Add total_months to anchor in a single step, preserving the anchor day.
+
+    Unlike iterative add_billing_months, this never loses the anchor day:
+    add_months_from_anchor(2026-01-31, 2) → 2026-03-31 (not 2026-03-28).
+    """
+    return anchor + relativedelta(months=total_months)
+
+
 def resolve_monthly_price(
     monthly_price_override_minor: int | None,
     org_monthly_price_minor: int,
@@ -112,13 +122,18 @@ def calculate_periods_due(
     as_of: datetime,
     period_months: int,
 ) -> int:
-    """Calculate minimum number of billing periods needed to move expiry past as_of."""
+    """Calculate minimum number of billing periods needed to move expiry past as_of.
+
+    Uses add_months_from_anchor to preserve the anchor day (H2 fix).
+    """
+    if period_months <= 0:
+        raise ValueError(f"billing_period_months must be positive, got {period_months}")
     if expires_at > as_of:
         return 0
     count = 0
-    current = expires_at
-    while current <= as_of:
-        current = add_billing_months(current, period_months)
+    # Use anchor-based arithmetic: add_months_from_anchor(expires_at, period_months * k)
+    # preserves the original day (e.g., Jan 31 + 2 months → Mar 31, not Mar 28)
+    while add_months_from_anchor(expires_at, period_months * count) <= as_of:
         count += 1
     return count
 
@@ -146,50 +161,20 @@ def project_expiration_after_payment(
     billing_period_months: int,
     periods_to_add: int,
     as_of: datetime,
+    *,
+    mode: str = "renewal",
 ) -> datetime:
-    """Project new expiration date after paying periods."""
-    # If expired, start from as_of; otherwise from current expires_at
-    base = max(as_of, expires_at)
-    result = base
-    for _ in range(periods_to_add):
-        result = add_billing_months(result, billing_period_months)
-    return result
+    """Project new expiration date after paying periods.
 
-
-def build_terminal_forecast_entries(
-    expires_at: datetime,
-    billing_period_months: int,
-    monthly_price: int,
-    as_of: datetime,
-    forecast_months: list[str],
-) -> list[ForecastMonth]:
-    """Build forecast entries for a single active terminal.
-
-    Simulates future renewals and assigns each period payment to a forecast month.
+    mode="renewal": extends from expires_at (continuous subscription).
+      New date = expires_at + periods * months. Anchor day preserved.
+    mode="reactivation": extends from as_of (fresh start after downtime).
+      New date = as_of + 1 period. periods_to_add ignored (always 1).
     """
-    if expires_at <= as_of:
-        # Overdue terminals: forecast starts after debt payment
-        return []
-
-    entries: dict[str, int] = {m: 0 for m in forecast_months}
-    current = expires_at
-
-    # Simulate 12 months of renewals (enough for 3-month forecast)
-    for _ in range(24):
-        if current > _forecast_end(forecast_months):
-            break
-        month_key = f"{current.year}-{current.month:02d}"
-        if month_key in entries:
-            period_price = calculate_period_price(monthly_price, billing_period_months)
-            entries[month_key] += period_price
-        current = add_billing_months(current, billing_period_months)
-
-    return [
-        ForecastMonth(
-            month=m, amount_minor=entries[m], terminal_count=1 if entries[m] > 0 else 0
-        )
-        for m in forecast_months
-    ]
+    if mode == "reactivation":
+        return add_months_from_anchor(as_of, billing_period_months)
+    # renewal: extend from original expires_at, preserving anchor day
+    return add_months_from_anchor(expires_at, billing_period_months * periods_to_add)
 
 
 def _forecast_end(forecast_months: list[str]) -> datetime:
@@ -210,10 +195,14 @@ def resolve_billing_status(
     deactivation_requested_at: datetime | None,
     as_of: datetime,
     due_soon_days: int = 30,
+    has_license: bool = True,
 ) -> BillingStatus:
     """Determine the billing status for a terminal."""
     if not terminal_is_active:
         return BillingStatus.ADMIN_DISABLED
+
+    if not has_license:
+        return BillingStatus.NO_LICENSE
 
     if not renewal_enabled:
         if expires_at is not None and expires_at > as_of:
@@ -254,6 +243,7 @@ def compute_terminal_billing(
         deactivation_requested_at=info.deactivation_requested_at,
         as_of=as_of,
         due_soon_days=due_soon_days,
+        has_license=info.license_id is not None,
     )
 
     # Debt calculation
@@ -276,6 +266,8 @@ def compute_terminal_billing(
         next_payment_amount = period_price
 
     # Projected expiry after debt payment
+    # For overdue active terminals: renewal mode (extend from expires_at)
+    # For disabled/reactivation: reactivation mode (extend from as_of)
     projected_expires_at: datetime | None = None
     if billing_status == BillingStatus.OVERDUE and info.license_expires_at is not None:
         projected_expires_at = project_expiration_after_payment(
@@ -283,6 +275,7 @@ def compute_terminal_billing(
             info.billing_period_months,
             periods_due,
             as_of,
+            mode="renewal",
         )
 
     # Capability flags
@@ -304,7 +297,7 @@ def compute_terminal_billing(
     included_in_forecast = (
         info.renewal_enabled
         and info.terminal_is_active
-        and billing_status != BillingStatus.OVERDUE
+        and billing_status not in (BillingStatus.OVERDUE, BillingStatus.NO_LICENSE)
     )
 
     return TerminalBillingResult(
@@ -353,18 +346,18 @@ def build_org_forecast(
         if t.license_expires_at is None:
             continue
 
-        # Simulate renewals for this terminal
+        # Simulate renewals for this terminal using anchor-based arithmetic
         period_price = t.period_price_minor
-        current = t.license_expires_at
+        anchor = t.license_expires_at
 
-        for _ in range(24):
+        for k in range(24):
+            current = add_months_from_anchor(anchor, t.billing_period_months * k)
             if current > _forecast_end(forecast_months):
                 break
             month_key = f"{current.year}-{current.month:02d}"
             if month_key in totals:
                 totals[month_key] += period_price
                 counts[month_key] += 1
-            current = add_billing_months(current, t.billing_period_months)
 
     return [
         ForecastMonth(

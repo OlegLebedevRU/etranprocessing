@@ -28,6 +28,9 @@ import {
   getBillingTerminals,
   deactivateTerminal,
   cancelDeactivation,
+  createCheckout,
+  createReactivationCheckout,
+  confirmPayment,
   type BillingSummary,
   type BillingTerminal,
 } from "../api/billing";
@@ -110,6 +113,41 @@ export default function BillingPage() {
     }
   };
 
+  const handlePayOverdue = async (terminal: BillingTerminal) => {
+    try {
+      setConfirmLoading(true);
+      const checkout = await createCheckout({
+        items: [{ terminal_id: terminal.terminal_id, advance_periods: 0 }],
+      });
+      await confirmPayment(checkout.order_id);
+      message.success("Оплата прошла успешно");
+      fetchData();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Ошибка оплаты";
+      message.error(msg);
+    } finally {
+      setConfirmLoading(false);
+    }
+  };
+
+  const handleReactivate = async (terminal: BillingTerminal) => {
+    try {
+      setConfirmLoading(true);
+      const checkout = await createReactivationCheckout(
+        terminal.terminal_id,
+        { advance_periods: 1 },
+      );
+      await confirmPayment(checkout.order_id);
+      message.success("Терминал подключён");
+      fetchData();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Ошибка подключения";
+      message.error(msg);
+    } finally {
+      setConfirmLoading(false);
+    }
+  };
+
   // Filter terminals by tab
   const filteredTerminals = terminals.filter((t) => {
     // Search filter
@@ -122,13 +160,13 @@ export default function BillingPage() {
 
     switch (activeTab) {
       case "attention":
-        return t.billing_status === "overdue" || t.billing_status === "due_soon";
+        return t.billing_status === "overdue" || t.billing_status === "due_soon" || t.billing_status === "no_license";
       case "active":
         return t.billing_status === "active" || t.billing_status === "due_soon";
       case "deactivation":
         return t.billing_status === "deactivation_scheduled";
       case "disabled":
-        return t.billing_status === "disabled" || t.billing_status === "admin_disabled";
+        return t.billing_status === "disabled" || t.billing_status === "admin_disabled" || t.billing_status === "no_license";
       default:
         return true;
     }
@@ -214,6 +252,16 @@ export default function BillingPage() {
       key: "actions",
       render: (_: unknown, r: BillingTerminal) => (
         <Space size="small">
+          {r.billing_status === "overdue" && r.overdue_amount_minor > 0 && (
+            <Button
+              size="small"
+              type="primary"
+              loading={confirmLoading}
+              onClick={() => handlePayOverdue(r)}
+            >
+              Оплатить {formatDebt(r.overdue_amount_minor)}
+            </Button>
+          )}
           {r.can_deactivate && (
             <Button
               size="small"
@@ -233,7 +281,12 @@ export default function BillingPage() {
             </Button>
           )}
           {r.can_reactivate && (
-            <Button size="small" type="default" disabled>
+            <Button
+              size="small"
+              type="default"
+              loading={confirmLoading}
+              onClick={() => handleReactivate(r)}
+            >
               Подключить
             </Button>
           )}

@@ -5,10 +5,18 @@ class Settings(BaseSettings):
     database_url: str = ""
     cors_origins: list[str] = []
 
+    # JWT validation (shared secret with MenuBuilder, hex-encoded)
+    jwt_secret_hex: str = ""
+    jwt_algorithm: str = "HS256"
+
     # Billing
     billing_due_soon_days: int = 30
 
     model_config = {"env_file": ".env", "extra": "ignore"}
+
+    @property
+    def jwt_secret_bytes(self) -> bytes:
+        return bytes.fromhex(self.jwt_secret_hex)
 
 
 settings = Settings()

@@ -131,3 +131,10 @@ class BillingOrderRead(BaseModel):
     created_at: datetime
     paid_at: datetime | None
     expires_at: datetime | None
+
+
+class ConfirmPaymentResponse(BaseModel):
+    order_id: str
+    status: OrderStatus
+    paid_at: datetime | None
+    items_updated: int

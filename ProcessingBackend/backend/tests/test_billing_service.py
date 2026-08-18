@@ -9,6 +9,7 @@ from app.services.billing import (
     BillingStatus,
     TerminalBillingInfo,
     add_billing_months,
+    add_months_from_anchor,
     calculate_period_price,
     calculate_periods_due,
     calculate_terminal_debt,
@@ -255,6 +256,7 @@ def test_reactivation_not_start_from_old_expiry():
         1,  # period months
         1,  # periods to add
         _dt(2026, 8, 18),  # as_of (payment date)
+        mode="reactivation",
     )
     # Should start from as_of, not from old expiry
     assert new_exp == _dt(2026, 9, 18)
@@ -269,3 +271,129 @@ def test_payment_not_expired_starts_from_expiry():
         _dt(2026, 8, 18),  # as_of
     )
     assert new_exp == _dt(2026, 12, 10)
+
+
+# === H2: Calendar drift — anchor day preserved ===
+
+
+def test_h2_anchor_day_preserved_jan31():
+    """H2: Jan 31 + 2 months must be Mar 31, not Mar 28."""
+    result = add_months_from_anchor(_dt(2026, 1, 31), 2)
+    assert result == _dt(2026, 3, 31)
+
+
+def test_h2_periods_due_jan31_no_drift():
+    """H2: expires Jan 31, as_of Mar 30, period=1m → 3 periods (Feb 28, Mar 31 > Mar 30)."""
+    # Before fix: iterative gave 4 (Jan31→Feb28→Mar28→Apr28)
+    # After fix: anchor-based gives 3 (Jan31, Feb28, Mar31 > Mar30)
+    result = calculate_periods_due(_dt(2025, 12, 31), _dt(2026, 3, 30), 1)
+    assert result == 3
+
+
+def test_h2_renewal_preserves_anchor_day():
+    """H2: Renewal from Aug 10 + 3 periods of 1 month → Nov 10 (not Nov 18)."""
+    new_exp = project_expiration_after_payment(
+        _dt(2026, 8, 10), 1, 3, _dt(2026, 8, 18), mode="renewal"
+    )
+    assert new_exp == _dt(2026, 11, 10)
+
+
+def test_h2_renewal_long_overdue_preserves_day():
+    """H2: expired 2024-08-10, paid 25 periods of 1m → 2026-09-10 (not 2028-09-18)."""
+    new_exp = project_expiration_after_payment(
+        _dt(2024, 8, 10), 1, 25, _dt(2026, 8, 18), mode="renewal"
+    )
+    assert new_exp == _dt(2026, 9, 10)
+
+
+def test_h2_chain_preserves_31st():
+    """H2: Chain from Jan 31 through multiple periods preserves 31st where possible."""
+    # Jan 31 → Feb 28 → Mar 31 (not Mar 28)
+    anchor = _dt(2026, 1, 31)
+    assert add_months_from_anchor(anchor, 1) == _dt(2026, 2, 28)
+    assert add_months_from_anchor(anchor, 2) == _dt(2026, 3, 31)
+    assert add_months_from_anchor(anchor, 3) == _dt(2026, 4, 30)
+    assert add_months_from_anchor(anchor, 4) == _dt(2026, 5, 31)
+
+
+# === H3: Renewal vs reactivation modes ===
+
+
+def test_h3_reactivation_starts_from_payment_date():
+    """H3: Reactivation always extends 1 period from as_of."""
+    new_exp = project_expiration_after_payment(
+        _dt(2024, 8, 10),  # long-expired
+        1,  # period months
+        25,  # periods_to_add (ignored for reactivation)
+        _dt(2026, 8, 18),  # as_of
+        mode="reactivation",
+    )
+    assert new_exp == _dt(2026, 9, 18)
+
+
+def test_h3_renewal_extends_from_expiry():
+    """H3: Renewal extends from expires_at, not as_of."""
+    new_exp = project_expiration_after_payment(
+        _dt(2026, 8, 10),  # not yet expired
+        3,  # period months
+        1,  # periods to add
+        _dt(2026, 8, 18),  # as_of
+        mode="renewal",
+    )
+    assert new_exp == _dt(2026, 11, 10)
+
+
+def test_h3_debt_zero_after_renewal_payment():
+    """H3: After paying overdue periods in renewal mode, periods_due → 0."""
+    expires_at = _dt(2026, 5, 10)
+    as_of = _dt(2026, 8, 18)
+    periods = calculate_periods_due(expires_at, as_of, 1)
+    assert periods == 4  # Jun 10, Jul 10, Aug 10, Sep 10
+
+    new_exp = project_expiration_after_payment(
+        expires_at, 1, periods, as_of, mode="renewal"
+    )
+    assert new_exp == _dt(2026, 9, 10)
+
+    # After payment, debt should be 0
+    remaining = calculate_periods_due(new_exp, as_of, 1)
+    assert remaining == 0
+
+
+# === H4: Guard on billing_period_months <= 0 ===
+
+
+def test_h4_zero_period_raises():
+    """H4: billing_period_months=0 must raise ValueError, not infinite loop."""
+    import pytest
+
+    with pytest.raises(ValueError, match="positive"):
+        calculate_periods_due(_dt(2026, 8, 10), _dt(2026, 8, 18), 0)
+
+
+def test_h4_negative_period_raises():
+    """H4: billing_period_months=-1 must raise ValueError."""
+    import pytest
+
+    with pytest.raises(ValueError, match="positive"):
+        calculate_periods_due(_dt(2026, 8, 10), _dt(2026, 8, 18), -1)
+
+
+# === M2: Terminal without license ===
+
+
+def test_m2_no_license_status():
+    """M2: Terminal without license → NO_LICENSE (not ACTIVE)."""
+    status = resolve_billing_status(
+        True, True, None, None, _dt(2026, 8, 18), has_license=False
+    )
+    assert status == BillingStatus.NO_LICENSE
+
+
+def test_m2_no_license_in_compute():
+    """M2: compute_terminal_billing with no license → NO_LICENSE."""
+    info = _info(license_id=None, license_expires_at=None)
+    result = compute_terminal_billing(info, _dt(2026, 8, 18))
+    assert result.billing_status == BillingStatus.NO_LICENSE
+    assert result.overdue_amount_minor == 0
+    assert result.included_in_forecast is False

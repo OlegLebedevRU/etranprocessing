@@ -4,15 +4,15 @@
 
 /**
  * Format minor units (kopecks) to display currency.
- * 300000 → "3 000 ₽"
+ * 300000 → "3 000,00 ₽", 30050 → "300,50 ₽"
  */
 export function formatMoneyMinor(value: number, currency = "RUB"): string {
   const major = value / 100;
   return new Intl.NumberFormat("ru-RU", {
     style: "currency",
     currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(major);
 }
 
@@ -77,6 +77,7 @@ export function billingStatusLabel(status: string): string {
     deactivation_scheduled: "Отключение запланировано",
     disabled: "Отключён",
     admin_disabled: "Административно заблокирован",
+    no_license: "Нет лицензии",
   };
   return labels[status] || status;
 }
@@ -92,6 +93,7 @@ export function billingStatusColor(status: string): string {
     deactivation_scheduled: "blue",
     disabled: "default",
     admin_disabled: "volcano",
+    no_license: "magenta",
   };
   return colors[status] || "default";
 }

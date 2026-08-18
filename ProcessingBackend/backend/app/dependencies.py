@@ -86,8 +86,9 @@ async def get_current_terminal(
             detail=f"Terminal not found. CN='{cn}', Serial='{cert_serial}'",
         )
 
-    if not terminal.is_active:
-        raise HTTPException(status_code=403, detail="Terminal is deactivated")
+    # Do NOT check is_active here — let get_terminal_license_state handle it
+    # so the licensebilling endpoint can return proper XML state=error
+    # instead of a JSON HTTPException.
 
     # OU is informational — log mismatch but don't block
     if ou:
@@ -206,8 +207,14 @@ async def get_current_user_jwt(
     request: Request,
 ) -> JwtUser:
     """Extract user identity from headers set by nginx after JWT validation.
-    JWT is validated at nginx; backend trusts jwt-sub and jwt-org headers
-    (set by auth_jwt_extract_request_claims).
+
+    SECURITY: nginx validates the JWT and extracts claims using
+    auth_jwt_extract_var_claims + explicit proxy_set_header. This prevents
+    client header spoofing because nginx removes all client-supplied headers
+    before setting proxy_set_header directives.
+
+    The backend trusts these headers as the authoritative source of identity
+    because nginx has already verified the JWT signature.
     """
     username = request.headers.get("jwt-sub", "")
     if not username:
@@ -220,6 +227,6 @@ async def get_current_user_jwt(
     try:
         org_id = int(org_id_str)
     except ValueError:
-        raise HTTPException(status_code=401, detail="Invalid jwt-org_id header")
+        raise HTTPException(status_code=401, detail="Invalid jwt-org header")
 
     return JwtUser(username=username, org_id=org_id)

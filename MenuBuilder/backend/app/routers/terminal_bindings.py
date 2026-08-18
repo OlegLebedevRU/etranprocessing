@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import get_current_user
 from app.database import get_db
 from app.models import MenuVariant, TerminalMenuBinding
 from app.schemas import TerminalBindingCreate, TerminalBindingRead, TerminalInfo
@@ -13,31 +14,58 @@ router = APIRouter()
 async def list_terminals(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all terminals with their menu binding and activity status."""
-    # Query terminals table directly (shared DB with ProcessingBackend)
+    """List terminals for the current user's organization."""
     from sqlalchemy import text
 
-    # Count total
-    total = await db.scalar(text("SELECT count(*) FROM terminals"))
+    org_id = user.get("org_id")
+    if org_id is not None:
+        org_id = int(org_id)
 
-    # Get page of terminals with bindings
-    offset = (page - 1) * page_size
-    rows = (
-        await db.execute(
-            text("""
-                SELECT t.id, t.device_id, t.sn, t.org_id, t.is_active,
-                       tmb.id as binding_id, tmb.menu_variant_id, mv.name as variant_name
-                FROM terminals t
-                LEFT JOIN terminal_menu_bindings tmb ON tmb.device_id = t.device_id
-                LEFT JOIN menu_variants mv ON mv.id = tmb.menu_variant_id
-                ORDER BY t.device_id
-                LIMIT :limit OFFSET :offset
-            """),
-            {"limit": page_size, "offset": offset},
+    # Count total for this org
+    if org_id is not None:
+        total = await db.scalar(
+            text("SELECT count(*) FROM terminals WHERE org_id = :org_id"),
+            {"org_id": org_id},
         )
-    ).fetchall()
+    else:
+        total = await db.scalar(text("SELECT count(*) FROM terminals"))
+
+    # Get page of terminals with bindings, filtered by org
+    offset = (page - 1) * page_size
+    if org_id is not None:
+        rows = (
+            await db.execute(
+                text("""
+                    SELECT t.id, t.device_id, t.sn, t.org_id, t.is_active,
+                           tmb.id as binding_id, tmb.menu_variant_id, mv.name as variant_name
+                    FROM terminals t
+                    LEFT JOIN terminal_menu_bindings tmb ON tmb.device_id = t.device_id
+                    LEFT JOIN menu_variants mv ON mv.id = tmb.menu_variant_id
+                    WHERE t.org_id = :org_id
+                    ORDER BY t.device_id
+                    LIMIT :limit OFFSET :offset
+                """),
+                {"limit": page_size, "offset": offset, "org_id": org_id},
+            )
+        ).fetchall()
+    else:
+        rows = (
+            await db.execute(
+                text("""
+                    SELECT t.id, t.device_id, t.sn, t.org_id, t.is_active,
+                           tmb.id as binding_id, tmb.menu_variant_id, mv.name as variant_name
+                    FROM terminals t
+                    LEFT JOIN terminal_menu_bindings tmb ON tmb.device_id = t.device_id
+                    LEFT JOIN menu_variants mv ON mv.id = tmb.menu_variant_id
+                    ORDER BY t.device_id
+                    LIMIT :limit OFFSET :offset
+                """),
+                {"limit": page_size, "offset": offset},
+            )
+        ).fetchall()
 
     items = []
     for r in rows:

@@ -1,7 +1,7 @@
 """Payment provider abstraction.
 
-Returns 501 when no provider is configured.
-No fake success path.
+Mock provider always returns success — for development and testing.
+Replace with real provider integration when ready.
 """
 
 import logging
@@ -25,8 +25,35 @@ class PaymentProvider(Protocol):
         ...
 
 
-def get_payment_provider() -> PaymentProvider | None:
-    """Get the configured payment provider, or None if not configured."""
-    # No provider configured yet — return None
-    # When a provider is added, check settings here
-    return None
+class MockPaymentProvider:
+    """Mock provider that always succeeds. For dev/test only."""
+
+    async def create_checkout(
+        self,
+        amount_minor: int,
+        currency: str,
+        order_id: str,
+    ) -> str:
+        logger.info(
+            "MockPaymentProvider: checkout order=%s amount=%d %s",
+            order_id,
+            amount_minor,
+            currency,
+        )
+        # Return a mock URL pointing to the confirm endpoint
+        return f"/api/billing/orders/{order_id}/confirm"
+
+    async def verify_payment(self, provider_order_id: str) -> bool:
+        logger.info("MockPaymentProvider: verify order=%s → True", provider_order_id)
+        return True
+
+
+_provider: PaymentProvider | None = None
+
+
+def get_payment_provider() -> PaymentProvider:
+    """Get the configured payment provider. Returns mock if none configured."""
+    global _provider
+    if _provider is None:
+        _provider = MockPaymentProvider()
+    return _provider
