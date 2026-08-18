@@ -59,6 +59,8 @@ class TerminalBillingInfo:
     monthly_price_override_minor: int | None
     org_monthly_price_minor: int
     org_currency: str
+    cert_not_valid_after: datetime | None = None
+    tenant_pin_creation_enabled: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +88,8 @@ class TerminalBillingResult:
     can_cancel_deactivation: bool
     can_reactivate: bool
     included_in_forecast: bool
+    cert_not_valid_after: datetime | None = None
+    tenant_pin_creation_enabled: bool = False
 
 
 def add_billing_months(expires_at: datetime, months: int) -> datetime:
@@ -322,6 +326,8 @@ def compute_terminal_billing(
         can_cancel_deactivation=can_cancel_deactivation,
         can_reactivate=can_reactivate,
         included_in_forecast=included_in_forecast,
+        cert_not_valid_after=info.cert_not_valid_after,
+        tenant_pin_creation_enabled=info.tenant_pin_creation_enabled,
     )
 
 

@@ -21,6 +21,7 @@ import {
   StopOutlined,
   ReloadOutlined,
   SearchOutlined,
+  SafetyCertificateOutlined,
 } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -34,6 +35,7 @@ import {
   type BillingSummary,
   type BillingTerminal,
 } from "../api/billing";
+import CertificatePinModal from "../components/CertificatePinModal";
 import {
   formatMoneyMinor,
   formatDebt,
@@ -64,6 +66,10 @@ export default function BillingPage() {
     terminal: BillingTerminal | null;
   }>({ open: false, terminal: null });
   const [confirmLoading, setConfirmLoading] = useState(false);
+  const [pinModal, setPinModal] = useState<{
+    open: boolean;
+    terminal: BillingTerminal | null;
+  }>({ open: false, terminal: null });
 
   const fetchData = useCallback(async () => {
     try {
@@ -212,6 +218,19 @@ export default function BillingPage() {
       render: (v: string | null) => formatDate(v),
     },
     {
+      title: "Сертификат",
+      dataIndex: "cert_not_valid_after",
+      key: "cert_expires",
+      render: (v: string | null) =>
+        v ? (
+          <Text type={new Date(v) < new Date() ? "danger" : "secondary"}>
+            {formatDate(v)}
+          </Text>
+        ) : (
+          <Text type="secondary">не выпущен</Text>
+        ),
+    },
+    {
       title: "Тариф",
       dataIndex: "monthly_price_minor",
       key: "tariff",
@@ -288,6 +307,15 @@ export default function BillingPage() {
               onClick={() => handleReactivate(r)}
             >
               Подключить
+            </Button>
+          )}
+          {r.tenant_pin_creation_enabled && (
+            <Button
+              size="small"
+              icon={<SafetyCertificateOutlined />}
+              onClick={() => setPinModal({ open: true, terminal: r })}
+            >
+              {r.cert_not_valid_after ? "Перевыпустить сертификат" : "Получить PIN"}
             </Button>
           )}
         </Space>
@@ -423,6 +451,14 @@ export default function BillingPage() {
           </p>
         )}
       </Modal>
+
+      {/* Certificate PIN issuance modal */}
+      <CertificatePinModal
+        open={pinModal.open}
+        terminal={pinModal.terminal}
+        onClose={() => setPinModal({ open: false, terminal: null })}
+        onIssued={fetchData}
+      />
     </div>
   );
 }

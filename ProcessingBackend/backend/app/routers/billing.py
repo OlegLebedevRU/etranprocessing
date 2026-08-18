@@ -117,6 +117,8 @@ async def _get_terminal_billing_data(
         else None,
         org_monthly_price_minor=org_settings.monthly_price_minor,
         org_currency=org_settings.currency,
+        cert_not_valid_after=terminal.cert_not_valid_after,
+        tenant_pin_creation_enabled=org_settings.tenant_pin_creation_enabled,
     )
 
 
@@ -163,6 +165,8 @@ async def _get_all_terminal_billing(
                 else None,
                 org_monthly_price_minor=org_settings.monthly_price_minor,
                 org_currency=org_settings.currency,
+                cert_not_valid_after=terminal.cert_not_valid_after,
+                tenant_pin_creation_enabled=org_settings.tenant_pin_creation_enabled,
             )
         )
     return infos

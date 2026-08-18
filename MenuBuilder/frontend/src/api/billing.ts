@@ -42,6 +42,8 @@ export interface BillingTerminal {
   can_cancel_deactivation: boolean;
   can_reactivate: boolean;
   included_in_forecast: boolean;
+  cert_not_valid_after: string | null;
+  tenant_pin_creation_enabled: boolean;
 }
 
 export interface DeactivateResponse {
