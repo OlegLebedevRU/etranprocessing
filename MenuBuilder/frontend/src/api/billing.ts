@@ -48,6 +48,8 @@ export interface BillingTerminal {
   cert_pin_price_minor: number;
   cert_operation: string;
   cert_expiring_soon: boolean;
+  cert_pin_pending: boolean;
+  cert_pin_expires_at: string | null;
 }
 
 export interface DeactivateResponse {

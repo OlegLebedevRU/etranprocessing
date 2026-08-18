@@ -106,9 +106,19 @@ function shouldAutoSelectLicense(
   return false;
 }
 
-/** Whether a paid certificate PIN can be bought for this terminal. */
+/**
+ * Whether a paid certificate PIN can be bought for this terminal.
+ *
+ * A pending (paid, not-yet-installed) PIN already resolves the certificate
+ * renewal question, so it must not be offered again until it is used or
+ * expires — paying for a PIN twice makes no sense.
+ */
 function isCertPayable(t: BillingTerminal): boolean {
-  return t.tenant_pin_creation_enabled && t.cert_pin_price_minor > 0;
+  return (
+    t.tenant_pin_creation_enabled &&
+    t.cert_pin_price_minor > 0 &&
+    !t.cert_pin_pending
+  );
 }
 
 function licenseAmountMinor(t: BillingTerminal, advancePeriods: number): number {
@@ -451,7 +461,13 @@ export default function BillingPage() {
       width: 250,
       render: (_: unknown, r: BillingTerminal) => {
         const pinButton = r.tenant_pin_creation_enabled ? (
-          <Tooltip title="Запросить PIN отдельно, не добавляя в общий счёт">
+          <Tooltip
+            title={
+              r.cert_pin_pending
+                ? "PIN уже оплачен — открыть и посмотреть код"
+                : "Запросить PIN отдельно, не добавляя в общий счёт"
+            }
+          >
             <Button
               size="small"
               type="text"
@@ -460,6 +476,28 @@ export default function BillingPage() {
             />
           </Tooltip>
         ) : null;
+
+        // A paid PIN awaiting installation already resolves the renewal —
+        // show that instead of the (now stale) plain expiry date.
+        if (r.cert_pin_pending) {
+          return (
+            <Space size={4} align="start">
+              <Space direction="vertical" size={0}>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  Текущий до{" "}
+                  {r.cert_not_valid_after
+                    ? formatDate(r.cert_not_valid_after)
+                    : "—"}
+                </Text>
+                <Text type="warning">Новый ждёт установки</Text>
+                <Text type="success" style={{ fontSize: 12 }}>
+                  Оплачено
+                </Text>
+              </Space>
+              {pinButton}
+            </Space>
+          );
+        }
 
         const label = !r.cert_serial ? (
           <Text type="warning">не выпущен</Text>
@@ -531,18 +569,6 @@ export default function BillingPage() {
         ) : (
           <Text type="secondary">{formatMoneyMinor(0)}</Text>
         ),
-    },
-    {
-      title: "Следующий платёж",
-      key: "next",
-      align: "right",
-      width: 140,
-      render: (_: unknown, r: BillingTerminal) => {
-        if (r.billing_status === "overdue") return "после погашения";
-        if (r.next_payment_amount_minor > 0)
-          return formatMoneyMinor(r.next_payment_amount_minor);
-        return "—";
-      },
     },
     {
       title: "Действия",

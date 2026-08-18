@@ -69,6 +69,8 @@ class BillingTerminalRead(BaseModel):
     cert_pin_price_minor: int = 0
     cert_operation: str = "primary_issue"
     cert_expiring_soon: bool = False
+    cert_pin_pending: bool = False
+    cert_pin_expires_at: datetime | None = None
 
 
 class DeactivateTerminalResponse(BaseModel):

@@ -98,6 +98,28 @@ def _resolve_cert_pricing(
     return resolve_effective_price(policy, operation), operation.value
 
 
+async def _get_pending_cert_pin(
+    db: AsyncSession, terminal_id: int, as_of: datetime
+) -> CertificatePin | None:
+    """The most recent paid-and-ready PIN still awaiting installation, if any.
+
+    A pending PIN that has not expired means the certificate question is
+    already resolved for this terminal — it just needs to be entered on the
+    device. It cannot be bought again until it is used or expires.
+    """
+    result = await db.execute(
+        select(CertificatePin)
+        .where(
+            CertificatePin.terminal_id == terminal_id,
+            CertificatePin.status == "pending",
+            CertificatePin.expires_at > as_of,
+        )
+        .order_by(CertificatePin.created_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
 async def _get_terminal_billing_data(
     db: AsyncSession,
     terminal: Terminal,
@@ -114,6 +136,8 @@ async def _get_terminal_billing_data(
     cert_price, cert_operation = _resolve_cert_pricing(
         org_settings, terminal.cert_serial
     )
+    as_of = datetime.now(UTC)
+    pending_pin = await _get_pending_cert_pin(db, terminal.id, as_of)
 
     return TerminalBillingInfo(
         terminal_id=terminal.id,
@@ -137,6 +161,8 @@ async def _get_terminal_billing_data(
         tenant_pin_creation_enabled=org_settings.tenant_pin_creation_enabled,
         cert_pin_price_minor=cert_price,
         cert_operation=cert_operation,
+        cert_pin_pending=pending_pin is not None,
+        cert_pin_expires_at=pending_pin.expires_at if pending_pin else None,
     )
 
 
@@ -162,12 +188,29 @@ async def _get_all_terminal_billing(
         )
         .where(Terminal.org_id == org_id)
     )
+    rows = result.all()
+
+    # One extra query for the whole org instead of one per terminal.
+    pending_pins_result = await db.execute(
+        select(CertificatePin).where(
+            CertificatePin.terminal_id.in_([t.id for t, _ in rows]),
+            CertificatePin.status == "pending",
+            CertificatePin.expires_at > as_of,
+        )
+    )
+    pending_pin_by_terminal: dict[int, CertificatePin] = {}
+    for pin in pending_pins_result.scalars():
+        # Keep the most recently created one if there happens to be more than one.
+        existing = pending_pin_by_terminal.get(pin.terminal_id)
+        if existing is None or pin.created_at > existing.created_at:
+            pending_pin_by_terminal[pin.terminal_id] = pin
 
     infos = []
-    for terminal, license_ in result.all():
+    for terminal, license_ in rows:
         cert_price, cert_operation = _resolve_cert_pricing(
             org_settings, terminal.cert_serial
         )
+        pending_pin = pending_pin_by_terminal.get(terminal.id)
         infos.append(
             TerminalBillingInfo(
                 terminal_id=terminal.id,
@@ -191,6 +234,8 @@ async def _get_all_terminal_billing(
                 tenant_pin_creation_enabled=org_settings.tenant_pin_creation_enabled,
                 cert_pin_price_minor=cert_price,
                 cert_operation=cert_operation,
+                cert_pin_pending=pending_pin is not None,
+                cert_pin_expires_at=pending_pin.expires_at if pending_pin else None,
             )
         )
     return infos

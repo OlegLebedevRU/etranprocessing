@@ -64,6 +64,8 @@ class TerminalBillingInfo:
     tenant_pin_creation_enabled: bool = False
     cert_pin_price_minor: int = 0
     cert_operation: str = "primary_issue"
+    cert_pin_pending: bool = False
+    cert_pin_expires_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,6 +99,8 @@ class TerminalBillingResult:
     cert_pin_price_minor: int = 0
     cert_operation: str = "primary_issue"
     cert_expiring_soon: bool = False
+    cert_pin_pending: bool = False
+    cert_pin_expires_at: datetime | None = None
 
 
 def add_billing_months(expires_at: datetime, months: int) -> datetime:
@@ -368,6 +372,8 @@ def compute_terminal_billing(
             as_of,
             cert_expiring_soon_days,
         ),
+        cert_pin_pending=info.cert_pin_pending,
+        cert_pin_expires_at=info.cert_pin_expires_at,
     )
 
 
