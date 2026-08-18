@@ -1,5 +1,12 @@
 # License Billing System — Implementation Plan
 
+> **Status (Aug 2026): historical planning document.** The decisions below
+> were implemented; the system is live in production with a working payment
+> provider and checkout flow. For the current, authoritative description of
+> the billing math and flow (periods, lapsed/due-soon rules, checkout,
+> forecast), see **`docs/billing-architecture.md`**. Keep this file only for
+> its architecture-decision rationale/history.
+
 ## Architecture Decisions
 
 ### Decision 1: Nginx Routing (`/api/billing/*` → ProcessingBackend)

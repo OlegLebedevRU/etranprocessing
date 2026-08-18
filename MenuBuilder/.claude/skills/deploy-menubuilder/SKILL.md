@@ -74,7 +74,8 @@ scp -i d:\.ssh\free-tier-cloud_ru "D:\repo\platerra\Public\etranprocessing\MenuB
 scp -i d:\.ssh\free-tier-cloud_ru -r "D:\repo\platerra\Public\etranprocessing\MenuBuilder\nginx" user1@176.108.247.249:/home/user1/MenuBuilder/
 ```
 
-Restart nginx (config is volume-mounted):
+**Only needed if `nginx.conf` itself changed.** Restart nginx (config is
+volume-mounted):
 
 ```bash
 ssh user1@176.108.247.249 -i d:\.ssh\free-tier-cloud_ru "sudo docker compose -f /home/user1/MenuBuilder/docker-compose.yaml restart menubuilder-frontend"
@@ -94,6 +95,23 @@ ssh user1@176.108.247.249 -i d:\.ssh\free-tier-cloud_ru "cd /home/user1/MenuBuil
 
 If the build fails with TypeScript errors, fix the source files locally in monorepo and repeat from Step 4.
 
+**No container restart needed after this step.** `menubuilder-frontend`'s
+`docker-compose.yaml` bind-mounts `./frontend/dist` (i.e.
+`/home/user1/MenuBuilder/frontend/dist` on the host) straight into
+`/usr/share/nginx/html` **read-only, live**. `npm run build` overwrites
+`dist/` in place on the host, and nginx serves the new files immediately —
+verified by comparing file mtimes inside vs. outside the container after a
+build (they match once you account for the container running in UTC vs. the
+host's MSK timezone). A restart is only required for Step 3 (`nginx.conf`
+changes) or JWT secret/env changes.
+
+> Note: there is also a legacy, **unused** static path at
+> `/var/www/menubuilder` on the host with its own (currently inactive)
+> systemd `nginx.service` and `/etc/nginx/sites-enabled/menubuilder` config.
+> Production traffic on port 3000 is served exclusively by the
+> `menubuilder-frontend` **Docker** container (`docker-proxy` owns the
+> `0.0.0.0:3000` listener) — don't waste time syncing files there.
+
 ### Step 6: Verify
 
 ```bash
@@ -101,6 +119,22 @@ ssh user1@176.108.247.249 -i d:\.ssh\free-tier-cloud_ru "sudo docker logs menubu
 ```
 
 Expected: `Uvicorn running on http://0.0.0.0:8000`
+
+To verify an **authenticated** endpoint (e.g. one behind `get_current_user`)
+without knowing a real user's plaintext password, generate a short-lived JWT
+directly inside the container using the same signing function the app uses,
+then curl with it — this avoids ever needing/typing real credentials:
+
+```bash
+# Write a small script that imports app.auth.create_access_token, builds a
+# token for a known test user/org, and calls the endpoint(s) with it — see
+# app/auth.py get_current_user for the expected claim names ("sub", "org").
+# Prefer a scp'd script file over an inline `ssh ... "python -c ..."`
+# one-liner: nested quoting through ssh + PowerShell reliably breaks/garbles
+# multi-line Python (parentheses, dict literals). Delete the script and any
+# printed token from the container/host afterwards — never leave test JWTs
+# or scripts lying around.
+```
 
 ### Step 7: Git commit and push
 
