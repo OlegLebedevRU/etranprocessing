@@ -111,12 +111,27 @@ ALTER TABLE org_billing_settings
 
 ```sql
 ALTER TABLE certificate_pins
-    ADD COLUMN org_id INT NOT NULL,
+    ADD COLUMN org_id INT NULL,
     ADD COLUMN order_item_id INT NULL REFERENCES billing_order_items(id),
     ADD COLUMN created_by VARCHAR(100) NULL,
     ADD COLUMN creation_source VARCHAR(20) NOT NULL DEFAULT 'system',
     ADD COLUMN payment_required BOOLEAN NOT NULL DEFAULT FALSE,
-    ADD COLUMN expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '24 hours');
+    ADD COLUMN expires_at TIMESTAMPTZ NULL;
+
+UPDATE certificate_pins cp
+SET org_id = t.org_id
+FROM terminals t
+WHERE t.id = cp.terminal_id
+  AND cp.org_id IS NULL;
+
+UPDATE certificate_pins
+SET expires_at = created_at + INTERVAL '24 hours'
+WHERE expires_at IS NULL;
+
+ALTER TABLE certificate_pins
+    ALTER COLUMN org_id SET NOT NULL,
+    ALTER COLUMN expires_at SET NOT NULL,
+    ALTER COLUMN expires_at SET DEFAULT (NOW() + INTERVAL '24 hours');
 
 ALTER TABLE certificate_pins
     ADD CONSTRAINT ck_certificate_pins_status
@@ -147,11 +162,17 @@ CREATE UNIQUE INDEX uq_cert_pins_one_pending_per_terminal
 ## 5. Billing orders и snapshots
 
 Для certificate-операции в `billing_order_items` добавляется `operation='cert_pin'` (или эквивалент).  
-Запись должна хранить snapshot организационной политики на момент запроса:
+Колонка `operation` уже существует в текущей модели, поэтому требуется только договориться о новом значении.  
+Дополнительно запись должна хранить snapshot организационной политики на момент запроса:
 
 ```sql
 ALTER TABLE billing_order_items
     ADD COLUMN cert_policy_snapshot JSONB NULL;
+
+-- Если CHECK по operation ещё не задан, зафиксировать допустимые значения:
+ALTER TABLE billing_order_items
+    ADD CONSTRAINT ck_billing_order_items_operation
+    CHECK (operation IN ('renewal', 'reactivation', 'cert_pin'));
 ```
 
 Минимум в snapshot:
