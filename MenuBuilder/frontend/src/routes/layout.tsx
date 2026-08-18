@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router";
-import { Layout, Menu, Button, theme } from "antd";
+import { Layout, Menu, Button, Tooltip, Typography, theme } from "antd";
 import {
-  MobileOutlined,
   AppstoreOutlined,
   DashboardOutlined,
   FileTextOutlined,
@@ -10,10 +9,19 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   LogoutOutlined,
-  UserOutlined,
+  ApiOutlined,
 } from "@ant-design/icons";
 
 const { Sider, Header, Content } = Layout;
+const { Text } = Typography;
+
+const NAV_ITEMS = [
+  { key: "monitoring", icon: <DashboardOutlined />, label: "Мониторинг" },
+  { key: "menu", icon: <AppstoreOutlined />, label: "Управление меню" },
+  { key: "reports", icon: <FileTextOutlined />, label: "Отчёты" },
+  { key: "billing", icon: <DollarOutlined />, label: "Лицензии" },
+  { key: "integrations", icon: <ApiOutlined />, label: "Интеграции" },
+];
 
 export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
@@ -21,7 +29,10 @@ export default function AppLayout() {
   const location = useLocation();
   const { token } = theme.useToken();
 
-  const selectedKey = location.pathname === "/" ? "terminals" : location.pathname.split("/")[1];
+  const segment = location.pathname.split("/")[1] || "monitoring";
+  const selectedKey = NAV_ITEMS.some((i) => i.key === segment)
+    ? segment
+    : "monitoring";
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
@@ -29,43 +40,60 @@ export default function AppLayout() {
         collapsible
         collapsed={collapsed}
         onCollapse={setCollapsed}
-        theme="dark"
-        width={180}
-        collapsedWidth={48}
+        theme="light"
+        width={196}
+        collapsedWidth={56}
         breakpoint="lg"
         onBreakpoint={(broken) => setCollapsed(broken)}
         trigger={null}
+        style={{ borderInlineEnd: `1px solid ${token.colorBorderSecondary}` }}
       >
         <div
           style={{
-            height: 40,
+            height: 48,
             display: "flex",
             alignItems: "center",
+            gap: 8,
             justifyContent: collapsed ? "center" : "flex-start",
-            paddingLeft: collapsed ? 0 : 12,
-            color: "#fff",
-            fontSize: collapsed ? 14 : 13,
-            fontWeight: 600,
-            letterSpacing: 0.5,
+            padding: collapsed ? 0 : "0 16px",
             whiteSpace: "nowrap",
             overflow: "hidden",
           }}
         >
-          {collapsed ? "MB" : "MenuBuilder"}
+          <span
+            style={{
+              width: 22,
+              height: 22,
+              flex: "0 0 22px",
+              borderRadius: 6,
+              background: token.colorPrimary,
+              color: "#fff",
+              fontSize: 11,
+              fontWeight: 700,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            P
+          </span>
+          {!collapsed && (
+            <Text
+              strong
+              style={{ fontSize: 14, letterSpacing: -0.2 }}
+              ellipsis
+            >
+              PlaterraMonitoring
+            </Text>
+          )}
         </div>
         <Menu
-          theme="dark"
+          theme="light"
           mode="inline"
           selectedKeys={[selectedKey]}
-          onClick={({ key }) => navigate(key === "terminals" ? "/" : `/${key}`)}
-          items={[
-            { key: "terminals", icon: <MobileOutlined />, label: "Терминалы" },
-            { key: "variants", icon: <AppstoreOutlined />, label: "Варианты меню" },
-            { key: "monitoring", icon: <DashboardOutlined />, label: "Мониторинг" },
-            { key: "reports", icon: <FileTextOutlined />, label: "Отчёты" },
-            { key: "billing", icon: <DollarOutlined />, label: "Лицензии" },
-            { key: "profile", icon: <UserOutlined />, label: "Профиль" },
-          ]}
+          onClick={({ key }) => navigate(`/${key}`)}
+          items={NAV_ITEMS}
+          style={{ borderInlineEnd: "none", paddingInline: 6 }}
         />
       </Sider>
       <Layout>
@@ -76,38 +104,48 @@ export default function AppLayout() {
             display: "flex",
             alignItems: "center",
             borderBottom: `1px solid ${token.colorBorderSecondary}`,
-            height: 40,
-            lineHeight: "40px",
+            height: 48,
+            lineHeight: "48px",
+            position: "sticky",
+            top: 0,
+            zIndex: 10,
           }}
         >
-          {collapsed ? (
-            <MenuUnfoldOutlined
-              style={{ fontSize: 16, cursor: "pointer" }}
-              onClick={() => setCollapsed(false)}
-            />
-          ) : (
-            <MenuFoldOutlined
-              style={{ fontSize: 16, cursor: "pointer" }}
-              onClick={() => setCollapsed(true)}
-            />
-          )}
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 13, color: token.colorTextSecondary }}>
+          <Button
+            type="text"
+            size="small"
+            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            onClick={() => setCollapsed((v) => !v)}
+          />
+          <Text strong style={{ marginLeft: 12, fontSize: 14 }}>
+            {NAV_ITEMS.find((i) => i.key === selectedKey)?.label}
+          </Text>
+          <div
+            style={{
+              marginLeft: "auto",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <Text type="secondary" style={{ fontSize: 13 }}>
               {localStorage.getItem("mb_user")}
-            </span>
-            <Button
-              type="text"
-              icon={<LogoutOutlined />}
-              onClick={() => {
-                localStorage.removeItem("mb_token");
-                localStorage.removeItem("mb_user");
-                window.location.href = "/login";
-              }}
-              title="Выйти"
-            />
+            </Text>
+            <Tooltip title="Выйти">
+              <Button
+                type="text"
+                size="small"
+                icon={<LogoutOutlined />}
+                onClick={() => {
+                  localStorage.removeItem("mb_token");
+                  localStorage.removeItem("mb_user");
+                  window.location.href = "/login";
+                }}
+              />
+            </Tooltip>
           </div>
         </Header>
-        <Content style={{ padding: 12 }}>
+        <Content style={{ padding: 16 }}>
           <Outlet />
         </Content>
       </Layout>

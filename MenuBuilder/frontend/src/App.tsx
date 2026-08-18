@@ -1,11 +1,13 @@
 import { Routes, Route, Navigate } from "react-router";
 import AppLayout from "./routes/layout";
 import LoginPage from "./routes/login";
+import MenuManagementLayout from "./routes/menu-management";
 import TerminalsPage from "./routes/terminals";
 import VariantsPage from "./routes/variants";
 import MonitoringPage from "./routes/monitoring";
 import ReportsPage from "./routes/reports";
-import ProfilePage from "./routes/profile";
+import IntegrationsLayout from "./routes/integrations";
+import ApiTokensPage from "./routes/api-tokens";
 import BillingPage from "./routes/billing";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -27,13 +29,36 @@ export default function App() {
           </RequireAuth>
         }
       >
-        <Route index element={<TerminalsPage />} />
-        <Route path="variants" element={<VariantsPage />} />
+        <Route index element={<Navigate to="/monitoring" replace />} />
         <Route path="monitoring" element={<MonitoringPage />} />
+        <Route path="menu" element={<MenuManagementLayout />}>
+          <Route index element={<Navigate to="/menu/terminals" replace />} />
+          <Route path="terminals" element={<TerminalsPage />} />
+          <Route path="variants" element={<VariantsPage />} />
+        </Route>
         <Route path="reports" element={<ReportsPage />} />
         <Route path="billing" element={<BillingPage />} />
-        <Route path="profile" element={<ProfilePage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="integrations" element={<IntegrationsLayout />}>
+          <Route
+            index
+            element={<Navigate to="/integrations/tokens" replace />}
+          />
+          <Route path="tokens" element={<ApiTokensPage />} />
+        </Route>
+        {/* Legacy paths kept so existing bookmarks keep working */}
+        <Route
+          path="terminals"
+          element={<Navigate to="/menu/terminals" replace />}
+        />
+        <Route
+          path="variants"
+          element={<Navigate to="/menu/variants" replace />}
+        />
+        <Route
+          path="profile"
+          element={<Navigate to="/integrations/tokens" replace />}
+        />
+        <Route path="*" element={<Navigate to="/monitoring" replace />} />
       </Route>
     </Routes>
   );

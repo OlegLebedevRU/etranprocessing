@@ -23,6 +23,7 @@ import {
 } from "../api/terminal-bindings";
 import { getMenuVariants, MenuVariant } from "../api/menu-variants";
 import { getStats } from "../api/stats";
+import PageHeader from "../components/PageHeader";
 
 const { Text } = Typography;
 
@@ -172,6 +173,10 @@ export default function TerminalsPage() {
 
   return (
     <>
+      <PageHeader
+        title="Терминалы"
+        subtitle="Привязка терминалов к вариантам меню"
+      />
       <Card styles={{ body: { padding: 0 } }}>
         <Table
           dataSource={terminals}

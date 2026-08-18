@@ -36,6 +36,7 @@ import {
 } from "../api/billing";
 import CertificatePinModal from "../components/CertificatePinModal";
 import CheckoutModal, { type CartLine } from "../components/CheckoutModal";
+import PageHeader from "../components/PageHeader";
 import {
   formatMoneyMinor,
   formatDebt,
@@ -95,6 +96,32 @@ function projectedExpiry(
   const projected = new Date(anchor);
   projected.setMonth(projected.getMonth() + periods * t.billing_period_months);
   return projected.toISOString();
+}
+
+/**
+ * The org's prevailing tariff period, used to label the advance-payment
+ * control in months instead of abstract "+1 / +2".
+ */
+function dominantPeriodMonths(terminals: BillingTerminal[]): number {
+  const counts = new Map<number, number>();
+  for (const t of terminals) {
+    const months = t.billing_period_months || 1;
+    counts.set(months, (counts.get(months) ?? 0) + 1);
+  }
+  let best = 1;
+  let bestCount = 0;
+  for (const [months, count] of counts) {
+    if (count > bestCount) {
+      best = months;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+/** "3 мес" / "6 мес" — short label used on the Segmented control. */
+function monthsLabel(months: number): string {
+  return `${months} мес`;
 }
 
 export default function BillingPage() {
@@ -263,6 +290,25 @@ export default function BillingPage() {
     });
   };
 
+  // Advance-payment control: labelled in months, derived from the org tariff.
+  const periodMonths = dominantPeriodMonths(terminals);
+  const hasDebt = terminals.some(
+    (t) => t.billing_status !== "admin_disabled" && isLicenseLapsed(t),
+  );
+  const advanceOptions = [
+    ...(hasDebt ? [{ label: "Только задолженность", value: 0 }] : []),
+    { label: monthsLabel(periodMonths), value: 1 },
+    { label: monthsLabel(periodMonths * 2), value: 2 },
+  ];
+
+  // "Только задолженность" disappears once there is nothing overdue, so the
+  // selection has to fall back to the first real advance period.
+  useEffect(() => {
+    if (!loading && !hasDebt && advancePeriods === 0) {
+      setAdvancePeriods(1);
+    }
+  }, [loading, hasDebt, advancePeriods]);
+
   // Counters
   const overdueCount = terminals.filter(
     (t) => t.billing_status === "overdue",
@@ -339,8 +385,19 @@ export default function BillingPage() {
     {
       title: "Сертификат",
       key: "cert",
-      width: 215,
+      width: 250,
       render: (_: unknown, r: BillingTerminal) => {
+        const pinButton = r.tenant_pin_creation_enabled ? (
+          <Tooltip title="Запросить PIN отдельно, не добавляя в общий счёт">
+            <Button
+              size="small"
+              type="text"
+              icon={<SafetyCertificateOutlined />}
+              onClick={() => setPinModal({ open: true, terminal: r })}
+            />
+          </Tooltip>
+        ) : null;
+
         const label = !r.cert_serial ? (
           <Text type="warning">не выпущен</Text>
         ) : !r.cert_not_valid_after ? (
@@ -359,20 +416,29 @@ export default function BillingPage() {
           </Text>
         );
 
-        if (!isCertPayable(r)) return label;
+        if (!isCertPayable(r))
+          return (
+            <Space size={4} align="start">
+              {label}
+              {pinButton}
+            </Space>
+          );
 
         return (
-          <Checkbox
-            checked={Boolean(selection[r.terminal_id]?.cert)}
-            onChange={(e) => toggle(r.terminal_id, "cert", e.target.checked)}
-          >
-            <Space direction="vertical" size={0}>
-              {label}
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                {formatMoneyMinor(r.cert_pin_price_minor)}
-              </Text>
-            </Space>
-          </Checkbox>
+          <Space size={4} align="start">
+            <Checkbox
+              checked={Boolean(selection[r.terminal_id]?.cert)}
+              onChange={(e) => toggle(r.terminal_id, "cert", e.target.checked)}
+            >
+              <Space direction="vertical" size={0}>
+                {label}
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {formatMoneyMinor(r.cert_pin_price_minor)}
+                </Text>
+              </Space>
+            </Checkbox>
+            {pinButton}
+          </Space>
         );
       },
     },
@@ -418,7 +484,7 @@ export default function BillingPage() {
     {
       title: "Действия",
       key: "actions",
-      width: 210,
+      width: 190,
       render: (_: unknown, r: BillingTerminal) => (
         <Space size="small" wrap>
           {r.can_deactivate && (
@@ -438,15 +504,6 @@ export default function BillingPage() {
             >
               Отменить отключение
             </Button>
-          )}
-          {r.tenant_pin_creation_enabled && (
-            <Tooltip title="Запросить PIN отдельно, не добавляя в общий счёт">
-              <Button
-                size="small"
-                icon={<SafetyCertificateOutlined />}
-                onClick={() => setPinModal({ open: true, terminal: r })}
-              />
-            </Tooltip>
           )}
         </Space>
       ),
@@ -482,6 +539,18 @@ export default function BillingPage() {
 
   return (
     <div>
+      <PageHeader
+        title="Лицензии"
+        subtitle="Оплата лицензий и сертификатов терминалов"
+        extra={
+          <>
+            <Tag color="red">Просрочено: {overdueCount}</Tag>
+            <Tag color="green">Активных: {activeCount}</Tag>
+            <Tag color="blue">Отключение: {deactivationCount}</Tag>
+            <Tag>Отключённых: {disabledCount}</Tag>
+          </>
+        }
+      />
       {/* Summary cards */}
       <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
         <Col xs={24} sm={12} md={6}>
@@ -554,14 +623,6 @@ export default function BillingPage() {
         ))}
       </Row>
 
-      {/* Counters */}
-      <Space style={{ marginBottom: 8 }} size="middle" wrap>
-        <Tag color="red">Просрочено: {overdueCount}</Tag>
-        <Tag color="green">Активных: {activeCount}</Tag>
-        <Tag color="blue">Отключение: {deactivationCount}</Tag>
-        <Tag>Отключённых: {disabledCount}</Tag>
-      </Space>
-
       {/* Terminal table with tabs */}
       <Card
         size="small"
@@ -575,11 +636,7 @@ export default function BillingPage() {
               size="small"
               value={advancePeriods}
               onChange={(v) => setAdvancePeriods(v as number)}
-              options={[
-                { label: "0", value: 0 },
-                { label: "+1", value: 1 },
-                { label: "+2", value: 2 },
-              ]}
+              options={advanceOptions}
             />
             <Button size="small" onClick={() => setAllVisible(true)}>
               Отметить всё

@@ -474,21 +474,27 @@ export default function ReportsPage() {
   return (
     <Layout style={{ background: "transparent" }}>
       <Sider
-        width={160}
+        width={170}
         theme="light"
         style={{
-          borderRight: "1px solid #f0f0f0",
-          borderRadius: 8,
-          marginRight: 8,
+          border: "1px solid #eceff3",
+          borderRadius: 10,
+          marginRight: 12,
+          padding: 6,
+          alignSelf: "flex-start",
+          position: "sticky",
+          top: 52,
         }}
       >
         <div
           style={{
-            padding: "12px 16px 8px",
+            fontSize: 11,
             fontWeight: 600,
-            fontSize: 14,
-            borderBottom: "1px solid #f0f0f0",
-            }}
+            letterSpacing: 0.6,
+            textTransform: "uppercase",
+            color: "#94a3b8",
+            padding: "6px 10px 8px",
+          }}
         >
           Отчёты
         </div>
@@ -497,7 +503,7 @@ export default function ReportsPage() {
           selectedKeys={[activeReport]}
           onClick={({ key }) => setActiveReport(key)}
           items={REPORTS}
-          style={{ border: "none" }}
+          style={{ border: "none", background: "transparent" }}
         />
       </Sider>
       <Content>

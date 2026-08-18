@@ -287,7 +287,7 @@ export default function VariantsPage() {
   ];
 
   return (
-    <div style={{ display: "flex", gap: 8, height: "calc(100vh - 64px)" }}>
+    <div style={{ display: "flex", gap: 8, height: "calc(100vh - 80px)" }}>
       {/* LEFT: Variants */}
       <Card
         size="small"

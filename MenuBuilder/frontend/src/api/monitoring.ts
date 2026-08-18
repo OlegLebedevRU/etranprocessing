@@ -15,6 +15,10 @@ export interface MonitoringTerminal {
   printer_fr: number;
   printer_check_counter: number;
   soft_version: string;
+  last_payment_at: string | null;
+  license_expires_at: string | null;
+  cert_serial: string | null;
+  cert_not_valid_after: string | null;
 }
 
 export interface MonitoringResponse {

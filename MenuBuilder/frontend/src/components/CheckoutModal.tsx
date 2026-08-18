@@ -192,7 +192,10 @@ export default function CheckoutModal({
                   <Space direction="vertical" size={0}>
                     {l.license && (
                       <Text>
-                        Лицензия{advancePeriods > 0 ? ` +${advancePeriods}` : ""}
+                        Лицензия
+                        {advancePeriods > 0
+                          ? ` + ${advancePeriods * (l.terminal.billing_period_months || 1)} мес`
+                          : ""}
                         {l.newExpiresAt && (
                           <Text type="secondary">
                             {" "}

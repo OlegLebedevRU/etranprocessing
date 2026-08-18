@@ -12,7 +12,7 @@ import {
   Tag,
   Alert,
 } from "antd";
-import { CopyOutlined, DeleteOutlined, PlusOutlined, UserOutlined, KeyOutlined } from "@ant-design/icons";
+import { CopyOutlined, DeleteOutlined, PlusOutlined, KeyOutlined } from "@ant-design/icons";
 import {
   createToken,
   listTokens,
@@ -20,8 +20,9 @@ import {
   getProfile,
   type TokenInfo,
 } from "../api/profile";
+import PageHeader from "../components/PageHeader";
 
-const { Title, Text, Paragraph } = Typography;
+const { Text, Paragraph } = Typography;
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<{ username: string; org_id: number } | null>(null);
@@ -136,21 +137,14 @@ export default function ProfilePage() {
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
-      <Title level={4} style={{ margin: 0 }}>
-        <UserOutlined /> Профиль
-      </Title>
-
-      {profile && (
-        <Card size="small">
-          <Space>
-            <Text strong>Пользователь:</Text>
-            <Text>{profile.username}</Text>
-            <Text type="secondary" style={{ marginLeft: 16 }}>
-              Организация: {profile.org_id}
-            </Text>
-          </Space>
-        </Card>
-      )}
+      <PageHeader
+        title="API-токены"
+        subtitle={
+          profile
+            ? `${profile.username} · организация ${profile.org_id}`
+            : undefined
+        }
+      />
 
       {createdToken && (
         <Alert

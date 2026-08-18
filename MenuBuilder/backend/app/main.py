@@ -182,8 +182,31 @@ async def get_monitoring():
         terminals = (
             await session.execute(
                 text(
-                    "SELECT id, device_id, sn, org_id, is_active FROM terminals ORDER BY device_id"
+                    "SELECT id, device_id, sn, org_id, is_active, "
+                    "cert_serial, cert_not_valid_after "
+                    "FROM terminals ORDER BY device_id"
                 )
+            )
+        ).fetchall()
+
+        # Latest payment per terminal (terminal activity indicator)
+        payment_rows = (
+            await session.execute(
+                text(
+                    "SELECT terminal_id, MAX(paym_datetime) "
+                    "FROM payments GROUP BY terminal_id"
+                )
+            )
+        ).fetchall()
+
+        # Latest license expiration per terminal
+        license_rows = (
+            await session.execute(
+                text("""
+                SELECT DISTINCT ON (terminal_id) terminal_id, expires_at
+                FROM licenses
+                ORDER BY terminal_id, expires_at DESC
+            """)
             )
         ).fetchall()
 
@@ -215,6 +238,9 @@ async def get_monitoring():
     gauge_map: dict[int, dict] = {}
     for r in latest:
         gauge_map[r[0]] = r[1] if r[1] else {}
+
+    last_payment_map: dict[int, datetime] = {r[0]: r[1] for r in payment_rows if r[1]}
+    license_map: dict[int, datetime] = {r[0]: r[1] for r in license_rows if r[1]}
 
     # Build interval map with overlap buffer to avoid false red on boundary shift
     SLOT_DURATION = 600  # 10 minutes
@@ -250,6 +276,9 @@ async def get_monitoring():
         dev_id = t[1]
         slots = device_slots.get(dev_id, [False] * 12)
         gauge = gauge_map.get(dev_id, {})
+        last_payment = last_payment_map.get(t[0])
+        license_expires = license_map.get(t[0])
+        cert_not_valid_after = t[6]
 
         # lastnumconn: count trailing false in slots
         lastnumconn = 0
@@ -288,6 +317,14 @@ async def get_monitoring():
                 "printer_fr": int(g("124") or "0"),
                 "printer_check_counter": int(g("120") or "0"),
                 "soft_version": fmt_soft_version(g("130")),
+                "last_payment_at": last_payment.isoformat() if last_payment else None,
+                "license_expires_at": license_expires.isoformat()
+                if license_expires
+                else None,
+                "cert_serial": t[5],
+                "cert_not_valid_after": cert_not_valid_after.isoformat()
+                if cert_not_valid_after
+                else None,
             }
         )
 

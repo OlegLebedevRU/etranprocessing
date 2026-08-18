@@ -1,9 +1,25 @@
 import { useEffect, useState, useCallback } from "react";
-import { Card, message, Space, Table, Tooltip, Typography } from "antd";
+import { Button, Card, message, Table, Tooltip, Typography } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import { getMonitoring, MonitoringTerminal } from "../api/monitoring";
+import PageHeader from "../components/PageHeader";
+import { formatDate } from "../utils/billing";
 
 const { Text } = Typography;
+
+/** Minutes after which the "last payment" cell turns yellow / red. */
+const PAYMENT_WARN_MINUTES = 60;
+const PAYMENT_ALERT_MINUTES = 240;
+/** Days before license expiry that count as "expiring soon". */
+const LICENSE_WARN_DAYS = 30;
+
+const COLOR = {
+  warnBg: "#fffbe6",
+  alertBg: "#fff1f0",
+  warn: "#d97706",
+  alert: "#dc2626",
+  muted: "#94a3b8",
+};
 
 function SlotBar({ slots }: { slots: boolean[] }) {
   return (
@@ -15,7 +31,7 @@ function SlotBar({ slots }: { slots: boolean[] }) {
             width: 3,
             height: active ? 14 : 10,
             borderRadius: 1,
-            background: active ? "#52c41a" : "#cf1322",
+            background: active ? "#16a34a" : "#dc2626",
           }}
         />
       ))}
@@ -26,14 +42,14 @@ function SlotBar({ slots }: { slots: boolean[] }) {
 function stateBg(val: string): string | undefined {
   const n = parseInt(val);
   if (isNaN(n)) return undefined;
-  if (n >= 200) return "#fff1f0";
-  if (n >= 100) return "#fffbe6";
+  if (n >= 200) return COLOR.alertBg;
+  if (n >= 100) return COLOR.warnBg;
   return undefined;
 }
 
 function lastnumBg(val: number): string | undefined {
-  if (val >= 6) return "#fff1f0";
-  if (val >= 3) return "#fffbe6";
+  if (val >= 6) return COLOR.alertBg;
+  if (val >= 3) return COLOR.warnBg;
   return undefined;
 }
 
@@ -48,6 +64,26 @@ function lastnumTooltip(val: number): string {
   return `${h}ч ${m}м`;
 }
 
+/** Minutes elapsed since an ISO timestamp, or null when there is none. */
+function minutesSince(iso: string | null): number | null {
+  if (!iso) return null;
+  const diff = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(diff)) return null;
+  return Math.max(0, Math.floor(diff / 60000));
+}
+
+function formatElapsed(minutes: number): string {
+  if (minutes < 60) return `${minutes}м`;
+  const h = Math.floor(minutes / 60);
+  if (h < 24) return `${h}ч ${minutes % 60}м`;
+  const d = Math.floor(h / 24);
+  return `${d}д ${h % 24}ч`;
+}
+
+function daysUntil(iso: string): number {
+  return Math.floor((new Date(iso).getTime() - Date.now()) / 86400000);
+}
+
 export default function MonitoringPage() {
   const [terminals, setTerminals] = useState<MonitoringTerminal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,7 +94,7 @@ export default function MonitoringPage() {
     try {
       const res = await getMonitoring();
       setTerminals(res.data.items);
-      setLastUpdate(new Date().toLocaleTimeString());
+      setLastUpdate(new Date().toLocaleTimeString("ru-RU"));
     } catch {
       message.error("Ошибка загрузки");
     } finally {
@@ -66,7 +102,9 @@ export default function MonitoringPage() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
   useEffect(() => {
     const timer = setInterval(load, 60000);
     return () => clearInterval(timer);
@@ -77,12 +115,18 @@ export default function MonitoringPage() {
       title: "ID",
       dataIndex: "device_id",
       key: "device_id",
-      render: (v: number) => <Text strong style={{ fontSize: 12 }}>{String(v).padStart(8, "\u00A0")}</Text>,
+      render: (v: number) => (
+        <Text strong style={{ fontSize: 12 }}>
+          {String(v).padStart(8, "\u00A0")}
+        </Text>
+      ),
     },
     {
       title: "Связь",
       key: "slots",
-      render: (_: any, record: MonitoringTerminal) => <SlotBar slots={record.slots} />,
+      render: (_: unknown, record: MonitoringTerminal) => (
+        <SlotBar slots={record.slots} />
+      ),
     },
     {
       title: "Обмен",
@@ -91,11 +135,121 @@ export default function MonitoringPage() {
       align: "center" as const,
       render: (v: number) => (
         <Tooltip title={lastnumTooltip(v)}>
-          <span style={{ fontSize: 12, background: lastnumBg(v), padding: "0 4px", borderRadius: 2 }}>
+          <span
+            style={{
+              fontSize: 12,
+              background: lastnumBg(v),
+              padding: "1px 5px",
+              borderRadius: 4,
+            }}
+          >
             {v}
           </span>
         </Tooltip>
       ),
+    },
+    {
+      title: "Платёж",
+      dataIndex: "last_payment_at",
+      key: "last_payment",
+      align: "center" as const,
+      render: (v: string | null) => {
+        const minutes = minutesSince(v);
+        if (minutes === null) {
+          return (
+            <Tooltip title="Платежей не было">
+              <Text style={{ fontSize: 12, color: COLOR.muted }}>—</Text>
+            </Tooltip>
+          );
+        }
+        const alert = minutes > PAYMENT_ALERT_MINUTES;
+        const warn = !alert && minutes > PAYMENT_WARN_MINUTES;
+        return (
+          <Tooltip title={new Date(v as string).toLocaleString("ru-RU")}>
+            <span
+              style={{
+                fontSize: 12,
+                background: alert
+                  ? COLOR.alertBg
+                  : warn
+                    ? COLOR.warnBg
+                    : undefined,
+                color: alert ? COLOR.alert : warn ? COLOR.warn : undefined,
+                padding: "1px 5px",
+                borderRadius: 4,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {formatElapsed(minutes)}
+            </span>
+          </Tooltip>
+        );
+      },
+    },
+    {
+      title: "Лицензия",
+      dataIndex: "license_expires_at",
+      key: "license",
+      align: "center" as const,
+      render: (v: string | null) => {
+        if (!v)
+          return (
+            <Text style={{ fontSize: 12, color: COLOR.muted }}>нет</Text>
+          );
+        const days = daysUntil(v);
+        return (
+          <Tooltip
+            title={
+              days < 0
+                ? `Истекла ${Math.abs(days)} дн. назад`
+                : `Осталось ${days} дн.`
+            }
+          >
+            <Text
+              style={{ fontSize: 12, whiteSpace: "nowrap" }}
+              type={
+                days < 0
+                  ? "danger"
+                  : days <= LICENSE_WARN_DAYS
+                    ? "warning"
+                    : undefined
+              }
+            >
+              {formatDate(v)}
+            </Text>
+          </Tooltip>
+        );
+      },
+    },
+    {
+      title: "Сертификат",
+      key: "cert",
+      align: "center" as const,
+      render: (_: unknown, r: MonitoringTerminal) => {
+        if (!r.cert_serial)
+          return (
+            <Text type="warning" style={{ fontSize: 12 }}>
+              не выпущен
+            </Text>
+          );
+        if (!r.cert_not_valid_after)
+          return (
+            <Text style={{ fontSize: 12, color: COLOR.muted }}>выпущен</Text>
+          );
+        const days = daysUntil(r.cert_not_valid_after);
+        return (
+          <Tooltip title={`Серийный номер: ${r.cert_serial}`}>
+            <Text
+              style={{ fontSize: 12, whiteSpace: "nowrap" }}
+              type={
+                days < 0 ? "danger" : days <= LICENSE_WARN_DAYS ? "warning" : undefined
+              }
+            >
+              {formatDate(r.cert_not_valid_after)}
+            </Text>
+          </Tooltip>
+        );
+      },
     },
     {
       title: "Валид.",
@@ -105,7 +259,14 @@ export default function MonitoringPage() {
       render: (v: string) => {
         const n = parseInt(v);
         return (
-          <span style={{ fontSize: 11, background: stateBg(v), padding: "0 3px", borderRadius: 2 }}>
+          <span
+            style={{
+              fontSize: 11,
+              background: stateBg(v),
+              padding: "1px 4px",
+              borderRadius: 4,
+            }}
+          >
             {isNaN(n) ? "—" : n}
           </span>
         );
@@ -119,7 +280,14 @@ export default function MonitoringPage() {
       render: (v: string) => {
         const n = parseInt(v);
         return (
-          <span style={{ fontSize: 11, background: stateBg(v), padding: "0 3px", borderRadius: 2 }}>
+          <span
+            style={{
+              fontSize: 11,
+              background: stateBg(v),
+              padding: "1px 4px",
+              borderRadius: 4,
+            }}
+          >
             {isNaN(n) ? "—" : n}
           </span>
         );
@@ -132,40 +300,51 @@ export default function MonitoringPage() {
       render: (v: string) => <Text style={{ fontSize: 11 }}>{v}</Text>,
     },
     {
+      title: "",
+      dataIndex: "is_active",
+      key: "active",
+      align: "center" as const,
+      render: (v: boolean) => (
+        <span style={{ color: v ? "#16a34a" : "#dc2626", fontSize: 14 }}>●</span>
+      ),
+    },
+    {
       title: "SN",
       dataIndex: "sn",
       key: "sn",
-      width: 80,
+      width: 1,
       render: (v: string) => (
-        <Tooltip title={<Typography.Text copyable style={{ fontSize: 11 }}>{v}</Typography.Text>}>
+        <Tooltip
+          title={
+            <Typography.Text copyable style={{ fontSize: 11 }}>
+              {v}
+            </Typography.Text>
+          }
+        >
           <Text code style={{ fontSize: 10, cursor: "default" }}>
             {v.length > 10 ? v.slice(0, 10) + "…" : v}
           </Text>
         </Tooltip>
       ),
     },
-    {
-      title: "",
-      dataIndex: "is_active",
-      key: "active",
-      render: (v: boolean) => (
-        <span style={{ color: v ? "#52c41a" : "#ff4d4f", fontSize: 14 }}>●</span>
-      ),
-    },
   ];
 
   return (
     <>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <Space size={8} align="center">
-          <Text strong style={{ fontSize: 14 }}>Мониторинг</Text>
-          <ReloadOutlined
-            style={{ fontSize: 13, cursor: "pointer", color: "#1677ff" }}
+      <PageHeader
+        title="Мониторинг"
+        subtitle={lastUpdate ? `Обновлено в ${lastUpdate}` : undefined}
+        extra={
+          <Button
+            size="small"
+            icon={<ReloadOutlined />}
             onClick={load}
-          />
-          {lastUpdate && <Text type="secondary" style={{ fontSize: 10 }}>{lastUpdate}</Text>}
-        </Space>
-      </div>
+            loading={loading}
+          >
+            Обновить
+          </Button>
+        }
+      />
 
       <Card styles={{ body: { padding: 0 } }} style={{ width: "fit-content" }}>
         <Table
