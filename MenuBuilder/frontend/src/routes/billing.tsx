@@ -221,14 +221,20 @@ export default function BillingPage() {
       title: "Сертификат",
       dataIndex: "cert_not_valid_after",
       key: "cert_expires",
-      render: (v: string | null) =>
-        v ? (
+      render: (v: string | null, r: BillingTerminal) => {
+        if (!r.cert_serial) {
+          return <Text type="secondary">не выпущен</Text>;
+        }
+        if (!v) {
+          // Legacy certificate issued before this app started tracking expiry.
+          return <Text type="secondary">выпущен (дата неизвестна)</Text>;
+        }
+        return (
           <Text type={new Date(v) < new Date() ? "danger" : "secondary"}>
             {formatDate(v)}
           </Text>
-        ) : (
-          <Text type="secondary">не выпущен</Text>
-        ),
+        );
+      },
     },
     {
       title: "Тариф",
@@ -315,7 +321,7 @@ export default function BillingPage() {
               icon={<SafetyCertificateOutlined />}
               onClick={() => setPinModal({ open: true, terminal: r })}
             >
-              {r.cert_not_valid_after ? "Перевыпустить сертификат" : "Получить PIN"}
+              {r.cert_serial ? "Перевыпустить сертификат" : "Получить PIN"}
             </Button>
           )}
         </Space>

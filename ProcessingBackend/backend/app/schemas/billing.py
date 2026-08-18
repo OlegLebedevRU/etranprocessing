@@ -63,6 +63,7 @@ class BillingTerminalRead(BaseModel):
     can_cancel_deactivation: bool
     can_reactivate: bool
     included_in_forecast: bool
+    cert_serial: str | None = None
     cert_not_valid_after: datetime | None = None
     tenant_pin_creation_enabled: bool = False
 

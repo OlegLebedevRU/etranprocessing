@@ -44,6 +44,7 @@ export interface BillingTerminal {
   included_in_forecast: boolean;
   cert_not_valid_after: string | null;
   tenant_pin_creation_enabled: boolean;
+  cert_serial: string | null;
 }
 
 export interface DeactivateResponse {
