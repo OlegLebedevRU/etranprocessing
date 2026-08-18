@@ -151,7 +151,7 @@ async def _handle_check(params: dict, db: AsyncSession) -> Response:
         cert_logger.warning("CHECK: pin not found: %s", pin)
         return error_response("Пин-код не существует", code=2)
 
-    _pin_row, terminal = found
+    terminal, _pin_row = found
 
     # sign = MD5(decode_base64(tosign) + SignKey)
     sign = ""
@@ -213,7 +213,7 @@ async def _handle_setup(params: dict, request: Request, db: AsyncSession) -> Res
         cert_logger.warning("SETUP: pin not found: %s", pin)
         return error_response("Пин-код не существует", code=2)
 
-    cert_pin, terminal = found
+    terminal, cert_pin = found
 
     body = await request.body()
     if not body:
