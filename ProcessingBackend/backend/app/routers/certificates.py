@@ -24,8 +24,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.logging_config import cert_logger
-from app.models import CertificatePin, Terminal
+from app.models import CertificatePin, Terminal, TerminalCertHistory
 from app.services.ca import sign_csr
+from app.services.cert_billing import mask_pin
 
 router = APIRouter()
 
@@ -90,14 +91,40 @@ def error_response(description: str, code: int = 1) -> Response:
 async def _find_terminal_by_pin(
     pin: str, db: AsyncSession
 ) -> Row[tuple[Terminal, CertificatePin]] | None:
-    """Look up terminal via certificate_pins table. Returns (terminal, pin_row) or None."""
+    """Look up terminal via certificate_pins table. Returns (terminal, pin_row) or None.
+
+    Lazily expires a `pending` PIN whose TTL has passed (marks it `expired` and
+    treats it as not found), instead of relying on a separate sweep job.
+    """
     result = await db.execute(
         select(Terminal, CertificatePin)
         .join(CertificatePin, CertificatePin.terminal_id == Terminal.id)
         .where(CertificatePin.pin == pin, CertificatePin.status == "pending")
     )
     row = result.one_or_none()
-    return row if row else None
+    if not row:
+        return None
+
+    _terminal, cert_pin = row
+    if cert_pin.expires_at <= datetime.now(UTC):
+        cert_pin.status = "expired"
+        await db.commit()
+        cert_logger.info("PIN expired: pin=%s", mask_pin(pin))
+        return None
+
+    return row
+
+
+def _parse_ca_datetime(value: str) -> datetime | None:
+    """Parse the CA's not_valid_after string into an aware datetime, if possible."""
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        cert_logger.warning("Unable to parse CA not_valid_after: %s", value)
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
 # ---------------------------------------------------------------------------
@@ -148,7 +175,7 @@ async def _handle_check(params: dict, db: AsyncSession) -> Response:
 
     found = await _find_terminal_by_pin(pin, db)
     if not found:
-        cert_logger.warning("CHECK: pin not found: %s", pin)
+        cert_logger.warning("CHECK: pin not found: %s", mask_pin(pin))
         return error_response("Пин-код не существует", code=2)
 
     terminal, _pin_row = found
@@ -162,7 +189,9 @@ async def _handle_check(params: dict, db: AsyncSession) -> Response:
                 hashlib.md5((decoded + SIGN_KEY).encode(ENCODING)).hexdigest().upper()
             )
         except ValueError, UnicodeDecodeError:
-            cert_logger.warning("CHECK: failed to decode/tosign for pin=%s", pin)
+            cert_logger.warning(
+                "CHECK: failed to decode/tosign for pin=%s", mask_pin(pin)
+            )
 
     dn = (
         f"CN={terminal.sn}"
@@ -178,7 +207,7 @@ async def _handle_check(params: dict, db: AsyncSession) -> Response:
 
     cert_logger.info(
         "CHECK: pin=%s, sn=%s, device=%d, org=%d, v=%s",
-        pin,
+        mask_pin(pin),
         terminal.sn,
         terminal.device_id,
         terminal.org_id,
@@ -210,7 +239,7 @@ async def _handle_setup(params: dict, request: Request, db: AsyncSession) -> Res
 
     found = await _find_terminal_by_pin(pin, db)
     if not found:
-        cert_logger.warning("SETUP: pin not found: %s", pin)
+        cert_logger.warning("SETUP: pin not found: %s", mask_pin(pin))
         return error_response("Пин-код не существует", code=2)
 
     terminal, cert_pin = found
@@ -226,7 +255,9 @@ async def _handle_setup(params: dict, request: Request, db: AsyncSession) -> Res
     else:
         pkcs10_pem = pkcs10_raw
 
-    cert_logger.info("SETUP: pin=%s, sn=%s, cpserial=%s", pin, terminal.sn, cpserial)
+    cert_logger.info(
+        "SETUP: pin=%s, sn=%s, cpserial=%s", mask_pin(pin), terminal.sn, cpserial
+    )
 
     try:
         ca_result = await sign_csr(
@@ -238,14 +269,26 @@ async def _handle_setup(params: dict, request: Request, db: AsyncSession) -> Res
         cert_logger.error("SETUP: CA failed: %s", e, exc_info=True)
         return error_response(f"Ошибка выпуска сертификата: {e}", code=1)
 
+    not_valid_after = _parse_ca_datetime(ca_result.not_valid_after)
+
     terminal.cert_serial = ca_result.serial_number
+    terminal.cert_not_valid_after = not_valid_after
     cert_pin.status = "used"
     cert_pin.used_at = datetime.now(UTC)
+    db.add(
+        TerminalCertHistory(
+            terminal_id=terminal.id,
+            cert_serial=ca_result.serial_number,
+            not_valid_after=not_valid_after,
+            pin_id=cert_pin.id,
+            source="setup",
+        )
+    )
     await db.commit()
 
     cert_logger.info(
         "SETUP OK: pin=%s, serial=%s, valid_until=%s",
-        pin,
+        mask_pin(pin),
         ca_result.serial_number,
         ca_result.not_valid_after,
     )

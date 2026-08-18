@@ -6,7 +6,9 @@ Certificates service handles terminal certificate enrollment via two legacy-comp
 - **CHECK** — terminal requests CA parameters with a PIN
 - **SETUP** — terminal submits PKCS10 CSR, receives signed certificate (PKCS#7 chain)
 
-PIN is pre-allocated in `certificate_pins` table (creation is out of scope).
+PIN is pre-allocated in `certificate_pins` table via the organizational billing flow —
+see [PIN-driven organizational billing](#pin-driven-organizational-billing) below and
+[`docs/billing-certificate-licensing-analysis/ANALYSIS.md`](../docs/billing-certificate-licensing-analysis/ANALYSIS.md).
 External CA is a Yandex Cloud Functions serverless function called over HTTPS.
 Terminal does NOT have a client certificate during enrollment — auth is purely PIN-based.
 
@@ -204,18 +206,32 @@ Note: Yandex Cloud Functions converts headers to Title-Case (`X-CN` → `X-Cn`).
 
 ```sql
 CREATE TABLE certificate_pins (
-    id          SERIAL PRIMARY KEY,
-    pin         VARCHAR(10) UNIQUE NOT NULL,
-    terminal_id INT NOT NULL REFERENCES terminals(id),
-    status      VARCHAR(20) NOT NULL DEFAULT 'pending',  -- pending / used
-    created_at  TIMESTAMPTZ DEFAULT NOW(),
-    used_at     TIMESTAMPTZ
+    id               SERIAL PRIMARY KEY,
+    pin              VARCHAR(10) UNIQUE NOT NULL,
+    terminal_id      INT NOT NULL REFERENCES terminals(id),
+    org_id           INT NOT NULL,
+    order_item_id    INT REFERENCES billing_order_items(id),
+    created_by       VARCHAR(100),
+    creation_source  VARCHAR(20) NOT NULL DEFAULT 'system',  -- tenant / global_admin / system
+    payment_required BOOLEAN NOT NULL DEFAULT FALSE,
+    status           VARCHAR(20) NOT NULL DEFAULT 'pending', -- pending / used / expired / cancelled
+    expires_at       TIMESTAMPTZ NOT NULL,                    -- TTL, default 24h (settings.cert_pin_ttl_hours)
+    created_at       TIMESTAMPTZ DEFAULT NOW(),
+    used_at          TIMESTAMPTZ
 );
 CREATE INDEX idx_cert_pins_terminal ON certificate_pins (terminal_id);
 CREATE INDEX idx_cert_pins_status ON certificate_pins (status);
+CREATE INDEX idx_cert_pins_org ON certificate_pins (org_id);
+CREATE INDEX idx_cert_pins_order_item ON certificate_pins (order_item_id);
+CREATE UNIQUE INDEX uq_cert_pins_one_pending_per_terminal
+    ON certificate_pins (terminal_id) WHERE status = 'pending';
 ```
 
-PIN creation is out of scope (separate process).
+PIN creation now happens via `POST /api/terminals/{terminal_id}/certificate-pin` (tenant-scoped,
+org billing policy driven) or, for paid operations, after the corresponding billing order is
+confirmed — see [PIN-driven organizational billing](#pin-driven-organizational-billing).
+A `check`/`setup` request against an expired `pending` PIN is lazily marked `expired` and
+treated as not found; it does not block a new PIN from being requested.
 
 ### terminals (relevant fields)
 
@@ -226,6 +242,50 @@ PIN creation is out of scope (separate process).
 | `sn` | VARCHAR(100) UNIQUE | Used as CN in DN (after X-CN override) |
 | `org_id` | INT | Used as O in DN |
 | `cert_serial` | VARCHAR(100) | Updated after successful setup |
+| `cert_not_valid_after` | TIMESTAMPTZ | Updated after successful setup (from CA `not_valid_after`) |
+
+### terminal_cert_history
+
+Append-only operational history of certificates issued for a terminal, written by the
+`setup` handler on every successful CA issuance.
+
+```sql
+CREATE TABLE terminal_cert_history (
+    id              SERIAL PRIMARY KEY,
+    terminal_id     INT NOT NULL REFERENCES terminals(id),
+    cert_serial     VARCHAR(100) NOT NULL,
+    not_valid_after TIMESTAMPTZ,
+    pin_id          INT REFERENCES certificate_pins(id),
+    source          VARCHAR(20) NOT NULL DEFAULT 'setup',
+    issued_at       TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_terminal_cert_history_terminal ON terminal_cert_history (terminal_id);
+```
+
+---
+
+## PIN-driven organizational billing
+
+Full analysis: [`docs/billing-certificate-licensing-analysis/ANALYSIS.md`](../docs/billing-certificate-licensing-analysis/ANALYSIS.md).
+
+Key rule: **payment/checkout never calls the CA.** `sign_csr()` remains the only CA call site,
+invoked exclusively from this router's `setup` handler. The billing subject is the
+*permission to create a PIN* for a terminal, not certificate issuance itself.
+
+```
+POST /api/terminals/{id}/certificate-pin (tenant, JWT)
+  → org_billing_settings.cert_billing_mode/cert_price_minor decide:
+      mode=none            → PIN created immediately (pin_ready)
+      per_operation, price=0 → PIN created immediately (pin_ready, audited)
+      per_operation, price>0 → billing_orders/billing_order_items(operation=cert_pin) created (payment_required)
+  → POST /api/billing/orders/{id}/confirm (mock provider) or real provider webhook
+      → for operation=cert_pin: creates the CertificatePin (still no CA call)
+  → terminal check/setup (this document) → sign_csr() → cert_serial + cert_not_valid_after + terminal_cert_history
+```
+
+Org-level settings added to `org_billing_settings`: `cert_billing_mode` (`none`|`per_operation`),
+`cert_price_minor`, `tenant_pin_creation_enabled`, `cert_charge_primary_issue`, `cert_charge_reissue`.
+See `app/services/cert_billing.py` for policy resolution, PIN generation/TTL, and PIN masking helpers.
 
 ---
 
@@ -252,15 +312,18 @@ ProcessingBackend/
 ├── nginx-mutual-ssl.conf                   # location /api/certificates/
 └── backend/
     ├── app/
-    │   ├── models.py                       # CertificatePin model
+    │   ├── models.py                       # CertificatePin, TerminalCertHistory models
     │   ├── routers/
-    │   │   └── certificates.py             # check/setup endpoints
+    │   │   ├── certificates.py             # check/setup endpoints
+    │   │   └── billing.py                  # POST .../certificate-pin, orders confirm/get
     │   ├── services/
-    │   │   └── ca.py                       # HTTP client to external CA
+    │   │   ├── ca.py                       # HTTP client to external CA
+    │   │   └── cert_billing.py             # PIN billing policy/generation/TTL
     │   └── logging_config.py               # cert_logger
     └── alembic/versions/
         ├── 001_initial_payment_flow_tables.py
-        └── 002_add_certificate_pins.py
+        ├── 002_add_certificate_pins.py
+        └── 006_cert_billing.py
 ```
 
 ---

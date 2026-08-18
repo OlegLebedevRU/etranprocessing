@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     # Billing
     billing_due_soon_days: int = 30
 
+    # Certificate PIN billing
+    cert_pin_ttl_hours: int = 24
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
     @property

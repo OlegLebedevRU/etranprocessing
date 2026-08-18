@@ -29,6 +29,9 @@ class Terminal(Base):
     device_id: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
     sn: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     cert_serial: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    cert_not_valid_after: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     org_id: Mapped[int] = mapped_column(Integer, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -301,30 +304,6 @@ class BalanceTerminalTsp(Base):
     )
 
 
-class CertificatePin(Base):
-    __tablename__ = "certificate_pins"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    pin: Mapped[str] = mapped_column(String(10), unique=True, nullable=False)
-    terminal_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("terminals.id"), nullable=False
-    )
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-    used_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-
-    terminal: Mapped[Terminal] = relationship()
-
-    __table_args__ = (
-        Index("idx_cert_pins_terminal", "terminal_id"),
-        Index("idx_cert_pins_status", "status"),
-    )
-
-
 class ApiToken(Base):
     __tablename__ = "api_tokens"
 
@@ -359,6 +338,14 @@ class OrgBillingSettings(Base):
     currency: Mapped[str] = mapped_column(
         String(3), nullable=False, server_default="RUB"
     )
+    # Organizational certificate tariff policy (source of truth — no per-terminal override).
+    cert_billing_mode: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="none"
+    )
+    cert_price_minor: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    tenant_pin_creation_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    cert_charge_primary_issue: Mapped[bool] = mapped_column(Boolean, default=True)
+    cert_charge_reissue: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -369,6 +356,14 @@ class OrgBillingSettings(Base):
     __table_args__ = (
         CheckConstraint(
             "monthly_price_minor >= 0", name="ck_org_billing_price_non_negative"
+        ),
+        CheckConstraint(
+            "cert_price_minor IS NULL OR cert_price_minor >= 0",
+            name="ck_org_cert_price_non_negative",
+        ),
+        CheckConstraint(
+            "cert_billing_mode IN ('none', 'per_operation')",
+            name="ck_org_cert_mode",
         ),
     )
 
@@ -434,6 +429,9 @@ class BillingOrderItem(Base):
     new_expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
+    # Snapshot of the org cert tariff policy at request time (operation="cert_pin" only).
+    # Prevents a later org-tariff change from retroactively altering an already-created order.
+    cert_policy_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     order: Mapped[BillingOrder] = relationship(back_populates="items")
     terminal: Mapped[Terminal] = relationship()
@@ -441,4 +439,82 @@ class BillingOrderItem(Base):
     __table_args__ = (
         Index("idx_billing_order_items_order_id", "order_id"),
         Index("idx_billing_order_items_terminal_id", "terminal_id"),
+        CheckConstraint(
+            "operation IN ('renewal', 'reactivation', 'cert_pin')",
+            name="ck_billing_order_items_operation",
+        ),
     )
+
+
+class CertificatePin(Base):
+    __tablename__ = "certificate_pins"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    pin: Mapped[str] = mapped_column(String(10), unique=True, nullable=False)
+    terminal_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("terminals.id"), nullable=False
+    )
+    org_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    order_item_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("billing_order_items.id"), nullable=True
+    )
+    created_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    creation_source: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="system"
+    )
+    payment_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    terminal: Mapped[Terminal] = relationship()
+    order_item: Mapped[BillingOrderItem | None] = relationship()
+
+    __table_args__ = (
+        Index("idx_cert_pins_terminal", "terminal_id"),
+        Index("idx_cert_pins_status", "status"),
+        Index("idx_cert_pins_org", "org_id"),
+        Index("idx_cert_pins_order_item", "order_item_id"),
+        CheckConstraint(
+            "status IN ('pending', 'used', 'expired', 'cancelled')",
+            name="ck_certificate_pins_status",
+        ),
+        CheckConstraint(
+            "creation_source IN ('tenant', 'global_admin', 'system')",
+            name="ck_certificate_pins_creation_source",
+        ),
+    )
+
+
+class TerminalCertHistory(Base):
+    """Operational history of certificates issued for a terminal (append-only)."""
+
+    __tablename__ = "terminal_cert_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    terminal_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("terminals.id"), nullable=False
+    )
+    cert_serial: Mapped[str] = mapped_column(String(100), nullable=False)
+    not_valid_after: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    pin_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("certificate_pins.id"), nullable=True
+    )
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default="setup")
+    issued_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    terminal: Mapped[Terminal] = relationship()
+    pin: Mapped[CertificatePin | None] = relationship()
+
+    __table_args__ = (Index("idx_terminal_cert_history_terminal", "terminal_id"),)

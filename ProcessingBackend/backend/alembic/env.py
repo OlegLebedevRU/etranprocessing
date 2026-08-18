@@ -5,15 +5,28 @@ from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
-
 from app.config import settings
 from app.database import Base
 
 # Import all models so Alembic can detect them
-from app.models import (
-    Terminal, OrgStatus, License, GateGaugeRecord, TechGateRecord,
-    Org, Tsp, TspParameterCode, Payment, PaymentParam, BalanceTerminalTsp,
-    CertificatePin, ApiToken, OrgBillingSettings, BillingOrder, BillingOrderItem,
+from app.models import (  # noqa: F401
+    ApiToken,
+    BalanceTerminalTsp,
+    BillingOrder,
+    BillingOrderItem,
+    CertificatePin,
+    GateGaugeRecord,
+    License,
+    Org,
+    OrgBillingSettings,
+    OrgStatus,
+    Payment,
+    PaymentParam,
+    TechGateRecord,
+    Terminal,
+    TerminalCertHistory,
+    Tsp,
+    TspParameterCode,
 )
 
 # this is the Alembic Config object, which provides

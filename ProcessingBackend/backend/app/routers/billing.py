@@ -13,9 +13,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
 from app.dependencies import JwtUser, get_current_user_jwt
-from app.models import BillingOrder, License, OrgBillingSettings, Terminal
+from app.models import (
+    BillingOrder,
+    BillingOrderItem,
+    CertificatePin,
+    License,
+    OrgBillingSettings,
+    Terminal,
+)
 from app.schemas.billing import (
     BillingForecastMonthRead,
+    BillingOrderRead,
     BillingSummaryRead,
     BillingTerminalRead,
     CancelDeactivationResponse,
@@ -26,11 +34,21 @@ from app.schemas.billing import (
     ReactivationCheckoutRequest,
     ReactivationCheckoutResponse,
 )
+from app.schemas.certificate_pin import PaymentRequiredResponse, PinReadyResponse
 from app.services.billing import (
     BillingStatus,
     TerminalBillingInfo,
     build_org_summary_data,
     compute_terminal_billing,
+)
+from app.services.cert_billing import (
+    build_cert_policy_snapshot,
+    compute_pin_expiry,
+    generate_unique_pin,
+    mask_pin,
+    resolve_cert_policy,
+    resolve_effective_price,
+    resolve_operation_type,
 )
 
 logger = logging.getLogger(__name__)
@@ -666,6 +684,55 @@ async def create_reactivation_checkout(
     )
 
 
+async def _apply_cert_pin_item(
+    db: AsyncSession, order: BillingOrder, item: BillingOrderItem
+) -> None:
+    """Create (or idempotently reuse) the CertificatePin for a paid cert_pin order item.
+
+    Does NOT call the CA — that only ever happens in certificates.py `setup`.
+    """
+    # Idempotent: order_item already has a PIN (e.g. webhook retried).
+    existing = await db.execute(
+        select(CertificatePin).where(CertificatePin.order_item_id == item.id)
+    )
+    if existing.scalar_one_or_none() is not None:
+        return
+
+    # Idempotent: terminal already has an unexpired pending PIN — link it to this order item.
+    result = await db.execute(
+        select(CertificatePin).where(
+            CertificatePin.terminal_id == item.terminal_id,
+            CertificatePin.status == "pending",
+        )
+    )
+    pending_pin = result.scalar_one_or_none()
+    if pending_pin is not None:
+        pending_pin.order_item_id = item.id
+        return
+
+    pin_value = await generate_unique_pin(db)
+    expires_at = compute_pin_expiry()
+    cert_pin = CertificatePin(
+        pin=pin_value,
+        terminal_id=item.terminal_id,
+        org_id=order.org_id,
+        order_item_id=item.id,
+        creation_source="tenant",
+        payment_required=True,
+        status="pending",
+        expires_at=expires_at,
+    )
+    db.add(cert_pin)
+
+    logger.info(
+        "cert_pin.created_after_payment org=%d terminal=%d order_item=%d pin=%s",
+        order.org_id,
+        item.terminal_id,
+        item.id,
+        mask_pin(pin_value),
+    )
+
+
 @router.post("/orders/{order_id}/confirm")
 async def confirm_payment(
     order_id: str,
@@ -720,8 +787,13 @@ async def confirm_payment(
 
     now = datetime.now(UTC)
 
-    # Apply each item: update license expires_at and re-enable renewal
+    # Apply each item: renewal/reactivation update license; cert_pin creates a PIN.
+    # NOTE: this must never call the CA (sign_csr) — that stays in certificates.py setup.
     for item in items:
+        if item.operation == "cert_pin":
+            await _apply_cert_pin_item(db, order, item)
+            continue
+
         result = await db.execute(
             select(License).where(
                 License.terminal_id == item.terminal_id,
@@ -763,4 +835,199 @@ async def confirm_payment(
         status=OrderStatus.PAID,
         paid_at=now,
         items_updated=len(items),
+    )
+
+
+@router.get("/orders/{order_id}", response_model=BillingOrderRead)
+async def get_order(
+    order_id: str,
+    user: JwtUser = Depends(get_current_user_jwt),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get billing order status. Used by clients to poll after payment (e.g. cert-pin flow)."""
+    from uuid import UUID
+
+    try:
+        order_uuid = UUID(order_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid order ID format")
+
+    result = await db.execute(
+        select(BillingOrder).where(
+            BillingOrder.id == order_uuid,
+            BillingOrder.org_id == user.org_id,
+        )
+    )
+    order = result.scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    return BillingOrderRead.model_validate(order)
+
+
+@router.post("/terminals/{terminal_id}/certificate-pin")
+async def create_certificate_pin(
+    terminal_id: int,
+    user: JwtUser = Depends(get_current_user_jwt),
+    db: AsyncSession = Depends(get_db),
+) -> PinReadyResponse | PaymentRequiredResponse:
+    """Request permission to create a PIN for a terminal (organizational cert billing).
+
+    This endpoint never calls the CA. It only decides whether the operation is free
+    (mode=none or price=0) — in which case a PIN is created immediately — or paid,
+    in which case a billing order is created and payment_required is returned.
+    The PIN is later consumed by the existing terminal check/setup flow
+    (routers/certificates.py), which is the only place `sign_csr()` is invoked.
+    """
+    from app.models import BillingOrderItem
+    from app.services.payment_provider import get_payment_provider
+
+    terminal = await _get_terminal_for_org(db, terminal_id, user.org_id)
+    org_settings = await _get_org_settings(db, user.org_id)
+
+    if not org_settings.tenant_pin_creation_enabled:
+        raise HTTPException(
+            status_code=403,
+            detail="Tenant self-service PIN creation is not enabled for this organization",
+        )
+
+    now = datetime.now(UTC)
+
+    # Idempotency: an unexpired pending PIN already exists for this terminal.
+    result = await db.execute(
+        select(CertificatePin).where(
+            CertificatePin.terminal_id == terminal.id,
+            CertificatePin.status == "pending",
+        )
+    )
+    existing_pin = result.scalar_one_or_none()
+    if existing_pin is not None:
+        if existing_pin.expires_at > now:
+            return PinReadyResponse(
+                terminal_id=terminal.id,
+                pin=existing_pin.pin,
+                expires_at=existing_pin.expires_at,
+            )
+        # Expired but not yet swept — mark it so a new one can be created below.
+        existing_pin.status = "expired"
+
+    # Idempotency: a pending order for a cert_pin operation on this terminal already exists.
+    result = await db.execute(
+        select(BillingOrder)
+        .join(BillingOrderItem, BillingOrderItem.order_id == BillingOrder.id)
+        .where(
+            BillingOrder.org_id == user.org_id,
+            BillingOrder.status == "pending",
+            BillingOrderItem.terminal_id == terminal.id,
+            BillingOrderItem.operation == "cert_pin",
+        )
+        .limit(1)
+    )
+    pending_order = result.scalar_one_or_none()
+    if pending_order is not None:
+        return PaymentRequiredResponse(
+            terminal_id=terminal.id,
+            order_id=str(pending_order.id),
+            amount_minor=pending_order.amount_minor,
+            currency=pending_order.currency,
+            payment_url=pending_order.payment_url,
+        )
+
+    policy = resolve_cert_policy(org_settings)
+    operation = resolve_operation_type(terminal.cert_serial)
+    price_minor = resolve_effective_price(policy, operation)
+
+    if price_minor <= 0:
+        # Free: mode=none, or per_operation with price=0/not-billable operation.
+        pin_value = await generate_unique_pin(db)
+        expires_at = compute_pin_expiry(now)
+        cert_pin = CertificatePin(
+            pin=pin_value,
+            terminal_id=terminal.id,
+            org_id=user.org_id,
+            creation_source="tenant",
+            payment_required=False,
+            status="pending",
+            expires_at=expires_at,
+        )
+        db.add(cert_pin)
+        await db.commit()
+
+        logger.info(
+            "cert_pin.request org=%d terminal=%d user=%s result=pin_ready "
+            "mode=%s price=%d pin=%s",
+            user.org_id,
+            terminal_id,
+            user.username,
+            policy.mode.value,
+            price_minor,
+            mask_pin(pin_value),
+        )
+        return PinReadyResponse(
+            terminal_id=terminal.id,
+            pin=pin_value,
+            expires_at=expires_at,
+        )
+
+    # Paid: create an order, defer PIN creation until payment is confirmed.
+    import uuid
+
+    provider = get_payment_provider()
+    order_id = uuid.uuid4()
+    snapshot = build_cert_policy_snapshot(policy, operation, price_minor)
+
+    order = BillingOrder(
+        id=order_id,
+        org_id=user.org_id,
+        status="pending",
+        currency=policy.currency,
+        amount_minor=price_minor,
+    )
+    db.add(order)
+    await db.flush()
+
+    item = BillingOrderItem(
+        order_id=order_id,
+        terminal_id=terminal.id,
+        operation="cert_pin",
+        periods_due=0,
+        advance_periods=0,
+        billing_period_months=1,
+        monthly_price_minor=price_minor,
+        amount_minor=price_minor,
+        old_expires_at=now,
+        new_expires_at=now,
+        cert_policy_snapshot=snapshot,
+    )
+    db.add(item)
+
+    try:
+        payment_url = await provider.create_checkout(
+            amount_minor=price_minor,
+            currency=policy.currency,
+            order_id=str(order_id),
+        )
+        order.payment_url = payment_url
+    except Exception:
+        logger.exception("Payment provider error")
+        raise HTTPException(status_code=502, detail="Payment provider error")
+
+    await db.commit()
+
+    logger.info(
+        "cert_pin.request org=%d terminal=%d user=%s result=payment_required "
+        "order=%s amount=%d",
+        user.org_id,
+        terminal_id,
+        user.username,
+        order_id,
+        price_minor,
+    )
+
+    return PaymentRequiredResponse(
+        terminal_id=terminal.id,
+        order_id=str(order_id),
+        amount_minor=price_minor,
+        currency=policy.currency,
+        payment_url=payment_url,
     )
