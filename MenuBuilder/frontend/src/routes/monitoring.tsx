@@ -312,7 +312,6 @@ export default function MonitoringPage() {
       title: "SN",
       dataIndex: "sn",
       key: "sn",
-      width: 1,
       render: (v: string) => (
         <Tooltip
           title={
@@ -321,7 +320,10 @@ export default function MonitoringPage() {
             </Typography.Text>
           }
         >
-          <Text code style={{ fontSize: 10, cursor: "default" }}>
+          <Text
+            code
+            style={{ fontSize: 10, cursor: "default", whiteSpace: "nowrap" }}
+          >
             {v.length > 10 ? v.slice(0, 10) + "…" : v}
           </Text>
         </Tooltip>

@@ -62,15 +62,48 @@ interface Selection {
   cert: boolean;
 }
 
+const LICENSE_DUE_SOON_DAYS = 30;
+
 /** A license that has expired or was never issued restarts from today. */
 function isLicenseLapsed(t: BillingTerminal): boolean {
   return !t.license_expires_at || new Date(t.license_expires_at) <= new Date();
+}
+
+/** Days remaining until a license expires (negative once it has lapsed). */
+function daysUntilLicenseExpiry(t: BillingTerminal): number {
+  if (!t.license_expires_at) return -Infinity;
+  return (
+    (new Date(t.license_expires_at).getTime() - Date.now()) / 86400000
+  );
+}
+
+/** Lapsed, or expiring soon enough that it needs attention right away. */
+function isLicenseUrgent(t: BillingTerminal): boolean {
+  return daysUntilLicenseExpiry(t) <= LICENSE_DUE_SOON_DAYS;
 }
 
 /** Whether a license payment can be made for this terminal right now. */
 function isLicensePayable(t: BillingTerminal, advancePeriods: number): boolean {
   if (t.billing_status === "admin_disabled") return false;
   return isLicenseLapsed(t) || advancePeriods > 0;
+}
+
+/**
+ * Whether the license line should be pre-checked by default: always for
+ * anything urgent (lapsed or expiring within a month), and additionally for
+ * anything whose expiry falls inside the chosen advance-payment horizon.
+ */
+function shouldAutoSelectLicense(
+  t: BillingTerminal,
+  advancePeriods: number,
+): boolean {
+  if (t.billing_status === "admin_disabled") return false;
+  if (isLicenseUrgent(t)) return true;
+  if (advancePeriods > 0) {
+    const horizonDays = advancePeriods * (t.billing_period_months || 1) * 30;
+    return daysUntilLicenseExpiry(t) <= horizonDays;
+  }
+  return false;
 }
 
 /** Whether a paid certificate PIN can be bought for this terminal. */
@@ -97,6 +130,7 @@ function projectedExpiry(
   projected.setMonth(projected.getMonth() + periods * t.billing_period_months);
   return projected.toISOString();
 }
+
 
 /**
  * The org's prevailing tariff period, used to label the advance-payment
@@ -152,16 +186,14 @@ export default function BillingPage() {
       ]);
       setSummary(s);
       setTerminals(t);
-      // Preselect everything that needs paying: lapsed licenses and
-      // certificates that are missing or about to expire.
-      setSelection(
+      // Preselect certificates that are missing or about to expire; license
+      // selection is derived separately below (it also depends on advancePeriods).
+      setSelection((prev) =>
         Object.fromEntries(
           t.map((term) => [
             term.terminal_id,
             {
-              license:
-                term.billing_status !== "admin_disabled" &&
-                isLicenseLapsed(term),
+              license: Boolean(prev[term.terminal_id]?.license),
               cert: isCertPayable(term) && term.cert_expiring_soon,
             },
           ]),
@@ -178,6 +210,26 @@ export default function BillingPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Auto-select license lines: anything urgent (lapsed or due within a
+  // month) is always checked; anything else whose expiry falls inside the
+  // chosen advance-payment horizon gets checked too. Certificate selections
+  // are independent and left untouched here.
+  useEffect(() => {
+    setSelection((prev) => {
+      let changed = false;
+      const next: Record<number, Selection> = { ...prev };
+      for (const t of terminals) {
+        const auto = shouldAutoSelectLicense(t, advancePeriods);
+        const current = next[t.terminal_id] ?? { license: false, cert: false };
+        if (current.license !== auto) {
+          next[t.terminal_id] = { ...current, license: auto };
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [terminals, advancePeriods]);
 
   const handleDeactivate = async () => {
     if (!deactivateModal.terminal) return;
@@ -295,19 +347,30 @@ export default function BillingPage() {
   const hasDebt = terminals.some(
     (t) => t.billing_status !== "admin_disabled" && isLicenseLapsed(t),
   );
+  // A license expiring within a month needs at least one paid period right
+  // away, which "Только задолженность" (0 periods) cannot cover — so that
+  // option is only offered when nothing is that urgent.
+  const hasUrgentDueSoon = terminals.some(
+    (t) =>
+      t.billing_status !== "admin_disabled" &&
+      !isLicenseLapsed(t) &&
+      isLicenseUrgent(t),
+  );
+  const showDebtOnlyOption = hasDebt && !hasUrgentDueSoon;
   const advanceOptions = [
-    ...(hasDebt ? [{ label: "Только задолженность", value: 0 }] : []),
+    ...(showDebtOnlyOption ? [{ label: "Только задолженность", value: 0 }] : []),
     { label: monthsLabel(periodMonths), value: 1 },
     { label: monthsLabel(periodMonths * 2), value: 2 },
   ];
 
-  // "Только задолженность" disappears once there is nothing overdue, so the
-  // selection has to fall back to the first real advance period.
+  // "Только задолженность" isn't always offered, so the selection has to
+  // fall back to the first real advance period whenever it disappears.
   useEffect(() => {
-    if (!loading && !hasDebt && advancePeriods === 0) {
+    if (!loading && !showDebtOnlyOption && advancePeriods === 0) {
       setAdvancePeriods(1);
     }
-  }, [loading, hasDebt, advancePeriods]);
+  }, [loading, showDebtOnlyOption, advancePeriods]);
+
 
   // Counters
   const overdueCount = terminals.filter(

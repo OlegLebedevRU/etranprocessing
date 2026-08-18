@@ -52,7 +52,12 @@ async def get_current_user(
     username: str = payload.get("sub", "")
     if not username:
         raise HTTPException(status_code=401, detail="Invalid token payload")
+    raw_org_id = payload.get("org") or payload.get("orgId") or payload.get("org_id")
+    try:
+        org_id = int(raw_org_id) if raw_org_id is not None else None
+    except TypeError, ValueError:
+        org_id = None
     return {
         "username": username,
-        "org_id": payload.get("org") or payload.get("orgId") or payload.get("org_id"),
+        "org_id": org_id,
     }

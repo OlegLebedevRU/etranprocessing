@@ -115,20 +115,6 @@ export default function TerminalsPage() {
       render: (v: number) => <Text strong style={{ fontSize: 12 }}>{v}</Text>,
     },
     {
-      title: "SN",
-      dataIndex: "sn",
-      key: "sn",
-      render: (v: string) => <Text code style={{ fontSize: 10 }}>{v}</Text>,
-    },
-    {
-      title: "",
-      dataIndex: "is_active",
-      key: "active",
-      render: (v: boolean) => (
-        <span style={{ color: v ? "#52c41a" : "#ff4d4f", fontSize: 14 }}>●</span>
-      ),
-    },
-    {
       title: "Меню",
       key: "variant",
       render: (_: any, record: TerminalInfo) => {
@@ -167,6 +153,20 @@ export default function TerminalsPage() {
             />
           )}
         </Space>
+      ),
+    },
+    {
+      title: "SN",
+      dataIndex: "sn",
+      key: "sn",
+      render: (v: string) => <Text code style={{ fontSize: 10 }}>{v}</Text>,
+    },
+    {
+      title: "",
+      dataIndex: "is_active",
+      key: "active",
+      render: (v: boolean) => (
+        <span style={{ color: v ? "#52c41a" : "#ff4d4f", fontSize: 14 }}>●</span>
       ),
     },
   ];
