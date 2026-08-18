@@ -29,6 +29,7 @@ app.add_middleware(
 )
 
 from app.routers import (
+    billing,
     certificates,
     gate_gauge,
     health,
@@ -47,3 +48,4 @@ app.include_router(payment.router, prefix="/api/payment", tags=["payment"])
 app.include_router(
     certificates.router, prefix="/api/certificates", tags=["certificates"]
 )
+app.include_router(billing.router)

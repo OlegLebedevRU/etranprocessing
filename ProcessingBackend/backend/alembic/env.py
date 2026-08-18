@@ -13,6 +13,7 @@ from app.database import Base
 from app.models import (
     Terminal, OrgStatus, License, GateGaugeRecord, TechGateRecord,
     Org, Tsp, TspParameterCode, Payment, PaymentParam, BalanceTerminalTsp,
+    CertificatePin, ApiToken, OrgBillingSettings, BillingOrder, BillingOrderItem,
 )
 
 # this is the Alembic Config object, which provides

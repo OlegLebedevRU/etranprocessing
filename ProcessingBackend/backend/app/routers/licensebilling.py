@@ -1,10 +1,14 @@
+import logging
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
-from app.dependencies import check_license, check_org_status, get_current_terminal
-from app.models import Terminal
+from app.dependencies import (
+    TerminalLicenseState,
+    get_terminal_license_state,
+)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -22,28 +26,23 @@ def xml_response(content: str) -> Response:
 @router.post("/check")
 async def license_check(
     request: Request,
-    terminal: Terminal = Depends(get_current_terminal),
-    db: AsyncSession = Depends(get_db),
+    license_state: TerminalLicenseState = Depends(get_terminal_license_state),
 ):
     """
     License billing check endpoint.
     Compatible with legacy licensebilling gate.ashx format.
+
+    Returns Result=OK for all recognized terminals.
+    State is computed: 'ok' if license is valid, 'error' otherwise.
+    Standard license expiry is a business state, not an exception.
     """
-    try:
-        license_ = await check_license(terminal, db)
-        await check_org_status(terminal, db)
-        return xml_response(
-            "<Response>"
-            "<Result>OK</Result>"
-            "<state>ok</state>"
-            f"<balance>{license_.balance}</balance>"
-            "</Response>"
-        )
-    except Exception as e:  # noqa: BLE001
-        return xml_response(
-            "<Response>"
-            "<Result>ERROR</Result>"
-            "<state>error</state>"
-            f"<description>{e!s}</description>"
-            "</Response>"
-        )
+
+    balance = license_state.license.balance if license_state.license else 0
+
+    return xml_response(
+        "<Response>"
+        "<Result>OK</Result>"
+        f"<state>{license_state.state}</state>"
+        f"<balance>{balance}</balance>"
+        "</Response>"
+    )

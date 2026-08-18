@@ -52,7 +52,7 @@ async def create_token(
 
     payload = {
         "sub": user["username"],
-        "org_id": user["org_id"],
+        "org": str(user["org_id"]),
         "jti": jti,
         "exp": expires_at,
         "iat": datetime.now(UTC),

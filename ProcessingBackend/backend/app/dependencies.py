@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from fastapi import Depends, HTTPException, Request
@@ -9,6 +10,12 @@ from app.database import get_db
 from app.models import License, OrgStatus, Terminal
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class TerminalLicenseState:
+    license: License | None
+    state: str  # "ok" | "error"
 
 
 def parse_cert_subject(subject: str) -> dict[str, str]:
@@ -134,3 +141,85 @@ async def check_org_status(
         raise HTTPException(status_code=403, detail="Organization is blocked")
 
     return org_status
+
+
+async def get_terminal_license_state(
+    terminal: Terminal = Depends(get_current_terminal),
+    db: AsyncSession = Depends(get_db),
+) -> TerminalLicenseState:
+    """
+    Compute the terminal license state for the terminal-facing API.
+    Returns TerminalLicenseState with license (if found) and computed state.
+    Never raises HTTPException — state is always computed, not thrown.
+    """
+    if not terminal.is_active:
+        result = await db.execute(
+            select(License).where(
+                License.terminal_id == terminal.id,
+                License.is_active == True,
+            )
+        )
+        license_ = result.scalar_one_or_none()
+        return TerminalLicenseState(license=license_, state="error")
+
+    # Check org status
+    result = await db.execute(
+        select(OrgStatus).where(OrgStatus.org_id == terminal.org_id)
+    )
+    org_status = result.scalar_one_or_none()
+    if org_status and org_status.status == "blocked":
+        result = await db.execute(
+            select(License).where(
+                License.terminal_id == terminal.id,
+                License.is_active == True,
+            )
+        )
+        license_ = result.scalar_one_or_none()
+        return TerminalLicenseState(license=license_, state="error")
+
+    # Find active license
+    result = await db.execute(
+        select(License).where(
+            License.terminal_id == terminal.id,
+            License.is_active == True,
+        )
+    )
+    license_ = result.scalar_one_or_none()
+
+    if not license_:
+        return TerminalLicenseState(license=None, state="error")
+
+    # Check expiry — renewal_enabled=false alone does NOT cause state=error
+    if license_.expires_at < datetime.now(UTC):
+        return TerminalLicenseState(license=license_, state="error")
+
+    return TerminalLicenseState(license=license_, state="ok")
+
+
+@dataclass(frozen=True, slots=True)
+class JwtUser:
+    username: str
+    org_id: int
+
+
+async def get_current_user_jwt(
+    request: Request,
+) -> JwtUser:
+    """Extract user identity from headers set by nginx after JWT validation.
+    JWT is validated at nginx; backend trusts jwt-sub and jwt-org headers
+    (set by auth_jwt_extract_request_claims).
+    """
+    username = request.headers.get("jwt-sub", "")
+    if not username:
+        raise HTTPException(status_code=401, detail="Missing jwt-sub header")
+
+    org_id_str = request.headers.get("jwt-org", "")
+    if not org_id_str:
+        raise HTTPException(status_code=401, detail="Missing jwt-org header")
+
+    try:
+        org_id = int(org_id_str)
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid jwt-org_id header")
+
+    return JwtUser(username=username, org_id=org_id)

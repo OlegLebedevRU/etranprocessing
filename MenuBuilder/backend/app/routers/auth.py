@@ -35,7 +35,7 @@ async def login(body: LoginRequest):
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
         )
 
-    token = create_access_token({"sub": user["username"], "org_id": user.get("org_id")})
+    token = create_access_token({"sub": user["username"], "org": str(user.get("org_id", 0))})
     from app.config import settings
 
     return TokenResponse(

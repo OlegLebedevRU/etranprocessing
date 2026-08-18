@@ -29,6 +29,7 @@ services:
       - /home/user1/iot-rpc-rest-app/certbot/conf/live/dev.leo4.ru/privkey.pem:/etc/nginx/ssl/privkey.pem:ro
     networks:
       - menubuilder_net
+      - pg_network
     depends_on:
       - menubuilder-backend
 

@@ -1,0 +1,593 @@
+"""User billing API — JSON endpoints for MenuBuilder.
+
+All endpoints are tenant-scoped via JWT org_id claim.
+"""
+
+import logging
+from datetime import UTC, datetime
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.config import settings
+from app.database import get_db
+from app.dependencies import JwtUser, get_current_user_jwt
+from app.models import BillingOrder, License, OrgBillingSettings, Terminal
+from app.schemas.billing import (
+    BillingForecastMonthRead,
+    BillingSummaryRead,
+    BillingTerminalRead,
+    CancelDeactivationResponse,
+    CheckoutItemResponse,
+    CheckoutRequest,
+    CheckoutResponse,
+    DeactivateTerminalResponse,
+    ReactivationCheckoutRequest,
+    ReactivationCheckoutResponse,
+)
+from app.services.billing import (
+    BillingStatus,
+    TerminalBillingInfo,
+    build_org_summary_data,
+    compute_terminal_billing,
+)
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/billing", tags=["billing"])
+
+
+async def _get_org_settings(db: AsyncSession, org_id: int) -> OrgBillingSettings:
+    """Get org billing settings or raise 409."""
+    result = await db.execute(
+        select(OrgBillingSettings).where(OrgBillingSettings.org_id == org_id)
+    )
+    settings_obj = result.scalar_one_or_none()
+    if not settings_obj:
+        raise HTTPException(
+            status_code=409,
+            detail="Billing settings are not configured for organization",
+        )
+    return settings_obj
+
+
+async def _get_terminal_for_org(
+    db: AsyncSession, terminal_id: int, org_id: int
+) -> Terminal:
+    """Get terminal belonging to the org or raise 404."""
+    result = await db.execute(
+        select(Terminal).where(
+            Terminal.id == terminal_id,
+            Terminal.org_id == org_id,
+        )
+    )
+    terminal = result.scalar_one_or_none()
+    if not terminal:
+        raise HTTPException(status_code=404, detail="Terminal not found")
+    return terminal
+
+
+async def _get_terminal_billing_data(
+    db: AsyncSession,
+    terminal: Terminal,
+    org_settings: OrgBillingSettings,
+) -> TerminalBillingInfo:
+    """Build TerminalBillingInfo from DB data."""
+    result = await db.execute(
+        select(License).where(
+            License.terminal_id == terminal.id,
+            License.is_active == True,
+        )
+    )
+    license_ = result.scalar_one_or_none()
+
+    return TerminalBillingInfo(
+        terminal_id=terminal.id,
+        device_id=terminal.device_id,
+        sn=terminal.sn,
+        terminal_is_active=terminal.is_active,
+        license_id=license_.id if license_ else None,
+        license_expires_at=license_.expires_at if license_ else None,
+        renewal_enabled=license_.renewal_enabled if license_ else True,
+        deactivation_requested_at=license_.deactivation_requested_at
+        if license_
+        else None,
+        billing_period_months=license_.billing_period_months if license_ else 1,
+        monthly_price_override_minor=license_.monthly_price_override_minor
+        if license_
+        else None,
+        org_monthly_price_minor=org_settings.monthly_price_minor,
+        org_currency=org_settings.currency,
+    )
+
+
+async def _get_all_terminal_billing(
+    db: AsyncSession,
+    org_id: int,
+    org_settings: OrgBillingSettings,
+    as_of: datetime,
+) -> list[TerminalBillingInfo]:
+    """Get billing info for all terminals of an organization."""
+    result = await db.execute(select(Terminal).where(Terminal.org_id == org_id))
+    terminals = result.scalars().all()
+
+    infos = []
+    for terminal in terminals:
+        info = await _get_terminal_billing_data(db, terminal, org_settings)
+        infos.append(info)
+    return infos
+
+
+@router.get("/summary", response_model=BillingSummaryRead)
+async def get_billing_summary(
+    user: JwtUser = Depends(get_current_user_jwt),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get billing summary for the organization."""
+    org_settings = await _get_org_settings(db, user.org_id)
+    as_of = datetime.now(UTC)
+
+    infos = await _get_all_terminal_billing(db, user.org_id, org_settings, as_of)
+    results = [
+        compute_terminal_billing(info, as_of, settings.billing_due_soon_days)
+        for info in infos
+    ]
+
+    summary = build_org_summary_data(
+        results, org_settings.currency, org_settings.monthly_price_minor, as_of
+    )
+
+    return BillingSummaryRead(
+        as_of=as_of,
+        currency=summary.currency,
+        monthly_base_price_minor=summary.monthly_base_price_minor,
+        overdue_amount_minor=summary.overdue_amount_minor,
+        overdue_terminal_count=summary.overdue_terminal_count,
+        active_terminal_count=summary.active_terminal_count,
+        deactivation_scheduled_count=summary.deactivation_scheduled_count,
+        disabled_terminal_count=summary.disabled_terminal_count,
+        admin_disabled_terminal_count=summary.admin_disabled_terminal_count,
+        nearest_required_payment_at=summary.nearest_required_payment_at,
+        forecast=[BillingForecastMonthRead.model_validate(fm) for fm in summary.forecast],
+    )
+
+
+@router.get("/terminals", response_model=list[BillingTerminalRead])
+async def get_billing_terminals(
+    status: str | None = None,
+    search: str | None = None,
+    user: JwtUser = Depends(get_current_user_jwt),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get billing details for all terminals of the organization."""
+    org_settings = await _get_org_settings(db, user.org_id)
+    as_of = datetime.now(UTC)
+
+    infos = await _get_all_terminal_billing(db, user.org_id, org_settings, as_of)
+    results = [
+        compute_terminal_billing(info, as_of, settings.billing_due_soon_days)
+        for info in infos
+    ]
+
+    # Filter by status
+    if status:
+        try:
+            target_status = BillingStatus(status)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
+        results = [r for r in results if r.billing_status == target_status]
+
+    # Filter by search
+    if search:
+        search_lower = search.lower()
+        results = [
+            r
+            for r in results
+            if search_lower in str(r.device_id) or search_lower in r.sn.lower()
+        ]
+
+    # Sort: overdue first, then by status priority, then by device_id
+    status_order = {
+        BillingStatus.OVERDUE: 0,
+        BillingStatus.DUE_SOON: 1,
+        BillingStatus.ACTIVE: 2,
+        BillingStatus.DEACTIVATION_SCHEDULED: 3,
+        BillingStatus.DISABLED: 4,
+        BillingStatus.ADMIN_DISABLED: 5,
+    }
+    results.sort(key=lambda r: (status_order.get(r.billing_status, 99), r.device_id))
+
+    return results
+
+
+@router.post(
+    "/terminals/{terminal_id}/deactivate", response_model=DeactivateTerminalResponse
+)
+async def deactivate_terminal(
+    terminal_id: int,
+    user: JwtUser = Depends(get_current_user_jwt),
+    db: AsyncSession = Depends(get_db),
+):
+    """Deactivate a terminal from future renewals. Idempotent."""
+    terminal = await _get_terminal_for_org(db, terminal_id, user.org_id)
+
+    result = await db.execute(
+        select(License).where(
+            License.terminal_id == terminal.id,
+            License.is_active == True,
+        )
+    )
+    license_ = result.scalar_one_or_none()
+    if not license_:
+        raise HTTPException(status_code=404, detail="No active license found")
+
+    now = datetime.now(UTC)
+
+    # Idempotent: already deactivated
+    if not license_.renewal_enabled:
+        org_settings = await _get_org_settings(db, user.org_id)
+        info = await _get_terminal_billing_data(db, terminal, org_settings)
+        billing = compute_terminal_billing(info, now, settings.billing_due_soon_days)
+        return DeactivateTerminalResponse(
+            terminal_id=terminal.id,
+            status=billing.billing_status,
+            works_until=license_.expires_at if license_.expires_at > now else None,
+            overdue_amount_minor=billing.overdue_amount_minor,
+            included_in_forecast=billing.included_in_forecast,
+        )
+
+    # Perform deactivation
+    license_.renewal_enabled = False
+    license_.deactivation_requested_at = now
+    await db.commit()
+
+    org_settings = await _get_org_settings(db, user.org_id)
+    info = await _get_terminal_billing_data(db, terminal, org_settings)
+    billing = compute_terminal_billing(info, now, settings.billing_due_soon_days)
+
+    return DeactivateTerminalResponse(
+        terminal_id=terminal.id,
+        status=billing.billing_status,
+        works_until=license_.expires_at if license_.expires_at > now else None,
+        overdue_amount_minor=billing.overdue_amount_minor,
+        included_in_forecast=billing.included_in_forecast,
+    )
+
+
+@router.post(
+    "/terminals/{terminal_id}/cancel-deactivation",
+    response_model=CancelDeactivationResponse,
+)
+async def cancel_deactivation(
+    terminal_id: int,
+    user: JwtUser = Depends(get_current_user_jwt),
+    db: AsyncSession = Depends(get_db),
+):
+    """Cancel a scheduled deactivation. Only allowed if license is still active."""
+    terminal = await _get_terminal_for_org(db, terminal_id, user.org_id)
+
+    result = await db.execute(
+        select(License).where(
+            License.terminal_id == terminal.id,
+            License.is_active == True,
+        )
+    )
+    license_ = result.scalar_one_or_none()
+    if not license_:
+        raise HTTPException(status_code=404, detail="No active license found")
+
+    if license_.renewal_enabled:
+        raise HTTPException(
+            status_code=400, detail="Terminal is not scheduled for deactivation"
+        )
+
+    now = datetime.now(UTC)
+
+    if license_.expires_at <= now:
+        raise HTTPException(
+            status_code=409,
+            detail="License has expired. Use reactivation checkout to reconnect.",
+        )
+
+    if not terminal.is_active:
+        raise HTTPException(
+            status_code=403,
+            detail="Terminal is administratively disabled",
+        )
+
+    # Cancel deactivation
+    license_.renewal_enabled = True
+    license_.deactivation_requested_at = None
+    await db.commit()
+
+    org_settings = await _get_org_settings(db, user.org_id)
+    info = await _get_terminal_billing_data(db, terminal, org_settings)
+    billing = compute_terminal_billing(info, now, settings.billing_due_soon_days)
+
+    return CancelDeactivationResponse(
+        terminal_id=terminal.id,
+        status=billing.billing_status,
+        renewal_enabled=True,
+    )
+
+
+@router.post("/checkout", response_model=CheckoutResponse)
+async def create_checkout(
+    body: CheckoutRequest,
+    user: JwtUser = Depends(get_current_user_jwt),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a checkout for paying overdue and/or advance periods."""
+    from app.services.payment_provider import get_payment_provider
+
+    if not body.items:
+        raise HTTPException(status_code=400, detail="No items in checkout")
+
+    org_settings = await _get_org_settings(db, user.org_id)
+    as_of = datetime.now(UTC)
+
+    # Validate all terminals belong to org
+    checkout_items = []
+    total_amount = 0
+
+    for item in body.items:
+        if item.advance_periods < 0 or item.advance_periods > 2:
+            raise HTTPException(
+                status_code=400,
+                detail=f"advance_periods must be 0, 1, or 2 for terminal {item.terminal_id}",
+            )
+
+        terminal = await _get_terminal_for_org(db, item.terminal_id, user.org_id)
+        info = await _get_terminal_billing_data(db, terminal, org_settings)
+        billing = compute_terminal_billing(info, as_of, settings.billing_due_soon_days)
+
+        if billing.billing_status == BillingStatus.DISABLED:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Terminal {item.terminal_id} is disabled. Use reactivation checkout.",
+            )
+        if billing.billing_status == BillingStatus.ADMIN_DISABLED:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Terminal {item.terminal_id} is administratively disabled.",
+            )
+
+        # Calculate periods
+        periods_due = billing.periods_due
+        total_periods = periods_due + item.advance_periods
+
+        if total_periods == 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No periods to pay for terminal {item.terminal_id}",
+            )
+
+        amount = total_periods * billing.period_price_minor
+        total_amount += amount
+
+        # Project new expiry
+        if billing.license_expires_at:
+            from app.services.billing import project_expiration_after_payment
+
+            new_expires_at = project_expiration_after_payment(
+                billing.license_expires_at,
+                billing.billing_period_months,
+                total_periods,
+                as_of,
+            )
+        else:
+            from app.services.billing import add_billing_months
+
+            new_expires_at = as_of
+            for _ in range(total_periods):
+                new_expires_at = add_billing_months(
+                    new_expires_at, billing.billing_period_months
+                )
+
+        checkout_items.append(
+            {
+                "terminal_id": item.terminal_id,
+                "periods_due": periods_due,
+                "advance_periods": item.advance_periods,
+                "amount_minor": amount,
+                "new_expires_at": new_expires_at,
+                "billing_period_months": billing.billing_period_months,
+                "monthly_price_minor": billing.monthly_price_minor,
+                "old_expires_at": billing.license_expires_at,
+                "period_price_minor": billing.period_price_minor,
+            }
+        )
+
+    # Create order
+    import uuid
+
+    provider = get_payment_provider()
+    order_id = uuid.uuid4()
+
+    order = BillingOrder(
+        id=order_id,
+        org_id=user.org_id,
+        status="pending",
+        currency=org_settings.currency,
+        amount_minor=total_amount,
+    )
+    db.add(order)
+    await db.flush()
+
+    # Create order items
+    from app.models import BillingOrderItem
+
+    for ci in checkout_items:
+        item = BillingOrderItem(
+            order_id=order_id,
+            terminal_id=ci["terminal_id"],
+            operation="renewal",
+            periods_due=ci["periods_due"],
+            advance_periods=ci["advance_periods"],
+            billing_period_months=ci["billing_period_months"],
+            monthly_price_minor=ci["monthly_price_minor"],
+            amount_minor=ci["amount_minor"],
+            old_expires_at=ci["old_expires_at"] or as_of,
+            new_expires_at=ci["new_expires_at"],
+        )
+        db.add(item)
+
+    # Get payment URL from provider
+    payment_url = None
+    if provider:
+        try:
+            payment_url = await provider.create_checkout(
+                amount_minor=total_amount,
+                currency=org_settings.currency,
+                order_id=str(order_id),
+            )
+            order.payment_url = payment_url
+        except Exception:
+            logger.exception("Payment provider error")
+            raise HTTPException(status_code=502, detail="Payment provider error")
+    else:
+        raise HTTPException(
+            status_code=501,
+            detail="Payment provider is not configured",
+        )
+
+    await db.commit()
+
+    return CheckoutResponse(
+        order_id=str(order_id),
+        currency=org_settings.currency,
+        amount_minor=total_amount,
+        payment_url=payment_url,
+        items=[
+            CheckoutItemResponse(
+                terminal_id=ci["terminal_id"],
+                periods_due=ci["periods_due"],
+                advance_periods=ci["advance_periods"],
+                amount_minor=ci["amount_minor"],
+                new_expires_at=ci["new_expires_at"],
+            )
+            for ci in checkout_items
+        ],
+    )
+
+
+@router.post(
+    "/terminals/{terminal_id}/reactivation-checkout",
+    response_model=ReactivationCheckoutResponse,
+)
+async def create_reactivation_checkout(
+    terminal_id: int,
+    body: ReactivationCheckoutRequest,
+    user: JwtUser = Depends(get_current_user_jwt),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a checkout for reactivating a disabled terminal."""
+    from app.services.billing import add_billing_months
+    from app.services.payment_provider import get_payment_provider
+
+    if body.advance_periods < 1 or body.advance_periods > 2:
+        raise HTTPException(status_code=400, detail="advance_periods must be 1 or 2")
+
+    terminal = await _get_terminal_for_org(db, terminal_id, user.org_id)
+    org_settings = await _get_org_settings(db, user.org_id)
+
+    result = await db.execute(
+        select(License).where(
+            License.terminal_id == terminal.id,
+            License.is_active == True,
+        )
+    )
+    license_ = result.scalar_one_or_none()
+
+    now = datetime.now(UTC)
+
+    # Terminal must be disabled (renewal_enabled=false and expired)
+    if license_ and license_.renewal_enabled:
+        raise HTTPException(
+            status_code=400,
+            detail="Terminal is not disabled. Use regular checkout.",
+        )
+    if license_ and license_.expires_at and license_.expires_at > now:
+        raise HTTPException(
+            status_code=400,
+            detail="Terminal license is still active. Cancel deactivation instead.",
+        )
+
+    # Calculate price
+    billing_period_months = license_.billing_period_months if license_ else 1
+    monthly_price_override = license_.monthly_price_override_minor if license_ else None
+    from app.services.billing import calculate_period_price, resolve_monthly_price
+
+    monthly_price = resolve_monthly_price(
+        monthly_price_override, org_settings.monthly_price_minor
+    )
+    period_price = calculate_period_price(monthly_price, billing_period_months)
+
+    total_amount = body.advance_periods * period_price
+
+    # New expiry starts from now
+    new_expires_at = now
+    for _ in range(body.advance_periods):
+        new_expires_at = add_billing_months(new_expires_at, billing_period_months)
+
+    # Create order
+    import uuid
+
+    provider = get_payment_provider()
+    order_id = uuid.uuid4()
+
+    order = BillingOrder(
+        id=order_id,
+        org_id=user.org_id,
+        status="pending",
+        currency=org_settings.currency,
+        amount_minor=total_amount,
+    )
+    db.add(order)
+    await db.flush()
+
+    from app.models import BillingOrderItem
+
+    item = BillingOrderItem(
+        order_id=order_id,
+        terminal_id=terminal_id,
+        operation="reactivation",
+        periods_due=0,
+        advance_periods=body.advance_periods,
+        billing_period_months=billing_period_months,
+        monthly_price_minor=monthly_price,
+        amount_minor=total_amount,
+        old_expires_at=license_.expires_at if license_ and license_.expires_at else now,
+        new_expires_at=new_expires_at,
+    )
+    db.add(item)
+
+    payment_url = None
+    if provider:
+        try:
+            payment_url = await provider.create_checkout(
+                amount_minor=total_amount,
+                currency=org_settings.currency,
+                order_id=str(order_id),
+            )
+            order.payment_url = payment_url
+        except Exception:
+            logger.exception("Payment provider error")
+            raise HTTPException(status_code=502, detail="Payment provider error")
+    else:
+        raise HTTPException(
+            status_code=501,
+            detail="Payment provider is not configured",
+        )
+
+    await db.commit()
+
+    return ReactivationCheckoutResponse(
+        order_id=str(order_id),
+        currency=org_settings.currency,
+        amount_minor=total_amount,
+        months=body.advance_periods * billing_period_months,
+        new_expires_at=new_expires_at,
+        payment_url=payment_url,
+    )

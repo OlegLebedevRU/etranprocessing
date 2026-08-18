@@ -6,6 +6,7 @@ import VariantsPage from "./routes/variants";
 import MonitoringPage from "./routes/monitoring";
 import ReportsPage from "./routes/reports";
 import ProfilePage from "./routes/profile";
+import BillingPage from "./routes/billing";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem("mb_token");
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="variants" element={<VariantsPage />} />
         <Route path="monitoring" element={<MonitoringPage />} />
         <Route path="reports" element={<ReportsPage />} />
+        <Route path="billing" element={<BillingPage />} />
         <Route path="profile" element={<ProfilePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

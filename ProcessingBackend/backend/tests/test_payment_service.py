@@ -1,8 +1,5 @@
 """Tests for payment service."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock
-
 from app.services.payment_service import parse_params_string
 
 
@@ -83,7 +80,9 @@ class TestParseParamsString:
     def test_complex_values(self):
         """Test parsing with complex values containing special characters."""
         # Note: semicolons in values will split the string
-        result = parse_params_string("1 value with spaces;2 value=with=equals;3 value;with;semicolons")
+        result = parse_params_string(
+            "1 value with spaces;2 value=with=equals;3 value;with;semicolons"
+        )
         # The parser splits on semicolons, so complex values with semicolons will be split
         assert 1 in result
         assert result[1] == "value with spaces"

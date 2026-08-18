@@ -1,18 +1,22 @@
+import uuid
 from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
     Integer,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -75,6 +79,18 @@ class License(Base):
     )
     balance: Mapped[int] = mapped_column(Integer, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    billing_period_months: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, server_default="1"
+    )
+    monthly_price_override_minor: Mapped[int | None] = mapped_column(
+        BigInteger, nullable=True
+    )
+    renewal_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true", default=True
+    )
+    deactivation_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -88,6 +104,9 @@ class License(Base):
         Index("idx_licenses_terminal_id", "terminal_id"),
         Index("idx_licenses_org_id", "org_id"),
         Index("idx_licenses_expires_at", "expires_at"),
+        CheckConstraint(
+            "monthly_price_override_minor >= 0", name="ck_license_price_non_negative"
+        ),
     )
 
 
@@ -326,4 +345,97 @@ class ApiToken(Base):
     __table_args__ = (
         Index("idx_api_tokens_user", "user_id"),
         Index("idx_api_tokens_jti", "jti"),
+    )
+
+
+class OrgBillingSettings(Base):
+    __tablename__ = "org_billing_settings"
+
+    org_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    monthly_price_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    currency: Mapped[str] = mapped_column(
+        String(3), nullable=False, server_default="RUB"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "monthly_price_minor >= 0", name="ck_org_billing_price_non_negative"
+        ),
+    )
+
+
+class BillingOrder(Base):
+    __tablename__ = "billing_orders"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    org_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default="pending"
+    )
+    currency: Mapped[str] = mapped_column(
+        String(3), nullable=False, server_default="RUB"
+    )
+    amount_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    provider_order_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    payment_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    paid_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    items: Mapped[list[BillingOrderItem]] = relationship(
+        back_populates="order", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        Index("idx_billing_orders_org_id", "org_id"),
+        Index("idx_billing_orders_status", "status"),
+    )
+
+
+class BillingOrderItem(Base):
+    __tablename__ = "billing_order_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    order_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("billing_orders.id"),
+        nullable=False,
+    )
+    terminal_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("terminals.id"), nullable=False
+    )
+    operation: Mapped[str] = mapped_column(String(20), nullable=False)
+    periods_due: Mapped[int] = mapped_column(Integer, nullable=False)
+    advance_periods: Mapped[int] = mapped_column(Integer, nullable=False)
+    billing_period_months: Mapped[int] = mapped_column(Integer, nullable=False)
+    monthly_price_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    amount_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    old_expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    new_expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+    order: Mapped[BillingOrder] = relationship(back_populates="items")
+    terminal: Mapped[Terminal] = relationship()
+
+    __table_args__ = (
+        Index("idx_billing_order_items_order_id", "order_id"),
+        Index("idx_billing_order_items_terminal_id", "terminal_id"),
     )

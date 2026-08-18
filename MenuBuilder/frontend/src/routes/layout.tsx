@@ -6,6 +6,7 @@ import {
   AppstoreOutlined,
   DashboardOutlined,
   FileTextOutlined,
+  DollarOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   LogoutOutlined,
@@ -62,6 +63,7 @@ export default function AppLayout() {
             { key: "variants", icon: <AppstoreOutlined />, label: "Варианты меню" },
             { key: "monitoring", icon: <DashboardOutlined />, label: "Мониторинг" },
             { key: "reports", icon: <FileTextOutlined />, label: "Отчёты" },
+            { key: "billing", icon: <DollarOutlined />, label: "Лицензии" },
             { key: "profile", icon: <UserOutlined />, label: "Профиль" },
           ]}
         />

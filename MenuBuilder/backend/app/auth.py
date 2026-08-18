@@ -54,5 +54,5 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Invalid token payload")
     return {
         "username": username,
-        "org_id": payload.get("org_id"),
+        "org_id": payload.get("org") or payload.get("orgId") or payload.get("org_id"),
     }
