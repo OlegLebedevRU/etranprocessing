@@ -176,7 +176,6 @@ public class main : IHttpHandler
             connection.Open();
             sqlCommand.ExecuteNonQuery();
             connection.Close();
-            GlobalObjectsManager.Logger.Info((object)"IX_PROCESS_RECORD OK");
             return 1;
         }
         catch
