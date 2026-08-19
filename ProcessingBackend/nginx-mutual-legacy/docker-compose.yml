@@ -1,0 +1,10 @@
+services:
+  nginx-mutual:
+    image: ghcr.io/oleglebedevru/iot-rpc-rest-app/nginx-mutual:sha-f78556a
+    ports:
+      - "443:443"
+    restart: always
+    volumes:
+      - ./crt/iot-processing-ru-selfsigned.crt:/crt/iot-processing-ru-selfsigned.crt:ro
+      - ./crt/iot-processing-ru-selfsigned.key:/crt/iot-processing-ru-selfsigned.key:ro
+      - ./nginx-configs/legacy_ssl.conf:/etc/nginx/conf.d/internal_ssl.conf:ro
