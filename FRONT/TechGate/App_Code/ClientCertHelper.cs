@@ -47,4 +47,22 @@ public static class ClientCertHelper
         }
         return "";
     }
+
+    /// <summary>
+    /// Same as GetSerialNumber, but throws a clear, descriptive exception
+    /// instead of silently returning an empty string when no client
+    /// certificate is present (direct flow) and no trusted proxy header is
+    /// present either. Use this at call sites where the result is later
+    /// parsed as an integer or used as a mandatory DB parameter - an empty
+    /// string there used to fail deep inside framework code (e.g.
+    /// FormatException from SqlParameter/int.Parse) with no indication of
+    /// the real cause.
+    /// </summary>
+    public static string GetSerialNumberOrThrow(HttpContext ctx)
+    {
+        string serial = GetSerialNumber(ctx);
+        if (string.IsNullOrEmpty(serial))
+            throw new Exception("Missing or invalid client certificate: cannot determine serial number.");
+        return serial;
+    }
 }
