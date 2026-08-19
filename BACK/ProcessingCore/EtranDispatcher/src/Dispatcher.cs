@@ -248,13 +248,6 @@ namespace EtranDispatcher
         }
 
         /// <summary>
-        /// Simplified idempotent payment write directly to the Payments
-        /// database, without calling the shared SOAP service
-        /// MessageProcessor.asmx (which also queues the payment for
-        /// operator/job review). Returns paym_id (existing one, if
-        /// PaymExtId was already accepted before, or a new one).
-        /// </summary>
-        /// <summary>
         /// Stores payment params via the already existing idempotent
         /// stored procedure AModule_AddPaymentParam - it handles
         /// get-or-create of param_id via service..TspCodes/Parameter_codes.
@@ -275,8 +268,35 @@ namespace EtranDispatcher
             }
         }
 
-        private static int SimplifiedPutPayment(string paymExtId, int paymSubjTp, int amount, int serialNumber,
-            int totalSum, string signature, int kopeks, int payTypeId, string paramsStr)
+        /// <summary>
+        /// Calls the real legacy stored procedure AModule_PutPayment
+        /// directly (same one the shared SOAP service MessageProcessor.asmx
+        /// calls via DbInterface.PutPaymentMessage), instead of a hand
+        /// rolled INSERT. This SP is not a plain insert - it contains all
+        /// of the actual legacy business logic: routing/eligibility via
+        /// service..GetRek_20090918, per-organization overrides (quarantine,
+        /// terminal limits, fraud shields), paym_state resolution,
+        /// term_datetime computed from the owning organization's timezone,
+        /// and dealer balance ledger updates (service..BalanceKioskTspExt).
+        /// Skipping this SP (as an earlier version of this file mistakenly
+        /// did with a bare INSERT) silently drops all of that derived data
+        /// even though the row itself still gets written - so it must
+        /// always be used for the "payment" function.
+        ///
+        /// The only thing intentionally NOT done here (by design, matching
+        /// the previously agreed simplification) is the "two-phase"
+        /// external payment gateway dispatch that DbInterface.PutPaymentMessage/
+        /// Job.Process would normally trigger next (an outbound HTTP call to
+        /// Url/Rek returned by the SP, followed later by an async
+        /// AModule_ReportTryExt confirmation once the external gateway
+        /// replies) - the payment is recorded with the paym_state the SP
+        /// itself resolved (e.g. immediately-confirmed for certain
+        /// organizations, or "pending external routing" otherwise) but is
+        /// not forwarded on to any external payment rail from here.
+        /// </summary>
+        private static void PutPayment(string paymExtId, int paymSubjTp, int amount, int serialNumber,
+            int totalSum, string signature, int kopeks, int payTypeId, string paramsStr,
+            out int paymId, out int paymState)
         {
             using (SqlConnection conn = new SqlConnection(GlobalObjectsManager.PaymentDbConnectionString))
             {
@@ -284,28 +304,47 @@ namespace EtranDispatcher
 
                 int existingPaymId, existingPaymState;
                 if (TryFindPayment(conn, paymExtId, out existingPaymId, out existingPaymState))
-                    return existingPaymId;
-
-                int paymId;
-                using (SqlCommand cmd = new SqlCommand(
-                    "INSERT INTO Payments (paym_datetime, paym_amount, PaymExtId, PaymSubjTp, paym_state, totalsum, serial_number, Signature, kopeks, payTypeId) " +
-                    "OUTPUT INSERTED.paym_id " +
-                    "VALUES (GETDATE(), @paym_amount, @PaymExtId, @PaymSubjTp, 2, @totalsum, @serial_number, @Signature, @kopeks, @payTypeId)", conn))
                 {
+                    paymId = existingPaymId;
+                    paymState = existingPaymState;
+                    return;
+                }
+
+                using (SqlCommand cmd = new SqlCommand("AModule_PutPayment", conn))
+                {
+                    cmd.CommandType = CommandType.StoredProcedure;
                     cmd.Parameters.AddWithValue("@paym_amount", amount);
                     cmd.Parameters.AddWithValue("@PaymExtId", paymExtId);
                     cmd.Parameters.AddWithValue("@PaymSubjTp", paymSubjTp);
-                    cmd.Parameters.AddWithValue("@totalsum", totalSum);
-                    cmd.Parameters.AddWithValue("@serial_number", serialNumber);
+                    cmd.Parameters.AddWithValue("@serial", serialNumber);
+                    cmd.Parameters.AddWithValue("@tsum", totalSum);
                     cmd.Parameters.AddWithValue("@Signature", string.IsNullOrEmpty(signature) ? "EMPTY" : signature);
+                    // Matches PaymStates.start (1) - the same default the
+                    // original SOAP-based flow used when the terminal
+                    // request itself carried no explicit PaymState.
+                    cmd.Parameters.AddWithValue("@paym_state", 1);
                     cmd.Parameters.AddWithValue("@kopeks", kopeks);
                     cmd.Parameters.AddWithValue("@payTypeId", payTypeId);
-                    paymId = (int)cmd.ExecuteScalar();
+
+                    using (SqlDataReader reader = cmd.ExecuteReader())
+                    {
+                        if (!reader.Read())
+                            throw new Exception("AModule_PutPayment returned no result.");
+
+                        string result = reader.GetString(reader.GetOrdinal("result"));
+                        if (!result.Equals("ok", StringComparison.OrdinalIgnoreCase))
+                        {
+                            string descr = null;
+                            try { descr = reader.GetString(reader.GetOrdinal("descr")); } catch { }
+                            throw new Exception(string.IsNullOrEmpty(descr) ? "Payment rejected by AModule_PutPayment." : descr);
+                        }
+
+                        paymId = reader.GetInt32(reader.GetOrdinal("Paym_id"));
+                        paymState = reader.GetInt32(reader.GetOrdinal("PaymState"));
+                    }
                 }
 
                 AddPaymentParams(conn, paymId, paymSubjTp, paramsStr);
-
-                return paymId;
             }
         }
 
@@ -652,12 +691,17 @@ namespace EtranDispatcher
 
 
                 // Simplified per product decision: instead of calling the
-                // shared SOAP service MessageProcessor.asmx (which internally
-                // runs GetRek_20090918, quarantine checks, Job.GetAvailableJobs/
-                // Job.Process - queueing the job for operator/job review, and
-                // an SMS notification) - a self-contained simplified DB write
-                // path is used. The shared MessageProcessor.asmx.cs itself is
-                // left untouched (still used by OsmpDispatcher/PostProcessor).
+                // shared SOAP service MessageProcessor.asmx, "payment" calls
+                // the real AModule_PutPayment stored procedure directly
+                // (PutPayment() below) - so all legacy business logic/derived
+                // data (routing via GetRek_20090918, quarantine/limit
+                // overrides, term_datetime, dealer balance ledger updates)
+                // still runs exactly as before. Only Job.GetAvailableJobs/
+                // Job.Process (the outbound call to an external payment
+                // gateway and its later async confirmation) and the SMS
+                // notification are intentionally skipped. The shared
+                // MessageProcessor.asmx.cs itself is left untouched (still
+                // used by OsmpDispatcher/PostProcessor).
                 string result = null;
                 if (Function.ToLower() == "payment")
                 {
@@ -670,14 +714,15 @@ namespace EtranDispatcher
                         int serialNumberInt = 0;
                         int.TryParse(SerialNumber, out serialNumberInt);
 
-                        int paymId = SimplifiedPutPayment(PaymExtId, PaymSubjTp, paymAmount, serialNumberInt,
-                            totalSumInt, Signature, kopeks, payTypeId, Params);
+                        int paymId, paymState;
+                        PutPayment(PaymExtId, PaymSubjTp, paymAmount, serialNumberInt,
+                            totalSumInt, Signature, kopeks, payTypeId, Params, out paymId, out paymState);
 
-                        result = BuildAckResponse(paymId, 2, PaymExtId, "Payment accepted.");
+                        result = BuildAckResponse(paymId, paymState, PaymExtId, "Payment accepted.");
                     }
                     catch (Exception ex)
                     {
-                        GlobalObjectsManager.Logger.Error("SimplifiedPutPayment", ex);
+                        GlobalObjectsManager.Logger.Error("PutPayment", ex);
                         result = BuildErrorResponse(PaymExtId, "Error saving payment: " + ex.Message);
                     }
                 }
