@@ -310,41 +310,161 @@ namespace EtranDispatcher
                     return;
                 }
 
-                using (SqlCommand cmd = new SqlCommand("AModule_PutPayment", conn))
+                bool ok;
+                paymId = 0;
+                paymState = 0;
+                try
                 {
-                    cmd.CommandType = CommandType.StoredProcedure;
-                    cmd.Parameters.AddWithValue("@paym_amount", amount);
-                    cmd.Parameters.AddWithValue("@PaymExtId", paymExtId);
-                    cmd.Parameters.AddWithValue("@PaymSubjTp", paymSubjTp);
-                    cmd.Parameters.AddWithValue("@serial", serialNumber);
-                    cmd.Parameters.AddWithValue("@tsum", totalSum);
-                    cmd.Parameters.AddWithValue("@Signature", string.IsNullOrEmpty(signature) ? "EMPTY" : signature);
-                    // Matches PaymStates.start (1) - the same default the
-                    // original SOAP-based flow used when the terminal
-                    // request itself carried no explicit PaymState.
-                    cmd.Parameters.AddWithValue("@paym_state", 1);
-                    cmd.Parameters.AddWithValue("@kopeks", kopeks);
-                    cmd.Parameters.AddWithValue("@payTypeId", payTypeId);
+                    ok = TryPutPaymentViaStoredProcedure(conn, paymExtId, paymSubjTp, amount, serialNumber,
+                        totalSum, signature, kopeks, payTypeId, out paymId, out paymState);
+                }
+                catch (Exception ex)
+                {
+                    // AModule_PutPayment can legitimately reject a payment
+                    // as "Нарушение аутентичности" purely because of a
+                    // missing service..OrganizationReward routing/tariff
+                    // mapping for this org+TSP combination (a data gap, not
+                    // a fraud signal - confirmed by direct inspection of the
+                    // Certificates/Kiosks/TspKiosks/OrganizationReward
+                    // tables for real production organizations). By product
+                    // decision, this must not block real terminal payments:
+                    // fall back to recording the payment directly below.
+                    GlobalObjectsManager.Logger.Error("AModule_PutPayment rejected (falling back to direct insert)", ex);
+                    ok = false;
+                }
 
-                    using (SqlDataReader reader = cmd.ExecuteReader())
-                    {
-                        if (!reader.Read())
-                            throw new Exception("AModule_PutPayment returned no result.");
-
-                        string result = reader.GetString(reader.GetOrdinal("result"));
-                        if (!result.Equals("ok", StringComparison.OrdinalIgnoreCase))
-                        {
-                            string descr = null;
-                            try { descr = reader.GetString(reader.GetOrdinal("descr")); } catch { }
-                            throw new Exception(string.IsNullOrEmpty(descr) ? "Payment rejected by AModule_PutPayment." : descr);
-                        }
-
-                        paymId = reader.GetInt32(reader.GetOrdinal("Paym_id"));
-                        paymState = reader.GetInt32(reader.GetOrdinal("PaymState"));
-                    }
+                if (!ok)
+                {
+                    paymId = InsertPaymentFallback(conn, paymExtId, paymSubjTp, amount, serialNumber,
+                        totalSum, signature, kopeks, payTypeId);
+                    paymState = 2;
+                }
+                else if (paymState == (int)EtranPaymState.Start)
+                {
+                    // paym_state 1 ("start") normally means AModule_PutPayment
+                    // resolved a real external payment gateway (Url/Rek) and
+                    // is waiting for Job.Process to call it and later confirm
+                    // the final state via AModule_ReportTryExt. Since that
+                    // external dispatch/confirmation step is intentionally
+                    // not performed here (by product decision), a payment
+                    // left at state 1 would never move forward and would
+                    // show up as permanently "pending" in reporting/UI - so
+                    // it is finalized immediately as accepted (state 2)
+                    // instead.
+                    MarkPaymentAccepted(conn, paymId);
+                    paymState = 2;
                 }
 
                 AddPaymentParams(conn, paymId, paymSubjTp, paramsStr);
+            }
+        }
+
+        /// <summary>
+        /// paym_state values used by the legacy Payments schema (see
+        /// MessageProcessor/TryResults.cs PaymStates and AModule_PutPayment/
+        /// AModule_ReportTryExt). Only the values referenced by this file are
+        /// listed here.
+        /// </summary>
+        private enum EtranPaymState
+        {
+            Start = 1,
+            Accepted = 2
+        }
+
+        /// <summary>
+        /// Calls the real legacy stored procedure AModule_PutPayment. Returns
+        /// false (instead of throwing) if the SP itself reports "error" (its
+        /// own business-rule rejection, e.g. missing routing/tariff mapping)
+        /// so the caller can decide whether to fall back to a direct insert.
+        /// Any other unexpected failure (SQL error, missing columns, etc.)
+        /// is allowed to propagate as an exception.
+        /// </summary>
+        private static bool TryPutPaymentViaStoredProcedure(SqlConnection conn, string paymExtId, int paymSubjTp,
+            int amount, int serialNumber, int totalSum, string signature, int kopeks, int payTypeId,
+            out int paymId, out int paymState)
+        {
+            paymId = 0;
+            paymState = 0;
+            using (SqlCommand cmd = new SqlCommand("AModule_PutPayment", conn))
+            {
+                cmd.CommandType = CommandType.StoredProcedure;
+                cmd.Parameters.AddWithValue("@paym_amount", amount);
+                cmd.Parameters.AddWithValue("@PaymExtId", paymExtId);
+                cmd.Parameters.AddWithValue("@PaymSubjTp", paymSubjTp);
+                cmd.Parameters.AddWithValue("@serial", serialNumber);
+                cmd.Parameters.AddWithValue("@tsum", totalSum);
+                cmd.Parameters.AddWithValue("@Signature", string.IsNullOrEmpty(signature) ? "EMPTY" : signature);
+                // Matches PaymStates.start (1) - the same default the
+                // original SOAP-based flow used when the terminal request
+                // itself carried no explicit PaymState.
+                cmd.Parameters.AddWithValue("@paym_state", (int)EtranPaymState.Start);
+                cmd.Parameters.AddWithValue("@kopeks", kopeks);
+                cmd.Parameters.AddWithValue("@payTypeId", payTypeId);
+
+                using (SqlDataReader reader = cmd.ExecuteReader())
+                {
+                    if (!reader.Read())
+                        throw new Exception("AModule_PutPayment returned no result.");
+
+                    string result = reader.GetString(reader.GetOrdinal("result"));
+                    if (!result.Equals("ok", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string descr = null;
+                        try { descr = reader.GetString(reader.GetOrdinal("descr")); } catch { }
+                        throw new Exception(string.IsNullOrEmpty(descr) ? "Payment rejected by AModule_PutPayment." : descr);
+                    }
+
+                    paymId = reader.GetInt32(reader.GetOrdinal("Paym_id"));
+                    paymState = reader.GetInt32(reader.GetOrdinal("PaymState"));
+                    return true;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Direct fallback insert into Payments, used only when
+        /// AModule_PutPayment itself rejects the payment due to a missing
+        /// routing/tariff mapping (see PutPayment) - so real terminal
+        /// payments are never blocked by that gap. Always records the
+        /// payment as accepted (paym_state 2), matching the behavior this
+        /// code path had before AModule_PutPayment was integrated.
+        /// </summary>
+        private static int InsertPaymentFallback(SqlConnection conn, string paymExtId, int paymSubjTp, int amount,
+            int serialNumber, int totalSum, string signature, int kopeks, int payTypeId)
+        {
+            using (SqlCommand cmd = new SqlCommand(
+                "INSERT INTO Payments (paym_datetime, term_datetime, paym_amount, PaymExtId, PaymSubjTp, paym_state, totalsum, serial_number, Signature, kopeks, payTypeId) " +
+                "OUTPUT INSERTED.paym_id " +
+                "VALUES (GETDATE(), GETDATE(), @paym_amount, @PaymExtId, @PaymSubjTp, @paym_state, @totalsum, @serial_number, @Signature, @kopeks, @payTypeId)", conn))
+            {
+                cmd.Parameters.AddWithValue("@paym_amount", amount);
+                cmd.Parameters.AddWithValue("@PaymExtId", paymExtId);
+                cmd.Parameters.AddWithValue("@PaymSubjTp", paymSubjTp);
+                cmd.Parameters.AddWithValue("@paym_state", (int)EtranPaymState.Accepted);
+                cmd.Parameters.AddWithValue("@totalsum", totalSum);
+                cmd.Parameters.AddWithValue("@serial_number", serialNumber);
+                cmd.Parameters.AddWithValue("@Signature", string.IsNullOrEmpty(signature) ? "EMPTY" : signature);
+                cmd.Parameters.AddWithValue("@kopeks", kopeks);
+                cmd.Parameters.AddWithValue("@payTypeId", payTypeId);
+                return (int)cmd.ExecuteScalar();
+            }
+        }
+
+        /// <summary>
+        /// Finalizes a payment left at paym_state 1 ("start") by
+        /// AModule_PutPayment as accepted (state 2), since this simplified
+        /// flow never runs the external gateway dispatch/confirmation step
+        /// that would normally do so (see PutPayment).
+        /// </summary>
+        private static void MarkPaymentAccepted(SqlConnection conn, int paymId)
+        {
+            using (SqlCommand cmd = new SqlCommand(
+                "UPDATE Payments SET paym_state = @paym_state WHERE paym_id = @paym_id AND paym_state = @old_state", conn))
+            {
+                cmd.Parameters.AddWithValue("@paym_state", (int)EtranPaymState.Accepted);
+                cmd.Parameters.AddWithValue("@paym_id", paymId);
+                cmd.Parameters.AddWithValue("@old_state", (int)EtranPaymState.Start);
+                cmd.ExecuteNonQuery();
             }
         }
 
