@@ -84,6 +84,31 @@ later via async `AModule_ReportTryExt`) and the SMS notification — not used
 in practice today, per product decision. `MessageProcessor.asmx.cs` itself
 is untouched (still used by `OsmpDispatcher`/`PostProcessor`).
 
+**Known data gap, handled defensively**: `AModule_PutPayment`'s call to
+`service..GetRek_20090918` legitimately rejects a payment with
+`"Нарушение аутентичности"` when `service..OrganizationReward` has no
+routing/tariff mapping for the org+TSP combination — confirmed via direct
+DB inspection to be a real, pre-existing data gap affecting some live
+organizations/TSPs (e.g. org 424 + TSP 10001, org 340 + TSP 830 had zero
+matching rows), not a fraud signal. Since this must not block real
+terminal payments, `PutPayment()` catches that SP-level rejection and
+falls back to a direct insert (`paym_state` 2, same behavior this code
+path had before `AModule_PutPayment` was integrated) instead of returning
+`Result=Error` to the terminal. Neither the shared stored procedure nor
+the legacy SOAP flow are touched by this fallback — it only applies to
+this simplified code path. Adding the missing `OrganizationReward` rows
+(if these org/TSP combos are actually meant to route through a payment
+system) is a data/ops task, not a code fix, and is out of scope here.
+
+Also: when `AModule_PutPayment` succeeds but leaves the payment at
+`paym_state` 1 ("start" — meaning it resolved a real external gateway and
+is waiting for `Job.Process` to dispatch to it and `AModule_ReportTryExt`
+to later confirm the final state), this simplified flow finalizes it
+immediately as accepted (`paym_state` 2) via a follow-up `UPDATE`, since
+the external dispatch/confirmation step is intentionally never performed
+here — otherwise the payment would stay stuck at state 1 forever and show
+as permanently pending in reporting/UI.
+
 `check`/`checkfull`/`update`/`addparams` were also reimplemented directly
 against the database (bypassing the SOAP call), but **do real validation**
 — they must NOT unconditionally return `Result=OK`:
