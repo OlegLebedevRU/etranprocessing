@@ -223,12 +223,58 @@ namespace EtranDispatcher
         }
 
         /// <summary>
+        /// Looks up an existing payment by PaymExtId (matches the core
+        /// query used by the legacy AModule_CheckPayment stored procedure,
+        /// minus the external-forwarding fallback via GetRek_MP2/Url/Rek,
+        /// which this simplified flow does not implement). Returns false
+        /// if no matching payment exists.
+        /// </summary>
+        private static bool TryFindPayment(SqlConnection conn, string paymExtId, out int paymId, out int paymState)
+        {
+            paymId = 0;
+            paymState = 0;
+            using (SqlCommand cmd = new SqlCommand(
+                "SELECT TOP 1 paym_id, paym_state FROM Payments WHERE PaymExtId = @PaymExtId", conn))
+            {
+                cmd.Parameters.AddWithValue("@PaymExtId", paymExtId);
+                using (SqlDataReader reader = cmd.ExecuteReader())
+                {
+                    if (!reader.Read()) return false;
+                    paymId = reader.GetInt32(0);
+                    paymState = reader.GetInt16(1);
+                    return true;
+                }
+            }
+        }
+
+        /// <summary>
         /// Simplified idempotent payment write directly to the Payments
         /// database, without calling the shared SOAP service
         /// MessageProcessor.asmx (which also queues the payment for
         /// operator/job review). Returns paym_id (existing one, if
         /// PaymExtId was already accepted before, or a new one).
         /// </summary>
+        /// <summary>
+        /// Stores payment params via the already existing idempotent
+        /// stored procedure AModule_AddPaymentParam - it handles
+        /// get-or-create of param_id via service..TspCodes/Parameter_codes.
+        /// </summary>
+        private static void AddPaymentParams(SqlConnection conn, int paymId, int paymSubjTp, string paramsStr)
+        {
+            foreach (var kv in ParsePaymentParams(paramsStr))
+            {
+                using (SqlCommand cmd = new SqlCommand("AModule_AddPaymentParam", conn))
+                {
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.Parameters.AddWithValue("@paym_id", paymId);
+                    cmd.Parameters.AddWithValue("@paymsubjtp", paymSubjTp);
+                    cmd.Parameters.AddWithValue("@Parameter_code", kv.Key);
+                    cmd.Parameters.AddWithValue("@param_value", kv.Value);
+                    cmd.ExecuteNonQuery();
+                }
+            }
+        }
+
         private static int SimplifiedPutPayment(string paymExtId, int paymSubjTp, int amount, int serialNumber,
             int totalSum, string signature, int kopeks, int payTypeId, string paramsStr)
         {
@@ -236,13 +282,9 @@ namespace EtranDispatcher
             {
                 conn.Open();
 
-                using (SqlCommand cmd = new SqlCommand("SELECT paym_id FROM Payments WHERE PaymExtId = @PaymExtId", conn))
-                {
-                    cmd.Parameters.AddWithValue("@PaymExtId", paymExtId);
-                    object existing = cmd.ExecuteScalar();
-                    if (existing != null && existing != DBNull.Value)
-                        return (int)existing;
-                }
+                int existingPaymId, existingPaymState;
+                if (TryFindPayment(conn, paymExtId, out existingPaymId, out existingPaymState))
+                    return existingPaymId;
 
                 int paymId;
                 using (SqlCommand cmd = new SqlCommand(
@@ -261,23 +303,147 @@ namespace EtranDispatcher
                     paymId = (int)cmd.ExecuteScalar();
                 }
 
-                // Payment params are stored via the already existing idempotent
-                // stored procedure AModule_AddPaymentParam - it handles
-                // get-or-create of param_id via service..TspCodes/Parameter_codes.
-                foreach (var kv in ParsePaymentParams(paramsStr))
-                {
-                    using (SqlCommand cmd = new SqlCommand("AModule_AddPaymentParam", conn))
-                    {
-                        cmd.CommandType = CommandType.StoredProcedure;
-                        cmd.Parameters.AddWithValue("@paym_id", paymId);
-                        cmd.Parameters.AddWithValue("@paymsubjtp", paymSubjTp);
-                        cmd.Parameters.AddWithValue("@Parameter_code", kv.Key);
-                        cmd.Parameters.AddWithValue("@param_value", kv.Value);
-                        cmd.ExecuteNonQuery();
-                    }
-                }
+                AddPaymentParams(conn, paymId, paymSubjTp, paramsStr);
 
                 return paymId;
+            }
+        }
+
+        /// <summary>
+        /// Real eligibility check for a serial+tsp_code combination, calling
+        /// the existing read-only stored procedure service.dbo.GetRek_MP2
+        /// directly (same one the legacy AModule_CheckPayment SP calls).
+        /// Verifies the terminal's certificate is active, its organization
+        /// is not locked/deleted, the TSP is active, the kiosk is allowed
+        /// to sell this TSP, and a payment system/reward mapping exists.
+        /// This call is read-only (no side effects), safe to run on every
+        /// "check" request.
+        /// </summary>
+        private static bool TryCheckEligibility(SqlConnection conn, int serial, int tspCode, out string urlOut, out string rekOut, out int? psId, out string msg)
+        {
+            using (SqlCommand cmd = new SqlCommand("service.dbo.GetRek_MP2", conn))
+            {
+                cmd.CommandType = CommandType.StoredProcedure;
+                cmd.Parameters.AddWithValue("@serial", serial);
+                cmd.Parameters.AddWithValue("@tsp_code", tspCode);
+                var pUrl = cmd.Parameters.Add("@url_out", SqlDbType.VarChar, 255);
+                pUrl.Direction = ParameterDirection.Output;
+                var pRek = cmd.Parameters.Add("@rek_out", SqlDbType.VarChar, 255);
+                pRek.Direction = ParameterDirection.Output;
+                var pPsId = cmd.Parameters.Add("@ps_id", SqlDbType.Int);
+                pPsId.Direction = ParameterDirection.Output;
+                var pMsg = cmd.Parameters.Add("@msg", SqlDbType.VarChar, 255);
+                pMsg.Direction = ParameterDirection.Output;
+
+                cmd.ExecuteNonQuery();
+
+                urlOut = pUrl.Value as string;
+                rekOut = pRek.Value as string;
+                psId = (pPsId.Value == null || pPsId.Value == DBNull.Value) ? (int?)null : (int)pPsId.Value;
+                msg = pMsg.Value as string;
+
+                return !string.IsNullOrEmpty(urlOut) && !string.IsNullOrEmpty(rekOut) && psId.HasValue;
+            }
+        }
+
+        /// <summary>
+        /// Simplified equivalent of the legacy "check" function
+        /// (AModule_CheckPayment): if a payment matching PaymExtId already
+        /// exists, reports its real state (idempotent status check,
+        /// matching legacy behavior - in practice this basically never
+        /// happens, since terminals generate a fresh PaymExtId per
+        /// transaction). Otherwise performs the real eligibility check
+        /// (see TryCheckEligibility / GetRek_MP2) to verify whether the
+        /// given terminal (serial) is currently authorized to submit a
+        /// payment for this TSP, before the terminal proceeds to the main
+        /// "payment" call. Does not implement the third-party payment
+        /// gateway forwarding (Url/Rek external redirect) that the
+        /// original stored procedure has - out of scope for this
+        /// simplified flow.
+        ///
+        /// NOTE for the new (Python) processing stack: this eligibility
+        /// check (service.Certificates/Kiosks/Organizations/TspCodes/
+        /// TspKiosks/PayProperties/OrganizationReward/PaySystems, see
+        /// GetRek_MP2) should be reimplemented there too - tracked as a
+        /// separate follow-up task/session, not done here.
+        /// </summary>
+        private static string SimplifiedCheckPayment(string paymExtId, int serialNumber, int tspCode)
+        {
+            using (SqlConnection conn = new SqlConnection(GlobalObjectsManager.PaymentDbConnectionString))
+            {
+                conn.Open();
+
+                int paymId, paymState;
+                if (TryFindPayment(conn, paymExtId, out paymId, out paymState))
+                    return BuildAckResponse(paymId, paymState, paymExtId, "Check passed.");
+
+                string urlOut, rekOut, msg;
+                int? psId;
+                bool eligible = TryCheckEligibility(conn, serialNumber, tspCode, out urlOut, out rekOut, out psId, out msg);
+
+                if (!string.IsNullOrEmpty(msg) && msg.Equals("Lock", StringComparison.OrdinalIgnoreCase))
+                    return BuildErrorResponse(paymExtId, "Terminal or organization is locked.");
+
+                if (!eligible)
+                    return BuildErrorResponse(paymExtId, "Payment authentication error.");
+
+                return BuildAckResponse(0, 0, paymExtId, "Check passed.");
+            }
+        }
+
+        /// <summary>
+        /// Simplified equivalent of the legacy "checkfull" function
+        /// (MessageProcessor.XmlPaymentInfo): calls the same existing
+        /// AModule_XmlPaymentInfo stored procedure directly (FOR XML
+        /// EXPLICIT), returning its raw XML document as-is - same output
+        /// shape as the original SOAP call, just without going through the
+        /// shared MessageProcessor.asmx service. If no payment matches
+        /// (the stored procedure's INNER JOINs return no rows), the result
+        /// is an empty string, exactly as the previous SOAP-based call
+        /// would also return for a non-existent payment.
+        /// </summary>
+        private static string SimplifiedXmlPaymentInfo(string paymExtId, int serialNumber)
+        {
+            using (SqlConnection conn = new SqlConnection(GlobalObjectsManager.PaymentDbConnectionString))
+            {
+                conn.Open();
+                using (SqlCommand cmd = new SqlCommand("AModule_XmlPaymentInfo", conn))
+                {
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.Parameters.AddWithValue("@PaymExtId", paymExtId);
+                    cmd.Parameters.AddWithValue("@serial_number", serialNumber);
+                    using (SqlDataReader reader = cmd.ExecuteReader())
+                    {
+                        string ret = null;
+                        while (reader.Read())
+                        {
+                            ret += reader.GetString(0);
+                        }
+                        return ret;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Simplified equivalent of the legacy "addparams"/"update"
+        /// functions: requires the payment to already exist (found by
+        /// PaymExtId), then stores the supplied params against it via the
+        /// existing AModule_AddPaymentParam stored procedure. Returns an
+        /// error if the payment does not exist yet, instead of silently
+        /// acknowledging success without writing anything.
+        /// </summary>
+        private static string SimplifiedUpdatePayment(string paymExtId, int paymSubjTp, string paramsStr, string ackDescription)
+        {
+            using (SqlConnection conn = new SqlConnection(GlobalObjectsManager.PaymentDbConnectionString))
+            {
+                conn.Open();
+                int paymId, paymState;
+                if (!TryFindPayment(conn, paymExtId, out paymId, out paymState))
+                    return BuildErrorResponse(paymExtId, "Payment not found.");
+
+                AddPaymentParams(conn, paymId, paymSubjTp, paramsStr);
+                return BuildAckResponse(paymId, paymState, paymExtId, ackDescription);
             }
         }
 
@@ -517,15 +683,43 @@ namespace EtranDispatcher
                 }
                 else if (Function.ToLower() == "check")
                 {
-                    result = BuildAckResponse(0, 0, PaymExtId, "Check passed.");
+                    try
+                    {
+                        int serialNumberIntForCheck = 0;
+                        int.TryParse(SerialNumber, out serialNumberIntForCheck);
+                        result = SimplifiedCheckPayment(PaymExtId, serialNumberIntForCheck, PaymSubjTp);
+                    }
+                    catch (Exception ex)
+                    {
+                        GlobalObjectsManager.Logger.Error("SimplifiedCheckPayment", ex);
+                        result = BuildErrorResponse(PaymExtId, "Error checking payment: " + ex.Message);
+                    }
                 }
                 else if (Function.ToLower() == "checkfull")
                 {
-                    result = BuildAckResponse(0, 0, PaymExtId, "Check passed.");
+                    try
+                    {
+                        int serialNumberInt = 0;
+                        int.TryParse(SerialNumber, out serialNumberInt);
+                        result = SimplifiedXmlPaymentInfo(PaymExtId, serialNumberInt);
+                    }
+                    catch (Exception ex)
+                    {
+                        GlobalObjectsManager.Logger.Error("SimplifiedXmlPaymentInfo", ex);
+                        result = BuildErrorResponse(PaymExtId, "Error checking payment: " + ex.Message);
+                    }
                 }
                 else if (Function.ToLower() == "update" || Function.ToLower() == "addparams")
                 {
-                    result = BuildAckResponse(0, 0, PaymExtId, "Payment updated.");
+                    try
+                    {
+                        result = SimplifiedUpdatePayment(PaymExtId, PaymSubjTp, Params, "Payment updated.");
+                    }
+                    catch (Exception ex)
+                    {
+                        GlobalObjectsManager.Logger.Error("SimplifiedUpdatePayment", ex);
+                        result = BuildErrorResponse(PaymExtId, "Error updating payment: " + ex.Message);
+                    }
                 }
 
 
