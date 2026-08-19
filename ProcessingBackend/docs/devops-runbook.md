@@ -39,12 +39,25 @@ Deploy steps (do this **first**, before the other apps — see rollback plan):
    `bin/EtranDispatcher.pdb`, `bin/log4net.dll`) to e.g. `payment_backup_<date>/`.
 2. Copy `BACK/ProcessingCore/EtranDispatcher/src/*.cs` (all 6 files,
    including the new `ClientCertHelper.cs`) into `payment/App_Code/`.
-3. Delete/rename `payment/bin/EtranDispatcher.dll` and `.pdb` (keep
+3. Also copy the updated `Global.asax` and `EtranDispatcher.asmx` over the
+   existing ones at the `payment/` root (both were converted from the
+   `Codebehind="*.cs"` precompiled model to inline `<script runat="server">`
+   — the old model referenced a `Global`/`EtranDispatcher` type that only
+   existed inside the now-removed `EtranDispatcher.dll`, causing a parser
+   error `Не удалось загрузить тип 'EtranDispatcher.Global'` on every
+   request). Delete `Global.asax.cs` and `EtranDispatcher.asmx.cs` from
+   `payment/` if present (their content is now inlined) — leaving them
+   there is harmless but redundant.
+4. Delete/rename `payment/bin/EtranDispatcher.dll` and `.pdb` (keep
    `bin/log4net.dll` — it's a third-party library, not part of this app's
-   own compiled code).
-4. Recycle the app pool / `iisreset` for this site so ASP.NET recompiles
+   own compiled code). **Move them fully OUT of the `bin/` folder** (not
+   just rename in place) — ASP.NET scans every `.dll` file present in
+   `bin/` regardless of name at app startup, so a renamed-but-still-present
+   file (e.g. `--EtranDispatcher.dll`) still gets picked up and fails with
+   `FileLoadException` on the mismatched manifest.
+5. Recycle the app pool / `iisreset` for this site so ASP.NET recompiles
    `App_Code` from scratch.
-5. Verify with test `function=check` and `function=payment` requests (use
+6. Verify with test `function=check` and `function=payment` requests (use
    test/non-critical data) and check the `Payments`/`Payment_params` tables
    and the `EtranDispatcher.log` (log4net) for exceptions.
 
@@ -63,11 +76,14 @@ No database rollback is needed — the simplified path is purely additive
 (idempotent inserts, nothing is deleted/mutated). If something goes wrong
 after deploying:
 1. Restore `bin/EtranDispatcher.dll` and `bin/EtranDispatcher.pdb` from the
-   backup.
-2. Remove/rename the `App_Code` folder added in step 2 above (e.g. to
+   backup (put them back into `bin/`).
+2. Restore the original `Global.asax` and `EtranDispatcher.asmx` from the
+   backup (the ones using `Codebehind="*.cs"`), and restore
+   `Global.asax.cs`/`EtranDispatcher.asmx.cs` if they were deleted.
+3. Remove/rename the `App_Code` folder added in step 2 above (e.g. to
    `App_Code.disabled`), so there's no type-conflict with the restored
    precompiled assembly.
-3. Recycle the app pool / `iisreset` — the app is back to its exact
+4. Recycle the app pool / `iisreset` — the app is back to its exact
    previous behavior (SOAP `MessageProcessor` + direct
    `Context.Request.ClientCertificate`).
 
