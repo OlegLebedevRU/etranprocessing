@@ -70,6 +70,30 @@ also queue jobs for operator review and send SMS — not used in practice
 today, per product decision). `MessageProcessor.asmx.cs` itself is
 untouched (still used by `OsmpDispatcher`/`PostProcessor`).
 
+`check`/`checkfull`/`update`/`addparams` were also reimplemented directly
+against the database (bypassing the SOAP call), but **do real validation**
+— they must NOT unconditionally return `Result=OK`:
+- `check`: first looks up an existing payment by `PaymExtId` (idempotent
+  status check — in practice this basically never triggers, since
+  terminals always send a fresh `PaymExtId`); if not found, calls the
+  existing read-only stored procedure `service.dbo.GetRek_MP2` directly
+  to perform the real pre-payment eligibility check the terminal relies
+  on (certificate active, organization/kiosk not locked, TSP active and
+  assigned to the kiosk, valid tariff mapping) — returns `Error` if
+  ineligible.
+- `checkfull` calls `AModule_XmlPaymentInfo` directly (same shape as
+  before).
+- `update`/`addparams` require the payment to already exist (found via
+  `PaymExtId`) before writing extra params via `AModule_AddPaymentParam`.
+
+**Known scope gap** (by explicit product decision, not an oversight):
+`function=payment` itself still does **not** run this eligibility check
+before inserting — it accepts and records any submitted payment. Adding
+the equivalent eligibility validation to the **new Python processing
+stack** (`ProcessingBackend/backend/app/services/payment_service.py` /
+`routers/payment.py`, whose `_handle_check()` currently also just returns
+a static OK) is tracked as a separate follow-up task for a future session.
+
 #### Rollback (Payment)
 
 No database rollback is needed — the simplified path is purely additive
