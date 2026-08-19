@@ -6,7 +6,7 @@ using System.Collections;
 namespace EtranDispatcher
 {
     /// <summary>
-    /// Менеджер конфигурации диспетчера.
+    /// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ.
     /// </summary>
     public sealed class EtranConfigurationManager
     {
@@ -85,6 +85,22 @@ namespace EtranDispatcher
             get
             {
                 return ConfigurationManager.AppSettings["SignKey"].ToString();
+            }
+        }
+
+        static public string EtranConfig
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["EtranConfig"];
+            }
+        }
+
+        static public string DBConnNamePayments
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["DBConnNamePayments"];
             }
         }
 

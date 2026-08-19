@@ -8,8 +8,8 @@ namespace EtranDispatcher
 
 
 	/// <summary>
-    /// Класс, создающий и управляющий всеми глобальными объектами службы. Он также поределяет
-    /// место их хранения. Все методы потокобезопасные.
+    /// пїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ. пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+    /// пїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ. пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ.
     /// </summary>
 	public sealed class GlobalObjectsManager
 	{
@@ -17,8 +17,45 @@ namespace EtranDispatcher
 
 		static private ILog _logger = LogManager.GetLogger("application-log");
 
+        static private string _paymentDbConnectionString = "";
         /// <summary>
-        /// Инициализирует менеджер глобальных объектов.
+        /// РЎС‚СЂРѕРєР° РїРѕРґРєР»СЋС‡РµРЅРёСЏ Рє Р»РµРіР°СЃРё-Р‘Р” Payments (MSSQL), РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ
+        /// СѓРїСЂРѕС‰С‘РЅРЅС‹Рј РїСѓС‚С‘Рј С„РёРєСЃР°С†РёРё РїР»Р°С‚РµР¶Р° РІ Dispatcher.cs (СЃРј.
+        /// SimplifiedPutPayment) РЅР°РїСЂСЏРјСѓСЋ, Р±РµР· РѕР±С‰РµРіРѕ SOAP-СЃРµСЂРІРёСЃР°
+        /// MessageProcessor.asmx. РџРѕР»СѓС‡Р°РµС‚СЃСЏ РґРёРЅР°РјРёС‡РµСЃРєРё С‡РµСЂРµР· СЃРµСЂРІРёСЃ
+        /// EtranConfig вЂ” С‚Р°Рє Р¶Рµ, РєР°Рє СЌС‚Рѕ СѓР¶Рµ РґРµР»Р°СЋС‚ licensebilling/
+        /// TechGate/GateGauge Рё СЃР°Рј MessageProcessor.asmx.cs, С‡С‚РѕР±С‹ РЅРµ
+        /// С…СЂР°РЅРёС‚СЊ СЃС‚СЂРѕРєСѓ РїРѕРґРєР»СЋС‡РµРЅРёСЏ СЃ СѓС‡С‘С‚РЅС‹РјРё РґР°РЅРЅС‹РјРё РІ web.config.
+        /// </summary>
+        static public string PaymentDbConnectionString
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(_paymentDbConnectionString))
+                {
+                    _paymentDbConnectionString = GetDBConn(EtranConfigurationManager.DBConnNamePayments);
+                    Logger.Info("PaymentDbConnectionString: РїРѕР»СѓС‡РµРЅР°");
+                }
+                return _paymentDbConnectionString;
+            }
+        }
+
+        static private string GetDBConn(string name)
+        {
+            string ret = string.Empty;
+            try
+            {
+                ret = (new System.Net.WebClient()).DownloadString(EtranConfigurationManager.EtranConfig + "?function=dbconn&dbname=" + name);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("GetDBConn", ex);
+            }
+            return ret;
+        }
+
+        /// <summary>
+        /// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ.
         /// </summary>
         static public void Init()
         {
@@ -27,7 +64,7 @@ namespace EtranDispatcher
 
 
 		/// <summary>
-		/// Возвращает объект журнала событий.
+		/// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ.
 		/// </summary>
 		static public ILog Logger
 		{

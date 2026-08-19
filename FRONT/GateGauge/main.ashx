@@ -39,8 +39,9 @@ public class main : IHttpHandler
                 GlobalObjectsManager.Logger.Info((object)("PostParams: " + query));
                 string str1 = HttpUtility.ParseQueryString(query, Encoding.GetEncoding(1251))["GaugePack"];
                 GlobalObjectsManager.Logger.Info((object)"разобрали стрингу");
-                string serialNumber = Context.Request.ClientCertificate.SerialNumber;
-                int sn = int.Parse(serialNumber.Remove(0, serialNumber.Length - 11).Replace("-", ""), NumberStyles.HexNumber);
+                //string serialNumber = Context.Request.ClientCertificate.SerialNumber;
+                //int sn = int.Parse(serialNumber.Remove(0, serialNumber.Length - 11).Replace("-", ""), NumberStyles.HexNumber);
+	int sn = int.Parse(ClientCertHelper.GetSerialNumber(Context));
                 GlobalObjectsManager.Logger.Info((object)"получили сн");
                 int terminalNum = this.GetTerminalNum(sn);
                 GlobalObjectsManager.Logger.Info((object)("получили номер терма " + (object)terminalNum));

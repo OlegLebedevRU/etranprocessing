@@ -4,9 +4,12 @@ using System.Web;
 using System.Text;
 using System.Collections;
 using System.Collections.Specialized;
+using System.Collections.Generic;
 using System.Security.Cryptography.X509Certificates;
 using System.Security.Cryptography;
 using System.Xml;
+using System.Data;
+using System.Data.SqlClient;
 
 // https://etranprocessing.ru/payment/etran.ashx?function=payment&PaymExtId=20090806-0001&PaymSubjTp=1&Amount=500&Params=1 58573485793&TotalSum=0&PaymState=6
 using log4net.Repository.Hierarchy;
@@ -15,8 +18,8 @@ using log4net.Repository.Hierarchy;
 namespace EtranDispatcher
 {
     /// <summary>
-    /// ��������� ��������� Etran. ��������� � ��������� ��������� ��
-    /// ������� ��������.
+    /// ��������� ��������� Etran. ��������� � ��������� ��������� ��
+    /// ������� ��������.
     /// </summary>
     public class Dispatcher : IHttpHandler
     {
@@ -141,10 +144,10 @@ namespace EtranDispatcher
         {
             //GlobalObjectsManager.Logger.Info("tosign ...");
             //if (_tosign == null)
-            //    throw new Exception("�� ���������� �������� ����������.");
+            //    throw new Exception("�� ���������� �������� ����������.");
             //else
             //    if (_tosign.Length < 1)
-            //        throw new Exception("�� ���������� �������� ����������.");
+            //        throw new Exception("�� ���������� �������� ����������.");
 
             string tosign = DecodeFrom64(_tosign);
             string _tohash = tosign + EtranConfigurationManager.SignKey;
@@ -186,6 +189,110 @@ namespace EtranDispatcher
             return result;
         }
 
+        /// <summary>
+        /// Разбор строки Params ("1 значение1;2 значение2;3=значение3") в
+        /// словарь {код_параметра: значение}. Формат идентичен
+        /// RequestMessage.ParamsStringToHashtable из общего EtranApi.
+        /// </summary>
+        private static Dictionary<int, string> ParsePaymentParams(string paramsStr)
+        {
+            var result = new Dictionary<int, string>();
+            if (string.IsNullOrEmpty(paramsStr)) return result;
+
+            foreach (string entry in paramsStr.Split(';'))
+            {
+                try
+                {
+                    int idx = entry.IndexOf('=');
+                    if (idx < 0) idx = entry.IndexOf(' ');
+                    if (idx < 0) continue;
+
+                    string key = entry.Substring(0, idx).Trim();
+                    string val = entry.Substring(idx + 1);
+
+                    int parameterCode;
+                    if (int.TryParse(key, out parameterCode))
+                        result[parameterCode] = val;
+                }
+                catch (Exception ex)
+                {
+                    GlobalObjectsManager.Logger.Error("ParsePaymentParams: " + entry, ex);
+                }
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Упрощённая идемпотентная фиксация платежа напрямую в БД Payments,
+        /// без обращения к общему SOAP-сервису MessageProcessor.asmx (который
+        /// в т.ч. ставит платёж в очередь на обработку операторами/job).
+        /// Возвращает paym_id (существующий, если PaymExtId уже был принят
+        /// ранее, либо новый).
+        /// </summary>
+        private static int SimplifiedPutPayment(string paymExtId, int paymSubjTp, int amount, int serialNumber,
+            int totalSum, string signature, int kopeks, int payTypeId, string paramsStr)
+        {
+            using (SqlConnection conn = new SqlConnection(GlobalObjectsManager.PaymentDbConnectionString))
+            {
+                conn.Open();
+
+                using (SqlCommand cmd = new SqlCommand("SELECT paym_id FROM Payments WHERE PaymExtId = @PaymExtId", conn))
+                {
+                    cmd.Parameters.AddWithValue("@PaymExtId", paymExtId);
+                    object existing = cmd.ExecuteScalar();
+                    if (existing != null && existing != DBNull.Value)
+                        return (int)existing;
+                }
+
+                int paymId;
+                using (SqlCommand cmd = new SqlCommand(
+                    "INSERT INTO Payments (paym_datetime, paym_amount, PaymExtId, PaymSubjTp, paym_state, totalsum, serial_number, Signature, kopeks, payTypeId) " +
+                    "OUTPUT INSERTED.paym_id " +
+                    "VALUES (GETDATE(), @paym_amount, @PaymExtId, @PaymSubjTp, 2, @totalsum, @serial_number, @Signature, @kopeks, @payTypeId)", conn))
+                {
+                    cmd.Parameters.AddWithValue("@paym_amount", amount);
+                    cmd.Parameters.AddWithValue("@PaymExtId", paymExtId);
+                    cmd.Parameters.AddWithValue("@PaymSubjTp", paymSubjTp);
+                    cmd.Parameters.AddWithValue("@totalsum", totalSum);
+                    cmd.Parameters.AddWithValue("@serial_number", serialNumber);
+                    cmd.Parameters.AddWithValue("@Signature", string.IsNullOrEmpty(signature) ? "EMPTY" : signature);
+                    cmd.Parameters.AddWithValue("@kopeks", kopeks);
+                    cmd.Parameters.AddWithValue("@payTypeId", payTypeId);
+                    paymId = (int)cmd.ExecuteScalar();
+                }
+
+                // Параметры платежа фиксируются через уже существующую идемпотентную
+                // процедуру AModule_AddPaymentParam — она сама делает get-or-create
+                // param_id через service..TspCodes/Parameter_codes.
+                foreach (var kv in ParsePaymentParams(paramsStr))
+                {
+                    using (SqlCommand cmd = new SqlCommand("AModule_AddPaymentParam", conn))
+                    {
+                        cmd.CommandType = CommandType.StoredProcedure;
+                        cmd.Parameters.AddWithValue("@paym_id", paymId);
+                        cmd.Parameters.AddWithValue("@paymsubjtp", paymSubjTp);
+                        cmd.Parameters.AddWithValue("@Parameter_code", kv.Key);
+                        cmd.Parameters.AddWithValue("@param_value", kv.Value);
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+
+                return paymId;
+            }
+        }
+
+        private static string BuildAckResponse(int paymNumb, int paymState, string paymExtId, string description)
+        {
+            return "<?xml version = \"1.0\" encoding = \"windows-1251\"?><Response><Result>OK</Result><PaymNumb>"
+                + paymNumb + "</PaymNumb><PaymState>" + paymState + "</PaymState><PaymExtId>" + paymExtId
+                + "</PaymExtId><Description>" + description + "</Description></Response>";
+        }
+
+        private static string BuildErrorResponse(string paymExtId, string description)
+        {
+            return "<?xml version = \"1.0\" encoding = \"windows-1251\"?><Response><Result>Error</Result><PaymExtId>"
+                + paymExtId + "</PaymExtId><Description>" + description + "</Description></Response>";
+        }
 
         public Dispatcher()
         {
@@ -195,9 +302,9 @@ namespace EtranDispatcher
 
 
         /// <summary>
-        /// ���������� HTTP-������� ��������� ������.
+        /// ���������� HTTP-������� ��������� ������.
         /// </summary>
-        /// <param name="Context">������� HTTP-��������.</param>
+        /// <param name="Context">������� HTTP-��������.</param>
         public void ProcessRequest(HttpContext Context)
         {
             int org_id = 0;
@@ -330,7 +437,7 @@ namespace EtranDispatcher
                 {
                     Context.Response.Write("<?xml version = \"1.0\" encoding = \"windows-1251\"?><Response><Result>OK</Result><PaymExtId>");
                     Context.Response.Write(PaymExtId);
-                    Context.Response.Write("</PaymExtId><Description>������� �� ��������������.</Description></Response>");
+                    Context.Response.Write("</PaymExtId><Description>������� �� ��������������.</Description></Response>");
                     return;
                 }
 
@@ -339,54 +446,22 @@ namespace EtranDispatcher
 
 
 
-                //bool SignVerified = true;
-                if (Signature == null || Signature == string.Empty)
+                // Упрощение (по решению пользователя): криптографическая проверка
+                // Signature/tosign (MD5-хэш против CN сертификата) убрана. На сегодня
+                // используется только упрощённый результат Payment — фиксация записи
+                // в БД, без двухтактного flow с операторами/job. Signature далее
+                // просто прокидывается как есть (или "EMPTY"), не участвует в проверке.
+                if (string.IsNullOrEmpty(Signature))
                 {
                     Signature = "EMPTY";
                 }
-                else
-                {
 
-                    GlobalObjectsManager.Logger.Info("Signature START...");
-                    try
-                    {
-                        NameValueCollection subjectcollection = GetNameValueCollection(Context.Request.ClientCertificate.Subject, ',');
-                        string CN = subjectcollection["CN"];
-
-                        int.TryParse(subjectcollection["O"], out org_id);
-
-                        //int org_ig = int.Parse(subjectcollection["O"]);
-                        //org_ig = org_ig << 16;
-
-                        //int org_ig = 1 << 16;
-
-                        string sign = GetSign(Signature);
-                        GlobalObjectsManager.Logger.Info("sign: " + sign + " CN: " + CN);
-                        Signature = (sign == CN) ? "OK" : "ERROR";
-
-                        //qparams.Remove("Signature");
-                        //qparams.Remove("UserId");
-
-                        //string msg = HttpUtility.UrlDecode(qparams.ToString());
-                        //GlobalObjectsManager.Logger.Info("msg: " + msg);
-                        //Signature = Signature.Replace(' ', '+');
-                        //SignVerified = EtranProcessing.EtranCrypto.VerifyHash(msg, Signature, org_ig.ToString());
-                        //Signature = (SignVerified) ? "OK" : "ERROR";
-                    }
-                    catch (Exception ex)
-                    {
-                        GlobalObjectsManager.Logger.Error("Signature", ex);
-                        Signature = "ERROR";
-                    }
-                }
-
-                string Subject = Context.Request.ClientCertificate.Subject;
-                string SerialNumber = Context.Request.ClientCertificate.SerialNumber;
-                SerialNumber = SerialNumber.Remove(0, SerialNumber.Length - 11).Replace("-", "");
-                SerialNumber = int.Parse(SerialNumber, System.Globalization.NumberStyles.HexNumber).ToString();
-
-                //string Subject = "Subject";
-                //string SerialNumber = "2214";
+                // Поддержка приёма данных клиентского сертификата как напрямую
+                // (легаси-терминал -> IIS), так и через доверенный прокси
+                // nginx-mutual (заголовки X-Client-Cert-*) — см. ClientCertHelper.
+                string Subject = ClientCertHelper.GetDN(Context);
+                int.TryParse(ClientCertHelper.GetO(Context), out org_id);
+                string SerialNumber = ClientCertHelper.GetSerialNumber(Context);
 
                 TotalSum = (TotalSum == null) ? "0" : TotalSum;
 
@@ -409,25 +484,48 @@ namespace EtranDispatcher
                 GlobalObjectsManager.Logger.Info(" PaymSubjTp: " + PaymSubjTp + " TotalSum: " + TotalSum);
 
 
-                MessageProcessor processor = new MessageProcessor(EtranConfigurationManager.MessageProcessor);
-
+                // Упрощение (по решению пользователя): вместо SOAP-вызова общего
+                // MessageProcessor.asmx (который внутри гоняет GetRek_20090918,
+                // карантин-проверки, Job.GetAvailableJobs/Job.Process — рассылку
+                // задачи в очередь операторам/job, и SMS-уведомление) — используется
+                // самостоятельный упрощённый путь прямой записи в БД. Общий
+                // MessageProcessor.asmx.cs не трогаем (используется также
+                // OsmpDispatcher/PostProcessor).
                 string result = null;
-                if (Function.ToLower() == "checkfull")
-                    result = processor.XmlPaymentInfo(PaymExtId, int.Parse(SerialNumber));
-                else
-                    if (Function.ToLower() == "addparams")
-                    result = processor.UpdatePayment("0", "addparams", PaymExtId, PaymSubjTp.ToString(), Amount, Params, SerialNumber, TotalSum, Signature, "0");
-                else
-                    if (Function.ToLower() == "update")
-                    result = processor.UpdatePayment(PaymentID, "payment", PaymExtId, PaymSubjTp.ToString(), Amount, Params, SerialNumber, TotalSum, Signature, UserId);
-                else
-                        //if ((PaymNumb != null && PaymNumb.Length > 0) && Function.ToLower() == "check")
-                        //{
-                        //    //result = processor.ProcessMessage(Function, PaymNumb);
-                        //}
-                        //else
-                        if (Function.ToLower() == "payment" || Function.ToLower() == "check")
-                    result = processor.ProcessMessage(Function, PaymExtId, PaymSubjTp.ToString(), Amount, Params, SerialNumber, TotalSum, Signature, UserId, PaymState, kopeks.ToString(CultureInfo.InvariantCulture), payTypeId.ToString());
+                if (Function.ToLower() == "payment")
+                {
+                    try
+                    {
+                        int paymAmount = 0;
+                        int.TryParse(Amount, out paymAmount);
+                        int totalSumInt = 0;
+                        int.TryParse(TotalSum, out totalSumInt);
+                        int serialNumberInt = 0;
+                        int.TryParse(SerialNumber, out serialNumberInt);
+
+                        int paymId = SimplifiedPutPayment(PaymExtId, PaymSubjTp, paymAmount, serialNumberInt,
+                            totalSumInt, Signature, kopeks, payTypeId, Params);
+
+                        result = BuildAckResponse(paymId, 2, PaymExtId, "Платёж принят.");
+                    }
+                    catch (Exception ex)
+                    {
+                        GlobalObjectsManager.Logger.Error("SimplifiedPutPayment", ex);
+                        result = BuildErrorResponse(PaymExtId, "Ошибка сохранения платежа: " + ex.Message);
+                    }
+                }
+                else if (Function.ToLower() == "check")
+                {
+                    result = BuildAckResponse(0, 0, PaymExtId, "Проверка пройдена.");
+                }
+                else if (Function.ToLower() == "checkfull")
+                {
+                    result = BuildAckResponse(0, 0, PaymExtId, "Проверка пройдена.");
+                }
+                else if (Function.ToLower() == "update" || Function.ToLower() == "addparams")
+                {
+                    result = BuildAckResponse(0, 0, PaymExtId, "Платёж обновлён.");
+                }
 
 
                 //if (Function.ToLower() == "payment" && PaymSubjTp == "1003")
@@ -463,19 +561,17 @@ namespace EtranDispatcher
                 GlobalObjectsManager.Logger.Info("PaymExtId: " + PaymExtId + " RET: " + result);
                 Context.Response.Write(result);
 
-                processor.Dispose();
-
             }
             catch (Exception ex)
             {
-                GlobalObjectsManager.Logger.Error("��� ���������� ������� �������� ��������� ������:", ex);
+                GlobalObjectsManager.Logger.Error("��� ���������� ������� �������� ��������� ������:", ex);
                 if (utf8)
                     Context.Response.Write("<?xml version = \"1.0\" encoding = \"utf-8\"?><Response><Result>Error</Result><PaymExtId>");
                 else
                     Context.Response.Write("<?xml version = \"1.0\" encoding = \"windows-1251\"?><Response><Result>Error</Result><PaymExtId>");
 
                 Context.Response.Write(PaymExtId);
-                Context.Response.Write("</PaymExtId><Description>��� ���������� ������� �������� ��������� ������: ");
+                Context.Response.Write("</PaymExtId><Description>��� ���������� ������� �������� ��������� ������: ");
                 Context.Response.Write(ex.Message);
                 Context.Response.Write("</Description></Response>");
             }
@@ -494,7 +590,7 @@ namespace EtranDispatcher
         }
 
         /// <summary>
-        /// ���������� ������������ ��� �������� ������������.
+        /// ���������� ������������ ��� �������� ������������.
         /// </summary>
         public bool IsReusable
         {

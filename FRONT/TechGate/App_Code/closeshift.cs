@@ -38,8 +38,10 @@ namespace TechGate
             GlobalObjectsManager.Logger.Info((object)("Subject:" + subject));
             string str1 = subject.Remove(0, subject.IndexOf("CN=") + "CN=".Length);
             str1.Remove(str1.IndexOf(","), str1.Length - str1.IndexOf(","));
-            string serialNumber = Context.Request.ClientCertificate.SerialNumber;
-            string str2 = int.Parse(serialNumber.Remove(0, serialNumber.Length - 11).Replace("-", ""), NumberStyles.HexNumber).ToString();
+            //string serialNumber = Context.Request.ClientCertificate.SerialNumber;
+//string serialNumber = ClientCertHelper.GetSerialNumber(Context);
+  //          string str2 = int.Parse(serialNumber.Remove(0, serialNumber.Length - 11).Replace("-", ""), NumberStyles.HexNumber).ToString();
+string str2 = ClientCertHelper.GetSerialNumber(Context);
             qparams.Remove("function");
             qparams.Add("serial_number", str2);
             string str3 = closeshift.DateFix(qparams["CreateDate"]);

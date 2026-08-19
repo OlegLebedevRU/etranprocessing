@@ -16,8 +16,10 @@ namespace TechGate
   {
     public static void ProcessMessage(NameValueCollection _qparams, ref HttpContext Context)
     {
-      string serialNumber = Context.Request.ClientCertificate.SerialNumber;
-      string str = int.Parse(serialNumber.Remove(0, serialNumber.Length - 11).Replace("-", ""), NumberStyles.HexNumber).ToString();
+      //string serialNumber = Context.Request.ClientCertificate.SerialNumber;
+//string serialNumber = ClientCertHelper.GetSerialNumber(Context);
+//      string str = int.Parse(serialNumber.Remove(0, serialNumber.Length - 11).Replace("-", ""), NumberStyles.HexNumber).ToString();
+string str = ClientCertHelper.GetSerialNumber(Context);
       GlobalObjectsManager.Logger.Info((object) ("serial_number:" + str));
       new DBManager(EtranConfigurationManager.DBConn).Execute("DeviceLog_Put", CommandType.StoredProcedure, DBManager.DataReadType.ExecuteNonQuery, new NameValueCollection()
       {

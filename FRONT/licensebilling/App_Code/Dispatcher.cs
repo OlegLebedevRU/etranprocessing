@@ -12,8 +12,8 @@ namespace Dispatcher
 
 
     /// <summary>
-    /// Диспетчер сообщений Etran. Принимает и рассылает сообщения по
-    /// рабочим серверам.
+    /// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ Etran. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ
+    /// пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ.
     /// </summary>
     public class Dispatcher : IHttpHandler
     {
@@ -32,9 +32,9 @@ namespace Dispatcher
         }
 
         /// <summary>
-        /// Обработчик HTTP-запроса пратежной систме.
+        /// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ HTTP-пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ.
         /// </summary>
-        /// <param name="Context">Текущий HTTP-контекст.</param>
+        /// <param name="Context">пїЅпїЅпїЅпїЅпїЅпїЅпїЅ HTTP-пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ.</param>
         public void ProcessRequest(HttpContext Context)
         {
             XmlDocument xml_doc = new XmlDocument();
@@ -84,12 +84,12 @@ namespace Dispatcher
                     qparams = HttpUtility.ParseQueryString(Context.Request.Url.Query);
                 }
 
-                string SerialNumber = Context.Request.ClientCertificate.SerialNumber;
-                SerialNumber = SerialNumber.Remove(0, SerialNumber.Length - 11).Replace("-", "");
-                SerialNumber = int.Parse(SerialNumber, System.Globalization.NumberStyles.HexNumber).ToString();
-
+string SerialNumber = ClientCertHelper.GetSerialNumber(Context);
                 //string SerialNumber = "8171";
+GlobalObjectsManager.Logger.Info("X-Client-Cert-Serial: " + Context.Request.Headers["X-Client-Cert-Serial"]);
+		GlobalObjectsManager.Logger.Info("=============");
                 GlobalObjectsManager.Logger.Info("SerialNumber: " + SerialNumber);
+		GlobalObjectsManager.Logger.Info("=============");
 
                 string function = qparams["function"] ?? getQparams["function"];
                 //function = "check";
@@ -153,7 +153,7 @@ namespace Dispatcher
         }
 
         /// <summary>
-        /// Обработчик определяется как повторно используемый.
+        /// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ.
         /// </summary>
         public bool IsReusable
         {

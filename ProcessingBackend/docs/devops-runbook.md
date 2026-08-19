@@ -1,5 +1,76 @@
 # DevOps Runbook
 
+## Legacy IIS server deployment (Payment / TechGate / GateGauge / licensebilling / Certificates)
+
+These are separate ASP.NET Web Applications running on the legacy IIS
+server (real code lives under `Public/etranprocessing/BACK/ProcessingCore/
+EtranDispatcher`, `Public/etranprocessing/FRONT/{TechGate,GateGauge,
+licensebilling,Certificates}`). No CI/CD — deployment is manual, by
+copying source files onto the server.
+
+### ClientCertHelper proxy-header contract
+
+All of these apps (except `Certificates`, which is PIN-based and doesn't
+need client-cert data) now include an `App_Code/ClientCertHelper.cs` (or
+`src/ClientCertHelper.cs` for Payment) that transparently supports two
+modes, chosen automatically per-request:
+- **Direct legacy flow** (terminal → IIS directly, current default): falls
+  back to `Context.Request.ClientCertificate.*`, unchanged behavior.
+- **Proxy flow** (terminal → nginx-mutual → IIS, after DNS cutover): used
+  only when the request's source IP matches `TrustedProxyIP` (configured in
+  the site-root `web.config`, already set to nginx-mutual's IP) **and** the
+  `X-Client-Cert-Serial` header is present. In that case, cert data is read
+  from `X-Client-Cert-Serial` / `X-Client-Cert-DN` / `X-Client-Cert-Verified`
+  / `X-SSL-Client-Cert` headers instead.
+
+This makes the change backward compatible: as long as terminals keep
+hitting IIS directly (before DNS cutover), behavior is 100% unchanged.
+
+### Payment: no-compile deployment (App_Code conversion)
+
+`payment/` was previously deployed as a precompiled Web Application
+(`bin/EtranDispatcher.dll` + `.pdb`). To avoid needing Visual Studio/MSBuild
+for this change, it's converted to the same "bare source in App_Code"
+model already used by TechGate/GateGauge/licensebilling — ASP.NET compiles
+it on the fly on first request.
+
+Deploy steps (do this **first**, before the other apps — see rollback plan):
+1. **Backup** the entire `payment/` folder (including `bin/EtranDispatcher.dll`,
+   `bin/EtranDispatcher.pdb`, `bin/log4net.dll`) to e.g. `payment_backup_<date>/`.
+2. Copy `BACK/ProcessingCore/EtranDispatcher/src/*.cs` (all 6 files,
+   including the new `ClientCertHelper.cs`) into `payment/App_Code/`.
+3. Delete/rename `payment/bin/EtranDispatcher.dll` and `.pdb` (keep
+   `bin/log4net.dll` — it's a third-party library, not part of this app's
+   own compiled code).
+4. Recycle the app pool / `iisreset` for this site so ASP.NET recompiles
+   `App_Code` from scratch.
+5. Verify with test `function=check` and `function=payment` requests (use
+   test/non-critical data) and check the `Payments`/`Payment_params` tables
+   and the `EtranDispatcher.log` (log4net) for exceptions.
+
+Also note: the Payment flow itself was simplified in this change — the
+`Signature`/`tosign` MD5 validation was removed (pass-through only), and
+`function=payment` now writes directly to `Payments`/`Payment_params`
+(idempotent on `PaymExtId`, via the existing `AModule_AddPaymentParam` SP)
+instead of calling the shared SOAP `MessageProcessor.asmx` (which used to
+also queue jobs for operator review and send SMS — not used in practice
+today, per product decision). `MessageProcessor.asmx.cs` itself is
+untouched (still used by `OsmpDispatcher`/`PostProcessor`).
+
+#### Rollback (Payment)
+
+No database rollback is needed — the simplified path is purely additive
+(idempotent inserts, nothing is deleted/mutated). If something goes wrong
+after deploying:
+1. Restore `bin/EtranDispatcher.dll` and `bin/EtranDispatcher.pdb` from the
+   backup.
+2. Remove/rename the `App_Code` folder added in step 2 above (e.g. to
+   `App_Code.disabled`), so there's no type-conflict with the restored
+   precompiled assembly.
+3. Recycle the app pool / `iisreset` — the app is back to its exact
+   previous behavior (SOAP `MessageProcessor` + direct
+   `Context.Request.ClientCertificate`).
+
 ## Quick Reference
 
 ### Server Access
@@ -21,6 +92,35 @@ sudo docker exec -it <container> bash
 | Payment API | https://dev.leo4.ru:4443/api/payment/etran.ashx |
 | MenuBuilder | https://dev.leo4.ru:4443/api/ListMenuFile |
 | License Billing | https://dev.leo4.ru:4443/api/licensebilling/ |
+
+### Legacy raw-path proxy (no `/api` prefix) → real legacy IIS server
+
+nginx-mutual also proxies the legacy terminal endpoints that do **not** use
+the `/api` prefix (`/certificates/`, `/payment/`, `/payment/etran.ashx`,
+`/GateGauge/main.ashx`, `/GateGauge/UpdateScript.ashx`, `/techgate/etran.ashx`,
+`/licensebilling/`, plus the `/` fallback) directly to the real legacy IIS
+server at its public IP `46.38.51.114`, forwarding client-cert data via
+`X-Client-Cert-*` headers. This is intended for the eventual DNS cutover of
+`iot-processing.ru` from the legacy server to nginx-mutual, while keeping the
+legacy direct-to-terminal flow (bypassing nginx-mutual) working as a fallback.
+
+Caveats:
+- The proxy target is a literal IP, not the `iot-processing.ru` domain —
+  after the DNS cutover, proxying to the domain would create a loop (nginx
+  proxying to itself). There is no VPN/tunnel to the legacy server's
+  internal address (`172.17.100.8`), so the public IP is used.
+- nginx does **not** present a client TLS certificate when talking to the
+  legacy server (that's the point of `X-Client-Cert-*` header forwarding +
+  `ClientCertHelper` on the legacy side, which trusts headers only from
+  `TrustedProxyIP`). If the legacy IIS site enforces "Require client
+  certificate" at the SSL binding (HTTP.sys) level, requests will be
+  rejected before reaching `ClientCertHelper` — this needs to be checked/
+  adjusted on the legacy IIS server itself, outside of nginx's control.
+- DNS cutover for `iot-processing.ru` is a manual step, done separately,
+  only after verifying the legacy-server-side `ClientCertHelper` changes
+  are deployed and working (see `Public/etranprocessing` repo,
+  `BACK/ProcessingCore/EtranDispatcher`, `FRONT/TechGate`, `FRONT/GateGauge`,
+  `FRONT/licensebilling`).
 
 ### Container Names
 
@@ -67,15 +167,21 @@ ssh user1@176.108.247.249 "cd /home/user1/MenuBuilder/frontend && npm run build"
 
 ### Update Nginx Config
 
+⚠️ The nginx-mutual config lives in the **`iot-rpc-rest-app`** repo, not
+here — see [nginx-config.md](nginx-config.md) "Source of truth" for why.
+Edit `nginx-configs/dev_leo4_ru/internal_ssl.conf` there, commit/push, then
+deploy:
+
 ```bash
-# 1. Copy config to server
-scp nginx-mutual-ssl.conf user1@176.108.247.249:/tmp/
+# 1. Copy config to server (from the iot-rpc-rest-app checkout)
+cd D:\work\iot.leo4.ru\iot-rpc-rest-app
+scp -i d:\.ssh\free-tier-cloud_ru nginx-configs/dev_leo4_ru/internal_ssl.conf user1@176.108.247.249:/tmp/
 
 # 2. Copy to container
-ssh user1@176.108.247.249 "sudo docker cp /tmp/nginx-mutual-ssl.conf iot-rpc-rest-app-nginx-mutual-1:/etc/nginx/conf.d/internal_ssl.conf"
+ssh -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249 "sudo docker cp /tmp/internal_ssl.conf iot-rpc-rest-app-nginx-mutual-1:/etc/nginx/conf.d/internal_ssl.conf"
 
 # 3. Test and reload
-ssh user1@176.108.247.249 "sudo docker exec iot-rpc-rest-app-nginx-mutual-1 nginx -t && sudo docker exec iot-rpc-rest-app-nginx-mutual-1 nginx -s reload"
+ssh -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249 "sudo docker exec iot-rpc-rest-app-nginx-mutual-1 nginx -t && sudo docker exec iot-rpc-rest-app-nginx-mutual-1 nginx -s reload"
 ```
 
 ## Database Operations

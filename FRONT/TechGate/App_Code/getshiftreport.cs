@@ -72,8 +72,10 @@ namespace TechGate
         throw new Exception("ошибка сертификата");
       string str3 = subject.Remove(0, subject.IndexOf("CN=") + "CN=".Length);
       GlobalObjectsManager.Logger.Info((object) ("cn:" + str3.Remove(str3.IndexOf(","), str3.Length - str3.IndexOf(","))));
-      string serialNumber = Context.Request.ClientCertificate.SerialNumber;
-      GlobalObjectsManager.Logger.Info((object) ("SerialNumber:" + int.Parse(serialNumber.Remove(0, serialNumber.Length - 11).Replace("-", ""), NumberStyles.HexNumber).ToString()));
+     // string serialNumber = Context.Request.ClientCertificate.SerialNumber;
+string serialNumber = ClientCertHelper.GetSerialNumber(Context);
+//      GlobalObjectsManager.Logger.Info((object) ("SerialNumber:" + int.Parse(serialNumber.Remove(0, serialNumber.Length - 11).Replace("-", ""), NumberStyles.HexNumber).ToString()));
+      GlobalObjectsManager.Logger.Info((object) ("SerialNumber:" + serialNumber));
       int num2 = qparams["function"] == "getshiftreport" ? 1 : 2;
       int num3 = int.Parse(qparams["KioskNumber"].ToString());
       DateTime dateTime1 = DateTime.Parse(qparams["ReportDateBegin"].ToString());
