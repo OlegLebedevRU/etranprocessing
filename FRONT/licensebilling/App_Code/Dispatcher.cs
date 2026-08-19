@@ -12,8 +12,8 @@ namespace Dispatcher
 
 
     /// <summary>
-    /// ��������� ��������� Etran. ��������� � ��������� ��������� ��
-    /// ������� ��������.
+    /// Etran message dispatcher. Accepts and forwards messages to the
+    /// worker servers.
     /// </summary>
     public class Dispatcher : IHttpHandler
     {
@@ -32,9 +32,9 @@ namespace Dispatcher
         }
 
         /// <summary>
-        /// ���������� HTTP-������� ��������� ������.
+        /// Handles the HTTP request for the payment system.
         /// </summary>
-        /// <param name="Context">������� HTTP-��������.</param>
+        /// <param name="Context">Current HTTP context.</param>
         public void ProcessRequest(HttpContext Context)
         {
             XmlDocument xml_doc = new XmlDocument();
@@ -153,7 +153,7 @@ GlobalObjectsManager.Logger.Info("X-Client-Cert-Serial: " + Context.Request.Head
         }
 
         /// <summary>
-        /// ���������� ������������ ��� �������� ������������.
+        /// The handler is marked as reusable.
         /// </summary>
         public bool IsReusable
         {
@@ -166,3 +166,4 @@ GlobalObjectsManager.Logger.Info("X-Client-Cert-Serial: " + Context.Request.Head
         #endregion
     }
 }
+

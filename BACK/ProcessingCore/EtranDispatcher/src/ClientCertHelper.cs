@@ -6,10 +6,10 @@ using System.Web;
 namespace EtranDispatcher
 {
     /// <summary>
-    /// Поддержка приёма данных клиентского сертификата как напрямую
-    /// (Context.Request.ClientCertificate, легаси-флоу от терминала),
-    /// так и через доверенный прокси nginx-mutual (заголовки X-Client-Cert-*).
-    /// Полностью аналогично реализации в licensebilling/App_Code/Dispatcher.cs.
+    /// Supports receiving client certificate data either directly
+    /// (Context.Request.ClientCertificate, legacy flow from the terminal)
+    /// or via the trusted nginx-mutual proxy (X-Client-Cert-* headers).
+    /// Mirrors the implementation in licensebilling/App_Code/Dispatcher.cs.
     /// </summary>
     public static class ClientCertHelper
     {
@@ -47,7 +47,7 @@ namespace EtranDispatcher
             {
                 string serial = context.Request.Headers["X-Client-Cert-Serial"];
                 serial = serial.Replace(":", "").Replace("-", "");
-                // последние 8 hex-символов = CA request ID (INT32)
+                // last 8 hex characters = CA request ID (INT32)
                 if (serial.Length >= 8)
                 {
                     string last8 = serial.Substring(serial.Length - 8);

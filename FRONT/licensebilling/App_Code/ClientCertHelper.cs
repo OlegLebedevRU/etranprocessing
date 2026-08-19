@@ -37,7 +37,7 @@ namespace Dispatcher
     {
         string serial = context.Request.Headers["X-Client-Cert-Serial"];
         serial = serial.Replace(":", "").Replace("-", "");
-        // последние 8 hex-символов = CA request ID (INT32)
+        // last 8 hex characters = CA request ID (INT32)
         if (serial.Length >= 8)
         {
             string last8 = serial.Substring(serial.Length - 8);

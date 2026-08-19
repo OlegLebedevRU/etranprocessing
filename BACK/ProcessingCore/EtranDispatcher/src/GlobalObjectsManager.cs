@@ -8,8 +8,8 @@ namespace EtranDispatcher
 
 
 	/// <summary>
-    /// �����, ��������� � ����������� ����� ����������� ��������� ������. �� ����� ����������
-    /// ����� �� ��������. ��� ������ ����������������.
+    /// Class holding the application's global objects. Not intended
+    /// to be instantiated. All members are static.
     /// </summary>
 	public sealed class GlobalObjectsManager
 	{
@@ -19,13 +19,13 @@ namespace EtranDispatcher
 
         static private string _paymentDbConnectionString = "";
         /// <summary>
-        /// Строка подключения к легаси-БД Payments (MSSQL), используется
-        /// упрощённым путём фиксации платежа в Dispatcher.cs (см.
-        /// SimplifiedPutPayment) напрямую, без общего SOAP-сервиса
-        /// MessageProcessor.asmx. Получается динамически через сервис
-        /// EtranConfig — так же, как это уже делают licensebilling/
-        /// TechGate/GateGauge и сам MessageProcessor.asmx.cs, чтобы не
-        /// хранить строку подключения с учётными данными в web.config.
+        /// Connection string to the legacy Payments database (MSSQL),
+        /// used by the simplified direct DB write path in Dispatcher.cs
+        /// (see SimplifiedPutPayment), without going through the shared
+        /// SOAP service MessageProcessor.asmx. Fetched dynamically via
+        /// the EtranConfig service, the same way licensebilling/TechGate/
+        /// GateGauge and MessageProcessor.asmx.cs itself already do, so
+        /// no credentials need to be stored in web.config.
         /// </summary>
         static public string PaymentDbConnectionString
         {
@@ -34,7 +34,7 @@ namespace EtranDispatcher
                 if (string.IsNullOrEmpty(_paymentDbConnectionString))
                 {
                     _paymentDbConnectionString = GetDBConn(EtranConfigurationManager.DBConnNamePayments);
-                    Logger.Info("PaymentDbConnectionString: получена");
+                    Logger.Info("PaymentDbConnectionString: retrieved");
                 }
                 return _paymentDbConnectionString;
             }
@@ -55,7 +55,7 @@ namespace EtranDispatcher
         }
 
         /// <summary>
-        /// �������������� �������� ���������� ��������.
+        /// Application startup initialization.
         /// </summary>
         static public void Init()
         {
@@ -64,7 +64,7 @@ namespace EtranDispatcher
 
 
 		/// <summary>
-		/// ���������� ������ ������� �������.
+		/// Returns the application's logger instance.
 		/// </summary>
 		static public ILog Logger
 		{

@@ -18,8 +18,8 @@ using log4net.Repository.Hierarchy;
 namespace EtranDispatcher
 {
     /// <summary>
-    /// ��������� ��������� Etran. ��������� � ��������� ��������� ��
-    /// ������� ��������.
+    /// Etran message dispatcher. Accepts and forwards messages to the
+    /// worker servers.
     /// </summary>
     public class Dispatcher : IHttpHandler
     {
@@ -144,10 +144,10 @@ namespace EtranDispatcher
         {
             //GlobalObjectsManager.Logger.Info("tosign ...");
             //if (_tosign == null)
-            //    throw new Exception("�� ���������� �������� ����������.");
+            //    throw new Exception("Source information not found.");
             //else
             //    if (_tosign.Length < 1)
-            //        throw new Exception("�� ���������� �������� ����������.");
+            //        throw new Exception("Source information not found.");
 
             string tosign = DecodeFrom64(_tosign);
             string _tohash = tosign + EtranConfigurationManager.SignKey;
@@ -190,9 +190,9 @@ namespace EtranDispatcher
         }
 
         /// <summary>
-        /// Разбор строки Params ("1 значение1;2 значение2;3=значение3") в
-        /// словарь {код_параметра: значение}. Формат идентичен
-        /// RequestMessage.ParamsStringToHashtable из общего EtranApi.
+        /// Parses the Params string ("1 value1;2 value2;3=value3") into a
+        /// dictionary of {parameter_code: value}. Format matches
+        /// RequestMessage.ParamsStringToHashtable from the shared EtranApi.
         /// </summary>
         private static Dictionary<int, string> ParsePaymentParams(string paramsStr)
         {
@@ -223,11 +223,11 @@ namespace EtranDispatcher
         }
 
         /// <summary>
-        /// Упрощённая идемпотентная фиксация платежа напрямую в БД Payments,
-        /// без обращения к общему SOAP-сервису MessageProcessor.asmx (который
-        /// в т.ч. ставит платёж в очередь на обработку операторами/job).
-        /// Возвращает paym_id (существующий, если PaymExtId уже был принят
-        /// ранее, либо новый).
+        /// Simplified idempotent payment write directly to the Payments
+        /// database, without calling the shared SOAP service
+        /// MessageProcessor.asmx (which also queues the payment for
+        /// operator/job review). Returns paym_id (existing one, if
+        /// PaymExtId was already accepted before, or a new one).
         /// </summary>
         private static int SimplifiedPutPayment(string paymExtId, int paymSubjTp, int amount, int serialNumber,
             int totalSum, string signature, int kopeks, int payTypeId, string paramsStr)
@@ -261,9 +261,9 @@ namespace EtranDispatcher
                     paymId = (int)cmd.ExecuteScalar();
                 }
 
-                // Параметры платежа фиксируются через уже существующую идемпотентную
-                // процедуру AModule_AddPaymentParam — она сама делает get-or-create
-                // param_id через service..TspCodes/Parameter_codes.
+                // Payment params are stored via the already existing idempotent
+                // stored procedure AModule_AddPaymentParam - it handles
+                // get-or-create of param_id via service..TspCodes/Parameter_codes.
                 foreach (var kv in ParsePaymentParams(paramsStr))
                 {
                     using (SqlCommand cmd = new SqlCommand("AModule_AddPaymentParam", conn))
@@ -302,9 +302,9 @@ namespace EtranDispatcher
 
 
         /// <summary>
-        /// ���������� HTTP-������� ��������� ������.
+        /// Handles the HTTP request for the payment system.
         /// </summary>
-        /// <param name="Context">������� HTTP-��������.</param>
+        /// <param name="Context">Current HTTP context.</param>
         public void ProcessRequest(HttpContext Context)
         {
             int org_id = 0;
@@ -437,7 +437,7 @@ namespace EtranDispatcher
                 {
                     Context.Response.Write("<?xml version = \"1.0\" encoding = \"windows-1251\"?><Response><Result>OK</Result><PaymExtId>");
                     Context.Response.Write(PaymExtId);
-                    Context.Response.Write("</PaymExtId><Description>������� �� ��������������.</Description></Response>");
+                    Context.Response.Write("</PaymExtId><Description>Function is not supported.</Description></Response>");
                     return;
                 }
 
@@ -446,19 +446,20 @@ namespace EtranDispatcher
 
 
 
-                // Упрощение (по решению пользователя): криптографическая проверка
-                // Signature/tosign (MD5-хэш против CN сертификата) убрана. На сегодня
-                // используется только упрощённый результат Payment — фиксация записи
-                // в БД, без двухтактного flow с операторами/job. Signature далее
-                // просто прокидывается как есть (или "EMPTY"), не участвует в проверке.
+                // Simplified per product decision: the Signature/tosign crypto
+                // check (MD5 hash vs certificate CN) was removed. Today only
+                // the simplified Payment result is used - recording the
+                // payment in the DB, without the two-phase flow involving
+                // operators/jobs. Signature is now just passed through as-is
+                // (or "EMPTY"), it no longer participates in any validation.
                 if (string.IsNullOrEmpty(Signature))
                 {
                     Signature = "EMPTY";
                 }
 
-                // Поддержка приёма данных клиентского сертификата как напрямую
-                // (легаси-терминал -> IIS), так и через доверенный прокси
-                // nginx-mutual (заголовки X-Client-Cert-*) — см. ClientCertHelper.
+                // Supports receiving client certificate data either directly
+                // (legacy terminal -> IIS) or via the trusted nginx-mutual
+                // proxy (X-Client-Cert-* headers) - see ClientCertHelper.
                 string Subject = ClientCertHelper.GetDN(Context);
                 int.TryParse(ClientCertHelper.GetO(Context), out org_id);
                 string SerialNumber = ClientCertHelper.GetSerialNumber(Context);
@@ -484,13 +485,13 @@ namespace EtranDispatcher
                 GlobalObjectsManager.Logger.Info(" PaymSubjTp: " + PaymSubjTp + " TotalSum: " + TotalSum);
 
 
-                // Упрощение (по решению пользователя): вместо SOAP-вызова общего
-                // MessageProcessor.asmx (который внутри гоняет GetRek_20090918,
-                // карантин-проверки, Job.GetAvailableJobs/Job.Process — рассылку
-                // задачи в очередь операторам/job, и SMS-уведомление) — используется
-                // самостоятельный упрощённый путь прямой записи в БД. Общий
-                // MessageProcessor.asmx.cs не трогаем (используется также
-                // OsmpDispatcher/PostProcessor).
+                // Simplified per product decision: instead of calling the
+                // shared SOAP service MessageProcessor.asmx (which internally
+                // runs GetRek_20090918, quarantine checks, Job.GetAvailableJobs/
+                // Job.Process - queueing the job for operator/job review, and
+                // an SMS notification) - a self-contained simplified DB write
+                // path is used. The shared MessageProcessor.asmx.cs itself is
+                // left untouched (still used by OsmpDispatcher/PostProcessor).
                 string result = null;
                 if (Function.ToLower() == "payment")
                 {
@@ -506,25 +507,25 @@ namespace EtranDispatcher
                         int paymId = SimplifiedPutPayment(PaymExtId, PaymSubjTp, paymAmount, serialNumberInt,
                             totalSumInt, Signature, kopeks, payTypeId, Params);
 
-                        result = BuildAckResponse(paymId, 2, PaymExtId, "Платёж принят.");
+                        result = BuildAckResponse(paymId, 2, PaymExtId, "Payment accepted.");
                     }
                     catch (Exception ex)
                     {
                         GlobalObjectsManager.Logger.Error("SimplifiedPutPayment", ex);
-                        result = BuildErrorResponse(PaymExtId, "Ошибка сохранения платежа: " + ex.Message);
+                        result = BuildErrorResponse(PaymExtId, "Error saving payment: " + ex.Message);
                     }
                 }
                 else if (Function.ToLower() == "check")
                 {
-                    result = BuildAckResponse(0, 0, PaymExtId, "Проверка пройдена.");
+                    result = BuildAckResponse(0, 0, PaymExtId, "Check passed.");
                 }
                 else if (Function.ToLower() == "checkfull")
                 {
-                    result = BuildAckResponse(0, 0, PaymExtId, "Проверка пройдена.");
+                    result = BuildAckResponse(0, 0, PaymExtId, "Check passed.");
                 }
                 else if (Function.ToLower() == "update" || Function.ToLower() == "addparams")
                 {
-                    result = BuildAckResponse(0, 0, PaymExtId, "Платёж обновлён.");
+                    result = BuildAckResponse(0, 0, PaymExtId, "Payment updated.");
                 }
 
 
@@ -564,14 +565,14 @@ namespace EtranDispatcher
             }
             catch (Exception ex)
             {
-                GlobalObjectsManager.Logger.Error("��� ���������� ������� �������� ��������� ������:", ex);
+                GlobalObjectsManager.Logger.Error("A system error occurred while processing the payment:", ex);
                 if (utf8)
                     Context.Response.Write("<?xml version = \"1.0\" encoding = \"utf-8\"?><Response><Result>Error</Result><PaymExtId>");
                 else
                     Context.Response.Write("<?xml version = \"1.0\" encoding = \"windows-1251\"?><Response><Result>Error</Result><PaymExtId>");
 
                 Context.Response.Write(PaymExtId);
-                Context.Response.Write("</PaymExtId><Description>��� ���������� ������� �������� ��������� ������: ");
+                Context.Response.Write("</PaymExtId><Description>A system error occurred while processing the payment: ");
                 Context.Response.Write(ex.Message);
                 Context.Response.Write("</Description></Response>");
             }
@@ -590,7 +591,7 @@ namespace EtranDispatcher
         }
 
         /// <summary>
-        /// ���������� ������������ ��� �������� ������������.
+        /// The handler is marked as reusable.
         /// </summary>
         public bool IsReusable
         {

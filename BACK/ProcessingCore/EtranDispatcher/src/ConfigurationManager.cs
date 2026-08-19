@@ -6,7 +6,7 @@ using System.Collections;
 namespace EtranDispatcher
 {
     /// <summary>
-    /// �������� ������������ ����������.
+    /// Application configuration manager.
     /// </summary>
     public sealed class EtranConfigurationManager
     {
