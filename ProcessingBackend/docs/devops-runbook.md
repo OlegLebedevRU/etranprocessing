@@ -63,12 +63,26 @@ Deploy steps (do this **first**, before the other apps — see rollback plan):
 
 Also note: the Payment flow itself was simplified in this change — the
 `Signature`/`tosign` MD5 validation was removed (pass-through only), and
-`function=payment` now writes directly to `Payments`/`Payment_params`
-(idempotent on `PaymExtId`, via the existing `AModule_AddPaymentParam` SP)
-instead of calling the shared SOAP `MessageProcessor.asmx` (which used to
-also queue jobs for operator review and send SMS — not used in practice
-today, per product decision). `MessageProcessor.asmx.cs` itself is
-untouched (still used by `OsmpDispatcher`/`PostProcessor`).
+`function=payment` now calls the real `AModule_PutPayment` stored procedure
+directly (idempotent on `PaymExtId` — an existing row is returned as-is,
+no duplicate insert), instead of going through the shared SOAP
+`MessageProcessor.asmx`. **Important**: `AModule_PutPayment` is not a
+plain insert — it also resolves `term_datetime` from the owning
+organization's timezone, performs routing/eligibility via
+`service..GetRek_20090918`, applies per-organization overrides (quarantine,
+terminal limits, fraud shields), and updates the dealer balance ledger
+(`service..BalanceKioskTspExt`). An earlier version of this fix mistakenly
+bypassed this SP with a bare `INSERT`, which silently dropped all of that
+derived data (missing `term_datetime`, no balance ledger updates) even
+though the payment row itself still got written — this was caught in
+production after deploy and fixed; the SP is now always called for
+`function=payment`. Payment params are still written via the existing
+`AModule_AddPaymentParam` SP. The only thing intentionally NOT done is the
+"two-phase" external payment gateway dispatch (`Job.GetAvailableJobs`/
+`Job.Process` — an outbound call to the URL/Rek the SP resolves, confirmed
+later via async `AModule_ReportTryExt`) and the SMS notification — not used
+in practice today, per product decision. `MessageProcessor.asmx.cs` itself
+is untouched (still used by `OsmpDispatcher`/`PostProcessor`).
 
 `check`/`checkfull`/`update`/`addparams` were also reimplemented directly
 against the database (bypassing the SOAP call), but **do real validation**
