@@ -37,7 +37,7 @@ class TestXmlResponse:
         from app.routers.payment import success_response
 
         response = success_response(12345, "0035_251025_12575292")
-        content = response.body.decode()
+        content = bytes(response.body).decode()
         assert "<?xml version='1.0' encoding='UTF-8'?>" in content
         assert "<Result>OK</Result>" in content
         assert "<PaymNumb>12345</PaymNumb>" in content
@@ -48,7 +48,7 @@ class TestXmlResponse:
         from app.routers.payment import error_response
 
         response = error_response("0035_251025_12575292", "Test error")
-        content = response.body.decode()
+        content = bytes(response.body).decode()
         assert "<?xml version='1.0' encoding='UTF-8'?>" in content
         assert "<Result>ERROR</Result>" in content
         assert "<PaymExtId>0035_251025_12575292</PaymExtId>" in content

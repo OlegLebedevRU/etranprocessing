@@ -94,19 +94,30 @@ async def test_auto_bind_cert_serial_on_licensebilling():
     exec_result_fallback = MagicMock()
     exec_result_fallback.scalar_one_or_none.return_value = terminal
 
-    mock_db.execute.side_effect = [exec_result_exact, exec_result_fallback]
+    exec_result_discovery = MagicMock()
+    exec_result_discovery.scalar_one_or_none.return_value = None
+
+    mock_db.execute.side_effect = [
+        exec_result_exact,
+        exec_result_fallback,
+        exec_result_discovery,
+    ]
 
     res_terminal = await get_current_terminal(req, mock_db)
 
     assert res_terminal is terminal
     assert terminal.cert_serial == "52B8E528000400002E35"
-    mock_db.add.assert_called_once()
-    added_obj = mock_db.add.call_args[0][0]
-    assert isinstance(added_obj, TerminalCertHistory)
+    added_history = [
+        call[0][0]
+        for call in mock_db.add.call_args_list
+        if isinstance(call[0][0], TerminalCertHistory)
+    ]
+    assert len(added_history) == 1
+    added_obj = added_history[0]
     assert added_obj.terminal_id == 1671
     assert added_obj.cert_serial == "52B8E528000400002E35"
     assert added_obj.source == "licensebilling"
-    mock_db.commit.assert_awaited_once()
+    mock_db.commit.assert_awaited()
 
 
 @pytest.mark.anyio
@@ -121,6 +132,7 @@ async def test_auto_bind_disabled_in_settings():
     )
 
     mock_db = AsyncMock()
+    mock_db.add = MagicMock()
     exec_result = MagicMock()
     exec_result.scalar_one_or_none.return_value = None
     mock_db.execute.return_value = exec_result
@@ -130,7 +142,11 @@ async def test_auto_bind_disabled_in_settings():
 
     assert exc_info.value.status_code == 401
     assert "Terminal not found" in exc_info.value.detail
-    mock_db.commit.assert_not_awaited()
+    # No TerminalCertHistory should be created
+    assert not any(
+        isinstance(call[0][0], TerminalCertHistory)
+        for call in mock_db.add.call_args_list
+    )
 
 
 @pytest.mark.anyio
@@ -143,6 +159,7 @@ async def test_auto_bind_not_performed_on_non_licensebilling_route():
     )
 
     mock_db = AsyncMock()
+    mock_db.add = MagicMock()
     exec_result = MagicMock()
     exec_result.scalar_one_or_none.return_value = None
     mock_db.execute.return_value = exec_result
@@ -151,8 +168,11 @@ async def test_auto_bind_not_performed_on_non_licensebilling_route():
         await get_current_terminal(req, mock_db)
 
     assert exc_info.value.status_code == 401
-    mock_db.add.assert_not_called()
-    mock_db.commit.assert_not_awaited()
+    # No TerminalCertHistory should be created
+    assert not any(
+        isinstance(call[0][0], TerminalCertHistory)
+        for call in mock_db.add.call_args_list
+    )
 
 
 @pytest.mark.anyio
@@ -164,7 +184,17 @@ async def test_mismatched_cert_serial_not_overwritten():
         serial="BBB",
     )
 
+    db_terminal = Terminal(
+        id=1671,
+        device_id=773,
+        sn="A99D2F18001ECC93DF5CBE27F442C8FA",
+        cert_serial="AAA",
+        org_id=1,
+        is_active=True,
+    )
+
     mock_db = AsyncMock()
+    mock_db.add = MagicMock()
     # Primary lookup (sn='CN...', cert_serial='BBB') -> None
     exec_result_exact = MagicMock()
     exec_result_exact.scalar_one_or_none.return_value = None
@@ -173,14 +203,29 @@ async def test_mismatched_cert_serial_not_overwritten():
     exec_result_fallback = MagicMock()
     exec_result_fallback.scalar_one_or_none.return_value = None
 
-    mock_db.execute.side_effect = [exec_result_exact, exec_result_fallback]
+    # Diagnostic lookup (sn='CN...') -> db_terminal
+    exec_result_diag = MagicMock()
+    exec_result_diag.scalar_one_or_none.return_value = db_terminal
+
+    # Discovery lookup -> None
+    exec_result_disc = MagicMock()
+    exec_result_disc.scalar_one_or_none.return_value = None
+
+    mock_db.execute.side_effect = [
+        exec_result_exact,
+        exec_result_fallback,
+        exec_result_diag,
+        exec_result_disc,
+    ]
 
     with pytest.raises(HTTPException) as exc_info:
         await get_current_terminal(req, mock_db)
 
     assert exc_info.value.status_code == 401
-    mock_db.add.assert_not_called()
-    mock_db.commit.assert_not_awaited()
+    assert not any(
+        isinstance(call[0][0], TerminalCertHistory)
+        for call in mock_db.add.call_args_list
+    )
 
 
 @pytest.mark.anyio

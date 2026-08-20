@@ -16,6 +16,19 @@ export default function LoginPage() {
       const result = await login(values.username, values.password);
       localStorage.setItem("mb_token", result.access_token);
       localStorage.setItem("mb_user", values.username);
+      if (result.master_token) {
+        localStorage.setItem("mb_master_token", result.master_token);
+      } else {
+        localStorage.removeItem("mb_master_token");
+      }
+      if (result.is_superuser) {
+        localStorage.setItem("mb_is_superuser", "true");
+      } else {
+        localStorage.removeItem("mb_is_superuser");
+      }
+      if (result.org_id) {
+        localStorage.setItem("mb_current_org_id", String(result.org_id));
+      }
       message.success("Вход выполнен");
       navigate("/monitoring", { replace: true });
     } catch (e: unknown) {

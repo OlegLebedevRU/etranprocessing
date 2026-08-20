@@ -10,6 +10,7 @@ from app.config import settings
 from app.database import Base, async_session, engine
 from app.models import Group, MenuVariant, Service, TerminalMenuBinding
 from app.routers import (
+    admin_tenants,
     auth,
     groups,
     mcp_proxy,
@@ -38,6 +39,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix="/api", tags=["auth"])
+app.include_router(admin_tenants.router, prefix="/api", tags=["admin-tenants"])
 app.include_router(groups.router, prefix="/api/groups", tags=["groups"])
 app.include_router(services.router, prefix="/api/services", tags=["services"])
 app.include_router(
@@ -192,7 +194,7 @@ async def get_monitoring(
 
     conditions = [
         "t.is_active = true",
-        "EXISTS (SELECT 1 FROM licenses l WHERE l.terminal_id = t.id AND l.is_active = true AND (l.renewal_enabled = true OR l.expires_at > :now))",
+        "EXISTS (SELECT 1 FROM licenses l WHERE l.terminal_id = t.id AND l.is_active = true AND l.renewal_enabled = true AND l.expires_at > :now)",
     ]
     params: dict = {"now": now}
 

@@ -53,7 +53,6 @@ const STATUS_TABS = [
   { key: "all", label: "Все" },
   { key: "attention", label: "Требуют внимания" },
   { key: "active", label: "Активные" },
-  { key: "deactivation", label: "Отключение запланировано" },
   { key: "disabled", label: "Отключённые" },
 ];
 
@@ -80,7 +79,10 @@ function daysUntilLicenseExpiry(t: BillingTerminal): number {
 /** Whether the terminal is disabled in licenses (or admin disabled) and excluded from payments. */
 function isTerminalDisabled(t: BillingTerminal): boolean {
   return (
+    !t.renewal_enabled ||
+    !t.terminal_is_active ||
     t.billing_status === "disabled" ||
+    t.billing_status === "deactivation_scheduled" ||
     t.billing_status === "admin_disabled" ||
     t.billing_status === "no_license"
   );
@@ -256,7 +258,7 @@ export default function BillingPage() {
     try {
       setConfirmLoading(true);
       await deactivateTerminal(deactivateModal.terminal.terminal_id);
-      message.success("Терминал отключён от продления");
+      message.success("Терминал отключён");
       setDeactivateModal({ open: false, terminal: null });
       fetchData();
     } catch (e: unknown) {
@@ -270,7 +272,7 @@ export default function BillingPage() {
   const handleCancelDeactivation = async (terminalId: number) => {
     try {
       await cancelDeactivation(terminalId);
-      message.success("Отключение отменено");
+      message.success("Терминал включён");
       fetchData();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Ошибка";
@@ -299,20 +301,18 @@ export default function BillingPage() {
         return true;
       case "attention":
         return (
-          t.billing_status === "overdue" ||
-          t.billing_status === "due_soon" ||
-          t.billing_status === "no_license"
+          !isTerminalDisabled(t) &&
+          (t.billing_status === "overdue" ||
+            t.billing_status === "due_soon" ||
+            t.billing_status === "no_license")
         );
       case "active":
-        return t.billing_status === "active" || t.billing_status === "due_soon";
-      case "deactivation":
-        return t.billing_status === "deactivation_scheduled";
-      case "disabled":
         return (
-          t.billing_status === "disabled" ||
-          t.billing_status === "admin_disabled" ||
-          t.billing_status === "no_license"
+          !isTerminalDisabled(t) &&
+          (t.billing_status === "active" || t.billing_status === "due_soon")
         );
+      case "disabled":
+        return isTerminalDisabled(t);
       default:
         return true;
     }
@@ -394,18 +394,14 @@ export default function BillingPage() {
 
   // Counters
   const overdueCount = terminals.filter(
-    (t) => t.billing_status === "overdue",
+    (t) => !isTerminalDisabled(t) && t.billing_status === "overdue",
   ).length;
   const activeCount = terminals.filter(
-    (t) => t.billing_status === "active" || t.billing_status === "due_soon",
-  ).length;
-  const deactivationCount = terminals.filter(
-    (t) => t.billing_status === "deactivation_scheduled",
-  ).length;
-  const disabledCount = terminals.filter(
     (t) =>
-      t.billing_status === "disabled" || t.billing_status === "admin_disabled",
+      !isTerminalDisabled(t) &&
+      (t.billing_status === "active" || t.billing_status === "due_soon"),
   ).length;
+  const disabledCount = terminals.filter((t) => isTerminalDisabled(t)).length;
 
   const columns: ColumnsType<BillingTerminal> = [
     {
@@ -460,6 +456,16 @@ export default function BillingPage() {
       key: "license",
       width: 215,
       render: (_: unknown, r: BillingTerminal) => {
+        if (isTerminalDisabled(r)) {
+          return (
+            <Text type={isLicenseLapsed(r) ? "danger" : "secondary"}>
+              {r.license_expires_at
+                ? formatDate(r.license_expires_at)
+                : "нет лицензии"}
+            </Text>
+          );
+        }
+
         const payable = isLicensePayable(r, advancePeriods);
         const lapsed = isLicenseLapsed(r);
         const checked = Boolean(selection[r.terminal_id]?.license) && payable;
@@ -499,6 +505,24 @@ export default function BillingPage() {
       key: "cert",
       width: 250,
       render: (_: unknown, r: BillingTerminal) => {
+        if (isTerminalDisabled(r)) {
+          return !r.cert_serial ? (
+            <Text type="secondary">не выпущен</Text>
+          ) : !r.cert_not_valid_after ? (
+            <Text type="secondary">выпущен (дата неизвестна)</Text>
+          ) : (
+            <Text
+              type={
+                new Date(r.cert_not_valid_after) < new Date()
+                  ? "danger"
+                  : "secondary"
+              }
+            >
+              {formatDate(r.cert_not_valid_after)}
+            </Text>
+          );
+        }
+
         const pinButton = r.tenant_pin_creation_enabled ? (
           <Tooltip
             title={
@@ -600,8 +624,8 @@ export default function BillingPage() {
       key: "debt",
       align: "right",
       width: 130,
-      render: (v: number) =>
-        v > 0 ? (
+      render: (v: number, r: BillingTerminal) =>
+        !isTerminalDisabled(r) && v > 0 ? (
           <Text type="danger" strong>
             {formatDebt(v)}
           </Text>
@@ -625,13 +649,21 @@ export default function BillingPage() {
             </Button>
           )}
           {r.can_cancel_deactivation && (
-            <Button
-              size="small"
-              type="primary"
-              onClick={() => handleCancelDeactivation(r.terminal_id)}
+            <Tooltip
+              title={
+                r.license_expires_at
+                  ? `Включить без оплаты (лицензия действует до ${formatDate(r.license_expires_at)})`
+                  : undefined
+              }
             >
-              Отменить отключение
-            </Button>
+              <Button
+                size="small"
+                type="primary"
+                onClick={() => handleCancelDeactivation(r.terminal_id)}
+              >
+                Включить
+              </Button>
+            </Tooltip>
           )}
         </Space>
       ),
@@ -674,7 +706,6 @@ export default function BillingPage() {
           <>
             <Tag color="red">Просрочено: {overdueCount}</Tag>
             <Tag color="green">Активных: {activeCount}</Tag>
-            <Tag color="blue">Отключение: {deactivationCount}</Tag>
             <Tag>Отключённых: {disabledCount}</Tag>
           </>
         }
@@ -822,19 +853,15 @@ export default function BillingPage() {
         onCancel={() => setDeactivateModal({ open: false, terminal: null })}
         onOk={handleDeactivate}
         confirmLoading={confirmLoading}
-        okText={
-          isExpiredDeactivation
-            ? "Отключить терминал"
-            : "Отключить после окончания лицензии"
-        }
+        okText="Отключить"
         cancelText="Отмена"
         okButtonProps={{ danger: true }}
       >
         {deactivationTerminal && (
           <p>
             {isExpiredDeactivation
-              ? "Терминал уже не имеет действующей лицензии. После отключения его расчётная сумма будет исключена из общей задолженности и прогнозов."
-              : `Терминал продолжит работать до ${formatDate(deactivationTerminal.license_expires_at)}. После окончания оплаченного периода он будет заблокирован. Новые начисления производиться не будут, а терминал будет исключён из финансового прогноза.`}
+              ? "Терминал не имеет действующей лицензии. После отключения он не будет учитываться в расчетах и перейдет в раздел Отключенные."
+              : `Терминал перейдет в раздел Отключенные и не будет учитываться в расчетах сумм. Действующая лицензия и сертификат (до ${formatDate(deactivationTerminal.license_expires_at)}) позволят включить его без оплаты до даты истечения.`}
           </p>
         )}
       </Modal>

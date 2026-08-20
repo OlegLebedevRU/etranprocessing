@@ -33,7 +33,7 @@ async def list_terminals(
 
     conditions = [
         "t.is_active = true",
-        "EXISTS (SELECT 1 FROM licenses l WHERE l.terminal_id = t.id AND l.is_active = true AND (l.renewal_enabled = true OR l.expires_at > :now))",
+        "EXISTS (SELECT 1 FROM licenses l WHERE l.terminal_id = t.id AND l.is_active = true AND l.renewal_enabled = true AND l.expires_at > :now)",
     ]
     params: dict = {"now": now}
 

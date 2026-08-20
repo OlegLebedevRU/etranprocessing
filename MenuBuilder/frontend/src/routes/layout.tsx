@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router";
 import { Layout, Menu, Button, Tooltip, Typography, theme } from "antd";
 import {
@@ -11,6 +11,8 @@ import {
   LogoutOutlined,
   ApiOutlined,
 } from "@ant-design/icons";
+import { getMe, type UserInfo } from "../api/auth";
+import { OrgSwitcher } from "../components/OrgSwitcher";
 
 const { Sider, Header, Content } = Layout;
 const { Text } = Typography;
@@ -25,9 +27,38 @@ const NAV_ITEMS = [
 
 export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
+  const [currentUser, setCurrentUser] = useState<UserInfo | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { token } = theme.useToken();
+
+  useEffect(() => {
+    let isMounted = true;
+    getMe()
+      .then((data) => {
+        if (isMounted) {
+          setCurrentUser(data);
+          if (data.username) {
+            localStorage.setItem("mb_user", data.username);
+          }
+          if (data.is_superuser) {
+            localStorage.setItem("mb_is_superuser", "true");
+          }
+          if (data.org_id) {
+            localStorage.setItem("mb_current_org_id", String(data.org_id));
+          }
+          if (data.org_name) {
+            localStorage.setItem("mb_current_org_name", data.org_name);
+          }
+        }
+      })
+      .catch(() => {
+        // Handled by axios interceptor
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const segment = location.pathname.split("/")[1] || "monitoring";
   const selectedKey = NAV_ITEMS.some((i) => i.key === segment)
@@ -125,11 +156,12 @@ export default function AppLayout() {
               marginLeft: "auto",
               display: "flex",
               alignItems: "center",
-              gap: 8,
+              gap: 12,
             }}
           >
+            <OrgSwitcher currentUser={currentUser} />
             <Text type="secondary" style={{ fontSize: 13 }}>
-              {localStorage.getItem("mb_user")}
+              {currentUser?.username || localStorage.getItem("mb_user")}
             </Text>
             <Tooltip title="Выйти">
               <Button
@@ -139,6 +171,10 @@ export default function AppLayout() {
                 onClick={() => {
                   localStorage.removeItem("mb_token");
                   localStorage.removeItem("mb_user");
+                  localStorage.removeItem("mb_master_token");
+                  localStorage.removeItem("mb_is_superuser");
+                  localStorage.removeItem("mb_current_org_id");
+                  localStorage.removeItem("mb_current_org_name");
                   window.location.href = "/login";
                 }}
               />

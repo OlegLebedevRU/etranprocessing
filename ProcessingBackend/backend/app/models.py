@@ -542,3 +542,54 @@ class TerminalCertHistory(Base):
     pin: Mapped[CertificatePin | None] = relationship()
 
     __table_args__ = (Index("idx_terminal_cert_history_terminal", "terminal_id"),)
+
+
+class TerminalCertDiscovery(Base):
+    """Accumulator for unique terminal certificate data observed at ingress / mirror.
+
+    Tracks unique (sn, cert_serial) combinations with request counts, validation status,
+    and timestamps, preventing log spam while preserving complete history for diagnostics
+    and troubleshooting validation discrepancies.
+    """
+
+    __tablename__ = "terminal_cert_discovery"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    sn: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    cert_serial: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, index=True
+    )
+    cert_dn: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    ou: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    o: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    is_valid: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    validation_status: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="unknown"
+    )
+    terminal_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("terminals.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    db_cert_serial: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    request_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    last_endpoint: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    client_ip: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    terminal: Mapped[Terminal | None] = relationship()
+
+    __table_args__ = (
+        Index("idx_terminal_cert_discovery_sn_serial", "sn", "cert_serial"),
+        Index("idx_terminal_cert_discovery_status", "validation_status"),
+        Index("idx_terminal_cert_discovery_last_seen", "last_seen_at"),
+    )

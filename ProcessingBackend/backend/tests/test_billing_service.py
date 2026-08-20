@@ -163,11 +163,11 @@ def test_status_overdue():
     assert status == BillingStatus.OVERDUE
 
 
-def test_status_deactivation_scheduled():
+def test_status_deactivation():
     status = resolve_billing_status(
         True, False, _dt(2026, 11, 10), _dt(2026, 8, 18), _dt(2026, 8, 18)
     )
-    assert status == BillingStatus.DEACTIVATION_SCHEDULED
+    assert status == BillingStatus.DISABLED
 
 
 def test_status_disabled():
@@ -226,7 +226,7 @@ def test_compute_deactivation_scheduled():
         deactivation_requested_at=_dt(2026, 8, 18),
     )
     result = compute_terminal_billing(info, _dt(2026, 8, 18))
-    assert result.billing_status == BillingStatus.DEACTIVATION_SCHEDULED
+    assert result.billing_status == BillingStatus.DISABLED
     assert result.overdue_amount_minor == 0
     assert result.included_in_forecast is False
     assert result.can_cancel_deactivation is True

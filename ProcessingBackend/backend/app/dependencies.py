@@ -3,12 +3,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from fastapi import Depends, HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
 from app.models import License, OrgStatus, Terminal, TerminalCertHistory
+from app.services.cert_discovery import record_terminal_discovery
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,12 @@ async def get_current_terminal(
     - X-Client-Cert-DN: 'emailAddress=...,CN=A99D2F...,OU=773,O=1,L=...,ST=...,C=ru'
     - X-Client-Cert-Serial: hex serial without colons (e.g. '52B8E528000400002E2D')
     """
+    endpoint = request.url.path
+    client_ip = (
+        request.headers.get("X-Real-IP")
+        or request.headers.get("X-Forwarded-For")
+        or (request.client.host if request.client else None)
+    )
 
     subject = request.headers.get("X-Client-Cert-DN", "")
     if not subject:
@@ -51,7 +58,17 @@ async def get_current_terminal(
     cert_serial = request.headers.get("X-Client-Cert-Serial", "")
 
     if not subject or not cert_serial:
-        logger.warning(f"Missing cert headers. DN='{subject}', Serial='{cert_serial}'")
+        logger.debug(f"Missing cert headers. DN='{subject}', Serial='{cert_serial}'")
+        await record_terminal_discovery(
+            db,
+            sn=None,
+            cert_serial=cert_serial or None,
+            cert_dn=subject or None,
+            is_valid=False,
+            validation_status="missing_headers",
+            endpoint=endpoint,
+            client_ip=client_ip,
+        )
         raise HTTPException(
             status_code=401, detail="Missing client certificate headers"
         )
@@ -59,17 +76,31 @@ async def get_current_terminal(
     parsed = parse_cert_subject(subject)
     cn = parsed.get("CN", "")
     ou = parsed.get("OU", "")
+    o = parsed.get("O", "")
+    l_val = parsed.get("L", "")
 
-    logger.info(
-        f"Cert DN: '{subject}', CN: '{cn}', OU: '{ou}', Serial: '{cert_serial}'"
+    logger.debug(
+        f"Cert DN: '{subject}', CN: '{cn}', OU: '{ou}', O: '{o}', L: '{l_val}', Serial: '{cert_serial}'"
     )
 
-    if not cn:
+    if not cn and not ou and not l_val:
+        await record_terminal_discovery(
+            db,
+            sn=None,
+            cert_serial=cert_serial,
+            cert_dn=subject,
+            ou=ou or None,
+            o=o or None,
+            is_valid=False,
+            validation_status="missing_cn",
+            endpoint=endpoint,
+            client_ip=client_ip,
+        )
         raise HTTPException(
             status_code=401, detail="CN not found in certificate subject"
         )
 
-    # Primary auth: sn (CN) + cert_serial — both must match
+    # 1. Primary auth: sn (CN) + cert_serial — both match
     result = await db.execute(
         select(Terminal).where(
             Terminal.sn == cn,
@@ -78,35 +109,133 @@ async def get_current_terminal(
     )
     terminal = result.scalar_one_or_none()
 
-    if not terminal:
-        is_licensebilling = request.url.path.startswith(
-            "/api/licensebilling"
-        ) or request.url.path.startswith("/licensebilling")
-        if is_licensebilling and settings.auto_set_cert_serial_on_licensebilling:
-            result = await db.execute(
-                select(Terminal).where(
-                    Terminal.sn == cn,
-                    (Terminal.cert_serial.is_(None)) | (Terminal.cert_serial == ""),
+    if terminal:
+        await record_terminal_discovery(
+            db,
+            sn=cn,
+            cert_serial=cert_serial,
+            cert_dn=subject,
+            ou=ou or None,
+            o=o or None,
+            is_valid=True,
+            validation_status="authenticated",
+            terminal_id=terminal.id,
+            db_cert_serial=terminal.cert_serial,
+            endpoint=endpoint,
+            client_ip=client_ip,
+        )
+    else:
+        is_allowed_autobind = (
+            endpoint.startswith(
+                (
+                    "/api/licensebilling",
+                    "/licensebilling",
+                    "/api/gategauge",
+                    "/GateGauge",
+                    "/api/techgate",
+                    "/techgate",
                 )
             )
-            terminal = result.scalar_one_or_none()
-            if terminal:
+            or settings.auto_set_cert_serial_on_licensebilling
+        )
+        if is_allowed_autobind:
+            conditions = []
+            if cn:
+                conditions.append(Terminal.sn == cn)
+            if l_val and l_val.isdigit():
+                if o and o.isdigit():
+                    conditions.append(
+                        (Terminal.id == int(l_val)) & (Terminal.org_id == int(o))
+                    )
+                else:
+                    conditions.append(Terminal.id == int(l_val))
+            if ou and ou.isdigit() and o and o.isdigit():
+                conditions.append(
+                    (Terminal.device_id == int(ou)) & (Terminal.org_id == int(o))
+                )
+
+            if conditions:
+                res = await db.execute(
+                    select(Terminal).where(
+                        or_(*conditions),
+                        (Terminal.cert_serial.is_(None)) | (Terminal.cert_serial == ""),
+                    )
+                )
+                matched_terminal = res.scalar_one_or_none()
+            else:
+                matched_terminal = None
+
+            if matched_terminal:
+                terminal = matched_terminal
+                if endpoint.startswith(("/api/licensebilling", "/licensebilling")):
+                    source = "licensebilling"
+                elif endpoint.startswith(("/api/gategauge", "/GateGauge")):
+                    source = "gategauge"
+                elif endpoint.startswith(("/api/techgate", "/techgate")):
+                    source = "techgate"
+                else:
+                    source = "auto_bind"
+
                 logger.info(
-                    f"Auto-populating cert_serial for terminal {terminal.sn} (id={terminal.id}) with '{cert_serial}' from licensebilling request"
+                    f"Auto-populating cert_serial for terminal {terminal.sn} (id={terminal.id}, dev={terminal.device_id}) with '{cert_serial}' from {source} request"
                 )
                 terminal.cert_serial = cert_serial
+                if cn and (not terminal.sn or terminal.sn.isdigit()):
+                    terminal.sn = cn
+
                 db.add(
                     TerminalCertHistory(
                         terminal_id=terminal.id,
                         cert_serial=cert_serial,
-                        source="licensebilling",
+                        source=source,
                     )
+                )
+                await record_terminal_discovery(
+                    db,
+                    sn=cn,
+                    cert_serial=cert_serial,
+                    cert_dn=subject,
+                    ou=ou or None,
+                    o=o or None,
+                    is_valid=True,
+                    validation_status="auto_bound",
+                    terminal_id=terminal.id,
+                    db_cert_serial=cert_serial,
+                    endpoint=endpoint,
+                    client_ip=client_ip,
                 )
                 await db.commit()
 
     if not terminal:
-        logger.warning(
-            f"Terminal not found by sn+serial. CN='{cn}', Serial='{cert_serial}'"
+        # Check if terminal exists with different serial for diagnostics
+        res = await db.execute(select(Terminal).where(Terminal.sn == cn))
+        db_term = res.scalar_one_or_none()
+        if db_term:
+            val_status = "serial_mismatch"
+            term_id = db_term.id
+            db_serial = db_term.cert_serial
+        else:
+            val_status = "terminal_not_found"
+            term_id = None
+            db_serial = None
+
+        await record_terminal_discovery(
+            db,
+            sn=cn,
+            cert_serial=cert_serial,
+            cert_dn=subject,
+            ou=ou or None,
+            o=o or None,
+            is_valid=False,
+            validation_status=val_status,
+            terminal_id=term_id,
+            db_cert_serial=db_serial,
+            endpoint=endpoint,
+            client_ip=client_ip,
+        )
+
+        logger.debug(
+            f"Terminal validation failed ({val_status}). CN='{cn}', Serial='{cert_serial}', DB_Serial='{db_serial}'"
         )
         raise HTTPException(
             status_code=401,
@@ -122,7 +251,7 @@ async def get_current_terminal(
         try:
             ou_device_id = int(ou)
             if terminal.device_id != ou_device_id:
-                logger.warning(
+                logger.debug(
                     f"OU mismatch: cert OU={ou_device_id}, db device_id={terminal.device_id} "
                     f"(terminal sn={cn})"
                 )

@@ -1,19 +1,19 @@
-# Billing Architecture — Flow &amp; Math Reference
+# Billing Architecture — Flow & Math Reference
 
 Authoritative reference for the terminal license/certificate billing system.
 Covers both backend (`ProcessingBackend/backend/app/services/billing.py`,
-`app/routers/billing.py`, `app/services/cert_billing.py`) and the MenuBuilder
-frontend cart page (`MenuBuilder/frontend/src/routes/billing.tsx`,
+`app/routers/billing.py`, `app/services/cert_billing.py`), MenuBuilder backend
+(`MenuBuilder/backend/app/main.py`, `app/routers/terminal_bindings.py`), and the
+MenuBuilder frontend cart and management pages (`MenuBuilder/frontend/src/routes/billing.tsx`,
 `components/CheckoutModal.tsx`). Supersedes the historical planning docs in
 `docs/billing-implementation-plan.md` and the pre-fix audit in
-`docs/billing-implementation-review/REVIEW.md` (both kept for history — see
-the status notes added at the top of each).
+`docs/billing-implementation-review/REVIEW.md`.
 
 ## 1. Domain model
 
 Each **terminal** has, independently:
 
-- A **license** (`License` row, `expires_at`, `renewal_enabled`,
+- A **license** (`License` row: `expires_at`, `renewal_enabled`,
   `deactivation_requested_at`, optional `monthly_price_override_minor`).
 - A **certificate** (`cert_serial`, `cert_not_valid_after`, plus a
   `CertificatePin` PIN-issue workflow — see
@@ -29,31 +29,52 @@ in transit over the API — never a float. The frontend cart truncates (not
 rounds) to whole currency units purely for *display* (`Math.floor(minor/100)`)
 per product requirement; the checkout payload still sends exact minor units.
 
-## 2. License billing status state machine
+## 2. License billing status state machine & Deactivation Logic
 
 `resolve_billing_status()` (`app/services/billing.py`) computes one of:
 
-| Status | Condition |
-|---|---|
-| `ADMIN_DISABLED` | `Terminal.is_active == False` (operator-level kill switch, unrelated to billing) |
-| `NO_LICENSE` | Terminal has no `License` row at all |
-| `DISABLED` | `renewal_enabled == False` and license already expired (user deactivated and the paid term has run out) |
-| `DEACTIVATION_SCHEDULED` | `renewal_enabled == False` but license `expires_at` is still in the future — user requested deactivation but is still inside the period they already paid for |
-| `OVERDUE` | `renewal_enabled == True` and `expires_at <= as_of` |
-| `DUE_SOON` | `renewal_enabled == True`, not expired yet, but `expires_at <= as_of + due_soon_days` (config: `settings.billing_due_soon_days`, default 30) |
-| `ACTIVE` | Everything else |
+| Status | Condition | Meaning & UX Behavior |
+|---|---|---|
+| `ADMIN_DISABLED` | `Terminal.is_active == False` | Operator-level kill switch, unrelated to billing. Excluded from payments and forecasts. |
+| `NO_LICENSE` | Terminal has no `License` row | Excluded from renewals; requires initial setup. |
+| `DISABLED` | `renewal_enabled == False` | **Deactivated terminal**. Immediately transitions to "Отключённые" section. No checkboxes, no calculated payable sums (license, cert, debt = 0), excluded from cart and financial forecast. |
+| `OVERDUE` | `renewal_enabled == True` and `expires_at <= as_of` | Active subscription lapsed. Needs 1 period payment starting today to reactivate. |
+| `DUE_SOON` | `renewal_enabled == True`, not expired, `expires_at <= as_of + due_soon_days` | Active subscription expiring soon (default ≤ 30 days). Eligible for advance renewal. |
+| `ACTIVE` | `renewal_enabled == True` and `expires_at > as_of + due_soon_days` | Fully active and paid ahead. |
 
-Key invariant: **`Terminal.is_active` is never touched by user-initiated
-billing actions** — it's an admin-only switch. A user "deactivating" a
-terminal only sets `License.renewal_enabled = False`; the terminal keeps
-working (and stays billable/OVERDUE-free) until its already-paid period
-actually expires (`DEACTIVATION_SCHEDULED → DISABLED`).
+### Deactivation & Re-enabling Logic ("Отключить" / "Включить")
+1. **Clicking "Отключить" (Deactivate)**:
+   - Sets `License.renewal_enabled = False` and `License.deactivation_requested_at = now`.
+   - The terminal immediately transitions to the **`DISABLED`** status and is placed in the **"Отключённые"** tab.
+   - For a disabled terminal, **NO amounts are billed or indicated** (0 debt, license amount disabled, certificate PIN payment disabled), **NO selection checkboxes** are displayed or selectable, and it is **completely excluded from checkout cart and forecast calculations**.
+2. **Re-enabling without payment (until expiration)**:
+   - If a disabled terminal still has a valid license (`license_expires_at > now`) and valid certificate, it has `can_cancel_deactivation = True`.
+   - The user can click **"Включить"** (Re-enable) at any time before expiration.
+   - This restores `renewal_enabled = True` without requiring any payment or checkout.
+3. **Reactivation after expiration**:
+   - Once the license date passes (`license_expires_at <= now`), `can_cancel_deactivation` becomes `False` and `can_reactivate` becomes `True`. Re-enabling then requires a standard reactivation payment starting from the payment date.
 
-## 3. "Lapsed" vs "due soon" — why the distinction matters
+## 3. Strict Isolation from Monitoring & Menu Management
+
+All disabled and deactivated terminals are strictly isolated from operational datasets:
+- **Monitoring (`/api/monitoring`)**: Queries filter terminals with:
+  ```sql
+  WHERE t.is_active = true
+    AND EXISTS (
+      SELECT 1 FROM licenses l
+      WHERE l.terminal_id = t.id
+        AND l.is_active = true
+        AND l.renewal_enabled = true
+        AND l.expires_at > :now
+    )
+  ```
+- **Menu Management (`/api/terminals`)**: Uses the identical filter condition.
+- Any terminal that is administratively disabled (`t.is_active = false`), deactivated by user (`l.renewal_enabled = false`), expired (`l.expires_at <= now`), or unlicensed is completely omitted from Monitoring and Menu Management.
+
+## 4. "Lapsed" vs "due soon" — why the distinction matters
 
 `is_license_lapsed(expires_at, as_of)` → `True` iff the license is missing or
-`expires_at <= as_of`. This is a **stricter** condition than `OVERDUE` status
-alone would suggest when read casually — it's the single source of truth used
+`expires_at <= as_of`. This is the single source of truth used
 at checkout time to decide how many periods must be paid **right now**:
 
 ```python
@@ -64,30 +85,16 @@ if total_periods == 0:
     raise HTTPException(400, "No periods to pay for terminal {id}")
 ```
 
-**Architectural consequence (important for any future UI work):** a license
-that is `DUE_SOON` (expiring within 30 days but not yet expired) is **not**
+**Architectural consequence:** a license that is `DUE_SOON` (expiring within 30 days but not yet expired) is **not**
 lapsed, so `periods_due = 0` for it. If the global cart is set to
 `advance_periods = 0` ("Только задолженность" / "debt only"), a due-soon
-terminal contributes `total_periods = 0` and the backend **rejects the whole
-checkout with HTTP 400** the moment that terminal's `include_license` line is
-included. There is currently **no per-line `advance_periods` override** — the
-frontend sends one global `advance_periods` for every line in the cart
-(`CheckoutModal.tsx`). This is why the MenuBuilder cart page
-(`routes/billing.tsx`) must:
+terminal contributes `total_periods = 0` and the backend rejects the checkout with HTTP 400
+if that terminal's `include_license` line is selected without advance periods.
+The MenuBuilder cart page (`routes/billing.tsx`):
+1. Auto-selects (checks) any license expiring within `LICENSE_DUE_SOON_DAYS` (30 days) for active terminals.
+2. Hides the "Только задолженность" advance-period option whenever an urgent-but-not-lapsed terminal exists in the org (`hasUrgentDueSoon` in `billing.tsx`), forcing `advance_periods >= 1` as the default.
 
-1. Auto-select (check) any license expiring within `LICENSE_DUE_SOON_DAYS`
-   (30 days, mirrors backend's `billing_due_soon_days`) even if not lapsed.
-2. Hide the "Только задолженность" advance-period option whenever such an
-   urgent-but-not-lapsed terminal exists in the org (`hasUrgentDueSoon` in
-   `billing.tsx`), forcing `advance_periods >= 1` as the default — otherwise
-   the auto-checked due-soon line would be un-payable and the whole checkout
-   would 400.
-
-If a genuine "pay debt only, ignore due-soon terminals" UX is ever needed, the
-correct fix is a **per-line `advance_periods`** in `CheckoutRequest` /
-`CheckoutModal`, not a client-side workaround.
-
-## 4. Period price &amp; date math
+## 5. Period price & date math
 
 ```
 monthly_price = license.monthly_price_override_minor or org_settings.monthly_price_minor
@@ -107,11 +114,9 @@ naive day-by-day iteration):
   extends from the **existing** `expires_at`, preserving its anchor day.
   `new_expires_at = expires_at + billing_period_months * advance_periods`.
 
-`advance_periods` is capped to **0, 1, or 2** at the API layer
-(`item.advance_periods` in `/api/billing/checkout`; a separate
-`/api/billing/reactivate` style endpoint requires `1` or `2`, never `0`).
+`advance_periods` is capped to **0, 1, or 2** at the API layer.
 
-## 5. Certificate PIN pricing
+## 6. Certificate PIN pricing
 
 Independent of the license line. `resolve_effective_price()` /
 `resolve_cert_policy()` (`app/services/cert_billing.py`) determine:
@@ -119,49 +124,43 @@ Independent of the license line. `resolve_effective_price()` /
 - `cert_operation`: `primary_issue` (no `cert_serial` yet) vs `reissue`
   (renewing an existing cert).
 - `cert_pin_price_minor`: 0 (free, e.g. within a grace policy) or a positive
-  amount. **A `cert_price <= 0` line cannot be checked out** — the API
-  rejects it with "Certificate PIN ... is free — request it directly instead
-  of paying for it" (400). Free-PIN issuance is a separate, un-billed flow
-  (`generate_pin` in the MCP pin-server, or a dedicated free-issue endpoint),
-  not part of `/api/billing/checkout`.
-- `cert_expiring_soon` (`is_cert_expiring_soon`) uses the same "≤ N days"
-  pattern as license `due_soon`, config `settings.cert_expiring_soon_days`
-  (default 30) — kept deliberately symmetric with the license threshold so
-  "expiring soon" means the same thing for both artifact types in the UI.
+  amount. **A `cert_price <= 0` line cannot be checked out** — free PIN issuance
+  is handled via the un-billed MCP pin-server workflow.
+- `cert_expiring_soon` (`is_cert_expiring_soon`) uses the symmetric "≤ N days"
+  threshold (`settings.cert_expiring_soon_days`, default 30).
 - Tenant self-service PIN purchase requires
   `org_settings.tenant_pin_creation_enabled`; otherwise 403.
+- Disabled terminals are excluded from certificate purchase offerings.
 
-## 6. Checkout flow end-to-end
+## 7. Checkout flow end-to-end
 
 1. `POST /api/billing/checkout` with `items: [{terminal_id, include_license,
    include_cert_pin, advance_periods}]`.
 2. Per item: validate org ownership, `advance_periods` range, "nothing
-   selected" (400 if neither flag set), `ADMIN_DISABLED` terminals rejected.
+   selected" (400 if neither flag set), `ADMIN_DISABLED` / disabled terminals rejected.
 3. License line (if `include_license`): compute `lapsed`, `periods_due`,
    `total_periods`, `amount_minor = total_periods * period_price`, projected
-   `new_expires_at` (mode = reactivation/renewal per §4).
+   `new_expires_at` (mode = reactivation/renewal per §5).
 4. Cert line (if `include_cert_pin`): validate tenant flag + non-zero price,
    compute `amount_minor = cert_pin_price_minor`, snapshot the cert policy
    (`build_cert_policy_snapshot`) onto the order item for audit/reproducibility.
 5. **Idempotency guard**: reject (409) if a `pending` `BillingOrder` already
-   references any of the same terminals — prevents duplicate concurrent
-   checkouts for the same terminal while a payment is in flight.
+   references any of the same terminals.
 6. Persist `BillingOrder` (+ `BillingOrderItem` rows) with `status="pending"`,
    call the configured `payment_provider.create_checkout(...)` for a redirect
    URL, commit, return `{order_id, amount_minor, payment_url, items[]}`.
-7. On payment confirmation (webhook/provider callback, outside this doc's
-   scope — see `app/services/payment_provider.py`), the order is marked paid
+7. On payment confirmation (webhook/provider callback), the order is marked paid
    and `License.expires_at` / cert issuance are applied.
 
-## 7. Forecast &amp; org summary
+## 8. Forecast & org summary
 
 `build_org_summary_data()` aggregates per-terminal `TerminalBillingResult`
-into: overdue amount/count, active count, deactivation-scheduled count,
+into: overdue amount/count, active count, disabled count,
 admin-disabled count, nearest required payment date, and a monthly
 `forecast[]` (only terminals with `included_in_forecast == True`, i.e.
-`renewal_enabled` and not `OVERDUE`/`NO_LICENSE`, are projected forward).
+`renewal_enabled == True`, active, and not `OVERDUE`/`NO_LICENSE`, are projected forward).
 
-## 8. MenuBuilder ↔ ProcessingBackend integration
+## 9. MenuBuilder ↔ ProcessingBackend integration
 
 - MenuBuilder's nginx proxies `/api/billing/*` straight through to
   `processing-backend` (same Docker network); ProcessingBackend independently
@@ -169,26 +168,12 @@ admin-disabled count, nearest required payment date, and a monthly
 - **`org_id` must always reach the backend as an `int`.** The JWT claim is a
   string in the token (`"org": "1"`); both MenuBuilder's own report endpoints
   and ProcessingBackend's billing endpoints filter SQL by integer `org_id`
-  columns, so any hop that forwards the raw string claim without casting will
-  produce `asyncpg.exceptions.DataError` (see incident in §9).
+  columns.
 
-## 9. Known-fixed pitfalls (do not reintroduce)
+## 10. Known-fixed pitfalls (do not reintroduce)
 
 - **`org_id` as string vs int** — MenuBuilder's `get_current_user()`
-  (`MenuBuilder/backend/app/auth.py`) now casts the JWT `org`/`orgId`/`org_id`
-  claim to `int` (falling back to `None` on parse failure) before it's used
-  anywhere downstream. This fixed 500s on `/api/reports/payments`,
-  `/api/reports/balance-by-terminal`, `/api/reports/balance-by-tsp`, all of
-  which bind `org_id` into raw SQL. `terminal_bindings.py` already had a local
-  `int(org_id)` workaround for the same root cause — that workaround is now
-  redundant but harmless.
-- **MCP pin-server `generate_pin` missing `org_id` on INSERT** — the
-  `certificate_pins` table requires `org_id NOT NULL`; the terminal resolved
-  via `_resolve_terminal` already carries `org_id`, it just wasn't threaded
-  through to the `INSERT` statement. Fixed in an earlier session — if you
-  touch `mcp-pin-server/src/pin_server/server.py`'s `generate_pin`, keep
-  `org_id` in the `INSERT ... VALUES (...)`.
-- **"No periods to pay" 400 for due-soon-but-not-lapsed terminals** — see §3.
-  Any future auto-select feature must account for this constraint before
-  defaulting a due-soon (non-lapsed) terminal into a cart with
-  `advance_periods = 0`.
+  (`MenuBuilder/backend/app/auth.py`) casts the JWT `org` claim to `int`.
+- **MCP pin-server `generate_pin` missing `org_id` on INSERT** — keep `org_id` in the `INSERT`.
+- **"No periods to pay" 400 for due-soon-but-not-lapsed terminals** — see §4.
+- **Deactivated terminal isolation** — deactivated terminals (`renewal_enabled = false`) must never show debt, payable lines, checkboxes, or appear in active monitoring/menu management queries.

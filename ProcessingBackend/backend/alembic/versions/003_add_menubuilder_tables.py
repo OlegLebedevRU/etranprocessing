@@ -7,16 +7,15 @@ Revision ID: 003
 Revises: 002
 Create Date: 2026-08-17
 """
-from typing import Sequence, Union
+
+from collections.abc import Sequence
 
 from alembic import op
-import sqlalchemy as sa
 
-
-revision: str = '003'
-down_revision: Union[str, None] = '002'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+revision: str = "003"
+down_revision: str | None = "002"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -39,8 +38,12 @@ def upgrade() -> None:
             created_at TIMESTAMPTZ DEFAULT now()
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_tmb_device_id ON terminal_menu_bindings(device_id)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_tmb_menu_variant_id ON terminal_menu_bindings(menu_variant_id)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tmb_device_id ON terminal_menu_bindings(device_id)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tmb_menu_variant_id ON terminal_menu_bindings(menu_variant_id)"
+    )
 
     # --- groups.menu_variant_id ---
     # Ensure default variant exists
@@ -65,7 +68,9 @@ def upgrade() -> None:
         END
         $$;
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_groups_menu_variant_id ON groups(menu_variant_id)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_groups_menu_variant_id ON groups(menu_variant_id)"
+    )
 
     # --- services.menu_variant_id ---
     op.execute("""
@@ -83,7 +88,9 @@ def upgrade() -> None:
         END
         $$;
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_services_menu_variant_id ON services(menu_variant_id)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_services_menu_variant_id ON services(menu_variant_id)"
+    )
 
     # Unique constraint on (menu_variant_id, tsp_code) — replace old single-column unique
     op.execute("ALTER TABLE services DROP CONSTRAINT IF EXISTS services_tsp_code_key")
@@ -102,8 +109,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint('uq_service_variant_tsp', 'services', type_='unique')
-    op.drop_column('services', 'menu_variant_id')
-    op.drop_column('groups', 'menu_variant_id')
-    op.drop_table('terminal_menu_bindings')
-    op.drop_table('menu_variants')
+    op.drop_constraint("uq_service_variant_tsp", "services", type_="unique")
+    op.drop_column("services", "menu_variant_id")
+    op.drop_column("groups", "menu_variant_id")
+    op.drop_table("terminal_menu_bindings")
+    op.drop_table("menu_variants")

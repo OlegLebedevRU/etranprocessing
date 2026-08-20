@@ -172,7 +172,7 @@ class PaymentService:
             self.db.add(balance)
 
 
-def parse_params_string(params_str: str) -> dict[int, str]:
+def parse_params_string(params_str: str | None) -> dict[int, str]:
     """
     Parse params string from terminal request.
 

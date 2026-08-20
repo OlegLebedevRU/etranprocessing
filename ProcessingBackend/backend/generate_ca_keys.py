@@ -10,7 +10,7 @@ Generates:
 
 import argparse
 import os
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
@@ -27,15 +27,17 @@ def generate_ca(out_dir: str, key_size: int = 2048, valid_years: int = 10) -> No
         backend=default_backend(),
     )
 
-    subject = issuer = x509.Name([
-        x509.NameAttribute(x509.NameOID.COUNTRY_NAME, "RU"),
-        x509.NameAttribute(x509.NameOID.STATE_OR_PROVINCE_NAME, "Moscow"),
-        x509.NameAttribute(x509.NameOID.LOCALITY_NAME, "Moscow"),
-        x509.NameAttribute(x509.NameOID.ORGANIZATION_NAME, "Platerra"),
-        x509.NameAttribute(x509.NameOID.COMMON_NAME, "Platerra CA"),
-    ])
+    subject = issuer = x509.Name(
+        [
+            x509.NameAttribute(x509.NameOID.COUNTRY_NAME, "RU"),
+            x509.NameAttribute(x509.NameOID.STATE_OR_PROVINCE_NAME, "Moscow"),
+            x509.NameAttribute(x509.NameOID.LOCALITY_NAME, "Moscow"),
+            x509.NameAttribute(x509.NameOID.ORGANIZATION_NAME, "Platerra"),
+            x509.NameAttribute(x509.NameOID.COMMON_NAME, "Platerra CA"),
+        ]
+    )
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     cert = (
         x509.CertificateBuilder()
         .subject_name(subject)
@@ -66,11 +68,13 @@ def generate_ca(out_dir: str, key_size: int = 2048, valid_years: int = 10) -> No
     cert_path = os.path.join(out_dir, "ca.crt")
 
     with open(key_path, "wb") as f:
-        f.write(key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.TraditionalOpenSSL,
-            encryption_algorithm=serialization.NoEncryption(),
-        ))
+        f.write(
+            key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=serialization.NoEncryption(),
+            )
+        )
 
     with open(cert_path, "wb") as f:
         f.write(cert.public_bytes(serialization.Encoding.PEM))
@@ -83,6 +87,8 @@ def generate_ca(out_dir: str, key_size: int = 2048, valid_years: int = 10) -> No
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate dev CA keys")
-    parser.add_argument("--out-dir", default="keys", help="Output directory (default: keys)")
+    parser.add_argument(
+        "--out-dir", default="keys", help="Output directory (default: keys)"
+    )
     args = parser.parse_args()
     generate_ca(args.out_dir)

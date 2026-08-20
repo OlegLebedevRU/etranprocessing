@@ -24,6 +24,7 @@ from app.models import (  # noqa: F401
     PaymentParam,
     TechGateRecord,
     Terminal,
+    TerminalCertDiscovery,
     TerminalCertHistory,
     Tsp,
     TspParameterCode,

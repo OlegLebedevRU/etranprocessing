@@ -263,8 +263,6 @@ def resolve_billing_status(
         return BillingStatus.NO_LICENSE
 
     if not renewal_enabled:
-        if expires_at is not None and expires_at > as_of:
-            return BillingStatus.DEACTIVATION_SCHEDULED
         return BillingStatus.DISABLED
 
     # renewal_enabled = True

@@ -1,7 +1,9 @@
 import asyncio
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
+
 from app.database import async_session
-from app.models import Terminal, OrgStatus, License
+from app.models import License, OrgStatus, Terminal
+
 
 async def seed():
     async with async_session() as db:
@@ -26,6 +28,7 @@ async def seed():
 
         # Get terminal id for license
         from sqlalchemy import select
+
         result = await db.execute(select(Terminal).where(Terminal.device_id == 773))
         t = result.scalar_one()
 
@@ -34,7 +37,7 @@ async def seed():
             terminal_id=t.id,
             org_id=1,
             license_type="standard",
-            expires_at=datetime.now(timezone.utc) + timedelta(days=365),
+            expires_at=datetime.now(UTC) + timedelta(days=365),
             balance=97685,
             is_active=True,
         )
@@ -42,5 +45,6 @@ async def seed():
 
         await db.commit()
         print(f"Seed data created: terminal_id={t.id}, device_id=773, org_id=1")
+
 
 asyncio.run(seed())
