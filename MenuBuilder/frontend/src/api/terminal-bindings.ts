@@ -23,8 +23,14 @@ export interface TerminalBindingCreate {
   menu_variant_id: number;
 }
 
-export const getTerminals = (page = 1, pageSize = 20) =>
-  client.get<TerminalsResponse>("/terminals", { params: { page, page_size: pageSize } });
+export const getTerminals = (page = 1, pageSize = 20, search?: string) =>
+  client.get<TerminalsResponse>("/terminals", {
+    params: {
+      page,
+      page_size: pageSize,
+      search: search || undefined,
+    },
+  });
 
 export const createOrUpdateBinding = (data: TerminalBindingCreate) =>
   client.post("/bindings", data);

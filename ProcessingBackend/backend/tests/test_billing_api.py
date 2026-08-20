@@ -605,3 +605,31 @@ async def test_get_billing_terminals_returns_address_and_type_fields():
     assert t_data["terminal_type_id"] == 1
     assert t_data["terminal_type_name"] == "Платежный терминал"
     assert t_data["created_at"] is not None
+
+
+@pytest.mark.anyio
+async def test_checkout_rejects_cert_pin_for_disabled_terminal():
+    """Cert PIN cannot be bought for a disabled terminal."""
+    added: list = []
+    org_settings = _paid_org_settings()
+    org_settings.tenant_pin_creation_enabled = True
+
+    resp = await _post_checkout(
+        _make_user(),
+        _make_terminal(),
+        _make_license(
+            expires_at=datetime.now(UTC) - timedelta(days=10), renewal_enabled=False
+        ),
+        org_settings,
+        [
+            {
+                "terminal_id": 1,
+                "include_license": False,
+                "include_cert_pin": True,
+            }
+        ],
+        added,
+    )
+
+    assert resp.status_code == 400
+    assert "disabled" in resp.json()["detail"].lower()

@@ -166,10 +166,16 @@ async def get_stats(variant_id: int | None = None):
 
 
 @app.get("/api/monitoring")
-async def get_monitoring():
+async def get_monitoring(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    search: str | None = Query(None),
+    user: dict = Depends(get_current_user),
+):
     """Terminal monitoring: connection history + GateGauge data.
     Returns last 2 hours in 10-min intervals (12 slots per terminal)
-    plus latest device state from gauge_data."""
+    plus latest device state from gauge_data.
+    Filters out terminals disabled in licenses and supports server pagination."""
     from datetime import datetime, timedelta
 
     from sqlalchemy import text
@@ -177,63 +183,120 @@ async def get_monitoring():
     now = datetime.now(UTC)
     start = now - timedelta(hours=2)
 
+    org_id = user.get("org_id")
+    if org_id is not None:
+        try:
+            org_id = int(org_id)
+        except ValueError, TypeError:
+            org_id = None
+
+    conditions = [
+        "t.is_active = true",
+        "EXISTS (SELECT 1 FROM licenses l WHERE l.terminal_id = t.id AND l.is_active = true AND (l.renewal_enabled = true OR l.expires_at > :now))",
+    ]
+    params: dict = {"now": now}
+
+    if org_id is not None:
+        conditions.append("t.org_id = :org_id")
+        params["org_id"] = org_id
+
+    if search:
+        conditions.append(
+            "(CAST(t.device_id AS TEXT) ILIKE :search OR t.sn ILIKE :search OR t.address ILIKE :search)"
+        )
+        params["search"] = f"%{search.strip()}%"
+
+    where_clause = " AND ".join(conditions)
+
     async with async_session() as session:
-        # Get all terminals
+        # Total count
+        total = await session.scalar(
+            text(f"SELECT count(*) FROM terminals t WHERE {where_clause}"),
+            params,
+        )
+
+        offset = (page - 1) * page_size
+        page_params = {**params, "limit": page_size, "offset": offset}
+
+        # Page of terminals
         terminals = (
             await session.execute(
                 text(
-                    "SELECT t.id, t.device_id, t.sn, t.org_id, t.is_active, "
-                    "t.cert_serial, t.cert_not_valid_after, t.address, t.note, "
-                    "t.terminal_type_id, tt.name AS terminal_type_name, t.created_at "
-                    "FROM terminals t "
-                    "LEFT JOIN terminal_types tt ON tt.id = t.terminal_type_id "
-                    "ORDER BY t.device_id"
-                )
+                    f"SELECT t.id, t.device_id, t.sn, t.org_id, t.is_active, "
+                    f"t.cert_serial, t.cert_not_valid_after, t.address, t.note, "
+                    f"t.terminal_type_id, tt.name AS terminal_type_name, t.created_at "
+                    f"FROM terminals t "
+                    f"LEFT JOIN terminal_types tt ON tt.id = t.terminal_type_id "
+                    f"WHERE {where_clause} "
+                    f"ORDER BY t.device_id "
+                    f"LIMIT :limit OFFSET :offset"
+                ),
+                page_params,
             )
         ).fetchall()
 
-        # Latest payment per terminal (terminal activity indicator)
+        if not terminals:
+            return {
+                "start": start.isoformat(),
+                "now": now.isoformat(),
+                "total": total or 0,
+                "page": page,
+                "page_size": page_size,
+                "items": [],
+            }
+
+        terminal_ids = [t[0] for t in terminals]
+        device_ids = [t[1] for t in terminals]
+
+        # Latest payment per terminal (scoped to current page only)
         payment_rows = (
             await session.execute(
                 text(
                     "SELECT terminal_id, MAX(paym_datetime) "
-                    "FROM payments GROUP BY terminal_id"
-                )
+                    "FROM payments "
+                    "WHERE terminal_id = ANY(:t_ids) "
+                    "GROUP BY terminal_id"
+                ),
+                {"t_ids": terminal_ids},
             )
         ).fetchall()
 
-        # Latest license expiration per terminal
+        # Latest license expiration per terminal (scoped to current page only)
         license_rows = (
             await session.execute(
                 text("""
                 SELECT DISTINCT ON (terminal_id) terminal_id, expires_at
                 FROM licenses
+                WHERE terminal_id = ANY(:t_ids)
                 ORDER BY terminal_id, expires_at DESC
-            """)
+            """),
+                {"t_ids": terminal_ids},
             )
         ).fetchall()
 
-        # Get GateGauge records for last 2 hours (for slots)
+        # Get GateGauge records for last 2 hours (scoped to current page only)
         records = (
             await session.execute(
                 text("""
                 SELECT device_id, created_at
                 FROM gate_gauge_records
-                WHERE created_at >= :start
+                WHERE device_id = ANY(:d_ids) AND created_at >= :start
                 ORDER BY device_id, created_at
             """),
-                {"start": start},
+                {"d_ids": device_ids, "start": start},
             )
         ).fetchall()
 
-        # Get latest gauge_data per terminal (for device state)
+        # Get latest gauge_data per terminal (scoped to current page only)
         latest = (
             await session.execute(
                 text("""
                 SELECT DISTINCT ON (device_id) device_id, gauge_data
                 FROM gate_gauge_records
+                WHERE device_id = ANY(:d_ids)
                 ORDER BY device_id, created_at DESC
             """),
+                {"d_ids": device_ids},
             )
         ).fetchall()
 
@@ -338,7 +401,14 @@ async def get_monitoring():
             }
         )
 
-    return {"start": start.isoformat(), "now": now.isoformat(), "items": items}
+    return {
+        "start": start.isoformat(),
+        "now": now.isoformat(),
+        "total": total or 0,
+        "page": page,
+        "page_size": page_size,
+        "items": items,
+    }
 
 
 @app.get("/api/reports/inkass")

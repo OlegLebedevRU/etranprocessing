@@ -29,8 +29,17 @@ export interface MonitoringTerminal {
 export interface MonitoringResponse {
   start: string;
   now: string;
+  total: number;
+  page: number;
+  page_size: number;
   items: MonitoringTerminal[];
 }
 
-export const getMonitoring = () =>
-  client.get<MonitoringResponse>("/monitoring");
+export const getMonitoring = (page = 1, pageSize = 20, search?: string) =>
+  client.get<MonitoringResponse>("/monitoring", {
+    params: {
+      page,
+      page_size: pageSize,
+      search: search || undefined,
+    },
+  });

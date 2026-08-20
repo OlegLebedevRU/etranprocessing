@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
-import { Button, Card, message, Table, Tooltip, Typography } from "antd";
-import { ReloadOutlined } from "@ant-design/icons";
+import { Button, Card, Input, message, Space, Table, Tooltip, Typography } from "antd";
+import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { getMonitoring, MonitoringTerminal } from "../api/monitoring";
 import PageHeader from "../components/PageHeader";
 import { formatDate } from "../utils/billing";
@@ -86,29 +86,50 @@ function daysUntil(iso: string): number {
 
 export default function MonitoringPage() {
   const [terminals, setTerminals] = useState<MonitoringTerminal[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState("");
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (isSilent = false) => {
+    if (!isSilent) {
+      setLoading(true);
+    }
     try {
-      const res = await getMonitoring();
+      const res = await getMonitoring(page, pageSize, search);
       setTerminals(res.data.items);
+      setTotal(res.data.total ?? res.data.items.length);
       setLastUpdate(new Date().toLocaleTimeString("ru-RU"));
     } catch {
-      message.error("Ошибка загрузки");
+      if (!isSilent) {
+        message.error("Ошибка загрузки");
+      }
     } finally {
-      setLoading(false);
+      if (!isSilent) {
+        setLoading(false);
+      }
     }
-  }, []);
+  }, [page, pageSize, search]);
 
   useEffect(() => {
-    load();
+    load(false);
   }, [load]);
+
+  // Smart auto-refresh: updates only the visible page
   useEffect(() => {
-    const timer = setInterval(load, 60000);
+    const timer = setInterval(() => {
+      load(true);
+    }, 15000);
     return () => clearInterval(timer);
   }, [load]);
+
+  const handleSearch = () => {
+    setPage(1);
+    setSearch(searchInput.trim());
+  };
 
   const columns = [
     {
@@ -363,18 +384,33 @@ export default function MonitoringPage() {
         title="Мониторинг"
         subtitle={lastUpdate ? `Обновлено в ${lastUpdate}` : undefined}
         extra={
-          <Button
-            size="small"
-            icon={<ReloadOutlined />}
-            onClick={load}
-            loading={loading}
-          >
-            Обновить
-          </Button>
+          <Space wrap>
+            <Input
+              placeholder="Поиск ID / SN / адрес"
+              prefix={<SearchOutlined />}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onPressEnter={handleSearch}
+              allowClear
+              style={{ width: 220 }}
+              size="small"
+            />
+            <Button size="small" type="primary" onClick={handleSearch}>
+              Найти
+            </Button>
+            <Button
+              size="small"
+              icon={<ReloadOutlined />}
+              onClick={() => load(false)}
+              loading={loading}
+            >
+              Обновить
+            </Button>
+          </Space>
         }
       />
 
-      <Card styles={{ body: { padding: 0 } }} style={{ width: "fit-content" }}>
+      <Card styles={{ body: { padding: 0 } }} style={{ width: "100%" }}>
         <Table
           dataSource={terminals}
           columns={columns}
@@ -382,7 +418,18 @@ export default function MonitoringPage() {
           loading={loading}
           size="small"
           tableLayout="auto"
-          pagination={false}
+          pagination={{
+            current: page,
+            pageSize,
+            total,
+            showSizeChanger: true,
+            pageSizeOptions: ["10", "20", "50", "100"],
+            showTotal: (tot, range) => `${range[0]}-${range[1]} из ${tot}`,
+            onChange: (p, ps) => {
+              setPage(p);
+              setPageSize(ps);
+            },
+          }}
         />
       </Card>
     </>

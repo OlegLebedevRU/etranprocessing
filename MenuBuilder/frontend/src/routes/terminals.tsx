@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import {
   Button,
   Card,
+  Input,
   message,
   Modal,
   Select,
@@ -14,6 +15,8 @@ import {
   LinkOutlined,
   DisconnectOutlined,
   EditOutlined,
+  ReloadOutlined,
+  SearchOutlined,
 } from "@ant-design/icons";
 import {
   getTerminals,
@@ -37,6 +40,8 @@ export default function TerminalsPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [variants, setVariants] = useState<MenuVariant[]>([]);
   const [statsMap, setStatsMap] = useState<Record<number, VariantStats>>({});
@@ -49,20 +54,37 @@ export default function TerminalsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [termRes, varRes] = await Promise.all([getTerminals(page, pageSize), getMenuVariants()]);
+      const [termRes, varRes] = await Promise.all([
+        getTerminals(page, pageSize, search),
+        getMenuVariants(),
+      ]);
       setTerminals(termRes.data.items);
       setTotal(termRes.data.total);
       setVariants(varRes.data);
 
-      const boundVariantIds = [...new Set(termRes.data.items.filter(t => t.menu_variant_id).map(t => t.menu_variant_id!))];
+      const boundVariantIds = [
+        ...new Set(
+          termRes.data.items
+            .filter((t) => t.menu_variant_id)
+            .map((t) => t.menu_variant_id!)
+        ),
+      ];
       const newStats: Record<number, VariantStats> = {};
       await Promise.all(
         boundVariantIds.map(async (vid) => {
-          if (statsMap[vid]) { newStats[vid] = statsMap[vid]; return; }
+          if (statsMap[vid]) {
+            newStats[vid] = statsMap[vid];
+            return;
+          }
           try {
             const s = await getStats(vid);
-            newStats[vid] = { groups: s.data.groups, services: s.data.services };
-          } catch { /* ignore */ }
+            newStats[vid] = {
+              groups: s.data.groups,
+              services: s.data.services,
+            };
+          } catch {
+            /* ignore */
+          }
         })
       );
       setStatsMap((prev) => ({ ...prev, ...newStats }));
@@ -71,9 +93,16 @@ export default function TerminalsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize]);
+  }, [page, pageSize, search]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const handleSearch = () => {
+    setPage(1);
+    setSearch(searchInput.trim());
+  };
 
   const openModal = (terminal: TerminalInfo) => {
     setModalTerminal(terminal);
@@ -176,6 +205,31 @@ export default function TerminalsPage() {
       <PageHeader
         title="Терминалы"
         subtitle="Привязка терминалов к вариантам меню"
+        extra={
+          <Space wrap>
+            <Input
+              placeholder="Поиск ID / SN / адрес"
+              prefix={<SearchOutlined />}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onPressEnter={handleSearch}
+              allowClear
+              style={{ width: 220 }}
+              size="small"
+            />
+            <Button size="small" type="primary" onClick={handleSearch}>
+              Найти
+            </Button>
+            <Button
+              size="small"
+              icon={<ReloadOutlined />}
+              onClick={load}
+              loading={loading}
+            >
+              Обновить
+            </Button>
+          </Space>
+        }
       />
       <Card styles={{ body: { padding: 0 } }}>
         <Table
@@ -192,8 +246,15 @@ export default function TerminalsPage() {
             showSizeChanger: true,
             pageSizeOptions: ["10", "20", "50", "100"],
             size: "small",
-            showTotal: (t) => <Text type="secondary" style={{ fontSize: 11 }}>{t} терм.</Text>,
-            onChange: (p, ps) => { setPage(p); setPageSize(ps); },
+            showTotal: (t, range) => (
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                {range[0]}-{range[1]} из {t} терм.
+              </Text>
+            ),
+            onChange: (p, ps) => {
+              setPage(p);
+              setPageSize(ps);
+            },
           }}
         />
       </Card>

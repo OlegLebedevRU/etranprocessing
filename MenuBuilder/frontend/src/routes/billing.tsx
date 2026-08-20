@@ -77,6 +77,15 @@ function daysUntilLicenseExpiry(t: BillingTerminal): number {
   );
 }
 
+/** Whether the terminal is disabled in licenses (or admin disabled) and excluded from payments. */
+function isTerminalDisabled(t: BillingTerminal): boolean {
+  return (
+    t.billing_status === "disabled" ||
+    t.billing_status === "admin_disabled" ||
+    t.billing_status === "no_license"
+  );
+}
+
 /** Lapsed, or expiring soon enough that it needs attention right away. */
 function isLicenseUrgent(t: BillingTerminal): boolean {
   return daysUntilLicenseExpiry(t) <= LICENSE_DUE_SOON_DAYS;
@@ -84,7 +93,7 @@ function isLicenseUrgent(t: BillingTerminal): boolean {
 
 /** Whether a license payment can be made for this terminal right now. */
 function isLicensePayable(t: BillingTerminal, advancePeriods: number): boolean {
-  if (t.billing_status === "admin_disabled") return false;
+  if (isTerminalDisabled(t)) return false;
   return isLicenseLapsed(t) || advancePeriods > 0;
 }
 
@@ -97,7 +106,7 @@ function shouldAutoSelectLicense(
   t: BillingTerminal,
   advancePeriods: number,
 ): boolean {
-  if (t.billing_status === "admin_disabled") return false;
+  if (isTerminalDisabled(t)) return false;
   if (isLicenseUrgent(t)) return true;
   if (advancePeriods > 0) {
     const horizonDays = advancePeriods * (t.billing_period_months || 1) * 30;
@@ -114,6 +123,7 @@ function shouldAutoSelectLicense(
  * expires — paying for a PIN twice makes no sense.
  */
 function isCertPayable(t: BillingTerminal): boolean {
+  if (isTerminalDisabled(t)) return false;
   return (
     t.tenant_pin_creation_enabled &&
     t.cert_pin_price_minor > 0 &&
@@ -355,14 +365,14 @@ export default function BillingPage() {
   // Advance-payment control: labelled in months, derived from the org tariff.
   const periodMonths = dominantPeriodMonths(terminals);
   const hasDebt = terminals.some(
-    (t) => t.billing_status !== "admin_disabled" && isLicenseLapsed(t),
+    (t) => !isTerminalDisabled(t) && isLicenseLapsed(t),
   );
   // A license expiring within a month needs at least one paid period right
   // away, which "Только задолженность" (0 periods) cannot cover — so that
   // option is only offered when nothing is that urgent.
   const hasUrgentDueSoon = terminals.some(
     (t) =>
-      t.billing_status !== "admin_disabled" &&
+      !isTerminalDisabled(t) &&
       !isLicenseLapsed(t) &&
       isLicenseUrgent(t),
   );
@@ -794,7 +804,13 @@ export default function BillingPage() {
           rowKey="terminal_id"
           size="small"
           tableLayout="auto"
-          pagination={false}
+          pagination={{
+            pageSize: 20,
+            showSizeChanger: true,
+            pageSizeOptions: ["10", "20", "50", "100"],
+            showTotal: (total, range) =>
+              `${range[0]}-${range[1]} из ${total} терм.`,
+          }}
           scroll={{ x: 1200 }}
         />
       </Card>

@@ -14,64 +14,70 @@ router = APIRouter()
 async def list_terminals(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    search: str | None = Query(None),
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """List terminals for the current user's organization."""
+    """List active licensed terminals for the current user's organization."""
+    from datetime import UTC, datetime
+
     from sqlalchemy import text
 
+    now = datetime.now(UTC)
     org_id = user.get("org_id")
     if org_id is not None:
-        org_id = int(org_id)
+        try:
+            org_id = int(org_id)
+        except ValueError, TypeError:
+            org_id = None
 
-    # Count total for this org
+    conditions = [
+        "t.is_active = true",
+        "EXISTS (SELECT 1 FROM licenses l WHERE l.terminal_id = t.id AND l.is_active = true AND (l.renewal_enabled = true OR l.expires_at > :now))",
+    ]
+    params: dict = {"now": now}
+
     if org_id is not None:
-        total = await db.scalar(
-            text("SELECT count(*) FROM terminals WHERE org_id = :org_id"),
-            {"org_id": org_id},
+        conditions.append("t.org_id = :org_id")
+        params["org_id"] = org_id
+
+    if search:
+        conditions.append(
+            "(CAST(t.device_id AS TEXT) ILIKE :search OR t.sn ILIKE :search OR t.address ILIKE :search)"
         )
-    else:
-        total = await db.scalar(text("SELECT count(*) FROM terminals"))
+        params["search"] = f"%{search.strip()}%"
 
-    # Get page of terminals with bindings, filtered by org
+    where_clause = " AND ".join(conditions)
+
+    # Count total for this org and active licenses
+    total = await db.scalar(
+        text(f"SELECT count(*) FROM terminals t WHERE {where_clause}"),
+        params,
+    )
+
+    # Get page of terminals with bindings
     offset = (page - 1) * page_size
-    if org_id is not None:
-        rows = (
-            await db.execute(
-                text("""
-                    SELECT t.id, t.device_id, t.sn, t.org_id, t.is_active,
-                           tmb.id as binding_id, tmb.menu_variant_id, mv.name as variant_name,
-                           t.address, t.note, t.terminal_type_id, tt.name as terminal_type_name,
-                           t.created_at
-                    FROM terminals t
-                    LEFT JOIN terminal_types tt ON tt.id = t.terminal_type_id
-                    LEFT JOIN terminal_menu_bindings tmb ON tmb.device_id = t.device_id
-                    LEFT JOIN menu_variants mv ON mv.id = tmb.menu_variant_id
-                    WHERE t.org_id = :org_id
-                    ORDER BY t.device_id
-                    LIMIT :limit OFFSET :offset
-                """),
-                {"limit": page_size, "offset": offset, "org_id": org_id},
-            )
-        ).fetchall()
-    else:
-        rows = (
-            await db.execute(
-                text("""
-                    SELECT t.id, t.device_id, t.sn, t.org_id, t.is_active,
-                           tmb.id as binding_id, tmb.menu_variant_id, mv.name as variant_name,
-                           t.address, t.note, t.terminal_type_id, tt.name as terminal_type_name,
-                           t.created_at
-                    FROM terminals t
-                    LEFT JOIN terminal_types tt ON tt.id = t.terminal_type_id
-                    LEFT JOIN terminal_menu_bindings tmb ON tmb.device_id = t.device_id
-                    LEFT JOIN menu_variants mv ON mv.id = tmb.menu_variant_id
-                    ORDER BY t.device_id
-                    LIMIT :limit OFFSET :offset
-                """),
-                {"limit": page_size, "offset": offset},
-            )
-        ).fetchall()
+    params["limit"] = page_size
+    params["offset"] = offset
+
+    rows = (
+        await db.execute(
+            text(f"""
+                SELECT t.id, t.device_id, t.sn, t.org_id, t.is_active,
+                       tmb.id as binding_id, tmb.menu_variant_id, mv.name as variant_name,
+                       t.address, t.note, t.terminal_type_id, tt.name as terminal_type_name,
+                       t.created_at
+                FROM terminals t
+                LEFT JOIN terminal_types tt ON tt.id = t.terminal_type_id
+                LEFT JOIN terminal_menu_bindings tmb ON tmb.device_id = t.device_id
+                LEFT JOIN menu_variants mv ON mv.id = tmb.menu_variant_id
+                WHERE {where_clause}
+                ORDER BY t.device_id
+                LIMIT :limit OFFSET :offset
+            """),
+            params,
+        )
+    ).fetchall()
 
     items = []
     for r in rows:

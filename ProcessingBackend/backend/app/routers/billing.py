@@ -577,6 +577,15 @@ async def create_checkout(
             )
 
         if item.include_cert_pin:
+            if billing.billing_status in (
+                BillingStatus.DISABLED,
+                BillingStatus.ADMIN_DISABLED,
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Terminal {item.terminal_id} is disabled.",
+                )
+
             if not org_settings.tenant_pin_creation_enabled:
                 raise HTTPException(
                     status_code=403,
