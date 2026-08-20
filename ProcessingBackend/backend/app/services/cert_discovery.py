@@ -85,5 +85,9 @@ async def record_terminal_discovery(
         await db.commit()
         return entry
     except Exception as e:  # noqa: BLE001
+        try:
+            await db.rollback()
+        except Exception:  # noqa: BLE001, S110
+            pass
         logger.debug("Failed to record terminal cert discovery: %s", e)
         return None

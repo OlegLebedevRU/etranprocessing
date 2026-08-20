@@ -9,6 +9,9 @@ import ReportsPage from "./routes/reports";
 import IntegrationsLayout from "./routes/integrations";
 import ApiTokensPage from "./routes/api-tokens";
 import BillingPage from "./routes/billing";
+import AdminLayout from "./routes/admin-layout";
+import AdminOrganizationsPage from "./routes/admin-organizations";
+import AdminTerminalsPage from "./routes/admin-terminals";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem("mb_token");
@@ -44,6 +47,14 @@ export default function App() {
             element={<Navigate to="/integrations/tokens" replace />}
           />
           <Route path="tokens" element={<ApiTokensPage />} />
+        </Route>
+        <Route path="admin" element={<AdminLayout />}>
+          <Route
+            index
+            element={<Navigate to="/admin/organizations" replace />}
+          />
+          <Route path="organizations" element={<AdminOrganizationsPage />} />
+          <Route path="terminals" element={<AdminTerminalsPage />} />
         </Route>
         {/* Legacy paths kept so existing bookmarks keep working */}
         <Route

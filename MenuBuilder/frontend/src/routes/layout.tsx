@@ -10,6 +10,7 @@ import {
   MenuUnfoldOutlined,
   LogoutOutlined,
   ApiOutlined,
+  ControlOutlined,
 } from "@ant-design/icons";
 import { getMe, type UserInfo } from "../api/auth";
 import { OrgSwitcher } from "../components/OrgSwitcher";
@@ -60,8 +61,25 @@ export default function AppLayout() {
     };
   }, []);
 
+  const isSuperuser =
+    Boolean(currentUser?.is_superuser) ||
+    localStorage.getItem("mb_is_superuser") === "true";
+
+  const navItems = [
+    ...NAV_ITEMS,
+    ...(isSuperuser
+      ? [
+          {
+            key: "admin",
+            icon: <ControlOutlined />,
+            label: "Администрирование",
+          },
+        ]
+      : []),
+  ];
+
   const segment = location.pathname.split("/")[1] || "monitoring";
-  const selectedKey = NAV_ITEMS.some((i) => i.key === segment)
+  const selectedKey = navItems.some((i) => i.key === segment)
     ? segment
     : "monitoring";
 
@@ -123,7 +141,7 @@ export default function AppLayout() {
           mode="inline"
           selectedKeys={[selectedKey]}
           onClick={({ key }) => navigate(`/${key}`)}
-          items={NAV_ITEMS}
+          items={navItems}
           style={{ borderInlineEnd: "none", paddingInline: 6 }}
         />
       </Sider>
@@ -149,7 +167,7 @@ export default function AppLayout() {
             onClick={() => setCollapsed((v) => !v)}
           />
           <Text strong style={{ marginLeft: 12, fontSize: 14 }}>
-            {NAV_ITEMS.find((i) => i.key === selectedKey)?.label}
+            {navItems.find((i) => i.key === selectedKey)?.label}
           </Text>
           <div
             style={{

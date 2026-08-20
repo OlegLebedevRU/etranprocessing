@@ -833,7 +833,7 @@ export default function AdminTerminalsPage() {
             <Switch checkedChildren="Активен" unCheckedChildren="Отключен" />
           </Form.Item>
 
-          <Divider orientation="left" style={{ margin: "16px 0 12px" }}>
+          <Divider style={{ margin: "16px 0 12px" }}>
             Настройки лицензии терминала
           </Divider>
 

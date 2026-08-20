@@ -34,6 +34,8 @@ def get_params_from_request(request: Request, body: bytes) -> dict:
 
 @router.get("")
 @router.post("")
+@router.get("/etran.ashx")
+@router.post("/etran.ashx")
 async def techgate_dispatch(
     request: Request,
     terminal: Terminal = Depends(get_current_terminal),
@@ -119,7 +121,7 @@ async def save_tech_gate_record(
     response_status: str = "ok",
 ):
     record = TechGateRecord(
-        device_id=terminal.device_id,
+        device_id=terminal.device_id or 0,
         sn=terminal.sn,
         function_name=function_name,
         request_data=request_data,

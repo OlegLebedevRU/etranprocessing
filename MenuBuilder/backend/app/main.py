@@ -10,7 +10,9 @@ from app.config import settings
 from app.database import Base, async_session, engine
 from app.models import Group, MenuVariant, Service, TerminalMenuBinding
 from app.routers import (
+    admin_organizations,
     admin_tenants,
+    admin_terminals,
     auth,
     groups,
     mcp_proxy,
@@ -40,6 +42,8 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/api", tags=["auth"])
 app.include_router(admin_tenants.router, prefix="/api", tags=["admin-tenants"])
+app.include_router(admin_organizations.router, tags=["admin-organizations"])
+app.include_router(admin_terminals.router, tags=["admin-terminals"])
 app.include_router(groups.router, prefix="/api/groups", tags=["groups"])
 app.include_router(services.router, prefix="/api/services", tags=["services"])
 app.include_router(

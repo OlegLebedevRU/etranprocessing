@@ -1,4 +1,5 @@
 from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -7,13 +8,10 @@ from app.auth import (
     create_master_token,
     create_tenant_token,
     decode_token,
-    get_current_user,
-    require_superuser,
 )
-from app.config import settings
 from app.main import app
 from app.models import Org
-from app.user_store import ConfigUserStore, UserRecord, get_user_store
+from app.user_store import UserRecord, get_user_store
 
 
 @pytest.fixture(autouse=True)

@@ -75,3 +75,5 @@ package-lock.json
 Thumbs.db
 
 *.tsbuildinfo
+
+.mimocode/
