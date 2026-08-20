@@ -195,25 +195,30 @@ async def test_mismatched_cert_serial_not_overwritten():
 
     mock_db = AsyncMock()
     mock_db.add = MagicMock()
-    # Primary lookup (sn='CN...', cert_serial='BBB') -> None
+    # 1. Primary lookup (sn='CN...', cert_serial='BBB') -> None
     exec_result_exact = MagicMock()
     exec_result_exact.scalar_one_or_none.return_value = None
 
-    # Fallback lookup (sn='CN...', cert_serial is None/empty) -> None (since DB has cert_serial='AAA')
-    exec_result_fallback = MagicMock()
-    exec_result_fallback.scalar_one_or_none.return_value = None
+    # 2. Autobind lookup by SN (sn='CN...', cert_serial is None/empty) -> None
+    exec_result_fallback_sn = MagicMock()
+    exec_result_fallback_sn.scalar_one_or_none.return_value = None
 
-    # Diagnostic lookup (sn='CN...') -> db_terminal
+    # 3. Autobind lookup by OU (device_id=773, org_id=1, cert_serial is None/empty) -> None
+    exec_result_fallback_ou = MagicMock()
+    exec_result_fallback_ou.scalar_one_or_none.return_value = None
+
+    # 4. Diagnostic lookup (sn='CN...') -> db_terminal (serial mismatch)
     exec_result_diag = MagicMock()
     exec_result_diag.scalar_one_or_none.return_value = db_terminal
 
-    # Discovery lookup -> None
+    # 5. Discovery lookup -> None
     exec_result_disc = MagicMock()
     exec_result_disc.scalar_one_or_none.return_value = None
 
     mock_db.execute.side_effect = [
         exec_result_exact,
-        exec_result_fallback,
+        exec_result_fallback_sn,
+        exec_result_fallback_ou,
         exec_result_diag,
         exec_result_disc,
     ]

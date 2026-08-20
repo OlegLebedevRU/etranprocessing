@@ -176,22 +176,145 @@ async def test_discovery_on_serial_mismatch():
     exec_exact = MagicMock()
     exec_exact.scalar_one_or_none.return_value = None
 
-    # 2. Fallback lookup (sn='SN123', cert_serial is None/empty) -> None
-    exec_fallback = MagicMock()
-    exec_fallback.scalar_one_or_none.return_value = None
+    # 2. Autobind lookup by SN -> None
+    exec_fallback_sn = MagicMock()
+    exec_fallback_sn.scalar_one_or_none.return_value = None
 
-    # 3. Diagnostic lookup (sn='SN123') -> db_terminal (serial mismatch!)
+    # 3. Autobind lookup by OU -> None
+    exec_fallback_ou = MagicMock()
+    exec_fallback_ou.scalar_one_or_none.return_value = None
+
+    # 4. Diagnostic lookup (sn='SN123') -> db_terminal (serial mismatch!)
     exec_diag = MagicMock()
     exec_diag.scalar_one_or_none.return_value = db_terminal
 
-    # 4. Discovery lookup -> None
+    # 5. Discovery lookup -> None
     exec_disc = MagicMock()
     exec_disc.scalar_one_or_none.return_value = None
 
-    mock_db.execute.side_effect = [exec_exact, exec_fallback, exec_diag, exec_disc]
+    mock_db.execute.side_effect = [
+        exec_exact,
+        exec_fallback_sn,
+        exec_fallback_ou,
+        exec_diag,
+        exec_disc,
+    ]
 
     with pytest.raises(HTTPException) as exc:
         await get_current_terminal(req, mock_db)
 
     assert exc.value.status_code == 401
     mock_db.commit.assert_awaited()
+
+
+@pytest.mark.anyio
+async def test_discovery_on_ou_fallback_matching():
+    """get_current_terminal authenticates and logs discovery via OU/O fallback when CN is mismatched from migration."""
+    req = _make_mock_request(
+        path="/api/licensebilling",
+        dn="CN=D5DD9F6A7D29079A64668DE35E101263,OU=209,O=424",
+        serial="11496",
+    )
+
+    db_terminal = Terminal(
+        id=1076,
+        device_id=209,
+        sn="27787473",
+        cert_serial=None,
+        org_id=424,
+        is_active=True,
+    )
+
+    mock_db = AsyncMock()
+    mock_db.add = MagicMock()
+
+    # 1. Exact match (sn='D5DD9F6A...', cert_serial='11496') -> None
+    exec_exact = MagicMock()
+    exec_exact.scalar_one_or_none.return_value = None
+
+    # 2. Auto-bind lookup by SN -> None
+    exec_autobind_sn = MagicMock()
+    exec_autobind_sn.scalar_one_or_none.return_value = None
+
+    # 3. Auto-bind lookup by OU -> None
+    exec_autobind_ou = MagicMock()
+    exec_autobind_ou.scalar_one_or_none.return_value = None
+
+    # 4. Diagnostic check by CN ('D5DD9F6A...') -> None (CN not found in DB)
+    exec_diag = MagicMock()
+    exec_diag.scalar_one_or_none.return_value = None
+
+    # 5. OU/O fallback lookup (device_id=209, org_id=424) -> db_terminal
+    exec_ou = MagicMock()
+    exec_ou.scalar_one_or_none.return_value = db_terminal
+
+    # 6. Discovery lookup -> None (new record)
+    exec_disc = MagicMock()
+    exec_disc.scalar_one_or_none.return_value = None
+
+    mock_db.execute.side_effect = [
+        exec_exact,
+        exec_autobind_sn,
+        exec_autobind_ou,
+        exec_diag,
+        exec_ou,
+        exec_disc,
+    ]
+
+    res = await get_current_terminal(req, mock_db)
+    assert res is db_terminal
+    assert db_terminal.cert_serial == "11496"
+    mock_db.commit.assert_awaited()
+
+
+@pytest.mark.anyio
+async def test_ou_fallback_disabled_in_settings():
+    """When transition_ou_fallback_auth=False, mismatched CN raises 401 even if OU matches."""
+    from app.config import settings
+
+    orig_setting = settings.transition_ou_fallback_auth
+    settings.transition_ou_fallback_auth = False
+    try:
+        req = _make_mock_request(
+            path="/api/licensebilling",
+            dn="CN=D5DD9F6A7D29079A64668DE35E101263,OU=209,O=424",
+            serial="11496",
+        )
+
+        mock_db = AsyncMock()
+        mock_db.add = MagicMock()
+
+        # 1. Exact match -> None
+        exec_exact = MagicMock()
+        exec_exact.scalar_one_or_none.return_value = None
+
+        # 2. Auto-bind fallback by SN -> None
+        exec_autobind_sn = MagicMock()
+        exec_autobind_sn.scalar_one_or_none.return_value = None
+
+        # 3. Auto-bind fallback by OU -> None
+        exec_autobind_ou = MagicMock()
+        exec_autobind_ou.scalar_one_or_none.return_value = None
+
+        # 4. Diagnostic lookup by CN -> None
+        exec_diag = MagicMock()
+        exec_diag.scalar_one_or_none.return_value = None
+
+        # 5. Discovery lookup -> None
+        exec_disc = MagicMock()
+        exec_disc.scalar_one_or_none.return_value = None
+
+        mock_db.execute.side_effect = [
+            exec_exact,
+            exec_autobind_sn,
+            exec_autobind_ou,
+            exec_diag,
+            exec_disc,
+        ]
+
+        with pytest.raises(HTTPException) as exc:
+            await get_current_terminal(req, mock_db)
+
+        assert exc.value.status_code == 401
+    finally:
+        settings.transition_ou_fallback_auth = orig_setting
