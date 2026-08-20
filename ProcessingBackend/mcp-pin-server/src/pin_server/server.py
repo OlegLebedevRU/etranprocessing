@@ -158,6 +158,9 @@ async def list_terminals(
             "sn": r["sn"],
             "org_id": r["org_id"],
             "is_active": r["is_active"],
+            "address": r.get("address"),
+            "note": r.get("note"),
+            "terminal_type_id": r.get("terminal_type_id", 0),
         }
         if include_pins:
             pins = await db.fetch(
@@ -203,6 +206,9 @@ async def terminal_status(
         "org_id": terminal["org_id"],
         "is_active": terminal["is_active"],
         "cert_serial": terminal["cert_serial"],
+        "address": terminal.get("address"),
+        "note": terminal.get("note"),
+        "terminal_type_id": terminal.get("terminal_type_id", 0),
         "created_at": str(terminal["created_at"]),
         "pins": [
             {

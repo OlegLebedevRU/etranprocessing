@@ -71,6 +71,11 @@ class BillingTerminalRead(BaseModel):
     cert_expiring_soon: bool = False
     cert_pin_pending: bool = False
     cert_pin_expires_at: datetime | None = None
+    address: str | None = None
+    note: str | None = None
+    terminal_type_id: int = 0
+    terminal_type_name: str | None = None
+    created_at: datetime | None = None
 
 
 class DeactivateTerminalResponse(BaseModel):

@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     cert_pin_ttl_hours: int = 24
     cert_expiring_soon_days: int = 30
 
+    # Auto-populate cert_serial on licensebilling if unset (e.g. legacy migrated terminal)
+    auto_set_cert_serial_on_licensebilling: bool = True
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
     @property

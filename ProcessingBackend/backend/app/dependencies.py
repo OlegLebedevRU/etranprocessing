@@ -6,8 +6,9 @@ from fastapi import Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
-from app.models import License, OrgStatus, Terminal
+from app.models import License, OrgStatus, Terminal, TerminalCertHistory
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +77,32 @@ async def get_current_terminal(
         )
     )
     terminal = result.scalar_one_or_none()
+
+    if not terminal:
+        is_licensebilling = request.url.path.startswith(
+            "/api/licensebilling"
+        ) or request.url.path.startswith("/licensebilling")
+        if is_licensebilling and settings.auto_set_cert_serial_on_licensebilling:
+            result = await db.execute(
+                select(Terminal).where(
+                    Terminal.sn == cn,
+                    (Terminal.cert_serial.is_(None)) | (Terminal.cert_serial == ""),
+                )
+            )
+            terminal = result.scalar_one_or_none()
+            if terminal:
+                logger.info(
+                    f"Auto-populating cert_serial for terminal {terminal.sn} (id={terminal.id}) with '{cert_serial}' from licensebilling request"
+                )
+                terminal.cert_serial = cert_serial
+                db.add(
+                    TerminalCertHistory(
+                        terminal_id=terminal.id,
+                        cert_serial=cert_serial,
+                        source="licensebilling",
+                    )
+                )
+                await db.commit()
 
     if not terminal:
         logger.warning(

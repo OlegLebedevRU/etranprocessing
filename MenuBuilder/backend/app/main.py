@@ -182,9 +182,12 @@ async def get_monitoring():
         terminals = (
             await session.execute(
                 text(
-                    "SELECT id, device_id, sn, org_id, is_active, "
-                    "cert_serial, cert_not_valid_after "
-                    "FROM terminals ORDER BY device_id"
+                    "SELECT t.id, t.device_id, t.sn, t.org_id, t.is_active, "
+                    "t.cert_serial, t.cert_not_valid_after, t.address, t.note, "
+                    "t.terminal_type_id, tt.name AS terminal_type_name, t.created_at "
+                    "FROM terminals t "
+                    "LEFT JOIN terminal_types tt ON tt.id = t.terminal_type_id "
+                    "ORDER BY t.device_id"
                 )
             )
         ).fetchall()
@@ -325,6 +328,13 @@ async def get_monitoring():
                 "cert_not_valid_after": cert_not_valid_after.isoformat()
                 if cert_not_valid_after
                 else None,
+                "address": t[7],
+                "note": t[8],
+                "terminal_type_id": t[9] if t[9] is not None else 0,
+                "terminal_type_name": t[10]
+                if t[10] is not None
+                else ("Стандартный" if (t[9] == 0 or t[9] is None) else f"Тип {t[9]}"),
+                "created_at": t[11].isoformat() if t[11] else None,
             }
         )
 

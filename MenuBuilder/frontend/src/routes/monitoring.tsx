@@ -122,6 +122,32 @@ export default function MonitoringPage() {
       ),
     },
     {
+      title: "Тип",
+      dataIndex: "terminal_type_name",
+      key: "terminal_type",
+      render: (v: string | null, record: MonitoringTerminal) => (
+        <Text style={{ fontSize: 12, whiteSpace: "nowrap" }}>
+          {v || (record.terminal_type_id !== undefined ? `Тип ${record.terminal_type_id}` : "—")}
+        </Text>
+      ),
+    },
+    {
+      title: "Адрес",
+      dataIndex: "address",
+      key: "address",
+      render: (v: string | null) => (
+        v ? (
+          <Tooltip title={v}>
+            <Text style={{ fontSize: 12, maxWidth: 180, display: "inline-block" }} ellipsis>
+              {v}
+            </Text>
+          </Tooltip>
+        ) : (
+          <Text style={{ fontSize: 12, color: COLOR.muted }}>—</Text>
+        )
+      ),
+    },
+    {
       title: "Связь",
       key: "slots",
       render: (_: unknown, record: MonitoringTerminal) => (

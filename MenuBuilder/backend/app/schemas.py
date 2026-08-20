@@ -109,3 +109,8 @@ class TerminalInfo(BaseModel):
     binding_id: int | None = None
     menu_variant_id: int | None = None
     menu_variant_name: str | None = None
+    address: str | None = None
+    note: str | None = None
+    terminal_type_id: int = 0
+    terminal_type_name: str | None = None
+    created_at: datetime | None = None

@@ -42,7 +42,3 @@ log/
 
 # Docker
 .docker/
-
-# Alembic
-alembic/versions/*.py
-!alembic/versions/.gitkeep

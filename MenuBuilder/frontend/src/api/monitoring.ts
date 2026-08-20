@@ -19,6 +19,11 @@ export interface MonitoringTerminal {
   license_expires_at: string | null;
   cert_serial: string | null;
   cert_not_valid_after: string | null;
+  address?: string | null;
+  note?: string | null;
+  terminal_type_id?: number;
+  terminal_type_name?: string | null;
+  created_at?: string | null;
 }
 
 export interface MonitoringResponse {

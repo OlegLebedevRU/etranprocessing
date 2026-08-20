@@ -50,6 +50,11 @@ export interface BillingTerminal {
   cert_expiring_soon: boolean;
   cert_pin_pending: boolean;
   cert_pin_expires_at: string | null;
+  address?: string | null;
+  note?: string | null;
+  terminal_type_id?: number;
+  terminal_type_name?: string | null;
+  created_at?: string | null;
 }
 
 export interface DeactivateResponse {

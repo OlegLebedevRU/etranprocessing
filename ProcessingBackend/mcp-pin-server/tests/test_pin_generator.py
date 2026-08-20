@@ -20,7 +20,9 @@ def test_generate_pin_randomness():
 @pytest.mark.asyncio
 async def test_generate_unique_pin():
     mock_db = AsyncMock()
-    mock_db.fetchval = AsyncMock(side_effect=[True, False])  # first exists, second doesn't
+    mock_db.fetchval = AsyncMock(
+        side_effect=[True, False]
+    )  # first exists, second doesn't
 
     pin = await generate_unique_pin(mock_db)
     assert len(pin) == 6

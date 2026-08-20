@@ -138,6 +138,9 @@ async def _get_terminal_billing_data(
     )
     as_of = datetime.now(UTC)
     pending_pin = await _get_pending_cert_pin(db, terminal.id, as_of)
+    type_name = (
+        getattr(getattr(terminal, "terminal_type", None), "name", None) or "Стандартный"
+    )
 
     return TerminalBillingInfo(
         terminal_id=terminal.id,
@@ -163,6 +166,11 @@ async def _get_terminal_billing_data(
         cert_operation=cert_operation,
         cert_pin_pending=pending_pin is not None,
         cert_pin_expires_at=pending_pin.expires_at if pending_pin else None,
+        address=getattr(terminal, "address", None),
+        note=getattr(terminal, "note", None),
+        terminal_type_id=getattr(terminal, "terminal_type_id", 0) or 0,
+        terminal_type_name=type_name,
+        created_at=getattr(terminal, "created_at", None),
     )
 
 
@@ -211,6 +219,10 @@ async def _get_all_terminal_billing(
             org_settings, terminal.cert_serial
         )
         pending_pin = pending_pin_by_terminal.get(terminal.id)
+        type_name = (
+            getattr(getattr(terminal, "terminal_type", None), "name", None)
+            or "Стандартный"
+        )
         infos.append(
             TerminalBillingInfo(
                 terminal_id=terminal.id,
@@ -236,6 +248,11 @@ async def _get_all_terminal_billing(
                 cert_operation=cert_operation,
                 cert_pin_pending=pending_pin is not None,
                 cert_pin_expires_at=pending_pin.expires_at if pending_pin else None,
+                address=getattr(terminal, "address", None),
+                note=getattr(terminal, "note", None),
+                terminal_type_id=getattr(terminal, "terminal_type_id", 0) or 0,
+                terminal_type_name=type_name,
+                created_at=getattr(terminal, "created_at", None),
             )
         )
     return infos

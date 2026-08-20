@@ -1,0 +1,98 @@
+# Project Guidelines & Overview
+
+## 1. Project Overview
+
+**etranprocessing** is a payment processing platform and terminal management ecosystem. It handles payment requests from self-service payment kiosks/terminals, verifies client certificates and authentication, executes routing and balance accounting, and provides terminal menu configuration and administrative tools.
+
+The platform is transitioning from a legacy ASP.NET / Microsoft SQL Server architecture to a modern asynchronous Python (FastAPI) / PostgreSQL stack with mutual TLS termination at Nginx.
+
+---
+
+## 2. Architecture & Request Flow
+
+```
+Payment Terminal (Mutual TLS HTTPS)
+        │
+        ▼
+Nginx Reverse Proxy (SSL / Client Cert validation)
+  - Validates client certificate
+  - Forwards identity headers (X-Client-Cert-DN, X-Client-Cert-Serial, etc.)
+        │
+        ▼
+ProcessingBackend (FastAPI + SQLAlchemy + asyncpg)
+  - Authenticates terminal from cert headers
+  - Validates payment / tech request & calculates tariffs/rewards
+  - Persists payments and updates balances
+        │
+        ▼
+PostgreSQL Database
+```
+
+---
+
+## 3. Repository Structure & Subprojects
+
+| Directory / Subproject | Technology / Framework | Description | Entry Point / Key Files |
+|---|---|---|---|
+| **`ProcessingBackend/backend`** | Python 3.14, FastAPI, SQLAlchemy (asyncpg), Alembic | Core payment processing REST API (payments, tech gate, license billing, balance tracking) | `uvicorn app.main:app` |
+| **`ProcessingBackend/mcp-pin-server`** | Python 3.14, FastMCP / MCP SDK | Model Context Protocol server for PIN operations & certificate tools | `python -m pin_server.server` |
+| **`MenuBuilder/backend`** | Python 3.14, FastAPI, SQLAlchemy | Backend service for terminal menu structures, categories, and payment items | `uvicorn app.main:app` |
+| **`MenuBuilder/frontend`** | React, TypeScript, Vite, Tailwind CSS | Web UI for configuring terminal payment menus | `npm run build` / `npm run dev` |
+| **`BACK/`** | Legacy C#, ASP.NET (.NET Framework) | Legacy processing core (`ProcessingCore/EtranDispatcher`, SOAP processors) | `Global.asax`, `EtranDispatcher.asmx` |
+| **`FRONT/`** | Legacy ASP.NET | Legacy front-facing web apps (`TechGate`, `GateGauge`, `licensebilling`, `Certificates`) | Web endpoints |
+| **`CommonLibs/`** | Legacy .NET Framework | Shared legacy C# utility libraries and DLLs | Visual Studio Solution |
+| **`GateYandexMoney/`** | Legacy C# | External payment gateway integration for Yandex.Money | Web services |
+| **`migrate/`** | Python / SQL scripts | Database migration utilities for transitioning MSSQL data to PostgreSQL | Migration scripts |
+| **`stored-procedures/`** | T-SQL | Legacy MSSQL stored procedures for business logic, routing, and ledger tracking | `.sql` scripts |
+| **`docs/`** | Markdown | Comprehensive architecture guides, DevOps runbooks, and billing plans | `devops-runbook.md`, `README.md` |
+
+---
+
+## 4. Development & Code Quality Guidelines
+
+### Python Standards
+- **Python Version**: Target **Python 3.14** (`requires-python = "==3.14.*"`).
+- **Package Manager**: Use `uv` for dependency management and running tools.
+- **Linters & Formatters**: Before committing or deploying, ensure all three checks pass in Python subprojects:
+  ```bash
+  uv run ruff check --fix <src_dir>
+  uv run ruff format <src_dir>
+  uv run pyright <src_dir>
+  ```
+- **Async Best Practices**: Use asynchronous SQLAlchemy 2.0 sessions (`AsyncSession`), `select()` syntax, and avoid blocking synchronous I/O.
+
+### Frontend Standards (MenuBuilder/frontend)
+- Use TypeScript with strict typing.
+- Run `npm run build` to verify production bundle creation.
+
+---
+
+## 5. Security & Secrets Policy
+
+**NEVER** commit or hardcode secrets, passwords, database credentials, internal tokens, or production API keys.
+
+1. **Environment Variables**:
+   - Store secrets only in `.env` files (never committed to git) or pass them via environment variables.
+   - Pydantic Settings classes must use `extra = "ignore"` to tolerate shared `.env` files.
+   - Default values for configuration keys must remain empty strings or non-sensitive local defaults (`localhost`, `[]`).
+2. **Database Credentials**:
+   - Database connection URLs in code must never contain hardcoded username/password credentials.
+3. **JWT Claims & Auth**:
+   - `org_id` claims inside JWT tokens may arrive as strings — always cast to `int` at the authentication boundary (`get_current_user`).
+
+---
+
+## 6. Testing & Verification
+
+- Run test suites using `uv run pytest` in the respective subproject directories (`ProcessingBackend/backend`, `MenuBuilder/backend`).
+- When writing tests for authenticated routes:
+  - Generate short-lived mock JWT tokens using the application's internal token generator (`create_access_token`).
+  - Use simulated certificate headers (`X-Client-Cert-DN`, `X-Client-Cert-Serial`) when testing terminal-authenticated endpoints.
+- Clean up any temporary test scripts, scratch SQL files, or test tokens after verification.
+
+---
+
+## 7. Deployment & Operations
+
+- **Container Orchestration**: Docker Compose is used for deploying backend services, Nginx mutual TLS proxy, and PostgreSQL (`docker-compose.yaml`).
+- **Legacy IIS Deployments**: Legacy ASP.NET endpoints use an App_Code dynamic compilation model (no-compile deployment) as documented in `ProcessingBackend/docs/devops-runbook.md`.

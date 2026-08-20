@@ -406,6 +406,35 @@ export default function BillingPage() {
       sorter: (a, b) => a.device_id - b.device_id,
     },
     {
+      title: "Тип",
+      dataIndex: "terminal_type_name",
+      key: "terminal_type",
+      width: 140,
+      render: (v: string | null, r: BillingTerminal) => (
+        <Text style={{ fontSize: 12 }}>
+          {v || (r.terminal_type_id !== undefined ? `Тип ${r.terminal_type_id}` : "—")}
+        </Text>
+      ),
+    },
+    {
+      title: "Адрес",
+      dataIndex: "address",
+      key: "address",
+      width: 180,
+      ellipsis: true,
+      render: (v: string | null) => (
+        v ? (
+          <Tooltip title={v}>
+            <Text style={{ fontSize: 12 }}>{v}</Text>
+          </Tooltip>
+        ) : (
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            —
+          </Text>
+        )
+      ),
+    },
+    {
       title: "Статус",
       dataIndex: "billing_status",
       key: "status",

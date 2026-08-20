@@ -66,6 +66,11 @@ class TerminalBillingInfo:
     cert_operation: str = "primary_issue"
     cert_pin_pending: bool = False
     cert_pin_expires_at: datetime | None = None
+    address: str | None = None
+    note: str | None = None
+    terminal_type_id: int = 0
+    terminal_type_name: str | None = None
+    created_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,6 +106,11 @@ class TerminalBillingResult:
     cert_expiring_soon: bool = False
     cert_pin_pending: bool = False
     cert_pin_expires_at: datetime | None = None
+    address: str | None = None
+    note: str | None = None
+    terminal_type_id: int = 0
+    terminal_type_name: str | None = None
+    created_at: datetime | None = None
 
 
 def add_billing_months(expires_at: datetime, months: int) -> datetime:
@@ -374,6 +384,11 @@ def compute_terminal_billing(
         ),
         cert_pin_pending=info.cert_pin_pending,
         cert_pin_expires_at=info.cert_pin_expires_at,
+        address=info.address,
+        note=info.note,
+        terminal_type_id=info.terminal_type_id,
+        terminal_type_name=info.terminal_type_name,
+        created_at=info.created_at,
     )
 
 

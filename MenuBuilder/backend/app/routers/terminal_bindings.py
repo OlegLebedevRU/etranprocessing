@@ -40,8 +40,11 @@ async def list_terminals(
             await db.execute(
                 text("""
                     SELECT t.id, t.device_id, t.sn, t.org_id, t.is_active,
-                           tmb.id as binding_id, tmb.menu_variant_id, mv.name as variant_name
+                           tmb.id as binding_id, tmb.menu_variant_id, mv.name as variant_name,
+                           t.address, t.note, t.terminal_type_id, tt.name as terminal_type_name,
+                           t.created_at
                     FROM terminals t
+                    LEFT JOIN terminal_types tt ON tt.id = t.terminal_type_id
                     LEFT JOIN terminal_menu_bindings tmb ON tmb.device_id = t.device_id
                     LEFT JOIN menu_variants mv ON mv.id = tmb.menu_variant_id
                     WHERE t.org_id = :org_id
@@ -56,8 +59,11 @@ async def list_terminals(
             await db.execute(
                 text("""
                     SELECT t.id, t.device_id, t.sn, t.org_id, t.is_active,
-                           tmb.id as binding_id, tmb.menu_variant_id, mv.name as variant_name
+                           tmb.id as binding_id, tmb.menu_variant_id, mv.name as variant_name,
+                           t.address, t.note, t.terminal_type_id, tt.name as terminal_type_name,
+                           t.created_at
                     FROM terminals t
+                    LEFT JOIN terminal_types tt ON tt.id = t.terminal_type_id
                     LEFT JOIN terminal_menu_bindings tmb ON tmb.device_id = t.device_id
                     LEFT JOIN menu_variants mv ON mv.id = tmb.menu_variant_id
                     ORDER BY t.device_id
@@ -79,6 +85,15 @@ async def list_terminals(
                 binding_id=r[5],
                 menu_variant_id=r[6],
                 menu_variant_name=r[7],
+                address=r[8],
+                note=r[9],
+                terminal_type_id=r[10] if r[10] is not None else 0,
+                terminal_type_name=r[11]
+                if r[11] is not None
+                else (
+                    "Стандартный" if (r[10] == 0 or r[10] is None) else f"Тип {r[10]}"
+                ),
+                created_at=r[12],
             )
         )
 

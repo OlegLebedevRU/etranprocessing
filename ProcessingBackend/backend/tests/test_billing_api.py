@@ -30,7 +30,15 @@ def _make_user(org_id: int = 1, username: str = "testuser") -> JwtUser:
     return JwtUser(username=username, org_id=org_id)
 
 
-def _make_terminal(id: int = 1, org_id: int = 1, is_active: bool = True) -> MagicMock:
+def _make_terminal(
+    id: int = 1,
+    org_id: int = 1,
+    is_active: bool = True,
+    address: str | None = None,
+    note: str | None = None,
+    terminal_type_id: int = 0,
+    terminal_type_name: str | None = None,
+) -> MagicMock:
     t = MagicMock()
     t.id = id
     t.device_id = 100 + id
@@ -39,6 +47,16 @@ def _make_terminal(id: int = 1, org_id: int = 1, is_active: bool = True) -> Magi
     t.is_active = is_active
     t.cert_serial = None
     t.cert_not_valid_after = None
+    t.address = address
+    t.note = note
+    t.terminal_type_id = terminal_type_id
+    if terminal_type_name:
+        tt = MagicMock()
+        tt.name = terminal_type_name
+        t.terminal_type = tt
+    else:
+        t.terminal_type = None
+    t.created_at = datetime(2026, 1, 1, tzinfo=UTC)
     return t
 
 
@@ -532,3 +550,58 @@ async def test_checkout_rejects_empty_selection():
     )
 
     assert resp.status_code == 400
+
+
+@pytest.mark.anyio
+async def test_get_billing_terminals_returns_address_and_type_fields():
+    """GET /api/billing/terminals returns address, note, terminal_type_id, terminal_type_name, created_at."""
+    user = _make_user()
+    terminal = _make_terminal(
+        address="г. Москва, ул. Ленина, д. 10",
+        note="Главный вход",
+        terminal_type_id=1,
+        terminal_type_name="Платежный терминал",
+    )
+    license_ = _make_license()
+    org_settings = _make_org_settings()
+
+    mock_db = AsyncMock()
+
+    def execute_side_effect(stmt):
+        stmt_str = str(stmt)
+        result = MagicMock()
+        if "org_billing_settings" in stmt_str:
+            result.scalar_one_or_none.return_value = org_settings
+        elif "terminals" in stmt_str:
+            result.all.return_value = [(terminal, license_)]
+        elif "certificate_pins" in stmt_str:
+            result.scalars.return_value.all.return_value = []
+        else:
+            result.scalar_one_or_none.return_value = None
+            result.scalars.return_value = MagicMock(return_value=[])
+        return result
+
+    mock_db.execute = AsyncMock(side_effect=execute_side_effect)
+
+    async def override_get_db():
+        yield mock_db
+
+    from app.database import get_db
+    from app.dependencies import get_current_user_jwt
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_jwt] = lambda: user
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/api/billing/terminals")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 1
+    t_data = data[0]
+    assert t_data["address"] == "г. Москва, ул. Ленина, д. 10"
+    assert t_data["note"] == "Главный вход"
+    assert t_data["terminal_type_id"] == 1
+    assert t_data["terminal_type_name"] == "Платежный терминал"
+    assert t_data["created_at"] is not None
