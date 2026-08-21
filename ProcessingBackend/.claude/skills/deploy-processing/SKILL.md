@@ -22,13 +22,14 @@ Deploys ProcessingBackend (FastAPI) and mcp-pin-server to the production server 
 
 ### Step 0: Pre-deploy checks (mandatory)
 
-**0a. Code quality — all must pass with zero errors:**
+**0a. Code quality & tests — all must pass with zero errors:**
 
 ```bash
 cd D:\repo\platerra\Public\etranprocessing\ProcessingBackend\backend
 uv run ruff check --fix app/
 uv run ruff format app/
 uv run pyright app/
+uv run pytest tests/
 ```
 
 ```bash
@@ -76,6 +77,17 @@ scp -i d:\.ssh\free-tier-cloud_ru -r "D:\repo\platerra\Public\etranprocessing\Pr
 ```bash
 scp -i d:\.ssh\free-tier-cloud_ru "D:\repo\platerra\Public\etranprocessing\ProcessingBackend\docker-compose.yaml" user1@176.108.247.249:/home/user1/ProcessingBackend/docker-compose.yaml
 ssh user1@176.108.247.249 -i d:\.ssh\free-tier-cloud_ru "sudo docker compose -f /home/user1/ProcessingBackend/docker-compose.yaml up -d --build processing-backend mcp-pin-server"
+```
+
+### Step 3b: Run Alembic migrations (if DB models / migrations changed)
+
+```bash
+ssh user1@176.108.247.249 -i d:\.ssh\free-tier-cloud_ru "sudo docker exec processing-backend alembic upgrade head"
+```
+
+If the migration added new columns or tables used by `MenuBuilder`, restart `menubuilder-backend`:
+```bash
+ssh user1@176.108.247.249 -i d:\.ssh\free-tier-cloud_ru "sudo docker restart menubuilder-backend"
 ```
 
 ### Step 4: Verify

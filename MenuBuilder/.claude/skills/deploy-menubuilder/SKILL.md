@@ -23,13 +23,19 @@ Deploys MenuBuilder backend (FastAPI) and frontend (React/Vite) to the productio
 
 ### Step 0: Pre-deploy checks (mandatory)
 
-**0a. Code quality — all must pass with zero errors:**
+**0a. Code quality & tests — all must pass with zero errors:**
 
 ```bash
 cd D:\repo\platerra\Public\etranprocessing\MenuBuilder\backend
 uv run ruff check --fix app/
 uv run ruff format app/
 uv run pyright app/
+uv run pytest tests/
+```
+
+```bash
+cd D:\repo\platerra\Public\etranprocessing\MenuBuilder\frontend
+npm run build
 ```
 
 **0b. Secrets scan — must find zero matches:**
@@ -151,14 +157,20 @@ git -C "D:\repo\platerra\Public\etranprocessing" push origin main
 - **Nginx only**: Step 3 only
 - **No git push**: skip Step 7 (WIP)
 
-## Database migration
+## Database migrations
 
-If a migration script exists:
+Database migrations are tracked using Alembic in `ProcessingBackend/backend/alembic/`.
+
+To apply pending database migrations:
 
 ```bash
-scp -i d:\.ssh\free-tier-cloud_ru "D:\repo\platerra\Public\etranprocessing\MenuBuilder\backend\migrate.py" user1@176.108.247.249:/home/user1/MenuBuilder/backend/migrate.py
-ssh user1@176.108.247.249 -i d:\.ssh\free-tier-cloud_ru "sudo docker cp /home/user1/MenuBuilder/backend/migrate.py menubuilder-backend:/app/migrate.py"
-ssh user1@176.108.247.249 -i d:\.ssh\free-tier-cloud_ru "sudo docker exec menubuilder-backend python migrate.py"
+ssh user1@176.108.247.249 -i d:\.ssh\free-tier-cloud_ru "sudo docker exec processing-backend alembic upgrade head"
+```
+
+If schema changes affect shared models (`orgs`, `org_billing_settings`, `licenses`, `terminals`, etc.), restart `menubuilder-backend`:
+
+```bash
+ssh user1@176.108.247.249 -i d:\.ssh\free-tier-cloud_ru "sudo docker restart menubuilder-backend"
 ```
 
 ## Troubleshooting

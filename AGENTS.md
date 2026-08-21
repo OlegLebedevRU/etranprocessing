@@ -50,13 +50,22 @@ uv run pyright <src_dir>
 
 All projects target **Python 3.14** (`requires-python = "==3.14.*"`).
 
-## Project structure
+## Project structure & Service Boundaries
 
-| Subproject | Source dir | Entry point |
-|---|---|---|
-| ProcessingBackend/backend | `app/` | `uvicorn app.main:app` |
-| MenuBuilder/backend | `app/` | `uvicorn app.main:app` |
-| ProcessingBackend/mcp-pin-server | `src/` | `python -m pin_server.server` |
+| Subproject | Technology / Framework | Role & Service Boundary | Entry point |
+|---|---|---|---|
+| **`ProcessingBackend/backend`** | Python 3.14, FastAPI, SQLAlchemy (asyncpg), Alembic | Core mTLS payment processing gateway, terminal XML/SOAP handlers (`/api/payment`, `/api/techgate`, `/api/gategauge`, `/api/licensebilling`, `/api/certificates`, `GET /api/ListMenuFile`). **No user-facing JWT routes.** | `uvicorn app.main:app` |
+| **`MenuBuilder/backend`** | Python 3.14, FastAPI, SQLAlchemy | Tenant & admin web portal, terminal menu management, and **user-facing billing API** (`/api/billing`, `/api/certificate-pin`, `/api/admin/organizations`, JWT authentication). | `uvicorn app.main:app` |
+| **`MenuBuilder/frontend`** | React, TypeScript, Vite, Tailwind CSS | Web UI for tenant administrators, terminal menu builder, license cart, and admin panels. | `npm run build` / `npm run dev` |
+| **`ProcessingBackend/mcp-pin-server`** | Python 3.14, FastMCP / MCP SDK | Model Context Protocol server for PIN operations & certificate tools. | `python -m pin_server.server` |
+
+## Infrastructure & Servers
+
+- **Primary Application Server**: `176.108.247.249` (user: `user1`, SSH key: `d:\.ssh\free-tier-cloud_ru`)
+  - Runs Docker containers: `processing-backend`, `menubuilder-backend`, `menubuilder-frontend`, `mcp-pin-server`, `postgres`, `rabbitmq`, etc.
+  - Reverse proxy Nginx on port 443 routes `/api/billing/` and admin/portal routes to `menubuilder-backend:8000`, and terminal endpoints to `processing-backend:8000`.
+- **Legacy mTLS Reverse Proxy Server**: `87.242.100.34` (user: `user1`, SSH key: `d:\.ssh\id_ed25519`)
+  - Runs `nginx-mutual-legacy` (terminates client mTLS and forwards requests to `176.108.247.249`).
 
 ## CI/CD — lessons learned (verified in production sessions)
 
@@ -68,6 +77,13 @@ the production host (`176.108.247.249`). See also each subproject's
   compose ...` fails with "permission denied while trying to connect to the
   Docker daemon socket". Always prefix with `sudo docker ...` /
   `sudo docker compose ...` over SSH.
+- **Database migrations (Alembic):** Alembic migrations reside in
+  `ProcessingBackend/backend/alembic/`. To apply migrations in production:
+  1. Upload migration files (e.g. `012_add_org_contacts_and_billing_modes.py`) to the server.
+  2. Copy into the container or rebuild `processing-backend`:
+     `sudo docker cp /home/user1/ProcessingBackend/backend/alembic/versions/. processing-backend:/app/alembic/versions/`
+  3. Execute: `sudo docker exec processing-backend alembic upgrade head`
+  4. If database schema was altered with new columns/tables, restart dependent containers (e.g. `sudo docker restart menubuilder-backend`).
 - **JWT `org_id` claims travel as strings — cast to `int` at the auth
   boundary, once.** Any endpoint that binds an org id into a raw SQL query
   against an integer column will raise `asyncpg.exceptions.DataError` if it

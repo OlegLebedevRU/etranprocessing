@@ -11,7 +11,7 @@ The platform is transitioning from a legacy ASP.NET / Microsoft SQL Server archi
 ## 2. Architecture & Request Flow
 
 ```
-Payment Terminal (Mutual TLS HTTPS)
+Payment Terminal (Mutual TLS HTTPS :4443 / legacy :443)
         │
         ▼
 Nginx Reverse Proxy (SSL / Client Cert validation)
@@ -21,11 +21,17 @@ Nginx Reverse Proxy (SSL / Client Cert validation)
         ▼
 ProcessingBackend (FastAPI + SQLAlchemy + asyncpg)
   - Authenticates terminal from cert headers
-  - Validates payment / tech request & calculates tariffs/rewards
+  - Handles payment / tech requests, terminal license checks & menus (ListMenuFile)
   - Persists payments and updates balances
         │
         ▼
 PostgreSQL Database
+        ▲
+        │
+MenuBuilder (FastAPI + React frontend + JWT auth)
+  - User and Tenant Admin Web UI (:443 -> menubuilder-backend:8000)
+  - Terminal menu builder, categories, items
+  - User-facing billing API (/api/billing, /api/certificate-pin)
 ```
 
 ---
@@ -34,17 +40,17 @@ PostgreSQL Database
 
 | Directory / Subproject | Technology / Framework | Description | Entry Point / Key Files |
 |---|---|---|---|
-| **`ProcessingBackend/backend`** | Python 3.14, FastAPI, SQLAlchemy (asyncpg), Alembic | Core payment processing REST API (payments, tech gate, license billing, balance tracking) | `uvicorn app.main:app` |
+| **`ProcessingBackend/backend`** | Python 3.14, FastAPI, SQLAlchemy (asyncpg), Alembic | Core mTLS payment processing REST/XML API (payments, tech gate, license billing check, balance tracking, terminal menus `GET /api/ListMenuFile`, Alembic migrations) | `uvicorn app.main:app` |
 | **`ProcessingBackend/mcp-pin-server`** | Python 3.14, FastMCP / MCP SDK | Model Context Protocol server for PIN operations & certificate tools | `python -m pin_server.server` |
-| **`MenuBuilder/backend`** | Python 3.14, FastAPI, SQLAlchemy | Backend service for terminal menu structures, categories, and payment items | `uvicorn app.main:app` |
-| **`MenuBuilder/frontend`** | React, TypeScript, Vite, Tailwind CSS | Web UI for configuring terminal payment menus | `npm run build` / `npm run dev` |
+| **`MenuBuilder/backend`** | Python 3.14, FastAPI, SQLAlchemy | Tenant/admin portal, terminal menu management, and **user billing API** (`/api/billing`, `/api/certificate-pin`, `/api/admin/organizations`) | `uvicorn app.main:app` |
+| **`MenuBuilder/frontend`** | React, TypeScript, Vite, Tailwind CSS | Web UI for configuring terminal payment menus, license cart, organizations, and billing | `npm run build` / `npm run dev` |
 | **`BACK/`** | Legacy C#, ASP.NET (.NET Framework) | Legacy processing core (`ProcessingCore/EtranDispatcher`, SOAP processors) | `Global.asax`, `EtranDispatcher.asmx` |
 | **`FRONT/`** | Legacy ASP.NET | Legacy front-facing web apps (`TechGate`, `GateGauge`, `licensebilling`, `Certificates`) | Web endpoints |
 | **`CommonLibs/`** | Legacy .NET Framework | Shared legacy C# utility libraries and DLLs | Visual Studio Solution |
 | **`GateYandexMoney/`** | Legacy C# | External payment gateway integration for Yandex.Money | Web services |
 | **`migrate/`** | Python / SQL scripts | Database migration utilities for transitioning MSSQL data to PostgreSQL | Migration scripts |
 | **`stored-procedures/`** | T-SQL | Legacy MSSQL stored procedures for business logic, routing, and ledger tracking | `.sql` scripts |
-| **`docs/`** | Markdown | Comprehensive architecture guides, DevOps runbooks, and billing plans | `devops-runbook.md`, `README.md` |
+| **`docs/`** | Markdown | Comprehensive architecture guides, UX requirements (`docs/billing-cart-ux-requirements.md`), DevOps runbooks | `docs/` |
 
 ---
 
@@ -94,5 +100,13 @@ PostgreSQL Database
 
 ## 7. Deployment & Operations
 
-- **Container Orchestration**: Docker Compose is used for deploying backend services, Nginx mutual TLS proxy, and PostgreSQL (`docker-compose.yaml`).
+- **Infrastructure & Hosts**:
+  - **Primary App Server**: `176.108.247.249` (user `user1`, SSH key `d:\.ssh\free-tier-cloud_ru`). Hosts `processing-backend`, `menubuilder-backend`, `menubuilder-frontend`, `mcp-pin-server`, `postgres`, `rabbitmq`.
+  - **Legacy mTLS Proxy Server**: `87.242.100.34` (user `user1`, SSH key `d:\.ssh\id_ed25519`). Hosts `nginx-mutual-legacy` handling mTLS on port 443.
+- **Container Orchestration**: Docker Compose is used for deploying backend services, Nginx mutual TLS proxy, and PostgreSQL (`docker-compose.yaml`). `sudo` is required for docker commands over SSH.
+- **Database Migrations (Alembic)**:
+  - Migrations are defined under `ProcessingBackend/backend/alembic/versions/`.
+  - In production, apply migrations via `sudo docker exec processing-backend alembic upgrade head`.
+  - If schema changes affect shared models, restart `menubuilder-backend` afterwards (`sudo docker restart menubuilder-backend`).
+- **Frontend Live Mounts**: `menubuilder-frontend` bind-mounts `./frontend/dist/`. Building on host updates files live without full container restart (restart only needed for `nginx.conf` changes).
 - **Legacy IIS Deployments**: Legacy ASP.NET endpoints use an App_Code dynamic compilation model (no-compile deployment) as documented in `ProcessingBackend/docs/devops-runbook.md`.
