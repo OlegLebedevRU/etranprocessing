@@ -2,6 +2,7 @@ import client from "./client";
 
 export interface MenuVariant {
   id: number;
+  org_id?: number;
   name: string;
   created_at: string;
 }

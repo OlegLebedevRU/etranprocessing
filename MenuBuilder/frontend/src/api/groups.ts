@@ -11,7 +11,7 @@ export interface Group {
 
 export interface GroupCreate {
   menu_variant_id: number;
-  org_id: number;
+  org_id?: number;
   name: string;
   parent_id?: number | null;
   number?: number;

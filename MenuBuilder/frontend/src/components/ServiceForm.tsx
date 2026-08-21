@@ -37,7 +37,12 @@ export default function ServiceForm({ open, service, groupId, onClose, onSaved }
       } else {
         form.resetFields();
         getFreeTsp(groupId)
-          .then((res) => setFreeTsp(res.data))
+          .then((res) => {
+            setFreeTsp(res.data);
+            if (res.data.length > 0) {
+              form.setFieldsValue({ tsp_code: res.data[0].tsp_code });
+            }
+          })
           .catch(() => setFreeTsp([]));
       }
     }
@@ -96,7 +101,7 @@ export default function ServiceForm({ open, service, groupId, onClose, onSaved }
           ) : (
             <Select
               showSearch
-              placeholder="Код"
+              placeholder="1000301"
               size="small"
               options={freeTsp.map((t) => ({ value: t.tsp_code, label: String(t.tsp_code) }))}
               optionFilterProp="label"
@@ -112,7 +117,7 @@ export default function ServiceForm({ open, service, groupId, onClose, onSaved }
         <Form.Item name="price" label="Цена">
           <InputNumber min={0} size="small" style={{ width: "100%" }} addonAfter="₽" />
         </Form.Item>
-        <Form.Item name="protypenumber" label="Тип номера">
+        <Form.Item name="protypenumber" label="Номер прототипа">
           <InputNumber min={0} size="small" style={{ width: "100%" }} />
         </Form.Item>
       </Form>

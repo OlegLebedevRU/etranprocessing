@@ -40,12 +40,17 @@ async def report_payments(
     tsp_code: int | None = None,
     paym_state: int | None = None,
     top: int = 100,
+    org_id: int | None = None,
 ) -> dict:
     """Query payments report."""
     conditions = ["1=1"]
     params = []
     idx = 1
 
+    if org_id is not None:
+        conditions.append(f"t.org_id = ${idx}")
+        params.append(org_id)
+        idx += 1
     if date_from:
         conditions.append(f"p.paym_datetime >= ${idx}")
         params.append(date_from)
@@ -139,12 +144,17 @@ async def report_balance_by_terminal(
     date_to: str | None = None,
     device_ids: str | None = None,
     tsp_code: int | None = None,
+    org_id: int | None = None,
 ) -> dict:
     """Balance aggregated by terminal."""
     conditions = ["1=1"]
     params = []
     idx = 1
 
+    if org_id is not None:
+        conditions.append(f"b.org_id = ${idx}")
+        params.append(org_id)
+        idx += 1
     if date_from:
         conditions.append(f"b.int_day >= ${idx}")
         params.append(_parse_int_day(date_from))
@@ -201,12 +211,17 @@ async def report_balance_by_tsp(
     date_from: str | None = None,
     date_to: str | None = None,
     device_ids: str | None = None,
+    org_id: int | None = None,
 ) -> dict:
     """Balance aggregated by TSP."""
     conditions = ["1=1"]
     params = []
     idx = 1
 
+    if org_id is not None:
+        conditions.append(f"b.org_id = ${idx}")
+        params.append(org_id)
+        idx += 1
     if date_from:
         conditions.append(f"b.int_day >= ${idx}")
         params.append(_parse_int_day(date_from))
@@ -260,12 +275,17 @@ async def report_inkass(
     device_ids: str | None = None,
     page: int = 1,
     size: int = 100,
+    org_id: int | None = None,
 ) -> dict:
     """Inkassation report."""
     conditions = ["r.function_name = 'inkass'"]
     params = []
     idx = 1
 
+    if org_id is not None:
+        conditions.append(f"t.org_id = ${idx}")
+        params.append(org_id)
+        idx += 1
     if date_from:
         conditions.append(f"r.created_at >= ${idx}")
         params.append(date_from)
@@ -286,24 +306,14 @@ async def report_inkass(
     params_with_limit = params + [size, offset]
 
     query = f"""
-        SELECT r.id, r.device_id, r.sn, r.created_at, r.request_data
+        SELECT r.id, r.device_id, r.sn, r.created_at, r.request_data, t.org_id
         FROM tech_gate_records r
+        JOIN terminals t ON t.device_id = r.device_id
         WHERE {where}
         ORDER BY r.created_at DESC
         LIMIT ${idx} OFFSET ${idx + 1}
     """
     rows = await db.fetch(query, *params_with_limit)
-
-    # Lookup org_id for device_ids
-    device_id_list = list({r["device_id"] for r in rows})
-    org_map = {}
-    if device_id_list:
-        placeholders = ", ".join(f"${i + 1}" for i in range(len(device_id_list)))
-        org_rows = await db.fetch(
-            f"SELECT device_id, org_id FROM terminals WHERE device_id IN ({placeholders})",
-            *device_id_list,
-        )
-        org_map = {r["device_id"]: r["org_id"] for r in org_rows}
 
     items = []
     for r in rows:
@@ -319,7 +329,7 @@ async def report_inkass(
                 "id": r["id"],
                 "device_id": r["device_id"],
                 "sn": r["sn"],
-                "org_id": org_map.get(r["device_id"]),
+                "org_id": r["org_id"],
                 "server_datetime": str(r["created_at"]),
                 "inkass_datetime": data.get("InkassDateTime"),
                 "total_sum": int(data.get("TotalSum", 0)),

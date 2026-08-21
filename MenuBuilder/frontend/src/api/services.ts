@@ -13,8 +13,8 @@ export interface Service {
 
 export interface ServiceCreate {
   group_id: number;
-  tsp_code: number;
   name: string;
+  tsp_code?: number;
   printname?: string;
   price?: number;
   protypenumber?: number;

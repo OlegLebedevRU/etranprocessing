@@ -40,26 +40,59 @@ mcp = FastMCP("ProcessingBackend", lifespan=app_lifespan)
 # === Terminal resolution ===
 
 
-async def _resolve_terminal(db: Database, identifier: str) -> dict:
+async def _resolve_terminal(
+    db: Database, identifier: str, org_id: int | None = None
+) -> dict:
     if identifier.isdigit():
         num = int(identifier)
-        row = await db.fetchrow("SELECT * FROM terminals WHERE id = $1", num)
+        if org_id is not None:
+            row = await db.fetchrow(
+                "SELECT * FROM terminals WHERE id = $1 AND org_id = $2",
+                num,
+                org_id,
+            )
+            if row:
+                return dict(row)
+            row = await db.fetchrow(
+                "SELECT * FROM terminals WHERE device_id = $1 AND org_id = $2",
+                num,
+                org_id,
+            )
+            if row:
+                return dict(row)
+        else:
+            row = await db.fetchrow("SELECT * FROM terminals WHERE id = $1", num)
+            if row:
+                return dict(row)
+            row = await db.fetchrow("SELECT * FROM terminals WHERE device_id = $1", num)
+            if row:
+                return dict(row)
+
+    if org_id is not None:
+        row = await db.fetchrow(
+            "SELECT * FROM terminals WHERE sn = $1 AND org_id = $2",
+            identifier,
+            org_id,
+        )
         if row:
             return dict(row)
-        row = await db.fetchrow("SELECT * FROM terminals WHERE device_id = $1", num)
+        row = await db.fetchrow(
+            "SELECT * FROM terminals WHERE sn ILIKE $1 AND org_id = $2 LIMIT 1",
+            f"%{identifier}%",
+            org_id,
+        )
         if row:
             return dict(row)
-
-    row = await db.fetchrow("SELECT * FROM terminals WHERE sn = $1", identifier)
-    if row:
-        return dict(row)
-
-    row = await db.fetchrow(
-        "SELECT * FROM terminals WHERE sn ILIKE $1 LIMIT 1",
-        f"%{identifier}%",
-    )
-    if row:
-        return dict(row)
+    else:
+        row = await db.fetchrow("SELECT * FROM terminals WHERE sn = $1", identifier)
+        if row:
+            return dict(row)
+        row = await db.fetchrow(
+            "SELECT * FROM terminals WHERE sn ILIKE $1 LIMIT 1",
+            f"%{identifier}%",
+        )
+        if row:
+            return dict(row)
 
     raise ValueError(f"Terminal not found: {identifier}")
 
@@ -76,6 +109,7 @@ def _validate_pin_format(pin: str) -> None:
 async def generate_pin(
     terminal_identifier: str,
     pin_code: str | None = None,
+    org_id: int | None = None,
     ctx: Context | None = None,
 ) -> dict:
     """Generate a PIN code for a terminal to install a certificate.
@@ -83,10 +117,11 @@ async def generate_pin(
     Args:
         terminal_identifier: device_id (number), sn (serial string), or database id
         pin_code: Optional custom 6-digit PIN; auto-generated if not provided
+        org_id: Optional organization ID filter for tenant isolation
     """
     assert ctx is not None
     db: Database = ctx.lifespan_context["db"]
-    terminal = await _resolve_terminal(db, terminal_identifier)
+    terminal = await _resolve_terminal(db, terminal_identifier, org_id=org_id)
 
     if pin_code:
         _validate_pin_format(pin_code)
@@ -122,33 +157,46 @@ async def generate_pin(
 @mcp.tool
 async def list_terminals(
     search: str | None = None,
+    org_id: int | None = None,
     include_pins: bool = True,
     ctx: Context | None = None,
 ) -> list:
-    """List terminals, optionally filtered by search term.
+    """List terminals, optionally filtered by search term and organization.
 
     Returns up to 50 terminals with their PIN status.
 
     Args:
-        search: Filter by SN (ILIKE), device_id, or org_id
+        search: Filter by SN (ILIKE), device_id, or database id
+        org_id: Optional organization ID filter for tenant isolation
         include_pins: Include PIN summary (default true)
     """
     assert ctx is not None
     db: Database = ctx.lifespan_context["db"]
 
+    conditions = ["1=1"]
+    params = []
+    idx = 1
+
+    if org_id is not None:
+        conditions.append(f"org_id = ${idx}")
+        params.append(org_id)
+        idx += 1
+
     if search and search.isdigit():
         num = int(search)
-        rows = await db.fetch(
-            "SELECT * FROM terminals WHERE device_id = $1 OR org_id = $1 ORDER BY id LIMIT 50",
-            num,
-        )
+        conditions.append(f"(device_id = ${idx} OR id = ${idx})")
+        params.append(num)
+        idx += 1
     elif search:
-        rows = await db.fetch(
-            "SELECT * FROM terminals WHERE sn ILIKE $1 ORDER BY id LIMIT 50",
-            f"%{search}%",
-        )
-    else:
-        rows = await db.fetch("SELECT * FROM terminals ORDER BY id LIMIT 50")
+        conditions.append(f"sn ILIKE ${idx}")
+        params.append(f"%{search}%")
+        idx += 1
+
+    where = " AND ".join(conditions)
+    rows = await db.fetch(
+        f"SELECT * FROM terminals WHERE {where} ORDER BY id LIMIT 50",
+        *params,
+    )
 
     result = []
     for r in rows:
@@ -184,16 +232,18 @@ async def list_terminals(
 @mcp.tool
 async def terminal_status(
     terminal_identifier: str,
+    org_id: int | None = None,
     ctx: Context | None = None,
 ) -> dict:
     """Get detailed status of a terminal including all PINs (pending and used).
 
     Args:
         terminal_identifier: device_id (number), sn (serial string), or database id
+        org_id: Optional organization ID filter for tenant isolation
     """
     assert ctx is not None
     db: Database = ctx.lifespan_context["db"]
-    terminal = await _resolve_terminal(db, terminal_identifier)
+    terminal = await _resolve_terminal(db, terminal_identifier, org_id=org_id)
     pins = await db.fetch(
         "SELECT pin, status, created_at, used_at "
         "FROM certificate_pins WHERE terminal_id = $1 ORDER BY created_at DESC",
@@ -223,19 +273,33 @@ async def terminal_status(
 
 
 @mcp.tool
-async def revoke_pin(pin: str, ctx: Context | None = None) -> dict:
+async def revoke_pin(
+    pin: str,
+    org_id: int | None = None,
+    ctx: Context | None = None,
+) -> dict:
     """Revoke a pending PIN code. Used PINs cannot be revoked.
 
     Args:
         pin: The 6-digit PIN to revoke
+        org_id: Optional organization ID filter for tenant isolation
     """
     assert ctx is not None
     db: Database = ctx.lifespan_context["db"]
     _validate_pin_format(pin)
-    existing = await db.fetchrow(
-        "SELECT id, pin, terminal_id, status FROM certificate_pins WHERE pin = $1",
-        pin,
-    )
+
+    if org_id is not None:
+        existing = await db.fetchrow(
+            "SELECT id, pin, terminal_id, org_id, status FROM certificate_pins WHERE pin = $1 AND org_id = $2",
+            pin,
+            org_id,
+        )
+    else:
+        existing = await db.fetchrow(
+            "SELECT id, pin, terminal_id, org_id, status FROM certificate_pins WHERE pin = $1",
+            pin,
+        )
+
     if not existing:
         raise ValueError(f"PIN {pin} not found")
     if existing["status"] != "pending":
@@ -262,6 +326,7 @@ async def report_payments_tool(
     tsp_code: int | None = None,
     paym_state: int | None = None,
     top: int = 100,
+    org_id: int | None = None,
     ctx: Context | None = None,
 ) -> dict:
     """Query payments report. Returns payments with details.
@@ -275,11 +340,12 @@ async def report_payments_tool(
         tsp_code: Filter by TSP code
         paym_state: Payment state (0=New, 1=Processing, 2=Paid, 3=Not paid, 4=Stopped, 5=Restart, 6=Quarantine)
         top: Max results (10-1000, default 100)
+        org_id: Optional organization ID filter for tenant isolation
     """
     assert ctx is not None
     db: Database = ctx.lifespan_context["db"]
     return await report_payments(
-        db, date_from, date_to, device_ids, tsp_code, paym_state, top
+        db, date_from, date_to, device_ids, tsp_code, paym_state, top, org_id=org_id
     )
 
 
@@ -289,6 +355,7 @@ async def report_balance_by_terminal_tool(
     date_to: str | None = None,
     device_ids: str | None = None,
     tsp_code: int | None = None,
+    org_id: int | None = None,
     ctx: Context | None = None,
 ) -> dict:
     """Balance report aggregated by terminal. All amounts in kopecks.
@@ -298,11 +365,12 @@ async def report_balance_by_terminal_tool(
         date_to: End date (YYYY-MM-DD)
         device_ids: Comma-separated device IDs
         tsp_code: Filter by TSP code
+        org_id: Optional organization ID filter for tenant isolation
     """
     assert ctx is not None
     db: Database = ctx.lifespan_context["db"]
     return await report_balance_by_terminal(
-        db, date_from, date_to, device_ids, tsp_code
+        db, date_from, date_to, device_ids, tsp_code, org_id=org_id
     )
 
 
@@ -311,6 +379,7 @@ async def report_balance_by_tsp_tool(
     date_from: str | None = None,
     date_to: str | None = None,
     device_ids: str | None = None,
+    org_id: int | None = None,
     ctx: Context | None = None,
 ) -> dict:
     """Balance report aggregated by TSP (service provider). All amounts in kopecks.
@@ -319,10 +388,13 @@ async def report_balance_by_tsp_tool(
         date_from: Start date (YYYY-MM-DD)
         date_to: End date (YYYY-MM-DD)
         device_ids: Comma-separated device IDs
+        org_id: Optional organization ID filter for tenant isolation
     """
     assert ctx is not None
     db: Database = ctx.lifespan_context["db"]
-    return await report_balance_by_tsp(db, date_from, date_to, device_ids)
+    return await report_balance_by_tsp(
+        db, date_from, date_to, device_ids, org_id=org_id
+    )
 
 
 @mcp.tool
@@ -332,6 +404,7 @@ async def report_inkass_tool(
     device_ids: str | None = None,
     page: int = 1,
     size: int = 100,
+    org_id: int | None = None,
     ctx: Context | None = None,
 ) -> dict:
     """Inkassation (cash collection) report. All amounts in kopecks.
@@ -342,10 +415,13 @@ async def report_inkass_tool(
         device_ids: Comma-separated device IDs
         page: Page number (default 1)
         size: Page size (10-500, default 100)
+        org_id: Optional organization ID filter for tenant isolation
     """
     assert ctx is not None
     db: Database = ctx.lifespan_context["db"]
-    return await report_inkass(db, date_from, date_to, device_ids, page, size)
+    return await report_inkass(
+        db, date_from, date_to, device_ids, page, size, org_id=org_id
+    )
 
 
 # === Custom routes ===

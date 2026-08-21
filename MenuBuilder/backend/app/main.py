@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from datetime import UTC
 
-from fastapi import Depends, FastAPI, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 
@@ -141,22 +141,61 @@ async def list_menu_file(
 
 
 @app.get("/api/stats")
-async def get_stats(variant_id: int | None = None):
+async def get_stats(
+    variant_id: int | None = None,
+    user: dict = Depends(get_current_user),
+):
     from sqlalchemy import func
 
+    org_id = user.get("org_id")
+    if org_id is not None:
+        try:
+            org_id = int(org_id)
+        except ValueError, TypeError:
+            org_id = None
+
     async with async_session() as session:
+        if variant_id is not None:
+            variant = await session.get(MenuVariant, variant_id)
+            if not variant:
+                raise HTTPException(status_code=404, detail="Variant not found")
+            if (
+                org_id
+                and org_id > 0
+                and variant.org_id != org_id
+                and not user.get("is_superuser")
+            ):
+                raise HTTPException(status_code=404, detail="Variant not found")
+
         groups_q = select(func.count(Group.id))
-        services_q = select(func.count(Service.id))
-        tsp_q = select(func.count(func.distinct(Service.tsp_code)))
-        avg_q = select(func.avg(Service.price))
+        services_q = select(func.count(Service.id)).join(
+            Group, Group.id == Service.group_id
+        )
+        tsp_q = select(func.count(func.distinct(Service.tsp_code))).join(
+            Group, Group.id == Service.group_id
+        )
+        avg_q = select(func.avg(Service.price)).join(
+            Group, Group.id == Service.group_id
+        )
+
+        if org_id and org_id > 0:
+            groups_q = groups_q.where(Group.org_id == org_id)
+            services_q = services_q.where(Group.org_id == org_id)
+            tsp_q = tsp_q.where(Group.org_id == org_id)
+            avg_q = avg_q.where(Group.org_id == org_id)
+        elif not user.get("is_superuser"):
+            return {
+                "groups": 0,
+                "services": 0,
+                "tsp_codes": 0,
+                "avg_price": 0.0,
+            }
 
         if variant_id:
             groups_q = groups_q.where(Group.menu_variant_id == variant_id)
-            services_q = services_q.join(Group).where(
-                Group.menu_variant_id == variant_id
-            )
-            tsp_q = tsp_q.join(Group).where(Group.menu_variant_id == variant_id)
-            avg_q = avg_q.join(Group).where(Group.menu_variant_id == variant_id)
+            services_q = services_q.where(Service.menu_variant_id == variant_id)
+            tsp_q = tsp_q.where(Service.menu_variant_id == variant_id)
+            avg_q = avg_q.where(Service.menu_variant_id == variant_id)
 
         groups_count = await session.scalar(groups_q)
         services_count = await session.scalar(services_q)
@@ -419,21 +458,36 @@ async def get_monitoring(
 
 @app.get("/api/reports/inkass")
 async def get_inkass_report(
+    user: dict = Depends(get_current_user),
     date_from: str | None = None,
     date_to: str | None = None,
     device_ids: str | None = None,
     page: int = Query(1, ge=1),
     size: int = Query(100, ge=10, le=500),
 ):
-    """Inkassation report from TechGate records."""
+    """Inkassation report from TechGate records. Tenant-scoped."""
     from datetime import datetime
 
     from sqlalchemy import text
+
+    org_id = user.get("org_id")
+    if org_id is not None:
+        try:
+            org_id = int(org_id)
+        except ValueError, TypeError:
+            org_id = None
+
+    if not org_id and not user.get("is_superuser"):
+        return {"items": [], "total": 0, "page": page, "size": size}
 
     async with async_session() as session:
         # Build filters
         conditions = ["r.function_name = 'inkass'"]
         params: dict = {}
+
+        if org_id is not None and org_id > 0:
+            conditions.append("t.org_id = :org_id")
+            params["org_id"] = org_id
 
         if date_from:
             conditions.append("r.created_at >= :date_from")
@@ -454,7 +508,12 @@ async def get_inkass_report(
         # Count
         count_row = (
             await session.execute(
-                text(f"SELECT count(*) FROM tech_gate_records r WHERE {where}"),
+                text(f"""
+                SELECT count(*)
+                FROM tech_gate_records r
+                JOIN terminals t ON t.device_id = r.device_id
+                WHERE {where}
+            """),
                 params,
             )
         ).scalar()
@@ -464,8 +523,9 @@ async def get_inkass_report(
         rows = (
             await session.execute(
                 text(f"""
-                SELECT r.id, r.device_id, r.sn, r.created_at, r.request_data
+                SELECT r.id, r.device_id, r.sn, r.created_at, r.request_data, t.org_id
                 FROM tech_gate_records r
+                JOIN terminals t ON t.device_id = r.device_id
                 WHERE {where}
                 ORDER BY r.created_at DESC
                 LIMIT :limit OFFSET :offset
@@ -473,21 +533,6 @@ async def get_inkass_report(
                 {**params, "limit": size, "offset": offset},
             )
         ).fetchall()
-
-        # Get terminal org_ids
-        dev_ids = list({r[1] for r in rows})
-        org_map: dict[int, int] = {}
-        if dev_ids:
-            ph = ",".join(f":oid_{i}" for i in range(len(dev_ids)))
-            org_rows = (
-                await session.execute(
-                    text(
-                        f"SELECT device_id, org_id FROM terminals WHERE device_id IN ({ph})"
-                    ),
-                    {f"oid_{i}": did for i, did in enumerate(dev_ids)},
-                )
-            ).fetchall()
-            org_map = {r[0]: r[1] for r in org_rows}
 
     def jint(d: dict, key: str) -> int:
         v = d.get(key, "0")
@@ -516,7 +561,7 @@ async def get_inkass_report(
                 "id": r[0],
                 "device_id": r[1],
                 "sn": r[2] or "",
-                "org_id": org_map.get(r[1], 0),
+                "org_id": r[5] or 0,
                 "inkass_datetime": parse_dt(d.get("InkassDateTime", "")),
                 "server_datetime": r[3].strftime("%Y-%m-%d %H:%M:%S") if r[3] else "",
                 "total_sum": jint(d, "TotalSum"),

@@ -39,7 +39,6 @@ export default function GroupForm({ open, group, parentId, menuVariantId, groups
         if (!menuVariantId) { message.error("Выберите вариант меню"); return; }
         const data: GroupCreate = {
           menu_variant_id: menuVariantId,
-          org_id: 1,
           name: values.name,
           parent_id: values.parent_id || null,
           number: values.number || 0,
@@ -75,7 +74,7 @@ export default function GroupForm({ open, group, parentId, menuVariantId, groups
           <Input />
         </Form.Item>
         <Form.Item name="number" label="Номер">
-          <InputNumber min={0} style={{ width: "100%" }} />
+          <InputNumber min={0} placeholder="Авто (от 801)" style={{ width: "100%" }} />
         </Form.Item>
         <Form.Item name="parent_id" label="Родительская группа">
           <Select

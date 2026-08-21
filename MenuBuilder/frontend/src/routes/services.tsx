@@ -82,7 +82,7 @@ export default function ServicesPage() {
       render: (v: number) => `${v} ₽`,
     },
     {
-      title: "Тип номера",
+      title: "Номер прототипа",
       dataIndex: "protypenumber",
       key: "protypenumber",
       sorter: (a: Service, b: Service) => a.protypenumber - b.protypenumber,

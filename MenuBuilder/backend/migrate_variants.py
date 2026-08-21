@@ -10,10 +10,36 @@ async def migrate():
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS menu_variants (
                 id SERIAL PRIMARY KEY,
-                name VARCHAR(255) UNIQUE NOT NULL,
+                org_id INTEGER NOT NULL DEFAULT 1,
+                name VARCHAR(255) NOT NULL,
                 created_at TIMESTAMPTZ DEFAULT now(),
                 updated_at TIMESTAMPTZ DEFAULT now()
             )
+        """))
+        await conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_menu_variants_org_id ON menu_variants(org_id)
+        """))
+        await conn.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'menu_variants' AND column_name = 'org_id'
+                ) THEN
+                    ALTER TABLE menu_variants ADD COLUMN org_id INTEGER NOT NULL DEFAULT 1;
+                END IF;
+                IF EXISTS (
+                    SELECT 1 FROM pg_constraint WHERE conname = 'menu_variants_name_key'
+                ) THEN
+                    ALTER TABLE menu_variants DROP CONSTRAINT menu_variants_name_key;
+                END IF;
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint WHERE conname = 'uq_menu_variants_org_name'
+                ) THEN
+                    ALTER TABLE menu_variants ADD CONSTRAINT uq_menu_variants_org_name UNIQUE (org_id, name);
+                END IF;
+            END
+            $$;
         """))
 
         # Create terminal_menu_bindings table

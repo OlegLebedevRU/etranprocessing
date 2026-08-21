@@ -194,7 +194,6 @@ export default function VariantsPage() {
         if (!selectedVariantId) return;
         const data: GroupCreate = {
           menu_variant_id: selectedVariantId,
-          org_id: 1,
           name: groupFormName,
           number: groupFormNumber || 0,
           parent_id: groupFormParentId,
@@ -446,8 +445,9 @@ export default function VariantsPage() {
           <div>
             <Text type="secondary" style={{ fontSize: 11 }}>Номер</Text>
             <InputNumber
-              value={groupFormNumber}
+              value={groupFormNumber || undefined}
               onChange={(v) => setGroupFormNumber(v || 0)}
+              placeholder="Авто (от 801)"
               size="small"
               style={{ width: "100%" }}
               min={0}

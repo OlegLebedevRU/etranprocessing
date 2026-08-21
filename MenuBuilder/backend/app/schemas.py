@@ -7,10 +7,12 @@ from pydantic import BaseModel
 
 class MenuVariantCreate(BaseModel):
     name: str
+    org_id: int | None = None
 
 
 class MenuVariantRead(BaseModel):
     id: int
+    org_id: int
     name: str
     created_at: datetime
 
@@ -27,8 +29,8 @@ class MenuVariantDuplicate(BaseModel):
 
 class GroupCreate(BaseModel):
     menu_variant_id: int
-    org_id: int
     name: str
+    org_id: int | None = None
     parent_id: int | None = None
     number: int = 0
 
@@ -55,8 +57,8 @@ class GroupRead(BaseModel):
 
 class ServiceCreate(BaseModel):
     group_id: int
-    tsp_code: int
     name: str
+    tsp_code: int = 0
     printname: str | None = None
     price: int = 0
     protypenumber: int = 0
