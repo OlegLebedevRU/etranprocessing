@@ -112,3 +112,31 @@ the production host (`176.108.247.249`). See also each subproject's
 - **After any lint/build/deploy/verification pass, clean up temp
   artifacts** (scp'd test scripts, generated tokens, scratch SQL files) from
   both the server and the local session workspace.
+
+## MCP Operations Server (`server-ops`) & DevOps Protocol
+
+An operations MCP server (`server-ops`) is connected to the primary application server (`176.108.247.249`). It provides tools for system health inspection, log investigation, Nginx and SSL management, and safe command execution.
+
+### Available MCP Ops Capabilities
+- **System monitoring**: `mcp_server-ops_system_info`, `mcp_server-ops_memory_analysis`, `mcp_server-ops_disk_analysis`, `mcp_server-ops_service_status`
+- **Log search & diagnostics**: `mcp_server-ops_log_search` (filtering by `keyword`, `level`: `error`/`warning`/`info`), `mcp_server-ops_log_read`, `mcp_server-ops_log_search_system` (`journalctl`), `mcp_server-ops_log_list`
+- **Nginx & Certbot**: `mcp_server-ops_nginx_config_read`, `mcp_server-ops_nginx_config_test`, `mcp_server-ops_nginx_reload`, `mcp_server-ops_certbot_install`, `mcp_server-ops_certbot_renew`
+- **Files & Command execution**: `mcp_server-ops_file_list`, `mcp_server-ops_file_read`, `mcp_server-ops_file_search`, `mcp_server-ops_command_exec` (whitelisted safe commands)
+- **Project audit & confirmation**: `mcp_server-ops_project_overview`, `mcp_server-ops_config_audit` (auto-masks secrets), `mcp_server-ops_confirm_execute` (2FA confirmation for mutating actions)
+
+### Mandatory Task Readiness Verification Protocol (Признак готовности к задаче)
+Before utilizing MCP Ops capabilities in any debugging, deployment, diagnostics, or configuration task, the agent **MUST** verify readiness and establish an explicit task readiness status:
+
+1. **Connectivity & Resource Pre-flight Check**:
+   - Probe server connectivity and load: call `mcp_server-ops_system_info(type="load")` or `mcp_server-ops_service_status(service="nginx")`.
+   - Check host resource safety thresholds:
+     - Available RAM > 300 MiB (`system_info` / `memory_analysis` — critical since server has 0B Swap).
+     - Root disk usage < 90% (`system_info` / `disk_analysis`).
+     - Load average within healthy limits (< 2.0).
+2. **Readiness Status Declaration**:
+   - Explicitly record the status in task context / plan:
+     - `[MCP Ops Readiness: READY]` — all checks passed; MCP tools may be used for diagnostics, log analysis, and verification.
+     - `[MCP Ops Readiness: DEGRADED / UNAVAILABLE]` — MCP unreachable or resource thresholds exceeded; fall back to standard SSH runbook commands.
+3. **Safety Guardrails**:
+   - State-changing operations (`nginx_reload`, `file_write`, `file_delete`) return a `confirmationId` and MUST be verified before confirmation via `mcp_server-ops_confirm_execute`.
+   - Never inspect raw secret files directly: use `mcp_server-ops_config_audit` for inspecting `.env` configurations.

@@ -60,6 +60,13 @@ If any match is found, move the value to `.env` and reference it via `os.environ
 
 Verify that this SKILL.md and all `.md` files under `.claude/` contain no credentials, passwords, tokens, or DB URLs. Infrastructure references (server IP, SSH key path) are acceptable; secret values are not.
 
+**0d. MCP Ops Readiness Check (Pre-flight):**
+
+Before initiating upload and container rebuild, verify host metrics and establish task readiness:
+1. Probe server load: `mcp_server-ops_system_info(type="load")`.
+2. Check available RAM (> 300 MiB) and disk space (< 90% full) using `mcp_server-ops_system_info(type="memory")` and `mcp_server-ops_system_info(type="disk")`.
+3. Set readiness mark: `[MCP Ops Readiness: READY]` (or fall back to SSH if unavailable).
+
 ### Step 1: Upload backend
 
 ```bash
@@ -92,6 +99,14 @@ ssh user1@176.108.247.249 -i d:\.ssh\free-tier-cloud_ru "sudo docker restart men
 
 ### Step 4: Verify
 
+Verify container logs via MCP or SSH:
+
+- **Via MCP Ops (Recommended when `[MCP Ops Readiness: READY]`):**
+  - Check for backend startup: `mcp_server-ops_log_search(keyword="Uvicorn running", lines=20)`
+  - Scan for recent exceptions: `mcp_server-ops_log_search(level="error", lines=50)`
+  - Verify container processes: `mcp_server-ops_system_info(type="processes")`
+
+- **Via SSH:**
 ```bash
 ssh user1@176.108.247.249 -i d:\.ssh\free-tier-cloud_ru "sudo docker logs processing-backend --tail 5"
 ssh user1@176.108.247.249 -i d:\.ssh\free-tier-cloud_ru "sudo docker logs mcp-pin-server --tail 5"

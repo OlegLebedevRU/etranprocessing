@@ -110,3 +110,33 @@ MenuBuilder (FastAPI + React frontend + JWT auth)
   - If schema changes affect shared models, restart `menubuilder-backend` afterwards (`sudo docker restart menubuilder-backend`).
 - **Frontend Live Mounts**: `menubuilder-frontend` bind-mounts `./frontend/dist/`. Building on host updates files live without full container restart (restart only needed for `nginx.conf` changes).
 - **Legacy IIS Deployments**: Legacy ASP.NET endpoints use an App_Code dynamic compilation model (no-compile deployment) as documented in `ProcessingBackend/docs/devops-runbook.md`.
+
+---
+
+## 8. MCP Operations Server (`server-ops`) & Task Readiness Protocol
+
+An operations MCP server (`server-ops`) is attached to the primary application server (`176.108.247.249`). It enables system health inspection, log analysis, Nginx/SSL operations, and safe diagnostic workflows.
+
+### Available MCP Ops Capabilities
+- **System monitoring**: `mcp_server-ops_system_info`, `mcp_server-ops_memory_analysis`, `mcp_server-ops_disk_analysis`, `mcp_server-ops_service_status`
+- **Log search & diagnostics**: `mcp_server-ops_log_search` (filtering by `keyword`, `level`: `error`/`warning`/`info`), `mcp_server-ops_log_read`, `mcp_server-ops_log_search_system` (`journalctl`), `mcp_server-ops_log_list`
+- **Nginx & Certbot**: `mcp_server-ops_nginx_config_read`, `mcp_server-ops_nginx_config_test`, `mcp_server-ops_nginx_reload`, `mcp_server-ops_certbot_install`, `mcp_server-ops_certbot_renew`
+- **Files & Safe execution**: `mcp_server-ops_file_list`, `mcp_server-ops_file_read`, `mcp_server-ops_file_search`, `mcp_server-ops_command_exec`
+- **Project audit & confirmation**: `mcp_server-ops_project_overview`, `mcp_server-ops_config_audit` (auto-masks secrets), `mcp_server-ops_confirm_execute`
+
+### Mandatory Task Readiness Verification Protocol (Признак готовности к задаче)
+Before using MCP Ops capabilities in any task (debugging, deployment verification, diagnostics, or configuration change), the agent **MUST** verify readiness and establish an explicit task readiness status:
+
+1. **Connectivity & Resource Pre-flight Check**:
+   - Probe server connectivity and load: execute `mcp_server-ops_system_info(type="load")` or `mcp_server-ops_service_status(service="nginx")`.
+   - Check host resource safety thresholds:
+     - Available RAM > 300 MiB (`system_info` / `memory_analysis` — critical since server has 0B Swap).
+     - Root disk usage < 90% (`system_info` / `disk_analysis`).
+     - Load average within healthy limits (< 2.0).
+2. **Readiness Status Declaration**:
+   - Explicitly record the status in the task plan / context:
+     - `[MCP Ops Readiness: READY]` — all checks passed; MCP tools may be used for diagnostics, log analysis, and verification.
+     - `[MCP Ops Readiness: DEGRADED / UNAVAILABLE]` — MCP unreachable or resource limits exceeded; fall back to standard SSH runbook commands.
+3. **Safety Guardrails**:
+   - State-changing operations (`nginx_reload`, `file_write`, `file_delete`) return a `confirmationId` and MUST be explicitly confirmed via `mcp_server-ops_confirm_execute`.
+   - Never inspect raw secret files directly: use `mcp_server-ops_config_audit` for inspecting `.env` configurations.

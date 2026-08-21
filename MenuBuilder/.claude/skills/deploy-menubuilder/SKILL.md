@@ -59,6 +59,13 @@ If any match is found, move the value to `.env` and reference it via `os.environ
 
 Verify that this SKILL.md and all `.md` files under `.claude/` contain no credentials, passwords, tokens, or DB URLs. Infrastructure references (server IP, SSH key path) are acceptable; secret values are not.
 
+**0d. MCP Ops Readiness Check (Pre-flight):**
+
+Before proceeding with build and deployment, check server health and establish task readiness:
+1. Probe server load: `mcp_server-ops_system_info(type="load")`.
+2. Check available RAM (> 300 MiB) and disk space (< 90% full) using `mcp_server-ops_system_info(type="memory")` and `mcp_server-ops_system_info(type="disk")`.
+3. Set readiness mark: `[MCP Ops Readiness: READY]` (or fall back to SSH if unavailable).
+
 ### Step 1: Upload backend (full rebuild)
 
 Upload pyproject.toml, Dockerfile, and app code:
@@ -120,6 +127,14 @@ changes) or JWT secret/env changes.
 
 ### Step 6: Verify
 
+Verify container logs via MCP or SSH:
+
+- **Via MCP Ops (Recommended when `[MCP Ops Readiness: READY]`):**
+  - Check for backend startup errors: `mcp_server-ops_log_search(keyword="Uvicorn running", lines=20)`
+  - Scan for recent exceptions: `mcp_server-ops_log_search(level="error", lines=50)`
+  - If Nginx was updated: test syntax with `mcp_server-ops_nginx_config_test` and reload with `mcp_server-ops_nginx_reload` (confirm with `mcp_server-ops_confirm_execute`).
+
+- **Via SSH:**
 ```bash
 ssh user1@176.108.247.249 -i d:\.ssh\free-tier-cloud_ru "sudo docker logs menubuilder-backend --tail 5"
 ```
