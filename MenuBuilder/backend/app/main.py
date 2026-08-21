@@ -14,6 +14,7 @@ from app.routers import (
     admin_tenants,
     admin_terminals,
     auth,
+    billing,
     groups,
     mcp_proxy,
     menu_variants,
@@ -50,6 +51,7 @@ app.include_router(
     menu_variants.router, prefix="/api/menu-variants", tags=["menu-variants"]
 )
 app.include_router(terminal_bindings.router, prefix="/api", tags=["terminals"])
+app.include_router(billing.router)
 app.include_router(profile.router, prefix="/api", tags=["profile"])
 app.include_router(mcp_proxy.router, prefix="/api", tags=["mcp"])
 

@@ -100,18 +100,15 @@ def test_periods_due_not_expired():
 
 
 def test_periods_due_one_period():
-    # expires Aug 10, as_of Aug 18, period=3 months → 1 period
     assert calculate_periods_due(_dt(2026, 8, 10), _dt(2026, 8, 18), 3) == 1
 
 
 def test_periods_due_multiple_periods():
-    # expires Aug 10, as_of Aug 18 2027, period=3 months → 5 periods
     result = calculate_periods_due(_dt(2026, 8, 10), _dt(2027, 8, 18), 3)
     assert result >= 4  # At least 4 three-month periods
 
 
 def test_periods_due_exact_boundary():
-    # expires exactly at as_of → needs 1 period
     result = calculate_periods_due(_dt(2026, 8, 18), _dt(2026, 8, 18), 1)
     assert result == 1
 
@@ -243,7 +240,7 @@ def test_deactivated_terminal_no_debt():
     """Spec: renewal_enabled=false → debt always 0 regardless of expiry."""
     info = _info(
         renewal_enabled=False,
-        license_expires_at=_dt(2025, 1, 1),  # Long expired
+        license_expires_at=_dt(2025, 1, 1),
     )
     result = compute_terminal_billing(info, _dt(2026, 8, 18))
     assert result.overdue_amount_minor == 0
@@ -252,23 +249,22 @@ def test_deactivated_terminal_no_debt():
 def test_reactivation_not_start_from_old_expiry():
     """Spec: reactivation starts from payment date, not old expires_at."""
     new_exp = project_expiration_after_payment(
-        _dt(2026, 8, 10),  # old expiry
-        1,  # period months
-        1,  # periods to add
-        _dt(2026, 8, 18),  # as_of (payment date)
+        _dt(2026, 8, 10),
+        1,
+        1,
+        _dt(2026, 8, 18),
         mode="reactivation",
     )
-    # Should start from as_of, not from old expiry
     assert new_exp == _dt(2026, 9, 18)
 
 
 def test_payment_not_expired_starts_from_expiry():
     """For non-expired terminals, payment extends from current expiry."""
     new_exp = project_expiration_after_payment(
-        _dt(2026, 11, 10),  # not expired
-        1,  # period months
-        1,  # periods to add
-        _dt(2026, 8, 18),  # as_of
+        _dt(2026, 11, 10),
+        1,
+        1,
+        _dt(2026, 8, 18),
     )
     assert new_exp == _dt(2026, 12, 10)
 
@@ -284,8 +280,6 @@ def test_h2_anchor_day_preserved_jan31():
 
 def test_h2_periods_due_jan31_no_drift():
     """H2: expires Jan 31, as_of Mar 30, period=1m → 3 periods (Feb 28, Mar 31 > Mar 30)."""
-    # Before fix: iterative gave 4 (Jan31→Feb28→Mar28→Apr28)
-    # After fix: anchor-based gives 3 (Jan31, Feb28, Mar31 > Mar30)
     result = calculate_periods_due(_dt(2025, 12, 31), _dt(2026, 3, 30), 1)
     assert result == 3
 
@@ -308,7 +302,6 @@ def test_h2_renewal_long_overdue_preserves_day():
 
 def test_h2_chain_preserves_31st():
     """H2: Chain from Jan 31 through multiple periods preserves 31st where possible."""
-    # Jan 31 → Feb 28 → Mar 31 (not Mar 28)
     anchor = _dt(2026, 1, 31)
     assert add_months_from_anchor(anchor, 1) == _dt(2026, 2, 28)
     assert add_months_from_anchor(anchor, 2) == _dt(2026, 3, 31)
@@ -322,10 +315,10 @@ def test_h2_chain_preserves_31st():
 def test_h3_reactivation_starts_from_payment_date():
     """H3: Reactivation restarts the term from as_of, ignoring the lapsed date."""
     new_exp = project_expiration_after_payment(
-        _dt(2024, 8, 10),  # long-expired
-        1,  # period months
-        1,  # periods to add
-        _dt(2026, 8, 18),  # as_of
+        _dt(2024, 8, 10),
+        1,
+        1,
+        _dt(2026, 8, 18),
         mode="reactivation",
     )
     assert new_exp == _dt(2026, 9, 18)
@@ -346,10 +339,10 @@ def test_reactivation_honours_advance_periods():
 def test_h3_renewal_extends_from_expiry():
     """H3: Renewal extends from expires_at, not as_of."""
     new_exp = project_expiration_after_payment(
-        _dt(2026, 8, 10),  # not yet expired
-        3,  # period months
-        1,  # periods to add
-        _dt(2026, 8, 18),  # as_of
+        _dt(2026, 8, 10),
+        3,
+        1,
+        _dt(2026, 8, 18),
         mode="renewal",
     )
     assert new_exp == _dt(2026, 11, 10)
@@ -360,14 +353,13 @@ def test_h3_debt_zero_after_renewal_payment():
     expires_at = _dt(2026, 5, 10)
     as_of = _dt(2026, 8, 18)
     periods = calculate_periods_due(expires_at, as_of, 1)
-    assert periods == 4  # Jun 10, Jul 10, Aug 10, Sep 10
+    assert periods == 4
 
     new_exp = project_expiration_after_payment(
         expires_at, 1, periods, as_of, mode="renewal"
     )
     assert new_exp == _dt(2026, 9, 10)
 
-    # After payment, debt should be 0
     remaining = calculate_periods_due(new_exp, as_of, 1)
     assert remaining == 0
 

@@ -207,6 +207,56 @@ class Tsp(Base):
     __table_args__ = (Index("idx_tsp_code", "tsp_code"),)
 
 
+class MenuVariant(Base):
+    __tablename__ = "menu_variants"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    org_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class Group(Base):
+    __tablename__ = "groups"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    menu_variant_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("menu_variants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    org_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    parent_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("groups.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
+
+class TerminalMenuBinding(Base):
+    __tablename__ = "terminal_menu_bindings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    device_id: Mapped[int] = mapped_column(
+        Integer, unique=True, nullable=False, index=True
+    )
+    menu_variant_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("menu_variants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
 class ServiceMenu(Base):
     """Services table from MenuBuilder - used for prototypenumber lookup."""
 

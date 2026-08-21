@@ -127,10 +127,17 @@ class AdminOrgRead(BaseModel):
     name: str
     status: int
     is_active: bool
+    email: str | None = None
+    phone: str | None = None
+    notify_by_email: bool = True
     created_at: datetime | None = None
     updated_at: datetime | None = None
     monthly_price_minor: int = 100_000
     currency: str = "RUB"
+    billing_mode: str = "standard"
+    min_billing_periods: int = 1
+    allowed_billing_periods: str | None = None
+    default_selection_mode: str = "all_due"
     cert_billing_mode: str = "none"
     cert_price_minor: int | None = None
     tenant_pin_creation_enabled: bool = False
@@ -146,8 +153,15 @@ class AdminOrgCreate(BaseModel):
     name: str
     status: int = 1
     is_active: bool = True
+    email: str | None = None
+    phone: str | None = None
+    notify_by_email: bool = True
     monthly_price_minor: int = 100_000
     currency: str = "RUB"
+    billing_mode: str = "standard"
+    min_billing_periods: int = 1
+    allowed_billing_periods: str | None = None
+    default_selection_mode: str = "all_due"
     cert_billing_mode: str = "none"
     cert_price_minor: int | None = None
     tenant_pin_creation_enabled: bool = False
@@ -160,8 +174,15 @@ class AdminOrgUpdate(BaseModel):
     name: str | None = None
     status: int | None = None
     is_active: bool | None = None
+    email: str | None = None
+    phone: str | None = None
+    notify_by_email: bool | None = None
     monthly_price_minor: int | None = None
     currency: str | None = None
+    billing_mode: str | None = None
+    min_billing_periods: int | None = None
+    allowed_billing_periods: str | None = None
+    default_selection_mode: str | None = None
     cert_billing_mode: str | None = None
     cert_price_minor: int | None = None
     tenant_pin_creation_enabled: bool | None = None

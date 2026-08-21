@@ -1,4 +1,4 @@
-"""Tests for /api/billing/* endpoints.
+"""Tests for /api/billing/* endpoints in MenuBuilder.
 
 Covers: deactivate, cancel-deactivation, checkout, confirm, org isolation.
 Uses dependency overrides to mock DB and JWT.
@@ -11,8 +11,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from app.dependencies import JwtUser
+from app.database import get_db
 from app.main import app
+from app.routers.billing import BillingUser, get_current_billing_user
 
 
 @pytest.fixture(autouse=True)
@@ -26,8 +27,8 @@ def anyio_backend():
     return "asyncio"
 
 
-def _make_user(org_id: int = 1, username: str = "testuser") -> JwtUser:
-    return JwtUser(username=username, org_id=org_id)
+def _make_user(org_id: int = 1, username: str = "testuser") -> BillingUser:
+    return BillingUser(username=username, org_id=org_id)
 
 
 def _make_terminal(
@@ -95,7 +96,7 @@ def _make_org_settings(org_id: int = 1) -> MagicMock:
     return settings
 
 
-def _setup_db_mock(mock_get_db, terminal, license_, org_settings):
+def _setup_db_mock(terminal, license_, org_settings):
     """Setup a mock DB session that returns controlled data."""
     mock_db = AsyncMock()
 
@@ -140,10 +141,6 @@ def _setup_db_mock(mock_get_db, terminal, license_, org_settings):
     return mock_db
 
 
-# Import after fixtures to avoid circular imports
-from app.database import get_db
-
-
 @pytest.mark.anyio
 async def test_deactivate_terminal():
     """Deactivate endpoint sets renewal_enabled=false."""
@@ -155,9 +152,7 @@ async def test_deactivate_terminal():
     app.dependency_overrides[get_db] = _async_gen_mock_db(
         terminal, license_, org_settings
     )
-    from app.dependencies import get_current_user_jwt
-
-    app.dependency_overrides[get_current_user_jwt] = lambda: user
+    app.dependency_overrides[get_current_billing_user] = lambda: user
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -176,7 +171,6 @@ async def test_deactivate_wrong_org_returns_404():
     license_ = _make_license()
     org_settings = _make_org_settings()
 
-    # Mock DB: terminal query returns None because org_id mismatch
     mock_db = AsyncMock()
 
     def execute_side_effect(stmt):
@@ -197,9 +191,7 @@ async def test_deactivate_wrong_org_returns_404():
         yield mock_db
 
     app.dependency_overrides[get_db] = override_get_db
-    from app.dependencies import get_current_user_jwt
-
-    app.dependency_overrides[get_current_user_jwt] = lambda: user
+    app.dependency_overrides[get_current_billing_user] = lambda: user
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -210,7 +202,7 @@ async def test_deactivate_wrong_org_returns_404():
 
 @pytest.mark.anyio
 async def test_reactivation_blocked_for_admin_disabled():
-    """H5: Admin-disabled terminal → 403 on reactivation."""
+    """H5: Admin-disabled terminal → 400 on reactivation."""
     user = _make_user()
     terminal = _make_terminal(is_active=False)
     license_ = _make_license(renewal_enabled=False)
@@ -219,9 +211,7 @@ async def test_reactivation_blocked_for_admin_disabled():
     app.dependency_overrides[get_db] = _async_gen_mock_db(
         terminal, license_, org_settings
     )
-    from app.dependencies import get_current_user_jwt
-
-    app.dependency_overrides[get_current_user_jwt] = lambda: user
+    app.dependency_overrides[get_current_billing_user] = lambda: user
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -230,8 +220,8 @@ async def test_reactivation_blocked_for_admin_disabled():
             json={"advance_periods": 1},
         )
 
-    assert resp.status_code == 403
-    assert "administratively" in resp.json()["detail"].lower()
+    assert resp.status_code == 400
+    assert "reactivated" in resp.json()["detail"].lower()
 
 
 @pytest.mark.anyio
@@ -241,9 +231,7 @@ async def test_confirm_payment_returns_404_for_wrong_org():
     order_id = str(uuid.uuid4())
 
     app.dependency_overrides[get_db] = _async_gen_mock_db_none_order()
-    from app.dependencies import get_current_user_jwt
-
-    app.dependency_overrides[get_current_user_jwt] = lambda: user
+    app.dependency_overrides[get_current_billing_user] = lambda: user
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -259,7 +247,6 @@ async def test_missing_org_settings_returns_409():
     terminal = _make_terminal()
     license_ = _make_license()
 
-    # DB returns None for org_billing_settings
     mock_db = AsyncMock()
 
     def execute_side_effect(stmt):
@@ -279,9 +266,7 @@ async def test_missing_org_settings_returns_409():
         yield mock_db
 
     app.dependency_overrides[get_db] = override_get_db
-    from app.dependencies import get_current_user_jwt
-
-    app.dependency_overrides[get_current_user_jwt] = lambda: user
+    app.dependency_overrides[get_current_billing_user] = lambda: user
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -290,12 +275,8 @@ async def test_missing_org_settings_returns_409():
     assert resp.status_code == 409
 
 
-# === Helpers ===
-
-
 def _async_gen_mock_db(terminal, license_, org_settings):
     """Create a mock DB session factory for dependency override."""
-
     mock_db = AsyncMock()
 
     def execute_side_effect(stmt):
@@ -305,6 +286,7 @@ def _async_gen_mock_db(terminal, license_, org_settings):
             result.scalar_one_or_none.return_value = org_settings
         elif "licenses" in stmt_str:
             result.scalar_one_or_none.return_value = license_
+            result.scalar_one.return_value = license_
         elif "terminals" in stmt_str:
             if "org_id" in stmt_str:
                 result.scalar_one_or_none.return_value = terminal
@@ -388,9 +370,7 @@ async def _post_checkout(user, terminal, license_, org_settings, items, added):
     app.dependency_overrides[get_db] = _checkout_db_mock(
         terminal, license_, org_settings, added
     )
-    from app.dependencies import get_current_user_jwt
-
-    app.dependency_overrides[get_current_user_jwt] = lambda: user
+    app.dependency_overrides[get_current_billing_user] = lambda: user
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -586,11 +566,8 @@ async def test_get_billing_terminals_returns_address_and_type_fields():
     async def override_get_db():
         yield mock_db
 
-    from app.database import get_db
-    from app.dependencies import get_current_user_jwt
-
     app.dependency_overrides[get_db] = override_get_db
-    app.dependency_overrides[get_current_user_jwt] = lambda: user
+    app.dependency_overrides[get_current_billing_user] = lambda: user
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:

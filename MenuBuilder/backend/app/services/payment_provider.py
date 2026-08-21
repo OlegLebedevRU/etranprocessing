@@ -1,4 +1,4 @@
-"""Payment provider abstraction.
+"""Payment provider abstraction for MenuBuilder.
 
 Mock provider always returns success — for development and testing.
 Replace with real provider integration when ready.

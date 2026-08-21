@@ -22,8 +22,14 @@ class Settings(BaseSettings):
     def jwt_secret_bytes(self) -> bytes:
         return bytes.fromhex(self.jwt_secret_hex)
 
-    class Config:
-        env_file = ".env"
+    # Billing
+    billing_due_soon_days: int = 30
+
+    # Certificate PIN billing
+    cert_pin_ttl_hours: int = 24
+    cert_expiring_soon_days: int = 30
+
+    model_config = {"env_file": ".env", "extra": "ignore"}
 
 
 settings = Settings()

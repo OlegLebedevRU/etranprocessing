@@ -415,38 +415,3 @@ async def get_terminal_license_state(
         return TerminalLicenseState(license=license_, state="error")
 
     return TerminalLicenseState(license=license_, state="ok")
-
-
-@dataclass(frozen=True, slots=True)
-class JwtUser:
-    username: str
-    org_id: int
-
-
-async def get_current_user_jwt(
-    request: Request,
-) -> JwtUser:
-    """Extract user identity from headers set by nginx after JWT validation.
-
-    SECURITY: nginx validates the JWT and extracts claims using
-    auth_jwt_extract_var_claims + explicit proxy_set_header. This prevents
-    client header spoofing because nginx removes all client-supplied headers
-    before setting proxy_set_header directives.
-
-    The backend trusts these headers as the authoritative source of identity
-    because nginx has already verified the JWT signature.
-    """
-    username = request.headers.get("jwt-sub", "")
-    if not username:
-        raise HTTPException(status_code=401, detail="Missing jwt-sub header")
-
-    org_id_str = request.headers.get("jwt-org", "")
-    if not org_id_str:
-        raise HTTPException(status_code=401, detail="Missing jwt-org header")
-
-    try:
-        org_id = int(org_id_str)
-    except ValueError:
-        raise HTTPException(status_code=401, detail="Invalid jwt-org header")
-
-    return JwtUser(username=username, org_id=org_id)
