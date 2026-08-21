@@ -88,6 +88,10 @@ def _make_org_settings(org_id: int = 1) -> MagicMock:
     settings.org_id = org_id
     settings.monthly_price_minor = 300000
     settings.currency = "RUB"
+    settings.billing_mode = "standard"
+    settings.min_billing_periods = 1
+    settings.allowed_billing_periods = None
+    settings.default_selection_mode = "all_due"
     settings.cert_billing_mode = "none"
     settings.cert_price_minor = None
     settings.tenant_pin_creation_enabled = False
@@ -610,3 +614,173 @@ async def test_checkout_rejects_cert_pin_for_disabled_terminal():
 
     assert resp.status_code == 400
     assert "disabled" in resp.json()["detail"].lower()
+
+
+@pytest.mark.anyio
+async def test_calculate_endpoint():
+    """POST /api/billing/calculate returns item calculation without adding DB order."""
+    added: list = []
+    user = _make_user()
+    terminal = _make_terminal()
+    license_ = _make_license(expires_at=datetime.now(UTC) + timedelta(days=45))
+    org_settings = _paid_org_settings()
+
+    app.dependency_overrides[get_db] = _checkout_db_mock(
+        terminal, license_, org_settings, added
+    )
+    app.dependency_overrides[get_current_billing_user] = lambda: user
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/api/billing/calculate",
+            json={
+                "items": [
+                    {
+                        "terminal_id": 1,
+                        "advance_periods": 1,
+                        "include_license": True,
+                        "include_cert_pin": True,
+                    }
+                ]
+            },
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["currency"] == "RUB"
+    assert data["total_amount_minor"] == 600000
+    assert data["license_amount_minor"] == 300000
+    assert data["cert_amount_minor"] == 300000
+    assert len(data["items"]) == 1
+    item = data["items"][0]
+    assert item["terminal_id"] == 1
+    assert item["advance_periods"] == 1
+    assert item["license_amount_minor"] == 300000
+    assert item["cert_amount_minor"] == 300000
+    assert item["total_item_amount_minor"] == 600000
+    # No BillingOrder should have been added
+    assert len(added) == 0
+
+
+@pytest.mark.anyio
+async def test_checkout_cert_linked_mode():
+    """In cert_linked mode, regular license is 0 ₽ and only cert PIN is charged."""
+    added: list = []
+    org_settings = _paid_org_settings()
+    org_settings.billing_mode = "cert_linked"
+
+    resp = await _post_checkout(
+        _make_user(),
+        _make_terminal(),
+        _make_license(expires_at=datetime.now(UTC) + timedelta(days=45)),
+        org_settings,
+        [
+            {
+                "terminal_id": 1,
+                "advance_periods": 1,
+                "include_license": True,
+                "include_cert_pin": True,
+            }
+        ],
+        added,
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    # 0 for license + 300000 for cert = 300000
+    assert data["amount_minor"] == 300000
+
+
+@pytest.mark.anyio
+async def test_checkout_min_billing_periods_enforced():
+    """Checkout enforces min_billing_periods."""
+    added: list = []
+    org_settings = _make_org_settings()
+    org_settings.min_billing_periods = 3
+
+    # Attempt to pay for only 1 period when 3 is min required -> 400
+    resp = await _post_checkout(
+        _make_user(),
+        _make_terminal(),
+        _make_license(expires_at=datetime.now(UTC) + timedelta(days=45)),
+        org_settings,
+        [{"terminal_id": 1, "advance_periods": 1, "include_license": True}],
+        added,
+    )
+    assert resp.status_code == 400
+    assert "minimum" in resp.json()["detail"].lower()
+
+    # Paying for 3 periods -> 200
+    resp_ok = await _post_checkout(
+        _make_user(),
+        _make_terminal(),
+        _make_license(expires_at=datetime.now(UTC) + timedelta(days=45)),
+        org_settings,
+        [{"terminal_id": 1, "advance_periods": 3, "include_license": True}],
+        added,
+    )
+    assert resp_ok.status_code == 200
+    assert resp_ok.json()["amount_minor"] == 900000
+
+
+@pytest.mark.anyio
+async def test_checkout_allowed_billing_periods_enforced():
+    """Checkout enforces allowed_billing_periods (e.g. 3,6,12)."""
+    added: list = []
+    org_settings = _make_org_settings()
+    org_settings.allowed_billing_periods = "3,6,12"
+    org_settings.min_billing_periods = 1
+
+    # 2 months is not in (3,6,12) -> 400
+    resp = await _post_checkout(
+        _make_user(),
+        _make_terminal(),
+        _make_license(expires_at=datetime.now(UTC) + timedelta(days=45)),
+        org_settings,
+        [{"terminal_id": 1, "advance_periods": 2, "include_license": True}],
+        added,
+    )
+    assert resp.status_code == 400
+    assert "not allowed" in resp.json()["detail"].lower()
+
+    # 6 months is in (3,6,12) -> 200
+    resp_ok = await _post_checkout(
+        _make_user(),
+        _make_terminal(),
+        _make_license(expires_at=datetime.now(UTC) + timedelta(days=45)),
+        org_settings,
+        [{"terminal_id": 1, "advance_periods": 6, "include_license": True}],
+        added,
+    )
+    assert resp_ok.status_code == 200
+    assert resp_ok.json()["amount_minor"] == 1800000
+
+
+@pytest.mark.anyio
+async def test_orders_endpoint_alias():
+    """POST /api/billing/orders works as an alias for checkout."""
+    added: list = []
+    user = _make_user()
+    terminal = _make_terminal()
+    license_ = _make_license(expires_at=datetime.now(UTC) + timedelta(days=45))
+    org_settings = _make_org_settings()
+
+    app.dependency_overrides[get_db] = _checkout_db_mock(
+        terminal, license_, org_settings, added
+    )
+    app.dependency_overrides[get_current_billing_user] = lambda: user
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/api/billing/orders",
+            json={
+                "items": [
+                    {"terminal_id": 1, "advance_periods": 1, "include_license": True}
+                ]
+            },
+        )
+
+    assert resp.status_code == 200
+    assert resp.json()["amount_minor"] == 300000

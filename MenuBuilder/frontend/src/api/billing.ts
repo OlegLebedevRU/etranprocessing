@@ -18,6 +18,10 @@ export interface BillingSummary {
   admin_disabled_terminal_count: number;
   nearest_required_payment_at: string | null;
   forecast: BillingForecastMonth[];
+  billing_mode?: "standard" | "post_factum" | "cert_linked";
+  min_billing_periods?: number;
+  allowed_billing_periods?: string | null;
+  default_selection_mode?: "only_lapsed" | "all_due" | "all";
 }
 
 export interface BillingTerminal {
@@ -42,6 +46,7 @@ export interface BillingTerminal {
   can_cancel_deactivation: boolean;
   can_reactivate: boolean;
   included_in_forecast: boolean;
+  billing_mode?: "standard" | "post_factum" | "cert_linked";
   cert_not_valid_after: string | null;
   tenant_pin_creation_enabled: boolean;
   cert_serial: string | null;
@@ -173,5 +178,32 @@ export async function confirmPayment(
   orderId: string,
 ): Promise<ConfirmPaymentResponse> {
   const res = await client.post(`/billing/orders/${orderId}/confirm`);
+  return res.data;
+}
+
+export interface CalculateItemResponse {
+  terminal_id: number;
+  operation: string;
+  periods_due: number;
+  advance_periods: number;
+  total_periods: number;
+  license_amount_minor: number;
+  cert_amount_minor: number;
+  total_item_amount_minor: number;
+  new_expires_at: string | null;
+}
+
+export interface CalculateResponse {
+  currency: string;
+  total_amount_minor: number;
+  license_amount_minor: number;
+  cert_amount_minor: number;
+  items: CalculateItemResponse[];
+}
+
+export async function calculateBilling(
+  data: CheckoutRequest,
+): Promise<CalculateResponse> {
+  const res = await client.post("/billing/calculate", data);
   return res.data;
 }

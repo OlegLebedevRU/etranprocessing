@@ -37,6 +37,10 @@ class BillingSummaryRead(BaseModel):
     admin_disabled_terminal_count: int
     nearest_required_payment_at: datetime | None
     forecast: list[BillingForecastMonthRead]
+    billing_mode: str = "standard"
+    min_billing_periods: int = 1
+    allowed_billing_periods: str | None = None
+    default_selection_mode: str = "all_due"
 
 
 class BillingTerminalRead(BaseModel):
@@ -63,6 +67,7 @@ class BillingTerminalRead(BaseModel):
     can_cancel_deactivation: bool
     can_reactivate: bool
     included_in_forecast: bool
+    billing_mode: str = "standard"
     cert_serial: str | None = None
     cert_not_valid_after: datetime | None = None
     tenant_pin_creation_enabled: bool = False
@@ -94,13 +99,33 @@ class CancelDeactivationResponse(BaseModel):
 
 class CheckoutItemRequest(BaseModel):
     terminal_id: int
-    advance_periods: int = 0  # 0, 1, or 2
+    advance_periods: int = 0
     include_license: bool = True
     include_cert_pin: bool = False
 
 
 class CheckoutRequest(BaseModel):
     items: list[CheckoutItemRequest]
+
+
+class CalculateItemResponse(BaseModel):
+    terminal_id: int
+    operation: str = "renewal"
+    periods_due: int
+    advance_periods: int
+    total_periods: int
+    license_amount_minor: int
+    cert_amount_minor: int
+    total_item_amount_minor: int
+    new_expires_at: datetime | None = None
+
+
+class CalculateResponse(BaseModel):
+    currency: str
+    total_amount_minor: int
+    license_amount_minor: int
+    cert_amount_minor: int
+    items: list[CalculateItemResponse]
 
 
 class CheckoutItemResponse(BaseModel):

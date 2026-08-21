@@ -29,7 +29,10 @@ from app.schemas.billing import (
     BillingOrderRead,
     BillingSummaryRead,
     BillingTerminalRead,
+    CalculateItemResponse,
+    CalculateResponse,
     CancelDeactivationResponse,
+    CheckoutItemRequest,
     CheckoutItemResponse,
     CheckoutRequest,
     CheckoutResponse,
@@ -50,6 +53,7 @@ from app.services.billing import (
     is_license_lapsed,
     project_expiration_after_payment,
     resolve_monthly_price,
+    validate_order_item_periods,
 )
 from app.services.cert_billing import (
     build_cert_policy_snapshot,
@@ -186,6 +190,7 @@ async def _get_terminal_billing_data(
         else None,
         org_monthly_price_minor=org_settings.monthly_price_minor,
         org_currency=org_settings.currency,
+        billing_mode=getattr(org_settings, "billing_mode", "standard") or "standard",
         cert_serial=terminal.cert_serial,
         cert_not_valid_after=terminal.cert_not_valid_after,
         tenant_pin_creation_enabled=org_settings.tenant_pin_creation_enabled,
@@ -265,6 +270,8 @@ async def _get_all_terminal_billing(
                 else None,
                 org_monthly_price_minor=org_settings.monthly_price_minor,
                 org_currency=org_settings.currency,
+                billing_mode=getattr(org_settings, "billing_mode", "standard")
+                or "standard",
                 cert_serial=terminal.cert_serial,
                 cert_not_valid_after=terminal.cert_not_valid_after,
                 tenant_pin_creation_enabled=org_settings.tenant_pin_creation_enabled,
@@ -303,7 +310,17 @@ async def get_billing_summary(
     ]
 
     summary = build_org_summary_data(
-        results, org_settings.currency, org_settings.monthly_price_minor, as_of
+        results,
+        org_settings.currency,
+        org_settings.monthly_price_minor,
+        as_of,
+        billing_mode=getattr(org_settings, "billing_mode", "standard") or "standard",
+        min_billing_periods=getattr(org_settings, "min_billing_periods", 1) or 1,
+        allowed_billing_periods=getattr(org_settings, "allowed_billing_periods", None),
+        default_selection_mode=getattr(
+            org_settings, "default_selection_mode", "all_due"
+        )
+        or "all_due",
     )
 
     return BillingSummaryRead(
@@ -320,6 +337,10 @@ async def get_billing_summary(
         forecast=[
             BillingForecastMonthRead.model_validate(fm) for fm in summary.forecast
         ],
+        billing_mode=summary.billing_mode,
+        min_billing_periods=summary.min_billing_periods,
+        allowed_billing_periods=summary.allowed_billing_periods,
+        default_selection_mode=summary.default_selection_mode,
     )
 
 
@@ -487,28 +508,25 @@ async def cancel_deactivation(
     )
 
 
-@router.post("/checkout", response_model=CheckoutResponse)
-async def create_checkout(
-    body: CheckoutRequest,
-    user: BillingUser = Depends(get_current_billing_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Create a checkout for paying overdue and/or advance periods."""
-    if not body.items:
-        raise HTTPException(status_code=400, detail="No items in checkout")
-
-    org_settings = await _get_org_settings(db, user.org_id)
-    as_of = datetime.now(UTC)
-
-    # Validate all terminals belong to org
-    checkout_items = []
+async def _prepare_checkout_items(
+    db: AsyncSession,
+    user_org_id: int,
+    org_settings: OrgBillingSettings,
+    items: list[CheckoutItemRequest],
+    as_of: datetime,
+) -> tuple[list[dict], list[CalculateItemResponse], int, int, int]:
+    """Validate items and compute order items, calculate response items, and totals."""
+    db_order_items = []
+    calculate_items = []
     total_amount = 0
+    license_total = 0
+    cert_total = 0
 
-    for item in body.items:
-        if item.advance_periods < 0 or item.advance_periods > 2:
+    for item in items:
+        if item.advance_periods < 0 or item.advance_periods > 120:
             raise HTTPException(
                 status_code=400,
-                detail=f"advance_periods must be 0, 1, or 2 for terminal {item.terminal_id}",
+                detail=f"advance_periods must be between 0 and 120 for terminal {item.terminal_id}",
             )
 
         if not item.include_license and not item.include_cert_pin:
@@ -517,7 +535,7 @@ async def create_checkout(
                 detail=f"Nothing selected to pay for terminal {item.terminal_id}",
             )
 
-        terminal = await _get_terminal_for_org(db, item.terminal_id, user.org_id)
+        terminal = await _get_terminal_for_org(db, item.terminal_id, user_org_id)
         info = await _get_terminal_billing_data(db, terminal, org_settings)
         billing = compute_terminal_billing(
             info,
@@ -532,8 +550,16 @@ async def create_checkout(
                 detail=f"Terminal {item.terminal_id} is administratively disabled.",
             )
 
+        item_license_amount = 0
+        item_cert_amount = 0
+        license_operation = "renewal"
+        periods_due = 0
+        total_periods = 0
+        new_expires_at: datetime | None = None
+
         if item.include_license:
             lapsed = is_license_lapsed(billing.license_expires_at, as_of)
+            license_operation = "reactivation" if lapsed else "renewal"
             periods_due = 1 if lapsed else 0
             total_periods = periods_due + item.advance_periods
 
@@ -543,8 +569,29 @@ async def create_checkout(
                     detail=f"No periods to pay for terminal {item.terminal_id}",
                 )
 
-            amount = total_periods * billing.period_price_minor
-            total_amount += amount
+            try:
+                validate_order_item_periods(
+                    billing_mode=getattr(org_settings, "billing_mode", "standard")
+                    or "standard",
+                    total_periods=total_periods,
+                    advance_periods=item.advance_periods,
+                    billing_period_months=billing.billing_period_months,
+                    min_billing_periods=getattr(org_settings, "min_billing_periods", 1)
+                    or 1,
+                    allowed_billing_periods=getattr(
+                        org_settings, "allowed_billing_periods", None
+                    ),
+                )
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+
+            if org_settings.billing_mode == "cert_linked":
+                item_license_amount = 0
+            else:
+                item_license_amount = total_periods * billing.period_price_minor
+
+            license_total += item_license_amount
+            total_amount += item_license_amount
 
             if lapsed:
                 new_expires_at = add_months_from_anchor(
@@ -560,13 +607,13 @@ async def create_checkout(
                     mode="renewal",
                 )
 
-            checkout_items.append(
+            db_order_items.append(
                 {
                     "terminal_id": item.terminal_id,
-                    "operation": "reactivation" if lapsed else "renewal",
+                    "operation": license_operation,
                     "periods_due": periods_due,
                     "advance_periods": item.advance_periods,
-                    "amount_minor": amount,
+                    "amount_minor": item_license_amount,
                     "new_expires_at": new_expires_at,
                     "billing_period_months": billing.billing_period_months,
                     "monthly_price_minor": billing.monthly_price_minor,
@@ -600,11 +647,21 @@ async def create_checkout(
                     "request it directly instead of paying for it",
                 )
 
-            total_amount += cert_price
+            pending = await _get_pending_cert_pin(db, item.terminal_id, as_of)
+            if pending:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"A pending PIN already exists for terminal {item.terminal_id}",
+                )
+
+            item_cert_amount = cert_price
+            cert_total += item_cert_amount
+            total_amount += item_cert_amount
+
             policy = resolve_cert_policy(org_settings)
             operation = resolve_operation_type(billing.cert_serial)
 
-            checkout_items.append(
+            db_order_items.append(
                 {
                     "terminal_id": item.terminal_id,
                     "operation": "cert_pin",
@@ -620,6 +677,71 @@ async def create_checkout(
                     ),
                 }
             )
+
+        calculate_items.append(
+            CalculateItemResponse(
+                terminal_id=item.terminal_id,
+                operation=license_operation if item.include_license else "cert_pin",
+                periods_due=periods_due,
+                advance_periods=item.advance_periods if item.include_license else 0,
+                total_periods=total_periods,
+                license_amount_minor=item_license_amount,
+                cert_amount_minor=item_cert_amount,
+                total_item_amount_minor=item_license_amount + item_cert_amount,
+                new_expires_at=new_expires_at,
+            )
+        )
+
+    return db_order_items, calculate_items, total_amount, license_total, cert_total
+
+
+@router.post("/calculate", response_model=CalculateResponse)
+async def calculate_billing(
+    body: CheckoutRequest,
+    user: BillingUser = Depends(get_current_billing_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Calculate billing amounts and preview changes without creating an order."""
+    if not body.items:
+        raise HTTPException(status_code=400, detail="No items in request")
+
+    org_settings = await _get_org_settings(db, user.org_id)
+    as_of = datetime.now(UTC)
+
+    (
+        _,
+        calculate_items,
+        total_amount,
+        license_total,
+        cert_total,
+    ) = await _prepare_checkout_items(db, user.org_id, org_settings, body.items, as_of)
+
+    return CalculateResponse(
+        currency=org_settings.currency,
+        total_amount_minor=total_amount,
+        license_amount_minor=license_total,
+        cert_amount_minor=cert_total,
+        items=calculate_items,
+    )
+
+
+@router.post("/checkout", response_model=CheckoutResponse)
+@router.post("/orders", response_model=CheckoutResponse)
+async def create_checkout(
+    body: CheckoutRequest,
+    user: BillingUser = Depends(get_current_billing_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a checkout for paying overdue and/or advance periods."""
+    if not body.items:
+        raise HTTPException(status_code=400, detail="No items in checkout")
+
+    org_settings = await _get_org_settings(db, user.org_id)
+    as_of = datetime.now(UTC)
+
+    checkout_items, _, total_amount, _, _ = await _prepare_checkout_items(
+        db, user.org_id, org_settings, body.items, as_of
+    )
 
     provider = get_payment_provider()
     import uuid
@@ -696,10 +818,10 @@ async def reactivation_checkout(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a checkout for reactivating a disabled terminal."""
-    if body.advance_periods not in (1, 2):
+    if body.advance_periods < 1 or body.advance_periods > 120:
         raise HTTPException(
             status_code=400,
-            detail="advance_periods must be 1 or 2 for reactivation",
+            detail="advance_periods must be between 1 and 120 for reactivation",
         )
 
     terminal = await _get_terminal_for_org(db, terminal_id, user.org_id)
@@ -732,9 +854,29 @@ async def reactivation_checkout(
     monthly_price = resolve_monthly_price(
         license_.monthly_price_override_minor if license_ else None,
         org_settings.monthly_price_minor,
+        billing_mode=getattr(org_settings, "billing_mode", "standard") or "standard",
     )
     period_price = calculate_period_price(monthly_price, billing_period_months)
-    total_amount = body.advance_periods * period_price
+
+    try:
+        validate_order_item_periods(
+            billing_mode=getattr(org_settings, "billing_mode", "standard")
+            or "standard",
+            total_periods=body.advance_periods,
+            advance_periods=body.advance_periods,
+            billing_period_months=billing_period_months,
+            min_billing_periods=getattr(org_settings, "min_billing_periods", 1) or 1,
+            allowed_billing_periods=getattr(
+                org_settings, "allowed_billing_periods", None
+            ),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if org_settings.billing_mode == "cert_linked":
+        total_amount = 0
+    else:
+        total_amount = body.advance_periods * period_price
 
     now = datetime.now(UTC)
     new_expires_at = add_months_from_anchor(

@@ -44,8 +44,13 @@ interface CheckoutModalProps {
   open: boolean;
   lines: CartLine[];
   advancePeriods: number;
+  billingMode?: string;
   onClose: () => void;
   onPaid: () => void;
+}
+
+function isLicenseLapsed(t: BillingTerminal): boolean {
+  return !t.license_expires_at || new Date(t.license_expires_at) <= new Date();
 }
 
 /**
@@ -57,6 +62,7 @@ export default function CheckoutModal({
   open,
   lines,
   advancePeriods,
+  billingMode,
   onClose,
   onPaid,
 }: CheckoutModalProps) {
@@ -71,6 +77,27 @@ export default function CheckoutModal({
   );
   const licenseCount = lines.filter((l) => l.license).length;
   const certCount = lines.filter((l) => l.cert).length;
+
+  const lapsedLines = lines.filter((l) => l.license && isLicenseLapsed(l.terminal));
+  const lapsedDebtMinor = lapsedLines.reduce(
+    (sum, l) =>
+      sum +
+      (l.terminal.billing_mode === "cert_linked" ? 0 : l.terminal.period_price_minor),
+    0,
+  );
+
+  const advanceLines = lines.filter((l) => l.license && advancePeriods > 0);
+  const advanceRenewalMinor = advanceLines.reduce(
+    (sum, l) =>
+      sum +
+      (l.terminal.billing_mode === "cert_linked"
+        ? 0
+        : advancePeriods * l.terminal.period_price_minor),
+    0,
+  );
+
+  const certLines = lines.filter((l) => l.cert);
+  const certsTotalMinor = certLines.reduce((sum, l) => sum + l.certAmountMinor, 0);
 
   const reset = () => {
     setPaid(false);
@@ -222,16 +249,44 @@ export default function CheckoutModal({
             ]}
           />
           <Divider style={{ margin: "16px 0 8px" }} />
-          <Descriptions size="small" column={1}>
-            <Descriptions.Item label="Лицензии">
-              {licenseCount} шт.
+          <Descriptions size="small" column={1} bordered style={{ marginTop: 8 }}>
+            <Descriptions.Item label="Погашение задолженности (просроченные)">
+              {lapsedLines.length > 0 ? (
+                <span>
+                  {lapsedLines.length} терм. ·{" "}
+                  <Text type="danger">{formatMoneyMinor(lapsedDebtMinor)}</Text>
+                </span>
+              ) : (
+                <Text type="secondary">Нет задолженности</Text>
+              )}
             </Descriptions.Item>
-            <Descriptions.Item label="Сертификаты">
-              {certCount} шт.
+            <Descriptions.Item label="Авансовое продление">
+              {advanceLines.length > 0 ? (
+                <span>
+                  {advanceLines.length} терм. (+{advancePeriods} периодов) ·{" "}
+                  {formatMoneyMinor(advanceRenewalMinor)}
+                </span>
+              ) : (
+                <Text type="secondary">Без аванса (+0 периодов)</Text>
+              )}
             </Descriptions.Item>
-            <Descriptions.Item label="Итого">
-              <Text strong style={{ fontSize: 16 }}>
+            <Descriptions.Item label="Выпуск PIN-сертификатов">
+              {certLines.length > 0 ? (
+                <span>
+                  {certLines.length} шт. · {formatMoneyMinor(certsTotalMinor)}
+                </span>
+              ) : (
+                <Text type="secondary">Не выбрано</Text>
+              )}
+            </Descriptions.Item>
+            <Descriptions.Item label="Итого к оплате">
+              <Text strong style={{ fontSize: 16, color: total > 0 ? "#1677ff" : undefined }}>
                 {formatMoneyMinor(total)}
+                {billingMode === "cert_linked" && total === 0 && (
+                  <span style={{ fontSize: 12, fontWeight: "normal", color: "#666", marginLeft: 8 }}>
+                    (лицензии включены в сертификат)
+                  </span>
+                )}
               </Text>
             </Descriptions.Item>
           </Descriptions>

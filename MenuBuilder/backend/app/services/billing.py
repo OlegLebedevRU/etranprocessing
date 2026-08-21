@@ -41,6 +41,10 @@ class OrgSummary:
     admin_disabled_terminal_count: int
     nearest_required_payment_at: datetime | None
     forecast: list[ForecastMonth]
+    billing_mode: str = "standard"
+    min_billing_periods: int = 1
+    allowed_billing_periods: str | None = None
+    default_selection_mode: str = "all_due"
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +63,7 @@ class TerminalBillingInfo:
     monthly_price_override_minor: int | None
     org_monthly_price_minor: int
     org_currency: str
+    billing_mode: str = "standard"
     cert_serial: str | None = None
     cert_not_valid_after: datetime | None = None
     tenant_pin_creation_enabled: bool = False
@@ -98,6 +103,7 @@ class TerminalBillingResult:
     can_cancel_deactivation: bool
     can_reactivate: bool
     included_in_forecast: bool
+    billing_mode: str = "standard"
     cert_serial: str | None = None
     cert_not_valid_after: datetime | None = None
     tenant_pin_creation_enabled: bool = False
@@ -130,8 +136,11 @@ def add_months_from_anchor(anchor: datetime, total_months: int) -> datetime:
 def resolve_monthly_price(
     monthly_price_override_minor: int | None,
     org_monthly_price_minor: int,
+    billing_mode: str = "standard",
 ) -> int:
     """Determine the effective monthly price for a terminal."""
+    if billing_mode == "cert_linked":
+        return 0
     if monthly_price_override_minor is not None:
         return monthly_price_override_minor
     return org_monthly_price_minor
@@ -290,6 +299,7 @@ def compute_terminal_billing(
     monthly_price = resolve_monthly_price(
         info.monthly_price_override_minor,
         info.org_monthly_price_minor,
+        info.billing_mode,
     )
     period_price = calculate_period_price(monthly_price, info.billing_period_months)
 
@@ -308,7 +318,7 @@ def compute_terminal_billing(
     overdue_amount = 0
     if billing_status == BillingStatus.OVERDUE:
         periods_due = 1
-        overdue_amount = period_price
+        overdue_amount = period_price if info.billing_mode != "cert_linked" else 0
 
     # Next payment
     next_payment_at: datetime | None = None
@@ -318,7 +328,7 @@ def compute_terminal_billing(
         and info.license_expires_at is not None
     ):
         next_payment_at = info.license_expires_at
-        next_payment_amount = period_price
+        next_payment_amount = period_price if info.billing_mode != "cert_linked" else 0
 
     # Projected expiry after paying the outstanding period: the term restarts today.
     projected_expires_at: datetime | None = None
@@ -369,6 +379,7 @@ def compute_terminal_billing(
         can_cancel_deactivation=can_cancel_deactivation,
         can_reactivate=can_reactivate,
         included_in_forecast=included_in_forecast,
+        billing_mode=info.billing_mode,
         cert_serial=info.cert_serial,
         cert_not_valid_after=info.cert_not_valid_after,
         tenant_pin_creation_enabled=info.tenant_pin_creation_enabled,
@@ -439,6 +450,10 @@ def build_org_summary_data(
     org_currency: str,
     org_monthly_price_minor: int,
     as_of: datetime,
+    billing_mode: str = "standard",
+    min_billing_periods: int = 1,
+    allowed_billing_periods: str | None = None,
+    default_selection_mode: str = "all_due",
 ) -> OrgSummary:
     """Build organization summary from computed terminal data."""
     overdue_amount = sum(t.overdue_amount_minor for t in terminals)
@@ -471,10 +486,11 @@ def build_org_summary_data(
             nearest = t.next_payment_at
 
     forecast = build_org_forecast(terminals, as_of)
+    base_price = 0 if billing_mode == "cert_linked" else org_monthly_price_minor
 
     return OrgSummary(
         currency=org_currency,
-        monthly_base_price_minor=org_monthly_price_minor,
+        monthly_base_price_minor=base_price,
         overdue_amount_minor=overdue_amount,
         overdue_terminal_count=overdue_count,
         active_terminal_count=active_count,
@@ -483,4 +499,55 @@ def build_org_summary_data(
         admin_disabled_terminal_count=admin_count,
         nearest_required_payment_at=nearest,
         forecast=forecast,
+        billing_mode=billing_mode,
+        min_billing_periods=min_billing_periods,
+        allowed_billing_periods=allowed_billing_periods,
+        default_selection_mode=default_selection_mode,
     )
+
+
+def parse_allowed_periods(allowed_billing_periods: str | None) -> list[int] | None:
+    """Parse comma-separated string of allowed renewal periods in months.
+
+    E.g. '1' -> [1], '3,6,12' -> [3, 6, 12]. Returns None if unset / empty / '*'.
+    """
+    if not allowed_billing_periods:
+        return None
+    cleaned = allowed_billing_periods.strip()
+    if not cleaned or cleaned == "*":
+        return None
+    try:
+        periods = [int(p.strip()) for p in cleaned.split(",") if p.strip()]
+        return periods if periods else None
+    except ValueError:
+        return None
+
+
+def validate_order_item_periods(
+    billing_mode: str,
+    total_periods: int,
+    advance_periods: int,
+    billing_period_months: int,
+    min_billing_periods: int = 1,
+    allowed_billing_periods: str | None = None,
+) -> None:
+    """Validate requested periods against org billing settings.
+
+    Raises ValueError if validation fails.
+    """
+    if advance_periods < 0:
+        raise ValueError("advance_periods cannot be negative")
+    if advance_periods > 120:
+        raise ValueError("advance_periods cannot exceed 120")
+    if total_periods > 0:
+        if min_billing_periods > 1 and total_periods < min_billing_periods:
+            raise ValueError(
+                f"Minimum billing periods is {min_billing_periods}, got {total_periods}"
+            )
+        allowed = parse_allowed_periods(allowed_billing_periods)
+        if allowed is not None:
+            total_months = total_periods * billing_period_months
+            if total_months not in allowed:
+                raise ValueError(
+                    f"Billing period of {total_months} month(s) is not allowed (allowed: {allowed_billing_periods})"
+                )

@@ -100,15 +100,35 @@ function isLicensePayable(t: BillingTerminal, advancePeriods: number): boolean {
 }
 
 /**
- * Whether the license line should be pre-checked by default: always for
- * anything urgent (lapsed or expiring within a month), and additionally for
- * anything whose expiry falls inside the chosen advance-payment horizon.
+ * Whether the license line should be pre-checked by default:
+ * Depends on default_selection_mode / billing_mode.
  */
 function shouldAutoSelectLicense(
   t: BillingTerminal,
   advancePeriods: number,
+  defaultSelectionMode: string = "all_due",
+  billingMode: string = "standard",
 ): boolean {
   if (isTerminalDisabled(t)) return false;
+
+  const mode =
+    defaultSelectionMode ||
+    (billingMode === "post_factum" ? "only_lapsed" : "all_due");
+
+  if (mode === "only_lapsed") {
+    if (isLicenseLapsed(t)) return true;
+    if (advancePeriods > 0) {
+      const horizonDays = advancePeriods * (t.billing_period_months || 1) * 30;
+      return daysUntilLicenseExpiry(t) <= horizonDays;
+    }
+    return false;
+  }
+
+  if (mode === "all") {
+    return true;
+  }
+
+  // default: "all_due"
   if (isLicenseUrgent(t)) return true;
   if (advancePeriods > 0) {
     const horizonDays = advancePeriods * (t.billing_period_months || 1) * 30;
@@ -134,8 +154,20 @@ function isCertPayable(t: BillingTerminal): boolean {
 }
 
 function licenseAmountMinor(t: BillingTerminal, advancePeriods: number): number {
+  if (t.billing_mode === "cert_linked") return 0;
   const periods = (isLicenseLapsed(t) ? 1 : 0) + advancePeriods;
   return periods * t.period_price_minor;
+}
+
+function parseAllowedPeriods(str?: string | null): number[] | null {
+  if (!str) return null;
+  const trimmed = str.trim();
+  if (!trimmed || trimmed === "*") return null;
+  const nums = trimmed
+    .split(",")
+    .map((s) => parseInt(s.trim(), 10))
+    .filter((n) => !isNaN(n) && n > 0);
+  return nums.length > 0 ? nums : null;
 }
 
 /** Date the license will run until once the selected periods are paid. */
@@ -233,16 +265,19 @@ export default function BillingPage() {
     fetchData();
   }, [fetchData]);
 
-  // Auto-select license lines: anything urgent (lapsed or due within a
-  // month) is always checked; anything else whose expiry falls inside the
-  // chosen advance-payment horizon gets checked too. Certificate selections
-  // are independent and left untouched here.
+  // Auto-select license lines: depends on default_selection_mode / billing_mode.
+  // Certificate selections are independent and left untouched here.
   useEffect(() => {
     setSelection((prev) => {
       let changed = false;
       const next: Record<number, Selection> = { ...prev };
       for (const t of terminals) {
-        const auto = shouldAutoSelectLicense(t, advancePeriods);
+        const auto = shouldAutoSelectLicense(
+          t,
+          advancePeriods,
+          summary?.default_selection_mode || "all_due",
+          summary?.billing_mode || "standard",
+        );
         const current = next[t.terminal_id] ?? { license: false, cert: false };
         if (current.license !== auto) {
           next[t.terminal_id] = { ...current, license: auto };
@@ -251,7 +286,7 @@ export default function BillingPage() {
       }
       return changed ? next : prev;
     });
-  }, [terminals, advancePeriods]);
+  }, [terminals, advancePeriods, summary]);
 
   const handleDeactivate = async () => {
     if (!deactivateModal.terminal) return;
@@ -364,6 +399,9 @@ export default function BillingPage() {
 
   // Advance-payment control: labelled in months, derived from the org tariff.
   const periodMonths = dominantPeriodMonths(terminals);
+  const allowed = parseAllowedPeriods(summary?.allowed_billing_periods);
+  const minPeriods = summary?.min_billing_periods || 1;
+  const isPostFactum = summary?.billing_mode === "post_factum";
   const hasDebt = terminals.some(
     (t) => !isTerminalDisabled(t) && isLicenseLapsed(t),
   );
@@ -376,20 +414,53 @@ export default function BillingPage() {
       !isLicenseLapsed(t) &&
       isLicenseUrgent(t),
   );
-  const showDebtOnlyOption = hasDebt && !hasUrgentDueSoon;
-  const advanceOptions = [
-    ...(showDebtOnlyOption ? [{ label: "Только задолженность", value: 0 }] : []),
-    { label: monthsLabel(periodMonths), value: 1 },
-    { label: monthsLabel(periodMonths * 2), value: 2 },
-  ];
 
-  // "Только задолженность" isn't always offered, so the selection has to
-  // fall back to the first real advance period whenever it disappears.
-  useEffect(() => {
-    if (!loading && !showDebtOnlyOption && advancePeriods === 0) {
-      setAdvancePeriods(1);
+  const advanceOptions = useMemo(() => {
+    if (allowed && allowed.length > 0) {
+      const opts = [];
+      if (allowed.includes(1) || isPostFactum || (hasDebt && !hasUrgentDueSoon)) {
+        opts.push({ label: "Только задолженность", value: 0 });
+      }
+      for (const m of allowed) {
+        opts.push({ label: monthsLabel(m), value: m });
+      }
+      return opts;
     }
-  }, [loading, showDebtOnlyOption, advancePeriods]);
+
+    if (minPeriods > 1) {
+      return [
+        { label: monthsLabel(minPeriods * periodMonths), value: minPeriods },
+        { label: monthsLabel(minPeriods * periodMonths * 2), value: minPeriods * 2 },
+        { label: monthsLabel(Math.max(12, minPeriods * 3)), value: Math.max(12, minPeriods * 3) },
+      ];
+    }
+
+    const showDebtOnly = isPostFactum || (hasDebt && !hasUrgentDueSoon);
+    return [
+      ...(showDebtOnly ? [{ label: "Только задолженность", value: 0 }] : []),
+      { label: monthsLabel(periodMonths), value: 1 },
+      { label: monthsLabel(periodMonths * 2), value: 2 },
+      { label: monthsLabel(periodMonths * 3), value: 3 },
+      { label: monthsLabel(periodMonths * 6), value: 6 },
+      { label: monthsLabel(periodMonths * 12), value: 12 },
+    ];
+  }, [allowed, minPeriods, isPostFactum, hasDebt, hasUrgentDueSoon, periodMonths]);
+
+  // Keep advancePeriods synchronized with valid options when settings/options change
+  useEffect(() => {
+    if (!loading && advanceOptions.length > 0) {
+      const validValues = advanceOptions.map((o) => o.value);
+      if (!validValues.includes(advancePeriods)) {
+        if (summary?.billing_mode === "post_factum" && validValues.includes(0)) {
+          setAdvancePeriods(0);
+        } else if (summary?.min_billing_periods && validValues.includes(summary.min_billing_periods)) {
+          setAdvancePeriods(summary.min_billing_periods);
+        } else {
+          setAdvancePeriods(advanceOptions[0].value);
+        }
+      }
+    }
+  }, [loading, advanceOptions, advancePeriods, summary]);
 
 
   // Counters
@@ -463,6 +534,21 @@ export default function BillingPage() {
                 ? formatDate(r.license_expires_at)
                 : "нет лицензии"}
             </Text>
+          );
+        }
+
+        if (r.billing_mode === "cert_linked") {
+          return (
+            <Space direction="vertical" size={0}>
+              <Text>
+                {r.license_expires_at
+                  ? formatDate(r.license_expires_at)
+                  : "по сертификату"}
+              </Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                0 ₽ (в сертификате)
+              </Text>
+            </Space>
           );
         }
 
@@ -611,12 +697,21 @@ export default function BillingPage() {
       dataIndex: "monthly_price_minor",
       key: "tariff",
       align: "right",
-      width: 130,
-      render: (v: number, r) => (
-        <span>
-          {formatMoneyMinor(v)}/{formatBillingPeriod(r.billing_period_months)}
-        </span>
-      ),
+      width: 140,
+      render: (v: number, r: BillingTerminal) => {
+        if (r.billing_mode === "cert_linked") {
+          return (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              0 ₽ (в сертификате)
+            </Text>
+          );
+        }
+        return (
+          <span>
+            {formatMoneyMinor(v)}/{formatBillingPeriod(r.billing_period_months)}
+          </span>
+        );
+      },
     },
     {
       title: "Задолженность",
@@ -704,6 +799,12 @@ export default function BillingPage() {
         subtitle="Оплата лицензий и сертификатов терминалов"
         extra={
           <>
+            {summary?.billing_mode === "post_factum" && (
+              <Tag color="orange">Пост-оплата (post_factum)</Tag>
+            )}
+            {summary?.billing_mode === "cert_linked" && (
+              <Tag color="geekblue">По сертификату (cert_linked)</Tag>
+            )}
             <Tag color="red">Просрочено: {overdueCount}</Tag>
             <Tag color="green">Активных: {activeCount}</Tag>
             <Tag>Отключённых: {disabledCount}</Tag>
@@ -734,10 +835,12 @@ export default function BillingPage() {
                 type="primary"
                 block
                 size="small"
-                disabled={totalMinor <= 0}
+                disabled={cartLines.length === 0}
                 onClick={() => setCheckoutOpen(true)}
               >
-                Перейти к оплате
+                {totalMinor > 0
+                  ? `Перейти к оплате (${formatMoneyMinor(totalMinor)})`
+                  : `Перейти к оформлению (${cartLines.length} поз.)`}
               </Button>
             </Space>
           </Card>
@@ -871,6 +974,7 @@ export default function BillingPage() {
         open={checkoutOpen}
         lines={cartLines}
         advancePeriods={advancePeriods}
+        billingMode={summary?.billing_mode}
         onClose={() => setCheckoutOpen(false)}
         onPaid={fetchData}
       />

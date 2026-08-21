@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   Button,
   Card,
+  Checkbox,
   Divider,
   Form,
   Input,
@@ -19,6 +20,8 @@ import {
 import type { ColumnsType } from "antd/es/table";
 import {
   EditOutlined,
+  MailOutlined,
+  PhoneOutlined,
   PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
@@ -73,9 +76,16 @@ export default function AdminOrganizationsPage() {
     createForm.setFieldsValue({
       org_name: "",
       name: "",
+      email: "",
+      phone: "",
+      notify_by_email: true,
       is_active: true,
       monthly_price_rub: 1000,
       currency: "RUB",
+      billing_mode: "standard",
+      min_billing_periods: 1,
+      allowed_billing_periods: "",
+      default_selection_mode: "all_due",
       cert_billing_mode: "none",
       cert_price_rub: 500,
       tenant_pin_creation_enabled: false,
@@ -93,9 +103,16 @@ export default function AdminOrganizationsPage() {
         org_id: values.org_id ? Number(values.org_id) : undefined,
         org_name: values.org_name.trim(),
         name: values.name.trim(),
+        email: values.email ? values.email.trim() : null,
+        phone: values.phone ? values.phone.trim() : null,
+        notify_by_email: values.notify_by_email ?? true,
         is_active: values.is_active,
         monthly_price_minor: Math.round(Number(values.monthly_price_rub || 0) * 100),
         currency: values.currency || "RUB",
+        billing_mode: values.billing_mode || "standard",
+        min_billing_periods: Number(values.min_billing_periods || 1),
+        allowed_billing_periods: values.allowed_billing_periods ? values.allowed_billing_periods.trim() : null,
+        default_selection_mode: values.default_selection_mode || "all_due",
         cert_billing_mode: values.cert_billing_mode || "none",
         cert_price_minor:
           values.cert_billing_mode === "per_operation"
@@ -119,15 +136,22 @@ export default function AdminOrganizationsPage() {
 
   const handleOpenEdit = (org: AdminOrg) => {
     setEditingOrg(org);
-    setEditCertMode(org.cert_billing_mode);
+    setEditCertMode(org.cert_billing_mode || "none");
     editForm.resetFields();
     editForm.setFieldsValue({
       org_name: org.org_name,
       name: org.name,
+      email: org.email || "",
+      phone: org.phone || "",
+      notify_by_email: org.notify_by_email ?? true,
       is_active: org.is_active,
       monthly_price_rub: (org.monthly_price_minor / 100).toFixed(2),
       currency: org.currency,
-      cert_billing_mode: org.cert_billing_mode,
+      billing_mode: org.billing_mode || "standard",
+      min_billing_periods: org.min_billing_periods || 1,
+      allowed_billing_periods: org.allowed_billing_periods || "",
+      default_selection_mode: org.default_selection_mode || "all_due",
+      cert_billing_mode: org.cert_billing_mode || "none",
       cert_price_rub: org.cert_price_minor ? (org.cert_price_minor / 100).toFixed(2) : 500,
       tenant_pin_creation_enabled: org.tenant_pin_creation_enabled,
       cert_charge_primary_issue: org.cert_charge_primary_issue,
@@ -143,9 +167,16 @@ export default function AdminOrganizationsPage() {
       const payload: AdminOrgUpdateInput = {
         org_name: values.org_name.trim(),
         name: values.name.trim(),
+        email: values.email ? values.email.trim() : null,
+        phone: values.phone ? values.phone.trim() : null,
+        notify_by_email: values.notify_by_email ?? true,
         is_active: values.is_active,
         monthly_price_minor: Math.round(Number(values.monthly_price_rub || 0) * 100),
         currency: values.currency,
+        billing_mode: values.billing_mode || "standard",
+        min_billing_periods: Number(values.min_billing_periods || 1),
+        allowed_billing_periods: values.allowed_billing_periods ? values.allowed_billing_periods.trim() : null,
+        default_selection_mode: values.default_selection_mode || "all_due",
         cert_billing_mode: values.cert_billing_mode,
         cert_price_minor:
           values.cert_billing_mode === "per_operation"
@@ -173,7 +204,9 @@ export default function AdminOrganizationsPage() {
     return (
       String(o.org_id).includes(lower) ||
       o.org_name.toLowerCase().includes(lower) ||
-      o.name.toLowerCase().includes(lower)
+      o.name.toLowerCase().includes(lower) ||
+      (o.email && o.email.toLowerCase().includes(lower)) ||
+      (o.phone && o.phone.toLowerCase().includes(lower))
     );
   });
 
@@ -187,13 +220,29 @@ export default function AdminOrganizationsPage() {
       render: (val) => <Text strong>#{val}</Text>,
     },
     {
-      title: "Организация",
+      title: "Организация и контакты",
       dataIndex: "org_name",
       key: "org_name",
       render: (text, record) => (
         <div>
           <div><Text strong>{text}</Text></div>
           <Text type="secondary" style={{ fontSize: 12 }}>{record.name}</Text>
+          {(record.email || record.phone) && (
+            <div style={{ marginTop: 4, fontSize: 12, color: "#555" }}>
+              {record.email && (
+                <span style={{ marginRight: 8 }}>
+                  <MailOutlined style={{ marginRight: 3, color: "#1677ff" }} />
+                  {record.email}
+                </span>
+              )}
+              {record.phone && (
+                <span>
+                  <PhoneOutlined style={{ marginRight: 3, color: "#52c41a" }} />
+                  {record.phone}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       ),
     },
@@ -201,7 +250,7 @@ export default function AdminOrganizationsPage() {
       title: "Статус",
       dataIndex: "is_active",
       key: "is_active",
-      width: 110,
+      width: 100,
       render: (active) => (
         <Tag color={active ? "success" : "default"}>
           {active ? "Активна" : "Отключена"}
@@ -209,21 +258,58 @@ export default function AdminOrganizationsPage() {
       ),
     },
     {
+      title: "Модель биллинга",
+      key: "billing_mode",
+      width: 170,
+      render: (_, record) => {
+        const mode = record.billing_mode || "standard";
+        let tagColor = "default";
+        let label = "Стандартная";
+        if (mode === "post_factum") {
+          tagColor = "orange";
+          label = "Пост-оплата (post_factum)";
+        } else if (mode === "cert_linked") {
+          tagColor = "geekblue";
+          label = "По сертификату (cert_linked)";
+        }
+        return (
+          <div>
+            <Tag color={tagColor}>{label}</Tag>
+            {record.allowed_billing_periods && (
+              <div style={{ fontSize: 11, color: "#777", marginTop: 2 }}>
+                Сетка: {record.allowed_billing_periods} мес.
+              </div>
+            )}
+            {(record.min_billing_periods || 1) > 1 && (
+              <div style={{ fontSize: 11, color: "#777" }}>
+                Мин. период: {record.min_billing_periods}
+              </div>
+            )}
+          </div>
+        );
+      },
+    },
+    {
       title: "Стоимость / мес.",
       dataIndex: "monthly_price_minor",
       key: "monthly_price_minor",
-      width: 140,
-      render: (val, record) => (
-        <Text>
-          {(val / 100).toLocaleString("ru-RU", { minimumFractionDigits: 2 })} {record.currency}
-        </Text>
-      ),
+      width: 130,
+      render: (val, record) => {
+        if (record.billing_mode === "cert_linked") {
+          return <Text type="secondary">0 ₽ (в сертификате)</Text>;
+        }
+        return (
+          <Text>
+            {(val / 100).toLocaleString("ru-RU", { minimumFractionDigits: 2 })} {record.currency}
+          </Text>
+        );
+      },
     },
     {
       title: "Тариф PIN / Cert",
       dataIndex: "cert_billing_mode",
       key: "cert_billing_mode",
-      width: 160,
+      width: 150,
       render: (mode, record) => {
         if (mode === "per_operation") {
           const price = record.cert_price_minor ? record.cert_price_minor / 100 : 0;
@@ -243,7 +329,7 @@ export default function AdminOrganizationsPage() {
       title: "PIN клиентом",
       dataIndex: "tenant_pin_creation_enabled",
       key: "tenant_pin_creation_enabled",
-      width: 120,
+      width: 110,
       render: (enabled) => (
         <Tag color={enabled ? "processing" : "default"}>
           {enabled ? "Включено" : "Выключено"}
@@ -268,7 +354,7 @@ export default function AdminOrganizationsPage() {
     {
       title: "Действия",
       key: "actions",
-      width: 120,
+      width: 110,
       align: "center",
       render: (_, record) => (
         <Button
@@ -306,11 +392,11 @@ export default function AdminOrganizationsPage() {
         </div>
         <Space>
           <Input
-            placeholder="Поиск по ID или названию..."
+            placeholder="Поиск по ID, названию, email, телефону..."
             prefix={<SearchOutlined />}
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            style={{ width: 240 }}
+            style={{ width: 260 }}
             allowClear
           />
           <Button icon={<ReloadOutlined />} onClick={loadData}>
@@ -340,7 +426,7 @@ export default function AdminOrganizationsPage() {
         confirmLoading={createSubmitting}
         okText="Создать организацию"
         cancelText="Отмена"
-        width={580}
+        width={620}
         destroyOnClose
       >
         <Form
@@ -370,24 +456,50 @@ export default function AdminOrganizationsPage() {
             </Form.Item>
           </div>
 
-          <Form.Item
-            name="org_name"
-            label="Название организации (юр. лицо)"
-            rules={[{ required: true, message: "Введите название организации" }]}
-          >
-            <Input placeholder="ООО 'Пример' или ИП..." />
-          </Form.Item>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Form.Item
+              name="org_name"
+              label="Название организации (юр. лицо)"
+              rules={[{ required: true, message: "Введите название организации" }]}
+            >
+              <Input placeholder="ООО 'Компания' или ИП..." />
+            </Form.Item>
+
+            <Form.Item
+              name="name"
+              label="Краткое наименование"
+              rules={[{ required: true, message: "Введите краткое наименование" }]}
+            >
+              <Input placeholder="Краткое имя..." />
+            </Form.Item>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Form.Item
+              name="email"
+              label="Контактный Email"
+              rules={[{ type: "email", message: "Некорректный email" }]}
+            >
+              <Input prefix={<MailOutlined />} placeholder="billing@example.com" />
+            </Form.Item>
+
+            <Form.Item
+              name="phone"
+              label="Контактный телефон"
+            >
+              <Input prefix={<PhoneOutlined />} placeholder="+7 (999) 000-00-00" />
+            </Form.Item>
+          </div>
 
           <Form.Item
-            name="name"
-            label="Краткое наименование (для отображения)"
-            rules={[{ required: true, message: "Введите краткое наименование" }]}
+            name="notify_by_email"
+            valuePropName="checked"
           >
-            <Input placeholder="Краткое имя..." />
+            <Checkbox>Отправлять почтовые уведомления (счета, акты, напоминания)</Checkbox>
           </Form.Item>
 
-          <Divider style={{ margin: "16px 0 12px" }}>
-            Параметры лицензирования и тарифов
+          <Divider style={{ margin: "16px 0 12px", fontSize: 14 }}>
+            Лицензирование и биллинг
           </Divider>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -411,6 +523,65 @@ export default function AdminOrganizationsPage() {
               </Select>
             </Form.Item>
           </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Form.Item
+              name="billing_mode"
+              label="Модель биллинга"
+              tooltip="Режим расчета и выставления счетов"
+            >
+              <Select>
+                <Select.Option value="standard">Стандартная (предоплата)</Select.Option>
+                <Select.Option value="post_factum">По факту задолженности (пост-оплата)</Select.Option>
+                <Select.Option value="cert_linked">Привязана к сертификату (cert_linked)</Select.Option>
+              </Select>
+            </Form.Item>
+
+            <Form.Item
+              name="default_selection_mode"
+              label="Выделение по умолчанию"
+              tooltip="Какие терминалы по умолчанию отмечены галочками на странице /billing"
+            >
+              <Select>
+                <Select.Option value="all_due">Задолженность и до 30 дней (all_due)</Select.Option>
+                <Select.Option value="only_lapsed">Только с задолженностью (only_lapsed)</Select.Option>
+                <Select.Option value="all">Все терминалы (all)</Select.Option>
+              </Select>
+            </Form.Item>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Form.Item
+              name="allowed_billing_periods"
+              label="Разрешенные периоды продления"
+              tooltip="Сетка продления в месяцах через запятую (например, 1 или 3,6,12). Оставьте пустым для любых."
+            >
+              <Select
+                allowClear
+                placeholder="Любые (без ограничений)"
+                options={[
+                  { label: "Любые периоды (без ограничений)", value: "" },
+                  { label: "1 мес (строго ежемесячно)", value: "1" },
+                  { label: "3, 6, 12 мес (шаги 3/6/12)", value: "3,6,12" },
+                  { label: "1, 3, 6, 12 мес", value: "1,3,6,12" },
+                  { label: "1, 2 мес", value: "1,2" },
+                  { label: "12 мес (только год)", value: "12" },
+                ]}
+              />
+            </Form.Item>
+
+            <Form.Item
+              name="min_billing_periods"
+              label="Минимальный период оплаты"
+              tooltip="Минимальное количество периодов за единовременную оплату"
+            >
+              <InputNumber min={1} max={120} style={{ width: "100%" }} placeholder="1" />
+            </Form.Item>
+          </div>
+
+          <Divider style={{ margin: "16px 0 12px", fontSize: 14 }}>
+            Настройки mTLS-сертификатов
+          </Divider>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <Form.Item
@@ -475,7 +646,7 @@ export default function AdminOrganizationsPage() {
         confirmLoading={editSubmitting}
         okText="Сохранить изменения"
         cancelText="Отмена"
-        width={580}
+        width={620}
         destroyOnClose
       >
         <Form
@@ -501,6 +672,30 @@ export default function AdminOrganizationsPage() {
             </Form.Item>
           </div>
 
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Form.Item
+              name="email"
+              label="Контактный Email"
+              rules={[{ type: "email", message: "Некорректный email" }]}
+            >
+              <Input prefix={<MailOutlined />} placeholder="billing@example.com" />
+            </Form.Item>
+
+            <Form.Item
+              name="phone"
+              label="Контактный телефон"
+            >
+              <Input prefix={<PhoneOutlined />} placeholder="+7 (999) 000-00-00" />
+            </Form.Item>
+          </div>
+
+          <Form.Item
+            name="notify_by_email"
+            valuePropName="checked"
+          >
+            <Checkbox>Отправлять почтовые уведомления (счета, акты, напоминания)</Checkbox>
+          </Form.Item>
+
           <Form.Item
             name="is_active"
             label="Статус активности организации"
@@ -509,8 +704,8 @@ export default function AdminOrganizationsPage() {
             <Switch checkedChildren="Активна" unCheckedChildren="Отключена" />
           </Form.Item>
 
-          <Divider style={{ margin: "16px 0 12px" }}>
-            Параметры лицензирования и тарифов
+          <Divider style={{ margin: "16px 0 12px", fontSize: 14 }}>
+            Лицензирование и биллинг
           </Divider>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -529,6 +724,65 @@ export default function AdminOrganizationsPage() {
               </Select>
             </Form.Item>
           </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Form.Item
+              name="billing_mode"
+              label="Модель биллинга"
+              tooltip="Режим расчета и выставления счетов"
+            >
+              <Select>
+                <Select.Option value="standard">Стандартная (предоплата)</Select.Option>
+                <Select.Option value="post_factum">По факту задолженности (пост-оплата)</Select.Option>
+                <Select.Option value="cert_linked">Привязана к сертификату (cert_linked)</Select.Option>
+              </Select>
+            </Form.Item>
+
+            <Form.Item
+              name="default_selection_mode"
+              label="Выделение по умолчанию"
+              tooltip="Какие терминалы по умолчанию отмечены галочками на странице /billing"
+            >
+              <Select>
+                <Select.Option value="all_due">Задолженность и до 30 дней (all_due)</Select.Option>
+                <Select.Option value="only_lapsed">Только с задолженностью (only_lapsed)</Select.Option>
+                <Select.Option value="all">Все терминалы (all)</Select.Option>
+              </Select>
+            </Form.Item>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Form.Item
+              name="allowed_billing_periods"
+              label="Разрешенные периоды продления"
+              tooltip="Сетка продления в месяцах через запятую (например, 1 или 3,6,12). Оставьте пустым для любых."
+            >
+              <Select
+                allowClear
+                placeholder="Любые (без ограничений)"
+                options={[
+                  { label: "Любые периоды (без ограничений)", value: "" },
+                  { label: "1 мес (строго ежемесячно)", value: "1" },
+                  { label: "3, 6, 12 мес (шаги 3/6/12)", value: "3,6,12" },
+                  { label: "1, 3, 6, 12 мес", value: "1,3,6,12" },
+                  { label: "1, 2 мес", value: "1,2" },
+                  { label: "12 мес (только год)", value: "12" },
+                ]}
+              />
+            </Form.Item>
+
+            <Form.Item
+              name="min_billing_periods"
+              label="Минимальный период оплаты"
+              tooltip="Минимальное количество периодов за единовременную оплату"
+            >
+              <InputNumber min={1} max={120} style={{ width: "100%" }} placeholder="1" />
+            </Form.Item>
+          </div>
+
+          <Divider style={{ margin: "16px 0 12px", fontSize: 14 }}>
+            Настройки mTLS-сертификатов
+          </Divider>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <Form.Item

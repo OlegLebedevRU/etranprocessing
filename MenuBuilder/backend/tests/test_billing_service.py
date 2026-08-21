@@ -10,13 +10,16 @@ from app.services.billing import (
     TerminalBillingInfo,
     add_billing_months,
     add_months_from_anchor,
+    build_org_summary_data,
     calculate_period_price,
     calculate_periods_due,
     calculate_terminal_debt,
     compute_terminal_billing,
+    parse_allowed_periods,
     project_expiration_after_payment,
     resolve_billing_status,
     resolve_monthly_price,
+    validate_order_item_periods,
 )
 
 
@@ -472,3 +475,120 @@ def test_cert_with_unknown_expiry_is_not_flagged():
     info = _info(cert_serial="AB12", cert_not_valid_after=None)
     result = compute_terminal_billing(info, _dt(2026, 8, 18))
     assert result.cert_expiring_soon is False
+
+
+# === Billing modes & periods settings ===
+
+
+def test_cert_linked_price_resolution():
+    """In cert_linked mode, monthly license price is 0."""
+    assert resolve_monthly_price(200000, 300000, billing_mode="cert_linked") == 0
+    assert resolve_monthly_price(None, 300000, billing_mode="cert_linked") == 0
+
+
+def test_cert_linked_terminal_billing():
+    """In cert_linked mode, terminal billing has 0 monthly/period/overdue price."""
+    info = _info(
+        license_expires_at=_dt(2026, 5, 18),
+        billing_mode="cert_linked",
+        org_monthly_price_minor=300000,
+    )
+    result = compute_terminal_billing(info, _dt(2026, 8, 18))
+    assert result.billing_status == BillingStatus.OVERDUE
+    assert result.monthly_price_minor == 0
+    assert result.period_price_minor == 0
+    assert result.overdue_amount_minor == 0
+    assert result.next_payment_amount_minor == 0
+    assert result.billing_mode == "cert_linked"
+
+
+def test_parse_allowed_periods():
+    """parse_allowed_periods correctly extracts integers or returns None."""
+    assert parse_allowed_periods("1") == [1]
+    assert parse_allowed_periods("3,6,12") == [3, 6, 12]
+    assert parse_allowed_periods(" 1, 3, 6 , 12 ") == [1, 3, 6, 12]
+    assert parse_allowed_periods(None) is None
+    assert parse_allowed_periods("") is None
+    assert parse_allowed_periods("*") is None
+    assert parse_allowed_periods("invalid") is None
+
+
+def test_validate_order_item_periods_success():
+    """Valid periods pass validation."""
+    # Standard mode, any period allowed
+    validate_order_item_periods(
+        "standard", total_periods=1, advance_periods=1, billing_period_months=1
+    )
+    # Fixed grid 3, 6, 12 months
+    validate_order_item_periods(
+        "standard",
+        total_periods=3,
+        advance_periods=3,
+        billing_period_months=1,
+        min_billing_periods=3,
+        allowed_billing_periods="3,6,12",
+    )
+
+
+def test_validate_order_item_periods_min_periods_violation():
+    """Period less than min_billing_periods raises ValueError."""
+    import pytest
+
+    with pytest.raises(ValueError, match="Minimum billing periods is 3, got 1"):
+        validate_order_item_periods(
+            "standard",
+            total_periods=1,
+            advance_periods=1,
+            billing_period_months=1,
+            min_billing_periods=3,
+        )
+
+
+def test_validate_order_item_periods_allowed_periods_violation():
+    """Period not in allowed_billing_periods raises ValueError."""
+    import pytest
+
+    with pytest.raises(ValueError, match="not allowed"):
+        validate_order_item_periods(
+            "standard",
+            total_periods=2,
+            advance_periods=2,
+            billing_period_months=1,
+            allowed_billing_periods="3,6,12",
+        )
+
+
+def test_build_org_summary_data_with_settings():
+    """Summary data contains billing settings fields."""
+    info = _info(license_expires_at=_dt(2026, 11, 10))
+    result = compute_terminal_billing(info, _dt(2026, 8, 18))
+    summary = build_org_summary_data(
+        [result],
+        "RUB",
+        300000,
+        _dt(2026, 8, 18),
+        billing_mode="post_factum",
+        min_billing_periods=1,
+        allowed_billing_periods="1",
+        default_selection_mode="only_lapsed",
+    )
+    assert summary.billing_mode == "post_factum"
+    assert summary.min_billing_periods == 1
+    assert summary.allowed_billing_periods == "1"
+    assert summary.default_selection_mode == "only_lapsed"
+    assert summary.monthly_base_price_minor == 300000
+
+
+def test_build_org_summary_data_cert_linked():
+    """In cert_linked mode, monthly_base_price_minor is 0."""
+    info = _info(license_expires_at=_dt(2026, 11, 10), billing_mode="cert_linked")
+    result = compute_terminal_billing(info, _dt(2026, 8, 18))
+    summary = build_org_summary_data(
+        [result],
+        "RUB",
+        300000,
+        _dt(2026, 8, 18),
+        billing_mode="cert_linked",
+    )
+    assert summary.billing_mode == "cert_linked"
+    assert summary.monthly_base_price_minor == 0
