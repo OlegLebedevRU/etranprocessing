@@ -1,12 +1,13 @@
 import logging
+import urllib.parse
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from cryptography import x509
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.database import get_db
 from app.models import License, OrgStatus, Terminal, TerminalCertHistory
 from app.services.cert_discovery import record_terminal_discovery
@@ -31,18 +32,36 @@ def parse_cert_subject(subject: str) -> dict[str, str]:
     return result
 
 
+def extract_cert_issuer(request: Request) -> str:
+    """Extract Issuer DN from proxy headers or parsed client certificate."""
+    for h in ("X-Client-Cert-Issuer-DN", "X-Client-Cert-Issuer", "X-SSL-Client-Issuer"):
+        val = request.headers.get(h)
+        if val:
+            return val
+    raw_cert = request.headers.get("X-SSL-Client-Cert")
+    if raw_cert:
+        try:
+            cert_pem = urllib.parse.unquote(raw_cert)
+            if "-----BEGIN CERTIFICATE-----" in cert_pem:
+                cert = x509.load_pem_x509_certificate(cert_pem.encode("utf-8"))
+                return cert.issuer.rfc4514_string()
+        except Exception:  # noqa: BLE001, S110
+            pass
+    return ""
+
+
 async def get_current_terminal(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> Terminal:
-    """
-    Extract terminal identity from nginx TLS headers.
-    Authentication by sn (CN from cert) + cert_serial — both must match.
-    OU is optional for quick device_id lookup but not used for auth.
+    """Extract terminal identity from TLS / reverse proxy headers.
 
-    Nginx-mutual forwards:
-    - X-Client-Cert-DN: 'emailAddress=...,CN=A99D2F...,OU=773,O=1,L=...,ST=...,C=ru'
-    - X-Client-Cert-Serial: hex serial without colons (e.g. '52B8E528000400002E2D')
+    Branching logic:
+    1. If Issuer is 'iot.leo4.ru' (New CA issued by new backend):
+       Strict validation by Terminal.sn == cn AND Terminal.cert_serial == cert_serial.
+    2. Else (Legacy CA / SubCA / legacy certificates):
+       Lookup terminal by OU (device_id) and O (org_id) (or L / kiosk_id).
+       Auto-binds or updates cert_serial for that specific terminal on request.
     """
     endpoint = request.url.path
     client_ip = (
@@ -79,8 +98,11 @@ async def get_current_terminal(
     o = parsed.get("O", "")
     l_val = parsed.get("L", "")
 
+    issuer = extract_cert_issuer(request)
+    is_new_ca = bool(issuer and "iot.leo4.ru" in issuer.lower())
+
     logger.debug(
-        f"Cert DN: '{subject}', CN: '{cn}', OU: '{ou}', O: '{o}', L: '{l_val}', Serial: '{cert_serial}'"
+        f"Cert Auth: Issuer='{issuer}', is_new_ca={is_new_ca}, CN='{cn}', OU='{ou}', O='{o}', L='{l_val}', Serial='{cert_serial}'"
     )
 
     if not cn and not ou and not l_val:
@@ -97,201 +119,20 @@ async def get_current_terminal(
             client_ip=client_ip,
         )
         raise HTTPException(
-            status_code=401, detail="CN not found in certificate subject"
+            status_code=401, detail="CN/identity not found in certificate subject"
         )
 
-    # 1. Primary auth: sn (CN) + cert_serial — both match
-    result = await db.execute(
-        select(Terminal).where(
-            Terminal.sn == cn,
-            Terminal.cert_serial == cert_serial,
-        )
-    )
-    terminal = result.scalar_one_or_none()
-
-    if terminal:
-        await record_terminal_discovery(
-            db,
-            sn=cn,
-            cert_serial=cert_serial,
-            cert_dn=subject,
-            ou=ou or None,
-            o=o or None,
-            is_valid=True,
-            validation_status="authenticated",
-            terminal_id=terminal.id,
-            db_cert_serial=terminal.cert_serial,
-            endpoint=endpoint,
-            client_ip=client_ip,
-        )
-    else:
-        is_allowed_autobind = (
-            endpoint.startswith(
-                (
-                    "/api/licensebilling",
-                    "/licensebilling",
-                    "/api/gategauge",
-                    "/GateGauge",
-                    "/api/techgate",
-                    "/techgate",
-                    "/api/payment",
-                    "/payment",
-                )
+    if is_new_ca:
+        # Strict auth for new CA: sn (CN) + cert_serial
+        result = await db.execute(
+            select(Terminal).where(
+                Terminal.sn == cn,
+                Terminal.cert_serial == cert_serial,
             )
-            or settings.auto_set_cert_serial_on_licensebilling
         )
-        if is_allowed_autobind:
-            matched_terminal = None
-            if cn:
-                res = await db.execute(
-                    select(Terminal).where(
-                        Terminal.sn == cn,
-                        (Terminal.cert_serial.is_(None)) | (Terminal.cert_serial == ""),
-                    )
-                )
-                matched_terminal = res.scalar_one_or_none()
+        terminal = result.scalar_one_or_none()
 
-            if not matched_terminal and ou and ou.isdigit() and o and o.isdigit():
-                res = await db.execute(
-                    select(Terminal).where(
-                        Terminal.device_id == int(ou),
-                        Terminal.org_id == int(o),
-                        (Terminal.cert_serial.is_(None)) | (Terminal.cert_serial == ""),
-                    )
-                )
-                matched_terminal = res.scalar_one_or_none()
-
-            if not matched_terminal and l_val and l_val.isdigit():
-                l_conds = [Terminal.id == int(l_val)]
-                if o and o.isdigit():
-                    l_conds.append(Terminal.org_id == int(o))
-                res = await db.execute(
-                    select(Terminal).where(
-                        *l_conds,
-                        (Terminal.cert_serial.is_(None)) | (Terminal.cert_serial == ""),
-                    )
-                )
-                matched_terminal = res.scalar_one_or_none()
-
-            if matched_terminal:
-                terminal = matched_terminal
-                if endpoint.startswith(("/api/licensebilling", "/licensebilling")):
-                    source = "licensebilling"
-                elif endpoint.startswith(("/api/gategauge", "/GateGauge")):
-                    source = "gategauge"
-                elif endpoint.startswith(("/api/techgate", "/techgate")):
-                    source = "techgate"
-                elif endpoint.startswith(("/api/payment", "/payment")):
-                    source = "payment"
-                else:
-                    source = "auto_bind"
-
-                logger.info(
-                    f"Auto-populating cert_serial for terminal {terminal.sn} (id={terminal.id}, dev={terminal.device_id}) with '{cert_serial}' from {source} request"
-                )
-                terminal.cert_serial = cert_serial
-
-                db.add(
-                    TerminalCertHistory(
-                        terminal_id=terminal.id,
-                        cert_serial=cert_serial,
-                        source=source,
-                    )
-                )
-                await record_terminal_discovery(
-                    db,
-                    sn=cn,
-                    cert_serial=cert_serial,
-                    cert_dn=subject,
-                    ou=ou or None,
-                    o=o or None,
-                    is_valid=True,
-                    validation_status="auto_bound",
-                    terminal_id=terminal.id,
-                    db_cert_serial=cert_serial,
-                    endpoint=endpoint,
-                    client_ip=client_ip,
-                )
-                try:
-                    await db.commit()
-                except Exception as e:  # noqa: BLE001
-                    try:
-                        await db.rollback()
-                    except Exception:  # noqa: BLE001, S110
-                        pass
-                    logger.warning(
-                        f"Failed to commit auto-bind for terminal {terminal.id}: {e}"
-                    )
-
-    if not terminal:
-        db_term: Terminal | None = None
-        if settings.transition_ou_fallback_auth and ou and ou.isdigit():
-            dev_id = int(ou)
-            # Check if CN strictly matches this specific device_id
-            res_diag = await db.execute(select(Terminal).where(Terminal.sn == cn))
-            db_term = res_diag.scalar_one_or_none()
-
-            # If no terminal has this CN, OR the terminal with this CN is a DIFFERENT device (shared CN collision)
-            if db_term is None or db_term.device_id != dev_id:
-                ou_conditions = [Terminal.device_id == dev_id]
-                if o and o.isdigit():
-                    ou_conditions.append(Terminal.org_id == int(o))
-                res_ou = await db.execute(select(Terminal).where(*ou_conditions))
-                matched_ou = res_ou.scalar_one_or_none()
-                if matched_ou:
-                    terminal = matched_ou
-                    logger.info(
-                        f"Transition fallback: authenticated terminal {terminal.device_id} (id={terminal.id}, org={terminal.org_id}) "
-                        f"via OU={ou}, O={o} with cert CN='{cn}', Serial='{cert_serial}', db_sn='{terminal.sn}', db_serial='{terminal.cert_serial}'"
-                    )
-                    if not terminal.cert_serial:
-                        terminal.cert_serial = cert_serial
-                        db.add(
-                            TerminalCertHistory(
-                                terminal_id=terminal.id,
-                                cert_serial=cert_serial,
-                                source="ou_fallback",
-                            )
-                        )
-                    await record_terminal_discovery(
-                        db,
-                        sn=cn,
-                        cert_serial=cert_serial,
-                        cert_dn=subject,
-                        ou=ou or None,
-                        o=o or None,
-                        is_valid=True,
-                        validation_status="matched_by_ou_fallback",
-                        terminal_id=terminal.id,
-                        db_cert_serial=terminal.cert_serial,
-                        endpoint=endpoint,
-                        client_ip=client_ip,
-                    )
-                    try:
-                        await db.commit()
-                    except Exception as e:  # noqa: BLE001
-                        try:
-                            await db.rollback()
-                        except Exception:  # noqa: BLE001, S110
-                            pass
-                        logger.warning(
-                            f"Failed to commit OU fallback discovery for terminal {terminal.id}: {e}"
-                        )
-
-        if not terminal:
-            if db_term is None:
-                res = await db.execute(select(Terminal).where(Terminal.sn == cn))
-                db_term = res.scalar_one_or_none()
-
-            if db_term:
-                val_status = "serial_mismatch"
-                term_id = db_term.id
-                db_serial = db_term.cert_serial
-            else:
-                val_status = "terminal_not_found"
-                term_id = None
-                db_serial = None
-
+        if terminal:
             await record_terminal_discovery(
                 db,
                 sn=cn,
@@ -299,21 +140,129 @@ async def get_current_terminal(
                 cert_dn=subject,
                 ou=ou or None,
                 o=o or None,
-                is_valid=False,
-                validation_status=val_status,
-                terminal_id=term_id,
-                db_cert_serial=db_serial,
+                is_valid=True,
+                validation_status="authenticated",
+                terminal_id=terminal.id,
+                db_cert_serial=terminal.cert_serial,
                 endpoint=endpoint,
                 client_ip=client_ip,
             )
+            return terminal
 
-            logger.debug(
-                f"Terminal validation failed ({val_status}). CN='{cn}', Serial='{cert_serial}', DB_Serial='{db_serial}'"
+        # Diagnosis for discovery log
+        res_diag = await db.execute(select(Terminal).where(Terminal.sn == cn))
+        db_term = res_diag.scalar_one_or_none()
+        if db_term:
+            val_status = "serial_mismatch"
+            term_id = db_term.id
+            db_serial = db_term.cert_serial
+        else:
+            val_status = "terminal_not_found"
+            term_id = None
+            db_serial = None
+
+        await record_terminal_discovery(
+            db,
+            sn=cn,
+            cert_serial=cert_serial,
+            cert_dn=subject,
+            ou=ou or None,
+            o=o or None,
+            is_valid=False,
+            validation_status=val_status,
+            terminal_id=term_id,
+            db_cert_serial=db_serial,
+            endpoint=endpoint,
+            client_ip=client_ip,
+        )
+        raise HTTPException(
+            status_code=401,
+            detail=f"Terminal auth failed ({val_status}). CN='{cn}', Serial='{cert_serial}'",
+        )
+
+    # Legacy CA flow: match by OU (device_id) and O (org_id)
+    matched_terminal = None
+    if ou and ou.isdigit():
+        dev_id = int(ou)
+        conds = [Terminal.device_id == dev_id]
+        if o and o.isdigit():
+            conds.append(Terminal.org_id == int(o))
+        res = await db.execute(select(Terminal).where(*conds))
+        matched_terminal = res.scalar_one_or_none()
+
+    if not matched_terminal and l_val and l_val.isdigit():
+        kiosk_id = int(l_val)
+        conds = [Terminal.id == kiosk_id]
+        if o and o.isdigit():
+            conds.append(Terminal.org_id == int(o))
+        res = await db.execute(select(Terminal).where(*conds))
+        matched_terminal = res.scalar_one_or_none()
+
+    if not matched_terminal and cn:
+        # Fallback if certificate had only CN and no OU/L
+        res = await db.execute(select(Terminal).where(Terminal.sn == cn))
+        matched_terminal = res.scalar_one_or_none()
+
+    if matched_terminal:
+        terminal = matched_terminal
+        if not terminal.cert_serial or terminal.cert_serial != cert_serial:
+            val_status = "auto_bound" if not terminal.cert_serial else "serial_updated"
+            terminal.cert_serial = cert_serial
+            db.add(
+                TerminalCertHistory(
+                    terminal_id=terminal.id,
+                    cert_serial=cert_serial,
+                    source="legacy_auth",
+                )
             )
-            raise HTTPException(
-                status_code=401,
-                detail=f"Terminal not found. CN='{cn}', Serial='{cert_serial}'",
+        else:
+            val_status = "authenticated"
+
+        await record_terminal_discovery(
+            db,
+            sn=cn or terminal.sn,
+            cert_serial=cert_serial,
+            cert_dn=subject,
+            ou=ou or str(terminal.device_id),
+            o=o or str(terminal.org_id),
+            is_valid=True,
+            validation_status=val_status,
+            terminal_id=terminal.id,
+            db_cert_serial=terminal.cert_serial,
+            endpoint=endpoint,
+            client_ip=client_ip,
+        )
+        try:
+            await db.commit()
+        except Exception as e:  # noqa: BLE001
+            try:
+                await db.rollback()
+            except Exception:  # noqa: BLE001, S110
+                pass
+            logger.warning(
+                f"Failed to commit discovery for legacy terminal {terminal.id}: {e}"
             )
+
+        return terminal
+
+    await record_terminal_discovery(
+        db,
+        sn=cn or None,
+        cert_serial=cert_serial,
+        cert_dn=subject,
+        ou=ou or None,
+        o=o or None,
+        is_valid=False,
+        validation_status="terminal_not_found",
+        terminal_id=None,
+        db_cert_serial=None,
+        endpoint=endpoint,
+        client_ip=client_ip,
+    )
+    raise HTTPException(
+        status_code=401,
+        detail=f"Legacy terminal not found for OU='{ou}', O='{o}', L='{l_val}'",
+    )
 
     # Do NOT check is_active here — let get_terminal_license_state handle it
     # so the licensebilling endpoint can return proper XML state=error
