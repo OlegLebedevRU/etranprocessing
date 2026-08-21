@@ -1,5 +1,16 @@
 import axios from "./client";
 
+export interface InkassBanknotes {
+  n10: number;
+  n50: number;
+  n100: number;
+  n200: number;
+  n500: number;
+  n1000: number;
+  n2000: number;
+  n5000: number;
+}
+
 export interface InkassRecord {
   id: number;
   device_id: number;
@@ -8,17 +19,20 @@ export interface InkassRecord {
   inkass_datetime: string;
   server_datetime: string;
   total_sum: number;
+  calculated_sum: number;
   total_count: number;
   total_note_sum: number;
   total_note_count: number;
   total_coin_sum: number;
   total_coin_count: number;
+  banknotes: InkassBanknotes;
   notes: number[];
   coins: number[];
   inkassator: string;
   inkass_ext_id: string;
   paym_ext_id: string;
   inkass_id: string;
+  report_number: string;
   cassette_num: string;
   cnt_inkass: number;
   cnt_inkass_sum: number;
@@ -62,6 +76,7 @@ export interface PaymentRecord {
   paym_amount: number;
   paym_ext_id: string;
   paym_tsp_code: number;
+  tsp_name?: string;
   paym_state: number;
   paym_state_label: string;
   pay_type_id: number;

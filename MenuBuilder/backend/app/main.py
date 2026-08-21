@@ -237,7 +237,6 @@ async def get_monitoring(
 
     conditions = [
         "t.is_active = true",
-        "EXISTS (SELECT 1 FROM licenses l WHERE l.terminal_id = t.id AND l.is_active = true AND l.renewal_enabled = true AND l.expires_at > :now)",
     ]
     params: dict = {"now": now}
 
@@ -319,6 +318,19 @@ async def get_monitoring(
             )
         ).fetchall()
 
+        # Latest inkassation per terminal (scoped to current page only)
+        inkass_rows = (
+            await session.execute(
+                text("""
+                SELECT device_id, MAX(created_at)
+                FROM tech_gate_records
+                WHERE function_name = 'inkass' AND device_id = ANY(:d_ids)
+                GROUP BY device_id
+            """),
+                {"d_ids": device_ids},
+            )
+        ).fetchall()
+
         # Get GateGauge records for last 2 hours (scoped to current page only)
         records = (
             await session.execute(
@@ -352,6 +364,7 @@ async def get_monitoring(
 
     last_payment_map: dict[int, datetime] = {r[0]: r[1] for r in payment_rows if r[1]}
     license_map: dict[int, datetime] = {r[0]: r[1] for r in license_rows if r[1]}
+    last_inkass_map: dict[int, datetime] = {r[0]: r[1] for r in inkass_rows if r[1]}
 
     # Build interval map with overlap buffer to avoid false red on boundary shift
     SLOT_DURATION = 600  # 10 minutes
@@ -389,6 +402,7 @@ async def get_monitoring(
         gauge = gauge_map.get(dev_id, {})
         last_payment = last_payment_map.get(t[0])
         license_expires = license_map.get(t[0])
+        last_inkass = last_inkass_map.get(dev_id)
         cert_not_valid_after = t[6]
 
         # lastnumconn: count trailing false in slots
@@ -429,6 +443,7 @@ async def get_monitoring(
                 "printer_check_counter": int(g("120") or "0"),
                 "soft_version": fmt_soft_version(g("130")),
                 "last_payment_at": last_payment.isoformat() if last_payment else None,
+                "last_inkass_at": last_inkass.isoformat() if last_inkass else None,
                 "license_expires_at": license_expires.isoformat()
                 if license_expires
                 else None,
@@ -442,7 +457,7 @@ async def get_monitoring(
                 "terminal_type_name": t[10]
                 if t[10] is not None
                 else ("Стандартный" if (t[9] == 0 or t[9] is None) else f"Тип {t[9]}"),
-                "created_at": t[11].isoformat() if t[11] else None,
+                "created_at": t[11].isoformat() if len(t) > 11 and t[11] else None,
             }
         )
 
@@ -523,7 +538,7 @@ async def get_inkass_report(
         rows = (
             await session.execute(
                 text(f"""
-                SELECT r.id, r.device_id, r.sn, r.created_at, r.request_data, t.org_id
+                SELECT r.id, r.device_id, r.sn, r.created_at, r.request_data, t.org_id, t.id AS terminal_id
                 FROM tech_gate_records r
                 JOIN terminals t ON t.device_id = r.device_id
                 WHERE {where}
@@ -533,6 +548,139 @@ async def get_inkass_report(
                 {**params, "limit": size, "offset": offset},
             )
         ).fetchall()
+
+        # Compute calculated_sum for each inkassation row based on payments
+        calculated_sums: dict[int, int] = {}
+        for r in rows:
+            rec_id = r[0]
+            dev_id = r[1]
+            rec_created_at = r[3]
+            d = r[4] if r[4] else {}
+            term_id = r[6] if len(r) > 6 else r[0]
+            curr_paym_ext_id = str(d.get("PaymExtId") or "").strip()
+
+            # Find immediately preceding inkassation record for this device
+            prev_inkass_row = (
+                await session.execute(
+                    text("""
+                    SELECT request_data, created_at
+                    FROM tech_gate_records
+                    WHERE device_id = :device_id AND function_name = 'inkass'
+                      AND (created_at < :created_at OR (created_at = :created_at AND id < :id))
+                    ORDER BY created_at DESC, id DESC
+                    LIMIT 1
+                """),
+                    {"device_id": dev_id, "created_at": rec_created_at, "id": rec_id},
+                )
+            ).fetchone()
+
+            prev_paym_ext_id = ""
+            prev_created_at = None
+            if prev_inkass_row:
+                prev_d = prev_inkass_row[0] if prev_inkass_row[0] else {}
+                prev_paym_ext_id = str(prev_d.get("PaymExtId") or "").strip()
+                prev_created_at = prev_inkass_row[1]
+
+            curr_p = None
+            if curr_paym_ext_id:
+                curr_p = (
+                    await session.execute(
+                        text("""
+                        SELECT paym_id, paym_datetime
+                        FROM payments
+                        WHERE terminal_id = :term_id AND paym_ext_id = :ext_id
+                        ORDER BY paym_id DESC
+                        LIMIT 1
+                    """),
+                        {"term_id": term_id, "ext_id": curr_paym_ext_id},
+                    )
+                ).fetchone()
+
+            prev_p = None
+            if prev_paym_ext_id:
+                prev_p = (
+                    await session.execute(
+                        text("""
+                        SELECT paym_id, paym_datetime
+                        FROM payments
+                        WHERE terminal_id = :term_id AND paym_ext_id = :ext_id
+                        ORDER BY paym_id DESC
+                        LIMIT 1
+                    """),
+                        {"term_id": term_id, "ext_id": prev_paym_ext_id},
+                    )
+                ).fetchone()
+
+            if curr_p:
+                if prev_p:
+                    calc_kopecks = (
+                        await session.execute(
+                            text("""
+                            SELECT COALESCE(SUM(paym_amount), 0)
+                            FROM payments
+                            WHERE terminal_id = :term_id AND paym_id > :prev_id AND paym_id <= :curr_id
+                        """),
+                            {
+                                "term_id": term_id,
+                                "prev_id": prev_p[0],
+                                "curr_id": curr_p[0],
+                            },
+                        )
+                    ).scalar()
+                elif prev_created_at:
+                    calc_kopecks = (
+                        await session.execute(
+                            text("""
+                            SELECT COALESCE(SUM(paym_amount), 0)
+                            FROM payments
+                            WHERE terminal_id = :term_id AND paym_datetime > :prev_created_at AND paym_id <= :curr_id
+                        """),
+                            {
+                                "term_id": term_id,
+                                "prev_created_at": prev_created_at,
+                                "curr_id": curr_p[0],
+                            },
+                        )
+                    ).scalar()
+                else:
+                    calc_kopecks = (
+                        await session.execute(
+                            text("""
+                            SELECT COALESCE(SUM(paym_amount), 0)
+                            FROM payments
+                            WHERE terminal_id = :term_id AND paym_id <= :curr_id
+                        """),
+                            {"term_id": term_id, "curr_id": curr_p[0]},
+                        )
+                    ).scalar()
+            elif prev_created_at:
+                calc_kopecks = (
+                    await session.execute(
+                        text("""
+                        SELECT COALESCE(SUM(paym_amount), 0)
+                        FROM payments
+                        WHERE terminal_id = :term_id AND paym_datetime > :prev_created_at AND paym_datetime <= :curr_created_at
+                    """),
+                        {
+                            "term_id": term_id,
+                            "prev_created_at": prev_created_at,
+                            "curr_created_at": rec_created_at,
+                        },
+                    )
+                ).scalar()
+            else:
+                calc_kopecks = (
+                    await session.execute(
+                        text("""
+                        SELECT COALESCE(SUM(paym_amount), 0)
+                        FROM payments
+                        WHERE terminal_id = :term_id AND paym_datetime <= :curr_created_at
+                    """),
+                        {"term_id": term_id, "curr_created_at": rec_created_at},
+                    )
+                ).scalar()
+
+            calculated_sums[rec_id] = (calc_kopecks or 0) // 100
 
     def jint(d: dict, key: str) -> int:
         v = d.get(key, "0")
@@ -553,35 +701,70 @@ async def get_inkass_report(
 
     items = []
     for r in rows:
+        rec_id = r[0]
         d = r[4] if r[4] else {}
         notes = [jint(d, f"Note{i}") for i in range(10)]
         coins = [jint(d, f"Coin{i}") for i in range(10)]
+
+        n10 = jint(d, "Note2") or jint(d, "note10") or jint(d, "Note10")
+        n50 = jint(d, "Note3") or jint(d, "note50") or jint(d, "Note50")
+        n100 = jint(d, "Note4") or jint(d, "note100") or jint(d, "Note100")
+        n200 = jint(d, "Note8") or jint(d, "note200") or jint(d, "Note200")
+        n500 = jint(d, "Note5") or jint(d, "note500") or jint(d, "Note500")
+        n1000 = jint(d, "Note6") or jint(d, "note1000") or jint(d, "Note1000")
+        n2000 = jint(d, "Note9") or jint(d, "note2000") or jint(d, "Note2000")
+        n5000 = jint(d, "Note7") or jint(d, "note5000") or jint(d, "Note5000")
+
+        banknotes = {
+            "n10": n10,
+            "n50": n50,
+            "n100": n100,
+            "n200": n200,
+            "n500": n500,
+            "n1000": n1000,
+            "n2000": n2000,
+            "n5000": n5000,
+        }
+        total_note_count = (
+            jint(d, "TotalNoteCount")
+            or jint(d, "TotalCount")
+            or (n10 + n50 + n100 + n200 + n500 + n1000 + n2000 + n5000)
+        )
+        transact_count = (
+            jint(d, "TransactCount") or jint(d, "cntTransact") or jint(d, "TotalCount")
+        )
+        report_number = d.get("InkassId") or d.get("cntInkass") or ""
+
         items.append(
             {
-                "id": r[0],
+                "id": rec_id,
                 "device_id": r[1],
                 "sn": r[2] or "",
                 "org_id": r[5] or 0,
-                "inkass_datetime": parse_dt(d.get("InkassDateTime", "")),
+                "inkass_datetime": parse_dt(d.get("InkassDateTime", ""))
+                or (r[3].strftime("%Y-%m-%d %H:%M:%S") if r[3] else ""),
                 "server_datetime": r[3].strftime("%Y-%m-%d %H:%M:%S") if r[3] else "",
-                "total_sum": jint(d, "TotalSum"),
+                "total_sum": jint(d, "TotalSum") or jint(d, "TotalNoteSum"),
+                "calculated_sum": calculated_sums.get(rec_id, 0),
                 "total_count": jint(d, "TotalCount"),
                 "total_note_sum": jint(d, "TotalNoteSum"),
-                "total_note_count": jint(d, "TotalNoteCount"),
+                "total_note_count": total_note_count,
                 "total_coin_sum": jint(d, "TotalCoinSum"),
                 "total_coin_count": jint(d, "TotalCoinCount"),
                 "notes": notes,
                 "coins": coins,
+                "banknotes": banknotes,
                 "inkassator": d.get("Inkassator", ""),
                 "inkass_ext_id": d.get("InkassExtId", ""),
                 "paym_ext_id": d.get("PaymExtId", ""),
                 "inkass_id": d.get("InkassId", ""),
-                "cassette_num": d.get("cassetteNum", ""),
+                "report_number": str(report_number),
+                "cassette_num": d.get("cassetteNum", "") or d.get("CassetteNum", ""),
                 "cnt_inkass": jint(d, "cntInkass"),
                 "cnt_inkass_sum": jint(d, "cntInkassSum"),
                 "cnt_transact": jint(d, "cntTransact"),
                 "cnt_total_sum": jint(d, "cntTotalSum"),
-                "transact_count": jint(d, "TransactCount"),
+                "transact_count": transact_count,
                 "last_sum_inkass": jint(d, "LastSumInkass"),
                 "currency": jint(d, "Currency"),
             }
@@ -686,6 +869,49 @@ async def get_payments_report(
             return {"items": [], "total": count_row or 0}
 
         paym_ids = [r[0] for r in rows]
+        device_ids_list = list({r[7] for r in rows})
+        tsp_codes_list = list({r[4] for r in rows})
+
+        # 1. Lookup service name from terminal menu bindings
+        binding_rows = (
+            await session.execute(
+                text("""
+                SELECT b.device_id, s.tsp_code, s.name
+                FROM terminal_menu_bindings b
+                JOIN services s ON s.menu_variant_id = b.menu_variant_id
+                WHERE b.device_id = ANY(:d_ids) AND s.tsp_code = ANY(:tsp_codes)
+            """),
+                {"d_ids": device_ids_list, "tsp_codes": tsp_codes_list},
+            )
+        ).fetchall()
+        binding_tsp_map = {(r[0], r[1]): r[2] for r in binding_rows}
+
+        # 2. Lookup service name from org menu variants
+        org_services_rows = (
+            await session.execute(
+                text("""
+                SELECT DISTINCT ON (s.tsp_code) s.tsp_code, s.name
+                FROM services s
+                JOIN menu_variants mv ON mv.id = s.menu_variant_id
+                WHERE mv.org_id = :org_id AND s.tsp_code = ANY(:tsp_codes)
+            """),
+                {"org_id": org_id, "tsp_codes": tsp_codes_list},
+            )
+        ).fetchall()
+        org_tsp_map = {r[0]: r[1] for r in org_services_rows}
+
+        # 3. Lookup from global tsp table
+        tsp_table_rows = (
+            await session.execute(
+                text("""
+                SELECT tsp_code, tsp_name
+                FROM tsp
+                WHERE tsp_code = ANY(:tsp_codes)
+            """),
+                {"tsp_codes": tsp_codes_list},
+            )
+        ).fetchall()
+        global_tsp_map = {r[0]: r[1] for r in tsp_table_rows}
 
         # Fetch params for all payments in one query
         ph = ",".join(f":pid_{i}" for i in range(len(paym_ids)))
@@ -716,18 +942,27 @@ async def get_payments_report(
     items = []
     for r in rows:
         paym_id = r[0]
+        dev_id = r[7]
+        t_code = r[4]
+        tsp_name = (
+            binding_tsp_map.get((dev_id, t_code))
+            or org_tsp_map.get(t_code)
+            or global_tsp_map.get(t_code)
+            or str(t_code)
+        )
         items.append(
             {
                 "paym_id": paym_id,
                 "paym_datetime": r[1].strftime("%Y-%m-%d %H:%M:%S") if r[1] else "",
                 "paym_amount": r[2],
-                "paym_ext_id": (r[3] or "").strip(),
-                "paym_tsp_code": r[4],
+                "paym_ext_id": (r[3] or "").strip() or str(paym_id),
+                "paym_tsp_code": t_code,
+                "tsp_name": tsp_name,
                 "paym_state": r[5],
                 "paym_state_label": PAYM_STATE_LABELS.get(r[5], str(r[5])),
                 "pay_type_id": r[6],
                 "pay_type_label": PAY_TYPE_LABELS.get(r[6], str(r[6])),
-                "device_id": r[7],
+                "device_id": dev_id,
                 "sn": r[8] or "",
                 "params": params_map.get(paym_id, []),
             }

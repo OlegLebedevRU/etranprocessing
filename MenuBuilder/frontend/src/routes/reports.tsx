@@ -244,22 +244,13 @@ export default function ReportsPage() {
   // --- Inkass columns ---
   const inkassColumns: ColumnsType<InkassRecord> = [
     {
-      title: "ID",
+      title: "Терминал",
       dataIndex: "device_id",
-      width: 70,
+      width: 90,
       sorter: (a, b) => a.device_id - b.device_id,
     },
     {
-      title: "SN",
-      dataIndex: "sn",
-      width: 100,
-      ellipsis: true,
-      render: (v: string) => (
-        <span title={v}>{v ? v.substring(0, 10) + "…" : "—"}</span>
-      ),
-    },
-    {
-      title: "Дата инкассации",
+      title: "Время",
       dataIndex: "inkass_datetime",
       width: 150,
       sorter: (a, b) => a.inkass_datetime.localeCompare(b.inkass_datetime),
@@ -270,73 +261,73 @@ export default function ReportsPage() {
       dataIndex: "total_sum",
       width: 110,
       align: "right",
-      render: (v: number) => fmtMoney(v),
+      render: (v: number) => (v ? v.toLocaleString("ru-RU") + " ₽" : "—"),
       sorter: (a, b) => a.total_sum - b.total_sum,
     },
     {
-      title: "Купюры",
-      width: 80,
+      title: "Расчетная сумма",
+      dataIndex: "calculated_sum",
+      width: 130,
       align: "right",
-      render: (_: unknown, r) => fmtInt(r.total_note_count),
+      render: (v: number) => (v ? v.toLocaleString("ru-RU") + " ₽" : "0 ₽"),
+      sorter: (a, b) => a.calculated_sum - b.calculated_sum,
     },
     {
-      title: "Монеты",
-      width: 80,
-      align: "right",
-      render: (_: unknown, r) => fmtInt(r.total_coin_count),
-    },
-    {
-      title: "Инкассатор",
-      dataIndex: "inkassator",
-      width: 120,
-      ellipsis: true,
-    },
-    {
-      title: "Кассета",
-      dataIndex: "cassette_num",
-      width: 90,
-      ellipsis: true,
-    },
-    {
-      title: "ID транзакции",
-      dataIndex: "paym_ext_id",
-      width: 160,
-      ellipsis: true,
-    },
-    {
-      title: "ID инкассации",
-      dataIndex: "inkass_ext_id",
-      width: 160,
-      ellipsis: true,
-    },
-    {
-      title: "Операций",
-      dataIndex: "transact_count",
-      width: 80,
+      title: "Всего банкнот",
+      dataIndex: "total_note_count",
+      width: 110,
       align: "right",
       render: fmtInt,
     },
     {
-      title: "Ср-во время",
-      dataIndex: "server_datetime",
-      width: 150,
+      title: "Количество операций",
+      dataIndex: "transact_count",
+      width: 140,
+      align: "right",
+      render: fmtInt,
+    },
+    {
+      title: "ID Транзакции",
+      dataIndex: "paym_ext_id",
+      width: 170,
+      ellipsis: true,
+    },
+    {
+      title: "ID Инкассации",
+      dataIndex: "inkass_ext_id",
+      width: 170,
+      ellipsis: true,
+    },
+    {
+      title: "Номер отчета",
+      dataIndex: "report_number",
+      width: 110,
+      ellipsis: true,
+      render: (v: string | number) => String(v || "—"),
     },
   ];
 
   // --- Payments columns ---
   const paymentsColumns: ColumnsType<PaymentRecord> = [
     {
-      title: "ID",
-      dataIndex: "paym_id",
-      width: 90,
-      sorter: (a, b) => a.paym_id - b.paym_id,
+      title: "Транзакция",
+      dataIndex: "paym_ext_id",
+      width: 180,
+      ellipsis: true,
     },
     {
-      title: "Дата",
-      dataIndex: "paym_datetime",
-      width: 150,
-      sorter: (a, b) => a.paym_datetime.localeCompare(b.paym_datetime),
-      defaultSortOrder: "descend",
+      title: "Терминал",
+      dataIndex: "device_id",
+      width: 90,
+      sorter: (a, b) => a.device_id - b.device_id,
+    },
+    {
+      title: "ТСП",
+      dataIndex: "tsp_name",
+      width: 180,
+      ellipsis: true,
+      render: (v: string | undefined, r: PaymentRecord) =>
+        v || String(r.paym_tsp_code),
     },
     {
       title: "Сумма",
@@ -347,42 +338,22 @@ export default function ReportsPage() {
       sorter: (a, b) => a.paym_amount - b.paym_amount,
     },
     {
-      title: "ExtID",
-      dataIndex: "paym_ext_id",
-      width: 160,
-      ellipsis: true,
-    },
-    {
-      title: "TSP",
-      dataIndex: "paym_tsp_code",
-      width: 70,
-      sorter: (a, b) => a.paym_tsp_code - b.paym_tsp_code,
-    },
-    {
-      title: "Терминал",
-      dataIndex: "device_id",
-      width: 80,
-      sorter: (a, b) => a.device_id - b.device_id,
-    },
-    {
-      title: "SN",
-      dataIndex: "sn",
-      width: 100,
-      ellipsis: true,
-      render: (v: string) => (
-        <span title={v}>{v ? v.substring(0, 10) + "…" : "—"}</span>
-      ),
+      title: "Время",
+      dataIndex: "paym_datetime",
+      width: 150,
+      sorter: (a, b) => a.paym_datetime.localeCompare(b.paym_datetime),
+      defaultSortOrder: "descend",
     },
     {
       title: "Состояние",
       dataIndex: "paym_state_label",
-      width: 110,
+      width: 120,
       render: (label: string, r) => (
         <Tag color={PAYM_STATE_COLORS[r.paym_state] || "default"}>{label}</Tag>
       ),
     },
     {
-      title: "Тип оплаты",
+      title: "Тип",
       dataIndex: "pay_type_label",
       width: 100,
     },
@@ -576,56 +547,15 @@ export default function ReportsPage() {
               expandable={{
                 expandedRowRender: (r) => (
                   <div style={{ padding: "8px 0" }}>
-                    <Space
-                      direction="vertical"
-                      size={4}
-                      style={{ width: "100%" }}
-                    >
-                      <div style={{ fontWeight: 500, marginBottom: 4 }}>
-                        Купюры
-                      </div>
-                      <Space wrap size={[8, 4]}>
-                        {NOTE_LABELS.map((label, i) =>
-                          r.notes[i] ? (
-                            <Tag key={i}>
-                              {label} ₽: {r.notes[i]} шт
-                            </Tag>
-                          ) : null
-                        )}
-                        {r.total_note_sum ? (
-                          <Tag color="blue">
-                            Итого: {fmtMoney(r.total_note_sum)}
-                          </Tag>
-                        ) : null}
-                      </Space>
-                      {r.coins.some((c) => c > 0) && (
-                        <>
-                          <div style={{ fontWeight: 500, marginTop: 8 }}>
-                            Монеты
-                          </div>
-                          <Space wrap size={[8, 4]}>
-                            {COIN_LABELS.map((label, i) =>
-                              r.coins[i] ? (
-                                <Tag key={i}>
-                                  {label} ₽: {r.coins[i]} шт
-                                </Tag>
-                              ) : null
-                            )}
-                            {r.total_coin_sum ? (
-                              <Tag color="blue">
-                                Итого: {fmtMoney(r.total_coin_sum)}
-                              </Tag>
-                            ) : null}
-                          </Space>
-                        </>
-                      )}
-                      <div style={{ marginTop: 8, color: "#666", fontSize: 12 }}>
-                        Расч. сумма: {fmtMoney(r.cnt_inkass_sum)} |
-                        Всего инкассаций: {r.cnt_inkass} | Всего операций:{" "}
-                        {r.cnt_transact} | Накопит. итог:{" "}
-                        {fmtMoney(r.cnt_total_sum)}
-                      </div>
-                    </Space>
+                    <div style={{ fontSize: 13, color: "#1f2937" }}>
+                      <span style={{ fontWeight: 600 }}>Банкноты: </span>
+                      <span>
+                        10р = {r.banknotes?.n10 ?? 0}, 50р = {r.banknotes?.n50 ?? 0},{" "}
+                        100р = {r.banknotes?.n100 ?? 0}, 500р = {r.banknotes?.n500 ?? 0},{" "}
+                        1000р = {r.banknotes?.n1000 ?? 0}, 2000р = {r.banknotes?.n2000 ?? 0},{" "}
+                        5000р = {r.banknotes?.n5000 ?? 0}
+                      </span>
+                    </div>
                   </div>
                 ),
               }}

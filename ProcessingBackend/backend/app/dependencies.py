@@ -50,6 +50,35 @@ def extract_cert_issuer(request: Request) -> str:
     return ""
 
 
+def extract_cert_not_valid_after(request: Request) -> datetime | None:
+    """Extract certificate expiration date (not_valid_after) from client certificate or headers."""
+    for h in (
+        "X-Client-Cert-NotAfter",
+        "X-Client-Cert-End",
+        "X-SSL-Client-V-End",
+        "X-Client-Cert-Valid-To",
+    ):
+        val = request.headers.get(h)
+        if val:
+            try:
+                return datetime.fromisoformat(val)
+            except Exception:  # noqa: BLE001, S110
+                pass
+    raw_cert = request.headers.get("X-SSL-Client-Cert")
+    if raw_cert:
+        try:
+            cert_pem = urllib.parse.unquote(raw_cert)
+            if "-----BEGIN CERTIFICATE-----" in cert_pem:
+                cert = x509.load_pem_x509_certificate(cert_pem.encode("utf-8"))
+                dt = getattr(cert, "not_valid_after_utc", None)
+                if dt is None:
+                    dt = cert.not_valid_after.replace(tzinfo=UTC)
+                return dt
+        except Exception:  # noqa: BLE001, S110
+            pass
+    return None
+
+
 async def get_current_terminal(
     request: Request,
     db: AsyncSession = Depends(get_db),
@@ -133,6 +162,12 @@ async def get_current_terminal(
         terminal = result.scalar_one_or_none()
 
         if terminal:
+            cert_not_valid_after = extract_cert_not_valid_after(request)
+            if (
+                cert_not_valid_after
+                and terminal.cert_not_valid_after != cert_not_valid_after
+            ):
+                terminal.cert_not_valid_after = cert_not_valid_after
             await record_terminal_discovery(
                 db,
                 sn=cn,
@@ -205,6 +240,13 @@ async def get_current_terminal(
 
     if matched_terminal:
         terminal = matched_terminal
+        cert_not_valid_after = extract_cert_not_valid_after(request)
+        if (
+            cert_not_valid_after
+            and terminal.cert_not_valid_after != cert_not_valid_after
+        ):
+            terminal.cert_not_valid_after = cert_not_valid_after
+
         if not terminal.cert_serial or terminal.cert_serial != cert_serial:
             val_status = "auto_bound" if not terminal.cert_serial else "serial_updated"
             terminal.cert_serial = cert_serial

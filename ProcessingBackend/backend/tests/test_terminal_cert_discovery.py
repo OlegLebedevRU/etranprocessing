@@ -7,7 +7,10 @@ import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
 
-from app.dependencies import get_current_terminal
+from app.dependencies import (
+    extract_cert_not_valid_after,
+    get_current_terminal,
+)
 from app.models import Terminal, TerminalCertDiscovery
 from app.services.cert_discovery import record_terminal_discovery
 
@@ -242,3 +245,58 @@ async def test_discovery_on_legacy_auto_bind():
     assert res is db_terminal
     assert db_terminal.cert_serial == "11496"
     mock_db.commit.assert_awaited()
+
+
+@pytest.mark.anyio
+async def test_extract_cert_not_valid_after_header():
+    """extract_cert_not_valid_after parses expiration date from header."""
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/api/gategauge",
+        "headers": [(b"x-client-cert-end", b"2028-12-31T23:59:59+00:00")],
+    }
+    req = Request(scope)
+    dt = extract_cert_not_valid_after(req)
+    assert dt is not None
+    assert dt.year == 2028
+    assert dt.month == 12
+    assert dt.day == 31
+
+
+@pytest.mark.anyio
+async def test_legacy_auth_updates_cert_not_valid_after():
+    """get_current_terminal updates terminal.cert_not_valid_after from request headers/cert."""
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/api/gategauge",
+        "headers": [
+            (b"x-client-cert-dn", b"CN=D5DD9F6A,OU=209,O=424"),
+            (b"x-client-cert-serial", b"11496"),
+            (b"x-client-cert-end", b"2027-08-31T12:00:00+00:00"),
+        ],
+    }
+    req = Request(scope)
+
+    db_terminal = Terminal(
+        id=1076,
+        device_id=209,
+        sn="a4b0000209c12345d210826",
+        cert_serial="11496",
+        cert_not_valid_after=None,
+        org_id=424,
+        is_active=True,
+    )
+
+    mock_db = AsyncMock()
+    mock_db.add = MagicMock()
+    exec_ou = MagicMock()
+    exec_ou.scalar_one_or_none.return_value = db_terminal
+    exec_disc = MagicMock()
+    exec_disc.scalar_one_or_none.return_value = None
+    mock_db.execute.side_effect = [exec_ou, exec_disc]
+
+    res = await get_current_terminal(req, mock_db)
+    assert res is db_terminal
+    assert db_terminal.cert_not_valid_after == datetime(2027, 8, 31, 12, 0, tzinfo=UTC)

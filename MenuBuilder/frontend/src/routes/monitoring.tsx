@@ -133,39 +133,13 @@ export default function MonitoringPage() {
 
   const columns = [
     {
-      title: "ID",
+      title: "Терминал",
       dataIndex: "device_id",
       key: "device_id",
       render: (v: number) => (
         <Text strong style={{ fontSize: 12 }}>
           {String(v).padStart(8, "\u00A0")}
         </Text>
-      ),
-    },
-    {
-      title: "Тип",
-      dataIndex: "terminal_type_name",
-      key: "terminal_type",
-      render: (v: string | null, record: MonitoringTerminal) => (
-        <Text style={{ fontSize: 12, whiteSpace: "nowrap" }}>
-          {v || (record.terminal_type_id !== undefined ? `Тип ${record.terminal_type_id}` : "—")}
-        </Text>
-      ),
-    },
-    {
-      title: "Адрес",
-      dataIndex: "address",
-      key: "address",
-      render: (v: string | null) => (
-        v ? (
-          <Tooltip title={v}>
-            <Text style={{ fontSize: 12, maxWidth: 180, display: "inline-block" }} ellipsis>
-              {v}
-            </Text>
-          </Tooltip>
-        ) : (
-          <Text style={{ fontSize: 12, color: COLOR.muted }}>—</Text>
-        )
       ),
     },
     {
@@ -196,7 +170,7 @@ export default function MonitoringPage() {
       ),
     },
     {
-      title: "Платёж",
+      title: "Платеж",
       dataIndex: "last_payment_at",
       key: "last_payment",
       align: "center" as const,
@@ -234,6 +208,34 @@ export default function MonitoringPage() {
       },
     },
     {
+      title: "Инкассация",
+      dataIndex: "last_inkass_at",
+      key: "last_inkass",
+      align: "center" as const,
+      render: (v: string | null) => {
+        if (!v) {
+          return (
+            <Tooltip title="Инкассаций не было">
+              <Text style={{ fontSize: 12, color: COLOR.muted }}>—</Text>
+            </Tooltip>
+          );
+        }
+        const d = new Date(v);
+        const dateStr = d.toLocaleDateString("ru-RU");
+        const timeStr = d.toLocaleTimeString("ru-RU", {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        return (
+          <Tooltip title={d.toLocaleString("ru-RU")}>
+            <Text style={{ fontSize: 12, whiteSpace: "nowrap" }}>
+              {dateStr} {timeStr}
+            </Text>
+          </Tooltip>
+        );
+      },
+    },
+    {
       title: "Лицензия",
       dataIndex: "license_expires_at",
       key: "license",
@@ -241,29 +243,43 @@ export default function MonitoringPage() {
       render: (v: string | null) => {
         if (!v)
           return (
-            <Text style={{ fontSize: 12, color: COLOR.muted }}>нет</Text>
+            <span
+              style={{
+                fontSize: 12,
+                background: COLOR.alertBg,
+                color: COLOR.alert,
+                padding: "1px 5px",
+                borderRadius: 4,
+                fontWeight: 500,
+              }}
+            >
+              нет
+            </span>
           );
         const days = daysUntil(v);
+        const isExpired = days < 0;
+        const isWarn = days <= LICENSE_WARN_DAYS;
         return (
           <Tooltip
             title={
-              days < 0
+              isExpired
                 ? `Истекла ${Math.abs(days)} дн. назад`
                 : `Осталось ${days} дн.`
             }
           >
-            <Text
-              style={{ fontSize: 12, whiteSpace: "nowrap" }}
-              type={
-                days < 0
-                  ? "danger"
-                  : days <= LICENSE_WARN_DAYS
-                    ? "warning"
-                    : undefined
-              }
+            <span
+              style={{
+                fontSize: 12,
+                whiteSpace: "nowrap",
+                background: isExpired ? COLOR.alertBg : isWarn ? COLOR.warnBg : undefined,
+                color: isExpired ? COLOR.alert : isWarn ? COLOR.warn : undefined,
+                padding: isExpired || isWarn ? "1px 5px" : undefined,
+                borderRadius: 4,
+                fontWeight: isExpired ? 500 : undefined,
+              }}
             >
               {formatDate(v)}
-            </Text>
+            </span>
           </Tooltip>
         );
       },
@@ -284,22 +300,27 @@ export default function MonitoringPage() {
             <Text style={{ fontSize: 12, color: COLOR.muted }}>выпущен</Text>
           );
         const days = daysUntil(r.cert_not_valid_after);
+        const isExpired = days < 0;
+        const isWarn = days <= LICENSE_WARN_DAYS;
         return (
           <Tooltip title={`Серийный номер: ${r.cert_serial}`}>
-            <Text
-              style={{ fontSize: 12, whiteSpace: "nowrap" }}
-              type={
-                days < 0 ? "danger" : days <= LICENSE_WARN_DAYS ? "warning" : undefined
-              }
+            <span
+              style={{
+                fontSize: 12,
+                whiteSpace: "nowrap",
+                background: isExpired ? COLOR.alertBg : isWarn ? COLOR.warnBg : undefined,
+                color: isExpired ? COLOR.alert : isWarn ? COLOR.warn : undefined,
+                padding: isExpired || isWarn ? "1px 5px" : undefined,
+              }}
             >
               {formatDate(r.cert_not_valid_after)}
-            </Text>
+            </span>
           </Tooltip>
         );
       },
     },
     {
-      title: "Валид.",
+      title: "Купюрник",
       dataIndex: "validator_state",
       key: "validator_state",
       align: "center" as const,
@@ -320,7 +341,7 @@ export default function MonitoringPage() {
       },
     },
     {
-      title: "Принт.",
+      title: "Принтер",
       dataIndex: "printer_state",
       key: "printer_state",
       align: "center" as const,
@@ -341,18 +362,28 @@ export default function MonitoringPage() {
       },
     },
     {
-      title: "ПО",
-      dataIndex: "soft_version",
-      key: "soft_version",
-      render: (v: string) => <Text style={{ fontSize: 11 }}>{v}</Text>,
+      title: "Адрес",
+      dataIndex: "address",
+      key: "address",
+      render: (v: string | null) =>
+        v ? (
+          <Tooltip title={v}>
+            <Text style={{ fontSize: 12, maxWidth: 180, display: "inline-block" }} ellipsis>
+              {v}
+            </Text>
+          </Tooltip>
+        ) : (
+          <Text style={{ fontSize: 12, color: COLOR.muted }}>—</Text>
+        ),
     },
     {
-      title: "",
-      dataIndex: "is_active",
-      key: "active",
-      align: "center" as const,
-      render: (v: boolean) => (
-        <span style={{ color: v ? "#16a34a" : "#dc2626", fontSize: 14 }}>●</span>
+      title: "Тип",
+      dataIndex: "terminal_type_name",
+      key: "terminal_type",
+      render: (v: string | null, record: MonitoringTerminal) => (
+        <Text style={{ fontSize: 12, whiteSpace: "nowrap" }}>
+          {v || (record.terminal_type_id !== undefined ? `Тип ${record.terminal_type_id}` : "—")}
+        </Text>
       ),
     },
     {
