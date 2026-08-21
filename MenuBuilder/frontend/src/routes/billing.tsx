@@ -487,11 +487,16 @@ export default function BillingPage() {
       dataIndex: "terminal_type_name",
       key: "terminal_type",
       width: 140,
-      render: (v: string | null, r: BillingTerminal) => (
-        <Text style={{ fontSize: 12 }}>
-          {v || (r.terminal_type_id !== undefined ? `Тип ${r.terminal_type_id}` : "—")}
-        </Text>
-      ),
+      render: (v: string | null, r: BillingTerminal) => {
+        if (r.terminal_type_id !== undefined && r.terminal_type_id !== null) {
+          return (
+            <Text style={{ fontSize: 12 }}>
+              {v ? `${r.terminal_type_id}: ${v}` : `${r.terminal_type_id}`}
+            </Text>
+          );
+        }
+        return <Text style={{ fontSize: 12 }}>{v || "—"}</Text>;
+      },
     },
     {
       title: "Адрес",
@@ -811,79 +816,82 @@ export default function BillingPage() {
           </>
         }
       />
-      {/* Summary cards */}
-      <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
-        <Col xs={24} sm={12} md={6}>
-          <Card
-            size="small"
-            style={{
-              borderColor: totalMinor > 0 ? "#1677ff" : undefined,
-              borderWidth: totalMinor > 0 ? 2 : 1,
-            }}
-          >
+      {/* Summary cards with responsive auto-fit grid */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+          gap: 10,
+          marginBottom: 12,
+        }}
+      >
+        <Card
+          size="small"
+          style={{
+            borderColor: totalMinor > 0 ? "#1677ff" : undefined,
+            borderWidth: totalMinor > 0 ? 2 : 1,
+          }}
+        >
+          <Space direction="vertical" size={2} style={{ width: "100%" }}>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              <ShoppingCartOutlined /> Сумма к оплате
+            </Text>
+            <div style={{ fontSize: 20, fontWeight: 700 }}>
+              {formatMoneyMinor(totalMinor)}
+            </div>
+            <Text type="secondary" style={{ fontSize: 11 }}>
+              лицензии: {licenseCount} · сертификаты: {certCount}
+            </Text>
+            <Button
+              type="primary"
+              block
+              size="small"
+              disabled={cartLines.length === 0}
+              onClick={() => setCheckoutOpen(true)}
+            >
+              {totalMinor > 0
+                ? `Оплатить (${formatMoneyMinor(totalMinor)})`
+                : `Оформить (${cartLines.length} поз.)`}
+            </Button>
+          </Space>
+        </Card>
+
+        <Card size="small">
+          <Space direction="vertical" size={2} style={{ width: "100%" }}>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              <WarningOutlined /> Задолженность
+            </Text>
+            <div style={{ fontSize: 20, fontWeight: 600 }}>
+              {summary && summary.overdue_amount_minor > 0 ? (
+                <Text type="danger">
+                  {formatDebt(summary.overdue_amount_minor)}
+                </Text>
+              ) : (
+                <Text type="success">{formatMoneyMinor(0)}</Text>
+              )}
+            </div>
+            <Text type="secondary" style={{ fontSize: 11 }}>
+              {summary?.overdue_terminal_count || 0} терм.
+            </Text>
+          </Space>
+        </Card>
+
+        {summary?.forecast.map((f) => (
+          <Card size="small" key={f.month}>
             <Space direction="vertical" size={2} style={{ width: "100%" }}>
               <Text type="secondary" style={{ fontSize: 12 }}>
-                <ShoppingCartOutlined /> Сумма к оплате
-              </Text>
-              <div style={{ fontSize: 22, fontWeight: 700 }}>
-                {formatMoneyMinor(totalMinor)}
-              </div>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                лицензии: {licenseCount} · сертификаты: {certCount}
-              </Text>
-              <Button
-                type="primary"
-                block
-                size="small"
-                disabled={cartLines.length === 0}
-                onClick={() => setCheckoutOpen(true)}
-              >
-                {totalMinor > 0
-                  ? `Перейти к оплате (${formatMoneyMinor(totalMinor)})`
-                  : `Перейти к оформлению (${cartLines.length} поз.)`}
-              </Button>
-            </Space>
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card size="small">
-            <Space direction="vertical" size={0} style={{ width: "100%" }}>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                <WarningOutlined /> Задолженность
+                <CalendarOutlined /> {formatForecastMonth(f.month)}
               </Text>
               <div style={{ fontSize: 20, fontWeight: 600 }}>
-                {summary && summary.overdue_amount_minor > 0 ? (
-                  <Text type="danger">
-                    {formatDebt(summary.overdue_amount_minor)}
-                  </Text>
-                ) : (
-                  <Text type="success">{formatMoneyMinor(0)}</Text>
-                )}
+                {formatMoneyMinor(f.amount_minor)}
               </div>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                {summary?.overdue_terminal_count || 0} терм.
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                {f.terminal_count} терм.
               </Text>
             </Space>
           </Card>
-        </Col>
-        {summary?.forecast.map((f) => (
-          <Col xs={24} sm={12} md={6} key={f.month}>
-            <Card size="small">
-              <Space direction="vertical" size={0} style={{ width: "100%" }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  <CalendarOutlined /> {formatForecastMonth(f.month)}
-                </Text>
-                <div style={{ fontSize: 20, fontWeight: 600 }}>
-                  {formatMoneyMinor(f.amount_minor)}
-                </div>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {f.terminal_count} терм.
-                </Text>
-              </Space>
-            </Card>
-          </Col>
         ))}
-      </Row>
+      </div>
 
       {/* Terminal table with tabs */}
       <Card
@@ -939,7 +947,8 @@ export default function BillingPage() {
           size="small"
           tableLayout="auto"
           pagination={{
-            pageSize: 20,
+            defaultPageSize: 50,
+            pageSize: 50,
             showSizeChanger: true,
             pageSizeOptions: ["10", "20", "50", "100"],
             showTotal: (total, range) =>

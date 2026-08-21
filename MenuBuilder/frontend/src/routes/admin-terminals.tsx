@@ -58,10 +58,13 @@ export default function AdminTerminalsPage() {
   const [terminals, setTerminals] = useState<AdminTerminal[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize, setPageSize] = useState(50);
 
   // Filter states
-  const [selectedOrgId, setSelectedOrgId] = useState<number | undefined>(undefined);
+  const [selectedOrgId, setSelectedOrgId] = useState<number | undefined>(() => {
+    const stored = localStorage.getItem("mb_current_org_id");
+    return stored ? Number(stored) : undefined;
+  });
   const [selectedStatus, setSelectedStatus] = useState<boolean | undefined>(undefined);
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -95,7 +98,17 @@ export default function AdminTerminalsPage() {
   // Load dictionaries
   useEffect(() => {
     getAdminOrganizations()
-      .then((data) => setOrgs(data))
+      .then((data) => {
+        setOrgs(data);
+        if (data.length > 0) {
+          setSelectedOrgId((prev) => {
+            if (prev !== undefined && data.some((o) => o.org_id === prev)) {
+              return prev;
+            }
+            return data[0].org_id;
+          });
+        }
+      })
       .catch(() => {});
     getTerminalTypes()
       .then((data) => setTerminalTypes(data))
@@ -104,6 +117,7 @@ export default function AdminTerminalsPage() {
 
   // Fetch terminals list
   const fetchTerminals = useCallback(async () => {
+    if (selectedOrgId === undefined) return;
     setLoading(true);
     try {
       const res = await getAdminTerminals({
@@ -132,7 +146,6 @@ export default function AdminTerminalsPage() {
   };
 
   const handleResetFilters = () => {
-    setSelectedOrgId(undefined);
     setSelectedStatus(undefined);
     setSearchInput("");
     setSearchQuery("");
@@ -346,10 +359,16 @@ export default function AdminTerminalsPage() {
       title: "Тип",
       dataIndex: "terminal_type_name",
       key: "terminal_type_name",
-      width: 120,
-      render: (typeName) => (
-        <Tag color="geekblue">{typeName || "Стандартный"}</Tag>
-      ),
+      width: 140,
+      render: (typeName, record) => {
+        const typeId = record.terminal_type_id;
+        const label = typeName || "Стандартный";
+        return (
+          <Tag color="geekblue">
+            {typeId !== undefined && typeId !== null ? `${typeId}: ${label}` : label}
+          </Tag>
+        );
+      },
     },
     {
       title: "Состояние",
@@ -539,23 +558,21 @@ export default function AdminTerminalsPage() {
         }}
       >
         <Select
-          placeholder="Фильтр по организации"
-          allowClear
+          placeholder="Выберите организацию"
           value={selectedOrgId}
           onChange={(val) => {
-            setSelectedOrgId(val);
-            setPage(1);
+            if (val !== undefined) {
+              setSelectedOrgId(val);
+              setPage(1);
+            }
           }}
-          style={{ width: 220 }}
+          style={{ width: 240 }}
           showSearch
           optionFilterProp="label"
-          options={[
-            { value: undefined, label: "Все организации" },
-            ...orgs.map((o) => ({
-              value: o.org_id,
-              label: `${o.org_name} (#${o.org_id})`,
-            })),
-          ]}
+          options={orgs.map((o) => ({
+            value: o.org_id,
+            label: `${o.org_name} (#${o.org_id})`,
+          }))}
         />
 
         <Select
@@ -588,11 +605,7 @@ export default function AdminTerminalsPage() {
           Найти
         </Button>
 
-        <Button icon={<ReloadOutlined />} onClick={fetchTerminals}>
-          Обновить
-        </Button>
-
-        {(selectedOrgId !== undefined || selectedStatus !== undefined || searchQuery) && (
+        {(selectedStatus !== undefined || searchQuery) && (
           <Button type="link" onClick={handleResetFilters} style={{ padding: 0 }}>
             Сбросить фильтры
           </Button>
@@ -608,8 +621,9 @@ export default function AdminTerminalsPage() {
           current: page,
           pageSize,
           total,
+          defaultPageSize: 50,
           showSizeChanger: true,
-          pageSizeOptions: ["10", "25", "50", "100"],
+          pageSizeOptions: ["10", "20", "50", "100"],
           onChange: (p, ps) => {
             setPage(p);
             setPageSize(ps);
@@ -701,9 +715,9 @@ export default function AdminTerminalsPage() {
                 terminalTypes.length > 0
                   ? terminalTypes.map((t) => ({
                       value: t.id,
-                      label: t.name,
+                      label: `${t.id}: ${t.name}`,
                     }))
-                  : [{ value: 0, label: "Стандартный терминал" }]
+                  : [{ value: 0, label: "0: Стандартный терминал" }]
               }
             />
           </Form.Item>
@@ -810,9 +824,9 @@ export default function AdminTerminalsPage() {
                 terminalTypes.length > 0
                   ? terminalTypes.map((t) => ({
                       value: t.id,
-                      label: t.name,
+                      label: `${t.id}: ${t.name}`,
                     }))
-                  : [{ value: 0, label: "Стандартный" }]
+                  : [{ value: 0, label: "0: Стандартный" }]
               }
             />
           </Form.Item>

@@ -37,7 +37,9 @@ export default function SectionLayout({
           borderRadius: token.borderRadiusLG,
           padding: 6,
           position: "sticky",
-          top: 52,
+          top: 64,
+          maxHeight: "calc(100vh - 80px)",
+          overflowY: "auto",
         }}
       >
         {title && (

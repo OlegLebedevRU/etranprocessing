@@ -39,7 +39,7 @@ export default function TerminalsPage() {
   const [terminals, setTerminals] = useState<TerminalInfo[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(50);
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [loading, setLoading] = useState(true);
@@ -243,6 +243,7 @@ export default function TerminalsPage() {
             current: page,
             pageSize,
             total,
+            defaultPageSize: 50,
             showSizeChanger: true,
             pageSizeOptions: ["10", "20", "50", "100"],
             size: "small",

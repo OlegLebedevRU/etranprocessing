@@ -1,17 +1,36 @@
+import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router";
-import AppLayout from "./routes/layout";
-import LoginPage from "./routes/login";
-import MenuManagementLayout from "./routes/menu-management";
-import TerminalsPage from "./routes/terminals";
-import VariantsPage from "./routes/variants";
-import MonitoringPage from "./routes/monitoring";
-import ReportsPage from "./routes/reports";
-import IntegrationsLayout from "./routes/integrations";
-import ApiTokensPage from "./routes/api-tokens";
-import BillingPage from "./routes/billing";
-import AdminLayout from "./routes/admin-layout";
-import AdminOrganizationsPage from "./routes/admin-organizations";
-import AdminTerminalsPage from "./routes/admin-terminals";
+import { Spin } from "antd";
+
+const AppLayout = lazy(() => import("./routes/layout"));
+const LoginPage = lazy(() => import("./routes/login"));
+const MenuManagementLayout = lazy(() => import("./routes/menu-management"));
+const TerminalsPage = lazy(() => import("./routes/terminals"));
+const VariantsPage = lazy(() => import("./routes/variants"));
+const MonitoringPage = lazy(() => import("./routes/monitoring"));
+const ReportsPage = lazy(() => import("./routes/reports"));
+const IntegrationsLayout = lazy(() => import("./routes/integrations"));
+const ApiTokensPage = lazy(() => import("./routes/api-tokens"));
+const BillingPage = lazy(() => import("./routes/billing"));
+const AdminLayout = lazy(() => import("./routes/admin-layout"));
+const AdminOrganizationsPage = lazy(() => import("./routes/admin-organizations"));
+const AdminTerminalsPage = lazy(() => import("./routes/admin-terminals"));
+
+function LoadingFallback() {
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        minHeight: "40vh",
+        width: "100%",
+      }}
+    >
+      <Spin size="large" />
+    </div>
+  );
+}
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem("mb_token");
@@ -23,54 +42,56 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route
-        element={
-          <RequireAuth>
-            <AppLayout />
-          </RequireAuth>
-        }
-      >
-        <Route index element={<Navigate to="/monitoring" replace />} />
-        <Route path="monitoring" element={<MonitoringPage />} />
-        <Route path="menu" element={<MenuManagementLayout />}>
-          <Route index element={<Navigate to="/menu/terminals" replace />} />
-          <Route path="terminals" element={<TerminalsPage />} />
-          <Route path="variants" element={<VariantsPage />} />
-        </Route>
-        <Route path="reports" element={<ReportsPage />} />
-        <Route path="billing" element={<BillingPage />} />
-        <Route path="integrations" element={<IntegrationsLayout />}>
+    <Suspense fallback={<LoadingFallback />}>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route
+          element={
+            <RequireAuth>
+              <AppLayout />
+            </RequireAuth>
+          }
+        >
+          <Route index element={<Navigate to="/monitoring" replace />} />
+          <Route path="monitoring" element={<MonitoringPage />} />
+          <Route path="menu" element={<MenuManagementLayout />}>
+            <Route index element={<Navigate to="/menu/terminals" replace />} />
+            <Route path="terminals" element={<TerminalsPage />} />
+            <Route path="variants" element={<VariantsPage />} />
+          </Route>
+          <Route path="reports" element={<ReportsPage />} />
+          <Route path="billing" element={<BillingPage />} />
+          <Route path="integrations" element={<IntegrationsLayout />}>
+            <Route
+              index
+              element={<Navigate to="/integrations/tokens" replace />}
+            />
+            <Route path="tokens" element={<ApiTokensPage />} />
+          </Route>
+          <Route path="admin" element={<AdminLayout />}>
+            <Route
+              index
+              element={<Navigate to="/admin/organizations" replace />}
+            />
+            <Route path="organizations" element={<AdminOrganizationsPage />} />
+            <Route path="terminals" element={<AdminTerminalsPage />} />
+          </Route>
+          {/* Legacy paths kept so existing bookmarks keep working */}
           <Route
-            index
+            path="terminals"
+            element={<Navigate to="/menu/terminals" replace />}
+          />
+          <Route
+            path="variants"
+            element={<Navigate to="/menu/variants" replace />}
+          />
+          <Route
+            path="profile"
             element={<Navigate to="/integrations/tokens" replace />}
           />
-          <Route path="tokens" element={<ApiTokensPage />} />
+          <Route path="*" element={<Navigate to="/monitoring" replace />} />
         </Route>
-        <Route path="admin" element={<AdminLayout />}>
-          <Route
-            index
-            element={<Navigate to="/admin/organizations" replace />}
-          />
-          <Route path="organizations" element={<AdminOrganizationsPage />} />
-          <Route path="terminals" element={<AdminTerminalsPage />} />
-        </Route>
-        {/* Legacy paths kept so existing bookmarks keep working */}
-        <Route
-          path="terminals"
-          element={<Navigate to="/menu/terminals" replace />}
-        />
-        <Route
-          path="variants"
-          element={<Navigate to="/menu/variants" replace />}
-        />
-        <Route
-          path="profile"
-          element={<Navigate to="/integrations/tokens" replace />}
-        />
-        <Route path="*" element={<Navigate to="/monitoring" replace />} />
-      </Route>
-    </Routes>
+      </Routes>
+    </Suspense>
   );
 }

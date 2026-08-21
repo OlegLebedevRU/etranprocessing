@@ -95,7 +95,14 @@ export default function AppLayout() {
         breakpoint="lg"
         onBreakpoint={(broken) => setCollapsed(broken)}
         trigger={null}
-        style={{ borderInlineEnd: `1px solid ${token.colorBorderSecondary}` }}
+        style={{
+          borderInlineEnd: `1px solid ${token.colorBorderSecondary}`,
+          position: "sticky",
+          top: 0,
+          height: "100vh",
+          overflowY: "auto",
+          zIndex: 100,
+        }}
       >
         <div
           style={{

@@ -28,6 +28,7 @@ import {
   getBalanceByTsp,
   type BalanceByTspRecord,
 } from "../api/reports";
+import { getServices } from "../api/services";
 
 const { Sider, Content } = Layout;
 
@@ -84,6 +85,21 @@ const PAYM_STATE_COLORS: Record<number, string> = {
 
 export default function ReportsPage() {
   const [activeReport, setActiveReport] = useState("inkass");
+  const [servicesMap, setServicesMap] = useState<Record<number, string>>({});
+
+  useEffect(() => {
+    getServices()
+      .then((res) => {
+        const map: Record<number, string> = {};
+        (res.data || []).forEach((s) => {
+          if (s.tsp_code && s.name) {
+            map[s.tsp_code] = s.name;
+          }
+        });
+        setServicesMap(map);
+      })
+      .catch(() => {});
+  }, []);
 
   // --- Inkass state ---
   const [inkItems, setInkItems] = useState<InkassRecord[]>([]);
@@ -105,7 +121,7 @@ export default function ReportsPage() {
   const [payDeviceIds, setPayDeviceIds] = useState<number[]>([]);
   const [payTspCode, setPayTspCode] = useState<number | undefined>();
   const [payState, setPayState] = useState<number>(-1);
-  const [payTop, setPayTop] = useState(100);
+  const [payTop, setPayTop] = useState(50);
 
   // --- Balance by terminal state ---
   const [btItems, setBtItems] = useState<BalanceByTerminalRecord[]>([]);
@@ -114,7 +130,6 @@ export default function ReportsPage() {
   const [btDateTo, setBtDateTo] = useState("");
   const [btTermInput, setBtTermInput] = useState("");
   const [btDeviceIds, setBtDeviceIds] = useState<number[]>([]);
-  const [btTspCode, setBtTspCode] = useState<number | undefined>();
 
   // --- Balance by TSP state ---
   const [btsItems, setBtsItems] = useState<BalanceByTspRecord[]>([]);
@@ -133,7 +148,7 @@ export default function ReportsPage() {
         date_to: inkDateTo || undefined,
         device_ids: inkDeviceIds.length ? inkDeviceIds : undefined,
         page: inkPage,
-        size: 100,
+        size: 50,
       });
       setInkItems(resp.items);
       setInkTotal(resp.total);
@@ -194,13 +209,12 @@ export default function ReportsPage() {
         date_from: btDateFrom || undefined,
         date_to: btDateTo || undefined,
         device_ids: btDeviceIds.length ? btDeviceIds : undefined,
-        tsp_code: btTspCode,
       });
       setBtItems(resp.items);
     } finally {
       setBtLoading(false);
     }
-  }, [btDateFrom, btDateTo, btDeviceIds, btTspCode]);
+  }, [btDateFrom, btDateTo, btDeviceIds]);
 
   useEffect(() => {
     if (activeReport === "balance-terminal") fetchBalanceByTerminal();
@@ -324,10 +338,14 @@ export default function ReportsPage() {
     {
       title: "ТСП",
       dataIndex: "tsp_name",
-      width: 180,
+      width: 200,
       ellipsis: true,
-      render: (v: string | undefined, r: PaymentRecord) =>
-        v || String(r.paym_tsp_code),
+      render: (v: string | undefined, r: PaymentRecord) => {
+        const name = (r.paym_tsp_code ? servicesMap[r.paym_tsp_code] : "") || v;
+        return r.paym_tsp_code
+          ? `${r.paym_tsp_code}: ${name || "—"}`
+          : (name || "—");
+      },
     },
     {
       title: "Сумма",
@@ -364,41 +382,25 @@ export default function ReportsPage() {
     {
       title: "Терминал",
       dataIndex: "device_id",
-      width: 90,
+      width: 140,
       sorter: (a, b) => a.device_id - b.device_id,
-    },
-    {
-      title: "SN",
-      dataIndex: "sn",
-      width: 120,
-      ellipsis: true,
-      render: (v: string) => (
-        <span title={v}>{v ? v.substring(0, 12) + "…" : "—"}</span>
-      ),
-    },
-    {
-      title: "TSP (кол-во)",
-      dataIndex: "tsp_count",
-      width: 100,
-      align: "right",
-      sorter: (a, b) => a.tsp_count - b.tsp_count,
-    },
-    {
-      title: "Платежей",
-      dataIndex: "total_count",
-      width: 100,
-      align: "right",
-      render: fmtInt,
-      sorter: (a, b) => a.total_count - b.total_count,
     },
     {
       title: "Сумма",
       dataIndex: "total_amount",
-      width: 130,
+      width: 160,
       align: "right",
       render: (v: number) => fmtMoney(v),
       sorter: (a, b) => a.total_amount - b.total_amount,
       defaultSortOrder: "descend",
+    },
+    {
+      title: "Платежей",
+      dataIndex: "total_count",
+      width: 140,
+      align: "right",
+      render: fmtInt,
+      sorter: (a, b) => a.total_count - b.total_count,
     },
   ];
 
@@ -407,38 +409,40 @@ export default function ReportsPage() {
     {
       title: "TSP код",
       dataIndex: "tsp_code",
-      width: 90,
+      width: 100,
       sorter: (a, b) => a.tsp_code - b.tsp_code,
     },
     {
       title: "Название",
       dataIndex: "tsp_name",
-      width: 200,
+      width: 260,
       ellipsis: true,
+      render: (v: string, r: BalanceByTspRecord) =>
+        servicesMap[r.tsp_code] || v || `ТСП ${r.tsp_code}`,
     },
     {
-      title: "Терминалов",
-      dataIndex: "terminal_count",
-      width: 100,
+      title: "Сумма",
+      dataIndex: "total_amount",
+      width: 140,
       align: "right",
-      sorter: (a, b) => a.terminal_count - b.terminal_count,
+      render: (v: number) => fmtMoney(v),
+      sorter: (a, b) => a.total_amount - b.total_amount,
+      defaultSortOrder: "descend",
     },
     {
       title: "Платежей",
       dataIndex: "total_count",
-      width: 100,
+      width: 110,
       align: "right",
       render: fmtInt,
       sorter: (a, b) => a.total_count - b.total_count,
     },
     {
-      title: "Сумма",
-      dataIndex: "total_amount",
-      width: 130,
+      title: "Терминалов",
+      dataIndex: "terminal_count",
+      width: 110,
       align: "right",
-      render: (v: number) => fmtMoney(v),
-      sorter: (a, b) => a.total_amount - b.total_amount,
-      defaultSortOrder: "descend",
+      sorter: (a, b) => a.terminal_count - b.terminal_count,
     },
   ];
 
@@ -454,7 +458,9 @@ export default function ReportsPage() {
           padding: 6,
           alignSelf: "flex-start",
           position: "sticky",
-          top: 52,
+          top: 64,
+          maxHeight: "calc(100vh - 80px)",
+          overflowY: "auto",
         }}
       >
         <div
@@ -534,14 +540,16 @@ export default function ReportsPage() {
               dataSource={inkItems}
               loading={inkLoading}
               size="small"
+              className="reports-table"
               tableLayout="auto"
               pagination={{
                 current: inkPage,
-                pageSize: 100,
+                pageSize: 50,
                 total: inkTotal,
                 onChange: setInkPage,
                 showTotal: (t) => `Всего: ${t}`,
-                showSizeChanger: false,
+                showSizeChanger: true,
+                pageSizeOptions: ["10", "20", "50", "100"],
               }}
               scroll={{ x: 800 }}
               expandable={{
@@ -644,6 +652,7 @@ export default function ReportsPage() {
               dataSource={payItems}
               loading={payLoading}
               size="small"
+              className="reports-table"
               tableLayout="auto"
               pagination={false}
               scroll={{ x: 900 }}
@@ -765,16 +774,6 @@ export default function ReportsPage() {
                 >
                   Найти
                 </Button>
-                <Input
-                  placeholder="TSP код"
-                  size="small"
-                  style={{ width: 90 }}
-                  value={btTspCode ?? ""}
-                  onChange={(e) => {
-                    const v = e.target.value.trim();
-                    setBtTspCode(v ? Number(v) : undefined);
-                  }}
-                />
               </Space>
               <Button
                 size="small"
@@ -783,22 +782,25 @@ export default function ReportsPage() {
               />
             </Space>
 
-            <Table<BalanceByTerminalRecord>
-              rowKey="terminal_id"
-              columns={balanceTerminalColumns}
-              dataSource={btItems}
-              loading={btLoading}
-              size="small"
-              tableLayout="auto"
-              pagination={{
-                pageSize: 20,
-                showSizeChanger: true,
-                pageSizeOptions: ["10", "20", "50", "100"],
-                showTotal: (total, range) =>
-                  `${range[0]}-${range[1]} из ${total} записей`,
-              }}
-              scroll={{ x: 500 }}
-            />
+            <div style={{ maxWidth: 560 }}>
+              <Table<BalanceByTerminalRecord>
+                rowKey="device_id"
+                columns={balanceTerminalColumns}
+                dataSource={btItems}
+                loading={btLoading}
+                size="small"
+                className="reports-table"
+                tableLayout="auto"
+                pagination={{
+                  defaultPageSize: 50,
+                  pageSize: 50,
+                  showSizeChanger: true,
+                  pageSizeOptions: ["10", "20", "50", "100"],
+                  showTotal: (total, range) =>
+                    `${range[0]}-${range[1]} из ${total} записей`,
+                }}
+              />
+            </div>
           </div>
         )}
 
@@ -852,22 +854,25 @@ export default function ReportsPage() {
               />
             </Space>
 
-            <Table<BalanceByTspRecord>
-              rowKey="tsp_code"
-              columns={balanceTspColumns}
-              dataSource={btsItems}
-              loading={btsLoading}
-              size="small"
-              tableLayout="auto"
-              pagination={{
-                pageSize: 20,
-                showSizeChanger: true,
-                pageSizeOptions: ["10", "20", "50", "100"],
-                showTotal: (total, range) =>
-                  `${range[0]}-${range[1]} из ${total} записей`,
-              }}
-              scroll={{ x: 600 }}
-            />
+            <div style={{ maxWidth: 840 }}>
+              <Table<BalanceByTspRecord>
+                rowKey="tsp_code"
+                columns={balanceTspColumns}
+                dataSource={btsItems}
+                loading={btsLoading}
+                size="small"
+                className="reports-table"
+                tableLayout="auto"
+                pagination={{
+                  defaultPageSize: 50,
+                  pageSize: 50,
+                  showSizeChanger: true,
+                  pageSizeOptions: ["10", "20", "50", "100"],
+                  showTotal: (total, range) =>
+                    `${range[0]}-${range[1]} из ${total} записей`,
+                }}
+              />
+            </div>
           </div>
         )}
       </Content>

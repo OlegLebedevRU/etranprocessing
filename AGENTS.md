@@ -56,7 +56,7 @@ All projects target **Python 3.14** (`requires-python = "==3.14.*"`).
 |---|---|---|---|
 | **`ProcessingBackend/backend`** | Python 3.14, FastAPI, SQLAlchemy (asyncpg), Alembic | Core mTLS payment processing gateway, terminal XML/SOAP handlers (`/api/payment`, `/api/techgate`, `/api/gategauge`, `/api/licensebilling`, `/api/certificates`, `GET /api/ListMenuFile`). **No user-facing JWT routes.** | `uvicorn app.main:app` |
 | **`MenuBuilder/backend`** | Python 3.14, FastAPI, SQLAlchemy | Tenant & admin web portal, terminal menu management, and **user-facing billing API** (`/api/billing`, `/api/certificate-pin`, `/api/admin/organizations`, JWT authentication). | `uvicorn app.main:app` |
-| **`MenuBuilder/frontend`** | React, TypeScript, Vite, Tailwind CSS | Web UI for tenant administrators, terminal menu builder, license cart, and admin panels. | `npm run build` / `npm run dev` |
+| **`MenuBuilder/frontend`** | React 19, TypeScript, Vite, Ant Design v6 | Web UI for tenant administrators, terminal menu builder, license cart, and admin panels (Code Splitting, Design Tokens, multi-tenant). | `npm run build` / `npm run dev` |
 | **`ProcessingBackend/mcp-pin-server`** | Python 3.14, FastMCP / MCP SDK | Model Context Protocol server for PIN operations & certificate tools. | `python -m pin_server.server` |
 
 ## Infrastructure & Servers

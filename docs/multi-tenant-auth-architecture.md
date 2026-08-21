@@ -61,11 +61,11 @@ Nginx validates JWT signatures at the ingress perimeter using `ngx-http-auth-jwt
 To prevent client header injection attacks, Nginx uses `auth_jwt_extract_var_claims` (which sets internal variables) rather than `auth_jwt_extract_request_claims` (which can append to attacker-controlled headers).
 
 ```nginx
-# Billing API: Terminates JWT, forwards verified claims as headers to ProcessingBackend
+# Billing API: Terminates JWT, forwards verified claims as headers to MenuBuilder backend
 location /api/billing/ {
     auth_jwt_extract_var_claims sub org role;
 
-    proxy_pass http://processing-backend:8000/api/billing/;
+    proxy_pass http://menubuilder-backend:8000/api/billing/;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;

@@ -40,3 +40,50 @@ body {
   font-weight: 600 !important;
   letter-spacing: 0.02em;
 }
+
+/* Compact tables for monitoring and reports */
+.compact-table .ant-table-tbody > tr > td {
+  padding: 3px 6px !important;
+  line-height: 1.25 !important;
+}
+.compact-table .ant-table-thead > tr > th {
+  padding: 5px 6px !important;
+}
+.reports-table .ant-table-tbody > tr > td {
+  padding: 4px 8px !important;
+  line-height: 1.25 !important;
+}
+.reports-table .ant-table-thead > tr > th {
+  padding: 6px 8px !important;
+}
+
+/* Enhanced Select, Dropdown, and Picker UX */
+.ant-select {
+  cursor: pointer;
+}
+.ant-select-selector {
+  cursor: pointer !important;
+}
+.ant-select-selection-item,
+.ant-select-selection-placeholder {
+  cursor: pointer;
+}
+.ant-select-item {
+  cursor: pointer;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+}
+.ant-select-item-option-content {
+  font-size: 13px !important;
+}
+.ant-select-dropdown {
+  padding: 6px !important;
+  border-radius: 8px !important;
+}
+.ant-select-dropdown .ant-select-item-option-selected {
+  font-weight: 600;
+}
+.ant-picker {
+  cursor: pointer;
+}

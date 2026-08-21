@@ -88,7 +88,7 @@ export default function MonitoringPage() {
   const [terminals, setTerminals] = useState<MonitoringTerminal[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(50);
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [loading, setLoading] = useState(true);
@@ -380,11 +380,16 @@ export default function MonitoringPage() {
       title: "Тип",
       dataIndex: "terminal_type_name",
       key: "terminal_type",
-      render: (v: string | null, record: MonitoringTerminal) => (
-        <Text style={{ fontSize: 12, whiteSpace: "nowrap" }}>
-          {v || (record.terminal_type_id !== undefined ? `Тип ${record.terminal_type_id}` : "—")}
-        </Text>
-      ),
+      render: (v: string | null, record: MonitoringTerminal) => {
+        if (record.terminal_type_id !== undefined && record.terminal_type_id !== null) {
+          return (
+            <Text style={{ fontSize: 12, whiteSpace: "nowrap" }}>
+              {v ? `${record.terminal_type_id}: ${v}` : `${record.terminal_type_id}`}
+            </Text>
+          );
+        }
+        return <Text style={{ fontSize: 12, whiteSpace: "nowrap" }}>{v || "—"}</Text>;
+      },
     },
     {
       title: "SN",
@@ -443,6 +448,7 @@ export default function MonitoringPage() {
 
       <Card styles={{ body: { padding: 0 } }} style={{ width: "100%" }}>
         <Table
+          className="compact-table"
           dataSource={terminals}
           columns={columns}
           rowKey="terminal_id"
@@ -453,6 +459,7 @@ export default function MonitoringPage() {
             current: page,
             pageSize,
             total,
+            defaultPageSize: 50,
             showSizeChanger: true,
             pageSizeOptions: ["10", "20", "50", "100"],
             showTotal: (tot, range) => `${range[0]}-${range[1]} из ${tot}`,
