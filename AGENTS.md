@@ -101,6 +101,7 @@ the production host (`176.108.247.249`). See also each subproject's
   `create_access_token()` (same secret, same claim names), then curl the
   endpoint with it. This verifies a fix end-to-end post-deploy without ever
   needing/typing a real user's password.
+- **SSH execution from Windows PowerShell:** When invoking remote commands via `ssh` from PowerShell, use `ssh -n ...` (e.g. `ssh -n -i d:\.ssh\free-tier-cloud_ru ...`) to prevent stdin handle blocking.
 - **PowerShell → `ssh` → remote shell quoting is fragile for inline Python.**
   Multi-line `python -c "..."` one-liners with parentheses/dict literals
   reliably get mangled through nested PowerShell/ssh/remote-shell quoting.
@@ -133,10 +134,11 @@ Before utilizing MCP Ops capabilities in any debugging, deployment, diagnostics,
      - Available RAM > 300 MiB (`system_info` / `memory_analysis` — critical since server has 0B Swap).
      - Root disk usage < 90% (`system_info` / `disk_analysis`).
      - Load average within healthy limits (< 2.0).
-2. **Readiness Status Declaration**:
+2. **Readiness Status Declaration & Non-Blocking Policy**:
    - Explicitly record the status in task context / plan:
      - `[MCP Ops Readiness: READY]` — all checks passed; MCP tools may be used for diagnostics, log analysis, and verification.
-     - `[MCP Ops Readiness: DEGRADED / UNAVAILABLE]` — MCP unreachable or resource thresholds exceeded; fall back to standard SSH runbook commands.
+     - `[MCP Ops Readiness: DEGRADED / UNAVAILABLE]` — MCP unreachable or resource thresholds exceeded; fall back to standard SSH runbook commands (`user1@176.108.247.249`, key `d:\.ssh\free-tier-cloud_ru`).
+   - **CRITICAL: `[MCP Ops Readiness: UNAVAILABLE]` (или `DEGRADED`) НЕ блокирует деплой (Non-Blocking)**. Отсутствие подключения или недоступность MCP Ops сервера не является причиной для отмены или задержки деплоя. Сборка, деплой, применение миграций и верификация в этом случае выполняются в штатном режиме через прямой SSH-транспорт (`scp`, `ssh sudo docker ...`) без блокировок.
 3. **Safety Guardrails**:
    - State-changing operations (`nginx_reload`, `file_write`, `file_delete`) return a `confirmationId` and MUST be verified before confirmation via `mcp_server-ops_confirm_execute`.
    - Never inspect raw secret files directly: use `mcp_server-ops_config_audit` for inspecting `.env` configurations.

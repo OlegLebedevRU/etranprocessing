@@ -65,7 +65,8 @@ Verify that this SKILL.md and all `.md` files under `.claude/` contain no creden
 Before initiating upload and container rebuild, verify host metrics and establish task readiness:
 1. Probe server load: `mcp_server-ops_system_info(type="load")`.
 2. Check available RAM (> 300 MiB) and disk space (< 90% full) using `mcp_server-ops_system_info(type="memory")` and `mcp_server-ops_system_info(type="disk")`.
-3. Set readiness mark: `[MCP Ops Readiness: READY]` (or fall back to SSH if unavailable).
+3. Set readiness mark: `[MCP Ops Readiness: READY]` or `[MCP Ops Readiness: UNAVAILABLE]`.
+4. **Non-blocking rule**: `[MCP Ops Readiness: UNAVAILABLE]` (или `DEGRADED`) **НЕ блокирует деплой (Non-Blocking)**. При недоступности MCP Ops немедленно продолжайте деплой через стандартный SSH-транспорт (шаги 1–5). Рекомендуется использовать флаг `ssh -n ...` для предотвращения блокировок stdin в Windows PowerShell.
 
 ### Step 1: Upload backend
 
@@ -106,10 +107,10 @@ Verify container logs via MCP or SSH:
   - Scan for recent exceptions: `mcp_server-ops_log_search(level="error", lines=50)`
   - Verify container processes: `mcp_server-ops_system_info(type="processes")`
 
-- **Via SSH:**
+- **Via SSH (Always available / Fallback when `[MCP Ops Readiness: UNAVAILABLE]`):**
 ```bash
-ssh user1@176.108.247.249 -i d:\.ssh\free-tier-cloud_ru "sudo docker logs processing-backend --tail 5"
-ssh user1@176.108.247.249 -i d:\.ssh\free-tier-cloud_ru "sudo docker logs mcp-pin-server --tail 5"
+ssh -n -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249 "sudo docker logs processing-backend --tail 5"
+ssh -n -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249 "sudo docker logs mcp-pin-server --tail 5"
 ```
 
 Expected: `Uvicorn running on http://0.0.0.0:8000` and `MCP server connected to database`

@@ -17,9 +17,10 @@ Before executing any diagnostic or operational workflow, verify and declare task
    - **RAM**: Available memory must be > 300 MiB (`mcp_server-ops_system_info(type="memory")` or `mcp_server-ops_memory_analysis`). *Critical: Server has 0B Swap.*
    - **Disk**: Root `/` usage must be < 90% (`mcp_server-ops_system_info(type="disk")` or `mcp_server-ops_disk_analysis`).
    - **Load Average**: Should be < 2.0 under normal operation.
-3. **Set Readiness Mark:**
+3. **Set Readiness Mark & Fallback Policy:**
    - `[MCP Ops Readiness: READY]` — proceed with MCP workflows below.
    - `[MCP Ops Readiness: DEGRADED / UNAVAILABLE]` — fall back to direct SSH commands (`user1@176.108.247.249`, key `d:\.ssh\free-tier-cloud_ru`).
+   - **Non-blocking Rule**: Статус `UNAVAILABLE` или `DEGRADED` **НЕ блокирует деплой (Non-Blocking)** и эксплуатационные задачи, а переключает их исполнение на прямой SSH/CLI транспорт (`ssh -n ...`).
 
 ---
 

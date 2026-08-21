@@ -43,7 +43,7 @@ MenuBuilder (FastAPI + React frontend + JWT auth)
 | **`ProcessingBackend/backend`** | Python 3.14, FastAPI, SQLAlchemy (asyncpg), Alembic | Core mTLS payment processing REST/XML API (payments, tech gate, license billing check, balance tracking, terminal menus `GET /api/ListMenuFile`, Alembic migrations) | `uvicorn app.main:app` |
 | **`ProcessingBackend/mcp-pin-server`** | Python 3.14, FastMCP / MCP SDK | Model Context Protocol server for PIN operations & certificate tools | `python -m pin_server.server` |
 | **`MenuBuilder/backend`** | Python 3.14, FastAPI, SQLAlchemy | Tenant/admin portal, terminal menu management, and **user billing API** (`/api/billing`, `/api/certificate-pin`, `/api/admin/organizations`) | `uvicorn app.main:app` |
-| **`MenuBuilder/frontend`** | React, TypeScript, Vite, Tailwind CSS | Web UI for configuring terminal payment menus, license cart, organizations, and billing | `npm run build` / `npm run dev` |
+| **`MenuBuilder/frontend`** | React 19, TypeScript, Vite, Ant Design v6 | Web UI for configuring terminal payment menus, license cart, organizations, and billing (Code Splitting, Design Tokens, multi-tenant) | `npm run build` / `npm run dev` |
 | **`BACK/`** | Legacy C#, ASP.NET (.NET Framework) | Legacy processing core (`ProcessingCore/EtranDispatcher`, SOAP processors) | `Global.asax`, `EtranDispatcher.asmx` |
 | **`FRONT/`** | Legacy ASP.NET | Legacy front-facing web apps (`TechGate`, `GateGauge`, `licensebilling`, `Certificates`) | Web endpoints |
 | **`CommonLibs/`** | Legacy .NET Framework | Shared legacy C# utility libraries and DLLs | Visual Studio Solution |
@@ -109,6 +109,7 @@ MenuBuilder (FastAPI + React frontend + JWT auth)
   - In production, apply migrations via `sudo docker exec processing-backend alembic upgrade head`.
   - If schema changes affect shared models, restart `menubuilder-backend` afterwards (`sudo docker restart menubuilder-backend`).
 - **Frontend Live Mounts**: `menubuilder-frontend` bind-mounts `./frontend/dist/`. Building on host updates files live without full container restart (restart only needed for `nginx.conf` changes).
+- **SSH execution from Windows PowerShell:** When invoking remote commands via `ssh` from PowerShell, use `ssh -n ...` (e.g. `ssh -n -i d:\.ssh\free-tier-cloud_ru ...`) to prevent stdin handle blocking.
 - **Legacy IIS Deployments**: Legacy ASP.NET endpoints use an App_Code dynamic compilation model (no-compile deployment) as documented in `ProcessingBackend/docs/devops-runbook.md`.
 
 ---
@@ -133,10 +134,11 @@ Before using MCP Ops capabilities in any task (debugging, deployment verificatio
      - Available RAM > 300 MiB (`system_info` / `memory_analysis` — critical since server has 0B Swap).
      - Root disk usage < 90% (`system_info` / `disk_analysis`).
      - Load average within healthy limits (< 2.0).
-2. **Readiness Status Declaration**:
+2. **Readiness Status Declaration & Non-Blocking Policy**:
    - Explicitly record the status in the task plan / context:
      - `[MCP Ops Readiness: READY]` — all checks passed; MCP tools may be used for diagnostics, log analysis, and verification.
-     - `[MCP Ops Readiness: DEGRADED / UNAVAILABLE]` — MCP unreachable or resource limits exceeded; fall back to standard SSH runbook commands.
+     - `[MCP Ops Readiness: DEGRADED / UNAVAILABLE]` — MCP unreachable or resource limits exceeded; fall back to standard SSH runbook commands (`user1@176.108.247.249`, key `d:\.ssh\free-tier-cloud_ru`).
+   - **CRITICAL: `[MCP Ops Readiness: UNAVAILABLE]` (или `DEGRADED`) НЕ блокирует деплой (Non-Blocking)**. Отсутствие подключения или недоступность MCP Ops сервера не является причиной для отмены или задержки деплоя. Сборка, деплой, применение миграций и верификация в этом случае выполняются в штатном режиме через прямой SSH-транспорт (`scp`, `ssh sudo docker ...`) без блокировок.
 3. **Safety Guardrails**:
    - State-changing operations (`nginx_reload`, `file_write`, `file_delete`) return a `confirmationId` and MUST be explicitly confirmed via `mcp_server-ops_confirm_execute`.
    - Never inspect raw secret files directly: use `mcp_server-ops_config_audit` for inspecting `.env` configurations.
