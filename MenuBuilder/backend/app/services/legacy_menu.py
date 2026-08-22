@@ -230,13 +230,76 @@ async def import_all_legacy_menus(
 
 
 async def main() -> None:
-    """CLI runner to import all legacy menus."""
+    """CLI runner to import legacy menus into PostgreSQL."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Import legacy menus and services from JSON into PostgreSQL."
+    )
+    group = parser.add_mutually_exclusive_group(required=False)
+    group.add_argument(
+        "--org",
+        type=int,
+        help="Single organization ID to import (e.g. --org 424)",
+    )
+    group.add_argument(
+        "--orgs",
+        type=str,
+        help="Comma-separated list of organization IDs (e.g. --orgs 1,424,477)",
+    )
+    group.add_argument(
+        "--all",
+        action="store_true",
+        default=True,
+        help="Import all organizations present in the JSON file (default)",
+    )
+    group.add_argument(
+        "--list-orgs",
+        action="store_true",
+        help="List available organizations in the JSON file and exit",
+    )
+
+    parser.add_argument(
+        "--file",
+        type=str,
+        default=None,
+        help=f"Path to JSON file (default: {DATA_FILE_PATH})",
+    )
+    parser.add_argument(
+        "--variant-name",
+        type=str,
+        default=LEGACY_VARIANT_NAME,
+        help=f"Name of the MenuVariant (default: '{LEGACY_VARIANT_NAME}')",
+    )
+
+    args = parser.parse_args()
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
     )
+
+    data_file = Path(args.file) if args.file else DATA_FILE_PATH
+    groups, _ = load_legacy_menu_data(data_file)
+    available_orgs = sorted({g["org_id"] for g in groups})
+
+    if args.list_orgs:
+        print(f"Available {len(available_orgs)} organizations in {data_file}:")
+        print(", ".join(map(str, available_orgs)))
+        return
+
+    target_orgs: list[int] | None = None
+    if args.org:
+        target_orgs = [args.org]
+    elif args.orgs:
+        target_orgs = [int(o.strip()) for o in args.orgs.split(",") if o.strip()]
+
     async with async_session() as session:
-        result = await import_all_legacy_menus(session)
+        result = await import_all_legacy_menus(
+            session=session,
+            org_ids=target_orgs,
+            variant_name=args.variant_name,
+        )
         print(f"Import completed: {len(result)} organizations imported.")
         for org_id, var in result.items():
             print(f"  Org {org_id}: variant_id={var.id}")
