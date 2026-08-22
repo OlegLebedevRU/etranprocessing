@@ -1,6 +1,8 @@
 services:
   processing-backend:
-    build: ./backend
+    build:
+      context: ..
+      dockerfile: ProcessingBackend/backend/Dockerfile
     container_name: processing-backend
     restart: always
     env_file:

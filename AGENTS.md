@@ -46,15 +46,23 @@ uv run ruff format <src_dir>
 uv run pyright <src_dir>
 ```
 
-## Python version
+## Python version & Backend Guidelines
 
 All projects target **Python 3.14** (`requires-python = "==3.14.*"`).
+
+Detailed backend code standards, architecture rules, and patterns are documented in **`ProcessingBackend/GUIDELINES.md`**. Key rules include:
+- **Shared DB Models (`shared/etranprocessing_db`)**: Single source of truth for all SQLAlchemy 2.0 ORM models for both `ProcessingBackend` and `MenuBuilder`.
+- **Thin DB Layer Principle**: `etranprocessing_db` contains *strictly* declarative models, constraints, and relationships. No business logic, auth/crypto utilities, or framework dependencies.
+- **FastAPI dependency injection**: `B008` is ignored; use `Depends()` in default argument positions.
+- **SQLAlchemy 2.0 Declarative**: Use `Mapped[T] = mapped_column(...)` for models.
+- **Python 3.14 Exception Handling**: Prefer `with contextlib.suppress(SpecificException):` over `try...except...pass` (`SIM105`). Never use silent broad `except Exception: pass`. For cleanup/rollback paths, explicitly catch `Exception` and log or document intent (`with contextlib.suppress(Exception):`).
 
 ## Project structure & Service Boundaries
 
 | Subproject | Technology / Framework | Role & Service Boundary | Entry point |
 |---|---|---|---|
-| **`ProcessingBackend/backend`** | Python 3.14, FastAPI, SQLAlchemy (asyncpg), Alembic | Core mTLS payment processing gateway, terminal XML/SOAP handlers (`/api/payment`, `/api/techgate`, `/api/gategauge`, `/api/licensebilling`, `/api/certificates`, `GET /api/ListMenuFile`). **No user-facing JWT routes.** | `uvicorn app.main:app` |
+| **`shared/` (`etranprocessing_db`)** | Python 3.14, SQLAlchemy 2.0, asyncpg | Shared thin declarative ORM model layer for both backends (23 unified models, constraints, indexes). | `import etranprocessing_db` |
+| **`ProcessingBackend/backend`** | Python 3.14, FastAPI, SQLAlchemy (asyncpg), Alembic | Core mTLS payment processing gateway, terminal XML/SOAP handlers (`/api/payment`, `/api/techgate`, `/api/gategauge`, `/api/licensebilling`, `/api/certificates`, `GET /api/ListMenuFile`). Sole authority for Alembic migrations. **No user-facing JWT routes.** | `uvicorn app.main:app` |
 | **`MenuBuilder/backend`** | Python 3.14, FastAPI, SQLAlchemy | Tenant & admin web portal, terminal menu management, and **user-facing billing API** (`/api/billing`, `/api/certificate-pin`, `/api/admin/organizations`, JWT authentication). | `uvicorn app.main:app` |
 | **`MenuBuilder/frontend`** | React 19, TypeScript, Vite, Ant Design v6 | Web UI for tenant administrators, terminal menu builder, license cart, and admin panels (Code Splitting, Design Tokens, multi-tenant). | `npm run build` / `npm run dev` |
 | **`ProcessingBackend/mcp-pin-server`** | Python 3.14, FastMCP / MCP SDK | Model Context Protocol server for PIN operations & certificate tools. | `python -m pin_server.server` |

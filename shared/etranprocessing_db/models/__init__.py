@@ -1,31 +1,41 @@
-"""Database models re-exported from shared etranprocessing_db package."""
-
-from etranprocessing_db.models import (
-    ApiToken,
-    BalanceTerminalTsp,
+from etranprocessing_db.models.auth import ApiToken
+from etranprocessing_db.models.billing import (
     BillingOrder,
     BillingOrderItem,
     CertificatePin,
-    GateGaugeRecord,
+)
+from etranprocessing_db.models.menu import (
     Group,
-    License,
     MenuVariant,
+    Service,
+    TerminalMenuBinding,
+)
+from etranprocessing_db.models.org import (
     Org,
     OrgBillingSettings,
     OrgStatus,
+)
+from etranprocessing_db.models.payment import (
+    BalanceTerminalTsp,
     Payment,
     PaymentParam,
-    Service,
-    ServiceMenu,
-    TechGateRecord,
-    Terminal,
-    TerminalCertDiscovery,
-    TerminalCertHistory,
-    TerminalMenuBinding,
-    TerminalType,
     Tsp,
     TspParameterCode,
 )
+from etranprocessing_db.models.telemetry import (
+    GateGaugeRecord,
+    TechGateRecord,
+)
+from etranprocessing_db.models.terminal import (
+    License,
+    Terminal,
+    TerminalCertDiscovery,
+    TerminalCertHistory,
+    TerminalType,
+)
+
+# Alias for backward compatibility during migration
+ServiceMenu = Service
 
 __all__ = [
     "ApiToken",

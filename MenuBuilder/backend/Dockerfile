@@ -6,10 +6,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc libpq-dev && \
     rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml .
+COPY shared/ /shared/
+RUN pip install --no-cache-dir /shared
+
+COPY MenuBuilder/backend/pyproject.toml .
 RUN pip install --no-cache-dir .
 
-COPY app/ ./app/
+COPY MenuBuilder/backend/app/ ./app/
 
 EXPOSE 8000
 

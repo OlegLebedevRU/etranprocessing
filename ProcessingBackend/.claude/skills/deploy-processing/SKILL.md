@@ -68,9 +68,10 @@ Before initiating upload and container rebuild, verify host metrics and establis
 3. Set readiness mark: `[MCP Ops Readiness: READY]` or `[MCP Ops Readiness: UNAVAILABLE]`.
 4. **Non-blocking rule**: `[MCP Ops Readiness: UNAVAILABLE]` (или `DEGRADED`) **НЕ блокирует деплой (Non-Blocking)**. При недоступности MCP Ops немедленно продолжайте деплой через стандартный SSH-транспорт (шаги 1–5). Рекомендуется использовать флаг `ssh -n ...` для предотвращения блокировок stdin в Windows PowerShell.
 
-### Step 1: Upload backend
+### Step 1: Upload backend & shared package
 
 ```bash
+scp -i d:\.ssh\free-tier-cloud_ru -r "D:\repo\platerra\Public\etranprocessing\shared" user1@176.108.247.249:/home/user1/
 scp -i d:\.ssh\free-tier-cloud_ru -r "D:\repo\platerra\Public\etranprocessing\ProcessingBackend\backend\pyproject.toml" "D:\repo\platerra\Public\etranprocessing\ProcessingBackend\backend\Dockerfile" "D:\repo\platerra\Public\etranprocessing\ProcessingBackend\backend\app" "D:\repo\platerra\Public\etranprocessing\ProcessingBackend\backend\alembic" "D:\repo\platerra\Public\etranprocessing\ProcessingBackend\backend\alembic.ini" user1@176.108.247.249:/home/user1/ProcessingBackend/backend/
 ```
 

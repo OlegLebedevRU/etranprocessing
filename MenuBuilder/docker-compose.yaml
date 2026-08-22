@@ -1,6 +1,8 @@
 services:
   menubuilder-backend:
-    build: ./backend
+    build:
+      context: ..
+      dockerfile: MenuBuilder/backend/Dockerfile
     container_name: menubuilder-backend
     restart: always
     env_file:

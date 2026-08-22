@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from app.auth import get_current_user
 from app.config import settings
-from app.database import Base, async_session, engine
+from app.database import async_session
 from app.models import Group, MenuVariant, Service, TerminalMenuBinding
 from app.routers import (
     admin_organizations,
@@ -26,8 +26,6 @@ from app.routers import (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
     yield
 
 

@@ -1,5 +1,4 @@
-"""Database models re-exported from shared etranprocessing_db package."""
-
+from etranprocessing_db.base import Base
 from etranprocessing_db.models import (
     ApiToken,
     BalanceTerminalTsp,
@@ -30,6 +29,7 @@ from etranprocessing_db.models import (
 __all__ = [
     "ApiToken",
     "BalanceTerminalTsp",
+    "Base",
     "BillingOrder",
     "BillingOrderItem",
     "CertificatePin",

@@ -40,7 +40,8 @@ MenuBuilder (FastAPI + React frontend + JWT auth)
 
 | Directory / Subproject | Technology / Framework | Description | Entry Point / Key Files |
 |---|---|---|---|
-| **`ProcessingBackend/backend`** | Python 3.14, FastAPI, SQLAlchemy (asyncpg), Alembic | Core mTLS payment processing REST/XML API (payments, tech gate, license billing check, balance tracking, terminal menus `GET /api/ListMenuFile`, Alembic migrations) | `uvicorn app.main:app` |
+| **`shared/` (`etranprocessing_db`)** | Python 3.14, SQLAlchemy 2.0, asyncpg | Shared thin declarative ORM model layer for both backends (23 unified models, constraints, indexes). | `import etranprocessing_db` |
+| **`ProcessingBackend/backend`** | Python 3.14, FastAPI, SQLAlchemy (asyncpg), Alembic | Core mTLS payment processing REST/XML API (payments, tech gate, license billing check, balance tracking, terminal menus `GET /api/ListMenuFile`, sole authority for Alembic migrations) | `uvicorn app.main:app` |
 | **`ProcessingBackend/mcp-pin-server`** | Python 3.14, FastMCP / MCP SDK | Model Context Protocol server for PIN operations & certificate tools | `python -m pin_server.server` |
 | **`MenuBuilder/backend`** | Python 3.14, FastAPI, SQLAlchemy | Tenant/admin portal, terminal menu management, and **user billing API** (`/api/billing`, `/api/certificate-pin`, `/api/admin/organizations`) | `uvicorn app.main:app` |
 | **`MenuBuilder/frontend`** | React 19, TypeScript, Vite, Ant Design v6 | Web UI for configuring terminal payment menus, license cart, organizations, and billing (Code Splitting, Design Tokens, multi-tenant) | `npm run build` / `npm run dev` |
@@ -56,8 +57,11 @@ MenuBuilder (FastAPI + React frontend + JWT auth)
 
 ## 4. Development & Code Quality Guidelines
 
-### Python Standards
+### Python Standards & Backend Guidelines
 - **Python Version**: Target **Python 3.14** (`requires-python = "==3.14.*"`).
+- **Backend Guidelines**: Comprehensive standards are defined in **`ProcessingBackend/GUIDELINES.md`**.
+- **Shared DB Models (`shared/etranprocessing_db`)**: Single source of truth for all SQLAlchemy 2.0 ORM models for both `ProcessingBackend` and `MenuBuilder`.
+- **Thin DB Layer Principle**: `etranprocessing_db` contains *strictly* declarative models, constraints, and relationships. No business logic, auth/crypto utilities, or framework dependencies.
 - **Package Manager**: Use `uv` for dependency management and running tools.
 - **Linters & Formatters**: Before committing or deploying, ensure all three checks pass in Python subprojects:
   ```bash
@@ -65,7 +69,9 @@ MenuBuilder (FastAPI + React frontend + JWT auth)
   uv run ruff format <src_dir>
   uv run pyright <src_dir>
   ```
-- **Async Best Practices**: Use asynchronous SQLAlchemy 2.0 sessions (`AsyncSession`), `select()` syntax, and avoid blocking synchronous I/O.
+- **Async Best Practices**: Use asynchronous SQLAlchemy 2.0 sessions (`AsyncSession`), `select()` syntax with eager loading (`selectinload`), and avoid blocking synchronous I/O. Models use `Mapped[T] = mapped_column(...)`.
+- **FastAPI Dependency Injection**: `B008` is ignored; use `Depends()` in default argument positions.
+- **Python 3.14 Exception Handling**: Prefer `with contextlib.suppress(SpecificException):` over `try...except...pass` (enforces Ruff rule `SIM105`). Never use silent broad `except Exception: pass`. For cleanup/rollback paths, catch `Exception` explicitly and log or document intent (`with contextlib.suppress(Exception):`).
 
 ### Frontend Standards (MenuBuilder/frontend)
 - Use TypeScript with strict typing.

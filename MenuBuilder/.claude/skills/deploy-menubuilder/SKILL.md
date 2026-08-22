@@ -67,11 +67,12 @@ Before proceeding with build and deployment, check server health and establish t
 3. Set readiness mark: `[MCP Ops Readiness: READY]` or `[MCP Ops Readiness: UNAVAILABLE]`.
 4. **Non-blocking rule**: `[MCP Ops Readiness: UNAVAILABLE]` (или `DEGRADED`) **НЕ блокирует деплой (Non-Blocking)**. При недоступности MCP Ops немедленно продолжайте деплой через стандартный SSH-транспорт (шаги 1–6). Рекомендуется использовать флаг `ssh -n ...` для предотвращения блокировок stdin в Windows PowerShell.
 
-### Step 1: Upload backend (full rebuild)
+### Step 1: Upload backend & shared package (full rebuild)
 
-Upload pyproject.toml, Dockerfile, and app code:
+Upload shared package, pyproject.toml, Dockerfile, and app code:
 
 ```bash
+scp -i d:\.ssh\free-tier-cloud_ru -r "D:\repo\platerra\Public\etranprocessing\shared" user1@176.108.247.249:/home/user1/
 scp -i d:\.ssh\free-tier-cloud_ru -r "D:\repo\platerra\Public\etranprocessing\MenuBuilder\backend\pyproject.toml" "D:\repo\platerra\Public\etranprocessing\MenuBuilder\backend\Dockerfile" "D:\repo\platerra\Public\etranprocessing\MenuBuilder\backend\app" user1@176.108.247.249:/home/user1/MenuBuilder/backend/
 ```
 

@@ -14,7 +14,11 @@ dependencies = [
     "python-dateutil>=2.9.0",
     "pyjwt>=2.10.0",
     "alembic>=1.16.0",
+    "etranprocessing-db",
 ]
+
+[tool.uv.sources]
+etranprocessing-db = { path = "../../shared", editable = true }
 
 [dependency-groups]
 dev = [

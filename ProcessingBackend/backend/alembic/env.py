@@ -6,26 +6,31 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 from app.config import settings
-from app.database import Base
+from etranprocessing_db.base import Base
 
 # Import all models so Alembic can detect them
-from app.models import (  # noqa: F401
+from etranprocessing_db.models import (  # noqa: F401
     ApiToken,
     BalanceTerminalTsp,
     BillingOrder,
     BillingOrderItem,
     CertificatePin,
     GateGaugeRecord,
+    Group,
     License,
+    MenuVariant,
     Org,
     OrgBillingSettings,
     OrgStatus,
     Payment,
     PaymentParam,
+    Service,
     TechGateRecord,
     Terminal,
     TerminalCertDiscovery,
     TerminalCertHistory,
+    TerminalMenuBinding,
+    TerminalType,
     Tsp,
     TspParameterCode,
 )

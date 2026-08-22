@@ -6,12 +6,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc libpq-dev && \
     rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml .
+COPY shared/ /shared/
+RUN pip install --no-cache-dir /shared
+
+COPY ProcessingBackend/backend/pyproject.toml .
 RUN pip install --no-cache-dir .
 
-COPY app/ ./app/
-COPY alembic/ ./alembic/
-COPY alembic.ini .
+COPY ProcessingBackend/backend/app/ ./app/
+COPY ProcessingBackend/backend/alembic/ ./alembic/
+COPY ProcessingBackend/backend/alembic.ini .
 
 EXPOSE 8000
 
