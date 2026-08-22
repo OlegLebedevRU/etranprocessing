@@ -1,5 +1,7 @@
 # Certificates Service — Flow & Architecture
 
+> **Authoritative Architecture Reference**: See **[`docs/certificate-architecture.md`](../../docs/certificate-architecture.md)** for complete end-to-end mTLS reverse proxy routing, dual-issuer authentication rules, native C tooling (`tools/terminal-cert-installer`), and PowerShell testing scripts.
+
 ## Overview
 
 Certificates service handles terminal certificate enrollment via two legacy-compatible endpoints:

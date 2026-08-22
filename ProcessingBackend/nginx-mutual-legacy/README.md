@@ -77,9 +77,86 @@ sudo docker compose exec nginx-mutual nginx -t
 To redeploy after editing `legacy_ssl.conf`:
 
 ```bash
-scp nginx-configs/legacy_ssl.conf user1@87.242.100.34:/home/user1/nginx-mutual-legacy/nginx-configs/legacy_ssl.conf
-ssh user1@87.242.100.34 "cd /home/user1/nginx-mutual-legacy && sudo docker compose exec nginx-mutual nginx -t && sudo docker compose exec nginx-mutual nginx -s reload"
+scp -i d:\.ssh\id_ed25519 ProcessingBackend/nginx-mutual-legacy/nginx-configs/legacy_ssl.conf user1@87.242.100.34:/home/user1/nginx-mutual-legacy/nginx-configs/legacy_ssl.conf
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker exec nginx-mutual-legacy-nginx-mutual-1 nginx -t && sudo docker exec nginx-mutual-legacy-nginx-mutual-1 nginx -s reload"
 ```
+
+## Selective Endpoint Switching (Legacy <-> New Backend)
+
+The proxy configuration `legacy_ssl.conf` allows switching individual terminal services between the legacy backend (`46.38.51.114`) and the new Python backend (`new_processing_backend` -> `176.108.247.249:4443`):
+
+### 1. Certificates Flow (`/certificates/`)
+- **New Backend (Active)**:
+  ```nginx
+  location = /certificates/ {
+      proxy_pass https://new_processing_backend/api/certificates/$is_args$args;
+      proxy_ssl_verify off;
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_buffering off;
+  }
+  ```
+- **Rollback to Legacy**:
+  ```nginx
+  location = /certificates/ {
+      proxy_pass http://46.38.51.114/certificates/$is_args$args;
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_buffering off;
+  }
+  ```
+
+### 2. License Billing Flow (`/licensebilling/`)
+- **New Backend (Active)**:
+  ```nginx
+  location = /licensebilling/ {
+      proxy_pass https://new_processing_backend/api/licensebilling/$is_args$args;
+      proxy_ssl_verify off;
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_set_header X-Client-Cert-Serial $ssl_client_serial;
+      proxy_set_header X-Client-Cert-DN $ssl_client_s_dn;
+      proxy_set_header X-Client-Cert-Verified $ssl_client_verify;
+      proxy_set_header X-SSL-Client-Cert $ssl_client_escaped_cert;
+      proxy_buffering off;
+  }
+  ```
+- **Rollback to Legacy**:
+  ```nginx
+  location = /licensebilling/ {
+      mirror /_mirror_licensebilling;
+      mirror_request_body on;
+      proxy_pass http://46.38.51.114/licensebilling/$is_args$args;
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_set_header X-Client-Cert-Serial $ssl_client_serial;
+      proxy_set_header X-Client-Cert-DN $ssl_client_s_dn;
+      proxy_set_header X-Client-Cert-Verified $ssl_client_verify;
+      proxy_set_header X-SSL-Client-Cert $ssl_client_escaped_cert;
+      proxy_buffering off;
+  }
+  ```
+
+### 3. General Rule for Switching Any Endpoint
+To switch any service (e.g. `payment`, `techgate`, `GateGauge`):
+1. In `legacy_ssl.conf`, change `proxy_pass http://46.38.51.114/<path>` to `proxy_pass https://new_processing_backend/api/<path>`.
+2. Add `proxy_ssl_verify off;`.
+3. If the location had mirror directives (`mirror /_mirror_...`), disable or remove the mirror (since new backend is now the primary recipient).
+4. Deploy and reload Nginx via `scp` and `ssh ... nginx -s reload`.
+
+---
 
 The self-signed certificate is intentional (terminals do not validate it
 strictly - a known, accepted factor for this migration, per product

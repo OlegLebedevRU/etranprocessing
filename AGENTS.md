@@ -66,6 +66,34 @@ Detailed backend code standards, architecture rules, and patterns are documented
 | **`MenuBuilder/backend`** | Python 3.14, FastAPI, SQLAlchemy | Tenant & admin web portal, terminal menu management, and **user-facing billing API** (`/api/billing`, `/api/certificate-pin`, `/api/admin/organizations`, JWT authentication). | `uvicorn app.main:app` |
 | **`MenuBuilder/frontend`** | React 19, TypeScript, Vite, Ant Design v6 | Web UI for tenant administrators, terminal menu builder, license cart, and admin panels (Code Splitting, Design Tokens, multi-tenant). | `npm run build` / `npm run dev` |
 | **`ProcessingBackend/mcp-pin-server`** | Python 3.14, FastMCP / MCP SDK | Model Context Protocol server for PIN operations & certificate tools. | `python -m pin_server.server` |
+| **`tools/`** | C (Win32/CNG/CryptoAPI) / Python | Auxiliary CLI utilities for terminals and server management. | `tools/` |
+
+## C / C++ Toolchains & Build Tools (Local Development Machine)
+
+For building native Windows utilities in `tools/` (or examples like `D:\work\iot.leo4.ru\iot-rpc-rest-app\examples\c-win-clion-rpc-client`), two fully functional C/C++ toolchains are available on this machine:
+
+### 1. JetBrains CLion Bundled Toolchain (MinGW-w64 + CMake + Ninja)
+- **CMake**: `C:\Program Files\JetBrains\CLion 2025.2.4\bin\cmake\win\x64\bin\cmake.exe` (v4.2.2)
+- **GCC / MinGW**: `C:\Program Files\JetBrains\CLion 2025.2.4\bin\mingw\bin\gcc.exe` (GCC 13.1.0 x64)
+- **Ninja**: `C:\Program Files\JetBrains\CLion 2025.2.4\bin\ninja\win\x64\ninja.exe` (v1.13.2)
+- **Security & Network Libs**: `-lncrypt`, `-lcrypt32`, `-lwinhttp` available out of the box.
+- **Example CMake invocation**:
+  ```powershell
+  & "C:\Program Files\JetBrains\CLion 2025.2.4\bin\cmake\win\x64\bin\cmake.exe" -B build -G Ninja -DCMAKE_C_COMPILER="C:/Program Files/JetBrains/CLion 2025.2.4/bin/mingw/bin/gcc.exe" -DCMAKE_MAKE_PROGRAM="C:/Program Files/JetBrains/CLion 2025.2.4/bin/ninja/win/x64/ninja.exe"
+  & "C:\Program Files\JetBrains\CLion 2025.2.4\bin\cmake\win\x64\bin\cmake.exe" --build build --config Release
+  ```
+
+### 2. Microsoft Visual C++ Build Tools 2022 (MSVC) + Windows SDK 10
+- **Install path**: `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools`
+- **Compiler**: `cl.exe` (v19.44 for x86 & x64)
+- **Windows SDK**: 10.0.22621.0 (`ncrypt.lib`, `crypt32.lib`, `winhttp.lib`)
+- **Environment activation**:
+  - x64: `call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"`
+  - x86: `call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars32.bat"`
+- **Standalone Static Binary Compilation (`/MT` — zero runtime dependencies)**:
+  ```cmd
+  cmd /c "call ""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"" && cl.exe /O2 /MT main.c /link ncrypt.lib crypt32.lib winhttp.lib /OUT:tool.exe"
+  ```
 
 ## Infrastructure & Servers
 
@@ -74,6 +102,44 @@ Detailed backend code standards, architecture rules, and patterns are documented
   - Reverse proxy Nginx on port 443 routes `/api/billing/` and admin/portal routes to `menubuilder-backend:8000`, and terminal endpoints to `processing-backend:8000`.
 - **Legacy mTLS Reverse Proxy Server**: `87.242.100.34` (user: `user1`, SSH key: `d:\.ssh\id_ed25519`)
   - Runs `nginx-mutual-legacy` (terminates client mTLS and forwards requests to `176.108.247.249`).
+
+## Selective Endpoint Switching (Legacy vs New Backend)
+
+In `ProcessingBackend/nginx-mutual-legacy/nginx-configs/legacy_ssl.conf`, individual terminal endpoints can be switched between the legacy backend (`http://46.38.51.114`) and the new backend (`https://new_processing_backend/api/...` -> `176.108.247.249:4443`):
+
+1. **Active switched endpoints**:
+   - `/certificates/` -> `https://new_processing_backend/api/certificates/`
+   - `/licensebilling/` -> `https://new_processing_backend/api/licensebilling/`
+2. **Switching an endpoint to New Backend**:
+   - Change `proxy_pass http://46.38.51.114/<endpoint>` to `proxy_pass https://new_processing_backend/api/<endpoint>`.
+   - Add `proxy_ssl_verify off;`.
+   - If the endpoint had mirror directives (`mirror /_mirror_...`), disable or comment them out.
+3. **Rollback to Legacy Backend**:
+   - Change `proxy_pass https://new_processing_backend/api/<endpoint>` back to `proxy_pass http://46.38.51.114/<endpoint>`.
+   - Remove `proxy_ssl_verify off;`.
+   - Re-enable mirror directives if needed.
+4. **Deploying & Reloading Nginx**:
+   ```bash
+   scp -i d:\.ssh\id_ed25519 ProcessingBackend/nginx-mutual-legacy/nginx-configs/legacy_ssl.conf user1@87.242.100.34:/home/user1/nginx-mutual-legacy/nginx-configs/legacy_ssl.conf
+   ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker exec nginx-mutual-legacy-nginx-mutual-1 nginx -t && sudo docker exec nginx-mutual-legacy-nginx-mutual-1 nginx -s reload"
+   ```
+
+## Certificate Architecture & Terminal mTLS Rules
+
+Comprehensive documentation for the certificate subsystem, mTLS proxying, native C tools, and verification scripts is in **[`docs/certificate-architecture.md`](docs/certificate-architecture.md)**.
+
+### Key Rules for Certificate Management:
+1. **Serial Number Update Invariant**:
+   - `terminals.cert_serial` for new CA certificates (`iot.leo4.ru`, 40 hex chars) is updated **EXCLUSIVELY** in `POST /api/certificates/?function=setup`. No other flow can overwrite it.
+   - For legacy certificates (`SubCA`, $\le 20$ chars), `dependencies.py` auto-binds serials if unset or legacy, but will **never** overwrite a 40-character new CA serial.
+2. **Dual-Issuer Authentication (`get_current_terminal`)**:
+   - **New CA (`iot.leo4.ru`)**: Strict check `Terminal.sn == CN AND Terminal.cert_serial == Serial`. Rejects on mismatch with `401 Unauthorized` (`serial_mismatch`).
+   - **Legacy CA**: Lookup by `OU` (`device_id`) and `O` (`org_id`).
+3. **Native C Tooling & Windows Schannel**:
+   - When generating keys in CNG KSP (`ncrypt.dll`), private keys are non-exportable (`NCRYPT_EXPORT_POLICY_PROPERTY = 0`).
+   - In `CRYPT_KEY_PROV_INFO`, `dwKeySpec` **must be `0`** (not `0xFFFFFFFF`) for Windows Schannel / SSPI compatibility (`AcquireCredentialsHandleW`).
+4. **PowerShell mTLS Verification**:
+   - Use `[System.Net.HttpWebRequest]` with `$req.ClientCertificates.Add($cert)` to test terminal mTLS endpoints directly from Windows (see full scripts in `docs/certificate-architecture.md`).
 
 ## CI/CD — lessons learned (verified in production sessions)
 

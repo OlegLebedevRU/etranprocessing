@@ -247,7 +247,12 @@ async def get_current_terminal(
         ):
             terminal.cert_not_valid_after = cert_not_valid_after
 
-        if not terminal.cert_serial or terminal.cert_serial != cert_serial:
+        # Only auto-bind / update serial if terminal has no serial or current serial is also a legacy cert (<=20 hex chars).
+        # Do not overwrite a new CA 40-char serial with a legacy cert serial.
+        should_update_serial = not terminal.cert_serial or (
+            terminal.cert_serial != cert_serial and len(terminal.cert_serial) <= 20
+        )
+        if should_update_serial:
             val_status = "auto_bound" if not terminal.cert_serial else "serial_updated"
             terminal.cert_serial = cert_serial
             db.add(

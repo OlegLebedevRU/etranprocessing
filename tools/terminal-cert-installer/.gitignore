@@ -1,0 +1,6 @@
+obj/
+build/
+.idea/
+cmake-build-*/
+*.obj
+*.pdb

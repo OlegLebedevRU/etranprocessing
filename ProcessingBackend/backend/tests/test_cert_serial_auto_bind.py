@@ -121,6 +121,53 @@ async def test_auto_bind_cert_serial_for_legacy_terminal():
 
 
 @pytest.mark.anyio
+async def test_legacy_auth_does_not_overwrite_new_ca_serial():
+    """Legacy auth request should not overwrite an active 40-character new CA cert_serial."""
+    req = _make_mock_request(
+        path="/api/licensebilling",
+        dn="CN=A99D2F18001ECC93DF5CBE27F442C8FA,OU=773,O=1",
+        serial="52B8E528000400002E35",
+        issuer="CN=SubCA",
+    )
+
+    new_ca_serial = "20E0B7ED4A12548E80F8B987F04D075FE7C79878"
+    terminal = Terminal(
+        id=1671,
+        device_id=773,
+        sn="a4b0000773c12345d210826",
+        cert_serial=new_ca_serial,
+        org_id=1,
+        is_active=True,
+    )
+
+    mock_db = AsyncMock()
+    mock_db.add = MagicMock()
+
+    exec_result_ou = MagicMock()
+    exec_result_ou.scalar_one_or_none.return_value = terminal
+    exec_result_discovery = MagicMock()
+    exec_result_discovery.scalar_one_or_none.return_value = None
+
+    mock_db.execute.side_effect = [
+        exec_result_ou,
+        exec_result_discovery,
+    ]
+
+    res_terminal = await get_current_terminal(req, mock_db)
+
+    assert res_terminal is terminal
+    # Must preserve new CA serial
+    assert terminal.cert_serial == new_ca_serial
+    # No TerminalCertHistory added for legacy_auth
+    added_history = [
+        call[0][0]
+        for call in mock_db.add.call_args_list
+        if isinstance(call[0][0], TerminalCertHistory)
+    ]
+    assert len(added_history) == 0
+
+
+@pytest.mark.anyio
 async def test_new_ca_strict_auth_success():
     """New CA (iot.leo4.ru) validates strictly by sn + cert_serial."""
     req = _make_mock_request(
