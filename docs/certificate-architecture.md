@@ -358,3 +358,213 @@ Inspects terminal records, certificate binding, and certificate history on the r
 "SELECT id, terminal_id, cert_serial, source, issued_at FROM terminal_cert_history WHERE terminal_id = 1 ORDER BY id DESC LIMIT 5;" | `
     ssh -n -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249 "sudo docker exec -i iot-rpc-rest-app-pg-1 psql -U etran -d etranprocessing"
 ```
+
+---
+
+## 6. Terminal Verification Registry & Migration Diagnostics (Механика проверки списка верификации)
+
+During the migration of terminal endpoints (`/certificates`, `/licensebilling`, `/payment`, `/gategauge`) from legacy IIS to the new FastAPI backend, real-time tracking of terminal connectivity and response states is vital.
+
+### 6.1. Verification Registry Data Model & State Calculation
+
+Incoming mTLS requests are recorded by `cert_discovery.py` in the `terminal_cert_discovery` table (storing client cert DN, serial, endpoint, client IP, request counts, and timestamps). 
+
+The composite verification status of any terminal is calculated dynamically across four tables:
+- `terminal_cert_discovery` (`d`)
+- `terminals` (`t`)
+- `org_statuses` / `orgs` (`os`, `o`)
+- `licenses` (`l`)
+
+```
+                                    ┌────────────────────────┐
+                                    │ Incoming mTLS Request  │
+                                    └───────────┬────────────┘
+                                                │
+                                                ▼
+                                    ┌────────────────────────┐
+                                    │   Authentication Test  │
+                                    └───────┬────────┬───────┘
+                     Auth Failed (is_valid=f)│        │ Auth Success (is_valid=t)
+                                            ▼        ▼
+                      ┌──────────────────────┐      ┌────────────────────────┐
+                      │ HTTP 401 Unauthorized│      │  Terminal & Org Active │
+                      │ - terminal_not_found │      └───────┬────────┬───────┘
+                      │ - serial_mismatch    │        No    │        │ Yes
+                      │ - missing_headers    │       ───────┘        ▼
+                      └──────────────────────┘      ┌────────────────────────┐
+                                                    │  Active License Record │
+                                                    └───────┬────────┬───────┘
+                                                No / Expired│        │ Valid (expires >= NOW)
+                                                            ▼        ▼
+                                                    ┌──────────────┐ ┌──────────────┐
+                                                    │ <state>error │ │  <state>ok   │
+                                                    └──────────────┘ └──────────────┘
+```
+
+### 6.2. Status Categories in `<state>` Field
+
+| Calculated State | Root Cause | Description / Next Steps |
+|---|---|---|
+| **`<state>ok</state>`** | Valid terminal, active org, active license (`expires_at >= NOW()`). | Terminal is fully functional in the new backend. |
+| **`<state>error</state>` (license expired)** | `licenses.expires_at < NOW()` | Terminal license has expired. Terminal must purchase renewal via Billing Cart. |
+| **`<state>error</state>` (inactive terminal/org)** | `terminals.is_active = false` or `org_statuses.status = 'blocked'` | Terminal or organization deactivated in portal. |
+| **`HTTP 401 (terminal_not_found)`** | Certificate valid at Nginx, but terminal OU/O not yet imported into `terminals` table. | Requires legacy terminal import (see Runbook §6.4). |
+| **`HTTP 401 (serial_mismatch)`** | New CA cert presented (`iot.leo4.ru`), but Serial in cert $\ne$ Serial in DB. | Terminal certificate was reissued or forged; needs certificate renewal. |
+| **`HTTP 401 (missing_headers)`** | Request reached backend without mTLS client cert headers. | Request was unauthenticated or direct without client cert. |
+
+---
+
+### 6.3. Audit Verification Script (PowerShell / Remote Python)
+
+Run this one-liner from PowerShell to print a real-time status table of all terminals communicating with the new backend:
+
+```powershell
+@'
+import subprocess, json
+
+sql = """
+SELECT json_agg(row_to_json(q)) FROM (
+    SELECT 
+        d.id as disc_id,
+        d.terminal_id,
+        d.sn as disc_sn,
+        d.cert_serial,
+        d.ou,
+        d.o,
+        d.is_valid,
+        d.validation_status,
+        d.request_count,
+        d.last_endpoint,
+        d.client_ip,
+        d.first_seen_at,
+        d.last_seen_at,
+        t.id as term_id,
+        t.sn as term_sn,
+        t.device_id,
+        t.org_id,
+        t.is_active as term_is_active,
+        t.cert_serial as db_cert_serial,
+        o.org_name,
+        os.status as org_status,
+        l.id as license_id,
+        l.is_active as lic_is_active,
+        l.expires_at as lic_expires_at,
+        l.balance as lic_balance,
+        CASE
+            WHEN d.is_valid = false THEN 'HTTP 401 (' || d.validation_status || ')'
+            WHEN t.is_active = false THEN 'error'
+            WHEN os.status = 'blocked' THEN 'error'
+            WHEN l.id IS NULL THEN 'error'
+            WHEN l.is_active = false THEN 'error'
+            WHEN l.expires_at < NOW() THEN 'error'
+            ELSE 'ok'
+        END as calculated_state,
+        CASE
+            WHEN d.is_valid = false THEN 'Auth failed: ' || d.validation_status
+            WHEN t.is_active = false THEN 'Terminal inactive'
+            WHEN os.status = 'blocked' THEN 'Org blocked'
+            WHEN l.id IS NULL THEN 'No license record'
+            WHEN l.is_active = false THEN 'License inactive'
+            WHEN l.expires_at < NOW() THEN 'License expired (' || to_char(l.expires_at, 'DD.MM.YYYY') || ')'
+            ELSE 'Active license until ' || to_char(l.expires_at, 'DD.MM.YYYY')
+        END as reason
+    FROM terminal_cert_discovery d
+    LEFT JOIN terminals t ON t.id = d.terminal_id
+    LEFT JOIN orgs o ON o.org_id = t.org_id
+    LEFT JOIN org_statuses os ON os.org_id = t.org_id
+    LEFT JOIN licenses l ON l.terminal_id = t.id AND l.is_active = true
+    ORDER BY d.id
+) q;
+"""
+
+out = subprocess.check_output([
+    'sudo', 'docker', 'exec', '-i', 'iot-rpc-rest-app-pg-1',
+    'psql', '-U', 'etran', '-d', 'etranprocessing', '-t', '-A', '-c', sql
+]).decode()
+
+data = json.loads(out)
+terminals = {}
+unauth = []
+
+for item in data:
+    tid = item.get('term_id')
+    if tid is not None:
+        if tid not in terminals:
+            terminals[tid] = {
+                'term_id': tid,
+                'device_id': item['device_id'],
+                'sn': item['term_sn'],
+                'org_id': item['org_id'],
+                'org_name': item['org_name'],
+                'state': item['calculated_state'],
+                'reason': item['reason'],
+                'balance': item['lic_balance'],
+                'lic_expires_at': item['lic_expires_at'][:10] if item['lic_expires_at'] else '—',
+                'cert_serial': item['db_cert_serial'] or item['cert_serial'],
+                'total_requests': item['request_count'],
+                'last_seen': item['last_seen_at'][:19] if item['last_seen_at'] else '—',
+                'last_endpoint': item['last_endpoint']
+            }
+        else:
+            terminals[tid]['total_requests'] += item['request_count']
+            if item.get('last_seen_at') and item['last_seen_at'] > terminals[tid]['last_seen']:
+                terminals[tid]['last_seen'] = item['last_seen_at'][:19]
+                terminals[tid]['last_endpoint'] = item['last_endpoint']
+                terminals[tid]['cert_serial'] = item['cert_serial']
+    else:
+        unauth.append(item)
+
+sorted_terms = sorted(terminals.values(), key=lambda x: (x['org_id'] or 0, x['device_id'] or 0))
+
+print(f"Total Authenticated Terminals: {len(sorted_terms)} | Total Unauthenticated Records: {len(unauth)}")
+print("-" * 120)
+print(f"{'TermID':<8}{'DevID':<8}{'SN':<26}{'OrgID':<8}{'State':<10}{'Balance':<10}{'LicUntil':<12}{'Requests':<10}{'OrgName'}")
+print("-" * 120)
+for t in sorted_terms:
+    print(f"{t['term_id']:<8}{t['device_id']:<8}{t['sn']:<26}{t['org_id']:<8}{t['state']:<10}{t['balance']:<10}{t['lic_expires_at']:<12}{t['total_requests']:<10}{t['org_name']}")
+
+if unauth:
+    print("\n" + "=" * 120)
+    print("UNAUTHENTICATED TERMINAL DISCOVERY RECORDS (Action Needed):")
+    print("=" * 120)
+    for u in unauth:
+        print(f"Discovery ID: {u['disc_id']} | OU: {u['ou']} | O: {u['o']} | Status: {u['validation_status']} | Reqs: {u['request_count']} | IP: {u['client_ip']} | Last Seen: {u['last_seen_at']}")
+'@ | ssh -n -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249 "python3"
+```
+
+---
+
+### 6.4. Runbook: Importing a Missing Legacy Terminal
+
+When an unauthenticated terminal appears in discovery logs with `validation_status = 'terminal_not_found'` (e.g. `OU=346, O=516`):
+
+1. **Query Legacy MS SQL (`172.17.100.1`)**:
+   ```powershell
+   $connStr = 'Server=172.17.100.1;Database=Service;User Id=ai-agent;Password=ai-agent;TrustServerCertificate=True;Connect Timeout=10;'
+   $conn = New-Object System.Data.SqlClient.SqlConnection($connStr)
+   $conn.Open()
+   $cmd = $conn.CreateCommand()
+   $cmd.CommandText = "SELECT kiosk_id, number, org_id, status, license FROM Kiosks WHERE number = 346 AND org_id = 516"
+   $da = New-Object System.Data.SqlClient.SqlDataAdapter($cmd)
+   $dt = New-Object System.Data.DataTable
+   [void]$da.Fill($dt)
+   $conn.Close()
+   $dt | Format-Table -AutoSize
+   ```
+
+2. **Generate Standard Platform Serial Number (SN)**:
+   Platform formula: `a4b<7-digit device_id>c<5-digit random>d<DDMMYY>`
+   Implemented in `ProcessingBackend/backend/app/services/sn.py: generate_device_sn(device_id)`.
+
+3. **Execute Synchronous Import via Python on Primary Server**:
+   ```python
+   # Inside processing-backend container:
+   # 1. OrgStatus(org_id=516, status='active')
+   # 2. Terminal(id=kiosk_id, device_id=number, sn=generate_device_sn(number), org_id=org_id, is_active=True, cert_serial=legacy_serial)
+   # 3. License(terminal_id=kiosk_id, org_id=org_id, expires_at=legacy_license_date, is_active=True, renewal_enabled=True, balance=0)
+   # 4. CertificatePin(pin=pin, terminal_id=kiosk_id, org_id=org_id, status='used', creation_source='system')
+   # 5. TerminalCertDiscovery update (terminal_id=kiosk_id, is_valid=True, validation_status='valid')
+   ```
+
+4. **Verify Immediate Authentication**:
+   Check `processing-backend` container logs: subsequent requests from the terminal will immediately return `HTTP 200 OK` with `<state>ok</state>`.

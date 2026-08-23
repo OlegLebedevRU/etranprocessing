@@ -140,6 +140,10 @@ Comprehensive documentation for the certificate subsystem, mTLS proxying, native
    - In `CRYPT_KEY_PROV_INFO`, `dwKeySpec` **must be `0`** (not `0xFFFFFFFF`) for Windows Schannel / SSPI compatibility (`AcquireCredentialsHandleW`).
 4. **PowerShell mTLS Verification**:
    - Use `[System.Net.HttpWebRequest]` with `$req.ClientCertificates.Add($cert)` to test terminal mTLS endpoints directly from Windows (see full scripts in `docs/certificate-architecture.md`).
+5. **Terminal Verification Registry & Discovery Audit**:
+   - The state of all terminals is tracked in real-time by joining `terminal_cert_discovery` + `terminals` + `org_statuses` + `licenses`.
+   - When migrating endpoints to the new backend, execute the verification audit script from `docs/certificate-architecture.md §6.3` to inspect all connected terminals.
+   - Any unauthenticated terminals (`validation_status = 'terminal_not_found'`, e.g., `OU=346, O=516`) must be imported from legacy MS SQL (`172.17.100.1`) with a generated platform SN (`a4b<7-digit dev_id>c<5-digit rand>d<DDMMYY>`), `OrgStatus(org_id, 'active')`, `License`, and `CertificatePin` (`creation_source='system'`) as described in `docs/certificate-architecture.md §6.4`.
 
 ## CI/CD — lessons learned (verified in production sessions)
 
