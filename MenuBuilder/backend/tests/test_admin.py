@@ -240,8 +240,8 @@ async def test_admin_terminals_flow():
             )
             res.all.return_value = [(term, "Platerra Org", "Стандартный")]
             res.scalar_one_or_none.return_value = None
-            res.scalars.return_value.first.return_value = None
-            res.scalars.return_value.all.return_value = []
+            res.scalars.return_value.first.return_value = term
+            res.scalars.return_value.all.return_value = [term]
             return res
         elif "FROM licenses" in sql_str:
             lic = License(
@@ -385,3 +385,28 @@ async def test_admin_terminals_flow():
         assert resp.status_code == 200
         status_resp = resp.json()
         assert status_resp["is_active"] is False
+
+        # 8. Provision to Leo4 IoT
+        resp = await client.post(
+            "/api/admin/terminals/1/provision-iot",
+            headers=headers,
+        )
+        assert resp.status_code == 200
+        prov_data = resp.json()
+        assert prov_data["terminal_id"] == 1
+        assert prov_data["device_id"] == 101
+        assert prov_data["iot_provisioned"] is True
+        assert prov_data["success"] is True
+
+        # 9. Batch provision to Leo4 IoT
+        mock_db.execute = AsyncMock(side_effect=mock_execute)
+        resp = await client.post(
+            "/api/admin/terminals/provision-iot-batch",
+            json={"terminal_ids": [1]},
+            headers=headers,
+        )
+        assert resp.status_code == 200
+        batch_data = resp.json()
+        assert len(batch_data["results"]) == 1
+        assert batch_data["results"][0]["terminal_id"] == 1
+        assert batch_data["results"][0]["iot_provisioned"] is True

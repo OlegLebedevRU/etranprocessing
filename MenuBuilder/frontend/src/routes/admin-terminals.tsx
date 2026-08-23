@@ -23,6 +23,8 @@ import {
 import type { ColumnsType } from "antd/es/table";
 import {
   CalendarOutlined,
+  CloudOutlined,
+  CloudUploadOutlined,
   CopyOutlined,
   DownOutlined,
   EditOutlined,
@@ -40,6 +42,8 @@ import {
   getAdminTerminals,
   getNextDeviceId,
   getTerminalTypes,
+  provisionBatchTerminalsToIot,
+  provisionTerminalToIot,
   setTerminalLicense,
   setTerminalStatus,
   updateAdminTerminal,
@@ -94,6 +98,13 @@ export default function AdminTerminalsPage() {
   const [licenseTerminal, setLicenseTerminal] = useState<AdminTerminal | null>(null);
   const [licenseForm] = Form.useForm();
   const [licenseSubmitting, setLicenseSubmitting] = useState(false);
+
+  // Leo4 IoT Provisioning state
+  const [provisionModalOpen, setProvisionModalOpen] = useState(false);
+  const [provisioningTerminal, setProvisioningTerminal] = useState<AdminTerminal | null>(null);
+  const [provisionSubmitting, setProvisionSubmitting] = useState(false);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [batchProvisionLoading, setBatchProvisionLoading] = useState(false);
 
   // Load dictionaries
   useEffect(() => {
@@ -318,6 +329,67 @@ export default function AdminTerminalsPage() {
     }
   };
 
+  // --- Leo4 IoT Provisioning Handlers ---
+  const handleOpenProvisionModal = (term: AdminTerminal) => {
+    setProvisioningTerminal(term);
+    setProvisionModalOpen(true);
+  };
+
+  const handleConfirmProvision = async () => {
+    if (!provisioningTerminal) return;
+    setProvisionSubmitting(true);
+    try {
+      const res = await provisionTerminalToIot(provisioningTerminal.id);
+      if (res.success) {
+        message.success(
+          `Терминал #${provisioningTerminal.device_id} успешно зарегистрирован в Leo4 IoT`
+        );
+        setTerminals((prev) =>
+          prev.map((t) =>
+            t.id === provisioningTerminal.id
+              ? {
+                  ...t,
+                  iot_provisioned: true,
+                  iot_provisioned_at: res.iot_provisioned_at || new Date().toISOString(),
+                  iot_is_online: res.iot_is_online,
+                }
+              : t
+          )
+        );
+        setProvisionModalOpen(false);
+      } else {
+        message.error(`Ошибка провиженинга: ${res.error || "Неизвестная ошибка"}`);
+      }
+    } catch (err: any) {
+      message.error(
+        `Не удалось выполнить провиженинг: ${
+          err?.response?.data?.detail || err.message || "Ошибка соединения"
+        }`
+      );
+    } finally {
+      setProvisionSubmitting(false);
+    }
+  };
+
+  const handleBatchProvision = async () => {
+    if (selectedRowKeys.length === 0) return;
+    setBatchProvisionLoading(true);
+    try {
+      const res = await provisionBatchTerminalsToIot(selectedRowKeys as number[]);
+      message.success(`Провиженинг выполнен для ${res.results.length} терминалов`);
+      fetchTerminals();
+      setSelectedRowKeys([]);
+    } catch (err: any) {
+      message.error(
+        `Ошибка массового провиженинга: ${
+          err?.response?.data?.detail || err.message || "Ошибка соединения"
+        }`
+      );
+    } finally {
+      setBatchProvisionLoading(false);
+    }
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     message.success("Скопировано в буфер обмена");
@@ -452,6 +524,42 @@ export default function AdminTerminalsPage() {
       ),
     },
     {
+      title: "Leo4 IoT",
+      key: "iot_status",
+      width: 150,
+      render: (_, record) => {
+        if (!record.iot_provisioned) {
+          return <span style={{ color: "#8c8c8c" }}>—</span>;
+        }
+        const provDate = record.iot_provisioned_at
+          ? new Date(record.iot_provisioned_at).toLocaleDateString("ru-RU", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+            })
+          : "";
+        return (
+          <Tooltip
+            title={
+              <div>
+                <div>Зарегистрирован в Leo4 IoT: {provDate || "Да"}</div>
+                {record.iot_last_connected_at && (
+                  <div>
+                    Посл. активность:{" "}
+                    {new Date(record.iot_last_connected_at).toLocaleString("ru-RU")}
+                  </div>
+                )}
+              </div>
+            }
+          >
+            <Tag color={record.iot_is_online ? "success" : "blue"} icon={<CloudOutlined />}>
+              {record.iot_is_online ? "Онлайн" : "Зарегистрирован"}
+            </Tag>
+          </Tooltip>
+        );
+      },
+    },
+    {
       title: "Адрес / Примечание",
       key: "info",
       render: (_, record) => (
@@ -491,6 +599,14 @@ export default function AdminTerminalsPage() {
             icon: <CalendarOutlined />,
             label: "Установить дату лицензии",
             onClick: () => handleOpenLicenseModal(record),
+          },
+          {
+            key: "iot_provision",
+            icon: <CloudOutlined />,
+            label: record.iot_provisioned
+              ? "Синхронизировать с Leo4 IoT"
+              : "Зарегистрировать в Leo4 IoT",
+            onClick: () => handleOpenProvisionModal(record),
           },
           {
             type: "divider" as const,
@@ -610,10 +726,25 @@ export default function AdminTerminalsPage() {
             Сбросить фильтры
           </Button>
         )}
+
+        {selectedRowKeys.length > 0 && (
+          <Button
+            type="primary"
+            icon={<CloudUploadOutlined />}
+            loading={batchProvisionLoading}
+            onClick={handleBatchProvision}
+          >
+            Провиженинг в Leo4 IoT ({selectedRowKeys.length})
+          </Button>
+        )}
       </div>
 
       <Table
         rowKey="id"
+        rowSelection={{
+          selectedRowKeys,
+          onChange: (keys: React.Key[]) => setSelectedRowKeys(keys),
+        }}
         loading={loading}
         columns={columns}
         dataSource={terminals}
@@ -981,6 +1112,59 @@ export default function AdminTerminalsPage() {
             </Paragraph>
           )}
         </div>
+      </Modal>
+
+      {/* Modal: Leo4 IoT Provisioning Confirmation */}
+      <Modal
+        title="Провиженинг в Leo4 IoT Platform"
+        open={provisionModalOpen}
+        onCancel={() => setProvisionModalOpen(false)}
+        onOk={handleConfirmProvision}
+        confirmLoading={provisionSubmitting}
+        okText="Подтвердить провиженинг"
+        cancelText="Отмена"
+        width={500}
+        destroyOnClose
+      >
+        {provisioningTerminal && (
+          <div style={{ marginTop: 12 }}>
+            <Alert
+              type="info"
+              showIcon
+              message="Регистрация в Leo4 IoT Platform"
+              description="Терминал будет зарегистрирован в платформе Leo4 IoT с автоматическим созданием прав доступа для подключения к брокеру RabbitMQ по mTLS. Общий CA сертификатов обеспечивает сквозную взаимную аутентификацию по SN."
+              style={{ marginBottom: 16 }}
+            />
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div>
+                <Text type="secondary">Номер терминала (OU / device_id): </Text>
+                <Text strong>#{provisioningTerminal.device_id}</Text>
+              </div>
+              <div>
+                <Text type="secondary">Серийный номер (SN / CN): </Text>
+                <Text code copyable>{provisioningTerminal.sn}</Text>
+              </div>
+              <div>
+                <Text type="secondary">Организация: </Text>
+                <Text strong>{provisioningTerminal.org_name || `ID ${provisioningTerminal.org_id}`}</Text>
+              </div>
+              <div>
+                <Text type="secondary">Статус сертификата: </Text>
+                {provisioningTerminal.cert_serial ? (
+                  <Tag color="cyan">Привязан (до {provisioningTerminal.cert_not_valid_after || "—"})</Tag>
+                ) : (
+                  <Tag color="default">Не привязан (будет авторизован после ввода PIN)</Tag>
+                )}
+              </div>
+              {provisioningTerminal.iot_provisioned && (
+                <div>
+                  <Text type="secondary">Текущий статус в Leo4: </Text>
+                  <Tag color="blue">Уже зарегистрирован (будут обновлены права ACL)</Tag>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </Modal>
     </Card>
   );

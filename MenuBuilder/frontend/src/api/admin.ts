@@ -100,6 +100,11 @@ export interface AdminTerminal {
   pending_pin?: string | null;
   pin_expires_at?: string | null;
   pin_status?: string | null;
+  iot_provisioned?: boolean;
+  iot_provisioned_at?: string | null;
+  iot_last_sync_at?: string | null;
+  iot_is_online?: boolean;
+  iot_last_connected_at?: string | null;
 }
 
 export interface AdminTerminalListResponse {
@@ -255,6 +260,42 @@ export async function setTerminalStatus(
   const { data } = await client.post<AdminTerminal>(
     `/admin/terminals/${terminalId}/set-status`,
     { is_active: isActive }
+  );
+  return data;
+}
+
+export interface ProvisionTerminalResponse {
+  success: boolean;
+  terminal_id: number;
+  device_id: number;
+  sn: string;
+  org_id: number;
+  iot_provisioned: boolean;
+  iot_provisioned_at?: string | null;
+  iot_is_online: boolean;
+  rmq_user_status?: string | null;
+  error?: string | null;
+}
+
+export interface BatchProvisionTerminalsResponse {
+  results: ProvisionTerminalResponse[];
+}
+
+export async function provisionTerminalToIot(
+  terminalId: number
+): Promise<ProvisionTerminalResponse> {
+  const { data } = await client.post<ProvisionTerminalResponse>(
+    `/admin/terminals/${terminalId}/provision-iot`
+  );
+  return data;
+}
+
+export async function provisionBatchTerminalsToIot(
+  terminalIds: number[]
+): Promise<BatchProvisionTerminalsResponse> {
+  const { data } = await client.post<BatchProvisionTerminalsResponse>(
+    "/admin/terminals/provision-iot-batch",
+    { terminal_ids: terminalIds }
   );
   return data;
 }

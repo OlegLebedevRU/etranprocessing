@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import secrets
 from datetime import UTC, datetime, timedelta
@@ -21,13 +22,17 @@ from app.schemas import (
     AdminTerminalListResponse,
     AdminTerminalRead,
     AdminTerminalUpdate,
+    BatchProvisionTerminalsRequest,
+    BatchProvisionTerminalsResponse,
     GeneratePinResponse,
     NextDeviceIdResponse,
+    ProvisionTerminalResponse,
     SetLicenseRequest,
     SetLicenseResponse,
     SetStatusRequest,
     TerminalTypeRead,
 )
+from app.services.iot_client import iot_client
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +67,50 @@ async def generate_unique_cert_pin(db: AsyncSession) -> str:
     raise HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail="Failed to generate unique PIN after multiple attempts",
+    )
+
+
+def _build_admin_terminal_read(
+    term: Terminal,
+    org_name: str | None = None,
+    tt_name: str | None = None,
+    lic: License | None = None,
+    pin_obj: CertificatePin | None = None,
+) -> AdminTerminalRead:
+    return AdminTerminalRead(
+        id=term.id,
+        device_id=term.device_id,
+        sn=term.sn,
+        cert_serial=term.cert_serial,
+        cert_not_valid_after=term.cert_not_valid_after,
+        org_id=term.org_id,
+        org_name=org_name,
+        is_active=term.is_active,
+        address=term.address,
+        note=term.note,
+        terminal_type_id=term.terminal_type_id,
+        terminal_type_name=tt_name,
+        created_at=term.created_at,
+        updated_at=term.updated_at,
+        license_id=lic.id if lic else None,
+        license_expires_at=lic.expires_at if lic else None,
+        license_is_active=lic.is_active if lic else None,
+        license_balance=lic.balance if lic else None,
+        license_type=lic.license_type if lic else None,
+        billing_period_months=lic.billing_period_months if lic else None,
+        monthly_price_override_minor=(
+            lic.monthly_price_override_minor if lic else None
+        ),
+        renewal_enabled=lic.renewal_enabled if lic else None,
+        deactivation_requested_at=(lic.deactivation_requested_at if lic else None),
+        pending_pin=pin_obj.pin if pin_obj else None,
+        pin_expires_at=pin_obj.expires_at if pin_obj else None,
+        pin_status=pin_obj.status if pin_obj else None,
+        iot_provisioned=term.iot_provisioned or False,
+        iot_provisioned_at=term.iot_provisioned_at,
+        iot_last_sync_at=term.iot_last_sync_at,
+        iot_is_online=term.iot_is_online or False,
+        iot_last_connected_at=term.iot_last_connected_at,
     )
 
 
@@ -205,37 +254,12 @@ async def list_terminals(
         pin_obj = pins_map.get(term.id)
 
         items.append(
-            AdminTerminalRead(
-                id=term.id,
-                device_id=term.device_id,
-                sn=term.sn,
-                cert_serial=term.cert_serial,
-                cert_not_valid_after=term.cert_not_valid_after,
-                org_id=term.org_id,
+            _build_admin_terminal_read(
+                term=term,
                 org_name=org_name,
-                is_active=term.is_active,
-                address=term.address,
-                note=term.note,
-                terminal_type_id=term.terminal_type_id,
-                terminal_type_name=terminal_type_name,
-                created_at=term.created_at,
-                updated_at=term.updated_at,
-                license_id=lic.id if lic else None,
-                license_expires_at=lic.expires_at if lic else None,
-                license_is_active=lic.is_active if lic else None,
-                license_balance=lic.balance if lic else None,
-                license_type=lic.license_type if lic else None,
-                billing_period_months=lic.billing_period_months if lic else None,
-                monthly_price_override_minor=(
-                    lic.monthly_price_override_minor if lic else None
-                ),
-                renewal_enabled=lic.renewal_enabled if lic else None,
-                deactivation_requested_at=(
-                    lic.deactivation_requested_at if lic else None
-                ),
-                pending_pin=pin_obj.pin if pin_obj else None,
-                pin_expires_at=pin_obj.expires_at if pin_obj else None,
-                pin_status=pin_obj.status if pin_obj else None,
+                tt_name=terminal_type_name,
+                lic=lic,
+                pin_obj=pin_obj,
             )
         )
 
@@ -326,30 +350,12 @@ async def create_terminal(
         if tt:
             tt_name = tt.name
 
-    return AdminTerminalRead(
-        id=terminal.id,
-        device_id=terminal.device_id,
-        sn=terminal.sn,
-        cert_serial=terminal.cert_serial,
-        cert_not_valid_after=terminal.cert_not_valid_after,
-        org_id=terminal.org_id,
+    return _build_admin_terminal_read(
+        term=terminal,
         org_name=org.org_name,
-        is_active=terminal.is_active,
-        address=terminal.address,
-        note=terminal.note,
-        terminal_type_id=terminal.terminal_type_id,
-        terminal_type_name=tt_name,
-        created_at=terminal.created_at,
-        updated_at=terminal.updated_at,
-        license_id=license_entry.id,
-        license_expires_at=license_entry.expires_at,
-        license_is_active=license_entry.is_active,
-        license_balance=license_entry.balance,
-        license_type=license_entry.license_type,
-        billing_period_months=license_entry.billing_period_months,
-        monthly_price_override_minor=license_entry.monthly_price_override_minor,
-        renewal_enabled=license_entry.renewal_enabled,
-        deactivation_requested_at=license_entry.deactivation_requested_at,
+        tt_name=tt_name,
+        lic=license_entry,
+        pin_obj=None,
     )
 
 
@@ -457,35 +463,12 @@ async def update_terminal(
     )
     pin_obj = pin_res.scalars().first()
 
-    return AdminTerminalRead(
-        id=terminal.id,
-        device_id=terminal.device_id,
-        sn=terminal.sn,
-        cert_serial=terminal.cert_serial,
-        cert_not_valid_after=terminal.cert_not_valid_after,
-        org_id=terminal.org_id,
+    return _build_admin_terminal_read(
+        term=terminal,
         org_name=org.org_name if org else None,
-        is_active=terminal.is_active,
-        address=terminal.address,
-        note=terminal.note,
-        terminal_type_id=terminal.terminal_type_id,
-        terminal_type_name=tt_name,
-        created_at=terminal.created_at,
-        updated_at=terminal.updated_at,
-        license_id=lic.id if lic else None,
-        license_expires_at=lic.expires_at if lic else None,
-        license_is_active=lic.is_active if lic else None,
-        license_balance=lic.balance if lic else None,
-        license_type=lic.license_type if lic else None,
-        billing_period_months=lic.billing_period_months if lic else None,
-        monthly_price_override_minor=(
-            lic.monthly_price_override_minor if lic else None
-        ),
-        renewal_enabled=lic.renewal_enabled if lic else None,
-        deactivation_requested_at=(lic.deactivation_requested_at if lic else None),
-        pending_pin=pin_obj.pin if pin_obj else None,
-        pin_expires_at=pin_obj.expires_at if pin_obj else None,
-        pin_status=pin_obj.status if pin_obj else None,
+        tt_name=tt_name,
+        lic=lic,
+        pin_obj=pin_obj,
     )
 
 
@@ -627,6 +610,7 @@ async def set_terminal_status(
         if tt:
             tt_name = tt.name
 
+    # Fetch pending pin if any
     pin_res = await db.execute(
         select(CertificatePin)
         .where(
@@ -637,33 +621,141 @@ async def set_terminal_status(
     )
     pin_obj = pin_res.scalars().first()
 
-    return AdminTerminalRead(
-        id=terminal.id,
+    return _build_admin_terminal_read(
+        term=terminal,
+        org_name=org.org_name if org else None,
+        tt_name=tt_name,
+        lic=lic,
+        pin_obj=pin_obj,
+    )
+
+
+@router.post(
+    "/terminals/{terminal_id}/provision-iot",
+    response_model=ProvisionTerminalResponse,
+)
+async def provision_terminal_to_iot(
+    terminal_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_superuser),
+) -> ProvisionTerminalResponse:
+    """Provision a terminal into Leo4 IoT Platform & RabbitMQ (Superuser only)."""
+    terminal = await db.get(Terminal, terminal_id)
+    if not terminal:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Terminal with ID {terminal_id} not found",
+        )
+
+    org = await db.get(Org, terminal.org_id)
+    org_name = org.org_name if org else None
+
+    # Call Leo4 IoT Platform
+    try:
+        iot_res = await iot_client.provision_terminal(
+            device_id=terminal.device_id,
+            sn=terminal.sn,
+            org_id=terminal.org_id,
+            name=org_name or f"Terminal {terminal.device_id}",
+            tags={"source": "etranprocessing", "address": terminal.address or ""},
+        )
+    except Exception as e:
+        logger.exception(
+            "Failed to provision terminal %d in Leo4 IoT", terminal.device_id
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to communicate with Leo4 IoT Platform: {e}",
+        ) from e
+
+    now = datetime.now(UTC)
+    terminal.iot_provisioned = True
+    terminal.iot_provisioned_at = terminal.iot_provisioned_at or now
+    terminal.iot_last_sync_at = now
+    terminal.iot_is_online = bool(iot_res.get("is_online", False))
+    if iot_res.get("connected_at"):
+        conn_at = iot_res["connected_at"]
+        if isinstance(conn_at, str):
+            with contextlib.suppress(ValueError):
+                terminal.iot_last_connected_at = datetime.fromisoformat(conn_at)
+
+    await db.commit()
+    await db.refresh(terminal)
+
+    return ProvisionTerminalResponse(
+        success=bool(iot_res.get("success", True)),
+        terminal_id=terminal.id,
         device_id=terminal.device_id,
         sn=terminal.sn,
-        cert_serial=terminal.cert_serial,
-        cert_not_valid_after=terminal.cert_not_valid_after,
         org_id=terminal.org_id,
-        org_name=org.org_name if org else None,
-        is_active=terminal.is_active,
-        address=terminal.address,
-        note=terminal.note,
-        terminal_type_id=terminal.terminal_type_id,
-        terminal_type_name=tt_name,
-        created_at=terminal.created_at,
-        updated_at=terminal.updated_at,
-        license_id=lic.id if lic else None,
-        license_expires_at=lic.expires_at if lic else None,
-        license_is_active=lic.is_active if lic else None,
-        license_balance=lic.balance if lic else None,
-        license_type=lic.license_type if lic else None,
-        billing_period_months=lic.billing_period_months if lic else None,
-        monthly_price_override_minor=(
-            lic.monthly_price_override_minor if lic else None
-        ),
-        renewal_enabled=lic.renewal_enabled if lic else None,
-        deactivation_requested_at=(lic.deactivation_requested_at if lic else None),
-        pending_pin=pin_obj.pin if pin_obj else None,
-        pin_expires_at=pin_obj.expires_at if pin_obj else None,
-        pin_status=pin_obj.status if pin_obj else None,
+        iot_provisioned=terminal.iot_provisioned,
+        iot_provisioned_at=terminal.iot_provisioned_at,
+        iot_is_online=terminal.iot_is_online,
+        rmq_user_status=iot_res.get("rmq_user_status"),
+        error=iot_res.get("error"),
     )
+
+
+@router.post(
+    "/terminals/provision-iot-batch",
+    response_model=BatchProvisionTerminalsResponse,
+)
+async def provision_batch_terminals_to_iot(
+    body: BatchProvisionTerminalsRequest,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_superuser),
+) -> BatchProvisionTerminalsResponse:
+    """Batch provision multiple terminals into Leo4 IoT Platform (Superuser only)."""
+    if not body.terminal_ids:
+        return BatchProvisionTerminalsResponse(results=[])
+
+    res = await db.execute(select(Terminal).where(Terminal.id.in_(body.terminal_ids)))
+    terminals = res.scalars().all()
+    if not terminals:
+        return BatchProvisionTerminalsResponse(results=[])
+
+    terminals_payload = [
+        {
+            "device_id": t.device_id,
+            "sn": t.sn,
+            "org_id": t.org_id,
+            "tags": {"source": "etranprocessing"},
+        }
+        for t in terminals
+    ]
+
+    try:
+        batch_results = await iot_client.provision_batch_terminals(terminals_payload)
+    except Exception as e:
+        logger.exception("Failed batch provisioning in Leo4 IoT")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to communicate with Leo4 IoT Platform: {e}",
+        ) from e
+
+    now = datetime.now(UTC)
+    results_map = {r["device_id"]: r for r in batch_results if "device_id" in r}
+
+    responses: list[ProvisionTerminalResponse] = []
+    for t in terminals:
+        r_info = results_map.get(t.device_id, {})
+        t.iot_provisioned = True
+        t.iot_provisioned_at = t.iot_provisioned_at or now
+        t.iot_last_sync_at = now
+        t.iot_is_online = bool(r_info.get("is_online", False))
+        responses.append(
+            ProvisionTerminalResponse(
+                success=bool(r_info.get("success", True)),
+                terminal_id=t.id,
+                device_id=t.device_id,
+                sn=t.sn,
+                org_id=t.org_id,
+                iot_provisioned=t.iot_provisioned,
+                iot_provisioned_at=t.iot_provisioned_at,
+                iot_is_online=t.iot_is_online,
+                rmq_user_status=r_info.get("rmq_user_status"),
+                error=r_info.get("error"),
+            )
+        )
+    await db.commit()
+    return BatchProvisionTerminalsResponse(results=responses)

@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     cert_pin_ttl_hours: int = 24
     cert_expiring_soon_days: int = 30
 
+    # Leo4 IoT Platform Provisioning
+    iot_rpc_base_url: str = ""
+    iot_rpc_service_token: str = ""
+    iot_rpc_timeout_seconds: float = 10.0
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

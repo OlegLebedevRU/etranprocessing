@@ -25,6 +25,10 @@ export interface MonitoringTerminal {
   terminal_type_id?: number;
   terminal_type_name?: string | null;
   created_at?: string | null;
+  iot_provisioned?: boolean;
+  iot_provisioned_at?: string | null;
+  iot_is_online?: boolean;
+  iot_last_connected_at?: string | null;
 }
 
 export interface MonitoringResponse {

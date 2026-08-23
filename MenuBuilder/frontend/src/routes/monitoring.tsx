@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { Button, Card, Input, message, Space, Table, Tooltip, Typography } from "antd";
-import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
+import { CloudOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { getMonitoring, MonitoringTerminal } from "../api/monitoring";
 import PageHeader from "../components/PageHeader";
 import { formatDate } from "../utils/billing";
@@ -136,10 +136,29 @@ export default function MonitoringPage() {
       title: "Терминал",
       dataIndex: "device_id",
       key: "device_id",
-      render: (v: number) => (
-        <Text strong style={{ fontSize: 12 }}>
-          {String(v).padStart(8, "\u00A0")}
-        </Text>
+      render: (v: number, record: MonitoringTerminal) => (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+          <Text strong style={{ fontSize: 12 }}>
+            {String(v).padStart(8, "\u00A0")}
+          </Text>
+          {record.iot_provisioned && (
+            <Tooltip
+              title={
+                record.iot_provisioned_at
+                  ? `Зарегистрирован в Leo4 IoT (${new Date(record.iot_provisioned_at).toLocaleDateString("ru-RU")})`
+                  : "Зарегистрирован в Leo4 IoT"
+              }
+            >
+              <CloudOutlined
+                style={{
+                  fontSize: 12,
+                  color: "#94a3b8",
+                  cursor: "default",
+                }}
+              />
+            </Tooltip>
+          )}
+        </span>
       ),
     },
     {

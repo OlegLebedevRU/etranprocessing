@@ -268,7 +268,8 @@ async def get_monitoring(
                 text(
                     f"SELECT t.id, t.device_id, t.sn, t.org_id, t.is_active, "
                     f"t.cert_serial, t.cert_not_valid_after, t.address, t.note, "
-                    f"t.terminal_type_id, tt.name AS terminal_type_name, t.created_at "
+                    f"t.terminal_type_id, tt.name AS terminal_type_name, t.created_at, "
+                    f"t.iot_provisioned, t.iot_provisioned_at, t.iot_is_online, t.iot_last_connected_at "
                     f"FROM terminals t "
                     f"LEFT JOIN terminal_types tt ON tt.id = t.terminal_type_id "
                     f"WHERE {where_clause} "
@@ -458,6 +459,18 @@ async def get_monitoring(
                 if t[10] is not None
                 else ("Стандартный" if (t[9] == 0 or t[9] is None) else f"Тип {t[9]}"),
                 "created_at": t[11].isoformat() if len(t) > 11 and t[11] else None,
+                "iot_provisioned": bool(t[12])
+                if len(t) > 12 and t[12] is not None
+                else False,
+                "iot_provisioned_at": t[13].isoformat()
+                if len(t) > 13 and t[13]
+                else None,
+                "iot_is_online": bool(t[14])
+                if len(t) > 14 and t[14] is not None
+                else False,
+                "iot_last_connected_at": t[15].isoformat()
+                if len(t) > 15 and t[15]
+                else None,
             }
         )
 

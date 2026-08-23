@@ -228,6 +228,11 @@ class AdminTerminalRead(BaseModel):
     pending_pin: str | None = None
     pin_expires_at: datetime | None = None
     pin_status: str | None = None
+    iot_provisioned: bool = False
+    iot_provisioned_at: datetime | None = None
+    iot_last_sync_at: datetime | None = None
+    iot_is_online: bool = False
+    iot_last_connected_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -291,3 +296,24 @@ class SetStatusRequest(BaseModel):
 
 class NextDeviceIdResponse(BaseModel):
     next_device_id: int
+
+
+class ProvisionTerminalResponse(BaseModel):
+    success: bool
+    terminal_id: int
+    device_id: int
+    sn: str
+    org_id: int
+    iot_provisioned: bool
+    iot_provisioned_at: datetime | None = None
+    iot_is_online: bool = False
+    rmq_user_status: str | None = None
+    error: str | None = None
+
+
+class BatchProvisionTerminalsRequest(BaseModel):
+    terminal_ids: list[int]
+
+
+class BatchProvisionTerminalsResponse(BaseModel):
+    results: list[ProvisionTerminalResponse]
