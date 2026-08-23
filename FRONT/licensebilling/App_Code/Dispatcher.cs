@@ -84,7 +84,7 @@ namespace Dispatcher
                     qparams = HttpUtility.ParseQueryString(Context.Request.Url.Query);
                 }
 
-string SerialNumber = ClientCertHelper.GetSerialNumber(Context);
+                string SerialNumber = ClientCertHelper.GetDBSerialNumber(Context);
                 //string SerialNumber = "8171";
 GlobalObjectsManager.Logger.Info("X-Client-Cert-Serial: " + Context.Request.Headers["X-Client-Cert-Serial"]);
 		GlobalObjectsManager.Logger.Info("=============");

@@ -41,10 +41,17 @@ public class main : IHttpHandler
                 GlobalObjectsManager.Logger.Info((object)"разобрали стрингу");
                 //string serialNumber = Context.Request.ClientCertificate.SerialNumber;
                 //int sn = int.Parse(serialNumber.Remove(0, serialNumber.Length - 11).Replace("-", ""), NumberStyles.HexNumber);
-	int sn = int.Parse(ClientCertHelper.GetSerialNumber(Context));
-                GlobalObjectsManager.Logger.Info((object)"получили сн");
-                int terminalNum = this.GetTerminalNum(sn);
+                int sn = 0;
+                int.TryParse(ClientCertHelper.GetSerialNumber(Context), out sn);
+                GlobalObjectsManager.Logger.Info((object)("получили сн: " + sn));
+                int terminalNum = sn != 0 ? this.GetTerminalNum(sn) : 0;
                 GlobalObjectsManager.Logger.Info((object)("получили номер терма " + (object)terminalNum));
+                if (terminalNum == 0 && ClientCertHelper.IsNewCA(Context))
+                {
+                    GlobalObjectsManager.Logger.Info((object)"Новый CA (iot.leo4.ru) detected, fallback to OU lookup");
+                    terminalNum = ClientCertHelper.GetTerminalNumByOU(Context);
+                    GlobalObjectsManager.Logger.Info((object)("OU lookup result: " + terminalNum));
+                }
                 if (terminalNum != 0)
                 {
                     this.IX_PROCESS_TRANSACTION(terminalNum);

@@ -55,7 +55,15 @@ public class UpdateScript : IHttpHandler {
           }));
                 //string serialNumber = Context.Request.ClientCertificate.SerialNumber;
                 //if (SqlSp.GetKioskId(int.Parse(serialNumber.Remove(0, serialNumber.Length - 11).Replace("-", ""), NumberStyles.HexNumber), out KioskId))
-                if (SqlSp.GetKioskId(int.Parse(ClientCertHelper.GetSerialNumber(Context)), out KioskId))
+                int sn = 0;
+                int.TryParse(ClientCertHelper.GetDBSerialNumber(Context), out sn);
+                bool foundKiosk = (sn != 0 && SqlSp.GetKioskId(sn, out KioskId));
+                if (!foundKiosk && ClientCertHelper.IsNewCA(Context))
+                {
+                    KioskId = ClientCertHelper.GetKioskIdByOU(Context);
+                    if (KioskId != 0) foundKiosk = true;
+                }
+                if (foundKiosk)
                 {
                     GlobalObjectsManager.Logger.Info((object)("UpdateScript KioskId " + (object)KioskId + " try get script"));
                     if (SqlSp.GetKioskUpdateScript(KioskId, Number, sysUpdateError, out Script))

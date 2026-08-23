@@ -23,7 +23,7 @@ namespace TechGate
 		//string serialNumber = ClientCertHelper.GetSerialNumber(Context);
 
             //string str1 = int.Parse(serialNumber.Remove(0, serialNumber.Length - 11).Replace("-", ""), NumberStyles.HexNumber).ToString();
-string str1 = ClientCertHelper.GetSerialNumber(Context);
+            string str1 = ClientCertHelper.GetDBSerialNumber(Context);
             GlobalObjectsManager.Logger.Info((object)("InkassProcessor serial_number:" + str1));
             qparams.Add("serial_number", str1);
             string str2 = closeshift.DateFix(qparams["InkassDateTime"]);

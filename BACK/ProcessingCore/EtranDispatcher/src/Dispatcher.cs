@@ -787,7 +787,7 @@ namespace EtranDispatcher
                 // proxy (X-Client-Cert-* headers) - see ClientCertHelper.
                 string Subject = ClientCertHelper.GetDN(Context);
                 int.TryParse(ClientCertHelper.GetO(Context), out org_id);
-                string SerialNumber = ClientCertHelper.GetSerialNumber(Context);
+                string SerialNumber = ClientCertHelper.GetDBSerialNumber(Context);
 
                 TotalSum = (TotalSum == null) ? "0" : TotalSum;
 

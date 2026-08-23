@@ -19,7 +19,7 @@ namespace TechGate
       //string serialNumber = Context.Request.ClientCertificate.SerialNumber;
 //string serialNumber = ClientCertHelper.GetSerialNumber(Context);
 //      string str = int.Parse(serialNumber.Remove(0, serialNumber.Length - 11).Replace("-", ""), NumberStyles.HexNumber).ToString();
-string str = ClientCertHelper.GetSerialNumber(Context);
+      string str = ClientCertHelper.GetDBSerialNumber(Context);
       GlobalObjectsManager.Logger.Info((object) ("serial_number:" + str));
       new DBManager(EtranConfigurationManager.DBConn).Execute("DeviceLog_Put", CommandType.StoredProcedure, DBManager.DataReadType.ExecuteNonQuery, new NameValueCollection()
       {

@@ -1,5 +1,7 @@
 using System;
 using System.Configuration;
+using System.Data;
+using System.Data.SqlClient;
 using System.Linq;
 using System.Web;
 
@@ -66,6 +68,20 @@ namespace EtranDispatcher
             return "";
         }
 
+        public static bool IsNewCA(HttpContext context)
+        {
+            string issuer = "";
+            if (IsProxyMode(context))
+            {
+                issuer = context.Request.Headers["X-Client-Cert-Issuer-DN"] ?? "";
+            }
+            if (string.IsNullOrEmpty(issuer) && context.Request.ClientCertificate.IsPresent)
+            {
+                issuer = context.Request.ClientCertificate.Issuer ?? "";
+            }
+            return issuer.IndexOf("iot.leo4.ru", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
         public static string GetDN(HttpContext context)
         {
             if (IsProxyMode(context))
@@ -73,12 +89,97 @@ namespace EtranDispatcher
                 string dn = context.Request.Headers["X-Client-Cert-DN"];
                 if (!string.IsNullOrEmpty(dn)) return dn;
             }
-            return context.Request.ClientCertificate.Subject;
+            if (context.Request.ClientCertificate.IsPresent)
+            {
+                return context.Request.ClientCertificate.Subject ?? "";
+            }
+            return "";
         }
 
         public static string GetCN(HttpContext context) { return ParseDN(GetDN(context), "CN"); }
         public static string GetO(HttpContext context) { return ParseDN(GetDN(context), "O"); }
         public static string GetOU(HttpContext context) { return ParseDN(GetDN(context), "OU"); }
+
+        public static int GetTerminalNumByOU(HttpContext context)
+        {
+            string ou = GetOU(context);
+            if (string.IsNullOrEmpty(ou) || !ou.All(char.IsDigit))
+                return 0;
+
+            int deviceId;
+            if (!int.TryParse(ou, out deviceId))
+                return 0;
+
+            try
+            {
+                using (SqlConnection connection = new SqlConnection(GlobalObjectsManager.PaymentDbConnectionString))
+                {
+                    connection.Open();
+                    using (SqlCommand cmd = new SqlCommand("SELECT TOP 1 number FROM [service].[dbo].Kiosks WHERE number = @num", connection))
+                    {
+                        cmd.Parameters.Add("@num", SqlDbType.Int).Value = deviceId;
+                        using (SqlDataReader reader = cmd.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                int res = int.Parse(reader.GetValue(0).ToString());
+                                GlobalObjectsManager.Logger.Info("GetTerminalNumByOU: resolved terminal number=" + res + " for OU=" + ou);
+                                return res;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                GlobalObjectsManager.Logger.Error("GetTerminalNumByOU error:", ex);
+            }
+            return 0;
+        }
+
+        public static string GetDBSerialNumber(HttpContext context)
+        {
+            string serial = GetSerialNumber(context);
+
+            if (!IsNewCA(context))
+                return serial;
+
+            string ou = GetOU(context);
+            if (string.IsNullOrEmpty(ou) || !ou.All(char.IsDigit))
+                return serial;
+
+            int deviceId;
+            if (!int.TryParse(ou, out deviceId))
+                return serial;
+
+            try
+            {
+                using (SqlConnection connection = new SqlConnection(GlobalObjectsManager.PaymentDbConnectionString))
+                {
+                    connection.Open();
+                    using (SqlCommand cmd = new SqlCommand(
+                        "SELECT TOP 1 c.serial_number FROM [service].[dbo].Certificates c JOIN [service].[dbo].Kiosks k ON c.kiosk_id = k.kiosk_id WHERE k.number = @num AND c.status_id < 3 ORDER BY c.update_datetime DESC",
+                        connection))
+                    {
+                        cmd.Parameters.Add("@num", SqlDbType.Int).Value = deviceId;
+                        using (SqlDataReader reader = cmd.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                string dbSerial = reader.GetValue(0).ToString();
+                                GlobalObjectsManager.Logger.Info("GetDBSerialNumber: resolved serial=" + dbSerial + " for OU=" + ou);
+                                return dbSerial;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                GlobalObjectsManager.Logger.Error("GetDBSerialNumber error:", ex);
+            }
+            return serial;
+        }
 
         public static bool IsVerified(HttpContext context)
         {
@@ -97,7 +198,7 @@ namespace EtranDispatcher
             {
                 string t = part.Trim();
                 if (t.StartsWith(field + "=", StringComparison.OrdinalIgnoreCase))
-                    return t.Substring(field.Length + 1);
+                    return t.Substring(field.Length + 1).Trim();
             }
             return null;
         }

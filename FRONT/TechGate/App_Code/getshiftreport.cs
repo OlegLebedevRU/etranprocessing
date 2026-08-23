@@ -60,21 +60,22 @@ namespace TechGate
 
     public static string ProcessMessage(NameValueCollection qparams, ref HttpContext Context)
     {
-      string subject = Context.Request.ClientCertificate.Subject;
+      string subject = ClientCertHelper.GetDN(Context);
       GlobalObjectsManager.Logger.Info((object) ("Subject:" + subject));
-      NameValueCollection nameValueCollection = Collection.GetNameValueCollection(subject, ",", "=");
-      string str1 = nameValueCollection["E"];
-      string s = nameValueCollection["O"];
-      int num1 = int.Parse(s);
+      string str1 = ClientCertHelper.GetDNField(Context, "E");
+      string s = ClientCertHelper.GetDNField(Context, "O");
+      int num1 = 0;
+      int.TryParse(s, out num1);
       GlobalObjectsManager.Logger.Info((object) ("O: " + s + " E: " + str1));
-      string str2 = "org@e-transfer.ru";
-      if (str1.IndexOf(str2) == -1)
-        throw new Exception("ошибка сертификата");
-      string str3 = subject.Remove(0, subject.IndexOf("CN=") + "CN=".Length);
-      GlobalObjectsManager.Logger.Info((object) ("cn:" + str3.Remove(str3.IndexOf(","), str3.Length - str3.IndexOf(","))));
-     // string serialNumber = Context.Request.ClientCertificate.SerialNumber;
-string serialNumber = ClientCertHelper.GetSerialNumber(Context);
-//      GlobalObjectsManager.Logger.Info((object) ("SerialNumber:" + int.Parse(serialNumber.Remove(0, serialNumber.Length - 11).Replace("-", ""), NumberStyles.HexNumber).ToString()));
+      if (!ClientCertHelper.IsNewCA(Context))
+      {
+        string str2 = "org@e-transfer.ru";
+        if (!string.IsNullOrEmpty(str1) && str1.IndexOf(str2) == -1)
+          throw new Exception("ошибка сертификата");
+      }
+      string str3 = ClientCertHelper.GetDNField(Context, "CN");
+      GlobalObjectsManager.Logger.Info((object) ("cn:" + str3));
+      string serialNumber = ClientCertHelper.GetDBSerialNumber(Context);
       GlobalObjectsManager.Logger.Info((object) ("SerialNumber:" + serialNumber));
       int num2 = qparams["function"] == "getshiftreport" ? 1 : 2;
       int num3 = int.Parse(qparams["KioskNumber"].ToString());
