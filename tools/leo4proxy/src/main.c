@@ -27,6 +27,26 @@ static void pause_if_explorer(void) {
     }
 }
 
+static LONG WINAPI unhandled_exception_handler(EXCEPTION_POINTERS* pExp) {
+    FILE* f = NULL;
+    fopen_s(&f, "leo4proxy_crash.log", "a");
+    if (f) {
+        fprintf(f, "\n=== LEO4PROXY CRASH REPORT ===\n");
+        fprintf(f, "Exception Code:    0x%08lX\n", pExp->ExceptionRecord->ExceptionCode);
+        fprintf(f, "Exception Address: 0x%p\n", pExp->ExceptionRecord->ExceptionAddress);
+        fprintf(f, "Exception Flags:   0x%08lX\n", pExp->ExceptionRecord->ExceptionFlags);
+        fclose(f);
+    }
+    fprintf(stderr, "\n===============================================================================\n");
+    fprintf(stderr, "[FATAL] Unhandled Exception: 0x%08lX at address 0x%p\n",
+            pExp->ExceptionRecord->ExceptionCode, pExp->ExceptionRecord->ExceptionAddress);
+    fprintf(stderr, "Crash details saved to leo4proxy_crash.log\n");
+    fprintf(stderr, "===============================================================================\n");
+
+    pause_if_explorer();
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+
 static BOOL WINAPI console_ctrl_handler(DWORD ctrlType) {
     switch (ctrlType) {
         case CTRL_C_EVENT:
@@ -130,6 +150,9 @@ static void print_usage(const char* exeName) {
 }
 
 int main(int argc, char* argv[]) {
+    // Install global unhandled exception filter
+    SetUnhandledExceptionFilter(unhandled_exception_handler);
+
     // Disable stdout/stderr buffering for real-time logs
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);

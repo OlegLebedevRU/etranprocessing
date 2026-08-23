@@ -483,8 +483,8 @@ int schannel_recv(SChannelSession* session, void* out_data, int max_len) {
 
         if (ss == SEC_E_INCOMPLETE_MESSAGE) {
             // Need more data from socket
-            if (session->recvBufLen >= session->recvBufAlloc) {
-                session->recvBufAlloc *= 2;
+            if (session->recvBufAlloc - session->recvBufLen < 4096) {
+                session->recvBufAlloc += 16384;
                 BYTE* newBuf = (BYTE*)realloc(session->recvBuf, session->recvBufAlloc);
                 if (!newBuf) return -1;
                 session->recvBuf = newBuf;

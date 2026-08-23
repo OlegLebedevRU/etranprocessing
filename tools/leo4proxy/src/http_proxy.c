@@ -98,13 +98,21 @@ static unsigned __stdcall http_client_worker(void* param) {
     CredHandle hCred = args->hCred;
     free(args);
 
+    char* reqBuf = (char*)malloc(65536);
+    char* modifiedReq = (char*)malloc(131072);
+    if (!reqBuf || !modifiedReq) {
+        if (reqBuf) free(reqBuf);
+        if (modifiedReq) free(modifiedReq);
+        closesocket(clientSock);
+        return 1;
+    }
+
     // 1. Read HTTP request from local client
-    char reqBuf[65536];
     int reqLen = 0;
     char* headerEnd = NULL;
 
-    while (reqLen < (int)sizeof(reqBuf) - 1) {
-        int r = recv(clientSock, reqBuf + reqLen, (int)sizeof(reqBuf) - 1 - reqLen, 0);
+    while (reqLen < 65536 - 1) {
+        int r = recv(clientSock, reqBuf + reqLen, 65536 - 1 - reqLen, 0);
         if (r <= 0) break;
         reqLen += r;
         reqBuf[reqLen] = '\0';
@@ -122,8 +130,8 @@ static unsigned __stdcall http_client_worker(void* param) {
             int headerBytes = (int)(headerEnd + 4 - reqBuf);
             int bodyBytes = reqLen - headerBytes;
 
-            while (bodyBytes < contentLen && reqLen < (int)sizeof(reqBuf) - 1) {
-                int r2 = recv(clientSock, reqBuf + reqLen, (int)sizeof(reqBuf) - 1 - reqLen, 0);
+            while (bodyBytes < contentLen && reqLen < 65536 - 1) {
+                int r2 = recv(clientSock, reqBuf + reqLen, 65536 - 1 - reqLen, 0);
                 if (r2 <= 0) break;
                 reqLen += r2;
                 reqBuf[reqLen] = '\0';
@@ -134,6 +142,8 @@ static unsigned __stdcall http_client_worker(void* param) {
     }
 
     if (reqLen <= 0 || !headerEnd) {
+        free(reqBuf);
+        free(modifiedReq);
         closesocket(clientSock);
         return 1;
     }
@@ -147,6 +157,8 @@ static unsigned __stdcall http_client_worker(void* param) {
     // Handle CORS preflight OPTIONS
     if (_stricmp(method, "OPTIONS") == 0) {
         send_http_response(clientSock, 204, "No Content", "text/plain", "", certDetails->sn);
+        free(reqBuf);
+        free(modifiedReq);
         closesocket(clientSock);
         return 0;
     }
@@ -157,12 +169,16 @@ static unsigned __stdcall http_client_worker(void* param) {
         _stricmp(path, "/status") == 0 ||
         _stricmp(path, "/info") == 0) {
         handle_info_request(clientSock, config, certDetails);
+        free(reqBuf);
+        free(modifiedReq);
         closesocket(clientSock);
         return 0;
     }
 
     if (_stricmp(path, "/_leo4/sn") == 0 || _stricmp(path, "/sn") == 0) {
         handle_sn_request(clientSock, certDetails);
+        free(reqBuf);
+        free(modifiedReq);
         closesocket(clientSock);
         return 0;
     }
@@ -176,21 +192,19 @@ static unsigned __stdcall http_client_worker(void* param) {
     // Build modified request to forward
     // Extract body if any
     const char* bodyStart = headerEnd + 4;
-
-    char modifiedReq[131072];
     int modLen = 0;
 
     // Line 1: method path version
-    modLen += snprintf(modifiedReq + modLen, sizeof(modifiedReq) - modLen, "%s %s %s\r\n", method, path, version);
+    modLen += snprintf(modifiedReq + modLen, 131072 - modLen, "%s %s %s\r\n", method, path, version);
 
     // Inject Host and X-Leo4-Proxy-Sn headers
     if (config->http_remote_port == 443) {
-        modLen += snprintf(modifiedReq + modLen, sizeof(modifiedReq) - modLen, "Host: %s\r\n", config->http_remote_host);
+        modLen += snprintf(modifiedReq + modLen, 131072 - modLen, "Host: %s\r\n", config->http_remote_host);
     } else {
-        modLen += snprintf(modifiedReq + modLen, sizeof(modifiedReq) - modLen, "Host: %s:%d\r\n", config->http_remote_host, config->http_remote_port);
+        modLen += snprintf(modifiedReq + modLen, 131072 - modLen, "Host: %s:%d\r\n", config->http_remote_host, config->http_remote_port);
     }
-    modLen += snprintf(modifiedReq + modLen, sizeof(modifiedReq) - modLen, "X-Leo4-Proxy-Sn: %s\r\n", certDetails->sn);
-    modLen += snprintf(modifiedReq + modLen, sizeof(modifiedReq) - modLen, "Connection: close\r\n");
+    modLen += snprintf(modifiedReq + modLen, 131072 - modLen, "X-Leo4-Proxy-Sn: %s\r\n", certDetails->sn);
+    modLen += snprintf(modifiedReq + modLen, 131072 - modLen, "Connection: close\r\n");
 
     // Copy original headers skipping Host and Connection
     char* lineStart = strstr(reqBuf, "\r\n");
@@ -205,7 +219,7 @@ static unsigned __stdcall http_client_worker(void* param) {
                 if (_strnicmp(lineStart, "Host:", 5) != 0 &&
                     _strnicmp(lineStart, "Connection:", 11) != 0 &&
                     _strnicmp(lineStart, "X-Leo4-Proxy-Sn:", 16) != 0) {
-                    if (modLen + lineLen + 2 < (int)sizeof(modifiedReq)) {
+                    if (modLen + lineLen + 2 < 131072) {
                         memcpy(modifiedReq + modLen, lineStart, lineLen);
                         modLen += lineLen;
                         memcpy(modifiedReq + modLen, "\r\n", 2);
@@ -218,17 +232,19 @@ static unsigned __stdcall http_client_worker(void* param) {
     }
 
     // End of headers
-    if (modLen + 2 < (int)sizeof(modifiedReq)) {
+    if (modLen + 2 < 131072) {
         memcpy(modifiedReq + modLen, "\r\n", 2);
         modLen += 2;
     }
 
     // Append body if present
     int bodyBytes = reqLen - (int)(bodyStart - reqBuf);
-    if (bodyBytes > 0 && modLen + bodyBytes < (int)sizeof(modifiedReq)) {
+    if (bodyBytes > 0 && modLen + bodyBytes < 131072) {
         memcpy(modifiedReq + modLen, bodyStart, bodyBytes);
         modLen += bodyBytes;
     }
+
+    free(reqBuf); // reqBuf no longer needed
 
     // Connect to backend via SChannel
     SChannelSession tlsSession;
@@ -237,12 +253,15 @@ static unsigned __stdcall http_client_worker(void* param) {
                 config->http_remote_host, config->http_remote_port);
         const char* errJson = "{\"error\": \"Failed to connect to upstream backend\"}";
         send_http_response(clientSock, 502, "Bad Gateway", "application/json", errJson, certDetails->sn);
+        free(modifiedReq);
         closesocket(clientSock);
         return 1;
     }
 
     // Send HTTP request over TLS
     int sent = schannel_send(&tlsSession, modifiedReq, modLen);
+    free(modifiedReq); // modifiedReq no longer needed
+
     if (sent <= 0) {
         fprintf(stderr, "[HTTP-PROXY] Failed to send request over TLS\n");
         const char* errJson = "{\"error\": \"Failed to send request to upstream\"}";
