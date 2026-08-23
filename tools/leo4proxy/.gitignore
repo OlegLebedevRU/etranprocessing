@@ -1,0 +1,9 @@
+obj/
+build/
+.idea/
+cmake-build-*/
+*.obj
+*.pdb
+.pytest_cache/
+__pycache__/
+*.pyc

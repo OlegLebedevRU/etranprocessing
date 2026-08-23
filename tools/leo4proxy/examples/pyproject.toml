@@ -1,0 +1,10 @@
+[project]
+name = "leo4proxy-examples"
+version = "0.1.0"
+description = "Leo4Proxy Python examples"
+requires-python = ">=3.10"
+dependencies = [
+    "paho-mqtt>=2.0.0",
+    "pydantic>=2.0.0",
+    "tzdata; sys_platform == 'win32'",
+]
