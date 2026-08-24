@@ -176,6 +176,9 @@ async def test_terminal_bindings_list_terminals():
         0,
         "Стандартный",
         datetime(2026, 1, 1, tzinfo=UTC),
+        1,
+        datetime(2026, 1, 1, tzinfo=UTC),
+        1,
     )
 
     executed_queries = []
@@ -407,7 +410,7 @@ async def test_payments_report_tsp_name_resolution():
 
     mock_session = AsyncMock()
 
-    # (paym_id, paym_datetime, paym_amount, paym_ext_id, paym_tsp_code, paym_state, pay_type_id, device_id, sn)
+    # (paym_id, paym_datetime, paym_amount, paym_ext_id, paym_tsp_code, paym_state, pay_type_id, device_id, sn, menu_snapshot_id)
     paym_row1 = (
         1001,
         datetime(2026, 8, 21, 10, 0, 0, tzinfo=UTC),
@@ -418,6 +421,7 @@ async def test_payments_report_tsp_name_resolution():
         1,
         209,
         "SN209",
+        None,
     )
     paym_row2 = (
         1002,
@@ -429,6 +433,7 @@ async def test_payments_report_tsp_name_resolution():
         1,
         209,
         "SN209",
+        None,
     )
 
     async def mock_execute(stmt, params=None):

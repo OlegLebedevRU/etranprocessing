@@ -149,9 +149,34 @@ export default function TerminalsPage() {
       render: (_: any, record: TerminalInfo) => {
         if (!record.menu_variant_name) return <Text type="secondary" style={{ fontSize: 11 }}>—</Text>;
         const stats = record.menu_variant_id ? statsMap[record.menu_variant_id] : null;
+
+        let versionTag = null;
+        if (record.is_latest) {
+          versionTag = (
+            <Tag color="success" style={{ margin: 0, fontSize: 10 }}>
+              v{record.loaded_version} (актуальная)
+            </Tag>
+          );
+        } else if (record.loaded_version) {
+          versionTag = (
+            <Tag color="warning" style={{ margin: 0, fontSize: 10 }}>
+              v{record.loaded_version} (на сервере v{record.current_version ?? "?"})
+            </Tag>
+          );
+        } else {
+          versionTag = (
+            <Tag color="default" style={{ margin: 0, fontSize: 10 }}>
+              Не загружена (на сервере v{record.current_version ?? "?"})
+            </Tag>
+          );
+        }
+
         return (
-          <Space size={4} style={{ flexWrap: "nowrap" }}>
-            <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>{record.menu_variant_name}</Tag>
+          <Space size={4} direction="vertical" style={{ gap: 2 }}>
+            <Space size={4} style={{ flexWrap: "nowrap" }}>
+              <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>{record.menu_variant_name}</Tag>
+              {versionTag}
+            </Space>
             {stats && (
               <Text type="secondary" style={{ fontSize: 10, whiteSpace: "nowrap" }}>
                 Групп: {stats.groups} / Услуг: {stats.services}
@@ -284,7 +309,10 @@ export default function TerminalsPage() {
           value={modalVariantId}
           onChange={setModalVariantId}
           style={{ width: "100%" }}
-          options={variants.map((v) => ({ value: v.id, label: v.name }))}
+          options={variants.map((v) => ({
+            value: v.id,
+            label: `${v.name} (v${v.version ?? 1})`,
+          }))}
           showSearch
           optionFilterProp="label"
         />

@@ -4,6 +4,7 @@ export interface MenuVariant {
   id: number;
   org_id?: number;
   name: string;
+  version?: number;
   created_at: string;
 }
 

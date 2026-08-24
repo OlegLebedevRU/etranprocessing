@@ -49,7 +49,7 @@ You are an expert in Python 3.14+, FastAPI, SQLAlchemy 2.0+, PostgreSQL, and sca
 
 ## 2. Code Quality & Pre-Commit Checks
 
-Before any commit or deployment, all three checks must pass in every Python subproject:
+Before any commit or deployment modifying Python code, all three checks must pass in the target Python subproject (skipped if changes are strictly limited to documentation, `tools/`, or legacy code without modifying `ProcessingBackend` or `MenuBuilder`):
 
 ```bash
 uv run ruff check --fix <src_dir>

@@ -63,7 +63,7 @@ MenuBuilder (FastAPI + React frontend + JWT auth)
 - **Shared DB Models (`shared/etranprocessing_db`)**: Single source of truth for all SQLAlchemy 2.0 ORM models for both `ProcessingBackend` and `MenuBuilder`.
 - **Thin DB Layer Principle**: `etranprocessing_db` contains *strictly* declarative models, constraints, and relationships. No business logic, auth/crypto utilities, or framework dependencies.
 - **Package Manager**: Use `uv` for dependency management and running tools.
-- **Linters & Formatters**: Before committing or deploying, ensure all three checks pass in Python subprojects:
+- **Linters & Formatters**: Before committing or deploying, ensure all three checks pass in Python subprojects that have code changes (see Section 9 for conditional testing rules):
   ```bash
   uv run ruff check --fix <src_dir>
   uv run ruff format <src_dir>
@@ -96,7 +96,7 @@ MenuBuilder (FastAPI + React frontend + JWT auth)
 
 ## 6. Testing & Verification
 
-- Run test suites using `uv run pytest` in the respective subproject directories (`ProcessingBackend/backend`, `MenuBuilder/backend`).
+- Run test suites using `uv run pytest` in the respective subproject directories (`ProcessingBackend/backend`, `MenuBuilder/backend`) when those subprojects (or `shared/`) are modified (skipped for doc-only, tools-only, or legacy-only changes per Section 9).
 - When writing tests for authenticated routes:
   - Generate short-lived mock JWT tokens using the application's internal token generator (`create_access_token`).
   - Use simulated certificate headers (`X-Client-Cert-DN`, `X-Client-Cert-Serial`) when testing terminal-authenticated endpoints.
@@ -148,3 +148,24 @@ Before using MCP Ops capabilities in any task (debugging, deployment verificatio
 3. **Safety Guardrails**:
    - State-changing operations (`nginx_reload`, `file_write`, `file_delete`) return a `confirmationId` and MUST be explicitly confirmed via `mcp_server-ops_confirm_execute`.
    - Never inspect raw secret files directly: use `mcp_server-ops_config_audit` for inspecting `.env` configurations.
+
+---
+
+## 9. AI Agent Scope Restrictions & Conditional Verification
+
+### Directory Access & Inspection Constraints (Ограничения видимости и изменений)
+1. **`/FRONT/` and `/BACK/` (Legacy ASP.NET / C#)**:
+   - **STRICTLY DO NOT** inspect, search, analyze, or modify files in `/FRONT` and `/BACK` unless the prompt explicitly contains the phrase `"доработка легаси"` or explicitly names these folders (`"FRONT"`, `"BACK"`).
+   - *Запрещено просматривать, анализировать и изменять каталоги `/FRONT` и `/BACK`, если в промпте прямо не указано «доработка легаси» или явно не написаны названия этих папок.*
+2. **`/tools/` (Auxiliary CLI utilities)**:
+   - **STRICTLY DO NOT** inspect, search, analyze, or modify files in `/tools` unless the prompt explicitly mentions `"tools"`.
+   - *Запрещено просматривать, анализировать и изменять каталог `/tools`, если в промпте прямо не указано слово «tools».*
+3. **`sqlFileExample/` and `stored-procedures/`**:
+   - **NEVER** inspect, analyze, consider, or touch files in `sqlFileExample` or `stored-procedures` (or `stored-procedure`) unless these folder names are explicitly written in the prompt.
+   - *Каталоги `sqlFileExample` и `stored-procedures` вообще не рассматривать и не трогать, только если напрямую не написаны названия этих папок в промпте.*
+
+### Conditional Verification & Testing (Условный пропуск тестов и проверок)
+4. **Skipping Tests/Linters for Doc, Tools, or Legacy Changes**:
+   - If changes are confined **ONLY** to documentation (`docs/`, `*.md`), `tools/`, or legacy code (`FRONT/`, `BACK/`) and do **NOT** modify `ProcessingBackend` and/or `MenuBuilder` (or `shared/etranprocessing_db`), **DO NOT** run tests (`pytest`), linters/formatters (`ruff`, `pyright`), or frontend checks (`npm run build`) in `ProcessingBackend` or `MenuBuilder`.
+   - Test execution and code quality checks in `ProcessingBackend` / `MenuBuilder` are mandatory **ONLY** when code in those subprojects (or `shared/`) is actually modified.
+   - *Если изменяются только документы, `tools` или легаси и это проходит без изменения `ProcessingBackend` и/или `MenuBuilder` (а также `shared`), то НЕ нужно тестировать и проверять код в соответствующих папках/репозиториях.*

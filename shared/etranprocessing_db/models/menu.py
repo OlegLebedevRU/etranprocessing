@@ -3,13 +3,16 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import (
+    JSON,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from etranprocessing_db.base import Base
@@ -21,6 +24,9 @@ class MenuVariant(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     org_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -37,6 +43,41 @@ class MenuVariant(Base):
     )
     bindings: Mapped[list[TerminalMenuBinding]] = relationship(
         back_populates="menu_variant", cascade="all, delete-orphan"
+    )
+    snapshots: Mapped[list[MenuVariantSnapshot]] = relationship(
+        back_populates="menu_variant", cascade="all, delete-orphan"
+    )
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("version", 1)
+        super().__init__(**kwargs)
+
+
+class MenuVariantSnapshot(Base):
+    __tablename__ = "menu_variant_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    menu_variant_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("menu_variants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    snapshot_data: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    menu_variant: Mapped[MenuVariant] = relationship(back_populates="snapshots")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "menu_variant_id", "version", name="uq_snapshot_variant_version"
+        ),
+        Index("idx_snapshot_variant_version", "menu_variant_id", "version"),
     )
 
 
@@ -105,6 +146,10 @@ class TerminalMenuBinding(Base):
         ForeignKey("menu_variants.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
+    )
+    loaded_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    loaded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

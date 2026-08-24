@@ -7,6 +7,7 @@ from etranprocessing_db.models.billing import (
 from etranprocessing_db.models.menu import (
     Group,
     MenuVariant,
+    MenuVariantSnapshot,
     Service,
     TerminalMenuBinding,
 )
@@ -47,6 +48,7 @@ __all__ = [
     "Group",
     "License",
     "MenuVariant",
+    "MenuVariantSnapshot",
     "Org",
     "OrgBillingSettings",
     "OrgStatus",

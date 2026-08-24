@@ -9,10 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
     BalanceTerminalTsp,
+    MenuVariantSnapshot,
     Payment,
     PaymentParam,
     ServiceMenu,
     Terminal,
+    TerminalMenuBinding,
     Tsp,
     TspParameterCode,
 )
@@ -108,6 +110,23 @@ class PaymentService:
         # Get prototypenumber for parameter lookup (default 99000)
         prototypenumber = await self.get_prototypenumber_by_tsp_code(tsp_code)
 
+        # Look up terminal's menu binding to get the snapshot A{x}
+        menu_snapshot_id = None
+        binding = await self.db.scalar(
+            select(TerminalMenuBinding).where(
+                TerminalMenuBinding.device_id == terminal.device_id
+            )
+        )
+        if binding and binding.loaded_version is not None:
+            snap = await self.db.scalar(
+                select(MenuVariantSnapshot).where(
+                    MenuVariantSnapshot.menu_variant_id == binding.menu_variant_id,
+                    MenuVariantSnapshot.version == binding.loaded_version,
+                )
+            )
+            if snap:
+                menu_snapshot_id = snap.id
+
         # Create payment record
         payment = Payment(
             paym_amount=amount,
@@ -117,6 +136,7 @@ class PaymentService:
             org_id=terminal.org_id,
             paym_state=2,  # Always accepted
             pay_type_id=pay_type_id,
+            menu_snapshot_id=menu_snapshot_id,
         )
         self.db.add(payment)
         await self.db.flush()  # Get paym_id
@@ -134,25 +154,40 @@ class PaymentService:
             self.db.add(payment_param)
 
         # Update balance
-        await self._update_balance(terminal, tsp.tsp_id, amount)
+        await self._update_balance(
+            terminal, tsp.tsp_id, amount, menu_snapshot_id=menu_snapshot_id
+        )
 
         await self.db.commit()
         return payment
 
-    async def _update_balance(self, terminal: Terminal, tsp_id: int, amount: int):
+    async def _update_balance(
+        self,
+        terminal: Terminal,
+        tsp_id: int,
+        amount: int,
+        menu_snapshot_id: int | None = None,
+    ):
         """Update balance_terminal_tsp with upsert pattern."""
         int_day = int(datetime.now(UTC).strftime("%Y%m%d"))
 
         # Check if record exists
-        result = await self.db.execute(
-            select(BalanceTerminalTsp).where(
-                and_(
-                    BalanceTerminalTsp.int_day == int_day,
-                    BalanceTerminalTsp.terminal_id == terminal.id,
-                    BalanceTerminalTsp.tsp_id == tsp_id,
-                )
+        if menu_snapshot_id is not None:
+            cond = and_(
+                BalanceTerminalTsp.int_day == int_day,
+                BalanceTerminalTsp.terminal_id == terminal.id,
+                BalanceTerminalTsp.tsp_id == tsp_id,
+                BalanceTerminalTsp.menu_snapshot_id == menu_snapshot_id,
             )
-        )
+        else:
+            cond = and_(
+                BalanceTerminalTsp.int_day == int_day,
+                BalanceTerminalTsp.terminal_id == terminal.id,
+                BalanceTerminalTsp.tsp_id == tsp_id,
+                BalanceTerminalTsp.menu_snapshot_id.is_(None),
+            )
+
+        result = await self.db.execute(select(BalanceTerminalTsp).where(cond))
         balance = result.scalar_one_or_none()
 
         if balance:
@@ -166,6 +201,7 @@ class PaymentService:
                 org_id=terminal.org_id,
                 terminal_id=terminal.id,
                 tsp_id=tsp_id,
+                menu_snapshot_id=menu_snapshot_id,
                 amount=amount,
                 count=1,
             )

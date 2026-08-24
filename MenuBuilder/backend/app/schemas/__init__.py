@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 # --- MenuVariant ---
 
@@ -14,9 +14,15 @@ class MenuVariantRead(BaseModel):
     id: int
     org_id: int
     name: str
-    created_at: datetime
+    version: int = 1
+    created_at: datetime | None = None
 
     model_config = {"from_attributes": True}
+
+    @field_validator("version", mode="before")
+    @classmethod
+    def default_version(cls, v: int | None) -> int:
+        return v if v is not None else 1
 
 
 class MenuVariantDuplicate(BaseModel):
@@ -92,6 +98,8 @@ class TerminalBindingRead(BaseModel):
     device_id: int
     menu_variant_id: int
     menu_variant_name: str | None = None
+    loaded_version: int | None = None
+    loaded_at: datetime | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -111,6 +119,10 @@ class TerminalInfo(BaseModel):
     binding_id: int | None = None
     menu_variant_id: int | None = None
     menu_variant_name: str | None = None
+    loaded_version: int | None = None
+    loaded_at: datetime | None = None
+    current_version: int | None = None
+    is_latest: bool = False
     address: str | None = None
     note: str | None = None
     terminal_type_id: int = 0

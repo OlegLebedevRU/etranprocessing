@@ -1,5 +1,5 @@
-from contextlib import asynccontextmanager
-from datetime import UTC
+from contextlib import asynccontextmanager, suppress
+from datetime import UTC, datetime
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,7 +8,13 @@ from sqlalchemy import select
 from app.auth import get_current_user
 from app.config import settings
 from app.database import async_session
-from app.models import Group, MenuVariant, Service, TerminalMenuBinding
+from app.models import (
+    Group,
+    MenuVariant,
+    MenuVariantSnapshot,
+    Service,
+    TerminalMenuBinding,
+)
 from app.routers import (
     admin_organizations,
     admin_tenants,
@@ -137,7 +143,49 @@ async def list_menu_file(
         )
         services_list = services_result.scalars().all()
 
-    return _build_menu_tree(groups_list, services_list)
+        menu_data = _build_menu_tree(groups_list, services_list)
+
+        # Check and create snapshot A{x} if not exists
+        snapshot = await session.scalar(
+            select(MenuVariantSnapshot).where(
+                MenuVariantSnapshot.menu_variant_id == variant.id,
+                MenuVariantSnapshot.version == variant.version,
+            )
+        )
+        if not snapshot:
+            snapshot = MenuVariantSnapshot(
+                menu_variant_id=variant.id,
+                version=variant.version,
+                snapshot_data={
+                    "menu_variant_id": variant.id,
+                    "version": variant.version,
+                    "tree": menu_data,
+                    "services_by_tsp": {
+                        str(s.tsp_code): {
+                            "name": s.name,
+                            "printname": s.printname,
+                            "price": s.price,
+                            "protypenumber": s.protypenumber,
+                        }
+                        for s in services_list
+                    },
+                },
+            )
+            session.add(snapshot)
+            await session.flush()
+
+        if device_id is not None:
+            binding = await session.scalar(
+                select(TerminalMenuBinding).where(
+                    TerminalMenuBinding.device_id == device_id
+                )
+            )
+            if binding:
+                binding.loaded_version = variant.version
+                binding.loaded_at = datetime.now(UTC)
+
+        await session.commit()
+        return menu_data
 
 
 @app.get("/api/stats")
@@ -867,7 +915,7 @@ async def get_payments_report(
                 text(f"""
                 SELECT p.paym_id, p.paym_datetime, p.paym_amount, p.paym_ext_id,
                        p.paym_tsp_code, p.paym_state, p.pay_type_id,
-                       t.device_id, t.sn
+                       t.device_id, t.sn, p.menu_snapshot_id
                 FROM payments p
                 JOIN terminals t ON t.id = p.terminal_id
                 WHERE {where}
@@ -884,6 +932,31 @@ async def get_payments_report(
         paym_ids = [r[0] for r in rows]
         device_ids_list = list({r[7] for r in rows})
         tsp_codes_list = list({r[4] for r in rows})
+        snapshot_ids = list({r[9] for r in rows if r[9] is not None})
+
+        # 0. Lookup snapshots for payments with snapshot reference
+        snapshots_map: dict[int, dict] = {}
+        if snapshot_ids:
+            import json
+
+            snap_rows = (
+                await session.execute(
+                    text("""
+                    SELECT id, snapshot_data
+                    FROM menu_variant_snapshots
+                    WHERE id = ANY(:s_ids)
+                """),
+                    {"s_ids": snapshot_ids},
+                )
+            ).fetchall()
+            for sr in snap_rows:
+                s_data = sr[1]
+                if isinstance(s_data, str):
+                    s_parsed = {}
+                    with suppress(Exception):
+                        s_parsed = json.loads(s_data)
+                    s_data = s_parsed
+                snapshots_map[sr[0]] = s_data
 
         # 1. Lookup service name from terminal menu bindings
         binding_rows = (
@@ -957,12 +1030,27 @@ async def get_payments_report(
         paym_id = r[0]
         dev_id = r[7]
         t_code = r[4]
-        tsp_name = (
-            binding_tsp_map.get((dev_id, t_code))
-            or org_tsp_map.get(t_code)
-            or global_tsp_map.get(t_code)
-            or str(t_code)
-        )
+        snap_id = r[9]
+
+        tsp_name = None
+        if snap_id and snap_id in snapshots_map:
+            snap_data = snapshots_map[snap_id]
+            services_by_tsp = (
+                snap_data.get("services_by_tsp", {})
+                if isinstance(snap_data, dict)
+                else {}
+            )
+            svc_info = services_by_tsp.get(str(t_code)) or services_by_tsp.get(t_code)
+            if svc_info and isinstance(svc_info, dict):
+                tsp_name = svc_info.get("name")
+
+        if not tsp_name:
+            tsp_name = (
+                binding_tsp_map.get((dev_id, t_code))
+                or org_tsp_map.get(t_code)
+                or global_tsp_map.get(t_code)
+                or str(t_code)
+            )
         items.append(
             {
                 "paym_id": paym_id,
@@ -1079,6 +1167,8 @@ async def get_balance_by_tsp(
     device_ids: str | None = None,
 ):
     """Balance statistics grouped by TSP. Tenant-scoped."""
+    import json
+
     from sqlalchemy import text
 
     org_id = user.get("org_id")
@@ -1112,31 +1202,110 @@ async def get_balance_by_tsp(
         rows = (
             await session.execute(
                 text(f"""
-                SELECT ts.tsp_code, ts.tsp_name,
-                       COUNT(DISTINCT b.terminal_id) AS terminal_count,
-                       SUM(b.count) AS total_count,
-                       SUM(b.amount) AS total_amount
+                SELECT ts.tsp_code, ts.tsp_name, b.menu_snapshot_id,
+                       b.terminal_id, b.count, b.amount
                 FROM balance_terminal_tsp b
                 JOIN terminals t ON t.id = b.terminal_id
                 JOIN tsp ts ON ts.tsp_id = b.tsp_id
                 WHERE {where}
-                GROUP BY ts.tsp_code, ts.tsp_name
-                ORDER BY total_amount DESC
             """),
                 params,
             )
         ).fetchall()
 
-    items = []
+        if not rows:
+            return {"items": []}
+
+        # 1. Fetch snapshots for resolution
+        snapshot_ids = list({r[2] for r in rows if r[2] is not None})
+        snapshots_map: dict[int, dict] = {}
+        if snapshot_ids:
+            snap_rows = (
+                await session.execute(
+                    text("""
+                        SELECT id, snapshot_data
+                        FROM menu_variant_snapshots
+                        WHERE id = ANY(:s_ids)
+                    """),
+                    {"s_ids": snapshot_ids},
+                )
+            ).fetchall()
+            for sr in snap_rows:
+                s_data = sr[1]
+                if isinstance(s_data, str):
+                    s_parsed = {}
+                    with suppress(Exception):
+                        s_parsed = json.loads(s_data)
+                    s_data = s_parsed
+                snapshots_map[sr[0]] = s_data
+
+        # 2. Org-level fallback
+        tsp_codes_list = list({r[0] for r in rows})
+        org_services_rows = (
+            await session.execute(
+                text("""
+                    SELECT DISTINCT ON (s.tsp_code) s.tsp_code, s.name
+                    FROM services s
+                    JOIN menu_variants mv ON mv.id = s.menu_variant_id
+                    WHERE mv.org_id = :org_id AND s.tsp_code = ANY(:tsp_codes)
+                """),
+                {"org_id": org_id, "tsp_codes": tsp_codes_list},
+            )
+        ).fetchall()
+        org_tsp_map = {r[0]: r[1] for r in org_services_rows}
+
+    # Aggregate by tsp_code
+    grouped: dict[int, dict] = {}
     for r in rows:
-        items.append(
-            {
-                "tsp_code": r[0],
-                "tsp_name": (r[1] or "").strip(),
-                "terminal_count": r[2],
-                "total_count": r[3],
-                "total_amount": r[4],
+        t_code = r[0]
+        global_name = (r[1] or "").strip()
+        snap_id = r[2]
+        term_id = r[3]
+        cnt = r[4] or 0
+        amt = r[5] or 0
+
+        # Resolve tsp_name with priority: snapshot -> org menu -> global -> code
+        tsp_name = None
+        if snap_id and snap_id in snapshots_map:
+            snap_data = snapshots_map[snap_id]
+            services_by_tsp = (
+                snap_data.get("services_by_tsp", {})
+                if isinstance(snap_data, dict)
+                else {}
+            )
+            svc_info = services_by_tsp.get(str(t_code)) or services_by_tsp.get(t_code)
+            if svc_info and isinstance(svc_info, dict):
+                tsp_name = svc_info.get("name")
+
+        if not tsp_name:
+            tsp_name = org_tsp_map.get(t_code) or global_name or str(t_code)
+
+        if t_code not in grouped:
+            grouped[t_code] = {
+                "tsp_code": t_code,
+                "tsp_name": tsp_name,
+                "terminal_ids": {term_id},
+                "total_count": cnt,
+                "total_amount": amt,
             }
+        else:
+            grouped[t_code]["terminal_ids"].add(term_id)
+            grouped[t_code]["total_count"] += cnt
+            grouped[t_code]["total_amount"] += amt
+            if tsp_name and snap_id:
+                grouped[t_code]["tsp_name"] = tsp_name
+
+    items = [
+        {
+            "tsp_code": data["tsp_code"],
+            "tsp_name": data["tsp_name"],
+            "terminal_count": len(data["terminal_ids"]),
+            "total_count": data["total_count"],
+            "total_amount": data["total_amount"],
+        }
+        for data in sorted(
+            grouped.values(), key=lambda x: x["total_amount"], reverse=True
         )
+    ]
 
     return {"items": items}

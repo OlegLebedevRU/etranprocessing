@@ -9,6 +9,10 @@ export interface TerminalInfo {
   binding_id: number | null;
   menu_variant_id: number | null;
   menu_variant_name: string | null;
+  loaded_version?: number | null;
+  loaded_at?: string | null;
+  current_version?: number | null;
+  is_latest?: boolean;
 }
 
 export interface TerminalsResponse {

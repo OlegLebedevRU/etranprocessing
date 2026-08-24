@@ -66,7 +66,8 @@ async def list_terminals(
                 SELECT t.id, t.device_id, t.sn, t.org_id, t.is_active,
                        tmb.id as binding_id, tmb.menu_variant_id, mv.name as variant_name,
                        t.address, t.note, t.terminal_type_id, tt.name as terminal_type_name,
-                       t.created_at
+                       t.created_at,
+                       tmb.loaded_version, tmb.loaded_at, mv.version as current_version
                 FROM terminals t
                 LEFT JOIN terminal_types tt ON tt.id = t.terminal_type_id
                 LEFT JOIN terminal_menu_bindings tmb ON tmb.device_id = t.device_id
@@ -81,6 +82,16 @@ async def list_terminals(
 
     items = []
     for r in rows:
+        binding_id = r[5]
+        loaded_ver = r[13]
+        loaded_at = r[14]
+        curr_ver = r[15]
+        is_latest = bool(
+            binding_id
+            and loaded_ver is not None
+            and curr_ver is not None
+            and loaded_ver == curr_ver
+        )
         items.append(
             TerminalInfo(
                 terminal_id=r[0],
@@ -88,7 +99,7 @@ async def list_terminals(
                 sn=r[2],
                 org_id=r[3],
                 is_active=r[4],
-                binding_id=r[5],
+                binding_id=binding_id,
                 menu_variant_id=r[6],
                 menu_variant_name=r[7],
                 address=r[8],
@@ -100,6 +111,10 @@ async def list_terminals(
                     "Стандартный" if (r[10] == 0 or r[10] is None) else f"Тип {r[10]}"
                 ),
                 created_at=r[12],
+                loaded_version=loaded_ver,
+                loaded_at=loaded_at,
+                current_version=curr_ver,
+                is_latest=is_latest,
             )
         )
 
@@ -153,7 +168,10 @@ async def create_or_update_binding(
         )
     )
     if existing:
-        existing.menu_variant_id = data.menu_variant_id
+        if existing.menu_variant_id != data.menu_variant_id:
+            existing.menu_variant_id = data.menu_variant_id
+            existing.loaded_version = None
+            existing.loaded_at = None
         await db.commit()
         await db.refresh(existing)
         return TerminalBindingRead(
@@ -161,11 +179,16 @@ async def create_or_update_binding(
             device_id=existing.device_id,
             menu_variant_id=existing.menu_variant_id,
             menu_variant_name=variant.name,
+            loaded_version=existing.loaded_version,
+            loaded_at=existing.loaded_at,
             created_at=existing.created_at,
         )
 
     binding = TerminalMenuBinding(
-        device_id=data.device_id, menu_variant_id=data.menu_variant_id
+        device_id=data.device_id,
+        menu_variant_id=data.menu_variant_id,
+        loaded_version=None,
+        loaded_at=None,
     )
     db.add(binding)
     await db.commit()
@@ -175,6 +198,8 @@ async def create_or_update_binding(
         device_id=binding.device_id,
         menu_variant_id=binding.menu_variant_id,
         menu_variant_name=variant.name,
+        loaded_version=binding.loaded_version,
+        loaded_at=binding.loaded_at,
         created_at=binding.created_at,
     )
 

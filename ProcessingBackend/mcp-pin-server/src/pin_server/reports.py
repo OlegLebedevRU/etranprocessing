@@ -1,4 +1,5 @@
 import json
+from contextlib import suppress
 
 from pin_server.db import Database
 
@@ -240,29 +241,91 @@ async def report_balance_by_tsp(
     where = " AND ".join(conditions)
 
     query = f"""
-        SELECT ts.tsp_code, ts.tsp_name,
-               COUNT(DISTINCT b.terminal_id) AS terminal_count,
-               SUM(b.count) AS total_count,
-               SUM(b.amount) AS total_amount
+        SELECT ts.tsp_code, ts.tsp_name, b.menu_snapshot_id,
+               b.terminal_id, b.count, b.amount
         FROM balance_terminal_tsp b
         JOIN terminals t ON t.id = b.terminal_id
         JOIN tsp ts ON ts.tsp_id = b.tsp_id
         WHERE {where}
-        GROUP BY ts.tsp_code, ts.tsp_name
-        ORDER BY total_amount DESC
     """
     rows = await db.fetch(query, *params)
+    if not rows:
+        return {"items": [], "count": 0}
+
+    # Fetch snapshots
+    snap_ids = list(
+        {r["menu_snapshot_id"] for r in rows if r["menu_snapshot_id"] is not None}
+    )
+    snapshots_map = {}
+    if snap_ids:
+        placeholders = ", ".join(f"${i + 1}" for i in range(len(snap_ids)))
+        snap_rows = await db.fetch(
+            f"SELECT id, snapshot_data FROM menu_variant_snapshots WHERE id IN ({placeholders})",
+            *snap_ids,
+        )
+        for sr in snap_rows:
+            sd = sr["snapshot_data"]
+            if isinstance(sd, str):
+                s_parsed = {}
+                with suppress(Exception):
+                    s_parsed = json.loads(sd)
+                sd = s_parsed
+            snapshots_map[sr["id"]] = sd
+
+    # Org services fallback
+    org_tsp_map = {}
+    if org_id is not None:
+        org_rows = await db.fetch(
+            "SELECT DISTINCT ON (s.tsp_code) s.tsp_code, s.name FROM services s JOIN menu_variants mv ON mv.id = s.menu_variant_id WHERE mv.org_id = $1",
+            org_id,
+        )
+        org_tsp_map = {r["tsp_code"]: r["name"] for r in org_rows}
+
+    grouped = {}
+    for r in rows:
+        t_code = r["tsp_code"]
+        snap_id = r["menu_snapshot_id"]
+        term_id = r["terminal_id"]
+        cnt = r["count"] or 0
+        amt = r["amount"] or 0
+
+        tsp_name = None
+        if snap_id and snap_id in snapshots_map:
+            s_data = snapshots_map[snap_id]
+            services_by_tsp = (
+                s_data.get("services_by_tsp", {}) if isinstance(s_data, dict) else {}
+            )
+            svc = services_by_tsp.get(str(t_code)) or services_by_tsp.get(t_code)
+            if svc and isinstance(svc, dict):
+                tsp_name = svc.get("name")
+        if not tsp_name:
+            tsp_name = org_tsp_map.get(t_code) or r["tsp_name"] or str(t_code)
+
+        if t_code not in grouped:
+            grouped[t_code] = {
+                "tsp_code": t_code,
+                "tsp_name": tsp_name,
+                "terminal_ids": {term_id},
+                "total_count": cnt,
+                "total_amount": amt,
+            }
+        else:
+            grouped[t_code]["terminal_ids"].add(term_id)
+            grouped[t_code]["total_count"] += cnt
+            grouped[t_code]["total_amount"] += amt
+            if tsp_name and snap_id:
+                grouped[t_code]["tsp_name"] = tsp_name
 
     items = [
         {
-            "tsp_code": r["tsp_code"],
-            "tsp_name": r["tsp_name"],
-            "terminal_count": r["terminal_count"],
-            "total_count": r["total_count"],
-            "total_amount": r["total_amount"],
-            "total_amount_rub": _format_amount(r["total_amount"]),
+            "tsp_code": d["tsp_code"],
+            "tsp_name": d["tsp_name"],
+            "terminal_count": len(d["terminal_ids"]),
+            "total_count": d["total_count"],
+            "total_amount": d["total_amount"],
+            "total_amount_rub": _format_amount(d["total_amount"]),
         }
-        for r in rows
+        for d in sorted(grouped.values(), key=lambda x: x["total_amount"], reverse=True)
     ]
 
     return {"items": items, "count": len(items)}

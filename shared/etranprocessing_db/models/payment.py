@@ -18,6 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from etranprocessing_db.base import Base
 
 if TYPE_CHECKING:
+    from etranprocessing_db.models.menu import MenuVariantSnapshot
     from etranprocessing_db.models.org import Org
     from etranprocessing_db.models.terminal import Terminal
 
@@ -66,9 +67,17 @@ class Payment(Base):
     )
     paym_state: Mapped[int] = mapped_column(Integer, default=0)
     pay_type_id: Mapped[int] = mapped_column(Integer, default=0)
+    menu_snapshot_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("menu_variant_snapshots.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     terminal: Mapped[Terminal] = relationship("Terminal")
     org: Mapped[Org] = relationship("Org")
+    menu_snapshot: Mapped[MenuVariantSnapshot | None] = relationship(
+        "MenuVariantSnapshot"
+    )
     params: Mapped[list[PaymentParam]] = relationship(
         back_populates="payment", cascade="all, delete-orphan"
     )
@@ -79,6 +88,7 @@ class Payment(Base):
         Index("idx_payments_ext_id", "paym_ext_id"),
         Index("idx_payments_tsp_code", "paym_tsp_code"),
         Index("idx_payments_datetime", "paym_datetime"),
+        Index("idx_payments_menu_snapshot_id", "menu_snapshot_id"),
     )
 
 
@@ -117,18 +127,32 @@ class BalanceTerminalTsp(Base):
     tsp_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("tsp.tsp_id"), nullable=False
     )
+    menu_snapshot_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("menu_variant_snapshots.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     amount: Mapped[int] = mapped_column(BigInteger, default=0)
     count: Mapped[int] = mapped_column(Integer, default=0)
     update_datetime: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
+    menu_snapshot: Mapped[MenuVariantSnapshot | None] = relationship(
+        "MenuVariantSnapshot"
+    )
+
     __table_args__ = (
         UniqueConstraint(
-            "int_day", "terminal_id", "tsp_id", name="uq_balance_day_terminal_tsp"
+            "int_day",
+            "terminal_id",
+            "tsp_id",
+            "menu_snapshot_id",
+            name="uq_balance_day_terminal_tsp_snap",
         ),
         Index("idx_balance_int_day", "int_day"),
         Index("idx_balance_terminal_id", "terminal_id"),
         Index("idx_balance_tsp_id", "tsp_id"),
         Index("idx_balance_org_id", "org_id"),
+        Index("idx_balance_menu_snapshot_id", "menu_snapshot_id"),
     )

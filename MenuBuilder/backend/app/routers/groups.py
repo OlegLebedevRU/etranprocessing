@@ -111,6 +111,7 @@ async def create_group(
         number=number,
     )
     db.add(group)
+    variant.version = (variant.version or 1) + 1
     await db.commit()
     await db.refresh(group)
     return group
@@ -160,6 +161,9 @@ async def update_group(
 
     for key, value in update_dict.items():
         setattr(group, key, value)
+    variant = await db.get(MenuVariant, group.menu_variant_id)
+    if variant:
+        variant.version = (variant.version or 1) + 1
     await db.commit()
     await db.refresh(group)
     return group
@@ -199,6 +203,9 @@ async def delete_group(
             status_code=409,
             detail="Cannot delete group with subgroups. Remove subgroups first.",
         )
+    variant = await db.get(MenuVariant, group.menu_variant_id)
+    if variant:
+        variant.version = (variant.version or 1) + 1
     await db.delete(group)
     await db.commit()
     return {"ok": True}

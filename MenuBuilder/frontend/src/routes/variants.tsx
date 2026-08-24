@@ -368,12 +368,33 @@ export default function VariantsPage() {
                   border: v.id === selectedVariantId ? "1px solid #91caff" : "1px solid transparent",
                   fontSize: 12,
                   fontWeight: v.id === selectedVariantId ? 600 : 400,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 4,
                 }}
               >
-                {v.name}
+                <span
+                  style={{
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    flex: 1,
+                  }}
+                >
+                  {v.name}
+                </span>
+                <Tag
+                  color="geekblue"
+                  style={{
+                    margin: 0,
+                    fontSize: 10,
+                    padding: "0 4px",
+                    lineHeight: "16px",
+                  }}
+                >
+                  v{v.version ?? 1}
+                </Tag>
               </div>
             ))}
           </div>

@@ -14,6 +14,7 @@ from etranprocessing_db.models import (  # noqa: F401
     Group,
     License,
     MenuVariant,
+    MenuVariantSnapshot,
     Org,
     OrgBillingSettings,
     OrgStatus,

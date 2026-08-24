@@ -156,6 +156,9 @@ async def create_service(
     service_dict["tsp_code"] = tsp_code
     service = Service(**service_dict, menu_variant_id=group.menu_variant_id)
     db.add(service)
+    variant = await db.get(MenuVariant, group.menu_variant_id)
+    if variant:
+        variant.version = (variant.version or 1) + 1
     await db.commit()
     await db.refresh(service)
     return service
@@ -181,6 +184,9 @@ async def update_service(
 
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(service, key, value)
+    variant = await db.get(MenuVariant, service.menu_variant_id)
+    if variant:
+        variant.version = (variant.version or 1) + 1
     await db.commit()
     await db.refresh(service)
     return service
@@ -203,6 +209,9 @@ async def delete_service(
     elif not user.get("is_superuser"):
         raise HTTPException(status_code=403, detail="Forbidden")
 
+    variant = await db.get(MenuVariant, service.menu_variant_id)
+    if variant:
+        variant.version = (variant.version or 1) + 1
     await db.delete(service)
     await db.commit()
     return {"ok": True}
