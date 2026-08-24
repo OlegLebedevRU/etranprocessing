@@ -14,7 +14,8 @@
 typedef struct {
     const ProxyConfig* config;
     const CertDetails* certDetails;
-    CredHandle hCred;
+    CredHandle hClientCred;
+    CredHandle hServerCred;
     SOCKET listenSock;
     volatile bool isRunning;
     HANDLE hThread;
@@ -23,7 +24,7 @@ typedef struct {
 /**
  * @brief Initializes and starts the HTTP->HTTPS proxy listening thread.
  */
-bool http_proxy_start(HttpProxyServer* server, const ProxyConfig* config, const CertDetails* certDetails, CredHandle hCred);
+bool http_proxy_start(HttpProxyServer* server, const ProxyConfig* config, const CertDetails* certDetails, CredHandle hClientCred, CredHandle hServerCred);
 
 /**
  * @brief Stops the HTTP proxy and closes sockets.

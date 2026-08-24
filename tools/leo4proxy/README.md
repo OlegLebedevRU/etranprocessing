@@ -115,6 +115,9 @@ leo4proxy.exe [ОПЦИИ]
 | `--mqtt-local <ip:port>` | `127.0.0.1:18883` | Локальный TCP-порт прокси MQTT |
 | `--http-remote <host:port>` | `iot-processing.ru:443` | Удаленный адрес HTTPS бэкенда |
 | `--http-local <ip:port>` | `127.0.0.1:18443` | Локальный HTTP-порт прокси |
+| `--local-ssl` | auto-detect | Включить SSL/TLS на обоих локальных слушателях |
+| `--http-local-ssl` | auto-detect | Включить SSL/TLS на локальном HTTP слушателе |
+| `--mqtt-local-ssl` | auto-detect | Включить SSL/TLS на локальном MQTT слушателе |
 | `--cert-email <pattern>` | `*.terminal@leo4.ru` -> `*.terminal@forpay.ru` | Шаблон поиска email в сертификате |
 | `--cert-thumbprint <sha1>` | auto (самый свежий) | Выбор сертификата по отпечатку SHA-1 |
 | `--user-store` | `LocalMachine\MY` | Использовать хранилище `CurrentUser\MY` |

@@ -14,7 +14,8 @@
 typedef struct {
     const ProxyConfig* config;
     const CertDetails* certDetails;
-    CredHandle hCred;
+    CredHandle hClientCred;
+    CredHandle hServerCred;
     SOCKET listenSock;
     volatile bool isRunning;
     HANDLE hThread;
@@ -23,7 +24,7 @@ typedef struct {
 /**
  * @brief Initializes and starts the MQTT proxy listening thread.
  */
-bool mqtt_proxy_start(MqttProxyServer* server, const ProxyConfig* config, const CertDetails* certDetails, CredHandle hCred);
+bool mqtt_proxy_start(MqttProxyServer* server, const ProxyConfig* config, const CertDetails* certDetails, CredHandle hClientCred, CredHandle hServerCred);
 
 /**
  * @brief Stops the MQTT proxy and closes sockets.

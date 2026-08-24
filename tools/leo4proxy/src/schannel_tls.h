@@ -40,6 +40,11 @@ typedef struct {
 bool schannel_init_client_creds(PCCERT_CONTEXT pCert, int insecure_server, CredHandle* out_hCred);
 
 /**
+ * @brief Initializes credentials handle for local inbound TLS server using the certificate.
+ */
+bool schannel_init_server_creds(PCCERT_CONTEXT pCert, CredHandle* out_hCred);
+
+/**
  * @brief Frees credentials handle.
  */
 void schannel_free_creds(CredHandle* hCred);
@@ -48,6 +53,11 @@ void schannel_free_creds(CredHandle* hCred);
  * @brief Connects to remote host over TCP and establishes SChannel TLS / mTLS session.
  */
 bool schannel_connect(SChannelSession* session, CredHandle* hCred, const char* host, int port, int timeout_ms, int insecure_server);
+
+/**
+ * @brief Performs inbound SChannel TLS handshake on an accepted incoming client socket.
+ */
+bool schannel_accept(SChannelSession* session, const CredHandle* hServerCred, SOCKET clientSock);
 
 /**
  * @brief Encrypts and sends application data over SChannel TLS connection.

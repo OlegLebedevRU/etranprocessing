@@ -80,6 +80,10 @@ void proxy_config_init_defaults(ProxyConfig* config) {
     config->is_machine_store = 1;      // Default: LocalMachine\MY
     config->insecure_server_cert = 1;  // Default: ignore untrusted server CA for dev/migration
 
+    config->http_local_ssl = 0;
+    config->mqtt_local_ssl = 0;
+    config->auto_local_ssl = 1;        // Default: auto-detect TLS vs Plain on local listener
+
     config->run_as_service = 0;
     config->run_foreground = 0;
     config->verbose = 0;
@@ -130,6 +134,9 @@ static void print_usage(const char* exeName) {
     printf("  --mqtt-local  <ip:port>   Local MQTT listener (default: %s:%d)\n", DEFAULT_MQTT_LOCAL_HOST, DEFAULT_MQTT_LOCAL_PORT);
     printf("  --http-remote <host:port> Remote HTTPS Backend (default: %s:%d)\n", DEFAULT_HTTP_REMOTE_HOST, DEFAULT_HTTP_REMOTE_PORT);
     printf("  --http-local  <ip:port>   Local HTTP listener (default: %s:%d)\n", DEFAULT_HTTP_LOCAL_HOST, DEFAULT_HTTP_LOCAL_PORT);
+    printf("  --local-ssl               Enforce SSL/TLS on both local listeners (default: auto-detect)\n");
+    printf("  --http-local-ssl          Enforce SSL/TLS on local HTTP listener\n");
+    printf("  --mqtt-local-ssl          Enforce SSL/TLS on local MQTT listener\n");
     printf("  --secure                  Strict server certificate CA validation (default: lax/insecure)\n\n");
     printf("CERTIFICATE SELECTION:\n");
     printf("  --cert-email <pattern>    Filter certs by email (default: newest %s -> %s)\n", DEFAULT_CERT_EMAIL_PRIMARY, DEFAULT_CERT_EMAIL_FALLBACK);
@@ -215,6 +222,13 @@ int main(int argc, char* argv[]) {
             parse_host_port(argv[++i], config.http_remote_host, sizeof(config.http_remote_host), &config.http_remote_port);
         } else if (_stricmp(argv[i], "--http-local") == 0 && i + 1 < argc) {
             parse_host_port(argv[++i], config.http_local_host, sizeof(config.http_local_host), &config.http_local_port);
+        } else if (_stricmp(argv[i], "--local-ssl") == 0) {
+            config.http_local_ssl = 1;
+            config.mqtt_local_ssl = 1;
+        } else if (_stricmp(argv[i], "--http-local-ssl") == 0) {
+            config.http_local_ssl = 1;
+        } else if (_stricmp(argv[i], "--mqtt-local-ssl") == 0) {
+            config.mqtt_local_ssl = 1;
         } else if (_stricmp(argv[i], "--cert-email") == 0 && i + 1 < argc) {
             strncpy_s(config.cert_email_pattern, sizeof(config.cert_email_pattern), argv[++i], _TRUNCATE);
         } else if (_stricmp(argv[i], "--cert-thumbprint") == 0 && i + 1 < argc) {
@@ -329,27 +343,33 @@ int main(int argc, char* argv[]) {
     cert_store_print_details(&certDetails);
 
     // Initialize SChannel Credentials
-    CredHandle hCred;
-    if (!schannel_init_client_creds(certDetails.pCertContext, config.insecure_server_cert, &hCred)) {
-        fprintf(stderr, "[FATAL] Failed to initialize SChannel credentials.\n");
+    CredHandle hClientCred;
+    if (!schannel_init_client_creds(certDetails.pCertContext, config.insecure_server_cert, &hClientCred)) {
+        fprintf(stderr, "[FATAL] Failed to initialize SChannel client credentials.\n");
         cert_store_free_details(&certDetails);
         WSACleanup();
         pause_if_explorer();
         return 1;
     }
 
+    CredHandle hServerCred;
+    if (!schannel_init_server_creds(certDetails.pCertContext, &hServerCred)) {
+        SecInvalidateHandle(&hServerCred);
+    }
+
     // Start Proxies
     MqttProxyServer mqttServer;
     HttpProxyServer httpServer;
 
-    bool mqttOk = mqtt_proxy_start(&mqttServer, &config, &certDetails, hCred);
-    bool httpOk = http_proxy_start(&httpServer, &config, &certDetails, hCred);
+    bool mqttOk = mqtt_proxy_start(&mqttServer, &config, &certDetails, hClientCred, hServerCred);
+    bool httpOk = http_proxy_start(&httpServer, &config, &certDetails, hClientCred, hServerCred);
 
     if (!mqttOk || !httpOk) {
         fprintf(stderr, "\n[FATAL] Failed to start proxy listeners.\n");
         if (mqttOk) mqtt_proxy_stop(&mqttServer);
         if (httpOk) http_proxy_stop(&httpServer);
-        schannel_free_creds(&hCred);
+        schannel_free_creds(&hClientCred);
+        schannel_free_creds(&hServerCred);
         cert_store_free_details(&certDetails);
         WSACleanup();
         pause_if_explorer();
@@ -357,10 +377,12 @@ int main(int argc, char* argv[]) {
     }
 
     printf("\n[STATUS] Proxies active and ready for client connections:\n");
-    printf("  - MQTT Proxy: http://%s:%d -> %s:%d (mTLS SN=%s)\n",
-           config.mqtt_local_host, config.mqtt_local_port, config.mqtt_remote_host, config.mqtt_remote_port, certDetails.sn);
-    printf("  - HTTP Proxy: http://%s:%d -> https://%s:%d (mTLS SN=%s)\n",
-           config.http_local_host, config.http_local_port, config.http_remote_host, config.http_remote_port, certDetails.sn);
+    printf("  - MQTT Proxy: http://%s:%d -> %s:%d (mTLS SN=%s)%s\n",
+           config.mqtt_local_host, config.mqtt_local_port, config.mqtt_remote_host, config.mqtt_remote_port, certDetails.sn,
+           config.mqtt_local_ssl ? " [SSL]" : " [TCP/SSL auto-detect]");
+    printf("  - HTTP Proxy: http://%s:%d -> https://%s:%d (mTLS SN=%s)%s\n",
+           config.http_local_host, config.http_local_port, config.http_remote_host, config.http_remote_port, certDetails.sn,
+           config.http_local_ssl ? " [SSL]" : " [HTTP/HTTPS auto-detect]");
     printf("  - Info API:   http://%s:%d/_leo4/info\n", config.http_local_host, config.http_local_port);
     printf("  - Device SN:  http://%s:%d/_leo4/sn\n", config.http_local_host, config.http_local_port);
     printf("\nPress Ctrl+C to stop.\n\n");
@@ -372,7 +394,8 @@ int main(int argc, char* argv[]) {
     printf("[LEO4PROXY] Stopping proxies...\n");
     mqtt_proxy_stop(&mqttServer);
     http_proxy_stop(&httpServer);
-    schannel_free_creds(&hCred);
+    schannel_free_creds(&hClientCred);
+    schannel_free_creds(&hServerCred);
     cert_store_free_details(&certDetails);
     WSACleanup();
 

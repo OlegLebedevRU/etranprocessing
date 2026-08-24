@@ -55,6 +55,10 @@ typedef struct {
     int  is_machine_store;      /* 1 for LocalMachine, 0 for CurrentUser */
     int  insecure_server_cert;  /* 1 to ignore untrusted server CA (default: 1) */
 
+    int  http_local_ssl;        /* 1 to enforce SSL on local HTTP listener */
+    int  mqtt_local_ssl;        /* 1 to enforce SSL on local MQTT listener */
+    int  auto_local_ssl;        /* 1 to auto-detect TLS vs Plain on local listener (default: 1) */
+
     int  run_as_service;
     int  run_foreground;
     int  verbose;

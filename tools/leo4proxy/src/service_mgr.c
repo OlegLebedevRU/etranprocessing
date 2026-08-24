@@ -99,25 +99,31 @@ static void WINAPI service_main(DWORD argc, LPWSTR* argv) {
     }
 
     // 3. Acquire SChannel Credentials
-    CredHandle hCred;
-    if (!schannel_init_client_creds(certDetails.pCertContext, g_serviceConfig.insecure_server_cert, &hCred)) {
+    CredHandle hClientCred;
+    if (!schannel_init_client_creds(certDetails.pCertContext, g_serviceConfig.insecure_server_cert, &hClientCred)) {
         cert_store_free_details(&certDetails);
         WSACleanup();
         report_service_status(SERVICE_STOPPED, ERROR_INVALID_PARAMETER, 0);
         return;
     }
 
+    CredHandle hServerCred;
+    if (!schannel_init_server_creds(certDetails.pCertContext, &hServerCred)) {
+        SecInvalidateHandle(&hServerCred);
+    }
+
     // 4. Start MQTT & HTTP Proxies
     MqttProxyServer mqttServer;
     HttpProxyServer httpServer;
 
-    bool mqttOk = mqtt_proxy_start(&mqttServer, &g_serviceConfig, &certDetails, hCred);
-    bool httpOk = http_proxy_start(&httpServer, &g_serviceConfig, &certDetails, hCred);
+    bool mqttOk = mqtt_proxy_start(&mqttServer, &g_serviceConfig, &certDetails, hClientCred, hServerCred);
+    bool httpOk = http_proxy_start(&httpServer, &g_serviceConfig, &certDetails, hClientCred, hServerCred);
 
     if (!mqttOk || !httpOk) {
         if (mqttOk) mqtt_proxy_stop(&mqttServer);
         if (httpOk) http_proxy_stop(&httpServer);
-        schannel_free_creds(&hCred);
+        schannel_free_creds(&hClientCred);
+        schannel_free_creds(&hServerCred);
         cert_store_free_details(&certDetails);
         WSACleanup();
         report_service_status(SERVICE_STOPPED, ERROR_SERVICE_SPECIFIC_ERROR, 0);
@@ -133,7 +139,8 @@ static void WINAPI service_main(DWORD argc, LPWSTR* argv) {
 
     mqtt_proxy_stop(&mqttServer);
     http_proxy_stop(&httpServer);
-    schannel_free_creds(&hCred);
+    schannel_free_creds(&hClientCred);
+    schannel_free_creds(&hServerCred);
     cert_store_free_details(&certDetails);
     WSACleanup();
     CloseHandle(g_stopEvent);

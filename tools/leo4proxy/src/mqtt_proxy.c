@@ -12,7 +12,8 @@
 typedef struct {
     SOCKET clientSock;
     const ProxyConfig* config;
-    CredHandle hCred;
+    CredHandle hClientCred;
+    CredHandle hServerCred;
 } MqttClientWorkerArgs;
 
 static int send_all_socket(SOCKET s, const BYTE* data, int len) {
@@ -29,22 +30,50 @@ static unsigned __stdcall mqtt_client_worker(void* param) {
     MqttClientWorkerArgs* args = (MqttClientWorkerArgs*)param;
     SOCKET clientSock = args->clientSock;
     const ProxyConfig* config = args->config;
-    CredHandle hCred = args->hCred;
+    CredHandle hClientCred = args->hClientCred;
+    CredHandle hServerCred = args->hServerCred;
     free(args);
-
-    if (config->verbose) {
-        printf("[MQTT-PROXY] Accepted local client connection. Connecting to %s:%d via TLS...\n",
-               config->mqtt_remote_host, config->mqtt_remote_port);
-    }
 
     BOOL keepAlive = TRUE;
     setsockopt(clientSock, SOL_SOCKET, SO_KEEPALIVE, (const char*)&keepAlive, sizeof(keepAlive));
 
-    SChannelSession tlsSession;
-    if (!schannel_connect(&tlsSession, &hCred, config->mqtt_remote_host, config->mqtt_remote_port, 10000, config->insecure_server_cert)) {
+    // Auto-detect or enforce TLS on incoming client socket
+    bool isClientTls = false;
+    BYTE peekByte = 0;
+    int p = recv(clientSock, (char*)&peekByte, 1, MSG_PEEK);
+    if (config->mqtt_local_ssl || (config->auto_local_ssl && p == 1 && peekByte == 0x16)) {
+        isClientTls = true;
+    }
+
+    SChannelSession clientTlsSession;
+    memset(&clientTlsSession, 0, sizeof(SChannelSession));
+
+    if (isClientTls && SecIsValidHandle(&hServerCred)) {
+        if (config->verbose) {
+            printf("[MQTT-PROXY] Inbound TLS handshake from local client...\n");
+        }
+        if (!schannel_accept(&clientTlsSession, &hServerCred, clientSock)) {
+            if (config->verbose) {
+                fprintf(stderr, "[MQTT-PROXY] Inbound TLS handshake failed.\n");
+            }
+            closesocket(clientSock);
+            return 1;
+        }
+    } else if (isClientTls) {
+        isClientTls = false;
+    }
+
+    if (config->verbose) {
+        printf("[MQTT-PROXY] Accepted local client connection%s. Connecting to %s:%d via TLS...\n",
+               isClientTls ? " (client TLS)" : "", config->mqtt_remote_host, config->mqtt_remote_port);
+    }
+
+    SChannelSession brokerTlsSession;
+    if (!schannel_connect(&brokerTlsSession, &hClientCred, config->mqtt_remote_host, config->mqtt_remote_port, 10000, config->insecure_server_cert)) {
         fprintf(stderr, "[MQTT-PROXY] Failed to establish mTLS connection to %s:%d\n",
                 config->mqtt_remote_host, config->mqtt_remote_port);
-        closesocket(clientSock);
+        if (isClientTls) schannel_close(&clientTlsSession);
+        else closesocket(clientSock);
         return 1;
     }
 
@@ -57,11 +86,12 @@ static unsigned __stdcall mqtt_client_worker(void* param) {
     bool running = true;
 
     while (running) {
-        // 1. If we have leftover decrypted plaintext, deliver it to local client immediately
-        if (tlsSession.plainBufLen > tlsSession.plainBufOffset) {
-            int recvd = schannel_recv(&tlsSession, buf, sizeof(buf));
+        // 1. If we have leftover decrypted plaintext from broker, deliver to client
+        if (brokerTlsSession.plainBufLen > brokerTlsSession.plainBufOffset) {
+            int recvd = schannel_recv(&brokerTlsSession, buf, sizeof(buf));
             if (recvd > 0) {
-                int s = send_all_socket(clientSock, buf, recvd);
+                int s = isClientTls ? schannel_send(&clientTlsSession, buf, recvd)
+                                    : send_all_socket(clientSock, buf, recvd);
                 if (s <= 0) {
                     running = false;
                     break;
@@ -70,16 +100,29 @@ static unsigned __stdcall mqtt_client_worker(void* param) {
             continue;
         }
 
-        // 2. Select on both sockets with 50ms interval
+        // 2. If client is TLS and has leftover decrypted plaintext, deliver to broker
+        if (isClientTls && clientTlsSession.plainBufLen > clientTlsSession.plainBufOffset) {
+            int recvd = schannel_recv(&clientTlsSession, buf, sizeof(buf));
+            if (recvd > 0) {
+                int s = schannel_send(&brokerTlsSession, buf, recvd);
+                if (s <= 0) {
+                    running = false;
+                    break;
+                }
+            }
+            continue;
+        }
+
+        // 3. Select on both sockets with 50ms interval
         fd_set read_fds;
         FD_ZERO(&read_fds);
         FD_SET(clientSock, &read_fds);
-        FD_SET(tlsSession.sock, &read_fds);
+        FD_SET(brokerTlsSession.sock, &read_fds);
 
-        SOCKET maxSock = (clientSock > tlsSession.sock) ? clientSock : tlsSession.sock;
+        SOCKET maxSock = (clientSock > brokerTlsSession.sock) ? clientSock : brokerTlsSession.sock;
         struct timeval tv;
         tv.tv_sec = 0;
-        tv.tv_usec = 50000; // 50ms
+        tv.tv_usec = 50000; // 50000 us = 50ms
 
         int sel = select((int)maxSock + 1, &read_fds, NULL, NULL, &tv);
         if (sel < 0) {
@@ -88,34 +131,39 @@ static unsigned __stdcall mqtt_client_worker(void* param) {
             continue;
         }
 
-        // Local client -> Broker (encrypt)
-        if (FD_ISSET(clientSock, &read_fds)) {
-            int recvd = recv(clientSock, (char*)buf, sizeof(buf), 0);
+        // Local client -> Broker
+        if (FD_ISSET(clientSock, &read_fds) || (isClientTls && clientTlsSession.recvBufLen > 0)) {
+            int recvd = isClientTls ? schannel_recv(&clientTlsSession, buf, sizeof(buf))
+                                    : recv(clientSock, (char*)buf, sizeof(buf), 0);
             if (recvd <= 0) {
-                if (config->verbose) {
-                    printf("[MQTT-PROXY] Local client disconnected.\n");
+                if (isClientTls && recvd == 0 && clientTlsSession.isConnected) {
+                    // Waiting for more TLS fragments
+                } else {
+                    if (config->verbose) {
+                        printf("[MQTT-PROXY] Local client disconnected.\n");
+                    }
+                    running = false;
+                    break;
                 }
-                running = false;
-                break;
-            }
+            } else {
+                if (config->verbose) {
+                    printf("[MQTT-PROXY] Client -> Broker: %d bytes | HEX:", recvd);
+                    for (int i = 0; i < recvd && i < 16; i++) printf(" %02X", buf[i]);
+                    printf("\n");
+                }
 
-            if (config->verbose) {
-                printf("[MQTT-PROXY] Client -> Broker: %d bytes | HEX:", recvd);
-                for (int i = 0; i < recvd && i < 16; i++) printf(" %02X", buf[i]);
-                printf("\n");
-            }
-
-            int sent = schannel_send(&tlsSession, buf, recvd);
-            if (sent <= 0) {
-                fprintf(stderr, "[MQTT-PROXY] Failed to send encrypted data to broker.\n");
-                running = false;
-                break;
+                int sent = schannel_send(&brokerTlsSession, buf, recvd);
+                if (sent <= 0) {
+                    fprintf(stderr, "[MQTT-PROXY] Failed to send encrypted data to broker.\n");
+                    running = false;
+                    break;
+                }
             }
         }
 
-        // Broker -> Local client (decrypt)
-        if (FD_ISSET(tlsSession.sock, &read_fds) || tlsSession.recvBufLen > 0) {
-            int recvd = schannel_recv(&tlsSession, buf, sizeof(buf));
+        // Broker -> Local client
+        if (FD_ISSET(brokerTlsSession.sock, &read_fds) || brokerTlsSession.recvBufLen > 0) {
+            int recvd = schannel_recv(&brokerTlsSession, buf, sizeof(buf));
             if (recvd < 0) {
                 if (config->verbose) {
                     printf("[MQTT-PROXY] SChannel recv error from broker.\n");
@@ -123,7 +171,7 @@ static unsigned __stdcall mqtt_client_worker(void* param) {
                 running = false;
                 break;
             } else if (recvd == 0) {
-                if (!tlsSession.isConnected) {
+                if (!brokerTlsSession.isConnected) {
                     if (config->verbose) {
                         printf("[MQTT-PROXY] Remote broker closed connection.\n");
                     }
@@ -137,7 +185,8 @@ static unsigned __stdcall mqtt_client_worker(void* param) {
                     printf("\n");
                 }
 
-                int s = send_all_socket(clientSock, buf, recvd);
+                int s = isClientTls ? schannel_send(&clientTlsSession, buf, recvd)
+                                    : send_all_socket(clientSock, buf, recvd);
                 if (s <= 0) {
                     running = false;
                     break;
@@ -146,8 +195,9 @@ static unsigned __stdcall mqtt_client_worker(void* param) {
         }
     }
 
-    schannel_close(&tlsSession);
-    closesocket(clientSock);
+    schannel_close(&brokerTlsSession);
+    if (isClientTls) schannel_close(&clientTlsSession);
+    else closesocket(clientSock);
 
     if (config->verbose) {
         printf("[MQTT-PROXY] Connection closed.\n");
@@ -192,7 +242,8 @@ static unsigned __stdcall mqtt_listener_thread(void* param) {
                 if (args) {
                     args->clientSock = clientSock;
                     args->config = config;
-                    args->hCred = server->hCred;
+                    args->hClientCred = server->hClientCred;
+                    args->hServerCred = server->hServerCred;
 
                     HANDLE hWorker = (HANDLE)_beginthreadex(NULL, 0, mqtt_client_worker, args, 0, NULL);
                     if (hWorker) {
@@ -211,13 +262,14 @@ static unsigned __stdcall mqtt_listener_thread(void* param) {
     return 0;
 }
 
-bool mqtt_proxy_start(MqttProxyServer* server, const ProxyConfig* config, const CertDetails* certDetails, CredHandle hCred) {
+bool mqtt_proxy_start(MqttProxyServer* server, const ProxyConfig* config, const CertDetails* certDetails, CredHandle hClientCred, CredHandle hServerCred) {
     if (!server || !config || !certDetails) return false;
     memset(server, 0, sizeof(MqttProxyServer));
 
     server->config = config;
     server->certDetails = certDetails;
-    server->hCred = hCred;
+    server->hClientCred = hClientCred;
+    server->hServerCred = hServerCred;
     server->listenSock = INVALID_SOCKET;
     server->isRunning = true;
 
@@ -259,9 +311,10 @@ bool mqtt_proxy_start(MqttProxyServer* server, const ProxyConfig* config, const 
         return false;
     }
 
-    printf("[MQTT-PROXY] Listening on %s:%d -> %s:%d (mTLS)\n",
+    printf("[MQTT-PROXY] Listening on %s:%d -> %s:%d (mTLS)%s\n",
            config->mqtt_local_host, config->mqtt_local_port,
-           config->mqtt_remote_host, config->mqtt_remote_port);
+           config->mqtt_remote_host, config->mqtt_remote_port,
+           config->mqtt_local_ssl ? " [local SSL enabled]" : " [local TCP/SSL auto-detect]");
 
     server->hThread = (HANDLE)_beginthreadex(NULL, 0, mqtt_listener_thread, server, 0, NULL);
     if (!server->hThread) {

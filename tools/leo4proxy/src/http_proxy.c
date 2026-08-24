@@ -14,10 +14,21 @@ typedef struct {
     SOCKET clientSock;
     const ProxyConfig* config;
     const CertDetails* certDetails;
-    CredHandle hCred;
+    CredHandle hClientCred;
+    CredHandle hServerCred;
 } HttpClientWorkerArgs;
 
-static int send_http_response(SOCKET s, int statusCode, const char* statusText, const char* contentType, const char* body, const char* sn) {
+static int send_all_socket(SOCKET s, const BYTE* data, int len) {
+    int total = 0;
+    while (total < len) {
+        int sent = send(s, (const char*)(data + total), len - total, 0);
+        if (sent <= 0) return sent;
+        total += sent;
+    }
+    return total;
+}
+
+static int send_http_response_ext(SOCKET s, SChannelSession* tlsSession, int statusCode, const char* statusText, const char* contentType, const char* body, const char* sn) {
     char headerBuf[1024];
     int bodyLen = body ? (int)strlen(body) : 0;
 
@@ -33,14 +44,21 @@ static int send_http_response(SOCKET s, int statusCode, const char* statusText, 
         "\r\n",
         statusCode, statusText, contentType, bodyLen, sn ? sn : "");
 
-    send(s, headerBuf, headerLen, 0);
-    if (bodyLen > 0) {
-        send(s, body, bodyLen, 0);
+    if (tlsSession) {
+        schannel_send(tlsSession, headerBuf, headerLen);
+        if (bodyLen > 0) {
+            schannel_send(tlsSession, body, bodyLen);
+        }
+    } else {
+        send(s, headerBuf, headerLen, 0);
+        if (bodyLen > 0) {
+            send(s, body, bodyLen, 0);
+        }
     }
     return 0;
 }
 
-static void handle_info_request(SOCKET s, const ProxyConfig* config, const CertDetails* certDetails) {
+static void handle_info_request_ext(SOCKET s, SChannelSession* tlsSession, const ProxyConfig* config, const CertDetails* certDetails) {
     char jsonBuf[2048];
 
     snprintf(jsonBuf, sizeof(jsonBuf),
@@ -83,11 +101,11 @@ static void handle_info_request(SOCKET s, const ProxyConfig* config, const CertD
         config->http_remote_host, config->http_remote_port
     );
 
-    send_http_response(s, 200, "OK", "application/json; charset=utf-8", jsonBuf, certDetails->sn);
+    send_http_response_ext(s, tlsSession, 200, "OK", "application/json; charset=utf-8", jsonBuf, certDetails->sn);
 }
 
-static void handle_sn_request(SOCKET s, const CertDetails* certDetails) {
-    send_http_response(s, 200, "OK", "text/plain; charset=utf-8", certDetails->sn, certDetails->sn);
+static void handle_sn_request_ext(SOCKET s, SChannelSession* tlsSession, const CertDetails* certDetails) {
+    send_http_response_ext(s, tlsSession, 200, "OK", "text/plain; charset=utf-8", certDetails->sn, certDetails->sn);
 }
 
 static unsigned __stdcall http_client_worker(void* param) {
@@ -95,15 +113,46 @@ static unsigned __stdcall http_client_worker(void* param) {
     SOCKET clientSock = args->clientSock;
     const ProxyConfig* config = args->config;
     const CertDetails* certDetails = args->certDetails;
-    CredHandle hCred = args->hCred;
+    CredHandle hClientCred = args->hClientCred;
+    CredHandle hServerCred = args->hServerCred;
     free(args);
+
+    BOOL keepAlive = TRUE;
+    setsockopt(clientSock, SOL_SOCKET, SO_KEEPALIVE, (const char*)&keepAlive, sizeof(keepAlive));
+
+    // Auto-detect or enforce TLS on incoming client socket
+    bool isClientTls = false;
+    BYTE peekByte = 0;
+    int p = recv(clientSock, (char*)&peekByte, 1, MSG_PEEK);
+    if (config->http_local_ssl || (config->auto_local_ssl && p == 1 && peekByte == 0x16)) {
+        isClientTls = true;
+    }
+
+    SChannelSession clientTlsSession;
+    memset(&clientTlsSession, 0, sizeof(SChannelSession));
+
+    if (isClientTls && SecIsValidHandle(&hServerCred)) {
+        if (config->verbose) {
+            printf("[HTTP-PROXY] Inbound TLS handshake from local client...\n");
+        }
+        if (!schannel_accept(&clientTlsSession, &hServerCred, clientSock)) {
+            if (config->verbose) {
+                fprintf(stderr, "[HTTP-PROXY] Inbound TLS handshake failed.\n");
+            }
+            closesocket(clientSock);
+            return 1;
+        }
+    } else if (isClientTls) {
+        isClientTls = false;
+    }
 
     char* reqBuf = (char*)malloc(65536);
     char* modifiedReq = (char*)malloc(131072);
     if (!reqBuf || !modifiedReq) {
         if (reqBuf) free(reqBuf);
         if (modifiedReq) free(modifiedReq);
-        closesocket(clientSock);
+        if (isClientTls) schannel_close(&clientTlsSession);
+        else closesocket(clientSock);
         return 1;
     }
 
@@ -112,7 +161,8 @@ static unsigned __stdcall http_client_worker(void* param) {
     char* headerEnd = NULL;
 
     while (reqLen < 65536 - 1) {
-        int r = recv(clientSock, reqBuf + reqLen, 65536 - 1 - reqLen, 0);
+        int r = isClientTls ? schannel_recv(&clientTlsSession, reqBuf + reqLen, 65536 - 1 - reqLen)
+                            : recv(clientSock, reqBuf + reqLen, 65536 - 1 - reqLen, 0);
         if (r <= 0) break;
         reqLen += r;
         reqBuf[reqLen] = '\0';
@@ -131,7 +181,8 @@ static unsigned __stdcall http_client_worker(void* param) {
             int bodyBytes = reqLen - headerBytes;
 
             while (bodyBytes < contentLen && reqLen < 65536 - 1) {
-                int r2 = recv(clientSock, reqBuf + reqLen, 65536 - 1 - reqLen, 0);
+                int r2 = isClientTls ? schannel_recv(&clientTlsSession, reqBuf + reqLen, 65536 - 1 - reqLen)
+                                     : recv(clientSock, reqBuf + reqLen, 65536 - 1 - reqLen, 0);
                 if (r2 <= 0) break;
                 reqLen += r2;
                 reqBuf[reqLen] = '\0';
@@ -144,7 +195,8 @@ static unsigned __stdcall http_client_worker(void* param) {
     if (reqLen <= 0 || !headerEnd) {
         free(reqBuf);
         free(modifiedReq);
-        closesocket(clientSock);
+        if (isClientTls) schannel_close(&clientTlsSession);
+        else closesocket(clientSock);
         return 1;
     }
 
@@ -156,10 +208,11 @@ static unsigned __stdcall http_client_worker(void* param) {
 
     // Handle CORS preflight OPTIONS
     if (_stricmp(method, "OPTIONS") == 0) {
-        send_http_response(clientSock, 204, "No Content", "text/plain", "", certDetails->sn);
+        send_http_response_ext(clientSock, isClientTls ? &clientTlsSession : NULL, 204, "No Content", "text/plain", "", certDetails->sn);
         free(reqBuf);
         free(modifiedReq);
-        closesocket(clientSock);
+        if (isClientTls) schannel_close(&clientTlsSession);
+        else closesocket(clientSock);
         return 0;
     }
 
@@ -168,25 +221,28 @@ static unsigned __stdcall http_client_worker(void* param) {
         _stricmp(path, "/_leo4/status") == 0 ||
         _stricmp(path, "/status") == 0 ||
         _stricmp(path, "/info") == 0) {
-        handle_info_request(clientSock, config, certDetails);
+        handle_info_request_ext(clientSock, isClientTls ? &clientTlsSession : NULL, config, certDetails);
         free(reqBuf);
         free(modifiedReq);
-        closesocket(clientSock);
+        if (isClientTls) schannel_close(&clientTlsSession);
+        else closesocket(clientSock);
         return 0;
     }
 
     if (_stricmp(path, "/_leo4/sn") == 0 || _stricmp(path, "/sn") == 0) {
-        handle_sn_request(clientSock, certDetails);
+        handle_sn_request_ext(clientSock, isClientTls ? &clientTlsSession : NULL, certDetails);
         free(reqBuf);
         free(modifiedReq);
-        closesocket(clientSock);
+        if (isClientTls) schannel_close(&clientTlsSession);
+        else closesocket(clientSock);
         return 0;
     }
 
     // 4. Proxy to Remote HTTPS Backend
     if (config->verbose) {
-        printf("[HTTP-PROXY] %s %s -> https://%s:%d (mTLS SN=%s)\n",
-               method, path, config->http_remote_host, config->http_remote_port, certDetails->sn);
+        printf("[HTTP-PROXY] %s %s -> https://%s:%d (mTLS SN=%s)%s\n",
+               method, path, config->http_remote_host, config->http_remote_port, certDetails->sn,
+               isClientTls ? " [client TLS]" : "");
     }
 
     // Build modified request to forward
@@ -247,51 +303,50 @@ static unsigned __stdcall http_client_worker(void* param) {
     free(reqBuf); // reqBuf no longer needed
 
     // Connect to backend via SChannel
-    SChannelSession tlsSession;
-    if (!schannel_connect(&tlsSession, &hCred, config->http_remote_host, config->http_remote_port, 10000, config->insecure_server_cert)) {
+    SChannelSession remoteTlsSession;
+    if (!schannel_connect(&remoteTlsSession, &hClientCred, config->http_remote_host, config->http_remote_port, 10000, config->insecure_server_cert)) {
         fprintf(stderr, "[HTTP-PROXY] Failed to establish mTLS connection to %s:%d\n",
                 config->http_remote_host, config->http_remote_port);
         const char* errJson = "{\"error\": \"Failed to connect to upstream backend\"}";
-        send_http_response(clientSock, 502, "Bad Gateway", "application/json", errJson, certDetails->sn);
+        send_http_response_ext(clientSock, isClientTls ? &clientTlsSession : NULL, 502, "Bad Gateway", "application/json", errJson, certDetails->sn);
         free(modifiedReq);
-        closesocket(clientSock);
+        if (isClientTls) schannel_close(&clientTlsSession);
+        else closesocket(clientSock);
         return 1;
     }
 
     // Send HTTP request over TLS
-    int sent = schannel_send(&tlsSession, modifiedReq, modLen);
+    int sent = schannel_send(&remoteTlsSession, modifiedReq, modLen);
     free(modifiedReq); // modifiedReq no longer needed
 
     if (sent <= 0) {
         fprintf(stderr, "[HTTP-PROXY] Failed to send request over TLS\n");
         const char* errJson = "{\"error\": \"Failed to send request to upstream\"}";
-        send_http_response(clientSock, 502, "Bad Gateway", "application/json", errJson, certDetails->sn);
-        schannel_close(&tlsSession);
-        closesocket(clientSock);
+        send_http_response_ext(clientSock, isClientTls ? &clientTlsSession : NULL, 502, "Bad Gateway", "application/json", errJson, certDetails->sn);
+        schannel_close(&remoteTlsSession);
+        if (isClientTls) schannel_close(&clientTlsSession);
+        else closesocket(clientSock);
         return 1;
     }
 
-    // Stream response from TLS to client socket
+    // Stream response from remote TLS to client socket (plain or client TLS)
     BYTE respBuf[16384];
     while (true) {
-        int recvd = schannel_recv(&tlsSession, respBuf, sizeof(respBuf));
+        int recvd = schannel_recv(&remoteTlsSession, respBuf, sizeof(respBuf));
         if (recvd <= 0) {
             break;
         }
 
-        int totalSent = 0;
-        while (totalSent < recvd) {
-            int s = send(clientSock, (const char*)(respBuf + totalSent), recvd - totalSent, 0);
-            if (s <= 0) {
-                break;
-            }
-            totalSent += s;
+        int s = isClientTls ? schannel_send(&clientTlsSession, respBuf, recvd)
+                            : send_all_socket(clientSock, respBuf, recvd);
+        if (s <= 0) {
+            break;
         }
-        if (totalSent < recvd) break;
     }
 
-    schannel_close(&tlsSession);
-    closesocket(clientSock);
+    schannel_close(&remoteTlsSession);
+    if (isClientTls) schannel_close(&clientTlsSession);
+    else closesocket(clientSock);
     return 0;
 }
 
@@ -332,7 +387,8 @@ static unsigned __stdcall http_listener_thread(void* param) {
                     args->clientSock = clientSock;
                     args->config = config;
                     args->certDetails = server->certDetails;
-                    args->hCred = server->hCred;
+                    args->hClientCred = server->hClientCred;
+                    args->hServerCred = server->hServerCred;
 
                     HANDLE hWorker = (HANDLE)_beginthreadex(NULL, 0, http_client_worker, args, 0, NULL);
                     if (hWorker) {
@@ -351,13 +407,14 @@ static unsigned __stdcall http_listener_thread(void* param) {
     return 0;
 }
 
-bool http_proxy_start(HttpProxyServer* server, const ProxyConfig* config, const CertDetails* certDetails, CredHandle hCred) {
+bool http_proxy_start(HttpProxyServer* server, const ProxyConfig* config, const CertDetails* certDetails, CredHandle hClientCred, CredHandle hServerCred) {
     if (!server || !config || !certDetails) return false;
     memset(server, 0, sizeof(HttpProxyServer));
 
     server->config = config;
     server->certDetails = certDetails;
-    server->hCred = hCred;
+    server->hClientCred = hClientCred;
+    server->hServerCred = hServerCred;
     server->listenSock = INVALID_SOCKET;
     server->isRunning = true;
 
@@ -399,9 +456,10 @@ bool http_proxy_start(HttpProxyServer* server, const ProxyConfig* config, const 
         return false;
     }
 
-    printf("[HTTP-PROXY] Listening on %s:%d -> https://%s:%d (mTLS)\n",
+    printf("[HTTP-PROXY] Listening on %s:%d -> https://%s:%d (mTLS)%s\n",
            config->http_local_host, config->http_local_port,
-           config->http_remote_host, config->http_remote_port);
+           config->http_remote_host, config->http_remote_port,
+           config->http_local_ssl ? " [local SSL enabled]" : " [local HTTP/HTTPS auto-detect]");
 
     server->hThread = (HANDLE)_beginthreadex(NULL, 0, http_listener_thread, server, 0, NULL);
     if (!server->hThread) {
