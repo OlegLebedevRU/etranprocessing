@@ -32,7 +32,7 @@ target_include_directories(leo4proxy PRIVATE src)
 
 if(MSVC)
     set_property(TARGET leo4proxy PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-    target_compile_options(leo4proxy PRIVATE /W4 /D_CRT_SECURE_NO_WARNINGS /DUNICODE /D_UNICODE)
+    target_compile_options(leo4proxy PRIVATE /W4 /utf-8 /D_CRT_SECURE_NO_WARNINGS /DUNICODE /D_UNICODE)
 endif()
 
 target_link_libraries(leo4proxy PRIVATE

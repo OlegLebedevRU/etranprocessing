@@ -12,6 +12,13 @@
 static TrayIconContext* g_trayCtx = NULL;
 static NOTIFYICONDATAW g_nid;
 
+static void utf8_to_w(const char* utf8, WCHAR* out_w, size_t out_w_count) {
+    if (!out_w || out_w_count == 0) return;
+    out_w[0] = L'\0';
+    if (!utf8 || utf8[0] == '\0') return;
+    MultiByteToWideChar(CP_UTF8, 0, utf8, -1, out_w, (int)out_w_count);
+}
+
 static void copy_to_clipboard(HWND hWnd, const char* text) {
     if (!text || text[0] == '\0') return;
     if (!OpenClipboard(hWnd)) return;
@@ -36,46 +43,59 @@ void tray_icon_show_info_dialog(TrayIconContext* ctx) {
     if (!ctx || !ctx->certDetails) return;
 
     WCHAR szTitle[256];
-    swprintf_s(szTitle, sizeof(szTitle)/sizeof(WCHAR), L"Leo4Proxy v%S - Information", LEO4_PROXY_VERSION);
+    swprintf_s(szTitle, sizeof(szTitle)/sizeof(WCHAR), L"Leo4Proxy v%hs - Information", LEO4_PROXY_VERSION);
+
+    WCHAR szSn[128], szUrn[128], szEmail[128], szIssuer[256], szThumb[64], szNotBefore[64], szNotAfter[64];
+    WCHAR szMqttRemote[256], szHttpRemote[256], szMqttLocal[64], szHttpLocal[64];
+
+    utf8_to_w(ctx->certDetails->sn, szSn, sizeof(szSn)/sizeof(WCHAR));
+    utf8_to_w(ctx->certDetails->urn, szUrn, sizeof(szUrn)/sizeof(WCHAR));
+    utf8_to_w(ctx->certDetails->email, szEmail, sizeof(szEmail)/sizeof(WCHAR));
+    utf8_to_w(ctx->certDetails->issuer, szIssuer, sizeof(szIssuer)/sizeof(WCHAR));
+    utf8_to_w(ctx->certDetails->thumbprint, szThumb, sizeof(szThumb)/sizeof(WCHAR));
+    utf8_to_w(ctx->certDetails->not_before, szNotBefore, sizeof(szNotBefore)/sizeof(WCHAR));
+    utf8_to_w(ctx->certDetails->not_after, szNotAfter, sizeof(szNotAfter)/sizeof(WCHAR));
+
+    utf8_to_w(ctx->config->mqtt_remote_host, szMqttRemote, sizeof(szMqttRemote)/sizeof(WCHAR));
+    utf8_to_w(ctx->config->http_remote_host, szHttpRemote, sizeof(szHttpRemote)/sizeof(WCHAR));
+    utf8_to_w(ctx->config->mqtt_local_host, szMqttLocal, sizeof(szMqttLocal)/sizeof(WCHAR));
+    utf8_to_w(ctx->config->http_local_host, szHttpLocal, sizeof(szHttpLocal)/sizeof(WCHAR));
 
     WCHAR szMessage[2048];
-    const CertDetails* d = ctx->certDetails;
-    const ProxyConfig* c = ctx->config;
-
     swprintf_s(szMessage, sizeof(szMessage)/sizeof(WCHAR),
         L"==========================================================\n"
-        L" Leo4Proxy v%S - SChannel mTLS Proxy\n"
+        L" Leo4Proxy v%hs - SChannel mTLS Proxy\n"
         L" Status: %s\n"
         L"==========================================================\n\n"
         L"--- Device & Certificate ---\n"
-        L"Device SN (CN):  %S\n"
-        L"Client ID:       %S\n"
-        L"SAN URN:         %S\n"
-        L"Email:           %S\n"
-        L"Thumbprint:      %S\n"
-        L"Issuer:          %S\n"
-        L"Valid From:      %S\n"
-        L"Valid To:        %S\n"
+        L"Device SN (CN):  %s\n"
+        L"Client ID:       %s\n"
+        L"SAN URN:         %s\n"
+        L"Email:           %s\n"
+        L"Thumbprint:      %s\n"
+        L"Issuer:          %s\n"
+        L"Valid From:      %s\n"
+        L"Valid To:        %s\n"
         L"Private Key:     %s\n\n"
         L"--- Active Proxy Endpoints ---\n"
-        L"MQTT Proxy:      http://%S:%d -> %S:%d (mTLS)\n"
-        L"HTTP Proxy:      http://%S:%d -> https://%S:%d (mTLS)\n"
-        L"Local Info API:  http://%S:%d/_leo4/info\n\n"
+        L"MQTT Proxy:      http://%s:%d -> %s:%d (mTLS)\n"
+        L"HTTP Proxy:      http://%s:%d -> https://%s:%d (mTLS)\n"
+        L"Local Info API:  http://%s:%d/_leo4/info\n\n"
         L"Right-click the tray icon for quick actions and controls.",
         LEO4_PROXY_VERSION,
         (ctx->currentState == TRAY_STATE_RUNNING) ? L"RUNNING (Active)" : L"STOPPED (Paused)",
-        d->sn,
-        d->sn,
-        d->urn[0] ? d->urn : "(none)",
-        d->email,
-        d->thumbprint,
-        d->issuer,
-        d->not_before,
-        d->not_after,
-        d->has_private_key ? L"YES (CNG KSP)" : L"NO",
-        c->mqtt_local_host, c->mqtt_local_port, c->mqtt_remote_host, c->mqtt_remote_port,
-        c->http_local_host, c->http_local_port, c->http_remote_host, c->http_remote_port,
-        c->http_local_host, c->http_local_port
+        szSn,
+        szSn,
+        szUrn[0] ? szUrn : L"(none)",
+        szEmail,
+        szThumb,
+        szIssuer,
+        szNotBefore,
+        szNotAfter,
+        ctx->certDetails->has_private_key ? L"YES (CNG KSP)" : L"NO",
+        szMqttLocal, ctx->config->mqtt_local_port, szMqttRemote, ctx->config->mqtt_remote_port,
+        szHttpLocal, ctx->config->http_local_port, szHttpRemote, ctx->config->http_remote_port,
+        szHttpLocal, ctx->config->http_local_port
     );
 
     MessageBoxW(ctx->hWnd, szMessage, szTitle, MB_OK | MB_ICONINFORMATION | MB_TOPMOST);
@@ -90,30 +110,33 @@ static void show_context_menu(HWND hWnd) {
     HMENU hMenu = CreatePopupMenu();
     if (!hMenu) return;
 
+    WCHAR szSn[128];
+    utf8_to_w(g_trayCtx->certDetails->sn, szSn, sizeof(szSn)/sizeof(WCHAR));
+
     // Header info line
     WCHAR szHeader[256];
     if (g_trayCtx->currentState == TRAY_STATE_RUNNING) {
-        swprintf_s(szHeader, sizeof(szHeader)/sizeof(WCHAR), L"[●] Leo4Proxy: RUNNING (%S)", g_trayCtx->certDetails->sn);
+        swprintf_s(szHeader, sizeof(szHeader)/sizeof(WCHAR), L"[RUNNING] Leo4Proxy (%s)", szSn);
     } else {
-        swprintf_s(szHeader, sizeof(szHeader)/sizeof(WCHAR), L"[●] Leo4Proxy: STOPPED (%S)", g_trayCtx->certDetails->sn);
+        swprintf_s(szHeader, sizeof(szHeader)/sizeof(WCHAR), L"[STOPPED] Leo4Proxy (%s)", szSn);
     }
     InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING | MF_DISABLED | MF_GRAYED, IDM_TRAY_HEADER, szHeader);
     InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_SEPARATOR, 0, NULL);
 
     // Start / Stop Selector
     if (g_trayCtx->currentState == TRAY_STATE_RUNNING) {
-        InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_STOP, L"■  Stop Proxies");
+        InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_STOP, L"Stop Proxies");
     } else {
-        InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_START, L"▶  Start Proxies");
+        InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_START, L"Start Proxies");
     }
-    InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_RESTART, L"🔄  Restart Proxies");
+    InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_RESTART, L"Restart Proxies");
 
     InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_SEPARATOR, 0, NULL);
 
     // Information Block
-    InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_INFO, L"ℹ  Information & Certificate...");
-    InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_BROWSER, L"🌐  Open /_leo4/info in Browser");
-    InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_COPY_SN, L"📋  Copy Device SN to Clipboard");
+    InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_INFO, L"Information & Certificate...");
+    InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_BROWSER, L"Open /_leo4/info in Browser");
+    InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_COPY_SN, L"Copy Device SN to Clipboard");
 
     InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_SEPARATOR, 0, NULL);
 
@@ -122,12 +145,12 @@ static void show_context_menu(HWND hWnd) {
     if (hConsole) {
         BOOL isVisible = IsWindowVisible(hConsole);
         InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_CONSOLE,
-                    isVisible ? L"👁  Hide Console Window" : L"👁  Show Console Window");
+                    isVisible ? L"Hide Console Window" : L"Show Console Window");
         InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_SEPARATOR, 0, NULL);
     }
 
     // Exit
-    InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_EXIT, L"✕  Exit");
+    InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_EXIT, L"Exit");
 
     // Must set foreground window before TrackPopupMenu
     SetForegroundWindow(hWnd);
@@ -168,7 +191,7 @@ static LRESULT CALLBACK tray_window_proc(HWND hWnd, UINT msg, WPARAM wParam, LPA
 
                 case IDM_TRAY_BROWSER: {
                     WCHAR szUrl[256];
-                    swprintf_s(szUrl, sizeof(szUrl)/sizeof(WCHAR), L"http://%S:%d/_leo4/info",
+                    swprintf_s(szUrl, sizeof(szUrl)/sizeof(WCHAR), L"http://%hs:%d/_leo4/info",
                                g_trayCtx->config->http_local_host, g_trayCtx->config->http_local_port);
                     ShellExecuteW(NULL, L"open", szUrl, NULL, NULL, SW_SHOWNORMAL);
                     break;
@@ -228,13 +251,16 @@ void tray_icon_set_state(TrayIconContext* ctx, TrayState state) {
     HICON hOldIcon = g_nid.hIcon;
     g_nid.hIcon = load_state_icon(state);
 
+    WCHAR szSn[128];
+    utf8_to_w(ctx->certDetails->sn, szSn, sizeof(szSn)/sizeof(WCHAR));
+
     if (state == TRAY_STATE_RUNNING) {
         swprintf_s(g_nid.szTip, sizeof(g_nid.szTip)/sizeof(WCHAR),
-                   L"Leo4Proxy - RUNNING\nSN: %S\nMQTT: %d | HTTP: %d",
-                   ctx->certDetails->sn, ctx->config->mqtt_local_port, ctx->config->http_local_port);
+                   L"Leo4Proxy - RUNNING\nSN: %s\nMQTT: %d | HTTP: %d",
+                   szSn, ctx->config->mqtt_local_port, ctx->config->http_local_port);
     } else {
         swprintf_s(g_nid.szTip, sizeof(g_nid.szTip)/sizeof(WCHAR),
-                   L"Leo4Proxy - STOPPED\nSN: %S", ctx->certDetails->sn);
+                   L"Leo4Proxy - STOPPED\nSN: %s", szSn);
     }
 
     Shell_NotifyIconW(NIM_MODIFY, &g_nid);
@@ -281,9 +307,12 @@ static unsigned __stdcall tray_thread_proc(void* param) {
     g_nid.uCallbackMessage = WM_TRAYICON;
     g_nid.hIcon = load_state_icon(ctx->currentState);
 
+    WCHAR szSn[128];
+    utf8_to_w(ctx->certDetails->sn, szSn, sizeof(szSn)/sizeof(WCHAR));
+
     swprintf_s(g_nid.szTip, sizeof(g_nid.szTip)/sizeof(WCHAR),
-               L"Leo4Proxy - RUNNING\nSN: %S\nMQTT: %d | HTTP: %d",
-               ctx->certDetails->sn, ctx->config->mqtt_local_port, ctx->config->http_local_port);
+               L"Leo4Proxy - RUNNING\nSN: %s\nMQTT: %d | HTTP: %d",
+               szSn, ctx->config->mqtt_local_port, ctx->config->http_local_port);
 
     Shell_NotifyIconW(NIM_ADD, &g_nid);
 
