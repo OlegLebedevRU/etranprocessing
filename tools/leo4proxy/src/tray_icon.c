@@ -102,18 +102,18 @@ static void show_context_menu(HWND hWnd) {
 
     // Start / Stop Selector
     if (g_trayCtx->currentState == TRAY_STATE_RUNNING) {
-        InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_STOP, L"■  Остановить прокси (Stop Proxies)");
+        InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_STOP, L"■  Stop Proxies");
     } else {
-        InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_START, L"▶  Запустить прокси (Start Proxies)");
+        InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_START, L"▶  Start Proxies");
     }
-    InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_RESTART, L"🔄  Перезапустить прокси (Restart)");
+    InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_RESTART, L"🔄  Restart Proxies");
 
     InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_SEPARATOR, 0, NULL);
 
     // Information Block
-    InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_INFO, L"ℹ  Информация и сертификат (Info)...");
-    InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_BROWSER, L"🌐  Открыть /_leo4/info в браузере");
-    InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_COPY_SN, L"📋  Скопировать Device SN в буфер");
+    InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_INFO, L"ℹ  Information & Certificate...");
+    InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_BROWSER, L"🌐  Open /_leo4/info in Browser");
+    InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_COPY_SN, L"📋  Copy Device SN to Clipboard");
 
     InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_SEPARATOR, 0, NULL);
 
@@ -122,12 +122,12 @@ static void show_context_menu(HWND hWnd) {
     if (hConsole) {
         BOOL isVisible = IsWindowVisible(hConsole);
         InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_CONSOLE,
-                    isVisible ? L"👁  Скрыть окно консоли (Hide Console)" : L"👁  Показать окно консоли (Show Console)");
+                    isVisible ? L"👁  Hide Console Window" : L"👁  Show Console Window");
         InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_SEPARATOR, 0, NULL);
     }
 
     // Exit
-    InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_EXIT, L"✕  Выход (Exit)");
+    InsertMenuW(hMenu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_TRAY_EXIT, L"✕  Exit");
 
     // Must set foreground window before TrackPopupMenu
     SetForegroundWindow(hWnd);
