@@ -39,6 +39,11 @@ body {
 .ant-table-thead > tr > th {
   font-weight: 600 !important;
   letter-spacing: 0.02em;
+  white-space: nowrap !important;
+}
+
+.ant-table-tbody > tr > td {
+  vertical-align: middle;
 }
 
 /* Compact tables for monitoring and reports */

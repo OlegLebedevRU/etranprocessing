@@ -245,42 +245,91 @@ export default function VariantsPage() {
 
   const serviceColumns = [
     {
-      title: "TSP",
+      title: "ТСП",
       dataIndex: "tsp_code",
       key: "tsp_code",
-      render: (v: number) => <Tag color="blue" style={{ margin: 0, fontSize: 10 }}>{v}</Tag>,
+      width: 75,
+      render: (v: number) => (
+        <Tag color="blue" style={{ margin: 0, fontSize: 11, whiteSpace: "nowrap" }}>
+          {v}
+        </Tag>
+      ),
+    },
+    {
+      title: "Активности",
+      key: "actions",
+      width: 90,
+      align: "center" as const,
+      render: (_: any, record: Service) => (
+        <Space size={2} style={{ whiteSpace: "nowrap" }}>
+          <Button
+            type="text"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => {
+              setEditService(record);
+              setServiceFormOpen(true);
+            }}
+            title="Редактировать"
+          />
+          <Popconfirm
+            title="Удалить услугу?"
+            onConfirm={() => handleDeleteService(record.id)}
+            okText="Да"
+            cancelText="Нет"
+          >
+            <Button type="text" size="small" danger icon={<DeleteOutlined />} title="Удалить" />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+    {
+      title: "Сумма",
+      dataIndex: "price",
+      key: "price",
+      width: 95,
+      align: "right" as const,
+      render: (v: number) => (
+        <span style={{ fontSize: 12, whiteSpace: "nowrap", fontWeight: 500 }}>
+          {v !== undefined && v !== null ? `${v} ₽` : "0 ₽"}
+        </span>
+      ),
     },
     {
       title: "Название для кнопки",
       dataIndex: "name",
       key: "name",
-      ellipsis: true,
-      render: (v: string) => <Text style={{ fontSize: 12 }}>{v}</Text>,
+      render: (v: string) => (
+        <div style={{ fontSize: 12, wordBreak: "break-word", whiteSpace: "normal", lineHeight: 1.35 }}>
+          {v}
+        </div>
+      ),
     },
     {
       title: "Наименование для чека",
       dataIndex: "printname",
       key: "printname",
-      ellipsis: true,
-      render: (v: string | null) => v ? <Text style={{ fontSize: 12 }}>{v}</Text> : <Text type="secondary" style={{ fontSize: 11 }}>—</Text>,
+      render: (v: string | null) =>
+        v ? (
+          <div style={{ fontSize: 12, wordBreak: "break-word", whiteSpace: "normal", lineHeight: 1.35 }}>
+            {v}
+          </div>
+        ) : (
+          <Text type="secondary" style={{ fontSize: 11 }}>
+            —
+          </Text>
+        ),
     },
     {
-      title: "₽",
-      dataIndex: "price",
-      key: "price",
-      align: "right" as const,
-      render: (v: number) => v ? <Text style={{ fontSize: 12 }}>{v}</Text> : <Text type="secondary" style={{ fontSize: 11 }}>—</Text>,
-    },
-    {
-      title: "",
-      key: "actions",
-      render: (_: any, record: Service) => (
-        <Space size={0}>
-          <Button type="text" size="small" icon={<EditOutlined />} onClick={() => { setEditService(record); setServiceFormOpen(true); }} />
-          <Popconfirm title="Удалить?" onConfirm={() => handleDeleteService(record.id)} okText="Да" cancelText="Нет">
-            <Button type="text" size="small" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
-        </Space>
+      title: "Номер Прототипа",
+      dataIndex: "protypenumber",
+      key: "protypenumber",
+      width: 130,
+      align: "center" as const,
+      render: (v: number) => (
+        <span style={{ fontSize: 12, whiteSpace: "nowrap" }}>
+          {v !== undefined && v !== null ? v : "—"}
+        </span>
       ),
     },
   ];

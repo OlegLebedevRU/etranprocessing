@@ -400,30 +400,36 @@ export default function AdminTerminalsPage() {
       title: "№ / Device ID",
       dataIndex: "device_id",
       key: "device_id",
-      width: 110,
+      width: 105,
       sorter: (a, b) => a.device_id - b.device_id,
-      render: (val) => <Text strong style={{ fontSize: 14 }}>#{val}</Text>,
+      render: (val) => (
+        <span style={{ whiteSpace: "nowrap" }}>
+          <Text strong style={{ fontSize: 13 }}>#{val}</Text>
+        </span>
+      ),
     },
     {
       title: "Серийный номер (SN)",
       dataIndex: "sn",
       key: "sn",
-      width: 210,
+      width: 190,
       render: (sn) => (
-        <Text code copyable={{ text: sn }} style={{ fontSize: 12 }}>
-          {sn}
-        </Text>
+        <span style={{ whiteSpace: "nowrap" }}>
+          <Text code copyable={{ text: sn }} style={{ fontSize: 11 }}>
+            {sn}
+          </Text>
+        </span>
       ),
     },
     {
       title: "Организация",
       dataIndex: "org_name",
       key: "org_name",
-      width: 160,
+      width: 170,
       render: (orgName, record) => (
-        <div>
-          <div><Text strong>{orgName || `Организация #${record.org_id}`}</Text></div>
-          <Text type="secondary" style={{ fontSize: 11 }}>ID: {record.org_id}</Text>
+        <div style={{ maxWidth: 160, wordBreak: "break-word", lineHeight: 1.35 }}>
+          <div><Text strong style={{ fontSize: 12 }}>{orgName || `Организация #${record.org_id}`}</Text></div>
+          <Text type="secondary" style={{ fontSize: 11, whiteSpace: "nowrap" }}>ID: {record.org_id}</Text>
         </div>
       ),
     },
@@ -436,7 +442,7 @@ export default function AdminTerminalsPage() {
         const typeId = record.terminal_type_id;
         const label = typeName || "Стандартный";
         return (
-          <Tag color="geekblue">
+          <Tag color="geekblue" style={{ margin: 0, whiteSpace: "nowrap" }}>
             {typeId !== undefined && typeId !== null ? `${typeId}: ${label}` : label}
           </Tag>
         );
@@ -446,7 +452,7 @@ export default function AdminTerminalsPage() {
       title: "Состояние",
       dataIndex: "is_active",
       key: "is_active",
-      width: 130,
+      width: 120,
       render: (active, record) => (
         <Popconfirm
           title={active ? "Отключить терминал?" : "Активировать терминал?"}
@@ -457,9 +463,9 @@ export default function AdminTerminalsPage() {
         >
           <Tag
             color={active ? "success" : "error"}
-            style={{ cursor: "pointer", userSelect: "none" }}
+            style={{ cursor: "pointer", userSelect: "none", margin: 0, whiteSpace: "nowrap" }}
           >
-            <Space orientation="horizontal" size={4}>
+            <Space size={4}>
               <PoweroffOutlined />
               {active ? "Активен" : "Отключен"}
             </Space>
@@ -470,10 +476,10 @@ export default function AdminTerminalsPage() {
     {
       title: "Лицензия",
       key: "license",
-      width: 180,
+      width: 170,
       render: (_, record) => {
         if (!record.license_expires_at) {
-          return <Tag color="default">Нет лицензии</Tag>;
+          return <Tag color="default" style={{ margin: 0, whiteSpace: "nowrap" }}>Нет лицензии</Tag>;
         }
         const expDate = new Date(record.license_expires_at);
         const isExpired = expDate < new Date();
@@ -484,15 +490,15 @@ export default function AdminTerminalsPage() {
         });
 
         return (
-          <div>
-            <Tag color={isExpired ? "error" : "success"}>
+          <Space direction="vertical" size={2} style={{ whiteSpace: "nowrap" }}>
+            <Tag color={isExpired ? "error" : "success"} style={{ margin: 0, whiteSpace: "nowrap" }}>
               {isExpired ? "Истекла: " : "До: "}
               {dateFormatted}
             </Tag>
             {record.license_is_active === false && (
-              <Tag color="warning" style={{ marginTop: 2 }}>Приостановлена</Tag>
+              <Tag color="warning" style={{ margin: 0, whiteSpace: "nowrap" }}>Приостановлена</Tag>
             )}
-          </div>
+          </Space>
         );
       },
     },
@@ -501,20 +507,20 @@ export default function AdminTerminalsPage() {
       key: "cert_and_pin",
       width: 170,
       render: (_, record) => (
-        <Space direction="vertical" size={2}>
+        <Space direction="vertical" size={2} style={{ whiteSpace: "nowrap" }}>
           {record.cert_serial ? (
             <Tooltip title={`Действителен до: ${record.cert_not_valid_after || "—"}`}>
-              <Tag color="cyan">Сертификат привязан</Tag>
+              <Tag color="cyan" style={{ margin: 0, whiteSpace: "nowrap" }}>Сертификат привязан</Tag>
             </Tooltip>
           ) : (
-            <Tag color="default">Без сертификата</Tag>
+            <Tag color="default" style={{ margin: 0, whiteSpace: "nowrap" }}>Без сертификата</Tag>
           )}
 
           {record.pending_pin && (
             <Tag
               color="volcano"
               icon={<KeyOutlined />}
-              style={{ cursor: "pointer" }}
+              style={{ cursor: "pointer", margin: 0, whiteSpace: "nowrap" }}
               onClick={() => copyToClipboard(record.pending_pin!)}
             >
               PIN: {record.pending_pin}
@@ -529,7 +535,7 @@ export default function AdminTerminalsPage() {
       width: 150,
       render: (_, record) => {
         if (!record.iot_provisioned) {
-          return <span style={{ color: "#8c8c8c" }}>—</span>;
+          return <span style={{ color: "#8c8c8c", whiteSpace: "nowrap" }}>—</span>;
         }
         const provDate = record.iot_provisioned_at
           ? new Date(record.iot_provisioned_at).toLocaleDateString("ru-RU", {
@@ -552,7 +558,11 @@ export default function AdminTerminalsPage() {
               </div>
             }
           >
-            <Tag color={record.iot_is_online ? "success" : "blue"} icon={<CloudOutlined />}>
+            <Tag
+              color={record.iot_is_online ? "success" : "blue"}
+              icon={<CloudOutlined />}
+              style={{ margin: 0, whiteSpace: "nowrap" }}
+            >
               {record.iot_is_online ? "Онлайн" : "Зарегистрирован"}
             </Tag>
           </Tooltip>
@@ -562,13 +572,20 @@ export default function AdminTerminalsPage() {
     {
       title: "Адрес / Примечание",
       key: "info",
+      width: 250,
       render: (_, record) => (
-        <div>
+        <div style={{ maxWidth: 240, wordBreak: "break-word", lineHeight: 1.35 }}>
           {record.address && (
-            <div><Text style={{ fontSize: 12 }}>📍 {record.address}</Text></div>
+            <div>
+              <Text style={{ fontSize: 12 }}>📍 {record.address}</Text>
+            </div>
           )}
           {record.note && (
-            <div><Text type="secondary" style={{ fontSize: 11 }}>📝 {record.note}</Text></div>
+            <div>
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                📝 {record.note}
+              </Text>
+            </div>
           )}
           {!record.address && !record.note && <Text type="secondary">—</Text>}
         </div>
@@ -762,7 +779,7 @@ export default function AdminTerminalsPage() {
           showTotal: (t) => `Всего терминалов: ${t}`,
         }}
         size="middle"
-        scroll={{ x: 1200 }}
+        scroll={{ x: 1600 }}
       />
 
       {/* Modal: Create Terminal */}

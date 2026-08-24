@@ -479,50 +479,65 @@ export default function BillingPage() {
       title: "Терминал",
       dataIndex: "device_id",
       key: "device_id",
-      width: 100,
+      width: 105,
       sorter: (a, b) => a.device_id - b.device_id,
+      render: (val: number) => (
+        <span style={{ whiteSpace: "nowrap" }}>
+          <Text strong style={{ fontSize: 13 }}>#{val}</Text>
+        </span>
+      ),
     },
     {
       title: "Тип",
       dataIndex: "terminal_type_name",
       key: "terminal_type",
-      width: 140,
+      width: 130,
       render: (v: string | null, r: BillingTerminal) => {
         if (r.terminal_type_id !== undefined && r.terminal_type_id !== null) {
           return (
-            <Text style={{ fontSize: 12 }}>
+            <div style={{ fontSize: 12, wordBreak: "break-word", lineHeight: 1.3 }}>
               {v ? `${r.terminal_type_id}: ${v}` : `${r.terminal_type_id}`}
-            </Text>
+            </div>
           );
         }
-        return <Text style={{ fontSize: 12 }}>{v || "—"}</Text>;
+        return <div style={{ fontSize: 12, wordBreak: "break-word" }}>{v || "—"}</div>;
       },
     },
     {
       title: "Адрес",
       dataIndex: "address",
       key: "address",
-      width: 180,
-      ellipsis: true,
-      render: (v: string | null) => (
+      width: 220,
+      render: (v: string | null) =>
         v ? (
-          <Tooltip title={v}>
-            <Text style={{ fontSize: 12 }}>{v}</Text>
-          </Tooltip>
+          <div style={{ fontSize: 12, wordBreak: "break-word", whiteSpace: "normal", lineHeight: 1.35 }}>
+            {v}
+          </div>
         ) : (
           <Text type="secondary" style={{ fontSize: 12 }}>
             —
           </Text>
-        )
-      ),
+        ),
     },
     {
       title: "Статус",
       dataIndex: "billing_status",
       key: "status",
-      width: 150,
+      width: 140,
       render: (status: string) => (
-        <Tag color={billingStatusColor(status)}>
+        <Tag
+          color={billingStatusColor(status)}
+          style={{
+            whiteSpace: "normal",
+            wordBreak: "break-word",
+            height: "auto",
+            padding: "2px 8px",
+            lineHeight: 1.3,
+            textAlign: "center",
+            display: "inline-block",
+            fontSize: 12,
+          }}
+        >
           {billingStatusLabel(status)}
         </Tag>
       ),
@@ -530,29 +545,35 @@ export default function BillingPage() {
     {
       title: "Лицензия",
       key: "license",
-      width: 215,
+      width: 220,
       render: (_: unknown, r: BillingTerminal) => {
         if (isTerminalDisabled(r)) {
           return (
-            <Text type={isLicenseLapsed(r) ? "danger" : "secondary"}>
-              {r.license_expires_at
-                ? formatDate(r.license_expires_at)
-                : "нет лицензии"}
-            </Text>
+            <span style={{ whiteSpace: "nowrap" }}>
+              <Text type={isLicenseLapsed(r) ? "danger" : "secondary"}>
+                {r.license_expires_at
+                  ? formatDate(r.license_expires_at)
+                  : "нет лицензии"}
+              </Text>
+            </span>
           );
         }
 
         if (r.billing_mode === "cert_linked") {
           return (
-            <Space direction="vertical" size={0}>
-              <Text>
-                {r.license_expires_at
-                  ? formatDate(r.license_expires_at)
-                  : "по сертификату"}
-              </Text>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                0 ₽ (в сертификате)
-              </Text>
+            <Space direction="vertical" size={0} style={{ whiteSpace: "nowrap" }}>
+              <span style={{ whiteSpace: "nowrap" }}>
+                <Text>
+                  {r.license_expires_at
+                    ? formatDate(r.license_expires_at)
+                    : "по сертификату"}
+                </Text>
+              </span>
+              <span style={{ whiteSpace: "nowrap" }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  0 ₽ (в сертификате)
+                </Text>
+              </span>
             </Space>
           );
         }
@@ -567,17 +588,24 @@ export default function BillingPage() {
             onChange={(e) => toggle(r.terminal_id, "license", e.target.checked)}
           >
             <Space direction="vertical" size={0}>
-              <Text type={lapsed ? "danger" : undefined}>
-                {r.license_expires_at
-                  ? formatDate(r.license_expires_at)
-                  : "нет лицензии"}
-              </Text>
-              {payable && (
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {formatMoneyMinor(licenseAmountMinor(r, advancePeriods))}
-                  {checked &&
-                    ` → ${formatDate(projectedExpiry(r, advancePeriods))}`}
+              <span style={{ whiteSpace: "nowrap" }}>
+                <Text type={lapsed ? "danger" : undefined}>
+                  {r.license_expires_at
+                    ? formatDate(r.license_expires_at)
+                    : "нет лицензии"}
                 </Text>
+              </span>
+              {payable && (
+                <div style={{ fontSize: 12, color: "#64748b", lineHeight: 1.3 }}>
+                  <span style={{ whiteSpace: "nowrap" }}>
+                    {formatMoneyMinor(licenseAmountMinor(r, advancePeriods))}
+                  </span>
+                  {checked && (
+                    <span style={{ whiteSpace: "nowrap" }}>
+                      {` → ${formatDate(projectedExpiry(r, advancePeriods))}`}
+                    </span>
+                  )}
+                </div>
               )}
             </Space>
           </Checkbox>
@@ -598,19 +626,21 @@ export default function BillingPage() {
       render: (_: unknown, r: BillingTerminal) => {
         if (isTerminalDisabled(r)) {
           return !r.cert_serial ? (
-            <Text type="secondary">не выпущен</Text>
+            <span style={{ whiteSpace: "nowrap" }}><Text type="secondary">не выпущен</Text></span>
           ) : !r.cert_not_valid_after ? (
-            <Text type="secondary">выпущен (дата неизвестна)</Text>
+            <span style={{ whiteSpace: "nowrap" }}><Text type="secondary">выпущен (дата неизвестна)</Text></span>
           ) : (
-            <Text
-              type={
-                new Date(r.cert_not_valid_after) < new Date()
-                  ? "danger"
-                  : "secondary"
-              }
-            >
-              {formatDate(r.cert_not_valid_after)}
-            </Text>
+            <span style={{ whiteSpace: "nowrap" }}>
+              <Text
+                type={
+                  new Date(r.cert_not_valid_after) < new Date()
+                    ? "danger"
+                    : "secondary"
+                }
+              >
+                {formatDate(r.cert_not_valid_after)}
+              </Text>
+            </span>
           );
         }
 
@@ -636,17 +666,21 @@ export default function BillingPage() {
         if (r.cert_pin_pending) {
           return (
             <Space size={4} align="start">
-              <Space direction="vertical" size={0}>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  Текущий до{" "}
-                  {r.cert_not_valid_after
-                    ? formatDate(r.cert_not_valid_after)
-                    : "—"}
-                </Text>
-                <Text type="warning">Новый ждёт установки</Text>
-                <Text type="success" style={{ fontSize: 12 }}>
-                  Оплачено
-                </Text>
+              <Space direction="vertical" size={0} style={{ whiteSpace: "nowrap" }}>
+                <span style={{ whiteSpace: "nowrap" }}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    Текущий до{" "}
+                    {r.cert_not_valid_after
+                      ? formatDate(r.cert_not_valid_after)
+                      : "—"}
+                  </Text>
+                </span>
+                <span style={{ whiteSpace: "nowrap" }}><Text type="warning">Новый ждёт установки</Text></span>
+                <span style={{ whiteSpace: "nowrap" }}>
+                  <Text type="success" style={{ fontSize: 12 }}>
+                    Оплачено
+                  </Text>
+                </span>
               </Space>
               {pinButton}
             </Space>
@@ -654,21 +688,23 @@ export default function BillingPage() {
         }
 
         const label = !r.cert_serial ? (
-          <Text type="warning">не выпущен</Text>
+          <span style={{ whiteSpace: "nowrap" }}><Text type="warning">не выпущен</Text></span>
         ) : !r.cert_not_valid_after ? (
-          <Text type="secondary">выпущен (дата неизвестна)</Text>
+          <span style={{ whiteSpace: "nowrap" }}><Text type="secondary">выпущен (дата неизвестна)</Text></span>
         ) : (
-          <Text
-            type={
-              new Date(r.cert_not_valid_after) < new Date()
-                ? "danger"
-                : r.cert_expiring_soon
-                  ? "warning"
-                  : "secondary"
-            }
-          >
-            {formatDate(r.cert_not_valid_after)}
-          </Text>
+          <span style={{ whiteSpace: "nowrap" }}>
+            <Text
+              type={
+                new Date(r.cert_not_valid_after) < new Date()
+                  ? "danger"
+                  : r.cert_expiring_soon
+                    ? "warning"
+                    : "secondary"
+              }
+            >
+              {formatDate(r.cert_not_valid_after)}
+            </Text>
+          </span>
         );
 
         if (!isCertPayable(r))
@@ -687,9 +723,11 @@ export default function BillingPage() {
             >
               <Space direction="vertical" size={0}>
                 {label}
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {formatMoneyMinor(r.cert_pin_price_minor)}
-                </Text>
+                <span style={{ whiteSpace: "nowrap" }}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {formatMoneyMinor(r.cert_pin_price_minor)}
+                  </Text>
+                </span>
               </Space>
             </Checkbox>
             {pinButton}
@@ -706,13 +744,15 @@ export default function BillingPage() {
       render: (v: number, r: BillingTerminal) => {
         if (r.billing_mode === "cert_linked") {
           return (
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              0 ₽ (в сертификате)
-            </Text>
+            <span style={{ whiteSpace: "nowrap" }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                0 ₽ (в сертификате)
+              </Text>
+            </span>
           );
         }
         return (
-          <span>
+          <span style={{ whiteSpace: "nowrap", fontSize: 12 }}>
             {formatMoneyMinor(v)}/{formatBillingPeriod(r.billing_period_months)}
           </span>
         );
@@ -726,17 +766,21 @@ export default function BillingPage() {
       width: 130,
       render: (v: number, r: BillingTerminal) =>
         !isTerminalDisabled(r) && v > 0 ? (
-          <Text type="danger" strong>
-            {formatDebt(v)}
-          </Text>
+          <span style={{ whiteSpace: "nowrap" }}>
+            <Text type="danger" strong>
+              {formatDebt(v)}
+            </Text>
+          </span>
         ) : (
-          <Text type="secondary">{formatMoneyMinor(0)}</Text>
+          <span style={{ whiteSpace: "nowrap" }}>
+            <Text type="secondary">{formatMoneyMinor(0)}</Text>
+          </span>
         ),
     },
     {
       title: "Действия",
       key: "actions",
-      width: 190,
+      width: 160,
       render: (_: unknown, r: BillingTerminal) => (
         <Space size="small" wrap>
           {r.can_deactivate && (
@@ -772,13 +816,14 @@ export default function BillingPage() {
       title: "SN",
       dataIndex: "sn",
       key: "sn",
-      width: 110,
-      ellipsis: true,
+      width: 130,
       render: (v: string) => (
         <Tooltip title={v}>
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            {v}
-          </Text>
+          <span style={{ whiteSpace: "nowrap" }}>
+            <Text code style={{ fontSize: 11 }}>
+              {v}
+            </Text>
+          </span>
         </Tooltip>
       ),
     },
@@ -954,7 +999,7 @@ export default function BillingPage() {
             showTotal: (total, range) =>
               `${range[0]}-${range[1]} из ${total} терм.`,
           }}
-          scroll={{ x: 1200 }}
+          scroll={{ x: 1550 }}
         />
       </Card>
 
