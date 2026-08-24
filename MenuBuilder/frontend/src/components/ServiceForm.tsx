@@ -150,12 +150,12 @@ export default function ServiceForm({ open, service, groupId, onClose, onSaved }
               name="name"
               label="Название для кнопки"
               rules={[{ required: true, message: "Введите название для кнопки" }]}
-              tooltip="Текст на экранной кнопке терминала (до 3 строк с переносом по словам)"
+              tooltip="Текст на экранной кнопке терминала (до 4 строк с переносом по словам)"
               style={{ marginBottom: 12 }}
             >
               <Input.TextArea
                 rows={3}
-                autoSize={{ minRows: 2, maxRows: 4 }}
+                autoSize={{ minRows: 2, maxRows: 5 }}
                 placeholder="Например: 2. Стрижка со сменой насадок"
                 style={{ fontSize: 13 }}
               />
@@ -221,8 +221,8 @@ export default function ServiceForm({ open, service, groupId, onClose, onSaved }
               <div
                 style={{
                   width: "100%",
-                  maxWidth: 230,
-                  minHeight: 125,
+                  maxWidth: 240,
+                  minHeight: 145,
                   background: "linear-gradient(180deg, #ffffff 0%, #eff6ff 100%)",
                   border: "2px solid #93c5fd",
                   borderRadius: 10,
@@ -243,14 +243,15 @@ export default function ServiceForm({ open, service, groupId, onClose, onSaved }
                     fontWeight: 600,
                     color: "#0f172a",
                     lineHeight: 1.35,
+                    whiteSpace: "pre-line",
                     wordBreak: "break-word",
                     display: "-webkit-box",
-                    WebkitLineClamp: 3,
+                    WebkitLineClamp: 4,
                     WebkitBoxOrient: "vertical",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     width: "100%",
-                    minHeight: 52,
+                    minHeight: 72,
                   }}
                 >
                   {displayName ? (
@@ -264,7 +265,7 @@ export default function ServiceForm({ open, service, groupId, onClose, onSaved }
                         fontSize: 12,
                       }}
                     >
-                      Название для кнопки (до 3 строк)...
+                      Название для кнопки (до 4 строк)...
                     </span>
                   )}
                 </div>
@@ -298,7 +299,7 @@ export default function ServiceForm({ open, service, groupId, onClose, onSaved }
                     style={{ color: "#3b82f6", marginTop: 2, flexShrink: 0 }}
                   />
                   <span>
-                    На кнопке терминала отображается название (перенос по словам до 3 строк) и сумма с «руб.».
+                    На кнопке терминала отображается название (перенос по словам до 4 строк) и сумма с «руб.».
                   </span>
                 </div>
 
