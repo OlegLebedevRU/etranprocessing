@@ -344,6 +344,9 @@ bool schannel_connect(SChannelSession* session, CredHandle* hCred, const char* h
     setsockopt(session->sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&zeroTimeout, sizeof(zeroTimeout));
     setsockopt(session->sock, SOL_SOCKET, SO_SNDTIMEO, (const char*)&zeroTimeout, sizeof(zeroTimeout));
 
+    BOOL keepAlive = TRUE;
+    setsockopt(session->sock, SOL_SOCKET, SO_KEEPALIVE, (const char*)&keepAlive, sizeof(keepAlive));
+
     session->isConnected = true;
     session->isHandshakeComplete = true;
     return true;

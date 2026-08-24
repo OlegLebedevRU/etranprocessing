@@ -77,6 +77,7 @@ def main():
         client_id=sn,
         protocol=mqtt.MQTTv5
     )
+    client.reconnect_delay_set(min_delay=1, max_delay=3)
     client.on_connect = on_connect
     client.on_message = on_message
 

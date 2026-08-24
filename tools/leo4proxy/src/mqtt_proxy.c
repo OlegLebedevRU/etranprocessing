@@ -37,6 +37,9 @@ static unsigned __stdcall mqtt_client_worker(void* param) {
                config->mqtt_remote_host, config->mqtt_remote_port);
     }
 
+    BOOL keepAlive = TRUE;
+    setsockopt(clientSock, SOL_SOCKET, SO_KEEPALIVE, (const char*)&keepAlive, sizeof(keepAlive));
+
     SChannelSession tlsSession;
     if (!schannel_connect(&tlsSession, &hCred, config->mqtt_remote_host, config->mqtt_remote_port, 10000, config->insecure_server_cert)) {
         fprintf(stderr, "[MQTT-PROXY] Failed to establish mTLS connection to %s:%d\n",

@@ -1309,8 +1309,13 @@ def on_message_with_remote_diagnostics(client, userdata, msg):
     on_message(client, userdata, msg)
 
 
+g_is_connected: bool = False
+
+
 # mqtt callbacks
 def on_connect(client, userdata, flags, reason_code, properties=None):
+    global g_is_connected
+    g_is_connected = True
     print(f"MQTT on_connect: reason_code={reason_code}")
     print(f"userdata={userdata}")
     print(f"flags={flags}")
@@ -1319,6 +1324,12 @@ def on_connect(client, userdata, flags, reason_code, properties=None):
     client.subscribe("srv/" + cert["CN"] + "/rsp", qos=1)
     client.subscribe("srv/" + cert["CN"] + "/eva", qos=0)
     client.subscribe("srv/" + cert["CN"] + "/cmt", qos=0)
+
+
+def on_disconnect(client, userdata, disconnect_flags, reason_code, properties=None):
+    global g_is_connected
+    g_is_connected = False
+    print(f"MQTT on_disconnect: reason_code={reason_code}, flags={disconnect_flags}")
 
 
 def on_subscribe(client, userdata, mid, reason_code_list, properties=None):
@@ -1408,8 +1419,12 @@ def main():
 
     mqttc.on_message = on_message_with_remote_diagnostics
     mqttc.on_connect = on_connect
+    mqttc.on_disconnect = on_disconnect
     mqttc.on_subscribe = on_subscribe
     mqttc.on_publish = on_publish
+
+    # Fast reconnect backoff (retry every 1-3 seconds instead of default 120s)
+    mqttc.reconnect_delay_set(min_delay=1, max_delay=3)
 
     # If direct mTLS without proxy is explicitly requested with cert files
     if os.getenv("MQTT_DIRECT_TLS", "0") == "1" and MQTT_CA_CERT and MQTT_CLIENT_CERT and MQTT_CLIENT_KEY:
@@ -1429,6 +1444,11 @@ def main():
     i = 0
     try:
         while True:
+            if not g_is_connected:
+                print(f"[CLIENT] Waiting for proxy connection (127.0.0.1:{MQTT_PORT})...")
+                sleep(1)
+                continue
+
             i = i + 1
 
             # Polling RPC request
