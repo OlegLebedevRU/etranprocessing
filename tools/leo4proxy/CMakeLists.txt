@@ -11,6 +11,8 @@ set(SOURCES
     src/mqtt_proxy.c
     src/http_proxy.c
     src/service_mgr.c
+    src/tray_icon.c
+    res/leo4proxy.rc
 )
 
 set(HEADERS
@@ -20,6 +22,8 @@ set(HEADERS
     src/mqtt_proxy.h
     src/http_proxy.h
     src/service_mgr.h
+    src/tray_icon.h
+    res/resource.h
 )
 
 add_executable(leo4proxy ${SOURCES} ${HEADERS})
@@ -37,6 +41,9 @@ target_link_libraries(leo4proxy PRIVATE
     ncrypt
     secur32
     advapi32
+    shell32
+    user32
+    gdi32
 )
 
 set_target_properties(leo4proxy PROPERTIES

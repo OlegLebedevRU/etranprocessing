@@ -21,7 +21,9 @@ call %VCVARS%
 if not exist bin mkdir bin
 if not exist obj mkdir obj
 
-cl.exe /nologo /O2 /MT /W4 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\ src\main.c src\http_client.c src\xml_utils.c src\cng_crypto.c src\cert_store.c /link /OUT:bin\terminal-cert-installer.exe ncrypt.lib crypt32.lib winhttp.lib advapi32.lib
+rc.exe /nologo /fo obj\app.res res\app.rc
+
+cl.exe /nologo /O2 /MT /W4 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\ src\main.c src\http_client.c src\xml_utils.c src\cng_crypto.c src\cert_store.c obj\app.res /link /OUT:bin\terminal-cert-installer.exe ncrypt.lib crypt32.lib winhttp.lib advapi32.lib shell32.lib user32.lib
 
 if %ERRORLEVEL% equ 0 (
     echo =======================================================

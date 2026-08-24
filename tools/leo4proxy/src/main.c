@@ -13,8 +13,84 @@
 #include "mqtt_proxy.h"
 #include "http_proxy.h"
 #include "service_mgr.h"
+#include "tray_icon.h"
+#include "../res/resource.h"
 
 static volatile bool g_consoleRunning = true;
+
+typedef struct {
+    ProxyConfig config;
+    CertDetails certDetails;
+    CredHandle hClientCred;
+    CredHandle hServerCred;
+    MqttProxyServer mqttServer;
+    HttpProxyServer httpServer;
+    TrayIconContext trayCtx;
+    bool isProxiesRunning;
+} AppState;
+
+static AppState g_app;
+
+static void on_tray_action(int action_id, void* user_data) {
+    AppState* app = (AppState*)user_data;
+    if (!app) return;
+
+    switch (action_id) {
+        case IDM_TRAY_STOP:
+            if (app->isProxiesRunning) {
+                printf("[TRAY] Stopping proxies requested from System Tray...\n");
+                mqtt_proxy_stop(&app->mqttServer);
+                http_proxy_stop(&app->httpServer);
+                app->isProxiesRunning = false;
+                tray_icon_set_state(&app->trayCtx, TRAY_STATE_STOPPED);
+                printf("[TRAY] Proxies STOPPED (Paused).\n");
+            }
+            break;
+
+        case IDM_TRAY_START:
+            if (!app->isProxiesRunning) {
+                printf("[TRAY] Starting proxies requested from System Tray...\n");
+                bool mOk = mqtt_proxy_start(&app->mqttServer, &app->config, &app->certDetails, app->hClientCred, app->hServerCred);
+                bool hOk = http_proxy_start(&app->httpServer, &app->config, &app->certDetails, app->hClientCred, app->hServerCred);
+                if (mOk && hOk) {
+                    app->isProxiesRunning = true;
+                    tray_icon_set_state(&app->trayCtx, TRAY_STATE_RUNNING);
+                    printf("[TRAY] Proxies RUNNING (Active).\n");
+                } else {
+                    fprintf(stderr, "[TRAY] Failed to start proxies!\n");
+                    tray_icon_set_state(&app->trayCtx, TRAY_STATE_ERROR);
+                }
+            }
+            break;
+
+        case IDM_TRAY_RESTART:
+            printf("[TRAY] Restarting proxies requested from System Tray...\n");
+            if (app->isProxiesRunning) {
+                mqtt_proxy_stop(&app->mqttServer);
+                http_proxy_stop(&app->httpServer);
+                app->isProxiesRunning = false;
+            }
+            Sleep(500);
+            {
+                bool mOk = mqtt_proxy_start(&app->mqttServer, &app->config, &app->certDetails, app->hClientCred, app->hServerCred);
+                bool hOk = http_proxy_start(&app->httpServer, &app->config, &app->certDetails, app->hClientCred, app->hServerCred);
+                if (mOk && hOk) {
+                    app->isProxiesRunning = true;
+                    tray_icon_set_state(&app->trayCtx, TRAY_STATE_RUNNING);
+                    printf("[TRAY] Proxies RESTARTED successfully.\n");
+                } else {
+                    fprintf(stderr, "[TRAY] Failed to restart proxies!\n");
+                    tray_icon_set_state(&app->trayCtx, TRAY_STATE_ERROR);
+                }
+            }
+            break;
+
+        case IDM_TRAY_EXIT:
+            printf("[TRAY] Exit requested from System Tray.\n");
+            g_consoleRunning = false;
+            break;
+    }
+}
 
 static void pause_if_explorer(void) {
     DWORD pids[2];
@@ -357,17 +433,19 @@ int main(int argc, char* argv[]) {
         SecInvalidateHandle(&hServerCred);
     }
 
-    // Start Proxies
-    MqttProxyServer mqttServer;
-    HttpProxyServer httpServer;
+    g_app.config = config;
+    g_app.certDetails = certDetails;
+    g_app.hClientCred = hClientCred;
+    g_app.hServerCred = hServerCred;
+    g_app.isProxiesRunning = false;
 
-    bool mqttOk = mqtt_proxy_start(&mqttServer, &config, &certDetails, hClientCred, hServerCred);
-    bool httpOk = http_proxy_start(&httpServer, &config, &certDetails, hClientCred, hServerCred);
+    bool mqttOk = mqtt_proxy_start(&g_app.mqttServer, &config, &certDetails, hClientCred, hServerCred);
+    bool httpOk = http_proxy_start(&g_app.httpServer, &config, &certDetails, hClientCred, hServerCred);
 
     if (!mqttOk || !httpOk) {
         fprintf(stderr, "\n[FATAL] Failed to start proxy listeners.\n");
-        if (mqttOk) mqtt_proxy_stop(&mqttServer);
-        if (httpOk) http_proxy_stop(&httpServer);
+        if (mqttOk) mqtt_proxy_stop(&g_app.mqttServer);
+        if (httpOk) http_proxy_stop(&g_app.httpServer);
         schannel_free_creds(&hClientCred);
         schannel_free_creds(&hServerCred);
         cert_store_free_details(&certDetails);
@@ -375,6 +453,11 @@ int main(int argc, char* argv[]) {
         pause_if_explorer();
         return 1;
     }
+
+    g_app.isProxiesRunning = true;
+
+    // Start System Tray Icon & Menu
+    tray_icon_start(&g_app.trayCtx, &config, &certDetails, on_tray_action, &g_app);
 
     printf("\n[STATUS] Proxies active and ready for client connections:\n");
     printf("  - MQTT Proxy: http://%s:%d -> %s:%d (mTLS SN=%s)%s\n",
@@ -385,15 +468,19 @@ int main(int argc, char* argv[]) {
            config.http_local_ssl ? " [SSL]" : " [HTTP/HTTPS auto-detect]");
     printf("  - Info API:   http://%s:%d/_leo4/info\n", config.http_local_host, config.http_local_port);
     printf("  - Device SN:  http://%s:%d/_leo4/sn\n", config.http_local_host, config.http_local_port);
+    printf("  - Tray Icon:  System Tray Notification Icon active (right-click for menu)\n");
     printf("\nPress Ctrl+C to stop.\n\n");
 
     while (g_consoleRunning) {
         Sleep(500);
     }
 
-    printf("[LEO4PROXY] Stopping proxies...\n");
-    mqtt_proxy_stop(&mqttServer);
-    http_proxy_stop(&httpServer);
+    printf("[LEO4PROXY] Stopping proxies & tray...\n");
+    tray_icon_stop(&g_app.trayCtx);
+    if (g_app.isProxiesRunning) {
+        mqtt_proxy_stop(&g_app.mqttServer);
+        http_proxy_stop(&g_app.httpServer);
+    }
     schannel_free_creds(&hClientCred);
     schannel_free_creds(&hServerCred);
     cert_store_free_details(&certDetails);

@@ -25,7 +25,9 @@ call %VCVARS%
 if not exist bin mkdir bin
 if not exist obj mkdir obj
 
-cl.exe /nologo /O2 /MT /W4 /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\ src\main.c src\cert_store.c src\schannel_tls.c src\mqtt_proxy.c src\http_proxy.c src\service_mgr.c /link /OUT:bin\leo4proxy.exe ws2_32.lib crypt32.lib ncrypt.lib secur32.lib advapi32.lib
+rc.exe /nologo /fo obj\leo4proxy.res res\leo4proxy.rc
+
+cl.exe /nologo /O2 /MT /W4 /D_CRT_SECURE_NO_WARNINGS /DUNICODE /D_UNICODE /I src /Foobj\ src\main.c src\cert_store.c src\schannel_tls.c src\mqtt_proxy.c src\http_proxy.c src\service_mgr.c src\tray_icon.c obj\leo4proxy.res /link /OUT:bin\leo4proxy.exe ws2_32.lib crypt32.lib ncrypt.lib secur32.lib advapi32.lib shell32.lib user32.lib gdi32.lib
 
 if %ERRORLEVEL% equ 0 (
     echo =======================================================

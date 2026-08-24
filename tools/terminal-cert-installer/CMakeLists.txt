@@ -20,6 +20,7 @@ set(SOURCES
     src/xml_utils.c
     src/cng_crypto.c
     src/cert_store.c
+    res/app.rc
 )
 
 add_executable(terminal-cert-installer ${SOURCES})
@@ -30,6 +31,8 @@ if(MSVC)
         crypt32.lib
         winhttp.lib
         advapi32.lib
+        shell32.lib
+        user32.lib
     )
 else()
     target_link_libraries(terminal-cert-installer
@@ -37,5 +40,7 @@ else()
         -lcrypt32
         -lwinhttp
         -ladvapi32
+        -lshell32
+        -luser32
     )
 endif()

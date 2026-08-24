@@ -1,0 +1,15 @@
+#pragma once
+
+#define IDI_APP_ICON      101
+#define IDI_TRAY_ACTIVE   102
+#define IDI_TRAY_STOPPED  103
+
+#define IDM_TRAY_HEADER   2001
+#define IDM_TRAY_START    2002
+#define IDM_TRAY_STOP     2003
+#define IDM_TRAY_RESTART  2004
+#define IDM_TRAY_INFO     2005
+#define IDM_TRAY_BROWSER  2006
+#define IDM_TRAY_COPY_SN  2007
+#define IDM_TRAY_CONSOLE  2008
+#define IDM_TRAY_EXIT     2009
