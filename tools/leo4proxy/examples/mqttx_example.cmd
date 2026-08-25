@@ -27,7 +27,7 @@ where mqttx.cmd >nul 2>&1
 if %errorlevel% neq 0 (
     where mqttx >nul 2>&1
     if !errorlevel! neq 0 (
-        echo [ERROR] MQTTX CLI ('mqttx') not found in PATH.
+        echo [ERROR] MQTTX CLI 'mqttx' not found in PATH.
         echo To install MQTTX CLI globally, run: npm install -g @emqx/mqttx-cli
         echo Or use 'uv run python_client.py' / 'powershell_example.ps1' / 'curl_mosquitto_pub.cmd'.
         goto :eof
@@ -64,14 +64,14 @@ echo   User Properties: event_type_code=888, dev_event_id=!CURR_EVENT_ID!, dev_t
 
 mqttx pub -h 127.0.0.1 -p 1883 -v 5 -u extra_service -i "%SN%_extra_mqttx" -t "%TOPIC%" -q 1 -m "!PAYLOAD!" --user-properties "event_type_code:888" --user-properties "dev_event_id:!CURR_EVENT_ID!" --user-properties "dev_timestamp:!UNIX_TS!" --user-properties "correlation_id:!CORR_ID!"
 if !errorlevel! equ 0 (
-    echo     [ACK] Event delivered successfully via MQTTX CLI!
+    echo     [ACK] Event delivered successfully via MQTTX CLI
 ) else (
     echo     [WARN] MQTTX CLI returned code !errorlevel!
 )
 
 if "%ONCE%"=="1" (
     echo:
-    echo [INFO] Single event sent (--once). Exiting.
+    echo [INFO] Single event sent [--once]. Exiting.
     goto :eof
 )
 

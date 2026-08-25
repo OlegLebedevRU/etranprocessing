@@ -32,7 +32,7 @@ if not defined PUB_EXE (
 )
 
 if not defined PUB_EXE (
-    echo [ERROR] mosquitto_pub.exe not found!
+    echo [ERROR] mosquitto_pub.exe not found
     echo Fallback: Use 'uv run python_client.py' or 'powershell_example.ps1'.
     goto :eof
 )
@@ -67,14 +67,14 @@ echo   User Properties: event_type_code=888, dev_event_id=!CURR_EVENT_ID!, dev_t
 
 "!PUB_EXE!" -h 127.0.0.1 -p 1883 -V 5 -u extra_service -i "%SN%_extra_cmd" -t "%TOPIC%" -q 1 -m "!PAYLOAD!" -D publish user-property event_type_code 888 -D publish user-property dev_event_id !CURR_EVENT_ID! -D publish user-property dev_timestamp !UNIX_TS! -D publish user-property correlation_id !CORR_ID!
 if !errorlevel! equ 0 (
-    echo     [ACK] Event delivered successfully to Mosquitto Bridge!
+    echo     [ACK] Event delivered successfully to Mosquitto Bridge
 ) else (
     echo     [WARN] mosquitto_pub exited with error code !errorlevel!
 )
 
 if "%ONCE%"=="1" (
     echo:
-    echo [INFO] Single event sent (--once). Exiting.
+    echo [INFO] Single event sent [--once]. Exiting.
     goto :eof
 )
 
