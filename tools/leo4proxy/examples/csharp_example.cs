@@ -28,7 +28,8 @@ public class Program
     private static readonly string ProxyHttpUrl = Environment.GetEnvironmentVariable("LEO4_PROXY_HTTP") ?? "http://127.0.0.1:18443";
     private static readonly string MqttHost = Environment.GetEnvironmentVariable("MQTT_HOST") ?? "127.0.0.1";
     private static readonly int MqttPort = int.TryParse(Environment.GetEnvironmentVariable("MQTT_PORT"), out var p) ? p : 1883;
-    private static readonly string MqttUsername = Environment.GetEnvironmentVariable("MQTT_USERNAME") ?? "main_app";
+    private static string _mqttRole = Environment.GetEnvironmentVariable("MQTT_ROLE") ?? "main_app";
+    private static string _mqttUsername = Environment.GetEnvironmentVariable("MQTT_USERNAME") ?? _mqttRole;
     private static readonly string MqttPassword = Environment.GetEnvironmentVariable("MQTT_PASSWORD") ?? "";
     private static readonly int PollIntervalSec = int.TryParse(Environment.GetEnvironmentVariable("MQTT_POLL_INTERVAL_SEC"), out var pi) ? pi : 60;
     private static readonly bool SendTestEvents = Environment.GetEnvironmentVariable("MQTT_SEND_TEST_EVENTS") == "1";
@@ -41,8 +42,22 @@ public class Program
     public static async Task Main(string[] args)
     {
         Console.OutputEncoding = Encoding.UTF8;
+
+        for (int i = 0; i < args.Length; i++)
+        {
+            if (args[i] == "--role" && i + 1 < args.Length)
+            {
+                _mqttRole = args[++i];
+                _mqttUsername = _mqttRole;
+            }
+            else if (args[i] == "--once" || args[i] == "-1")
+            {
+                // MaxIterations = 1
+            }
+        }
+
         Console.WriteLine("================================================================");
-        Console.WriteLine("  Leo4 IoT C# Main Application (main_app role)");
+        Console.WriteLine($"  Leo4 IoT C# Client ({_mqttRole} role)");
         Console.WriteLine("  Target: Mosquitto Bridge (127.0.0.1:1883, No-SSL Plain TCP)");
         Console.WriteLine("================================================================\n");
 
@@ -60,11 +75,17 @@ public class Program
         // 2. Perform Optional Backend License Check via HTTP Proxy
         await CheckLicenseBillingAsync();
 
+        // Determine Presence Topic and Payloads according to AGENTS.md
+        var isMainApp = string.Equals(_mqttRole, "main_app", StringComparison.OrdinalIgnoreCase);
+        var presenceTopic = isMainApp ? $"dev/{_deviceSn}/app" : $"dev/{_deviceSn}/svc";
+        var onlinePayload = isMainApp ? "app_online" : "svc_online";
+        var offlinePayload = isMainApp ? "app_offline" : "svc_offline";
+
         // 3. Connect to MQTT Broker (Mosquitto Bridge on 1883)
         var factory = new MqttFactory();
         _mqttClient = factory.CreateMqttClient();
 
-        var clientId = Environment.GetEnvironmentVariable("MQTT_CLIENT_ID") ?? _deviceSn;
+        var clientId = Environment.GetEnvironmentVariable("MQTT_CLIENT_ID") ?? $"{_deviceSn}_{(isMainApp ? "main_cs" : "extra_cs")}";
 
         var optionsBuilder = new MqttClientOptionsBuilder()
             .WithTcpServer(MqttHost, MqttPort)
@@ -72,21 +93,36 @@ public class Program
             .WithClientId(clientId)
             .WithCleanSession(true)
             .WithKeepAlivePeriod(TimeSpan.FromSeconds(60))
-            .WithTimeout(TimeSpan.FromSeconds(10));
+            .WithTimeout(TimeSpan.FromSeconds(10))
+            .WithWillTopic(presenceTopic)
+            .WithWillPayload(Encoding.UTF8.GetBytes(offlinePayload))
+            .WithWillQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
+            .WithWillRetain(true);
 
-        if (!string.IsNullOrEmpty(MqttUsername))
+        if (!string.IsNullOrEmpty(_mqttUsername))
         {
-            optionsBuilder.WithCredentials(MqttUsername, string.IsNullOrEmpty(MqttPassword) ? null : MqttPassword);
+            optionsBuilder.WithCredentials(_mqttUsername, string.IsNullOrEmpty(MqttPassword) ? null : MqttPassword);
         }
 
         var clientOptions = optionsBuilder.Build();
+        Console.WriteLine($"[MQTT] Configured LWT: {presenceTopic} -> {offlinePayload} (retain=true)");
 
         _mqttClient.ApplicationMessageReceivedAsync += OnMessageReceivedAsync;
 
         _mqttClient.ConnectedAsync += async e =>
         {
-            Console.WriteLine($"[MQTT] Connected successfully to {MqttHost}:{MqttPort} as '{MqttUsername}'!");
-            
+            Console.WriteLine($"[MQTT] Connected successfully to {MqttHost}:{MqttPort} as '{_mqttUsername}'!");
+
+            // Publish presence: online (retain=true) immediately after CONNACK
+            Console.WriteLine($"[PRESENCE] Publishing status: {presenceTopic} = {onlinePayload} (retain=true)");
+            var onlineMsg = new MqttApplicationMessageBuilder()
+                .WithTopic(presenceTopic)
+                .WithPayload(Encoding.UTF8.GetBytes(onlinePayload))
+                .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
+                .WithRetainFlag(true)
+                .Build();
+            await _mqttClient.PublishAsync(onlineMsg);
+
             // Subscribe to all inbound server topics for this terminal
             var subTopic = $"srv/{_deviceSn}/#";
             Console.WriteLine($"[MQTT] Subscribing to: {subTopic}");
@@ -102,7 +138,7 @@ public class Program
             return Task.CompletedTask;
         };
 
-        Console.WriteLine($"[MAIN-APP] Connecting to Mosquitto Bridge at {MqttHost}:{MqttPort} (user: '{MqttUsername}')...");
+        Console.WriteLine($"[CLIENT] Connecting to Mosquitto Bridge at {MqttHost}:{MqttPort} (user: '{_mqttUsername}')...");
         try
         {
             await _mqttClient.ConnectAsync(clientOptions, cts.Token);
@@ -173,13 +209,23 @@ public class Program
             }
         }
 
-        // Clean disconnect
+        // Clean disconnect: publish offline presence with retain=true before disconnect
         if (_mqttClient != null && _mqttClient.IsConnected)
         {
+            Console.WriteLine($"[PRESENCE] Publishing shutdown status: {presenceTopic} = {offlinePayload} (retain=true)");
+            var offlineMsg = new MqttApplicationMessageBuilder()
+                .WithTopic(presenceTopic)
+                .WithPayload(Encoding.UTF8.GetBytes(offlinePayload))
+                .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
+                .WithRetainFlag(true)
+                .Build();
+            await _mqttClient.PublishAsync(offlineMsg);
+            await Task.Delay(200);
+
             Console.WriteLine("[SHUTDOWN] Disconnecting from MQTT broker...");
             await _mqttClient.DisconnectAsync(new MqttClientDisconnectOptionsBuilder().Build());
         }
-        Console.WriteLine("[SUCCESS] Main App completed.");
+        Console.WriteLine($"[SUCCESS] C# Client ({_mqttRole}) completed.");
     }
 
     private static async Task ResolveDeviceMetadataAsync()

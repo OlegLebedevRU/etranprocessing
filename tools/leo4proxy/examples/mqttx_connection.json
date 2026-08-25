@@ -14,7 +14,25 @@
       "clean": true,
       "keepalive": 60,
       "ssl": false,
+      "will": {
+        "lastWillTopic": "dev/a3b1234567c10221d290825/svc",
+        "lastWillPayload": "svc_offline",
+        "lastWillQos": 1,
+        "lastWillRetain": true
+      },
       "messages": [
+        {
+          "topic": "dev/a3b1234567c10221d290825/svc",
+          "qos": 1,
+          "retain": true,
+          "payload": "svc_online"
+        },
+        {
+          "topic": "dev/a3b1234567c10221d290825/svc",
+          "qos": 1,
+          "retain": true,
+          "payload": "svc_offline"
+        },
         {
           "topic": "dev/a3b1234567c10221d290825/evt",
           "qos": 1,
@@ -42,6 +60,26 @@
       "clean": true,
       "keepalive": 60,
       "ssl": false,
+      "will": {
+        "lastWillTopic": "dev/a3b1234567c10221d290825/app",
+        "lastWillPayload": "app_offline",
+        "lastWillQos": 1,
+        "lastWillRetain": true
+      },
+      "messages": [
+        {
+          "topic": "dev/a3b1234567c10221d290825/app",
+          "qos": 1,
+          "retain": true,
+          "payload": "app_online"
+        },
+        {
+          "topic": "dev/a3b1234567c10221d290825/app",
+          "qos": 1,
+          "retain": true,
+          "payload": "app_offline"
+        }
+      ],
       "subscriptions": [
         {
           "topic": "srv/a3b1234567c10221d290825/#",

@@ -26,21 +26,26 @@
 
 [CmdletBinding()]
 param(
+    [string]$Role = "extra_service",
     [int]$IntervalSeconds = 600,
     [switch]$Once,
     [string]$BrokerHost = "127.0.0.1",
     [int]$BrokerPort = 1883,
-    [string]$Username = "extra_service",
+    [string]$Username = "",
     [string]$CustomSn = ""
 )
+
+if ([string]::IsNullOrWhiteSpace($Username)) {
+    $Username = $Role
+}
 
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 Write-Host "================================================================" -ForegroundColor Cyan
-Write-Host "  Leo4 IoT PowerShell Event Publisher (extra_service role)" -ForegroundColor Cyan
+Write-Host "  Leo4 IoT PowerShell Event Publisher ($Role role)" -ForegroundColor Cyan
 Write-Host "  Target: Mosquitto Bridge ($BrokerHost`:$BrokerPort, Plain TCP No-SSL)" -ForegroundColor Cyan
-Write-Host "  Interval: $IntervalSeconds sec (10 min), Topic: dev/<SN>/evt (QoS 1, Retain 0)" -ForegroundColor Cyan
+Write-Host "  Interval: $IntervalSeconds sec, Topic: dev/<SN>/evt (QoS 1, Retain 0)" -ForegroundColor Cyan
 Write-Host "================================================================`n" -ForegroundColor Cyan
 
 # 1. Resolve Device SN
@@ -62,6 +67,19 @@ if ([string]::IsNullOrWhiteSpace($deviceSn)) {
 
 $topic = "dev/$deviceSn/evt"
 
+# Presence configuration according to AGENTS.md
+if ($Role -eq "main_app") {
+    $presenceTopic = "dev/$deviceSn/app"
+    $onlinePayload = "app_online"
+    $offlinePayload = "app_offline"
+    $clientSuffix = "main_ps"
+} else {
+    $presenceTopic = "dev/$deviceSn/svc"
+    $onlinePayload = "svc_online"
+    $offlinePayload = "svc_offline"
+    $clientSuffix = "extra_ps"
+}
+
 # 2. Locate mosquitto_pub utility
 $mosquittoPubPath = $null
 $candidatePaths = @(
@@ -78,7 +96,38 @@ foreach ($path in $candidatePaths) {
     }
 }
 
-# Function to publish via mosquitto_pub CLI or Fallback .NET TCP MQTT 5.0
+# Function to publish Presence status message (retain = true)
+function Publish-MqttPresence {
+    param(
+        [string]$Status
+    )
+
+    Write-Host "[PRESENCE] Publishing status: $presenceTopic = $Status (retain=true)" -ForegroundColor Magenta
+    if ($mosquittoPubPath) {
+        $argsList = @(
+            "-h", $BrokerHost,
+            "-p", $BrokerPort.ToString(),
+            "-V", "5",
+            "-u", $Username,
+            "-i", "$($deviceSn)_$($clientSuffix)_pres",
+            "-t", $presenceTopic,
+            "-m", $Status,
+            "-r",
+            "-q", "1"
+        )
+        $proc = Start-Process -FilePath $mosquittoPubPath -ArgumentList $argsList -NoNewWindow -PassThru -Wait
+        return ($proc.ExitCode -eq 0)
+    } else {
+        $pyScript = "$PSScriptRoot\python_client.py"
+        if (Test-Path $pyScript) {
+            # Python fallback handles presence
+            return $true
+        }
+    }
+    return $false
+}
+
+# Function to publish via mosquitto_pub CLI or Fallback Python helper
 function Publish-MqttEvent {
     param(
         [string]$PayloadJson,
@@ -89,16 +138,20 @@ function Publish-MqttEvent {
     )
 
     if ($mosquittoPubPath) {
-        # Using native mosquitto_pub CLI with MQTT 5.0 User Properties (-D publish user-property)
+        # Using native mosquitto_pub CLI with LWT and MQTT 5.0 User Properties
         $argsList = @(
             "-h", $BrokerHost,
             "-p", $BrokerPort.ToString(),
             "-V", "5",
             "-u", $Username,
-            "-i", "$($deviceSn)_extra_ps",
+            "-i", "$($deviceSn)_$clientSuffix",
             "-t", $topic,
             "-q", "1",
             "-m", $PayloadJson,
+            "--will-topic", $presenceTopic,
+            "--will-payload", $offlinePayload,
+            "--will-retain",
+            "--will-qos", "1",
             "-D", "publish", "user-property", "event_type_code", "888",
             "-D", "publish", "user-property", "dev_event_id", $EventId.ToString(),
             "-D", "publish", "user-property", "dev_timestamp", $UnixTs.ToString(),
@@ -114,11 +167,11 @@ function Publish-MqttEvent {
             return $false
         }
     } else {
-        # Fallback via Python helper or direct TCP
+        # Fallback via Python helper
         Write-Host "    [INFO] mosquitto_pub.exe not found on disk. Invoking Python MQTT publisher..." -ForegroundColor Gray
         $pyScript = "$PSScriptRoot\python_client.py"
         if (Test-Path $pyScript) {
-            & uv run $pyScript --once --port $BrokerPort --host $BrokerHost
+            & uv run $pyScript --once --role $Role --port $BrokerPort --host $BrokerHost
             return $true
         }
     }
@@ -130,6 +183,9 @@ $iteration = 0
 $baseEventId = 36823
 
 try {
+    # Publish initial online presence
+    $null = Publish-MqttPresence -Status $onlinePayload
+
     while ($true) {
         $iteration++
         $devEventId = $baseEventId + ($iteration - 1)
@@ -166,11 +222,13 @@ try {
             break
         }
 
-        Write-Host "`n[SLEEP] Waiting $IntervalSeconds seconds (10 minutes) until next event publication..." -ForegroundColor DarkGray
+        Write-Host "`n[SLEEP] Waiting $IntervalSeconds seconds until next event publication..." -ForegroundColor DarkGray
         Start-Sleep -Seconds $IntervalSeconds
     }
 } catch {
     Write-Host "`n[SHUTDOWN] Terminated by user." -ForegroundColor Yellow
 } finally {
-    Write-Host "[SUCCESS] PowerShell Extra Service completed." -ForegroundColor Cyan
+    # Publish offline status on normal exit
+    $null = Publish-MqttPresence -Status $offlinePayload
+    Write-Host "[SUCCESS] PowerShell Client ($Role) completed." -ForegroundColor Cyan
 }

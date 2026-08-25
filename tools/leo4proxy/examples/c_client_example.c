@@ -28,6 +28,9 @@
 
 static volatile int g_connected = 0;
 static volatile int g_publish_delivered = 0;
+static char g_presence_topic[256] = { 0 };
+static const char* g_online_payload = "svc_online";
+static const char* g_offline_payload = "svc_offline";
 
 /* Generates UUID v4 string */
 static void generate_uuid(char* out_uuid, size_t size) {
@@ -102,9 +105,20 @@ static int query_device_sn(char* out_sn, size_t out_sn_size) {
 }
 
 static void on_connected(void* context, char* cause) {
-    (void)context; (void)cause;
+    (void)cause;
+    MQTTAsync client = (MQTTAsync)context;
     g_connected = 1;
-    printf("[MQTT-C] Successfully connected to Mosquitto Bridge as 'extra_service'!\n");
+    printf("[MQTT-C] Successfully connected to Mosquitto Bridge!\n");
+
+    if (client && g_presence_topic[0] != '\0') {
+        MQTTAsync_message pres_msg = MQTTAsync_message_initializer;
+        pres_msg.payload = (void*)g_online_payload;
+        pres_msg.payloadlen = (int)strlen(g_online_payload);
+        pres_msg.qos = 1;
+        pres_msg.retained = 1;
+        MQTTAsync_sendMessage(client, g_presence_topic, &pres_msg, NULL);
+        printf("[PRESENCE] Published status: %s = %s (retain=1)\n", g_presence_topic, g_online_payload);
+    }
 }
 
 static void on_connect_failure(void* context, MQTTAsync_failureData5* response) {
@@ -128,7 +142,12 @@ int main(int argc, char* argv[]) {
     int interval_sec = DEFAULT_INTERVAL_SEC;
     int run_once = 0;
     const char* mqtt_uri = DEFAULT_MQTT_URI;
-    const char* username = "extra_service";
+    const char* role = "extra_service";
+
+    const char* env_role = getenv("MQTT_ROLE");
+    if (env_role && strlen(env_role) > 0) {
+        role = env_role;
+    }
 
     for (int a = 1; a < argc; a++) {
         if (strcmp(argv[a], "--once") == 0 || strcmp(argv[a], "-1") == 0) {
@@ -138,11 +157,15 @@ int main(int argc, char* argv[]) {
             if (interval_sec <= 0) interval_sec = DEFAULT_INTERVAL_SEC;
         } else if (strcmp(argv[a], "--uri") == 0 && a + 1 < argc) {
             mqtt_uri = argv[++a];
+        } else if (strcmp(argv[a], "--role") == 0 && a + 1 < argc) {
+            role = argv[++a];
         }
     }
 
+    const char* username = role;
+
     printf("================================================================\n");
-    printf("  Leo4 IoT C Event Publisher (extra_service role)\n");
+    printf("  Leo4 IoT C Event Publisher (%s role)\n", role);
     printf("  Target: Mosquitto Bridge (%s, Plain TCP No-SSL)\n", mqtt_uri);
     printf("  Interval: %d sec (10 min), Topic: dev/<SN>/evt (QoS 1, Retain 0)\n", interval_sec);
     printf("================================================================\n\n");
@@ -163,8 +186,18 @@ int main(int argc, char* argv[]) {
     char topic[256];
     snprintf(topic, sizeof(topic), "dev/%s/evt", sn);
 
+    if (strcmp(role, "main_app") == 0) {
+        snprintf(g_presence_topic, sizeof(g_presence_topic), "dev/%s/app", sn);
+        g_online_payload = "app_online";
+        g_offline_payload = "app_offline";
+    } else {
+        snprintf(g_presence_topic, sizeof(g_presence_topic), "dev/%s/svc", sn);
+        g_online_payload = "svc_online";
+        g_offline_payload = "svc_offline";
+    }
+
     char client_id[128];
-    snprintf(client_id, sizeof(client_id), "%s_extra_c", sn);
+    snprintf(client_id, sizeof(client_id), "%s_%s_c", sn, (strcmp(role, "main_app") == 0 ? "main" : "extra"));
 
     MQTTAsync client;
     MQTTAsync_createOptions create_opts = MQTTAsync_createOptions_initializer5;
@@ -176,7 +209,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    MQTTAsync_setConnected(client, NULL, on_connected);
+    MQTTAsync_setConnected(client, client, on_connected);
 
     MQTTAsync_connectOptions conn_opts = MQTTAsync_connectOptions_initializer5;
     conn_opts.keepAliveInterval = 60;
@@ -187,6 +220,15 @@ int main(int argc, char* argv[]) {
     conn_opts.ssl = NULL; /* Plain TCP No-SSL */
     conn_opts.onFailure5 = on_connect_failure;
 
+    /* Configure LWT (Will Message) before connecting */
+    MQTTAsync_willOptions will_opts = MQTTAsync_willOptions_initializer;
+    will_opts.topicName = g_presence_topic;
+    will_opts.message = g_offline_payload;
+    will_opts.retained = 1;
+    will_opts.qos = 1;
+    conn_opts.will = &will_opts;
+
+    printf("[INFO] Configured LWT: %s -> %s (retain=1)\n", g_presence_topic, g_offline_payload);
     printf("[INFO] Connecting to %s as '%s'...\n", mqtt_uri, username);
     rc = MQTTAsync_connect(client, &conn_opts);
     if (rc != MQTTASYNC_SUCCESS) {
@@ -299,10 +341,22 @@ int main(int argc, char* argv[]) {
         Sleep(interval_sec * 1000);
     }
 
+    /* Normal shutdown: publish offline status with retain=1 before disconnect */
+    if (g_presence_topic[0] != '\0') {
+        MQTTAsync_message pres_msg = MQTTAsync_message_initializer;
+        pres_msg.payload = (void*)g_offline_payload;
+        pres_msg.payloadlen = (int)strlen(g_offline_payload);
+        pres_msg.qos = 1;
+        pres_msg.retained = 1;
+        printf("\n[PRESENCE] Publishing shutdown status: %s = %s (retain=1)\n", g_presence_topic, g_offline_payload);
+        MQTTAsync_sendMessage(client, g_presence_topic, &pres_msg, NULL);
+        Sleep(300);
+    }
+
     printf("[INFO] Disconnecting...\n");
     MQTTAsync_disconnect(client, NULL);
     MQTTAsync_destroy(&client);
 
-    printf("[SUCCESS] C Extra Service completed.\n");
+    printf("[SUCCESS] C Client (%s) completed.\n", role);
     return 0;
 }

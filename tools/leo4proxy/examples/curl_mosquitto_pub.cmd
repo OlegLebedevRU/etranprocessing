@@ -41,6 +41,9 @@ set "TOPIC=dev/%SN%/evt"
 set "EVENT_ID=36823"
 set "ITERATION=0"
 
+echo [PRESENCE] Publishing status: dev/%SN%/svc = svc_online (retain=true)
+"!PUB_EXE!" -h 127.0.0.1 -p 1883 -V 5 -u extra_service -i "%SN%_extra_pres" -t "dev/%SN%/svc" -m "svc_online" -r -q 1
+
 :loop
 set /a ITERATION+=1
 set /a CURR_EVENT_ID=EVENT_ID + ITERATION - 1
@@ -65,7 +68,7 @@ echo   QoS:             1 (Retain: 0)
 echo   Payload:         !PAYLOAD!
 echo   User Properties: event_type_code=888, dev_event_id=!CURR_EVENT_ID!, dev_timestamp=!UNIX_TS!, correlation_id=!CORR_ID!
 
-"!PUB_EXE!" -h 127.0.0.1 -p 1883 -V 5 -u extra_service -i "%SN%_extra_cmd" -t "%TOPIC%" -q 1 -m "!PAYLOAD!" -D publish user-property event_type_code 888 -D publish user-property dev_event_id !CURR_EVENT_ID! -D publish user-property dev_timestamp !UNIX_TS! -D publish user-property correlation_id !CORR_ID!
+"!PUB_EXE!" -h 127.0.0.1 -p 1883 -V 5 -u extra_service -i "%SN%_extra_cmd" -t "%TOPIC%" -q 1 -m "!PAYLOAD!" --will-topic "dev/%SN%/svc" --will-payload "svc_offline" --will-retain --will-qos 1 -D publish user-property event_type_code 888 -D publish user-property dev_event_id !CURR_EVENT_ID! -D publish user-property dev_timestamp !UNIX_TS! -D publish user-property correlation_id !CORR_ID!
 if !errorlevel! equ 0 (
     echo     [ACK] Event delivered successfully to Mosquitto Bridge
 ) else (
@@ -75,7 +78,7 @@ if !errorlevel! equ 0 (
 if "%ONCE%"=="1" (
     echo:
     echo [INFO] Single event sent [--once]. Exiting.
-    goto :eof
+    goto :shutdown
 )
 
 echo:
@@ -83,3 +86,10 @@ echo [SLEEP] Waiting 600 seconds (10 minutes) until next event publication...
 echo Press Ctrl+C to stop.
 timeout /t 600 /nobreak >nul
 goto :loop
+
+:shutdown
+echo:
+echo [PRESENCE] Publishing shutdown status: dev/%SN%/svc = svc_offline (retain=true)
+"!PUB_EXE!" -h 127.0.0.1 -p 1883 -V 5 -u extra_service -i "%SN%_extra_pres" -t "dev/%SN%/svc" -m "svc_offline" -r -q 1
+echo [SUCCESS] Extra Service terminated.
+goto :eof

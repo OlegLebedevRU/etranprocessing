@@ -110,7 +110,8 @@ def create_event_data(dev_event_id: int) -> tuple[dict, dict[str, str]]:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Leo4 IoT Extra Service Event Sender (10-minute loop)")
+    parser = argparse.ArgumentParser(description="Leo4 IoT Event Sender with Presence Lifecycle")
+    parser.add_argument("--role", type=str, choices=["extra_service", "main_app"], default=os.getenv("MQTT_ROLE", "extra_service"), help="Client role: extra_service or main_app (default: extra_service)")
     parser.add_argument("--interval", type=int, default=EVENT_INTERVAL_SEC, help="Interval in seconds between events (default: 600 = 10 min)")
     parser.add_argument("--once", action="store_true", help="Send a single event and exit immediately")
     parser.add_argument("--count", type=int, default=0, help="Maximum number of events to send (0 = infinite)")
@@ -118,24 +119,48 @@ def main():
     parser.add_argument("--host", type=str, default=MQTT_HOST, help="MQTT Broker host (default: 127.0.0.1)")
     args = parser.parse_args()
 
+    role = args.role
+    username = MQTT_USERNAME if MQTT_USERNAME != "extra_service" else role
+
     print("================================================================")
-    print("  Leo4 IoT Python Event Publisher (extra_service role)")
+    print(f"  Leo4 IoT Python Event Publisher ({role} role)")
     print(f"  Target: Mosquitto Bridge ({args.host}:{args.port}, No-SSL Plain TCP)")
-    print(f"  Interval: {args.interval}s (10 min), Topic: dev/<SN>/evt (QoS 1, Retain 0)")
+    print(f"  Interval: {args.interval}s, Topic: dev/<SN>/evt (QoS 1, Retain 0)")
     print("================================================================\n")
 
     sn = resolve_device_sn()
     topic = f"dev/{sn}/evt"
 
-    client_id = f"{sn}_extra_py"
+    # Presence topic and payloads according to AGENTS.md requirements
+    if role == "main_app":
+        presence_topic = f"dev/{sn}/app"
+        online_payload = b"app_online"
+        offline_payload = b"app_offline"
+        client_id_suffix = "main_py"
+    else:
+        presence_topic = f"dev/{sn}/svc"
+        online_payload = b"svc_online"
+        offline_payload = b"svc_offline"
+        client_id_suffix = "extra_py"
+
+    client_id = f"{sn}_{client_id_suffix}"
     client = mqtt.Client(
         callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
         client_id=client_id,
         protocol=mqtt.MQTTv5,
     )
 
-    if MQTT_USERNAME:
-        client.username_pw_set(username=MQTT_USERNAME, password=MQTT_PASSWORD or None)
+    if username:
+        client.username_pw_set(username=username, password=MQTT_PASSWORD or None)
+
+    # Configure LWT (Will Message) BEFORE connecting to the broker
+    client.will_set(
+        topic=presence_topic,
+        payload=offline_payload,
+        qos=1,
+        retain=True,
+    )
+    print(f"[MQTT] Configured LWT: {presence_topic} -> {offline_payload.decode()} (retain=True)")
 
     is_connected = False
 
@@ -143,7 +168,10 @@ def main():
         nonlocal is_connected
         if reason_code == 0:
             is_connected = True
-            print(f"[MQTT] Successfully connected to {args.host}:{args.port} as '{MQTT_USERNAME}'")
+            print(f"[MQTT] Successfully connected to {args.host}:{args.port} as '{username}'")
+            # Publish online status immediately after CONNACK
+            print(f"[PRESENCE] Publishing status: {presence_topic} = {online_payload.decode()} (retain=True)")
+            c.publish(topic=presence_topic, payload=online_payload, qos=1, retain=True)
         else:
             print(f"[MQTT] Connection failed with reason code: {reason_code}")
 
@@ -153,7 +181,7 @@ def main():
         print(f"[MQTT] Disconnected from broker (rc={reason_code})")
 
     def on_publish(c, userdata, mid, reason_code=None, properties=None):
-        print(f"    [ACK] Event delivered successfully! (mid={mid}, rc={reason_code})")
+        print(f"    [ACK] Message delivered successfully! (mid={mid}, rc={reason_code})")
 
     client.on_connect = on_connect
     client.on_disconnect = on_disconnect
@@ -189,7 +217,7 @@ def main():
 
             print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Publishing Event #{iteration}:")
             print(f"  Topic:           {topic}")
-            print(f"  QoS:             1 (Retain: 0)")
+            print("  QoS:             1 (Retain: 0)")
             print(f"  Payload:         {payload_json}")
             print(f"  User Properties: {user_props_dict}")
 
@@ -210,15 +238,23 @@ def main():
                 print(f"\n[INFO] Reached requested event count ({args.count}). Exiting.")
                 break
 
-            print(f"\n[SLEEP] Waiting {args.interval} seconds (10 minutes) until next event publication...")
+            print(f"\n[SLEEP] Waiting {args.interval} seconds until next event publication...")
             time.sleep(args.interval)
 
     except KeyboardInterrupt:
         print("\n[SHUTDOWN] Interrupted by user. Stopping...")
     finally:
+        # Normal shutdown: publish offline status with retain=True before disconnect
+        if is_connected:
+            print(f"[PRESENCE] Publishing shutdown status: {presence_topic} = {offline_payload.decode()} (retain=True)")
+            offline_info = client.publish(topic=presence_topic, payload=offline_payload, qos=1, retain=True)
+            try:
+                offline_info.wait_for_publish(timeout=3)
+            except Exception:
+                pass
         client.loop_stop()
         client.disconnect()
-        print("[SUCCESS] Python Extra Service terminated.")
+        print(f"[SUCCESS] Python client ({role}) terminated.")
 
 
 if __name__ == "__main__":

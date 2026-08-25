@@ -50,14 +50,46 @@
 
 ## 2. Разделение ролей: `main_app` vs `extra_service`
 
-| Роль | Назначение | Доступные топики (ACL) | QoS | Примеры |
-|---|---|---|---|---|
-| **`main_app`** | Основное приложение (UI / Мастер). Двусторонний обмен, прием задач (RPC), удаленная диагностика, опрос (poll) и отправка ответов. | `srv/<SN>/#` (readwrite)<br>`dev/<SN>/#` (readwrite) | QoS 0 / 1 | • `mqtt_test_client.py`<br>• `csharp_example.cs` (`.csproj`) |
-| **`extra_service`** | Вспомогательный фоновый сервис. Периодическая циклическая отправка телеметрии и аппаратных событий раз в 10 минут. | `dev/<SN>/evt` (write only) | QoS 1 | • `python_client.py`<br>• `c_client_example.c`<br>• `powershell_example.ps1`<br>• `curl_mosquitto_pub.cmd`<br>• `mqttx_example.cmd` / `mqttx_connection.json` |
+| Роль | Назначение | Доступные топики (ACL) | Presence (LWT & Status) | QoS | Примеры |
+|---|---|---|---|---|---|
+| **`main_app`** | Основное приложение (UI / Мастер). Двусторонний обмен, прием задач (RPC), удаленная диагностика, опрос (poll) и отправка ответов. | `srv/<SN>/#` (readwrite)<br>`dev/<SN>/#` (readwrite) | **Will:** `dev/<SN>/app` -> `app_offline` (retain=1)<br>**Online:** `dev/<SN>/app` -> `app_online` (retain=1)<br>**Shutdown:** `dev/<SN>/app` -> `app_offline` (retain=1) | QoS 0 / 1 | • `mqtt_test_client.py`<br>• `csharp_example.cs` (`.csproj`) |
+| **`extra_service`** | Вспомогательный фоновый сервис. Периодическая циклическая отправка телеметрии и аппаратных событий раз в 10 минут. | `dev/<SN>/evt` (write only)<br>`dev/<SN>/svc` (write only) | **Will:** `dev/<SN>/svc` -> `svc_offline` (retain=1)<br>**Online:** `dev/<SN>/svc` -> `svc_online` (retain=1)<br>**Shutdown:** `dev/<SN>/svc` -> `svc_offline` (retain=1) | QoS 1 | • `python_client.py`<br>• `c_client_example.c`<br>• `powershell_example.ps1`<br>• `curl_mosquitto_pub.cmd`<br>• `mqttx_example.cmd` / `mqttx_connection.json` |
 
 ---
 
-## 3. Спецификация события цикла (10 минут) для `extra_service`
+## 3. Спецификация присутствия (Presence / LWT) и событий
+
+### 3.1. Жизненный цикл присутствия для `main_app`
+```
+Client CONNECT:
+  will_topic   = dev/{SN}/app
+  will_payload = app_offline
+  will_retain  = true (qos=1)
+
+After CONNACK:
+  PUBLISH dev/{SN}/app = app_online (retain=true, qos=1)
+
+Normal shutdown:
+  PUBLISH dev/{SN}/app = app_offline (retain=true, qos=1)
+  DISCONNECT
+```
+
+### 3.2. Жизненный цикл присутствия для `extra_service`
+```
+Client CONNECT:
+  will_topic   = dev/{SN}/svc
+  will_payload = svc_offline
+  will_retain  = true (qos=1)
+
+After CONNACK:
+  PUBLISH dev/{SN}/svc = svc_online (retain=true, qos=1)
+
+Normal shutdown:
+  PUBLISH dev/{SN}/svc = svc_offline (retain=true, qos=1)
+  DISCONNECT
+```
+
+### 3.3. Спецификация события цикла (10 минут) для `extra_service`
 
 Каждый `extra_service` отправляет сообщения в топик `dev/<SN>/evt` каждые 10 минут (600 секунд) со следующими параметрами:
 
@@ -182,3 +214,24 @@ tools\leo4proxy\examples\curl_mosquitto_pub.cmd --once
 1. **REST API прокси:** `GET http://127.0.0.1:18443/_leo4/sn` (чистый текст) или `/_leo4/info` (JSON-метаданные).
 2. **Переменные окружения:** `$env:DEVICE_SN` или `$env:MQTT_SN`.
 3. **Fallback по умолчанию:** `a3b1234567c10221d290825` / `a4b0000773c82116d210826`.
+
+---
+
+## 6. Тестирование и верификация присутствия (Presence / LWT)
+
+Для проверки статусов присутствия клиентов используется **специальный тестовый клиент без LWT**, который подписывается на топики `dev/+/app` и `dev/+/svc` на локальном брокере `127.0.0.1:1883`:
+
+### 6.1. Режим онлайн-мониторинга статусов присутствия
+```powershell
+# Запуск специального клиента-наблюдателя (без LWT)
+uv run tools/leo4proxy/examples/mqtt_test_client.py --monitor-presence
+
+# С ограничением по времени (например, 30 секунд):
+uv run tools/leo4proxy/examples/mqtt_test_client.py --monitor-presence --duration 30
+```
+
+### 6.2. Автоматический тестовый набор (Test Suite)
+Запуск автоматической проверки всех примеров клиентов, сценариев `main_app`, `extra_service` и срабатывания LWT при аварийном завершении:
+```powershell
+uv run tools/leo4proxy/examples/test_presence_suite.py
+```

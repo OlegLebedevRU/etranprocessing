@@ -246,3 +246,79 @@ Before utilizing MCP Ops capabilities in any debugging, deployment, diagnostics,
 3. **Safety Guardrails**:
    - State-changing operations (`nginx_reload`, `file_write`, `file_delete`) return a `confirmationId` and MUST be verified before confirmation via `mcp_server-ops_confirm_execute`.
    - Never inspect raw secret files directly: use `mcp_server-ops_config_audit` for inspecting `.env` configurations.
+
+## MQTT Client Development Rules for AI Agents (Правила разработки MQTT-клиентов)
+
+### Обязательный предварительный опрос типа клиента
+Перед началом разработки или изменения любого MQTT-клиента агент **обязан спросить в чате**:
+
+> **"Какой тип MQTT-клиента создаётся: main_app или extra_service?"**
+
+Дальнейшая реализация должна строго зависеть от ответа пользователя.
+
+---
+
+### 1. Сценарий для `main_app` (Основное приложение)
+
+Если пользователь отвечает `main_app`, агент обязан применить дополнительный сценарий MQTT presence/status для основного приложения:
+
+```
+Client CONNECT:
+  will_topic = dev/{SN}/app
+  will_payload = app_offline
+  will_retain = true
+
+After CONNACK:
+  PUBLISH dev/{SN}/app = app_online, retain = true
+
+Normal shutdown:
+  PUBLISH dev/{SN}/app = app_offline, retain = true
+  DISCONNECT
+```
+
+**Требования для `main_app`**:
+- `{SN}` должен быть заменён на серийный номер устройства/терминала.
+- Will Message должен задаваться до подключения клиента к брокеру.
+- Публикация `app_online` должна выполняться только после успешного `CONNACK`.
+- При штатном завершении клиент должен сначала опубликовать `app_offline` с `retain=true`, затем выполнить корректный `DISCONNECT`.
+- При аварийном отключении брокер должен сам опубликовать `app_offline` через Will Message.
+- Retain должен быть включён для online/offline статуса.
+
+---
+
+### 2. Сценарий для `extra_service` (Вспомогательный сервис)
+
+Если пользователь отвечает `extra_service`, агент обязан применить дополнительный сценарий MQTT presence/status для вспомогательного сервиса:
+
+```
+Client CONNECT:
+  will_topic = dev/{SN}/svc
+  will_payload = svc_offline
+  will_retain = true
+
+After CONNACK:
+  PUBLISH dev/{SN}/svc = svc_online, retain = true
+
+Normal shutdown:
+  PUBLISH dev/{SN}/svc = svc_offline, retain = true
+  DISCONNECT
+```
+
+**Требования для `extra_service`**:
+- `{SN}` должен быть заменён на серийный номер устройства/терминала.
+- Will Message должен задаваться до подключения клиента к брокеру.
+- Публикация `svc_online` должна выполняться только после успешного `CONNACK`.
+- При штатном завершении клиент должен сначала опубликовать `svc_offline` с `retain=true`, затем выполнить корректный `DISCONNECT`.
+- При аварийном отключении брокер должен сам опубликовать `svc_offline` через Will Message.
+- Retain должен быть включён для online/offline статуса.
+
+---
+
+### 3. Общие требования к реализации MQTT-клиентов
+
+- **Запрет самостоятельного выбора**: Если тип клиента не указан или ответ отличается от `main_app`/`extra_service`, агент не должен самостоятельно выбирать тип. Нужно уточнить тип клиента в чате.
+- **Блокировка реализации**: Нельзя реализовывать MQTT-клиент без выбранного типа клиента.
+- **Обязательность presence-сценария**: Presence/status-сценарий должен быть частью стандартной реализации MQTT-клиента.
+- **Строгое соответствие топиков и payload**: Топики и payload должны использоваться строго как указано выше.
+- **Запрет произвольных изменений**: Не заменять `app`/`svc` и `app_online`/`app_offline`/`svc_online`/`svc_offline` на другие значения без отдельного согласования.
+- **Проверка существующего кода**: Если в проекте уже есть MQTT-клиент, при его изменении агент должен проверить наличие этого сценария и добавить его при отсутствии.

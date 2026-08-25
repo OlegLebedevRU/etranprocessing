@@ -70,6 +70,10 @@ nginx_locations.conf
 node_modules/
 package-lock.json
 
+# .NET Build artifacts
+[Bb]in/
+[Oo]bj/
+
 # OS
 .DS_Store
 Thumbs.db

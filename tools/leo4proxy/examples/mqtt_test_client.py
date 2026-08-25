@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+import argparse
+import contextlib
 import json
 import os
 import platform
@@ -1310,20 +1312,32 @@ def on_message_with_remote_diagnostics(client, userdata, msg):
 
 
 g_is_connected: bool = False
+g_presence_topic: str = ""
+g_online_payload: bytes = b""
+g_offline_payload: bytes = b""
 
 
 # mqtt callbacks
 def on_connect(client, userdata, flags, reason_code, properties=None):
     global g_is_connected
-    g_is_connected = True
-    print(f"MQTT on_connect: reason_code={reason_code}")
-    print(f"userdata={userdata}")
-    print(f"flags={flags}")
-    print(f"properties={properties}")
-    client.subscribe("srv/" + cert["CN"] + "/tsk", qos=0)
-    client.subscribe("srv/" + cert["CN"] + "/rsp", qos=1)
-    client.subscribe("srv/" + cert["CN"] + "/eva", qos=0)
-    client.subscribe("srv/" + cert["CN"] + "/cmt", qos=0)
+    if reason_code == 0:
+        g_is_connected = True
+        print(f"MQTT on_connect: reason_code={reason_code}")
+        print(f"userdata={userdata}")
+        print(f"flags={flags}")
+        print(f"properties={properties}")
+
+        # Publish online presence immediately after CONNACK
+        if g_presence_topic and g_online_payload:
+            print(f"[PRESENCE] Publishing status: {g_presence_topic} = {g_online_payload.decode()} (retain=True)")
+            client.publish(g_presence_topic, g_online_payload, qos=1, retain=True)
+
+        client.subscribe("srv/" + cert["CN"] + "/tsk", qos=0)
+        client.subscribe("srv/" + cert["CN"] + "/rsp", qos=1)
+        client.subscribe("srv/" + cert["CN"] + "/eva", qos=0)
+        client.subscribe("srv/" + cert["CN"] + "/cmt", qos=0)
+    else:
+        print(f"MQTT on_connect failed: reason_code={reason_code}")
 
 
 def on_disconnect(client, userdata, disconnect_flags, reason_code, properties=None):
@@ -1338,6 +1352,64 @@ def on_subscribe(client, userdata, mid, reason_code_list, properties=None):
 
 def on_publish(client, userdata, mid, reason_code=None, properties=None):
     pass
+
+
+def run_presence_test_listener(
+    host: str = "127.0.0.1",
+    port: int = 1883,
+    duration_sec: int = 0,
+    event_callback: Callable[[str, str, bool, int], None] | None = None,
+):
+    """
+    Specialized test client (WITHOUT LWT) for observing and verifying MQTT presence.
+    Subscribes to dev/+/app and dev/+/svc topics on localhost:1883 without setting its own Will message.
+    """
+    watcher_id = f"test_watcher_{uuid.uuid4().hex[:8]}"
+    watcher = mqtt.Client(
+        mqtt.CallbackAPIVersion.VERSION2,
+        protocol=mqtt.MQTTv5,
+        client_id=watcher_id,
+    )
+    # Note: Will (LWT) is NOT set for this test client as required by specification!
+
+    def on_watcher_connect(client, userdata, flags, reason_code, properties=None):
+        if reason_code == 0:
+            print(f"[TEST-WATCHER] Connected to {host}:{port} without LWT (client_id={watcher_id})")
+            client.subscribe("dev/+/app", qos=1)
+            client.subscribe("dev/+/svc", qos=1)
+            client.subscribe("srv/#", qos=1)
+            print("[TEST-WATCHER] Subscribed to presence topics: dev/+/app, dev/+/svc, srv/#")
+        else:
+            print(f"[TEST-WATCHER] Connection failed: {reason_code}")
+
+    def on_watcher_message(client, userdata, msg):
+        payload_str = msg.payload.decode("utf-8", errors="replace")
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        is_presence = msg.topic.endswith("/app") or msg.topic.endswith("/svc")
+        tag = "[PRESENCE EVENT]" if is_presence else "[INBOUND EVENT]"
+        print(f"[{now_str}] {tag} Topic: {msg.topic} | Payload: {payload_str} | Retain: {msg.retain} | QoS: {msg.qos}")
+        if event_callback:
+            event_callback(msg.topic, payload_str, bool(msg.retain), int(msg.qos))
+
+    watcher.on_connect = on_watcher_connect
+    watcher.on_message = on_watcher_message
+
+    print(f"[TEST-WATCHER] Starting specialized presence test listener on {host}:{port} (NO LWT)...")
+    watcher.connect(host=host, port=port, keepalive=60)
+    watcher.loop_start()
+
+    try:
+        start_t = time.time()
+        while True:
+            time.sleep(0.5)
+            if duration_sec > 0 and (time.time() - start_t) >= duration_sec:
+                break
+    except KeyboardInterrupt:
+        print("\n[TEST-WATCHER] Stopped by user.")
+    finally:
+        watcher.loop_stop()
+        watcher.disconnect()
+        print("[TEST-WATCHER] Disconnected.")
 
 
 # ---------------------------------------------------------------------------
@@ -1406,12 +1478,44 @@ def resolve_certificate() -> dict[str, str]:
 
 
 def main():
-    global cert, mqttc
+    global cert, mqttc, g_presence_topic, g_online_payload, g_offline_payload
+
+    parser = argparse.ArgumentParser(description="Leo4 IoT MQTT Test Client & Presence Monitor")
+    parser.add_argument("--role", type=str, choices=["main_app", "extra_service"], default=os.getenv("MQTT_ROLE", "main_app"), help="Client role: main_app or extra_service (default: main_app)")
+    parser.add_argument("--monitor-presence", "--monitor", action="store_true", help="Run specialized test client (without LWT) subscribed to /app and /svc topics")
+    parser.add_argument("--host", type=str, default=MQTT_HOST, help="MQTT Broker host (default: 127.0.0.1)")
+    parser.add_argument("--port", type=int, default=MQTT_PORT, help="MQTT Broker port (default: 1883)")
+    parser.add_argument("--duration", type=int, default=0, help="Duration in seconds for monitor mode (0 = infinite)")
+    parser.add_argument("--poll-interval", type=int, default=MQTT_POLL_INTERVAL_SEC, help="Poll interval in seconds (default: 60)")
+    parser.add_argument("--max-iterations", type=int, default=MQTT_MAX_ITERATIONS, help="Max loop iterations (0 = infinite)")
+    parser.add_argument("--send-events", action="store_true", default=MQTT_SEND_TEST_EVENTS, help="Send sample telemetry events during polling")
+    args = parser.parse_args()
+
+    # Specialized test observer mode (NO LWT)
+    if args.monitor_presence:
+        run_presence_test_listener(host=args.host, port=args.port, duration_sec=args.duration)
+        return
 
     cert.update(resolve_certificate())
     print(f"Active Device CN/SN: {cert['CN']}")
 
-    mqtt_client_id = os.getenv("MQTT_CLIENT_ID") or cert.get("CN") or cert.get("sn")
+    role = args.role
+    is_main_app = (role == "main_app")
+    username = MQTT_USERNAME if MQTT_USERNAME != "main_app" else role
+
+    # Configure presence topics according to AGENTS.md
+    if is_main_app:
+        g_presence_topic = f"dev/{cert['CN']}/app"
+        g_online_payload = b"app_online"
+        g_offline_payload = b"app_offline"
+        client_id_default = f"{cert['CN']}_main_py"
+    else:
+        g_presence_topic = f"dev/{cert['CN']}/svc"
+        g_online_payload = b"svc_online"
+        g_offline_payload = b"svc_offline"
+        client_id_default = f"{cert['CN']}_extra_py"
+
+    mqtt_client_id = os.getenv("MQTT_CLIENT_ID") or client_id_default
 
     mqttc = mqtt.Client(
         mqtt.CallbackAPIVersion.VERSION2,
@@ -1428,12 +1532,21 @@ def main():
     # Fast reconnect backoff (retry every 1-3 seconds instead of default 120s)
     mqttc.reconnect_delay_set(min_delay=1, max_delay=3)
 
-    if MQTT_USERNAME:
-        mqttc.username_pw_set(username=MQTT_USERNAME, password=MQTT_PASSWORD or None)
+    if username:
+        mqttc.username_pw_set(username=username, password=MQTT_PASSWORD or None)
+
+    # Configure LWT (Will Message) BEFORE connecting to the broker
+    mqttc.will_set(
+        topic=g_presence_topic,
+        payload=g_offline_payload,
+        qos=1,
+        retain=True,
+    )
+    print(f"[MQTT] Configured LWT: {g_presence_topic} -> {g_offline_payload.decode()} (retain=True)")
 
     # If direct mTLS without proxy is explicitly requested with cert files
     if os.getenv("MQTT_DIRECT_TLS", "0") == "1" and MQTT_CA_CERT and MQTT_CLIENT_CERT and MQTT_CLIENT_KEY:
-        print(f"[DIRECT-TLS] Enabling direct OpenSSL TLS to {MQTT_HOST}:{MQTT_PORT}...")
+        print(f"[DIRECT-TLS] Enabling direct OpenSSL TLS to {args.host}:{args.port}...")
         mqttc.tls_set(
             MQTT_CA_CERT,
             MQTT_CLIENT_CERT,
@@ -1441,16 +1554,16 @@ def main():
             tls_version=ssl.PROTOCOL_TLSv1_2,
         )
     else:
-        print(f"[MAIN-APP] Connecting to Mosquitto Bridge at {MQTT_HOST}:{MQTT_PORT} (plain TCP, user: '{MQTT_USERNAME or 'anonymous'}')...")
+        print(f"[{role.upper()}] Connecting to Mosquitto Bridge at {args.host}:{args.port} (plain TCP, user: '{username}')...")
 
-    mqttc.connect(host=MQTT_HOST, port=MQTT_PORT, keepalive=60)
+    mqttc.connect(host=args.host, port=args.port, keepalive=60)
     mqttc.loop_start()
 
     i = 0
     try:
         while True:
             if not g_is_connected:
-                print(f"[CLIENT] Waiting for broker connection (127.0.0.1:{MQTT_PORT})...")
+                print(f"[CLIENT] Waiting for broker connection ({args.host}:{args.port})...")
                 sleep(1)
                 continue
 
@@ -1469,7 +1582,7 @@ def main():
             )
             print(f"device side, poll req sent, iteration = {i}")
 
-            if MQTT_SEND_TEST_EVENTS:
+            if args.send_events:
                 props.clear()
                 event_id = 36823 + i
                 corr_id = str(uuid.uuid4())
@@ -1524,17 +1637,25 @@ def main():
                 )
                 print(f"device side, prepare send gauge = {gauge}, test iteration = {i}")
 
-            if MQTT_MAX_ITERATIONS > 0 and i >= MQTT_MAX_ITERATIONS:
-                print(f"device side, reached max iterations ({MQTT_MAX_ITERATIONS}), exiting.")
+            if args.max_iterations > 0 and i >= args.max_iterations:
+                print(f"device side, reached max iterations ({args.max_iterations}), exiting.")
                 break
 
-            sleep(MQTT_POLL_INTERVAL_SEC)
+            sleep(args.poll_interval)
     except KeyboardInterrupt:
         print("\nStopping MQTT client (KeyboardInterrupt)...")
     finally:
+        # Publish offline presence before disconnect
+        if g_is_connected and g_presence_topic and g_offline_payload:
+            print(f"[PRESENCE] Publishing shutdown status: {g_presence_topic} = {g_offline_payload.decode()} (retain=True)")
+            offline_info = mqttc.publish(g_presence_topic, g_offline_payload, qos=1, retain=True)
+            with contextlib.suppress(Exception):
+                offline_info.wait_for_publish(timeout=2)
+
         print("Stopping MQTT client loop and disconnecting...")
         mqttc.loop_stop()
         mqttc.disconnect()
+        print(f"[SUCCESS] MQTT client ({role}) terminated.")
 
 
 if __name__ == "__main__":
