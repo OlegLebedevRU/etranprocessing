@@ -10,6 +10,9 @@ set(SOURCES
     src/schannel_tls.c
     src/mqtt_proxy.c
     src/http_proxy.c
+    src/reverse_proxy.c
+    src/discovery.c
+    src/firewall.c
     src/service_mgr.c
     src/tray_icon.c
     res/leo4proxy.rc
@@ -21,6 +24,9 @@ set(HEADERS
     src/schannel_tls.h
     src/mqtt_proxy.h
     src/http_proxy.h
+    src/reverse_proxy.h
+    src/discovery.h
+    src/firewall.h
     src/service_mgr.h
     src/tray_icon.h
     res/resource.h
@@ -44,6 +50,7 @@ target_link_libraries(leo4proxy PRIVATE
     shell32
     user32
     gdi32
+    iphlpapi
 )
 
 set_target_properties(leo4proxy PROPERTIES

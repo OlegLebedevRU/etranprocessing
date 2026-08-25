@@ -53,19 +53,35 @@
 
 ---
 
-## 3. Сборка (Zero-Dependency)
+## 3. Сборка (Zero-Dependency & Unified 32/64 Архитектура)
 
-### Вариант 1: Через MSVC Build Tools 2022 (Статическая сборка `/MT`)
+`leo4proxy` полностью поддерживает как **32-битные (x86)**, так и **64-битные (x64)** версии Windows (включая Windows 7 / POSReady 7 x86, Windows 10/11 x86 и x64).
+
+### Вариант 1: Автоматическая унифицированная сборка через MSVC Build Tools 2022 (`/MT`)
+Скрипт `build.cmd` автоматически компилирует статически слинкованные бинарники под обе архитектуры (x86 и x64):
 ```cmd
 cd tools\leo4proxy
 build.cmd
 ```
-Результат: `tools\leo4proxy\bin\leo4proxy.exe` (~120 КБ, не требует внешних DLL, кроме стандартных системных библиотек Windows: `ws2_32.dll`, `crypt32.dll`, `ncrypt.dll`, `secur32.dll`, `advapi32.dll`).
+* **Параметры сборки:**
+  - `build.cmd` (или `build.cmd all`) — собирает обе архитектуры (x86 и x64).
+  - `build.cmd x86` — собирает только 32-битную версию.
+  - `build.cmd x64` — собирает только 64-битную версию.
+* **Результаты сборки в каталоге `bin/`:**
+  - `bin\x86\leo4proxy.exe` — 32-битный нативный бинарник (универсален: работает на 32-битных ОС и на 64-битных через WOW64).
+  - `bin\x64\leo4proxy.exe` — 64-битный нативный бинарник.
+  - `bin\leo4proxy.exe` — стандартный исполняемый файл по умолчанию (копия x86 для максимальной совместимости со всеми терминалами).
+* Не требует внешних DLL (`/MT`), использует системные библиотеки Windows: `ws2_32.dll`, `crypt32.dll`, `ncrypt.dll`, `secur32.dll`, `advapi32.dll`, `shell32.dll`, `user32.dll`, `gdi32.dll`, `iphlpapi.dll`.
 
 ### Вариант 2: Через CMake (CLion / MinGW / Ninja)
 ```powershell
+# Сборка x64
 cmake -B build -G Ninja
 cmake --build build --config Release
+
+# Сборка x86 (32-bit Win32)
+cmake -B build32 -A Win32
+cmake --build build32 --config Release
 ```
 
 ---
@@ -102,42 +118,75 @@ leo4proxy.exe [ОПЦИИ]
 - Тип запуска: `SERVICE_AUTO_START` (автоматический запуск при старте Windows).
 - Восстановление при сбоях (`SERVICE_FAILURE_ACTIONS`): автоматический перезапуск службы через 5 сек (1-й сбой), 10 сек (2-й сбой), 30 сек (последующие сбои).
 
-### 4.3. Запуск в консольном режиме
+### 4.3. Готовые CMD-скрипты с автоматическим запросом прав администратора (UAC Elevation)
+В папке `tools/leo4proxy/` (и в распространяемом дистрибутиве) доступен набор командных файлов с префиксом `leo4proxy_`. Все скрипты:
+- Автоматически запрашивают права администратора Windows через UAC (Self-Elevation).
+- Выводят все системные сообщения исключительно на **английском языке**, исключая любые проблемы с кодировками (CP866, CP1251, UTF-8).
+- При успешном выполнении **автоматически закрывают консоль** без зависания окон.
+- В случае возникновения ошибки выводят **акцентированный баннер ошибки** и ожидают нажатия клавиши (`pause`) для удобной диагностики.
+
+| Скрипт | Назначение | Описание работы |
+|---|---|---|
+| `leo4proxy_install.cmd` (`leo4proxy_install_start.cmd`) | **Инсталляция + Старт** | Авто-UAC, настройка правил Брандмауэра Windows Defender, регистрация службы `Leo4Proxy` в SCM (тип запуска `SERVICE_AUTO_START` с автовосстановлением) и немедленный запуск службы. |
+| `leo4proxy_uninstall.cmd` (`leo4proxy_stop_uninstall.cmd`) | **Стоп + Деинсталляция** | Авто-UAC, остановка службы и процессов `leo4proxy`, полное удаление службы из SCM и очистка правил Брандмауэра. |
+| `leo4proxy_start.cmd` | **Идемпотентный старт** | Авто-UAC, проверяет наличие службы в системе (если не установлена — выполняет инсталляцию и настройку Firewall) и запускает службу `Leo4Proxy`. |
+| `leo4proxy_stop.cmd` | **Остановка** | Авто-UAC, корректная остановка службы Windows `Leo4Proxy` и завершение фоновых процессов. |
+| `leo4proxy_restart.cmd` | **Перезапуск** | Авто-UAC, отправка команды на перезапуск службы в SCM (или автоустановка при отсутствии). |
+| `leo4proxy_status.cmd` | **Диагностика и статус** | Проверка статуса службы в SCM (`sc query`), детальный статус через CLI и тестирование сертификата/mTLS. |
+
+Любой скрипт можно запускать как двойным кликом из Проводника Windows (UAC появится автоматически), так и передавать дополнительные параметры (например: `leo4proxy_install.cmd --reverse-target 127.0.0.1:8000`).
+
+### 4.4. Запуск в консольном режиме
 * **Запуск в консоли с подробным логированием:**
   ```cmd
   leo4proxy.exe -f --verbose
   ```
 
-### 4.4. Настройка параметров подключения
+### 4.5. Настройка параметров подключения
 | Параметр | По умолчанию | Описание |
 |---|---|---|
+| `--reverse-target <host:port>` | `127.0.0.1:8000` | Внутренний plain HTTP бэкенд для обратного проксирования |
+| `--reverse-listen <ip:port>` | `0.0.0.0:443` | Внешний IP и порт для входящих HTTPS-клиентов |
+| `--reverse-port <port>` | `443` | Внешний порт для входящего HTTPS |
+| `--no-reverse` | `0` (включен) | Отключить обратный HTTPS-прокси |
+| `--domain <name>` | авто (SAN DNS / `leo4-<sn>.local`) | Переопределить имя домена для mDNS/LLMNR |
+| `--no-discovery` | `0` (включено) | Отключить анонсирование mDNS (:5353) и LLMNR (:5355) |
+| `--no-firewall` | `0` (включено) | Отключить авто-настройку правил Windows Defender Firewall |
+| `--no-elevate` | `0` (авто) | Отключить авто-элевацию прав администратора через UAC |
 | `--mqtt-remote <host:port>` | `dev.leo4.ru:8883` | Удаленный адрес MQTT-брокера |
-| `--mqtt-local <ip:port>` | `127.0.0.1:18883` | Локальный TCP-порт прокси MQTT |
-| `--http-remote <host:port>` | `iot-processing.ru:443` | Удаленный адрес HTTPS бэкенда |
-| `--http-local <ip:port>` | `127.0.0.1:18443` | Локальный HTTP-порт прокси |
-| `--local-ssl` | auto-detect | Включить SSL/TLS на обоих локальных слушателях |
-| `--http-local-ssl` | auto-detect | Включить SSL/TLS на локальном HTTP слушателе |
-| `--mqtt-local-ssl` | auto-detect | Включить SSL/TLS на локальном MQTT слушателе |
+| `--mqtt-local <ip:port>` | `127.0.0.1:18883` | Локальный TCP-порт прямого прокси MQTT |
+| `--http-remote <host:port>` | `iot-processing.ru:443` | Удаленный адрес прямого HTTPS бэкенда процессинга |
+| `--http-local <ip:port>` | `127.0.0.1:18443` | Локальный HTTP-порт прямого прокси |
+| `--local-ssl` | auto-detect | Включить SSL/TLS на локальных слушателях |
 | `--cert-email <pattern>` | `*.terminal@leo4.ru` -> `*.terminal@forpay.ru` | Шаблон поиска email в сертификате |
 | `--cert-thumbprint <sha1>` | auto (самый свежий) | Выбор сертификата по отпечатку SHA-1 |
 | `--user-store` | `LocalMachine\MY` | Использовать хранилище `CurrentUser\MY` |
 | `--secure` | lax / manual validation | Включить строгую валидацию CA сервера |
 
-### 4.5. Системный трей Windows (System Tray & Notification Icon)
+### 4.6. Системный трей Windows (System Tray & Notification Icon)
 При запуске `leo4proxy.exe` в интерактивном режиме в области уведомлений Windows (System Tray) отображается значок состояния:
 - **Индикация состояния**:
   - 🟢 **Зеленый значок**: прокси активен и обрабатывает входящие подключения (`RUNNING`).
   - 🔴 **Красный значок**: прокси временно приостановлен (`STOPPED`).
 - **Контекстное меню по правому клику**:
-  - **Статус и SN**: информационный заголовок со статусом и серийным номером терминала.
-  - **Селектор управления**: пункты «■ Stop Proxies», «▶ Start Proxies», «🔄 Restart Proxies».
-  - **Блок Информация**:
-    - «ℹ Information & Certificate...» — модальное окно с деталями сертификата, SN, сроком действия и адресами.
-    - «🌐 Open /_leo4/info in Browser» — быстрый переход к локальному JSON API.
+  - **Заголовок**: информационный заголовок со статусом и серийным номером терминала (`[RUNNING] Leo4Proxy (leo4-0000773)`).
+  - **Быстрый переход .local**:
+    - «🌐 Open https://leo4-0000773.local in Browser» — мгновенный переход в браузере по mDNS-имени.
+    - «📋 Copy https://leo4-0000773.local to Clipboard» — копирование локального URL.
+  - **Селектор Reverse Proxy**:
+    - Индикатор: `Reverse HTTPS: RUNNING (:443 -> :8000)` / `STOPPED`.
+    - Переключатель: «■ Stop Reverse Proxy» / «▶ Start Reverse Proxy».
+  - **Селектор Forward Proxies**:
+    - Индикатор: `Forward Proxies: RUNNING (MQTT/HTTP)` / `STOPPED`.
+    - Переключатель: «■ Stop Forward Proxies» / «▶ Start Forward Proxies».
+  - **Глобальное управление**: «■ Stop All Proxies», «▶ Start All Proxies», «🔄 Restart All Proxies».
+  - **Блок Информация и Утилиты**:
+    - «ℹ Information & Status...» — модальное окно с деталями сертификата, SAN DNS, LAN IP, Reverse Proxy, Forward Proxy и статусом правил Firewall.
+    - «🌐 Open /_leo4/info in Browser» — переход к локальному JSON API.
     - «📋 Copy Device SN to Clipboard» — копирование серийного номера в буфер обмена Windows.
   - **Управление окном**: скрыть / показать окно консоли («👁 Hide/Show Console Window»).
-  - **Выход**: «✕ Exit» — корректное завершение работы прокси и удаление иконки из трея.
-- **Двойной клик левой кнопкой мыши**: быстрое открытие окна с информацией о терминале и сертификате.
+  - **Выход**: «✕ Exit» — корректное завершение работы всех прокси и удаление иконки из трея.
+- **Двойной клик левой кнопкой мыши**: быстрое открытие окна с подробной информацией о терминале, портах и сертификате.
 
 ---
 
@@ -185,56 +234,57 @@ $sn = & "C:\Program Files\Leo4Proxy\leo4proxy.exe" --get-sn
 
 ---
 
-## 6. Примеры интеграции для различных языков
+## 6. Примеры интеграции для различных языков (Mosquitto Bridge NoSSL & Leo4Proxy)
 
-Все примеры доступны в каталоге `tools/leo4proxy/examples/`:
+Все примеры доступны в каталоге **`tools/leo4proxy/examples/`** и разделены на две роли:
 
-### 1. Python (`examples/mqtt_test_client.py` и `examples/python_client.py`)
-- **`examples/mqtt_test_client.py`** — полнофункциональный эталонный клиент (соответствует `proxy_app/mqtt_test_client.py`):
-  - Автоматическое получение метаданных и `client_id` через `http://127.0.0.1:18443/_leo4/info`.
-  - Подключение к `127.0.0.1:18883` по plain TCP (MQTT 5.0).
-  - Полный жизненный цикл RPC: `srv/<SN>/tsk` -> `dev/<SN>/req` -> `srv/<SN>/rsp` -> `dev/<SN>/res` (статусы 206/200).
-  - Встроенная подсистема **Remote Diagnostics** (методы 7000 STREAM_CONTROL, 7001 EXEC, 7002 CANCEL, streaming логов, 19 диагностических команд для Windows/Linux/SQL).
-  - Фоновый цикл опроса (polling RPC) и публикация событий состояния (`dev/<SN>/evt`, gauge 44, event 90).
-- **`examples/python_client.py`** — быстрый демонстрационный скрипт (HTTP API + MQTT за 5 секунд).
+### 6.1. Роль `main_app` (Основное приложение — UI / Мастер)
+Подключается к локальному Mosquitto Bridge (`127.0.0.1:1883`, plain TCP) как пользователь `main_app`, подписывается на серверные топики `srv/<SN>/#`, принимает RPC-задачи и удаленную диагностику, отправляет ответы `dev/<SN>/res` и выполняет опрос сервера `dev/<SN>/req`.
 
-```bash
-# Запуск полнофункционального клиента через Leo4Proxy (благодаря PEP 723 зависимости разрешаются автоматически)
-uv run tools/leo4proxy/examples/mqtt_test_client.py
-```
+1. **Python Main App (`examples/mqtt_test_client.py`)**:
+   - Автоматическое получение метаданных и `client_id` через `http://127.0.0.1:18443/_leo4/info`.
+   - Подключение к `127.0.0.1:1883` по plain TCP (MQTT 5.0, user: `main_app`).
+   - Полный жизненный цикл RPC: `srv/<SN>/tsk` -> `dev/<SN>/req` -> `srv/<SN>/rsp` -> `dev/<SN>/res` (статусы 206/200).
+   - Встроенная подсистема **Remote Diagnostics** (методы 7000 STREAM_CONTROL, 7001 EXEC, 7002 CANCEL, streaming логов, 19 диагностических команд для Windows/Linux/SQL).
+   - Фоновый цикл опроса (polling RPC `dev/<SN>/req`) и отправка событий состояния.
+   ```bash
+   uv run tools/leo4proxy/examples/mqtt_test_client.py
+   ```
 
-### 2. C / Paho MQTT C (`examples/c_client_example.c`)
-```c
-// Собирается с PAHO_WITH_SSL=OFF без OpenSSL!
-MQTTAsync client;
-MQTTAsync_createOptions create_opts = MQTTAsync_createOptions_initializer5;
-create_opts.MQTTVersion = MQTTVERSION_5;
+2. **C# Main App (`examples/csharp_example.cs` / `examples/csharp_example.csproj`)**:
+   - Полнофункциональный C# клиент на базе `MQTTnet` (.NET 8 / 9).
+   - Автоматическое разрешение SN через REST API прокси и проверка mTLS бэкенда (`/licensebilling/`).
+   - Подписка на `srv/<SN>/#`, обработка серверных задач и отправка ответов `dev/<SN>/res`.
+   - Цикл опроса сервера `dev/<SN>/req` с CorrelationData.
+   ```powershell
+   dotnet run --project tools/leo4proxy/examples/csharp_example.csproj
+   ```
 
-// client_id = sn (серийный номер устройства)
-MQTTAsync_createWithOptions(&client, "tcp://127.0.0.1:18883", sn, MQTTCLIENT_PERSISTENCE_NONE, NULL, &create_opts);
+---
 
-MQTTAsync_connectOptions conn_opts = MQTTAsync_connectOptions_initializer5;
-conn_opts.MQTTVersion = MQTTVERSION_5;
-conn_opts.ssl = NULL; // Чистый TCP к прокси
+### 6.2. Роль `extra_service` (Вспомогательный сервис — цикл событий 10 минут)
+Подключается к Mosquitto Bridge (`127.0.0.1:1883`) как пользователь `extra_service` и отправляет аппаратные события телеметрии в цикле раз в 10 минут (600 секунд) в топик `dev/<SN>/evt` (QoS 1, Retain 0) с пользовательскими свойствами MQTT 5.0:
+- **Payload:** `{ "101": 36823, "102": "2026-08-03T12:41:33+03:00", "200": 888, "300": [ { "301": "044AFE42C76781", "302": 6, "303": 0 } ] }`
+- **User Properties:** `event_type_code: 888`, `dev_event_id: 36823`, `dev_timestamp: 1740984093`, `correlation_id: <uuid>`
 
-MQTTAsync_connect(client, &conn_opts);
-```
+1. **Python Extra Service (`examples/python_client.py`)**:
+   ```powershell
+   uv run tools/leo4proxy/examples/python_client.py [--interval 600] [--once]
+   ```
+2. **C / Paho MQTT C (`examples/c_client_example.c`)**:
+   - Сборка с `PAHO_WITH_SSL=OFF` (чистый TCP без OpenSSL).
+   - Формирование MQTT 5.0 User Properties и циклическая публикация в `dev/<SN>/evt`.
+3. **PowerShell (`examples/powershell_example.ps1`)**:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File tools/leo4proxy/examples/powershell_example.ps1 [-Once]
+   ```
+4. **cURL + Mosquitto_pub (`examples/curl_mosquitto_pub.cmd` / `examples/mosquitto_pub_example.cmd`)**:
+   ```cmd
+   tools\leo4proxy\examples\curl_mosquitto_pub.cmd [--once]
+   ```
+5. **MQTTX (`examples/mqttx_example.cmd`, `examples/mqttx_connection.json`, `examples/mqttx_scenario.js`)**:
+   - Готовый CLI-раннер `mqttx_example.cmd`.
+   - Импортируемый профиль подключений `mqttx_connection.json` для Desktop GUI MQTTX.
+   - Сценарий `mqttx_scenario.js` для динамической генерации событий во вкладке Scripts MQTTX.
 
-### 3. PowerShell (`examples/powershell_example.ps1`)
-```powershell
-# 1. Получение информации об устройстве
-$info = Invoke-RestMethod -Uri "http://127.0.0.1:18443/_leo4/info"
-Write-Host "Device SN: $($info.sn)"
-
-# 2. Вызов mTLS бэкенда
-$resp = Invoke-WebRequest -Uri "http://127.0.0.1:18443/licensebilling/" `
-                          -Method Post `
-                          -Body "function=check&Signature=..." `
-                          -ContentType "application/x-www-form-urlencoded"
-```
-
-### 4. cURL (`examples/curl_example.cmd`)
-```cmd
-:: Запрос баланса через mTLS прокси
-curl -X POST http://127.0.0.1:18443/licensebilling/ -d "function=check&Signature=..."
-```
+Подробная документация по всем примерам: **`tools/leo4proxy/examples/README.md`**.

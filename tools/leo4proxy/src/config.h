@@ -29,6 +29,11 @@
 #define DEFAULT_HTTP_REMOTE_HOST "iot-processing.ru"
 #define DEFAULT_HTTP_REMOTE_PORT 443
 
+#define DEFAULT_REVERSE_LOCAL_HOST   "0.0.0.0"
+#define DEFAULT_REVERSE_LOCAL_PORT   443
+#define DEFAULT_REVERSE_TARGET_HOST  "127.0.0.1"
+#define DEFAULT_REVERSE_TARGET_PORT  8000
+
 #define DEFAULT_CERT_EMAIL_PRIMARY  ".terminal@leo4.ru"
 #define DEFAULT_CERT_EMAIL_FALLBACK ".terminal@forpay.ru"
 
@@ -48,6 +53,21 @@ typedef struct {
     int  http_local_port;
     char http_remote_host[MAX_HOST_LEN];
     int  http_remote_port;
+
+    /* Reverse Proxy settings */
+    int  reverse_proxy_enabled;            /* 1 to enable reverse HTTPS proxy (default: 1) */
+    char reverse_local_host[MAX_HOST_LEN]; /* Listener host, e.g. "0.0.0.0" */
+    int  reverse_local_port;               /* Listener port, default 443 */
+    char reverse_target_host[MAX_HOST_LEN];/* Internal target backend host, e.g. "127.0.0.1" */
+    int  reverse_target_port;              /* Internal target backend port, default 8000 */
+
+    /* Discovery & Network Announcement */
+    int  discovery_enabled;                /* 1 to enable mDNS (5353) & LLMNR (5355) (default: 1) */
+    char custom_local_domain[MAX_HOST_LEN];/* Custom domain override if specified */
+
+    /* Windows Firewall & Elevation automation */
+    int  firewall_auto;                    /* 1 to automatically manage Windows Defender Firewall rules (default: 1) */
+    int  auto_elevate;                     /* 1 to auto-elevate to admin if launched unprivileged (default: 1) */
 
     char cert_email_pattern[MAX_EMAIL_LEN];
     char cert_thumbprint[MAX_THUMBPRINT_LEN];

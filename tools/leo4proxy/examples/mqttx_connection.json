@@ -1,0 +1,53 @@
+{
+  "version": "1.11.0",
+  "connections": [
+    {
+      "id": "leo4-mosquitto-bridge-extra",
+      "name": "Leo4 Mosquitto Bridge (extra_service)",
+      "host": "127.0.0.1",
+      "port": 1883,
+      "protocol": "mqtt://",
+      "mqttVersion": "5.0",
+      "clientId": "a3b1234567c10221d290825_extra_mqttx",
+      "username": "extra_service",
+      "password": "",
+      "clean": true,
+      "keepalive": 60,
+      "ssl": false,
+      "messages": [
+        {
+          "topic": "dev/a3b1234567c10221d290825/evt",
+          "qos": 1,
+          "retain": false,
+          "payload": "{\n  \"101\": 36823,\n  \"102\": \"2026-08-03T12:41:33+03:00\",\n  \"200\": 888,\n  \"300\": [\n    {\n      \"301\": \"044AFE42C76781\",\n      \"302\": 6,\n      \"303\": 0\n    }\n  ]\n}",
+          "userProperties": [
+            { "key": "event_type_code", "value": "888" },
+            { "key": "dev_event_id", "value": "36823" },
+            { "key": "dev_timestamp", "value": "1740984093" },
+            { "key": "correlation_id", "value": "d9afcbfa-3d2c-4304-8e69-f644fef29f1f" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "leo4-mosquitto-bridge-main",
+      "name": "Leo4 Mosquitto Bridge (main_app)",
+      "host": "127.0.0.1",
+      "port": 1883,
+      "protocol": "mqtt://",
+      "mqttVersion": "5.0",
+      "clientId": "a3b1234567c10221d290825_main_mqttx",
+      "username": "main_app",
+      "password": "",
+      "clean": true,
+      "keepalive": 60,
+      "ssl": false,
+      "subscriptions": [
+        {
+          "topic": "srv/a3b1234567c10221d290825/#",
+          "qos": 1
+        }
+      ]
+    }
+  ]
+}

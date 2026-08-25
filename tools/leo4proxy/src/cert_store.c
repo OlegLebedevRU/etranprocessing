@@ -189,6 +189,39 @@ static bool cert_get_san_urn(PCCERT_CONTEXT pCert, char* out_urn, size_t out_urn
     return found;
 }
 
+static int cert_get_all_san_dns_names(PCCERT_CONTEXT pCert, char out_dns[8][128], int max_count) {
+    if (!pCert || !out_dns || max_count <= 0) return 0;
+    int count = 0;
+
+    PCERT_EXTENSION pExt = CertFindExtension(szOID_SUBJECT_ALT_NAME2, pCert->pCertInfo->cExtension, pCert->pCertInfo->rgExtension);
+    if (!pExt) {
+        pExt = CertFindExtension(szOID_SUBJECT_ALT_NAME, pCert->pCertInfo->cExtension, pCert->pCertInfo->rgExtension);
+    }
+    if (!pExt) return 0;
+
+    DWORD cbDecoded = 0;
+    if (!CryptDecodeObject(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, szOID_SUBJECT_ALT_NAME2, pExt->Value.pbData, pExt->Value.cbData, 0, NULL, &cbDecoded)) {
+        return 0;
+    }
+
+    CERT_ALT_NAME_INFO* pAltName = (CERT_ALT_NAME_INFO*)malloc(cbDecoded);
+    if (!pAltName) return 0;
+
+    if (CryptDecodeObject(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, szOID_SUBJECT_ALT_NAME2, pExt->Value.pbData, pExt->Value.cbData, 0, pAltName, &cbDecoded)) {
+        for (DWORD i = 0; i < pAltName->cAltEntry && count < max_count; i++) {
+            if (pAltName->rgAltEntry[i].dwAltNameChoice == CERT_ALT_NAME_DNS_NAME && pAltName->rgAltEntry[i].pwszDNSName) {
+                WideCharToMultiByte(CP_UTF8, 0, pAltName->rgAltEntry[i].pwszDNSName, -1, out_dns[count], 128, NULL, NULL);
+                if (out_dns[count][0] != '\0') {
+                    count++;
+                }
+            }
+        }
+    }
+
+    free(pAltName);
+    return count;
+}
+
 static bool cert_check_private_key(PCCERT_CONTEXT pCert) {
     if (!pCert) return false;
     HCRYPTPROV_OR_NCRYPT_KEY_HANDLE hKey = 0;
@@ -257,6 +290,25 @@ static void fill_cert_details(PCCERT_CONTEXT pCert, CertDetails* details) {
     cert_get_cn(pCert, details->sn, sizeof(details->sn));
     cert_get_san_urn(pCert, details->urn, sizeof(details->urn));
 
+    details->san_dns_count = cert_get_all_san_dns_names(pCert, details->san_dns_list, 8);
+    if (details->san_dns_count > 0) {
+        strncpy_s(details->san_dns, sizeof(details->san_dns), details->san_dns_list[0], _TRUNCATE);
+    }
+
+    // Determine canonical local hostname (prefer .device.leo4.ru or .local or .term.leo4.ru)
+    if (details->san_dns[0] != '\0') {
+        strncpy_s(details->local_hostname, sizeof(details->local_hostname), details->san_dns, _TRUNCATE);
+    } else if (details->sn[0] != '\0') {
+        snprintf(details->local_hostname, sizeof(details->local_hostname), "leo4-%s.local", details->sn);
+    } else {
+        strncpy_s(details->local_hostname, sizeof(details->local_hostname), "leo4-device.local", _TRUNCATE);
+    }
+
+    // Convert local_hostname to lower case
+    for (char* p = details->local_hostname; *p; p++) {
+        *p = (char)tolower((unsigned char)*p);
+    }
+
     details->ft_not_before = pCert->pCertInfo->NotBefore;
     details->ft_not_after = pCert->pCertInfo->NotAfter;
 
@@ -283,6 +335,10 @@ void cert_store_print_details(const CertDetails* details) {
     if (details->urn[0] != '\0') {
         printf("  SAN URN:        %s\n", details->urn);
     }
+    if (details->san_dns[0] != '\0') {
+        printf("  SAN DNS:        %s\n", details->san_dns);
+    }
+    printf("  Local Hostname: %s\n", details->local_hostname);
     printf("  Email:          %s\n", details->email);
     printf("  Issuer:         %s\n", details->issuer);
     printf("  Serial:         %s\n", details->serial);

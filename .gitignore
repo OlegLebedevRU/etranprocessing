@@ -77,3 +77,8 @@ Thumbs.db
 *.tsbuildinfo
 
 .mimocode/
+
+# Network logs
+*netlog*.json
+edge_netlog.json
+

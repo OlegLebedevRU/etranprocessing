@@ -8,6 +8,9 @@
 #include "schannel_tls.h"
 #include "mqtt_proxy.h"
 #include "http_proxy.h"
+#include "reverse_proxy.h"
+#include "discovery.h"
+#include "firewall.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -112,14 +115,32 @@ static void WINAPI service_main(DWORD argc, LPWSTR* argv) {
         SecInvalidateHandle(&hServerCred);
     }
 
-    // 4. Start MQTT & HTTP Proxies
+    // 4. Start Forward (MQTT/HTTP), Reverse HTTPS, and Discovery Servers
     MqttProxyServer mqttServer;
     HttpProxyServer httpServer;
+    ReverseProxyServer reverseServer;
+    DiscoveryServer discoveryServer;
+
+    bool isReverseStarted = false;
+    bool isDiscoveryStarted = false;
+
+    // Configure firewall rules
+    firewall_ensure_rules(&g_serviceConfig, NULL);
 
     bool mqttOk = mqtt_proxy_start(&mqttServer, &g_serviceConfig, &certDetails, hClientCred, hServerCred);
     bool httpOk = http_proxy_start(&httpServer, &g_serviceConfig, &certDetails, hClientCred, hServerCred);
 
+    if (g_serviceConfig.reverse_proxy_enabled && SecIsValidHandle(&hServerCred)) {
+        isReverseStarted = reverse_proxy_start(&reverseServer, &g_serviceConfig, &certDetails, hServerCred);
+    }
+
+    if (g_serviceConfig.discovery_enabled) {
+        isDiscoveryStarted = discovery_start(&discoveryServer, &g_serviceConfig, &certDetails);
+    }
+
     if (!mqttOk || !httpOk) {
+        if (isDiscoveryStarted) discovery_stop(&discoveryServer);
+        if (isReverseStarted) reverse_proxy_stop(&reverseServer);
         if (mqttOk) mqtt_proxy_stop(&mqttServer);
         if (httpOk) http_proxy_stop(&httpServer);
         schannel_free_creds(&hClientCred);
@@ -137,6 +158,8 @@ static void WINAPI service_main(DWORD argc, LPWSTR* argv) {
 
     report_service_status(SERVICE_STOP_PENDING, NO_ERROR, 5000);
 
+    if (isDiscoveryStarted) discovery_stop(&discoveryServer);
+    if (isReverseStarted) reverse_proxy_stop(&reverseServer);
     mqtt_proxy_stop(&mqttServer);
     http_proxy_stop(&httpServer);
     schannel_free_creds(&hClientCred);
@@ -300,6 +323,7 @@ bool service_uninstall(void) {
 
     if (DeleteService(hService)) {
         printf("[SERVICE] Service '%ls' uninstalled successfully.\n", LEO4_SERVICE_NAME);
+        firewall_remove_rules();
     } else {
         fprintf(stderr, "[SERVICE] DeleteService failed: %lu\n", GetLastError());
     }

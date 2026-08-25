@@ -35,6 +35,11 @@ typedef struct {
 } SChannelSession;
 
 /**
+ * @brief Establishes standard non-blocking TCP connection with timeout.
+ */
+SOCKET tcp_connect(const char* host, int port, int timeout_ms);
+
+/**
  * @brief Initializes credentials handle with the client certificate from Windows Store.
  */
 bool schannel_init_client_creds(PCCERT_CONTEXT pCert, int insecure_server, CredHandle* out_hCred);

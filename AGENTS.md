@@ -88,28 +88,38 @@ Detailed backend code standards, architecture rules, and patterns are documented
 
 For building native Windows utilities in `tools/` (or examples like `D:\work\iot.leo4.ru\iot-rpc-rest-app\examples\c-win-clion-rpc-client`), two fully functional C/C++ toolchains are available on this machine:
 
-### 1. JetBrains CLion Bundled Toolchain (MinGW-w64 + CMake + Ninja)
+### 1. Mandatory Unified 32/64-bit Architecture Build Policy for `tools/`
+- **Mandatory Policy for AI Agents**: Always build native Windows CLI utilities and background services in `tools/` (`tools/leo4proxy`, `tools/terminal-cert-installer`) for **unified 32-bit (x86) and 64-bit (x64) architectures**.
+- **Target Compatibility**: 32-bit (x86) builds are critical for payment kiosks/terminals running 32-bit Windows 7 Embedded / POSReady 7, and run seamlessly on 64-bit Windows via WOW64.
+- **Output Artifacts**:
+  - `bin\x86\<tool>.exe`: 32-bit static binary (`/MT`, pure x86 PE).
+  - `bin\x64\<tool>.exe`: 64-bit static binary (`/MT`, x64 PE).
+  - `bin\<tool>.exe`: Default universal binary (x86 for maximum compatibility across all terminal machines).
+- **Automated Unified Build**:
+  Running `build.cmd` (or `build.cmd all`) in any `tools/<subproject>` automatically builds both x86 and x64 targets.
+
+### 2. JetBrains CLion Bundled Toolchain (MinGW-w64 + CMake + Ninja)
 - **CMake**: `C:\Program Files\JetBrains\CLion 2025.2.4\bin\cmake\win\x64\bin\cmake.exe` (v4.2.2)
 - **GCC / MinGW**: `C:\Program Files\JetBrains\CLion 2025.2.4\bin\mingw\bin\gcc.exe` (GCC 13.1.0 x64)
 - **Ninja**: `C:\Program Files\JetBrains\CLion 2025.2.4\bin\ninja\win\x64\ninja.exe` (v1.13.2)
-- **Security & Network Libs**: `-lncrypt`, `-lcrypt32`, `-lwinhttp` available out of the box.
+- **Security & Network Libs**: `-lncrypt`, `-lcrypt32`, `-lwinhttp`, `-lsecur32`, `-lws2_32` available out of the box.
 - **Example CMake invocation**:
   ```powershell
   & "C:\Program Files\JetBrains\CLion 2025.2.4\bin\cmake\win\x64\bin\cmake.exe" -B build -G Ninja -DCMAKE_C_COMPILER="C:/Program Files/JetBrains/CLion 2025.2.4/bin/mingw/bin/gcc.exe" -DCMAKE_MAKE_PROGRAM="C:/Program Files/JetBrains/CLion 2025.2.4/bin/ninja/win/x64/ninja.exe"
   & "C:\Program Files\JetBrains\CLion 2025.2.4\bin\cmake\win\x64\bin\cmake.exe" --build build --config Release
   ```
 
-### 2. Microsoft Visual C++ Build Tools 2022 (MSVC) + Windows SDK 10
+### 3. Microsoft Visual C++ Build Tools 2022 (MSVC) + Windows SDK 10
 - **Install path**: `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools`
 - **Compiler**: `cl.exe` (v19.44 for x86 & x64)
-- **Windows SDK**: 10.0.22621.0 (`ncrypt.lib`, `crypt32.lib`, `winhttp.lib`)
+- **Windows SDK**: 10.0.22621.0 (`ncrypt.lib`, `crypt32.lib`, `secur32.lib`, `ws2_32.lib`, `winhttp.lib`)
 - **Environment activation**:
-  - x64: `call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"`
-  - x86: `call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars32.bat"`
+  - x86 (32-bit): `call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars32.bat"`
+  - x64 (64-bit): `call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"`
 - **Standalone Static Binary Compilation (`/MT` — zero runtime dependencies)**:
-  ```cmd
-  cmd /c "call ""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"" && cl.exe /O2 /MT main.c /link ncrypt.lib crypt32.lib winhttp.lib /OUT:tool.exe"
-  ```
+  - Unified Build: `cd tools\<tool_dir> && build.cmd`
+  - x86 Build only: `cd tools\<tool_dir> && build.cmd x86`
+  - x64 Build only: `cd tools\<tool_dir> && build.cmd x64`
 
 ## Infrastructure & Servers
 

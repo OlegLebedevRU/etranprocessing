@@ -1,6 +1,6 @@
 /**
  * @file main.c
- * @brief Leo4Proxy - Unified Windows SChannel mTLS Proxy for MQTT and HTTPS.
+ * @brief Leo4Proxy - Unified Windows SChannel mTLS Proxy and Reverse HTTPS Gateway for Leo4 & Etranprocessing.
  */
 
 #include "config.h"
@@ -12,6 +12,9 @@
 #include "schannel_tls.h"
 #include "mqtt_proxy.h"
 #include "http_proxy.h"
+#include "reverse_proxy.h"
+#include "discovery.h"
+#include "firewall.h"
 #include "service_mgr.h"
 #include "tray_icon.h"
 #include "../res/resource.h"
@@ -25,8 +28,12 @@ typedef struct {
     CredHandle hServerCred;
     MqttProxyServer mqttServer;
     HttpProxyServer httpServer;
+    ReverseProxyServer reverseServer;
+    DiscoveryServer discoveryServer;
     TrayIconContext trayCtx;
-    bool isProxiesRunning;
+    bool isForwardRunning;
+    bool isReverseRunning;
+    bool isDiscoveryRunning;
 } AppState;
 
 static AppState g_app;
@@ -36,51 +43,116 @@ static void on_tray_action(int action_id, void* user_data) {
     if (!app) return;
 
     switch (action_id) {
-        case IDM_TRAY_STOP:
-            if (app->isProxiesRunning) {
-                printf("[TRAY] Stopping proxies requested from System Tray...\n");
+        case IDM_TRAY_STOP_ALL:
+            printf("[TRAY] Stopping all proxies and discovery...\n");
+            if (app->isReverseRunning) {
+                reverse_proxy_stop(&app->reverseServer);
+                app->isReverseRunning = false;
+                tray_icon_set_reverse_state(&app->trayCtx, false);
+            }
+            if (app->isForwardRunning) {
                 mqtt_proxy_stop(&app->mqttServer);
                 http_proxy_stop(&app->httpServer);
-                app->isProxiesRunning = false;
-                tray_icon_set_state(&app->trayCtx, TRAY_STATE_STOPPED);
-                printf("[TRAY] Proxies STOPPED (Paused).\n");
+                app->isForwardRunning = false;
+                tray_icon_set_forward_state(&app->trayCtx, false);
             }
+            if (app->isDiscoveryRunning) {
+                discovery_stop(&app->discoveryServer);
+                app->isDiscoveryRunning = false;
+            }
+            tray_icon_set_state(&app->trayCtx, TRAY_STATE_STOPPED);
+            printf("[TRAY] All proxies STOPPED.\n");
             break;
 
-        case IDM_TRAY_START:
-            if (!app->isProxiesRunning) {
-                printf("[TRAY] Starting proxies requested from System Tray...\n");
+        case IDM_TRAY_START_ALL:
+            printf("[TRAY] Starting all proxies and discovery...\n");
+            if (!app->isForwardRunning) {
                 bool mOk = mqtt_proxy_start(&app->mqttServer, &app->config, &app->certDetails, app->hClientCred, app->hServerCred);
                 bool hOk = http_proxy_start(&app->httpServer, &app->config, &app->certDetails, app->hClientCred, app->hServerCred);
                 if (mOk && hOk) {
-                    app->isProxiesRunning = true;
-                    tray_icon_set_state(&app->trayCtx, TRAY_STATE_RUNNING);
-                    printf("[TRAY] Proxies RUNNING (Active).\n");
-                } else {
-                    fprintf(stderr, "[TRAY] Failed to start proxies!\n");
-                    tray_icon_set_state(&app->trayCtx, TRAY_STATE_ERROR);
+                    app->isForwardRunning = true;
+                    tray_icon_set_forward_state(&app->trayCtx, true);
+                }
+            }
+            if (!app->isReverseRunning && app->config.reverse_proxy_enabled && SecIsValidHandle(&app->hServerCred)) {
+                if (reverse_proxy_start(&app->reverseServer, &app->config, &app->certDetails, app->hServerCred)) {
+                    app->isReverseRunning = true;
+                    tray_icon_set_reverse_state(&app->trayCtx, true);
+                }
+            }
+            if (!app->isDiscoveryRunning && app->config.discovery_enabled) {
+                if (discovery_start(&app->discoveryServer, &app->config, &app->certDetails)) {
+                    app->isDiscoveryRunning = true;
+                }
+            }
+            tray_icon_set_state(&app->trayCtx, TRAY_STATE_RUNNING);
+            printf("[TRAY] All proxies RUNNING.\n");
+            break;
+
+        case IDM_TRAY_RESTART_ALL:
+            printf("[TRAY] Restarting all proxies...\n");
+            if (app->isReverseRunning) reverse_proxy_stop(&app->reverseServer);
+            if (app->isForwardRunning) {
+                mqtt_proxy_stop(&app->mqttServer);
+                http_proxy_stop(&app->httpServer);
+            }
+            if (app->isDiscoveryRunning) discovery_stop(&app->discoveryServer);
+            app->isReverseRunning = false;
+            app->isForwardRunning = false;
+            app->isDiscoveryRunning = false;
+            Sleep(500);
+
+            mqtt_proxy_start(&app->mqttServer, &app->config, &app->certDetails, app->hClientCred, app->hServerCred);
+            http_proxy_start(&app->httpServer, &app->config, &app->certDetails, app->hClientCred, app->hServerCred);
+            app->isForwardRunning = true;
+            tray_icon_set_forward_state(&app->trayCtx, true);
+
+            if (app->config.reverse_proxy_enabled && SecIsValidHandle(&app->hServerCred)) {
+                reverse_proxy_start(&app->reverseServer, &app->config, &app->certDetails, app->hServerCred);
+                app->isReverseRunning = true;
+                tray_icon_set_reverse_state(&app->trayCtx, true);
+            }
+            if (app->config.discovery_enabled) {
+                discovery_start(&app->discoveryServer, &app->config, &app->certDetails);
+                app->isDiscoveryRunning = true;
+            }
+            tray_icon_set_state(&app->trayCtx, TRAY_STATE_RUNNING);
+            printf("[TRAY] All proxies RESTARTED.\n");
+            break;
+
+        case IDM_TRAY_TOGGLE_REVERSE:
+            if (app->isReverseRunning) {
+                printf("[TRAY] Stopping Reverse HTTPS Proxy...\n");
+                reverse_proxy_stop(&app->reverseServer);
+                app->isReverseRunning = false;
+                tray_icon_set_reverse_state(&app->trayCtx, false);
+                printf("[TRAY] Reverse HTTPS Proxy STOPPED.\n");
+            } else {
+                printf("[TRAY] Starting Reverse HTTPS Proxy...\n");
+                if (reverse_proxy_start(&app->reverseServer, &app->config, &app->certDetails, app->hServerCred)) {
+                    app->isReverseRunning = true;
+                    tray_icon_set_reverse_state(&app->trayCtx, true);
+                    printf("[TRAY] Reverse HTTPS Proxy RUNNING.\n");
                 }
             }
             break;
 
-        case IDM_TRAY_RESTART:
-            printf("[TRAY] Restarting proxies requested from System Tray...\n");
-            if (app->isProxiesRunning) {
+        case IDM_TRAY_TOGGLE_FORWARD:
+            if (app->isForwardRunning) {
+                printf("[TRAY] Stopping Forward Proxies...\n");
                 mqtt_proxy_stop(&app->mqttServer);
                 http_proxy_stop(&app->httpServer);
-                app->isProxiesRunning = false;
-            }
-            Sleep(500);
-            {
+                app->isForwardRunning = false;
+                tray_icon_set_forward_state(&app->trayCtx, false);
+                printf("[TRAY] Forward Proxies STOPPED.\n");
+            } else {
+                printf("[TRAY] Starting Forward Proxies...\n");
                 bool mOk = mqtt_proxy_start(&app->mqttServer, &app->config, &app->certDetails, app->hClientCred, app->hServerCred);
                 bool hOk = http_proxy_start(&app->httpServer, &app->config, &app->certDetails, app->hClientCred, app->hServerCred);
                 if (mOk && hOk) {
-                    app->isProxiesRunning = true;
-                    tray_icon_set_state(&app->trayCtx, TRAY_STATE_RUNNING);
-                    printf("[TRAY] Proxies RESTARTED successfully.\n");
-                } else {
-                    fprintf(stderr, "[TRAY] Failed to restart proxies!\n");
-                    tray_icon_set_state(&app->trayCtx, TRAY_STATE_ERROR);
+                    app->isForwardRunning = true;
+                    tray_icon_set_forward_state(&app->trayCtx, true);
+                    printf("[TRAY] Forward Proxies RUNNING.\n");
                 }
             }
             break;
@@ -95,7 +167,6 @@ static void on_tray_action(int action_id, void* user_data) {
 static void pause_if_explorer(void) {
     DWORD pids[2];
     DWORD count = GetConsoleProcessList(pids, 2);
-    // If count <= 1, this process is the sole process attached to the console (launched from Explorer)
     if (count <= 1) {
         printf("\n[LEO4PROXY] Press Enter to exit...\n");
         fflush(stdout);
@@ -152,6 +223,17 @@ void proxy_config_init_defaults(ProxyConfig* config) {
     strncpy_s(config->http_remote_host, sizeof(config->http_remote_host), DEFAULT_HTTP_REMOTE_HOST, _TRUNCATE);
     config->http_remote_port = DEFAULT_HTTP_REMOTE_PORT;
 
+    config->reverse_proxy_enabled = 1;
+    strncpy_s(config->reverse_local_host, sizeof(config->reverse_local_host), DEFAULT_REVERSE_LOCAL_HOST, _TRUNCATE);
+    config->reverse_local_port = DEFAULT_REVERSE_LOCAL_PORT;
+    strncpy_s(config->reverse_target_host, sizeof(config->reverse_target_host), DEFAULT_REVERSE_TARGET_HOST, _TRUNCATE);
+    config->reverse_target_port = DEFAULT_REVERSE_TARGET_PORT;
+
+    config->discovery_enabled = 1;
+    config->custom_local_domain[0] = '\0';
+    config->firewall_auto = 1;
+    config->auto_elevate = 1;
+
     strncpy_s(config->cert_store_name, sizeof(config->cert_store_name), "MY", _TRUNCATE);
     config->is_machine_store = 1;      // Default: LocalMachine\MY
     config->insecure_server_cert = 1;  // Default: ignore untrusted server CA for dev/migration
@@ -169,7 +251,6 @@ static void parse_host_port(const char* str, char* out_host, size_t out_host_siz
     if (!str || !out_host || !out_port) return;
 
     const char* p = str;
-    // Skip optional scheme
     const char* scheme = strstr(str, "://");
     if (scheme) {
         p = scheme + 3;
@@ -189,7 +270,7 @@ static void parse_host_port(const char* str, char* out_host, size_t out_host_siz
 
 static void print_usage(const char* exeName) {
     printf("===============================================================================\n");
-    printf(" Leo4Proxy v%s - Windows SChannel mTLS Proxy for MQTT & HTTPS\n", LEO4_PROXY_VERSION);
+    printf(" Leo4Proxy v%s - SChannel mTLS Proxy & Reverse HTTPS Gateway\n", LEO4_PROXY_VERSION);
     printf("===============================================================================\n\n");
     printf("USAGE:\n");
     printf("  %s [OPTIONS]\n\n", exeName);
@@ -202,34 +283,36 @@ static void print_usage(const char* exeName) {
     printf("  --stop                  Stop Windows Service\n");
     printf("  --restart               Restart Windows Service\n");
     printf("  --status                Check Windows Service status\n");
-    printf("  -f, --console           Run in foreground console mode (default when run interactively)\n");
+    printf("  -f, --console           Run in foreground console mode\n");
     printf("  -v, --verbose           Enable verbose connection debugging logs\n");
     printf("  -h, --help              Show this help message\n\n");
-    printf("PROXY ENDPOINT CONFIGURATION:\n");
-    printf("  --mqtt-remote <host:port> Remote MQTT Broker (default: %s:%d)\n", DEFAULT_MQTT_REMOTE_HOST, DEFAULT_MQTT_REMOTE_PORT);
-    printf("  --mqtt-local  <ip:port>   Local MQTT listener (default: %s:%d)\n", DEFAULT_MQTT_LOCAL_HOST, DEFAULT_MQTT_LOCAL_PORT);
-    printf("  --http-remote <host:port> Remote HTTPS Backend (default: %s:%d)\n", DEFAULT_HTTP_REMOTE_HOST, DEFAULT_HTTP_REMOTE_PORT);
-    printf("  --http-local  <ip:port>   Local HTTP listener (default: %s:%d)\n", DEFAULT_HTTP_LOCAL_HOST, DEFAULT_HTTP_LOCAL_PORT);
-    printf("  --local-ssl               Enforce SSL/TLS on both local listeners (default: auto-detect)\n");
-    printf("  --http-local-ssl          Enforce SSL/TLS on local HTTP listener\n");
-    printf("  --mqtt-local-ssl          Enforce SSL/TLS on local MQTT listener\n");
-    printf("  --secure                  Strict server certificate CA validation (default: lax/insecure)\n\n");
+    printf("REVERSE HTTPS PROXY & LAN DISCOVERY (.local):\n");
+    printf("  --reverse-target <h:p>  Internal target server for reverse proxy (default: %s:%d)\n", DEFAULT_REVERSE_TARGET_HOST, DEFAULT_REVERSE_TARGET_PORT);
+    printf("  --reverse-listen <i:p>  External listen address for reverse proxy (default: %s:%d)\n", DEFAULT_REVERSE_LOCAL_HOST, DEFAULT_REVERSE_LOCAL_PORT);
+    printf("  --reverse-port <port>   External port for reverse HTTPS (default: %d)\n", DEFAULT_REVERSE_LOCAL_PORT);
+    printf("  --no-reverse            Disable reverse HTTPS proxy\n");
+    printf("  --domain <name>         Override LAN hostname (default: from SAN DNS or leo4-<sn>.local)\n");
+    printf("  --no-discovery          Disable mDNS (5353) & LLMNR (5355) LAN announcement\n");
+    printf("  --no-firewall           Disable automatic Windows Defender Firewall rules configuration\n");
+    printf("  --no-elevate            Do not automatically elevate to Administrator if unprivileged\n\n");
+    printf("FORWARD mTLS PROXIES (OUTBOUND):\n");
+    printf("  --mqtt-remote <host:p>  Remote MQTT Broker (default: %s:%d)\n", DEFAULT_MQTT_REMOTE_HOST, DEFAULT_MQTT_REMOTE_PORT);
+    printf("  --mqtt-local  <ip:port> Local MQTT listener (default: %s:%d)\n", DEFAULT_MQTT_LOCAL_HOST, DEFAULT_MQTT_LOCAL_PORT);
+    printf("  --http-remote <host:p>  Remote HTTPS Backend (default: %s:%d)\n", DEFAULT_HTTP_REMOTE_HOST, DEFAULT_HTTP_REMOTE_PORT);
+    printf("  --http-local  <ip:port> Local HTTP listener (default: %s:%d)\n", DEFAULT_HTTP_LOCAL_HOST, DEFAULT_HTTP_LOCAL_PORT);
+    printf("  --local-ssl             Enforce SSL/TLS on local listeners (default: auto-detect)\n");
+    printf("  --secure                Strict server CA validation (default: lax/insecure)\n\n");
     printf("CERTIFICATE SELECTION:\n");
-    printf("  --cert-email <pattern>    Filter certs by email (default: newest %s -> %s)\n", DEFAULT_CERT_EMAIL_PRIMARY, DEFAULT_CERT_EMAIL_FALLBACK);
-    printf("  --cert-thumbprint <sha1>  Select specific certificate by SHA-1 thumbprint\n");
-    printf("  --user-store              Search CurrentUser\\MY instead of LocalMachine\\MY\n\n");
+    printf("  --cert-email <pattern>  Filter certs by email (default: newest %s -> %s)\n", DEFAULT_CERT_EMAIL_PRIMARY, DEFAULT_CERT_EMAIL_FALLBACK);
+    printf("  --cert-thumbprint <sha> Select specific certificate by SHA-1 thumbprint\n");
+    printf("  --user-store            Search CurrentUser\\MY instead of LocalMachine\\MY\n\n");
     printf("EXAMPLES:\n");
-    printf("  1. Check device SN for scripts:\n");
+    printf("  1. Standard interactive start (Reverse HTTPS on :443 + Forward mTLS on :18883,:18443):\n");
+    printf("       %s\n\n", exeName);
+    printf("  2. Forward Reverse HTTPS requests to local Uvicorn on 127.0.0.1:8000:\n");
+    printf("       %s --reverse-target 127.0.0.1:8000\n\n", exeName);
+    printf("  3. Check device SN for scripts:\n");
     printf("       %s --get-sn\n\n", exeName);
-    printf("  2. Test certificate from Windows Store:\n");
-    printf("       %s --test-cert\n\n", exeName);
-    printf("  3. Run in console mode:\n");
-    printf("       %s -f --verbose\n\n", exeName);
-    printf("  4. Install/Update Windows Service with custom broker:\n");
-    printf("       %s --install --mqtt-remote dev.leo4.ru:8883 --http-remote iot-processing.ru:443\n\n", exeName);
-    printf("  5. Query internal metadata from local clients:\n");
-    printf("       curl http://127.0.0.1:18443/_leo4/info\n");
-    printf("       curl http://127.0.0.1:18443/_leo4/sn\n\n");
 }
 
 int main(int argc, char* argv[]) {
@@ -298,6 +381,22 @@ int main(int argc, char* argv[]) {
             parse_host_port(argv[++i], config.http_remote_host, sizeof(config.http_remote_host), &config.http_remote_port);
         } else if (_stricmp(argv[i], "--http-local") == 0 && i + 1 < argc) {
             parse_host_port(argv[++i], config.http_local_host, sizeof(config.http_local_host), &config.http_local_port);
+        } else if (_stricmp(argv[i], "--reverse-target") == 0 && i + 1 < argc) {
+            parse_host_port(argv[++i], config.reverse_target_host, sizeof(config.reverse_target_host), &config.reverse_target_port);
+        } else if ((_stricmp(argv[i], "--reverse-listen") == 0 || _stricmp(argv[i], "--reverse-local") == 0) && i + 1 < argc) {
+            parse_host_port(argv[++i], config.reverse_local_host, sizeof(config.reverse_local_host), &config.reverse_local_port);
+        } else if (_stricmp(argv[i], "--reverse-port") == 0 && i + 1 < argc) {
+            config.reverse_local_port = atoi(argv[++i]);
+        } else if (_stricmp(argv[i], "--no-reverse") == 0) {
+            config.reverse_proxy_enabled = 0;
+        } else if ((_stricmp(argv[i], "--domain") == 0 || _stricmp(argv[i], "--local-domain") == 0) && i + 1 < argc) {
+            strncpy_s(config.custom_local_domain, sizeof(config.custom_local_domain), argv[++i], _TRUNCATE);
+        } else if (_stricmp(argv[i], "--no-discovery") == 0) {
+            config.discovery_enabled = 0;
+        } else if (_stricmp(argv[i], "--no-firewall") == 0) {
+            config.firewall_auto = 0;
+        } else if (_stricmp(argv[i], "--no-elevate") == 0) {
+            config.auto_elevate = 0;
         } else if (_stricmp(argv[i], "--local-ssl") == 0) {
             config.http_local_ssl = 1;
             config.mqtt_local_ssl = 1;
@@ -344,12 +443,18 @@ int main(int argc, char* argv[]) {
         printf("[LEO4PROXY] Testing SChannel credentials handle acquisition...\n");
         CredHandle hCred;
         if (schannel_init_client_creds(details.pCertContext, config.insecure_server_cert, &hCred)) {
-            printf("[LEO4PROXY] SUCCESS: SChannel credentials acquired successfully! (mTLS is ready)\n");
+            printf("[LEO4PROXY] SUCCESS: SChannel client credentials acquired! (mTLS is ready)\n");
             schannel_free_creds(&hCred);
         } else {
-            fprintf(stderr, "[ERROR] SChannel AcquireCredentialsHandle failed.\n");
+            fprintf(stderr, "[ERROR] SChannel client AcquireCredentialsHandle failed.\n");
             cert_store_free_details(&details);
             return 1;
+        }
+
+        CredHandle hServer;
+        if (schannel_init_server_creds(details.pCertContext, &hServer)) {
+            printf("[LEO4PROXY] SUCCESS: SChannel server credentials acquired! (Reverse HTTPS is ready)\n");
+            schannel_free_creds(&hServer);
         }
 
         cert_store_free_details(&details);
@@ -383,9 +488,16 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    // 5. Interactive Execution
+    // 5. Automatic UAC Elevation for interactive use if unprivileged and requested
+    if (config.auto_elevate && !config.run_foreground && !firewall_is_elevated()) {
+        if (firewall_elevate_self(argc, argv)) {
+            return 0; // Elevated child started
+        }
+    }
+
+    // 6. Interactive Execution
     printf("===============================================================================\n");
-    printf(" Leo4Proxy v%s - Windows SChannel mTLS Proxy for MQTT & HTTPS\n", LEO4_PROXY_VERSION);
+    printf(" Leo4Proxy v%s - SChannel mTLS Proxy & Reverse HTTPS Gateway\n", LEO4_PROXY_VERSION);
     printf("===============================================================================\n");
 
     // Automatically update/install service configuration with current arguments
@@ -433,17 +545,23 @@ int main(int argc, char* argv[]) {
         SecInvalidateHandle(&hServerCred);
     }
 
+    // Configure Windows Defender Firewall rules
+    firewall_ensure_rules(&config, NULL);
+
     g_app.config = config;
     g_app.certDetails = certDetails;
     g_app.hClientCred = hClientCred;
     g_app.hServerCred = hServerCred;
-    g_app.isProxiesRunning = false;
+    g_app.isForwardRunning = false;
+    g_app.isReverseRunning = false;
+    g_app.isDiscoveryRunning = false;
 
+    // Start Forward Proxies (MQTT & HTTP)
     bool mqttOk = mqtt_proxy_start(&g_app.mqttServer, &config, &certDetails, hClientCred, hServerCred);
     bool httpOk = http_proxy_start(&g_app.httpServer, &config, &certDetails, hClientCred, hServerCred);
 
     if (!mqttOk || !httpOk) {
-        fprintf(stderr, "\n[FATAL] Failed to start proxy listeners.\n");
+        fprintf(stderr, "\n[FATAL] Failed to start forward proxy listeners.\n");
         if (mqttOk) mqtt_proxy_stop(&g_app.mqttServer);
         if (httpOk) http_proxy_stop(&g_app.httpServer);
         schannel_free_creds(&hClientCred);
@@ -453,22 +571,45 @@ int main(int argc, char* argv[]) {
         pause_if_explorer();
         return 1;
     }
+    g_app.isForwardRunning = true;
 
-    g_app.isProxiesRunning = true;
+    // Start Reverse HTTPS Proxy
+    if (config.reverse_proxy_enabled && SecIsValidHandle(&hServerCred)) {
+        if (reverse_proxy_start(&g_app.reverseServer, &config, &certDetails, hServerCred)) {
+            g_app.isReverseRunning = true;
+        } else {
+            fprintf(stderr, "[WARNING] Reverse HTTPS Proxy failed to start on %s:%d\n",
+                    config.reverse_local_host, config.reverse_local_port);
+        }
+    }
+
+    // Start LAN Discovery & Network Announcement (mDNS & LLMNR)
+    if (config.discovery_enabled) {
+        if (discovery_start(&g_app.discoveryServer, &config, &certDetails)) {
+            g_app.isDiscoveryRunning = true;
+        }
+    }
 
     // Start System Tray Icon & Menu
     tray_icon_start(&g_app.trayCtx, &config, &certDetails, on_tray_action, &g_app);
 
-    printf("\n[STATUS] Proxies active and ready for client connections:\n");
-    printf("  - MQTT Proxy: http://%s:%d -> %s:%d (mTLS SN=%s)%s\n",
+    printf("\n[STATUS] Proxies active and ready:\n");
+    if (g_app.isReverseRunning) {
+        printf("  - Reverse HTTPS: https://%s:%d -> http://%s:%d (Plain HTTP)\n",
+               config.reverse_local_host, config.reverse_local_port,
+               config.reverse_target_host, config.reverse_target_port);
+        printf("  - Local URL:     https://%s%s\n",
+               certDetails.local_hostname,
+               (config.reverse_local_port == 443) ? "" : ":custom_port");
+    }
+    printf("  - Forward MQTT:  http://%s:%d -> %s:%d (mTLS SN=%s)%s\n",
            config.mqtt_local_host, config.mqtt_local_port, config.mqtt_remote_host, config.mqtt_remote_port, certDetails.sn,
            config.mqtt_local_ssl ? " [SSL]" : " [TCP/SSL auto-detect]");
-    printf("  - HTTP Proxy: http://%s:%d -> https://%s:%d (mTLS SN=%s)%s\n",
+    printf("  - Forward HTTP:  http://%s:%d -> https://%s:%d (mTLS SN=%s)%s\n",
            config.http_local_host, config.http_local_port, config.http_remote_host, config.http_remote_port, certDetails.sn,
            config.http_local_ssl ? " [SSL]" : " [HTTP/HTTPS auto-detect]");
-    printf("  - Info API:   http://%s:%d/_leo4/info\n", config.http_local_host, config.http_local_port);
-    printf("  - Device SN:  http://%s:%d/_leo4/sn\n", config.http_local_host, config.http_local_port);
-    printf("  - Tray Icon:  System Tray Notification Icon active (right-click for menu)\n");
+    printf("  - Diagnostic API:http://%s:%d/_leo4/info\n", config.http_local_host, config.http_local_port);
+    printf("  - System Tray:   Right-click the tray icon for selectors & options\n");
     printf("\nPress Ctrl+C to stop.\n\n");
 
     while (g_consoleRunning) {
@@ -477,7 +618,13 @@ int main(int argc, char* argv[]) {
 
     printf("[LEO4PROXY] Stopping proxies & tray...\n");
     tray_icon_stop(&g_app.trayCtx);
-    if (g_app.isProxiesRunning) {
+    if (g_app.isDiscoveryRunning) {
+        discovery_stop(&g_app.discoveryServer);
+    }
+    if (g_app.isReverseRunning) {
+        reverse_proxy_stop(&g_app.reverseServer);
+    }
+    if (g_app.isForwardRunning) {
         mqtt_proxy_stop(&g_app.mqttServer);
         http_proxy_stop(&g_app.httpServer);
     }

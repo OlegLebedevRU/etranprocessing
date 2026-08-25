@@ -1346,7 +1346,9 @@ def on_publish(client, userdata, mid, reason_code=None, properties=None):
 
 PROXY_HTTP_URL = os.getenv("LEO4_PROXY_HTTP", "http://127.0.0.1:18443")
 MQTT_HOST = os.getenv("MQTT_HOST", "127.0.0.1")
-MQTT_PORT = int(os.getenv("MQTT_PORT", "18883"))
+MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
+MQTT_USERNAME = os.getenv("MQTT_USERNAME", "main_app")
+MQTT_PASSWORD = os.getenv("MQTT_PASSWORD", "")
 MQTT_POLL_INTERVAL_SEC = int(os.getenv("MQTT_POLL_INTERVAL_SEC", "60"))
 MQTT_SEND_TEST_EVENTS = os.getenv("MQTT_SEND_TEST_EVENTS", "0") == "1"
 MQTT_MAX_ITERATIONS = int(os.getenv("MQTT_MAX_ITERATIONS", "0"))
@@ -1426,6 +1428,9 @@ def main():
     # Fast reconnect backoff (retry every 1-3 seconds instead of default 120s)
     mqttc.reconnect_delay_set(min_delay=1, max_delay=3)
 
+    if MQTT_USERNAME:
+        mqttc.username_pw_set(username=MQTT_USERNAME, password=MQTT_PASSWORD or None)
+
     # If direct mTLS without proxy is explicitly requested with cert files
     if os.getenv("MQTT_DIRECT_TLS", "0") == "1" and MQTT_CA_CERT and MQTT_CLIENT_CERT and MQTT_CLIENT_KEY:
         print(f"[DIRECT-TLS] Enabling direct OpenSSL TLS to {MQTT_HOST}:{MQTT_PORT}...")
@@ -1436,7 +1441,7 @@ def main():
             tls_version=ssl.PROTOCOL_TLSv1_2,
         )
     else:
-        print(f"[PROXY-MODE] Connecting to Leo4Proxy at {MQTT_HOST}:{MQTT_PORT} (plain TCP)...")
+        print(f"[MAIN-APP] Connecting to Mosquitto Bridge at {MQTT_HOST}:{MQTT_PORT} (plain TCP, user: '{MQTT_USERNAME or 'anonymous'}')...")
 
     mqttc.connect(host=MQTT_HOST, port=MQTT_PORT, keepalive=60)
     mqttc.loop_start()
@@ -1445,7 +1450,7 @@ def main():
     try:
         while True:
             if not g_is_connected:
-                print(f"[CLIENT] Waiting for proxy connection (127.0.0.1:{MQTT_PORT})...")
+                print(f"[CLIENT] Waiting for broker connection (127.0.0.1:{MQTT_PORT})...")
                 sleep(1)
                 continue
 
@@ -1466,18 +1471,35 @@ def main():
 
             if MQTT_SEND_TEST_EVENTS:
                 props.clear()
-                props.CorrelationData = str(uuid.UUID(int=1)).encode("utf-8")
+                event_id = 36823 + i
+                corr_id = str(uuid.uuid4())
+                ts_now = int(time.time())
                 props.UserProperty = [
-                    ("event_type_code", "90"),
-                    ("dev_event_id", f"{10000+i}"),
-                    ("dev_timestamp", f"{int(time.time())}"),
+                    ("event_type_code", "888"),
+                    ("dev_event_id", str(event_id)),
+                    ("dev_timestamp", str(ts_now)),
+                    ("correlation_id", corr_id),
                 ]
+                event_payload = {
+                    "101": event_id,
+                    "102": current_time_iso_with_offset(),
+                    "200": 888,
+                    "300": [
+                        {
+                            "301": "044AFE42C76781",
+                            "302": 6,
+                            "303": 0,
+                        }
+                    ],
+                }
                 mqttc.publish(
                     "dev/" + cert["CN"] + "/evt",
-                    "{\"test\":" + f"\"event = {i}" + "\"}",
-                    qos=0,
+                    json.dumps(event_payload),
+                    qos=1,
+                    retain=False,
                     properties=props,
                 )
+                print(f"device side, event sent (type 888, id {event_id}), iteration = {i}")
 
                 props.clear()
                 did = 10000 + i

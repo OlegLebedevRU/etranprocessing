@@ -24,6 +24,7 @@ Response JSON (both flows):
   }
 """
 
+import ipaddress
 import logging
 import os
 import re
@@ -197,9 +198,13 @@ def _sign_new(csr, ca_cert, ca_key, exp_days, override_cn, sign):
         .not_valid_after(not_after)
     )
 
-    # Copy extensions from CSR (excluding SAN since we construct it)
+    # Copy extensions from CSR (excluding SAN and KeyUsage since we construct complete ones)
     for ext in csr.extensions:
-        if ext.oid == x509.ExtensionOID.SUBJECT_ALTERNATIVE_NAME:
+        if ext.oid in (
+            x509.ExtensionOID.SUBJECT_ALTERNATIVE_NAME,
+            x509.ExtensionOID.KEY_USAGE,
+            x509.ExtensionOID.EXTENDED_KEY_USAGE,
+        ):
             continue
         builder = builder.add_extension(ext.value, critical=ext.critical)
 
@@ -211,6 +216,33 @@ def _sign_new(csr, ca_cert, ca_key, exp_days, override_cn, sign):
             x509.BasicConstraints(ca=False, path_length=None), critical=True
         )
 
+    # KeyUsage: digital_signature is MANDATORY for TLS client auth (CertificateVerify in mTLS)
+    builder = builder.add_extension(
+        x509.KeyUsage(
+            digital_signature=True,
+            content_commitment=True,
+            key_encipherment=True,
+            data_encipherment=False,
+            key_agreement=False,
+            key_cert_sign=False,
+            crl_sign=False,
+            encipher_only=False,
+            decipher_only=False,
+        ),
+        critical=True,
+    )
+
+    # Ensure ExtendedKeyUsage (ServerAuth + ClientAuth for reverse HTTPS and mTLS)
+    builder = builder.add_extension(
+        x509.ExtendedKeyUsage(
+            [
+                x509.ExtendedKeyUsageOID.SERVER_AUTH,
+                x509.ExtendedKeyUsageOID.CLIENT_AUTH,
+            ]
+        ),
+        critical=False,
+    )
+
     # Build SAN entries
     san_list: list[x509.GeneralName] = []
     try:
@@ -221,11 +253,18 @@ def _sign_new(csr, ca_cert, ca_key, exp_days, override_cn, sign):
     except x509.ExtensionNotFound:
         pass
 
-    # Add device SN as URI SAN and hostname as DNS SAN
+    # Add device SN as URI SAN and hostnames as DNS/IP SANs
     if device_sn:
-        san_list.append(x509.UniformResourceIdentifier(device_sn))
         dev_code = _extract_device_code(device_sn, device_id)
+        san_list.append(x509.UniformResourceIdentifier(device_sn))
+        san_list.append(x509.UniformResourceIdentifier(f"urn:leo4:terminal:{dev_code}"))
+        san_list.append(x509.DNSName(f"leo4-{dev_code}.device.leo4.ru"))
+        san_list.append(x509.DNSName(f"leo4-{dev_code}.term.leo4.ru"))
+        san_list.append(x509.DNSName(f"leo4-{dev_code}.internal"))
         san_list.append(x509.DNSName(f"leo4-{dev_code}.local"))
+        san_list.append(x509.DNSName("localhost"))
+        san_list.append(x509.IPAddress(ipaddress.IPv4Address("127.0.0.1")))
+        san_list.append(x509.IPAddress(ipaddress.IPv6Address("::1")))
 
     # Add sign as SAN URI if present
     if sign:

@@ -19,6 +19,10 @@ typedef struct {
     char email[128];
     char sn[128];
     char urn[128];
+    char san_dns[256];
+    char san_dns_list[8][128];
+    int san_dns_count;
+    char local_hostname[256];
     char not_before[64];
     char not_after[64];
     FILETIME ft_not_before;

@@ -37,19 +37,34 @@
 
 ---
 
-## Сборка
+## Сборка (Zero-Dependency & Unified 32/64 Архитектура)
+
+Утилита полностью поддерживает как **32-битные (x86)**, так и **64-битные (x64)** версии Windows.
 
 ### Вариант 1: Через командную строку (MSVC Build Tools 2022)
+Скрипт `build.cmd` автоматически компилирует статически слинкованные бинарники под обе архитектуры (x86 и x64):
 ```cmd
 cd tools\terminal-cert-installer
 build.cmd
 ```
-Результат: `bin\terminal-cert-installer.exe`.
+* **Параметры сборки:**
+  - `build.cmd` (или `build.cmd all`) — собирает обе архитектуры (x86 и x64).
+  - `build.cmd x86` — собирает только 32-битную версию.
+  - `build.cmd x64` — собирает только 64-битную версию.
+* **Результаты сборки в каталоге `bin/`:**
+  - `bin\x86\terminal-cert-installer.exe` — 32-битный нативный бинарник (универсален: работает на 32-битных ОС POSReady 7 и на 64-битных через WOW64).
+  - `bin\x64\terminal-cert-installer.exe` — 64-битный нативный бинарник.
+  - `bin\terminal-cert-installer.exe` — стандартный исполняемый файл по умолчанию.
 
 ### Вариант 2: Через CMake / CLion (MinGW или MSVC)
 ```powershell
+# Сборка x64
 & "C:\Program Files\JetBrains\CLion 2025.2.4\bin\cmake\win\x64\bin\cmake.exe" -B build -G Ninja -DCMAKE_C_COMPILER="C:/Program Files/JetBrains/CLion 2025.2.4/bin/mingw/bin/gcc.exe" -DCMAKE_MAKE_PROGRAM="C:/Program Files/JetBrains/CLion 2025.2.4/bin/ninja/win/x64/ninja.exe"
 & "C:\Program Files\JetBrains\CLion 2025.2.4\bin\cmake\win\x64\bin\cmake.exe" --build build --config Release
+
+# Сборка x86 (MSVC Win32)
+cmake -B build32 -A Win32
+cmake --build build32 --config Release
 ```
 
 ---

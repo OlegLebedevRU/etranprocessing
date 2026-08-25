@@ -2,100 +2,224 @@
 # requires-python = ">=3.10"
 # dependencies = [
 #     "paho-mqtt>=2.0.0",
+#     "tzdata; sys_platform == 'win32'",
 # ]
 # ///
 
 """
-Leo4Proxy Python Client Example
-Connects to Leo4 IoT Platform via local SChannel TLS Proxy (127.0.0.1:18883 / 18443).
-No OpenSSL certificate or private key files required on disk!
+Leo4 IoT Python Event Publisher (extra_service role)
+Connects to local Mosquitto Bridge (127.0.0.1:1883) via plain TCP (No-SSL).
+Publishes telemetry events in a 10-minute cycle to topic 'dev/<SN>/evt' (QoS 1, Retain 0)
+with MQTT 5.0 User Properties and hardware event payload.
 """
 
-import urllib.request
+from __future__ import annotations
+
+import argparse
 import json
+import os
+import sys
 import time
+import urllib.request
+import uuid
+from datetime import datetime
+import zoneinfo
 import paho.mqtt.client as mqtt
 
+# --- Force UTF-8 for console I/O on Windows ---
+if sys.platform == "win32":
+    os.system("chcp 65001 >nul 2>&1")
+    for _stream in (sys.stdin, sys.stdout, sys.stderr):
+        if hasattr(_stream, "reconfigure"):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+# -----------------------------------------------
+
+PROXY_HTTP_URL = os.getenv("LEO4_PROXY_HTTP", "http://127.0.0.1:18443")
+MQTT_HOST = os.getenv("MQTT_HOST", "127.0.0.1")
+MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
+MQTT_USERNAME = os.getenv("MQTT_USERNAME", "extra_service")
+MQTT_PASSWORD = os.getenv("MQTT_PASSWORD", "")
+DEFAULT_SN = os.getenv("DEVICE_SN", "a3b1234567c10221d290825")
+EVENT_INTERVAL_SEC = int(os.getenv("EVENT_INTERVAL_SEC", "600"))  # 10 minutes default
+
+
+def get_current_iso_time_with_offset() -> str:
+    """Returns ISO-8601 formatted string with timezone offset (e.g. 2026-08-03T12:41:33+03:00)."""
+    try:
+        msk_tz = zoneinfo.ZoneInfo("Europe/Moscow")
+        now = datetime.now(msk_tz)
+    except Exception:
+        from datetime import timezone, timedelta
+        msk_tz = timezone(timedelta(hours=3))
+        now = datetime.now(msk_tz)
+    basic = now.strftime("%Y-%m-%dT%H:%M:%S%z")
+    if len(basic) >= 5 and (basic[-5] in ("+", "-")):
+        return basic[:-2] + ":" + basic[-2:]
+    return basic
+
+
+def resolve_device_sn() -> str:
+    """Resolves device serial number from local proxy REST endpoint with fallback."""
+    if PROXY_HTTP_URL:
+        try:
+            req = urllib.request.Request(f"{PROXY_HTTP_URL}/_leo4/sn", headers={"User-Agent": "Leo4ExtraService/1.0"})
+            with urllib.request.urlopen(req, timeout=2) as resp:
+                sn = resp.read().decode("utf-8").strip()
+                if sn:
+                    print(f"[INFO] Discovered active Device SN from local proxy: {sn}")
+                    return sn
+        except Exception:
+            pass
+    print(f"[INFO] Using configured Device SN: {DEFAULT_SN}")
+    return DEFAULT_SN
+
+
+def create_event_data(dev_event_id: int) -> tuple[dict, dict[str, str]]:
+    """
+    Creates payload and user properties matching the specification:
+    - Topic: dev/<SN>/evt
+    - QoS: 1, Retain: 0
+    - Payload: { "101": 36823, "102": "...", "200": 888, "300": [ { "301": "044AFE42C76781", "302": 6, "303": 0 } ] }
+    - User Properties: event_type_code: 888, dev_event_id: 36823, dev_timestamp, correlation_id
+    """
+    now_ts = int(time.time())
+    iso_time = get_current_iso_time_with_offset()
+    corr_id = str(uuid.uuid4())
+
+    payload = {
+        "101": dev_event_id,
+        "102": iso_time,
+        "200": 888,
+        "300": [
+            {
+                "301": "044AFE42C76781",
+                "302": 6,
+                "303": 0
+            }
+        ]
+    }
+
+    user_properties = {
+        "event_type_code": "888",
+        "dev_event_id": str(dev_event_id),
+        "dev_timestamp": str(now_ts),
+        "correlation_id": corr_id,
+    }
+
+    return payload, user_properties
+
+
 def main():
-    print("==================================================================")
-    print("  Leo4 IoT Python Client via Leo4Proxy (SChannel mTLS)")
-    print("==================================================================")
+    parser = argparse.ArgumentParser(description="Leo4 IoT Extra Service Event Sender (10-minute loop)")
+    parser.add_argument("--interval", type=int, default=EVENT_INTERVAL_SEC, help="Interval in seconds between events (default: 600 = 10 min)")
+    parser.add_argument("--once", action="store_true", help="Send a single event and exit immediately")
+    parser.add_argument("--count", type=int, default=0, help="Maximum number of events to send (0 = infinite)")
+    parser.add_argument("--port", type=int, default=MQTT_PORT, help="MQTT Broker port (default: 1883)")
+    parser.add_argument("--host", type=str, default=MQTT_HOST, help="MQTT Broker host (default: 127.0.0.1)")
+    args = parser.parse_args()
 
-    # 1. Obtain active Device SN and metadata from local proxy info endpoint
-    info_url = "http://127.0.0.1:18443/_leo4/info"
-    print(f"\n[1] Querying device info from local proxy: {info_url}...")
-    
-    try:
-        with urllib.request.urlopen(info_url, timeout=3) as resp:
-            info = json.loads(resp.read().decode("utf-8"))
-            sn = info.get("sn")
-            print(f"    Status:     {info.get('status')}")
-            print(f"    Device SN:  {sn}")
-            print(f"    Email:      {info.get('email')}")
-            print(f"    Thumbprint: {info.get('thumbprint')}")
-            print(f"    MQTT Local: {info.get('endpoints', {}).get('mqtt_local')}")
-            print(f"    HTTP Local: {info.get('endpoints', {}).get('http_local')}")
-    except Exception as e:
-        print(f"[ERROR] Failed to query local proxy: {e}")
-        print("Please ensure leo4proxy.exe is running!")
-        return
+    print("================================================================")
+    print("  Leo4 IoT Python Event Publisher (extra_service role)")
+    print(f"  Target: Mosquitto Bridge ({args.host}:{args.port}, No-SSL Plain TCP)")
+    print(f"  Interval: {args.interval}s (10 min), Topic: dev/<SN>/evt (QoS 1, Retain 0)")
+    print("================================================================\n")
 
-    # 2. Example HTTPS backend API call via local HTTP proxy
-    print(f"\n[2] Performing mTLS LicenseBilling check via local proxy (127.0.0.1:18443)...")
-    billing_url = "http://127.0.0.1:18443/licensebilling/"
-    req_body = "function=check&Signature=TUI9MSBCQkhFNTMyMUI0MDAxNDkwfENQVT0xIEJGRUJGQkZGMDAwODA2QzE=".encode("utf-8")
-    req = urllib.request.Request(
-        billing_url,
-        data=req_body,
-        headers={"Content-Type": "application/x-www-form-urlencoded"}
-    )
-    
-    try:
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            xml_resp = resp.read().decode("utf-8")
-            proxy_sn_header = resp.headers.get("X-Leo4-Proxy-Sn")
-            print(f"    HTTP Status:       {resp.status}")
-            print(f"    X-Leo4-Proxy-Sn:   {proxy_sn_header}")
-            print(f"    Response XML Body: {xml_resp.strip()}")
-    except Exception as e:
-        print(f"    [WARN] Backend check: {e}")
+    sn = resolve_device_sn()
+    topic = f"dev/{sn}/evt"
 
-    # 3. Connect to MQTT Broker via local proxy (plain TCP 18883)
-    print(f"\n[3] Connecting to MQTT Broker via local SChannel Proxy (127.0.0.1:18883)...")
-
-    def on_connect(client, userdata, flags, rc, properties=None):
-        print(f"    [MQTT] Connected successfully! ReasonCode: {rc}")
-        sub_topic = f"srv/{sn}/#"
-        print(f"    [MQTT] Subscribing to: {sub_topic}")
-        client.subscribe(sub_topic, qos=1)
-
-    def on_message(client, userdata, msg):
-        print(f"    [MQTT] Message arrived on {msg.topic}: {msg.payload.decode('utf-8', 'ignore')}")
-
+    client_id = f"{sn}_extra_py"
     client = mqtt.Client(
         callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
-        client_id=sn,
-        protocol=mqtt.MQTTv5
+        client_id=client_id,
+        protocol=mqtt.MQTTv5,
     )
-    client.reconnect_delay_set(min_delay=1, max_delay=3)
+
+    if MQTT_USERNAME:
+        client.username_pw_set(username=MQTT_USERNAME, password=MQTT_PASSWORD or None)
+
+    is_connected = False
+
+    def on_connect(c, userdata, flags, reason_code, properties=None):
+        nonlocal is_connected
+        if reason_code == 0:
+            is_connected = True
+            print(f"[MQTT] Successfully connected to {args.host}:{args.port} as '{MQTT_USERNAME}'")
+        else:
+            print(f"[MQTT] Connection failed with reason code: {reason_code}")
+
+    def on_disconnect(c, userdata, disconnect_flags, reason_code, properties=None):
+        nonlocal is_connected
+        is_connected = False
+        print(f"[MQTT] Disconnected from broker (rc={reason_code})")
+
+    def on_publish(c, userdata, mid, reason_code=None, properties=None):
+        print(f"    [ACK] Event delivered successfully! (mid={mid}, rc={reason_code})")
+
     client.on_connect = on_connect
-    client.on_message = on_message
+    client.on_disconnect = on_disconnect
+    client.on_publish = on_publish
+    client.reconnect_delay_set(min_delay=1, max_delay=3)
 
-    client.connect("127.0.0.1", 18883, 60)
-    client.loop_start()
+    print(f"[INFO] Connecting to broker at {args.host}:{args.port}...")
+    try:
+        client.connect(host=args.host, port=args.port, keepalive=60)
+        client.loop_start()
+    except Exception as e:
+        print(f"[WARN] Connection error: {e}. Will retry in loop...")
 
-    time.sleep(2)
+    iteration = 0
+    base_event_id = 36823
 
-    # Publish an event
-    pub_topic = f"dev/{sn}/evt"
-    event_payload = json.dumps({"101": 1047, "200": 44, "300": [{"310": "1.04.025", "311": 13}]})
-    print(f"    [MQTT] Publishing event to: {pub_topic}")
-    client.publish(pub_topic, event_payload, qos=1)
+    try:
+        while True:
+            # Wait for active connection before publishing
+            wait_attempts = 0
+            while not is_connected and wait_attempts < 10:
+                time.sleep(0.5)
+                wait_attempts += 1
 
-    time.sleep(2)
-    client.loop_stop()
-    client.disconnect()
-    print("\n[SUCCESS] Completed Leo4Proxy demonstration.")
+            iteration += 1
+            dev_event_id = base_event_id + (iteration - 1)
+            payload_obj, user_props_dict = create_event_data(dev_event_id)
+            payload_json = json.dumps(payload_obj, ensure_ascii=False)
+
+            # MQTT 5.0 properties
+            props = mqtt.Properties(mqtt.PacketTypes.PUBLISH)
+            props.UserProperty = [(k, v) for k, v in user_props_dict.items()]
+
+            print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Publishing Event #{iteration}:")
+            print(f"  Topic:           {topic}")
+            print(f"  QoS:             1 (Retain: 0)")
+            print(f"  Payload:         {payload_json}")
+            print(f"  User Properties: {user_props_dict}")
+
+            msg_info = client.publish(
+                topic=topic,
+                payload=payload_json.encode("utf-8"),
+                qos=1,
+                retain=False,
+                properties=props,
+            )
+            msg_info.wait_for_publish(timeout=5)
+
+            if args.once:
+                print("\n[INFO] Single event sent (--once). Exiting.")
+                break
+
+            if args.count > 0 and iteration >= args.count:
+                print(f"\n[INFO] Reached requested event count ({args.count}). Exiting.")
+                break
+
+            print(f"\n[SLEEP] Waiting {args.interval} seconds (10 minutes) until next event publication...")
+            time.sleep(args.interval)
+
+    except KeyboardInterrupt:
+        print("\n[SHUTDOWN] Interrupted by user. Stopping...")
+    finally:
+        client.loop_stop()
+        client.disconnect()
+        print("[SUCCESS] Python Extra Service terminated.")
+
 
 if __name__ == "__main__":
     main()
