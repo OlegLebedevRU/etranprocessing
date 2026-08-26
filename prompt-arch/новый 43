@@ -1,0 +1,22 @@
+Формула создания нового SN
+Файл: app-service/core/services/legacy.py:25-31
+def generate_device_sn(device_number: int) -> str:
+    device_part = f"{device_number:07d}"       # device_number, 7 цифр с ведущими нулями
+    rand_first = str(random.randint(1, 9))     # первая цифра: 1-9 (не 0)
+    rand_rest = "".join([str(random.randint(0, 9)) for _ in range(4)])  # 4 цифры: 0-9
+    random_part = rand_first + rand_rest       # итого 5 случайных цифр
+    date_part = datetime.now().strftime("%d%m%y")  # дата: ДДММГГ
+    return f"a{PLATFORM}b{device_part}c{random_part}d{date_part}"
+Где PLATFORM = "4" (строка 22).
+Итоговый формат SN:
+a4b<7 цифр device_number>c<5 случайных цифр>d<ДДММГГ>
+Пример: a4b0000123c74821d200826
+Часть	Значение	Формат
+a	префикс	литерал
+4	PLATFORM	константа
+b	разделитель	литерал
+0000123	device_number	7 цифр, zero-padded
+c	разделитель	литерал
+74821	случайное число	5 цифр (первая 1-9, остальные 0-9)
+d	разделитель	литерал
+200826	текущая дата	ДДММГГ

@@ -1,0 +1,73 @@
+варианты конфигураций терминала
+ID   Имя                   Описание
+─────────────────────────────────────────────────────────
+0    Empty                 (начальная настройка)
+5    Postomat              Постомат
+74   StorageBox            Камера хранения
+78   SafeBox               Главное окно сейфа
+79   RentPoint             Пункт проката
+80   WBPost                Постомат Вайлдберри
+82   SBCashier             Касса АКХ
+85   KeysKeeper            Хранение ключей
+86   PostPaymentAKH        АКХ с пост-оплатой
+87   ShiftAccessSB         Камера хранения с посменным доступом
+89   EasySB                Камера хранения без интерфейса с удалённой кассой
+90   AKHInfoKiosk          Инфокиоск АКХ
+91   QueueBox              Сейф без задней стенки
+92   VendingMashine        Торговый автомат
+93   Evolution             АКХ EVOLUTION
+94   EvolutionInfo         Инфокиоск EVOLUTION
+95   AKH_RFID              АКХ RFID
+96   Concierge             Concierge
+97   Depo                  Depo
+98   OhtaPark              Охта-парк
+99   Laundry               Прачечная
+100  SBHybrid              ЭС с гибридным доступом
+101  CoworkingKeys         Ключница коворкинга
+102  AquaPark              АКХ Аквапарк
+103  DWK                   Камера хранения ДВК
+104  ASS                   АСХ комплектующих
+105  EasyPost              Простой сетевой постомат
+106  PPE                   Шкафы СИЗ
+107  KeyBox                Ключница
+108  Leroy                 Хранитель сканеров Леруа
+109  VKH                   Вендинговая камера хранения
+110  MUBitrix              Миграционный учёт. Битрикс
+111  DCTStorage            Хранение терминалов сбора данных
+112  Trailquipt            Trailquipt
+113  FMLogistic            FMLogistic
+114  APoint                APoint
+115  OfficeBox             OfficeBox
+116  ApartmentKeys         ApartmentKeys
+117  Chairs                Chairs
+118  CoffeeMania           CoffeeMania
+119  LentaKeys             LentaKeys
+120  NestleEquipment       NestleEquipment
+121  Pepsico               Pepsico
+122  RemoteCells           RemoteCells
+123  FingerStorage         FingerStorage
+124  PostBox               PostBox
+125  ServiceBasket         ServiceBasket
+126  ESClient              ESClient
+127  ESServer              ESServer
+128  AutoKeysKeeper        AutoKeysKeeper
+129  SberKeyBox            SberKeyBox
+130  SberKeyBoxAdmin       SberKeyBoxAdmin
+131  BGPost                BGPost
+132  ZKCons                ZKCons
+133  Keysomat              Keysomat
+134  SIZRenter             SIZRenter
+135  PresidentTaxi         PresidentTaxi
+136  Lamoda                Lamoda
+137  LamodaServer          LamodaServer
+138  InOutCashier          InOutCashier
+139  VendingWithOrders     VendingWithOrders
+140  Polet                 Polet
+141  FitnessEquipment      FitnessEquipment
+142  AKH                   Главная форма AKH
+143  QRStorages            QRStorages
+144  TechnoAvia            TechnoAvia
+
+Исходник (частично): Platerra.Terminal.Common\Enums\AppMode.cs
+
+org_id = 1,111,302,305,314,315,339,340,349,352,353,355,359,360,389,392,393,394,395,396,398,401,402,403,404,405,408,424,429,434,435,442,445,450,453,457,462,463,472,475,476,477,486,488,491,492,493,495,496,498,500,501,519,521,522
