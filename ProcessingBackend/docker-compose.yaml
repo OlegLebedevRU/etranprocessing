@@ -12,7 +12,6 @@ services:
       - ./keys:/function/storage/keys:ro
     networks:
       - pg_network
-      - processing_net
 
   mcp-pin-server:
     build: ./mcp-pin-server
@@ -25,22 +24,7 @@ services:
     depends_on:
       - processing-backend
 
-  processing-frontend:
-    image: nginx:alpine
-    container_name: processing-frontend
-    restart: always
-    ports:
-      - "8080:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    networks:
-      - processing_net
-    depends_on:
-      - processing-backend
-
 networks:
   pg_network:
     external: true
     name: iot-rpc-rest-app_pg_network
-  processing_net:
-    driver: bridge
