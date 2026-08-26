@@ -1,4 +1,4 @@
-from etranprocessing_db.models.auth import ApiToken
+from etranprocessing_db.models.auth import ApiToken, User, UserSession
 from etranprocessing_db.models.billing import (
     BillingOrder,
     BillingOrderItem,
@@ -64,4 +64,6 @@ __all__ = [
     "TerminalType",
     "Tsp",
     "TspParameterCode",
+    "User",
+    "UserSession",
 ]

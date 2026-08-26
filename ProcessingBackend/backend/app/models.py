@@ -26,6 +26,8 @@ from etranprocessing_db.models import (
     TerminalType,
     Tsp,
     TspParameterCode,
+    User,
+    UserSession,
 )
 
 __all__ = [
@@ -54,4 +56,6 @@ __all__ = [
     "TerminalType",
     "Tsp",
     "TspParameterCode",
+    "User",
+    "UserSession",
 ]

@@ -15,6 +15,7 @@ const BillingPage = lazy(() => import("./routes/billing"));
 const AdminLayout = lazy(() => import("./routes/admin-layout"));
 const AdminOrganizationsPage = lazy(() => import("./routes/admin-organizations"));
 const AdminTerminalsPage = lazy(() => import("./routes/admin-terminals"));
+const AdminUsersPage = lazy(() => import("./routes/admin-users"));
 
 function LoadingFallback() {
   return (
@@ -75,6 +76,7 @@ export default function App() {
             />
             <Route path="organizations" element={<AdminOrganizationsPage />} />
             <Route path="terminals" element={<AdminTerminalsPage />} />
+            <Route path="users" element={<AdminUsersPage />} />
           </Route>
           {/* Legacy paths kept so existing bookmarks keep working */}
           <Route

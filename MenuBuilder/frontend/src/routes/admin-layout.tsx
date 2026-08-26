@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { BankOutlined, DesktopOutlined } from "@ant-design/icons";
+import { BankOutlined, DesktopOutlined, UserOutlined } from "@ant-design/icons";
 import { Alert, Button, Result, Spin } from "antd";
 import SectionLayout from "../components/SectionLayout";
 import { getMe, type UserInfo } from "../api/auth";
@@ -15,6 +15,11 @@ const ADMIN_NAV_ITEMS = [
     key: "terminals",
     icon: <DesktopOutlined />,
     label: "Терминалы",
+  },
+  {
+    key: "users",
+    icon: <UserOutlined />,
+    label: "Пользователи",
   },
 ];
 

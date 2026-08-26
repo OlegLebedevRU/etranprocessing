@@ -19,6 +19,7 @@ from app.routers import (
     admin_organizations,
     admin_tenants,
     admin_terminals,
+    admin_users,
     auth,
     billing,
     groups,
@@ -46,6 +47,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix="/api", tags=["auth"])
+app.include_router(admin_users.router, prefix="/api", tags=["admin-users"])
 app.include_router(admin_tenants.router, prefix="/api", tags=["admin-tenants"])
 app.include_router(admin_organizations.router, tags=["admin-organizations"])
 app.include_router(admin_terminals.router, tags=["admin-terminals"])

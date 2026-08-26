@@ -1,0 +1,127 @@
+Цель: Усовершенствовать работу с Пользователями MenuBuilder.
+Scope: создать БД пользователей для их учета, добавления/изменения и авторизации. Процесс авторизации включает в себя basic авторизацию на уровне MenuBuilder и генерацию jwt (RSA) на внешней функции jwt-issuer. Загрузить в БД готовый список пользователей с логинами, md5 - паролями из файла. Для терминации jwt использовать nginx, публичный ключ взять в iot-rpc-rest-app/nginx-jwt.
+Пример токена, возвращаемого от jwt-issuer: 200 200 @{accessToken=eyJhbGciOiJSUzI1NiIsImtpZCI6Im1lbnVidWlsZGVyLXJzMjU2LWtleS0xIiwidHlwIjoiSldUIn0.eyJvcmdJZCI6NDI0LCJ1c2VySWQiOjEyMywicm9sZUlkIjoyLCJzdWIiOiIxMjMiLCJvcmciOiI0MjQiLCJyb2xlIjoiMiIsImF1ZCI6Im1lbnVidWlsZGV...
+
+Детали флоу:
+Опытная проверка 
+PowerShell -> API Gateway -> Cloud Function jwt-issuer -> RS256 JWT
+
+$uri = "https://d5ducjnc3s38o5qqk84q.apigw.yandexcloud.net/etranprocessing/jwt"
+
+$serviceSecret = "CHANGE_ME_SERVICE_TO_SERVICE_SECRET"
+
+$timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+$nonce = [guid]::NewGuid().ToString()
+
+$requestBodyObject = [ordered]@{
+    orgId = 424
+    userId = 123
+    roleId = 2
+    clientId = "menubuilder-backend"
+    aud = "menubuilder"
+    iss = "external-jwt-issuer"
+    nonce = $nonce
+    timestamp = $timestamp
+}
+
+$requestBody = $requestBodyObject | ConvertTo-Json -Compress
+
+$signedPayload = "$timestamp.$nonce.$requestBody"
+
+$hmac = [System.Security.Cryptography.HMACSHA256]::new(
+    [System.Text.Encoding]::UTF8.GetBytes($serviceSecret)
+)
+
+$signatureBytes = $hmac.ComputeHash(
+    [System.Text.Encoding]::UTF8.GetBytes($signedPayload)
+)
+
+$signature = "sha256=" + [Convert]::ToBase64String($signatureBytes)
+
+$bodyObject = @{
+    params = @{
+        orgId = 424
+        userId = 123
+        roleId = 2
+        clientId = "menubuilder-backend"
+        aud = "menubuilder"
+        iss = "external-jwt-issuer"
+        nonce = $nonce
+        timestamp = $timestamp
+        signature = $signature
+        requestBody = $requestBody
+        kid = "menubuilder-rs256-key-1"
+    }
+}
+
+$body = $bodyObject | ConvertTo-Json -Depth 10 -Compress
+
+Write-Host "UTC now:       $([DateTimeOffset]::UtcNow.ToString("o"))"
+Write-Host "Unix seconds:  $timestamp"
+Write-Host "Nonce:         $nonce"
+Write-Host "Request body:  $requestBody"
+Write-Host "Signature:     $signature"
+Write-Host "Full body:     $body"
+
+Invoke-RestMethod `
+    -Method Post `
+    -Uri $uri `
+    -ContentType "application/json" `
+    -Body $body
+
+
+Контракт MenuBuilder -> jwt-issuer можно считать таким:
+{
+  "params": {
+    "orgId": 424,
+    "userId": 123,
+    "roleId": 2,
+    "clientId": "menubuilder-backend",
+    "aud": "menubuilder",
+    "iss": "external-jwt-issuer",
+    "nonce": "uuid",
+    "timestamp": 1720000000,
+    "signature": "sha256=base64-hmac",
+    "requestBody": "{\"orgId\":424,...}",
+    "kid": "menubuilder-rs256-key-1"
+  }
+}
+
+## Следующий шаг для MenuBuilder
+После успешной проверки Basic-авторизации MenuBuilder должен:
+1. получить из БД:
+    - `userId`;
+    - `orgId`;
+    - `roleId`;
+
+2. сформировать `requestBody`;
+3. посчитать HMAC;
+4. вызвать: POST https://d5ducjnc3s38o5qqk84q.apigw.yandexcloud.net/etranprocessing/jwt
+
+получить:
+{
+  "accessToken": "...",
+  "refreshToken": "...",
+  "tokenType": "Bearer",
+  "expiresIn": 900,
+  "refreshExpiresIn": 604800,
+  "orgId": 424,
+  "userId": 123,
+  "roleId": 2
+}
+
+
+ отдать фронтенду лучше через cookie:
+Set-Cookie: accessToken=...; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=1800
+Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=Lax; Path=/api/auth; Max-Age=604800
+
+Первая версия работы с refresh  - контролирует MenuBuilder 
+JWT issuer выпускает accessToken, refreshToken. MenuBuilder хранит refreshToken в своей БД/таблице сессий. Это лучше, потому что MenuBuilder сможет:
+отозвать refresh;
+завершить все сессии пользователя;
+ограничить количество активных сессий;
+видеть last_used_at;
+делать logout.
+
+
+
