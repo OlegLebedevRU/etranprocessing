@@ -35,6 +35,7 @@ import DeviceTasksTab from "./DeviceTasksTab";
 import DeviceEventsTab from "./DeviceEventsTab";
 import DeviceTagsTab from "./DeviceTagsTab";
 import DeviceConsoleTab from "./DeviceConsoleTab";
+import DevicePassportTab from "./DevicePassportTab";
 
 const { Title, Text } = Typography;
 
@@ -471,40 +472,11 @@ export default function DevicesManagementPage() {
                   </span>
                 ),
                 children: (
-                  <Descriptions bordered column={1} size="small" style={{ marginTop: 8 }}>
-                    <Descriptions.Item label="Device ID (Номер)">
-                      #{selectedDevice.device_id}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="Серийный номер (SN)">
-                      <Text code>{selectedDevice.sn}</Text>
-                    </Descriptions.Item>
-                    <Descriptions.Item label="Организация (ID)">
-                      #{selectedOrgId}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="Приложение / Платформа">
-                      {selectedDevice.app || "—"}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="IP адрес подключения">
-                      {selectedDevice.connection?.ip || "—"}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="Версия ПО">
-                      {selectedDevice.connection?.app_version || "—"}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="Последнее подключение">
-                      {selectedDevice.connection?.last_connected_at
-                        ? new Date(selectedDevice.connection.last_connected_at).toLocaleString("ru-RU")
-                        : "—"}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="Редактирование в реестре">
-                      <Button
-                        type="link"
-                        onClick={() => navigate(`/admin/terminals?search=${selectedDevice.device_id}`)}
-                        style={{ padding: 0 }}
-                      >
-                        Открыть в Реестре терминалов →
-                      </Button>
-                    </Descriptions.Item>
-                  </Descriptions>
+                  <DevicePassportTab
+                    deviceId={selectedDevice.device_id}
+                    sn={selectedDevice.sn}
+                    orgId={selectedOrgId}
+                  />
                 ),
               },
             ]}

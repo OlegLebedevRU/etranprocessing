@@ -6,6 +6,46 @@ export interface DeviceTagItem {
   id?: number;
 }
 
+export interface DeviceConnectionDetailsRaw {
+  user?: string;
+  name?: string;
+  conn_name?: string;
+  connected_at?: number | string;
+  peer_host?: string;
+  peer_port?: number;
+  peer_cert_subject?: string;
+  peer_cert_validity?: string;
+  protocol?: string;
+  ssl?: boolean;
+  ssl_cipher?: string;
+  ssl_protocol?: string;
+  bytes_received?: number;
+  bytes_sent?: number;
+  client_properties?: Record<string, any>;
+}
+
+export interface DeviceConnectionRaw {
+  device_id: number;
+  client_id?: string;
+  connected_at?: string;
+  checked_at?: string;
+  last_checked_result: boolean;
+  app_connect?: boolean;
+  svc_connect?: boolean;
+  is_app_available?: boolean;
+  is_svc_available?: boolean;
+  details?: DeviceConnectionDetailsRaw | null;
+}
+
+export interface DeviceRawResult {
+  id: number;
+  device_id: number;
+  sn: string;
+  device_gauges?: any[];
+  connection?: DeviceConnectionRaw | null;
+  device_tags?: DeviceTagItem[];
+}
+
 export interface DeviceConnectionInfo {
   is_online?: boolean;
   last_connected_at?: string;
@@ -162,6 +202,13 @@ export async function getDevices(orgId: number, deviceId?: number): Promise<Devi
   }
   const { data } = await client.get<DeviceItem[]>("/v1/devices/", { params });
   return (data || []).map(mapDeviceToListItem);
+}
+
+export async function getDeviceRaw(orgId: number, deviceId: number): Promise<DeviceRawResult | null> {
+  const { data } = await client.get<DeviceRawResult[]>("/v1/devices/", {
+    params: { org_id: orgId, device_id: deviceId },
+  });
+  return data && data.length > 0 ? data[0] : null;
 }
 
 export async function updateDeviceTag(
