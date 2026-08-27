@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { Table, Tag, Button, Space, Typography, Tooltip, Modal, message, Popconfirm } from "antd";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Table, Tag, Button, Space, Typography, Tooltip, Modal, message, Popconfirm, Card, Divider } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   SyncOutlined,
@@ -17,10 +17,16 @@ import {
   deleteDeviceTask,
   type TaskItem,
 } from "../../api/devices";
-import { METHOD_CATALOG } from "./types";
+import {
+  getMethodDefinition,
+  getTaskStatusInfo,
+  extractTaskResults,
+  formatTimestamp,
+  TaskStatus,
+} from "./domain";
 import CreateTaskModal from "./CreateTaskModal";
 
-const { Text } = Typography;
+const { Text, Paragraph } = Typography;
 
 interface DeviceTasksTabProps {
   deviceId: number;
@@ -81,58 +87,34 @@ export default function DeviceTasksTab({ deviceId, sn, orgId }: DeviceTasksTabPr
   };
 
   const getStatusTag = (status: number) => {
-    switch (status) {
-      case 0:
-      case 1:
-      case 2:
-        return (
-          <Tooltip title="В процессе обработки / очереди">
-            <Tag icon={<SyncOutlined spin />} color="processing">
-              В процессе
-            </Tag>
-          </Tooltip>
-        );
-      case 3:
-        return (
-          <Tooltip title="Задача успешно выполнена">
-            <Tag icon={<CheckCircleOutlined />} color="success">
-              Выполнено
-            </Tag>
-          </Tooltip>
-        );
-      case 4:
-        return (
-          <Tooltip title="Истек срок жизни TTL">
-            <Tag icon={<ClockCircleOutlined />} color="warning">
-              Таймаут
-            </Tag>
-          </Tooltip>
-        );
-      case 5:
-        return (
-          <Tooltip title="Задача отменена пользователем">
-            <Tag icon={<DeleteOutlined />} color="default">
-              Отменена
-            </Tag>
-          </Tooltip>
-        );
-      case 6:
-        return (
-          <Tooltip title="Ошибка при выполнении">
-            <Tag icon={<CloseCircleOutlined />} color="error">
-              Ошибка
-            </Tag>
-          </Tooltip>
-        );
-      default:
-        return <Tag color="default">Статус {status}</Tag>;
-    }
+    const info = getTaskStatusInfo(status);
+    let icon = <SyncOutlined spin />;
+    if (info.state === "success") icon = <CheckCircleOutlined />;
+    else if (info.state === "timeout") icon = <ClockCircleOutlined />;
+    else if (info.state === "failed") icon = <CloseCircleOutlined />;
+    else if (info.state === "deleted") icon = <DeleteOutlined />;
+
+    return (
+      <Tooltip title={info.label}>
+        <Tag icon={icon} color={info.color}>
+          {info.shortLabel}
+        </Tag>
+      </Tooltip>
+    );
   };
 
   const getMethodLabel = (code: number) => {
-    const item = METHOD_CATALOG.find((m) => m.code === code);
-    return item ? item.label : `Метод #${code}`;
+    const def = getMethodDefinition(code);
+    return def ? def.label : `Метод #${code}`;
   };
+
+  const extractedDetailResults = useMemo(() => {
+    return extractTaskResults(selectedTaskDetail);
+  }, [selectedTaskDetail]);
+
+  const selectedStatusInfo = useMemo(() => {
+    return getTaskStatusInfo(selectedTaskDetail?.status ?? TaskStatus.READY);
+  }, [selectedTaskDetail?.status]);
 
   const columns: ColumnsType<TaskItem> = [
     {
@@ -142,8 +124,19 @@ export default function DeviceTasksTab({ deviceId, sn, orgId }: DeviceTasksTabPr
       width: 170,
       render: (val) => (
         <span style={{ fontSize: 13 }}>
-          {val ? new Date(val).toLocaleString("ru-RU") : "—"}
+          {formatTimestamp(val)}
         </span>
+      ),
+    },
+    {
+      title: "Внешний ID (ext_task_id)",
+      dataIndex: "ext_task_id",
+      key: "ext_task_id",
+      width: 170,
+      render: (val) => (
+        <code style={{ fontSize: 12, color: "#1677ff" }}>
+          {val || "—"}
+        </code>
       ),
     },
     {
@@ -160,23 +153,23 @@ export default function DeviceTasksTab({ deviceId, sn, orgId }: DeviceTasksTabPr
       title: "Статус",
       dataIndex: "status",
       key: "status",
-      width: 140,
+      width: 130,
       render: (status) => getStatusTag(status),
     },
     {
       title: "Приоритет / TTL",
       key: "ttl",
-      width: 140,
+      width: 150,
       render: (_, record) => (
         <span style={{ fontSize: 12, color: "#595959" }}>
-          Приоритет: {record.priority ?? 0} | TTL: {record.ttl_minutes ?? 60}м
+          Приоритет: {record.priority ?? 0} | TTL: {record.ttl ?? record.ttl_minutes ?? 60}м
         </span>
       ),
     },
     {
       title: "Действия",
       key: "actions",
-      width: 120,
+      width: 100,
       align: "center",
       render: (_, record) => (
         <Space size={4}>
@@ -266,68 +259,122 @@ export default function DeviceTasksTab({ deviceId, sn, orgId }: DeviceTasksTabPr
       />
 
       <Modal
-        title={`Детали задачи #${selectedTaskDetail?.id || ""}`}
+        title={`Детали RPC-задачи #${selectedTaskDetail?.id || ""}`}
         open={detailModalOpen}
         onCancel={() => setDetailModalOpen(false)}
         footer={[
-          <Button key="close" onClick={() => setDetailModalOpen(false)}>
+          <Button key="close" type="primary" onClick={() => setDetailModalOpen(false)}>
             Закрыть
           </Button>,
         ]}
-        width={600}
+        width={680}
       >
         {detailLoading ? (
           <div style={{ textAlign: "center", padding: 24 }}>Загрузка...</div>
         ) : selectedTaskDetail ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div>
-              <Text type="secondary">Метод: </Text>
-              <Text strong>{getMethodLabel(selectedTaskDetail.method_code)}</Text>
-            </div>
-            <div>
-              <Text type="secondary">Статус: </Text>
-              {getStatusTag(selectedTaskDetail.status)}
-            </div>
-            <div>
-              <Text type="secondary">Создана: </Text>
-              <Text>{new Date(selectedTaskDetail.created_at).toLocaleString("ru-RU")}</Text>
-            </div>
+            <Card size="small">
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div>
+                  <Text type="secondary">Метод: </Text>
+                  <Text strong>{getMethodLabel(selectedTaskDetail.method_code)}</Text>
+                </div>
+                <div>
+                  <Text type="secondary">Статус: </Text>
+                  {getStatusTag(selectedTaskDetail.status)}
+                </div>
+                <div>
+                  <Text type="secondary">Внешний ID: </Text>
+                  <code>{selectedTaskDetail.ext_task_id || "—"}</code>
+                </div>
+                <div>
+                  <Text type="secondary">Приоритет / TTL: </Text>
+                  <Text>
+                    {selectedTaskDetail.priority ?? 0} / {selectedTaskDetail.ttl ?? selectedTaskDetail.ttl_minutes ?? 60} мин.
+                  </Text>
+                </div>
+                <div>
+                  <Text type="secondary">Создана: </Text>
+                  <Text>{formatTimestamp(selectedTaskDetail.created_at)}</Text>
+                </div>
+                <div>
+                  <Text type="secondary">Принята (ACK): </Text>
+                  <Text>{selectedTaskDetail.pending_at ? formatTimestamp(selectedTaskDetail.pending_at) : "—"}</Text>
+                </div>
+              </div>
+            </Card>
 
-            {selectedTaskDetail.params && (
+            {/* Полезная нагрузка */}
+            {(selectedTaskDetail.payload || selectedTaskDetail.params) && (
               <div>
-                <Text type="secondary">Параметры вызова (Payload):</Text>
-                <pre
+                <Text type="secondary" strong>Параметры вызова (Payload):</Text>
+                <Paragraph
+                  copyable={{
+                    text: JSON.stringify(selectedTaskDetail.payload || selectedTaskDetail.params, null, 2),
+                  }}
                   style={{
-                    background: "#f5f5f5",
-                    padding: 8,
-                    borderRadius: 4,
+                    backgroundColor: "#1e1e1e",
+                    color: "#9cdcfe",
+                    padding: "8px 12px",
+                    borderRadius: 6,
+                    fontFamily: "Consolas, Monaco, monospace",
                     fontSize: 12,
-                    maxHeight: 160,
+                    maxHeight: 140,
                     overflowY: "auto",
+                    whiteSpace: "pre-wrap",
+                    marginTop: 4,
+                    marginBottom: 0,
                   }}
                 >
-                  {JSON.stringify(selectedTaskDetail.params, null, 2)}
-                </pre>
+                  {JSON.stringify(selectedTaskDetail.payload || selectedTaskDetail.params, null, 2)}
+                </Paragraph>
               </div>
             )}
 
+            {/* Результат выполнения */}
             <div>
-              <Text type="secondary">Результат выполнения (Ответ устройства):</Text>
-              <pre
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                <Text type="secondary" strong>Результат выполнения (Ответ устройства):</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {selectedStatusInfo.label}
+                </Text>
+              </div>
+              <Paragraph
+                copyable={{
+                  text: JSON.stringify(
+                    extractedDetailResults.hasResults
+                      ? extractedDetailResults.resultsList.length > 0
+                        ? extractedDetailResults.resultsList
+                        : extractedDetailResults.primaryResult
+                      : { status: selectedStatusInfo.label, message: extractedDetailResults.summary },
+                    null,
+                    2
+                  ),
+                }}
                 style={{
-                  background: "#f0f5ff",
-                  border: "1px solid #d6e4ff",
-                  padding: 8,
-                  borderRadius: 4,
+                  backgroundColor: extractedDetailResults.hasResults ? "#0f1f14" : "#1e1e1e",
+                  color: extractedDetailResults.hasResults ? "#73d13d" : "#faad14",
+                  border: `1px solid ${extractedDetailResults.hasResults ? "#237804" : "#434343"}`,
+                  padding: "8px 12px",
+                  borderRadius: 6,
+                  fontFamily: "Consolas, Monaco, monospace",
                   fontSize: 12,
-                  maxHeight: 200,
+                  maxHeight: 180,
                   overflowY: "auto",
+                  whiteSpace: "pre-wrap",
+                  marginBottom: 0,
                 }}
               >
-                {selectedTaskDetail.results
-                  ? JSON.stringify(selectedTaskDetail.results, null, 2)
-                  : "Ожидается ответ от устройства..."}
-              </pre>
+                {extractedDetailResults.hasResults
+                  ? JSON.stringify(
+                      extractedDetailResults.resultsList.length > 0
+                        ? extractedDetailResults.resultsList
+                        : extractedDetailResults.primaryResult,
+                      null,
+                      2
+                    )
+                  : `/* ${extractedDetailResults.summary} */`}
+              </Paragraph>
             </div>
           </div>
         ) : null}

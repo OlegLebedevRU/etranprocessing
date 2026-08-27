@@ -42,19 +42,34 @@ export interface DeviceListItem {
   connection?: DeviceConnectionInfo | null;
 }
 
+export interface TaskResultItem {
+  id: number;
+  ext_id?: number;
+  status_code: number;
+  result?: Record<string, any> | any[] | null;
+}
+
 export interface TaskItem {
   id: string;
+  ext_task_id?: string;
   device_id: number;
-  org_id: number;
+  org_id?: number;
   method_code: number;
   status: number; // 0: READY, 1: PENDING, 2: LOCK, 3: DONE, 4: EXPIRED, 5: DELETED, 6: FAILED, 7: UNDEFINED
   priority?: number;
+  ttl?: number;
   ttl_minutes?: number;
+  payload?: {
+    dt?: any[];
+    [key: string]: any;
+  } | null;
   params?: Record<string, any>;
-  ext_task_id?: string;
-  created_at: string;
+  created_at: number | string;
+  pending_at?: number | string | null;
+  locked_at?: number | string | null;
+  deleted_at?: number | string | null;
   updated_at?: string;
-  results?: any;
+  results?: TaskResultItem[] | any;
 }
 
 export interface TaskListResponse {
@@ -66,11 +81,22 @@ export interface TaskListResponse {
 }
 
 export interface TaskCreateInput {
+  ext_task_id?: string;
   device_id: number;
   method_code: number;
   priority?: number;
+  ttl?: number;
   ttl_minutes?: number;
+  payload?: {
+    dt?: any[];
+    [key: string]: any;
+  };
   params?: Record<string, any>;
+}
+
+export interface TaskCreateResponse {
+  id: string;
+  created_at: number;
 }
 
 export interface DeviceEventItem {

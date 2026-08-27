@@ -1,0 +1,327 @@
+import type { MethodDefinition, DeviceContext } from "./types";
+
+export const CUSTOM_METHOD_CODE = -1;
+
+export const CUSTOM_METHOD_DEFINITION: MethodDefinition = {
+  code: CUSTOM_METHOD_CODE,
+  name: "CMD_CUSTOM",
+  label: "Произвольный метод (Custom JSON)",
+  description: "Отправка произвольного кода RPC-команды и массива payload.dt в формате JSON",
+  dtFormat: "custom",
+  isCustom: true,
+};
+
+export const METHOD_CATALOG_DEFINITIONS: MethodDefinition[] = [
+  {
+    code: 16,
+    name: "CMD_ATTACH_CARD",
+    label: "16 - Привязка карты/PIN к слоту",
+    description: "Привязка идентификатора карты или сервисного PIN-кода к номеру слота устройства",
+    dtFormat: "objectArray",
+    supportsMultiple: true,
+    fields: [
+      {
+        name: "cd",
+        label: "ID карты / PIN-код (cd)",
+        type: "string",
+        required: true,
+        placeholder: "Например, 123456 или HEX UID",
+        tooltip: "Идентификатор карты или сервисный PIN-код",
+      },
+      {
+        name: "cl",
+        label: "Номер слота (cl: 1..255)",
+        type: "number",
+        required: true,
+        defaultValue: 1,
+        tooltip: "Целевой слот устройства (от 1 до 255)",
+        validation: { min: 1, max: 255 },
+      },
+    ],
+  },
+  {
+    code: 20,
+    name: "CMD_SUB_REQUEST",
+    label: "20 - Короткая команда",
+    description: "Отправка короткой команды управления подсистемами устройства",
+    dtFormat: "objectArray",
+    fields: [
+      {
+        name: "mt",
+        label: "Код подкоманды (mt)",
+        type: "number",
+        defaultValue: 4,
+        required: true,
+        tooltip: "Числовой код подкоманды (по умолчанию 4)",
+        validation: { min: 0, max: 65535 },
+      },
+    ],
+  },
+  {
+    code: 21,
+    name: "CMD_ESP_RESTART",
+    label: "21 - Перезагрузка устройства",
+    description: "Штатная перезагрузка микроконтроллера/операционной системы устройства",
+    dtFormat: "empty",
+  },
+  {
+    code: 35,
+    name: "CMD_API_CODE_INPUT",
+    label: "35 - Ввод PIN-кода",
+    description: "Удаленный ввод сервисного PIN-кода на устройстве (передается массивом строк)",
+    dtFormat: "stringArray",
+    fields: [
+      {
+        name: "pin",
+        label: "PIN-код (до 6 цифр)",
+        type: "string",
+        required: true,
+        placeholder: "123456",
+        tooltip: "Сервисный PIN-код (от 1 до 6 цифр)",
+        validation: {
+          regex: "^\\d{1,6}$",
+          regexMessage: "PIN-код должен состоять из 1-6 цифр",
+        },
+      },
+    ],
+  },
+  {
+    code: 47,
+    name: "CMD_DELETE_CARDS",
+    label: "47 - Удаление привязок карт",
+    description: "Удаление привязок карт для указанных номеров слотов (массив чисел)",
+    dtFormat: "numberArray",
+    fields: [
+      {
+        name: "slots",
+        label: "Номера слотов (через запятую)",
+        type: "string",
+        required: true,
+        placeholder: "1, 2, 5",
+        tooltip: "Список номеров слотов, разделенных запятыми или пробелами",
+      },
+    ],
+  },
+  {
+    code: 49,
+    name: "CMD_SET_NVS_RECORD",
+    label: "49 - Запись параметра в NVS",
+    description: "Типизированная запись параметра в энергонезависимое хранилище NVS (ns, k, t, v)",
+    dtFormat: "dbWrite",
+    supportsMultiple: true,
+    fields: [
+      {
+        name: "ns",
+        label: "Раздел (Namespace)",
+        type: "string",
+        required: true,
+        defaultValue: "cfg_eth",
+        placeholder: "cfg_eth",
+      },
+      {
+        name: "k",
+        label: "Ключ (Key)",
+        type: "string",
+        required: true,
+        placeholder: "ip_addr",
+      },
+      {
+        name: "t",
+        label: "Тип данных (Type)",
+        type: "select",
+        required: true,
+        defaultValue: "str",
+        options: [
+          { label: "str (Строка)", value: "str" },
+          { label: "i8 (-128..127)", value: "i8" },
+          { label: "u8 (0..255)", value: "u8" },
+          { label: "i16 (-32768..32767)", value: "i16" },
+          { label: "u16 (0..65535)", value: "u16" },
+          { label: "i32 (-2147483648..2147483647)", value: "i32" },
+          { label: "u32 (0..4294967295)", value: "u32" },
+        ],
+      },
+      {
+        name: "v",
+        label: "Значение (Value)",
+        type: "string",
+        required: true,
+        placeholder: "Значение параметра",
+      },
+    ],
+  },
+  {
+    code: 50,
+    name: "CMD_GET_NVS_RECORD",
+    label: "50 - Чтение раздела NVS",
+    description: "Запрос чтения всех параметров указанного раздела NVS",
+    dtFormat: "objectArray",
+    fields: [
+      {
+        name: "ns",
+        label: "Раздел (Namespace)",
+        type: "string",
+        required: true,
+        defaultValue: "cfg_eth",
+        placeholder: "cfg_eth",
+      },
+    ],
+  },
+  {
+    code: 51,
+    name: "CMD_OPERATE_CELL",
+    label: "51 - Открыть ячейку / замок",
+    description: "Команда открытия ячейки или срабатывания замка постамата/терминала",
+    dtFormat: "objectArray",
+    fields: [
+      {
+        name: "cl",
+        label: "Номер ячейки/замка (1..255)",
+        type: "number",
+        required: true,
+        defaultValue: 1,
+        tooltip: "Номер ячейки или замка (от 1 до 255)",
+        validation: { min: 1, max: 255 },
+      },
+    ],
+  },
+  {
+    code: 411,
+    name: "CMD_STM32_MCU_UPDATE",
+    label: "411 - Прошивка STM32 MCU",
+    description: "Запуск процедуры прошивки микроконтроллера STM32",
+    dtFormat: "empty",
+  },
+  {
+    code: 512,
+    name: "CMD_STM32_BIN_DOWNLOAD",
+    label: "512 - Загрузка бинарного файла прошивки",
+    description: "Загрузка файла прошивки STM32 по HTTPS с верификацией SHA256",
+    dtFormat: "objectFields",
+    fields: [
+      {
+        name: "url",
+        label: "URL файла прошивки (HTTPS)",
+        type: "string",
+        required: true,
+        placeholder: "https://example.com/firmware.bin",
+        validation: {
+          regex: "^https?://.+",
+          regexMessage: "Введите валидный URL (http:// или https://)",
+        },
+      },
+      {
+        name: "sha256",
+        label: "SHA256 хеш-сумма (64 hex символа)",
+        type: "string",
+        required: true,
+        placeholder: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        validation: {
+          regex: "^[0-9a-fA-F]{64}$",
+          regexMessage: "SHA256 должен состоять ровно из 64 шестнадцатеричных символов",
+        },
+      },
+      {
+        name: "chunk_size",
+        label: "Размер чанка (chunk_size)",
+        type: "select",
+        required: true,
+        defaultValue: 1024,
+        options: [
+          { label: "1024 байта", value: 1024 },
+          { label: "2048 байт", value: 2048 },
+        ],
+      },
+    ],
+  },
+  {
+    code: 7010,
+    name: "CMD_FULLSCREEN_JPEG",
+    label: "7010 - Полноэкранный JPEG",
+    description: "Управление полноэкранным выводом JPEG изображения на дисплей",
+    dtFormat: "fullscreenJpeg",
+    fields: [
+      {
+        name: "action",
+        label: "Действие (action)",
+        type: "select",
+        required: true,
+        defaultValue: "show",
+        options: [
+          { label: "Показать изображение (show)", value: "show" },
+          { label: "Скрыть изображение (hide)", value: "hide" },
+        ],
+      },
+      {
+        name: "url",
+        label: "URL изображения (для действия show)",
+        type: "string",
+        placeholder: "https://example.com/screen.jpg",
+        validation: {
+          regex: "^https?://.+",
+          regexMessage: "Введите валидный URL (http:// или https://)",
+        },
+      },
+    ],
+  },
+  CUSTOM_METHOD_DEFINITION,
+];
+
+/**
+ * Получить описание метода по коду
+ */
+export function getMethodDefinition(code: number): MethodDefinition | undefined {
+  if (code === CUSTOM_METHOD_CODE) {
+    return CUSTOM_METHOD_DEFINITION;
+  }
+  return METHOD_CATALOG_DEFINITIONS.find((m) => m.code === code);
+}
+
+/**
+ * Получить список доступных методов с учетом контекста устройства (роль, теги, свойства)
+ */
+export function getAvailableMethods(context?: DeviceContext): MethodDefinition[] {
+  if (!context) {
+    return METHOD_CATALOG_DEFINITIONS;
+  }
+
+  return METHOD_CATALOG_DEFINITIONS.filter((method) => {
+    // 1. Проверка роли пользователя, если задано ограничение
+    if (method.allowedRoles && method.allowedRoles.length > 0) {
+      if (!context.role || !method.allowedRoles.includes(context.role)) {
+        return false;
+      }
+    }
+
+    // 2. Проверка поддерживаемых возможностей терминала
+    if (method.requiredCapabilities && method.requiredCapabilities.length > 0) {
+      const caps = context.capabilities || [];
+      const hasAllCaps = method.requiredCapabilities.every((c) => caps.includes(c));
+      if (!hasAllCaps) {
+        return false;
+      }
+    }
+
+    // 3. Проверка наличия обязательных тегов терминала
+    if (method.requiredTags && method.requiredTags.length > 0) {
+      const deviceTagNames = (context.tags || []).map((t) => t.tag);
+      const hasAllTags = method.requiredTags.every((t) => deviceTagNames.includes(t));
+      if (!hasAllTags) {
+        return false;
+      }
+    }
+
+    // 4. Пользовательский предикат фильтрации устройства
+    if (method.deviceFilter) {
+      try {
+        if (!method.deviceFilter(context)) {
+          return false;
+        }
+      } catch {
+        return false;
+      }
+    }
+
+    return true;
+  });
+}
