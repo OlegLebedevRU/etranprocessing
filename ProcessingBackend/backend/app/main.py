@@ -74,6 +74,7 @@ app.add_middleware(
 
 from app.routers import (
     certificates,
+    devices_legacy,
     gate_gauge,
     health,
     licensebilling,
@@ -93,3 +94,4 @@ app.include_router(
     certificates.router, prefix="/api/certificates", tags=["certificates"]
 )
 app.include_router(list_menu.router, prefix="/api", tags=["menu"])
+app.include_router(devices_legacy.router, tags=["devices_legacy"])
