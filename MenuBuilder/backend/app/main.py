@@ -23,6 +23,7 @@ from app.routers import (
     auth,
     billing,
     groups,
+    integrations,
     mcp_proxy,
     menu_variants,
     profile,
@@ -59,6 +60,7 @@ app.include_router(
 app.include_router(terminal_bindings.router, prefix="/api", tags=["terminals"])
 app.include_router(billing.router)
 app.include_router(profile.router, prefix="/api", tags=["profile"])
+app.include_router(integrations.router)
 app.include_router(mcp_proxy.router, prefix="/api", tags=["mcp"])
 
 

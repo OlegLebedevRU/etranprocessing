@@ -10,6 +10,7 @@ const VariantsPage = lazy(() => import("./routes/variants"));
 const MonitoringPage = lazy(() => import("./routes/monitoring"));
 const ReportsPage = lazy(() => import("./routes/reports"));
 const IntegrationsLayout = lazy(() => import("./routes/integrations"));
+const ApiConnectionPage = lazy(() => import("./routes/api-connection"));
 const ApiTokensPage = lazy(() => import("./routes/api-tokens"));
 const BillingPage = lazy(() => import("./routes/billing"));
 const DevicesPage = lazy(() => import("./routes/devices"));
@@ -67,8 +68,9 @@ export default function App() {
           <Route path="integrations" element={<IntegrationsLayout />}>
             <Route
               index
-              element={<Navigate to="/integrations/tokens" replace />}
+              element={<Navigate to="/integrations/api-connection" replace />}
             />
+            <Route path="api-connection" element={<ApiConnectionPage />} />
             <Route path="tokens" element={<ApiTokensPage />} />
           </Route>
           <Route path="admin" element={<AdminLayout />}>
