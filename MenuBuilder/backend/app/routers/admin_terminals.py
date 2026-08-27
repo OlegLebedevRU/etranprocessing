@@ -86,6 +86,9 @@ def _build_admin_terminal_read(
         org_id=term.org_id,
         org_name=org_name,
         is_active=term.is_active,
+        show_in_monitoring=term.show_in_monitoring
+        if term.show_in_monitoring is not None
+        else True,
         address=term.address,
         note=term.note,
         terminal_type_id=term.terminal_type_id,
@@ -322,6 +325,7 @@ async def create_terminal(
         address=body.address,
         note=body.note,
         is_active=body.is_active,
+        show_in_monitoring=body.show_in_monitoring,
     )
     db.add(terminal)
     await db.flush()
@@ -338,6 +342,18 @@ async def create_terminal(
         renewal_enabled=body.renewal_enabled,
     )
     db.add(license_entry)
+
+    # Sync provisioning if requested
+    if body.iot_provisioned:
+        with contextlib.suppress(Exception):
+            prov_res = await iot_client.provision_terminal(
+                device_id=terminal.device_id,
+                sn=terminal.sn,
+                org_id=terminal.org_id,
+            )
+            if prov_res.get("success"):
+                terminal.iot_provisioned = True
+                terminal.iot_provisioned_at = datetime.now(UTC)
 
     await db.commit()
     await db.refresh(terminal)
@@ -392,6 +408,21 @@ async def update_terminal(
         terminal.note = body.note
     if body.is_active is not None:
         terminal.is_active = body.is_active
+    if body.show_in_monitoring is not None:
+        terminal.show_in_monitoring = body.show_in_monitoring
+    if body.iot_provisioned is not None:
+        if body.iot_provisioned and not terminal.iot_provisioned:
+            with contextlib.suppress(Exception):
+                prov_res = await iot_client.provision_terminal(
+                    device_id=terminal.device_id,
+                    sn=terminal.sn,
+                    org_id=terminal.org_id,
+                )
+                if prov_res.get("success"):
+                    terminal.iot_provisioned = True
+                    terminal.iot_provisioned_at = datetime.now(UTC)
+        elif not body.iot_provisioned:
+            terminal.iot_provisioned = False
 
     # Fetch/update license
     lic_res = await db.execute(

@@ -82,6 +82,7 @@ export interface AdminTerminal {
   org_id: number;
   org_name?: string | null;
   is_active: boolean;
+  show_in_monitoring?: boolean;
   address?: string | null;
   note?: string | null;
   terminal_type_id: number;
@@ -121,6 +122,8 @@ export interface AdminTerminalCreateInput {
   address?: string;
   note?: string;
   is_active?: boolean;
+  show_in_monitoring?: boolean;
+  iot_provisioned?: boolean;
   license_expires_at?: string;
   billing_period_months?: number;
   renewal_enabled?: boolean;
@@ -132,6 +135,8 @@ export interface AdminTerminalUpdateInput {
   address?: string;
   note?: string;
   is_active?: boolean;
+  show_in_monitoring?: boolean;
+  iot_provisioned?: boolean;
   license_expires_at?: string;
   license_is_active?: boolean;
   renewal_enabled?: boolean;

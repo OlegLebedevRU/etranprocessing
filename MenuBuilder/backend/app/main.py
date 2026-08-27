@@ -287,6 +287,7 @@ async def get_monitoring(
 
     conditions = [
         "t.is_active = true",
+        "t.show_in_monitoring = true",
     ]
     params: dict = {"now": now}
 

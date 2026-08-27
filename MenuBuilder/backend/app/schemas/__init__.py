@@ -222,6 +222,7 @@ class AdminTerminalRead(BaseModel):
     org_id: int
     org_name: str | None = None
     is_active: bool
+    show_in_monitoring: bool = True
     address: str | None = None
     note: str | None = None
     terminal_type_id: int = 0
@@ -263,6 +264,8 @@ class AdminTerminalCreate(BaseModel):
     address: str | None = None
     note: str | None = None
     is_active: bool = True
+    show_in_monitoring: bool = True
+    iot_provisioned: bool = False
     license_expires_at: datetime | None = None
     billing_period_months: int = 1
     renewal_enabled: bool = True
@@ -274,6 +277,8 @@ class AdminTerminalUpdate(BaseModel):
     address: str | None = None
     note: str | None = None
     is_active: bool | None = None
+    show_in_monitoring: bool | None = None
+    iot_provisioned: bool | None = None
     license_expires_at: datetime | None = None
     license_is_active: bool | None = None
     renewal_enabled: bool | None = None

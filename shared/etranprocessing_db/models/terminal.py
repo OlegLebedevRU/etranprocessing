@@ -61,6 +61,9 @@ class Terminal(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+    show_in_monitoring: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="true", nullable=False
+    )
     iot_provisioned: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="false", nullable=False
     )

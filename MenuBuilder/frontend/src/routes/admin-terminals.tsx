@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router";
 import {
   Alert,
   Button,
@@ -25,6 +26,7 @@ import {
   CalendarOutlined,
   CloudOutlined,
   CloudUploadOutlined,
+  ClusterOutlined,
   CopyOutlined,
   DownOutlined,
   EditOutlined,
@@ -58,6 +60,7 @@ import {
 const { Title, Text, Paragraph } = Typography;
 
 export default function AdminTerminalsPage() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [terminals, setTerminals] = useState<AdminTerminal[]>([]);
   const [total, setTotal] = useState(0);
@@ -173,6 +176,8 @@ export default function AdminTerminalsPage() {
       address: "",
       note: "",
       is_active: true,
+      show_in_monitoring: true,
+      iot_provisioned: false,
       license_months: 12,
       billing_period_months: 1,
     });
@@ -206,6 +211,8 @@ export default function AdminTerminalsPage() {
         address: values.address?.trim() || undefined,
         note: values.note?.trim() || undefined,
         is_active: Boolean(values.is_active),
+        show_in_monitoring: Boolean(values.show_in_monitoring !== undefined ? values.show_in_monitoring : true),
+        iot_provisioned: Boolean(values.iot_provisioned),
         license_expires_at: expDate.toISOString(),
         billing_period_months: Number(values.billing_period_months || 1),
         renewal_enabled: true,
@@ -232,6 +239,8 @@ export default function AdminTerminalsPage() {
       address: term.address || "",
       note: term.note || "",
       is_active: term.is_active,
+      show_in_monitoring: term.show_in_monitoring ?? true,
+      iot_provisioned: term.iot_provisioned ?? false,
       billing_period_months: term.billing_period_months || 1,
       renewal_enabled: term.renewal_enabled ?? true,
       monthly_price_override_rub: term.monthly_price_override_minor
@@ -251,6 +260,8 @@ export default function AdminTerminalsPage() {
         address: values.address?.trim() || "",
         note: values.note?.trim() || "",
         is_active: Boolean(values.is_active),
+        show_in_monitoring: Boolean(values.show_in_monitoring),
+        iot_provisioned: Boolean(values.iot_provisioned),
         billing_period_months: Number(values.billing_period_months || 1),
         renewal_enabled: Boolean(values.renewal_enabled),
         monthly_price_override_minor: values.monthly_price_override_rub
@@ -452,25 +463,34 @@ export default function AdminTerminalsPage() {
       title: "Состояние",
       dataIndex: "is_active",
       key: "is_active",
-      width: 120,
+      width: 130,
       render: (active, record) => (
-        <Popconfirm
-          title={active ? "Отключить терминал?" : "Активировать терминал?"}
-          description={`Вы действительно хотите переключить состояние терминала #${record.device_id}?`}
-          onConfirm={() => handleToggleStatus(record, !active)}
-          okText="Да"
-          cancelText="Отмена"
-        >
-          <Tag
-            color={active ? "success" : "error"}
-            style={{ cursor: "pointer", userSelect: "none", margin: 0, whiteSpace: "nowrap" }}
+        <Space direction="vertical" size={2} style={{ whiteSpace: "nowrap" }}>
+          <Popconfirm
+            title={active ? "Отключить терминал?" : "Активировать терминал?"}
+            description={`Вы действительно хотите переключить состояние терминала #${record.device_id}?`}
+            onConfirm={() => handleToggleStatus(record, !active)}
+            okText="Да"
+            cancelText="Отмена"
           >
-            <Space size={4}>
-              <PoweroffOutlined />
-              {active ? "Активен" : "Отключен"}
-            </Space>
-          </Tag>
-        </Popconfirm>
+            <Tag
+              color={active ? "success" : "error"}
+              style={{ cursor: "pointer", userSelect: "none", margin: 0, whiteSpace: "nowrap" }}
+            >
+              <Space size={4}>
+                <PoweroffOutlined />
+                {active ? "Активен" : "Отключен"}
+              </Space>
+            </Tag>
+          </Popconfirm>
+          {record.show_in_monitoring === false && (
+            <Tooltip title="Скрыт из операционного мониторинга платежей">
+              <Tag color="default" style={{ margin: 0, whiteSpace: "nowrap" }}>
+                Скрыт в монит.
+              </Tag>
+            </Tooltip>
+          )}
+        </Space>
       ),
     },
     {
@@ -604,6 +624,12 @@ export default function AdminTerminalsPage() {
             icon: <EditOutlined />,
             label: "Редактировать параметры",
             onClick: () => handleOpenEdit(record),
+          },
+          {
+            key: "goto_device_management",
+            icon: <ClusterOutlined />,
+            label: "Управление устройством (IoT)",
+            onClick: () => navigate(`/devices?device_id=${record.device_id}&sn=${record.sn}`),
           },
           {
             key: "pin",
@@ -888,6 +914,25 @@ export default function AdminTerminalsPage() {
             </Form.Item>
 
             <Form.Item
+              name="show_in_monitoring"
+              label="Показ в Мониторинге"
+              valuePropName="checked"
+            >
+              <Switch checkedChildren="Включен" unCheckedChildren="Скрыт" />
+            </Form.Item>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Form.Item
+              name="iot_provisioned"
+              label="Провиженинг в Leo4 IoT"
+              tooltip="Автоматически регистрирует устройство в бэкенде iot-rpc и RabbitMQ"
+              valuePropName="checked"
+            >
+              <Switch checkedChildren="Включен" unCheckedChildren="Выключен" />
+            </Form.Item>
+
+            <Form.Item
               name="license_months"
               label="Первичная лицензия (мес.)"
             >
@@ -987,12 +1032,31 @@ export default function AdminTerminalsPage() {
             <Input />
           </Form.Item>
 
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Form.Item
+              name="is_active"
+              label="Состояние терминала"
+              valuePropName="checked"
+            >
+              <Switch checkedChildren="Активен" unCheckedChildren="Отключен" />
+            </Form.Item>
+
+            <Form.Item
+              name="show_in_monitoring"
+              label="Показ в Мониторинге"
+              valuePropName="checked"
+            >
+              <Switch checkedChildren="Включен" unCheckedChildren="Скрыт" />
+            </Form.Item>
+          </div>
+
           <Form.Item
-            name="is_active"
-            label="Состояние терминала"
+            name="iot_provisioned"
+            label="Провиженинг в Leo4 IoT"
+            tooltip="При включении синхронно регистрирует устройство в бэкенде iot-rpc"
             valuePropName="checked"
           >
-            <Switch checkedChildren="Активен" unCheckedChildren="Отключен" />
+            <Switch checkedChildren="Зарегистрирован" unCheckedChildren="Не зарегистрирован" />
           </Form.Item>
 
           <Divider style={{ margin: "16px 0 12px" }}>

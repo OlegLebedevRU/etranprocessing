@@ -12,6 +12,7 @@ const ReportsPage = lazy(() => import("./routes/reports"));
 const IntegrationsLayout = lazy(() => import("./routes/integrations"));
 const ApiTokensPage = lazy(() => import("./routes/api-tokens"));
 const BillingPage = lazy(() => import("./routes/billing"));
+const DevicesPage = lazy(() => import("./routes/devices"));
 const AdminLayout = lazy(() => import("./routes/admin-layout"));
 const AdminOrganizationsPage = lazy(() => import("./routes/admin-organizations"));
 const AdminTerminalsPage = lazy(() => import("./routes/admin-terminals"));
@@ -62,6 +63,7 @@ export default function App() {
           </Route>
           <Route path="reports" element={<ReportsPage />} />
           <Route path="billing" element={<BillingPage />} />
+          <Route path="devices" element={<DevicesPage />} />
           <Route path="integrations" element={<IntegrationsLayout />}>
             <Route
               index

@@ -11,6 +11,7 @@ import {
   LogoutOutlined,
   ApiOutlined,
   ControlOutlined,
+  ClusterOutlined,
 } from "@ant-design/icons";
 import { getMe, type UserInfo } from "../api/auth";
 import { OrgSwitcher } from "../components/OrgSwitcher";
@@ -69,6 +70,11 @@ export default function AppLayout() {
     ...NAV_ITEMS,
     ...(isSuperuser
       ? [
+          {
+            key: "devices",
+            icon: <ClusterOutlined />,
+            label: "Управление устройствами",
+          },
           {
             key: "admin",
             icon: <ControlOutlined />,
