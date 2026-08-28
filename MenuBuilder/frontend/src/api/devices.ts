@@ -76,6 +76,7 @@ export interface DeviceListItem {
   status: "online" | "offline" | "unknown";
   ageSeconds?: number;
   app?: string;
+  sys?: string;
   description?: string;
   cmds?: string;
   tags: DeviceTagItem[];
@@ -162,6 +163,7 @@ export function mapDeviceToListItem(device: DeviceItem): DeviceListItem {
   let description = "";
   let cmds = "";
   let app = "";
+  let sys = "";
 
   tags.forEach((val) => {
     if (val.tag === "name" || val.tag === "description") {
@@ -170,6 +172,8 @@ export function mapDeviceToListItem(device: DeviceItem): DeviceListItem {
       cmds = cmds ? `${cmds} ${val.value}` : val.value;
     } else if (val.tag === "app") {
       app = val.value;
+    } else if (val.tag === "sys") {
+      sys = val.value.toLowerCase().trim();
     }
   });
 
@@ -188,6 +192,7 @@ export function mapDeviceToListItem(device: DeviceItem): DeviceListItem {
     status,
     ageSeconds,
     app,
+    sys,
     description,
     cmds,
     tags,

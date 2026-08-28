@@ -1,0 +1,47 @@
+@echo off
+setlocal EnableExtensions
+
+net session >nul 2>&1
+if errorlevel 1 (
+    echo [INFO] Administrator privileges required. Requesting UAC elevation...
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath 'cmd.exe' -ArgumentList '/c \"\"%~f0\" %*\"' -Verb RunAs"
+    exit /b 0
+)
+
+cd /d "%~dp0"
+
+echo =======================================================
+echo     L4Con Remote Diagnostics Service Uninstaller
+echo =======================================================
+
+set "EXE_PATH="
+if exist "%~dp0l4con.exe" (
+    set "EXE_PATH=%~dp0l4con.exe"
+) else if exist "%~dp0bin\l4con.exe" (
+    set "EXE_PATH=%~dp0bin\l4con.exe"
+) else if exist "%~dp0bin\x86\l4con.exe" (
+    set "EXE_PATH=%~dp0bin\x86\l4con.exe"
+) else if exist "%~dp0bin\x64\l4con.exe" (
+    set "EXE_PATH=%~dp0bin\x64\l4con.exe"
+)
+
+echo [1/2] Stopping L4Con service...
+if defined EXE_PATH (
+    "%EXE_PATH%" --stop >nul 2>&1
+)
+sc stop L4Con >nul 2>&1
+taskkill /f /im l4con.exe >nul 2>&1
+
+echo [2/2] Removing L4Con service from Windows SCM...
+if defined EXE_PATH (
+    "%EXE_PATH%" --uninstall
+) else (
+    sc delete L4Con >nul 2>&1
+)
+
+echo.
+echo =======================================================
+echo    [OK] L4Con Service uninstalled successfully.
+echo =======================================================
+ping -n 2 127.0.0.1 >nul 2>&1
+exit /b 0

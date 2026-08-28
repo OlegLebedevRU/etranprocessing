@@ -1,0 +1,106 @@
+# l4con (Leo4 Diagnostic Console Agent)
+
+Легковесный автономный MQTT-клиент диагностики и удалённой веб-консоли (роль `extra_service`) для Windows, предназначенный для выполнения команд Windows CLI (`cmd.exe` / `PowerShell`), потоковой передачи вывода (`dev/{SN}/out`) и управления через MQTT RPC (`7001` Exec, `7002` Cancel).
+
+---
+
+## 1. Назначение и функциональность
+
+- **Роль**: `extra_service`
+- **Протокол**: MQTT 3.1.1 (TCP Plain No-SSL) к локальному мосту Mosquitto (`127.0.0.1:1883`) или удалённому брокеру
+- **Presence & LWT сценарий (согласно регламенту)**:
+  1. При подключении (CONNECT):
+     - `will_topic = dev/{SN}/svc`
+     - `will_payload = svc_offline`
+     - `will_retain = true`
+     - `will_qos = 1`
+  2. После успешного `CONNACK` (rc=0):
+     - `PUBLISH dev/{SN}/svc = svc_online (retain=1, qos=1)`
+  3. При штатном завершении (Normal Shutdown / Service Stop / Ctrl+C):
+     - `PUBLISH dev/{SN}/svc = svc_offline (retain=1, qos=1)`
+     - `DISCONNECT`
+     - Закрытие сокета
+  4. При аварийном отключении (Crash / Kill / Network drop):
+     - Брокер автоматически публикует Will Message `dev/{SN}/svc = svc_offline (retain=1)`
+- **RPC Lifecycle & Выполнение команд**:
+  - Подписка на задачи: `SUBSCRIBE srv/{SN}/tsk` (QoS 1)
+  - Обработка `7001` (`CMD_DIAG_EXEC`):
+    - Поддержка `cmd.exe /c` и `powershell.exe -Command`
+    - Неинтерактивный режим (`stdin = DEVNULL`) — защита от зависаний на `pause`, `date`
+    - Автодекодирование кодировки OEM Windows (CP866 / CP1251) в UTF-8
+    - Потоковая передача вывода в `dev/{SN}/out` чанками с монотонным номером `seq`
+    - Blacklist опасных команд (`format`, `diskpart`, `del /s /q c:\`, `shutdown`, etc.)
+    - Таймаут выполнения (`ttl_sec`) с принудительным завершением дерева процессов (`taskkill /F /T /PID`)
+  - Обработка `7002` (`CMD_DIAG_CANCEL`):
+    - Мгновенное прерывание активного процесса и отправка `exit_code = 130`
+  - Финальный отчет в `dev/{SN}/res`
+- **Определение Serial Number (SN)**:
+  - Автоматический опрос REST API `GET http://127.0.0.1:18443/_leo4/sn` через WinHTTP
+  - Переменная окружения `DEVICE_SN`
+  - CLI параметр `--sn <SN>`
+- **Zero-Dependency**:
+  - Написан на чистом Win32 / C (WinSock2, WinHTTP, SCM)
+  - Скомпилирован статически (`/MT`) без зависимостей от внешних библиотек и рантаймов
+
+---
+
+## 2. Сборка
+
+Для сборки используется MSVC компилятор (`cl.exe` / `rc.exe`):
+
+```cmd
+cd tools\l4con
+build.cmd
+```
+
+Скрипт компилирует:
+- `bin\x86\l4con.exe` (32-битная статическая сборка)
+- `bin\x64\l4con.exe` (64-битная статическая сборка)
+- `bin\l4con.exe` (универсальный исполняемый файл для x86/x64)
+
+---
+
+## 3. Установка и управление службой Windows
+
+Служба регистрируется под именем **`L4Con`** с автозапуском (`SERVICE_AUTO_START`) и автоматическим перезапуском при сбоях (auto-recovery: 5с, 10с, 30с).
+
+### Команды CLI:
+
+| Команда | Описание |
+|---|---|
+| `l4con.exe --install` | Установка службы в Windows SCM с автозапуском и сохранением параметров |
+| `l4con.exe --uninstall` | Остановка и полное удаление службы из Windows |
+| `l4con.exe --start` | Запуск зарегистрированной службы |
+| `l4con.exe --stop` | Корректная остановка службы с отправкой `svc_offline` |
+| `l4con.exe --restart` | Перезапуск службы |
+| `l4con.exe --status` | Проверка текущего статуса службы (RUNNING, STOPPED, PID) |
+| `l4con.exe --console` (или `-f`) | Запуск в интерактивном режиме консоли (остановка по Ctrl+C) |
+
+### Готовые `.cmd` скрипты:
+
+- `l4con_install.cmd` — инсталляция и старт службы
+- `l4con_uninstall.cmd` — остановка и удаление службы
+- `l4con_start.cmd` — запуск службы
+- `l4con_stop.cmd` — остановка службы
+- `l4con_restart.cmd` — перезапуск службы
+- `l4con_status.cmd` — статус службы
+
+---
+
+## 4. Параметры командной строки
+
+```text
+  --host <ip>        Хост MQTT-брокера (по умолчанию: 127.0.0.1)
+  --port <port>      Порт MQTT-брокера (по умолчанию: 1883)
+  --uri <uri>        URI MQTT-брокера (например, tcp://127.0.0.1:1883)
+  --proxy-port <p>   HTTP-порт Leo4Proxy для запроса SN (по умолчанию: 18443)
+  --sn <SN>          Явное задание серийного номера устройства
+  --role <role>      MQTT role / username (по умолчанию: extra_service)
+  --keepalive <sec>  Интервал keepalive в секундах (по умолчанию: 60)
+  --reconnect <sec>  Пауза перед переподключением в секундах (по умолчанию: 5)
+  --timeout <sec>    Таймаут выполнения команды по умолчанию (по умолчанию: 30)
+  --no-blacklist     Отключение встроенного черного списка опасных команд
+  --verbose          Подробный вывод отладочных сообщений
+  --version, -v      Версия приложения
+  --help, -h         Справка по использованию
+```

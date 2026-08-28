@@ -28,6 +28,7 @@ import {
   DashboardOutlined,
   InfoCircleOutlined,
   CopyOutlined,
+  ControlOutlined,
 } from "@ant-design/icons";
 import { getDevices, type DeviceListItem } from "../../api/devices";
 import { getAdminOrganizations, type AdminOrg } from "../../api/admin";
@@ -68,12 +69,12 @@ export default function DevicesManagementPage() {
     getAdminOrganizations()
       .then((data) => {
         setOrgs(data);
-        if (data.length > 0 && selectedOrgId === undefined) {
-          setSelectedOrgId(data[0].org_id);
+        if (data.length > 0) {
+          setSelectedOrgId((prev) => (prev !== undefined ? prev : data[0].org_id));
         }
       })
       .catch(() => {});
-  }, [selectedOrgId]);
+  }, []);
 
   // Fetch devices
   const fetchDevicesList = useCallback(async () => {
@@ -255,26 +256,17 @@ export default function DevicesManagementPage() {
     {
       title: "Действия",
       key: "actions",
-      width: 180,
+      width: 140,
       align: "center",
       render: (_, record) => (
-        <Space size={6}>
-          <Button
-            size="small"
-            type="primary"
-            icon={<UnorderedListOutlined />}
-            onClick={() => handleOpenDevice(record, "tasks")}
-          >
-            Задачи
-          </Button>
-          <Button
-            size="small"
-            icon={<CodeOutlined />}
-            onClick={() => handleOpenDevice(record, "console")}
-          >
-            Консоль
-          </Button>
-        </Space>
+        <Button
+          size="small"
+          type="primary"
+          icon={<ControlOutlined />}
+          onClick={() => handleOpenDevice(record, "tasks")}
+        >
+          Управление
+        </Button>
       ),
     },
   ];
@@ -460,7 +452,10 @@ export default function DevicesManagementPage() {
                   <DeviceConsoleTab
                     sn={selectedDevice.sn}
                     app={selectedDevice.app}
+                    sys={selectedDevice.sys}
+                    tags={selectedDevice.tags}
                     orgId={selectedOrgId}
+                    isActiveTab={activeTabKey === "console"}
                   />
                 ),
               },

@@ -1,0 +1,6 @@
+#ifndef L4CON_RESOURCE_H
+#define L4CON_RESOURCE_H
+
+#define IDI_APP_ICON 101
+
+#endif /* L4CON_RESOURCE_H */
