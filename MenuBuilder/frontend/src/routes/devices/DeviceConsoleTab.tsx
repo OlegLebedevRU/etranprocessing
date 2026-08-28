@@ -12,6 +12,7 @@ import {
   Progress,
   Badge,
   Alert,
+  Segmented,
 } from "antd";
 import type { InputRef } from "antd";
 import {
@@ -28,6 +29,8 @@ import {
   CodeOutlined,
   WarningOutlined,
   ApiOutlined,
+  FullscreenOutlined,
+  FullscreenExitOutlined,
 } from "@ant-design/icons";
 import { getDiagnosticsWsUrl } from "../../api/devices";
 
@@ -110,6 +113,13 @@ export default function DeviceConsoleTab({
   const [elapsedSec, setElapsedSec] = useState<number>(0);
   const [lastExitCode, setLastExitCode] = useState<number | null>(null);
 
+  // Fullscreen and dynamic height state (in-memory only, no localStorage)
+  const [isFullScreen, setIsFullScreen] = useState<boolean>(false);
+  const [terminalHeight, setTerminalHeight] = useState<number>(420);
+  const isDraggingRef = useRef<boolean>(false);
+  const startYRef = useRef<number>(0);
+  const startHeightRef = useRef<number>(420);
+
   // Command History Navigation (↑ / ↓)
   const [history, setHistory] = useState<string[]>(() => {
     try {
@@ -134,6 +144,55 @@ export default function DeviceConsoleTab({
   useEffect(() => {
     activeSessionIdRef.current = activeSessionId;
   }, [activeSessionId]);
+
+  // Exit full-screen on Escape key (capture phase ensures it intercepts before Drawer closes)
+  useEffect(() => {
+    if (!isFullScreen) return;
+
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape" || e.key === "Esc") {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsFullScreen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleEsc, true);
+    return () => {
+      window.removeEventListener("keydown", handleEsc, true);
+    };
+  }, [isFullScreen]);
+
+  // Handle vertical resizing of the console terminal in compact mode
+  const handleMouseDownResize = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      isDraggingRef.current = true;
+      startYRef.current = e.clientY;
+      startHeightRef.current = terminalHeight;
+      document.body.style.userSelect = "none";
+      document.body.style.cursor = "row-resize";
+
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        if (!isDraggingRef.current) return;
+        const delta = moveEvent.clientY - startYRef.current;
+        const newHeight = Math.max(160, Math.min(window.innerHeight - 200, startHeightRef.current + delta));
+        setTerminalHeight(newHeight);
+      };
+
+      const handleMouseUp = () => {
+        isDraggingRef.current = false;
+        document.body.style.userSelect = "";
+        document.body.style.cursor = "";
+        window.removeEventListener("mousemove", handleMouseMove);
+        window.removeEventListener("mouseup", handleMouseUp);
+      };
+
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+    },
+    [terminalHeight]
+  );
 
   const appendLine = useCallback(
     (kind: ConsoleLine["kind"], text: string, seq?: number) => {
@@ -574,7 +633,62 @@ export default function DeviceConsoleTab({
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    <div
+      style={
+        isFullScreen
+          ? {
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              width: "100vw",
+              height: "100vh",
+              zIndex: 1100,
+              background: "#f6f7f9",
+              padding: "16px 24px",
+              boxSizing: "border-box",
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+              overflow: "hidden",
+            }
+          : {
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+            }
+      }
+    >
+      {/* Fullscreen Header Info Bar */}
+      {isFullScreen && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            paddingBottom: 4,
+            borderBottom: "1px solid #e2e8f0",
+          }}
+        >
+          <Space size={8}>
+            <CodeOutlined style={{ color: "#2563eb", fontSize: 16 }} />
+            <Text strong style={{ fontSize: 14 }}>
+              Консоль диагностики устройства #{sn}
+            </Text>
+            {resolvedSys && <Tag color="blue">{resolvedSys.toUpperCase()}</Tag>}
+            <Tag color={connected ? "success" : "default"}>
+              {connected ? "Подключено" : "Отключено"}
+            </Tag>
+          </Space>
+          <Space size={8}>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              Нажмите <kbd style={{ padding: "1px 5px", background: "#e2e8f0", borderRadius: 3, fontSize: 11 }}>Esc</kbd> для возврата в компактный вид
+            </Text>
+          </Space>
+        </div>
+      )}
+
       {/* Alert if system tag is missing */}
       {!hasSupportedSys && (
         <Alert
@@ -695,6 +809,23 @@ export default function DeviceConsoleTab({
         </Space>
 
         <Space size={12}>
+          <Segmented
+            size="small"
+            value={isFullScreen ? "fullscreen" : "compact"}
+            onChange={(val) => setIsFullScreen(val === "fullscreen")}
+            options={[
+              {
+                label: "Компактный",
+                value: "compact",
+                icon: <FullscreenExitOutlined />,
+              },
+              {
+                label: "Полный экран",
+                value: "fullscreen",
+                icon: <FullscreenOutlined />,
+              },
+            ]}
+          />
           <Tooltip title="Автоматическая прокрутка вниз при новом выводе">
             <span style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}>
               Автоскролл:
@@ -742,7 +873,9 @@ export default function DeviceConsoleTab({
           fontSize: 12,
           padding: 12,
           borderRadius: 6,
-          height: 420,
+          height: isFullScreen ? "auto" : terminalHeight,
+          flex: isFullScreen ? 1 : undefined,
+          minHeight: 160,
           overflowY: "auto",
           display: "flex",
           flexDirection: "column",
@@ -793,6 +926,33 @@ export default function DeviceConsoleTab({
         )}
         <div ref={consoleBottomRef} />
       </div>
+
+      {/* Height Resizer Handle (Compact mode only) */}
+      {!isFullScreen && (
+        <div
+          onMouseDown={handleMouseDownResize}
+          style={{
+            height: 8,
+            cursor: "row-resize",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            margin: "-6px 0 -2px 0",
+            zIndex: 2,
+            userSelect: "none",
+          }}
+          title="Потяните для изменения высоты консоли"
+        >
+          <div
+            style={{
+              width: 38,
+              height: 4,
+              borderRadius: 2,
+              backgroundColor: "#d1d5db",
+            }}
+          />
+        </div>
+      )}
 
       {/* Status progression and Active Execution Bar */}
       {isExecuting && (
@@ -890,6 +1050,7 @@ export default function DeviceConsoleTab({
             />
           )}
           {isWindows && <span style={{ marginLeft: 12 }}>История: клавиши ↑ / ↓</span>}
+          {isFullScreen && <span style={{ marginLeft: 12 }}>Выход: Esc</span>}
         </span>
       </div>
     </div>
