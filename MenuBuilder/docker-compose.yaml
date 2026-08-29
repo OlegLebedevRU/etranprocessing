@@ -24,6 +24,7 @@ services:
       - "3000:443"
     environment:
       - JWT_SECRET_HEX=${JWT_SECRET_HEX}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-${IOT_RPC_SERVICE_TOKEN}}
     volumes:
       - ./frontend/dist:/usr/share/nginx/html:ro
       - ./nginx.conf:/etc/nginx/conf.d/default.conf.template:ro

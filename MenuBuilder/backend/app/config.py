@@ -56,10 +56,25 @@ class Settings(BaseSettings):
     cert_pin_ttl_hours: int = 24
     cert_expiring_soon_days: int = 30
 
-    # Leo4 IoT Platform Provisioning
+    # Leo4 IoT Platform Provisioning & Internal API
+    leo4_internal_api_base_url: str = ""
+    leo4_internal_service_token: str = ""
+    internal_service_key: str = ""
     iot_rpc_base_url: str = ""
     iot_rpc_service_token: str = ""
     iot_rpc_timeout_seconds: float = 10.0
+
+    @property
+    def internal_api_base_url(self) -> str:
+        return self.leo4_internal_api_base_url or self.iot_rpc_base_url or ""
+
+    @property
+    def internal_service_key_value(self) -> str:
+        return (
+            self.leo4_internal_service_token
+            or self.internal_service_key
+            or self.iot_rpc_service_token
+        )
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

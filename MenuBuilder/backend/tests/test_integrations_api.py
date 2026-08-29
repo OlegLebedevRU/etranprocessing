@@ -191,7 +191,7 @@ async def test_iot_client_remote_http_mock():
 
     # Test real client with mocked HTTP transport
     mock_responses = {
-        "POST /api/v1/provisioning/api-keys": httpx.Response(
+        "POST /api/internal/v1/provisioning/api-keys": httpx.Response(
             200,
             json={
                 "org_id": 105,
@@ -202,7 +202,7 @@ async def test_iot_client_remote_http_mock():
                 "updated_at": "2026-08-28T00:00:00Z",
             },
         ),
-        "GET /api/v1/provisioning/api-keys/105": httpx.Response(
+        "GET /api/internal/v1/provisioning/api-keys/105": httpx.Response(
             200,
             json={
                 "org_id": 105,
@@ -211,7 +211,7 @@ async def test_iot_client_remote_http_mock():
                 "is_active": True,
             },
         ),
-        "DELETE /api/v1/provisioning/api-keys/105": httpx.Response(
+        "DELETE /api/internal/v1/provisioning/api-keys/105": httpx.Response(
             200,
             json={"status": "deleted", "org_id": 105},
         ),
@@ -221,7 +221,7 @@ async def test_iot_client_remote_http_mock():
         async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
             key = f"{request.method} {request.url.path}"
             if (
-                request.url.path == "/api/v1/provisioning/api-keys"
+                request.url.path == "/api/internal/v1/provisioning/api-keys"
                 and request.method == "POST"
             ):
                 content = request.read().decode()
@@ -234,7 +234,7 @@ async def test_iot_client_remote_http_mock():
                     )
             if key in mock_responses:
                 return mock_responses[key]
-            if request.url.path == "/api/v1/provisioning/api-keys/999":
+            if request.url.path == "/api/internal/v1/provisioning/api-keys/999":
                 return httpx.Response(404, json={"detail": "Not found"})
             return httpx.Response(404)
 

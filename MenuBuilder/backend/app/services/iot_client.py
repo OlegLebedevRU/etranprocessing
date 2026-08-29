@@ -31,20 +31,23 @@ class IotPlatformClient:
         service_token: str | None = None,
         timeout: float | None = None,
     ):
-        self.base_url = (base_url or settings.iot_rpc_base_url or "").rstrip("/")
+        self.base_url = (
+            base_url if base_url is not None else settings.internal_api_base_url
+        ).rstrip("/")
         self.service_token = (
             service_token
             if service_token is not None
-            else settings.iot_rpc_service_token
+            else settings.internal_service_key_value
         )
         self.timeout = timeout or settings.iot_rpc_timeout_seconds
         self._simulated_api_keys: dict[int, dict[str, Any]] = {}
 
-    def _get_headers(self) -> dict[str, str]:
+    def _get_headers(self, org_id: int | None = None) -> dict[str, str]:
         headers = {"Content-Type": "application/json"}
         if self.service_token:
             headers["X-Internal-Service-Key"] = self.service_token
-            headers["x-api-key"] = self.service_token
+        if org_id is not None:
+            headers["X-Org-Id"] = str(org_id)
         return headers
 
     async def provision_terminal(
@@ -72,7 +75,7 @@ class IotPlatformClient:
                 "error": None,
             }
 
-        url = f"{self.base_url}/api/v1/provisioning/terminals"
+        url = f"{self.base_url}/api/internal/v1/provisioning/terminals"
         payload = {
             "device_id": device_id,
             "sn": sn,
@@ -81,7 +84,9 @@ class IotPlatformClient:
             "tags": tags or {"source": "etranprocessing"},
         }
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            resp = await client.post(url, json=payload, headers=self._get_headers())
+            resp = await client.post(
+                url, json=payload, headers=self._get_headers(org_id=org_id)
+            )
             resp.raise_for_status()
             return resp.json()
 
@@ -107,7 +112,7 @@ class IotPlatformClient:
                 for t in terminals
             ]
 
-        url = f"{self.base_url}/api/v1/provisioning/terminals/batch"
+        url = f"{self.base_url}/api/internal/v1/provisioning/terminals/batch"
         payload = {"terminals": terminals}
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             resp = await client.post(url, json=payload, headers=self._get_headers())
@@ -124,7 +129,7 @@ class IotPlatformClient:
         if not self.base_url:
             return []
 
-        url = f"{self.base_url}/api/v1/provisioning/terminals/status"
+        url = f"{self.base_url}/api/internal/v1/provisioning/terminals/status"
         payload = {"device_ids": device_ids}
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             resp = await client.post(url, json=payload, headers=self._get_headers())
@@ -159,7 +164,7 @@ class IotPlatformClient:
             self._simulated_api_keys[org_id] = record
             return record
 
-        url = f"{self.base_url}/api/v1/provisioning/api-keys"
+        url = f"{self.base_url}/api/internal/v1/provisioning/api-keys"
         payload = {
             "org_id": org_id,
             "api_key": api_key,
@@ -167,7 +172,9 @@ class IotPlatformClient:
             "is_active": is_active,
         }
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            resp = await client.post(url, json=payload, headers=self._get_headers())
+            resp = await client.post(
+                url, json=payload, headers=self._get_headers(org_id=org_id)
+            )
             if resp.status_code == 409:
                 err_detail = "API key is already assigned to another organization"
                 with contextlib.suppress(Exception):
@@ -199,12 +206,12 @@ class IotPlatformClient:
                 res["api_key"] = mask_api_key(str(res["api_key"]))
             return res
 
-        url = f"{self.base_url}/api/v1/provisioning/api-keys/{org_id}"
+        url = f"{self.base_url}/api/internal/v1/provisioning/api-keys/{org_id}"
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             resp = await client.get(
                 url,
                 params={"mask": "true" if mask else "false"},
-                headers=self._get_headers(),
+                headers=self._get_headers(org_id=org_id),
             )
             if resp.status_code == 404:
                 return None
@@ -222,9 +229,9 @@ class IotPlatformClient:
                 return None
             return {"status": "deleted", "org_id": org_id}
 
-        url = f"{self.base_url}/api/v1/provisioning/api-keys/{org_id}"
+        url = f"{self.base_url}/api/internal/v1/provisioning/api-keys/{org_id}"
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            resp = await client.delete(url, headers=self._get_headers())
+            resp = await client.delete(url, headers=self._get_headers(org_id=org_id))
             if resp.status_code == 404:
                 return None
             resp.raise_for_status()

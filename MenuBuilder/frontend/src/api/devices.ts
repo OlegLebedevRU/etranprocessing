@@ -205,12 +205,12 @@ export async function getDevices(orgId: number, deviceId?: number): Promise<Devi
   if (deviceId !== undefined) {
     params.device_id = deviceId;
   }
-  const { data } = await client.get<DeviceItem[]>("/v1/devices/", { params });
+  const { data } = await client.get<DeviceItem[]>("/internal/v1/devices/", { params });
   return (data || []).map(mapDeviceToListItem);
 }
 
 export async function getDeviceRaw(orgId: number, deviceId: number): Promise<DeviceRawResult | null> {
-  const { data } = await client.get<DeviceRawResult[]>("/v1/devices/", {
+  const { data } = await client.get<DeviceRawResult[]>("/internal/v1/devices/", {
     params: { org_id: orgId, device_id: deviceId },
   });
   return data && data.length > 0 ? data[0] : null;
@@ -221,7 +221,7 @@ export async function updateDeviceTag(
   deviceId: number,
   tag: { tag: string; value: string }
 ): Promise<any> {
-  const { data } = await client.put(`/v1/devices/${deviceId}`, tag, {
+  const { data } = await client.put(`/internal/v1/devices/${deviceId}`, tag, {
     params: { org_id: orgId },
   });
   return data;
@@ -233,7 +233,7 @@ export async function getDeviceTasks(
   page: number = 1,
   size: number = 50
 ): Promise<TaskListResponse> {
-  const { data } = await client.get<TaskListResponse>("/v1/device-tasks/", {
+  const { data } = await client.get<TaskListResponse>("/internal/v1/device-tasks/", {
     params: { org_id: orgId, device_id: deviceId, page, size },
   });
   return data;
@@ -243,21 +243,21 @@ export async function createDeviceTask(
   orgId: number,
   payload: TaskCreateInput
 ): Promise<TaskItem> {
-  const { data } = await client.post<TaskItem>("/v1/device-tasks/", payload, {
+  const { data } = await client.post<TaskItem>("/internal/v1/device-tasks/", payload, {
     params: { org_id: orgId },
   });
   return data;
 }
 
 export async function getTaskDetail(orgId: number, taskId: string): Promise<TaskItem> {
-  const { data } = await client.get<TaskItem>(`/v1/device-tasks/${taskId}`, {
+  const { data } = await client.get<TaskItem>(`/internal/v1/device-tasks/${taskId}`, {
     params: { org_id: orgId },
   });
   return data;
 }
 
 export async function deleteDeviceTask(orgId: number, taskId: string): Promise<any> {
-  const { data } = await client.delete(`/v1/device-tasks/${taskId}`, {
+  const { data } = await client.delete(`/internal/v1/device-tasks/${taskId}`, {
     params: { org_id: orgId },
   });
   return data;
@@ -269,7 +269,7 @@ export async function getDeviceEvents(
   page: number = 1,
   size: number = 50
 ): Promise<EventListResponse> {
-  const { data } = await client.get<EventListResponse>("/v1/device-events/", {
+  const { data } = await client.get<EventListResponse>("/internal/v1/device-events/", {
     params: { org_id: orgId, device_id: deviceId, page, size },
   });
   return data;
@@ -278,5 +278,5 @@ export async function getDeviceEvents(
 export function getDiagnosticsWsUrl(sn: string, orgId: number): string {
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
   const host = window.location.host;
-  return `${proto}//${host}/api/v1/diagnostics/ws/devices/${encodeURIComponent(sn)}?org_id=${orgId}`;
+  return `${proto}//${host}/api/internal/v1/diagnostics/ws/devices/${encodeURIComponent(sn)}?org_id=${orgId}`;
 }
