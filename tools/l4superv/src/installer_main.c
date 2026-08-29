@@ -102,14 +102,21 @@ int wmain(int argc, wchar_t* argv[]) {
     }
 
     if (!silent) {
-        wprintf(L"[1/4] Destination directory: %ls\n", dest_dir);
+        wprintf(L"[1/5] Target installation directory: %ls\n", dest_dir);
     }
+
+    // Pre-stop any running services to release binary file locks before extraction
+    svc_stop_and_kill(SVC_NAME_L4SUPERV);
+    svc_stop_and_kill(SVC_NAME_L4CON);
+    svc_stop_and_kill(SVC_NAME_MOSQUITTO);
+    svc_stop_and_kill(SVC_NAME_LEO4PROXY);
+    Sleep(500);
 
     // Locate ZIP package
     wchar_t zip_file[MAX_PATH] = { 0 };
     if (find_zip_package(exe_path, custom_zip, zip_file, MAX_PATH)) {
         if (!silent) {
-            wprintf(L"[2/4] Found package archive: %ls\n", zip_file);
+            wprintf(L"[2/5] Found package archive: %ls\n", zip_file);
             wprintf(L"      Unpacking tools tree...\n");
         }
         if (!zip_extract_all(zip_file, dest_dir, !silent)) {
@@ -120,7 +127,7 @@ int wmain(int argc, wchar_t* argv[]) {
         }
     } else {
         if (!silent) {
-            wprintf(L"[2/4] [INFO] No zip package found next to installer. Checking existing directory...\n");
+            wprintf(L"[2/5] [INFO] No zip package found next to installer. Checking existing directory...\n");
         }
     }
 
@@ -134,9 +141,21 @@ int wmain(int argc, wchar_t* argv[]) {
     swprintf_s(sub_dir, MAX_PATH, L"%ls\\l4pin", dest_dir); CreateDirectoryW(sub_dir, NULL);
     swprintf_s(sub_dir, MAX_PATH, L"%ls\\l4superv", dest_dir); CreateDirectoryW(sub_dir, NULL);
 
+    // Copy l4install.exe into target base directory for future maintenance
+    wchar_t target_installer[MAX_PATH];
+    swprintf_s(target_installer, MAX_PATH, L"%ls\\l4install.exe", dest_dir);
+    if (_wcsicmp(exe_path, target_installer) != 0) {
+        CopyFileW(exe_path, target_installer, FALSE);
+    }
+
+    // Ensure permissive ACLs on mosquitto\log
+    wchar_t mosq_log_dir[MAX_PATH];
+    swprintf_s(mosq_log_dir, MAX_PATH, L"%ls\\mosquitto\\log", dest_dir);
+    svc_set_dir_permissions(mosq_log_dir);
+
     // Initial config and state
     if (!silent) {
-        wprintf(L"[3/4] Initializing default configurations and hardware bindings...\n");
+        wprintf(L"[3/5] Configuring default settings, permissions and hardware bindings...\n");
     }
 
     L4SupervConfig cfg;
@@ -160,12 +179,13 @@ int wmain(int argc, wchar_t* argv[]) {
     L4State state;
     state_load(dest_dir, &state);
     hw_get_fingerprint(state.hw_fingerprint, sizeof(state.hw_fingerprint));
+    state_update_services(dest_dir, &state);
     state_save(dest_dir, &state);
 
     // Services installation & start
     if (!skip_services) {
         if (!silent) {
-            wprintf(L"[4/4] Installing and registering Windows Services (SCM)...\n");
+            wprintf(L"[4/5] Checking existing services, cleaning foreign paths, and registering native SCM services...\n");
         }
 
         bool ok = svc_ensure_all_installed_and_running(dest_dir);
@@ -176,15 +196,56 @@ int wmain(int argc, wchar_t* argv[]) {
         }
     }
 
+    // Refresh state.json after services started
+    state_load(dest_dir, &state);
+    state_save(dest_dir, &state);
+
     if (!silent) {
-        wprintf(L"\n===============================================================\n");
-        wprintf(L" [OK] Installation Completed Successfully!\n");
-        wprintf(L" Target Location: %ls\n", dest_dir);
-        wprintf(L" Installed Services:\n");
-        wprintf(L"   - %-12ls (Status: %ls)\n", SVC_NAME_LEO4PROXY, svc_is_running(SVC_NAME_LEO4PROXY) ? L"RUNNING" : L"STOPPED");
-        wprintf(L"   - %-12ls (Status: %ls)\n", SVC_NAME_MOSQUITTO, svc_is_running(SVC_NAME_MOSQUITTO) ? L"RUNNING" : L"STOPPED");
-        wprintf(L"   - %-12ls (Status: %ls)\n", SVC_NAME_L4CON,     svc_is_running(SVC_NAME_L4CON)     ? L"RUNNING" : L"STOPPED");
-        wprintf(L"   - %-12ls (Status: %ls)\n", SVC_NAME_L4SUPERV,  svc_is_running(SVC_NAME_L4SUPERV)  ? L"RUNNING" : L"STOPPED");
+        wprintf(L"[5/5] Service Verification & Diagnostics:\n");
+        wprintf(L"===============================================================\n");
+        wprintf(L" [OK] Installation and Service Verification Completed!\n");
+        wprintf(L" Target Location:    %ls\n", dest_dir);
+        wprintf(L" Log Directory:      %ls (Permissions: RW for All)\n", mosq_log_dir);
+        wprintf(L" Installed Tools:\n");
+        wprintf(L"   - Installer Copy: %ls\\l4install.exe\n", dest_dir);
+        wprintf(L"   - Supervisor:     %ls\\l4superv\\l4superv.exe\n", dest_dir);
+        wprintf(L"   - PIN Tool:       %ls\\l4pin\\l4pin.exe\n", dest_dir);
+        wprintf(L"---------------------------------------------------------------\n");
+        wprintf(L" Service Runtime Status (from SCM & Process Table):\n");
+        
+        wprintf(L"   - %-12ls : %-12hs (PID: %6lu, Match: %ls)\n",
+                SVC_NAME_LEO4PROXY, state.svc_leo4proxy.status, state.svc_leo4proxy.runtime_pid,
+                state.svc_leo4proxy.path_match ? L"YES" : L"NO");
+        if (state.svc_leo4proxy.runtime_exe[0] != '\0') {
+            wprintf(L"                   Path: %hs\n", state.svc_leo4proxy.runtime_exe);
+        }
+
+        wprintf(L"   - %-12ls : %-12hs (PID: %6lu, Match: %ls)\n",
+                SVC_NAME_MOSQUITTO, state.svc_mosquitto.status, state.svc_mosquitto.runtime_pid,
+                state.svc_mosquitto.path_match ? L"YES" : L"NO");
+        if (state.svc_mosquitto.runtime_exe[0] != '\0') {
+            wprintf(L"                   Path: %hs\n", state.svc_mosquitto.runtime_exe);
+        }
+
+        wprintf(L"   - %-12ls : %-12hs (PID: %6lu, Match: %ls)\n",
+                SVC_NAME_L4CON, state.svc_l4con.status, state.svc_l4con.runtime_pid,
+                state.svc_l4con.path_match ? L"YES" : L"NO");
+        if (state.svc_l4con.runtime_exe[0] != '\0') {
+            wprintf(L"                   Path: %hs\n", state.svc_l4con.runtime_exe);
+        }
+
+        wprintf(L"   - %-12ls : %-12hs (PID: %6lu, Match: %ls)\n",
+                SVC_NAME_L4SUPERV, state.svc_l4superv.status, state.svc_l4superv.runtime_pid,
+                state.svc_l4superv.path_match ? L"YES" : L"NO");
+        if (state.svc_l4superv.runtime_exe[0] != '\0') {
+            wprintf(L"                   Path: %hs\n", state.svc_l4superv.runtime_exe);
+        }
+
+        wprintf(L"---------------------------------------------------------------\n");
+        wprintf(L" Orchestrator State:\n");
+        wprintf(L"   Status:            %hs\n", state.status);
+        wprintf(L"   Device SN:         %hs\n", state.sn[0] ? state.sn : "(none)");
+        wprintf(L"   HW Fingerprint:    %hs\n", state.hw_fingerprint);
         wprintf(L"===============================================================\n\n");
     }
 

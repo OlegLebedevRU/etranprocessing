@@ -34,6 +34,10 @@ if exist "D:\Platerra26\tools\mosquitto" (
 ) else if exist "%REPO_TOOLS%\mosquitto" (
     xcopy /e /y /q "%REPO_TOOLS%\mosquitto\*" "%STAGING%\mosquitto\" >nul
 )
+:: Clean any hardcoded config from development machine
+if exist "%STAGING%\mosquitto\mosquitto.conf" del /f /q "%STAGING%\mosquitto\mosquitto.conf" >nul 2>nul
+if exist "%STAGING%\mosquitto\mosquitto.conf.bak" del /f /q "%STAGING%\mosquitto\mosquitto.conf.bak" >nul 2>nul
+if exist "%STAGING%\mosquitto\install_mosquitto.ps1.bak" del /f /q "%STAGING%\mosquitto\install_mosquitto.ps1.bak" >nul 2>nul
 
 :: 3. Copy l4con
 echo [3/5] Staging l4con...
@@ -47,12 +51,12 @@ if exist "%REPO_TOOLS%\l4pin\bin" (
     xcopy /e /y /q "%REPO_TOOLS%\l4pin\bin\*" "%STAGING%\l4pin\" >nul
 )
 
-:: 5. Copy l4superv
-echo [5/5] Staging l4superv...
+:: 5. Copy l4superv and l4install
+echo [5/5] Staging l4superv and l4install...
 if exist "%~dp0bin" (
-    xcopy /e /y /q "%~dp0bin\l4superv*.exe" "%STAGING%\l4superv\" >nul 2>nul
-    xcopy /e /y /q "%~dp0bin\l4superv_*.cmd" "%STAGING%\l4superv\" >nul 2>nul
-    xcopy /e /y /q "%~dp0bin\README.md" "%STAGING%\l4superv\" >nul 2>nul
+    xcopy /e /y /q "%~dp0bin\*.exe" "%STAGING%\l4superv\" >nul 2>nul
+    xcopy /e /y /q "%~dp0bin\*.cmd" "%STAGING%\l4superv\" >nul 2>nul
+    copy /y "%~dp0bin\l4install.exe" "%STAGING%\l4install.exe" >nul 2>nul
 )
 
 :: Create zip archive via PowerShell Compress-Archive

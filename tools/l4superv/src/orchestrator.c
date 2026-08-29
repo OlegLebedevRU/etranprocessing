@@ -41,6 +41,7 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
             
             state_init(state);
             strcpy_s(state->hw_fingerprint, sizeof(state->hw_fingerprint), current_fp);
+            state_update_services(cfg->base_path, state);
             state_save(cfg->base_path, state);
 
             mosquitto_conf_generate_standby(cfg->base_path, cfg->mosquitto_port);
@@ -53,6 +54,7 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
         }
     } else if (state->hw_fingerprint[0] == '\0' && current_fp[0] != '\0') {
         strcpy_s(state->hw_fingerprint, sizeof(state->hw_fingerprint), current_fp);
+        state_update_services(cfg->base_path, state);
         state_save(cfg->base_path, state);
     }
 
@@ -85,6 +87,7 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
             strcpy_s(state->thumbprint, sizeof(state->thumbprint), proxy_info.thumbprint);
             strcpy_s(state->not_after, sizeof(state->not_after), proxy_info.not_after);
             state->updated_at = time(NULL);
+            state_update_services(cfg->base_path, state);
             state_save(cfg->base_path, state);
 
             if (p_action_taken) *p_action_taken = true;
@@ -100,6 +103,7 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
             strcpy_s(state->thumbprint, sizeof(state->thumbprint), proxy_info.thumbprint);
             strcpy_s(state->not_after, sizeof(state->not_after), proxy_info.not_after);
             state->updated_at = time(NULL);
+            state_update_services(cfg->base_path, state);
             state_save(cfg->base_path, state);
 
             if (p_action_taken) *p_action_taken = true;
@@ -128,30 +132,41 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
             state->thumbprint[0] = '\0';
             state->not_after[0] = '\0';
             state->updated_at = time(NULL);
+            state_update_services(cfg->base_path, state);
             state_save(cfg->base_path, state);
 
             if (p_action_taken) *p_action_taken = true;
         }
     }
 
-    // 4. Watchdog Process / Service Monitoring
+    // 4. Watchdog Process & Path Enforcement
     if (cfg->watchdog_enabled) {
-        if (cfg->auto_start_leo4proxy && svc_exists(SVC_NAME_LEO4PROXY) && !svc_is_running(SVC_NAME_LEO4PROXY)) {
-            log_info("[WATCHDOG] %s is stopped. Starting...", SVC_NAME_LEO4PROXY);
-            svc_start(SVC_NAME_LEO4PROXY);
-            if (p_action_taken) *p_action_taken = true;
+        if (cfg->auto_start_leo4proxy) {
+            if (!svc_exists(SVC_NAME_LEO4PROXY) || !svc_is_running(SVC_NAME_LEO4PROXY)) {
+                log_info("[WATCHDOG] %ls is stopped or missing. Starting...", SVC_NAME_LEO4PROXY);
+                svc_start(SVC_NAME_LEO4PROXY);
+                if (p_action_taken) *p_action_taken = true;
+            }
         }
-        if (cfg->auto_start_mosquitto && svc_exists(SVC_NAME_MOSQUITTO) && !svc_is_running(SVC_NAME_MOSQUITTO)) {
-            log_info("[WATCHDOG] %s is stopped. Starting...", SVC_NAME_MOSQUITTO);
-            svc_start(SVC_NAME_MOSQUITTO);
-            if (p_action_taken) *p_action_taken = true;
+        if (cfg->auto_start_mosquitto) {
+            if (!svc_exists(SVC_NAME_MOSQUITTO) || !svc_is_running(SVC_NAME_MOSQUITTO)) {
+                log_info("[WATCHDOG] %ls is stopped or missing. Starting...", SVC_NAME_MOSQUITTO);
+                svc_start(SVC_NAME_MOSQUITTO);
+                if (p_action_taken) *p_action_taken = true;
+            }
         }
-        if (cfg->auto_start_l4con && svc_exists(SVC_NAME_L4CON) && !svc_is_running(SVC_NAME_L4CON)) {
-            log_info("[WATCHDOG] %s is stopped. Starting...", SVC_NAME_L4CON);
-            svc_start(SVC_NAME_L4CON);
-            if (p_action_taken) *p_action_taken = true;
+        if (cfg->auto_start_l4con) {
+            if (!svc_exists(SVC_NAME_L4CON) || !svc_is_running(SVC_NAME_L4CON)) {
+                log_info("[WATCHDOG] %ls is stopped or missing. Starting...", SVC_NAME_L4CON);
+                svc_start(SVC_NAME_L4CON);
+                if (p_action_taken) *p_action_taken = true;
+            }
         }
     }
+
+    // Always keep services state updated in state.json
+    state_update_services(cfg->base_path, state);
+    state_save(cfg->base_path, state);
 
     return true;
 }

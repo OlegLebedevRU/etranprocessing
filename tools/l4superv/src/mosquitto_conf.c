@@ -1,4 +1,5 @@
 #include "mosquitto_conf.h"
+#include "service_mgr.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,6 +28,7 @@ static void ensure_log_dir_exists(const wchar_t* base_path) {
     wchar_t log_dir[MAX_PATH];
     swprintf_s(log_dir, MAX_PATH, L"%s\\mosquitto\\log", base_path);
     CreateDirectoryW(log_dir, NULL);
+    svc_set_dir_permissions(log_dir);
 }
 
 bool mosquitto_conf_generate_standby(const wchar_t* base_path, int port) {
@@ -56,6 +58,9 @@ bool mosquitto_conf_generate_standby(const wchar_t* base_path, int port) {
     fprintf(f, "log_type warning\n");
     fprintf(f, "log_type notice\n");
     fprintf(f, "log_type information\n");
+    fprintf(f, "log_type subscribe\n");
+    fprintf(f, "log_type unsubscribe\n");
+    fprintf(f, "connection_messages true\n");
 
     fclose(f);
     return true;
@@ -152,23 +157,15 @@ bool mosquitto_conf_generate_active(const wchar_t* base_path,
     fprintf(f, "cleansession true\n");
     fprintf(f, "restart_timeout 5 60\n");
     fprintf(f, "keepalive_interval 60\n\n");
-    fprintf(f, "# Permissions for main UI / master application\n");
-    fprintf(f, "user main_app\n");
-    fprintf(f, "topic readwrite srv/%s/#\n", sn);
-    fprintf(f, "topic readwrite dev/%s/#\n\n", sn);
-    fprintf(f, "# Permissions for auxiliary diagnostics service (l4con)\n");
-    fprintf(f, "user extra_service\n");
-    fprintf(f, "topic write dev/%s/evt\n", sn);
-    fprintf(f, "topic write dev/%s/svc\n", sn);
-    fprintf(f, "topic write dev/%s/out\n", sn);
-    fprintf(f, "topic write dev/%s/res\n", sn);
-    fprintf(f, "topic read  srv/%s/tsk\n\n", sn);
     fprintf(f, "persistence false\n");
     fprintf(f, "log_dest file %s/mosquitto/log/mosquitto.log\n", base_fwd);
     fprintf(f, "log_type error\n");
     fprintf(f, "log_type warning\n");
     fprintf(f, "log_type notice\n");
     fprintf(f, "log_type information\n");
+    fprintf(f, "log_type subscribe\n");
+    fprintf(f, "log_type unsubscribe\n");
+    fprintf(f, "connection_messages true\n");
 
     fclose(f);
     return true;

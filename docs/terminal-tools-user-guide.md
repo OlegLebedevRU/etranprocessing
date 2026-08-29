@@ -101,16 +101,20 @@ l4superv.exe [КОМАНДА]
  Leo4 Services Status Overview
  Base Path: C:\l4tools
 ===============================================================
-  Leo4Proxy    : RUNNING         (PID: 47272)
-  Mosquitto    : RUNNING         (PID: 109724)
-  L4Con        : RUNNING         (PID: 145164)
-  L4Superv     : RUNNING         (PID: 88412)
+  Leo4Proxy    : RUNNING      (PID: 139724, Match: YES)
+                  Path: C:\l4tools\leo4proxy\leo4proxy.exe
+  mosquitto    : RUNNING      (PID: 222144, Match: YES)
+                  Path: C:\l4tools\mosquitto\mosquitto.exe
+  L4Con        : RUNNING      (PID:   5136, Match: YES)
+                  Path: C:\l4tools\l4con\l4con.exe
+  L4Superv     : RUNNING      (PID: 198780, Match: YES)
+                  Path: C:\l4tools\l4superv\l4superv.exe
 ---------------------------------------------------------------
  Orchestrator State:
-   Status:            active
-   Device SN:         a4b0000773c82116d210826
-   Thumbprint:        BDA8B797277DEF2B5F72FCF58007B74062AC075C
-   Valid To:          2027-08-29 13:27:45 UTC
+   Status:            standby
+   Device SN:         (none)
+   Thumbprint:        (none)
+   Valid To:          (none)
    HW Fingerprint:    86a27449-e358-4b13-8875-7b8cf318c84d:B0E860DB
 ===============================================================
 ```

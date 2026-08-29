@@ -90,36 +90,41 @@ static BOOL WINAPI ConsoleCtrlHandler(DWORD dwCtrlType) {
 }
 
 static void print_status(const L4SupervConfig* cfg) {
+    L4State st;
+    state_load(cfg->base_path, &st);
+
     wprintf(L"===============================================================\n");
     wprintf(L" Leo4 Services Status Overview\n");
     wprintf(L" Base Path: %ls\n", cfg->base_path);
     wprintf(L"===============================================================\n");
-
-    const wchar_t* svc_list[] = {
-        SVC_NAME_LEO4PROXY,
-        SVC_NAME_MOSQUITTO,
-        SVC_NAME_L4CON,
-        SVC_NAME_L4SUPERV
-    };
-
-    for (size_t i = 0; i < sizeof(svc_list)/sizeof(svc_list[0]); i++) {
-        DWORD state = 0, pid = 0;
-        bool exists = svc_get_status(svc_list[i], &state, &pid);
-        const wchar_t* state_str = L"NOT_INSTALLED";
-        if (exists) {
-            switch (state) {
-                case SERVICE_RUNNING: state_str = L"RUNNING"; break;
-                case SERVICE_STOPPED: state_str = L"STOPPED"; break;
-                case SERVICE_START_PENDING: state_str = L"START_PENDING"; break;
-                case SERVICE_STOP_PENDING: state_str = L"STOP_PENDING"; break;
-                default: state_str = L"OTHER"; break;
-            }
-        }
-        wprintf(L"  %-12ls : %-15ls (PID: %lu)\n", svc_list[i], state_str, pid);
+    wprintf(L"  %-12ls : %-12hs (PID: %6lu, Match: %ls)\n",
+            SVC_NAME_LEO4PROXY, st.svc_leo4proxy.status, st.svc_leo4proxy.runtime_pid,
+            st.svc_leo4proxy.path_match ? L"YES" : L"NO");
+    if (st.svc_leo4proxy.runtime_exe[0] != '\0') {
+        wprintf(L"                  Path: %hs\n", st.svc_leo4proxy.runtime_exe);
     }
 
-    L4State st;
-    state_load(cfg->base_path, &st);
+    wprintf(L"  %-12ls : %-12hs (PID: %6lu, Match: %ls)\n",
+            SVC_NAME_MOSQUITTO, st.svc_mosquitto.status, st.svc_mosquitto.runtime_pid,
+            st.svc_mosquitto.path_match ? L"YES" : L"NO");
+    if (st.svc_mosquitto.runtime_exe[0] != '\0') {
+        wprintf(L"                  Path: %hs\n", st.svc_mosquitto.runtime_exe);
+    }
+
+    wprintf(L"  %-12ls : %-12hs (PID: %6lu, Match: %ls)\n",
+            SVC_NAME_L4CON, st.svc_l4con.status, st.svc_l4con.runtime_pid,
+            st.svc_l4con.path_match ? L"YES" : L"NO");
+    if (st.svc_l4con.runtime_exe[0] != '\0') {
+        wprintf(L"                  Path: %hs\n", st.svc_l4con.runtime_exe);
+    }
+
+    wprintf(L"  %-12ls : %-12hs (PID: %6lu, Match: %ls)\n",
+            SVC_NAME_L4SUPERV, st.svc_l4superv.status, st.svc_l4superv.runtime_pid,
+            st.svc_l4superv.path_match ? L"YES" : L"NO");
+    if (st.svc_l4superv.runtime_exe[0] != '\0') {
+        wprintf(L"                  Path: %hs\n", st.svc_l4superv.runtime_exe);
+    }
+
     wprintf(L"---------------------------------------------------------------\n");
     wprintf(L" Orchestrator State:\n");
     wprintf(L"   Status:            %hs\n", st.status);

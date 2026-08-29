@@ -265,10 +265,15 @@ static void WINAPI service_main(DWORD argc, LPWSTR* argv) {
                     // Same certificate, free temporary details
                     cert_store_free_details(&newDetails);
                 }
-            } else if (isExpired && g_serviceConfig.drop_on_expire) {
-                // No valid non-expired certificate found and drop_on_expire is enabled -> transition to standby mode
-                printf("[SERVICE] Active certificate (SN: %s) expired and --drop-on-expire is enabled! Transitioning to standby mode...\n",
-                       certDetails.sn);
+            } else if (!foundBest || (isExpired && g_serviceConfig.drop_on_expire)) {
+                // No valid certificate found in store or expired -> transition to standby mode
+                if (!foundBest) {
+                    printf("[SERVICE] Active certificate (SN: %s) was removed/deleted from store! Transitioning to standby mode...\n",
+                           certDetails.sn);
+                } else {
+                    printf("[SERVICE] Active certificate (SN: %s) expired and --drop-on-expire is enabled! Transitioning to standby mode...\n",
+                           certDetails.sn);
+                }
 
                 if (isDiscoveryStarted) {
                     discovery_stop(&discoveryServer);
@@ -294,6 +299,7 @@ static void WINAPI service_main(DWORD argc, LPWSTR* argv) {
                 SecInvalidateHandle(&hServerCred);
 
                 cert_store_free_details(&certDetails);
+                memset(&certDetails, 0, sizeof(certDetails));
                 isCertLoaded = false;
                 g_proxyStats.cert_ready = 0;
             }
