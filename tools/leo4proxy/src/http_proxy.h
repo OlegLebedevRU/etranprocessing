@@ -27,6 +27,11 @@ typedef struct {
 bool http_proxy_start(HttpProxyServer* server, const ProxyConfig* config, const CertDetails* certDetails, CredHandle hClientCred, CredHandle hServerCred);
 
 /**
+ * @brief Dynamically updates credentials and active certificate details.
+ */
+void http_proxy_update_creds(HttpProxyServer* server, const CertDetails* certDetails, CredHandle hClientCred, CredHandle hServerCred);
+
+/**
  * @brief Stops the HTTP proxy and closes sockets.
  */
 void http_proxy_stop(HttpProxyServer* server);

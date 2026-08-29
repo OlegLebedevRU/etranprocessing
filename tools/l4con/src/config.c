@@ -26,12 +26,8 @@ void config_init_defaults(AppConfig* config) {
     config->enable_blacklist = true;
     config->verbose = false;
     config->foreground = false;
-
-    // Check environment variable for SN
-    const char* env_sn = getenv("DEVICE_SN");
-    if (env_sn && strlen(env_sn) > 0) {
-        strncpy(config->device_sn, env_sn, sizeof(config->device_sn) - 1);
-    }
+    config->is_service = false;
+    config->sn_explicitly_set = false;
 }
 
 int config_query_sn_from_proxy(int proxy_port, char* out_sn, size_t out_sn_size) {
@@ -66,21 +62,28 @@ int config_query_sn_from_proxy(int proxy_port, char* out_sn, size_t out_sn_size)
                            WINHTTP_NO_REQUEST_DATA, 0, 0, 0) &&
         WinHttpReceiveResponse(hRequest, NULL)) {
 
-        DWORD dwSize = 0;
-        WinHttpQueryDataAvailable(hRequest, &dwSize);
-        if (dwSize > 0 && dwSize < out_sn_size) {
-            DWORD dwDownloaded = 0;
-            if (WinHttpReadData(hRequest, out_sn, dwSize, &dwDownloaded)) {
-                out_sn[dwDownloaded] = '\0';
-                for (int i = (int)dwDownloaded - 1; i >= 0; i--) {
-                    if (out_sn[i] == '\r' || out_sn[i] == '\n' || out_sn[i] == ' ') {
-                        out_sn[i] = '\0';
-                    } else {
-                        break;
+        DWORD dwStatusCode = 0;
+        DWORD dwStatusSize = sizeof(dwStatusCode);
+        if (WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                                WINHTTP_HEADER_NAME_BY_INDEX, &dwStatusCode, &dwStatusSize, WINHTTP_NO_HEADER_INDEX)) {
+            if (dwStatusCode == 200) {
+                DWORD dwSize = 0;
+                WinHttpQueryDataAvailable(hRequest, &dwSize);
+                if (dwSize > 0 && dwSize < out_sn_size) {
+                    DWORD dwDownloaded = 0;
+                    if (WinHttpReadData(hRequest, out_sn, dwSize, &dwDownloaded)) {
+                        out_sn[dwDownloaded] = '\0';
+                        for (int i = (int)dwDownloaded - 1; i >= 0; i--) {
+                            if (out_sn[i] == '\r' || out_sn[i] == '\n' || out_sn[i] == ' ' || out_sn[i] == '\t') {
+                                out_sn[i] = '\0';
+                            } else {
+                                break;
+                            }
+                        }
+                        if (strlen(out_sn) > 0) {
+                            rc = 0;
+                        }
                     }
-                }
-                if (strlen(out_sn) > 0) {
-                    rc = 0;
                 }
             }
         }
@@ -138,6 +141,7 @@ bool config_parse_args(AppConfig* config, int argc, char* argv[], bool* out_is_s
             config->proxy_http_port = atoi(argv[++i]);
         } else if (_stricmp(argv[i], "--sn") == 0 && i + 1 < argc) {
             strncpy(config->device_sn, argv[++i], sizeof(config->device_sn) - 1);
+            config->sn_explicitly_set = true;
         } else if ((_stricmp(argv[i], "--client-id") == 0 || _stricmp(argv[i], "--clientid") == 0 || _stricmp(argv[i], "-c") == 0) && i + 1 < argc) {
             strncpy(config->client_id, argv[++i], sizeof(config->client_id) - 1);
         } else if (_stricmp(argv[i], "--role") == 0 && i + 1 < argc) {

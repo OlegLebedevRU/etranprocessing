@@ -61,4 +61,9 @@ void cert_store_print_details(const CertDetails* details);
  */
 bool cert_store_get_active_sn(char* out_sn, size_t out_sn_size);
 
+/**
+ * @brief Checks if a certificate has expired (NotAfter < CurrentSystemTime).
+ */
+bool cert_store_is_cert_expired(const CertDetails* details);
+
 #endif /* LEO4_CERT_STORE_H */

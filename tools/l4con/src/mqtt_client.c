@@ -349,15 +349,50 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
     get_iso_timestamp(ts_buf, sizeof(ts_buf));
 
     // Resolve Serial Number (SN)
-    if (strlen(config->device_sn) > 0) {
+    // Rule:
+    // 1. In Windows Service mode, Leo4Proxy is the strict source of truth for SN (CLI SN is ignored).
+    // 2. In interactive/console mode, CLI --sn argument is used as a debug/test override.
+    // 3. If SN is not explicitly provided in CLI args (or when running as a service),
+    //    wait indefinitely in a loop until Leo4Proxy responds with valid SN.
+    bool use_cli_sn = (!config->is_service && config->sn_explicitly_set && strlen(config->device_sn) > 0);
+
+    if (use_cli_sn) {
         snprintf(state.sn, sizeof(state.sn), "%s", config->device_sn);
+        get_iso_timestamp(ts_buf, sizeof(ts_buf));
+        printf("[%s] [DEBUG] Using explicitly configured SN from CLI arguments: %s\n", ts_buf, state.sn);
     } else {
-        printf("[%s] Querying device SN from Leo4Proxy (port %d)...\n", ts_buf, config->proxy_http_port);
-        if (config_query_sn_from_proxy(config->proxy_http_port, state.sn, sizeof(state.sn)) != 0) {
-            snprintf(state.sn, sizeof(state.sn), "%s", DEFAULT_FALLBACK_SN);
-            printf("[%s] [WARN] Leo4Proxy query failed. Using fallback SN: %s\n", ts_buf, state.sn);
-        } else {
-            printf("[%s] [OK] Resolved SN from Leo4Proxy: %s\n", ts_buf, state.sn);
+        bool sn_resolved = false;
+        int query_attempt = 0;
+        int retry_delay_ms = (config->reconnect_sec > 0 ? config->reconnect_sec : 5) * 1000;
+
+        get_iso_timestamp(ts_buf, sizeof(ts_buf));
+        printf("[%s] Leo4Proxy is the source of truth for device SN. Waiting for Leo4Proxy on port %d...\n",
+               ts_buf, config->proxy_http_port);
+
+        while (!sn_resolved) {
+            if (WaitForSingleObject(hStopEvent, 0) == WAIT_OBJECT_0) {
+                DeleteCriticalSection(&state.send_cs);
+                if (hMutex) CloseHandle(hMutex);
+                return 0;
+            }
+
+            query_attempt++;
+            if (config_query_sn_from_proxy(config->proxy_http_port, state.sn, sizeof(state.sn)) == 0 && strlen(state.sn) > 0) {
+                sn_resolved = true;
+                get_iso_timestamp(ts_buf, sizeof(ts_buf));
+                printf("[%s] [OK] Resolved device SN from Leo4Proxy: %s\n", ts_buf, state.sn);
+                break;
+            }
+
+            get_iso_timestamp(ts_buf, sizeof(ts_buf));
+            printf("[%s] [WARN] Leo4Proxy not responding / SN not available yet (attempt %d). Retrying in %ds...\n",
+                   ts_buf, query_attempt, retry_delay_ms / 1000);
+
+            if (WaitForSingleObject(hStopEvent, (DWORD)retry_delay_ms) == WAIT_OBJECT_0) {
+                DeleteCriticalSection(&state.send_cs);
+                if (hMutex) CloseHandle(hMutex);
+                return 0;
+            }
         }
     }
 

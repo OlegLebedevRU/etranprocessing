@@ -91,6 +91,12 @@ static void WINAPI service_main(DWORD argc, LPWSTR* argv) {
 
     report_service_status(SERVICE_RUNNING, NO_ERROR, 0);
 
+    // Windows Service mode: enforce is_service flag and discard any SN argument.
+    // Leo4Proxy is the strict source of truth for SN when running as a Windows Service!
+    g_serviceConfig.is_service = true;
+    g_serviceConfig.sn_explicitly_set = false;
+    g_serviceConfig.device_sn[0] = '\0';
+
     // Run main MQTT loop (blocks until stopEvent is signaled)
     mqtt_client_run(&g_serviceConfig, g_stopEvent);
 
@@ -109,6 +115,9 @@ static void WINAPI service_main(DWORD argc, LPWSTR* argv) {
 bool service_run_dispatcher(const AppConfig* config) {
     if (config) {
         g_serviceConfig = *config;
+        g_serviceConfig.is_service = true;
+        g_serviceConfig.sn_explicitly_set = false;
+        g_serviceConfig.device_sn[0] = '\0';
     }
 
     SERVICE_TABLE_ENTRYW dispatchTable[] = {

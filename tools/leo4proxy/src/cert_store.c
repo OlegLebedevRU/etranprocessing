@@ -406,6 +406,15 @@ static bool search_in_single_store(HCERTSTORE hStore, const ProxyConfig* config,
             continue;
         }
 
+        // 2. If drop_on_expire is enabled, ignore expired certificates
+        if (config->drop_on_expire) {
+            FILETIME ftNow;
+            GetSystemTimeAsFileTime(&ftNow);
+            if (CompareFileTime(&ftNow, &pCur->pCertInfo->NotAfter) > 0) {
+                continue;
+            }
+        }
+
         char email[128] = { 0 };
         char thumbprint[64] = { 0 };
         char subject[512] = { 0 };
@@ -543,4 +552,11 @@ bool cert_store_get_active_sn(char* out_sn, size_t out_sn_size) {
     }
 
     return false;
+}
+
+bool cert_store_is_cert_expired(const CertDetails* details) {
+    if (!details || details->pCertContext == NULL) return true;
+    FILETIME ftNow;
+    GetSystemTimeAsFileTime(&ftNow);
+    return CompareFileTime(&ftNow, &details->ft_not_after) > 0;
 }

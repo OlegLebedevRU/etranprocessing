@@ -8,7 +8,7 @@
 #pragma comment(lib, "winhttp.lib")
 #pragma comment(lib, "crypt32.lib")
 
-#define USER_AGENT L"EtranTerminalCertInstaller/1.0"
+#define USER_AGENT L"l4pin/1.0"
 
 bool generate_tosign(char* out_tosign, size_t out_tosign_size) {
     if (!out_tosign || out_tosign_size < 32) return false;
@@ -76,16 +76,17 @@ static bool parse_url(const char* url_str, ParsedUrl* parsed) {
         wcscpy(parsed->path, L"/");
     }
 
-    // If path does not contain "/api/certificates" and does not contain "/certificates" and does not end with ".ashx", append default
-    if (wcsstr(parsed->path, L"/api/certificates") == NULL &&
-        wcsstr(parsed->path, L"/certificates") == NULL &&
-        wcsstr(parsed->path, L"Dispatcher.ashx") == NULL) {
-        // Remove trailing slash if any
+    // If path is "/" or empty or does not contain "/api/certificates" and does not contain "/certificates" and does not end with ".ashx", append /api/certificates
+    if (wcscmp(parsed->path, L"/") == 0) {
+        wcscpy(parsed->path, L"/api/certificates");
+    } else if (wcsstr(parsed->path, L"/api/certificates") == NULL &&
+               wcsstr(parsed->path, L"/certificates") == NULL &&
+               wcsstr(parsed->path, L"Dispatcher.ashx") == NULL) {
         size_t plen = wcslen(parsed->path);
         if (plen > 0 && parsed->path[plen - 1] == L'/') {
             parsed->path[plen - 1] = L'\0';
         }
-        wcscat(parsed->path, L"/certificates/Dispatcher.ashx");
+        wcscat(parsed->path, L"/api/certificates");
     }
 
     return true;
@@ -315,4 +316,176 @@ bool http_setup(
                parsed.path, w_pin, w_sign);
 
     return send_http_request(&parsed, L"POST", query_and_path, pkcs10_b64, out_response, out_response_len);
+}
+
+bool http_get_simple(
+    const char* url_str,
+    int timeout_ms,
+    char** out_response,
+    size_t* out_response_len
+) {
+    if (out_response) *out_response = NULL;
+    if (out_response_len) *out_response_len = 0;
+    if (!url_str || url_str[0] == '\0') return false;
+
+    WCHAR w_url[1024];
+    MultiByteToWideChar(CP_UTF8, 0, url_str, -1, w_url, 1024);
+
+    URL_COMPONENTS urlComp;
+    memset(&urlComp, 0, sizeof(urlComp));
+    urlComp.dwStructSize = sizeof(urlComp);
+    urlComp.dwHostNameLength = (DWORD)-1;
+    urlComp.dwUrlPathLength = (DWORD)-1;
+    urlComp.dwExtraInfoLength = (DWORD)-1;
+
+    if (!WinHttpCrackUrl(w_url, (DWORD)wcslen(w_url), 0, &urlComp)) {
+        return false;
+    }
+
+    WCHAR host[256] = { 0 };
+    if (urlComp.dwHostNameLength > 0 && urlComp.dwHostNameLength < 255) {
+        wcsncpy(host, urlComp.lpszHostName, urlComp.dwHostNameLength);
+        host[urlComp.dwHostNameLength] = L'\0';
+    }
+
+    INTERNET_PORT port = urlComp.nPort;
+    BOOL is_https = (urlComp.nScheme == INTERNET_SCHEME_HTTPS);
+
+    WCHAR path[1024] = { 0 };
+    if (urlComp.dwUrlPathLength > 0 && urlComp.dwUrlPathLength < 1023) {
+        wcsncpy(path, urlComp.lpszUrlPath, urlComp.dwUrlPathLength);
+        path[urlComp.dwUrlPathLength] = L'\0';
+    } else {
+        wcscpy(path, L"/");
+    }
+
+    if (urlComp.dwExtraInfoLength > 0 && wcslen(path) + urlComp.dwExtraInfoLength < 1023) {
+        wcsncat(path, urlComp.lpszExtraInfo, urlComp.dwExtraInfoLength);
+    }
+
+    HINTERNET hSession = WinHttpOpen(
+        USER_AGENT,
+        WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+        WINHTTP_NO_PROXY_NAME,
+        WINHTTP_NO_PROXY_BYPASS,
+        0
+    );
+    if (!hSession) return false;
+
+    if (timeout_ms > 0) {
+        WinHttpSetTimeouts(hSession, timeout_ms, timeout_ms, timeout_ms, timeout_ms);
+    }
+
+    HINTERNET hConnect = WinHttpConnect(hSession, host, port, 0);
+    if (!hConnect) {
+        WinHttpCloseHandle(hSession);
+        return false;
+    }
+
+    DWORD req_flags = is_https ? WINHTTP_FLAG_SECURE : 0;
+    HINTERNET hRequest = WinHttpOpenRequest(
+        hConnect,
+        L"GET",
+        path,
+        NULL,
+        WINHTTP_NO_REFERER,
+        WINHTTP_DEFAULT_ACCEPT_TYPES,
+        req_flags
+    );
+    if (!hRequest) {
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        return false;
+    }
+
+    if (is_https) {
+        DWORD sec_flags = SECURITY_FLAG_IGNORE_UNKNOWN_CA |
+                          SECURITY_FLAG_IGNORE_CERT_CN_INVALID |
+                          SECURITY_FLAG_IGNORE_CERT_DATE_INVALID |
+                          SECURITY_FLAG_IGNORE_CERT_WRONG_USAGE;
+        WinHttpSetOption(hRequest, WINHTTP_OPTION_SECURITY_FLAGS, &sec_flags, sizeof(sec_flags));
+    }
+
+    BOOL bSend = WinHttpSendRequest(hRequest, NULL, 0, NULL, 0, 0, 0);
+    if (!bSend && GetLastError() == ERROR_WINHTTP_CLIENT_AUTH_CERT_NEEDED) {
+        WinHttpSetOption(hRequest, WINHTTP_OPTION_CLIENT_CERT_CONTEXT, WINHTTP_NO_CLIENT_CERT_CONTEXT, 0);
+        bSend = WinHttpSendRequest(hRequest, NULL, 0, NULL, 0, 0, 0);
+    }
+    if (!bSend) {
+        WinHttpCloseHandle(hRequest);
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        return false;
+    }
+
+    if (!WinHttpReceiveResponse(hRequest, NULL)) {
+        WinHttpCloseHandle(hRequest);
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        return false;
+    }
+
+    DWORD status_code = 0;
+    DWORD status_code_size = sizeof(status_code);
+    WinHttpQueryHeaders(
+        hRequest,
+        WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+        WINHTTP_HEADER_NAME_BY_INDEX,
+        &status_code,
+        &status_code_size,
+        WINHTTP_NO_HEADER_INDEX
+    );
+
+    if (status_code != 200) {
+        WinHttpCloseHandle(hRequest);
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        return false;
+    }
+
+    size_t capacity = 4096;
+    size_t total_read = 0;
+    char* resp_buf = (char*)malloc(capacity);
+    if (!resp_buf) {
+        WinHttpCloseHandle(hRequest);
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        return false;
+    }
+
+    DWORD bytes_available = 0;
+    while (WinHttpQueryDataAvailable(hRequest, &bytes_available) && bytes_available > 0) {
+        if (total_read + bytes_available + 1 > capacity) {
+            capacity = (total_read + bytes_available + 1) * 2;
+            char* new_buf = (char*)realloc(resp_buf, capacity);
+            if (!new_buf) {
+                free(resp_buf);
+                WinHttpCloseHandle(hRequest);
+                WinHttpCloseHandle(hConnect);
+                WinHttpCloseHandle(hSession);
+                return false;
+            }
+            resp_buf = new_buf;
+        }
+
+        DWORD bytes_read = 0;
+        if (WinHttpReadData(hRequest, resp_buf + total_read, bytes_available, &bytes_read)) {
+            total_read += bytes_read;
+        } else {
+            break;
+        }
+    }
+
+    resp_buf[total_read] = '\0';
+
+    WinHttpCloseHandle(hRequest);
+    WinHttpCloseHandle(hConnect);
+    WinHttpCloseHandle(hSession);
+
+    if (out_response) *out_response = resp_buf;
+    else free(resp_buf);
+
+    if (out_response_len) *out_response_len = total_read;
+
+    return (total_read > 0);
 }

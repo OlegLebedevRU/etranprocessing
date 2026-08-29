@@ -17,10 +17,10 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "CompanyName", "Leo4 / Platerra"
-            VALUE "FileDescription", "Terminal Certificate Installer"
+            VALUE "FileDescription", "Leo4 Terminal Certificate Installer (l4pin)"
             VALUE "FileVersion", "1.0.0.0"
-            VALUE "InternalName", "terminal-cert-installer"
-            VALUE "OriginalFilename", "terminal-cert-installer.exe"
+            VALUE "InternalName", "l4pin"
+            VALUE "OriginalFilename", "l4pin.exe"
             VALUE "ProductName", "Leo4 IoT Platform Tools"
             VALUE "ProductVersion", "1.0.0.0"
         END

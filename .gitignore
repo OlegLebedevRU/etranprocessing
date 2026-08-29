@@ -73,6 +73,8 @@ package-lock.json
 # .NET Build artifacts
 [Bb]in/
 [Oo]bj/
+*.obj
+*.pdb
 
 # OS
 .DS_Store

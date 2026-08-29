@@ -24,7 +24,6 @@
 #define DEFAULT_KEEPALIVE_SEC    60
 #define DEFAULT_RECONNECT_SEC    5
 #define DEFAULT_CMD_TIMEOUT_SEC  30
-#define DEFAULT_FALLBACK_SN      "a3b1234567c10221d290825"
 
 typedef struct {
     char mqtt_host[128];
@@ -33,6 +32,7 @@ typedef struct {
     char role[64];
     char client_id[128];
     char device_sn[128];
+    bool sn_explicitly_set;
     int  keepalive_sec;
     int  reconnect_sec;
     int  default_cmd_timeout;
@@ -40,6 +40,7 @@ typedef struct {
     bool enable_blacklist;
     bool verbose;
     bool foreground;
+    bool is_service;
 } AppConfig;
 
 void config_init_defaults(AppConfig* config);

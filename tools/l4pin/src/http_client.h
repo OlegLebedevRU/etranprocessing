@@ -52,6 +52,16 @@ bool http_setup(
     size_t* out_response_len
 );
 
+/**
+ * Perform simple GET request with timeout (used for probes/discovery).
+ */
+bool http_get_simple(
+    const char* url_str,
+    int timeout_ms,
+    char** out_response,
+    size_t* out_response_len
+);
+
 #ifdef __cplusplus
 }
 #endif

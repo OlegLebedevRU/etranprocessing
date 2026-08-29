@@ -2,7 +2,7 @@
 setlocal EnableExtensions
 
 :: ============================================================================
-:: Etran Terminal Certificate Installer - Interactive UAC Setup
+:: Leo4 Terminal Certificate Installer (l4pin) - Interactive UAC Setup
 :: ============================================================================
 
 :: 1. Check for Administrator privileges and request UAC elevation if needed
@@ -16,26 +16,26 @@ if errorlevel 1 (
 :: 2. Switch to script directory
 cd /d "%~dp0"
 
-:: 3. Locate terminal-cert-installer binary
+:: 3. Locate l4pin binary
 set "EXE_PATH="
-if exist "%~dp0terminal-cert-installer.exe" (
-    set "EXE_PATH=%~dp0terminal-cert-installer.exe"
-) else if exist "%~dp0bin\terminal-cert-installer.exe" (
-    set "EXE_PATH=%~dp0bin\terminal-cert-installer.exe"
-) else if exist "%~dp0bin\x86\terminal-cert-installer.exe" (
-    set "EXE_PATH=%~dp0bin\x86\terminal-cert-installer.exe"
-) else if exist "%~dp0bin\x64\terminal-cert-installer.exe" (
-    set "EXE_PATH=%~dp0bin\x64\terminal-cert-installer.exe"
-) else if exist "%~dp0..\bin\terminal-cert-installer.exe" (
-    set "EXE_PATH=%~dp0..\bin\terminal-cert-installer.exe"
-) else if exist "%~dp0..\terminal-cert-installer.exe" (
-    set "EXE_PATH=%~dp0..\terminal-cert-installer.exe"
+if exist "%~dp0l4pin.exe" (
+    set "EXE_PATH=%~dp0l4pin.exe"
+) else if exist "%~dp0bin\l4pin.exe" (
+    set "EXE_PATH=%~dp0bin\l4pin.exe"
+) else if exist "%~dp0bin\x86\l4pin.exe" (
+    set "EXE_PATH=%~dp0bin\x86\l4pin.exe"
+) else if exist "%~dp0bin\x64\l4pin.exe" (
+    set "EXE_PATH=%~dp0bin\x64\l4pin.exe"
+) else if exist "%~dp0..\bin\l4pin.exe" (
+    set "EXE_PATH=%~dp0..\bin\l4pin.exe"
+) else if exist "%~dp0..\l4pin.exe" (
+    set "EXE_PATH=%~dp0..\l4pin.exe"
 )
 
 if not defined EXE_PATH goto :error_no_exe
 
 echo =======================================================
-echo     Etran Terminal Certificate Installer (CNG / v=26)
+echo     Leo4 Terminal Certificate Installer (l4pin)
 echo =======================================================
 echo.
 echo [INFO] Working directory: %CD%
@@ -56,6 +56,8 @@ set "PIN_ARG="
 if not "%~1"=="" (
     set "ARG1=%~1"
     if /i "%~1"=="--pin" (
+        set "PIN_ARG=%~2"
+    ) else if /i "%~1"=="-pin" (
         set "PIN_ARG=%~2"
     ) else if /i "%~1"=="-p" (
         set "PIN_ARG=%~2"
@@ -87,7 +89,7 @@ if not defined PIN_ARG (
     )
 )
 
-:: 6. Run terminal-cert-installer with PIN
+:: 6. Run l4pin with PIN
 echo -------------------------------------------------------
 echo [INFO] Requesting and enrolling certificate for PIN: %PIN_ARG%...
 echo -------------------------------------------------------
@@ -135,10 +137,10 @@ exit /b %EXIT_CODE%
 :error_no_exe
 echo.
 echo *******************************************************
-echo  [ERROR] terminal-cert-installer.exe not found!
+echo  [ERROR] l4pin.exe not found!
 echo *******************************************************
 echo Please build the project (build.cmd) or place
-echo terminal-cert-installer.exe in this folder.
+echo l4pin.exe in this folder.
 echo.
 pause
 exit /b 1

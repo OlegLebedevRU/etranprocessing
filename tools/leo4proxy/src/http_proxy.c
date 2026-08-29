@@ -10,12 +10,78 @@
 #include <stdlib.h>
 #include <string.h>
 
+ProxyStats g_proxyStats = { 0 };
+
+bool is_loopback_sockaddr(const struct sockaddr* sa) {
+    if (!sa) return false;
+    if (sa->sa_family == AF_INET) {
+        const struct sockaddr_in* sin = (const struct sockaddr_in*)sa;
+        return (ntohl(sin->sin_addr.s_addr) >> 24) == 127;
+    } else if (sa->sa_family == AF_INET6) {
+        const struct sockaddr_in6* sin6 = (const struct sockaddr_in6*)sa;
+        return memcmp(&sin6->sin6_addr, &in6addr_loopback, sizeof(struct in6_addr)) == 0;
+    }
+    return false;
+}
+
+bool tcp_probe_connect(const char* host, int port, int timeout_ms) {
+    if (!host || host[0] == '\0' || port <= 0) return false;
+
+    char portStr[16];
+    snprintf(portStr, sizeof(portStr), "%d", port);
+
+    struct addrinfo hints, *res = NULL;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+
+    if (getaddrinfo(host, portStr, &hints, &res) != 0 || !res) {
+        return false;
+    }
+
+    SOCKET s = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    if (s == INVALID_SOCKET) {
+        freeaddrinfo(res);
+        return false;
+    }
+
+    u_long nonblock = 1;
+    ioctlsocket(s, FIONBIO, &nonblock);
+
+    bool connected = false;
+    int rc = connect(s, res->ai_addr, (int)res->ai_addrlen);
+    if (rc == 0) {
+        connected = true;
+    } else if (WSAGetLastError() == WSAEWOULDBLOCK) {
+        fd_set writefds, exceptfds;
+        FD_ZERO(&writefds);
+        FD_ZERO(&exceptfds);
+        FD_SET(s, &writefds);
+        FD_SET(s, &exceptfds);
+
+        struct timeval tv;
+        tv.tv_sec = timeout_ms / 1000;
+        tv.tv_usec = (timeout_ms % 1000) * 1000;
+
+        int sel = select((int)(s + 1), NULL, &writefds, &exceptfds, &tv);
+        if (sel > 0 && FD_ISSET(s, &writefds) && !FD_ISSET(s, &exceptfds)) {
+            int err = 0;
+            int errLen = sizeof(err);
+            if (getsockopt(s, SOL_SOCKET, SO_ERROR, (char*)&err, &errLen) == 0 && err == 0) {
+                connected = true;
+            }
+        }
+    }
+
+    closesocket(s);
+    freeaddrinfo(res);
+    return connected;
+}
+
 typedef struct {
     SOCKET clientSock;
-    const ProxyConfig* config;
-    const CertDetails* certDetails;
-    CredHandle hClientCred;
-    CredHandle hServerCred;
+    HttpProxyServer* server;
 } HttpClientWorkerArgs;
 
 static int send_all_socket(SOCKET s, const BYTE* data, int len) {
@@ -58,64 +124,201 @@ static int send_http_response_ext(SOCKET s, SChannelSession* tlsSession, int sta
     return 0;
 }
 
-static void handle_info_request_ext(SOCKET s, SChannelSession* tlsSession, const ProxyConfig* config, const CertDetails* certDetails) {
-    char jsonBuf[2048];
+static void handle_info_request_ext(SOCKET s, SChannelSession* tlsSession, const ProxyConfig* config, const CertDetails* certDetails, bool is_local) {
+    bool cert_ready = (certDetails != NULL && certDetails->sn[0] != '\0' && g_proxyStats.cert_ready);
+    bool backend_online = tcp_probe_connect(config->reverse_target_host, config->reverse_target_port, 250);
 
-    snprintf(jsonBuf, sizeof(jsonBuf),
-        "{\n"
-        "  \"status\": \"ok\",\n"
-        "  \"version\": \"%s\",\n"
-        "  \"sn\": \"%s\",\n"
-        "  \"client_id\": \"%s\",\n"
-        "  \"urn\": \"%s\",\n"
-        "  \"email\": \"%s\",\n"
-        "  \"subject\": \"%s\",\n"
-        "  \"issuer\": \"%s\",\n"
-        "  \"serial\": \"%s\",\n"
-        "  \"thumbprint\": \"%s\",\n"
-        "  \"not_before\": \"%s\",\n"
-        "  \"not_after\": \"%s\",\n"
-        "  \"has_private_key\": %s,\n"
-        "  \"endpoints\": {\n"
-        "    \"mqtt_local\": \"%s:%d\",\n"
-        "    \"mqtt_remote\": \"%s:%d\",\n"
-        "    \"http_local\": \"%s:%d\",\n"
-        "    \"http_remote\": \"https://%s:%d\"\n"
-        "  }\n"
-        "}\n",
-        LEO4_PROXY_VERSION,
-        certDetails->sn,
-        certDetails->sn,
-        certDetails->urn,
-        certDetails->email,
-        certDetails->subject,
-        certDetails->issuer,
-        certDetails->serial,
-        certDetails->thumbprint,
-        certDetails->not_before,
-        certDetails->not_after,
-        certDetails->has_private_key ? "true" : "false",
-        config->mqtt_local_host, config->mqtt_local_port,
-        config->mqtt_remote_host, config->mqtt_remote_port,
-        config->http_local_host, config->http_local_port,
-        config->http_remote_host, config->http_remote_port
-    );
-
-    send_http_response_ext(s, tlsSession, 200, "OK", "application/json; charset=utf-8", jsonBuf, certDetails->sn);
+    if (is_local) {
+        char jsonBuf[4096];
+        if (cert_ready) {
+            snprintf(jsonBuf, sizeof(jsonBuf),
+                "{\n"
+                "  \"status\": \"ready\",\n"
+                "  \"certificate_found\": true,\n"
+                "  \"version\": \"%s\",\n"
+                "  \"sn\": \"%s\",\n"
+                "  \"client_id\": \"%s\",\n"
+                "  \"urn\": \"%s\",\n"
+                "  \"email\": \"%s\",\n"
+                "  \"subject\": \"%s\",\n"
+                "  \"issuer\": \"%s\",\n"
+                "  \"serial\": \"%s\",\n"
+                "  \"thumbprint\": \"%s\",\n"
+                "  \"not_before\": \"%s\",\n"
+                "  \"not_after\": \"%s\",\n"
+                "  \"has_private_key\": %s,\n"
+                "  \"local_hostname\": \"%s\",\n"
+                "  \"san_dns\": \"%s\",\n"
+                "  \"listeners\": {\n"
+                "    \"mqtt_local\": \"%s:%d\",\n"
+                "    \"http_local\": \"%s:%d\",\n"
+                "    \"reverse_listen\": \"%s:%d\"\n"
+                "  },\n"
+                "  \"upstreams\": {\n"
+                "    \"mqtt_remote\": \"%s:%d\",\n"
+                "    \"http_remote\": \"https://%s:%d\",\n"
+                "    \"reverse_target\": \"http://%s:%d\"\n"
+                "  },\n"
+                "  \"routes_active\": true,\n"
+                "  \"clients\": {\n"
+                "    \"mqtt_active_clients\": %ld,\n"
+                "    \"mqtt_total_connections\": %ld,\n"
+                "    \"http_total_requests\": %ld,\n"
+                "    \"reverse_total_requests\": %ld\n"
+                "  },\n"
+                "  \"backend_service\": {\n"
+                "    \"online\": %s,\n"
+                "    \"target\": \"%s:%d\"\n"
+                "  }\n"
+                "}\n",
+                LEO4_PROXY_VERSION,
+                certDetails->sn,
+                certDetails->sn,
+                certDetails->urn,
+                certDetails->email,
+                certDetails->subject,
+                certDetails->issuer,
+                certDetails->serial,
+                certDetails->thumbprint,
+                certDetails->not_before,
+                certDetails->not_after,
+                certDetails->has_private_key ? "true" : "false",
+                certDetails->local_hostname,
+                certDetails->san_dns,
+                config->mqtt_local_host, config->mqtt_local_port,
+                config->http_local_host, config->http_local_port,
+                config->reverse_local_host, config->reverse_local_port,
+                config->mqtt_remote_host, config->mqtt_remote_port,
+                config->http_remote_host, config->http_remote_port,
+                config->reverse_target_host, config->reverse_target_port,
+                g_proxyStats.mqtt_active_clients,
+                g_proxyStats.mqtt_total_connections,
+                g_proxyStats.http_total_requests,
+                g_proxyStats.reverse_total_requests,
+                backend_online ? "true" : "false",
+                config->reverse_target_host, config->reverse_target_port
+            );
+        } else {
+            snprintf(jsonBuf, sizeof(jsonBuf),
+                "{\n"
+                "  \"status\": \"waiting_for_certificate\",\n"
+                "  \"certificate_found\": false,\n"
+                "  \"version\": \"%s\",\n"
+                "  \"sn\": \"\",\n"
+                "  \"client_id\": \"\",\n"
+                "  \"local_hostname\": \"leo4-device.local\",\n"
+                "  \"san_dns\": \"\",\n"
+                "  \"listeners\": {\n"
+                "    \"mqtt_local\": \"%s:%d (disabled)\",\n"
+                "    \"http_local\": \"%s:%d\",\n"
+                "    \"reverse_listen\": \"%s:%d (disabled)\"\n"
+                "  },\n"
+                "  \"upstreams\": {\n"
+                "    \"mqtt_remote\": \"%s:%d (disabled)\",\n"
+                "    \"http_remote\": \"https://%s:%d (disabled)\",\n"
+                "    \"reverse_target\": \"http://%s:%d (disabled)\"\n"
+                "  },\n"
+                "  \"routes_active\": false,\n"
+                "  \"clients\": {\n"
+                "    \"mqtt_active_clients\": %ld,\n"
+                "    \"mqtt_total_connections\": %ld,\n"
+                "    \"http_total_requests\": %ld,\n"
+                "    \"reverse_total_requests\": %ld\n"
+                "  },\n"
+                "  \"backend_service\": {\n"
+                "    \"online\": %s,\n"
+                "    \"target\": \"%s:%d\"\n"
+                "  }\n"
+                "}\n",
+                LEO4_PROXY_VERSION,
+                config->mqtt_local_host, config->mqtt_local_port,
+                config->http_local_host, config->http_local_port,
+                config->reverse_local_host, config->reverse_local_port,
+                config->mqtt_remote_host, config->mqtt_remote_port,
+                config->http_remote_host, config->http_remote_port,
+                config->reverse_target_host, config->reverse_target_port,
+                g_proxyStats.mqtt_active_clients,
+                g_proxyStats.mqtt_total_connections,
+                g_proxyStats.http_total_requests,
+                g_proxyStats.reverse_total_requests,
+                backend_online ? "true" : "false",
+                config->reverse_target_host, config->reverse_target_port
+            );
+        }
+        send_http_response_ext(s, tlsSession, 200, "OK", "application/json; charset=utf-8", jsonBuf, cert_ready ? certDetails->sn : NULL);
+    } else {
+        char jsonBuf[2048];
+        if (cert_ready) {
+            snprintf(jsonBuf, sizeof(jsonBuf),
+                "{\n"
+                "  \"status\": \"ready\",\n"
+                "  \"sn\": \"%s\",\n"
+                "  \"dns\": \"%s\",\n"
+                "  \"local_hostname\": \"%s\",\n"
+                "  \"backend_online\": %s,\n"
+                "  \"internal_clients\": {\n"
+                "    \"mqtt_connected\": %ld,\n"
+                "    \"http_active\": true,\n"
+                "    \"requests_count\": %ld\n"
+                "  }\n"
+                "}\n",
+                certDetails->sn,
+                certDetails->local_hostname,
+                certDetails->local_hostname,
+                backend_online ? "true" : "false",
+                g_proxyStats.mqtt_active_clients,
+                g_proxyStats.http_total_requests + g_proxyStats.reverse_total_requests
+            );
+        } else {
+            snprintf(jsonBuf, sizeof(jsonBuf),
+                "{\n"
+                "  \"status\": \"waiting_for_certificate\",\n"
+                "  \"sn\": null,\n"
+                "  \"dns\": \"leo4-device.local\",\n"
+                "  \"local_hostname\": \"leo4-device.local\",\n"
+                "  \"backend_online\": %s,\n"
+                "  \"internal_clients\": {\n"
+                "    \"mqtt_connected\": 0,\n"
+                "    \"http_active\": false,\n"
+                "    \"requests_count\": %ld\n"
+                "  }\n"
+                "}\n",
+                backend_online ? "true" : "false",
+                g_proxyStats.http_total_requests + g_proxyStats.reverse_total_requests
+            );
+        }
+        send_http_response_ext(s, tlsSession, 200, "OK", "application/json; charset=utf-8", jsonBuf, cert_ready ? certDetails->sn : NULL);
+    }
 }
 
 static void handle_sn_request_ext(SOCKET s, SChannelSession* tlsSession, const CertDetails* certDetails) {
-    send_http_response_ext(s, tlsSession, 200, "OK", "text/plain; charset=utf-8", certDetails->sn, certDetails->sn);
+    if (certDetails && certDetails->sn[0] != '\0' && g_proxyStats.cert_ready) {
+        send_http_response_ext(s, tlsSession, 200, "OK", "text/plain; charset=utf-8", certDetails->sn, certDetails->sn);
+    } else {
+        send_http_response_ext(s, tlsSession, 503, "Service Unavailable", "text/plain; charset=utf-8", "Waiting for certificate\n", NULL);
+    }
 }
 
 static unsigned __stdcall http_client_worker(void* param) {
     HttpClientWorkerArgs* args = (HttpClientWorkerArgs*)param;
     SOCKET clientSock = args->clientSock;
-    const ProxyConfig* config = args->config;
-    const CertDetails* certDetails = args->certDetails;
-    CredHandle hClientCred = args->hClientCred;
-    CredHandle hServerCred = args->hServerCred;
+    HttpProxyServer* server = args->server;
+    const ProxyConfig* config = server->config;
     free(args);
+
+    InterlockedIncrement(&g_proxyStats.http_total_requests);
+
+    struct sockaddr_storage peerAddr;
+    int peerLen = sizeof(peerAddr);
+    memset(&peerAddr, 0, sizeof(peerAddr));
+    getpeername(clientSock, (struct sockaddr*)&peerAddr, &peerLen);
+    bool is_local = is_loopback_sockaddr((struct sockaddr*)&peerAddr);
+
+    const CertDetails* certDetails = server->certDetails;
+    CredHandle hClientCred = server->hClientCred;
+    CredHandle hServerCred = server->hServerCred;
+    bool cert_ready = (certDetails != NULL && certDetails->sn[0] != '\0' && g_proxyStats.cert_ready);
+    const char* active_sn = cert_ready ? certDetails->sn : "";
 
     BOOL keepAlive = TRUE;
     setsockopt(clientSock, SOL_SOCKET, SO_KEEPALIVE, (const char*)&keepAlive, sizeof(keepAlive));
@@ -208,7 +411,7 @@ static unsigned __stdcall http_client_worker(void* param) {
 
     // Handle CORS preflight OPTIONS
     if (_stricmp(method, "OPTIONS") == 0) {
-        send_http_response_ext(clientSock, isClientTls ? &clientTlsSession : NULL, 204, "No Content", "text/plain", "", certDetails->sn);
+        send_http_response_ext(clientSock, isClientTls ? &clientTlsSession : NULL, 204, "No Content", "text/plain", "", active_sn);
         free(reqBuf);
         free(modifiedReq);
         if (isClientTls) schannel_close(&clientTlsSession);
@@ -221,7 +424,7 @@ static unsigned __stdcall http_client_worker(void* param) {
         _stricmp(path, "/_leo4/status") == 0 ||
         _stricmp(path, "/status") == 0 ||
         _stricmp(path, "/info") == 0) {
-        handle_info_request_ext(clientSock, isClientTls ? &clientTlsSession : NULL, config, certDetails);
+        handle_info_request_ext(clientSock, isClientTls ? &clientTlsSession : NULL, config, certDetails, is_local);
         free(reqBuf);
         free(modifiedReq);
         if (isClientTls) schannel_close(&clientTlsSession);
@@ -238,7 +441,18 @@ static unsigned __stdcall http_client_worker(void* param) {
         return 0;
     }
 
-    // 4. Proxy to Remote HTTPS Backend
+    // 4. Check if upstream proxy routes are active
+    if (!cert_ready || !SecIsValidHandle(&hClientCred)) {
+        const char* errJson = "{\"error\": \"Proxy routes disabled: waiting for certificate\"}\r\n";
+        send_http_response_ext(clientSock, isClientTls ? &clientTlsSession : NULL, 503, "Service Unavailable", "application/json; charset=utf-8", errJson, NULL);
+        free(reqBuf);
+        free(modifiedReq);
+        if (isClientTls) schannel_close(&clientTlsSession);
+        else closesocket(clientSock);
+        return 1;
+    }
+
+    // 5. Proxy to Remote HTTPS Backend
     if (config->verbose) {
         printf("[HTTP-PROXY] %s %s -> https://%s:%d (mTLS SN=%s)%s\n",
                method, path, config->http_remote_host, config->http_remote_port, certDetails->sn,
@@ -385,10 +599,7 @@ static unsigned __stdcall http_listener_thread(void* param) {
                 HttpClientWorkerArgs* args = (HttpClientWorkerArgs*)malloc(sizeof(HttpClientWorkerArgs));
                 if (args) {
                     args->clientSock = clientSock;
-                    args->config = config;
-                    args->certDetails = server->certDetails;
-                    args->hClientCred = server->hClientCred;
-                    args->hServerCred = server->hServerCred;
+                    args->server = server;
 
                     HANDLE hWorker = (HANDLE)_beginthreadex(NULL, 0, http_client_worker, args, 0, NULL);
                     if (hWorker) {
@@ -408,7 +619,7 @@ static unsigned __stdcall http_listener_thread(void* param) {
 }
 
 bool http_proxy_start(HttpProxyServer* server, const ProxyConfig* config, const CertDetails* certDetails, CredHandle hClientCred, CredHandle hServerCred) {
-    if (!server || !config || !certDetails) return false;
+    if (!server || !config) return false;
     memset(server, 0, sizeof(HttpProxyServer));
 
     server->config = config;
@@ -471,6 +682,14 @@ bool http_proxy_start(HttpProxyServer* server, const ProxyConfig* config, const 
     }
 
     return true;
+}
+
+void http_proxy_update_creds(HttpProxyServer* server, const CertDetails* certDetails, CredHandle hClientCred, CredHandle hServerCred) {
+    if (!server) return;
+    server->certDetails = certDetails;
+    server->hClientCred = hClientCred;
+    server->hServerCred = hServerCred;
+    MemoryBarrier();
 }
 
 void http_proxy_stop(HttpProxyServer* server) {

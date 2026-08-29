@@ -206,7 +206,7 @@ Before adding the newly issued certificate to `LocalMachine\MY`, the installer s
 
 | Component | Target Location | Description |
 |---|---|---|
-| **CLI Certificate Installer** | `tools/terminal-cert-installer/` | Standalone CLI tool (`terminal-cert-installer.exe`) for manual terminal setup, silent unattended installation (`--silent`), and certificate status diagnosis (`--status`). |
+| **CLI Certificate Installer** | `tools/l4pin/` | Standalone CLI tool (`l4pin.exe`) for manual terminal setup, silent unattended installation (`--pin <PIN>`), smart endpoint discovery (`url-finder`), and certificate status diagnosis (`--status`). |
 | **Native Crypto Library (DLL)** | `tools/libterminal-crypto/` | Shared C dynamic library (`terminal_crypto.dll`) exposing a clean C API for direct P/Invoke integration into legacy C# (.NET 4.0) terminal binaries without changing legacy CryptoAPI code. |
 | **Terminal Integration Sidecar** | `tools/terminal-sidecar/` | Lightweight background Windows Service in C for automatic certificate renewal (when expiring $\le 30$ days), watchdog telemetry, and high-speed menu cache synchronization. |
 

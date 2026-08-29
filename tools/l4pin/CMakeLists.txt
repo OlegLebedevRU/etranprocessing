@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(terminal-cert-installer C)
+project(l4pin C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -16,6 +16,7 @@ include_directories(src)
 
 set(SOURCES
     src/main.c
+    src/url_finder.c
     src/http_client.c
     src/xml_utils.c
     src/cng_crypto.c
@@ -23,10 +24,10 @@ set(SOURCES
     res/app.rc
 )
 
-add_executable(terminal-cert-installer ${SOURCES})
+add_executable(l4pin ${SOURCES})
 
 if(MSVC)
-    target_link_libraries(terminal-cert-installer
+    target_link_libraries(l4pin
         ncrypt.lib
         crypt32.lib
         winhttp.lib
@@ -35,7 +36,7 @@ if(MSVC)
         user32.lib
     )
 else()
-    target_link_libraries(terminal-cert-installer
+    target_link_libraries(l4pin
         -lncrypt
         -lcrypt32
         -lwinhttp

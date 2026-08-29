@@ -12,6 +12,7 @@
 typedef struct {
     SOCKET clientSock;
     const ProxyConfig* config;
+    MqttProxyServer* server;
     CredHandle hClientCred;
     CredHandle hServerCred;
 } MqttClientWorkerArgs;
@@ -30,9 +31,13 @@ static unsigned __stdcall mqtt_client_worker(void* param) {
     MqttClientWorkerArgs* args = (MqttClientWorkerArgs*)param;
     SOCKET clientSock = args->clientSock;
     const ProxyConfig* config = args->config;
+    MqttProxyServer* server = args->server;
     CredHandle hClientCred = args->hClientCred;
     CredHandle hServerCred = args->hServerCred;
     free(args);
+
+    InterlockedIncrement(&g_proxyStats.mqtt_active_clients);
+    InterlockedIncrement(&g_proxyStats.mqtt_total_connections);
 
     BOOL keepAlive = TRUE;
     setsockopt(clientSock, SOL_SOCKET, SO_KEEPALIVE, (const char*)&keepAlive, sizeof(keepAlive));
@@ -57,6 +62,7 @@ static unsigned __stdcall mqtt_client_worker(void* param) {
                 fprintf(stderr, "[MQTT-PROXY] Inbound TLS handshake failed.\n");
             }
             closesocket(clientSock);
+            InterlockedDecrement(&g_proxyStats.mqtt_active_clients);
             return 1;
         }
     } else if (isClientTls) {
@@ -74,6 +80,7 @@ static unsigned __stdcall mqtt_client_worker(void* param) {
                 config->mqtt_remote_host, config->mqtt_remote_port);
         if (isClientTls) schannel_close(&clientTlsSession);
         else closesocket(clientSock);
+        InterlockedDecrement(&g_proxyStats.mqtt_active_clients);
         return 1;
     }
 
@@ -85,7 +92,7 @@ static unsigned __stdcall mqtt_client_worker(void* param) {
     BYTE buf[16384];
     bool running = true;
 
-    while (running) {
+    while (running && (!server || server->isRunning)) {
         // 1. If we have leftover decrypted plaintext from broker, deliver to client
         if (brokerTlsSession.plainBufLen > brokerTlsSession.plainBufOffset) {
             int recvd = schannel_recv(&brokerTlsSession, buf, sizeof(buf));
@@ -199,6 +206,8 @@ static unsigned __stdcall mqtt_client_worker(void* param) {
     if (isClientTls) schannel_close(&clientTlsSession);
     else closesocket(clientSock);
 
+    InterlockedDecrement(&g_proxyStats.mqtt_active_clients);
+
     if (config->verbose) {
         printf("[MQTT-PROXY] Connection closed.\n");
     }
@@ -242,6 +251,7 @@ static unsigned __stdcall mqtt_listener_thread(void* param) {
                 if (args) {
                     args->clientSock = clientSock;
                     args->config = config;
+                    args->server = server;
                     args->hClientCred = server->hClientCred;
                     args->hServerCred = server->hServerCred;
 

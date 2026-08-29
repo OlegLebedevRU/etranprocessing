@@ -93,78 +93,231 @@ static void WINAPI service_main(DWORD argc, LPWSTR* argv) {
         return;
     }
 
-    // 2. Find Certificate in Windows Store
-    CertDetails certDetails;
-    if (!cert_store_find_best_cert(&g_serviceConfig, &certDetails)) {
-        WSACleanup();
-        report_service_status(SERVICE_STOPPED, ERROR_NOT_FOUND, 0);
-        return;
-    }
+    // Configure firewall rules
+    firewall_ensure_rules(&g_serviceConfig, NULL);
 
-    // 3. Acquire SChannel Credentials
-    CredHandle hClientCred;
-    if (!schannel_init_client_creds(certDetails.pCertContext, g_serviceConfig.insecure_server_cert, &hClientCred)) {
-        cert_store_free_details(&certDetails);
-        WSACleanup();
-        report_service_status(SERVICE_STOPPED, ERROR_INVALID_PARAMETER, 0);
-        return;
-    }
-
-    CredHandle hServerCred;
-    if (!schannel_init_server_creds(certDetails.pCertContext, &hServerCred)) {
-        SecInvalidateHandle(&hServerCred);
-    }
-
-    // 4. Start Forward (MQTT/HTTP), Reverse HTTPS, and Discovery Servers
     MqttProxyServer mqttServer;
     HttpProxyServer httpServer;
     ReverseProxyServer reverseServer;
     DiscoveryServer discoveryServer;
+    memset(&mqttServer, 0, sizeof(mqttServer));
+    memset(&httpServer, 0, sizeof(httpServer));
+    memset(&reverseServer, 0, sizeof(reverseServer));
+    memset(&discoveryServer, 0, sizeof(discoveryServer));
 
+    CredHandle hClientCred;
+    CredHandle hServerCred;
+    SecInvalidateHandle(&hClientCred);
+    SecInvalidateHandle(&hServerCred);
+
+    CertDetails certDetails;
+    memset(&certDetails, 0, sizeof(certDetails));
+
+    bool isCertLoaded = false;
+    bool isMqttStarted = false;
     bool isReverseStarted = false;
     bool isDiscoveryStarted = false;
 
-    // Configure firewall rules
-    firewall_ensure_rules(&g_serviceConfig, NULL);
-
-    bool mqttOk = mqtt_proxy_start(&mqttServer, &g_serviceConfig, &certDetails, hClientCred, hServerCred);
-    bool httpOk = http_proxy_start(&httpServer, &g_serviceConfig, &certDetails, hClientCred, hServerCred);
-
-    if (g_serviceConfig.reverse_proxy_enabled && SecIsValidHandle(&hServerCred)) {
-        isReverseStarted = reverse_proxy_start(&reverseServer, &g_serviceConfig, &certDetails, hServerCred);
-    }
-
-    if (g_serviceConfig.discovery_enabled) {
-        isDiscoveryStarted = discovery_start(&discoveryServer, &g_serviceConfig, &certDetails);
-    }
-
-    if (!mqttOk || !httpOk) {
-        if (isDiscoveryStarted) discovery_stop(&discoveryServer);
-        if (isReverseStarted) reverse_proxy_stop(&reverseServer);
-        if (mqttOk) mqtt_proxy_stop(&mqttServer);
-        if (httpOk) http_proxy_stop(&httpServer);
-        schannel_free_creds(&hClientCred);
-        schannel_free_creds(&hServerCred);
-        cert_store_free_details(&certDetails);
-        WSACleanup();
-        report_service_status(SERVICE_STOPPED, ERROR_SERVICE_SPECIFIC_ERROR, 0);
-        return;
-    }
-
+    // Report service as RUNNING immediately
     report_service_status(SERVICE_RUNNING, NO_ERROR, 0);
 
-    // Wait until stop signal is received
-    WaitForSingleObject(g_stopEvent, INFINITE);
+    // Start HTTP diagnostic listener in standby mode (route proxying disabled until cert is loaded)
+    bool isHttpStarted = http_proxy_start(&httpServer, &g_serviceConfig, NULL, hClientCred, hServerCred);
+    if (!isHttpStarted) {
+        fprintf(stderr, "[SERVICE] Warning: Failed to start base HTTP listener on %s:%d\n",
+                g_serviceConfig.http_local_host, g_serviceConfig.http_local_port);
+    }
 
+    // Main Service Loop: periodic non-aggressive check for certificate rotation and expiration
+    DWORD pollIntervalMs = (g_serviceConfig.cert_poll_interval > 0 ? (DWORD)g_serviceConfig.cert_poll_interval : 30) * 1000;
+    DWORD standbyIntervalMs = 5000;
+
+    while (WaitForSingleObject(g_stopEvent, 0) == WAIT_TIMEOUT) {
+        if (!isCertLoaded) {
+            CertDetails newDetails;
+            memset(&newDetails, 0, sizeof(newDetails));
+            if (cert_store_find_best_cert(&g_serviceConfig, &newDetails)) {
+                CredHandle newClientCred, newServerCred;
+                SecInvalidateHandle(&newClientCred);
+                SecInvalidateHandle(&newServerCred);
+
+                bool clientOk = schannel_init_client_creds(newDetails.pCertContext, g_serviceConfig.insecure_server_cert, &newClientCred);
+                if (!schannel_init_server_creds(newDetails.pCertContext, &newServerCred)) {
+                    SecInvalidateHandle(&newServerCred);
+                }
+
+                if (clientOk) {
+                    certDetails = newDetails;
+                    hClientCred = newClientCred;
+                    hServerCred = newServerCred;
+                    isCertLoaded = true;
+                    g_proxyStats.cert_ready = 1;
+
+                    printf("[SERVICE] Terminal certificate loaded successfully! SN: %s, Hostname: %s\n",
+                           certDetails.sn, certDetails.local_hostname);
+
+                    // Update HTTP proxy with valid credentials
+                    http_proxy_update_creds(&httpServer, &certDetails, hClientCred, hServerCred);
+
+                    // Start MQTT proxy
+                    if (!isMqttStarted) {
+                        isMqttStarted = mqtt_proxy_start(&mqttServer, &g_serviceConfig, &certDetails, hClientCred, hServerCred);
+                    }
+
+                    // Start Reverse HTTPS proxy
+                    if (!isReverseStarted && g_serviceConfig.reverse_proxy_enabled && SecIsValidHandle(&hServerCred)) {
+                        isReverseStarted = reverse_proxy_start(&reverseServer, &g_serviceConfig, &certDetails, hServerCred);
+                    }
+
+                    // Start Discovery
+                    if (!isDiscoveryStarted && g_serviceConfig.discovery_enabled) {
+                        isDiscoveryStarted = discovery_start(&discoveryServer, &g_serviceConfig, &certDetails);
+                    }
+                } else {
+                    if (SecIsValidHandle(&newClientCred)) schannel_free_creds(&newClientCred);
+                    if (SecIsValidHandle(&newServerCred)) schannel_free_creds(&newServerCred);
+                    cert_store_free_details(&newDetails);
+                }
+            }
+        } else {
+            // Certificate is currently loaded.
+            // 1. Check if current certificate has expired and drop_on_expire is enabled
+            bool isExpired = cert_store_is_cert_expired(&certDetails);
+
+            // 2. Poll store for best available certificate (finds rotated / newer cert, or skips expired if drop_on_expire is set)
+            CertDetails newDetails;
+            memset(&newDetails, 0, sizeof(newDetails));
+            bool foundBest = cert_store_find_best_cert(&g_serviceConfig, &newDetails);
+
+            if (foundBest) {
+                // Check if the certificate in store is different from our active one (by thumbprint)
+                if (_stricmp(newDetails.thumbprint, certDetails.thumbprint) != 0) {
+                    printf("[SERVICE] New/updated certificate detected in store! Thumbprint: %s (old: %s). Hot-swapping...\n",
+                           newDetails.thumbprint, certDetails.thumbprint);
+
+                    CredHandle newClientCred, newServerCred;
+                    SecInvalidateHandle(&newClientCred);
+                    SecInvalidateHandle(&newServerCred);
+
+                    bool clientOk = schannel_init_client_creds(newDetails.pCertContext, g_serviceConfig.insecure_server_cert, &newClientCred);
+                    if (!schannel_init_server_creds(newDetails.pCertContext, &newServerCred)) {
+                        SecInvalidateHandle(&newServerCred);
+                    }
+
+                    if (clientOk) {
+                        bool snChanged = (_stricmp(newDetails.sn, certDetails.sn) != 0 ||
+                                          _stricmp(newDetails.local_hostname, certDetails.local_hostname) != 0);
+
+                        // Save old handles to free after switch
+                        CredHandle oldClientCred = hClientCred;
+                        CredHandle oldServerCred = hServerCred;
+                        CertDetails oldDetails = certDetails;
+
+                        // Swap active state
+                        certDetails = newDetails;
+                        hClientCred = newClientCred;
+                        hServerCred = newServerCred;
+
+                        // 1. Update HTTP Proxy credentials
+                        http_proxy_update_creds(&httpServer, &certDetails, hClientCred, hServerCred);
+
+                        // 2. Restart MQTT Proxy (closes active client connections so mosquitto bridge reconnects immediately with new cert)
+                        if (isMqttStarted) {
+                            mqtt_proxy_stop(&mqttServer);
+                            isMqttStarted = false;
+                        }
+                        isMqttStarted = mqtt_proxy_start(&mqttServer, &g_serviceConfig, &certDetails, hClientCred, hServerCred);
+
+                        // 3. Restart Reverse HTTPS Proxy (drops inbound TLS sessions and binds with new server cert)
+                        if (isReverseStarted) {
+                            reverse_proxy_stop(&reverseServer);
+                            isReverseStarted = false;
+                        }
+                        if (g_serviceConfig.reverse_proxy_enabled && SecIsValidHandle(&hServerCred)) {
+                            isReverseStarted = reverse_proxy_start(&reverseServer, &g_serviceConfig, &certDetails, hServerCred);
+                        }
+
+                        // 4. Restart Discovery if SN/hostname changed
+                        if (snChanged) {
+                            if (isDiscoveryStarted) {
+                                discovery_stop(&discoveryServer);
+                                isDiscoveryStarted = false;
+                            }
+                            if (g_serviceConfig.discovery_enabled) {
+                                isDiscoveryStarted = discovery_start(&discoveryServer, &g_serviceConfig, &certDetails);
+                            }
+                        }
+
+                        // Free old credentials and details
+                        if (SecIsValidHandle(&oldClientCred)) schannel_free_creds(&oldClientCred);
+                        if (SecIsValidHandle(&oldServerCred)) schannel_free_creds(&oldServerCred);
+                        cert_store_free_details(&oldDetails);
+
+                        printf("[SERVICE] Certificate hot-swap COMPLETE! Active SN: %s, Hostname: %s\n",
+                               certDetails.sn, certDetails.local_hostname);
+                    } else {
+                        fprintf(stderr, "[SERVICE] Failed to acquire SChannel credentials for new certificate. Keeping current cert.\n");
+                        if (SecIsValidHandle(&newClientCred)) schannel_free_creds(&newClientCred);
+                        if (SecIsValidHandle(&newServerCred)) schannel_free_creds(&newServerCred);
+                        cert_store_free_details(&newDetails);
+                    }
+                } else {
+                    // Same certificate, free temporary details
+                    cert_store_free_details(&newDetails);
+                }
+            } else if (isExpired && g_serviceConfig.drop_on_expire) {
+                // No valid non-expired certificate found and drop_on_expire is enabled -> transition to standby mode
+                printf("[SERVICE] Active certificate (SN: %s) expired and --drop-on-expire is enabled! Transitioning to standby mode...\n",
+                       certDetails.sn);
+
+                if (isDiscoveryStarted) {
+                    discovery_stop(&discoveryServer);
+                    isDiscoveryStarted = false;
+                }
+                if (isReverseStarted) {
+                    reverse_proxy_stop(&reverseServer);
+                    isReverseStarted = false;
+                }
+                if (isMqttStarted) {
+                    mqtt_proxy_stop(&mqttServer);
+                    isMqttStarted = false;
+                }
+
+                // Update HTTP proxy back to standby (no valid cert)
+                CredHandle invalidCred;
+                SecInvalidateHandle(&invalidCred);
+                http_proxy_update_creds(&httpServer, NULL, invalidCred, invalidCred);
+
+                if (SecIsValidHandle(&hClientCred)) schannel_free_creds(&hClientCred);
+                if (SecIsValidHandle(&hServerCred)) schannel_free_creds(&hServerCred);
+                SecInvalidateHandle(&hClientCred);
+                SecInvalidateHandle(&hServerCred);
+
+                cert_store_free_details(&certDetails);
+                isCertLoaded = false;
+                g_proxyStats.cert_ready = 0;
+            }
+        }
+
+        // Wait poll interval or until stop signal
+        DWORD waitMs = isCertLoaded ? pollIntervalMs : standbyIntervalMs;
+        if (WaitForSingleObject(g_stopEvent, waitMs) != WAIT_TIMEOUT) {
+            break;
+        }
+    }
+
+    // Service Stop & Cleanup
     report_service_status(SERVICE_STOP_PENDING, NO_ERROR, 5000);
 
     if (isDiscoveryStarted) discovery_stop(&discoveryServer);
     if (isReverseStarted) reverse_proxy_stop(&reverseServer);
-    mqtt_proxy_stop(&mqttServer);
-    http_proxy_stop(&httpServer);
-    schannel_free_creds(&hClientCred);
-    schannel_free_creds(&hServerCred);
-    cert_store_free_details(&certDetails);
+    if (isMqttStarted) mqtt_proxy_stop(&mqttServer);
+    if (isHttpStarted) http_proxy_stop(&httpServer);
+
+    if (SecIsValidHandle(&hClientCred)) schannel_free_creds(&hClientCred);
+    if (SecIsValidHandle(&hServerCred)) schannel_free_creds(&hServerCred);
+    if (isCertLoaded) cert_store_free_details(&certDetails);
+
     WSACleanup();
     CloseHandle(g_stopEvent);
     g_stopEvent = NULL;

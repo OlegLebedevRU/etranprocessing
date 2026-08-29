@@ -237,6 +237,8 @@ void proxy_config_init_defaults(ProxyConfig* config) {
     strncpy_s(config->cert_store_name, sizeof(config->cert_store_name), "MY", _TRUNCATE);
     config->is_machine_store = 1;      // Default: LocalMachine\MY
     config->insecure_server_cert = 1;  // Default: ignore untrusted server CA for dev/migration
+    config->cert_poll_interval = DEFAULT_CERT_POLL_INTERVAL; // Default: 30s poll in service mode
+    config->drop_on_expire = 0;        // Default: keep expired cert and let remote server decide
 
     config->http_local_ssl = 0;
     config->mqtt_local_ssl = 0;
@@ -302,10 +304,12 @@ static void print_usage(const char* exeName) {
     printf("  --http-local  <ip:port> Local HTTP listener (default: %s:%d)\n", DEFAULT_HTTP_LOCAL_HOST, DEFAULT_HTTP_LOCAL_PORT);
     printf("  --local-ssl             Enforce SSL/TLS on local listeners (default: auto-detect)\n");
     printf("  --secure                Strict server CA validation (default: lax/insecure)\n\n");
-    printf("CERTIFICATE SELECTION:\n");
-    printf("  --cert-email <pattern>  Filter certs by email (default: newest %s -> %s)\n", DEFAULT_CERT_EMAIL_PRIMARY, DEFAULT_CERT_EMAIL_FALLBACK);
-    printf("  --cert-thumbprint <sha> Select specific certificate by SHA-1 thumbprint\n");
-    printf("  --user-store            Search CurrentUser\\MY instead of LocalMachine\\MY\n\n");
+    printf("CERTIFICATE SELECTION & ROTATION:\n");
+    printf("  --cert-email <pattern>     Filter certs by email (default: newest %s -> %s)\n", DEFAULT_CERT_EMAIL_PRIMARY, DEFAULT_CERT_EMAIL_FALLBACK);
+    printf("  --cert-thumbprint <sha>    Select specific certificate by SHA-1 thumbprint\n");
+    printf("  --user-store               Search CurrentUser\\MY instead of LocalMachine\\MY\n");
+    printf("  --cert-poll-interval <sec> Polling interval in seconds for cert changes in service (default: %d)\n", DEFAULT_CERT_POLL_INTERVAL);
+    printf("  --drop-on-expire           Transition to standby mode if cert expires and no valid cert in store\n\n");
     printf("EXAMPLES:\n");
     printf("  1. Standard interactive start (Reverse HTTPS on :443 + Forward mTLS on :18883,:18443):\n");
     printf("       %s\n\n", exeName);
@@ -408,6 +412,11 @@ int main(int argc, char* argv[]) {
             strncpy_s(config.cert_email_pattern, sizeof(config.cert_email_pattern), argv[++i], _TRUNCATE);
         } else if (_stricmp(argv[i], "--cert-thumbprint") == 0 && i + 1 < argc) {
             strncpy_s(config.cert_thumbprint, sizeof(config.cert_thumbprint), argv[++i], _TRUNCATE);
+        } else if (_stricmp(argv[i], "--cert-poll-interval") == 0 && i + 1 < argc) {
+            config.cert_poll_interval = atoi(argv[++i]);
+            if (config.cert_poll_interval < 1) config.cert_poll_interval = 1;
+        } else if (_stricmp(argv[i], "--drop-on-expire") == 0) {
+            config.drop_on_expire = 1;
         }
     }
 
@@ -555,6 +564,8 @@ int main(int argc, char* argv[]) {
     g_app.isForwardRunning = false;
     g_app.isReverseRunning = false;
     g_app.isDiscoveryRunning = false;
+
+    g_proxyStats.cert_ready = 1;
 
     // Start Forward Proxies (MQTT & HTTP)
     bool mqttOk = mqtt_proxy_start(&g_app.mqttServer, &config, &certDetails, hClientCred, hServerCred);

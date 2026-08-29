@@ -5,29 +5,33 @@
 #include <stdbool.h>
 
 #include "http_client.h"
+#include "url_finder.h"
 #include "xml_utils.h"
 #include "cng_crypto.h"
 #include "cert_store.h"
 
-#define DEFAULT_URL "https://iot-processing.ru/certificates/Dispatcher.ashx"
 #define DEFAULT_KEY_NAME L"EtranTerminalKey"
 
 static void print_usage(const char* prog_name) {
-    printf("Etran Terminal Certificate Installer (v=26 CNG Flow)\n\n");
+    printf("Leo4 Terminal Certificate Installer - l4pin (v=26 CNG Flow)\n\n");
     printf("Usage:\n");
     printf("  %s <PIN> [options]\n", prog_name);
     printf("  %s --pin <PIN> [options]\n", prog_name);
+    printf("  %s -pin <PIN> [options]\n", prog_name);
     printf("  %s --status [--store <machine|user>] [--email <email>]\n\n", prog_name);
     printf("Options:\n");
-    printf("  --pin, -p <PIN>        6-character terminal certificate PIN\n");
-    printf("  --url, -u <URL>        Base URL (default: %s)\n", DEFAULT_URL);
-    printf("  --store, -s <STORE>    Target store: 'machine' (LocalMachine\\MY, default) or 'user' (CurrentUser\\MY)\n");
-    printf("  --key-name, -k <NAME>  CNG key container name (default: EtranTerminalKey)\n");
-    printf("  --status, -l           List certificates in target store\n");
-    printf("  --help, -h             Show this help message\n\n");
+    printf("  --pin, -pin, -p <PIN>    6-character terminal certificate PIN code\n");
+    printf("  --url, -url, -u <URL>    Base URL override (default: auto-detected via leo4proxy -> fallback)\n");
+    printf("  --store, -store, -s <S>  Target store: 'machine' (LocalMachine\\MY, default) or 'user' (CurrentUser\\MY)\n");
+    printf("  --key-name, -k <NAME>    CNG key container name (default: EtranTerminalKey)\n");
+    printf("  --email, -e <EMAIL>      Filter certificates by email (for --status)\n");
+    printf("  --status, -l, --list     List installed certificates in target store\n");
+    printf("  --help, -h, /?           Show this help message\n\n");
     printf("Examples:\n");
-    printf("  %s B75GL9\n", prog_name);
-    printf("  %s --pin B75GL9 --store machine\n", prog_name);
+    printf("  %s 021358\n", prog_name);
+    printf("  %s --pin 021358 --store machine\n", prog_name);
+    printf("  %s -pin 021358\n", prog_name);
+    printf("  %s --status\n", prog_name);
 }
 
 int main(int argc, char* argv[]) {
@@ -35,27 +39,53 @@ int main(int argc, char* argv[]) {
     SetConsoleOutputCP(CP_UTF8);
 
     char pin[64] = { 0 };
-    char base_url[512] = DEFAULT_URL;
-    bool is_machine_store = true; // Default is LocalMachine\MY as requested
+    char cli_url[512] = { 0 };
+    bool cli_url_provided = false;
+    char base_url[512] = { 0 };
+    bool is_machine_store = true; // Default is LocalMachine\MY
     WCHAR key_name[128] = DEFAULT_KEY_NAME;
     bool status_mode = false;
     char filter_email[256] = { 0 };
 
     for (int i = 1; i < argc; i++) {
-        if (_stricmp(argv[i], "--help") == 0 || _stricmp(argv[i], "-h") == 0 || _stricmp(argv[i], "/?") == 0) {
+        const char* arg = argv[i];
+
+        if (_stricmp(arg, "--help") == 0 || _stricmp(arg, "-help") == 0 ||
+            _stricmp(arg, "-h") == 0 || _stricmp(arg, "/help") == 0 ||
+            _stricmp(arg, "/h") == 0 || _stricmp(arg, "/?") == 0) {
             print_usage(argv[0]);
             return 0;
-        } else if (_stricmp(argv[i], "--status") == 0 || _stricmp(argv[i], "-l") == 0 || _stricmp(argv[i], "--list") == 0) {
+        } else if (_stricmp(arg, "--status") == 0 || _stricmp(arg, "-status") == 0 ||
+                   _stricmp(arg, "-l") == 0 || _stricmp(arg, "--list") == 0 ||
+                   _stricmp(arg, "-list") == 0 || _stricmp(arg, "/status") == 0 ||
+                   _stricmp(arg, "/list") == 0) {
             status_mode = true;
-        } else if (_stricmp(argv[i], "--pin") == 0 || _stricmp(argv[i], "-p") == 0) {
+        } else if (_stricmp(arg, "--pin") == 0 || _stricmp(arg, "-pin") == 0 ||
+                   _stricmp(arg, "-p") == 0 || _stricmp(arg, "/pin") == 0 ||
+                   _stricmp(arg, "/p") == 0) {
             if (i + 1 < argc) {
                 strncpy(pin, argv[++i], sizeof(pin) - 1);
             }
-        } else if (_stricmp(argv[i], "--url") == 0 || _stricmp(argv[i], "-u") == 0) {
+        } else if (_strnicmp(arg, "--pin=", 6) == 0) {
+            strncpy(pin, arg + 6, sizeof(pin) - 1);
+        } else if (_strnicmp(arg, "-pin=", 5) == 0) {
+            strncpy(pin, arg + 5, sizeof(pin) - 1);
+        } else if (_stricmp(arg, "--url") == 0 || _stricmp(arg, "-url") == 0 ||
+                   _stricmp(arg, "-u") == 0 || _stricmp(arg, "/url") == 0 ||
+                   _stricmp(arg, "/u") == 0) {
             if (i + 1 < argc) {
-                strncpy(base_url, argv[++i], sizeof(base_url) - 1);
+                strncpy(cli_url, argv[++i], sizeof(cli_url) - 1);
+                cli_url_provided = true;
             }
-        } else if (_stricmp(argv[i], "--store") == 0 || _stricmp(argv[i], "-s") == 0) {
+        } else if (_strnicmp(arg, "--url=", 6) == 0) {
+            strncpy(cli_url, arg + 6, sizeof(cli_url) - 1);
+            cli_url_provided = true;
+        } else if (_strnicmp(arg, "-url=", 5) == 0) {
+            strncpy(cli_url, arg + 5, sizeof(cli_url) - 1);
+            cli_url_provided = true;
+        } else if (_stricmp(arg, "--store") == 0 || _stricmp(arg, "-store") == 0 ||
+                   _stricmp(arg, "-s") == 0 || _stricmp(arg, "/store") == 0 ||
+                   _stricmp(arg, "/s") == 0) {
             if (i + 1 < argc) {
                 const char* s = argv[++i];
                 if (_stricmp(s, "user") == 0 || _stricmp(s, "currentuser") == 0) {
@@ -64,17 +94,21 @@ int main(int argc, char* argv[]) {
                     is_machine_store = true;
                 }
             }
-        } else if (_stricmp(argv[i], "--key-name") == 0 || _stricmp(argv[i], "-k") == 0) {
+        } else if (_stricmp(arg, "--key-name") == 0 || _stricmp(arg, "-key-name") == 0 ||
+                   _stricmp(arg, "-k") == 0 || _stricmp(arg, "/key-name") == 0 ||
+                   _stricmp(arg, "/k") == 0) {
             if (i + 1 < argc) {
                 MultiByteToWideChar(CP_UTF8, 0, argv[++i], -1, key_name, 128);
             }
-        } else if (_stricmp(argv[i], "--email") == 0 || _stricmp(argv[i], "-e") == 0) {
+        } else if (_stricmp(arg, "--email") == 0 || _stricmp(arg, "-email") == 0 ||
+                   _stricmp(arg, "-e") == 0 || _stricmp(arg, "/email") == 0 ||
+                   _stricmp(arg, "/e") == 0) {
             if (i + 1 < argc) {
                 strncpy(filter_email, argv[++i], sizeof(filter_email) - 1);
             }
-        } else if (argv[i][0] != '-' && pin[0] == '\0') {
+        } else if (arg[0] != '-' && arg[0] != '/' && pin[0] == '\0') {
             // Positional argument = PIN
-            strncpy(pin, argv[i], sizeof(pin) - 1);
+            strncpy(pin, arg, sizeof(pin) - 1);
         }
     }
 
@@ -99,10 +133,16 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // Resolve base URL via url-finder strategy
+    if (!resolve_certificates_url(cli_url_provided ? cli_url : NULL, base_url, sizeof(base_url))) {
+        fprintf(stderr, "[ERROR] Failed to resolve target certificates URL.\n");
+        return 1;
+    }
+
+    printf("\n=================================================================\n");
+    printf("  Leo4 Terminal Certificate Setup - l4pin (CNG / v=26)\n");
     printf("=================================================================\n");
-    printf("  Etran Terminal Certificate Setup (CNG / v=26)\n");
-    printf("=================================================================\n");
-    printf("Target Server:       %s\n", base_url);
+    printf("Target Endpoint:     %s\n", base_url);
     printf("PIN Code:            %s\n", pin);
     printf("Target Store:        %s\\MY\n", is_machine_store ? "LocalMachine" : "CurrentUser");
     printf("CNG Key Container:   %ls\n", key_name);
@@ -132,7 +172,7 @@ int main(int argc, char* argv[]) {
     CheckResponse check_resp;
     if (!parse_check_response(check_xml, &check_resp)) {
         fprintf(stderr, "[ERROR] CHECK failed: code=%d, description='%s'\n",
-                check_resp.code, check_resp.description[0] ? check_resp.description : check_xml);
+                check_resp.code, check_resp.description[0] ? check_resp.description : (check_xml ? check_xml : ""));
         free(check_xml);
         return 2;
     }

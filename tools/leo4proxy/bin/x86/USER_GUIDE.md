@@ -92,6 +92,8 @@ leo4proxy.exe [options]
 | `--reverse-target <host:port>` | Target endpoint for reverse proxy (default: `127.0.0.1:8000`) |
 | `--cert-email <email>` | Select certificate matching specific email in `LocalMachine\MY` |
 | `--cert-thumbprint <hex>` | Select certificate matching specific SHA-1 thumbprint |
+| `--cert-poll-interval <sec>` | Polling interval in seconds for certificate changes in service mode (default: `30`) |
+| `--drop-on-expire` | Transition to standby mode if certificate expires and no valid replacement exists |
 | `--install` / `--uninstall` | Register or unregister Windows Service |
 | `--start` / `--stop` | Start or stop Windows Service |
 | `--help` | Display usage and all CLI flags |

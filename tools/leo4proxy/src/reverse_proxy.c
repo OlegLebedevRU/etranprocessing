@@ -102,135 +102,335 @@ static void send_redirect(SChannelSession* session, const char* location, bool k
     schannel_send(session, responseBuf, totalLen);
 }
 
-static void handle_info_request(SChannelSession* session, const ProxyConfig* config, const CertDetails* certDetails, bool wants_html, bool keep_alive) {
-    char jsonBuf[2048];
-    int jsonLen = snprintf(jsonBuf, sizeof(jsonBuf),
-        "{\n"
-        "  \"sn\": \"%s\",\n"
-        "  \"client_id\": \"%s\",\n"
-        "  \"urn\": \"%s\",\n"
-        "  \"email\": \"%s\",\n"
-        "  \"issuer\": \"%s\",\n"
-        "  \"serial\": \"%s\",\n"
-        "  \"thumbprint\": \"%s\",\n"
-        "  \"not_before\": \"%s\",\n"
-        "  \"not_after\": \"%s\",\n"
-        "  \"has_private_key\": %s,\n"
-        "  \"san_dns\": \"%s\",\n"
-        "  \"local_hostname\": \"%s\",\n"
-        "  \"reverse_proxy\": {\n"
-        "    \"listen\": \"%s:%d\",\n"
-        "    \"target\": \"%s:%d\"\n"
-        "  },\n"
-        "  \"version\": \"%s\"\n"
-        "}",
-        certDetails->sn,
-        certDetails->sn,
-        certDetails->urn,
-        certDetails->email,
-        certDetails->issuer,
-        certDetails->serial,
-        certDetails->thumbprint,
-        certDetails->not_before,
-        certDetails->not_after,
-        certDetails->has_private_key ? "true" : "false",
-        certDetails->san_dns,
-        certDetails->local_hostname,
-        config->reverse_local_host, config->reverse_local_port,
-        config->reverse_target_host, config->reverse_target_port,
-        LEO4_PROXY_VERSION
-    );
+static void handle_info_request(SChannelSession* session, const ProxyConfig* config, const CertDetails* certDetails, bool wants_html, bool keep_alive, bool is_local) {
+    bool cert_ready = (certDetails != NULL && certDetails->sn[0] != '\0' && g_proxyStats.cert_ready);
+    bool backend_online = tcp_probe_connect(config->reverse_target_host, config->reverse_target_port, 250);
+
+    char jsonBuf[4096];
+    int jsonLen = 0;
+
+    if (is_local) {
+        if (cert_ready) {
+            jsonLen = snprintf(jsonBuf, sizeof(jsonBuf),
+                "{\n"
+                "  \"status\": \"ready\",\n"
+                "  \"certificate_found\": true,\n"
+                "  \"version\": \"%s\",\n"
+                "  \"sn\": \"%s\",\n"
+                "  \"client_id\": \"%s\",\n"
+                "  \"urn\": \"%s\",\n"
+                "  \"email\": \"%s\",\n"
+                "  \"subject\": \"%s\",\n"
+                "  \"issuer\": \"%s\",\n"
+                "  \"serial\": \"%s\",\n"
+                "  \"thumbprint\": \"%s\",\n"
+                "  \"not_before\": \"%s\",\n"
+                "  \"not_after\": \"%s\",\n"
+                "  \"has_private_key\": %s,\n"
+                "  \"local_hostname\": \"%s\",\n"
+                "  \"san_dns\": \"%s\",\n"
+                "  \"listeners\": {\n"
+                "    \"mqtt_local\": \"%s:%d\",\n"
+                "    \"http_local\": \"%s:%d\",\n"
+                "    \"reverse_listen\": \"%s:%d\"\n"
+                "  },\n"
+                "  \"upstreams\": {\n"
+                "    \"mqtt_remote\": \"%s:%d\",\n"
+                "    \"http_remote\": \"https://%s:%d\",\n"
+                "    \"reverse_target\": \"http://%s:%d\"\n"
+                "  },\n"
+                "  \"routes_active\": true,\n"
+                "  \"clients\": {\n"
+                "    \"mqtt_active_clients\": %ld,\n"
+                "    \"mqtt_total_connections\": %ld,\n"
+                "    \"http_total_requests\": %ld,\n"
+                "    \"reverse_total_requests\": %ld\n"
+                "  },\n"
+                "  \"backend_service\": {\n"
+                "    \"online\": %s,\n"
+                "    \"target\": \"%s:%d\"\n"
+                "  }\n"
+                "}",
+                LEO4_PROXY_VERSION,
+                certDetails->sn,
+                certDetails->sn,
+                certDetails->urn,
+                certDetails->email,
+                certDetails->subject,
+                certDetails->issuer,
+                certDetails->serial,
+                certDetails->thumbprint,
+                certDetails->not_before,
+                certDetails->not_after,
+                certDetails->has_private_key ? "true" : "false",
+                certDetails->local_hostname,
+                certDetails->san_dns,
+                config->mqtt_local_host, config->mqtt_local_port,
+                config->http_local_host, config->http_local_port,
+                config->reverse_local_host, config->reverse_local_port,
+                config->mqtt_remote_host, config->mqtt_remote_port,
+                config->http_remote_host, config->http_remote_port,
+                config->reverse_target_host, config->reverse_target_port,
+                g_proxyStats.mqtt_active_clients,
+                g_proxyStats.mqtt_total_connections,
+                g_proxyStats.http_total_requests,
+                g_proxyStats.reverse_total_requests,
+                backend_online ? "true" : "false",
+                config->reverse_target_host, config->reverse_target_port
+            );
+        } else {
+            jsonLen = snprintf(jsonBuf, sizeof(jsonBuf),
+                "{\n"
+                "  \"status\": \"waiting_for_certificate\",\n"
+                "  \"certificate_found\": false,\n"
+                "  \"version\": \"%s\",\n"
+                "  \"sn\": \"\",\n"
+                "  \"client_id\": \"\",\n"
+                "  \"local_hostname\": \"leo4-device.local\",\n"
+                "  \"san_dns\": \"\",\n"
+                "  \"listeners\": {\n"
+                "    \"mqtt_local\": \"%s:%d (disabled)\",\n"
+                "    \"http_local\": \"%s:%d\",\n"
+                "    \"reverse_listen\": \"%s:%d (disabled)\"\n"
+                "  },\n"
+                "  \"upstreams\": {\n"
+                "    \"mqtt_remote\": \"%s:%d (disabled)\",\n"
+                "    \"http_remote\": \"https://%s:%d (disabled)\",\n"
+                "    \"reverse_target\": \"http://%s:%d (disabled)\"\n"
+                "  },\n"
+                "  \"routes_active\": false,\n"
+                "  \"clients\": {\n"
+                "    \"mqtt_active_clients\": %ld,\n"
+                "    \"mqtt_total_connections\": %ld,\n"
+                "    \"http_total_requests\": %ld,\n"
+                "    \"reverse_total_requests\": %ld\n"
+                "  },\n"
+                "  \"backend_service\": {\n"
+                "    \"online\": %s,\n"
+                "    \"target\": \"%s:%d\"\n"
+                "  }\n"
+                "}",
+                LEO4_PROXY_VERSION,
+                config->mqtt_local_host, config->mqtt_local_port,
+                config->http_local_host, config->http_local_port,
+                config->reverse_local_host, config->reverse_local_port,
+                config->mqtt_remote_host, config->mqtt_remote_port,
+                config->http_remote_host, config->http_remote_port,
+                config->reverse_target_host, config->reverse_target_port,
+                g_proxyStats.mqtt_active_clients,
+                g_proxyStats.mqtt_total_connections,
+                g_proxyStats.http_total_requests,
+                g_proxyStats.reverse_total_requests,
+                backend_online ? "true" : "false",
+                config->reverse_target_host, config->reverse_target_port
+            );
+        }
+    } else {
+        if (cert_ready) {
+            jsonLen = snprintf(jsonBuf, sizeof(jsonBuf),
+                "{\n"
+                "  \"status\": \"ready\",\n"
+                "  \"sn\": \"%s\",\n"
+                "  \"dns\": \"%s\",\n"
+                "  \"local_hostname\": \"%s\",\n"
+                "  \"backend_online\": %s,\n"
+                "  \"internal_clients\": {\n"
+                "    \"mqtt_connected\": %ld,\n"
+                "    \"http_active\": true,\n"
+                "    \"requests_count\": %ld\n"
+                "  }\n"
+                "}",
+                certDetails->sn,
+                certDetails->local_hostname,
+                certDetails->local_hostname,
+                backend_online ? "true" : "false",
+                g_proxyStats.mqtt_active_clients,
+                g_proxyStats.http_total_requests + g_proxyStats.reverse_total_requests
+            );
+        } else {
+            jsonLen = snprintf(jsonBuf, sizeof(jsonBuf),
+                "{\n"
+                "  \"status\": \"waiting_for_certificate\",\n"
+                "  \"sn\": null,\n"
+                "  \"dns\": \"leo4-device.local\",\n"
+                "  \"local_hostname\": \"leo4-device.local\",\n"
+                "  \"backend_online\": %s,\n"
+                "  \"internal_clients\": {\n"
+                "    \"mqtt_connected\": 0,\n"
+                "    \"http_active\": false,\n"
+                "    \"requests_count\": %ld\n"
+                "  }\n"
+                "}",
+                backend_online ? "true" : "false",
+                g_proxyStats.http_total_requests + g_proxyStats.reverse_total_requests
+            );
+        }
+    }
 
     char responseBuf[16384];
     int totalLen = 0;
 
     if (wants_html) {
         char htmlBody[12288];
-        int htmlBodyLen = snprintf(htmlBody, sizeof(htmlBody),
-            "<!DOCTYPE html>\n"
-            "<html lang=\"ru\">\n"
-            "<head>\n"
-            "<meta charset=\"utf-8\">\n"
-            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
-            "<title>Leo4 Terminal - %s</title>\n"
-            "<style>\n"
-            "  :root { --bg: #0f172a; --card: #1e293b; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --success: #4ade80; }\n"
-            "  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 24px; }\n"
-            "  .container { max-width: 800px; margin: 0 auto; }\n"
-            "  .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 24px; }\n"
-            "  .badge { background: #064e3b; color: var(--success); padding: 4px 12px; border-radius: 9999px; font-weight: 600; font-size: 14px; }\n"
-            "  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }\n"
-            "  .sn-box { display: flex; align-items: center; justify-content: space-between; background: #0f172a; padding: 12px 16px; border-radius: 8px; border: 1px solid var(--border); font-family: monospace; font-size: 18px; color: var(--accent); margin-top: 8px; }\n"
-            "  .btn { background: var(--accent); color: #0f172a; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }\n"
-            "  .btn:hover { opacity: 0.9; }\n"
-            "  .grid { display: grid; grid-template-columns: 140px 1fr; gap: 10px; font-size: 14px; }\n"
-            "  .label { color: var(--muted); }\n"
-            "  .value { font-family: monospace; word-break: break-all; }\n"
-            "  pre { background: #0f172a; padding: 16px; border-radius: 8px; border: 1px solid var(--border); overflow-x: auto; color: #38bdf8; font-size: 13px; }\n"
-            "  .links { display: flex; gap: 16px; margin-top: 16px; }\n"
-            "  .link { color: var(--accent); text-decoration: none; font-size: 14px; font-weight: 500; }\n"
-            "  .link:hover { text-decoration: underline; }\n"
-            "</style>\n"
-            "</head>\n"
-            "<body>\n"
-            "<div class=\"container\">\n"
-            "  <div class=\"header\">\n"
-            "    <div>\n"
-            "      <h1 style=\"margin: 0; font-size: 24px;\">Leo4 Terminal Diagnostic Info</h1>\n"
-            "      <div style=\"color: var(--muted); font-size: 14px; margin-top: 4px;\">Host: %s | Reverse HTTPS Proxy</div>\n"
-            "    </div>\n"
-            "    <div class=\"badge\">Online & TLS OK</div>\n"
-            "  </div>\n"
-            "  <div class=\"card\">\n"
-            "    <div style=\"font-size: 14px; color: var(--muted);\">Serial Number (SN / Client ID)</div>\n"
-            "    <div class=\"sn-box\">\n"
-            "      <span id=\"snText\">%s</span>\n"
-            "      <button class=\"btn\" onclick=\"navigator.clipboard.writeText(document.getElementById('snText').innerText); this.innerText='Скопировано!'; setTimeout(()=>this.innerText='Копировать', 1500)\">Копировать</button>\n"
-            "    </div>\n"
-            "  </div>\n"
-            "  <div class=\"card\">\n"
-            "    <h3 style=\"margin-top: 0; margin-bottom: 16px; font-size: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px;\">Параметры сертификата и маршрутизации</h3>\n"
-            "    <div class=\"grid\">\n"
-            "      <div class=\"label\">Local Domain:</div><div class=\"value\" style=\"color: var(--accent); font-weight: 600;\">%s</div>\n"
-            "      <div class=\"label\">SAN DNS:</div><div class=\"value\">%s</div>\n"
-            "      <div class=\"label\">Client Email:</div><div class=\"value\">%s</div>\n"
-            "      <div class=\"label\">Issuer CA:</div><div class=\"value\">%s</div>\n"
-            "      <div class=\"label\">Serial:</div><div class=\"value\">%s</div>\n"
-            "      <div class=\"label\">Thumbprint:</div><div class=\"value\">%s</div>\n"
-            "      <div class=\"label\">Valid:</div><div class=\"value\">%s &mdash; %s</div>\n"
-            "      <div class=\"label\">Private Key:</div><div class=\"value\" style=\"color: var(--success); font-weight: 600;\">%s</div>\n"
-            "      <div class=\"label\">Reverse Target:</div><div class=\"value\">http://%s:%d</div>\n"
-            "      <div class=\"label\">Proxy Version:</div><div class=\"value\">%s</div>\n"
-            "    </div>\n"
-            "    <div class=\"links\">\n"
-            "      <a class=\"link\" href=\"/_leo4/sn\">/_leo4/sn (Plain SN)</a>\n"
-            "      <a class=\"link\" href=\"/_leo4/info?format=json\">/_leo4/info?format=json (JSON API)</a>\n"
-            "      <a class=\"link\" href=\"/\">/ (Главная страница сервиса)</a>\n"
-            "    </div>\n"
-            "  </div>\n"
-            "  <div class=\"card\">\n"
-            "    <h3 style=\"margin-top: 0; margin-bottom: 12px; font-size: 14px; color: var(--muted);\">Raw JSON Response</h3>\n"
-            "    <pre>%s</pre>\n"
-            "  </div>\n"
-            "</div>\n"
-            "</body>\n"
-            "</html>\n",
-            certDetails->sn,
-            certDetails->local_hostname,
-            certDetails->sn,
-            certDetails->local_hostname,
-            certDetails->san_dns,
-            certDetails->email,
-            certDetails->issuer,
-            certDetails->serial,
-            certDetails->thumbprint,
-            certDetails->not_before,
-            certDetails->not_after,
-            certDetails->has_private_key ? "YES (CNG KSP Hardware / Protected)" : "NO",
-            config->reverse_target_host, config->reverse_target_port,
-            LEO4_PROXY_VERSION,
-            jsonBuf
-        );
+        int htmlBodyLen = 0;
+        const char* active_sn = cert_ready ? certDetails->sn : "WAITING";
+        const char* active_host = cert_ready ? certDetails->local_hostname : "leo4-device.local";
+
+        if (is_local && cert_ready) {
+            htmlBodyLen = snprintf(htmlBody, sizeof(htmlBody),
+                "<!DOCTYPE html>\n"
+                "<html lang=\"ru\">\n"
+                "<head>\n"
+                "<meta charset=\"utf-8\">\n"
+                "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
+                "<title>Leo4 Terminal - %s</title>\n"
+                "<style>\n"
+                "  :root { --bg: #0f172a; --card: #1e293b; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --success: #4ade80; }\n"
+                "  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 24px; }\n"
+                "  .container { max-width: 800px; margin: 0 auto; }\n"
+                "  .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 24px; }\n"
+                "  .badge { background: #064e3b; color: var(--success); padding: 4px 12px; border-radius: 9999px; font-weight: 600; font-size: 14px; }\n"
+                "  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }\n"
+                "  .sn-box { display: flex; align-items: center; justify-content: space-between; background: #0f172a; padding: 12px 16px; border-radius: 8px; border: 1px solid var(--border); font-family: monospace; font-size: 18px; color: var(--accent); margin-top: 8px; }\n"
+                "  .btn { background: var(--accent); color: #0f172a; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }\n"
+                "  .btn:hover { opacity: 0.9; }\n"
+                "  .grid { display: grid; grid-template-columns: 140px 1fr; gap: 10px; font-size: 14px; }\n"
+                "  .label { color: var(--muted); }\n"
+                "  .value { font-family: monospace; word-break: break-all; }\n"
+                "  pre { background: #0f172a; padding: 16px; border-radius: 8px; border: 1px solid var(--border); overflow-x: auto; color: #38bdf8; font-size: 13px; }\n"
+                "  .links { display: flex; gap: 16px; margin-top: 16px; }\n"
+                "  .link { color: var(--accent); text-decoration: none; font-size: 14px; font-weight: 500; }\n"
+                "  .link:hover { text-decoration: underline; }\n"
+                "</style>\n"
+                "</head>\n"
+                "<body>\n"
+                "<div class=\"container\">\n"
+                "  <div class=\"header\">\n"
+                "    <div>\n"
+                "      <h1 style=\"margin: 0; font-size: 24px;\">Leo4 Terminal Diagnostic Info (Local)</h1>\n"
+                "      <div style=\"color: var(--muted); font-size: 14px; margin-top: 4px;\">Host: %s | Reverse HTTPS Proxy</div>\n"
+                "    </div>\n"
+                "    <div class=\"badge\">Online & TLS OK</div>\n"
+                "  </div>\n"
+                "  <div class=\"card\">\n"
+                "    <div style=\"font-size: 14px; color: var(--muted);\">Serial Number (SN / Client ID)</div>\n"
+                "    <div class=\"sn-box\">\n"
+                "      <span id=\"snText\">%s</span>\n"
+                "      <button class=\"btn\" onclick=\"navigator.clipboard.writeText(document.getElementById('snText').innerText); this.innerText='Скопировано!'; setTimeout(()=>this.innerText='Копировать', 1500)\">Копировать</button>\n"
+                "    </div>\n"
+                "  </div>\n"
+                "  <div class=\"card\">\n"
+                "    <h3 style=\"margin-top: 0; margin-bottom: 16px; font-size: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px;\">Параметры сертификата и маршрутизации</h3>\n"
+                "    <div class=\"grid\">\n"
+                "      <div class=\"label\">Local Domain:</div><div class=\"value\" style=\"color: var(--accent); font-weight: 600;\">%s</div>\n"
+                "      <div class=\"label\">SAN DNS:</div><div class=\"value\">%s</div>\n"
+                "      <div class=\"label\">Client Email:</div><div class=\"value\">%s</div>\n"
+                "      <div class=\"label\">Issuer CA:</div><div class=\"value\">%s</div>\n"
+                "      <div class=\"label\">Serial:</div><div class=\"value\">%s</div>\n"
+                "      <div class=\"label\">Thumbprint:</div><div class=\"value\">%s</div>\n"
+                "      <div class=\"label\">Valid:</div><div class=\"value\">%s &mdash; %s</div>\n"
+                "      <div class=\"label\">Private Key:</div><div class=\"value\" style=\"color: var(--success); font-weight: 600;\">%s</div>\n"
+                "      <div class=\"label\">Reverse Target:</div><div class=\"value\">http://%s:%d (%s)</div>\n"
+                "      <div class=\"label\">Proxy Version:</div><div class=\"value\">%s</div>\n"
+                "    </div>\n"
+                "    <div class=\"links\">\n"
+                "      <a class=\"link\" href=\"/_leo4/sn\">/_leo4/sn (Plain SN)</a>\n"
+                "      <a class=\"link\" href=\"/_leo4/info?format=json\">/_leo4/info?format=json (JSON API)</a>\n"
+                "      <a class=\"link\" href=\"/\">/ (Главная страница сервиса)</a>\n"
+                "    </div>\n"
+                "  </div>\n"
+                "  <div class=\"card\">\n"
+                "    <h3 style=\"margin-top: 0; margin-bottom: 12px; font-size: 14px; color: var(--muted);\">Raw JSON Response</h3>\n"
+                "    <pre>%s</pre>\n"
+                "  </div>\n"
+                "</div>\n"
+                "</body>\n"
+                "</html>\n",
+                certDetails->sn,
+                certDetails->local_hostname,
+                certDetails->sn,
+                certDetails->local_hostname,
+                certDetails->san_dns,
+                certDetails->email,
+                certDetails->issuer,
+                certDetails->serial,
+                certDetails->thumbprint,
+                certDetails->not_before,
+                certDetails->not_after,
+                certDetails->has_private_key ? "YES (CNG KSP Hardware / Protected)" : "NO",
+                config->reverse_target_host, config->reverse_target_port,
+                backend_online ? "online" : "offline",
+                LEO4_PROXY_VERSION,
+                jsonBuf
+            );
+        } else {
+            htmlBodyLen = snprintf(htmlBody, sizeof(htmlBody),
+                "<!DOCTYPE html>\n"
+                "<html lang=\"ru\">\n"
+                "<head>\n"
+                "<meta charset=\"utf-8\">\n"
+                "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
+                "<title>Leo4 Terminal - %s</title>\n"
+                "<style>\n"
+                "  :root { --bg: #0f172a; --card: #1e293b; --border: #334155; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --success: #4ade80; }\n"
+                "  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 24px; }\n"
+                "  .container { max-width: 800px; margin: 0 auto; }\n"
+                "  .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 24px; }\n"
+                "  .badge { background: #064e3b; color: var(--success); padding: 4px 12px; border-radius: 9999px; font-weight: 600; font-size: 14px; }\n"
+                "  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }\n"
+                "  .sn-box { display: flex; align-items: center; justify-content: space-between; background: #0f172a; padding: 12px 16px; border-radius: 8px; border: 1px solid var(--border); font-family: monospace; font-size: 18px; color: var(--accent); margin-top: 8px; }\n"
+                "  .grid { display: grid; grid-template-columns: 140px 1fr; gap: 10px; font-size: 14px; }\n"
+                "  .label { color: var(--muted); }\n"
+                "  .value { font-family: monospace; word-break: break-all; }\n"
+                "  pre { background: #0f172a; padding: 16px; border-radius: 8px; border: 1px solid var(--border); overflow-x: auto; color: #38bdf8; font-size: 13px; }\n"
+                "  .links { display: flex; gap: 16px; margin-top: 16px; }\n"
+                "  .link { color: var(--accent); text-decoration: none; font-size: 14px; font-weight: 500; }\n"
+                "  .link:hover { text-decoration: underline; }\n"
+                "</style>\n"
+                "</head>\n"
+                "<body>\n"
+                "<div class=\"container\">\n"
+                "  <div class=\"header\">\n"
+                "    <div>\n"
+                "      <h1 style=\"margin: 0; font-size: 24px;\">Leo4 Terminal Diagnostic Info</h1>\n"
+                "      <div style=\"color: var(--muted); font-size: 14px; margin-top: 4px;\">Host: %s</div>\n"
+                "    </div>\n"
+                "    <div class=\"badge\">%s</div>\n"
+                "  </div>\n"
+                "  <div class=\"card\">\n"
+                "    <div style=\"font-size: 14px; color: var(--muted);\">Serial Number (SN / Client ID)</div>\n"
+                "    <div class=\"sn-box\">\n"
+                "      <span>%s</span>\n"
+                "    </div>\n"
+                "  </div>\n"
+                "  <div class=\"card\">\n"
+                "    <h3 style=\"margin-top: 0; margin-bottom: 16px; font-size: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px;\">Состояние устройства</h3>\n"
+                "    <div class=\"grid\">\n"
+                "      <div class=\"label\">Local Domain:</div><div class=\"value\" style=\"color: var(--accent); font-weight: 600;\">%s</div>\n"
+                "      <div class=\"label\">Backend Service:</div><div class=\"value\" style=\"color: %s;\">%s</div>\n"
+                "      <div class=\"label\">MQTT Clients:</div><div class=\"value\">%ld connected</div>\n"
+                "      <div class=\"label\">HTTP Requests:</div><div class=\"value\">%ld total</div>\n"
+                "    </div>\n"
+                "  </div>\n"
+                "  <div class=\"card\">\n"
+                "    <h3 style=\"margin-top: 0; margin-bottom: 12px; font-size: 14px; color: var(--muted);\">JSON Output</h3>\n"
+                "    <pre>%s</pre>\n"
+                "  </div>\n"
+                "</div>\n"
+                "</body>\n"
+                "</html>\n",
+                active_sn,
+                active_host,
+                cert_ready ? "Online & TLS OK" : "Waiting for Certificate",
+                active_sn,
+                active_host,
+                backend_online ? "var(--success)" : "var(--muted)",
+                backend_online ? "online" : "offline",
+                g_proxyStats.mqtt_active_clients,
+                g_proxyStats.http_total_requests + g_proxyStats.reverse_total_requests,
+                jsonBuf
+            );
+        }
 
         totalLen = snprintf(responseBuf, sizeof(responseBuf),
             "HTTP/1.1 200 OK\r\n"
@@ -244,11 +444,12 @@ static void handle_info_request(SChannelSession* session, const ProxyConfig* con
             "%s"
             "\r\n"
             "%s",
-            htmlBodyLen, certDetails->sn,
+            htmlBodyLen, active_sn,
             keep_alive ? "keep-alive" : "close",
             keep_alive ? "Keep-Alive: timeout=15, max=100\r\n" : "",
             htmlBody);
     } else {
+        const char* active_sn = cert_ready ? certDetails->sn : "";
         totalLen = snprintf(responseBuf, sizeof(responseBuf),
             "HTTP/1.1 200 OK\r\n"
             "Content-Type: application/json; charset=utf-8\r\n"
@@ -261,7 +462,7 @@ static void handle_info_request(SChannelSession* session, const ProxyConfig* con
             "%s"
             "\r\n"
             "%s",
-            jsonLen, certDetails->sn,
+            jsonLen, active_sn,
             keep_alive ? "keep-alive" : "close",
             keep_alive ? "Keep-Alive: timeout=15, max=100\r\n" : "",
             jsonBuf);
@@ -312,7 +513,10 @@ static unsigned __stdcall reverse_client_worker(void* arg) {
         inet_ntop(AF_INET, &addr4->sin_addr, clientIp, sizeof(clientIp));
     }
     printf("[REVERSE-PROXY] Inbound connection from %s\n", clientIp);
+    bool is_local = is_loopback_sockaddr((struct sockaddr*)&args->clientAddr);
     free(args);
+
+    InterlockedIncrement(&g_proxyStats.reverse_total_requests);
 
     // 1. Perform Inbound TLS Handshake via SChannel
     SChannelSession clientTlsSession;
@@ -415,7 +619,7 @@ static unsigned __stdcall reverse_client_worker(void* arg) {
         if (_stricmp(method, "GET") == 0 &&
             (_stricmp(path, "/_leo4/info") == 0 || _strnicmp(path, "/_leo4/info?", 12) == 0 ||
              _stricmp(path, "/_leo4/status") == 0 || _strnicmp(path, "/_leo4/status?", 14) == 0)) {
-            handle_info_request(&clientTlsSession, config, certDetails, wants_html, keep_alive);
+            handle_info_request(&clientTlsSession, config, certDetails, wants_html, keep_alive, is_local);
             if (client_wants_close) break;
             continue;
         }
@@ -489,7 +693,7 @@ static unsigned __stdcall reverse_client_worker(void* arg) {
         if (targetSock == INVALID_SOCKET) {
             // If visiting root with browser and backend is offline, show helpful diagnostic landing page
             if ((strcmp(path, "/") == 0 || strcmp(path, "") == 0) && wants_html) {
-                handle_info_request(&clientTlsSession, config, certDetails, true, keep_alive);
+                handle_info_request(&clientTlsSession, config, certDetails, true, keep_alive, is_local);
                 if (client_wants_close) break;
                 continue;
             } else {

@@ -12,6 +12,7 @@
 
 #include <winsock2.h>
 #include <windows.h>
+#include <stdbool.h>
 
 #define LEO4_PROXY_VERSION "1.0.0"
 #define LEO4_SERVICE_NAME L"Leo4Proxy"
@@ -36,6 +37,7 @@
 
 #define DEFAULT_CERT_EMAIL_PRIMARY  ".terminal@leo4.ru"
 #define DEFAULT_CERT_EMAIL_FALLBACK ".terminal@forpay.ru"
+#define DEFAULT_CERT_POLL_INTERVAL  30
 
 #define MAX_HOST_LEN        256
 #define MAX_SN_LEN          128
@@ -74,6 +76,8 @@ typedef struct {
     char cert_store_name[64];
     int  is_machine_store;      /* 1 for LocalMachine, 0 for CurrentUser */
     int  insecure_server_cert;  /* 1 to ignore untrusted server CA (default: 1) */
+    int  cert_poll_interval;    /* Interval in seconds for certificate change polling (default: 30) */
+    int  drop_on_expire;        /* 1 to transition to standby mode if cert expires and no valid cert in store (default: 0) */
 
     int  http_local_ssl;        /* 1 to enforce SSL on local HTTP listener */
     int  mqtt_local_ssl;        /* 1 to enforce SSL on local MQTT listener */
@@ -84,6 +88,21 @@ typedef struct {
     int  verbose;
 } ProxyConfig;
 
+/* Runtime proxy metrics and status */
+typedef struct {
+    volatile LONG mqtt_active_clients;
+    volatile LONG mqtt_total_connections;
+    volatile LONG http_total_requests;
+    volatile LONG reverse_total_requests;
+    volatile LONG cert_ready;
+} ProxyStats;
+
+extern ProxyStats g_proxyStats;
+
 void proxy_config_init_defaults(ProxyConfig* config);
+
+/* Network utility helpers */
+bool tcp_probe_connect(const char* host, int port, int timeout_ms);
+bool is_loopback_sockaddr(const struct sockaddr* sa);
 
 #endif /* LEO4_CONFIG_H */
