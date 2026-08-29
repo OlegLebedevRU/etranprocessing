@@ -1,0 +1,5 @@
+#pragma once
+
+#define IDI_APP_ICON        101
+#define CREATEPROCESS_MANIFEST_RESOURCE_ID 1
+#define RT_MANIFEST         24

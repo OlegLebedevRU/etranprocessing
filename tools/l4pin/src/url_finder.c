@@ -102,34 +102,45 @@ bool resolve_certificates_url(const char* cli_url_arg, char* out_url, size_t out
     }
 
     if (json_resp && successful_probe) {
-        char raw_http_local[128] = { 0 };
-        if (parse_json_field(json_resp, "http_local", raw_http_local, sizeof(raw_http_local))) {
-            char norm_http_local[128] = { 0 };
-            normalize_host_port(raw_http_local, norm_http_local, sizeof(norm_http_local));
+        char status_val[64] = { 0 };
+        char routes_val[32] = { 0 };
+        parse_json_field(json_resp, "status", status_val, sizeof(status_val));
+        parse_json_field(json_resp, "routes_active", routes_val, sizeof(routes_val));
 
-            if (norm_http_local[0] != '\0') {
-                printf("[URL Finder] Discovered leo4proxy at %s (listener: %s)\n",
-                       successful_probe, norm_http_local);
+        bool routes_ready = (_stricmp(status_val, "ready") == 0 || _stricmp(routes_val, "true") == 0);
+        if (!routes_ready) {
+            printf("[URL Finder] leo4proxy is in '%s' status (routes inactive). Falling back to direct cloud endpoint.\n",
+                   status_val[0] ? status_val : "waiting_for_certificate");
+        } else {
+            char raw_http_local[128] = { 0 };
+            if (parse_json_field(json_resp, "http_local", raw_http_local, sizeof(raw_http_local))) {
+                char norm_http_local[128] = { 0 };
+                normalize_host_port(raw_http_local, norm_http_local, sizeof(norm_http_local));
 
-                // Check whether HTTPS or HTTP works for http_local
-                char test_https_url[256];
-                snprintf(test_https_url, sizeof(test_https_url), "https://%s/_leo4/info", norm_http_local);
+                if (norm_http_local[0] != '\0') {
+                    printf("[URL Finder] Discovered leo4proxy at %s (listener: %s)\n",
+                           successful_probe, norm_http_local);
 
-                char* test_resp = NULL;
-                size_t test_len = 0;
-                bool https_ok = http_get_simple(test_https_url, 1000, &test_resp, &test_len);
-                if (test_resp) free(test_resp);
+                    // Check whether HTTPS or HTTP works for http_local
+                    char test_https_url[256];
+                    snprintf(test_https_url, sizeof(test_https_url), "https://%s/_leo4/info", norm_http_local);
 
-                if (https_ok) {
-                    snprintf(out_url, out_url_size, "https://%s/api/certificates", norm_http_local);
-                } else {
-                    // Try HTTP
-                    snprintf(out_url, out_url_size, "http://%s/api/certificates", norm_http_local);
+                    char* test_resp = NULL;
+                    size_t test_len = 0;
+                    bool https_ok = http_get_simple(test_https_url, 1000, &test_resp, &test_len);
+                    if (test_resp) free(test_resp);
+
+                    if (https_ok) {
+                        snprintf(out_url, out_url_size, "https://%s/api/certificates", norm_http_local);
+                    } else {
+                        // Try HTTP
+                        snprintf(out_url, out_url_size, "http://%s/api/certificates", norm_http_local);
+                    }
+
+                    printf("[URL Finder] Resolved base URL via leo4proxy -> '%s'\n", out_url);
+                    free(json_resp);
+                    return true;
                 }
-
-                printf("[URL Finder] Resolved base URL via leo4proxy -> '%s'\n", out_url);
-                free(json_resp);
-                return true;
             }
         }
         free(json_resp);
