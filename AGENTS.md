@@ -82,7 +82,23 @@ Detailed backend code standards, architecture rules, and patterns are documented
 | **`MenuBuilder/backend`** | Python 3.14, FastAPI, SQLAlchemy | Tenant & admin web portal, terminal menu management, and **user-facing billing API** (`/api/billing`, `/api/certificate-pin`, `/api/admin/organizations`, JWT authentication). | `uvicorn app.main:app` |
 | **`MenuBuilder/frontend`** | React 19, TypeScript, Vite, Ant Design v6 | Web UI for tenant administrators, terminal menu builder, license cart, and admin panels (Code Splitting, Design Tokens, multi-tenant). | `npm run build` / `npm run dev` |
 | **`ProcessingBackend/mcp-pin-server`** | Python 3.14, FastMCP / MCP SDK | Model Context Protocol server for PIN operations & certificate tools. | `python -m pin_server.server` |
-| **`tools/`** | C (Win32/CNG/CryptoAPI) / Python | Auxiliary CLI utilities for terminals and server management. | `tools/` |
+| **`tools/`** | C (Win32/CNG/CryptoAPI) / Python | Auxiliary CLI utilities for terminals and server management (`leo4proxy`, `mosquitto`, `l4con`, `l4sql`, `l4pin`, `l4superv`, `l4install`). | `tools/` |
+
+## L4 Tools Suite & Terminal Architecture Rules
+
+Comprehensive architectural specifications, orchestration principles, REST-RPC integration protocols, and development guidelines for creating and modifying tools in `tools/` are documented in:
+- **[`docs/terminal-tools-architecture-guide.md`](docs/terminal-tools-architecture-guide.md)** — Architectural blueprint, orchestration principles, REST-RPC integration flow, and step-by-step guideline for adding new native tools to L4 Suite.
+- **[`docs/remote-console-diagnostics-flow.md`](docs/remote-console-diagnostics-flow.md)** — Remote web console and diagnostic agent protocol, MQTT topic matrix, RPC methods (`7001` Exec, `7002` Cancel, `7003` Ping), and E2E test cases.
+- **[`docs/terminal-tools-user-guide.md`](docs/terminal-tools-user-guide.md)** — User guide and operational manual for engineers.
+
+### Key Rules for Tools Development (`tools/`):
+1. **Isolated Subdirectory Model**: Every tool in `C:\l4tools` resides in its own isolated subfolder (e.g. `C:\l4tools\l4sql\l4sql.exe`, `C:\l4tools\l4con\l4con.exe`).
+2. **Zero-Touch PATH & Working Directory**:
+   - `l4con` sets default spawned process working directory to `C:\l4tools` (preventing `C:\Windows\system32` leakage) and streams active prompt `C:\l4tools> <command>` to the console.
+   - `l4con` and `l4install` enrich the process and system `PATH` with all suite subdirectories, allowing seamless execution without full paths.
+3. **Mandatory 32/64-bit Architecture Build**: Always support both x86 (universal for POSReady 7/Windows 7–11) and x64 builds via `build.cmd`.
+4. **Zero-Dependency Win32 / C**: Native static `/MT` builds using only standard Windows SDK libraries (`odbc32.lib`, `advapi32.lib`, `user32.lib`, `winhttp.lib`, `ws2_32.lib`, `shlwapi.lib`).
+5. **Distribution Packaging**: Any new or updated tool must be staged in `tools/l4superv/pack_zip.cmd` and handled in `tools/l4superv/src/installer_main.c`.
 
 ## C / C++ Toolchains & Build Tools (Local Development Machine)
 

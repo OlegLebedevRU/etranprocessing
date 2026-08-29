@@ -39,7 +39,7 @@ if !MSVC_FOUND! equ 1 (
         exit /b 1
     )
 
-    cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /Isrc /Ires /Fe:bin\l4con.exe src\main.c src\config.c src\mqtt_protocol.c src\command_runner.c src\mqtt_client.c src\service_mgr.c obj\l4con.res /link ws2_32.lib winhttp.lib advapi32.lib user32.lib
+    cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /Isrc /Ires /Fe:bin\l4con.exe src\main.c src\config.c src\mqtt_protocol.c src\command_runner.c src\mqtt_client.c src\service_mgr.c obj\l4con.res /link ws2_32.lib winhttp.lib advapi32.lib user32.lib shlwapi.lib
     if !errorlevel! neq 0 (
         echo [ERROR] MSVC compilation failed!
         exit /b 1
@@ -89,7 +89,7 @@ if !GCC_FOUND! equ 1 (
         exit /b 1
     )
 
-    gcc.exe -O2 -static -Wall -Wextra -DUNICODE -D_UNICODE -DWIN32_LEAN_AND_MEAN -I src -I res -o bin\l4con.exe src\main.c src\config.c src\mqtt_protocol.c src\command_runner.c src\mqtt_client.c src\service_mgr.c obj\l4con.res.o -lws2_32 -lwinhttp -ladvapi32 -luser32
+    gcc.exe -O2 -static -Wall -Wextra -DUNICODE -D_UNICODE -DWIN32_LEAN_AND_MEAN -I src -I res -o bin\l4con.exe src\main.c src\config.c src\mqtt_protocol.c src\command_runner.c src\mqtt_client.c src\service_mgr.c obj\l4con.res.o -lws2_32 -lwinhttp -ladvapi32 -luser32 -lshlwapi
     if !errorlevel! neq 0 (
         echo [ERROR] GCC compilation failed!
         exit /b 1

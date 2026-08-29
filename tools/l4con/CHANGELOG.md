@@ -2,6 +2,18 @@
 
 All notable changes to the `l4con` component will be documented in this file.
 
+## [1.1.0] - 2026-08-29
+
+### Added & Improved
+- **Working Directory & Prompt Reporting**:
+  - Automatically switches default working directory for spawned processes from `C:\Windows\system32` to the tools base path (`C:\l4tools`).
+  - Streams active prompt line (`C:\l4tools> <command>`) as the initial output chunk to the remote console.
+- **Automatic Environment PATH Enrichment**:
+  - Implemented `command_runner_setup_environment()`: prepends `C:\l4tools`, `C:\l4tools\l4sql`, `C:\l4tools\l4con`, `C:\l4tools\l4pin`, `C:\l4tools\l4superv`, and `C:\l4tools\leo4proxy` to process `PATH`.
+  - Enables zero-path execution for all bundled utilities (`l4sql`, `l4pin`, `l4superv`).
+- **SCM Service Startup Hook**:
+  - Integrated working directory and `PATH` setup inside `service_main()` for `L4Con` Windows Service.
+
 ## [1.0.0] - 2026-08-29
 
 ### Initial Release

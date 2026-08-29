@@ -9,6 +9,77 @@
 #include <string.h>
 #include <time.h>
 #include <ctype.h>
+#include <shlwapi.h>
+
+#pragma comment(lib, "shlwapi.lib")
+
+static wchar_t g_active_working_dir[MAX_PATH] = L"C:\\l4tools";
+
+void command_runner_setup_environment(void) {
+    wchar_t exe_path[MAX_PATH];
+    if (GetModuleFileNameW(NULL, exe_path, MAX_PATH) == 0) return;
+
+    // exe_dir: e.g. C:\l4tools\l4con or C:\l4tools\bin
+    wchar_t exe_dir[MAX_PATH];
+    wcscpy_s(exe_dir, MAX_PATH, exe_path);
+    PathRemoveFileSpecW(exe_dir);
+
+    // base_dir: e.g. C:\l4tools
+    wchar_t base_dir[MAX_PATH];
+    wcscpy_s(base_dir, MAX_PATH, exe_dir);
+    wchar_t* last_slash = wcsrchr(base_dir, L'\\');
+    if (last_slash && (_wcsicmp(last_slash + 1, L"l4con") == 0 || _wcsicmp(last_slash + 1, L"bin") == 0)) {
+        *last_slash = L'\0';
+    }
+
+    if (PathFileExistsW(base_dir)) {
+        wcscpy_s(g_active_working_dir, MAX_PATH, base_dir);
+    } else if (PathFileExistsW(L"C:\\l4tools")) {
+        wcscpy_s(g_active_working_dir, MAX_PATH, L"C:\\l4tools");
+    } else {
+        wcscpy_s(g_active_working_dir, MAX_PATH, exe_dir);
+    }
+
+    // Set process working directory to base directory (e.g. C:\l4tools)
+    if (PathFileExistsW(g_active_working_dir)) {
+        SetCurrentDirectoryW(g_active_working_dir);
+    }
+
+    // Read existing PATH
+    DWORD cur_len = GetEnvironmentVariableW(L"PATH", NULL, 0);
+    wchar_t* cur_path = NULL;
+    if (cur_len > 0) {
+        cur_path = (wchar_t*)malloc((cur_len + 1) * sizeof(wchar_t));
+        if (cur_path) {
+            GetEnvironmentVariableW(L"PATH", cur_path, cur_len + 1);
+        }
+    }
+
+    // Build extended PATH with all tool directories
+    wchar_t new_path[8192];
+    _snwprintf(new_path, sizeof(new_path)/sizeof(wchar_t),
+               L"%ls;%ls\\l4con;%ls\\l4sql;%ls\\l4pin;%ls\\l4superv;%ls\\leo4proxy;%ls;%ls",
+               g_active_working_dir, g_active_working_dir, g_active_working_dir,
+               g_active_working_dir, g_active_working_dir, g_active_working_dir,
+               exe_dir,
+               cur_path ? cur_path : L"");
+
+    SetEnvironmentVariableW(L"PATH", new_path);
+
+    if (cur_path) free(cur_path);
+}
+
+void command_runner_get_active_working_dir(char* out_dir, size_t out_max) {
+    if (!out_dir || out_max == 0) return;
+    out_dir[0] = '\0';
+    WideCharToMultiByte(CP_UTF8, 0, g_active_working_dir, -1, out_dir, (int)out_max, NULL, NULL);
+}
+
+void command_runner_get_active_working_dir_w(wchar_t* out_dir, size_t out_max) {
+    if (!out_dir || out_max == 0) return;
+    wcsncpy(out_dir, g_active_working_dir, out_max - 1);
+    out_dir[out_max - 1] = L'\0';
+}
 
 static const char* BLACKLIST_PATTERNS[] = {
     "format ",
@@ -220,10 +291,12 @@ int command_runner_execute(CommandContext* ctx,
     }
 
     wchar_t* w_workdir = NULL;
-    wchar_t w_workdir_buf[256];
+    wchar_t w_workdir_buf[MAX_PATH];
     if (strlen(ctx->working_dir) > 0) {
-        MultiByteToWideChar(CP_UTF8, 0, ctx->working_dir, -1, w_workdir_buf, 256);
+        MultiByteToWideChar(CP_UTF8, 0, ctx->working_dir, -1, w_workdir_buf, MAX_PATH);
         w_workdir = w_workdir_buf;
+    } else {
+        w_workdir = g_active_working_dir;
     }
 
     // Create stdin pipe for non-interactive EOF
@@ -287,6 +360,22 @@ int command_runner_execute(CommandContext* ctx,
     char json_buf[16384];
     size_t total_output_bytes = 0;
     bool is_truncated = false;
+
+    // Send initial working directory prompt
+    char cwd_utf8[MAX_PATH];
+    command_runner_get_active_working_dir(cwd_utf8, sizeof(cwd_utf8));
+
+    char prompt_data[512];
+    snprintf(prompt_data, sizeof(prompt_data), "%s> %s\r\n", cwd_utf8, ctx->command_line);
+    char escaped_prompt[1024];
+    json_escape_string(prompt_data, strlen(prompt_data), escaped_prompt, sizeof(escaped_prompt));
+
+    seq++;
+    snprintf(json_buf, sizeof(json_buf),
+             "{\"v\":1,\"session_id\":\"%s\",\"seq\":%u,\"kind\":\"stdout\",\"stream\":\"stdout\","
+             "\"encoding\":\"utf-8\",\"data\":\"%s\",\"eof\":false,\"exit_code\":null,\"truncated\":false}",
+             ctx->session_id, seq, escaped_prompt);
+    if (callback) callback(ctx->out_topic, json_buf, strlen(json_buf), user_data);
 
     DWORD max_wait_ms = (DWORD)(ctx->ttl_sec * 1000);
     uint64_t proc_start_tick = get_tick_ms();

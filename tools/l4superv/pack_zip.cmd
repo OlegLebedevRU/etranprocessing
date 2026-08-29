@@ -15,11 +15,12 @@ md "%STAGING%\leo4proxy"
 md "%STAGING%\mosquitto"
 md "%STAGING%\mosquitto\log"
 md "%STAGING%\l4con"
+md "%STAGING%\l4sql"
 md "%STAGING%\l4pin"
 md "%STAGING%\l4superv"
 
 :: 1. Copy leo4proxy
-echo [1/5] Staging leo4proxy...
+echo [1/7] Staging leo4proxy...
 if exist "%REPO_TOOLS%\leo4proxy\bin" (
     xcopy /e /y /q "%REPO_TOOLS%\leo4proxy\bin\*" "%STAGING%\leo4proxy\" >nul
 )
@@ -28,7 +29,7 @@ if exist "%REPO_TOOLS%\leo4proxy\leo4proxy.exe" (
 )
 
 :: 2. Copy mosquitto
-echo [2/5] Staging mosquitto...
+echo [2/7] Staging mosquitto...
 if exist "D:\Platerra26\tools\mosquitto" (
     xcopy /e /y /q "D:\Platerra26\tools\mosquitto\*" "%STAGING%\mosquitto\" >nul
 ) else if exist "%REPO_TOOLS%\mosquitto" (
@@ -40,7 +41,7 @@ if exist "%STAGING%\mosquitto\mosquitto.conf.bak" del /f /q "%STAGING%\mosquitto
 if exist "%STAGING%\mosquitto\install_mosquitto.ps1.bak" del /f /q "%STAGING%\mosquitto\install_mosquitto.ps1.bak" >nul 2>nul
 
 :: 3. Copy l4con
-echo [3/6] Staging l4con...
+echo [3/7] Staging l4con...
 if exist "%REPO_TOOLS%\l4con\bin" (
     xcopy /e /y /q "%REPO_TOOLS%\l4con\bin\*" "%STAGING%\l4con\" >nul
 )
@@ -48,14 +49,25 @@ if exist "%REPO_TOOLS%\l4con\CHANGELOG.md" (
     copy /y "%REPO_TOOLS%\l4con\CHANGELOG.md" "%STAGING%\l4con\CHANGELOG.md" >nul 2>nul
 )
 
-:: 4. Copy l4pin
-echo [4/6] Staging l4pin...
+:: 4. Copy l4sql
+echo [4/7] Staging l4sql...
+if exist "%REPO_TOOLS%\l4sql\bin" (
+    xcopy /e /y /q "%REPO_TOOLS%\l4sql\bin\*" "%STAGING%\l4sql\" >nul
+) else if exist "%REPO_TOOLS%\l4sql\build\l4sql.exe" (
+    copy /y "%REPO_TOOLS%\l4sql\build\l4sql.exe" "%STAGING%\l4sql\" >nul
+)
+if exist "%REPO_TOOLS%\l4sql\README.md" (
+    copy /y "%REPO_TOOLS%\l4sql\README.md" "%STAGING%\l4sql\README.md" >nul 2>nul
+)
+
+:: 5. Copy l4pin
+echo [5/7] Staging l4pin...
 if exist "%REPO_TOOLS%\l4pin\bin" (
     xcopy /e /y /q "%REPO_TOOLS%\l4pin\bin\*" "%STAGING%\l4pin\" >nul
 )
 
-:: 5. Copy l4superv and l4install
-echo [5/6] Staging l4superv and l4install...
+:: 6. Copy l4superv and l4install
+echo [6/7] Staging l4superv and l4install...
 if exist "%~dp0bin" (
     xcopy /e /y /q "%~dp0bin\*.exe" "%STAGING%\l4superv\" >nul 2>nul
     xcopy /e /y /q "%~dp0bin\*.cmd" "%STAGING%\l4superv\" >nul 2>nul
@@ -65,8 +77,8 @@ if exist "%~dp0CHANGELOG.md" (
     copy /y "%~dp0CHANGELOG.md" "%STAGING%\l4superv\CHANGELOG.md" >nul 2>nul
 )
 
-:: 6. Stage User Guide in package root
-echo [6/6] Staging terminal-tools-user-guide.md in package root...
+:: 7. Stage User Guide in package root
+echo [7/7] Staging terminal-tools-user-guide.md in package root...
 if exist "%REPO_TOOLS%\..\docs\terminal-tools-user-guide.md" (
     copy /y "%REPO_TOOLS%\..\docs\terminal-tools-user-guide.md" "%STAGING%\terminal-tools-user-guide.md" >nul
     copy /y "%REPO_TOOLS%\..\docs\terminal-tools-user-guide.md" "%~dp0bin\terminal-tools-user-guide.md" >nul 2>nul

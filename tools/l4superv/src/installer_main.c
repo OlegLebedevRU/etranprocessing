@@ -11,6 +11,45 @@
 
 #pragma comment(lib, "shlwapi.lib")
 
+static void add_to_system_path(const wchar_t* base_dir) {
+    HKEY hKey;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE,
+                      L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment",
+                      0, KEY_READ | KEY_WRITE, &hKey) != ERROR_SUCCESS) {
+        return;
+    }
+
+    wchar_t current_path[32768] = {0};
+    DWORD type = 0;
+    DWORD size = sizeof(current_path) - sizeof(wchar_t);
+    if (RegQueryValueExW(hKey, L"Path", NULL, &type, (LPBYTE)current_path, &size) != ERROR_SUCCESS) {
+        current_path[0] = L'\0';
+    }
+
+    wchar_t tools_path[MAX_PATH * 6];
+    swprintf_s(tools_path, sizeof(tools_path)/sizeof(wchar_t),
+               L"%ls;%ls\\l4sql;%ls\\l4pin;%ls\\l4con;%ls\\l4superv",
+               base_dir, base_dir, base_dir, base_dir, base_dir);
+
+    if (wcsstr(current_path, base_dir) == NULL) {
+        wchar_t new_path[32768];
+        if (current_path[0] != L'\0') {
+            swprintf_s(new_path, sizeof(new_path)/sizeof(wchar_t), L"%ls;%ls", tools_path, current_path);
+        } else {
+            wcscpy_s(new_path, sizeof(new_path)/sizeof(wchar_t), tools_path);
+        }
+
+        DWORD new_size = (DWORD)((wcslen(new_path) + 1) * sizeof(wchar_t));
+        RegSetValueExW(hKey, L"Path", 0, REG_EXPAND_SZ, (const BYTE*)new_path, new_size);
+
+        DWORD_PTR result;
+        SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0,
+                            (LPARAM)L"Environment", SMTO_ABORTIFHUNG, 1000, &result);
+    }
+
+    RegCloseKey(hKey);
+}
+
 static void print_banner(void) {
     wprintf(L"===============================================================\n");
     wprintf(L"  Leo4 Tools Suite Installer (l4install) v%ls\n", L4_SUPERV_VERSION_STR);
@@ -138,8 +177,12 @@ int wmain(int argc, wchar_t* argv[]) {
     swprintf_s(sub_dir, MAX_PATH, L"%ls\\mosquitto", dest_dir); CreateDirectoryW(sub_dir, NULL);
     swprintf_s(sub_dir, MAX_PATH, L"%ls\\mosquitto\\log", dest_dir); CreateDirectoryW(sub_dir, NULL);
     swprintf_s(sub_dir, MAX_PATH, L"%ls\\l4con", dest_dir); CreateDirectoryW(sub_dir, NULL);
+    swprintf_s(sub_dir, MAX_PATH, L"%ls\\l4sql", dest_dir); CreateDirectoryW(sub_dir, NULL);
     swprintf_s(sub_dir, MAX_PATH, L"%ls\\l4pin", dest_dir); CreateDirectoryW(sub_dir, NULL);
     swprintf_s(sub_dir, MAX_PATH, L"%ls\\l4superv", dest_dir); CreateDirectoryW(sub_dir, NULL);
+
+    // Register tools in system PATH for interactive sessions
+    add_to_system_path(dest_dir);
 
     // Copy l4install.exe into target base directory for future maintenance
     wchar_t target_installer[MAX_PATH];
@@ -224,6 +267,7 @@ int wmain(int argc, wchar_t* argv[]) {
         wprintf(L"   - Installer Copy: %ls\\l4install.exe\n", dest_dir);
         wprintf(L"   - Supervisor:     %ls\\l4superv\\l4superv.exe\n", dest_dir);
         wprintf(L"   - PIN Tool:       %ls\\l4pin\\l4pin.exe\n", dest_dir);
+        wprintf(L"   - SQL Client:     %ls\\l4sql\\l4sql.exe\n", dest_dir);
         wprintf(L"---------------------------------------------------------------\n");
         wprintf(L" Service Runtime Status (from SCM & Process Table):\n");
         

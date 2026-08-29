@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include "service_mgr.h"
 #include "mqtt_client.h"
+#include "command_runner.h"
 
 #pragma comment(lib, "advapi32.lib")
 
@@ -90,6 +91,9 @@ static void WINAPI service_main(DWORD argc, LPWSTR* argv) {
     }
 
     report_service_status(SERVICE_RUNNING, NO_ERROR, 0);
+
+    // Initialize tools base path, working directory and PATH environment in service context
+    command_runner_setup_environment();
 
     // Windows Service mode: enforce is_service flag and discard any SN argument.
     // Leo4Proxy is the strict source of truth for SN when running as a Windows Service!

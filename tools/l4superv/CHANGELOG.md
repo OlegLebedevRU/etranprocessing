@@ -2,6 +2,16 @@
 
 All notable changes to the `l4superv` and `l4install` suite will be documented in this file.
 
+## [1.1.0] - 2026-08-29
+
+### Added & Improved
+- **SQL Client Integration (`l4sql`)**:
+  - Added `l4sql` directory staging into `tools.zip` and automated extraction to `C:\l4tools\l4sql\l4sql.exe` during `l4install`.
+- **System PATH Registration**:
+  - `l4install` registers `C:\l4tools`, `C:\l4tools\l4sql`, `C:\l4tools\l4pin`, `C:\l4tools\l4con`, `C:\l4tools\l4superv` in system environment variable `Path` (`HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment`) and broadcasts `WM_SETTINGCHANGE`.
+- **Diagnostics Output**:
+  - Added `l4sql` status verification to `l4install` final output summary.
+
 ## [1.0.1] - 2026-08-29
 
 ### Added

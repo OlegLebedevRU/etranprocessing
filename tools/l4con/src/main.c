@@ -9,6 +9,7 @@
 #include "config.h"
 #include "service_mgr.h"
 #include "mqtt_client.h"
+#include "command_runner.h"
 
 static HANDLE g_consoleStopEvent = NULL;
 
@@ -39,6 +40,9 @@ int main(int argc, char* argv[]) {
 
     AppConfig config;
     config_init_defaults(&config);
+
+    // Initialize tools base path, working directory and PATH environment
+    command_runner_setup_environment();
 
     bool is_service_cmd = false;
     config_parse_args(&config, argc, argv, &is_service_cmd);

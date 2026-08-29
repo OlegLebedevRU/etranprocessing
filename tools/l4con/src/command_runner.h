@@ -36,6 +36,9 @@ typedef struct {
 
 typedef void (*OutputChunkCallback)(const char* topic, const char* json_envelope, size_t json_len, void* user_data);
 
+void command_runner_setup_environment(void);
+void command_runner_get_active_working_dir(char* out_dir, size_t out_max);
+void command_runner_get_active_working_dir_w(wchar_t* out_dir, size_t out_max);
 bool command_runner_is_blacklisted(const char* cmd);
 void command_runner_init_context(CommandContext* ctx);
 void command_runner_request_cancel(CommandContext* ctx);
