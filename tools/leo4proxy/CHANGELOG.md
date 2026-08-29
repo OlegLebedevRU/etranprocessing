@@ -2,6 +2,15 @@
 
 All notable changes to the `leo4proxy` component will be documented in this file.
 
+## [1.1.1] - 2026-08-29
+
+### Fixed
+- **Certificate Removal / Deletion Handling**:
+  - Fixed issue where deleting a certificate from Windows Certificate Store (`LocalMachine\MY`) left proxy running with stale in-memory credentials.
+  - Proxy worker thread now detects certificate disappearance (`!foundBest`), immediately stops mTLS listeners/tunnels (`:18883`, `:443`), frees SChannel credentials, clears certificate details, and resets state to `waiting_for_certificate` (Standby mode).
+
+---
+
 ## [1.1.0] - 2026-08-29
 
 ### Added

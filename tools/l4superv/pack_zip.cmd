@@ -40,23 +40,36 @@ if exist "%STAGING%\mosquitto\mosquitto.conf.bak" del /f /q "%STAGING%\mosquitto
 if exist "%STAGING%\mosquitto\install_mosquitto.ps1.bak" del /f /q "%STAGING%\mosquitto\install_mosquitto.ps1.bak" >nul 2>nul
 
 :: 3. Copy l4con
-echo [3/5] Staging l4con...
+echo [3/6] Staging l4con...
 if exist "%REPO_TOOLS%\l4con\bin" (
     xcopy /e /y /q "%REPO_TOOLS%\l4con\bin\*" "%STAGING%\l4con\" >nul
 )
+if exist "%REPO_TOOLS%\l4con\CHANGELOG.md" (
+    copy /y "%REPO_TOOLS%\l4con\CHANGELOG.md" "%STAGING%\l4con\CHANGELOG.md" >nul 2>nul
+)
 
 :: 4. Copy l4pin
-echo [4/5] Staging l4pin...
+echo [4/6] Staging l4pin...
 if exist "%REPO_TOOLS%\l4pin\bin" (
     xcopy /e /y /q "%REPO_TOOLS%\l4pin\bin\*" "%STAGING%\l4pin\" >nul
 )
 
 :: 5. Copy l4superv and l4install
-echo [5/5] Staging l4superv and l4install...
+echo [5/6] Staging l4superv and l4install...
 if exist "%~dp0bin" (
     xcopy /e /y /q "%~dp0bin\*.exe" "%STAGING%\l4superv\" >nul 2>nul
     xcopy /e /y /q "%~dp0bin\*.cmd" "%STAGING%\l4superv\" >nul 2>nul
     copy /y "%~dp0bin\l4install.exe" "%STAGING%\l4install.exe" >nul 2>nul
+)
+if exist "%~dp0CHANGELOG.md" (
+    copy /y "%~dp0CHANGELOG.md" "%STAGING%\l4superv\CHANGELOG.md" >nul 2>nul
+)
+
+:: 6. Stage User Guide in package root
+echo [6/6] Staging terminal-tools-user-guide.md in package root...
+if exist "%REPO_TOOLS%\..\docs\terminal-tools-user-guide.md" (
+    copy /y "%REPO_TOOLS%\..\docs\terminal-tools-user-guide.md" "%STAGING%\terminal-tools-user-guide.md" >nul
+    copy /y "%REPO_TOOLS%\..\docs\terminal-tools-user-guide.md" "%~dp0bin\terminal-tools-user-guide.md" >nul 2>nul
 )
 
 :: Create zip archive via PowerShell Compress-Archive

@@ -11,52 +11,23 @@ if not exist bin\x64 md bin\x64
 if not exist obj md obj
 
 :: 1. Check MSVC
-set MSVC_FOUND=0
-where cl.exe >nul 2>nul
-if !errorlevel! equ 0 (
-    set MSVC_FOUND=1
-) else (
-    if exist "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" (
-        call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64 >nul 2>nul
-        set MSVC_FOUND=1
-    ) else if exist "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" (
-        call "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64 >nul 2>nul
-        set MSVC_FOUND=1
-    ) else if exist "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" (
-        call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" x64 >nul 2>nul
-        set MSVC_FOUND=1
-    )
+set "VC_DIR="
+if exist "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build" (
+    set "VC_DIR=C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build"
+) else if exist "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build" (
+    set "VC_DIR=C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build"
+) else if exist "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build" (
+    set "VC_DIR=C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build"
+) else if exist "d:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build" (
+    set "VC_DIR=d:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build"
 )
 
-if !MSVC_FOUND! equ 1 (
+if defined VC_DIR (
     echo [Toolchain] Using Microsoft Visual C++ (MSVC)
     
-    :: Compile Resources
-    rc.exe /fo obj\l4superv.res res\l4superv.rc
+    cmd /c ""%VC_DIR%\vcvars64.bat" && rc.exe /fo obj\l4superv.res res\l4superv.rc && rc.exe /fo obj\l4install.res res\l4install.rc && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /Isrc /Ires /Fe:bin\l4superv.exe src\supervisor_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\proxy_client.c src\orchestrator.c obj\l4superv.res /link advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /Isrc /Ires /Fe:bin\l4install.exe src\installer_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\miniz.c src\zip_extractor.c obj\l4install.res /link advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib shell32.lib"
     if !errorlevel! neq 0 (
-        echo [ERROR] rc.exe failed for l4superv.rc!
-        exit /b 1
-    )
-
-    rc.exe /fo obj\l4install.res res\l4install.rc
-    if !errorlevel! neq 0 (
-        echo [ERROR] rc.exe failed for l4install.rc!
-        exit /b 1
-    )
-
-    :: 1. Build l4superv.exe
-    echo [Compile] Building l4superv.exe...
-    cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /Isrc /Ires /Fe:bin\l4superv.exe src\supervisor_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\proxy_client.c src\orchestrator.c obj\l4superv.res /link advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib
-    if !errorlevel! neq 0 (
-        echo [ERROR] MSVC compilation failed for l4superv!
-        exit /b 1
-    )
-
-    :: 2. Build l4install.exe
-    echo [Compile] Building l4install.exe...
-    cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /Isrc /Ires /Fe:bin\l4install.exe src\installer_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\miniz.c src\zip_extractor.c obj\l4install.res /link advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib shell32.lib
-    if !errorlevel! neq 0 (
-        echo [ERROR] MSVC compilation failed for l4install!
+        echo [ERROR] MSVC compilation failed!
         exit /b 1
     )
 
@@ -75,6 +46,16 @@ if !MSVC_FOUND! equ 1 (
         copy /y README.md bin\README.md >nul 2>nul
         copy /y README.md bin\x86\README.md >nul 2>nul
         copy /y README.md bin\x64\README.md >nul 2>nul
+    )
+    if exist CHANGELOG.md (
+        copy /y CHANGELOG.md bin\CHANGELOG.md >nul 2>nul
+        copy /y CHANGELOG.md bin\x86\CHANGELOG.md >nul 2>nul
+        copy /y CHANGELOG.md bin\x64\CHANGELOG.md >nul 2>nul
+    )
+    if exist "%~dp0..\..\docs\terminal-tools-user-guide.md" (
+        copy /y "%~dp0..\..\docs\terminal-tools-user-guide.md" bin\terminal-tools-user-guide.md >nul 2>nul
+        copy /y "%~dp0..\..\docs\terminal-tools-user-guide.md" bin\x86\terminal-tools-user-guide.md >nul 2>nul
+        copy /y "%~dp0..\..\docs\terminal-tools-user-guide.md" bin\x64\terminal-tools-user-guide.md >nul 2>nul
     )
 
     echo.
@@ -120,6 +101,16 @@ if !GCC_FOUND! equ 1 (
         copy /y README.md bin\README.md >nul 2>nul
         copy /y README.md bin\x86\README.md >nul 2>nul
         copy /y README.md bin\x64\README.md >nul 2>nul
+    )
+    if exist CHANGELOG.md (
+        copy /y CHANGELOG.md bin\CHANGELOG.md >nul 2>nul
+        copy /y CHANGELOG.md bin\x86\CHANGELOG.md >nul 2>nul
+        copy /y CHANGELOG.md bin\x64\CHANGELOG.md >nul 2>nul
+    )
+    if exist "%~dp0..\..\docs\terminal-tools-user-guide.md" (
+        copy /y "%~dp0..\..\docs\terminal-tools-user-guide.md" bin\terminal-tools-user-guide.md >nul 2>nul
+        copy /y "%~dp0..\..\docs\terminal-tools-user-guide.md" bin\x86\terminal-tools-user-guide.md >nul 2>nul
+        copy /y "%~dp0..\..\docs\terminal-tools-user-guide.md" bin\x64\terminal-tools-user-guide.md >nul 2>nul
     )
 
     echo.

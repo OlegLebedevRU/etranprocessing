@@ -148,6 +148,19 @@ int wmain(int argc, wchar_t* argv[]) {
         CopyFileW(exe_path, target_installer, FALSE);
     }
 
+    // Ensure terminal-tools-user-guide.md is present next to l4install.exe
+    wchar_t target_guide[MAX_PATH];
+    swprintf_s(target_guide, MAX_PATH, L"%ls\\terminal-tools-user-guide.md", dest_dir);
+    wchar_t exe_dir[MAX_PATH];
+    wcscpy_s(exe_dir, MAX_PATH, exe_path);
+    wchar_t* last_slash = wcsrchr(exe_dir, L'\\');
+    if (last_slash) *last_slash = L'\0';
+    wchar_t source_guide[MAX_PATH];
+    swprintf_s(source_guide, MAX_PATH, L"%ls\\terminal-tools-user-guide.md", exe_dir);
+    if (PathFileExistsW(source_guide) && _wcsicmp(source_guide, target_guide) != 0) {
+        CopyFileW(source_guide, target_guide, FALSE);
+    }
+
     // Ensure permissive ACLs on mosquitto\log
     wchar_t mosq_log_dir[MAX_PATH];
     swprintf_s(mosq_log_dir, MAX_PATH, L"%ls\\mosquitto\\log", dest_dir);
@@ -206,7 +219,8 @@ int wmain(int argc, wchar_t* argv[]) {
         wprintf(L" [OK] Installation and Service Verification Completed!\n");
         wprintf(L" Target Location:    %ls\n", dest_dir);
         wprintf(L" Log Directory:      %ls (Permissions: RW for All)\n", mosq_log_dir);
-        wprintf(L" Installed Tools:\n");
+        wprintf(L" Installed Tools & Documentation:\n");
+        wprintf(L"   - User Guide:     %ls\\terminal-tools-user-guide.md\n", dest_dir);
         wprintf(L"   - Installer Copy: %ls\\l4install.exe\n", dest_dir);
         wprintf(L"   - Supervisor:     %ls\\l4superv\\l4superv.exe\n", dest_dir);
         wprintf(L"   - PIN Tool:       %ls\\l4pin\\l4pin.exe\n", dest_dir);
