@@ -4,7 +4,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_current_terminal
-from app.models import GateGaugeRecord, Terminal
+from app.models import Terminal
+from app.services.gauge_bus import gauge_mqtt_bus, gauge_store
+from app.services.gauge_engine import create_or_update_snapshot, parse_gauge_pack
 
 router = APIRouter()
 
@@ -16,20 +18,6 @@ def xml_response(content: str) -> Response:
     )
 
 
-def parse_gauge_pack(raw: str) -> dict:
-    """Parse semicolon-delimited resource=value pairs into JSON dict."""
-    result = {}
-    for pair in raw.split(";"):
-        pair = pair.strip()
-        if "=" in pair:
-            key, value = pair.split("=", 1)
-            try:
-                result[int(key)] = value
-            except ValueError:
-                result[key] = value
-    return result
-
-
 @router.post("")
 async def post_gauge(
     request: Request,
@@ -39,7 +27,7 @@ async def post_gauge(
     """
     GateGauge endpoint - receives telemetry data from terminals.
     Compatible with legacy GateGauge main.ashx format.
-    Stores in JSONB with circular buffer (24 records per terminal).
+    Maintains operational retain snapshot in RabbitMQ MQTT / in-memory store.
     """
     body = await request.body()
     raw_text = body.decode("windows-1251", errors="replace")
@@ -60,14 +48,15 @@ async def post_gauge(
         )
 
     gauge_data = parse_gauge_pack(gauge_raw)
+    existing_snapshot = gauge_store.get_by_device_id(terminal.device_id)
 
-    record = GateGaugeRecord(
+    snapshot = create_or_update_snapshot(
         device_id=terminal.device_id,
         sn=terminal.sn,
         gauge_data=gauge_data,
-        raw_data=gauge_raw,
+        existing_snapshot=existing_snapshot,
     )
-    db.add(record)
-    await db.commit()
+
+    gauge_mqtt_bus.publish_snapshot(terminal.sn, snapshot)
 
     return xml_response("<Response><Result>OK</Result></Response>")

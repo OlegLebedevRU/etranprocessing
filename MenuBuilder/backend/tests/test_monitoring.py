@@ -23,6 +23,20 @@ def anyio_backend():
 @pytest.mark.anyio
 async def test_monitoring_pagination_and_query_scoping():
     """Verify get_monitoring applies pagination, org_id filtering, and queries sub-records only for page items."""
+    from app.services.gauge_bus import gauge_store
+
+    gauge_store.clear()
+    gauge_store.set_snapshot(
+        {
+            "device_id": 1001,
+            "sn": "SN1001",
+            "updated_at": datetime.now(UTC).isoformat(),
+            "last_tick_epoch": int(datetime.now(UTC).timestamp() // 600),
+            "slots_bitmask": 0x001,
+            "gauge": {"102": "0", "109": "5000", "121": "0"},
+        }
+    )
+
     app.dependency_overrides[get_current_user] = lambda: {
         "username": "admin",
         "org_id": 1,
@@ -58,12 +72,6 @@ async def test_monitoring_pagination_and_query_scoping():
             ]
         elif "DISTINCT ON (terminal_id) terminal_id, expires_at" in sql_str:
             result.fetchall.return_value = [(1, datetime(2026, 9, 1, 0, 0, tzinfo=UTC))]
-        elif "DISTINCT ON (device_id) device_id, gauge_data" in sql_str:
-            result.fetchall.return_value = [
-                (1001, {"102": "0", "109": "5000", "121": "0"})
-            ]
-        elif "gate_gauge_records" in sql_str:
-            result.fetchall.return_value = [(1001, datetime.now(UTC))]
         elif "FROM terminals t" in sql_str:
             result.fetchall.return_value = [mock_terminal_row]
         else:
@@ -101,12 +109,12 @@ async def test_monitoring_pagination_and_query_scoping():
     assert term_query[1]["org_id"] == 1
     assert term_query[1]["search"] == "%1001%"
 
-    # Verify sub-queries used terminal_ids and device_ids scoped to page items
+    # Verify sub-queries used terminal_ids scoped to page items
     payment_query = next(q for q in executed_queries if "payments" in q[0])
     assert payment_query[1]["t_ids"] == [1]
 
-    gauge_query = next(q for q in executed_queries if "DISTINCT ON (device_id)" in q[0])
-    assert gauge_query[1]["d_ids"] == [1001]
+    # GateGauge is no longer queried from PostgreSQL DB
+    assert not any("gate_gauge_records" in q[0] for q in executed_queries)
 
 
 @pytest.mark.anyio

@@ -30,11 +30,15 @@ from app.routers import (
     services,
     terminal_bindings,
 )
+from app.services.gauge_bus import gauge_mqtt_bus, gauge_store
+from app.services.gauge_engine import decode_slots_bitmask
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    gauge_mqtt_bus.start()
     yield
+    gauge_mqtt_bus.stop()
 
 
 app = FastAPI(title="MenuBuilder API", version="0.2.0", lifespan=lifespan)
@@ -385,60 +389,9 @@ async def get_monitoring(
             )
         ).fetchall()
 
-        # Get GateGauge records for last 2 hours (scoped to current page only)
-        records = (
-            await session.execute(
-                text("""
-                SELECT device_id, created_at
-                FROM gate_gauge_records
-                WHERE device_id = ANY(:d_ids) AND created_at >= :start
-                ORDER BY device_id, created_at
-            """),
-                {"d_ids": device_ids, "start": start},
-            )
-        ).fetchall()
-
-        # Get latest gauge_data per terminal (scoped to current page only)
-        latest = (
-            await session.execute(
-                text("""
-                SELECT DISTINCT ON (device_id) device_id, gauge_data
-                FROM gate_gauge_records
-                WHERE device_id = ANY(:d_ids)
-                ORDER BY device_id, created_at DESC
-            """),
-                {"d_ids": device_ids},
-            )
-        ).fetchall()
-
-    # Build latest gauge map
-    gauge_map: dict[int, dict] = {}
-    for r in latest:
-        gauge_map[r[0]] = r[1] if r[1] else {}
-
     last_payment_map: dict[int, datetime] = {r[0]: r[1] for r in payment_rows if r[1]}
     license_map: dict[int, datetime] = {r[0]: r[1] for r in license_rows if r[1]}
     last_inkass_map: dict[int, datetime] = {r[0]: r[1] for r in inkass_rows if r[1]}
-
-    # Build interval map with overlap buffer to avoid false red on boundary shift
-    SLOT_DURATION = 600  # 10 minutes
-    SLOT_OVERLAP = 60  # 1 minute buffer on each side of boundary
-    device_slots: dict[int, list[bool]] = {}
-    for r in records:
-        dev_id = r[0]
-        ts = r[1]
-        if dev_id not in device_slots:
-            device_slots[dev_id] = [False] * 12
-        delta_sec = (now - ts).total_seconds()
-        slot_index = 11 - int(delta_sec // SLOT_DURATION)
-        if 0 <= slot_index < 12:
-            device_slots[dev_id][slot_index] = True
-            # If near boundary, also mark adjacent slot to prevent false red on recalculation
-            offset_in_slot = delta_sec % SLOT_DURATION
-            if offset_in_slot < SLOT_OVERLAP and slot_index > 0:
-                device_slots[dev_id][slot_index - 1] = True
-            elif offset_in_slot > SLOT_DURATION - SLOT_OVERLAP and slot_index < 11:
-                device_slots[dev_id][slot_index + 1] = True
 
     def fmt_soft_version(raw: str) -> str:
         if not raw or raw == "0":
@@ -449,11 +402,30 @@ async def get_monitoring(
             return raw[:-2] + "." + raw[-2:]
         return "0." + raw.zfill(2)
 
+    now_epoch_tick = int(now.timestamp() // 600)
     items = []
     for t in terminals:
         dev_id = t[1]
-        slots = device_slots.get(dev_id, [False] * 12)
-        gauge = gauge_map.get(dev_id, {})
+        sn = t[2]
+        snapshot = gauge_store.get_by_device_id(dev_id) or (
+            gauge_store.get_by_sn(sn) if sn else None
+        )
+        if snapshot:
+            bitmask = int(snapshot.get("slots_bitmask", 0))
+            last_epoch_tick = int(snapshot.get("last_tick_epoch", 0))
+            updated_at = snapshot.get("updated_at")
+            slots = decode_slots_bitmask(
+                bitmask,
+                last_epoch_tick,
+                now_epoch_tick,
+                updated_at=updated_at,
+                now_dt=now,
+            )
+            gauge = snapshot.get("gauge", {})
+        else:
+            slots = [False] * 12
+            gauge = {}
+
         last_payment = last_payment_map.get(t[0])
         license_expires = license_map.get(t[0])
         last_inkass = last_inkass_map.get(dev_id)

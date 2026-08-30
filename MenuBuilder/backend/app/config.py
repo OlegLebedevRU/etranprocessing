@@ -76,6 +76,15 @@ class Settings(BaseSettings):
             or self.iot_rpc_service_token
         )
 
+    # MQTT / RabbitMQ Gauges settings
+    mqtt_host: str = "rabbitmq"
+    mqtt_port: int = 1883
+    mqtt_username: str = "etran_service"
+    mqtt_password: str = "etran_secret"
+    mqtt_enabled: bool = True
+    mqtt_topic_prefix: str = "dev"
+    amqp_url: str = "amqp://etran_service:etran_secret@rabbitmq:5672//"
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

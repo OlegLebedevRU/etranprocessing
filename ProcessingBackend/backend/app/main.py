@@ -7,13 +7,16 @@ from fastapi.responses import Response
 
 from app.config import settings
 from app.database import engine
+from app.services.gauge_bus import gauge_mqtt_bus
 
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    gauge_mqtt_bus.start()
     yield
+    gauge_mqtt_bus.stop()
     await engine.dispose()
 
 

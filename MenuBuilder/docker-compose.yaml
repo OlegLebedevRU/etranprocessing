@@ -13,6 +13,7 @@ services:
     networks:
       - pg_network
       - menubuilder_net
+      - rmq_network
 
   menubuilder-frontend:
     build:
@@ -42,3 +43,6 @@ networks:
     name: iot-rpc-rest-app_pg_network
   menubuilder_net:
     driver: bridge
+  rmq_network:
+    external: true
+    name: iot_rabbitmq_network
