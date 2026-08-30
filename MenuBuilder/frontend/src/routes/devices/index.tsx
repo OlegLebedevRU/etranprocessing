@@ -29,6 +29,7 @@ import {
   InfoCircleOutlined,
   CopyOutlined,
   ControlOutlined,
+  StopOutlined,
 } from "@ant-design/icons";
 import { getDevices, type DeviceListItem } from "../../api/devices";
 import { getAdminOrganizations, type AdminOrg } from "../../api/admin";
@@ -127,6 +128,8 @@ export default function DevicesManagementPage() {
       // Status filter
       if (statusFilter === "online" && d.status !== "online") return false;
       if (statusFilter === "offline" && d.status !== "offline") return false;
+      if (statusFilter === "blocked" && d.status !== "blocked" && !d.is_blocked)
+        return false;
 
       // Search query
       if (searchQuery.trim()) {
@@ -135,7 +138,22 @@ export default function DevicesManagementPage() {
         const matchesSn = d.sn.toLowerCase().includes(query);
         const matchesApp = d.app?.toLowerCase().includes(query);
         const matchesDesc = d.description?.toLowerCase().includes(query);
-        return matchesId || matchesSn || matchesApp || matchesDesc;
+        const matchesViolation = (d.violation_type || "").toLowerCase().includes(query);
+        const matchesReason = (d.violation_details?.reason || "").toLowerCase().includes(query);
+        const matchesTags = d.tags.some(
+          (t) =>
+            t.tag.toLowerCase().includes(query) ||
+            t.value.toLowerCase().includes(query)
+        );
+        return (
+          matchesId ||
+          matchesSn ||
+          matchesApp ||
+          matchesDesc ||
+          matchesViolation ||
+          matchesReason ||
+          matchesTags
+        );
       }
       return true;
     });
@@ -167,11 +185,15 @@ export default function DevicesManagementPage() {
       width: 140,
       sorter: (a, b) => a.device_id - b.device_id,
       render: (id, record) => {
+        const isBlocked = record.status === "blocked" || record.is_blocked;
         const isOnline = record.status === "online";
+        const badgeStatus = isBlocked ? "error" : isOnline ? "success" : "default";
         return (
           <Space>
-            <Badge status={isOnline ? "success" : "error"} />
-            <Text strong>#{id}</Text>
+            <Badge status={badgeStatus} />
+            <Text strong style={isBlocked ? { color: "#cf1322" } : undefined}>
+              #{id}
+            </Text>
           </Space>
         );
       },
@@ -203,8 +225,64 @@ export default function DevicesManagementPage() {
     {
       title: "Статус связи",
       key: "status",
-      width: 160,
+      width: 190,
       render: (_, record) => {
+        if (record.status === "blocked" || record.is_blocked) {
+          const violationType = record.violation_type;
+          const isSnCollision = violationType === "SN_COLLISION";
+          const isDeviceClone = violationType === "DEVICE_CLONE";
+          const label = isSnCollision
+            ? "Коллизия SN"
+            : isDeviceClone
+              ? "Клон устройства"
+              : "Заблокировано";
+          const subLabel = isSnCollision
+            ? "Дубликат сертификата"
+            : isDeviceClone
+              ? "Клон накопителя / IP"
+              : record.violation_details?.reason || "Инцидент безопасности";
+
+          return (
+            <Tooltip
+              title={
+                <div style={{ fontSize: 12 }}>
+                  <div>
+                    <strong>🔴 Доступ заблокирован</strong>
+                  </div>
+                  <div>Тип нарушения: {violationType || "SN_COLLISION"}</div>
+                  {record.violation_details?.reason && (
+                    <div>Причина: {record.violation_details.reason}</div>
+                  )}
+                  {record.violation_details?.flapping_count !== undefined && (
+                    <div>
+                      Попыток (flapping):{" "}
+                      {record.violation_details.flapping_count}
+                    </div>
+                  )}
+                  {record.violation_details?.conflicting_hosts &&
+                    record.violation_details.conflicting_hosts.length > 0 && (
+                      <div>
+                        Конфликт хостов:{" "}
+                        {record.violation_details.conflicting_hosts.join(", ")}
+                      </div>
+                    )}
+                </div>
+              }
+            >
+              <Space direction="vertical" size={2}>
+                <Tag
+                  color="error"
+                  icon={<StopOutlined />}
+                  style={{ margin: 0, fontWeight: 500 }}
+                >
+                  {label}
+                </Tag>
+                <span style={{ fontSize: 11, color: "#ff4d4f" }}>{subLabel}</span>
+              </Space>
+            </Tooltip>
+          );
+        }
+
         const isOnline = record.status === "online";
         const ageText =
           record.ageSeconds !== undefined
@@ -215,7 +293,7 @@ export default function DevicesManagementPage() {
 
         return (
           <Space direction="vertical" size={2}>
-            <Tag color={isOnline ? "success" : "error"} style={{ margin: 0 }}>
+            <Tag color={isOnline ? "success" : "default"} style={{ margin: 0 }}>
               {isOnline ? "Онлайн" : "Оффлайн"}
             </Tag>
             <span style={{ fontSize: 11, color: "#8c8c8c" }}>{ageText}</span>
@@ -326,20 +404,21 @@ export default function DevicesManagementPage() {
         <Select
           value={statusFilter}
           onChange={(val) => setStatusFilter(val)}
-          style={{ width: 150 }}
+          style={{ width: 230 }}
           options={[
             { value: "all", label: "Все статусы" },
             { value: "online", label: "Только онлайн" },
             { value: "offline", label: "Только оффлайн" },
+            { value: "blocked", label: "Заблокированные (Коллизии / Клоны)" },
           ]}
         />
 
         <Input
-          placeholder="Поиск по ID, SN, имени или приложению..."
+          placeholder="Поиск по ID, SN, имени, приложению или коллизии..."
           prefix={<SearchOutlined style={{ color: "#bfbfbf" }} />}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          style={{ width: 280 }}
+          style={{ width: 300 }}
           allowClear
         />
 
@@ -372,14 +451,30 @@ export default function DevicesManagementPage() {
       <Drawer
         title={
           selectedDevice ? (
-            <Space size={12}>
+            <Space size={12} wrap>
               <ClusterOutlined style={{ color: "#1677ff" }} />
               <span>
                 Устройство #{selectedDevice.device_id} (SN: {selectedDevice.sn})
               </span>
-              <Tag color={selectedDevice.status === "online" ? "success" : "error"}>
-                {selectedDevice.status === "online" ? "Онлайн" : "Оффлайн"}
-              </Tag>
+              {selectedDevice.status === "blocked" || selectedDevice.is_blocked ? (
+                <Tag color="error" icon={<StopOutlined />}>
+                  Заблокировано (
+                  {selectedDevice.violation_type === "SN_COLLISION"
+                    ? "Коллизия сертификатов"
+                    : selectedDevice.violation_type === "DEVICE_CLONE"
+                      ? "Клон устройства"
+                      : "Инцидент безопасности"}
+                  )
+                </Tag>
+              ) : (
+                <Tag
+                  color={
+                    selectedDevice.status === "online" ? "success" : "default"
+                  }
+                >
+                  {selectedDevice.status === "online" ? "Онлайн" : "Оффлайн"}
+                </Tag>
+              )}
             </Space>
           ) : (
             "Устройство"
@@ -387,7 +482,7 @@ export default function DevicesManagementPage() {
         }
         open={Boolean(selectedDevice)}
         onClose={handleCloseDrawer}
-        width={860}
+        width={880}
         destroyOnClose
       >
         {selectedDevice && selectedOrgId !== undefined && (

@@ -552,10 +552,14 @@ export default function AdminTerminalsPage() {
     {
       title: "Leo4 IoT",
       key: "iot_status",
-      width: 150,
+      width: 170,
       render: (_, record) => {
         if (!record.iot_provisioned) {
-          return <span style={{ color: "#8c8c8c", whiteSpace: "nowrap" }}>—</span>;
+          return (
+            <Tooltip title="Терминал не зарегистрирован в платформе Leo4 IoT">
+              <span style={{ color: "#8c8c8c", whiteSpace: "nowrap" }}>—</span>
+            </Tooltip>
+          );
         }
         const provDate = record.iot_provisioned_at
           ? new Date(record.iot_provisioned_at).toLocaleDateString("ru-RU", {
@@ -564,27 +568,56 @@ export default function AdminTerminalsPage() {
               year: "numeric",
             })
           : "";
+        const provDateTime = record.iot_provisioned_at
+          ? new Date(record.iot_provisioned_at).toLocaleString("ru-RU")
+          : "";
+        const lastConnDateTime = record.iot_last_connected_at
+          ? new Date(record.iot_last_connected_at).toLocaleString("ru-RU")
+          : "";
+        const lastSyncDateTime = record.iot_last_sync_at
+          ? new Date(record.iot_last_sync_at).toLocaleString("ru-RU")
+          : "";
+
         return (
           <Tooltip
             title={
-              <div>
-                <div>Зарегистрирован в Leo4 IoT: {provDate || "Да"}</div>
-                {record.iot_last_connected_at && (
+              <div style={{ fontSize: 12 }}>
+                <div>
+                  <strong>Статус Leo4 IoT:</strong>{" "}
+                  {record.iot_is_online ? "Онлайн" : "Зарегистрирован (Оффлайн)"}
+                </div>
+                {provDateTime && (
                   <div>
-                    Посл. активность:{" "}
-                    {new Date(record.iot_last_connected_at).toLocaleString("ru-RU")}
+                    <strong>Дата регистрации:</strong> {provDateTime}
+                  </div>
+                )}
+                {lastConnDateTime && (
+                  <div>
+                    <strong>Посл. подключение:</strong> {lastConnDateTime}
+                  </div>
+                )}
+                {lastSyncDateTime && (
+                  <div>
+                    <strong>Посл. синхронизация:</strong> {lastSyncDateTime}
                   </div>
                 )}
               </div>
             }
           >
-            <Tag
-              color={record.iot_is_online ? "success" : "blue"}
-              icon={<CloudOutlined />}
-              style={{ margin: 0, whiteSpace: "nowrap" }}
-            >
-              {record.iot_is_online ? "Онлайн" : "Зарегистрирован"}
-            </Tag>
+            <Space direction="vertical" size={2} style={{ whiteSpace: "nowrap" }}>
+              <Tag
+                color={record.iot_is_online ? "success" : "blue"}
+                icon={<CloudOutlined />}
+                style={{ margin: 0, whiteSpace: "nowrap" }}
+              >
+                {record.iot_is_online ? "Онлайн" : "Зарегистрирован"}
+              </Tag>
+              {provDate && (
+                <Text type="secondary" style={{ fontSize: 11, whiteSpace: "nowrap" }}>
+                  Рег: {provDate}
+                </Text>
+              )}
+            </Space>
           </Tooltip>
         );
       },

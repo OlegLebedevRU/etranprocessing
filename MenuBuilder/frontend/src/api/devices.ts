@@ -6,10 +6,70 @@ export interface DeviceTagItem {
   id?: number;
 }
 
+export interface DeviceViolationDetails {
+  violation_type?: "SN_COLLISION" | "DEVICE_CLONE" | string;
+  reason?: string;
+  detected_at?: string;
+  flapping_count?: number;
+  host_switches?: number;
+  cert_validities?: string[];
+  conflicting_hosts?: string[];
+}
+
+export interface DeviceAuditEventItem {
+  id: number;
+  device_id: number;
+  org_id?: number;
+  event_type:
+    | "PROVISIONED"
+    | "SN_COLLISION"
+    | "DEVICE_CLONE"
+    | "BLOCKED"
+    | "UNBLOCKED"
+    | string;
+  actor?: string | null;
+  details?: Record<string, any> | null;
+  created_at: string;
+}
+
+export function formatPeerHost(host?: string | null): string {
+  if (!host) return "—";
+  const str = String(host).trim();
+
+  // Match Erlang IPv4-mapped IPv6 tuple format: "{0,0,0,0,0,65535,21485,65262}"
+  const tupleMatch = str.match(
+    /\{?\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*,\s*65535\s*,\s*(\d+)\s*,\s*(\d+)\s*\}?/
+  );
+  if (tupleMatch) {
+    const w1 = parseInt(tupleMatch[1], 10);
+    const w2 = parseInt(tupleMatch[2], 10);
+    const b1 = (w1 >> 8) & 255;
+    const b2 = w1 & 255;
+    const b3 = (w2 >> 8) & 255;
+    const b4 = w2 & 255;
+    return `${b1}.${b2}.${b3}.${b4}`;
+  }
+
+  // Match 4-element Erlang tuple like "{192,168,1,1}"
+  const ipv4TupleMatch = str.match(
+    /\{?\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\}?/
+  );
+  if (ipv4TupleMatch) {
+    return `${ipv4TupleMatch[1]}.${ipv4TupleMatch[2]}.${ipv4TupleMatch[3]}.${ipv4TupleMatch[4]}`;
+  }
+
+  return str;
+}
+
+export function formatConflictingHosts(hosts?: string[] | null): string[] {
+  if (!hosts || !Array.isArray(hosts)) return [];
+  return hosts.map((h) => formatPeerHost(h));
+}
+
 export interface DeviceConnectionDetailsRaw {
   user?: string;
   name?: string;
-  conn_name?: string;
+  conn_name?: string | null;
   connected_at?: number | string;
   peer_host?: string;
   peer_port?: number;
@@ -30,10 +90,14 @@ export interface DeviceConnectionRaw {
   connected_at?: string;
   checked_at?: string;
   last_checked_result: boolean;
-  app_connect?: boolean;
-  svc_connect?: boolean;
-  is_app_available?: boolean;
-  is_svc_available?: boolean;
+  app_connect?: boolean | null;
+  svc_connect?: boolean | null;
+  is_app_available?: boolean | null;
+  is_svc_available?: boolean | null;
+  is_blocked?: boolean;
+  violation_type?: "SN_COLLISION" | "DEVICE_CLONE" | string | null;
+  violation_details?: DeviceViolationDetails | null;
+  recent_audit_events?: DeviceAuditEventItem[] | null;
   details?: DeviceConnectionDetailsRaw | null;
 }
 
@@ -50,8 +114,17 @@ export interface DeviceConnectionInfo {
   is_online?: boolean;
   last_connected_at?: string;
   last_checked_result?: boolean;
+  is_blocked?: boolean;
+  violation_type?: "SN_COLLISION" | "DEVICE_CLONE" | string | null;
+  violation_details?: DeviceViolationDetails | null;
+  recent_audit_events?: DeviceAuditEventItem[] | null;
   ip?: string;
   app_version?: string;
+  details?: DeviceConnectionDetailsRaw | null;
+  app_connect?: boolean | null;
+  svc_connect?: boolean | null;
+  is_app_available?: boolean | null;
+  is_svc_available?: boolean | null;
 }
 
 export interface DeviceGaugeItem {
@@ -61,19 +134,30 @@ export interface DeviceGaugeItem {
 }
 
 export interface DeviceItem {
+  id?: number;
   device_id: number;
   sn: string;
   created_at?: string;
   is_deleted?: boolean;
-  connection?: DeviceConnectionInfo | null;
+  connection?: (DeviceConnectionInfo & {
+    is_blocked?: boolean;
+    violation_type?: string | null;
+    violation_details?: DeviceViolationDetails | null;
+    recent_audit_events?: DeviceAuditEventItem[] | null;
+  }) | null;
   device_tags?: DeviceTagItem[];
   device_gauges?: DeviceGaugeItem[];
 }
 
 export interface DeviceListItem {
+  id?: number;
   device_id: number;
   sn: string;
-  status: "online" | "offline" | "unknown";
+  status: "online" | "offline" | "blocked" | "unknown";
+  is_blocked?: boolean;
+  violation_type?: "SN_COLLISION" | "DEVICE_CLONE" | string | null;
+  violation_details?: DeviceViolationDetails | null;
+  recent_audit_events?: DeviceAuditEventItem[] | null;
   ageSeconds?: number;
   app?: string;
   sys?: string;
@@ -177,8 +261,20 @@ export function mapDeviceToListItem(device: DeviceItem): DeviceListItem {
     }
   });
 
-  const isOnline = Boolean(device.connection?.last_checked_result || device.connection?.is_online);
-  const status: "online" | "offline" | "unknown" = isOnline ? "online" : "offline";
+  const isBlocked = Boolean(device.connection?.is_blocked);
+  const isOnline = Boolean(
+    !isBlocked &&
+      (device.connection?.last_checked_result || device.connection?.is_online)
+  );
+
+  let status: "online" | "offline" | "blocked" | "unknown";
+  if (isBlocked) {
+    status = "blocked";
+  } else if (isOnline) {
+    status = "online";
+  } else {
+    status = "offline";
+  }
 
   let ageSeconds: number | undefined;
   if (device.connection?.last_connected_at) {
@@ -187,9 +283,14 @@ export function mapDeviceToListItem(device: DeviceItem): DeviceListItem {
   }
 
   return {
+    id: device.id,
     device_id: device.device_id,
     sn: device.sn,
     status,
+    is_blocked: isBlocked,
+    violation_type: device.connection?.violation_type || null,
+    violation_details: device.connection?.violation_details || null,
+    recent_audit_events: device.connection?.recent_audit_events || null,
     ageSeconds,
     app,
     sys,
@@ -200,20 +301,33 @@ export function mapDeviceToListItem(device: DeviceItem): DeviceListItem {
   };
 }
 
-export async function getDevices(orgId: number, deviceId?: number): Promise<DeviceListItem[]> {
+export async function getDevices(
+  orgId: number,
+  deviceId?: number
+): Promise<DeviceListItem[]> {
   const params: Record<string, any> = { org_id: orgId };
   if (deviceId !== undefined) {
     params.device_id = deviceId;
   }
-  const { data } = await client.get<DeviceItem[]>("/internal/v1/devices/", { params });
+  const { data } = await client.get<DeviceItem[]>("/internal/v1/devices/", {
+    params,
+  });
   return (data || []).map(mapDeviceToListItem);
 }
 
-export async function getDeviceRaw(orgId: number, deviceId: number): Promise<DeviceRawResult | null> {
+export async function getDeviceRaw(
+  orgId: number,
+  deviceId: number
+): Promise<DeviceRawResult | null> {
   const { data } = await client.get<DeviceRawResult[]>("/internal/v1/devices/", {
     params: { org_id: orgId, device_id: deviceId },
   });
   return data && data.length > 0 ? data[0] : null;
+}
+
+export async function triggerDeviceProvisioning(deviceId: number): Promise<any> {
+  const { data } = await client.post(`/admin/terminals/${deviceId}/iot-provision`);
+  return data;
 }
 
 export async function updateDeviceTag(
