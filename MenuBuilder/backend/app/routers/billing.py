@@ -160,7 +160,6 @@ async def _get_terminal_billing_data(
     result = await db.execute(
         select(License).where(
             License.terminal_id == terminal.id,
-            License.is_active == True,
         )
     )
     license_ = result.scalar_one_or_none()
@@ -178,12 +177,10 @@ async def _get_terminal_billing_data(
         device_id=terminal.device_id,
         sn=terminal.sn,
         terminal_is_active=terminal.is_active,
-        license_id=license_.id if license_ else None,
+        license_id=license_.terminal_id if license_ else None,
         license_expires_at=license_.expires_at if license_ else None,
-        renewal_enabled=license_.renewal_enabled if license_ else True,
-        deactivation_requested_at=license_.deactivation_requested_at
-        if license_
-        else None,
+        renewal_enabled=terminal.is_active,
+        deactivation_requested_at=None,
         billing_period_months=license_.billing_period_months if license_ else 1,
         monthly_price_override_minor=license_.monthly_price_override_minor
         if license_
@@ -218,8 +215,7 @@ async def _get_all_terminal_billing(
         select(Terminal, active_license)
         .outerjoin(
             active_license,
-            (active_license.terminal_id == Terminal.id)
-            & (active_license.is_active == True),
+            active_license.terminal_id == Terminal.id,
         )
         .where(Terminal.org_id == org_id)
     )
@@ -258,12 +254,10 @@ async def _get_all_terminal_billing(
                 device_id=terminal.device_id,
                 sn=terminal.sn,
                 terminal_is_active=terminal.is_active,
-                license_id=license_.id if license_ else None,
+                license_id=license_.terminal_id if license_ else None,
                 license_expires_at=license_.expires_at if license_ else None,
-                renewal_enabled=license_.renewal_enabled if license_ else True,
-                deactivation_requested_at=license_.deactivation_requested_at
-                if license_
-                else None,
+                renewal_enabled=terminal.is_active,
+                deactivation_requested_at=None,
                 billing_period_months=license_.billing_period_months if license_ else 1,
                 monthly_price_override_minor=license_.monthly_price_override_minor
                 if license_
@@ -388,15 +382,17 @@ async def get_billing_terminals(
         BillingStatus.OVERDUE: 0,
         BillingStatus.DUE_SOON: 1,
         BillingStatus.ACTIVE: 2,
-        BillingStatus.DEACTIVATION_SCHEDULED: 3,
-        BillingStatus.DISABLED: 4,
-        BillingStatus.ADMIN_DISABLED: 5,
+        BillingStatus.DISABLED: 3,
+        BillingStatus.NO_LICENSE: 4,
     }
     results.sort(key=lambda r: (status_order.get(r.billing_status, 99), r.device_id))
 
     return results
 
 
+@router.post(
+    "/terminals/{terminal_id}/disable", response_model=DeactivateTerminalResponse
+)
 @router.post(
     "/terminals/{terminal_id}/deactivate", response_model=DeactivateTerminalResponse
 )
@@ -405,10 +401,12 @@ async def deactivate_terminal(
     user: BillingUser = Depends(get_current_billing_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Schedule deactivation of a terminal's license at expiration."""
+    """Disable a terminal operationally and exclude from billing."""
     terminal = await _get_terminal_for_org(db, terminal_id, user.org_id)
-    org_settings = await _get_org_settings(db, user.org_id)
+    terminal.is_active = False
+    await db.commit()
 
+    org_settings = await _get_org_settings(db, user.org_id)
     info = await _get_terminal_billing_data(db, terminal, org_settings)
     as_of = datetime.now(UTC)
     billing = compute_terminal_billing(
@@ -418,41 +416,18 @@ async def deactivate_terminal(
         settings.cert_expiring_soon_days,
     )
 
-    if not billing.can_deactivate:
-        raise HTTPException(
-            status_code=400,
-            detail="Terminal cannot be deactivated in its current state",
-        )
-
-    result = await db.execute(
-        select(License).where(
-            License.terminal_id == terminal.id,
-            License.is_active == True,
-        )
-    )
-    license_ = result.scalar_one()
-    license_.renewal_enabled = False
-    license_.deactivation_requested_at = as_of
-
-    await db.commit()
-
-    updated_info = await _get_terminal_billing_data(db, terminal, org_settings)
-    updated_billing = compute_terminal_billing(
-        updated_info,
-        as_of,
-        settings.billing_due_soon_days,
-        settings.cert_expiring_soon_days,
-    )
-
     return DeactivateTerminalResponse(
         terminal_id=terminal.id,
-        status=updated_billing.billing_status,
-        works_until=license_.expires_at,
-        overdue_amount_minor=updated_billing.overdue_amount_minor,
-        included_in_forecast=updated_billing.included_in_forecast,
+        status=billing.billing_status,
+        works_until=info.license_expires_at,
+        overdue_amount_minor=billing.overdue_amount_minor,
+        included_in_forecast=billing.included_in_forecast,
     )
 
 
+@router.post(
+    "/terminals/{terminal_id}/enable", response_model=CancelDeactivationResponse
+)
 @router.post(
     "/terminals/{terminal_id}/cancel-deactivation",
     response_model=CancelDeactivationResponse,
@@ -462,49 +437,43 @@ async def cancel_deactivation(
     user: BillingUser = Depends(get_current_billing_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Cancel scheduled deactivation, restoring automatic renewal."""
+    """Enable terminal operationally. If expired, reset expires_at to now."""
     terminal = await _get_terminal_for_org(db, terminal_id, user.org_id)
-    org_settings = await _get_org_settings(db, user.org_id)
+    terminal.is_active = True
+    now = datetime.now(UTC)
 
-    info = await _get_terminal_billing_data(db, terminal, org_settings)
-    as_of = datetime.now(UTC)
-    billing = compute_terminal_billing(
-        info,
-        as_of,
-        settings.billing_due_soon_days,
-        settings.cert_expiring_soon_days,
-    )
+    result = await db.execute(select(License).where(License.terminal_id == terminal.id))
+    license_ = result.scalar_one_or_none()
 
-    if not billing.can_cancel_deactivation:
-        raise HTTPException(
-            status_code=400,
-            detail="Deactivation cannot be cancelled in current state",
+    if license_:
+        license_.expires_at = max(license_.expires_at, now)
+    else:
+        license_ = License(
+            terminal_id=terminal.id,
+            org_id=user.org_id,
+            expires_at=now,
+            billing_period_months=1,
         )
-
-    result = await db.execute(
-        select(License).where(
-            License.terminal_id == terminal.id,
-            License.is_active == True,
-        )
-    )
-    license_ = result.scalar_one()
-    license_.renewal_enabled = True
-    license_.deactivation_requested_at = None
+        db.add(license_)
 
     await db.commit()
 
-    updated_info = await _get_terminal_billing_data(db, terminal, org_settings)
-    updated_billing = compute_terminal_billing(
-        updated_info,
-        as_of,
+    org_settings = await _get_org_settings(db, user.org_id)
+    info = await _get_terminal_billing_data(db, terminal, org_settings)
+    billing = compute_terminal_billing(
+        info,
+        now,
         settings.billing_due_soon_days,
         settings.cert_expiring_soon_days,
     )
 
     return CancelDeactivationResponse(
         terminal_id=terminal.id,
-        status=updated_billing.billing_status,
+        status=billing.billing_status,
         renewal_enabled=True,
+        works_until=license_.expires_at,
+        overdue_amount_minor=billing.overdue_amount_minor,
+        included_in_forecast=billing.included_in_forecast,
     )
 
 
@@ -544,10 +513,13 @@ async def _prepare_checkout_items(
             settings.cert_expiring_soon_days,
         )
 
-        if billing.billing_status == BillingStatus.ADMIN_DISABLED:
+        if billing.billing_status in (
+            BillingStatus.DISABLED,
+            BillingStatus.ADMIN_DISABLED,
+        ):
             raise HTTPException(
                 status_code=400,
-                detail=f"Terminal {item.terminal_id} is administratively disabled.",
+                detail=f"Terminal {item.terminal_id} is disabled. Enable it first.",
             )
 
         item_license_amount = 0
@@ -845,7 +817,6 @@ async def reactivation_checkout(
     result = await db.execute(
         select(License).where(
             License.terminal_id == terminal.id,
-            License.is_active == True,
         )
     )
     license_ = result.scalar_one_or_none()
@@ -1028,7 +999,6 @@ async def confirm_payment(
         result = await db.execute(
             select(License).where(
                 License.terminal_id == item.terminal_id,
-                License.is_active == True,
             )
         )
         license_ = result.scalar_one_or_none()
@@ -1039,13 +1009,10 @@ async def confirm_payment(
                 org_id=order.org_id,
                 expires_at=item.new_expires_at,
                 billing_period_months=item.billing_period_months,
-                renewal_enabled=True,
             )
             db.add(license_)
         else:
             license_.expires_at = item.new_expires_at
-            license_.renewal_enabled = True
-            license_.deactivation_requested_at = None
 
     order.status = OrderStatus.PAID
     order.paid_at = now

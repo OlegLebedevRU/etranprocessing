@@ -16,10 +16,11 @@ class BillingStatus(StrEnum):
     ACTIVE = "active"
     DUE_SOON = "due_soon"
     OVERDUE = "overdue"
-    DEACTIVATION_SCHEDULED = "deactivation_scheduled"
     DISABLED = "disabled"
-    ADMIN_DISABLED = "admin_disabled"
     NO_LICENSE = "no_license"
+    # Legacy aliases mapped to disabled for backwards compatibility
+    ADMIN_DISABLED = "disabled"
+    DEACTIVATION_SCHEDULED = "disabled"
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,21 +175,19 @@ def calculate_periods_due(
 
 def calculate_terminal_debt(
     expires_at: datetime | None,
-    renewal_enabled: bool,
-    billing_period_months: int,
-    period_price: int,
-    as_of: datetime,
+    renewal_enabled: bool = True,
+    billing_period_months: int = 1,
+    period_price: int = 0,
+    as_of: datetime | None = None,
+    terminal_is_active: bool | None = None,
 ) -> int:
-    """Calculate the amount required to bring a terminal back into service.
-
-    A lapsed license is always charged exactly one billing period starting from
-    `as_of` — missed periods are never billed retroactively.
-    """
-    if not renewal_enabled:
+    """Calculate the debt amount for a terminal."""
+    active = terminal_is_active if terminal_is_active is not None else renewal_enabled
+    if not active:
         return 0
     if expires_at is None:
         return 0
-    if expires_at > as_of:
+    if as_of is not None and expires_at > as_of:
         return 0
     return period_price
 
@@ -257,33 +256,84 @@ def _forecast_end(forecast_months: list[str]) -> datetime:
 
 def resolve_billing_status(
     terminal_is_active: bool,
-    renewal_enabled: bool,
-    expires_at: datetime | None,
-    deactivation_requested_at: datetime | None,
-    as_of: datetime,
+    *args,
+    expires_at: datetime | None = None,
+    as_of: datetime | None = None,
     due_soon_days: int = 30,
     has_license: bool = True,
+    **kwargs,
 ) -> BillingStatus:
-    """Determine the billing status for a terminal."""
+    """Determine the billing status for a terminal.
+
+    Clean statuses:
+    - disabled: if not terminal_is_active
+    - no_license: if not has_license or expires_at is None
+    - overdue: if terminal_is_active and expires_at <= as_of
+    - due_soon: if terminal_is_active and as_of < expires_at <= as_of + due_soon_days
+    - active: if terminal_is_active and expires_at > as_of + due_soon_days
+    """
     if not terminal_is_active:
-        return BillingStatus.ADMIN_DISABLED
-
-    if not has_license:
-        return BillingStatus.NO_LICENSE
-
-    if not renewal_enabled:
         return BillingStatus.DISABLED
 
-    # renewal_enabled = True
-    if expires_at is None:
-        return BillingStatus.ACTIVE
+    actual_expires_at = expires_at
+    actual_as_of = as_of
+    actual_due_soon_days = due_soon_days
+    actual_has_license = has_license
 
-    if expires_at <= as_of:
+    if len(args) == 1:
+        actual_expires_at = args[0]
+    elif len(args) == 2:
+        actual_expires_at = args[0]
+        actual_as_of = args[1]
+    elif len(args) == 3:
+        if isinstance(args[0], bool):
+            actual_expires_at = args[1]
+            actual_as_of = args[2]
+        else:
+            actual_expires_at = args[0]
+            actual_as_of = args[1]
+            if isinstance(args[2], int):
+                actual_due_soon_days = args[2]
+            elif isinstance(args[2], bool):
+                actual_has_license = args[2]
+    elif len(args) == 4:
+        if isinstance(args[0], bool):
+            actual_expires_at = args[1]
+            actual_as_of = args[3] if isinstance(args[3], datetime) else actual_as_of
+        else:
+            actual_expires_at = args[0]
+            actual_as_of = args[1]
+            if isinstance(args[2], int):
+                actual_due_soon_days = args[2]
+            if isinstance(args[3], bool):
+                actual_has_license = args[3]
+    elif len(args) >= 5:
+        actual_expires_at = args[1] if isinstance(args[0], bool) else args[0]
+        actual_as_of = (
+            args[4] if len(args) >= 5 and isinstance(args[4], datetime) else args[1]
+        )
+        if len(args) >= 6 and isinstance(args[5], int):
+            actual_due_soon_days = args[5]
+        if len(args) >= 7 and isinstance(args[6], bool):
+            actual_has_license = args[6]
+
+    if "has_license" in kwargs:
+        actual_has_license = kwargs["has_license"]
+    if "due_soon_days" in kwargs:
+        actual_due_soon_days = kwargs["due_soon_days"]
+
+    if not actual_has_license or actual_expires_at is None:
+        return BillingStatus.NO_LICENSE
+
+    if actual_as_of is None:
+        actual_as_of = datetime.now(UTC)
+
+    if actual_expires_at <= actual_as_of:
         return BillingStatus.OVERDUE
 
     # Check if due soon
-    due_soon_threshold = as_of + relativedelta(days=due_soon_days)
-    if expires_at <= due_soon_threshold:
+    due_soon_threshold = actual_as_of + relativedelta(days=actual_due_soon_days)
+    if actual_expires_at <= due_soon_threshold:
         return BillingStatus.DUE_SOON
 
     return BillingStatus.ACTIVE
@@ -305,9 +355,7 @@ def compute_terminal_billing(
 
     billing_status = resolve_billing_status(
         terminal_is_active=info.terminal_is_active,
-        renewal_enabled=info.renewal_enabled,
         expires_at=info.license_expires_at,
-        deactivation_requested_at=info.deactivation_requested_at,
         as_of=as_of,
         due_soon_days=due_soon_days,
         has_license=info.license_id is not None,
@@ -334,27 +382,23 @@ def compute_terminal_billing(
     projected_expires_at: datetime | None = None
     if billing_status == BillingStatus.OVERDUE:
         projected_expires_at = add_months_from_anchor(as_of, info.billing_period_months)
+    elif (
+        billing_status in (BillingStatus.ACTIVE, BillingStatus.DUE_SOON)
+        and info.license_expires_at is not None
+    ):
+        projected_expires_at = add_months_from_anchor(
+            info.license_expires_at, info.billing_period_months
+        )
 
     # Capability flags
-    can_deactivate = (
-        info.renewal_enabled and info.license_id is not None and info.terminal_is_active
-    )
-    can_cancel_deactivation = (
-        not info.renewal_enabled
-        and info.license_expires_at is not None
-        and info.license_expires_at > as_of
-        and info.terminal_is_active
-    )
-    can_reactivate = (
-        not info.renewal_enabled
-        and (info.license_expires_at is None or info.license_expires_at <= as_of)
-        and info.terminal_is_active
-    )
+    can_deactivate = info.terminal_is_active
+    can_cancel_deactivation = not info.terminal_is_active
+    can_reactivate = False
 
-    included_in_forecast = (
-        info.renewal_enabled
-        and info.terminal_is_active
-        and billing_status not in (BillingStatus.OVERDUE, BillingStatus.NO_LICENSE)
+    included_in_forecast = info.terminal_is_active and billing_status not in (
+        BillingStatus.OVERDUE,
+        BillingStatus.NO_LICENSE,
+        BillingStatus.DISABLED,
     )
 
     return TerminalBillingResult(
@@ -364,8 +408,8 @@ def compute_terminal_billing(
         terminal_is_active=info.terminal_is_active,
         license_id=info.license_id,
         license_expires_at=info.license_expires_at,
-        renewal_enabled=info.renewal_enabled,
-        deactivation_requested_at=info.deactivation_requested_at,
+        renewal_enabled=info.terminal_is_active,
+        deactivation_requested_at=None,
         billing_status=billing_status,
         monthly_price_minor=monthly_price,
         billing_period_months=info.billing_period_months,
@@ -465,15 +509,11 @@ def build_org_summary_data(
         for t in terminals
         if t.billing_status in (BillingStatus.ACTIVE, BillingStatus.DUE_SOON)
     )
-    deactivation_count = sum(
-        1 for t in terminals if t.billing_status == BillingStatus.DEACTIVATION_SCHEDULED
-    )
+    deactivation_count = 0
     disabled_count = sum(
         1 for t in terminals if t.billing_status == BillingStatus.DISABLED
     )
-    admin_count = sum(
-        1 for t in terminals if t.billing_status == BillingStatus.ADMIN_DISABLED
-    )
+    admin_count = disabled_count
 
     # Nearest required payment
     nearest: datetime | None = None

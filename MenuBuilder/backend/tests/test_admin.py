@@ -249,9 +249,7 @@ async def test_admin_terminals_flow():
                 terminal_id=1,
                 org_id=1,
                 expires_at=datetime(2028, 1, 1, tzinfo=UTC),
-                is_active=True,
                 billing_period_months=1,
-                renewal_enabled=True,
             )
             res.scalars.return_value.all.return_value = [lic]
             res.scalars.return_value.first.return_value = lic

@@ -110,18 +110,11 @@ class License(Base):
         DateTime(timezone=True), nullable=False
     )
     balance: Mapped[int] = mapped_column(Integer, default=0)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     billing_period_months: Mapped[int] = mapped_column(
         SmallInteger, nullable=False, server_default="1", default=1
     )
     monthly_price_override_minor: Mapped[int | None] = mapped_column(
         BigInteger, nullable=True
-    )
-    renewal_enabled: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="true", default=True
-    )
-    deactivation_requested_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

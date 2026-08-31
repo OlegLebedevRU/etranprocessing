@@ -597,10 +597,8 @@ async def test_checkout_rejects_cert_pin_for_disabled_terminal():
 
     resp = await _post_checkout(
         _make_user(),
-        _make_terminal(),
-        _make_license(
-            expires_at=datetime.now(UTC) - timedelta(days=10), renewal_enabled=False
-        ),
+        _make_terminal(is_active=False),
+        _make_license(expires_at=datetime.now(UTC) - timedelta(days=10)),
         org_settings,
         [
             {

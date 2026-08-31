@@ -498,6 +498,13 @@ export default function AdminTerminalsPage() {
       key: "license",
       width: 170,
       render: (_, record) => {
+        if (!record.is_active) {
+          return (
+            <Tag color="default" style={{ margin: 0, whiteSpace: "nowrap" }}>
+              Отключен
+            </Tag>
+          );
+        }
         if (!record.license_expires_at) {
           return <Tag color="default" style={{ margin: 0, whiteSpace: "nowrap" }}>Нет лицензии</Tag>;
         }
@@ -515,9 +522,6 @@ export default function AdminTerminalsPage() {
               {isExpired ? "Истекла: " : "До: "}
               {dateFormatted}
             </Tag>
-            {record.license_is_active === false && (
-              <Tag color="warning" style={{ margin: 0, whiteSpace: "nowrap" }}>Приостановлена</Tag>
-            )}
           </Space>
         );
       },

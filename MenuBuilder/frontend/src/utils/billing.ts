@@ -71,12 +71,12 @@ export function formatForecastMonth(month: string): string {
  */
 export function billingStatusLabel(status: string): string {
   const labels: Record<string, string> = {
-    active: "Активен",
-    due_soon: "Скоро истекает",
-    overdue: "Просрочен",
-    deactivation_scheduled: "Отключение запланировано",
-    disabled: "Отключён",
-    admin_disabled: "Административно заблокирован",
+    active: "Оплачен",
+    due_soon: "Истекает",
+    overdue: "Требует оплаты",
+    deactivation_scheduled: "Отключен",
+    disabled: "Отключен",
+    admin_disabled: "Отключен",
     no_license: "Нет лицензии",
   };
   return labels[status] || status;
@@ -87,13 +87,13 @@ export function billingStatusLabel(status: string): string {
  */
 export function billingStatusColor(status: string): string {
   const colors: Record<string, string> = {
-    active: "green",
-    due_soon: "orange",
-    overdue: "red",
-    deactivation_scheduled: "blue",
+    active: "success",
+    due_soon: "warning",
+    overdue: "error",
+    deactivation_scheduled: "default",
     disabled: "default",
-    admin_disabled: "volcano",
-    no_license: "magenta",
+    admin_disabled: "default",
+    no_license: "default",
   };
   return colors[status] || "default";
 }

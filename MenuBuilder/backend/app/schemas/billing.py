@@ -52,8 +52,8 @@ class BillingTerminalRead(BaseModel):
     terminal_is_active: bool
     license_id: int | None
     license_expires_at: datetime | None
-    renewal_enabled: bool
-    deactivation_requested_at: datetime | None
+    renewal_enabled: bool = True
+    deactivation_requested_at: datetime | None = None
     billing_status: BillingStatus
     monthly_price_minor: int
     billing_period_months: int
@@ -94,7 +94,10 @@ class DeactivateTerminalResponse(BaseModel):
 class CancelDeactivationResponse(BaseModel):
     terminal_id: int
     status: BillingStatus
-    renewal_enabled: bool
+    renewal_enabled: bool = True
+    works_until: datetime | None = None
+    overdue_amount_minor: int = 0
+    included_in_forecast: bool = False
 
 
 class CheckoutItemRequest(BaseModel):

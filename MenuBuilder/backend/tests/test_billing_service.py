@@ -164,24 +164,18 @@ def test_status_overdue():
 
 
 def test_status_deactivation():
-    status = resolve_billing_status(
-        True, False, _dt(2026, 11, 10), _dt(2026, 8, 18), _dt(2026, 8, 18)
-    )
+    status = resolve_billing_status(False, _dt(2026, 11, 10), _dt(2026, 8, 18))
     assert status == BillingStatus.DISABLED
 
 
 def test_status_disabled():
-    status = resolve_billing_status(
-        True, False, _dt(2026, 8, 10), _dt(2026, 8, 18), _dt(2026, 8, 18)
-    )
+    status = resolve_billing_status(False, _dt(2026, 8, 10), _dt(2026, 8, 18))
     assert status == BillingStatus.DISABLED
 
 
 def test_status_admin_disabled():
-    status = resolve_billing_status(
-        False, True, _dt(2026, 11, 10), None, _dt(2026, 8, 18)
-    )
-    assert status == BillingStatus.ADMIN_DISABLED
+    status = resolve_billing_status(False, _dt(2026, 11, 10), _dt(2026, 8, 18))
+    assert status == BillingStatus.DISABLED
 
 
 # === Full terminal computation ===
@@ -209,21 +203,20 @@ def test_compute_overdue_terminal():
 
 def test_compute_disabled_terminal():
     info = _info(
-        renewal_enabled=False,
+        terminal_is_active=False,
         license_expires_at=_dt(2026, 8, 10),
-        deactivation_requested_at=_dt(2026, 8, 1),
     )
     result = compute_terminal_billing(info, _dt(2026, 8, 18))
     assert result.billing_status == BillingStatus.DISABLED
     assert result.overdue_amount_minor == 0
     assert result.included_in_forecast is False
-    assert result.can_reactivate is True
+    assert result.can_cancel_deactivation is True
+    assert result.can_reactivate is False
 
 
 def test_compute_deactivation_scheduled():
     info = _info(
-        renewal_enabled=False,
-        deactivation_requested_at=_dt(2026, 8, 18),
+        terminal_is_active=False,
     )
     result = compute_terminal_billing(info, _dt(2026, 8, 18))
     assert result.billing_status == BillingStatus.DISABLED
@@ -235,14 +228,14 @@ def test_compute_deactivation_scheduled():
 def test_compute_admin_disabled():
     info = _info(terminal_is_active=False)
     result = compute_terminal_billing(info, _dt(2026, 8, 18))
-    assert result.billing_status == BillingStatus.ADMIN_DISABLED
+    assert result.billing_status == BillingStatus.DISABLED
     assert result.included_in_forecast is False
 
 
 def test_deactivated_terminal_no_debt():
-    """Spec: renewal_enabled=false → debt always 0 regardless of expiry."""
+    """Spec: disabled terminal → debt always 0 regardless of expiry."""
     info = _info(
-        renewal_enabled=False,
+        terminal_is_active=False,
         license_expires_at=_dt(2025, 1, 1),
     )
     result = compute_terminal_billing(info, _dt(2026, 8, 18))
@@ -440,13 +433,66 @@ def test_debt_helper_ignores_missed_periods():
 
 
 def test_deactivating_overdue_terminal_clears_debt():
-    """Turning renewal off drops an overdue terminal's debt and forecast entry."""
-    info = _info(license_expires_at=_dt(2026, 5, 18), renewal_enabled=False)
+    """Turning terminal off drops an overdue terminal's debt and forecast entry."""
+    info = _info(license_expires_at=_dt(2026, 5, 18), terminal_is_active=False)
     result = compute_terminal_billing(info, _dt(2026, 8, 18))
     assert result.billing_status == BillingStatus.DISABLED
     assert result.overdue_amount_minor == 0
     assert result.included_in_forecast is False
-    assert result.can_reactivate is True
+    assert result.can_cancel_deactivation is True
+    assert result.can_reactivate is False
+
+
+# === Test Matrix TC-1 to TC-5 ===
+
+
+def test_tc1_disable_paid_terminal():
+    """TC-1: Disabled paid terminal has 0 debt, excluded from forecast."""
+    info = _info(terminal_is_active=False, license_expires_at=_dt(2026, 9, 2))
+    res = compute_terminal_billing(info, _dt(2026, 8, 18))
+    assert res.billing_status == BillingStatus.DISABLED
+    assert res.overdue_amount_minor == 0
+    assert res.included_in_forecast is False
+
+
+def test_tc2_enable_paid_terminal():
+    """TC-2: Enabled paid terminal is ACTIVE, preserves future expires_at."""
+    info = _info(terminal_is_active=True, license_expires_at=_dt(2026, 9, 2))
+    res = compute_terminal_billing(info, _dt(2026, 8, 18))
+    assert (
+        res.billing_status == BillingStatus.ACTIVE
+        or res.billing_status == BillingStatus.DUE_SOON
+    )
+    assert res.license_expires_at == _dt(2026, 9, 2)
+    assert res.included_in_forecast is True
+
+
+def test_tc3_enable_overdue_terminal_reset_expiry():
+    """TC-3: Case 373 - Once enabled with expires_at=now, debt is strictly 1 period (no past 60d debt)."""
+    # Enabled with expires_at reset to as_of (today)
+    as_of = _dt(2026, 8, 18)
+    info = _info(
+        terminal_is_active=True, license_expires_at=as_of, billing_period_months=1
+    )
+    res = compute_terminal_billing(info, as_of)
+    assert res.billing_status == BillingStatus.OVERDUE
+    assert (
+        res.overdue_amount_minor == 300000
+    )  # Exactly 1 period (3000 RUB), no debt for 60 days of storage downtime
+    assert res.projected_expires_at_after_debt_payment == _dt(2026, 9, 18)
+
+
+def test_tc4_prolong_active_terminal():
+    """TC-4: Prolonging active terminal adds period to max(expires_at, now)."""
+    now = _dt(2026, 8, 18)
+    new_exp = project_expiration_after_payment(now, 1, 1, now, mode="reactivation")
+    assert new_exp == _dt(2026, 9, 18)
+
+
+def test_tc5_consistency_status():
+    """TC-5: resolve_billing_status returns DISABLED for inactive terminals."""
+    status = resolve_billing_status(False, _dt(2026, 12, 1), _dt(2026, 8, 18))
+    assert status == BillingStatus.DISABLED
 
 
 # === Certificate expiry hints ===

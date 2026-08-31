@@ -334,16 +334,14 @@ async def check_license(
     terminal: Terminal,
     db: AsyncSession,
 ) -> License:
-    """Check that terminal has an active, non-expired license."""
-    result = await db.execute(
-        select(License).where(
-            License.terminal_id == terminal.id,
-            License.is_active == True,
-        )
-    )
+    """Check that terminal has a non-expired license and is active."""
+    if not terminal.is_active:
+        raise HTTPException(status_code=403, detail="Terminal is disabled")
+
+    result = await db.execute(select(License).where(License.terminal_id == terminal.id))
     license_ = result.scalar_one_or_none()
     if not license_:
-        raise HTTPException(status_code=403, detail="No active license")
+        raise HTTPException(status_code=403, detail="No license")
 
     if license_.expires_at < datetime.now(UTC):
         raise HTTPException(status_code=403, detail="License expired")
@@ -378,45 +376,19 @@ async def get_terminal_license_state(
     Returns TerminalLicenseState with license (if found) and computed state.
     Never raises HTTPException — state is always computed, not thrown.
     """
-    if not terminal.is_active:
-        result = await db.execute(
-            select(License).where(
-                License.terminal_id == terminal.id,
-                License.is_active == True,
-            )
-        )
-        license_ = result.scalar_one_or_none()
-        return TerminalLicenseState(license=license_, state="error")
-
     # Check org status
-    result = await db.execute(
+    org_res = await db.execute(
         select(OrgStatus).where(OrgStatus.org_id == terminal.org_id)
     )
-    org_status = result.scalar_one_or_none()
-    if org_status and org_status.status == "blocked":
-        result = await db.execute(
-            select(License).where(
-                License.terminal_id == terminal.id,
-                License.is_active == True,
-            )
-        )
-        license_ = result.scalar_one_or_none()
-        return TerminalLicenseState(license=license_, state="error")
+    org_status = org_res.scalar_one_or_none()
 
-    # Find active license
-    result = await db.execute(
-        select(License).where(
-            License.terminal_id == terminal.id,
-            License.is_active == True,
-        )
-    )
+    result = await db.execute(select(License).where(License.terminal_id == terminal.id))
     license_ = result.scalar_one_or_none()
 
-    if not license_:
-        return TerminalLicenseState(license=None, state="error")
+    if not terminal.is_active or (org_status and org_status.status == "blocked"):
+        return TerminalLicenseState(license=license_, state="error")
 
-    # Check expiry — renewal_enabled=false alone does NOT cause state=error
-    if license_.expires_at < datetime.now(UTC):
+    if not license_ or license_.expires_at < datetime.now(UTC):
         return TerminalLicenseState(license=license_, state="error")
 
     return TerminalLicenseState(license=license_, state="ok")

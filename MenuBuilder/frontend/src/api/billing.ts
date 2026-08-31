@@ -136,16 +136,28 @@ export async function getBillingTerminals(
 export async function deactivateTerminal(
   terminalId: number,
 ): Promise<DeactivateResponse> {
-  const res = await client.post(`/billing/terminals/${terminalId}/deactivate`);
+  const res = await client.post(`/billing/terminals/${terminalId}/disable`);
+  return res.data;
+}
+
+export async function disableTerminal(
+  terminalId: number,
+): Promise<DeactivateResponse> {
+  const res = await client.post(`/billing/terminals/${terminalId}/disable`);
   return res.data;
 }
 
 export async function cancelDeactivation(
   terminalId: number,
 ): Promise<CancelDeactivationResponse> {
-  const res = await client.post(
-    `/billing/terminals/${terminalId}/cancel-deactivation`,
-  );
+  const res = await client.post(`/billing/terminals/${terminalId}/enable`);
+  return res.data;
+}
+
+export async function enableTerminal(
+  terminalId: number,
+): Promise<CancelDeactivationResponse> {
+  const res = await client.post(`/billing/terminals/${terminalId}/enable`);
   return res.data;
 }
 

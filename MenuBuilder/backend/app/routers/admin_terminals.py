@@ -97,15 +97,15 @@ def _build_admin_terminal_read(
         updated_at=term.updated_at,
         license_id=lic.id if lic else None,
         license_expires_at=lic.expires_at if lic else None,
-        license_is_active=lic.is_active if lic else None,
+        license_is_active=term.is_active if lic else None,
         license_balance=lic.balance if lic else None,
         license_type=lic.license_type if lic else None,
         billing_period_months=lic.billing_period_months if lic else None,
         monthly_price_override_minor=(
             lic.monthly_price_override_minor if lic else None
         ),
-        renewal_enabled=lic.renewal_enabled if lic else None,
-        deactivation_requested_at=(lic.deactivation_requested_at if lic else None),
+        renewal_enabled=term.is_active if lic else None,
+        deactivation_requested_at=None,
         pending_pin=pin_obj.pin if pin_obj else None,
         pin_expires_at=pin_obj.expires_at if pin_obj else None,
         pin_status=pin_obj.status if pin_obj else None,
@@ -343,9 +343,7 @@ async def create_terminal(
         org_id=body.org_id,
         license_type="standard",
         expires_at=expires_at,
-        is_active=body.is_active,
         billing_period_months=body.billing_period_months,
-        renewal_enabled=body.renewal_enabled,
     )
     db.add(license_entry)
 
@@ -443,13 +441,6 @@ async def update_terminal(
             lic.org_id = body.org_id
         if body.license_expires_at is not None:
             lic.expires_at = body.license_expires_at
-        if body.license_is_active is not None:
-            lic.is_active = body.license_is_active
-        elif body.is_active is not None:
-            # Sync license active state if terminal state changed
-            lic.is_active = body.is_active
-        if body.renewal_enabled is not None:
-            lic.renewal_enabled = body.renewal_enabled
         if body.billing_period_months is not None:
             lic.billing_period_months = body.billing_period_months
         if (
@@ -457,6 +448,8 @@ async def update_terminal(
             or "monthly_price_override_minor" in body.model_fields_set
         ):
             lic.monthly_price_override_minor = body.monthly_price_override_minor
+        if body.is_active and lic.expires_at < datetime.now(UTC):
+            lic.expires_at = datetime.now(UTC)
     elif body.license_expires_at is not None or body.is_active is not None:
         # Create license if none existed
         lic = License(
@@ -465,13 +458,7 @@ async def update_terminal(
             license_type="standard",
             expires_at=body.license_expires_at
             or (datetime.now(UTC) + timedelta(days=365)),
-            is_active=body.license_is_active
-            if body.license_is_active is not None
-            else terminal.is_active,
             billing_period_months=body.billing_period_months or 1,
-            renewal_enabled=body.renewal_enabled
-            if body.renewal_enabled is not None
-            else True,
             monthly_price_override_minor=body.monthly_price_override_minor,
         )
         db.add(lic)
@@ -587,14 +574,10 @@ async def set_terminal_license(
             org_id=terminal.org_id,
             license_type="standard",
             expires_at=body.expires_at,
-            is_active=body.is_active,
-            renewal_enabled=body.renewal_enabled,
         )
         db.add(lic)
     else:
         lic.expires_at = body.expires_at
-        lic.is_active = body.is_active
-        lic.renewal_enabled = body.renewal_enabled
 
     await db.commit()
     await db.refresh(lic)
@@ -603,8 +586,8 @@ async def set_terminal_license(
         terminal_id=terminal.id,
         license_id=lic.id,
         expires_at=lic.expires_at,
-        is_active=lic.is_active,
-        renewal_enabled=lic.renewal_enabled,
+        is_active=terminal.is_active,
+        renewal_enabled=terminal.is_active,
     )
 
 
@@ -625,15 +608,25 @@ async def set_terminal_status(
 
     terminal.is_active = body.is_active
 
-    # Also update license status
     lic_res = await db.execute(
         select(License)
         .where(License.terminal_id == terminal_id)
         .order_by(License.id.desc())
     )
     lic = lic_res.scalars().first()
-    if lic:
-        lic.is_active = body.is_active
+    now = datetime.now(UTC)
+    if body.is_active:
+        if lic:
+            lic.expires_at = max(lic.expires_at, now)
+        else:
+            lic = License(
+                terminal_id=terminal.id,
+                org_id=terminal.org_id,
+                license_type="standard",
+                expires_at=now,
+                billing_period_months=1,
+            )
+            db.add(lic)
 
     await db.commit()
     await db.refresh(terminal)

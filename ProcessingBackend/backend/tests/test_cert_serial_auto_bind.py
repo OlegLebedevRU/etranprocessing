@@ -286,8 +286,6 @@ async def test_end_to_end_licensebilling_auto_bind():
         org_id=1,
         license_type="standard",
         expires_at=datetime.now(UTC) + timedelta(days=30),
-        is_active=True,
-        renewal_enabled=True,
     )
 
     async def override_get_db():
