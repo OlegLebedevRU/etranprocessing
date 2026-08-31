@@ -85,7 +85,7 @@ async def test_monitoring_pagination_and_query_scoping():
     mock_cm.__aenter__.return_value = mock_session
     mock_cm.__aexit__.return_value = None
 
-    with patch("app.main.async_session", return_value=mock_cm):
+    with patch("app.routers.monitoring.async_session", return_value=mock_cm):
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
@@ -143,7 +143,7 @@ async def test_monitoring_empty_page():
     mock_cm.__aenter__.return_value = mock_session
     mock_cm.__aexit__.return_value = None
 
-    with patch("app.main.async_session", return_value=mock_cm):
+    with patch("app.routers.monitoring.async_session", return_value=mock_cm):
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
@@ -280,7 +280,7 @@ async def test_monitoring_includes_all_terminals_without_license_filter():
     mock_cm.__aenter__.return_value = mock_session
     mock_cm.__aexit__.return_value = None
 
-    with patch("app.main.async_session", return_value=mock_cm):
+    with patch("app.routers.monitoring.async_session", return_value=mock_cm):
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
@@ -379,7 +379,7 @@ async def test_inkass_report_example_calculation_and_fields():
     mock_cm.__aenter__.return_value = mock_session
     mock_cm.__aexit__.return_value = None
 
-    with patch("app.main.async_session", return_value=mock_cm):
+    with patch("app.routers.reports.async_session", return_value=mock_cm):
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
@@ -477,7 +477,7 @@ async def test_payments_report_tsp_name_resolution():
     mock_cm.__aenter__.return_value = mock_session
     mock_cm.__aexit__.return_value = None
 
-    with patch("app.main.async_session", return_value=mock_cm):
+    with patch("app.routers.reports.async_session", return_value=mock_cm):
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
@@ -522,7 +522,7 @@ async def test_balance_by_terminal_report():
     mock_cm.__aenter__.return_value = mock_session
     mock_cm.__aexit__.return_value = None
 
-    with patch("app.main.async_session", return_value=mock_cm):
+    with patch("app.routers.reports.async_session", return_value=mock_cm):
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
@@ -566,7 +566,7 @@ async def test_balance_by_tsp_report():
     mock_cm.__aenter__.return_value = mock_session
     mock_cm.__aexit__.return_value = None
 
-    with patch("app.main.async_session", return_value=mock_cm):
+    with patch("app.routers.reports.async_session", return_value=mock_cm):
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:

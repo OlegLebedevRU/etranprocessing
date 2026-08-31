@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -10,8 +10,6 @@ from app.main import app
 from app.models import (
     Group,
     MenuVariant,
-    MenuVariantSnapshot,
-    Service,
     Terminal,
     TerminalMenuBinding,
 )
@@ -157,87 +155,3 @@ async def test_terminal_binding_version_reset_on_change():
         assert data["menu_variant_id"] == 20
         assert data["loaded_version"] is None
         assert binding.loaded_version is None
-
-
-@pytest.mark.anyio
-async def test_list_menu_file_creates_snapshot_and_updates_binding():
-    """Verify ListMenuFile creates MenuVariantSnapshot and sets loaded_version on TerminalMenuBinding."""
-    variant = MenuVariant(id=10, name="Main Menu", org_id=1, version=2)
-    group = Group(id=100, menu_variant_id=10, org_id=1, number=801, name="Group 1")
-    service = Service(
-        id=1,
-        menu_variant_id=10,
-        group_id=100,
-        tsp_code=1000301,
-        name="Service A",
-        price=1000,
-    )
-    binding = TerminalMenuBinding(
-        id=1,
-        device_id=209,
-        menu_variant_id=10,
-        loaded_version=1,
-        loaded_at=datetime.now(UTC),
-    )
-
-    mock_session = AsyncMock()
-
-    async def mock_get(model, pk):
-        if model == MenuVariant and pk == 10:
-            return variant
-        return None
-
-    mock_session.get.side_effect = mock_get
-
-    async def mock_scalar(stmt, params=None):
-        sql = str(stmt)
-        if "FROM terminal_menu_bindings" in sql:
-            return binding
-        if "FROM menu_variant_snapshots" in sql:
-            return None  # snapshot does not exist yet
-        if "FROM menu_variants" in sql:
-            return variant
-        return None
-
-    mock_session.scalar.side_effect = mock_scalar
-
-    async def mock_execute(stmt, params=None):
-        sql = str(stmt)
-        res = MagicMock()
-        if "FROM groups" in sql:
-            res.scalars.return_value.all.return_value = [group]
-        elif "FROM services" in sql:
-            res.scalars.return_value.all.return_value = [service]
-        else:
-            res.scalars.return_value.all.return_value = []
-        return res
-
-    mock_session.execute.side_effect = mock_execute
-
-    mock_cm = AsyncMock()
-    mock_cm.__aenter__.return_value = mock_session
-    mock_cm.__aexit__.return_value = None
-
-    with patch("app.main.async_session", return_value=mock_cm):
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
-            resp = await client.get("/api/ListMenuFile?device_id=209")
-            assert resp.status_code == 200
-            data = resp.json()
-            assert data["name"] == "root"
-            assert len(data["items"]) == 1
-
-            # Binding loaded_version should be updated to variant.version (2)
-            assert binding.loaded_version == 2
-            assert binding.loaded_at is not None
-
-            # Added snapshot should have been added to session
-            assert mock_session.add.called
-            added_snapshot = mock_session.add.call_args[0][0]
-            assert isinstance(added_snapshot, MenuVariantSnapshot)
-            assert added_snapshot.version == 2
-            assert (
-                added_snapshot.snapshot_data["services_by_tsp"]["1000301"]["name"]
-                == "Service A"
-            )

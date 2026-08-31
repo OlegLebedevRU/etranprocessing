@@ -149,9 +149,9 @@ async def get_current_user(
         token = request.cookies["access_token"]
 
     # Also check headers forwarded from Nginx
-    nginx_user_id = request.headers.get("X-User-Id") or request.headers.get("jwt-sub")
-    nginx_org_id = request.headers.get("X-Org-Id") or request.headers.get("jwt-org")
-    nginx_role = request.headers.get("jwt-role")
+    nginx_user_id = request.headers.get("X-User-Id")
+    nginx_org_id = request.headers.get("X-Org-Id")
+    nginx_role = request.headers.get("X-User-Role")
 
     if not token and not nginx_user_id:
         raise HTTPException(

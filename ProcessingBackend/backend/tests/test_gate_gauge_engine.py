@@ -2,6 +2,13 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
+from etranprocessing_gauge import (
+    calculate_lastnumconn,
+    create_or_update_snapshot,
+    decode_slots_bitmask,
+    parse_gauge_pack,
+    update_slots_bitmask,
+)
 from httpx import ASGITransport, AsyncClient
 
 from app.database import get_db
@@ -9,13 +16,6 @@ from app.dependencies import get_current_terminal
 from app.main import app
 from app.models import Terminal
 from app.services.gauge_bus import GaugeStore, gauge_store
-from app.services.gauge_engine import (
-    calculate_lastnumconn,
-    create_or_update_snapshot,
-    decode_slots_bitmask,
-    parse_gauge_pack,
-    update_slots_bitmask,
-)
 
 
 @pytest.fixture

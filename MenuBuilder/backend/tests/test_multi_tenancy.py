@@ -512,7 +512,10 @@ async def test_stats_and_inkass_auth_and_isolation(tenant1_headers, tenant2_head
     mock_cm.__aenter__.return_value = mock_session
     mock_cm.__aexit__.return_value = None
 
-    with patch("app.main.async_session", return_value=mock_cm):
+    with (
+        patch("app.routers.reports.async_session", return_value=mock_cm),
+        patch("app.routers.dashboard.async_session", return_value=mock_cm),
+    ):
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:

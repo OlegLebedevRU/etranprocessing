@@ -1,17 +1,62 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 from httpx import ASGITransport, AsyncClient
+from starlette.requests import Request
 
 from app.auth import (
     create_access_token,
     create_master_token,
     create_tenant_token,
     decode_token,
+    get_current_user,
 )
 from app.main import app
 from app.models import Org
 from app.user_store import UserRecord, get_user_store
+
+
+def _request_with_headers(headers: dict[str, str]) -> Request:
+    return Request(
+        {
+            "type": "http",
+            "headers": [
+                (name.lower().encode(), value.encode())
+                for name, value in headers.items()
+            ],
+        }
+    )
+
+
+@pytest.mark.anyio
+async def test_canonical_nginx_headers_preserve_switched_tenant_context():
+    user = await get_current_user(
+        _request_with_headers(
+            {
+                "X-User-Id": "17",
+                "X-Org-Id": "223",
+                "X-User-Role": "superuser",
+            }
+        ),
+        None,
+    )
+
+    assert user["user_id"] == 17
+    assert user["org_id"] == 223
+    assert user["role"] == "superuser"
+
+
+@pytest.mark.anyio
+async def test_legacy_nginx_identity_headers_are_not_trusted():
+    request = _request_with_headers(
+        {"jwt-sub": "17", "jwt-org": "223", "jwt-role": "superuser"}
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_current_user(request, None)
+
+    assert exc_info.value.status_code == 401
 
 
 @pytest.fixture(autouse=True)

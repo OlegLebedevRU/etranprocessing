@@ -15,10 +15,12 @@ dependencies = [
     "python-dateutil>=2.9.0",
     "paho-mqtt>=2.1.0",
     "etranprocessing-db",
+    "etranprocessing-gauge",
 ]
 
 [tool.uv.sources]
 etranprocessing-db = { path = "../../shared", editable = true }
+etranprocessing-gauge = { path = "../../shared/etranprocessing_gauge", editable = true }
 
 [dependency-groups]
 dev = [

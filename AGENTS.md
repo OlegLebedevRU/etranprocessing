@@ -39,18 +39,7 @@ All sensitive values must come from environment variables or `.env` files.
 
 ### Pre-commit / pre-deploy scan
 
-```bash
-# DB URLs with credentials in any tracked file
-grep -rn "postgresql://.*:.*@" --include="*.py" --include="*.yaml" --include="*.yml" --include="*.toml" --include="*.md"
-
-# Hardcoded non-empty secret defaults
-grep -rn 'os\.getenv(.*,\s*"[^"]\{8,\}")' --include="*.py"
-
-# Production URLs in code (not in .env)
-grep -rn "https://dev\.\|https://api\.\|https://prod\." --include="*.py"
-```
-
-Zero matches expected. If found, move to `.env`.
+Use the repository's current secret scanner or an equivalent read-only scan for tracked files. Do not encode shell-specific one-off commands or production host patterns in this project-wide file. Review every match; remove real credentials from Git history and rotate them.
 
 ## Code quality
 
@@ -77,7 +66,7 @@ Detailed backend code standards, architecture rules, and patterns are documented
 
 | Subproject | Technology / Framework | Role & Service Boundary | Entry point |
 |---|---|---|---|
-| **`shared/` (`etranprocessing_db`)** | Python 3.14, SQLAlchemy 2.0, asyncpg | Shared thin declarative ORM model layer for both backends (23 unified models, constraints, indexes). | `import etranprocessing_db` |
+| **`shared/` (`etranprocessing_db`)** | Python 3.14, SQLAlchemy 2.0, asyncpg | Shared thin declarative ORM model layer for both backends (models, constraints, indexes). | `import etranprocessing_db` |
 | **`ProcessingBackend/backend`** | Python 3.14, FastAPI, SQLAlchemy (asyncpg), Alembic | Core mTLS payment processing gateway, terminal XML/SOAP handlers (`/api/payment`, `/api/techgate`, `/api/gategauge`, `/api/licensebilling`, `/api/certificates`, `GET /api/ListMenuFile`). Sole authority for Alembic migrations. **No user-facing JWT routes.** | `uvicorn app.main:app` |
 | **`MenuBuilder/backend`** | Python 3.14, FastAPI, SQLAlchemy | Tenant & admin web portal, terminal menu management, and **user-facing billing API** (`/api/billing`, `/api/certificate-pin`, `/api/admin/organizations`, JWT authentication). | `uvicorn app.main:app` |
 | **`MenuBuilder/frontend`** | React 19, TypeScript, Vite, Ant Design v6 | Web UI for tenant administrators, terminal menu builder, license cart, and admin panels (Code Splitting, Design Tokens, multi-tenant). | `npm run build` / `npm run dev` |
@@ -185,25 +174,18 @@ Comprehensive documentation for the certificate subsystem, mTLS proxying, native
 5. **Terminal Verification Registry & Discovery Audit**:
    - The state of all terminals is tracked in real-time by joining `terminal_cert_discovery` + `terminals` + `org_statuses` + `licenses`.
    - When migrating endpoints to the new backend, execute the verification audit script from `docs/certificate-architecture.md §6.3` to inspect all connected terminals.
-   - Any unauthenticated terminals (`validation_status = 'terminal_not_found'`, e.g., `OU=346, O=516`) must be imported from legacy MS SQL (`172.17.100.1`) with a generated platform SN (`a4b<7-digit dev_id>c<5-digit rand>d<DDMMYY>`), `OrgStatus(org_id, 'active')`, `License`, and `CertificatePin` (`creation_source='system'`) as described in `docs/certificate-architecture.md §6.4`.
+   - Do not turn an audit finding into an automatic data import. Reconciliation requires an explicit migration task, reviewed source data, an idempotent script, and post-migration verification.
 
-## CI/CD — lessons learned (verified in production sessions)
+## Deployment invariants
 
-These are working, verified practices for deploying and verifying changes on
-the production host (`176.108.247.249`). See also each subproject's
-`.claude/skills/deploy-*/SKILL.md` for the full step-by-step deploy flow.
+Keep only durable invariants here. Use the current runbook under `docs/` for environment-specific hosts, paths and step-by-step commands.
 
 - **`docker` on the server requires `sudo`.** Plain `docker ...` / `docker
   compose ...` fails with "permission denied while trying to connect to the
   Docker daemon socket". Always prefix with `sudo docker ...` /
   `sudo docker compose ...` over SSH.
 - **Database migrations (Alembic):** Alembic migrations reside in
-  `ProcessingBackend/backend/alembic/`. To apply migrations in production:
-  1. Upload migration files (e.g. `012_add_org_contacts_and_billing_modes.py`) to the server.
-  2. Copy into the container or rebuild `processing-backend`:
-     `sudo docker cp /home/user1/ProcessingBackend/backend/alembic/versions/. processing-backend:/app/alembic/versions/`
-  3. Execute: `sudo docker exec processing-backend alembic upgrade head`
-  4. If database schema was altered with new columns/tables, restart dependent containers (e.g. `sudo docker restart menubuilder-backend`).
+  `ProcessingBackend/backend/alembic/`; `ProcessingBackend` is the sole migration owner. Deploy migrations through the standard image/release flow, run `alembic upgrade head`, and roll all consumers of changed shared models to compatible versions.
 - **JWT `org_id` claims travel as strings — cast to `int` at the auth
   boundary, once.** Any endpoint that binds an org id into a raw SQL query
   against an integer column will raise `asyncpg.exceptions.DataError` if it
@@ -216,23 +198,9 @@ the production host (`176.108.247.249`). See also each subproject's
   `nginx.conf`/cert/env changes. Verify by comparing file mtimes inside vs.
   outside the container (watch for timezone offsets between host and
   container when eyeballing timestamps).
-- **Testing authenticated endpoints without real credentials:** generate a
-  short-lived JWT directly inside the target container using the app's own
-  `create_access_token()` (same secret, same claim names), then curl the
-  endpoint with it. This verifies a fix end-to-end post-deploy without ever
-  needing/typing a real user's password.
-- **SSH execution from Windows PowerShell:** When invoking remote commands via `ssh` from PowerShell, use `ssh -n ...` (e.g. `ssh -n -i d:\.ssh\free-tier-cloud_ru ...`) to prevent stdin handle blocking.
-- **PowerShell → `ssh` → remote shell quoting is fragile for inline Python.**
-  Multi-line `python -c "..."` one-liners with parentheses/dict literals
-  reliably get mangled through nested PowerShell/ssh/remote-shell quoting.
-  Prefer: write the script to a local file, `scp` it to `/tmp` on the server,
-  `docker cp` it into the container, then `docker exec <container> python
-  /tmp/script.py`. Delete the temp script (locally and on the server/
-  container) once done — never leave test scripts or generated tokens lying
-  around.
-- **After any lint/build/deploy/verification pass, clean up temp
-  artifacts** (scp'd test scripts, generated tokens, scratch SQL files) from
-  both the server and the local session workspace.
+- **Authenticated deployment checks:** use dedicated short-lived test credentials issued through an approved test path. Do not generate ad hoc tokens from production secrets or copy executable scratch scripts into running containers.
+- **SSH from non-interactive clients:** disable stdin forwarding and keep environment-specific identities and hostnames in the runbook, not in this file.
+- **Cleanup:** remove temporary artifacts and test credentials created by the current task from local and remote environments.
 
 ## MCP Operations Server (`server-ops`) & DevOps Protocol
 
@@ -357,13 +325,8 @@ Normal shutdown:
 - Категорически запрещено создавать произвольные топики (`srv/<SN>/cmd`, `dev/<SN>/ctrl` и т.д.).
 - Использовать регламентированные методы `7001` (`CMD_DIAG_EXEC`) и `7002` (`CMD_DIAG_CANCEL`).
 
-### 2. Регламент актуализации документации по сигналу одобрения пользователя
-Если в процессе диалога после внесения изменений во флоу диагностики/консоли пользователь выражает прямое одобрение результата фразами:
-> **«Всё отлично»**, **«все получилось»**, **«спасибо»**, **«готово»**, **«отлично»**, **«принято»**, **«сработало»** (и их смысловыми аналогами),
-
-это является **прямым сигналом для AI-агента на актуализацию документации**:
-1. Агент обязан зафиксировать утвержденные изменения протокола, форматов сообщений или логики компонентов.
-2. Актуализировать файл `docs/remote-console-diagnostics-flow.md` в соответствии с принятыми решениями.
+### 2. Актуализация спецификации
+Обновляйте `docs/remote-console-diagnostics-flow.md` в той же задаче, которая намеренно меняет утверждённый протокол, форматы сообщений или ответственность компонентов. Обычная благодарность или подтверждение пользователя не является отдельным запросом на изменение файлов.
 
 ---
 
@@ -388,12 +351,8 @@ AI-агентам **СТРОГО ЗАПРЕЩЕНО** напрямую изме�
 
 ---
 
-## Changelog Maintenance Rules (Ведение CHANGELOG.md при успешных изменениях)
+## Changelog Maintenance Rules (Ведение CHANGELOG.md)
 
-Все AI-агенты при разработке, рефакторинге или добавлении функционала в подпроекты (`tools/leo4proxy`, `tools/l4con`, `ProcessingBackend`, `MenuBuilder`, `shared/` и др.) **ОБЯЗАНЫ** вести и поддерживать в актуальном состоянии `CHANGELOG.md` соответствующего подпроекта (или корневой журнал изменений при межкомпонентных правках).
+Поддерживайте `CHANGELOG.md` соответствующего подпроекта для пользовательских, протокольных, архитектурных и других release-significant изменений. Внутренние правки без наблюдаемого эффекта не требуют записи.
 
-### Регламент фиксации изменений в `CHANGELOG.md`:
-1. **Ведение записей при внесении изменений**:
-   - При добавлении нового функционала, изменении CLI аргументов, протоколов или архитектуры подпроекта агент создаёт или обновляет файл `CHANGELOG.md` в каталоге подпроекта, фиксируя изменения по разделам (`Added`, `Changed`, `Fixed`, `Deprecated`, `Removed`).
-2. **Окончательная актуализация по сигналу успешности от пользователя**:
-   - Если пользователь в процессе диалога выражает подтверждение и одобрение результата (например, фразами: **«Всё отлично»**, **«все получилось»**, **«работает»**, **«проверил, всё ок»**, **«готово»**, **«принято»**, **«сработало»**, **«тест прошёл успешно»** и их смысловыми аналогами), агент **ОБЯЗАН** зафиксировать версию, актуальную дату и финализировать блок изменений в `CHANGELOG.md`.
+Фиксируйте итоговое состояние по разделам `Added`, `Changed`, `Fixed`, `Deprecated`, `Removed`; не превращайте changelog в перечень промежуточных действий или коммитов. Дату и версию финализируйте только в рамках явной release/versioning задачи либо принятого проектом процесса, а не по ключевым словам в сообщениях пользователя.

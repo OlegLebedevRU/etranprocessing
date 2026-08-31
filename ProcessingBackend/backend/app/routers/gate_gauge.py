@@ -1,3 +1,4 @@
+from etranprocessing_gauge import create_or_update_snapshot, parse_gauge_pack
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,7 +7,6 @@ from app.database import get_db
 from app.dependencies import get_current_terminal
 from app.models import Terminal
 from app.services.gauge_bus import gauge_mqtt_bus, gauge_store
-from app.services.gauge_engine import create_or_update_snapshot, parse_gauge_pack
 
 router = APIRouter()
 

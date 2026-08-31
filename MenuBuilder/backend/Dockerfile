@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     rm -rf /var/lib/apt/lists/*
 
 COPY shared/ /shared/
-RUN pip install --no-cache-dir /shared
+RUN pip install --no-cache-dir /shared /shared/etranprocessing_gauge
 
 COPY MenuBuilder/backend/pyproject.toml .
 RUN pip install --no-cache-dir .

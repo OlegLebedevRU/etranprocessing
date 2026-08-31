@@ -1,20 +1,19 @@
 # Billing Architecture — Flow & Math Reference
 
 Authoritative reference for the terminal license/certificate billing system.
-Covers both backend (`ProcessingBackend/backend/app/services/billing.py`,
-`app/routers/billing.py`, `app/services/cert_billing.py`), MenuBuilder backend
-(`MenuBuilder/backend/app/main.py`, `app/routers/terminal_bindings.py`), and the
-MenuBuilder frontend cart and management pages (`MenuBuilder/frontend/src/routes/billing.tsx`,
-`components/CheckoutModal.tsx`). Supersedes the historical planning docs in
-`docs/billing-implementation-plan.md` and the pre-fix audit in
-`docs/billing-implementation-review/REVIEW.md`.
+Owner: MenuBuilder billing domain. Verified: 2026-08-31 against shared models,
+`MenuBuilder/backend/app/services/billing.py`, billing routers and frontend cart.
+It supersedes the historical planning and review documents, whose references to
+`renewal_enabled`, `deactivation_requested_at` and `licenses.is_active` describe
+the schema before Alembic migration `019` and are not an active contract.
 
 ## 1. Domain model
 
 Each **terminal** has, independently:
 
-- A **license** (`License` row: `expires_at`, `renewal_enabled`,
-  `deactivation_requested_at`, optional `monthly_price_override_minor`).
+- Administrative availability (`Terminal.is_active`).
+- A paid **license term** (`License.expires_at`, with optional
+  `monthly_price_override_minor`).
 - A **certificate** (`cert_serial`, `cert_not_valid_after`, plus a
   `CertificatePin` PIN-issue workflow — see
   `ProcessingBackend/docs/certificates-flow.md`).
@@ -35,41 +34,34 @@ per product requirement; the checkout payload still sends exact minor units.
 
 | Status | Condition | Meaning & UX Behavior |
 |---|---|---|
-| `ADMIN_DISABLED` | `Terminal.is_active == False` | Operator-level kill switch, unrelated to billing. Excluded from payments and forecasts. |
+| `DISABLED` | `Terminal.is_active == False` | Administratively disabled terminal. Excluded from payments and forecasts. |
 | `NO_LICENSE` | Terminal has no `License` row | Excluded from renewals; requires initial setup. |
-| `DISABLED` | `renewal_enabled == False` | **Deactivated terminal**. Immediately transitions to "Отключённые" section. No checkboxes, no calculated payable sums (license, cert, debt = 0), excluded from cart and financial forecast. |
-| `OVERDUE` | `renewal_enabled == True` and `expires_at <= as_of` | Active subscription lapsed. Needs 1 period payment starting today to reactivate. |
-| `DUE_SOON` | `renewal_enabled == True`, not expired, `expires_at <= as_of + due_soon_days` | Active subscription expiring soon (default ≤ 30 days). Eligible for advance renewal. |
-| `ACTIVE` | `renewal_enabled == True` and `expires_at > as_of + due_soon_days` | Fully active and paid ahead. |
+| `OVERDUE` | Active terminal and `expires_at <= as_of` | Paid term lapsed. Needs one period payment starting today to restore service. |
+| `DUE_SOON` | Active terminal, not expired, `expires_at <= as_of + due_soon_days` | Paid term expiring soon (default ≤ 30 days). Eligible for advance renewal. |
+| `ACTIVE` | Active terminal and `expires_at > as_of + due_soon_days` | Fully active and paid ahead. |
 
 ### Deactivation & Re-enabling Logic ("Отключить" / "Включить")
-1. **Clicking "Отключить" (Deactivate)**:
-   - Sets `License.renewal_enabled = False` and `License.deactivation_requested_at = now`.
-   - The terminal immediately transitions to the **`DISABLED`** status and is placed in the **"Отключённые"** tab.
-   - For a disabled terminal, **NO amounts are billed or indicated** (0 debt, license amount disabled, certificate PIN payment disabled), **NO selection checkboxes** are displayed or selectable, and it is **completely excluded from checkout cart and forecast calculations**.
-2. **Re-enabling without payment (until expiration)**:
-   - If a disabled terminal still has a valid license (`license_expires_at > now`) and valid certificate, it has `can_cancel_deactivation = True`.
-   - The user can click **"Включить"** (Re-enable) at any time before expiration.
-   - This restores `renewal_enabled = True` without requiring any payment or checkout.
-3. **Reactivation after expiration**:
-   - Once the license date passes (`license_expires_at <= now`), `can_cancel_deactivation` becomes `False` and `can_reactivate` becomes `True`. Re-enabling then requires a standard reactivation payment starting from the payment date.
+1. **Clicking "Отключить"** sets `Terminal.is_active = False`. The terminal
+   transitions to `DISABLED`, has no payable lines or checkboxes, and is
+   excluded from cart, monitoring, terminal-facing access and forecasts.
+2. **Clicking "Включить"** sets `Terminal.is_active = True`. If
+   `License.expires_at > now`, no payment is required; otherwise the terminal
+   becomes `OVERDUE` and restoration uses the standard checkout flow.
+3. Administrative state and paid term are independent facts. Billing code must
+   not recreate a second enable/renewal flag on `licenses`.
 
 ## 3. Strict Isolation from Monitoring & Menu Management
 
-All disabled and deactivated terminals are strictly isolated from operational datasets:
-- **Monitoring (`/api/monitoring`)**: Queries filter terminals with:
+Administratively disabled terminals are isolated from operational datasets:
+- **Monitoring (`/api/monitoring`)** filters terminals with:
   ```sql
   WHERE t.is_active = true
-    AND EXISTS (
-      SELECT 1 FROM licenses l
-      WHERE l.terminal_id = t.id
-        AND l.is_active = true
-        AND l.renewal_enabled = true
-        AND l.expires_at > :now
-    )
+    AND t.show_in_monitoring = true
   ```
-- **Menu Management (`/api/terminals`)**: Uses the identical filter condition.
-- Any terminal that is administratively disabled (`t.is_active = false`), deactivated by user (`l.renewal_enabled = false`), expired (`l.expires_at <= now`), or unlicensed is completely omitted from Monitoring and Menu Management.
+- **Terminal-facing APIs** additionally enforce license presence and
+  `License.expires_at > now` in `ProcessingBackend.get_current_terminal`.
+- Monitoring may still show an active but overdue terminal so operators can
+  diagnose it; terminal-facing payment/menu access is denied after expiry.
 
 ## 4. "Lapsed" vs "due soon" — why the distinction matters
 
@@ -157,14 +149,14 @@ Independent of the license line. `resolve_effective_price()` /
 `build_org_summary_data()` aggregates per-terminal `TerminalBillingResult`
 into: overdue amount/count, active count, disabled count,
 admin-disabled count, nearest required payment date, and a monthly
-`forecast[]` (only terminals with `included_in_forecast == True`, i.e.
-`renewal_enabled == True`, active, and not `OVERDUE`/`NO_LICENSE`, are projected forward).
+`forecast[]` (only administratively active terminals with an eligible license
+and `included_in_forecast == True` are projected forward).
 
 ## 9. MenuBuilder ↔ ProcessingBackend integration
 
-- MenuBuilder's nginx proxies `/api/billing/*` straight through to
-  `processing-backend` (same Docker network); ProcessingBackend independently
-  validates the JWT (`python-jose`, same `JWT_SECRET_HEX` as MenuBuilder).
+- MenuBuilder backend owns the user-facing `/api/billing/*` use cases. Its nginx
+  terminates JWT and forwards canonical `X-User-Id`, `X-Org-Id` and
+  `X-User-Role` headers; the backend applies tenant scope.
 - **`org_id` must always reach the backend as an `int`.** The JWT claim is a
   string in the token (`"org": "1"`); both MenuBuilder's own report endpoints
   and ProcessingBackend's billing endpoints filter SQL by integer `org_id`
@@ -176,4 +168,8 @@ admin-disabled count, nearest required payment date, and a monthly
   (`MenuBuilder/backend/app/auth.py`) casts the JWT `org` claim to `int`.
 - **MCP pin-server `generate_pin` missing `org_id` on INSERT** — keep `org_id` in the `INSERT`.
 - **"No periods to pay" 400 for due-soon-but-not-lapsed terminals** — see §4.
-- **Deactivated terminal isolation** — deactivated terminals (`renewal_enabled = false`) must never show debt, payable lines, checkboxes, or appear in active monitoring/menu management queries.
+- **State duplication** — do not reintroduce `renewal_enabled`,
+  `deactivation_requested_at` or `licenses.is_active`; use
+  `Terminal.is_active + License.expires_at`.
+- **Disabled terminal isolation** — `Terminal.is_active = false` terminals must
+  never show payable lines or pass terminal-facing authorization.

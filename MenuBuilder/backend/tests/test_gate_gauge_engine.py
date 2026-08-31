@@ -1,14 +1,14 @@
 from datetime import UTC, datetime
 
 import pytest
-
-from app.services.gauge_bus import GaugeStore
-from app.services.gauge_engine import (
+from etranprocessing_gauge import (
     calculate_lastnumconn,
     decode_slots_bitmask,
     parse_gauge_pack,
     update_slots_bitmask,
 )
+
+from app.services.gauge_bus import GaugeStore
 
 
 @pytest.fixture

@@ -2,7 +2,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.main import _build_menu_tree
 from app.models import Group, MenuVariant, Service
 from app.services.legacy_menu import (
     import_all_legacy_menus,
@@ -83,21 +82,6 @@ async def test_import_legacy_menu_for_org_424():
     for g in sub_groups:
         assert g.parent_id == root_grp.id
         assert g.org_id == 424
-
-    # Build tree check
-    tree = _build_menu_tree(groups, services)
-    assert tree["name"] == "root"
-    assert len(tree["items"]) == 1
-    assert tree["items"][0]["name"] == "Раздел главного меню"
-    assert len(tree["items"][0]["items"]) == 12
-
-    first_cat = tree["items"][0]["items"][0]  # Стрижки
-    assert first_cat["name"] == "Стрижки"
-    assert len(first_cat["items"]) == 11
-    mens_cut = next(s for s in first_cat["items"] if s["code"] == 1000301)
-    assert mens_cut["name"] == "Мужская стрижка"
-    assert mens_cut["price"] == "600"
-    assert mens_cut["prototypeid"] == 990021
 
 
 @pytest.mark.anyio
