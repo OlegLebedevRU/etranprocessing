@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import dayjs from "dayjs";
 import {
   Layout,
   Menu,
@@ -112,30 +113,30 @@ export default function ReportsPage() {
   const [inkDeviceIds, setInkDeviceIds] = useState<number[]>([]);
 
   // --- Payments state ---
+  const todayStr = dayjs().format("YYYY-MM-DD");
   const [payItems, setPayItems] = useState<PaymentRecord[]>([]);
   const [payTotal, setPayTotal] = useState(0);
   const [payLoading, setPayLoading] = useState(false);
-  const [payDateFrom, setPayDateFrom] = useState("");
-  const [payDateTo, setPayDateTo] = useState("");
+  const [payDateFrom, setPayDateFrom] = useState<string>(todayStr);
+  const [payDateTo, setPayDateTo] = useState<string>(todayStr);
   const [payTermInput, setPayTermInput] = useState("");
   const [payDeviceIds, setPayDeviceIds] = useState<number[]>([]);
   const [payTspCode, setPayTspCode] = useState<number | undefined>();
-  const [payState, setPayState] = useState<number>(-1);
   const [payTop, setPayTop] = useState(50);
 
   // --- Balance by terminal state ---
   const [btItems, setBtItems] = useState<BalanceByTerminalRecord[]>([]);
   const [btLoading, setBtLoading] = useState(false);
-  const [btDateFrom, setBtDateFrom] = useState("");
-  const [btDateTo, setBtDateTo] = useState("");
+  const [btDateFrom, setBtDateFrom] = useState<string>(todayStr);
+  const [btDateTo, setBtDateTo] = useState<string>(todayStr);
   const [btTermInput, setBtTermInput] = useState("");
   const [btDeviceIds, setBtDeviceIds] = useState<number[]>([]);
 
   // --- Balance by TSP state ---
   const [btsItems, setBtsItems] = useState<BalanceByTspRecord[]>([]);
   const [btsLoading, setBtsLoading] = useState(false);
-  const [btsDateFrom, setBtsDateFrom] = useState("");
-  const [btsDateTo, setBtsDateTo] = useState("");
+  const [btsDateFrom, setBtsDateFrom] = useState<string>(todayStr);
+  const [btsDateTo, setBtsDateTo] = useState<string>(todayStr);
   const [btsTermInput, setBtsTermInput] = useState("");
   const [btsDeviceIds, setBtsDeviceIds] = useState<number[]>([]);
 
@@ -175,11 +176,10 @@ export default function ReportsPage() {
     setPayLoading(true);
     try {
       const resp = await getPayments({
-        date_from: payDateFrom || undefined,
-        date_to: payDateTo || undefined,
+        date_from: payDateFrom || todayStr,
+        date_to: payDateTo || todayStr,
         device_ids: payDeviceIds.length ? payDeviceIds : undefined,
         tsp_code: payTspCode,
-        paym_state: payState >= 0 ? payState : undefined,
         top: payTop,
       });
       setPayItems(resp.items);
@@ -187,7 +187,7 @@ export default function ReportsPage() {
     } finally {
       setPayLoading(false);
     }
-  }, [payDateFrom, payDateTo, payDeviceIds, payTspCode, payState, payTop]);
+  }, [payDateFrom, payDateTo, payDeviceIds, payTspCode, payTop, todayStr]);
 
   useEffect(() => {
     if (activeReport === "payments") fetchPayments();
@@ -206,15 +206,15 @@ export default function ReportsPage() {
     setBtLoading(true);
     try {
       const resp = await getBalanceByTerminal({
-        date_from: btDateFrom || undefined,
-        date_to: btDateTo || undefined,
+        date_from: btDateFrom || todayStr,
+        date_to: btDateTo || todayStr,
         device_ids: btDeviceIds.length ? btDeviceIds : undefined,
       });
       setBtItems(resp.items);
     } finally {
       setBtLoading(false);
     }
-  }, [btDateFrom, btDateTo, btDeviceIds]);
+  }, [btDateFrom, btDateTo, btDeviceIds, todayStr]);
 
   useEffect(() => {
     if (activeReport === "balance-terminal") fetchBalanceByTerminal();
@@ -233,15 +233,15 @@ export default function ReportsPage() {
     setBtsLoading(true);
     try {
       const resp = await getBalanceByTsp({
-        date_from: btsDateFrom || undefined,
-        date_to: btsDateTo || undefined,
+        date_from: btsDateFrom || todayStr,
+        date_to: btsDateTo || todayStr,
         device_ids: btsDeviceIds.length ? btsDeviceIds : undefined,
       });
       setBtsItems(resp.items);
     } finally {
       setBtsLoading(false);
     }
-  }, [btsDateFrom, btsDateTo, btsDeviceIds]);
+  }, [btsDateFrom, btsDateTo, btsDeviceIds, todayStr]);
 
   useEffect(() => {
     if (activeReport === "balance-tsp") fetchBalanceByTsp();
@@ -587,15 +587,19 @@ export default function ReportsPage() {
                 <DatePicker
                   placeholder="Дата с"
                   size="small"
+                  value={payDateFrom ? dayjs(payDateFrom) : dayjs()}
+                  allowClear={false}
                   onChange={(d) =>
-                    setPayDateFrom(d ? d.format("YYYY-MM-DD") : "")
+                    setPayDateFrom(d ? d.format("YYYY-MM-DD") : todayStr)
                   }
                 />
                 <DatePicker
                   placeholder="Дата по"
                   size="small"
+                  value={payDateTo ? dayjs(payDateTo) : dayjs()}
+                  allowClear={false}
                   onChange={(d) =>
-                    setPayDateTo(d ? d.format("YYYY-MM-DD") : "")
+                    setPayDateTo(d ? d.format("YYYY-MM-DD") : todayStr)
                   }
                 />
                 <Input
@@ -622,13 +626,6 @@ export default function ReportsPage() {
                     const v = e.target.value.trim();
                     setPayTspCode(v ? Number(v) : undefined);
                   }}
-                />
-                <Select
-                  size="small"
-                  style={{ width: 130 }}
-                  value={payState}
-                  onChange={setPayState}
-                  options={PAYM_STATE_OPTIONS}
                 />
                 <Select
                   size="small"
@@ -748,15 +745,19 @@ export default function ReportsPage() {
                 <DatePicker
                   placeholder="Дата с"
                   size="small"
+                  value={btDateFrom ? dayjs(btDateFrom) : dayjs()}
+                  allowClear={false}
                   onChange={(d) =>
-                    setBtDateFrom(d ? d.format("YYYY-MM-DD") : "")
+                    setBtDateFrom(d ? d.format("YYYY-MM-DD") : todayStr)
                   }
                 />
                 <DatePicker
                   placeholder="Дата по"
                   size="small"
+                  value={btDateTo ? dayjs(btDateTo) : dayjs()}
+                  allowClear={false}
                   onChange={(d) =>
-                    setBtDateTo(d ? d.format("YYYY-MM-DD") : "")
+                    setBtDateTo(d ? d.format("YYYY-MM-DD") : todayStr)
                   }
                 />
                 <Input
@@ -820,15 +821,19 @@ export default function ReportsPage() {
                 <DatePicker
                   placeholder="Дата с"
                   size="small"
+                  value={btsDateFrom ? dayjs(btsDateFrom) : dayjs()}
+                  allowClear={false}
                   onChange={(d) =>
-                    setBtsDateFrom(d ? d.format("YYYY-MM-DD") : "")
+                    setBtsDateFrom(d ? d.format("YYYY-MM-DD") : todayStr)
                   }
                 />
                 <DatePicker
                   placeholder="Дата по"
                   size="small"
+                  value={btsDateTo ? dayjs(btsDateTo) : dayjs()}
+                  allowClear={false}
                   onChange={(d) =>
-                    setBtsDateTo(d ? d.format("YYYY-MM-DD") : "")
+                    setBtsDateTo(d ? d.format("YYYY-MM-DD") : todayStr)
                   }
                 />
                 <Input

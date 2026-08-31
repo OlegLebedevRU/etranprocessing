@@ -444,7 +444,13 @@ async def test_payments_report_tsp_name_resolution():
         None,
     )
 
+    from datetime import date
+
+    captured_params = []
+
     async def mock_execute(stmt, params=None):
+        if params:
+            captured_params.append(dict(params))
         sql_str = str(stmt)
         result = MagicMock()
         result.scalar.return_value = 2
@@ -475,7 +481,9 @@ async def test_payments_report_tsp_name_resolution():
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
-            resp = await client.get("/api/reports/payments")
+            resp = await client.get(
+                "/api/reports/payments?date_from=2026-08-01&date_to=2026-08-31"
+            )
             assert resp.status_code == 200
             data = resp.json()
             assert data["total"] == 2
@@ -485,3 +493,88 @@ async def test_payments_report_tsp_name_resolution():
             assert items[0]["tsp_name"] == "Мобильная связь"
             assert items[1]["paym_id"] == 1002
             assert items[1]["tsp_name"] == "Неизвестный провайдер"
+            assert len(captured_params) > 0
+            assert captured_params[0]["dt_from"] == date(2026, 8, 1)
+            assert captured_params[0]["dt_to"] == date(2026, 9, 1)
+
+
+@pytest.mark.anyio
+async def test_balance_by_terminal_report():
+    """Verify balance by terminal report."""
+    app.dependency_overrides[get_current_user] = lambda: {
+        "username": "admin",
+        "org_id": 1,
+    }
+
+    mock_session = AsyncMock()
+
+    # (device_id, sn, terminal_id, tsp_count, total_count, total_amount)
+    row1 = (209, "SN209", 1, 3, 10, 50000)
+
+    async def mock_execute(stmt, params=None):
+        result = MagicMock()
+        result.fetchall.return_value = [row1]
+        return result
+
+    mock_session.execute = AsyncMock(side_effect=mock_execute)
+
+    mock_cm = AsyncMock()
+    mock_cm.__aenter__.return_value = mock_session
+    mock_cm.__aexit__.return_value = None
+
+    with patch("app.main.async_session", return_value=mock_cm):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.get(
+                "/api/reports/balance-by-terminal?date_from=2026-08-31&date_to=2026-08-31"
+            )
+            assert resp.status_code == 200
+            data = resp.json()
+            assert len(data["items"]) == 1
+            assert data["items"][0]["device_id"] == 209
+            assert data["items"][0]["total_amount"] == 50000
+
+
+@pytest.mark.anyio
+async def test_balance_by_tsp_report():
+    """Verify balance by TSP report."""
+    app.dependency_overrides[get_current_user] = lambda: {
+        "username": "admin",
+        "org_id": 1,
+    }
+
+    mock_session = AsyncMock()
+
+    # (tsp_code, tsp_name, menu_snapshot_id, terminal_id, count, amount)
+    row1 = (7001, "Мобильная связь", None, 1, 5, 25000)
+
+    async def mock_execute(stmt, params=None):
+        sql_str = str(stmt)
+        result = MagicMock()
+        if "FROM balance_terminal_tsp" in sql_str:
+            result.fetchall.return_value = [row1]
+        elif "FROM services s" in sql_str:
+            result.fetchall.return_value = [(7001, "Мобильная связь")]
+        else:
+            result.fetchall.return_value = []
+        return result
+
+    mock_session.execute = AsyncMock(side_effect=mock_execute)
+
+    mock_cm = AsyncMock()
+    mock_cm.__aenter__.return_value = mock_session
+    mock_cm.__aexit__.return_value = None
+
+    with patch("app.main.async_session", return_value=mock_cm):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.get(
+                "/api/reports/balance-by-tsp?date_from=2026-08-31&date_to=2026-08-31"
+            )
+            assert resp.status_code == 200
+            data = resp.json()
+            assert len(data["items"]) == 1
+            assert data["items"][0]["tsp_code"] == 7001
+            assert data["items"][0]["total_amount"] == 25000

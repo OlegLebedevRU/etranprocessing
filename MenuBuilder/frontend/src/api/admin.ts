@@ -1,4 +1,5 @@
 import client from "./client";
+import { invalidateCache, withCache } from "./cache";
 
 export interface AdminOrg {
   org_id: number;
@@ -165,14 +166,25 @@ export interface SetLicenseResponse {
   renewal_enabled: boolean;
 }
 
-export async function getAdminOrganizations(): Promise<AdminOrg[]> {
-  const { data } = await client.get<AdminOrg[]>("/admin/organizations");
-  return data;
+export async function getAdminOrganizations(forceFresh = false): Promise<AdminOrg[]> {
+  if (forceFresh) {
+    invalidateCache("admin_orgs");
+  }
+  return withCache<AdminOrg[]>(
+    "admin_orgs",
+    async () => {
+      const { data } = await client.get<AdminOrg[]>("/admin/organizations");
+      return data;
+    },
+    120_000
+  );
 }
 
 export async function createAdminOrganization(
   payload: AdminOrgCreateInput
 ): Promise<AdminOrg> {
+  invalidateCache("admin_orgs");
+  invalidateCache("available_tenants");
   const { data } = await client.post<AdminOrg>(
     "/admin/organizations",
     payload
@@ -184,6 +196,8 @@ export async function updateAdminOrganization(
   orgId: number,
   payload: AdminOrgUpdateInput
 ): Promise<AdminOrg> {
+  invalidateCache("admin_orgs");
+  invalidateCache("available_tenants");
   const { data } = await client.put<AdminOrg>(
     `/admin/organizations/${orgId}`,
     payload

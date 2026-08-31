@@ -191,11 +191,15 @@ async def list_terminals(
         query = query.where(Terminal.is_active == is_active)
 
     if search:
-        search_pattern = f"%{search.strip()}%"
-        # Check if search is purely numeric for exact or pattern device_id matching
-        search_int = None
-        if search.strip().isdigit():
-            search_int = int(search.strip())
+        raw_search = search.strip()
+        search_pattern = f"%{raw_search}%"
+
+        # Check if search contains comma-separated numbers (e.g. "101, 102, 105")
+        comma_ids = [
+            int(part.strip())
+            for part in raw_search.split(",")
+            if part.strip().isdigit()
+        ]
 
         conditions: list[Any] = [
             Terminal.sn.ilike(search_pattern),
@@ -205,8 +209,10 @@ async def list_terminals(
             Org.org_name.ilike(search_pattern),
             Org.name.ilike(search_pattern),
         ]
-        if search_int is not None:
-            conditions.append(Terminal.device_id == search_int)
+        if len(comma_ids) > 1:
+            conditions.append(Terminal.device_id.in_(comma_ids))
+        elif len(comma_ids) == 1 and raw_search.isdigit():
+            conditions.append(Terminal.device_id == comma_ids[0])
 
         query = query.where(or_(*conditions))
 

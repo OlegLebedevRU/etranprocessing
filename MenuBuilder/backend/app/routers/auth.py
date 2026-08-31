@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import logging
+from contextlib import suppress
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from pydantic import BaseModel
@@ -9,6 +10,7 @@ from sqlalchemy import select
 
 from app.auth import (
     create_master_token,
+    decode_token,
     get_current_user,
 )
 from app.config import settings
@@ -234,10 +236,30 @@ async def refresh_token(
             detail="User is inactive or not found",
         )
 
+    # Determine effective org_id: for superusers, preserve current active org_id if provided in accessToken
+    effective_org_id = user.org_id
+    if user.is_superuser:
+        curr_token = None
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            curr_token = auth_header.split(" ", 1)[1]
+        elif "accessToken" in request.cookies:
+            curr_token = request.cookies["accessToken"]
+        if curr_token:
+            with suppress(Exception):
+                curr_payload = decode_token(curr_token)
+                curr_org = (
+                    curr_payload.get("orgId")
+                    or curr_payload.get("org_id")
+                    or curr_payload.get("org")
+                )
+                if curr_org is not None and str(curr_org).isdigit():
+                    effective_org_id = int(curr_org)
+
     # Issue new token pair
     token_data = await jwt_issuer_client.issue_tokens(
         user_id=user.id,
-        org_id=user.org_id,
+        org_id=effective_org_id,
         role_id=user.role_id,
         username=user.username,
         role=user.role,

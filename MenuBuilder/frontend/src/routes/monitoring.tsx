@@ -1,8 +1,7 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Button, Card, Input, message, Space, Table, Tooltip, Typography } from "antd";
 import { CloudOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { getMonitoring, MonitoringTerminal } from "../api/monitoring";
-import PageHeader from "../components/PageHeader";
 import { formatDate } from "../utils/billing";
 
 const { Text } = Typography;
@@ -93,6 +92,8 @@ export default function MonitoringPage() {
   const [searchInput, setSearchInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState("");
+  const [simulatedRefreshing, setSimulatedRefreshing] = useState(false);
+  const lastManualFetchTimeRef = useRef<number>(0);
 
   const load = useCallback(async (isSilent = false) => {
     if (!isSilent) {
@@ -118,13 +119,29 @@ export default function MonitoringPage() {
     load(false);
   }, [load]);
 
-  // Smart auto-refresh: updates only the visible page
+  // Auto-refresh: 1 time per minute (60,000 ms)
   useEffect(() => {
     const timer = setInterval(() => {
       load(true);
-    }, 15000);
+    }, 60000);
     return () => clearInterval(timer);
   }, [load]);
+
+  const handleManualRefresh = () => {
+    const now = Date.now();
+    const elapsed = now - lastManualFetchTimeRef.current;
+    if (elapsed < 5000) {
+      // Cooldown protection: simulate refresh feedback without backend call
+      setSimulatedRefreshing(true);
+      setTimeout(() => {
+        setSimulatedRefreshing(false);
+        setLastUpdate(new Date().toLocaleTimeString("ru-RU"));
+      }, 300);
+      return;
+    }
+    lastManualFetchTimeRef.current = now;
+    load(false);
+  };
 
   const handleSearch = () => {
     setPage(1);
@@ -435,11 +452,29 @@ export default function MonitoringPage() {
 
   return (
     <>
-      <PageHeader
-        title="Мониторинг"
-        subtitle={lastUpdate ? `Обновлено в ${lastUpdate}` : undefined}
-        extra={
-          <Space wrap>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          marginBottom: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        <Space size={16} align="center" wrap>
+          <div>
+            <Typography.Title level={5} style={{ margin: 0, fontWeight: 600 }}>
+              Мониторинг
+            </Typography.Title>
+            {lastUpdate && (
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                Обновлено в {lastUpdate}
+              </Text>
+            )}
+          </div>
+
+          <Space size={8} wrap>
             <Input
               placeholder="Поиск ID / SN / адрес"
               prefix={<SearchOutlined />}
@@ -456,14 +491,14 @@ export default function MonitoringPage() {
             <Button
               size="small"
               icon={<ReloadOutlined />}
-              onClick={() => load(false)}
-              loading={loading}
+              onClick={handleManualRefresh}
+              loading={loading || simulatedRefreshing}
             >
               Обновить
             </Button>
           </Space>
-        }
-      />
+        </Space>
+      </div>
 
       <Card styles={{ body: { padding: 0 } }} style={{ width: "100%" }}>
         <Table
@@ -475,6 +510,7 @@ export default function MonitoringPage() {
           size="small"
           tableLayout="auto"
           pagination={{
+            position: ["topRight", "bottomRight"],
             current: page,
             pageSize,
             total,

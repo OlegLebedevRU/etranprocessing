@@ -1,4 +1,5 @@
 import client from "./client";
+import { invalidateCache, withCache } from "./cache";
 
 export interface LoginResponse {
   access_token: string;
@@ -36,17 +37,31 @@ export async function logout(): Promise<void> {
   try {
     await client.post("/auth/logout");
   } finally {
+    invalidateCache();
     localStorage.removeItem("mb_token");
     localStorage.removeItem("mb_user");
+    localStorage.removeItem("mb_is_superuser");
+    localStorage.removeItem("mb_current_org_id");
+    localStorage.removeItem("mb_current_org_name");
   }
 }
 
 export async function refreshAuthToken(): Promise<LoginResponse> {
+  invalidateCache("auth_me");
   const { data } = await client.post<LoginResponse>("/auth/refresh");
   return data;
 }
 
-export async function getMe(): Promise<UserInfo> {
-  const { data } = await client.get<UserInfo>("/auth/me");
-  return data;
+export async function getMe(forceFresh = false): Promise<UserInfo> {
+  if (forceFresh) {
+    invalidateCache("auth_me");
+  }
+  return withCache<UserInfo>(
+    "auth_me",
+    async () => {
+      const { data } = await client.get<UserInfo>("/auth/me");
+      return data;
+    },
+    60_000
+  );
 }

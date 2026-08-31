@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager, suppress
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -543,11 +543,19 @@ async def get_inkass_report(
             params["org_id"] = org_id
 
         if date_from:
-            conditions.append("r.created_at >= :date_from")
-            params["date_from"] = date_from
+            try:
+                dt_from = date.fromisoformat(date_from.strip())
+                conditions.append("r.created_at >= :dt_from")
+                params["dt_from"] = dt_from
+            except ValueError:
+                pass
         if date_to:
-            conditions.append("r.created_at < (:date_to::date + interval '1 day')")
-            params["date_to"] = date_to
+            try:
+                dt_to = date.fromisoformat(date_to.strip()) + timedelta(days=1)
+                conditions.append("r.created_at < :dt_to")
+                params["dt_to"] = dt_to
+            except ValueError:
+                pass
         if device_ids:
             ids = [int(x.strip()) for x in device_ids.split(",") if x.strip().isdigit()]
             if ids:
@@ -841,22 +849,38 @@ async def get_payments_report(
     top: int = Query(100, ge=10, le=1000),
 ):
     """Payments report with expandable params. Tenant-scoped by org_id."""
+    from datetime import UTC, datetime
+
     from sqlalchemy import text
 
     org_id = user.get("org_id")
     if not org_id:
         return {"items": [], "total": 0}
 
+    # Default to current date (today) if date filters are empty
+    if not date_from and not date_to:
+        today_str = datetime.now(UTC).strftime("%Y-%m-%d")
+        date_from = today_str
+        date_to = today_str
+
     async with async_session() as session:
         conditions = ["p.org_id = :org_id"]
         params: dict = {"org_id": org_id}
 
         if date_from:
-            conditions.append("p.paym_datetime >= :date_from")
-            params["date_from"] = date_from
+            try:
+                dt_from = date.fromisoformat(date_from.strip())
+                conditions.append("p.paym_datetime >= :dt_from")
+                params["dt_from"] = dt_from
+            except ValueError:
+                pass
         if date_to:
-            conditions.append("p.paym_datetime < (:date_to::date + interval '1 day')")
-            params["date_to"] = date_to
+            try:
+                dt_to = date.fromisoformat(date_to.strip()) + timedelta(days=1)
+                conditions.append("p.paym_datetime < :dt_to")
+                params["dt_to"] = dt_to
+            except ValueError:
+                pass
         if device_ids:
             ids = [int(x.strip()) for x in device_ids.split(",") if x.strip().isdigit()]
             if ids:

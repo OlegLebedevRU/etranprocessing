@@ -784,12 +784,12 @@ export default function AdminTerminalsPage() {
         />
 
         <Input
-          placeholder="Поиск (номер, SN, адрес, имя орг)..."
+          placeholder="Поиск (номер, список ID через запятую, SN, адрес, орг)..."
           prefix={<SearchOutlined />}
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           onPressEnter={handleSearch}
-          style={{ width: 260 }}
+          style={{ width: 340 }}
           allowClear
         />
 
@@ -825,6 +825,7 @@ export default function AdminTerminalsPage() {
         columns={columns}
         dataSource={terminals}
         pagination={{
+          position: ["topRight", "bottomRight"],
           current: page,
           pageSize,
           total,

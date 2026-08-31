@@ -151,7 +151,7 @@ class JwtIssuerClient:
         refresh_token = secrets.token_urlsafe(64)
 
         payload = {
-            "sub": str(user_id),
+            "sub": username or str(user_id),
             "username": username or str(user_id),
             "userId": user_id,
             "user_id": user_id,
@@ -162,6 +162,9 @@ class JwtIssuerClient:
             "role_id": role_id,
             "role": role,
             "is_superuser": is_superuser,
+            "token_type": "tenant",
+            "orig_sub": username or str(user_id),
+            "is_imp": bool(is_superuser and effective_org_id > 1),
             "aud": self.aud,
             "iss": self.iss,
             "iat": int(now.timestamp()),

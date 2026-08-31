@@ -63,7 +63,7 @@ export default function DevicesManagementPage() {
 
   // Selected device for drawer
   const [selectedDevice, setSelectedDevice] = useState<DeviceListItem | null>(null);
-  const [activeTabKey, setActiveTabKey] = useState<string>("tasks");
+  const [activeTabKey, setActiveTabKey] = useState<string>("info");
 
   // Load organizations for filter
   useEffect(() => {
@@ -71,7 +71,12 @@ export default function DevicesManagementPage() {
       .then((data) => {
         setOrgs(data);
         if (data.length > 0) {
-          setSelectedOrgId((prev) => (prev !== undefined ? prev : data[0].org_id));
+          setSelectedOrgId((prev) => {
+            if (prev !== undefined && data.some((o) => o.org_id === prev)) {
+              return prev;
+            }
+            return data[0].org_id;
+          });
         }
       })
       .catch(() => {});
@@ -105,7 +110,7 @@ export default function DevicesManagementPage() {
   }, [fetchDevicesList]);
 
   // Handle opening device drawer
-  const handleOpenDevice = (dev: DeviceListItem, defaultTab = "tasks") => {
+  const handleOpenDevice = (dev: DeviceListItem, defaultTab = "info") => {
     setSelectedDevice(dev);
     setActiveTabKey(defaultTab);
     setSearchParams({ device_id: String(dev.device_id) });
@@ -341,7 +346,7 @@ export default function DevicesManagementPage() {
           size="small"
           type="primary"
           icon={<ControlOutlined />}
-          onClick={() => handleOpenDevice(record, "tasks")}
+          onClick={() => handleOpenDevice(record, "info")}
         >
           Управление
         </Button>
@@ -437,10 +442,11 @@ export default function DevicesManagementPage() {
         loading={loading}
         size="small"
         onRow={(record) => ({
-          onClick: () => handleOpenDevice(record, "tasks"),
+          onClick: () => handleOpenDevice(record, "info"),
           style: { cursor: "pointer" },
         })}
         pagination={{
+          position: ["topRight", "bottomRight"],
           defaultPageSize: 20,
           showSizeChanger: true,
           pageSizeOptions: ["10", "20", "50", "100"],
@@ -491,14 +497,14 @@ export default function DevicesManagementPage() {
             onChange={setActiveTabKey}
             items={[
               {
-                key: "tasks",
+                key: "info",
                 label: (
                   <span>
-                    <UnorderedListOutlined /> Задачи (RPC)
+                    <InfoCircleOutlined /> Паспорт
                   </span>
                 ),
                 children: (
-                  <DeviceTasksTab
+                  <DevicePassportTab
                     deviceId={selectedDevice.device_id}
                     sn={selectedDevice.sn}
                     orgId={selectedOrgId}
@@ -514,6 +520,21 @@ export default function DevicesManagementPage() {
                 ),
                 children: (
                   <DeviceEventsTab
+                    deviceId={selectedDevice.device_id}
+                    sn={selectedDevice.sn}
+                    orgId={selectedOrgId}
+                  />
+                ),
+              },
+              {
+                key: "tasks",
+                label: (
+                  <span>
+                    <UnorderedListOutlined /> Команды (RPC)
+                  </span>
+                ),
+                children: (
+                  <DeviceTasksTab
                     deviceId={selectedDevice.device_id}
                     sn={selectedDevice.sn}
                     orgId={selectedOrgId}
@@ -551,21 +572,6 @@ export default function DevicesManagementPage() {
                     tags={selectedDevice.tags}
                     orgId={selectedOrgId}
                     isActiveTab={activeTabKey === "console"}
-                  />
-                ),
-              },
-              {
-                key: "info",
-                label: (
-                  <span>
-                    <InfoCircleOutlined /> Паспорт
-                  </span>
-                ),
-                children: (
-                  <DevicePassportTab
-                    deviceId={selectedDevice.device_id}
-                    sn={selectedDevice.sn}
-                    orgId={selectedOrgId}
                   />
                 ),
               },
