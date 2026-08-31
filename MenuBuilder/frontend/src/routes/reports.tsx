@@ -338,13 +338,13 @@ export default function ReportsPage() {
     {
       title: "ТСП",
       dataIndex: "tsp_name",
-      width: 200,
+      width: 220,
       ellipsis: true,
       render: (v: string | undefined, r: PaymentRecord) => {
-        const name = (r.paym_tsp_code ? servicesMap[r.paym_tsp_code] : "") || v;
+        const verTag = r.menu_version ? ` (v${r.menu_version})` : "";
         return r.paym_tsp_code
-          ? `${r.paym_tsp_code}: ${name || "—"}`
-          : (name || "—");
+          ? `${r.paym_tsp_code}${verTag}: ${v || "—"}`
+          : (v || "—");
       },
     },
     {
@@ -413,12 +413,20 @@ export default function ReportsPage() {
       sorter: (a, b) => a.tsp_code - b.tsp_code,
     },
     {
+      title: "Версия",
+      dataIndex: "version",
+      width: 85,
+      align: "center",
+      render: (ver: number | null | undefined) =>
+        ver ? <Tag color="blue">{`v${ver}`}</Tag> : <Tag color="default">—</Tag>,
+      sorter: (a, b) => (a.version || 0) - (b.version || 0),
+    },
+    {
       title: "Название",
       dataIndex: "tsp_name",
-      width: 260,
+      width: 240,
       ellipsis: true,
-      render: (v: string, r: BalanceByTspRecord) =>
-        servicesMap[r.tsp_code] || v || `ТСП ${r.tsp_code}`,
+      render: (v: string, r: BalanceByTspRecord) => v || `ТСП ${r.tsp_code}`,
     },
     {
       title: "Сумма",

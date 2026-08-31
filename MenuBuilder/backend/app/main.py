@@ -22,6 +22,7 @@ from app.routers import (
     admin_users,
     auth,
     billing,
+    catalog,
     groups,
     integrations,
     mcp_proxy,
@@ -58,6 +59,7 @@ app.include_router(admin_organizations.router, tags=["admin-organizations"])
 app.include_router(admin_terminals.router, tags=["admin-terminals"])
 app.include_router(groups.router, prefix="/api/groups", tags=["groups"])
 app.include_router(services.router, prefix="/api/services", tags=["services"])
+app.include_router(catalog.router)
 app.include_router(
     menu_variants.router, prefix="/api/menu-variants", tags=["menu-variants"]
 )
@@ -1034,16 +1036,17 @@ async def get_payments_report(
         snap_id = r[9]
 
         tsp_name = None
+        menu_version = None
         if snap_id and snap_id in snapshots_map:
             snap_data = snapshots_map[snap_id]
-            services_by_tsp = (
-                snap_data.get("services_by_tsp", {})
-                if isinstance(snap_data, dict)
-                else {}
-            )
-            svc_info = services_by_tsp.get(str(t_code)) or services_by_tsp.get(t_code)
-            if svc_info and isinstance(svc_info, dict):
-                tsp_name = svc_info.get("name")
+            if isinstance(snap_data, dict):
+                menu_version = snap_data.get("version")
+                services_by_tsp = snap_data.get("services_by_tsp", {})
+                svc_info = services_by_tsp.get(str(t_code)) or services_by_tsp.get(
+                    t_code
+                )
+                if svc_info and isinstance(svc_info, dict):
+                    tsp_name = svc_info.get("name")
 
         if not tsp_name:
             tsp_name = (
@@ -1060,6 +1063,7 @@ async def get_payments_report(
                 "paym_ext_id": (r[3] or "").strip() or str(paym_id),
                 "paym_tsp_code": t_code,
                 "tsp_name": tsp_name,
+                "menu_version": menu_version,
                 "paym_state": r[5],
                 "paym_state_label": PAYM_STATE_LABELS.get(r[5], str(r[5])),
                 "pay_type_id": r[6],
@@ -1255,8 +1259,8 @@ async def get_balance_by_tsp(
         ).fetchall()
         org_tsp_map = {r[0]: r[1] for r in org_services_rows}
 
-    # Aggregate by tsp_code
-    grouped: dict[int, dict] = {}
+    # Aggregate by (tsp_code, version)
+    grouped: dict[tuple[int, int | None], dict] = {}
     for r in rows:
         t_code = r[0]
         global_name = (r[1] or "").strip()
@@ -1265,40 +1269,44 @@ async def get_balance_by_tsp(
         cnt = r[4] or 0
         amt = r[5] or 0
 
-        # Resolve tsp_name with priority: snapshot -> org menu -> global -> code
+        # Resolve tsp_name and version with priority: snapshot -> org menu -> global -> code
         tsp_name = None
+        menu_version = None
         if snap_id and snap_id in snapshots_map:
             snap_data = snapshots_map[snap_id]
-            services_by_tsp = (
-                snap_data.get("services_by_tsp", {})
-                if isinstance(snap_data, dict)
-                else {}
-            )
-            svc_info = services_by_tsp.get(str(t_code)) or services_by_tsp.get(t_code)
-            if svc_info and isinstance(svc_info, dict):
-                tsp_name = svc_info.get("name")
+            if isinstance(snap_data, dict):
+                menu_version = snap_data.get("version")
+                services_by_tsp = snap_data.get("services_by_tsp", {})
+                svc_info = services_by_tsp.get(str(t_code)) or services_by_tsp.get(
+                    t_code
+                )
+                if svc_info and isinstance(svc_info, dict):
+                    tsp_name = svc_info.get("name")
 
         if not tsp_name:
             tsp_name = org_tsp_map.get(t_code) or global_name or str(t_code)
 
-        if t_code not in grouped:
-            grouped[t_code] = {
+        group_key = (t_code, menu_version)
+        if group_key not in grouped:
+            grouped[group_key] = {
                 "tsp_code": t_code,
+                "version": menu_version,
                 "tsp_name": tsp_name,
                 "terminal_ids": {term_id},
                 "total_count": cnt,
                 "total_amount": amt,
             }
         else:
-            grouped[t_code]["terminal_ids"].add(term_id)
-            grouped[t_code]["total_count"] += cnt
-            grouped[t_code]["total_amount"] += amt
+            grouped[group_key]["terminal_ids"].add(term_id)
+            grouped[group_key]["total_count"] += cnt
+            grouped[group_key]["total_amount"] += amt
             if tsp_name and snap_id:
-                grouped[t_code]["tsp_name"] = tsp_name
+                grouped[group_key]["tsp_name"] = tsp_name
 
     items = [
         {
             "tsp_code": data["tsp_code"],
+            "version": data["version"],
             "tsp_name": data["tsp_name"],
             "terminal_count": len(data["terminal_ids"]),
             "total_count": data["total_count"],

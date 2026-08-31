@@ -9,22 +9,27 @@ export interface Service {
   printname: string | null;
   price: number;
   protypenumber: number;
+  catalog_item_id?: number | null;
 }
 
 export interface ServiceCreate {
   group_id: number;
   name: string;
   tsp_code?: number;
-  printname?: string;
+  printname?: string | null;
   price?: number;
   protypenumber?: number;
+  catalog_item_id?: number | null;
+  add_to_catalog?: boolean;
+  catalog_category_id?: number | null;
 }
 
 export interface ServiceUpdate {
   name?: string;
-  printname?: string;
+  printname?: string | null;
   price?: number;
   protypenumber?: number;
+  catalog_item_id?: number | null;
 }
 
 export const getServices = (groupId?: number) =>
@@ -44,7 +49,7 @@ export const updateService = (id: number, data: ServiceUpdate) =>
 export const deleteService = (id: number) =>
   client.delete(`/services/${id}`);
 
-export const getFreeTsp = (groupId: number) =>
+export const getFreeTsp = (groupId: number, fromCatalog: boolean = false) =>
   client.get<{ tsp_code: number }[]>("/services/free-tsp", {
-    params: { group_id: groupId },
+    params: { group_id: groupId, from_catalog: fromCatalog },
   });

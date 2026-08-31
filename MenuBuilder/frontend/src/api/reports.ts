@@ -77,6 +77,7 @@ export interface PaymentRecord {
   paym_ext_id: string;
   paym_tsp_code: number;
   tsp_name?: string;
+  menu_version?: number | null;
   paym_state: number;
   paym_state_label: string;
   pay_type_id: number;
@@ -138,6 +139,7 @@ export async function getBalanceByTerminal(params: {
 
 export interface BalanceByTspRecord {
   tsp_code: number;
+  version?: number | null;
   tsp_name: string;
   terminal_count: number;
   total_count: number;

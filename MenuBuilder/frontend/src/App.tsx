@@ -7,6 +7,7 @@ const LoginPage = lazy(() => import("./routes/login"));
 const MenuManagementLayout = lazy(() => import("./routes/menu-management"));
 const TerminalsPage = lazy(() => import("./routes/terminals"));
 const VariantsPage = lazy(() => import("./routes/variants"));
+const CatalogPage = lazy(() => import("./routes/catalog"));
 const MonitoringPage = lazy(() => import("./routes/monitoring"));
 const ReportsPage = lazy(() => import("./routes/reports"));
 const IntegrationsPage = lazy(() => import("./routes/integrations"));
@@ -59,6 +60,7 @@ export default function App() {
             <Route index element={<Navigate to="/menu/terminals" replace />} />
             <Route path="terminals" element={<TerminalsPage />} />
             <Route path="variants" element={<VariantsPage />} />
+            <Route path="catalog" element={<CatalogPage />} />
           </Route>
           <Route path="reports" element={<ReportsPage />} />
           <Route path="billing" element={<BillingPage />} />

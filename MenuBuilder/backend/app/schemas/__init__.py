@@ -68,6 +68,9 @@ class ServiceCreate(BaseModel):
     printname: str | None = None
     price: int = 0
     protypenumber: int = 0
+    catalog_item_id: int | None = None
+    add_to_catalog: bool = False
+    catalog_category_id: int | None = None
 
 
 class ServiceUpdate(BaseModel):
@@ -75,6 +78,7 @@ class ServiceUpdate(BaseModel):
     printname: str | None = None
     price: int | None = None
     protypenumber: int | None = None
+    catalog_item_id: int | None = None
 
 
 class ServiceRead(BaseModel):
@@ -86,8 +90,78 @@ class ServiceRead(BaseModel):
     printname: str | None
     price: int
     protypenumber: int
+    catalog_item_id: int | None = None
 
     model_config = {"from_attributes": True}
+
+
+# --- Catalog ---
+
+
+class CatalogCategoryCreate(BaseModel):
+    name: str
+    parent_id: int | None = None
+    sort_order: int = 0
+
+
+class CatalogCategoryUpdate(BaseModel):
+    name: str | None = None
+    parent_id: int | None = None
+    sort_order: int | None = None
+
+
+class CatalogCategoryRead(BaseModel):
+    id: int
+    org_id: int
+    name: str
+    parent_id: int | None = None
+    sort_order: int = 0
+    depth: int = 1
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    items_count: int = 0
+    children: list[CatalogCategoryRead] = []
+
+    model_config = {"from_attributes": True}
+
+
+class CatalogItemCreate(BaseModel):
+    category_id: int
+    name: str
+    tsp_code: int = 0
+    printname: str | None = None
+    price: int = 0
+    protypenumber: int = 0
+
+
+class CatalogItemUpdate(BaseModel):
+    category_id: int | None = None
+    name: str | None = None
+    printname: str | None = None
+    price: int | None = None
+    protypenumber: int | None = None
+
+
+class CatalogItemRead(BaseModel):
+    id: int
+    org_id: int
+    category_id: int
+    tsp_code: int
+    name: str
+    printname: str | None = None
+    price: int = 0
+    protypenumber: int = 0
+    category_name: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class CatalogPropagateResponse(BaseModel):
+    updated_variants_count: int
+    updated_services_count: int
+    affected_variant_names: list[str]
 
 
 # --- Terminal binding ---

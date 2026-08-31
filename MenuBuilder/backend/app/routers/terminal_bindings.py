@@ -18,12 +18,9 @@ async def list_terminals(
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """List active licensed terminals for the current user's organization."""
-    from datetime import UTC, datetime
-
+    """List active terminals for the current user's organization."""
     from sqlalchemy import text
 
-    now = datetime.now(UTC)
     org_id = user.get("org_id")
     if org_id is not None:
         try:
@@ -33,9 +30,8 @@ async def list_terminals(
 
     conditions = [
         "t.is_active = true",
-        "EXISTS (SELECT 1 FROM licenses l WHERE l.terminal_id = t.id AND l.is_active = true AND l.renewal_enabled = true AND l.expires_at > :now)",
     ]
-    params: dict = {"now": now}
+    params: dict = {}
 
     if org_id is not None:
         conditions.append("t.org_id = :org_id")

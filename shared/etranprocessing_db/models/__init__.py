@@ -4,6 +4,7 @@ from etranprocessing_db.models.billing import (
     BillingOrderItem,
     CertificatePin,
 )
+from etranprocessing_db.models.catalog import CatalogCategory, CatalogItem
 from etranprocessing_db.models.menu import (
     Group,
     MenuVariant,
@@ -43,6 +44,8 @@ __all__ = [
     "BalanceTerminalTsp",
     "BillingOrder",
     "BillingOrderItem",
+    "CatalogCategory",
+    "CatalogItem",
     "CertificatePin",
     "GateGaugeRecord",
     "Group",

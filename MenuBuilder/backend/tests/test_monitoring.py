@@ -161,7 +161,7 @@ async def test_monitoring_empty_page():
 
 @pytest.mark.anyio
 async def test_terminal_bindings_list_terminals():
-    """Verify list_terminals applies pagination, org_id filtering, and active license filter."""
+    """Verify list_terminals applies pagination, org_id filtering, and does not filter out by license."""
     app.dependency_overrides[get_current_user] = lambda: {
         "username": "admin",
         "org_id": 1,
@@ -216,9 +216,9 @@ async def test_terminal_bindings_list_terminals():
         assert item["device_id"] == 1001
         assert item["menu_variant_name"] == "Default Menu"
 
-    # Verify query had WHERE clause with licenses filter and org_id
+    # Verify query had WHERE clause with org_id and without licenses filter
     term_query = next(q for q in executed_queries if "FROM terminals t" in q[0])
-    assert "l.renewal_enabled = true" in term_query[0]
+    assert "EXISTS (SELECT 1 FROM licenses" not in term_query[0]
     assert term_query[1]["limit"] == 20
     assert term_query[1]["org_id"] == 1
     assert term_query[1]["search"] == "%1001%"

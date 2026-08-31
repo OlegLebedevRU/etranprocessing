@@ -602,7 +602,7 @@ async def test_group_numbering_starts_at_801(tenant1_headers):
 
 
 @pytest.mark.anyio
-async def test_service_numbering_starts_at_1000301(tenant1_headers):
+async def test_service_numbering_ranges(tenant1_headers):
     mock_db = AsyncMock()
 
     v1 = MenuVariant(id=1, org_id=1, name="Variant 1")
@@ -636,31 +636,41 @@ async def test_service_numbering_starts_at_1000301(tenant1_headers):
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
-        # 1. Check free-tsp endpoint starts from 1000301
+        # 1. Check free-tsp endpoint starts from 1001301 for custom services
         resp = await client.get(
             "/api/services/free-tsp?group_id=1", headers=tenant1_headers
         )
         assert resp.status_code == 200
         free_codes = resp.json()
         assert len(free_codes) > 0
-        assert free_codes[0]["tsp_code"] == 1000301
-        assert free_codes[1]["tsp_code"] == 1000302
+        assert free_codes[0]["tsp_code"] == 1001301
+        assert free_codes[1]["tsp_code"] == 1001302
 
-        # 2. Create service with auto tsp_code (0) -> assigns 1000301
+        # 2. Check free-tsp endpoint with from_catalog=true starts from 1000301
+        resp_cat = await client.get(
+            "/api/services/free-tsp?group_id=1&from_catalog=true",
+            headers=tenant1_headers,
+        )
+        assert resp_cat.status_code == 200
+        free_cat_codes = resp_cat.json()
+        assert len(free_cat_codes) > 0
+        assert free_cat_codes[0]["tsp_code"] == 1000301
+
+        # 3. Create custom service with auto tsp_code (0) -> assigns 1001301
         resp = await client.post(
             "/api/services",
             json={"group_id": 1, "name": "Service Auto", "tsp_code": 0},
             headers=tenant1_headers,
         )
         assert resp.status_code == 201
-        assert resp.json()["tsp_code"] == 1000301
+        assert resp.json()["tsp_code"] == 1001301
 
-        # 3. Next creation when 1000301 is in used_codes -> assigns 1000302
-        res_mock.fetchall.return_value = [(1000301,)]
+        # 4. Next creation when 1001301 is in used_codes -> assigns 1001302
+        res_mock.fetchall.return_value = [(1001301,)]
         resp = await client.post(
             "/api/services",
             json={"group_id": 1, "name": "Service Auto 2", "tsp_code": 0},
             headers=tenant1_headers,
         )
         assert resp.status_code == 201
-        assert resp.json()["tsp_code"] == 1000302
+        assert resp.json()["tsp_code"] == 1001302

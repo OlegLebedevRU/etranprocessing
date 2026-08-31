@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     JSON,
@@ -16,6 +17,9 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from etranprocessing_db.base import Base
+
+if TYPE_CHECKING:
+    from etranprocessing_db.models.catalog import CatalogItem
 
 
 class MenuVariant(Base):
@@ -126,8 +130,15 @@ class Service(Base):
     printname: Mapped[str | None] = mapped_column(String(255), nullable=True)
     price: Mapped[int] = mapped_column(Integer, default=0)
     protypenumber: Mapped[int] = mapped_column(Integer, default=0)
+    catalog_item_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("catalog_items.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     group: Mapped[Group] = relationship("Group", back_populates="services")
+    catalog_item: Mapped[CatalogItem | None] = relationship("CatalogItem")
 
     __table_args__ = (
         UniqueConstraint("menu_variant_id", "tsp_code", name="uq_service_variant_tsp"),

@@ -1,4 +1,4 @@
-import { AppstoreOutlined, MobileOutlined } from "@ant-design/icons";
+import { AppstoreOutlined, FolderOutlined, MobileOutlined } from "@ant-design/icons";
 import SectionLayout from "../components/SectionLayout";
 
 export default function MenuManagementLayout() {
@@ -8,11 +8,14 @@ export default function MenuManagementLayout() {
       items={[
         { key: "terminals", icon: <MobileOutlined />, label: "Терминалы" },
         { key: "variants", icon: <AppstoreOutlined />, label: "Меню" },
+        { key: "catalog", icon: <FolderOutlined />, label: "Каталог" },
       ]}
       resolvePath={(key) => `/menu/${key}`}
-      resolveKey={(pathname) =>
-        pathname.startsWith("/menu/variants") ? "variants" : "terminals"
-      }
+      resolveKey={(pathname) => {
+        if (pathname.startsWith("/menu/catalog")) return "catalog";
+        if (pathname.startsWith("/menu/variants")) return "variants";
+        return "terminals";
+      }}
     />
   );
 }
