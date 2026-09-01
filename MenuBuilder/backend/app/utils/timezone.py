@@ -108,6 +108,25 @@ def get_local_int_day(
     return int(local_dt.strftime("%Y%m%d"))
 
 
+def to_utc_iso(dt: datetime | None) -> str:
+    """Serialize an absolute timestamp as UTC ISO-8601 with a 'Z' suffix.
+
+    Args:
+        dt: Timezone-aware datetime (assumed UTC if naive). None yields "".
+
+    Returns:
+        ISO-8601 string in UTC with 'Z' suffix, e.g. '2026-09-01T14:24:19Z',
+        or "" if dt is None.
+    """
+    if dt is None:
+        return ""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    else:
+        dt = dt.astimezone(UTC)
+    return dt.isoformat().replace("+00:00", "Z")
+
+
 def get_date_range_bounds_utc(
     date_from_str: str | None,
     date_to_str: str | None,

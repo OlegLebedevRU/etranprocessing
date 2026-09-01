@@ -1,12 +1,75 @@
 import json
 from contextlib import suppress
+from datetime import UTC, date, datetime, time, timedelta, tzinfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pin_server.db import Database
+
+DEFAULT_TIMEZONE = "Europe/Moscow"
 
 
 def _parse_int_day(date_str: str) -> int:
     """Convert YYYY-MM-DD to YYYYMMDD integer."""
     return int(date_str.replace("-", ""))
+
+
+def _resolve_tz(tz_name: str | None, default: str = DEFAULT_TIMEZONE) -> tzinfo:
+    """Resolve an IANA timezone name to a ZoneInfo instance, falling back to `default`."""
+    if tz_name:
+        with suppress(ZoneInfoNotFoundError, ValueError, KeyError):
+            return ZoneInfo(tz_name.strip())
+    with suppress(ZoneInfoNotFoundError, ValueError, KeyError):
+        return ZoneInfo(default)
+    return UTC
+
+
+async def _resolve_org_timezone(db: Database, org_id: int | None) -> tzinfo:
+    """Resolve the org's accounting/report timezone. This is the single source of truth
+    for tenant-local date -> UTC conversions; it must match the HTTP reports contract.
+    """
+    if org_id is not None:
+        tz_name = await db.fetchval(
+            "SELECT timezone FROM orgs WHERE org_id = $1", org_id
+        )
+        if tz_name:
+            return _resolve_tz(tz_name)
+    return _resolve_tz(None)
+
+
+def _date_range_bounds_utc(
+    date_from_str: str | None,
+    date_to_str: str | None,
+    tz: tzinfo,
+) -> tuple[datetime | None, datetime | None]:
+    """Convert tenant-local calendar dates (YYYY-MM-DD) into a half-open UTC range
+    [from_utc, to_utc). Mirrors MenuBuilder's `get_date_range_bounds_utc` so that HTTP
+    and MCP reports return identical results for the same org_id/date_from/date_to.
+    """
+    dt_from_utc: datetime | None = None
+    dt_to_utc: datetime | None = None
+
+    if date_from_str:
+        with suppress(ValueError):
+            d_from = date.fromisoformat(date_from_str.strip())
+            dt_from_utc = datetime.combine(d_from, time.min, tzinfo=tz).astimezone(UTC)
+
+    if date_to_str:
+        with suppress(ValueError):
+            d_to = date.fromisoformat(date_to_str.strip()) + timedelta(days=1)
+            dt_to_utc = datetime.combine(d_to, time.min, tzinfo=tz).astimezone(UTC)
+
+    return dt_from_utc, dt_to_utc
+
+
+def _to_utc_iso(dt) -> str:
+    """Serialize an absolute timestamp as UTC ISO-8601 with a 'Z' suffix."""
+    if dt is None:
+        return ""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    else:
+        dt = dt.astimezone(UTC)
+    return dt.isoformat().replace("+00:00", "Z")
 
 
 def _format_amount(kopecks: int) -> str:
@@ -52,13 +115,15 @@ async def report_payments(
         conditions.append(f"t.org_id = ${idx}")
         params.append(org_id)
         idx += 1
-    if date_from:
+    tz = await _resolve_org_timezone(db, org_id)
+    dt_from_utc, dt_to_utc = _date_range_bounds_utc(date_from, date_to, tz)
+    if dt_from_utc is not None:
         conditions.append(f"p.paym_datetime >= ${idx}")
-        params.append(date_from)
+        params.append(dt_from_utc)
         idx += 1
-    if date_to:
-        conditions.append(f"p.paym_datetime < (${idx}::date + interval '1 day')")
-        params.append(date_to)
+    if dt_to_utc is not None:
+        conditions.append(f"p.paym_datetime < ${idx}")
+        params.append(dt_to_utc)
         idx += 1
     if device_ids:
         ids = [int(x.strip()) for x in device_ids.split(",")]
@@ -117,7 +182,7 @@ async def report_payments(
         items.append(
             {
                 "paym_id": r["paym_id"],
-                "paym_datetime": str(r["paym_datetime"]),
+                "paym_datetime": _to_utc_iso(r["paym_datetime"]),
                 "paym_amount": r["paym_amount"],
                 "paym_amount_rub": _format_amount(r["paym_amount"]),
                 "paym_ext_id": r["paym_ext_id"],
@@ -349,13 +414,15 @@ async def report_inkass(
         conditions.append(f"t.org_id = ${idx}")
         params.append(org_id)
         idx += 1
-    if date_from:
+    tz = await _resolve_org_timezone(db, org_id)
+    dt_from_utc, dt_to_utc = _date_range_bounds_utc(date_from, date_to, tz)
+    if dt_from_utc is not None:
         conditions.append(f"r.created_at >= ${idx}")
-        params.append(date_from)
+        params.append(dt_from_utc)
         idx += 1
-    if date_to:
-        conditions.append(f"r.created_at < (${idx}::date + interval '1 day')")
-        params.append(date_to)
+    if dt_to_utc is not None:
+        conditions.append(f"r.created_at < ${idx}")
+        params.append(dt_to_utc)
         idx += 1
     if device_ids:
         ids = [int(x.strip()) for x in device_ids.split(",")]
@@ -393,7 +460,7 @@ async def report_inkass(
                 "device_id": r["device_id"],
                 "sn": r["sn"],
                 "org_id": r["org_id"],
-                "server_datetime": str(r["created_at"]),
+                "server_datetime": _to_utc_iso(r["created_at"]),
                 "inkass_datetime": data.get("InkassDateTime"),
                 "total_sum": int(data.get("TotalSum", 0)),
                 "total_sum_rub": _format_amount(int(data.get("TotalSum", 0))),

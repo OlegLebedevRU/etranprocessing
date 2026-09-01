@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import dayjs from "dayjs";
 import {
   Layout,
@@ -32,9 +32,9 @@ import {
 import { getServices } from "../api/services";
 import { getMe } from "../api/auth";
 import {
+  DEFAULT_TIMEZONE,
   formatTenantDateTime,
   getTimezoneBadgeText,
-  resolveTenantTimezone,
 } from "../utils/timezone";
 
 const { Sider, Content } = Layout;
@@ -93,7 +93,10 @@ const PAYM_STATE_COLORS: Record<number, string> = {
 export default function ReportsPage() {
   const [activeReport, setActiveReport] = useState("inkass");
   const [servicesMap, setServicesMap] = useState<Record<number, string>>({});
-  const [tenantTz, setTenantTz] = useState<string>(() => resolveTenantTimezone());
+  // Tenant timezone context comes exclusively from /api/auth/me. Browser timezone
+  // and shared localStorage caches must never be used as an authoritative source.
+  const [tenantTz, setTenantTz] = useState<string>(DEFAULT_TIMEZONE);
+  const [tenantReady, setTenantReady] = useState(false);
 
   useEffect(() => {
     getMe()
@@ -102,7 +105,8 @@ export default function ReportsPage() {
           setTenantTz(u.timezone);
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setTenantReady(true));
   }, []);
 
   useEffect(() => {
@@ -130,12 +134,16 @@ export default function ReportsPage() {
   const [inkDeviceIds, setInkDeviceIds] = useState<number[]>([]);
 
   // --- Payments state ---
-  const todayStr = dayjs().format("YYYY-MM-DD");
+  // "Today" must be computed in the confirmed tenant timezone, never the browser's.
+  const todayStr = useMemo(
+    () => dayjs().tz(tenantTz).format("YYYY-MM-DD"),
+    [tenantTz]
+  );
   const [payItems, setPayItems] = useState<PaymentRecord[]>([]);
   const [payTotal, setPayTotal] = useState(0);
   const [payLoading, setPayLoading] = useState(false);
-  const [payDateFrom, setPayDateFrom] = useState<string>(todayStr);
-  const [payDateTo, setPayDateTo] = useState<string>(todayStr);
+  const [payDateFrom, setPayDateFrom] = useState<string>("");
+  const [payDateTo, setPayDateTo] = useState<string>("");
   const [payTermInput, setPayTermInput] = useState("");
   const [payDeviceIds, setPayDeviceIds] = useState<number[]>([]);
   const [payTspCode, setPayTspCode] = useState<number | undefined>();
@@ -144,16 +152,16 @@ export default function ReportsPage() {
   // --- Balance by terminal state ---
   const [btItems, setBtItems] = useState<BalanceByTerminalRecord[]>([]);
   const [btLoading, setBtLoading] = useState(false);
-  const [btDateFrom, setBtDateFrom] = useState<string>(todayStr);
-  const [btDateTo, setBtDateTo] = useState<string>(todayStr);
+  const [btDateFrom, setBtDateFrom] = useState<string>("");
+  const [btDateTo, setBtDateTo] = useState<string>("");
   const [btTermInput, setBtTermInput] = useState("");
   const [btDeviceIds, setBtDeviceIds] = useState<number[]>([]);
 
   // --- Balance by TSP state ---
   const [btsItems, setBtsItems] = useState<BalanceByTspRecord[]>([]);
   const [btsLoading, setBtsLoading] = useState(false);
-  const [btsDateFrom, setBtsDateFrom] = useState<string>(todayStr);
-  const [btsDateTo, setBtsDateTo] = useState<string>(todayStr);
+  const [btsDateFrom, setBtsDateFrom] = useState<string>("");
+  const [btsDateTo, setBtsDateTo] = useState<string>("");
   const [btsTermInput, setBtsTermInput] = useState("");
   const [btsDeviceIds, setBtsDeviceIds] = useState<number[]>([]);
 
@@ -176,8 +184,8 @@ export default function ReportsPage() {
   }, [inkDateFrom, inkDateTo, inkDeviceIds, inkPage]);
 
   useEffect(() => {
-    if (activeReport === "inkass") fetchInkass();
-  }, [fetchInkass, activeReport]);
+    if (tenantReady && activeReport === "inkass") fetchInkass();
+  }, [fetchInkass, activeReport, tenantReady]);
 
   const handleInkTermSearch = () => {
     const ids = inkTermInput
@@ -207,8 +215,8 @@ export default function ReportsPage() {
   }, [payDateFrom, payDateTo, payDeviceIds, payTspCode, payTop, todayStr]);
 
   useEffect(() => {
-    if (activeReport === "payments") fetchPayments();
-  }, [fetchPayments, activeReport]);
+    if (tenantReady && activeReport === "payments") fetchPayments();
+  }, [fetchPayments, activeReport, tenantReady]);
 
   const handlePayTermSearch = () => {
     const ids = payTermInput
@@ -234,8 +242,8 @@ export default function ReportsPage() {
   }, [btDateFrom, btDateTo, btDeviceIds, todayStr]);
 
   useEffect(() => {
-    if (activeReport === "balance-terminal") fetchBalanceByTerminal();
-  }, [fetchBalanceByTerminal, activeReport]);
+    if (tenantReady && activeReport === "balance-terminal") fetchBalanceByTerminal();
+  }, [fetchBalanceByTerminal, activeReport, tenantReady]);
 
   const handleBtTermSearch = () => {
     const ids = btTermInput
@@ -261,8 +269,8 @@ export default function ReportsPage() {
   }, [btsDateFrom, btsDateTo, btsDeviceIds, todayStr]);
 
   useEffect(() => {
-    if (activeReport === "balance-tsp") fetchBalanceByTsp();
-  }, [fetchBalanceByTsp, activeReport]);
+    if (tenantReady && activeReport === "balance-tsp") fetchBalanceByTsp();
+  }, [fetchBalanceByTsp, activeReport, tenantReady]);
 
   const handleBtsTermSearch = () => {
     const ids = btsTermInput
@@ -619,7 +627,7 @@ export default function ReportsPage() {
                 <DatePicker
                   placeholder="Дата с"
                   size="small"
-                  value={payDateFrom ? dayjs(payDateFrom) : dayjs()}
+                  value={dayjs(payDateFrom || todayStr)}
                   allowClear={false}
                   onChange={(d) =>
                     setPayDateFrom(d ? d.format("YYYY-MM-DD") : todayStr)
@@ -628,7 +636,7 @@ export default function ReportsPage() {
                 <DatePicker
                   placeholder="Дата по"
                   size="small"
-                  value={payDateTo ? dayjs(payDateTo) : dayjs()}
+                  value={dayjs(payDateTo || todayStr)}
                   allowClear={false}
                   onChange={(d) =>
                     setPayDateTo(d ? d.format("YYYY-MM-DD") : todayStr)
@@ -782,7 +790,7 @@ export default function ReportsPage() {
                 <DatePicker
                   placeholder="Дата с"
                   size="small"
-                  value={btDateFrom ? dayjs(btDateFrom) : dayjs()}
+                  value={dayjs(btDateFrom || todayStr)}
                   allowClear={false}
                   onChange={(d) =>
                     setBtDateFrom(d ? d.format("YYYY-MM-DD") : todayStr)
@@ -791,7 +799,7 @@ export default function ReportsPage() {
                 <DatePicker
                   placeholder="Дата по"
                   size="small"
-                  value={btDateTo ? dayjs(btDateTo) : dayjs()}
+                  value={dayjs(btDateTo || todayStr)}
                   allowClear={false}
                   onChange={(d) =>
                     setBtDateTo(d ? d.format("YYYY-MM-DD") : todayStr)
@@ -863,7 +871,7 @@ export default function ReportsPage() {
                 <DatePicker
                   placeholder="Дата с"
                   size="small"
-                  value={btsDateFrom ? dayjs(btsDateFrom) : dayjs()}
+                  value={dayjs(btsDateFrom || todayStr)}
                   allowClear={false}
                   onChange={(d) =>
                     setBtsDateFrom(d ? d.format("YYYY-MM-DD") : todayStr)
@@ -872,7 +880,7 @@ export default function ReportsPage() {
                 <DatePicker
                   placeholder="Дата по"
                   size="small"
-                  value={btsDateTo ? dayjs(btsDateTo) : dayjs()}
+                  value={dayjs(btsDateTo || todayStr)}
                   allowClear={false}
                   onChange={(d) =>
                     setBtsDateTo(d ? d.format("YYYY-MM-DD") : todayStr)

@@ -444,8 +444,6 @@ async def test_payments_report_tsp_name_resolution():
         None,
     )
 
-    from datetime import date
-
     captured_params = []
 
     async def mock_execute(stmt, params=None):

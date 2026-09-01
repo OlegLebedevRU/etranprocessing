@@ -211,3 +211,80 @@ class TestPaymentServiceTimezone:
         assert balance_records[0].amount == 35000
         assert balance_records[0].org_id == 424
         assert balance_records[0].terminal_id == 42
+
+    async def test_accounting_ignores_terminal_timezone_override(self):
+        """TSP accounting day MUST be based on Org.timezone only, never on Terminal.timezone.
+
+        Terminal is in Asia/Vladivostok (UTC+10) but Org accounting timezone is
+        Europe/Moscow (UTC+3). At 2026-08-31 15:00:00 UTC it is still 2026-08-31
+        18:00 in Moscow (int_day 20260831), but already 2026-09-01 01:00 in
+        Vladivostok (int_day 20260901). If the terminal timezone override was still
+        used for accounting, the recorded business day would be wrong.
+        """
+        mock_db = AsyncMock()
+
+        # Terminal explicitly overrides its own timezone to Vladivostok (UTC+10),
+        # while its Org's accounting timezone is Europe/Moscow (UTC+3).
+        terminal = Terminal(
+            id=55,
+            device_id=555,
+            org_id=424,
+            sn="SN555",
+            timezone="Asia/Vladivostok",
+        )
+        tsp = Tsp(tsp_id=11, tsp_code=7002, tsp_name="ТСП Москва")
+
+        async def mock_scalar(stmt, params=None):
+            sql = str(stmt)
+            if "FROM terminal_menu_bindings" in sql:
+                return None
+            if "FROM tsp_parameter_codes" in sql:
+                return 100
+            return None
+
+        mock_db.scalar.side_effect = mock_scalar
+
+        async def mock_execute(stmt, params=None):
+            sql = str(stmt)
+            res = MagicMock()
+            if "FROM tsp" in sql:
+                res.scalar_one_or_none.return_value = tsp
+            elif "FROM orgs" in sql:
+                res.scalar_one_or_none.return_value = "Europe/Moscow"
+            elif "FROM balance_terminal_tsp" in sql:
+                res.scalar_one_or_none.return_value = None
+            else:
+                res.scalar_one_or_none.return_value = None
+            return res
+
+        mock_db.execute.side_effect = mock_execute
+
+        service = PaymentService(mock_db)
+
+        payment_dt = datetime(2026, 8, 31, 15, 0, 0, tzinfo=UTC)
+
+        accounting_tz = await service.get_org_accounting_timezone(terminal.org_id)
+        diagnostic_tz = await service.get_effective_timezone(terminal)
+        assert payment_dt.astimezone(accounting_tz).utcoffset() == timedelta(hours=3)
+        assert payment_dt.astimezone(diagnostic_tz).utcoffset() == timedelta(hours=10)
+
+        payment = await service.create_payment(
+            terminal=terminal,
+            tsp_code=7002,
+            amount=10000,
+            paym_ext_id="0555_010926_00300001",
+            params={101: "9990000000"},
+            payment_datetime=payment_dt,
+        )
+        assert payment.paym_amount == 10000
+
+        added_objects = [call[0][0] for call in mock_db.add.call_args_list]
+        balance_records = [
+            obj for obj in added_objects if isinstance(obj, BalanceTerminalTsp)
+        ]
+        assert len(balance_records) == 1
+        # int_day must be computed from Org.timezone (Moscow), not from the
+        # terminal's overridden Asia/Vladivostok timezone.
+        assert balance_records[0].int_day == get_local_int_day(
+            payment_dt, tz="Europe/Moscow"
+        )

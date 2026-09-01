@@ -76,12 +76,25 @@ class PaymentService:
         return result.scalar_one_or_none()
 
     async def get_effective_timezone(self, terminal: Terminal) -> tzinfo:
-        """Resolve effective timezone for terminal: terminal.timezone -> org.timezone -> default (Europe/Moscow)."""
+        """Resolve terminal-local diagnostic timezone: terminal.timezone -> org.timezone -> default.
+
+        This is a diagnostic/display context only (e.g. interpreting terminal wall-clock
+        fields). It MUST NOT be used for TSP accounting/business-day calculations - use
+        `get_org_accounting_timezone` for that.
+        """
         if terminal.timezone:
             return resolve_tz(terminal.timezone)
-        if terminal.org_id:
+        return await self.get_org_accounting_timezone(terminal.org_id)
+
+    async def get_org_accounting_timezone(self, org_id: int | None) -> tzinfo:
+        """Resolve the org's accounting timezone: Org.timezone -> default (Europe/Moscow).
+
+        This is the single source of truth for TSP accounting/business-day calculations.
+        Terminal.timezone MUST NOT override it (no terminal override in accounting path).
+        """
+        if org_id:
             result = await self.db.execute(
-                select(Org.timezone).where(Org.org_id == terminal.org_id)
+                select(Org.timezone).where(Org.org_id == org_id)
             )
             org_tz = result.scalar_one_or_none()
             if org_tz:
@@ -192,8 +205,12 @@ class PaymentService:
         menu_snapshot_id: int | None = None,
         payment_datetime: datetime | None = None,
     ):
-        """Update balance_terminal_tsp with upsert pattern using terminal's effective timezone."""
-        tz = await self.get_effective_timezone(terminal)
+        """Update balance_terminal_tsp with upsert pattern using the org accounting timezone.
+
+        Terminal.timezone is intentionally ignored here: TSP accounting day is determined
+        exclusively by Org.timezone, never by terminal override.
+        """
+        tz = await self.get_org_accounting_timezone(terminal.org_id)
         int_day = get_local_int_day(payment_datetime or datetime.now(UTC), tz=tz)
 
         # Check if record exists

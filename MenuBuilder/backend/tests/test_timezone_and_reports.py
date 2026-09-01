@@ -48,7 +48,9 @@ class TestTimezoneUtils:
         # Fallbacks to Europe/Moscow
         assert ref_dt.astimezone(resolve_tz(None)).utcoffset() == timedelta(hours=3)
         assert ref_dt.astimezone(resolve_tz("")).utcoffset() == timedelta(hours=3)
-        assert ref_dt.astimezone(resolve_tz("Nonexistent/Zone")).utcoffset() == timedelta(hours=3)
+        assert ref_dt.astimezone(
+            resolve_tz("Nonexistent/Zone")
+        ).utcoffset() == timedelta(hours=3)
 
     def test_get_local_datetime(self):
         # 2026-08-31 22:00:00 UTC
@@ -72,7 +74,9 @@ class TestTimezoneUtils:
 
     def test_get_date_range_bounds_utc(self):
         # Date range 2026-09-01 to 2026-09-01 in Tyumen (Asia/Yekaterinburg, UTC+5)
-        dt_from, dt_to = get_date_range_bounds_utc("2026-09-01", "2026-09-01", "Asia/Yekaterinburg")
+        dt_from, dt_to = get_date_range_bounds_utc(
+            "2026-09-01", "2026-09-01", "Asia/Yekaterinburg"
+        )
         assert dt_from is not None and dt_to is not None
         # Start: 2026-09-01 00:00:00 +05:00 -> 2026-08-31 19:00:00 UTC
         assert dt_from == datetime(2026, 8, 31, 19, 0, 0, tzinfo=UTC)
@@ -112,7 +116,12 @@ class TestAuthAndTimezone:
 
     async def test_switch_tenant_returns_timezone(self):
         su_token = create_access_token(
-            {"sub": "admin", "role": "superuser", "is_superuser": True, "token_type": "master"}
+            {
+                "sub": "admin",
+                "role": "superuser",
+                "is_superuser": True,
+                "token_type": "master",
+            }
         )
         headers = {"Authorization": f"Bearer {su_token}"}
 
@@ -155,7 +164,12 @@ class TestAdminOrgAndTimezone:
 
     async def test_admin_org_crud_timezone(self):
         su_token = create_access_token(
-            {"sub": "admin", "role": "superuser", "is_superuser": True, "token_type": "master"}
+            {
+                "sub": "admin",
+                "role": "superuser",
+                "is_superuser": True,
+                "token_type": "master",
+            }
         )
         headers = {"Authorization": f"Bearer {su_token}"}
         mock_db = AsyncMock()
@@ -266,5 +280,7 @@ class TestReportsTimezone:
                 assert len(data["items"]) == 1
                 item = data["items"][0]
                 assert item["paym_id"] == 1001
-                # Check that 21:30 UTC is converted to local Tyumen time 02:30:00
-                assert item["paym_datetime"] == "2026-09-01 02:30:00"
+                # Backend must return the absolute UTC instant with a 'Z' suffix,
+                # NOT a pre-localized naive string (that caused double conversion
+                # on the frontend, which applies its own UTC -> tenant tz shift).
+                assert item["paym_datetime"] == "2026-08-31T21:30:00Z"

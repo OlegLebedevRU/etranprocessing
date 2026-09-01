@@ -13,6 +13,7 @@ from app.utils.timezone import (
     get_local_datetime,
     get_timezone_name,
     resolve_tz,
+    to_utc_iso,
 )
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
@@ -290,11 +291,7 @@ async def get_inkass_report(
             or _json_int(data, "TotalCount")
         )
         report_number = data.get("InkassId") or data.get("cntInkass") or ""
-        server_dt_str = (
-            get_local_datetime(row[3], tz=tz).strftime("%Y-%m-%d %H:%M:%S")
-            if row[3]
-            else ""
-        )
+        server_dt_str = to_utc_iso(row[3]) if row[3] else ""
         items.append(
             {
                 "id": row[0],
@@ -514,11 +511,7 @@ async def get_payments_report(
         items.append(
             {
                 "paym_id": payment_id,
-                "paym_datetime": (
-                    get_local_datetime(row[1], tz=tz).strftime("%Y-%m-%d %H:%M:%S")
-                    if row[1]
-                    else ""
-                ),
+                "paym_datetime": to_utc_iso(row[1]) if row[1] else "",
                 "paym_amount": row[2],
                 "paym_ext_id": (row[3] or "").strip() or str(payment_id),
                 "paym_tsp_code": current_tsp_code,

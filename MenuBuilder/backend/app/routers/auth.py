@@ -383,8 +383,7 @@ async def me(user: dict = Depends(get_current_user)):
                     ).__name__ not in ("MagicMock", "AsyncMock"):
                         org_name = getattr(row, "org_name", None)
                         org_timezone = (
-                            getattr(row, "timezone", "Europe/Moscow")
-                            or "Europe/Moscow"
+                            getattr(row, "timezone", "Europe/Moscow") or "Europe/Moscow"
                         )
                 else:
                     with suppress(Exception):
