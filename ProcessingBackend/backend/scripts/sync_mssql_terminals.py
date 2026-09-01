@@ -324,22 +324,16 @@ async def run_sync():
             else:
                 expires_at = now
 
-            # In billing model, License.is_active represents the primary current license record.
-            # Validity is determined by expires_at and renewal_enabled.
-            license_active = True
-
             lic = lics_by_term_id.get(term_id)
             if lic:
                 lic.org_id = org_id
                 lic.expires_at = expires_at
-                lic.is_active = license_active
             else:
                 lic = License(
                     terminal_id=term_id,
                     org_id=org_id,
                     license_type="standard",
                     expires_at=expires_at,
-                    is_active=license_active,
                 )
                 db.add(lic)
                 lics_by_term_id[term_id] = lic

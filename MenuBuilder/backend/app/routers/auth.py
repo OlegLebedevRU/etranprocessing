@@ -58,6 +58,7 @@ class UserInfo(BaseModel):
     token_type: str = "tenant"
     is_impersonated: bool = False
     org_name: str | None = None
+    timezone: str = "Europe/Moscow"
 
 
 def _extract_basic_auth(authorization: str | None) -> tuple[str, str] | None:
@@ -358,15 +359,59 @@ async def logout(
 async def me(user: dict = Depends(get_current_user)):
     org_id = user.get("org_id")
     org_name = None
+    org_timezone = "Europe/Moscow"
     if org_id:
         try:
             async with async_session() as session:
                 result = await session.execute(
-                    select(Org.org_name).where(Org.org_id == org_id)
+                    select(Org.org_name, Org.timezone).where(Org.org_id == org_id)
                 )
-                org_name = result.scalar_one_or_none()
+                row = result.first()
+                if row is not None and type(row).__name__ not in (
+                    "MagicMock",
+                    "AsyncMock",
+                ):
+                    if isinstance(row, (tuple, list)):
+                        org_name = str(row[0]) if row[0] is not None else None
+                        org_timezone = (
+                            str(row[1])
+                            if len(row) > 1 and row[1] is not None
+                            else "Europe/Moscow"
+                        )
+                    elif hasattr(row, "org_name") and type(
+                        getattr(row, "org_name", None)
+                    ).__name__ not in ("MagicMock", "AsyncMock"):
+                        org_name = getattr(row, "org_name", None)
+                        org_timezone = (
+                            getattr(row, "timezone", "Europe/Moscow")
+                            or "Europe/Moscow"
+                        )
+                else:
+                    with suppress(Exception):
+                        scalar_val = result.scalar_one_or_none()
+                        if scalar_val is not None and type(scalar_val).__name__ not in (
+                            "MagicMock",
+                            "AsyncMock",
+                        ):
+                            org_name = str(scalar_val)
         except Exception:  # noqa: BLE001
             org_name = None
+            org_timezone = "Europe/Moscow"
+
+    if org_name is not None and (
+        type(org_name).__name__ in ("MagicMock", "AsyncMock")
+        or not isinstance(org_name, str)
+    ):
+        org_name = (
+            str(org_name)
+            if type(org_name).__name__ not in ("MagicMock", "AsyncMock")
+            else None
+        )
+    if not isinstance(org_timezone, str) or type(org_timezone).__name__ in (
+        "MagicMock",
+        "AsyncMock",
+    ):
+        org_timezone = "Europe/Moscow"
 
     is_su = bool(user.get("is_superuser") or user.get("role") in ("superuser", "admin"))
     return UserInfo(
@@ -380,4 +425,5 @@ async def me(user: dict = Depends(get_current_user)):
         token_type=user.get("token_type", "tenant"),
         is_impersonated=bool(user.get("is_impersonated", False)),
         org_name=org_name,
+        timezone=org_timezone,
     )

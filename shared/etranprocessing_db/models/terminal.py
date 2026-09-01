@@ -46,6 +46,9 @@ class Terminal(Base):
     )
     org_id: Mapped[int] = mapped_column(Integer, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    timezone: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, default=None, server_default=None
+    )
     address: Mapped[str | None] = mapped_column(String(500), nullable=True)
     note: Mapped[str | None] = mapped_column(String(500), nullable=True)
     terminal_type_id: Mapped[int] = mapped_column(

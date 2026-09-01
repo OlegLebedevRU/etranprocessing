@@ -63,7 +63,8 @@ async def list_terminals(
                        tmb.id as binding_id, tmb.menu_variant_id, mv.name as variant_name,
                        t.address, t.note, t.terminal_type_id, tt.name as terminal_type_name,
                        t.created_at,
-                       tmb.loaded_version, tmb.loaded_at, mv.version as current_version
+                       tmb.loaded_version, tmb.loaded_at, mv.version as current_version,
+                       t.timezone
                 FROM terminals t
                 LEFT JOIN terminal_types tt ON tt.id = t.terminal_type_id
                 LEFT JOIN terminal_menu_bindings tmb ON tmb.device_id = t.device_id
@@ -111,6 +112,7 @@ async def list_terminals(
                 loaded_at=loaded_at,
                 current_version=curr_ver,
                 is_latest=is_latest,
+                timezone=r[16] if len(r) > 16 else None,
             )
         )
 

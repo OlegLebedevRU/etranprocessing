@@ -25,6 +25,12 @@ class Org(Base):
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     status: Mapped[int] = mapped_column(Integer, default=1)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    timezone: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default="Europe/Moscow",
+        server_default="Europe/Moscow",
+    )
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
     notify_by_email: Mapped[bool] = mapped_column(

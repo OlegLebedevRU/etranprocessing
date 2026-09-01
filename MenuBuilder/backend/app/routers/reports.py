@@ -1,12 +1,19 @@
 import json
 from contextlib import suppress
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from app.auth import get_current_user
 from app.database import async_session
+from app.models import Org
+from app.utils.timezone import (
+    get_date_range_bounds_utc,
+    get_local_datetime,
+    get_timezone_name,
+    resolve_tz,
+)
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
@@ -186,24 +193,36 @@ async def get_inkass_report(
         except ValueError, TypeError:
             org_id = None
     if not org_id and not user.get("is_superuser"):
-        return {"items": [], "total": 0, "page": page, "size": size}
+        return {
+            "items": [],
+            "total": 0,
+            "page": page,
+            "size": size,
+            "timezone": "Europe/Moscow",
+        }
 
     async with async_session() as session:
+        tz = resolve_tz("Europe/Moscow")
+        if org_id:
+            org_tz_row = (
+                await session.execute(select(Org.timezone).where(Org.org_id == org_id))
+            ).scalar_one_or_none()
+            if org_tz_row:
+                tz = resolve_tz(org_tz_row)
+        tz_name = get_timezone_name(tz)
+
         conditions = ["r.function_name = 'inkass'"]
         params: dict = {}
         if org_id is not None and org_id > 0:
             conditions.append("t.org_id = :org_id")
             params["org_id"] = org_id
-        if date_from:
-            with suppress(ValueError):
-                params["dt_from"] = date.fromisoformat(date_from.strip())
-                conditions.append("r.created_at >= :dt_from")
-        if date_to:
-            with suppress(ValueError):
-                params["dt_to"] = date.fromisoformat(date_to.strip()) + timedelta(
-                    days=1
-                )
-                conditions.append("r.created_at < :dt_to")
+        dt_from_utc, dt_to_utc = get_date_range_bounds_utc(date_from, date_to, tz=tz)
+        if dt_from_utc:
+            params["dt_from"] = dt_from_utc
+            conditions.append("r.created_at >= :dt_from")
+        if dt_to_utc:
+            params["dt_to"] = dt_to_utc
+            conditions.append("r.created_at < :dt_to")
         _add_device_filter(conditions, params, device_ids)
         where = " AND ".join(conditions)
         count_row = (
@@ -271,6 +290,11 @@ async def get_inkass_report(
             or _json_int(data, "TotalCount")
         )
         report_number = data.get("InkassId") or data.get("cntInkass") or ""
+        server_dt_str = (
+            get_local_datetime(row[3], tz=tz).strftime("%Y-%m-%d %H:%M:%S")
+            if row[3]
+            else ""
+        )
         items.append(
             {
                 "id": row[0],
@@ -280,10 +304,8 @@ async def get_inkass_report(
                 "inkass_datetime": _parse_inkass_datetime(
                     data.get("InkassDateTime", "")
                 )
-                or (row[3].strftime("%Y-%m-%d %H:%M:%S") if row[3] else ""),
-                "server_datetime": row[3].strftime("%Y-%m-%d %H:%M:%S")
-                if row[3]
-                else "",
+                or server_dt_str,
+                "server_datetime": server_dt_str,
                 "total_sum": _json_int(data, "TotalSum")
                 or _json_int(data, "TotalNoteSum"),
                 "calculated_sum": calculated_sums.get(row[0], 0),
@@ -311,7 +333,7 @@ async def get_inkass_report(
                 "currency": _json_int(data, "Currency"),
             }
         )
-    return {"items": items, "total": count_row or 0}
+    return {"items": items, "total": count_row or 0, "timezone": tz_name}
 
 
 @router.get("/payments")
@@ -326,23 +348,29 @@ async def get_payments_report(
 ):
     org_id = user.get("org_id")
     if not org_id:
-        return {"items": [], "total": 0}
-    if not date_from and not date_to:
-        date_from = date_to = datetime.now(UTC).strftime("%Y-%m-%d")
+        return {"items": [], "total": 0, "timezone": "Europe/Moscow"}
 
     async with async_session() as session:
+        org_tz_row = (
+            await session.execute(select(Org.timezone).where(Org.org_id == org_id))
+        ).scalar_one_or_none()
+        tz = resolve_tz(org_tz_row)
+        tz_name = get_timezone_name(tz)
+
+        if not date_from and not date_to:
+            date_from = date_to = get_local_datetime(datetime.now(UTC), tz=tz).strftime(
+                "%Y-%m-%d"
+            )
+
         conditions = ["p.org_id = :org_id"]
         params: dict = {"org_id": org_id}
-        if date_from:
-            with suppress(ValueError):
-                params["dt_from"] = date.fromisoformat(date_from.strip())
-                conditions.append("p.paym_datetime >= :dt_from")
-        if date_to:
-            with suppress(ValueError):
-                params["dt_to"] = date.fromisoformat(date_to.strip()) + timedelta(
-                    days=1
-                )
-                conditions.append("p.paym_datetime < :dt_to")
+        dt_from_utc, dt_to_utc = get_date_range_bounds_utc(date_from, date_to, tz=tz)
+        if dt_from_utc:
+            params["dt_from"] = dt_from_utc
+            conditions.append("p.paym_datetime >= :dt_from")
+        if dt_to_utc:
+            params["dt_to"] = dt_to_utc
+            conditions.append("p.paym_datetime < :dt_to")
         _add_device_filter(conditions, params, device_ids)
         if tsp_code is not None:
             conditions.append("p.paym_tsp_code = :tsp_code")
@@ -373,7 +401,7 @@ async def get_payments_report(
             )
         ).fetchall()
         if not rows:
-            return {"items": [], "total": count_row or 0}
+            return {"items": [], "total": count_row or 0, "timezone": tz_name}
 
         payment_ids = [row[0] for row in rows]
         device_id_values = list({row[7] for row in rows})
@@ -486,7 +514,11 @@ async def get_payments_report(
         items.append(
             {
                 "paym_id": payment_id,
-                "paym_datetime": row[1].strftime("%Y-%m-%d %H:%M:%S") if row[1] else "",
+                "paym_datetime": (
+                    get_local_datetime(row[1], tz=tz).strftime("%Y-%m-%d %H:%M:%S")
+                    if row[1]
+                    else ""
+                ),
                 "paym_amount": row[2],
                 "paym_ext_id": (row[3] or "").strip() or str(payment_id),
                 "paym_tsp_code": current_tsp_code,
@@ -501,7 +533,7 @@ async def get_payments_report(
                 "params": params_map.get(payment_id, []),
             }
         )
-    return {"items": items, "total": count_row or 0}
+    return {"items": items, "total": count_row or 0, "timezone": tz_name}
 
 
 @router.get("/balance-by-terminal")
@@ -514,8 +546,14 @@ async def get_balance_by_terminal(
 ):
     org_id = user.get("org_id")
     if not org_id:
-        return {"items": []}
+        return {"items": [], "timezone": "Europe/Moscow"}
     async with async_session() as session:
+        org_tz_row = (
+            await session.execute(select(Org.timezone).where(Org.org_id == org_id))
+        ).scalar_one_or_none()
+        tz = resolve_tz(org_tz_row)
+        tz_name = get_timezone_name(tz)
+
         conditions = ["b.org_id = :org_id"]
         params: dict = {"org_id": org_id}
         if date_from and (day_from := _parse_int_day(date_from)) is not None:
@@ -555,7 +593,8 @@ async def get_balance_by_terminal(
                 "total_amount": row[5],
             }
             for row in rows
-        ]
+        ],
+        "timezone": tz_name,
     }
 
 
@@ -568,8 +607,14 @@ async def get_balance_by_tsp(
 ):
     org_id = user.get("org_id")
     if not org_id:
-        return {"items": []}
+        return {"items": [], "timezone": "Europe/Moscow"}
     async with async_session() as session:
+        org_tz_row = (
+            await session.execute(select(Org.timezone).where(Org.org_id == org_id))
+        ).scalar_one_or_none()
+        tz = resolve_tz(org_tz_row)
+        tz_name = get_timezone_name(tz)
+
         conditions = ["b.org_id = :org_id"]
         params: dict = {"org_id": org_id}
         if date_from and (day_from := _parse_int_day(date_from)) is not None:
@@ -593,7 +638,7 @@ async def get_balance_by_tsp(
             )
         ).fetchall()
         if not rows:
-            return {"items": []}
+            return {"items": [], "timezone": tz_name}
         snapshot_ids = list({row[2] for row in rows if row[2] is not None})
         snapshots_map: dict[int, dict] = {}
         if snapshot_ids:
@@ -676,5 +721,6 @@ async def get_balance_by_tsp(
             for item in sorted(
                 grouped.values(), key=lambda value: value["total_amount"], reverse=True
             )
-        ]
+        ],
+        "timezone": tz_name,
     }

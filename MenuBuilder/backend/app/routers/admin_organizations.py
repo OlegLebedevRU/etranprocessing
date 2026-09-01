@@ -42,6 +42,7 @@ async def list_organizations(
                 name=org.name,
                 status=org.status,
                 is_active=org.is_active,
+                timezone=getattr(org, "timezone", "Europe/Moscow") or "Europe/Moscow",
                 email=getattr(org, "email", None),
                 phone=getattr(org, "phone", None),
                 notify_by_email=(
@@ -126,6 +127,7 @@ async def create_organization(
         name=body.name,
         status=body.status,
         is_active=body.is_active,
+        timezone=body.timezone or "Europe/Moscow",
         email=body.email,
         phone=body.phone,
         notify_by_email=body.notify_by_email,
@@ -166,6 +168,7 @@ async def create_organization(
         name=org.name,
         status=org.status,
         is_active=org.is_active,
+        timezone=getattr(org, "timezone", "Europe/Moscow") or "Europe/Moscow",
         email=org.email,
         phone=org.phone,
         notify_by_email=org.notify_by_email,
@@ -210,6 +213,8 @@ async def update_organization(
         org.status = body.status
     if body.is_active is not None:
         org.is_active = body.is_active
+    if body.timezone is not None or "timezone" in body.model_fields_set:
+        org.timezone = body.timezone or "Europe/Moscow"
     if body.email is not None or "email" in body.model_fields_set:
         org.email = body.email
     if body.phone is not None or "phone" in body.model_fields_set:
@@ -288,6 +293,7 @@ async def update_organization(
         name=org.name,
         status=org.status,
         is_active=org.is_active,
+        timezone=getattr(org, "timezone", "Europe/Moscow") or "Europe/Moscow",
         email=getattr(org, "email", None),
         phone=getattr(org, "phone", None),
         notify_by_email=(

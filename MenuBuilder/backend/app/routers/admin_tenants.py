@@ -22,6 +22,7 @@ class SwitchTenantResponse(BaseModel):
     token_type: str = "bearer"
     org_id: int
     org_name: str
+    timezone: str = "Europe/Moscow"
     expires_in: int
 
 
@@ -30,6 +31,7 @@ class OrgItem(BaseModel):
     org_name: str
     name: str | None = None
     is_active: bool
+    timezone: str = "Europe/Moscow"
 
 
 @router.get("/available", response_model=list[OrgItem])
@@ -48,6 +50,7 @@ async def list_available_tenants(
                 org_name=o.org_name,
                 name=o.name,
                 is_active=o.is_active,
+                timezone=getattr(o, "timezone", "Europe/Moscow") or "Europe/Moscow",
             )
             for o in orgs
         ]
@@ -131,5 +134,6 @@ async def switch_tenant(
         token_type="bearer",
         org_id=org.org_id,
         org_name=org.org_name,
+        timezone=getattr(org, "timezone", "Europe/Moscow") or "Europe/Moscow",
         expires_in=expires_in,
     )

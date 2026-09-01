@@ -494,8 +494,12 @@ async def test_payments_report_tsp_name_resolution():
             assert items[1]["paym_id"] == 1002
             assert items[1]["tsp_name"] == "Неизвестный провайдер"
             assert len(captured_params) > 0
-            assert captured_params[0]["dt_from"] == date(2026, 8, 1)
-            assert captured_params[0]["dt_to"] == date(2026, 9, 1)
+            assert captured_params[0]["dt_from"] == datetime(
+                2026, 7, 31, 21, 0, tzinfo=UTC
+            )
+            assert captured_params[0]["dt_to"] == datetime(
+                2026, 8, 31, 21, 0, tzinfo=UTC
+            )
 
 
 @pytest.mark.anyio

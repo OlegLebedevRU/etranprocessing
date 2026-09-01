@@ -93,6 +93,7 @@ def _build_admin_terminal_read(
         note=term.note,
         terminal_type_id=term.terminal_type_id,
         terminal_type_name=tt_name,
+        timezone=term.timezone,
         created_at=term.created_at,
         updated_at=term.updated_at,
         license_id=lic.id if lic else None,
@@ -330,6 +331,7 @@ async def create_terminal(
         terminal_type_id=body.terminal_type_id,
         address=body.address,
         note=body.note,
+        timezone=body.timezone,
         is_active=body.is_active,
         show_in_monitoring=body.show_in_monitoring,
     )
@@ -410,6 +412,8 @@ async def update_terminal(
         terminal.address = body.address
     if body.note is not None:
         terminal.note = body.note
+    if body.timezone is not None or "timezone" in body.model_fields_set:
+        terminal.timezone = body.timezone
     if body.is_active is not None:
         terminal.is_active = body.is_active
     if body.show_in_monitoring is not None:

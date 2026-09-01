@@ -2,7 +2,7 @@
 
 import base64
 import hashlib
-from datetime import UTC, datetime
+from datetime import UTC, datetime, tzinfo
 
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import (
     BalanceTerminalTsp,
     MenuVariantSnapshot,
+    Org,
     Payment,
     PaymentParam,
     ServiceMenu,
@@ -18,6 +19,7 @@ from app.models import (
     Tsp,
     TspParameterCode,
 )
+from app.utils.timezone import get_local_int_day, resolve_tz
 
 
 class PaymentService:
@@ -73,6 +75,19 @@ class PaymentService:
         )
         return result.scalar_one_or_none()
 
+    async def get_effective_timezone(self, terminal: Terminal) -> tzinfo:
+        """Resolve effective timezone for terminal: terminal.timezone -> org.timezone -> default (Europe/Moscow)."""
+        if terminal.timezone:
+            return resolve_tz(terminal.timezone)
+        if terminal.org_id:
+            result = await self.db.execute(
+                select(Org.timezone).where(Org.org_id == terminal.org_id)
+            )
+            org_tz = result.scalar_one_or_none()
+            if org_tz:
+                return resolve_tz(org_tz)
+        return resolve_tz("Europe/Moscow")
+
     async def create_payment(
         self,
         terminal: Terminal,
@@ -81,6 +96,7 @@ class PaymentService:
         paym_ext_id: str,
         params: dict[int, str],
         pay_type_id: int = 0,
+        payment_datetime: datetime | None = None,
     ) -> Payment:
         """
         Create payment with params and update balance.
@@ -93,6 +109,7 @@ class PaymentService:
             paym_ext_id: External payment ID from terminal
             params: Dict of {parameter_code: param_value}
             pay_type_id: Payment type (1=cash, 2=card, 3=SBP, 4=combo, ...)
+            payment_datetime: Optional specific UTC/aware timestamp for the payment
 
         Returns:
             Created or existing Payment object
@@ -138,6 +155,8 @@ class PaymentService:
             pay_type_id=pay_type_id,
             menu_snapshot_id=menu_snapshot_id,
         )
+        if payment_datetime is not None:
+            payment.paym_datetime = payment_datetime
         self.db.add(payment)
         await self.db.flush()  # Get paym_id
 
@@ -155,7 +174,11 @@ class PaymentService:
 
         # Update balance
         await self._update_balance(
-            terminal, tsp.tsp_id, amount, menu_snapshot_id=menu_snapshot_id
+            terminal,
+            tsp.tsp_id,
+            amount,
+            menu_snapshot_id=menu_snapshot_id,
+            payment_datetime=payment_datetime,
         )
 
         await self.db.commit()
@@ -167,9 +190,11 @@ class PaymentService:
         tsp_id: int,
         amount: int,
         menu_snapshot_id: int | None = None,
+        payment_datetime: datetime | None = None,
     ):
-        """Update balance_terminal_tsp with upsert pattern."""
-        int_day = int(datetime.now(UTC).strftime("%Y%m%d"))
+        """Update balance_terminal_tsp with upsert pattern using terminal's effective timezone."""
+        tz = await self.get_effective_timezone(terminal)
+        int_day = get_local_int_day(payment_datetime or datetime.now(UTC), tz=tz)
 
         # Check if record exists
         if menu_snapshot_id is not None:

@@ -202,6 +202,7 @@ class TerminalInfo(BaseModel):
     terminal_type_id: int = 0
     terminal_type_name: str | None = None
     created_at: datetime | None = None
+    timezone: str | None = None
 
 
 # --- Admin: Organizations & Licensing ---
@@ -213,6 +214,7 @@ class AdminOrgRead(BaseModel):
     name: str
     status: int
     is_active: bool
+    timezone: str = "Europe/Moscow"
     email: str | None = None
     phone: str | None = None
     notify_by_email: bool = True
@@ -239,6 +241,7 @@ class AdminOrgCreate(BaseModel):
     name: str
     status: int = 1
     is_active: bool = True
+    timezone: str = "Europe/Moscow"
     email: str | None = None
     phone: str | None = None
     notify_by_email: bool = True
@@ -260,6 +263,7 @@ class AdminOrgUpdate(BaseModel):
     name: str | None = None
     status: int | None = None
     is_active: bool | None = None
+    timezone: str | None = None
     email: str | None = None
     phone: str | None = None
     notify_by_email: bool | None = None
@@ -301,6 +305,7 @@ class AdminTerminalRead(BaseModel):
     note: str | None = None
     terminal_type_id: int = 0
     terminal_type_name: str | None = None
+    timezone: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
     license_id: int | None = None
@@ -337,6 +342,7 @@ class AdminTerminalCreate(BaseModel):
     terminal_type_id: int = 0
     address: str | None = None
     note: str | None = None
+    timezone: str | None = None
     is_active: bool = True
     show_in_monitoring: bool = True
     iot_provisioned: bool = False
@@ -350,6 +356,7 @@ class AdminTerminalUpdate(BaseModel):
     terminal_type_id: int | None = None
     address: str | None = None
     note: str | None = None
+    timezone: str | None = None
     is_active: bool | None = None
     show_in_monitoring: bool | None = None
     iot_provisioned: bool | None = None
