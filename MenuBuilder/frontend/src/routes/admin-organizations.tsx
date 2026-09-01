@@ -34,6 +34,11 @@ import {
   type AdminOrgCreateInput,
   type AdminOrgUpdateInput,
 } from "../api/admin";
+import {
+  TIMEZONE_OPTIONS,
+  DEFAULT_TIMEZONE,
+  getTimezoneLabel,
+} from "../utils/timezone";
 
 const { Title, Text } = Typography;
 
@@ -76,6 +81,7 @@ export default function AdminOrganizationsPage() {
     createForm.setFieldsValue({
       org_name: "",
       name: "",
+      timezone: DEFAULT_TIMEZONE,
       email: "",
       phone: "",
       notify_by_email: true,
@@ -103,6 +109,7 @@ export default function AdminOrganizationsPage() {
         org_id: values.org_id ? Number(values.org_id) : undefined,
         org_name: values.org_name.trim(),
         name: values.name.trim(),
+        timezone: values.timezone || DEFAULT_TIMEZONE,
         email: values.email ? values.email.trim() : null,
         phone: values.phone ? values.phone.trim() : null,
         notify_by_email: values.notify_by_email ?? true,
@@ -141,6 +148,7 @@ export default function AdminOrganizationsPage() {
     editForm.setFieldsValue({
       org_name: org.org_name,
       name: org.name,
+      timezone: org.timezone || DEFAULT_TIMEZONE,
       email: org.email || "",
       phone: org.phone || "",
       notify_by_email: org.notify_by_email ?? true,
@@ -167,6 +175,7 @@ export default function AdminOrganizationsPage() {
       const payload: AdminOrgUpdateInput = {
         org_name: values.org_name.trim(),
         name: values.name.trim(),
+        timezone: values.timezone || DEFAULT_TIMEZONE,
         email: values.email ? values.email.trim() : null,
         phone: values.phone ? values.phone.trim() : null,
         notify_by_email: values.notify_by_email ?? true,
@@ -254,6 +263,17 @@ export default function AdminOrganizationsPage() {
       render: (active) => (
         <Tag color={active ? "success" : "default"}>
           {active ? "Активна" : "Отключена"}
+        </Tag>
+      ),
+    },
+    {
+      title: "Часовой пояс",
+      dataIndex: "timezone",
+      key: "timezone",
+      width: 170,
+      render: (tz) => (
+        <Tag color="geekblue">
+          {getTimezoneLabel(tz || "Europe/Moscow")}
         </Tag>
       ),
     },
@@ -497,6 +517,26 @@ export default function AdminOrganizationsPage() {
           </div>
 
           <Form.Item
+            name="timezone"
+            label="Часовой пояс организации"
+            tooltip="Используется для расчетов суточных отчетов, агрегации балансов и отображения времени"
+            rules={[{ required: true, message: "Выберите часовой пояс" }]}
+          >
+            <Select
+              showSearch
+              placeholder="Выберите часовой пояс..."
+              filterOption={(input, option) =>
+                (option?.label ?? "").toLowerCase().includes(input.toLowerCase()) ||
+                (option?.value ?? "").toLowerCase().includes(input.toLowerCase())
+              }
+              options={TIMEZONE_OPTIONS.map((tz) => ({
+                value: tz.value,
+                label: `${tz.city} (${tz.offset}) — ${tz.regions}`,
+              }))}
+            />
+          </Form.Item>
+
+          <Form.Item
             name="notify_by_email"
             valuePropName="checked"
           >
@@ -693,6 +733,26 @@ export default function AdminOrganizationsPage() {
               <Input prefix={<PhoneOutlined />} placeholder="+7 (999) 000-00-00" />
             </Form.Item>
           </div>
+
+          <Form.Item
+            name="timezone"
+            label="Часовой пояс организации"
+            tooltip="Используется для расчетов суточных отчетов, агрегации балансов и отображения времени"
+            rules={[{ required: true, message: "Выберите часовой пояс" }]}
+          >
+            <Select
+              showSearch
+              placeholder="Выберите часовой пояс..."
+              filterOption={(input, option) =>
+                (option?.label ?? "").toLowerCase().includes(input.toLowerCase()) ||
+                (option?.value ?? "").toLowerCase().includes(input.toLowerCase())
+              }
+              options={TIMEZONE_OPTIONS.map((tz) => ({
+                value: tz.value,
+                label: `${tz.city} (${tz.offset}) — ${tz.regions}`,
+              }))}
+            />
+          </Form.Item>
 
           <Form.Item
             name="notify_by_email"

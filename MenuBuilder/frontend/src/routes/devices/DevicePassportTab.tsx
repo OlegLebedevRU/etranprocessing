@@ -32,6 +32,10 @@ import {
   type DeviceTagItem,
   type DeviceAuditEventItem,
 } from "../../api/devices";
+import {
+  formatTenantDateTime,
+  resolveTenantTimezone,
+} from "../../utils/timezone";
 
 const { Text } = Typography;
 
@@ -51,11 +55,9 @@ function formatBytes(bytes?: number): string {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
 }
 
-function formatDateTime(dateStrOrNum?: string | number): string {
+function formatDateTime(dateStrOrNum?: string | number, tz?: string): string {
   if (!dateStrOrNum) return "—";
-  const date = new Date(dateStrOrNum);
-  if (isNaN(date.getTime())) return String(dateStrOrNum);
-  return date.toLocaleString("ru-RU");
+  return formatTenantDateTime(dateStrOrNum, tz);
 }
 
 function formatRelativeTime(dateStrOrNum?: string | number): string {
@@ -122,6 +124,7 @@ export default function DevicePassportTab({
   const [unblocking, setUnblocking] = useState(false);
   const [device, setDevice] = useState<DeviceRawResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const tenantTz = resolveTenantTimezone();
 
   const fetchDeviceData = useCallback(async () => {
     setLoading(true);
@@ -222,7 +225,7 @@ export default function DevicePassportTab({
       key: "created_at",
       width: 170,
       render: (val) => (
-        <span style={{ fontSize: 12 }}>{formatDateTime(val)}</span>
+        <span style={{ fontSize: 12 }}>{formatDateTime(val, tenantTz)}</span>
       ),
     },
     {
@@ -344,7 +347,7 @@ export default function DevicePassportTab({
                 {violation?.detected_at && (
                   <div style={{ marginBottom: 4 }}>
                     <strong>Время первого обнаружения: </strong>
-                    <span>{formatDateTime(violation.detected_at)}</span>
+                    <span>{formatDateTime(violation.detected_at, tenantTz)}</span>
                   </div>
                 )}
 
@@ -549,7 +552,7 @@ export default function DevicePassportTab({
           <Descriptions.Item label="Время подключения">
             {connectedAt ? (
               <Space wrap>
-                <Text>{formatDateTime(connectedAt)}</Text>
+                <Text>{formatDateTime(connectedAt, tenantTz)}</Text>
                 {relTime && <Text type="secondary">({relTime})</Text>}
               </Space>
             ) : (
@@ -559,7 +562,7 @@ export default function DevicePassportTab({
 
           <Descriptions.Item label="Время сверки в БД (checked_at)">
             {conn?.checked_at ? (
-              <Text>{formatDateTime(conn.checked_at)}</Text>
+              <Text>{formatDateTime(conn.checked_at, tenantTz)}</Text>
             ) : (
               <Text type="secondary">—</Text>
             )}

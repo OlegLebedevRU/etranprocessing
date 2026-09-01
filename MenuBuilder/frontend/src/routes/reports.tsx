@@ -30,6 +30,12 @@ import {
   type BalanceByTspRecord,
 } from "../api/reports";
 import { getServices } from "../api/services";
+import { getMe } from "../api/auth";
+import {
+  formatTenantDateTime,
+  getTimezoneBadgeText,
+  resolveTenantTimezone,
+} from "../utils/timezone";
 
 const { Sider, Content } = Layout;
 
@@ -87,6 +93,17 @@ const PAYM_STATE_COLORS: Record<number, string> = {
 export default function ReportsPage() {
   const [activeReport, setActiveReport] = useState("inkass");
   const [servicesMap, setServicesMap] = useState<Record<number, string>>({});
+  const [tenantTz, setTenantTz] = useState<string>(() => resolveTenantTimezone());
+
+  useEffect(() => {
+    getMe()
+      .then((u) => {
+        if (u?.timezone) {
+          setTenantTz(u.timezone);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     getServices()
@@ -269,6 +286,7 @@ export default function ReportsPage() {
       width: 150,
       sorter: (a, b) => a.inkass_datetime.localeCompare(b.inkass_datetime),
       defaultSortOrder: "descend",
+      render: (v: string) => formatTenantDateTime(v, tenantTz),
     },
     {
       title: "Сумма",
@@ -361,6 +379,7 @@ export default function ReportsPage() {
       width: 150,
       sorter: (a, b) => a.paym_datetime.localeCompare(b.paym_datetime),
       defaultSortOrder: "descend",
+      render: (v: string) => formatTenantDateTime(v, tenantTz),
     },
     {
       title: "Состояние",
@@ -535,11 +554,16 @@ export default function ReportsPage() {
                   Найти
                 </Button>
               </Space>
-              <Button
-                size="small"
-                icon={<ReloadOutlined />}
-                onClick={fetchInkass}
-              />
+              <Space>
+                <Tag color="blue" style={{ margin: 0 }}>
+                  Часовой пояс: {getTimezoneBadgeText(tenantTz)}
+                </Tag>
+                <Button
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  onClick={fetchInkass}
+                />
+              </Space>
             </Space>
 
             <Table<InkassRecord>
@@ -644,11 +668,16 @@ export default function ReportsPage() {
                   placeholder="ТОП"
                 />
               </Space>
-              <Button
-                size="small"
-                icon={<ReloadOutlined />}
-                onClick={fetchPayments}
-              />
+              <Space>
+                <Tag color="blue" style={{ margin: 0 }}>
+                  Часовой пояс: {getTimezoneBadgeText(tenantTz)}
+                </Tag>
+                <Button
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  onClick={fetchPayments}
+                />
+              </Space>
             </Space>
 
             <Table<PaymentRecord>
@@ -784,11 +813,16 @@ export default function ReportsPage() {
                   Найти
                 </Button>
               </Space>
-              <Button
-                size="small"
-                icon={<ReloadOutlined />}
-                onClick={fetchBalanceByTerminal}
-              />
+              <Space>
+                <Tag color="blue" style={{ margin: 0 }}>
+                  Часовой пояс: {getTimezoneBadgeText(tenantTz)}
+                </Tag>
+                <Button
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  onClick={fetchBalanceByTerminal}
+                />
+              </Space>
             </Space>
 
             <div style={{ maxWidth: 560 }}>
@@ -860,11 +894,16 @@ export default function ReportsPage() {
                   Найти
                 </Button>
               </Space>
-              <Button
-                size="small"
-                icon={<ReloadOutlined />}
-                onClick={fetchBalanceByTsp}
-              />
+              <Space>
+                <Tag color="blue" style={{ margin: 0 }}>
+                  Часовой пояс: {getTimezoneBadgeText(tenantTz)}
+                </Tag>
+                <Button
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  onClick={fetchBalanceByTsp}
+                />
+              </Space>
             </Space>
 
             <div style={{ maxWidth: 840 }}>

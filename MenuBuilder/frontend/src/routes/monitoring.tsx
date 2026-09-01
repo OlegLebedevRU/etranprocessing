@@ -3,6 +3,12 @@ import { Button, Card, Input, message, Space, Table, Tooltip, Typography } from 
 import { CloudOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { getMonitoring, MonitoringTerminal } from "../api/monitoring";
 import { formatDate } from "../utils/billing";
+import { getMe } from "../api/auth";
+import {
+  formatTenantDateTime,
+  formatTenantDate,
+  resolveTenantTimezone,
+} from "../utils/timezone";
 
 const { Text } = Typography;
 
@@ -93,7 +99,18 @@ export default function MonitoringPage() {
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState("");
   const [simulatedRefreshing, setSimulatedRefreshing] = useState(false);
+  const [tenantTz, setTenantTz] = useState<string>(() => resolveTenantTimezone());
   const lastManualFetchTimeRef = useRef<number>(0);
+
+  useEffect(() => {
+    getMe()
+      .then((u) => {
+        if (u?.timezone) {
+          setTenantTz(u.timezone);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const load = useCallback(async (isSilent = false) => {
     if (!isSilent) {
@@ -162,7 +179,7 @@ export default function MonitoringPage() {
             <Tooltip
               title={
                 record.iot_provisioned_at
-                  ? `Зарегистрирован в Leo4 IoT (${new Date(record.iot_provisioned_at).toLocaleDateString("ru-RU")})`
+                  ? `Зарегистрирован в Leo4 IoT (${formatTenantDate(record.iot_provisioned_at, tenantTz)})`
                   : "Зарегистрирован в Leo4 IoT"
               }
             >
@@ -222,7 +239,7 @@ export default function MonitoringPage() {
         const alert = minutes > PAYMENT_ALERT_MINUTES;
         const warn = !alert && minutes > PAYMENT_WARN_MINUTES;
         return (
-          <Tooltip title={new Date(v as string).toLocaleString("ru-RU")}>
+          <Tooltip title={formatTenantDateTime(v, tenantTz)}>
             <span
               style={{
                 fontSize: 12,
@@ -256,16 +273,11 @@ export default function MonitoringPage() {
             </Tooltip>
           );
         }
-        const d = new Date(v);
-        const dateStr = d.toLocaleDateString("ru-RU");
-        const timeStr = d.toLocaleTimeString("ru-RU", {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
+        const formatted = formatTenantDateTime(v, tenantTz, "DD.MM.YYYY HH:mm");
         return (
-          <Tooltip title={d.toLocaleString("ru-RU")}>
+          <Tooltip title={formatTenantDateTime(v, tenantTz)}>
             <Text style={{ fontSize: 12, whiteSpace: "nowrap" }}>
-              {dateStr} {timeStr}
+              {formatted}
             </Text>
           </Tooltip>
         );

@@ -6,6 +6,7 @@ export interface OrgItem {
   org_name: string;
   name?: string | null;
   is_active: boolean;
+  timezone?: string;
 }
 
 export interface SwitchTenantResponse {
@@ -14,6 +15,7 @@ export interface SwitchTenantResponse {
   org_id: number;
   org_name: string;
   expires_in: number;
+  timezone?: string;
 }
 
 export async function listAvailableTenants(forceFresh = false): Promise<OrgItem[]> {
@@ -35,5 +37,8 @@ export async function switchTenant(orgId: number): Promise<SwitchTenantResponse>
   const { data } = await client.post<SwitchTenantResponse>("/admin/tenants/switch", {
     org_id: orgId,
   });
+  if (data?.timezone) {
+    localStorage.setItem("org_timezone", data.timezone);
+  }
   return data;
 }

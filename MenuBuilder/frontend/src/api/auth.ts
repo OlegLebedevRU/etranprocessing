@@ -26,6 +26,7 @@ export interface UserInfo {
   token_type?: string;
   is_impersonated?: boolean;
   org_name?: string | null;
+  timezone?: string;
 }
 
 export async function login(username: string, password: string): Promise<LoginResponse> {
@@ -43,6 +44,7 @@ export async function logout(): Promise<void> {
     localStorage.removeItem("mb_is_superuser");
     localStorage.removeItem("mb_current_org_id");
     localStorage.removeItem("mb_current_org_name");
+    localStorage.removeItem("org_timezone");
   }
 }
 
@@ -60,6 +62,9 @@ export async function getMe(forceFresh = false): Promise<UserInfo> {
     "auth_me",
     async () => {
       const { data } = await client.get<UserInfo>("/auth/me");
+      if (data?.timezone) {
+        localStorage.setItem("org_timezone", data.timezone);
+      }
       return data;
     },
     60_000

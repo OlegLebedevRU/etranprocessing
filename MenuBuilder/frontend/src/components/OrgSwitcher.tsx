@@ -64,6 +64,9 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({ currentUser, onTenantS
       localStorage.setItem("mb_token", result.access_token);
       localStorage.setItem("mb_current_org_id", String(result.org_id));
       localStorage.setItem("mb_current_org_name", result.org_name);
+      if (result.timezone) {
+        localStorage.setItem("org_timezone", result.timezone);
+      }
       message.success(`Контекст переключен на: ${result.org_name} (ID: ${result.org_id})`);
 
       if (onTenantSwitched) {

@@ -52,6 +52,9 @@ export default function AppLayout() {
           if (data.org_name) {
             localStorage.setItem("mb_current_org_name", data.org_name);
           }
+          if (data.timezone) {
+            localStorage.setItem("org_timezone", data.timezone);
+          }
         }
       })
       .catch(() => {

@@ -7,6 +7,7 @@ export interface AdminOrg {
   name: string;
   status: number;
   is_active: boolean;
+  timezone?: string;
   email?: string | null;
   phone?: string | null;
   notify_by_email?: boolean;
@@ -31,6 +32,7 @@ export interface AdminOrgCreateInput {
   name: string;
   status?: number;
   is_active?: boolean;
+  timezone?: string;
   email?: string;
   phone?: string;
   notify_by_email?: boolean;
@@ -52,6 +54,7 @@ export interface AdminOrgUpdateInput {
   name?: string;
   status?: number;
   is_active?: boolean;
+  timezone?: string;
   email?: string | null;
   phone?: string | null;
   notify_by_email?: boolean;
@@ -83,6 +86,7 @@ export interface AdminTerminal {
   org_id: number;
   org_name?: string | null;
   is_active: boolean;
+  timezone?: string | null;
   show_in_monitoring?: boolean;
   address?: string | null;
   note?: string | null;
@@ -122,6 +126,7 @@ export interface AdminTerminalCreateInput {
   terminal_type_id?: number;
   address?: string;
   note?: string;
+  timezone?: string | null;
   is_active?: boolean;
   show_in_monitoring?: boolean;
   iot_provisioned?: boolean;
@@ -135,6 +140,7 @@ export interface AdminTerminalUpdateInput {
   terminal_type_id?: number;
   address?: string;
   note?: string;
+  timezone?: string | null;
   is_active?: boolean;
   show_in_monitoring?: boolean;
   iot_provisioned?: boolean;

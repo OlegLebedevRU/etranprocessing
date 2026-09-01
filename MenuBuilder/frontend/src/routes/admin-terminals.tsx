@@ -56,6 +56,10 @@ import {
   type GeneratePinResponse,
   type TerminalType,
 } from "../api/admin";
+import {
+  TIMEZONE_OPTIONS,
+  getTimezoneLabel,
+} from "../utils/timezone";
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -175,6 +179,7 @@ export default function AdminTerminalsPage() {
       terminal_type_id: 0,
       address: "",
       note: "",
+      timezone: null,
       is_active: true,
       show_in_monitoring: true,
       iot_provisioned: false,
@@ -210,6 +215,7 @@ export default function AdminTerminalsPage() {
         terminal_type_id: Number(values.terminal_type_id || 0),
         address: values.address?.trim() || undefined,
         note: values.note?.trim() || undefined,
+        timezone: values.timezone ? String(values.timezone) : null,
         is_active: Boolean(values.is_active),
         show_in_monitoring: Boolean(values.show_in_monitoring !== undefined ? values.show_in_monitoring : true),
         iot_provisioned: Boolean(values.iot_provisioned),
@@ -238,6 +244,7 @@ export default function AdminTerminalsPage() {
       terminal_type_id: term.terminal_type_id,
       address: term.address || "",
       note: term.note || "",
+      timezone: term.timezone || null,
       is_active: term.is_active,
       show_in_monitoring: term.show_in_monitoring ?? true,
       iot_provisioned: term.iot_provisioned ?? false,
@@ -259,6 +266,7 @@ export default function AdminTerminalsPage() {
         terminal_type_id: Number(values.terminal_type_id),
         address: values.address?.trim() || "",
         note: values.note?.trim() || "",
+        timezone: values.timezone ? String(values.timezone) : null,
         is_active: Boolean(values.is_active),
         show_in_monitoring: Boolean(values.show_in_monitoring),
         iot_provisioned: Boolean(values.iot_provisioned),
@@ -455,6 +463,26 @@ export default function AdminTerminalsPage() {
         return (
           <Tag color="geekblue" style={{ margin: 0, whiteSpace: "nowrap" }}>
             {typeId !== undefined && typeId !== null ? `${typeId}: ${label}` : label}
+          </Tag>
+        );
+      },
+    },
+    {
+      title: "Часовой пояс",
+      dataIndex: "timezone",
+      key: "timezone",
+      width: 170,
+      render: (tz: string | null | undefined) => {
+        if (!tz) {
+          return (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              По умолчанию (орг.)
+            </Text>
+          );
+        }
+        return (
+          <Tag color="cyan" style={{ margin: 0, whiteSpace: "nowrap" }}>
+            {getTimezoneLabel(tz)}
           </Tag>
         );
       },
@@ -942,6 +970,24 @@ export default function AdminTerminalsPage() {
             <Input placeholder="Любая служебная информация..." />
           </Form.Item>
 
+          <Form.Item
+            name="timezone"
+            label="Часовой пояс терминала"
+            tooltip="По умолчанию наследует часовой пояс организации. Выберите конкретный пояс только для индивидуального переопределения."
+          >
+            <Select
+              allowClear
+              placeholder="Наследовать от организации (по умолчанию)"
+              options={[
+                { value: null, label: "Наследовать от организации (по умолчанию)" },
+                ...TIMEZONE_OPTIONS.map((tz) => ({
+                  value: tz.value,
+                  label: `${tz.city} (${tz.offset}) — ${tz.regions}`,
+                })),
+              ]}
+            />
+          </Form.Item>
+
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <Form.Item
               name="is_active"
@@ -1068,6 +1114,24 @@ export default function AdminTerminalsPage() {
 
           <Form.Item name="note" label="Примечание">
             <Input />
+          </Form.Item>
+
+          <Form.Item
+            name="timezone"
+            label="Часовой пояс терминала"
+            tooltip="По умолчанию наследует часовой пояс организации. Выберите конкретный пояс только для индивидуального переопределения."
+          >
+            <Select
+              allowClear
+              placeholder="Наследовать от организации (по умолчанию)"
+              options={[
+                { value: null, label: "Наследовать от организации (по умолчанию)" },
+                ...TIMEZONE_OPTIONS.map((tz) => ({
+                  value: tz.value,
+                  label: `${tz.city} (${tz.offset}) — ${tz.regions}`,
+                })),
+              ]}
+            />
           </Form.Item>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
