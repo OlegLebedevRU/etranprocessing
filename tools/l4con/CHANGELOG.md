@@ -2,6 +2,22 @@
 
 All notable changes to the `l4con` component will be documented in this file.
 
+## [1.2.0] - 2026-09-02
+
+### Fixed & Improved
+- **Direct Shell & Executable Path Resolution**:
+  - Implemented `resolve_cmd_path()`, `resolve_powershell_path()`, and `resolve_taskkill_path()` to ensure canonical resolution of `%COMSPEC%`, `%SystemRoot%\System32`, and `%SystemRoot%\Sysnative` across native 32-bit, native 64-bit, and WOW64 environments.
+  - Formats quoted full path invocations (e.g. `"C:\Windows\System32\cmd.exe" /c ...` or `"C:\Windows\Sysnative\cmd.exe" /c ...`) preventing `ERROR_FILE_NOT_FOUND (error code 2)` during process spawning.
+- **WOW64 Filesystem Redirection Management**:
+  - Dynamically disables WOW64 file system redirection (`Wow64DisableWow64FsRedirection`) during `CreateProcessW` invocations in `command_runner_execute` and `command_runner_kill_process_tree`.
+  - Fixes `Failed to create process: error code 2 (ERROR_FILE_NOT_FOUND)` when running 32-bit (x86) `l4con.exe` on 64-bit Windows machines executing `cmd.exe`, `powershell.exe`, or system utilities.
+- **Robust Working Directory & PATH Resolution**:
+  - Added recursive parent path detection in `command_runner_setup_environment` supporting nested `\x86`, `\x64`, and `\l4con` directory layouts.
+  - Added validation of working directory existence before passing to `CreateProcessW`, falling back safely to base directory or process context.
+  - Enriched extended `PATH` with architecture-specific and system directories (`C:\Windows\System32`, `C:\Windows`, `C:\Windows\System32\Wbem`, `C:\Windows\System32\WindowsPowerShell\v1.0`, `C:\Windows\Sysnative`).
+- **Dual-Architecture Unified MSVC Build**:
+  - Full support for native x86 (PE32) and x64 (PE32+) static builds via `build.cmd [all|x86|x64]`.
+
 ## [1.1.0] - 2026-08-29
 
 ### Added & Improved

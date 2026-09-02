@@ -15,11 +15,73 @@
 
 static wchar_t g_active_working_dir[MAX_PATH] = L"C:\\l4tools";
 
+typedef BOOL (WINAPI *LPFN_WOW64DISABLEWOW64FSREDIRECTION)(PVOID*);
+typedef BOOL (WINAPI *LPFN_WOW64REVERTWOW64FSREDIRECTION)(PVOID);
+
+static BOOL disable_wow64_redirection(PVOID* old_val) {
+    if (!old_val) return FALSE;
+    *old_val = NULL;
+    HMODULE hKernel32 = GetModuleHandleW(L"kernel32.dll");
+    if (!hKernel32) return FALSE;
+    LPFN_WOW64DISABLEWOW64FSREDIRECTION fn = 
+        (LPFN_WOW64DISABLEWOW64FSREDIRECTION)GetProcAddress(hKernel32, "Wow64DisableWow64FsRedirection");
+    if (fn) {
+        return fn(old_val);
+    }
+    return FALSE;
+}
+
+static void revert_wow64_redirection(PVOID old_val) {
+    HMODULE hKernel32 = GetModuleHandleW(L"kernel32.dll");
+    if (!hKernel32) return;
+    LPFN_WOW64REVERTWOW64FSREDIRECTION fn = 
+        (LPFN_WOW64REVERTWOW64FSREDIRECTION)GetProcAddress(hKernel32, "Wow64RevertWow64FsRedirection");
+    if (fn) {
+        fn(old_val);
+    }
+}
+
+static void resolve_cmd_path(wchar_t* out_path, size_t out_max) {
+    if (GetEnvironmentVariableW(L"COMSPEC", out_path, (DWORD)out_max) > 0) {
+        if (GetFileAttributesW(out_path) != INVALID_FILE_ATTRIBUTES) return;
+    }
+    wchar_t win_dir[MAX_PATH];
+    if (GetWindowsDirectoryW(win_dir, MAX_PATH) > 0) {
+        _snwprintf(out_path, out_max, L"%ls\\System32\\cmd.exe", win_dir);
+        if (GetFileAttributesW(out_path) != INVALID_FILE_ATTRIBUTES) return;
+        _snwprintf(out_path, out_max, L"%ls\\Sysnative\\cmd.exe", win_dir);
+        if (GetFileAttributesW(out_path) != INVALID_FILE_ATTRIBUTES) return;
+    }
+    wcscpy_s(out_path, out_max, L"cmd.exe");
+}
+
+static void resolve_powershell_path(wchar_t* out_path, size_t out_max) {
+    wchar_t win_dir[MAX_PATH];
+    if (GetWindowsDirectoryW(win_dir, MAX_PATH) > 0) {
+        _snwprintf(out_path, out_max, L"%ls\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", win_dir);
+        if (GetFileAttributesW(out_path) != INVALID_FILE_ATTRIBUTES) return;
+        _snwprintf(out_path, out_max, L"%ls\\Sysnative\\WindowsPowerShell\\v1.0\\powershell.exe", win_dir);
+        if (GetFileAttributesW(out_path) != INVALID_FILE_ATTRIBUTES) return;
+    }
+    wcscpy_s(out_path, out_max, L"powershell.exe");
+}
+
+static void resolve_taskkill_path(wchar_t* out_path, size_t out_max) {
+    wchar_t win_dir[MAX_PATH];
+    if (GetWindowsDirectoryW(win_dir, MAX_PATH) > 0) {
+        _snwprintf(out_path, out_max, L"%ls\\System32\\taskkill.exe", win_dir);
+        if (GetFileAttributesW(out_path) != INVALID_FILE_ATTRIBUTES) return;
+        _snwprintf(out_path, out_max, L"%ls\\Sysnative\\taskkill.exe", win_dir);
+        if (GetFileAttributesW(out_path) != INVALID_FILE_ATTRIBUTES) return;
+    }
+    wcscpy_s(out_path, out_max, L"taskkill.exe");
+}
+
 void command_runner_setup_environment(void) {
     wchar_t exe_path[MAX_PATH];
     if (GetModuleFileNameW(NULL, exe_path, MAX_PATH) == 0) return;
 
-    // exe_dir: e.g. C:\l4tools\l4con or C:\l4tools\bin
+    // exe_dir: e.g. C:\l4tools\l4con\x86 or C:\l4tools\l4con or C:\l4tools\bin
     wchar_t exe_dir[MAX_PATH];
     wcscpy_s(exe_dir, MAX_PATH, exe_path);
     PathRemoveFileSpecW(exe_dir);
@@ -27,23 +89,36 @@ void command_runner_setup_environment(void) {
     // base_dir: e.g. C:\l4tools
     wchar_t base_dir[MAX_PATH];
     wcscpy_s(base_dir, MAX_PATH, exe_dir);
+
+    // Strip architecture subdir if present (e.g. \x86, \x64, \bin)
     wchar_t* last_slash = wcsrchr(base_dir, L'\\');
-    if (last_slash && (_wcsicmp(last_slash + 1, L"l4con") == 0 || _wcsicmp(last_slash + 1, L"bin") == 0)) {
+    if (last_slash && (_wcsicmp(last_slash + 1, L"x86") == 0 ||
+                       _wcsicmp(last_slash + 1, L"x64") == 0 ||
+                       _wcsicmp(last_slash + 1, L"bin") == 0)) {
         *last_slash = L'\0';
     }
 
-    if (PathFileExistsW(base_dir)) {
+    // Strip tool subdir if present (e.g. \l4con)
+    last_slash = wcsrchr(base_dir, L'\\');
+    if (last_slash && (_wcsicmp(last_slash + 1, L"l4con") == 0 ||
+                       _wcsicmp(last_slash + 1, L"bin") == 0)) {
+        *last_slash = L'\0';
+    }
+
+    DWORD attr = GetFileAttributesW(base_dir);
+    if (attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY)) {
         wcscpy_s(g_active_working_dir, MAX_PATH, base_dir);
-    } else if (PathFileExistsW(L"C:\\l4tools")) {
-        wcscpy_s(g_active_working_dir, MAX_PATH, L"C:\\l4tools");
     } else {
-        wcscpy_s(g_active_working_dir, MAX_PATH, exe_dir);
+        attr = GetFileAttributesW(L"C:\\l4tools");
+        if (attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY)) {
+            wcscpy_s(g_active_working_dir, MAX_PATH, L"C:\\l4tools");
+        } else {
+            wcscpy_s(g_active_working_dir, MAX_PATH, exe_dir);
+        }
     }
 
     // Set process working directory to base directory (e.g. C:\l4tools)
-    if (PathFileExistsW(g_active_working_dir)) {
-        SetCurrentDirectoryW(g_active_working_dir);
-    }
+    SetCurrentDirectoryW(g_active_working_dir);
 
     // Read existing PATH
     DWORD cur_len = GetEnvironmentVariableW(L"PATH", NULL, 0);
@@ -55,13 +130,28 @@ void command_runner_setup_environment(void) {
         }
     }
 
-    // Build extended PATH with all tool directories
+    wchar_t win_dir[MAX_PATH];
+    if (GetWindowsDirectoryW(win_dir, MAX_PATH) == 0) {
+        wcscpy_s(win_dir, MAX_PATH, L"C:\\Windows");
+    }
+
+    // Build extended PATH with all tool directories and standard system directories
     wchar_t new_path[8192];
     _snwprintf(new_path, sizeof(new_path)/sizeof(wchar_t),
-               L"%ls;%ls\\l4con;%ls\\l4sql;%ls\\l4pin;%ls\\l4superv;%ls\\leo4proxy;%ls;%ls",
+               L"%ls;%ls\\l4con;%ls\\l4con\\x86;%ls\\l4con\\x64;"
+               L"%ls\\l4sql;%ls\\l4sql\\x86;%ls\\l4sql\\x64;"
+               L"%ls\\l4pin;%ls\\l4pin\\x86;%ls\\l4pin\\x64;"
+               L"%ls\\l4superv;%ls\\l4superv\\x86;%ls\\l4superv\\x64;"
+               L"%ls\\leo4proxy;%ls\\leo4proxy\\x86;%ls\\leo4proxy\\x64;"
+               L"%ls;%ls\\System32;%ls;%ls\\System32\\Wbem;%ls\\System32\\WindowsPowerShell\\v1.0;%ls\\Sysnative;%ls",
+               g_active_working_dir,
+               g_active_working_dir, g_active_working_dir, g_active_working_dir,
+               g_active_working_dir, g_active_working_dir, g_active_working_dir,
+               g_active_working_dir, g_active_working_dir, g_active_working_dir,
                g_active_working_dir, g_active_working_dir, g_active_working_dir,
                g_active_working_dir, g_active_working_dir, g_active_working_dir,
                exe_dir,
+               win_dir, win_dir, win_dir, win_dir, win_dir,
                cur_path ? cur_path : L"");
 
     SetEnvironmentVariableW(L"PATH", new_path);
@@ -159,8 +249,11 @@ void command_runner_request_cancel(CommandContext* ctx) {
 
 void command_runner_kill_process_tree(DWORD pid) {
     if (pid == 0) return;
-    wchar_t kill_cmd[128];
-    _snwprintf(kill_cmd, sizeof(kill_cmd)/sizeof(wchar_t), L"taskkill.exe /F /T /PID %lu", pid);
+    wchar_t taskkill_exe[MAX_PATH];
+    resolve_taskkill_path(taskkill_exe, MAX_PATH);
+
+    wchar_t kill_cmd[MAX_PATH + 64];
+    _snwprintf(kill_cmd, sizeof(kill_cmd)/sizeof(wchar_t), L"\"%ls\" /F /T /PID %lu", taskkill_exe, pid);
 
     STARTUPINFOW si;
     PROCESS_INFORMATION pi;
@@ -170,10 +263,17 @@ void command_runner_kill_process_tree(DWORD pid) {
     si.wShowWindow = SW_HIDE;
     ZeroMemory(&pi, sizeof(pi));
 
+    PVOID wow64_old_val = NULL;
+    BOOL wow64_disabled = disable_wow64_redirection(&wow64_old_val);
+
     if (CreateProcessW(NULL, kill_cmd, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
         WaitForSingleObject(pi.hProcess, 3000);
         CloseHandle(pi.hProcess);
         CloseHandle(pi.hThread);
+    }
+
+    if (wow64_disabled) {
+        revert_wow64_redirection(wow64_old_val);
     }
 }
 
@@ -271,32 +371,45 @@ int command_runner_execute(CommandContext* ctx,
     SetHandleInformation(hReadPipe, HANDLE_FLAG_INHERIT, 0);
 
     // Build CommandLine
-    wchar_t sys_dir[MAX_PATH];
-    if (GetSystemDirectoryW(sys_dir, MAX_PATH) == 0) {
-        wcscpy_s(sys_dir, MAX_PATH, L"C:\\Windows\\System32");
-    }
-
+    wchar_t shell_exe[MAX_PATH];
     wchar_t w_cmdline[4096];
     wchar_t w_usercmd[2048];
     MultiByteToWideChar(CP_UTF8, 0, ctx->command_line, -1, w_usercmd, 2048);
 
     if (ctx->shell == SHELL_POWERSHELL) {
+        resolve_powershell_path(shell_exe, MAX_PATH);
         _snwprintf(w_cmdline, sizeof(w_cmdline)/sizeof(wchar_t),
-                   L"powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command %ls",
-                   w_usercmd);
+                   L"\"%ls\" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command %ls",
+                   shell_exe, w_usercmd);
     } else {
+        resolve_cmd_path(shell_exe, MAX_PATH);
         _snwprintf(w_cmdline, sizeof(w_cmdline)/sizeof(wchar_t),
-                   L"cmd.exe /c %ls",
-                   w_usercmd);
+                   L"\"%ls\" /c %ls",
+                   shell_exe, w_usercmd);
     }
 
     wchar_t* w_workdir = NULL;
     wchar_t w_workdir_buf[MAX_PATH];
     if (strlen(ctx->working_dir) > 0) {
         MultiByteToWideChar(CP_UTF8, 0, ctx->working_dir, -1, w_workdir_buf, MAX_PATH);
-        w_workdir = w_workdir_buf;
+        DWORD attr = GetFileAttributesW(w_workdir_buf);
+        if (attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY)) {
+            w_workdir = w_workdir_buf;
+        } else {
+            DWORD base_attr = GetFileAttributesW(g_active_working_dir);
+            if (base_attr != INVALID_FILE_ATTRIBUTES && (base_attr & FILE_ATTRIBUTE_DIRECTORY)) {
+                w_workdir = g_active_working_dir;
+            } else {
+                w_workdir = NULL;
+            }
+        }
     } else {
-        w_workdir = g_active_working_dir;
+        DWORD base_attr = GetFileAttributesW(g_active_working_dir);
+        if (base_attr != INVALID_FILE_ATTRIBUTES && (base_attr & FILE_ATTRIBUTE_DIRECTORY)) {
+            w_workdir = g_active_working_dir;
+        } else {
+            w_workdir = NULL;
+        }
     }
 
     // Create stdin pipe for non-interactive EOF
@@ -318,9 +431,17 @@ int command_runner_execute(CommandContext* ctx,
 
     ZeroMemory(&pi, sizeof(pi));
 
+    PVOID wow64_old_val = NULL;
+    BOOL wow64_disabled = disable_wow64_redirection(&wow64_old_val);
+
     BOOL proc_created = CreateProcessW(NULL, w_cmdline, NULL, NULL, TRUE,
                                        CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP,
                                        NULL, w_workdir, &si, &pi);
+    DWORD dwErr = GetLastError();
+
+    if (wow64_disabled) {
+        revert_wow64_redirection(wow64_old_val);
+    }
 
     // Close stdin handles in parent process
     if (hStdInWrite != NULL) {
@@ -339,7 +460,6 @@ int command_runner_execute(CommandContext* ctx,
     }
 
     if (!proc_created) {
-        DWORD dwErr = GetLastError();
         CloseHandle(hReadPipe);
         char err_json[512];
         snprintf(err_json, sizeof(err_json),
