@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Button, Select, Space, Tag, Typography, message } from "antd";
+import { Button, Grid, Select, Space, Tag, Typography, message } from "antd";
 import { SwapOutlined, BankOutlined } from "@ant-design/icons";
 import { listAvailableTenants, switchTenant, type OrgItem } from "../api/adminTenants";
 import type { UserInfo } from "../api/auth";
@@ -12,14 +12,10 @@ interface OrgSwitcherProps {
 }
 
 export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({ currentUser, onTenantSwitched }) => {
+  const screens = Grid.useBreakpoint();
   const isSuperUser = Boolean(
     currentUser?.is_superuser || currentUser?.can_switch_org || currentUser?.role === "superuser"
   );
-
-  // STRICT SECURITY & UI RULE: Never render for regular users
-  if (!isSuperUser) {
-    return null;
-  }
 
   const [orgs, setOrgs] = useState<OrgItem[]>([]);
   const [selectedOrgId, setSelectedOrgId] = useState<number | null>(
@@ -29,6 +25,7 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({ currentUser, onTenantS
   const [switching, setSwitching] = useState<boolean>(false);
 
   useEffect(() => {
+    if (!isSuperUser) return;
     let isMounted = true;
     setLoading(true);
     listAvailableTenants()
@@ -49,7 +46,12 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({ currentUser, onTenantS
     return () => {
       isMounted = false;
     };
-  }, [currentUser?.org_id]);
+  }, [isSuperUser, currentUser?.org_id]);
+
+  // STRICT SECURITY & UI RULE: Never render for regular users
+  if (!isSuperUser) {
+    return null;
+  }
 
   const handleSwitch = async () => {
     if (!selectedOrgId) return;
@@ -87,26 +89,30 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({ currentUser, onTenantS
     orgs.find((o) => o.org_id === currentUser?.org_id)?.org_name ||
     (currentUser?.org_id ? `Организация #${currentUser.org_id}` : "Не выбрана");
 
+  const isMobile = !screens.md;
+  const isXs = screens.xs;
+
   return (
     <div
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 8,
+        gap: isXs ? 4 : 8,
         background: "#f0f5ff",
         border: "1px solid #adc6ff",
         borderRadius: 6,
-        padding: "3px 8px",
+        padding: isXs ? "2px 4px" : "3px 8px",
+        maxWidth: "100%",
       }}
     >
-      <Tag color="blue" icon={<BankOutlined />} style={{ margin: 0 }}>
-        Тенант: {currentOrgDisplayName}
+      <Tag color="blue" icon={<BankOutlined />} style={{ margin: 0, maxWidth: isXs ? 110 : 200 }} title={currentOrgDisplayName}>
+        {isXs ? currentOrgDisplayName : `Тенант: ${currentOrgDisplayName}`}
       </Tag>
       <Select
         size="small"
         showSearch
-        placeholder="Сменить организацию..."
-        style={{ width: 200 }}
+        placeholder="Сменить..."
+        style={{ width: isXs ? 110 : isMobile ? 150 : 200 }}
         loading={loading}
         value={selectedOrgId}
         onChange={setSelectedOrgId}
@@ -126,7 +132,7 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({ currentUser, onTenantS
         onClick={handleSwitch}
         disabled={!selectedOrgId || selectedOrgId === currentUser?.org_id}
       >
-        Войти
+        {!isXs && "Войти"}
       </Button>
     </div>
   );

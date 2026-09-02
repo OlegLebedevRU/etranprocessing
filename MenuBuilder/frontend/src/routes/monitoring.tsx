@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Button, Card, Input, message, Space, Table, Tooltip, Typography } from "antd";
+import { Button, Card, Grid, Input, message, Space, Table, Tooltip, Typography } from "antd";
 import { CloudOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { getMonitoring, MonitoringTerminal } from "../api/monitoring";
 import { formatDate } from "../utils/billing";
@@ -102,6 +102,10 @@ export default function MonitoringPage() {
   const [tenantTz, setTenantTz] = useState<string>(() => resolveTenantTimezone());
   const lastManualFetchTimeRef = useRef<number>(0);
 
+  const screens = Grid.useBreakpoint();
+  const isXs = screens.xs;
+  const isMobile = !screens.md;
+
   useEffect(() => {
     getMe()
       .then((u) => {
@@ -170,6 +174,8 @@ export default function MonitoringPage() {
       title: "Терминал",
       dataIndex: "device_id",
       key: "device_id",
+      fixed: "left" as const,
+      width: 96,
       render: (v: number, record: MonitoringTerminal) => (
         <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
           <Text strong style={{ fontSize: 12 }}>
@@ -177,6 +183,7 @@ export default function MonitoringPage() {
           </Text>
           {record.iot_provisioned && (
             <Tooltip
+              mouseEnterDelay={0.35}
               title={
                 record.iot_provisioned_at
                   ? `Зарегистрирован в Leo4 IoT (${formatTenantDate(record.iot_provisioned_at, tenantTz)})`
@@ -198,6 +205,8 @@ export default function MonitoringPage() {
     {
       title: "Связь",
       key: "slots",
+      width: 52,
+      align: "center" as const,
       render: (_: unknown, record: MonitoringTerminal) => (
         <SlotBar slots={record.slots} />
       ),
@@ -206,9 +215,10 @@ export default function MonitoringPage() {
       title: "Обмен",
       dataIndex: "lastnumconn",
       key: "lastnumconn",
+      width: 65,
       align: "center" as const,
       render: (v: number) => (
-        <Tooltip title={lastnumTooltip(v)}>
+        <Tooltip mouseEnterDelay={0.35} title={lastnumTooltip(v)}>
           <span
             style={{
               fontSize: 12,
@@ -226,20 +236,17 @@ export default function MonitoringPage() {
       title: "Платеж",
       dataIndex: "last_payment_at",
       key: "last_payment",
+      width: 80,
       align: "center" as const,
       render: (v: string | null) => {
         const minutes = minutesSince(v);
         if (minutes === null) {
-          return (
-            <Tooltip title="Платежей не было">
-              <Text style={{ fontSize: 12, color: COLOR.muted }}>—</Text>
-            </Tooltip>
-          );
+          return <Text style={{ fontSize: 12, color: COLOR.muted }}>—</Text>;
         }
         const alert = minutes > PAYMENT_ALERT_MINUTES;
         const warn = !alert && minutes > PAYMENT_WARN_MINUTES;
         return (
-          <Tooltip title={formatTenantDateTime(v, tenantTz)}>
+          <Tooltip mouseEnterDelay={0.35} title={formatTenantDateTime(v, tenantTz)}>
             <span
               style={{
                 fontSize: 12,
@@ -264,22 +271,17 @@ export default function MonitoringPage() {
       title: "Инкассация",
       dataIndex: "last_inkass_at",
       key: "last_inkass",
+      width: 125,
       align: "center" as const,
       render: (v: string | null) => {
         if (!v) {
-          return (
-            <Tooltip title="Инкассаций не было">
-              <Text style={{ fontSize: 12, color: COLOR.muted }}>—</Text>
-            </Tooltip>
-          );
+          return <Text style={{ fontSize: 12, color: COLOR.muted }}>—</Text>;
         }
         const formatted = formatTenantDateTime(v, tenantTz, "DD.MM.YYYY HH:mm");
         return (
-          <Tooltip title={formatTenantDateTime(v, tenantTz)}>
-            <Text style={{ fontSize: 12, whiteSpace: "nowrap" }}>
-              {formatted}
-            </Text>
-          </Tooltip>
+          <Text style={{ fontSize: 12, whiteSpace: "nowrap" }}>
+            {formatted}
+          </Text>
         );
       },
     },
@@ -287,6 +289,7 @@ export default function MonitoringPage() {
       title: "Лицензия",
       dataIndex: "license_expires_at",
       key: "license",
+      width: 100,
       align: "center" as const,
       render: (v: string | null) => {
         if (!v)
@@ -309,6 +312,7 @@ export default function MonitoringPage() {
         const isWarn = days <= LICENSE_WARN_DAYS;
         return (
           <Tooltip
+            mouseEnterDelay={0.35}
             title={
               isExpired
                 ? `Истекла ${Math.abs(days)} дн. назад`
@@ -335,6 +339,7 @@ export default function MonitoringPage() {
     {
       title: "Сертификат",
       key: "cert",
+      width: 105,
       align: "center" as const,
       render: (_: unknown, r: MonitoringTerminal) => {
         if (!r.cert_serial)
@@ -351,7 +356,7 @@ export default function MonitoringPage() {
         const isExpired = days < 0;
         const isWarn = days <= LICENSE_WARN_DAYS;
         return (
-          <Tooltip title={`Серийный номер: ${r.cert_serial}`}>
+          <Tooltip mouseEnterDelay={0.35} title={`Серийный номер: ${r.cert_serial}`}>
             <span
               style={{
                 fontSize: 12,
@@ -371,6 +376,7 @@ export default function MonitoringPage() {
       title: "Купюрник",
       dataIndex: "validator_state",
       key: "validator_state",
+      width: 75,
       align: "center" as const,
       render: (v: string) => {
         const n = parseInt(v);
@@ -392,6 +398,7 @@ export default function MonitoringPage() {
       title: "Принтер",
       dataIndex: "printer_state",
       key: "printer_state",
+      width: 70,
       align: "center" as const,
       render: (v: string) => {
         const n = parseInt(v);
@@ -413,10 +420,12 @@ export default function MonitoringPage() {
       title: "Адрес",
       dataIndex: "address",
       key: "address",
+      width: 170,
+      ellipsis: true,
       render: (v: string | null) =>
         v ? (
-          <Tooltip title={v}>
-            <Text style={{ fontSize: 12, maxWidth: 180, display: "inline-block" }} ellipsis>
+          <Tooltip mouseEnterDelay={0.35} title={v}>
+            <Text style={{ fontSize: 12, maxWidth: 170, display: "inline-block" }} ellipsis>
               {v}
             </Text>
           </Tooltip>
@@ -428,6 +437,8 @@ export default function MonitoringPage() {
       title: "Тип",
       dataIndex: "terminal_type_name",
       key: "terminal_type",
+      width: 95,
+      ellipsis: true,
       render: (v: string | null, record: MonitoringTerminal) => {
         if (record.terminal_type_id !== undefined && record.terminal_type_id !== null) {
           return (
@@ -443,21 +454,14 @@ export default function MonitoringPage() {
       title: "SN",
       dataIndex: "sn",
       key: "sn",
+      width: 115,
       render: (v: string) => (
-        <Tooltip
-          title={
-            <Typography.Text copyable style={{ fontSize: 11 }}>
-              {v}
-            </Typography.Text>
-          }
+        <Typography.Text
+          copyable={{ text: v, tooltips: ["Копировать SN", "Скопировано!"] }}
+          style={{ fontSize: 11, fontFamily: "monospace", whiteSpace: "nowrap" }}
         >
-          <Text
-            code
-            style={{ fontSize: 10, cursor: "default", whiteSpace: "nowrap" }}
-          >
-            {v.length > 10 ? v.slice(0, 10) + "…" : v}
-          </Text>
-        </Tooltip>
+          {v.length > 10 ? v.slice(0, 8) + "…" : v}
+        </Typography.Text>
       ),
     },
   ];
@@ -467,52 +471,50 @@ export default function MonitoringPage() {
       <div
         style={{
           display: "flex",
-          alignItems: "center",
+          alignItems: isXs ? "stretch" : "center",
           justifyContent: "space-between",
-          gap: 12,
+          flexDirection: isXs ? "column" : "row",
+          gap: 10,
           marginBottom: 12,
-          flexWrap: "wrap",
         }}
       >
-        <Space size={16} align="center" wrap>
-          <div>
-            <Typography.Title level={5} style={{ margin: 0, fontWeight: 600 }}>
-              Мониторинг
-            </Typography.Title>
-            {lastUpdate && (
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                Обновлено в {lastUpdate}
-              </Text>
-            )}
-          </div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10, justifyContent: "space-between" }}>
+          <Typography.Title level={5} style={{ margin: 0, fontWeight: 600 }}>
+            Мониторинг
+          </Typography.Title>
+          {lastUpdate && (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              Обновлено в {lastUpdate}
+            </Text>
+          )}
+        </div>
 
-          <Space size={8} wrap>
-            <Input
-              placeholder="Поиск ID / SN / адрес"
-              prefix={<SearchOutlined />}
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              onPressEnter={handleSearch}
-              allowClear
-              style={{ width: 220 }}
-              size="small"
-            />
-            <Button size="small" type="primary" onClick={handleSearch}>
-              Найти
-            </Button>
-            <Button
-              size="small"
-              icon={<ReloadOutlined />}
-              onClick={handleManualRefresh}
-              loading={loading || simulatedRefreshing}
-            >
-              Обновить
-            </Button>
-          </Space>
-        </Space>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", width: isXs ? "100%" : "auto" }}>
+          <Input
+            placeholder="Поиск ID / SN / адрес"
+            prefix={<SearchOutlined />}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onPressEnter={handleSearch}
+            allowClear
+            style={{ width: isXs ? "100%" : 220, flex: isXs ? 1 : undefined }}
+            size="small"
+          />
+          <Button size="small" type="primary" onClick={handleSearch}>
+            Найти
+          </Button>
+          <Button
+            size="small"
+            icon={<ReloadOutlined />}
+            onClick={handleManualRefresh}
+            loading={loading || simulatedRefreshing}
+          >
+            {!isXs && "Обновить"}
+          </Button>
+        </div>
       </div>
 
-      <Card styles={{ body: { padding: 0 } }} style={{ width: "100%" }}>
+      <Card styles={{ body: { padding: 0 } }} style={{ width: "100%", overflow: "hidden" }}>
         <Table
           className="compact-table"
           dataSource={terminals}
@@ -520,16 +522,19 @@ export default function MonitoringPage() {
           rowKey="terminal_id"
           loading={loading}
           size="small"
-          tableLayout="auto"
+          tableLayout="fixed"
+          scroll={{ x: 1080 }}
           pagination={{
             position: ["topRight", "bottomRight"],
             current: page,
             pageSize,
             total,
             defaultPageSize: 50,
-            showSizeChanger: true,
+            simple: isXs,
+            showSizeChanger: !isXs,
             pageSizeOptions: ["10", "20", "50", "100"],
-            showTotal: (tot, range) => `${range[0]}-${range[1]} из ${tot}`,
+            showTotal: (tot, range) =>
+              isXs ? `${range[0]}-${range[1]}/${tot}` : `${range[0]}-${range[1]} из ${tot}`,
             onChange: (p, ps) => {
               setPage(p);
               setPageSize(ps);

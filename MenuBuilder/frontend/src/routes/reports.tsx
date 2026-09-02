@@ -10,6 +10,8 @@ import {
   Space,
   Tag,
   Select,
+  Grid,
+  Segmented,
 } from "antd";
 import {
   FileTextOutlined,
@@ -97,6 +99,10 @@ export default function ReportsPage() {
   // and shared localStorage caches must never be used as an authoritative source.
   const [tenantTz, setTenantTz] = useState<string>(DEFAULT_TIMEZONE);
   const [tenantReady, setTenantReady] = useState(false);
+
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
+  const isXs = screens.xs;
 
   useEffect(() => {
     getMe()
@@ -285,6 +291,7 @@ export default function ReportsPage() {
     {
       title: "Терминал",
       dataIndex: "device_id",
+      fixed: "left" as const,
       width: 90,
       sorter: (a, b) => a.device_id - b.device_id,
     },
@@ -352,7 +359,8 @@ export default function ReportsPage() {
     {
       title: "Транзакция",
       dataIndex: "paym_ext_id",
-      width: 180,
+      fixed: "left" as const,
+      width: 160,
       ellipsis: true,
     },
     {
@@ -409,7 +417,8 @@ export default function ReportsPage() {
     {
       title: "Терминал",
       dataIndex: "device_id",
-      width: 140,
+      fixed: "left" as const,
+      width: 110,
       sorter: (a, b) => a.device_id - b.device_id,
     },
     {
@@ -436,6 +445,7 @@ export default function ReportsPage() {
     {
       title: "TSP код",
       dataIndex: "tsp_code",
+      fixed: "left" as const,
       width: 100,
       sorter: (a, b) => a.tsp_code - b.tsp_code,
     },
@@ -482,280 +492,354 @@ export default function ReportsPage() {
   ];
 
   return (
-    <Layout style={{ background: "transparent" }}>
-      <Sider
-        width={170}
-        theme="light"
-        style={{
-          border: "1px solid #eceff3",
-          borderRadius: 10,
-          marginRight: 12,
-          padding: 6,
-          alignSelf: "flex-start",
-          position: "sticky",
-          top: 64,
-          maxHeight: "calc(100vh - 80px)",
-          overflowY: "auto",
-        }}
-      >
-        <div
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            letterSpacing: 0.6,
-            textTransform: "uppercase",
-            color: "#94a3b8",
-            padding: "6px 10px 8px",
-          }}
-        >
-          Отчёты
+    <div>
+      {/* Mobile/Tablet report switcher */}
+      {isMobile && (
+        <div style={{ marginBottom: 12, overflowX: "auto", paddingBottom: 2 }}>
+          <Segmented
+            block={isXs}
+            size="middle"
+            value={activeReport}
+            onChange={(v) => setActiveReport(String(v))}
+            options={REPORTS.map((r) => ({
+              value: r.key,
+              label: (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "2px 4px" }}>
+                  {r.icon}
+                  <span>{r.label}</span>
+                </span>
+              ),
+            }))}
+          />
         </div>
-        <Menu
-          mode="inline"
-          selectedKeys={[activeReport]}
-          onClick={({ key }) => setActiveReport(key)}
-          items={REPORTS}
-          style={{ border: "none", background: "transparent" }}
-        />
-      </Sider>
-      <Content>
-        {/* ====== Inkass report ====== */}
-        {activeReport === "inkass" && (
+      )}
+
+      <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+        {/* Desktop Sider */}
+        {!isMobile && (
           <div
-            style={{ background: "#fff", borderRadius: 8, padding: 12 }}
+            style={{
+              width: 170,
+              flex: "0 0 170px",
+              background: "#fff",
+              border: "1px solid #eceff3",
+              borderRadius: 10,
+              padding: 6,
+              alignSelf: "flex-start",
+              position: "sticky",
+              top: 64,
+              maxHeight: "calc(100vh - 80px)",
+              overflowY: "auto",
+            }}
           >
-            <Space
+            <div
               style={{
-                marginBottom: 12,
-                display: "flex",
-                justifyContent: "space-between",
+                fontSize: 11,
+                fontWeight: 600,
+                letterSpacing: 0.6,
+                textTransform: "uppercase",
+                color: "#94a3b8",
+                padding: "6px 10px 8px",
               }}
             >
-              <Space wrap>
-                <DatePicker
-                  placeholder="Дата с"
-                  size="small"
-                  onChange={(d) =>
-                    setInkDateFrom(d ? d.format("YYYY-MM-DD") : "")
-                  }
-                />
-                <DatePicker
-                  placeholder="Дата по"
-                  size="small"
-                  onChange={(d) =>
-                    setInkDateTo(d ? d.format("YYYY-MM-DD") : "")
-                  }
-                />
-                <Input
-                  placeholder="ID терминалов через запятую"
-                  size="small"
-                  style={{ width: 220 }}
-                  value={inkTermInput}
-                  onChange={(e) => setInkTermInput(e.target.value)}
-                  onPressEnter={handleInkTermSearch}
-                />
-                <Button
-                  size="small"
-                  icon={<SearchOutlined />}
-                  onClick={handleInkTermSearch}
-                >
-                  Найти
-                </Button>
-              </Space>
-              <Space>
-                <Tag color="blue" style={{ margin: 0 }}>
-                  Часовой пояс: {getTimezoneBadgeText(tenantTz)}
-                </Tag>
-                <Button
-                  size="small"
-                  icon={<ReloadOutlined />}
-                  onClick={fetchInkass}
-                />
-              </Space>
-            </Space>
-
-            <Table<InkassRecord>
-              rowKey="id"
-              columns={inkassColumns}
-              dataSource={inkItems}
-              loading={inkLoading}
-              size="small"
-              className="reports-table"
-              tableLayout="auto"
-              pagination={{
-                current: inkPage,
-                pageSize: 50,
-                total: inkTotal,
-                onChange: setInkPage,
-                showTotal: (t) => `Всего: ${t}`,
-                showSizeChanger: true,
-                pageSizeOptions: ["10", "20", "50", "100"],
-              }}
-              scroll={{ x: 800 }}
-              expandable={{
-                expandedRowRender: (r) => (
-                  <div style={{ padding: "8px 0" }}>
-                    <div style={{ fontSize: 13, color: "#1f2937" }}>
-                      <span style={{ fontWeight: 600 }}>Банкноты: </span>
-                      <span>
-                        10р = {r.banknotes?.n10 ?? 0}, 50р = {r.banknotes?.n50 ?? 0},{" "}
-                        100р = {r.banknotes?.n100 ?? 0}, 500р = {r.banknotes?.n500 ?? 0},{" "}
-                        1000р = {r.banknotes?.n1000 ?? 0}, 2000р = {r.banknotes?.n2000 ?? 0},{" "}
-                        5000р = {r.banknotes?.n5000 ?? 0}
-                      </span>
-                    </div>
-                  </div>
-                ),
-              }}
+              Отчёты
+            </div>
+            <Menu
+              mode="inline"
+              selectedKeys={[activeReport]}
+              onClick={({ key }) => setActiveReport(key)}
+              items={REPORTS}
+              style={{ border: "none", background: "transparent" }}
             />
           </div>
         )}
 
-        {/* ====== Payments report ====== */}
-        {activeReport === "payments" && (
-          <div
-            style={{ background: "#fff", borderRadius: 8, padding: 12 }}
-          >
-            <Space
-              style={{
-                marginBottom: 12,
-                display: "flex",
-                justifyContent: "space-between",
-              }}
+        <div style={{ flex: 1, minWidth: 0, width: "100%" }}>
+          {/* ====== Inkass report ====== */}
+          {activeReport === "inkass" && (
+            <div
+              style={{ background: "#fff", borderRadius: 8, padding: isXs ? 8 : 12 }}
             >
-              <Space wrap>
-                <DatePicker
-                  placeholder="Дата с"
-                  size="small"
-                  value={dayjs(payDateFrom || todayStr)}
-                  allowClear={false}
-                  onChange={(d) =>
-                    setPayDateFrom(d ? d.format("YYYY-MM-DD") : todayStr)
-                  }
-                />
-                <DatePicker
-                  placeholder="Дата по"
-                  size="small"
-                  value={dayjs(payDateTo || todayStr)}
-                  allowClear={false}
-                  onChange={(d) =>
-                    setPayDateTo(d ? d.format("YYYY-MM-DD") : todayStr)
-                  }
-                />
-                <Input
-                  placeholder="ID терминалов через запятую"
-                  size="small"
-                  style={{ width: 200 }}
-                  value={payTermInput}
-                  onChange={(e) => setPayTermInput(e.target.value)}
-                  onPressEnter={handlePayTermSearch}
-                />
-                <Button
-                  size="small"
-                  icon={<SearchOutlined />}
-                  onClick={handlePayTermSearch}
-                >
-                  Найти
-                </Button>
-                <Input
-                  placeholder="TSP код"
-                  size="small"
-                  style={{ width: 90 }}
-                  value={payTspCode ?? ""}
-                  onChange={(e) => {
-                    const v = e.target.value.trim();
-                    setPayTspCode(v ? Number(v) : undefined);
+              <div
+                style={{
+                  marginBottom: 12,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: 8,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 8,
+                    alignItems: "center",
+                    flex: 1,
+                    minWidth: isXs ? "100%" : 320,
                   }}
-                />
-                <Select
-                  size="small"
-                  style={{ width: 80 }}
-                  value={payTop}
-                  onChange={setPayTop}
-                  options={TOP_OPTIONS}
-                  placeholder="ТОП"
-                />
-              </Space>
-              <Space>
-                <Tag color="blue" style={{ margin: 0 }}>
-                  Часовой пояс: {getTimezoneBadgeText(tenantTz)}
-                </Tag>
-                <Button
-                  size="small"
-                  icon={<ReloadOutlined />}
-                  onClick={fetchPayments}
-                />
-              </Space>
-            </Space>
+                >
+                  <div style={{ display: "flex", gap: 6, flex: isXs ? "1 1 100%" : undefined }}>
+                    <DatePicker
+                      placeholder="Дата с"
+                      size="small"
+                      style={{ flex: 1 }}
+                      onChange={(d) =>
+                        setInkDateFrom(d ? d.format("YYYY-MM-DD") : "")
+                      }
+                    />
+                    <DatePicker
+                      placeholder="Дата по"
+                      size="small"
+                      style={{ flex: 1 }}
+                      onChange={(d) =>
+                        setInkDateTo(d ? d.format("YYYY-MM-DD") : "")
+                      }
+                    />
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flex: isXs ? "1 1 100%" : undefined }}>
+                    <Input
+                      placeholder="ID терминалов (через запятую)"
+                      size="small"
+                      style={{ flex: 1, minWidth: 140, maxWidth: isXs ? undefined : 220 }}
+                      value={inkTermInput}
+                      onChange={(e) => setInkTermInput(e.target.value)}
+                      onPressEnter={handleInkTermSearch}
+                      allowClear
+                    />
+                    <Button
+                      size="small"
+                      type="primary"
+                      icon={<SearchOutlined />}
+                      onClick={handleInkTermSearch}
+                    >
+                      {!isXs && "Найти"}
+                    </Button>
+                  </div>
+                </div>
 
-            <Table<PaymentRecord>
-              rowKey="paym_id"
-              columns={paymentsColumns}
-              dataSource={payItems}
-              loading={payLoading}
-              size="small"
-              className="reports-table"
-              tableLayout="auto"
-              pagination={false}
-              scroll={{ x: 900 }}
-              expandable={{
-                expandedRowRender: (r) => (
-                  <div style={{ padding: "8px 0" }}>
-                    {r.params.length === 0 ? (
-                      <span style={{ color: "#999", fontSize: 12 }}>
-                        Нет параметров
-                      </span>
-                    ) : (
-                      <Space
-                        direction="vertical"
-                        size={2}
-                        style={{ width: "100%" }}
-                      >
-                        <div style={{ fontWeight: 500, marginBottom: 4, fontSize: 12 }}>
-                          Параметры платежа
-                        </div>
-                        <table
-                          style={{
-                            fontSize: 12,
-                            borderCollapse: "collapse",
-                          }}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: isXs ? 0 : "auto" }}>
+                  <Tag color="blue" style={{ margin: 0, fontSize: isXs ? 11 : 12 }}>
+                    {isXs ? getTimezoneBadgeText(tenantTz) : `Часовой пояс: ${getTimezoneBadgeText(tenantTz)}`}
+                  </Tag>
+                  <Button
+                    size="small"
+                    icon={<ReloadOutlined />}
+                    onClick={fetchInkass}
+                  />
+                </div>
+              </div>
+
+              <Table<InkassRecord>
+                rowKey="id"
+                columns={inkassColumns}
+                dataSource={inkItems}
+                loading={inkLoading}
+                size="small"
+                className="reports-table"
+                tableLayout="fixed"
+                pagination={{
+                  current: inkPage,
+                  pageSize: 50,
+                  total: inkTotal,
+                  onChange: setInkPage,
+                  simple: isXs,
+                  showTotal: (t, range) =>
+                    isXs ? `${range[0]}-${range[1]}/${t}` : `Всего: ${t}`,
+                  showSizeChanger: !isXs,
+                  pageSizeOptions: ["10", "20", "50", "100"],
+                }}
+                scroll={{ x: 850 }}
+                expandable={{
+                  expandedRowRender: (r) => (
+                    <div style={{ padding: "6px 0" }}>
+                      <div style={{ fontSize: 12, color: "#1f2937", marginBottom: 4, fontWeight: 600 }}>
+                        Банкноты:
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        <Tag>10 ₽: {r.banknotes?.n10 ?? 0}</Tag>
+                        <Tag>50 ₽: {r.banknotes?.n50 ?? 0}</Tag>
+                        <Tag>100 ₽: {r.banknotes?.n100 ?? 0}</Tag>
+                        <Tag>500 ₽: {r.banknotes?.n500 ?? 0}</Tag>
+                        <Tag>1 000 ₽: {r.banknotes?.n1000 ?? 0}</Tag>
+                        <Tag>2 000 ₽: {r.banknotes?.n2000 ?? 0}</Tag>
+                        <Tag>5 000 ₽: {r.banknotes?.n5000 ?? 0}</Tag>
+                      </div>
+                    </div>
+                  ),
+                }}
+              />
+            </div>
+          )}
+
+          {/* ====== Payments report ====== */}
+          {activeReport === "payments" && (
+            <div
+              style={{ background: "#fff", borderRadius: 8, padding: isXs ? 8 : 12 }}
+            >
+              <div
+                style={{
+                  marginBottom: 12,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: 8,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 8,
+                    alignItems: "center",
+                    flex: 1,
+                    minWidth: isXs ? "100%" : 320,
+                  }}
+                >
+                  <div style={{ display: "flex", gap: 6, flex: isXs ? "1 1 100%" : undefined }}>
+                    <DatePicker
+                      placeholder="Дата с"
+                      size="small"
+                      style={{ flex: 1 }}
+                      value={dayjs(payDateFrom || todayStr)}
+                      allowClear={false}
+                      onChange={(d) =>
+                        setPayDateFrom(d ? d.format("YYYY-MM-DD") : todayStr)
+                      }
+                    />
+                    <DatePicker
+                      placeholder="Дата по"
+                      size="small"
+                      style={{ flex: 1 }}
+                      value={dayjs(payDateTo || todayStr)}
+                      allowClear={false}
+                      onChange={(d) =>
+                        setPayDateTo(d ? d.format("YYYY-MM-DD") : todayStr)
+                      }
+                    />
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flex: isXs ? "1 1 100%" : undefined, flexWrap: "wrap" }}>
+                    <Input
+                      placeholder="ID терминалов"
+                      size="small"
+                      style={{ flex: 1, minWidth: 110, maxWidth: isXs ? undefined : 180 }}
+                      value={payTermInput}
+                      onChange={(e) => setPayTermInput(e.target.value)}
+                      onPressEnter={handlePayTermSearch}
+                      allowClear
+                    />
+                    <Button
+                      size="small"
+                      type="primary"
+                      icon={<SearchOutlined />}
+                      onClick={handlePayTermSearch}
+                    >
+                      {!isXs && "Найти"}
+                    </Button>
+                    <Input
+                      placeholder="TSP"
+                      size="small"
+                      style={{ width: isXs ? 75 : 90 }}
+                      value={payTspCode ?? ""}
+                      onChange={(e) => {
+                        const v = e.target.value.trim();
+                        setPayTspCode(v ? Number(v) : undefined);
+                      }}
+                    />
+                    <Select
+                      size="small"
+                      style={{ width: 75 }}
+                      value={payTop}
+                      onChange={setPayTop}
+                      options={TOP_OPTIONS}
+                      placeholder="ТОП"
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: isXs ? 0 : "auto" }}>
+                  <Tag color="blue" style={{ margin: 0, fontSize: isXs ? 11 : 12 }}>
+                    {isXs ? getTimezoneBadgeText(tenantTz) : `Часовой пояс: ${getTimezoneBadgeText(tenantTz)}`}
+                  </Tag>
+                  <Button
+                    size="small"
+                    icon={<ReloadOutlined />}
+                    onClick={fetchPayments}
+                  />
+                </div>
+              </div>
+
+              <Table<PaymentRecord>
+                rowKey="paym_id"
+                columns={paymentsColumns}
+                dataSource={payItems}
+                loading={payLoading}
+                size="small"
+                className="reports-table"
+                tableLayout="fixed"
+                pagination={false}
+                scroll={{ x: 920 }}
+                expandable={{
+                  expandedRowRender: (r) => (
+                    <div style={{ padding: "8px 0", overflowX: "auto", maxWidth: "100%" }}>
+                      {r.params.length === 0 ? (
+                        <span style={{ color: "#999", fontSize: 12 }}>
+                          Нет параметров
+                        </span>
+                      ) : (
+                        <Space
+                          direction="vertical"
+                          size={2}
+                          style={{ width: "100%" }}
                         >
-                          <thead>
-                            <tr>
-                              <th
-                                style={{
-                                  textAlign: "left",
-                                  paddingRight: 16,
-                                  color: "#888",
-                                  fontWeight: 500,
-                                }}
-                              >
-                                Код
-                              </th>
-                              <th
-                                style={{
-                                  textAlign: "left",
-                                  paddingRight: 16,
-                                  color: "#888",
-                                  fontWeight: 500,
-                                }}
-                              >
-                                Описание
-                              </th>
-                              <th
-                                style={{
-                                  textAlign: "left",
-                                  color: "#888",
-                                  fontWeight: 500,
-                                }}
-                              >
-                                Значение
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {r.params.map((p, i) => (
-                              <tr key={i}>
+                          <div style={{ fontWeight: 500, marginBottom: 4, fontSize: 12 }}>
+                            Параметры платежа
+                          </div>
+                          <table
+                            style={{
+                              fontSize: 12,
+                              borderCollapse: "collapse",
+                              minWidth: 320,
+                            }}
+                          >
+                            <thead>
+                              <tr>
+                                <th
+                                  style={{
+                                    textAlign: "left",
+                                    paddingRight: 16,
+                                    color: "#888",
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  Код
+                                </th>
+                                <th
+                                  style={{
+                                    textAlign: "left",
+                                    paddingRight: 16,
+                                    color: "#888",
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  Описание
+                                </th>
+                                <th
+                                  style={{
+                                    textAlign: "left",
+                                    color: "#888",
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  Значение
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {r.params.map((p, i) => (
+                                <tr key={i}>
                                 <td style={{ paddingRight: 16 }}>{p.code}</td>
                                 <td style={{ paddingRight: 16 }}>
                                   {p.description || "—"}
@@ -774,168 +858,215 @@ export default function ReportsPage() {
           </div>
         )}
 
-        {/* ====== Balance by terminal report ====== */}
-        {activeReport === "balance-terminal" && (
-          <div
-            style={{ background: "#fff", borderRadius: 8, padding: 12 }}
-          >
-            <Space
-              style={{
-                marginBottom: 12,
-                display: "flex",
-                justifyContent: "space-between",
-              }}
+          {/* ====== Balance by terminal report ====== */}
+          {activeReport === "balance-terminal" && (
+            <div
+              style={{ background: "#fff", borderRadius: 8, padding: isXs ? 8 : 12 }}
             >
-              <Space wrap>
-                <DatePicker
-                  placeholder="Дата с"
-                  size="small"
-                  value={dayjs(btDateFrom || todayStr)}
-                  allowClear={false}
-                  onChange={(d) =>
-                    setBtDateFrom(d ? d.format("YYYY-MM-DD") : todayStr)
-                  }
-                />
-                <DatePicker
-                  placeholder="Дата по"
-                  size="small"
-                  value={dayjs(btDateTo || todayStr)}
-                  allowClear={false}
-                  onChange={(d) =>
-                    setBtDateTo(d ? d.format("YYYY-MM-DD") : todayStr)
-                  }
-                />
-                <Input
-                  placeholder="ID терминалов через запятую"
-                  size="small"
-                  style={{ width: 200 }}
-                  value={btTermInput}
-                  onChange={(e) => setBtTermInput(e.target.value)}
-                  onPressEnter={handleBtTermSearch}
-                />
-                <Button
-                  size="small"
-                  icon={<SearchOutlined />}
-                  onClick={handleBtTermSearch}
-                >
-                  Найти
-                </Button>
-              </Space>
-              <Space>
-                <Tag color="blue" style={{ margin: 0 }}>
-                  Часовой пояс: {getTimezoneBadgeText(tenantTz)}
-                </Tag>
-                <Button
-                  size="small"
-                  icon={<ReloadOutlined />}
-                  onClick={fetchBalanceByTerminal}
-                />
-              </Space>
-            </Space>
-
-            <div style={{ maxWidth: 560 }}>
-              <Table<BalanceByTerminalRecord>
-                rowKey="device_id"
-                columns={balanceTerminalColumns}
-                dataSource={btItems}
-                loading={btLoading}
-                size="small"
-                className="reports-table"
-                tableLayout="auto"
-                pagination={{
-                  defaultPageSize: 50,
-                  pageSize: 50,
-                  showSizeChanger: true,
-                  pageSizeOptions: ["10", "20", "50", "100"],
-                  showTotal: (total, range) =>
-                    `${range[0]}-${range[1]} из ${total} записей`,
+              <div
+                style={{
+                  marginBottom: 12,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: 8,
                 }}
-              />
-            </div>
-          </div>
-        )}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 8,
+                    alignItems: "center",
+                    flex: 1,
+                    minWidth: isXs ? "100%" : 320,
+                  }}
+                >
+                  <div style={{ display: "flex", gap: 6, flex: isXs ? "1 1 100%" : undefined }}>
+                    <DatePicker
+                      placeholder="Дата с"
+                      size="small"
+                      style={{ flex: 1 }}
+                      value={dayjs(btDateFrom || todayStr)}
+                      allowClear={false}
+                      onChange={(d) =>
+                        setBtDateFrom(d ? d.format("YYYY-MM-DD") : todayStr)
+                      }
+                    />
+                    <DatePicker
+                      placeholder="Дата по"
+                      size="small"
+                      style={{ flex: 1 }}
+                      value={dayjs(btDateTo || todayStr)}
+                      allowClear={false}
+                      onChange={(d) =>
+                        setBtDateTo(d ? d.format("YYYY-MM-DD") : todayStr)
+                      }
+                    />
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flex: isXs ? "1 1 100%" : undefined }}>
+                    <Input
+                      placeholder="ID терминалов"
+                      size="small"
+                      style={{ flex: 1, minWidth: 120, maxWidth: isXs ? undefined : 200 }}
+                      value={btTermInput}
+                      onChange={(e) => setBtTermInput(e.target.value)}
+                      onPressEnter={handleBtTermSearch}
+                      allowClear
+                    />
+                    <Button
+                      size="small"
+                      type="primary"
+                      icon={<SearchOutlined />}
+                      onClick={handleBtTermSearch}
+                    >
+                      {!isXs && "Найти"}
+                    </Button>
+                  </div>
+                </div>
 
-        {/* ====== Balance by TSP report ====== */}
-        {activeReport === "balance-tsp" && (
-          <div
-            style={{ background: "#fff", borderRadius: 8, padding: 12 }}
-          >
-            <Space
-              style={{
-                marginBottom: 12,
-                display: "flex",
-                justifyContent: "space-between",
-              }}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: isXs ? 0 : "auto" }}>
+                  <Tag color="blue" style={{ margin: 0, fontSize: isXs ? 11 : 12 }}>
+                    {isXs ? getTimezoneBadgeText(tenantTz) : `Часовой пояс: ${getTimezoneBadgeText(tenantTz)}`}
+                  </Tag>
+                  <Button
+                    size="small"
+                    icon={<ReloadOutlined />}
+                    onClick={fetchBalanceByTerminal}
+                  />
+                </div>
+              </div>
+
+              <div style={{ maxWidth: "100%" }}>
+                <Table<BalanceByTerminalRecord>
+                  rowKey="device_id"
+                  columns={balanceTerminalColumns}
+                  dataSource={btItems}
+                  loading={btLoading}
+                  size="small"
+                  className="reports-table"
+                  tableLayout="fixed"
+                  scroll={{ x: 450 }}
+                  pagination={{
+                    defaultPageSize: 50,
+                    pageSize: 50,
+                    simple: isXs,
+                    showSizeChanger: !isXs,
+                    pageSizeOptions: ["10", "20", "50", "100"],
+                    showTotal: (total, range) =>
+                      isXs ? `${range[0]}-${range[1]}/${total}` : `${range[0]}-${range[1]} из ${total} записей`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ====== Balance by TSP report ====== */}
+          {activeReport === "balance-tsp" && (
+            <div
+              style={{ background: "#fff", borderRadius: 8, padding: isXs ? 8 : 12 }}
             >
-              <Space wrap>
-                <DatePicker
-                  placeholder="Дата с"
-                  size="small"
-                  value={dayjs(btsDateFrom || todayStr)}
-                  allowClear={false}
-                  onChange={(d) =>
-                    setBtsDateFrom(d ? d.format("YYYY-MM-DD") : todayStr)
-                  }
-                />
-                <DatePicker
-                  placeholder="Дата по"
-                  size="small"
-                  value={dayjs(btsDateTo || todayStr)}
-                  allowClear={false}
-                  onChange={(d) =>
-                    setBtsDateTo(d ? d.format("YYYY-MM-DD") : todayStr)
-                  }
-                />
-                <Input
-                  placeholder="ID терминалов через запятую"
-                  size="small"
-                  style={{ width: 200 }}
-                  value={btsTermInput}
-                  onChange={(e) => setBtsTermInput(e.target.value)}
-                  onPressEnter={handleBtsTermSearch}
-                />
-                <Button
-                  size="small"
-                  icon={<SearchOutlined />}
-                  onClick={handleBtsTermSearch}
-                >
-                  Найти
-                </Button>
-              </Space>
-              <Space>
-                <Tag color="blue" style={{ margin: 0 }}>
-                  Часовой пояс: {getTimezoneBadgeText(tenantTz)}
-                </Tag>
-                <Button
-                  size="small"
-                  icon={<ReloadOutlined />}
-                  onClick={fetchBalanceByTsp}
-                />
-              </Space>
-            </Space>
-
-            <div style={{ maxWidth: 840 }}>
-              <Table<BalanceByTspRecord>
-                rowKey="tsp_code"
-                columns={balanceTspColumns}
-                dataSource={btsItems}
-                loading={btsLoading}
-                size="small"
-                className="reports-table"
-                tableLayout="auto"
-                pagination={{
-                  defaultPageSize: 50,
-                  pageSize: 50,
-                  showSizeChanger: true,
-                  pageSizeOptions: ["10", "20", "50", "100"],
-                  showTotal: (total, range) =>
-                    `${range[0]}-${range[1]} из ${total} записей`,
+              <div
+                style={{
+                  marginBottom: 12,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: 8,
                 }}
-              />
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 8,
+                    alignItems: "center",
+                    flex: 1,
+                    minWidth: isXs ? "100%" : 320,
+                  }}
+                >
+                  <div style={{ display: "flex", gap: 6, flex: isXs ? "1 1 100%" : undefined }}>
+                    <DatePicker
+                      placeholder="Дата с"
+                      size="small"
+                      style={{ flex: 1 }}
+                      value={dayjs(btsDateFrom || todayStr)}
+                      allowClear={false}
+                      onChange={(d) =>
+                        setBtsDateFrom(d ? d.format("YYYY-MM-DD") : todayStr)
+                      }
+                    />
+                    <DatePicker
+                      placeholder="Дата по"
+                      size="small"
+                      style={{ flex: 1 }}
+                      value={dayjs(btsDateTo || todayStr)}
+                      allowClear={false}
+                      onChange={(d) =>
+                        setBtsDateTo(d ? d.format("YYYY-MM-DD") : todayStr)
+                      }
+                    />
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flex: isXs ? "1 1 100%" : undefined }}>
+                    <Input
+                      placeholder="ID терминалов"
+                      size="small"
+                      style={{ flex: 1, minWidth: 120, maxWidth: isXs ? undefined : 200 }}
+                      value={btsTermInput}
+                      onChange={(e) => setBtsTermInput(e.target.value)}
+                      onPressEnter={handleBtsTermSearch}
+                      allowClear
+                    />
+                    <Button
+                      size="small"
+                      type="primary"
+                      icon={<SearchOutlined />}
+                      onClick={handleBtsTermSearch}
+                    >
+                      {!isXs && "Найти"}
+                    </Button>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: isXs ? 0 : "auto" }}>
+                  <Tag color="blue" style={{ margin: 0, fontSize: isXs ? 11 : 12 }}>
+                    {isXs ? getTimezoneBadgeText(tenantTz) : `Часовой пояс: ${getTimezoneBadgeText(tenantTz)}`}
+                  </Tag>
+                  <Button
+                    size="small"
+                    icon={<ReloadOutlined />}
+                    onClick={fetchBalanceByTsp}
+                  />
+                </div>
+              </div>
+
+              <div style={{ maxWidth: "100%" }}>
+                <Table<BalanceByTspRecord>
+                  rowKey="tsp_code"
+                  columns={balanceTspColumns}
+                  dataSource={btsItems}
+                  loading={btsLoading}
+                  size="small"
+                  className="reports-table"
+                  tableLayout="fixed"
+                  scroll={{ x: 720 }}
+                  pagination={{
+                    defaultPageSize: 50,
+                    pageSize: 50,
+                    simple: isXs,
+                    showSizeChanger: !isXs,
+                    pageSizeOptions: ["10", "20", "50", "100"],
+                    showTotal: (total, range) =>
+                      isXs ? `${range[0]}-${range[1]}/${total}` : `${range[0]}-${range[1]} из ${total} записей`,
+                  }}
+                />
+              </div>
             </div>
-          </div>
-        )}
-      </Content>
-    </Layout>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

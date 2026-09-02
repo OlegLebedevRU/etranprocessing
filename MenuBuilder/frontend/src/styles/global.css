@@ -92,3 +92,35 @@ body {
 .ant-picker {
   cursor: pointer;
 }
+
+/* Mobile responsive improvements & touch protection for tooltips */
+@media (hover: none) and (pointer: coarse) {
+  /* On touch devices, prevent giant tooltips from capturing pointer events and blocking clicks */
+  .ant-tooltip {
+    pointer-events: none;
+  }
+}
+
+.ant-table-wrapper {
+  max-width: 100%;
+}
+
+.ant-table-content {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Clean mobile wrapping and responsive filter toolbar */
+@media (max-width: 768px) {
+  .compact-table .ant-table-tbody > tr > td {
+    padding: 3px 5px !important;
+    font-size: 11px !important;
+  }
+  .reports-table .ant-table-tbody > tr > td {
+    padding: 4px 6px !important;
+    font-size: 12px !important;
+  }
+  .ant-table-thead > tr > th {
+    font-size: 11px !important;
+    padding: 5px 5px !important;
+  }
+}

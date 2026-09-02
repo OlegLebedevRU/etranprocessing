@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router";
-import { Layout, Menu, Button, Tooltip, Typography, theme } from "antd";
+import { Layout, Menu, Button, Tooltip, Typography, theme, Grid } from "antd";
 import {
   AppstoreOutlined,
   DashboardOutlined,
@@ -33,6 +33,8 @@ export default function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { token } = theme.useToken();
+  const screens = Grid.useBreakpoint();
+  const isXs = screens.xs;
 
   useEffect(() => {
     let isMounted = true;
@@ -164,7 +166,7 @@ export default function AppLayout() {
       <Layout>
         <Header
           style={{
-            padding: "0 16px",
+            padding: isXs ? "0 8px" : "0 16px",
             background: token.colorBgContainer,
             display: "flex",
             alignItems: "center",
@@ -182,7 +184,7 @@ export default function AppLayout() {
             icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
             onClick={() => setCollapsed((v) => !v)}
           />
-          <Text strong style={{ marginLeft: 12, fontSize: 14 }}>
+          <Text strong style={{ marginLeft: isXs ? 6 : 12, fontSize: isXs ? 13 : 14 }} ellipsis>
             {navItems.find((i) => i.key === selectedKey)?.label}
           </Text>
           <div
@@ -190,14 +192,16 @@ export default function AppLayout() {
               marginLeft: "auto",
               display: "flex",
               alignItems: "center",
-              gap: 12,
+              gap: isXs ? 6 : 12,
             }}
           >
             <OrgSwitcher currentUser={currentUser} />
-            <Text type="secondary" style={{ fontSize: 13 }}>
-              {currentUser?.username || localStorage.getItem("mb_user")}
-            </Text>
-            <Tooltip title="Выйти">
+            {!isXs && (
+              <Text type="secondary" style={{ fontSize: 13 }} ellipsis>
+                {currentUser?.username || localStorage.getItem("mb_user")}
+              </Text>
+            )}
+            <Tooltip title="Выйти" mouseEnterDelay={0.3}>
               <Button
                 type="text"
                 size="small"
@@ -215,7 +219,7 @@ export default function AppLayout() {
             </Tooltip>
           </div>
         </Header>
-        <Content style={{ padding: 16 }}>
+        <Content style={{ padding: isXs ? 8 : 16 }}>
           <Outlet />
         </Content>
       </Layout>
