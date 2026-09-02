@@ -15,7 +15,9 @@ import {
   Tabs,
   Alert,
   message,
-  Descriptions,
+  Grid,
+  Row,
+  Col,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -30,6 +32,8 @@ import {
   CopyOutlined,
   ControlOutlined,
   StopOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
 } from "@ant-design/icons";
 import { getDevices, type DeviceListItem } from "../../api/devices";
 import { getAdminOrganizations, type AdminOrg } from "../../api/admin";
@@ -40,10 +44,13 @@ import DeviceConsoleTab from "./DeviceConsoleTab";
 import DevicePassportTab from "./DevicePassportTab";
 
 const { Title, Text } = Typography;
+const { useBreakpoint } = Grid;
 
 export default function DevicesManagementPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
 
   // Superuser check
   const isSuperuser = localStorage.getItem("mb_is_superuser") === "true";
@@ -127,6 +134,28 @@ export default function DevicesManagementPage() {
     });
   };
 
+  // KPI Metrics for dashboard
+  const kpiStats = useMemo(() => {
+    let online = 0;
+    let offline = 0;
+    let blocked = 0;
+    for (const d of devices) {
+      if (d.status === "blocked" || d.is_blocked) {
+        blocked++;
+      } else if (d.status === "online") {
+        online++;
+      } else {
+        offline++;
+      }
+    }
+    return {
+      total: devices.length,
+      online,
+      offline,
+      blocked,
+    };
+  }, [devices]);
+
   // Filtered devices list
   const filteredDevices = useMemo(() => {
     return devices.filter((d) => {
@@ -184,19 +213,20 @@ export default function DevicesManagementPage() {
 
   const columns: ColumnsType<DeviceListItem> = [
     {
-      title: "№ (ID)",
+      title: isMobile ? "ID" : "№ (ID)",
       dataIndex: "device_id",
       key: "device_id",
-      width: 140,
+      width: isMobile ? 70 : 100,
+      fixed: isMobile ? "left" : undefined,
       sorter: (a, b) => a.device_id - b.device_id,
       render: (id, record) => {
         const isBlocked = record.status === "blocked" || record.is_blocked;
         const isOnline = record.status === "online";
         const badgeStatus = isBlocked ? "error" : isOnline ? "success" : "default";
         return (
-          <Space>
+          <Space size={4}>
             <Badge status={badgeStatus} />
-            <Text strong style={isBlocked ? { color: "#cf1322" } : undefined}>
+            <Text strong style={isBlocked ? { color: "#cf1322", fontSize: 12 } : { fontSize: 12 }}>
               #{id}
             </Text>
           </Space>
@@ -204,86 +234,80 @@ export default function DevicesManagementPage() {
       },
     },
     {
-      title: "Серийный номер (SN)",
+      title: isMobile ? "SN" : "Серийный номер (SN)",
       dataIndex: "sn",
       key: "sn",
-      width: 220,
-      render: (sn) => (
-        <Space size={4}>
-          <Text code style={{ fontSize: 13 }}>
-            {sn}
-          </Text>
-          <Tooltip title="Копировать SN">
-            <Button
-              type="text"
-              size="small"
-              icon={<CopyOutlined />}
-              onClick={(e) => {
-                e.stopPropagation();
-                copyToClipboard(sn);
-              }}
-            />
-          </Tooltip>
-        </Space>
-      ),
+      width: isMobile ? 125 : 180,
+      render: (sn) => {
+        const displaySn =
+          isMobile && sn.length > 8 ? `${sn.slice(0, 4)}…${sn.slice(-3)}` : sn;
+        return (
+          <Space size={4}>
+            <Tooltip title={`Серийный номер: ${sn}`} mouseEnterDelay={0.35}>
+              <Text code style={{ fontSize: 12, cursor: "pointer" }}>
+                {displaySn}
+              </Text>
+            </Tooltip>
+            <Tooltip title="Копировать SN" mouseEnterDelay={0.35}>
+              <Button
+                type="text"
+                size="small"
+                icon={<CopyOutlined style={{ fontSize: 11 }} />}
+                style={{ width: 22, height: 22, padding: 0 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  copyToClipboard(sn);
+                }}
+              />
+            </Tooltip>
+          </Space>
+        );
+      },
     },
     {
-      title: "Статус связи",
+      title: isMobile ? "Статус" : "Связь",
       key: "status",
-      width: 190,
+      width: isMobile ? 90 : 115,
       render: (_, record) => {
         if (record.status === "blocked" || record.is_blocked) {
           const violationType = record.violation_type;
           const isSnCollision = violationType === "SN_COLLISION";
           const isDeviceClone = violationType === "DEVICE_CLONE";
-          const label = isSnCollision
-            ? "Коллизия SN"
-            : isDeviceClone
-              ? "Клон устройства"
-              : "Заблокировано";
-          const subLabel = isSnCollision
-            ? "Дубликат сертификата"
-            : isDeviceClone
-              ? "Клон накопителя / IP"
-              : record.violation_details?.reason || "Инцидент безопасности";
+          const mnemonic = isSnCollision ? "ERR:SN" : isDeviceClone ? "CLONE" : "BLOCK";
+          const subText = isSnCollision ? "Коллизия" : isDeviceClone ? "Клон" : "Блок";
 
           return (
             <Tooltip
+              mouseEnterDelay={0.35}
               title={
                 <div style={{ fontSize: 12 }}>
                   <div>
-                    <strong>🔴 Доступ заблокирован</strong>
+                    <strong>🔴 Заблокировано: {isSnCollision ? "Коллизия SN" : isDeviceClone ? "Клон устройства" : "Инцидент безопасности"}</strong>
                   </div>
                   <div>Тип нарушения: {violationType || "SN_COLLISION"}</div>
                   {record.violation_details?.reason && (
                     <div>Причина: {record.violation_details.reason}</div>
                   )}
                   {record.violation_details?.flapping_count !== undefined && (
-                    <div>
-                      Попыток (flapping):{" "}
-                      {record.violation_details.flapping_count}
-                    </div>
+                    <div>Попыток (flapping): {record.violation_details.flapping_count}</div>
                   )}
                   {record.violation_details?.conflicting_hosts &&
                     record.violation_details.conflicting_hosts.length > 0 && (
-                      <div>
-                        Конфликт хостов:{" "}
-                        {record.violation_details.conflicting_hosts.join(", ")}
-                      </div>
+                      <div>Конфликт хостов: {record.violation_details.conflicting_hosts.join(", ")}</div>
                     )}
                 </div>
               }
             >
-              <Space direction="vertical" size={2}>
+              <div style={{ lineHeight: 1.15 }}>
                 <Tag
                   color="error"
-                  icon={<StopOutlined />}
-                  style={{ margin: 0, fontWeight: 500 }}
+                  icon={<StopOutlined style={{ fontSize: 10 }} />}
+                  style={{ margin: 0, fontWeight: 700, fontSize: 10, padding: "0 4px" }}
                 >
-                  {label}
+                  {mnemonic}
                 </Tag>
-                <span style={{ fontSize: 11, color: "#ff4d4f" }}>{subLabel}</span>
-              </Space>
+                <div style={{ fontSize: 10, color: "#ff4d4f", marginTop: 2 }}>{subText}</div>
+              </div>
             </Tooltip>
           );
         }
@@ -292,65 +316,172 @@ export default function DevicesManagementPage() {
         const ageText =
           record.ageSeconds !== undefined
             ? record.ageSeconds < 60
-              ? `${record.ageSeconds}с назад`
-              : `${Math.floor(record.ageSeconds / 60)}м назад`
+              ? `${record.ageSeconds}с`
+              : record.ageSeconds < 3600
+                ? `${Math.floor(record.ageSeconds / 60)}м`
+                : record.ageSeconds < 86400
+                  ? `${Math.floor(record.ageSeconds / 3600)}ч`
+                  : `${Math.floor(record.ageSeconds / 86400)}д`
             : "—";
 
+        const fullAgeText =
+          record.ageSeconds !== undefined
+            ? record.ageSeconds < 60
+              ? `${record.ageSeconds} сек. назад`
+              : record.ageSeconds < 3600
+                ? `${Math.floor(record.ageSeconds / 60)} мин. назад`
+                : `${Math.floor(record.ageSeconds / 3600)} ч. назад`
+            : "нет данных";
+
         return (
-          <Space direction="vertical" size={2}>
-            <Tag color={isOnline ? "success" : "default"} style={{ margin: 0 }}>
-              {isOnline ? "Онлайн" : "Оффлайн"}
-            </Tag>
-            <span style={{ fontSize: 11, color: "#8c8c8c" }}>{ageText}</span>
-          </Space>
+          <Tooltip
+            mouseEnterDelay={0.35}
+            title={
+              isOnline
+                ? `🟢 На связи (Online), последний пинг: ${fullAgeText}`
+                : `⚪ Не на связи (Offline), последний контакт: ${fullAgeText}`
+            }
+          >
+            <div style={{ lineHeight: 1.15 }}>
+              <Tag
+                color={isOnline ? "success" : "default"}
+                style={{
+                  margin: 0,
+                  fontWeight: 700,
+                  fontSize: 10,
+                  padding: "0 5px",
+                  letterSpacing: 0.5,
+                }}
+              >
+                {isOnline ? "ON" : "OFF"}
+              </Tag>
+              <div
+                style={{
+                  fontSize: 10,
+                  color: isOnline ? "#52c41a" : "#8c8c8c",
+                  marginTop: 2,
+                  fontFamily: "monospace",
+                }}
+              >
+                {ageText}
+              </div>
+            </div>
+          </Tooltip>
         );
       },
     },
     {
-      title: "Приложение / Платформа",
+      title: isMobile ? "App" : "Приложение / Платформа",
       dataIndex: "app",
       key: "app",
-      width: 180,
-      render: (app) => (app ? <Tag color="blue">{app}</Tag> : <Text type="secondary">—</Text>),
+      width: isMobile ? 85 : 150,
+      render: (app) =>
+        app ? (
+          <Tag color="blue" style={{ fontSize: 11, margin: 0, maxWidth: "100%", textOverflow: "ellipsis", overflow: "hidden" }}>
+            {app}
+          </Tag>
+        ) : (
+          <Text type="secondary" style={{ fontSize: 11 }}>—</Text>
+        ),
     },
     {
-      title: "Описание / Теги",
+      title: isMobile ? "Теги" : "Описание / Теги",
       key: "tags_info",
-      render: (_, record) => (
-        <Space direction="vertical" size={2}>
-          {record.description && (
-            <Text style={{ fontSize: 12 }}>{record.description}</Text>
-          )}
-          {record.tags && record.tags.length > 0 && (
-            <Space size={4} wrap>
-              {record.tags.slice(0, 3).map((t) => (
-                <Tag key={t.tag} color="default" style={{ fontSize: 11 }}>
-                  {t.tag}: {t.value}
-                </Tag>
-              ))}
-              {record.tags.length > 3 && (
-                <Tag style={{ fontSize: 11 }}>+{record.tags.length - 3}</Tag>
-              )}
-            </Space>
-          )}
-        </Space>
-      ),
+      render: (_, record) => {
+        const visibleTags = isMobile ? record.tags.slice(0, 1) : record.tags.slice(0, 3);
+        const hiddenCount = record.tags.length - visibleTags.length;
+
+        const allTagsTooltip = (
+          <div style={{ fontSize: 11 }}>
+            {record.description && <div style={{ marginBottom: 4 }}><strong>Описание:</strong> {record.description}</div>}
+            <div><strong>Все теги ({record.tags.length}):</strong></div>
+            {record.tags.map((t) => (
+              <div key={t.tag} style={{ fontFamily: "monospace", marginTop: 2 }}>
+                {t.tag}: {t.value}
+              </div>
+            ))}
+          </div>
+        );
+
+        return (
+          <div style={{ lineHeight: 1.25 }}>
+            {record.description && !isMobile && (
+              <div style={{ fontSize: 11, color: "#595959", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 260 }}>
+                {record.description}
+              </div>
+            )}
+            {record.tags && record.tags.length > 0 ? (
+              <Space size={3} wrap style={{ alignItems: "center" }}>
+                {visibleTags.map((t) => (
+                  <Tag
+                    key={t.tag}
+                    color="default"
+                    style={{
+                      fontSize: 10,
+                      padding: "0 4px",
+                      margin: 0,
+                      borderRadius: 3,
+                    }}
+                  >
+                    {t.tag}:{t.value}
+                  </Tag>
+                ))}
+                {hiddenCount > 0 && (
+                  <Tooltip title={allTagsTooltip} mouseEnterDelay={0.35}>
+                    <Tag
+                      style={{
+                        fontSize: 10,
+                        padding: "0 4px",
+                        margin: 0,
+                        cursor: "pointer",
+                        borderRadius: 3,
+                        background: "#f0f0f0",
+                      }}
+                    >
+                      +{hiddenCount}
+                    </Tag>
+                  </Tooltip>
+                )}
+              </Space>
+            ) : (
+              !record.description && <Text type="secondary" style={{ fontSize: 11 }}>—</Text>
+            )}
+          </div>
+        );
+      },
     },
     {
-      title: "Действия",
+      title: "",
       key: "actions",
-      width: 140,
+      width: isMobile ? 48 : 110,
       align: "center",
-      render: (_, record) => (
-        <Button
-          size="small"
-          type="primary"
-          icon={<ControlOutlined />}
-          onClick={() => handleOpenDevice(record, "info")}
-        >
-          Управление
-        </Button>
-      ),
+      render: (_, record) =>
+        isMobile ? (
+          <Tooltip title="Управление устройством" mouseEnterDelay={0.35}>
+            <Button
+              size="small"
+              type="primary"
+              icon={<ControlOutlined style={{ fontSize: 12 }} />}
+              style={{ width: 28, height: 28, padding: 0 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleOpenDevice(record, "info");
+              }}
+            />
+          </Tooltip>
+        ) : (
+          <Button
+            size="small"
+            type="primary"
+            icon={<ControlOutlined />}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenDevice(record, "info");
+            }}
+          >
+            Управление
+          </Button>
+        ),
     },
   ];
 
@@ -362,33 +493,121 @@ export default function DevicesManagementPage() {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: 16,
+          marginBottom: 14,
           flexWrap: "wrap",
-          gap: 12,
+          gap: 10,
         }}
       >
         <div>
-          <Title level={4} style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+          <Title level={4} style={{ margin: 0, display: "flex", alignItems: "center", gap: 8, fontSize: isMobile ? 16 : 20 }}>
             <ClusterOutlined style={{ color: "#1677ff" }} /> Управление устройствами (Leo4 IoT)
           </Title>
-          <Text type="secondary">
-            Центр управления IoT-устройствами, запуск асинхронных RPC-задач, журнал событий и консоль диагностики
+          <Text type="secondary" style={{ fontSize: isMobile ? 11 : 13 }}>
+            Центр мониторинга IoT-терминалов, запуск RPC-задач, журнал событий и консоль диагностики
           </Text>
         </div>
-        <Button icon={<ReloadOutlined />} onClick={fetchDevicesList} loading={loading}>
-          Обновить список
+        <Button
+          icon={<ReloadOutlined />}
+          onClick={fetchDevicesList}
+          loading={loading}
+          size={isMobile ? "small" : "middle"}
+        >
+          Обновить
         </Button>
       </div>
+
+      {/* UX Dashboard KPI Statistic Cards */}
+      <Row gutter={[8, 8]} style={{ marginBottom: 14 }}>
+        <Col xs={12} sm={6}>
+          <div
+            onClick={() => setStatusFilter("all")}
+            style={{
+              cursor: "pointer",
+              padding: "8px 12px",
+              background: statusFilter === "all" ? "#e6f4ff" : "#fafafa",
+              border: `1px solid ${statusFilter === "all" ? "#1677ff" : "#e8e8e8"}`,
+              borderRadius: 6,
+              transition: "all 0.2s",
+            }}
+          >
+            <div style={{ fontSize: 11, color: "#8c8c8c", fontWeight: 500 }}>Всего устройств</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: "#1f1f1f" }}>
+              {kpiStats.total}
+            </div>
+          </div>
+        </Col>
+        <Col xs={12} sm={6}>
+          <div
+            onClick={() => setStatusFilter("online")}
+            style={{
+              cursor: "pointer",
+              padding: "8px 12px",
+              background: statusFilter === "online" ? "#f6ffed" : "#fafafa",
+              border: `1px solid ${statusFilter === "online" ? "#52c41a" : "#e8e8e8"}`,
+              borderRadius: 6,
+              transition: "all 0.2s",
+            }}
+          >
+            <div style={{ fontSize: 11, color: "#52c41a", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
+              <CheckCircleOutlined /> Онлайн (ON)
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: "#52c41a" }}>
+              {kpiStats.online}
+            </div>
+          </div>
+        </Col>
+        <Col xs={12} sm={6}>
+          <div
+            onClick={() => setStatusFilter("offline")}
+            style={{
+              cursor: "pointer",
+              padding: "8px 12px",
+              background: statusFilter === "offline" ? "#f5f5f5" : "#fafafa",
+              border: `1px solid ${statusFilter === "offline" ? "#8c8c8c" : "#e8e8e8"}`,
+              borderRadius: 6,
+              transition: "all 0.2s",
+            }}
+          >
+            <div style={{ fontSize: 11, color: "#8c8c8c", fontWeight: 500, display: "flex", alignItems: "center", gap: 4 }}>
+              <ClockCircleOutlined /> Оффлайн (OFF)
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: "#595959" }}>
+              {kpiStats.offline}
+            </div>
+          </div>
+        </Col>
+        <Col xs={12} sm={6}>
+          <div
+            onClick={() => setStatusFilter("blocked")}
+            style={{
+              cursor: "pointer",
+              padding: "8px 12px",
+              background: statusFilter === "blocked" ? "#fff1f0" : "#fafafa",
+              border: `1px solid ${statusFilter === "blocked" ? "#ff4d4f" : "#e8e8e8"}`,
+              borderRadius: 6,
+              transition: "all 0.2s",
+            }}
+          >
+            <div style={{ fontSize: 11, color: "#ff4d4f", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
+              <StopOutlined /> Блокировки (ERR)
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: "#ff4d4f" }}>
+              {kpiStats.blocked}
+            </div>
+          </div>
+        </Col>
+      </Row>
 
       {/* Filter Toolbar */}
       <div
         style={{
           display: "flex",
           flexWrap: "wrap",
-          gap: 10,
-          marginBottom: 16,
-          padding: "12px",
+          gap: 8,
+          marginBottom: 14,
+          padding: isMobile ? "10px" : "12px",
           background: "#fafafa",
+          border: "1px solid #f0f0f0",
           borderRadius: 6,
           alignItems: "center",
         }}
@@ -397,7 +616,7 @@ export default function DevicesManagementPage() {
           placeholder="Организация"
           value={selectedOrgId}
           onChange={(val) => setSelectedOrgId(val)}
-          style={{ width: 240 }}
+          style={{ flex: isMobile ? "1 1 100%" : "0 0 230px" }}
           showSearch
           optionFilterProp="label"
           options={orgs.map((o) => ({
@@ -409,38 +628,40 @@ export default function DevicesManagementPage() {
         <Select
           value={statusFilter}
           onChange={(val) => setStatusFilter(val)}
-          style={{ width: 230 }}
+          style={{ flex: isMobile ? "1 1 100%" : "0 0 200px" }}
           options={[
             { value: "all", label: "Все статусы" },
-            { value: "online", label: "Только онлайн" },
-            { value: "offline", label: "Только оффлайн" },
-            { value: "blocked", label: "Заблокированные (Коллизии / Клоны)" },
+            { value: "online", label: "Только онлайн [ON]" },
+            { value: "offline", label: "Только оффлайн [OFF]" },
+            { value: "blocked", label: "Заблокированные [ERR]" },
           ]}
         />
 
         <Input
-          placeholder="Поиск по ID, SN, имени, приложению или коллизии..."
+          placeholder="Поиск ID, SN, имени, app, тегам..."
           prefix={<SearchOutlined style={{ color: "#bfbfbf" }} />}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          style={{ width: 300 }}
+          style={{ flex: isMobile ? "1 1 100%" : "1 1 240px" }}
           allowClear
         />
 
-        <div style={{ marginLeft: "auto" }}>
-          <Text type="secondary" style={{ fontSize: 13 }}>
-            Найдено устройств: <strong>{filteredDevices.length}</strong>
+        <div style={{ marginLeft: isMobile ? 0 : "auto", width: isMobile ? "100%" : "auto" }}>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            Найдено: <strong>{filteredDevices.length}</strong>
           </Text>
         </div>
       </div>
 
       {/* Devices Table */}
       <Table
+        className="compact-table"
         rowKey="device_id"
         columns={columns}
         dataSource={filteredDevices}
         loading={loading}
         size="small"
+        scroll={{ x: 680 }}
         onRow={(record) => ({
           onClick: () => handleOpenDevice(record, "info"),
           style: { cursor: "pointer" },
@@ -450,6 +671,8 @@ export default function DevicesManagementPage() {
           defaultPageSize: 20,
           showSizeChanger: true,
           pageSizeOptions: ["10", "20", "50", "100"],
+          simple: isMobile,
+          size: "small",
         }}
       />
 
@@ -457,28 +680,25 @@ export default function DevicesManagementPage() {
       <Drawer
         title={
           selectedDevice ? (
-            <Space size={12} wrap>
+            <Space size={8} wrap style={{ alignItems: "center" }}>
               <ClusterOutlined style={{ color: "#1677ff" }} />
-              <span>
-                Устройство #{selectedDevice.device_id} (SN: {selectedDevice.sn})
+              <span style={{ fontSize: isMobile ? 14 : 16, fontWeight: 600 }}>
+                #{selectedDevice.device_id} (SN: {selectedDevice.sn})
               </span>
               {selectedDevice.status === "blocked" || selectedDevice.is_blocked ? (
-                <Tag color="error" icon={<StopOutlined />}>
-                  Заблокировано (
+                <Tag color="error" icon={<StopOutlined />} style={{ fontSize: 11, margin: 0 }}>
                   {selectedDevice.violation_type === "SN_COLLISION"
-                    ? "Коллизия сертификатов"
+                    ? "ERR:SN (Коллизия)"
                     : selectedDevice.violation_type === "DEVICE_CLONE"
-                      ? "Клон устройства"
-                      : "Инцидент безопасности"}
-                  )
+                      ? "CLONE (Клон)"
+                      : "BLOCK (Блокировка)"}
                 </Tag>
               ) : (
                 <Tag
-                  color={
-                    selectedDevice.status === "online" ? "success" : "default"
-                  }
+                  color={selectedDevice.status === "online" ? "success" : "default"}
+                  style={{ fontSize: 11, margin: 0, fontWeight: 600 }}
                 >
-                  {selectedDevice.status === "online" ? "Онлайн" : "Оффлайн"}
+                  {selectedDevice.status === "online" ? "ON (Онлайн)" : "OFF (Оффлайн)"}
                 </Tag>
               )}
             </Space>
@@ -488,13 +708,19 @@ export default function DevicesManagementPage() {
         }
         open={Boolean(selectedDevice)}
         onClose={handleCloseDrawer}
-        width={880}
+        width={isMobile ? "100%" : 880}
+        styles={{
+          body: {
+            padding: isMobile ? "10px 8px" : "16px 20px",
+          },
+        }}
         destroyOnClose
       >
         {selectedDevice && selectedOrgId !== undefined && (
           <Tabs
             activeKey={activeTabKey}
             onChange={setActiveTabKey}
+            size={isMobile ? "small" : "middle"}
             items={[
               {
                 key: "info",

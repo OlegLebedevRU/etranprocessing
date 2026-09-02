@@ -135,11 +135,13 @@ export default function DeviceTagsTab({
       </div>
 
       <Table
+        className="compact-table"
         rowKey="tag"
         columns={columns}
         dataSource={tags}
         pagination={false}
         size="small"
+        scroll={{ x: 380 }}
       />
 
       <Modal

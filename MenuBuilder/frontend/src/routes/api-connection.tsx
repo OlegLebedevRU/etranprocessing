@@ -709,11 +709,13 @@ fetchDevices().catch(console.error);`;
                     type="inner"
                     hoverable
                     style={{ height: "100%", display: "flex", flexDirection: "column" }}
-                    bodyStyle={{
-                      flex: 1,
-                      display: "flex",
-                      flexDirection: "column",
-                      justifyContent: "space-between",
+                    styles={{
+                      body: {
+                        flex: 1,
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "space-between",
+                      },
                     }}
                   >
                     <div>
@@ -771,6 +773,7 @@ fetchDevices().catch(console.error);`;
         confirmLoading={actionLoading}
         okText="Создать ключ"
         cancelText="Отмена"
+        style={{ maxWidth: "calc(100vw - 16px)" }}
       >
         <Form
           form={form}

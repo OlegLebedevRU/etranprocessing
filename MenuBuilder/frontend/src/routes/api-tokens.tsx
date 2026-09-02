@@ -197,11 +197,13 @@ export default function ProfilePage() {
         }
       >
         <Table
+          className="compact-table"
           dataSource={tokens}
           columns={columns}
           rowKey="jti"
           loading={loading}
           size="small"
+          scroll={{ x: 600 }}
           pagination={false}
         />
       </Card>
@@ -216,6 +218,7 @@ export default function ProfilePage() {
         }}
         okText="Создать"
         cancelText="Отмена"
+        style={{ maxWidth: "calc(100vw - 16px)" }}
       >
         <Space direction="vertical" style={{ width: "100%" }}>
           <div>

@@ -16,6 +16,7 @@ import {
   Tooltip,
   message,
   Typography,
+  Grid,
 } from "antd";
 import {
   WarningOutlined,
@@ -48,6 +49,7 @@ import {
 } from "../utils/billing";
 
 const { Text } = Typography;
+const { useBreakpoint } = Grid;
 
 const STATUS_TABS = [
   { key: "all", label: "Все" },
@@ -213,6 +215,9 @@ function monthsLabel(months: number): string {
 }
 
 export default function BillingPage() {
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
+
   const [summary, setSummary] = useState<BillingSummary | null>(null);
   const [terminals, setTerminals] = useState<BillingTerminal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -479,7 +484,8 @@ export default function BillingPage() {
       title: "Терминал",
       dataIndex: "device_id",
       key: "device_id",
-      width: 105,
+      width: isMobile ? 85 : 105,
+      fixed: isMobile ? "left" : undefined,
       sorter: (a, b) => a.device_id - b.device_id,
       render: (val: number) => (
         <span style={{ whiteSpace: "nowrap" }}>
@@ -943,7 +949,7 @@ export default function BillingPage() {
         size="small"
         title="Терминалы"
         extra={
-          <Space wrap>
+          <Space wrap style={{ width: isMobile ? "100%" : "auto" }}>
             <Text type="secondary" style={{ fontSize: 12 }}>
               Оплатить вперёд
             </Text>
@@ -964,7 +970,7 @@ export default function BillingPage() {
               prefix={<SearchOutlined />}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              style={{ width: 180 }}
+              style={{ width: isMobile ? "100%" : 180 }}
               size="small"
             />
             <Button
@@ -986,6 +992,7 @@ export default function BillingPage() {
           }))}
         />
         <Table
+          className="compact-table"
           dataSource={filteredTerminals}
           columns={columns}
           rowKey="terminal_id"
@@ -996,10 +1003,12 @@ export default function BillingPage() {
             pageSize: 50,
             showSizeChanger: true,
             pageSizeOptions: ["10", "20", "50", "100"],
+            size: "small",
+            simple: isMobile,
             showTotal: (total, range) =>
               `${range[0]}-${range[1]} из ${total} терм.`,
           }}
-          scroll={{ x: 1550 }}
+          scroll={{ x: 1250 }}
         />
       </Card>
 

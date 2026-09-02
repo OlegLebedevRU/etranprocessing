@@ -137,11 +137,13 @@ export default function DeviceEventsTab({ deviceId, orgId }: DeviceEventsTabProp
       </div>
 
       <Table
+        className="compact-table"
         rowKey={(r, idx) => r.id ? String(r.id) : `${r.created_at}_${idx}`}
         columns={columns}
         dataSource={events}
         loading={loading}
         size="small"
+        scroll={{ x: 600 }}
         expandable={{
           expandedRowRender: (record) => (
             <div style={{ margin: 0 }}>

@@ -16,6 +16,7 @@ import {
   Tag,
   Typography,
   message,
+  Grid,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -41,8 +42,12 @@ import {
 } from "../utils/timezone";
 
 const { Title, Text } = Typography;
+const { useBreakpoint } = Grid;
 
 export default function AdminOrganizationsPage() {
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
+
   const [loading, setLoading] = useState(false);
   const [orgs, setOrgs] = useState<AdminOrg[]>([]);
   const [searchText, setSearchText] = useState("");
@@ -410,13 +415,13 @@ export default function AdminOrganizationsPage() {
             Управление организациями, ценообразованием терминалов и сертификатной политикой
           </Text>
         </div>
-        <Space>
+        <Space wrap style={{ width: isMobile ? "100%" : "auto" }}>
           <Input
-            placeholder="Поиск по ID, названию, email, телефону..."
+            placeholder="Поиск ID, названию, email, тел..."
             prefix={<SearchOutlined />}
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            style={{ width: 260 }}
+            style={{ width: isMobile ? "100%" : 260 }}
             allowClear
           />
           <Button icon={<ReloadOutlined />} onClick={loadData}>
@@ -429,6 +434,7 @@ export default function AdminOrganizationsPage() {
       </div>
 
       <Table
+        className="compact-table"
         rowKey="org_id"
         loading={loading}
         columns={columns}
@@ -438,8 +444,11 @@ export default function AdminOrganizationsPage() {
           pageSize: 50,
           showSizeChanger: true,
           pageSizeOptions: ["10", "20", "50", "100"],
+          simple: isMobile,
+          size: "small",
         }}
-        size="middle"
+        size="small"
+        scroll={{ x: 1100 }}
       />
 
       {/* Modal: Create Organization */}
@@ -452,6 +461,7 @@ export default function AdminOrganizationsPage() {
         okText="Создать организацию"
         cancelText="Отмена"
         width={620}
+        style={{ maxWidth: "calc(100vw - 16px)" }}
         destroyOnClose
       >
         <Form
@@ -692,6 +702,7 @@ export default function AdminOrganizationsPage() {
         okText="Сохранить изменения"
         cancelText="Отмена"
         width={620}
+        style={{ maxWidth: "calc(100vw - 16px)" }}
         destroyOnClose
       >
         <Form

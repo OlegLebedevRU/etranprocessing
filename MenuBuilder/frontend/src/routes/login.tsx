@@ -49,12 +49,13 @@ export default function LoginPage() {
         justifyContent: "center",
         gap: 16,
         background: "#f6f7f9",
-        padding: 24,
+        padding: 16,
       }}
     >
       <Card
         style={{
-          width: 380,
+          width: "100%",
+          maxWidth: 380,
           boxShadow: "0 8px 28px rgba(15, 23, 42, 0.06)",
         }}
       >
@@ -106,7 +107,8 @@ export default function LoginPage() {
 
       <div
         style={{
-          width: 380,
+          width: "100%",
+          maxWidth: 380,
           textAlign: "center",
           fontSize: 11,
           lineHeight: 1.6,

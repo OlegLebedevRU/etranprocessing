@@ -551,6 +551,7 @@ export default function IntegrationsPage() {
         onCancel={() => setApiModalOpen(false)}
         footer={null}
         width={960}
+        style={{ maxWidth: "calc(100vw - 16px)" }}
         destroyOnClose
       >
         <ApiConnectionPage />

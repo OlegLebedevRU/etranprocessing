@@ -319,6 +319,7 @@ export default function CreateTaskModal({
         )
       }
       width={720}
+      style={{ maxWidth: "calc(100vw - 16px)", top: 16 }}
       destroyOnClose
     >
       {phase === "form" ? (
@@ -550,7 +551,7 @@ export default function CreateTaskModal({
           <Divider style={{ margin: "14px 0" }} />
 
           {/* Заголовок задачи (Header) */}
-          <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
             <Form.Item
               name="ext_task_id"
               label="Внешний ID задачи (ext_task_id)"
@@ -635,7 +636,7 @@ export default function CreateTaskModal({
           />
 
           <Card size="small" title="Текущее состояние RPC-вызова">
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
               <div>
                 <Text type="secondary">Метод: </Text>
                 <Text strong>{selectedMethod.label}</Text>

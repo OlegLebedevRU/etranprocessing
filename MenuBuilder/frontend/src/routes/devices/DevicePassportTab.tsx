@@ -704,6 +704,7 @@ export default function DevicePassportTab({
               dataSource={recentAuditEvents}
               size="small"
               pagination={false}
+              scroll={{ x: 600 }}
             />
           ) : (
             <Text type="secondary">

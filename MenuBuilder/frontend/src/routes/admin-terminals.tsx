@@ -20,6 +20,7 @@ import {
   Tooltip,
   Typography,
   message,
+  Grid,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -62,9 +63,13 @@ import {
 } from "../utils/timezone";
 
 const { Title, Text, Paragraph } = Typography;
+const { useBreakpoint } = Grid;
 
 export default function AdminTerminalsPage() {
   const navigate = useNavigate();
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
+
   const [loading, setLoading] = useState(false);
   const [terminals, setTerminals] = useState<AdminTerminal[]>([]);
   const [total, setTotal] = useState(0);
@@ -416,10 +421,11 @@ export default function AdminTerminalsPage() {
 
   const columns: ColumnsType<AdminTerminal> = [
     {
-      title: "№ / Device ID",
+      title: isMobile ? "ID" : "№ / Device ID",
       dataIndex: "device_id",
       key: "device_id",
-      width: 105,
+      width: isMobile ? 80 : 105,
+      fixed: isMobile ? "left" : undefined,
       sorter: (a, b) => a.device_id - b.device_id,
       render: (val) => (
         <span style={{ whiteSpace: "nowrap" }}>
@@ -428,17 +434,27 @@ export default function AdminTerminalsPage() {
       ),
     },
     {
-      title: "Серийный номер (SN)",
+      title: isMobile ? "SN" : "Серийный номер (SN)",
       dataIndex: "sn",
       key: "sn",
-      width: 190,
-      render: (sn) => (
-        <span style={{ whiteSpace: "nowrap" }}>
-          <Text code copyable={{ text: sn }} style={{ fontSize: 11 }}>
-            {sn}
-          </Text>
-        </span>
-      ),
+      width: isMobile ? 120 : 190,
+      render: (sn) => {
+        const display = isMobile && sn.length > 8 ? `${sn.slice(0, 4)}…${sn.slice(-3)}` : sn;
+        return (
+          <Space size={3}>
+            <Tooltip title={`Серийный номер: ${sn}`} mouseEnterDelay={0.35}>
+              <Text code style={{ fontSize: 11 }}>{display}</Text>
+            </Tooltip>
+            <Button
+              type="text"
+              size="small"
+              icon={<CopyOutlined style={{ fontSize: 10 }} />}
+              style={{ width: 20, height: 20, padding: 0 }}
+              onClick={() => copyToClipboard(sn)}
+            />
+          </Space>
+        );
+      },
     },
     {
       title: "Организация",
@@ -679,8 +695,8 @@ export default function AdminTerminalsPage() {
     {
       title: "Действия",
       key: "actions",
-      width: 110,
-      fixed: "right",
+      width: isMobile ? 85 : 110,
+      fixed: isMobile ? undefined : "right",
       align: "center",
       render: (_, record) => {
         const menuItems = [
@@ -775,8 +791,9 @@ export default function AdminTerminalsPage() {
           flexWrap: "wrap",
           gap: 10,
           marginBottom: 16,
-          padding: "12px",
+          padding: isMobile ? "10px" : "12px",
           background: "#fafafa",
+          border: "1px solid #f0f0f0",
           borderRadius: 6,
           alignItems: "center",
         }}
@@ -790,7 +807,7 @@ export default function AdminTerminalsPage() {
               setPage(1);
             }
           }}
-          style={{ width: 240 }}
+          style={{ flex: isMobile ? "1 1 100%" : "0 0 240px" }}
           showSearch
           optionFilterProp="label"
           options={orgs.map((o) => ({
@@ -807,7 +824,7 @@ export default function AdminTerminalsPage() {
             setSelectedStatus(val);
             setPage(1);
           }}
-          style={{ width: 150 }}
+          style={{ flex: isMobile ? "1 1 100%" : "0 0 150px" }}
           options={[
             { value: undefined, label: "Все состояния" },
             { value: true, label: "Только активные" },
@@ -816,12 +833,12 @@ export default function AdminTerminalsPage() {
         />
 
         <Input
-          placeholder="Поиск (номер, список ID через запятую, SN, адрес, орг)..."
+          placeholder="Поиск (номер, SN, адрес, орг)..."
           prefix={<SearchOutlined />}
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           onPressEnter={handleSearch}
-          style={{ width: 340 }}
+          style={{ flex: isMobile ? "1 1 100%" : "1 1 260px" }}
           allowClear
         />
 
@@ -842,12 +859,13 @@ export default function AdminTerminalsPage() {
             loading={batchProvisionLoading}
             onClick={handleBatchProvision}
           >
-            Провиженинг в Leo4 IoT ({selectedRowKeys.length})
+            Провиженинг ({selectedRowKeys.length})
           </Button>
         )}
       </div>
 
       <Table
+        className="compact-table"
         rowKey="id"
         rowSelection={{
           selectedRowKeys,
@@ -864,14 +882,16 @@ export default function AdminTerminalsPage() {
           defaultPageSize: 50,
           showSizeChanger: true,
           pageSizeOptions: ["10", "20", "50", "100"],
+          simple: isMobile,
+          size: "small",
           onChange: (p, ps) => {
             setPage(p);
             setPageSize(ps);
           },
-          showTotal: (t) => `Всего терминалов: ${t}`,
+          showTotal: (t) => `Всего: ${t}`,
         }}
-        size="middle"
-        scroll={{ x: 1600 }}
+        size="small"
+        scroll={{ x: 1250 }}
       />
 
       {/* Modal: Create Terminal */}
@@ -884,6 +904,7 @@ export default function AdminTerminalsPage() {
         okText="Создать терминал"
         cancelText="Отмена"
         width={560}
+        style={{ maxWidth: "calc(100vw - 16px)" }}
         destroyOnClose
       >
         <Form
@@ -1042,6 +1063,7 @@ export default function AdminTerminalsPage() {
         okText="Сохранить изменения"
         cancelText="Отмена"
         width={560}
+        style={{ maxWidth: "calc(100vw - 16px)" }}
         destroyOnClose
       >
         <Form
@@ -1206,6 +1228,7 @@ export default function AdminTerminalsPage() {
         okText="Применить дату"
         cancelText="Отмена"
         width={440}
+        style={{ maxWidth: "calc(100vw - 16px)" }}
         destroyOnClose
       >
         <Form
@@ -1260,6 +1283,7 @@ export default function AdminTerminalsPage() {
           </Button>,
         ]}
         width={440}
+        style={{ maxWidth: "calc(100vw - 16px)" }}
       >
         <div style={{ textAlign: "center", padding: "16px 0" }}>
           <Text type="secondary">
@@ -1307,6 +1331,7 @@ export default function AdminTerminalsPage() {
         okText="Подтвердить провиженинг"
         cancelText="Отмена"
         width={500}
+        style={{ maxWidth: "calc(100vw - 16px)" }}
         destroyOnClose
       >
         {provisioningTerminal && (

@@ -10,6 +10,8 @@ import {
   Table,
   Tag,
   Typography,
+  Tooltip,
+  Grid,
 } from "antd";
 import {
   LinkOutlined,
@@ -17,6 +19,7 @@ import {
   EditOutlined,
   ReloadOutlined,
   SearchOutlined,
+  CopyOutlined,
 } from "@ant-design/icons";
 import {
   getTerminals,
@@ -29,6 +32,7 @@ import { getStats } from "../api/stats";
 import PageHeader from "../components/PageHeader";
 
 const { Text } = Typography;
+const { useBreakpoint } = Grid;
 
 interface VariantStats {
   groups: number;
@@ -36,6 +40,9 @@ interface VariantStats {
 }
 
 export default function TerminalsPage() {
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
+
   const [terminals, setTerminals] = useState<TerminalInfo[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -136,11 +143,18 @@ export default function TerminalsPage() {
     }
   };
 
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      message.success("Скопировано");
+    });
+  };
+
   const columns = [
     {
       title: "ID",
       dataIndex: "device_id",
       key: "device_id",
+      width: 60,
       render: (v: number) => <Text strong style={{ fontSize: 12 }}>{v}</Text>,
     },
     {
@@ -173,7 +187,7 @@ export default function TerminalsPage() {
 
         return (
           <Space size={4} direction="vertical" style={{ gap: 2 }}>
-            <Space size={4} style={{ flexWrap: "nowrap" }}>
+            <Space size={4} style={{ flexWrap: "wrap" }}>
               <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>{record.menu_variant_name}</Tag>
               {versionTag}
             </Space>
@@ -187,8 +201,46 @@ export default function TerminalsPage() {
       },
     },
     {
+      title: "SN",
+      dataIndex: "sn",
+      key: "sn",
+      width: isMobile ? 110 : 160,
+      render: (v: string) => {
+        if (!v) return <Text type="secondary">—</Text>;
+        const display = isMobile && v.length > 8 ? `${v.slice(0, 4)}…${v.slice(-3)}` : v;
+        return (
+          <Space size={3}>
+            <Tooltip title={`Серийный номер: ${v}`} mouseEnterDelay={0.35}>
+              <Text code style={{ fontSize: 11 }}>{display}</Text>
+            </Tooltip>
+            <Button
+              type="text"
+              size="small"
+              icon={<CopyOutlined style={{ fontSize: 10 }} />}
+              style={{ width: 20, height: 20, padding: 0 }}
+              onClick={() => copyToClipboard(v)}
+            />
+          </Space>
+        );
+      },
+    },
+    {
+      title: "",
+      dataIndex: "is_active",
+      key: "active",
+      width: 36,
+      align: "center" as const,
+      render: (v: boolean) => (
+        <Tooltip title={v ? "Активен" : "Неактивен"} mouseEnterDelay={0.35}>
+          <span style={{ color: v ? "#52c41a" : "#ff4d4f", fontSize: 14 }}>●</span>
+        </Tooltip>
+      ),
+    },
+    {
       title: "",
       key: "actions",
+      width: 70,
+      align: "center" as const,
       render: (_: any, record: TerminalInfo) => (
         <Space size={0}>
           <Button
@@ -209,20 +261,6 @@ export default function TerminalsPage() {
         </Space>
       ),
     },
-    {
-      title: "SN",
-      dataIndex: "sn",
-      key: "sn",
-      render: (v: string) => <Text code style={{ fontSize: 10 }}>{v}</Text>,
-    },
-    {
-      title: "",
-      dataIndex: "is_active",
-      key: "active",
-      render: (v: boolean) => (
-        <span style={{ color: v ? "#52c41a" : "#ff4d4f", fontSize: 14 }}>●</span>
-      ),
-    },
   ];
 
   return (
@@ -231,7 +269,7 @@ export default function TerminalsPage() {
         title="Терминалы"
         subtitle="Привязка терминалов к вариантам меню"
         extra={
-          <Space wrap>
+          <Space wrap style={{ width: isMobile ? "100%" : "auto" }}>
             <Input
               placeholder="Поиск ID / SN / адрес"
               prefix={<SearchOutlined />}
@@ -239,7 +277,7 @@ export default function TerminalsPage() {
               onChange={(e) => setSearchInput(e.target.value)}
               onPressEnter={handleSearch}
               allowClear
-              style={{ width: 220 }}
+              style={{ width: isMobile ? "100%" : 220 }}
               size="small"
             />
             <Button size="small" type="primary" onClick={handleSearch}>
@@ -258,12 +296,13 @@ export default function TerminalsPage() {
       />
       <Card styles={{ body: { padding: 0 } }}>
         <Table
+          className="compact-table"
           dataSource={terminals}
           columns={columns}
           rowKey="terminal_id"
           loading={loading}
           size="small"
-          tableLayout="auto"
+          scroll={{ x: 500 }}
           pagination={{
             current: page,
             pageSize,
@@ -272,6 +311,7 @@ export default function TerminalsPage() {
             showSizeChanger: true,
             pageSizeOptions: ["10", "20", "50", "100"],
             size: "small",
+            simple: isMobile,
             showTotal: (t, range) => (
               <Text type="secondary" style={{ fontSize: 11 }}>
                 {range[0]}-{range[1]} из {t} терм.
@@ -294,6 +334,7 @@ export default function TerminalsPage() {
         okText="Прикрепить"
         cancelText="Отмена"
         width={340}
+        style={{ maxWidth: "calc(100vw - 16px)" }}
       >
         {modalTerminal && (
           <div style={{ marginBottom: 10, fontSize: 12 }}>

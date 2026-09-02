@@ -15,6 +15,7 @@ import {
   Tag,
   Typography,
   message,
+  Grid,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -46,8 +47,12 @@ import {
 } from "../api/adminUsers";
 
 const { Title, Text } = Typography;
+const { useBreakpoint } = Grid;
 
 export default function AdminUsersPage() {
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
+
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<UserItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -452,20 +457,28 @@ export default function AdminUsersPage() {
             </Space>
           </div>
 
-          <Space wrap size="middle" style={{ width: "100%" }}>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 10,
+              alignItems: "center",
+              width: "100%",
+            }}
+          >
             <Input
               placeholder="Поиск по логину или ФИО"
               prefix={<SearchOutlined />}
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               onPressEnter={handleSearch}
-              style={{ width: 220 }}
+              style={{ flex: isMobile ? "1 1 100%" : "1 1 200px" }}
               allowClear
             />
             <Select
               placeholder="Все организации"
               allowClear
-              style={{ width: 220 }}
+              style={{ flex: isMobile ? "1 1 100%" : "0 0 220px" }}
               value={selectedOrgId}
               onChange={(val) => {
                 setSelectedOrgId(val);
@@ -482,7 +495,7 @@ export default function AdminUsersPage() {
             <Select
               placeholder="Роль"
               allowClear
-              style={{ width: 160 }}
+              style={{ flex: isMobile ? "1 1 100%" : "0 0 150px" }}
               value={selectedRole}
               onChange={(val) => {
                 setSelectedRole(val);
@@ -497,7 +510,7 @@ export default function AdminUsersPage() {
             <Select
               placeholder="Статус"
               allowClear
-              style={{ width: 140 }}
+              style={{ flex: isMobile ? "1 1 100%" : "0 0 130px" }}
               value={selectedActive}
               onChange={(val) => {
                 setSelectedActive(val);
@@ -512,19 +525,24 @@ export default function AdminUsersPage() {
             <Button onClick={handleSearch} icon={<SearchOutlined />}>
               Найти
             </Button>
-          </Space>
+          </div>
 
           <Table
+            className="compact-table"
             columns={columns}
             dataSource={users}
             rowKey="id"
             loading={loading}
+            size="small"
+            scroll={{ x: 750 }}
             pagination={{
               current: page,
               pageSize: pageSize,
               total: total,
               showSizeChanger: true,
               pageSizeOptions: ["20", "50", "100"],
+              simple: isMobile,
+              size: "small",
               onChange: (p, ps) => {
                 setPage(p);
                 setPageSize(ps);
@@ -541,6 +559,7 @@ export default function AdminUsersPage() {
         onCancel={() => setCreateModalOpen(false)}
         onOk={() => createForm.submit()}
         confirmLoading={createSubmitting}
+        style={{ maxWidth: "calc(100vw - 16px)" }}
         destroyOnClose
       >
         <Form form={createForm} layout="vertical" onFinish={handleCreateSubmit}>
@@ -601,6 +620,7 @@ export default function AdminUsersPage() {
         onCancel={() => setEditModalOpen(false)}
         onOk={() => editForm.submit()}
         confirmLoading={editSubmitting}
+        style={{ maxWidth: "calc(100vw - 16px)" }}
         destroyOnClose
       >
         <Form form={editForm} layout="vertical" onFinish={handleEditSubmit}>
@@ -658,7 +678,7 @@ export default function AdminUsersPage() {
             <span>Активные сессии пользователя {selectedUserForSessions?.username}</span>
           </Space>
         }
-        width={680}
+        width={isMobile ? "100%" : 680}
         open={sessionsDrawerOpen}
         onClose={() => setSessionsDrawerOpen(false)}
         extra={
@@ -673,12 +693,14 @@ export default function AdminUsersPage() {
         }
       >
         <Table
+          className="compact-table"
           columns={sessionColumns}
           dataSource={sessions}
           rowKey="id"
           loading={sessionsLoading}
           pagination={false}
           size="small"
+          scroll={{ x: 500 }}
         />
       </Drawer>
     </div>

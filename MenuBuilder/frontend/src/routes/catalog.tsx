@@ -17,6 +17,7 @@ import {
   Tree,
   Typography,
   message,
+  Grid,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { DataNode } from "antd/es/tree";
@@ -48,8 +49,12 @@ import {
 } from "../api/catalog";
 
 const { Title, Text } = Typography;
+const { useBreakpoint } = Grid;
 
 export default function CatalogPage() {
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
+
   const [categories, setCategories] = useState<CatalogCategory[]>([]);
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -632,30 +637,34 @@ export default function CatalogPage() {
                   </span>
                   <Tag style={{ marginLeft: 8 }}>{items.length}</Tag>
                 </Col>
-                <Col>
+                <Col xs={24} sm={12} md={10} style={{ marginTop: isMobile ? 8 : 0 }}>
                   <Input
                     placeholder="Поиск по названию или ТСП..."
                     prefix={<SearchOutlined />}
                     value={searchText}
                     onChange={(e) => setSearchText(e.target.value)}
                     allowClear
-                    style={{ width: 260 }}
+                    style={{ width: "100%" }}
                   />
                 </Col>
               </Row>
             }
           >
             <Table
+              className="compact-table"
               dataSource={items}
               columns={itemColumns}
               rowKey="id"
               loading={itemsLoading}
+              scroll={{ x: 700 }}
               pagination={{
                 defaultPageSize: 15,
                 showSizeChanger: true,
                 pageSizeOptions: ["10", "15", "30", "50"],
+                size: "small",
+                simple: isMobile,
               }}
-              size="middle"
+              size="small"
             />
           </Card>
         </Col>
@@ -676,6 +685,7 @@ export default function CatalogPage() {
         confirmLoading={catSubmitting}
         okText="Сохранить"
         cancelText="Отмена"
+        style={{ maxWidth: "calc(100vw - 16px)" }}
       >
         <Form form={catForm} layout="vertical">
           <Form.Item
@@ -701,6 +711,7 @@ export default function CatalogPage() {
         okText="Сохранить"
         cancelText="Отмена"
         width={560}
+        style={{ maxWidth: "calc(100vw - 16px)" }}
       >
         <Form form={itemForm} layout="vertical">
           <Form.Item

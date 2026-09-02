@@ -228,11 +228,13 @@ export default function DeviceTasksTab({ deviceId, sn, orgId }: DeviceTasksTabPr
       </div>
 
       <Table
+        className="compact-table"
         rowKey="id"
         columns={columns}
         dataSource={tasks}
         loading={loading}
         size="small"
+        scroll={{ x: 680 }}
         pagination={{
           current: page,
           pageSize,
