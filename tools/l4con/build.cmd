@@ -1,123 +1,116 @@
 @echo off
-setlocal enabledelayedexpansion
+setlocal
+set "VSCMD_SKIP_SENDTELEMETRY=1"
 
 echo =======================================================
-echo Building l4con (Leo4 Diagnostic Console Agent)
+echo Building l4con (C / MSVC /MT Static - Unified 32/64)
 echo =======================================================
 
 set TARGET_ARCH=%1
 if "%TARGET_ARCH%"=="" set TARGET_ARCH=all
 
-if not exist bin md bin
-if not exist bin\x86 md bin\x86
-if not exist bin\x64 md bin\x64
-if not exist obj md obj
-
-:: 1. Check MSVC
-set MSVC_FOUND=0
-where cl.exe >nul 2>nul
-if !errorlevel! equ 0 (
-    set MSVC_FOUND=1
-) else (
-    if exist "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" (
-        call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64 >nul 2>nul
-        set MSVC_FOUND=1
-    ) else if exist "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" (
-        call "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64 >nul 2>nul
-        set MSVC_FOUND=1
-    ) else if exist "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" (
-        call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" x64 >nul 2>nul
-        set MSVC_FOUND=1
-    )
+:: Find MSVC VsDevCmd directory
+set "VS_DEV_CMD="
+if exist "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" (
+    set "VS_DEV_CMD=C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat"
+) else if exist "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" (
+    set "VS_DEV_CMD=C:\Program Files\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat"
+) else if exist "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat" (
+    set "VS_DEV_CMD=C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat"
+) else if exist "d:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat" (
+    set "VS_DEV_CMD=d:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat"
+) else if exist "C:\Program Files (x86)\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat" (
+    set "VS_DEV_CMD=C:\Program Files (x86)\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat"
 )
 
-if !MSVC_FOUND! equ 1 (
-    echo [Toolchain] Using Microsoft Visual C++ (MSVC)
-    rc.exe /fo obj\l4con.res res\l4con.rc
-    if !errorlevel! neq 0 (
-        echo [ERROR] rc.exe failed!
-        exit /b 1
-    )
-
-    cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /Isrc /Ires /Fe:bin\l4con.exe src\main.c src\config.c src\mqtt_protocol.c src\command_runner.c src\mqtt_client.c src\service_mgr.c obj\l4con.res /link ws2_32.lib winhttp.lib advapi32.lib user32.lib shlwapi.lib
-    if !errorlevel! neq 0 (
-        echo [ERROR] MSVC compilation failed!
-        exit /b 1
-    )
-
-    copy /y bin\l4con.exe bin\x64\l4con.exe >nul 2>nul
-    copy /y bin\l4con.exe bin\x86\l4con.exe >nul 2>nul
-
-    for %%f in (l4con_*.cmd) do (
-        copy /y "%%f" bin\"%%f" >nul
-        copy /y "%%f" bin\x86\"%%f" >nul
-        copy /y "%%f" bin\x64\"%%f" >nul
-    )
-    if exist README.md (
-        copy /y README.md bin\README.md >nul
-        copy /y README.md bin\x86\README.md >nul
-        copy /y README.md bin\x64\README.md >nul
-    )
-
-    echo.
-    echo =======================================================
-    echo [OK] Build SUCCESS:
-    echo   - bin\l4con.exe
-    echo   - bin\x64\l4con.exe
-    echo   - bin\x86\l4con.exe
-    echo =======================================================
-    exit /b 0
+if not defined VS_DEV_CMD (
+    echo Error: MSVC VsDevCmd.bat not found in standard paths.
+    exit /b 1
 )
 
-:: 2. Check GCC compiler
-set GCC_FOUND=0
-where gcc.exe >nul 2>nul
-if !errorlevel! equ 0 (
-    set GCC_FOUND=1
-) else (
-    if exist "C:\Program Files\JetBrains\CLion 2025.2.4\bin\mingw\bin\gcc.exe" (
-        set "PATH=C:\Program Files\JetBrains\CLion 2025.2.4\bin\mingw\bin;!PATH!"
-        set GCC_FOUND=1
-    )
-)
+if not exist bin mkdir bin
+if not exist bin\x86 mkdir bin\x86
+if not exist bin\x64 mkdir bin\x64
+if not exist obj\x86 mkdir obj\x86
+if not exist obj\x64 mkdir obj\x64
 
-if !GCC_FOUND! equ 1 (
-    echo [Toolchain] Using MinGW GCC
-    windres.exe -I res res\l4con.rc -o obj\l4con.res.o
-    if !errorlevel! neq 0 (
-        echo [ERROR] windres failed!
-        exit /b 1
-    )
+set BUILD_FAILED=0
 
-    gcc.exe -O2 -static -Wall -Wextra -DUNICODE -D_UNICODE -DWIN32_LEAN_AND_MEAN -I src -I res -o bin\l4con.exe src\main.c src\config.c src\mqtt_protocol.c src\command_runner.c src\mqtt_client.c src\service_mgr.c obj\l4con.res.o -lws2_32 -lwinhttp -ladvapi32 -luser32 -lshlwapi
-    if !errorlevel! neq 0 (
-        echo [ERROR] GCC compilation failed!
-        exit /b 1
-    )
+if /i "%TARGET_ARCH%"=="all" goto :build_all
+if /i "%TARGET_ARCH%"=="x86" goto :build_x86
+if /i "%TARGET_ARCH%"=="32" goto :build_x86
+if /i "%TARGET_ARCH%"=="win32" goto :build_x86
+if /i "%TARGET_ARCH%"=="x64" goto :build_x64
+if /i "%TARGET_ARCH%"=="64" goto :build_x64
 
-    copy /y bin\l4con.exe bin\x64\l4con.exe >nul 2>nul
-    copy /y bin\l4con.exe bin\x86\l4con.exe >nul 2>nul
-
-    for %%f in (l4con_*.cmd) do (
-        copy /y "%%f" bin\"%%f" >nul
-        copy /y "%%f" bin\x86\"%%f" >nul
-        copy /y "%%f" bin\x64\"%%f" >nul
-    )
-    if exist README.md (
-        copy /y README.md bin\README.md >nul
-        copy /y README.md bin\x86\README.md >nul
-        copy /y README.md bin\x64\README.md >nul
-    )
-
-    echo.
-    echo =======================================================
-    echo [OK] Build SUCCESS:
-    echo   - bin\l4con.exe
-    echo   - bin\x64\l4con.exe
-    echo   - bin\x86\l4con.exe
-    echo =======================================================
-    exit /b 0
-)
-
-echo [ERROR] No supported compiler found (MSVC or MinGW GCC required).
+echo Unknown architecture "%TARGET_ARCH%". Valid options: all, x86, x64
 exit /b 1
+
+:build_all
+call :do_build_x86
+call :do_build_x64
+goto :summary
+
+:build_x86
+call :do_build_x86
+goto :summary
+
+:build_x64
+call :do_build_x64
+goto :summary
+
+:do_build_x86
+echo.
+echo [Build x86] 32-bit static binary...
+cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\l4con.res res\l4con.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x86\ src\main.c src\config.c src\mqtt_protocol.c src\command_runner.c src\mqtt_client.c src\service_mgr.c obj\x86\l4con.res /link /OUT:bin\x86\l4con.exe ws2_32.lib winhttp.lib advapi32.lib user32.lib shlwapi.lib"
+if errorlevel 1 (
+    echo [ERROR] x86 build failed!
+    set BUILD_FAILED=1
+) else (
+    echo [OK] x86 build SUCCESS: bin\x86\l4con.exe
+    copy /y bin\x86\l4con.exe bin\l4con.exe >nul
+)
+exit /b 0
+
+:do_build_x64
+echo.
+echo [Build x64] 64-bit static binary...
+cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /fo obj\x64\l4con.res res\l4con.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x64\ src\main.c src\config.c src\mqtt_protocol.c src\command_runner.c src\mqtt_client.c src\service_mgr.c obj\x64\l4con.res /link /OUT:bin\x64\l4con.exe ws2_32.lib winhttp.lib advapi32.lib user32.lib shlwapi.lib"
+if errorlevel 1 (
+    echo [ERROR] x64 build failed!
+    set BUILD_FAILED=1
+) else (
+    echo [OK] x64 build SUCCESS: bin\x64\l4con.exe
+)
+exit /b 0
+
+:summary
+echo.
+echo =======================================================
+if %BUILD_FAILED% equ 0 (
+    echo Unified Build COMPLETE:
+    if exist bin\x86\l4con.exe echo   - x86 [32-bit]: bin\x86\l4con.exe
+    if exist bin\x64\l4con.exe echo   - x64 [64-bit]: bin\x64\l4con.exe
+    if exist bin\l4con.exe     echo   - Default:      bin\l4con.exe
+
+    :: Copy companion scripts and documentation into bin directories
+    for %%f in (l4con_*.cmd) do (
+        copy /y "%%f" bin\"%%f" >nul
+        copy /y "%%f" bin\x86\"%%f" >nul
+        copy /y "%%f" bin\x64\"%%f" >nul
+    )
+    if exist README.md (
+        copy /y README.md bin\README.md >nul
+        copy /y README.md bin\x86\README.md >nul
+        copy /y README.md bin\x64\README.md >nul
+    )
+    if exist CHANGELOG.md (
+        copy /y CHANGELOG.md bin\CHANGELOG.md >nul
+        copy /y CHANGELOG.md bin\x86\CHANGELOG.md >nul
+        copy /y CHANGELOG.md bin\x64\CHANGELOG.md >nul
+    )
+) else (
+    echo Unified Build FAILED with errors.
+)
+echo =======================================================
+exit /b %BUILD_FAILED%

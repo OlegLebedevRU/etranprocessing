@@ -1,5 +1,6 @@
 @echo off
 setlocal
+set "VSCMD_SKIP_SENDTELEMETRY=1"
 
 echo =======================================================
 echo Building l4sql (C / MSVC /MT Static - Unified x86/x64)
@@ -8,22 +9,22 @@ echo =======================================================
 set TARGET_ARCH=%1
 if "%TARGET_ARCH%"=="" set TARGET_ARCH=all
 
-:: Find MSVC VC Auxiliary Build directory
-set "VC_DIR="
-if exist "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build" (
-    set "VC_DIR=C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build"
-) else if exist "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build" (
-    set "VC_DIR=C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build"
-) else if exist "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build" (
-    set "VC_DIR=C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build"
-) else if exist "d:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build" (
-    set "VC_DIR=d:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build"
-) else if exist "C:\Program Files (x86)\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build" (
-    set "VC_DIR=C:\Program Files (x86)\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build"
+:: Find MSVC VsDevCmd directory
+set "VS_DEV_CMD="
+if exist "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" (
+    set "VS_DEV_CMD=C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat"
+) else if exist "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" (
+    set "VS_DEV_CMD=C:\Program Files\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat"
+) else if exist "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat" (
+    set "VS_DEV_CMD=C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat"
+) else if exist "d:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat" (
+    set "VS_DEV_CMD=d:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat"
+) else if exist "C:\Program Files (x86)\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat" (
+    set "VS_DEV_CMD=C:\Program Files (x86)\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat"
 )
 
-if not defined VC_DIR (
-    echo Error: MSVC VC Auxiliary Build directory not found in standard paths.
+if not defined VS_DEV_CMD (
+    echo Error: MSVC VsDevCmd.bat not found in standard paths.
     exit /b 1
 )
 
@@ -60,8 +61,8 @@ goto :summary
 
 :do_build_x86
 echo.
-echo [Build x86] 32-bit universal static binary (compatible with x86 & x64 via WOW64)...
-cmd /c ""%VC_DIR%\vcvars32.bat" && rc.exe /nologo /fo obj\x86\l4sql.res res\l4sql.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x86\ src\main.c src\xml_parser.c src\db_discovery.c src\sql_validator.c src\db_odbc.c src\output_formatter.c obj\x86\l4sql.res /link /OUT:bin\x86\l4sql.exe odbc32.lib advapi32.lib user32.lib shlwapi.lib"
+echo [Build x86] 32-bit universal static binary (compatible with x86 and x64 via WOW64)...
+cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\l4sql.res res\l4sql.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x86\ src\main.c src\xml_parser.c src\db_discovery.c src\sql_validator.c src\db_odbc.c src\output_formatter.c obj\x86\l4sql.res /link /OUT:bin\x86\l4sql.exe odbc32.lib advapi32.lib user32.lib shlwapi.lib"
 if errorlevel 1 (
     echo [ERROR] x86 build failed!
     set BUILD_FAILED=1
@@ -75,7 +76,7 @@ exit /b 0
 :do_build_x64
 echo.
 echo [Build x64] 64-bit static binary...
-cmd /c ""%VC_DIR%\vcvars64.bat" && rc.exe /nologo /fo obj\x64\l4sql.res res\l4sql.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x64\ src\main.c src\xml_parser.c src\db_discovery.c src\sql_validator.c src\db_odbc.c src\output_formatter.c obj\x64\l4sql.res /link /OUT:bin\x64\l4sql.exe odbc32.lib advapi32.lib user32.lib shlwapi.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /fo obj\x64\l4sql.res res\l4sql.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x64\ src\main.c src\xml_parser.c src\db_discovery.c src\sql_validator.c src\db_odbc.c src\output_formatter.c obj\x64\l4sql.res /link /OUT:bin\x64\l4sql.exe odbc32.lib advapi32.lib user32.lib shlwapi.lib"
 if errorlevel 1 (
     echo [ERROR] x64 build failed!
     set BUILD_FAILED=1

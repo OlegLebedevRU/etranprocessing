@@ -69,8 +69,7 @@ if exist "%REPO_TOOLS%\l4pin\bin" (
 :: 6. Copy l4superv and l4install
 echo [6/7] Staging l4superv and l4install...
 if exist "%~dp0bin" (
-    xcopy /e /y /q "%~dp0bin\*.exe" "%STAGING%\l4superv\" >nul 2>nul
-    xcopy /e /y /q "%~dp0bin\*.cmd" "%STAGING%\l4superv\" >nul 2>nul
+    xcopy /e /y /q "%~dp0bin\*" "%STAGING%\l4superv\" >nul 2>nul
     copy /y "%~dp0bin\l4install.exe" "%STAGING%\l4install.exe" >nul 2>nul
 )
 if exist "%~dp0CHANGELOG.md" (

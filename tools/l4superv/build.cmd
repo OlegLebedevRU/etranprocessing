@@ -1,126 +1,125 @@
 @echo off
-setlocal enabledelayedexpansion
+setlocal
+set "VSCMD_SKIP_SENDTELEMETRY=1"
 
 echo =======================================================
 echo Building l4superv and l4install (Leo4 Supervisor Suite)
 echo =======================================================
 
-if not exist bin md bin
-if not exist bin\x86 md bin\x86
-if not exist bin\x64 md bin\x64
-if not exist obj md obj
+set TARGET_ARCH=%1
+if "%TARGET_ARCH%"=="" set TARGET_ARCH=all
 
-:: 1. Check MSVC
-set "VC_DIR="
-if exist "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build" (
-    set "VC_DIR=C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build"
-) else if exist "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build" (
-    set "VC_DIR=C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build"
-) else if exist "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build" (
-    set "VC_DIR=C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build"
-) else if exist "d:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build" (
-    set "VC_DIR=d:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build"
+:: Find MSVC VsDevCmd directory
+set "VS_DEV_CMD="
+if exist "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" (
+    set "VS_DEV_CMD=C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat"
+) else if exist "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" (
+    set "VS_DEV_CMD=C:\Program Files\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat"
+) else if exist "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat" (
+    set "VS_DEV_CMD=C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat"
+) else if exist "d:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat" (
+    set "VS_DEV_CMD=d:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat"
+) else if exist "C:\Program Files (x86)\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat" (
+    set "VS_DEV_CMD=C:\Program Files (x86)\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat"
 )
 
-if defined VC_DIR (
-    echo [Toolchain] Using Microsoft Visual C++ (MSVC)
-    
-    cmd /c ""%VC_DIR%\vcvars64.bat" && rc.exe /fo obj\l4superv.res res\l4superv.rc && rc.exe /fo obj\l4install.res res\l4install.rc && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /Isrc /Ires /Fe:bin\l4superv.exe src\supervisor_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\proxy_client.c src\orchestrator.c obj\l4superv.res /link advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /Isrc /Ires /Fe:bin\l4install.exe src\installer_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\miniz.c src\zip_extractor.c obj\l4install.res /link advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib shell32.lib"
-    if !errorlevel! neq 0 (
-        echo [ERROR] MSVC compilation failed!
-        exit /b 1
-    )
-
-    copy /y bin\l4superv.exe bin\x64\l4superv.exe >nul 2>nul
-    copy /y bin\l4superv.exe bin\x86\l4superv.exe >nul 2>nul
-
-    copy /y bin\l4install.exe bin\x64\l4install.exe >nul 2>nul
-    copy /y bin\l4install.exe bin\x86\l4install.exe >nul 2>nul
-
-    for %%f in (l4superv_*.cmd l4install_*.cmd pack_*.cmd) do (
-        copy /y "%%f" bin\"%%f" >nul 2>nul
-        copy /y "%%f" bin\x86\"%%f" >nul 2>nul
-        copy /y "%%f" bin\x64\"%%f" >nul 2>nul
-    )
-    if exist README.md (
-        copy /y README.md bin\README.md >nul 2>nul
-        copy /y README.md bin\x86\README.md >nul 2>nul
-        copy /y README.md bin\x64\README.md >nul 2>nul
-    )
-    if exist CHANGELOG.md (
-        copy /y CHANGELOG.md bin\CHANGELOG.md >nul 2>nul
-        copy /y CHANGELOG.md bin\x86\CHANGELOG.md >nul 2>nul
-        copy /y CHANGELOG.md bin\x64\CHANGELOG.md >nul 2>nul
-    )
-    if exist "%~dp0..\..\docs\terminal-tools-user-guide.md" (
-        copy /y "%~dp0..\..\docs\terminal-tools-user-guide.md" bin\terminal-tools-user-guide.md >nul 2>nul
-        copy /y "%~dp0..\..\docs\terminal-tools-user-guide.md" bin\x86\terminal-tools-user-guide.md >nul 2>nul
-        copy /y "%~dp0..\..\docs\terminal-tools-user-guide.md" bin\x64\terminal-tools-user-guide.md >nul 2>nul
-    )
-
-    echo.
-    echo =======================================================
-    echo [OK] Build SUCCESS:
-    echo   - bin\l4superv.exe
-    echo   - bin\l4install.exe
-    echo =======================================================
-    exit /b 0
+if not defined VS_DEV_CMD (
+    echo Error: MSVC VsDevCmd.bat not found in standard paths.
+    exit /b 1
 )
 
-:: 2. Check GCC compiler
-set GCC_FOUND=0
-where gcc.exe >nul 2>nul
-if !errorlevel! equ 0 (
-    set GCC_FOUND=1
-) else (
-    if exist "C:\Program Files\JetBrains\CLion 2025.2.4\bin\mingw\bin\gcc.exe" (
-        set "PATH=C:\Program Files\JetBrains\CLion 2025.2.4\bin\mingw\bin;!PATH!"
-        set GCC_FOUND=1
-    )
-)
+if not exist bin mkdir bin
+if not exist bin\x86 mkdir bin\x86
+if not exist bin\x64 mkdir bin\x64
+if not exist obj\x86 mkdir obj\x86
+if not exist obj\x64 mkdir obj\x64
 
-if !GCC_FOUND! equ 1 (
-    echo [Toolchain] Using MinGW GCC
-    windres.exe -I res res\l4superv.rc -o obj\l4superv.res.o
-    windres.exe -I res res\l4install.rc -o obj\l4install.res.o
+set BUILD_FAILED=0
 
-    gcc.exe -O2 -static -Wall -Wextra -DUNICODE -D_UNICODE -DWIN32_LEAN_AND_MEAN -I src -I res -o bin\l4superv.exe src\supervisor_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\proxy_client.c src\orchestrator.c obj\l4superv.res.o -ladvapi32 -lcrypt32 -lwinhttp -lws2_32 -luser32 -lshlwapi
-    gcc.exe -O2 -static -Wall -Wextra -DUNICODE -D_UNICODE -DWIN32_LEAN_AND_MEAN -I src -I res -o bin\l4install.exe src\installer_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\miniz.c src\zip_extractor.c obj\l4install.res.o -ladvapi32 -lcrypt32 -lwinhttp -lws2_32 -luser32 -lshlwapi -lshell32
+if /i "%TARGET_ARCH%"=="all" goto :build_all
+if /i "%TARGET_ARCH%"=="x86" goto :build_x86
+if /i "%TARGET_ARCH%"=="32" goto :build_x86
+if /i "%TARGET_ARCH%"=="win32" goto :build_x86
+if /i "%TARGET_ARCH%"=="x64" goto :build_x64
+if /i "%TARGET_ARCH%"=="64" goto :build_x64
 
-    copy /y bin\l4superv.exe bin\x64\l4superv.exe >nul 2>nul
-    copy /y bin\l4superv.exe bin\x86\l4superv.exe >nul 2>nul
-    copy /y bin\l4install.exe bin\x64\l4install.exe >nul 2>nul
-    copy /y bin\l4install.exe bin\x86\l4install.exe >nul 2>nul
-
-    for %%f in (l4superv_*.cmd l4install_*.cmd pack_*.cmd) do (
-        copy /y "%%f" bin\"%%f" >nul 2>nul
-        copy /y "%%f" bin\x86\"%%f" >nul 2>nul
-        copy /y "%%f" bin\x64\"%%f" >nul 2>nul
-    )
-    if exist README.md (
-        copy /y README.md bin\README.md >nul 2>nul
-        copy /y README.md bin\x86\README.md >nul 2>nul
-        copy /y README.md bin\x64\README.md >nul 2>nul
-    )
-    if exist CHANGELOG.md (
-        copy /y CHANGELOG.md bin\CHANGELOG.md >nul 2>nul
-        copy /y CHANGELOG.md bin\x86\CHANGELOG.md >nul 2>nul
-        copy /y CHANGELOG.md bin\x64\CHANGELOG.md >nul 2>nul
-    )
-    if exist "%~dp0..\..\docs\terminal-tools-user-guide.md" (
-        copy /y "%~dp0..\..\docs\terminal-tools-user-guide.md" bin\terminal-tools-user-guide.md >nul 2>nul
-        copy /y "%~dp0..\..\docs\terminal-tools-user-guide.md" bin\x86\terminal-tools-user-guide.md >nul 2>nul
-        copy /y "%~dp0..\..\docs\terminal-tools-user-guide.md" bin\x64\terminal-tools-user-guide.md >nul 2>nul
-    )
-
-    echo.
-    echo =======================================================
-    echo [OK] Build SUCCESS (MinGW):
-    echo   - bin\l4superv.exe
-    echo   - bin\l4install.exe
-    echo =======================================================
-    exit /b 0
-)
-
-echo [ERROR] No supported compiler found (MSVC or MinGW GCC required).
+echo Unknown architecture "%TARGET_ARCH%". Valid options: all, x86, x64
 exit /b 1
+
+:build_all
+call :do_build_x86
+call :do_build_x64
+goto :summary
+
+:build_x86
+call :do_build_x86
+goto :summary
+
+:build_x64
+call :do_build_x64
+goto :summary
+
+:do_build_x86
+echo.
+echo [Build x86] 32-bit static binaries...
+cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\l4superv.res res\l4superv.rc && rc.exe /nologo /fo obj\x86\l4install.res res\l4install.rc && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x86\ src\supervisor_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\proxy_client.c src\orchestrator.c obj\x86\l4superv.res /link /OUT:bin\x86\l4superv.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x86\ src\installer_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\miniz.c src\zip_extractor.c obj\x86\l4install.res /link /OUT:bin\x86\l4install.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib shell32.lib"
+if errorlevel 1 (
+    echo [ERROR] x86 build failed!
+    set BUILD_FAILED=1
+) else (
+    echo [OK] x86 build SUCCESS: bin\x86\l4superv.exe, bin\x86\l4install.exe
+    copy /y bin\x86\l4superv.exe bin\l4superv.exe >nul
+    copy /y bin\x86\l4install.exe bin\l4install.exe >nul
+)
+exit /b 0
+
+:do_build_x64
+echo.
+echo [Build x64] 64-bit static binaries...
+cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /fo obj\x64\l4superv.res res\l4superv.rc && rc.exe /nologo /fo obj\x64\l4install.res res\l4install.rc && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x64\ src\supervisor_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\proxy_client.c src\orchestrator.c obj\x64\l4superv.res /link /OUT:bin\x64\l4superv.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x64\ src\installer_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\miniz.c src\zip_extractor.c obj\x64\l4install.res /link /OUT:bin\x64\l4install.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib shell32.lib"
+if errorlevel 1 (
+    echo [ERROR] x64 build failed!
+    set BUILD_FAILED=1
+) else (
+    echo [OK] x64 build SUCCESS: bin\x64\l4superv.exe, bin\x64\l4install.exe
+)
+exit /b 0
+
+:summary
+echo.
+echo =======================================================
+if %BUILD_FAILED% equ 0 (
+    echo Unified Build COMPLETE:
+    if exist bin\x86\l4superv.exe echo   - x86 [32-bit]: bin\x86\l4superv.exe
+    if exist bin\x64\l4superv.exe echo   - x64 [64-bit]: bin\x64\l4superv.exe
+    if exist bin\l4superv.exe     echo   - Default:      bin\l4superv.exe
+    if exist bin\x86\l4install.exe echo   - x86 [32-bit]: bin\x86\l4install.exe
+    if exist bin\x64\l4install.exe echo   - x64 [64-bit]: bin\x64\l4install.exe
+    if exist bin\l4install.exe     echo   - Default:      bin\l4install.exe
+
+    :: Copy companion scripts and documentation into bin directories
+    for %%f in (l4superv_*.cmd l4install_*.cmd pack_*.cmd) do (
+        copy /y "%%f" bin\"%%f" >nul
+        copy /y "%%f" bin\x86\"%%f" >nul
+        copy /y "%%f" bin\x64\"%%f" >nul
+    )
+    if exist README.md (
+        copy /y README.md bin\README.md >nul
+        copy /y README.md bin\x86\README.md >nul
+        copy /y README.md bin\x64\README.md >nul
+    )
+    if exist CHANGELOG.md (
+        copy /y CHANGELOG.md bin\CHANGELOG.md >nul
+        copy /y CHANGELOG.md bin\x86\CHANGELOG.md >nul
+        copy /y CHANGELOG.md bin\x64\CHANGELOG.md >nul
+    )
+    if exist "%~dp0..\..\docs\terminal-tools-user-guide.md" (
+        copy /y "%~dp0..\..\docs\terminal-tools-user-guide.md" bin\terminal-tools-user-guide.md >nul
+        copy /y "%~dp0..\..\docs\terminal-tools-user-guide.md" bin\x86\terminal-tools-user-guide.md >nul
+        copy /y "%~dp0..\..\docs\terminal-tools-user-guide.md" bin\x64\terminal-tools-user-guide.md >nul
+    )
+) else (
+    echo Unified Build FAILED with errors.
+)
+echo =======================================================
+exit /b %BUILD_FAILED%

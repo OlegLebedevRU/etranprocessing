@@ -2,6 +2,16 @@
 
 All notable changes to the `l4superv` and `l4install` suite will be documented in this file.
 
+## [1.2.0] - 2026-09-02
+
+### Added & Documented
+- **Dual-Architecture Unified Toolchain (x86 / x64)**:
+  - Added full dual-target native MSVC build scripts producing genuine 32-bit PE32 and 64-bit PE32+ binaries for `l4con`, `l4superv`, `l4install`, `leo4proxy`, `l4pin`, `l4sql`, and `leo4-simple-svc-mqtt`.
+- **Anti-Clone Reset & Certificate Store Documentation**:
+  - Documented hardware fingerprint mismatch behavior (`auto_reset_on_clone`) in `README.md` and `terminal-tools-user-guide.md`, detailing automatic cleanup of terminal certificates (`leo4.ru`, `forpay.ru`) from `LocalMachine\MY`.
+  - Added troubleshooting guidance on avoiding unexpected certificate cleanup when cloning or manually migrating tool folders across machines.
+  - Clarified non-blocking shared read-only nature of Windows CryptoAPI store polling across concurrent processes.
+
 ## [1.1.0] - 2026-08-29
 
 ### Added & Improved
