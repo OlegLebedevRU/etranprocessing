@@ -249,11 +249,12 @@ async def _process_inkass_at_receipt(
         params["calc_lower_paym_ext_id"] = lower_bound_ext_id
         return
 
-    # Calculate sum (cash payments: pay_type_id IN (0, 1), paym_state == 2)
+    # Calculate sum (cash payments: pay_type_id IN (0, 1), paym_state == 2, excluding 1 ruble / 100 kopecks)
     if lower_paym_id is not None:
         sum_query = """
             SELECT COALESCE(SUM(paym_amount), 0) FROM payments
             WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id IN (0, 1)
+              AND paym_amount != 100
               AND paym_id > :prev_id AND paym_id <= :curr_id
         """
         q_params = {
@@ -266,6 +267,7 @@ async def _process_inkass_at_receipt(
         sum_query = """
             SELECT COALESCE(SUM(paym_amount), 0) FROM payments
             WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id IN (0, 1)
+              AND paym_amount != 100
               AND paym_id <= :curr_id
         """
         q_params = {

@@ -809,3 +809,85 @@ async def test_inkass_recalculate_preview_record217_scenario():
             )
             assert no_change_resp.status_code == 200
             assert no_change_resp.json()["calc_status"] == "mismatch"
+
+
+@pytest.mark.anyio
+async def test_inkass_strategies_exclude_1_ruble_payments():
+    """Verify that all inkassation calculation queries contain 'paym_amount != 100'."""
+    app.dependency_overrides[get_current_user] = lambda: {
+        "username": "admin",
+        "org_id": 1,
+    }
+
+    mock_session = AsyncMock()
+
+    req_data = {
+        "TotalSum": "30000",
+        "PaymExtId": "0348_020926_12453741",
+        "InkassExtId": "0348_020926_12500446",
+        "InkassId": "55",
+        "InkassDateTime": "02.09.2026 14:50:04",
+    }
+    record_row = (
+        1204,
+        348,
+        datetime(2026, 9, 2, 14, 50, 4, tzinfo=UTC),
+        req_data,
+        1001,
+        1,
+    )
+    prev_req_data = {
+        "PaymExtId": "0348_250826_10482994",
+        "InkassExtId": "0348_250826_10521945",
+        "InkassId": "54",
+        "InkassDateTime": "25.08.2026 12:52:20",
+    }
+    prev_record_row = (
+        1200,
+        prev_req_data,
+        datetime(2026, 8, 25, 12, 52, 20, tzinfo=UTC),
+    )
+
+    captured_sql = []
+
+    async def mock_execute(stmt, params=None):
+        sql_str = str(stmt)
+        captured_sql.append(sql_str)
+        result = MagicMock()
+        if "WHERE r.id = :record_id" in sql_str:
+            result.fetchone.return_value = record_row
+        elif "WHERE device_id = :dev_id AND function_name = 'inkass'" in sql_str:
+            result.fetchone.return_value = prev_record_row
+        elif "FROM payments" in sql_str and "ORDER BY paym_id DESC" in sql_str:
+            result.fetchone.return_value = (
+                500,
+                "0348_020926_12453741",
+                datetime(2026, 9, 2, 12, 45, 37, tzinfo=UTC),
+            )
+        elif "COALESCE(SUM(paym_amount)" in sql_str:
+            result.scalar.return_value = 3000000  # 30000 rubles
+        else:
+            result.fetchone.return_value = None
+            result.fetchall.return_value = []
+        return result
+
+    mock_session.execute = AsyncMock(side_effect=mock_execute)
+    mock_session.commit = AsyncMock()
+
+    mock_cm = AsyncMock()
+    mock_cm.__aenter__.return_value = mock_session
+    mock_cm.__aexit__.return_value = None
+
+    with patch("app.routers.reports.async_session", return_value=mock_cm):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.post("/api/reports/inkass/1204/recalculate-preview")
+            assert resp.status_code == 200
+
+    sum_queries = [s for s in captured_sql if "COALESCE(SUM(paym_amount)" in s]
+    assert len(sum_queries) >= 3, (
+        "Expected queries for exact, time, and gross strategies"
+    )
+    for q in sum_queries:
+        assert "paym_amount != 100" in q, f"Query missing 1-ruble exclusion: {q}"

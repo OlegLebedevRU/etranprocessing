@@ -199,6 +199,7 @@ async def _calculated_inkass_sum(
         query = """
             SELECT COALESCE(SUM(paym_amount), 0) FROM payments
             WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id IN (0, 1)
+              AND paym_amount != 100
               AND paym_id > :prev_id AND paym_id <= :curr_id
         """
         params = {
@@ -210,6 +211,7 @@ async def _calculated_inkass_sum(
         query = """
             SELECT COALESCE(SUM(paym_amount), 0) FROM payments
             WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id IN (0, 1)
+              AND paym_amount != 100
               AND paym_datetime > :prev_created_at
               AND paym_id <= :curr_id
         """
@@ -222,6 +224,7 @@ async def _calculated_inkass_sum(
         query = """
             SELECT COALESCE(SUM(paym_amount), 0) FROM payments
             WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id IN (0, 1)
+              AND paym_amount != 100
               AND paym_id <= :curr_id
         """
         params = {"term_id": terminal_id, "curr_id": current_payment[0]}
@@ -229,6 +232,7 @@ async def _calculated_inkass_sum(
         query = """
             SELECT COALESCE(SUM(paym_amount), 0) FROM payments
             WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id IN (0, 1)
+              AND paym_amount != 100
               AND paym_datetime > :prev_created_at
               AND paym_datetime <= :curr_created_at
         """
@@ -241,6 +245,7 @@ async def _calculated_inkass_sum(
         query = """
             SELECT COALESCE(SUM(paym_amount), 0) FROM payments
             WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id IN (0, 1)
+              AND paym_amount != 100
               AND paym_datetime <= :curr_created_at
         """
         params = {"term_id": terminal_id, "curr_created_at": created_at}
@@ -380,6 +385,7 @@ async def _calculate_strategies_preview(
             q1 = """
                 SELECT COALESCE(SUM(paym_amount), 0) FROM payments
                 WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id IN (0, 1)
+                  AND paym_amount != 100
                   AND paym_id > :prev_id AND paym_id <= :curr_id
             """
             p1 = {
@@ -391,6 +397,7 @@ async def _calculate_strategies_preview(
             q1 = """
                 SELECT COALESCE(SUM(paym_amount), 0) FROM payments
                 WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id IN (0, 1)
+                  AND paym_amount != 100
                   AND paym_id <= :curr_id
             """
             p1 = {"term_id": terminal_id, "curr_id": curr_p_exact[0]}
@@ -430,6 +437,7 @@ async def _calculate_strategies_preview(
             qn = """
                 SELECT COALESCE(SUM(paym_amount), 0) FROM payments
                 WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id IN (0, 1)
+                  AND paym_amount != 100
                   AND paym_id > :prev_id AND paym_id <= :curr_id
             """
             pn = {
@@ -441,6 +449,7 @@ async def _calculate_strategies_preview(
             qn = """
                 SELECT COALESCE(SUM(paym_amount), 0) FROM payments
                 WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id IN (0, 1)
+                  AND paym_amount != 100
                   AND paym_id <= :curr_id
             """
             pn = {"term_id": terminal_id, "curr_id": curr_p_nearest[0]}
@@ -481,6 +490,7 @@ async def _calculate_strategies_preview(
         q2 = """
             SELECT COALESCE(SUM(paym_amount), 0) FROM payments
             WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id IN (0, 1)
+              AND paym_amount != 100
               AND paym_datetime > :dt_start AND paym_datetime <= :dt_end
         """
         p2 = {"term_id": terminal_id, "dt_start": dt_start, "dt_end": dt_end}
@@ -488,6 +498,7 @@ async def _calculate_strategies_preview(
         q2 = """
             SELECT COALESCE(SUM(paym_amount), 0) FROM payments
             WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id IN (0, 1)
+              AND paym_amount != 100
               AND paym_datetime <= :dt_end
         """
         p2 = {"term_id": terminal_id, "dt_end": dt_end}
@@ -527,6 +538,7 @@ async def _calculate_strategies_preview(
             q3 = """
                 SELECT COALESCE(SUM(paym_amount), 0) FROM payments
                 WHERE terminal_id = :term_id AND paym_state = 2
+                  AND paym_amount != 100
                   AND paym_id > :prev_id AND paym_id <= :curr_id
             """
             p3 = {
@@ -538,6 +550,7 @@ async def _calculate_strategies_preview(
             q3 = """
                 SELECT COALESCE(SUM(paym_amount), 0) FROM payments
                 WHERE terminal_id = :term_id AND paym_state = 2
+                  AND paym_amount != 100
                   AND paym_id <= :curr_id
             """
             p3 = {"term_id": terminal_id, "curr_id": active_curr_p[0]}
@@ -553,6 +566,7 @@ async def _calculate_strategies_preview(
         q3_dt = """
             SELECT COALESCE(SUM(paym_amount), 0) FROM payments
             WHERE terminal_id = :term_id AND paym_state = 2
+              AND paym_amount != 100
         """
         if dt_start:
             q3_dt += " AND paym_datetime > :dt_start AND paym_datetime <= :dt_end"
