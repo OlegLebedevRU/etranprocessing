@@ -441,7 +441,7 @@ export default function DevicePassportTab({
           </Descriptions.Item>
 
           <Descriptions.Item label="Серийный номер (SN)">
-            <Text code copyable={{ text: device?.sn || sn }}>
+            <Text code copyable={{ text: device?.sn || sn }} style={{ whiteSpace: "nowrap" }}>
               {device?.sn || sn}
             </Text>
           </Descriptions.Item>

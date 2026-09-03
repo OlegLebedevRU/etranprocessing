@@ -1,13 +1,15 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   Button,
   Card,
+  Col,
   Empty,
   Input,
   InputNumber,
   message,
   Modal,
   Popconfirm,
+  Row,
   Space,
   Spin,
   Table,
@@ -17,6 +19,7 @@ import {
   Grid,
   Segmented,
 } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import {
   PlusOutlined,
   CopyOutlined,
@@ -24,8 +27,10 @@ import {
   EditOutlined,
   FolderOutlined,
   FolderOpenOutlined,
+  FolderAddOutlined,
   AppstoreOutlined,
   UnorderedListOutlined,
+  SearchOutlined,
 } from "@ant-design/icons";
 import type { DataNode, TreeProps } from "antd/es/tree";
 import {
@@ -63,12 +68,11 @@ function buildTree(groups: Group[], parentId: number | null = null): DataNode[] 
     .map((g) => ({
       key: g.id,
       title: (
-        <span style={{ fontSize: 12 }}>
-          <Text strong style={{ fontSize: 11 }}>{g.number}.</Text> {g.name}
+        <span style={{ fontSize: 13 }}>
+          <Text strong style={{ fontSize: 12, marginRight: 4 }}>{g.number}.</Text> {g.name}
         </span>
       ),
-      icon: ({ expanded }: { expanded?: boolean }) =>
-        expanded ? <FolderOpenOutlined style={{ fontSize: 13 }} /> : <FolderOutlined style={{ fontSize: 13 }} />,
+      icon: <FolderOutlined style={{ fontSize: 14 }} />,
       children: buildTree(groups, g.id),
     }));
 }
@@ -91,6 +95,7 @@ export default function VariantsPage() {
   // Right panel: services
   const [services, setServices] = useState<Service[]>([]);
   const [servicesLoading, setServicesLoading] = useState(false);
+  const [serviceSearchText, setServiceSearchText] = useState("");
   const [serviceFormOpen, setServiceFormOpen] = useState(false);
   const [editService, setEditService] = useState<Service | null>(null);
 
@@ -253,122 +258,119 @@ export default function VariantsPage() {
       : groups
   );
 
-  const serviceColumns = [
+  const filteredServices = useMemo(() => {
+    if (!serviceSearchText.trim()) return services;
+    const q = serviceSearchText.toLowerCase();
+    return services.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        (s.printname && s.printname.toLowerCase().includes(q)) ||
+        String(s.tsp_code).includes(q)
+    );
+  }, [services, serviceSearchText]);
+
+  const serviceColumns: ColumnsType<Service> = [
     {
       title: "ТСП",
       dataIndex: "tsp_code",
       key: "tsp_code",
-      width: 75,
-      render: (v: number) => (
-        <Tag color="blue" style={{ margin: 0, fontSize: 11, whiteSpace: "nowrap" }}>
-          {v}
+      width: 110,
+      render: (code: number) => (
+        <Tag color="cyan" style={{ fontFamily: "monospace", fontSize: 13 }}>
+          {code}
         </Tag>
       ),
+      sorter: (a, b) => a.tsp_code - b.tsp_code,
     },
     {
-      title: "Активности",
+      title: "Название",
+      dataIndex: "name",
+      key: "name",
+      ellipsis: true,
+      render: (name: string) => <span style={{ fontWeight: 500 }}>{name}</span>,
+    },
+    {
+      title: "Печатное наименование",
+      dataIndex: "printname",
+      key: "printname",
+      ellipsis: true,
+      render: (p: string | null) => p || <Text type="secondary">—</Text>,
+    },
+    {
+      title: "Цена",
+      dataIndex: "price",
+      key: "price",
+      width: 110,
+      align: "right",
+      render: (price: number) => (price > 0 ? `${price} ₽` : "0 ₽"),
+      sorter: (a, b) => (a.price ?? 0) - (b.price ?? 0),
+    },
+    {
+      title: "Прототип",
+      dataIndex: "protypenumber",
+      key: "protypenumber",
+      width: 100,
+      align: "center",
+      render: (p: number) => (
+        <span style={{ fontFamily: "monospace", color: "#8c8c8c" }}>
+          {p !== undefined && p !== null ? p : "—"}
+        </span>
+      ),
+      sorter: (a, b) => (a.protypenumber ?? 0) - (b.protypenumber ?? 0),
+    },
+    {
+      title: "Действия",
       key: "actions",
-      width: 90,
-      align: "center" as const,
-      render: (_: any, record: Service) => (
-        <Space size={2} style={{ whiteSpace: "nowrap" }}>
+      width: 120,
+      align: "center",
+      render: (_, record) => (
+        <Space size="small">
           <Button
             type="text"
-            size="small"
             icon={<EditOutlined />}
+            size="small"
             onClick={() => {
               setEditService(record);
               setServiceFormOpen(true);
             }}
-            title="Редактировать"
           />
           <Popconfirm
             title="Удалить услугу?"
+            okText="Да, удалить"
+            cancelText="Отмена"
             onConfirm={() => handleDeleteService(record.id)}
-            okText="Да"
-            cancelText="Нет"
           >
-            <Button type="text" size="small" danger icon={<DeleteOutlined />} title="Удалить" />
+            <Button type="text" danger icon={<DeleteOutlined />} size="small" />
           </Popconfirm>
         </Space>
-      ),
-    },
-    {
-      title: "Сумма",
-      dataIndex: "price",
-      key: "price",
-      width: 95,
-      align: "right" as const,
-      render: (v: number) => (
-        <span style={{ fontSize: 12, whiteSpace: "nowrap", fontWeight: 500 }}>
-          {v !== undefined && v !== null ? `${v} ₽` : "0 ₽"}
-        </span>
-      ),
-    },
-    {
-      title: "Название для кнопки",
-      dataIndex: "name",
-      key: "name",
-      render: (v: string) => (
-        <div style={{ fontSize: 12, wordBreak: "break-word", whiteSpace: "normal", lineHeight: 1.35 }}>
-          {v}
-        </div>
-      ),
-    },
-    {
-      title: "Наименование для чека",
-      dataIndex: "printname",
-      key: "printname",
-      render: (v: string | null) =>
-        v ? (
-          <div style={{ fontSize: 12, wordBreak: "break-word", whiteSpace: "normal", lineHeight: 1.35 }}>
-            {v}
-          </div>
-        ) : (
-          <Text type="secondary" style={{ fontSize: 11 }}>
-            —
-          </Text>
-        ),
-    },
-    {
-      title: "Номер Прототипа",
-      dataIndex: "protypenumber",
-      key: "protypenumber",
-      width: 130,
-      align: "center" as const,
-      render: (v: number) => (
-        <span style={{ fontSize: 12, whiteSpace: "nowrap" }}>
-          {v !== undefined && v !== null ? v : "—"}
-        </span>
       ),
     },
   ];
 
   const variantsCard = (
     <Card
-      size="small"
       style={{
-        width: isMobile ? "100%" : 180,
+        width: isMobile ? "100%" : 210,
         flexShrink: 0,
         overflow: "auto",
         height: isMobile ? "calc(100vh - 160px)" : "100%",
+        minHeight: 520,
       }}
-      styles={{ body: { padding: "8px 6px" } }}
-      title={<Text strong style={{ fontSize: 12 }}>Варианты меню</Text>}
+      title={<span style={{ fontWeight: 600 }}>Варианты меню</span>}
       extra={
         <Space size={0}>
-          <Button type="text" size="small" icon={<PlusOutlined />} onClick={handleCreateVariant} />
-          <Button type="text" size="small" icon={<CopyOutlined />} onClick={handleDuplicate} disabled={!selectedVariantId} />
-          <Popconfirm title="Удалить?" onConfirm={handleDeleteVariant} okText="Да" cancelText="Нет" disabled={!selectedVariantId}>
-            <Button type="text" size="small" danger icon={<DeleteOutlined />} disabled={!selectedVariantId} />
+          <Button type="text" size="small" icon={<PlusOutlined />} onClick={handleCreateVariant} title="Создать вариант" />
+          <Button type="text" size="small" icon={<CopyOutlined />} onClick={handleDuplicate} disabled={!selectedVariantId} title="Копировать вариант" />
+          <Popconfirm title="Удалить вариант меню?" onConfirm={handleDeleteVariant} okText="Да, удалить" cancelText="Отмена" disabled={!selectedVariantId}>
+            <Button type="text" size="small" danger icon={<DeleteOutlined />} disabled={!selectedVariantId} title="Удалить вариант" />
           </Popconfirm>
         </Space>
       }
     >
       {variants.length === 0 ? (
-        <Empty description="Нет" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        <Empty description="Нет вариантов" image={Empty.PRESENTED_IMAGE_SIMPLE} />
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           {variants.map((v) => (
             <div
               key={v.id}
@@ -377,17 +379,18 @@ export default function VariantsPage() {
                 if (isMobile) setMobileTab("groups");
               }}
               style={{
-                padding: "6px 8px",
-                borderRadius: 4,
+                padding: "8px 10px",
+                borderRadius: 6,
                 cursor: "pointer",
                 background: v.id === selectedVariantId ? "#e6f4ff" : "transparent",
-                border: v.id === selectedVariantId ? "1px solid #91caff" : "1px solid transparent",
-                fontSize: 12,
+                border: v.id === selectedVariantId ? "1px solid #91caff" : "1px solid #f0f0f0",
+                fontSize: 13,
                 fontWeight: v.id === selectedVariantId ? 600 : 400,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                gap: 4,
+                gap: 6,
+                transition: "all 0.2s",
               }}
             >
               <span
@@ -420,60 +423,112 @@ export default function VariantsPage() {
 
   const groupsCard = (
     <Card
-      size="small"
       style={{
-        width: isMobile ? "100%" : 260,
+        width: isMobile ? "100%" : 300,
         flexShrink: 0,
         overflow: "auto",
         height: isMobile ? "calc(100vh - 160px)" : "100%",
+        minHeight: 520,
       }}
-      styles={{ body: { padding: "4px 6px" } }}
-      title={<Text strong style={{ fontSize: 12 }}>Группы</Text>}
-      extra={
-        <Space size={0}>
-          <Button type="text" size="small" icon={<PlusOutlined />} onClick={() => openGroupForm()} disabled={!selectedVariantId} />
-          {selectedGroup && (
-            <>
-              <Button type="text" size="small" icon={<EditOutlined />} onClick={() => openGroupForm(selectedGroup)} />
-              <Popconfirm title="Удалить?" onConfirm={() => handleDeleteGroup(selectedGroup.id)} okText="Да" cancelText="Нет">
-                <Button type="text" size="small" danger icon={<DeleteOutlined />} />
-              </Popconfirm>
-              <Button type="text" size="small" icon={<PlusOutlined />} onClick={() => openGroupForm(undefined, selectedGroup.id)} title="Подгруппа" />
-            </>
-          )}
-        </Space>
+      title={
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span>Структура групп</span>
+          <Button
+            type="link"
+            size="small"
+            icon={<FolderAddOutlined />}
+            onClick={() => openGroupForm()}
+            disabled={!selectedVariantId}
+          >
+            + Группа
+          </Button>
+        </div>
       }
+      loading={groupsLoading}
     >
       {!selectedVariantId ? (
-        <Empty description="Выберите вариант" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-      ) : groupsLoading ? (
-        <Spin size="small" style={{ display: "block", margin: "20px auto" }} />
+        <Empty description="Выберите вариант меню" image={Empty.PRESENTED_IMAGE_SIMPLE} />
       ) : (
         <>
-          <Input.Search
+          <Input
+            placeholder="Поиск по группам..."
+            prefix={<SearchOutlined />}
             size="small"
-            placeholder="Поиск..."
             allowClear
+            value={groupSearch}
             onChange={(e) => setGroupSearch(e.target.value)}
-            style={{ marginBottom: 4 }}
+            style={{ marginBottom: 12 }}
           />
           {treeData.length === 0 ? (
-            <Empty description="Нет групп" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            <Empty description="Нет групп в меню" image={Empty.PRESENTED_IMAGE_SIMPLE}>
+              <Button
+                type="primary"
+                size="small"
+                icon={<FolderAddOutlined />}
+                onClick={() => openGroupForm()}
+              >
+                Создать первую группу
+              </Button>
+            </Empty>
           ) : (
-            <Tree
-              showIcon
-              draggable
-              defaultExpandAll
-              treeData={treeData}
-              selectedKeys={selectedGroupId ? [selectedGroupId] : []}
-              onSelect={(keys) => {
-                const nextKey = (keys[0] as number) || null;
-                setSelectedGroupId(nextKey);
-                if (isMobile && nextKey) setMobileTab("services");
-              }}
-              onDrop={onDrop}
-              style={{ fontSize: 12 }}
-            />
+            <div>
+              <Tree
+                showLine={{ showLeafIcon: false }}
+                showIcon
+                draggable
+                defaultExpandAll
+                treeData={treeData}
+                selectedKeys={selectedGroupId ? [selectedGroupId] : []}
+                onSelect={(keys) => {
+                  const nextKey = (keys[0] as number) || null;
+                  setSelectedGroupId(nextKey);
+                  if (isMobile && nextKey) setMobileTab("services");
+                }}
+                onDrop={onDrop}
+              />
+
+              {selectedGroup && (
+                <div
+                  style={{
+                    marginTop: 20,
+                    padding: "12px",
+                    background: "#fafafa",
+                    borderRadius: 6,
+                    border: "1px solid #f0f0f0",
+                  }}
+                >
+                  <div style={{ fontWeight: 600, marginBottom: 8 }}>
+                    Управление: {selectedGroup.name}
+                  </div>
+                  <Space wrap size="small">
+                    <Button
+                      size="small"
+                      icon={<PlusOutlined />}
+                      onClick={() => openGroupForm(undefined, selectedGroup.id)}
+                    >
+                      + Подгруппа
+                    </Button>
+                    <Button
+                      size="small"
+                      icon={<EditOutlined />}
+                      onClick={() => openGroupForm(selectedGroup)}
+                    >
+                      Изменить
+                    </Button>
+                    <Popconfirm
+                      title="Удалить эту группу со всеми подгруппами и услугами?"
+                      okText="Да, удалить"
+                      cancelText="Отмена"
+                      onConfirm={() => handleDeleteGroup(selectedGroup.id)}
+                    >
+                      <Button size="small" danger icon={<DeleteOutlined />}>
+                        Удалить
+                      </Button>
+                    </Popconfirm>
+                  </Space>
+                </div>
+              )}
+            </div>
           )}
         </>
       )}
@@ -482,47 +537,68 @@ export default function VariantsPage() {
 
   const servicesCard = (
     <Card
-      size="small"
       style={{
         flex: 1,
         width: isMobile ? "100%" : "auto",
         overflow: "auto",
         height: isMobile ? "calc(100vh - 160px)" : "100%",
+        minHeight: 520,
       }}
-      styles={{ body: { padding: "4px 6px" } }}
       title={
-        selectedGroup ? (
-          <Text strong style={{ fontSize: 12 }}>
-            {selectedGroup.number}. {selectedGroup.name}
-          </Text>
-        ) : (
-          <Text type="secondary" style={{ fontSize: 12 }}>Услуги</Text>
-        )
+        <Row justify="space-between" align="middle" gutter={16}>
+          <Col>
+            <span>
+              {selectedGroup
+                ? `Услуги группы: ${selectedGroup.name}`
+                : "Услуги"}
+            </span>
+            <Tag style={{ marginLeft: 8 }}>{filteredServices.length}</Tag>
+          </Col>
+          <Col xs={24} sm={12} md={10} style={{ marginTop: isMobile ? 8 : 0 }}>
+            <Input
+              placeholder="Поиск по названию или ТСП..."
+              prefix={<SearchOutlined />}
+              value={serviceSearchText}
+              onChange={(e) => setServiceSearchText(e.target.value)}
+              allowClear
+              style={{ width: "100%" }}
+            />
+          </Col>
+        </Row>
       }
       extra={
-        selectedGroup && (
-          <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => { setEditService(null); setServiceFormOpen(true); }}>
-            Добавить
-          </Button>
-        )
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => {
+            setEditService(null);
+            setServiceFormOpen(true);
+          }}
+          disabled={!selectedGroupId}
+        >
+          + Добавить услугу
+        </Button>
       }
     >
-      {!selectedGroupId ? (
-        <Empty description="Выберите группу" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-      ) : (
-        <Table
-          className="compact-table"
-          dataSource={services}
-          columns={serviceColumns}
-          rowKey="id"
-          loading={servicesLoading}
-          size="small"
-          scroll={{ x: 500 }}
-          tableLayout="auto"
-          pagination={false}
-          locale={{ emptyText: "Нет услуг" }}
-        />
-      )}
+      <Table
+        className="compact-table"
+        dataSource={filteredServices}
+        columns={serviceColumns}
+        rowKey="id"
+        loading={servicesLoading}
+        size="small"
+        scroll={{ x: 700 }}
+        pagination={{
+          defaultPageSize: 15,
+          showSizeChanger: true,
+          pageSizeOptions: ["10", "15", "30", "50"],
+          size: "small",
+          simple: isMobile,
+        }}
+        locale={{
+          emptyText: !selectedGroupId ? "Выберите группу для просмотра услуг" : "Нет услуг в группе",
+        }}
+      />
     </Card>
   );
 
@@ -572,7 +648,7 @@ export default function VariantsPage() {
           {mobileTab === "services" && servicesCard}
         </div>
       ) : (
-        <div style={{ display: "flex", gap: 8, height: "calc(100vh - 80px)" }}>
+        <div style={{ display: "flex", gap: 16, height: "calc(100vh - 80px)", minHeight: 560 }}>
           {variantsCard}
           {groupsCard}
           {servicesCard}

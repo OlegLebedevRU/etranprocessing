@@ -238,14 +238,22 @@ export default function DevicesManagementPage() {
       title: isMobile ? "SN" : "Серийный номер (SN)",
       dataIndex: "sn",
       key: "sn",
-      width: isMobile ? 125 : 180,
+      width: isMobile ? 135 : 200,
       render: (sn) => {
         const displaySn =
           isMobile && sn.length > 8 ? `${sn.slice(0, 4)}…${sn.slice(-3)}` : sn;
         return (
-          <Space size={4}>
+          <Space size={4} wrap={false} style={{ flexWrap: "nowrap", alignItems: "center" }}>
             <Tooltip title={`Серийный номер: ${sn}`} mouseEnterDelay={0.35}>
-              <Text code style={{ fontSize: 12, cursor: "pointer" }}>
+              <Text
+                code
+                style={{
+                  fontSize: 12,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                  display: "inline-block",
+                }}
+              >
                 {displaySn}
               </Text>
             </Tooltip>
@@ -254,7 +262,7 @@ export default function DevicesManagementPage() {
                 type="text"
                 size="small"
                 icon={<CopyOutlined style={{ fontSize: 11 }} />}
-                style={{ width: 22, height: 22, padding: 0 }}
+                style={{ width: 22, height: 22, padding: 0, flexShrink: 0 }}
                 onClick={(e) => {
                   e.stopPropagation();
                   copyToClipboard(sn);

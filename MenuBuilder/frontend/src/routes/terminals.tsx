@@ -5,6 +5,7 @@ import {
   Input,
   message,
   Modal,
+  Popconfirm,
   Select,
   Space,
   Table,
@@ -19,7 +20,6 @@ import {
   EditOutlined,
   ReloadOutlined,
   SearchOutlined,
-  CopyOutlined,
 } from "@ant-design/icons";
 import {
   getTerminals,
@@ -143,25 +143,22 @@ export default function TerminalsPage() {
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      message.success("Скопировано");
-    });
-  };
-
   const columns = [
     {
       title: "ID",
       dataIndex: "device_id",
       key: "device_id",
-      width: 60,
-      render: (v: number) => <Text strong style={{ fontSize: 12 }}>{v}</Text>,
+      width: 80,
+      align: "center" as const,
+      render: (v: number) => <Text strong style={{ fontSize: 13 }}>#{v}</Text>,
     },
     {
       title: "Меню",
       key: "variant",
       render: (_: any, record: TerminalInfo) => {
-        if (!record.menu_variant_name) return <Text type="secondary" style={{ fontSize: 11 }}>—</Text>;
+        if (!record.menu_variant_name) {
+          return <Text type="secondary" style={{ fontSize: 12 }}>— Не привязано —</Text>;
+        }
         const stats = record.menu_variant_id ? statsMap[record.menu_variant_id] : null;
 
         let versionTag = null;
@@ -187,12 +184,14 @@ export default function TerminalsPage() {
 
         return (
           <Space size={4} direction="vertical" style={{ gap: 2 }}>
-            <Space size={4} style={{ flexWrap: "wrap" }}>
-              <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>{record.menu_variant_name}</Tag>
+            <Space size={6} style={{ flexWrap: "wrap", alignItems: "center" }}>
+              <Tag color="blue" style={{ margin: 0, fontSize: 12, fontWeight: 500 }}>
+                {record.menu_variant_name}
+              </Tag>
               {versionTag}
             </Space>
             {stats && (
-              <Text type="secondary" style={{ fontSize: 10, whiteSpace: "nowrap" }}>
+              <Text type="secondary" style={{ fontSize: 11, whiteSpace: "nowrap" }}>
                 Групп: {stats.groups} / Услуг: {stats.services}
               </Text>
             )}
@@ -201,62 +200,55 @@ export default function TerminalsPage() {
       },
     },
     {
-      title: "SN",
-      dataIndex: "sn",
-      key: "sn",
-      width: isMobile ? 110 : 160,
-      render: (v: string) => {
-        if (!v) return <Text type="secondary">—</Text>;
-        const display = isMobile && v.length > 8 ? `${v.slice(0, 4)}…${v.slice(-3)}` : v;
-        return (
-          <Space size={3}>
-            <Tooltip title={`Серийный номер: ${v}`} mouseEnterDelay={0.35}>
-              <Text code style={{ fontSize: 11 }}>{display}</Text>
-            </Tooltip>
-            <Button
-              type="text"
-              size="small"
-              icon={<CopyOutlined style={{ fontSize: 10 }} />}
-              style={{ width: 20, height: 20, padding: 0 }}
-              onClick={() => copyToClipboard(v)}
-            />
-          </Space>
-        );
-      },
-    },
-    {
-      title: "",
+      title: "Статус",
       dataIndex: "is_active",
       key: "active",
-      width: 36,
+      width: 110,
       align: "center" as const,
       render: (v: boolean) => (
-        <Tooltip title={v ? "Активен" : "Неактивен"} mouseEnterDelay={0.35}>
-          <span style={{ color: v ? "#52c41a" : "#ff4d4f", fontSize: 14 }}>●</span>
-        </Tooltip>
+        <Tag
+          color={v ? "success" : "default"}
+          style={{ margin: 0, fontSize: 11, padding: "1px 8px" }}
+        >
+          <Space size={4}>
+            <span style={{ color: v ? "#52c41a" : "#bfbfbf", fontSize: 10 }}>●</span>
+            {v ? "Активен" : "Отключен"}
+          </Space>
+        </Tag>
       ),
     },
     {
-      title: "",
+      title: "Действия",
       key: "actions",
-      width: 70,
+      width: 140,
       align: "center" as const,
       render: (_: any, record: TerminalInfo) => (
-        <Space size={0}>
+        <Space size="small">
           <Button
-            type="text"
+            type="primary"
+            ghost={!record.binding_id}
             size="small"
             icon={record.binding_id ? <EditOutlined /> : <LinkOutlined />}
             onClick={() => openModal(record)}
-          />
+          >
+            {record.binding_id ? "Изменить" : "Привязать"}
+          </Button>
           {record.binding_id && (
-            <Button
-              type="text"
-              size="small"
-              danger
-              icon={<DisconnectOutlined />}
-              onClick={() => handleUnbind(record)}
-            />
+            <Popconfirm
+              title="Отвязать меню?"
+              description={`Снять привязку терминала #${record.device_id} от меню?`}
+              okText="Да, отвязать"
+              cancelText="Отмена"
+              onConfirm={() => handleUnbind(record)}
+            >
+              <Button
+                type="text"
+                size="small"
+                danger
+                icon={<DisconnectOutlined />}
+                title="Отвязать"
+              />
+            </Popconfirm>
           )}
         </Space>
       ),
@@ -264,7 +256,7 @@ export default function TerminalsPage() {
   ];
 
   return (
-    <>
+    <div style={{ maxWidth: 840, margin: "0 auto", width: "100%", padding: "0 8px 24px" }}>
       <PageHeader
         title="Терминалы"
         subtitle="Привязка терминалов к вариантам меню"
@@ -326,27 +318,29 @@ export default function TerminalsPage() {
       </Card>
 
       <Modal
-        title={`Терминал ${modalTerminal?.device_id}`}
+        title={`Терминал #${modalTerminal?.device_id}`}
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
         onOk={handleSave}
         confirmLoading={saving}
-        okText="Прикрепить"
+        okText="Сохранить"
         cancelText="Отмена"
-        width={340}
+        width={360}
         style={{ maxWidth: "calc(100vw - 16px)" }}
       >
         {modalTerminal && (
-          <div style={{ marginBottom: 10, fontSize: 12 }}>
-            <p style={{ margin: "2px 0" }}><Text type="secondary">SN:</Text> <Text code style={{ fontSize: 11 }}>{modalTerminal.sn}</Text></p>
-            <p style={{ margin: "2px 0" }}>
+          <div style={{ marginBottom: 12, fontSize: 12 }}>
+            <p style={{ margin: "3px 0" }}>
+              <Text type="secondary">SN:</Text> <Text code style={{ fontSize: 11, whiteSpace: "nowrap" }}>{modalTerminal.sn}</Text>
+            </p>
+            <p style={{ margin: "3px 0" }}>
               <Text type="secondary">Статус:</Text>{" "}
-              {modalTerminal.is_active ? <Tag color="success" style={{ fontSize: 11 }}>Активен</Tag> : <Tag color="error" style={{ fontSize: 11 }}>Неактивен</Tag>}
+              {modalTerminal.is_active ? <Tag color="success" style={{ fontSize: 11 }}>Активен</Tag> : <Tag color="default" style={{ fontSize: 11 }}>Отключен</Tag>}
             </p>
           </div>
         )}
         <Select
-          placeholder="Вариант меню"
+          placeholder="Выберите вариант меню"
           value={modalVariantId}
           onChange={setModalVariantId}
           style={{ width: "100%" }}
@@ -358,6 +352,6 @@ export default function TerminalsPage() {
           optionFilterProp="label"
         />
       </Modal>
-    </>
+    </div>
   );
 }
