@@ -510,8 +510,8 @@ async def test_balance_by_terminal_report():
 
     mock_session = AsyncMock()
 
-    # (device_id, sn, terminal_id, tsp_count, total_count, total_amount)
-    row1 = (209, "SN209", 1, 3, 10, 50000)
+    # (device_id, sn, terminal_id, int_day, day_count, day_amount)
+    row1 = (209, "SN209", 1, 20260831, 10, 50000)
 
     async def mock_execute(stmt, params=None):
         result = MagicMock()
@@ -536,6 +536,9 @@ async def test_balance_by_terminal_report():
             assert len(data["items"]) == 1
             assert data["items"][0]["device_id"] == 209
             assert data["items"][0]["total_amount"] == 50000
+            assert data["items"][0]["total_count"] == 10
+            assert data["items"][0]["days"]["2026-08-31"]["amount"] == 50000
+            assert data["items"][0]["days"]["2026-08-31"]["count"] == 10
 
 
 @pytest.mark.anyio

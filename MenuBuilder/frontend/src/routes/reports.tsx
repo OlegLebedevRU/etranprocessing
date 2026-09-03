@@ -71,6 +71,7 @@ function fmtInt(v: number): string {
 
 const NOTE_LABELS = ["1", "2", "5", "10", "50", "100", "200", "500", "1000", "5000"];
 const COIN_LABELS = ["1", "2", "5", "10", "—", "—", "—", "—", "—", "—"];
+const RU_WEEKDAYS = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
 
 const PAYM_STATE_OPTIONS = [
   { value: -1, label: "Все" },
@@ -175,12 +176,36 @@ export default function ReportsPage() {
   const [payTop, setPayTop] = useState(50);
 
   // --- Balance by terminal state ---
+  const defaultBtDateTo = todayStr;
+  const defaultBtDateFrom = useMemo(
+    () => dayjs(todayStr).subtract(6, "day").format("YYYY-MM-DD"),
+    [todayStr]
+  );
   const [btItems, setBtItems] = useState<BalanceByTerminalRecord[]>([]);
   const [btLoading, setBtLoading] = useState(false);
   const [btDateFrom, setBtDateFrom] = useState<string>("");
   const [btDateTo, setBtDateTo] = useState<string>("");
   const [btTermInput, setBtTermInput] = useState("");
   const [btDeviceIds, setBtDeviceIds] = useState<number[]>([]);
+
+  const effectiveBtDateFrom = btDateFrom || defaultBtDateFrom;
+  const effectiveBtDateTo = btDateTo || defaultBtDateTo;
+
+  const displayedDates = useMemo(() => {
+    const start = dayjs(effectiveBtDateFrom);
+    const end = dayjs(effectiveBtDateTo);
+    if (!start.isValid()) return [];
+
+    const actualEnd = end.isValid() && !end.isBefore(start) ? end : start;
+    const diffDays = actualEnd.diff(start, "day") + 1;
+    const count = Math.min(Math.max(1, diffDays), 7);
+
+    const dates: string[] = [];
+    for (let i = 0; i < count; i++) {
+      dates.push(start.add(i, "day").format("YYYY-MM-DD"));
+    }
+    return dates;
+  }, [effectiveBtDateFrom, effectiveBtDateTo]);
 
   // --- Balance by TSP state ---
   const [btsItems, setBtsItems] = useState<BalanceByTspRecord[]>([]);
@@ -253,18 +278,21 @@ export default function ReportsPage() {
 
   // --- Balance by terminal fetch ---
   const fetchBalanceByTerminal = useCallback(async () => {
+    if (!displayedDates.length) return;
     setBtLoading(true);
     try {
+      const fetchFrom = displayedDates[0];
+      const fetchTo = displayedDates[displayedDates.length - 1];
       const resp = await getBalanceByTerminal({
-        date_from: btDateFrom || todayStr,
-        date_to: btDateTo || todayStr,
+        date_from: fetchFrom,
+        date_to: fetchTo,
         device_ids: btDeviceIds.length ? btDeviceIds : undefined,
       });
       setBtItems(resp.items);
     } finally {
       setBtLoading(false);
     }
-  }, [btDateFrom, btDateTo, btDeviceIds, todayStr]);
+  }, [displayedDates, btDeviceIds]);
 
   useEffect(() => {
     if (tenantReady && activeReport === "balance-terminal") fetchBalanceByTerminal();
@@ -538,32 +566,132 @@ export default function ReportsPage() {
   ];
 
   // --- Balance by terminal columns ---
-  const balanceTerminalColumns: ColumnsType<BalanceByTerminalRecord> = [
-    {
-      title: "Терминал",
-      dataIndex: "device_id",
-      fixed: "left" as const,
-      width: 110,
-      sorter: (a, b) => a.device_id - b.device_id,
-    },
-    {
-      title: "Сумма",
+  const balanceTerminalColumns: ColumnsType<BalanceByTerminalRecord> = useMemo(() => {
+    const cols: ColumnsType<BalanceByTerminalRecord> = [
+      {
+        title: "Терминал",
+        dataIndex: "device_id",
+        fixed: isXs ? undefined : ("left" as const),
+        width: 120,
+        sorter: (a, b) => a.device_id - b.device_id,
+        render: (id: number, r: BalanceByTerminalRecord) => (
+          <div>
+            <div style={{ fontWeight: 600 }}>{id}</div>
+            {r.sn ? (
+              <div style={{ fontSize: 11, color: "#8c8c8c" }}>{r.sn}</div>
+            ) : null}
+          </div>
+        ),
+      },
+    ];
+
+    displayedDates.forEach((d) => {
+      const dt = dayjs(d);
+      const weekday = RU_WEEKDAYS[dt.day()] || "";
+      cols.push({
+        title: (
+          <div style={{ textAlign: "right" }}>
+            <div>{dt.format("DD.MM.YYYY")}</div>
+            <div style={{ fontSize: 11, color: "#8c8c8c", fontWeight: "normal" }}>
+              {weekday}
+            </div>
+          </div>
+        ),
+        key: `day_${d}`,
+        width: 130,
+        align: "right",
+        sorter: (a, b) => (a.days?.[d]?.amount || 0) - (b.days?.[d]?.amount || 0),
+        render: (_: unknown, r: BalanceByTerminalRecord) => {
+          const dayData = r.days?.[d];
+          if (!dayData || (!dayData.amount && !dayData.count)) {
+            return <span style={{ color: "#bfbfbf" }}>—</span>;
+          }
+          return (
+            <div style={{ textAlign: "right", lineHeight: 1.3 }}>
+              <div style={{ fontWeight: 600, color: "#262626" }}>
+                {dayData.amount ? fmtMoney(dayData.amount) : "0,00"}
+              </div>
+              <div style={{ fontSize: 11, color: "#8c8c8c" }}>
+                {fmtInt(dayData.count)} пл.
+              </div>
+            </div>
+          );
+        },
+      });
+    });
+
+    cols.push({
+      title: "Итого",
       dataIndex: "total_amount",
-      width: 160,
-      align: "right",
-      render: (v: number) => fmtMoney(v),
-      sorter: (a, b) => a.total_amount - b.total_amount,
-      defaultSortOrder: "descend",
-    },
-    {
-      title: "Платежей",
-      dataIndex: "total_count",
+      key: "total_amount",
       width: 140,
       align: "right",
-      render: fmtInt,
-      sorter: (a, b) => a.total_count - b.total_count,
-    },
-  ];
+      sorter: (a, b) => a.total_amount - b.total_amount,
+      defaultSortOrder: "descend",
+      render: (_: unknown, r: BalanceByTerminalRecord) => {
+        if (!r.total_amount && !r.total_count) {
+          return <span style={{ color: "#bfbfbf" }}>—</span>;
+        }
+        return (
+          <div style={{ textAlign: "right", lineHeight: 1.3 }}>
+            <div style={{ fontWeight: 700, color: "#1890ff" }}>
+              {fmtMoney(r.total_amount)}
+            </div>
+            <div style={{ fontSize: 11, color: "#8c8c8c" }}>
+              {fmtInt(r.total_count)} пл.
+            </div>
+          </div>
+        );
+      },
+    });
+
+    return cols;
+  }, [displayedDates, isXs]);
+
+  const renderBalanceTerminalSummary = (
+    pageData: readonly BalanceByTerminalRecord[]
+  ) => {
+    if (!pageData.length) return null;
+    let allTotalAmount = 0;
+    let allTotalCount = 0;
+    const dayTotals: Record<string, { amount: number; count: number }> = {};
+    for (const d of displayedDates) {
+      dayTotals[d] = { amount: 0, count: 0 };
+    }
+    for (const row of btItems) {
+      allTotalAmount += row.total_amount || 0;
+      allTotalCount += row.total_count || 0;
+      for (const d of displayedDates) {
+        if (row.days?.[d]) {
+          dayTotals[d].amount += row.days[d].amount || 0;
+          dayTotals[d].count += row.days[d].count || 0;
+        }
+      }
+    }
+    return (
+      <Table.Summary fixed>
+        <Table.Summary.Row style={{ background: "#fafafa", fontWeight: 600 }}>
+          <Table.Summary.Cell index={0}>Всего</Table.Summary.Cell>
+          {displayedDates.map((d, idx) => (
+            <Table.Summary.Cell key={d} index={idx + 1} align="right">
+              <div>{dayTotals[d].amount ? fmtMoney(dayTotals[d].amount) : "—"}</div>
+              <div style={{ fontSize: 11, color: "#8c8c8c", fontWeight: "normal" }}>
+                {dayTotals[d].count ? `${fmtInt(dayTotals[d].count)} пл.` : "—"}
+              </div>
+            </Table.Summary.Cell>
+          ))}
+          <Table.Summary.Cell index={displayedDates.length + 1} align="right">
+            <div style={{ color: "#1890ff" }}>
+              {allTotalAmount ? fmtMoney(allTotalAmount) : "—"}
+            </div>
+            <div style={{ fontSize: 11, color: "#8c8c8c", fontWeight: "normal" }}>
+              {allTotalCount ? `${fmtInt(allTotalCount)} пл.` : "—"}
+            </div>
+          </Table.Summary.Cell>
+        </Table.Summary.Row>
+      </Table.Summary>
+    );
+  };
 
   // --- Balance by TSP columns ---
   const balanceTspColumns: ColumnsType<BalanceByTspRecord> = [
@@ -1121,28 +1249,41 @@ export default function ReportsPage() {
                     minWidth: isXs ? "100%" : 320,
                   }}
                 >
-                  <div style={{ display: "flex", gap: 6, flex: isXs ? "1 1 100%" : undefined }}>
+                  <div style={{ display: "flex", gap: 6, flex: isXs ? "1 1 100%" : undefined, alignItems: "center" }}>
                     <DatePicker
                       placeholder="Дата с"
                       size="small"
-                      style={{ flex: 1 }}
-                      value={dayjs(btDateFrom || todayStr)}
+                      style={{ flex: 1, minWidth: 120 }}
+                      value={dayjs(effectiveBtDateFrom)}
                       allowClear={false}
-                      onChange={(d) =>
-                        setBtDateFrom(d ? d.format("YYYY-MM-DD") : todayStr)
-                      }
+                      onChange={(d) => {
+                        const newFrom = d ? d.format("YYYY-MM-DD") : defaultBtDateFrom;
+                        setBtDateFrom(newFrom);
+                        if (dayjs(effectiveBtDateTo).isBefore(dayjs(newFrom))) {
+                          setBtDateTo(newFrom);
+                        }
+                      }}
                     />
                     <DatePicker
                       placeholder="Дата по"
                       size="small"
-                      style={{ flex: 1 }}
-                      value={dayjs(btDateTo || todayStr)}
+                      style={{ flex: 1, minWidth: 120 }}
+                      value={dayjs(effectiveBtDateTo)}
                       allowClear={false}
-                      onChange={(d) =>
-                        setBtDateTo(d ? d.format("YYYY-MM-DD") : todayStr)
-                      }
+                      onChange={(d) => {
+                        const newTo = d ? d.format("YYYY-MM-DD") : defaultBtDateTo;
+                        setBtDateTo(newTo);
+                        if (dayjs(newTo).isBefore(dayjs(effectiveBtDateFrom))) {
+                          setBtDateFrom(newTo);
+                        }
+                      }}
                     />
                   </div>
+                  {dayjs(effectiveBtDateTo).diff(dayjs(effectiveBtDateFrom), "day") >= 7 && displayedDates.length > 0 && (
+                    <Tag color="orange" style={{ margin: 0, fontSize: isXs ? 11 : 12 }}>
+                      Макс. 7 колонок: {dayjs(displayedDates[0]).format("DD.MM")} – {dayjs(displayedDates[displayedDates.length - 1]).format("DD.MM")}
+                    </Tag>
+                  )}
                   <div style={{ display: "flex", gap: 6, flex: isXs ? "1 1 100%" : undefined }}>
                     <Input
                       placeholder="ID терминалов"
@@ -1184,8 +1325,8 @@ export default function ReportsPage() {
                   loading={btLoading}
                   size="small"
                   className="reports-table"
-                  tableLayout="fixed"
-                  scroll={{ x: 450 }}
+                  scroll={{ x: Math.max(600, 120 + displayedDates.length * 130 + 140) }}
+                  summary={renderBalanceTerminalSummary}
                   pagination={{
                     defaultPageSize: 50,
                     pageSize: 50,

@@ -1082,30 +1082,65 @@ async def get_balance_by_terminal(
         rows = (
             await session.execute(
                 text(f"""
-                    SELECT t.device_id, t.sn, t.id AS terminal_id,
-                           COUNT(*) AS tsp_count, SUM(b.count) AS total_count,
-                           SUM(b.amount) AS total_amount
+                    SELECT t.device_id, t.sn, t.id AS terminal_id, b.int_day,
+                           SUM(b.count) AS day_count,
+                           SUM(b.amount) AS day_amount
                     FROM balance_terminal_tsp b
                     JOIN terminals t ON t.id = b.terminal_id
                     JOIN tsp ts ON ts.tsp_id = b.tsp_id
-                    WHERE {where} GROUP BY t.device_id, t.sn, t.id
-                    ORDER BY total_amount DESC
+                    WHERE {where}
+                    GROUP BY t.device_id, t.sn, t.id, b.int_day
+                    ORDER BY t.device_id, b.int_day
                 """),
                 params,
             )
         ).fetchall()
+
+        terminals_map: dict[int, dict] = {}
+        for row in rows:
+            device_id = row[0]
+            sn = (row[1] or "").strip()
+            terminal_id = row[2]
+            int_day = row[3]
+            day_count = int(row[4] or 0)
+            day_amount = int(row[5] or 0)
+
+            if device_id not in terminals_map:
+                terminals_map[device_id] = {
+                    "device_id": device_id,
+                    "sn": sn,
+                    "terminal_id": terminal_id,
+                    "tsp_count": 0,
+                    "total_count": 0,
+                    "total_amount": 0,
+                    "days": {},
+                }
+
+            term = terminals_map[device_id]
+            term["total_count"] += day_count
+            term["total_amount"] += day_amount
+
+            if int_day is not None:
+                day_str = str(int_day)
+                if len(day_str) == 8 and day_str.isdigit():
+                    date_key = f"{day_str[:4]}-{day_str[4:6]}-{day_str[6:8]}"
+                else:
+                    date_key = day_str
+                if date_key in term["days"]:
+                    term["days"][date_key]["amount"] += day_amount
+                    term["days"][date_key]["count"] += day_count
+                else:
+                    term["days"][date_key] = {
+                        "amount": day_amount,
+                        "count": day_count,
+                    }
+
+        items = sorted(
+            terminals_map.values(), key=lambda x: x["total_amount"], reverse=True
+        )
+
     return {
-        "items": [
-            {
-                "device_id": row[0],
-                "sn": (row[1] or "").strip(),
-                "terminal_id": row[2],
-                "tsp_count": row[3],
-                "total_count": row[4],
-                "total_amount": row[5],
-            }
-            for row in rows
-        ],
+        "items": items,
         "timezone": tz_name,
     }
 

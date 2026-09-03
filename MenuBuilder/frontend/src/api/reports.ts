@@ -160,6 +160,11 @@ export async function getPayments(params: {
 
 // --- Balance by terminal ---
 
+export interface BalanceDayData {
+  amount: number;
+  count: number;
+}
+
 export interface BalanceByTerminalRecord {
   device_id: number;
   sn: string;
@@ -167,6 +172,7 @@ export interface BalanceByTerminalRecord {
   tsp_count: number;
   total_count: number;
   total_amount: number;
+  days?: Record<string, BalanceDayData>;
 }
 
 export async function getBalanceByTerminal(params: {
