@@ -40,11 +40,7 @@ export async function logout(): Promise<void> {
     await client.post("/auth/logout");
   } finally {
     invalidateCache();
-    localStorage.removeItem("mb_token");
-    localStorage.removeItem("mb_user");
-    localStorage.removeItem("mb_is_superuser");
-    localStorage.removeItem("mb_current_org_id");
-    localStorage.removeItem("mb_current_org_name");
+    // Cookie transport: server clears HttpOnly cookies; only UI-side cache remains here
     localStorage.removeItem("org_timezone");
   }
 }

@@ -146,8 +146,9 @@ async def test_jwt_issuer_retry_on_5xx():
             }
         return mock_resp
 
-    with patch("httpx.AsyncClient.post", side_effect=mock_post), patch(
-        "asyncio.sleep", new_callable=AsyncMock
+    with (
+        patch("httpx.AsyncClient.post", side_effect=mock_post),
+        patch("asyncio.sleep", new_callable=AsyncMock),
     ):
         tokens = await client.issue_tokens(user_id=11, org_id=21, role_id=3)
 

@@ -103,31 +103,41 @@ def create_tenant_token(
 
 
 def decode_token(token: str) -> dict[str, Any]:
-    """Decode and validate a JWT using RS256 public key (with HS256/unverified fallback for test tokens)."""
-    # 1. Try RS256 with public key
+    """Decode and validate a JWT.
+
+    Production path: RS256 with the external issuer's public key, aud/iss verified.
+    Mock/HS256/unverified paths are available ONLY when jwt_issuer_mock_enabled is on
+    (unit tests, local dev) — never in production.
+    """
+    # 1. RS256 from the external issuer
     try:
+        decode_kwargs: dict[str, Any] = {"options": {"verify_aud": False}}
+        if settings.jwt_verify_audience:
+            decode_kwargs = {
+                "audience": settings.jwt_issuer_aud,
+                "issuer": settings.jwt_issuer_iss,
+                "options": {"verify_aud": True},
+            }
         return jwt.decode(
             token,
             settings.jwt_public_key,
             algorithms=["RS256"],
-            options={"verify_aud": False},
+            **decode_kwargs,
         )
     except Exception:  # noqa: S110, BLE001
         pass
 
-    # 2. Try HS256 with mock secret (for unit tests / mock mode)
-    try:
-        return jwt.decode(
-            token,
-            "mock_secret",
-            algorithms=["HS256"],
-            options={"verify_aud": False},
-        )
-    except Exception:  # noqa: S110, BLE001
-        pass
-
-    # 3. Try reading unverified claims if mock mode is active
+    # 2/3. Test-only fallbacks, gated by mock mode
     if settings.jwt_issuer_mock_enabled:
+        try:
+            return jwt.decode(
+                token,
+                "mock_secret",
+                algorithms=["HS256"],
+                options={"verify_aud": False},
+            )
+        except Exception:  # noqa: S110, BLE001
+            pass
         try:
             return jwt.get_unverified_claims(token)
         except Exception:  # noqa: S110, BLE001
@@ -206,27 +216,44 @@ async def get_current_user(
     except TypeError, ValueError:
         role_id = 3
 
+    # External issuer emits role as a numeric string ("1"/"2"/"3"); normalize to names
+    role_names = {1: "superuser", 2: "admin", 3: "user"}
+    if role.isdigit():
+        role = role_names.get(int(role), "user")
+
     username = payload.get("username") or payload.get("sub") or str(user_id)
     is_su = bool(
-        payload.get("is_superuser")
-        or role in ("superuser", "admin")
-        or role_id == 1
+        payload.get("is_superuser") or role in ("superuser", "admin") or role_id == 1
     )
     if is_su and role not in ("superuser", "admin"):
         role = "superuser"
 
     token_type = payload.get("token_type", "tenant")
     orig_sub = payload.get("orig_sub") or username
-    is_imp = bool(payload.get("is_imp", False))
+    # v2 issuer sends is_imp explicitly; for older tokens derive it: superuser inside a tenant
+    if "is_imp" in payload:
+        is_imp = bool(payload.get("is_imp"))
+    else:
+        is_imp = bool(is_su and org_id is not None and org_id > 0)
 
-    if is_imp and request.method in ("POST", "PUT", "PATCH", "DELETE"):
+    req_method = (
+        request.scope.get("method")
+        if hasattr(request, "scope") and isinstance(request.scope, dict)
+        else getattr(request, "method", None)
+    )
+    if is_imp and req_method in ("POST", "PUT", "PATCH", "DELETE"):
+        req_path = (
+            request.url.path
+            if hasattr(request, "url") and hasattr(request.url, "path")
+            else ""
+        )
         logger.info(
             "audit impersonated action user=%s orig_sub=%s org=%s method=%s path=%s",
             username,
             orig_sub,
             org_id,
-            request.method,
-            request.url.path,
+            req_method,
+            req_path,
         )
 
     return {
@@ -240,6 +267,7 @@ async def get_current_user(
         "orig_sub": orig_sub,
         "is_impersonated": is_imp,
         "exp": payload.get("exp"),
+        "sid": payload.get("sid"),
     }
 
 

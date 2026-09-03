@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { getMe, type UserInfo } from "../api/auth";
+import { scheduleRefresh } from "../api/session";
 
 export interface SessionContextType {
   user: UserInfo | null;
@@ -22,7 +23,8 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Migration for legacy clients: clean up mb_token / mb_master_token from localStorage
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const transport = (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_AUTH_TRANSPORT;
+      const transport = (import.meta as unknown as { env?: Record<string, string | undefined> }).env
+          ?.VITE_AUTH_TRANSPORT;
       if (transport !== "bearer") {
         localStorage.removeItem("mb_token");
         localStorage.removeItem("mb_master_token");
@@ -37,6 +39,13 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (data?.timezone) {
         localStorage.setItem("org_timezone", data.timezone);
       }
+      // After a page reload nobody else schedules the silent refresh — do it from /auth/me
+      if (data?.expires_at) {
+        const remainingSec = Math.floor((Date.parse(data.expires_at) - Date.now()) / 1000);
+        if (remainingSec > 0) {
+          scheduleRefresh(remainingSec);
+        }
+      }
       return data;
     } catch {
       setUser(null);
@@ -47,13 +56,13 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   useEffect(() => {
-    refreshUser();
+    void refreshUser();
   }, []);
 
   return (
-    <SessionContext.Provider value={{ user, loading, refreshUser, setUser }}>
-      {children}
-    </SessionContext.Provider>
+      <SessionContext.Provider value={{ user, loading, refreshUser, setUser }}>
+        {children}
+      </SessionContext.Provider>
   );
 };
 

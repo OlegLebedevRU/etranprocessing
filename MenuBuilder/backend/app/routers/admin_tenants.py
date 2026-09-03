@@ -11,6 +11,10 @@ from app.services.jwt_issuer import jwt_issuer_client
 from app.user_store import get_user_store
 
 router = APIRouter(prefix="/admin/tenants", tags=["admin-tenants"])
+# Alias under /api/auth/*: the refreshToken cookie has path=/api/auth and the browser
+# sends it ONLY to that prefix. Nginx has auth_jwt off there; backend verifies the
+# accessToken cookie itself via require_superuser.
+auth_alias_router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 class SwitchTenantRequest(BaseModel):
@@ -35,6 +39,46 @@ class OrgItem(BaseModel):
     name: str | None = None
     is_active: bool
     timezone: str = "Europe/Moscow"
+
+
+async def _resolve_current_session(
+    request: Request,
+    body_refresh_token: str | None,
+    user: dict,
+):
+    """Find the caller's server-side session.
+
+    Priority:
+      1. `sid` claim from the access token (issuer v2) — works on any path.
+      2. refresh token from request body or `refreshToken` cookie
+         (cookie arrives only under /api/auth/* because of its path).
+    """
+    store = get_user_store()
+
+    sid = user.get("sid")
+    if sid is not None and str(sid).isdigit():
+        session = await store.get_session_by_id(int(sid))
+        if (
+            session is not None
+            and not session.is_revoked
+            and session.user_id == user.get("user_id")
+        ):
+            return store, session
+
+    refresh_token_val = body_refresh_token or request.cookies.get("refreshToken")
+    if not refresh_token_val:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session not found. Use /api/auth/switch-tenant or pass refresh_token.",
+        )
+
+    session = await store.get_session_by_refresh_token(refresh_token_val)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired session",
+        )
+    return store, session
 
 
 @router.get("/available", response_model=list[OrgItem])
@@ -67,23 +111,7 @@ async def switch_tenant(
     user: dict = Depends(require_superuser),
 ):
     """Switch tenant context and issue a tenant-scoped JWT. Strictly restricted to superusers."""
-    refresh_token_val = body.refresh_token
-    if not refresh_token_val:
-        refresh_token_val = request.cookies.get("refreshToken") or request.cookies.get("refresh_token")
-
-    if not refresh_token_val:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Session not found. Refresh token required.",
-        )
-
-    store = get_user_store()
-    session = await store.get_session_by_refresh_token(refresh_token_val)
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired session",
-        )
+    store, session = await _resolve_current_session(request, body.refresh_token, user)
 
     if body.org_id == 0:
         target_org_id = 0
@@ -102,7 +130,9 @@ async def switch_tenant(
                 )
             target_org_id = org.org_id
             target_org_name = org.org_name
-            target_timezone = getattr(org, "timezone", "Europe/Moscow") or "Europe/Moscow"
+            target_timezone = (
+                getattr(org, "timezone", "Europe/Moscow") or "Europe/Moscow"
+            )
 
     user_id = user.get("user_id") or session.user_id or 1
     role_id = user.get("role_id") or 1
@@ -130,8 +160,8 @@ async def switch_tenant(
     await store.set_session_active_org(session.id, target_org_id)
     await store.set_user_last_org(user_id, target_org_id)
 
-    # DO NOT call create_session, DO NOT touch/rewrite refreshToken cookie.
-    # Update ONLY accessToken cookie.
+    # DO NOT create a new session, DO NOT rewrite the refreshToken cookie.
+    # Update ONLY the accessToken cookie.
     is_secure = _is_secure_request(request)
     _set_access_cookie(
         response=response,
@@ -152,3 +182,14 @@ async def switch_tenant(
         is_superuser=is_superuser,
         is_impersonated=is_imp,
     )
+
+
+@auth_alias_router.post("/switch-tenant", response_model=SwitchTenantResponse)
+async def switch_tenant_via_auth_path(
+    body: SwitchTenantRequest,
+    request: Request,
+    response: Response,
+    user: dict = Depends(require_superuser),
+):
+    """Browser entry point: same handler, but under /api/auth so the refreshToken cookie is sent."""
+    return await switch_tenant(body, request, response, user)

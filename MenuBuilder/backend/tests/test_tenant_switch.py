@@ -3,7 +3,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
+from fastapi.security import HTTPAuthorizationCredentials
 from httpx import ASGITransport, AsyncClient
+from jose import jwt
 from starlette.requests import Request
 
 from app.auth import (
@@ -25,6 +27,8 @@ def _request_with_headers(headers: dict[str, str]) -> Request:
     return Request(
         {
             "type": "http",
+            "method": "GET",
+            "path": "/",
             "headers": [
                 (name.lower().encode(), value.encode())
                 for name, value in headers.items()
@@ -320,7 +324,9 @@ async def test_step2_superuser_switch_refresh_and_session_count():
                 "/api/admin/tenants/switch",
                 json={"org_id": 223},
                 cookies=cookies,
-                headers={"Authorization": f"Bearer {login_resp.json()['access_token']}"},
+                headers={
+                    "Authorization": f"Bearer {login_resp.json()['access_token']}"
+                },
             )
             assert switch_resp.status_code == 200
             switch_data = switch_resp.json()
@@ -392,7 +398,9 @@ async def test_step2_superuser_login_with_last_org():
     with (
         patch("app.routers.auth.get_user_store", return_value=store),
         patch("app.routers.auth.async_session") as mock_async_session,
-        patch.object(jwt_issuer_client, "issue_tokens", wraps=jwt_issuer_client.issue_tokens) as spy_issuer,
+        patch.object(
+            jwt_issuer_client, "issue_tokens", wraps=jwt_issuer_client.issue_tokens
+        ) as spy_issuer,
     ):
         mock_async_session.return_value.__aenter__.return_value = mock_session
         async with AsyncClient(
@@ -778,3 +786,180 @@ async def test_step6_authorization_matrix_and_audit(caplog):
                 headers={"Authorization": f"Bearer {su_platform_token}"},
             )
             assert r8.status_code == 200
+
+
+@pytest.mark.anyio
+async def test_step9_switch_via_auth_alias_with_cookie():
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        # 1. Login superuser
+        login_resp = await client.post(
+            "/api/auth/login",
+            json={
+                "username": "o.lebedev",
+                "password": "eaf21fcabcffeb1f97f01a4fc02ece63",
+            },
+        )
+        assert login_resp.status_code == 200
+        cookies = dict(login_resp.cookies)
+        assert "refreshToken" in cookies
+        assert "accessToken" in cookies
+
+        # 2. Switch to org_id: 0 via /api/auth/switch-tenant with cookies and X-Requested-With
+        switch0_resp = await client.post(
+            "/api/auth/switch-tenant",
+            json={"org_id": 0},
+            cookies=cookies,
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+        assert switch0_resp.status_code == 200
+        data0 = switch0_resp.json()
+        assert data0["org_id"] == 0
+        assert data0["org_name"] == "Платформа"
+        assert data0["is_impersonated"] is False
+
+        cookies.update(dict(switch0_resp.cookies))
+
+        # 3. Switch to active org (223)
+        mock_target_org = Org(
+            org_id=223,
+            org_name="DEMO Company",
+            name="DEMO Company",
+            status=1,
+            is_active=True,
+        )
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_target_org
+        mock_session.execute.return_value = mock_result
+
+        with patch("app.routers.admin_tenants.async_session") as mock_async_session:
+            mock_async_session.return_value.__aenter__.return_value = mock_session
+            switch_resp = await client.post(
+                "/api/auth/switch-tenant",
+                json={"org_id": 223},
+                cookies=cookies,
+                headers={"X-Requested-With": "XMLHttpRequest"},
+            )
+            assert switch_resp.status_code == 200
+            data_switched = switch_resp.json()
+            assert data_switched["org_id"] == 223
+            assert data_switched["is_impersonated"] is True
+
+
+@pytest.mark.xfail(
+    strict=True, reason="sid support in _generate_mock_tokens is added in Phase B"
+)
+@pytest.mark.anyio
+async def test_step9_switch_by_sid_claim_without_refresh_cookie():
+    store = get_user_store()
+    user = await store.get_by_username("o.lebedev")
+    assert user is not None
+    session = await store.create_session(
+        user_id=user.id,
+        refresh_token="test_sid_switch_refresh_token",
+        ip_address="127.0.0.1",
+        user_agent="pytest",
+        expires_in_seconds=3600,
+        active_org_id=0,
+    )
+    tokens = jwt_issuer_client._generate_mock_tokens(
+        user_id=user.id,
+        org_id=0,
+        role_id=1,
+        username="o.lebedev",
+        role="superuser",
+        is_superuser=True,
+        sid=session.id,  # pyright: ignore[reportCallIssue]
+    )
+    token = tokens["accessToken"]
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        # Call /api/admin/tenants/switch without refreshToken cookie
+        resp = await client.post(
+            "/api/admin/tenants/switch",
+            json={"org_id": 0},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 200
+
+
+@pytest.mark.anyio
+async def test_step9_hs256_rejected_when_mock_disabled(monkeypatch):
+    monkeypatch.setattr(settings, "jwt_issuer_mock_enabled", False)
+    payload = {
+        "sub": "o.lebedev",
+        "userId": 1,
+        "roleId": 1,
+        "orgId": 0,
+        "role": "superuser",
+        "is_superuser": True,
+        "exp": int((datetime.now(UTC) + timedelta(hours=1)).timestamp()),
+    }
+    hs256_token = jwt.encode(payload, "mock_secret", algorithm="HS256")
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        resp = await client.get(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {hs256_token}"},
+        )
+        assert resp.status_code == 401
+
+
+@pytest.mark.anyio
+async def test_step9_numeric_role_normalized():
+    # 1. role="1", roleId=1, orgId=0 -> role="superuser", is_superuser=True
+    token_su = jwt.encode(
+        {"sub": "1", "userId": 1, "role": "1", "roleId": 1, "orgId": 0},
+        "mock_secret",
+        algorithm="HS256",
+    )
+    req = _request_with_headers({"Authorization": f"Bearer {token_su}"})
+    user_su = await get_current_user(
+        req, HTTPAuthorizationCredentials(scheme="Bearer", credentials=token_su)
+    )
+    assert user_su["role"] == "superuser"
+    assert user_su["is_superuser"] is True
+
+    # 2. role="3", roleId=3 -> role="user", is_superuser=False
+    token_usr = jwt.encode(
+        {"sub": "2", "userId": 2, "role": "3", "roleId": 3, "orgId": 10},
+        "mock_secret",
+        algorithm="HS256",
+    )
+    req_usr = _request_with_headers({"Authorization": f"Bearer {token_usr}"})
+    user_usr = await get_current_user(
+        req_usr, HTTPAuthorizationCredentials(scheme="Bearer", credentials=token_usr)
+    )
+    assert user_usr["role"] == "user"
+    assert user_usr["is_superuser"] is False
+
+
+@pytest.mark.anyio
+async def test_step9_is_imp_derived_for_v1_token():
+    # 1. roleId=1, orgId=223 without is_imp in payload -> is_impersonated is True
+    token_imp = jwt.encode(
+        {"sub": "1", "userId": 1, "role": "superuser", "roleId": 1, "orgId": 223},
+        "mock_secret",
+        algorithm="HS256",
+    )
+    req_imp = _request_with_headers({"Authorization": f"Bearer {token_imp}"})
+    user_imp = await get_current_user(
+        req_imp, HTTPAuthorizationCredentials(scheme="Bearer", credentials=token_imp)
+    )
+    assert user_imp["is_impersonated"] is True
+
+    # 2. roleId=1, orgId=0 without is_imp in payload -> is_impersonated is False
+    token_plat = jwt.encode(
+        {"sub": "1", "userId": 1, "role": "superuser", "roleId": 1, "orgId": 0},
+        "mock_secret",
+        algorithm="HS256",
+    )
+    req_plat = _request_with_headers({"Authorization": f"Bearer {token_plat}"})
+    user_plat = await get_current_user(
+        req_plat, HTTPAuthorizationCredentials(scheme="Bearer", credentials=token_plat)
+    )
+    assert user_plat["is_impersonated"] is False

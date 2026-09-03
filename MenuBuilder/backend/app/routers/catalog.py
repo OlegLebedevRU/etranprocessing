@@ -240,7 +240,11 @@ async def list_items(
 ):
     org_id = resolve_org_id(user)
 
-    stmt = select(CatalogItem).options(selectinload(CatalogItem.category)).where(CatalogItem.org_id == org_id)
+    stmt = (
+        select(CatalogItem)
+        .options(selectinload(CatalogItem.category))
+        .where(CatalogItem.org_id == org_id)
+    )
     if category_id is not None:
         stmt = stmt.where(CatalogItem.category_id == category_id)
     if search:

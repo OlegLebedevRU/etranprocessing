@@ -25,18 +25,22 @@ export async function listAvailableTenants(forceFresh = false): Promise<OrgItem[
     invalidateCache("available_tenants");
   }
   return withCache<OrgItem[]>(
-    "available_tenants",
-    async () => {
-      const { data } = await client.get<OrgItem[]>("/admin/tenants/available");
-      return data;
-    },
-    120_000
+      "available_tenants",
+      async () => {
+        const { data } = await client.get<OrgItem[]>("/admin/tenants/available");
+        return data;
+      },
+      120_000
   );
 }
 
+/**
+ * Tenant switch goes through /api/auth/switch-tenant (not /api/admin/tenants/switch):
+ * the HttpOnly refreshToken cookie has path=/api/auth, so the browser only sends it there.
+ */
 export async function switchTenant(orgId: number): Promise<SwitchTenantResponse> {
   invalidateCache();
-  const { data } = await client.post<SwitchTenantResponse>("/admin/tenants/switch", {
+  const { data } = await client.post<SwitchTenantResponse>("/auth/switch-tenant", {
     org_id: orgId,
   });
   if (data?.timezone) {

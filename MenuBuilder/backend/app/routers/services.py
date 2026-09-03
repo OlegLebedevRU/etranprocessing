@@ -36,7 +36,9 @@ async def list_services(
             raise HTTPException(status_code=404, detail="Menu variant not found")
         stmt = stmt.where(Service.menu_variant_id == menu_variant_id)
     else:
-        stmt = stmt.join(Group, Group.id == Service.group_id).where(Group.org_id == org_id)
+        stmt = stmt.join(Group, Group.id == Service.group_id).where(
+            Group.org_id == org_id
+        )
 
     stmt = stmt.order_by(Service.tsp_code)
     result = await db.execute(stmt)

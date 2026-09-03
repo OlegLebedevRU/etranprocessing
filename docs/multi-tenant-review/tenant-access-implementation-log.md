@@ -352,3 +352,45 @@
 
 ### Что осталось:
 - Шаг 8: Документация и финальный отчёт (D12).
+
+---
+
+## Шаг 9. Стабилизация и доработки switch-alias, auth hardening
+
+**Дата:** 2026-09-03  
+**Статус:** Выполнен  
+
+### Что сделано:
+1. Выполнены ручные изменения архитектуры Шага 9:
+   - В `app/routers/admin_tenants.py`: реализован хелпер `_resolve_current_session` (приоритет: claim `sid` -> refresh token из тела/куки), добавлен `auth_alias_router` с маршрутом `POST /api/auth/switch-tenant` (решение ограничения path `/api/auth` для HttpOnly cookie `refreshToken`).
+   - В `app/user_store.py`: добавлен метод `DatabaseUserStore.get_session_by_id()`.
+   - В `app/main.py`: подключен `admin_tenants.auth_alias_router` под префиксом `/api`.
+   - В `app/config.py`: включен флаг `jwt_verify_audience: bool = True`.
+   - В `app/auth.py::decode_token`: пути fallback (HS256 с `mock_secret` и unverified-claims) теперь строго заблокированы при отключенном `jwt_issuer_mock_enabled`; RS256 проверяет `aud` и `iss`.
+   - В `app/auth.py::get_current_user`: числовые роли ("1"/"2"/"3") нормализуются в строковые ("superuser", "admin", "user"); `sid` пробрасывается в словарь пользователя; `is_imp` берется из claim либо вычисляется как `is_superuser and org_id > 0`.
+   - Во frontend: `api/adminTenants.ts` переведен на `POST /auth/switch-tenant`; `api/session.ts` перепланирует таймер по `token-refreshed` без прямого чтения `mb_token`; `session/SessionContext.tsx` планирует фоновое обновление по `expires_at` из `/auth/me`; `api/auth.ts::logout` упрощен.
+2. Стабилизация и исправления (Фаза A):
+   - Удалена паразитная строка-комментарий `# ... existing code ...` в `user_store.py`.
+   - Исправлена обработка `request.method` в `app/auth.py` при аудите мутаций имперсонированных пользователей для безопасной работы с объектами `Request` без явного `method` в `scope`.
+   - Добавлены переводы строк в конце файлов, форматирование кодовой базы через `ruff format`.
+   - В `MenuBuilder/frontend/src/routes/login.tsx` сохранено обращение к `mb_token` строго под флагом `VITE_AUTH_TRANSPORT === "bearer"`.
+   - Добавлены тесты в `tests/test_tenant_switch.py`:
+     - `test_step9_switch_via_auth_alias_with_cookie`: успешное переключение в платформу (`org_id=0`) и тенант через `/api/auth/switch-tenant` с передачей CSRF-заголовка и проверкой `is_impersonated`.
+     - `test_step9_switch_by_sid_claim_without_refresh_cookie`: помечен `xfail(strict=True)` до реализации передачи `sid` в `_generate_mock_tokens` в Шаге 10.
+     - `test_step9_hs256_rejected_when_mock_disabled`: проверка отклонения (401) HS256 токенов при `jwt_issuer_mock_enabled=False`.
+     - `test_step9_numeric_role_normalized`: нормализация числовых ролей ("1" -> superuser, "3" -> user).
+     - `test_step9_is_imp_derived_for_v1_token`: вывод флага имперсонации `is_imp` для токенов v1 без явного claim.
+
+### Что проверено:
+- `pytest` (`MenuBuilder/backend`): 196 passed, 1 xfailed (sid switch) за 69.01s.
+- `ruff check .` (`MenuBuilder/backend`): All checks passed.
+- `ruff format --check .` (`MenuBuilder/backend`): All files formatted.
+- `pyright .` (`MenuBuilder/backend`): 0 errors, 0 warnings.
+- `npm run build` (`MenuBuilder/frontend`): сборка успешна (24.16s).
+- Поиск `mb_token` в `src/`: только ветки под флагом `bearer` и зачистка в `SessionContext` / `client.ts`.
+
+### Что осталось:
+- Шаг 10 (Фаза B): Отправка v2-полей в issuer, зеркало mock к контракту issuer v2.
+- Шаг 13 (Фаза C): Ротация сессии на месте.
+- Шаг 11/12 (Фаза D): Деплой и smoke.
+- Шаг 14 (Фаза E): Документация.

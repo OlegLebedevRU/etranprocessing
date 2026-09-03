@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = 60  # 60 minutes for access token
     jwt_refresh_expire_days: int = 30  # 30 days for refresh token
     trust_proxy_identity_headers: bool = False
+    # Verify aud/iss of RS256 tokens against jwt_issuer_aud / jwt_issuer_iss
+    jwt_verify_audience: bool = True
 
     @property
     def jwt_secret_bytes(self) -> bytes:

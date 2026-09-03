@@ -173,7 +173,7 @@ class JwtIssuerClient:
             "is_superuser": is_superuser,
             "token_type": "tenant",
             "orig_sub": username or str(user_id),
-            "is_imp": bool(is_superuser and effective_org_id > 1),
+            "is_imp": bool(is_superuser and effective_org_id > 0),
             "aud": self.aud,
             "iss": self.iss,
             "iat": int(now.timestamp()),

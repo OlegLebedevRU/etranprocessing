@@ -65,9 +65,12 @@ async def csrf_protection_middleware(request: Request, call_next):
         )
     return await call_next(request)
 
+
 app.include_router(auth.router, prefix="/api", tags=["auth"])
 app.include_router(admin_users.router, prefix="/api", tags=["admin-users"])
 app.include_router(admin_tenants.router, prefix="/api", tags=["admin-tenants"])
+# Browser-facing alias /api/auth/switch-tenant (refreshToken cookie path = /api/auth)
+app.include_router(admin_tenants.auth_alias_router, prefix="/api", tags=["auth"])
 app.include_router(admin_organizations.router, tags=["admin-organizations"])
 app.include_router(admin_terminals.router, tags=["admin-terminals"])
 app.include_router(groups.router, prefix="/api/groups", tags=["groups"])

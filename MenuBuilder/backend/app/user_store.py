@@ -93,7 +93,9 @@ class DatabaseUserStore(AbstractUserStore):
         if self._db_available:
             try:
                 async with async_session() as session:
-                    result = await session.execute(select(User).where(User.id == user_id))
+                    result = await session.execute(
+                        select(User).where(User.id == user_id)
+                    )
                     user = result.scalar_one_or_none()
                     if user:
                         return self._to_record(user)
@@ -233,6 +235,41 @@ class DatabaseUserStore(AbstractUserStore):
                 is_revoked=s["is_revoked"],
                 active_org_id=s.get("active_org_id"),
             )
+        return None
+
+    async def get_session_by_id(self, session_id: int) -> UserSession | None:
+        """Fetch a session by primary key (used with the `sid` claim of issuer v2 tokens)."""
+        now = datetime.now(UTC)
+        if self._db_available:
+            try:
+                async with async_session() as session:
+                    result = await session.execute(
+                        select(UserSession).where(
+                            UserSession.id == session_id,
+                            UserSession.is_revoked.is_(False),
+                            UserSession.expires_at > now,
+                        )
+                    )
+                    return result.scalar_one_or_none()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "Database error fetching session by id %s: %s", session_id, exc
+                )
+                self._db_available = False
+
+        for s in self._in_memory_sessions.values():
+            if s["id"] == session_id and not s["is_revoked"] and s["expires_at"] > now:
+                return UserSession(
+                    id=s["id"],
+                    user_id=s["user_id"],
+                    refresh_token=s["refresh_token"],
+                    refresh_token_hash=s["refresh_token_hash"],
+                    ip_address=s["ip_address"],
+                    user_agent=s["user_agent"],
+                    expires_at=s["expires_at"],
+                    is_revoked=s["is_revoked"],
+                    active_org_id=s.get("active_org_id"),
+                )
         return None
 
     async def set_session_active_org(self, session_id: int, org_id: int) -> None:
@@ -408,10 +445,7 @@ class ConfigUserStore(AbstractUserStore):
                     org_id = None
 
                 role = str(u.get("role", "user")).lower()
-                is_su = bool(
-                    u.get("is_superuser")
-                    or role in ("superuser", "admin")
-                )
+                is_su = bool(u.get("is_superuser") or role in ("superuser", "admin"))
                 if is_su and role not in ("superuser", "admin"):
                     role = "superuser"
 
@@ -434,10 +468,7 @@ class ConfigUserStore(AbstractUserStore):
     async def get_by_id(self, user_id: int) -> UserRecord | None:
         for u in settings.get_users():
             role = str(u.get("role", "user")).lower()
-            is_su = bool(
-                u.get("is_superuser")
-                or role in ("superuser", "admin")
-            )
+            is_su = bool(u.get("is_superuser") or role in ("superuser", "admin"))
             uid = int(u.get("id", 1 if is_su else 0))
             if uid == user_id:
                 return await self.get_by_username(u["username"])

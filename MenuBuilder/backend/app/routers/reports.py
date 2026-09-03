@@ -338,7 +338,9 @@ async def get_payments_report(
 
     async with async_session() as session:
         org_tz_row = (
-            await session.execute(select(Org.timezone).where(Org.org_id == effective_org_id))
+            await session.execute(
+                select(Org.timezone).where(Org.org_id == effective_org_id)
+            )
         ).scalar_one_or_none()
         tz = resolve_tz(org_tz_row)
         tz_name = get_timezone_name(tz)
@@ -530,7 +532,9 @@ async def get_balance_by_terminal(
     effective_org_id = resolve_org_id(user, org_id)
     async with async_session() as session:
         org_tz_row = (
-            await session.execute(select(Org.timezone).where(Org.org_id == effective_org_id))
+            await session.execute(
+                select(Org.timezone).where(Org.org_id == effective_org_id)
+            )
         ).scalar_one_or_none()
         tz = resolve_tz(org_tz_row)
         tz_name = get_timezone_name(tz)
@@ -590,7 +594,9 @@ async def get_balance_by_tsp(
     effective_org_id = resolve_org_id(user, org_id)
     async with async_session() as session:
         org_tz_row = (
-            await session.execute(select(Org.timezone).where(Org.org_id == effective_org_id))
+            await session.execute(
+                select(Org.timezone).where(Org.org_id == effective_org_id)
+            )
         ).scalar_one_or_none()
         tz = resolve_tz(org_tz_row)
         tz_name = get_timezone_name(tz)
