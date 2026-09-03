@@ -139,12 +139,12 @@ src/
 
 - `baseURL: "/api"`;
 - JSON как тип содержимого по умолчанию;
-- `withCredentials: true` для передачи HttpOnly cookie `accessToken` и `refreshToken`;
-- `X-Requested-With: XMLHttpRequest` как заголовок по умолчанию на всех запросах (CSRF-защита мутаций);
-- Request interceptor: при стандартном транспорте (`cookie`) не передаёт токен в заголовках, полагаясь на браузерный транспорт; при `VITE_AUTH_TRANSPORT=bearer` подставляет заголовок `Authorization: Bearer <mb_token>`;
-- Response interceptor: реактивный fallback при 401 с очередью повторных запросов;
+- `withCredentials: true` для гарантированной передачи HttpOnly cookies `accessToken` (path `/`) и `refreshToken` (path `/api/auth`);
+- `X-Requested-With: XMLHttpRequest` как заголовок по умолчанию на всех запросах (CSRF-защита мутаций на стороне backend);
+- Request interceptor: при стандартном транспорте (`cookie`) не передаёт токен в заголовках, полагаясь на браузерный транспорт cookies; при `VITE_AUTH_TRANSPORT=bearer` подставляет заголовок `Authorization: Bearer <mb_token>`;
+- Response interceptor: реактивный fallback при 401 с очередью ожидания повторных запросов (`failedQueue`);
 - Упреждающее фоновое обновление токена (silent refresh) в `src/api/session.ts` по таймеру (`exp - 300с`) и на событии `visibilitychange`;
-- Межвкладочная синхронизация сессии через `BroadcastChannel("mb-session")` (события `token-refreshed`, `tenant-switched`, `logout`).
+- Межвкладочная синхронизация сессии через `BroadcastChannel` (каналы `"tenant-sync"` и `"mb-session"`, события `token-refreshed`, `tenant-switched`, `logout`).
 
 API разделён по предметным областям: `auth`, `monitoring`, `reports`, `billing`, `certificate-pin`, `catalog`, `menu-variants`, `terminal-bindings`, `devices`, `integrations`, `admin`, `adminTenants`, `adminUsers` и другие. Компоненты не должны собирать URL вручную, если операция относится к существующему API-модулю.
 
@@ -248,10 +248,11 @@ sequenceDiagram
 
 ### 9.1. Сессия и SessionContext
 
-Аутентификация в браузере опирается на HttpOnly cookie (`accessToken` и `refreshToken`), устанавливаемые backend'ом с атрибутами `SameSite=Lax` и `Secure` при HTTPS. Токены не сохраняются и не читаются через `localStorage` (защита от XSS-угроз).
+Аутентификация в браузере опирается на HttpOnly cookie (`accessToken` с `path=/` и `refreshToken` с `path=/api/auth`), устанавливаемые backend'ом с атрибутами `SameSite=Lax` и `Secure` при HTTPS. Токены не сохраняются и не читаются через `localStorage` (защита от XSS-угроз).
 
 Единым источником истины о текущей сессии на фронтенде является `SessionContext` (`src/session/SessionContext.tsx`).
-При старте приложения `RequireAuth` обращается к серверу через `GET /api/auth/me` (кэш в памяти 60 секунд) и сохраняет объект `UserInfo` в контексте.
+При старте приложения `RequireAuth` обращается к серверу через `GET /api/auth/me` (кэш в памяти 60 секунд) и сохраняет объект `UserInfo` в контексте. Объект содержит полный набор атрибутов сессии: `user_id`, `username`, `org_id`, `role_id`, `role`, `is_superuser`, `can_switch_org`, `token_type`, `is_impersonated`, `org_name`, `timezone`, `expires_at`, `full_name`.
+На основе поля `expires_at` `SessionContext` планирует упреждающий таймер silent refresh за 300 секунд до истечения срока действия токена (с перепланированием при наступлении событий `token-refreshed`).
 Если сессия отсутствует или недействительна (401), выполняется автоматический переход на `/login`.
 
 ### 9.2. Переключение организации
@@ -348,8 +349,8 @@ Vite создаёт статический production bundle в `MenuBuilder/fro
 
 1. **Route-centric монолиты.** Несколько страниц велики и совмещают загрузку данных, доменные вычисления и JSX, что усложняет изолированное тестирование и повторное использование.
 2. **Ручное управление server state.** Loading/error/refetch/cache-invalidation реализуются в каждом экране отдельно; отсутствуют дедупликация запросов и согласованная политика retries для большинства данных.
-3. ~~**Разрозненный session context.**~~ [РЕШЕНО в целевой архитектуре тенантов] Реализован централизованный `SessionContext` с источником истины в `/api/auth/me` и синхронизацией вкладок через `BroadcastChannel`.
-4. ~~**JWT в localStorage.**~~ [РЕШЕНО в целевой архитектуре тенантов] Токены переведены на HttpOnly cookie с CSRF-защитой через `X-Requested-With: XMLHttpRequest`. Токены больше не сохраняются в `localStorage`.
+3. ~~**Разрозненный session context.**~~ [СНЯТО — решено в целевой архитектуре] Реализован централизованный `SessionContext` с источником истины в `/api/auth/me` и межвкладочной синхронизацией через `BroadcastChannel`.
+4. ~~**JWT в localStorage.**~~ [СНЯТО — решено в целевой архитектуре] Токены полностью переведены на HttpOnly cookie (`accessToken` с path `/` и `refreshToken` с path `/api/auth`) с CSRF-защитой через `X-Requested-With: XMLHttpRequest`. Безусловная запись в `localStorage` устранена.
 5. **Неполная автоматизированная проверка.** Нет unit/component/e2e test scripts, а build не проверяет поведение критических потоков.
 6. **Неоднородная готовность интеграций.** Часть интерфейса витрины имеет демонстрационное локальное поведение без сохранения на backend.
 7. **Нет общей observability-границы.** Ошибки в основном показываются локально; отсутствуют error boundary, correlation ID и централизованный сбор frontend exceptions.
