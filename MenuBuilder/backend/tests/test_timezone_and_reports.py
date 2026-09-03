@@ -10,6 +10,7 @@ from app.auth import create_access_token
 from app.database import get_db
 from app.main import app
 from app.models import Org
+from app.user_store import get_user_store
 from app.utils.timezone import (
     get_date_range_bounds_utc,
     get_local_datetime,
@@ -125,6 +126,12 @@ class TestAuthAndTimezone:
         )
         headers = {"Authorization": f"Bearer {su_token}"}
 
+        store = get_user_store()
+        await store.create_session(
+            user_id=1,
+            refresh_token="test_refresh_tz_switch",
+        )
+
         mock_session = AsyncMock()
         mock_org = Org(
             org_id=424,
@@ -149,6 +156,7 @@ class TestAuthAndTimezone:
                 resp = await client.post(
                     "/api/admin/tenants/switch",
                     json={"org_id": 424},
+                    cookies={"refreshToken": "test_refresh_tz_switch"},
                     headers=headers,
                 )
                 assert resp.status_code == 200

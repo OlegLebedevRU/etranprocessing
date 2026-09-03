@@ -61,6 +61,7 @@ import {
   TIMEZONE_OPTIONS,
   getTimezoneLabel,
 } from "../utils/timezone";
+import { useSession } from "../session/SessionContext";
 
 const { Title, Text, Paragraph } = Typography;
 const { useBreakpoint } = Grid;
@@ -69,6 +70,7 @@ export default function AdminTerminalsPage() {
   const navigate = useNavigate();
   const screens = useBreakpoint();
   const isMobile = !screens.md;
+  const { user } = useSession();
 
   const [loading, setLoading] = useState(false);
   const [terminals, setTerminals] = useState<AdminTerminal[]>([]);
@@ -78,8 +80,7 @@ export default function AdminTerminalsPage() {
 
   // Filter states
   const [selectedOrgId, setSelectedOrgId] = useState<number | undefined>(() => {
-    const stored = localStorage.getItem("mb_current_org_id");
-    return stored ? Number(stored) : undefined;
+    return user?.org_id ? Number(user.org_id) : undefined;
   });
   const [selectedStatus, setSelectedStatus] = useState<boolean | undefined>(undefined);
   const [searchInput, setSearchInput] = useState("");

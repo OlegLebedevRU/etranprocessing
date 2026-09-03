@@ -22,8 +22,9 @@ class Settings(BaseSettings):
     jwt_public_key: str = DEFAULT_JWT_PUBLIC_KEY
     jwt_private_key: str | None = None
     jwt_secret_hex: str = ""
-    jwt_expire_minutes: int = 15  # 15 minutes for access token
-    jwt_refresh_expire_days: int = 7  # 7 days for refresh token
+    jwt_expire_minutes: int = 60  # 60 minutes for access token
+    jwt_refresh_expire_days: int = 30  # 30 days for refresh token
+    trust_proxy_identity_headers: bool = False
 
     @property
     def jwt_secret_bytes(self) -> bytes:
@@ -42,6 +43,7 @@ class Settings(BaseSettings):
     jwt_issuer_kid: str = "menubuilder-rs256-key-1"
     jwt_issuer_timeout_seconds: float = 10.0
     jwt_issuer_mock_enabled: bool = False
+    jwt_issuer_token_cache_enabled: bool = False
 
     # Legacy auth users fallback
     auth_users: str = "[]"

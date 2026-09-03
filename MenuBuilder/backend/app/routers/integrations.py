@@ -4,7 +4,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from app.auth import get_current_user
+from app.auth import require_tenant_context
 from app.services.iot_client import iot_client, mask_api_key
 
 router = APIRouter(prefix="/api/integrations", tags=["integrations"])
@@ -60,7 +60,7 @@ def _resolve_target_org_id(
         return requested_org_id
 
     user_org = user.get("org_id")
-    if user_org is not None:
+    if user_org is not None and int(user_org) > 0:
         return int(user_org)
 
     raise HTTPException(
@@ -75,7 +75,7 @@ async def get_org_api_key(
         default=None, description="Target Org ID (superuser only)"
     ),
     mask: bool = Query(default=True, description="Whether to mask key string"),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
 ) -> ApiKeyResponse:
     """Get current organization API key status (masked by default for UI display)."""
     target_org_id = _resolve_target_org_id(user, org_id)
@@ -111,7 +111,7 @@ async def reveal_org_api_key(
     org_id: int | None = Query(
         default=None, description="Target Org ID (superuser only)"
     ),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
 ) -> ApiKeyResponse:
     """Get unmasked full API key string for secure copying/viewing."""
     target_org_id = _resolve_target_org_id(user, org_id)
@@ -140,7 +140,7 @@ async def reveal_org_api_key(
 @router.post("/api-key/provision", response_model=ApiKeyResponse)
 async def provision_org_api_key(
     req: ApiKeyProvisionRequest,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
 ) -> ApiKeyResponse:
     """Provision, generate, or rotate organization API key on iot-rpc platform."""
     target_org_id = _resolve_target_org_id(user, req.org_id)
@@ -174,7 +174,7 @@ async def provision_org_api_key(
 @router.post("/api-key/toggle-active", response_model=ApiKeyResponse)
 async def toggle_api_key_active(
     req: ApiKeyToggleActiveRequest,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
 ) -> ApiKeyResponse:
     """Enable or disable existing API key."""
     target_org_id = _resolve_target_org_id(user, req.org_id)
@@ -212,7 +212,7 @@ async def delete_org_api_key(
     org_id: int | None = Query(
         default=None, description="Target Org ID (superuser only)"
     ),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
 ) -> DeleteApiKeyResponse:
     """Delete / revoke organization API key on iot-rpc platform."""
     target_org_id = _resolve_target_org_id(user, org_id)

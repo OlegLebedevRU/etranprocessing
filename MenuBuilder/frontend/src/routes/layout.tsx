@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router";
 import { Layout, Menu, Button, Tooltip, Typography, theme, Grid } from "antd";
 import {
@@ -13,7 +13,9 @@ import {
   ControlOutlined,
   ClusterOutlined,
 } from "@ant-design/icons";
-import { getMe, type UserInfo } from "../api/auth";
+import { logout } from "../api/auth";
+import { notifySessionEvent } from "../api/session";
+import { useSession } from "../session/SessionContext";
 import { OrgSwitcher } from "../components/OrgSwitcher";
 
 const { Sider, Header, Content } = Layout;
@@ -29,70 +31,53 @@ const NAV_ITEMS = [
 
 export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
-  const [currentUser, setCurrentUser] = useState<UserInfo | null>(null);
+  const { user, setUser } = useSession();
+  const currentUser = user;
   const navigate = useNavigate();
   const location = useLocation();
   const { token } = theme.useToken();
   const screens = Grid.useBreakpoint();
   const isXs = screens.xs;
 
-  useEffect(() => {
-    let isMounted = true;
-    getMe()
-      .then((data) => {
-        if (isMounted) {
-          setCurrentUser(data);
-          if (data.username) {
-            localStorage.setItem("mb_user", data.username);
-          }
-          if (data.is_superuser) {
-            localStorage.setItem("mb_is_superuser", "true");
-          }
-          if (data.org_id) {
-            localStorage.setItem("mb_current_org_id", String(data.org_id));
-          }
-          if (data.org_name) {
-            localStorage.setItem("mb_current_org_name", data.org_name);
-          }
-          if (data.timezone) {
-            localStorage.setItem("org_timezone", data.timezone);
-          }
-        }
-      })
-      .catch(() => {
-        // Handled by axios interceptor
-      });
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  const isSuperuser = Boolean(currentUser?.is_superuser);
 
-  const isSuperuser =
-    Boolean(currentUser?.is_superuser) ||
-    localStorage.getItem("mb_is_superuser") === "true";
+  const isPlatformMode = Boolean(isSuperuser && currentUser?.org_id === 0);
 
-  const navItems = [
-    ...NAV_ITEMS,
-    ...(isSuperuser
-      ? [
-          {
-            key: "devices",
-            icon: <ClusterOutlined />,
-            label: "Управление устройствами",
-          },
-          {
-            key: "admin",
-            icon: <ControlOutlined />,
-            label: "Администрирование",
-          },
-        ]
-      : []),
-  ];
+  const navItems = isPlatformMode
+    ? [
+        {
+          key: "devices",
+          icon: <ClusterOutlined />,
+          label: "Управление устройствами",
+        },
+        {
+          key: "admin",
+          icon: <ControlOutlined />,
+          label: "Администрирование",
+        },
+      ]
+    : [
+        ...NAV_ITEMS,
+        ...(isSuperuser
+          ? [
+              {
+                key: "devices",
+                icon: <ClusterOutlined />,
+                label: "Управление устройствами",
+              },
+              {
+                key: "admin",
+                icon: <ControlOutlined />,
+                label: "Администрирование",
+              },
+            ]
+          : []),
+      ];
 
-  const segment = location.pathname.split("/")[1] || "monitoring";
+  const segment = location.pathname.split("/")[1] || (isPlatformMode ? "admin" : "monitoring");
   const selectedKey = navItems.some((i) => i.key === segment)
     ? segment
-    : "monitoring";
+    : (isPlatformMode ? "admin" : "monitoring");
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
@@ -198,7 +183,7 @@ export default function AppLayout() {
             <OrgSwitcher currentUser={currentUser} />
             {!isXs && (
               <Text type="secondary" style={{ fontSize: 13 }} ellipsis>
-                {currentUser?.username || localStorage.getItem("mb_user")}
+                {currentUser?.username || "Пользователь"}
               </Text>
             )}
             <Tooltip title="Выйти" mouseEnterDelay={0.3}>
@@ -206,13 +191,10 @@ export default function AppLayout() {
                 type="text"
                 size="small"
                 icon={<LogoutOutlined />}
-                onClick={() => {
-                  localStorage.removeItem("mb_token");
-                  localStorage.removeItem("mb_user");
-                  localStorage.removeItem("mb_master_token");
-                  localStorage.removeItem("mb_is_superuser");
-                  localStorage.removeItem("mb_current_org_id");
-                  localStorage.removeItem("mb_current_org_name");
+                onClick={async () => {
+                  notifySessionEvent({ type: "logout" });
+                  await logout();
+                  setUser(null);
                   window.location.href = "/login";
                 }}
               />
@@ -220,7 +202,24 @@ export default function AppLayout() {
           </div>
         </Header>
         <Content style={{ padding: isXs ? 8 : 16 }}>
-          <Outlet />
+          {isPlatformMode &&
+          ["monitoring", "menu", "reports", "billing", "integrations"].includes(segment) ? (
+            <div
+              style={{
+                textAlign: "center",
+                padding: "48px 16px",
+                background: token.colorBgContainer,
+                borderRadius: 8,
+              }}
+            >
+              <Typography.Title level={4}>Выберите организацию</Typography.Title>
+              <Typography.Text type="secondary">
+                Вы находитесь в платформенном контексте. Для доступа к тенантным разделам выберите организацию в переключателе сверху.
+              </Typography.Text>
+            </div>
+          ) : (
+            <Outlet />
+          )}
         </Content>
       </Layout>
     </Layout>

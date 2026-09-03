@@ -1,155 +1,149 @@
-# Multi-Tenant Authentication & Organization Switching Architecture
+# Целевая архитектура многотенантной аутентификации и авторизации (MenuBuilder)
 
-## 1. Overview & Objectives
+## 1. Обзор и принципы
 
-In the **etranprocessing / MenuBuilder** ecosystem, users interact with tenant-scoped entities (terminals, menu variants, payment groups, billing subscriptions, reports).
+В платформе **etranprocessing / MenuBuilder** пользователи взаимодействуют с тенантными сущностями (терминалы, варианты меню, группы услуг, биллинг, отчёты).
+Платформа разграничивает доступ между обычными пользователями организаций и суперпользователями (администраторами платформы), которым требуется переключаться между организациями (тенантный контекст) и работать на платформенном уровне.
 
-This document specifies the multi-tenant context switching architecture that allows privileged users (superusers/administrators) to securely select and operate within the context of any organization, while strictly preventing regular users from accessing or discovering tenant-switching capabilities.
-
----
-
-## 2. Token Architecture & Claims Specification
-
-Authentication uses signed JWTs (HMAC-SHA256, `HS256`) with a shared secret key configured in both Nginx (`JWT_SECRET_HEX`) and FastAPI services.
-
-### A. Master Token (Platform / Superuser Session)
-- **Issued to:** Superusers during login.
-- **Purpose:** Platform administration, querying available tenants, requesting tenant tokens.
-- **Claims:**
-  ```json
-  {
-    "sub": "o.lebedev",
-    "role": "superuser",
-    "is_superuser": true,
-    "token_type": "master",
-    "org": "0",
-    "org_id": null,
-    "can_switch_org": true,
-    "iat": 1787000000,
-    "exp": 1787028800
-  }
-  ```
-
-### B. Tenant Token (Context Session)
-- **Issued to:**
-  1. Regular users upon login (bound to their fixed `org_id`).
-  2. Superusers upon switching organization context.
-- **Purpose:** All standard business operations (`/api/monitoring`, `/api/menu-variants`, `/api/billing/*`, `/api/report/*`).
-- **Claims:**
-  ```json
-  {
-    "sub": "o.lebedev",
-    "org": "223",
-    "org_id": 223,
-    "role": "superuser",
-    "is_superuser": true,
-    "token_type": "tenant",
-    "orig_sub": "o.lebedev",
-    "is_imp": true,
-    "iat": 1787000000,
-    "exp": 1787028800
-  }
-  ```
+### Ключевые архитектурные принципы:
+1. **Tenant-in-token (Вариант A)**: `orgId` является неотъемлемым claim'ом JWT. Nginx (`auth_jwt`), backend MenuBuilder, ProcessingBackend и любые downstream-сервисы считывают тенант напрямую из проверенного токена без дополнительных запросов в БД.
+2. **Единый контур доверия (RS256 External Issuer)**: Все токены выпускаются внешним JWT issuer'ом (Yandex Cloud Function). Локальная подпись токенов в production исключена.
+3. **Один активный токен у клиента**: У клиента всегда ровно один рабочий токен. Понятие «локального master-токена» устранено: платформенный контекст суперпользователя — это токен с claim `orgId=0, is_superuser=true`.
+4. **Правило авторизации №1 (Права по claim)**: Доступ к суперпользовательским ручкам (`/api/admin/*`, `/api/devices/*`) проверяется исключительно по флагу `is_superuser` (через `require_superuser`), а не по `token_type`. Суперпользователь внутри тенанта сохраняет доступ к административным сервисам без необходимости переключения токенов.
+5. **Правило авторизации №2 (Изоляция тенанта)**: Тенант для обычного пользователя определяется строго из токена (`resolve_org_id`). Любой `org_id` из query/body/headers валидируется: при несовпадении с активным токеном возвращается 403 Forbidden.
+6. **Сессия — источник истины про активный тенант**: Активный тенант сохраняется в серверной сессии (`user_sessions.active_org_id`). При `POST /auth/refresh` тенант берётся из `session.active_org_id`, что исключает сброс тенанта у суперпользователя при истечении access-токена.
 
 ---
 
-## 3. Anti-Spoofing & Gateway Enforcement (Nginx)
+## 2. Модель токенов и таблица claims
 
-Nginx validates JWT signatures at the ingress perimeter using `ngx-http-auth-jwt-module`.
+Все токены подписываются алгоритмом **RS256** внешним issuer'ом с публичным ключом, проверяемым в Nginx и backend.
 
-### Anti-Spoofing Configuration:
-To prevent client header injection attacks, Nginx uses `auth_jwt_extract_var_claims` (which sets internal variables) rather than `auth_jwt_extract_request_claims` (which can append to attacker-controlled headers).
+| Токен | Кому выдаётся | Ключевые claims | Назначение и доступ |
+|---|---|---|---|
+| **Tenant token (Обычный)** | Обычный пользователь | `sub`, `userId`, `orgId=<fixed>`, `role="user"`, `is_superuser=false` | Доступ исключительно к тенантным API (`/api/menu/*`, `/api/reports/*`, `/api/billing/*`, `/api/monitoring`) своей организации. |
+| **Platform token (Суперюзер)** | Суперпользователь вне тенанта | `sub`, `userId`, `orgId=0`, `role="superuser"`, `is_superuser=true` | Платформенные API (`/api/admin/*`, `/api/devices/*`, `/api/auth/*`). Тенантные ручки возвращают 403 «Выберите организацию». |
+| **Tenant token (Impersonated)** | Суперпользователь в тенанте | `sub`, `userId`, `orgId=X`, `role="superuser"`, `is_superuser=true`, `is_imp=true`, `orig_sub` | Полный доступ к тенантным ручкам организации `X` **и** одновременный доступ к платформенным `/api/admin/*`. Мутации логируются для аудита. |
 
-```nginx
-# Billing API: Terminates JWT, forwards verified claims as headers to MenuBuilder backend
-location /api/billing/ {
-    auth_jwt_extract_var_claims sub org role;
+---
 
-    proxy_pass http://menubuilder-backend:8000/api/billing/;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header Authorization "";
-    proxy_set_header jwt-sub $jwt_claim_sub;
-    proxy_set_header jwt-org $jwt_claim_org;
-}
+## 3. Транспорт токенов и безопасность (HttpOnly Cookie + CSRF)
 
-# MenuBuilder API: Validates JWT and forwards verified claim variables to backend
-location /api/ {
-    auth_jwt_extract_var_claims sub org role;
+### 3.1. HttpOnly Cookie как единственный транспорт браузера
+Браузерный клиент (`MenuBuilder/frontend`) не хранит токены в `localStorage` (защита от XSS-атак).
+- При `login`, `refresh`, `switch`: сервер устанавливает HttpOnly cookie `accessToken` (`path=/`, `SameSite=Lax`, `max_age=expires_in`, `Secure` при HTTPS / `X-Forwarded-Proto: https`).
+- `refreshToken` передается в HttpOnly cookie с ограничением пути `path=/api/auth`.
+- Заголовок `Authorization: Bearer <token>` поддерживается на бэкенде для API-клиентов, внешних интеграций и тестов.
 
-    proxy_pass http://menubuilder-backend:8000;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header jwt-sub $jwt_claim_sub;
-    proxy_set_header jwt-org $jwt_claim_org;
-    proxy_set_header jwt-role $jwt_claim_role;
-}
+### 3.2. CSRF-защита
+Для защиты от межсайтовой подделки запросов (CSRF) в `app/main.py` действует middleware:
+- Для всех мутирующих запросов (`POST`, `PUT`, `PATCH`, `DELETE`), аутентифицированных через cookie (при отсутствии заголовка `Authorization: Bearer`), обязательно требуется наличие заголовка:
+  `X-Requested-With: XMLHttpRequest`
+- Запросы без этого заголовка отклоняются с `403 Forbidden` (`detail: CSRF check failed`).
+- Эндпоинты `/api/auth/login` и `/api/auth/refresh` исключены из проверки.
+
+---
+
+## 4. Диаграммы последовательности ключевых потоков
+
+### 4.1. Вход в систему (Login Flow)
+```
+Пользователь                 Frontend                  Backend             JWT Issuer           PostgreSQL
+    │                            │                        │                    │                     │
+    │── Ввод логина/пароля ─────>│                        │                    │                     │
+    │                            │── POST /auth/login ───>│                    │                     │
+    │                            │                        │── Аутентификация ───────────────────────>│
+    │                            │                        │<─ UserRecord ────────────────────────────│
+    │                            │                        │   (last_org_id)                          │
+    │                            │                        │                                          │
+    │                            │                        │── Single-flight issue_tokens(orgId) ────>│
+    │                            │                        │<─ {accessToken, refreshToken} ───────────│
+    │                            │                        │                                          │
+    │                            │                        │── create_session(active_org_id) ────────>│
+    │                            │<── 200 OK + Set-Cookie │                                          │
+    │                            │    (accessToken,       │                                          │
+    │                            │     refreshToken)      │                                          │
+    │                            │── GET /auth/me ───────>│                                          │
+    │                            │<── 200 UserInfo ───────│                                          │
+    │<── Переход в систему ──────│   (SessionContext)     │                                          │
+```
+
+### 4.2. Переключение тенанта суперпользователем (Tenant Switch Flow)
+```
+Суперюзер                   Frontend                  Backend             JWT Issuer           PostgreSQL
+    │                            │                        │                    │                     │
+    │── Выбор Org X в Switcher ─>│                        │                    │                     │
+    │                            │── POST /admin/switch ─>│                    │                     │
+    │                            │   {org_id: X}          │── Проверка session по refreshToken ─────>│
+    │                            │                        │── Проверка Org X (если X > 0) ──────────>│
+    │                            │                        │                                          │
+    │                            │                        │── issue_tokens(orgId=X, is_imp=true) ───>│
+    │                            │                        │<─ {accessToken} ─────────────────────────│
+    │                            │                        │                                          │
+    │                            │                        │── set_session_active_org(session, X) ───>│
+    │                            │                        │── set_user_last_org(user, X) ───────────>│
+    │                            │                        │   (БЕЗ создания новой сессии!)           │
+    │                            │<── 200 OK + Set-Cookie │                                          │
+    │                            │    (обновлен           │                                          │
+    │                            │     accessToken)       │                                          │
+    │                            │── BroadcastChannel ───>│ (Остальные вкладки перезагружаются)
+    │                            │   "tenant-switched"    │                                          │
+    │<── Обновление контекста UI─│                        │                                          │
+```
+
+### 4.3. Фоновое и реактивное обновление (Silent & Reactive Refresh)
+```
+Frontend Timer               Frontend                  Backend             JWT Issuer           PostgreSQL
+    │                            │                        │                    │                     │
+    │── Таймер: exp - 300с ─────>│                        │                    │                     │
+    │   (или visibilitychange)   │── POST /auth/refresh ─>│                                          │
+    │                            │   (с cookie)           │── Чтение session.active_org_id ─────────>│
+    │                            │                        │<─ active_org_id = X ─────────────────────│
+    │                            │                        │                                          │
+    │                            │                        │── issue_tokens(orgId=X) ────────────────>│
+    │                            │                        │<─ {new accessToken, refreshToken} ───────│
+    │                            │                        │                                          │
+    │                            │                        │── touch_session / rotate ───────────────>│
+    │                            │<── 200 OK + Set-Cookie │                                          │
+    │                            │    (accessToken)       │                                          │
+    │── Перезапуск таймера ──────│                        │                                          │
 ```
 
 ---
 
-## 4. FastAPI Dependency Hierarchy
-
-Access control is enforced declaratively using FastAPI dependencies:
+## 5. Иерархия зависимостей FastAPI
 
 ```
-                  ┌──────────────────────────────┐
-                  │      get_current_user        │
-                  │   (Validates JWT signature   │
-                  │     & extracts payload)      │
-                  └──────────────┬───────────────┘
-                                 │
-                 ┌───────────────┴───────────────┐
-                 ▼                               ▼
-  ┌──────────────────────────────┐ ┌──────────────────────────────┐
-  │      require_superuser       │ │    require_tenant_context    │
-  │ (Rejects non-superusers with │ │  (Requires org_id > 0 and    │
-  │       403 Forbidden)         │ │   token_type == "tenant")    │
-  └──────────────┬───────────────┘ └──────────────────────────────┘
-                 │
-                 ▼
-  - GET  /api/admin/tenants/available
-  - POST /api/admin/tenants/switch
+                        ┌──────────────────────────────┐
+                        │      get_current_user        │
+                        │   (Декодирует RS256 JWT,     │
+                        │    проверяет cookie/Bearer,  │
+                        │    логирует аудит имперсонац)│
+                        └──────────────┬───────────────┘
+                                       │
+                       ┌───────────────┴───────────────┐
+                       ▼                               ▼
+        ┌──────────────────────────────┐ ┌──────────────────────────────┐
+        │      require_superuser       │ │    require_tenant_context    │
+        │ (Проверяет claim is_superuser│ │  (Требует org_id > 0,        │
+        │  или роль superuser/admin)   │ │   иначе 403 "Выберите орг")  │
+        └──────────────┬───────────────┘ └─────────────┬────────────────┘
+                       │                               │
+                       ▼                               ▼
+        - GET  /api/admin/tenants/*      - /api/menu-variants/*
+        - GET  /api/admin/organizations  - /api/groups/*, /api/services/*
+        - GET  /api/admin/terminals/*    - /api/reports/* (resolve_org_id)
+        - CRUD /api/devices/*            - /api/monitoring, /api/catalog/*
 ```
 
 ---
 
-## 5. Modular User Store & Extensibility Architecture
+## 6. Отвергнутые альтернативы
 
-To allow seamless future migration to a PostgreSQL `users` table or a dedicated external Auth Microservice, the user store is abstracted into `AbstractUserStore`:
-
-```python
-class AbstractUserStore(ABC):
-    @abstractmethod
-    async def get_by_username(self, username: str) -> UserRecord | None: ...
-
-    @abstractmethod
-    async def authenticate(self, username: str, plain_password: str) -> UserRecord | None: ...
-```
-
-### Implementations:
-1. **`ConfigUserStore` (Active)**: Loads users from `settings.auth_users`. Identifies `o.lebedev` as a superuser.
-2. **`DatabaseUserStore` (Pluggable)**: Adapter skeleton for direct queries to `users` table.
-3. **`RemoteAuthUserStore` (Pluggable)**: Adapter skeleton for delegating authentication to an external auth service.
-
----
-
-## 6. Frontend Architecture (MenuBuilder/frontend)
-
-1. **State Management**:
-   - `mb_token`: Active working JWT sent in `Authorization: Bearer <token>` for all API calls.
-   - `mb_master_token`: Master JWT retained for superusers to enable switching between tenants.
-   - `mb_is_superuser`: Boolean flag determining admin capabilities.
-2. **Conditional Rendering (`OrgSwitcher`)**:
-   - Strictly renders `null` if the user is not a superuser.
-   - For superusers: renders an Ant Design `Select` dropdown populated from `GET /api/admin/tenants/available` with a "Войти" button.
-3. **Context Switching**:
-   - Superuser clicks "Войти" -> `POST /api/admin/tenants/switch { org_id: X }`.
-   - Backend returns new tenant-scoped JWT.
-   - Frontend sets `localStorage.setItem("mb_token", access_token)` and refreshes page/views.
+### Альтернатива B: Server-Side Tenant Context (Контекст на стороне сервера)
+- **Суть предложения:** Access JWT выпускается только с идентификатором пользователя (`userId`), а активная организация (`orgId`) хранится исключительно в сессии сервера или передается пользовательским заголовком `X-Org-Id`.
+- **Причины отказа:**
+  1. **Нарушение самодостаточности токена:** Downstream-сервисы (ProcessingBackend, сервисы отчетов, Nginx mTLS gate) не могут доверять заголовку клиента без запроса в базу данных или обращения к сессионному хранилищу, что создает узкое горлышко и ломает stateless-архитектуру микросервисов.
+  2. **Риск подмены тенанта (Tenant Spoofing):** При доверии заголовкам клиента на периметре Nginx требуется сложная логика валидации прав пользователя на каждой точке входа.
+  3. **Проблемы распределенного аудита:** В логах Nginx и микросервисов claims токена однозначно фиксируют тенант и факт имперсонации (`is_imp`, `orig_sub`), что критично для финтех-процессинга и требований безопасности.
+- **Итог:** Выбран вариант **A (Tenant-in-token)**, а задержка внешнего issuer'а (2–3 сек) нейтрализована увеличением TTL до 60 мин, упреждающим фоновым обновлением (silent refresh) и single-flight дедупликацией запросов.

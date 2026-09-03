@@ -1,15 +1,26 @@
 import axios from "axios";
+import { notifySessionEvent, scheduleRefresh } from "./session";
+
+const authTransport =
+  (import.meta as unknown as { env?: Record<string, string | undefined> }).env
+    ?.VITE_AUTH_TRANSPORT || "cookie";
 
 const client = axios.create({
   baseURL: "/api",
-  headers: { "Content-Type": "application/json" },
+  headers: {
+    "Content-Type": "application/json",
+    "X-Requested-With": "XMLHttpRequest",
+  },
   withCredentials: true,
 });
 
 client.interceptors.request.use((config) => {
-  const token = localStorage.getItem("mb_token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  config.headers["X-Requested-With"] = "XMLHttpRequest";
+  if (authTransport === "bearer") {
+    const token = localStorage.getItem("mb_token");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
   }
   return config;
 });
@@ -62,20 +73,31 @@ client.interceptors.response.use(
         const { data } = await axios.post(
           "/api/auth/refresh",
           {},
-          { withCredentials: true }
+          {
+            withCredentials: true,
+            headers: { "X-Requested-With": "XMLHttpRequest" },
+          }
         );
         const newToken = data.access_token;
-        if (newToken) {
+        if (authTransport === "bearer" && newToken) {
           localStorage.setItem("mb_token", newToken);
           client.defaults.headers.common.Authorization = `Bearer ${newToken}`;
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
         }
         processQueue(null, newToken);
+        if (data.expires_in) {
+          scheduleRefresh(data.expires_in);
+          notifySessionEvent({
+            type: "token-refreshed",
+            expiresAt: Date.now() + data.expires_in * 1000,
+          });
+        }
         return client(originalRequest);
       } catch (refreshErr) {
         processQueue(refreshErr, null);
         localStorage.removeItem("mb_token");
         localStorage.removeItem("mb_user");
+        notifySessionEvent({ type: "logout" });
         if (window.location.pathname !== "/login") {
           window.location.href = "/login";
         }

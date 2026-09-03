@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_user
+from app.auth import require_tenant_context, resolve_org_id
 from app.database import get_db
 from app.models import MenuVariant, Terminal, TerminalMenuBinding
 from app.schemas import TerminalBindingCreate, TerminalBindingRead, TerminalInfo
@@ -15,27 +15,19 @@ async def list_terminals(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     search: str | None = Query(None),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
     """List active terminals for the current user's organization."""
     from sqlalchemy import text
 
-    org_id = user.get("org_id")
-    if org_id is not None:
-        try:
-            org_id = int(org_id)
-        except ValueError, TypeError:
-            org_id = None
+    org_id = resolve_org_id(user)
 
     conditions = [
         "t.is_active = true",
+        "t.org_id = :org_id",
     ]
-    params: dict = {}
-
-    if org_id is not None:
-        conditions.append("t.org_id = :org_id")
-        params["org_id"] = org_id
+    params: dict = {"org_id": org_id}
 
     if search:
         conditions.append(
@@ -122,42 +114,20 @@ async def list_terminals(
 @router.post("/bindings", response_model=TerminalBindingRead, status_code=201)
 async def create_or_update_binding(
     data: TerminalBindingCreate,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
-    org_id = user.get("org_id")
-    if org_id is not None:
-        try:
-            org_id = int(org_id)
-        except ValueError, TypeError:
-            org_id = None
-
-    if not org_id and not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Forbidden")
+    org_id = resolve_org_id(user)
 
     # Check terminal exists and belongs to org
     terminal = await db.scalar(
         select(Terminal).where(Terminal.device_id == data.device_id)
     )
-    if not terminal:
-        raise HTTPException(status_code=404, detail="Terminal not found")
-    if (
-        org_id
-        and org_id > 0
-        and terminal.org_id != org_id
-        and not user.get("is_superuser")
-    ):
+    if not terminal or terminal.org_id != org_id:
         raise HTTPException(status_code=404, detail="Terminal not found")
 
     variant = await db.get(MenuVariant, data.menu_variant_id)
-    if not variant:
-        raise HTTPException(status_code=404, detail="Menu variant not found")
-    if (
-        org_id
-        and org_id > 0
-        and variant.org_id != org_id
-        and not user.get("is_superuser")
-    ):
+    if not variant or variant.org_id != org_id:
         raise HTTPException(status_code=404, detail="Menu variant not found")
 
     existing = await db.scalar(
@@ -205,28 +175,19 @@ async def create_or_update_binding(
 @router.delete("/bindings/{binding_id}")
 async def delete_binding(
     binding_id: int,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
+    org_id = resolve_org_id(user)
     binding = await db.get(TerminalMenuBinding, binding_id)
     if not binding:
         raise HTTPException(status_code=404, detail="Binding not found")
 
-    org_id = user.get("org_id")
-    if org_id is not None:
-        try:
-            org_id = int(org_id)
-        except ValueError, TypeError:
-            org_id = None
-
-    if org_id and org_id > 0 and not user.get("is_superuser"):
-        terminal = await db.scalar(
-            select(Terminal).where(Terminal.device_id == binding.device_id)
-        )
-        if not terminal or terminal.org_id != org_id:
-            raise HTTPException(status_code=404, detail="Binding not found")
-    elif not org_id and not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Forbidden")
+    terminal = await db.scalar(
+        select(Terminal).where(Terminal.device_id == binding.device_id)
+    )
+    if not terminal or terminal.org_id != org_id:
+        raise HTTPException(status_code=404, detail="Binding not found")
 
     await db.delete(binding)
     await db.commit()

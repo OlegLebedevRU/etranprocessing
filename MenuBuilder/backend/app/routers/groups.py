@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.auth import get_current_user
+from app.auth import require_tenant_context, resolve_org_id
 from app.database import get_db
 from app.models import Group, MenuVariant
 from app.schemas import GroupCreate, GroupRead, GroupUpdate
@@ -14,26 +14,17 @@ router = APIRouter()
 @router.get("", response_model=list[GroupRead])
 async def list_groups(
     menu_variant_id: int,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
-    org_id = user.get("org_id")
+    org_id = resolve_org_id(user)
     variant = await db.get(MenuVariant, menu_variant_id)
-    if not variant:
+    if not variant or variant.org_id != org_id:
         raise HTTPException(status_code=404, detail="Menu variant not found")
-    if (
-        org_id
-        and org_id > 0
-        and variant.org_id != org_id
-        and not user.get("is_superuser")
-    ):
-        raise HTTPException(status_code=404, detail="Menu variant not found")
-    if not org_id and not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Forbidden")
 
     stmt = (
         select(Group)
-        .where(Group.menu_variant_id == menu_variant_id)
+        .where(Group.menu_variant_id == menu_variant_id, Group.org_id == org_id)
         .options(selectinload(Group.children))
         .order_by(Group.number)
     )
@@ -44,39 +35,26 @@ async def list_groups(
 @router.get("/{group_id}", response_model=GroupRead)
 async def get_group(
     group_id: int,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
+    org_id = resolve_org_id(user)
     group = await db.get(Group, group_id)
-    if not group:
+    if not group or group.org_id != org_id:
         raise HTTPException(status_code=404, detail="Group not found")
-    org_id = user.get("org_id")
-    if (
-        org_id
-        and org_id > 0
-        and group.org_id != org_id
-        and not user.get("is_superuser")
-    ):
-        raise HTTPException(status_code=404, detail="Group not found")
-    if not org_id and not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Forbidden")
     return group
 
 
 @router.post("", response_model=GroupRead, status_code=201)
 async def create_group(
     data: GroupCreate,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
-    org_id = user.get("org_id")
-    if not org_id or org_id <= 0:
-        raise HTTPException(status_code=400, detail="Organization context required")
+    org_id = resolve_org_id(user)
 
     variant = await db.get(MenuVariant, data.menu_variant_id)
-    if not variant:
-        raise HTTPException(status_code=404, detail="Menu variant not found")
-    if variant.org_id != org_id and not user.get("is_superuser"):
+    if not variant or variant.org_id != org_id:
         raise HTTPException(status_code=404, detail="Menu variant not found")
 
     if data.parent_id:
@@ -85,7 +63,7 @@ async def create_group(
             raise HTTPException(
                 status_code=400, detail="Parent group not found in this menu variant"
             )
-        if parent.org_id != org_id and not user.get("is_superuser"):
+        if parent.org_id != org_id:
             raise HTTPException(
                 status_code=400, detail="Parent group not found in this organization"
             )
@@ -121,22 +99,13 @@ async def create_group(
 async def update_group(
     group_id: int,
     data: GroupUpdate,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
+    org_id = resolve_org_id(user)
     group = await db.get(Group, group_id)
-    if not group:
+    if not group or group.org_id != org_id:
         raise HTTPException(status_code=404, detail="Group not found")
-    org_id = user.get("org_id")
-    if (
-        org_id
-        and org_id > 0
-        and group.org_id != org_id
-        and not user.get("is_superuser")
-    ):
-        raise HTTPException(status_code=404, detail="Group not found")
-    if not org_id and not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Forbidden")
 
     update_dict = data.model_dump(exclude_unset=True)
     if "parent_id" in update_dict and update_dict["parent_id"] is not None:
@@ -149,12 +118,7 @@ async def update_group(
             raise HTTPException(
                 status_code=400, detail="Parent group not found in this menu variant"
             )
-        if (
-            org_id
-            and org_id > 0
-            and parent.org_id != org_id
-            and not user.get("is_superuser")
-        ):
+        if parent.org_id != org_id:
             raise HTTPException(
                 status_code=400, detail="Parent group not found in this organization"
             )
@@ -172,26 +136,17 @@ async def update_group(
 @router.delete("/{group_id}")
 async def delete_group(
     group_id: int,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
+    org_id = resolve_org_id(user)
     group = await db.get(
         Group,
         group_id,
         options=[selectinload(Group.services), selectinload(Group.children)],
     )
-    if not group:
+    if not group or group.org_id != org_id:
         raise HTTPException(status_code=404, detail="Group not found")
-    org_id = user.get("org_id")
-    if (
-        org_id
-        and org_id > 0
-        and group.org_id != org_id
-        and not user.get("is_superuser")
-    ):
-        raise HTTPException(status_code=404, detail="Group not found")
-    if not org_id and not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Forbidden")
 
     if group.services:
         raise HTTPException(

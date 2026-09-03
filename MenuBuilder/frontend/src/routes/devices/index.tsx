@@ -37,6 +37,7 @@ import {
 } from "@ant-design/icons";
 import { getDevices, type DeviceListItem } from "../../api/devices";
 import { getAdminOrganizations, type AdminOrg } from "../../api/admin";
+import { useSession } from "../../session/SessionContext";
 import DeviceTasksTab from "./DeviceTasksTab";
 import DeviceEventsTab from "./DeviceEventsTab";
 import DeviceTagsTab from "./DeviceTagsTab";
@@ -53,7 +54,8 @@ export default function DevicesManagementPage() {
   const isMobile = !screens.md;
 
   // Superuser check
-  const isSuperuser = localStorage.getItem("mb_is_superuser") === "true";
+  const { user } = useSession();
+  const isSuperuser = Boolean(user?.is_superuser);
 
   // Data states
   const [loading, setLoading] = useState(false);
@@ -62,8 +64,7 @@ export default function DevicesManagementPage() {
 
   // Filter states
   const [selectedOrgId, setSelectedOrgId] = useState<number | undefined>(() => {
-    const stored = localStorage.getItem("mb_current_org_id");
-    return stored ? Number(stored) : undefined;
+    return user?.org_id ? Number(user.org_id) : undefined;
   });
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");

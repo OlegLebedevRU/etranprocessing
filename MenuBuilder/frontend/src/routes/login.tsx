@@ -3,31 +3,27 @@ import { useNavigate } from "react-router";
 import { Button, Card, Form, Input, Typography, message } from "antd";
 import { UserOutlined, LockOutlined } from "@ant-design/icons";
 import { login } from "../api/auth";
+import { scheduleRefresh } from "../api/session";
+import { useSession } from "../session/SessionContext";
 
 const { Title, Text } = Typography;
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { refreshUser } = useSession();
 
   const onFinish = async (values: { username: string; password: string }) => {
     setLoading(true);
     try {
       const result = await login(values.username, values.password);
-      localStorage.setItem("mb_token", result.access_token);
-      localStorage.setItem("mb_user", values.username);
-      if (result.master_token) {
-        localStorage.setItem("mb_master_token", result.master_token);
-      } else {
-        localStorage.removeItem("mb_master_token");
+      const authTransport = (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_AUTH_TRANSPORT;
+      if (authTransport === "bearer") {
+        localStorage.setItem("mb_token", result.access_token);
       }
-      if (result.is_superuser) {
-        localStorage.setItem("mb_is_superuser", "true");
-      } else {
-        localStorage.removeItem("mb_is_superuser");
-      }
-      if (result.org_id) {
-        localStorage.setItem("mb_current_org_id", String(result.org_id));
+      await refreshUser(true);
+      if (result.expires_in) {
+        scheduleRefresh(result.expires_in);
       }
       message.success("Вход выполнен");
       navigate("/monitoring", { replace: true });

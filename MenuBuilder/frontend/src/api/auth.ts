@@ -27,6 +27,7 @@ export interface UserInfo {
   is_impersonated?: boolean;
   org_name?: string | null;
   timezone?: string;
+  expires_at?: string | null;
 }
 
 export async function login(username: string, password: string): Promise<LoginResponse> {

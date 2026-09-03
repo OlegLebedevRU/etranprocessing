@@ -1,7 +1,7 @@
 # Владение общей PostgreSQL-схемой
 
 **Владелец документа:** архитектура backend-платформы  
-**Проверено:** 2026-08-31  
+**Проверено:** 2026-09-03  
 **Область:** `shared/etranprocessing_db`, `ProcessingBackend`, `MenuBuilder`
 
 ## Правила владения
@@ -19,8 +19,8 @@
 | Таблица | Домен | Владелец | Разрешённая запись | Разрешённое чтение и ограничения |
 |---|---|---|---|---|
 | `api_tokens` | auth | MB | MB | MB; MCP использует отдельный прикладной контракт |
-| `users` | auth | MB | MB | MB |
-| `user_sessions` | auth | MB | MB | MB |
+| `users` | auth | MB | MB (включая `last_org_id`) | MB |
+| `user_sessions` | auth | MB | MB (включая `active_org_id`) | MB |
 | `orgs` | organization | MB | MB | MB; PB читает статус при terminal auth |
 | `org_billing_settings` | organization/billing | MB | MB | MB |
 | `org_statuses` | organization | MB | MB | MB; PB может читать справочное состояние |

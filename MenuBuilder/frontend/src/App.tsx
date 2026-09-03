@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router";
 import { Spin } from "antd";
+import { SessionProvider, useSession } from "./session/SessionContext";
 
 const AppLayout = lazy(() => import("./routes/layout"));
 const LoginPage = lazy(() => import("./routes/login"));
@@ -35,8 +36,11 @@ function LoadingFallback() {
 }
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const token = localStorage.getItem("mb_token");
-  if (!token) {
+  const { user, loading } = useSession();
+  if (loading) {
+    return <LoadingFallback />;
+  }
+  if (!user) {
     return <Navigate to="/login" replace />;
   }
   return <>{children}</>;
@@ -44,53 +48,55 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <Suspense fallback={<LoadingFallback />}>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route
-          element={
-            <RequireAuth>
-              <AppLayout />
-            </RequireAuth>
-          }
-        >
-          <Route index element={<Navigate to="/monitoring" replace />} />
-          <Route path="monitoring" element={<MonitoringPage />} />
-          <Route path="menu" element={<MenuManagementLayout />}>
-            <Route index element={<Navigate to="/menu/terminals" replace />} />
-            <Route path="terminals" element={<TerminalsPage />} />
-            <Route path="variants" element={<VariantsPage />} />
-            <Route path="catalog" element={<CatalogPage />} />
-          </Route>
-          <Route path="reports" element={<ReportsPage />} />
-          <Route path="billing" element={<BillingPage />} />
-          <Route path="devices" element={<DevicesPage />} />
-          <Route path="integrations" element={<IntegrationsPage />} />
-          <Route path="admin" element={<AdminLayout />}>
+    <SessionProvider>
+      <Suspense fallback={<LoadingFallback />}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route
+            element={
+              <RequireAuth>
+                <AppLayout />
+              </RequireAuth>
+            }
+          >
+            <Route index element={<Navigate to="/monitoring" replace />} />
+            <Route path="monitoring" element={<MonitoringPage />} />
+            <Route path="menu" element={<MenuManagementLayout />}>
+              <Route index element={<Navigate to="/menu/terminals" replace />} />
+              <Route path="terminals" element={<TerminalsPage />} />
+              <Route path="variants" element={<VariantsPage />} />
+              <Route path="catalog" element={<CatalogPage />} />
+            </Route>
+            <Route path="reports" element={<ReportsPage />} />
+            <Route path="billing" element={<BillingPage />} />
+            <Route path="devices" element={<DevicesPage />} />
+            <Route path="integrations" element={<IntegrationsPage />} />
+            <Route path="admin" element={<AdminLayout />}>
+              <Route
+                index
+                element={<Navigate to="/admin/organizations" replace />}
+              />
+              <Route path="organizations" element={<AdminOrganizationsPage />} />
+              <Route path="terminals" element={<AdminTerminalsPage />} />
+              <Route path="users" element={<AdminUsersPage />} />
+            </Route>
+            {/* Legacy paths kept so existing bookmarks keep working */}
             <Route
-              index
-              element={<Navigate to="/admin/organizations" replace />}
+              path="terminals"
+              element={<Navigate to="/menu/terminals" replace />}
             />
-            <Route path="organizations" element={<AdminOrganizationsPage />} />
-            <Route path="terminals" element={<AdminTerminalsPage />} />
-            <Route path="users" element={<AdminUsersPage />} />
+            <Route
+              path="variants"
+              element={<Navigate to="/menu/variants" replace />}
+            />
+            <Route
+              path="profile"
+              element={<Navigate to="/integrations" replace />}
+            />
+            <Route path="*" element={<Navigate to="/monitoring" replace />} />
           </Route>
-          {/* Legacy paths kept so existing bookmarks keep working */}
-          <Route
-            path="terminals"
-            element={<Navigate to="/menu/terminals" replace />}
-          />
-          <Route
-            path="variants"
-            element={<Navigate to="/menu/variants" replace />}
-          />
-          <Route
-            path="profile"
-            element={<Navigate to="/integrations" replace />}
-          />
-          <Route path="*" element={<Navigate to="/monitoring" replace />} />
-        </Route>
-      </Routes>
-    </Suspense>
+        </Routes>
+      </Suspense>
+    </SessionProvider>
   );
 }

@@ -27,6 +27,7 @@ class UserRecord:
     is_superuser: bool = False
     is_active: bool = True
     full_name: str | None = None
+    last_org_id: int | None = None
 
 
 def verify_md5_password(plain_password: str, md5_hash: str) -> bool:
@@ -65,34 +66,46 @@ class DatabaseUserStore(AbstractUserStore):
     def __init__(self) -> None:
         self._in_memory_sessions: dict[str, dict] = {}
         self._session_seq: int = 1
+        self._db_available: bool = True
+        self._in_memory_user_last_org: dict[int, int] = {}
 
     async def get_by_username(self, username: str) -> UserRecord | None:
-        try:
-            async with async_session() as session:
-                result = await session.execute(
-                    select(User).where(User.username == username)
-                )
-                user = result.scalar_one_or_none()
-                if user:
-                    return self._to_record(user)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Database error fetching user %s: %s", username, exc)
+        if self._db_available:
+            try:
+                async with async_session() as session:
+                    result = await session.execute(
+                        select(User).where(User.username == username)
+                    )
+                    user = result.scalar_one_or_none()
+                    if user:
+                        return self._to_record(user)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Database error fetching user %s: %s", username, exc)
+                self._db_available = False
 
         # Fallback to config users
-        return await ConfigUserStore().get_by_username(username)
+        rec = await ConfigUserStore().get_by_username(username)
+        if rec and rec.id in self._in_memory_user_last_org:
+            rec.last_org_id = self._in_memory_user_last_org[rec.id]
+        return rec
 
     async def get_by_id(self, user_id: int) -> UserRecord | None:
-        try:
-            async with async_session() as session:
-                result = await session.execute(select(User).where(User.id == user_id))
-                user = result.scalar_one_or_none()
-                if user:
-                    return self._to_record(user)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Database error fetching user id %s: %s", user_id, exc)
+        if self._db_available:
+            try:
+                async with async_session() as session:
+                    result = await session.execute(select(User).where(User.id == user_id))
+                    user = result.scalar_one_or_none()
+                    if user:
+                        return self._to_record(user)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Database error fetching user id %s: %s", user_id, exc)
+                self._db_available = False
 
         # Fallback to config users
-        return await ConfigUserStore().get_by_id(user_id)
+        rec = await ConfigUserStore().get_by_id(user_id)
+        if rec and rec.id in self._in_memory_user_last_org:
+            rec.last_org_id = self._in_memory_user_last_org[rec.id]
+        return rec
 
     async def authenticate(
         self, username: str, plain_password: str
@@ -120,6 +133,7 @@ class DatabaseUserStore(AbstractUserStore):
             is_superuser=user.is_superuser,
             is_active=user.is_active,
             full_name=user.full_name,
+            last_org_id=getattr(user, "last_org_id", None),
         )
 
     # --- Session Management ---
@@ -131,84 +145,132 @@ class DatabaseUserStore(AbstractUserStore):
         ip_address: str | None = None,
         user_agent: str | None = None,
         expires_in_seconds: int = 604800,
+        active_org_id: int | None = None,
     ) -> UserSession:
         token_hash = hash_refresh_token(refresh_token)
         expires_at = datetime.now(UTC) + timedelta(seconds=expires_in_seconds)
 
-        try:
-            async with async_session() as session:
-                db_session = UserSession(
-                    user_id=user_id,
-                    refresh_token=refresh_token[:250],  # truncated if long
-                    refresh_token_hash=token_hash,
-                    ip_address=ip_address,
-                    user_agent=user_agent[:500] if user_agent else None,
-                    expires_at=expires_at,
-                    is_revoked=False,
-                )
-                session.add(db_session)
-                await session.commit()
-                await session.refresh(db_session)
-                return db_session
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Database error creating session: %s", exc)
-            # In-memory fallback for offline test environments
-            sess_id = self._session_seq
-            self._session_seq += 1
-            sess_dict = {
-                "id": sess_id,
-                "user_id": user_id,
-                "refresh_token": refresh_token[:250],
-                "refresh_token_hash": token_hash,
-                "ip_address": ip_address,
-                "user_agent": user_agent[:500] if user_agent else None,
-                "expires_at": expires_at,
-                "created_at": datetime.now(UTC),
-                "last_used_at": datetime.now(UTC),
-                "is_revoked": False,
-            }
-            self._in_memory_sessions[token_hash] = sess_dict
-            return UserSession(
-                id=sess_id,
-                user_id=user_id,
-                refresh_token=refresh_token[:250],
-                refresh_token_hash=token_hash,
-                ip_address=ip_address,
-                user_agent=user_agent[:500] if user_agent else None,
-                expires_at=expires_at,
-                is_revoked=False,
-            )
+        if self._db_available:
+            try:
+                async with async_session() as session:
+                    db_session = UserSession(
+                        user_id=user_id,
+                        refresh_token=refresh_token[:250],  # truncated if long
+                        refresh_token_hash=token_hash,
+                        ip_address=ip_address,
+                        user_agent=user_agent[:500] if user_agent else None,
+                        expires_at=expires_at,
+                        is_revoked=False,
+                        active_org_id=active_org_id,
+                    )
+                    session.add(db_session)
+                    await session.commit()
+                    await session.refresh(db_session)
+                    return db_session
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Database error creating session: %s", exc)
+                self._db_available = False
+
+        # In-memory fallback for offline test environments
+        sess_id = self._session_seq
+        self._session_seq += 1
+        sess_dict = {
+            "id": sess_id,
+            "user_id": user_id,
+            "refresh_token": refresh_token[:250],
+            "refresh_token_hash": token_hash,
+            "ip_address": ip_address,
+            "user_agent": user_agent[:500] if user_agent else None,
+            "expires_at": expires_at,
+            "created_at": datetime.now(UTC),
+            "last_used_at": datetime.now(UTC),
+            "is_revoked": False,
+            "active_org_id": active_org_id,
+        }
+        self._in_memory_sessions[token_hash] = sess_dict
+        return UserSession(
+            id=sess_id,
+            user_id=user_id,
+            refresh_token=refresh_token[:250],
+            refresh_token_hash=token_hash,
+            ip_address=ip_address,
+            user_agent=user_agent[:500] if user_agent else None,
+            expires_at=expires_at,
+            is_revoked=False,
+            active_org_id=active_org_id,
+        )
 
     async def get_session_by_refresh_token(
         self, refresh_token: str
     ) -> UserSession | None:
         token_hash = hash_refresh_token(refresh_token)
         now = datetime.now(UTC)
-        try:
-            async with async_session() as session:
-                result = await session.execute(
-                    select(UserSession).where(
-                        UserSession.refresh_token_hash == token_hash,
-                        UserSession.is_revoked.is_(False),
-                        UserSession.expires_at > now,
+        if self._db_available:
+            try:
+                async with async_session() as session:
+                    result = await session.execute(
+                        select(UserSession).where(
+                            UserSession.refresh_token_hash == token_hash,
+                            UserSession.is_revoked.is_(False),
+                            UserSession.expires_at > now,
+                        )
                     )
-                )
-                return result.scalar_one_or_none()
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Database error fetching session: %s", exc)
-            s = self._in_memory_sessions.get(token_hash)
-            if s and not s["is_revoked"] and s["expires_at"] > now:
-                return UserSession(
-                    id=s["id"],
-                    user_id=s["user_id"],
-                    refresh_token=s["refresh_token"],
-                    refresh_token_hash=s["refresh_token_hash"],
-                    ip_address=s["ip_address"],
-                    user_agent=s["user_agent"],
-                    expires_at=s["expires_at"],
-                    is_revoked=s["is_revoked"],
-                )
-            return None
+                    return result.scalar_one_or_none()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Database error fetching session: %s", exc)
+                self._db_available = False
+
+        s = self._in_memory_sessions.get(token_hash)
+        if s and not s["is_revoked"] and s["expires_at"] > now:
+            return UserSession(
+                id=s["id"],
+                user_id=s["user_id"],
+                refresh_token=s["refresh_token"],
+                refresh_token_hash=s["refresh_token_hash"],
+                ip_address=s["ip_address"],
+                user_agent=s["user_agent"],
+                expires_at=s["expires_at"],
+                is_revoked=s["is_revoked"],
+                active_org_id=s.get("active_org_id"),
+            )
+        return None
+
+    async def set_session_active_org(self, session_id: int, org_id: int) -> None:
+        if self._db_available:
+            try:
+                async with async_session() as session:
+                    await session.execute(
+                        update(UserSession)
+                        .where(UserSession.id == session_id)
+                        .values(active_org_id=org_id, last_used_at=datetime.now(UTC))
+                    )
+                    await session.commit()
+                    return
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Database error updating session active org: %s", exc)
+                self._db_available = False
+
+        for s in self._in_memory_sessions.values():
+            if s["id"] == session_id:
+                s["active_org_id"] = org_id
+                s["last_used_at"] = datetime.now(UTC)
+                break
+
+    async def set_user_last_org(self, user_id: int, org_id: int) -> None:
+        self._in_memory_user_last_org[user_id] = org_id
+        if self._db_available:
+            try:
+                async with async_session() as session:
+                    await session.execute(
+                        update(User)
+                        .where(User.id == user_id)
+                        .values(last_org_id=org_id, updated_at=datetime.now(UTC))
+                    )
+                    await session.commit()
+                    return
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Database error updating user last org: %s", exc)
+                self._db_available = False
 
     async def touch_session(self, session_id: int) -> None:
         try:
@@ -349,7 +411,6 @@ class ConfigUserStore(AbstractUserStore):
                 is_su = bool(
                     u.get("is_superuser")
                     or role in ("superuser", "admin")
-                    or username == "o.lebedev"
                 )
                 if is_su and role not in ("superuser", "admin"):
                     role = "superuser"
@@ -366,12 +427,19 @@ class ConfigUserStore(AbstractUserStore):
                     is_superuser=is_su,
                     is_active=bool(u.get("is_active", True)),
                     full_name=u.get("full_name"),
+                    last_org_id=u.get("last_org_id"),
                 )
         return None
 
     async def get_by_id(self, user_id: int) -> UserRecord | None:
         for u in settings.get_users():
-            if int(u.get("id", 0)) == user_id:
+            role = str(u.get("role", "user")).lower()
+            is_su = bool(
+                u.get("is_superuser")
+                or role in ("superuser", "admin")
+            )
+            uid = int(u.get("id", 1 if is_su else 0))
+            if uid == user_id:
                 return await self.get_by_username(u["username"])
         return None
 

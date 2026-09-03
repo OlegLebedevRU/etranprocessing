@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.auth import get_current_user
+from app.auth import require_tenant_context, resolve_org_id
 from app.database import get_db
 from app.models import Group, MenuVariant, Service
 from app.schemas import MenuVariantCreate, MenuVariantDuplicate, MenuVariantRead
@@ -15,15 +15,15 @@ router = APIRouter()
 
 @router.get("", response_model=list[MenuVariantRead])
 async def list_variants(
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
-    org_id = user.get("org_id")
-    query = select(MenuVariant).order_by(MenuVariant.name)
-    if org_id and org_id > 0:
-        query = query.where(MenuVariant.org_id == org_id)
-    elif not user.get("is_superuser"):
-        return []
+    org_id = resolve_org_id(user)
+    query = (
+        select(MenuVariant)
+        .where(MenuVariant.org_id == org_id)
+        .order_by(MenuVariant.name)
+    )
     result = await db.execute(query)
     return result.scalars().all()
 
@@ -31,34 +31,23 @@ async def list_variants(
 @router.get("/{variant_id}", response_model=MenuVariantRead)
 async def get_variant(
     variant_id: int,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
+    org_id = resolve_org_id(user)
     variant = await db.get(MenuVariant, variant_id)
-    if not variant:
+    if not variant or variant.org_id != org_id:
         raise HTTPException(status_code=404, detail="Menu variant not found")
-    org_id = user.get("org_id")
-    if (
-        org_id
-        and org_id > 0
-        and variant.org_id != org_id
-        and not user.get("is_superuser")
-    ):
-        raise HTTPException(status_code=404, detail="Menu variant not found")
-    if not org_id and not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Forbidden")
     return variant
 
 
 @router.post("", response_model=MenuVariantRead, status_code=201)
 async def create_variant(
     data: MenuVariantCreate,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
-    org_id = user.get("org_id")
-    if not org_id or org_id <= 0:
-        raise HTTPException(status_code=400, detail="Organization context required")
+    org_id = resolve_org_id(user)
 
     existing = await db.scalar(
         select(MenuVariant).where(
@@ -80,22 +69,13 @@ async def create_variant(
 @router.delete("/{variant_id}")
 async def delete_variant(
     variant_id: int,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
+    org_id = resolve_org_id(user)
     variant = await db.get(MenuVariant, variant_id)
-    if not variant:
+    if not variant or variant.org_id != org_id:
         raise HTTPException(status_code=404, detail="Menu variant not found")
-    org_id = user.get("org_id")
-    if (
-        org_id
-        and org_id > 0
-        and variant.org_id != org_id
-        and not user.get("is_superuser")
-    ):
-        raise HTTPException(status_code=404, detail="Menu variant not found")
-    if not org_id and not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Forbidden")
 
     await db.delete(variant)
     await db.commit()
@@ -105,12 +85,10 @@ async def delete_variant(
 @router.post("/duplicate", response_model=MenuVariantRead, status_code=201)
 async def duplicate_variant(
     data: MenuVariantDuplicate,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
-    org_id = user.get("org_id")
-    if not org_id or org_id <= 0:
-        raise HTTPException(status_code=400, detail="Organization context required")
+    org_id = resolve_org_id(user)
 
     source = await db.get(
         MenuVariant,
@@ -119,9 +97,7 @@ async def duplicate_variant(
             selectinload(MenuVariant.groups).selectinload(Group.services),
         ],
     )
-    if not source:
-        raise HTTPException(status_code=404, detail="Source variant not found")
-    if source.org_id != org_id and not user.get("is_superuser"):
+    if not source or source.org_id != org_id:
         raise HTTPException(status_code=404, detail="Source variant not found")
 
     # Generate name with +1 suffix

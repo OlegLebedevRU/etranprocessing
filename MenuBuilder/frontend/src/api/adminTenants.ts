@@ -16,6 +16,8 @@ export interface SwitchTenantResponse {
   org_name: string;
   expires_in: number;
   timezone?: string;
+  is_superuser?: boolean;
+  is_impersonated?: boolean;
 }
 
 export async function listAvailableTenants(forceFresh = false): Promise<OrgItem[]> {

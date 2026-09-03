@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 
-from app.auth import get_current_user
+from app.auth import require_tenant_context, resolve_org_id
 from app.database import async_session
 from app.models import Group, MenuVariant, Service
 
@@ -11,26 +11,14 @@ router = APIRouter(prefix="/api", tags=["dashboard"])
 @router.get("/stats")
 async def get_stats(
     variant_id: int | None = None,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
 ):
-    org_id = user.get("org_id")
-    if org_id is not None:
-        try:
-            org_id = int(org_id)
-        except ValueError, TypeError:
-            org_id = None
+    org_id = resolve_org_id(user)
 
     async with async_session() as session:
         if variant_id is not None:
             variant = await session.get(MenuVariant, variant_id)
-            if not variant:
-                raise HTTPException(status_code=404, detail="Variant not found")
-            if (
-                org_id
-                and org_id > 0
-                and variant.org_id != org_id
-                and not user.get("is_superuser")
-            ):
+            if not variant or variant.org_id != org_id:
                 raise HTTPException(status_code=404, detail="Variant not found")
 
         groups_q = select(func.count(Group.id))
@@ -44,18 +32,10 @@ async def get_stats(
             Group, Group.id == Service.group_id
         )
 
-        if org_id and org_id > 0:
-            groups_q = groups_q.where(Group.org_id == org_id)
-            services_q = services_q.where(Group.org_id == org_id)
-            tsp_q = tsp_q.where(Group.org_id == org_id)
-            avg_q = avg_q.where(Group.org_id == org_id)
-        elif not user.get("is_superuser"):
-            return {
-                "groups": 0,
-                "services": 0,
-                "tsp_codes": 0,
-                "avg_price": 0.0,
-            }
+        groups_q = groups_q.where(Group.org_id == org_id)
+        services_q = services_q.where(Group.org_id == org_id)
+        tsp_q = tsp_q.where(Group.org_id == org_id)
+        avg_q = avg_q.where(Group.org_id == org_id)
 
         if variant_id:
             groups_q = groups_q.where(Group.menu_variant_id == variant_id)

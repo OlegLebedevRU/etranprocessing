@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { Button, Grid, Select, Space, Tag, Typography, message } from "antd";
 import { SwapOutlined, BankOutlined } from "@ant-design/icons";
 import { listAvailableTenants, switchTenant, type OrgItem } from "../api/adminTenants";
+import { notifySessionEvent, scheduleRefresh } from "../api/session";
+import { useSession } from "../session/SessionContext";
 import type { UserInfo } from "../api/auth";
 
 const { Text } = Typography;
@@ -13,6 +15,7 @@ interface OrgSwitcherProps {
 
 export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({ currentUser, onTenantSwitched }) => {
   const screens = Grid.useBreakpoint();
+  const { refreshUser } = useSession();
   const isSuperUser = Boolean(
     currentUser?.is_superuser || currentUser?.can_switch_org || currentUser?.role === "superuser"
   );
@@ -54,8 +57,8 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({ currentUser, onTenantS
   }
 
   const handleSwitch = async () => {
-    if (!selectedOrgId) return;
-    if (selectedOrgId === currentUser?.org_id) {
+    if (selectedOrgId === null || selectedOrgId === undefined) return;
+    if (selectedOrgId === (currentUser?.org_id ?? 0)) {
       message.info("Вы уже находитесь в контексте этой организации");
       return;
     }
@@ -63,13 +66,27 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({ currentUser, onTenantS
     setSwitching(true);
     try {
       const result = await switchTenant(selectedOrgId);
-      localStorage.setItem("mb_token", result.access_token);
-      localStorage.setItem("mb_current_org_id", String(result.org_id));
-      localStorage.setItem("mb_current_org_name", result.org_name);
+      const authTransport = (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_AUTH_TRANSPORT;
+      if (authTransport === "bearer") {
+        localStorage.setItem("mb_token", result.access_token);
+      }
       if (result.timezone) {
         localStorage.setItem("org_timezone", result.timezone);
       }
-      message.success(`Контекст переключен на: ${result.org_name} (ID: ${result.org_id})`);
+      if (result.expires_in) {
+        scheduleRefresh(result.expires_in);
+      }
+      notifySessionEvent({
+        type: "tenant-switched",
+        orgId: result.org_id,
+        orgName: result.org_name,
+      });
+      await refreshUser(true);
+      message.success(
+        result.org_id === 0
+          ? "Контекст переключен на: Платформа"
+          : `Контекст переключен на: ${result.org_name} (ID: ${result.org_id})`
+      );
 
       if (onTenantSwitched) {
         onTenantSwitched();
@@ -84,10 +101,12 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({ currentUser, onTenantS
     }
   };
 
-  const currentOrgDisplayName =
-    currentUser?.org_name ||
-    orgs.find((o) => o.org_id === currentUser?.org_id)?.org_name ||
-    (currentUser?.org_id ? `Организация #${currentUser.org_id}` : "Не выбрана");
+  const isPlatformContext = (currentUser?.org_id ?? 0) === 0;
+  const currentOrgDisplayName = isPlatformContext
+    ? "Платформа"
+    : currentUser?.org_name ||
+      orgs.find((o) => o.org_id === currentUser?.org_id)?.org_name ||
+      (currentUser?.org_id ? `Организация #${currentUser.org_id}` : "Не выбрана");
 
   const isMobile = !screens.md;
   const isXs = screens.xs;
@@ -105,24 +124,36 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({ currentUser, onTenantS
         maxWidth: "100%",
       }}
     >
-      <Tag color="blue" icon={<BankOutlined />} style={{ margin: 0, maxWidth: isXs ? 110 : 200 }} title={currentOrgDisplayName}>
-        {isXs ? currentOrgDisplayName : `Тенант: ${currentOrgDisplayName}`}
+      <Tag
+        color={isPlatformContext ? "gold" : "blue"}
+        icon={<BankOutlined />}
+        style={{ margin: 0, maxWidth: isXs ? 110 : 200 }}
+        title={currentOrgDisplayName}
+      >
+        {isPlatformContext
+          ? "Платформа"
+          : isXs
+          ? currentOrgDisplayName
+          : `Тенант: ${currentOrgDisplayName}`}
       </Tag>
       <Select
         size="small"
         showSearch
         placeholder="Сменить..."
-        style={{ width: isXs ? 110 : isMobile ? 150 : 200 }}
+        style={{ width: isXs ? 110 : isMobile ? 150 : 220 }}
         loading={loading}
         value={selectedOrgId}
         onChange={setSelectedOrgId}
         filterOption={(input, option) =>
           (option?.label ?? "").toLowerCase().includes(input.toLowerCase())
         }
-        options={orgs.map((o) => ({
-          value: o.org_id,
-          label: `${o.org_name} (ID: ${o.org_id})`,
-        }))}
+        options={[
+          { value: 0, label: "Платформа / выйти из тенанта" },
+          ...orgs.map((o) => ({
+            value: o.org_id,
+            label: `${o.org_name} (ID: ${o.org_id})`,
+          })),
+        ]}
       />
       <Button
         type="primary"
@@ -130,7 +161,11 @@ export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({ currentUser, onTenantS
         icon={<SwapOutlined />}
         loading={switching}
         onClick={handleSwitch}
-        disabled={!selectedOrgId || selectedOrgId === currentUser?.org_id}
+        disabled={
+          selectedOrgId === null ||
+          selectedOrgId === undefined ||
+          selectedOrgId === (currentUser?.org_id ?? 0)
+        }
       >
         {!isXs && "Войти"}
       </Button>

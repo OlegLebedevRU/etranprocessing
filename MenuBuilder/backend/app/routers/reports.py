@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select, text
 
-from app.auth import get_current_user
+from app.auth import require_tenant_context, resolve_org_id
 from app.database import async_session
 from app.models import Org
 from app.utils.timezone import (
@@ -180,33 +180,23 @@ async def _calculated_inkass_sum(
 
 @router.get("/inkass")
 async def get_inkass_report(
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     date_from: str | None = None,
     date_to: str | None = None,
     device_ids: str | None = None,
     page: int = Query(1, ge=1),
     size: int = Query(100, ge=10, le=500),
+    org_id: int | None = Query(None),
 ):
-    org_id = user.get("org_id")
-    if org_id is not None:
-        try:
-            org_id = int(org_id)
-        except ValueError, TypeError:
-            org_id = None
-    if not org_id and not user.get("is_superuser"):
-        return {
-            "items": [],
-            "total": 0,
-            "page": page,
-            "size": size,
-            "timezone": "Europe/Moscow",
-        }
+    effective_org_id = resolve_org_id(user, org_id)
 
     async with async_session() as session:
         tz = resolve_tz("Europe/Moscow")
-        if org_id:
+        if effective_org_id:
             org_tz_row = (
-                await session.execute(select(Org.timezone).where(Org.org_id == org_id))
+                await session.execute(
+                    select(Org.timezone).where(Org.org_id == effective_org_id)
+                )
             ).scalar_one_or_none()
             if org_tz_row:
                 tz = resolve_tz(org_tz_row)
@@ -214,9 +204,9 @@ async def get_inkass_report(
 
         conditions = ["r.function_name = 'inkass'"]
         params: dict = {}
-        if org_id is not None and org_id > 0:
+        if effective_org_id > 0:
             conditions.append("t.org_id = :org_id")
-            params["org_id"] = org_id
+            params["org_id"] = effective_org_id
         dt_from_utc, dt_to_utc = get_date_range_bounds_utc(date_from, date_to, tz=tz)
         if dt_from_utc:
             params["dt_from"] = dt_from_utc
@@ -335,21 +325,20 @@ async def get_inkass_report(
 
 @router.get("/payments")
 async def get_payments_report(
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     date_from: str | None = None,
     date_to: str | None = None,
     device_ids: str | None = None,
     tsp_code: int | None = None,
     paym_state: int | None = None,
     top: int = Query(100, ge=10, le=1000),
+    org_id: int | None = Query(None),
 ):
-    org_id = user.get("org_id")
-    if not org_id:
-        return {"items": [], "total": 0, "timezone": "Europe/Moscow"}
+    effective_org_id = resolve_org_id(user, org_id)
 
     async with async_session() as session:
         org_tz_row = (
-            await session.execute(select(Org.timezone).where(Org.org_id == org_id))
+            await session.execute(select(Org.timezone).where(Org.org_id == effective_org_id))
         ).scalar_one_or_none()
         tz = resolve_tz(org_tz_row)
         tz_name = get_timezone_name(tz)
@@ -360,7 +349,7 @@ async def get_payments_report(
             )
 
         conditions = ["p.org_id = :org_id"]
-        params: dict = {"org_id": org_id}
+        params: dict = {"org_id": effective_org_id}
         dt_from_utc, dt_to_utc = get_date_range_bounds_utc(date_from, date_to, tz=tz)
         if dt_from_utc:
             params["dt_from"] = dt_from_utc
@@ -531,24 +520,23 @@ async def get_payments_report(
 
 @router.get("/balance-by-terminal")
 async def get_balance_by_terminal(
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     date_from: str | None = None,
     date_to: str | None = None,
     device_ids: str | None = None,
     tsp_code: int | None = None,
+    org_id: int | None = Query(None),
 ):
-    org_id = user.get("org_id")
-    if not org_id:
-        return {"items": [], "timezone": "Europe/Moscow"}
+    effective_org_id = resolve_org_id(user, org_id)
     async with async_session() as session:
         org_tz_row = (
-            await session.execute(select(Org.timezone).where(Org.org_id == org_id))
+            await session.execute(select(Org.timezone).where(Org.org_id == effective_org_id))
         ).scalar_one_or_none()
         tz = resolve_tz(org_tz_row)
         tz_name = get_timezone_name(tz)
 
         conditions = ["b.org_id = :org_id"]
-        params: dict = {"org_id": org_id}
+        params: dict = {"org_id": effective_org_id}
         if date_from and (day_from := _parse_int_day(date_from)) is not None:
             conditions.append("b.int_day >= :day_from")
             params["day_from"] = day_from
@@ -593,23 +581,22 @@ async def get_balance_by_terminal(
 
 @router.get("/balance-by-tsp")
 async def get_balance_by_tsp(
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     date_from: str | None = None,
     date_to: str | None = None,
     device_ids: str | None = None,
+    org_id: int | None = Query(None),
 ):
-    org_id = user.get("org_id")
-    if not org_id:
-        return {"items": [], "timezone": "Europe/Moscow"}
+    effective_org_id = resolve_org_id(user, org_id)
     async with async_session() as session:
         org_tz_row = (
-            await session.execute(select(Org.timezone).where(Org.org_id == org_id))
+            await session.execute(select(Org.timezone).where(Org.org_id == effective_org_id))
         ).scalar_one_or_none()
         tz = resolve_tz(org_tz_row)
         tz_name = get_timezone_name(tz)
 
         conditions = ["b.org_id = :org_id"]
-        params: dict = {"org_id": org_id}
+        params: dict = {"org_id": effective_org_id}
         if date_from and (day_from := _parse_int_day(date_from)) is not None:
             conditions.append("b.int_day >= :day_from")
             params["day_from"] = day_from

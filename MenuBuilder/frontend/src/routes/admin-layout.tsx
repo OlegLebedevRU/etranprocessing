@@ -1,9 +1,8 @@
-import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { BankOutlined, DesktopOutlined, UserOutlined } from "@ant-design/icons";
-import { Alert, Button, Result, Spin } from "antd";
+import { Button, Result, Spin } from "antd";
 import SectionLayout from "../components/SectionLayout";
-import { getMe, type UserInfo } from "../api/auth";
+import { useSession } from "../session/SessionContext";
 
 const ADMIN_NAV_ITEMS = [
   {
@@ -25,35 +24,8 @@ const ADMIN_NAV_ITEMS = [
 
 export default function AdminLayout() {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [isSuperuser, setIsSuperuser] = useState<boolean>(
-    localStorage.getItem("mb_is_superuser") === "true"
-  );
-
-  useEffect(() => {
-    let isMounted = true;
-    getMe()
-      .then((data) => {
-        if (isMounted) {
-          const superuser = Boolean(data.is_superuser);
-          setIsSuperuser(superuser);
-          if (superuser) {
-            localStorage.setItem("mb_is_superuser", "true");
-          } else {
-            localStorage.removeItem("mb_is_superuser");
-          }
-          setLoading(false);
-        }
-      })
-      .catch(() => {
-        if (isMounted) {
-          setLoading(false);
-        }
-      });
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  const { user, loading } = useSession();
+  const isSuperuser = Boolean(user?.is_superuser);
 
   if (loading) {
     return (

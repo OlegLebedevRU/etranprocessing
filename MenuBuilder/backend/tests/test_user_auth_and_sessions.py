@@ -105,10 +105,11 @@ async def test_auth_refresh_and_logout():
             refreshed_data = refresh_resp.json()
             assert "access_token" in refreshed_data
 
-        # Call logout
+        # Call logout (with CSRF header required for cookie-authenticated mutations)
         logout_resp = await ac.post(
             "/api/auth/logout",
             json={"refresh_token": refresh_token},
+            headers={"X-Requested-With": "XMLHttpRequest"},
         )
         assert logout_resp.status_code == 200
         assert logout_resp.json()["ok"] is True

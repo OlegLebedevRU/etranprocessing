@@ -63,21 +63,21 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    Root[/] --> Login[/login]
+    Root["/"] --> Login["/login"]
     Root --> Auth[RequireAuth + AppLayout]
-    Auth --> Monitoring[/monitoring]
-    Auth --> Menu[/menu]
-    Menu --> Terminals[/menu/terminals]
-    Menu --> Variants[/menu/variants]
-    Menu --> Catalog[/menu/catalog]
-    Auth --> Reports[/reports]
-    Auth --> Billing[/billing]
-    Auth --> Integrations[/integrations]
-    Auth --> Devices[/devices, superuser]
-    Auth --> Admin[/admin, superuser]
-    Admin --> Organizations[/admin/organizations]
-    Admin --> AdminTerminals[/admin/terminals]
-    Admin --> Users[/admin/users]
+    Auth --> Monitoring["/monitoring"]
+    Auth --> Menu["/menu"]
+    Menu --> Terminals["/menu/terminals"]
+    Menu --> Variants["/menu/variants"]
+    Menu --> Catalog["/menu/catalog"]
+    Auth --> Reports["/reports"]
+    Auth --> Billing["/billing"]
+    Auth --> Integrations["/integrations"]
+    Auth --> Devices["/devices, superuser"]
+    Auth --> Admin["/admin, superuser"]
+    Admin --> Organizations["/admin/organizations"]
+    Admin --> AdminTerminals["/admin/terminals"]
+    Admin --> Users["/admin/users"]
 ```
 
 `RequireAuth` проверяет только наличие `mb_token` в `localStorage`. Это UX-guard от открытия внутренних страниц без сессии, но не механизм безопасности. Истинная проверка токена и полномочий выполняется backend. Старые пути `/terminals`, `/variants` и `/profile` перенаправляются на актуальные разделы для совместимости с закладками.
@@ -106,7 +106,7 @@ flowchart TB
     Components --> API
     API --> Client[Общий Axios client]
     API --> Cache[In-memory TTL cache]
-    Client --> Backend[/api/*]
+    Client --> Backend["/api/*"]
     Routes --> AntD[Ant Design + theme]
     Components --> AntD
 ```
@@ -139,33 +139,45 @@ src/
 
 - `baseURL: "/api"`;
 - JSON как тип содержимого по умолчанию;
-- `withCredentials: true` для cookie-based refresh;
-- request interceptor, добавляющий `Authorization: Bearer <mb_token>`;
-- response interceptor для обновления токена и приведения ошибок к `Error`.
+- `withCredentials: true` для передачи HttpOnly cookie `accessToken` и `refreshToken`;
+- `X-Requested-With: XMLHttpRequest` как заголовок по умолчанию на всех запросах (CSRF-защита мутаций);
+- Request interceptor: при стандартном транспорте (`cookie`) не передаёт токен в заголовках, полагаясь на браузерный транспорт; при `VITE_AUTH_TRANSPORT=bearer` подставляет заголовок `Authorization: Bearer <mb_token>`;
+- Response interceptor: реактивный fallback при 401 с очередью повторных запросов;
+- Упреждающее фоновое обновление токена (silent refresh) в `src/api/session.ts` по таймеру (`exp - 300с`) и на событии `visibilitychange`;
+- Межвкладочная синхронизация сессии через `BroadcastChannel("mb-session")` (события `token-refreshed`, `tenant-switched`, `logout`).
 
 API разделён по предметным областям: `auth`, `monitoring`, `reports`, `billing`, `certificate-pin`, `catalog`, `menu-variants`, `terminal-bindings`, `devices`, `integrations`, `admin`, `adminTenants`, `adminUsers` и другие. Компоненты не должны собирать URL вручную, если операция относится к существующему API-модулю.
 
-### 6.2. Восстановление сессии после 401
+### 6.2. Жизненный цикл сессии и обновление токенов
 
 ```mermaid
 sequenceDiagram
-    participant Page as Страница
+    participant Tab as Вкладка браузера
+    participant Session as Session/Timer
     participant Client as Axios client
-    participant API as Backend
+    participant API as Backend (FastAPI)
+    participant Channel as BroadcastChannel
 
-    Page->>Client: API-запрос
-    Client->>API: Bearer access token
-    API-->>Client: 401
-    Client->>API: POST /api/auth/refresh + cookie
+    Note over Session,API: 1. Проактивный Silent Refresh (основной путь)
+    Session->>Client: Наступление exp - 300с (или visibilitychange)
+    Client->>API: POST /api/auth/refresh (HttpOnly cookie)
+    API-->>Client: 200 OK + Set-Cookie (accessToken) + expires_in
+    Client->>Session: Перезапуск таймера на новый expires_in
+    Client->>Channel: postMessage("token-refreshed")
+
+    Note over Tab,API: 2. Реактивный Refresh (fallback при 401)
+    Tab->>Client: API-запрос
+    Client->>API: Запрос с cookie
+    API-->>Client: 401 Unauthorized (токен истёк)
+    Client->>API: POST /api/auth/refresh (HttpOnly cookie)
     alt Refresh успешен
-        API-->>Client: Новый access token
-        Client->>Client: Сохранить token, разрешить очередь
+        API-->>Client: 200 OK + Set-Cookie (accessToken)
+        Client->>Client: Разрешить очередь ожидания (failedQueue)
         Client->>API: Повторить исходный запрос
-        API-->>Page: Данные
-    else Refresh неуспешен
-        Client->>Client: Очистить локальную сессию
-        Client-->>Page: Ошибка
-        Client->>Page: Redirect /login
+        API-->>Tab: Данные
+    else Refresh неуспешен (сессия истекла/отозвана)
+        Client->>Channel: postMessage("logout")
+        Client->>Tab: Redirect /login
     end
 ```
 
@@ -234,26 +246,27 @@ sequenceDiagram
 
 ## 9. Аутентификация, роли и мультитенантность
 
-### 9.1. Сессия
+### 9.1. Сессия и SessionContext
 
-После логина access token сохраняется под ключом `mb_token`. Дополнительно локально сохраняются имя пользователя, признак суперадминистратора, текущая организация и её часовой пояс. Refresh token ожидается в cookie и отправляется благодаря `withCredentials`.
+Аутентификация в браузере опирается на HttpOnly cookie (`accessToken` и `refreshToken`), устанавливаемые backend'ом с атрибутами `SameSite=Lax` и `Secure` при HTTPS. Токены не сохраняются и не читаются через `localStorage` (защита от XSS-угроз).
 
-`GET /api/auth/me` является источником актуального профиля. Его результат кэшируется на 60 секунд и используется layout для построения навигации. `localStorage` выступает fallback при первом рендере, но не должен считаться доверенным источником ролей.
+Единым источником истины о текущей сессии на фронтенде является `SessionContext` (`src/session/SessionContext.tsx`).
+При старте приложения `RequireAuth` обращается к серверу через `GET /api/auth/me` (кэш в памяти 60 секунд) и сохраняет объект `UserInfo` в контексте.
+Если сессия отсутствует или недействительна (401), выполняется автоматический переход на `/login`.
 
 ### 9.2. Переключение организации
 
-`OrgSwitcher` показывается только пользователям с признаком superuser/can-switch-org. После выбора организации backend выдаёт новый access token с тенантным контекстом; компонент обновляет localStorage и перезагружает страницу, чтобы сбросить локальное состояние экранов.
+`OrgSwitcher` отображается только суперпользователям (`is_superuser=true`).
+- В выпадающем списке доступен пункт «Платформа / выйти из тенанта» (`org_id: 0`).
+- При выборе организации суперпользователем бэкенд выполняет `switchTenant(org_id)`: обновляет `active_org_id` в текущей сессии без создания лишних сессий и возвращает обновлённую cookie `accessToken`.
+- `OrgSwitcher` вызывает `refreshUser(true)` и публикует событие в `BroadcastChannel("mb-session")` с типом `tenant-switched`, что синхронизирует остальные открытые вкладки.
 
 Важные инварианты:
 
 - `org_id` из UI нельзя использовать как достаточное условие доступа;
-- backend обязан выводить доступную организацию из проверенного токена/серверной сессии;
-- смена организации должна сбрасывать или разделять все tenant-dependent cache keys;
-- скрытие пунктов меню не заменяет серверную проверку прав.
-
-### 9.3. Риски хранения токена
-
-Access token доступен JavaScript через `localStorage`, поэтому успешная XSS-атака может его прочитать. До перехода на более защищённую модель сессии необходимо минимизировать inline HTML, не использовать небезопасный `dangerouslySetInnerHTML`, поддерживать строгую CSP на Nginx и не журналировать токены или секреты интеграций.
+- backend обязан выводить доступную организацию из проверенного токена/серверной сессии (`resolve_org_id`);
+- смена организации обновляет context и разделяет все tenant-dependent cache keys;
+- скрытие пунктов меню не заменяет серверную проверку прав (Rule #1 и Rule #2).
 
 ## 10. UI-архитектура и UX
 
@@ -335,8 +348,8 @@ Vite создаёт статический production bundle в `MenuBuilder/fro
 
 1. **Route-centric монолиты.** Несколько страниц велики и совмещают загрузку данных, доменные вычисления и JSX, что усложняет изолированное тестирование и повторное использование.
 2. **Ручное управление server state.** Loading/error/refetch/cache-invalidation реализуются в каждом экране отдельно; отсутствуют дедупликация запросов и согласованная политика retries для большинства данных.
-3. **Разрозненный session context.** Профиль и tenant context дублируются между React state и несколькими ключами localStorage; смена организации требует полного reload.
-4. **JWT в localStorage.** Текущая модель повышает последствия XSS и требует особенно строгой защиты frontend/Nginx.
+3. ~~**Разрозненный session context.**~~ [РЕШЕНО в целевой архитектуре тенантов] Реализован централизованный `SessionContext` с источником истины в `/api/auth/me` и синхронизацией вкладок через `BroadcastChannel`.
+4. ~~**JWT в localStorage.**~~ [РЕШЕНО в целевой архитектуре тенантов] Токены переведены на HttpOnly cookie с CSRF-защитой через `X-Requested-With: XMLHttpRequest`. Токены больше не сохраняются в `localStorage`.
 5. **Неполная автоматизированная проверка.** Нет unit/component/e2e test scripts, а build не проверяет поведение критических потоков.
 6. **Неоднородная готовность интеграций.** Часть интерфейса витрины имеет демонстрационное локальное поведение без сохранения на backend.
 7. **Нет общей observability-границы.** Ошибки в основном показываются локально; отсутствуют error boundary, correlation ID и централизованный сбор frontend exceptions.
@@ -378,5 +391,8 @@ Vite создаёт статический production bundle в `MenuBuilder/fro
 | Lazy routes + vendor chunks | Снижение стоимости первой загрузки и стабильный browser cache | Нужны корректные loading/error сценарии чанков |
 | Ant Design + централизованная тема | Единообразный data-dense UI | Следует ограничивать inline-стили и глобальные overrides |
 | Axios interceptor refresh queue | Один refresh при серии параллельных 401 | Ошибка refresh завершает всю ожидающую очередь и сессию |
+| HttpOnly cookie + CSRF header | Защита от XSS и CSRF | Токены недоступны из JS; мутации требуют X-Requested-With |
+| Проактивный silent refresh | 2-3с задержка внешнего issuer'а незаметна пользователю | Запросы пользователя не блокируются ожиданием issuer'а |
+| Единый SessionContext | Избавление от рассинхронизации ролей и тенантов | Все компоненты читают актуальный профиль из /auth/me |
 | Локальный React state | Низкий порог сложности для независимых экранов | Крупные страницы дублируют server-state orchestration |
 | Полный reload при switch tenant | Гарантированный сброс локального UI state | Переключение медленнее и зависит от корректной очистки кэша |

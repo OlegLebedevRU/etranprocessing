@@ -1,7 +1,8 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.responses import JSONResponse
 
 from app.config import settings
 from app.routers import (
@@ -42,6 +43,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def csrf_protection_middleware(request: Request, call_next):
+    # CSRF check: if authenticated via cookie (no Authorization Bearer header)
+    # on mutating methods (POST, PUT, PATCH, DELETE), require X-Requested-With: XMLHttpRequest.
+    # Exclude login and refresh.
+    auth_header = request.headers.get("Authorization")
+    has_bearer = bool(auth_header and auth_header.startswith("Bearer "))
+    if (
+        not has_bearer
+        and "accessToken" in request.cookies
+        and request.method in ("POST", "PUT", "PATCH", "DELETE")
+        and not request.url.path.endswith(("/auth/login", "/auth/refresh"))
+        and request.headers.get("X-Requested-With") != "XMLHttpRequest"
+    ):
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"detail": "CSRF check failed"},
+        )
+    return await call_next(request)
 
 app.include_router(auth.router, prefix="/api", tags=["auth"])
 app.include_router(admin_users.router, prefix="/api", tags=["admin-users"])

@@ -3,14 +3,13 @@ from __future__ import annotations
 import base64
 import logging
 from contextlib import suppress
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.auth import (
-    create_master_token,
-    decode_token,
     get_current_user,
 )
 from app.config import settings
@@ -59,6 +58,7 @@ class UserInfo(BaseModel):
     is_impersonated: bool = False
     org_name: str | None = None
     timezone: str = "Europe/Moscow"
+    expires_at: str | None = None
 
 
 def _extract_basic_auth(authorization: str | None) -> tuple[str, str] | None:
@@ -73,12 +73,17 @@ def _extract_basic_auth(authorization: str | None) -> tuple[str, str] | None:
         return None
 
 
-def _set_auth_cookies(
+def _is_secure_request(request: Request) -> bool:
+    return (
+        request.url.scheme == "https"
+        or request.headers.get("X-Forwarded-Proto", "").lower() == "https"
+    )
+
+
+def _set_access_cookie(
     response: Response,
     access_token: str,
-    refresh_token: str | None,
     expires_in: int,
-    refresh_expires_in: int,
     is_secure: bool = False,
 ) -> None:
     # Set accessToken cookie (accessible across whole app)
@@ -88,19 +93,49 @@ def _set_auth_cookies(
         httponly=True,
         samesite="lax",
         path="/",
-        max_age=max(expires_in, 1800),
+        max_age=expires_in,
         secure=is_secure,
     )
+
+
+def _set_refresh_cookie(
+    response: Response,
+    refresh_token: str,
+    refresh_expires_in: int,
+    is_secure: bool = False,
+) -> None:
     # Set refreshToken cookie (restricted to /api/auth path)
+    response.set_cookie(
+        key="refreshToken",
+        value=refresh_token,
+        httponly=True,
+        samesite="lax",
+        path="/api/auth",
+        max_age=refresh_expires_in,
+        secure=is_secure,
+    )
+
+
+def _set_auth_cookies(
+    response: Response,
+    access_token: str,
+    refresh_token: str | None,
+    expires_in: int,
+    refresh_expires_in: int,
+    is_secure: bool = False,
+) -> None:
+    _set_access_cookie(
+        response=response,
+        access_token=access_token,
+        expires_in=expires_in,
+        is_secure=is_secure,
+    )
     if refresh_token:
-        response.set_cookie(
-            key="refreshToken",
-            value=refresh_token,
-            httponly=True,
-            samesite="lax",
-            path="/api/auth",
-            max_age=refresh_expires_in,
-            secure=is_secure,
+        _set_refresh_cookie(
+            response=response,
+            refresh_token=refresh_token,
+            refresh_expires_in=refresh_expires_in,
+            is_secure=is_secure,
         )
 
 
@@ -134,10 +169,33 @@ async def login(
             detail="Invalid credentials",
         )
 
+    # Determine initial org_id:
+    # for superuser: user.last_org_id or 0 (if last_org_id points to inactive/deleted org -> 0)
+    # for regular user: user.org_id (if None or <= 0 -> 403 "Пользователь не привязан к организации")
+    if user.is_superuser:
+        candidate_org_id = user.last_org_id or 0
+        initial_org_id = candidate_org_id
+        if candidate_org_id > 0:
+            with suppress(Exception):
+                async with async_session() as db_session:
+                    org = await db_session.get(Org, candidate_org_id)
+                    if org is not None and not (
+                        getattr(org, "is_active", True)
+                        and getattr(org, "status", 1) == 1
+                    ):
+                        initial_org_id = 0
+    else:
+        if user.org_id is None or user.org_id <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Пользователь не привязан к организации",
+            )
+        initial_org_id = user.org_id
+
     # Issue RS256 token pair from external jwt-issuer
     token_data = await jwt_issuer_client.issue_tokens(
         user_id=user.id,
-        org_id=user.org_id,
+        org_id=initial_org_id,
         role_id=user.role_id,
         username=user.username,
         role=user.role,
@@ -172,10 +230,11 @@ async def login(
             ip_address=client_ip,
             user_agent=user_agent,
             expires_in_seconds=refresh_expires_in,
+            active_org_id=initial_org_id,
         )
 
     # Set HttpOnly Cookies
-    is_secure = request.url.scheme == "https"
+    is_secure = _is_secure_request(request)
     _set_auth_cookies(
         response=response,
         access_token=access_token,
@@ -185,19 +244,17 @@ async def login(
         is_secure=is_secure,
     )
 
-    master_token = create_master_token(user) if user.is_superuser else None
-
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
         token_type="Bearer",
         expires_in=expires_in,
         refresh_expires_in=refresh_expires_in,
-        master_token=master_token,
+        master_token=None,
         is_superuser=user.is_superuser,
         role=user.role,
         role_id=user.role_id,
-        org_id=user.org_id,
+        org_id=initial_org_id,
         user_id=user.id,
     )
 
@@ -237,25 +294,22 @@ async def refresh_token(
             detail="User is inactive or not found",
         )
 
-    # Determine effective org_id: for superusers, preserve current active org_id if provided in accessToken
-    effective_org_id = user.org_id
+    # Determine effective org_id:
+    # Session is source of truth for superuser active tenant!
+    # For regular user, always enforce user.org_id
     if user.is_superuser:
-        curr_token = None
-        auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            curr_token = auth_header.split(" ", 1)[1]
-        elif "accessToken" in request.cookies:
-            curr_token = request.cookies["accessToken"]
-        if curr_token:
-            with suppress(Exception):
-                curr_payload = decode_token(curr_token)
-                curr_org = (
-                    curr_payload.get("orgId")
-                    or curr_payload.get("org_id")
-                    or curr_payload.get("org")
-                )
-                if curr_org is not None and str(curr_org).isdigit():
-                    effective_org_id = int(curr_org)
+        effective_org_id = (
+            session.active_org_id
+            if session.active_org_id is not None
+            else (user.last_org_id or 0)
+        )
+    else:
+        if user.org_id is None or user.org_id <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Пользователь не привязан к организации",
+            )
+        effective_org_id = user.org_id
 
     # Issue new token pair
     token_data = await jwt_issuer_client.issue_tokens(
@@ -299,11 +353,12 @@ async def refresh_token(
             ip_address=client_ip,
             user_agent=user_agent,
             expires_in_seconds=refresh_expires_in,
+            active_org_id=effective_org_id,
         )
     else:
         await store.touch_session(session.id)
 
-    is_secure = request.url.scheme == "https"
+    is_secure = _is_secure_request(request)
     _set_auth_cookies(
         response=response,
         access_token=access_token,
@@ -313,19 +368,17 @@ async def refresh_token(
         is_secure=is_secure,
     )
 
-    master_token = create_master_token(user) if user.is_superuser else None
-
     return TokenResponse(
         access_token=access_token,
         refresh_token=new_refresh_token,
         token_type="Bearer",
         expires_in=expires_in,
         refresh_expires_in=refresh_expires_in,
-        master_token=master_token,
+        master_token=None,
         is_superuser=user.is_superuser,
         role=user.role,
         role_id=user.role_id,
-        org_id=user.org_id,
+        org_id=effective_org_id,
         user_id=user.id,
     )
 
@@ -347,6 +400,23 @@ async def logout(
     if refresh_token_val:
         store = get_user_store()
         await store.revoke_session_by_token(refresh_token_val)
+
+    # Invalidate issuer token cache for user if token is present
+    curr_token = None
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        curr_token = auth_header.split(" ", 1)[1]
+    elif "accessToken" in request.cookies:
+        curr_token = request.cookies["accessToken"]
+
+    if curr_token:
+        with suppress(Exception):
+            from app.auth import decode_token
+
+            payload = decode_token(curr_token)
+            uid = payload.get("userId") or payload.get("user_id") or payload.get("sub")
+            if uid and str(uid).isdigit():
+                jwt_issuer_client.invalidate_cache_for_user(int(uid))
 
     # Clear cookies
     response.delete_cookie(key="accessToken", path="/")
@@ -413,6 +483,14 @@ async def me(user: dict = Depends(get_current_user)):
         org_timezone = "Europe/Moscow"
 
     is_su = bool(user.get("is_superuser") or user.get("role") in ("superuser", "admin"))
+    expires_at = None
+    exp_val = user.get("exp")
+    if exp_val is not None:
+        try:
+            expires_at = datetime.fromtimestamp(float(exp_val), tz=UTC).isoformat()
+        except Exception:  # noqa: BLE001
+            expires_at = None
+
     return UserInfo(
         user_id=user.get("user_id"),
         username=user["username"],
@@ -425,4 +503,5 @@ async def me(user: dict = Depends(get_current_user)):
         is_impersonated=bool(user.get("is_impersonated", False)),
         org_name=org_name,
         timezone=org_timezone,
+        expires_at=expires_at,
     )

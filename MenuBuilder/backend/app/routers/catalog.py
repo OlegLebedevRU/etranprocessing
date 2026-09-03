@@ -3,7 +3,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.auth import get_current_user
+from app.auth import require_tenant_context, resolve_org_id
 from app.database import get_db
 from app.models import (
     CatalogCategory,
@@ -46,27 +46,22 @@ async def _get_category_depth(db: AsyncSession, category_id: int | None) -> int:
 
 @router.get("/categories", response_model=list[CatalogCategoryRead])
 async def list_categories(
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
-    org_id = user.get("org_id")
-    if not org_id and not user.get("is_superuser"):
-        return []
+    org_id = resolve_org_id(user)
 
-    stmt = select(CatalogCategory)
-    if org_id and org_id > 0:
-        stmt = stmt.where(CatalogCategory.org_id == org_id)
-
+    stmt = select(CatalogCategory).where(CatalogCategory.org_id == org_id)
     stmt = stmt.order_by(CatalogCategory.sort_order, CatalogCategory.id)
     result = await db.execute(stmt)
     all_cats = list(result.scalars().all())
 
     # Get items count per category
-    item_counts_stmt = select(
-        CatalogItem.category_id, func.count(CatalogItem.id)
-    ).group_by(CatalogItem.category_id)
-    if org_id and org_id > 0:
-        item_counts_stmt = item_counts_stmt.where(CatalogItem.org_id == org_id)
+    item_counts_stmt = (
+        select(CatalogItem.category_id, func.count(CatalogItem.id))
+        .where(CatalogItem.org_id == org_id)
+        .group_by(CatalogItem.category_id)
+    )
     count_rows = (await db.execute(item_counts_stmt)).fetchall()
     counts_map = {r[0]: r[1] for r in count_rows}
 
@@ -107,19 +102,15 @@ async def list_categories(
 )
 async def create_category(
     data: CatalogCategoryCreate,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
-    org_id = user.get("org_id")
-    if not org_id and not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Forbidden")
+    org_id = resolve_org_id(user)
 
     parent_depth = 0
     if data.parent_id is not None:
         parent = await db.get(CatalogCategory, data.parent_id)
-        if not parent or (
-            org_id and parent.org_id != org_id and not user.get("is_superuser")
-        ):
+        if not parent or parent.org_id != org_id:
             raise HTTPException(status_code=404, detail="Parent category not found")
         parent_depth = await _get_category_depth(db, data.parent_id)
         if parent_depth >= 3:
@@ -156,14 +147,12 @@ async def create_category(
 async def update_category(
     category_id: int,
     data: CatalogCategoryUpdate,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
+    org_id = resolve_org_id(user)
     cat = await db.get(CatalogCategory, category_id)
-    if not cat:
-        raise HTTPException(status_code=404, detail="Category not found")
-    org_id = user.get("org_id")
-    if org_id and cat.org_id != org_id and not user.get("is_superuser"):
+    if not cat or cat.org_id != org_id:
         raise HTTPException(status_code=404, detail="Category not found")
 
     if data.parent_id is not None and data.parent_id != cat.parent_id:
@@ -172,9 +161,7 @@ async def update_category(
                 status_code=400, detail="Cannot set category as its own parent"
             )
         parent = await db.get(CatalogCategory, data.parent_id)
-        if not parent or (
-            org_id and parent.org_id != org_id and not user.get("is_superuser")
-        ):
+        if not parent or parent.org_id != org_id:
             raise HTTPException(status_code=404, detail="Parent category not found")
         parent_depth = await _get_category_depth(db, data.parent_id)
         if parent_depth >= 3:
@@ -214,14 +201,12 @@ async def update_category(
 @router.delete("/categories/{category_id}")
 async def delete_category(
     category_id: int,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
+    org_id = resolve_org_id(user)
     cat = await db.get(CatalogCategory, category_id)
-    if not cat:
-        raise HTTPException(status_code=404, detail="Category not found")
-    org_id = user.get("org_id")
-    if org_id and cat.org_id != org_id and not user.get("is_superuser"):
+    if not cat or cat.org_id != org_id:
         raise HTTPException(status_code=404, detail="Category not found")
 
     await db.delete(cat)
@@ -231,12 +216,10 @@ async def delete_category(
 
 @router.get("/free-tsp")
 async def get_free_catalog_tsp(
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
-    org_id = user.get("org_id")
-    if not org_id and not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Forbidden")
+    org_id = resolve_org_id(user)
 
     used_codes_res = await db.execute(
         select(CatalogItem.tsp_code).where(CatalogItem.org_id == org_id)
@@ -252,16 +235,12 @@ async def get_free_catalog_tsp(
 async def list_items(
     category_id: int | None = None,
     search: str | None = None,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
-    org_id = user.get("org_id")
-    if not org_id and not user.get("is_superuser"):
-        return []
+    org_id = resolve_org_id(user)
 
-    stmt = select(CatalogItem).options(selectinload(CatalogItem.category))
-    if org_id and org_id > 0:
-        stmt = stmt.where(CatalogItem.org_id == org_id)
+    stmt = select(CatalogItem).options(selectinload(CatalogItem.category)).where(CatalogItem.org_id == org_id)
     if category_id is not None:
         stmt = stmt.where(CatalogItem.category_id == category_id)
     if search:
@@ -297,17 +276,13 @@ async def list_items(
 )
 async def create_item(
     data: CatalogItemCreate,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
-    org_id = user.get("org_id")
-    if not org_id and not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Forbidden")
+    org_id = resolve_org_id(user)
 
     category = await db.get(CatalogCategory, data.category_id)
-    if not category or (
-        org_id and category.org_id != org_id and not user.get("is_superuser")
-    ):
+    if not category or category.org_id != org_id:
         raise HTTPException(status_code=404, detail="Category not found")
 
     tsp_code = data.tsp_code
@@ -374,21 +349,17 @@ async def create_item(
 async def update_item(
     item_id: int,
     data: CatalogItemUpdate,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
+    org_id = resolve_org_id(user)
     item = await db.get(CatalogItem, item_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
-    org_id = user.get("org_id")
-    if org_id and item.org_id != org_id and not user.get("is_superuser"):
+    if not item or item.org_id != org_id:
         raise HTTPException(status_code=404, detail="Item not found")
 
     if data.category_id is not None and data.category_id != item.category_id:
         category = await db.get(CatalogCategory, data.category_id)
-        if not category or (
-            org_id and category.org_id != org_id and not user.get("is_superuser")
-        ):
+        if not category or category.org_id != org_id:
             raise HTTPException(status_code=404, detail="Category not found")
         item.category_id = data.category_id
 
@@ -423,14 +394,12 @@ async def update_item(
 @router.delete("/items/{item_id}")
 async def delete_item(
     item_id: int,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
+    org_id = resolve_org_id(user)
     item = await db.get(CatalogItem, item_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
-    org_id = user.get("org_id")
-    if org_id and item.org_id != org_id and not user.get("is_superuser"):
+    if not item or item.org_id != org_id:
         raise HTTPException(status_code=404, detail="Item not found")
 
     await db.delete(item)
@@ -440,16 +409,14 @@ async def delete_item(
 
 @router.post("/propagate-to-menus", response_model=CatalogPropagateResponse)
 async def propagate_catalog_to_menus(
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Propagate catalog changes to all linked services across menu variants.
     Increments menu variant version for all affected variants and creates snapshots.
     """
-    org_id = user.get("org_id")
-    if not org_id and not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Forbidden")
+    org_id = resolve_org_id(user)
 
     # 1. Fetch all catalog items for this org
     items_stmt = select(CatalogItem).where(CatalogItem.org_id == org_id)

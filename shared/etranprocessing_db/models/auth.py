@@ -68,6 +68,7 @@ class User(Base):
     is_superuser: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    last_org_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -107,8 +108,12 @@ class UserSession(Base):
     is_revoked: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    active_org_id: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, index=True
+    )
 
     __table_args__ = (
         Index("idx_user_sessions_user_id", "user_id"),
         Index("idx_user_sessions_refresh_hash", "refresh_token_hash"),
+        Index("idx_user_sessions_active_org_id", "active_org_id"),
     )

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_user
+from app.auth import require_tenant_context, resolve_org_id
 from app.database import get_db
 from app.models import CatalogCategory, CatalogItem, Group, MenuVariant, Service
 from app.schemas import ServiceCreate, ServiceRead, ServiceUpdate
@@ -20,41 +20,23 @@ CUSTOM_TSP_END = 1001999
 async def list_services(
     group_id: int | None = None,
     menu_variant_id: int | None = None,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
-    org_id = user.get("org_id")
+    org_id = resolve_org_id(user)
     stmt = select(Service)
     if group_id is not None:
         group = await db.get(Group, group_id)
-        if not group:
-            raise HTTPException(status_code=404, detail="Group not found")
-        if (
-            org_id
-            and org_id > 0
-            and group.org_id != org_id
-            and not user.get("is_superuser")
-        ):
+        if not group or group.org_id != org_id:
             raise HTTPException(status_code=404, detail="Group not found")
         stmt = stmt.where(Service.group_id == group_id)
     elif menu_variant_id is not None:
         variant = await db.get(MenuVariant, menu_variant_id)
-        if not variant:
-            raise HTTPException(status_code=404, detail="Menu variant not found")
-        if (
-            org_id
-            and org_id > 0
-            and variant.org_id != org_id
-            and not user.get("is_superuser")
-        ):
+        if not variant or variant.org_id != org_id:
             raise HTTPException(status_code=404, detail="Menu variant not found")
         stmt = stmt.where(Service.menu_variant_id == menu_variant_id)
     else:
-        stmt = stmt.join(Group, Group.id == Service.group_id)
-        if org_id and org_id > 0:
-            stmt = stmt.where(Group.org_id == org_id)
-        elif not user.get("is_superuser"):
-            return []
+        stmt = stmt.join(Group, Group.id == Service.group_id).where(Group.org_id == org_id)
 
     stmt = stmt.order_by(Service.tsp_code)
     result = await db.execute(stmt)
@@ -65,22 +47,13 @@ async def list_services(
 async def get_free_tsp(
     group_id: int,
     from_catalog: bool = False,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
+    org_id = resolve_org_id(user)
     group = await db.get(Group, group_id)
-    if not group:
+    if not group or group.org_id != org_id:
         raise HTTPException(status_code=404, detail="Group not found")
-    org_id = user.get("org_id")
-    if (
-        org_id
-        and org_id > 0
-        and group.org_id != org_id
-        and not user.get("is_superuser")
-    ):
-        raise HTTPException(status_code=404, detail="Group not found")
-    if not org_id and not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Forbidden")
 
     used_codes = await db.execute(
         select(Service.tsp_code).where(Service.menu_variant_id == group.menu_variant_id)
@@ -103,41 +76,29 @@ async def get_free_tsp(
 @router.get("/{service_id}", response_model=ServiceRead)
 async def get_service(
     service_id: int,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
+    org_id = resolve_org_id(user)
     service = await db.get(Service, service_id)
     if not service:
         raise HTTPException(status_code=404, detail="Service not found")
-    org_id = user.get("org_id")
-    if org_id and org_id > 0:
-        group = await db.get(Group, service.group_id)
-        if not group or (group.org_id != org_id and not user.get("is_superuser")):
-            raise HTTPException(status_code=404, detail="Service not found")
-    elif not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Forbidden")
+    group = await db.get(Group, service.group_id)
+    if not group or group.org_id != org_id:
+        raise HTTPException(status_code=404, detail="Service not found")
     return service
 
 
 @router.post("", response_model=ServiceRead, status_code=201)
 async def create_service(
     data: ServiceCreate,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
+    org_id = resolve_org_id(user)
     group = await db.get(Group, data.group_id)
-    if not group:
+    if not group or group.org_id != org_id:
         raise HTTPException(status_code=404, detail="Group not found")
-    org_id = user.get("org_id")
-    if (
-        org_id
-        and org_id > 0
-        and group.org_id != org_id
-        and not user.get("is_superuser")
-    ):
-        raise HTTPException(status_code=404, detail="Group not found")
-    if not org_id and not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Forbidden")
 
     catalog_item_id = data.catalog_item_id
     tsp_code = data.tsp_code
@@ -145,9 +106,7 @@ async def create_service(
     # If linked from catalog
     if catalog_item_id:
         cat_item = await db.get(CatalogItem, catalog_item_id)
-        if not cat_item or (
-            org_id and cat_item.org_id != org_id and not user.get("is_superuser")
-        ):
+        if not cat_item or cat_item.org_id != org_id:
             raise HTTPException(status_code=404, detail="Catalog item not found")
         tsp_code = cat_item.tsp_code
 
@@ -170,9 +129,7 @@ async def create_service(
             category_id = first_cat.id
         else:
             cat = await db.get(CatalogCategory, category_id)
-            if not cat or (
-                org_id and cat.org_id != org_id and not user.get("is_superuser")
-            ):
+            if not cat or cat.org_id != org_id:
                 raise HTTPException(
                     status_code=404, detail="Catalog category not found"
                 )
@@ -260,19 +217,16 @@ async def create_service(
 async def update_service(
     service_id: int,
     data: ServiceUpdate,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
+    org_id = resolve_org_id(user)
     service = await db.get(Service, service_id)
     if not service:
         raise HTTPException(status_code=404, detail="Service not found")
-    org_id = user.get("org_id")
-    if org_id and org_id > 0:
-        group = await db.get(Group, service.group_id)
-        if not group or (group.org_id != org_id and not user.get("is_superuser")):
-            raise HTTPException(status_code=404, detail="Service not found")
-    elif not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Forbidden")
+    group = await db.get(Group, service.group_id)
+    if not group or group.org_id != org_id:
+        raise HTTPException(status_code=404, detail="Service not found")
 
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(service, key, value)
@@ -287,19 +241,16 @@ async def update_service(
 @router.delete("/{service_id}")
 async def delete_service(
     service_id: int,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
+    org_id = resolve_org_id(user)
     service = await db.get(Service, service_id)
     if not service:
         raise HTTPException(status_code=404, detail="Service not found")
-    org_id = user.get("org_id")
-    if org_id and org_id > 0:
-        group = await db.get(Group, service.group_id)
-        if not group or (group.org_id != org_id and not user.get("is_superuser")):
-            raise HTTPException(status_code=404, detail="Service not found")
-    elif not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Forbidden")
+    group = await db.get(Group, service.group_id)
+    if not group or group.org_id != org_id:
+        raise HTTPException(status_code=404, detail="Service not found")
 
     variant = await db.get(MenuVariant, service.menu_variant_id)
     if variant:

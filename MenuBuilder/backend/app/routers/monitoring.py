@@ -4,7 +4,7 @@ from etranprocessing_gauge import decode_slots_bitmask
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
 
-from app.auth import get_current_user
+from app.auth import require_tenant_context, resolve_org_id
 from app.database import async_session
 from app.services.gauge_bus import gauge_store
 
@@ -16,25 +16,20 @@ async def get_monitoring(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     search: str | None = Query(None),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_tenant_context),
 ):
     """Return terminal connection history and current gauge state."""
     now = datetime.now(UTC)
     start = now - timedelta(hours=2)
 
-    org_id = user.get("org_id")
-    if org_id is not None:
-        try:
-            org_id = int(org_id)
-        except ValueError, TypeError:
-            org_id = None
+    org_id = resolve_org_id(user)
 
-    conditions = ["t.is_active = true", "t.show_in_monitoring = true"]
-    params: dict = {"now": now}
-
-    if org_id is not None:
-        conditions.append("t.org_id = :org_id")
-        params["org_id"] = org_id
+    conditions = [
+        "t.is_active = true",
+        "t.show_in_monitoring = true",
+        "t.org_id = :org_id",
+    ]
+    params: dict = {"now": now, "org_id": org_id}
 
     if search:
         conditions.append(

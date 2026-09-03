@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -7,6 +8,8 @@ from jose import jwt
 
 from app.config import settings
 from app.user_store import UserRecord
+
+logger = logging.getLogger(__name__)
 
 security_scheme = HTTPBearer(auto_error=False)
 
@@ -19,7 +22,7 @@ def find_user(username: str) -> dict | None:
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
-    """Fallback / local access token creator."""
+    """DEPRECATED: Fallback / local access token creator. Kept for test harnesses only."""
     to_encode = data.copy()
     expire_minutes = settings.jwt_expire_minutes
     if expires_delta:
@@ -36,7 +39,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
 
 
 def create_master_token(user: UserRecord | dict) -> str:
-    """Create a platform/master access token for a superuser."""
+    """DEPRECATED: Create a platform/master access token for a superuser. Kept for legacy tests only."""
     username = user.username if isinstance(user, UserRecord) else user["username"]
     role = user.role if isinstance(user, UserRecord) else user.get("role", "superuser")
     is_su = (
@@ -66,7 +69,7 @@ def create_tenant_token(
     target_org_id: int,
     original_user: str | None = None,
 ) -> str:
-    """Create a tenant-scoped access token for acting within a specific organization context."""
+    """DEPRECATED: Create a tenant-scoped access token for acting within a specific organization context."""
     username = user.username if isinstance(user, UserRecord) else user["username"]
     role = user.role if isinstance(user, UserRecord) else user.get("role", "user")
     is_su = (
@@ -145,33 +148,31 @@ async def get_current_user(
         token = credentials.credentials
     elif "accessToken" in request.cookies:
         token = request.cookies["accessToken"]
-    elif "access_token" in request.cookies:
-        token = request.cookies["access_token"]
 
-    # Also check headers forwarded from Nginx
+    # Also check headers forwarded from Nginx (only trusted if configured)
     nginx_user_id = request.headers.get("X-User-Id")
     nginx_org_id = request.headers.get("X-Org-Id")
     nginx_role = request.headers.get("X-User-Role")
 
-    if not token and not nginx_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
-        )
-
-    if token:
-        payload = decode_token(token)
+    if not token:
+        if settings.trust_proxy_identity_headers and nginx_user_id:
+            payload = {
+                "sub": nginx_user_id,
+                "userId": int(nginx_user_id)
+                if nginx_user_id and nginx_user_id.isdigit()
+                else 0,
+                "orgId": int(nginx_org_id)
+                if nginx_org_id and nginx_org_id.isdigit()
+                else 0,
+                "role": nginx_role or "user",
+            }
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required",
+            )
     else:
-        payload = {
-            "sub": nginx_user_id,
-            "userId": int(nginx_user_id)
-            if nginx_user_id and nginx_user_id.isdigit()
-            else 0,
-            "orgId": int(nginx_org_id)
-            if nginx_org_id and nginx_org_id.isdigit()
-            else 0,
-            "role": nginx_role or "user",
-        }
+        payload = decode_token(token)
 
     raw_user_id = payload.get("userId") or payload.get("user_id") or payload.get("sub")
     raw_org_id = payload.get("orgId") or payload.get("org_id") or payload.get("org")
@@ -210,7 +211,6 @@ async def get_current_user(
         payload.get("is_superuser")
         or role in ("superuser", "admin")
         or role_id == 1
-        or username == "o.lebedev"
     )
     if is_su and role not in ("superuser", "admin"):
         role = "superuser"
@@ -218,6 +218,16 @@ async def get_current_user(
     token_type = payload.get("token_type", "tenant")
     orig_sub = payload.get("orig_sub") or username
     is_imp = bool(payload.get("is_imp", False))
+
+    if is_imp and request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        logger.info(
+            "audit impersonated action user=%s orig_sub=%s org=%s method=%s path=%s",
+            username,
+            orig_sub,
+            org_id,
+            request.method,
+            request.url.path,
+        )
 
     return {
         "user_id": user_id,
@@ -229,6 +239,7 @@ async def get_current_user(
         "token_type": token_type,
         "orig_sub": orig_sub,
         "is_impersonated": is_imp,
+        "exp": payload.get("exp"),
     }
 
 
@@ -249,9 +260,32 @@ async def require_tenant_context(
 ) -> dict:
     """Dependency: require active tenant context (org_id > 0)."""
     org_id = user.get("org_id")
-    if org_id is None or org_id <= 0:
+    if org_id in (None, 0) or (isinstance(org_id, int) and org_id <= 0):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Active organization context required",
+            detail="Выберите организацию",
         )
     return user
+
+
+def resolve_org_id(user: dict[str, Any], requested: int | None = None) -> int:
+    """Resolve and enforce effective org_id according to authorization Rule #2.
+
+    - Token/session is the source of truth for org_id.
+    - If user has no active tenant context (org_id in (None, 0)), raises 403 'Выберите организацию'.
+    - If client provided requested org_id and it does NOT match user's active org_id:
+      raises 403 (both for regular users and for impersonated superusers).
+    """
+    token_org = user.get("org_id")
+    if token_org in (None, 0) or (isinstance(token_org, int) and token_org <= 0):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Выберите организацию",
+        )
+    effective_org_id = int(token_org)
+    if requested is not None and requested != effective_org_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Access denied: requested org_id {requested} does not match active tenant {effective_org_id}",
+        )
+    return effective_org_id
