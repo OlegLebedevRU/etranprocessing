@@ -372,13 +372,28 @@ export default function ReportsPage() {
     {
       title: "ТСП",
       dataIndex: "tsp_name",
-      width: 220,
+      width: 240,
       ellipsis: true,
       render: (v: string | undefined, r: PaymentRecord) => {
-        const verTag = r.menu_version ? ` (v${r.menu_version})` : "";
-        return r.paym_tsp_code
-          ? `${r.paym_tsp_code}${verTag}: ${v || "—"}`
-          : (v || "—");
+        if (!r.paym_tsp_code) {
+          return v || "—";
+        }
+        return (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, maxWidth: "100%" }}>
+            <span style={{ fontWeight: 600 }}>{r.paym_tsp_code}</span>
+            {r.menu_version ? (
+              <>
+                <span style={{ color: "#bfbfbf" }}>|</span>
+                <Tag color="blue" style={{ margin: 0, padding: "0 4px", fontSize: 11, lineHeight: "18px" }}>
+                  {`v${r.menu_version}`}
+                </Tag>
+              </>
+            ) : null}
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              : {v || "—"}
+            </span>
+          </span>
+        );
       },
     },
     {
@@ -446,8 +461,23 @@ export default function ReportsPage() {
       title: "TSP код",
       dataIndex: "tsp_code",
       fixed: "left" as const,
-      width: 100,
+      width: 140,
       sorter: (a, b) => a.tsp_code - b.tsp_code,
+      render: (code: number, r: BalanceByTspRecord) => (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontWeight: 600 }}>{code}</span>
+          <span style={{ color: "#bfbfbf" }}>|</span>
+          {r.version ? (
+            <Tag color="blue" style={{ margin: 0, padding: "0 4px", fontSize: 11, lineHeight: "18px" }}>
+              {`v${r.version}`}
+            </Tag>
+          ) : (
+            <Tag color="default" style={{ margin: 0, padding: "0 4px", fontSize: 11, lineHeight: "18px" }}>
+              —
+            </Tag>
+          )}
+        </span>
+      ),
     },
     {
       title: "Версия",

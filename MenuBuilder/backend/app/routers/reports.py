@@ -381,7 +381,7 @@ async def get_payments_report(
                 text(f"""
                     SELECT p.paym_id, p.paym_datetime, p.paym_amount, p.paym_ext_id,
                            p.paym_tsp_code, p.paym_state, p.pay_type_id,
-                           t.device_id, t.sn, p.menu_snapshot_id
+                           t.device_id, t.sn, p.menu_snapshot_id, p.menu_version
                     FROM payments p JOIN terminals t ON t.id = p.terminal_id
                     WHERE {where} ORDER BY p.paym_datetime DESC LIMIT :top
                 """),
@@ -434,7 +434,7 @@ async def get_payments_report(
                     FROM services s JOIN menu_variants mv ON mv.id = s.menu_variant_id
                     WHERE mv.org_id = :org_id AND s.tsp_code = ANY(:tsp_codes)
                 """),
-                {"org_id": org_id, "tsp_codes": tsp_codes},
+                {"org_id": effective_org_id, "tsp_codes": tsp_codes},
             )
         ).fetchall()
         org_tsp_map = {row[0]: row[1] for row in org_service_rows}
@@ -482,12 +482,14 @@ async def get_payments_report(
             row[4],
             row[9],
         )
+        row_menu_version = row[10] if len(row) > 10 else None
         tsp_name = None
-        menu_version = None
+        menu_version = row_menu_version
         if snapshot_id and snapshot_id in snapshots_map:
             snapshot_data = snapshots_map[snapshot_id]
             if isinstance(snapshot_data, dict):
-                menu_version = snapshot_data.get("version")
+                if menu_version is None:
+                    menu_version = snapshot_data.get("version")
                 service_info = snapshot_data.get("services_by_tsp", {}).get(
                     str(current_tsp_code)
                 ) or snapshot_data.get("services_by_tsp", {}).get(current_tsp_code)
@@ -614,18 +616,29 @@ async def get_balance_by_tsp(
         rows = (
             await session.execute(
                 text(f"""
-                    SELECT ts.tsp_code, ts.tsp_name, b.menu_snapshot_id,
-                           b.terminal_id, b.count, b.amount
+                    SELECT ts.tsp_code, ts.tsp_name, b.menu_version, b.menu_snapshot_id,
+                           COUNT(DISTINCT b.terminal_id) AS terminal_count,
+                           SUM(b.count) AS total_count,
+                           SUM(b.amount) AS total_amount
                     FROM balance_terminal_tsp b
                     JOIN terminals t ON t.id = b.terminal_id
-                    JOIN tsp ts ON ts.tsp_id = b.tsp_id WHERE {where}
+                    JOIN tsp ts ON ts.tsp_id = b.tsp_id
+                    WHERE {where}
+                    GROUP BY ts.tsp_code, ts.tsp_name, b.menu_version, b.menu_snapshot_id
+                    ORDER BY ts.tsp_code, b.menu_version
                 """),
                 params,
             )
         ).fetchall()
         if not rows:
             return {"items": [], "timezone": tz_name}
-        snapshot_ids = list({row[2] for row in rows if row[2] is not None})
+        snapshot_ids = list(
+            {
+                (row[3] if len(row) >= 7 else row[2])
+                for row in rows
+                if (row[3] if len(row) >= 7 else row[2]) is not None
+            }
+        )
         snapshots_map: dict[int, dict] = {}
         if snapshot_ids:
             snapshot_rows = (
@@ -653,20 +666,33 @@ async def get_balance_by_tsp(
                     FROM services s JOIN menu_variants mv ON mv.id = s.menu_variant_id
                     WHERE mv.org_id = :org_id AND s.tsp_code = ANY(:tsp_codes)
                 """),
-                {"org_id": org_id, "tsp_codes": tsp_codes},
+                {"org_id": effective_org_id, "tsp_codes": tsp_codes},
             )
         ).fetchall()
         org_tsp_map = {row[0]: row[1] for row in org_service_rows}
 
     grouped: dict[tuple[int, int | None], dict] = {}
     for row in rows:
-        tsp_code, global_name, snapshot_id, terminal_id, count, amount = row
+        if len(row) >= 7:
+            (
+                tsp_code,
+                global_name,
+                menu_version,
+                snapshot_id,
+                terminal_count,
+                count,
+                amount,
+            ) = row[:7]
+        else:
+            tsp_code, global_name, snapshot_id, _term_id, count, amount = row[:6]
+            menu_version = None
+            terminal_count = 1
         tsp_name = None
-        menu_version = None
         if snapshot_id and snapshot_id in snapshots_map:
             snapshot_data = snapshots_map[snapshot_id]
             if isinstance(snapshot_data, dict):
-                menu_version = snapshot_data.get("version")
+                if menu_version is None:
+                    menu_version = snapshot_data.get("version")
                 service_info = snapshot_data.get("services_by_tsp", {}).get(
                     str(tsp_code)
                 ) or snapshot_data.get("services_by_tsp", {}).get(tsp_code)
@@ -675,7 +701,7 @@ async def get_balance_by_tsp(
         tsp_name = (
             tsp_name
             or org_tsp_map.get(tsp_code)
-            or global_name.strip()
+            or (global_name.strip() if global_name else "")
             or str(tsp_code)
         )
         key = (tsp_code, menu_version)
@@ -684,14 +710,14 @@ async def get_balance_by_tsp(
                 "tsp_code": tsp_code,
                 "version": menu_version,
                 "tsp_name": tsp_name,
-                "terminal_ids": {terminal_id},
-                "total_count": count or 0,
-                "total_amount": amount or 0,
+                "terminal_count": terminal_count or 0,
+                "total_count": int(count or 0),
+                "total_amount": int(amount or 0),
             }
         else:
-            grouped[key]["terminal_ids"].add(terminal_id)
-            grouped[key]["total_count"] += count or 0
-            grouped[key]["total_amount"] += amount or 0
+            grouped[key]["terminal_count"] += terminal_count or 0
+            grouped[key]["total_count"] += int(count or 0)
+            grouped[key]["total_amount"] += int(amount or 0)
             if tsp_name and snapshot_id:
                 grouped[key]["tsp_name"] = tsp_name
     return {
@@ -700,7 +726,7 @@ async def get_balance_by_tsp(
                 "tsp_code": item["tsp_code"],
                 "version": item["version"],
                 "tsp_name": item["tsp_name"],
-                "terminal_count": len(item["terminal_ids"]),
+                "terminal_count": item["terminal_count"],
                 "total_count": item["total_count"],
                 "total_amount": item["total_amount"],
             }

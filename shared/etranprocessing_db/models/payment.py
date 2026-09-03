@@ -72,6 +72,7 @@ class Payment(Base):
         ForeignKey("menu_variant_snapshots.id", ondelete="SET NULL"),
         nullable=True,
     )
+    menu_version: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
 
     terminal: Mapped[Terminal] = relationship("Terminal")
     org: Mapped[Org] = relationship("Org")
@@ -89,6 +90,7 @@ class Payment(Base):
         Index("idx_payments_tsp_code", "paym_tsp_code"),
         Index("idx_payments_datetime", "paym_datetime"),
         Index("idx_payments_menu_snapshot_id", "menu_snapshot_id"),
+        Index("idx_payments_tsp_code_menu_version", "paym_tsp_code", "menu_version"),
     )
 
 
@@ -132,6 +134,7 @@ class BalanceTerminalTsp(Base):
         ForeignKey("menu_variant_snapshots.id", ondelete="SET NULL"),
         nullable=True,
     )
+    menu_version: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     amount: Mapped[int] = mapped_column(BigInteger, default=0)
     count: Mapped[int] = mapped_column(Integer, default=0)
     update_datetime: Mapped[datetime] = mapped_column(
@@ -147,12 +150,13 @@ class BalanceTerminalTsp(Base):
             "int_day",
             "terminal_id",
             "tsp_id",
-            "menu_snapshot_id",
-            name="uq_balance_day_terminal_tsp_snap",
+            "menu_version",
+            name="uq_balance_day_terminal_tsp_ver",
         ),
         Index("idx_balance_int_day", "int_day"),
         Index("idx_balance_terminal_id", "terminal_id"),
         Index("idx_balance_tsp_id", "tsp_id"),
         Index("idx_balance_org_id", "org_id"),
         Index("idx_balance_menu_snapshot_id", "menu_snapshot_id"),
+        Index("idx_balance_menu_version", "menu_version"),
     )

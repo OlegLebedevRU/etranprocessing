@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
     BalanceTerminalTsp,
+    Group,
+    MenuVariant,
     MenuVariantSnapshot,
     Org,
     Payment,
@@ -101,6 +103,87 @@ class PaymentService:
                 return resolve_tz(org_tz)
         return resolve_tz("Europe/Moscow")
 
+    async def create_snapshot_for_variant(
+        self, variant_id: int, version: int
+    ) -> MenuVariantSnapshot | None:
+        """Create and persist a snapshot for a given variant and version."""
+        variant = await self.db.get(MenuVariant, variant_id)
+        if not variant:
+            return None
+
+        groups_result = await self.db.execute(
+            select(Group)
+            .where(Group.menu_variant_id == variant.id)
+            .order_by(Group.number)
+        )
+        groups_list = groups_result.scalars().all()
+
+        group_ids = [g.id for g in groups_list]
+        services_list = []
+        if group_ids:
+            services_result = await self.db.execute(
+                select(ServiceMenu)
+                .where(ServiceMenu.group_id.in_(group_ids))
+                .order_by(ServiceMenu.tsp_code)
+            )
+            services_list = services_result.scalars().all()
+
+        groups_by_parent: dict[int | None, list[Group]] = {}
+        for g in groups_list:
+            groups_by_parent.setdefault(g.parent_id, []).append(g)
+
+        services_by_group: dict[int, list[ServiceMenu]] = {}
+        for s in services_list:
+            services_by_group.setdefault(s.group_id, []).append(s)
+
+        def build_tree(parent_id: int | None):
+            items = []
+            for g in sorted(
+                groups_by_parent.get(parent_id, []), key=lambda x: x.number
+            ):
+                node: dict[str, object] = {"name": g.name}
+                child_items = build_tree(g.id)
+                for s in sorted(
+                    services_by_group.get(g.id, []), key=lambda x: x.tsp_code
+                ):
+                    svc = {
+                        "name": s.name,
+                        "code": s.tsp_code,
+                        "prototypeid": s.protypenumber,
+                    }
+                    if s.printname:
+                        svc["printname"] = s.printname
+                    if s.price:
+                        svc["price"] = str(s.price)
+                    child_items.append(svc)
+                node["items"] = child_items if child_items else []
+                items.append(node)
+            return items
+
+        menu_data = {"name": "root", "items": build_tree(None)}
+
+        snapshot = MenuVariantSnapshot(
+            menu_variant_id=variant.id,
+            version=version,
+            snapshot_data={
+                "menu_variant_id": variant.id,
+                "version": version,
+                "tree": menu_data,
+                "services_by_tsp": {
+                    str(s.tsp_code): {
+                        "name": s.name,
+                        "printname": s.printname,
+                        "price": s.price,
+                        "protypenumber": s.protypenumber,
+                    }
+                    for s in services_list
+                },
+            },
+        )
+        self.db.add(snapshot)
+        await self.db.flush()
+        return snapshot
+
     async def create_payment(
         self,
         terminal: Terminal,
@@ -141,19 +224,39 @@ class PaymentService:
         prototypenumber = await self.get_prototypenumber_by_tsp_code(tsp_code)
 
         # Look up terminal's menu binding to get the snapshot A{x}
-        menu_snapshot_id = None
         binding = await self.db.scalar(
             select(TerminalMenuBinding).where(
                 TerminalMenuBinding.device_id == terminal.device_id
             )
         )
+        variant = None
+        if binding:
+            variant = await self.db.get(MenuVariant, binding.menu_variant_id)
+        if not variant and terminal.org_id:
+            variant = await self.db.scalar(
+                select(MenuVariant)
+                .where(MenuVariant.org_id == terminal.org_id)
+                .order_by(MenuVariant.id)
+            )
+
+        menu_version: int | None = None
         if binding and binding.loaded_version is not None:
+            menu_version = binding.loaded_version
+        elif variant:
+            menu_version = variant.version
+        else:
+            menu_version = 1
+
+        menu_snapshot_id: int | None = None
+        if variant and menu_version:
             snap = await self.db.scalar(
                 select(MenuVariantSnapshot).where(
-                    MenuVariantSnapshot.menu_variant_id == binding.menu_variant_id,
-                    MenuVariantSnapshot.version == binding.loaded_version,
+                    MenuVariantSnapshot.menu_variant_id == variant.id,
+                    MenuVariantSnapshot.version == menu_version,
                 )
             )
+            if not snap:
+                snap = await self.create_snapshot_for_variant(variant.id, menu_version)
             if snap:
                 menu_snapshot_id = snap.id
 
@@ -167,6 +270,7 @@ class PaymentService:
             paym_state=2,  # Always accepted
             pay_type_id=pay_type_id,
             menu_snapshot_id=menu_snapshot_id,
+            menu_version=menu_version,
         )
         if payment_datetime is not None:
             payment.paym_datetime = payment_datetime
@@ -190,6 +294,7 @@ class PaymentService:
             terminal,
             tsp.tsp_id,
             amount,
+            menu_version=menu_version,
             menu_snapshot_id=menu_snapshot_id,
             payment_datetime=payment_datetime,
         )
@@ -202,6 +307,7 @@ class PaymentService:
         terminal: Terminal,
         tsp_id: int,
         amount: int,
+        menu_version: int | None = None,
         menu_snapshot_id: int | None = None,
         payment_datetime: datetime | None = None,
     ):
@@ -214,19 +320,19 @@ class PaymentService:
         int_day = get_local_int_day(payment_datetime or datetime.now(UTC), tz=tz)
 
         # Check if record exists
-        if menu_snapshot_id is not None:
+        if menu_version is not None:
             cond = and_(
                 BalanceTerminalTsp.int_day == int_day,
                 BalanceTerminalTsp.terminal_id == terminal.id,
                 BalanceTerminalTsp.tsp_id == tsp_id,
-                BalanceTerminalTsp.menu_snapshot_id == menu_snapshot_id,
+                BalanceTerminalTsp.menu_version == menu_version,
             )
         else:
             cond = and_(
                 BalanceTerminalTsp.int_day == int_day,
                 BalanceTerminalTsp.terminal_id == terminal.id,
                 BalanceTerminalTsp.tsp_id == tsp_id,
-                BalanceTerminalTsp.menu_snapshot_id.is_(None),
+                BalanceTerminalTsp.menu_version.is_(None),
             )
 
         result = await self.db.execute(select(BalanceTerminalTsp).where(cond))
@@ -236,6 +342,8 @@ class PaymentService:
             # Update existing record
             balance.amount += amount
             balance.count += 1
+            if menu_snapshot_id is not None and balance.menu_snapshot_id is None:
+                balance.menu_snapshot_id = menu_snapshot_id
         else:
             # Create new record
             balance = BalanceTerminalTsp(
@@ -243,6 +351,7 @@ class PaymentService:
                 org_id=terminal.org_id,
                 terminal_id=terminal.id,
                 tsp_id=tsp_id,
+                menu_version=menu_version,
                 menu_snapshot_id=menu_snapshot_id,
                 amount=amount,
                 count=1,
