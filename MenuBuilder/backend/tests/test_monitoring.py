@@ -663,7 +663,8 @@ async def test_inkass_recalculate_preview_and_apply():
             assert data["record_id"] == 1204
             assert data["device_id"] == 348
             assert data["fact_total_sum"] == 30000
-            assert len(data["strategies"]) == 3
+            assert len(data["strategies"]) == 2
+            assert not any(s["id"] == "gross_total" for s in data["strategies"])
             exact = next(
                 s for s in data["strategies"] if s["id"] == "exact_paym_ext_id"
             )
@@ -797,6 +798,10 @@ async def test_inkass_recalculate_preview_record217_scenario():
             time_st = next(s for s in data["strategies"] if s["id"] == "terminal_time")
             assert time_st["calculated_cash"] == 5400
 
+            # Verify strategy gross_total is NOT present
+            assert not any(s["id"] == "gross_total" for s in data["strategies"])
+            assert len(data["strategies"]) == 3
+
             # Verify that query params for terminal_time passed datetime instances, NOT str!
             time_params = next(p for p in passed_params if "dt_start" in p)
             assert isinstance(time_params["dt_start"], datetime)
@@ -886,8 +891,6 @@ async def test_inkass_strategies_exclude_1_ruble_payments():
             assert resp.status_code == 200
 
     sum_queries = [s for s in captured_sql if "COALESCE(SUM(paym_amount)" in s]
-    assert len(sum_queries) >= 3, (
-        "Expected queries for exact, time, and gross strategies"
-    )
+    assert len(sum_queries) >= 2, "Expected queries for exact and time strategies"
     for q in sum_queries:
         assert "paym_amount != 100" in q, f"Query missing 1-ruble exclusion: {q}"

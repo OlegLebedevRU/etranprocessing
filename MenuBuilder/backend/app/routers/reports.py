@@ -530,69 +530,6 @@ async def _calculate_strategies_preview(
         }
     )
 
-    # Strategy 4: gross_total (Валовый оборот: наличные + безнал)
-    active_curr_p = curr_p_exact or curr_p_nearest
-    active_prev_p = prev_p_exact or prev_p_nearest
-    if active_curr_p:
-        if active_prev_p:
-            q3 = """
-                SELECT COALESCE(SUM(paym_amount), 0) FROM payments
-                WHERE terminal_id = :term_id AND paym_state = 2
-                  AND paym_amount != 100
-                  AND paym_id > :prev_id AND paym_id <= :curr_id
-            """
-            p3 = {
-                "term_id": terminal_id,
-                "prev_id": active_prev_p[0],
-                "curr_id": active_curr_p[0],
-            }
-        else:
-            q3 = """
-                SELECT COALESCE(SUM(paym_amount), 0) FROM payments
-                WHERE terminal_id = :term_id AND paym_state = 2
-                  AND paym_amount != 100
-                  AND paym_id <= :curr_id
-            """
-            p3 = {"term_id": terminal_id, "curr_id": active_curr_p[0]}
-        amt3 = (await session.execute(text(q3), p3)).scalar() or 0
-        sum3 = int(amt3) // 100
-        gross_lower = (
-            active_prev_p[1]
-            if active_prev_p
-            else (prev_upper_ext_id or "Начало работы")
-        )
-        gross_upper = active_curr_p[1]
-    else:
-        q3_dt = """
-            SELECT COALESCE(SUM(paym_amount), 0) FROM payments
-            WHERE terminal_id = :term_id AND paym_state = 2
-              AND paym_amount != 100
-        """
-        if dt_start:
-            q3_dt += " AND paym_datetime > :dt_start AND paym_datetime <= :dt_end"
-            p3_dt = {"term_id": terminal_id, "dt_start": dt_start, "dt_end": dt_end}
-        else:
-            q3_dt += " AND paym_datetime <= :dt_end"
-            p3_dt = {"term_id": terminal_id, "dt_end": dt_end}
-        amt3 = (await session.execute(text(q3_dt), p3_dt)).scalar() or 0
-        sum3 = int(amt3) // 100
-        gross_lower = dt_start_display
-        gross_upper = dt_end_display
-
-    delta3 = fact_total_sum - sum3
-    strategies.append(
-        {
-            "id": "gross_total",
-            "name": "Валовый оборот (все типы оплат: нал + безнал)",
-            "lower_bound": gross_lower,
-            "upper_bound": gross_upper,
-            "calculated_cash": sum3,
-            "delta": delta3,
-            "is_matched": (sum3 == fact_total_sum),
-            "description": "Суммируются все проведенные платежи без фильтра по типу оплаты",
-        }
-    )
-
     cur_status = request_data.get("calc_status")
     if not cur_status:
         if curr_p_exact and sum1 is not None and sum1 == fact_total_sum:

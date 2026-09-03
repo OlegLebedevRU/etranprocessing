@@ -442,15 +442,25 @@ export default function ReportsPage() {
       width: 120,
       fixed: "right" as const,
       align: "center",
-      render: (_: unknown, r: InkassRecord) => (
-        <Button
-          size="small"
-          icon={<ReloadOutlined />}
-          onClick={() => openRecalcModal(r)}
-        >
-          Пересчитать
-        </Button>
-      ),
+      render: (_: unknown, r: InkassRecord) => {
+        const isMatched =
+          r.calc_status === "matched" ||
+          (r.calculated_sum != null &&
+            r.total_sum != null &&
+            r.calculated_sum === r.total_sum);
+        if (isMatched) {
+          return null;
+        }
+        return (
+          <Button
+            size="small"
+            icon={<ReloadOutlined />}
+            onClick={() => openRecalcModal(r)}
+          >
+            Пересчитать
+          </Button>
+        );
+      },
     },
   ];
 
