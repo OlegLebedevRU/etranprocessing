@@ -1,6 +1,6 @@
 import json
 from contextlib import suppress
-from datetime import UTC, datetime
+from datetime import UTC, datetime, tzinfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -10,6 +10,7 @@ from app.auth import require_tenant_context, resolve_org_id
 from app.database import async_session
 from app.models import Org, TechGateRecord
 from app.utils.timezone import (
+    DEFAULT_TIMEZONE,
     get_date_range_bounds_utc,
     get_local_datetime,
     get_timezone_name,
@@ -84,6 +85,56 @@ def _parse_inkass_datetime(value: str) -> str:
         return value
 
 
+def _parse_inkass_datetime_utc(
+    value: str | datetime | None,
+    tz: tzinfo | str = DEFAULT_TIMEZONE,
+) -> datetime | None:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
+
+    val_str = str(value).strip()
+    if not val_str:
+        return None
+
+    target_zone = resolve_tz(tz)
+
+    for fmt in ("%d.%m.%Y %H:%M:%S", "%d.%m.%Y %H:%M", "%Y-%m-%d %H:%M:%S"):
+        try:
+            local_dt = datetime.strptime(val_str, fmt).replace(tzinfo=target_zone)
+            return local_dt.astimezone(UTC)
+        except ValueError:
+            continue
+
+    try:
+        dt = datetime.fromisoformat(val_str)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=target_zone)
+        return dt.astimezone(UTC)
+    except ValueError:
+        return None
+
+
+def ext_id_to_canonical(ext_id: str) -> str:
+    parts = ext_id.strip().split("_")
+    if len(parts) >= 3 and len(parts[1]) == 6 and len(parts[2]) >= 8:
+        d, t = parts[1], parts[2]
+        return f"20{d[4:6]}{d[2:4]}{d[0:2]}{t[:8]}"
+    return ""
+
+
+async def _resolve_org_tz(session, org_id: int | None) -> tzinfo:
+    if not org_id:
+        return resolve_tz(DEFAULT_TIMEZONE)
+    org_tz_row = (
+        await session.execute(select(Org.timezone).where(Org.org_id == org_id))
+    ).scalar_one_or_none()
+    return resolve_tz(org_tz_row)
+
+
 async def _calculated_inkass_sum(
     session,
     record_id: int,
@@ -99,6 +150,9 @@ async def _calculated_inkass_sum(
         return int(request_data["calc_cash_sum"])
     if "calculated_sum" in request_data and request_data["calculated_sum"] is not None:
         return int(request_data["calculated_sum"])
+
+    if created_at and created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=UTC)
 
     current_ext_id = str(request_data.get("PaymExtId") or "").strip()
     previous_inkass = (
@@ -120,6 +174,8 @@ async def _calculated_inkass_sum(
         previous_data = previous_inkass[0] or {}
         previous_ext_id = str(previous_data.get("PaymExtId") or "").strip()
         previous_created_at = previous_inkass[1]
+        if previous_created_at and previous_created_at.tzinfo is None:
+            previous_created_at = previous_created_at.replace(tzinfo=UTC)
 
     async def find_payment(external_id: str):
         if not external_id:
@@ -142,7 +198,8 @@ async def _calculated_inkass_sum(
     if current_payment and previous_payment:
         query = """
             SELECT COALESCE(SUM(paym_amount), 0) FROM payments
-            WHERE terminal_id = :term_id AND paym_id > :prev_id AND paym_id <= :curr_id
+            WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id IN (0, 1)
+              AND paym_id > :prev_id AND paym_id <= :curr_id
         """
         params = {
             "term_id": terminal_id,
@@ -152,7 +209,8 @@ async def _calculated_inkass_sum(
     elif current_payment and previous_created_at:
         query = """
             SELECT COALESCE(SUM(paym_amount), 0) FROM payments
-            WHERE terminal_id = :term_id AND paym_datetime > :prev_created_at
+            WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id IN (0, 1)
+              AND paym_datetime > :prev_created_at
               AND paym_id <= :curr_id
         """
         params = {
@@ -163,13 +221,15 @@ async def _calculated_inkass_sum(
     elif current_payment:
         query = """
             SELECT COALESCE(SUM(paym_amount), 0) FROM payments
-            WHERE terminal_id = :term_id AND paym_id <= :curr_id
+            WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id IN (0, 1)
+              AND paym_id <= :curr_id
         """
         params = {"term_id": terminal_id, "curr_id": current_payment[0]}
     elif previous_created_at:
         query = """
             SELECT COALESCE(SUM(paym_amount), 0) FROM payments
-            WHERE terminal_id = :term_id AND paym_datetime > :prev_created_at
+            WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id IN (0, 1)
+              AND paym_datetime > :prev_created_at
               AND paym_datetime <= :curr_created_at
         """
         params = {
@@ -180,7 +240,8 @@ async def _calculated_inkass_sum(
     else:
         query = """
             SELECT COALESCE(SUM(paym_amount), 0) FROM payments
-            WHERE terminal_id = :term_id AND paym_datetime <= :curr_created_at
+            WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id IN (0, 1)
+              AND paym_datetime <= :curr_created_at
         """
         params = {"term_id": terminal_id, "curr_created_at": created_at}
     amount = (await session.execute(text(query), params)).scalar()
@@ -198,18 +259,22 @@ async def _calculate_strategies_preview(
     terminal_id: int,
     created_at: datetime,
     request_data: dict,
+    org_tz: tzinfo | str = DEFAULT_TIMEZONE,
 ) -> dict:
+    if created_at and created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=UTC)
+
     fact_total_sum = _json_int(request_data, "TotalSum") or _json_int(
         request_data, "TotalNoteSum"
     )
     curr_paym_ext_id = str(request_data.get("PaymExtId") or "").strip()
+    curr_inkass_ext_id = str(request_data.get("InkassExtId") or "").strip()
     curr_inkass_id_raw = request_data.get("InkassId") or request_data.get("cntInkass")
     curr_inkass_id = (
         int(curr_inkass_id_raw)
         if curr_inkass_id_raw and str(curr_inkass_id_raw).isdigit()
         else None
     )
-    curr_inkass_dt = _parse_inkass_datetime(request_data.get("InkassDateTime", ""))
 
     # Find previous inkassation
     prev_record_row = None
@@ -243,17 +308,19 @@ async def _calculate_strategies_preview(
 
     prev_data = prev_record_row[1] or {} if prev_record_row else {}
     prev_created_at = prev_record_row[2] if prev_record_row else None
+    if prev_created_at and prev_created_at.tzinfo is None:
+        prev_created_at = prev_created_at.replace(tzinfo=UTC)
+
     prev_upper_ext_id = str(
         prev_data.get("calc_upper_paym_ext_id") or prev_data.get("PaymExtId") or ""
     ).strip()
-    prev_inkass_dt = _parse_inkass_datetime(prev_data.get("InkassDateTime", ""))
 
-    async def find_payment(ext_id: str):
+    async def find_payment_exact(ext_id: str):
         if not ext_id:
             return None
         res = await session.execute(
             text("""
-                SELECT paym_id, paym_datetime
+                SELECT paym_id, paym_ext_id, paym_datetime
                 FROM payments
                 WHERE terminal_id = :term_id AND paym_ext_id = :ext_id
                 ORDER BY paym_id DESC
@@ -263,87 +330,188 @@ async def _calculate_strategies_preview(
         )
         return res.fetchone()
 
-    curr_p = await find_payment(curr_paym_ext_id) if curr_paym_ext_id else None
-    prev_p = await find_payment(prev_upper_ext_id) if prev_upper_ext_id else None
+    async def find_payment_nearest_canonical(ext_id: str):
+        if not ext_id:
+            return None
+        canon = ext_id_to_canonical(ext_id)
+        if not canon:
+            return None
+        res = await session.execute(
+            text("""
+                SELECT paym_id, paym_ext_id, paym_datetime
+                FROM payments
+                WHERE terminal_id = :term_id
+                  AND ('20' || substring(paym_ext_id from 10 for 2) || substring(paym_ext_id from 8 for 2) ||
+                       substring(paym_ext_id from 6 for 2) || substring(paym_ext_id from 13 for 8)) <= :canon_key
+                ORDER BY ('20' || substring(paym_ext_id from 10 for 2) || substring(paym_ext_id from 8 for 2) ||
+                          substring(paym_ext_id from 6 for 2) || substring(paym_ext_id from 13 for 8)) DESC,
+                         paym_id DESC
+                LIMIT 1
+            """),
+            {"term_id": terminal_id, "canon_key": canon},
+        )
+        return res.fetchone()
+
+    curr_p_exact = (
+        await find_payment_exact(curr_paym_ext_id) if curr_paym_ext_id else None
+    )
+    prev_p_exact = (
+        await find_payment_exact(prev_upper_ext_id) if prev_upper_ext_id else None
+    )
+
+    curr_p_nearest = curr_p_exact or (
+        await find_payment_nearest_canonical(curr_paym_ext_id or curr_inkass_ext_id)
+    )
+    prev_p_nearest = prev_p_exact or (
+        await find_payment_nearest_canonical(prev_upper_ext_id)
+    )
 
     strategies = []
 
-    # Strategy 1: exact_paym_ext_id (Эталонная по PaymExtId, только наличные pay_type_id = 0)
+    # Strategy 1: exact_paym_ext_id (Эталонная по точному PaymExtId, только наличные pay_type_id IN (0, 1))
     sum1 = None
-    if curr_p:
-        if prev_p:
+    if curr_p_exact:
+        prev_bound_id = (
+            prev_p_exact[0]
+            if prev_p_exact
+            else (prev_p_nearest[0] if prev_p_nearest else None)
+        )
+        if prev_bound_id:
             q1 = """
                 SELECT COALESCE(SUM(paym_amount), 0) FROM payments
-                WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id = 0
+                WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id IN (0, 1)
                   AND paym_id > :prev_id AND paym_id <= :curr_id
             """
             p1 = {
                 "term_id": terminal_id,
-                "prev_id": prev_p[0],
-                "curr_id": curr_p[0],
+                "prev_id": prev_bound_id,
+                "curr_id": curr_p_exact[0],
             }
         else:
             q1 = """
                 SELECT COALESCE(SUM(paym_amount), 0) FROM payments
-                WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id = 0
+                WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id IN (0, 1)
                   AND paym_id <= :curr_id
             """
-            p1 = {"term_id": terminal_id, "curr_id": curr_p[0]}
+            p1 = {"term_id": terminal_id, "curr_id": curr_p_exact[0]}
         amt1 = (await session.execute(text(q1), p1)).scalar() or 0
         sum1 = int(amt1) // 100
         delta1 = fact_total_sum - sum1
         strategies.append(
             {
                 "id": "exact_paym_ext_id",
-                "name": "Эталонная по PaymExtId (только наличные)",
+                "name": "Эталонная по точному PaymExtId (только наличные)",
                 "lower_bound": prev_upper_ext_id or "Начало работы",
                 "upper_bound": curr_paym_ext_id,
                 "calculated_cash": sum1,
                 "delta": delta1,
                 "is_matched": (sum1 == fact_total_sum),
-                "description": "Расчет строго по интервалу внешних идентификаторов платежей (pay_type_id = 0)",
+                "description": "Расчет строго по точному внешнему идентификатору платежа (pay_type_id IN (0, 1))",
             }
         )
     else:
         strategies.append(
             {
                 "id": "exact_paym_ext_id",
-                "name": "Эталонная по PaymExtId (только наличные)",
+                "name": "Эталонная по точному PaymExtId (только наличные)",
                 "lower_bound": prev_upper_ext_id or None,
                 "upper_bound": curr_paym_ext_id or "Не указан",
                 "calculated_cash": None,
                 "delta": None,
                 "is_matched": False,
-                "description": f"Платеж {curr_paym_ext_id or 'PaymExtId'} пока не найден в базе данных",
+                "description": f"Платеж {curr_paym_ext_id or 'PaymExtId'} пока не найден в базе данных (возможно, задерживается в сети)",
             }
         )
 
-    # Strategy 2: terminal_time (По дате/времени терминала, только наличные pay_type_id = 0)
-    dt_end = curr_inkass_dt or created_at
-    dt_start = prev_inkass_dt or prev_created_at
+    # Strategy 2: nearest_paym_ext_id (По ближайшему PaymExtId до среза инкассации)
+    if curr_p_nearest and (not curr_p_exact or curr_p_nearest[0] != curr_p_exact[0]):
+        prev_bound_id = prev_p_nearest[0] if prev_p_nearest else None
+        if prev_bound_id:
+            qn = """
+                SELECT COALESCE(SUM(paym_amount), 0) FROM payments
+                WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id IN (0, 1)
+                  AND paym_id > :prev_id AND paym_id <= :curr_id
+            """
+            pn = {
+                "term_id": terminal_id,
+                "prev_id": prev_bound_id,
+                "curr_id": curr_p_nearest[0],
+            }
+        else:
+            qn = """
+                SELECT COALESCE(SUM(paym_amount), 0) FROM payments
+                WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id IN (0, 1)
+                  AND paym_id <= :curr_id
+            """
+            pn = {"term_id": terminal_id, "curr_id": curr_p_nearest[0]}
+        amtn = (await session.execute(text(qn), pn)).scalar() or 0
+        sumn = int(amtn) // 100
+        deltan = fact_total_sum - sumn
+        strategies.append(
+            {
+                "id": "nearest_paym_ext_id",
+                "name": "По ближайшему PaymExtId (до среза инкассации)",
+                "lower_bound": (
+                    prev_p_nearest[1] if prev_p_nearest else prev_upper_ext_id
+                )
+                or "Начало работы",
+                "upper_bound": curr_p_nearest[1],
+                "calculated_cash": sumn,
+                "delta": deltan,
+                "is_matched": (sumn == fact_total_sum),
+                "description": f"Расчет по ближайшему проведенному платежу {curr_p_nearest[1]} (до {curr_paym_ext_id or curr_inkass_ext_id})",
+            }
+        )
+
+    # Strategy 3: terminal_time (По дате/времени инкассации, только наличные pay_type_id IN (0, 1))
+    dt_end = (
+        _parse_inkass_datetime_utc(request_data.get("InkassDateTime"), org_tz)
+        or created_at
+    )
+    dt_start = (
+        _parse_inkass_datetime_utc(prev_data.get("InkassDateTime"), org_tz)
+        or prev_created_at
+    )
+    if dt_end and dt_end.tzinfo is None:
+        dt_end = dt_end.replace(tzinfo=UTC)
+    if dt_start and dt_start.tzinfo is None:
+        dt_start = dt_start.replace(tzinfo=UTC)
+
     if dt_start:
         q2 = """
             SELECT COALESCE(SUM(paym_amount), 0) FROM payments
-            WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id = 0
+            WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id IN (0, 1)
               AND paym_datetime > :dt_start AND paym_datetime <= :dt_end
         """
         p2 = {"term_id": terminal_id, "dt_start": dt_start, "dt_end": dt_end}
     else:
         q2 = """
             SELECT COALESCE(SUM(paym_amount), 0) FROM payments
-            WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id = 0
+            WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id IN (0, 1)
               AND paym_datetime <= :dt_end
         """
         p2 = {"term_id": terminal_id, "dt_end": dt_end}
     amt2 = (await session.execute(text(q2), p2)).scalar() or 0
     sum2 = int(amt2) // 100
     delta2 = fact_total_sum - sum2
+
+    dt_start_display = (
+        get_local_datetime(dt_start, org_tz).strftime("%Y-%m-%d %H:%M:%S")
+        if dt_start
+        else "Начало работы"
+    )
+    dt_end_display = (
+        get_local_datetime(dt_end, org_tz).strftime("%Y-%m-%d %H:%M:%S")
+        if dt_end
+        else ""
+    )
+
     strategies.append(
         {
             "id": "terminal_time",
             "name": "По времени инкассации (только наличные)",
-            "lower_bound": str(dt_start) if dt_start else "Начало работы",
-            "upper_bound": str(dt_end),
+            "lower_bound": dt_start_display,
+            "upper_bound": dt_end_display,
             "calculated_cash": sum2,
             "delta": delta2,
             "is_matched": (sum2 == fact_total_sum),
@@ -351,9 +519,11 @@ async def _calculate_strategies_preview(
         }
     )
 
-    # Strategy 3: gross_total (Валовый оборот: наличные + безнал)
-    if curr_p:
-        if prev_p:
+    # Strategy 4: gross_total (Валовый оборот: наличные + безнал)
+    active_curr_p = curr_p_exact or curr_p_nearest
+    active_prev_p = prev_p_exact or prev_p_nearest
+    if active_curr_p:
+        if active_prev_p:
             q3 = """
                 SELECT COALESCE(SUM(paym_amount), 0) FROM payments
                 WHERE terminal_id = :term_id AND paym_state = 2
@@ -361,8 +531,8 @@ async def _calculate_strategies_preview(
             """
             p3 = {
                 "term_id": terminal_id,
-                "prev_id": prev_p[0],
-                "curr_id": curr_p[0],
+                "prev_id": active_prev_p[0],
+                "curr_id": active_curr_p[0],
             }
         else:
             q3 = """
@@ -370,22 +540,38 @@ async def _calculate_strategies_preview(
                 WHERE terminal_id = :term_id AND paym_state = 2
                   AND paym_id <= :curr_id
             """
-            p3 = {"term_id": terminal_id, "curr_id": curr_p[0]}
+            p3 = {"term_id": terminal_id, "curr_id": active_curr_p[0]}
         amt3 = (await session.execute(text(q3), p3)).scalar() or 0
         sum3 = int(amt3) // 100
+        gross_lower = (
+            active_prev_p[1]
+            if active_prev_p
+            else (prev_upper_ext_id or "Начало работы")
+        )
+        gross_upper = active_curr_p[1]
     else:
-        amt3 = (
-            await session.execute(text(q2.replace("AND pay_type_id = 0", "")), p2)
-        ).scalar() or 0
+        q3_dt = """
+            SELECT COALESCE(SUM(paym_amount), 0) FROM payments
+            WHERE terminal_id = :term_id AND paym_state = 2
+        """
+        if dt_start:
+            q3_dt += " AND paym_datetime > :dt_start AND paym_datetime <= :dt_end"
+            p3_dt = {"term_id": terminal_id, "dt_start": dt_start, "dt_end": dt_end}
+        else:
+            q3_dt += " AND paym_datetime <= :dt_end"
+            p3_dt = {"term_id": terminal_id, "dt_end": dt_end}
+        amt3 = (await session.execute(text(q3_dt), p3_dt)).scalar() or 0
         sum3 = int(amt3) // 100
+        gross_lower = dt_start_display
+        gross_upper = dt_end_display
+
     delta3 = fact_total_sum - sum3
     strategies.append(
         {
             "id": "gross_total",
             "name": "Валовый оборот (все типы оплат: нал + безнал)",
-            "lower_bound": prev_upper_ext_id
-            or (str(dt_start) if dt_start else "Начало работы"),
-            "upper_bound": curr_paym_ext_id or str(dt_end),
+            "lower_bound": gross_lower,
+            "upper_bound": gross_upper,
             "calculated_cash": sum3,
             "delta": delta3,
             "is_matched": (sum3 == fact_total_sum),
@@ -395,9 +581,9 @@ async def _calculate_strategies_preview(
 
     cur_status = request_data.get("calc_status")
     if not cur_status:
-        if curr_p and sum1 is not None and sum1 == fact_total_sum:
+        if curr_p_exact and sum1 is not None and sum1 == fact_total_sum:
             cur_status = "matched"
-        elif not curr_p:
+        elif not curr_p_exact:
             cur_status = "needs_calc"
         else:
             cur_status = "mismatch"
@@ -601,6 +787,8 @@ async def recalculate_inkass_preview(
         if effective_org_id > 0 and record_row[5] != effective_org_id:
             raise HTTPException(status_code=403, detail="Доступ запрещен")
 
+        org_tz = await _resolve_org_tz(session, record_row[5])
+
         return await _calculate_strategies_preview(
             session,
             record_row[0],
@@ -608,6 +796,7 @@ async def recalculate_inkass_preview(
             record_row[4],
             record_row[2],
             record_row[3] or {},
+            org_tz=org_tz,
         )
 
 
@@ -654,6 +843,8 @@ async def apply_inkass_calculation(
                 "delta": request_data.get("calc_delta"),
             }
 
+        org_tz = await _resolve_org_tz(session, record_row[5])
+
         preview = await _calculate_strategies_preview(
             session,
             record_row[0],
@@ -661,6 +852,7 @@ async def apply_inkass_calculation(
             record_row[4],
             record_row[2],
             request_data,
+            org_tz=org_tz,
         )
         st = next(
             (s for s in preview["strategies"] if s["id"] == body.strategy_id),

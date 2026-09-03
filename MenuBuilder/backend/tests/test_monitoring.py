@@ -637,7 +637,7 @@ async def test_inkass_recalculate_preview_and_apply():
                     datetime(2026, 8, 25, 10, 48, 29, tzinfo=UTC),
                 )
         elif "COALESCE(SUM(paym_amount)" in sql_str:
-            if "pay_type_id = 0" in sql_str:
+            if "pay_type_id IN (0, 1)" in sql_str or "pay_type_id = 0" in sql_str:
                 result.scalar.return_value = 3000000  # 30000 rubles
             else:
                 result.scalar.return_value = 26475100  # 264751 rubles
@@ -682,3 +682,130 @@ async def test_inkass_recalculate_preview_and_apply():
             assert apply_data["calc_status"] == "matched"
             assert apply_data["calculated_sum"] == 30000
             assert apply_data["delta"] == 0
+
+
+@pytest.mark.anyio
+async def test_inkass_recalculate_preview_record217_scenario():
+    """Verify inkassation recalculate-preview handles datetime parameters and missing exact paym_ext_id without 500 error."""
+    app.dependency_overrides[get_current_user] = lambda: {
+        "username": "admin",
+        "org_id": 1,
+    }
+
+    mock_session = AsyncMock()
+
+    # Record 217 scenario: Terminal sends PaymExtId with seq 15, while payment has seq 14
+    req_data = {
+        "TotalSum": "9400",
+        "PaymExtId": "0281_030926_11493915",
+        "InkassExtId": "0281_030926_11514759",
+        "InkassId": "123056",
+        "InkassDateTime": "03.09.2026 11:51:47",
+    }
+    record_row = (
+        217,
+        281,
+        datetime(2026, 9, 3, 8, 51, 42, tzinfo=UTC),
+        req_data,
+        1133,
+        1,
+    )
+
+    prev_req_data = {
+        "PaymExtId": "0281_030926_10360210",
+        "InkassExtId": "0281_030926_10490258",
+        "InkassId": "123055",
+        "InkassDateTime": "03.09.2026 10:49:02",
+    }
+    prev_record_row = (
+        213,
+        prev_req_data,
+        datetime(2026, 9, 3, 7, 48, 57, tzinfo=UTC),
+    )
+
+    passed_params = []
+
+    async def mock_execute(stmt, params=None):
+        sql_str = str(stmt)
+        if params:
+            passed_params.append(dict(params))
+        result = MagicMock()
+        if "WHERE r.id = :record_id" in sql_str:
+            result.fetchone.return_value = record_row
+        elif "WHERE device_id = :dev_id AND function_name = 'inkass'" in sql_str:
+            result.fetchone.return_value = prev_record_row
+        elif "WHERE terminal_id = :term_id AND paym_ext_id = :ext_id" in sql_str:
+            # Exact match fails for both curr and prev
+            result.fetchone.return_value = None
+        elif "substring(paym_ext_id from 10 for 2)" in sql_str and "LIMIT 1" in sql_str:
+            # Nearest canonical match
+            if (params or {}).get("canon_key") == "2026090311493915":
+                result.fetchone.return_value = (
+                    26063,
+                    "0281_030926_11493914",
+                    datetime(2026, 9, 3, 8, 49, 40, tzinfo=UTC),
+                )
+            else:
+                result.fetchone.return_value = (
+                    25934,
+                    "0281_030926_10360209",
+                    datetime(2026, 9, 3, 7, 36, 16, tzinfo=UTC),
+                )
+        elif "COALESCE(SUM(paym_amount)" in sql_str:
+            if "pay_type_id IN (0, 1)" in sql_str:
+                result.scalar.return_value = 540000  # 5400 rubles
+            else:
+                result.scalar.return_value = 570000  # 5700 rubles (with card)
+        else:
+            result.fetchone.return_value = None
+            result.fetchall.return_value = []
+        return result
+
+    mock_session.execute = AsyncMock(side_effect=mock_execute)
+    mock_session.commit = AsyncMock()
+
+    mock_cm = AsyncMock()
+    mock_cm.__aenter__.return_value = mock_session
+    mock_cm.__aexit__.return_value = None
+
+    with patch("app.routers.reports.async_session", return_value=mock_cm):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.post("/api/reports/inkass/217/recalculate-preview")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["record_id"] == 217
+            assert data["device_id"] == 281
+            assert data["fact_total_sum"] == 9400
+
+            # Verify strategy 1 (exact) reports not found
+            exact_st = next(
+                s for s in data["strategies"] if s["id"] == "exact_paym_ext_id"
+            )
+            assert exact_st["calculated_cash"] is None
+            assert exact_st["is_matched"] is False
+
+            # Verify strategy 2 (nearest) calculated 5400
+            nearest_st = next(
+                s for s in data["strategies"] if s["id"] == "nearest_paym_ext_id"
+            )
+            assert nearest_st["calculated_cash"] == 5400
+            assert nearest_st["upper_bound"] == "0281_030926_11493914"
+
+            # Verify strategy 3 (terminal_time) calculated 5400 and dt_start/dt_end were datetime objects!
+            time_st = next(s for s in data["strategies"] if s["id"] == "terminal_time")
+            assert time_st["calculated_cash"] == 5400
+
+            # Verify that query params for terminal_time passed datetime instances, NOT str!
+            time_params = next(p for p in passed_params if "dt_start" in p)
+            assert isinstance(time_params["dt_start"], datetime)
+            assert isinstance(time_params["dt_end"], datetime)
+
+            # Test apply "no_change"
+            no_change_resp = await client.post(
+                "/api/reports/inkass/217/apply-calculation",
+                json={"strategy_id": "no_change"},
+            )
+            assert no_change_resp.status_code == 200
+            assert no_change_resp.json()["calc_status"] == "mismatch"

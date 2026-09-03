@@ -132,7 +132,7 @@ async def _process_inkass_at_receipt(
       Find previous inkassation:
         - Priority 1: InkassId / cntInkass < curr_inkass_id
         - Priority 2: created_at
-      Calculate cash sum (pay_type_id = 0, paym_state = 2).
+      Calculate cash sum (pay_type_id IN (0, 1), paym_state = 2).
       Compare with TotalSum: if match, 'matched', else 'mismatch'.
     """
     curr_paym_ext_id = str(params.get("PaymExtId") or "").strip()
@@ -249,11 +249,11 @@ async def _process_inkass_at_receipt(
         params["calc_lower_paym_ext_id"] = lower_bound_ext_id
         return
 
-    # Calculate sum (cash payments: pay_type_id == 0, paym_state == 2)
+    # Calculate sum (cash payments: pay_type_id IN (0, 1), paym_state == 2)
     if lower_paym_id is not None:
         sum_query = """
             SELECT COALESCE(SUM(paym_amount), 0) FROM payments
-            WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id = 0
+            WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id IN (0, 1)
               AND paym_id > :prev_id AND paym_id <= :curr_id
         """
         q_params = {
@@ -265,7 +265,7 @@ async def _process_inkass_at_receipt(
         # First inkassation on terminal
         sum_query = """
             SELECT COALESCE(SUM(paym_amount), 0) FROM payments
-            WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id = 0
+            WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id IN (0, 1)
               AND paym_id <= :curr_id
         """
         q_params = {
