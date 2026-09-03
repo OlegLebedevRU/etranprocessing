@@ -19,7 +19,12 @@ export interface InkassRecord {
   inkass_datetime: string;
   server_datetime: string;
   total_sum: number;
-  calculated_sum: number;
+  calculated_sum: number | null;
+  calc_status?: "matched" | "mismatch" | "needs_calc";
+  calc_delta?: number | null;
+  calc_strategy?: string | null;
+  calc_lower_paym_ext_id?: string | null;
+  calc_upper_paym_ext_id?: string | null;
   total_count: number;
   total_note_sum: number;
   total_note_count: number;
@@ -41,6 +46,50 @@ export interface InkassRecord {
   transact_count: number;
   last_sum_inkass: number;
   currency: number;
+}
+
+export interface StrategyPreview {
+  id: string;
+  name: string;
+  lower_bound: string | null;
+  upper_bound: string | null;
+  calculated_cash: number | null;
+  delta: number | null;
+  is_matched: boolean;
+  description?: string;
+}
+
+export interface RecalculatePreviewResponse {
+  record_id: number;
+  device_id: number;
+  report_number: string;
+  fact_total_sum: number;
+  current_status: "matched" | "mismatch" | "needs_calc";
+  strategies: StrategyPreview[];
+}
+
+export interface ApplyCalculationResponse {
+  status: string;
+  calc_status: "matched" | "mismatch" | "needs_calc";
+  calculated_sum: number | null;
+  delta: number | null;
+}
+
+export async function getInkassRecalculatePreview(
+  recordId: number
+): Promise<RecalculatePreviewResponse> {
+  const { data } = await axios.post(`/reports/inkass/${recordId}/recalculate-preview`);
+  return data;
+}
+
+export async function applyInkassCalculation(
+  recordId: number,
+  strategyId: string
+): Promise<ApplyCalculationResponse> {
+  const { data } = await axios.post(`/reports/inkass/${recordId}/apply-calculation`, {
+    strategy_id: strategyId,
+  });
+  return data;
 }
 
 export interface InkassResponse {

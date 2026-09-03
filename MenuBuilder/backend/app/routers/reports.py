@@ -2,12 +2,13 @@ import json
 from contextlib import suppress
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select, text
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+from sqlalchemy import select, text, update
 
 from app.auth import require_tenant_context, resolve_org_id
 from app.database import async_session
-from app.models import Org
+from app.models import Org, TechGateRecord
 from app.utils.timezone import (
     get_date_range_bounds_utc,
     get_local_datetime,
@@ -90,7 +91,15 @@ async def _calculated_inkass_sum(
     terminal_id: int,
     created_at: datetime,
     request_data: dict,
-) -> int:
+) -> int | None:
+    # If already calculated in request_data, return directly
+    if request_data.get("calc_status") == "needs_calc":
+        return None
+    if "calc_cash_sum" in request_data and request_data["calc_cash_sum"] is not None:
+        return int(request_data["calc_cash_sum"])
+    if "calculated_sum" in request_data and request_data["calculated_sum"] is not None:
+        return int(request_data["calculated_sum"])
+
     current_ext_id = str(request_data.get("PaymExtId") or "").strip()
     previous_inkass = (
         await session.execute(
@@ -176,6 +185,231 @@ async def _calculated_inkass_sum(
         params = {"term_id": terminal_id, "curr_created_at": created_at}
     amount = (await session.execute(text(query), params)).scalar()
     return (amount or 0) // 100
+
+
+class ApplyCalculationRequest(BaseModel):
+    strategy_id: str
+
+
+async def _calculate_strategies_preview(
+    session,
+    record_id: int,
+    device_id: int,
+    terminal_id: int,
+    created_at: datetime,
+    request_data: dict,
+) -> dict:
+    fact_total_sum = _json_int(request_data, "TotalSum") or _json_int(
+        request_data, "TotalNoteSum"
+    )
+    curr_paym_ext_id = str(request_data.get("PaymExtId") or "").strip()
+    curr_inkass_id_raw = request_data.get("InkassId") or request_data.get("cntInkass")
+    curr_inkass_id = (
+        int(curr_inkass_id_raw)
+        if curr_inkass_id_raw and str(curr_inkass_id_raw).isdigit()
+        else None
+    )
+    curr_inkass_dt = _parse_inkass_datetime(request_data.get("InkassDateTime", ""))
+
+    # Find previous inkassation
+    prev_record_row = None
+    if curr_inkass_id and curr_inkass_id > 1:
+        prev_res = await session.execute(
+            text("""
+                SELECT id, request_data, created_at
+                FROM tech_gate_records
+                WHERE device_id = :dev_id AND function_name = 'inkass'
+                  AND COALESCE((request_data->>'InkassId')::bigint, (request_data->>'cntInkass')::bigint, 0) < :curr_ink_id
+                ORDER BY COALESCE((request_data->>'InkassId')::bigint, (request_data->>'cntInkass')::bigint, 0) DESC, id DESC
+                LIMIT 1
+            """),
+            {"dev_id": device_id, "curr_ink_id": curr_inkass_id},
+        )
+        prev_record_row = prev_res.fetchone()
+
+    if not prev_record_row:
+        prev_res = await session.execute(
+            text("""
+                SELECT id, request_data, created_at
+                FROM tech_gate_records
+                WHERE device_id = :dev_id AND function_name = 'inkass'
+                  AND (created_at < :created_at OR (created_at = :created_at AND id < :id))
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+            """),
+            {"dev_id": device_id, "created_at": created_at, "id": record_id},
+        )
+        prev_record_row = prev_res.fetchone()
+
+    prev_data = prev_record_row[1] or {} if prev_record_row else {}
+    prev_created_at = prev_record_row[2] if prev_record_row else None
+    prev_upper_ext_id = str(
+        prev_data.get("calc_upper_paym_ext_id") or prev_data.get("PaymExtId") or ""
+    ).strip()
+    prev_inkass_dt = _parse_inkass_datetime(prev_data.get("InkassDateTime", ""))
+
+    async def find_payment(ext_id: str):
+        if not ext_id:
+            return None
+        res = await session.execute(
+            text("""
+                SELECT paym_id, paym_datetime
+                FROM payments
+                WHERE terminal_id = :term_id AND paym_ext_id = :ext_id
+                ORDER BY paym_id DESC
+                LIMIT 1
+            """),
+            {"term_id": terminal_id, "ext_id": ext_id},
+        )
+        return res.fetchone()
+
+    curr_p = await find_payment(curr_paym_ext_id) if curr_paym_ext_id else None
+    prev_p = await find_payment(prev_upper_ext_id) if prev_upper_ext_id else None
+
+    strategies = []
+
+    # Strategy 1: exact_paym_ext_id (Эталонная по PaymExtId, только наличные pay_type_id = 0)
+    sum1 = None
+    if curr_p:
+        if prev_p:
+            q1 = """
+                SELECT COALESCE(SUM(paym_amount), 0) FROM payments
+                WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id = 0
+                  AND paym_id > :prev_id AND paym_id <= :curr_id
+            """
+            p1 = {
+                "term_id": terminal_id,
+                "prev_id": prev_p[0],
+                "curr_id": curr_p[0],
+            }
+        else:
+            q1 = """
+                SELECT COALESCE(SUM(paym_amount), 0) FROM payments
+                WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id = 0
+                  AND paym_id <= :curr_id
+            """
+            p1 = {"term_id": terminal_id, "curr_id": curr_p[0]}
+        amt1 = (await session.execute(text(q1), p1)).scalar() or 0
+        sum1 = int(amt1) // 100
+        delta1 = fact_total_sum - sum1
+        strategies.append(
+            {
+                "id": "exact_paym_ext_id",
+                "name": "Эталонная по PaymExtId (только наличные)",
+                "lower_bound": prev_upper_ext_id or "Начало работы",
+                "upper_bound": curr_paym_ext_id,
+                "calculated_cash": sum1,
+                "delta": delta1,
+                "is_matched": (sum1 == fact_total_sum),
+                "description": "Расчет строго по интервалу внешних идентификаторов платежей (pay_type_id = 0)",
+            }
+        )
+    else:
+        strategies.append(
+            {
+                "id": "exact_paym_ext_id",
+                "name": "Эталонная по PaymExtId (только наличные)",
+                "lower_bound": prev_upper_ext_id or None,
+                "upper_bound": curr_paym_ext_id or "Не указан",
+                "calculated_cash": None,
+                "delta": None,
+                "is_matched": False,
+                "description": f"Платеж {curr_paym_ext_id or 'PaymExtId'} пока не найден в базе данных",
+            }
+        )
+
+    # Strategy 2: terminal_time (По дате/времени терминала, только наличные pay_type_id = 0)
+    dt_end = curr_inkass_dt or created_at
+    dt_start = prev_inkass_dt or prev_created_at
+    if dt_start:
+        q2 = """
+            SELECT COALESCE(SUM(paym_amount), 0) FROM payments
+            WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id = 0
+              AND paym_datetime > :dt_start AND paym_datetime <= :dt_end
+        """
+        p2 = {"term_id": terminal_id, "dt_start": dt_start, "dt_end": dt_end}
+    else:
+        q2 = """
+            SELECT COALESCE(SUM(paym_amount), 0) FROM payments
+            WHERE terminal_id = :term_id AND paym_state = 2 AND pay_type_id = 0
+              AND paym_datetime <= :dt_end
+        """
+        p2 = {"term_id": terminal_id, "dt_end": dt_end}
+    amt2 = (await session.execute(text(q2), p2)).scalar() or 0
+    sum2 = int(amt2) // 100
+    delta2 = fact_total_sum - sum2
+    strategies.append(
+        {
+            "id": "terminal_time",
+            "name": "По времени инкассации (только наличные)",
+            "lower_bound": str(dt_start) if dt_start else "Начало работы",
+            "upper_bound": str(dt_end),
+            "calculated_cash": sum2,
+            "delta": delta2,
+            "is_matched": (sum2 == fact_total_sum),
+            "description": "Расчет по временному окну между инкассациями терминала",
+        }
+    )
+
+    # Strategy 3: gross_total (Валовый оборот: наличные + безнал)
+    if curr_p:
+        if prev_p:
+            q3 = """
+                SELECT COALESCE(SUM(paym_amount), 0) FROM payments
+                WHERE terminal_id = :term_id AND paym_state = 2
+                  AND paym_id > :prev_id AND paym_id <= :curr_id
+            """
+            p3 = {
+                "term_id": terminal_id,
+                "prev_id": prev_p[0],
+                "curr_id": curr_p[0],
+            }
+        else:
+            q3 = """
+                SELECT COALESCE(SUM(paym_amount), 0) FROM payments
+                WHERE terminal_id = :term_id AND paym_state = 2
+                  AND paym_id <= :curr_id
+            """
+            p3 = {"term_id": terminal_id, "curr_id": curr_p[0]}
+        amt3 = (await session.execute(text(q3), p3)).scalar() or 0
+        sum3 = int(amt3) // 100
+    else:
+        amt3 = (
+            await session.execute(text(q2.replace("AND pay_type_id = 0", "")), p2)
+        ).scalar() or 0
+        sum3 = int(amt3) // 100
+    delta3 = fact_total_sum - sum3
+    strategies.append(
+        {
+            "id": "gross_total",
+            "name": "Валовый оборот (все типы оплат: нал + безнал)",
+            "lower_bound": prev_upper_ext_id
+            or (str(dt_start) if dt_start else "Начало работы"),
+            "upper_bound": curr_paym_ext_id or str(dt_end),
+            "calculated_cash": sum3,
+            "delta": delta3,
+            "is_matched": (sum3 == fact_total_sum),
+            "description": "Суммируются все проведенные платежи без фильтра по типу оплаты",
+        }
+    )
+
+    cur_status = request_data.get("calc_status")
+    if not cur_status:
+        if curr_p and sum1 is not None and sum1 == fact_total_sum:
+            cur_status = "matched"
+        elif not curr_p:
+            cur_status = "needs_calc"
+        else:
+            cur_status = "mismatch"
+
+    return {
+        "record_id": record_id,
+        "device_id": device_id,
+        "report_number": str(curr_inkass_id_raw or ""),
+        "fact_total_sum": fact_total_sum,
+        "current_status": cur_status,
+        "strategies": strategies,
+    }
 
 
 @router.get("/inkass")
@@ -282,6 +516,23 @@ async def get_inkass_report(
         )
         report_number = data.get("InkassId") or data.get("cntInkass") or ""
         server_dt_str = to_utc_iso(row[3]) if row[3] else ""
+        total_sum_val = _json_int(data, "TotalSum") or _json_int(data, "TotalNoteSum")
+        calc_cash_sum = calculated_sums.get(row[0])
+        calc_status = data.get("calc_status")
+        if calc_status is None:
+            if calc_cash_sum is None:
+                calc_status = "needs_calc"
+            elif calc_cash_sum == total_sum_val:
+                calc_status = "matched"
+            else:
+                calc_status = "mismatch"
+
+        calc_delta = (
+            (total_sum_val - calc_cash_sum)
+            if (calc_cash_sum is not None and total_sum_val is not None)
+            else None
+        )
+
         items.append(
             {
                 "id": row[0],
@@ -293,9 +544,13 @@ async def get_inkass_report(
                 )
                 or server_dt_str,
                 "server_datetime": server_dt_str,
-                "total_sum": _json_int(data, "TotalSum")
-                or _json_int(data, "TotalNoteSum"),
-                "calculated_sum": calculated_sums.get(row[0], 0),
+                "total_sum": total_sum_val,
+                "calculated_sum": calc_cash_sum,
+                "calc_status": calc_status,
+                "calc_delta": calc_delta,
+                "calc_strategy": data.get("calc_strategy_applied"),
+                "calc_lower_paym_ext_id": data.get("calc_lower_paym_ext_id"),
+                "calc_upper_paym_ext_id": data.get("calc_upper_paym_ext_id"),
                 "total_count": _json_int(data, "TotalCount"),
                 "total_note_sum": _json_int(data, "TotalNoteSum"),
                 "total_note_count": total_note_count,
@@ -321,6 +576,133 @@ async def get_inkass_report(
             }
         )
     return {"items": items, "total": count_row or 0, "timezone": tz_name}
+
+
+@router.post("/inkass/{record_id}/recalculate-preview")
+async def recalculate_inkass_preview(
+    record_id: int,
+    user: dict = Depends(require_tenant_context),
+):
+    effective_org_id = resolve_org_id(user)
+    async with async_session() as session:
+        record_row = (
+            await session.execute(
+                text("""
+                    SELECT r.id, r.device_id, r.created_at, r.request_data, t.id AS terminal_id, t.org_id
+                    FROM tech_gate_records r
+                    JOIN terminals t ON t.device_id = r.device_id
+                    WHERE r.id = :record_id AND r.function_name = 'inkass'
+                """),
+                {"record_id": record_id},
+            )
+        ).fetchone()
+        if not record_row:
+            raise HTTPException(status_code=404, detail="Инкассация не найдена")
+        if effective_org_id > 0 and record_row[5] != effective_org_id:
+            raise HTTPException(status_code=403, detail="Доступ запрещен")
+
+        return await _calculate_strategies_preview(
+            session,
+            record_row[0],
+            record_row[1],
+            record_row[4],
+            record_row[2],
+            record_row[3] or {},
+        )
+
+
+@router.post("/inkass/{record_id}/apply-calculation")
+async def apply_inkass_calculation(
+    record_id: int,
+    body: ApplyCalculationRequest,
+    user: dict = Depends(require_tenant_context),
+):
+    effective_org_id = resolve_org_id(user)
+    async with async_session() as session:
+        record_row = (
+            await session.execute(
+                text("""
+                    SELECT r.id, r.device_id, r.created_at, r.request_data, t.id AS terminal_id, t.org_id
+                    FROM tech_gate_records r
+                    JOIN terminals t ON t.device_id = r.device_id
+                    WHERE r.id = :record_id AND r.function_name = 'inkass'
+                """),
+                {"record_id": record_id},
+            )
+        ).fetchone()
+        if not record_row:
+            raise HTTPException(status_code=404, detail="Инкассация не найдена")
+        if effective_org_id > 0 and record_row[5] != effective_org_id:
+            raise HTTPException(status_code=403, detail="Доступ запрещен")
+
+        request_data = dict(record_row[3] or {})
+
+        if body.strategy_id == "no_change":
+            request_data["calc_status"] = "mismatch"
+            request_data["calc_applied_by_user"] = user.get("username", "user")
+            request_data["calc_applied_at"] = datetime.now(UTC).isoformat()
+            await session.execute(
+                update(TechGateRecord)
+                .where(TechGateRecord.id == record_id)
+                .values(request_data=request_data)
+            )
+            await session.commit()
+            return {
+                "status": "ok",
+                "calc_status": "mismatch",
+                "calculated_sum": request_data.get("calc_cash_sum"),
+                "delta": request_data.get("calc_delta"),
+            }
+
+        preview = await _calculate_strategies_preview(
+            session,
+            record_row[0],
+            record_row[1],
+            record_row[4],
+            record_row[2],
+            request_data,
+        )
+        st = next(
+            (s for s in preview["strategies"] if s["id"] == body.strategy_id),
+            None,
+        )
+        if not st:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Неизвестная стратегия: {body.strategy_id}",
+            )
+
+        calculated_cash = st["calculated_cash"]
+        delta = st["delta"]
+        is_matched = st["is_matched"]
+
+        request_data["calc_status"] = (
+            "matched"
+            if is_matched
+            else ("needs_calc" if calculated_cash is None else "mismatch")
+        )
+        request_data["calc_cash_sum"] = calculated_cash
+        request_data["calculated_sum"] = calculated_cash
+        request_data["calc_delta"] = delta
+        request_data["calc_strategy_applied"] = body.strategy_id
+        request_data["calc_lower_paym_ext_id"] = st["lower_bound"]
+        request_data["calc_upper_paym_ext_id"] = st["upper_bound"]
+        request_data["calc_applied_by_user"] = user.get("username", "user")
+        request_data["calc_applied_at"] = datetime.now(UTC).isoformat()
+
+        await session.execute(
+            update(TechGateRecord)
+            .where(TechGateRecord.id == record_id)
+            .values(request_data=request_data)
+        )
+        await session.commit()
+
+        return {
+            "status": "ok",
+            "calc_status": request_data["calc_status"],
+            "calculated_sum": calculated_cash,
+            "delta": delta,
+        }
 
 
 @router.get("/payments")

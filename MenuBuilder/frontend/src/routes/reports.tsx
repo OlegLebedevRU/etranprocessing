@@ -12,6 +12,10 @@ import {
   Select,
   Grid,
   Segmented,
+  Modal,
+  Radio,
+  Spin,
+  message,
 } from "antd";
 import {
   FileTextOutlined,
@@ -19,6 +23,8 @@ import {
   BarChartOutlined,
   ReloadOutlined,
   SearchOutlined,
+  CheckCircleOutlined,
+  WarningOutlined,
 } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -30,6 +36,9 @@ import {
   type BalanceByTerminalRecord,
   getBalanceByTsp,
   type BalanceByTspRecord,
+  getInkassRecalculatePreview,
+  applyInkassCalculation,
+  type RecalculatePreviewResponse,
 } from "../api/reports";
 import { getServices } from "../api/services";
 import { getMe } from "../api/auth";
@@ -138,6 +147,16 @@ export default function ReportsPage() {
   const [inkDateTo, setInkDateTo] = useState("");
   const [inkTermInput, setInkTermInput] = useState("");
   const [inkDeviceIds, setInkDeviceIds] = useState<number[]>([]);
+
+  // --- Inkass recalculate state ---
+  const [recalcModalVisible, setRecalcModalVisible] = useState(false);
+  const [recalcRecord, setRecalcRecord] = useState<InkassRecord | null>(null);
+  const [recalcLoading, setRecalcLoading] = useState(false);
+  const [recalcApplying, setRecalcApplying] = useState(false);
+  const [recalcPreview, setRecalcPreview] =
+    useState<RecalculatePreviewResponse | null>(null);
+  const [selectedStrategyId, setSelectedStrategyId] =
+    useState<string>("exact_paym_ext_id");
 
   // --- Payments state ---
   // "Today" must be computed in the confirmed tenant timezone, never the browser's.
@@ -286,6 +305,50 @@ export default function ReportsPage() {
     setBtsDeviceIds(ids);
   };
 
+  const openRecalcModal = useCallback(async (record: InkassRecord) => {
+    setRecalcRecord(record);
+    setRecalcModalVisible(true);
+    setRecalcLoading(true);
+    setRecalcPreview(null);
+    setSelectedStrategyId("exact_paym_ext_id");
+    try {
+      const data = await getInkassRecalculatePreview(record.id);
+      setRecalcPreview(data);
+      const matched = data.strategies.find((s) => s.is_matched);
+      if (matched) {
+        setSelectedStrategyId(matched.id);
+      } else if (data.strategies.length > 0) {
+        setSelectedStrategyId(data.strategies[0].id);
+      }
+    } catch {
+      message.error("Не удалось загрузить варианты пересчета инкассации");
+    } finally {
+      setRecalcLoading(false);
+    }
+  }, []);
+
+  const handleApplyStrategy = useCallback(
+    async (strategyId: string) => {
+      if (!recalcRecord) return;
+      setRecalcApplying(true);
+      try {
+        await applyInkassCalculation(recalcRecord.id, strategyId);
+        message.success(
+          strategyId === "no_change"
+            ? "Инкассация оставлена без пересчета"
+            : "Стратегия расчета успешно применена",
+        );
+        setRecalcModalVisible(false);
+        fetchInkass();
+      } catch {
+        message.error("Ошибка при сохранении стратегии пересчета");
+      } finally {
+        setRecalcApplying(false);
+      }
+    },
+    [recalcRecord, fetchInkass],
+  );
+
   // --- Inkass columns ---
   const inkassColumns: ColumnsType<InkassRecord> = [
     {
@@ -314,10 +377,31 @@ export default function ReportsPage() {
     {
       title: "Расчетная сумма",
       dataIndex: "calculated_sum",
-      width: 130,
+      width: 160,
       align: "right",
-      render: (v: number) => (v ? v.toLocaleString("ru-RU") + " ₽" : "0 ₽"),
-      sorter: (a, b) => a.calculated_sum - b.calculated_sum,
+      render: (v: number | null, r: InkassRecord) => (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+          <span style={{ fontWeight: 600 }}>
+            {v != null ? `${v.toLocaleString("ru-RU")} ₽` : "—"}
+          </span>
+          {r.calc_status === "matched" && (
+            <Tag color="success" style={{ margin: 0, fontSize: 10, lineHeight: "16px", padding: "0 4px" }}>
+              Совпало
+            </Tag>
+          )}
+          {r.calc_status === "needs_calc" && (
+            <Tag color="processing" style={{ margin: 0, fontSize: 10, lineHeight: "16px", padding: "0 4px" }}>
+              Ожидает расчета
+            </Tag>
+          )}
+          {r.calc_status === "mismatch" && (
+            <Tag color="warning" style={{ margin: 0, fontSize: 10, lineHeight: "16px", padding: "0 4px" }}>
+              {r.calc_delta != null ? `Δ ${r.calc_delta > 0 ? "+" : ""}${r.calc_delta.toLocaleString("ru-RU")} ₽` : "Расхождение"}
+            </Tag>
+          )}
+        </div>
+      ),
+      sorter: (a, b) => (a.calculated_sum ?? 0) - (b.calculated_sum ?? 0),
     },
     {
       title: "Всего банкнот",
@@ -351,6 +435,22 @@ export default function ReportsPage() {
       width: 110,
       ellipsis: true,
       render: (v: string | number) => String(v || "—"),
+    },
+    {
+      title: "Действия",
+      key: "actions",
+      width: 120,
+      fixed: "right" as const,
+      align: "center",
+      render: (_: unknown, r: InkassRecord) => (
+        <Button
+          size="small"
+          icon={<ReloadOutlined />}
+          onClick={() => openRecalcModal(r)}
+        >
+          Пересчитать
+        </Button>
+      ),
     },
   ];
 
@@ -691,6 +791,113 @@ export default function ReportsPage() {
                   ),
                 }}
               />
+
+              <Modal
+                title={`Пересчет инкассации: Терминал ${recalcRecord?.device_id || ""} | Отчет №${recalcRecord?.report_number || "—"}`}
+                open={recalcModalVisible}
+                onCancel={() => !recalcApplying && setRecalcModalVisible(false)}
+                width={680}
+                footer={[
+                  <Button
+                    key="cancel"
+                    onClick={() => setRecalcModalVisible(false)}
+                    disabled={recalcApplying}
+                  >
+                    Отмена
+                  </Button>,
+                  <Button
+                    key="no_change"
+                    onClick={() => handleApplyStrategy("no_change")}
+                    loading={recalcApplying}
+                  >
+                    Оставить без пересчета
+                  </Button>,
+                  <Button
+                    key="apply"
+                    type="primary"
+                    onClick={() => handleApplyStrategy(selectedStrategyId)}
+                    loading={recalcApplying}
+                    disabled={recalcLoading || !recalcPreview?.strategies?.length}
+                  >
+                    Применить стратегию
+                  </Button>,
+                ]}
+              >
+                <div style={{ marginBottom: 16 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      padding: "8px 12px",
+                      background: "#f8fafc",
+                      borderRadius: 6,
+                      border: "1px solid #e2e8f0",
+                    }}
+                  >
+                    <span><strong>Фактическая сумма (кассета):</strong></span>
+                    <span style={{ fontSize: 16, fontWeight: 700, color: "#1677ff" }}>
+                      {recalcRecord?.total_sum ? `${recalcRecord.total_sum.toLocaleString("ru-RU")} ₽` : "—"}
+                    </span>
+                  </div>
+                </div>
+
+                {recalcLoading ? (
+                  <div style={{ textAlign: "center", padding: "32px 0" }}>
+                    <Spin tip="Расчет вариантов по доступным стратегиям..." />
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <div style={{ fontSize: 13, color: "#64748b" }}>
+                      Выберите стратегию расчета интервала платежей:
+                    </div>
+                    <Radio.Group
+                      value={selectedStrategyId}
+                      onChange={(e) => setSelectedStrategyId(e.target.value)}
+                      style={{ width: "100%" }}
+                    >
+                      <Space direction="vertical" style={{ width: "100%" }} size={10}>
+                        {recalcPreview?.strategies?.map((st) => (
+                          <div
+                            key={st.id}
+                            onClick={() => setSelectedStrategyId(st.id)}
+                            style={{
+                              border: selectedStrategyId === st.id ? "2px solid #1677ff" : "1px solid #e2e8f0",
+                              background: selectedStrategyId === st.id ? "#f0f7ff" : "#fff",
+                              borderRadius: 8,
+                              padding: "10px 14px",
+                              cursor: "pointer",
+                              transition: "all 0.2s",
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                              <Radio value={st.id} style={{ fontWeight: 600 }}>
+                                {st.name}
+                              </Radio>
+                              {st.is_matched ? (
+                                <Tag color="success" icon={<CheckCircleOutlined />}>СОВПАЛО (100%)</Tag>
+                              ) : (
+                                st.calculated_cash != null && (
+                                  <Tag color="warning" icon={<WarningOutlined />}>
+                                    Δ {st.delta != null ? `${st.delta > 0 ? "+" : ""}${st.delta.toLocaleString("ru-RU")} ₽` : "Не сходится"}
+                                  </Tag>
+                                )
+                              )}
+                            </div>
+                            <div style={{ fontSize: 12, color: "#64748b", marginLeft: 24 }}>
+                              {st.description}
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginTop: 6, marginLeft: 24, padding: "4px 8px", background: "#f8fafc", borderRadius: 4 }}>
+                              <span>Интервал: <strong>[{st.lower_bound || "—"} ... {st.upper_bound || "—"}]</strong></span>
+                              <span>Расчет: <strong>{st.calculated_cash != null ? `${st.calculated_cash.toLocaleString("ru-RU")} ₽` : "Не определен"}</strong></span>
+                            </div>
+                          </div>
+                        ))}
+                      </Space>
+                    </Radio.Group>
+                  </div>
+                )}
+              </Modal>
             </div>
           )}
 

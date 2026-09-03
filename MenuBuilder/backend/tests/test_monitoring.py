@@ -580,3 +580,105 @@ async def test_balance_by_tsp_report():
             assert len(data["items"]) == 1
             assert data["items"][0]["tsp_code"] == 7001
             assert data["items"][0]["total_amount"] == 25000
+
+
+@pytest.mark.anyio
+async def test_inkass_recalculate_preview_and_apply():
+    """Verify inkassation recalculate-preview and apply-calculation endpoints."""
+    app.dependency_overrides[get_current_user] = lambda: {
+        "username": "admin",
+        "org_id": 1,
+    }
+
+    mock_session = AsyncMock()
+
+    req_data = {
+        "TotalSum": "30000",
+        "PaymExtId": "0348_020926_12453741",
+        "InkassId": "55",
+        "InkassDateTime": "02.09.2026 14:50:04",
+    }
+    record_row = (
+        1204,
+        348,
+        datetime(2026, 9, 2, 14, 50, 4, tzinfo=UTC),
+        req_data,
+        10,
+        1,
+    )
+
+    prev_req_data = {
+        "PaymExtId": "0348_250826_10482994",
+        "InkassId": "54",
+        "InkassDateTime": "25.08.2026 12:52:20",
+    }
+    prev_record_row = (
+        1100,
+        prev_req_data,
+        datetime(2026, 8, 25, 12, 52, 20, tzinfo=UTC),
+    )
+
+    async def mock_execute(stmt, params=None):
+        sql_str = str(stmt)
+        result = MagicMock()
+        if "WHERE r.id = :record_id" in sql_str:
+            result.fetchone.return_value = record_row
+        elif "WHERE device_id = :dev_id AND function_name = 'inkass'" in sql_str:
+            result.fetchone.return_value = prev_record_row
+        elif "FROM payments" in sql_str and "ORDER BY paym_id DESC" in sql_str:
+            if (params or {}).get("ext_id") == "0348_020926_12453741":
+                result.fetchone.return_value = (
+                    500,
+                    datetime(2026, 9, 2, 12, 45, 37, tzinfo=UTC),
+                )
+            else:
+                result.fetchone.return_value = (
+                    400,
+                    datetime(2026, 8, 25, 10, 48, 29, tzinfo=UTC),
+                )
+        elif "COALESCE(SUM(paym_amount)" in sql_str:
+            if "pay_type_id = 0" in sql_str:
+                result.scalar.return_value = 3000000  # 30000 rubles
+            else:
+                result.scalar.return_value = 26475100  # 264751 rubles
+        else:
+            result.fetchone.return_value = None
+            result.fetchall.return_value = []
+        return result
+
+    mock_session.execute = AsyncMock(side_effect=mock_execute)
+    mock_session.commit = AsyncMock()
+
+    mock_cm = AsyncMock()
+    mock_cm.__aenter__.return_value = mock_session
+    mock_cm.__aexit__.return_value = None
+
+    with patch("app.routers.reports.async_session", return_value=mock_cm):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.post("/api/reports/inkass/1204/recalculate-preview")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["record_id"] == 1204
+            assert data["device_id"] == 348
+            assert data["fact_total_sum"] == 30000
+            assert len(data["strategies"]) == 3
+            exact = next(
+                s for s in data["strategies"] if s["id"] == "exact_paym_ext_id"
+            )
+            assert exact["calculated_cash"] == 30000
+            assert exact["delta"] == 0
+            assert exact["is_matched"] is True
+
+            # Apply calculation
+            apply_resp = await client.post(
+                "/api/reports/inkass/1204/apply-calculation",
+                json={"strategy_id": "exact_paym_ext_id"},
+            )
+            assert apply_resp.status_code == 200
+            apply_data = apply_resp.json()
+            assert apply_data["status"] == "ok"
+            assert apply_data["calc_status"] == "matched"
+            assert apply_data["calculated_sum"] == 30000
+            assert apply_data["delta"] == 0
