@@ -271,9 +271,11 @@ async def test_admin_tenants_switch_endpoint():
 
             # Verify the issued tenant token contains expected claims
             issued_claims = decode_token(data["access_token"])
-            assert issued_claims["sub"] == "o.lebedev"
+            # Issuer v2 contract: sub is str(userId) ("1"), username/orig_sub are "o.lebedev", orgId is int
+            assert issued_claims["sub"] == "1"
+            assert issued_claims["username"] == "o.lebedev"
             assert issued_claims["org"] == "223"
-            assert issued_claims["org_id"] == 223
+            assert issued_claims["orgId"] == 223
             assert issued_claims["token_type"] == "tenant"
             assert issued_claims["orig_sub"] == "o.lebedev"
             assert issued_claims["is_imp"] is True
@@ -848,9 +850,6 @@ async def test_step9_switch_via_auth_alias_with_cookie():
             assert data_switched["is_impersonated"] is True
 
 
-@pytest.mark.xfail(
-    strict=True, reason="sid support in _generate_mock_tokens is added in Phase B"
-)
 @pytest.mark.anyio
 async def test_step9_switch_by_sid_claim_without_refresh_cookie():
     store = get_user_store()
@@ -871,7 +870,7 @@ async def test_step9_switch_by_sid_claim_without_refresh_cookie():
         username="o.lebedev",
         role="superuser",
         is_superuser=True,
-        sid=session.id,  # pyright: ignore[reportCallIssue]
+        sid=session.id,
     )
     token = tokens["accessToken"]
     async with AsyncClient(

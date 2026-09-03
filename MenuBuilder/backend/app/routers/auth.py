@@ -59,6 +59,7 @@ class UserInfo(BaseModel):
     org_name: str | None = None
     timezone: str = "Europe/Moscow"
     expires_at: str | None = None
+    full_name: str | None = None
 
 
 def _extract_basic_auth(authorization: str | None) -> tuple[str, str] | None:
@@ -200,6 +201,7 @@ async def login(
         username=user.username,
         role=user.role,
         is_superuser=user.is_superuser,
+        sid=None,
     )
 
     access_token = token_data.get("accessToken") or token_data.get("access_token") or ""
@@ -319,6 +321,7 @@ async def refresh_token(
         username=user.username,
         role=user.role,
         is_superuser=user.is_superuser,
+        sid=session.id,
     )
 
     access_token = token_data.get("accessToken") or token_data.get("access_token") or ""
@@ -491,9 +494,20 @@ async def me(user: dict = Depends(get_current_user)):
         except Exception:  # noqa: BLE001
             expires_at = None
 
+    username = user.get("username")
+    user_id = user.get("user_id")
+    full_name = None
+
+    if user_id and user_id > 0:
+        store_user = await get_user_store().get_by_id(user_id)
+        if store_user:
+            if not username or str(username).isdigit():
+                username = store_user.username
+            full_name = store_user.full_name
+
     return UserInfo(
-        user_id=user.get("user_id"),
-        username=user["username"],
+        user_id=user_id,
+        username=username or user.get("username") or "",
         org_id=org_id,
         role_id=user.get("role_id", 1 if is_su else 3),
         role=user.get("role", "user"),
@@ -504,4 +518,5 @@ async def me(user: dict = Depends(get_current_user)):
         org_name=org_name,
         timezone=org_timezone,
         expires_at=expires_at,
+        full_name=full_name,
     )

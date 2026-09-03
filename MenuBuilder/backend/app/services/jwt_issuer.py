@@ -20,6 +20,35 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+ISSUER_V2_ACCESS_MANDATORY_CLAIMS: frozenset[str] = frozenset(
+    {
+        "orgId",
+        "userId",
+        "roleId",
+        "sub",
+        "org",
+        "role",
+        "aud",
+        "iss",
+        "iat",
+        "nbf",
+        "exp",
+        "jti",
+        "is_superuser",
+        "token_type",
+        "is_imp",
+    }
+)
+
+ISSUER_V2_ACCESS_CLAIMS: frozenset[str] = frozenset(
+    ISSUER_V2_ACCESS_MANDATORY_CLAIMS
+    | {
+        "username",
+        "orig_sub",
+        "sid",
+    }
+)
+
 
 class JwtIssuerClient:
     """Client for external RS256 JWT Issuer hosted on Yandex Cloud Function."""
@@ -39,7 +68,7 @@ class JwtIssuerClient:
         self._kid = settings.jwt_issuer_kid
         self._timeout = settings.jwt_issuer_timeout_seconds
         self._inflight: dict[tuple[int, int], asyncio.Future[dict[str, Any]]] = {}
-        self._token_cache: dict[tuple[int, int], tuple[dict[str, Any], float]] = {}
+        self._token_cache: dict[tuple[int, int, Any], tuple[dict[str, Any], float]] = {}
 
     def invalidate_cache_for_user(self, user_id: int) -> None:
         """Invalidate all cached tokens for a specific user upon logout or deactivation."""
@@ -104,13 +133,21 @@ class JwtIssuerClient:
         user_id: int,
         org_id: int | None,
         role_id: int,
+        *,
+        username: str | None = None,
+        is_superuser: bool | None = None,
+        is_imp: bool | None = None,
+        orig_sub: str | None = None,
+        sid: str | int | None = None,
+        access_ttl_minutes: int | None = None,
+        refresh_ttl_days: int | None = None,
     ) -> dict[str, Any]:
         """Build the HMAC-SHA256 signed request payload according to the jwt-issuer contract."""
         timestamp = int(time.time())
         nonce = str(uuid.uuid4())
         effective_org_id = org_id or 0
 
-        request_body_dict = {
+        request_body_dict: dict[str, Any] = {
             "orgId": effective_org_id,
             "userId": user_id,
             "roleId": role_id,
@@ -120,6 +157,21 @@ class JwtIssuerClient:
             "nonce": nonce,
             "timestamp": timestamp,
         }
+        if username is not None:
+            request_body_dict["username"] = username
+        if is_superuser is not None:
+            request_body_dict["isSuperuser"] = is_superuser
+        if is_imp is not None:
+            request_body_dict["isImp"] = is_imp
+        if orig_sub is not None:
+            request_body_dict["origSub"] = orig_sub
+        if sid is not None:
+            request_body_dict["sid"] = sid
+        if access_ttl_minutes is not None:
+            request_body_dict["accessTtlMinutes"] = access_ttl_minutes
+        if refresh_ttl_days is not None:
+            request_body_dict["refreshTtlDays"] = refresh_ttl_days
+
         # Compact JSON without whitespace
         request_body = json.dumps(request_body_dict, separators=(",", ":"))
 
@@ -152,36 +204,49 @@ class JwtIssuerClient:
         username: str = "",
         role: str = "user",
         is_superuser: bool = False,
+        *,
+        sid: int | str | None = None,
+        orig_sub: str | None = None,
     ) -> dict[str, Any]:
-        """Generate mock JWT tokens for local development and unit tests."""
+        """Generate mock JWT tokens matching external issuer v2 contract for local development and unit tests."""
         effective_org_id = org_id or 0
         now = datetime.now(UTC)
         access_exp = now + timedelta(minutes=settings.jwt_expire_minutes)
         refresh_token = secrets.token_urlsafe(64)
+        iat = int(now.timestamp())
+        nbf = iat
+        exp = int(access_exp.timestamp())
+        jti = secrets.token_hex(16)
+        is_imp = bool(is_superuser and effective_org_id > 0)
 
-        payload = {
-            "sub": username or str(user_id),
-            "username": username or str(user_id),
-            "userId": user_id,
-            "user_id": user_id,
+        payload: dict[str, Any] = {
             "orgId": effective_org_id,
-            "org_id": effective_org_id,
-            "org": str(effective_org_id),
+            "userId": user_id,
             "roleId": role_id,
-            "role_id": role_id,
-            "role": role,
-            "is_superuser": is_superuser,
-            "token_type": "tenant",
-            "orig_sub": username or str(user_id),
-            "is_imp": bool(is_superuser and effective_org_id > 0),
+            "sub": str(user_id),
+            "org": str(effective_org_id),
+            "role": str(role_id),
             "aud": self.aud,
             "iss": self.iss,
-            "iat": int(now.timestamp()),
-            "exp": int(access_exp.timestamp()),
+            "iat": iat,
+            "nbf": nbf,
+            "exp": exp,
+            "jti": jti,
+            "is_superuser": bool(is_superuser),
+            "token_type": "tenant",
+            "is_imp": is_imp,
         }
+        if username:
+            payload["username"] = username
+            payload["orig_sub"] = orig_sub or username
+        elif orig_sub:
+            payload["orig_sub"] = orig_sub
 
-        # For mock testing, sign with unverified/symmetric or test key if RSA key is unavailable
-        headers = {"kid": self.kid, "alg": "none"}
+        if sid is not None:
+            payload["sid"] = sid
+
+        # For mock testing, sign with RS256 if RSA key is configured, else HS256 with mock_secret
+        headers = {"kid": self.kid}
         priv_key = settings.jwt_private_key
         mock_access_token = (
             jwt.encode(
@@ -213,27 +278,34 @@ class JwtIssuerClient:
         username: str = "",
         role: str = "user",
         is_superuser: bool = False,
+        *,
+        sid: int | str | None = None,
+        orig_sub: str | None = None,
     ) -> dict[str, Any]:
         """Issue access and refresh tokens from external jwt-issuer or mock in test mode."""
-        key = (user_id, org_id or 0)
+        effective_org_id = org_id or 0
+        cache_key = (user_id, effective_org_id, sid)
+        inflight_key = (user_id, effective_org_id)
 
         # Optional token cache lookup (serve if > 10 min remaining)
-        if settings.jwt_issuer_token_cache_enabled and key in self._token_cache:
-            cached_data, exp_timestamp = self._token_cache[key]
+        if settings.jwt_issuer_token_cache_enabled and cache_key in self._token_cache:
+            cached_data, exp_timestamp = self._token_cache[cache_key]
             if exp_timestamp - time.time() > 600:
                 logger.debug(
-                    "Serving cached token for user_id=%s org_id=%s",
+                    "Serving cached token for user_id=%s org_id=%s sid=%s",
                     user_id,
-                    org_id,
+                    effective_org_id,
+                    sid,
                 )
                 return cached_data
 
         if self.mock_enabled or not self.secret:
             logger.debug(
-                "Using mock JWT issuer for user_id=%s org_id=%s role_id=%s",
+                "Using mock JWT issuer for user_id=%s org_id=%s role_id=%s sid=%s",
                 user_id,
                 org_id,
                 role_id,
+                sid,
             )
             mock_tokens = self._generate_mock_tokens(
                 user_id=user_id,
@@ -242,20 +314,22 @@ class JwtIssuerClient:
                 username=username,
                 role=role,
                 is_superuser=is_superuser,
+                sid=sid,
+                orig_sub=orig_sub,
             )
             if settings.jwt_issuer_token_cache_enabled:
                 exp_seconds = float(
                     mock_tokens.get("expiresIn") or settings.jwt_expire_minutes * 60
                 )
-                self._token_cache[key] = (mock_tokens, time.time() + exp_seconds)
+                self._token_cache[cache_key] = (mock_tokens, time.time() + exp_seconds)
             return mock_tokens
 
-        if key in self._inflight:
-            return await asyncio.shield(self._inflight[key])
+        if inflight_key in self._inflight:
+            return await asyncio.shield(self._inflight[inflight_key])
 
         loop = asyncio.get_running_loop()
         future: asyncio.Future[dict[str, Any]] = loop.create_future()
-        self._inflight[key] = future
+        self._inflight[inflight_key] = future
 
         try:
             result = await self._issue_tokens_with_retry(
@@ -265,6 +339,8 @@ class JwtIssuerClient:
                 username=username,
                 role=role,
                 is_superuser=is_superuser,
+                sid=sid,
+                orig_sub=orig_sub,
             )
             if settings.jwt_issuer_token_cache_enabled:
                 exp_seconds = float(
@@ -272,14 +348,14 @@ class JwtIssuerClient:
                     or result.get("expires_in")
                     or settings.jwt_expire_minutes * 60
                 )
-                self._token_cache[key] = (result, time.time() + exp_seconds)
+                self._token_cache[cache_key] = (result, time.time() + exp_seconds)
             future.set_result(result)
             return result
         except BaseException as exc:
             future.set_exception(exc)
             raise
         finally:
-            self._inflight.pop(key, None)
+            self._inflight.pop(inflight_key, None)
 
     async def _issue_tokens_with_retry(
         self,
@@ -289,12 +365,23 @@ class JwtIssuerClient:
         username: str = "",
         role: str = "user",
         is_superuser: bool = False,
+        *,
+        sid: int | str | None = None,
+        orig_sub: str | None = None,
     ) -> dict[str, Any]:
         start_time = time.monotonic()
+        is_imp = bool(is_superuser and (org_id or 0) > 0)
         payload = self.build_signed_request(
             user_id=user_id,
             org_id=org_id,
             role_id=role_id,
+            username=username or None,
+            is_superuser=is_superuser,
+            is_imp=is_imp,
+            orig_sub=orig_sub or username or None,
+            sid=sid,
+            access_ttl_minutes=settings.jwt_expire_minutes,
+            refresh_ttl_days=settings.jwt_refresh_expire_days,
         )
 
         last_error: Exception | None = None
@@ -380,6 +467,8 @@ class JwtIssuerClient:
                 username=username,
                 role=role,
                 is_superuser=is_superuser,
+                sid=sid,
+                orig_sub=orig_sub,
             )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

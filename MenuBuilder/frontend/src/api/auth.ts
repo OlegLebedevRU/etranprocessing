@@ -28,6 +28,7 @@ export interface UserInfo {
   org_name?: string | null;
   timezone?: string;
   expires_at?: string | null;
+  full_name?: string | null;
 }
 
 export async function login(username: string, password: string): Promise<LoginResponse> {

@@ -394,3 +394,50 @@
 - Шаг 13 (Фаза C): Ротация сессии на месте.
 - Шаг 11/12 (Фаза D): Деплой и smoke.
 - Шаг 14 (Фаза E): Документация.
+
+---
+
+## Шаг 10. Backend отправляет v2-поля, mock = зеркало контракта issuer v2
+
+**Дата:** 2026-09-03  
+**Статус:** Выполнен  
+
+### Что изменено:
+1. `app/services/jwt_issuer.py`:
+   - Метод `build_signed_request` расширен новыми опциональными параметрами: `username, is_superuser, is_imp, orig_sub, sid, access_ttl_minutes, refresh_ttl_days`. Опциональные поля сериализуются в camelCase в compact JSON `requestBody` (без пробелов) строго если значение не `None`. Верхнеуровневый словарь `params` не расширялся (issuer читает опциональные поля только из тела запроса). Подпись HMAC-SHA256 рассчитывается по обновленному `requestBody`.
+   - В `issue_tokens` и `_issue_tokens_with_retry` добавлены kwargs `sid: int | str | None = None` и `orig_sub: str | None = None`. Автоматически вычисляется `is_imp = bool(is_superuser and (org_id or 0) > 0)` и передается в `build_signed_request` вместе с TTL (`jwt_expire_minutes`, `jwt_refresh_expire_days`).
+   - Кэш токенов (`jwt_issuer_token_cache_enabled`): ключ кэша обновлен до тройки `(user_id, org_id or 0, sid)`, предотвращая отдачу токена с чужим `sid`. Single-flight дедупликация in-flight запросов сохраняет ключ `(user_id, org_id or 0)`. Метод `invalidate_cache_for_user` очищает все закэшированные варианты сессий пользователя.
+   - Метод `_generate_mock_tokens` приведен к полному зеркальному соответствию контракту issuer v2:
+     - `sub`: строго `str(user_id)`.
+     - `role`: строго строковый идентификатор роли `str(role_id)`.
+     - `org`: строго `str(effective_org_id)`.
+     - `userId`, `orgId`, `roleId`: целочисленные значения.
+     - Добавлены claims: `nbf`, `jti`, `token_type="tenant"`, `is_imp`, `is_superuser`, а также `username`, `orig_sub` и `sid` (если заданы).
+     - Удалены дублирующие snake_case claims `user_id`, `org_id`, `role_id`.
+   - Добавлены константы `ISSUER_V2_ACCESS_MANDATORY_CLAIMS` и `ISSUER_V2_ACCESS_CLAIMS`.
+2. Роутеры:
+   - `routers/auth.py::login`: передает `sid=None` в `issue_tokens` (сессия создается после вызова issuer'а; первый access-токен не несет `sid`, поэтому alias `/api/auth/switch-tenant` использует refresh-cookie).
+   - `routers/auth.py::refresh_token`: передает `sid=session.id`.
+   - `routers/admin_tenants.py::switch_tenant`: передает `sid=session.id` и `orig_sub=user.get("orig_sub") or username`.
+   - `routers/auth.py::me`: если `username` в токене отсутствует или представлен числовым `sub`, а `user_id > 0`, подставляется имя пользователя из `get_user_store().get_by_id(user_id)`. В схему `UserInfo` добавлено поле `full_name: str | None = None`.
+   - `MenuBuilder/frontend/src/api/auth.ts`: в тип `UserInfo` добавлено поле `full_name?: string | null`.
+3. Тесты:
+   - В `tests/test_jwt_issuer.py`:
+     - Добавлен тест `test_mock_access_claims_match_issuer_v2_contract`, проверяющий строгое соответствие claims mock-токена контракту v2 и отсутствие устаревших дубликатов snake_case.
+     - Добавлен тест `test_build_signed_request_v2_fields`: проверка включения v2 полей в `requestBody`, отсутствия полей со значением `None` и корректности HMAC-подписи.
+     - Обновлены тесты кэша `test_jwt_issuer_cache_hit_and_miss` (проверка изоляции по `sid`) и `test_jwt_issuer_cache_margin_expiration`.
+   - В `tests/test_tenant_switch.py`:
+     - Снят маркер `xfail` с теста `test_step9_switch_by_sid_claim_without_refresh_cookie` (тест проходит успешно).
+     - В `test_admin_tenants_switch_endpoint` обновлены ожидания согласно контракту v2 (`sub == "1"`, `username == "o.lebedev"`, `orgId == 223`).
+
+### Что проверено:
+- `pytest` (`MenuBuilder/backend`): 199 passed за 58.35s (все 199 тестов зелёные).
+- `ruff check .` (`MenuBuilder/backend`): All checks passed.
+- `ruff format --check .` (`MenuBuilder/backend`): All files formatted.
+- `pyright .` (`MenuBuilder/backend`): 0 errors, 0 warnings.
+- `npm run build` (`MenuBuilder/frontend`): сборка успешна (39.39s).
+
+### Что осталось:
+- Шаг 13 (Фаза C): Ротация сессии на месте.
+- Шаг 11/12 (Фаза D): Деплой и smoke.
+- Шаг 14 (Фаза E): Документация.

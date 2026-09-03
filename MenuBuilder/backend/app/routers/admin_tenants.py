@@ -147,6 +147,8 @@ async def switch_tenant(
         username=username,
         role=role,
         is_superuser=is_superuser,
+        sid=session.id,
+        orig_sub=user.get("orig_sub") or username,
     )
 
     access_token = token_data.get("accessToken") or token_data.get("access_token") or ""
