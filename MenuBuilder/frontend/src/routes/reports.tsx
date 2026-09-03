@@ -458,11 +458,11 @@ export default function ReportsPage() {
   // --- Balance by TSP columns ---
   const balanceTspColumns: ColumnsType<BalanceByTspRecord> = [
     {
-      title: "TSP код",
+      title: "ТСП/Версия меню",
       dataIndex: "tsp_code",
       fixed: "left" as const,
-      width: 140,
-      sorter: (a, b) => a.tsp_code - b.tsp_code,
+      width: 165,
+      sorter: (a, b) => a.tsp_code - b.tsp_code || (a.version || 0) - (b.version || 0),
       render: (code: number, r: BalanceByTspRecord) => (
         <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
           <span style={{ fontWeight: 600 }}>{code}</span>
@@ -478,15 +478,6 @@ export default function ReportsPage() {
           )}
         </span>
       ),
-    },
-    {
-      title: "Версия",
-      dataIndex: "version",
-      width: 85,
-      align: "center",
-      render: (ver: number | null | undefined) =>
-        ver ? <Tag color="blue">{`v${ver}`}</Tag> : <Tag color="default">—</Tag>,
-      sorter: (a, b) => (a.version || 0) - (b.version || 0),
     },
     {
       title: "Название",
@@ -1074,7 +1065,7 @@ export default function ReportsPage() {
 
               <div style={{ maxWidth: "100%" }}>
                 <Table<BalanceByTspRecord>
-                  rowKey="tsp_code"
+                  rowKey={(r) => `${r.tsp_code}_${r.version ?? 0}`}
                   columns={balanceTspColumns}
                   dataSource={btsItems}
                   loading={btsLoading}
