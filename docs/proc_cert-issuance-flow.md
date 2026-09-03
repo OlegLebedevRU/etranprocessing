@@ -1,6 +1,6 @@
 # Certificates Service — Flow & Architecture
 
-> **Authoritative Architecture Reference**: See **[`docs/certificate-architecture.md`](certificate-architecture.md)** for complete end-to-end mTLS reverse proxy routing, dual-issuer authentication rules, native C tooling (`tools/terminal-cert-installer`), and PowerShell testing scripts.
+> **Authoritative Architecture Reference**: See **[`docs/etran_cert-infrastructure-architecture.md`](etran_cert-infrastructure-architecture.md)** for complete end-to-end mTLS reverse proxy routing, dual-issuer authentication rules, native C tooling (`tools/terminal-cert-installer`), and PowerShell testing scripts.
 
 ## Overview
 
@@ -310,7 +310,7 @@ ProcessingBackend/
 ├── ca_test.py                              # Local CA test script
 ├── ca_requirements.txt                     # cryptography>=44.0.0
 ├── docs/
-│   └── certificates-flow.md                # This document
+│   └── proc_cert-issuance-flow.md          # This document
 ├── nginx-mutual-ssl.conf                   # location /api/certificates/
 └── backend/
     ├── app/

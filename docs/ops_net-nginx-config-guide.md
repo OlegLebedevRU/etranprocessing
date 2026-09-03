@@ -77,7 +77,7 @@ proxy_set_header X-Client-Cert-Serial $ssl_client_serial;
 | `/api/gategauge/*` | processing-backend:8000 | Device telemetry |
 | `/api/ListMenuFile` | menubuilder-backend:8000 | Menu files |
 | `/api/debug/*` | processing-backend:8000 | Debug endpoints |
-| `/certificates/`, `/payment/`, `/payment/etran.ashx`, `/GateGauge/main.ashx`, `/GateGauge/UpdateScript.ashx`, `/techgate/etran.ashx`, `/licensebilling/` | `https://46.38.51.114` (legacy IIS server, direct IP) | Legacy raw-path terminal endpoints (no `/api` prefix), proxied to the real legacy server with client-cert data forwarded via `X-Client-Cert-*` headers — see [devops-runbook.md](devops-runbook.md) for details on why an IP is used instead of the `iot-processing.ru` domain |
+| `/certificates/`, `/payment/`, `/payment/etran.ashx`, `/GateGauge/main.ashx`, `/GateGauge/UpdateScript.ashx`, `/techgate/etran.ashx`, `/licensebilling/` | `https://46.38.51.114` (legacy IIS server, direct IP) | Legacy raw-path terminal endpoints (no `/api` prefix), proxied to the real legacy server with client-cert data forwarded via `X-Client-Cert-*` headers — see [ops_run-devops-runbook.md](ops_run-devops-runbook.md) for details on why an IP is used instead of the `iot-processing.ru` domain |
 | `/*` | `https://46.38.51.114` (legacy IIS server, direct IP) | Legacy fallback |
 
 ### Payment Location

@@ -177,8 +177,9 @@ curl -X POST https://dev.leo4.ru:4443/api/payment/etran.ashx \
 ## More Documentation
 
 - [Documentation Index](README.md)
-- [ProcessingBackend Overview](processing-backend.md)
-- [Architecture Overview](etranprocessing-architecture-analysis.md)
-- [Nginx Configuration](nginx-config.md)
-- [DevOps Runbook](devops-runbook.md)
-- [AI Agent Reference](ai-agent-reference.md)
+- [Documentation Naming Convention](etran_dev-documentation-naming-convention.md)
+- [ProcessingBackend Overview](proc_pay-backend-architecture.md)
+- [Architecture Overview](etran_arch-architecture-analysis.md)
+- [Nginx Configuration](ops_net-nginx-config-guide.md)
+- [DevOps Runbook](ops_run-devops-runbook.md)
+- [AI Agent Reference](etran_dev-ai-agent-reference.md)

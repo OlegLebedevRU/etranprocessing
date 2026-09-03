@@ -32,7 +32,7 @@
 
 ### 3. `planning-and-research/` — Исторические планы и исследования миграции
 Первоначальные планы и исследования легаси-компонентов до их реализации в новом стеке:
-- **[`billing-implementation-plan-2026-08-19.md`](planning-and-research/billing-implementation-plan-2026-08-19.md)** (19.08.2026) — Исходный пошаговый план разработки лицензионного биллинга (актуальная архитектура: [`docs/billing-architecture.md`](../billing-architecture.md)).
+- **[`billing-implementation-plan-2026-08-19.md`](planning-and-research/billing-implementation-plan-2026-08-19.md)** (19.08.2026) — Исходный пошаговый план разработки лицензионного биллинга (актуальная архитектура: [`docs/etran_bill-licensing-architecture.md`](../etran_bill-licensing-architecture.md)).
 - **[`billing-cert-licensing-analysis-2026-08-18.md`](planning-and-research/billing-cert-licensing-analysis-2026-08-18.md)** (18.08.2026) — Сравнительный анализ привязки сертификатов и лицензий между легаси ASP.NET и новым FastAPI.
 - **[`legacy-listmenuservice-research.md`](planning-and-research/legacy-listmenuservice-research.md)** (21.08.2026) — Исследование легаси WCF/OWIN сервиса `ListMenuFile` для его переноса в FastAPI.
 

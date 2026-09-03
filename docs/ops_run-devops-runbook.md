@@ -247,7 +247,7 @@ ssh user1@176.108.247.249 "cd /home/user1/MenuBuilder/frontend && npm run build"
 ### Update Nginx Config
 
 ⚠️ The nginx-mutual config lives in the **`iot-rpc-rest-app`** repo, not
-here — see [nginx-config.md](nginx-config.md) "Source of truth" for why.
+here — see [ops_net-nginx-config-guide.md](ops_net-nginx-config-guide.md) "Source of truth" for why.
 Edit `nginx-configs/dev_leo4_ru/internal_ssl.conf` there, commit/push, then
 deploy:
 

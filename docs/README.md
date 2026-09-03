@@ -2,17 +2,20 @@
 
 Центральный навигатор по технической, архитектурной и эксплуатационной документации платформы процессинга платежей и управления терминалами `etranprocessing`.
 
+> 📌 **Стандарт именования файлов:** Все активные документы в каталоге `docs/` именуются по обязательному правилу двух мнемокодов с разделителем `{СФЕРА}_{ФЛОУ}-{дескриптивное-имя}.md`.  
+> Спецификация и словарь мнемокодов: **[`etran_dev-documentation-naming-convention.md`](etran_dev-documentation-naming-convention.md)**.
+
 ---
 
 ## 1. Архитектура системы и модели данных
 
 Документы, фиксирующие базовые принципы построения системы, доменные модели, разграничение владения таблицами БД и безопасность:
 
-- **[`etranprocessing-architecture-analysis.md`](etranprocessing-architecture-analysis.md)** — Комплексный архитектурный анализ платформы: обзор доменов `ProcessingBackend` и `MenuBuilder`, потоки данных, контракты очередей и оценка рисков.
-- **[`database-ownership.md`](database-ownership.md)** — Матрица владения базой данных PostgreSQL: разграничение прав на чтение/запись таблиц между `ProcessingBackend` и `MenuBuilder`, единый пакет `shared/etranprocessing_db`, правила создания Alembic-миграций.
-- **[`multi-tenant-auth-architecture.md`](multi-tenant-auth-architecture.md)** — Мультитенантная архитектура аутентификации и авторизации: единый централизованный JWT-токен (RS256), хранение в cookie `accessToken`, сессии в БД/in-memory, контекст тенанта и переключение организаций суперюзером.
-- **[`billing-architecture.md`](billing-architecture.md)** — Авторитетная архитектура и математика лицензионного биллинга: статусы (`DISABLED`, `OVERDUE`, `DUE_SOON`, `ACTIVE`), независимый биллинг сертификатов, расчет периодов с сохранением дня якоря, корзина и чекаут.
-- **[`certificate-architecture.md`](certificate-architecture.md)** — Сквозная спецификация инфраструктуры сертификатов и mTLS: двухфакторный выпуск через PIN, терминальный установщик на C, проверка подлинности на Nginx и PowerShell-скрипты аудита.
+- **[`etran_arch-architecture-analysis.md`](etran_arch-architecture-analysis.md)** — Комплексный архитектурный анализ платформы: обзор доменов `ProcessingBackend` и `MenuBuilder`, потоки данных, контракты очередей и оценка рисков.
+- **[`etran_data-database-ownership.md`](etran_data-database-ownership.md)** — Матрица владения базой данных PostgreSQL: разграничение прав на чтение/запись таблиц между `ProcessingBackend` и `MenuBuilder`, единый пакет `shared/etranprocessing_db`, правила создания Alembic-миграций.
+- **[`menu_auth-multi-tenant-architecture.md`](menu_auth-multi-tenant-architecture.md)** — Мультитенантная архитектура аутентификации и авторизации: единый централизованный JWT-токен (RS256), хранение в cookie `accessToken`, сессии в БД/in-memory, контекст тенанта и переключение организаций суперюзером.
+- **[`etran_bill-licensing-architecture.md`](etran_bill-licensing-architecture.md)** — Авторитетная архитектура и математика лицензионного биллинга: статусы (`DISABLED`, `OVERDUE`, `DUE_SOON`, `ACTIVE`), независимый биллинг сертификатов, расчет периодов с сохранением дня якоря, корзина и чекаут.
+- **[`etran_cert-infrastructure-architecture.md`](etran_cert-infrastructure-architecture.md)** — Сквозная спецификация инфраструктуры сертификатов и mTLS: двухфакторный выпуск через PIN, терминальный установщик на C, проверка подлинности на Nginx и PowerShell-скрипты аудита.
 
 ---
 
@@ -20,9 +23,9 @@
 
 Документация по серверным компонентам обработки платежей, терминальным интерфейсам и авторизационным шлюзам:
 
-- **[`processing-backend.md`](processing-backend.md)** — Архитектура и справочник сервиса `ProcessingBackend`: обработка платежей от терминалов по HTTPS (mTLS), логирование транзакций, таблицы балансов, legacy-совместимость.
-- **[`certificates-flow.md`](certificates-flow.md)** — Поток выпуска сертификатов терминалов (эндпоинты `CHECK` и `SETUP`), взаимодействие с внешним CA (Yandex Cloud Functions), ветвление криптопровайдеров (`v=26` CNG vs legacy).
-- **[`jwt-flow.md`](jwt-flow.md)** — Руководство по сборке и конфигурации Nginx с модулем `ngx-http-auth-jwt-module`: проверка RS256 JWT на обратном прокси, валидация cookie и форвардинг заголовков идентичности.
+- **[`proc_pay-backend-architecture.md`](proc_pay-backend-architecture.md)** — Архитектура и справочник сервиса `ProcessingBackend`: обработка платежей от терминалов по HTTPS (mTLS), логирование транзакций, таблицы балансов, legacy-совместимость.
+- **[`proc_cert-issuance-flow.md`](proc_cert-issuance-flow.md)** — Поток выпуска сертификатов терминалов (эндпоинты `CHECK` и `SETUP`), взаимодействие с внешним CA (Yandex Cloud Functions), ветвление криптопровайдеров (`v=26` CNG vs legacy).
+- **[`ops_net-nginx-jwt-module.md`](ops_net-nginx-jwt-module.md)** — Руководство по сборке и конфигурации Nginx с модулем `ngx-http-auth-jwt-module`: проверка RS256 JWT на обратном прокси, валидация cookie и форвардинг заголовков идентичности.
 
 ---
 
@@ -30,9 +33,9 @@
 
 Руководства по клиентскому веб-приложению `MenuBuilder/frontend` (портал администратора и управление меню):
 
-- **[`menubuilder-frontend-architecture.md`](menubuilder-frontend-architecture.md)** — Архитектура SPA на React 19, TypeScript и Vite: роутинг, управление сессиями, контекст тенанта (`SessionContext`), организация API-клиентов и сборка.
-- **[`ui-patterns.md`](ui-patterns.md)** — Шаблоны интерфейса, конвенции Ant Design 6, табличные плотности, дизайн-токены и правила построения форм.
-- **[`billing-cart-ux-requirements.md`](billing-cart-ux-requirements.md)** — Спецификация интерфейса корзины биллинга: правила автовыбора лицензий, расчет задолженности, блокировки и логика продления.
+- **[`menu_ui-frontend-architecture.md`](menu_ui-frontend-architecture.md)** — Архитектура SPA на React 19, TypeScript и Vite: роутинг, управление сессиями, контекст тенанта (`SessionContext`), организация API-клиентов и сборка.
+- **[`menu_ui-patterns-and-tokens.md`](menu_ui-patterns-and-tokens.md)** — Шаблоны интерфейса, конвенции Ant Design 6, табличные плотности, дизайн-токены и правила построения форм.
+- **[`menu_bill-cart-ux-requirements.md`](menu_bill-cart-ux-requirements.md)** — Спецификация интерфейса корзины биллинга: правила автовыбора лицензий, расчет задолженности, блокировки и логика продления.
 
 ---
 
@@ -40,11 +43,11 @@
 
 Взаимодействие с терминальными устройствами (киосками), протоколы связи, телеметрия и нативные утилиты:
 
-- **[`terminal-tools-architecture-guide.md`](terminal-tools-architecture-guide.md)** — Архитектура терминальных утилит (l4superv, l4pin, l4mon, l4gate, l4route): стек C/WinAPI, IPC-пайпы, шифрование и интеграция с Windows.
-- **[`terminal-tools-user-guide.md`](terminal-tools-user-guide.md)** — Руководство оператора и администратора по терминальным утилитам: Zero-to-Start, развертывание, конфигурирование и траблшутинг.
-- **[`terminal-apps-developer-guide.md`](terminal-apps-developer-guide.md)** — Руководство разработчика терминальных клиентских приложений: спецификации протоколов взаимодействия с локальным супервайзером.
-- **[`api-device-connection-and-audit.md`](api-device-connection-and-audit.md)** — Спецификация REST API состояния связи терминалов: структура объекта `connection`, фиксация клонов устройств (`DEVICE_CLONE`) и коллизий сертификатов (`SN_COLLISION`), журнал аудита жизненного цикла.
-- **[`schannel-mqtt-cert-store-guide.md`](schannel-mqtt-cert-store-guide.md)** — Руководство по организации mTLS для MQTT с использованием неэкспортируемых сертификатов из Windows Certificate Store через Python SChannel TLS Proxy.
+- **[`term_tool-architecture-guide.md`](term_tool-architecture-guide.md)** — Архитектура терминальных утилит (l4superv, l4pin, l4mon, l4gate, l4route): стек C/WinAPI, IPC-пайпы, шифрование и интеграция с Windows.
+- **[`term_tool-user-guide.md`](term_tool-user-guide.md)** — Руководство оператора и администратора по терминальным утилитам: Zero-to-Start, развертывание, конфигурирование и траблшутинг.
+- **[`term_tool-developer-guide.md`](term_tool-developer-guide.md)** — Руководство разработчика терминальных клиентских приложений: спецификации протоколов взаимодействия с локальным супервайзером.
+- **[`term_conn-device-connection-and-audit.md`](term_conn-device-connection-and-audit.md)** — Спецификация REST API состояния связи терминалов: структура объекта `connection`, фиксация клонов устройств (`DEVICE_CLONE`) и коллизий сертификатов (`SN_COLLISION`), журнал аудита жизненного цикла.
+- **[`term_conn-schannel-mqtt-cert-store.md`](term_conn-schannel-mqtt-cert-store.md)** — Руководство по организации mTLS для MQTT с использованием неэкспортируемых сертификатов из Windows Certificate Store через Python SChannel TLS Proxy.
 
 ---
 
@@ -52,10 +55,10 @@
 
 Регламенты развертывания, управления инфраструктурой и диагностических операций:
 
-- **[`devops-runbook.md`](devops-runbook.md)** — Регламент эксплуатации: инструкции по сборке и обновлению контейнеров, деплой на серверы, управление сертификатами, переключение legacy IIS и процедуры отката.
-- **[`nginx-config.md`](nginx-config.md)** — Справочник конфигурации Nginx: взаимная TLS-аутентификация (порт 4443), проксирование заголовков сертификатов, JWT-терминация (порт 443).
-- **[`infrastructure-and-migration-connections.md`](infrastructure-and-migration-connections.md)** — Инфраструктурный справочник: сетевые адреса серверов (`176.108.247.249`, `87.242.100.34`), порты, параметры БД и окружений.
-- **[`remote-console-diagnostics-flow.md`](remote-console-diagnostics-flow.md)** — Регламент удаленной диагностики терминалов и серверов через SSH, MQTT-каналы и операции с MCP Ops сервером (`server-ops`).
+- **[`ops_run-devops-runbook.md`](ops_run-devops-runbook.md)** — Регламент эксплуатации: инструкции по сборке и обновлению контейнеров, деплой на серверы, управление сертификатами, переключение legacy IIS и процедуры отката.
+- **[`ops_net-nginx-config-guide.md`](ops_net-nginx-config-guide.md)** — Справочник конфигурации Nginx: взаимная TLS-аутентификация (порт 4443), проксирование заголовков сертификатов, JWT-терминация (порт 443).
+- **[`ops_net-infrastructure-connections.md`](ops_net-infrastructure-connections.md)** — Инфраструктурный справочник: сетевые адреса серверов (`176.108.247.249`, `87.242.100.34`), порты, параметры БД и окружений.
+- **[`ops_run-remote-console-diagnostics.md`](ops_run-remote-console-diagnostics.md)** — Регламент удаленной диагностики терминалов и серверов через SSH, MQTT-каналы и операции с MCP Ops сервером (`server-ops`).
 
 ---
 
@@ -63,8 +66,9 @@
 
 Практические руководства для быстрого погружения в проект и эффективной работы:
 
-- **[`quickstart.md`](quickstart.md)** — Руководство по быстрому старту: развертывание локального окружения, запуск PostgreSQL, выполнение Alembic-миграций и тестирование API.
-- **[`ai-agent-reference.md`](ai-agent-reference.md)** — Справочник для ИИ-агентов: структура проекта, ключевые точки входа, стандарты кодирования (Python 3.14, SQLAlchemy 2.0 asyncpg, shared models), шаблоны частых изменений.
+- **[`etran_dev-documentation-naming-convention.md`](etran_dev-documentation-naming-convention.md)** — Стандарт именования файлов технической документации: формула префикса `{СФЕРА}_{ФЛОУ}-{имя}.md`, словарь мнемокодов и реестр.
+- **[`etran_dev-quickstart.md`](etran_dev-quickstart.md)** — Руководство по быстрому старту: развертывание локального окружения, запуск PostgreSQL, выполнение Alembic-миграций и тестирование API.
+- **[`etran_dev-ai-agent-reference.md`](etran_dev-ai-agent-reference.md)** — Справочник для ИИ-агентов: структура проекта, ключевые точки входа, стандарты кодирования (Python 3.14, SQLAlchemy 2.0 asyncpg, shared models), шаблоны частых изменений.
 
 ---
 

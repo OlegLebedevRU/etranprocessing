@@ -11,7 +11,7 @@
 - `ProcessingBackend` обслуживает доверенный терминальный трафик: идентификацию по mTLS-атрибутам, payment/tech-запросы, проверку активности и лицензии, выдачу меню, телеметрию и gauge-события.
 - `MenuBuilder` обслуживает людей и администраторов: JWT-аутентификацию, multi-tenant управление меню и каталогом, терминалами, организациями, биллингом, мониторингом, отчётами и IoT-интеграциями.
 - `shared/etranprocessing_db` является общим декларативным словарём данных, `shared/etranprocessing_gauge` — единым framework-independent deterministic gauge core, а `ProcessingBackend/backend/alembic` — единственной цепочкой изменения схемы.
-- PostgreSQL связывает оба контура транзакционными данными, RabbitMQ/MQTT — оперативными gauge-событиями, а внутренний Leo4 IoT API — состоянием устройств и диагностикой. Владение таблицами и допустимые cross-domain чтения зафиксированы в `docs/database-ownership.md`.
+- PostgreSQL связывает оба контура транзакционными данными, RabbitMQ/MQTT — оперативными gauge-событиями, а внутренний Leo4 IoT API — состоянием устройств и диагностикой. Владение таблицами и допустимые cross-domain чтения зафиксированы в `docs/etran_data-database-ownership.md`.
 
 Архитектура рационально разделяет machine-to-machine и human-facing нагрузки. После внедрения устранена неоднозначность владельца `ListMenuFile`, формализованы DB ownership и shared-schema rollout, а дублировавшийся gauge engine заменён общим пакетом; основной оставшийся источник связанности — общая PostgreSQL-схема.
 
@@ -127,7 +127,7 @@ Snapshots и распространение версии до binding дают �
 - `terminal.is_active` — административная доступность терминала;
 - `license.expires_at` — оплаченный срок обслуживания.
 
-`MenuBuilder` рассчитывает задолженность, режим renewal/restoration, прогноз и итог заказа. `ProcessingBackend` применяет состояние при terminal access. После Alembic migration `019` единственный контракт состояния — `terminal.is_active + license.expires_at`; `docs/billing-architecture.md` синхронизирован, а исторические упоминания `renewal_enabled` явно выведены из активного контракта.
+`MenuBuilder` рассчитывает задолженность, режим renewal/restoration, прогноз и итог заказа. `ProcessingBackend` применяет состояние при terminal access. После Alembic migration `019` единственный контракт состояния — `terminal.is_active + license.expires_at`; `docs/etran_bill-licensing-architecture.md` синхронизирован, а исторические упоминания `renewal_enabled` явно выведены из активного контракта.
 
 ### 4.4 Gauge и мониторинг
 
@@ -148,7 +148,7 @@ MenuBuilder обращается к Leo4 через internal API v1. Для ча
 
 ### Ограничения
 
-- Общая БД технически позволяет обращаться к таблицам другого домена; допустимые writers/readers и column-scoped co-writer исключения теперь зафиксированы в `docs/database-ownership.md`, но пока не обеспечиваются отдельными DB roles.
+- Общая БД технически позволяет обращаться к таблицам другого домена; допустимые writers/readers и column-scoped co-writer исключения теперь зафиксированы в `docs/etran_data-database-ownership.md`, но пока не обеспечиваются отдельными DB roles.
 - Изменение shared models требует согласованного развертывания обоих backend.
 - MenuBuilder reporting всё ещё содержит временные прямые read-only запросы к payment/telemetry доменам; теперь они локализованы в профильных routers и явно перечислены в ownership matrix.
 - Column/use-case ownership документирован, но следующий уровень enforcement — отдельные DB grants/owner APIs.
@@ -170,7 +170,7 @@ MenuBuilder обращается к Leo4 через internal API v1. Для ча
 |---|---|---|---|
 | Контролируется | Owner `/api/ListMenuFile` | Regression routing может вернуть endpoint в MenuBuilder | Owner закреплён за ProcessingBackend, exact locations и route ownership tests обязательны |
 | Высокий | Переходный `optional_no_ca` для terminal TLS | Криптографическая подлинность сертификата пока не гарантируется edge-слоем | Сохранить header sanitization/network isolation; отдельно вернуть strict CA validation после готовности цепочки сертификатов |
-| Высокий | Shared database enforcement только соглашениями | Ошибочная cross-domain запись остаётся технически возможной | Ввести отдельные DB roles/grants и owner APIs, следовать `docs/database-ownership.md` |
+| Высокий | Shared database enforcement только соглашениями | Ошибочная cross-domain запись остаётся технически возможной | Ввести отдельные DB roles/grants и owner APIs, следовать `docs/etran_data-database-ownership.md` |
 | Контролируется | Gauge core | Consumer может обойти общий package | Общие vectors, direct package imports и compatibility exports проверяются в CI |
 | Контролируется | MenuBuilder composition root | Новая прикладная логика может вернуться в `main.py` | `main.py` оставлять wiring-only; use cases размещать в routers/services/repositories |
 | Контролируется | JWT/certificate header contracts | Изменение nginx claims может разойтись с FastAPI | Канонические headers и spoofing/tenant tests обязательны |

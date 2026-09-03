@@ -28,7 +28,7 @@ etranprocessing is a payment processing backend for terminals/kiosks. It receive
 | `app/routers/payment.py` | `/api/payment/etran.ashx` |
 | `app/routers/tech_gate.py` | `/api/techgate/etran.ashx` |
 | `app/routers/licensebilling.py` | `/api/licensebilling/` |
-| `app/routers/billing.py` | `/api/billing/*` (summary, terminals, checkout, reactivate — see `docs/billing-architecture.md`) |
+| `app/routers/billing.py` | `/api/billing/*` (summary, terminals, checkout, reactivate — see `docs/etran_bill-licensing-architecture.md`) |
 | `app/routers/health.py` | `/api/health` |
 
 ### Services
@@ -36,7 +36,7 @@ etranprocessing is a payment processing backend for terminals/kiosks. It receive
 | File | Purpose |
 |------|---------|
 | `app/services/payment_service.py` | Payment business logic |
-| `app/services/billing.py` | Pure license-billing calculations (status machine, period/date math, forecast) — see `docs/billing-architecture.md` |
+| `app/services/billing.py` | Pure license-billing calculations (status machine, period/date math, forecast) — see `docs/etran_bill-licensing-architecture.md` |
 | `app/services/cert_billing.py` | Certificate PIN pricing/policy resolution |
 
 ## Common Tasks
@@ -163,6 +163,7 @@ asyncio.run(test())
 - URL-decode request parameters (`+` = space, `%3b` = `;`)
 - Default prototypenumber is 99000 if not found
 - Payment API is idempotent by `paym_ext_id`
+- **Documentation naming convention**: All technical docs in `docs/` must use the standard prefix `{СФЕРА}_{ФЛОУ}-{name}.md` (see `docs/etran_dev-documentation-naming-convention.md`). Always register new docs in `docs/README.md`.
 
 ## Legacy Reference
 

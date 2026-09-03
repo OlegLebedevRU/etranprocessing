@@ -76,9 +76,9 @@ Detailed backend code standards, architecture rules, and patterns are documented
 ## L4 Tools Suite & Terminal Architecture Rules
 
 Comprehensive architectural specifications, orchestration principles, REST-RPC integration protocols, and development guidelines for creating and modifying tools in `tools/` are documented in:
-- **[`docs/terminal-tools-architecture-guide.md`](docs/terminal-tools-architecture-guide.md)** — Architectural blueprint, orchestration principles, REST-RPC integration flow, and step-by-step guideline for adding new native tools to L4 Suite.
-- **[`docs/remote-console-diagnostics-flow.md`](docs/remote-console-diagnostics-flow.md)** — Remote web console and diagnostic agent protocol, MQTT topic matrix, RPC methods (`7001` Exec, `7002` Cancel, `7003` Ping), and E2E test cases.
-- **[`docs/terminal-tools-user-guide.md`](docs/terminal-tools-user-guide.md)** — User guide and operational manual for engineers.
+- **[`docs/term_tool-architecture-guide.md`](docs/term_tool-architecture-guide.md)** — Architectural blueprint, orchestration principles, REST-RPC integration flow, and step-by-step guideline for adding new native tools to L4 Suite.
+- **[`docs/ops_run-remote-console-diagnostics.md`](docs/ops_run-remote-console-diagnostics.md)** — Remote web console and diagnostic agent protocol, MQTT topic matrix, RPC methods (`7001` Exec, `7002` Cancel, `7003` Ping), and E2E test cases.
+- **[`docs/term_tool-user-guide.md`](docs/term_tool-user-guide.md)** — User guide and operational manual for engineers.
 
 ### Key Rules for Tools Development (`tools/`):
 1. **Isolated Subdirectory Model**: Every tool in `C:\l4tools` resides in its own isolated subfolder (e.g. `C:\l4tools\l4sql\l4sql.exe`, `C:\l4tools\l4con\l4con.exe`).
@@ -157,7 +157,7 @@ In `ProcessingBackend/nginx-mutual-legacy/nginx-configs/legacy_ssl.conf`, indivi
 
 ## Certificate Architecture & Terminal mTLS Rules
 
-Comprehensive documentation for the certificate subsystem, mTLS proxying, native C tools, and verification scripts is in **[`docs/certificate-architecture.md`](docs/certificate-architecture.md)**.
+Comprehensive documentation for the certificate subsystem, mTLS proxying, native C tools, and verification scripts is in **[`docs/etran_cert-infrastructure-architecture.md`](docs/etran_cert-infrastructure-architecture.md)**.
 
 ### Key Rules for Certificate Management:
 1. **Serial Number Update Invariant**:
@@ -170,10 +170,10 @@ Comprehensive documentation for the certificate subsystem, mTLS proxying, native
    - When generating keys in CNG KSP (`ncrypt.dll`), private keys are non-exportable (`NCRYPT_EXPORT_POLICY_PROPERTY = 0`).
    - In `CRYPT_KEY_PROV_INFO`, `dwKeySpec` **must be `0`** (not `0xFFFFFFFF`) for Windows Schannel / SSPI compatibility (`AcquireCredentialsHandleW`).
 4. **PowerShell mTLS Verification**:
-   - Use `[System.Net.HttpWebRequest]` with `$req.ClientCertificates.Add($cert)` to test terminal mTLS endpoints directly from Windows (see full scripts in `docs/certificate-architecture.md`).
+   - Use `[System.Net.HttpWebRequest]` with `$req.ClientCertificates.Add($cert)` to test terminal mTLS endpoints directly from Windows (see full scripts in `docs/etran_cert-infrastructure-architecture.md`).
 5. **Terminal Verification Registry & Discovery Audit**:
    - The state of all terminals is tracked in real-time by joining `terminal_cert_discovery` + `terminals` + `org_statuses` + `licenses`.
-   - When migrating endpoints to the new backend, execute the verification audit script from `docs/certificate-architecture.md §6.3` to inspect all connected terminals.
+   - When migrating endpoints to the new backend, execute the verification audit script from `docs/etran_cert-infrastructure-architecture.md §6.3` to inspect all connected terminals.
    - Do not turn an audit finding into an automatic data import. Reconciliation requires an explicit migration task, reviewed source data, an idempotent script, and post-migration verification.
 
 ## Deployment invariants
@@ -311,7 +311,7 @@ Normal shutdown:
 
 ## Remote Diagnostics & Web Console Flow Rules (Правила разработки удалённой консоли и диагностики)
 
-Полная сквозная спецификация архитектуры, взаимодействия компонентов и матрицы топиков зафиксирована в **[`docs/remote-console-diagnostics-flow.md`](docs/remote-console-diagnostics-flow.md)**.
+Полная сквозная спецификация архитектуры, взаимодействия компонентов и матрицы топиков зафиксирована в **[`docs/ops_run-remote-console-diagnostics.md`](docs/ops_run-remote-console-diagnostics.md)**.
 
 ### 1. Обязательное следование спецификации
 Все AI-агенты при любой разработке, рефакторинге, добавлении функционала или отладке компонентов подсистемы удалённой диагностики и веб-консоли:
@@ -320,13 +320,13 @@ Normal shutdown:
 - Client / Agent: `tools/l4con`
 - MQTT Broker / Routing
 
-**ОБЯЗАНЫ** строго следовать правилам протокола `iot-rpc-rest-app` и документу `docs/remote-console-diagnostics-flow.md`:
+**ОБЯЗАНЫ** строго следовать правилам протокола `iot-rpc-rest-app` и документу `docs/ops_run-remote-console-diagnostics.md`:
 - Строго соблюдать матрицу топиков: Server ➔ Device (`srv/<SN>/tsk`, `srv/<SN>/rsp`), Device ➔ Server (`dev/<SN>/req`, `dev/<SN>/res`, `dev/<SN>/out`, `dev/<SN>/svc`).
 - Категорически запрещено создавать произвольные топики (`srv/<SN>/cmd`, `dev/<SN>/ctrl` и т.д.).
 - Использовать регламентированные методы `7001` (`CMD_DIAG_EXEC`) и `7002` (`CMD_DIAG_CANCEL`).
 
 ### 2. Актуализация спецификации
-Обновляйте `docs/remote-console-diagnostics-flow.md` в той же задаче, которая намеренно меняет утверждённый протокол, форматы сообщений или ответственность компонентов. Обычная благодарность или подтверждение пользователя не является отдельным запросом на изменение файлов.
+Обновляйте `docs/ops_run-remote-console-diagnostics.md` в той же задаче, которая намеренно меняет утверждённый протокол, форматы сообщений или ответственность компонентов. Обычная благодарность или подтверждение пользователя не является отдельным запросом на изменение файлов.
 
 ---
 
@@ -356,3 +356,28 @@ AI-агентам **СТРОГО ЗАПРЕЩЕНО** напрямую изме�
 Поддерживайте `CHANGELOG.md` соответствующего подпроекта для пользовательских, протокольных, архитектурных и других release-significant изменений. Внутренние правки без наблюдаемого эффекта не требуют записи.
 
 Фиксируйте итоговое состояние по разделам `Added`, `Changed`, `Fixed`, `Deprecated`, `Removed`; не превращайте changelog в перечень промежуточных действий или коммитов. Дату и версию финализируйте только в рамках явной release/versioning задачи либо принятого проектом процесса, а не по ключевым словам в сообщениях пользователя.
+
+---
+
+## Documentation Naming Convention & Structure Rules (Правила именования и структуры документации)
+
+Все активные документы в каталоге `docs/` обязаны строго именоваться по стандарту двух мнемокодов с разделителем:
+👉 **[`docs/etran_dev-documentation-naming-convention.md`](docs/etran_dev-documentation-naming-convention.md)**
+
+### 1. Формула префикса имени файла
+```text
+{СФЕРА}_{ФЛОУ}-{дескриптивное-имя}.md
+```
+- **Мнемокод 1 (`СФЕРА`)**:
+  - `etran` — общесистемный контур (сквозная архитектура, общая БД, стандарты платформы)
+  - `proc` — подпроект `ProcessingBackend`
+  - `menu` — подпроект `MenuBuilder`
+  - `term` — терминалы, киоски, утилиты L4 Suite
+  - `ops` — DevOps, Nginx, серверная инфраструктура, развертывание
+- **Мнемокод 2 (`ФЛОУ`)**:
+  - `arch` (архитектура), `data` (БД и модели), `auth` (аутентификация/JWT), `bill` (биллинг), `cert` (сертификаты/mTLS), `pay` (платежный процессинг), `ui` (фронтенд), `tool` (утилиты киосков), `conn` (связь и аудит устройств), `net` (сеть/прокси), `run` (эксплуатация/ранбуки), `dev` (руководства разработчика).
+
+### 2. Обязанности AI-агентов:
+1. **Строгое соответствие префиксов**: Любой новый документ технической документации в `docs/` обязан создаваться с префиксом `{СФЕРА}_{ФЛОУ}-`. Создание файлов без префикса запрещено.
+2. **Синхронизация с реестром**: Каждый новый или переименованный документ должен быть немедленно зарегистрирован в **[`docs/README.md`](docs/README.md)**.
+3. **Изоляция истории активной разработки**: Архивные материалы, промежуточные аудиты и черновики хранятся строго в **`docs/history/`** и не переименовываются по этому стандарту для сохранения исторического контекста.
