@@ -152,7 +152,7 @@ class DatabaseUserStore(AbstractUserStore):
         token_hash = hash_refresh_token(refresh_token)
         expires_at = datetime.now(UTC) + timedelta(seconds=expires_in_seconds)
 
-        if self._db_available:
+        if self._db_available and user_id and user_id > 0:
             try:
                 async with async_session() as session:
                     db_session = UserSession(
@@ -171,7 +171,6 @@ class DatabaseUserStore(AbstractUserStore):
                     return db_session
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Database error creating session: %s", exc)
-                self._db_available = False
 
         # In-memory fallback for offline test environments
         sess_id = self._session_seq

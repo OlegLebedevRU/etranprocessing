@@ -29,6 +29,10 @@ from app.routers import (
 from app.services.gauge_bus import gauge_mqtt_bus
 from app.user_store import get_user_store
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
 logger = logging.getLogger(__name__)
 
 

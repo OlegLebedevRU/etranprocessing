@@ -480,3 +480,39 @@
 ### Что осталось:
 - Шаг 11/12 (Фаза D): Деплой и smoke.
 - Шаг 14 (Фаза E): Документация.
+
+---
+
+## Шаг 11/12. Предпроверка деплоя, деплой и smoke-тестирование на проде
+
+**Дата:** 2026-09-03  
+**Статус:** Выполнен  
+
+### Что выполнено:
+1. Предпроверка окружения и протокол готовности:
+   - Объявлен статус протокола MCP: `[MCP Ops Readiness: UNAVAILABLE]`, выполнен штатный non-blocking fallback на SSH-транспорт (`user1@176.108.247.249`, ключ `d:\.ssh\free-tier-cloud_ru`).
+   - Ресурсы сервера проверены: доступная RAM 2132 MiB (>300 MiB threshold), диск 45% (<90%), load average 0.00 (<2.0).
+   - Конфигурация: `JWT_ISSUER_MOCK_ENABLED=False` (по умолчанию), `jwt_verify_audience=True`, `jwt_issuer_aud=menubuilder`, `jwt_issuer_iss=external-jwt-issuer`, TTL 60 мин (3600 с) / 30 дней (2592000 с).
+   - Секрет `SERVICE_TO_YC_SERVICE_SECRET` проверен вызовом к живой Yandex Cloud Function: получен статус HTTP 200, токен RS256 валидируется публичным ключом бэкенда.
+2. База данных и миграции Alembic:
+   - Миграция `021_add_session_active_org_and_user_last_org` перенесена в контейнер `processing-backend`.
+   - Выполнен `alembic upgrade head` на проде; статус миграций обновлен до `021 (head)`: добавлены колонки `user_sessions.active_org_id` (с индексом) и `users.last_org_id`.
+3. Сборка и деплой:
+   - Обновленные модели `shared/etranprocessing_db` синхронизированы на сервер.
+   - Собран production-бандл фронтенда `MenuBuilder/frontend` (`dist/`) и скопирован в bind-mount каталог на сервере; выполнен `nginx -s reload`.
+   - Контейнер `menubuilder-backend` пересобран (`docker compose build --no-cache menubuilder-backend`) и перезапущен (`docker compose up -d --no-deps menubuilder-backend`).
+   - Настроено логирование `logging.basicConfig(level=logging.INFO)` в `main.py` для отображения таймингов issuer'а и аудита имперсонации в docker logs.
+4. Результаты smoke-тестирования на проде:
+   - a. Логин обычного пользователя `test` -> 200 OK, в `/auth/me` флаги `can_switch_org=False`, `is_superuser=False` (нет `OrgSwitcher`).
+   - b. Логин суперюзера `o.lebedev` -> 200 OK, куки `accessToken` и `refreshToken` выставлены, `/auth/me` показывает `username: o.lebedev`, `is_superuser: True`.
+   - c. Переключение в тенант через `POST /api/auth/switch-tenant` `{org_id: 522}` -> 200 OK, ответ содержит `org_id: 522`, `is_impersonated: True`, выдан новый токен с claim `sid: "225"`.
+   - d. Сохранение контекста при обновлении (F5): фоновый запрос `POST /api/auth/refresh` -> 200 OK, `expires_in: 3600`, сессия в БД ротируется на месте (`id=225`, строка не дублируется), `/auth/me` сохраняет активный тенант 522 и статус имперсонации.
+   - e. Межвкладочная синхронизация поддерживается через `BroadcastChannel("tenant-sync")` сообщением `tenant-switched`.
+   - f. Раздел администрирования доступен из тенанта: `GET /api/admin/tenants/available` -> 200 OK (51 организация).
+   - g. Логи backend фиксируют:
+     - `jwt issuer call user_id=1 org_id=522 took=...` (вызывается строго при login/switch/refresh).
+     - `audit impersonated action user=o.lebedev orig_sub=o.lebedev org=522 method=POST path=/api/auth/switch-tenant` на мутирующих действиях суперюзера в тенанте.
+   - h. Проверка безопасности: запрос изнутри сети с HS256-токеном, подписанным `mock_secret`, на `GET /api/auth/me` возвращает `401 Unauthorized` (HS256 gate надежно заблокирован).
+
+### Что осталось:
+- Шаг 14 (Фаза E): Документация.
