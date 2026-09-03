@@ -17,7 +17,7 @@ etranprocessing is a payment processing backend for terminals/kiosks. It receive
 | `app/main.py` | FastAPI app setup | Router registration |
 | `app/config.py` | Settings from .env | `DATABASE_URL`, `CORS_ORIGINS` |
 | `app/database.py` | SQLAlchemy engine | `get_db()` dependency |
-| `app/models.py` | Database models | `Terminal`, `Payment`, `Tsp`, etc. |
+| `shared/etranprocessing_db` | Shared database models (re-exported in `app/models.py`) | `Terminal`, `Payment`, `Tsp`, etc. |
 | `app/dependencies.py` | Auth dependencies | `get_current_terminal()` |
 | `app/logging_config.py` | Payment logger | `payment_logger` |
 
@@ -45,13 +45,13 @@ etranprocessing is a payment processing backend for terminals/kiosks. It receive
 
 1. Create/edit router in `app/routers/`
 2. Add router to `app/main.py`
-3. Create model in `app/models.py` if needed
+3. Add or update model in `shared/etranprocessing_db` (or alias in `app/models.py`) if needed
 4. Create migration in `alembic/versions/`
 
 ### Add New Database Table
 
-1. Add model to `app/models.py`
-2. Create migration script
+1. Add model to `shared/etranprocessing_db`
+2. Create migration script in `alembic/versions/`
 3. Run migration on server
 
 ### Modify Payment Flow
@@ -66,7 +66,7 @@ etranprocessing is a payment processing backend for terminals/kiosks. It receive
 
 ```python
 from sqlalchemy import select
-from app.models import Terminal
+from etranprocessing_db import Terminal
 
 async def get_terminal(db: AsyncSession, sn: str) -> Optional[Terminal]:
     result = await db.execute(
@@ -112,7 +112,7 @@ terminals ←── payments → orgs
 
 ## Environment
 
-- **Python**: 3.12+ (container)
+- **Python**: 3.14 (requires-python = "==3.14.*")
 - **FastAPI**: 0.141+
 - **SQLAlchemy**: 2.0+
 - **PostgreSQL**: 15

@@ -1,6 +1,6 @@
 # Certificates Service — Flow & Architecture
 
-> **Authoritative Architecture Reference**: See **[`docs/certificate-architecture.md`](../../docs/certificate-architecture.md)** for complete end-to-end mTLS reverse proxy routing, dual-issuer authentication rules, native C tooling (`tools/terminal-cert-installer`), and PowerShell testing scripts.
+> **Authoritative Architecture Reference**: See **[`docs/certificate-architecture.md`](certificate-architecture.md)** for complete end-to-end mTLS reverse proxy routing, dual-issuer authentication rules, native C tooling (`tools/terminal-cert-installer`), and PowerShell testing scripts.
 
 ## Overview
 
@@ -10,7 +10,7 @@ Certificates service handles terminal certificate enrollment via two legacy-comp
 
 PIN is pre-allocated in `certificate_pins` table via the organizational billing flow —
 see [PIN-driven organizational billing](#pin-driven-organizational-billing) below and
-[`docs/billing-certificate-licensing-analysis/ANALYSIS.md`](../docs/billing-certificate-licensing-analysis/ANALYSIS.md).
+[`docs/history/planning-and-research/billing-cert-licensing-analysis-2026-08-18.md`](history/planning-and-research/billing-cert-licensing-analysis-2026-08-18.md).
 External CA is a Yandex Cloud Functions serverless function called over HTTPS.
 Terminal does NOT have a client certificate during enrollment — auth is purely PIN-based.
 
@@ -268,7 +268,7 @@ CREATE INDEX idx_terminal_cert_history_terminal ON terminal_cert_history (termin
 
 ## PIN-driven organizational billing
 
-Full analysis: [`docs/billing-certificate-licensing-analysis/ANALYSIS.md`](../docs/billing-certificate-licensing-analysis/ANALYSIS.md).
+Full analysis: [`docs/history/planning-and-research/billing-cert-licensing-analysis-2026-08-18.md`](history/planning-and-research/billing-cert-licensing-analysis-2026-08-18.md).
 
 Key rule: **payment/checkout never calls the CA.** `sign_csr()` remains the only CA call site,
 invoked exclusively from this router's `setup` handler. The billing subject is the

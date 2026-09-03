@@ -16,7 +16,7 @@ Each **terminal** has, independently:
   `monthly_price_override_minor`).
 - A **certificate** (`cert_serial`, `cert_not_valid_after`, plus a
   `CertificatePin` PIN-issue workflow — see
-  `ProcessingBackend/docs/certificates-flow.md`).
+  `docs/certificates-flow.md`).
 
 Both are billed **independently** and can be paid for in the same checkout
 (`CheckoutRequest.items[].include_license` / `include_cert_pin`), but the math

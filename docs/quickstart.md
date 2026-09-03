@@ -92,16 +92,16 @@ sudo docker exec processing-backend tail -f /app/log/payment.log
 
 ### Key Files to Read
 
-1. `app/models.py` - Database schema
+1. `shared/etranprocessing_db` (`app/models.py`) - Database schema and models
 2. `app/routers/payment.py` - Payment endpoints
 3. `app/services/payment_service.py` - Business logic
 4. `app/dependencies.py` - Authentication
 
 ### Common Modifications
 
-**Add new field to Payment:**
-1. Edit `app/models.py` - add column
-2. Create migration script
+**Add new field to Model:**
+1. Edit `shared/etranprocessing_db/models/...` - add column
+2. Create migration script in `alembic/versions/`
 3. Run migration on server
 
 **Add new endpoint:**
@@ -176,7 +176,9 @@ curl -X POST https://dev.leo4.ru:4443/api/payment/etran.ashx \
 
 ## More Documentation
 
-- [Architecture Overview](README.md)
+- [Documentation Index](README.md)
+- [ProcessingBackend Overview](processing-backend.md)
+- [Architecture Overview](etranprocessing-architecture-analysis.md)
 - [Nginx Configuration](nginx-config.md)
 - [DevOps Runbook](devops-runbook.md)
 - [AI Agent Reference](ai-agent-reference.md)
