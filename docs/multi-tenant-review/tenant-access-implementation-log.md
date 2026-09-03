@@ -441,3 +441,42 @@
 - Шаг 13 (Фаза C): Ротация сессии на месте.
 - Шаг 11/12 (Фаза D): Деплой и smoke.
 - Шаг 14 (Фаза E): Документация.
+
+---
+
+## Шаг 13. Ротация сессии на месте и фоновая очистка просроченных сессий
+
+**Дата:** 2026-09-03  
+**Статус:** Выполнен  
+
+### Что изменено:
+1. `app/user_store.py`:
+   - Реализован метод `DatabaseUserStore.rotate_session(session_id: int, new_refresh_token: str, expires_in_seconds: int) -> None`:
+     - Обновляет ту же строку в таблице `user_sessions`: `refresh_token`, `refresh_token_hash`, `expires_at`, `last_used_at`.
+     - Значение `active_org_id` и первичный ключ `session.id` (`sid`) остаются неизменными на протяжении всей жизни сессии.
+     - In-memory fallback: перекладывает запись под новый хэш с сохранением того же `id`.
+   - Реализован метод `DatabaseUserStore.cleanup_expired_sessions() -> int`:
+     - Выполняет запрос `DELETE FROM user_sessions WHERE (is_revoked AND created_at < now()-7d) OR expires_at < now()-7d`.
+2. `app/routers/auth.py::refresh_token`:
+   - Блок `revoke_session_by_token + create_session` заменен на вызов `store.rotate_session(session.id, new_refresh_token, refresh_expires_in)`.
+   - Сессия пользователя больше не плодится при периодических запросах refresh.
+3. `app/config.py`:
+   - Добавлен флаг `session_cleanup_enabled: bool = True`.
+   - В тестах (`tests/conftest.py`) флаг выключен по умолчанию.
+4. `app/main.py::lifespan`:
+   - Добавлена фоновая задача `_cleanup_expired_sessions_task`: при включенном `session_cleanup_enabled` раз в 6 часов выполняет очистку устаревших сессий с логированием результата и перехватом ошибок. Корректно отменяется при завершении приложения.
+5. Тесты:
+   - В `tests/test_tenant_switch.py`:
+     - Добавлен тест `test_step13_sequential_refresh_preserves_session_id_and_active_org`: 3 последовательных вызова `/api/auth/refresh` подтверждают, что количество сессий не растет, `session.id` (`sid`) не меняется, а `active_org_id=223` надежно сохраняется в access-токене.
+     - Добавлен тест `test_step13_cleanup_expired_sessions`: подтверждено удаление отозванных (>7 дней) и просроченных (>7 дней) сессий и сохранение активных.
+
+### Что проверено:
+- `pytest` (`MenuBuilder/backend`): 201 passed за 50.46s (все 201 тестов зелёные).
+- `ruff check .` (`MenuBuilder/backend`): All checks passed.
+- `ruff format --check .` (`MenuBuilder/backend`): All files formatted.
+- `pyright .` (`MenuBuilder/backend`): 0 errors, 0 warnings.
+- `npm run build` (`MenuBuilder/frontend`): сборка успешна (44.03s).
+
+### Что осталось:
+- Шаг 11/12 (Фаза D): Деплой и smoke.
+- Шаг 14 (Фаза E): Документация.

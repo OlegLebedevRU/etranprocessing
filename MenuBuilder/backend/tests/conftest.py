@@ -18,3 +18,4 @@ os.environ.setdefault(
 from app.config import settings
 
 settings.jwt_issuer_mock_enabled = True
+settings.session_cleanup_enabled = False

@@ -324,6 +324,87 @@ class DatabaseUserStore(AbstractUserStore):
                 if s["id"] == session_id:
                     s["last_used_at"] = datetime.now(UTC)
 
+    async def rotate_session(
+        self,
+        session_id: int,
+        new_refresh_token: str,
+        expires_in_seconds: int,
+    ) -> None:
+        token_hash = hash_refresh_token(new_refresh_token)
+        now = datetime.now(UTC)
+        expires_at = now + timedelta(seconds=expires_in_seconds)
+
+        if self._db_available:
+            try:
+                async with async_session() as session:
+                    await session.execute(
+                        update(UserSession)
+                        .where(UserSession.id == session_id)
+                        .values(
+                            refresh_token=new_refresh_token[:250],
+                            refresh_token_hash=token_hash,
+                            expires_at=expires_at,
+                            last_used_at=now,
+                        )
+                    )
+                    await session.commit()
+                    return
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "Database error rotating session %s: %s", session_id, exc
+                )
+                self._db_available = False
+
+        old_hash = None
+        target_dict = None
+        for h, s in self._in_memory_sessions.items():
+            if s["id"] == session_id:
+                old_hash = h
+                target_dict = s
+                break
+
+        if target_dict and old_hash:
+            del self._in_memory_sessions[old_hash]
+            target_dict["refresh_token"] = new_refresh_token[:250]
+            target_dict["refresh_token_hash"] = token_hash
+            target_dict["expires_at"] = expires_at
+            target_dict["last_used_at"] = now
+            self._in_memory_sessions[token_hash] = target_dict
+
+    async def cleanup_expired_sessions(self) -> int:
+        cutoff = datetime.now(UTC) - timedelta(days=7)
+        if self._db_available:
+            try:
+                from sqlalchemy import delete
+
+                async with async_session() as session:
+                    result = await session.execute(
+                        delete(UserSession).where(
+                            (
+                                UserSession.is_revoked.is_(True)
+                                & (UserSession.created_at < cutoff)
+                            )
+                            | (UserSession.expires_at < cutoff)
+                        )
+                    )
+                    await session.commit()
+                    return int(getattr(result, "rowcount", 0) or 0)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Database error cleaning up expired sessions: %s", exc)
+                self._db_available = False
+
+        to_del = [
+            h
+            for h, s in self._in_memory_sessions.items()
+            if (
+                s.get("is_revoked") and s.get("created_at") and s["created_at"] < cutoff
+            )
+            or (s.get("expires_at") and s["expires_at"] < cutoff)
+        ]
+        for h in to_del:
+            self._in_memory_sessions.pop(h, None)
+        return len(to_del)
+
     async def revoke_session_by_token(self, refresh_token: str) -> bool:
         token_hash = hash_refresh_token(refresh_token)
         try:

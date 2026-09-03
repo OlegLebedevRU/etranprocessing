@@ -341,22 +341,12 @@ async def refresh_token(
         or settings.jwt_refresh_expire_days * 86400
     )
 
-    # Touch session or rotate
+    # Rotate session in-place or touch existing session
     if new_refresh_token != refresh_token_val:
-        await store.revoke_session_by_token(refresh_token_val)
-        client_ip = (
-            request.headers.get("X-Real-IP")
-            or request.headers.get("X-Forwarded-For")
-            or (request.client.host if request.client else None)
-        )
-        user_agent = request.headers.get("User-Agent")
-        await store.create_session(
-            user_id=user.id,
-            refresh_token=new_refresh_token,
-            ip_address=client_ip,
-            user_agent=user_agent,
+        await store.rotate_session(
+            session_id=session.id,
+            new_refresh_token=new_refresh_token,
             expires_in_seconds=refresh_expires_in,
-            active_org_id=effective_org_id,
         )
     else:
         await store.touch_session(session.id)

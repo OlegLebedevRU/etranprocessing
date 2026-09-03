@@ -1,4 +1,6 @@
-from contextlib import asynccontextmanager
+import asyncio
+import logging
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,13 +27,39 @@ from app.routers import (
     terminal_bindings,
 )
 from app.services.gauge_bus import gauge_mqtt_bus
+from app.user_store import get_user_store
+
+logger = logging.getLogger(__name__)
+
+
+async def _cleanup_expired_sessions_task() -> None:
+    """Background task running every 6 hours to clean up expired/revoked sessions."""
+    while True:
+        try:
+            await asyncio.sleep(6 * 3600)
+            store = get_user_store()
+            deleted = await store.cleanup_expired_sessions()
+            logger.info("Background session cleanup removed %d sessions", deleted)
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Error in background session cleanup: %s", exc)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     gauge_mqtt_bus.start()
-    yield
-    gauge_mqtt_bus.stop()
+    cleanup_task: asyncio.Task | None = None
+    if settings.session_cleanup_enabled:
+        cleanup_task = asyncio.create_task(_cleanup_expired_sessions_task())
+    try:
+        yield
+    finally:
+        if cleanup_task is not None:
+            cleanup_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await cleanup_task
+        gauge_mqtt_bus.stop()
 
 
 app = FastAPI(title="MenuBuilder API", version="0.2.0", lifespan=lifespan)

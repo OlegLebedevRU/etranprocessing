@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     jwt_issuer_timeout_seconds: float = 10.0
     jwt_issuer_mock_enabled: bool = False
     jwt_issuer_token_cache_enabled: bool = False
+    session_cleanup_enabled: bool = True
 
     # Legacy auth users fallback
     auth_users: str = "[]"

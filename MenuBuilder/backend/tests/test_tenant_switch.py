@@ -20,7 +20,12 @@ from app.config import settings
 from app.main import app
 from app.models import Org
 from app.services.jwt_issuer import jwt_issuer_client
-from app.user_store import ConfigUserStore, UserRecord, get_user_store
+from app.user_store import (
+    ConfigUserStore,
+    UserRecord,
+    get_user_store,
+    hash_refresh_token,
+)
 
 
 def _request_with_headers(headers: dict[str, str]) -> Request:
@@ -962,3 +967,128 @@ async def test_step9_is_imp_derived_for_v1_token():
         req_plat, HTTPAuthorizationCredentials(scheme="Bearer", credentials=token_plat)
     )
     assert user_plat["is_impersonated"] is False
+
+
+@pytest.mark.anyio
+async def test_step13_sequential_refresh_preserves_session_id_and_active_org():
+    """Verify Step 13 requirements:
+    3 sequential refresh calls -> user_sessions count does not grow, session.id is identical, active_org_id is preserved (223).
+    """
+    store = get_user_store()
+    user = await store.get_by_username("o.lebedev")
+    assert user is not None
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        # 1. Login superuser
+        login_resp = await client.post(
+            "/api/auth/login",
+            json={
+                "username": "o.lebedev",
+                "password": "eaf21fcabcffeb1f97f01a4fc02ece63",
+            },
+        )
+        assert login_resp.status_code == 200
+        cookies = dict(login_resp.cookies)
+
+        # 2. Switch to org 223
+        mock_target_org = Org(
+            org_id=223,
+            org_name="DEMO Company",
+            name="DEMO Company",
+            status=1,
+            is_active=True,
+        )
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_target_org
+        mock_session.execute.return_value = mock_result
+
+        with patch("app.routers.admin_tenants.async_session") as mock_async_session:
+            mock_async_session.return_value.__aenter__.return_value = mock_session
+            switch_resp = await client.post(
+                "/api/auth/switch-tenant",
+                json={"org_id": 223},
+                cookies=cookies,
+                headers={"X-Requested-With": "XMLHttpRequest"},
+            )
+            assert switch_resp.status_code == 200
+
+        cookies.update(dict(switch_resp.cookies))
+
+        # Initial session lookup
+        init_session = await store.get_session_by_refresh_token(cookies["refreshToken"])
+        assert init_session is not None
+        initial_sid = init_session.id
+        assert init_session.active_org_id == 223
+
+        initial_session_count = len(store._in_memory_sessions)
+
+        # Perform 3 sequential refreshes
+        for i in range(1, 4):
+            ref_resp = await client.post(
+                "/api/auth/refresh",
+                cookies=cookies,
+                headers={"X-Requested-With": "XMLHttpRequest"},
+            )
+            assert ref_resp.status_code == 200, f"Refresh {i} failed: {ref_resp.text}"
+            cookies.update(dict(ref_resp.cookies))
+
+            # Verify session count did NOT increase
+            assert len(store._in_memory_sessions) == initial_session_count
+
+            # Verify session was rotated in-place with the exact same id and active_org_id
+            curr_session = await store.get_session_by_refresh_token(
+                cookies["refreshToken"]
+            )
+            assert curr_session is not None
+            assert curr_session.id == initial_sid
+            assert curr_session.active_org_id == 223
+
+            # Verify access token claims contain sid and orgId=223
+            data = ref_resp.json()
+            claims = decode_token(data["access_token"])
+            assert claims["sid"] == initial_sid
+            assert claims["orgId"] == 223
+
+
+@pytest.mark.anyio
+async def test_step13_cleanup_expired_sessions():
+    """Verify cleanup_expired_sessions removes revoked and old expired sessions."""
+    store = get_user_store()
+    now = datetime.now(UTC)
+    old_time = now - timedelta(days=10)
+
+    # 1. Create a revoked session older than 7 days
+    await store.create_session(
+        user_id=1,
+        refresh_token="old_revoked_token",
+        expires_in_seconds=3600,
+    )
+    s1_hash = hash_refresh_token("old_revoked_token")
+    store._in_memory_sessions[s1_hash]["is_revoked"] = True
+    store._in_memory_sessions[s1_hash]["created_at"] = old_time
+
+    # 2. Create an expired session older than 7 days
+    await store.create_session(
+        user_id=1,
+        refresh_token="old_expired_token",
+        expires_in_seconds=3600,
+    )
+    s2_hash = hash_refresh_token("old_expired_token")
+    store._in_memory_sessions[s2_hash]["expires_at"] = old_time
+
+    # 3. Create an active session
+    await store.create_session(
+        user_id=1,
+        refresh_token="active_token",
+        expires_in_seconds=3600,
+    )
+    s3_hash = hash_refresh_token("active_token")
+
+    deleted = await store.cleanup_expired_sessions()
+    assert deleted >= 2
+    assert s1_hash not in store._in_memory_sessions
+    assert s2_hash not in store._in_memory_sessions
+    assert s3_hash in store._in_memory_sessions
