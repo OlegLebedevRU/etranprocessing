@@ -40,10 +40,12 @@ if /i "%TARGET_ARCH%"=="all" goto :build_all
 if /i "%TARGET_ARCH%"=="x86" goto :build_x86
 if /i "%TARGET_ARCH%"=="32" goto :build_x86
 if /i "%TARGET_ARCH%"=="win32" goto :build_x86
+if /i "%TARGET_ARCH%"=="win7" goto :build_x86
+if /i "%TARGET_ARCH%"=="win7_x86" goto :build_x86
 if /i "%TARGET_ARCH%"=="x64" goto :build_x64
 if /i "%TARGET_ARCH%"=="64" goto :build_x64
 
-echo Unknown architecture "%TARGET_ARCH%". Valid options: all, x86, x64
+echo Unknown architecture "%TARGET_ARCH%". Valid options: all, x86, win7, x64
 exit /b 1
 
 :build_all
@@ -61,8 +63,8 @@ goto :summary
 
 :do_build_x86
 echo.
-echo [Build x86] 32-bit static binaries...
-cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\l4superv.res res\l4superv.rc && rc.exe /nologo /fo obj\x86\l4install.res res\l4install.rc && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x86\ src\supervisor_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\proxy_client.c src\orchestrator.c obj\x86\l4superv.res /link /OUT:bin\x86\l4superv.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x86\ src\installer_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\miniz.c src\zip_extractor.c obj\x86\l4install.res /link /OUT:bin\x86\l4install_x86.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib shell32.lib"
+echo [Build x86] 32-bit static binaries (Windows 7 SP1+ compatible)...
+cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\l4superv.res res\l4superv.rc && rc.exe /nologo /fo obj\x86\l4install.res res\l4install.rc && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_WIN32_WINNT=0x0601 /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x86\ src\supervisor_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\proxy_client.c src\orchestrator.c obj\x86\l4superv.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\l4superv.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_WIN32_WINNT=0x0601 /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x86\ src\installer_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\miniz.c src\zip_extractor.c obj\x86\l4install.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\l4install_x86.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib shell32.lib"
 if errorlevel 1 (
     echo [ERROR] x86 build failed!
     set BUILD_FAILED=1

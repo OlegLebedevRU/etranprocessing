@@ -28,10 +28,6 @@ if exist "%~dp0leo4proxy.exe" (
     set "EXE_PATH=%~dp0leo4proxy.exe"
 ) else if exist "%~dp0bin\leo4proxy.exe" (
     set "EXE_PATH=%~dp0bin\leo4proxy.exe"
-) else if exist "%~dp0bin\x86\leo4proxy.exe" (
-    set "EXE_PATH=%~dp0bin\x86\leo4proxy.exe"
-) else if exist "%~dp0bin\x64\leo4proxy.exe" (
-    set "EXE_PATH=%~dp0bin\x64\leo4proxy.exe"
 )
 
 :: 4. Stop service if installed

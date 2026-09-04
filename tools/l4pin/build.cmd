@@ -40,10 +40,12 @@ if /i "%TARGET_ARCH%"=="all" goto :build_all
 if /i "%TARGET_ARCH%"=="x86" goto :build_x86
 if /i "%TARGET_ARCH%"=="32" goto :build_x86
 if /i "%TARGET_ARCH%"=="win32" goto :build_x86
+if /i "%TARGET_ARCH%"=="win7" goto :build_x86
+if /i "%TARGET_ARCH%"=="win7_x86" goto :build_x86
 if /i "%TARGET_ARCH%"=="x64" goto :build_x64
 if /i "%TARGET_ARCH%"=="64" goto :build_x64
 
-echo Unknown architecture "%TARGET_ARCH%". Valid options: all, x86, x64
+echo Unknown architecture "%TARGET_ARCH%". Valid options: all, x86, win7, x64
 exit /b 1
 
 :build_all
@@ -61,8 +63,8 @@ goto :summary
 
 :do_build_x86
 echo.
-echo [Build x86] 32-bit universal static binary (compatible with x86 and x64 via WOW64)...
-cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\app.res res\app.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x86\ src\main.c src\url_finder.c src\http_client.c src\xml_utils.c src\cng_crypto.c src\cert_store.c obj\x86\app.res /link /OUT:bin\x86\l4pin.exe ncrypt.lib crypt32.lib winhttp.lib advapi32.lib shell32.lib user32.lib"
+echo [Build x86] 32-bit universal static binary (Windows 7 SP1+ compatible)...
+cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\app.res res\app.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x86\ src\main.c src\url_finder.c src\http_client.c src\xml_utils.c src\cng_crypto.c src\cert_store.c obj\x86\app.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\l4pin.exe ncrypt.lib crypt32.lib winhttp.lib advapi32.lib shell32.lib user32.lib"
 if errorlevel 1 (
     echo [ERROR] x86 build failed!
     set BUILD_FAILED=1

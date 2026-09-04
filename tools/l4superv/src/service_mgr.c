@@ -486,6 +486,19 @@ bool svc_ensure_all_installed_and_running(const wchar_t* base_path) {
     swprintf_s(mosq_log_dir, MAX_PATH, L"%s\\mosquitto\\log", base_path);
     svc_set_dir_permissions(mosq_log_dir);
 
+    // Ensure MOSQUITTO_DIR system and process environment variable is set
+    wchar_t mosq_dir[MAX_PATH];
+    swprintf_s(mosq_dir, MAX_PATH, L"%s\\mosquitto", base_path);
+    SetEnvironmentVariableW(L"MOSQUITTO_DIR", mosq_dir);
+
+    HKEY hEnvKey;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment", 0, KEY_SET_VALUE, &hEnvKey) == ERROR_SUCCESS) {
+        RegSetValueExW(hEnvKey, L"MOSQUITTO_DIR", 0, REG_SZ, (const BYTE*)mosq_dir, (DWORD)((wcslen(mosq_dir) + 1) * sizeof(wchar_t)));
+        RegCloseKey(hEnvKey);
+        DWORD_PTR dwResult = 0;
+        SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, (LPARAM)L"Environment", SMTO_ABORTIFHUNG, 2000, &dwResult);
+    }
+
     wchar_t exe_path[MAX_PATH];
     wchar_t cmd_line[MAX_PATH * 2];
 

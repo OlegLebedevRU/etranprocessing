@@ -223,6 +223,16 @@ int wmain(int argc, wchar_t* argv[]) {
     swprintf_s(mosq_log_dir, MAX_PATH, L"%ls\\mosquitto\\log", dest_dir);
     svc_set_dir_permissions(mosq_log_dir);
 
+    // Ensure system environment variable MOSQUITTO_DIR is configured
+    wchar_t mosq_dir[MAX_PATH];
+    swprintf_s(mosq_dir, MAX_PATH, L"%ls\\mosquitto", dest_dir);
+    SetEnvironmentVariableW(L"MOSQUITTO_DIR", mosq_dir);
+    HKEY hEnvKey;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment", 0, KEY_SET_VALUE, &hEnvKey) == ERROR_SUCCESS) {
+        RegSetValueExW(hEnvKey, L"MOSQUITTO_DIR", 0, REG_SZ, (const BYTE*)mosq_dir, (DWORD)((wcslen(mosq_dir) + 1) * sizeof(wchar_t)));
+        RegCloseKey(hEnvKey);
+    }
+
     // Initial config and state
     if (!silent) {
         wprintf(L"[3/5] Configuring default settings, permissions and hardware bindings...\n");
