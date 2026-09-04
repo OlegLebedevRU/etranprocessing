@@ -52,6 +52,7 @@ run_migration.sh
 import_*.py
 import_*.sql
 list_*.py
+!ProcessingBackend/backend/app/routers/list_menu.py
 check_*.py
 add_*.py
 *_location.conf
