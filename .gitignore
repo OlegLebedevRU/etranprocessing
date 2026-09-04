@@ -62,6 +62,7 @@ nginx_locations.conf
 
 # Keep docs and config templates
 !docs/
+!tools/dist/
 !.env.example
 !.gitignore
 !.dockerignore

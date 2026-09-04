@@ -4,8 +4,9 @@ setlocal enabledelayedexpansion
 set "INSTALL_EXE="
 if exist "%~dp0l4install.exe" set "INSTALL_EXE=%~dp0l4install.exe"
 if not defined INSTALL_EXE if exist "%~dp0bin\l4install.exe" set "INSTALL_EXE=%~dp0bin\l4install.exe"
-if not defined INSTALL_EXE if exist "%~dp0bin\x64\l4install.exe" set "INSTALL_EXE=%~dp0bin\x64\l4install.exe"
-if not defined INSTALL_EXE if exist "%~dp0bin\x86\l4install.exe" set "INSTALL_EXE=%~dp0bin\x86\l4install.exe"
+if not defined INSTALL_EXE if exist "%~dp0l4install_x64.exe" set "INSTALL_EXE=%~dp0l4install_x64.exe"
+if not defined INSTALL_EXE if exist "%~dp0l4install_x86.exe" set "INSTALL_EXE=%~dp0l4install_x86.exe"
+if not defined INSTALL_EXE if exist "%~dp0..\l4install.exe" set "INSTALL_EXE=%~dp0..\l4install.exe"
 
 if not defined INSTALL_EXE (
     echo [ERROR] l4install.exe not found. Please run build.cmd first.

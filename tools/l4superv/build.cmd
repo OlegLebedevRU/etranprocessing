@@ -62,26 +62,30 @@ goto :summary
 :do_build_x86
 echo.
 echo [Build x86] 32-bit static binaries...
-cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\l4superv.res res\l4superv.rc && rc.exe /nologo /fo obj\x86\l4install.res res\l4install.rc && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x86\ src\supervisor_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\proxy_client.c src\orchestrator.c obj\x86\l4superv.res /link /OUT:bin\x86\l4superv.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x86\ src\installer_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\miniz.c src\zip_extractor.c obj\x86\l4install.res /link /OUT:bin\x86\l4install.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib shell32.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\l4superv.res res\l4superv.rc && rc.exe /nologo /fo obj\x86\l4install.res res\l4install.rc && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x86\ src\supervisor_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\proxy_client.c src\orchestrator.c obj\x86\l4superv.res /link /OUT:bin\x86\l4superv.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x86\ src\installer_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\miniz.c src\zip_extractor.c obj\x86\l4install.res /link /OUT:bin\x86\l4install_x86.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib shell32.lib"
 if errorlevel 1 (
     echo [ERROR] x86 build failed!
     set BUILD_FAILED=1
 ) else (
-    echo [OK] x86 build SUCCESS: bin\x86\l4superv.exe, bin\x86\l4install.exe
+    echo [OK] x86 build SUCCESS: bin\x86\l4superv.exe, bin\x86\l4install_x86.exe
     copy /y bin\x86\l4superv.exe bin\l4superv.exe >nul
-    copy /y bin\x86\l4install.exe bin\l4install.exe >nul
+    copy /y bin\x86\l4install_x86.exe bin\x86\l4install.exe >nul
+    copy /y bin\x86\l4install_x86.exe bin\l4install_x86.exe >nul
+    copy /y bin\x86\l4install_x86.exe bin\l4install.exe >nul
 )
 exit /b 0
 
 :do_build_x64
 echo.
 echo [Build x64] 64-bit static binaries...
-cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /fo obj\x64\l4superv.res res\l4superv.rc && rc.exe /nologo /fo obj\x64\l4install.res res\l4install.rc && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x64\ src\supervisor_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\proxy_client.c src\orchestrator.c obj\x64\l4superv.res /link /OUT:bin\x64\l4superv.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x64\ src\installer_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\miniz.c src\zip_extractor.c obj\x64\l4install.res /link /OUT:bin\x64\l4install.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib shell32.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /fo obj\x64\l4superv.res res\l4superv.rc && rc.exe /nologo /fo obj\x64\l4install.res res\l4install.rc && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x64\ src\supervisor_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\proxy_client.c src\orchestrator.c obj\x64\l4superv.res /link /OUT:bin\x64\l4superv.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x64\ src\installer_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\miniz.c src\zip_extractor.c obj\x64\l4install.res /link /OUT:bin\x64\l4install_x64.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib shell32.lib"
 if errorlevel 1 (
     echo [ERROR] x64 build failed!
     set BUILD_FAILED=1
 ) else (
-    echo [OK] x64 build SUCCESS: bin\x64\l4superv.exe, bin\x64\l4install.exe
+    echo [OK] x64 build SUCCESS: bin\x64\l4superv.exe, bin\x64\l4install_x64.exe
+    copy /y bin\x64\l4install_x64.exe bin\x64\l4install.exe >nul
+    copy /y bin\x64\l4install_x64.exe bin\l4install_x64.exe >nul
 )
 exit /b 0
 
@@ -93,9 +97,10 @@ if %BUILD_FAILED% equ 0 (
     if exist bin\x86\l4superv.exe echo   - x86 [32-bit]: bin\x86\l4superv.exe
     if exist bin\x64\l4superv.exe echo   - x64 [64-bit]: bin\x64\l4superv.exe
     if exist bin\l4superv.exe     echo   - Default:      bin\l4superv.exe
-    if exist bin\x86\l4install.exe echo   - x86 [32-bit]: bin\x86\l4install.exe
-    if exist bin\x64\l4install.exe echo   - x64 [64-bit]: bin\x64\l4install.exe
-    if exist bin\l4install.exe     echo   - Default:      bin\l4install.exe
+    if exist bin\x86\l4install_x86.exe echo   - x86 [32-bit]: bin\x86\l4install_x86.exe
+    if exist bin\x64\l4install_x64.exe echo   - x64 [64-bit]: bin\x64\l4install_x64.exe
+    if exist bin\l4install_x86.exe     echo   - Root x86:     bin\l4install_x86.exe
+    if exist bin\l4install_x64.exe     echo   - Root x64:     bin\l4install_x64.exe
 
     :: Copy companion scripts and documentation into bin directories
     for %%f in (l4superv_*.cmd l4install_*.cmd pack_*.cmd) do (

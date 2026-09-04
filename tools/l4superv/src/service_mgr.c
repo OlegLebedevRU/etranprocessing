@@ -491,9 +491,9 @@ bool svc_ensure_all_installed_and_running(const wchar_t* base_path) {
 
     // 1. Leo4Proxy
     svc_cleanup_foreign(SVC_NAME_LEO4PROXY, base_path);
-    swprintf_s(exe_path, MAX_PATH, L"%s\\leo4proxy\\bin\\leo4proxy.exe", base_path);
+    swprintf_s(exe_path, MAX_PATH, L"%s\\leo4proxy\\leo4proxy.exe", base_path);
     if (!file_exists(exe_path)) {
-        swprintf_s(exe_path, MAX_PATH, L"%s\\leo4proxy\\leo4proxy.exe", base_path);
+        swprintf_s(exe_path, MAX_PATH, L"%s\\leo4proxy\\bin\\leo4proxy.exe", base_path);
     }
     if (file_exists(exe_path)) {
         swprintf_s(cmd_line, sizeof(cmd_line)/sizeof(wchar_t), L"\"%s\" --service", exe_path);
@@ -523,9 +523,9 @@ bool svc_ensure_all_installed_and_running(const wchar_t* base_path) {
 
     // 3. L4Con
     svc_cleanup_foreign(SVC_NAME_L4CON, base_path);
-    swprintf_s(exe_path, MAX_PATH, L"%s\\l4con\\bin\\l4con.exe", base_path);
+    swprintf_s(exe_path, MAX_PATH, L"%s\\l4con\\l4con.exe", base_path);
     if (!file_exists(exe_path)) {
-        swprintf_s(exe_path, MAX_PATH, L"%s\\l4con\\l4con.exe", base_path);
+        swprintf_s(exe_path, MAX_PATH, L"%s\\l4con\\bin\\l4con.exe", base_path);
     }
     if (file_exists(exe_path)) {
         swprintf_s(cmd_line, sizeof(cmd_line)/sizeof(wchar_t), L"\"%s\" --service", exe_path);
@@ -539,9 +539,9 @@ bool svc_ensure_all_installed_and_running(const wchar_t* base_path) {
 
     // 4. L4Superv
     svc_cleanup_foreign(SVC_NAME_L4SUPERV, base_path);
-    swprintf_s(exe_path, MAX_PATH, L"%s\\l4superv\\bin\\l4superv.exe", base_path);
+    swprintf_s(exe_path, MAX_PATH, L"%s\\l4superv\\l4superv.exe", base_path);
     if (!file_exists(exe_path)) {
-        swprintf_s(exe_path, MAX_PATH, L"%s\\l4superv\\l4superv.exe", base_path);
+        swprintf_s(exe_path, MAX_PATH, L"%s\\l4superv\\bin\\l4superv.exe", base_path);
     }
     if (file_exists(exe_path)) {
         swprintf_s(cmd_line, sizeof(cmd_line)/sizeof(wchar_t), L"\"%s\"", exe_path);

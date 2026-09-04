@@ -11,6 +11,14 @@
 
 #pragma comment(lib, "shlwapi.lib")
 
+#if defined(_M_X64) || defined(__x86_64__)
+static const wchar_t* CURRENT_INSTALLER_ARCH = L"x64";
+static const wchar_t* CURRENT_INSTALLER_NAME = L"l4install_x64.exe";
+#else
+static const wchar_t* CURRENT_INSTALLER_ARCH = L"x86";
+static const wchar_t* CURRENT_INSTALLER_NAME = L"l4install_x86.exe";
+#endif
+
 static void add_to_system_path(const wchar_t* base_dir) {
     HKEY hKey;
     if (RegOpenKeyExW(HKEY_LOCAL_MACHINE,
@@ -52,13 +60,13 @@ static void add_to_system_path(const wchar_t* base_dir) {
 
 static void print_banner(void) {
     wprintf(L"===============================================================\n");
-    wprintf(L"  Leo4 Tools Suite Installer (l4install) v%ls\n", L4_SUPERV_VERSION_STR);
+    wprintf(L"  Leo4 Tools Suite Installer (%ls) v%ls\n", CURRENT_INSTALLER_ARCH, L4_SUPERV_VERSION_STR);
     wprintf(L"  Automated Zero-Touch Deployment for Terminal Services\n");
     wprintf(L"===============================================================\n\n");
 }
 
 static void print_usage(void) {
-    wprintf(L"Usage: l4install.exe [OPTIONS]\n\n");
+    wprintf(L"Usage: %ls [OPTIONS]\n\n", CURRENT_INSTALLER_NAME);
     wprintf(L"Options:\n");
     wprintf(L"  --dest <dir>       Target installation directory (default: C:\\l4tools)\n");
     wprintf(L"  --zip <path>       Path to tools.zip package (default: auto-detected next to exe)\n");
@@ -156,9 +164,9 @@ int wmain(int argc, wchar_t* argv[]) {
     if (find_zip_package(exe_path, custom_zip, zip_file, MAX_PATH)) {
         if (!silent) {
             wprintf(L"[2/5] Found package archive: %ls\n", zip_file);
-            wprintf(L"      Unpacking tools tree...\n");
+            wprintf(L"      Unpacking tools tree for %ls architecture...\n", CURRENT_INSTALLER_ARCH);
         }
-        if (!zip_extract_all(zip_file, dest_dir, !silent)) {
+        if (!zip_extract_all(zip_file, dest_dir, CURRENT_INSTALLER_ARCH, !silent)) {
             if (!silent) {
                 wprintf(L"[ERROR] Failed to unpack archive %ls into %ls\n", zip_file, dest_dir);
             }
@@ -184,14 +192,20 @@ int wmain(int argc, wchar_t* argv[]) {
     // Register tools in system PATH for interactive sessions
     add_to_system_path(dest_dir);
 
-    // Copy l4install.exe into target base directory for future maintenance
-    wchar_t target_installer[MAX_PATH];
-    swprintf_s(target_installer, MAX_PATH, L"%ls\\l4install.exe", dest_dir);
-    if (_wcsicmp(exe_path, target_installer) != 0) {
-        CopyFileW(exe_path, target_installer, FALSE);
+    // Copy installer into target base directory under both universal and architectural names
+    wchar_t target_universal[MAX_PATH];
+    swprintf_s(target_universal, MAX_PATH, L"%ls\\l4install.exe", dest_dir);
+    if (_wcsicmp(exe_path, target_universal) != 0) {
+        CopyFileW(exe_path, target_universal, FALSE);
     }
 
-    // Ensure terminal-tools-user-guide.md is present next to l4install.exe
+    wchar_t target_arch_named[MAX_PATH];
+    swprintf_s(target_arch_named, MAX_PATH, L"%ls\\%ls", dest_dir, CURRENT_INSTALLER_NAME);
+    if (_wcsicmp(exe_path, target_arch_named) != 0) {
+        CopyFileW(exe_path, target_arch_named, FALSE);
+    }
+
+    // Ensure terminal-tools-user-guide.md is present next to installer
     wchar_t target_guide[MAX_PATH];
     swprintf_s(target_guide, MAX_PATH, L"%ls\\terminal-tools-user-guide.md", dest_dir);
     wchar_t exe_dir[MAX_PATH];
@@ -264,7 +278,7 @@ int wmain(int argc, wchar_t* argv[]) {
         wprintf(L" Log Directory:      %ls (Permissions: RW for All)\n", mosq_log_dir);
         wprintf(L" Installed Tools & Documentation:\n");
         wprintf(L"   - User Guide:     %ls\\terminal-tools-user-guide.md\n", dest_dir);
-        wprintf(L"   - Installer Copy: %ls\\l4install.exe\n", dest_dir);
+        wprintf(L"   - Installer Copy: %ls\\l4install.exe (and %ls)\n", dest_dir, CURRENT_INSTALLER_NAME);
         wprintf(L"   - Supervisor:     %ls\\l4superv\\l4superv.exe\n", dest_dir);
         wprintf(L"   - PIN Tool:       %ls\\l4pin\\l4pin.exe\n", dest_dir);
         wprintf(L"   - SQL Client:     %ls\\l4sql\\l4sql.exe\n", dest_dir);

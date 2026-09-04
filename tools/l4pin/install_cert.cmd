@@ -22,12 +22,6 @@ if exist "%~dp0l4pin.exe" (
     set "EXE_PATH=%~dp0l4pin.exe"
 ) else if exist "%~dp0bin\l4pin.exe" (
     set "EXE_PATH=%~dp0bin\l4pin.exe"
-) else if exist "%~dp0bin\x86\l4pin.exe" (
-    set "EXE_PATH=%~dp0bin\x86\l4pin.exe"
-) else if exist "%~dp0bin\x64\l4pin.exe" (
-    set "EXE_PATH=%~dp0bin\x64\l4pin.exe"
-) else if exist "%~dp0..\bin\l4pin.exe" (
-    set "EXE_PATH=%~dp0..\bin\l4pin.exe"
 ) else if exist "%~dp0..\l4pin.exe" (
     set "EXE_PATH=%~dp0..\l4pin.exe"
 )
