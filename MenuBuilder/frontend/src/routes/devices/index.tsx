@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router";
 import {
   Card,
@@ -19,7 +19,7 @@ import {
   Row,
   Col,
 } from "antd";
-import type { ColumnsType } from "antd/es/table";
+import type { ColumnsType, TableProps } from "antd/es/table";
 import {
   ReloadOutlined,
   SearchOutlined,
@@ -35,7 +35,12 @@ import {
   CheckCircleOutlined,
   ClockCircleOutlined,
 } from "@ant-design/icons";
-import { getDevices, type DeviceListItem } from "../../api/devices";
+import {
+  getDevices,
+  getDeviceDetail,
+  type DeviceListItem,
+  type DeviceStats,
+} from "../../api/devices";
 import { getAdminOrganizations, type AdminOrg } from "../../api/admin";
 import { useSession } from "../../session/SessionContext";
 import DeviceTasksTab from "./DeviceTasksTab";
@@ -60,18 +65,43 @@ export default function DevicesManagementPage() {
   // Data states
   const [loading, setLoading] = useState(false);
   const [devices, setDevices] = useState<DeviceListItem[]>([]);
+  const [total, setTotal] = useState<number>(0);
+  const [stats, setStats] = useState<DeviceStats>({
+    total: 0,
+    online: 0,
+    offline: 0,
+    blocked: 0,
+  });
   const [orgs, setOrgs] = useState<AdminOrg[]>([]);
+
+  // Pagination states
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(20);
+
+  // Sorting states
+  const [sortBy, setSortBy] = useState<string>("device_id");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
   // Filter states
   const [selectedOrgId, setSelectedOrgId] = useState<number | undefined>(() => {
     return user?.org_id ? Number(user.org_id) : undefined;
   });
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
   // Selected device for drawer
   const [selectedDevice, setSelectedDevice] = useState<DeviceListItem | null>(null);
   const [activeTabKey, setActiveTabKey] = useState<string>("info");
+
+  // Debounce search query
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchQuery.trim());
+      setPage(1);
+    }, 350);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
 
   // Load organizations for filter
   useEffect(() => {
@@ -95,27 +125,50 @@ export default function DevicesManagementPage() {
     if (selectedOrgId === undefined) return;
     setLoading(true);
     try {
-      const items = await getDevices(selectedOrgId);
-      setDevices(items);
-
-      // Deep link support via ?device_id=X
-      const urlDeviceId = searchParams.get("device_id");
-      if (urlDeviceId) {
-        const found = items.find((d) => String(d.device_id) === urlDeviceId);
-        if (found) {
-          setSelectedDevice(found);
-        }
-      }
+      const res = await getDevices(selectedOrgId, {
+        page,
+        size: pageSize,
+        q: debouncedSearch || undefined,
+        status: statusFilter === "all" ? undefined : statusFilter,
+        sortBy,
+        sortOrder,
+      });
+      setDevices(res.items);
+      setTotal(res.total);
+      setStats(res.stats);
     } catch (err: any) {
       message.error(err.message || "Ошибка загрузки списка IoT устройств");
     } finally {
       setLoading(false);
     }
-  }, [selectedOrgId, searchParams]);
+  }, [selectedOrgId, page, pageSize, debouncedSearch, statusFilter, sortBy, sortOrder]);
 
   useEffect(() => {
     fetchDevicesList();
   }, [fetchDevicesList]);
+
+  // Deep link support via ?device_id=X
+  useEffect(() => {
+    const urlDeviceId = searchParams.get("device_id");
+    if (urlDeviceId && selectedOrgId !== undefined) {
+      if (selectedDevice && String(selectedDevice.device_id) === urlDeviceId) {
+        return;
+      }
+      const numId = Number(urlDeviceId);
+      const found = devices.find((d) => d.device_id === numId);
+      if (found) {
+        setSelectedDevice(found);
+      } else {
+        getDeviceDetail(selectedOrgId, numId)
+          .then((dev) => {
+            if (dev) {
+              setSelectedDevice(dev);
+            }
+          })
+          .catch(() => {});
+      }
+    }
+  }, [searchParams, selectedOrgId, devices, selectedDevice]);
 
   // Handle opening device drawer
   const handleOpenDevice = (dev: DeviceListItem, defaultTab = "info") => {
@@ -135,64 +188,60 @@ export default function DevicesManagementPage() {
     });
   };
 
-  // KPI Metrics for dashboard
-  const kpiStats = useMemo(() => {
-    let online = 0;
-    let offline = 0;
-    let blocked = 0;
-    for (const d of devices) {
-      if (d.status === "blocked" || d.is_blocked) {
-        blocked++;
-      } else if (d.status === "online") {
-        online++;
-      } else {
-        offline++;
+  const handleTagsUpdated = async () => {
+    fetchDevicesList();
+    if (selectedDevice && selectedOrgId !== undefined) {
+      try {
+        const updated = await getDeviceDetail(selectedOrgId, selectedDevice.device_id);
+        if (updated) {
+          setSelectedDevice(updated);
+        }
+      } catch {
+        // ignore
       }
     }
-    return {
-      total: devices.length,
-      online,
-      offline,
-      blocked,
-    };
-  }, [devices]);
+  };
 
-  // Filtered devices list
-  const filteredDevices = useMemo(() => {
-    return devices.filter((d) => {
-      // Status filter
-      if (statusFilter === "online" && d.status !== "online") return false;
-      if (statusFilter === "offline" && d.status !== "offline") return false;
-      if (statusFilter === "blocked" && d.status !== "blocked" && !d.is_blocked)
-        return false;
+  const handleOrgChange = (orgId: number) => {
+    setSelectedOrgId(orgId);
+    setPage(1);
+  };
 
-      // Search query
-      if (searchQuery.trim()) {
-        const query = searchQuery.trim().toLowerCase();
-        const matchesId = String(d.device_id).includes(query);
-        const matchesSn = d.sn.toLowerCase().includes(query);
-        const matchesApp = d.app?.toLowerCase().includes(query);
-        const matchesDesc = d.description?.toLowerCase().includes(query);
-        const matchesViolation = (d.violation_type || "").toLowerCase().includes(query);
-        const matchesReason = (d.violation_details?.reason || "").toLowerCase().includes(query);
-        const matchesTags = d.tags.some(
-          (t) =>
-            t.tag.toLowerCase().includes(query) ||
-            t.value.toLowerCase().includes(query)
-        );
-        return (
-          matchesId ||
-          matchesSn ||
-          matchesApp ||
-          matchesDesc ||
-          matchesViolation ||
-          matchesReason ||
-          matchesTags
-        );
-      }
-      return true;
-    });
-  }, [devices, statusFilter, searchQuery]);
+  const handleStatusFilterChange = (val: string) => {
+    setStatusFilter(val);
+    setPage(1);
+  };
+
+  const handleTableChange: TableProps<DeviceListItem>["onChange"] = (
+    pagination,
+    _filters,
+    sorter
+  ) => {
+    if (pagination.current && pagination.current !== page) {
+      setPage(pagination.current);
+    }
+    if (pagination.pageSize && pagination.pageSize !== pageSize) {
+      setPageSize(pagination.pageSize);
+      setPage(1);
+    }
+
+    if (sorter && !Array.isArray(sorter) && sorter.order) {
+      const field = String(sorter.field || sorter.columnKey || "device_id");
+      let mappedSortBy = "device_id";
+      if (field === "sn") mappedSortBy = "sn";
+      else if (field === "status") mappedSortBy = "status";
+      else if (field === "connected_at" || field === "ageSeconds") mappedSortBy = "connected_at";
+      else mappedSortBy = "device_id";
+
+      setSortBy(mappedSortBy);
+      setSortOrder(sorter.order === "descend" ? "desc" : "asc");
+      setPage(1);
+    } else if (!sorter || (!Array.isArray(sorter) && !sorter.order)) {
+      setSortBy("device_id");
+      setSortOrder("asc");
+      setPage(1);
+    }
+  };
 
   if (!isSuperuser) {
     return (
@@ -219,7 +268,8 @@ export default function DevicesManagementPage() {
       key: "device_id",
       width: isMobile ? 70 : 100,
       fixed: isMobile ? "left" : undefined,
-      sorter: (a, b) => a.device_id - b.device_id,
+      sorter: true,
+      sortOrder: sortBy === "device_id" ? (sortOrder === "asc" ? "ascend" : "descend") : null,
       render: (id, record) => {
         const isBlocked = record.status === "blocked" || record.is_blocked;
         const isOnline = record.status === "online";
@@ -239,6 +289,8 @@ export default function DevicesManagementPage() {
       dataIndex: "sn",
       key: "sn",
       width: isMobile ? 135 : 200,
+      sorter: true,
+      sortOrder: sortBy === "sn" ? (sortOrder === "asc" ? "ascend" : "descend") : null,
       render: (sn) => {
         const displaySn =
           isMobile && sn.length > 8 ? `${sn.slice(0, 4)}…${sn.slice(-3)}` : sn;
@@ -276,7 +328,10 @@ export default function DevicesManagementPage() {
     {
       title: isMobile ? "Статус" : "Связь",
       key: "status",
+      dataIndex: "status",
       width: isMobile ? 90 : 115,
+      sorter: true,
+      sortOrder: sortBy === "status" ? (sortOrder === "asc" ? "ascend" : "descend") : null,
       render: (_, record) => {
         if (record.status === "blocked" || record.is_blocked) {
           const violationType = record.violation_type;
@@ -529,7 +584,7 @@ export default function DevicesManagementPage() {
       <Row gutter={[8, 8]} style={{ marginBottom: 14 }}>
         <Col xs={12} sm={6}>
           <div
-            onClick={() => setStatusFilter("all")}
+            onClick={() => handleStatusFilterChange("all")}
             style={{
               cursor: "pointer",
               padding: "8px 12px",
@@ -541,13 +596,13 @@ export default function DevicesManagementPage() {
           >
             <div style={{ fontSize: 11, color: "#8c8c8c", fontWeight: 500 }}>Всего устройств</div>
             <div style={{ fontSize: 18, fontWeight: 700, color: "#1f1f1f" }}>
-              {kpiStats.total}
+              {stats.total}
             </div>
           </div>
         </Col>
         <Col xs={12} sm={6}>
           <div
-            onClick={() => setStatusFilter("online")}
+            onClick={() => handleStatusFilterChange("online")}
             style={{
               cursor: "pointer",
               padding: "8px 12px",
@@ -561,13 +616,13 @@ export default function DevicesManagementPage() {
               <CheckCircleOutlined /> Онлайн (ON)
             </div>
             <div style={{ fontSize: 18, fontWeight: 700, color: "#52c41a" }}>
-              {kpiStats.online}
+              {stats.online}
             </div>
           </div>
         </Col>
         <Col xs={12} sm={6}>
           <div
-            onClick={() => setStatusFilter("offline")}
+            onClick={() => handleStatusFilterChange("offline")}
             style={{
               cursor: "pointer",
               padding: "8px 12px",
@@ -581,13 +636,13 @@ export default function DevicesManagementPage() {
               <ClockCircleOutlined /> Оффлайн (OFF)
             </div>
             <div style={{ fontSize: 18, fontWeight: 700, color: "#595959" }}>
-              {kpiStats.offline}
+              {stats.offline}
             </div>
           </div>
         </Col>
         <Col xs={12} sm={6}>
           <div
-            onClick={() => setStatusFilter("blocked")}
+            onClick={() => handleStatusFilterChange("blocked")}
             style={{
               cursor: "pointer",
               padding: "8px 12px",
@@ -601,7 +656,7 @@ export default function DevicesManagementPage() {
               <StopOutlined /> Блокировки (ERR)
             </div>
             <div style={{ fontSize: 18, fontWeight: 700, color: "#ff4d4f" }}>
-              {kpiStats.blocked}
+              {stats.blocked}
             </div>
           </div>
         </Col>
@@ -624,7 +679,7 @@ export default function DevicesManagementPage() {
         <Select
           placeholder="Организация"
           value={selectedOrgId}
-          onChange={(val) => setSelectedOrgId(val)}
+          onChange={handleOrgChange}
           style={{ flex: isMobile ? "1 1 100%" : "0 0 230px" }}
           showSearch
           optionFilterProp="label"
@@ -636,7 +691,7 @@ export default function DevicesManagementPage() {
 
         <Select
           value={statusFilter}
-          onChange={(val) => setStatusFilter(val)}
+          onChange={handleStatusFilterChange}
           style={{ flex: isMobile ? "1 1 100%" : "0 0 200px" }}
           options={[
             { value: "all", label: "Все статусы" },
@@ -657,7 +712,7 @@ export default function DevicesManagementPage() {
 
         <div style={{ marginLeft: isMobile ? 0 : "auto", width: isMobile ? "100%" : "auto" }}>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            Найдено: <strong>{filteredDevices.length}</strong>
+            Найдено: <strong>{total}</strong>
           </Text>
         </div>
       </div>
@@ -667,21 +722,28 @@ export default function DevicesManagementPage() {
         className="compact-table"
         rowKey="device_id"
         columns={columns}
-        dataSource={filteredDevices}
+        dataSource={devices}
         loading={loading}
         size="small"
         scroll={{ x: 680 }}
+        onChange={handleTableChange}
         onRow={(record) => ({
           onClick: () => handleOpenDevice(record, "info"),
           style: { cursor: "pointer" },
         })}
         pagination={{
+          current: page,
+          pageSize: pageSize,
+          total: total,
           position: ["topRight", "bottomRight"],
-          defaultPageSize: 20,
           showSizeChanger: true,
           pageSizeOptions: ["10", "20", "50", "100"],
           simple: isMobile,
           size: "small",
+          showTotal: (totalCount, range) =>
+            isMobile
+              ? `${range[0]}-${range[1]}/${totalCount}`
+              : `Показано ${range[0]}–${range[1]} из ${totalCount} устройств`,
         }}
       />
 
@@ -788,7 +850,7 @@ export default function DevicesManagementPage() {
                     deviceId={selectedDevice.device_id}
                     orgId={selectedOrgId}
                     tags={selectedDevice.tags}
-                    onTagsUpdated={fetchDevicesList}
+                    onTagsUpdated={handleTagsUpdated}
                   />
                 ),
               },

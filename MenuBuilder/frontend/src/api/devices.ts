@@ -112,7 +112,9 @@ export interface DeviceRawResult {
 
 export interface DeviceConnectionInfo {
   is_online?: boolean;
+  connected_at?: string;
   last_connected_at?: string;
+  checked_at?: string;
   last_checked_result?: boolean;
   is_blocked?: boolean;
   violation_type?: "SN_COLLISION" | "DEVICE_CLONE" | string | null;
@@ -165,6 +167,46 @@ export interface DeviceListItem {
   cmds?: string;
   tags: DeviceTagItem[];
   connection?: DeviceConnectionInfo | null;
+}
+
+export interface DeviceStats {
+  total: number;
+  online: number;
+  offline: number;
+  blocked: number;
+}
+
+export interface DeviceListRawResponse {
+  items: DeviceItem[];
+  total: number;
+  page: number;
+  size: number;
+  pages: number;
+  stats: DeviceStats;
+}
+
+export interface DeviceListResponse {
+  items: DeviceListItem[];
+  total: number;
+  page: number;
+  size: number;
+  pages: number;
+  stats: DeviceStats;
+}
+
+export interface GetDevicesParams {
+  orgId?: number;
+  org_id?: number;
+  page?: number;
+  size?: number;
+  q?: string;
+  status?: string;
+  deviceId?: number;
+  device_id?: number;
+  sortBy?: string;
+  sort_by?: string;
+  sortOrder?: "asc" | "desc";
+  sort_order?: "asc" | "desc";
 }
 
 export interface TaskResultItem {
@@ -277,9 +319,13 @@ export function mapDeviceToListItem(device: DeviceItem): DeviceListItem {
   }
 
   let ageSeconds: number | undefined;
-  if (device.connection?.last_connected_at) {
-    const connTime = new Date(device.connection.last_connected_at).getTime();
-    ageSeconds = Math.max(0, Math.floor((Date.now() - connTime) / 1000));
+  const lastConnected =
+    device.connection?.connected_at || device.connection?.last_connected_at;
+  if (lastConnected) {
+    const connTime = new Date(lastConnected).getTime();
+    if (!isNaN(connTime)) {
+      ageSeconds = Math.max(0, Math.floor((Date.now() - connTime) / 1000));
+    }
   }
 
   return {
@@ -302,27 +348,124 @@ export function mapDeviceToListItem(device: DeviceItem): DeviceListItem {
 }
 
 export async function getDevices(
-  orgId: number,
-  deviceId?: number
-): Promise<DeviceListItem[]> {
-  const params: Record<string, any> = { org_id: orgId };
-  if (deviceId !== undefined) {
-    params.device_id = deviceId;
+  orgIdOrParams: number | GetDevicesParams,
+  options?: Omit<GetDevicesParams, "orgId" | "org_id">
+): Promise<DeviceListResponse> {
+  const queryParams: Record<string, any> = {};
+
+  if (typeof orgIdOrParams === "number") {
+    queryParams.org_id = orgIdOrParams;
+    if (options) {
+      if (options.page !== undefined) queryParams.page = options.page;
+      if (options.size !== undefined) queryParams.size = options.size;
+      if (options.q !== undefined && options.q.trim() !== "") queryParams.q = options.q.trim();
+      if (options.status !== undefined && options.status !== "all") queryParams.status = options.status;
+      if (options.deviceId !== undefined) queryParams.device_id = options.deviceId;
+      if (options.device_id !== undefined) queryParams.device_id = options.device_id;
+      if (options.sortBy !== undefined) queryParams.sort_by = options.sortBy;
+      if (options.sort_by !== undefined) queryParams.sort_by = options.sort_by;
+      if (options.sortOrder !== undefined) queryParams.sort_order = options.sortOrder;
+      if (options.sort_order !== undefined) queryParams.sort_order = options.sort_order;
+    }
+  } else {
+    const p = orgIdOrParams;
+    const orgId = p.org_id ?? p.orgId;
+    if (orgId !== undefined) queryParams.org_id = orgId;
+    if (p.page !== undefined) queryParams.page = p.page;
+    if (p.size !== undefined) queryParams.size = p.size;
+    if (p.q !== undefined && p.q.trim() !== "") queryParams.q = p.q.trim();
+    if (p.status !== undefined && p.status !== "all") queryParams.status = p.status;
+    if (p.deviceId !== undefined) queryParams.device_id = p.deviceId;
+    if (p.device_id !== undefined) queryParams.device_id = p.device_id;
+    if (p.sortBy !== undefined) queryParams.sort_by = p.sortBy;
+    if (p.sort_by !== undefined) queryParams.sort_by = p.sort_by;
+    if (p.sortOrder !== undefined) queryParams.sort_order = p.sortOrder;
+    if (p.sort_order !== undefined) queryParams.sort_order = p.sort_order;
   }
-  const { data } = await client.get<DeviceItem[]>("/internal/v1/devices/", {
-    params,
+
+  const { data } = await client.get<DeviceListRawResponse | DeviceItem[]>("/internal/v1/devices/", {
+    params: queryParams,
   });
-  return (data || []).map(mapDeviceToListItem);
+
+  if (Array.isArray(data)) {
+    const items = data.map(mapDeviceToListItem);
+    return {
+      items,
+      total: items.length,
+      page: 1,
+      size: items.length || 20,
+      pages: 1,
+      stats: {
+        total: items.length,
+        online: items.filter((i) => i.status === "online").length,
+        offline: items.filter((i) => i.status === "offline").length,
+        blocked: items.filter((i) => i.status === "blocked" || i.is_blocked).length,
+      },
+    };
+  }
+
+  return {
+    items: (data?.items || []).map(mapDeviceToListItem),
+    total: data?.total ?? 0,
+    page: data?.page ?? 1,
+    size: data?.size ?? (queryParams.size || 20),
+    pages: data?.pages ?? 0,
+    stats: data?.stats ?? { total: 0, online: 0, offline: 0, blocked: 0 },
+  };
+}
+
+export async function getDeviceDetail(
+  orgId: number,
+  deviceId: number
+): Promise<DeviceListItem | null> {
+  try {
+    const { data } = await client.get<DeviceItem>(`/internal/v1/devices/${deviceId}`, {
+      params: { org_id: orgId },
+    });
+    return data ? mapDeviceToListItem(data) : null;
+  } catch (err: any) {
+    if (err?.response?.status === 404) {
+      return null;
+    }
+    try {
+      const res = await getDevices(orgId, { deviceId, size: 1 });
+      const found = res.items.find((d) => d.device_id === deviceId);
+      if (found) return found;
+    } catch {
+      // ignore fallback error
+    }
+    throw err;
+  }
 }
 
 export async function getDeviceRaw(
   orgId: number,
   deviceId: number
 ): Promise<DeviceRawResult | null> {
-  const { data } = await client.get<DeviceRawResult[]>("/internal/v1/devices/", {
-    params: { org_id: orgId, device_id: deviceId },
-  });
-  return data && data.length > 0 ? data[0] : null;
+  try {
+    const { data } = await client.get<DeviceRawResult>(`/internal/v1/devices/${deviceId}`, {
+      params: { org_id: orgId },
+    });
+    return data;
+  } catch (err: any) {
+    if (err?.response?.status === 404) {
+      return null;
+    }
+    try {
+      const { data } = await client.get<DeviceListRawResponse | DeviceRawResult[]>("/internal/v1/devices/", {
+        params: { org_id: orgId, device_id: deviceId },
+      });
+      if (Array.isArray(data)) {
+        return data.length > 0 ? data[0] : null;
+      }
+      if (data && Array.isArray((data as any).items)) {
+        return (data as any).items.length > 0 ? (data as any).items[0] : null;
+      }
+    } catch {
+      // ignore fallback error
+    }
+    throw err;
+  }
 }
 
 export async function triggerDeviceProvisioning(deviceId: number): Promise<any> {
