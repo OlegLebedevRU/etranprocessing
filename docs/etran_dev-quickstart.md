@@ -62,30 +62,27 @@
 
 1. **Upload code**
    ```bash
-   scp -r backend/app user1@176.108.247.249:/home/user1/ProcessingBackend/backend/
+   scp -i d:\.ssh\id_ed25519 -r backend/app user1@87.242.100.34:/home/user1/ProcessingBackend/backend/
    ```
 
 2. **Rebuild container**
    ```bash
-   ssh user1@176.108.247.249 "cd /home/user1/ProcessingBackend && sudo docker compose up -d --build processing-backend"
+   ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker compose -f /home/user1/compose.yaml up -d --build processing-backend"
    ```
 
 3. **Verify**
    ```bash
-   ssh user1@176.108.247.249 "sudo docker logs processing-backend --tail 10"
+   ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker logs processing-backend --tail 10"
    ```
 
 ### Check Service Health
 
 ```bash
 # Container status
-sudo docker ps | grep processing
+sudo docker compose -f /home/user1/compose.yaml ps
 
 # API health
-curl https://dev.leo4.ru:4443/api/health
-
-# Payment logs
-sudo docker exec processing-backend tail -f /app/log/payment.log
+curl -k https://87.242.100.34:3000/api/health
 ```
 
 ## For AI Agents
@@ -126,13 +123,10 @@ uv run pytest tests/test_payment_service.py
 
 ```bash
 # 1. Copy files to server
-scp -r backend/app user1@176.108.247.249:/tmp/
+scp -i d:\.ssh\id_ed25519 -r backend/app user1@87.242.100.34:/home/user1/ProcessingBackend/backend/
 
-# 2. Copy to container
-ssh user1@176.108.247.249 "sudo docker cp /tmp/app processing-backend:/app/"
-
-# 3. Restart
-ssh user1@176.108.247.249 "sudo docker restart processing-backend"
+# 2. Rebuild/Restart
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker compose -f /home/user1/compose.yaml restart processing-backend"
 ```
 
 ## Environment Variables

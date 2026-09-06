@@ -9,3 +9,12 @@ services:
       - ./crt/iot-processing.ru.key:/crt/iot-processing.ru.key:ro
       - ./crt/iot_leo4_ca.crt:/crt/iot_leo4_ca.crt:ro
       - ./nginx-configs/legacy_ssl.conf:/etc/nginx/conf.d/internal_ssl.conf:ro
+    networks:
+      - default
+      - user1_default
+
+networks:
+  default:
+    name: nginx-mutual-legacy_default
+  user1_default:
+    external: true

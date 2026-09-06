@@ -1,7 +1,7 @@
 import subprocess, sys, time
 
-ssh_key = 'd:\\.ssh\\free-tier-cloud_ru'
-host = 'user1@176.108.247.249'
+ssh_key = 'd:\\.ssh\\id_ed25519'
+host = 'user1@87.242.100.34'
 
 # Wait a bit for terminal request
 time.sleep(10)

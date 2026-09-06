@@ -5,18 +5,18 @@ description: Deploys MenuBuilder (backend + frontend) to the production server. 
 
 # Deploy MenuBuilder
 
-Deploys MenuBuilder backend (FastAPI) and frontend (React/Vite) to the production server at `176.108.247.249`, rebuilds Docker containers.
+Deploys MenuBuilder backend (FastAPI) and frontend (React/Vite) to the production server at `87.242.100.34`, rebuilds Docker containers.
 
 **Source of truth: monorepo at `D:\repo\platerra\Public\etranprocessing\MenuBuilder\`**
 
 ## Prerequisites
 
-- SSH key: `d:\.ssh\free-tier-cloud_ru`
-- Server: `user1@176.108.247.249`
-- Project on server: `/home/user1/MenuBuilder/`
-- Docker compose file: `/home/user1/MenuBuilder/docker-compose.yaml`
+- SSH key: `d:\.ssh\id_ed25519`
+- Server: `user1@87.242.100.34`
+- Project on server: `/home/user1/`
+- Docker compose file: `/home/user1/compose.yaml`
 - Backend container: `menubuilder-backend`
-- Frontend container: `menubuilder-frontend` (nginx, serves `frontend/dist/`)
+- Gateway container: `nginx-default` (serves `MenuBuilder/frontend/dist/` on port 3000)
 - **Monorepo (source):** `D:\repo\platerra\Public\etranprocessing\MenuBuilder\`
 
 ## Instructions
@@ -72,73 +72,44 @@ Before proceeding with build and deployment, check server health and establish t
 Upload shared package, pyproject.toml, Dockerfile, and app code:
 
 ```bash
-scp -i d:\.ssh\free-tier-cloud_ru -r "D:\repo\platerra\Public\etranprocessing\shared" user1@176.108.247.249:/home/user1/
-scp -i d:\.ssh\free-tier-cloud_ru -r "D:\repo\platerra\Public\etranprocessing\MenuBuilder\backend\pyproject.toml" "D:\repo\platerra\Public\etranprocessing\MenuBuilder\backend\Dockerfile" "D:\repo\platerra\Public\etranprocessing\MenuBuilder\backend\app" user1@176.108.247.249:/home/user1/MenuBuilder/backend/
+scp -i d:\.ssh\id_ed25519 -r "D:\repo\platerra\Public\etranprocessing\shared" user1@87.242.100.34:/home/user1/
+scp -i d:\.ssh\id_ed25519 -r "D:\repo\platerra\Public\etranprocessing\MenuBuilder\backend\pyproject.toml" "D:\repo\platerra\Public\etranprocessing\MenuBuilder\backend\Dockerfile" "D:\repo\platerra\Public\etranprocessing\MenuBuilder\backend\app" user1@87.242.100.34:/home/user1/MenuBuilder/backend/
 ```
 
 ### Step 2: Rebuild backend container
 
 ```bash
-ssh user1@176.108.247.249 -i d:\.ssh\free-tier-cloud_ru "sudo docker compose -f /home/user1/MenuBuilder/docker-compose.yaml up -d --build menubuilder-backend"
+ssh user1@87.242.100.34 -i d:\.ssh\id_ed25519 "sudo docker compose -f /home/user1/compose.yaml up -d --build menubuilder-backend"
 ```
 
-### Step 3: Upload nginx config
+### Step 3: Upload nginx config (if nginx routing changed)
 
 ```bash
-scp -i d:\.ssh\free-tier-cloud_ru "D:\repo\platerra\Public\etranprocessing\MenuBuilder\nginx.conf" user1@176.108.247.249:/home/user1/MenuBuilder/nginx.conf
-scp -i d:\.ssh\free-tier-cloud_ru -r "D:\repo\platerra\Public\etranprocessing\MenuBuilder\nginx" user1@176.108.247.249:/home/user1/MenuBuilder/
+scp -i d:\.ssh\id_ed25519 -r "D:\repo\platerra\Public\etranprocessing\nginx-configs" user1@87.242.100.34:/home/user1/
+ssh user1@87.242.100.34 -i d:\.ssh\id_ed25519 "sudo docker exec nginx-default nginx -t && sudo docker exec nginx-default nginx -s reload"
 ```
 
-**Only needed if `nginx.conf` itself changed.** Restart nginx (config is
-volume-mounted):
+### Step 4: Build and upload frontend bundle
 
 ```bash
-ssh user1@176.108.247.249 -i d:\.ssh\free-tier-cloud_ru "sudo docker compose -f /home/user1/MenuBuilder/docker-compose.yaml restart menubuilder-frontend"
+cd D:\repo\platerra\Public\etranprocessing\MenuBuilder\frontend
+npm run build
+scp -i d:\.ssh\id_ed25519 -r dist/* user1@87.242.100.34:/home/user1/MenuBuilder/frontend/dist/
 ```
 
-### Step 4: Upload frontend source
+`nginx-default` bind-mounts `./MenuBuilder/frontend/dist` straight into `/usr/share/nginx/html` **read-only, live**. Overwriting `dist/` on host serves new files immediately without container restart.
 
-```bash
-scp -i d:\.ssh\free-tier-cloud_ru -r "D:\repo\platerra\Public\etranprocessing\MenuBuilder\frontend\src" user1@176.108.247.249:/home/user1/MenuBuilder/frontend/
-```
-
-### Step 5: Build frontend on server
-
-```bash
-ssh user1@176.108.247.249 -i d:\.ssh\free-tier-cloud_ru "cd /home/user1/MenuBuilder/frontend && npm run build"
-```
-
-If the build fails with TypeScript errors, fix the source files locally in monorepo and repeat from Step 4.
-
-**No container restart needed after this step.** `menubuilder-frontend`'s
-`docker-compose.yaml` bind-mounts `./frontend/dist` (i.e.
-`/home/user1/MenuBuilder/frontend/dist` on the host) straight into
-`/usr/share/nginx/html` **read-only, live**. `npm run build` overwrites
-`dist/` in place on the host, and nginx serves the new files immediately —
-verified by comparing file mtimes inside vs. outside the container after a
-build (they match once you account for the container running in UTC vs. the
-host's MSK timezone). A restart is only required for Step 3 (`nginx.conf`
-changes) or JWT secret/env changes.
-
-> Note: there is also a legacy, **unused** static path at
-> `/var/www/menubuilder` on the host with its own (currently inactive)
-> systemd `nginx.service` and `/etc/nginx/sites-enabled/menubuilder` config.
-> Production traffic on port 3000 is served exclusively by the
-> `menubuilder-frontend` **Docker** container (`docker-proxy` owns the
-> `0.0.0.0:3000` listener) — don't waste time syncing files there.
-
-### Step 6: Verify
+### Step 5: Verify
 
 Verify container logs via MCP or SSH:
 
 - **Via MCP Ops (Recommended when `[MCP Ops Readiness: READY]`):**
   - Check for backend startup errors: `mcp_server-ops_log_search(keyword="Uvicorn running", lines=20)`
   - Scan for recent exceptions: `mcp_server-ops_log_search(level="error", lines=50)`
-  - If Nginx was updated: test syntax with `mcp_server-ops_nginx_config_test` and reload with `mcp_server-ops_nginx_reload` (confirm with `mcp_server-ops_confirm_execute`).
 
 - **Via SSH (Always available / Fallback when `[MCP Ops Readiness: UNAVAILABLE]`):**
 ```bash
-ssh -n -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249 "sudo docker logs menubuilder-backend --tail 5"
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker logs menubuilder-backend --tail 10"
 ```
 
 Expected: `Uvicorn running on http://0.0.0.0:8000`
@@ -181,13 +152,13 @@ Database migrations are tracked using Alembic in `ProcessingBackend/backend/alem
 To apply pending database migrations:
 
 ```bash
-ssh user1@176.108.247.249 -i d:\.ssh\free-tier-cloud_ru "sudo docker exec processing-backend alembic upgrade head"
+ssh user1@87.242.100.34 -i d:\.ssh\id_ed25519 "sudo docker exec processing-backend alembic upgrade head"
 ```
 
 If schema changes affect shared models (`orgs`, `org_billing_settings`, `licenses`, `terminals`, etc.), restart `menubuilder-backend`:
 
 ```bash
-ssh user1@176.108.247.249 -i d:\.ssh\free-tier-cloud_ru "sudo docker restart menubuilder-backend"
+ssh user1@87.242.100.34 -i d:\.ssh\id_ed25519 "sudo docker restart menubuilder-backend"
 ```
 
 ## Troubleshooting

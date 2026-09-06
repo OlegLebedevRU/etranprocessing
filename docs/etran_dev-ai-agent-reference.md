@@ -115,17 +115,17 @@ terminals ←── payments → orgs
 - **Python**: 3.14 (requires-python = "==3.14.*")
 - **FastAPI**: 0.141+
 - **SQLAlchemy**: 2.0+
-- **PostgreSQL**: 15
+- **Database**: Managed PostgreSQL 18 (10.0.0.7:5432, db: `etran`)
+- **Server**: 87.242.100.34 (user: `user1`, SSH: `d:\.ssh\id_ed25519`)
 
 ## Deployment
 
 ```bash
 # Build and deploy
-cd /home/user1/ProcessingBackend
-sudo docker compose up -d --build processing-backend
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker compose -f /home/user1/compose.yaml up -d --build processing-backend"
 
 # Check logs
-sudo docker logs processing-backend --tail 50
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker logs processing-backend --tail 50"
 ```
 
 ## Testing

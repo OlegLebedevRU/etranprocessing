@@ -81,9 +81,9 @@ scp -i d:\.ssh\id_ed25519 ProcessingBackend/nginx-mutual-legacy/nginx-configs/le
 ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker exec nginx-mutual-legacy-nginx-mutual-1 nginx -t && sudo docker exec nginx-mutual-legacy-nginx-mutual-1 nginx -s reload"
 ```
 
-## Selective Endpoint Switching (Legacy <-> New Backend)
+## Upstream & Routing Architecture
 
-The proxy configuration `legacy_ssl.conf` allows switching individual terminal services between the legacy backend (`46.38.51.114`) and the new Python backend (`new_processing_backend` -> `176.108.247.249:4443`):
+The proxy configuration `legacy_ssl.conf` routes terminal requests between the legacy backend (`46.38.51.114`) and the local Python processing backend (`new_processing_backend` -> `processing-backend:8000` via Docker network `user1_default`):
 
 ### 1. Certificates Flow (`/certificates/`)
 - **New Backend (Active)**:

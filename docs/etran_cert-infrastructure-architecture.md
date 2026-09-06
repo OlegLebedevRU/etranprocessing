@@ -12,35 +12,35 @@ Authoritative reference for the **etranprocessing** certificate lifecycle, mutua
                │   - Legacy .NET / C# App (CryptoAPI / Schannel)             │
                │   - Native C CLI Tooling (CNG KSP / WinHTTP)                │
                │   - Windows Certificate Store (LocalMachine\MY)             │
-               └──────────────┬──────────────────────────────┬───────────────┘
-                              │ mTLS (:443)                  │ mTLS (:4443)
-                              ▼                              ▼
-        ┌───────────────────────────────────┐    ┌───────────────────────────────────┐
-        │       nginx-mutual-legacy         │    │       nginx-mutual-primary        │
-        │         (87.242.100.34)           │    │         (176.108.247.249)         │
-        │   - Terminates TLS 1.0 - 1.2      │    │   - Modern TLS 1.2 - 1.3          │
-        │   - Validates client cert against │    │   - Validates client cert         │
-        │     legacy & new CA bundles       │    │   - Forwards client cert headers  │
-        │   - Dynamic Selective Routing     │    │                                   │
-        └───────┬───────────────────┬───────┘    └─────────────────┬─────────────────┘
-                │                   │                              │
-                │ (proxy_pass)      │ (proxy_pass)                 │ (proxy_pass)
-                ▼                   ▼                              ▼
-     ┌──────────────────────┐  ┌─────────────────────────────────────────────────────┐
-     │  Legacy IIS Backend  │  │                 ProcessingBackend                   │
-     │   (46.38.51.114)     │  │          (FastAPI + asyncpg + PostgreSQL)           │
-     │                      │  │   - Endpoint routing: /api/certificates,            │
-     │  - Legacy SOAP/REST  │  │     /api/licensebilling, /api/payment, etc.         │
-     │  - Legacy DB access  │  │   - Dual-issuer authentication (get_current_terminal)│
-     │                      │  │   - Certificate enrollment & CA integration         │
-     └──────────────────────┘  └──────────────────────────┬──────────────────────────┘
-                                                          │ HTTPS
-                                                          ▼
-                                              ┌──────────────────────┐
-                                              │ External Serverless  │
-                                              │ CA (Yandex Cloud)    │
-                                              │   (iot.leo4.ru)      │
-                                              └──────────────────────┘
+               └──────────────────────────────┬──────────────────────────────┘
+                                              │ mTLS (:443)
+                                              ▼
+                        ┌───────────────────────────────────────────┐
+                        │            nginx-mutual-legacy            │
+                        │              (87.242.100.34)              │
+                        │   - Terminates TLS 1.0 - 1.3              │
+                        │   - Validates client cert against         │
+                        │     legacy & new CA bundles               │
+                        │   - Forwards client cert headers          │
+                        │   - Bridges to Docker network user1_default│
+                        └──────────────┬────────────────────────────┘
+                                       │ (proxy_pass via HTTP)
+                                       ▼
+     ┌─────────────────────────────────────────────────────────────────────────┐
+     │                            ProcessingBackend                            │
+     │            (FastAPI + asyncpg + Managed PostgreSQL 10.0.0.7)            │
+     │   - Endpoint routing: /api/certificates, /api/licensebilling,           │
+     │     /api/payment, /api/ListMenuFile, /api/techgate                      │
+     │   - Dual-issuer authentication (get_current_terminal)                   │
+     │   - Certificate enrollment & CA integration                             │
+     └────────────────────────────────────┬────────────────────────────────────┘
+                                          │ HTTPS
+                                          ▼
+                              ┌──────────────────────┐
+                              │ External Serverless  │
+                              │ CA (Yandex Cloud)    │
+                              │   (iot.leo4.ru)      │
+                              └──────────────────────┘
 ```
 
 ---
@@ -350,13 +350,13 @@ $store.Close()
 Inspects terminal records, certificate binding, and certificate history on the remote PostgreSQL database:
 
 ```powershell
-# Check terminal record and current serial
+# Check terminal record and current serial (Managed PostgreSQL on 10.0.0.7)
 "SELECT id, sn, device_id, org_id, cert_serial, cert_not_valid_after FROM terminals WHERE id = 1;" | `
-    ssh -n -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249 "sudo docker exec -i iot-rpc-rest-app-pg-1 psql -U etran -d etranprocessing"
+    ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "psql -h 10.0.0.7 -U etran_db_user -d etran"
 
 # Check certificate audit history
 "SELECT id, terminal_id, cert_serial, source, issued_at FROM terminal_cert_history WHERE terminal_id = 1 ORDER BY id DESC LIMIT 5;" | `
-    ssh -n -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249 "sudo docker exec -i iot-rpc-rest-app-pg-1 psql -U etran -d etranprocessing"
+    ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "psql -h 10.0.0.7 -U etran_db_user -d etran"
 ```
 
 ---
@@ -478,8 +478,7 @@ SELECT json_agg(row_to_json(q)) FROM (
 """
 
 out = subprocess.check_output([
-    'sudo', 'docker', 'exec', '-i', 'iot-rpc-rest-app-pg-1',
-    'psql', '-U', 'etran', '-d', 'etranprocessing', '-t', '-A', '-c', sql
+    'psql', '-h', '10.0.0.7', '-U', 'etran_db_user', '-d', 'etran', '-t', '-A', '-c', sql
 ]).decode()
 
 data = json.loads(out)
@@ -529,7 +528,7 @@ if unauth:
     print("=" * 120)
     for u in unauth:
         print(f"Discovery ID: {u['disc_id']} | OU: {u['ou']} | O: {u['o']} | Status: {u['validation_status']} | Reqs: {u['request_count']} | IP: {u['client_ip']} | Last Seen: {u['last_seen_at']}")
-'@ | ssh -n -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249 "python3"
+'@ | ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "python3"
 ```
 
 ---

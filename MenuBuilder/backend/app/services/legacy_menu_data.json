@@ -3536,125 +3536,6 @@
       "parentId": 682
     },
     {
-      "Id": 663,
-      "org_id": 516,
-      "number": 0,
-      "name": "Раздел главного меню",
-      "parentId": null
-    },
-    {
-      "Id": 844,
-      "org_id": 516,
-      "number": 801,
-      "name": "МОЙКА+СУШКА С ПРИДАНИЕМ ФОРМЫ, ТАТУ, БРОВИ",
-      "parentId": 0
-    },
-    {
-      "Id": 845,
-      "org_id": 516,
-      "number": 802,
-      "name": "Мойка + Сушка с приданием формы",
-      "parentId": 844
-    },
-    {
-      "Id": 846,
-      "org_id": 516,
-      "number": 803,
-      "name": "HAIR TATOO",
-      "parentId": 844
-    },
-    {
-      "Id": 847,
-      "org_id": 516,
-      "number": 804,
-      "name": "УКЛАДКИ, ПРИЧЕСКИ, КОСЫ",
-      "parentId": 0
-    },
-    {
-      "Id": 848,
-      "org_id": 516,
-      "number": 805,
-      "name": "Женская укладка",
-      "parentId": 847
-    },
-    {
-      "Id": 849,
-      "org_id": 516,
-      "number": 806,
-      "name": "Мужская укладка",
-      "parentId": 847
-    },
-    {
-      "Id": 850,
-      "org_id": 516,
-      "number": 807,
-      "name": "Прическа",
-      "parentId": 847
-    },
-    {
-      "Id": 851,
-      "org_id": 516,
-      "number": 808,
-      "name": "Кудри, локоны ",
-      "parentId": 847
-    },
-    {
-      "Id": 852,
-      "org_id": 516,
-      "number": 809,
-      "name": "Полировка волос",
-      "parentId": 847
-    },
-    {
-      "Id": 854,
-      "org_id": 516,
-      "number": 810,
-      "name": "Химическая завивка",
-      "parentId": 847
-    },
-    {
-      "Id": 855,
-      "org_id": 516,
-      "number": 811,
-      "name": "ОКРАШИВАНИЕ (без стоимости материалов) ",
-      "parentId": 0
-    },
-    {
-      "Id": 856,
-      "org_id": 516,
-      "number": 812,
-      "name": "Окрашивание в 1 ТОН",
-      "parentId": 855
-    },
-    {
-      "Id": 857,
-      "org_id": 516,
-      "number": 813,
-      "name": "Сложное окрашивание",
-      "parentId": 855
-    },
-    {
-      "Id": 858,
-      "org_id": 516,
-      "number": 814,
-      "name": "Мелирование",
-      "parentId": 855
-    },
-    {
-      "Id": 859,
-      "org_id": 516,
-      "number": 815,
-      "name": "Прикорневое мелирование",
-      "parentId": 855
-    },
-    {
-      "Id": 860,
-      "org_id": 516,
-      "number": 816,
-      "name": "Тонирование краской ",
-      "parentId": 855
-    },
-    {
       "Id": 679,
       "org_id": 517,
       "number": 0,
@@ -4059,6 +3940,125 @@
       "number": 812,
       "name": "Комбо",
       "parentId": 0
+    },
+    {
+      "Id": 663,
+      "org_id": 516,
+      "number": 0,
+      "name": "Раздел главного меню",
+      "parentId": null
+    },
+    {
+      "Id": 844,
+      "org_id": 516,
+      "number": 801,
+      "name": "МОЙКА+СУШКА С ПРИДАНИЕМ ФОРМЫ, ТАТУ, БРОВИ",
+      "parentId": 0
+    },
+    {
+      "Id": 845,
+      "org_id": 516,
+      "number": 802,
+      "name": "Мойка + Сушка с приданием формы",
+      "parentId": 844
+    },
+    {
+      "Id": 846,
+      "org_id": 516,
+      "number": 803,
+      "name": "HAIR TATOO",
+      "parentId": 844
+    },
+    {
+      "Id": 847,
+      "org_id": 516,
+      "number": 804,
+      "name": "УКЛАДКИ, ПРИЧЕСКИ, КОСЫ",
+      "parentId": 0
+    },
+    {
+      "Id": 848,
+      "org_id": 516,
+      "number": 805,
+      "name": "Женская укладка",
+      "parentId": 847
+    },
+    {
+      "Id": 849,
+      "org_id": 516,
+      "number": 806,
+      "name": "Мужская укладка",
+      "parentId": 847
+    },
+    {
+      "Id": 850,
+      "org_id": 516,
+      "number": 807,
+      "name": "Прическа",
+      "parentId": 847
+    },
+    {
+      "Id": 851,
+      "org_id": 516,
+      "number": 808,
+      "name": "Кудри, локоны ",
+      "parentId": 847
+    },
+    {
+      "Id": 852,
+      "org_id": 516,
+      "number": 809,
+      "name": "Полировка волос",
+      "parentId": 847
+    },
+    {
+      "Id": 854,
+      "org_id": 516,
+      "number": 810,
+      "name": "Химическая завивка",
+      "parentId": 847
+    },
+    {
+      "Id": 855,
+      "org_id": 516,
+      "number": 811,
+      "name": "ОКРАШИВАНИЕ (без стоимости материалов) ",
+      "parentId": 0
+    },
+    {
+      "Id": 856,
+      "org_id": 516,
+      "number": 812,
+      "name": "Окрашивание в 1 ТОН",
+      "parentId": 855
+    },
+    {
+      "Id": 857,
+      "org_id": 516,
+      "number": 813,
+      "name": "Сложное окрашивание",
+      "parentId": 855
+    },
+    {
+      "Id": 858,
+      "org_id": 516,
+      "number": 814,
+      "name": "Мелирование",
+      "parentId": 855
+    },
+    {
+      "Id": 859,
+      "org_id": 516,
+      "number": 815,
+      "name": "Прикорневое мелирование",
+      "parentId": 855
+    },
+    {
+      "Id": 860,
+      "org_id": 516,
+      "number": 816,
+      "name": "Тонирование краской ",
+      "parentId": 855
     }
   ],
   "services": [
@@ -21424,87 +21424,6 @@
       "protypenumber": 99001
     },
     {
-      "Id": 4178,
-      "group_id": 663,
-      "tsp_code": 1000301,
-      "name": "ОФОРМЛЕНИЕ УСОВ И БОРОДЫ",
-      "printname": "Оформление усов и бороды",
-      "price": 400,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4179,
-      "group_id": 663,
-      "tsp_code": 1000302,
-      "name": "ПРОЧИЕ УСЛУГИ (материалы/окрашивания 1гр-10 руб)",
-      "printname": "Прочие услуги",
-      "price": 0,
-      "protypenumber": 99002
-    },
-    {
-      "Id": 4180,
-      "group_id": 663,
-      "tsp_code": 1000303,
-      "name": "МОЙКА ГОЛОВЫ",
-      "printname": "Мойка головы",
-      "price": 100,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4181,
-      "group_id": 663,
-      "tsp_code": 1000304,
-      "name": "СТРИЖКА ЧЕЛКИ ПРОСТАЯ",
-      "printname": "Стрижка челки простая",
-      "price": 250,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4182,
-      "group_id": 663,
-      "tsp_code": 1000305,
-      "name": "СТРИЖКА 1-3 НАСАДКИ И ПЕНСИОНЕРАМ",
-      "printname": "пенсионерам",
-      "price": 400,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4183,
-      "group_id": 663,
-      "tsp_code": 1000306,
-      "name": "СТРИЖКА ",
-      "printname": "Стрижка",
-      "price": 450,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4184,
-      "group_id": 663,
-      "tsp_code": 1000307,
-      "name": "СТРИЖКА ФЭЙД, СМЕНА ОБРАЗА",
-      "printname": "СТРИЖКА ФЭЙД, СМЕНА ОБРАЗА",
-      "price": 500,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4185,
-      "group_id": 663,
-      "tsp_code": 1000308,
-      "name": "КАРЕ, КАСКАД, ЛЕСЕНКА С МЫТЬЕМ И СУШКОЙ ГОЛОВЫ",
-      "printname": "КАРЕ, КАСКАД, ЛЕСЕНКА С МЫТЬЕМ И СУШКОЙ ГОЛОВЫ",
-      "price": 600,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4237,
-      "group_id": 663,
-      "tsp_code": 1000345,
-      "name": "СТРИЖКА КАРЕ,КАСКАД,ЛЕСЕНКА",
-      "printname": "СТРИЖКА КАРЕ,КАСКАД,ЛЕСЕНКА",
-      "price": 500,
-      "protypenumber": 99001
-    },
-    {
       "Id": 3176,
       "group_id": 678,
       "tsp_code": 1000358,
@@ -23854,330 +23773,6 @@
       "protypenumber": 99001
     },
     {
-      "Id": 4186,
-      "group_id": 844,
-      "tsp_code": 1000309,
-      "name": "Коррекция бровей",
-      "printname": "Коррекция бровей",
-      "price": 400,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4187,
-      "group_id": 844,
-      "tsp_code": 1000310,
-      "name": "ОКРАШИВАНИЕ БРОВЕЙ КРАСКОЙ",
-      "printname": "ОКРАШИВАНИЕ БРОВЕЙ КРАСКОЙ",
-      "price": 400,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4188,
-      "group_id": 845,
-      "tsp_code": 1000311,
-      "name": "Короткие волосы до 15 см",
-      "printname": "Мойка + сушка с приданием формы (до 15 см)",
-      "price": 500,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4189,
-      "group_id": 845,
-      "tsp_code": 1000312,
-      "name": "Средние волосы 15-30 см",
-      "printname": "Мойка + сушка с приданием формы (15-30 см)",
-      "price": 600,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4190,
-      "group_id": 845,
-      "tsp_code": 1000313,
-      "name": "Длинные волосы от 30 см",
-      "printname": "Мойка + сушка с приданием формы (от 30 см)",
-      "price": 700,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4191,
-      "group_id": 846,
-      "tsp_code": 1000314,
-      "name": "Простой рисунок",
-      "printname": "HAIR TATOO (простой рисунок) ",
-      "price": 100,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4192,
-      "group_id": 846,
-      "tsp_code": 1000315,
-      "name": "Сложный рисунок",
-      "printname": "HAIR TATOO (сложный рисунок) ",
-      "price": 200,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4193,
-      "group_id": 847,
-      "tsp_code": 1000316,
-      "name": "Плетение косы сложное",
-      "printname": "Плетение косы сложное",
-      "price": 500,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4194,
-      "group_id": 847,
-      "tsp_code": 1000317,
-      "name": "Плетение косы с канекалоном",
-      "printname": "Плетение косы с канекалоном",
-      "price": 600,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4195,
-      "group_id": 848,
-      "tsp_code": 1000318,
-      "name": "Короткие волосы до 15 см",
-      "printname": "Женская укладка (до 15 см)",
-      "price": 550,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4196,
-      "group_id": 848,
-      "tsp_code": 1000319,
-      "name": "Средние волосы 15-30 см",
-      "printname": "Женская укладка (15-30 см)",
-      "price": 650,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4197,
-      "group_id": 848,
-      "tsp_code": 1000320,
-      "name": "Длинные волосы от 30 см",
-      "printname": "Женская укладка (от 30 см)",
-      "price": 850,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4198,
-      "group_id": 849,
-      "tsp_code": 1000321,
-      "name": "Мужская укладка",
-      "printname": "Мужская укладка",
-      "price": 250,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4657,
-      "group_id": 849,
-      "tsp_code": 1000344,
-      "name": "Стрижка бровей, ушей",
-      "printname": "Стрижка бровей, ушей",
-      "price": 50,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4199,
-      "group_id": 850,
-      "tsp_code": 1000322,
-      "name": "Прическа простая",
-      "printname": "Прическа простая",
-      "price": 1300,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4200,
-      "group_id": 850,
-      "tsp_code": 1000323,
-      "name": "Прическа сложная",
-      "printname": "Прическа сложная",
-      "price": 1700,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4201,
-      "group_id": 851,
-      "tsp_code": 1000324,
-      "name": "Кудри, локоны ",
-      "printname": "Кудри, локоны ",
-      "price": 1200,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4202,
-      "group_id": 852,
-      "tsp_code": 1000325,
-      "name": "Полировка волос (средняя длина)",
-      "printname": "Полировка волос (средняя длина)",
-      "price": 500,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4203,
-      "group_id": 852,
-      "tsp_code": 1000326,
-      "name": "Полировка волос (длинные)",
-      "printname": "Полировка волос (длинные)",
-      "price": 750,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4204,
-      "group_id": 854,
-      "tsp_code": 1000327,
-      "name": "Химическая завивка ",
-      "printname": "Химическая завивка ",
-      "price": 1500,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4205,
-      "group_id": 855,
-      "tsp_code": 1000328,
-      "name": "Прикорневое окрашивание",
-      "printname": "Прикорневое окрашивание",
-      "price": 1100,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4215,
-      "group_id": 855,
-      "tsp_code": 1000338,
-      "name": "Тонирование маской, шампунем, кондиционером или тоником",
-      "printname": "Тонирование маской, шампунем, кондиционером или тоником",
-      "price": 300,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4206,
-      "group_id": 856,
-      "tsp_code": 1000329,
-      "name": "Короткие волосы до 15 см",
-      "printname": "Окрашивание в 1 тон (до 15 см)",
-      "price": 1100,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4207,
-      "group_id": 856,
-      "tsp_code": 1000330,
-      "name": "Средние волосы 15-30 см",
-      "printname": "Окрашивание в 1 тон (15-30 см)",
-      "price": 1500,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4208,
-      "group_id": 856,
-      "tsp_code": 1000331,
-      "name": "Длинные волосы от 30 см",
-      "printname": "Длинные волосы от 30 см",
-      "price": 1650,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4209,
-      "group_id": 857,
-      "tsp_code": 1000332,
-      "name": "Короткие волосы до 15 см",
-      "printname": "Сложное окрашивание (до 15 см)",
-      "price": 2000,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4210,
-      "group_id": 857,
-      "tsp_code": 1000333,
-      "name": "Средние волосы 15-30 см",
-      "printname": "Сложное окрашивание (15-30 см)",
-      "price": 3000,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4211,
-      "group_id": 857,
-      "tsp_code": 1000334,
-      "name": "Длинные волосы от 30 см",
-      "printname": "Сложное окрашивание (от 30 см)",
-      "price": 3500,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4212,
-      "group_id": 858,
-      "tsp_code": 1000335,
-      "name": "Короткие волосы до 15 см",
-      "printname": "Мелирование (до 15 см)",
-      "price": 2000,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4213,
-      "group_id": 858,
-      "tsp_code": 1000336,
-      "name": "Средние волосы 15-30 см",
-      "printname": "Мелирование (15-30 см)",
-      "price": 2500,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4214,
-      "group_id": 858,
-      "tsp_code": 1000337,
-      "name": "Длинные волосы от 30 см",
-      "printname": "Мелирование (от 30 см)",
-      "price": 3500,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4216,
-      "group_id": 859,
-      "tsp_code": 1000339,
-      "name": "Простое",
-      "printname": "Прикорневое мелирование (простое)",
-      "price": 2000,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4217,
-      "group_id": 859,
-      "tsp_code": 1000340,
-      "name": "Сложное",
-      "printname": "Прикорневое мелирование (сложное)",
-      "price": 2600,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4218,
-      "group_id": 860,
-      "tsp_code": 1000341,
-      "name": "Короткие волосы до 15 см",
-      "printname": "Тонирование краской (до 15 см)",
-      "price": 1000,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4219,
-      "group_id": 860,
-      "tsp_code": 1000342,
-      "name": "Средние волосы 15-30 см",
-      "printname": "Тонирование краской (15-30 см)",
-      "price": 1200,
-      "protypenumber": 99001
-    },
-    {
-      "Id": 4220,
-      "group_id": 860,
-      "tsp_code": 1000343,
-      "name": "Длинные волосы от 30 см",
-      "printname": "Тонирование краской (от 30 см)",
-      "price": 1500,
-      "protypenumber": 99001
-    },
-    {
       "Id": 4242,
       "group_id": 861,
       "tsp_code": 1000344,
@@ -26030,6 +25625,411 @@
       "printname": "Стрижка мужская (стандартная) + мытье головы",
       "price": 650,
       "protypenumber": 990021
+    },
+    {
+      "Id": 4178,
+      "group_id": 663,
+      "tsp_code": 1000301,
+      "name": "ОФОРМЛЕНИЕ УСОВ И БОРОДЫ",
+      "printname": "Оформление усов и бороды",
+      "price": 400,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4179,
+      "group_id": 663,
+      "tsp_code": 1000302,
+      "name": "ПРОЧИЕ УСЛУГИ (материалы/окрашивания 1гр-10 руб)",
+      "printname": "Прочие услуги",
+      "price": 0,
+      "protypenumber": 99002
+    },
+    {
+      "Id": 4180,
+      "group_id": 663,
+      "tsp_code": 1000303,
+      "name": "МОЙКА ГОЛОВЫ",
+      "printname": "Мойка головы",
+      "price": 100,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4181,
+      "group_id": 663,
+      "tsp_code": 1000304,
+      "name": "СТРИЖКА ЧЕЛКИ ПРОСТАЯ",
+      "printname": "Стрижка челки простая",
+      "price": 300,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4182,
+      "group_id": 663,
+      "tsp_code": 1000305,
+      "name": "СТРИЖКА 1-3 НАСАДКИ И ПЕНСИОНЕРАМ",
+      "printname": "пенсионерам",
+      "price": 450,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4183,
+      "group_id": 663,
+      "tsp_code": 1000306,
+      "name": "СТРИЖКА ",
+      "printname": "Стрижка",
+      "price": 450,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4184,
+      "group_id": 663,
+      "tsp_code": 1000307,
+      "name": "СТРИЖКА ФЭЙД, СМЕНА ОБРАЗА",
+      "printname": "СТРИЖКА ФЭЙД, СМЕНА ОБРАЗА",
+      "price": 500,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4185,
+      "group_id": 663,
+      "tsp_code": 1000308,
+      "name": "КАРЕ, КАСКАД, ЛЕСЕНКА С МЫТЬЕМ И СУШКОЙ ГОЛОВЫ",
+      "printname": "КАРЕ, КАСКАД, ЛЕСЕНКА С МЫТЬЕМ И СУШКОЙ ГОЛОВЫ",
+      "price": 600,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4237,
+      "group_id": 663,
+      "tsp_code": 1000345,
+      "name": "СТРИЖКА КАРЕ,КАСКАД,ЛЕСЕНКА",
+      "printname": "СТРИЖКА КАРЕ,КАСКАД,ЛЕСЕНКА",
+      "price": 500,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4186,
+      "group_id": 844,
+      "tsp_code": 1000309,
+      "name": "Коррекция бровей",
+      "printname": "Коррекция бровей",
+      "price": 400,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4187,
+      "group_id": 844,
+      "tsp_code": 1000310,
+      "name": "ОКРАШИВАНИЕ БРОВЕЙ КРАСКОЙ",
+      "printname": "ОКРАШИВАНИЕ БРОВЕЙ КРАСКОЙ",
+      "price": 400,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4188,
+      "group_id": 845,
+      "tsp_code": 1000311,
+      "name": "Короткие волосы до 15 см",
+      "printname": "Мойка + сушка с приданием формы (до 15 см)",
+      "price": 500,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4189,
+      "group_id": 845,
+      "tsp_code": 1000312,
+      "name": "Средние волосы 15-30 см",
+      "printname": "Мойка + сушка с приданием формы (15-30 см)",
+      "price": 600,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4190,
+      "group_id": 845,
+      "tsp_code": 1000313,
+      "name": "Длинные волосы от 30 см",
+      "printname": "Мойка + сушка с приданием формы (от 30 см)",
+      "price": 700,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4191,
+      "group_id": 846,
+      "tsp_code": 1000314,
+      "name": "Простой рисунок",
+      "printname": "HAIR TATOO (простой рисунок) ",
+      "price": 100,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4192,
+      "group_id": 846,
+      "tsp_code": 1000315,
+      "name": "Сложный рисунок",
+      "printname": "HAIR TATOO (сложный рисунок) ",
+      "price": 200,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4193,
+      "group_id": 847,
+      "tsp_code": 1000316,
+      "name": "Плетение косы сложное",
+      "printname": "Плетение косы сложное",
+      "price": 500,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4194,
+      "group_id": 847,
+      "tsp_code": 1000317,
+      "name": "Плетение косы с канекалоном",
+      "printname": "Плетение косы с канекалоном",
+      "price": 600,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4195,
+      "group_id": 848,
+      "tsp_code": 1000318,
+      "name": "Короткие волосы до 15 см",
+      "printname": "Женская укладка (до 15 см)",
+      "price": 550,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4196,
+      "group_id": 848,
+      "tsp_code": 1000319,
+      "name": "Средние волосы 15-30 см",
+      "printname": "Женская укладка (15-30 см)",
+      "price": 650,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4197,
+      "group_id": 848,
+      "tsp_code": 1000320,
+      "name": "Длинные волосы от 30 см",
+      "printname": "Женская укладка (от 30 см)",
+      "price": 850,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4198,
+      "group_id": 849,
+      "tsp_code": 1000321,
+      "name": "Мужская укладка",
+      "printname": "Мужская укладка",
+      "price": 250,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4657,
+      "group_id": 849,
+      "tsp_code": 1000344,
+      "name": "Стрижка бровей, ушей",
+      "printname": "Стрижка бровей, ушей",
+      "price": 50,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4199,
+      "group_id": 850,
+      "tsp_code": 1000322,
+      "name": "Прическа простая",
+      "printname": "Прическа простая",
+      "price": 1300,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4200,
+      "group_id": 850,
+      "tsp_code": 1000323,
+      "name": "Прическа сложная",
+      "printname": "Прическа сложная",
+      "price": 1700,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4201,
+      "group_id": 851,
+      "tsp_code": 1000324,
+      "name": "Кудри, локоны ",
+      "printname": "Кудри, локоны ",
+      "price": 1200,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4202,
+      "group_id": 852,
+      "tsp_code": 1000325,
+      "name": "Полировка волос (средняя длина)",
+      "printname": "Полировка волос (средняя длина)",
+      "price": 500,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4203,
+      "group_id": 852,
+      "tsp_code": 1000326,
+      "name": "Полировка волос (длинные)",
+      "printname": "Полировка волос (длинные)",
+      "price": 750,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4204,
+      "group_id": 854,
+      "tsp_code": 1000327,
+      "name": "Химическая завивка ",
+      "printname": "Химическая завивка ",
+      "price": 1500,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4205,
+      "group_id": 855,
+      "tsp_code": 1000328,
+      "name": "Прикорневое окрашивание",
+      "printname": "Прикорневое окрашивание",
+      "price": 1100,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4215,
+      "group_id": 855,
+      "tsp_code": 1000338,
+      "name": "Тонирование маской, шампунем, кондиционером или тоником",
+      "printname": "Тонирование маской, шампунем, кондиционером или тоником",
+      "price": 300,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4206,
+      "group_id": 856,
+      "tsp_code": 1000329,
+      "name": "Короткие волосы до 15 см",
+      "printname": "Окрашивание в 1 тон (до 15 см)",
+      "price": 1100,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4207,
+      "group_id": 856,
+      "tsp_code": 1000330,
+      "name": "Средние волосы 15-30 см",
+      "printname": "Окрашивание в 1 тон (15-30 см)",
+      "price": 1500,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4208,
+      "group_id": 856,
+      "tsp_code": 1000331,
+      "name": "Длинные волосы от 30 см",
+      "printname": "Длинные волосы от 30 см",
+      "price": 1650,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4209,
+      "group_id": 857,
+      "tsp_code": 1000332,
+      "name": "Короткие волосы до 15 см",
+      "printname": "Сложное окрашивание (до 15 см)",
+      "price": 2000,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4210,
+      "group_id": 857,
+      "tsp_code": 1000333,
+      "name": "Средние волосы 15-30 см",
+      "printname": "Сложное окрашивание (15-30 см)",
+      "price": 3000,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4211,
+      "group_id": 857,
+      "tsp_code": 1000334,
+      "name": "Длинные волосы от 30 см",
+      "printname": "Сложное окрашивание (от 30 см)",
+      "price": 3500,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4212,
+      "group_id": 858,
+      "tsp_code": 1000335,
+      "name": "Короткие волосы до 15 см",
+      "printname": "Мелирование (до 15 см)",
+      "price": 2000,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4213,
+      "group_id": 858,
+      "tsp_code": 1000336,
+      "name": "Средние волосы 15-30 см",
+      "printname": "Мелирование (15-30 см)",
+      "price": 2500,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4214,
+      "group_id": 858,
+      "tsp_code": 1000337,
+      "name": "Длинные волосы от 30 см",
+      "printname": "Мелирование (от 30 см)",
+      "price": 3500,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4216,
+      "group_id": 859,
+      "tsp_code": 1000339,
+      "name": "Простое",
+      "printname": "Прикорневое мелирование (простое)",
+      "price": 2000,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4217,
+      "group_id": 859,
+      "tsp_code": 1000340,
+      "name": "Сложное",
+      "printname": "Прикорневое мелирование (сложное)",
+      "price": 2600,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4218,
+      "group_id": 860,
+      "tsp_code": 1000341,
+      "name": "Короткие волосы до 15 см",
+      "printname": "Тонирование краской (до 15 см)",
+      "price": 1000,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4219,
+      "group_id": 860,
+      "tsp_code": 1000342,
+      "name": "Средние волосы 15-30 см",
+      "printname": "Тонирование краской (15-30 см)",
+      "price": 1200,
+      "protypenumber": 99001
+    },
+    {
+      "Id": 4220,
+      "group_id": 860,
+      "tsp_code": 1000343,
+      "name": "Длинные волосы от 30 см",
+      "printname": "Тонирование краской (от 30 см)",
+      "price": 1500,
+      "protypenumber": 99001
     }
   ]
 }

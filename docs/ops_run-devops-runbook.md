@@ -155,149 +155,135 @@ after deploying:
 ### Server Access
 
 ```bash
-# SSH
-ssh -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249
+# SSH to Primary Production Server (87.242.100.34)
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34
 
 # Docker containers
-sudo docker ps
+sudo docker compose -f /home/user1/compose.yaml ps
 sudo docker logs <container> --tail 50
 sudo docker exec -it <container> bash
 ```
 
-### Service URLs
+### Service URLs & Ports
 
-| Service | URL |
-|---------|-----|
-| Payment API | https://dev.leo4.ru:4443/api/payment/etran.ashx |
-| MenuBuilder | https://dev.leo4.ru:4443/api/ListMenuFile |
-| License Billing | https://dev.leo4.ru:4443/api/licensebilling/ |
+| Service | Port / Protocol | Target / URL |
+|---------|-----------------|--------------|
+| Terminal mTLS Gateway | 443 / HTTPS (mTLS) | `https://iot-processing.ru/payment/` (nginx-mutual-legacy) |
+| Web UI MenuBuilder & REST API | 3000 / HTTPS (TLS) | `https://dev.leo4.ru:3000/` (nginx-default) |
+| ACME HTTP-01 Challenge | 80 / HTTP | `http://dev.leo4.ru/.well-known/acme-challenge/` |
+| Terem Email mTLS | 1443, 1444 / HTTPS (mTLS) | `https://dev.leo4.ru:1443/` (nginx-default) |
+| RabbitMQ AMQP / MQTT TLS | 5672, 8883 | `amqp://...:5672/`, `mqtts://...:8883/` |
 
-### Legacy raw-path proxy (no `/api` prefix) → real legacy IIS server
+### Terminal Routing & mTLS Proxy (nginx-mutual-legacy)
 
-nginx-mutual also proxies the legacy terminal endpoints that do **not** use
-the `/api` prefix (`/certificates/`, `/payment/`, `/payment/etran.ashx`,
-`/GateGauge/main.ashx`, `/GateGauge/UpdateScript.ashx`, `/techgate/etran.ashx`,
-`/licensebilling/`, plus the `/` fallback) directly to the real legacy IIS
-server at its public IP `46.38.51.114`, forwarding client-cert data via
-`X-Client-Cert-*` headers. This is intended for the eventual DNS cutover of
-`iot-processing.ru` from the legacy server to nginx-mutual, while keeping the
-legacy direct-to-terminal flow (bypassing nginx-mutual) working as a fallback.
-
-Caveats:
-- The proxy target is a literal IP, not the `iot-processing.ru` domain —
-  after the DNS cutover, proxying to the domain would create a loop (nginx
-  proxying to itself). There is no VPN/tunnel to the legacy server's
-  internal address (`172.17.100.8`), so the public IP is used.
-- nginx does **not** present a client TLS certificate when talking to the
-  legacy server (that's the point of `X-Client-Cert-*` header forwarding +
-  `ClientCertHelper` on the legacy side, which trusts headers only from
-  `TrustedProxyIP`). If the legacy IIS site enforces "Require client
-  certificate" at the SSL binding (HTTP.sys) level, requests will be
-  rejected before reaching `ClientCertHelper` — this needs to be checked/
-  adjusted on the legacy IIS server itself, outside of nginx's control.
-- DNS cutover for `iot-processing.ru` is a manual step, done separately,
-  only after verifying the legacy-server-side `ClientCertHelper` changes
-  are deployed and working (see `Public/etranprocessing` repo,
-  `BACK/ProcessingCore/EtranDispatcher`, `FRONT/TechGate`, `FRONT/GateGauge`,
-  `FRONT/licensebilling`).
+`nginx-mutual-legacy` (listening on host port 443) terminates terminal client certificates and forwards requests directly to the local Docker network `user1_default` at `http://processing-backend:8000`:
+- `/payment/`, `/payment/etran.ashx` → `http://new_processing_backend/api/payment/`
+- `/techgate/etran.ashx` → `http://new_processing_backend/api/techgate/etran.ashx`
+- `/api/ListMenuFile` → `http://new_processing_backend/api/ListMenuFile`
+- `/licensebilling/` → `http://new_processing_backend/api/licensebilling/`
+- `/certificates/` → `http://new_processing_backend/api/certificates/`
+- Unswitched legacy routes fallback to legacy server `http://46.38.51.114`.
 
 ### Container Names
 
-| Container | Purpose |
-|-----------|---------|
-| processing-backend | Payment processing API |
-| processing-frontend | Frontend nginx |
-| menubuilder-backend | Menu management API |
-| menubuilder-frontend | Menu frontend |
-| iot-rpc-rest-app-nginx-mutual-1 | SSL termination + routing |
-| iot-rpc-rest-app-pg-1 | PostgreSQL database |
-| iot-rpc-rest-app-nginx-1 | Legacy nginx |
+| Container | Purpose | Network | Compose File |
+|-----------|---------|---------|--------------|
+| `processing-backend` | Payment processing API (:8000) | `user1_default` | `/home/user1/compose.yaml` |
+| `menubuilder-backend` | Menu management and Billing API (:8000) | `user1_default` | `/home/user1/compose.yaml` |
+| `nginx-default` | Web UI & JWT API gateway (:80, :3000, :1443, :1444) | `user1_default` | `/home/user1/compose.yaml` |
+| `app1` | IoT platform backend (:8000) | `user1_default` | `/home/user1/compose.yaml` |
+| `mcp-pin-server` | MCP server for PIN operations (:8001) | `user1_default` | `/home/user1/compose.yaml` |
+| `rabbitmq` | Message broker (:5672, :8883) | `user1_default` | `/home/user1/compose.yaml` |
+| `nginx-mutual-legacy-nginx-mutual-1` | Terminal mTLS ingress (:443) | `user1_default` | `/home/user1/nginx-mutual-legacy/docker-compose.yml` |
 
 ## Deployment
+
+Deployments must be strictly reproducible from the Git repository.
 
 ### Deploy ProcessingBackend
 
 ```bash
-# 1. Upload code
-scp -r backend/app user1@176.108.247.249:/home/user1/ProcessingBackend/backend/
+# 1. Sync shared models and backend code from repo to server
+scp -i d:\.ssh\id_ed25519 -r shared/* user1@87.242.100.34:/home/user1/shared/
+scp -i d:\.ssh\id_ed25519 -r ProcessingBackend/backend/* user1@87.242.100.34:/home/user1/ProcessingBackend/backend/
 
-# 2. Upload docker-compose
-scp docker-compose.yaml user1@176.108.247.249:/home/user1/ProcessingBackend/
+# 2. Rebuild and restart container
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker compose -f /home/user1/compose.yaml build processing-backend && sudo docker compose -f /home/user1/compose.yaml up -d processing-backend"
 
-# 3. Rebuild and restart
-ssh user1@176.108.247.249 "cd /home/user1/ProcessingBackend && sudo docker compose up -d --build processing-backend"
+# 3. Apply database migrations
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker exec processing-backend alembic upgrade head"
+
+# 4. Restart consumers of shared models if needed
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker restart menubuilder-backend"
 ```
 
 ### Deploy MenuBuilder
 
 ```bash
-# 1. Upload backend
-scp -r backend/app user1@176.108.247.249:/home/user1/MenuBuilder/backend/
+# 1. Sync shared models and MenuBuilder backend
+scp -i d:\.ssh\id_ed25519 -r shared/* user1@87.242.100.34:/home/user1/shared/
+scp -i d:\.ssh\id_ed25519 -r MenuBuilder/backend/* user1@87.242.100.34:/home/user1/MenuBuilder/backend/
 
-# 2. Rebuild
-ssh user1@176.108.247.249 "cd /home/user1/MenuBuilder && sudo docker compose up -d --build menubuilder-backend"
+# 2. Rebuild and restart MenuBuilder backend
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker compose -f /home/user1/compose.yaml build menubuilder-backend && sudo docker compose -f /home/user1/compose.yaml up -d menubuilder-backend"
 
-# 3. Upload frontend
-scp -r frontend/src user1@176.108.247.249:/home/user1/MenuBuilder/frontend/
-
-# 4. Build frontend
-ssh user1@176.108.247.249 "cd /home/user1/MenuBuilder/frontend && npm run build"
+# 3. Build frontend locally and upload dist
+cd MenuBuilder/frontend
+npm run build
+scp -i d:\.ssh\id_ed25519 -r dist/* user1@87.242.100.34:/home/user1/MenuBuilder/frontend/dist/
+# Note: nginx-default live-mounts frontend/dist/, no container restart required.
 ```
 
-### Update Nginx Config
+### Update Nginx Configurations
 
-⚠️ The nginx-mutual config lives in the **`iot-rpc-rest-app`** repo, not
-here — see [ops_net-nginx-config-guide.md](ops_net-nginx-config-guide.md) "Source of truth" for why.
-Edit `nginx-configs/dev_leo4_ru/internal_ssl.conf` there, commit/push, then
-deploy:
-
+#### Terminal Gateway (`nginx-mutual-legacy`)
+Config lives in `ProcessingBackend/nginx-mutual-legacy/nginx-configs/legacy_ssl.conf`.
 ```bash
-# 1. Copy config to server (from the iot-rpc-rest-app checkout)
-cd D:\work\iot.leo4.ru\iot-rpc-rest-app
-scp -i d:\.ssh\free-tier-cloud_ru nginx-configs/dev_leo4_ru/internal_ssl.conf user1@176.108.247.249:/tmp/
+# 1. Upload config to server
+scp -i d:\.ssh\id_ed25519 ProcessingBackend/nginx-mutual-legacy/nginx-configs/legacy_ssl.conf user1@87.242.100.34:/home/user1/nginx-mutual-legacy/nginx-configs/legacy_ssl.conf
 
-# 2. Copy to container
-ssh -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249 "sudo docker cp /tmp/internal_ssl.conf iot-rpc-rest-app-nginx-mutual-1:/etc/nginx/conf.d/internal_ssl.conf"
+# 2. Test and reload without dropping connections
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker exec nginx-mutual-legacy-nginx-mutual-1 nginx -t && sudo docker exec nginx-mutual-legacy-nginx-mutual-1 nginx -s reload"
+```
 
-# 3. Test and reload
-ssh -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249 "sudo docker exec iot-rpc-rest-app-nginx-mutual-1 nginx -t && sudo docker exec iot-rpc-rest-app-nginx-mutual-1 nginx -s reload"
+#### Web UI & JWT Gateway (`nginx-default`)
+Configs live in `nginx-configs/` (`port_80.conf`, `port_3000.conf`, `terem_email_mtls.conf`).
+```bash
+# 1. Upload configs to server
+scp -i d:\.ssh\id_ed25519 -r nginx-configs/* user1@87.242.100.34:/home/user1/nginx-configs/
+
+# 2. Test and reload
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker exec nginx-default nginx -t && sudo docker exec nginx-default nginx -s reload"
 ```
 
 ## Database Operations
 
-### Connect to PostgreSQL
+### Connect to Managed PostgreSQL (10.0.0.7)
 
 ```bash
-# Via docker
-sudo docker exec -it iot-rpc-rest-app-pg-1 psql -U etran -d etranprocessing
+# From server host (passwords stored in ~/.pgpass):
+psql -h 10.0.0.7 -U etran_db_user -d etran
+psql -h 10.0.0.7 -U leo4_db_user -d iot_rpc
 
-# Via psql (if installed)
-psql -h 176.108.247.249 -U etran -d etranprocessing
+# Run SQL query directly
+psql -h 10.0.0.7 -U etran_db_user -d etran -c "SELECT COUNT(1) FROM terminals;"
 ```
 
-### Run Migration
+### Run Migrations
 
+Migrations are owned by `ProcessingBackend/backend/alembic/`:
 ```bash
-# 1. Copy migration script
-scp migration.py user1@176.108.247.249:/tmp/
-
-# 2. Copy to container
-ssh user1@176.108.247.249 "sudo docker cp /tmp/migration.py processing-backend:/app/migration.py"
-
-# 3. Run
-ssh user1@176.108.247.249 "sudo docker exec processing-backend python /app/migration.py"
+sudo docker exec processing-backend alembic upgrade head
 ```
 
-### Backup Database
+### Backup & Restore Database (Managed PostgreSQL)
 
 ```bash
-sudo docker exec iot-rpc-rest-app-pg-1 pg_dump -U etran etranprocessing > backup_$(date +%Y%m%d).sql
-```
+# Backup Managed PG (from server host via ~/.pgpass):
+pg_dump -h 10.0.0.7 -U etran_db_user etran > backup_etran_$(date +%Y%m%d).sql
 
-### Restore Database
-
-```bash
-cat backup.sql | sudo docker exec -i iot-rpc-rest-app-pg-1 psql -U etran -d etranprocessing
+# Restore:
+psql -h 10.0.0.7 -U etran_db_user -d etran < backup_etran.sql
 ```
 
 ## Monitoring
@@ -305,11 +291,11 @@ cat backup.sql | sudo docker exec -i iot-rpc-rest-app-pg-1 psql -U etran -d etra
 ### Check Service Status
 
 ```bash
-# All containers
-sudo docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+# All containers (unified compose stack)
+sudo docker compose -f /home/user1/compose.yaml ps
 
-# Specific service
-sudo docker ps | grep processing-backend
+# Legacy mTLS proxy
+sudo docker compose -f /home/user1/nginx-mutual-legacy/docker-compose.yml ps
 ```
 
 ### View Logs
@@ -319,13 +305,8 @@ sudo docker ps | grep processing-backend
 sudo docker logs processing-backend --tail 100
 sudo docker logs processing-backend -f  # Follow
 
-# Payment logs (persistent)
-sudo docker exec processing-backend cat /app/log/payment.log
-sudo docker exec processing-backend tail -f /app/log/payment.log
-
-# Host log files
-cat /home/user1/ProcessingBackend/log/payment.log
-tail -f /home/user1/ProcessingBackend/log/payment.log
+# Terminal mTLS gateway logs
+sudo docker logs nginx-mutual-legacy-nginx-mutual-1 --tail 100
 ```
 
 ### Check Database
@@ -343,11 +324,8 @@ async def q():
 asyncio.run(q())
 "
 
-# Recent payments
-sudo docker exec processing-backend python /app/list_payments.py
-
 # Terminal count
-sudo docker exec -it iot-rpc-rest-app-pg-1 psql -U etran -d etranprocessing -c "SELECT COUNT(*) FROM terminals;"
+psql -h 10.0.0.7 -U etran_db_user -d etran -c "SELECT COUNT(*) FROM terminals;"
 ```
 
 ## Troubleshooting
@@ -359,8 +337,8 @@ sudo docker exec -it iot-rpc-rest-app-pg-1 psql -U etran -d etranprocessing -c "
 sudo docker logs processing-backend --tail 50
 
 # Common issues:
-# - .env file missing
-# - Database connection failed
+# - .env file missing in /home/user1/ProcessingBackend/backend/.env
+# - Managed PostgreSQL connection failed (check 10.0.0.7:5432)
 # - Port conflict
 ```
 
@@ -368,10 +346,10 @@ sudo docker logs processing-backend --tail 50
 
 ```bash
 # 1. Check nginx config
-sudo docker exec iot-rpc-rest-app-nginx-mutual-1 cat /etc/nginx/conf.d/internal_ssl.conf | grep -A 20 "payment"
+sudo docker exec nginx-mutual-legacy-nginx-mutual-1 cat /etc/nginx/conf.d/internal_ssl.conf | grep -A 20 "payment"
 
-# 2. Check terminal exists
-sudo docker exec -it iot-rpc-rest-app-pg-1 psql -U etran -d etranprocessing -c "SELECT * FROM terminals WHERE sn = 'CN_FROM_LOG';"
+# 2. Check terminal exists in database
+psql -h 10.0.0.7 -U etran_db_user -d etran -c "SELECT * FROM terminals WHERE sn = 'CN_FROM_LOG';"
 
 # 3. Check cert headers in logs
 sudo docker logs processing-backend | grep "Cert DN"

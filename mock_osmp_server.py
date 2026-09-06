@@ -27,7 +27,15 @@ class OSMPMockHandler(BaseHTTPRequestHandler):
             if txn_id == '0':
                 txn_id = post_params.get('txn_id', ['0'])[0]
 
-        if account == '5555':
+        if command != 'check':
+            response_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<response>
+    <osmp_txn_id>{txn_id}</osmp_txn_id>
+    <result>3</result>
+    <comment>Команда '{command}' не поддерживается</comment>
+</response>
+"""
+        elif account == '5555':
             res_sum = "120.00"
             res_comment = "OK"
             recipient = "Лицевой счет: 5555, Сумма к оплате: 120.00 руб."

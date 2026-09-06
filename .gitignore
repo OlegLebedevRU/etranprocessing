@@ -91,3 +91,6 @@ Thumbs.db
 *netlog*.json
 edge_netlog.json
 
+# Local problem investigation dumps
+menulistfiles-problem/
+

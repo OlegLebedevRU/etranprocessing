@@ -5,16 +5,16 @@ description: Deploys ProcessingBackend (backend + mcp-pin-server) to the product
 
 # Deploy ProcessingBackend
 
-Deploys ProcessingBackend (FastAPI) and mcp-pin-server to the production server at `176.108.247.249`, rebuilds Docker containers.
+Deploys ProcessingBackend (FastAPI) and mcp-pin-server to the production server at `87.242.100.34`, rebuilds Docker containers.
 
 **Source of truth: monorepo at `D:\repo\platerra\Public\etranprocessing\ProcessingBackend\`**
 
 ## Prerequisites
 
-- SSH key: `d:\.ssh\free-tier-cloud_ru`
-- Server: `user1@176.108.247.249`
-- Project on server: `/home/user1/ProcessingBackend/`
-- Docker compose file: `/home/user1/ProcessingBackend/docker-compose.yaml`
+- SSH key: `d:\.ssh\id_ed25519`
+- Server: `user1@87.242.100.34`
+- Project on server: `/home/user1/`
+- Docker compose file: `/home/user1/compose.yaml`
 - Backend container: `processing-backend`
 - MCP container: `mcp-pin-server`
 
@@ -71,32 +71,31 @@ Before initiating upload and container rebuild, verify host metrics and establis
 ### Step 1: Upload backend & shared package
 
 ```bash
-scp -i d:\.ssh\free-tier-cloud_ru -r "D:\repo\platerra\Public\etranprocessing\shared" user1@176.108.247.249:/home/user1/
-scp -i d:\.ssh\free-tier-cloud_ru -r "D:\repo\platerra\Public\etranprocessing\ProcessingBackend\backend\pyproject.toml" "D:\repo\platerra\Public\etranprocessing\ProcessingBackend\backend\Dockerfile" "D:\repo\platerra\Public\etranprocessing\ProcessingBackend\backend\app" "D:\repo\platerra\Public\etranprocessing\ProcessingBackend\backend\alembic" "D:\repo\platerra\Public\etranprocessing\ProcessingBackend\backend\alembic.ini" user1@176.108.247.249:/home/user1/ProcessingBackend/backend/
+scp -i d:\.ssh\id_ed25519 -r "D:\repo\platerra\Public\etranprocessing\shared" user1@87.242.100.34:/home/user1/
+scp -i d:\.ssh\id_ed25519 -r "D:\repo\platerra\Public\etranprocessing\ProcessingBackend\backend\pyproject.toml" "D:\repo\platerra\Public\etranprocessing\ProcessingBackend\backend\Dockerfile" "D:\repo\platerra\Public\etranprocessing\ProcessingBackend\backend\app" "D:\repo\platerra\Public\etranprocessing\ProcessingBackend\backend\alembic" "D:\repo\platerra\Public\etranprocessing\ProcessingBackend\backend\alembic.ini" user1@87.242.100.34:/home/user1/ProcessingBackend/backend/
 ```
 
 ### Step 2: Upload mcp-pin-server
 
 ```bash
-scp -i d:\.ssh\free-tier-cloud_ru -r "D:\repo\platerra\Public\etranprocessing\ProcessingBackend\mcp-pin-server\pyproject.toml" "D:\repo\platerra\Public\etranprocessing\ProcessingBackend\mcp-pin-server\Dockerfile" "D:\repo\platerra\Public\etranprocessing\ProcessingBackend\mcp-pin-server\src" user1@176.108.247.249:/home/user1/ProcessingBackend/mcp-pin-server/
+scp -i d:\.ssh\id_ed25519 -r "D:\repo\platerra\Public\etranprocessing\ProcessingBackend\mcp-pin-server\pyproject.toml" "D:\repo\platerra\Public\etranprocessing\ProcessingBackend\mcp-pin-server\Dockerfile" "D:\repo\platerra\Public\etranprocessing\ProcessingBackend\mcp-pin-server\src" user1@87.242.100.34:/home/user1/ProcessingBackend/mcp-pin-server/
 ```
 
-### Step 3: Upload docker-compose and rebuild
+### Step 3: Rebuild and restart containers
 
 ```bash
-scp -i d:\.ssh\free-tier-cloud_ru "D:\repo\platerra\Public\etranprocessing\ProcessingBackend\docker-compose.yaml" user1@176.108.247.249:/home/user1/ProcessingBackend/docker-compose.yaml
-ssh user1@176.108.247.249 -i d:\.ssh\free-tier-cloud_ru "sudo docker compose -f /home/user1/ProcessingBackend/docker-compose.yaml up -d --build processing-backend mcp-pin-server"
+ssh user1@87.242.100.34 -i d:\.ssh\id_ed25519 "sudo docker compose -f /home/user1/compose.yaml up -d --build processing-backend mcp-pin-server"
 ```
 
 ### Step 3b: Run Alembic migrations (if DB models / migrations changed)
 
 ```bash
-ssh user1@176.108.247.249 -i d:\.ssh\free-tier-cloud_ru "sudo docker exec processing-backend alembic upgrade head"
+ssh user1@87.242.100.34 -i d:\.ssh\id_ed25519 "sudo docker exec processing-backend alembic upgrade head"
 ```
 
 If the migration added new columns or tables used by `MenuBuilder`, restart `menubuilder-backend`:
 ```bash
-ssh user1@176.108.247.249 -i d:\.ssh\free-tier-cloud_ru "sudo docker restart menubuilder-backend"
+ssh user1@87.242.100.34 -i d:\.ssh\id_ed25519 "sudo docker restart menubuilder-backend"
 ```
 
 ### Step 4: Verify
@@ -110,8 +109,8 @@ Verify container logs via MCP or SSH:
 
 - **Via SSH (Always available / Fallback when `[MCP Ops Readiness: UNAVAILABLE]`):**
 ```bash
-ssh -n -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249 "sudo docker logs processing-backend --tail 5"
-ssh -n -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249 "sudo docker logs mcp-pin-server --tail 5"
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker logs processing-backend --tail 5"
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker logs mcp-pin-server --tail 5"
 ```
 
 Expected: `Uvicorn running on http://0.0.0.0:8000` and `MCP server connected to database`

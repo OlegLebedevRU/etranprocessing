@@ -5,7 +5,7 @@ description: Inspects server health, analyzes memory and disk usage, searches ap
 
 # Server Ops & Diagnostics Skill
 
-Operational workflows for monitoring, diagnosing, and troubleshooting the production server at `176.108.247.249` via the connected `server-ops` MCP server.
+Operational workflows for monitoring, diagnosing, and troubleshooting the production server at `87.242.100.34` via the connected `server-ops` MCP server.
 
 ## Mandatory Task Readiness Protocol (Step 0)
 
@@ -19,7 +19,7 @@ Before executing any diagnostic or operational workflow, verify and declare task
    - **Load Average**: Should be < 2.0 under normal operation.
 3. **Set Readiness Mark & Fallback Policy:**
    - `[MCP Ops Readiness: READY]` — proceed with MCP workflows below.
-   - `[MCP Ops Readiness: DEGRADED / UNAVAILABLE]` — fall back to direct SSH commands (`user1@176.108.247.249`, key `d:\.ssh\free-tier-cloud_ru`).
+   - `[MCP Ops Readiness: DEGRADED / UNAVAILABLE]` — fall back to direct SSH commands (`user1@87.242.100.34`, key `d:\.ssh\id_ed25519`).
    - **Non-blocking Rule**: Статус `UNAVAILABLE` или `DEGRADED` **НЕ блокирует деплой (Non-Blocking)** и эксплуатационные задачи, а переключает их исполнение на прямой SSH/CLI транспорт (`ssh -n ...`).
 
 ---

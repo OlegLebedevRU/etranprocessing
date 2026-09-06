@@ -7,35 +7,33 @@ Nginx serves as the entry point for all terminal requests. It handles:
 - Reverse proxy to backend services
 - URL routing based on path prefix
 
-## ⚠️ Source of truth
+## ⚠️ Source of truth & Architecture
 
-The **only** source of truth for this config is the separate repository
-**`iot-rpc-rest-app`** (https://github.com/OlegLebedevRU/iot-rpc-rest-app,
-locally checked out at `D:\work\iot.leo4.ru\iot-rpc-rest-app`), file
-`nginx-configs/dev_leo4_ru/internal_ssl.conf`. That repository's Dockerfile
-builds the actual `nginx-mutual` image deployed on the server — any copy of
-this config kept in the `etranprocessing` repo WILL drift and mislead future
-readers/deploys (this happened before: for a long time the running
-container had legacy raw-path routes and a config drift compared to what
-was committed in `iot-rpc-rest-app`, while stale duplicate copies of the
-config sat in this repo under `ProcessingBackend/*.conf`, none of them
-matching the real running config or each other). Those stale duplicate
-files have been removed from `etranprocessing`. Do **not** recreate
-copies of `internal_ssl.conf` here — edit it directly in `iot-rpc-rest-app`
-and deploy from there (commit → rebuild `nginx-mutual` image → redeploy;
-do not `docker cp` random config edits directly into the running container
-without also committing them to `iot-rpc-rest-app`).
+Following the production consolidation to server `87.242.100.34`, Nginx ingress is handled by two dedicated Docker containers operating within the shared `user1_default` bridge network:
 
-## Container
+1. **Terminal mTLS Ingress (`nginx-mutual-legacy`)**:
+   - **Host Port**: `443` (Mutual TLS termination for self-service payment kiosks).
+   - **Container**: `nginx-mutual-legacy-nginx-mutual-1`.
+   - **Source of truth**: `ProcessingBackend/nginx-mutual-legacy/nginx-configs/legacy_ssl.conf`.
+   - **Mounted inside container**: `/etc/nginx/conf.d/internal_ssl.conf:ro`.
+   - **Docker Compose**: `ProcessingBackend/nginx-mutual-legacy/docker-compose.yml`.
+
+2. **Web UI, JWT Auth & REST API Gateway (`nginx-default`)**:
+   - **Host Ports**: `80` (ACME HTTP-01 challenge & redirect), `3000` (MenuBuilder Web UI & JWT API gateway), `1443`/`1444` (Terem Email mTLS).
+   - **Container**: `nginx-default`.
+   - **Source of truth**: `nginx-configs/` (`port_80.conf`, `port_3000.conf`, `terem_email_mtls.conf`).
+   - **Docker Compose**: `/home/user1/compose.yaml`.
+
+## Container: nginx-mutual-legacy
 
 ```
-iot-rpc-rest-app-nginx-mutual-1
+nginx-mutual-legacy-nginx-mutual-1
 ```
 
-**Image**: Custom nginx with SSL configuration
+**Image**: `ghcr.io/oleglebedevru/iot-rpc-rest-app/nginx-mutual:sha-f78556a`
 
 **Ports**: 
-- 4443 (HTTPS with client cert)
+- `443` (HTTPS with client cert validation)
 
 ## Key Configuration Sections
 
@@ -127,44 +125,27 @@ Handles terminal bug that sends `/api/api/...` instead of `/api/...`.
 
 ## Modifying Configuration
 
-**Edit in the `iot-rpc-rest-app` repository, not here** — see "Source of
-truth" above. Workflow:
+### Terminal mTLS Gateway (`nginx-mutual-legacy`)
+Edit `ProcessingBackend/nginx-mutual-legacy/nginx-configs/legacy_ssl.conf`:
 
 ```bash
-# 1. Edit the config in its real repo
-cd D:\work\iot.leo4.ru\iot-rpc-rest-app
-# edit nginx-configs/dev_leo4_ru/internal_ssl.conf
+# 1. Upload config to server 87.242.100.34
+scp -i d:\.ssh\id_ed25519 ProcessingBackend/nginx-mutual-legacy/nginx-configs/legacy_ssl.conf user1@87.242.100.34:/home/user1/nginx-mutual-legacy/nginx-configs/legacy_ssl.conf
 
-# 2. Commit and push
-git add nginx-configs/dev_leo4_ru/internal_ssl.conf
-git commit -m "..."
-git push
-
-# 3. Deploy: copy to server and reload the running container
-#    (until CI/CD rebuilds the nginx-mutual image automatically)
-scp -i d:\.ssh\free-tier-cloud_ru nginx-configs/dev_leo4_ru/internal_ssl.conf user1@176.108.247.249:/tmp/
-ssh -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249 "sudo docker cp /tmp/internal_ssl.conf iot-rpc-rest-app-nginx-mutual-1:/etc/nginx/conf.d/internal_ssl.conf && sudo docker exec iot-rpc-rest-app-nginx-mutual-1 nginx -t && sudo docker exec iot-rpc-rest-app-nginx-mutual-1 nginx -s reload"
+# 2. Test and reload without downtime
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker exec nginx-mutual-legacy-nginx-mutual-1 nginx -t && sudo docker exec nginx-mutual-legacy-nginx-mutual-1 nginx -s reload"
 ```
 
-### Quick edit directly on the running container (for emergency hotfixes only)
+### Web UI & JWT Gateway (`nginx-default`)
+Edit configs in `nginx-configs/` (`port_80.conf`, `port_3000.conf`, `terem_email_mtls.conf`):
 
 ```bash
-# Enter container
-sudo docker exec -it iot-rpc-rest-app-nginx-mutual-1 bash
+# 1. Upload configs to server 87.242.100.34
+scp -i d:\.ssh\id_ed25519 -r nginx-configs/* user1@87.242.100.34:/home/user1/nginx-configs/
 
-# Edit config
-vi /etc/nginx/conf.d/internal_ssl.conf
-
-# Test config
-nginx -t
-
-# Reload
-nginx -s reload
+# 2. Test and reload
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker exec nginx-default nginx -t && sudo docker exec nginx-default nginx -s reload"
 ```
-
-⚠️ If you edit directly on the container, you **must** also copy the same
-change back into `iot-rpc-rest-app/nginx-configs/dev_leo4_ru/internal_ssl.conf`
-and commit it — otherwise the drift problem described above will recur.
 
 ## Troubleshooting
 

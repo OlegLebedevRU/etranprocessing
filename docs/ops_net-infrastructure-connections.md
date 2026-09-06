@@ -6,7 +6,7 @@
 
 ## 1. Сетевая топология и изоляция контуров
 
-Архитектура разделена на три изолированных сетевых контура:
+Архитектура разделена на изолированные сетевые контуры:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -20,32 +20,33 @@
                                     │  Миграция: через ETL Bridge
                                     ▼  (Скрипты на машине разработчика)
 ┌────────────────────────────────────────────────────────────────────────┐
-│                 Продуктовый контур приложений (Cloud App Server)        │
+│             Единый продуктовый сервер (Primary App Server)             │
 │                                                                        │
-│   • Хост: 176.108.247.249 (SSH: user1, ключ free-tier-cloud_ru)       │
-│   • PostgreSQL: контейнер iot-rpc-rest-app-pg-1 (БД: etranprocessing)  │
-│   • Бэкенды: processing-backend, menubuilder-backend                   │
-│   • Фронтенд: menubuilder-frontend (Nginx)                             │
-│   • MCP Сервер: mcp-pin-server, server-ops                             │
-└───────────────────────────────────▲────────────────────────────────────┘
-                                    │
-                                    │  Внутренний трафик / Proxy
-                                    │
-┌───────────────────────────────────┴────────────────────────────────────┐
-│                    Legacy mTLS Proxy Server                            │
+│   • Хост: 87.242.100.34 (внутренний IP 10.0.0.5, SSH: id_ed25519)     │
+│   • Сеть Docker: user1_default                                         │
+│   • Бэкенды: processing-backend (:8000), menubuilder-backend (:8000)   │
+│   • IoT платформа: app1 (:8000)                                        │
+│   • Брокер: rabbitmq (:5672, :8883)                                    │
+│   • MCP Сервер: mcp-pin-server (:8001), server-ops                     │
+│   • Web & JWT Gateway: nginx-default (:80, :3000, :1443, :1444)        │
+│   • Terminal mTLS Gateway: nginx-mutual-legacy (:443)                  │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │  (Внутренняя сеть облака 10.0.0.0/24)
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│             Кластер Managed PostgreSQL (Yandex Cloud / Bastion)        │
 │                                                                        │
-│   • Хост: 87.242.100.34 (SSH: user1, ключ id_ed25519)                  │
-│   • Сервис: nginx-mutual-legacy (:443 mTLS)                            │
-│   • Проксирует запросы старых терминалов на 176.108.247.249:4443       │
+│   • Хост: 10.0.0.7 (порт 5432)                                         │
+│   • Базы данных: etran (etran_db_user), iot_rpc (leo4_db_user)         │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Важнейшее сетевое ограничение
-> **СЕРВЕРЫ НОВОГО БЭКЕНДА (`176.108.247.249`) НЕ ИМЕЮТ ПРЯМОГО СЕТЕВОГО ДОСТУПА К ЛЕГАСИ MS SQL СЕРВЕРУ (`172.17.100.1`).**
+> **СЕРВЕРЫ НОВОГО БЭКЕНДА (`87.242.100.34`) НЕ ИМЕЮТ ПРЯМОГО СЕТЕВОГО ДОСТУПА К ЛЕГАСИ MS SQL СЕРВЕРУ (`172.17.100.1`).**
 >
 > Прямое обращение из Docker-контейнеров нового сервера к легаси-БД невозможно по соображениям сетевой безопасности. Поэтому любой импорт и синхронизация данных (терминалы, лицензии, меню, транзакции) выполняются по схеме **ETL Bridge**:
 > 1. **Extract**: Скрипт выполняется в среде, имеющей доступ к защищенной сети (локальная машина разработчика / AI-агента), извлекает данные из MS SQL и формирует валидированный JSON-дамп.
-> 2. **Transfer**: JSON-дамп передается на продуктовый сервер через защищенный SSH/SCP (`user1@176.108.247.249`).
+> 2. **Transfer**: JSON-дамп передается на продуктовый сервер через защищенный SSH/SCP (`user1@87.242.100.34`, ключ `d:\.ssh\id_ed25519`).
 > 3. **Load**: Модуль импорта (`menubuilder-backend` / `psql`) применяет изменения в PostgreSQL.
 
 ---
@@ -69,27 +70,30 @@
 * **Метод извлечения данных**: PowerShell `System.Data.SqlClient` или Python-скрипты в защищенной среде (без необходимости установки внешних C/ODBC-драйверов на Windows).
 
 ### 2.2. Основной продуктовый сервер (Primary App Server)
-* **Хост / IP**: `176.108.247.249`.
+* **Хост / IP**: `87.242.100.34` (внутренний IP `10.0.0.5`).
 * **Пользователь SSH**: `user1`.
-* **SSH-ключ**: `d:\.ssh\free-tier-cloud_ru`.
-* **Команда подключения**: `ssh -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249`.
+* **SSH-ключ**: `d:\.ssh\id_ed25519`.
+* **Команда подключения**: `ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34`.
 * **Рабочие директории**:
   * `/home/user1/ProcessingBackend/`
   * `/home/user1/MenuBuilder/`
   * `/home/user1/shared/`
+  * `/home/user1/nginx-configs/`
+  * `/home/user1/nginx-mutual-legacy/`
 * **Docker контейнеры**:
-  * `processing-backend`: FastAPI сервис процессинга платежей и mTLS (порт 4443).
-  * `menubuilder-backend`: FastAPI сервис панели управления и меню (порт 8000).
-  * `menubuilder-frontend`: Nginx веб-интерфейс и статика (порт 80 / 443).
-  * `iot-rpc-rest-app-pg-1`: PostgreSQL база данных.
-  * `rabbitmq`: Очереди сообщений.
-  * `mcp-pin-server`: MCP сервер управления PIN-кодами.
+  * `processing-backend`: FastAPI сервис процессинга платежей и меню (порт 8000).
+  * `menubuilder-backend`: FastAPI сервис панели управления и биллинга (порт 8000).
+  * `nginx-default`: Nginx веб-интерфейс MenuBuilder и JWT API gateway (порты 80, 3000, 1443, 1444).
+  * `app1`: IoT platform backend (порт 8000).
+  * `rabbitmq`: Очереди сообщений и MQTT (порты 5672, 8883).
+  * `mcp-pin-server`: MCP сервер управления PIN-кодами (порт 8001).
+  * `nginx-mutual-legacy-nginx-mutual-1`: mTLS терминальный шлюз (порт 443).
 
-### 2.3. Новая база данных (PostgreSQL)
-* **Контейнер**: `iot-rpc-rest-app-pg-1`.
-* **База данных**: `etranprocessing`.
-* **Пользователь**: `etran`.
-* **Прямой доступ с сервера**: `sudo docker exec -it iot-rpc-rest-app-pg-1 psql -U etran -d etranprocessing`.
+### 2.3. Новая база данных (Managed PostgreSQL 18)
+* **Хост**: `10.0.0.7:5432`.
+* **База данных**: `etran` (для etranprocessing) и `iot_rpc` (для IoT платформы).
+* **Пользователи**: `etran_db_user` (БД `etran`), `leo4_db_user` (БД `iot_rpc`).
+* **Прямой доступ с сервера**: `psql -h 10.0.0.7 -U etran_db_user -d etran` (пароль из `~/.pgpass`).
 * **Ключевые таблицы**:
   * `org_statuses` (`org_id`, `status_id`, `status_name`, `is_blocked`) — организации.
   * `terminals` (`device_id`, `org_id`, `address`, `device_sn`, `status_id`, `cert_not_valid_after`) — терминалы.
@@ -100,11 +104,10 @@
   * `services` (`id`, `menu_variant_id`, `group_id`, `tsp_code`, `name`, `printname`, `price`, `protypenumber`, `is_active`) — услуги.
   * `terminal_menu_bindings` (`terminal_id`, `menu_variant_id`) — привязка терминалов к меню.
 
-### 2.4. Legacy mTLS Proxy Server
+### 2.4. Внешний mTLS терминальный шлюз (nginx-mutual-legacy)
 * **Хост / IP**: `87.242.100.34`.
-* **Пользователь SSH**: `user1`.
-* **SSH-ключ**: `d:\.ssh\id_ed25519`.
-* **Сервис**: `nginx-mutual-legacy` (порт 443 mTLS).
+* **Порт**: `443` (mTLS с проверкой клиентских сертификатов).
+* **Маршрутизация**: Внутри Docker-сети `user1_default` передает проверенные запросы терминалов в `http://processing-backend:8000`.
 
 ---
 

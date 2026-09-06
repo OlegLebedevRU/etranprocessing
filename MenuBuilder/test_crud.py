@@ -2,12 +2,12 @@ import subprocess
 import sys
 
 SSH_BASE = [
-    'ssh', '-i', r'd:\.ssh\free-tier-cloud_ru',
+    'ssh', '-n', '-i', r'd:\.ssh\id_ed25519',
     '-o', 'ConnectTimeout=30',
     '-o', 'ServerAliveInterval=5',
     '-o', 'StrictHostKeyChecking=no',
     '-o', 'BatchMode=yes',
-    'user1@176.108.247.249'
+    'user1@87.242.100.34'
 ]
 
 def run_ssh(cmd, timeout=30):

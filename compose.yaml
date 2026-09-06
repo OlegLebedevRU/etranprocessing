@@ -1,0 +1,96 @@
+services:
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: rabbitmq
+    restart: unless-stopped
+    ports:
+      - "8883:8883"
+      - "5672:5672"
+    environment:
+      RABBITMQ_HOST: "%"
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_CONFIG_FILE: /etc/rabbitmq/rabbitmq.conf
+    volumes:
+      - ./iot-rpc-rest-app/rmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./iot-rpc-rest-app/rmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+      - ./iot-rpc-rest-app/rmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+      - ./iot-rpc-rest-app/crt/iot_leo4_ca.crt:/crt/ca_certificate.pem:ro
+      - ./iot-rpc-rest-app/crt/cert_0000.pem:/crt/server_certificate.pem:ro
+      - ./iot-rpc-rest-app/crt/key_0000.pem:/crt/server_key.pem:ro
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nginx:
+    build:
+      context: ./MenuBuilder
+      dockerfile: nginx/Dockerfile
+    container_name: nginx-default
+    restart: always
+    ports:
+      - "80:80"
+      - "3000:3000"
+      - "1443:1443"
+      - "1444:1444"
+    environment:
+      - JWT_SECRET_HEX=d9c7bb690cfb5cfae60e87b7a66e133bc7ce4599a16f2c5e533d1b8209da029b
+      - INTERNAL_SERVICE_KEY=internal-service-key-dev
+    volumes:
+      - ./MenuBuilder/frontend/dist:/usr/share/nginx/html:ro
+      - ./nginx-configs/port_80.conf:/etc/nginx/conf.d/port_80.conf:ro
+      - ./nginx-configs/port_3000.conf:/etc/nginx/conf.d/port_3000.conf:ro
+      - ./nginx-configs/terem_email_mtls.conf:/etc/nginx/conf.d/terem_email_mtls.conf:ro
+      - ./nginx-configs/terem_email_proxy.inc:/etc/nginx/conf.d/terem_email_proxy.inc:ro
+      - ./nginx-configs/default.conf.template:/etc/nginx/conf.d/default.conf.template:ro
+      - ./nginx-configs/snippets:/etc/nginx/conf.d/snippets:ro
+      - ./certbot/conf:/etc/nginx/ssl:ro
+      - ./certbot/www:/var/www/certbot:ro
+      - ./iot-rpc-rest-app/crt/iot_leo4_ca.crt:/crt/ca_certificate.pem:ro
+      - ./iot-rpc-rest-app/crt/cert_0000.pem:/crt/server_certificate.pem:ro
+      - ./iot-rpc-rest-app/crt/key_0000.pem:/crt/server_key.pem:ro
+
+  processing-backend:
+    build:
+      context: .
+      dockerfile: ProcessingBackend/backend/Dockerfile
+    container_name: processing-backend
+    restart: always
+    env_file:
+      - ./ProcessingBackend/backend/.env
+    volumes:
+      - ./ProcessingBackend/keys:/function/storage/keys:ro
+
+  mcp-pin-server:
+    build:
+      context: ./ProcessingBackend/mcp-pin-server
+    container_name: mcp-pin-server
+    restart: unless-stopped
+    env_file:
+      - ./ProcessingBackend/mcp-pin-server/.env
+
+  menubuilder-backend:
+    build:
+      context: .
+      dockerfile: MenuBuilder/backend/Dockerfile
+    container_name: menubuilder-backend
+    restart: always
+    env_file:
+      - ./MenuBuilder/backend/.env
+
+  app1:
+    build:
+      context: ./iot-rpc-rest-app
+      dockerfile: ./docker-files/app-service/Dockerfile
+    container_name: app1
+    restart: always
+    env_file:
+      - ./iot-rpc-rest-app/app-service/.env
+    volumes:
+      - ./iot-rpc-rest-app/logs:/var/log/app
+
+volumes:
+  rabbitmq_data:

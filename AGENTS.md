@@ -128,32 +128,24 @@ For building native Windows utilities in `tools/` (or examples like `D:\work\iot
 
 ## Infrastructure & Servers
 
-- **Primary Application Server**: `176.108.247.249` (user: `user1`, SSH key: `d:\.ssh\free-tier-cloud_ru`)
-  - Runs Docker containers: `processing-backend`, `menubuilder-backend`, `menubuilder-frontend`, `mcp-pin-server`, `postgres`, `rabbitmq`, etc.
-  - Reverse proxy Nginx on port 443 routes `/api/billing/` and admin/portal routes to `menubuilder-backend:8000`, and terminal endpoints to `processing-backend:8000`.
-- **Legacy mTLS Reverse Proxy Server**: `87.242.100.34` (user: `user1`, SSH key: `d:\.ssh\id_ed25519`)
-  - Runs `nginx-mutual-legacy` (terminates client mTLS and forwards requests to `176.108.247.249`).
+- **Primary Production Server**: `87.242.100.34` (internal IP `10.0.0.5`, user: `user1`, SSH key: `d:\.ssh\id_ed25519`)
+  - Orchestration: `/home/user1/compose.yaml` in Docker network `user1_default`.
+  - Runs Docker containers: `processing-backend` (:8000), `menubuilder-backend` (:8000), `nginx-default` (:80, :3000, :1443, :1444), `app1` (:8000), `mcp-pin-server` (:8001), `rabbitmq` (:5672, :8883).
+  - External mTLS Proxy: `nginx-mutual-legacy` (:443) managed via `/home/user1/nginx-mutual-legacy/docker-compose.yml`, connected to network `user1_default`. Terminates client mTLS for terminals (`iot-processing.ru`) and locally forwards requests to `http://processing-backend:8000`.
+- **Managed Database Server**: `10.0.0.7:5432` (Managed PostgreSQL 18)
+  - Databases: `etran` (processing and menubuilder models), `iot_rpc` (IoT platform models).
 
-## Selective Endpoint Switching (Legacy vs New Backend)
+## Terminal Routing & Proxying (nginx-mutual-legacy)
 
-In `ProcessingBackend/nginx-mutual-legacy/nginx-configs/legacy_ssl.conf`, individual terminal endpoints can be switched between the legacy backend (`http://46.38.51.114`) and the new backend (`https://new_processing_backend/api/...` -> `176.108.247.249:4443`):
-
-1. **Active switched endpoints**:
-   - `/certificates/` -> `https://new_processing_backend/api/certificates/`
-   - `/licensebilling/` -> `https://new_processing_backend/api/licensebilling/`
-2. **Switching an endpoint to New Backend**:
-   - Change `proxy_pass http://46.38.51.114/<endpoint>` to `proxy_pass https://new_processing_backend/api/<endpoint>`.
-   - Add `proxy_ssl_verify off;`.
-   - If the endpoint had mirror directives (`mirror /_mirror_...`), disable or comment them out.
-3. **Rollback to Legacy Backend**:
-   - Change `proxy_pass https://new_processing_backend/api/<endpoint>` back to `proxy_pass http://46.38.51.114/<endpoint>`.
-   - Remove `proxy_ssl_verify off;`.
-   - Re-enable mirror directives if needed.
-4. **Deploying & Reloading Nginx**:
-   ```bash
-   scp -i d:\.ssh\id_ed25519 ProcessingBackend/nginx-mutual-legacy/nginx-configs/legacy_ssl.conf user1@87.242.100.34:/home/user1/nginx-mutual-legacy/nginx-configs/legacy_ssl.conf
-   ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker exec nginx-mutual-legacy-nginx-mutual-1 nginx -t && sudo docker exec nginx-mutual-legacy-nginx-mutual-1 nginx -s reload"
-   ```
+In `ProcessingBackend/nginx-mutual-legacy/nginx-configs/legacy_ssl.conf`:
+- `upstream new_processing_backend` routes to local container `server processing-backend:8000;`.
+- Terminal endpoints (`/payment/`, `/payment/etran.ashx`, `/techgate/etran.ashx`, `/api/ListMenuFile`, `/licensebilling/`) proxy directly to `http://new_processing_backend`.
+- Legacy fallback for unprocessed routes: `http://46.38.51.114`.
+- **Deploying & Reloading Nginx**:
+  ```bash
+  scp -i d:\.ssh\id_ed25519 ProcessingBackend/nginx-mutual-legacy/nginx-configs/legacy_ssl.conf user1@87.242.100.34:/home/user1/nginx-mutual-legacy/nginx-configs/legacy_ssl.conf
+  ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker exec nginx-mutual-legacy-nginx-mutual-1 nginx -t && sudo docker exec nginx-mutual-legacy-nginx-mutual-1 nginx -s reload"
+  ```
 
 ## Certificate Architecture & Terminal mTLS Rules
 
@@ -204,7 +196,7 @@ Keep only durable invariants here. Use the current runbook under `docs/` for env
 
 ## MCP Operations Server (`server-ops`) & DevOps Protocol
 
-An operations MCP server (`server-ops`) is connected to the primary application server (`176.108.247.249`). It provides tools for system health inspection, log investigation, Nginx and SSL management, and safe command execution.
+An operations MCP server (`server-ops`) is configured for the production server (`87.242.100.34`). It provides tools for system health inspection, log investigation, Nginx and SSL management, and safe command execution.
 
 ### Available MCP Ops Capabilities
 - **System monitoring**: `mcp_server-ops_system_info`, `mcp_server-ops_memory_analysis`, `mcp_server-ops_disk_analysis`, `mcp_server-ops_service_status`
@@ -225,7 +217,7 @@ Before utilizing MCP Ops capabilities in any debugging, deployment, diagnostics,
 2. **Readiness Status Declaration & Non-Blocking Policy**:
    - Explicitly record the status in task context / plan:
      - `[MCP Ops Readiness: READY]` — all checks passed; MCP tools may be used for diagnostics, log analysis, and verification.
-     - `[MCP Ops Readiness: DEGRADED / UNAVAILABLE]` — MCP unreachable or resource thresholds exceeded; fall back to standard SSH runbook commands (`user1@176.108.247.249`, key `d:\.ssh\free-tier-cloud_ru`).
+     - `[MCP Ops Readiness: DEGRADED / UNAVAILABLE]` — MCP unreachable or resource thresholds exceeded; fall back to standard SSH runbook commands (`user1@87.242.100.34`, key `d:\.ssh\id_ed25519`).
    - **CRITICAL: `[MCP Ops Readiness: UNAVAILABLE]` (или `DEGRADED`) НЕ блокирует деплой (Non-Blocking)**. Отсутствие подключения или недоступность MCP Ops сервера не является причиной для отмены или задержки деплоя. Сборка, деплой, применение миграций и верификация в этом случае выполняются в штатном режиме через прямой SSH-транспорт (`scp`, `ssh sudo docker ...`) без блокировок.
 3. **Safety Guardrails**:
    - State-changing operations (`nginx_reload`, `file_write`, `file_delete`) return a `confirmationId` and MUST be verified before confirmation via `mcp_server-ops_confirm_execute`.

@@ -309,13 +309,14 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> AuthenticatedUser:
 
 ## 8. Deployment & CI/CD Operations
 
-### Docker on Production Server (`176.108.247.249`)
+### Docker on Production Server (`87.242.100.34`)
 
 - `docker` and `docker compose` commands over SSH require `sudo`.
-- Rebuild containers with:
+- Connect via SSH: `ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34`.
+- Rebuild containers with unified compose file:
   ```bash
-  sudo docker compose -f /home/user1/ProcessingBackend/docker-compose.yaml up -d --build processing-backend mcp-pin-server
-  sudo docker compose -f /home/user1/MenuBuilder/docker-compose.yaml up -d --build menubuilder-backend
+  sudo docker compose -f /home/user1/compose.yaml up -d --build processing-backend mcp-pin-server
+  sudo docker compose -f /home/user1/compose.yaml up -d --build menubuilder-backend
   ```
 - Use `ssh -n ...` when executing remote commands from Windows PowerShell to prevent stdin stream blocking.
 
