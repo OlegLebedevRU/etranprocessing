@@ -5,6 +5,7 @@ services:
       - "443:443"
     restart: always
     volumes:
-      - ./crt/iot-processing-ru-selfsigned.crt:/crt/iot-processing-ru-selfsigned.crt:ro
-      - ./crt/iot-processing-ru-selfsigned.key:/crt/iot-processing-ru-selfsigned.key:ro
+      - ./crt/iot-processing.ru.crt:/crt/iot-processing.ru.crt:ro
+      - ./crt/iot-processing.ru.key:/crt/iot-processing.ru.key:ro
+      - ./crt/iot_leo4_ca.crt:/crt/iot_leo4_ca.crt:ro
       - ./nginx-configs/legacy_ssl.conf:/etc/nginx/conf.d/internal_ssl.conf:ro
