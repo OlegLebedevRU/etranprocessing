@@ -1,4 +1,5 @@
 import logging
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -107,6 +108,13 @@ def create_tenant_token(
         "orig_sub": orig,
         "is_imp": is_imp,
     }
+    perms = (
+        user.permissions
+        if isinstance(user, UserRecord)
+        else user.get("permissions")
+    )
+    if perms is not None:
+        payload["permissions"] = list(perms)
     return create_access_token(payload)
 
 
@@ -162,7 +170,7 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security_scheme),
 ) -> dict[str, Any]:
     token: str | None = None
-    if credentials:
+    if isinstance(credentials, HTTPAuthorizationCredentials):
         token = credentials.credentials
     elif "accessToken" in request.cookies:
         token = request.cookies["accessToken"]
@@ -251,13 +259,13 @@ async def get_current_user(
     else:
         is_imp = bool(is_su and org_id is not None and org_id > 0)
 
-    # Permissions resolution
-    if "permissions" in payload and payload["permissions"] is not None:
-        user_perms = list(payload["permissions"])
-    elif role_id in (1, 2, 3) or is_su:
+    # Permissions resolution: roles 1, 2, 3 and superusers always have full access
+    if role_id in (1, 2, 3) or is_su:
         from app.security.permissions import ALL_PERMISSIONS
 
         user_perms = list(ALL_PERMISSIONS)
+    elif "permissions" in payload and payload["permissions"] is not None:
+        user_perms = list(payload["permissions"])
     elif role_id == 4:
         if user_id and user_id > 0:
             from app.user_store import get_user_store
@@ -309,11 +317,29 @@ async def get_current_user(
 async def get_current_user_optional(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(security_scheme),
-) -> dict | None:
-    """Optional user dependency: returns None if no Bearer token provided, otherwise calls get_current_user."""
-    if not credentials or not credentials.credentials:
+) -> dict[str, Any] | None:
+    """Optional user dependency: returns None if unauthenticated, otherwise returns current user dict."""
+    app_instance = getattr(request, "app", None)
+    if app_instance and hasattr(app_instance, "dependency_overrides"):
+        override = app_instance.dependency_overrides.get(get_current_user)
+        if override:
+            res = override()
+            return await res if hasattr(res, "__await__") else res
+
+    token: str | None = None
+    if credentials:
+        token = credentials.credentials
+    elif "accessToken" in request.cookies:
+        token = request.cookies["accessToken"]
+
+    nginx_user_id = request.headers.get("X-User-Id")
+    if not token and not (settings.trust_proxy_identity_headers and nginx_user_id):
         return None
-    return await get_current_user(request, credentials)
+
+    with suppress(HTTPException):
+        return await get_current_user(request, credentials)
+
+    return None
 
 
 async def require_superuser(

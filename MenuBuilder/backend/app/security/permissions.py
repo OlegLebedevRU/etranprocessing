@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import suppress
 from typing import Any
 
 from fastapi import Depends, HTTPException, Request, status
@@ -69,11 +70,34 @@ async def require_readonly_guard(
                 res = override()
                 user = await res if hasattr(res, "__await__") else res
 
-    if user and (user.get("role_id") == ROLE_VIEWER or user.get("role") == "viewer"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Действие запрещено для роли только для чтения",
-        )
+    if user is None:
+        app_instance = getattr(request, "app", None)
+        if app_instance and hasattr(app_instance, "dependency_overrides"):
+            from app.routers.billing import get_current_billing_user
+
+            if get_current_billing_user in app_instance.dependency_overrides:
+                b_user = app_instance.dependency_overrides[get_current_billing_user]()
+                is_b_su = getattr(b_user, "is_superuser", False)
+                user = {
+                    "role_id": 1 if is_b_su else 3,
+                    "role": "superuser" if is_b_su else "user",
+                    "is_superuser": is_b_su,
+                }
+
+    if user is None:
+        with suppress(HTTPException):
+            user = await get_current_user(request, None)
+
+    if user:
+        try:
+            u_role_id = int(user.get("role_id", 0))
+        except (ValueError, TypeError):
+            u_role_id = 0
+        if u_role_id == ROLE_VIEWER or user.get("role") == "viewer":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Действие запрещено для роли только для чтения",
+            )
 
     return user
 
@@ -107,17 +131,22 @@ def require_permission(permission_code: str):
                     return {
                         "role_id": 1 if is_b_su else 3,
                         "role": "superuser" if is_b_su else "user",
+                        "is_superuser": is_b_su,
+                        "permissions": list(ALL_PERMISSIONS),
                     }
 
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Missing authentication credentials",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+        if user is None:
+            user = await get_current_user(request, None)
 
-        role_id = user.get("role_id", ROLE_USER)
+        role_id_raw = user.get("role_id", ROLE_USER)
+        try:
+            role_id = int(role_id_raw)
+        except (ValueError, TypeError):
+            role_id = ROLE_USER
         is_su = bool(
-            user.get("is_superuser") or user.get("role") in ("superuser", "admin")
+            user.get("is_superuser")
+            or user.get("role") in ("superuser", "admin")
+            or role_id == ROLE_SUPERUSER
         )
         if is_su or role_id in (ROLE_SUPERUSER, ROLE_ADMIN, ROLE_USER):
             return user
@@ -143,8 +172,16 @@ async def require_tenant_admin(
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Dependency: require role 1 (superuser) or role 3 (tenant user / tenant admin)."""
-    role_id = user.get("role_id", ROLE_USER)
-    is_su = bool(user.get("is_superuser") or user.get("role") in ("superuser", "admin"))
+    role_id_raw = user.get("role_id", ROLE_USER)
+    try:
+        role_id = int(role_id_raw)
+    except (ValueError, TypeError):
+        role_id = ROLE_USER
+    is_su = bool(
+        user.get("is_superuser")
+        or user.get("role") in ("superuser", "admin")
+        or role_id == ROLE_SUPERUSER
+    )
     if not is_su and role_id not in (ROLE_SUPERUSER, ROLE_USER):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
