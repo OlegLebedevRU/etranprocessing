@@ -12,7 +12,7 @@ def test_legacy_proxy_routes_list_menu_to_processing_ingress():
     config = LEGACY_NGINX_CONFIG.read_text(encoding="utf-8")
 
     assert "location = /api/ListMenuFile" in config
-    assert "proxy_pass https://new_processing_backend/api/ListMenuFile" in config
+    assert "proxy_pass http://new_processing_backend/api/ListMenuFile" in config
 
 
 def test_legacy_proxy_overwrites_terminal_certificate_headers():
@@ -30,7 +30,7 @@ def test_legacy_proxy_routes_payment_techgate_gategauge_to_new_backend_with_lega
     # Payment
     assert "location = /payment/ {" in config
     assert (
-        "proxy_pass https://new_processing_backend/api/payment/$is_args$args;" in config
+        "proxy_pass http://new_processing_backend/api/payment/$is_args$args;" in config
     )
     assert "mirror /_mirror_payment;" in config
     assert "proxy_pass http://46.38.51.114/payment/$is_args$args;" in config
@@ -38,7 +38,7 @@ def test_legacy_proxy_routes_payment_techgate_gategauge_to_new_backend_with_lega
     # Payment etran.ashx
     assert "location = /payment/etran.ashx {" in config
     assert (
-        "proxy_pass https://new_processing_backend/api/payment/etran.ashx$is_args$args;"
+        "proxy_pass http://new_processing_backend/api/payment/etran.ashx$is_args$args;"
         in config
     )
     assert "mirror /_mirror_payment_etran;" in config
@@ -47,7 +47,7 @@ def test_legacy_proxy_routes_payment_techgate_gategauge_to_new_backend_with_lega
     # TechGate
     assert "location = /techgate/etran.ashx {" in config
     assert (
-        "proxy_pass https://new_processing_backend/api/techgate/etran.ashx$is_args$args;"
+        "proxy_pass http://new_processing_backend/api/techgate/etran.ashx$is_args$args;"
         in config
     )
     assert "mirror /_mirror_techgate;" in config
@@ -56,7 +56,7 @@ def test_legacy_proxy_routes_payment_techgate_gategauge_to_new_backend_with_lega
     # GateGauge
     assert "location = /GateGauge/main.ashx {" in config
     assert (
-        "proxy_pass https://new_processing_backend/api/gategauge$is_args$args;"
+        "proxy_pass http://new_processing_backend/api/gategauge$is_args$args;"
         in config
     )
     assert "mirror /_mirror_gategauge;" in config
@@ -64,7 +64,7 @@ def test_legacy_proxy_routes_payment_techgate_gategauge_to_new_backend_with_lega
 
     # Licensebilling has no mirror
     assert "location = /_mirror_licensebilling" not in config
-    assert "proxy_pass https://new_processing_backend/api/licensebilling/" in config
+    assert "proxy_pass http://new_processing_backend/api/licensebilling/" in config
 
 
 def test_legacy_proxy_ssl_certificates():
