@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import logging
 from abc import ABC, abstractmethod
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -33,6 +34,53 @@ class UserRecord:
 def verify_md5_password(plain_password: str, md5_hash: str) -> bool:
     calculated = hashlib.md5(plain_password.encode("utf-8")).hexdigest()
     return hmac.compare_digest(calculated.lower(), md5_hash.lower())
+
+
+def verify_pbkdf2_hash(plain_password: str, stored_hash: str) -> bool:
+    if not stored_hash.startswith("pbkdf2:"):
+        return False
+    with suppress(Exception):
+        parts = stored_hash.split("$")
+        if len(parts) == 3:
+            method_part, salt, expected = parts
+            method_subparts = method_part.split(":")
+            hash_name = method_subparts[1] if len(method_subparts) > 1 else "sha256"
+            iterations = int(method_subparts[2]) if len(method_subparts) > 2 else 260000
+            calc = hashlib.pbkdf2_hmac(
+                hash_name,
+                plain_password.encode("utf-8"),
+                salt.encode("utf-8"),
+                iterations,
+            ).hex()
+            return hmac.compare_digest(calc.lower(), expected.lower())
+    return False
+
+
+def verify_password(plain_password: str, stored_hash: str) -> bool:
+    if not stored_hash:
+        return False
+    # 1. MD5 hash verification
+    if verify_md5_password(plain_password, stored_hash):
+        return True
+    # 2. Direct string / hash match (plain text or client sent precomputed hash)
+    if hmac.compare_digest(plain_password.lower(), stored_hash.lower()):
+        return True
+    # 3. Werkzeug PBKDF2 format
+    if stored_hash.startswith("pbkdf2:") and verify_pbkdf2_hash(
+        plain_password, stored_hash
+    ):
+        return True
+    # 4. Passlib CryptContext fallback (bcrypt, argon2, sha256_crypt, etc.)
+    with suppress(Exception):
+        from passlib.context import CryptContext
+
+        pwd_context = CryptContext(
+            schemes=["bcrypt", "pbkdf2_sha256", "sha256_crypt", "md5_crypt"],
+            deprecated="auto",
+        )
+        if pwd_context.verify(plain_password, stored_hash):
+            return True
+    return False
 
 
 def hash_refresh_token(token: str) -> str:
@@ -115,11 +163,7 @@ class DatabaseUserStore(AbstractUserStore):
         user = await self.get_by_username(username)
         if not user or not user.is_active:
             return None
-        # Plain password verification against MD5 hash
-        if verify_md5_password(plain_password, user.md5_password):
-            return user
-        # Direct MD5 hash matching (if client sent MD5 directly)
-        if hmac.compare_digest(plain_password.lower(), user.md5_password.lower()):
+        if verify_password(plain_password, user.md5_password):
             return user
         return None
 
@@ -517,6 +561,8 @@ class ConfigUserStore(AbstractUserStore):
 
     async def get_by_username(self, username: str) -> UserRecord | None:
         for u in settings.get_users():
+            if not isinstance(u, dict):
+                continue
             if u.get("username") == username:
                 raw_org = u.get("org_id")
                 try:
@@ -533,8 +579,13 @@ class ConfigUserStore(AbstractUserStore):
 
                 return UserRecord(
                     id=int(u.get("id", 1 if is_su else 0)),
-                    username=u["username"],
-                    md5_password=u.get("md5_password", ""),
+                    username=u.get("username", username),
+                    md5_password=str(
+                        u.get("md5_password")
+                        or u.get("password")
+                        or u.get("password_hash")
+                        or ""
+                    ),
                     org_id=org_id,
                     role_id=role_id,
                     role=role,
@@ -547,11 +598,15 @@ class ConfigUserStore(AbstractUserStore):
 
     async def get_by_id(self, user_id: int) -> UserRecord | None:
         for u in settings.get_users():
+            if not isinstance(u, dict):
+                continue
             role = str(u.get("role", "user")).lower()
             is_su = bool(u.get("is_superuser") or role in ("superuser", "admin"))
             uid = int(u.get("id", 1 if is_su else 0))
             if uid == user_id:
-                return await self.get_by_username(u["username"])
+                uname = u.get("username")
+                if uname:
+                    return await self.get_by_username(uname)
         return None
 
     async def authenticate(
@@ -560,9 +615,7 @@ class ConfigUserStore(AbstractUserStore):
         user = await self.get_by_username(username)
         if not user or not user.is_active:
             return None
-        if verify_md5_password(plain_password, user.md5_password):
-            return user
-        if hmac.compare_digest(plain_password.lower(), user.md5_password.lower()):
+        if verify_password(plain_password, user.md5_password):
             return user
         return None
 

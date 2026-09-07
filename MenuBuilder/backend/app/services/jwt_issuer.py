@@ -300,8 +300,11 @@ class JwtIssuerClient:
                 return cached_data
 
         if self.mock_enabled or not self.secret:
-            logger.debug(
-                "Using mock JWT issuer for user_id=%s org_id=%s role_id=%s sid=%s",
+            logger.info(
+                "Using mock JWT issuer (url=%s, mock_enabled=%s, has_secret=%s) for user_id=%s org_id=%s role_id=%s sid=%s",
+                self.url,
+                self.mock_enabled,
+                bool(self.secret),
                 user_id,
                 org_id,
                 role_id,
@@ -384,6 +387,15 @@ class JwtIssuerClient:
             refresh_ttl_days=settings.jwt_refresh_expire_days,
         )
 
+        logger.info(
+            "Sending request to JWT issuer at %s for user_id=%s org_id=%s role_id=%s (clientId=%s)",
+            self.url,
+            user_id,
+            org_id or 0,
+            role_id,
+            self.client_id,
+        )
+
         last_error: Exception | None = None
         for attempt in range(2):
             try:
@@ -391,7 +403,8 @@ class JwtIssuerClient:
                     resp = await client.post(self.url, json=payload)
                     if resp.status_code >= 500:
                         logger.warning(
-                            "JWT issuer HTTP %s on attempt %d: %s",
+                            "JWT issuer at %s returned HTTP %s on attempt %d: %s",
+                            self.url,
                             resp.status_code,
                             attempt + 1,
                             resp.text,
@@ -401,10 +414,11 @@ class JwtIssuerClient:
                             continue
                         took = time.monotonic() - start_time
                         logger.info(
-                            "jwt issuer call user_id=%s org_id=%s took=%.2fs",
+                            "JWT issuer call failed: user_id=%s org_id=%s took=%.2fs url=%s",
                             user_id,
                             org_id or 0,
                             took,
+                            self.url,
                         )
                         raise HTTPException(
                             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -412,14 +426,18 @@ class JwtIssuerClient:
                         )
                     if resp.status_code != 200:
                         logger.error(
-                            "JWT issuer HTTP %s: %s", resp.status_code, resp.text
+                            "JWT issuer at %s returned HTTP %s: %s",
+                            self.url,
+                            resp.status_code,
+                            resp.text,
                         )
                         took = time.monotonic() - start_time
                         logger.info(
-                            "jwt issuer call user_id=%s org_id=%s took=%.2fs",
+                            "JWT issuer call failed: user_id=%s org_id=%s took=%.2fs url=%s",
                             user_id,
                             org_id or 0,
                             took,
+                            self.url,
                         )
                         raise HTTPException(
                             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -428,7 +446,8 @@ class JwtIssuerClient:
                     data = resp.json()
                     took = time.monotonic() - start_time
                     logger.info(
-                        "jwt issuer call user_id=%s org_id=%s took=%.2fs",
+                        "JWT issuer at %s successfully issued tokens for user_id=%s org_id=%s took=%.2fs",
+                        self.url,
                         user_id,
                         org_id or 0,
                         took,

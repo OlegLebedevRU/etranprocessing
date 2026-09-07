@@ -165,10 +165,21 @@ async def login(
     store = get_user_store()
     user = await store.authenticate(username, password)
     if not user:
+        logger.warning(
+            "Authentication failed: invalid credentials for username '%s'", username
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
         )
+
+    logger.info(
+        "Authentication successful for user '%s' (id=%s, role=%s, is_superuser=%s)",
+        user.username,
+        user.id,
+        user.role,
+        user.is_superuser,
+    )
 
     # Determine initial org_id:
     # for superuser: user.last_org_id or 0 (if last_org_id points to inactive/deleted org -> 0)

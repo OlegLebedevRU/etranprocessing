@@ -16,7 +16,7 @@ security_scheme = HTTPBearer(auto_error=False)
 
 def find_user(username: str) -> dict | None:
     for u in settings.get_users():
-        if u["username"] == username:
+        if isinstance(u, dict) and u.get("username") == username:
             return u
     return None
 

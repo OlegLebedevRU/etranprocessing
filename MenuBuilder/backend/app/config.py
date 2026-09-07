@@ -1,4 +1,5 @@
 import json
+from contextlib import suppress
 
 from pydantic_settings import BaseSettings
 
@@ -52,7 +53,61 @@ class Settings(BaseSettings):
     auth_users: str = "[]"
 
     def get_users(self) -> list[dict]:
-        return json.loads(self.auth_users)
+        raw = self.auth_users
+        if not raw:
+            return []
+        parsed = raw
+        if isinstance(raw, str):
+            with suppress(json.JSONDecodeError, ValueError, TypeError):
+                parsed = json.loads(raw)
+            if not isinstance(parsed, (dict, list)):
+                return []
+
+        # Handle double-encoded JSON string
+        if isinstance(parsed, str):
+            with suppress(json.JSONDecodeError, ValueError, TypeError):
+                parsed = json.loads(parsed)
+            if not isinstance(parsed, (dict, list)):
+                return []
+
+        users: list[dict] = []
+        if isinstance(parsed, list):
+            for item in parsed:
+                if isinstance(item, dict):
+                    users.append(item)
+                elif isinstance(item, str):
+                    is_su = item.lower() in ("admin", "superuser")
+                    users.append(
+                        {
+                            "username": item,
+                            "role": "superuser" if is_su else "user",
+                            "is_superuser": is_su,
+                            "role_id": 1 if is_su else 3,
+                            "id": 1 if is_su else 0,
+                        }
+                    )
+        elif isinstance(parsed, dict):
+            if "username" in parsed:
+                users.append(parsed)
+            else:
+                for uname, val in parsed.items():
+                    if isinstance(val, dict):
+                        rec = dict(val)
+                        rec.setdefault("username", uname)
+                        users.append(rec)
+                    elif isinstance(val, str):
+                        is_su = uname.lower() in ("admin", "superuser")
+                        users.append(
+                            {
+                                "username": uname,
+                                "md5_password": val,
+                                "role": "superuser" if is_su else "user",
+                                "is_superuser": is_su,
+                                "role_id": 1 if is_su else 3,
+                                "id": 1 if is_su else 0,
+                            }
+                        )
+        return users
 
     # Billing
     billing_due_soon_days: int = 30
