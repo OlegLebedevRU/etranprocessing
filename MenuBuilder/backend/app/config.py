@@ -151,6 +151,12 @@ class Settings(BaseSettings):
     mqtt_topic_prefix: str = "dev"
     amqp_url: str = "amqp://etran_service:etran_secret@rabbitmq:5672//"
 
+    # L4media Video Surveillance
+    l4media_ingress_url: str = "http://l4media-ingress:9100"
+    l4media_janus_url: str = "http://l4media-janus:8088/janus"
+    video_port_base: int = 6000
+    video_port_slots: int = 50
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

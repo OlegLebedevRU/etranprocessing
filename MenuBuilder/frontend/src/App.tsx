@@ -24,6 +24,7 @@ const VariantsPage = lazy(() => import("./routes/variants"));
 const CatalogPage = lazy(() => import("./routes/catalog"));
 const MenuHelpPage = lazy(() => import("./routes/menu-help"));
 const MonitoringPage = lazy(() => import("./routes/monitoring"));
+const VideoSurveillancePage = lazy(() => import("./routes/video-surveillance"));
 const ReportsPage = lazy(() => import("./routes/reports"));
 const IntegrationsPage = lazy(() => import("./routes/integrations"));
 const BillingPage = lazy(() => import("./routes/billing"));
@@ -191,6 +192,7 @@ export default function App() {
                 </ViewerGuard>
               }
             />
+            <Route path="video" element={<VideoSurveillancePage />} />
             <Route
               path="menu"
               element={

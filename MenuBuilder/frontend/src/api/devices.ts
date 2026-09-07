@@ -357,7 +357,10 @@ export async function getDevices(
     queryParams.org_id = orgIdOrParams;
     if (options) {
       if (options.page !== undefined) queryParams.page = options.page;
-      if (options.size !== undefined) queryParams.size = options.size;
+      if (options.size !== undefined) {
+        const parsedSize = Number(options.size);
+        queryParams.size = Math.min(Math.max(parsedSize > 0 ? parsedSize : 20, 1), 100);
+      }
       if (options.q !== undefined && options.q.trim() !== "") queryParams.q = options.q.trim();
       if (options.status !== undefined && options.status !== "all") queryParams.status = options.status;
       if (options.deviceId !== undefined) queryParams.device_id = options.deviceId;
@@ -372,7 +375,10 @@ export async function getDevices(
     const orgId = p.org_id ?? p.orgId;
     if (orgId !== undefined) queryParams.org_id = orgId;
     if (p.page !== undefined) queryParams.page = p.page;
-    if (p.size !== undefined) queryParams.size = p.size;
+    if (p.size !== undefined) {
+      const parsedSize = Number(p.size);
+      queryParams.size = Math.min(Math.max(parsedSize > 0 ? parsedSize : 20, 1), 100);
+    }
     if (p.q !== undefined && p.q.trim() !== "") queryParams.q = p.q.trim();
     if (p.status !== undefined && p.status !== "all") queryParams.status = p.status;
     if (p.deviceId !== undefined) queryParams.device_id = p.deviceId;

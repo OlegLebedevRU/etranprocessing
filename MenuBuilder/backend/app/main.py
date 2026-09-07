@@ -26,6 +26,7 @@ from app.routers import (
     services,
     settings_users,
     terminal_bindings,
+    video,
 )
 from app.routers import (
     settings as settings_router,
@@ -125,3 +126,4 @@ app.include_router(mcp_proxy.router, prefix="/api", tags=["mcp"])
 app.include_router(dashboard.router)
 app.include_router(monitoring.router)
 app.include_router(reports.router)
+app.include_router(video.router)

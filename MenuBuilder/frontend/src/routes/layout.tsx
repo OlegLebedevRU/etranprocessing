@@ -13,6 +13,7 @@ import {
   ControlOutlined,
   ClusterOutlined,
   SettingOutlined,
+  VideoCameraOutlined,
 } from "@ant-design/icons";
 import { logout } from "../api/auth";
 import { notifySessionEvent } from "../api/session";
@@ -31,6 +32,7 @@ const { Text } = Typography;
 
 const NAV_ITEMS = [
   { key: "monitoring", icon: <DashboardOutlined />, label: "Мониторинг" },
+  { key: "video", icon: <VideoCameraOutlined />, label: "Видеонаблюдение" },
   { key: "menu", icon: <AppstoreOutlined />, label: "Управление меню" },
   { key: "reports", icon: <FileTextOutlined />, label: "Отчёты" },
   { key: "billing", icon: <DollarOutlined />, label: "Лицензии" },
@@ -62,6 +64,11 @@ export default function AppLayout() {
         label: "Управление устройствами",
       },
       {
+        key: "video",
+        icon: <VideoCameraOutlined />,
+        label: "Видеонаблюдение",
+      },
+      {
         key: "settings",
         icon: <SettingOutlined />,
         label: "Настройки",
@@ -77,6 +84,7 @@ export default function AppLayout() {
     if (hasPermission(currentUser, PERMISSION_MONITORING_VIEW)) {
       navItems.push({ key: "monitoring", icon: <DashboardOutlined />, label: "Мониторинг" });
     }
+    navItems.push({ key: "video", icon: <VideoCameraOutlined />, label: "Видеонаблюдение" });
     if (hasAnyReportPermission(currentUser)) {
       navItems.push({ key: "reports", icon: <FileTextOutlined />, label: "Отчёты" });
     }
