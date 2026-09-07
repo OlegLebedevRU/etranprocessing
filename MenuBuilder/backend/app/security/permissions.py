@@ -91,7 +91,7 @@ async def require_readonly_guard(
     if user:
         try:
             u_role_id = int(user.get("role_id", 0))
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             u_role_id = 0
         if u_role_id == ROLE_VIEWER or user.get("role") == "viewer":
             raise HTTPException(
@@ -141,7 +141,7 @@ def require_permission(permission_code: str):
         role_id_raw = user.get("role_id", ROLE_USER)
         try:
             role_id = int(role_id_raw)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             role_id = ROLE_USER
         is_su = bool(
             user.get("is_superuser")
@@ -175,7 +175,7 @@ async def require_tenant_admin(
     role_id_raw = user.get("role_id", ROLE_USER)
     try:
         role_id = int(role_id_raw)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         role_id = ROLE_USER
     is_su = bool(
         user.get("is_superuser")

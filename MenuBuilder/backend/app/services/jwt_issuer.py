@@ -445,6 +445,24 @@ class JwtIssuerClient:
                         )
                     data = resp.json()
                     took = time.monotonic() - start_time
+                    if (
+                        isinstance(data, dict)
+                        and "body" in data
+                        and isinstance(data["body"], dict)
+                    ):
+                        data = data["body"]
+                    if isinstance(data, dict) and "error" in data:
+                        logger.error(
+                            "JWT issuer at %s returned error for user_id=%s role_id=%s: %s",
+                            self.url,
+                            user_id,
+                            role_id,
+                            data["error"],
+                        )
+                        raise HTTPException(
+                            status_code=status.HTTP_502_BAD_GATEWAY,
+                            detail=f"JWT issuer error: {data['error']}",
+                        )
                     logger.info(
                         "JWT issuer at %s successfully issued tokens for user_id=%s org_id=%s took=%.2fs",
                         self.url,
@@ -452,12 +470,6 @@ class JwtIssuerClient:
                         org_id or 0,
                         took,
                     )
-                    if (
-                        isinstance(data, dict)
-                        and "body" in data
-                        and isinstance(data["body"], dict)
-                    ):
-                        return data["body"]
                     return data
             except httpx.RequestError as exc:
                 last_error = exc

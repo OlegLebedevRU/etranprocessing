@@ -109,9 +109,7 @@ def create_tenant_token(
         "is_imp": is_imp,
     }
     perms = (
-        user.permissions
-        if isinstance(user, UserRecord)
-        else user.get("permissions")
+        user.permissions if isinstance(user, UserRecord) else user.get("permissions")
     )
     if perms is not None:
         payload["permissions"] = list(perms)

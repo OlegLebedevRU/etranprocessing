@@ -218,6 +218,12 @@ async def login(
 
     access_token = token_data.get("accessToken") or token_data.get("access_token") or ""
     refresh_token = token_data.get("refreshToken") or token_data.get("refresh_token")
+    if not access_token:
+        error_detail = token_data.get("error") or "Failed to issue access token"
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"JWT issuance failed: {error_detail}",
+        )
     expires_in = int(
         token_data.get("expiresIn")
         or token_data.get("expires_in")
@@ -337,6 +343,12 @@ async def refresh_token(
     )
 
     access_token = token_data.get("accessToken") or token_data.get("access_token") or ""
+    if not access_token:
+        error_detail = token_data.get("error") or "Failed to issue access token"
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"JWT issuance failed: {error_detail}",
+        )
     new_refresh_token = (
         token_data.get("refreshToken")
         or token_data.get("refresh_token")

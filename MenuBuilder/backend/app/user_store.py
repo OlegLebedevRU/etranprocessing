@@ -115,7 +115,7 @@ class DatabaseUserStore(AbstractUserStore):
     def __init__(self) -> None:
         self._in_memory_sessions: dict[str, dict] = {}
         self._session_seq: int = 1
-        self._db_available: bool = True
+        self._db_available: bool = bool(settings.database_url)
         self._in_memory_user_last_org: dict[int, int] = {}
 
     async def get_by_username(self, username: str) -> UserRecord | None:
@@ -130,7 +130,6 @@ class DatabaseUserStore(AbstractUserStore):
                         return self._to_record(user)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Database error fetching user %s: %s", username, exc)
-                self._db_available = False
 
         # Fallback to config users
         rec = await ConfigUserStore().get_by_username(username)
@@ -150,7 +149,6 @@ class DatabaseUserStore(AbstractUserStore):
                         return self._to_record(user)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Database error fetching user id %s: %s", user_id, exc)
-                self._db_available = False
 
         # Fallback to config users
         rec = await ConfigUserStore().get_by_id(user_id)
@@ -265,7 +263,6 @@ class DatabaseUserStore(AbstractUserStore):
                     return result.scalar_one_or_none()
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Database error fetching session: %s", exc)
-                self._db_available = False
 
         s = self._in_memory_sessions.get(token_hash)
         if s and not s["is_revoked"] and s["expires_at"] > now:
@@ -300,7 +297,6 @@ class DatabaseUserStore(AbstractUserStore):
                 logger.warning(
                     "Database error fetching session by id %s: %s", session_id, exc
                 )
-                self._db_available = False
 
         for s in self._in_memory_sessions.values():
             if s["id"] == session_id and not s["is_revoked"] and s["expires_at"] > now:
@@ -330,7 +326,6 @@ class DatabaseUserStore(AbstractUserStore):
                     return
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Database error updating session active org: %s", exc)
-                self._db_available = False
 
         for s in self._in_memory_sessions.values():
             if s["id"] == session_id:
@@ -352,7 +347,6 @@ class DatabaseUserStore(AbstractUserStore):
                     return
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Database error updating user last org: %s", exc)
-                self._db_available = False
 
     async def touch_session(self, session_id: int) -> None:
         try:
@@ -398,7 +392,6 @@ class DatabaseUserStore(AbstractUserStore):
                 logger.warning(
                     "Database error rotating session %s: %s", session_id, exc
                 )
-                self._db_available = False
 
         old_hash = None
         target_dict = None
@@ -436,7 +429,6 @@ class DatabaseUserStore(AbstractUserStore):
                     return int(getattr(result, "rowcount", 0) or 0)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Database error cleaning up expired sessions: %s", exc)
-                self._db_available = False
 
         to_del = [
             h
