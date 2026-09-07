@@ -1,0 +1,20 @@
+general: {
+	configs_folder = "/usr/local/etc/janus"
+	plugins_folder = "/usr/local/lib/janus/plugins"
+	transports_folder = "/usr/local/lib/janus/transports"
+	events_folder = "/usr/local/lib/janus/events"
+	loggers_folder = "/usr/local/lib/janus/loggers"
+
+	debug_level = 4
+	admin_secret = "janusoverlord"
+}
+
+media: {
+	ipv6 = false
+	rtp_port_range = "20000-20100"
+}
+
+nat: {
+	nice_debug = false
+	nat_1_1_mapping = "87.242.100.34"
+}

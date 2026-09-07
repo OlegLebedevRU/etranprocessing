@@ -161,9 +161,19 @@ leo4proxy.exe [ОПЦИИ]
 | `--cert-email <pattern>` | `*.terminal@leo4.ru` -> `*.terminal@forpay.ru` | Шаблон поиска email в сертификате |
 | `--cert-thumbprint <sha1>` | auto (самый свежий) | Выбор сертификата по отпечатку SHA-1 |
 | `--user-store` | `LocalMachine\MY` | Использовать хранилище `CurrentUser\MY` |
-| `--cert-poll-interval <sec>` | `30` | Интервал фонового опроса хранилища сертификатов в режиме службы (сек) |
-| `--drop-on-expire` | `0` (отключен) | Переход в режим ожидания при истечении срока действия сертификата |
-| `--secure` | lax / manual validation | Включить строгую валидацию CA сервера |
+| `--stream` | `0` (отключен) | Включить legacy TCP -> mTLS стрим-форвардер |
+| `--stream-local <ip:port>` | `127.0.0.1:8554` | Локальный TCP listener для legacy стриминга |
+| `--stream-remote <host:port>` | `dev.leo4.ru:8443` | Удаленный адрес облачного медиа-шлюза |
+| `--stream-max-clients <n>` | `2` | Максимум одновременных клиентов стриминга |
+| `--stream-idle-timeout <sec>` | `30` | Idle-таймаут закрытия TCP туннеля (сек, 0 = отключен) |
+| `--rtp-tunnel` | `0` (отключен) | Включить основной видеорежим RTP/RTCP UDP -> framed mTLS tunnel (L4RTP/1) |
+| `--no-rtp-tunnel` | — | Отключить RTP-туннель |
+| `--rtp-local <ip[:rtp[:rtcp]]>` | `127.0.0.1:5004/5005` | Локальные порты loopback UDP (RTP и RTCP) |
+| `--rtp-port <port>` | `5004` | Локальный порт RTP (UDP) |
+| `--rtcp-port <port>` | `5005` | Локальный порт RTCP (UDP) |
+| `--rtp-remote <host:port>` | `dev.leo4.ru:8443` | Удаленный единый адрес облачного видео-шлюза (mTLS) |
+| `--rtp-idle-timeout <sec>` | `30` | Idle-таймаут закрытия mTLS сессии при отсутствии UDP (сек, 0 = отключен) |
+| `--rtp-reconnect <sec>` | `3` | Начальная задержка backoff при сбое связи (сек, удваивается до 30с) |
 
 ### 4.6. Системный трей Windows (System Tray & Notification Icon)
 При запуске `leo4proxy.exe` в интерактивном режиме в области уведомлений Windows (System Tray) отображается значок состояния:
@@ -306,6 +316,124 @@ $sn = & "C:\Program Files\Leo4Proxy\leo4proxy.exe" --get-sn
 3. **Обработка истечения срока действия (Expiration)**:
    - **Поведение по умолчанию**: `leo4proxy` продолжает использовать текущий сертификат, передавая решение о валидности внешним серверам процессинга и брокеру.
    - **Режим строгого сброса (`--drop-on-expire`)**: при протухании сертификата и отсутствии в хранилище валидной замены служба переходит в режим ожидания (`waiting_for_certificate`), отключая проксирование до момента установки нового непросроченного сертификата.
+
+---
+
+## 8. Видеопоток с камеры терминала (RTP Tunnel L4RTP/1 и legacy Stream Forwarder)
+
+В `leo4proxy` реализованы два режима передачи видеопотока с USB/встроенной камеры терминала в облачный медиасервер (Janus media ingress):
+1. **Основной рекомендуемый режим (`--rtp-tunnel`)**: локальный RTP/RTCP по UDP -> framed mTLS/TCP туннель (протокол `L4RTP/1`, Lazy Connect, преамбула SN).
+2. **Опциональный legacy-режим (`--stream`)**: plain TCP forwarder в mTLS TCP.
+
+---
+
+### 8.1. Основной режим: RTP/RTCP UDP -> framed mTLS/TCP (протокол L4RTP/1)
+
+В основном видеорежиме локальный `ffmpeg.exe` передает датаграммы RTP (видео) и RTCP (управление/статистика) по UDP на loopback интерфейс терминала:
+- RTP: `127.0.0.1:5004` (UDP)
+- RTCP: `127.0.0.1:5005` (UDP)
+
+Модуль `rtp_tunnel` упаковывает каждую UDP-датаграмму в собственный минималистичный TCP-фрейминг (`L4RTP/1`) и передает все пакеты внутри **ОДНОГО** исходящего mTLS/TCP-соединения на единый внешний endpoint `dev.leo4.ru:8443` (общий для всех терминалов). Серверный ingress распаковывает кадры и перенаправляет в Janus.
+
+```
+ffmpeg (USB Camera)
+  │  RTP UDP (127.0.0.1:5004)
+  │  RTCP UDP (127.0.0.1:5005)
+  ▼
+leo4proxy (модуль rtp_tunnel)
+  │  Преамбула SN + кадры L4RTP/1 внутри ОДНОГО mTLS/TCP соединения
+  │  (Windows SChannel, клиентский сертификат из LocalMachine\MY)
+  ▼
+dev.leo4.ru:8443 (Nginx Reverse Proxy / Ingress)
+  │  Демультиплексирование по преамбуле SN
+  ▼
+Janus WebRTC Gateway (RTP/RTCP UDP ports)
+```
+
+#### Ключевые свойства L4RTP/1:
+- **Единый endpoint**: все терминалы подключаются к одному адресу `dev.leo4.ru:8443`.
+- **Идентификация и безопасность**: серийный номер терминала (SN) берется СТРОГО из поля `sn` сертификата `CertDetails` (`src/cert_store.h`). SN служит идентификатором маршрутизации, а авторизация обеспечивается взаимной TLS-аутентификацией (mTLS). Сервер обязан сверять заявленный SN с сертификатом сессии.
+- **Lazy Connect (подключение по требованию)**: `leo4proxy` НЕ держит TLS-соединение постоянно открытым. Соединение с облаком инициируется ТОЛЬКО при поступлении первого локального UDP-пакета от `ffmpeg`. Если локальный поток отсутствует дольше `--rtp-idle-timeout` (по умолчанию 30 с), mTLS-сессия корректно закрывается и прокси возвращается в режим ожидания (IDLE).
+- **Экспоненциальный Backoff**: при недоступности облака или разрыве TLS включается прерываемая задержка (`reconnect_sec`, удваиваемая до капа 30 с). Во время backoff локальные датаграммы считываются и сбрасываются с инкрементом счетчика `rtp_tunnel_dropped_no_upstream` (без накопления в памяти). Повторное подключение инициируется только если видеопоток продолжает поступать.
+- **Zero-Codec Overhead**: `leo4proxy` не декодирует H.264, не парсит заголовки RTP и не собирает кадры. Датаграммы пересылаются байт-в-байт.
+
+#### Спецификация wire-протокола L4RTP/1:
+1. **Преамбула (отправляется один раз сразу после mTLS handshake перед первым кадром):**
+   ```text
+   Offset  Size  Field
+   0       4     Magic: ASCII "L4RT" (0x4C 0x34 0x52 0x54)
+   4       1     Version: 0x01
+   5       1     Flags: 0x00 (reserved)
+   6       2     SN length, uint16 big-endian
+   8       N     SN (ASCII/UTF-8 без завершающего NUL)
+   ```
+2. **Кадры (RTP / RTCP):**
+   ```text
+   Offset  Size  Field
+   0       1     Type: 0x01 = RTP, 0x02 = RTCP, 0x03 = keepalive
+   1       1     Flags: 0x00 (reserved)
+   2       2     Payload length, uint16 big-endian
+   4       N     Payload (байты UDP-датаграммы без изменений)
+   ```
+   *Заголовок кадра и payload отправляются одним вызовом `schannel_send()` в едином TLS-record.*
+
+#### CLI-параметры RTP-туннеля:
+| Флаг | По умолчанию | Описание |
+|---|---|---|
+| `--rtp-tunnel` | отключен | Включить основной режим передачи видео RTP/RTCP UDP -> mTLS. |
+| `--no-rtp-tunnel` | — | Отключить RTP-туннель. |
+| `--rtp-local <ip[:rtp[:rtcp]]>` | `127.0.0.1:5004/5005` | Локальный loopback-адрес и порты для RTP и RTCP UDP. |
+| `--rtp-port <port>` | `5004` | Локальный порт для RTP UDP (видеодатаграммы). |
+| `--rtcp-port <port>` | `5005` | Локальный порт для RTCP UDP (контрольные пакеты). |
+| `--rtp-remote <host:port>` | `dev.leo4.ru:8443` | Единый удаленный адрес облачного видео-шлюза (mTLS). |
+| `--rtp-idle-timeout <sec>` | `30` | Таймаут отсутствия локального видео до закрытия mTLS сессии (0 = отключен). |
+| `--rtp-reconnect <sec>` | `3` | Начальная задержка повторного подключения при сбое (сек, экспоненциально до 30с). |
+
+#### Запуск ffmpeg для RTP-туннеля:
+```cmd
+ffmpeg -f dshow -i video="USB Camera" -c:v libx264 -preset ultrafast -tune zerolatency -b:v 800k -f rtp rtp://127.0.0.1:5004?rtcpport=5005
+```
+Готовый скрипт с автоматическим перезапуском: `tools/leo4proxy/examples/ffmpeg_rtp_tunnel_example.cmd`.
+
+---
+
+### 8.2. Опциональный legacy-режим: Stream Forwarder (`--stream`)
+
+Сохранён для обратной совместимости. Осуществляет прямое байтовое перенаправление входящего локального TCP-подключения (`127.0.0.1:8554`) в исходящее mTLS TCP-соединение:
+```cmd
+leo4proxy.exe --stream --stream-remote dev.leo4.ru:8443
+ffmpeg -f dshow -i video="USB Camera" -c:v libx264 -preset ultrafast -tune zerolatency -b:v 800k -f mpegts tcp://127.0.0.1:8554
+```
+Оба режима (`--rtp-tunnel` и `--stream`) являются независимыми и могут работать одновременно на разных портах.
+
+---
+
+### 8.3. Диагностика через REST API (`GET /_leo4/info`)
+
+Проверка состояния RTP-туннеля и счетчиков трафика:
+```bash
+curl http://127.0.0.1:18443/_leo4/info
+```
+Пример блока метрик в ответе:
+```json
+{
+  "rtp_tunnel_enabled": true,
+  "listeners": {
+    "rtp_tunnel_local": "udp://127.0.0.1:5004 (RTP), udp://127.0.0.1:5005 (RTCP)"
+  },
+  "upstreams": {
+    "rtp_tunnel_remote": "dev.leo4.ru:8443"
+  },
+  "clients": {
+    "rtp_tunnel_active": 1,
+    "rtp_tunnel_total_connections": 3,
+    "rtp_tunnel_bytes_up": 2491820,
+    "rtp_tunnel_packets_rtp": 1820,
+    "rtp_tunnel_packets_rtcp": 94,
+    "rtp_tunnel_dropped_no_upstream": 0
+  }
+}
+```
 
 ---
 

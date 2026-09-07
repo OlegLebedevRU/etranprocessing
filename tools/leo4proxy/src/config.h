@@ -14,10 +14,10 @@
 #include <windows.h>
 #include <stdbool.h>
 
-#define LEO4_PROXY_VERSION "1.0.0"
+#define LEO4_PROXY_VERSION "1.2.0"
 #define LEO4_SERVICE_NAME L"Leo4Proxy"
 #define LEO4_SERVICE_DISPLAY_NAME L"Leo4 IoT SChannel Proxy Service"
-#define LEO4_SERVICE_DESC L"Leo4 IoT SChannel mTLS Proxy for MQTT (18883) and HTTPS (18443) using Windows Certificate Store."
+#define LEO4_SERVICE_DESC L"Leo4 IoT SChannel mTLS Proxy for MQTT (18883), HTTPS (18443), Stream (8554) and RTP Tunnel (5004/5005) using Windows Certificate Store."
 
 /* Default endpoints */
 #define DEFAULT_MQTT_LOCAL_HOST  "127.0.0.1"
@@ -29,6 +29,26 @@
 #define DEFAULT_HTTP_LOCAL_PORT  18443
 #define DEFAULT_HTTP_REMOTE_HOST "iot-processing.ru"
 #define DEFAULT_HTTP_REMOTE_PORT 443
+
+/* Stream forwarder (RTP/RTSP-over-mTLS, TCP) */
+#define DEFAULT_STREAM_LOCAL_HOST   "127.0.0.1"
+#define DEFAULT_STREAM_LOCAL_PORT   8554
+#define DEFAULT_STREAM_REMOTE_HOST  "dev.leo4.ru"
+#define DEFAULT_STREAM_REMOTE_PORT  8443
+#define DEFAULT_STREAM_MAX_CLIENTS  2
+#define DEFAULT_STREAM_IDLE_TIMEOUT 30
+
+/* Primary media mode: local RTP/RTCP UDP -> framed mTLS/TCP tunnel (L4RTP/1) */
+#define DEFAULT_RTP_TUNNEL_LOCAL_HOST        "127.0.0.1"
+#define DEFAULT_RTP_TUNNEL_RTP_PORT          5004
+#define DEFAULT_RTP_TUNNEL_RTCP_PORT         5005
+#define DEFAULT_RTP_TUNNEL_REMOTE_HOST       "dev.leo4.ru"
+#define DEFAULT_RTP_TUNNEL_REMOTE_PORT       8443
+#define DEFAULT_RTP_TUNNEL_IDLE_TIMEOUT      30      /* sec; 0 = disabled */
+#define DEFAULT_RTP_TUNNEL_RECONNECT_SEC     3       /* initial backoff */
+#define DEFAULT_RTP_TUNNEL_RECONNECT_MAX_SEC 30      /* backoff cap */
+#define DEFAULT_RTP_TUNNEL_CONNECT_TIMEOUT   5000    /* ms, schannel_connect */
+#define DEFAULT_RTP_TUNNEL_MAX_PACKET_SIZE   65535
 
 #define DEFAULT_REVERSE_LOCAL_HOST   "0.0.0.0"
 #define DEFAULT_REVERSE_LOCAL_PORT   443
@@ -55,6 +75,25 @@ typedef struct {
     int  http_local_port;
     char http_remote_host[MAX_HOST_LEN];
     int  http_remote_port;
+
+    /* Stream forwarder settings */
+    int  stream_proxy_enabled;              /* 1 to enable local TCP -> mTLS stream forwarder (default: 0, opt-in) */
+    char stream_local_host[MAX_HOST_LEN];
+    int  stream_local_port;
+    char stream_remote_host[MAX_HOST_LEN];
+    int  stream_remote_port;
+    int  stream_max_clients;
+    int  stream_idle_timeout_sec;
+
+    /* RTP tunnel settings (L4RTP/1) */
+    int  rtp_tunnel_enabled;                /* opt-in, default 0 */
+    char rtp_tunnel_local_host[MAX_HOST_LEN];
+    int  rtp_tunnel_rtp_port;
+    int  rtp_tunnel_rtcp_port;
+    char rtp_tunnel_remote_host[MAX_HOST_LEN];
+    int  rtp_tunnel_remote_port;
+    int  rtp_tunnel_idle_timeout_sec;
+    int  rtp_tunnel_reconnect_sec;
 
     /* Reverse Proxy settings */
     int  reverse_proxy_enabled;            /* 1 to enable reverse HTTPS proxy (default: 1) */
@@ -90,11 +129,21 @@ typedef struct {
 
 /* Runtime proxy metrics and status */
 typedef struct {
-    volatile LONG mqtt_active_clients;
-    volatile LONG mqtt_total_connections;
-    volatile LONG http_total_requests;
-    volatile LONG reverse_total_requests;
-    volatile LONG cert_ready;
+    volatile LONG     mqtt_active_clients;
+    volatile LONG     mqtt_total_connections;
+    volatile LONG     http_total_requests;
+    volatile LONG     reverse_total_requests;
+    volatile LONG     stream_active_clients;
+    volatile LONG     stream_total_connections;
+    volatile LONGLONG stream_bytes_up;
+    volatile LONGLONG stream_bytes_down;
+    volatile LONG     rtp_tunnel_active;
+    volatile LONG     rtp_tunnel_total_connections;
+    volatile LONGLONG rtp_tunnel_bytes_up;
+    volatile LONGLONG rtp_tunnel_packets_rtp;
+    volatile LONGLONG rtp_tunnel_packets_rtcp;
+    volatile LONGLONG rtp_tunnel_dropped_no_upstream;
+    volatile LONG     cert_ready;
 } ProxyStats;
 
 extern ProxyStats g_proxyStats;

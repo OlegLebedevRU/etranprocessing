@@ -1,0 +1,78 @@
+name: l4media
+
+services:
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: l4media-nginx
+    restart: unless-stopped
+    ports:
+      - "${L4MEDIA_PORT:-8443}:8443"
+    volumes:
+      - ${CA_CERT_PATH:-/home/user1/iot-rpc-rest-app/crt/iot_leo4_ca.crt}:/crt/ca_certificate.pem:ro
+      - ./crt/server_certificate.pem:/crt/server_certificate.pem:ro
+      - ./crt/server_key.pem:/crt/server_key.pem:ro
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    networks:
+      - l4media_net
+    depends_on:
+      - ingress
+
+  ingress:
+    build:
+      context: ./ingress
+      dockerfile: Dockerfile
+    container_name: l4media-ingress
+    restart: unless-stopped
+    environment:
+      - JANUS_HOST=janus
+      - ROUTES_FILE=/etc/l4media/routes.conf
+    volumes:
+      - ./ingress/routes.conf:/etc/l4media/routes.conf:ro
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    networks:
+      - l4media_net
+    depends_on:
+      - janus
+
+  janus:
+    image: canyan/janus-gateway:latest
+    container_name: l4media-janus
+    restart: unless-stopped
+    volumes:
+      - ./janus/janus.jcfg:/usr/local/etc/janus/janus.jcfg:ro
+      - ./janus/janus.plugin.streaming.jcfg:/usr/local/etc/janus/janus.plugin.streaming.jcfg:ro
+      - ./janus/janus.transport.http.jcfg:/usr/local/etc/janus/janus.transport.http.jcfg:ro
+    ports:
+      # WebRTC media UDP port range for future browser streaming
+      - "20000-20100:20000-20100/udp"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    networks:
+      - l4media_net
+
+networks:
+  l4media_net:
+    name: l4media_net
+    driver: bridge
+    attachable: true
+
+# ---------------------------------------------------------------------------
+# Интеграция с MenuBuilder Backend (внешняя сеть docker-стека: user1_default)
+# По умолчанию изолировано в l4media_net. Для ручного подключения выполните:
+#   docker network connect user1_default l4media-ingress
+#   docker network connect user1_default l4media-janus
+# Или раскомментируйте секцию ниже и добавьте user1_default в networks сервисов:
+# ---------------------------------------------------------------------------
+# networks:
+#   user1_default:
+#     external: true

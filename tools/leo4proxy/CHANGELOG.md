@@ -2,6 +2,45 @@
 
 All notable changes to the `leo4proxy` component will be documented in this file.
 
+## [1.2.0] - 2026-09-07
+
+### Added
+- **Primary Media Video Mode: RTP/RTCP UDP -> framed mTLS/TCP tunnel (`--rtp-tunnel`, L4RTP/1)**:
+  - Added native `rtp_tunnel` module (`src/rtp_tunnel.c`, `src/rtp_tunnel.h`) for capturing local RTP (`:5004`) and RTCP (`:5005`) UDP datagrams on loopback and encapsulating them into framed mTLS TCP tunnel (protocol `L4RTP/1`) targeting a single external endpoint (`dev.leo4.ru:8443`).
+  - Wire protocol L4RTP/1:
+    - Preamble: Magic "L4RT", version 0x01, uint16 big-endian SN length, followed by SN extracted strictly from client certificate (`certDetails->sn`).
+    - Frames: Type (0x01 RTP, 0x02 RTCP, 0x03 keepalive), flags 0x00, uint16 big-endian payload length, raw UDP datagram. Header and payload sent in single `schannel_send()` call.
+  - Strict Lazy Connect lifecycle: outbound mTLS connection is opened only when first local UDP packet arrives from ffmpeg, and closed gracefully after idle timeout (`--rtp-idle-timeout`, default 30s).
+  - Exponential Backoff on network failure: delay starts at 3s and doubles up to 30s, interruptible sleep in 50ms slices, dropping local datagrams without memory allocation during outage (`rtp_tunnel_dropped_no_upstream`). Reconnect is attempted only if video traffic continues.
+  - Sockets configured with `SO_RCVBUF = 512 KB` to absorb H.264 IDR packet bursts without packet drop; `SO_REUSEADDR` intentionally omitted.
+  - Added CLI options: `--rtp-tunnel`, `--no-rtp-tunnel`, `--rtp-local`, `--rtp-port`, `--rtcp-port`, `--rtp-remote`, `--rtp-idle-timeout`, `--rtp-reconnect`.
+  - Service lifecycle support: start/stop/restart on certificate rotation, standby on certificate deletion/expiration.
+  - Diagnostic API (`/_leo4/info`) extended with `"rtp_tunnel_enabled"`, local/remote listener endpoints, and transmission metrics.
+  - Companion example script: `examples/ffmpeg_rtp_tunnel_example.cmd`.
+- Preserved existing `--stream` as optional legacy TCP stream forwarder.
+
+## [1.1.0] - 2026-09-07
+
+### Added
+- **Stream Forwarder (`--stream`)**:
+  - Added transparent plain-TCP to SChannel mTLS forwarder (`src/stream_proxy.c`, `src/stream_proxy.h`) for streaming video from terminal cameras (`ffmpeg.exe`, RTSP interleaved, MPEG-TS, RTP-over-TCP) into cloud media ingress (`dev.leo4.ru:8443`).
+  - Added CLI flags:
+    - `--stream`: enable stream forwarder (opt-in, default: disabled).
+    - `--no-stream`: disable stream forwarder.
+    - `--stream-local <ip:port>`: local TCP listener (default: `127.0.0.1:8554`).
+    - `--stream-remote <host:port>`: remote cloud ingress (default: `dev.leo4.ru:8443`).
+    - `--stream-max-clients <n>`: maximum concurrent client connections (default: `2`, min: 1).
+    - `--stream-idle-timeout <sec>`: idle timeout in seconds before closing tunnel (default: `30`, 0 = disabled).
+  - Diagnostic API (`/_leo4/info`) enhancements:
+    - Added top-level `"stream_enabled": true|false`.
+    - Added `"stream_local"` in `listeners` (`"127.0.0.1:8554"` or `"127.0.0.1:8554 (disabled)"`).
+    - Added `"stream_remote"` in `upstreams` (`"dev.leo4.ru:8443"`).
+    - Added `"stream_active_clients"`, `"stream_total_connections"`, `"stream_bytes_up"`, `"stream_bytes_down"` in `clients`.
+  - Windows Service integration: automatic start with service, hot-swap reconnection on certificate rotation, standby on certificate deletion/expiration, and clean shutdown.
+  - Companion example script: `examples/ffmpeg_stream_example.cmd`.
+
+---
+
 ## [1.1.1] - 2026-08-29
 
 ### Fixed

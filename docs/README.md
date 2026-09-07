@@ -18,6 +18,7 @@
 - **[`etran_bill-licensing-architecture.md`](etran_bill-licensing-architecture.md)** — Авторитетная архитектура и математика лицензионного биллинга: статусы (`DISABLED`, `OVERDUE`, `DUE_SOON`, `ACTIVE`), независимый биллинг сертификатов, расчет периодов с сохранением дня якоря, корзина и чекаут.
 - **[`etran_cert-infrastructure-architecture.md`](etran_cert-infrastructure-architecture.md)** — Сквозная спецификация инфраструктуры сертификатов и mTLS: двухфакторный выпуск через PIN, терминальный установщик на C, проверка подлинности на Nginx и PowerShell-скрипты аудита.
 - **[`etran_arch-serverless-email-integration.md`](etran_arch-serverless-email-integration.md)** — Архитектура и спецификация интеграции serverless-сервиса отправки email: email организации, подтверждение адресов, отправка финансовых и сменных отчетов, mTLS-проброс от терминалов.
+- **[`etran_arch-l4media-streaming-architecture.md`](etran_arch-l4media-streaming-architecture.md)** — Архитектура подсистемы видеотрансляций `l4media`: прием mTLS видеопотоков L4RTP/1 от киосков (`leo4proxy`), декапсуляция, Janus WebRTC Gateway и интеграция с `MenuBuilder`.
 
 ---
 

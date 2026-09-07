@@ -94,13 +94,88 @@ leo4proxy.exe [options]
 | `--cert-thumbprint <hex>` | Select certificate matching specific SHA-1 thumbprint |
 | `--cert-poll-interval <sec>` | Polling interval in seconds for certificate changes in service mode (default: `30`) |
 | `--drop-on-expire` | Transition to standby mode if certificate expires and no valid replacement exists |
+| `--stream` | Enable local TCP -> mTLS video stream forwarder (default: disabled) |
+| `--no-stream` | Disable stream forwarder |
+| `--stream-local <ip:port>` | Local stream listener address (default: `127.0.0.1:8554`) |
+| `--stream-remote <host:port>` | Remote cloud media ingress (default: `dev.leo4.ru:8443`) |
+| `--stream-max-clients <n>` | Max concurrent streaming connections (default: `2`, min: 1) |
+| `--stream-idle-timeout <sec>` | Idle timeout in seconds before closing tunnel (default: `30`, 0 = disabled) |
+| `--rtp-tunnel` | Enable primary video RTP/RTCP UDP -> framed mTLS tunnel (default: disabled) |
+| `--no-rtp-tunnel` | Disable RTP tunnel |
+| `--rtp-local <ip[:rtp[:rtcp]]>` | Local loopback UDP address/ports (default: `127.0.0.1:5004/5005`) |
+| `--rtp-port <port>` | Local RTP UDP port (default: `5004`) |
+| `--rtcp-port <port>` | Local RTCP UDP port (default: `5005`) |
+| `--rtp-remote <host:port>` | Remote cloud video ingress (default: `dev.leo4.ru:8443`) |
+| `--rtp-idle-timeout <sec>` | Idle timeout before closing mTLS session (default: `30`, 0 = disabled) |
+| `--rtp-reconnect <sec>` | Initial reconnect backoff delay in seconds (default: `3`, doubles to 30) |
 | `--install` / `--uninstall` | Register or unregister Windows Service |
 | `--start` / `--stop` | Start or stop Windows Service |
 | `--help` | Display usage and all CLI flags |
 
 ---
 
-## 6. Troubleshooting
+## 6. Видеопоток с камеры терминала (RTP Tunnel L4RTP/1 и Stream Forwarder)
+
+В `leo4proxy` поддерживаются два режима защищенной передачи видеопотока в облачный медиасервер:
+1. **Основной видеорежим (`--rtp-tunnel`)**: локальный RTP/RTCP по UDP -> framed mTLS/TCP туннель (протокол `L4RTP/1`, Lazy Connect, преамбула SN).
+2. **Опциональный legacy-режим (`--stream`)**: plain TCP forwarder в mTLS TCP.
+
+---
+
+### 6.1. Основной режим: RTP/RTCP UDP -> framed mTLS/TCP (L4RTP/1)
+
+`ffmpeg` на терминале передает стандартные UDP датаграммы:
+- **RTP**: `127.0.0.1:5004` (UDP)
+- **RTCP**: `127.0.0.1:5005` (UDP)
+
+Прокси `leo4proxy` выполняет фрейминг датаграмм по протоколу `L4RTP/1` и отправляет их в **ОДНОМ** mTLS-соединении на единый внешний endpoint `dev.leo4.ru:8443`.
+
+```
+ffmpeg (USB Camera) ──UDP (5004/5005)──► leo4proxy ──L4RTP/1 mTLS──► dev.leo4.ru:8443 (Cloud Ingress)
+```
+
+#### Ключевые особенности:
+- **Преамбула SN**: сразу после TLS handshake прокси отправляет преамбулу с серийным номером (SN), взятым строго из клиентского сертификата (`certDetails->sn`).
+- **Lazy Connect**: исходящее TLS-соединение открывается только при приходе первого UDP-пакета от `ffmpeg` и закрывается по idle-таймауту (по умолчанию 30 с).
+- **Экспоненциальный Backoff**: при сетевых сбоях включается прерываемая пауза (3с -> 6с -> 30с) со сбросом поступающих UDP-пакетов без расхода памяти (`rtp_tunnel_dropped_no_upstream`).
+
+#### CLI-параметры RTP-туннеля:
+- `--rtp-tunnel`: включить основной режим (по умолчанию выключен).
+- `--no-rtp-tunnel`: выключить RTP-туннель.
+- `--rtp-local <ip[:rtp[:rtcp]]>`: локальные порты UDP (по умолчанию `127.0.0.1:5004/5005`).
+- `--rtp-port <port>` / `--rtcp-port <port>`: порты RTP и RTCP по отдельности.
+- `--rtp-remote <host:port>`: удаленный облачный шлюз (по умолчанию `dev.leo4.ru:8443`).
+- `--rtp-idle-timeout <sec>`: таймаут простоя в секундах до закрытия сессии (по умолчанию `30`).
+- `--rtp-reconnect <sec>`: начальная задержка backoff (по умолчанию `3`).
+
+#### Пример запуска ffmpeg:
+```cmd
+ffmpeg -f dshow -i video="USB Camera" -c:v libx264 -preset ultrafast -tune zerolatency -b:v 800k -f rtp rtp://127.0.0.1:5004?rtcpport=5005
+```
+Готовый скрипт: `tools/leo4proxy/examples/ffmpeg_rtp_tunnel_example.cmd`.
+
+---
+
+### 6.2. Опциональный legacy-режим: Stream Forwarder (`--stream`)
+
+Обеспечивает прямое туннелирование TCP-потока (MPEG-TS / RTSP over TCP) от локального `ffmpeg`:
+```cmd
+leo4proxy.exe --install --stream --stream-remote dev.leo4.ru:8443
+ffmpeg -f dshow -i video="USB Camera" -c:v libx264 -preset ultrafast -tune zerolatency -b:v 800k -f mpegts tcp://127.0.0.1:8554
+```
+Готовый скрипт: `tools/leo4proxy/examples/ffmpeg_stream_example.cmd`.
+
+---
+
+### 6.3. Диагностика через REST API
+Метрики передаваемых байтов и пакетов доступны через диагностический API:
+```bash
+curl http://127.0.0.1:18443/_leo4/info
+```
+
+---
+
+## 7. Troubleshooting
 
 - **Service fails to start (`Error: No valid client certificate found`)**:
   - Run `install_cert.cmd` from `terminal-cert-installer` to enroll a valid certificate.

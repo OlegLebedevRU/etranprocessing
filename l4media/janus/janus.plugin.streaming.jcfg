@@ -1,0 +1,15 @@
+general: {
+}
+
+alpha-stream: {
+	type = "rtp"
+	id = 1
+	description = "Alpha L4RTP Stream"
+	audio = false
+	video = true
+	videoport = 6000
+	videortcpport = 6001
+	videopt = 96
+	videocodec = "h264"
+	videofmtp = "profile-level-id=42e01f;packetization-mode=1"
+}

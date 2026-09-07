@@ -11,6 +11,8 @@
 #include "cert_store.h"
 #include "schannel_tls.h"
 #include "mqtt_proxy.h"
+#include "stream_proxy.h"
+#include "rtp_tunnel.h"
 #include "http_proxy.h"
 #include "reverse_proxy.h"
 #include "discovery.h"
@@ -27,11 +29,15 @@ typedef struct {
     CredHandle hClientCred;
     CredHandle hServerCred;
     MqttProxyServer mqttServer;
+    StreamProxyServer streamServer;
+    RtpTunnelServer rtpTunnelServer;
     HttpProxyServer httpServer;
     ReverseProxyServer reverseServer;
     DiscoveryServer discoveryServer;
     TrayIconContext trayCtx;
     bool isForwardRunning;
+    bool isStreamRunning;
+    bool isRtpTunnelRunning;
     bool isReverseRunning;
     bool isDiscoveryRunning;
 } AppState;
@@ -51,6 +57,14 @@ static void on_tray_action(int action_id, void* user_data) {
                 tray_icon_set_reverse_state(&app->trayCtx, false);
             }
             if (app->isForwardRunning) {
+                if (app->isStreamRunning) {
+                    stream_proxy_stop(&app->streamServer);
+                    app->isStreamRunning = false;
+                }
+                if (app->isRtpTunnelRunning) {
+                    rtp_tunnel_stop(&app->rtpTunnelServer);
+                    app->isRtpTunnelRunning = false;
+                }
                 mqtt_proxy_stop(&app->mqttServer);
                 http_proxy_stop(&app->httpServer);
                 app->isForwardRunning = false;
@@ -72,6 +86,22 @@ static void on_tray_action(int action_id, void* user_data) {
                 if (mOk && hOk) {
                     app->isForwardRunning = true;
                     tray_icon_set_forward_state(&app->trayCtx, true);
+                    if (app->config.stream_proxy_enabled) {
+                        if (stream_proxy_start(&app->streamServer, &app->config, &app->certDetails, app->hClientCred)) {
+                            app->isStreamRunning = true;
+                        } else {
+                            fprintf(stderr, "[WARNING] Stream forwarder failed to start on %s:%d\n",
+                                    app->config.stream_local_host, app->config.stream_local_port);
+                        }
+                    }
+                    if (app->config.rtp_tunnel_enabled) {
+                        if (rtp_tunnel_start(&app->rtpTunnelServer, &app->config, &app->certDetails, app->hClientCred)) {
+                            app->isRtpTunnelRunning = true;
+                        } else {
+                            fprintf(stderr, "[WARNING] RTP tunnel failed to start on %s:%d/%d\n",
+                                    app->config.rtp_tunnel_local_host, app->config.rtp_tunnel_rtp_port, app->config.rtp_tunnel_rtcp_port);
+                        }
+                    }
                 }
             }
             if (!app->isReverseRunning && app->config.reverse_proxy_enabled && SecIsValidHandle(&app->hServerCred)) {
@@ -93,6 +123,14 @@ static void on_tray_action(int action_id, void* user_data) {
             printf("[TRAY] Restarting all proxies...\n");
             if (app->isReverseRunning) reverse_proxy_stop(&app->reverseServer);
             if (app->isForwardRunning) {
+                if (app->isStreamRunning) {
+                    stream_proxy_stop(&app->streamServer);
+                    app->isStreamRunning = false;
+                }
+                if (app->isRtpTunnelRunning) {
+                    rtp_tunnel_stop(&app->rtpTunnelServer);
+                    app->isRtpTunnelRunning = false;
+                }
                 mqtt_proxy_stop(&app->mqttServer);
                 http_proxy_stop(&app->httpServer);
             }
@@ -106,6 +144,22 @@ static void on_tray_action(int action_id, void* user_data) {
             http_proxy_start(&app->httpServer, &app->config, &app->certDetails, app->hClientCred, app->hServerCred);
             app->isForwardRunning = true;
             tray_icon_set_forward_state(&app->trayCtx, true);
+            if (app->config.stream_proxy_enabled) {
+                if (stream_proxy_start(&app->streamServer, &app->config, &app->certDetails, app->hClientCred)) {
+                    app->isStreamRunning = true;
+                } else {
+                    fprintf(stderr, "[WARNING] Stream forwarder failed to start on %s:%d\n",
+                            app->config.stream_local_host, app->config.stream_local_port);
+                }
+            }
+            if (app->config.rtp_tunnel_enabled) {
+                if (rtp_tunnel_start(&app->rtpTunnelServer, &app->config, &app->certDetails, app->hClientCred)) {
+                    app->isRtpTunnelRunning = true;
+                } else {
+                    fprintf(stderr, "[WARNING] RTP tunnel failed to start on %s:%d/%d\n",
+                            app->config.rtp_tunnel_local_host, app->config.rtp_tunnel_rtp_port, app->config.rtp_tunnel_rtcp_port);
+                }
+            }
 
             if (app->config.reverse_proxy_enabled && SecIsValidHandle(&app->hServerCred)) {
                 reverse_proxy_start(&app->reverseServer, &app->config, &app->certDetails, app->hServerCred);
@@ -140,6 +194,14 @@ static void on_tray_action(int action_id, void* user_data) {
         case IDM_TRAY_TOGGLE_FORWARD:
             if (app->isForwardRunning) {
                 printf("[TRAY] Stopping Forward Proxies...\n");
+                if (app->isStreamRunning) {
+                    stream_proxy_stop(&app->streamServer);
+                    app->isStreamRunning = false;
+                }
+                if (app->isRtpTunnelRunning) {
+                    rtp_tunnel_stop(&app->rtpTunnelServer);
+                    app->isRtpTunnelRunning = false;
+                }
                 mqtt_proxy_stop(&app->mqttServer);
                 http_proxy_stop(&app->httpServer);
                 app->isForwardRunning = false;
@@ -152,6 +214,22 @@ static void on_tray_action(int action_id, void* user_data) {
                 if (mOk && hOk) {
                     app->isForwardRunning = true;
                     tray_icon_set_forward_state(&app->trayCtx, true);
+                    if (app->config.stream_proxy_enabled) {
+                        if (stream_proxy_start(&app->streamServer, &app->config, &app->certDetails, app->hClientCred)) {
+                            app->isStreamRunning = true;
+                        } else {
+                            fprintf(stderr, "[WARNING] Stream forwarder failed to start on %s:%d\n",
+                                    app->config.stream_local_host, app->config.stream_local_port);
+                        }
+                    }
+                    if (app->config.rtp_tunnel_enabled) {
+                        if (rtp_tunnel_start(&app->rtpTunnelServer, &app->config, &app->certDetails, app->hClientCred)) {
+                            app->isRtpTunnelRunning = true;
+                        } else {
+                            fprintf(stderr, "[WARNING] RTP tunnel failed to start on %s:%d/%d\n",
+                                    app->config.rtp_tunnel_local_host, app->config.rtp_tunnel_rtp_port, app->config.rtp_tunnel_rtcp_port);
+                        }
+                    }
                     printf("[TRAY] Forward Proxies RUNNING.\n");
                 }
             }
@@ -223,6 +301,23 @@ void proxy_config_init_defaults(ProxyConfig* config) {
     strncpy_s(config->http_remote_host, sizeof(config->http_remote_host), DEFAULT_HTTP_REMOTE_HOST, _TRUNCATE);
     config->http_remote_port = DEFAULT_HTTP_REMOTE_PORT;
 
+    config->stream_proxy_enabled = 0;
+    strncpy_s(config->stream_local_host, sizeof(config->stream_local_host), DEFAULT_STREAM_LOCAL_HOST, _TRUNCATE);
+    config->stream_local_port = DEFAULT_STREAM_LOCAL_PORT;
+    strncpy_s(config->stream_remote_host, sizeof(config->stream_remote_host), DEFAULT_STREAM_REMOTE_HOST, _TRUNCATE);
+    config->stream_remote_port = DEFAULT_STREAM_REMOTE_PORT;
+    config->stream_max_clients = DEFAULT_STREAM_MAX_CLIENTS;
+    config->stream_idle_timeout_sec = DEFAULT_STREAM_IDLE_TIMEOUT;
+
+    config->rtp_tunnel_enabled = 0;
+    strncpy_s(config->rtp_tunnel_local_host, sizeof(config->rtp_tunnel_local_host), DEFAULT_RTP_TUNNEL_LOCAL_HOST, _TRUNCATE);
+    config->rtp_tunnel_rtp_port = DEFAULT_RTP_TUNNEL_RTP_PORT;
+    config->rtp_tunnel_rtcp_port = DEFAULT_RTP_TUNNEL_RTCP_PORT;
+    strncpy_s(config->rtp_tunnel_remote_host, sizeof(config->rtp_tunnel_remote_host), DEFAULT_RTP_TUNNEL_REMOTE_HOST, _TRUNCATE);
+    config->rtp_tunnel_remote_port = DEFAULT_RTP_TUNNEL_REMOTE_PORT;
+    config->rtp_tunnel_idle_timeout_sec = DEFAULT_RTP_TUNNEL_IDLE_TIMEOUT;
+    config->rtp_tunnel_reconnect_sec = DEFAULT_RTP_TUNNEL_RECONNECT_SEC;
+
     config->reverse_proxy_enabled = 1;
     strncpy_s(config->reverse_local_host, sizeof(config->reverse_local_host), DEFAULT_REVERSE_LOCAL_HOST, _TRUNCATE);
     config->reverse_local_port = DEFAULT_REVERSE_LOCAL_PORT;
@@ -270,6 +365,40 @@ static void parse_host_port(const char* str, char* out_host, size_t out_host_siz
     }
 }
 
+static void parse_rtp_local(const char* str, char* out_host, size_t out_host_size, int* out_rtp_port, int* out_rtcp_port) {
+    if (!str || !out_host || !out_rtp_port || !out_rtcp_port) return;
+
+    const char* p = str;
+    const char* scheme = strstr(str, "://");
+    if (scheme) {
+        p = scheme + 3;
+    }
+
+    char temp[MAX_HOST_LEN];
+    strncpy_s(temp, sizeof(temp), p, _TRUNCATE);
+
+    char* slash = strchr(temp, '/');
+    if (slash) {
+        *slash = '\0';
+        *out_rtcp_port = atoi(slash + 1);
+    }
+
+    char* colon1 = strchr(temp, ':');
+    if (colon1) {
+        *colon1 = '\0';
+        char* colon2 = strchr(colon1 + 1, ':');
+        if (colon2) {
+            *colon2 = '\0';
+            *out_rtcp_port = atoi(colon2 + 1);
+        }
+        *out_rtp_port = atoi(colon1 + 1);
+        if (!slash && !colon2) {
+            *out_rtcp_port = *out_rtp_port + 1;
+        }
+    }
+    strncpy_s(out_host, out_host_size, temp, _TRUNCATE);
+}
+
 static void print_usage(const char* exeName) {
     printf("===============================================================================\n");
     printf(" Leo4Proxy v%s - SChannel mTLS Proxy & Reverse HTTPS Gateway\n", LEO4_PROXY_VERSION);
@@ -304,6 +433,26 @@ static void print_usage(const char* exeName) {
     printf("  --http-local  <ip:port> Local HTTP listener (default: %s:%d)\n", DEFAULT_HTTP_LOCAL_HOST, DEFAULT_HTTP_LOCAL_PORT);
     printf("  --local-ssl             Enforce SSL/TLS on local listeners (default: auto-detect)\n");
     printf("  --secure                Strict server CA validation (default: lax/insecure)\n\n");
+    printf("STREAM FORWARDER (Legacy TCP -> mTLS -> cloud media ingress):\n");
+    printf("  --stream                   Enable local TCP -> mTLS stream forwarder (default: disabled)\n");
+    printf("  --no-stream                Disable stream forwarder\n");
+    printf("  --stream-local <ip:port>   Local stream listener (default: %s:%d)\n", DEFAULT_STREAM_LOCAL_HOST, DEFAULT_STREAM_LOCAL_PORT);
+    printf("  --stream-remote <host:p>   Remote cloud stream ingress (default: %s:%d)\n", DEFAULT_STREAM_REMOTE_HOST, DEFAULT_STREAM_REMOTE_PORT);
+    printf("  --stream-max-clients <n>   Max concurrent streaming clients (default: %d, min: 1)\n", DEFAULT_STREAM_MAX_CLIENTS);
+    printf("  --stream-idle-timeout <sec> Idle timeout in seconds before closing tunnel (default: %d, 0 = disabled)\n\n", DEFAULT_STREAM_IDLE_TIMEOUT);
+    printf("RTP/RTCP TUNNEL (Primary Video Mode: ffmpeg UDP -> L4RTP/1 mTLS -> dev.leo4.ru:8443):\n");
+    printf("  --rtp-tunnel               Enable local RTP/RTCP UDP -> mTLS tunnel (default: disabled)\n");
+    printf("  --no-rtp-tunnel            Disable RTP tunnel\n");
+    printf("  --rtp-local <ip[:rtp[:rtcp]]> Local UDP listener address (default: %s:%d/%d)\n",
+           DEFAULT_RTP_TUNNEL_LOCAL_HOST, DEFAULT_RTP_TUNNEL_RTP_PORT, DEFAULT_RTP_TUNNEL_RTCP_PORT);
+    printf("  --rtp-port <port>          Local RTP UDP port (default: %d)\n", DEFAULT_RTP_TUNNEL_RTP_PORT);
+    printf("  --rtcp-port <port>         Local RTCP UDP port (default: %d)\n", DEFAULT_RTP_TUNNEL_RTCP_PORT);
+    printf("  --rtp-remote <host:p>      Remote cloud video ingress (default: %s:%d)\n",
+           DEFAULT_RTP_TUNNEL_REMOTE_HOST, DEFAULT_RTP_TUNNEL_REMOTE_PORT);
+    printf("  --rtp-idle-timeout <sec>   Idle timeout before closing mTLS session (default: %d, 0 = disabled)\n",
+           DEFAULT_RTP_TUNNEL_IDLE_TIMEOUT);
+    printf("  --rtp-reconnect <sec>      Initial reconnect backoff in seconds (default: %d)\n\n",
+           DEFAULT_RTP_TUNNEL_RECONNECT_SEC);
     printf("CERTIFICATE SELECTION & ROTATION:\n");
     printf("  --cert-email <pattern>     Filter certs by email (default: newest %s -> %s)\n", DEFAULT_CERT_EMAIL_PRIMARY, DEFAULT_CERT_EMAIL_FALLBACK);
     printf("  --cert-thumbprint <sha>    Select specific certificate by SHA-1 thumbprint\n");
@@ -317,6 +466,12 @@ static void print_usage(const char* exeName) {
     printf("       %s --reverse-target 127.0.0.1:8000\n\n", exeName);
     printf("  3. Check device SN for scripts:\n");
     printf("       %s --get-sn\n\n", exeName);
+    printf("  4. Primary RTP/RTCP video tunnel for ffmpeg (UDP :5004/:5005 -> mTLS :8443):\n");
+    printf("       %s --rtp-tunnel --rtp-remote dev.leo4.ru:8443\n", exeName);
+    printf("       ffmpeg -f dshow -i video=\"USB Camera\" -c:v libx264 -preset ultrafast -tune zerolatency -b:v 800k -f rtp rtp://127.0.0.1:5004?rtcpport=5005\n\n");
+    printf("  5. Legacy TCP video stream forwarding for ffmpeg (RTSP/MPEG-TS over TCP -> mTLS :8443):\n");
+    printf("       %s --stream --stream-remote dev.leo4.ru:8443\n", exeName);
+    printf("       ffmpeg -f dshow -i video=\"USB Camera\" -c:v libx264 -preset ultrafast -tune zerolatency -b:v 800k -f mpegts tcp://127.0.0.1:8554\n\n");
 }
 
 int main(int argc, char* argv[]) {
@@ -417,6 +572,39 @@ int main(int argc, char* argv[]) {
             if (config.cert_poll_interval < 1) config.cert_poll_interval = 1;
         } else if (_stricmp(argv[i], "--drop-on-expire") == 0) {
             config.drop_on_expire = 1;
+        } else if (_stricmp(argv[i], "--stream") == 0) {
+            config.stream_proxy_enabled = 1;
+        } else if (_stricmp(argv[i], "--no-stream") == 0) {
+            config.stream_proxy_enabled = 0;
+        } else if (_stricmp(argv[i], "--stream-local") == 0 && i + 1 < argc) {
+            parse_host_port(argv[++i], config.stream_local_host, sizeof(config.stream_local_host), &config.stream_local_port);
+        } else if (_stricmp(argv[i], "--stream-remote") == 0 && i + 1 < argc) {
+            parse_host_port(argv[++i], config.stream_remote_host, sizeof(config.stream_remote_host), &config.stream_remote_port);
+        } else if (_stricmp(argv[i], "--stream-max-clients") == 0 && i + 1 < argc) {
+            config.stream_max_clients = atoi(argv[++i]);
+            if (config.stream_max_clients < 1) config.stream_max_clients = 1;
+        } else if (_stricmp(argv[i], "--stream-idle-timeout") == 0 && i + 1 < argc) {
+            config.stream_idle_timeout_sec = atoi(argv[++i]);
+            if (config.stream_idle_timeout_sec < 0) config.stream_idle_timeout_sec = 0;
+        } else if (_stricmp(argv[i], "--rtp-tunnel") == 0) {
+            config.rtp_tunnel_enabled = 1;
+        } else if (_stricmp(argv[i], "--no-rtp-tunnel") == 0) {
+            config.rtp_tunnel_enabled = 0;
+        } else if (_stricmp(argv[i], "--rtp-local") == 0 && i + 1 < argc) {
+            parse_rtp_local(argv[++i], config.rtp_tunnel_local_host, sizeof(config.rtp_tunnel_local_host),
+                            &config.rtp_tunnel_rtp_port, &config.rtp_tunnel_rtcp_port);
+        } else if (_stricmp(argv[i], "--rtp-port") == 0 && i + 1 < argc) {
+            config.rtp_tunnel_rtp_port = atoi(argv[++i]);
+        } else if (_stricmp(argv[i], "--rtcp-port") == 0 && i + 1 < argc) {
+            config.rtp_tunnel_rtcp_port = atoi(argv[++i]);
+        } else if (_stricmp(argv[i], "--rtp-remote") == 0 && i + 1 < argc) {
+            parse_host_port(argv[++i], config.rtp_tunnel_remote_host, sizeof(config.rtp_tunnel_remote_host), &config.rtp_tunnel_remote_port);
+        } else if (_stricmp(argv[i], "--rtp-idle-timeout") == 0 && i + 1 < argc) {
+            config.rtp_tunnel_idle_timeout_sec = atoi(argv[++i]);
+            if (config.rtp_tunnel_idle_timeout_sec < 0) config.rtp_tunnel_idle_timeout_sec = 0;
+        } else if (_stricmp(argv[i], "--rtp-reconnect") == 0 && i + 1 < argc) {
+            config.rtp_tunnel_reconnect_sec = atoi(argv[++i]);
+            if (config.rtp_tunnel_reconnect_sec < 1) config.rtp_tunnel_reconnect_sec = 1;
         }
     }
 
@@ -562,6 +750,8 @@ int main(int argc, char* argv[]) {
     g_app.hClientCred = hClientCred;
     g_app.hServerCred = hServerCred;
     g_app.isForwardRunning = false;
+    g_app.isStreamRunning = false;
+    g_app.isRtpTunnelRunning = false;
     g_app.isReverseRunning = false;
     g_app.isDiscoveryRunning = false;
 
@@ -583,6 +773,26 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     g_app.isForwardRunning = true;
+
+    // Start Stream Forwarder (opt-in legacy)
+    if (config.stream_proxy_enabled) {
+        if (stream_proxy_start(&g_app.streamServer, &config, &certDetails, hClientCred)) {
+            g_app.isStreamRunning = true;
+        } else {
+            fprintf(stderr, "[WARNING] Stream Forwarder failed to start on %s:%d\n",
+                    config.stream_local_host, config.stream_local_port);
+        }
+    }
+
+    // Start RTP Tunnel (opt-in primary media mode)
+    if (config.rtp_tunnel_enabled) {
+        if (rtp_tunnel_start(&g_app.rtpTunnelServer, &config, &certDetails, hClientCred)) {
+            g_app.isRtpTunnelRunning = true;
+        } else {
+            fprintf(stderr, "[WARNING] RTP Tunnel failed to start on %s:%d/%d\n",
+                    config.rtp_tunnel_local_host, config.rtp_tunnel_rtp_port, config.rtp_tunnel_rtcp_port);
+        }
+    }
 
     // Start Reverse HTTPS Proxy
     if (config.reverse_proxy_enabled && SecIsValidHandle(&hServerCred)) {
@@ -619,6 +829,23 @@ int main(int argc, char* argv[]) {
     printf("  - Forward HTTP:  http://%s:%d -> https://%s:%d (mTLS SN=%s)%s\n",
            config.http_local_host, config.http_local_port, config.http_remote_host, config.http_remote_port, certDetails.sn,
            config.http_local_ssl ? " [SSL]" : " [HTTP/HTTPS auto-detect]");
+    if (config.stream_proxy_enabled && g_app.isStreamRunning) {
+        printf("  - Stream Fwd:    tcp://%s:%d -> %s:%d (mTLS SN=%s) [max %d clients]\n",
+               config.stream_local_host, config.stream_local_port,
+               config.stream_remote_host, config.stream_remote_port,
+               certDetails.sn, config.stream_max_clients);
+    } else {
+        printf("  - Stream Fwd:    disabled (use --stream)\n");
+    }
+    if (config.rtp_tunnel_enabled && g_app.isRtpTunnelRunning) {
+        printf("  - RTP Tunnel:    udp://%s:%d (RTP), udp://%s:%d (RTCP) -> %s:%d (L4RTP/1 mTLS SN=%s, Lazy Connect)\n",
+               config.rtp_tunnel_local_host, config.rtp_tunnel_rtp_port,
+               config.rtp_tunnel_local_host, config.rtp_tunnel_rtcp_port,
+               config.rtp_tunnel_remote_host, config.rtp_tunnel_remote_port,
+               certDetails.sn);
+    } else {
+        printf("  - RTP Tunnel:    disabled (use --rtp-tunnel)\n");
+    }
     printf("  - Diagnostic API:http://%s:%d/_leo4/info\n", config.http_local_host, config.http_local_port);
     printf("  - System Tray:   Right-click the tray icon for selectors & options\n");
     printf("\nPress Ctrl+C to stop.\n\n");
@@ -634,6 +861,14 @@ int main(int argc, char* argv[]) {
     }
     if (g_app.isReverseRunning) {
         reverse_proxy_stop(&g_app.reverseServer);
+    }
+    if (g_app.isStreamRunning) {
+        stream_proxy_stop(&g_app.streamServer);
+        g_app.isStreamRunning = false;
+    }
+    if (g_app.isRtpTunnelRunning) {
+        rtp_tunnel_stop(&g_app.rtpTunnelServer);
+        g_app.isRtpTunnelRunning = false;
     }
     if (g_app.isForwardRunning) {
         mqtt_proxy_stop(&g_app.mqttServer);

@@ -7,6 +7,8 @@
 #include "cert_store.h"
 #include "schannel_tls.h"
 #include "mqtt_proxy.h"
+#include "stream_proxy.h"
+#include "rtp_tunnel.h"
 #include "http_proxy.h"
 #include "reverse_proxy.h"
 #include "discovery.h"
@@ -97,10 +99,14 @@ static void WINAPI service_main(DWORD argc, LPWSTR* argv) {
     firewall_ensure_rules(&g_serviceConfig, NULL);
 
     MqttProxyServer mqttServer;
+    StreamProxyServer streamServer;
+    RtpTunnelServer rtpTunnelServer;
     HttpProxyServer httpServer;
     ReverseProxyServer reverseServer;
     DiscoveryServer discoveryServer;
     memset(&mqttServer, 0, sizeof(mqttServer));
+    memset(&streamServer, 0, sizeof(streamServer));
+    memset(&rtpTunnelServer, 0, sizeof(rtpTunnelServer));
     memset(&httpServer, 0, sizeof(httpServer));
     memset(&reverseServer, 0, sizeof(reverseServer));
     memset(&discoveryServer, 0, sizeof(discoveryServer));
@@ -115,6 +121,8 @@ static void WINAPI service_main(DWORD argc, LPWSTR* argv) {
 
     bool isCertLoaded = false;
     bool isMqttStarted = false;
+    bool isStreamStarted = false;
+    bool isRtpTunnelStarted = false;
     bool isReverseStarted = false;
     bool isDiscoveryStarted = false;
 
@@ -162,6 +170,16 @@ static void WINAPI service_main(DWORD argc, LPWSTR* argv) {
                     // Start MQTT proxy
                     if (!isMqttStarted) {
                         isMqttStarted = mqtt_proxy_start(&mqttServer, &g_serviceConfig, &certDetails, hClientCred, hServerCred);
+                    }
+
+                    // Start Stream proxy
+                    if (!isStreamStarted && g_serviceConfig.stream_proxy_enabled) {
+                        isStreamStarted = stream_proxy_start(&streamServer, &g_serviceConfig, &certDetails, hClientCred);
+                    }
+
+                    // Start RTP tunnel
+                    if (!isRtpTunnelStarted && g_serviceConfig.rtp_tunnel_enabled) {
+                        isRtpTunnelStarted = rtp_tunnel_start(&rtpTunnelServer, &g_serviceConfig, &certDetails, hClientCred);
                     }
 
                     // Start Reverse HTTPS proxy
@@ -228,6 +246,24 @@ static void WINAPI service_main(DWORD argc, LPWSTR* argv) {
                         }
                         isMqttStarted = mqtt_proxy_start(&mqttServer, &g_serviceConfig, &certDetails, hClientCred, hServerCred);
 
+                        // Restart Stream Proxy
+                        if (isStreamStarted) {
+                            stream_proxy_stop(&streamServer);
+                            isStreamStarted = false;
+                        }
+                        if (g_serviceConfig.stream_proxy_enabled) {
+                            isStreamStarted = stream_proxy_start(&streamServer, &g_serviceConfig, &certDetails, hClientCred);
+                        }
+
+                        // Restart RTP Tunnel
+                        if (isRtpTunnelStarted) {
+                            rtp_tunnel_stop(&rtpTunnelServer);
+                            isRtpTunnelStarted = false;
+                        }
+                        if (g_serviceConfig.rtp_tunnel_enabled) {
+                            isRtpTunnelStarted = rtp_tunnel_start(&rtpTunnelServer, &g_serviceConfig, &certDetails, hClientCred);
+                        }
+
                         // 3. Restart Reverse HTTPS Proxy (drops inbound TLS sessions and binds with new server cert)
                         if (isReverseStarted) {
                             reverse_proxy_stop(&reverseServer);
@@ -283,6 +319,14 @@ static void WINAPI service_main(DWORD argc, LPWSTR* argv) {
                     reverse_proxy_stop(&reverseServer);
                     isReverseStarted = false;
                 }
+                if (isStreamStarted) {
+                    stream_proxy_stop(&streamServer);
+                    isStreamStarted = false;
+                }
+                if (isRtpTunnelStarted) {
+                    rtp_tunnel_stop(&rtpTunnelServer);
+                    isRtpTunnelStarted = false;
+                }
                 if (isMqttStarted) {
                     mqtt_proxy_stop(&mqttServer);
                     isMqttStarted = false;
@@ -317,6 +361,8 @@ static void WINAPI service_main(DWORD argc, LPWSTR* argv) {
 
     if (isDiscoveryStarted) discovery_stop(&discoveryServer);
     if (isReverseStarted) reverse_proxy_stop(&reverseServer);
+    if (isStreamStarted) stream_proxy_stop(&streamServer);
+    if (isRtpTunnelStarted) rtp_tunnel_stop(&rtpTunnelServer);
     if (isMqttStarted) mqtt_proxy_stop(&mqttServer);
     if (isHttpStarted) http_proxy_stop(&httpServer);
 

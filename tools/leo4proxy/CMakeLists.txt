@@ -9,6 +9,8 @@ set(SOURCES
     src/cert_store.c
     src/schannel_tls.c
     src/mqtt_proxy.c
+    src/stream_proxy.c
+    src/rtp_tunnel.c
     src/http_proxy.c
     src/reverse_proxy.c
     src/discovery.c
@@ -23,6 +25,8 @@ set(HEADERS
     src/cert_store.h
     src/schannel_tls.h
     src/mqtt_proxy.h
+    src/stream_proxy.h
+    src/rtp_tunnel.h
     src/http_proxy.h
     src/reverse_proxy.h
     src/discovery.h

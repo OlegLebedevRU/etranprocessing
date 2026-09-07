@@ -49,22 +49,20 @@ echo Unknown architecture "%TARGET_ARCH%". Valid options: all, x86, win7, x64
 exit /b 1
 
 :build_all
-call :do_build_x86
-call :do_build_x64
-goto :summary
+set "DO_X64_NEXT=1"
+goto :do_build_x86
 
 :build_x86
-call :do_build_x86
-goto :summary
+set "DO_X64_NEXT=0"
+goto :do_build_x86
 
 :build_x64
-call :do_build_x64
-goto :summary
+goto :do_build_x64
 
 :do_build_x86
 echo.
 echo [Build x86] 32-bit static binary (Windows 7 SP1+ compatible)...
-cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\leo4proxy.res res\leo4proxy.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /D_CRT_SECURE_NO_WARNINGS /DUNICODE /D_UNICODE /I src /Foobj\x86\ src\main.c src\cert_store.c src\schannel_tls.c src\mqtt_proxy.c src\http_proxy.c src\reverse_proxy.c src\discovery.c src\firewall.c src\service_mgr.c src\tray_icon.c obj\x86\leo4proxy.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\leo4proxy.exe ws2_32.lib crypt32.lib ncrypt.lib secur32.lib advapi32.lib shell32.lib user32.lib gdi32.lib iphlpapi.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\leo4proxy.res res\leo4proxy.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /D_CRT_SECURE_NO_WARNINGS /DUNICODE /D_UNICODE /I src /Foobj\x86\ src\main.c src\cert_store.c src\schannel_tls.c src\mqtt_proxy.c src\stream_proxy.c src\rtp_tunnel.c src\http_proxy.c src\reverse_proxy.c src\discovery.c src\firewall.c src\service_mgr.c src\tray_icon.c obj\x86\leo4proxy.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\leo4proxy.exe ws2_32.lib crypt32.lib ncrypt.lib secur32.lib advapi32.lib shell32.lib user32.lib gdi32.lib iphlpapi.lib"
 if errorlevel 1 (
     echo [ERROR] x86 build failed!
     set BUILD_FAILED=1
@@ -72,19 +70,20 @@ if errorlevel 1 (
     echo [OK] x86 build SUCCESS: bin\x86\leo4proxy.exe
     copy /y bin\x86\leo4proxy.exe bin\leo4proxy.exe >nul
 )
-exit /b 0
+if "%DO_X64_NEXT%"=="1" goto :do_build_x64
+goto :summary
 
 :do_build_x64
 echo.
 echo [Build x64] 64-bit static binary...
-cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /fo obj\x64\leo4proxy.res res\leo4proxy.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_CRT_SECURE_NO_WARNINGS /DUNICODE /D_UNICODE /I src /Foobj\x64\ src\main.c src\cert_store.c src\schannel_tls.c src\mqtt_proxy.c src\http_proxy.c src\reverse_proxy.c src\discovery.c src\firewall.c src\service_mgr.c src\tray_icon.c obj\x64\leo4proxy.res /link /OUT:bin\x64\leo4proxy.exe ws2_32.lib crypt32.lib ncrypt.lib secur32.lib advapi32.lib shell32.lib user32.lib gdi32.lib iphlpapi.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /fo obj\x64\leo4proxy.res res\leo4proxy.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_CRT_SECURE_NO_WARNINGS /DUNICODE /D_UNICODE /I src /Foobj\x64\ src\main.c src\cert_store.c src\schannel_tls.c src\mqtt_proxy.c src\stream_proxy.c src\rtp_tunnel.c src\http_proxy.c src\reverse_proxy.c src\discovery.c src\firewall.c src\service_mgr.c src\tray_icon.c obj\x64\leo4proxy.res /link /OUT:bin\x64\leo4proxy.exe ws2_32.lib crypt32.lib ncrypt.lib secur32.lib advapi32.lib shell32.lib user32.lib gdi32.lib iphlpapi.lib"
 if errorlevel 1 (
     echo [ERROR] x64 build failed!
     set BUILD_FAILED=1
 ) else (
     echo [OK] x64 build SUCCESS: bin\x64\leo4proxy.exe
 )
-exit /b 0
+goto :summary
 
 :summary
 echo.

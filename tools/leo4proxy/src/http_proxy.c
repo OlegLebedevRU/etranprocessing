@@ -129,12 +129,31 @@ static void handle_info_request_ext(SOCKET s, SChannelSession* tlsSession, const
     bool backend_online = tcp_probe_connect(config->reverse_target_host, config->reverse_target_port, 250);
 
     if (is_local) {
-        char jsonBuf[4096];
+        char jsonBuf[8192];
+        char streamLocalBuf[MAX_HOST_LEN + 32];
+        if (config->stream_proxy_enabled) {
+            snprintf(streamLocalBuf, sizeof(streamLocalBuf), "%s:%d", config->stream_local_host, config->stream_local_port);
+        } else {
+            snprintf(streamLocalBuf, sizeof(streamLocalBuf), "%s:%d (disabled)", config->stream_local_host, config->stream_local_port);
+        }
+
+        char rtpLocalBuf[MAX_HOST_LEN + 64];
+        if (config->rtp_tunnel_enabled) {
+            snprintf(rtpLocalBuf, sizeof(rtpLocalBuf), "udp://%s:%d (RTP), udp://%s:%d (RTCP)",
+                     config->rtp_tunnel_local_host, config->rtp_tunnel_rtp_port,
+                     config->rtp_tunnel_local_host, config->rtp_tunnel_rtcp_port);
+        } else {
+            snprintf(rtpLocalBuf, sizeof(rtpLocalBuf), "udp://%s:%d/%d (disabled)",
+                     config->rtp_tunnel_local_host, config->rtp_tunnel_rtp_port, config->rtp_tunnel_rtcp_port);
+        }
+
         if (cert_ready) {
             snprintf(jsonBuf, sizeof(jsonBuf),
                 "{\n"
                 "  \"status\": \"ready\",\n"
                 "  \"certificate_found\": true,\n"
+                "  \"stream_enabled\": %s,\n"
+                "  \"rtp_tunnel_enabled\": %s,\n"
                 "  \"version\": \"%s\",\n"
                 "  \"sn\": \"%s\",\n"
                 "  \"client_id\": \"%s\",\n"
@@ -152,25 +171,41 @@ static void handle_info_request_ext(SOCKET s, SChannelSession* tlsSession, const
                 "  \"listeners\": {\n"
                 "    \"mqtt_local\": \"%s:%d\",\n"
                 "    \"http_local\": \"%s:%d\",\n"
-                "    \"reverse_listen\": \"%s:%d\"\n"
+                "    \"reverse_listen\": \"%s:%d\",\n"
+                "    \"stream_local\": \"%s\",\n"
+                "    \"rtp_tunnel_local\": \"%s\"\n"
                 "  },\n"
                 "  \"upstreams\": {\n"
                 "    \"mqtt_remote\": \"%s:%d\",\n"
                 "    \"http_remote\": \"https://%s:%d\",\n"
-                "    \"reverse_target\": \"http://%s:%d\"\n"
+                "    \"reverse_target\": \"http://%s:%d\",\n"
+                "    \"stream_remote\": \"%s:%d\",\n"
+                "    \"rtp_tunnel_remote\": \"%s:%d\"\n"
                 "  },\n"
                 "  \"routes_active\": true,\n"
                 "  \"clients\": {\n"
                 "    \"mqtt_active_clients\": %ld,\n"
                 "    \"mqtt_total_connections\": %ld,\n"
                 "    \"http_total_requests\": %ld,\n"
-                "    \"reverse_total_requests\": %ld\n"
+                "    \"reverse_total_requests\": %ld,\n"
+                "    \"stream_active_clients\": %ld,\n"
+                "    \"stream_total_connections\": %ld,\n"
+                "    \"stream_bytes_up\": %lld,\n"
+                "    \"stream_bytes_down\": %lld,\n"
+                "    \"rtp_tunnel_active\": %ld,\n"
+                "    \"rtp_tunnel_total_connections\": %ld,\n"
+                "    \"rtp_tunnel_bytes_up\": %lld,\n"
+                "    \"rtp_tunnel_packets_rtp\": %lld,\n"
+                "    \"rtp_tunnel_packets_rtcp\": %lld,\n"
+                "    \"rtp_tunnel_dropped_no_upstream\": %lld\n"
                 "  },\n"
                 "  \"backend_service\": {\n"
                 "    \"online\": %s,\n"
                 "    \"target\": \"%s:%d\"\n"
                 "  }\n"
                 "}\n",
+                config->stream_proxy_enabled ? "true" : "false",
+                config->rtp_tunnel_enabled ? "true" : "false",
                 LEO4_PROXY_VERSION,
                 certDetails->sn,
                 certDetails->sn,
@@ -188,13 +223,27 @@ static void handle_info_request_ext(SOCKET s, SChannelSession* tlsSession, const
                 config->mqtt_local_host, config->mqtt_local_port,
                 config->http_local_host, config->http_local_port,
                 config->reverse_local_host, config->reverse_local_port,
+                streamLocalBuf,
+                rtpLocalBuf,
                 config->mqtt_remote_host, config->mqtt_remote_port,
                 config->http_remote_host, config->http_remote_port,
                 config->reverse_target_host, config->reverse_target_port,
+                config->stream_remote_host, config->stream_remote_port,
+                config->rtp_tunnel_remote_host, config->rtp_tunnel_remote_port,
                 g_proxyStats.mqtt_active_clients,
                 g_proxyStats.mqtt_total_connections,
                 g_proxyStats.http_total_requests,
                 g_proxyStats.reverse_total_requests,
+                g_proxyStats.stream_active_clients,
+                g_proxyStats.stream_total_connections,
+                (long long)g_proxyStats.stream_bytes_up,
+                (long long)g_proxyStats.stream_bytes_down,
+                g_proxyStats.rtp_tunnel_active,
+                g_proxyStats.rtp_tunnel_total_connections,
+                (long long)g_proxyStats.rtp_tunnel_bytes_up,
+                (long long)g_proxyStats.rtp_tunnel_packets_rtp,
+                (long long)g_proxyStats.rtp_tunnel_packets_rtcp,
+                (long long)g_proxyStats.rtp_tunnel_dropped_no_upstream,
                 backend_online ? "true" : "false",
                 config->reverse_target_host, config->reverse_target_port
             );
@@ -203,6 +252,8 @@ static void handle_info_request_ext(SOCKET s, SChannelSession* tlsSession, const
                 "{\n"
                 "  \"status\": \"waiting_for_certificate\",\n"
                 "  \"certificate_found\": false,\n"
+                "  \"stream_enabled\": %s,\n"
+                "  \"rtp_tunnel_enabled\": %s,\n"
                 "  \"version\": \"%s\",\n"
                 "  \"sn\": \"\",\n"
                 "  \"client_id\": \"\",\n"
@@ -211,36 +262,66 @@ static void handle_info_request_ext(SOCKET s, SChannelSession* tlsSession, const
                 "  \"listeners\": {\n"
                 "    \"mqtt_local\": \"%s:%d (disabled)\",\n"
                 "    \"http_local\": \"%s:%d\",\n"
-                "    \"reverse_listen\": \"%s:%d (disabled)\"\n"
+                "    \"reverse_listen\": \"%s:%d (disabled)\",\n"
+                "    \"stream_local\": \"%s\",\n"
+                "    \"rtp_tunnel_local\": \"%s\"\n"
                 "  },\n"
                 "  \"upstreams\": {\n"
                 "    \"mqtt_remote\": \"%s:%d (disabled)\",\n"
                 "    \"http_remote\": \"https://%s:%d (disabled)\",\n"
-                "    \"reverse_target\": \"http://%s:%d (disabled)\"\n"
+                "    \"reverse_target\": \"http://%s:%d (disabled)\",\n"
+                "    \"stream_remote\": \"%s:%d\",\n"
+                "    \"rtp_tunnel_remote\": \"%s:%d\"\n"
                 "  },\n"
                 "  \"routes_active\": false,\n"
                 "  \"clients\": {\n"
                 "    \"mqtt_active_clients\": %ld,\n"
                 "    \"mqtt_total_connections\": %ld,\n"
                 "    \"http_total_requests\": %ld,\n"
-                "    \"reverse_total_requests\": %ld\n"
+                "    \"reverse_total_requests\": %ld,\n"
+                "    \"stream_active_clients\": %ld,\n"
+                "    \"stream_total_connections\": %ld,\n"
+                "    \"stream_bytes_up\": %lld,\n"
+                "    \"stream_bytes_down\": %lld,\n"
+                "    \"rtp_tunnel_active\": %ld,\n"
+                "    \"rtp_tunnel_total_connections\": %ld,\n"
+                "    \"rtp_tunnel_bytes_up\": %lld,\n"
+                "    \"rtp_tunnel_packets_rtp\": %lld,\n"
+                "    \"rtp_tunnel_packets_rtcp\": %lld,\n"
+                "    \"rtp_tunnel_dropped_no_upstream\": %lld\n"
                 "  },\n"
                 "  \"backend_service\": {\n"
                 "    \"online\": %s,\n"
                 "    \"target\": \"%s:%d\"\n"
                 "  }\n"
                 "}\n",
+                config->stream_proxy_enabled ? "true" : "false",
+                config->rtp_tunnel_enabled ? "true" : "false",
                 LEO4_PROXY_VERSION,
                 config->mqtt_local_host, config->mqtt_local_port,
                 config->http_local_host, config->http_local_port,
                 config->reverse_local_host, config->reverse_local_port,
+                streamLocalBuf,
+                rtpLocalBuf,
                 config->mqtt_remote_host, config->mqtt_remote_port,
                 config->http_remote_host, config->http_remote_port,
                 config->reverse_target_host, config->reverse_target_port,
+                config->stream_remote_host, config->stream_remote_port,
+                config->rtp_tunnel_remote_host, config->rtp_tunnel_remote_port,
                 g_proxyStats.mqtt_active_clients,
                 g_proxyStats.mqtt_total_connections,
                 g_proxyStats.http_total_requests,
                 g_proxyStats.reverse_total_requests,
+                g_proxyStats.stream_active_clients,
+                g_proxyStats.stream_total_connections,
+                (long long)g_proxyStats.stream_bytes_up,
+                (long long)g_proxyStats.stream_bytes_down,
+                g_proxyStats.rtp_tunnel_active,
+                g_proxyStats.rtp_tunnel_total_connections,
+                (long long)g_proxyStats.rtp_tunnel_bytes_up,
+                (long long)g_proxyStats.rtp_tunnel_packets_rtp,
+                (long long)g_proxyStats.rtp_tunnel_packets_rtcp,
+                (long long)g_proxyStats.rtp_tunnel_dropped_no_upstream,
                 backend_online ? "true" : "false",
                 config->reverse_target_host, config->reverse_target_port
             );
