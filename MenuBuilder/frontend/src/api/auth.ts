@@ -29,6 +29,7 @@ export interface UserInfo {
   timezone?: string;
   expires_at?: string | null;
   full_name?: string | null;
+  permissions?: string[];
 }
 
 export async function login(username: string, password: string): Promise<LoginResponse> {

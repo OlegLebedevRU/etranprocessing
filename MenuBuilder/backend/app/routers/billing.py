@@ -43,6 +43,11 @@ from app.schemas.billing import (
     ReactivationCheckoutResponse,
 )
 from app.schemas.certificate_pin import PaymentRequiredResponse, PinReadyResponse
+from app.security.permissions import (
+    PERMISSION_BILLING_VIEW,
+    require_permission,
+    require_readonly_guard,
+)
 from app.services.billing import (
     BillingStatus,
     TerminalBillingInfo,
@@ -68,7 +73,11 @@ from app.services.payment_provider import get_payment_provider
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/billing", tags=["billing"])
+router = APIRouter(
+    prefix="/api/billing",
+    tags=["billing"],
+    dependencies=[Depends(require_readonly_guard)],
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -286,6 +295,7 @@ async def _get_all_terminal_billing(
 @router.get("/summary", response_model=BillingSummaryRead)
 async def get_billing_summary(
     user: BillingUser = Depends(get_current_billing_user),
+    _perm: dict = Depends(require_permission(PERMISSION_BILLING_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
     """Get billing summary for the organization."""
@@ -343,6 +353,7 @@ async def get_billing_terminals(
     status: str | None = None,
     search: str | None = None,
     user: BillingUser = Depends(get_current_billing_user),
+    _perm: dict = Depends(require_permission(PERMISSION_BILLING_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
     """Get billing details for all terminals of the organization."""
@@ -1038,6 +1049,7 @@ async def confirm_payment(
 async def get_order(
     order_id: str,
     user: BillingUser = Depends(get_current_billing_user),
+    _perm: dict = Depends(require_permission(PERMISSION_BILLING_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
     """Get billing order status. Used by clients to poll after payment."""

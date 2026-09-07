@@ -1,7 +1,20 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Routes, Route, Navigate } from "react-router";
-import { Spin } from "antd";
+import { Button, Modal, Space, Spin, Typography } from "antd";
+import { LockOutlined, LogoutOutlined } from "@ant-design/icons";
 import { SessionProvider, useSession } from "./session/SessionContext";
+import { logout } from "./api/auth";
+import { notifySessionEvent } from "./api/session";
+import {
+  PERMISSION_BILLING_VIEW,
+  PERMISSION_MONITORING_VIEW,
+  PERMISSION_SETTINGS_TERMINALS_VIEW,
+  getDefaultRouteForViewer,
+  hasAnyReportPermission,
+  hasPermission,
+} from "./utils/permissions";
+
+const { Paragraph } = Typography;
 
 const AppLayout = lazy(() => import("./routes/layout"));
 const LoginPage = lazy(() => import("./routes/login"));
@@ -22,6 +35,7 @@ const AdminUsersPage = lazy(() => import("./routes/admin-users"));
 const SettingsLayout = lazy(() => import("./routes/settings-layout"));
 const ProfileSettingsPage = lazy(() => import("./routes/settings/ProfileSettingsPage"));
 const TerminalsSettingsPage = lazy(() => import("./routes/settings/TerminalsSettingsPage"));
+const UserSettingsPage = lazy(() => import("./routes/settings/UserSettingsPage"));
 const VerifyEmailPage = lazy(() => import("./routes/settings/VerifyEmailPage"));
 
 function LoadingFallback() {
@@ -51,6 +65,109 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function DefaultRouteResolver() {
+  const { user } = useSession();
+  const [modalOpen] = useState(true);
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (user.role_id !== 4) {
+    return <Navigate to="/monitoring" replace />;
+  }
+
+  const defaultRoute = getDefaultRouteForViewer(user);
+  if (defaultRoute) {
+    return <Navigate to={defaultRoute} replace />;
+  }
+
+  // Viewer with no permissions assigned
+  return (
+    <Modal
+      open={modalOpen}
+      closable={false}
+      maskClosable={false}
+      footer={[
+        <Button
+          key="logout"
+          type="primary"
+          danger
+          icon={<LogoutOutlined />}
+          onClick={async () => {
+            notifySessionEvent({ type: "logout" });
+            await logout();
+            window.location.href = "/login";
+          }}
+        >
+          Выйти из системы
+        </Button>,
+      ]}
+      title={
+        <Space>
+          <LockOutlined style={{ color: "#ff4d4f" }} />
+          <span>Доступ ограничен</span>
+        </Space>
+      }
+    >
+      <Paragraph style={{ marginTop: 16 }}>
+        Вам необходимо обратиться к Главному пользователю для назначения доступов к разделам.
+      </Paragraph>
+    </Modal>
+  );
+}
+
+function SettingsIndexResolver() {
+  const { user } = useSession();
+  if (user?.role_id === 4) {
+    return <Navigate to="/settings/terminals" replace />;
+  }
+  return <Navigate to="/settings/profile" replace />;
+}
+
+function ViewerGuard({
+  children,
+  permission,
+  requireTenantAdmin,
+  forbiddenForRole4,
+}: {
+  children: React.ReactNode;
+  permission?: string;
+  requireTenantAdmin?: boolean;
+  forbiddenForRole4?: boolean;
+}) {
+  const { user } = useSession();
+  if (!user) return <Navigate to="/login" replace />;
+
+  if (forbiddenForRole4 && user.role_id === 4) {
+    const fallback = getDefaultRouteForViewer(user);
+    return fallback ? <Navigate to={fallback} replace /> : <DefaultRouteResolver />;
+  }
+
+  if (requireTenantAdmin) {
+    const isTenantAdmin = user.is_superuser || user.role_id === 1 || user.role_id === 3;
+    if (!isTenantAdmin) {
+      const fallback = getDefaultRouteForViewer(user);
+      return fallback ? <Navigate to={fallback} replace /> : <DefaultRouteResolver />;
+    }
+  }
+
+  if (permission && user.role_id === 4) {
+    let allowed = false;
+    if (permission === "reports") {
+      allowed = hasAnyReportPermission(user);
+    } else {
+      allowed = hasPermission(user, permission);
+    }
+    if (!allowed) {
+      const fallback = getDefaultRouteForViewer(user);
+      return fallback ? <Navigate to={fallback} replace /> : <DefaultRouteResolver />;
+    }
+  }
+
+  return <>{children}</>;
+}
+
 export default function App() {
   return (
     <SessionProvider>
@@ -65,26 +182,80 @@ export default function App() {
               </RequireAuth>
             }
           >
-            <Route index element={<Navigate to="/monitoring" replace />} />
-            <Route path="monitoring" element={<MonitoringPage />} />
-            <Route path="menu" element={<MenuManagementLayout />}>
+            <Route index element={<DefaultRouteResolver />} />
+            <Route
+              path="monitoring"
+              element={
+                <ViewerGuard permission={PERMISSION_MONITORING_VIEW}>
+                  <MonitoringPage />
+                </ViewerGuard>
+              }
+            />
+            <Route
+              path="menu"
+              element={
+                <ViewerGuard forbiddenForRole4>
+                  <MenuManagementLayout />
+                </ViewerGuard>
+              }
+            >
               <Route index element={<Navigate to="/menu/terminals" replace />} />
               <Route path="terminals" element={<TerminalsPage />} />
               <Route path="variants" element={<VariantsPage />} />
               <Route path="catalog" element={<CatalogPage />} />
               <Route path="help" element={<MenuHelpPage />} />
             </Route>
-            <Route path="reports" element={<ReportsPage />} />
-            <Route path="billing" element={<BillingPage />} />
+            <Route
+              path="reports"
+              element={
+                <ViewerGuard permission="reports">
+                  <ReportsPage />
+                </ViewerGuard>
+              }
+            />
+            <Route
+              path="billing"
+              element={
+                <ViewerGuard permission={PERMISSION_BILLING_VIEW}>
+                  <BillingPage />
+                </ViewerGuard>
+              }
+            />
             <Route path="devices" element={<DevicesPage />} />
-            <Route path="integrations" element={<IntegrationsPage />} />
+            <Route
+              path="integrations"
+              element={
+                <ViewerGuard forbiddenForRole4>
+                  <IntegrationsPage />
+                </ViewerGuard>
+              }
+            />
             <Route path="settings" element={<SettingsLayout />}>
+              <Route index element={<SettingsIndexResolver />} />
               <Route
-                index
-                element={<Navigate to="/settings/profile" replace />}
+                path="profile"
+                element={
+                  <ViewerGuard forbiddenForRole4>
+                    <ProfileSettingsPage />
+                  </ViewerGuard>
+                }
               />
-              <Route path="profile" element={<ProfileSettingsPage />} />
-              <Route path="terminals" element={<TerminalsSettingsPage />} />
+              <Route
+                path="terminals"
+                element={
+                  <ViewerGuard permission={PERMISSION_SETTINGS_TERMINALS_VIEW}>
+                    <TerminalsSettingsPage />
+                  </ViewerGuard>
+                }
+              />
+              <Route
+                path="users"
+                element={
+                  <ViewerGuard requireTenantAdmin>
+                    <UserSettingsPage />
+                  </ViewerGuard>
+                }
+              />
               <Route path="verify-email" element={<VerifyEmailPage />} />
             </Route>
             <Route path="admin" element={<AdminLayout />}>
@@ -109,7 +280,7 @@ export default function App() {
               path="profile"
               element={<Navigate to="/settings/profile" replace />}
             />
-            <Route path="*" element={<Navigate to="/monitoring" replace />} />
+            <Route path="*" element={<DefaultRouteResolver />} />
           </Route>
         </Routes>
       </Suspense>

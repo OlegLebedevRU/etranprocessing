@@ -9,6 +9,14 @@ from sqlalchemy import select, text, update
 from app.auth import require_tenant_context, resolve_org_id
 from app.database import async_session
 from app.models import Org, TechGateRecord
+from app.security.permissions import (
+    PERMISSION_REPORTS_BALANCE_TERMINAL_VIEW,
+    PERMISSION_REPORTS_BALANCE_TSP_VIEW,
+    PERMISSION_REPORTS_INKASS_VIEW,
+    PERMISSION_REPORTS_PAYMENTS_VIEW,
+    require_permission,
+    require_readonly_guard,
+)
 from app.utils.timezone import (
     DEFAULT_TIMEZONE,
     get_date_range_bounds_utc,
@@ -18,7 +26,11 @@ from app.utils.timezone import (
     to_utc_iso,
 )
 
-router = APIRouter(prefix="/api/reports", tags=["reports"])
+router = APIRouter(
+    prefix="/api/reports",
+    tags=["reports"],
+    dependencies=[Depends(require_readonly_guard)],
+)
 
 PAYM_STATE_LABELS = {
     0: "Новый",
@@ -551,7 +563,7 @@ async def _calculate_strategies_preview(
 
 @router.get("/inkass")
 async def get_inkass_report(
-    user: dict = Depends(require_tenant_context),
+    user: dict = Depends(require_permission(PERMISSION_REPORTS_INKASS_VIEW)),
     date_from: str | None = None,
     date_to: str | None = None,
     device_ids: str | None = None,
@@ -850,7 +862,7 @@ async def apply_inkass_calculation(
 
 @router.get("/payments")
 async def get_payments_report(
-    user: dict = Depends(require_tenant_context),
+    user: dict = Depends(require_permission(PERMISSION_REPORTS_PAYMENTS_VIEW)),
     date_from: str | None = None,
     date_to: str | None = None,
     device_ids: str | None = None,
@@ -1049,7 +1061,7 @@ async def get_payments_report(
 
 @router.get("/balance-by-terminal")
 async def get_balance_by_terminal(
-    user: dict = Depends(require_tenant_context),
+    user: dict = Depends(require_permission(PERMISSION_REPORTS_BALANCE_TERMINAL_VIEW)),
     date_from: str | None = None,
     date_to: str | None = None,
     device_ids: str | None = None,
@@ -1147,7 +1159,7 @@ async def get_balance_by_terminal(
 
 @router.get("/balance-by-tsp")
 async def get_balance_by_tsp(
-    user: dict = Depends(require_tenant_context),
+    user: dict = Depends(require_permission(PERMISSION_REPORTS_BALANCE_TSP_VIEW)),
     date_from: str | None = None,
     date_to: str | None = None,
     device_ids: str | None = None,

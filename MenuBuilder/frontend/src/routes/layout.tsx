@@ -18,6 +18,13 @@ import { logout } from "../api/auth";
 import { notifySessionEvent } from "../api/session";
 import { useSession } from "../session/SessionContext";
 import { OrgSwitcher } from "../components/OrgSwitcher";
+import {
+  PERMISSION_BILLING_VIEW,
+  PERMISSION_MONITORING_VIEW,
+  PERMISSION_SETTINGS_TERMINALS_VIEW,
+  hasAnyReportPermission,
+  hasPermission,
+} from "../utils/permissions";
 
 const { Sider, Header, Content } = Layout;
 const { Text } = Typography;
@@ -42,44 +49,62 @@ export default function AppLayout() {
   const isXs = screens.xs;
 
   const isSuperuser = Boolean(currentUser?.is_superuser);
+  const isRole4 = currentUser?.role_id === 4;
 
   const isPlatformMode = Boolean(isSuperuser && currentUser?.org_id === 0);
 
-  const navItems = isPlatformMode
-    ? [
-        {
-          key: "devices",
-          icon: <ClusterOutlined />,
-          label: "Управление устройствами",
-        },
-        {
-          key: "settings",
-          icon: <SettingOutlined />,
-          label: "Настройки",
-        },
-        {
-          key: "admin",
-          icon: <ControlOutlined />,
-          label: "Администрирование",
-        },
-      ]
-    : [
-        ...NAV_ITEMS,
-        ...(isSuperuser
-          ? [
-              {
-                key: "devices",
-                icon: <ClusterOutlined />,
-                label: "Управление устройствами",
-              },
-              {
-                key: "admin",
-                icon: <ControlOutlined />,
-                label: "Администрирование",
-              },
-            ]
-          : []),
-      ];
+  let navItems;
+  if (isPlatformMode) {
+    navItems = [
+      {
+        key: "devices",
+        icon: <ClusterOutlined />,
+        label: "Управление устройствами",
+      },
+      {
+        key: "settings",
+        icon: <SettingOutlined />,
+        label: "Настройки",
+      },
+      {
+        key: "admin",
+        icon: <ControlOutlined />,
+        label: "Администрирование",
+      },
+    ];
+  } else if (isRole4) {
+    navItems = [];
+    if (hasPermission(currentUser, PERMISSION_MONITORING_VIEW)) {
+      navItems.push({ key: "monitoring", icon: <DashboardOutlined />, label: "Мониторинг" });
+    }
+    if (hasAnyReportPermission(currentUser)) {
+      navItems.push({ key: "reports", icon: <FileTextOutlined />, label: "Отчёты" });
+    }
+    if (hasPermission(currentUser, PERMISSION_BILLING_VIEW)) {
+      navItems.push({ key: "billing", icon: <DollarOutlined />, label: "Лицензии" });
+    }
+    if (hasPermission(currentUser, PERMISSION_SETTINGS_TERMINALS_VIEW)) {
+      navItems.push({ key: "settings", icon: <SettingOutlined />, label: "Настройки" });
+    }
+  } else {
+    navItems = [
+      ...NAV_ITEMS,
+      ...(isSuperuser
+        ? [
+            {
+              key: "devices",
+              icon: <ClusterOutlined />,
+              label: "Управление устройствами",
+            },
+            {
+              key: "admin",
+              icon: <ControlOutlined />,
+              label: "Администрирование",
+            },
+          ]
+        : []),
+    ];
+  }
 
   const segment = location.pathname.split("/")[1] || (isPlatformMode ? "admin" : "monitoring");
   const selectedKey = navItems.some((i) => i.key === segment)
@@ -150,7 +175,13 @@ export default function AppLayout() {
           theme="light"
           mode="inline"
           selectedKeys={[selectedKey]}
-          onClick={({ key }) => navigate(`/${key}`)}
+          onClick={({ key }) => {
+            if (key === "settings" && isRole4) {
+              navigate("/settings/terminals");
+            } else {
+              navigate(`/${key}`);
+            }
+          }}
           items={navItems}
           style={{ borderInlineEnd: "none", paddingInline: 6 }}
         />

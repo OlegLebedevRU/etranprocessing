@@ -38,6 +38,7 @@ import {
 import CertificatePinModal from "../components/CertificatePinModal";
 import CheckoutModal, { type CartLine } from "../components/CheckoutModal";
 import PageHeader from "../components/PageHeader";
+import { useSession } from "../session/SessionContext";
 import {
   formatMoneyMinor,
   formatDebt,
@@ -215,6 +216,9 @@ function monthsLabel(months: number): string {
 }
 
 export default function BillingPage() {
+  const { user } = useSession();
+  const isRole4 = user?.role_id === 4;
+
   const screens = useBreakpoint();
   const isMobile = !screens.md;
 
@@ -553,7 +557,7 @@ export default function BillingPage() {
       key: "license",
       width: 220,
       render: (_: unknown, r: BillingTerminal) => {
-        if (isTerminalDisabled(r)) {
+        if (isRole4 || isTerminalDisabled(r)) {
           return (
             <span style={{ whiteSpace: "nowrap" }}>
               <Text type={isLicenseLapsed(r) ? "danger" : "secondary"}>
@@ -630,7 +634,7 @@ export default function BillingPage() {
       key: "cert",
       width: 250,
       render: (_: unknown, r: BillingTerminal) => {
-        if (isTerminalDisabled(r)) {
+        if (isRole4 || isTerminalDisabled(r)) {
           return !r.cert_serial ? (
             <span style={{ whiteSpace: "nowrap" }}><Text type="secondary">не выпущен</Text></span>
           ) : !r.cert_not_valid_after ? (
@@ -835,6 +839,13 @@ export default function BillingPage() {
     },
   ];
 
+  const displayedColumns = useMemo(() => {
+    if (isRole4) {
+      return columns.filter((c) => c.key !== "actions");
+    }
+    return columns;
+  }, [isRole4, columns]);
+
   if (loading && !summary) {
     return (
       <div style={{ textAlign: "center", padding: 48 }}>
@@ -852,7 +863,11 @@ export default function BillingPage() {
     <div>
       <PageHeader
         title="Лицензии"
-        subtitle="Оплата лицензий и сертификатов терминалов"
+        subtitle={
+          isRole4
+            ? "Просмотр сроков действия лицензий и сертификатов терминалов (только чтение)"
+            : "Оплата лицензий и сертификатов терминалов"
+        }
         extra={
           <>
             {summary?.billing_mode === "post_factum" && (
@@ -876,36 +891,38 @@ export default function BillingPage() {
           marginBottom: 12,
         }}
       >
-        <Card
-          size="small"
-          style={{
-            borderColor: totalMinor > 0 ? "#1677ff" : undefined,
-            borderWidth: totalMinor > 0 ? 2 : 1,
-          }}
-        >
-          <Space direction="vertical" size={2} style={{ width: "100%" }}>
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              <ShoppingCartOutlined /> Сумма к оплате
-            </Text>
-            <div style={{ fontSize: 20, fontWeight: 700 }}>
-              {formatMoneyMinor(totalMinor)}
-            </div>
-            <Text type="secondary" style={{ fontSize: 11 }}>
-              лицензии: {licenseCount} · сертификаты: {certCount}
-            </Text>
-            <Button
-              type="primary"
-              block
-              size="small"
-              disabled={cartLines.length === 0}
-              onClick={() => setCheckoutOpen(true)}
-            >
-              {totalMinor > 0
-                ? `Оплатить (${formatMoneyMinor(totalMinor)})`
-                : `Оформить (${cartLines.length} поз.)`}
-            </Button>
-          </Space>
-        </Card>
+        {!isRole4 && (
+          <Card
+            size="small"
+            style={{
+              borderColor: totalMinor > 0 ? "#1677ff" : undefined,
+              borderWidth: totalMinor > 0 ? 2 : 1,
+            }}
+          >
+            <Space direction="vertical" size={2} style={{ width: "100%" }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                <ShoppingCartOutlined /> Сумма к оплате
+              </Text>
+              <div style={{ fontSize: 20, fontWeight: 700 }}>
+                {formatMoneyMinor(totalMinor)}
+              </div>
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                лицензии: {licenseCount} · сертификаты: {certCount}
+              </Text>
+              <Button
+                type="primary"
+                block
+                size="small"
+                disabled={cartLines.length === 0}
+                onClick={() => setCheckoutOpen(true)}
+              >
+                {totalMinor > 0
+                  ? `Оплатить (${formatMoneyMinor(totalMinor)})`
+                  : `Оформить (${cartLines.length} поз.)`}
+              </Button>
+            </Space>
+          </Card>
+        )}
 
         <Card size="small">
           <Space direction="vertical" size={2} style={{ width: "100%" }}>
@@ -950,21 +967,25 @@ export default function BillingPage() {
         title="Терминалы"
         extra={
           <Space wrap style={{ width: isMobile ? "100%" : "auto" }}>
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              Оплатить вперёд
-            </Text>
-            <Segmented
-              size="small"
-              value={advancePeriods}
-              onChange={(v) => setAdvancePeriods(v as number)}
-              options={advanceOptions}
-            />
-            <Button size="small" onClick={() => setAllVisible(true)}>
-              Отметить всё
-            </Button>
-            <Button size="small" onClick={() => setAllVisible(false)}>
-              Снять всё
-            </Button>
+            {!isRole4 && (
+              <>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  Оплатить вперёд
+                </Text>
+                <Segmented
+                  size="small"
+                  value={advancePeriods}
+                  onChange={(v) => setAdvancePeriods(v as number)}
+                  options={advanceOptions}
+                />
+                <Button size="small" onClick={() => setAllVisible(true)}>
+                  Отметить всё
+                </Button>
+                <Button size="small" onClick={() => setAllVisible(false)}>
+                  Снять всё
+                </Button>
+              </>
+            )}
             <Input
               placeholder="Поиск..."
               prefix={<SearchOutlined />}
@@ -994,7 +1015,7 @@ export default function BillingPage() {
         <Table
           className="compact-table"
           dataSource={filteredTerminals}
-          columns={columns}
+          columns={displayedColumns}
           rowKey="terminal_id"
           size="small"
           tableLayout="auto"

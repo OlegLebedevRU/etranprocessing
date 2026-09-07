@@ -5,7 +5,7 @@ import hmac
 import logging
 from abc import ABC, abstractmethod
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select, update
@@ -24,11 +24,12 @@ class UserRecord:
     md5_password: str = ""
     org_id: int | None = None
     role_id: int = 3
-    role: str = "user"  # "superuser" | "admin" | "user"
+    role: str = "user"  # "superuser" | "admin" | "user" | "viewer"
     is_superuser: bool = False
     is_active: bool = True
     full_name: str | None = None
     last_org_id: int | None = None
+    permissions: list[str] = field(default_factory=list)
 
 
 def verify_md5_password(plain_password: str, md5_hash: str) -> bool:
@@ -180,6 +181,7 @@ class DatabaseUserStore(AbstractUserStore):
             is_active=user.is_active,
             full_name=user.full_name,
             last_org_id=getattr(user, "last_org_id", None),
+            permissions=getattr(user, "permissions", None) or [],
         )
 
     # --- Session Management ---
@@ -593,6 +595,7 @@ class ConfigUserStore(AbstractUserStore):
                     is_active=bool(u.get("is_active", True)),
                     full_name=u.get("full_name"),
                     last_org_id=u.get("last_org_id"),
+                    permissions=u.get("permissions") or [],
                 )
         return None
 

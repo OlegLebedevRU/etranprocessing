@@ -15,6 +15,11 @@ from app.auth import get_current_user
 from app.config import settings
 from app.database import get_db
 from app.models import EmailVerification, Org, Terminal, User
+from app.security.permissions import (
+    PERMISSION_SETTINGS_TERMINALS_VIEW,
+    require_permission,
+    require_readonly_guard,
+)
 from app.services.email_service import send_email_with_logging
 from app.user_store import verify_password
 
@@ -145,11 +150,7 @@ async def get_profile(
     send_rep = getattr(org, "send_reports", True) if org else True
     is_verified = getattr(org, "is_email_verified", False) if org else False
     org_verified_at = org.email_verified_at if org else None
-    verified_at = (
-        org_verified_at.isoformat()
-        if org_verified_at is not None
-        else None
-    )
+    verified_at = org_verified_at.isoformat() if org_verified_at is not None else None
 
     return ProfileResponse(
         username=str(user.get("username", "")),
@@ -211,11 +212,7 @@ async def update_profile(
     await db.refresh(org)
 
     org_verified_at = org.email_verified_at
-    verified_at = (
-        org_verified_at.isoformat()
-        if org_verified_at is not None
-        else None
-    )
+    verified_at = org_verified_at.isoformat() if org_verified_at is not None else None
 
     return ProfileResponse(
         username=str(user.get("username", "")),
@@ -475,9 +472,7 @@ async def confirm_email_otp(
         "email": org.email,
         "is_email_verified": True,
         "email_verified_at": (
-            org_verified_at.isoformat()
-            if org_verified_at is not None
-            else None
+            org_verified_at.isoformat() if org_verified_at is not None else None
         ),
     }
 
@@ -544,11 +539,12 @@ async def confirm_email_token(
 @router.get("/terminals", response_model=list[TerminalSettingsItem])
 async def list_terminals_settings(
     org_id: int | None = Query(None, description="Org ID for superuser viewing"),
-    user: dict[str, Any] = Depends(get_current_user),
+    user: dict[str, Any] = Depends(
+        require_permission(PERMISSION_SETTINGS_TERMINALS_VIEW)
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> list[TerminalSettingsItem]:
-    """List terminals for current organization (available for role 3 and superuser in readonly mode)."""
-    _check_settings_access(user)
+    """List terminals for current organization (available for role 3, superuser, and role 4 with settings:terminals:view)."""
     is_su = bool(user.get("is_superuser") or user.get("role_id") == 1)
 
     effective_org_id = int(user.get("org_id", 0))
@@ -590,13 +586,14 @@ async def list_terminals_settings(
 
 
 @router.patch("/terminals/{terminal_id}", response_model=TerminalSettingsItem)
+@router.put("/terminals/{terminal_id}", response_model=TerminalSettingsItem)
 async def update_terminal_settings(
     terminal_id: int,
     req: UpdateTerminalSettingsRequest,
-    user: dict[str, Any] = Depends(get_current_user),
+    user: dict[str, Any] = Depends(require_readonly_guard),
     db: AsyncSession = Depends(get_db),
 ) -> TerminalSettingsItem:
-    """Update terminal address, note, and timezone only (role 3 only, superuser is readonly)."""
+    """Update terminal address, note, and timezone only (role 3 only, superuser and role 4 are blocked)."""
     _check_settings_access(user)
     _ensure_not_superuser(user)
 

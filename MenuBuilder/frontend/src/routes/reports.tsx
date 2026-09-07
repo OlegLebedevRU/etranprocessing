@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { useSearchParams } from "react-router";
 import dayjs from "dayjs";
 import {
   Layout,
@@ -15,6 +16,7 @@ import {
   Modal,
   Radio,
   Spin,
+  Result,
   message,
 } from "antd";
 import {
@@ -25,6 +27,7 @@ import {
   SearchOutlined,
   CheckCircleOutlined,
   WarningOutlined,
+  DownloadOutlined,
 } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -42,6 +45,15 @@ import {
 } from "../api/reports";
 import { getServices } from "../api/services";
 import { getMe } from "../api/auth";
+import { useSession } from "../session/SessionContext";
+import {
+  PERMISSION_REPORTS_BALANCE_TERMINAL_VIEW,
+  PERMISSION_REPORTS_BALANCE_TSP_VIEW,
+  PERMISSION_REPORTS_EXPORT,
+  PERMISSION_REPORTS_INKASS_VIEW,
+  PERMISSION_REPORTS_PAYMENTS_VIEW,
+  hasPermission,
+} from "../utils/permissions";
 import {
   DEFAULT_TIMEZONE,
   formatTenantDateTime,
@@ -51,10 +63,30 @@ import {
 const { Sider, Content } = Layout;
 
 const REPORTS = [
-  { key: "inkass", icon: <FileTextOutlined />, label: "Инкассация" },
-  { key: "payments", icon: <DollarOutlined />, label: "Платежи" },
-  { key: "balance-terminal", icon: <BarChartOutlined />, label: "По терминалам" },
-  { key: "balance-tsp", icon: <BarChartOutlined />, label: "По ТСП" },
+  {
+    key: "inkass",
+    icon: <FileTextOutlined />,
+    label: "Инкассация",
+    perm: PERMISSION_REPORTS_INKASS_VIEW,
+  },
+  {
+    key: "payments",
+    icon: <DollarOutlined />,
+    label: "Платежи",
+    perm: PERMISSION_REPORTS_PAYMENTS_VIEW,
+  },
+  {
+    key: "balance-terminal",
+    icon: <BarChartOutlined />,
+    label: "По терминалам",
+    perm: PERMISSION_REPORTS_BALANCE_TERMINAL_VIEW,
+  },
+  {
+    key: "balance-tsp",
+    icon: <BarChartOutlined />,
+    label: "По ТСП",
+    perm: PERMISSION_REPORTS_BALANCE_TSP_VIEW,
+  },
 ];
 
 function fmtMoney(v: number): string {
@@ -103,7 +135,157 @@ const PAYM_STATE_COLORS: Record<number, string> = {
 };
 
 export default function ReportsPage() {
-  const [activeReport, setActiveReport] = useState("inkass");
+  const { user } = useSession();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const allowedReports = useMemo(() => {
+    return REPORTS.filter((r) => hasPermission(user, r.perm));
+  }, [user]);
+
+  const initialTab = useMemo(() => {
+    const tabParam = searchParams.get("tab");
+    if (tabParam && allowedReports.some((r) => r.key === tabParam)) {
+      return tabParam;
+    }
+    return allowedReports[0]?.key || "inkass";
+  }, [searchParams, allowedReports]);
+
+  const [activeReport, setActiveReport] = useState(initialTab);
+
+  useEffect(() => {
+    if (allowedReports.length > 0 && !allowedReports.some((r) => r.key === activeReport)) {
+      setActiveReport(allowedReports[0].key);
+    }
+  }, [allowedReports, activeReport]);
+
+  const handleSelectReport = (key: string) => {
+    setActiveReport(key);
+    setSearchParams({ tab: key });
+  };
+
+  const canExport = hasPermission(user, PERMISSION_REPORTS_EXPORT);
+
+  const downloadCsv = (
+    filename: string,
+    headers: string[],
+    rows: (string | number)[][]
+  ) => {
+    const escapeCell = (val: string | number) => {
+      const str = String(val ?? "");
+      if (
+        str.includes(";") ||
+        str.includes('"') ||
+        str.includes("\n") ||
+        str.includes("\r")
+      ) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+    const csvContent =
+      "\uFEFF" +
+      [
+        headers.map(escapeCell).join(";"),
+        ...rows.map((r) => r.map(escapeCell).join(";")),
+      ].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute(
+      "download",
+      `${filename}_${dayjs().format("YYYYMMDD_HHmmss")}.csv`
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportCurrentReport = () => {
+    if (activeReport === "inkass") {
+      const headers = [
+        "Терминал",
+        "Серийный номер",
+        "Время инкассации",
+        "Сумма факта (руб)",
+        "Расчетная сумма (руб)",
+        "Статус",
+        "Всего банкнот",
+        "Всего транзакций",
+        "Номер инкассации",
+      ];
+      const rows = inkItems.map((r) => [
+        r.device_id,
+        r.sn || "",
+        formatTenantDateTime(r.inkass_datetime, tenantTz),
+        r.total_sum ? r.total_sum.toLocaleString("ru-RU") : "0",
+        r.calculated_sum != null ? r.calculated_sum.toLocaleString("ru-RU") : "",
+        r.calc_status || "",
+        r.total_note_count,
+        r.transact_count,
+        r.report_number || "",
+      ]);
+      downloadCsv("inkass_report", headers, rows);
+    } else if (activeReport === "payments") {
+      const headers = [
+        "Транзакция",
+        "Терминал",
+        "Серийный номер",
+        "Код ТСП",
+        "ТСП",
+        "Сумма (руб)",
+        "Время",
+        "Статус",
+        "Тип",
+      ];
+      const rows = payItems.map((r) => [
+        r.paym_ext_id,
+        r.device_id,
+        r.sn || "",
+        r.paym_tsp_code || "",
+        r.tsp_name || "",
+        r.paym_amount ? (r.paym_amount / 100).toFixed(2) : "0.00",
+        formatTenantDateTime(r.paym_datetime, tenantTz),
+        r.paym_state_label,
+        r.pay_type_label,
+      ]);
+      downloadCsv("payments_report", headers, rows);
+    } else if (activeReport === "balance-terminal") {
+      const headers = [
+        "Терминал",
+        "Серийный номер",
+        "Всего платежей",
+        "Всего сумма (руб)",
+        ...displayedDates.map((d) => dayjs(d).format("DD.MM")),
+      ];
+      const rows = btItems.map((r) => [
+        r.device_id,
+        r.sn || "",
+        r.total_count,
+        r.total_amount,
+        ...displayedDates.map((d) => (r.days ? r.days[d]?.amount || 0 : 0)),
+      ]);
+      downloadCsv("balance_by_terminal", headers, rows);
+    } else if (activeReport === "balance-tsp") {
+      const headers = [
+        "Код ТСП",
+        "ТСП",
+        "Терминалов",
+        "Кол-во транзакций",
+        "Общая сумма (руб)",
+      ];
+      const rows = btsItems.map((r) => [
+        r.tsp_code,
+        r.tsp_name || "",
+        r.terminal_count,
+        r.total_count,
+        r.total_amount,
+      ]);
+      downloadCsv("balance_by_tsp", headers, rows);
+    }
+  };
+
   const [servicesMap, setServicesMap] = useState<Record<number, string>>({});
   // Tenant timezone context comes exclusively from /api/auth/me. Browser timezone
   // and shared localStorage caches must never be used as an authoritative source.
@@ -492,6 +674,13 @@ export default function ReportsPage() {
     },
   ];
 
+  const displayedInkassColumns: ColumnsType<InkassRecord> = useMemo(() => {
+    if (user?.role_id === 4) {
+      return inkassColumns.filter((c) => c.key !== "actions");
+    }
+    return inkassColumns;
+  }, [user?.role_id, inkassColumns]);
+
   // --- Payments columns ---
   const paymentsColumns: ColumnsType<PaymentRecord> = [
     {
@@ -750,6 +939,16 @@ export default function ReportsPage() {
     },
   ];
 
+  if (allowedReports.length === 0) {
+    return (
+      <Result
+        status="403"
+        title="Нет доступных отчетов"
+        subTitle="У вашей учетной записи нет прав на просмотр ни одного отчета."
+      />
+    );
+  }
+
   return (
     <div>
       {/* Mobile/Tablet report switcher */}
@@ -759,8 +958,8 @@ export default function ReportsPage() {
             block={isXs}
             size="middle"
             value={activeReport}
-            onChange={(v) => setActiveReport(String(v))}
-            options={REPORTS.map((r) => ({
+            onChange={(v) => handleSelectReport(String(v))}
+            options={allowedReports.map((r) => ({
               value: r.key,
               label: (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "2px 4px" }}>
@@ -806,8 +1005,8 @@ export default function ReportsPage() {
             <Menu
               mode="inline"
               selectedKeys={[activeReport]}
-              onClick={({ key }) => setActiveReport(key)}
-              items={REPORTS}
+              onClick={({ key }) => handleSelectReport(key)}
+              items={allowedReports}
               style={{ border: "none", background: "transparent" }}
             />
           </div>
@@ -882,6 +1081,15 @@ export default function ReportsPage() {
                   <Tag color="blue" style={{ margin: 0, fontSize: isXs ? 11 : 12 }}>
                     {isXs ? getTimezoneBadgeText(tenantTz) : `Часовой пояс: ${getTimezoneBadgeText(tenantTz)}`}
                   </Tag>
+                  {canExport && (
+                    <Button
+                      size="small"
+                      icon={<DownloadOutlined />}
+                      onClick={handleExportCurrentReport}
+                    >
+                      {!isXs && "Экспорт"}
+                    </Button>
+                  )}
                   <Button
                     size="small"
                     icon={<ReloadOutlined />}
@@ -892,7 +1100,7 @@ export default function ReportsPage() {
 
               <Table<InkassRecord>
                 rowKey="id"
-                columns={inkassColumns}
+                columns={displayedInkassColumns}
                 dataSource={inkItems}
                 loading={inkLoading}
                 size="small"
@@ -1129,6 +1337,15 @@ export default function ReportsPage() {
                   <Tag color="blue" style={{ margin: 0, fontSize: isXs ? 11 : 12 }}>
                     {isXs ? getTimezoneBadgeText(tenantTz) : `Часовой пояс: ${getTimezoneBadgeText(tenantTz)}`}
                   </Tag>
+                  {canExport && (
+                    <Button
+                      size="small"
+                      icon={<DownloadOutlined />}
+                      onClick={handleExportCurrentReport}
+                    >
+                      {!isXs && "Экспорт"}
+                    </Button>
+                  )}
                   <Button
                     size="small"
                     icon={<ReloadOutlined />}
@@ -1309,6 +1526,15 @@ export default function ReportsPage() {
                   <Tag color="blue" style={{ margin: 0, fontSize: isXs ? 11 : 12 }}>
                     {isXs ? getTimezoneBadgeText(tenantTz) : `Часовой пояс: ${getTimezoneBadgeText(tenantTz)}`}
                   </Tag>
+                  {canExport && (
+                    <Button
+                      size="small"
+                      icon={<DownloadOutlined />}
+                      onClick={handleExportCurrentReport}
+                    >
+                      {!isXs && "Экспорт"}
+                    </Button>
+                  )}
                   <Button
                     size="small"
                     icon={<ReloadOutlined />}
@@ -1413,6 +1639,15 @@ export default function ReportsPage() {
                   <Tag color="blue" style={{ margin: 0, fontSize: isXs ? 11 : 12 }}>
                     {isXs ? getTimezoneBadgeText(tenantTz) : `Часовой пояс: ${getTimezoneBadgeText(tenantTz)}`}
                   </Tag>
+                  {canExport && (
+                    <Button
+                      size="small"
+                      icon={<DownloadOutlined />}
+                      onClick={handleExportCurrentReport}
+                    >
+                      {!isXs && "Экспорт"}
+                    </Button>
+                  )}
                   <Button
                     size="small"
                     icon={<ReloadOutlined />}

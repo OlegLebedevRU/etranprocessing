@@ -14,6 +14,14 @@ logger = logging.getLogger(__name__)
 security_scheme = HTTPBearer(auto_error=False)
 
 
+ROLE_SUPERUSER = 1
+ROLE_ADMIN = 2
+ROLE_USER = 3
+ROLE_VIEWER = 4
+ROLE_ID_TO_NAME: dict[int, str] = {1: "superuser", 2: "admin", 3: "user", 4: "viewer"}
+NAME_TO_ROLE_ID: dict[str, int] = {v: k for k, v in ROLE_ID_TO_NAME.items()}
+
+
 def find_user(username: str) -> dict | None:
     for u in settings.get_users():
         if isinstance(u, dict) and u.get("username") == username:
@@ -216,14 +224,19 @@ async def get_current_user(
     except TypeError, ValueError:
         role_id = 3
 
-    # External issuer emits role as a numeric string ("1"/"2"/"3"); normalize to names
-    role_names = {1: "superuser", 2: "admin", 3: "user"}
+    # External issuer emits role as a numeric string ("1"/"2"/"3"/"4"); normalize to names
+    role_names = {1: "superuser", 2: "admin", 3: "user", 4: "viewer"}
     if role.isdigit():
         role = role_names.get(int(role), "user")
 
+    if role == "viewer" or role_id == 4:
+        role = "viewer"
+        role_id = 4
+
     username = payload.get("username") or payload.get("sub") or str(user_id)
     is_su = bool(
-        payload.get("is_superuser") or role in ("superuser", "admin") or role_id == 1
+        (payload.get("is_superuser") or role in ("superuser", "admin") or role_id == 1)
+        and role_id != 4
     )
     if is_su and role not in ("superuser", "admin"):
         role = "superuser"
@@ -231,10 +244,30 @@ async def get_current_user(
     token_type = payload.get("token_type", "tenant")
     orig_sub = payload.get("orig_sub") or username
     # v2 issuer sends is_imp explicitly; for older tokens derive it: superuser inside a tenant
-    if "is_imp" in payload:
+    if role_id == 4:
+        is_imp = False
+    elif "is_imp" in payload:
         is_imp = bool(payload.get("is_imp"))
     else:
         is_imp = bool(is_su and org_id is not None and org_id > 0)
+
+    # Permissions resolution
+    if "permissions" in payload and payload["permissions"] is not None:
+        user_perms = list(payload["permissions"])
+    elif role_id in (1, 2, 3) or is_su:
+        from app.security.permissions import ALL_PERMISSIONS
+
+        user_perms = list(ALL_PERMISSIONS)
+    elif role_id == 4:
+        if user_id and user_id > 0:
+            from app.user_store import get_user_store
+
+            store_user = await get_user_store().get_by_id(user_id)
+            user_perms = list(store_user.permissions) if store_user else []
+        else:
+            user_perms = []
+    else:
+        user_perms = []
 
     req_method = (
         request.scope.get("method")
@@ -263,12 +296,24 @@ async def get_current_user(
         "role_id": role_id,
         "role": role,
         "is_superuser": is_su,
+        "can_switch_org": False if role_id == 4 else is_su,
         "token_type": token_type,
         "orig_sub": orig_sub,
         "is_impersonated": is_imp,
         "exp": payload.get("exp"),
         "sid": payload.get("sid"),
+        "permissions": user_perms,
     }
+
+
+async def get_current_user_optional(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(security_scheme),
+) -> dict | None:
+    """Optional user dependency: returns None if no Bearer token provided, otherwise calls get_current_user."""
+    if not credentials or not credentials.credentials:
+        return None
+    return await get_current_user(request, credentials)
 
 
 async def require_superuser(

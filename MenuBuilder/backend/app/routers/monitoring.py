@@ -4,8 +4,9 @@ from etranprocessing_gauge import decode_slots_bitmask
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
 
-from app.auth import require_tenant_context, resolve_org_id
+from app.auth import resolve_org_id
 from app.database import async_session
+from app.security.permissions import PERMISSION_MONITORING_VIEW, require_permission
 from app.services.gauge_bus import gauge_store
 
 router = APIRouter(prefix="/api", tags=["monitoring"])
@@ -16,7 +17,7 @@ async def get_monitoring(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     search: str | None = Query(None),
-    user: dict = Depends(require_tenant_context),
+    user: dict = Depends(require_permission(PERMISSION_MONITORING_VIEW)),
 ):
     """Return terminal connection history and current gauge state."""
     now = datetime.now(UTC)

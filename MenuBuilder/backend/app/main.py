@@ -24,6 +24,7 @@ from app.routers import (
     profile,
     reports,
     services,
+    settings_users,
     terminal_bindings,
 )
 from app.routers import (
@@ -118,6 +119,7 @@ app.include_router(terminal_bindings.router, prefix="/api", tags=["terminals"])
 app.include_router(billing.router)
 app.include_router(profile.router, prefix="/api", tags=["profile"])
 app.include_router(settings_router.router, prefix="/api", tags=["settings"])
+app.include_router(settings_users.router, prefix="/api", tags=["settings-users"])
 app.include_router(integrations.router)
 app.include_router(mcp_proxy.router, prefix="/api", tags=["mcp"])
 app.include_router(dashboard.router)

@@ -56,6 +56,8 @@ export default function TerminalsSettingsPage() {
   const [form] = Form.useForm();
 
   const isSuperuser = Boolean(user?.is_superuser || user?.role_id === 1);
+  const isRole4 = user?.role_id === 4;
+  const isReadOnly = isSuperuser || isRole4;
 
   const fetchTerminals = async () => {
     setLoading(true);
@@ -84,7 +86,7 @@ export default function TerminalsSettingsPage() {
   };
 
   const handleSaveTerminal = async (values: any) => {
-    if (!editingTerminal || isSuperuser) return;
+    if (!editingTerminal || isReadOnly) return;
     setSaving(true);
     try {
       const updated = await updateTerminalSettings(editingTerminal.id, {
@@ -176,10 +178,9 @@ export default function TerminalsSettingsPage() {
         <Button
           size="small"
           icon={<EditOutlined />}
-          disabled={isSuperuser}
           onClick={() => handleEditClick(record)}
         >
-          {isSuperuser ? "Просмотр" : "Изменить"}
+          {isReadOnly ? "Просмотр" : "Изменить"}
         </Button>
       ),
     },
@@ -187,13 +188,13 @@ export default function TerminalsSettingsPage() {
 
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto", paddingBottom: 40 }}>
-      {isSuperuser && (
+      {isReadOnly && (
         <Alert
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
           message="Режим только для чтения"
-          description="Суперпользователь просматривает терминалы организации в режиме только для чтения. Права не пересекаются с разделом Администрирование."
+          description="Просмотр параметров терминалов доступен в режиме только для чтения без возможности внесения изменений."
         />
       )}
 
@@ -232,7 +233,7 @@ export default function TerminalsSettingsPage() {
 
       {/* Edit Modal */}
       <Modal
-        title={`Редактирование терминала ${editingTerminal?.sn || ""}`}
+        title={`${isReadOnly ? "Просмотр параметров терминала" : "Редактирование терминала"} ${editingTerminal?.sn || ""}`}
         open={modalVisible}
         onCancel={() => setModalVisible(false)}
         footer={null}
@@ -242,14 +243,19 @@ export default function TerminalsSettingsPage() {
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
-          message="Ограничение параметров"
-          description="В данном разделе можно изменять только адрес, примечание и часовой пояс терминала."
+          message={isReadOnly ? "Режим только для чтения" : "Ограничение параметров"}
+          description={
+            isReadOnly
+              ? "Параметры терминала доступны только для просмотра."
+              : "В данном разделе можно изменять только адрес, примечание и часовой пояс терминала."
+          }
         />
 
         <Form
           form={form}
           layout="vertical"
           onFinish={handleSaveTerminal}
+          disabled={isReadOnly}
         >
           <Form.Item
             name="address"
@@ -293,15 +299,18 @@ export default function TerminalsSettingsPage() {
 
           <div style={{ textAlign: "right", marginTop: 24 }}>
             <Space>
-              <Button onClick={() => setModalVisible(false)}>Отмена</Button>
-              <Button
-                type="primary"
-                htmlType="submit"
-                loading={saving}
-                disabled={isSuperuser}
-              >
-                Сохранить
+              <Button onClick={() => setModalVisible(false)}>
+                {isReadOnly ? "Закрыть" : "Отмена"}
               </Button>
+              {!isReadOnly && (
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  loading={saving}
+                >
+                  Сохранить
+                </Button>
+              )}
             </Space>
           </div>
         </Form>

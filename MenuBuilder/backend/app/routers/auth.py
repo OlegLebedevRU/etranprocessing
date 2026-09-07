@@ -60,6 +60,7 @@ class UserInfo(BaseModel):
     timezone: str = "Europe/Moscow"
     expires_at: str | None = None
     full_name: str | None = None
+    permissions: list[str] = []
 
 
 def _extract_basic_auth(authorization: str | None) -> tuple[str, str] | None:
@@ -498,6 +499,7 @@ async def me(user: dict = Depends(get_current_user)):
     username = user.get("username")
     user_id = user.get("user_id")
     full_name = None
+    store_user = None
 
     if user_id and user_id > 0:
         store_user = await get_user_store().get_by_id(user_id)
@@ -506,18 +508,35 @@ async def me(user: dict = Depends(get_current_user)):
                 username = store_user.username
             full_name = store_user.full_name
 
+    role_id = user.get("role_id", 1 if is_su else 3)
+    role_name = user.get("role", "user")
+    if role_id == 4:
+        role_name = "viewer"
+
+    from app.security.permissions import ALL_PERMISSIONS
+
+    if role_id in (1, 2, 3) or is_su:
+        permissions = list(ALL_PERMISSIONS)
+    elif role_id == 4:
+        permissions = list(user.get("permissions") or [])
+        if not permissions and store_user:
+            permissions = list(store_user.permissions or [])
+    else:
+        permissions = []
+
     return UserInfo(
         user_id=user_id,
         username=username or user.get("username") or "",
         org_id=org_id,
-        role_id=user.get("role_id", 1 if is_su else 3),
-        role=user.get("role", "user"),
+        role_id=role_id,
+        role=role_name,
         is_superuser=is_su,
-        can_switch_org=is_su,
+        can_switch_org=False if role_id == 4 else is_su,
         token_type=user.get("token_type", "tenant"),
         is_impersonated=bool(user.get("is_impersonated", False)),
         org_name=org_name,
         timezone=org_timezone,
         expires_at=expires_at,
         full_name=full_name,
+        permissions=permissions,
     )

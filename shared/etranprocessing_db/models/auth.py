@@ -4,13 +4,16 @@ from datetime import datetime
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
     Integer,
     String,
     func,
+    text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from etranprocessing_db.base import Base
@@ -70,6 +73,12 @@ class User(Base):
     )
     last_org_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    permissions: Mapped[list[str]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'[]'::jsonb"),
+        comment="Список строковых разрешений пользователя (актуально для role_id=4)",
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -80,6 +89,11 @@ class User(Base):
     __table_args__ = (
         Index("idx_users_username", "username"),
         Index("idx_users_org_id", "org_id"),
+        Index("idx_users_permissions", "permissions", postgresql_using="gin"),
+        CheckConstraint(
+            "role_id != 4 OR (org_id IS NOT NULL AND org_id > 0)",
+            name="chk_users_role4_tenant",
+        ),
     )
 
 
