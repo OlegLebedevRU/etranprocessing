@@ -116,6 +116,12 @@ class Settings(BaseSettings):
     cert_pin_ttl_hours: int = 24
     cert_expiring_soon_days: int = 30
 
+    # Serverless Email Gateway
+    serverless_email_gateway_url: str = (
+        "https://d5dbnvm0kd5ames2tb0o.apigw.yandexcloud.net"
+    )
+    frontend_base_url: str = "https://leo4.ru"
+
     # Leo4 IoT Platform Provisioning & Internal API
     leo4_internal_api_base_url: str = ""
     leo4_internal_service_token: str = ""

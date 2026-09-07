@@ -26,6 +26,9 @@ from app.routers import (
     services,
     terminal_bindings,
 )
+from app.routers import (
+    settings as settings_router,
+)
 from app.services.gauge_bus import gauge_mqtt_bus
 from app.user_store import get_user_store
 
@@ -114,6 +117,7 @@ app.include_router(
 app.include_router(terminal_bindings.router, prefix="/api", tags=["terminals"])
 app.include_router(billing.router)
 app.include_router(profile.router, prefix="/api", tags=["profile"])
+app.include_router(settings_router.router, prefix="/api", tags=["settings"])
 app.include_router(integrations.router)
 app.include_router(mcp_proxy.router, prefix="/api", tags=["mcp"])
 app.include_router(dashboard.router)

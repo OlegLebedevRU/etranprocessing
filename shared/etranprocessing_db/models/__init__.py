@@ -5,6 +5,7 @@ from etranprocessing_db.models.billing import (
     CertificatePin,
 )
 from etranprocessing_db.models.catalog import CatalogCategory, CatalogItem
+from etranprocessing_db.models.email import EmailLog, EmailVerification
 from etranprocessing_db.models.menu import (
     Group,
     MenuVariant,
@@ -47,6 +48,8 @@ __all__ = [
     "CatalogCategory",
     "CatalogItem",
     "CertificatePin",
+    "EmailLog",
+    "EmailVerification",
     "GateGaugeRecord",
     "Group",
     "License",

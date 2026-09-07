@@ -10,6 +10,8 @@ from etranprocessing_db.models import (  # noqa: F401
     BillingOrder,
     BillingOrderItem,
     CertificatePin,
+    EmailLog,
+    EmailVerification,
     GateGaugeRecord,
     Group,
     License,

@@ -19,6 +19,10 @@ const AdminLayout = lazy(() => import("./routes/admin-layout"));
 const AdminOrganizationsPage = lazy(() => import("./routes/admin-organizations"));
 const AdminTerminalsPage = lazy(() => import("./routes/admin-terminals"));
 const AdminUsersPage = lazy(() => import("./routes/admin-users"));
+const SettingsLayout = lazy(() => import("./routes/settings-layout"));
+const ProfileSettingsPage = lazy(() => import("./routes/settings/ProfileSettingsPage"));
+const TerminalsSettingsPage = lazy(() => import("./routes/settings/TerminalsSettingsPage"));
+const VerifyEmailPage = lazy(() => import("./routes/settings/VerifyEmailPage"));
 
 function LoadingFallback() {
   return (
@@ -53,6 +57,7 @@ export default function App() {
       <Suspense fallback={<LoadingFallback />}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/settings/verify-email" element={<VerifyEmailPage />} />
           <Route
             element={
               <RequireAuth>
@@ -73,6 +78,15 @@ export default function App() {
             <Route path="billing" element={<BillingPage />} />
             <Route path="devices" element={<DevicesPage />} />
             <Route path="integrations" element={<IntegrationsPage />} />
+            <Route path="settings" element={<SettingsLayout />}>
+              <Route
+                index
+                element={<Navigate to="/settings/profile" replace />}
+              />
+              <Route path="profile" element={<ProfileSettingsPage />} />
+              <Route path="terminals" element={<TerminalsSettingsPage />} />
+              <Route path="verify-email" element={<VerifyEmailPage />} />
+            </Route>
             <Route path="admin" element={<AdminLayout />}>
               <Route
                 index
@@ -93,7 +107,7 @@ export default function App() {
             />
             <Route
               path="profile"
-              element={<Navigate to="/integrations" replace />}
+              element={<Navigate to="/settings/profile" replace />}
             />
             <Route path="*" element={<Navigate to="/monitoring" replace />} />
           </Route>

@@ -12,6 +12,7 @@ import {
   ApiOutlined,
   ControlOutlined,
   ClusterOutlined,
+  SettingOutlined,
 } from "@ant-design/icons";
 import { logout } from "../api/auth";
 import { notifySessionEvent } from "../api/session";
@@ -27,6 +28,7 @@ const NAV_ITEMS = [
   { key: "reports", icon: <FileTextOutlined />, label: "Отчёты" },
   { key: "billing", icon: <DollarOutlined />, label: "Лицензии" },
   { key: "integrations", icon: <ApiOutlined />, label: "Интеграции" },
+  { key: "settings", icon: <SettingOutlined />, label: "Настройки" },
 ];
 
 export default function AppLayout() {
@@ -49,6 +51,11 @@ export default function AppLayout() {
           key: "devices",
           icon: <ClusterOutlined />,
           label: "Управление устройствами",
+        },
+        {
+          key: "settings",
+          icon: <SettingOutlined />,
+          label: "Настройки",
         },
         {
           key: "admin",
