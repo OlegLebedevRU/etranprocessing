@@ -57,6 +57,7 @@
 | Префикс | Имя файла | Назначение документа |
 |---|---|---|
 | `etran_arch` | `etran_arch-architecture-analysis.md` | Комплексный архитектурный анализ платформы etranprocessing |
+| `etran_arch` | `etran_arch-serverless-email-integration.md` | Спецификация и архитектура интеграции serverless-сервиса отправки email |
 | `etran_data` | `etran_data-database-ownership.md` | Матрица владения базой данных PostgreSQL между сервисами |
 | `etran_bill` | `etran_bill-licensing-architecture.md` | Архитектура и математика лицензионного биллинга |
 | `etran_cert` | `etran_cert-infrastructure-architecture.md` | Сквозная архитектура инфраструктуры сертификатов и mTLS |
