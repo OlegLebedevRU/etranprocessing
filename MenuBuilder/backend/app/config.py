@@ -142,15 +142,6 @@ class Settings(BaseSettings):
             or self.iot_rpc_service_token
         )
 
-    # MQTT / RabbitMQ Gauges settings
-    mqtt_host: str = "rabbitmq"
-    mqtt_port: int = 1883
-    mqtt_username: str = "etran_service"
-    mqtt_password: str = "etran_secret"
-    mqtt_enabled: bool = True
-    mqtt_topic_prefix: str = "dev"
-    amqp_url: str = "amqp://etran_service:etran_secret@rabbitmq:5672//"
-
     # L4media Video Surveillance
     l4media_ingress_url: str = "http://l4media-ingress:9100"
     l4media_janus_url: str = "http://l4media-janus:8088/janus"

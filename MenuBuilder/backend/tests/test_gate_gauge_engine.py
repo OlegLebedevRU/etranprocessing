@@ -8,8 +8,6 @@ from etranprocessing_gauge import (
     update_slots_bitmask,
 )
 
-from app.services.gauge_bus import GaugeStore
-
 
 @pytest.fixture
 def anyio_backend():
@@ -96,26 +94,3 @@ def test_calculate_lastnumconn():
     assert calculate_lastnumconn([True] * 11 + [False]) == 1
     assert calculate_lastnumconn([True] * 10 + [False, False]) == 2
     assert calculate_lastnumconn([False] * 12) == 12
-
-
-def test_gauge_store_operations():
-    store = GaugeStore()
-    snap = {
-        "device_id": 123,
-        "sn": "SN123",
-        "slots_bitmask": 5,
-        "last_tick_epoch": 100,
-        "gauge": {"102": "0"},
-    }
-    store.set_snapshot(snap)
-    assert store.get_by_device_id(123) == snap
-    assert store.get_by_sn("SN123") == snap
-    assert store.get_by_device_id(999) is None
-
-    store.update_enrichment(123, {"last_payment_at": "2026-08-30T17:00:00Z"})
-    updated = store.get_by_device_id(123)
-    assert updated is not None
-    assert updated["internal_enrichment"]["last_payment_at"] == "2026-08-30T17:00:00Z"
-
-    store.clear()
-    assert store.get_by_device_id(123) is None

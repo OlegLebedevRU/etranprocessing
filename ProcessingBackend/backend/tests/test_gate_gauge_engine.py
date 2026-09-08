@@ -15,7 +15,6 @@ from app.database import get_db
 from app.dependencies import get_current_terminal
 from app.main import app
 from app.models import Terminal
-from app.services.gauge_bus import GaugeStore, gauge_store
 
 
 @pytest.fixture
@@ -127,33 +126,8 @@ def test_create_or_update_snapshot():
     assert snap["internal_enrichment"]["iot_is_online"] is True
 
 
-def test_gauge_store_operations():
-    store = GaugeStore()
-    snap = {
-        "device_id": 123,
-        "sn": "SN123",
-        "slots_bitmask": 5,
-        "last_tick_epoch": 100,
-        "gauge": {"102": "0"},
-    }
-    store.set_snapshot(snap)
-    assert store.get_by_device_id(123) == snap
-    assert store.get_by_sn("SN123") == snap
-    assert store.get_by_device_id(999) is None
-
-    store.update_enrichment(123, {"last_payment_at": "2026-08-30T17:00:00Z"})
-    updated = store.get_by_device_id(123)
-    assert updated is not None
-    assert updated["internal_enrichment"]["last_payment_at"] == "2026-08-30T17:00:00Z"
-
-    store.clear()
-    assert store.get_by_device_id(123) is None
-
-
 @pytest.mark.anyio
 async def test_post_gategauge_endpoint():
-    gauge_store.clear()
-
     mock_terminal = Terminal(
         id=1,
         device_id=6209,
@@ -161,9 +135,11 @@ async def test_post_gategauge_endpoint():
         org_id=1,
         is_active=True,
     )
+    mock_db = AsyncMock()
+    mock_db.scalar.return_value = None
 
     app.dependency_overrides[get_current_terminal] = lambda: mock_terminal
-    app.dependency_overrides[get_db] = lambda: AsyncMock()
+    app.dependency_overrides[get_db] = lambda: mock_db
 
     body = "GaugePack=102=0;109=15000;112=CCNET;121=OK;130=1.42".encode("windows-1251")
 
@@ -178,13 +154,8 @@ async def test_post_gategauge_endpoint():
         assert resp.status_code == 200
         assert "<Result>OK</Result>" in resp.text
 
-    snap = gauge_store.get_by_device_id(6209)
-    assert snap is not None
-    assert snap["sn"] == "a4b0006209c67756d020626"
-    assert snap["gauge"]["102"] == "0"
-    assert snap["gauge"]["109"] == "15000"
-    assert snap["gauge"]["112"] == "CCNET"
-    assert snap["slots_bitmask"] == 1
+    assert mock_db.execute.called
+    assert mock_db.commit.called
 
 
 @pytest.mark.anyio

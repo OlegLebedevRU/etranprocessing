@@ -12,7 +12,6 @@ services:
       - ./keys:/function/storage/keys:ro
     networks:
       - pg_network
-      - rmq_network
 
   mcp-pin-server:
     build: ./mcp-pin-server
@@ -29,6 +28,3 @@ networks:
   pg_network:
     external: true
     name: iot-rpc-rest-app_pg_network
-  rmq_network:
-    external: true
-    name: iot_rabbitmq_network

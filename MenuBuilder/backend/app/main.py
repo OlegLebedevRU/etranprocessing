@@ -31,7 +31,6 @@ from app.routers import (
 from app.routers import (
     settings as settings_router,
 )
-from app.services.gauge_bus import gauge_mqtt_bus
 from app.user_store import get_user_store
 
 logging.basicConfig(
@@ -57,7 +56,6 @@ async def _cleanup_expired_sessions_task() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    gauge_mqtt_bus.start()
     cleanup_task: asyncio.Task | None = None
     if settings.session_cleanup_enabled:
         cleanup_task = asyncio.create_task(_cleanup_expired_sessions_task())
@@ -68,7 +66,6 @@ async def lifespan(app: FastAPI):
             cleanup_task.cancel()
             with suppress(asyncio.CancelledError):
                 await cleanup_task
-        gauge_mqtt_bus.stop()
 
 
 app = FastAPI(title="MenuBuilder API", version="0.2.0", lifespan=lifespan)

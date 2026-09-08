@@ -28,6 +28,7 @@ from etranprocessing_db.models.payment import (
 from etranprocessing_db.models.telemetry import (
     GateGaugeRecord,
     TechGateRecord,
+    TerminalGaugeState,
 )
 from etranprocessing_db.models.terminal import (
     License,
@@ -66,6 +67,7 @@ __all__ = [
     "Terminal",
     "TerminalCertDiscovery",
     "TerminalCertHistory",
+    "TerminalGaugeState",
     "TerminalMenuBinding",
     "TerminalType",
     "Tsp",

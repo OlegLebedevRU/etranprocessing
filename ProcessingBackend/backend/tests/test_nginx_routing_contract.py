@@ -56,8 +56,7 @@ def test_legacy_proxy_routes_payment_techgate_gategauge_to_new_backend_with_lega
     # GateGauge
     assert "location = /GateGauge/main.ashx {" in config
     assert (
-        "proxy_pass http://new_processing_backend/api/gategauge$is_args$args;"
-        in config
+        "proxy_pass http://new_processing_backend/api/gategauge$is_args$args;" in config
     )
     assert "mirror /_mirror_gategauge;" in config
     assert "proxy_pass http://46.38.51.114/GateGauge/main.ashx$is_args$args;" in config

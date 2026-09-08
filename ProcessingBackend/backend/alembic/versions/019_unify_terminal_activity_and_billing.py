@@ -11,6 +11,7 @@ Create Date: 2026-08-31
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -45,9 +46,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.add_column(
         "licenses",
-        sa.Column(
-            "is_active", sa.Boolean(), server_default="true", nullable=False
-        ),
+        sa.Column("is_active", sa.Boolean(), server_default="true", nullable=False),
     )
     op.add_column(
         "licenses",

@@ -23,20 +23,6 @@ def anyio_backend():
 @pytest.mark.anyio
 async def test_monitoring_pagination_and_query_scoping():
     """Verify get_monitoring applies pagination, org_id filtering, and queries sub-records only for page items."""
-    from app.services.gauge_bus import gauge_store
-
-    gauge_store.clear()
-    gauge_store.set_snapshot(
-        {
-            "device_id": 1001,
-            "sn": "SN1001",
-            "updated_at": datetime.now(UTC).isoformat(),
-            "last_tick_epoch": int(datetime.now(UTC).timestamp() // 600),
-            "slots_bitmask": 0x001,
-            "gauge": {"102": "0", "109": "5000", "121": "0"},
-        }
-    )
-
     app.dependency_overrides[get_current_user] = lambda: {
         "username": "admin",
         "org_id": 1,
@@ -44,7 +30,7 @@ async def test_monitoring_pagination_and_query_scoping():
 
     mock_session = AsyncMock()
 
-    # Terminal rows: id, device_id, sn, org_id, is_active, cert_serial, cert_not_valid_after, address, note, terminal_type_id, tt.name, created_at
+    # Terminal rows: id, device_id, sn, org_id, is_active, cert_serial, cert_not_valid_after, address, note, terminal_type_id, tt.name, created_at, iot_provisioned, iot_provisioned_at, iot_is_online, iot_last_connected_at, tgs.slots_bitmask, tgs.last_tick_epoch, tgs.updated_at, tgs.gauge_data, tgs.last_payment_at, tgs.last_inkass_at, tgs.license_expires_at, lic.expires_at
     mock_terminal_row = (
         1,
         1001,
@@ -58,6 +44,18 @@ async def test_monitoring_pagination_and_query_scoping():
         0,
         "Стандартный",
         datetime(2026, 1, 1, tzinfo=UTC),
+        False,
+        None,
+        True,
+        None,
+        0x001,
+        int(datetime.now(UTC).timestamp() // 600),
+        datetime.now(UTC),
+        {"102": "0", "109": "5000", "121": "0"},
+        datetime(2026, 8, 20, 12, 0, tzinfo=UTC),
+        None,
+        datetime(2026, 9, 1, 0, 0, tzinfo=UTC),
+        datetime(2026, 9, 1, 0, 0, tzinfo=UTC),
     )
 
     executed_queries = []
@@ -66,13 +64,7 @@ async def test_monitoring_pagination_and_query_scoping():
         sql_str = str(stmt)
         executed_queries.append((sql_str, params))
         result = MagicMock()
-        if "payments" in sql_str:
-            result.fetchall.return_value = [
-                (1, datetime(2026, 8, 20, 12, 0, tzinfo=UTC))
-            ]
-        elif "DISTINCT ON (terminal_id) terminal_id, expires_at" in sql_str:
-            result.fetchall.return_value = [(1, datetime(2026, 9, 1, 0, 0, tzinfo=UTC))]
-        elif "FROM terminals t" in sql_str:
+        if "FROM terminals t" in sql_str:
             result.fetchall.return_value = [mock_terminal_row]
         else:
             result.fetchall.return_value = []
@@ -109,12 +101,12 @@ async def test_monitoring_pagination_and_query_scoping():
     assert term_query[1]["org_id"] == 1
     assert term_query[1]["search"] == "%1001%"
 
-    # Verify sub-queries used terminal_ids scoped to page items
-    payment_query = next(q for q in executed_queries if "payments" in q[0])
-    assert payment_query[1]["t_ids"] == [1]
-
-    # GateGauge is no longer queried from PostgreSQL DB
-    assert not any("gate_gauge_records" in q[0] for q in executed_queries)
+    # Verify query joins terminal_gauge_states and licenses directly in the main query
+    assert "LEFT JOIN terminal_gauge_states" in term_query[0]
+    assert "LEFT JOIN LATERAL" in term_query[0]
+    assert "FROM licenses" in term_query[0]
+    assert not any("payments" in q[0] for q in executed_queries)
+    assert not any("tech_gate_records" in q[0] for q in executed_queries)
 
 
 @pytest.mark.anyio
@@ -157,6 +149,84 @@ async def test_monitoring_empty_page():
     # Subqueries for payments or gauge records should NOT be executed when page is empty
     assert not any("payments" in q[0] for q in executed_queries)
     assert not any("gate_gauge_records" in q[0] for q in executed_queries)
+
+
+@pytest.mark.anyio
+async def test_monitoring_updates_stale_license_in_gauge_state():
+    """Verify get_monitoring syncs license_expires_at into terminal_gauge_states when out of sync."""
+    app.dependency_overrides[get_current_user] = lambda: {
+        "username": "admin",
+        "org_id": 1,
+    }
+
+    mock_session = AsyncMock()
+    mock_session.scalar.return_value = 1
+
+    # tgs.license_expires_at is None, but lic.expires_at is 2026-12-31
+    mock_row = (
+        1,
+        1001,
+        "SN1001",
+        1,
+        True,
+        "CERT123",
+        datetime(2027, 1, 1, tzinfo=UTC),
+        "Test Address",
+        "Test Note",
+        0,
+        "Стандартный",
+        datetime(2026, 1, 1, tzinfo=UTC),
+        False,
+        None,
+        True,
+        None,
+        0x001,
+        int(datetime.now(UTC).timestamp() // 600),
+        datetime.now(UTC),
+        {},
+        None,
+        None,
+        None,  # tgs.license_expires_at is None
+        datetime(2026, 12, 31, 23, 59, tzinfo=UTC),  # lic.expires_at
+    )
+
+    executed_queries = []
+
+    async def mock_execute(stmt, params=None):
+        sql_str = str(stmt)
+        executed_queries.append((sql_str, params))
+        result = MagicMock()
+        if "FROM terminals t" in sql_str:
+            result.fetchall.return_value = [mock_row]
+        else:
+            result.fetchall.return_value = []
+        return result
+
+    mock_session.execute = AsyncMock(side_effect=mock_execute)
+    mock_cm = AsyncMock()
+    mock_cm.__aenter__.return_value = mock_session
+    mock_cm.__aexit__.return_value = None
+
+    with patch("app.routers.monitoring.async_session", return_value=mock_cm):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.get("/api/monitoring")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert len(data["items"]) == 1
+            assert data["items"][0]["license_expires_at"] == "2026-12-31T23:59:00+00:00"
+
+    # Verify UPSERT was executed to sync terminal_gauge_states
+    upsert_query = next(
+        (q for q in executed_queries if "INSERT INTO terminal_gauge_states" in q[0]),
+        None,
+    )
+    assert upsert_query is not None
+    assert "ON CONFLICT (device_id) DO UPDATE" in upsert_query[0]
+    assert upsert_query[1][0]["device_id"] == 1001
+    assert upsert_query[1][0]["exp"] == datetime(2026, 12, 31, 23, 59, tzinfo=UTC)
+    assert mock_session.commit.called
 
 
 @pytest.mark.anyio
@@ -249,6 +319,19 @@ async def test_monitoring_includes_all_terminals_without_license_filter():
         "Test Terminal",
         1,
         "Тип 1",
+        datetime(2026, 1, 1, tzinfo=UTC),
+        False,
+        None,
+        False,
+        None,
+        0x001,
+        int(datetime.now(UTC).timestamp() // 600),
+        datetime.now(UTC),
+        {},
+        None,
+        datetime(2026, 8, 21, 8, 8, 40, tzinfo=UTC),
+        datetime(2025, 1, 1, 0, 0, tzinfo=UTC),
+        datetime(2025, 1, 1, 0, 0, tzinfo=UTC),
     )
 
     async def mock_execute(stmt, params=None):

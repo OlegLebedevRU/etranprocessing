@@ -2,12 +2,13 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_current_terminal
-from app.models import Payment, TechGateRecord, Terminal
+from app.models import Payment, TechGateRecord, Terminal, TerminalGaugeState
 
 logger = logging.getLogger(__name__)
 
@@ -308,6 +309,21 @@ async def save_tech_gate_record(
             request_data.setdefault("calc_status", "needs_calc")
             request_data.setdefault("needs_calc", True)
             request_data.setdefault("calculated_sum", None)
+
+        stmt = (
+            insert(TerminalGaugeState)
+            .values(
+                device_id=terminal.device_id,
+                sn=terminal.sn,
+                updated_at=func.now(),
+                last_inkass_at=func.now(),
+            )
+            .on_conflict_do_update(
+                index_elements=["device_id"],
+                set_={"last_inkass_at": func.now()},
+            )
+        )
+        await db.execute(stmt)
 
     record = TechGateRecord(
         device_id=terminal.device_id or 0,

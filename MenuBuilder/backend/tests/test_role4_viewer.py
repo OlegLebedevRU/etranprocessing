@@ -287,7 +287,9 @@ async def test_cookie_based_authentication(
             assert resp_role4_mut.status_code == 403
             assert "только для чтения" in resp_role4_mut.json()["detail"]
 
-        async with AsyncClient(transport=transport, base_url="http://test") as ac_unauth:
+        async with AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as ac_unauth:
             # 5. No credentials/cookie -> 401 Unauthorized
             resp_unauth = await ac_unauth.get("/api/monitoring")
             assert resp_unauth.status_code == 401

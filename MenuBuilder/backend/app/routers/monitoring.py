@@ -7,7 +7,6 @@ from sqlalchemy import text
 from app.auth import resolve_org_id
 from app.database import async_session
 from app.security.permissions import PERMISSION_MONITORING_VIEW, require_permission
-from app.services.gauge_bus import gauge_store
 
 router = APIRouter(prefix="/api", tags=["monitoring"])
 
@@ -52,9 +51,21 @@ async def get_monitoring(
                     f"SELECT t.id, t.device_id, t.sn, t.org_id, t.is_active, "
                     f"t.cert_serial, t.cert_not_valid_after, t.address, t.note, "
                     f"t.terminal_type_id, tt.name AS terminal_type_name, t.created_at, "
-                    f"t.iot_provisioned, t.iot_provisioned_at, t.iot_is_online, t.iot_last_connected_at "
+                    f"t.iot_provisioned, t.iot_provisioned_at, t.iot_is_online, t.iot_last_connected_at, "
+                    f"tgs.slots_bitmask, tgs.last_tick_epoch, tgs.updated_at AS tgs_updated_at, "
+                    f"tgs.gauge_data, tgs.last_payment_at, tgs.last_inkass_at, "
+                    f"tgs.license_expires_at AS tgs_license_expires_at, "
+                    f"lic.expires_at AS license_expires_at "
                     f"FROM terminals t "
                     f"LEFT JOIN terminal_types tt ON tt.id = t.terminal_type_id "
+                    f"LEFT JOIN terminal_gauge_states tgs ON tgs.device_id = t.device_id "
+                    f"LEFT JOIN LATERAL ("
+                    f"    SELECT l.expires_at "
+                    f"    FROM licenses l "
+                    f"    WHERE l.terminal_id = t.id "
+                    f"    ORDER BY l.expires_at DESC "
+                    f"    LIMIT 1"
+                    f") lic ON true "
                     f"WHERE {where_clause} "
                     f"ORDER BY t.device_id "
                     f"LIMIT :limit OFFSET :offset"
@@ -73,49 +84,22 @@ async def get_monitoring(
                 "items": [],
             }
 
-        terminal_ids = [terminal[0] for terminal in terminals]
-        device_ids = [terminal[1] for terminal in terminals]
-        payment_rows = (
+        stale_records = [
+            {"device_id": t[1], "sn": t[2], "exp": t[23], "now": now}
+            for t in terminals
+            if t[1] is not None and len(t) > 23 and t[22] != t[23]
+        ]
+        if stale_records:
             await session.execute(
                 text(
-                    "SELECT terminal_id, MAX(paym_datetime) FROM payments "
-                    "WHERE terminal_id = ANY(:t_ids) GROUP BY terminal_id"
+                    "INSERT INTO terminal_gauge_states (device_id, sn, updated_at, license_expires_at) "
+                    "VALUES (:device_id, :sn, :now, :exp) "
+                    "ON CONFLICT (device_id) DO UPDATE "
+                    "SET license_expires_at = EXCLUDED.license_expires_at"
                 ),
-                {"t_ids": terminal_ids},
+                stale_records,
             )
-        ).fetchall()
-        license_rows = (
-            await session.execute(
-                text("""
-                SELECT DISTINCT ON (terminal_id) terminal_id, expires_at
-                FROM licenses
-                WHERE terminal_id = ANY(:t_ids)
-                ORDER BY terminal_id, expires_at DESC
-            """),
-                {"t_ids": terminal_ids},
-            )
-        ).fetchall()
-        inkass_rows = (
-            await session.execute(
-                text("""
-                SELECT device_id, MAX(created_at)
-                FROM tech_gate_records
-                WHERE function_name = 'inkass' AND device_id = ANY(:d_ids)
-                GROUP BY device_id
-            """),
-                {"d_ids": device_ids},
-            )
-        ).fetchall()
-
-    last_payment_map: dict[int, datetime] = {
-        row[0]: row[1] for row in payment_rows if row[1]
-    }
-    license_map: dict[int, datetime] = {
-        row[0]: row[1] for row in license_rows if row[1]
-    }
-    last_inkass_map: dict[int, datetime] = {
-        row[0]: row[1] for row in inkass_rows if row[1]
-    }
+            await session.commit()
 
     def fmt_soft_version(raw: str) -> str:
         if not raw or raw == "0":
@@ -130,14 +114,24 @@ async def get_monitoring(
     items = []
     for terminal in terminals:
         dev_id = terminal[1]
-        sn = terminal[2]
-        snapshot = gauge_store.get_by_device_id(dev_id) or (
-            gauge_store.get_by_sn(sn) if sn else None
-        )
-        if snapshot:
-            bitmask = int(snapshot.get("slots_bitmask", 0))
-            last_epoch_tick = int(snapshot.get("last_tick_epoch", 0))
-            updated_at = snapshot.get("updated_at")
+
+        tgs_slots_bitmask = terminal[16] if len(terminal) > 16 else None
+        tgs_last_tick_epoch = terminal[17] if len(terminal) > 17 else None
+        tgs_updated_at = terminal[18] if len(terminal) > 18 else None
+        tgs_gauge_data = terminal[19] if len(terminal) > 19 else None
+        last_payment = terminal[20] if len(terminal) > 20 else None
+        last_inkass = terminal[21] if len(terminal) > 21 else None
+        if len(terminal) > 23:
+            license_expires = terminal[23]
+        elif len(terminal) > 22:
+            license_expires = terminal[22]
+        else:
+            license_expires = None
+
+        if tgs_slots_bitmask is not None:
+            bitmask = int(tgs_slots_bitmask)
+            last_epoch_tick = int(tgs_last_tick_epoch or 0)
+            updated_at = tgs_updated_at
             slots = decode_slots_bitmask(
                 bitmask,
                 last_epoch_tick,
@@ -145,14 +139,11 @@ async def get_monitoring(
                 updated_at=updated_at,
                 now_dt=now,
             )
-            gauge = snapshot.get("gauge", {})
+            gauge = tgs_gauge_data or {}
         else:
             slots = [False] * 12
             gauge = {}
 
-        last_payment = last_payment_map.get(terminal[0])
-        license_expires = license_map.get(terminal[0])
-        last_inkass = last_inkass_map.get(dev_id)
         cert_not_valid_after = terminal[6]
         lastnumconn = 0
         for slot in reversed(slots):

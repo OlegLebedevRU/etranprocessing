@@ -4,12 +4,13 @@ import logging
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_current_terminal
 from app.logging_config import payment_logger
-from app.models import Terminal
+from app.models import Terminal, TerminalGaugeState
 from app.services.payment_service import PaymentService, parse_params_string
 
 logger = logging.getLogger(__name__)
@@ -139,6 +140,22 @@ async def _handle_payment(
             params=parsed_params,
             pay_type_id=pay_type_id,
         )
+
+        stmt = (
+            insert(TerminalGaugeState)
+            .values(
+                device_id=terminal.device_id,
+                sn=terminal.sn,
+                updated_at=payment.paym_datetime,
+                last_payment_at=payment.paym_datetime,
+            )
+            .on_conflict_do_update(
+                index_elements=["device_id"],
+                set_={"last_payment_at": payment.paym_datetime},
+            )
+        )
+        await db.execute(stmt)
+        await db.commit()
 
         payment_logger.info(f"SUCCESS: paym_id={payment.paym_id}, ext_id={paym_ext_id}")
         return success_response(payment.paym_id, paym_ext_id)

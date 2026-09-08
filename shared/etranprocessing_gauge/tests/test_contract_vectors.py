@@ -1,7 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
 from etranprocessing_gauge import (
-    GaugeStore,
     create_or_update_snapshot,
     decode_slots_bitmask,
     parse_gauge_pack,
@@ -62,17 +61,3 @@ def test_snapshot_contract_preserves_enrichment_and_normalizes_keys():
     assert snapshot["gauge"] == {"102": "1"}
     assert snapshot["internal_enrichment"]["last_payment_at"] is not None
     assert snapshot["internal_enrichment"]["iot_is_online"] is False
-
-
-def test_store_contract_indexes_snapshot_by_device_and_serial():
-    store = GaugeStore()
-    snapshot = {"device_id": 773, "sn": "term-001", "gauge": {}}
-
-    store.set_snapshot(snapshot)
-
-    assert store.get_by_device_id(773) is snapshot
-    assert store.get_by_sn("term-001") is snapshot
-    assert store.get_all() == {773: snapshot}
-
-    store.clear()
-    assert store.get_all() == {}
