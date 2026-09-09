@@ -48,8 +48,10 @@ def _xml_error_response(status_code: int, detail: str) -> Response:
 
 @app.exception_handler(HTTPException)
 async def xml_licensebilling_exception_handler(request: Request, exc: HTTPException):
-    """Return XML responses for errors on /api/licensebilling routes."""
-    if request.url.path.startswith("/api/licensebilling"):
+    """Return XML responses for errors on /api/licensebilling and /licensebilling routes."""
+    if request.url.path.startswith(
+        "/api/licensebilling"
+    ) or request.url.path.startswith("/licensebilling"):
         logger.warning(
             "XML error for %s %s: %d %s",
             request.method,
@@ -86,6 +88,12 @@ from app.routers import (
 app.include_router(health.router, prefix="/api", tags=["health"])
 app.include_router(
     licensebilling.router, prefix="/api/licensebilling", tags=["licensebilling"]
+)
+app.include_router(
+    licensebilling.router,
+    prefix="/licensebilling",
+    tags=["licensebilling"],
+    include_in_schema=False,
 )
 app.include_router(gate_gauge.router, prefix="/api/gategauge", tags=["gategauge"])
 app.include_router(tech_gate.router, prefix="/api/techgate", tags=["techgate"])

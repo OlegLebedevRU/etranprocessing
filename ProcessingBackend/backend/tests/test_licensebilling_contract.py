@@ -258,13 +258,57 @@ async def test_check_endpoint_works():
 
 
 @pytest.mark.anyio
-async def test_missing_cert_headers_returns_xml_401():
-    """H1: Missing cert headers must return XML (not JSON) with Result=ERROR."""
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/licensebilling",
+        "/api/licensebilling/",
+        "/api/licensebilling/check",
+        "/api/licensebilling/check/",
+        "/api/licensebilling/gate.ashx",
+        "/api/licensebilling/gate.ashx/",
+        "/licensebilling",
+        "/licensebilling/",
+        "/licensebilling/check",
+        "/licensebilling/check/",
+        "/licensebilling/gate.ashx",
+        "/licensebilling/gate.ashx/",
+    ],
+)
+async def test_all_legacy_paths_and_trailing_slashes(path: str):
+    """Ensure all legacy routes and trailing slashes return 200 OK without 307 redirect."""
+    terminal = make_terminal()
+    license_ = make_license()
+    state = MagicMock(license=license_, state="ok")
+
+    for method in ("get", "post"):
+        resp = await _make_request(method, path, terminal, state)
+        assert resp.status_code == 200, (
+            f"Failed for {method.upper()} {path}: status={resp.status_code}, "
+            f"headers={dict(resp.headers)}"
+        )
+        assert "application/xml" in resp.headers.get("content-type", "")
+        root = parse_xml(resp.text)
+        assert get_text(root, "Result") == "OK"
+        assert get_text(root, "state") == "ok"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/licensebilling",
+        "/api/licensebilling/",
+        "/licensebilling",
+        "/licensebilling/",
+    ],
+)
+async def test_missing_cert_headers_returns_xml_401(path: str):
+    """Missing cert headers must return XML (not JSON) with Result=ERROR."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.get("/api/licensebilling")
+        resp = await client.get(path)
 
-    # Should be XML, not JSON
     assert "application/xml" in resp.headers.get("content-type", "")
     assert resp.status_code == 401
     root = parse_xml(resp.text)

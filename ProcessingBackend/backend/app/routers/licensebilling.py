@@ -22,8 +22,16 @@ def xml_response(content: str) -> Response:
 
 @router.get("")
 @router.post("")
+@router.get("/")
+@router.post("/")
 @router.get("/check")
 @router.post("/check")
+@router.get("/check/")
+@router.post("/check/")
+@router.get("/gate.ashx")
+@router.post("/gate.ashx")
+@router.get("/gate.ashx/")
+@router.post("/gate.ashx/")
 async def license_check(
     request: Request,
     license_state: TerminalLicenseState = Depends(get_terminal_license_state),
