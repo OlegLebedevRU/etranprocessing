@@ -39,6 +39,7 @@ services:
           memory: 128M
     networks:
       - l4media_net
+      - user1_default
     depends_on:
       - janus
 
@@ -59,20 +60,12 @@ services:
           memory: 512M
     networks:
       - l4media_net
+      - user1_default
 
 networks:
   l4media_net:
     name: l4media_net
     driver: bridge
     attachable: true
-
-# ---------------------------------------------------------------------------
-# Интеграция с MenuBuilder Backend (внешняя сеть docker-стека: user1_default)
-# По умолчанию изолировано в l4media_net. Для ручного подключения выполните:
-#   docker network connect user1_default l4media-ingress
-#   docker network connect user1_default l4media-janus
-# Или раскомментируйте секцию ниже и добавьте user1_default в networks сервисов:
-# ---------------------------------------------------------------------------
-# networks:
-#   user1_default:
-#     external: true
+  user1_default:
+    external: true

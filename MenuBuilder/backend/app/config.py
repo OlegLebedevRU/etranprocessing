@@ -148,6 +148,11 @@ class Settings(BaseSettings):
     video_port_base: int = 6000
     video_port_slots: int = 50
 
+    # Remote Input Control
+    remote_control_enabled: bool = True
+    remote_control_ws_connect_timeout_sec: float = 5.0
+    remote_control_click_timeout_sec: float = 7.0  # > app1 click_ack_timeout (5 s)
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

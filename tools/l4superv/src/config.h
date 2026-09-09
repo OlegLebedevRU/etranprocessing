@@ -22,8 +22,11 @@ typedef struct {
     bool    auto_start_leo4proxy;
     bool    auto_start_mosquitto;
     bool    auto_start_l4con;
+    bool    auto_start_l4desk;
     wchar_t leo4proxy_args[512];
     wchar_t l4con_args[512];
+    wchar_t l4desk_args[512];
+    wchar_t l4desk_mode[64];
 } L4SupervConfig;
 
 /**

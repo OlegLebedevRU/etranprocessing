@@ -27,6 +27,7 @@ from app.routers import (
     settings_users,
     terminal_bindings,
     video,
+    video_control,
 )
 from app.routers import (
     settings as settings_router,
@@ -124,3 +125,4 @@ app.include_router(dashboard.router)
 app.include_router(monitoring.router)
 app.include_router(reports.router)
 app.include_router(video.router)
+app.include_router(video_control.router)

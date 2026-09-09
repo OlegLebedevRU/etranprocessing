@@ -2,6 +2,20 @@
 
 All notable changes to the `l4superv` and `l4install` suite will be documented in this file.
 
+## [1.3.0] - 2026-09-09
+
+### Added & Improved
+- **User Session Process Orchestration (`session_proc`)**:
+  - Implemented `session_proc` helper leveraging `WTSQueryUserToken`, `DuplicateTokenEx`, `CreateEnvironmentBlock`, and `CreateProcessAsUserW` to orchestrate processes in active interactive console user sessions (`Session != 0`).
+  - Added support for launching and supervising `l4desk` (Remote Input Control Agent) with hidden window flags (`CREATE_NO_WINDOW`) without stealing focus from kiosk application.
+  - Watchdog tracking: detects console session changes (logoff/logon), safely stops old process and starts new in current active session.
+  - Exponential backoff recovery (5s -> 10s -> 30s) on crash.
+  - Graceful termination via named event `Global\L4Desk_Stop_<SN>`.
+- **Status Reporting**:
+  - `l4superv --status` displays `l4desk: RUNNING (pid N, session M)` or `STOPPED`.
+- **Packaging & Staging**:
+  - Integrated `l4desk` into `tools.zip` packaging (`pack_zip.cmd`), `tools/dist`, and Windows 7 SP1 installer.
+
 ## [1.2.0] - 2026-09-02
 
 ### Added & Documented

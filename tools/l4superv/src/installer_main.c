@@ -34,10 +34,10 @@ static void add_to_system_path(const wchar_t* base_dir) {
         current_path[0] = L'\0';
     }
 
-    wchar_t tools_path[MAX_PATH * 6];
+    wchar_t tools_path[MAX_PATH * 7];
     swprintf_s(tools_path, sizeof(tools_path)/sizeof(wchar_t),
-               L"%ls;%ls\\l4sql;%ls\\l4pin;%ls\\l4con;%ls\\l4superv",
-               base_dir, base_dir, base_dir, base_dir, base_dir);
+               L"%ls;%ls\\l4sql;%ls\\l4pin;%ls\\l4con;%ls\\l4superv;%ls\\l4desk",
+               base_dir, base_dir, base_dir, base_dir, base_dir, base_dir);
 
     if (wcsstr(current_path, base_dir) == NULL) {
         wchar_t new_path[32768];
@@ -188,6 +188,9 @@ int wmain(int argc, wchar_t* argv[]) {
     swprintf_s(sub_dir, MAX_PATH, L"%ls\\l4sql", dest_dir); CreateDirectoryW(sub_dir, NULL);
     swprintf_s(sub_dir, MAX_PATH, L"%ls\\l4pin", dest_dir); CreateDirectoryW(sub_dir, NULL);
     swprintf_s(sub_dir, MAX_PATH, L"%ls\\l4superv", dest_dir); CreateDirectoryW(sub_dir, NULL);
+    swprintf_s(sub_dir, MAX_PATH, L"%ls\\l4desk", dest_dir); CreateDirectoryW(sub_dir, NULL);
+    swprintf_s(sub_dir, MAX_PATH, L"%ls\\l4desk\\log", dest_dir); CreateDirectoryW(sub_dir, NULL);
+    svc_set_dir_permissions(sub_dir);
 
     // Register tools in system PATH for interactive sessions
     add_to_system_path(dest_dir);
@@ -290,6 +293,7 @@ int wmain(int argc, wchar_t* argv[]) {
         wprintf(L"   - User Guide:     %ls\\terminal-tools-user-guide.md\n", dest_dir);
         wprintf(L"   - Installer Copy: %ls\\l4install.exe (and %ls)\n", dest_dir, CURRENT_INSTALLER_NAME);
         wprintf(L"   - Supervisor:     %ls\\l4superv\\l4superv.exe\n", dest_dir);
+        wprintf(L"   - Remote Input:   %ls\\l4desk\\l4desk.exe\n", dest_dir);
         wprintf(L"   - PIN Tool:       %ls\\l4pin\\l4pin.exe\n", dest_dir);
         wprintf(L"   - SQL Client:     %ls\\l4sql\\l4sql.exe\n", dest_dir);
         wprintf(L"---------------------------------------------------------------\n");
@@ -322,6 +326,8 @@ int wmain(int argc, wchar_t* argv[]) {
         if (state.svc_l4superv.runtime_exe[0] != '\0') {
             wprintf(L"                   Path: %hs\n", state.svc_l4superv.runtime_exe);
         }
+
+        wprintf(L"   - %-12ls : CONFIGURED (user session process)\n", L"l4desk");
 
         wprintf(L"---------------------------------------------------------------\n");
         wprintf(L" Orchestrator State:\n");

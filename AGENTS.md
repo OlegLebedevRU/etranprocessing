@@ -228,7 +228,7 @@ Before utilizing MCP Ops capabilities in any debugging, deployment, diagnostics,
 ### Обязательный предварительный опрос типа клиента
 Перед началом разработки или изменения любого MQTT-клиента агент **обязан спросить в чате**:
 
-> **"Какой тип MQTT-клиента создаётся: main_app или extra_service?"**
+> **"Какой тип MQTT-клиента создаётся: main_app, extra_service или svc_desk?"**
 
 Дальнейшая реализация должна строго зависеть от ответа пользователя.
 
@@ -290,13 +290,33 @@ Normal shutdown:
 
 ---
 
-### 3. Общие требования к реализации MQTT-клиентов
+### 3. Сценарий для `svc_desk` (Агент удалённого ввода l4desk)
 
-- **Запрет самостоятельного выбора**: Если тип клиента не указан или ответ отличается от `main_app`/`extra_service`, агент не должен самостоятельно выбирать тип. Нужно уточнить тип клиента в чате.
+Client CONNECT (только localhost Mosquitto, client_id = svc_desk):
+  will_topic   = dev/{SN}/ctl
+  will_payload = {"v":1,"type":"presence","agent":"l4desk","status":"offline","desktop_available":false,"timestamp":"<UTC>"}
+  will_retain  = true, will_qos = 1
+
+After CONNACK:
+  SUBSCRIBE srv/{SN}/ctl (qos 1)
+  PUBLISH dev/{SN}/ctl = presence status=online (retain=true, qos=1), затем каждые 30 с
+
+Normal shutdown:
+  PUBLISH dev/{SN}/ctl = presence status=offline (retain=true) → DISCONNECT
+
+Запреты: не публиковать в dev/{SN}/svc|app|evt|out|res; команды/ACK/NACK — без retain; только pointer_move/mouse_click(left).
+Спецификация протокола: см. [`docs/remote-input-protocol.md`](docs/remote-input-protocol.md) и [`docs/etran_arch-remote-input-control.md`](docs/etran_arch-remote-input-control.md).
+
+---
+
+### 4. Общие требования к реализации MQTT-клиентов
+
+- **Запрет самостоятельного выбора**: Если тип клиента не указан или ответ отличается от `main_app`/`extra_service`/`svc_desk`, агент не должен самостоятельно выбирать тип. Нужно уточнить тип клиента в чате.
 - **Блокировка реализации**: Нельзя реализовывать MQTT-клиент без выбранного типа клиента.
 - **Обязательность presence-сценария**: Presence/status-сценарий должен быть частью стандартной реализации MQTT-клиента.
 - **Строгое соответствие топиков и payload**: Топики и payload должны использоваться строго как указано выше.
-- **Запрет произвольных изменений**: Не заменять `app`/`svc` и `app_online`/`app_offline`/`svc_online`/`svc_offline` на другие значения без отдельного согласования.
+- **Запрет произвольных изменений**: Не заменять `app`/`svc`/`ctl` и `app_online`/`app_offline`/`svc_online`/`svc_offline` на другие значения без отдельного согласования.
+- **Изоляция топиков**: `svc_desk` нельзя заменять на `extra_service`, так как `dev/{SN}/svc` занят `l4con` (retained last-wins).
 - **Проверка существующего кода**: Если в проекте уже есть MQTT-клиент, при его изменении агент должен проверить наличие этого сценария и добавить его при отсутствии.
 
 ---

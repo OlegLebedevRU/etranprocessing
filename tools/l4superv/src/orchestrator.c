@@ -3,9 +3,32 @@
 #include "service_mgr.h"
 #include "mosquitto_conf.h"
 #include "proxy_client.h"
+#include "session_proc.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <shlwapi.h>
+
+#pragma comment(lib, "shlwapi.lib")
+
+static PROCESS_INFORMATION g_l4desk_pi = { 0 };
+static DWORD               g_l4desk_session = 0;
+static time_t              g_l4desk_last_start_attempt = 0;
+static int                 g_l4desk_backoff_sec = 5;
+
+bool orchestrator_get_l4desk_status(DWORD* out_pid, DWORD* out_session) {
+    if (out_pid) *out_pid = 0;
+    if (out_session) *out_session = 0;
+
+    if (sp_is_alive(g_l4desk_pi.hProcess)) {
+        if (out_pid) *out_pid = g_l4desk_pi.dwProcessId;
+        DWORD sid = 0;
+        ProcessIdToSessionId(g_l4desk_pi.dwProcessId, &sid);
+        if (out_session) *out_session = sid ? sid : g_l4desk_session;
+        return true;
+    }
+    return false;
+}
 
 static void log_info(const char* fmt, ...) {
     va_list args;
@@ -49,6 +72,11 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
             svc_restart(SVC_NAME_LEO4PROXY);
             svc_restart(SVC_NAME_L4CON);
 
+            if (sp_is_alive(g_l4desk_pi.hProcess)) {
+                sp_stop(&g_l4desk_pi, NULL, 3000);
+                g_l4desk_session = 0;
+            }
+
             if (p_action_taken) *p_action_taken = true;
             return true;
         }
@@ -80,6 +108,14 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
             if (sn_changed) {
                 // l4con caches SN on start; restart it to fetch new SN
                 svc_restart(SVC_NAME_L4CON);
+
+                // l4desk also caches SN on start; restart it
+                if (sp_is_alive(g_l4desk_pi.hProcess)) {
+                    wchar_t stop_evt[128];
+                    swprintf_s(stop_evt, 128, L"Global\\L4Desk_Stop_%hs", state->sn);
+                    sp_stop(&g_l4desk_pi, stop_evt, 3000);
+                    g_l4desk_session = 0;
+                }
             }
 
             strcpy_s(state->status, sizeof(state->status), "active");
@@ -162,6 +198,75 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
                 if (p_action_taken) *p_action_taken = true;
             }
         }
+        if (cfg->auto_start_l4desk) {
+            // Only start l4desk when state is ACTIVE and SN is resolved
+            if (strcmp(state->status, "active") == 0 && state->sn[0] != '\0') {
+                DWORD active_session = sp_get_active_console_session();
+                if (active_session == 0) {
+                    if (sp_is_alive(g_l4desk_pi.hProcess)) {
+                        log_info("[WATCHDOG] No active console session found. Stopping l4desk...");
+                        wchar_t stop_evt[128];
+                        swprintf_s(stop_evt, 128, L"Global\\L4Desk_Stop_%hs", state->sn);
+                        sp_stop(&g_l4desk_pi, stop_evt, 3000);
+                        g_l4desk_session = 0;
+                    }
+                } else {
+                    if (sp_is_alive(g_l4desk_pi.hProcess)) {
+                        DWORD proc_session = 0;
+                        ProcessIdToSessionId(g_l4desk_pi.dwProcessId, &proc_session);
+                        if (proc_session != active_session) {
+                            log_info("[WATCHDOG] Active console session changed (%lu -> %lu). Re-launching l4desk...",
+                                     proc_session, active_session);
+                            wchar_t stop_evt[128];
+                            swprintf_s(stop_evt, 128, L"Global\\L4Desk_Stop_%hs", state->sn);
+                            sp_stop(&g_l4desk_pi, stop_evt, 3000);
+                            g_l4desk_session = 0;
+                        }
+                    }
+
+                    if (!sp_is_alive(g_l4desk_pi.hProcess)) {
+                        time_t now = time(NULL);
+                        if (now - g_l4desk_last_start_attempt >= g_l4desk_backoff_sec) {
+                            g_l4desk_last_start_attempt = now;
+                            wchar_t l4desk_exe[MAX_PATH];
+                            swprintf_s(l4desk_exe, MAX_PATH, L"%ls\\l4desk\\l4desk.exe", cfg->base_path);
+                            if (!PathFileExistsW(l4desk_exe)) {
+                                swprintf_s(l4desk_exe, MAX_PATH, L"%ls\\l4desk\\x86\\l4desk.exe", cfg->base_path);
+                                if (!PathFileExistsW(l4desk_exe)) {
+                                    swprintf_s(l4desk_exe, MAX_PATH, L"%ls\\l4desk\\x64\\l4desk.exe", cfg->base_path);
+                                }
+                            }
+
+                            if (PathFileExistsW(l4desk_exe)) {
+                                wchar_t cmdline[1024];
+                                swprintf_s(cmdline, 1024, L"\"%ls\" %ls", l4desk_exe,
+                                           cfg->l4desk_args[0] ? cfg->l4desk_args : L"--run --presence-interval 30");
+                                wchar_t workdir[MAX_PATH];
+                                swprintf_s(workdir, MAX_PATH, L"%ls\\l4desk", cfg->base_path);
+
+                                log_info("[WATCHDOG] Launching l4desk in active console session %lu...", active_session);
+                                sp_enable_system_privileges();
+                                if (sp_start_in_session(active_session, l4desk_exe, cmdline, workdir, &g_l4desk_pi)) {
+                                    log_info("[WATCHDOG] l4desk started in session %lu (PID: %lu)", active_session, g_l4desk_pi.dwProcessId);
+                                    g_l4desk_session = active_session;
+                                    g_l4desk_backoff_sec = 5;
+                                    if (p_action_taken) *p_action_taken = true;
+                                } else {
+                                    log_info("[WARN] Failed to start l4desk in session %lu (err=%lu)", active_session, GetLastError());
+                                    g_l4desk_backoff_sec = (g_l4desk_backoff_sec < 30) ? (g_l4desk_backoff_sec == 5 ? 10 : 30) : 30;
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                if (sp_is_alive(g_l4desk_pi.hProcess)) {
+                    log_info("[WATCHDOG] Terminal state not active. Stopping l4desk...");
+                    sp_stop(&g_l4desk_pi, NULL, 3000);
+                    g_l4desk_session = 0;
+                }
+            }
+        }
     }
 
     // Always keep services state updated in state.json
@@ -195,6 +300,13 @@ void orchestrator_run_loop(const L4SupervConfig* cfg, volatile bool* p_stop_flag
 
         Sleep(1000);
         poll_countdown--;
+    }
+
+    if (sp_is_alive(g_l4desk_pi.hProcess)) {
+        wchar_t stop_evt[128];
+        swprintf_s(stop_evt, 128, L"Global\\L4Desk_Stop_%hs", state.sn);
+        sp_stop(&g_l4desk_pi, stop_evt, 3000);
+        g_l4desk_session = 0;
     }
 
     log_info("l4superv supervisor loop stopped.");

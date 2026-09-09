@@ -61,6 +61,12 @@ C:\l4tools\
 │   ├── l4con.exe                 # Служба удалённой веб-консоли (extra_service)
 │   └── bin\ (x86, x64)
 │
+├── l4desk\
+│   ├── l4desk.exe                # Агент удалённого ввода мыши (пользовательская сессия)
+│   ├── l4desk_console.cmd        # Запуск в консоли для отладки
+│   ├── README.md
+│   └── log\l4desk.log            # Лог агента
+│
 └── l4pin\
     ├── l4pin.exe                 # CLI-утилита установки сертификата по PIN
     └── bin\ (x86, x64)
@@ -156,14 +162,28 @@ Usage: l4superv.exe [OPTIONS]
   "services": {
     "leo4proxy": { "auto_start": true },
     "mosquitto": { "auto_start": true },
-    "l4con":     { "auto_start": true }
+    "l4con":     { "auto_start": true },
+    "l4desk":    { "auto_start": true, "mode": "user_session", "args": "--run --presence-interval 30" }
   }
 }
 ```
 
 ---
 
-## 8. Дополнительная документация
+## 8. Процессы пользовательской сессии (l4desk)
+
+В отличие от системных служб Windows (Session 0), агент удалённого ввода `l4desk` должен выполняться в **активной интерактивной сессии пользователя** (Session ≠ 0), где работает интерфейс киоска, чтобы иметь доступ к `SendInput` и объекту рабочего стола `winsta0\default`.
+
+- Служба `L4Superv` работает под `NT AUTHORITY\SYSTEM` с привилегиями `SE_TCB_NAME`, `SE_ASSIGNPRIMARYTOKEN_NAME` и `SE_INCREASE_QUOTA_NAME`.
+- Helper `session_proc` определяет активную консольную сессию (`WTSGetActiveConsoleSessionId`), получает токен пользователя (`WTSQueryUserToken` + `DuplicateTokenEx`) и запускает `l4desk.exe` с флагами `CREATE_NO_WINDOW` без кражи фокуса у терминального приложения.
+- Watchdog супервизора непрерывно следит за сессионным процессом:
+  - При смене активной сессии (logon/logoff/switch user) старый процесс останавливается (`sp_stop`), и запускается новый в актуальной сессии.
+  - При аварийном завершении процесс перезапускается с экспоненциальным backoff (5с -> 10с -> 30с).
+  - При смене `SN` или остановке службы процесс корректно завершается через именованное событие `Global\L4Desk_Stop_<SN>`.
+
+---
+
+## 9. Дополнительная документация
 
 * [Руководство разработчика клиентских приложений и HTTP-сервисов](../../docs/terminal-apps-developer-guide.md) — интеграция MQTT (`main_app`, `extra_service`), Presence/LWT, Reverse Proxy и REST API `leo4proxy`.
 * [Пользовательское руководство: Zero-to-Start и администрирование](../../docs/terminal-tools-user-guide.md) — пошаговая установка в 1 клик, CLI-аргументы, самодиагностика и решение проблем.

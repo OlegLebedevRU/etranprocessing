@@ -109,6 +109,12 @@ export class JanusStreamingClient {
         return;
       }
 
+      if (data?.plugindata?.data?.error) {
+        const errDetail = data.plugindata.data.error;
+        pending.reject(new Error(errDetail));
+        return;
+      }
+
       pending.resolve(data);
     }
 

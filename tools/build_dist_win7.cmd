@@ -44,6 +44,14 @@ if errorlevel 1 (
     exit /b 1
 )
 
+echo   - Compiling l4desk...
+cd /d "%~dp0l4desk"
+call build.cmd win7
+if errorlevel 1 (
+    echo [ERROR] l4desk build failed!
+    exit /b 1
+)
+
 echo   - Compiling l4sql...
 cd /d "%~dp0l4sql"
 call build.cmd win7
@@ -82,6 +90,8 @@ md "%STAGING%\mosquitto"
 md "%STAGING%\mosquitto\log"
 md "%STAGING%\l4con"
 md "%STAGING%\l4con\x86"
+md "%STAGING%\l4desk"
+md "%STAGING%\l4desk\x86"
 md "%STAGING%\l4sql"
 md "%STAGING%\l4sql\x86"
 md "%STAGING%\l4pin"
@@ -119,6 +129,18 @@ if exist "%~dp0l4con\README.md" (
 )
 if exist "%~dp0l4con\CHANGELOG.md" (
     copy /y "%~dp0l4con\CHANGELOG.md" "%STAGING%\l4con\CHANGELOG.md" >nul
+)
+
+:: Copy l4desk
+copy /y "%~dp0l4desk\bin\x86\l4desk.exe" "%STAGING%\l4desk\x86\l4desk.exe" >nul
+for %%f in ("%~dp0l4desk\l4desk_*.cmd") do (
+    copy /y "%%f" "%STAGING%\l4desk\" >nul
+)
+if exist "%~dp0l4desk\README.md" (
+    copy /y "%~dp0l4desk\README.md" "%STAGING%\l4desk\README.md" >nul
+)
+if exist "%~dp0l4desk\CHANGELOG.md" (
+    copy /y "%~dp0l4desk\CHANGELOG.md" "%STAGING%\l4desk\CHANGELOG.md" >nul
 )
 
 :: Copy l4sql

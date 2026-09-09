@@ -296,6 +296,7 @@ async def get_current_user(
         )
 
     return {
+        "sub": str(payload.get("sub") or username or user_id),
         "user_id": user_id,
         "username": username,
         "org_id": org_id,

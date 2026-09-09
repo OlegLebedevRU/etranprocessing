@@ -23,6 +23,10 @@ md "%STAGING%\l4con"
 md "%STAGING%\l4con\x86"
 md "%STAGING%\l4con\x64"
 
+md "%STAGING%\l4desk"
+md "%STAGING%\l4desk\x86"
+md "%STAGING%\l4desk\x64"
+
 md "%STAGING%\l4sql"
 md "%STAGING%\l4sql\x86"
 md "%STAGING%\l4sql\x64"
@@ -80,6 +84,24 @@ if exist "%REPO_TOOLS%\l4con\README.md" (
 )
 if exist "%REPO_TOOLS%\l4con\CHANGELOG.md" (
     copy /y "%REPO_TOOLS%\l4con\CHANGELOG.md" "%STAGING%\l4con\CHANGELOG.md" >nul 2>nul
+)
+
+:: 3b. Copy l4desk
+echo [3b/8] Staging l4desk...
+if exist "%REPO_TOOLS%\l4desk\bin\x86\l4desk.exe" (
+    copy /y "%REPO_TOOLS%\l4desk\bin\x86\l4desk.exe" "%STAGING%\l4desk\x86\l4desk.exe" >nul
+)
+if exist "%REPO_TOOLS%\l4desk\bin\x64\l4desk.exe" (
+    copy /y "%REPO_TOOLS%\l4desk\bin\x64\l4desk.exe" "%STAGING%\l4desk\x64\l4desk.exe" >nul
+)
+for %%f in ("%REPO_TOOLS%\l4desk\l4desk_*.cmd") do (
+    copy /y "%%f" "%STAGING%\l4desk\" >nul
+)
+if exist "%REPO_TOOLS%\l4desk\README.md" (
+    copy /y "%REPO_TOOLS%\l4desk\README.md" "%STAGING%\l4desk\README.md" >nul 2>nul
+)
+if exist "%REPO_TOOLS%\l4desk\CHANGELOG.md" (
+    copy /y "%REPO_TOOLS%\l4desk\CHANGELOG.md" "%STAGING%\l4desk\CHANGELOG.md" >nul 2>nul
 )
 
 :: 4. Copy l4sql

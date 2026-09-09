@@ -462,6 +462,7 @@ dependencies = [
     { name = "python-jose", extra = ["cryptography"] },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "uvicorn", extra = ["standard"] },
+    { name = "websockets" },
 ]
 
 [package.dev-dependencies]
@@ -486,6 +487,7 @@ requires-dist = [
     { name = "python-jose", extras = ["cryptography"], specifier = ">=3.3.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.52" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.52.0" },
+    { name = "websockets", specifier = ">=12.0" },
 ]
 
 [package.metadata.requires-dev]

@@ -42,12 +42,22 @@ class IotPlatformClient:
         self.timeout = timeout or settings.iot_rpc_timeout_seconds
         self._simulated_api_keys: dict[int, dict[str, Any]] = {}
 
-    def _get_headers(self, org_id: int | None = None) -> dict[str, str]:
+    def _get_headers(
+        self, org_id: int | None = None, *, user: dict[str, Any] | None = None
+    ) -> dict[str, str]:
         headers = {"Content-Type": "application/json"}
         if self.service_token:
             headers["X-Internal-Service-Key"] = self.service_token
         if org_id is not None:
             headers["X-Org-Id"] = str(org_id)
+        if user:
+            if user.get("role"):
+                headers["X-Role"] = str(user["role"])
+            if "role_id" in user and user["role_id"] is not None:
+                headers["X-Role-Id"] = str(user["role_id"])
+            user_sub = user.get("sub") or user.get("username") or user.get("user_id")
+            if user_sub is not None:
+                headers["X-User-Id"] = str(user_sub)
         return headers
 
     async def provision_terminal(
@@ -236,6 +246,273 @@ class IotPlatformClient:
                 return None
             resp.raise_for_status()
             return resp.json()
+
+    @staticmethod
+    def _handle_app1_http_error(exc: httpx.HTTPStatusError) -> None:
+        status_code = exc.response.status_code
+        if status_code == status.HTTP_403_FORBIDDEN:
+            detail = "Доступ к управлению устройством запрещён"
+            with contextlib.suppress(Exception):
+                res = exc.response.json()
+                if isinstance(res, dict) and "detail" in res:
+                    detail = res["detail"]
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=detail,
+            )
+        if status_code == status.HTTP_409_CONFLICT:
+            detail: Any = {"detail": "lease busy"}
+            with contextlib.suppress(Exception):
+                detail = exc.response.json()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=detail,
+            )
+        if status_code == status.HTTP_429_TOO_MANY_REQUESTS:
+            detail = "Слишком частые действия"
+            with contextlib.suppress(Exception):
+                res = exc.response.json()
+                if isinstance(res, dict) and "detail" in res:
+                    detail = res["detail"]
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=detail,
+            )
+        if status_code >= 500:
+            logger.error("app1 internal error: %d %s", status_code, exc.response.text)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Ошибка сервиса управления iot-rpc-rest-app: {status_code}",
+            )
+        detail = exc.response.text
+        with contextlib.suppress(Exception):
+            res = exc.response.json()
+            if isinstance(res, dict) and "detail" in res:
+                detail = res["detail"]
+        raise HTTPException(status_code=status_code, detail=detail)
+
+    async def remote_input_status(
+        self,
+        sn: str,
+        org_id: int | None = None,
+        user: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Fetch remote input status (agent presence & lease) from app1."""
+        if not self.base_url or not settings.remote_control_enabled:
+            return {
+                "sn": sn,
+                "agent": {
+                    "online": False,
+                    "desktop_available": False,
+                    "screen": None,
+                    "last_seen_at": None,
+                    "stale": True,
+                },
+                "lease": {
+                    "active": False,
+                    "lease_id": None,
+                    "owner_user_id": None,
+                    "expires_at": None,
+                },
+            }
+
+        url = f"{self.base_url}/api/internal/v1/remote-input/devices/{sn}/status"
+        headers = self._get_headers(org_id=org_id, user=user)
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                resp = await client.get(url, headers=headers)
+                resp.raise_for_status()
+                return resp.json()
+        except httpx.HTTPStatusError as exc:
+            self._handle_app1_http_error(exc)
+            raise
+        except httpx.RequestError as exc:
+            logger.error("Failed to get remote input status for %s: %s", sn, exc)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Недоступен сервис управления iot-rpc-rest-app: {exc}",
+            ) from exc
+
+    async def remote_input_acquire_lease(
+        self,
+        sn: str,
+        org_id: int | None = None,
+        user: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Acquire a remote control lease on app1."""
+        if not self.base_url or not settings.remote_control_enabled:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="remote control unavailable",
+            )
+
+        url = f"{self.base_url}/api/internal/v1/remote-input/devices/{sn}/lease"
+        headers = self._get_headers(org_id=org_id, user=user)
+        owner_user_id = str(user.get("sub", "") if user else "")
+        owner_role = str(user.get("role", "") if user else "")
+        payload = {
+            "owner_user_id": owner_user_id,
+            "owner_role": owner_role,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                resp = await client.post(url, json=payload, headers=headers)
+                resp.raise_for_status()
+                return resp.json()
+        except httpx.HTTPStatusError as exc:
+            self._handle_app1_http_error(exc)
+            raise
+        except httpx.RequestError as exc:
+            logger.error("Failed to acquire lease for %s: %s", sn, exc)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Недоступен сервис управления iot-rpc-rest-app: {exc}",
+            ) from exc
+
+    async def remote_input_keepalive(
+        self,
+        lease_id: str,
+        org_id: int | None = None,
+        user: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Send keepalive for lease on app1."""
+        if not self.base_url or not settings.remote_control_enabled:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="remote control unavailable",
+            )
+
+        url = f"{self.base_url}/api/internal/v1/remote-input/lease/{lease_id}/keepalive"
+        headers = self._get_headers(org_id=org_id, user=user)
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                resp = await client.post(url, headers=headers)
+                resp.raise_for_status()
+                return resp.json()
+        except httpx.HTTPStatusError as exc:
+            self._handle_app1_http_error(exc)
+            raise
+        except httpx.RequestError as exc:
+            logger.error("Failed to keepalive lease %s: %s", lease_id, exc)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Недоступен сервис управления iot-rpc-rest-app: {exc}",
+            ) from exc
+
+    async def remote_input_release(
+        self,
+        lease_id: str,
+        org_id: int | None = None,
+        user: dict[str, Any] | None = None,
+    ) -> None:
+        """Release a lease on app1 (idempotent, 404 ignored)."""
+        if not self.base_url or not settings.remote_control_enabled:
+            return
+
+        url = f"{self.base_url}/api/internal/v1/remote-input/lease/{lease_id}"
+        headers = self._get_headers(org_id=org_id, user=user)
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                resp = await client.delete(url, headers=headers)
+                if resp.status_code == status.HTTP_404_NOT_FOUND:
+                    return
+                resp.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == status.HTTP_404_NOT_FOUND:
+                return
+            self._handle_app1_http_error(exc)
+        except httpx.RequestError as exc:
+            logger.warning(
+                "Failed to release lease %s (best-effort): %s", lease_id, exc
+            )
+
+    async def remote_input_move(
+        self,
+        lease_id: str,
+        x: int,
+        y: int,
+        org_id: int | None = None,
+        user: dict[str, Any] | None = None,
+    ) -> None:
+        """Send pointer-move via REST fallback on app1 (returns 202)."""
+        if not self.base_url or not settings.remote_control_enabled:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="remote control unavailable",
+            )
+
+        url = f"{self.base_url}/api/internal/v1/remote-input/lease/{lease_id}/pointer-move"
+        headers = self._get_headers(org_id=org_id, user=user)
+        payload = {"x": x, "y": y}
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                resp = await client.post(url, json=payload, headers=headers)
+                resp.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            self._handle_app1_http_error(exc)
+            raise
+        except httpx.RequestError as exc:
+            logger.error("Failed to send pointer move for lease %s: %s", lease_id, exc)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Недоступен сервис управления iot-rpc-rest-app: {exc}",
+            ) from exc
+
+    async def remote_input_click(
+        self,
+        lease_id: str,
+        x: int,
+        y: int,
+        client_ref: str | None = None,
+        org_id: int | None = None,
+        user: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Send mouse-click via REST fallback on app1."""
+        if not self.base_url or not settings.remote_control_enabled:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="remote control unavailable",
+            )
+
+        url = (
+            f"{self.base_url}/api/internal/v1/remote-input/lease/{lease_id}/mouse-click"
+        )
+        headers = self._get_headers(org_id=org_id, user=user)
+        payload: dict[str, Any] = {
+            "x": x,
+            "y": y,
+            "button": "left",
+        }
+        if client_ref:
+            payload["client_ref"] = client_ref
+        timeout = settings.remote_control_click_timeout_sec
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post(url, json=payload, headers=headers)
+                resp.raise_for_status()
+                return resp.json()
+        except httpx.HTTPStatusError as exc:
+            self._handle_app1_http_error(exc)
+            raise
+        except httpx.RequestError as exc:
+            logger.error("Failed to send mouse click for lease %s: %s", lease_id, exc)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Недоступен сервис управления iot-rpc-rest-app: {exc}",
+            ) from exc
+
+    def remote_input_ws_url(self, lease_id: str) -> str:
+        """Convert internal HTTP(S) base URL to WS(S) URL for app1 lease WS endpoint."""
+        base = self.base_url
+        if not base:
+            base = "http://app1:8000"
+        if base.startswith("https://"):
+            ws_base = "wss://" + base[8:]
+        elif base.startswith("http://"):
+            ws_base = "ws://" + base[7:]
+        else:
+            ws_base = f"ws://{base}"
+        return f"{ws_base}/api/internal/v1/remote-input/ws/lease/{lease_id}"
 
 
 iot_client = IotPlatformClient()

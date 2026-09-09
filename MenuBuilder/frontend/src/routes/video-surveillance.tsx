@@ -9,6 +9,8 @@ import {
   Space,
   Empty,
   Spin,
+  Modal,
+  Tag,
   message,
   theme,
 } from "antd";
@@ -18,16 +20,21 @@ import {
   StopOutlined,
   VideoCameraOutlined,
   ReloadOutlined,
+  ControlOutlined,
 } from "@ant-design/icons";
 import { getDevices, DeviceListItem } from "../api/devices";
 import {
   createVideoSession,
   getVideoSessionStatus,
   getJanusWsUrl,
+  getControlStatus,
+  ClickResult,
 } from "../api/video";
 import { JanusStreamingClient } from "../api/janusClient";
 import { useSession } from "../session/SessionContext";
 import PageHeader from "../components/PageHeader";
+import { useRemoteControl } from "../hooks/useRemoteControl";
+import RemoteControlOverlay from "../components/RemoteControlOverlay";
 
 const { Text, Title } = Typography;
 
@@ -93,8 +100,65 @@ export default function VideoSurveillancePage() {
     );
   }, [devices, search]);
 
+  const isOperatorRole = useMemo(() => {
+    if (!user) return false;
+    if (user.role_id === 4 || user.role === "viewer") return false;
+    return (
+      user.role_id === 1 ||
+      user.role_id === 2 ||
+      user.role_id === 3 ||
+      user.role === "superuser" ||
+      user.role === "admin" ||
+      user.role === "user" ||
+      Boolean(user.is_superuser)
+    );
+  }, [user]);
+
+  const handleClickResult = useCallback((res: ClickResult) => {
+    if (res.result === "injected") {
+      const ms = res.latency_ms !== undefined ? ` (${res.latency_ms} мс)` : "";
+      message.success(`Клик выполнен${ms}`);
+    } else if (res.result === "unconfirmed") {
+      message.warning("Клик не подтверждён — повторите вручную");
+    } else if (res.result === "nack") {
+      message.error(`Клик отклонён агентом: ${res.code || res.message || "ошибка"}`);
+    }
+  }, []);
+
+  const handleErrorMessage = useCallback((msg: string) => {
+    message.error(msg);
+  }, []);
+
+  const rc = useRemoteControl({
+    deviceId: selectedDevice?.device_id ?? null,
+    isSessionActive,
+    onClickResult: handleClickResult,
+    onErrorMessage: handleErrorMessage,
+  });
+
+  const rcRef = useRef(rc);
+  rcRef.current = rc;
+
+  // Fetch initial control status whenever selected device changes
+  useEffect(() => {
+    if (!selectedDevice) return;
+    let isMounted = true;
+    getControlStatus(selectedDevice.device_id)
+      .then((stat) => {
+        if (isMounted && stat?.agent) {
+          rcRef.current.setPresence(stat.agent);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedDevice?.device_id]);
+
   // Stop current active session cleanly
   const stopSession = useCallback(async () => {
+    await rcRef.current.disable("session_stopped");
+
     if (pollTimerRef.current) {
       clearInterval(pollTimerRef.current);
       pollTimerRef.current = null;
@@ -119,16 +183,20 @@ export default function VideoSurveillancePage() {
     setStatusText("Сессия остановлена");
   }, []);
 
+  const stopSessionRef = useRef(stopSession);
+  stopSessionRef.current = stopSession;
+
   // Clean up on component unmount
   useEffect(() => {
     return () => {
-      stopSession();
+      stopSessionRef.current();
     };
-  }, [stopSession]);
+  }, []);
 
   // Change selected device
   const handleSelectDevice = async (device: DeviceListItem) => {
     if (selectedDevice?.device_id === device.device_id) return;
+    await rcRef.current.disable("device_changed");
     if (isSessionActive || isStarting) {
       await stopSession();
     }
@@ -139,6 +207,8 @@ export default function VideoSurveillancePage() {
   // Start video session
   const handleStart = async () => {
     if (!selectedDevice) return;
+
+    await rcRef.current.disable("session_start_clean");
 
     setIsStarting(true);
     setStatusText("Инициализация видеосессии...");
@@ -163,6 +233,8 @@ export default function VideoSurveillancePage() {
         onStatusChange: (status) => {
           if (status === "connecting") {
             setStatusText("Соединение с медиасервером...");
+          } else if (status === "streaming" || status === "webrtcup") {
+            setStatusText("Медиасервер подключен (ожидание видео)");
           }
         },
         onError: (err) => {
@@ -181,7 +253,15 @@ export default function VideoSurveillancePage() {
       prevPacketsRef.current = null;
       pollTimerRef.current = setInterval(async () => {
         try {
-          const stat = await getVideoSessionStatus(selectedDevice.device_id);
+          const [stat, ctlStat] = await Promise.all([
+            getVideoSessionStatus(selectedDevice.device_id),
+            getControlStatus(selectedDevice.device_id).catch(() => null),
+          ]);
+
+          if (ctlStat?.agent && rcRef.current.status !== "active") {
+            rcRef.current.setPresence(ctlStat.agent);
+          }
+
           const now = Date.now();
 
           let pps = 0;
@@ -355,13 +435,62 @@ export default function VideoSurveillancePage() {
                       Старт
                     </Button>
                   ) : (
-                    <Button
-                      danger
-                      icon={<StopOutlined />}
-                      onClick={stopSession}
-                    >
-                      Стоп
-                    </Button>
+                    <>
+                      {isOperatorRole && (
+                        (rc.status === "active" || rc.status === "agent_offline" || rc.status === "desktop_locked") ? (
+                          <Button
+                            danger
+                            type="primary"
+                            icon={<ControlOutlined />}
+                            onClick={async () => {
+                              await rc.disable("user_toggle");
+                              message.info("Управление отключено");
+                            }}
+                          >
+                            Отключить управление
+                          </Button>
+                        ) : (
+                          <Button
+                            icon={<ControlOutlined />}
+                            disabled={
+                              !rc.presence?.online ||
+                              !rc.presence?.desktop_available ||
+                              rc.status === "acquiring"
+                            }
+                            loading={rc.status === "acquiring"}
+                            onClick={() => {
+                              if (!rc.presence?.online) {
+                                message.warning("Управление недоступно: агент offline");
+                                return;
+                              }
+                              if (!rc.presence?.desktop_available) {
+                                message.warning("Экран терминала заблокирован");
+                                return;
+                              }
+                              Modal.confirm({
+                                title: "Включение удалённого управления",
+                                content:
+                                  "Вы управляете мышью удалённого терминала. Действия ограничены мышью, подтверждаются агентом и журналируются.",
+                                okText: "Включить",
+                                cancelText: "Отмена",
+                                onOk: async () => {
+                                  await rc.enable();
+                                },
+                              });
+                            }}
+                          >
+                            Включить управление
+                          </Button>
+                        )
+                      )}
+                      <Button
+                        danger
+                        icon={<StopOutlined />}
+                        onClick={stopSession}
+                      >
+                        Стоп
+                      </Button>
+                    </>
                   )}
                 </Space>
               </div>
@@ -395,6 +524,14 @@ export default function VideoSurveillancePage() {
                   }}
                 />
 
+                <RemoteControlOverlay
+                  videoRef={videoRef}
+                  active={isSessionActive && rc.status === "active"}
+                  presence={rc.presence}
+                  sendMove={rc.sendMove}
+                  sendClick={rc.sendClick}
+                />
+
                 {!isSessionActive && (
                   <div style={{ textAlign: "center", color: "rgba(255,255,255,0.45)" }}>
                     <VideoCameraOutlined style={{ fontSize: 56, marginBottom: 16 }} />
@@ -418,7 +555,7 @@ export default function VideoSurveillancePage() {
                   justifyContent: "space-between",
                 }}
               >
-                <Space>
+                <Space wrap>
                   <Badge
                     status={
                       isSessionActive
@@ -430,6 +567,26 @@ export default function VideoSurveillancePage() {
                   />
                   <Text strong>Статус:</Text>
                   <Text>{statusText}</Text>
+                  {rc.presence && (
+                    <>
+                      <Tag color={rc.presence.online ? (rc.presence.stale ? "orange" : "green") : "default"}>
+                        Агент: {rc.presence.online ? (rc.presence.stale ? "stale" : "online") : "offline"}
+                      </Tag>
+                      <Tag color={rc.presence.desktop_available ? "green" : "orange"}>
+                        {rc.presence.desktop_available ? "Экран доступен" : "Экран заблокирован"}
+                      </Tag>
+                    </>
+                  )}
+                  {rc.status === "active" && (
+                    <Tag color="blue">
+                      Управление активно {rc.lease?.expires_at ? `до ${new Date(rc.lease.expires_at).toLocaleTimeString()}` : ""}
+                    </Tag>
+                  )}
+                  {rc.status === "busy" && (
+                    <Tag color="volcano">
+                      Занято другим оператором {rc.busyOwner ? `(#${rc.busyOwner})` : ""}
+                    </Tag>
+                  )}
                 </Space>
 
                 {isSessionActive && (

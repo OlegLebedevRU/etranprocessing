@@ -234,6 +234,55 @@ scp -i d:\.ssh\id_ed25519 -r dist/* user1@87.242.100.34:/home/user1/MenuBuilder/
 # Note: nginx-default live-mounts frontend/dist/, no container restart required.
 ```
 
+### Deploy Remote Input Control (MenuBuilder & Terminal Tools)
+
+Модуль удалённого управления мышью терминала (`l4desk` + MenuBuilder Video UI).
+
+#### 1. Серверные компоненты (Server 87.242.100.34)
+
+```bash
+# 1. Проверка доступности Internal API в app1 (предварительное условие)
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "curl -s http://127.0.0.1:8000/api/internal/v1/remote-input/devices/test/status | head -c 50"
+
+# 2. Синхронизация бэкенда MenuBuilder и обновление .env
+scp -i d:\.ssh\id_ed25519 -r MenuBuilder/backend/* user1@87.242.100.34:/home/user1/MenuBuilder/backend/
+
+# Убедитесь, что в /home/user1/MenuBuilder/backend/.env добавлена переменная:
+# REMOTE_CONTROL_ENABLED=true
+
+# 3. Пересборка и перезапуск контейнера menubuilder-backend (БЕЗ перезапуска других сервисов)
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker compose -f /home/user1/compose.yaml build menubuilder-backend && sudo docker compose -f /home/user1/compose.yaml up -d --no-deps menubuilder-backend"
+
+# 4. Сборка и доставка фронтенда MenuBuilder
+cd MenuBuilder/frontend
+npm run build
+scp -i d:\.ssh\id_ed25519 -r dist/* user1@87.242.100.34:/home/user1/MenuBuilder/frontend/dist/
+
+# 5. Обновление nginx-default (после согласования diff для /api/v1/video/ с владельцем)
+scp -i d:\.ssh\id_ed25519 nginx-configs/port_3000.conf user1@87.242.100.34:/home/user1/nginx-configs/port_3000.conf
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker exec nginx-default nginx -t && sudo docker exec nginx-default nginx -s reload"
+```
+
+#### 2. Терминальные компоненты (`tools.zip` / `l4desk`)
+
+```cmd
+:: 1. Сборка пакета дистрибутива на сборочной машине
+cd tools\l4desk && call build.cmd
+cd ..\l4superv && call build.cmd all
+call pack_zip.cmd
+
+:: 2. Доставка на терминал:
+:: - Скопировать l4desk\l4desk.exe в C:\l4tools\l4desk\
+:: - Обновить C:\l4tools\l4superv\l4superv.exe
+:: - Добавить блок l4desk в C:\l4tools\l4superv.json:
+::   "l4desk": { "auto_start": true, "mode": "user_session", "args": "--run --presence-interval 30" }
+:: - Выполнить C:\l4tools\l4superv\l4superv_restart.cmd
+```
+
+#### 3. Верификация
+- Статус агента: `curl -k https://dev.leo4.ru:3000/api/v1/video/devices/<id>/control/status` возвращает `agent.online: true`.
+- WebSocket handshake: подключение `wss://dev.leo4.ru:3000/api/v1/video/devices/<id>/control/ws/<lease_id>` возвращает `101 Switching Protocols`.
+
 ### Update Nginx Configurations
 
 #### Terminal Gateway (`nginx-mutual-legacy`)

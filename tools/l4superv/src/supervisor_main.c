@@ -4,6 +4,7 @@
 #include "hardware_fingerprint.h"
 #include "mosquitto_conf.h"
 #include "orchestrator.h"
+#include "session_proc.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,6 +37,8 @@ static void WINAPI ServiceCtrlHandler(DWORD dwCtrl) {
 static void WINAPI ServiceMain(DWORD dwArgc, LPWSTR *lpszArgv) {
     (void)dwArgc;
     (void)lpszArgv;
+
+    sp_enable_system_privileges();
 
     g_svcStatusHandle = RegisterServiceCtrlHandlerW(SVC_NAME_L4SUPERV, ServiceCtrlHandler);
     if (!g_svcStatusHandle) {
@@ -125,6 +128,19 @@ static void print_status(const L4SupervConfig* cfg) {
         wprintf(L"                  Path: %hs\n", st.svc_l4superv.runtime_exe);
     }
 
+    DWORD desk_pid = 0, desk_session = 0;
+    bool desk_running = orchestrator_get_l4desk_status(&desk_pid, &desk_session);
+    if (desk_running) {
+        wprintf(L"  %-12ls : RUNNING (pid %lu, session %lu)\n", L"l4desk", desk_pid, desk_session);
+    } else {
+        DWORD active_session = sp_get_active_console_session();
+        if (active_session == 0) {
+            wprintf(L"  %-12ls : STOPPED (no interactive session)\n", L"l4desk");
+        } else {
+            wprintf(L"  %-12ls : STOPPED\n", L"l4desk");
+        }
+    }
+
     wprintf(L"---------------------------------------------------------------\n");
     wprintf(L" Orchestrator State:\n");
     wprintf(L"   Status:            %hs\n", st.status);
@@ -150,6 +166,8 @@ static void print_usage(void) {
 }
 
 int wmain(int argc, wchar_t* argv[]) {
+    sp_enable_system_privileges();
+
     wchar_t exe_path[MAX_PATH];
     GetModuleFileNameW(NULL, exe_path, MAX_PATH);
 
