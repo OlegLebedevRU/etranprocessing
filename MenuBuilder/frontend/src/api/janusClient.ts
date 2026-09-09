@@ -1,6 +1,7 @@
 export interface JanusClientOptions {
   wsUrl: string;
   mountpointId: number;
+  pin?: string;
   onRemoteTrack: (stream: MediaStream) => void;
   onStatusChange?: (status: string) => void;
   onError?: (error: Error | string) => void;
@@ -15,6 +16,7 @@ interface PendingTx {
 export class JanusStreamingClient {
   private wsUrl: string;
   private mountpointId: number;
+  private pin?: string;
   private onRemoteTrack: (stream: MediaStream) => void;
   private onStatusChange?: (status: string) => void;
   private onError?: (error: Error | string) => void;
@@ -30,6 +32,7 @@ export class JanusStreamingClient {
   constructor(options: JanusClientOptions) {
     this.wsUrl = options.wsUrl;
     this.mountpointId = options.mountpointId;
+    this.pin = options.pin;
     this.onRemoteTrack = options.onRemoteTrack;
     this.onStatusChange = options.onStatusChange;
     this.onError = options.onError;
@@ -229,14 +232,18 @@ export class JanusStreamingClient {
     };
 
     // 4. Request "watch" mountpoint
+    const watchBody: Record<string, any> = {
+      request: "watch",
+      id: this.mountpointId,
+    };
+    if (this.pin) {
+      watchBody.pin = this.pin;
+    }
     await this.sendTransaction({
       janus: "message",
       session_id: this.sessionId,
       handle_id: this.handleId,
-      body: {
-        request: "watch",
-        id: this.mountpointId,
-      },
+      body: watchBody,
     });
   }
 

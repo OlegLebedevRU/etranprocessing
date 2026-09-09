@@ -1,4 +1,5 @@
 import logging
+import uuid
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -39,6 +40,8 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     else:
         expire = datetime.now(UTC) + timedelta(minutes=expire_minutes)
     to_encode.update({"exp": expire, "iat": datetime.now(UTC)})
+    to_encode.setdefault("jti", str(uuid.uuid4()))
+    to_encode.setdefault("session_id", to_encode["jti"])
 
     # If RS256 with private key is configured, use it; otherwise fallback to test HMAC
     priv_key = getattr(settings, "jwt_private_key", None)
@@ -309,6 +312,13 @@ async def get_current_user(
         "is_impersonated": is_imp,
         "exp": payload.get("exp"),
         "sid": payload.get("sid"),
+        "session_id": str(
+            payload.get("session_id")
+            or payload.get("sid")
+            or payload.get("jti")
+            or f"sess-{user_id}"
+        ),
+        "jti": payload.get("jti"),
         "permissions": user_perms,
     }
 

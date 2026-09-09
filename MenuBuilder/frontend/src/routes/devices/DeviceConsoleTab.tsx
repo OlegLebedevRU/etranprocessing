@@ -33,11 +33,18 @@ import {
   FullscreenExitOutlined,
 } from "@ant-design/icons";
 import { getDiagnosticsWsUrl } from "../../api/devices";
+import { useSession } from "../../session/SessionContext";
+import {
+  acquireControlLease,
+  keepaliveControlLease,
+  releaseControlLease,
+} from "../../api/video";
 
 const { Text } = Typography;
 
 interface DeviceConsoleTabProps {
   sn: string;
+  deviceId?: number;
   app?: string;
   sys?: string;
   tags?: Array<{ tag: string; value: string }>;
@@ -77,11 +84,17 @@ function generateUUID(): string {
 
 export default function DeviceConsoleTab({
   sn,
+  deviceId,
   sys,
   tags,
   orgId,
   isActiveTab = true,
 }: DeviceConsoleTabProps) {
+  const { user } = useSession();
+  const [leaseId, setLeaseId] = useState<string | null>(null);
+  const leaseIdRef = useRef<string | null>(null);
+  const keepaliveTimerRef = useRef<number | null>(null);
+
   // Resolve system tag (windows / esp32 / none)
   const resolvedSys = useMemo(() => {
     if (sys) return sys.toLowerCase().trim();
@@ -271,7 +284,7 @@ export default function DeviceConsoleTab({
   }, [execState, timeoutSec, appendLine]);
 
   // Connect WebSocket manually on button click
-  const connectWebSocket = useCallback(() => {
+  const connectWebSocket = useCallback(async () => {
     if (!sn) return;
     if (!hasSupportedSys) {
       message.warning("Консоль недоступна: у устройства отсутствует поддерживаемый тег sys (windows / esp32)");
@@ -286,10 +299,69 @@ export default function DeviceConsoleTab({
     setConnecting(true);
     lastStatusRef.current = "";
     seenSeqSetRef.current.clear();
+
+    const effectiveDeviceId = deviceId;
+    if (!effectiveDeviceId) {
+      setConnecting(false);
+      appendLine("error", "[ERROR] Не указан идентификатор устройства (deviceId).");
+      return;
+    }
+
+    appendLine("status", `[STATUS] Запрос монопольной аренды терминала (scope: console)...`);
+
+    const consoleSessionId = user?.session_id || user?.sub || `console-${Date.now()}`;
+    let currentLeaseId: string | null = null;
+    let effectiveSessionId = consoleSessionId;
+    try {
+      const lease = await acquireControlLease(effectiveDeviceId, "console", undefined, consoleSessionId);
+      currentLeaseId = lease.lease_id;
+      if (lease.owner_session_id) {
+        effectiveSessionId = lease.owner_session_id;
+      }
+      setLeaseId(lease.lease_id);
+      leaseIdRef.current = lease.lease_id;
+      appendLine("status", `[STATUS] Аренда получена (lease_id: ${lease.lease_id}).`);
+
+      if (keepaliveTimerRef.current) {
+        clearInterval(keepaliveTimerRef.current);
+      }
+      keepaliveTimerRef.current = window.setInterval(async () => {
+        if (leaseIdRef.current) {
+          try {
+            await keepaliveControlLease(effectiveDeviceId, leaseIdRef.current);
+          } catch (e) {
+            console.warn("Console lease keepalive failed", e);
+          }
+        }
+      }, (lease.keepalive_sec || 10) * 1000);
+    } catch (err: any) {
+      setConnecting(false);
+      const detail = err.response?.data?.detail;
+      if (err.response?.status === 409) {
+        if (detail && typeof detail === "object" && detail.code === "lease_taken") {
+          const owner = detail.owner_role
+            ? `оператором (${detail.owner_role}, ${detail.owner_masked || detail.owner_user_id || "..."})`
+            : "другим пользователем";
+          const exp = detail.expires_at ? ` до ${new Date(detail.expires_at).toLocaleTimeString()}` : "";
+          appendLine("error", `[ERROR] Терминал занят ${owner}${exp}.`);
+        } else {
+          appendLine(
+            "error",
+            `[ERROR] Конфликт аренды терминала: ${typeof detail === "string" ? detail : detail?.detail || JSON.stringify(detail)}`
+          );
+        }
+      } else if (err.response?.status === 403) {
+        appendLine("error", `[ERROR] Доступ к консоли разрешён только суперадминистраторам.`);
+      } else {
+        appendLine("error", `[ERROR] Ошибка получения аренды: ${err.response?.data?.detail || err.message}`);
+      }
+      return;
+    }
+
     appendLine("status", `[STATUS] Подключение к сессии диагностики терминала ${sn}...`);
 
     try {
-      const url = getDiagnosticsWsUrl(sn, orgId);
+      const url = getDiagnosticsWsUrl(sn, orgId, currentLeaseId, effectiveSessionId);
       const ws = new WebSocket(url);
       wsRef.current = ws;
 
@@ -389,16 +461,32 @@ export default function DeviceConsoleTab({
         setIsLogging(false);
         setExecState("idle");
         setActiveSessionId(null);
-        appendLine("status", `[INFO] Соединение закрыто (код ${event.code}).`);
+        if (event.code === 4409) {
+          appendLine("error", `[ERROR] Соединение отклонено: конфликт монопольной аренды терминала (код 4409).`);
+        } else {
+          appendLine("status", `[INFO] Соединение закрыто (код ${event.code}).`);
+        }
       };
     } catch (err: any) {
       setConnecting(false);
       appendLine("error", `[ERROR] Не удалось создать WebSocket: ${err.message || err}`);
     }
-  }, [sn, orgId, hasSupportedSys, isWindows, appendLine]);
+  }, [sn, orgId, deviceId, hasSupportedSys, isWindows, user, appendLine]);
 
   // Disconnect WebSocket (with 7002 cancel if active)
   const disconnectWebSocket = useCallback(() => {
+    if (keepaliveTimerRef.current) {
+      clearInterval(keepaliveTimerRef.current);
+      keepaliveTimerRef.current = null;
+    }
+
+    if (leaseIdRef.current && deviceId) {
+      const lid = leaseIdRef.current;
+      leaseIdRef.current = null;
+      setLeaseId(null);
+      releaseControlLease(deviceId, lid).catch(() => {});
+    }
+
     if (wsRef.current) {
       if (wsRef.current.readyState === WebSocket.OPEN && activeSessionIdRef.current) {
         try {
@@ -423,7 +511,7 @@ export default function DeviceConsoleTab({
     setExecState("idle");
     setActiveSessionId(null);
     appendLine("info", "[INFO] Сеанс диагностики отключен пользователем.");
-  }, [sn, appendLine]);
+  }, [sn, deviceId, appendLine]);
 
   // Tab switching behavior (keepSession check)
   const prevIsActiveTabRef = useRef<boolean>(Boolean(isActiveTab));
@@ -431,6 +519,16 @@ export default function DeviceConsoleTab({
     if (prevIsActiveTabRef.current && !isActiveTab) {
       // Switched away from console tab
       if (!keepSession) {
+        if (keepaliveTimerRef.current) {
+          clearInterval(keepaliveTimerRef.current);
+          keepaliveTimerRef.current = null;
+        }
+        if (leaseIdRef.current && deviceId) {
+          const lid = leaseIdRef.current;
+          leaseIdRef.current = null;
+          setLeaseId(null);
+          releaseControlLease(deviceId, lid).catch(() => {});
+        }
         if (wsRef.current) {
           if (wsRef.current.readyState === WebSocket.OPEN && activeSessionIdRef.current) {
             try {
@@ -458,11 +556,20 @@ export default function DeviceConsoleTab({
       }
     }
     prevIsActiveTabRef.current = Boolean(isActiveTab);
-  }, [isActiveTab, keepSession, sn, appendLine]);
+  }, [isActiveTab, keepSession, sn, deviceId, appendLine]);
 
   // Strict unmount cleanup (Drawer close / Page navigation): always cancel 7002 and disconnect
   useEffect(() => {
     return () => {
+      if (keepaliveTimerRef.current) {
+        clearInterval(keepaliveTimerRef.current);
+        keepaliveTimerRef.current = null;
+      }
+      if (leaseIdRef.current && deviceId) {
+        const lid = leaseIdRef.current;
+        leaseIdRef.current = null;
+        releaseControlLease(deviceId, lid).catch(() => {});
+      }
       if (wsRef.current) {
         if (wsRef.current.readyState === WebSocket.OPEN) {
           try {
@@ -482,7 +589,7 @@ export default function DeviceConsoleTab({
         wsRef.current = null;
       }
     };
-  }, [sn]);
+  }, [sn, deviceId]);
 
   // Auto-scroll
   useEffect(() => {

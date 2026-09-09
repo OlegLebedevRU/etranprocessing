@@ -8,6 +8,7 @@ export const PERMISSION_REPORTS_BALANCE_TSP_VIEW = "reports:balance_tsp:view";
 export const PERMISSION_REPORTS_EXPORT = "reports:export";
 export const PERMISSION_BILLING_VIEW = "billing:view";
 export const PERMISSION_SETTINGS_TERMINALS_VIEW = "settings:terminals:view";
+export const PERMISSION_VIDEO_VIEW = "video:view";
 
 export const ALL_PERMISSIONS = [
   PERMISSION_MONITORING_VIEW,
@@ -18,6 +19,7 @@ export const ALL_PERMISSIONS = [
   PERMISSION_REPORTS_EXPORT,
   PERMISSION_BILLING_VIEW,
   PERMISSION_SETTINGS_TERMINALS_VIEW,
+  PERMISSION_VIDEO_VIEW,
 ] as const;
 
 export const PERMISSION_LABELS: Record<string, string> = {
@@ -29,6 +31,7 @@ export const PERMISSION_LABELS: Record<string, string> = {
   [PERMISSION_REPORTS_EXPORT]: "Экспорт отчетов в файл",
   [PERMISSION_BILLING_VIEW]: "Лицензии (просмотр)",
   [PERMISSION_SETTINGS_TERMINALS_VIEW]: "Терминалы (настройки)",
+  [PERMISSION_VIDEO_VIEW]: "Видеонаблюдение",
 };
 
 export function hasPermission(user: UserInfo | null, permissionCode: string): boolean {
@@ -61,6 +64,7 @@ export function getDefaultRouteForViewer(user: UserInfo | null): string | null {
   if (!user) return null;
   if (user.role_id !== 4) return "/monitoring";
   if (hasPermission(user, PERMISSION_MONITORING_VIEW)) return "/monitoring";
+  if (hasPermission(user, PERMISSION_VIDEO_VIEW)) return "/video";
   if (hasPermission(user, PERMISSION_REPORTS_PAYMENTS_VIEW)) return "/reports?tab=payments";
   if (hasPermission(user, PERMISSION_REPORTS_INKASS_VIEW)) return "/reports?tab=inkass";
   if (hasPermission(user, PERMISSION_REPORTS_BALANCE_TERMINAL_VIEW)) return "/reports?tab=balance-terminal";

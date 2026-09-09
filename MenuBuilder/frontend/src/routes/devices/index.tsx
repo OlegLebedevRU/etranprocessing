@@ -863,6 +863,7 @@ export default function DevicesManagementPage() {
                 ),
                 children: (
                   <DeviceConsoleTab
+                    deviceId={selectedDevice.device_id}
                     sn={selectedDevice.sn}
                     app={selectedDevice.app}
                     sys={selectedDevice.sys}

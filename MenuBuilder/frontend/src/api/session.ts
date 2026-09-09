@@ -62,7 +62,9 @@ export function scheduleRefresh(expiresInSec: number): void {
   }, delaySec * 1000);
 }
 
-export async function doSilentRefresh(): Promise<void> {
+let visibilityTimer: ReturnType<typeof setTimeout> | null = null;
+
+export async function doSilentRefresh(retryCount = 0): Promise<void> {
   try {
     const result = await refreshAuthToken();
     scheduleRefresh(result.expires_in);
@@ -70,17 +72,41 @@ export async function doSilentRefresh(): Promise<void> {
       type: "token-refreshed",
       expiresAt: Date.now() + result.expires_in * 1000,
     });
-  } catch (err) {
+  } catch (err: any) {
+    const isNetworkError =
+      !err?.response &&
+      (err?.code === "ERR_NETWORK" ||
+        err?.message === "Network Error" ||
+        err?.name === "AxiosError");
+
+    if (isNetworkError && retryCount < 1) {
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      if (typeof window === "undefined" || window.navigator?.onLine !== false) {
+        return doSilentRefresh(retryCount + 1);
+      }
+    }
+
     console.warn("Silent token refresh failed, fallback to reactive refresh:", err);
   }
 }
 
 if (typeof document !== "undefined") {
   document.addEventListener("visibilitychange", () => {
+    if (visibilityTimer) {
+      clearTimeout(visibilityTimer);
+      visibilityTimer = null;
+    }
     if (!document.hidden && targetExpiresAtTimestamp > 0) {
+      if (typeof window !== "undefined" && typeof window.navigator !== "undefined" && !window.navigator.onLine) {
+        return;
+      }
       const remainingMs = targetExpiresAtTimestamp - Date.now();
       if (remainingMs < 300_000) {
-        void doSilentRefresh();
+        visibilityTimer = setTimeout(() => {
+          if (!document.hidden && (typeof window === "undefined" || window.navigator?.onLine !== false)) {
+            void doSilentRefresh();
+          }
+        }, 1500);
       }
     }
   });

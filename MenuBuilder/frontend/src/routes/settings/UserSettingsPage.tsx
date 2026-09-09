@@ -45,6 +45,7 @@ import {
   PERMISSION_REPORTS_INKASS_VIEW,
   PERMISSION_REPORTS_PAYMENTS_VIEW,
   PERMISSION_SETTINGS_TERMINALS_VIEW,
+  PERMISSION_VIDEO_VIEW,
 } from "../../utils/permissions";
 
 const { Text, Title, Paragraph } = Typography;
@@ -264,6 +265,18 @@ export default function UserSettingsPage() {
                     — просмотр адресов и параметров терминалов (только чтение)
                   </span>
                 </Checkbox>
+              </div>
+
+              <Divider style={{ margin: "4px 0" }} />
+              <div>
+                <Tooltip title="Доступ к разделу Видеонаблюдение и просмотр запущенной трансляции. Не даёт управлять трансляцией и терминалом">
+                  <Checkbox value={PERMISSION_VIDEO_VIEW}>
+                    <Text strong>{PERMISSION_LABELS[PERMISSION_VIDEO_VIEW]}</Text>
+                    <span style={{ color: "#8c8c8c", fontSize: 12, marginLeft: 6 }}>
+                      — доступ к разделу Видеонаблюдение и просмотр запущенной трансляции
+                    </span>
+                  </Checkbox>
+                </Tooltip>
               </div>
             </div>
           </Checkbox.Group>

@@ -81,6 +81,7 @@ def org1_viewer_token():
             "roleId": 4,
             "role_id": 4,
             "token_type": "tenant",
+            "permissions": ["video:view"],
         }
     )
 

@@ -1,5 +1,6 @@
 import contextlib
 import logging
+import secrets
 import uuid
 from typing import Any
 
@@ -9,10 +10,12 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import require_tenant_context, resolve_org_id
+from app.auth import resolve_org_id
 from app.config import settings
 from app.database import get_db
 from app.models import Terminal
+from app.security.permissions import PERMISSION_VIDEO_VIEW, require_permission
+from app.services.iot_client import iot_client
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +27,7 @@ class VideoSessionResponse(BaseModel):
     sn: str
     janus_ws: str
     session_ttl_sec: int
+    pin: str | None = None
 
 
 class VideoStatusResponse(BaseModel):
@@ -32,6 +36,27 @@ class VideoStatusResponse(BaseModel):
     bytes: int
     idle_sec: float | None = None
     sn: str
+
+
+_mountpoint_pins: dict[int, dict[str, Any]] = {}
+
+
+def get_or_create_mountpoint_pin(
+    mountpoint_id: int, stream_instance_id: str | None = None
+) -> str:
+    cached = _mountpoint_pins.get(mountpoint_id)
+    if (
+        cached
+        and cached.get("stream_instance_id") == stream_instance_id
+        and cached.get("pin")
+    ):
+        return str(cached["pin"])
+    new_pin = secrets.token_hex(8)
+    _mountpoint_pins[mountpoint_id] = {
+        "pin": new_pin,
+        "stream_instance_id": stream_instance_id,
+    }
+    return new_pin
 
 
 def get_device_ports(device_id: int) -> tuple[int, int]:
@@ -87,7 +112,11 @@ async def _ensure_ingress_route(sn: str, rtp_port: int, rtcp_port: int) -> None:
 
 
 async def _ensure_janus_mountpoint(
-    mountpoint_id: int, device_id: int, rtp_port: int, rtcp_port: int
+    mountpoint_id: int,
+    device_id: int,
+    rtp_port: int,
+    rtcp_port: int,
+    pin: str | None = None,
 ) -> None:
     janus_url = settings.l4media_janus_url.rstrip("/")
     try:
@@ -141,7 +170,7 @@ async def _ensure_janus_mountpoint(
                     )
 
                 tx3 = uuid.uuid4().hex
-                req_body = {
+                req_body: dict[str, Any] = {
                     "request": "create",
                     "type": "rtp",
                     "id": mountpoint_id,
@@ -155,6 +184,8 @@ async def _ensure_janus_mountpoint(
                     "videocodec": "h264",
                     "videofmtp": "profile-level-id=42e01f;packetization-mode=1",
                 }
+                if pin:
+                    req_body["pin"] = pin
                 resp3 = await client.post(
                     f"{janus_url}/{session_id}/{handle_id}",
                     json={"janus": "message", "transaction": tx3, "body": req_body},
@@ -171,6 +202,8 @@ async def _ensure_janus_mountpoint(
                     )
                 data3 = resp3.json()
                 plugindata = data3.get("plugindata", {}).get("data", {})
+                err_code = plugindata.get("error_code") if plugindata else None
+                err_str = str(plugindata.get("error", "")) if plugindata else ""
                 if data3.get("janus") == "error":
                     err_code = data3.get("error", {}).get("code")
                     err_reason = str(data3.get("error", {}).get("reason", ""))
@@ -182,14 +215,13 @@ async def _ensure_janus_mountpoint(
                             status_code=status.HTTP_502_BAD_GATEWAY,
                             detail=f"Janus error ({err_code}): {err_reason}",
                         )
-                elif plugindata.get("error_code") or plugindata.get("error"):
-                    err_code = plugindata.get("error_code")
-                    err_str = str(plugindata.get("error", ""))
-                    if (
-                        err_code != 456
-                        and "already exists" not in err_str.lower()
-                        and "occupied" not in err_str.lower()
-                    ):
+                elif err_code or err_str:
+                    is_already_exists = (
+                        err_code == 456
+                        or "already exists" in err_str.lower()
+                        or "occupied" in err_str.lower()
+                    )
+                    if not is_already_exists:
                         logger.error(
                             "Janus streaming plugin error: %s (%s)", err_str, err_code
                         )
@@ -197,10 +229,35 @@ async def _ensure_janus_mountpoint(
                             status_code=status.HTTP_502_BAD_GATEWAY,
                             detail=f"Janus plugin error: {err_str}",
                         )
-                    logger.info(
-                        "Mountpoint %d already exists in Janus, reusing",
-                        mountpoint_id,
-                    )
+                    if pin:
+                        logger.info(
+                            "Mountpoint %d already exists; recreating with pin",
+                            mountpoint_id,
+                        )
+                        with contextlib.suppress(Exception):
+                            tx_dest_mp = uuid.uuid4().hex
+                            await client.post(
+                                f"{janus_url}/{session_id}/{handle_id}",
+                                json={
+                                    "janus": "message",
+                                    "transaction": tx_dest_mp,
+                                    "body": {"request": "destroy", "id": mountpoint_id},
+                                },
+                            )
+                            tx_recreate = uuid.uuid4().hex
+                            await client.post(
+                                f"{janus_url}/{session_id}/{handle_id}",
+                                json={
+                                    "janus": "message",
+                                    "transaction": tx_recreate,
+                                    "body": req_body,
+                                },
+                            )
+                    else:
+                        logger.info(
+                            "Mountpoint %d already exists in Janus, reusing",
+                            mountpoint_id,
+                        )
             finally:
                 with contextlib.suppress(Exception):
                     tx_dest = uuid.uuid4().hex
@@ -285,21 +342,74 @@ async def _get_ingress_status(sn: str) -> dict[str, Any]:
 )
 async def create_video_session(
     device_id: int,
-    user: dict[str, Any] = Depends(require_tenant_context),
+    user: dict[str, Any] = Depends(require_permission(PERMISSION_VIDEO_VIEW)),
     db: AsyncSession = Depends(get_db),
 ) -> VideoSessionResponse:
     terminal = await _verify_device_access(device_id, user, db)
+    org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
+
+    # Verify that caller holds active lease on app1
+    status_data = await iot_client.remote_input_status(
+        terminal.sn, org_id=org_id, user=user
+    )
+    lease_info = status_data.get("lease") or {}
+    if not lease_info.get("active"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Требуется активная аренда терминала для подключения к видеопотоку",
+        )
+
+    # Check lease ownership
+    owner_user_id = str(lease_info.get("owner_user_id") or "")
+    user_sub = str(user.get("sub") or "")
+    user_id_str = str(user.get("user_id") or "")
+    role_id = int(user.get("role_id", 3))
+    is_su = bool(
+        user.get("is_superuser", False)
+        or user.get("role") in ("superuser", "admin")
+        or role_id == 1
+    )
+
+    if not is_su and owner_user_id not in (user_sub, user_id_str):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Подключение к видеосессии доступно только держателю активной аренды",
+        )
+
+    lease_scope = lease_info.get("scope")
+    if role_id == 4:
+        if lease_scope != "view":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Для роли наблюдателя требуется аренда с уровнем view",
+            )
+    elif lease_scope not in ("view", "stream", "input", "console"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Недостаточный уровень аренды для подключения к видеопотоку",
+        )
+
+    stream_instance_id = (
+        str(lease_info.get("stream_instance_id"))
+        if lease_info.get("stream_instance_id")
+        else None
+    )
+    pin = get_or_create_mountpoint_pin(device_id, stream_instance_id)
+
     rtp_port, rtcp_port = get_device_ports(device_id)
     mountpoint_id = device_id
 
     await _ensure_ingress_route(terminal.sn, rtp_port, rtcp_port)
-    await _ensure_janus_mountpoint(mountpoint_id, device_id, rtp_port, rtcp_port)
+    await _ensure_janus_mountpoint(
+        mountpoint_id, device_id, rtp_port, rtcp_port, pin=pin
+    )
 
     return VideoSessionResponse(
         mountpoint_id=mountpoint_id,
         sn=terminal.sn,
         janus_ws="/janus-ws",
         session_ttl_sec=600,
+        pin=pin,
     )
 
 
@@ -310,7 +420,7 @@ async def create_video_session(
 )
 async def get_video_session_status(
     device_id: int,
-    user: dict[str, Any] = Depends(require_tenant_context),
+    user: dict[str, Any] = Depends(require_permission(PERMISSION_VIDEO_VIEW)),
     db: AsyncSession = Depends(get_db),
 ) -> VideoStatusResponse:
     terminal = await _verify_device_access(device_id, user, db)

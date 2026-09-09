@@ -9,6 +9,7 @@ import {
   PERMISSION_BILLING_VIEW,
   PERMISSION_MONITORING_VIEW,
   PERMISSION_SETTINGS_TERMINALS_VIEW,
+  PERMISSION_VIDEO_VIEW,
   getDefaultRouteForViewer,
   hasAnyReportPermission,
   hasPermission,
@@ -192,7 +193,14 @@ export default function App() {
                 </ViewerGuard>
               }
             />
-            <Route path="video" element={<VideoSurveillancePage />} />
+            <Route
+              path="video"
+              element={
+                <ViewerGuard permission={PERMISSION_VIDEO_VIEW}>
+                  <VideoSurveillancePage />
+                </ViewerGuard>
+              }
+            />
             <Route
               path="menu"
               element={

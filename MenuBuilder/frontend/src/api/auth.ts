@@ -30,6 +30,8 @@ export interface UserInfo {
   expires_at?: string | null;
   full_name?: string | null;
   permissions?: string[];
+  session_id?: string | null;
+  sub?: string;
 }
 
 export async function login(username: string, password: string): Promise<LoginResponse> {

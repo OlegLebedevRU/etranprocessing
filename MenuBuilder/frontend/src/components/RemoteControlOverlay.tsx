@@ -8,6 +8,8 @@ export interface RemoteControlOverlayProps {
   presence: ControlAgentStatus | null;
   sendMove: (x: number, y: number) => void;
   sendClick: (x: number, y: number) => Promise<any>;
+  sendKey?: (kind: "down" | "up" | "press", vk: number, text?: string) => boolean | Promise<any>;
+  isCameraMode?: boolean;
   debugBorder?: boolean;
 }
 
@@ -24,6 +26,8 @@ export default function RemoteControlOverlay({
   presence,
   sendMove,
   sendClick,
+  sendKey,
+  isCameraMode = false,
   debugBorder = true,
 }: RemoteControlOverlayProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -175,7 +179,7 @@ export default function RemoteControlOverlay({
   };
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!active) return;
+    if (!active || isCameraMode) return;
     // Left-click only, no modifiers
     if (e.button !== 0 || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) {
       return;
@@ -189,15 +193,64 @@ export default function RemoteControlOverlay({
     void sendClick(coords.x, coords.y);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!active || isCameraMode || !sendKey) return;
+    if (e.key === "F5" || e.key === "F12" || (e.ctrlKey && e.key === "r")) {
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    sendKey("down", e.keyCode, e.key.length === 1 ? e.key : undefined);
+  };
+
+  const handleKeyUp = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!active || isCameraMode || !sendKey) return;
+    if (e.key === "F5" || e.key === "F12" || (e.ctrlKey && e.key === "r")) {
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    sendKey("up", e.keyCode, e.key.length === 1 ? e.key : undefined);
+  };
+
   if (!active) {
     return null;
+  }
+
+  if (isCameraMode) {
+    return (
+      <div
+        style={{
+          position: "absolute",
+          top: 10,
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 11,
+          pointerEvents: "auto",
+        }}
+      >
+        <Alert
+          message="Управление вводом недоступно в режиме трансляции камеры (требуется рабочий стол)"
+          type="info"
+          showIcon
+          style={{
+            backgroundColor: "rgba(230, 244, 255, 0.9)",
+            padding: "4px 14px",
+            fontSize: 12,
+          }}
+        />
+      </div>
+    );
   }
 
   return (
     <div
       ref={containerRef}
+      tabIndex={0}
       onPointerMove={handlePointerMove}
       onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      onKeyUp={handleKeyUp}
       onContextMenu={(e) => e.preventDefault()}
       onWheel={(e) => e.preventDefault()}
       onMouseDown={(e) => {
@@ -213,6 +266,7 @@ export default function RemoteControlOverlay({
         cursor: "crosshair",
         userSelect: "none",
         touchAction: "none",
+        outline: "none",
       }}
     >
       {/* Visual boundary of active desktop screen */}
@@ -257,6 +311,30 @@ export default function RemoteControlOverlay({
           </Tooltip>
         </div>
       )}
+
+      {/* Keyboard capture hint */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 10,
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 11,
+          pointerEvents: "none",
+        }}
+      >
+        <div
+          style={{
+            backgroundColor: "rgba(0, 0, 0, 0.65)",
+            color: "#ffffff",
+            padding: "2px 10px",
+            borderRadius: 4,
+            fontSize: 11,
+          }}
+        >
+          ⌨ Ввод с клавиатуры активен (кликните по окну видео для фокуса ввода)
+        </div>
+      </div>
     </div>
   );
 }

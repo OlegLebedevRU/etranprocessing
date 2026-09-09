@@ -369,29 +369,43 @@ docker network connect user1_default l4media-janus
 
 ---
 
-### 5.4. Архитектурный паттерн 3: Защищённый WebRTC Gateway через Nginx (Безопасность)
+### 5.4. Архитектурный паттерн 3: Защита Mountpoint через PIN и изоляция сигнализации (Безопасность)
 
-Для публикации WebRTC-сигнализации наружу **запрещено открывать сырой порт 8188 или 7088 в открытый Интернет**. Вместо этого WebSockets Janus проксируются через основной обратный прокси Nginx хоста с проверкой авторизации:
+Для защиты медиапотоков терминалов от несанкционированного подключения реализована двухконтурная схема:
 
-```nginx
-# В конфигурации Nginx MenuBuilder (:443):
-location /janus-ws {
-    # Проверка JWT cookie оператора (только авторизованные администраторы)
-    auth_request /api/auth/validate-session;
+1. **Создание и защита Mountpoint на стороне BFF (`MenuBuilder/backend`):**
+   * Создание сессии стриминга выполняется исключительно через `POST /api/v1/video/devices/{device_id}/session`.
+   * BFF проверяет наличие активной монопольной аренды терминала (Lease) у вызывающего пользователя в `app1` (роли 1–3 со scope ≥ `view`, либо роль 4 с правом `video:view` и собственной lease `view`).
+   * BFF генерирует криптографически стойкий сессионный `pin` (случайная строка), регистрирует его в памяти процесса per `device_id` / `stream_instance_id` и передаёт плагину `janus.plugin.streaming` при вызове `create`:
+     ```json
+     {
+       "request": "create",
+       "type": "rtp",
+       "id": mountpoint_id,
+       "pin": "<secret_pin>",
+       "videoport": rtp_port,
+       "videortcpport": rtcp_port,
+       "videocodec": "h264"
+     }
+     ```
+   * Если маунтпоинт ранее уже был создан без PIN или со старым PIN, BFF пересоздаёт его (`destroy` -> `create`).
+   * BFF возвращает `pin` в теле ответа `VideoSessionResponse` **строго держателю активной аренды**.
 
-    proxy_pass http://l4media-janus:8188;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $host;
-    proxy_read_timeout 3600s;
-}
-```
+2. **Авторизованное подключение плеера (`JanusStreamingClient`):**
+   * Браузерный клиент передаёт полученный `pin` в запросе `watch`:
+     ```json
+     {
+       "request": "watch",
+       "id": mountpoint_id,
+       "pin": "<secret_pin>"
+     }
+     ```
+   * Без валидного `pin` Janus отклоняет запрос на просмотр mountpoint ошибкой `460 (Unauthorized/Invalid PIN)`.
 
-Это гарантирует:
-* Полную защиту медиашлюза от несанкционированного доступа.
-* Тенантную изоляцию (оператор может просматривать видео только тех терминалов, к которым имеет доступ согласно своей роли и организации в MenuBuilder).
-* Защиту от перебора идентификаторов маунтпоинтов.
+3. **Остаточный риск и архитектурный статус `/janus-ws`:**
+   * В текущей конфигурации Nginx (`nginx-configs/port_3000.conf`) эндпоинт `/janus-ws` открыт без директивы `auth_request`, поскольку WebSocket-соединение из браузера не может передавать произвольные заголовки авторизации в стандартном протоколе Janus.
+   * Благодаря защите каждого mountpoint динамическим `pin`, генерируемым только для владельца lease, перебор идентификаторов mountpoint сторонними клиентами не позволяет подключиться к видеотрансляции.
+   * Добавление валидации JWT cookie на уровне Nginx (`auth_request` в BFF перед апгрейдом WebSocket) зафиксировано в бэклоге как последующее улучшение (follow-up).
 
 ---
 

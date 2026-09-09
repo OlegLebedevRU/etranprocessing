@@ -166,7 +166,7 @@ export function useRemoteControl({
 
     try {
       // 1. Acquire control lease
-      const leaseData = await acquireControlLease(deviceId);
+      const leaseData = await acquireControlLease(deviceId, "input");
       if (activeDeviceIdRef.current !== deviceId) {
         void releaseControlLease(deviceId, leaseData.lease_id).catch(() => {});
         return;
@@ -308,22 +308,54 @@ export function useRemoteControl({
         return;
       }
       const respData = err?.response?.data;
+      const detail = respData?.detail;
       if (err?.response?.status === 409 || respData?.detail === "lease busy") {
         setStatus("busy");
-        const owner = respData?.owner_user_id || "другой оператор";
-        setBusyOwner(owner);
-        const msg = `Управление занято другим оператором (#${owner})`;
-        setErrorMessage(msg);
-        if (onErrorMessage) onErrorMessage(msg);
+        if (detail && typeof detail === "object" && detail.code === "lease_taken") {
+          const owner = detail.owner_role
+            ? `${detail.owner_role} (${detail.owner_masked || detail.owner_user_id || "..."})`
+            : "другой оператор";
+          const exp = detail.expires_at
+            ? ` до ${new Date(detail.expires_at).toLocaleTimeString()}`
+            : "";
+          setBusyOwner(owner);
+          const msg = `Терминал занят: ${owner}${exp}`;
+          setErrorMessage(msg);
+          if (onErrorMessage) onErrorMessage(msg);
+        } else {
+          const owner =
+            (detail && typeof detail === "object" ? detail.owner_user_id : null) ||
+            "другой оператор";
+          setBusyOwner(owner);
+          const msg = `Управление занято другим оператором (#${owner})`;
+          setErrorMessage(msg);
+          if (onErrorMessage) onErrorMessage(msg);
+        }
       } else {
         setStatus("error");
-        const msg = err?.message || err?.response?.data?.detail || "Ошибка включения управления";
+        const msg =
+          err?.message ||
+          err?.response?.data?.detail ||
+          "Ошибка включения управления";
         setErrorMessage(msg);
         if (onErrorMessage) onErrorMessage(msg);
       }
       await disable("failed");
     }
   }, [deviceId, isSessionActive, disable, onErrorMessage, onClickResult, sendWsMessage]);
+
+  const sendKey = useCallback(
+    (kind: "down" | "up" | "press", vk: number, text?: string) => {
+      if (status !== "active") return false;
+      return sendWsMessage({
+        type: "key",
+        kind,
+        vk,
+        text,
+      });
+    },
+    [status, sendWsMessage]
+  );
 
   const sendMove = useCallback(
     (x: number, y: number) => {
@@ -425,8 +457,19 @@ export function useRemoteControl({
     }
   }, [deviceId, disable]);
 
-  // Cleanup on unmount or broadcast logout
+  // Cleanup on unmount, pagehide, or broadcast logout
   useEffect(() => {
+    const handleUnload = () => {
+      const curLease = leaseRef.current;
+      const targetDevId = activeDeviceIdRef.current;
+      if (curLease && targetDevId !== null) {
+        const url = `/api/v1/video/devices/${targetDevId}/control/lease/${curLease.lease_id}`;
+        navigator.sendBeacon?.(url);
+      }
+    };
+    window.addEventListener("beforeunload", handleUnload);
+    window.addEventListener("pagehide", handleUnload);
+
     const channel =
       typeof window !== "undefined" && "BroadcastChannel" in window
         ? new BroadcastChannel("mb-session")
@@ -441,6 +484,8 @@ export function useRemoteControl({
     }
 
     return () => {
+      window.removeEventListener("beforeunload", handleUnload);
+      window.removeEventListener("pagehide", handleUnload);
       if (channel) {
         channel.close();
       }
@@ -460,6 +505,7 @@ export function useRemoteControl({
       disable,
       sendMove,
       sendClick,
+      sendKey,
       setPresence,
     }),
     [
@@ -473,6 +519,7 @@ export function useRemoteControl({
       disable,
       sendMove,
       sendClick,
+      sendKey,
     ]
   );
 }

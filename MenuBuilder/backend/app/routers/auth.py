@@ -61,6 +61,8 @@ class UserInfo(BaseModel):
     expires_at: str | None = None
     full_name: str | None = None
     permissions: list[str] = []
+    session_id: str | None = None
+    sub: str | None = None
 
 
 def _extract_basic_auth(authorization: str | None) -> tuple[str, str] | None:
@@ -426,14 +428,46 @@ async def logout(
     elif "accessToken" in request.cookies:
         curr_token = request.cookies["accessToken"]
 
+    logout_user_id: str | None = None
+    logout_session_id: str | None = None
+
     if curr_token:
         with suppress(Exception):
             from app.auth import decode_token
 
             payload = decode_token(curr_token)
             uid = payload.get("userId") or payload.get("user_id") or payload.get("sub")
+            if uid is not None:
+                logout_user_id = str(uid)
+            raw_sess = (
+                payload.get("session_id") or payload.get("sid") or payload.get("jti")
+            )
+            if raw_sess:
+                logout_session_id = str(raw_sess)
             if uid and str(uid).isdigit():
                 jwt_issuer_client.invalidate_cache_for_user(int(uid))
+
+    if not logout_user_id and refresh_token_val:
+        with suppress(Exception):
+            store = get_user_store()
+            sess = await store.get_session_by_refresh_token(refresh_token_val)
+            if sess:
+                logout_user_id = str(sess.user_id)
+
+    if logout_user_id:
+        try:
+            from app.services.iot_client import iot_client
+
+            await iot_client.remote_input_release_by_owner(
+                user_id=logout_user_id,
+                session_id=logout_session_id,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "Failed to release remote input leases for user %s on logout: %s",
+                logout_user_id,
+                exc,
+            )
 
     # Clear cookies
     response.delete_cookie(key="accessToken", path="/")
@@ -551,4 +585,6 @@ async def me(user: dict = Depends(get_current_user)):
         expires_at=expires_at,
         full_name=full_name,
         permissions=permissions,
+        session_id=user.get("session_id"),
+        sub=user.get("sub"),
     )

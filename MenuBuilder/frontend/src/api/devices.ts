@@ -425,20 +425,12 @@ export async function getDeviceDetail(
   deviceId: number
 ): Promise<DeviceListItem | null> {
   try {
-    const { data } = await client.get<DeviceItem>(`/internal/v1/devices/${deviceId}`, {
-      params: { org_id: orgId },
-    });
-    return data ? mapDeviceToListItem(data) : null;
+    const res = await getDevices(orgId, { deviceId, size: 1 });
+    const found = res.items.find((d) => d.device_id === deviceId);
+    return found || null;
   } catch (err: any) {
     if (err?.response?.status === 404) {
       return null;
-    }
-    try {
-      const res = await getDevices(orgId, { deviceId, size: 1 });
-      const found = res.items.find((d) => d.device_id === deviceId);
-      if (found) return found;
-    } catch {
-      // ignore fallback error
     }
     throw err;
   }
@@ -449,26 +441,19 @@ export async function getDeviceRaw(
   deviceId: number
 ): Promise<DeviceRawResult | null> {
   try {
-    const { data } = await client.get<DeviceRawResult>(`/internal/v1/devices/${deviceId}`, {
-      params: { org_id: orgId },
+    const { data } = await client.get<DeviceListRawResponse | DeviceRawResult[]>("/internal/v1/devices/", {
+      params: { org_id: orgId, device_id: deviceId },
     });
-    return data;
+    if (Array.isArray(data)) {
+      return data.length > 0 ? data[0] : null;
+    }
+    if (data && Array.isArray((data as any).items)) {
+      return (data as any).items.length > 0 ? (data as any).items[0] : null;
+    }
+    return null;
   } catch (err: any) {
     if (err?.response?.status === 404) {
       return null;
-    }
-    try {
-      const { data } = await client.get<DeviceListRawResponse | DeviceRawResult[]>("/internal/v1/devices/", {
-        params: { org_id: orgId, device_id: deviceId },
-      });
-      if (Array.isArray(data)) {
-        return data.length > 0 ? data[0] : null;
-      }
-      if (data && Array.isArray((data as any).items)) {
-        return (data as any).items.length > 0 ? (data as any).items[0] : null;
-      }
-    } catch {
-      // ignore fallback error
     }
     throw err;
   }
@@ -538,8 +523,20 @@ export async function getDeviceEvents(
   return data;
 }
 
-export function getDiagnosticsWsUrl(sn: string, orgId: number): string {
+export function getDiagnosticsWsUrl(
+  sn: string,
+  orgId: number,
+  leaseId?: string,
+  sessionId?: string
+): string {
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
   const host = window.location.host;
-  return `${proto}//${host}/api/internal/v1/diagnostics/ws/devices/${encodeURIComponent(sn)}?org_id=${orgId}`;
+  let url = `${proto}//${host}/api/internal/v1/diagnostics/ws/devices/${encodeURIComponent(sn)}?org_id=${orgId}`;
+  if (leaseId) {
+    url += `&lease_id=${encodeURIComponent(leaseId)}`;
+  }
+  if (sessionId) {
+    url += `&session_id=${encodeURIComponent(sessionId)}`;
+  }
+  return url;
 }

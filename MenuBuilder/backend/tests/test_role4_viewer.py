@@ -229,6 +229,21 @@ async def test_settings_users_validation():
             )
             assert resp.status_code == 400
             assert "Недопустимые разрешения" in resp.json()["detail"]
+
+            # Test video:view is accepted
+            from app.security.permissions import PERMISSION_VIDEO_VIEW
+
+            mock_db.add = lambda obj: setattr(obj, "id", 123)
+            resp_ok = await ac.post(
+                "/api/settings/users",
+                json={
+                    "username": "new_viewer_2",
+                    "password": "secret_password",
+                    "permissions": [PERMISSION_VIDEO_VIEW],
+                },
+            )
+            assert resp_ok.status_code == 201
+            assert PERMISSION_VIDEO_VIEW in resp_ok.json()["permissions"]
         finally:
             app.dependency_overrides.pop(get_current_user, None)
             app.dependency_overrides.pop(get_db, None)
