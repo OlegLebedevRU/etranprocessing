@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <time.h>
 
 int64_t ctl_get_time_ms(void) {
     FILETIME ft;
@@ -132,13 +133,71 @@ int ctl_build_extended_presence_payload(char* buf, size_t max_len,
 
     /* Stream block */
     if (stream && offset > 0 && (size_t)offset < max_len) {
+        const char* state_val = stream->state[0] ? stream->state : "stopped";
+        const char* mode_val = (strcmp(state_val, "stopped") == 0 || stream->mode[0] == '\0') ? "stopped" : stream->mode;
+
         offset += snprintf(buf + offset, max_len - offset,
-            "\"stream\":{\"state\":\"%s\",\"mode\":\"%s\",\"source_id\":\"%s\","
-            "\"stream_instance_id\":\"%s\",\"profile\":\"%s\",\"reason\":\"%s\","
-            "\"ffmpeg_pid\":%u,\"started_at\":%llu,\"restart_count\":%d},",
-            stream->state, stream->mode, stream->source_id,
-            stream->stream_instance_id, stream->profile, stream->reason,
-            stream->ffmpeg_pid, (unsigned long long)stream->started_at, stream->restart_count);
+            "\"stream\":{\"state\":\"%s\",\"mode\":\"%s\",",
+            state_val, mode_val);
+
+        if (stream->source_id[0] != '\0') {
+            char esc_src[128];
+            json_escape_str(stream->source_id, esc_src, sizeof(esc_src));
+            offset += snprintf(buf + offset, max_len - offset, "\"source_id\":\"%s\",", esc_src);
+        } else {
+            offset += snprintf(buf + offset, max_len - offset, "\"source_id\":null,");
+        }
+
+        if (stream->stream_instance_id[0] != '\0') {
+            char esc_inst[128];
+            json_escape_str(stream->stream_instance_id, esc_inst, sizeof(esc_inst));
+            offset += snprintf(buf + offset, max_len - offset, "\"stream_instance_id\":\"%s\",", esc_inst);
+        } else {
+            offset += snprintf(buf + offset, max_len - offset, "\"stream_instance_id\":null,");
+        }
+
+        const char* profile_val = stream->profile[0] ? stream->profile : "default";
+
+        char reason_buf[128];
+        if (stream->reason[0] != '\0') {
+            char esc_reason[96];
+            json_escape_str(stream->reason, esc_reason, sizeof(esc_reason));
+            snprintf(reason_buf, sizeof(reason_buf), "\"%s\"", esc_reason);
+        } else {
+            strcpy_s(reason_buf, sizeof(reason_buf), "null");
+        }
+
+        char started_at_buf[64];
+        if (strcmp(state_val, "stopped") == 0 || stream->started_at == 0) {
+            strcpy_s(started_at_buf, sizeof(started_at_buf), "null");
+        } else {
+            time_t sec = 0;
+            int ms = 0;
+            if (stream->started_at > 100000000000ULL) {
+                sec = (time_t)(stream->started_at / 1000ULL);
+                ms = (int)(stream->started_at % 1000ULL);
+            } else {
+                sec = (time_t)stream->started_at;
+                ms = 0;
+            }
+            struct tm tm_utc;
+            memset(&tm_utc, 0, sizeof(tm_utc));
+            if (gmtime_s(&tm_utc, &sec) == 0) {
+                snprintf(started_at_buf, sizeof(started_at_buf), "\"%04d-%02d-%02dT%02d:%02d:%02d.%03dZ\"",
+                         tm_utc.tm_year + 1900, tm_utc.tm_mon + 1, tm_utc.tm_mday,
+                         tm_utc.tm_hour, tm_utc.tm_min, tm_utc.tm_sec, ms);
+            } else {
+                strcpy_s(started_at_buf, sizeof(started_at_buf), "null");
+            }
+        }
+
+        offset += snprintf(buf + offset, max_len - offset,
+            "\"profile\":\"%s\",\"reason\":%s,\"ffmpeg_pid\":%u,\"started_at\":%s,\"restart_count\":%d},",
+            profile_val,
+            reason_buf,
+            stream->ffmpeg_pid,
+            started_at_buf,
+            stream->restart_count);
     }
 
     if (offset > 0 && (size_t)offset < max_len) {

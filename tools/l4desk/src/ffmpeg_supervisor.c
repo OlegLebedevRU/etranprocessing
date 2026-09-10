@@ -231,6 +231,13 @@ static bool stop_active_process_internal(void) {
     wait_udp_ports_released();
 
     strcpy_s(g_sup.state, sizeof(g_sup.state), "stopped");
+    g_sup.stream_instance_id[0] = '\0';
+    g_sup.lease_id[0] = '\0';
+    g_sup.mode[0] = '\0';
+    g_sup.source_id[0] = '\0';
+    g_sup.profile[0] = '\0';
+    g_sup.reason[0] = '\0';
+    g_sup.started_at = 0;
     g_sup.ffmpeg_pid = 0;
     g_sup.ffmpeg_start_time = 0;
     save_state_file();
@@ -574,7 +581,13 @@ bool ffmpeg_supervisor_start(const char* stream_instance_id,
     strcpy_s(g_sup.stream_instance_id, sizeof(g_sup.stream_instance_id), stream_instance_id);
     if (lease_id) strcpy_s(g_sup.lease_id, sizeof(g_sup.lease_id), lease_id);
     strcpy_s(g_sup.mode, sizeof(g_sup.mode), mode);
-    strcpy_s(g_sup.source_id, sizeof(g_sup.source_id), source_id);
+    if (mode && _stricmp(mode, "desktop") == 0) {
+        strcpy_s(g_sup.source_id, sizeof(g_sup.source_id), target_disp.desktop_id);
+    } else if (mode && _stricmp(mode, "usb-camera") == 0) {
+        strcpy_s(g_sup.source_id, sizeof(g_sup.source_id), target_cam.camera_id);
+    } else {
+        strcpy_s(g_sup.source_id, sizeof(g_sup.source_id), source_id);
+    }
     if (profile) strcpy_s(g_sup.profile, sizeof(g_sup.profile), profile);
     g_sup.session_id = target_disp.session_id;
     g_sup.desktop_rect.left = target_disp.x;

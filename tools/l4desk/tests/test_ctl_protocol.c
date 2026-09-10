@@ -197,7 +197,25 @@ static void test_protocol_payloads(void) {
     ASSERT_TRUE(strstr(buf, "\"inventory\"") != NULL);
     ASSERT_TRUE(strstr(buf, "\"disp:12345678\"") != NULL);
     ASSERT_TRUE(strstr(buf, "\"cam:87654321\"") != NULL);
-    ASSERT_TRUE(strstr(buf, "\"stream\"") != NULL);
+    ASSERT_TRUE(strstr(buf, "\"stream\":{\"state\":\"stopped\",\"mode\":\"stopped\",") != NULL);
+    ASSERT_TRUE(strstr(buf, "\"source_id\":null") != NULL);
+    ASSERT_TRUE(strstr(buf, "\"stream_instance_id\":null") != NULL);
+    ASSERT_TRUE(strstr(buf, "\"profile\":\"default\"") != NULL);
+    ASSERT_TRUE(strstr(buf, "\"reason\":null") != NULL);
+    ASSERT_TRUE(strstr(buf, "\"started_at\":null") != NULL);
+
+    /* Test running stream with timestamp */
+    sinfo.started_at = 1789043052;
+    strcpy_s(sinfo.state, sizeof(sinfo.state), "running");
+    strcpy_s(sinfo.mode, sizeof(sinfo.mode), "desktop");
+    strcpy_s(sinfo.source_id, sizeof(sinfo.source_id), "disp:12345678");
+    strcpy_s(sinfo.stream_instance_id, sizeof(sinfo.stream_instance_id), "str_abc");
+    len = ctl_build_extended_presence_payload(buf, sizeof(buf), "online", true, &sm, &inv, &sinfo);
+    ASSERT_TRUE(len > 0);
+    ASSERT_TRUE(strstr(buf, "\"stream\":{\"state\":\"running\",\"mode\":\"desktop\",") != NULL);
+    ASSERT_TRUE(strstr(buf, "\"source_id\":\"disp:12345678\"") != NULL);
+    ASSERT_TRUE(strstr(buf, "\"stream_instance_id\":\"str_abc\"") != NULL);
+    ASSERT_TRUE(strstr(buf, "\"started_at\":\"") != NULL);
 
     printf("[PASS] test_protocol_payloads\n");
 }
@@ -263,6 +281,11 @@ static void test_command_handling_validation(void) {
     ASSERT_TRUE(ctl_handle_command(cmd_bad_src, strlen(cmd_bad_src), "TERM001", &inv, resp, sizeof(resp), &resp_len, &should_pub, &qos));
     ASSERT_TRUE(should_pub);
     ASSERT_TRUE(strstr(resp, "\"code\":\"source_unavailable\"") != NULL);
+
+    /* 5b. Source fallback: source_id="disp" finds primary display disp:11223344 */
+    DisplayInfo d_fallback;
+    ASSERT_TRUE(inventory_find_display(&inv, "disp", &d_fallback));
+    ASSERT_TRUE(strcmp(d_fallback.desktop_id, "disp:11223344") == 0);
 
     /* 6. Mouse click when stream not running -> stream_mismatch */
     const char* cmd_click = "{\"v\":1,\"type\":\"mouse_click\",\"command_id\":\"clk_001\",\"lease_id\":\"l1\","

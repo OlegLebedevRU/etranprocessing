@@ -292,23 +292,106 @@ bool inventory_refresh(const char* base_path, SystemInventory* inv) {
 
 bool inventory_find_display(const SystemInventory* inv, const char* desktop_id, DisplayInfo* out_disp) {
     if (!inv || !desktop_id) return false;
+
+    /* 1. Exact match by desktop_id (e.g. disp:3580dc5e) */
     for (int i = 0; i < inv->display_count; i++) {
         if (_stricmp(inv->displays[i].desktop_id, desktop_id) == 0) {
             if (out_disp) *out_disp = inv->displays[i];
             return true;
         }
     }
+
+    /* 2. Match by display device name (e.g. \\.\DISPLAY1 or DISPLAY1) */
+    for (int i = 0; i < inv->display_count; i++) {
+        if (_stricmp(inv->displays[i].name, desktop_id) == 0) {
+            if (out_disp) *out_disp = inv->displays[i];
+            return true;
+        }
+        const char* short_name = strrchr(inv->displays[i].name, '\\');
+        if (short_name && _stricmp(short_name + 1, desktop_id) == 0) {
+            if (out_disp) *out_disp = inv->displays[i];
+            return true;
+        }
+    }
+
+    /* 3. Match hash part without "disp:" prefix */
+    for (int i = 0; i < inv->display_count; i++) {
+        if (strncmp(inv->displays[i].desktop_id, "disp:", 5) == 0 &&
+            _stricmp(inv->displays[i].desktop_id + 5, desktop_id) == 0) {
+            if (out_disp) *out_disp = inv->displays[i];
+            return true;
+        }
+    }
+
+    /* 4. Fallback for generic identifiers ("disp", "desktop", "0", "primary", "default") -> primary display */
+    if (_stricmp(desktop_id, "disp") == 0 ||
+        _stricmp(desktop_id, "desktop") == 0 ||
+        strcmp(desktop_id, "0") == 0 ||
+        _stricmp(desktop_id, "primary") == 0 ||
+        _stricmp(desktop_id, "default") == 0) {
+        if (inv->display_count > 0) {
+            int target_idx = 0;
+            for (int i = 0; i < inv->display_count; i++) {
+                if (inv->displays[i].primary) {
+                    target_idx = i;
+                    break;
+                }
+            }
+            if (out_disp) *out_disp = inv->displays[target_idx];
+            return true;
+        }
+    }
+
     return false;
 }
 
 bool inventory_find_camera(const SystemInventory* inv, const char* camera_id, CameraInfo* out_cam) {
     if (!inv || !camera_id) return false;
+
+    /* 1. Exact match by camera_id (e.g. cam:7933044a) */
     for (int i = 0; i < inv->camera_count; i++) {
         if (_stricmp(inv->cameras[i].camera_id, camera_id) == 0) {
             if (out_cam) *out_cam = inv->cameras[i];
             return true;
         }
     }
+
+    /* 2. Match by camera name */
+    for (int i = 0; i < inv->camera_count; i++) {
+        if (_stricmp(inv->cameras[i].name, camera_id) == 0) {
+            if (out_cam) *out_cam = inv->cameras[i];
+            return true;
+        }
+    }
+
+    /* 3. Match hash part without "cam:" prefix */
+    for (int i = 0; i < inv->camera_count; i++) {
+        if (strncmp(inv->cameras[i].camera_id, "cam:", 4) == 0 &&
+            _stricmp(inv->cameras[i].camera_id + 4, camera_id) == 0) {
+            if (out_cam) *out_cam = inv->cameras[i];
+            return true;
+        }
+    }
+
+    /* 4. Fallback for generic identifiers ("cam", "camera", "usb-camera", "0", "default") -> first available */
+    if (_stricmp(camera_id, "cam") == 0 ||
+        _stricmp(camera_id, "camera") == 0 ||
+        _stricmp(camera_id, "usb-camera") == 0 ||
+        strcmp(camera_id, "0") == 0 ||
+        _stricmp(camera_id, "default") == 0) {
+        if (inv->camera_count > 0) {
+            int target_idx = 0;
+            for (int i = 0; i < inv->camera_count; i++) {
+                if (inv->cameras[i].available) {
+                    target_idx = i;
+                    break;
+                }
+            }
+            if (out_cam) *out_cam = inv->cameras[target_idx];
+            return true;
+        }
+    }
+
     return false;
 }
 
