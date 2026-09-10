@@ -639,11 +639,44 @@ async def start_device_stream(
             )
         lease_id = str(lease_info["lease_id"])
 
+    source_id = body.source_id
+    if body.mode == "desktop" and source_id in ("0", "disp", "desktop", ""):
+        with contextlib.suppress(Exception):
+            inv = await iot_client.remote_input_inventory(
+                sn=terminal.sn,
+                refresh=0,
+                org_id=org_id,
+                user=user,
+            )
+            displays = list(inv.get("displays") or [])
+            if displays:
+                primary = next(
+                    (d for d in displays if d.get("is_primary") or d.get("primary")),
+                    displays[0],
+                )
+                resolved_id = str(primary.get("id") or primary.get("desktop_id") or "")
+                if resolved_id:
+                    source_id = resolved_id
+    elif body.mode == "usb-camera" and source_id in ("0", "cam", "camera", ""):
+        with contextlib.suppress(Exception):
+            inv = await iot_client.remote_input_inventory(
+                sn=terminal.sn,
+                refresh=0,
+                org_id=org_id,
+                user=user,
+            )
+            cameras = list(inv.get("cameras") or [])
+            if cameras:
+                cam = cameras[0]
+                resolved_id = str(cam.get("id") or cam.get("camera_id") or "")
+                if resolved_id:
+                    source_id = resolved_id
+
     try:
         res = await iot_client.remote_input_stream_start(
             lease_id=lease_id,
             mode=body.mode,
-            source_id=body.source_id,
+            source_id=source_id,
             profile=body.profile,
             org_id=org_id,
             user=user,

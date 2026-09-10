@@ -434,6 +434,21 @@ export default function VideoSurveillancePage() {
     }
   };
 
+  // Helper for nack banner errors
+  const handleBannerError = (code: string, fallbackMessage?: string) => {
+    const errorMap: Record<string, string> = {
+      source_unavailable: "Выбранный источник видео недоступен на терминале",
+      session_unavailable: "Сессия рабочего стола пользователя недоступна",
+      failed: "Сбой запуска видеозахвата ffmpeg на терминале",
+      ffmpeg_missing: "Утилита ffmpeg не найдена на терминале",
+      terminal_timeout: "Таймаут ответа терминала на команду трансляции",
+      busy_transition: "Терминал занят переключением видеопотока",
+    };
+    const msg = errorMap[code] || fallbackMessage || `Ошибка терминала: ${code}`;
+    setBannerError({ code, message: msg });
+    return msg;
+  };
+
   // Operator Start Stream
   const handleOperatorStart = async () => {
     if (!selectedDevice) return;
@@ -451,30 +466,24 @@ export default function VideoSurveillancePage() {
       startLeaseKeepalive(selectedDevice.device_id, leaseRes.lease_id, leaseRes.keepalive_sec);
 
       // 2. Parse selected mode and source_id
-      const [mode, source_id] = selectedSourceKey.split(":");
+      const colonIdx = selectedSourceKey.indexOf(":");
+      const mode = colonIdx !== -1 ? selectedSourceKey.slice(0, colonIdx) : "desktop";
+      const source_id = colonIdx !== -1 ? selectedSourceKey.slice(colonIdx + 1) : "0";
       setStatusText("Запуск трансляции на терминале...");
-      try {
-        const startRes = await startDeviceStream(selectedDevice.device_id, {
-          mode: mode as "desktop" | "usb-camera",
-          source_id: source_id || "0",
-          profile: selectedProfile,
-          lease_id: leaseRes.lease_id,
-        });
 
-        setActiveStream({
-          state: (startRes.state as any) || "running",
-          mode,
-          source_id,
-          stream_instance_id: startRes.stream_instance_id,
-        });
-      } catch (streamErr: any) {
-        console.warn("startDeviceStream warning/fallback", streamErr);
-        setActiveStream({
-          state: "running",
-          mode,
-          source_id,
-        });
-      }
+      const startRes = await startDeviceStream(selectedDevice.device_id, {
+        mode: mode as "desktop" | "usb-camera",
+        source_id: source_id || "0",
+        profile: selectedProfile,
+        lease_id: leaseRes.lease_id,
+      });
+
+      setActiveStream({
+        state: (startRes.state as any) || "running",
+        mode,
+        source_id,
+        stream_instance_id: startRes.stream_instance_id,
+      });
       setStreamStage("running");
 
       // 3. Init WebRTC session and Janus mountpoint with PIN
@@ -545,6 +554,7 @@ export default function VideoSurveillancePage() {
         }
       }, 5000);
     } catch (err: any) {
+      let errorMsg = "";
       const detail = err?.response?.data?.detail;
       if (err?.response?.status === 409) {
         if (detail && typeof detail === "object" && detail.code === "lease_taken") {
@@ -555,39 +565,31 @@ export default function VideoSurveillancePage() {
             ? ` до ${new Date(detail.expires_at).toLocaleTimeString()}`
             : "";
           setRefusalNotice(`Терминал занят: ${owner}${exp}`);
-          setStatusText("Терминал занят");
+          errorMsg = `Терминал занят: ${owner}${exp}`;
+          message.warning(errorMsg);
         } else {
           const nackCode = detail?.code || detail?.nack?.code;
           if (nackCode) {
-            handleBannerError(nackCode);
+            const bannerMsg = handleBannerError(nackCode, detail?.message);
+            errorMsg = bannerMsg;
+            message.error(bannerMsg);
           } else {
-            message.error(typeof detail === "string" ? detail : "Конфликт аренды");
+            errorMsg = typeof detail === "string" ? detail : (detail?.message || "Конфликт аренды");
+            message.error(errorMsg);
           }
         }
       } else {
-        const msg = err?.message || detail || "Ошибка запуска трансляции";
-        message.error(msg);
-        setStatusText(`Ошибка: ${msg}`);
+        errorMsg = err?.message || (typeof detail === "string" ? detail : detail?.message) || "Ошибка запуска трансляции";
+        message.error(errorMsg);
       }
-      setStreamStage("failed");
       await stopSession();
+      setStreamStage("idle");
+      if (errorMsg) {
+        setStatusText(`Ошибка: ${errorMsg}`);
+      }
     } finally {
       setIsStarting(false);
     }
-  };
-
-  // Helper for nack banner errors
-  const handleBannerError = (code: string) => {
-    const errorMap: Record<string, string> = {
-      source_unavailable: "Выбранный источник видео недоступен на терминале",
-      session_unavailable: "Сессия рабочего стола пользователя недоступна",
-      failed: "Сбой запуска видеозахвата ffmpeg на терминале",
-      ffmpeg_missing: "Утилита ffmpeg не найдена на терминале",
-      terminal_timeout: "Таймаут ответа терминала на команду трансляции",
-      busy_transition: "Терминал занят переключением видеопотока",
-    };
-    const msg = errorMap[code] || `Ошибка терминала: ${code}`;
-    setBannerError({ code, message: msg });
   };
 
   // Operator Switch Source
@@ -599,7 +601,9 @@ export default function VideoSurveillancePage() {
     setStatusText("Остановка текущего источника...");
 
     try {
-      const [mode, source_id] = selectedSourceKey.split(":");
+      const colonIdx = selectedSourceKey.indexOf(":");
+      const mode = colonIdx !== -1 ? selectedSourceKey.slice(0, colonIdx) : "desktop";
+      const source_id = colonIdx !== -1 ? selectedSourceKey.slice(colonIdx + 1) : "0";
       setStreamStage("starting");
       setStatusText(`Переключение на ${mode === "desktop" ? "экран" : "камеру"} ${source_id}...`);
 
@@ -623,9 +627,10 @@ export default function VideoSurveillancePage() {
       const detail = err?.response?.data?.detail;
       const nackCode = detail?.code || detail?.nack?.code;
       if (nackCode) {
-        handleBannerError(nackCode);
+        const bannerMsg = handleBannerError(nackCode, detail?.message);
+        message.error(bannerMsg);
       } else {
-        message.error(typeof detail === "string" ? detail : "Ошибка переключения источника");
+        message.error(typeof detail === "string" ? detail : (detail?.message || "Ошибка переключения источника"));
       }
       setStreamStage("failed");
     } finally {
@@ -673,10 +678,56 @@ export default function VideoSurveillancePage() {
   };
 
   const isCurrentSourceActive = useMemo(() => {
-    if (!activeStream || !selectedSourceKey) return false;
-    const [mode, source_id] = selectedSourceKey.split(":");
+    if (!activeStream || activeStream.state !== "running" || !selectedSourceKey) return false;
+    const colonIdx = selectedSourceKey.indexOf(":");
+    const mode = colonIdx !== -1 ? selectedSourceKey.slice(0, colonIdx) : "desktop";
+    const source_id = colonIdx !== -1 ? selectedSourceKey.slice(colonIdx + 1) : "0";
     return activeStream.mode === mode && String(activeStream.source_id) === String(source_id);
   }, [activeStream, selectedSourceKey]);
+
+  const activeSourceLabel = useMemo(() => {
+    if (!activeStream || activeStream.state === "stopped" || (!activeStream.source_id && !activeStream.mode)) {
+      return null;
+    }
+    const mode = activeStream.mode || "desktop";
+    const srcId = String(activeStream.source_id ?? "");
+
+    if (mode === "desktop" && inventory?.displays?.length) {
+      const isGeneric = srcId === "0" || srcId === "disp" || srcId === "desktop" || srcId === "";
+      const disp =
+        inventory.displays.find(
+          (d: DisplaySource) =>
+            String(d.id) === srcId ||
+            String(d.desktop_id) === srcId ||
+            (isGeneric && (d.is_primary || d.primary))
+        ) || (isGeneric ? inventory.displays[0] : null);
+
+      if (disp) {
+        const res = disp.resolution || (disp.width && disp.height ? `${disp.width}x${disp.height}` : null);
+        return `${disp.name}${res ? ` (${res})` : ""}`;
+      }
+    }
+
+    if (mode === "usb-camera" && inventory?.cameras?.length) {
+      const isGeneric = srcId === "0" || srcId === "cam" || srcId === "camera" || srcId === "";
+      const cam =
+        inventory.cameras.find(
+          (c: CameraSource) =>
+            String(c.id) === srcId ||
+            String(c.camera_id) === srcId
+        ) || (isGeneric ? inventory.cameras[0] : null);
+
+      if (cam) {
+        return cam.name;
+      }
+    }
+
+    if (!srcId && !activeStream.mode) {
+      return null;
+    }
+
+    return `${mode} #${srcId || "0"}`;
+  }, [activeStream, inventory]);
 
   return (
     <div style={{ padding: "0 24px 24px" }}>
@@ -1150,10 +1201,10 @@ export default function VideoSurveillancePage() {
                       Этап: {streamStage}
                     </Tag>
                   )}
-                  {activeStream && (
+                  {activeSourceLabel && (
                     <Tag>
-                      Источник: {activeStream.mode || "desktop"} #{activeStream.source_id || "0"}
-                      {activeStream.restart_count ? ` (рестартов: ${activeStream.restart_count})` : ""}
+                      Источник: {activeSourceLabel}
+                      {activeStream?.restart_count ? ` (рестартов: ${activeStream.restart_count})` : ""}
                     </Tag>
                   )}
                   {rc.presence && (

@@ -107,9 +107,18 @@ client.interceptors.response.use(
       }
     }
 
-    const msg =
-      err.response?.data?.detail || err.message || "Unknown error";
-    return Promise.reject(new Error(msg));
+    const detail = err.response?.data?.detail;
+    let msg: string;
+    if (typeof detail === "string") {
+      msg = detail;
+    } else if (detail && typeof detail === "object") {
+      msg = detail.message || detail.code || JSON.stringify(detail);
+    } else {
+      msg = err.message || "Unknown error";
+    }
+    const error = new Error(msg);
+    (error as any).response = err.response;
+    return Promise.reject(error);
   }
 );
 
