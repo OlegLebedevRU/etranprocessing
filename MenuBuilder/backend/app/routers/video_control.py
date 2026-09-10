@@ -129,7 +129,7 @@ class StreamStateResponse(BaseModel):
 
 class ControlEventRequest(BaseModel):
     lease_id: str
-    type: Literal["pointer_move", "mouse_click", "key"]
+    type: Literal["pointer_move", "mouse_click", "key", "key_event"]
     x: int | None = Field(default=None, ge=0, le=65535)
     y: int | None = Field(default=None, ge=0, le=65535)
     button: Literal["left"] = "left"
@@ -160,7 +160,7 @@ class WsInboundClick(BaseModel):
 
 
 class WsInboundKey(BaseModel):
-    type: Literal["key"]
+    type: Literal["key", "key_event"]
     kind: Literal["down", "up", "press"]
     vk: int = Field(ge=0, le=255)
     text: str | None = Field(default=None, max_length=32)
@@ -860,7 +860,7 @@ async def send_device_control_event(
             org_id=org_id,
             user=user,
         )
-    elif event.type == "key":
+    elif event.type in ("key", "key_event"):
         if event.kind is None or event.vk is None:
             raise HTTPException(
                 status_code=422, detail="kind and vk are required for key event"
@@ -988,7 +988,7 @@ async def control_ws_proxy(
                         elif msg_type == "mouse_click":
                             validated = WsInboundClick.model_validate(data)
                             click_count += 1
-                        elif msg_type == "key":
+                        elif msg_type in ("key", "key_event"):
                             validated = WsInboundKey.model_validate(data)
                         elif msg_type == "keepalive":
                             validated = WsInboundKeepalive.model_validate(data)
@@ -1006,7 +1006,21 @@ async def control_ws_proxy(
                         )
                         continue
 
-                    await upstream_ws.send(validated.model_dump_json())
+                    payload = validated.model_dump(exclude_none=True)
+                    if msg_type in ("key", "key_event"):
+                        payload["type"] = "key_event"
+                    if msg_type in ("pointer_move", "mouse_click", "key", "key_event"):
+                        desktop_id = lease_info.get(
+                            "selected_desktop_id"
+                        ) or lease_info.get("desktop_id")
+                        if desktop_id:
+                            payload.setdefault("desktop_id", desktop_id)
+                        if lease_info.get("stream_instance_id"):
+                            payload.setdefault(
+                                "stream_instance_id",
+                                str(lease_info["stream_instance_id"]),
+                            )
+                    await upstream_ws.send(json.dumps(payload))
                     if msg_type == "release":
                         break
 
@@ -1028,7 +1042,8 @@ async def control_ws_proxy(
                     with contextlib.suppress(Exception):
                         parsed = json.loads(raw_msg)
                         if isinstance(parsed, dict):
-                            if parsed.get("type") == "click_result":
+                            out_type = parsed.get("type")
+                            if out_type == "click_result":
                                 click_results.append(
                                     {
                                         "command_id": parsed.get("command_id"),
@@ -1036,8 +1051,22 @@ async def control_ws_proxy(
                                         "latency_ms": parsed.get("latency_ms"),
                                     }
                                 )
-                            elif parsed.get("type") == "lease_revoked":
+                            elif out_type == "lease_revoked":
                                 close_reason = "lease_revoked"
+                                logger.info(
+                                    "Lease revoked upstream lease=%s device_id=%d reason=%s",
+                                    lease_id,
+                                    device_id,
+                                    parsed.get("reason"),
+                                )
+                            elif out_type == "stream_state":
+                                logger.info(
+                                    "Stream state event received upstream lease=%s device_id=%d state=%s stream_instance_id=%s",
+                                    lease_id,
+                                    device_id,
+                                    parsed.get("state"),
+                                    parsed.get("stream_instance_id"),
+                                )
 
                     try:
                         await websocket.send_text(raw_msg)

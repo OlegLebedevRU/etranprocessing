@@ -289,10 +289,17 @@ async def test_control_events_move_and_click(mock_db_session, org1_operator_head
             "latency_ms": 42,
         }
     )
+    mock_key = AsyncMock(
+        return_value={
+            "command_id": "9cc3eb62-8176-46b5-93fa-1a293be46b53",
+            "result": "injected",
+        }
+    )
 
     with (
         patch.object(iot_client, "remote_input_move", new=mock_move),
         patch.object(iot_client, "remote_input_click", new=mock_click),
+        patch.object(iot_client, "remote_input_key", new=mock_key),
     ):
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
@@ -328,6 +335,36 @@ async def test_control_events_move_and_click(mock_db_session, org1_operator_head
             data = resp_click.json()
             assert data["result"] == "injected"
             assert data["latency_ms"] == 42
+
+            # Key (legacy "key")
+            resp_key = await client.post(
+                "/api/v1/video/devices/1/control/events",
+                json={
+                    "lease_id": "52857e4e-2895-46c0-b2be-5f80b27feea7",
+                    "type": "key",
+                    "kind": "press",
+                    "vk": 13,
+                    "text": "\r",
+                    "client_ref": "ref-key-1",
+                },
+                headers=org1_operator_headers,
+            )
+            assert resp_key.status_code == 200
+            assert mock_key.await_count == 1
+
+            # Key ("key_event")
+            resp_key_event = await client.post(
+                "/api/v1/video/devices/1/control/events",
+                json={
+                    "lease_id": "52857e4e-2895-46c0-b2be-5f80b27feea7",
+                    "type": "key_event",
+                    "kind": "down",
+                    "vk": 65,
+                },
+                headers=org1_operator_headers,
+            )
+            assert resp_key_event.status_code == 200
+            assert mock_key.await_count == 2
 
 
 @pytest.mark.anyio
@@ -515,3 +552,244 @@ def test_ws_relay_happy_path_and_release(org1_operator_token, mock_db_session):
 
     # Upon disconnect, remote_input_release should have been called
     mock_release.assert_awaited_once()
+
+
+def test_ws_proxy_key_normalization_and_enrichment(
+    org1_operator_token, mock_db_session
+):
+    client = TestClient(app)
+
+    fake_status = {
+        "sn": "sn0001",
+        "agent": {"online": True, "desktop_available": True},
+        "lease": {
+            "active": True,
+            "lease_id": "test-lease",
+            "owner_user_id": "operator1",
+            "selected_desktop_id": "disp:3f8a12bc",
+            "stream_instance_id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+            "expires_at": "2026-09-09T10:05:00Z",
+        },
+    }
+
+    class FakeSessionContext:
+        async def __aenter__(self):
+            return mock_db_session
+
+        async def __aexit__(self, *args):
+            pass
+
+    mock_release = AsyncMock(return_value=None)
+
+    class FakeUpstreamWs:
+        def __init__(self):
+            self.sent = []
+            self.incoming = asyncio.Queue()
+            self.incoming.put_nowait(json.dumps({"type": "hello", "v": 1}))
+
+        async def send(self, msg):
+            self.sent.append(json.loads(msg))
+
+        async def recv(self):
+            return await self.incoming.get()
+
+    class FakeUpstreamConnect:
+        def __init__(self, *args, **kwargs):
+            self.ws = FakeUpstreamWs()
+
+        async def __aenter__(self):
+            return self.ws
+
+        async def __aexit__(self, *args):
+            pass
+
+    fake_connect = FakeUpstreamConnect()
+
+    with (
+        patch(
+            "app.routers.video_control.async_session", return_value=FakeSessionContext()
+        ),
+        patch.object(
+            iot_client, "remote_input_status", new=AsyncMock(return_value=fake_status)
+        ),
+        patch.object(iot_client, "remote_input_release", new=mock_release),
+        patch(
+            "app.routers.video_control.websockets.connect",
+            return_value=fake_connect,
+        ),
+        client.websocket_connect(
+            "/api/v1/video/devices/1/control/ws/test-lease",
+            cookies={"accessToken": org1_operator_token},
+        ) as ws,
+    ):
+        hello = ws.receive_json()
+        assert hello.get("type") == "hello"
+
+        # 1. Send "key" -> normalized to "key_event" + enriched
+        ws.send_json({"type": "key", "kind": "press", "vk": 13, "text": "\r"})
+
+        # 2. Send "key_event" -> stays "key_event" + enriched
+        ws.send_json({"type": "key_event", "kind": "down", "vk": 65})
+
+        # 3. Send "pointer_move" -> enriched with desktop_id & stream_instance_id
+        ws.send_json({"type": "pointer_move", "x": 100, "y": 200})
+
+        # 4. Send "mouse_click" -> enriched with desktop_id & stream_instance_id
+        ws.send_json(
+            {
+                "type": "mouse_click",
+                "x": 300,
+                "y": 400,
+                "button": "left",
+                "client_ref": "c-test",
+            }
+        )
+
+        # 5. Send keepalive -> NOT enriched with desktop_id / stream_instance_id
+        ws.send_json({"type": "keepalive"})
+
+        # Send release to finish cleanly
+        ws.send_json({"type": "release"})
+
+    sent = fake_connect.ws.sent
+    assert len(sent) == 6
+
+    # Verify key -> key_event
+    msg_key = sent[0]
+    assert msg_key["type"] == "key_event"
+    assert msg_key["kind"] == "press"
+    assert msg_key["vk"] == 13
+    assert msg_key["text"] == "\r"
+    assert msg_key["desktop_id"] == "disp:3f8a12bc"
+    assert msg_key["stream_instance_id"] == "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+
+    # Verify key_event
+    msg_key_event = sent[1]
+    assert msg_key_event["type"] == "key_event"
+    assert msg_key_event["kind"] == "down"
+    assert msg_key_event["vk"] == 65
+    assert msg_key_event["desktop_id"] == "disp:3f8a12bc"
+    assert msg_key_event["stream_instance_id"] == "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+
+    # Verify pointer_move enrichment
+    msg_move = sent[2]
+    assert msg_move["type"] == "pointer_move"
+    assert msg_move["x"] == 100
+    assert msg_move["y"] == 200
+    assert msg_move["desktop_id"] == "disp:3f8a12bc"
+    assert msg_move["stream_instance_id"] == "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+
+    # Verify mouse_click enrichment
+    msg_click = sent[3]
+    assert msg_click["type"] == "mouse_click"
+    assert msg_click["x"] == 300
+    assert msg_click["y"] == 400
+    assert msg_click["button"] == "left"
+    assert msg_click["client_ref"] == "c-test"
+    assert msg_click["desktop_id"] == "disp:3f8a12bc"
+    assert msg_click["stream_instance_id"] == "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+
+    # Verify keepalive has no desktop_id / stream_instance_id
+    msg_keepalive = sent[4]
+    assert msg_keepalive == {"type": "keepalive"}
+
+
+def test_ws_proxy_stream_state_and_lease_revoked_forwarding(
+    org1_operator_token, mock_db_session
+):
+    client = TestClient(app)
+
+    fake_status = {
+        "sn": "sn0001",
+        "agent": {"online": True, "desktop_available": True},
+        "lease": {
+            "active": True,
+            "lease_id": "test-lease",
+            "owner_user_id": "operator1",
+            "expires_at": "2026-09-09T10:05:00Z",
+        },
+    }
+
+    class FakeSessionContext:
+        async def __aenter__(self):
+            return mock_db_session
+
+        async def __aexit__(self, *args):
+            pass
+
+    mock_release = AsyncMock(return_value=None)
+
+    class FakeUpstreamWs:
+        def __init__(self):
+            self.sent = []
+            self.incoming = asyncio.Queue()
+            self.incoming.put_nowait(json.dumps({"type": "hello", "v": 1}))
+
+        async def send(self, msg):
+            self.sent.append(json.loads(msg))
+
+        async def recv(self):
+            return await self.incoming.get()
+
+    class FakeUpstreamConnect:
+        def __init__(self, *args, **kwargs):
+            self.ws = FakeUpstreamWs()
+
+        async def __aenter__(self):
+            return self.ws
+
+        async def __aexit__(self, *args):
+            pass
+
+    fake_connect = FakeUpstreamConnect()
+
+    with (
+        patch(
+            "app.routers.video_control.async_session", return_value=FakeSessionContext()
+        ),
+        patch.object(
+            iot_client, "remote_input_status", new=AsyncMock(return_value=fake_status)
+        ),
+        patch.object(iot_client, "remote_input_release", new=mock_release),
+        patch(
+            "app.routers.video_control.websockets.connect",
+            return_value=fake_connect,
+        ),
+        client.websocket_connect(
+            "/api/v1/video/devices/1/control/ws/test-lease",
+            cookies={"accessToken": org1_operator_token},
+        ) as ws,
+    ):
+        hello = ws.receive_json()
+        assert hello.get("type") == "hello"
+
+        # Upstream sends stream_state
+        fake_connect.ws.incoming.put_nowait(
+            json.dumps(
+                {
+                    "type": "stream_state",
+                    "state": "running",
+                    "stream_instance_id": "inst-456",
+                    "reason": "Process started successfully",
+                }
+            )
+        )
+        msg_stream_state = ws.receive_json()
+        assert msg_stream_state["type"] == "stream_state"
+        assert msg_stream_state["state"] == "running"
+        assert msg_stream_state["stream_instance_id"] == "inst-456"
+
+        # Upstream sends lease_revoked
+        fake_connect.ws.incoming.put_nowait(
+            json.dumps(
+                {
+                    "type": "lease_revoked",
+                    "reason": "lease_expired",
+                }
+            )
+        )
+        msg_revoked = ws.receive_json()
+        assert msg_revoked["type"] == "lease_revoked"
+        assert msg_revoked["reason"] == "lease_expired"
+
+        ws.send_json({"type": "release"})

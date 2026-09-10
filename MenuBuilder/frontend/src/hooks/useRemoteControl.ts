@@ -348,7 +348,7 @@ export function useRemoteControl({
     (kind: "down" | "up" | "press", vk: number, text?: string) => {
       if (status !== "active") return false;
       return sendWsMessage({
-        type: "key",
+        type: "key_event",
         kind,
         vk,
         text,
@@ -361,14 +361,17 @@ export function useRemoteControl({
     (x: number, y: number) => {
       if (status !== "active") return;
 
+      const clampedX = Math.max(0, Math.min(65535, Math.round(x)));
+      const clampedY = Math.max(0, Math.min(65535, Math.round(y)));
+
       const now = Date.now();
       const throttleIntervalMs = 100; // <= 10 moves per second
 
-      pendingMoveRef.current = { x, y };
+      pendingMoveRef.current = { x: clampedX, y: clampedY };
 
       if (now - lastMoveSentTimeRef.current >= throttleIntervalMs) {
         lastMoveSentTimeRef.current = now;
-        sendWsMessage({ type: "pointer_move", x, y });
+        sendWsMessage({ type: "pointer_move", x: clampedX, y: clampedY });
         pendingMoveRef.current = null;
       } else if (!moveTimerRef.current) {
         const remaining = throttleIntervalMs - (now - lastMoveSentTimeRef.current);
@@ -395,9 +398,12 @@ export function useRemoteControl({
         return { result: "unconfirmed", message: "Управление не активно" };
       }
 
+      const clampedX = Math.max(0, Math.min(65535, Math.round(x)));
+      const clampedY = Math.max(0, Math.min(65535, Math.round(y)));
+
       // 1. Flush any pending move or send final move with same coordinates
       clearMoveThrottle();
-      sendWsMessage({ type: "pointer_move", x, y });
+      sendWsMessage({ type: "pointer_move", x: clampedX, y: clampedY });
       lastMoveSentTimeRef.current = Date.now();
 
       // 2. Prepare mouse_click with client_ref
@@ -422,8 +428,8 @@ export function useRemoteControl({
 
         const sent = sendWsMessage({
           type: "mouse_click",
-          x,
-          y,
+          x: clampedX,
+          y: clampedY,
           button: "left",
           client_ref: clientRef,
         });

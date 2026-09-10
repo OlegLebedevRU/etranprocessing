@@ -189,10 +189,18 @@ export type ControlWsOutbound =
       reason?: string;
     };
 
+export interface ControlWsKey {
+  type: "key_event" | "key";
+  kind: "down" | "up" | "press";
+  vk: number;
+  text?: string;
+  client_ref?: string;
+}
+
 export type ControlWsInbound =
   | { type: "pointer_move"; x: number; y: number }
   | { type: "mouse_click"; x: number; y: number; button: "left"; client_ref?: string }
-  | { type: "key"; kind: "down" | "up" | "press"; vk: number; text?: string; client_ref?: string }
+  | ControlWsKey
   | { type: "keepalive" }
   | { type: "release" };
 
@@ -280,7 +288,7 @@ export async function sendControlEvent(
   event:
     | { lease_id: string; type: "pointer_move"; x: number; y: number }
     | { lease_id: string; type: "mouse_click"; x: number; y: number; button?: "left"; client_ref?: string }
-    | { lease_id: string; type: "key"; kind: "down" | "up" | "press"; vk: number; text?: string; client_ref?: string }
+    | { lease_id: string; type: "key" | "key_event"; kind: "down" | "up" | "press"; vk: number; text?: string; client_ref?: string }
 ): Promise<any> {
   const { data } = await client.post(`/v1/video/devices/${deviceId}/control/events`, event);
   return data;
