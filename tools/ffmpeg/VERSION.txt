@@ -1,0 +1,30 @@
+FFmpeg Distribution Package for Leo4 Terminal Tools Suite
+
+[Architecture: x64]
+Version: 9.0 minimal-static (Zero-Dependency)
+Binary: ffmpeg\x64\ffmpeg.exe (~33 MB)
+Build Toolchain: MinGW-w64 (x86_64-w64-mingw32, GCC 16.2.0, crosstool-NG)
+Source Container: ghcr.io/btbn/ffmpeg-builds/base-win64
+Built-in Features:
+  - Video Encoder: libx264 (H.264 / AVC static)
+  - Screen Capture: gdigrab (GDI desktop capture with mouse cursor)
+  - Camera Capture: dshow (DirectShow)
+  - Network Protocols: rtp, udp
+  - Pixel Processing: swscale, filters (scale, format, fps)
+External DLLs: NONE (fully statically linked, depends only on Windows system DLLs and UCRT)
+Target OS: Windows 10/11 x64, Windows Server 2016-2025, Windows 7 SP1 x64 (with KB2999226 / UCRT)
+
+[Architecture: x86]
+Version: 9.0 minimal-static (Zero-Dependency)
+Binary: ffmpeg\x86\ffmpeg.exe (~26 MB)
+Build Toolchain: MinGW-w64 (i686-w64-mingw32, GCC 16.2.0, crosstool-NG)
+Source Container: ghcr.io/btbn/ffmpeg-builds/base-win32
+Built-in Features:
+  - Video Encoder: libx264 (H.264 / AVC static)
+  - Screen Capture: gdigrab (GDI desktop capture with mouse cursor)
+  - Camera Capture: dshow (DirectShow)
+  - Network Protocols: rtp, udp
+  - Pixel Processing: swscale, filters (scale, format, fps)
+External DLLs: NONE (fully statically linked, depends only on Windows system DLLs and UCRT)
+Target OS: Windows 10/11 x86, Windows 7 Embedded / POSReady 7 x86, Windows 7 SP1 x86 (with KB2999226 / UCRT)
+Status: READY

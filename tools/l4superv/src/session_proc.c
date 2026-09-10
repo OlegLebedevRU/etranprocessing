@@ -46,9 +46,10 @@ DWORD sp_get_active_console_session(void) {
     return sessionId;
 }
 
-BOOL sp_start_in_session(DWORD session_id, const wchar_t* exe, const wchar_t* cmdline, const wchar_t* workdir, PROCESS_INFORMATION* out) {
+BOOL sp_start_in_session(DWORD session_id, const wchar_t* exe, const wchar_t* cmdline, const wchar_t* workdir, PROCESS_INFORMATION* out, HANDLE* out_job) {
     if (!out) return FALSE;
     memset(out, 0, sizeof(PROCESS_INFORMATION));
+    if (out_job) *out_job = NULL;
 
     if (session_id == 0) {
         return FALSE;
@@ -81,7 +82,24 @@ BOOL sp_start_in_session(DWORD session_id, const wchar_t* exe, const wchar_t* cm
         wcsncpy_s(cmdline_buf, sizeof(cmdline_buf) / sizeof(wchar_t), cmdline, _TRUNCATE);
     }
 
-    DWORD creation_flags = CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT | CREATE_BREAKAWAY_FROM_JOB;
+    // 1. Create dedicated Job Object for process tree isolation
+    HANDLE hJob = CreateJobObjectW(NULL, NULL);
+    if (hJob) {
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION jeli;
+        memset(&jeli, 0, sizeof(jeli));
+        jeli.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        // JOB_OBJECT_LIMIT_BREAKAWAY_OK is intentionally NOT set (child processes cannot breakaway)
+        SetInformationJobObject(hJob, JobObjectExtendedLimitInformation, &jeli, sizeof(jeli));
+    }
+
+    // 2. Prepare creation flags: create suspended so child is placed in Job Object before running
+    DWORD creation_flags = CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED;
+
+    BOOL in_job = FALSE;
+    if (IsProcessInJob(GetCurrentProcess(), NULL, &in_job) && in_job) {
+        // Only break away from parent job if supervisor itself was launched inside a job
+        creation_flags |= CREATE_BREAKAWAY_FROM_JOB;
+    }
 
     BOOL ret = CreateProcessAsUserW(
         hPrimaryToken,
@@ -102,7 +120,25 @@ BOOL sp_start_in_session(DWORD session_id, const wchar_t* exe, const wchar_t* cm
     }
     CloseHandle(hPrimaryToken);
 
-    return ret;
+    if (!ret) {
+        if (hJob) {
+            CloseHandle(hJob);
+        }
+        return FALSE;
+    }
+
+    // 3. Assign process to Job Object before resuming
+    if (hJob) {
+        AssignProcessToJobObject(hJob, out->hProcess);
+        if (out_job) {
+            *out_job = hJob;
+        }
+    }
+
+    // 4. Resume main thread to begin execution
+    ResumeThread(out->hThread);
+
+    return TRUE;
 }
 
 BOOL sp_is_alive(HANDLE hProcess) {
@@ -114,13 +150,25 @@ BOOL sp_is_alive(HANDLE hProcess) {
     return FALSE;
 }
 
-void sp_stop(PROCESS_INFORMATION* pi, const wchar_t* stop_event_name, DWORD grace_ms) {
-    if (!pi || !pi->hProcess || pi->hProcess == INVALID_HANDLE_VALUE) return;
+void sp_stop(PROCESS_INFORMATION* pi, HANDLE* phJob, const wchar_t* stop_event_name, DWORD grace_ms) {
+    if (!pi || !pi->hProcess || pi->hProcess == INVALID_HANDLE_VALUE) {
+        if (phJob && *phJob && *phJob != INVALID_HANDLE_VALUE) {
+            CloseHandle(*phJob);
+            *phJob = NULL;
+        }
+        return;
+    }
+
+    DWORD timeout = (grace_ms >= 8000) ? grace_ms : (grace_ms == 0 ? L4_STOP_GRACE_DEFAULT_MS : grace_ms);
 
     if (!sp_is_alive(pi->hProcess)) {
         CloseHandle(pi->hProcess);
         if (pi->hThread) CloseHandle(pi->hThread);
         memset(pi, 0, sizeof(PROCESS_INFORMATION));
+        if (phJob && *phJob && *phJob != INVALID_HANDLE_VALUE) {
+            CloseHandle(*phJob);
+            *phJob = NULL;
+        }
         return;
     }
 
@@ -132,8 +180,11 @@ void sp_stop(PROCESS_INFORMATION* pi, const wchar_t* stop_event_name, DWORD grac
         }
     }
 
-    DWORD wait_res = WaitForSingleObject(pi->hProcess, grace_ms > 0 ? grace_ms : 3000);
+    DWORD wait_res = WaitForSingleObject(pi->hProcess, timeout);
     if (wait_res != WAIT_OBJECT_0) {
+        if (phJob && *phJob && *phJob != INVALID_HANDLE_VALUE) {
+            TerminateJobObject(*phJob, 1);
+        }
         TerminateProcess(pi->hProcess, 0);
         WaitForSingleObject(pi->hProcess, 1000);
     }
@@ -141,4 +192,9 @@ void sp_stop(PROCESS_INFORMATION* pi, const wchar_t* stop_event_name, DWORD grac
     CloseHandle(pi->hProcess);
     if (pi->hThread) CloseHandle(pi->hThread);
     memset(pi, 0, sizeof(PROCESS_INFORMATION));
+
+    if (phJob && *phJob && *phJob != INVALID_HANDLE_VALUE) {
+        CloseHandle(*phJob);
+        *phJob = NULL;
+    }
 }

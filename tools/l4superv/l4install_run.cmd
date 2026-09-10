@@ -17,9 +17,9 @@ if not defined INSTALL_EXE (
 net session >nul 2>&1
 if %errorlevel% neq 0 (
     echo Requesting Administrator privileges...
-    powershell -Command "Start-Process '%INSTALL_EXE%' -Verb RunAs -Wait"
+    powershell -NoProfile -Command "Start-Process '%INSTALL_EXE%' -ArgumentList '%*' -Verb RunAs -Wait"
     exit /b %errorlevel%
 )
 
-"%INSTALL_EXE%"
+"%INSTALL_EXE%" %*
 pause

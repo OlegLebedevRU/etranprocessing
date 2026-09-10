@@ -153,12 +153,18 @@ if exist "%~dp0CHANGELOG.md" (
 )
 
 :: 7. Stage User Guide in package root
-echo [7/7] Staging terminal-tools-user-guide.md in package root...
+echo [7/8] Staging terminal-tools-user-guide.md in package root...
 if exist "%REPO_TOOLS%\..\docs\terminal-tools-user-guide.md" (
     copy /y "%REPO_TOOLS%\..\docs\terminal-tools-user-guide.md" "%STAGING%\terminal-tools-user-guide.md" >nul
     copy /y "%REPO_TOOLS%\..\docs\terminal-tools-user-guide.md" "%~dp0bin\terminal-tools-user-guide.md" >nul 2>nul
 ) else if exist "%~dp0bin\terminal-tools-user-guide.md" (
     copy /y "%~dp0bin\terminal-tools-user-guide.md" "%STAGING%\terminal-tools-user-guide.md" >nul
+)
+
+:: 8. Pack FFmpeg package
+echo [8/8] Packing FFmpeg package via pack_ffmpeg.cmd...
+if exist "%REPO_TOOLS%\ffmpeg\pack_ffmpeg.cmd" (
+    call "%REPO_TOOLS%\ffmpeg\pack_ffmpeg.cmd"
 )
 
 :: Create zip archive via PowerShell Compress-Archive

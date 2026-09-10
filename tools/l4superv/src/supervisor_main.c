@@ -130,8 +130,21 @@ static void print_status(const L4SupervConfig* cfg) {
 
     DWORD desk_pid = 0, desk_session = 0;
     bool desk_running = orchestrator_get_l4desk_status(&desk_pid, &desk_session);
+    FFmpegStatus ffmpeg_st = { 0 };
+    bool ffmpeg_found = orchestrator_get_ffmpeg_status(cfg->base_path, &ffmpeg_st);
+
     if (desk_running) {
-        wprintf(L"  %-12ls : RUNNING (pid %lu, session %lu)\n", L"l4desk", desk_pid, desk_session);
+        if (ffmpeg_found && ffmpeg_st.is_active) {
+            wprintf(L"  %-12ls : RUNNING (PID %lu, session %lu), FFmpeg: RUNNING (PID %lu, %hs)\n",
+                    L"l4desk", desk_pid, desk_session, ffmpeg_st.pid,
+                    ffmpeg_st.stream_instance_id[0] ? ffmpeg_st.stream_instance_id : "active");
+        } else if (ffmpeg_found && ffmpeg_st.state[0] != '\0' && _stricmp(ffmpeg_st.state, "stopped") != 0 && ffmpeg_st.pid > 0) {
+            wprintf(L"  %-12ls : RUNNING (PID %lu, session %lu), FFmpeg: %hs (PID %lu)\n",
+                    L"l4desk", desk_pid, desk_session, ffmpeg_st.state, ffmpeg_st.pid);
+        } else {
+            wprintf(L"  %-12ls : RUNNING (PID %lu, session %lu), FFmpeg: IDLE\n",
+                    L"l4desk", desk_pid, desk_session);
+        }
     } else {
         DWORD active_session = sp_get_active_console_session();
         if (active_session == 0) {

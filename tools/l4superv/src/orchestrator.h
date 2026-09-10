@@ -3,6 +3,13 @@
 #include "state_mgr.h"
 #include <stdbool.h>
 
+typedef struct {
+    DWORD pid;
+    char  state[32];
+    char  stream_instance_id[64];
+    bool  is_active;
+} FFmpegStatus;
+
 /**
  * Execute a single orchestration step (poll proxy, check HW, manage configs and services).
  * Returns true if step completed successfully.
@@ -18,3 +25,8 @@ void orchestrator_run_loop(const L4SupervConfig* cfg, volatile bool* p_stop_flag
  * Query current runtime status of l4desk user session process.
  */
 bool orchestrator_get_l4desk_status(DWORD* out_pid, DWORD* out_session);
+
+/**
+ * Query current runtime status of FFmpeg process from l4desk state file.
+ */
+bool orchestrator_get_ffmpeg_status(const wchar_t* base_path, FFmpegStatus* out_status);

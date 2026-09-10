@@ -12,9 +12,40 @@
 #pragma comment(lib, "shlwapi.lib")
 
 static PROCESS_INFORMATION g_l4desk_pi = { 0 };
-static DWORD               g_l4desk_session = 0;
+static HANDLE               g_l4desk_job = NULL;
+static DWORD                g_l4desk_session = 0;
 static time_t              g_l4desk_last_start_attempt = 0;
 static int                 g_l4desk_backoff_sec = 5;
+
+static bool json_extract_str(const char* json, const char* key, char* out, size_t out_size) {
+    if (!json || !key || !out || out_size == 0) return false;
+    char search[128];
+    sprintf_s(search, sizeof(search), "\"%s\"", key);
+    const char* p = strstr(json, search);
+    if (!p) return false;
+    p += strlen(search);
+    while (*p && (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n' || *p == ':')) p++;
+    if (*p != '\"') return false;
+    p++;
+    size_t i = 0;
+    while (*p && *p != '\"' && i < out_size - 1) {
+        out[i++] = *p++;
+    }
+    out[i] = '\0';
+    return true;
+}
+
+static bool json_extract_int(const char* json, const char* key, int* out_val) {
+    if (!json || !key || !out_val) return false;
+    char search[128];
+    sprintf_s(search, sizeof(search), "\"%s\"", key);
+    const char* p = strstr(json, search);
+    if (!p) return false;
+    p += strlen(search);
+    while (*p && (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n' || *p == ':')) p++;
+    *out_val = atoi(p);
+    return true;
+}
 
 bool orchestrator_get_l4desk_status(DWORD* out_pid, DWORD* out_session) {
     if (out_pid) *out_pid = 0;
@@ -26,8 +57,60 @@ bool orchestrator_get_l4desk_status(DWORD* out_pid, DWORD* out_session) {
         ProcessIdToSessionId(g_l4desk_pi.dwProcessId, &sid);
         if (out_session) *out_session = sid ? sid : g_l4desk_session;
         return true;
+    } else if (g_l4desk_pi.hProcess || g_l4desk_job) {
+        sp_stop(&g_l4desk_pi, &g_l4desk_job, NULL, 0);
+        g_l4desk_session = 0;
     }
     return false;
+}
+
+bool orchestrator_get_ffmpeg_status(const wchar_t* base_path, FFmpegStatus* out_status) {
+    if (!out_status) return false;
+    memset(out_status, 0, sizeof(FFmpegStatus));
+
+    wchar_t state_file[MAX_PATH];
+    swprintf_s(state_file, MAX_PATH, L"%ls\\l4desk\\state\\ffmpeg_state.json",
+               (base_path && base_path[0]) ? base_path : L"C:\\l4tools");
+
+    if (!PathFileExistsW(state_file)) {
+        return false;
+    }
+
+    FILE* f = NULL;
+    if (_wfopen_s(&f, state_file, L"rb") != 0 || !f) {
+        return false;
+    }
+
+    char buf[4096] = { 0 };
+    size_t bytes_read = fread(buf, 1, sizeof(buf) - 1, f);
+    fclose(f);
+    if (bytes_read == 0) {
+        return false;
+    }
+    buf[bytes_read] = '\0';
+
+    int pid = 0;
+    if (json_extract_int(buf, "pid", &pid)) {
+        out_status->pid = (DWORD)pid;
+    }
+    json_extract_str(buf, "state", out_status->state, sizeof(out_status->state));
+    json_extract_str(buf, "stream_instance_id", out_status->stream_instance_id, sizeof(out_status->stream_instance_id));
+
+    if (out_status->pid > 0) {
+        HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, out_status->pid);
+        if (!hProc) {
+            hProc = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, out_status->pid);
+        }
+        if (hProc) {
+            DWORD exitCode = 0;
+            if (GetExitCodeProcess(hProc, &exitCode) && exitCode == STILL_ACTIVE) {
+                out_status->is_active = true;
+            }
+            CloseHandle(hProc);
+        }
+    }
+
+    return true;
 }
 
 static void log_info(const char* fmt, ...) {
@@ -73,7 +156,7 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
             svc_restart(SVC_NAME_L4CON);
 
             if (sp_is_alive(g_l4desk_pi.hProcess)) {
-                sp_stop(&g_l4desk_pi, NULL, 3000);
+                sp_stop(&g_l4desk_pi, &g_l4desk_job, NULL, 8000);
                 g_l4desk_session = 0;
             }
 
@@ -113,7 +196,7 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
                 if (sp_is_alive(g_l4desk_pi.hProcess)) {
                     wchar_t stop_evt[128];
                     swprintf_s(stop_evt, 128, L"Global\\L4Desk_Stop_%hs", state->sn);
-                    sp_stop(&g_l4desk_pi, stop_evt, 3000);
+                    sp_stop(&g_l4desk_pi, &g_l4desk_job, stop_evt, 8000);
                     g_l4desk_session = 0;
                 }
             }
@@ -207,7 +290,7 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
                         log_info("[WATCHDOG] No active console session found. Stopping l4desk...");
                         wchar_t stop_evt[128];
                         swprintf_s(stop_evt, 128, L"Global\\L4Desk_Stop_%hs", state->sn);
-                        sp_stop(&g_l4desk_pi, stop_evt, 3000);
+                        sp_stop(&g_l4desk_pi, &g_l4desk_job, stop_evt, 8000);
                         g_l4desk_session = 0;
                     }
                 } else {
@@ -219,7 +302,7 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
                                      proc_session, active_session);
                             wchar_t stop_evt[128];
                             swprintf_s(stop_evt, 128, L"Global\\L4Desk_Stop_%hs", state->sn);
-                            sp_stop(&g_l4desk_pi, stop_evt, 3000);
+                            sp_stop(&g_l4desk_pi, &g_l4desk_job, stop_evt, 8000);
                             g_l4desk_session = 0;
                         }
                     }
@@ -246,8 +329,9 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
 
                                 log_info("[WATCHDOG] Launching l4desk in active console session %lu...", active_session);
                                 sp_enable_system_privileges();
-                                if (sp_start_in_session(active_session, l4desk_exe, cmdline, workdir, &g_l4desk_pi)) {
-                                    log_info("[WATCHDOG] l4desk started in session %lu (PID: %lu)", active_session, g_l4desk_pi.dwProcessId);
+                                if (sp_start_in_session(active_session, l4desk_exe, cmdline, workdir, &g_l4desk_pi, &g_l4desk_job)) {
+                                    log_info("[WATCHDOG] l4desk started in session %lu (PID: %lu, Job: %p)",
+                                             active_session, g_l4desk_pi.dwProcessId, g_l4desk_job);
                                     g_l4desk_session = active_session;
                                     g_l4desk_backoff_sec = 5;
                                     if (p_action_taken) *p_action_taken = true;
@@ -262,7 +346,7 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
             } else {
                 if (sp_is_alive(g_l4desk_pi.hProcess)) {
                     log_info("[WATCHDOG] Terminal state not active. Stopping l4desk...");
-                    sp_stop(&g_l4desk_pi, NULL, 3000);
+                    sp_stop(&g_l4desk_pi, &g_l4desk_job, NULL, 8000);
                     g_l4desk_session = 0;
                 }
             }
@@ -305,7 +389,7 @@ void orchestrator_run_loop(const L4SupervConfig* cfg, volatile bool* p_stop_flag
     if (sp_is_alive(g_l4desk_pi.hProcess)) {
         wchar_t stop_evt[128];
         swprintf_s(stop_evt, 128, L"Global\\L4Desk_Stop_%hs", state.sn);
-        sp_stop(&g_l4desk_pi, stop_evt, 3000);
+        sp_stop(&g_l4desk_pi, &g_l4desk_job, stop_evt, 8000);
         g_l4desk_session = 0;
     }
 
