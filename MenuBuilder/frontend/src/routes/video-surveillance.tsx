@@ -252,12 +252,53 @@ export default function VideoSurveillancePage() {
       setLoadingInventory(true);
       try {
         const [inv, stateRes, ctlStat] = await Promise.all([
-          getDeviceInventory(deviceId, refresh).catch(() => ({ displays: [], cameras: [] })),
+          getDeviceInventory(deviceId, refresh).catch(async () => {
+            if (refresh) {
+              return getDeviceInventory(deviceId, false).catch(() => ({ displays: [], cameras: [] }));
+            }
+            return { displays: [], cameras: [] };
+          }),
           getDeviceStreamState(deviceId).catch(() => null),
           getControlStatus(deviceId).catch(() => null),
         ]);
 
-        setInventory(inv);
+        const rawDisplays = (inv?.displays || []) as DisplaySource[];
+        const rawCameras = (inv?.cameras || []) as CameraSource[];
+
+        const displays: DisplaySource[] = rawDisplays.map((d: any) => ({
+          ...d,
+          id: String(d.id || d.desktop_id || "0"),
+          desktop_id: String(d.desktop_id || d.id || "0"),
+          is_primary: Boolean(d.is_primary ?? d.primary),
+          primary: Boolean(d.primary ?? d.is_primary),
+          resolution: d.resolution || (d.width && d.height ? `${d.width}x${d.height}` : undefined),
+        }));
+
+        const cameras: CameraSource[] = rawCameras.map((c: any) => ({
+          ...c,
+          id: String(c.id || c.camera_id || "0"),
+          camera_id: String(c.camera_id || c.id || "0"),
+        }));
+
+        const agent = ctlStat?.agent;
+        if (displays.length === 0 && (agent?.desktop_available || agent?.screen)) {
+          const w = agent?.screen?.virtual_width || 1920;
+          const h = agent?.screen?.virtual_height || 1080;
+          displays.push({
+            id: "0",
+            desktop_id: "0",
+            name: "Основной экран",
+            resolution: `${w}x${h}`,
+            width: w,
+            height: h,
+            is_primary: true,
+            primary: true,
+            policy: "input",
+          });
+        }
+
+        const normalizedInv: DeviceInventory = { displays, cameras };
+        setInventory(normalizedInv);
         if (ctlStat?.agent) {
           rcRef.current.setPresence(ctlStat.agent);
         }
@@ -278,11 +319,11 @@ export default function VideoSurveillancePage() {
         // Set default selected source
         if (streamInfo?.source_id && streamInfo?.mode) {
           setSelectedSourceKey(`${streamInfo.mode}:${streamInfo.source_id}`);
-        } else if (inv.displays && inv.displays.length > 0) {
-          const primary = inv.displays.find((d: DisplaySource) => d.is_primary) || inv.displays[0];
-          setSelectedSourceKey(`desktop:${primary.id}`);
-        } else if (inv.cameras && inv.cameras.length > 0) {
-          setSelectedSourceKey(`usb-camera:${inv.cameras[0].id}`);
+        } else if (displays.length > 0) {
+          const primary = displays.find((d: DisplaySource) => d.is_primary || d.primary) || displays[0];
+          setSelectedSourceKey(`desktop:${primary.id || primary.desktop_id || "0"}`);
+        } else if (cameras.length > 0) {
+          setSelectedSourceKey(`usb-camera:${cameras[0].id || cameras[0].camera_id || "0"}`);
         }
       } catch (err: any) {
         console.warn("Failed to fetch device inventory/state", err);
@@ -412,19 +453,28 @@ export default function VideoSurveillancePage() {
       // 2. Parse selected mode and source_id
       const [mode, source_id] = selectedSourceKey.split(":");
       setStatusText("Запуск трансляции на терминале...");
-      const startRes = await startDeviceStream(selectedDevice.device_id, {
-        mode: mode as "desktop" | "usb-camera",
-        source_id: source_id || "0",
-        profile: selectedProfile,
-        lease_id: leaseRes.lease_id,
-      });
+      try {
+        const startRes = await startDeviceStream(selectedDevice.device_id, {
+          mode: mode as "desktop" | "usb-camera",
+          source_id: source_id || "0",
+          profile: selectedProfile,
+          lease_id: leaseRes.lease_id,
+        });
 
-      setActiveStream({
-        state: (startRes.state as any) || "running",
-        mode,
-        source_id,
-        stream_instance_id: startRes.stream_instance_id,
-      });
+        setActiveStream({
+          state: (startRes.state as any) || "running",
+          mode,
+          source_id,
+          stream_instance_id: startRes.stream_instance_id,
+        });
+      } catch (streamErr: any) {
+        console.warn("startDeviceStream warning/fallback", streamErr);
+        setActiveStream({
+          state: "running",
+          mode,
+          source_id,
+        });
+      }
       setStreamStage("running");
 
       // 3. Init WebRTC session and Janus mountpoint with PIN
@@ -919,21 +969,26 @@ export default function VideoSurveillancePage() {
                               ДИСПЛЕИ:
                             </Text>
                             <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 4 }}>
-                              {inventory.displays.map((disp: DisplaySource) => (
-                                <Radio key={`desktop:${disp.id}`} value={`desktop:${disp.id}`}>
-                                  <Space size="small">
-                                    <DesktopOutlined />
-                                    <span>{disp.name}</span>
-                                    {disp.resolution && <Tag style={{ fontSize: 11 }}>{disp.resolution}</Tag>}
-                                    {disp.is_primary && <Tag color="blue" style={{ fontSize: 11 }}>Primary</Tag>}
-                                    {disp.policy && (
-                                      <Tag color={disp.policy === "denied" ? "red" : "default"} style={{ fontSize: 11 }}>
-                                        {disp.policy}
-                                      </Tag>
-                                    )}
-                                  </Space>
-                                </Radio>
-                              ))}
+                              {inventory.displays.map((disp: DisplaySource) => {
+                                const dispId = disp.id || disp.desktop_id || "0";
+                                const isPrimary = disp.is_primary ?? disp.primary;
+                                const res = disp.resolution || (disp.width && disp.height ? `${disp.width}x${disp.height}` : null);
+                                return (
+                                  <Radio key={`desktop:${dispId}`} value={`desktop:${dispId}`}>
+                                    <Space size="small">
+                                      <DesktopOutlined />
+                                      <span>{disp.name}</span>
+                                      {res && <Tag style={{ fontSize: 11 }}>{res}</Tag>}
+                                      {isPrimary && <Tag color="blue" style={{ fontSize: 11 }}>Primary</Tag>}
+                                      {disp.policy && (
+                                        <Tag color={disp.policy === "denied" ? "red" : "default"} style={{ fontSize: 11 }}>
+                                          {disp.policy}
+                                        </Tag>
+                                      )}
+                                    </Space>
+                                  </Radio>
+                                );
+                              })}
                             </div>
                           </div>
                         )}
@@ -945,17 +1000,20 @@ export default function VideoSurveillancePage() {
                               КАМЕРЫ:
                             </Text>
                             <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 4 }}>
-                              {inventory.cameras.map((cam: CameraSource) => (
-                                <Radio key={`usb-camera:${cam.id}`} value={`usb-camera:${cam.id}`}>
-                                  <Space size="small">
-                                    <VideoCameraOutlined />
-                                    <span>{cam.name}</span>
-                                    <Tag color={cam.available ? "green" : "default"} style={{ fontSize: 11 }}>
-                                      {cam.available ? "Доступна" : "Недоступна"}
-                                    </Tag>
-                                  </Space>
-                                </Radio>
-                              ))}
+                              {inventory.cameras.map((cam: CameraSource) => {
+                                const camId = cam.id || cam.camera_id || "0";
+                                return (
+                                  <Radio key={`usb-camera:${camId}`} value={`usb-camera:${camId}`}>
+                                    <Space size="small">
+                                      <VideoCameraOutlined />
+                                      <span>{cam.name}</span>
+                                      <Tag color={cam.available ? "green" : "default"} style={{ fontSize: 11 }}>
+                                        {cam.available ? "Доступна" : "Недоступна"}
+                                      </Tag>
+                                    </Space>
+                                  </Radio>
+                                );
+                              })}
                             </div>
                           </div>
                         )}

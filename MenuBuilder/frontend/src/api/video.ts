@@ -51,15 +51,20 @@ export interface ControlScreen {
 export interface DisplaySource {
   id: string;
   name: string;
+  desktop_id?: string;
   resolution?: string;
   width?: number;
   height?: number;
+  x?: number;
+  y?: number;
   is_primary?: boolean;
+  primary?: boolean;
   policy?: "input" | "view" | "denied";
 }
 
 export interface CameraSource {
   id: string;
+  camera_id?: string;
   name: string;
   available?: boolean;
 }

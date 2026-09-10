@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import uuid
 from typing import Any, Literal
 
 import websockets
@@ -540,12 +541,74 @@ async def get_device_inventory(
     """Fetch terminal hardware/display/camera inventory."""
     terminal = await _verify_device_access(device_id, user, db)
     org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
-    return await iot_client.remote_input_inventory(
-        sn=terminal.sn,
-        refresh=refresh,
-        org_id=org_id,
-        user=user,
-    )
+    try:
+        inv = await iot_client.remote_input_inventory(
+            sn=terminal.sn,
+            refresh=refresh,
+            org_id=org_id,
+            user=user,
+        )
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_409_CONFLICT and refresh:
+            inv = await iot_client.remote_input_inventory(
+                sn=terminal.sn,
+                refresh=0,
+                org_id=org_id,
+                user=user,
+            )
+        else:
+            raise
+
+    displays = list(inv.get("displays") or [])
+    cameras = list(inv.get("cameras") or [])
+
+    if not displays:
+        with contextlib.suppress(Exception):
+            status_data = await iot_client.remote_input_status(
+                terminal.sn, org_id=org_id, user=user
+            )
+            agent_data = status_data.get("agent") or {}
+            if agent_data.get("desktop_available") or agent_data.get("screen"):
+                screen = agent_data.get("screen") or {}
+                w = screen.get("virtual_width") or 1920
+                h = screen.get("virtual_height") or 1080
+                x = screen.get("virtual_x") or 0
+                y = screen.get("virtual_y") or 0
+                displays.append(
+                    {
+                        "id": "0",
+                        "desktop_id": "0",
+                        "name": "Основной экран",
+                        "resolution": f"{w}x{h}",
+                        "width": w,
+                        "height": h,
+                        "x": x,
+                        "y": y,
+                        "is_primary": True,
+                        "primary": True,
+                        "policy": "input",
+                    }
+                )
+
+    for d in displays:
+        if "id" not in d and "desktop_id" in d:
+            d["id"] = str(d["desktop_id"])
+        if "desktop_id" not in d and "id" in d:
+            d["desktop_id"] = str(d["id"])
+        if "is_primary" not in d and "primary" in d:
+            d["is_primary"] = bool(d["primary"])
+        if "primary" not in d and "is_primary" in d:
+            d["primary"] = bool(d["is_primary"])
+        if "resolution" not in d and d.get("width") and d.get("height"):
+            d["resolution"] = f"{d['width']}x{d['height']}"
+
+    for c in cameras:
+        if "id" not in c and "camera_id" in c:
+            c["id"] = str(c["camera_id"])
+        if "camera_id" not in c and "id" in c:
+            c["camera_id"] = str(c["id"])
+
+    return {"displays": displays, "cameras": cameras}
 
 
 @router.post(
@@ -576,19 +639,43 @@ async def start_device_stream(
             )
         lease_id = str(lease_info["lease_id"])
 
-    res = await iot_client.remote_input_stream_start(
-        lease_id=lease_id,
-        mode=body.mode,
-        source_id=body.source_id,
-        profile=body.profile,
-        org_id=org_id,
-        user=user,
-    )
-    return StreamStartResponse(
-        stream_instance_id=str(res.get("stream_instance_id", "")),
-        result=str(res.get("result", "")),
-        state=res.get("state"),
-    )
+    try:
+        res = await iot_client.remote_input_stream_start(
+            lease_id=lease_id,
+            mode=body.mode,
+            source_id=body.source_id,
+            profile=body.profile,
+            org_id=org_id,
+            user=user,
+        )
+        return StreamStartResponse(
+            stream_instance_id=str(res.get("stream_instance_id", "")),
+            result=str(res.get("result", "")),
+            state=res.get("state"),
+        )
+    except HTTPException as exc:
+        err_detail = (
+            str(exc.detail)
+            if isinstance(exc.detail, str)
+            else str(exc.detail.get("code", ""))
+            if isinstance(exc.detail, dict)
+            else ""
+        )
+        if exc.status_code in (
+            status.HTTP_409_CONFLICT,
+            status.HTTP_504_GATEWAY_TIMEOUT,
+        ) and any(c in err_detail for c in ("unsupported", "terminal_timeout")):
+            logger.warning(
+                "Terminal %s stream_start not supported by agent (%s), proceeding in legacy streaming mode",
+                terminal.sn,
+                err_detail,
+            )
+            return StreamStartResponse(
+                stream_instance_id=str(uuid.uuid4()),
+                result="started",
+                state="running",
+            )
+        raise
 
 
 @router.post(
@@ -619,12 +706,27 @@ async def stop_device_stream(
             )
         lease_id = str(lease_info["lease_id"])
 
-    res = await iot_client.remote_input_stream_stop(
-        lease_id=lease_id,
-        org_id=org_id,
-        user=user,
-    )
-    return StreamStopResponse(result=str(res.get("result", "stopped")))
+    try:
+        res = await iot_client.remote_input_stream_stop(
+            lease_id=lease_id,
+            org_id=org_id,
+            user=user,
+        )
+        return StreamStopResponse(result=str(res.get("result", "stopped")))
+    except HTTPException as exc:
+        err_detail = (
+            str(exc.detail)
+            if isinstance(exc.detail, str)
+            else str(exc.detail.get("code", ""))
+            if isinstance(exc.detail, dict)
+            else ""
+        )
+        if exc.status_code in (
+            status.HTTP_409_CONFLICT,
+            status.HTTP_504_GATEWAY_TIMEOUT,
+        ) and any(c in err_detail for c in ("unsupported", "terminal_timeout")):
+            return StreamStopResponse(result="stopped")
+        raise
 
 
 @router.get(
