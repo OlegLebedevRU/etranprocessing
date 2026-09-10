@@ -46,12 +46,13 @@ bool ffmpeg_build_desktop_cmdline(const wchar_t* ffmpeg_binary,
         L"\"%ls\" -progress pipe:1 "
         L"-f gdigrab -framerate %d -offset_x %d -offset_y %d -video_size %dx%d -i desktop -draw_mouse 1 "
         L"-c:v libx264 -preset ultrafast -tune zerolatency "
-        L"-b:v %hs -maxrate %hs -bufsize %hs -g %d -pix_fmt yuv420p -r %d "
+        L"-profile:v baseline -level 3.1 -x264-params bframes=0:force-cfr=1 "
+        L"-b:v %hs -maxrate %hs -bufsize %hs -g %d -keyint_min %d -sc_threshold 0 -pix_fmt yuv420p -r %d "
         L"-metadata comment=l4desk:%hs "
         L"-f rtp rtp://127.0.0.1:5004?rtcpport=5005",
         ffmpeg_binary,
         params.fps, x, y, width, height,
-        params.bitrate, params.maxrate, params.bufsize, gop, params.fps,
+        params.bitrate, params.maxrate, params.bufsize, gop, gop, params.fps,
         stream_instance_id
     );
 
@@ -102,12 +103,13 @@ bool ffmpeg_build_camera_cmdline(const wchar_t* ffmpeg_binary,
         L"\"%ls\" -progress pipe:1 "
         L"-f dshow -rtbufsize 64M -framerate %d -video_size %dx%d -i %ls "
         L"-c:v libx264 -preset ultrafast -tune zerolatency "
-        L"-b:v %hs -maxrate %hs -bufsize %hs -g %d -pix_fmt yuv420p -r %d "
+        L"-profile:v baseline -level 3.1 -x264-params bframes=0:force-cfr=1 "
+        L"-b:v %hs -maxrate %hs -bufsize %hs -g %d -keyint_min %d -sc_threshold 0 -pix_fmt yuv420p -r %d "
         L"-metadata comment=l4desk:%hs "
         L"-f rtp rtp://127.0.0.1:5004?rtcpport=5005",
         ffmpeg_binary,
         params.fps, cam_w, cam_h, video_dev_arg,
-        params.bitrate, params.maxrate, params.bufsize, gop, params.fps,
+        params.bitrate, params.maxrate, params.bufsize, gop, gop, params.fps,
         stream_instance_id
     );
 

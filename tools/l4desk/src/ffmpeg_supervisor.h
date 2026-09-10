@@ -25,8 +25,14 @@ typedef struct {
     int restart_count;
 } StreamStateInfo;
 
+typedef void (*FFmpegEventCallback)(const char* stream_instance_id,
+                                    const char* state,
+                                    const char* reason,
+                                    void* user_data);
+
 void ffmpeg_supervisor_init(const char* base_path, const char* sn);
 void ffmpeg_supervisor_cleanup(void);
+void ffmpeg_supervisor_set_event_callback(FFmpegEventCallback cb, void* user_data);
 
 void ffmpeg_supervisor_set_custom_binary(const wchar_t* path);
 

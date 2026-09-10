@@ -1,5 +1,43 @@
 # CHANGELOG: l4desk
 
+## [1.2.0] - 2026-09-11 (AGENT 3: ctl v1 protocol sync & H.264 Baseline Level 3.1)
+
+### Changed
+- **FFmpeg H.264 Baseline Level 3.1 под Janus WebRTC Streaming Plugin**:
+  - В аргументы командной строки FFmpeg (`src/ffmpeg_cmdline.c`) для desktop и camera явно добавлены флаги:
+    `-profile:v baseline -level 3.1 -x264-params bframes=0:force-cfr=1`.
+  - Установлен строгий фиксированный GOP: `-g %d -keyint_min %d` (`gop = params.fps * 2`) и отключение внеплановых I-кадров `-sc_threshold 0`.
+  - Обеспечено полное соответствие SDP-заявке Janus: `videofmtp="profile-level-id=42e01f;packetization-mode=1"`.
+
+- **Протокол ctl v1 и жизненный цикл stream_event (`src/ctl_protocol.c`, `src/ffmpeg_supervisor.c`)**:
+  - Строгая валидация утверждённого enum состояний стрима:
+    `stopped`, `starting`, `running`, `stopping`, `restarting`, `failed`, `source_unavailable`, `session_unavailable`.
+  - Обеспечена отправка событий `stream_event` на всех фазах жизненного цикла:
+    - `starting` -> `running` (после успешного запуска процесса)
+    - `running` -> `stopping` (при начале остановки или switch)
+    - `stopping` -> `stopped` (после фактического завершения процесса и освобождения сокетов)
+    - `running` -> `restarting` (при обнаружении сбоя процесса или stall)
+    - переход в `failed` (при ошибке старта или исчерпании лимита перезапусков)
+    - переходы в `source_unavailable` / `session_unavailable`
+  - Ответ `ack` на команду `stream_stop` отправляется строго **после** фактического завершения процесса FFmpeg, закрытия дескрипторов и освобождения сетевых сокетов.
+
+- **Синхронизация клавиатурного ввода `key_event` (`src/ctl_protocol.c`, `src/input_inject.c`)**:
+  - Проверка активного стрима: `state == STREAM_STATE_RUNNING` и `mode == STREAM_MODE_DESKTOP`.
+  - Проверка соответствия контекста: `lease_id`, `desktop_id`, `stream_instance_id` с возвратом соответствующих NACK (`lease_mismatch`, `desktop_mismatch`, `stream_mismatch`).
+  - Проверка локальной политики выбранного экрана: `policy == POLICY_INPUT` (возврат `source_not_allowed` при политике только просмотра или запрета).
+  - Whitelist виртуальных клавиш: `0x08` (Backspace), `0x09` (Tab), `0x0D` (Enter), `0x1B` (Esc), `0x20` (Space), `0x2E` (Delete), `0x25..0x28` (Стрелки), `0x30..0x39` (0-9), `0x41..0x5A` (A-Z), `0x70..0x7B` (F1-F12), Numpad, модификаторы и OEM-символы.
+  - Блокировка деструктивных клавиш (Win-клавиши, комбинация Ctrl+Alt+Del).
+  - Инъекция через `SendInput` с поддержкой режимов `down`, `up`, `press` и флагом `KEYEVENTF_EXTENDEDKEY` для навигационных клавиш.
+
+- **Координатная модель мыши (`src/input_inject.c`, `src/ctl_protocol.c`)**:
+  - Поддержка шкал `0.0..1.0` (float) и `0..65535` (integer): автоматическое масштабирование от `65535.0f` при значениях `> 1.0`.
+  - Перевод нормализованных координат в виртуальные координаты монитора с учётом смещения (`desktop_rect.x`, `desktop_rect.y`) и возможных отрицательных координат в многомониторных конфигурациях.
+  - Нормализация для `SendInput` относительно полного виртуального рабочего стола (`SM_XVIRTUALSCREEN`, `SM_YVIRTUALSCREEN`, `SM_CXVIRTUALSCREEN`, `SM_CYVIRTUALSCREEN`).
+
+### Fixed
+- Устранено предупреждение C4201 из системного заголовка `olectl.h` в `display_inventory.c`.
+- Сборка `tools/l4desk/build.cmd all` компилируется под x86 и x64 со строгим уровнем предупреждений `/W4` с нулевым количеством ворнингов.
+
 ## [1.1.0] - 2026-09-10 (PROMPT 4.2)
 
 ### Added

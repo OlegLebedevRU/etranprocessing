@@ -177,17 +177,21 @@ static void wait_udp_ports_released(void) {
     Sleep(100);
 }
 
-static bool stop_active_process_internal(void) {
+static FFmpegEventCallback g_event_cb = NULL;
+static void* g_event_user_data = NULL;
+
+static void notify_stream_event(const char* stream_instance_id, const char* state, const char* reason) {
+    if (g_event_cb) {
+        g_event_cb(stream_instance_id, state, reason, g_event_user_data);
+    }
+}
+
+static void cleanup_process_handles_internal(void) {
     if (!g_sup.hProcess) {
-        strcpy_s(g_sup.state, sizeof(g_sup.state), "stopped");
         g_sup.ffmpeg_pid = 0;
         g_sup.ffmpeg_start_time = 0;
-        save_state_file();
-        return true;
+        return;
     }
-
-    strcpy_s(g_sup.state, sizeof(g_sup.state), "stopping");
-    save_state_file();
 
     log_info("Stopping FFmpeg process (PID=%u, soft stop phase 1)...", g_sup.ffmpeg_pid);
 
@@ -230,6 +234,26 @@ static bool stop_active_process_internal(void) {
 
     wait_udp_ports_released();
 
+    g_sup.started_at = 0;
+    g_sup.ffmpeg_pid = 0;
+    g_sup.ffmpeg_start_time = 0;
+    log_info("FFmpeg process stopped and resources released.");
+}
+
+static bool stop_active_process_internal(void) {
+    if (!g_sup.hProcess) {
+        strcpy_s(g_sup.state, sizeof(g_sup.state), "stopped");
+        g_sup.ffmpeg_pid = 0;
+        g_sup.ffmpeg_start_time = 0;
+        save_state_file();
+        return true;
+    }
+
+    strcpy_s(g_sup.state, sizeof(g_sup.state), "stopping");
+    save_state_file();
+
+    cleanup_process_handles_internal();
+
     strcpy_s(g_sup.state, sizeof(g_sup.state), "stopped");
     g_sup.stream_instance_id[0] = '\0';
     g_sup.lease_id[0] = '\0';
@@ -237,12 +261,8 @@ static bool stop_active_process_internal(void) {
     g_sup.source_id[0] = '\0';
     g_sup.profile[0] = '\0';
     g_sup.reason[0] = '\0';
-    g_sup.started_at = 0;
-    g_sup.ffmpeg_pid = 0;
-    g_sup.ffmpeg_start_time = 0;
     save_state_file();
 
-    log_info("FFmpeg stopped and resources released.");
     return true;
 }
 
@@ -253,6 +273,14 @@ static void ffmpeg_supervisor_ensure_inited(void) {
         memset(&g_sup, 0, sizeof(g_sup));
         strcpy_s(g_sup.state, sizeof(g_sup.state), "stopped");
     }
+}
+
+void ffmpeg_supervisor_set_event_callback(FFmpegEventCallback cb, void* user_data) {
+    ffmpeg_supervisor_ensure_inited();
+    EnterCriticalSection(&g_sup_cs);
+    g_event_cb = cb;
+    g_event_user_data = user_data;
+    LeaveCriticalSection(&g_sup_cs);
 }
 
 void ffmpeg_supervisor_init(const char* base_path, const char* sn) {
@@ -539,7 +567,18 @@ bool ffmpeg_supervisor_start(const char* stream_instance_id,
     if (is_switched) {
         log_info("Controlled switch: stopping existing stream %s before starting %s...",
                  g_sup.stream_instance_id, stream_instance_id);
-        stop_active_process_internal();
+        char prev_stream_id[64] = { 0 };
+        strcpy_s(prev_stream_id, sizeof(prev_stream_id), g_sup.stream_instance_id);
+
+        strcpy_s(g_sup.state, sizeof(g_sup.state), "stopping");
+        save_state_file();
+        notify_stream_event(prev_stream_id, "stopping", "");
+
+        cleanup_process_handles_internal();
+
+        strcpy_s(g_sup.state, sizeof(g_sup.state), "stopped");
+        save_state_file();
+        notify_stream_event(prev_stream_id, "stopped", "");
     }
 
     /* Locate FFmpeg binary */
@@ -595,15 +634,23 @@ bool ffmpeg_supervisor_start(const char* stream_instance_id,
     g_sup.desktop_rect.right = target_disp.x + target_disp.width;
     g_sup.desktop_rect.bottom = target_disp.y + target_disp.height;
 
+    /* Transition: starting */
+    strcpy_s(g_sup.state, sizeof(g_sup.state), "starting");
+    g_sup.reason[0] = '\0';
+    save_state_file();
+    notify_stream_event(stream_instance_id, "starting", "");
+
     bool launched = launch_ffmpeg_process(cmdline, stream_instance_id,
                                           out_err_code, max_err_code,
                                           out_err_msg, max_err_msg);
     if (launched) {
+        notify_stream_event(stream_instance_id, "running", "");
         strcpy_s(out_result, max_result, is_switched ? "switched" : "started");
     } else {
         strcpy_s(g_sup.state, sizeof(g_sup.state), "failed");
         strcpy_s(g_sup.reason, sizeof(g_sup.reason), out_err_code);
         save_state_file();
+        notify_stream_event(stream_instance_id, "failed", out_err_code);
     }
 
     LeaveCriticalSection(&g_sup_cs);
@@ -640,7 +687,28 @@ bool ffmpeg_supervisor_stop(const char* stream_instance_id,
         return false;
     }
 
-    stop_active_process_internal();
+    char active_stream_id[64] = { 0 };
+    strcpy_s(active_stream_id, sizeof(active_stream_id), g_sup.stream_instance_id);
+
+    /* 1. Transition: running -> stopping */
+    strcpy_s(g_sup.state, sizeof(g_sup.state), "stopping");
+    save_state_file();
+    notify_stream_event(active_stream_id, "stopping", "");
+
+    /* 2. Stop process, close handles, release ports */
+    cleanup_process_handles_internal();
+
+    /* 3. Transition: stopping -> stopped */
+    strcpy_s(g_sup.state, sizeof(g_sup.state), "stopped");
+    g_sup.stream_instance_id[0] = '\0';
+    g_sup.lease_id[0] = '\0';
+    g_sup.mode[0] = '\0';
+    g_sup.source_id[0] = '\0';
+    g_sup.profile[0] = '\0';
+    g_sup.reason[0] = '\0';
+    save_state_file();
+    notify_stream_event(active_stream_id, "stopped", "");
+
     strcpy_s(out_result, max_result, "stopped");
 
     LeaveCriticalSection(&g_sup_cs);
@@ -660,10 +728,15 @@ bool ffmpeg_supervisor_tick(const SystemInventory* inv,
         return true;
     }
 
+    char cur_stream_id[64] = { 0 };
+    strcpy_s(cur_stream_id, sizeof(cur_stream_id), g_sup.stream_instance_id);
+
     DWORD exit_code = 0;
     if (GetExitCodeProcess(g_sup.hProcess, &exit_code) && exit_code != STILL_ACTIVE) {
         log_warn("FFmpeg process PID=%u exited unexpectedly with code %lu",
                  g_sup.ffmpeg_pid, exit_code);
+
+        cleanup_process_handles_internal();
 
         time_t now = time(NULL);
         if (g_sup.restart_window_start == 0 || (now - g_sup.restart_window_start > 600)) {
@@ -675,7 +748,9 @@ bool ffmpeg_supervisor_tick(const SystemInventory* inv,
         if (g_sup.restart_count > 5) {
             strcpy_s(g_sup.state, sizeof(g_sup.state), "failed");
             strcpy_s(g_sup.reason, sizeof(g_sup.reason), "restart_limit");
-            stop_active_process_internal();
+            save_state_file();
+
+            notify_stream_event(cur_stream_id, "failed", "restart_limit");
 
             if (p_state_changed) *p_state_changed = true;
             if (out_new_state) strcpy_s(out_new_state, max_state_len, g_sup.state);
@@ -685,7 +760,11 @@ bool ffmpeg_supervisor_tick(const SystemInventory* inv,
         }
 
         strcpy_s(g_sup.state, sizeof(g_sup.state), "restarting");
+        strcpy_s(g_sup.reason, sizeof(g_sup.reason), "unexpected_exit");
         save_state_file();
+
+        notify_stream_event(cur_stream_id, "restarting", "unexpected_exit");
+
         if (p_state_changed) *p_state_changed = true;
         if (out_new_state) strcpy_s(out_new_state, max_state_len, g_sup.state);
         if (out_reason) strcpy_s(out_reason, max_reason_len, "unexpected_exit");
@@ -697,9 +776,13 @@ bool ffmpeg_supervisor_tick(const SystemInventory* inv,
     /* Check interactive session if desktop */
     if (_stricmp(g_sup.mode, "desktop") == 0 && !desktop_is_interactive_available()) {
         log_warn("Interactive session became unavailable for desktop stream.");
+        cleanup_process_handles_internal();
+
         strcpy_s(g_sup.state, sizeof(g_sup.state), "session_unavailable");
         strcpy_s(g_sup.reason, sizeof(g_sup.reason), "session_unavailable");
-        stop_active_process_internal();
+        save_state_file();
+
+        notify_stream_event(cur_stream_id, "session_unavailable", "session_unavailable");
 
         if (p_state_changed) *p_state_changed = true;
         if (out_new_state) strcpy_s(out_new_state, max_state_len, g_sup.state);
@@ -714,9 +797,13 @@ bool ffmpeg_supervisor_tick(const SystemInventory* inv,
             DisplayInfo d;
             if (!inventory_find_display(inv, g_sup.source_id, &d)) {
                 log_warn("Target display %s disappeared from inventory.", g_sup.source_id);
+                cleanup_process_handles_internal();
+
                 strcpy_s(g_sup.state, sizeof(g_sup.state), "source_unavailable");
                 strcpy_s(g_sup.reason, sizeof(g_sup.reason), "source_unavailable");
-                stop_active_process_internal();
+                save_state_file();
+
+                notify_stream_event(cur_stream_id, "source_unavailable", "source_unavailable");
 
                 if (p_state_changed) *p_state_changed = true;
                 if (out_new_state) strcpy_s(out_new_state, max_state_len, g_sup.state);
@@ -728,9 +815,13 @@ bool ffmpeg_supervisor_tick(const SystemInventory* inv,
             CameraInfo c;
             if (!inventory_find_camera(inv, g_sup.source_id, &c) || !c.available) {
                 log_warn("Target camera %s disappeared or became unavailable.", g_sup.source_id);
+                cleanup_process_handles_internal();
+
                 strcpy_s(g_sup.state, sizeof(g_sup.state), "source_unavailable");
                 strcpy_s(g_sup.reason, sizeof(g_sup.reason), "source_unavailable");
-                stop_active_process_internal();
+                save_state_file();
+
+                notify_stream_event(cur_stream_id, "source_unavailable", "source_unavailable");
 
                 if (p_state_changed) *p_state_changed = true;
                 if (out_new_state) strcpy_s(out_new_state, max_state_len, g_sup.state);
@@ -745,9 +836,13 @@ bool ffmpeg_supervisor_tick(const SystemInventory* inv,
     time_t now = time(NULL);
     if (g_sup.last_progress_time > 0 && (now - g_sup.last_progress_time > 10)) {
         log_warn("Stream stall detected (> 10s without progress). Triggering restart.");
+        cleanup_process_handles_internal();
+
         strcpy_s(g_sup.state, sizeof(g_sup.state), "restarting");
         strcpy_s(g_sup.reason, sizeof(g_sup.reason), "stall");
-        stop_active_process_internal();
+        save_state_file();
+
+        notify_stream_event(cur_stream_id, "restarting", "stall");
 
         if (p_state_changed) *p_state_changed = true;
         if (out_new_state) strcpy_s(out_new_state, max_state_len, g_sup.state);

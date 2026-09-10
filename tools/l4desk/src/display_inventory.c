@@ -8,7 +8,10 @@
 #include <windows.h>
 #include <objbase.h>
 #include <strmif.h>
+#pragma warning(push)
+#pragma warning(disable: 4201)
 #include <olectl.h>
+#pragma warning(pop)
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

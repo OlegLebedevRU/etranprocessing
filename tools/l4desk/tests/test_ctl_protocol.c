@@ -102,8 +102,16 @@ static void test_mouse_mapping(void) {
     ASSERT_TRUE(ny >= 32700 && ny <= 32800);
 
     /* 3. Out-of-bounds coordinates clamp */
-    input_map_coordinates_custom(-0.5, 1.5, 0, 0, 1920, 1080, 0, 0, 1920, 1080, &nx, &ny);
+    input_map_coordinates_custom(-0.5, 70000.0, 0, 0, 1920, 1080, 0, 0, 1920, 1080, &nx, &ny);
     ASSERT_TRUE(nx == 0 && ny == 65535);
+
+    /* 4. Integer / float 0..65535 scale mapping */
+    input_map_coordinates_custom(32768.0, 32768.0, 0, 0, 1920, 1080, 0, 0, 1920, 1080, &nx, &ny);
+    ASSERT_TRUE(nx >= 32700 && nx <= 32800);
+    ASSERT_TRUE(ny >= 32700 && ny <= 32800);
+
+    input_map_coordinates_custom(65535.0, 65535.0, 0, 0, 1920, 1080, 0, 0, 1920, 1080, &nx, &ny);
+    ASSERT_TRUE(nx == 65535 && ny == 65535);
 
     printf("[PASS] test_mouse_mapping\n");
 }
@@ -233,6 +241,24 @@ static void test_protocol_payloads(void) {
     ASSERT_TRUE(strstr(buf, "\"source_id\":\"disp:12345678\"") != NULL);
     ASSERT_TRUE(strstr(buf, "\"stream_instance_id\":\"str_abc\"") != NULL);
     ASSERT_TRUE(strstr(buf, "\"started_at\":\"") != NULL);
+
+    /* 6. FFmpeg H.264 Baseline Level 3.1 command line verification */
+    wchar_t cmdline[2048];
+    ASSERT_TRUE(ffmpeg_build_desktop_cmdline(L"C:\\l4tools\\ffmpeg\\ffmpeg.exe",
+                                            "test_str_inst", "default",
+                                            0, 0, 1920, 1080,
+                                            cmdline, sizeof(cmdline) / sizeof(wchar_t)));
+    ASSERT_TRUE(wcsstr(cmdline, L"-profile:v baseline -level 3.1 -x264-params bframes=0:force-cfr=1") != NULL);
+    ASSERT_TRUE(wcsstr(cmdline, L"-sc_threshold 0") != NULL);
+    ASSERT_TRUE(wcsstr(cmdline, L"-g 50 -keyint_min 50") != NULL);
+
+    ASSERT_TRUE(ffmpeg_build_camera_cmdline(L"C:\\l4tools\\ffmpeg\\ffmpeg.exe",
+                                           "test_str_inst", "low",
+                                           "@device:pnp:camera1", "USB Camera",
+                                           cmdline, sizeof(cmdline) / sizeof(wchar_t)));
+    ASSERT_TRUE(wcsstr(cmdline, L"-profile:v baseline -level 3.1 -x264-params bframes=0:force-cfr=1") != NULL);
+    ASSERT_TRUE(wcsstr(cmdline, L"-sc_threshold 0") != NULL);
+    ASSERT_TRUE(wcsstr(cmdline, L"-g 30 -keyint_min 30") != NULL);
 
     printf("[PASS] test_protocol_payloads\n");
 }

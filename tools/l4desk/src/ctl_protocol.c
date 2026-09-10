@@ -207,6 +207,18 @@ int ctl_build_extended_presence_payload(char* buf, size_t max_len,
     return offset;
 }
 
+static bool ctl_is_valid_stream_state(const char* s) {
+    if (!s) return false;
+    return (strcmp(s, "stopped") == 0 ||
+            strcmp(s, "starting") == 0 ||
+            strcmp(s, "running") == 0 ||
+            strcmp(s, "stopping") == 0 ||
+            strcmp(s, "restarting") == 0 ||
+            strcmp(s, "failed") == 0 ||
+            strcmp(s, "source_unavailable") == 0 ||
+            strcmp(s, "session_unavailable") == 0);
+}
+
 int ctl_build_stream_event_payload(char* buf, size_t max_len,
                                   const char* sn,
                                   const char* stream_instance_id,
@@ -215,13 +227,23 @@ int ctl_build_stream_event_payload(char* buf, size_t max_len,
     char iso_time[64];
     ctl_get_utc_iso(iso_time, sizeof(iso_time));
 
+    const char* valid_state = (state && ctl_is_valid_stream_state(state)) ? state : "failed";
+
+    char esc_sn[128] = { 0 };
+    char esc_inst[128] = { 0 };
+    char esc_reason[256] = { 0 };
+
+    json_escape_str(sn ? sn : "", esc_sn, sizeof(esc_sn));
+    json_escape_str(stream_instance_id ? stream_instance_id : "", esc_inst, sizeof(esc_inst));
+    json_escape_str(reason ? reason : "", esc_reason, sizeof(esc_reason));
+
     return snprintf(buf, max_len,
         "{\"v\":1,\"type\":\"stream_event\",\"sn\":\"%s\",\"stream_instance_id\":\"%s\","
         "\"state\":\"%s\",\"reason\":\"%s\",\"timestamp\":\"%s\"}",
-        sn ? sn : "",
-        stream_instance_id ? stream_instance_id : "",
-        state ? state : "",
-        reason ? reason : "",
+        esc_sn,
+        esc_inst,
+        valid_state,
+        esc_reason,
         iso_time);
 }
 
@@ -534,6 +556,7 @@ bool ctl_handle_command(const char* payload, size_t payload_len,
                 int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
                                                  "stream_mismatch", "Stream is not running", now_ms);
                 if (len > 0) {
+                    dedup_cache_put(cmd_id, out_resp, (size_t)len, expires_at_ms);
                     *out_resp_len = (size_t)len;
                     *p_should_publish = true;
                     return true;
@@ -549,6 +572,7 @@ bool ctl_handle_command(const char* payload, size_t payload_len,
                                                  "input_not_allowed_in_camera_mode",
                                                  "Input is not allowed in camera mode", now_ms);
                 if (len > 0) {
+                    dedup_cache_put(cmd_id, out_resp, (size_t)len, expires_at_ms);
                     *out_resp_len = (size_t)len;
                     *p_should_publish = true;
                     return true;
@@ -557,12 +581,13 @@ bool ctl_handle_command(const char* payload, size_t payload_len,
             return false;
         }
 
-        if (stream.lease_id[0] != '\0' && lease_id[0] != '\0' && strcmp(stream.lease_id, lease_id) != 0) {
+        if (stream.lease_id[0] != '\0' && (lease_id[0] == '\0' || strcmp(stream.lease_id, lease_id) != 0)) {
             log_warn("Input rejected: lease_mismatch (active: %s, cmd: %s)", stream.lease_id, lease_id);
             if (!is_move) {
                 int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
                                                  "lease_mismatch", "Lease ID mismatch", now_ms);
                 if (len > 0) {
+                    dedup_cache_put(cmd_id, out_resp, (size_t)len, expires_at_ms);
                     *out_resp_len = (size_t)len;
                     *p_should_publish = true;
                     return true;
@@ -577,6 +602,7 @@ bool ctl_handle_command(const char* payload, size_t payload_len,
                 int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
                                                  "desktop_mismatch", "Desktop ID mismatch", now_ms);
                 if (len > 0) {
+                    dedup_cache_put(cmd_id, out_resp, (size_t)len, expires_at_ms);
                     *out_resp_len = (size_t)len;
                     *p_should_publish = true;
                     return true;
@@ -593,6 +619,7 @@ bool ctl_handle_command(const char* payload, size_t payload_len,
                 int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
                                                  "stream_mismatch", "Stream instance mismatch", now_ms);
                 if (len > 0) {
+                    dedup_cache_put(cmd_id, out_resp, (size_t)len, expires_at_ms);
                     *out_resp_len = (size_t)len;
                     *p_should_publish = true;
                     return true;
@@ -611,6 +638,7 @@ bool ctl_handle_command(const char* payload, size_t payload_len,
                         int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
                                                          "source_not_allowed", "Display policy denies input", now_ms);
                         if (len > 0) {
+                            dedup_cache_put(cmd_id, out_resp, (size_t)len, expires_at_ms);
                             *out_resp_len = (size_t)len;
                             *p_should_publish = true;
                             return true;

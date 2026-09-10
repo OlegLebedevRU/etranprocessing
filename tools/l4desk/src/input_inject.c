@@ -6,14 +6,24 @@ void input_map_coordinates_custom(double nx, double ny,
                                  int rect_x, int rect_y, int rect_w, int rect_h,
                                  int virt_x, int virt_y, int virt_w, int virt_h,
                                  int* out_norm_x, int* out_norm_y) {
+    /* 1. Scale detection: if value > 1.0, scale from 65535.0, otherwise treat as 0.0..1.0 */
+    if (nx > 1.0) {
+        nx /= 65535.0;
+    }
+    if (ny > 1.0) {
+        ny /= 65535.0;
+    }
+
     if (nx < 0.0) nx = 0.0;
     if (nx > 1.0) nx = 1.0;
     if (ny < 0.0) ny = 0.0;
     if (ny > 1.0) ny = 1.0;
 
+    /* 2. Map normalized frame coords to monitor virtual coords taking into account monitor offset */
     int target_x = rect_x + (int)(nx * (double)rect_w);
     int target_y = rect_y + (int)(ny * (double)rect_h);
 
+    /* 3. Normalize for SendInput relative to entire virtual screen */
     double div_w = (virt_w > 1) ? (double)(virt_w - 1) : 1.0;
     double div_h = (virt_h > 1) ? (double)(virt_h - 1) : 1.0;
 
@@ -200,6 +210,12 @@ bool input_inject_key(const char* kind, int vk, const char* text, DWORD* out_err
 
     WORD scan = (WORD)MapVirtualKeyW((UINT)vk, MAPVK_VK_TO_VSC);
 
+    DWORD ext_flag = 0;
+    if ((vk >= VK_PRIOR && vk <= VK_DOWN) || vk == VK_DELETE || vk == VK_INSERT ||
+        vk == VK_RCONTROL || vk == VK_RMENU || vk == VK_DIVIDE) {
+        ext_flag = KEYEVENTF_EXTENDEDKEY;
+    }
+
     if (is_press) {
         INPUT inps[2];
         memset(inps, 0, sizeof(inps));
@@ -207,12 +223,12 @@ bool input_inject_key(const char* kind, int vk, const char* text, DWORD* out_err
         inps[0].type = INPUT_KEYBOARD;
         inps[0].ki.wVk = (WORD)vk;
         inps[0].ki.wScan = scan;
-        inps[0].ki.dwFlags = 0;
+        inps[0].ki.dwFlags = ext_flag;
 
         inps[1].type = INPUT_KEYBOARD;
         inps[1].ki.wVk = (WORD)vk;
         inps[1].ki.wScan = scan;
-        inps[1].ki.dwFlags = KEYEVENTF_KEYUP;
+        inps[1].ki.dwFlags = ext_flag | KEYEVENTF_KEYUP;
 
         UINT sent = SendInput(2, inps, sizeof(INPUT));
         if (sent != 2) {
@@ -225,7 +241,7 @@ bool input_inject_key(const char* kind, int vk, const char* text, DWORD* out_err
         inp.type = INPUT_KEYBOARD;
         inp.ki.wVk = (WORD)vk;
         inp.ki.wScan = scan;
-        inp.ki.dwFlags = is_up ? KEYEVENTF_KEYUP : 0;
+        inp.ki.dwFlags = ext_flag | (is_up ? KEYEVENTF_KEYUP : 0);
 
         UINT sent = SendInput(1, &inp, sizeof(INPUT));
         if (sent != 1) {

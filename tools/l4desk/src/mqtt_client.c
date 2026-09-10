@@ -106,6 +106,16 @@ static void publish_stream_event(MqttState* st, const char* stream_instance_id, 
     }
 }
 
+static void on_ffmpeg_stream_event(const char* stream_instance_id, const char* state, const char* reason, void* user_data) {
+    MqttState* st = (MqttState*)user_data;
+    if (st && st->sock != INVALID_SOCKET) {
+        publish_stream_event(st, stream_instance_id, state, reason);
+        if (state) {
+            strcpy_s(st->last_stream_state, sizeof(st->last_stream_state), state);
+        }
+    }
+}
+
 static bool screen_changed(const ScreenMetrics* a, const ScreenMetrics* b) {
     return (a->virtual_x != b->virtual_x ||
             a->virtual_y != b->virtual_y ||
@@ -143,6 +153,7 @@ int mqtt_client_run(const L4DeskConfig* config, HANDLE hStopEvent) {
 
     /* Initialize supervisor & reconcile orphaned processes */
     ffmpeg_supervisor_init(config->base_path, state.sn);
+    ffmpeg_supervisor_set_event_callback(on_ffmpeg_stream_event, &state);
     ffmpeg_supervisor_reconcile();
 
     int current_backoff = config->reconnect_sec > 0 ? config->reconnect_sec : 5;
@@ -324,13 +335,14 @@ int mqtt_client_run(const L4DeskConfig* config, HANDLE hStopEvent) {
                                     log_debug("Published ACK/NACK to %s: %s", out_topic, resp_buf);
                                 }
 
-                                /* Check if stream state changed after command */
+                                /* Check if stream state changed after command (if not already published) */
                                 StreamStateInfo cur_stream;
                                 ffmpeg_supervisor_get_info(&cur_stream);
                                 if (strcmp(cur_stream.state, state.last_stream_state) != 0) {
                                     publish_stream_event(&state, cur_stream.stream_instance_id,
                                                          cur_stream.state, cur_stream.reason);
                                     publish_presence(&state, "online");
+                                    strcpy_s(state.last_stream_state, sizeof(state.last_stream_state), cur_stream.state);
                                 }
                             }
                         }
@@ -359,8 +371,11 @@ int mqtt_client_run(const L4DeskConfig* config, HANDLE hStopEvent) {
             if (stream_changed) {
                 StreamStateInfo sinfo;
                 ffmpeg_supervisor_get_info(&sinfo);
-                publish_stream_event(&state, sinfo.stream_instance_id, new_state, change_reason);
-                publish_presence(&state, "online");
+                if (strcmp(new_state, state.last_stream_state) != 0) {
+                    publish_stream_event(&state, sinfo.stream_instance_id, new_state, change_reason);
+                    publish_presence(&state, "online");
+                    strcpy_s(state.last_stream_state, sizeof(state.last_stream_state), new_state);
+                }
             }
 
             /* Periodic PINGREQ keepalive */
@@ -430,6 +445,7 @@ int mqtt_client_run(const L4DeskConfig* config, HANDLE hStopEvent) {
         current_backoff = current_backoff < 60 ? current_backoff * 2 : 60;
     }
 
+    ffmpeg_supervisor_set_event_callback(NULL, NULL);
     ffmpeg_supervisor_cleanup();
     DeleteCriticalSection(&state.send_cs);
     return 0;
