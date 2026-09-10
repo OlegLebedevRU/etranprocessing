@@ -1,70 +1,120 @@
-import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Card,
-  Input,
-  Button,
-  Badge,
-  Tooltip,
-  Typography,
-  Space,
-  Empty,
-  Spin,
-  Modal,
-  Tag,
-  Radio,
-  Select,
   Alert,
-  Divider,
+  Card,
+  Drawer,
+  Grid,
   message,
+  Space,
   theme,
+  Typography,
 } from "antd";
 import {
-  SearchOutlined,
-  PlayCircleOutlined,
-  StopOutlined,
-  VideoCameraOutlined,
-  ReloadOutlined,
-  ControlOutlined,
-  DesktopOutlined,
-  SwapOutlined,
-  LockOutlined,
-  InfoCircleOutlined,
-} from "@ant-design/icons";
-import { getDevices, DeviceListItem } from "../api/devices";
+  DeviceListItem,
+  getDevices,
+} from "../api/devices";
 import {
+  acquireControlLease,
+  CameraSource,
+  ClickResult,
   createVideoSession,
-  getVideoSessionStatus,
-  getJanusWsUrl,
+  DeviceInventory,
+  DisplaySource,
   getControlStatus,
   getDeviceInventory,
+  getDeviceStreamState,
+  getJanusWsUrl,
+  getVideoSessionStatus,
+  keepaliveControlLease,
+  releaseControlLease,
   startDeviceStream,
   stopDeviceStream,
-  getDeviceStreamState,
-  acquireControlLease,
-  releaseControlLease,
-  keepaliveControlLease,
-  changeControlScope,
-  ClickResult,
-  DeviceInventory,
   StreamPresenceInfo,
-  DisplaySource,
-  CameraSource,
 } from "../api/video";
+import { listTerminalsSettings } from "../api/settings";
 import { JanusStreamingClient } from "../api/janusClient";
 import { useSession } from "../session/SessionContext";
 import PageHeader from "../components/PageHeader";
 import { useRemoteControl } from "../hooks/useRemoteControl";
-import RemoteControlOverlay from "../components/RemoteControlOverlay";
 import { hasPermission, PERMISSION_VIDEO_VIEW } from "../utils/permissions";
 
-const { Text, Title } = Typography;
+// Новые переработанные UX/UI компоненты
+import { TerminalList } from "../components/video/TerminalList";
+import { TerminalHeader } from "../components/video/TerminalHeader";
+import { VideoPlayerScreen } from "../components/video/VideoPlayerScreen";
+import { StreamControls, StreamStage } from "../components/video/StreamControls";
+import { SourceSelector } from "../components/video/SourceSelector";
+import { RemoteControlPanel } from "../components/video/RemoteControlPanel";
+
+const { Text } = Typography;
+
+/**
+ * Преобразование ошибок терминала и бэкенда в понятные сообщения на русском языке
+ */
+function formatVideoError(err: any): { title: string; message: string } {
+  const detail = err?.response?.data?.detail;
+  const status = err?.response?.status;
+  const raw = typeof detail === "string" ? detail : (detail?.message || err?.message || "");
+
+  if (status === 403) {
+    return {
+      title: "Доступ ограничен",
+      message: "У вас нет прав для просмотра или управления видеотрансляцией на данном терминале.",
+    };
+  }
+  if (status === 404) {
+    return {
+      title: "Терминал не найден",
+      message: "Устройство не найдено или удалено из реестра.",
+    };
+  }
+  if (raw.includes("offline") || raw.includes("Device is offline")) {
+    return {
+      title: "Терминал не в сети",
+      message: "Терминал не на связи (offline). Проверьте питание и подключение к сети.",
+    };
+  }
+  if (raw.includes("source_unavailable") || raw.includes("source")) {
+    return {
+      title: "Источник недоступен",
+      message: "Выбранный экран или камера недоступны на терминале. Выберите другой источник.",
+    };
+  }
+  if (raw.includes("ffmpeg_missing")) {
+    return {
+      title: "Компонент не найден",
+      message: "На терминале отсутствует утилита захвата видео ffmpeg.",
+    };
+  }
+  if (raw.includes("terminal_timeout") || raw.includes("timeout")) {
+    return {
+      title: "Таймаут соединения",
+      message: "Терминал не ответил на команду запуска в установленное время.",
+    };
+  }
+  if (raw.includes("lease_taken") || raw.includes("busy")) {
+    return {
+      title: "Терминал занят",
+      message: "Терминал уже находится под управлением другого пользователя.",
+    };
+  }
+
+  return {
+    title: "Ошибка запуска трансляции",
+    message: raw || "Не удалось запустить видеопоток. Повторите попытку через несколько секунд.",
+  };
+}
 
 export default function VideoSurveillancePage() {
   const { user, loading: userLoading } = useSession();
   const { token } = theme.useToken();
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
+  const isDesktop = Boolean(screens.lg);
+
   const orgId = typeof user?.org_id === "number" ? user.org_id : 1;
 
-  // Role resolution per Prompt 3.2: Viewer (role 4) vs Operators (roles 1, 2, 3)
+  // Определение роли: Viewer vs Operator / Admin
   const isViewer = user?.role_id === 4 || user?.role === "viewer";
   const canView = hasPermission(user, PERMISSION_VIDEO_VIEW);
   const isOperator =
@@ -78,33 +128,33 @@ export default function VideoSurveillancePage() {
         user?.role === "admin"
     );
 
-  // Device list state
+  // Список устройств и словарь адресов (device_id -> address)
   const [devices, setDevices] = useState<DeviceListItem[]>([]);
+  const [terminalAddresses, setTerminalAddresses] = useState<Record<number, string>>({});
   const [loadingDevices, setLoadingDevices] = useState<boolean>(true);
-  const [search, setSearch] = useState<string>("");
   const [selectedDevice, setSelectedDevice] = useState<DeviceListItem | null>(null);
 
-  // Inventory & Source selection state
+  // Мобильный / планшетный Drawer выбора терминала
+  const [isDeviceDrawerOpen, setIsDeviceDrawerOpen] = useState(false);
+
+  // Источники видео (дисплеи, камеры)
   const [inventory, setInventory] = useState<DeviceInventory | null>(null);
   const [loadingInventory, setLoadingInventory] = useState<boolean>(false);
   const [selectedSourceKey, setSelectedSourceKey] = useState<string>("");
   const [selectedProfile, setSelectedProfile] = useState<string>("default");
 
-  // Stream state & stage progression (stopping -> starting -> running)
+  // Статус потока
   const [activeStream, setActiveStream] = useState<StreamPresenceInfo | null>(null);
-  const [streamStage, setStreamStage] = useState<
-    "idle" | "stopping" | "starting" | "running" | "failed"
-  >("idle");
+  const [streamStage, setStreamStage] = useState<StreamStage>("idle");
   const [bannerError, setBannerError] = useState<{
     code: string;
     message: string;
   } | null>(null);
   const [refusalNotice, setRefusalNotice] = useState<string | null>(null);
 
-  // Media player & lease state
+  // Медиаплеер и WebRTC сессия
   const [isSessionActive, setIsSessionActive] = useState<boolean>(false);
-  const [isStarting, setIsStarting] = useState<boolean>(false);
-  const [statusText, setStatusText] = useState<string>("Ожидание запуска");
+  const [statusText, setStatusText] = useState<string>("Не запущена");
   const [activeLeaseId, setActiveLeaseId] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -114,11 +164,15 @@ export default function VideoSurveillancePage() {
   const leaseRef = useRef<{ id: string; deviceId: number } | null>(null);
   const prevPacketsRef = useRef<{ packets: number; time: number } | null>(null);
 
-  // Load devices list
+  // Загрузка терминалов и их адресов
   const loadDevices = useCallback(async () => {
     setLoadingDevices(true);
     try {
-      const res = await getDevices(orgId, { page: 1, size: 100 });
+      const [res, settingsList] = await Promise.all([
+        getDevices(orgId, { page: 1, size: 100 }),
+        listTerminalsSettings(orgId).catch(() => []),
+      ]);
+
       let allItems = res.items || [];
       if (res.pages > 1) {
         for (let p = 2; p <= res.pages; p++) {
@@ -126,7 +180,26 @@ export default function VideoSurveillancePage() {
           allItems = allItems.concat(nextRes.items || []);
         }
       }
+
+      // Формирование словаря адресов: device_id -> address
+      const addrMap: Record<number, string> = {};
+      for (const t of settingsList) {
+        if (t.device_id && t.address) {
+          addrMap[t.device_id] = t.address;
+        }
+      }
+      for (const d of allItems) {
+        if (!addrMap[d.device_id] && Array.isArray(d.tags)) {
+          const addrTag = d.tags.find(
+            (t) => t.tag === "address" || t.tag === "location" || t.tag === "addr"
+          );
+          if (addrTag?.value) addrMap[d.device_id] = addrTag.value;
+        }
+      }
+
+      setTerminalAddresses(addrMap);
       setDevices(allItems);
+
       setSelectedDevice((prev) => {
         if (prev && allItems.some((d) => d.device_id === prev.device_id)) {
           return prev;
@@ -134,7 +207,7 @@ export default function VideoSurveillancePage() {
         return allItems.length > 0 ? allItems[0] : null;
       });
     } catch (err: any) {
-      message.error(err?.message || "Ошибка загрузки списка устройств");
+      message.error(err?.message || "Ошибка загрузки списка терминалов");
     } finally {
       setLoadingDevices(false);
     }
@@ -146,17 +219,7 @@ export default function VideoSurveillancePage() {
     }
   }, [loadDevices, userLoading]);
 
-  // Filter devices
-  const filteredDevices = useMemo(() => {
-    if (!search.trim()) return devices;
-    const q = search.trim().toLowerCase();
-    return devices.filter(
-      (d) =>
-        String(d.device_id).includes(q) ||
-        (d.sn && d.sn.toLowerCase().includes(q))
-    );
-  }, [devices, search]);
-
+  // Обработчики кликов удалённого управления
   const handleClickResult = useCallback((res: ClickResult) => {
     if (res.result === "injected") {
       const ms = res.latency_ms !== undefined ? ` (${res.latency_ms} мс)` : "";
@@ -172,6 +235,7 @@ export default function VideoSurveillancePage() {
     message.error(msg);
   }, []);
 
+  // Хук удалённого управления (мышь/клавиатура)
   const rc = useRemoteControl({
     deviceId: selectedDevice?.device_id ?? null,
     isSessionActive,
@@ -182,7 +246,7 @@ export default function VideoSurveillancePage() {
   const rcRef = useRef(rc);
   rcRef.current = rc;
 
-  // Clear keepalive interval
+  // Очистка интервала keepalive для аренды
   const clearLeaseKeepalive = () => {
     if (keepaliveTimerRef.current) {
       clearInterval(keepaliveTimerRef.current);
@@ -190,7 +254,7 @@ export default function VideoSurveillancePage() {
     }
   };
 
-  // Start keepalive interval
+  // Запуск keepalive для аренды
   const startLeaseKeepalive = (deviceId: number, leaseId: string, keepaliveSec = 15) => {
     clearLeaseKeepalive();
     keepaliveTimerRef.current = setInterval(async () => {
@@ -202,7 +266,7 @@ export default function VideoSurveillancePage() {
     }, Math.max(5, keepaliveSec - 3) * 1000);
   };
 
-  // Stop current active session cleanly
+  // Остановка текущей медиасессии
   const stopSession = useCallback(async () => {
     clearLeaseKeepalive();
     await rcRef.current.disable("session_stopped");
@@ -238,15 +302,14 @@ export default function VideoSurveillancePage() {
     }
 
     setIsSessionActive(false);
-    setIsStarting(false);
-    setStatusText("Сессия остановлена");
+    setStatusText("Не запущена");
     setStreamStage("idle");
   }, []);
 
   const stopSessionRef = useRef(stopSession);
   stopSessionRef.current = stopSession;
 
-  // Load inventory and stream state for selected device
+  // Загрузка инвентаря устройств и состояния стрима
   const fetchDeviceInfo = useCallback(
     async (deviceId: number, refresh = false) => {
       setLoadingInventory(true);
@@ -262,33 +325,20 @@ export default function VideoSurveillancePage() {
           getControlStatus(deviceId).catch(() => null),
         ]);
 
-        const rawDisplays = (inv?.displays || []) as DisplaySource[];
-        const rawCameras = (inv?.cameras || []) as CameraSource[];
+        const displays: DisplaySource[] = (inv?.displays || []).filter(
+          (d: DisplaySource) => d.policy !== "denied"
+        );
+        const cameras: CameraSource[] = inv?.cameras || [];
 
-        const displays: DisplaySource[] = rawDisplays.map((d: any) => ({
-          ...d,
-          id: String(d.id || d.desktop_id || "0"),
-          desktop_id: String(d.desktop_id || d.id || "0"),
-          is_primary: Boolean(d.is_primary ?? d.primary),
-          primary: Boolean(d.primary ?? d.is_primary),
-          resolution: d.resolution || (d.width && d.height ? `${d.width}x${d.height}` : undefined),
-        }));
-
-        const cameras: CameraSource[] = rawCameras.map((c: any) => ({
-          ...c,
-          id: String(c.id || c.camera_id || "0"),
-          camera_id: String(c.camera_id || c.id || "0"),
-        }));
-
-        const agent = ctlStat?.agent;
-        if (displays.length === 0 && (agent?.desktop_available || agent?.screen)) {
-          const w = agent?.screen?.virtual_width || 1920;
-          const h = agent?.screen?.virtual_height || 1080;
+        // Fallback если дисплей не вернулся, но агент сообщает screen
+        if (displays.length === 0 && ctlStat?.agent?.screen) {
+          const sc = ctlStat.agent.screen;
+          const w = sc.virtual_width || 1920;
+          const h = sc.virtual_height || 1080;
           displays.push({
             id: "0",
-            desktop_id: "0",
             name: "Основной экран",
-            resolution: `${w}x${h}`,
+            resolution: `${w}×${h}`,
             width: w,
             height: h,
             is_primary: true,
@@ -299,6 +349,7 @@ export default function VideoSurveillancePage() {
 
         const normalizedInv: DeviceInventory = { displays, cameras };
         setInventory(normalizedInv);
+
         if (ctlStat?.agent) {
           rcRef.current.setPresence(ctlStat.agent);
         }
@@ -316,7 +367,7 @@ export default function VideoSurveillancePage() {
           setStreamStage("idle");
         }
 
-        // Set default selected source
+        // Выбор источника по умолчанию
         if (streamInfo?.source_id && streamInfo?.mode) {
           setSelectedSourceKey(`${streamInfo.mode}:${streamInfo.source_id}`);
         } else if (displays.length > 0) {
@@ -334,27 +385,40 @@ export default function VideoSurveillancePage() {
     []
   );
 
-  // Connect to stream (Viewer flow)
+  // Смена выбранного терминала
+  const handleSelectDevice = async (device: DeviceListItem) => {
+    if (selectedDevice?.device_id === device.device_id) return;
+    setBannerError(null);
+    setRefusalNotice(null);
+    await stopSession();
+    setSelectedDevice(device);
+    setStatusText("Не запущена");
+    await fetchDeviceInfo(device.device_id);
+
+    // Автоматическое подключение для зрителя (viewer)
+    if (isViewer && canView && device.status === "online") {
+      void handleViewerConnect(device.device_id);
+    }
+  };
+
+  // Подключение зрителя (Viewer)
   const handleViewerConnect = useCallback(
     async (deviceId: number) => {
-      setIsStarting(true);
       setBannerError(null);
       setRefusalNotice(null);
+      setStreamStage("starting");
       setStatusText("Запрос аренды для просмотра...");
 
       try {
-        // 1. Viewer acquires lease with scope 'view'
         const leaseRes = await acquireControlLease(deviceId, "view");
         setActiveLeaseId(leaseRes.lease_id);
         leaseRef.current = { id: leaseRes.lease_id, deviceId };
         startLeaseKeepalive(deviceId, leaseRes.lease_id, leaseRes.keepalive_sec);
 
-        // 2. Init video session with pin
         setStatusText("Подключение к медиапотоку...");
         const sessionData = await createVideoSession(deviceId);
         const wsUrl = getJanusWsUrl(sessionData.janus_ws);
 
-        // 3. Connect Janus streaming client with PIN
         const client = new JanusStreamingClient({
           wsUrl,
           mountpointId: sessionData.mountpoint_id,
@@ -369,7 +433,9 @@ export default function VideoSurveillancePage() {
             if (status === "connecting") {
               setStatusText("Соединение с медиасервером...");
             } else if (status === "streaming" || status === "webrtcup") {
-              setStatusText("Трансляция активна");
+              setStatusText("В эфире");
+              setStreamStage("running");
+              setIsSessionActive(true);
             }
           },
           onError: (err) => {
@@ -382,94 +448,45 @@ export default function VideoSurveillancePage() {
         await client.start();
         janusClientRef.current = client;
         setIsSessionActive(true);
-        setStatusText("Просмотр трансляции");
+        setStreamStage("running");
+        setStatusText("В эфире");
       } catch (err: any) {
-        const detail = err?.response?.data?.detail;
-        if (err?.response?.status === 409) {
-          if (detail && typeof detail === "object" && detail.code === "stream_not_running") {
-            setBannerError({
-              code: "stream_not_running",
-              message: "Трансляция не запущена оператором",
-            });
-            setStatusText("Трансляция не запущена");
-          } else if (detail && typeof detail === "object" && detail.code === "lease_taken") {
-            const owner = detail.owner_role
-              ? `${detail.owner_role} (${detail.owner_masked || detail.owner_user_id || "..."})`
-              : "другим пользователем";
-            const exp = detail.expires_at
-              ? ` до ${new Date(detail.expires_at).toLocaleTimeString()}`
-              : "";
-            setRefusalNotice(`Терминал занят: ${owner}${exp}`);
-            setStatusText("Терминал занят");
-          } else {
-            const msg = typeof detail === "string" ? detail : JSON.stringify(detail);
-            message.warning(`Отказ: ${msg}`);
-            setStatusText(`Отказ: ${msg}`);
-          }
-        } else {
-          const msg = err?.message || detail || "Ошибка подключения";
-          message.error(msg);
-          setStatusText(`Ошибка: ${msg}`);
-        }
-      } finally {
-        setIsStarting(false);
+        const formatted = formatVideoError(err);
+        setBannerError({ code: "viewer_connect_failed", message: formatted.message });
+        setStatusText(formatted.message);
+        setStreamStage("failed");
+        setIsSessionActive(false);
+        await stopSession();
       }
     },
-    []
+    [stopSession]
   );
 
-  // Device selection change
-  const handleSelectDevice = async (device: DeviceListItem) => {
-    if (selectedDevice?.device_id === device.device_id) return;
-    setBannerError(null);
-    setRefusalNotice(null);
-    await stopSession();
-    setSelectedDevice(device);
-    setStatusText("Ожидание запуска");
-    await fetchDeviceInfo(device.device_id);
-
-    // If role is viewer with permission, automatically attempt view connection
-    if (isViewer && canView) {
-      void handleViewerConnect(device.device_id);
-    }
-  };
-
-  // Helper for nack banner errors
-  const handleBannerError = (code: string, fallbackMessage?: string) => {
-    const errorMap: Record<string, string> = {
-      source_unavailable: "Выбранный источник видео недоступен на терминале",
-      session_unavailable: "Сессия рабочего стола пользователя недоступна",
-      failed: "Сбой запуска видеозахвата ffmpeg на терминале",
-      ffmpeg_missing: "Утилита ffmpeg не найдена на терминале",
-      terminal_timeout: "Таймаут ответа терминала на команду трансляции",
-      busy_transition: "Терминал занят переключением видеопотока",
-    };
-    const msg = errorMap[code] || fallbackMessage || `Ошибка терминала: ${code}`;
-    setBannerError({ code, message: msg });
-    return msg;
-  };
-
-  // Operator Start Stream
+  // Запуск трансляции оператором
   const handleOperatorStart = async () => {
     if (!selectedDevice) return;
-    setIsStarting(true);
+    if (selectedDevice.status !== "online") {
+      message.warning("Терминал не на связи (offline). Запуск трансляции невозможен.");
+      return;
+    }
+
     setBannerError(null);
     setRefusalNotice(null);
     setStreamStage("starting");
     setStatusText("Запрос аренды терминала...");
 
     try {
-      // 1. Operator acquires lease with scope 'stream'
+      // 1. Оператор запрашивает аренду со scope 'stream'
       const leaseRes = await acquireControlLease(selectedDevice.device_id, "stream");
       setActiveLeaseId(leaseRes.lease_id);
       leaseRef.current = { id: leaseRes.lease_id, deviceId: selectedDevice.device_id };
       startLeaseKeepalive(selectedDevice.device_id, leaseRes.lease_id, leaseRes.keepalive_sec);
 
-      // 2. Parse selected mode and source_id
+      // 2. Определение режима и ID источника
       const colonIdx = selectedSourceKey.indexOf(":");
       const mode = colonIdx !== -1 ? selectedSourceKey.slice(0, colonIdx) : "desktop";
       const source_id = colonIdx !== -1 ? selectedSourceKey.slice(colonIdx + 1) : "0";
-      setStatusText("Запуск трансляции на терминале...");
+      setStatusText("Запуск видеопотока на терминале...");
 
       const startRes = await startDeviceStream(selectedDevice.device_id, {
         mode: mode as "desktop" | "usb-camera",
@@ -478,15 +495,7 @@ export default function VideoSurveillancePage() {
         lease_id: leaseRes.lease_id,
       });
 
-      setActiveStream({
-        state: (startRes.state as any) || "running",
-        mode,
-        source_id,
-        stream_instance_id: startRes.stream_instance_id,
-      });
-      setStreamStage("running");
-
-      // 3. Init WebRTC session and Janus mountpoint with PIN
+      // 3. Инициализация WebRTC сессии и подключение клиента Janus
       setStatusText("Подключение к медиасерверу...");
       const sessionData = await createVideoSession(selectedDevice.device_id);
       const wsUrl = getJanusWsUrl(sessionData.janus_ws);
@@ -505,7 +514,9 @@ export default function VideoSurveillancePage() {
           if (status === "connecting") {
             setStatusText("Соединение с медиасервером...");
           } else if (status === "streaming" || status === "webrtcup") {
-            setStatusText("Трансляция активна");
+            setStatusText("В эфире");
+            setStreamStage("running");
+            setIsSessionActive(true);
           }
         },
         onError: (err) => {
@@ -517,10 +528,20 @@ export default function VideoSurveillancePage() {
 
       await client.start();
       janusClientRef.current = client;
-      setIsSessionActive(true);
-      setStatusText("Трансляция запущена");
 
-      // 4. Polling status
+      // Успешный запуск
+      setActiveStream({
+        state: (startRes.state as any) || "running",
+        mode,
+        source_id,
+        stream_instance_id: startRes.stream_instance_id,
+      });
+      setStreamStage("running");
+      setIsSessionActive(true);
+      setStatusText("В эфире");
+      message.success("Трансляция успешно запущена");
+
+      // 4. Периодический опрос качества и RTP пакетов
       prevPacketsRef.current = null;
       pollTimerRef.current = setInterval(async () => {
         try {
@@ -547,100 +568,28 @@ export default function VideoSurveillancePage() {
           prevPacketsRef.current = { packets: stat.rtp_packets, time: now };
 
           if (stat.streaming && stat.rtp_packets > 0) {
-            setStatusText(`Идёт трансляция (${pps} pkt/s)`);
+            setStatusText(`В эфире (${pps} кадр/сек)`);
           }
         } catch (e) {
           console.warn("Status poll error", e);
         }
       }, 5000);
     } catch (err: any) {
-      let errorMsg = "";
-      const detail = err?.response?.data?.detail;
-      if (err?.response?.status === 409) {
-        if (detail && typeof detail === "object" && detail.code === "lease_taken") {
-          const owner = detail.owner_role
-            ? `${detail.owner_role} (${detail.owner_masked || detail.owner_user_id || "..."})`
-            : "другим пользователем";
-          const exp = detail.expires_at
-            ? ` до ${new Date(detail.expires_at).toLocaleTimeString()}`
-            : "";
-          setRefusalNotice(`Терминал занят: ${owner}${exp}`);
-          errorMsg = `Терминал занят: ${owner}${exp}`;
-          message.warning(errorMsg);
-        } else {
-          const nackCode = detail?.code || detail?.nack?.code;
-          if (nackCode) {
-            const bannerMsg = handleBannerError(nackCode, detail?.message);
-            errorMsg = bannerMsg;
-            message.error(bannerMsg);
-          } else {
-            errorMsg = typeof detail === "string" ? detail : (detail?.message || "Конфликт аренды");
-            message.error(errorMsg);
-          }
-        }
-      } else {
-        errorMsg = err?.message || (typeof detail === "string" ? detail : detail?.message) || "Ошибка запуска трансляции";
-        message.error(errorMsg);
-      }
-      await stopSession();
-      setStreamStage("idle");
-      if (errorMsg) {
-        setStatusText(`Ошибка: ${errorMsg}`);
-      }
-    } finally {
-      setIsStarting(false);
-    }
-  };
-
-  // Operator Switch Source
-  const handleOperatorSwitch = async () => {
-    if (!selectedDevice || !leaseRef.current) return;
-    setIsStarting(true);
-    setBannerError(null);
-    setStreamStage("stopping");
-    setStatusText("Остановка текущего источника...");
-
-    try {
-      const colonIdx = selectedSourceKey.indexOf(":");
-      const mode = colonIdx !== -1 ? selectedSourceKey.slice(0, colonIdx) : "desktop";
-      const source_id = colonIdx !== -1 ? selectedSourceKey.slice(colonIdx + 1) : "0";
-      setStreamStage("starting");
-      setStatusText(`Переключение на ${mode === "desktop" ? "экран" : "камеру"} ${source_id}...`);
-
-      const res = await startDeviceStream(selectedDevice.device_id, {
-        mode: mode as "desktop" | "usb-camera",
-        source_id: source_id || "0",
-        profile: selectedProfile,
-        lease_id: leaseRef.current.id,
-      });
-
-      setActiveStream({
-        state: (res.state as any) || "running",
-        mode,
-        source_id,
-        stream_instance_id: res.stream_instance_id,
-      });
-      setStreamStage("running");
-      setStatusText("Источник успешно переключен");
-      message.success("Источник трансляции переключен");
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail;
-      const nackCode = detail?.code || detail?.nack?.code;
-      if (nackCode) {
-        const bannerMsg = handleBannerError(nackCode, detail?.message);
-        message.error(bannerMsg);
-      } else {
-        message.error(typeof detail === "string" ? detail : (detail?.message || "Ошибка переключения источника"));
-      }
+      const formatted = formatVideoError(err);
+      setBannerError({ code: "start_failed", message: formatted.message });
+      setStatusText(formatted.message);
+      message.error(formatted.message);
       setStreamStage("failed");
-    } finally {
-      setIsStarting(false);
+      setActiveStream(null);
+      setIsSessionActive(false);
+      await stopSession();
     }
   };
 
-  // Operator Stop Stream
+  // Остановка трансляции оператором
   const handleOperatorStop = async () => {
     if (!selectedDevice) return;
+    setStreamStage("stopping");
     try {
       if (leaseRef.current) {
         await stopDeviceStream(selectedDevice.device_id, leaseRef.current.id);
@@ -652,7 +601,26 @@ export default function VideoSurveillancePage() {
     message.info("Трансляция остановлена");
   };
 
-  // Page unload and cleanup effects
+  // Переключение режима удалённого управления
+  const handleToggleControl = async () => {
+    if (rc.status === "active") {
+      await rc.disable("operator_manual");
+      message.info("Удалённое управление отключено");
+    } else {
+      if (activeStream?.mode === "usb-camera") {
+        message.warning("Управление мышью недоступно в режиме трансляции камеры");
+        return;
+      }
+      try {
+        await rc.enable();
+        message.success("Управление активировано");
+      } catch (err: any) {
+        // обработано в хуке
+      }
+    }
+  };
+
+  // Очистка при размонтировании
   useEffect(() => {
     const handleUnload = () => {
       const cur = leaseRef.current;
@@ -671,20 +639,7 @@ export default function VideoSurveillancePage() {
     };
   }, []);
 
-  const shortenSn = (sn: string) => {
-    if (!sn) return "—";
-    if (sn.length <= 12) return sn;
-    return `${sn.slice(0, 6)}...${sn.slice(-4)}`;
-  };
-
-  const isCurrentSourceActive = useMemo(() => {
-    if (!activeStream || activeStream.state !== "running" || !selectedSourceKey) return false;
-    const colonIdx = selectedSourceKey.indexOf(":");
-    const mode = colonIdx !== -1 ? selectedSourceKey.slice(0, colonIdx) : "desktop";
-    const source_id = colonIdx !== -1 ? selectedSourceKey.slice(colonIdx + 1) : "0";
-    return activeStream.mode === mode && String(activeStream.source_id) === String(source_id);
-  }, [activeStream, selectedSourceKey]);
-
+  // Человекочитаемое имя активного источника
   const activeSourceLabel = useMemo(() => {
     if (!activeStream || activeStream.state === "stopped" || (!activeStream.source_id && !activeStream.mode)) {
       return null;
@@ -703,8 +658,11 @@ export default function VideoSurveillancePage() {
         ) || (isGeneric ? inventory.displays[0] : null);
 
       if (disp) {
-        const res = disp.resolution || (disp.width && disp.height ? `${disp.width}x${disp.height}` : null);
-        return `${disp.name}${res ? ` (${res})` : ""}`;
+        const res = disp.resolution || (disp.width && disp.height ? `${disp.width}×${disp.height}` : null);
+        const isPrimary = disp.is_primary ?? disp.primary;
+        let name = disp.name?.replace(/desktop\s*#?\d*/gi, "").replace(/#\d+/g, "").trim();
+        const label = isPrimary ? (name ? `Основной экран (${name})` : "Основной экран") : (name || "Монитор");
+        return `${label}${res ? ` (${res})` : ""}`;
       }
     }
 
@@ -717,379 +675,126 @@ export default function VideoSurveillancePage() {
             String(c.camera_id) === srcId
         ) || (isGeneric ? inventory.cameras[0] : null);
 
-      if (cam) {
+      if (cam && cam.name) {
         return cam.name;
       }
     }
 
-    if (!srcId && !activeStream.mode) {
-      return null;
+    if (mode === "desktop") {
+      return "Рабочий стол (основной экран)";
+    }
+    if (mode === "usb-camera") {
+      return "Камера терминала";
     }
 
-    return `${mode} #${srcId || "0"}`;
+    return "Источник видео";
   }, [activeStream, inventory]);
 
+  const hasSources = (inventory?.displays?.length ?? 0) > 0 || (inventory?.cameras?.length ?? 0) > 0;
+  const isCameraMode = activeStream?.mode === "usb-camera";
+
   return (
-    <div style={{ padding: "0 24px 24px" }}>
+    <div style={{ padding: isMobile ? "0 12px 16px" : "0 24px 24px" }}>
       <PageHeader
         title="Видеонаблюдение"
-        subtitle="Просмотр WebRTC трансляций с терминалов и удаленное управление"
+        subtitle="Просмотр видеотрансляций с терминалов и удаленное управление"
       />
 
+      {/* Основная адаптивная раскладка */}
       <div
         style={{
           display: "flex",
           gap: 16,
-          alignItems: "stretch",
-          minHeight: "calc(100vh - 180px)",
+          alignItems: "flex-start",
+          marginTop: 12,
         }}
       >
-        {/* Left Column: Device list (~280px) */}
-        <Card
-          title={
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span>Устройства ({filteredDevices.length})</span>
-              <Button
-                type="text"
-                size="small"
-                icon={<ReloadOutlined />}
-                onClick={loadDevices}
+        {/* Левая панель списка терминалов (видна на Desktop) */}
+        {isDesktop && (
+          <div
+            style={{
+              width: 320,
+              flex: "0 0 320px",
+              position: "sticky",
+              top: 72,
+              maxHeight: "calc(100vh - 90px)",
+            }}
+          >
+            <Card
+              size="small"
+              styles={{ body: { padding: 12 } }}
+              style={{
+                borderRadius: 8,
+                border: `1px solid ${token.colorBorderSecondary}`,
+                height: "100%",
+              }}
+            >
+              <TerminalList
+                devices={devices}
+                terminalAddresses={terminalAddresses}
+                selectedDevice={selectedDevice}
+                onSelectDevice={handleSelectDevice}
+                loading={loadingDevices}
+                onRefresh={loadDevices}
+                maxHeight="calc(100vh - 240px)"
               />
-            </div>
-          }
-          style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column" }}
-          bodyStyle={{ padding: 12, display: "flex", flexDirection: "column", flex: 1 }}
-        >
-          <Input
-            prefix={<SearchOutlined style={{ color: token.colorTextPlaceholder }} />}
-            placeholder="Поиск по ID или SN..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            allowClear
-            style={{ marginBottom: 12 }}
-          />
-
-          <div style={{ flex: 1, overflowY: "auto", maxHeight: "calc(100vh - 280px)" }}>
-            {loadingDevices ? (
-              <div style={{ textAlign: "center", padding: 32 }}>
-                <Spin />
-              </div>
-            ) : filteredDevices.length === 0 ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Нет устройств" />
-            ) : (
-              filteredDevices.map((dev) => {
-                const isSelected = selectedDevice?.device_id === dev.device_id;
-                const isOnline = dev.status === "online";
-                return (
-                  <div
-                    key={dev.device_id}
-                    onClick={() => handleSelectDevice(dev)}
-                    style={{
-                      padding: "10px 12px",
-                      marginBottom: 6,
-                      borderRadius: 6,
-                      cursor: "pointer",
-                      backgroundColor: isSelected
-                        ? token.colorPrimaryBg
-                        : token.colorBgContainer,
-                      border: `1px solid ${
-                        isSelected ? token.colorPrimaryBorder : token.colorBorderSecondary
-                      }`,
-                      transition: "all 0.2s ease",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                      }}
-                    >
-                      <Text strong style={{ fontSize: 14 }}>
-                        #{dev.device_id}
-                      </Text>
-                      <Badge
-                        status={isOnline ? "success" : "default"}
-                        text={
-                          <span style={{ fontSize: 12, color: token.colorTextSecondary }}>
-                            {dev.status}
-                          </span>
-                        }
-                      />
-                    </div>
-                    <div style={{ marginTop: 4 }}>
-                      <Tooltip title={`Серийный номер: ${dev.sn}`}>
-                        <Text type="secondary" style={{ fontSize: 12, fontFamily: "monospace" }}>
-                          {shortenSn(dev.sn)}
-                        </Text>
-                      </Tooltip>
-                    </div>
-                  </div>
-                );
-              })
-            )}
+            </Card>
           </div>
-        </Card>
+        )}
 
-        {/* Right Column: Player & Controls Panel */}
-        <Card
-          style={{ flex: 1, display: "flex", flexDirection: "column" }}
-          bodyStyle={{ padding: 24, display: "flex", flexDirection: "column", flex: 1 }}
+        {/* Выдвижной Drawer со списком терминалов для мобильных и планшетов */}
+        <Drawer
+          title="Выбор терминала"
+          placement="left"
+          open={isDeviceDrawerOpen}
+          onClose={() => setIsDeviceDrawerOpen(false)}
+          width={screens.xs ? "85%" : 360}
+          styles={{ body: { padding: 12 } }}
+        >
+          <TerminalList
+            devices={devices}
+            terminalAddresses={terminalAddresses}
+            selectedDevice={selectedDevice}
+            onSelectDevice={(dev) => {
+              void handleSelectDevice(dev);
+              setIsDeviceDrawerOpen(false);
+            }}
+            loading={loadingDevices}
+            onRefresh={loadDevices}
+            maxHeight="calc(100vh - 180px)"
+          />
+        </Drawer>
+
+        {/* Правая / Основная рабочая зона */}
+        <div
+          style={{
+            flex: 1,
+            minWidth: 0,
+            display: "flex",
+            flexDirection: "column",
+            gap: 14,
+          }}
         >
           {selectedDevice ? (
             <>
-              {/* Header */}
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 16,
-                }}
-              >
-                <div>
-                  <Title level={4} style={{ margin: 0 }}>
-                    Устройство #{selectedDevice.device_id}
-                  </Title>
-                  <Text type="secondary" style={{ fontSize: 13, fontFamily: "monospace" }}>
-                    SN: {selectedDevice.sn}
-                  </Text>
-                  {isViewer && (
-                    <Tag color="purple" style={{ marginLeft: 8 }}>
-                      Режим наблюдателя (только просмотр)
-                    </Tag>
-                  )}
-                </div>
+              {/* 1. Контекст выбранного терминала */}
+              <TerminalHeader
+                selectedDevice={selectedDevice}
+                address={terminalAddresses[selectedDevice.device_id]}
+                onOpenDeviceDrawer={() => setIsDeviceDrawerOpen(true)}
+                onRefreshDevice={() => fetchDeviceInfo(selectedDevice.device_id, true)}
+                loadingRefresh={loadingInventory}
+                isMobile={isMobile}
+              />
 
-                {/* Operator Actions Bar */}
-                {isOperator && (
-                  <Space>
-                    {!isSessionActive ? (
-                      <Button
-                        type="primary"
-                        icon={<PlayCircleOutlined />}
-                        onClick={handleOperatorStart}
-                        loading={isStarting}
-                        disabled={!selectedSourceKey}
-                      >
-                        Запустить
-                      </Button>
-                    ) : (
-                      <>
-                        <Button
-                          icon={<SwapOutlined />}
-                          onClick={handleOperatorSwitch}
-                          loading={isStarting && streamStage === "starting"}
-                          disabled={isCurrentSourceActive || isStarting}
-                        >
-                          Переключить
-                        </Button>
-
-                        {/* Remote Control Toggle */}
-                        {activeStream?.mode === "desktop" ? (
-                          rc.status === "active" ? (
-                            <Button
-                              danger
-                              type="primary"
-                              icon={<ControlOutlined />}
-                              onClick={async () => {
-                                await rc.disable("user_toggle");
-                                if (leaseRef.current) {
-                                  await changeControlScope(selectedDevice.device_id, "stream").catch(() => {});
-                                }
-                                message.info("Управление отключено");
-                              }}
-                            >
-                              Отключить управление
-                            </Button>
-                          ) : (
-                            <Button
-                              icon={<ControlOutlined />}
-                              disabled={
-                                !rc.presence?.online ||
-                                !rc.presence?.desktop_available ||
-                                rc.status === "acquiring" ||
-                                isStarting
-                              }
-                              loading={rc.status === "acquiring"}
-                              onClick={() => {
-                                if (!rc.presence?.online) {
-                                  message.warning("Управление недоступно: агент offline");
-                                  return;
-                                }
-                                if (!rc.presence?.desktop_available) {
-                                  message.warning("Экран терминала заблокирован");
-                                  return;
-                                }
-                                Modal.confirm({
-                                  title: "Включение удалённого управления",
-                                  content:
-                                    "Вы управляете клавиатурой и мышью терминала. Действия подтверждаются агентом и журналируются.",
-                                  okText: "Включить",
-                                  cancelText: "Отмена",
-                                  onOk: async () => {
-                                    try {
-                                      await changeControlScope(selectedDevice.device_id, "input");
-                                      await rc.enable();
-                                    } catch (e: any) {
-                                      message.error(e?.response?.data?.detail || "Ошибка включения управления");
-                                    }
-                                  },
-                                });
-                              }}
-                            >
-                              Включить управление
-                            </Button>
-                          )
-                        ) : (
-                          <Tooltip title="Управление вводом доступно только в режиме трансляции рабочего стола">
-                            <Button icon={<ControlOutlined />} disabled>
-                              Управление (недоступно для камеры)
-                            </Button>
-                          </Tooltip>
-                        )}
-
-                        <Button danger icon={<StopOutlined />} onClick={handleOperatorStop}>
-                          Остановить
-                        </Button>
-                      </>
-                    )}
-                  </Space>
-                )}
-              </div>
-
-              {/* Source Selection & Settings Panel (Operators only) */}
-              {isOperator && (
-                <div
-                  style={{
-                    marginBottom: 16,
-                    padding: "12px 16px",
-                    borderRadius: 8,
-                    backgroundColor: token.colorFillAlter,
-                    border: `1px solid ${token.colorBorderSecondary}`,
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                    <Text strong style={{ fontSize: 13 }}>
-                      Выбор источника трансляции:
-                    </Text>
-                    <Space size="middle">
-                      <Space size="small">
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                          Профиль качества:
-                        </Text>
-                        <Select
-                          size="small"
-                          value={selectedProfile}
-                          onChange={setSelectedProfile}
-                          style={{ width: 110 }}
-                          options={[
-                            { label: "Default (720p)", value: "default" },
-                            { label: "Low (480p)", value: "low" },
-                          ]}
-                          disabled={isSessionActive && isCurrentSourceActive}
-                        />
-                      </Space>
-                      <Button
-                        size="small"
-                        type="link"
-                        icon={<ReloadOutlined />}
-                        loading={loadingInventory}
-                        onClick={() => fetchDeviceInfo(selectedDevice.device_id, true)}
-                      >
-                        Обновить источники
-                      </Button>
-                    </Space>
-                  </div>
-
-                  {loadingInventory ? (
-                    <div style={{ textAlign: "center", padding: 8 }}>
-                      <Spin size="small" />
-                    </div>
-                  ) : (
-                    <Radio.Group
-                      value={selectedSourceKey}
-                      onChange={(e) => setSelectedSourceKey(e.target.value)}
-                      style={{ width: "100%" }}
-                    >
-                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                        {/* Displays */}
-                        {inventory?.displays && inventory.displays.length > 0 && (
-                          <div>
-                            <Text type="secondary" style={{ fontSize: 11, fontWeight: 600 }}>
-                              ДИСПЛЕИ:
-                            </Text>
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 4 }}>
-                              {inventory.displays.map((disp: DisplaySource) => {
-                                const dispId = disp.id || disp.desktop_id || "0";
-                                const isPrimary = disp.is_primary ?? disp.primary;
-                                const res = disp.resolution || (disp.width && disp.height ? `${disp.width}x${disp.height}` : null);
-                                return (
-                                  <Radio key={`desktop:${dispId}`} value={`desktop:${dispId}`}>
-                                    <Space size="small">
-                                      <DesktopOutlined />
-                                      <span>{disp.name}</span>
-                                      {res && <Tag style={{ fontSize: 11 }}>{res}</Tag>}
-                                      {isPrimary && <Tag color="blue" style={{ fontSize: 11 }}>Primary</Tag>}
-                                      {disp.policy && (
-                                        <Tag color={disp.policy === "denied" ? "red" : "default"} style={{ fontSize: 11 }}>
-                                          {disp.policy}
-                                        </Tag>
-                                      )}
-                                    </Space>
-                                  </Radio>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Cameras */}
-                        {inventory?.cameras && inventory.cameras.length > 0 && (
-                          <div style={{ marginTop: inventory?.displays?.length ? 4 : 0 }}>
-                            <Text type="secondary" style={{ fontSize: 11, fontWeight: 600 }}>
-                              КАМЕРЫ:
-                            </Text>
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 4 }}>
-                              {inventory.cameras.map((cam: CameraSource) => {
-                                const camId = cam.id || cam.camera_id || "0";
-                                return (
-                                  <Radio key={`usb-camera:${camId}`} value={`usb-camera:${camId}`}>
-                                    <Space size="small">
-                                      <VideoCameraOutlined />
-                                      <span>{cam.name}</span>
-                                      <Tag color={cam.available ? "green" : "default"} style={{ fontSize: 11 }}>
-                                        {cam.available ? "Доступна" : "Недоступна"}
-                                      </Tag>
-                                    </Space>
-                                  </Radio>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        {(!inventory?.displays?.length && !inventory?.cameras?.length) && (
-                          <Text type="secondary" style={{ fontSize: 12 }}>
-                            Источники видео не обнаружены в присутствии терминала.
-                          </Text>
-                        )}
-                      </div>
-                    </Radio.Group>
-                  )}
-                </div>
-              )}
-
-              {/* Banners & Notifications */}
+              {/* Уведомления об ошибках или конфликте аренды */}
               {bannerError && (
                 <Alert
                   type="warning"
                   showIcon
                   message={bannerError.message}
-                  description={`Код терминала: ${bannerError.code}`}
                   closable
                   onClose={() => setBannerError(null)}
-                  style={{ marginBottom: 16 }}
                 />
               )}
 
@@ -1097,158 +802,90 @@ export default function VideoSurveillancePage() {
                 <Alert
                   type="error"
                   showIcon
-                  icon={<LockOutlined />}
                   message={refusalNotice}
-                  description="Второй пользователь не может перехватить сессию до окончания текущей аренды."
+                  description="Второй оператор не может перехватить управление до завершения текущего сеанса."
                   closable
                   onClose={() => setRefusalNotice(null)}
-                  style={{ marginBottom: 16 }}
                 />
               )}
 
-              {/* Video Area */}
-              <div
-                style={{
-                  position: "relative",
-                  width: "100%",
-                  maxHeight: "560px",
-                  height: "560px",
-                  backgroundColor: "#000000",
-                  borderRadius: 8,
-                  overflow: "hidden",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
+              {/* 2. Главный видеоэкран с поддержкой 16:9 и всех состояний */}
+              <VideoPlayerScreen
+                selectedDevice={selectedDevice}
+                videoRef={videoRef}
+                isSessionActive={isSessionActive}
+                streamStage={streamStage}
+                errorMessage={bannerError?.message}
+                isOperator={isOperator}
+                isViewer={isViewer}
+                activeSourceLabel={activeSourceLabel || undefined}
+                isCameraMode={isCameraMode}
+                onStartStream={isOperator ? handleOperatorStart : () => handleViewerConnect(selectedDevice.device_id)}
+                onRetryStream={isOperator ? handleOperatorStart : () => handleViewerConnect(selectedDevice.device_id)}
+                onRefreshTerminal={() => fetchDeviceInfo(selectedDevice.device_id, true)}
+                rc={{
+                  status: rc.status,
+                  presence: rc.presence,
+                  sendMove: rc.sendMove,
+                  sendClick: rc.sendClick,
+                  sendKey: rc.sendKey,
+                  busyOwner: rc.busyOwner,
                 }}
-              >
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  controls={false}
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "contain",
-                    display: isSessionActive ? "block" : "none",
-                  }}
-                />
+              />
 
-                <RemoteControlOverlay
-                  videoRef={videoRef}
-                  active={isSessionActive && rc.status === "active"}
+              {/* 3. Панель управления трансляцией (Запустить / Остановить) */}
+              <StreamControls
+                isSessionActive={isSessionActive}
+                streamStage={streamStage}
+                isTerminalOnline={selectedDevice.status === "online"}
+                isOperator={isOperator}
+                isViewer={isViewer}
+                onStart={handleOperatorStart}
+                onStop={handleOperatorStop}
+                hasSources={hasSources}
+                activeSourceLabel={activeSourceLabel || undefined}
+                isMobile={isMobile}
+              />
+
+              {/* 4. Выбор источника видео (экраны и камеры) для операторов */}
+              {isOperator && (
+                <SourceSelector
+                  inventory={inventory}
+                  selectedSourceKey={selectedSourceKey}
+                  onSelectSourceKey={setSelectedSourceKey}
+                  selectedProfile={selectedProfile}
+                  onChangeProfile={setSelectedProfile}
+                  loadingInventory={loadingInventory}
+                  onRefreshInventory={() => fetchDeviceInfo(selectedDevice.device_id, true)}
+                  disabled={isSessionActive}
+                />
+              )}
+
+              {/* 5. Блок удалённого управления терминалом */}
+              {isOperator && (
+                <RemoteControlPanel
+                  rcStatus={rc.status}
                   presence={rc.presence}
-                  sendMove={rc.sendMove}
-                  sendClick={rc.sendClick}
-                  sendKey={rc.sendKey}
-                  isCameraMode={activeStream?.mode === "usb-camera"}
+                  lease={rc.lease}
+                  busyOwner={rc.busyOwner}
+                  isSessionActive={isSessionActive}
+                  isCameraMode={isCameraMode}
+                  isTerminalOnline={selectedDevice.status === "online"}
+                  onEnableControl={handleToggleControl}
+                  onDisableControl={handleToggleControl}
+                  onSendKey={rc.sendKey}
+                  isMobile={isMobile}
                 />
-
-                {!isSessionActive && (
-                  <div style={{ textAlign: "center", color: "rgba(255,255,255,0.45)" }}>
-                    <VideoCameraOutlined style={{ fontSize: 56, marginBottom: 16 }} />
-                    <div style={{ fontSize: 16 }}>Трансляция не запущена</div>
-                    <div style={{ fontSize: 13, marginTop: 4 }}>
-                      {isViewer
-                        ? "Ожидание запуска трансляции оператором терминала"
-                        : "Выберите источник и нажмите «Запустить» для начала трансляции"}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Status Line */}
-              <div
-                style={{
-                  marginTop: 16,
-                  padding: "10px 16px",
-                  borderRadius: 6,
-                  backgroundColor: token.colorFillAlter,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <Space wrap>
-                  <Badge
-                    status={
-                      streamStage === "running"
-                        ? "success"
-                        : streamStage === "starting"
-                          ? "processing"
-                          : streamStage === "stopping"
-                            ? "warning"
-                            : streamStage === "failed"
-                              ? "error"
-                              : "default"
-                    }
-                  />
-                  <Text strong>Статус:</Text>
-                  <Text>{statusText}</Text>
-                  {streamStage !== "idle" && (
-                    <Tag
-                      color={
-                        streamStage === "running"
-                          ? "green"
-                          : streamStage === "starting"
-                            ? "blue"
-                            : streamStage === "stopping"
-                              ? "orange"
-                              : "red"
-                      }
-                    >
-                      Этап: {streamStage}
-                    </Tag>
-                  )}
-                  {activeSourceLabel && (
-                    <Tag>
-                      Источник: {activeSourceLabel}
-                      {activeStream?.restart_count ? ` (рестартов: ${activeStream.restart_count})` : ""}
-                    </Tag>
-                  )}
-                  {rc.presence && (
-                    <>
-                      <Tag color={rc.presence.online ? (rc.presence.stale ? "orange" : "green") : "default"}>
-                        Агент: {rc.presence.online ? (rc.presence.stale ? "stale" : "online") : "offline"}
-                      </Tag>
-                      <Tag color={rc.presence.desktop_available ? "green" : "orange"}>
-                        {rc.presence.desktop_available ? "Экран доступен" : "Экран заблокирован"}
-                      </Tag>
-                    </>
-                  )}
-                  {rc.status === "active" && (
-                    <Tag color="blue">
-                      Управление активно {rc.lease?.expires_at ? `до ${new Date(rc.lease.expires_at).toLocaleTimeString()}` : ""}
-                    </Tag>
-                  )}
-                  {rc.status === "busy" && (
-                    <Tag color="volcano">
-                      Занято другим оператором {rc.busyOwner ? `(#${rc.busyOwner})` : ""}
-                    </Tag>
-                  )}
-                </Space>
-
-                {isSessionActive && (
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    Mountpoint ID: {selectedDevice.device_id}
-                  </Text>
-                )}
-              </div>
+              )}
             </>
           ) : (
-            <div
-              style={{
-                display: "flex",
-                flex: 1,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Empty description="Выберите устройство в списке слева для начала видеонаблюдения" />
-            </div>
+            <Card style={{ textAlign: "center", padding: "64px 24px" }}>
+              <Text type="secondary" style={{ fontSize: 15 }}>
+                Выберите терминал в списке для начала видеонаблюдения
+              </Text>
+            </Card>
           )}
-        </Card>
+        </div>
       </div>
     </div>
   );
