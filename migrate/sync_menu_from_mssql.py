@@ -2,7 +2,7 @@
 
 Network topology note:
 MS SQL (172.17.100.1) is in a protected internal network accessible from local environment.
-Target cloud backend (176.108.247.249) does not have direct route to 172.17.100.1.
+Target cloud backend (87.242.100.34) does not have direct route to 172.17.100.1.
 This script extracts from MS SQL, formats/validates data, and applies locally or deploys to cloud server.
 """
 
@@ -45,8 +45,8 @@ BACKEND_DATA_JSON = (
     / "legacy_menu_data.json"
 )
 
-REMOTE_SERVER = "user1@176.108.247.249"
-REMOTE_SSH_KEY = r"d:\.ssh\free-tier-cloud_ru"
+REMOTE_SERVER = "user1@87.242.100.34"
+REMOTE_SSH_KEY = r"d:\.ssh\id_ed25519"
 REMOTE_DATA_DEST = "/home/user1/MenuBuilder/backend/app/services/legacy_menu_data.json"
 
 

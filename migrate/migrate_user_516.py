@@ -1,7 +1,7 @@
 """Migrate user for org=516 directly from legacy MS SQL to PostgreSQL (etran).
 
 Source: MS SQL Server 172.17.100.1, Database: Service, Table: Users, User: ai-agent
-Target: PostgreSQL etran database (iot-rpc-rest-app-pg-1 on 176.108.247.249)
+Target: PostgreSQL etran database (on 87.242.100.34)
 """
 
 from __future__ import annotations
@@ -27,12 +27,12 @@ DEFAULT_DB = os.environ.get("MSSQL_DATABASE", "Service")
 DEFAULT_USER = os.environ.get("MSSQL_USER", "ai-agent")
 DEFAULT_PASSWORD = os.environ.get("MSSQL_PASSWORD", "ai-agent")
 DEFAULT_ORG_ID = int(os.environ.get("MIGRATE_ORG_ID", "516"))
-DEFAULT_PG_DB = os.environ.get("POSTGRES_DB", "etranprocessing")
-DEFAULT_PG_USER = os.environ.get("POSTGRES_USER", "postgres")
+DEFAULT_PG_DB = os.environ.get("POSTGRES_DB", "etran")
+DEFAULT_PG_USER = os.environ.get("POSTGRES_USER", "etran_db_user")
 
-DEFAULT_SSH_HOST = os.environ.get("SSH_HOST", "176.108.247.249")
+DEFAULT_SSH_HOST = os.environ.get("SSH_HOST", "87.242.100.34")
 DEFAULT_SSH_USER = os.environ.get("SSH_USER", "user1")
-DEFAULT_SSH_KEY = os.environ.get("SSH_KEY", r"d:\.ssh\free-tier-cloud_ru")
+DEFAULT_SSH_KEY = os.environ.get("SSH_KEY", r"d:\.ssh\id_ed25519")
 
 
 def fetch_mssql_user_data(

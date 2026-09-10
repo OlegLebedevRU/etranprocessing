@@ -1,18 +1,14 @@
 # nginx-mutual-legacy (standalone `iot-processing.ru` host)
 
 Reverse proxy for the DNS cutover of the legacy terminal domain
-`iot-processing.ru`, running on a **dedicated host** (currently `87.242.100.34`,
+`iot-processing.ru`, running on a **dedicated host** (`87.242.100.34`,
 Ubuntu 24.04) - fully independent from the `iot-rpc-rest-app` repo/CI/image
-build pipeline and from the original `nginx-mutual` instance on
-`176.108.247.249` (`dev.leo4.ru:4443`, used for `/api/*` new-stack testing).
+build pipeline.
 
-## Why a separate host and a separate config source-of-truth
+## Why a dedicated host and config source-of-truth
 
-Port 443 on the original nginx-mutual VM (`176.108.247.249`) is already owned
-by the `nginx-jwt` service (`dev.leo4.ru`). Since Docker cannot bind two
-containers to the same host port, and DNS cutover for `iot-processing.ru`
-needs port 443, this runs on its own host instead. It reuses the **already
-published** `nginx-mutual` Docker image from `iot-rpc-rest-app`
+Port 443 needs DNS cutover for `iot-processing.ru`, running on its own dedicated host `87.242.100.34`.
+It reuses the **already published** `nginx-mutual` Docker image from `iot-rpc-rest-app`
 (`ghcr.io/oleglebedevru/iot-rpc-rest-app/nginx-mutual:sha-f78556a` - public,
 no login needed) via a plain `docker compose`, with a completely different,
 self-contained nginx config **bind-mounted over** the one baked into the

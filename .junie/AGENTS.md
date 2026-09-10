@@ -107,22 +107,28 @@ MenuBuilder (FastAPI + React frontend + JWT auth)
 ## 7. Deployment & Operations
 
 - **Infrastructure & Hosts**:
-  - **Primary App Server**: `176.108.247.249` (user `user1`, SSH key `d:\.ssh\free-tier-cloud_ru`). Hosts `processing-backend`, `menubuilder-backend`, `menubuilder-frontend`, `mcp-pin-server`, `postgres`, `rabbitmq`.
-  - **Legacy mTLS Proxy Server**: `87.242.100.34` (user `user1`, SSH key `d:\.ssh\id_ed25519`). Hosts `nginx-mutual-legacy` handling mTLS on port 443.
-- **Container Orchestration**: Docker Compose is used for deploying backend services, Nginx mutual TLS proxy, and PostgreSQL (`docker-compose.yaml`). `sudo` is required for docker commands over SSH.
+  - **Production Deploy Server**: `87.242.100.34` (user `user1`, SSH key `d:\.ssh\id_ed25519`).
+    - **ОБЯЗАТЕЛЬНОЕ ПРАВИЛО ДЕПЛОЯ**: Деплой выполняется **ВСЕГДА** на хост `ssh user1@87.242.100.34 -i d:\.ssh\id_ed25519`.
+    - **СЕРВЕР `176.108.247.249`**: Сервер `176.108.247.249` **удалён из документации деплоя**. Использование сервера `176.108.247.249` допускается **ТОЛЬКО по прямому указанию в промпте**.
+    - Хост `87.242.100.34` содержит все рабочие сервисы: `processing-backend`, `menubuilder-backend`, `nginx-default` (порт 3000, раздача SPA `MenuBuilder/frontend/dist`), `mcp-pin-server`, `l4media-ingress`, `l4media-nginx`, `l4media-janus`, `nginx-mutual-legacy` (порт 443), `rabbitmq`, `app1`.
+- **Container Orchestration**: Docker Compose используется для оркестрации сервисов (`/home/user1/compose.yaml`). Команды `docker` и `docker compose` выполняются через `sudo`.
 - **Database Migrations (Alembic)**:
-  - Migrations are defined under `ProcessingBackend/backend/alembic/versions/`.
-  - In production, apply migrations via `sudo docker exec processing-backend alembic upgrade head`.
-  - If schema changes affect shared models, restart `menubuilder-backend` afterwards (`sudo docker restart menubuilder-backend`).
-- **Frontend Live Mounts**: `menubuilder-frontend` bind-mounts `./frontend/dist/`. Building on host updates files live without full container restart (restart only needed for `nginx.conf` changes).
-- **SSH execution from Windows PowerShell:** When invoking remote commands via `ssh` from PowerShell, use `ssh -n ...` (e.g. `ssh -n -i d:\.ssh\free-tier-cloud_ru ...`) to prevent stdin handle blocking.
-- **Legacy IIS Deployments**: Legacy ASP.NET endpoints use an App_Code dynamic compilation model (no-compile deployment) as documented in `ProcessingBackend/docs/devops-runbook.md`.
+  - Миграции расположены в `ProcessingBackend/backend/alembic/versions/`.
+  - В продакшене применяются командой: `ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker exec processing-backend alembic upgrade head"`.
+  - Если изменения схемы затрагивают общие модели, перезапустить `menubuilder-backend`: `ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker restart menubuilder-backend"`.
+- **Frontend Live Mounts & Delivery**: `nginx-default` монтирует локальный каталог `/home/user1/MenuBuilder/frontend/dist/`. Сборка выполняется локально (`npm --prefix MenuBuilder/frontend run build`), доставка артефактов на хост:
+  ```bash
+  scp -i d:\.ssh\id_ed25519 -r MenuBuilder/frontend/dist/* user1@87.242.100.34:/home/user1/MenuBuilder/frontend/dist/
+  ```
+  Файлы обновляются на лету без необходимости перезапуска контейнера (перезапуск `nginx-default` требуется только при изменениях в `nginx-configs/`).
+- **SSH execution from Windows PowerShell:** При выполнении удалённых команд через `ssh` из PowerShell обязательно указывать флаг `-n` (`ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 ...`) для исключения зависаний дескриптора ввода (stdin handle blocking).
+- **Legacy IIS Deployments**: Эндпоинты легаси ASP.NET используют модель динамической компиляции App_Code (no-compile deployment) согласно `docs/ops_run-devops-runbook.md`.
 
 ---
 
 ## 8. MCP Operations Server (`server-ops`) & Task Readiness Protocol
 
-An operations MCP server (`server-ops`) is attached to the primary application server (`176.108.247.249`). It enables system health inspection, log analysis, Nginx/SSL operations, and safe diagnostic workflows.
+Операционный MCP-сервер (`server-ops`) обеспечивает мониторинг состояния системы, анализ логов, операции с Nginx/SSL и безопасную диагностику сервисов на хосте развертывания (`87.242.100.34`).
 
 ### Available MCP Ops Capabilities
 - **System monitoring**: `mcp_server-ops_system_info`, `mcp_server-ops_memory_analysis`, `mcp_server-ops_disk_analysis`, `mcp_server-ops_service_status`
@@ -143,8 +149,8 @@ Before using MCP Ops capabilities in any task (debugging, deployment verificatio
 2. **Readiness Status Declaration & Non-Blocking Policy**:
    - Explicitly record the status in the task plan / context:
      - `[MCP Ops Readiness: READY]` — all checks passed; MCP tools may be used for diagnostics, log analysis, and verification.
-     - `[MCP Ops Readiness: DEGRADED / UNAVAILABLE]` — MCP unreachable or resource limits exceeded; fall back to standard SSH runbook commands (`user1@176.108.247.249`, key `d:\.ssh\free-tier-cloud_ru`).
-   - **CRITICAL: `[MCP Ops Readiness: UNAVAILABLE]` (или `DEGRADED`) НЕ блокирует деплой (Non-Blocking)**. Отсутствие подключения или недоступность MCP Ops сервера не является причиной для отмены или задержки деплоя. Сборка, деплой, применение миграций и верификация в этом случае выполняются в штатном режиме через прямой SSH-транспорт (`scp`, `ssh sudo docker ...`) без блокировок.
+     - `[MCP Ops Readiness: DEGRADED / UNAVAILABLE]` — MCP unreachable or resource limits exceeded; fall back to standard SSH runbook commands (`user1@87.242.100.34`, key `d:\.ssh\id_ed25519`).
+   - **CRITICAL: `[MCP Ops Readiness: UNAVAILABLE]` (или `DEGRADED`) НЕ блокирует деплой (Non-Blocking)**. Отсутствие подключения или недоступность MCP Ops сервера не является причиной для отмены или задержки деплоя. Сборка, деплой, применение миграций и верификация в этом случае выполняются в штатном режиме через прямой SSH-транспорт (`scp -i d:\.ssh\id_ed25519 ...`, `ssh -n -i d:\.ssh\id_ed25519 sudo docker ...`) без блокировок.
 3. **Safety Guardrails**:
    - State-changing operations (`nginx_reload`, `file_write`, `file_delete`) return a `confirmationId` and MUST be explicitly confirmed via `mcp_server-ops_confirm_execute`.
    - Never inspect raw secret files directly: use `mcp_server-ops_config_audit` for inspecting `.env` configurations.

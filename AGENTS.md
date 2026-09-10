@@ -129,6 +129,8 @@ For building native Windows utilities in `tools/` (or examples like `D:\work\iot
 ## Infrastructure & Servers
 
 - **Primary Production Server**: `87.242.100.34` (internal IP `10.0.0.5`, user: `user1`, SSH key: `d:\.ssh\id_ed25519`)
+  - **ОБЯЗАТЕЛЬНОЕ ПРАВИЛО ДЕПЛОЯ**: Деплой выполняется **ВСЕГДА** на хост `ssh user1@87.242.100.34 -i d:\.ssh\id_ed25519`.
+  - **СЕРВЕР `176.108.247.249`**: Сервер `176.108.247.249` **удалён из документации деплоя**. Использование сервера `176.108.247.249` допускается **ТОЛЬКО по прямому указанию в промпте**.
   - Orchestration: `/home/user1/compose.yaml` in Docker network `user1_default`.
   - Runs Docker containers: `processing-backend` (:8000), `menubuilder-backend` (:8000), `nginx-default` (:80, :3000, :1443, :1444), `app1` (:8000), `mcp-pin-server` (:8001), `rabbitmq` (:5672, :8883).
   - External mTLS Proxy: `nginx-mutual-legacy` (:443) managed via `/home/user1/nginx-mutual-legacy/docker-compose.yml`, connected to network `user1_default`. Terminates client mTLS for terminals (`iot-processing.ru`) and locally forwards requests to `http://processing-backend:8000`.
