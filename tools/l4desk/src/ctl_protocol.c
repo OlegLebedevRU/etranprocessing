@@ -247,16 +247,28 @@ int ctl_build_ack_stream_payload(char* buf, size_t max_len,
                                  const char* stream_instance_id,
                                  const char* state,
                                  int64_t terminal_time_ms) {
-    return snprintf(buf, max_len,
-        "{\"v\":1,\"type\":\"ack\",\"command_id\":\"%s\",\"lease_id\":\"%s\",\"sn\":\"%s\","
-        "\"result\":\"%s\",\"stream_instance_id\":\"%s\",\"state\":\"%s\",\"terminal_time_ms\":%lld}",
-        command_id ? command_id : "",
-        lease_id ? lease_id : "",
-        sn ? sn : "",
-        result ? result : "",
-        stream_instance_id ? stream_instance_id : "",
-        state ? state : "",
-        (long long)terminal_time_ms);
+    if (stream_instance_id && stream_instance_id[0] != '\0') {
+        return snprintf(buf, max_len,
+            "{\"v\":1,\"type\":\"ack\",\"command_id\":\"%s\",\"lease_id\":\"%s\",\"sn\":\"%s\","
+            "\"result\":\"%s\",\"stream_instance_id\":\"%s\",\"state\":\"%s\",\"terminal_time_ms\":%lld}",
+            command_id ? command_id : "",
+            lease_id ? lease_id : "",
+            sn ? sn : "",
+            result ? result : "",
+            stream_instance_id,
+            state ? state : "",
+            (long long)terminal_time_ms);
+    } else {
+        return snprintf(buf, max_len,
+            "{\"v\":1,\"type\":\"ack\",\"command_id\":\"%s\",\"lease_id\":\"%s\",\"sn\":\"%s\","
+            "\"result\":\"%s\",\"stream_instance_id\":null,\"state\":\"%s\",\"terminal_time_ms\":%lld}",
+            command_id ? command_id : "",
+            lease_id ? lease_id : "",
+            sn ? sn : "",
+            result ? result : "",
+            state ? state : "",
+            (long long)terminal_time_ms);
+    }
 }
 
 int ctl_build_ack_inventory_payload(char* buf, size_t max_len,

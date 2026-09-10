@@ -156,6 +156,23 @@ static void test_protocol_payloads(void) {
     ASSERT_TRUE(strstr(buf, "\"stream_instance_id\":\"stream_99\"") != NULL);
     ASSERT_TRUE(strstr(buf, "\"state\":\"running\"") != NULL);
 
+    /* 2b. Stream ACK with empty stream_instance_id -> null */
+    len = ctl_build_ack_stream_payload(buf, sizeof(buf), "cmd_2b", "lease_1", "TERM001",
+                                       "stopped", "", "stopped", 1700000000000LL);
+    ASSERT_TRUE(len > 0);
+    ASSERT_TRUE(strstr(buf, "\"result\":\"stopped\"") != NULL);
+    ASSERT_TRUE(strstr(buf, "\"stream_instance_id\":null") != NULL);
+    ASSERT_TRUE(strstr(buf, "\"stream_instance_id\":\"\"") == NULL);
+    ASSERT_TRUE(strstr(buf, "\"state\":\"stopped\"") != NULL);
+
+    /* 2c. Stream ACK with NULL stream_instance_id -> null */
+    len = ctl_build_ack_stream_payload(buf, sizeof(buf), "cmd_2c", "lease_1", "TERM001",
+                                       "stopped", NULL, "stopped", 1700000000000LL);
+    ASSERT_TRUE(len > 0);
+    ASSERT_TRUE(strstr(buf, "\"result\":\"stopped\"") != NULL);
+    ASSERT_TRUE(strstr(buf, "\"stream_instance_id\":null") != NULL);
+    ASSERT_TRUE(strstr(buf, "\"state\":\"stopped\"") != NULL);
+
     /* 3. NACK */
     len = ctl_build_nack_payload(buf, sizeof(buf), "cmd_3", "lease_1", "TERM001",
                                  "source_not_allowed", "Display is denied", 1700000000000LL);
@@ -300,6 +317,15 @@ static void test_command_handling_validation(void) {
     ASSERT_TRUE(ctl_handle_command(cmd_key, strlen(cmd_key), "TERM001", &inv, resp, sizeof(resp), &resp_len, &should_pub, &qos));
     ASSERT_TRUE(should_pub);
     ASSERT_TRUE(strstr(resp, "\"code\":\"stream_mismatch\"") != NULL);
+
+    /* 8. stream_stop when stream stopped with empty stream_instance_id -> stream_instance_id: null */
+    const char* cmd_stop = "{\"v\":1,\"type\":\"stream_stop\",\"command_id\":\"stp_001\",\"lease_id\":\"l1\","
+                           "\"sn\":\"TERM001\",\"stream_instance_id\":\"\"}";
+    ASSERT_TRUE(ctl_handle_command(cmd_stop, strlen(cmd_stop), "TERM001", &inv, resp, sizeof(resp), &resp_len, &should_pub, &qos));
+    ASSERT_TRUE(should_pub);
+    ASSERT_TRUE(strstr(resp, "\"result\":\"already_stopped\"") != NULL);
+    ASSERT_TRUE(strstr(resp, "\"stream_instance_id\":null") != NULL);
+    ASSERT_TRUE(strstr(resp, "\"stream_instance_id\":\"\"") == NULL);
 
     printf("[PASS] test_command_handling_validation\n");
 }
