@@ -1,66 +1,103 @@
-# l4desk — Leo4 Remote Input Control Agent
+# l4desk — Leo4 Terminal Remote Desktop, Input & Media Streaming Agent
 
-`l4desk` — легковесный, автономный агент удалённого ввода для платёжных терминалов и киосков под управлением Windows (Windows 7 SP1+ x86 / Windows 10/11 x64).
+`l4desk` — легковесный, автономный агент удалённого рабочего стола, ввода и оркестрации видеопотоков FFmpeg для платёжных терминалов и киосков под управлением Windows (Windows 7 SP1+ x86 / Windows 10/11 x64).
 
-## 1. Назначение
+## 1. Назначение и функциональность (PROMPT 4.2)
 
-Агент работает в активной интерактивной сессии пользователя (запускается супервизором `l4superv`) и обеспечивает безопасное выполнение команд удалённого управления мышью (курсор и левый клик), поступающих через control-канал MQTT от бэкенда `iot-rpc-rest-app` (`app1`) и веб-интерфейса `MenuBuilder`.
+Агент работает в активной интерактивной сессии пользователя (запускается супервизором `l4superv`) и реализует прикладную сторону контракта управления трансляцией и удалённого ввода:
+- **Инвентаризация дисплеев**: перечисление мониторов (`EnumDisplayMonitors` + `EnumDisplayDevicesW`), генерация стабильных `desktop_id` (`disp:<fnv1a_hex>`), учёт отрицательных координат в виртуальном пространстве, чтение локальной политики экранов (`input`, `view`, `denied`).
+- **Инвентаризация камер**: перечисление видеоустройств DirectShow (`CLSID_VideoInputDeviceCategory`), генерация стабильных `camera_id` (`cam:<fnv1a_hex>`), формирование аргументов запуска `-f dshow -i video=@<DevicePath>`.
+- **Удалённый ввод**: инъекция движений мыши (`pointer_move`), кликов (`mouse_click`) с маппингом нормализованных координат `[0.0, 1.0]` в виртуальный экран, а также клавиатурных нажатий (`key_event`) со строгим whitelist допустимых клавиш и защитой от деструктивных комбинаций.
+- **Оркестрация FFmpeg**: запуск строго из `<base>\ffmpeg\ffmpeg.exe` (по умолчанию `C:\l4tools\ffmpeg\ffmpeg.exe`) в скрытом режиме (`SW_HIDE`), перенаправление stdin (для soft stop по `q\n`), перенаправление stdout/stderr в ротационный лог-файл (до 5 файлов по 5 МБ), контроль через Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`).
+- **Двухфазная остановка**: фаза 1 (soft stop `q\n` с ожиданием до 5 с) → фаза 2 (hard kill через `TerminateJobObject`/`TerminateProcess`) → подтверждение освобождения портов и ресурсов.
+- **Controlled switch**: бесшовное последовательное переключение источников (`stopping` старого → `stopped` → `starting` нового → `running`) с ответом `ack.result = switched`.
+- **Файл состояния и Reconciliation**: запись состояния в `<base>\l4desk\state\ffmpeg_state.json`. При старте — поиск и мягкая остановка зависших процессов FFmpeg от предыдущих сессий с защитой от PID reuse (проверка `creation_time` и метаданных).
+- **Health-check и отказоустойчивость**: отслеживание неожиданного падения процесса, экспоненциальный backoff перезапуска (ограничение до 5 рестартов за 10 мин), обнаружение stall (зависание кадров более 10 с), контроль интерактивности сессии.
 
 ## 2. Архитектура и сетевая изоляция
 
-- **Zero-Dependency**: написан на чистом Win32 C, компилируется с ключом `/MT` (статическая линковка CRT), не требует сторонних DLL (`mosquitto.dll`, `paho` и OpenSSL не используются).
-- **Локальный транспорт**: подключается **строго к `127.0.0.1:1883`** (локальный брокер Mosquitto), не открывает входящих сетевых портов и не обращается во внешнюю сеть напрямую.
-- **Внешняя безопасность**: весь внешний трафик между терминалом и облачным брокером RabbitMQ защищён локальным мостом Mosquitto и mTLS-прокси `leo4proxy` (сертификат терминала X.509).
+- **Zero-Dependency Win32/C**: статическая компиляция `/MT`, поддержка x86 и x64.
+- **Локальный транспорт**: подключение строго к `127.0.0.1:1883` (Mosquitto), `client_id = svc_desk`.
+- **Управление**: control-plane `srv/<SN>/ctl` → `dev/<SN>/ctl` (envelope v1, `command_id`, dedup-кеш, ACK/NACK).
+- **Трансляция медиа**: RTP/RTCP направляются на UDP `127.0.0.1:5004/5005` в локальный туннель `leo4proxy` (`--rtp-tunnel`), который передаёт поток в `l4media-nginx:8443` по mTLS.
 
-## 3. Протокол MQTT и топики
+## 3. Контракт протокола `ctl` (envelope v1)
 
-- **Идентификатор клиента**: `client_id = svc_desk`.
-- **Подписка**: `srv/<SN>/ctl` (QoS 1) — команды `pointer_move` и `mouse_click`.
-- **Публикация статуса (Presence)**: `dev/<SN>/ctl` (`retain=1, qos=1`)
-  - LWT: `{"v":1,"type":"presence","agent":"l4desk","status":"offline","desktop_available":false,"timestamp":"..."}`
-  - Online: `{"v":1,"type":"presence","agent":"l4desk","status":"online","desktop_available":true,"screen":{...},"timestamp":"..."}`
-  - Периодичность: каждые 30 секунд или немедленно при изменении доступности рабочего стола / разрешения экрана.
-- **Публикация подтверждений (ACK / NACK)**: `dev/<SN>/ctl` (`retain=0, qos=1`)
-  - ACK: `{"v":1,"type":"ack","command_id":"...","lease_id":"...","sn":"...","result":"injected","terminal_time_ms":...}`
-  - NACK: `{"v":1,"type":"ack","command_id":"...","lease_id":"...","sn":"...","result":"nack","code":"...","message":"...","terminal_time_ms":...}`
-- **Запрет**: Агент никогда не публикует сообщения в топики `dev/<SN>/svc`, `dev/<SN>/app`, `dev/<SN>/evt`, `dev/<SN>/out`, `dev/<SN>/res`.
+### 3.1 Входящие команды (`srv/<SN>/ctl`)
 
-## 4. Инъекция ввода и безопасность
+1. `inventory_get {command_id, lease_id?}`
+   - Возвращает `ack` со структурой `inventory` (списки `displays` и `cameras`).
+2. `stream_start {command_id, lease_id, mode:"desktop"|"usb-camera", source_id, profile, stream_instance_id}`
+   - Ответы: `ack.result = "started" | "already_running" | "switched"` или `nack`.
+3. `stream_stop {command_id, lease_id, stream_instance_id?}`
+   - Ответы: `ack.result = "stopped" | "already_stopped"` (публикуется только после фактического завершения процесса).
+4. `pointer_move {command_id, lease_id, desktop_id, stream_instance_id, x:float, y:float}`
+   - Нормализованные координаты `[0.0, 1.0]` кадра, исполняется только при активном стриме в режиме `desktop` и совпадающих ID.
+5. `mouse_click {command_id, lease_id, desktop_id, stream_instance_id, x:float, y:float, button?}`
+   - Поддерживает кнопки `left`, `right`, `middle`. Возвращает `ack.result = "injected"` или `nack`.
+6. `key_event {command_id, lease_id, desktop_id, stream_instance_id, kind:"down"|"up"|"press", vk:int, text?:str}`
+   - Проверка по белому списку виртуальных клавиш. Возвращает `ack.result = "injected"` или `nack`.
 
-- Ввод выполняется через `SendInput` с флагами `MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK`.
-- Координаты нормализованы в диапазоне `0..65535` виртуального рабочего стола.
-- Проверка доступности экрана: `OpenInputDesktop` + проверка имени `"Default"`. Если экран заблокирован (Winlogon, Secure Desktop / UAC), агент отклоняет клик с кодом `interactive_desktop_unavailable`.
-- Дедупликация: bounded LRU-кеш (256 записей) по `command_id`. Повторные пакеты получают сохранённый ACK/NACK без повторного клика.
-- Защита от устаревших команд: команды с `expires_at_ms < now` отклоняются с кодом `expired`.
+### 3.2 Исходящие сообщения (`dev/<SN>/ctl`)
 
-## 5. Аргументы командной строки
+- **Расширенный `presence`** (`retain=1, qos=1`):
+  - `status`: `online` / `offline`
+  - `desktop_available`: boolean
+  - `session_id`: DWORD
+  - `screen`: `{virtual_x, virtual_y, virtual_width, virtual_height}`
+  - `inventory`:
+    - `displays[]`: `{desktop_id, name, primary, x, y, width, height, session_id, policy}`
+    - `cameras[]`: `{camera_id, name, available}`
+  - `stream`: `{state, mode, source_id, stream_instance_id, profile, reason, ffmpeg_pid, started_at, restart_count}`
+  - `timestamp`: ISO-8601
+- **`stream_event`** (`retain=0, qos=1`):
+  - Публикуется при каждом изменении состояния стрима (`{stream_instance_id, state, reason, timestamp}`).
+- **Коды `nack.code`**:
+  - `lease_mismatch`, `desktop_mismatch`, `stream_mismatch`, `source_not_allowed`, `source_unavailable`, `session_unavailable`, `busy_transition`, `ffmpeg_missing`, `ffmpeg_integrity`, `input_not_allowed_in_camera_mode`, `invalid_profile`, `invalid_sn`, `invalid_payload`, `expired`, `unsupported`, `inject_failed`.
 
-```text
-Usage: l4desk [options]
-Options:
-  --run                      Скрытый режим под оркестрацией l4superv
-  --console, -f              Консольный режим для отладки
-  --host <ip>                Адрес MQTT-брокера (по умолчанию: 127.0.0.1)
-  --port <port>              Порт MQTT-брокера (по умолчанию: 1883)
-  --proxy-port <port>        Порт Leo4Proxy для обнаружения SN (по умолчанию: 18443)
-  --client-id <id>           Идентификатор клиента (по умолчанию: svc_desk)
-  --sn <sn>                  Серийный номер устройства (только для консольной отладки)
-  --presence-interval <sec>  Интервал публикации presence (по умолчанию: 30)
-  --keepalive <sec>          Таймаут keepalive MQTT (по умолчанию: 30)
-  --reconnect <sec>          Начальный интервал переподключения (по умолчанию: 5)
-  --log <path>               Путь к файлу логов (по умолчанию: C:\l4tools\l4desk\log\l4desk.log)
-  --verbose, -v              Подробное логирование
-  --version                  Показать версию
+## 4. Локальная политика (`l4desk_policy.ini`)
+
+Расположение: `<base>\l4desk\l4desk_policy.ini` (по умолчанию `C:\l4tools\l4desk\l4desk_policy.ini`).
+
+```ini
+[displays]
+allow=*
+view_only=disp:11223344
+deny=disp:99999999
+
+[cameras]
+allow=*
+deny=cam:deadbeef
+
+[profiles]
+allow=default,low
 ```
 
-### Пример отладочного запуска:
+## 5. Сборка и тестирование
+
+### Сборка бинарников (`build.cmd`):
 ```cmd
-l4desk.exe --console --sn a4b0000773c82116d210826 --verbose
+tools\l4desk\build.cmd all
 ```
+Артефакты:
+- `bin\x86\l4desk.exe` — 32-битный бинарник (совместим с Windows 7 SP1+ x86)
+- `bin\x64\l4desk.exe` — 64-битный бинарник (Windows 10/11 x64)
+- `bin\l4desk.exe` — копия 32-битного бинарника по умолчанию
 
-## 6. Состав поставки
+### Модульные тесты:
+```cmd
+tools\l4desk\tests\run_tests.cmd
+```
+Запускает:
+1. `fake_ffmpeg.exe` (мок-процесс)
+2. `test_ctl_protocol.exe` (тесты парсинга, FNV-1a хэшей, маппинга мыши, whitelist клавиатуры, всех кодов NACK)
+3. `test_orchestrator.exe` (тесты запуска, двухфазного soft/hard stop, зависания, краша, stall, reconciliation и защиты от PID reuse)
 
-В поставку входит исключительно единый статический бинарный файл:
-- `l4desk.exe` (x86 или x64)
-
-Дополнительные внешние библиотеки и рантаймы не требуются.
+### Интеграционные тесты (Python / PowerShell):
+```cmd
+python tools\l4desk\tests\integration_test.py
+```
+или
+```powershell
+powershell -File tools\l4desk\tests\integration_test.ps1
+```

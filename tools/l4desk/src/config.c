@@ -6,6 +6,14 @@
 void config_init_defaults(L4DeskConfig* cfg) {
     if (!cfg) return;
     memset(cfg, 0, sizeof(L4DeskConfig));
+
+    const char* env_base = getenv("L4_TOOLS_BASE_PATH");
+    if (env_base && env_base[0] != '\0') {
+        strcpy_s(cfg->base_path, sizeof(cfg->base_path), env_base);
+    } else {
+        strcpy_s(cfg->base_path, sizeof(cfg->base_path), DEFAULT_BASE_PATH);
+    }
+
     strcpy_s(cfg->mqtt_host, sizeof(cfg->mqtt_host), DEFAULT_MQTT_HOST);
     cfg->mqtt_port = DEFAULT_MQTT_PORT;
     cfg->proxy_http_port = DEFAULT_PROXY_HTTP_PORT;
@@ -13,7 +21,7 @@ void config_init_defaults(L4DeskConfig* cfg) {
     cfg->presence_interval_sec = DEFAULT_PRESENCE_INTERVAL_SEC;
     cfg->keepalive_sec = DEFAULT_KEEPALIVE_SEC;
     cfg->reconnect_sec = DEFAULT_RECONNECT_SEC;
-    strcpy_s(cfg->log_file, sizeof(cfg->log_file), DEFAULT_LOG_FILE);
+    snprintf(cfg->log_file, sizeof(cfg->log_file), "%s\\l4desk\\log\\l4desk.log", cfg->base_path);
     cfg->verbose = false;
     cfg->run_mode = false;
     cfg->console_mode = true;
@@ -64,6 +72,11 @@ bool config_parse_args(L4DeskConfig* cfg, int argc, char* argv[]) {
         }
         if (_stricmp(argv[i], "--verbose") == 0 || _stricmp(argv[i], "-v") == 0) {
             cfg->verbose = true;
+            continue;
+        }
+        if (_stricmp(argv[i], "--base-path") == 0 && i + 1 < argc) {
+            strcpy_s(cfg->base_path, sizeof(cfg->base_path), argv[++i]);
+            snprintf(cfg->log_file, sizeof(cfg->log_file), "%s\\l4desk\\log\\l4desk.log", cfg->base_path);
             continue;
         }
         if (_stricmp(argv[i], "--host") == 0 && i + 1 < argc) {

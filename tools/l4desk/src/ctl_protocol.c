@@ -3,6 +3,7 @@
 #include "dedup_cache.h"
 #include "input_inject.h"
 #include "desktop_state.h"
+#include "ffmpeg_supervisor.h"
 #include "log.h"
 #include <windows.h>
 #include <stdio.h>
@@ -28,16 +29,32 @@ void ctl_get_utc_iso(char* out, size_t max_len) {
              st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
 }
 
-static bool is_valid_uuid(const char* s) {
-    if (!s || strlen(s) != 36) return false;
-    for (int i = 0; i < 36; i++) {
-        if (i == 8 || i == 13 || i == 18 || i == 23) {
-            if (s[i] != '-') return false;
-        } else {
-            if (!isxdigit((unsigned char)s[i])) return false;
-        }
+static bool is_valid_identifier(const char* s) {
+    if (!s) return false;
+    size_t len = strlen(s);
+    if (len < 1 || len > 64) return false;
+    for (size_t i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)s[i];
+        if (c <= 32 || c >= 127) return false;
     }
     return true;
+}
+
+static void json_escape_str(const char* in, char* out, size_t max_out) {
+    if (!out || max_out == 0) return;
+    size_t j = 0;
+    for (size_t i = 0; in && in[i] && j + 2 < max_out; i++) {
+        if (in[i] == '\\') {
+            out[j++] = '\\';
+            out[j++] = '\\';
+        } else if (in[i] == '"') {
+            out[j++] = '\\';
+            out[j++] = '"';
+        } else {
+            out[j++] = in[i];
+        }
+    }
+    out[j] = '\0';
 }
 
 int ctl_build_presence_payload(char* buf, size_t max_len,
@@ -63,6 +80,92 @@ int ctl_build_presence_payload(char* buf, size_t max_len,
     }
 }
 
+int ctl_build_extended_presence_payload(char* buf, size_t max_len,
+                                       const char* status,
+                                       bool desktop_available,
+                                       const ScreenMetrics* screen,
+                                       const SystemInventory* inv,
+                                       const StreamStateInfo* stream) {
+    char iso_time[64];
+    ctl_get_utc_iso(iso_time, sizeof(iso_time));
+
+    DWORD session_id = desktop_get_current_session_id();
+
+    int offset = snprintf(buf, max_len,
+        "{\"v\":1,\"type\":\"presence\",\"agent\":\"l4desk\",\"status\":\"%s\","
+        "\"desktop_available\":%s,\"session_id\":%u,",
+        status, desktop_available ? "true" : "false", session_id);
+
+    if (screen && offset > 0 && (size_t)offset < max_len) {
+        offset += snprintf(buf + offset, max_len - offset,
+            "\"screen\":{\"virtual_x\":%d,\"virtual_y\":%d,\"virtual_width\":%d,\"virtual_height\":%d},",
+            screen->virtual_x, screen->virtual_y, screen->virtual_width, screen->virtual_height);
+    }
+
+    /* Inventory block */
+    if (inv && offset > 0 && (size_t)offset < max_len) {
+        offset += snprintf(buf + offset, max_len - offset, "\"inventory\":{\"displays\":[");
+        for (int i = 0; i < inv->display_count; i++) {
+            const DisplayInfo* d = &inv->displays[i];
+            char esc_name[128];
+            json_escape_str(d->name, esc_name, sizeof(esc_name));
+            offset += snprintf(buf + offset, max_len - offset,
+                "%s{\"desktop_id\":\"%s\",\"name\":\"%s\",\"primary\":%s,\"x\":%d,\"y\":%d,"
+                "\"width\":%d,\"height\":%d,\"session_id\":%u,\"policy\":\"%s\"}",
+                (i > 0 ? "," : ""),
+                d->desktop_id, esc_name, d->primary ? "true" : "false",
+                d->x, d->y, d->width, d->height, d->session_id, d->policy);
+        }
+
+        offset += snprintf(buf + offset, max_len - offset, "],\"cameras\":[");
+        for (int i = 0; i < inv->camera_count; i++) {
+            const CameraInfo* c = &inv->cameras[i];
+            char esc_cam_name[256];
+            json_escape_str(c->name, esc_cam_name, sizeof(esc_cam_name));
+            offset += snprintf(buf + offset, max_len - offset,
+                "%s{\"camera_id\":\"%s\",\"name\":\"%s\",\"available\":%s}",
+                (i > 0 ? "," : ""),
+                c->camera_id, esc_cam_name, c->available ? "true" : "false");
+        }
+        offset += snprintf(buf + offset, max_len - offset, "]},");
+    }
+
+    /* Stream block */
+    if (stream && offset > 0 && (size_t)offset < max_len) {
+        offset += snprintf(buf + offset, max_len - offset,
+            "\"stream\":{\"state\":\"%s\",\"mode\":\"%s\",\"source_id\":\"%s\","
+            "\"stream_instance_id\":\"%s\",\"profile\":\"%s\",\"reason\":\"%s\","
+            "\"ffmpeg_pid\":%u,\"started_at\":%llu,\"restart_count\":%d},",
+            stream->state, stream->mode, stream->source_id,
+            stream->stream_instance_id, stream->profile, stream->reason,
+            stream->ffmpeg_pid, (unsigned long long)stream->started_at, stream->restart_count);
+    }
+
+    if (offset > 0 && (size_t)offset < max_len) {
+        offset += snprintf(buf + offset, max_len - offset, "\"timestamp\":\"%s\"}", iso_time);
+    }
+
+    return offset;
+}
+
+int ctl_build_stream_event_payload(char* buf, size_t max_len,
+                                  const char* sn,
+                                  const char* stream_instance_id,
+                                  const char* state,
+                                  const char* reason) {
+    char iso_time[64];
+    ctl_get_utc_iso(iso_time, sizeof(iso_time));
+
+    return snprintf(buf, max_len,
+        "{\"v\":1,\"type\":\"stream_event\",\"sn\":\"%s\",\"stream_instance_id\":\"%s\","
+        "\"state\":\"%s\",\"reason\":\"%s\",\"timestamp\":\"%s\"}",
+        sn ? sn : "",
+        stream_instance_id ? stream_instance_id : "",
+        state ? state : "",
+        reason ? reason : "",
+        iso_time);
+}
+
 int ctl_build_ack_payload(char* buf, size_t max_len,
                           const char* command_id,
                           const char* lease_id,
@@ -71,7 +174,78 @@ int ctl_build_ack_payload(char* buf, size_t max_len,
     return snprintf(buf, max_len,
         "{\"v\":1,\"type\":\"ack\",\"command_id\":\"%s\",\"lease_id\":\"%s\",\"sn\":\"%s\","
         "\"result\":\"injected\",\"terminal_time_ms\":%lld}",
-        command_id, lease_id, sn, (long long)terminal_time_ms);
+        command_id ? command_id : "",
+        lease_id ? lease_id : "",
+        sn ? sn : "",
+        (long long)terminal_time_ms);
+}
+
+int ctl_build_ack_stream_payload(char* buf, size_t max_len,
+                                 const char* command_id,
+                                 const char* lease_id,
+                                 const char* sn,
+                                 const char* result,
+                                 const char* stream_instance_id,
+                                 const char* state,
+                                 int64_t terminal_time_ms) {
+    return snprintf(buf, max_len,
+        "{\"v\":1,\"type\":\"ack\",\"command_id\":\"%s\",\"lease_id\":\"%s\",\"sn\":\"%s\","
+        "\"result\":\"%s\",\"stream_instance_id\":\"%s\",\"state\":\"%s\",\"terminal_time_ms\":%lld}",
+        command_id ? command_id : "",
+        lease_id ? lease_id : "",
+        sn ? sn : "",
+        result ? result : "",
+        stream_instance_id ? stream_instance_id : "",
+        state ? state : "",
+        (long long)terminal_time_ms);
+}
+
+int ctl_build_ack_inventory_payload(char* buf, size_t max_len,
+                                    const char* command_id,
+                                    const char* lease_id,
+                                    const char* sn,
+                                    const SystemInventory* inv,
+                                    int64_t terminal_time_ms) {
+    int offset = snprintf(buf, max_len,
+        "{\"v\":1,\"type\":\"ack\",\"command_id\":\"%s\",\"lease_id\":\"%s\",\"sn\":\"%s\","
+        "\"result\":\"inventory\",\"inventory\":{\"displays\":[",
+        command_id ? command_id : "",
+        lease_id ? lease_id : "",
+        sn ? sn : "");
+
+    if (inv && offset > 0 && (size_t)offset < max_len) {
+        for (int i = 0; i < inv->display_count; i++) {
+            const DisplayInfo* d = &inv->displays[i];
+            char esc_name[128];
+            json_escape_str(d->name, esc_name, sizeof(esc_name));
+            offset += snprintf(buf + offset, max_len - offset,
+                "%s{\"desktop_id\":\"%s\",\"name\":\"%s\",\"primary\":%s,\"x\":%d,\"y\":%d,"
+                "\"width\":%d,\"height\":%d,\"session_id\":%u,\"policy\":\"%s\"}",
+                (i > 0 ? "," : ""),
+                d->desktop_id, esc_name, d->primary ? "true" : "false",
+                d->x, d->y, d->width, d->height, d->session_id, d->policy);
+        }
+
+        offset += snprintf(buf + offset, max_len - offset, "],\"cameras\":[");
+        for (int i = 0; i < inv->camera_count; i++) {
+            const CameraInfo* c = &inv->cameras[i];
+            char esc_cam_name[256];
+            json_escape_str(c->name, esc_cam_name, sizeof(esc_cam_name));
+            offset += snprintf(buf + offset, max_len - offset,
+                "%s{\"camera_id\":\"%s\",\"name\":\"%s\",\"available\":%s}",
+                (i > 0 ? "," : ""),
+                c->camera_id, esc_cam_name, c->available ? "true" : "false");
+        }
+        offset += snprintf(buf + offset, max_len - offset, "]},");
+    } else {
+        offset += snprintf(buf + offset, max_len - offset, "],\"cameras\":[]},");
+    }
+
+    if (offset > 0 && (size_t)offset < max_len) {
+        offset += snprintf(buf + offset, max_len - offset, "\"terminal_time_ms\":%lld}",
+                           (long long)terminal_time_ms);
+    }
+    return offset;
 }
 
 int ctl_build_nack_payload(char* buf, size_t max_len,
@@ -81,6 +255,9 @@ int ctl_build_nack_payload(char* buf, size_t max_len,
                            const char* code,
                            const char* message,
                            int64_t terminal_time_ms) {
+    char esc_msg[512] = { 0 };
+    json_escape_str(message, esc_msg, sizeof(esc_msg));
+
     return snprintf(buf, max_len,
         "{\"v\":1,\"type\":\"ack\",\"command_id\":\"%s\",\"lease_id\":\"%s\",\"sn\":\"%s\","
         "\"result\":\"nack\",\"code\":\"%s\",\"message\":\"%s\",\"terminal_time_ms\":%lld}",
@@ -88,12 +265,13 @@ int ctl_build_nack_payload(char* buf, size_t max_len,
         lease_id ? lease_id : "",
         sn ? sn : "",
         code ? code : "unknown_error",
-        message ? message : "",
+        esc_msg,
         (long long)terminal_time_ms);
 }
 
 bool ctl_handle_command(const char* payload, size_t payload_len,
                         const char* own_sn,
+                        const SystemInventory* inv,
                         char* out_resp, size_t max_resp,
                         size_t* out_resp_len,
                         bool* p_should_publish,
@@ -104,14 +282,8 @@ bool ctl_handle_command(const char* payload, size_t payload_len,
 
     int64_t now_ms = ctl_get_time_ms();
 
-    // 1. Size check <= 1024 bytes and valid payload
-    char cmd_id[64] = { 0 };
-    char lease_id[64] = { 0 };
-    char cmd_sn[64] = { 0 };
-    char cmd_type[32] = { 0 };
-
-    if (payload_len > 1024 || payload_len < 10) {
-        log_warn("Dropping malformed command: length %zu > 1024 or too small", payload_len);
+    if (payload_len > 8192 || payload_len < 10) {
+        log_warn("Dropping malformed command: length %zu out of range", payload_len);
         return false;
     }
 
@@ -121,62 +293,175 @@ bool ctl_handle_command(const char* payload, size_t payload_len,
         return false;
     }
 
+    char cmd_id[64] = { 0 };
+    char lease_id[64] = { 0 };
+    char cmd_sn[64] = { 0 };
+    char cmd_type[32] = { 0 };
+
     json_extract_str(payload, "command_id", cmd_id, sizeof(cmd_id));
     json_extract_str(payload, "lease_id", lease_id, sizeof(lease_id));
     json_extract_str(payload, "sn", cmd_sn, sizeof(cmd_sn));
     json_extract_str(payload, "type", cmd_type, sizeof(cmd_type));
 
-    // 2. Type check
-    bool is_move = (strcmp(cmd_type, "pointer_move") == 0);
-    bool is_click = (strcmp(cmd_type, "mouse_click") == 0);
-    if (!is_move && !is_click) {
-        log_warn("Unsupported command type: '%s'", cmd_type);
-        if (cmd_id[0] != '\0') {
-            int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn, "unsupported", "Unsupported command type", now_ms);
-            if (len > 0) {
-                *out_resp_len = (size_t)len;
-                *p_should_publish = true;
-                return true;
-            }
-        }
-        return false;
-    }
+    log_info("Received command type: '%s', id: '%s'", cmd_type, cmd_id);
 
-    // 3. SN check
-    if (strcmp(cmd_sn, own_sn) != 0) {
+    if (cmd_sn[0] != '\0' && own_sn && own_sn[0] != '\0' && strcmp(cmd_sn, own_sn) != 0) {
         log_warn("Rejected command for foreign SN: '%s' (own: '%s')", cmd_sn, own_sn);
-        if (is_click && cmd_id[0] != '\0') {
-            int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn, "invalid_sn", "SN mismatch", now_ms);
-            if (len > 0) {
-                *out_resp_len = (size_t)len;
-                *p_should_publish = true;
-                return true;
-            }
+        int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn, "invalid_sn", "SN mismatch", now_ms);
+        if (len > 0) {
+            *out_resp_len = (size_t)len;
+            *p_should_publish = true;
+            return true;
         }
         return false;
     }
 
-    // 4. UUID format check
-    if (!is_valid_uuid(cmd_id) || !is_valid_uuid(lease_id)) {
-        log_warn("Invalid UUID format: cmd_id='%s' lease_id='%s'", cmd_id, lease_id);
-        if (is_click) {
-            int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn, "invalid_payload", "Invalid UUID format", now_ms);
-            if (len > 0) {
-                *out_resp_len = (size_t)len;
-                *p_should_publish = true;
-                return true;
-            }
+    if (!is_valid_identifier(cmd_id)) {
+        log_warn("Invalid command_id format: '%s'", cmd_id);
+        int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn, "invalid_payload", "Invalid command_id", now_ms);
+        if (len > 0) {
+            *out_resp_len = (size_t)len;
+            *p_should_publish = true;
+            return true;
         }
         return false;
     }
 
-    // 5. Expiration check (+2000 ms tolerance)
+    /* Expiration check (+2000 ms tolerance) */
     int64_t expires_at_ms = 0;
     if (json_extract_int64(payload, "expires_at_ms", &expires_at_ms)) {
-        if (expires_at_ms + 2000 < now_ms) {
+        if (expires_at_ms > 0 && expires_at_ms + 2000 < now_ms) {
             log_debug("Expired command: expires_at_ms=%lld now=%lld", (long long)expires_at_ms, (long long)now_ms);
-            if (is_click) {
-                int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn, "expired", "Command expired", now_ms);
+            int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn, "expired", "Command expired", now_ms);
+            if (len > 0) {
+                *out_resp_len = (size_t)len;
+                *p_should_publish = true;
+                return true;
+            }
+            return false;
+        }
+    }
+
+    /* Dedup check */
+    if (dedup_cache_get(cmd_id, out_resp, max_resp, out_resp_len)) {
+        log_debug("Dedup cache hit for cmd=%s, resending cached response", cmd_id);
+        *p_should_publish = true;
+        return true;
+    }
+
+    /* 1. inventory_get */
+    if (strcmp(cmd_type, "inventory_get") == 0) {
+        int len = ctl_build_ack_inventory_payload(out_resp, max_resp, cmd_id, lease_id, own_sn, inv, now_ms);
+        if (len > 0) {
+            dedup_cache_put(cmd_id, out_resp, (size_t)len, expires_at_ms);
+            *out_resp_len = (size_t)len;
+            *p_should_publish = true;
+            return true;
+        }
+        return false;
+    }
+
+    /* 2. stream_start */
+    if (strcmp(cmd_type, "stream_start") == 0) {
+        char mode[32] = { 0 };
+        char source_id[64] = { 0 };
+        char profile[32] = { 0 };
+        char stream_instance_id[64] = { 0 };
+
+        json_extract_str(payload, "mode", mode, sizeof(mode));
+        json_extract_str(payload, "source_id", source_id, sizeof(source_id));
+        json_extract_str(payload, "profile", profile, sizeof(profile));
+        json_extract_str(payload, "stream_instance_id", stream_instance_id, sizeof(stream_instance_id));
+
+        if (mode[0] == '\0' || source_id[0] == '\0' || stream_instance_id[0] == '\0') {
+            int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
+                                             "invalid_payload", "Missing required stream_start fields", now_ms);
+            if (len > 0) {
+                dedup_cache_put(cmd_id, out_resp, (size_t)len, expires_at_ms);
+                *out_resp_len = (size_t)len;
+                *p_should_publish = true;
+                return true;
+            }
+            return false;
+        }
+
+        char result[32] = { 0 };
+        char err_code[64] = { 0 };
+        char err_msg[256] = { 0 };
+
+        bool ok = ffmpeg_supervisor_start(stream_instance_id, lease_id, mode, source_id,
+                                          profile, inv, result, sizeof(result),
+                                          err_code, sizeof(err_code),
+                                          err_msg, sizeof(err_msg));
+        int len = 0;
+        if (ok) {
+            len = ctl_build_ack_stream_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
+                                               result, stream_instance_id, "running", now_ms);
+        } else {
+            len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
+                                         err_code, err_msg, now_ms);
+        }
+
+        if (len > 0) {
+            dedup_cache_put(cmd_id, out_resp, (size_t)len, expires_at_ms);
+            *out_resp_len = (size_t)len;
+            *p_should_publish = true;
+            return true;
+        }
+        return false;
+    }
+
+    /* 3. stream_stop */
+    if (strcmp(cmd_type, "stream_stop") == 0) {
+        char stream_instance_id[64] = { 0 };
+        json_extract_str(payload, "stream_instance_id", stream_instance_id, sizeof(stream_instance_id));
+
+        char result[32] = { 0 };
+        char err_code[64] = { 0 };
+        char err_msg[256] = { 0 };
+
+        bool ok = ffmpeg_supervisor_stop(stream_instance_id, lease_id,
+                                         result, sizeof(result),
+                                         err_code, sizeof(err_code),
+                                         err_msg, sizeof(err_msg));
+        int len = 0;
+        if (ok) {
+            len = ctl_build_ack_stream_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
+                                               result, stream_instance_id, "stopped", now_ms);
+        } else {
+            len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
+                                         err_code, err_msg, now_ms);
+        }
+
+        if (len > 0) {
+            dedup_cache_put(cmd_id, out_resp, (size_t)len, expires_at_ms);
+            *out_resp_len = (size_t)len;
+            *p_should_publish = true;
+            return true;
+        }
+        return false;
+    }
+
+    /* 4. Remote input commands: pointer_move, mouse_click, key_event */
+    bool is_move = (strcmp(cmd_type, "pointer_move") == 0);
+    bool is_click = (strcmp(cmd_type, "mouse_click") == 0);
+    bool is_key = (strcmp(cmd_type, "key_event") == 0);
+
+    if (is_move || is_click || is_key) {
+        char desktop_id[64] = { 0 };
+        char stream_instance_id[64] = { 0 };
+        json_extract_str(payload, "desktop_id", desktop_id, sizeof(desktop_id));
+        json_extract_str(payload, "stream_instance_id", stream_instance_id, sizeof(stream_instance_id));
+
+        StreamStateInfo stream;
+        ffmpeg_supervisor_get_info(&stream);
+
+        /* Validate active stream */
+        if (strcmp(stream.state, "running") != 0) {
+            log_warn("Input rejected: stream is not running (state=%s)", stream.state);
+            if (!is_move) {
+                int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
+                                                 "stream_mismatch", "Stream is not running", now_ms);
                 if (len > 0) {
                     *out_resp_len = (size_t)len;
                     *p_should_publish = true;
@@ -185,31 +470,190 @@ bool ctl_handle_command(const char* payload, size_t payload_len,
             }
             return false;
         }
-    }
 
-    // 6. Coordinates and button check
-    int x = -1, y = -1;
-    if (!json_extract_int(payload, "x", &x) || !json_extract_int(payload, "y", &y) ||
-        x < 0 || x > 65535 || y < 0 || y > 65535) {
-        log_warn("Invalid coordinates: x=%d y=%d", x, y);
-        if (is_click) {
-            int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn, "invalid_payload", "Coordinates out of range 0..65535", now_ms);
-            if (len > 0) {
-                *out_resp_len = (size_t)len;
-                *p_should_publish = true;
-                return true;
+        if (_stricmp(stream.mode, "desktop") != 0) {
+            log_warn("Input rejected: stream mode is not desktop (mode=%s)", stream.mode);
+            if (!is_move) {
+                int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
+                                                 "input_not_allowed_in_camera_mode",
+                                                 "Input is not allowed in camera mode", now_ms);
+                if (len > 0) {
+                    *out_resp_len = (size_t)len;
+                    *p_should_publish = true;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        if (stream.lease_id[0] != '\0' && lease_id[0] != '\0' && strcmp(stream.lease_id, lease_id) != 0) {
+            log_warn("Input rejected: lease_mismatch (active: %s, cmd: %s)", stream.lease_id, lease_id);
+            if (!is_move) {
+                int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
+                                                 "lease_mismatch", "Lease ID mismatch", now_ms);
+                if (len > 0) {
+                    *out_resp_len = (size_t)len;
+                    *p_should_publish = true;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        if (stream.source_id[0] != '\0' && desktop_id[0] != '\0' && strcmp(stream.source_id, desktop_id) != 0) {
+            log_warn("Input rejected: desktop_mismatch (active: %s, cmd: %s)", stream.source_id, desktop_id);
+            if (!is_move) {
+                int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
+                                                 "desktop_mismatch", "Desktop ID mismatch", now_ms);
+                if (len > 0) {
+                    *out_resp_len = (size_t)len;
+                    *p_should_publish = true;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        if (stream.stream_instance_id[0] != '\0' && stream_instance_id[0] != '\0' &&
+            strcmp(stream.stream_instance_id, stream_instance_id) != 0) {
+            log_warn("Input rejected: stream_mismatch (active: %s, cmd: %s)",
+                     stream.stream_instance_id, stream_instance_id);
+            if (!is_move) {
+                int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
+                                                 "stream_mismatch", "Stream instance mismatch", now_ms);
+                if (len > 0) {
+                    *out_resp_len = (size_t)len;
+                    *p_should_publish = true;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /* Check display policy */
+        if (inv) {
+            DisplayInfo d;
+            if (inventory_find_display(inv, stream.source_id, &d)) {
+                if (_stricmp(d.policy, "input") != 0) {
+                    log_warn("Input rejected: display policy is %s (not input)", d.policy);
+                    if (!is_move) {
+                        int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
+                                                         "source_not_allowed", "Display policy denies input", now_ms);
+                        if (len > 0) {
+                            *out_resp_len = (size_t)len;
+                            *p_should_publish = true;
+                            return true;
+                        }
+                    }
+                    return false;
+                }
             }
         }
-        return false;
-    }
 
-    if (is_click) {
-        char button[16] = { 0 };
-        json_extract_str(payload, "button", button, sizeof(button));
-        if (strcmp(button, "left") != 0) {
-            log_warn("Unsupported button: '%s'", button);
-            int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn, "unsupported", "Only left button is supported", now_ms);
+        /* Handle pointer_move / mouse_click */
+        if (is_move || is_click) {
+            double nx = 0.0, ny = 0.0;
+            bool has_x = json_extract_double(payload, "x", &nx);
+            bool has_y = json_extract_double(payload, "y", &ny);
+
+            if (!has_x || !has_y) {
+                int ix = 0, iy = 0;
+                if (json_extract_int(payload, "x", &ix) && json_extract_int(payload, "y", &iy)) {
+                    nx = (double)ix;
+                    ny = (double)iy;
+                    has_x = true;
+                    has_y = true;
+                }
+            }
+
+            if (!has_x || !has_y) {
+                if (is_click) {
+                    int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
+                                                     "invalid_payload", "Missing coordinates", now_ms);
+                    if (len > 0) {
+                        *out_resp_len = (size_t)len;
+                        *p_should_publish = true;
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            /* Normalize legacy 0..65535 or coords > 1.0 */
+            if (nx > 1.0 || ny > 1.0) {
+                nx /= 65535.0;
+                ny /= 65535.0;
+            }
+
+            int rect_w = stream.desktop_rect.right - stream.desktop_rect.left;
+            int rect_h = stream.desktop_rect.bottom - stream.desktop_rect.top;
+            if (rect_w <= 0) rect_w = 1920;
+            if (rect_h <= 0) rect_h = 1080;
+
+            DWORD err = 0;
+            if (is_move) {
+                input_inject_move_norm(nx, ny, stream.desktop_rect.left, stream.desktop_rect.top,
+                                       rect_w, rect_h, &err);
+                *p_should_publish = false;
+                return true;
+            } else {
+                char button[16] = "left";
+                json_extract_str(payload, "button", button, sizeof(button));
+
+                bool ok = input_inject_click_norm(nx, ny, button,
+                                                  stream.desktop_rect.left, stream.desktop_rect.top,
+                                                  rect_w, rect_h, &err);
+                int len = 0;
+                if (ok) {
+                    len = ctl_build_ack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn, now_ms);
+                } else {
+                    len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
+                                                 "inject_failed", "Click injection failed", now_ms);
+                }
+                if (len > 0) {
+                    dedup_cache_put(cmd_id, out_resp, (size_t)len, expires_at_ms);
+                    *out_resp_len = (size_t)len;
+                    *p_should_publish = true;
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        /* Handle key_event */
+        if (is_key) {
+            char kind[16] = "press";
+            int vk = 0;
+            char text[128] = { 0 };
+
+            json_extract_str(payload, "kind", kind, sizeof(kind));
+            json_extract_int(payload, "vk", &vk);
+            json_extract_str(payload, "text", text, sizeof(text));
+
+            if (vk > 0 && !input_is_vk_allowed(vk)) {
+                log_warn("Key rejected: vk %d is forbidden or not whitelisted", vk);
+                int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
+                                                 "source_not_allowed", "Virtual key not allowed", now_ms);
+                if (len > 0) {
+                    dedup_cache_put(cmd_id, out_resp, (size_t)len, expires_at_ms);
+                    *out_resp_len = (size_t)len;
+                    *p_should_publish = true;
+                    return true;
+                }
+                return false;
+            }
+
+            DWORD err = 0;
+            bool ok = input_inject_key(kind, vk, text[0] != '\0' ? text : NULL, &err);
+            int len = 0;
+            if (ok) {
+                len = ctl_build_ack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn, now_ms);
+            } else {
+                len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
+                                             "inject_failed", "Key injection failed", now_ms);
+            }
             if (len > 0) {
+                dedup_cache_put(cmd_id, out_resp, (size_t)len, expires_at_ms);
                 *out_resp_len = (size_t)len;
                 *p_should_publish = true;
                 return true;
@@ -218,62 +662,15 @@ bool ctl_handle_command(const char* payload, size_t payload_len,
         }
     }
 
-    // 7. Dedup check: if command already processed, resend cached response
-    if (dedup_cache_get(cmd_id, out_resp, max_resp, out_resp_len)) {
-        log_debug("Dedup cache hit for cmd=%s, resending cached response", cmd_id);
+    /* Unsupported command */
+    log_warn("Unsupported command type: '%s'", cmd_type);
+    int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
+                                     "unsupported", "Unsupported command type", now_ms);
+    if (len > 0) {
+        *out_resp_len = (size_t)len;
         *p_should_publish = true;
         return true;
     }
 
-    // 8. Desktop availability check
-    if (!desktop_is_interactive_available()) {
-        log_warn("Interactive desktop unavailable for command cmd=%s", cmd_id);
-        if (is_click) {
-            int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn, "interactive_desktop_unavailable", "Desktop is locked or in non-interactive session", now_ms);
-            if (len > 0) {
-                dedup_cache_put(cmd_id, out_resp, (size_t)len, expires_at_ms);
-                *out_resp_len = (size_t)len;
-                *p_should_publish = true;
-                return true;
-            }
-        }
-        return false;
-    }
-
-    // 9. Input injection
-    DWORD inject_err = 0;
-    if (is_move) {
-        bool ok = input_inject_move(x, y, &inject_err);
-        if (!ok) {
-            log_debug("input_inject_move failed (err=%lu)", inject_err);
-        }
-        // Do NOT send ACK for pointer_move (best-effort)
-        *p_should_publish = false;
-        return true;
-    } else if (is_click) {
-        bool ok = input_inject_click(x, y, &inject_err);
-        if (!ok) {
-            char errMsg[64];
-            snprintf(errMsg, sizeof(errMsg), "SendInput failed with error %lu", inject_err);
-            log_warn("Click injection failed for cmd=%s: %s", cmd_id, errMsg);
-            int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn, "inject_failed", errMsg, now_ms);
-            if (len > 0) {
-                dedup_cache_put(cmd_id, out_resp, (size_t)len, expires_at_ms);
-                *out_resp_len = (size_t)len;
-                *p_should_publish = true;
-                return true;
-            }
-        } else {
-            log_info("Click injected at (%d, %d) for cmd=%s lease=%s", x, y, cmd_id, lease_id);
-            int len = ctl_build_ack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn, now_ms);
-            if (len > 0) {
-                dedup_cache_put(cmd_id, out_resp, (size_t)len, expires_at_ms);
-                *out_resp_len = (size_t)len;
-                *p_should_publish = true;
-                return true;
-            }
-        }
-    }
-
-    return true;
+    return false;
 }

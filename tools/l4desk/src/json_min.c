@@ -84,6 +84,22 @@ bool json_extract_int64(const char* json, const char* key, int64_t* out) {
     return true;
 }
 
+bool json_extract_double(const char* json, const char* key, double* out) {
+    if (!out) return false;
+    const char* val = find_key_colon(json, key);
+    if (!val) return false;
+
+    while (*val && isspace((unsigned char)*val)) val++;
+    if (!isdigit((unsigned char)*val) && *val != '-' && *val != '.') return false;
+
+    char* endptr = NULL;
+    double dval = strtod(val, &endptr);
+    if (endptr == val) return false;
+
+    *out = dval;
+    return true;
+}
+
 bool json_extract_bool(const char* json, const char* key, bool* out) {
     if (!out) return false;
     const char* val = find_key_colon(json, key);

@@ -17,9 +17,11 @@
 #define DEFAULT_PRESENCE_INTERVAL_SEC 30
 #define DEFAULT_KEEPALIVE_SEC 30
 #define DEFAULT_RECONNECT_SEC 5
+#define DEFAULT_BASE_PATH "C:\\l4tools"
 #define DEFAULT_LOG_FILE "C:\\l4tools\\l4desk\\log\\l4desk.log"
 
 typedef struct {
+    char base_path[MAX_PATH];
     char mqtt_host[128];
     int mqtt_port;
     int proxy_http_port;

@@ -6,6 +6,8 @@
 #include "mqtt_protocol.h"
 #include "ctl_protocol.h"
 #include "desktop_state.h"
+#include "display_inventory.h"
+#include "ffmpeg_supervisor.h"
 #include "dedup_cache.h"
 #include "sn_discovery.h"
 #include "log.h"
@@ -25,8 +27,13 @@ typedef struct {
     uint16_t packet_id_counter;
     char sn[64];
     time_t last_presence_time;
+    time_t last_inventory_time;
     bool last_desk_avail;
     ScreenMetrics last_screen;
+    SystemInventory inventory;
+    uint32_t last_inventory_hash;
+    char last_stream_state[32];
+    const L4DeskConfig* config;
 } MqttState;
 
 static uint16_t get_next_packet_id(MqttState* st) {
@@ -50,7 +57,7 @@ static bool socket_send_all(SOCKET s, const unsigned char* buf, size_t len) {
 static bool send_publish_packet(MqttState* st, const char* topic, const void* payload, size_t payload_len, uint8_t qos, uint8_t retain) {
     EnterCriticalSection(&st->send_cs);
     uint16_t pkt_id = (qos > 0) ? get_next_packet_id(st) : 0;
-    unsigned char buf[4096];
+    unsigned char buf[16384];
     int len = mqtt_build_publish(buf, sizeof(buf), topic, payload, payload_len, pkt_id, qos, retain);
     bool ok = false;
     if (len > 0) {
@@ -68,14 +75,34 @@ static void publish_presence(MqttState* st, const char* status) {
     desktop_get_screen_metrics(&screen);
     bool desk_avail = desktop_is_interactive_available();
 
-    char payload[512];
-    int len = ctl_build_presence_payload(payload, sizeof(payload), status, desk_avail, &screen);
+    StreamStateInfo stream;
+    ffmpeg_supervisor_get_info(&stream);
+
+    char payload[16384];
+    int len = ctl_build_extended_presence_payload(payload, sizeof(payload),
+                                                  status, desk_avail, &screen,
+                                                  &st->inventory, &stream);
     if (len > 0) {
-        send_publish_packet(st, topic, payload, (size_t)len, 1, 1); // retain=1, qos=1
-        log_info("Published presence [%s]: %s (retain=1, qos=1)", status, payload);
+        send_publish_packet(st, topic, payload, (size_t)len, 1, 1); /* retain=1, qos=1 */
+        log_info("Published presence [%s] (len=%d, retain=1, qos=1)", status, len);
+        log_debug("Presence payload: %s", payload);
         st->last_presence_time = time(NULL);
         st->last_desk_avail = desk_avail;
         st->last_screen = screen;
+        st->last_inventory_hash = st->inventory.hash;
+        strcpy_s(st->last_stream_state, sizeof(st->last_stream_state), stream.state);
+    }
+}
+
+static void publish_stream_event(MqttState* st, const char* stream_instance_id, const char* state, const char* reason) {
+    char topic[128];
+    snprintf(topic, sizeof(topic), "dev/%s/ctl", st->sn);
+
+    char payload[1024];
+    int len = ctl_build_stream_event_payload(payload, sizeof(payload), st->sn, stream_instance_id, state, reason);
+    if (len > 0) {
+        send_publish_packet(st, topic, payload, (size_t)len, 1, 0); /* retain=0, qos=1 */
+        log_info("Published stream_event [%s]: %s (retain=0, qos=1)", state, payload);
     }
 }
 
@@ -92,10 +119,16 @@ int mqtt_client_run(const L4DeskConfig* config, HANDLE hStopEvent) {
     MqttState state;
     memset(&state, 0, sizeof(state));
     state.sock = INVALID_SOCKET;
+    state.config = config;
     InitializeCriticalSection(&state.send_cs);
     dedup_cache_init();
 
-    // 1. Resolve terminal SN
+    inventory_init(config->base_path);
+    inventory_refresh(config->base_path, &state.inventory);
+    state.last_inventory_hash = state.inventory.hash;
+    state.last_inventory_time = time(NULL);
+
+    /* 1. Resolve terminal SN */
     if (config->sn_explicitly_set && config->sn[0] != '\0') {
         strcpy_s(state.sn, sizeof(state.sn), config->sn);
         log_info("Using explicitly configured terminal SN: %s", state.sn);
@@ -108,9 +141,13 @@ int mqtt_client_run(const L4DeskConfig* config, HANDLE hStopEvent) {
         }
     }
 
+    /* Initialize supervisor & reconcile orphaned processes */
+    ffmpeg_supervisor_init(config->base_path, state.sn);
+    ffmpeg_supervisor_reconcile();
+
     int current_backoff = config->reconnect_sec > 0 ? config->reconnect_sec : 5;
 
-    // 2. Main reconnection loop
+    /* 2. Main reconnection loop */
     while (hStopEvent == NULL || WaitForSingleObject(hStopEvent, 0) != WAIT_OBJECT_0) {
         log_info("Connecting to MQTT broker at %s:%d (client_id=%s)...",
                  config->mqtt_host, config->mqtt_port, config->client_id);
@@ -122,7 +159,6 @@ int mqtt_client_run(const L4DeskConfig* config, HANDLE hStopEvent) {
             continue;
         }
 
-        // Disable Nagle's algorithm for minimal command latency
         int nodelay = 1;
         setsockopt(s, IPPROTO_TCP, TCP_NODELAY, (const char*)&nodelay, sizeof(nodelay));
 
@@ -146,7 +182,7 @@ int mqtt_client_run(const L4DeskConfig* config, HANDLE hStopEvent) {
         current_backoff = config->reconnect_sec > 0 ? config->reconnect_sec : 5;
         state.sock = s;
 
-        // Prepare LWT: topic dev/<SN>/ctl, payload offline, retain=1, qos=1
+        /* Prepare LWT: topic dev/<SN>/ctl, payload offline, retain=1, qos=1 */
         char will_topic[128];
         snprintf(will_topic, sizeof(will_topic), "dev/%s/ctl", state.sn);
         char will_payload[512];
@@ -167,7 +203,7 @@ int mqtt_client_run(const L4DeskConfig* config, HANDLE hStopEvent) {
             continue;
         }
 
-        // Wait for CONNACK (4 bytes: 0x20, 0x02, session_present, return_code)
+        /* Wait for CONNACK */
         unsigned char connack_buf[4];
         int cr = recv(s, (char*)connack_buf, 4, 0);
         if (cr != 4 || connack_buf[0] != MQTT_PKT_CONNACK || connack_buf[3] != 0) {
@@ -180,7 +216,7 @@ int mqtt_client_run(const L4DeskConfig* config, HANDLE hStopEvent) {
 
         log_info("MQTT Connected successfully (rc=0)");
 
-        // 3. Subscribe to srv/<SN>/ctl QoS 1
+        /* 3. Subscribe to srv/<SN>/ctl QoS 1 */
         char sub_topic[128];
         snprintf(sub_topic, sizeof(sub_topic), "srv/%s/ctl", state.sn);
         unsigned char sub_buf[256];
@@ -191,14 +227,14 @@ int mqtt_client_run(const L4DeskConfig* config, HANDLE hStopEvent) {
             log_info("Subscribed to control topic: %s (QoS 1)", sub_topic);
         }
 
-        // 4. Publish dev/<SN>/ctl presence online (retain=1, qos=1)
+        /* 4. Publish dev/<SN>/ctl presence online (retain=1, qos=1) */
         publish_presence(&state, "online");
 
-        // 5. Active connection polling loop
+        /* 5. Active connection polling loop */
         time_t last_ping_time = time(NULL);
         time_t ping_interval = config->keepalive_sec > 4 ? config->keepalive_sec / 2 : 2;
 
-        unsigned char rx_buf[16384];
+        unsigned char rx_buf[32768];
         size_t rx_buf_len = 0;
 
         while (hStopEvent == NULL || WaitForSingleObject(hStopEvent, 0) != WAIT_OBJECT_0) {
@@ -208,7 +244,7 @@ int mqtt_client_run(const L4DeskConfig* config, HANDLE hStopEvent) {
 
             struct timeval tv;
             tv.tv_sec = 0;
-            tv.tv_usec = 100000; // 100 ms
+            tv.tv_usec = 100000; /* 100 ms */
 
             int sel_rc = select(0, &read_fds, NULL, NULL, &tv);
             if (sel_rc == SOCKET_ERROR) {
@@ -222,9 +258,10 @@ int mqtt_client_run(const L4DeskConfig* config, HANDLE hStopEvent) {
                     log_warn("Socket disconnected by broker.");
                     break;
                 }
+                log_info("MQTT recv bytes_recvd=%d (prev rx_buf_len=%zu)", bytes_recvd, rx_buf_len);
                 rx_buf_len += (size_t)bytes_recvd;
 
-                // Process MQTT packets
+                /* Process MQTT packets */
                 size_t offset = 0;
                 while (offset < rx_buf_len) {
                     uint8_t pkt_type = rx_buf[offset] & 0xF0;
@@ -233,12 +270,12 @@ int mqtt_client_run(const L4DeskConfig* config, HANDLE hStopEvent) {
                     uint32_t rem_len = 0;
                     int rem_bytes = 0;
                     if (mqtt_decode_remaining_length(rx_buf + offset + 1, rx_buf_len - (offset + 1), &rem_len, &rem_bytes) != 0) {
-                        break; // Incomplete remaining length
+                        break; /* Incomplete remaining length */
                     }
 
                     size_t total_pkt_len = 1 + rem_bytes + rem_len;
                     if (offset + total_pkt_len > rx_buf_len) {
-                        break; // Incomplete packet, wait for more data
+                        break; /* Incomplete packet, wait for more data */
                     }
 
                     const unsigned char* pkt_body = rx_buf + offset + 1 + rem_bytes;
@@ -252,7 +289,7 @@ int mqtt_client_run(const L4DeskConfig* config, HANDLE hStopEvent) {
                         if (mqtt_parse_publish(pkt_body, rem_len, pkt_flags,
                                                topic_in, sizeof(topic_in),
                                                &pkt_id_in, &payload_ptr, &payload_len) == 0) {
-                            // Acknowledge QoS 1 publish immediately with PUBACK
+                            /* Acknowledge QoS 1 publish immediately with PUBACK */
                             uint8_t qos = (pkt_flags >> 1) & 0x03;
                             if (qos == 1 && pkt_id_in > 0) {
                                 unsigned char puback_buf[4];
@@ -262,20 +299,38 @@ int mqtt_client_run(const L4DeskConfig* config, HANDLE hStopEvent) {
                                 LeaveCriticalSection(&state.send_cs);
                             }
 
-                            // Process command payload
-                            char resp_buf[1024];
+                            /* Process command payload */
+                            char resp_buf[8192];
                             size_t resp_len = 0;
                             bool should_pub = false;
                             uint8_t resp_qos = 1;
 
-                            if (ctl_handle_command(payload_ptr, payload_len, state.sn,
+                            char payload_str[8192];
+                            if (payload_len < sizeof(payload_str)) {
+                                memcpy(payload_str, payload_ptr, payload_len);
+                                payload_str[payload_len] = '\0';
+                            } else {
+                                payload_str[0] = '\0';
+                            }
+
+                            if (ctl_handle_command(payload_str, payload_len, state.sn,
+                                                   &state.inventory,
                                                    resp_buf, sizeof(resp_buf), &resp_len,
                                                    &should_pub, &resp_qos)) {
                                 if (should_pub && resp_len > 0) {
                                     char out_topic[128];
                                     snprintf(out_topic, sizeof(out_topic), "dev/%s/ctl", state.sn);
-                                    send_publish_packet(&state, out_topic, resp_buf, resp_len, resp_qos, 0); // Commands/ACKs: retain=0
+                                    send_publish_packet(&state, out_topic, resp_buf, resp_len, resp_qos, 0);
                                     log_debug("Published ACK/NACK to %s: %s", out_topic, resp_buf);
+                                }
+
+                                /* Check if stream state changed after command */
+                                StreamStateInfo cur_stream;
+                                ffmpeg_supervisor_get_info(&cur_stream);
+                                if (strcmp(cur_stream.state, state.last_stream_state) != 0) {
+                                    publish_stream_event(&state, cur_stream.stream_instance_id,
+                                                         cur_stream.state, cur_stream.reason);
+                                    publish_presence(&state, "online");
                                 }
                             }
                         }
@@ -294,7 +349,21 @@ int mqtt_client_run(const L4DeskConfig* config, HANDLE hStopEvent) {
                 }
             }
 
-            // Periodic PINGREQ keepalive
+            /* Supervisor health-check tick */
+            bool stream_changed = false;
+            char new_state[32] = { 0 };
+            char change_reason[64] = { 0 };
+            ffmpeg_supervisor_tick(&state.inventory, &stream_changed,
+                                   new_state, sizeof(new_state),
+                                   change_reason, sizeof(change_reason));
+            if (stream_changed) {
+                StreamStateInfo sinfo;
+                ffmpeg_supervisor_get_info(&sinfo);
+                publish_stream_event(&state, sinfo.stream_instance_id, new_state, change_reason);
+                publish_presence(&state, "online");
+            }
+
+            /* Periodic PINGREQ keepalive */
             time_t now = time(NULL);
             if (now - last_ping_time >= ping_interval) {
                 unsigned char ping_buf[2];
@@ -305,21 +374,38 @@ int mqtt_client_run(const L4DeskConfig* config, HANDLE hStopEvent) {
                 last_ping_time = now;
             }
 
-            // Periodic presence check & republish
+            /* Periodic inventory refresh check (every <= 10 sec) */
+            if (now - state.last_inventory_time >= 10) {
+                SystemInventory cur_inv;
+                inventory_refresh(config->base_path, &cur_inv);
+                if (cur_inv.hash != state.last_inventory_hash) {
+                    state.inventory = cur_inv;
+                    state.last_inventory_hash = cur_inv.hash;
+                    log_info("Inventory changed, publishing updated presence...");
+                    publish_presence(&state, "online");
+                }
+                state.last_inventory_time = now;
+            }
+
+            /* Periodic presence check & republish */
             ScreenMetrics cur_screen;
             desktop_get_screen_metrics(&cur_screen);
             bool cur_avail = desktop_is_interactive_available();
 
-            bool changed = (cur_avail != state.last_desk_avail) || screen_changed(&cur_screen, &state.last_screen);
+            bool screen_diff = (cur_avail != state.last_desk_avail) || screen_changed(&cur_screen, &state.last_screen);
             if ((now - state.last_presence_time >= config->presence_interval_sec) ||
-                (changed && (now - state.last_presence_time >= 5))) {
+                (screen_diff && (now - state.last_presence_time >= 5))) {
                 publish_presence(&state, "online");
             }
         }
 
-        // Graceful disconnect on shutdown
+        /* Graceful disconnect on shutdown */
         if (hStopEvent != NULL && WaitForSingleObject(hStopEvent, 0) == WAIT_OBJECT_0) {
-            log_info("Graceful shutdown: publishing dev/%s/ctl offline presence...", state.sn);
+            log_info("Graceful shutdown: stopping FFmpeg process...");
+            char stop_res[32], err_code[64], err_msg[128];
+            ffmpeg_supervisor_stop(NULL, NULL, stop_res, sizeof(stop_res), err_code, sizeof(err_code), err_msg, sizeof(err_msg));
+
+            log_info("Publishing dev/%s/ctl offline presence...", state.sn);
             publish_presence(&state, "offline");
 
             unsigned char disc_buf[2];
@@ -332,12 +418,19 @@ int mqtt_client_run(const L4DeskConfig* config, HANDLE hStopEvent) {
             break;
         }
 
-        closesocket(s);
-        state.sock = INVALID_SOCKET;
-        Sleep(2000);
+        if (state.sock != INVALID_SOCKET) {
+            closesocket(state.sock);
+            state.sock = INVALID_SOCKET;
+        }
+
+        log_warn("Connection lost. Reconnecting in %ds...", current_backoff);
+        if (WaitForSingleObject(hStopEvent, (DWORD)current_backoff * 1000) == WAIT_OBJECT_0) {
+            break;
+        }
+        current_backoff = current_backoff < 60 ? current_backoff * 2 : 60;
     }
 
+    ffmpeg_supervisor_cleanup();
     DeleteCriticalSection(&state.send_cs);
-    dedup_cache_cleanup();
     return 0;
 }
