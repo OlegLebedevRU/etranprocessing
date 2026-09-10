@@ -1,172 +1,434 @@
-# Mosquitto MQTT Broker (No-SSL Bridge)
+# Mosquitto MQTT Broker (Локальный брокер и No-SSL Bridge)
 
-Local lightweight MQTT broker for `PlaterraTerminal` kiosk software with upstream bridge functionality forwarding traffic through the native `leo4proxy` mTLS tunnel.
+Автономный, легковесный локальный брокер сообщений MQTT для терминалов самообслуживания и платёжных киосков экосистемы **etranprocessing** (включая основное платёжное ПО `PlaterraTerminal`). Реализует функции локального мультиплексора очередей и топиков с мостированием (Upstream Bridge) внешнего трафика через нативный mTLS-туннель `leo4proxy` без накладных расходов на OpenSSL.
 
-Build: Standalone 32-bit executable `mosquitto.exe` (Win32, `/MT`, no OpenSSL/TLS external dependencies), fully compatible with Windows 7, 10, 11, and Windows Embedded/POSReady (both x86 and x64 architectures).
-
----
-
-## 1. Architecture & Integration with Native Proxy (`leo4proxy`)
-
-The Mosquitto service acts as a local queue and topic multiplexer for internal terminal processes, aggregating their connections into a single upstream channel to the cloud broker.
-
-```
-+-------------------------------+
-| PlaterraTerminal (UI / Master)| --(TCP :1883, ClientId="ui")----+
-+-------------------------------+                                 |
-+-------------------------------+                                 v
-| PlaterraTerminalService (Svc) | --(TCP :1883, ClientId="svc")--> [Mosquitto Broker :1883]
-+-------------------------------+                                 |   (Local, Plain TCP)
-                                                                  |
-                                   [Bridge Upstream: 127.0.0.1:18883]
-                                   (remote_clientid = <SN>, MQTT 5.0)
-                                                                  |
-                                                                  v
-                                                      +-------------------------------+
-                                                      |    leo4proxy (:18883)         |
-                                                      | (Native Win32 SChannel mTLS)  |
-                                                      |  - Hardware-bound cert from   |
-                                                      |    Windows Store (MY / System)|
-                                                      +-------------------------------+
-                                                                  |
-                                                                  | (Outbound mTLS :8883)
-                                                                  v
-                                                      +-------------------------------+
-                                                      |     Server MQTT Broker        |
-                                                      |     (dev.leo4.ru:8883)        |
-                                                      +-------------------------------+
-```
-
-### Key Advantages of Pairing with `leo4proxy`:
-- **Zero OpenSSL Dependencies on Broker:** Mosquitto operates purely as a local TCP broker/client and does not require TLS certificates or OpenSSL DLLs on disk.
-- **Hardware-Bound Authentication:** `leo4proxy` offloads mTLS handshakes to native Windows SChannel using the device private key stored in the secure Windows Certificate Store.
-- **Single Connection to Cloud Broker:** The remote broker sees strictly 1 persistent connection with `client_id = <SN>`, avoiding session collision loops (*Client Takeover / Flapping*).
+Сборка: статический 32-битный исполняемый файл `mosquitto.exe` (Win32, `/MT`, без сторонних динамических зависимостей OpenSSL/CRT), нативно совместимый с Windows 7 SP1, 10, 11 и Windows Embedded/POSReady (как x86, так и x64 архитектуры).
 
 ---
 
-## 2. Working Directory & `%MOSQUITTO_DIR%` Environment Variable
+## 1. Архитектура и место в терминальном комплексе L4 Suite
 
-### How Mosquitto Locates Configuration in Windows Service Mode
-When the Windows Service Control Manager starts `mosquitto.exe run`:
-1. The process queries the system environment variable `%MOSQUITTO_DIR%`.
-2. The configuration file is resolved strictly at: `%MOSQUITTO_DIR%\mosquitto.conf`.
-3. **CRITICAL:** If `%MOSQUITTO_DIR%` is undefined or points to a non-existent directory, the service will immediately terminate (`SERVICE_STOPPED`).
+Служба `Mosquitto` на терминале функционирует как локальная шина сообщений и концентратор топиков для внутренних терминальных процессов, агрегируя их подключения в единый восходящий защищённый канал к облачному брокеру платформы:
 
-### How to Configure or Relocate the Working Directory
-To set or change the configuration folder:
-1. Set the system-level (`Machine` / `HKLM`) environment variable `MOSQUITTO_DIR`:
-   - **Via PowerShell (Run as Administrator):**
-     ```powershell
-     [System.Environment]::SetEnvironmentVariable('MOSQUITTO_DIR', 'D:\Platerra26\tools\mosquitto', [System.EnvironmentVariableTarget]::Machine)
-     ```
-   - **Via Command Prompt (Run as Administrator):**
-     ```cmd
-     setx /M MOSQUITTO_DIR "D:\Platerra26\tools\mosquitto"
-     ```
-2. Or run the installer script with the target directory parameter:
-   ```powershell
-   .\install_mosquitto.ps1 -TargetDir "C:\Platerra\tools\mosquitto"
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                 Платёжный терминал (Киоск)                                  │
+│                                                                                             │
+│  ┌───────────────────────────────┐               ┌───────────────────────────────────────┐  │
+│  │       PlaterraTerminal        │               │                 l4con                 │  │
+│  │ (main_app, ядро UI / платежи) │               │   (extra_service, консоль/диагн.)     │  │
+│  │    D:\Platerra26\*.exe        │               │       C:\l4tools\l4con\l4con.exe      │  │
+│  └───────────────┬───────────────┘               └───────────────────┬───────────────────┘  │
+│                  │                                                   │                      │
+│                  │ TCP :1883, ClientId="main_app"                    │ TCP :1883,           │
+│                  │ (Presence: dev/{SN}/app)                          │ ClientId="{SN}_extra"│
+│                  │                                                   │ (dev/{SN}/svc)       │
+│                  │         ┌───────────────────────────────────────┐ │                      │
+│                  │         │                l4desk                 │ │                      │
+│                  │         │    (svc_desk, удалённый ввод/видео)   │ │                      │
+│                  │         │      C:\l4tools\l4desk\l4desk.exe     │ │                      │
+│                  │         └───────────────────┬───────────────────┘ │                      │
+│                  │                             │ TCP :1883,          │                      │
+│                  │                             │ ClientId="svc_desk" │                      │
+│                  │                             │ (dev/{SN}/ctl)      │                      │
+│                  ▼                             ▼                     ▼                      │
+│  ┌───────────────────────────────────────────────────────────────────────────────────────┐  │
+│  │                          Mosquitto Broker (Local, Plain TCP)                          │  │
+│  │                                  Порт 127.0.0.1:1883                                  │  │
+│  │                        (Управляется супервизором l4superv)                            │  │
+│  └──────────────────────────────────────────┬────────────────────────────────────────────┘  │
+│                                             │                                               │
+│                                             │ Внутренний Bridge: 127.0.0.1:18883            │
+│                                             │ (remote_clientid = <SN>, MQTT 5.0)            │
+│                                             ▼                                               │
+│  ┌───────────────────────────────────────────────────────────────────────────────────────┐  │
+│  │                                       leo4proxy                                       │  │
+│  │                       (Нативный Win32 SChannel mTLS прокси)                           │  │
+│  │           - Сертификат терминала X.509 из хранилища LocalMachine\MY (KSP)             │  │
+│  │           - Единственный источник истины по SN (порт 18443)                           │  │
+│  └──────────────────────────────────────────┬────────────────────────────────────────────┘  │
+│                                             │                                               │
+└─────────────────────────────────────────────┼───────────────────────────────────────────────┘
+                                              │
+                                              │ Исходящий защищённый mTLS туннель
+                                              │ TCP :8883 (MQTTS)
+                                              ▼
+                                ┌───────────────────────────┐
+                                │     Серверный брокер      │
+                                │   MQTT (dev.leo4.ru:8883) │
+                                │   (RabbitMQ Native MQTT)  │
+                                └───────────────────────────┘
+```
+
+### Ключевые преимущества связки Mosquitto с `leo4proxy`:
+- **Полное отсутствие OpenSSL на брокере:** `mosquitto.exe` работает исключительно как локальный TCP-сервер и локальный мост. Он не требует установки сертификатов в файлы, ключей на диске или зависимостей от внешних библиотек OpenSSL (`libssl.dll`, `libcrypto.dll`).
+- **Аппаратная привязка и безопасность ключей:** Вся криптографическая нагрузка mTLS вынесена в `leo4proxy`, использующий Windows SChannel и криптопровайдер Windows CNG KSP с защитой от экспорта закрытого ключа (`NCRYPT_ALLOW_EXPORT_NONE`).
+- **Единая постоянная сессия к облаку (Zero Flapping):** Облачный брокер видит строго **одно** постоянное стабильное соединение от терминала с `remote_clientid = <SN>`. Внутренние процессы (`PlaterraTerminal`, `l4con`, `l4desk`) могут перезапускаться независимо — это не вызывает циклов захвата сессий (*Client Takeover / Session Flapping*) на облачном сервере.
+- **Локальная автономность при сбоях сети:** При временном обрыве связи с интернетом или недоступности внешнего сервера локальные процессы не теряют соединение с `127.0.0.1:1883`. Брокер аккумулирует локальные сообщения с QoS 1/2 в памяти и автоматически сбрасывает их в туннель после восстановления соединения.
+
+---
+
+## 2. Целевые папки и системная переменная `%MOSQUITTO_DIR%`
+
+### 2.1. Стандартная структура каталогов L4 Suite (`C:\l4tools`)
+В современной архитектуре терминальных утилит L4 Suite стандартизирован единый базовый каталог развёртывания — `%L4_TOOLS_BASE_PATH%` (по умолчанию `C:\l4tools`):
+
+```text
+C:\l4tools\
+├── l4superv.json                 # Главная конфигурация супервизора
+├── state.json                    # Файл состояния рантайма (SN, thumbprint, статус)
+├── mosquitto.conf.tmpl           # (Опционально) Пользовательский шаблон конфигурации
+│
+├── mosquitto\                    # Каталог службы Mosquitto (%MOSQUITTO_DIR%)
+│   ├── mosquitto.exe             # 32-битный бинарник брокера
+│   ├── mosquitto.conf            # Активный сгенерированный рабочий конфиг
+│   ├── acl.conf                  # (Опционально) Правила разграничения прав доступа
+│   └── log\
+│       └── mosquitto.log         # Файл журнала брокера
+│
+├── leo4proxy\                    # Нативный mTLS прокси и HTTP discovery
+│   └── leo4proxy.exe
+├── l4con\                        # Агент удалённой диагностики и веб-консоли
+│   └── l4con.exe
+├── l4desk\                       # Агент удалённого ввода мыши и видеострима
+│   └── l4desk.exe
+└── l4pin\                        # CLI-утилита установки сертификата по PIN
+    └── l4pin.exe
+```
+
+### 2.2. Соотношение с каталогом основного ПО терминала (`D:\Platerra26`)
+- **`D:\Platerra26\`** (или `C:\Platerra\` в зависимости от сборки киоска) — выделенный рабочий каталог основного платёжного приложения `PlaterraTerminal.exe`, его бизнес-логики (`BLL`), слоёв доступа к данным (`DAL`), баз данных MS SQL/LocalDB, служебных файлов (`DBConfig.xml`, `ExternalVariable.xml`) и рабочих логов (`PlaterraTerminal.log`).
+- Системный брокер `Mosquitto` и сопутствующие утилиты L4 Suite **не смешиваются** с исполняемыми файлами платёжного ПО и централизованно располагаются в `C:\l4tools\mosquitto\`.
+- При необходимости ручной или стендовой установки утилиты поддерживают развёртывание в альтернативные папки (например, `D:\Platerra26\tools\mosquitto`), однако целевым production-стандартом является `C:\l4tools\mosquitto`.
+
+### 2.3. Механизм поиска конфигурации через `%MOSQUITTO_DIR%`
+Когда менеджер управления службами Windows (SCM) запускает службу `mosquitto` (команда `mosquitto.exe run`):
+1. Процесс считывает системную переменную окружения `MOSQUITTO_DIR`.
+2. Путь к конфигурационному файлу разрешается строго как:
+   ```text
+   %MOSQUITTO_DIR%\mosquitto.conf
    ```
-   *(The script automatically updates `MOSQUITTO_DIR` and registers the service with SCM).*
+3. **КРИТИЧНО:** Если переменная `%MOSQUITTO_DIR%` не задана на системном уровне (`Machine`) или указывает на несуществующую папку, служба завершается с ошибкой сразу после старта (`SERVICE_STOPPED`, код выхода 1).
+
+### 2.4. Настройка переменной окружения
+- **Автоматически:** При развёртывании через установщик `l4install` или при старте супервизора `l4superv` переменная `MOSQUITTO_DIR` автоматически регистрируется в реестре `HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment` с рассылкой широковещательного сообщения `WM_SETTINGCHANGE`.
+- **В PowerShell (от имени Администратора):**
+  ```powershell
+  [System.Environment]::SetEnvironmentVariable('MOSQUITTO_DIR', 'C:\l4tools\mosquitto', [System.EnvironmentVariableTarget]::Machine)
+  ```
+- **В командной строке CMD (от имени Администратора):**
+  ```cmd
+  setx /M MOSQUITTO_DIR "C:\l4tools\mosquitto"
+  ```
 
 ---
 
-## 3. Installation Methods & Execution
+## 3. Развёртывание и оркестрация (Способы установки)
 
-All installation and service management scripts automatically detect permission level and request **Administrator (UAC)** elevation if launched from an standard user / unelevated session.
+### Способ 1: Автоматическое оркестрированное развёртывание (Production-стандарт — `l4install` + `l4superv`)
 
-### Option A: One-Click Installation (Batch)
-Execute:
+Основной рекомендованный метод развёртывания всего комплекса служб на терминале по принципу **«Запустил и забыл»** (Zero-Touch Deployment):
+
+1. **Единый запуск инсталлятора:**
+   На терминале запускается `l4install.exe` (требует UAC 1 раз). Инсталлятор находит архив `tools.zip`, распаковывает дерево утилит в `C:\l4tools`, прописывает переменную `%MOSQUITTO_DIR%` и регистрирует системные службы Windows с контролем зависимостей:
+   - `Leo4Proxy` (автозапуск)
+   - `Mosquitto` (автозапуск, зависит от `Leo4Proxy`)
+   - `L4Con` (автозапуск, зависит от `Mosquitto`)
+   - `L4Superv` (супервизор и watchdog комплекса)
+2. **Динамическое переключение режимов супервизором (`l4superv`):**
+   Супервизор непрерывно опрашивает REST API `http://127.0.0.1:18443/_leo4/info`:
+   - **Режим ожидания (Standby / Neutral):** Если сертификат терминала ещё не установлен (статус `waiting_for_certificate`), супервизор генерирует минимальный локальный `mosquitto.conf` без исходящего моста. Локальный порт `1883` доступен, внутренние процессы могут взаимодействовать, а в журнале отсутствуют циклические ошибки попыток подключения к мосту.
+   - **Боевой режим (Active Bridge):** Как только сертификат установлен (через `l4pin <PIN>` или импорт в хранилище), супервизор мгновенно извлекает серийный номер `SN`, динамически собирает боевую конфигурацию `mosquitto.conf` с мостом к `127.0.0.1:18883`, настраивает маппинг топиков под актуальный `SN` и перезапускает службу брокера.
+   - **Ротация сертификата:** При обновлении сертификата (тот же `SN`) мост кратковременно перезапускается; при смене `SN` конфиг перестраивается автоматически.
+3. **Встроенный сторожевой таймер (Watchdog):**
+   `l4superv` каждые 10 секунд проверяет статус службы `mosquitto`. При нештатном падении процесса служба немедленно перезапускается, а повреждённый `mosquitto.conf` восстанавливается из шаблона.
+
+### Способ 2: Автономное (Standalone) развёртывание (`install_mosquitto.cmd` / `install_mosquitto.ps1`)
+
+Применяется для автономного обновления брокера, стендового тестирования или ручной установки без развёртывания полного комплекса L4 Suite.
+
+Скрипты автоматически запрашивают повышение привилегий UAC при запуске из непривилегированной сессии.
+
+#### Вариант A: Запуск через пакетный файл
 ```cmd
-D:\Platerra26\tools\mosquitto\install.cmd
+install_mosquitto.cmd
 ```
-*(or `install_mosquitto.cmd`)*. The script requests UAC elevation if needed, auto-detects the device serial number, generates configuration files, sets system environment variables, registers the Windows service with automatic restart on failure, and starts it.
+*(или `install.cmd`)*. Скрипт определяет каталог запуска, находит `SN`, формирует конфигурацию, устанавливает переменную `MOSQUITTO_DIR` и регистрирует службу Windows.
 
-### Option B: PowerShell Execution with Parameters
+#### Вариант B: Запуск через PowerShell с параметрами
 ```powershell
 powershell.exe -ExecutionPolicy Bypass -File .\install_mosquitto.ps1 [-TargetDir <Path>] [-CustomSn <SerialNumber>]
 ```
 
-**Parameters:**
-- `-TargetDir` *(Default: script directory)* -- Target installation folder containing `mosquitto.exe`, `mosquitto.conf`, and logs.
-- `-CustomSn` *(Optional)* -- Manually override the device serial number, bypassing auto-detection.
+**Параметры:**
+- `-TargetDir` *(по умолчанию: текущий каталог скрипта, рекомендуется `C:\l4tools\mosquitto`)* — целевая директория размещения брокера, конфига и логов.
+- `-CustomSn` *(опционально)* — принудительное переопределение серийного номера устройства в обход автодетекта.
 
-### Device SN Discovery Workflow:
-1. Queries CLI `leo4proxy.exe --get-sn` in adjacent and standard application directories.
-2. Fallback: Queries local HTTP REST endpoint `http://127.0.0.1:18443/_leo4/sn` of a running `leo4proxy` service.
-3. **Neutral Mode (Fallback):** If `leo4proxy` is not found or no certificate is present, a neutral `mosquitto.conf` is generated without the upstream bridge section (broker serves local processes without attempting outbound connections).
+#### Алгоритм обнаружения серийного номера (`SN` Discovery):
+1. Вызов CLI `leo4proxy.exe --get-sn` в соседних системных каталогах.
+2. Fallback: запрос к локальному HTTP-эндпоинту `http://127.0.0.1:18443/_leo4/sn` работающей службы `leo4proxy`.
+3. **Fallback в нейтральный режим (Neutral Mode):** Если `leo4proxy` не найден или сертификат отсутствует, генерируется локальная нейтральная конфигурация без секции upstream bridge (брокер обслуживает локальные подключения без попыток выхода наружу).
 
 ---
 
-## 4. Features of `mosquitto.conf`
+## 4. Внутренние клиенты брокера и типы приложений (MQTT Clients & Roles)
 
-When a device serial number is available, the generated configuration follows this structure:
+К локальному брокеру Mosquitto (`127.0.0.1:1883`, Plain TCP) подключаются три ключевых типа внутренних клиентов:
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                                Клиенты локального брокера                              │
+├────────────────────┬────────────────────┬───────────────────────┬──────────────────────┤
+│ Параметр           │ main_app           │ extra_service         │ svc_desk             │
+├────────────────────┼────────────────────┼───────────────────────┼──────────────────────┤
+│ Приложение         │ PlaterraTerminal   │ l4con                 │ l4desk               │
+│ Назначение         │ Платёжное ядро, UI │ Консоль, диагностика  │ Удалённый ввод мыши, │
+│                    │ киоска, фискализац.│ телеметрия датчиков   │ видеострим камеры    │
+│ Расположение       │ D:\Platerra26\     │ C:\l4tools\l4con\     │ C:\l4tools\l4desk\   │
+│ Client ID          │ main_app           │ {SN}_extra            │ svc_desk             │
+│ Сессия Windows     │ User Session       │ Session 0 (Служба)    │ User Session         │
+│ Топик Presence     │ dev/{SN}/app       │ dev/{SN}/svc          │ dev/{SN}/ctl         │
+│ Формат Presence    │ plain text         │ plain text            │ JSON (v: 1)          │
+│ Значения Presence  │ app_online /       │ svc_online /          │ status: online/offl.,│
+│                    │ app_offline        │ svc_offline           │ desktop_available... │
+│ Retain & QoS       │ retain=1, qos=1    │ retain=1, qos=1       │ retain=1, qos=1      │
+│ Подписки           │ srv/{SN}/#         │ srv/{SN}/tsk, /rsp    │ srv/{SN}/ctl         │
+│ Публикации         │ dev/{SN}/req, /res │ dev/{SN}/out, /res,   │ dev/{SN}/ctl (ACK/   │
+│                    │ dev/{SN}/out       │ dev/{SN}/evt          │ NACK, без retain)    │
+└────────────────────┴────────────────────┴───────────────────────┴──────────────────────┘
+```
+
+### 4.1. `main_app` — Основное приложение терминала (`PlaterraTerminal`)
+- **Назначение:** Главный прикладной процесс киоска самообслуживания (`PlaterraTerminal.exe`, C# / .NET Framework, расположен в `D:\Platerra26\`). Управляет пользовательским интерфейсом, меню платежей, приёмом банкнот (валидатор), фискальным принтером чеков, пин-падом эквайринга, передачей финансовых транзакций в процессинг и получением серверных конфигураций.
+- **Подключение:** `127.0.0.1:1883`, Plain TCP (No-SSL).
+- **Client ID:** `main_app` или `main_app_{SN}` (в легаси-профилях допускается `ui`).
+- **Права ACL (`user main_app`):** Полный доступ на чтение и запись (`readwrite`) в пространства `dev/{SN}/#` и `srv/{SN}/#`.
+- **Обязательный регламентный сценарий присутствия (Presence / LWT):**
+  ```text
+  Client CONNECT:
+    will_topic   = dev/{SN}/app
+    will_payload = app_offline
+    will_retain  = true
+    will_qos     = 1
+
+  After CONNACK (rc == 0):
+    PUBLISH dev/{SN}/app = app_online, retain = true, qos = 1
+
+  Normal shutdown (штатное завершение):
+    PUBLISH dev/{SN}/app = app_offline, retain = true, qos = 1
+    DISCONNECT
+  ```
+- **Аварийный сбой:** При краше или непредвиденном завершении `PlaterraTerminal` брокер самостоятельно рассылает сохранённый Will Message `dev/{SN}/app = app_offline`.
+
+### 4.2. `extra_service` — Вспомогательный системный сервис (`l4con`, телеметрия)
+- **Назначение:** Автономный агент удалённой диагностики и интерактивной командной строки Windows (`l4con.exe` в `C:\l4tools\l4con\`), работающий как системная служба Windows `L4Con`. Выполняет команды оператора из веб-интерфейса `MenuBuilder` (RPC `7001` Exec, `7002` Cancel), передаёт вывод консоли и собирает периодическую аппаратную телеметрию.
+- **Подключение:** `127.0.0.1:1883`, Plain TCP (No-SSL).
+- **Client ID:** `{SN}_extra` (в легаси-профилях допускается `svc`).
+- **Права ACL (`user extra_service`):** Публикация в `dev/{SN}/svc`, `dev/{SN}/evt`, `dev/{SN}/out`, `dev/{SN}/res`; подписка на `srv/{SN}/tsk`, `srv/{SN}/rsp`.
+- **Обязательный регламентный сценарий присутствия (Presence / LWT):**
+  ```text
+  Client CONNECT:
+    will_topic   = dev/{SN}/svc
+    will_payload = svc_offline
+    will_retain  = true
+    will_qos     = 1
+
+  After CONNACK (rc == 0):
+    PUBLISH dev/{SN}/svc = svc_online, retain = true, qos = 1
+
+  Normal shutdown (штатная остановка службы):
+    PUBLISH dev/{SN}/svc = svc_offline, retain = true, qos = 1
+    DISCONNECT
+  ```
+- **Цикл телеметрии:** Сервисы с ролью `extra_service` публикуют события датчиков и оборудования в топик `dev/{SN}/evt` с интервалом раз в 10 минут (600 секунд) с пользовательскими свойствами MQTT 5.0 (`event_type_code`, `correlation_id`).
+
+### 4.3. `svc_desk` — Агент удалённого ввода и видеострима (`l4desk`)
+- **Назначение:** Специализированный автономный агент удалённого ввода мыши и оркестрации видеострима с веб-камеры через `ffmpeg.exe` (`l4desk.exe` в `C:\l4tools\l4desk\`). Работает в активной пользовательской сессии (Session != 0) под контролем супервизора `l4superv` (изоляция в Windows Job Object).
+- **Подключение:** Строго `127.0.0.1:1883`, Plain TCP.
+- **Client ID:** `svc_desk`.
+- **Критическое правило изоляции топика:** Топик `dev/{SN}/svc` уже закреплён за службой `l4con`. Во избежание конфликта retained-сообщений статуса `l4desk` использует **выделенный канал `dev/{SN}/ctl`**.
+- **Сценарий присутствия (Presence / LWT):**
+  ```text
+  Client CONNECT:
+    will_topic   = dev/{SN}/ctl
+    will_payload = {"v":1,"type":"presence","agent":"l4desk","status":"offline","desktop_available":false,"timestamp":"<UTC>"}
+    will_retain  = true
+    will_qos     = 1
+
+  After CONNACK (rc == 0):
+    SUBSCRIBE srv/{SN}/ctl (qos = 1)
+    PUBLISH dev/{SN}/ctl = {"v":1,"type":"presence","agent":"l4desk","status":"online","desktop_available":true,"screen":{...},"timestamp":"<UTC>"} (retain = true, qos = 1)
+    (Повторная отправка heartbeat каждые 30 секунд)
+
+  Normal shutdown:
+    PUBLISH dev/{SN}/ctl = {"v":1,"type":"presence","agent":"l4desk","status":"offline",...} (retain = true, qos = 1)
+    DISCONNECT
+  ```
+- **Строгие ограничения:** Агенту `l4desk` запрещено публиковать сообщения в топики `dev/{SN}/svc`, `dev/{SN}/app`, `dev/{SN}/evt`, `dev/{SN}/out`, `dev/{SN}/res`. Ответы ACK/NACK публикуются в `dev/{SN}/ctl` без флага retain.
+
+---
+
+## 5. Конфигурация брокера (`mosquitto.conf`) и режимы работы
+
+### 5.1. Боевой режим (Active Bridge Mode)
+При наличии у терминала валидного сертификата с известным `SN` (например, `a4b0000773c82116d210826`) супервизор формирует активную конфигурацию:
 
 ```conf
 # ==============================================================================
-# Mosquitto MQTT Broker Configuration
-# Generated automatically for Device SN: a4b0000773c82116d210826
+# Mosquitto MQTT Broker Configuration (Active Bridge)
+# Device SN: a4b0000773c82116d210826
 # ==============================================================================
 
-# Local listener for internal terminal processes
+# 1. Локальный слушатель для внутренних процессов терминала
 listener 1883 127.0.0.1
 allow_anonymous true
 
-# Bridge configuration to leo4proxy (Native mTLS tunnel)
+# 2. Мост к локальному туннелю leo4proxy (Native SChannel mTLS)
 connection platerra-upstream
 bridge_protocol_version mqttv50
 address 127.0.0.1:18883
 
-# Remote client identifier for external broker
+# 3. Идентификатор клиента на облачном брокере (строго равен SN устройства)
 remote_clientid a4b0000773c82116d210826
 
-# Disable Mosquitto $SYS status topics (required for external broker compatibility)
+# 4. Отключение внутренних системных тем $SYS (критично для совместимости с внешними брокерами)
 try_private false
 notifications false
 
-# Topic routing rules (topic <pattern> <direction> <QoS>)
-# 1) Outbound responses and events from terminal to server:
+# 5. Маршрутизация топиков терминала (topic <pattern> <direction> <QoS>)
+# Исходящие сообщения от терминала к облачному серверу:
 topic dev/a4b0000773c82116d210826/out out 0
 topic dev/a4b0000773c82116d210826/# out 1
 
-# 2) Inbound commands from server to terminal:
+# Входящие команды от облачного сервера к терминалу:
 topic srv/a4b0000773c82116d210826/rsp in 1
 topic srv/a4b0000773c82116d210826/# in 1
 
-# Connection reliability and keep-alive
+# 6. Управление сессией и тайминги переподключения
 cleansession true
 restart_timeout 5 60
 keepalive_interval 60
 
-# Persistence and logging
+# 7. Хранение состояния и параметры журналирования
 persistence false
-log_dest file D:/Platerra26/tools/mosquitto/log/mosquitto.log
+log_dest file C:/l4tools/mosquitto/log/mosquitto.log
 log_type error
 log_type warning
 log_type notice
 log_type information
 ```
 
-### Essential Formatting Rules on Windows:
-1. **UTF-8 No-BOM Encoding:** Mosquitto parser does not support Byte Order Marks (BOM `EF BB BF`). Files must be saved strictly in UTF-8 without BOM or pure ASCII.
-2. **Forward Slashes in Paths:** Directives such as `log_dest file` and `persistence_location` must use forward slashes `/` (e.g. `D:/Platerra26/tools/mosquitto/log/mosquitto.log`).
-3. **`try_private false` & `notifications false`:** Mandatory flags when bridging to third-party MQTT brokers (EMQX, VerneMQ, RabbitMQ). Prevents Mosquitto from sending internal `$SYS` topic loops.
-4. **Topic Isolation via ACL:** An `acl.conf` file is created for role segregation between `main_app` and `extra_service`. Uncomment `acl_file` in `mosquitto.conf` if ACL enforcement is needed.
+### 5.2. Режим ожидания (Standby / Neutral Mode)
+Если сертификат ещё не выпущен (терминал находится на этапе сборки, инициализации или ввода PIN):
+```conf
+# ==============================================================================
+# Mosquitto MQTT Broker Configuration (Standby / Neutral Mode)
+# ==============================================================================
+listener 1883 127.0.0.1
+allow_anonymous true
+
+persistence false
+log_dest file C:/l4tools/mosquitto/log/mosquitto.log
+log_type error
+log_type warning
+log_type notice
+log_type information
+```
+В этом режиме брокер не пытается подключиться к `127.0.0.1:18883`, журнал не засоряется ошибками `Connection refused`, а локальные службы могут корректно стартовать в ожидании готовности сети.
+
+### 5.3. Пользовательский шаблон (`mosquitto.conf.tmpl`)
+Если администратору требуется задать нестандартные параметры брокера (например, ограничение размера пакета `max_packet_size` или настройку памяти), в каталоге `C:\l4tools` размещается файл `mosquitto.conf.tmpl`.
+
+Супервизор `l4superv` поддерживает подстановку динамических макросов:
+- `%SN%` — актуальный серийный номер терминала.
+- `%BASE_PATH%` — базовый путь с прямыми слэшами (например, `C:/l4tools`).
+- `%PORT%` — локальный порт прослушивания (по умолчанию `1883`).
+
+### 5.4. Разграничение доступа на базе ACL (`acl.conf`)
+Для строгого разграничения прав между процессами используется файл `acl.conf`:
+```conf
+# ==============================================================================
+# Mosquitto Access Control List (acl.conf)
+# ==============================================================================
+
+# Роль основного приложения PlaterraTerminal (main_app)
+user main_app
+topic readwrite dev/%u/#
+topic readwrite srv/%u/#
+
+# Роль вспомогательного сервиса диагностики и телеметрии (extra_service)
+user extra_service
+topic write dev/%u/svc
+topic write dev/%u/evt
+topic write dev/%u/out
+topic write dev/%u/res
+topic read srv/%u/tsk
+topic read srv/%u/rsp
+```
+Для включения проверки ACL раскомментируйте директиву `acl_file` в конфигурации брокера.
 
 ---
 
-## 5. Troubleshooting & Diagnostics
+## 6. Требования к форматированию и специфике Windows
+
+1. **Кодировка UTF-8 строго БЕЗ BOM (No-BOM):**
+   Встроенный парсер конфигурации Mosquitto не поддерживает сигнатуру Byte Order Mark (`EF BB BF`). Конфигурационные файлы должны сохраняться строго в кодировке UTF-8 без BOM или в чистом ASCII. При наличии BOM брокер падает с ошибкой разбора первой строки.
+2. **Прямые слэши `/` в путях файловой системы:**
+   Во всех путях внутри `mosquitto.conf` (`log_dest file`, `persistence_location`, `acl_file`) необходимо использовать **прямые слэши `/`** (например, `C:/l4tools/mosquitto/log/mosquitto.log`), так как обратные слэши `\` интерпретируются парсером как символы экранирования.
+3. **Параметры `try_private false` и `notifications false`:**
+   Обязательные директивы при организации моста к сторонним брокерам (RabbitMQ MQTT, EMQX). Предотвращают генерацию внутренних служебных тем `$SYS`, вызывающих циклические ошибки маршрутизации.
+4. **Конфигурация службы Windows:**
+   Служба регистрируется под именем `mosquitto` (Display Name: `Mosquitto Broker`) с бинарной строкой:
+   ```cmd
+   "C:\l4tools\mosquitto\mosquitto.exe" run
+   ```
+   Служба выполняется от системной учётной записи `NT AUTHORITY\SYSTEM` (`LocalSystem`) и запускается автоматически при старте ОС (`SERVICE_AUTO_START`).
+
+---
+
+## 7. Диагностика, мониторинг и траблшутинг
+
+### 7.1. Экспресс-команды диагностики (CLI)
 
 ```cmd
-:: Test configuration syntax
-mosquitto.exe -c mosquitto.conf --test-config
+:: 1. Проверка синтаксиса текущего конфигурационного файла
+"C:\l4tools\mosquitto\mosquitto.exe" -c "C:\l4tools\mosquitto\mosquitto.conf" --test-config
 
-:: Query Windows service status
+:: 2. Проверка переменной окружения MOSQUITTO_DIR
+echo %MOSQUITTO_DIR%
+
+:: 3. Проверка статуса службы и её конфигурации в Windows SCM
 sc.exe query mosquitto
+sc.exe qc mosquitto
 
-:: Verify local port 1883 listening status
+:: 4. Проверка прослушивания локального порта 1883
 netstat -ano | findstr :1883
 
-:: Inspect broker runtime logs
-type log\mosquitto.log
+:: 5. Проверка статуса локального mTLS моста leo4proxy на порту 18883
+netstat -ano | findstr :18883
+
+:: 6. Просмотр последних записей журнала брокера
+type "C:\l4tools\mosquitto\log\mosquitto.log"
 ```
+
+В PowerShell мониторинг лога в реальном времени выполняется командой:
+```powershell
+Get-Content -Path "C:\l4tools\mosquitto\log\mosquitto.log" -Tail 50 -Wait
+```
+
+### 7.2. Проверка связи с `leo4proxy` и готовности сертификата
+```cmd
+curl.exe -s http://127.0.0.1:18443/_leo4/info
+curl.exe -s http://127.0.0.1:18443/_leo4/sn
+```
+Если статус `waiting_for_certificate`, мост к серверу работать не должен; брокер обязан находиться в Standby-режиме.
+
+### 7.3. Типовые неполадки и их устранение
+
+| Проблема / Симптом | Вероятная причина | Способ устранения |
+|---|---|---|
+| Служба падает сразу после запуска (`SERVICE_STOPPED`, код 1) | Переменная окружения `MOSQUITTO_DIR` не задана на системном уровне (`Machine`) или указывает на несуществующую папку. | Выполнить `setx /M MOSQUITTO_DIR "C:\l4tools\mosquitto"` и перезапустить службу: `net start mosquitto`. |
+| Ошибка `Error: Unknown configuration variable...` при старте | Файл `mosquitto.conf` сохранён с BOM (Byte Order Mark) либо в путях использованы обратные слэши `\`. | Пересохранить конфиг в UTF-8 без BOM, заменить все обратные слэши в путях на прямые `/`. |
+| Ошибки `Connection refused` к `127.0.0.1:18883` в логе | Служба `leo4proxy` не запущена либо не имеет сертификата, а `mosquitto.conf` настроен с активным мостом. | Запустить службу `leo4proxy` или переключить брокер в режим Standby (супервизор `l4superv` делает это автоматически). |
+| Клиенты постоянно отключаются (*Client Flapping*) | Несколько клиентов подключились с идентичным `client_id` (например, параллельно запущен тестовый скрипт с `client_id="main_app"`). | Убедиться в уникальности `client_id` для каждого подключенного процесса. |
+| Команды сервера не доходят до приложения киоска | Приложение `PlaterraTerminal` не подписалось на `srv/{SN}/#` после `CONNACK` либо брокер не синхронизировал мост. | Проверить подписку клиента и статус моста в `mosquitto.log`. |
