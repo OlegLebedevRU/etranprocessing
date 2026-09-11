@@ -5,7 +5,7 @@ general: {
 	events_folder = "/usr/local/lib/janus/events"
 	loggers_folder = "/usr/local/lib/janus/loggers"
 
-	debug_level = 4
+	debug_level = 3
 	admin_secret = "janusoverlord"
 }
 

@@ -44,6 +44,7 @@
 #define HTTP_REQ_BUFFER_SIZE      8192
 #define HTTP_RESP_BUFFER_SIZE     (64 * 1024)    /* 64 KB response buffer */
 #define CLIENT_IDLE_TIMEOUT_SEC   120            /* Reap clients idle for >2 min */
+#define RTP_STALE_DEADLINE_SEC    10             /* Threshold for media freshness */
 #define MAX_RTP_PAYLOAD_SIZE      65507          /* Max UDP payload */
 
 #define L4RTP_MAGIC               "L4RT"
@@ -73,6 +74,7 @@ typedef struct {
     ClientState state;
     char sn[128];
     char peer_addr[64];
+    uint64_t epoch;                 /* Monotonic connection epoch ID */
 
     /* Buffer for partial TCP frame accumulation */
     uint8_t rx_buf[RX_BUFFER_SIZE];
@@ -84,14 +86,16 @@ typedef struct {
     int rtp_port;
     int rtcp_port;
 
-    /* Metrics */
+    /* Metrics & Time tracking */
     uint64_t rtp_packets;
     uint64_t rtcp_packets;
     uint64_t unrouted_packets;
     uint64_t keepalive_packets;
     uint64_t total_bytes;
     time_t connect_time;
-    time_t last_activity;
+    time_t last_activity;           /* Last byte received over transport (TCP) */
+    time_t last_rtp_time;           /* Last RTP media frame packet received (0 if none) */
+    time_t last_rtcp_time;          /* Last RTCP packet received (0 if none) */
 } IngressClient;
 
 /* Global state */
@@ -99,6 +103,7 @@ static volatile bool g_running = true;
 static RouteTable g_routes;
 static IngressClient* g_clients[MAX_CLIENTS];
 static int g_client_count = 0;
+static uint64_t g_next_epoch = 1;
 static int g_udp_sock = -1;
 static struct in_addr g_janus_ip;
 static char g_janus_host[128] = "janus";
@@ -335,9 +340,12 @@ static IngressClient* add_ingress_client(int epoll_fd, int client_fd, const char
 
     c->fd = client_fd;
     c->state = STATE_PREAMBLE;
+    c->epoch = g_next_epoch++;
     snprintf(c->peer_addr, sizeof(c->peer_addr), "%s:%d", peer_ip, peer_port);
     c->connect_time = time(NULL);
     c->last_activity = c->connect_time;
+    c->last_rtp_time = 0;
+    c->last_rtcp_time = 0;
 
     /* Socket performance options */
     int flag = 1;
@@ -357,7 +365,8 @@ static IngressClient* add_ingress_client(int epoll_fd, int client_fd, const char
     }
 
     g_clients[g_client_count++] = c;
-    printf("[INGRESS] Connection accepted from %s (active: %d)\n", c->peer_addr, g_client_count);
+    printf("[INGRESS] Connection accepted from %s (epoch #%" PRIu64 ", active: %d)\n",
+           c->peer_addr, c->epoch, g_client_count);
     return c;
 }
 
@@ -365,8 +374,8 @@ static void remove_ingress_client(int epoll_fd, IngressClient* c) {
     if (!c) return;
 
     time_t duration = time(NULL) - c->connect_time;
-    printf("[INGRESS] Disconnected %s (SN: '%s', duration: %lds, RTP: %" PRIu64 " pkts, RTCP: %" PRIu64 " pkts, Total: %" PRIu64 " bytes)\n",
-           c->peer_addr, c->sn[0] ? c->sn : "unknown", (long)duration,
+    printf("[INGRESS] Disconnected %s (SN: '%s', epoch #%" PRIu64 ", duration: %lds, RTP: %" PRIu64 " pkts, RTCP: %" PRIu64 " pkts, Total: %" PRIu64 " bytes)\n",
+           c->peer_addr, c->sn[0] ? c->sn : "unknown", c->epoch, (long)duration,
            c->rtp_packets, c->rtcp_packets, c->total_bytes);
 
     epoll_ctl(epoll_fd, EPOLL_CTL_DEL, c->fd, NULL);
@@ -445,8 +454,8 @@ static void process_ingress_data(int epoll_fd, IngressClient* c) {
             for (int i = 0; i < g_client_count; i++) {
                 IngressClient* old_c = g_clients[i];
                 if (old_c && old_c != c && strcmp(old_c->sn, c->sn) == 0) {
-                    printf("[INGRESS] Closing duplicate/stale session for SN '%s' from %s (new connection from %s)\n",
-                           c->sn, old_c->peer_addr, c->peer_addr);
+                    printf("[INGRESS] Closing duplicate/stale session for SN '%s' (epoch #%" PRIu64 ") from %s (new connection from %s, epoch #%" PRIu64 ")\n",
+                           c->sn, old_c->epoch, old_c->peer_addr, c->peer_addr, c->epoch);
                     remove_ingress_client(epoll_fd, old_c);
                     break;
                 }
@@ -508,6 +517,7 @@ static void process_ingress_data(int epoll_fd, IngressClient* c) {
 
                 const uint8_t* payload = c->rx_buf + off + 4;
                 if (type == L4RTP_FRAME_RTP) {
+                    c->last_rtp_time = time(NULL);
                     if (c->rtp_port > 0) {
                         sendto(g_udp_sock, payload, payload_len, 0,
                                (struct sockaddr*)&c->rtp_target, sizeof(c->rtp_target));
@@ -517,6 +527,7 @@ static void process_ingress_data(int epoll_fd, IngressClient* c) {
                         c->unrouted_packets++;
                     }
                 } else if (type == L4RTP_FRAME_RTCP) {
+                    c->last_rtcp_time = time(NULL);
                     if (c->rtcp_port > 0) {
                         sendto(g_udp_sock, payload, payload_len, 0,
                                (struct sockaddr*)&c->rtcp_target, sizeof(c->rtcp_target));
@@ -572,6 +583,103 @@ static void parse_query_or_body_ports(const char* query, const char* body, int* 
             if (colon && *rtcp == 0) *rtcp = atoi(colon + 1);
         }
     }
+}
+
+/* Format session metrics and freshness into JSON object */
+static size_t format_session_json(char* buf, size_t buf_size, const IngressClient* c, time_t now) {
+    if (!c || !buf || buf_size == 0) return 0;
+
+    const char* state_str = "preamble";
+    if (c->state == STATE_FRAMING) {
+        state_str = (c->rtp_port > 0) ? "streaming" : "connected";
+    }
+
+    bool route_exists = (c->rtp_port > 0);
+
+    long transport_idle_sec = (long)(now - c->last_activity);
+    if (transport_idle_sec < 0) transport_idle_sec = 0;
+
+    long rtp_idle_sec = (c->last_rtp_time > 0) ? (long)(now - c->last_rtp_time) : -1;
+    if (rtp_idle_sec < 0 && c->last_rtp_time > 0) rtp_idle_sec = 0;
+
+    /*
+     * Effective idle_sec:
+     * For backward compatibility with clients that rely on idle_sec to gauge media liveness,
+     * if RTP media has been received, idle_sec reflects media freshness (time since last RTP frame).
+     * If no RTP media has been received yet, it falls back to transport idle time.
+     */
+    long effective_idle_sec = (c->last_rtp_time > 0) ? rtp_idle_sec : transport_idle_sec;
+
+    bool fresh_rtp = false;
+    const char* media_state = "unknown";
+
+    if (c->state == STATE_PREAMBLE) {
+        media_state = "connected";
+    } else if (!route_exists) {
+        media_state = "connected";
+    } else if (c->rtp_packets == 0) {
+        media_state = "unknown";
+    } else {
+        if (rtp_idle_sec >= 0 && rtp_idle_sec <= RTP_STALE_DEADLINE_SEC) {
+            fresh_rtp = true;
+            media_state = "receiving_fresh_media";
+        } else {
+            fresh_rtp = false;
+            media_state = "stale";
+        }
+    }
+
+    size_t off = 0;
+    off += snprintf(buf + off, buf_size - off,
+                    "{\"sn\":\"%s\",\"peer\":\"%s\",\"state\":\"%s\","
+                    "\"media_state\":\"%s\",\"fresh_rtp\":%s,"
+                    "\"transport_connected\":true,\"route_exists\":%s,"
+                    "\"connection_epoch\":%" PRIu64 ",\"stale_deadline_sec\":%d,"
+                    "\"rtp_port\":%d,\"rtcp_port\":%d,"
+                    "\"rtp_packets\":%" PRIu64 ",\"rtcp_packets\":%" PRIu64 ","
+                    "\"unrouted_packets\":%" PRIu64 ",\"keepalive_packets\":%" PRIu64 ","
+                    "\"bytes\":%" PRIu64 ",\"duration_sec\":%ld,"
+                    "\"idle_sec\":%ld,\"transport_idle_sec\":%ld,",
+                    c->sn[0] ? c->sn : "pending",
+                    c->peer_addr,
+                    state_str,
+                    media_state,
+                    fresh_rtp ? "true" : "false",
+                    route_exists ? "true" : "false",
+                    c->epoch,
+                    RTP_STALE_DEADLINE_SEC,
+                    c->rtp_port, c->rtcp_port,
+                    c->rtp_packets,
+                    c->rtcp_packets,
+                    c->unrouted_packets,
+                    c->keepalive_packets,
+                    c->total_bytes,
+                    (long)(now - c->connect_time),
+                    effective_idle_sec,
+                    transport_idle_sec);
+
+    if (c->last_rtp_time > 0) {
+        off += snprintf(buf + off, buf_size - off,
+                        "\"last_rtp_at\":%ld,\"rtp_idle_sec\":%ld,",
+                        (long)c->last_rtp_time, rtp_idle_sec);
+    } else {
+        off += snprintf(buf + off, buf_size - off,
+                        "\"last_rtp_at\":null,\"rtp_idle_sec\":null,");
+    }
+
+    if (c->last_rtcp_time > 0) {
+        off += snprintf(buf + off, buf_size - off,
+                        "\"last_rtcp_at\":%ld,", (long)c->last_rtcp_time);
+    } else {
+        off += snprintf(buf + off, buf_size - off,
+                        "\"last_rtcp_at\":null,");
+    }
+
+    off += snprintf(buf + off, buf_size - off,
+                    "\"last_activity\":%ld,\"last_activity_at\":%ld}",
+                    (long)c->last_activity, (long)c->last_activity);
+
+    return off;
 }
 
 /* HTTP Control API on port 9100 */
@@ -727,37 +835,49 @@ static void handle_control_request(int client_fd) {
         time_t now = time(NULL);
         size_t off = 0;
         off += snprintf(resp_body + off, HTTP_RESP_BUFFER_SIZE - off,
-                        "{\"status\":\"ok\",\"uptime_sec\":%ld,\"active_connections\":%d,\"sessions\":[",
-                        (long)(now - g_server_start_time), g_client_count);
+                        "{\"status\":\"ok\",\"uptime_sec\":%ld,\"stale_deadline_sec\":%d,"
+                        "\"active_connections\":%d,\"sessions\":[",
+                        (long)(now - g_server_start_time), RTP_STALE_DEADLINE_SEC, g_client_count);
         for (int i = 0; i < g_client_count; i++) {
             IngressClient* c = g_clients[i];
             if (!c) continue;
-
-            const char* state_str = "preamble";
-            if (c->state == STATE_FRAMING) {
-                state_str = (c->rtp_port > 0) ? "streaming" : "connected";
+            if (i > 0) {
+                off += snprintf(resp_body + off, HTTP_RESP_BUFFER_SIZE - off, ",");
             }
-
-            off += snprintf(resp_body + off, HTTP_RESP_BUFFER_SIZE - off,
-                            "%s{\"sn\":\"%s\",\"peer\":\"%s\",\"state\":\"%s\","
-                            "\"rtp_port\":%d,\"rtcp_port\":%d,"
-                            "\"rtp_packets\":%" PRIu64 ",\"rtcp_packets\":%" PRIu64 ","
-                            "\"unrouted_packets\":%" PRIu64 ",\"keepalive_packets\":%" PRIu64 ","
-                            "\"bytes\":%" PRIu64 ",\"duration_sec\":%ld,\"idle_sec\":%ld}",
-                            (i > 0 ? "," : ""),
-                            c->sn[0] ? c->sn : "pending",
-                            c->peer_addr,
-                            state_str,
-                            c->rtp_port, c->rtcp_port,
-                            c->rtp_packets,
-                            c->rtcp_packets,
-                            c->unrouted_packets,
-                            c->keepalive_packets,
-                            c->total_bytes,
-                            (long)(now - c->connect_time),
-                            (long)(now - c->last_activity));
+            off += format_session_json(resp_body + off, HTTP_RESP_BUFFER_SIZE - off, c, now);
         }
         snprintf(resp_body + off, HTTP_RESP_BUFFER_SIZE - off, "]}\n");
+    }
+    else if (strcmp(method, "GET") == 0 && strncmp(path, "/stats/", 7) == 0) {
+        /* GET /stats/<sn> -> JSON object for single SN (connected or disconnected) */
+        char sn[128] = {0};
+        safe_strcpy(sn, path + 7, sizeof(sn));
+        char* q = strchr(sn, '?');
+        if (q) *q = '\0';
+
+        time_t now = time(NULL);
+        IngressClient* matched = NULL;
+        for (int i = 0; i < g_client_count; i++) {
+            if (g_clients[i] && strcmp(g_clients[i]->sn, sn) == 0) {
+                matched = g_clients[i];
+                break;
+            }
+        }
+
+        if (matched) {
+            size_t off = 0;
+            off += snprintf(resp_body + off, HTTP_RESP_BUFFER_SIZE - off, "{\"status\":\"ok\",\"session\":");
+            off += format_session_json(resp_body + off, HTTP_RESP_BUFFER_SIZE - off, matched, now);
+            snprintf(resp_body + off, HTTP_RESP_BUFFER_SIZE - off, "}\n");
+        } else {
+            const RouteEntry* r = find_route(sn);
+            snprintf(resp_body, HTTP_RESP_BUFFER_SIZE,
+                     "{\"status\":\"ok\",\"sn\":\"%s\",\"state\":\"disconnected\","
+                     "\"media_state\":\"disconnected\",\"transport_connected\":false,"
+                     "\"route_exists\":%s,\"fresh_rtp\":false,\"rtp_packets\":0,"
+                     "\"rtcp_packets\":0,\"bytes\":0,\"idle_sec\":null,\"last_rtp_at\":null}\n",
+                     sn, r ? "true" : "false");
+        }
     }
     else if (strcmp(method, "GET") == 0 && strcmp(path, "/health") == 0) {
         snprintf(resp_body, HTTP_RESP_BUFFER_SIZE, "{\"status\":\"ok\"}\n");
@@ -885,9 +1005,15 @@ int main(int argc, char* argv[]) {
                 printf("[INGRESS STATS] Active sessions: %d\n", g_client_count);
                 for (int i = 0; i < g_client_count; i++) {
                     IngressClient* c = g_clients[i];
-                    printf("  - SN: %-24s | %s | %s (RTP:%d RTCP:%d) | RTP: %" PRIu64 " pkts | RTCP: %" PRIu64 " pkts | %" PRIu64 " KB\n",
-                           c->sn[0] ? c->sn : "(preamble)", c->peer_addr,
+                    long rtp_idle = (c->last_rtp_time > 0) ? (long)(now - c->last_rtp_time) : -1;
+                    const char* fresh_desc = "NO MEDIA";
+                    if (c->last_rtp_time > 0) {
+                        fresh_desc = (rtp_idle <= RTP_STALE_DEADLINE_SEC) ? "FRESH" : "STALE";
+                    }
+                    printf("  - SN: %-24s (epoch #%" PRIu64 ") | %s | %s [%s, rtp_idle:%lds] (RTP:%d RTCP:%d) | RTP: %" PRIu64 " pkts | RTCP: %" PRIu64 " pkts | %" PRIu64 " KB\n",
+                           c->sn[0] ? c->sn : "(preamble)", c->epoch, c->peer_addr,
                            c->state == STATE_FRAMING ? (c->rtp_port > 0 ? "STREAMING" : "UNROUTED") : "PREAMBLE",
+                           fresh_desc, (rtp_idle >= 0 ? rtp_idle : 0),
                            c->rtp_port, c->rtcp_port,
                            c->rtp_packets, c->rtcp_packets,
                            c->total_bytes / 1024);

@@ -6,6 +6,9 @@ TARGET = l4media-ingress
 SRCS = src/l4media_ingress.c
 OBJS = $(SRCS:.c=.o)
 
+TEST_TARGET = test_ingress_unit
+TEST_SRCS = tests/test_ingress_unit.c
+
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
@@ -14,7 +17,13 @@ $(TARGET): $(OBJS)
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-clean:
-	rm -f $(OBJS) $(TARGET)
+test: $(TEST_TARGET)
+	./$(TEST_TARGET)
 
-.PHONY: all clean
+$(TEST_TARGET): $(TEST_SRCS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+clean:
+	rm -f $(OBJS) $(TARGET) $(TEST_TARGET)
+
+.PHONY: all clean test

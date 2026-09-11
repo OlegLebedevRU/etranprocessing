@@ -6,7 +6,9 @@ RUN apk add --no-cache gcc musl-dev make
 WORKDIR /build
 COPY Makefile ./
 COPY src/ ./src/
+COPY tests/ ./tests/
 
+RUN make test CFLAGS="-O2 -Wall -Wextra -pedantic -std=c11 -D_GNU_SOURCE"
 RUN make CFLAGS="-O2 -Wall -Wextra -pedantic -std=c11 -D_GNU_SOURCE -static"
 
 # Stage 2: Minimal runtime

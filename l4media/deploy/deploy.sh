@@ -15,29 +15,8 @@ REMOTE_DEST="${SERVER_USER}@${SERVER_HOST}:/home/${SERVER_USER}/l4media"
 
 echo "=== [1/6] Synchronizing l4media codebase to ${SERVER_USER}@${SERVER_HOST} ==="
 
-# Check if running locally on remote server or from dev machine
-if [[ "$(id -un 2>/dev/null || true)" == "${SERVER_USER}" && -f "/home/${SERVER_USER}/l4media/compose.yaml" ]]; then
-    echo "Running directly on remote server."
-    TARGET_DIR="/home/${SERVER_USER}/l4media"
-else
-    echo "Deploying from remote client via SSH..."
-    # Copy files via scp/rsync
-    ssh -n -i "${SSH_KEY}" -o BatchMode=yes "${SERVER_USER}@${SERVER_HOST}" "mkdir -p /home/${SERVER_USER}/l4media/crt"
-    scp -i "${SSH_KEY}" -r \
-        "${L4MEDIA_DIR}/compose.yaml" \
-        "${L4MEDIA_DIR}/.env.example" \
-        "${L4MEDIA_DIR}/README.md" \
-        "${L4MEDIA_DIR}/ARCHITECTURE.md" \
-        "${L4MEDIA_DIR}/nginx" \
-        "${L4MEDIA_DIR}/ingress" \
-        "${L4MEDIA_DIR}/janus" \
-        "${L4MEDIA_DIR}/deploy" \
-        "${SERVER_USER}@${SERVER_HOST}:/home/${SERVER_USER}/l4media/"
-    TARGET_DIR="/home/${SERVER_USER}/l4media"
-fi
-
-# Execute remote server deployment commands
-ssh -n -i "${SSH_KEY}" -o BatchMode=yes "${SERVER_USER}@${SERVER_HOST}" bash << 'EOF'
+deploy_remote_commands() {
+cat << 'EOF'
 set -euo pipefail
 cd /home/user1/l4media
 
@@ -93,7 +72,6 @@ sudo docker logs --tail 15 l4media-janus || true
 echo "--- Verifying unaffected external containers ---"
 sudo docker ps --format '{{.Names}} {{.Status}}' > /tmp/docker_ps_after_l4media.txt
 
-# Compare containers that do NOT start with l4media
 python3 - << 'PYEOF'
 with open('/tmp/docker_ps_before_l4media.txt') as f:
     before = dict(line.strip().split(' ', 1) for line in f if line.strip())
@@ -110,7 +88,6 @@ for name, status in external_before.items():
     if name not in external_after:
         mismatches.append(f"MISSING: {name}")
     else:
-        # Check if status indicates a restart (e.g. Up 2 seconds vs Up 2 hours)
         if "Up Less than a second" in external_after[name] or "Up 1 second" in external_after[name]:
             mismatches.append(f"RESTARTED: {name} (was: {status}, now: {external_after[name]})")
 
@@ -122,7 +99,27 @@ if mismatches:
 else:
     print("SUCCESS: ALL external containers remained untouched and running!")
 PYEOF
-
 EOF
+}
+
+# Check if running locally on remote server or from dev machine
+if [[ "$(id -un 2>/dev/null || true)" == "${SERVER_USER}" && -f "/home/${SERVER_USER}/l4media/compose.yaml" ]]; then
+    echo "Running directly on remote server."
+    deploy_remote_commands | bash
+else
+    echo "Deploying from remote client via SSH..."
+    ssh -n -i "${SSH_KEY}" -o BatchMode=yes "${SERVER_USER}@${SERVER_HOST}" "mkdir -p /home/${SERVER_USER}/l4media/crt"
+    scp -i "${SSH_KEY}" -r \
+        "${L4MEDIA_DIR}/compose.yaml" \
+        "${L4MEDIA_DIR}/.env.example" \
+        "${L4MEDIA_DIR}/README.md" \
+        "${L4MEDIA_DIR}/ARCHITECTURE.md" \
+        "${L4MEDIA_DIR}/nginx" \
+        "${L4MEDIA_DIR}/ingress" \
+        "${L4MEDIA_DIR}/janus" \
+        "${L4MEDIA_DIR}/deploy" \
+        "${SERVER_USER}@${SERVER_HOST}:/home/${SERVER_USER}/l4media/"
+    deploy_remote_commands | ssh -n -i "${SSH_KEY}" -o BatchMode=yes "${SERVER_USER}@${SERVER_HOST}" bash
+fi
 
 echo "=== l4media deployment completed successfully! ==="
