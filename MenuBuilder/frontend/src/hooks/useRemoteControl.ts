@@ -189,14 +189,12 @@ export function useRemoteControl({
 
         ws.onopen = () => {
           if (wsRef.current !== ws) return;
-          // Keepalive interval: send keepalive if 10s no incoming message
+          // Keepalive interval: send keepalive every 5s
           lastInboundTimeRef.current = Date.now();
           clearKeepalive();
           keepaliveTimerRef.current = setInterval(() => {
-            if (Date.now() - lastInboundTimeRef.current >= 10000) {
-              sendWsMessage({ type: "keepalive" });
-            }
-          }, 2000);
+            sendWsMessage({ type: "keepalive" });
+          }, 5000);
         };
 
         ws.onmessage = (event) => {

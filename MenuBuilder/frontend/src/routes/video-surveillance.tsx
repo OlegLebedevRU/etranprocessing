@@ -254,16 +254,25 @@ export default function VideoSurveillancePage() {
     }
   };
 
-  // Запуск keepalive для аренды
-  const startLeaseKeepalive = (deviceId: number, leaseId: string, keepaliveSec = 15) => {
+  // Запуск keepalive для аренды (каждые 5 секунд при TTL 15-20 с)
+  const startLeaseKeepalive = (deviceId: number, leaseId: string, _keepaliveSec = 15) => {
     clearLeaseKeepalive();
     keepaliveTimerRef.current = setInterval(async () => {
       try {
         await keepaliveControlLease(deviceId, leaseId);
-      } catch (e) {
-        console.warn("Lease keepalive failed", e);
+      } catch (e: any) {
+        console.error("Lease keepalive failed:", e);
+        const status = e?.response?.status || e?.status;
+        const detail =
+          e?.response?.data?.detail || e?.message || "Сессия аренды завершена";
+        if (status === 404 || status === 409 || status === 403) {
+          clearLeaseKeepalive();
+          message.error(
+            `Продление аренды видеопотока прервано (${status}): ${detail}. Сессия может быть завершена.`
+          );
+        }
       }
-    }, Math.max(5, keepaliveSec - 3) * 1000);
+    }, 5000);
   };
 
   // Остановка текущей медиасессии
@@ -824,6 +833,7 @@ export default function VideoSurveillancePage() {
                 isViewer={isViewer}
                 activeSourceLabel={activeSourceLabel || undefined}
                 isCameraMode={isCameraMode}
+                streamMode={activeStream?.mode}
                 onStartStream={isOperator ? handleOperatorStart : () => handleViewerConnect(selectedDevice.device_id)}
                 onRetryStream={isOperator ? handleOperatorStart : () => handleViewerConnect(selectedDevice.device_id)}
                 onRefreshTerminal={() => fetchDeviceInfo(selectedDevice.device_id, true)}

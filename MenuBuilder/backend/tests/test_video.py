@@ -5,6 +5,7 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import HTTPException
 from httpx import ASGITransport, AsyncClient
 
 from app.auth import create_access_token
@@ -321,5 +322,51 @@ async def test_session_cleanup_on_stop_and_release(mock_db_session, operator_tok
             assert resp.json()["result"] == "stopped"
 
             # Cache was cleared and destroy was called
+            assert 1 not in _mountpoint_pins
+            mock_destroy.assert_called_once_with(1)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "exc",
+    [
+        HTTPException(status_code=409, detail="no active stream for lease"),
+        HTTPException(status_code=409, detail="stream already stopped"),
+        HTTPException(status_code=504, detail="terminal_timeout"),
+        HTTPException(status_code=504, detail="already stopped"),
+    ],
+)
+async def test_stream_stop_idempotent_on_conflict_or_timeout(
+    mock_db_session, operator_token, exc
+):
+    """stop_device_stream returns 200 with result='stopped' on 409 or supported 504."""
+    app.dependency_overrides[get_db] = lambda: mock_db_session
+
+    pin = get_or_create_mountpoint_pin(1, lease_id="lease-idem-1")
+    assert 1 in _mountpoint_pins
+
+    headers = {"Authorization": f"Bearer {operator_token}"}
+
+    with (
+        patch.object(
+            iot_client,
+            "remote_input_stream_stop",
+            side_effect=exc,
+        ),
+        patch(
+            "app.routers.video_control._destroy_janus_mountpoint", new=AsyncMock()
+        ) as mock_destroy,
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.post(
+                "/api/v1/video/devices/1/stream/stop",
+                json={"lease_id": "lease-idem-1", "destroy_mountpoint": True},
+                headers=headers,
+            )
+            assert resp.status_code == 200
+            assert resp.json()["result"] == "stopped"
+
             assert 1 not in _mountpoint_pins
             mock_destroy.assert_called_once_with(1)

@@ -29,6 +29,7 @@ export interface VideoPlayerScreenProps {
   isViewer: boolean;
   activeSourceLabel?: string;
   isCameraMode: boolean;
+  streamMode?: string;
   onStartStream: () => void;
   onRetryStream?: () => void;
   onRefreshTerminal?: () => void;
@@ -53,6 +54,7 @@ export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
   isViewer,
   activeSourceLabel,
   isCameraMode,
+  streamMode,
   onStartStream,
   onRetryStream,
   onRefreshTerminal,
@@ -239,6 +241,7 @@ export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
         sendClick={rc.sendClick}
         sendKey={rc.sendKey}
         isCameraMode={isCameraMode}
+        streamMode={streamMode}
       />
 
       {/* Индикатор прямого эфира поверх видео */}

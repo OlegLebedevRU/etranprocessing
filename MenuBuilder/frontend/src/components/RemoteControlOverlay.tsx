@@ -10,6 +10,7 @@ export interface RemoteControlOverlayProps {
   sendClick: (x: number, y: number) => Promise<any>;
   sendKey?: (kind: "down" | "up" | "press", vk: number, text?: string) => boolean | Promise<any>;
   isCameraMode?: boolean;
+  streamMode?: string;
   debugBorder?: boolean;
 }
 
@@ -28,11 +29,14 @@ export default function RemoteControlOverlay({
   sendClick,
   sendKey,
   isCameraMode = false,
+  streamMode: propStreamMode,
   debugBorder = true,
 }: RemoteControlOverlayProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [desktopRect, setDesktopRect] = useState<Rect | null>(null);
   const [geometryKnown, setGeometryKnown] = useState<boolean>(true);
+
+  const streamMode = propStreamMode ?? presence?.stream?.mode;
 
   // Recalculate contentRect and desktopRect based on video dimensions and container dimensions
   const updateRects = useCallback(() => {
@@ -144,6 +148,19 @@ export default function RemoteControlOverlay({
     };
   }, [updateRects, videoRef]);
 
+  // Non-passive wheel event listener to prevent page scrolling during remote control
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+    };
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      el.removeEventListener("wheel", handleWheel);
+    };
+  }, [active, isCameraMode]);
+
   const getNormalizedCoordinates = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!desktopRect || !containerRef.current) return null;
     const rect = containerRef.current.getBoundingClientRect();
@@ -172,14 +189,16 @@ export default function RemoteControlOverlay({
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!active) return;
+    if (!active || isCameraMode) return;
+    // Не отправлять перемещения, если стрим не в режиме desktop
+    if (streamMode && streamMode !== "desktop") return;
     const coords = getNormalizedCoordinates(e);
     if (!coords) return;
     sendMove(coords.x, coords.y);
   };
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!active || isCameraMode) return;
+    if (!active || isCameraMode || (streamMode && streamMode !== "desktop")) return;
     // Left-click only, no modifiers
     if (e.button !== 0 || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) {
       return;
@@ -194,7 +213,7 @@ export default function RemoteControlOverlay({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!active || isCameraMode || !sendKey) return;
+    if (!active || isCameraMode || (streamMode && streamMode !== "desktop") || !sendKey) return;
     if (e.key === "F5" || e.key === "F12" || (e.ctrlKey && e.key === "r")) {
       return;
     }
@@ -204,7 +223,7 @@ export default function RemoteControlOverlay({
   };
 
   const handleKeyUp = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!active || isCameraMode || !sendKey) return;
+    if (!active || isCameraMode || (streamMode && streamMode !== "desktop") || !sendKey) return;
     if (e.key === "F5" || e.key === "F12" || (e.ctrlKey && e.key === "r")) {
       return;
     }
@@ -252,7 +271,6 @@ export default function RemoteControlOverlay({
       onKeyDown={handleKeyDown}
       onKeyUp={handleKeyUp}
       onContextMenu={(e) => e.preventDefault()}
-      onWheel={(e) => e.preventDefault()}
       onMouseDown={(e) => {
         if (e.button !== 0) e.preventDefault();
       }}

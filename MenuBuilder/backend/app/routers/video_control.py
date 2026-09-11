@@ -763,16 +763,20 @@ async def stop_device_stream(
         return StreamStopResponse(result=str(res.get("result", "stopped")))
     except HTTPException as exc:
         err_detail = (
-            str(exc.detail)
+            str(exc.detail).lower()
             if isinstance(exc.detail, str)
-            else str(exc.detail.get("code", ""))
+            else str(exc.detail.get("code", "")).lower()
             if isinstance(exc.detail, dict)
             else ""
         )
-        if exc.status_code in (
-            status.HTTP_409_CONFLICT,
-            status.HTTP_504_GATEWAY_TIMEOUT,
-        ) and any(c in err_detail for c in ("unsupported", "terminal_timeout")):
+        # Идемпотентная обработка: если поток уже остановлен или отсутствует
+        if exc.status_code == status.HTTP_409_CONFLICT or (
+            exc.status_code == status.HTTP_504_GATEWAY_TIMEOUT
+            and any(
+                c in err_detail
+                for c in ("unsupported", "terminal_timeout", "already", "no active")
+            )
+        ):
             clear_mountpoint_pin(device_id)
             if body and body.destroy_mountpoint:
                 await _destroy_janus_mountpoint(device_id)
