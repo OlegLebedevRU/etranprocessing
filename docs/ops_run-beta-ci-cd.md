@@ -53,6 +53,14 @@ Checkpoint изменяется только после успешного уд�
 собраны из этого commit. Первый MenuBuilder выпускается явно. Остальные затем
 выбираются изменениями либо ручным запуском.
 
+После опытного выпуска `--start-monitoring` один раз фиксирует начало
+автоматического наблюдения для ещё не выпущенных компонентов. Он сохраняет
+все реальные releases и первоначальный bootstrap SHA, допускает между bootstrap
+и стартом только CI-скрипты/документацию и отвергает любые изменения приложений.
+Так исправление самого сборщика при вводе не запускает непрошенный выпуск всех
+сервисов. Повторная установка baseline запрещена; без этого шага auto-run закрыт.
+Уже выпущенный MenuBuilder всегда сравнивается с его настоящим release SHA.
+
 `builder.lock` защищает timer и ручной запуск одним lock. Production имеет
 дополнительный lock. Состояние записывается атомарно с fsync.
 
@@ -122,7 +130,8 @@ ssh -n -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249 "sudo -n -u github-ru
 ```
 
 7. Проверить registry digest, health API, revision контейнера и неизменность ID
-   соседних сервисов. Только затем `sudo systemctl enable --now etran-beta.timer`.
+   соседних сервисов. Выполнить `--start-monitoring` тем же launcher под
+   `github-runner`, затем `sudo systemctl enable --now etran-beta.timer`.
 
 Приватный Git доступ при необходимости задаётся отдельно read-only deploy key;
 при preflight репозиторий успешно читался без GitHub Actions. Registry credentials

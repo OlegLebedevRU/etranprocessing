@@ -51,11 +51,38 @@ def affected(component, paths):
 
 def needs_release(component, revision, state, changed_paths):
     previous = state["releases"].get(component, {})
-    baseline = previous.get("revision", state["bootstrap_revision"])
+    baseline = previous.get(
+        "revision", state.get("monitoring_revision", state["bootstrap_revision"])
+    )
     require_revision(baseline)
     return baseline != revision and affected(
         component, changed_paths(baseline, revision)
     )
+
+
+def start_monitoring(state, revision, changed_paths):
+    require_revision(revision)
+    if "monitoring_revision" in state:
+        raise ValueError(
+            "Monitoring has already started; refusing to reset its baseline"
+        )
+    if "menubuilder-backend" not in state["releases"]:
+        raise ValueError(
+            "Complete the trial MenuBuilder release before starting monitoring"
+        )
+    paths = changed_paths(state["bootstrap_revision"], revision)
+    if any(
+        not path.endswith(".md")
+        and not path.startswith((".github/ci/", "deploy/beta/"))
+        for path in paths
+    ):
+        raise ValueError(
+            "Application changes since bootstrap require explicit release review"
+        )
+    updated = json.loads(json.dumps(state))
+    updated["monitoring_revision"] = revision
+    updated["monitoring_started_at"] = datetime.now(UTC).isoformat()
+    return updated
 
 
 def successful_state(state, component, artifact):
@@ -280,6 +307,7 @@ def main():
     )
     parser.add_argument("--build-only", action="store_true")
     parser.add_argument("--initialize", action="store_true")
+    parser.add_argument("--start-monitoring", action="store_true")
     args = parser.parse_args()
     revision = require_revision(execute("git", "rev-parse", "HEAD", capture=True))
     execute("git", "diff", "--exit-code", "HEAD", "--")
@@ -296,6 +324,16 @@ def main():
     state = json.loads(state_file.read_text())
     if state.get("schema") != 1:
         raise ValueError("Unsupported state schema")
+    if args.start_monitoring:
+        atomic_json(state_file, start_monitoring(state, revision, git_paths))
+        print(
+            "Monitoring baseline set; successful release records preserved", flush=True
+        )
+        return
+    if args.component == "auto" and "monitoring_revision" not in state:
+        raise RuntimeError(
+            "Run the trial and --start-monitoring before automatic releases"
+        )
     for component in COMPONENTS:
         selected = args.component in {component, "all"} or (
             args.component == "auto"

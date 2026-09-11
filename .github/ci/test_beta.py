@@ -13,6 +13,43 @@ DIGEST = "sha256:" + "d" * 64
 
 
 class SelectionTests(unittest.TestCase):
+    def test_monitoring_commission_preserves_real_releases(self):
+        state = self.state()
+        result = beta.start_monitoring(
+            state,
+            C,
+            Mock(
+                return_value=[
+                    ".github/ci/test_beta.py",
+                    "deploy/beta/launcher.py",
+                    "docs/ci.md",
+                ]
+            ),
+        )
+        self.assertEqual(result["releases"], state["releases"])
+        self.assertEqual(result["bootstrap_revision"], A)
+        self.assertEqual(result["monitoring_revision"], C)
+        self.assertNotIn("monitoring_revision", state)
+        changes = Mock(return_value=["shared/models.py"])
+        self.assertFalse(beta.needs_release("processingbackend", C, result, changes))
+        changes.assert_not_called()
+        self.assertTrue(beta.needs_release("menubuilder-backend", C, result, changes))
+        changes.assert_called_with(B, C)
+
+    def test_monitoring_cannot_skip_application_changes_or_restart(self):
+        for paths in [
+            ["MenuBuilder/backend/app/main.py"],
+            ["shared/models.py"],
+            ["MenuBuilder/frontend/Dockerfile"],
+        ]:
+            with self.assertRaisesRegex(ValueError, "Application changes"):
+                beta.start_monitoring(self.state(), C, Mock(return_value=paths))
+        state = {**self.state(), "monitoring_revision": B}
+        with self.assertRaisesRegex(ValueError, "already started"):
+            beta.start_monitoring(state, C, Mock())
+        with self.assertRaisesRegex(ValueError, "trial MenuBuilder"):
+            beta.start_monitoring({"bootstrap_revision": A, "releases": {}}, C, Mock())
+
     def test_checkout_includes_processing_proxy_contract_fixture(self):
         source = (beta.ROOT / "deploy/beta/launcher.py").read_text()
         self.assertIn('"ProcessingBackend/nginx-mutual-legacy/nginx-configs"', source)
