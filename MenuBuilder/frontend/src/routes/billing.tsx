@@ -12,6 +12,7 @@ import {
   Modal,
   Tabs,
   Input,
+  Pagination,
   Spin,
   Tooltip,
   message,
@@ -253,12 +254,20 @@ export default function BillingPage() {
 
   const [summary, setSummary] = useState<BillingSummary | null>(null);
   const [terminals, setTerminals] = useState<BillingTerminal[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
+  const [sortBy, setSortBy] = useState("device_id");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [activeTab, setActiveTab] = useState("all");
   const [advancePeriods, setAdvancePeriods] = useState(0);
   const [selection, setSelection] = useState<Record<number, Selection>>({});
+  const [selectedTerminalsMap, setSelectedTerminalsMap] = useState<
+    Record<number, BillingTerminal>
+  >({});
   const [deactivateModal, setDeactivateModal] = useState<{
     open: boolean;
     terminal: BillingTerminal | null;
@@ -270,40 +279,58 @@ export default function BillingPage() {
   }>({ open: false, terminal: null });
   const [checkoutOpen, setCheckoutOpen] = useState(false);
 
-  const fetchData = useCallback(async () => {
+  const fetchSummary = useCallback(async () => {
+    try {
+      const s = await getBillingSummary();
+      setSummary(s);
+    } catch (e: unknown) {
+      console.error("Failed to load billing summary", e);
+    }
+  }, []);
+
+  const fetchTerminalsData = useCallback(async () => {
     try {
       setLoading(true);
-      const [s, tResp] = await Promise.all([
-        getBillingSummary(),
-        getBillingTerminals(),
-      ]);
-      const t = tResp.items;
-      setSummary(s);
-      setTerminals(t);
-      // Preselect certificates that are missing or about to expire; license
-      // selection is derived separately below (it also depends on advancePeriods).
-      setSelection((prev) =>
-        Object.fromEntries(
-          t.map((term) => [
-            term.terminal_id,
-            {
-              license: Boolean(prev[term.terminal_id]?.license),
+      const tResp = await getBillingTerminals({
+        status: activeTab === "all" ? undefined : activeTab,
+        search: search.trim() || undefined,
+        sort_by: sortBy,
+        sort_order: sortOrder,
+        only_new: activeTab === "new",
+        page,
+        page_size: pageSize,
+      });
+      setTerminals(tResp.items);
+      setTotalCount(tResp.total_count);
+
+      // Preselect certificates that are missing or about to expire on the current page
+      setSelection((prev) => {
+        const next = { ...prev };
+        for (const term of tResp.items) {
+          if (!next[term.terminal_id]) {
+            next[term.terminal_id] = {
+              license: false,
               cert: isCertPayable(term) && term.cert_expiring_soon,
-            },
-          ]),
-        ),
-      );
+            };
+          }
+        }
+        return next;
+      });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Ошибка загрузки";
       message.error(msg);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeTab, search, sortBy, sortOrder, page, pageSize]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    fetchSummary();
+  }, [fetchSummary]);
+
+  useEffect(() => {
+    fetchTerminalsData();
+  }, [fetchTerminalsData]);
 
   // Auto-select license lines: depends on default_selection_mode / billing_mode.
   // Certificate selections are independent and left untouched here.
@@ -311,6 +338,9 @@ export default function BillingPage() {
     setSelection((prev) => {
       let changed = false;
       const next: Record<number, Selection> = { ...prev };
+      const nextMap: Record<number, BillingTerminal> = {
+        ...selectedTerminalsMap,
+      };
       for (const t of terminals) {
         const auto = shouldAutoSelectLicense(
           t,
@@ -321,10 +351,19 @@ export default function BillingPage() {
         const current = next[t.terminal_id] ?? { license: false, cert: false };
         if (current.license !== auto) {
           next[t.terminal_id] = { ...current, license: auto };
+          if (auto || current.cert) {
+            nextMap[t.terminal_id] = t;
+          } else {
+            delete nextMap[t.terminal_id];
+          }
           changed = true;
         }
       }
-      return changed ? next : prev;
+      if (changed) {
+        setSelectedTerminalsMap(nextMap);
+        return next;
+      }
+      return prev;
     });
   }, [terminals, advancePeriods, summary]);
 
@@ -335,7 +374,8 @@ export default function BillingPage() {
       await deactivateTerminal(deactivateModal.terminal.terminal_id);
       message.success("Терминал отключён");
       setDeactivateModal({ open: false, terminal: null });
-      fetchData();
+      fetchSummary();
+      fetchTerminalsData();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Ошибка";
       message.error(msg);
@@ -348,7 +388,8 @@ export default function BillingPage() {
     try {
       await cancelDeactivation(terminalId);
       message.success("Терминал включён");
-      fetchData();
+      fetchSummary();
+      fetchTerminalsData();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Ошибка";
       message.error(msg);
@@ -356,73 +397,71 @@ export default function BillingPage() {
   };
 
   const toggle = (terminalId: number, field: keyof Selection, on: boolean) => {
-    setSelection((prev) => ({
-      ...prev,
-      [terminalId]: { ...prev[terminalId], [field]: on },
-    }));
+    setSelection((prev) => {
+      const current = prev[terminalId] || { license: false, cert: false };
+      const nextSel = { ...current, [field]: on };
+      const next = { ...prev, [terminalId]: nextSel };
+
+      const term =
+        terminals.find((t) => t.terminal_id === terminalId) ||
+        selectedTerminalsMap[terminalId];
+      if (term) {
+        setSelectedTerminalsMap((m) => {
+          if (nextSel.license || nextSel.cert) {
+            return { ...m, [terminalId]: term };
+          } else {
+            const copy = { ...m };
+            delete copy[terminalId];
+            return copy;
+          }
+        });
+      }
+      return next;
+    });
   };
 
-  // Filter terminals by tab and search
-  const filteredTerminals = terminals.filter((t) => {
-    if (search) {
-      const raw = search.trim();
-      const commaIds = raw
-        .split(",")
-        .map((p) => p.trim())
-        .filter((p) => /^\d+$/.test(p))
-        .map((p) => Number(p));
-
-      let matched = false;
-      if (commaIds.length > 0 && commaIds.includes(t.device_id)) {
-        matched = true;
-      } else {
-        const s = raw.toLowerCase();
-        if (
-          String(t.device_id).includes(s) ||
-          t.sn.toLowerCase().includes(s) ||
-          (t.address && t.address.toLowerCase().includes(s)) ||
-          (t.note && t.note.toLowerCase().includes(s)) ||
-          (t.cert_serial && t.cert_serial.toLowerCase().includes(s))
-        ) {
-          matched = true;
+  const setAllVisible = (on: boolean) => {
+    setSelection((prev) => {
+      const next = { ...prev };
+      const nextMap = { ...selectedTerminalsMap };
+      for (const t of terminals) {
+        const license = on && isLicensePayable(t, advancePeriods);
+        const cert = on && isCertPayable(t);
+        next[t.terminal_id] = { license, cert };
+        if (license || cert) {
+          nextMap[t.terminal_id] = t;
+        } else {
+          delete nextMap[t.terminal_id];
         }
       }
-      if (!matched) return false;
-    }
+      setSelectedTerminalsMap(nextMap);
+      return next;
+    });
+  };
 
-    switch (activeTab) {
-      case "all":
-        return true;
-      case "new":
-        return isNewTerminal(t);
-      case "attention":
-        return (
-          !isTerminalDisabled(t) &&
-          t.billing_mode !== "master" &&
-          summary?.billing_mode !== "master" &&
-          (t.billing_status === "overdue" ||
-            t.billing_status === "due_soon" ||
-            t.billing_status === "no_license")
-        );
-      case "active":
-        return (
-          !isTerminalDisabled(t) &&
-          (t.billing_mode === "master" ||
-            summary?.billing_mode === "master" ||
-            t.billing_status === "active" ||
-            t.billing_status === "due_soon")
-        );
-      case "disabled":
-        return isTerminalDisabled(t);
-      default:
-        return true;
-    }
-  });
+  const selectOnlyNew = () => {
+    setSelection((prev) => {
+      const next = { ...prev };
+      const nextMap = { ...selectedTerminalsMap };
+      for (const t of terminals) {
+        const isNew = isNewTerminal(t);
+        const license = isNew && isLicensePayable(t, advancePeriods);
+        const cert = isNew && isCertPayable(t);
+        next[t.terminal_id] = { license, cert };
+        if (license || cert) {
+          nextMap[t.terminal_id] = t;
+        } else {
+          delete nextMap[t.terminal_id];
+        }
+      }
+      setSelectedTerminalsMap(nextMap);
+      return next;
+    });
+  };
 
-  // Cart lines are built from every terminal, not just the visible tab, so
-  // switching tabs never silently drops something the user already selected.
+  // Cart lines are built from selectedTerminalsMap across all pages and tabs
   const cartLines: CartLine[] = useMemo(() => {
-    return terminals
+    return Object.values(selectedTerminalsMap)
       .map((t) => {
         const sel = selection[t.terminal_id];
         const license =
@@ -441,7 +480,7 @@ export default function BillingPage() {
         };
       })
       .filter((l): l is CartLine => l !== null);
-  }, [terminals, selection, advancePeriods]);
+  }, [selectedTerminalsMap, selection, advancePeriods]);
 
   const totalMinor = cartLines.reduce(
     (sum, l) => sum + l.licenseAmountMinor + l.certAmountMinor,
@@ -450,50 +489,16 @@ export default function BillingPage() {
   const licenseCount = cartLines.filter((l) => l.license).length;
   const certCount = cartLines.filter((l) => l.cert).length;
 
-  const setAllVisible = (on: boolean) => {
-    setSelection((prev) => {
-      const next = { ...prev };
-      for (const t of filteredTerminals) {
-        next[t.terminal_id] = {
-          license: on && isLicensePayable(t, advancePeriods),
-          cert: on && isCertPayable(t),
-        };
-      }
-      return next;
-    });
-  };
-
-  const selectOnlyNew = () => {
-    setSelection((prev) => {
-      const next = { ...prev };
-      for (const t of filteredTerminals) {
-        const isNew = isNewTerminal(t);
-        next[t.terminal_id] = {
-          license: isNew && isLicensePayable(t, advancePeriods),
-          cert: isNew && isCertPayable(t),
-        };
-      }
-      return next;
-    });
-  };
-
   // Advance-payment control: labelled in months, derived from the org tariff.
   const periodMonths = dominantPeriodMonths(terminals);
   const allowed = parseAllowedPeriods(summary?.allowed_billing_periods);
   const minPeriods = summary?.min_billing_periods || 1;
   const isPostFactum = summary?.billing_mode === "post_factum";
-  const hasDebt = terminals.some(
-    (t) => !isTerminalDisabled(t) && isLicenseLapsed(t),
-  );
+  const hasDebt = (summary?.overdue_amount_minor ?? 0) > 0;
   // A license expiring within a month needs at least one paid period right
   // away, which "Только задолженность" (0 periods) cannot cover — so that
   // option is only offered when nothing is that urgent.
-  const hasUrgentDueSoon = terminals.some(
-    (t) =>
-      !isTerminalDisabled(t) &&
-      !isLicenseLapsed(t) &&
-      isLicenseUrgent(t),
-  );
+  const hasUrgentDueSoon = summary?.nearest_required_payment_at != null;
 
   const advanceOptions = useMemo(() => {
     if (allowed && allowed.length > 0) {
@@ -544,23 +549,11 @@ export default function BillingPage() {
 
 
   // Counters
-  const isMasterOrg = summary?.billing_mode === "master";
-  const overdueCount = terminals.filter(
-    (t) =>
-      !isTerminalDisabled(t) &&
-      !isMasterOrg &&
-      t.billing_mode !== "master" &&
-      t.billing_status === "overdue",
-  ).length;
-  const activeCount = terminals.filter(
-    (t) =>
-      !isTerminalDisabled(t) &&
-      (isMasterOrg ||
-        t.billing_mode === "master" ||
-        t.billing_status === "active" ||
-        t.billing_status === "due_soon"),
-  ).length;
-  const disabledCount = terminals.filter((t) => isTerminalDisabled(t)).length;
+  const overdueCount = summary?.overdue_terminal_count ?? 0;
+  const activeCount = summary?.active_terminal_count ?? 0;
+  const disabledCount =
+    (summary?.disabled_terminal_count ?? 0) +
+    (summary?.admin_disabled_terminal_count ?? 0);
 
   const columns: ColumnsType<BillingTerminal> = [
     {
@@ -569,7 +562,13 @@ export default function BillingPage() {
       key: "device_id",
       width: isMobile ? 85 : 105,
       fixed: isMobile ? "left" : undefined,
-      sorter: (a, b) => a.device_id - b.device_id,
+      sorter: true,
+      sortOrder:
+        sortBy === "device_id"
+          ? sortOrder === "asc"
+            ? "ascend"
+            : "descend"
+          : null,
       render: (val: number) => (
         <span style={{ whiteSpace: "nowrap" }}>
           <Text strong style={{ fontSize: 13 }}>#{val}</Text>
@@ -656,11 +655,13 @@ export default function BillingPage() {
       title: "Лицензия",
       key: "license",
       width: 220,
-      sorter: (a: BillingTerminal, b: BillingTerminal) => {
-        const ta = a.license_expires_at ? new Date(a.license_expires_at).getTime() : 0;
-        const tb = b.license_expires_at ? new Date(b.license_expires_at).getTime() : 0;
-        return ta - tb;
-      },
+      sorter: true,
+      sortOrder:
+        sortBy === "license_expires_at"
+          ? sortOrder === "asc"
+            ? "ascend"
+            : "descend"
+          : null,
       render: (_: unknown, r: BillingTerminal) => {
         if (isRole4 || isTerminalDisabled(r)) {
           return (
@@ -757,11 +758,13 @@ export default function BillingPage() {
       title: "Сертификат",
       key: "cert",
       width: 250,
-      sorter: (a: BillingTerminal, b: BillingTerminal) => {
-        const ta = a.cert_not_valid_after ? new Date(a.cert_not_valid_after).getTime() : 0;
-        const tb = b.cert_not_valid_after ? new Date(b.cert_not_valid_after).getTime() : 0;
-        return ta - tb;
-      },
+      sorter: true,
+      sortOrder:
+        sortBy === "cert_not_valid_after"
+          ? sortOrder === "asc"
+            ? "ascend"
+            : "descend"
+          : null,
       render: (_: unknown, r: BillingTerminal) => {
         if (isRole4 || isTerminalDisabled(r)) {
           return !r.cert_serial ? (
@@ -984,6 +987,29 @@ export default function BillingPage() {
     return columns;
   }, [isRole4, columns]);
 
+  const handleTableChange = (
+    _pagination: unknown,
+    _filters: unknown,
+    sorter: any,
+  ) => {
+    const s = Array.isArray(sorter) ? sorter[0] : sorter;
+    if (s && s.columnKey && s.order) {
+      if (s.columnKey === "cert") {
+        setSortBy("cert_not_valid_after");
+      } else if (s.columnKey === "license") {
+        setSortBy("license_expires_at");
+      } else {
+        setSortBy("device_id");
+      }
+      setSortOrder(s.order === "descend" ? "desc" : "asc");
+      setPage(1);
+    } else {
+      setSortBy("device_id");
+      setSortOrder("asc");
+      setPage(1);
+    }
+  };
+
   if (loading && !summary) {
     return (
       <div style={{ textAlign: "center", padding: 48 }}>
@@ -1105,7 +1131,12 @@ export default function BillingPage() {
       {/* Terminal table with tabs */}
       <Card
         size="small"
-        title="Терминалы"
+        title={
+          <Space>
+            <span>Терминалы</span>
+            <Tag color="default">{totalCount} шт.</Tag>
+          </Space>
+        }
         extra={
           <Space wrap style={{ width: isMobile ? "100%" : "auto" }}>
             {!isRole4 && (
@@ -1130,11 +1161,14 @@ export default function BillingPage() {
                 </Button>
               </>
             )}
-            <Input
+            <Input.Search
               placeholder="Поиск по номерам (101, 102...), SN..."
-              prefix={<SearchOutlined />}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onSearch={(val) => {
+                setSearch(val.trim());
+                setPage(1);
+              }}
               style={{ width: isMobile ? "100%" : 240 }}
               size="small"
               allowClear
@@ -1142,7 +1176,10 @@ export default function BillingPage() {
             <Button
               icon={<ReloadOutlined />}
               size="small"
-              onClick={fetchData}
+              onClick={() => {
+                fetchSummary();
+                fetchTerminalsData();
+              }}
               loading={loading}
             />
           </Space>
@@ -1150,31 +1187,41 @@ export default function BillingPage() {
       >
         <Tabs
           activeKey={activeTab}
-          onChange={setActiveTab}
+          onChange={(key) => {
+            setActiveTab(key);
+            setPage(1);
+          }}
           size="small"
           items={STATUS_TABS.map((tab) => ({
             key: tab.key,
             label: tab.label,
           }))}
+          tabBarExtraContent={
+            <Pagination
+              size="small"
+              current={page}
+              pageSize={pageSize}
+              total={totalCount}
+              showSizeChanger
+              pageSizeOptions={["50", "100", "200"]}
+              onChange={(p, ps) => {
+                setPage(p);
+                setPageSize(ps);
+              }}
+              showTotal={(total, range) => `${range[0]}–${range[1]} из ${total}`}
+            />
+          }
         />
         <Table
           className="compact-table"
-          dataSource={filteredTerminals}
+          dataSource={terminals}
           columns={displayedColumns}
           rowKey="terminal_id"
           size="small"
           tableLayout="auto"
-          pagination={{
-            defaultPageSize: 50,
-            pageSize: pageSize,
-            onShowSizeChange: (_current, size) => setPageSize(size),
-            showSizeChanger: true,
-            pageSizeOptions: ["50", "100", "200"],
-            size: "small",
-            simple: isMobile,
-            showTotal: (total, range) =>
-              `${range[0]}-${range[1]} из ${total} терм.`,
-          }}
+          loading={loading}
+          onChange={handleTableChange}
+          pagination={false}
           scroll={{ x: 1250 }}
         />
       </Card>
@@ -1206,7 +1253,12 @@ export default function BillingPage() {
         advancePeriods={advancePeriods}
         billingMode={summary?.billing_mode}
         onClose={() => setCheckoutOpen(false)}
-        onPaid={fetchData}
+        onPaid={() => {
+          setSelection({});
+          setSelectedTerminalsMap({});
+          fetchSummary();
+          fetchTerminalsData();
+        }}
       />
 
       {/* Certificate PIN issuance modal */}
@@ -1214,7 +1266,10 @@ export default function BillingPage() {
         open={pinModal.open}
         terminal={pinModal.terminal}
         onClose={() => setPinModal({ open: false, terminal: null })}
-        onIssued={fetchData}
+        onIssued={() => {
+          fetchSummary();
+          fetchTerminalsData();
+        }}
       />
     </div>
   );

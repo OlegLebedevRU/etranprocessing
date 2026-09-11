@@ -6,6 +6,7 @@ import {
   Form,
   Input,
   Modal,
+  Pagination,
   Select,
   Space,
   Table,
@@ -93,17 +94,10 @@ export default function TerminalsSettingsPage() {
   }, [user?.org_id, page, pageSize, search, sortBy, sortOrder]);
 
   const handleTableChange = (
-    pagination: any,
+    _pagination: any,
     _filters: any,
     sorter: any,
   ) => {
-    if (pagination.current && pagination.current !== page) {
-      setPage(pagination.current);
-    }
-    if (pagination.pageSize && pagination.pageSize !== pageSize) {
-      setPageSize(pagination.pageSize);
-      setPage(1);
-    }
     if (sorter && sorter.field) {
       const field = String(sorter.field);
       const order = sorter.order === "descend" ? "desc" : "asc";
@@ -265,7 +259,16 @@ export default function TerminalsSettingsPage() {
           установки, служебное примечание и индивидуальный часовой пояс.
         </Paragraph>
 
-        <div style={{ marginBottom: 16 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 16,
+            flexWrap: "wrap",
+            gap: 12,
+          }}
+        >
           <Input.Search
             placeholder="Поиск по номерам (через запятую: 101, 102), SN, адресу, примечанию"
             allowClear
@@ -275,7 +278,20 @@ export default function TerminalsSettingsPage() {
               setSearch(val.trim());
               setPage(1);
             }}
-            style={{ maxWidth: 460 }}
+            style={{ maxWidth: 460, flex: "1 1 300px" }}
+          />
+          <Pagination
+            size="small"
+            current={page}
+            pageSize={pageSize}
+            total={totalCount}
+            showSizeChanger
+            pageSizeOptions={["50", "100", "200"]}
+            onChange={(p, ps) => {
+              setPage(p);
+              setPageSize(ps);
+            }}
+            showTotal={(total, range) => `${range[0]}–${range[1]} из ${total}`}
           />
         </div>
 
@@ -285,14 +301,7 @@ export default function TerminalsSettingsPage() {
           rowKey="id"
           loading={loading}
           onChange={handleTableChange}
-          pagination={{
-            current: page,
-            pageSize: pageSize,
-            total: totalCount,
-            showSizeChanger: true,
-            pageSizeOptions: ["50", "100", "200"],
-            showTotal: (total) => `Всего: ${total}`,
-          }}
+          pagination={false}
           locale={{ emptyText: "Нет зарегистрированных терминалов для выбранной организации" }}
         />
       </Card>

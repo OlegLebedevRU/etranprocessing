@@ -580,8 +580,9 @@ async def test_get_billing_terminals_returns_address_and_type_fields():
 
     assert resp.status_code == 200
     data = resp.json()
-    assert len(data) == 1
-    t_data = data[0]
+    items = data["items"] if isinstance(data, dict) and "items" in data else data
+    assert len(items) == 1
+    t_data = items[0]
     assert t_data["address"] == "г. Москва, ул. Ленина, д. 10"
     assert t_data["note"] == "Главный вход"
     assert t_data["terminal_type_id"] == 1

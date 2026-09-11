@@ -452,8 +452,9 @@ async def test_settings_terminals_flow(role3_headers, superuser_headers):
         resp_list = await client.get("/api/settings/terminals", headers=role3_headers)
         assert resp_list.status_code == 200
         data = resp_list.json()
-        assert len(data) == 1
-        assert data[0]["sn"] == "term-101"
+        items = data["items"] if isinstance(data, dict) and "items" in data else data
+        assert len(items) == 1
+        assert items[0]["sn"] == "term-101"
 
         # 2. Superuser list terminals
         resp_su_list = await client.get(

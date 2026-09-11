@@ -545,7 +545,7 @@ async def confirm_email_token(
 
 @router.get(
     "/terminals",
-    response_model=TerminalSettingsListResponse | list[TerminalSettingsItem],
+    response_model=TerminalSettingsListResponse,
 )
 async def list_terminals_settings(
     org_id: int | None = Query(None, description="Org ID for superuser viewing"),
@@ -557,31 +557,37 @@ async def list_terminals_settings(
         "device_id", description="Sort by field: device_id, created_at, sn, address"
     ),
     sort_order: str = Query("asc", description="Sort order: asc, desc"),
-    page: int | None = Query(None, ge=1, description="Page number"),
+    page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=500, description="Items per page"),
+    fetch_all: bool = Query(
+        False, alias="all", description="Return all terminals without pagination"
+    ),
     user: dict[str, Any] = Depends(
         require_permission(PERMISSION_SETTINGS_TERMINALS_VIEW)
     ),
     db: AsyncSession = Depends(get_db),
     response: Response = None,  # type: ignore[assignment]
-) -> TerminalSettingsListResponse | list[TerminalSettingsItem]:
+) -> TerminalSettingsListResponse:
     """List terminals for current organization with search, sorting and pagination."""
     is_su = bool(user.get("is_superuser") or user.get("role_id") == 1)
 
     effective_org_id = int(user.get("org_id", 0))
-    if is_su and org_id is not None and org_id > 0:
-        effective_org_id = org_id
+    passed_org_id = org_id if isinstance(org_id, int) else None
+    if is_su and passed_org_id is not None and passed_org_id > 0:
+        effective_org_id = passed_org_id
+
+    cur_page = page if isinstance(page, int) else 1
+    cur_page_size = page_size if isinstance(page_size, int) else 50
+    should_fetch_all = bool(fetch_all) if isinstance(fetch_all, bool) else False
 
     if effective_org_id <= 0:
-        if page is not None:
-            return TerminalSettingsListResponse(
-                items=[], total_count=0, page=page, page_size=page_size
-            )
-        return []
+        return TerminalSettingsListResponse(
+            items=[], total_count=0, page=cur_page, page_size=cur_page_size
+        )
 
     query = select(Terminal).where(Terminal.org_id == effective_org_id)
 
-    if search:
+    if search and isinstance(search, str):
         raw_search = search.strip()
         search_pattern = f"%{raw_search}%"
         comma_ids = [
@@ -610,23 +616,26 @@ async def list_terminals_settings(
     total_count = (await db.execute(count_query)).scalar_one()
 
     # Sorting
+    order_str = sort_order if isinstance(sort_order, str) else "asc"
+    field_str = sort_by if isinstance(sort_by, str) else "device_id"
+
     sort_col: Any = Terminal.device_id
-    if sort_by == "created_at":
+    if field_str == "created_at":
         sort_col = Terminal.created_at
-    elif sort_by == "sn":
+    elif field_str == "sn":
         sort_col = Terminal.sn
-    elif sort_by == "address":
+    elif field_str == "address":
         sort_col = Terminal.address
-    elif sort_by == "id":
+    elif field_str == "id":
         sort_col = Terminal.id
 
-    if sort_order.lower() == "desc":
+    if order_str.lower() == "desc":
         query = query.order_by(sort_col.desc())
     else:
         query = query.order_by(sort_col.asc())
 
-    if page is not None:
-        query = query.offset((page - 1) * page_size).limit(page_size)
+    if not should_fetch_all:
+        query = query.offset((cur_page - 1) * cur_page_size).limit(cur_page_size)
 
     res = await db.execute(query)
     terminals = res.scalars().all()
@@ -656,14 +665,12 @@ async def list_terminals_settings(
     if response is not None:
         response.headers["X-Total-Count"] = str(total_count)
 
-    if page is not None:
-        return TerminalSettingsListResponse(
-            items=items,
-            total_count=total_count,
-            page=page,
-            page_size=page_size,
-        )
-    return items
+    return TerminalSettingsListResponse(
+        items=items,
+        total_count=total_count,
+        page=cur_page if not should_fetch_all else 1,
+        page_size=cur_page_size if not should_fetch_all else total_count,
+    )
 
 
 @router.patch("/terminals/{terminal_id}", response_model=TerminalSettingsItem)
