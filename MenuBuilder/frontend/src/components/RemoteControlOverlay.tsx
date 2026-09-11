@@ -151,7 +151,7 @@ export default function RemoteControlOverlay({
   // Non-passive wheel event listener to prevent page scrolling during remote control
   useEffect(() => {
     const el = containerRef.current;
-    if (!el) return;
+    if (!el || !active || isCameraMode || streamMode !== "desktop") return;
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
     };
@@ -159,7 +159,7 @@ export default function RemoteControlOverlay({
     return () => {
       el.removeEventListener("wheel", handleWheel);
     };
-  }, [active, isCameraMode]);
+  }, [active, isCameraMode, streamMode]);
 
   const getNormalizedCoordinates = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!desktopRect || !containerRef.current) return null;
@@ -189,16 +189,14 @@ export default function RemoteControlOverlay({
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!active || isCameraMode) return;
-    // Не отправлять перемещения, если стрим не в режиме desktop
-    if (streamMode && streamMode !== "desktop") return;
+    if (!active || isCameraMode || streamMode !== "desktop" || !geometryKnown) return;
     const coords = getNormalizedCoordinates(e);
     if (!coords) return;
     sendMove(coords.x, coords.y);
   };
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!active || isCameraMode || (streamMode && streamMode !== "desktop")) return;
+    if (!active || isCameraMode || streamMode !== "desktop" || !geometryKnown) return;
     // Left-click only, no modifiers
     if (e.button !== 0 || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) {
       return;
@@ -213,7 +211,7 @@ export default function RemoteControlOverlay({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!active || isCameraMode || (streamMode && streamMode !== "desktop") || !sendKey) return;
+    if (!active || isCameraMode || streamMode !== "desktop" || !sendKey) return;
     if (e.key === "F5" || e.key === "F12" || (e.ctrlKey && e.key === "r")) {
       return;
     }
@@ -223,7 +221,7 @@ export default function RemoteControlOverlay({
   };
 
   const handleKeyUp = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!active || isCameraMode || (streamMode && streamMode !== "desktop") || !sendKey) return;
+    if (!active || isCameraMode || streamMode !== "desktop" || !sendKey) return;
     if (e.key === "F5" || e.key === "F12" || (e.ctrlKey && e.key === "r")) {
       return;
     }
@@ -236,7 +234,7 @@ export default function RemoteControlOverlay({
     return null;
   }
 
-  if (isCameraMode) {
+  if (isCameraMode || streamMode !== "desktop") {
     return (
       <div
         style={{
@@ -249,7 +247,11 @@ export default function RemoteControlOverlay({
         }}
       >
         <Alert
-          message="Управление вводом недоступно в режиме трансляции камеры (требуется рабочий стол)"
+          message={
+            isCameraMode
+              ? "Управление вводом недоступно в режиме трансляции камеры (требуется рабочий стол)"
+              : "Управление вводом доступно только в подтверждённом режиме рабочего стола"
+          }
           type="info"
           showIcon
           style={{

@@ -281,6 +281,30 @@ class IotPlatformClient:
                 detail=detail,
             )
 
+        if status_code == status.HTTP_404_NOT_FOUND:
+            if isinstance(body, dict):
+                code = body.get("code") or "lease_not_found"
+                inner_detail = body.get("detail")
+                msg = (
+                    inner_detail
+                    if isinstance(inner_detail, str)
+                    else "Resource or lease not found on app1"
+                )
+                detail = {"code": code, "detail": msg}
+                if "lease_id" in body:
+                    detail["lease_id"] = body["lease_id"]
+                if "generation" in body:
+                    detail["generation"] = body["generation"]
+            else:
+                detail = {
+                    "code": "lease_not_found",
+                    "detail": "Resource or lease not found on app1",
+                }
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=detail,
+            )
+
         if status_code == status.HTTP_429_TOO_MANY_REQUESTS:
             detail = "Слишком частые действия"
             if isinstance(body, dict) and "detail" in body:
@@ -600,6 +624,7 @@ class IotPlatformClient:
     async def remote_input_keepalive(
         self,
         lease_id: str,
+        generation: int | None = None,
         org_id: int | None = None,
         user: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
@@ -612,9 +637,14 @@ class IotPlatformClient:
 
         url = f"{self.base_url}/api/internal/v1/remote-input/lease/{lease_id}/keepalive"
         headers = self._get_headers(org_id=org_id, user=user)
+        payload = {}
+        if generation is not None:
+            payload["generation"] = generation
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(url, headers=headers)
+                resp = await client.post(
+                    url, json=payload if payload else None, headers=headers
+                )
                 resp.raise_for_status()
                 return resp.json()
         except httpx.HTTPStatusError as exc:

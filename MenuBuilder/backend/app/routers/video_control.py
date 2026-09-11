@@ -31,6 +31,7 @@ from app.database import async_session, get_db
 from app.routers.video import (
     _destroy_janus_mountpoint,
     _get_ingress_status,
+    _mountpoint_pins,
     _verify_device_access,
     clear_mountpoint_pin,
     set_mountpoint_stream_instance,
@@ -104,6 +105,9 @@ class ControlLeaseResponse(BaseModel):
 
 class KeepaliveRequest(BaseModel):
     lease_id: str
+    generation: int | None = None
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class StreamStartRequest(BaseModel):
@@ -115,7 +119,10 @@ class StreamStartRequest(BaseModel):
 
 class StreamStopRequest(BaseModel):
     lease_id: str | None = None
+    stream_instance_id: str | None = None
     destroy_mountpoint: bool = False
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class StreamStartResponse(BaseModel):
@@ -178,14 +185,21 @@ class WsInboundKey(BaseModel):
 
 class WsInboundKeepalive(BaseModel):
     type: Literal["keepalive"]
+    generation: int | None = None
+    lease_id: str | None = None
+    request_id: str | None = None
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
 
 class WsInboundRelease(BaseModel):
     type: Literal["release"]
+    generation: int | None = None
+    lease_id: str | None = None
+    reason: str | None = None
+    request_id: str | None = None
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
 
 # ---------------------------------------------------------------------------
@@ -757,9 +771,11 @@ async def stop_device_stream(
             org_id=org_id,
             user=user,
         )
-        clear_mountpoint_pin(device_id)
+        clear_mountpoint_pin(device_id, lease_id=lease_id)
         if body and body.destroy_mountpoint:
-            await _destroy_janus_mountpoint(device_id)
+            cached = _mountpoint_pins.get(device_id)
+            if not cached or cached.get("lease_id") == lease_id:
+                await _destroy_janus_mountpoint(device_id)
         return StreamStopResponse(result=str(res.get("result", "stopped")))
     except HTTPException as exc:
         err_detail = (
@@ -769,21 +785,34 @@ async def stop_device_stream(
             if isinstance(exc.detail, dict)
             else ""
         )
-        # Идемпотентная обработка: если поток уже остановлен или отсутствует
-        if exc.status_code == status.HTTP_409_CONFLICT or (
+        # Idempotent stop check: only known stopped states are no-op
+        # Conflict on owner/session/tenant/epoch must NOT be swallowed!
+        is_known_stopped = any(
+            c in err_detail
+            for c in (
+                "already_stopped",
+                "no_active_stream",
+                "not_running",
+                "already",
+                "no active",
+            )
+        ) and not any(
+            c in err_detail
+            for c in ("owner", "tenant", "epoch", "session", "instance", "mode")
+        )
+        if (exc.status_code == status.HTTP_409_CONFLICT and is_known_stopped) or (
             exc.status_code == status.HTTP_504_GATEWAY_TIMEOUT
             and any(
                 c in err_detail
                 for c in ("unsupported", "terminal_timeout", "already", "no active")
             )
         ):
-            clear_mountpoint_pin(device_id)
+            clear_mountpoint_pin(device_id, lease_id=lease_id)
             if body and body.destroy_mountpoint:
-                await _destroy_janus_mountpoint(device_id)
+                cached = _mountpoint_pins.get(device_id)
+                if not cached or cached.get("lease_id") == lease_id:
+                    await _destroy_janus_mountpoint(device_id)
             return StreamStopResponse(result="stopped")
-        clear_mountpoint_pin(device_id)
-        if body and body.destroy_mountpoint:
-            await _destroy_janus_mountpoint(device_id)
         raise
 
 
@@ -803,8 +832,22 @@ async def get_device_stream_state(
     status_data = await iot_client.remote_input_status(
         terminal.sn, org_id=org_id, user=user
     )
+    lease_info = status_data.get("lease") or {}
     stream_info = (status_data.get("agent") or {}).get("stream")
     ingress_stats = await _get_ingress_status(terminal.sn)
+
+    # Stopped state of current epoch takes priority over stale running cache
+    if (
+        not lease_info.get("active")
+        and stream_info
+        and stream_info.get("state") == "running"
+    ):
+        stream_info = {
+            **stream_info,
+            "state": "stopped",
+            "reason": "lease_expired",
+        }
+
     return StreamStateResponse(
         sn=terminal.sn,
         stream=stream_info,
@@ -822,11 +865,25 @@ async def keepalive_device_control_lease(
     """Extend active control lease."""
     terminal = await _verify_device_access(device_id, user, db)
     org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
-    return await iot_client.remote_input_keepalive(
-        lease_id=body.lease_id,
-        org_id=org_id,
-        user=user,
-    )
+    try:
+        return await iot_client.remote_input_keepalive(
+            lease_id=body.lease_id,
+            generation=body.generation,
+            org_id=org_id,
+            user=user,
+        )
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_404_NOT_FOUND:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "code": "lease_not_found",
+                    "detail": "Аренда не найдена или срок её действия истёк",
+                    "lease_id": body.lease_id,
+                    "generation": body.generation,
+                },
+            ) from exc
+        raise
 
 
 @router.delete(
@@ -852,7 +909,9 @@ async def release_device_control_lease(
     finally:
         clear_mountpoint_pin(device_id, lease_id=lease_id)
         if destroy_mountpoint:
-            await _destroy_janus_mountpoint(device_id)
+            cached = _mountpoint_pins.get(device_id)
+            if not cached or cached.get("lease_id") == lease_id:
+                await _destroy_janus_mountpoint(device_id)
 
 
 @router.post("/devices/{device_id}/control/events")
@@ -991,6 +1050,7 @@ async def control_ws_proxy(
     click_count = 0
     click_results: list[dict[str, Any]] = []
     close_reason = "normal"
+    upstream_close_code: int | None = None
 
     try:
         async with websockets.connect(
@@ -1052,16 +1112,31 @@ async def control_ws_proxy(
                                 str(lease_info["stream_instance_id"]),
                             )
                     await upstream_ws.send(json.dumps(payload))
-                    if msg_type == "release":
+                    if msg_type == "keepalive":
+                        logger.info(
+                            "WS ctl browser->upstream type=keepalive lease_id=%s generation=%s request_id=%s",
+                            lease_id,
+                            getattr(validated, "generation", None),
+                            getattr(validated, "request_id", None),
+                        )
+                    elif msg_type == "release":
+                        logger.info(
+                            "WS ctl browser->upstream type=release lease_id=%s generation=%s reason=%s request_id=%s",
+                            lease_id,
+                            getattr(validated, "generation", None),
+                            getattr(validated, "reason", None),
+                            getattr(validated, "request_id", None),
+                        )
                         break
 
             async def upstream_to_browser() -> None:
-                nonlocal click_results, close_reason
+                nonlocal click_results, close_reason, upstream_close_code
                 while True:
                     try:
                         raw_msg = await upstream_ws.recv()
                     except websockets.exceptions.ConnectionClosed as cc:
                         close_reason = f"upstream_closed_{cc.code}"
+                        upstream_close_code = cc.code
                         break
                     except Exception:  # noqa: BLE001
                         close_reason = "upstream_receive_error"
@@ -1091,6 +1166,24 @@ async def control_ws_proxy(
                                     parsed.get("reason"),
                                 )
                             elif out_type == "stream_state":
+                                parsed_lease = parsed.get("lease_id")
+                                if parsed_lease and str(parsed_lease) != lease_id:
+                                    logger.warning(
+                                        "Dropping late stream_state event for stale lease=%s (current lease=%s)",
+                                        parsed_lease,
+                                        lease_id,
+                                    )
+                                    continue
+                                if "lease_id" not in parsed:
+                                    parsed["lease_id"] = lease_id
+                                if (
+                                    "stream_instance_id" not in parsed
+                                    and lease_info.get("stream_instance_id")
+                                ):
+                                    parsed["stream_instance_id"] = str(
+                                        lease_info["stream_instance_id"]
+                                    )
+                                raw_msg = json.dumps(parsed)
                                 logger.info(
                                     "Stream state event received upstream lease=%s device_id=%d state=%s stream_instance_id=%s",
                                     lease_id,
@@ -1129,23 +1222,25 @@ async def control_ws_proxy(
         with contextlib.suppress(Exception):
             await websocket.close()
 
-        # Idempotent best-effort release of the lease on disconnect
-        with contextlib.suppress(Exception):
-            await iot_client.remote_input_release(
-                lease_id=lease_id,
-                org_id=target_org_id,
-                user=user,
-            )
+        # Idempotent best-effort release of the lease on disconnect (safe bounded fallback)
+        if close_reason != "lease_revoked":
+            with contextlib.suppress(Exception):
+                await iot_client.remote_input_release(
+                    lease_id=lease_id,
+                    org_id=target_org_id,
+                    user=user,
+                )
         clear_mountpoint_pin(device_id, lease_id=lease_id)
 
         logger.info(
-            "WebSocket session finished lease=%s device_id=%d sn=%s org_id=%s user=%s reason=%s clicks=%d results=%s",
+            "WebSocket session finished lease=%s device_id=%d sn=%s org_id=%s user=%s close_reason=%s upstream_code=%s clicks=%d results=%s",
             lease_id,
             device_id,
             terminal.sn,
             target_org_id,
             user.get("sub"),
             close_reason,
+            upstream_close_code,
             click_count,
             click_results,
         )

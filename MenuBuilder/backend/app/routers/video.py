@@ -39,6 +39,9 @@ class VideoStatusResponse(BaseModel):
     sn: str
     last_rtp_at: float | int | str | None = None
     last_activity: float | int | str | None = None
+    transport_connected: bool | None = None
+    fresh_rtp: bool | None = None
+    media_state: str | None = None
 
 
 _mountpoint_pins: dict[int, dict[str, Any]] = {}
@@ -48,6 +51,7 @@ def get_or_create_mountpoint_pin(
     mountpoint_id: int,
     stream_instance_id: str | None = None,
     lease_id: str | None = None,
+    owner_user_id: str | None = None,
 ) -> str:
     cached = _mountpoint_pins.get(mountpoint_id)
     if cached and cached.get("pin"):
@@ -55,6 +59,8 @@ def get_or_create_mountpoint_pin(
         if lease_id and cached.get("lease_id") == lease_id:
             if stream_instance_id and not cached.get("stream_instance_id"):
                 cached["stream_instance_id"] = stream_instance_id
+            if owner_user_id and not cached.get("owner_user_id"):
+                cached["owner_user_id"] = owner_user_id
             return str(cached["pin"])
 
         # Match by stream_instance_id
@@ -64,12 +70,16 @@ def get_or_create_mountpoint_pin(
         ):
             if lease_id and not cached.get("lease_id"):
                 cached["lease_id"] = lease_id
+            if owner_user_id and not cached.get("owner_user_id"):
+                cached["owner_user_id"] = owner_user_id
             return str(cached["pin"])
 
         # If a pin is already active for this mountpoint (viewer or reconnect)
-        if not cached.get("lease_id") or not lease_id or cached.get("janus_pin"):
+        if (not cached.get("lease_id") and not lease_id) or cached.get("janus_pin"):
             if stream_instance_id and not cached.get("stream_instance_id"):
                 cached["stream_instance_id"] = stream_instance_id
+            if owner_user_id and not cached.get("owner_user_id"):
+                cached["owner_user_id"] = owner_user_id
             return str(cached["pin"])
 
     new_pin = secrets.token_hex(8)
@@ -77,6 +87,8 @@ def get_or_create_mountpoint_pin(
         "pin": new_pin,
         "lease_id": lease_id,
         "stream_instance_id": stream_instance_id,
+        "owner_user_id": owner_user_id,
+        "created_at": time.time(),
     }
     return new_pin
 
@@ -86,15 +98,35 @@ def set_mountpoint_stream_instance(mountpoint_id: int, stream_instance_id: str) 
         _mountpoint_pins[mountpoint_id]["stream_instance_id"] = stream_instance_id
 
 
-def clear_mountpoint_pin(mountpoint_id: int, lease_id: str | None = None) -> None:
+def clear_mountpoint_pin(
+    mountpoint_id: int,
+    lease_id: str | None = None,
+    stream_instance_id: str | None = None,
+) -> None:
     cached = _mountpoint_pins.get(mountpoint_id)
     if not cached:
         return
-    if lease_id is None or cached.get("lease_id") == lease_id:
-        _mountpoint_pins.pop(mountpoint_id, None)
+    if lease_id is not None:
+        if cached.get("lease_id") == lease_id:
+            _mountpoint_pins.pop(mountpoint_id, None)
+        return
+    if stream_instance_id is not None:
+        if cached.get("stream_instance_id") == stream_instance_id:
+            _mountpoint_pins.pop(mountpoint_id, None)
+        return
+    _mountpoint_pins.pop(mountpoint_id, None)
 
 
 async def _destroy_janus_mountpoint(mountpoint_id: int) -> None:
+    cached = _mountpoint_pins.get(mountpoint_id)
+    if cached and cached.get("lease_id"):
+        logger.warning(
+            "Skipping Janus mountpoint %d teardown: active for lease %s",
+            mountpoint_id,
+            cached.get("lease_id"),
+        )
+        return
+
     clear_mountpoint_pin(mountpoint_id)
     janus_url = settings.l4media_janus_url.rstrip("/")
     try:
@@ -423,6 +455,9 @@ async def _get_ingress_status(sn: str) -> dict[str, Any]:
             "sn": sn,
             "last_rtp_at": None,
             "last_activity": None,
+            "transport_connected": False,
+            "fresh_rtp": False,
+            "media_state": "disconnected",
         }
 
     best = min(
@@ -437,33 +472,42 @@ async def _get_ingress_status(sn: str) -> dict[str, Any]:
     last_act = best.get("last_activity")
 
     now = time.time()
-    if idle is None:
-        if isinstance(last_rtp, (int, float)) and last_rtp > 0:
-            idle = max(0.0, now - float(last_rtp))
-        elif isinstance(last_act, (int, float)) and last_act > 0:
-            idle = max(0.0, now - float(last_act))
-
     rtp_pkts = int(best.get("rtp_packets", 0))
     bytes_count = int(best.get("bytes", 0))
+    state = str(best.get("state", "")).lower()
 
-    recent_rtp = False
-    if isinstance(last_rtp, (int, float)) and last_rtp > 0:
-        recent_rtp = (now - float(last_rtp)) <= 10
+    transport_connected = (state in ("streaming", "connected")) or (rtp_pkts > 0)
 
-    is_streaming = (
-        (recent_rtp and rtp_pkts > 0)
-        or (idle is not None and idle <= 10 and rtp_pkts > 0)
-        or (best.get("state") == "streaming" and idle is not None and idle <= 10)
-    )
+    fresh_rtp: bool | None = None
+    media_state = "disconnected"
+
+    if transport_connected:
+        if isinstance(last_rtp, (int, float)) and last_rtp > 0:
+            rtp_age = max(0.0, now - float(last_rtp))
+            if idle is None:
+                idle = rtp_age
+            fresh_rtp = (rtp_age <= 10.0) and (rtp_pkts > 0)
+            media_state = "live" if fresh_rtp else "stale"
+        elif idle is not None and isinstance(idle, (int, float)):
+            fresh_rtp = (idle <= 10.0) and (rtp_pkts > 0)
+            media_state = "live" if fresh_rtp else "stale"
+        else:
+            fresh_rtp = None
+            media_state = "unknown"
+
+    is_streaming = bool(transport_connected and fresh_rtp is True)
 
     return {
-        "streaming": bool(is_streaming),
+        "streaming": is_streaming,
         "rtp_packets": rtp_pkts,
         "bytes": bytes_count,
         "idle_sec": float(idle) if idle is not None else None,
         "sn": sn,
         "last_rtp_at": last_rtp,
         "last_activity": last_act,
+        "transport_connected": transport_connected,
+        "fresh_rtp": fresh_rtp,
+        "media_state": media_state,
     }
 
 
@@ -528,7 +572,10 @@ async def create_video_session(
         else None
     )
     pin = get_or_create_mountpoint_pin(
-        device_id, stream_instance_id=stream_instance_id, lease_id=lease_id
+        device_id,
+        stream_instance_id=stream_instance_id,
+        lease_id=lease_id,
+        owner_user_id=owner_user_id,
     )
 
     rtp_port, rtcp_port = get_device_ports(device_id)

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import time
-from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -16,7 +15,6 @@ from app.routers.video import (
     _ensure_janus_mountpoint,
     _get_ingress_status,
     _mountpoint_pins,
-    clear_mountpoint_pin,
     get_device_ports,
     get_or_create_mountpoint_pin,
     set_mountpoint_stream_instance,
@@ -297,7 +295,7 @@ async def test_session_cleanup_on_stop_and_release(mock_db_session, operator_tok
     app.dependency_overrides[get_db] = lambda: mock_db_session
 
     # Initialize pin in cache
-    pin = get_or_create_mountpoint_pin(1, lease_id="lease-cleanup-1")
+    get_or_create_mountpoint_pin(1, lease_id="lease-cleanup-1")
     assert 1 in _mountpoint_pins
 
     headers = {"Authorization": f"Bearer {operator_token}"}
@@ -342,7 +340,7 @@ async def test_stream_stop_idempotent_on_conflict_or_timeout(
     """stop_device_stream returns 200 with result='stopped' on 409 or supported 504."""
     app.dependency_overrides[get_db] = lambda: mock_db_session
 
-    pin = get_or_create_mountpoint_pin(1, lease_id="lease-idem-1")
+    get_or_create_mountpoint_pin(1, lease_id="lease-idem-1")
     assert 1 in _mountpoint_pins
 
     headers = {"Authorization": f"Bearer {operator_token}"}

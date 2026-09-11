@@ -16,6 +16,7 @@ import {
 import {
   acquireControlLease,
   CameraSource,
+  changeControlScope,
   ClickResult,
   createVideoSession,
   DeviceInventory,
@@ -31,6 +32,7 @@ import {
   stopDeviceStream,
   StreamPresenceInfo,
 } from "../api/video";
+import { SessionLifecycleCoordinator } from "../utils/sessionLifecycle";
 import { listTerminalsSettings } from "../api/settings";
 import { JanusStreamingClient } from "../api/janusClient";
 import { useSession } from "../session/SessionContext";
@@ -236,9 +238,75 @@ export default function VideoSurveillancePage() {
   }, []);
 
   // Хук удалённого управления (мышь/клавиатура)
+  const lastPacketGrowthTimeRef = useRef<number>(Date.now());
+
+  // Координатор сессии управляет generation/эпохами, keepalive и событиями терминала
+  const coordinatorRef = useRef<SessionLifecycleCoordinator>(
+    new SessionLifecycleCoordinator({
+      onKeepaliveRequest: async (deviceId, leaseId) => {
+        await keepaliveControlLease(deviceId, leaseId);
+      },
+      onReleaseRequest: async (deviceId, leaseId) => {
+        await releaseControlLease(deviceId, leaseId);
+      },
+      onScopeChangeRequest: async (deviceId, scope) => {
+        await changeControlScope(deviceId, scope);
+      },
+      onSessionTerminated: (reason, details) => {
+        message.warning(`Трансляция остановлена терминалом: ${reason || "остановлена"}`);
+        setStatusText(`Остановлена (${reason || "терминал"})`);
+        setStreamStage(details?.code === "failed" ? "failed" : "idle");
+        setIsSessionActive(false);
+        setActiveStream(null);
+        setActiveLeaseId(null);
+        leaseRef.current = null;
+        if (videoRef.current) {
+          videoRef.current.srcObject = null;
+        }
+        if (janusClientRef.current) {
+          void janusClientRef.current.stop();
+          janusClientRef.current = null;
+        }
+        if (pollTimerRef.current) {
+          clearInterval(pollTimerRef.current);
+          pollTimerRef.current = null;
+        }
+      },
+      onLeaseLost: (statusCode, msg) => {
+        message.error(`Аренда видеопотока завершена (${statusCode}): ${msg}. Сессия остановлена.`);
+        setStatusText(`Сессия завершена (${statusCode})`);
+        setStreamStage("failed");
+        setIsSessionActive(false);
+        setActiveStream(null);
+        setActiveLeaseId(null);
+        leaseRef.current = null;
+        if (videoRef.current) {
+          videoRef.current.srcObject = null;
+        }
+        if (janusClientRef.current) {
+          void janusClientRef.current.stop();
+          janusClientRef.current = null;
+        }
+        if (pollTimerRef.current) {
+          clearInterval(pollTimerRef.current);
+          pollTimerRef.current = null;
+        }
+      },
+    })
+  );
+
   const rc = useRemoteControl({
     deviceId: selectedDevice?.device_id ?? null,
     isSessionActive,
+    leaseId: activeLeaseId,
+    streamMode: activeStream?.mode,
+    sharedLease: true,
+    onStreamState: (event) => {
+      coordinatorRef.current.handleStreamStateEvent(event);
+    },
+    onLeaseLost: (reason) => {
+      void coordinatorRef.current.stopSession(`lease_revoked_${reason}`);
+    },
     onClickResult: handleClickResult,
     onErrorMessage: handleErrorMessage,
   });
@@ -246,39 +314,10 @@ export default function VideoSurveillancePage() {
   const rcRef = useRef(rc);
   rcRef.current = rc;
 
-  // Очистка интервала keepalive для аренды
-  const clearLeaseKeepalive = () => {
-    if (keepaliveTimerRef.current) {
-      clearInterval(keepaliveTimerRef.current);
-      keepaliveTimerRef.current = null;
-    }
-  };
-
-  // Запуск keepalive для аренды (каждые 5 секунд при TTL 15-20 с)
-  const startLeaseKeepalive = (deviceId: number, leaseId: string, _keepaliveSec = 15) => {
-    clearLeaseKeepalive();
-    keepaliveTimerRef.current = setInterval(async () => {
-      try {
-        await keepaliveControlLease(deviceId, leaseId);
-      } catch (e: any) {
-        console.error("Lease keepalive failed:", e);
-        const status = e?.response?.status || e?.status;
-        const detail =
-          e?.response?.data?.detail || e?.message || "Сессия аренды завершена";
-        if (status === 404 || status === 409 || status === 403) {
-          clearLeaseKeepalive();
-          message.error(
-            `Продление аренды видеопотока прервано (${status}): ${detail}. Сессия может быть завершена.`
-          );
-        }
-      }
-    }, 5000);
-  };
-
   // Остановка текущей медиасессии
-  const stopSession = useCallback(async () => {
-    clearLeaseKeepalive();
+  const stopSession = useCallback(async (reason = "normal") => {
     await rcRef.current.disable("session_stopped");
+    await coordinatorRef.current.stopSession(reason);
 
     if (pollTimerRef.current) {
       clearInterval(pollTimerRef.current);
@@ -300,15 +339,9 @@ export default function VideoSurveillancePage() {
     }
 
     if (leaseRef.current) {
-      const cur = leaseRef.current;
       leaseRef.current = null;
-      setActiveLeaseId(null);
-      try {
-        await releaseControlLease(cur.deviceId, cur.id);
-      } catch {
-        // ignore
-      }
     }
+    setActiveLeaseId(null);
 
     setIsSessionActive(false);
     setStatusText("Не запущена");
@@ -422,7 +455,12 @@ export default function VideoSurveillancePage() {
         const leaseRes = await acquireControlLease(deviceId, "view");
         setActiveLeaseId(leaseRes.lease_id);
         leaseRef.current = { id: leaseRes.lease_id, deviceId };
-        startLeaseKeepalive(deviceId, leaseRes.lease_id, leaseRes.keepalive_sec);
+        coordinatorRef.current.startSession({
+          deviceId,
+          leaseId: leaseRes.lease_id,
+          streamInstanceId: "viewer",
+          keepaliveIntervalMs: (leaseRes.keepalive_sec ? Math.min(leaseRes.keepalive_sec / 2, 5) : 5) * 1000,
+        });
 
         setStatusText("Подключение к медиапотоку...");
         const sessionData = await createVideoSession(deviceId);
@@ -490,7 +528,6 @@ export default function VideoSurveillancePage() {
       const leaseRes = await acquireControlLease(selectedDevice.device_id, "stream");
       setActiveLeaseId(leaseRes.lease_id);
       leaseRef.current = { id: leaseRes.lease_id, deviceId: selectedDevice.device_id };
-      startLeaseKeepalive(selectedDevice.device_id, leaseRes.lease_id, leaseRes.keepalive_sec);
 
       // 2. Route-before-Start: подготовка медиаканала (ingress и Janus mountpoint) ДО запуска FFmpeg
       setStatusText("Подготовка медиаканала (маршрутизация)...");
@@ -507,6 +544,14 @@ export default function VideoSurveillancePage() {
         source_id: source_id || "0",
         profile: selectedProfile,
         lease_id: leaseRes.lease_id,
+      });
+
+      // Запуск координатора сессии (generation tracking и неперекрывающийся keepalive)
+      coordinatorRef.current.startSession({
+        deviceId: selectedDevice.device_id,
+        leaseId: leaseRes.lease_id,
+        streamInstanceId: startRes.stream_instance_id,
+        keepaliveIntervalMs: (leaseRes.keepalive_sec ? Math.min(leaseRes.keepalive_sec / 2, 5) : 5) * 1000,
       });
 
       // 4. Подключение WebRTC-клиента Janus
@@ -556,6 +601,7 @@ export default function VideoSurveillancePage() {
 
       // 5. Периодический опрос качества и RTP пакетов
       prevPacketsRef.current = null;
+      lastPacketGrowthTimeRef.current = Date.now();
       pollTimerRef.current = setInterval(async () => {
         try {
           const [stat, stateRes, ctlStat] = await Promise.all([
@@ -568,7 +614,10 @@ export default function VideoSurveillancePage() {
             rcRef.current.setPresence(ctlStat.agent);
           }
           if (stateRes?.stream) {
-            setActiveStream(stateRes.stream);
+            coordinatorRef.current.handleStreamStateEvent(stateRes.stream);
+            if (stateRes.stream.state !== "stopped" && stateRes.stream.state !== "failed") {
+              setActiveStream(stateRes.stream);
+            }
           }
 
           const now = Date.now();
@@ -581,7 +630,16 @@ export default function VideoSurveillancePage() {
           prevPacketsRef.current = { packets: stat.rtp_packets, time: now };
 
           if (stat.streaming && stat.rtp_packets > 0) {
-            setStatusText(`В эфире (${pps} кадр/сек)`);
+            if (pps === 0 && now - lastPacketGrowthTimeRef.current > 15000) {
+              setStatusText("В эфире (кадры не поступают)");
+            } else {
+              if (pps > 0) {
+                lastPacketGrowthTimeRef.current = now;
+              }
+              setStatusText(`В эфире (${pps} кадр/сек)`);
+            }
+          } else if (!stat.streaming) {
+            setStatusText("Трансляция не передается");
           }
         } catch (e) {
           console.warn("Status poll error", e);
@@ -593,7 +651,7 @@ export default function VideoSurveillancePage() {
       message.error(formatted.message);
       setActiveStream(null);
       setIsSessionActive(false);
-      await stopSession();
+      await stopSession("start_failed");
       setStreamStage("failed");
       setStatusText(formatted.message);
     }
@@ -604,13 +662,14 @@ export default function VideoSurveillancePage() {
     if (!selectedDevice) return;
     setStreamStage("stopping");
     try {
-      if (leaseRef.current) {
-        await stopDeviceStream(selectedDevice.device_id, leaseRef.current.id);
+      const curLease = coordinatorRef.current.session?.leaseId || activeLeaseId;
+      if (curLease) {
+        await stopDeviceStream(selectedDevice.device_id, curLease);
       }
     } catch {
       // ignore
     }
-    await stopSession();
+    await stopSession("operator_stop");
     message.info("Трансляция остановлена");
   };
 
@@ -618,10 +677,15 @@ export default function VideoSurveillancePage() {
   const handleToggleControl = async () => {
     if (rc.status === "active") {
       await rc.disable("operator_manual");
+      await coordinatorRef.current.detachInput();
       message.info("Удалённое управление отключено");
     } else {
       if (activeStream?.mode === "usb-camera") {
         message.warning("Управление мышью недоступно в режиме трансляции камеры");
+        return;
+      }
+      if (activeStream?.mode && activeStream.mode !== "desktop") {
+        message.warning("Управление мышью доступно только в подтверждённом режиме рабочего стола");
         return;
       }
       try {

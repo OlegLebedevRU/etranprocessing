@@ -25,6 +25,11 @@ export type RemoteControlStatus =
 export interface UseRemoteControlOptions {
   deviceId: number | null;
   isSessionActive: boolean;
+  leaseId?: string | null;
+  streamMode?: string | null;
+  sharedLease?: boolean;
+  onStreamState?: (event: { state?: string; reason?: string; stream_instance_id?: string }) => void;
+  onLeaseLost?: (reason: string) => void;
   onErrorMessage?: (msg: string) => void;
   onClickResult?: (result: ClickResult) => void;
 }
@@ -32,6 +37,11 @@ export interface UseRemoteControlOptions {
 export function useRemoteControl({
   deviceId,
   isSessionActive,
+  leaseId,
+  streamMode,
+  sharedLease = false,
+  onStreamState,
+  onLeaseLost,
   onErrorMessage,
   onClickResult,
 }: UseRemoteControlOptions) {
@@ -47,6 +57,9 @@ export function useRemoteControl({
   const helloTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeDeviceIdRef = useRef<number | null>(deviceId);
   activeDeviceIdRef.current = deviceId;
+
+  // Track currently held keys for safe release on teardown
+  const pressedKeysRef = useRef<Set<number>>(new Set());
 
   // Pending move throttling
   const lastMoveSentTimeRef = useRef<number>(0);
@@ -121,6 +134,24 @@ export function useRemoteControl({
       leaseRef.current = null;
       setLease(null);
 
+      // Safely release any pressed keys before disconnecting
+      if (
+        pressedKeysRef.current.size > 0 &&
+        wsRef.current &&
+        wsRef.current.readyState === WebSocket.OPEN
+      ) {
+        for (const vk of pressedKeysRef.current) {
+          try {
+            wsRef.current.send(JSON.stringify({ type: "key_event", kind: "up", vk }));
+          } catch {
+            // ignore
+          }
+        }
+      }
+      pressedKeysRef.current.clear();
+
+      const isDetachingInput = sharedLease && isSessionActive && reason !== "session_stopped";
+
       // Send release message if WS is open and detach handlers
       if (wsRef.current) {
         const socket = wsRef.current;
@@ -129,7 +160,7 @@ export function useRemoteControl({
         socket.onclose = null;
         socket.onerror = null;
         socket.onmessage = null;
-        if (socket.readyState === WebSocket.OPEN) {
+        if (!isDetachingInput && socket.readyState === WebSocket.OPEN) {
           try {
             socket.send(JSON.stringify({ type: "release" }));
           } catch {
@@ -143,8 +174,8 @@ export function useRemoteControl({
         }
       }
 
-      // Best-effort DELETE lease
-      if (currentLease && targetDeviceId !== null) {
+      // Best-effort DELETE lease only if NOT a shared lease or NOT detaching input
+      if (!sharedLease && currentLease && targetDeviceId !== null) {
         try {
           await releaseControlLease(targetDeviceId, currentLease.lease_id);
         } catch {
@@ -152,11 +183,18 @@ export function useRemoteControl({
         }
       }
     },
-    []
+    [sharedLease, isSessionActive]
   );
 
   const enable = useCallback(async () => {
     if (!deviceId || !isSessionActive) {
+      return;
+    }
+
+    if (streamMode && streamMode !== "desktop") {
+      const msg = "Управление доступно только в режиме рабочего стола";
+      setErrorMessage(msg);
+      if (onErrorMessage) onErrorMessage(msg);
       return;
     }
 
@@ -168,7 +206,9 @@ export function useRemoteControl({
       // 1. Acquire control lease
       const leaseData = await acquireControlLease(deviceId, "input");
       if (activeDeviceIdRef.current !== deviceId) {
-        void releaseControlLease(deviceId, leaseData.lease_id).catch(() => {});
+        if (!sharedLease) {
+          void releaseControlLease(deviceId, leaseData.lease_id).catch(() => {});
+        }
         return;
       }
 
@@ -261,11 +301,25 @@ export function useRemoteControl({
               return;
             }
 
+            if (data.type === "stream_state") {
+              if (onStreamState) {
+                onStreamState({
+                  state: data.state,
+                  reason: data.reason,
+                  stream_instance_id: data.stream_instance_id,
+                });
+              }
+              return;
+            }
+
             if (data.type === "lease_revoked") {
               const msg = `Сессия управления завершена: ${data.reason || "отзыв аренды"}`;
               setErrorMessage(msg);
               if (onErrorMessage) {
                 onErrorMessage(msg);
+              }
+              if (onLeaseLost) {
+                onLeaseLost(data.reason || "lease_revoked");
               }
               void disable("revoked");
               return;
@@ -340,11 +394,26 @@ export function useRemoteControl({
       }
       await disable("failed");
     }
-  }, [deviceId, isSessionActive, disable, onErrorMessage, onClickResult, sendWsMessage]);
+  }, [
+    deviceId,
+    isSessionActive,
+    leaseId,
+    streamMode,
+    sharedLease,
+    disable,
+    onErrorMessage,
+    onClickResult,
+    sendWsMessage,
+  ]);
 
   const sendKey = useCallback(
     (kind: "down" | "up" | "press", vk: number, text?: string) => {
-      if (status !== "active") return false;
+      if (status !== "active" || streamMode !== "desktop") return false;
+      if (kind === "down") {
+        pressedKeysRef.current.add(vk);
+      } else if (kind === "up") {
+        pressedKeysRef.current.delete(vk);
+      }
       return sendWsMessage({
         type: "key_event",
         kind,
@@ -352,12 +421,12 @@ export function useRemoteControl({
         text,
       });
     },
-    [status, sendWsMessage]
+    [status, streamMode, sendWsMessage]
   );
 
   const sendMove = useCallback(
     (x: number, y: number) => {
-      if (status !== "active") return;
+      if (status !== "active" || streamMode !== "desktop") return;
 
       const clampedX = Math.max(0, Math.min(65535, Math.round(x)));
       const clampedY = Math.max(0, Math.min(65535, Math.round(y)));
@@ -387,12 +456,12 @@ export function useRemoteControl({
         }, remaining);
       }
     },
-    [status, sendWsMessage]
+    [status, streamMode, sendWsMessage]
   );
 
   const sendClick = useCallback(
     async (x: number, y: number): Promise<ClickResult> => {
-      if (status !== "active") {
+      if (status !== "active" || streamMode !== "desktop") {
         return { result: "unconfirmed", message: "Управление не активно" };
       }
 
@@ -443,7 +512,7 @@ export function useRemoteControl({
         }
       });
     },
-    [status, sendWsMessage, onClickResult]
+    [status, streamMode, sendWsMessage, onClickResult]
   );
 
   // Auto-disable when session stops
@@ -464,11 +533,13 @@ export function useRemoteControl({
   // Cleanup on unmount, pagehide, or broadcast logout
   useEffect(() => {
     const handleUnload = () => {
-      const curLease = leaseRef.current;
-      const targetDevId = activeDeviceIdRef.current;
-      if (curLease && targetDevId !== null) {
-        const url = `/api/v1/video/devices/${targetDevId}/control/lease/${curLease.lease_id}`;
-        navigator.sendBeacon?.(url);
+      if (!sharedLease) {
+        const curLease = leaseRef.current;
+        const targetDevId = activeDeviceIdRef.current;
+        if (curLease && targetDevId !== null) {
+          const url = `/api/v1/video/devices/${targetDevId}/control/lease/${curLease.lease_id}`;
+          navigator.sendBeacon?.(url);
+        }
       }
     };
     window.addEventListener("beforeunload", handleUnload);
