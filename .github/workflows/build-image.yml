@@ -1,0 +1,192 @@
+name: Build and deploy images
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - MenuBuilder/backend/**
+      - MenuBuilder/frontend/**
+      - ProcessingBackend/backend/**
+      - shared/**
+      - l4media/ingress/**
+      - l4media/nginx/**
+      - .github/**
+      - .dockerignore
+      - .gitattributes
+  workflow_dispatch:
+    inputs:
+      component:
+        description: Подсистема для сборки и деплоя
+        type: choice
+        required: true
+        default: menubuilder-backend
+        options:
+          - all
+          - menubuilder-backend
+          - menubuilder-frontend
+          - processingbackend
+          - l4media-ingress
+          - l4media-nginx
+      deploy:
+        description: Доставить на production (false — только тесты и публикация образа)
+        type: boolean
+        required: true
+        default: true
+
+permissions:
+  contents: read
+
+# Do not interrupt a deployment. The single builder also bounds memory usage.
+concurrency:
+  group: etran-production-release
+  cancel-in-progress: false
+
+env:
+  REGISTRY: dev-leo4-ru.cr.cloud.ru
+  REGISTRY_NAMESPACE: etran
+  DEPLOY_HOST: 87.242.100.34
+  DEPLOY_USER: user1
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  changes:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.select.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          sparse-checkout: |
+            .github
+      - name: Test CI contracts
+        run: python3 -m unittest discover -s .github/ci -v
+      - name: Select matrix.trigger
+        id: select
+        env:
+          CI_BOOTSTRAP_COMPONENT: ${{ vars.CI_BOOTSTRAP_COMPONENT }}
+        run: python3 .github/ci/matrix.py
+
+  release:
+    needs: changes
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 45
+    strategy:
+      max-parallel: 1
+      fail-fast: true
+      matrix: ${{ fromJSON(needs.changes.outputs.matrix) }}
+    name: Release ${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v4
+        if: matrix.trigger
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            .github
+            MenuBuilder
+            ProcessingBackend/backend
+            shared
+            l4media
+            nginx-configs
+            docs
+
+      - name: Prepare isolated SSH identity
+        if: matrix.trigger && (github.event_name == 'push' || inputs.deploy)
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          umask 077
+          SSH_DIR="$(mktemp -d "$RUNNER_TEMP/etran-ssh.XXXXXX")"
+          printf 'SSH_DIR=%s\n' "$SSH_DIR" >> "$GITHUB_ENV"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$SSH_DIR/key"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$SSH_DIR/known_hosts"
+          ssh -n -i "$SSH_DIR/key" -o IdentitiesOnly=yes -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$SSH_DIR/known_hosts" \
+            -o ConnectTimeout=15 "$DEPLOY_USER@$DEPLOY_HOST" 'sudo -n docker compose version --short'
+
+      - uses: astral-sh/setup-uv@v6
+        if: matrix.trigger && matrix.python
+        with:
+          enable-cache: true
+
+      - name: Python compilation and tests
+        if: matrix.trigger && matrix.python
+        working-directory: ${{ matrix.directory }}
+        run: |
+          set -euo pipefail
+          uv sync --locked
+          uv run --locked python -m compileall -q app tests
+          uv run --locked pytest
+
+      - name: Isolate registry credentials
+        if: matrix.trigger
+        run: |
+          umask 077
+          CONFIG="$(mktemp -d "$RUNNER_TEMP/etran-docker.XXXXXX")"
+          printf 'DOCKER_CONFIG=%s\n' "$CONFIG" >> "$GITHUB_ENV"
+
+      - name: Set up cached Buildx
+        if: matrix.trigger
+        uses: docker/setup-buildx-action@v3
+        with:
+          name: etran-builder
+          keep-state: true
+          cache-binary: true
+
+      - name: Log in to registry
+        if: matrix.trigger
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.REGISTRY_KEYID }}
+          password: ${{ secrets.REGISTRY_KEYSECRET }}
+
+      - name: Build and push SHA image
+        if: matrix.trigger
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          builder: etran-builder
+          push: true
+          pull: true
+          platforms: linux/amd64
+          tags: ${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/${{ matrix.name }}:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+      - name: Pull and deploy on production
+        if: matrix.trigger && (github.event_name == 'push' || inputs.deploy)
+        env:
+          COMPONENT: ${{ matrix.name }}
+          REVISION: ${{ github.sha }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          SSH_ARGS=(-i "$SSH_DIR/key" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$SSH_DIR/known_hosts" -o ConnectTimeout=15)
+          REMOTE_DIR="/home/user1/.etran-ci/runs/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/$COMPONENT"
+          ssh -n "${SSH_ARGS[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "install -d -m 700 '$REMOTE_DIR'"
+          scp "${SSH_ARGS[@]}" .github/ci/deploy.py .github/ci/components.py "$DEPLOY_USER@$DEPLOY_HOST:$REMOTE_DIR/"
+          ssh -n "${SSH_ARGS[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "python3 '$REMOTE_DIR/deploy.py' '$COMPONENT' '$REVISION' '$DIGEST'"
+          printf '### Deployed %s\n- Commit: `%s`\n- Image: `%s/%s/%s@%s`\n' \
+            "$COMPONENT" "$REVISION" "$REGISTRY" "$REGISTRY_NAMESPACE" "$COMPONENT" "$DIGEST" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove temporary credentials
+        if: always() && matrix.trigger
+        run: |
+          if [ -n "${SSH_DIR:-}" ]; then rm -rf -- "$SSH_DIR"; fi
+          if [ -n "${DOCKER_CONFIG:-}" ]; then
+            docker logout "$REGISTRY" || true
+            # Leave the temporary builder metadata until the Buildx post-step.
+            rm -f -- "$DOCKER_CONFIG/config.json"
+          fi

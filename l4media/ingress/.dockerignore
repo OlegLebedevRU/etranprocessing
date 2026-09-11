@@ -1,0 +1,7 @@
+**
+!Makefile
+!src/
+!src/**
+!tests/
+!tests/**
+!routes.conf
