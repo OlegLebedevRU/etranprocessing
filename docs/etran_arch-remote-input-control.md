@@ -124,16 +124,19 @@
 - **Время жизни аренды на сервере `app1`**: базовый TTL составляет 15–20 секунд для оперативного обнаружения обрыва связи (предельный — до 60 секунд).
 - **Интервал keepalive**: клиент (Frontend) продлевает аренду каждые 5 секунд через `POST /api/v1/video/devices/{device_id}/control/keepalive`.
 - **Сквозная цепочка продления (Keepalive Chain)**:
-  1. Frontend регулярно вызывает keepalive-эндпоинт BFF `POST .../control/keepalive`.
-  2. BFF авторизует запрос и вызывает `POST /api/internal/v1/remote-input/lease/{lease_id}/keepalive` в `app1`.
-  3. `app1` обновляет `expires_at` в `LeaseRegistry` и публикует исходящую управляющую команду `CtlLeaseRenew` (`lease_renew`) в RabbitMQ/MQTT топик `srv/<SN>/ctl` при каждом keepalive (как по REST, так и по WebSocket).
-  4. Агент `l4desk` принимает `lease_renew` и вызывает `ffmpeg_supervisor_update_lease()`, сдвигая таймер локального fail-closed watchdog'а (5 с grace) и предотвращая остановку FFmpeg.
-- **Автоматическое освобождение (Release)**:
+  1. Frontend через координатор жизненного цикла `SessionLifecycleCoordinator` с неперекрывающимся расписанием и трекингом поколений (`generation`) вызывает эндпоинт BFF `POST .../control/keepalive`.
+  2. BFF авторизует запрос и вызывает `POST /api/internal/v1/remote-input/lease/{lease_id}/keepalive` в `app1` (с поддержкой `generation` и `wait_ack`). При истекшей аренде возвращается нормализованный JSON `{"code": "lease_not_found", ...}`, что позволяет надежно отличить потерю сессии от отсутствия самого HTTP-маршрута.
+  3. `app1` обновляет `expires_at` в `LeaseRegistry` и публикует исходящую команду `CtlLeaseRenew` (`lease_renew`) с каноническим wire-полем `command_id` UUID в топик `srv/<SN>/ctl` (как по REST, так и по WebSocket). В ответе отдается статус `renew_status` (`server_accepted`, `terminal_applied`, etc.) и `applied_deadline_ms`.
+  4. Агент `l4desk` принимает `lease_renew`, проверяет совпадение активной `lease_id`, валидность дедлайна `expires_at_ms > now_ms` (а также соответствие эпохи `stream_instance_id`, если поле передано в команде). При успехе вызывает `ffmpeg_supervisor_update_lease()`, сдвигая таймер локального fail-closed watchdog'а (5 с grace) и предотвращая остановку FFmpeg.
+- **Автоматическое освобождение (Release) и безопасный Detach**:
+  - **Безопасное отключение ввода (`detachInput`):** оператор может отключить удаленное управление без уничтожения общей видеотрансляции. Scope понижается до `stream`, общая аренда не удаляется (`sharedLease = true`), что исключает коллизию с последующим падением keepalive в 404.
+  - **Сброс клавиш при завершении:** при teardown сессии или отключении ввода фронтенд гарантированно отправляет `key_event` с `kind="up"` для всех зажатых клавиш, исключая залипание ввода на терминале.
   - При закрытии вкладки / навигации со страницы срабатывает `pagehide` / `beforeunload` с отправкой запроса на освобождение аренды.
   - При выходе из системы (`POST /api/auth/logout`) BFF вызывает `DELETE /api/internal/v1/remote-input/leases/by-owner`, освобождая все активные аренды сессии пользователя.
+  - Повторный `DELETE /lease/{lease_id}` тем же владельцем строго идемпотентен (`204 No Content`) и не дублирует побочные эффекты.
   - При отзыве аренды (`lease_revoked`) по WebSocket плеер и оверлей немедленно останавливаются с отображением причины.
-- **Синхронизация состояния стрима по `stream_event`**: при получении терминального события со `state in ("stopped", "failed")` сервис `app1` сбрасывает состояние стрима в активной аренде (`lease.stream_state = "stopped"`, `lease.stream_instance_id = None`) и рассылает оповещение WebSocket-клиентам. Это предотвращает рассинхронизацию, когда на UI отображается статус «В эфире», но фактически процесс трансляции остановлен или упал.
-- **Идемпотентность остановки**: вызов `POST .../stream/stop` идемпотентен — если поток уже остановлен на терминале или в `app1` (`no active stream for lease` / `already_stopped`), BFF возвращает `200 OK` (`result="stopped"`), не выбрасывая ошибку 409 Conflict.
+- **Синхронизация состояния стрима по `stream_event`**: при получении терминального события со `state in ("stopped", "failed")` сервис `app1` сбрасывает состояние стрима в активной аренде (`lease.stream_state = "stopped"`, `lease.stream_instance_id = None`) и рассылает оповещение WebSocket-клиентам. События устаревших эпох стрима отфильтровываются как в `app1`, так и в BFF WebSocket-прокси.
+- **Идемпотентность остановки**: вызов `POST .../stream/stop` идемпотентен — если поток уже остановлен на терминале или в `app1` (`no active stream for lease` / `already_stopped`), BFF возвращает `200 OK` (`result="stopped"`), очищает PIN mountpoint, при этом сохраняя `409 Conflict` для реальных конфликтов организации, владельца или эпохи.
 
 ---
 

@@ -31,15 +31,19 @@ Lease и stream state разделены; нормативная [lease lifecycl
 
 ## Проверка
 Producer/consumer fixtures обеих ревизий, REST и WS keepalive → MQTT → ACK → local expiry;
-duplicate/late/offline/restart. Шаблон [release handoff](../tasks/release-handoff-template.md).
+тесты `test_step4_reproduce_and_contracts.py`, полный набор pytest (101 тест), ruff check/format.
 
-## Известные риски и незавершённые вопросы
-Нет доступа к исходникам/deployed revision в рамках этой задачи. Все сведения о внутренней
-реализации app1 — документальные, не гарантия текущего сервиса.
+## Актуальный статус реализации (Шаг 4)
+- Поле `CtlLeaseRenew` сериализует каноническое wire-поле `command_id` UUID.
+- Поддержаны семантика `renew_status` (`server_accepted`, `terminal_applied`, etc.) и `applied_deadline_ms`.
+- Защищен режим камеры от сброса в desktop при re-acquire и scope upgrade.
+- Безопасный идемпотентный release для владельца, изоляция эпох стримов.
+- Сервис протестирован и задеплоен на хост 87.242.100.34 (200 OK на /docs).
 
 ## Источники и актуальность
 - Authoritative docs: [E2E](../../docs/etran_arch-video-remote-desktop-e2e.md),
-  [console](../../docs/ops_run-remote-console-diagnostics.md).
-- Code references: BFF keepalive просмотрен; app1 — не проверен.
-- Проверено: 2026-09-11, HEAD `63ce6a7` локального репозитория, без runtime.
-- Обновить при: app1 revision, DTO, publish/consume, state/TTL или совместном релизе.
+  [console](../../docs/ops_run-remote-console-diagnostics.md),
+  [protocol specification](../../docs/ingress_iot/remote-input-protocol.md).
+- Code references: BFF keepalive и schemas/service app1 актуализированы.
+- Актуализировано: 2026-09-11, реализация Шага 4, деплой на 87.242.100.34.
+- Обновить при: стендовой E2E-верификации и ревизии provisioning топиков.

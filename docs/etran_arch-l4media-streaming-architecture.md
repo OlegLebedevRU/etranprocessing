@@ -495,18 +495,35 @@ export const TerminalVideoTab: React.FC<TerminalVideoTabProps> = ({ terminalSn }
 
 ---
 
-## 6. Отказоустойчивость, лимиты и жизненный цикл соединений
+## 6. Отказоустойчивость, лимиты, свежесть медиапотока и безопасность
 
-1. **Таймауты неактивности (Idle Disconnect):**
+1. **Контроль свежести видеопотока (RTP Freshness vs Transport Connectivity):**
+   * В `l4media-ingress` раздельно отслеживаются временные метки `last_rtp_time` (приём кадра RTP `0x01`) и `last_activity` (транспортный keepalive `0x03` или RTCP `0x02`).
+   * Транспортные keepalive и RTCP-пакеты **не** обновляют `last_rtp_time`.
+   * Введён порог свежести медиакадров `RTP_STALE_DEADLINE_SEC = 10` и монотонная эпоха соединения `connection_epoch`.
+   * Состояние клиента типизировано через enum `media_state`:
+     - `receiving_fresh_media`: активный приём RTP-пакетов (с момента последнего пакета прошло < 10 с);
+     - `stale`: TCP-соединение живо, но RTP-пакеты не поступали более 10 секунд (поток застыл/остановлен);
+     - `connected`: соединение установлено, но RTP-пакеты ещё не поступали;
+     - `disconnected`: соединение отсутствует.
+   * Контрольный API расширен: `GET /stats` отдаёт `media_state`, `last_rtp_time`, `fresh_rtp`, добавлен целевой эндпоинт `GET /stats/<sn>`.
+   * В бэкенде `MenuBuilder` статус стрима переводится в `stale`/`unknown` при отсутствии свежих RTP, что исключает ложный показ статуса «В эфире».
+2. **Конфиденциальность и безопасность логов:**
+   * В `janus.jcfg` уровень отладки зафиксирован на `debug_level = 3` (вместо 4), что исключает вывод тел HTTP/WS-запросов с PIN и авторизационными данными в открытый stdout контейнера.
+   * В `l4media-nginx` потоковый лог перенаправлен в стандартные потоки `/dev/stdout` и `/dev/stderr`.
+3. **Автоматическое тестирование и сборка:**
+   * В `l4media/ingress` внедрены C unit-тесты (`tests/test_ingress_unit.c`), исполняемые автоматически на этапе сборки Docker-образа (`make test`).
+   * Реализован набор интеграционных регрессионных тестов `tests/test_ingress_regression.py` (6 сценариев: stale-RTP, RTCP-only, socket-open idle, duplicate SN / monotonic epoch, dynamic route, malformed framing).
+4. **Таймауты неактивности (Idle Disconnect):**
    * В `leo4proxy` настроен параметр `--rtp-idle-timeout 30` (при отсутствии кадров от ffmpeg в течение 30 секунд mTLS-туннель разрывается, переводя прокси в режим ожидания `IDLE`).
    * В Nginx stream задан `proxy_timeout 3600s` для предотвращения обрыва длительных сессий оператора.
-2. **Экспоненциальный Backoff при сбоях связи:**
+5. **Экспоненциальный Backoff при сбоях связи:**
    * При разрыве mTLS-соединения с сервером `leo4proxy` переходит в состояние `STATE_BACKOFF` с удвоением интервала реконнекта (от 3 до 30 секунд), предотвращая перегрузку сервера запросами.
-3. **Лимиты ресурсов (Docker Resource Constraints):**
+6. **Лимиты ресурсов (Docker Resource Constraints):**
    * Контейнер `l4media-ingress`: лимит памяти 128 MB (реальное потребление < 15 MB).
    * Контейнер `l4media-nginx`: лимит памяти 128 MB.
    * Контейнер `l4media-janus`: лимит памяти 512 MB.
-4. **Контроль целостности буфера при сетевых всплесках:**
+7. **Контроль целостности буфера при сетевых всплесках:**
    * Локальные UDP-сокеты в `leo4proxy` имеют буфер `SO_RCVBUF = 512 KB` для предотвращения потерь пакетов во время пачек ключевых кадров (IDR-bursts).
    * Выходной UDP-сокет в `l4media-ingress` имеет буфер `SO_SNDBUF = 1 MB`.
 
@@ -514,10 +531,11 @@ export const TerminalVideoTab: React.FC<TerminalVideoTabProps> = ({ terminalSn }
 
 ## 7. Сводная таблица соответствия спецификации
 
-| Характеристика | Спецификация | Текущая реализация в Alpha-MVP |
+| Характеристика | Спецификация | Текущая реализация (Шаг 4) |
 |---|---|---|
 | **Входной протокол на сервере** | mTLS TCP :8443 (TLS 1.2, SChannel ciphers, Client Cert CA) | Полностью реализовано (`l4media-nginx`, образ Alpine stream) |
 | **Формат транспортного фрейминга** | Преамбула L4RTP/1 (`L4RT`), кадры RTP (`0x01`), RTCP (`0x02`), Keepalive (`0x03`) | Полностью реализовано (`l4media-ingress` на чистом C) |
-| **Маршрутизация по серийному номеру** | Таблица маршрутов SN -> (rtp_port, rtcp_port) | Реализовано: файл `routes.conf` + динамический HTTP API на порту 9100 |
-| **Выходной медиасервер** | Janus WebRTC Gateway (H.264, PT 96) | Полностью реализовано (`l4media-janus`, mountpoint 1) |
-| **Интеграция с MenuBuilder** | Сеть `user1_default`, Control API 9100, Janus APIs (8088/8188/7088), MQTT RPC 7000 | Сетевые интерфейсы и Control API готовы к подключению |
+| **Телеметрия свежести медиа** | Раздельный учёт `last_rtp_time` и `last_activity`, дедлайн 10 с, enum `media_state` | Полностью реализовано (`l4media-ingress` c `/stats` и `/stats/<sn>`, BFF integration) |
+| **Маршрутизация по серийному номеру** | Таблица маршрутов SN -> (rtp_port, rtcp_port) | Реализовано: динамический HTTP API на порту 9100 (`/routes/<sn>`) |
+| **Выходной медиасервер** | Janus WebRTC Gateway (H.264, PT 96) | Полностью реализовано (`l4media-janus`, mountpoints c PIN, `debug_level = 3`) |
+| **Интеграция с MenuBuilder** | Сеть `user1_default`, Control API 9100, Janus APIs (8088/8188/7088), ctl v1 | Полностью реализовано и задеплоено на хосте 87.242.100.34 |

@@ -41,20 +41,25 @@ agent restart → reconcile → stopped/agent_restart_reconcile.
 - [build.cmd](../../tools/l4desk/build.cmd) — штатная MSVC /MT сборка.
 
 ## Проверка
-- После изменений C: из tools\l4desk выполнить `cmd /c build.cmd all`.
-- Проверить свежие `bin\x86\l4desk.exe`, `bin\x64\l4desk.exe`, `bin\l4desk.exe`;
+- После изменений C: из tools\l4desk выполнить `cmd /c build.cmd all` (сборка /MT x86 и x64).
+- Проверить свежие `bin\x86\l4desk.exe`, `bin\x64\l4desk.exe`, `bin\l4desk.exe` (v1.5.0);
   default копируется из x86, x86 — совместимость Windows 7 SP1+/WOW64.
+- Запуск тестов: `cmd /c tools\l4desk\tests\run_tests.cmd` (модульные тесты C) и
+  `python tools\l4desk\tests\integration_test.py` (сквозная интеграция с Mosquitto).
 - [Матрица](../operations/validation-matrix.md): renew/NACK/dedup/expiry/recovery/reconcile,
   x86 и x64; сборка не заменяет runtime/e2e. Для doc-only сборка не нужна.
 
-## Известные риски и незавершённые вопросы
-Renew ACK без expiry и границы grace/dedup — [известные gaps](../contracts/lease-lifecycle.md).
-app1 и UI propagation не проверялись runtime. MQTT client type требует уточнения
-перед изменением клиента; эта карточка лишь описывает существующий svc_desk.
+## Актуальный статус реализации (v1.5.0, Шаг 4)
+- Строгая проверка эпохи `stream_instance_id` (NACK `stream_mismatch`).
+- Строгая валидация дедлайна `expires_at_ms > now_ms` (NACK `invalid_payload`).
+- Сессионный мьютекс изолирован по SN: `Local\L4Desk_SingleInstance_<SN>`.
+- Подтверждена обработка канонического `command_id` UUID из `app1`.
+- Остаточный этап: стендовая верификация E2E на целевом терминале.
 
 ## Источники и актуальность
 - Authoritative docs: [E2E](../../docs/etran_arch-video-remote-desktop-e2e.md),
-  [remote input](../../docs/etran_arch-remote-input-control.md), [AGENTS](../../AGENTS.md).
+  [remote input](../../docs/etran_arch-remote-input-control.md), [AGENTS](../../AGENTS.md),
+  [README](../../tools/l4desk/README.md), [CHANGELOG](../../tools/l4desk/CHANGELOG.md).
 - Code references: ctl_protocol, supervisor и build.cmd просмотрены; остальные — точки входа.
-- Проверено: 2026-09-11, HEAD `63ce6a7`, код/документы, без build/runtime.
+- Актуализировано: 2026-09-11, релиз 1.5.0, Шаг 4.
 - Обновить при: ctl, input policy, FFmpeg lifecycle, build/артефактах.

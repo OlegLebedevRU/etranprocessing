@@ -29,15 +29,20 @@ disconnect/idle/stop требует раздельной оценки lease, ing
 - [compose.yaml](../../compose.yaml) — локальная orchestration reference, не доказательство runtime.
 
 ## Проверка
-Framing, invalid/duplicate SN, route absent, stale counters, first frame, browser ICE/decode,
-reconnect/stop и недоступность management извне. Подробно [video contract](../contracts/video-streaming.md).
+C unit-тесты (`tests/test_ingress_unit.c`) исполняются автоматически в Dockerfile (`make test`).
+Python regression suite `tests/test_ingress_regression.py` (6 сценариев).
+Подробно [video contract](../contracts/video-streaming.md).
 
-## Известные риски и незавершённые вопросы
-Cert↔SN binding и fresh RTP telemetry требуют отдельной проверки; не подтверждены этой карточкой.
+## Актуальный статус реализации (Шаг 4)
+- В ingress разделены метки `last_rtp_time` и `last_activity` (RTCP/keepalive не обновляют RTP).
+- Реализован порог свежести `RTP_STALE_DEADLINE_SEC = 10`, эпоха `connection_epoch` и enum `media_state`.
+- Добавлены эндпоинты `/stats` и `/stats/<sn>`.
+- Уровень отладки Janus понижен до `debug_level = 3` (исключена утечка PIN).
+- Логи Nginx направлены в `/dev/stdout` и `/dev/stderr`. Стек задеплоен на 87.242.100.34.
 
 ## Источники и актуальность
 - Authoritative docs: [E2E](../../docs/etran_arch-video-remote-desktop-e2e.md),
   [media](../../docs/etran_arch-l4media-streaming-architecture.md).
-- Code references: навигационные ссылки выше, media runtime не исследован.
-- Проверено: 2026-09-11, HEAD `63ce6a7`, документальная карта ответственности.
+- Code references: l4media_ingress.c, ingress/Makefile, janus.jcfg, nginx.conf.
+- Актуализировано: 2026-09-11, реализация Шага 4, деплой на 87.242.100.34.
 - Обновить при: ingress protocol/routes, Janus/ICE, TLS trust boundary или deployment.

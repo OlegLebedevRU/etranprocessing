@@ -11,17 +11,18 @@ l4desk — локальный expiry, FFmpeg и освобождение вво�
 ## Внешние контракты
 | Direction | Transport | Endpoint/topic | Main payload | Guarantees |
 |---|---|---|---|---|
-| UI → BFF → app1 | REST | BFF control/keepalive → `/api/internal/v1/remote-input/lease/{lease_id}/keepalive` | lease_id, доверенный owner context | endpoint успех ≠ terminal renew |
-| app1 → l4desk | MQTT | `srv/{SN}/ctl` | lease_renew, command_id, lease_id, expires_at_ms | QoS 1, no retain, локальная проверка |
-| l4desk → app1/UI | MQTT → WS/status | `dev/{SN}/ctl` | ack/nack или stream_event с причиной | no retain; propagation требует E2E |
+| UI → BFF → app1 | REST / WS | BFF control/keepalive → `/api/internal/v1/remote-input/lease/{lease_id}/keepalive` | lease_id, generation, wait_ack, owner context | wait_ack=1 ожидает terminal ACK; возврат renew_status |
+| app1 → l4desk | MQTT | `srv/{SN}/ctl` | lease_renew, command_id (UUID), lease_id, expires_at_ms, ttl_sec | QoS 1, no retain, wire-поле command_id канонизировано |
+| l4desk → app1/UI | MQTT → WS/status | `dev/{SN}/ctl` | ack (renewed/nack), applied_deadline_ms, stream_event с причиной | no retain; propagation в WS и UI координатор |
 
 ## Инварианты
 - **lease_expired — terminal safety stop; recovery запрещён.**
 - **unexpected_exit при валидной неистекшей lease — причина bounded recovery.**
 - lease_id защищает от старых сессий; stream_instance_id — от старой эпохи стрима.
 - Нормативно renew требует будущий expiry, совпадающий ID и running/restarting;
-  текущие ограничения проверки ниже не следует считать допустимой нормой.
+  строгая валидация expires_at_ms > now_ms (и stream_instance_id при наличии) внедрена в Step 4.
 - Stop/release отменяет recovery; reconcile не оставляет orphan и ложный UI running.
+- Отключение ввода (detach input) не удаляет общую видеотрансляцию (sharedLease в SessionLifecycleCoordinator).
 
 ## State machine
 Концептуальная lease: `created → active → renewed → expired → stopped`.
@@ -51,19 +52,20 @@ stop keepalive → lease_expired без restart. Отдельно controlled une
 wrong lease, missing/zero/past expiry, duplicate до/после TTL, expiry во время backoff,
 restart агента и доставка события в UI. [Полная матрица](../operations/validation-matrix.md).
 
-## Известные риски и незавершённые вопросы
-- **Код:** отсутствующий/нулевой expires_at_ms может дать ACK без продления; общий
-  expiry-check допускает 2000 мс tolerance. Это не строгая валидация будущего срока.
-- **Код:** expiration проверяется до dedup; после TTL повтор может вернуть expired,
-  а не исходный ответ. Некоторые NACK renew не кладутся в cache.
-- **Код:** watchdog действует только при expiry > 0 и имеет grace +5 с; это слабее
-  строгого требования «recovery только до expiry». Граничные случаи не проверены runtime.
-- **Документ:** app1 публикует renew и очищает stream по event; внешний код не проверен.
-  Локальная архитектура явно оставляет E2E этап незавершённым.
+## Устраненные дефекты и актуальное состояние (Шаг 4)
+- **F1 / F2 (app1):** `CtlLeaseRenew` сериализует каноническое wire-поле `command_id` UUID;
+  терминальный агент корректно распознает продления, ACK коррелируется со статусом `renew_status`.
+- **F3 / F4 (MenuBuilder UI/BFF):** Реализован `SessionLifecycleCoordinator` с трекингом `generation`,
+  безопасным `detachInput()` без сброса общей аренды и фильтрацией событий по `stream_instance_id`.
+  BFF нормализовал 404 (`lease_not_found`) и поддержал `generation`.
+- **F6 (l4desk):** Введена строгая валидация `expires_at_ms > now_ms` и верхнего предела эпохи;
+  при невалидном времени или несоответствии `stream_instance_id` (если передан) возвращается NACK `invalid_payload` / `stream_mismatch`.
+- **Остаточный этап:** Сквозная стендовая верификация (E2E) с реальным терминалом.
 
 ## Источники и актуальность
 - Authoritative docs: [remote-input](../../docs/etran_arch-remote-input-control.md),
-  [E2E architecture](../../docs/etran_arch-video-remote-desktop-e2e.md).
+  [E2E architecture](../../docs/etran_arch-video-remote-desktop-e2e.md),
+  [protocol specification](../../docs/ingress_iot/remote-input-protocol.md).
 - Code references: ctl renew/dedup и supervisor update_lease/tick, ссылки выше.
-- Проверено: 2026-09-11, HEAD `63ce6a7`, статическое чтение, без запуска и исправлений C.
-- Обновить при: таймерах, renew validation, retry budget, state/reason или reconcile.
+- Актуализировано: 2026-09-11, реализация Шага 4, деплой на 87.242.100.34.
+- Обновить при: проведении стендовой E2E-верификации.
