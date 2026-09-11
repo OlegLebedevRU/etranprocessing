@@ -2,9 +2,26 @@
 
 ## Статус
 
-Реализация подготовлена в репозитории. Серверная установка, первая публикация
-locked-образа и end-to-end выпуск пока не подтверждены. Timer не включён.
-До первого успешного выпуска не считать бета-сценарий введённым в эксплуатацию.
+Бета-сценарий установлен и проверен end-to-end (2026-09-11 UTC).
+`etran-beta.timer` enabled/active; запуск службы завершился с
+`Result=success`, `ExecMainStatus=0`, без повторных сборок при неизменном коде.
+
+- Установленный launcher: `52e93a952defdca8eaa05b26dfb734db7c0697d5`.
+- Последний выпуск MenuBuilder backend / worker:
+  `cd5658c68561b01e283705435fd6e64a13646d13`.
+- Production image:
+  `dev-leo4-ru.cr.cloud.ru/etran/menubuilder-backend@sha256:af7e054da54eafd71c2ca1e1931ef136a68ccbed3ce91c6718dad73299cedb03`.
+- Проверены HTTP health, работа контейнера, restart-count=0; девять соседних
+  контейнеров не пересоздавались. Повторный build-only переиспользовал digest.
+- Все пять образов `52e93a9` собраны/опубликованы; остальные четыре компонента
+  проверены только в build-only режиме, их production-версии не менялись.
+- Проверки: 28 CI-тестов, 106 ProcessingBackend, 278 MenuBuilder, 13 frontend,
+  ingress `make test`, production frontend build, Ruff и Pyright.
+
+При Linux-проверке исправлен неполный sparse checkout (отсутствовала proxy
+fixture ProcessingBackend): добавлен регрессионный тест, все проверки повторены.
+Первое наблюдение начинается с `cd5658c` для ещё не выпущенных компонентов;
+это не выдаётся за их фактическую production-версию.
 
 ## Контракт и версии
 
