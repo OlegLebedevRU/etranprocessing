@@ -191,9 +191,13 @@ async def test_janus_mountpoint_idempotent_reuse():
     # 4. session destroy -> 200
     responses = [
         # session create
-        AsyncMock(status_code=200, json=lambda: {"janus": "success", "data": {"id": 100}}),
+        AsyncMock(
+            status_code=200, json=lambda: {"janus": "success", "data": {"id": 100}}
+        ),
         # attach plugin
-        AsyncMock(status_code=200, json=lambda: {"janus": "success", "data": {"id": 200}}),
+        AsyncMock(
+            status_code=200, json=lambda: {"janus": "success", "data": {"id": 200}}
+        ),
         # create mountpoint -> first time succeeds
         AsyncMock(
             status_code=200,
@@ -219,8 +223,12 @@ async def test_janus_mountpoint_idempotent_reuse():
 
     # Second call: Janus reports "already exists"
     second_responses = [
-        AsyncMock(status_code=200, json=lambda: {"janus": "success", "data": {"id": 101}}),
-        AsyncMock(status_code=200, json=lambda: {"janus": "success", "data": {"id": 201}}),
+        AsyncMock(
+            status_code=200, json=lambda: {"janus": "success", "data": {"id": 101}}
+        ),
+        AsyncMock(
+            status_code=200, json=lambda: {"janus": "success", "data": {"id": 201}}
+        ),
         AsyncMock(
             status_code=200,
             json=lambda: {
@@ -306,7 +314,9 @@ async def test_session_cleanup_on_stop_and_release(mock_db_session, operator_tok
             "remote_input_stream_stop",
             new=AsyncMock(return_value={"result": "stopped"}),
         ),
-        patch("app.routers.video_control._destroy_janus_mountpoint", new=AsyncMock()) as mock_destroy,
+        patch(
+            "app.routers.video_control._destroy_janus_mountpoint", new=AsyncMock()
+        ) as mock_destroy,
     ):
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
