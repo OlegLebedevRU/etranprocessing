@@ -1,5 +1,22 @@
 # GitHub Actions: сборка и точечный production-деплой
 
+## Статус внедрения — 2026-09-11
+
+Регламент ниже описывает реализованный flow, **но его первый end-to-end выпуск
+пока не подтверждён**. Commit `8a2faf8` опубликован; GitHub завершил push-run
+`34644517558` и dispatch-run `34645206014` с `startup_failure` до создания job.
+REST API не возвращает job/check-run/log с причиной. Требуется текст ошибки
+из интерфейса Actions; настройки и синтаксис наугад не меняем.
+
+Публичный deploy-ключ установлен с согласия владельца, четыре GitHub Secrets
+присутствуют. Фактические SSH из runner, registry push/pull, длительность полного
+Buildx step и переключение контейнера ещё не проверены. Production не обновлён.
+`CI_BOOTSTRAP_COMPONENT=menubuilder-backend` оставлена до успешного опытного выпуска.
+
+Локально: 278 тестов MenuBuilder backend, 15 CI-тестов и сборка frontend успешны;
+Ruff/Pyright/actionlint прошли. Образы остальных компонентов и их build-only run
+предстоит проверить после устранения блокировки GitHub.
+
 ## Контракт
 
 `push main → changes → matrix.trigger → tests → build/push SHA → SSH → docker pull digest → health`.
