@@ -70,6 +70,7 @@
 
 Практические руководства для быстрого погружения в проект и эффективной работы:
 
+- **[`etran_dev-agent-context-workflow.md`](etran_dev-agent-context-workflow.md)** — Рабочая память агентов: skills, выборочные context distillates, маршрутизация ролей, task/release handoff и регламент актуальности; [быстрый индекс](../.agent-context/README.md).
 - **[`etran_dev-documentation-naming-convention.md`](etran_dev-documentation-naming-convention.md)** — Стандарт именования файлов технической документации: формула префикса `{СФЕРА}_{ФЛОУ}-{имя}.md`, словарь мнемокодов и реестр.
 - **[`etran_dev-quickstart.md`](etran_dev-quickstart.md)** — Руководство по быстрому старту: развертывание локального окружения, запуск PostgreSQL, выполнение Alembic-миграций и тестирование API.
 - **[`etran_dev-ai-agent-reference.md`](etran_dev-ai-agent-reference.md)** — Справочник для ИИ-агентов: структура проекта, ключевые точки входа, стандарты кодирования (Python 3.14, SQLAlchemy 2.0 asyncpg, shared models), шаблоны частых изменений.

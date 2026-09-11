@@ -13,7 +13,7 @@ Guide and automated operational workflow for inspecting, monitoring, and generat
 
 - **Host**: `87.242.100.34` (user `user1`, SSH key `d:\.ssh\id_ed25519`)
 - **Container**: `rabbitmq` (managed via Docker Compose in `/home/user1/compose.yaml` or standard Docker)
-- **Broker Version**: `RabbitMQ 4.1.4` (Erlang/OTP 27)
+- **Reference Broker Version (verify at runtime)**: `RabbitMQ 4.1.4` (Erlang/OTP 27)
 - **Port Mapping & Protocols**:
   - `5672` — AMQP 0-9-1 (Backend services: `processing-backend`, `menubuilder-backend`, `app1`)
   - `1883` — MQTT Plain TCP
@@ -25,17 +25,20 @@ Guide and automated operational workflow for inspecting, monitoring, and generat
 
 ## 2. Pre-Flight Verification & Host Health
 
-Before running deep diagnostics, verify SSH connectivity and host resource safety:
+Before remote diagnostics, follow the [deployment/readiness card](../../../.agent-context/operations/deployment-invariants.md).
+Record MCP readiness when using MCP; unavailability falls back to authorized SSH.
+Never disable SSH host verification or dump raw secret configurations.
+Verify SSH connectivity and host resource safety:
 
 ```powershell
 # 1. Verify container is running
-ssh -n -o StrictHostKeyChecking=no -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker ps --filter name=rabbitmq --format 'table {{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Ports}}'"
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker ps --filter name=rabbitmq --format 'table {{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Ports}}'"
 
 # 2. Check host RAM and Disk
-ssh -n -o StrictHostKeyChecking=no -i d:\.ssh\id_ed25519 user1@87.242.100.34 "free -h; df -h /"
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "free -h; df -h /; uptime"
 ```
 
-Safety criteria: Available RAM > 300 MiB (server has 0B Swap), Root Disk `/` usage < 90%.
+Safety criteria: Available RAM > 300 MiB (server has 0B Swap), Root Disk `/` usage < 90%, load average < 2.0.
 
 ---
 
@@ -43,45 +46,45 @@ Safety criteria: Available RAM > 300 MiB (server has 0B Swap), Root Disk `/` usa
 
 ### 3.1. Node Status, Uptime & Active Plugins
 ```powershell
-ssh -n -o StrictHostKeyChecking=no -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker exec rabbitmq rabbitmqctl status; echo '=== ENABLED PLUGINS ==='; sudo docker exec rabbitmq rabbitmq-plugins list -e"
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker exec rabbitmq rabbitmqctl status; echo '=== ENABLED PLUGINS ==='; sudo docker exec rabbitmq rabbitmq-plugins list -e"
 ```
 
 ### 3.2. Users, Tags & ACL Permissions Breakdown
 ```powershell
-ssh -n -o StrictHostKeyChecking=no -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker exec rabbitmq rabbitmqctl list_users; echo '=== PERMISSIONS ==='; sudo docker exec rabbitmq rabbitmqctl list_permissions"
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker exec rabbitmq rabbitmqctl list_users; echo '=== PERMISSIONS ==='; sudo docker exec rabbitmq rabbitmqctl list_permissions"
 ```
 *Note: Categorize users into Administrator (`user`), Service accounts (`etran_service`), and Devices/Terminals (e.g. `[device]` tag).*
 
 ### 3.3. Queues, Consumers & Message Backlog
 ```powershell
-ssh -n -o StrictHostKeyChecking=no -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker exec rabbitmq rabbitmqctl list_queues name messages consumers type memory state"
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker exec rabbitmq rabbitmqctl list_queues name messages consumers type memory state"
 ```
 *Categorize queues into Core/System queues (`req`, `res`, `app`, `svc`, `ack`, `evt`, `out`, `iot.device.connection.events`, background jobs) and MQTT subscription queues (`mqtt-subscription-*`).*
 
 ### 3.4. Exchanges, Topics & Bindings
 ```powershell
-ssh -n -o StrictHostKeyChecking=no -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker exec rabbitmq rabbitmqctl list_exchanges name type; echo '=== BINDINGS ==='; sudo docker exec rabbitmq rabbitmqctl list_bindings source_name source_kind destination_name destination_kind routing_key"
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker exec rabbitmq rabbitmqctl list_exchanges name type; echo '=== BINDINGS ==='; sudo docker exec rabbitmq rabbitmqctl list_bindings source_name source_kind destination_name destination_kind routing_key"
 ```
 
 ### 3.5. Connections, Channels & Message Throughput (Overview)
-Fetch message rates, publish/deliver totals, and active connections via Management API or rabbitmqctl:
+Fetch message rates and publish/deliver totals via an approved Management API client
+whose authentication is supplied securely outside the repository and command log.
+Never put inline credentials in examples or disable host verification. If no secure
+API profile is available, report these metrics as not collected; do not guess credentials.
+Connection counts can be obtained through rabbitmqctl without embedding API credentials:
 ```powershell
-# Query Management Overview API via host bridge:
-ssh -n -o StrictHostKeyChecking=no -i d:\.ssh\id_ed25519 user1@87.242.100.34 "curl -s -u user:root http://127.0.0.1:15672/rabbitmq/api/overview | jq '{message_stats, object_totals, queue_totals}'"
-
-# Or query connection counts:
-ssh -n -o StrictHostKeyChecking=no -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker exec rabbitmq rabbitmqctl list_connections name protocol user peer_host peer_port channels"
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker exec rabbitmq rabbitmqctl list_connections name protocol user peer_host peer_port channels"
 ```
 
 ### 3.6. Memory Breakdown & Disk Space Usage
 ```powershell
-ssh -n -o StrictHostKeyChecking=no -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker stats --no-stream rabbitmq; echo '=== MEMORY BREAKDOWN ==='; sudo docker exec rabbitmq rabbitmq-diagnostics memory_breakdown; echo '=== DISK INFO ==='; sudo docker exec rabbitmq df -h /var/lib/rabbitmq"
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker stats --no-stream rabbitmq; echo '=== MEMORY BREAKDOWN ==='; sudo docker exec rabbitmq rabbitmq-diagnostics memory_breakdown; echo '=== DISK INFO ==='; sudo docker exec rabbitmq df -h /var/lib/rabbitmq"
 ```
 
 ### 3.7. Log Analysis & Error Diagnostics
 Inspect recent logs for errors, connection drops, auth refusals, and TLS handshake issues:
 ```powershell
-ssh -n -o StrictHostKeyChecking=no -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker logs --tail 1000 rabbitmq 2>&1 | grep -o '\[error\].*' | cut -d' ' -f3- | sort | uniq -c | sort -nr | head -n 25"
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker logs --tail 1000 rabbitmq 2>&1 | grep -o '\[error\].*' | cut -d' ' -f3- | sort | uniq -c | sort -nr | head -n 25"
 ```
 
 ---

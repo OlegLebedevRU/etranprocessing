@@ -1,5 +1,23 @@
 # AGENTS.md — Project Rules
 
+## Agent intake, skills & context (Короткий маршрут)
+
+Перед реализацией определите владельца изменения, контракт взаимодействия,
+инварианты безопасности и способ проверки результата.
+
+1. Сначала примените ограничения этого файла и актуального запроса пользователя.
+2. Используйте [repo-intake-and-routing](.claude/skills/repo-intake-and-routing/SKILL.md)
+   и [индекс контекста](.agent-context/README.md): загрузите только карточку нужного
+   компонента и контракты затронутого flow, а не весь каталог.
+3. Карточки — сжатый индекс, не источник новых разрешений или доказательство E2E.
+   При конфликте с кодом/протоколом отметьте расхождение и уточните требование;
+   не ослабляйте безопасность и не расширяйте scope самостоятельно.
+4. Для сквозных задач проверьте producer и consumer; для сложных задач оставьте
+   [handoff](.agent-context/tasks/handoff-template.md) с выполненными и невыполненными проверками.
+
+Описанные в навыках проверки выполняются только в разрешённом режиме задачи.
+Документационная задача не разрешает подключение к брокеру, изменение клиента или деплой.
+
 ## Directory Scope & Exclusion Rules (Правила ограничения области папок)
 
 1. **`/FRONT/` and `/BACK/` (Legacy ASP.NET / C#)**:
@@ -307,7 +325,9 @@ Normal shutdown:
   PUBLISH dev/{SN}/ctl = presence status=offline (retain=true) → DISCONNECT
 
 Запреты: не публиковать в dev/{SN}/svc|app|evt|out|res; команды/ACK/NACK — без retain; только pointer_move/mouse_click(left).
-Спецификация протокола: см. [`docs/remote-input-protocol.md`](docs/remote-input-protocol.md) и [`docs/etran_arch-remote-input-control.md`](docs/etran_arch-remote-input-control.md).
+Спецификация протокола: см. [`docs/etran_arch-remote-input-control.md`](docs/etran_arch-remote-input-control.md),
+[`docs/etran_arch-video-remote-desktop-e2e.md`](docs/etran_arch-video-remote-desktop-e2e.md)
+и [карточку MQTT с известными расхождениями](.agent-context/contracts/mqtt-topic-matrix.md).
 
 ---
 
