@@ -26,6 +26,7 @@ class SimpleMQTTClient:
         self.client_id = client_id
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.settimeout(10.0)
+        self.queue = []
 
     def connect(self):
         self.sock.connect((self.host, self.port))
@@ -56,9 +57,14 @@ class SimpleMQTTClient:
         self.sock.sendall(pkt)
 
     def recv_message(self, timeout=10.0, filter_type=None):
-        self.sock.settimeout(timeout)
         start = time.time()
+        for idx, data in enumerate(self.queue):
+            if filter_type is None or data.get("type") == filter_type:
+                return self.queue.pop(idx)
+
         while time.time() - start < timeout:
+            rem_timeout = max(0.1, timeout - (time.time() - start))
+            self.sock.settimeout(rem_timeout)
             try:
                 header = self.sock.recv(1)
                 if not header:
@@ -95,6 +101,7 @@ class SimpleMQTTClient:
                         data = json.loads(payload)
                         if filter_type is None or data.get("type") == filter_type:
                             return data
+                        self.queue.append(data)
                     except:
                         pass
             except socket.timeout:
@@ -162,6 +169,7 @@ def main():
         "--console",
         "--host", "127.0.0.1",
         "--port", "1883",
+        "--client-id", f"integ_desk_{os.getpid()}",
         "--sn", test_sn,
         "--base-path", test_base,
         "--presence-interval", "5"
@@ -182,9 +190,13 @@ def main():
                 break
         if presence is None:
             proc.terminate()
-            stdout, stderr = proc.communicate(timeout=2)
-            print("l4desk stdout:\n", stdout.decode('utf-8', errors='replace'))
-            print("l4desk stderr:\n", stderr.decode('utf-8', errors='replace'))
+            try:
+                proc.wait(timeout=2)
+            except:
+                proc.kill()
+            log_f.close()
+            with open(stdout_log_path, "r", encoding="utf-8", errors="replace") as lf:
+                print("l4desk log:\n", lf.read())
             raise AssertionError("Did not receive online presence!")
         print(f"  [OK] Online presence received: status={presence.get('status')}")
         inv = presence.get("inventory", {})
@@ -227,10 +239,15 @@ def main():
         assert ack_start.get("result") == "started", f"Expected started, got {ack_start}"
         print(f"  [OK] stream_start ACK received: result=started")
 
-        # Check stream_event
+        # Check stream_events (starting -> running)
         evt_start = mqtt.recv_message(timeout=5.0, filter_type="stream_event")
-        assert evt_start is not None, "Did not receive stream_event running!"
-        assert evt_start.get("state") == "running", f"Expected state=running, got {evt_start}"
+        assert evt_start is not None, "Did not receive stream_event starting!"
+        assert evt_start.get("state") == "starting", f"Expected state=starting, got {evt_start}"
+        print(f"  [OK] stream_event received: state=starting")
+
+        evt_running = mqtt.recv_message(timeout=5.0, filter_type="stream_event")
+        assert evt_running is not None, "Did not receive stream_event running!"
+        assert evt_running.get("state") == "running", f"Expected state=running, got {evt_running}"
         print(f"  [OK] stream_event received: state=running")
 
         # 4. Test already_running idempotency
@@ -279,6 +296,71 @@ def main():
         assert nack_disp is not None, "Did not receive response for bad desktop_id!"
         assert nack_disp.get("result") == "nack" and nack_disp.get("code") == "desktop_mismatch", f"Got: {nack_disp}"
         print(f"  [OK] desktop_mismatch NACK verified: code={nack_disp.get('code')}")
+
+        # 6b. Test contract failing fixture (app1 incident: cmd_id instead of command_id) -> expect NACK invalid_payload
+        print("\n[Step 6b] Testing lease_renew with failing fixture (cmd_id instead of command_id)...")
+        failing_renew_cmd = {
+            "v": 1,
+            "type": "lease_renew",
+            "cmd_id": "831028de-8f1a-42b9-986a-6a2ee4e5e578",
+            "lease_id": "lease_test_01",
+            "sn": test_sn,
+            "stream_instance_id": "stream_inst_01",
+            "expires_at_ms": int((time.time() + 60) * 1000),
+            "ttl_sec": 15,
+            "timestamp": "2026-09-11T10:53:37.642Z"
+        }
+        mqtt.publish(srv_topic, json.dumps(failing_renew_cmd))
+        nack_renew = mqtt.recv_message(timeout=5.0, filter_type="ack")
+        assert nack_renew is not None, "Did not receive NACK response for failing renew fixture!"
+        assert nack_renew.get("result") == "nack" and nack_renew.get("code") == "invalid_payload", f"Got: {nack_renew}"
+        print(f"  [OK] contract failing fixture rejected as expected: code={nack_renew.get('code')}")
+
+        # 6c. Test contract canonical fixture (command_id UUID) -> expect ACK
+        print("\n[Step 6c] Testing lease_renew with canonical fixture (command_id UUID)...")
+        canonical_renew_cmd = {
+            "v": 1,
+            "type": "lease_renew",
+            "command_id": "dbca37f5-5b0c-427c-a009-a4ddccfe28d0",
+            "lease_id": "lease_test_01",
+            "sn": test_sn,
+            "stream_instance_id": "stream_inst_01",
+            "expires_at_ms": int((time.time() + 60) * 1000),
+            "ttl_sec": 15,
+            "timestamp": "2026-09-11T10:53:37.642Z"
+        }
+        mqtt.publish(srv_topic, json.dumps(canonical_renew_cmd))
+        ack_renew = mqtt.recv_message(timeout=5.0, filter_type="ack")
+        assert ack_renew is not None, "Did not receive ACK for canonical renew!"
+        assert ack_renew.get("type") == "ack", f"Got: {ack_renew}"
+        assert ack_renew.get("command_id") == "dbca37f5-5b0c-427c-a009-a4ddccfe28d0", f"Mismatched command_id: {ack_renew}"
+        print(f"  [OK] canonical lease_renew accepted: command_id={ack_renew.get('command_id')}")
+
+        # 6d. Test duplicate lease_renew dedup cache
+        print("\n[Step 6d] Testing duplicate lease_renew dedup cache...")
+        mqtt.publish(srv_topic, json.dumps(canonical_renew_cmd))
+        ack_renew_dup = mqtt.recv_message(timeout=5.0, filter_type="ack")
+        assert ack_renew_dup is not None, "Did not receive cached ACK for duplicate renew!"
+        assert ack_renew_dup.get("command_id") == "dbca37f5-5b0c-427c-a009-a4ddccfe28d0", f"Mismatched dedup: {ack_renew_dup}"
+        print(f"  [OK] dedup cache returned cached ACK successfully")
+
+        # 6e. Test lease_renew with stream_instance_id mismatch -> expect stream_mismatch NACK
+        print("\n[Step 6e] Testing lease_renew with mismatched stream_instance_id...")
+        bad_epoch_renew_cmd = {
+            "v": 1,
+            "type": "lease_renew",
+            "command_id": "cmd_renew_bad_epoch_99",
+            "lease_id": "lease_test_01",
+            "sn": test_sn,
+            "stream_instance_id": "wrong_epoch_id",
+            "expires_at_ms": int((time.time() + 60) * 1000),
+            "ttl_sec": 15
+        }
+        mqtt.publish(srv_topic, json.dumps(bad_epoch_renew_cmd))
+        nack_bad_epoch = mqtt.recv_message(timeout=5.0, filter_type="ack")
+        assert nack_bad_epoch is not None, "Did not receive NACK for mismatched epoch!"
+        assert nack_bad_epoch.get("result") == "nack" and nack_bad_epoch.get("code") == "stream_mismatch", f"Got: {nack_bad_epoch}"
+        print(f"  [OK] stream_mismatch NACK verified for bad epoch: code={nack_bad_epoch.get('code')}")
 
         # 7. Test controlled switch to new stream_instance_id
         print("\n[Step 7] Testing controlled switch to new stream_instance_id...")
@@ -331,9 +413,13 @@ def main():
         ack_stop = mqtt.recv_message(timeout=6.0, filter_type="ack")
         if ack_stop is None:
             proc.terminate()
-            stdout, stderr = proc.communicate(timeout=2)
-            print("l4desk stdout:\n", stdout.decode('utf-8', errors='replace'))
-            print("l4desk stderr:\n", stderr.decode('utf-8', errors='replace'))
+            try:
+                proc.wait(timeout=2)
+            except:
+                proc.kill()
+            log_f.close()
+            with open(stdout_log_path, "r", encoding="utf-8", errors="replace") as lf:
+                print("l4desk log:\n", lf.read())
         assert ack_stop is not None, "Did not receive ACK for stream_stop!"
         assert ack_stop.get("result") == "stopped", f"Expected stopped, got {ack_stop}"
         print(f"  [OK] stream_stop ACK verified: result=stopped")

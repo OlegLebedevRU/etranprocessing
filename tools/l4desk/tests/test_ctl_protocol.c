@@ -404,6 +404,47 @@ static void test_command_handling_validation(void) {
     ffmpeg_supervisor_get_info(&sinfo);
     ASSERT_TRUE(sinfo.lease_expires_at_ms == 4102444900000ULL);
 
+    /* 14. Contract failing fixture (app1 incident 2026-09-11: cmd_id instead of command_id) -> rejected as invalid_payload */
+    uint64_t prev_lease_expires = sinfo.lease_expires_at_ms;
+    const char* cmd_renew_failing_fixture =
+        "{\"v\":1,\"type\":\"lease_renew\",\"cmd_id\":\"831028de-8f1a-42b9-986a-6a2ee4e5e578\","
+        "\"lease_id\":\"lease_valid\",\"sn\":\"TERM001\",\"expires_at_ms\":4102444950000,\"ttl_sec\":15,"
+        "\"timestamp\":\"2026-09-11T10:53:37.642Z\"}";
+    ASSERT_TRUE(ctl_handle_command(cmd_renew_failing_fixture, strlen(cmd_renew_failing_fixture), "TERM001", &inv, resp, sizeof(resp), &resp_len, &should_pub, &qos));
+    ASSERT_TRUE(should_pub);
+    ASSERT_TRUE(strstr(resp, "\"result\":\"nack\"") != NULL);
+    ASSERT_TRUE(strstr(resp, "\"code\":\"invalid_payload\"") != NULL);
+    ffmpeg_supervisor_get_info(&sinfo);
+    ASSERT_TRUE(sinfo.lease_expires_at_ms == prev_lease_expires); /* Not updated! Fail-closed verified */
+
+    /* 15. Contract canonical fixture (canonical command_id UUID) -> ACK and lease updated */
+    const char* cmd_renew_canonical_fixture =
+        "{\"v\":1,\"type\":\"lease_renew\",\"command_id\":\"dbca37f5-5b0c-427c-a009-a4ddccfe28d0\","
+        "\"lease_id\":\"lease_valid\",\"sn\":\"TERM001\",\"expires_at_ms\":4102445000000,\"ttl_sec\":15,"
+        "\"timestamp\":\"2026-09-11T10:53:37.642Z\"}";
+    ASSERT_TRUE(ctl_handle_command(cmd_renew_canonical_fixture, strlen(cmd_renew_canonical_fixture), "TERM001", &inv, resp, sizeof(resp), &resp_len, &should_pub, &qos));
+    ASSERT_TRUE(should_pub);
+    ASSERT_TRUE(strstr(resp, "\"type\":\"ack\"") != NULL);
+    ASSERT_TRUE(strstr(resp, "\"command_id\":\"dbca37f5-5b0c-427c-a009-a4ddccfe28d0\"") != NULL);
+    ffmpeg_supervisor_get_info(&sinfo);
+    ASSERT_TRUE(sinfo.lease_expires_at_ms == 4102445000000ULL);
+
+    /* 16. Negative: stream_instance_id mismatch -> stream_mismatch */
+    const char* cmd_renew_bad_epoch =
+        "{\"v\":1,\"type\":\"lease_renew\",\"command_id\":\"rnw_005\",\"lease_id\":\"lease_valid\","
+        "\"stream_instance_id\":\"wrong_epoch_id\",\"sn\":\"TERM001\",\"expires_at_ms\":4102445100000}";
+    ASSERT_TRUE(ctl_handle_command(cmd_renew_bad_epoch, strlen(cmd_renew_bad_epoch), "TERM001", &inv, resp, sizeof(resp), &resp_len, &should_pub, &qos));
+    ASSERT_TRUE(should_pub);
+    ASSERT_TRUE(strstr(resp, "\"code\":\"stream_mismatch\"") != NULL);
+
+    /* 17. Negative: missing / 0 expires_at_ms -> invalid_payload */
+    const char* cmd_renew_zero_exp =
+        "{\"v\":1,\"type\":\"lease_renew\",\"command_id\":\"rnw_006\",\"lease_id\":\"lease_valid\","
+        "\"sn\":\"TERM001\",\"expires_at_ms\":0}";
+    ASSERT_TRUE(ctl_handle_command(cmd_renew_zero_exp, strlen(cmd_renew_zero_exp), "TERM001", &inv, resp, sizeof(resp), &resp_len, &should_pub, &qos));
+    ASSERT_TRUE(should_pub);
+    ASSERT_TRUE(strstr(resp, "\"code\":\"invalid_payload\"") != NULL);
+
     ffmpeg_supervisor_stop(NULL, NULL, start_res, sizeof(start_res), start_err_code, sizeof(start_err_code), start_err_msg, sizeof(start_err_msg));
 
     printf("[PASS] test_command_handling_validation\n");

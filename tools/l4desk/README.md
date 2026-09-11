@@ -53,10 +53,15 @@
      - Белый список виртуальных кодов `vk`: `0x08` (Backspace), `0x09` (Tab), `0x0D` (Enter), `0x1B` (Esc), `0x20` (Space), `0x2E` (Delete), `0x25..0x28` (Стрелки), `0x30..0x39` (0-9), `0x41..0x5A` (A-Z), `0x70..0x7B` (F1-F12), Numpad, модификаторы и OEM-символы.
      - Запрещены деструктивные клавиши (`VK_LWIN`, `VK_RWIN`, `VK_APPS`) и комбинация Ctrl+Alt+Del.
      - Инъекция через `SendInput` (`down`, `up`, `press`) с флагом `KEYEVENTF_EXTENDEDKEY` для навигационных клавиш. Возвращает `ack.result = "injected"` или `nack`.
-7. `lease_renew` / `stream_renew {command_id, lease_id, sn, expires_at_ms}`
+7. `lease_renew` / `stream_renew {command_id, lease_id, sn, expires_at_ms, stream_instance_id?}`
    - Продление срока действия активной аренды стрима.
-   - Валидация: стрим должен находиться в `running` или `restarting` (иначе NACK `stream_not_running`), переданный `lease_id` обязан совпадать с активным стримом (иначе NACK `lease_mismatch`).
-   - Обновляет локальный таймер `lease_expires_at_ms` в супервизоре FFmpeg и возвращает `ack.result = "injected"`. Предотвращает преждевременную остановку стрима сторожевым таймером при пассивном просмотре без кликов/ввода.
+   - Валидация:
+     - Обязательное присутствие непустого `command_id` (UUID). Отсутствие или пустое поле отклоняется NACK `invalid_payload`.
+     - Стрим должен находиться в `running` или `restarting` (иначе NACK `stream_not_running`).
+     - Переданный `lease_id` обязан совпадать с активным стримом (иначе NACK `lease_mismatch`).
+     - При передаче `stream_instance_id` значение обязано совпадать с эпохой активного стрима (иначе NACK `stream_mismatch`).
+     - Значение `expires_at_ms` обязано быть положительным, строго в будущем относительно времени терминала (`expires_at_ms > now_ms`) и в допустимых границах (иначе NACK `invalid_payload`).
+   - При успешной валидации обновляет локальный таймер `lease_expires_at_ms` в супервизоре FFmpeg, возвращает `ack` и кеширует ответ в bounded LRU-кеш дедупликации. Предотвращает преждевременную остановку стрима сторожевым таймером при пассивном просмотре без кликов/ввода.
 
 ### 3.2 Исходящие сообщения (`dev/<SN>/ctl`)
 

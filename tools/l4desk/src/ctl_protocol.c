@@ -565,11 +565,34 @@ bool ctl_handle_command(const char* payload, size_t payload_len,
             return false;
         }
 
-        if (expires_at_ms > 0) {
-            ffmpeg_supervisor_update_lease(lease_id, (uint64_t)expires_at_ms);
-            log_info("Lease renewed for stream %s: new expires_at_ms=%llu",
-                     stream.stream_instance_id, (unsigned long long)expires_at_ms);
+        char stream_instance_id[64] = { 0 };
+        json_extract_str(payload, "stream_instance_id", stream_instance_id, sizeof(stream_instance_id));
+        if (stream_instance_id[0] != '\0' && stream.stream_instance_id[0] != '\0' &&
+            strcmp(stream.stream_instance_id, stream_instance_id) != 0) {
+            int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
+                                             "stream_mismatch", "Stream instance ID mismatch", now_ms);
+            if (len > 0) {
+                *out_resp_len = (size_t)len;
+                *p_should_publish = true;
+                return true;
+            }
+            return false;
         }
+
+        if (expires_at_ms <= 0 || expires_at_ms <= now_ms || expires_at_ms > 5000000000000LL) {
+            int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
+                                             "invalid_payload", "Missing, expired, or invalid expires_at_ms", now_ms);
+            if (len > 0) {
+                *out_resp_len = (size_t)len;
+                *p_should_publish = true;
+                return true;
+            }
+            return false;
+        }
+
+        ffmpeg_supervisor_update_lease(lease_id, (uint64_t)expires_at_ms);
+        log_info("Lease renewed for stream %s: new expires_at_ms=%llu",
+                 stream.stream_instance_id, (unsigned long long)expires_at_ms);
 
         int len = ctl_build_ack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn, now_ms);
         if (len > 0) {

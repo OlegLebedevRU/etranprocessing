@@ -80,9 +80,13 @@ int main(int argc, char* argv[]) {
     log_info("===============================================================================");
 
     // Single-instance enforcement (per session)
-    HANDLE hSingleMutex = CreateMutexW(NULL, FALSE, L"Local\\L4Desk_SingleInstance");
+    wchar_t mutex_name[128] = L"Local\\L4Desk_SingleInstance";
+    if (config.sn_explicitly_set && config.sn[0] != '\0') {
+        swprintf_s(mutex_name, sizeof(mutex_name) / sizeof(wchar_t), L"Local\\L4Desk_SingleInstance_%hs", config.sn);
+    }
+    HANDLE hSingleMutex = CreateMutexW(NULL, FALSE, mutex_name);
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
-        log_warn("Another instance of l4desk is already running in this session. Exiting.");
+        log_warn("Another instance of l4desk is already running in this session (%ls). Exiting.", mutex_name);
         if (hSingleMutex) CloseHandle(hSingleMutex);
         log_close();
         return 0;
