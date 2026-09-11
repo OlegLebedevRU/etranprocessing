@@ -132,6 +132,7 @@ export interface AdminTerminalCreateInput {
   iot_provisioned?: boolean;
   license_expires_at?: string;
   billing_period_months?: number;
+  monthly_price_override_minor?: number | null;
   renewal_enabled?: boolean;
 }
 

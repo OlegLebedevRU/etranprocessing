@@ -138,8 +138,10 @@ def _resolve_cert_pricing(
     org_settings: OrgBillingSettings, cert_serial: str | None
 ) -> tuple[int, str]:
     """Effective cert PIN price and operation type for a terminal's current state."""
-    policy = resolve_cert_policy(org_settings)
     operation = resolve_operation_type(cert_serial)
+    if getattr(org_settings, "billing_mode", None) == "master":
+        return 0, operation.value
+    policy = resolve_cert_policy(org_settings)
     return resolve_effective_price(policy, operation), operation.value
 
 
@@ -199,7 +201,11 @@ async def _get_terminal_billing_data(
         billing_mode=getattr(org_settings, "billing_mode", "standard") or "standard",
         cert_serial=terminal.cert_serial,
         cert_not_valid_after=terminal.cert_not_valid_after,
-        tenant_pin_creation_enabled=org_settings.tenant_pin_creation_enabled,
+        tenant_pin_creation_enabled=(
+            True
+            if getattr(org_settings, "billing_mode", None) == "master"
+            else org_settings.tenant_pin_creation_enabled
+        ),
         cert_pin_price_minor=cert_price,
         cert_operation=cert_operation,
         cert_pin_pending=pending_pin is not None,
@@ -277,7 +283,11 @@ async def _get_all_terminal_billing(
                 or "standard",
                 cert_serial=terminal.cert_serial,
                 cert_not_valid_after=terminal.cert_not_valid_after,
-                tenant_pin_creation_enabled=org_settings.tenant_pin_creation_enabled,
+                tenant_pin_creation_enabled=(
+                    True
+                    if getattr(org_settings, "billing_mode", None) == "master"
+                    else org_settings.tenant_pin_creation_enabled
+                ),
                 cert_pin_price_minor=cert_price,
                 cert_operation=cert_operation,
                 cert_pin_pending=pending_pin is not None,
@@ -568,7 +578,7 @@ async def _prepare_checkout_items(
             except ValueError as e:
                 raise HTTPException(status_code=400, detail=str(e))
 
-            if org_settings.billing_mode == "cert_linked":
+            if org_settings.billing_mode in ("cert_linked", "master"):
                 item_license_amount = 0
             else:
                 item_license_amount = total_periods * billing.period_price_minor
@@ -855,7 +865,7 @@ async def reactivation_checkout(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    if org_settings.billing_mode == "cert_linked":
+    if org_settings.billing_mode in ("cert_linked", "master"):
         total_amount = 0
     else:
         total_amount = body.advance_periods * period_price
@@ -1080,8 +1090,9 @@ async def create_certificate_pin(
     """Request permission to create a PIN for a terminal (organizational cert billing)."""
     terminal = await _get_terminal_for_org(db, terminal_id, user.org_id)
     org_settings = await _get_org_settings(db, user.org_id)
+    is_master = getattr(org_settings, "billing_mode", None) == "master"
 
-    if not org_settings.tenant_pin_creation_enabled:
+    if not org_settings.tenant_pin_creation_enabled and not is_master:
         raise HTTPException(
             status_code=403,
             detail="Tenant self-service PIN creation is not enabled for this organization",
@@ -1105,30 +1116,31 @@ async def create_certificate_pin(
             )
         existing_pin.status = "expired"
 
-    result = await db.execute(
-        select(BillingOrder)
-        .join(BillingOrderItem, BillingOrderItem.order_id == BillingOrder.id)
-        .where(
-            BillingOrder.org_id == user.org_id,
-            BillingOrder.status == "pending",
-            BillingOrderItem.terminal_id == terminal.id,
-            BillingOrderItem.operation == "cert_pin",
+    if not is_master:
+        result = await db.execute(
+            select(BillingOrder)
+            .join(BillingOrderItem, BillingOrderItem.order_id == BillingOrder.id)
+            .where(
+                BillingOrder.org_id == user.org_id,
+                BillingOrder.status == "pending",
+                BillingOrderItem.terminal_id == terminal.id,
+                BillingOrderItem.operation == "cert_pin",
+            )
+            .limit(1)
         )
-        .limit(1)
-    )
-    pending_order = result.scalar_one_or_none()
-    if pending_order is not None:
-        return PaymentRequiredResponse(
-            terminal_id=terminal.id,
-            order_id=str(pending_order.id),
-            amount_minor=pending_order.amount_minor,
-            currency=pending_order.currency,
-            payment_url=pending_order.payment_url,
-        )
+        pending_order = result.scalar_one_or_none()
+        if pending_order is not None:
+            return PaymentRequiredResponse(
+                terminal_id=terminal.id,
+                order_id=str(pending_order.id),
+                amount_minor=pending_order.amount_minor,
+                currency=pending_order.currency,
+                payment_url=pending_order.payment_url,
+            )
 
     policy = resolve_cert_policy(org_settings)
     operation = resolve_operation_type(terminal.cert_serial)
-    price_minor = resolve_effective_price(policy, operation)
+    price_minor = 0 if is_master else resolve_effective_price(policy, operation)
 
     if price_minor <= 0:
         pin_value = await generate_unique_pin(db)

@@ -18,7 +18,7 @@ export interface BillingSummary {
   admin_disabled_terminal_count: number;
   nearest_required_payment_at: string | null;
   forecast: BillingForecastMonth[];
-  billing_mode?: "standard" | "post_factum" | "cert_linked";
+  billing_mode?: "standard" | "post_factum" | "cert_linked" | "master";
   min_billing_periods?: number;
   allowed_billing_periods?: string | null;
   default_selection_mode?: "only_lapsed" | "all_due" | "all";
@@ -46,7 +46,7 @@ export interface BillingTerminal {
   can_cancel_deactivation: boolean;
   can_reactivate: boolean;
   included_in_forecast: boolean;
-  billing_mode?: "standard" | "post_factum" | "cert_linked";
+  billing_mode?: "standard" | "post_factum" | "cert_linked" | "master";
   cert_not_valid_after: string | null;
   tenant_pin_creation_enabled: boolean;
   cert_serial: string | null;

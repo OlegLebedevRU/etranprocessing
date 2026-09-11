@@ -58,6 +58,7 @@ def test_mask_pin_hides_all_but_last_digits():
 
 def _org_settings(**overrides) -> MagicMock:
     settings = MagicMock()
+    settings.billing_mode = overrides.get("billing_mode", "standard")
     settings.cert_billing_mode = overrides.get("cert_billing_mode", "none")
     settings.cert_price_minor = overrides.get("cert_price_minor")
     settings.currency = overrides.get("currency", "RUB")
@@ -371,6 +372,33 @@ async def test_certificate_pin_disabled_flag_returns_403():
         resp = await client.post("/api/billing/terminals/1/certificate-pin")
 
     assert resp.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_certificate_pin_master_mode_always_free_and_enabled():
+    """In master billing mode, PIN creation is always enabled and free (200 pin_ready)."""
+    user = _make_user()
+    terminal = _make_terminal()
+    org_settings = _org_settings(
+        billing_mode="master",
+        cert_billing_mode="per_operation",
+        cert_price_minor=500000,
+        tenant_pin_creation_enabled=False,
+    )
+    get_db = _override_auth(user)
+    mock_db, override = _cert_pin_mock_db(terminal, org_settings)
+    app.dependency_overrides[get_db] = override
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post("/api/billing/terminals/1/certificate-pin")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "pin_ready"
+    assert data["payment_required"] is False
+    assert len(data["pin"]) == 6
+    assert mock_db.commit.called
 
 
 @pytest.mark.anyio

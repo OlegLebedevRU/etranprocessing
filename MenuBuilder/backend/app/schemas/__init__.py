@@ -348,6 +348,7 @@ class AdminTerminalCreate(BaseModel):
     iot_provisioned: bool = False
     license_expires_at: datetime | None = None
     billing_period_months: int = 1
+    monthly_price_override_minor: int | None = None
     renewal_enabled: bool = True
 
 

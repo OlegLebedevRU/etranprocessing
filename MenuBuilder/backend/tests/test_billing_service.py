@@ -638,3 +638,43 @@ def test_build_org_summary_data_cert_linked():
     )
     assert summary.billing_mode == "cert_linked"
     assert summary.monthly_base_price_minor == 0
+
+
+def test_master_mode_price_resolution():
+    """In master mode, monthly license price is always 0."""
+    assert resolve_monthly_price(200000, 300000, billing_mode="master") == 0
+    assert resolve_monthly_price(None, 300000, billing_mode="master") == 0
+    assert resolve_monthly_price(0, 0, billing_mode="master") == 0
+
+
+def test_master_mode_terminal_billing():
+    """In master mode, terminal billing has 0 monthly/period/overdue price."""
+    info = _info(
+        license_expires_at=_dt(2026, 5, 18),
+        billing_mode="master",
+        org_monthly_price_minor=300000,
+    )
+    result = compute_terminal_billing(info, _dt(2026, 8, 18))
+    assert result.billing_status == BillingStatus.OVERDUE
+    assert result.monthly_price_minor == 0
+    assert result.period_price_minor == 0
+    assert result.overdue_amount_minor == 0
+    assert result.next_payment_amount_minor == 0
+    assert result.periods_due == 0
+    assert result.billing_mode == "master"
+
+
+def test_build_org_summary_data_master():
+    """In master mode, monthly_base_price_minor is 0."""
+    info = _info(license_expires_at=_dt(2026, 11, 10), billing_mode="master")
+    result = compute_terminal_billing(info, _dt(2026, 8, 18))
+    summary = build_org_summary_data(
+        [result],
+        "RUB",
+        300000,
+        _dt(2026, 8, 18),
+        billing_mode="master",
+    )
+    assert summary.billing_mode == "master"
+    assert summary.monthly_base_price_minor == 0
+    assert summary.overdue_amount_minor == 0

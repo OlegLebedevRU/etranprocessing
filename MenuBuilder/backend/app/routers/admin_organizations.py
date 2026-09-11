@@ -53,8 +53,8 @@ async def list_organizations(
                 created_at=org.created_at,
                 updated_at=org.updated_at,
                 monthly_price_minor=(
-                    getattr(bs, "monthly_price_minor", None) or 100_000
-                    if bs
+                    bs.monthly_price_minor
+                    if bs and bs.monthly_price_minor is not None
                     else 100_000
                 ),
                 currency=getattr(bs, "currency", None) or "RUB" if bs else "RUB",
@@ -227,7 +227,11 @@ async def update_organization(
     if not bs:
         bs = OrgBillingSettings(
             org_id=org_id,
-            monthly_price_minor=body.monthly_price_minor or 100_000,
+            monthly_price_minor=(
+                body.monthly_price_minor
+                if body.monthly_price_minor is not None
+                else 100_000
+            ),
             currency=body.currency or "RUB",
             billing_mode=body.billing_mode or "standard",
             min_billing_periods=body.min_billing_periods or 1,
@@ -304,7 +308,9 @@ async def update_organization(
         created_at=org.created_at,
         updated_at=org.updated_at,
         monthly_price_minor=(
-            getattr(bs, "monthly_price_minor", None) or 100_000 if bs else 100_000
+            bs.monthly_price_minor
+            if bs and bs.monthly_price_minor is not None
+            else 100_000
         ),
         currency=getattr(bs, "currency", None) or "RUB" if bs else "RUB",
         billing_mode=(

@@ -140,7 +140,7 @@ def resolve_monthly_price(
     billing_mode: str = "standard",
 ) -> int:
     """Determine the effective monthly price for a terminal."""
-    if billing_mode == "cert_linked":
+    if billing_mode in ("cert_linked", "master"):
         return 0
     if monthly_price_override_minor is not None:
         return monthly_price_override_minor
@@ -365,8 +365,10 @@ def compute_terminal_billing(
     periods_due = 0
     overdue_amount = 0
     if billing_status == BillingStatus.OVERDUE:
-        periods_due = 1
-        overdue_amount = period_price if info.billing_mode != "cert_linked" else 0
+        periods_due = 1 if info.billing_mode not in ("cert_linked", "master") else 0
+        overdue_amount = (
+            period_price if info.billing_mode not in ("cert_linked", "master") else 0
+        )
 
     # Next payment
     next_payment_at: datetime | None = None
@@ -376,7 +378,9 @@ def compute_terminal_billing(
         and info.license_expires_at is not None
     ):
         next_payment_at = info.license_expires_at
-        next_payment_amount = period_price if info.billing_mode != "cert_linked" else 0
+        next_payment_amount = (
+            period_price if info.billing_mode not in ("cert_linked", "master") else 0
+        )
 
     # Projected expiry after paying the outstanding period: the term restarts today.
     projected_expires_at: datetime | None = None
@@ -463,6 +467,8 @@ def build_org_forecast(
     for t in terminals:
         if not t.included_in_forecast:
             continue
+        if t.billing_mode in ("cert_linked", "master"):
+            continue
         if t.license_expires_at is None:
             continue
 
@@ -526,7 +532,9 @@ def build_org_summary_data(
             nearest = t.next_payment_at
 
     forecast = build_org_forecast(terminals, as_of)
-    base_price = 0 if billing_mode == "cert_linked" else org_monthly_price_minor
+    base_price = (
+        0 if billing_mode in ("cert_linked", "master") else org_monthly_price_minor
+    )
 
     return OrgSummary(
         currency=org_currency,

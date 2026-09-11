@@ -119,7 +119,12 @@ export default function AdminOrganizationsPage() {
         phone: values.phone ? values.phone.trim() : null,
         notify_by_email: values.notify_by_email ?? true,
         is_active: values.is_active,
-        monthly_price_minor: Math.round(Number(values.monthly_price_rub || 0) * 100),
+        monthly_price_minor:
+          values.monthly_price_rub !== undefined &&
+          values.monthly_price_rub !== null &&
+          values.monthly_price_rub !== ""
+            ? Math.round(Number(values.monthly_price_rub) * 100)
+            : 0,
         currency: values.currency || "RUB",
         billing_mode: values.billing_mode || "standard",
         min_billing_periods: Number(values.min_billing_periods || 1),
@@ -158,7 +163,10 @@ export default function AdminOrganizationsPage() {
       phone: org.phone || "",
       notify_by_email: org.notify_by_email ?? true,
       is_active: org.is_active,
-      monthly_price_rub: (org.monthly_price_minor / 100).toFixed(2),
+      monthly_price_rub:
+        org.monthly_price_minor != null
+          ? (org.monthly_price_minor / 100).toFixed(2)
+          : "0.00",
       currency: org.currency,
       billing_mode: org.billing_mode || "standard",
       min_billing_periods: org.min_billing_periods || 1,
@@ -185,7 +193,12 @@ export default function AdminOrganizationsPage() {
         phone: values.phone ? values.phone.trim() : null,
         notify_by_email: values.notify_by_email ?? true,
         is_active: values.is_active,
-        monthly_price_minor: Math.round(Number(values.monthly_price_rub || 0) * 100),
+        monthly_price_minor:
+          values.monthly_price_rub !== undefined &&
+          values.monthly_price_rub !== null &&
+          values.monthly_price_rub !== ""
+            ? Math.round(Number(values.monthly_price_rub) * 100)
+            : 0,
         currency: values.currency,
         billing_mode: values.billing_mode || "standard",
         min_billing_periods: Number(values.min_billing_periods || 1),
@@ -296,6 +309,9 @@ export default function AdminOrganizationsPage() {
         } else if (mode === "cert_linked") {
           tagColor = "geekblue";
           label = "По сертификату (cert_linked)";
+        } else if (mode === "master") {
+          tagColor = "purple";
+          label = "Мастер-лицензия";
         }
         return (
           <div>
@@ -320,6 +336,9 @@ export default function AdminOrganizationsPage() {
       key: "monthly_price_minor",
       width: 130,
       render: (val, record) => {
+        if (record.billing_mode === "master") {
+          return <Text type="success">0 ₽ (Мастер-лицензия)</Text>;
+        }
         if (record.billing_mode === "cert_linked") {
           return <Text type="secondary">0 ₽ (в сертификате)</Text>;
         }
@@ -585,10 +604,17 @@ export default function AdminOrganizationsPage() {
               label="Модель биллинга"
               tooltip="Режим расчета и выставления счетов"
             >
-              <Select>
+              <Select
+                onChange={(val) => {
+                  if (val === "master") {
+                    createForm.setFieldsValue({ monthly_price_rub: 0 });
+                  }
+                }}
+              >
                 <Select.Option value="standard">Стандартная (предоплата)</Select.Option>
                 <Select.Option value="post_factum">По факту задолженности (пост-оплата)</Select.Option>
                 <Select.Option value="cert_linked">Привязана к сертификату (cert_linked)</Select.Option>
+                <Select.Option value="master">Мастер-лицензия (без оплаты)</Select.Option>
               </Select>
             </Form.Item>
 
@@ -807,10 +833,17 @@ export default function AdminOrganizationsPage() {
               label="Модель биллинга"
               tooltip="Режим расчета и выставления счетов"
             >
-              <Select>
+              <Select
+                onChange={(val) => {
+                  if (val === "master") {
+                    editForm.setFieldsValue({ monthly_price_rub: 0 });
+                  }
+                }}
+              >
                 <Select.Option value="standard">Стандартная (предоплата)</Select.Option>
                 <Select.Option value="post_factum">По факту задолженности (пост-оплата)</Select.Option>
                 <Select.Option value="cert_linked">Привязана к сертификату (cert_linked)</Select.Option>
+                <Select.Option value="master">Мастер-лицензия (без оплаты)</Select.Option>
               </Select>
             </Form.Item>
 

@@ -93,12 +93,14 @@ function isTerminalDisabled(t: BillingTerminal): boolean {
 
 /** Lapsed, or expiring soon enough that it needs attention right away. */
 function isLicenseUrgent(t: BillingTerminal): boolean {
+  if (t.billing_mode === "master") return false;
   return daysUntilLicenseExpiry(t) <= LICENSE_DUE_SOON_DAYS;
 }
 
 /** Whether a license payment can be made for this terminal right now. */
 function isLicensePayable(t: BillingTerminal, advancePeriods: number): boolean {
   if (isTerminalDisabled(t)) return false;
+  if (t.billing_mode === "master" || t.billing_mode === "cert_linked") return false;
   return isLicenseLapsed(t) || advancePeriods > 0;
 }
 
@@ -113,6 +115,13 @@ function shouldAutoSelectLicense(
   billingMode: string = "standard",
 ): boolean {
   if (isTerminalDisabled(t)) return false;
+  if (
+    t.billing_mode === "master" ||
+    billingMode === "master" ||
+    t.billing_mode === "cert_linked"
+  ) {
+    return false;
+  }
 
   const mode =
     defaultSelectionMode ||
@@ -157,7 +166,7 @@ function isCertPayable(t: BillingTerminal): boolean {
 }
 
 function licenseAmountMinor(t: BillingTerminal, advancePeriods: number): number {
-  if (t.billing_mode === "cert_linked") return 0;
+  if (t.billing_mode === "cert_linked" || t.billing_mode === "master") return 0;
   const periods = (isLicenseLapsed(t) ? 1 : 0) + advancePeriods;
   return periods * t.period_price_minor;
 }
@@ -346,6 +355,8 @@ export default function BillingPage() {
       case "attention":
         return (
           !isTerminalDisabled(t) &&
+          t.billing_mode !== "master" &&
+          summary?.billing_mode !== "master" &&
           (t.billing_status === "overdue" ||
             t.billing_status === "due_soon" ||
             t.billing_status === "no_license")
@@ -353,7 +364,10 @@ export default function BillingPage() {
       case "active":
         return (
           !isTerminalDisabled(t) &&
-          (t.billing_status === "active" || t.billing_status === "due_soon")
+          (t.billing_mode === "master" ||
+            summary?.billing_mode === "master" ||
+            t.billing_status === "active" ||
+            t.billing_status === "due_soon")
         );
       case "disabled":
         return isTerminalDisabled(t);
@@ -473,13 +487,21 @@ export default function BillingPage() {
 
 
   // Counters
+  const isMasterOrg = summary?.billing_mode === "master";
   const overdueCount = terminals.filter(
-    (t) => !isTerminalDisabled(t) && t.billing_status === "overdue",
+    (t) =>
+      !isTerminalDisabled(t) &&
+      !isMasterOrg &&
+      t.billing_mode !== "master" &&
+      t.billing_status === "overdue",
   ).length;
   const activeCount = terminals.filter(
     (t) =>
       !isTerminalDisabled(t) &&
-      (t.billing_status === "active" || t.billing_status === "due_soon"),
+      (isMasterOrg ||
+        t.billing_mode === "master" ||
+        t.billing_status === "active" ||
+        t.billing_status === "due_soon"),
   ).length;
   const disabledCount = terminals.filter((t) => isTerminalDisabled(t)).length;
 
@@ -534,23 +556,44 @@ export default function BillingPage() {
       dataIndex: "billing_status",
       key: "status",
       width: 140,
-      render: (status: string) => (
-        <Tag
-          color={billingStatusColor(status)}
-          style={{
-            whiteSpace: "normal",
-            wordBreak: "break-word",
-            height: "auto",
-            padding: "2px 8px",
-            lineHeight: 1.3,
-            textAlign: "center",
-            display: "inline-block",
-            fontSize: 12,
-          }}
-        >
-          {billingStatusLabel(status)}
-        </Tag>
-      ),
+      render: (status: string, r: BillingTerminal) => {
+        if (r.billing_mode === "master" || summary?.billing_mode === "master") {
+          return (
+            <Tag
+              color="purple"
+              style={{
+                whiteSpace: "normal",
+                wordBreak: "break-word",
+                height: "auto",
+                padding: "2px 8px",
+                lineHeight: 1.3,
+                textAlign: "center",
+                display: "inline-block",
+                fontSize: 12,
+              }}
+            >
+              Без оплаты
+            </Tag>
+          );
+        }
+        return (
+          <Tag
+            color={billingStatusColor(status)}
+            style={{
+              whiteSpace: "normal",
+              wordBreak: "break-word",
+              height: "auto",
+              padding: "2px 8px",
+              lineHeight: 1.3,
+              textAlign: "center",
+              display: "inline-block",
+              fontSize: 12,
+            }}
+          >
+            {billingStatusLabel(status)}
+          </Tag>
+        );
+      },
     },
     {
       title: "Лицензия",
@@ -582,6 +625,25 @@ export default function BillingPage() {
               <span style={{ whiteSpace: "nowrap" }}>
                 <Text type="secondary" style={{ fontSize: 12 }}>
                   0 ₽ (в сертификате)
+                </Text>
+              </span>
+            </Space>
+          );
+        }
+
+        if (r.billing_mode === "master" || summary?.billing_mode === "master") {
+          return (
+            <Space direction="vertical" size={0} style={{ whiteSpace: "nowrap" }}>
+              <span style={{ whiteSpace: "nowrap" }}>
+                <Text>
+                  {r.license_expires_at
+                    ? formatDate(r.license_expires_at)
+                    : "Мастер-лицензия"}
+                </Text>
+              </span>
+              <span style={{ whiteSpace: "nowrap" }}>
+                <Text type="success" style={{ fontSize: 12 }}>
+                  0 ₽ (Мастер-лицензия)
                 </Text>
               </span>
             </Space>
@@ -752,6 +814,15 @@ export default function BillingPage() {
       align: "right",
       width: 140,
       render: (v: number, r: BillingTerminal) => {
+        if (r.billing_mode === "master" || summary?.billing_mode === "master") {
+          return (
+            <span style={{ whiteSpace: "nowrap" }}>
+              <Text type="success" style={{ fontSize: 12 }}>
+                0 ₽ (Мастер-лицензия)
+              </Text>
+            </span>
+          );
+        }
         if (r.billing_mode === "cert_linked") {
           return (
             <span style={{ whiteSpace: "nowrap" }}>
@@ -875,6 +946,9 @@ export default function BillingPage() {
             )}
             {summary?.billing_mode === "cert_linked" && (
               <Tag color="geekblue">По сертификату (cert_linked)</Tag>
+            )}
+            {summary?.billing_mode === "master" && (
+              <Tag color="purple">Мастер-лицензия (без оплаты)</Tag>
             )}
             <Tag color="red">Просрочено: {overdueCount}</Tag>
             <Tag color="green">Активных: {activeCount}</Tag>

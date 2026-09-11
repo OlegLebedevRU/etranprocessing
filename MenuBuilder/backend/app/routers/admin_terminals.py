@@ -346,6 +346,7 @@ async def create_terminal(
         license_type="standard",
         expires_at=expires_at,
         billing_period_months=body.billing_period_months,
+        monthly_price_override_minor=body.monthly_price_override_minor,
     )
     db.add(license_entry)
 

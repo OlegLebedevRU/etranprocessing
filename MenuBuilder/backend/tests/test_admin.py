@@ -191,6 +191,19 @@ async def test_admin_organizations_flow():
         assert updated_org["org_name"] == "Platerra Updated"
         assert updated_org["monthly_price_minor"] == 180_000
 
+        # 4. Test master mode update with 0 price (ensure 0 is retained and not converted to 100_000)
+        master_payload = {
+            "billing_mode": "master",
+            "monthly_price_minor": 0,
+        }
+        resp = await client.put(
+            "/api/admin/organizations/1", json=master_payload, headers=headers
+        )
+        assert resp.status_code == 200
+        master_org = resp.json()
+        assert master_org["billing_mode"] == "master"
+        assert master_org["monthly_price_minor"] == 0
+
 
 @pytest.mark.anyio
 async def test_admin_terminals_flow():

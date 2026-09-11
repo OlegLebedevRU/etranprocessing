@@ -227,6 +227,12 @@ export default function AdminTerminalsPage() {
         iot_provisioned: Boolean(values.iot_provisioned),
         license_expires_at: expDate.toISOString(),
         billing_period_months: Number(values.billing_period_months || 1),
+        monthly_price_override_minor:
+          values.monthly_price_override_rub !== undefined &&
+          values.monthly_price_override_rub !== null &&
+          values.monthly_price_override_rub !== ""
+            ? Math.round(Number(values.monthly_price_override_rub) * 100)
+            : null,
         renewal_enabled: true,
       };
 
@@ -256,9 +262,10 @@ export default function AdminTerminalsPage() {
       iot_provisioned: term.iot_provisioned ?? false,
       billing_period_months: term.billing_period_months || 1,
       renewal_enabled: term.renewal_enabled ?? true,
-      monthly_price_override_rub: term.monthly_price_override_minor
-        ? (term.monthly_price_override_minor / 100).toFixed(2)
-        : undefined,
+      monthly_price_override_rub:
+        term.monthly_price_override_minor != null
+          ? (term.monthly_price_override_minor / 100).toFixed(2)
+          : undefined,
     });
     setEditModalOpen(true);
   };
@@ -278,9 +285,12 @@ export default function AdminTerminalsPage() {
         iot_provisioned: Boolean(values.iot_provisioned),
         billing_period_months: Number(values.billing_period_months || 1),
         renewal_enabled: Boolean(values.renewal_enabled),
-        monthly_price_override_minor: values.monthly_price_override_rub
-          ? Math.round(Number(values.monthly_price_override_rub) * 100)
-          : null,
+        monthly_price_override_minor:
+          values.monthly_price_override_rub !== undefined &&
+          values.monthly_price_override_rub !== null &&
+          values.monthly_price_override_rub !== ""
+            ? Math.round(Number(values.monthly_price_override_rub) * 100)
+            : null,
       };
 
       await updateAdminTerminal(editingTerminal.id, payload);
@@ -1051,6 +1061,19 @@ export default function AdminTerminalsPage() {
               </Select>
             </Form.Item>
           </div>
+
+          <Form.Item
+            name="monthly_price_override_rub"
+            label="Индивидуальная цена лицензии (₽) (опционально)"
+            tooltip="Переопределяет стандартную стоимость организации для данного терминала (можно 0 ₽)"
+          >
+            <InputNumber
+              placeholder="По умолчанию из организации"
+              min={0}
+              step={100}
+              style={{ width: "100%" }}
+            />
+          </Form.Item>
         </Form>
       </Modal>
 
