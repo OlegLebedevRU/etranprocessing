@@ -153,10 +153,10 @@ def test_build_cert_policy_snapshot():
     }
 
 
-def test_compute_pin_expiry_adds_24h_by_default():
+def test_compute_pin_expiry_adds_7_days_by_default():
     base = datetime(2026, 8, 20, 12, 0, tzinfo=UTC)
     expiry = compute_pin_expiry(base)
-    assert expiry == datetime(2026, 8, 21, 12, 0, tzinfo=UTC)
+    assert expiry == datetime(2026, 8, 27, 12, 0, tzinfo=UTC)
 
 
 # === Async unit tests: unique PIN generation ===

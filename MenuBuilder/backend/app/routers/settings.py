@@ -6,9 +6,9 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
-from sqlalchemy import desc, select
+from sqlalchemy import String, cast, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
@@ -112,6 +112,13 @@ class TerminalSettingsItem(BaseModel):
     cert_not_valid_after: str | None
     created_at: str | None
     updated_at: str | None
+
+
+class TerminalSettingsListResponse(BaseModel):
+    items: list[TerminalSettingsItem]
+    total_count: int
+    page: int
+    page_size: int
 
 
 class UpdateTerminalSettingsRequest(BaseModel):
@@ -536,15 +543,29 @@ async def confirm_email_token(
 # --- Endpoints: Terminals ---
 
 
-@router.get("/terminals", response_model=list[TerminalSettingsItem])
+@router.get(
+    "/terminals",
+    response_model=TerminalSettingsListResponse | list[TerminalSettingsItem],
+)
 async def list_terminals_settings(
     org_id: int | None = Query(None, description="Org ID for superuser viewing"),
+    search: str | None = Query(
+        None,
+        description="Search by device_id (single or comma-separated), sn, address, note",
+    ),
+    sort_by: str = Query(
+        "device_id", description="Sort by field: device_id, created_at, sn, address"
+    ),
+    sort_order: str = Query("asc", description="Sort order: asc, desc"),
+    page: int | None = Query(None, ge=1, description="Page number"),
+    page_size: int = Query(50, ge=1, le=500, description="Items per page"),
     user: dict[str, Any] = Depends(
         require_permission(PERMISSION_SETTINGS_TERMINALS_VIEW)
     ),
     db: AsyncSession = Depends(get_db),
-) -> list[TerminalSettingsItem]:
-    """List terminals for current organization (available for role 3, superuser, and role 4 with settings:terminals:view)."""
+    response: Response = None,  # type: ignore[assignment]
+) -> TerminalSettingsListResponse | list[TerminalSettingsItem]:
+    """List terminals for current organization with search, sorting and pagination."""
     is_su = bool(user.get("is_superuser") or user.get("role_id") == 1)
 
     effective_org_id = int(user.get("org_id", 0))
@@ -552,13 +573,62 @@ async def list_terminals_settings(
         effective_org_id = org_id
 
     if effective_org_id <= 0:
+        if page is not None:
+            return TerminalSettingsListResponse(
+                items=[], total_count=0, page=page, page_size=page_size
+            )
         return []
 
-    res = await db.execute(
-        select(Terminal)
-        .where(Terminal.org_id == effective_org_id)
-        .order_by(Terminal.id.asc())
-    )
+    query = select(Terminal).where(Terminal.org_id == effective_org_id)
+
+    if search:
+        raw_search = search.strip()
+        search_pattern = f"%{raw_search}%"
+        comma_ids = [
+            int(part.strip())
+            for part in raw_search.split(",")
+            if part.strip().isdigit()
+        ]
+
+        conditions: list[Any] = [
+            Terminal.sn.ilike(search_pattern),
+            Terminal.address.ilike(search_pattern),
+            Terminal.note.ilike(search_pattern),
+            Terminal.cert_serial.ilike(search_pattern),
+        ]
+        if len(comma_ids) > 1:
+            conditions.append(Terminal.device_id.in_(comma_ids))
+        elif len(comma_ids) == 1:
+            conditions.append(Terminal.device_id == comma_ids[0])
+            conditions.append(cast(Terminal.device_id, String).ilike(search_pattern))
+        else:
+            conditions.append(cast(Terminal.device_id, String).ilike(search_pattern))
+
+        query = query.where(or_(*conditions))
+
+    count_query = select(func.count()).select_from(query.subquery())
+    total_count = (await db.execute(count_query)).scalar_one()
+
+    # Sorting
+    sort_col: Any = Terminal.device_id
+    if sort_by == "created_at":
+        sort_col = Terminal.created_at
+    elif sort_by == "sn":
+        sort_col = Terminal.sn
+    elif sort_by == "address":
+        sort_col = Terminal.address
+    elif sort_by == "id":
+        sort_col = Terminal.id
+
+    if sort_order.lower() == "desc":
+        query = query.order_by(sort_col.desc())
+    else:
+        query = query.order_by(sort_col.asc())
+
+    if page is not None:
+        query = query.offset((page - 1) * page_size).limit(page_size)
+
+    res = await db.execute(query)
     terminals = res.scalars().all()
 
     items = []
@@ -581,6 +651,17 @@ async def list_terminals_settings(
                 created_at=t.created_at.isoformat() if t.created_at else None,
                 updated_at=t.updated_at.isoformat() if t.updated_at else None,
             )
+        )
+
+    if response is not None:
+        response.headers["X-Total-Count"] = str(total_count)
+
+    if page is not None:
+        return TerminalSettingsListResponse(
+            items=items,
+            total_count=total_count,
+            page=page,
+            page_size=page_size,
         )
     return items
 

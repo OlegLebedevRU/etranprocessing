@@ -170,10 +170,11 @@ export default function VideoSurveillancePage() {
   const loadDevices = useCallback(async () => {
     setLoadingDevices(true);
     try {
-      const [res, settingsList] = await Promise.all([
+      const [res, settingsData] = await Promise.all([
         getDevices(orgId, { page: 1, size: 100 }),
-        listTerminalsSettings(orgId).catch(() => []),
+        listTerminalsSettings(orgId).catch(() => ({ items: [] })),
       ]);
+      const settingsList = "items" in settingsData ? settingsData.items : [];
 
       let allItems = res.items || [];
       if (res.pages > 1) {

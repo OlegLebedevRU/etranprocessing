@@ -113,7 +113,7 @@ class Settings(BaseSettings):
     billing_due_soon_days: int = 30
 
     # Certificate PIN billing
-    cert_pin_ttl_hours: int = 24
+    cert_pin_ttl_hours: int = 168  # 7 days (7 * 24h)
     cert_expiring_soon_days: int = 30
 
     # Serverless Email Gateway

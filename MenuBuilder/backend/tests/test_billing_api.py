@@ -39,10 +39,11 @@ def _make_terminal(
     note: str | None = None,
     terminal_type_id: int = 0,
     terminal_type_name: str | None = None,
+    device_id: int | None = None,
 ) -> MagicMock:
     t = MagicMock()
     t.id = id
-    t.device_id = 100 + id
+    t.device_id = device_id if device_id is not None else 100 + id
     t.sn = f"SN{id}"
     t.org_id = org_id
     t.is_active = is_active
@@ -586,6 +587,96 @@ async def test_get_billing_terminals_returns_address_and_type_fields():
     assert t_data["terminal_type_id"] == 1
     assert t_data["terminal_type_name"] == "Платежный терминал"
     assert t_data["created_at"] is not None
+
+
+@pytest.mark.anyio
+async def test_get_billing_terminals_pagination_sorting_search_and_new_filter():
+    """GET /api/billing/terminals supports pagination, comma search, sorting and new filter."""
+    user = _make_user()
+    t1 = _make_terminal(
+        id=1,
+        device_id=101,
+        address="Address 101",
+        note="Note 1",
+    )
+    t1.cert_serial = "CERT123"
+    t1.created_at = datetime(2020, 1, 1, tzinfo=UTC)
+    t2 = _make_terminal(
+        id=2,
+        device_id=102,
+        address="Address 102",
+        note="Note 2",
+    )
+    t2.cert_serial = None
+    l1 = _make_license(expires_at=datetime.now(UTC) + timedelta(days=20))
+    l2 = _make_license(expires_at=datetime.now(UTC) + timedelta(days=50))
+    org_settings = _make_org_settings()
+
+    mock_db = AsyncMock()
+
+    def execute_side_effect(stmt):
+        stmt_str = str(stmt)
+        result = MagicMock()
+        if "org_billing_settings" in stmt_str:
+            result.scalar_one_or_none.return_value = org_settings
+        elif "terminals" in stmt_str:
+            result.all.return_value = [(t1, l1), (t2, l2)]
+        elif "certificate_pins" in stmt_str:
+            result.scalars.return_value.all.return_value = []
+        else:
+            result.scalar_one_or_none.return_value = None
+            result.scalars.return_value = MagicMock(return_value=[])
+        return result
+
+    mock_db.execute = AsyncMock(side_effect=execute_side_effect)
+
+    async def override_get_db():
+        yield mock_db
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_billing_user] = lambda: user
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. Test pagination & sort by device_id desc
+        resp = await client.get(
+            "/api/billing/terminals?page=1&page_size=50&sort_by=device_id&sort_order=desc"
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "items" in data
+        assert data["total_count"] == 2
+        assert data["page"] == 1
+        assert data["page_size"] == 50
+        assert data["items"][0]["device_id"] == 102
+        assert data["items"][1]["device_id"] == 101
+        assert resp.headers.get("x-total-count") == "2"
+
+        # 2. Test comma search
+        resp_search = await client.get(
+            "/api/billing/terminals?search=101,105&page=1&page_size=50"
+        )
+        assert resp_search.status_code == 200
+        data_search = resp_search.json()
+        assert len(data_search["items"]) == 1
+        assert data_search["items"][0]["device_id"] == 101
+
+        # 3. Test sort by license_expires_at asc
+        resp_sort_lic = await client.get(
+            "/api/billing/terminals?sort_by=license_expires_at&sort_order=asc&page=1&page_size=50"
+        )
+        assert resp_sort_lic.status_code == 200
+        items_lic = resp_sort_lic.json()["items"]
+        assert items_lic[0]["device_id"] == 101
+
+        # 4. Test filter only_new
+        resp_new = await client.get(
+            "/api/billing/terminals?only_new=true&page=1&page_size=50"
+        )
+        assert resp_new.status_code == 200
+        items_new = resp_new.json()["items"]
+        assert len(items_new) >= 1
+        assert items_new[0]["device_id"] == 102
 
 
 @pytest.mark.anyio

@@ -83,6 +83,13 @@ class BillingTerminalRead(BaseModel):
     created_at: datetime | None = None
 
 
+class BillingTerminalListResponse(BaseModel):
+    items: list[BillingTerminalRead]
+    total_count: int
+    page: int
+    page_size: int
+
+
 class DeactivateTerminalResponse(BaseModel):
     terminal_id: int
     status: BillingStatus

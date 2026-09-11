@@ -44,6 +44,22 @@ export interface TerminalSettingsItem {
   updated_at: string | null;
 }
 
+export interface TerminalSettingsListResponse {
+  items: TerminalSettingsItem[];
+  total_count: number;
+  page: number;
+  page_size: number;
+}
+
+export interface ListTerminalsSettingsParams {
+  org_id?: number;
+  search?: string;
+  sort_by?: string;
+  sort_order?: "asc" | "desc";
+  page?: number;
+  page_size?: number;
+}
+
 export interface UpdateTerminalSettingsPayload {
   address?: string | null;
   note?: string | null;
@@ -99,9 +115,24 @@ export async function confirmEmailToken(
   return data;
 }
 
-export async function listTerminalsSettings(orgId?: number): Promise<TerminalSettingsItem[]> {
-  const params = orgId ? { org_id: orgId } : undefined;
-  const { data } = await client.get<TerminalSettingsItem[]>("/settings/terminals", { params });
+export async function listTerminalsSettings(
+  params?: ListTerminalsSettingsParams | number
+): Promise<TerminalSettingsListResponse> {
+  const queryParams = typeof params === "number" ? { org_id: params } : params;
+  const { data, headers } = await client.get<TerminalSettingsListResponse | TerminalSettingsItem[]>(
+    "/settings/terminals",
+    { params: queryParams }
+  );
+  if (Array.isArray(data)) {
+    const rawTotal = headers ? headers["x-total-count"] : undefined;
+    const total = rawTotal ? parseInt(rawTotal, 10) : data.length;
+    return {
+      items: data,
+      total_count: isNaN(total) ? data.length : total,
+      page: queryParams?.page || 1,
+      page_size: queryParams?.page_size || data.length,
+    };
+  }
   return data;
 }
 

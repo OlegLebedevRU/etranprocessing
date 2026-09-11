@@ -484,3 +484,73 @@ async def test_settings_terminals_flow(role3_headers, superuser_headers):
         assert updated["address"] == "Updated Kiosk St 5"
         assert updated["note"] == "Updated Note 1"
         assert updated["timezone"] == "Asia/Novosibirsk"
+
+
+@pytest.mark.anyio
+async def test_settings_terminals_pagination_and_comma_search(role3_headers):
+    mock_db = AsyncMock()
+    t1 = Terminal(
+        id=1,
+        device_id=101,
+        sn="term-101",
+        org_id=10,
+        address="Address 101",
+        note="Note 101",
+        timezone="Europe/Moscow",
+        is_active=True,
+        cert_serial=None,
+        cert_not_valid_after=None,
+        created_at=None,
+        updated_at=None,
+    )
+    t2 = Terminal(
+        id=2,
+        device_id=102,
+        sn="term-102",
+        org_id=10,
+        address="Address 102",
+        note="Note 102",
+        timezone="Europe/Moscow",
+        is_active=True,
+        cert_serial=None,
+        cert_not_valid_after=None,
+        created_at=None,
+        updated_at=None,
+    )
+
+    async def mock_execute(stmt):
+        res = MagicMock()
+        sql_str = str(stmt).lower()
+        if "count(" in sql_str:
+            res.scalar_one.return_value = 2
+        else:
+            res.scalars.return_value.all.return_value = [t1, t2]
+        return res
+
+    mock_db.execute = AsyncMock(side_effect=mock_execute)
+    app.dependency_overrides[get_db] = lambda: mock_db
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        # Test pagination
+        resp = await client.get(
+            "/api/settings/terminals?page=1&page_size=50&sort_by=device_id&sort_order=desc",
+            headers=role3_headers,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "items" in data
+        assert data["total_count"] == 2
+        assert data["page"] == 1
+        assert data["page_size"] == 50
+        assert resp.headers.get("x-total-count") == "2"
+
+        # Test comma search
+        resp_search = await client.get(
+            "/api/settings/terminals?search=101,102&page=1&page_size=50",
+            headers=role3_headers,
+        )
+        assert resp_search.status_code == 200
+        data_search = resp_search.json()
+        assert len(data_search["items"]) == 2

@@ -117,19 +117,50 @@ export interface ReactivationCheckoutResponse {
   payment_url: string | null;
 }
 
+export interface BillingTerminalListResponse {
+  items: BillingTerminal[];
+  total_count: number;
+  page: number;
+  page_size: number;
+}
+
+export interface GetBillingTerminalsParams {
+  status?: string;
+  search?: string;
+  sort_by?: string;
+  sort_order?: "asc" | "desc";
+  only_new?: boolean;
+  page?: number;
+  page_size?: number;
+}
+
 export async function getBillingSummary(): Promise<BillingSummary> {
   const res = await client.get("/billing/summary");
   return res.data;
 }
 
 export async function getBillingTerminals(
-  status?: string,
+  statusOrParams?: string | GetBillingTerminalsParams,
   search?: string,
-): Promise<BillingTerminal[]> {
-  const params: Record<string, string> = {};
-  if (status) params.status = status;
-  if (search) params.search = search;
-  const res = await client.get("/billing/terminals", { params });
+): Promise<BillingTerminalListResponse> {
+  let params: Record<string, unknown> = {};
+  if (typeof statusOrParams === "string") {
+    if (statusOrParams) params.status = statusOrParams;
+    if (search) params.search = search;
+  } else if (statusOrParams) {
+    params = { ...statusOrParams };
+  }
+  const res = await client.get<BillingTerminalListResponse | BillingTerminal[]>("/billing/terminals", { params });
+  if (Array.isArray(res.data)) {
+    const rawTotal = res.headers ? res.headers["x-total-count"] : undefined;
+    const total = rawTotal ? parseInt(rawTotal, 10) : res.data.length;
+    return {
+      items: res.data,
+      total_count: isNaN(total) ? res.data.length : total,
+      page: (params.page as number) || 1,
+      page_size: (params.page_size as number) || res.data.length,
+    };
+  }
   return res.data;
 }
 

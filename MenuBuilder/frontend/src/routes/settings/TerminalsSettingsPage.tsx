@@ -55,6 +55,15 @@ export default function TerminalsSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm();
 
+  // Smart pagination, search, sorting
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [totalCount, setTotalCount] = useState(0);
+  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [sortBy, setSortBy] = useState("device_id");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+
   const isSuperuser = Boolean(user?.is_superuser || user?.role_id === 1);
   const isRole4 = user?.role_id === 4;
   const isReadOnly = isSuperuser || isRole4;
@@ -62,8 +71,16 @@ export default function TerminalsSettingsPage() {
   const fetchTerminals = async () => {
     setLoading(true);
     try {
-      const data = await listTerminalsSettings(user?.org_id || undefined);
-      setTerminals(data);
+      const data = await listTerminalsSettings({
+        org_id: user?.org_id || undefined,
+        search: search.trim() || undefined,
+        sort_by: sortBy,
+        sort_order: sortOrder,
+        page,
+        page_size: pageSize,
+      });
+      setTerminals(data.items);
+      setTotalCount(data.total_count);
     } catch (err: any) {
       message.error(err.response?.data?.detail || "Ошибка загрузки списка терминалов");
     } finally {
@@ -73,7 +90,27 @@ export default function TerminalsSettingsPage() {
 
   useEffect(() => {
     fetchTerminals();
-  }, [user?.org_id]);
+  }, [user?.org_id, page, pageSize, search, sortBy, sortOrder]);
+
+  const handleTableChange = (
+    pagination: any,
+    _filters: any,
+    sorter: any,
+  ) => {
+    if (pagination.current && pagination.current !== page) {
+      setPage(pagination.current);
+    }
+    if (pagination.pageSize && pagination.pageSize !== pageSize) {
+      setPageSize(pagination.pageSize);
+      setPage(1);
+    }
+    if (sorter && sorter.field) {
+      const field = String(sorter.field);
+      const order = sorter.order === "descend" ? "desc" : "asc";
+      setSortBy(field);
+      setSortOrder(order);
+    }
+  };
 
   const handleEditClick = (term: TerminalSettingsItem) => {
     setEditingTerminal(term);
@@ -110,7 +147,14 @@ export default function TerminalsSettingsPage() {
       title: "Device ID",
       dataIndex: "device_id",
       key: "device_id",
-      width: 100,
+      width: 120,
+      sorter: true,
+      sortOrder:
+        sortBy === "device_id"
+          ? sortOrder === "asc"
+            ? "ascend"
+            : "descend"
+          : null,
       render: (id: number) => <Text strong>{id}</Text>,
     },
     {
@@ -203,7 +247,7 @@ export default function TerminalsSettingsPage() {
           <Space>
             <DesktopOutlined />
             <span>Терминалы организации</span>
-            <Tag color="default">{terminals.length} шт.</Tag>
+            <Tag color="default">{totalCount} шт.</Tag>
           </Space>
         }
         extra={
@@ -221,12 +265,34 @@ export default function TerminalsSettingsPage() {
           установки, служебное примечание и индивидуальный часовой пояс.
         </Paragraph>
 
+        <div style={{ marginBottom: 16 }}>
+          <Input.Search
+            placeholder="Поиск по номерам (через запятую: 101, 102), SN, адресу, примечанию"
+            allowClear
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onSearch={(val) => {
+              setSearch(val.trim());
+              setPage(1);
+            }}
+            style={{ maxWidth: 460 }}
+          />
+        </div>
+
         <Table
           columns={columns}
           dataSource={terminals}
           rowKey="id"
           loading={loading}
-          pagination={{ pageSize: 15, showSizeChanger: true }}
+          onChange={handleTableChange}
+          pagination={{
+            current: page,
+            pageSize: pageSize,
+            total: totalCount,
+            showSizeChanger: true,
+            pageSizeOptions: ["50", "100", "200"],
+            showTotal: (total) => `Всего: ${total}`,
+          }}
           locale={{ emptyText: "Нет зарегистрированных терминалов для выбранной организации" }}
         />
       </Card>

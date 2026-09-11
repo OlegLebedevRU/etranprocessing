@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -28,6 +28,7 @@ from app.schemas.billing import (
     BillingForecastMonthRead,
     BillingOrderRead,
     BillingSummaryRead,
+    BillingTerminalListResponse,
     BillingTerminalRead,
     CalculateItemResponse,
     CalculateResponse,
@@ -358,15 +359,48 @@ async def get_billing_summary(
     )
 
 
-@router.get("/terminals", response_model=list[BillingTerminalRead])
+def _is_new_terminal(r: BillingTerminalRead, now: datetime) -> bool:
+    """Check if terminal is new (recently added or awaiting certificate installation)."""
+    # ждет установки сертификата (есть pending PIN или сертификат еще не выпущен)
+    if r.cert_pin_pending or not r.cert_serial:
+        return True
+    # нет лицензии
+    if not r.license_expires_at or r.billing_status == BillingStatus.NO_LICENSE:
+        return True
+    # недавно добавлен (создан за последние 30 дней)
+    if r.created_at:
+        created = (
+            r.created_at if r.created_at.tzinfo else r.created_at.replace(tzinfo=UTC)
+        )
+        if (now - created).total_seconds() <= 30 * 86400:
+            return True
+    return False
+
+
+@router.get(
+    "/terminals",
+    response_model=BillingTerminalListResponse | list[BillingTerminalRead],
+)
 async def get_billing_terminals(
     status: str | None = None,
     search: str | None = None,
+    sort_by: str | None = Query(
+        None,
+        description="Sort field: device_id, license_expires_at, cert_not_valid_after, status",
+    ),
+    sort_order: str = Query("asc", description="Sort order: asc, desc"),
+    only_new: bool | None = Query(
+        None,
+        description="Filter only new terminals (recently added or awaiting cert)",
+    ),
+    page: int | None = Query(None, ge=1, description="Page number"),
+    page_size: int = Query(50, ge=1, le=500, description="Items per page"),
     user: BillingUser = Depends(get_current_billing_user),
     _perm: dict = Depends(require_permission(PERMISSION_BILLING_VIEW)),
     db: AsyncSession = Depends(get_db),
-):
-    """Get billing details for all terminals of the organization."""
+    response: Response = None,  # type: ignore[assignment]
+) -> BillingTerminalListResponse | list[BillingTerminalRead]:
+    """Get billing details for all terminals of the organization with smart pagination, search, and sorting."""
     org_settings = await _get_org_settings(db, user.org_id)
     as_of = datetime.now(UTC)
 
@@ -380,35 +414,110 @@ async def get_billing_terminals(
         )
         for info in infos
     ]
+    reads = [BillingTerminalRead.model_validate(r) for r in results]
 
-    # Filter by status
-    if status:
+    # Filter by status or new
+    if status == "new" or only_new:
+        reads = [r for r in reads if _is_new_terminal(r, as_of)]
+    elif status:
         try:
             target_status = BillingStatus(status)
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
-        results = [r for r in results if r.billing_status == target_status]
+        reads = [r for r in reads if r.billing_status == target_status]
 
-    # Filter by search
+    # Filter by search (support comma-separated list of device_ids or text search)
     if search:
-        search_lower = search.lower()
-        results = [
-            r
-            for r in results
-            if search_lower in str(r.device_id) or search_lower in r.sn.lower()
+        raw_search = search.strip()
+        search_lower = raw_search.lower()
+        comma_ids = [
+            int(part.strip())
+            for part in raw_search.split(",")
+            if part.strip().isdigit()
         ]
 
-    # Sort: overdue first, then by status priority, then by device_id
-    status_order = {
-        BillingStatus.OVERDUE: 0,
-        BillingStatus.DUE_SOON: 1,
-        BillingStatus.ACTIVE: 2,
-        BillingStatus.DISABLED: 3,
-        BillingStatus.NO_LICENSE: 4,
-    }
-    results.sort(key=lambda r: (status_order.get(r.billing_status, 99), r.device_id))
+        filtered = []
+        for r in reads:
+            if comma_ids and r.device_id in comma_ids:
+                filtered.append(r)
+                continue
+            if (
+                search_lower in str(r.device_id)
+                or search_lower in r.sn.lower()
+                or (r.address and search_lower in r.address.lower())
+                or (r.note and search_lower in r.note.lower())
+                or (r.cert_serial and search_lower in r.cert_serial.lower())
+            ):
+                filtered.append(r)
+        reads = filtered
 
-    return results
+    # Sorting
+    is_desc = sort_order.lower() == "desc"
+    if sort_by == "license_expires_at":
+
+        def lic_key(r: BillingTerminalRead) -> datetime:
+            if r.license_expires_at:
+                return (
+                    r.license_expires_at
+                    if r.license_expires_at.tzinfo
+                    else r.license_expires_at.replace(tzinfo=UTC)
+                )
+            return (
+                datetime.min.replace(tzinfo=UTC)
+                if is_desc
+                else datetime.max.replace(tzinfo=UTC)
+            )
+
+        reads.sort(key=lic_key, reverse=is_desc)
+    elif sort_by == "cert_not_valid_after":
+
+        def cert_key(r: BillingTerminalRead) -> datetime:
+            if r.cert_not_valid_after:
+                return (
+                    r.cert_not_valid_after
+                    if r.cert_not_valid_after.tzinfo
+                    else r.cert_not_valid_after.replace(tzinfo=UTC)
+                )
+            return (
+                datetime.min.replace(tzinfo=UTC)
+                if is_desc
+                else datetime.max.replace(tzinfo=UTC)
+            )
+
+        reads.sort(key=cert_key, reverse=is_desc)
+    elif sort_by == "device_id":
+        reads.sort(key=lambda r: r.device_id, reverse=is_desc)
+    elif sort_by == "status":
+        status_order = {
+            BillingStatus.OVERDUE: 0,
+            BillingStatus.DUE_SOON: 1,
+            BillingStatus.ACTIVE: 2,
+            BillingStatus.DISABLED: 3,
+            BillingStatus.NO_LICENSE: 4,
+        }
+        reads.sort(
+            key=lambda r: (status_order.get(r.billing_status, 99), r.device_id),
+            reverse=is_desc,
+        )
+    else:
+        reads.sort(key=lambda r: r.device_id, reverse=is_desc)
+
+    total_count = len(reads)
+    if response is not None:
+        response.headers["X-Total-Count"] = str(total_count)
+
+    if page is not None:
+        start = (page - 1) * page_size
+        end = start + page_size
+        paged_items = reads[start:end]
+        return BillingTerminalListResponse(
+            items=paged_items,
+            total_count=total_count,
+            page=page,
+            page_size=page_size,
+        )
+
+    return reads
 
 
 @router.post(

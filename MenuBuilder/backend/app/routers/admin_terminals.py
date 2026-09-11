@@ -9,6 +9,7 @@ from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import require_superuser
+from app.config import settings
 from app.database import get_db
 from app.models import (
     CertificatePin,
@@ -528,7 +529,7 @@ async def generate_terminal_pin(
     )
 
     pin = await generate_unique_cert_pin(db)
-    expires_at = datetime.now(UTC) + timedelta(hours=24)
+    expires_at = datetime.now(UTC) + timedelta(hours=settings.cert_pin_ttl_hours)
 
     cert_pin = CertificatePin(
         pin=pin,

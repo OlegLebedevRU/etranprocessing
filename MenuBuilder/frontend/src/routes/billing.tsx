@@ -54,10 +54,30 @@ const { useBreakpoint } = Grid;
 
 const STATUS_TABS = [
   { key: "all", label: "Все" },
+  { key: "new", label: "Новые" },
   { key: "attention", label: "Требуют внимания" },
   { key: "active", label: "Активные" },
   { key: "disabled", label: "Отключённые" },
 ];
+
+export function isNewTerminal(t: BillingTerminal): boolean {
+  // ждет установки сертификата (есть pending PIN или сертификат еще не выпущен)
+  if (t.cert_pin_pending || !t.cert_serial) {
+    return true;
+  }
+  // нет лицензии
+  if (!t.license_expires_at || t.billing_status === "no_license") {
+    return true;
+  }
+  // недавно добавлен (создан за последние 30 дней)
+  if (t.created_at) {
+    const createdTime = new Date(t.created_at).getTime();
+    if (!isNaN(createdTime) && Date.now() - createdTime <= 30 * 24 * 60 * 60 * 1000) {
+      return true;
+    }
+  }
+  return false;
+}
 
 interface Selection {
   license: boolean;
@@ -235,6 +255,7 @@ export default function BillingPage() {
   const [terminals, setTerminals] = useState<BillingTerminal[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [pageSize, setPageSize] = useState(50);
   const [activeTab, setActiveTab] = useState("all");
   const [advancePeriods, setAdvancePeriods] = useState(0);
   const [selection, setSelection] = useState<Record<number, Selection>>({});
@@ -252,10 +273,11 @@ export default function BillingPage() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [s, t] = await Promise.all([
+      const [s, tResp] = await Promise.all([
         getBillingSummary(),
         getBillingTerminals(),
       ]);
+      const t = tResp.items;
       setSummary(s);
       setTerminals(t);
       // Preselect certificates that are missing or about to expire; license
@@ -343,15 +365,36 @@ export default function BillingPage() {
   // Filter terminals by tab and search
   const filteredTerminals = terminals.filter((t) => {
     if (search) {
-      const s = search.toLowerCase();
-      if (!String(t.device_id).includes(s) && !t.sn.toLowerCase().includes(s)) {
-        return false;
+      const raw = search.trim();
+      const commaIds = raw
+        .split(",")
+        .map((p) => p.trim())
+        .filter((p) => /^\d+$/.test(p))
+        .map((p) => Number(p));
+
+      let matched = false;
+      if (commaIds.length > 0 && commaIds.includes(t.device_id)) {
+        matched = true;
+      } else {
+        const s = raw.toLowerCase();
+        if (
+          String(t.device_id).includes(s) ||
+          t.sn.toLowerCase().includes(s) ||
+          (t.address && t.address.toLowerCase().includes(s)) ||
+          (t.note && t.note.toLowerCase().includes(s)) ||
+          (t.cert_serial && t.cert_serial.toLowerCase().includes(s))
+        ) {
+          matched = true;
+        }
       }
+      if (!matched) return false;
     }
 
     switch (activeTab) {
       case "all":
         return true;
+      case "new":
+        return isNewTerminal(t);
       case "attention":
         return (
           !isTerminalDisabled(t) &&
@@ -414,6 +457,20 @@ export default function BillingPage() {
         next[t.terminal_id] = {
           license: on && isLicensePayable(t, advancePeriods),
           cert: on && isCertPayable(t),
+        };
+      }
+      return next;
+    });
+  };
+
+  const selectOnlyNew = () => {
+    setSelection((prev) => {
+      const next = { ...prev };
+      for (const t of filteredTerminals) {
+        const isNew = isNewTerminal(t);
+        next[t.terminal_id] = {
+          license: isNew && isLicensePayable(t, advancePeriods),
+          cert: isNew && isCertPayable(t),
         };
       }
       return next;
@@ -599,6 +656,11 @@ export default function BillingPage() {
       title: "Лицензия",
       key: "license",
       width: 220,
+      sorter: (a: BillingTerminal, b: BillingTerminal) => {
+        const ta = a.license_expires_at ? new Date(a.license_expires_at).getTime() : 0;
+        const tb = b.license_expires_at ? new Date(b.license_expires_at).getTime() : 0;
+        return ta - tb;
+      },
       render: (_: unknown, r: BillingTerminal) => {
         if (isRole4 || isTerminalDisabled(r)) {
           return (
@@ -695,6 +757,11 @@ export default function BillingPage() {
       title: "Сертификат",
       key: "cert",
       width: 250,
+      sorter: (a: BillingTerminal, b: BillingTerminal) => {
+        const ta = a.cert_not_valid_after ? new Date(a.cert_not_valid_after).getTime() : 0;
+        const tb = b.cert_not_valid_after ? new Date(b.cert_not_valid_after).getTime() : 0;
+        return ta - tb;
+      },
       render: (_: unknown, r: BillingTerminal) => {
         if (isRole4 || isTerminalDisabled(r)) {
           return !r.cert_serial ? (
@@ -1058,15 +1125,19 @@ export default function BillingPage() {
                 <Button size="small" onClick={() => setAllVisible(false)}>
                   Снять всё
                 </Button>
+                <Button size="small" onClick={selectOnlyNew}>
+                  Выбрать только новые
+                </Button>
               </>
             )}
             <Input
-              placeholder="Поиск..."
+              placeholder="Поиск по номерам (101, 102...), SN..."
               prefix={<SearchOutlined />}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              style={{ width: isMobile ? "100%" : 180 }}
+              style={{ width: isMobile ? "100%" : 240 }}
               size="small"
+              allowClear
             />
             <Button
               icon={<ReloadOutlined />}
@@ -1095,9 +1166,10 @@ export default function BillingPage() {
           tableLayout="auto"
           pagination={{
             defaultPageSize: 50,
-            pageSize: 50,
+            pageSize: pageSize,
+            onShowSizeChange: (_current, size) => setPageSize(size),
             showSizeChanger: true,
-            pageSizeOptions: ["10", "20", "50", "100"],
+            pageSizeOptions: ["50", "100", "200"],
             size: "small",
             simple: isMobile,
             showTotal: (total, range) =>
