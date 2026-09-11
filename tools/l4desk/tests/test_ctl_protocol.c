@@ -368,6 +368,44 @@ static void test_command_handling_validation(void) {
     ffmpeg_supervisor_get_info(&sinfo);
     ASSERT_TRUE(sinfo.lease_expires_at_ms == 1700000000000ULL);
 
+    /* 10. lease_renew when stream not running -> stream_not_running */
+    const char* cmd_renew_nostream = "{\"v\":1,\"type\":\"lease_renew\",\"command_id\":\"rnw_001\",\"lease_id\":\"l1\","
+                                     "\"sn\":\"TERM001\",\"expires_at_ms\":4102444800000}";
+    ASSERT_TRUE(ctl_handle_command(cmd_renew_nostream, strlen(cmd_renew_nostream), "TERM001", &inv, resp, sizeof(resp), &resp_len, &should_pub, &qos));
+    ASSERT_TRUE(should_pub);
+    ASSERT_TRUE(strstr(resp, "\"code\":\"stream_not_running\"") != NULL);
+
+    /* 11. Start stream, then lease_renew with wrong lease_id -> lease_mismatch */
+    char start_res[32], start_err_code[64], start_err_msg[256];
+    ffmpeg_supervisor_start("s_test", "lease_valid", "desktop", "disp:11223344", "default", &inv,
+                            start_res, sizeof(start_res), start_err_code, sizeof(start_err_code), start_err_msg, sizeof(start_err_msg));
+
+    const char* cmd_renew_badlease = "{\"v\":1,\"type\":\"lease_renew\",\"command_id\":\"rnw_002\",\"lease_id\":\"lease_wrong\","
+                                     "\"sn\":\"TERM001\",\"expires_at_ms\":4102444800000}";
+    ASSERT_TRUE(ctl_handle_command(cmd_renew_badlease, strlen(cmd_renew_badlease), "TERM001", &inv, resp, sizeof(resp), &resp_len, &should_pub, &qos));
+    ASSERT_TRUE(should_pub);
+    ASSERT_TRUE(strstr(resp, "\"code\":\"lease_mismatch\"") != NULL);
+
+    /* 12. lease_renew with matching lease_id -> ACK and lease updated */
+    const char* cmd_renew_ok = "{\"v\":1,\"type\":\"lease_renew\",\"command_id\":\"rnw_003\",\"lease_id\":\"lease_valid\","
+                               "\"sn\":\"TERM001\",\"expires_at_ms\":4102444800000}";
+    ASSERT_TRUE(ctl_handle_command(cmd_renew_ok, strlen(cmd_renew_ok), "TERM001", &inv, resp, sizeof(resp), &resp_len, &should_pub, &qos));
+    ASSERT_TRUE(should_pub);
+    ASSERT_TRUE(strstr(resp, "\"type\":\"ack\"") != NULL);
+    ffmpeg_supervisor_get_info(&sinfo);
+    ASSERT_TRUE(sinfo.lease_expires_at_ms == 4102444800000ULL);
+
+    /* 13. stream_renew alias -> ACK and lease updated */
+    const char* cmd_renew_alias = "{\"v\":1,\"type\":\"stream_renew\",\"command_id\":\"rnw_004\",\"lease_id\":\"lease_valid\","
+                                 "\"sn\":\"TERM001\",\"expires_at_ms\":4102444900000}";
+    ASSERT_TRUE(ctl_handle_command(cmd_renew_alias, strlen(cmd_renew_alias), "TERM001", &inv, resp, sizeof(resp), &resp_len, &should_pub, &qos));
+    ASSERT_TRUE(should_pub);
+    ASSERT_TRUE(strstr(resp, "\"type\":\"ack\"") != NULL);
+    ffmpeg_supervisor_get_info(&sinfo);
+    ASSERT_TRUE(sinfo.lease_expires_at_ms == 4102444900000ULL);
+
+    ffmpeg_supervisor_stop(NULL, NULL, start_res, sizeof(start_res), start_err_code, sizeof(start_err_code), start_err_msg, sizeof(start_err_msg));
+
     printf("[PASS] test_command_handling_validation\n");
 }
 

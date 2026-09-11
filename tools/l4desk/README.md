@@ -11,7 +11,7 @@
 - **Оркестрация FFmpeg и профиль H.264 Baseline Level 3.1**: запуск строго из `<base>\ffmpeg\ffmpeg.exe` (по умолчанию `C:\l4tools\ffmpeg\ffmpeg.exe`) в скрытом режиме (`SW_HIDE`), перенаправление stdin (для soft stop по `q\n`), перенаправление stdout/stderr в ротационный лог-файл (до 5 файлов по 5 МБ), контроль через Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`). Явная фиксация флагов кодирования H.264 Constrained Baseline Level 3.1 под SDP-заявку Janus Streaming Plugin: `-profile:v baseline -level 3.1 -x264-params bframes=0:force-cfr=1 -g %d -keyint_min %d -sc_threshold 0 -pix_fmt yuv420p`.
 - **Двухфазная остановка**: фаза 1 (soft stop `q\n` с ожиданием до 5 с) → фаза 2 (hard kill через `TerminateJobObject`/`TerminateProcess`) → подтверждение освобождения портов и ресурсов.
 - **Controlled switch**: бесшовное последовательное переключение источников (`stopping` старого → `stopped` → `starting` нового → `running`) с ответом `ack.result = switched`.
-- **Файл состояния и Reconciliation**: запись состояния в `<base>\l4desk\state\ffmpeg_state.json`. При старте — поиск и мягкая остановка зависших процессов FFmpeg от предыдущих сессий с защитой от PID reuse (проверка `creation_time` и метаданных).
+- **Файл состояния и Reconciliation**: запись состояния в `<base>\l4desk\state\ffmpeg_state.json`. При старте — поиск и мягкая остановка зависших процессов FFmpeg от предыдущих сессий с защитой от PID reuse (проверка `creation_time` и метаданных). При завершении подтвержденного осиротевшего процесса супервизор публикует событие `stream_event` (`state="stopped"`, `reason="agent_restart_reconcile"`), буферизуемое клиентом MQTT и отправляемое сразу после установления соединения и статуса `presence online`, предотвращая ложное отображение активной трансляции на сервере `app1`.
 - **Health-check и отказоустойчивость**:
   - **Замкнутый Recovery-Loop супервизора**: автоматический перезапуск упавшего или зависшего (stall > 10 с) процесса FFmpeg с сохранением всех активных параметров трансляции (`mode`, `source_id`, `profile`, `stream_instance_id`, `lease_id`). Расчёт задержки повтора по формуле экспоненциального backoff со случайным jitter: `delay_sec = min(30, (1 << restart_count)) + (rand() % 1000) / 1000.0`.
   - **Restart budget**: ограничение не более 5 попыток перезапуска за 10-минутное скользящее окно (`restart_count > 5` переводит состояние в `failed` с `reason="restart_limit"` и прекращает дальнейшие попытки).
@@ -22,6 +22,7 @@
     2. Принудительно останавливает процесс FFmpeg.
     3. Переводит состояние стрима в `stopped` с `reason="lease_expired"`.
     4. Отправляет уведомление `stream_event` (`state="stopped"`, `reason="lease_expired"`).
+  - **Методика проверки Recovery супервизора**: автоматический перезапуск срабатывает **строго при неожиданном падении FFmpeg** (`unexpected_exit`), когда срок аренды ещё активен. После остановки по `lease_expired` автоматический перезапуск **запрещён** (штатная остановка по безопасности). Для проверки recovery завершается исключительно процесс FFmpeg: `Get-Process ffmpeg | Stop-Process -Force`, при этом в логе фиксируется цепочка: `unexpected_exit` -> `stream_event [restarting]` -> backoff -> старт нового FFmpeg -> `stream_event [running] reason="recovered"`.
 
 ## 2. Архитектура и сетевая изоляция
 
@@ -52,6 +53,10 @@
      - Белый список виртуальных кодов `vk`: `0x08` (Backspace), `0x09` (Tab), `0x0D` (Enter), `0x1B` (Esc), `0x20` (Space), `0x2E` (Delete), `0x25..0x28` (Стрелки), `0x30..0x39` (0-9), `0x41..0x5A` (A-Z), `0x70..0x7B` (F1-F12), Numpad, модификаторы и OEM-символы.
      - Запрещены деструктивные клавиши (`VK_LWIN`, `VK_RWIN`, `VK_APPS`) и комбинация Ctrl+Alt+Del.
      - Инъекция через `SendInput` (`down`, `up`, `press`) с флагом `KEYEVENTF_EXTENDEDKEY` для навигационных клавиш. Возвращает `ack.result = "injected"` или `nack`.
+7. `lease_renew` / `stream_renew {command_id, lease_id, sn, expires_at_ms}`
+   - Продление срока действия активной аренды стрима.
+   - Валидация: стрим должен находиться в `running` или `restarting` (иначе NACK `stream_not_running`), переданный `lease_id` обязан совпадать с активным стримом (иначе NACK `lease_mismatch`).
+   - Обновляет локальный таймер `lease_expires_at_ms` в супервизоре FFmpeg и возвращает `ack.result = "injected"`. Предотвращает преждевременную остановку стрима сторожевым таймером при пассивном просмотре без кликов/ввода.
 
 ### 3.2 Исходящие сообщения (`dev/<SN>/ctl`)
 
@@ -88,7 +93,7 @@
      ```
   3. Нормализация для `SendInput` относительно полного виртуального рабочего стола (`SM_XVIRTUALSCREEN`, `SM_YVIRTUALSCREEN`, `SM_CXVIRTUALSCREEN`, `SM_CYVIRTUALSCREEN`).
 - **Коды `nack.code`**:
-  - `lease_mismatch`, `desktop_mismatch`, `stream_mismatch`, `source_not_allowed`, `source_unavailable`, `session_unavailable`, `busy_transition`, `ffmpeg_missing`, `ffmpeg_integrity`, `input_not_allowed_in_camera_mode`, `invalid_profile`, `invalid_sn`, `invalid_payload`, `expired`, `unsupported`, `inject_failed`.
+  - `lease_mismatch`, `desktop_mismatch`, `stream_mismatch`, `stream_not_running`, `source_not_allowed`, `source_unavailable`, `session_unavailable`, `busy_transition`, `ffmpeg_missing`, `ffmpeg_integrity`, `input_not_allowed_in_camera_mode`, `invalid_profile`, `invalid_sn`, `invalid_payload`, `expired`, `unsupported`, `inject_failed`.
 
 ## 4. Локальная политика (`l4desk_policy.ini`)
 

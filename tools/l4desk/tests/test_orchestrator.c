@@ -34,6 +34,17 @@ static uint64_t test_get_current_time_ms(void) {
     return (uint64_t)((uli.QuadPart - 116444736000000000ULL) / 10000ULL);
 }
 
+static char g_last_event_stream_id[64] = { 0 };
+static char g_last_event_state[32] = { 0 };
+static char g_last_event_reason[64] = { 0 };
+
+static void test_event_callback(const char* stream_instance_id, const char* state, const char* reason, void* user_data) {
+    (void)user_data;
+    if (stream_instance_id) strcpy_s(g_last_event_stream_id, sizeof(g_last_event_stream_id), stream_instance_id);
+    if (state) strcpy_s(g_last_event_state, sizeof(g_last_event_state), state);
+    if (reason) strcpy_s(g_last_event_reason, sizeof(g_last_event_reason), reason);
+}
+
 static void setup_test_inventory(SystemInventory* inv) {
     memset(inv, 0, sizeof(SystemInventory));
     strcpy_s(inv->displays[0].desktop_id, sizeof(inv->displays[0].desktop_id), "disp:11223344");
@@ -88,6 +99,7 @@ int main(int argc, char* argv[]) {
 
     ffmpeg_supervisor_init(test_dir, "TERM_TEST_01");
     ffmpeg_supervisor_set_custom_binary(fake_bin);
+    ffmpeg_supervisor_set_event_callback(test_event_callback, NULL);
 
     char result[32] = { 0 };
     char err_code[64] = { 0 };
@@ -238,6 +250,10 @@ int main(int argc, char* argv[]) {
             fclose(fState);
         }
 
+        g_last_event_stream_id[0] = '\0';
+        g_last_event_state[0] = '\0';
+        g_last_event_reason[0] = '\0';
+
         /* Now call reconcile: it must kill the orphaned child process */
         ffmpeg_supervisor_reconcile();
 
@@ -246,7 +262,11 @@ int main(int argc, char* argv[]) {
         ASSERT_TRUE(child_exit != STILL_ACTIVE);
         CloseHandle(pi.hProcess);
         CloseHandle(pi.hThread);
-        printf("  [OK] Orphaned child process correctly detected and terminated\n");
+        ASSERT_TRUE(strcmp(g_last_event_stream_id, "inst_orphan_real") == 0);
+        ASSERT_TRUE(strcmp(g_last_event_state, "stopped") == 0);
+        ASSERT_TRUE(strcmp(g_last_event_reason, "agent_restart_reconcile") == 0);
+        printf("  [OK] Orphaned child process correctly detected and terminated (event: %s/%s)\n",
+               g_last_event_state, g_last_event_reason);
     }
 
     /* 9. Test recovery-loop auto-restart (restarting -> running / recovered) */
@@ -301,7 +321,7 @@ int main(int argc, char* argv[]) {
     Sleep(200); /* Wait for initial crash */
 
     /* Trigger ticks until budget is exhausted (attempts 1 to 5 restart, 6th fails) */
-    for (int attempt = 1; attempt <= 12; attempt++) {
+    for (int attempt = 1; attempt <= 35; attempt++) {
         ffmpeg_supervisor_tick(&inv, &changed, nstate, sizeof(nstate), nreason, sizeof(nreason));
         ffmpeg_supervisor_get_info(&sinfo);
         if (strcmp(sinfo.state, "failed") == 0) {

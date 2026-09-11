@@ -1,5 +1,29 @@
 # CHANGELOG: l4desk
 
+## [1.4.0] - 2026-09-11 (Команда продления аренды `lease_renew`, Reconcile-события и верификация recovery)
+
+### Added
+- **Команда продления аренды `lease_renew` / `stream_renew` (`src/ctl_protocol.c`)**:
+  - Добавлена обработка входящих команд `lease_renew` и `stream_renew` в `ctl_handle_command`:
+    - Валидация состояния активного стрима: стрим должен находиться в состоянии `running` или `restarting` (при других состояниях возвращается NACK `stream_not_running`).
+    - Проверка совпадения идентификатора аренды `lease_id` с активным стримом (при несовпадении возвращается NACK `lease_mismatch`).
+    - Обновление срока действия локального fail-closed сторожевого таймера супервизора через `ffmpeg_supervisor_update_lease(lease_id, expires_at_ms)`.
+    - Формирование ответа ACK и кеширование в bounded LRU-кеш дедупликации.
+  - Устранена преждевременная остановка трансляции локальным сторожевым таймером (`lease_expired`) при непрерывной сессии просмотра без кликов мыши.
+- **Оповещение сервера при `reconcile` осиротевших процессов (`src/ffmpeg_supervisor.c`, `src/mqtt_client.c`)**:
+  - В `ffmpeg_supervisor_reconcile()` при обнаружении и завершении осиротевшего процесса FFmpeg (подтвержденного по `creation_time`) инициируется отправка события:
+    `notify_stream_event(stream_id, "stopped", "agent_restart_reconcile")`.
+  - В `src/mqtt_client.c` добавлена буферизация событий стрима (`has_pending_stream_event`), возникших до установки MQTT-соединения, с немедленной отправкой накопленного события `publish_stream_event` сразу после получения `CONNACK` и публикации первичного статуса `presence online`.
+  - Сервер `app1` и веб-интерфейс гарантированно получают статус завершения предыдущего стрима после перезапуска агента (`taskkill l4desk.exe`), предотвращая ложное отображение статуса «В эфире».
+- **Методика верификации Recovery супервизора**:
+  - Зафиксировано разграничение между штатной остановкой по безопасности (`lease_expired`, после которой перезапуск категорически запрещён) и сбоем процесса FFmpeg во время активной аренды (`unexpected_exit`).
+  - Регламентирована процедура проверки recovery через принудительное завершение только процесса FFmpeg (`Get-Process ffmpeg | Stop-Process -Force`), подтверждающая прохождение цепочки:
+    `unexpected_exit` -> публикация `stream_event [restarting]` -> экспоненциальный backoff -> запуск нового FFmpeg -> публикация `stream_event [running] reason="recovered"`.
+- **Расширение модульных тестов (`tests/test_ctl_protocol.c`, `tests/test_orchestrator.c`)**:
+  - В `test_ctl_protocol.c` добавлены тесты для `lease_renew` (NACK `stream_not_running`, NACK `lease_mismatch`, ACK и продление `lease_expires_at_ms`, проверка псевдонима `stream_renew`).
+  - В `test_orchestrator.c` добавлена проверка регистрации callback-события и валидация отправки `stopped` / `agent_restart_reconcile` при обнаружении осиротевшего дочернего процесса.
+  - Оптимизирован цикл тиков в тесте лимита бюджета перезапусков (тест 10) для гарантированного исчерпания всех 5 попыток и перехода в `failed` / `restart_limit`.
+
 ## [1.3.0] - 2026-09-11 (PROMPT AGENT 2.2: Closed recovery-loop & Local fail-closed lease watchdog)
 
 ### Added

@@ -34,6 +34,10 @@ typedef struct {
     uint32_t last_inventory_hash;
     char last_stream_state[32];
     const L4DeskConfig* config;
+    bool has_pending_stream_event;
+    char pending_stream_id[64];
+    char pending_stream_state[32];
+    char pending_stream_reason[64];
 } MqttState;
 
 static uint16_t get_next_packet_id(MqttState* st) {
@@ -108,11 +112,19 @@ static void publish_stream_event(MqttState* st, const char* stream_instance_id, 
 
 static void on_ffmpeg_stream_event(const char* stream_instance_id, const char* state, const char* reason, void* user_data) {
     MqttState* st = (MqttState*)user_data;
-    if (st && st->sock != INVALID_SOCKET) {
+    if (!st) return;
+    if (st->sock != INVALID_SOCKET) {
         publish_stream_event(st, stream_instance_id, state, reason);
         if (state) {
             strcpy_s(st->last_stream_state, sizeof(st->last_stream_state), state);
         }
+    } else {
+        st->has_pending_stream_event = true;
+        strcpy_s(st->pending_stream_id, sizeof(st->pending_stream_id), stream_instance_id ? stream_instance_id : "");
+        strcpy_s(st->pending_stream_state, sizeof(st->pending_stream_state), state ? state : "");
+        strcpy_s(st->pending_stream_reason, sizeof(st->pending_stream_reason), reason ? reason : "");
+        log_info("Buffered pending stream_event [%s] until MQTT connects (reason=%s)",
+                 st->pending_stream_state, st->pending_stream_reason);
     }
 }
 
@@ -240,6 +252,15 @@ int mqtt_client_run(const L4DeskConfig* config, HANDLE hStopEvent) {
 
         /* 4. Publish dev/<SN>/ctl presence online (retain=1, qos=1) */
         publish_presence(&state, "online");
+
+        /* Publish any buffered stream_event (e.g. from reconcile before connect) */
+        if (state.has_pending_stream_event) {
+            publish_stream_event(&state, state.pending_stream_id, state.pending_stream_state, state.pending_stream_reason);
+            if (state.pending_stream_state[0] != '\0') {
+                strcpy_s(state.last_stream_state, sizeof(state.last_stream_state), state.pending_stream_state);
+            }
+            state.has_pending_stream_event = false;
+        }
 
         /* 5. Active connection polling loop */
         time_t last_ping_time = time(NULL);

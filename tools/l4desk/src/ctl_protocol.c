@@ -538,6 +538,49 @@ bool ctl_handle_command(const char* payload, size_t payload_len,
         return false;
     }
 
+    /* lease_renew / stream_renew */
+    if (strcmp(cmd_type, "lease_renew") == 0 || strcmp(cmd_type, "stream_renew") == 0) {
+        StreamStateInfo stream;
+        ffmpeg_supervisor_get_info(&stream);
+
+        if (strcmp(stream.state, "running") != 0 && strcmp(stream.state, "restarting") != 0) {
+            int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
+                                             "stream_not_running", "No active stream to renew", now_ms);
+            if (len > 0) {
+                *out_resp_len = (size_t)len;
+                *p_should_publish = true;
+                return true;
+            }
+            return false;
+        }
+
+        if (stream.lease_id[0] != '\0' && strcmp(stream.lease_id, lease_id) != 0) {
+            int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
+                                             "lease_mismatch", "Active stream lease does not match", now_ms);
+            if (len > 0) {
+                *out_resp_len = (size_t)len;
+                *p_should_publish = true;
+                return true;
+            }
+            return false;
+        }
+
+        if (expires_at_ms > 0) {
+            ffmpeg_supervisor_update_lease(lease_id, (uint64_t)expires_at_ms);
+            log_info("Lease renewed for stream %s: new expires_at_ms=%llu",
+                     stream.stream_instance_id, (unsigned long long)expires_at_ms);
+        }
+
+        int len = ctl_build_ack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn, now_ms);
+        if (len > 0) {
+            dedup_cache_put(cmd_id, out_resp, (size_t)len, expires_at_ms);
+            *out_resp_len = (size_t)len;
+            *p_should_publish = true;
+            return true;
+        }
+        return false;
+    }
+
     /* 4. Remote input commands: pointer_move, mouse_click, key_event */
     bool is_move = (strcmp(cmd_type, "pointer_move") == 0);
     bool is_click = (strcmp(cmd_type, "mouse_click") == 0);

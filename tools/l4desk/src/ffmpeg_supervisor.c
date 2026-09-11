@@ -405,6 +405,9 @@ void ffmpeg_supervisor_reconcile(void) {
                         log_warn("Confirmed orphaned process PID=%d creation_time matches. Terminating...", pid);
                         TerminateProcess(hProc, 1);
                         WaitForSingleObject(hProc, 3000);
+                        if (stream_id[0] != '\0') {
+                            notify_stream_event(stream_id, "stopped", "agent_restart_reconcile");
+                        }
                     } else {
                         log_info("Process PID=%d has different creation time (PID reused). Skipping.", pid);
                     }
