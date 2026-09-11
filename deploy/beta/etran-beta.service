@@ -1,0 +1,19 @@
+[Unit]
+Description=Etran beta versioned build and deployment
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=github-runner
+Group=github-runner
+WorkingDirectory=/home/github-runner/etran-ci
+Environment=HOME=/home/github-runner
+Environment=PATH=/home/github-runner/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=UV_CACHE_DIR=/home/github-runner/etran-ci/uv-cache
+Environment=UV_PYTHON_INSTALL_DIR=/home/github-runner/etran-ci/python
+Environment=CI=1
+UMask=0077
+ExecStart=/usr/bin/python3 /opt/etran-beta/launcher.py
+TimeoutStartSec=3600
+SuccessExitStatus=75

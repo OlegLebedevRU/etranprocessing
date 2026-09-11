@@ -48,8 +48,17 @@ def update_override(previous, service, image):
 
 def atomic_json(path, data):
     temporary = path.with_suffix(".tmp")
-    temporary.write_text(json.dumps(data, indent=2) + "\n")
+    with temporary.open("w") as stream:
+        stream.write(json.dumps(data, indent=2) + "\n")
+        stream.flush()
+        os.fsync(stream.fileno())
     temporary.replace(path)
+    if os.name == "posix":
+        descriptor = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
 
 
 def compose_command(component, override):

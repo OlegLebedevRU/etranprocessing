@@ -60,6 +60,8 @@
 Регламенты развертывания, управления инфраструктурой и диагностических операций:
 
 - **[`ops_run-devops-runbook.md`](ops_run-devops-runbook.md)** — Регламент эксплуатации: инструкции по сборке и обновлению контейнеров, деплой на серверы, управление сертификатами, переключение legacy IIS и процедуры отката.
+- **[`ops_run-beta-ci-cd.md`](ops_run-beta-ci-cd.md)** — Автономный бета-CI/CD: выделенный builder, версионированные образы, systemd timer, установка и восстановление.
+- **[`ops_run-github-actions-ci-cd.md`](ops_run-github-actions-ci-cd.md)** — Предыдущий вариант GitHub Actions (отключён для бета-перехода), общий механизм digest-деплоя и Compose override.
 - **[`ops_net-nginx-config-guide.md`](ops_net-nginx-config-guide.md)** — Справочник конфигурации Nginx: взаимная TLS-аутентификация (порт 4443), проксирование заголовков сертификатов, JWT-терминация (порт 443).
 - **[`ops_net-infrastructure-connections.md`](ops_net-infrastructure-connections.md)** — Инфраструктурный справочник: сетевые адреса целевого сервера (`87.242.100.34`), Managed PostgreSQL (`10.0.0.7`), порты, параметры БД и окружений.
 - **[`ops_run-remote-console-diagnostics.md`](ops_run-remote-console-diagnostics.md)** — Регламент удаленной диагностики терминалов и серверов через SSH, MQTT-каналы и операции с MCP Ops сервером (`server-ops`).

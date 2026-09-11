@@ -72,6 +72,10 @@ nginx_locations.conf
 # Node
 node_modules/
 package-lock.json
+!MenuBuilder/frontend/package-lock.json
+
+# Local beta CI bootstrap credentials (never commit)
+.beta-ci-secrets/
 
 # .NET Build artifacts
 [Bb]in/

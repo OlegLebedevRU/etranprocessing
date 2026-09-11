@@ -1,0 +1,11 @@
+[Unit]
+Description=Poll main for beta releases without a hosted CI scheduler
+
+[Timer]
+OnBootSec=60s
+OnUnitInactiveSec=60s
+AccuracySec=5s
+Unit=etran-beta.service
+
+[Install]
+WantedBy=timers.target
