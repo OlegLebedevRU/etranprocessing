@@ -9,6 +9,8 @@
 #include <stdint.h>
 #include "display_inventory.h"
 
+#define FFMPEG_SUPERVISOR_STATE_RUNNING "running"
+
 typedef struct {
     char stream_instance_id[64];
     char lease_id[64];
@@ -23,6 +25,8 @@ typedef struct {
     uint64_t ffmpeg_start_time;
     uint64_t started_at;
     int restart_count;
+    uint64_t next_restart_time;
+    uint64_t lease_expires_at_ms;
 } StreamStateInfo;
 
 typedef void (*FFmpegEventCallback)(const char* stream_instance_id,
@@ -54,10 +58,19 @@ bool ffmpeg_supervisor_stop(const char* stream_instance_id,
                             char* out_err_code, size_t max_err_code,
                             char* out_err_msg, size_t max_err_msg);
 
+bool ffmpeg_supervisor_stop_with_reason(const char* reason);
+
+void ffmpeg_supervisor_update_lease(const char* lease_id, uint64_t expires_at_ms);
+
 bool ffmpeg_supervisor_tick(const SystemInventory* inv,
                             bool* p_state_changed,
                             char* out_new_state, size_t max_state_len,
                             char* out_reason, size_t max_reason_len);
+
+bool ffmpeg_supervisor_check(const SystemInventory* inv,
+                             bool* p_state_changed,
+                             char* out_new_state, size_t max_state_len,
+                             char* out_reason, size_t max_reason_len);
 
 void ffmpeg_supervisor_get_info(StreamStateInfo* out_info);
 

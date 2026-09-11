@@ -353,6 +353,21 @@ static void test_command_handling_validation(void) {
     ASSERT_TRUE(strstr(resp, "\"stream_instance_id\":null") != NULL);
     ASSERT_TRUE(strstr(resp, "\"stream_instance_id\":\"\"") == NULL);
 
+    /* 9. Lease watchdog update verification */
+    ffmpeg_supervisor_init("C:\\l4tools", "TERM001");
+    StreamStateInfo sinfo;
+    ffmpeg_supervisor_get_info(&sinfo);
+    ASSERT_TRUE(sinfo.lease_expires_at_ms == 0);
+
+    ffmpeg_supervisor_update_lease("l1", 1700000000000ULL);
+    ffmpeg_supervisor_get_info(&sinfo);
+    ASSERT_TRUE(sinfo.lease_expires_at_ms == 1700000000000ULL);
+
+    /* Smaller lease_expires_at_ms is not overwritten (monotonic) */
+    ffmpeg_supervisor_update_lease("l1", 1600000000000ULL);
+    ffmpeg_supervisor_get_info(&sinfo);
+    ASSERT_TRUE(sinfo.lease_expires_at_ms == 1700000000000ULL);
+
     printf("[PASS] test_command_handling_validation\n");
 }
 

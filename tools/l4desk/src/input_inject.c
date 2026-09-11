@@ -2,6 +2,8 @@
 #include <string.h>
 #include <stdlib.h>
 
+static bool s_key_is_down[256] = { false };
+
 void input_map_coordinates_custom(double nx, double ny,
                                  int rect_x, int rect_y, int rect_w, int rect_h,
                                  int virt_x, int virt_y, int virt_w, int virt_h,
@@ -235,6 +237,9 @@ bool input_inject_key(const char* kind, int vk, const char* text, DWORD* out_err
             if (out_error) *out_error = GetLastError();
             return false;
         }
+        if (vk >= 0 && vk < 256) {
+            s_key_is_down[vk] = false;
+        }
     } else {
         INPUT inp;
         memset(&inp, 0, sizeof(INPUT));
@@ -248,7 +253,52 @@ bool input_inject_key(const char* kind, int vk, const char* text, DWORD* out_err
             if (out_error) *out_error = GetLastError();
             return false;
         }
+        if (vk >= 0 && vk < 256) {
+            s_key_is_down[vk] = !is_up;
+        }
     }
 
     return true;
+}
+
+void input_release_all(void) {
+    /* 1. Release all mouse buttons (left, right, middle) */
+    INPUT mouse_inps[3];
+    memset(mouse_inps, 0, sizeof(mouse_inps));
+
+    mouse_inps[0].type = INPUT_MOUSE;
+    mouse_inps[0].mi.dwFlags = MOUSEEVENTF_LEFTUP;
+
+    mouse_inps[1].type = INPUT_MOUSE;
+    mouse_inps[1].mi.dwFlags = MOUSEEVENTF_RIGHTUP;
+
+    mouse_inps[2].type = INPUT_MOUSE;
+    mouse_inps[2].mi.dwFlags = MOUSEEVENTF_MIDDLEUP;
+
+    SendInput(3, mouse_inps, sizeof(INPUT));
+
+    /* 2. Release all active keyboard virtual keys */
+    for (int vk = 1; vk < 256; vk++) {
+        SHORT key_state = GetAsyncKeyState(vk);
+        bool is_down = ((key_state & 0x8000) != 0) || s_key_is_down[vk];
+        if (is_down) {
+            WORD scan = (WORD)MapVirtualKeyW((UINT)vk, MAPVK_VK_TO_VSC);
+
+            DWORD ext_flag = 0;
+            if ((vk >= VK_PRIOR && vk <= VK_DOWN) || vk == VK_DELETE || vk == VK_INSERT ||
+                vk == VK_RCONTROL || vk == VK_RMENU || vk == VK_DIVIDE) {
+                ext_flag = KEYEVENTF_EXTENDEDKEY;
+            }
+
+            INPUT inp;
+            memset(&inp, 0, sizeof(inp));
+            inp.type = INPUT_KEYBOARD;
+            inp.ki.wVk = (WORD)vk;
+            inp.ki.wScan = scan;
+            inp.ki.dwFlags = ext_flag | KEYEVENTF_KEYUP;
+
+            SendInput(1, &inp, sizeof(INPUT));
+            s_key_is_down[vk] = false;
+        }
+    }
 }

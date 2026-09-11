@@ -9,6 +9,7 @@
 #include "ffmpeg_supervisor.h"
 #include "ffmpeg_cmdline.h"
 #include "display_inventory.h"
+#include "input_inject.h"
 #include "json_min.h"
 
 #define ASSERT_TRUE(cond) do { \
@@ -22,6 +23,15 @@ static void get_test_dir(char* out, size_t max_len) {
     char temp_dir[MAX_PATH];
     GetTempPathA(sizeof(temp_dir), temp_dir);
     snprintf(out, max_len, "%sl4desk_test_%lu", temp_dir, GetCurrentProcessId());
+}
+
+static uint64_t test_get_current_time_ms(void) {
+    FILETIME ft;
+    GetSystemTimeAsFileTime(&ft);
+    ULARGE_INTEGER uli;
+    uli.LowPart = ft.dwLowDateTime;
+    uli.HighPart = ft.dwHighDateTime;
+    return (uint64_t)((uli.QuadPart - 116444736000000000ULL) / 10000ULL);
 }
 
 static void setup_test_inventory(SystemInventory* inv) {
@@ -238,6 +248,144 @@ int main(int argc, char* argv[]) {
         CloseHandle(pi.hThread);
         printf("  [OK] Orphaned child process correctly detected and terminated\n");
     }
+
+    /* 9. Test recovery-loop auto-restart (restarting -> running / recovered) */
+    printf("[TEST 9] Testing recovery-loop auto-restart...\n");
+    SetEnvironmentVariableA("L4DESK_FAST_BACKOFF", "1");
+    SetEnvironmentVariableA("FAKE_FFMPEG_MODE", "crash");
+    ok = ffmpeg_supervisor_start("inst_005", "lease_001", "desktop", "disp:11223344",
+                                 "default", &inv, result, sizeof(result),
+                                 err_code, sizeof(err_code), err_msg, sizeof(err_msg));
+    ASSERT_TRUE(ok);
+    Sleep(200); /* Wait for process crash */
+
+    changed = false;
+    memset(nstate, 0, sizeof(nstate));
+    memset(nreason, 0, sizeof(nreason));
+    ffmpeg_supervisor_tick(&inv, &changed, nstate, sizeof(nstate), nreason, sizeof(nreason));
+    ASSERT_TRUE(changed);
+    ASSERT_TRUE(strcmp(nstate, "restarting") == 0);
+    ASSERT_TRUE(strcmp(nreason, "unexpected_exit") == 0);
+
+    /* Allow normal execution on next spawn */
+    SetEnvironmentVariableA("FAKE_FFMPEG_MODE", NULL);
+
+    /* Wait for backoff timeout (50ms fast backoff) */
+    Sleep(70);
+
+    changed = false;
+    memset(nstate, 0, sizeof(nstate));
+    memset(nreason, 0, sizeof(nreason));
+    ffmpeg_supervisor_tick(&inv, &changed, nstate, sizeof(nstate), nreason, sizeof(nreason));
+    ASSERT_TRUE(changed);
+    ASSERT_TRUE(strcmp(nstate, "running") == 0);
+    ASSERT_TRUE(strcmp(nreason, "recovered") == 0);
+
+    ffmpeg_supervisor_get_info(&sinfo);
+    ASSERT_TRUE(strcmp(sinfo.state, "running") == 0);
+    ASSERT_TRUE(sinfo.ffmpeg_pid > 0);
+    ASSERT_TRUE(sinfo.restart_count == 1);
+    printf("  [OK] Auto-restart recovery-loop recovered stream (PID=%lu, attempt=%d)\n",
+           sinfo.ffmpeg_pid, sinfo.restart_count);
+
+    ffmpeg_supervisor_stop(NULL, NULL, result, sizeof(result), err_code, sizeof(err_code), err_msg, sizeof(err_msg));
+
+    /* 10. Test restart budget limit (> 5 attempts -> failed / restart_limit) */
+    printf("[TEST 10] Testing restart budget limit (>5 attempts)...\n");
+    SetEnvironmentVariableA("L4DESK_FAST_BACKOFF", "1");
+    SetEnvironmentVariableA("FAKE_FFMPEG_MODE", "crash");
+    ok = ffmpeg_supervisor_start("inst_006", "lease_001", "desktop", "disp:11223344",
+                                 "default", &inv, result, sizeof(result),
+                                 err_code, sizeof(err_code), err_msg, sizeof(err_msg));
+    ASSERT_TRUE(ok);
+    Sleep(200); /* Wait for initial crash */
+
+    /* Trigger ticks until budget is exhausted (attempts 1 to 5 restart, 6th fails) */
+    for (int attempt = 1; attempt <= 12; attempt++) {
+        ffmpeg_supervisor_tick(&inv, &changed, nstate, sizeof(nstate), nreason, sizeof(nreason));
+        ffmpeg_supervisor_get_info(&sinfo);
+        if (strcmp(sinfo.state, "failed") == 0) {
+            break;
+        }
+        Sleep(80);
+    }
+
+    ffmpeg_supervisor_get_info(&sinfo);
+    ASSERT_TRUE(strcmp(sinfo.state, "failed") == 0);
+    ASSERT_TRUE(strcmp(sinfo.reason, "restart_limit") == 0);
+    ASSERT_TRUE(sinfo.restart_count > 5);
+    printf("  [OK] Transitioned to 'failed' (reason='restart_limit', count=%d)\n", sinfo.restart_count);
+    SetEnvironmentVariableA("FAKE_FFMPEG_MODE", NULL);
+
+    ffmpeg_supervisor_stop(NULL, NULL, result, sizeof(result), err_code, sizeof(err_code), err_msg, sizeof(err_msg));
+
+    /* 11. Test restart cancellation upon stream_stop */
+    printf("[TEST 11] Testing restart cancellation upon stream_stop...\n");
+    SetEnvironmentVariableA("L4DESK_FAST_BACKOFF", "1");
+    SetEnvironmentVariableA("FAKE_FFMPEG_MODE", "crash");
+    ok = ffmpeg_supervisor_start("inst_007", "lease_001", "desktop", "disp:11223344",
+                                 "default", &inv, result, sizeof(result),
+                                 err_code, sizeof(err_code), err_msg, sizeof(err_msg));
+    ASSERT_TRUE(ok);
+    Sleep(200);
+
+    /* First tick triggers restarting */
+    ffmpeg_supervisor_tick(&inv, &changed, nstate, sizeof(nstate), nreason, sizeof(nreason));
+    ASSERT_TRUE(strcmp(nstate, "restarting") == 0);
+
+    /* Operator stops the stream while in 'restarting' */
+    ok = ffmpeg_supervisor_stop("inst_007", "lease_001", result, sizeof(result),
+                                err_code, sizeof(err_code), err_msg, sizeof(err_msg));
+    ASSERT_TRUE(ok);
+    ASSERT_TRUE(strcmp(result, "stopped") == 0);
+
+    ffmpeg_supervisor_get_info(&sinfo);
+    ASSERT_TRUE(strcmp(sinfo.state, "stopped") == 0);
+    ASSERT_TRUE(sinfo.next_restart_time == 0);
+
+    /* Wait and tick again: stream must NOT restart */
+    Sleep(100);
+    changed = false;
+    ffmpeg_supervisor_tick(&inv, &changed, nstate, sizeof(nstate), nreason, sizeof(nreason));
+    ASSERT_TRUE(!changed);
+
+    ffmpeg_supervisor_get_info(&sinfo);
+    ASSERT_TRUE(strcmp(sinfo.state, "stopped") == 0);
+    ASSERT_TRUE(sinfo.ffmpeg_pid == 0);
+    SetEnvironmentVariableA("FAKE_FFMPEG_MODE", NULL);
+    printf("  [OK] Scheduled restart cancelled on stream_stop\n");
+
+    /* 12. Test local lease watchdog (fail-closed) */
+    printf("[TEST 12] Testing local lease watchdog (fail-closed)...\n");
+    ok = ffmpeg_supervisor_start("inst_008", "lease_watchdog", "desktop", "disp:11223344",
+                                 "default", &inv, result, sizeof(result),
+                                 err_code, sizeof(err_code), err_msg, sizeof(err_msg));
+    ASSERT_TRUE(ok);
+    ASSERT_TRUE(strcmp(result, "started") == 0);
+
+    uint64_t now_ms = test_get_current_time_ms();
+    /* Set lease expiration: expired 6 seconds ago (> 5s grace period) */
+    ffmpeg_supervisor_update_lease("lease_watchdog", now_ms - 6000);
+
+    changed = false;
+    memset(nstate, 0, sizeof(nstate));
+    memset(nreason, 0, sizeof(nreason));
+    ffmpeg_supervisor_tick(&inv, &changed, nstate, sizeof(nstate), nreason, sizeof(nreason));
+    ASSERT_TRUE(changed);
+    ASSERT_TRUE(strcmp(nstate, "stopped") == 0);
+    ASSERT_TRUE(strcmp(nreason, "lease_expired") == 0);
+
+    ffmpeg_supervisor_get_info(&sinfo);
+    ASSERT_TRUE(strcmp(sinfo.state, "stopped") == 0);
+    ASSERT_TRUE(strcmp(sinfo.reason, "lease_expired") == 0);
+    ASSERT_TRUE(sinfo.ffmpeg_pid == 0);
+    printf("  [OK] Fail-closed stop executed upon lease expiration\n");
+
+    /* 13. Test input_release_all() */
+    printf("[TEST 13] Testing input_release_all()...\n");
+    input_release_all();
+    printf("  [OK] input_release_all executed cleanly\n");
+    SetEnvironmentVariableA("L4DESK_FAST_BACKOFF", NULL);
 
     ffmpeg_supervisor_cleanup();
     printf("=== ALL ORCHESTRATOR TESTS PASSED ===\n");

@@ -1,5 +1,35 @@
 # CHANGELOG: l4desk
 
+## [1.3.0] - 2026-09-11 (PROMPT AGENT 2.2: Closed recovery-loop & Local fail-closed lease watchdog)
+
+### Added
+- **Замкнутый reconciliation / recovery-loop супервизора FFmpeg (`src/ffmpeg_supervisor.c`)**:
+  - Сохранение активных параметров трансляции: `mode` (desktop/usb-camera), `source_id`, `profile`, `stream_instance_id`, `lease_id`, а также параметров камеры и геометрии дисплея.
+  - Автоматический перезапуск процесса FFmpeg при неожиданном завершении процесса (`STILL_ACTIVE` false) или зависании кадров (stall > 10 с).
+  - Экспоненциальный backoff со случайным jitter: `delay_sec = min(30, (1 << restart_count)) + (rand() % 1000) / 1000.0`.
+  - Ограничение бюджета перезапусков (restart budget): не более 5 попыток за 10-минутное скользящее окно. При исчерпании лимита супервизор переходит в состояние `failed` (`reason="restart_limit"`), отправляет событие `stream_event` и прекращает попытки перезапуска.
+  - Успешный перезапуск переводит стрим в состояние `running` с отправкой события `stream_event(state="running", reason="recovered")`.
+  - Инвариант одного процесса: обязательное освобождение дескрипторов старого процесса и закрытие Job Object перед созданием нового процесса.
+  - Отмена перезапуска: команда `stream_stop` немедленно отменяет любой запланированный restart (`next_restart_time = 0`), штатно останавливает процесс и переводит супервизор в `stopped`.
+- **Локальный сторожевой таймер аренды (Fail-Closed Lease Watchdog, `src/ctl_protocol.c`, `src/ffmpeg_supervisor.c`)**:
+  - Обновление `lease_expires_at_ms` при получении валидных команд управления (`stream_start`, `pointer_move`, `mouse_click`, `key_event`).
+  - Мониторинг срока действия аренды в тике супервизора: если локальное время терминала превышает `expires_at_ms + 5000` (5 секунд льготного периода grace) и продления не поступило, супервизор выполняет принудительный fail-closed останов:
+    - Вызов `input_release_all()` для немедленного отпускания всех клавиш и кнопок мыши.
+    - Останов процесса FFmpeg и очистка дескрипторов.
+    - Перевод состояния стрима в `stopped` с `reason="lease_expired"`.
+    - Отправка события `stream_event(state="stopped", reason="lease_expired")`.
+- **Сброс зажатого ввода `input_release_all()` (`src/input_inject.c`, `src/input_inject.h`)**:
+  - Сброс зажатых кнопок мыши (`MOUSEEVENTF_LEFTUP`, `MOUSEEVENTF_RIGHTUP`, `MOUSEEVENTF_MIDDLEUP`).
+  - Сброс всех активных клавиш клавиатуры (`KEYEVENTF_KEYUP` с правильными скан-кодами и `KEYEVENTF_EXTENDEDKEY` для навигационных клавиш).
+  - Отслеживание состояния инъекции `down`/`up` и проверка глобального состояния `GetAsyncKeyState`.
+- **Расширенные модульные тесты (`tests/test_orchestrator.c`, `tests/test_ctl_protocol.c`)**:
+  - Тест 9: автоперезапуск recovery-loop (переход `restarting` -> `running` / `recovered`).
+  - Тест 10: лимит бюджета перезапусков (> 5 попыток -> `failed` / `restart_limit`).
+  - Тест 11: немедленная отмена перезапуска при `stream_stop`.
+  - Тест 12: fail-closed остановка стрима при истечении срока аренды (lease watchdog, grace 5 с).
+  - Тест 13: валидация вызова `input_release_all()`.
+  - Тест монотонного обновления срока аренды в протоколе `ctl`.
+
 ## [1.2.0] - 2026-09-11 (AGENT 3: ctl v1 protocol sync & H.264 Baseline Level 3.1)
 
 ### Changed

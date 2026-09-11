@@ -32,4 +32,7 @@ bool input_inject_click(int x, int y, DWORD* out_error);
 bool input_is_vk_allowed(int vk);
 bool input_inject_key(const char* kind, int vk, const char* text, DWORD* out_error);
 
+/* Release all injected/active keys and mouse buttons */
+void input_release_all(void);
+
 #endif /* L4DESK_INPUT_INJECT_H */

@@ -488,6 +488,9 @@ bool ctl_handle_command(const char* payload, size_t payload_len,
                                           err_msg, sizeof(err_msg));
         int len = 0;
         if (ok) {
+            if (expires_at_ms > 0) {
+                ffmpeg_supervisor_update_lease(lease_id, (uint64_t)expires_at_ms);
+            }
             len = ctl_build_ack_stream_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
                                                result, stream_instance_id, "running", now_ms);
         } else {
@@ -647,6 +650,11 @@ bool ctl_handle_command(const char* payload, size_t payload_len,
                     return false;
                 }
             }
+        }
+
+        /* Refresh local lease watchdog on valid control input */
+        if (expires_at_ms > 0) {
+            ffmpeg_supervisor_update_lease(stream.lease_id, (uint64_t)expires_at_ms);
         }
 
         /* Handle pointer_move / mouse_click */
