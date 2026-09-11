@@ -28,7 +28,13 @@ from app.auth import (
 )
 from app.config import settings
 from app.database import async_session, get_db
-from app.routers.video import _get_ingress_status, _verify_device_access
+from app.routers.video import (
+    _destroy_janus_mountpoint,
+    _get_ingress_status,
+    _verify_device_access,
+    clear_mountpoint_pin,
+    set_mountpoint_stream_instance,
+)
 from app.security.permissions import (
     ALL_PERMISSIONS,
     PERMISSION_VIDEO_VIEW,
@@ -109,6 +115,7 @@ class StreamStartRequest(BaseModel):
 
 class StreamStopRequest(BaseModel):
     lease_id: str | None = None
+    destroy_mountpoint: bool = False
 
 
 class StreamStartResponse(BaseModel):
@@ -681,8 +688,11 @@ async def start_device_stream(
             org_id=org_id,
             user=user,
         )
+        stream_inst_id = str(res.get("stream_instance_id", ""))
+        if stream_inst_id:
+            set_mountpoint_stream_instance(device_id, stream_inst_id)
         return StreamStartResponse(
-            stream_instance_id=str(res.get("stream_instance_id", "")),
+            stream_instance_id=stream_inst_id,
             result=str(res.get("result", "")),
             state=res.get("state"),
         )
@@ -703,8 +713,10 @@ async def start_device_stream(
                 terminal.sn,
                 err_detail,
             )
+            fallback_inst_id = str(uuid.uuid4())
+            set_mountpoint_stream_instance(device_id, fallback_inst_id)
             return StreamStartResponse(
-                stream_instance_id=str(uuid.uuid4()),
+                stream_instance_id=fallback_inst_id,
                 result="started",
                 state="running",
             )
@@ -745,6 +757,9 @@ async def stop_device_stream(
             org_id=org_id,
             user=user,
         )
+        clear_mountpoint_pin(device_id)
+        if body and body.destroy_mountpoint:
+            await _destroy_janus_mountpoint(device_id)
         return StreamStopResponse(result=str(res.get("result", "stopped")))
     except HTTPException as exc:
         err_detail = (
@@ -758,7 +773,13 @@ async def stop_device_stream(
             status.HTTP_409_CONFLICT,
             status.HTTP_504_GATEWAY_TIMEOUT,
         ) and any(c in err_detail for c in ("unsupported", "terminal_timeout")):
+            clear_mountpoint_pin(device_id)
+            if body and body.destroy_mountpoint:
+                await _destroy_janus_mountpoint(device_id)
             return StreamStopResponse(result="stopped")
+        clear_mountpoint_pin(device_id)
+        if body and body.destroy_mountpoint:
+            await _destroy_janus_mountpoint(device_id)
         raise
 
 
@@ -811,17 +832,23 @@ async def keepalive_device_control_lease(
 async def release_device_control_lease(
     device_id: int,
     lease_id: str,
+    destroy_mountpoint: bool = Query(False),
     user: dict[str, Any] = Depends(require_permission(PERMISSION_VIDEO_VIEW)),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """Release active control lease."""
     terminal = await _verify_device_access(device_id, user, db)
     org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
-    await iot_client.remote_input_release(
-        lease_id=lease_id,
-        org_id=org_id,
-        user=user,
-    )
+    try:
+        await iot_client.remote_input_release(
+            lease_id=lease_id,
+            org_id=org_id,
+            user=user,
+        )
+    finally:
+        clear_mountpoint_pin(device_id, lease_id=lease_id)
+        if destroy_mountpoint:
+            await _destroy_janus_mountpoint(device_id)
 
 
 @router.post("/devices/{device_id}/control/events")
@@ -1105,6 +1132,7 @@ async def control_ws_proxy(
                 org_id=target_org_id,
                 user=user,
             )
+        clear_mountpoint_pin(device_id, lease_id=lease_id)
 
         logger.info(
             "WebSocket session finished lease=%s device_id=%d sn=%s org_id=%s user=%s reason=%s clicks=%d results=%s",

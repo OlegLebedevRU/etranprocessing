@@ -14,6 +14,8 @@ export interface VideoStatusResponse {
   bytes: number;
   idle_sec: number | null;
   sn: string;
+  last_rtp_at?: number | string | null;
+  last_activity?: number | string | null;
 }
 
 export async function createVideoSession(
@@ -237,8 +239,14 @@ export async function keepaliveControlLease(deviceId: number, leaseId: string): 
   await client.post(`/v1/video/devices/${deviceId}/control/keepalive`, { lease_id: leaseId });
 }
 
-export async function releaseControlLease(deviceId: number, leaseId: string): Promise<void> {
-  await client.delete(`/v1/video/devices/${deviceId}/control/lease/${leaseId}`);
+export async function releaseControlLease(
+  deviceId: number,
+  leaseId: string,
+  destroyMountpoint = false
+): Promise<void> {
+  await client.delete(`/v1/video/devices/${deviceId}/control/lease/${leaseId}`, {
+    params: destroyMountpoint ? { destroy_mountpoint: true } : undefined,
+  });
 }
 
 export async function getDeviceInventory(
@@ -269,11 +277,15 @@ export async function startDeviceStream(
 
 export async function stopDeviceStream(
   deviceId: number,
-  leaseId?: string
+  leaseId?: string,
+  destroyMountpoint = false
 ): Promise<StreamStopResponse> {
   const { data } = await client.post<StreamStopResponse>(
     `/v1/video/devices/${deviceId}/stream/stop`,
-    leaseId ? { lease_id: leaseId } : {}
+    {
+      ...(leaseId ? { lease_id: leaseId } : {}),
+      destroy_mountpoint: destroyMountpoint,
+    }
   );
   return data;
 }

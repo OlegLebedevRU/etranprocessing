@@ -453,10 +453,11 @@ export default function VideoSurveillancePage() {
       } catch (err: any) {
         const formatted = formatVideoError(err);
         setBannerError({ code: "viewer_connect_failed", message: formatted.message });
-        setStatusText(formatted.message);
-        setStreamStage("failed");
+        message.error(formatted.message);
         setIsSessionActive(false);
         await stopSession();
+        setStreamStage("failed");
+        setStatusText(formatted.message);
       }
     },
     [stopSession]
@@ -482,7 +483,11 @@ export default function VideoSurveillancePage() {
       leaseRef.current = { id: leaseRes.lease_id, deviceId: selectedDevice.device_id };
       startLeaseKeepalive(selectedDevice.device_id, leaseRes.lease_id, leaseRes.keepalive_sec);
 
-      // 2. Определение режима и ID источника
+      // 2. Route-before-Start: подготовка медиаканала (ingress и Janus mountpoint) ДО запуска FFmpeg
+      setStatusText("Подготовка медиаканала (маршрутизация)...");
+      const sessionData = await createVideoSession(selectedDevice.device_id);
+
+      // 3. Определение режима и запуск видеопотока на терминале
       const colonIdx = selectedSourceKey.indexOf(":");
       const mode = colonIdx !== -1 ? selectedSourceKey.slice(0, colonIdx) : "desktop";
       const source_id = colonIdx !== -1 ? selectedSourceKey.slice(colonIdx + 1) : "0";
@@ -495,9 +500,8 @@ export default function VideoSurveillancePage() {
         lease_id: leaseRes.lease_id,
       });
 
-      // 3. Инициализация WebRTC сессии и подключение клиента Janus
+      // 4. Подключение WebRTC-клиента Janus
       setStatusText("Подключение к медиасерверу...");
-      const sessionData = await createVideoSession(selectedDevice.device_id);
       const wsUrl = getJanusWsUrl(sessionData.janus_ws);
 
       const client = new JanusStreamingClient({
@@ -541,7 +545,7 @@ export default function VideoSurveillancePage() {
       setStatusText("В эфире");
       message.success("Трансляция успешно запущена");
 
-      // 4. Периодический опрос качества и RTP пакетов
+      // 5. Периодический опрос качества и RTP пакетов
       prevPacketsRef.current = null;
       pollTimerRef.current = setInterval(async () => {
         try {
@@ -577,12 +581,12 @@ export default function VideoSurveillancePage() {
     } catch (err: any) {
       const formatted = formatVideoError(err);
       setBannerError({ code: "start_failed", message: formatted.message });
-      setStatusText(formatted.message);
       message.error(formatted.message);
-      setStreamStage("failed");
       setActiveStream(null);
       setIsSessionActive(false);
       await stopSession();
+      setStreamStage("failed");
+      setStatusText(formatted.message);
     }
   };
 

@@ -1,6 +1,7 @@
 import contextlib
 import logging
 import secrets
+import time
 import uuid
 from typing import Any
 
@@ -36,27 +37,114 @@ class VideoStatusResponse(BaseModel):
     bytes: int
     idle_sec: float | None = None
     sn: str
+    last_rtp_at: float | int | str | None = None
+    last_activity: float | int | str | None = None
 
 
 _mountpoint_pins: dict[int, dict[str, Any]] = {}
 
 
 def get_or_create_mountpoint_pin(
-    mountpoint_id: int, stream_instance_id: str | None = None
+    mountpoint_id: int,
+    stream_instance_id: str | None = None,
+    lease_id: str | None = None,
 ) -> str:
     cached = _mountpoint_pins.get(mountpoint_id)
-    if (
-        cached
-        and cached.get("stream_instance_id") == stream_instance_id
-        and cached.get("pin")
-    ):
-        return str(cached["pin"])
+    if cached and cached.get("pin"):
+        # Match by lease_id
+        if lease_id and cached.get("lease_id") == lease_id:
+            if stream_instance_id and not cached.get("stream_instance_id"):
+                cached["stream_instance_id"] = stream_instance_id
+            return str(cached["pin"])
+
+        # Match by stream_instance_id
+        if (
+            stream_instance_id
+            and cached.get("stream_instance_id") == stream_instance_id
+        ):
+            if lease_id and not cached.get("lease_id"):
+                cached["lease_id"] = lease_id
+            return str(cached["pin"])
+
+        # If a pin is already active for this mountpoint (viewer or reconnect)
+        if not cached.get("lease_id") or not lease_id or cached.get("janus_pin"):
+            if stream_instance_id and not cached.get("stream_instance_id"):
+                cached["stream_instance_id"] = stream_instance_id
+            return str(cached["pin"])
+
     new_pin = secrets.token_hex(8)
     _mountpoint_pins[mountpoint_id] = {
         "pin": new_pin,
+        "lease_id": lease_id,
         "stream_instance_id": stream_instance_id,
     }
     return new_pin
+
+
+def set_mountpoint_stream_instance(mountpoint_id: int, stream_instance_id: str) -> None:
+    if mountpoint_id in _mountpoint_pins:
+        _mountpoint_pins[mountpoint_id]["stream_instance_id"] = stream_instance_id
+
+
+def clear_mountpoint_pin(mountpoint_id: int, lease_id: str | None = None) -> None:
+    cached = _mountpoint_pins.get(mountpoint_id)
+    if not cached:
+        return
+    if lease_id is None or cached.get("lease_id") == lease_id:
+        _mountpoint_pins.pop(mountpoint_id, None)
+
+
+async def _destroy_janus_mountpoint(mountpoint_id: int) -> None:
+    clear_mountpoint_pin(mountpoint_id)
+    janus_url = settings.l4media_janus_url.rstrip("/")
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            tx1 = uuid.uuid4().hex
+            resp1 = await client.post(
+                janus_url, json={"janus": "create", "transaction": tx1}
+            )
+            if resp1.status_code != 200:
+                return
+            data1 = resp1.json()
+            session_id = data1.get("data", {}).get("id")
+            if not session_id:
+                return
+            try:
+                tx2 = uuid.uuid4().hex
+                resp2 = await client.post(
+                    f"{janus_url}/{session_id}",
+                    json={
+                        "janus": "attach",
+                        "plugin": "janus.plugin.streaming",
+                        "transaction": tx2,
+                    },
+                )
+                if resp2.status_code != 200:
+                    return
+                data2 = resp2.json()
+                handle_id = data2.get("data", {}).get("id")
+                if not handle_id:
+                    return
+
+                tx3 = uuid.uuid4().hex
+                await client.post(
+                    f"{janus_url}/{session_id}/{handle_id}",
+                    json={
+                        "janus": "message",
+                        "transaction": tx3,
+                        "body": {"request": "destroy", "id": mountpoint_id},
+                    },
+                )
+                logger.info("Janus mountpoint %d destroyed", mountpoint_id)
+            finally:
+                with contextlib.suppress(Exception):
+                    tx_dest = uuid.uuid4().hex
+                    await client.post(
+                        f"{janus_url}/{session_id}",
+                        json={"janus": "destroy", "transaction": tx_dest},
+                    )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to destroy Janus mountpoint %d: %s", mountpoint_id, exc)
 
 
 def get_device_ports(device_id: int) -> tuple[int, int]:
@@ -204,13 +292,18 @@ async def _ensure_janus_mountpoint(
                 plugindata = data3.get("plugindata", {}).get("data", {})
                 err_code = plugindata.get("error_code") if plugindata else None
                 err_str = str(plugindata.get("error", "")) if plugindata else ""
+
+                is_already_exists = False
                 if data3.get("janus") == "error":
                     err_code = data3.get("error", {}).get("code")
                     err_reason = str(data3.get("error", {}).get("reason", ""))
                     if (
-                        "already exists" not in err_reason.lower()
-                        and "occupied" not in err_reason.lower()
+                        "already exists" in err_reason.lower()
+                        or "occupied" in err_reason.lower()
+                        or err_code == 456
                     ):
+                        is_already_exists = True
+                    else:
                         raise HTTPException(
                             status_code=status.HTTP_502_BAD_GATEWAY,
                             detail=f"Janus error ({err_code}): {err_reason}",
@@ -229,9 +322,24 @@ async def _ensure_janus_mountpoint(
                             status_code=status.HTTP_502_BAD_GATEWAY,
                             detail=f"Janus plugin error: {err_str}",
                         )
-                    if pin:
+
+                if is_already_exists:
+                    cached_janus_pin = _mountpoint_pins.get(mountpoint_id, {}).get(
+                        "janus_pin"
+                    )
+                    if pin and cached_janus_pin == pin:
                         logger.info(
-                            "Mountpoint %d already exists; recreating with pin",
+                            "Mountpoint %d already exists in Janus with matching pin, reusing",
+                            mountpoint_id,
+                        )
+                    elif not pin:
+                        logger.info(
+                            "Mountpoint %d already exists in Janus, reusing",
+                            mountpoint_id,
+                        )
+                    else:
+                        logger.info(
+                            "Mountpoint %d already exists in Janus with different/unknown pin; recreating",
                             mountpoint_id,
                         )
                         with contextlib.suppress(Exception):
@@ -253,11 +361,14 @@ async def _ensure_janus_mountpoint(
                                     "body": req_body,
                                 },
                             )
-                    else:
-                        logger.info(
-                            "Mountpoint %d already exists in Janus, reusing",
-                            mountpoint_id,
-                        )
+                        if mountpoint_id in _mountpoint_pins:
+                            _mountpoint_pins[mountpoint_id]["janus_pin"] = pin
+                else:
+                    if mountpoint_id in _mountpoint_pins:
+                        _mountpoint_pins[mountpoint_id]["janus_pin"] = pin
+                    logger.info(
+                        "Mountpoint %d created successfully in Janus", mountpoint_id
+                    )
             finally:
                 with contextlib.suppress(Exception):
                     tx_dest = uuid.uuid4().hex
@@ -310,6 +421,8 @@ async def _get_ingress_status(sn: str) -> dict[str, Any]:
             "bytes": 0,
             "idle_sec": None,
             "sn": sn,
+            "last_rtp_at": None,
+            "last_activity": None,
         }
 
     best = min(
@@ -320,10 +433,27 @@ async def _get_ingress_status(sn: str) -> dict[str, Any]:
         ),
     )
     idle = best.get("idle_sec")
+    last_rtp = best.get("last_rtp_at")
+    last_act = best.get("last_activity")
+
+    now = time.time()
+    if idle is None:
+        if isinstance(last_rtp, (int, float)) and last_rtp > 0:
+            idle = max(0.0, now - float(last_rtp))
+        elif isinstance(last_act, (int, float)) and last_act > 0:
+            idle = max(0.0, now - float(last_act))
+
     rtp_pkts = int(best.get("rtp_packets", 0))
     bytes_count = int(best.get("bytes", 0))
-    is_streaming = (idle is not None and idle <= 10 and rtp_pkts > 0) or (
-        best.get("state") == "streaming" and idle is not None and idle <= 10
+
+    recent_rtp = False
+    if isinstance(last_rtp, (int, float)) and last_rtp > 0:
+        recent_rtp = (now - float(last_rtp)) <= 10
+
+    is_streaming = (
+        (recent_rtp and rtp_pkts > 0)
+        or (idle is not None and idle <= 10 and rtp_pkts > 0)
+        or (best.get("state") == "streaming" and idle is not None and idle <= 10)
     )
 
     return {
@@ -332,6 +462,8 @@ async def _get_ingress_status(sn: str) -> dict[str, Any]:
         "bytes": bytes_count,
         "idle_sec": float(idle) if idle is not None else None,
         "sn": sn,
+        "last_rtp_at": last_rtp,
+        "last_activity": last_act,
     }
 
 
@@ -389,12 +521,15 @@ async def create_video_session(
             detail="Недостаточный уровень аренды для подключения к видеопотоку",
         )
 
+    lease_id = str(lease_info.get("lease_id")) if lease_info.get("lease_id") else None
     stream_instance_id = (
         str(lease_info.get("stream_instance_id"))
         if lease_info.get("stream_instance_id")
         else None
     )
-    pin = get_or_create_mountpoint_pin(device_id, stream_instance_id)
+    pin = get_or_create_mountpoint_pin(
+        device_id, stream_instance_id=stream_instance_id, lease_id=lease_id
+    )
 
     rtp_port, rtcp_port = get_device_ports(device_id)
     mountpoint_id = device_id
