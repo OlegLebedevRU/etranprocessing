@@ -1,5 +1,11 @@
 # PROMPT AGENT — `iot-rpc-rest-app` (`app1`): Продление аренды в MQTT, scope upgrade и статус агента
 
+> 📌 **Статус задачи: ВЫПОЛНЕНО.**
+> ### Summary реализации:
+> - Устранено замерзание видеопотока терминала: реализована отправка исходящей команды продления аренды `CtlLeaseRenew` (`lease_renew`) в топик `srv/{SN}/ctl` при каждом keepalive (REST и WebSocket).
+> - Устранена ошибка отклонения событий мыши `mode_conflict` / `input_not_allowed_in_camera_mode`: обеспечена обязательная фиксация `lease.stream_mode = "desktop"` при создании аренды со `scope in ("stream", "input")` и при повышении scope до `"input"`.
+> - Защищен статус агента от гонки LWT-сообщений брокера при рестарте `l4desk` и обеспечен сброс состояния стрима (`lease.stream_state = "stopped"`, `lease.stream_instance_id = None`) по `stream_event` со `state in ("stopped", "failed")` с оповещением WebSocket-клиентов.
+
 Ты — Senior Python / Backend инженер. Работаешь автономно в репозитории `D:\work\iot.leo4.ru\iot-rpc-rest-app` (сервис `app-service`, Docker-контейнер `app1`).
 Твоя цель — устранить замерзание видеопотока из-за истечения локальной аренды терминала, обеспечить отправку команды продления аренды в MQTT-шину `srv/{SN}/ctl`, гарантировать установку `stream_mode="desktop"` при повышении аренды до `scope="input"` и защитить статус `online` агента от гонки LWT.
 
