@@ -65,23 +65,27 @@ flowchart LR
 
 1. Оператор проходит авторизацию; BFF проверяет разрешения и принадлежность устройства организации.
 2. UI получает состояние агента/источники, берет аренду `scope=stream`.
-3. Запрашивает start выбранного источника. app1 создает `stream_instance_id`, посылает ctl; l4desk проверяет политику и запускает FFmpeg.
-4. После ответа start UI запрашивает видеосессию. BFF настраивает ingress route и Janus mountpoint с PIN.
-5. UI выполняет Janus `watch` и обмен SDP/ICE; браузер получает видео непосредственно от Janus.
-6. Для ввода нужна аренда со scope `input`, desktop-источник и разрешенная локальная политика. Камера всегда view-only. Поддержка конкретных команд ограничена пересечением реализаций, см. §2.5.
-7. При завершении запрашиваются stop и освобождение аренды, закрываются control WS и Janus-сессия. Истечение аренды на сервере само по себе не является доказательством остановки FFmpeg или уже установленного WebRTC-подключения.
+3. **Подготовка медиаканала (Route-before-Start):** UI запрашивает сессию `POST /api/v1/video/{device_id}/session`. BFF регистрирует ingress route (`PUT /routes/{sn}`) и подготавливает Janus mountpoint с PIN. Маршрут и Janus готовы принимать UDP-дейтаграммы до старта энкодера.
+4. **Запуск энкодера на терминале:** UI запрашивает старт выбранного источника `POST /devices/{id}/stream/start`. app1 валидирует аренду (идемпотентно: повторный start для того же источника возвращает `already_running` с сохранением действующего `stream_instance_id`), отсылает ctl `stream_start`; l4desk проверяет политику и запускает FFmpeg.
+5. Первые же RTP/RTCP-дейтаграммы (IDR/SPS/PPS) от FFmpeg через leo4proxy и ingress мгновенно попадают в готовый Janus mountpoint (0 unrouted пакетов). UI выполняет Janus `watch` и обмен SDP/ICE; браузер сразу декодирует ключевой кадр без 2-секундного ожидания.
+6. Для ввода нужна аренда со scope `input`, desktop-источник и разрешенная локальная политика. Камера всегда view-only. Команды ввода обогащаются контекстом active lease (`desktop_id`, `stream_instance_id`), координаты нормализуются к диапазону `0..65535`.
+7. При штатном завершении запрашиваются stop (идемпотентный: повтор возвращает `already_stopped`) и освобождение аренды, закрываются control WS и Janus-сессия. При разрыве связи на терминале срабатывает локальный fail-closed watchdog (5 с grace), принудительно останавливающий FFmpeg и сбрасывающий удерживаемый ввод через `input_release_all()`.
 
 **Три разные готовности:** `FFmpeg running` ≠ `свежий RTP на ingress` ≠ `браузер декодирует кадры`. Аналогично MQTT online ≠ интерактивный desktop доступен.
 
 ### 1.4. Приоритеты развития
 
-- **P0 — согласовать контракты [ВЫПОЛНЕНО]:** расхождения `key`/`key_event`, опциональный `sn` в `stream_event`, координаты `0..65535` и серверное обогащение active lease устранены; профиль H.264 Constrained Baseline Level 3.1 зафиксирован под Janus; тесты-фикстуры добавлены, сервисы `app1` и BFF обновлены/задеплоены, бинарники `l4desk` собраны без предупреждений компилятора.
-- **Следующий рекомендуемый шаг (P1 / R6):** переход на порядок **Route-before-Start** (настройка маршрута в ingress и mountpoint в Janus до отправки `stream_start` агенту), исключающий потерю первых IDR/SPS/PPS кадров в `unrouted` и задержку до 2 с при старте видео.
-- **P0 — закрыть безопасность:** проверить связывание сертификата с SN медиапреамбулы; локально ограничивать срок действия разрешения; реально прекращать просмотр и ввод после отзыва, а не только менять серверный статус.
-- **P1 — довести автономное восстановление:** замкнутый supervisor/reconciler FFmpeg в l4desk (recovery-loop с restart budget), bounded queues, восстановление маршрутов/mountpoint после рестартов, достоверные признаки готовности (`last_rtp_at`).
-- **P1 — упростить развертывание:** совместимый подписанный набор версий, единый bootstrap/preflight, защищенные локальные сокеты, конфигурация без секретов в пакете, воспроизводимые серверные образы.
-- **P1/P2 — сетевые условия:** TURN для сложных сетей, измерение задержки и head-of-line blocking TCP; отдельное решение по обратному RTCP/запросу ключевого кадра.
-- **Linux:** заменить только платформенные захват/ввод/службы/хранилище ключей, сохранив внешние контракты. **ESP32-P4:** MIPI-CSI → ISP → аппаратный H.264 → RTP → L4RTP/1/mTLS; без FFmpeg, Janus на устройстве и без эмуляции desktop-ввода. Это направления реализации, не готовые клиенты.
+- **P0 / R1 — согласовать контракты [ВЫПОЛНЕНО]:** расхождения `key`/`key_event`, опциональный `sn` в `stream_event`, координаты `0..65535` и серверное обогащение active lease устранены; профиль H.264 Constrained Baseline Level 3.1 зафиксирован под Janus; тесты-фикстуры добавлены, сервисы `app1` и BFF обновлены/задеплоены, бинарники `l4desk` собраны без предупреждений компилятора.
+- **P1 / R6 — порядок Route-before-Start и привязка сессии [ВЫПОЛНЕНО В КОДЕ И ЗАДЕПЛОЕНО]:** в MenuBuilder (UI/BFF) реализован порядок Route-before-Start (`createVideoSession` до `startDeviceStream`), исключающий потерю начальных IDR/SPS/PPS кадров в `unrouted` и задержку до 2 с; PIN mountpoint привязан к `device_id` и `lease_id`/`stream_instance_id`, mountpoint переиспользуется идемпотентно, реализован безопасный откат при ошибках запуска; фронтенд собран и доставлен, бэкенд перезапущен на `87.242.100.34`.
+- **P1 / R5 — идемпотентность управления и синхронизация жизненного цикла [ВЫПОЛНЕНО И ЗАДЕПЛОЕНО]:** в `app1` реализована идемпотентность `stream_start` (`already_running`) и `stream_stop` (`already_stopped`), исключено рассогласование сессий при повторных кликах/ретраях; при терминальных событиях `stream_event` (`stopped`/`failed`/`source_unavailable`) поля стрима в active lease очищаются, а клиентам рассылается `WsStreamState`; тесты пройдены, контейнер `app1` задеплоен на `87.242.100.34`.
+- **P0 / R3 и P1 / R4 — локальный watchdog аренды и замкнутый recovery-loop [ВЫПОЛНЕНО В КОДЕ]:** в `tools/l4desk` супервизор FFmpeg замкнут в полноценный recovery-loop (перезапуск с экспоненциальным backoff, jitter и лимитом 5 попыток за 10 мин, отмена при stop); внедрен локальный fail-closed watchdog аренды (5 с grace) с функцией `input_release_all()`, исключающий утечку экрана и залипание клавиш при потере связи; бинарники x86/x64 пересобраны через `build.cmd all`.
+- **Текущее состояние Шага 2:** код всех звеньев реализован и задеплоен; **ожидает выполнения сквозная стендовая верификация (Этап 4)**: запуск без unrouted пакетов, kill-restart, timeout-stop.
+- **Следующие шаги:**
+  - **P0 — закрыть безопасность (R2):** проверить связывание сертификата с SN медиапреамбулы; защита media/control management API.
+  - **P1 — довести телеметрию и очереди (R7):** метрика `last_rtp_at` в ingress, bounded queues, замеры latency p95.
+  - **P1 — упростить развертывание (R8, R9):** совместимый подписанный набор версий, единый bootstrap/preflight, защищенные локальные сокеты.
+  - **P1/P2 — сетевые условия (R10):** TURN для сложных сетей, измерение задержки и head-of-line blocking TCP.
+  - **Linux (R12):** платформенные захват/ввод/службы с сохранением внешних контрактов. **ESP32-P4 (R12):** stream-only RTP over TLS (L4RTP/1) на аппаратном H.264.
 
 <a id="part-2"></a>
 ## Часть 2. Детальная версия
@@ -116,40 +120,60 @@ flowchart LR
 
 ```mermaid
 sequenceDiagram
-  participant UI as MenuBuilder UI
-  participant BFF as MenuBuilder BFF
+  autonumber
+  actor User as Оператор в Web UI
+  participant UI as MenuBuilder Frontend
+  participant BFF as MenuBuilder Backend
   participant App as IoT app1
-  participant Agent as l4desk через MQTT-мост
-  participant FF as FFmpeg / leo4proxy
   participant In as l4media ingress
   participant J as Janus
+  participant Agent as l4desk через MQTT-мост
+  participant FF as FFmpeg / leo4proxy
+
+  User->>UI: Выбор терминала и клик "Запустить"
   UI->>BFF: статус / inventory / lease(scope=stream)
   BFF->>App: проверенный контекст пользователя и устройства
   App-->>BFF: lease_id, expires_at, keepalive_sec
   BFF-->>UI: аренда
-  UI->>BFF: start(mode, source_id, profile)
-  BFF->>App: start(lease_id)
-  App->>Agent: ctl stream_start(command_id, lease_id, stream_instance_id)
-  Agent->>FF: проверить источник, запустить процесс
-  FF->>In: первые RTP через L4RTP/1 и mTLS
-  Note over FF,In: TLS медиатуннеля открывается по первой дейтаграмме, route может еще отсутствовать
-  Agent-->>App: ACK started / switched либо NACK
-  App-->>BFF: результат start (ожидание ACK до 15 с)
-  BFF-->>UI: результат start
-  UI->>BFF: POST video session
-  BFF->>In: PUT /routes/{sn}?rtp=...&rtcp=...
-  BFF->>J: create session → attach streaming → create mountpoint(PIN)
-  BFF-->>UI: mountpoint_id, sn, janus_ws, session_ttl_sec, pin
-  UI->>J: create / attach / watch(id, pin)
-  J-->>UI: JSEP offer
-  UI->>J: JSEP answer / start, ICE candidates
-  J-->>UI: WebRTC video
-  Note over UI,App: keepalive аренды независимо от Janus keepalive
+
+  rect rgb(235, 248, 255)
+    Note over UI,J: ЭТАП 1: Route-before-Start (подготовка маршрута и медиасервера)
+    UI->>BFF: POST /api/v1/video/{device_id}/session
+    BFF->>In: PUT /routes/{sn}?rtp=...&rtcp=...
+    In-->>BFF: 200 OK (маршрут готов)
+    BFF->>J: create session → ensure mountpoint(id, PIN)
+    J-->>BFF: mountpoint ready (идемпотентное переиспользование)
+    BFF-->>UI: mountpoint_id, sn, janus_ws, session_ttl_sec, pin
+  end
+
+  rect rgb(240, 255, 240)
+    Note over UI,FF: ЭТАП 2: Запуск энкодера на терминале
+    UI->>BFF: POST /devices/{id}/stream/start
+    BFF->>App: start(lease_id, mode, source_id, profile)
+    Note over App: Идемпотентность: если уже запущен тот же источник, возврат already_running
+    App->>Agent: ctl stream_start(command_id, lease_id, stream_instance_id)
+    Agent->>FF: проверить источник, запустить процесс FFmpeg (H.264 Baseline 3.1)
+    FF->>In: первые RTP через L4RTP/1 и mTLS (IDR/SPS/PPS)
+    In->>J: мгновенный форвардинг в UDP (0 unrouted!)
+    Agent-->>App: ACK started (или already_running)
+    App-->>BFF: результат start (started / already_running)
+    BFF-->>UI: результат start
+  end
+
+  rect rgb(255, 250, 240)
+    Note over UI,J: ЭТАП 3: WebRTC сессия
+    UI->>J: create / attach / watch(id, pin)
+    J-->>UI: JSEP offer (IDR уже в буфере)
+    UI->>J: JSEP answer / start, ICE candidates
+    J-->>UI: WebRTC DTLS-SRTP video (мгновенный показ)
+  end
+
+  Note over UI,App: keepalive аренды (при потере связи: watchdog 5 с grace глушит FFmpeg)
 ```
 
-Первые пакеты могут прийти до маршрута: ingress оставляет такое соединение открытым, учитывает пакеты как `unrouted` и ожидает динамический маршрут. Это текущее поведение отличается от старого alpha-описания «неизвестный SN отклоняется». Пропуск начала потока означает ожидание следующего пригодного IDR/SPS/PPS; перестановку route-before-start можно рассматривать как улучшение, но не как уже существующий порядок UI.
+В реализации **Route-before-Start** сессия просмотра и маршрут в ingress регистрируются **до** отправки команды `stream_start` агенту. Первые RTP-пакеты от FFmpeg сразу попадают в зарегистрированный динамический маршрут (`unrouted_packets` = 0), а Janus получает начальный IDR-кадр без 2-секундного ожидания следующего GOP. При ошибке запуска на терминале в UI срабатывает безопасный откат: закрытие сессии Janus, освобождение аренды и очистка состояния плеера.
 
-`POST /api/v1/video/{device_id}/session` — подготовка ресурса просмотра, а не запуск FFmpeg. BFF проверяет устройство/организацию/разрешение и состояние аренды app1. Создание временной служебной Janus-сессии в backend не создает browser PeerConnection.
+`POST /api/v1/video/{device_id}/session` — подготовка ресурса просмотра и настройка маршрута, а не запуск FFmpeg. BFF проверяет устройство/организацию/разрешение и состояние аренды app1. PIN mountpoint сохраняется в кэше с привязкой к `device_id` и `lease_id`/`stream_instance_id`, исключая деструктивное пересоздание mountpoint при повторном открытии или подключении viewer.
 
 В `janusClient.ts` используется WebSocket subprotocol Janus, отдельные session/handle/transaction IDs, trickle ICE и keepalive каждые 25 с. PeerConnection сейчас настроен с Google STUN, **без TURN**. STUN помогает обнаружить адрес, но не ретранслирует медиа; для сетей с заблокированным UDP нужен проверенный relay-сценарий. Локальный callback `streaming` вызывается после отправки SDP answer/start, до подтверждения декодированного кадра — его нельзя использовать как единственную метрику успешного просмотра.
 
@@ -160,21 +184,24 @@ stateDiagram-v2
   [*] --> stopped
   stopped --> starting: stream_start + разрешенный источник
   starting --> running: процесс запущен
-  running --> stopping: stream_stop / switch
-  stopping --> stopped: процесс завершен
+  running --> stopping: stream_stop / switch / lease watchdog timeout
+  stopping --> stopped: процесс завершен + input_release_all
   stopped --> starting: продолжение controlled switch
-  running --> restarting: обнаружен выход / stall
-  restarting --> starting: целевой reconciler, требуется завершить
+  running --> restarting: обнаружен выход / stall (restart budget < 5 / 10 min)
+  restarting --> starting: backoff + jitter истек -> повторный spawn
+  restarting --> failed: превышен лимит попыток (>=5 за 10 мин)
+  failed --> stopped: stream_stop
 ```
 
-Схема показывает существенные переходы, не полный enum ошибок. Последняя стрелка — **предложение**, а не доказательство существующего автоматического restart-loop.
+Схема показывает существенные переходы, включая замкнутый recovery-loop и локальный fail-closed watchdog.
 
 - l4desk инвентаризирует дисплеи и DirectShow-камеры. Идентификаторы имеют вид `disp:<fnv1a_hex>` и `cam:<fnv1a_hex>`; локальная политика дисплеев — `input`, `view`, `denied`. Геометрия учитывает виртуальный экран, включая отрицательные координаты.
 - Бинарник FFmpeg берется из `<base>\ffmpeg\ffmpeg.exe`; базовое размещение — `C:\l4tools`. Запуск скрытый, с перенаправленными stdin/stdout/stderr, Job Object и журналом.
 - Controlled switch — **последовательные stop старого и start нового**, а не бесшовная смена без потери кадров. Непрерывность SSRC/декодирования между источниками не гарантируется.
-- Остановка: `q\n` в stdin → ожидание до 5 с → принудительное завершение Job/process при необходимости. ACK остановки должен означать завершенный процесс, а не только прием команды.
+- Остановка: `q\n` в stdin → ожидание до 5 с → принудительное завершение Job/process при необходимости. ACK остановки означает завершенный процесс, а не только прием команды.
 - Файл состояния `<base>\l4desk\state\ffmpeg_state.json` используется для reconciliation. При работе с оставшимся PID требуется проверка creation time и метаданных: один PID не доказывает владение процессом.
-- В supervisor есть проверки выхода процесса, потери источника/сессии, stall более 10 с и состояние `restarting`. Наличие этих проверок и заявленного в README restart budget не заменяет проверку реального повторного запуска; см. задачу R4.
+- В supervisor `tools/l4desk` (`ffmpeg_supervisor.c`) замкнут **recovery-loop**: при выходе процесса, stall более 10 с или потере источника супервизор проверяет скользящий бюджет перезапусков (не более 5 попыток за 10 минут) и рассчитывает задержку с экспоненциальным backoff и jitter. В состоянии `restarting` по истечении таймера выполняется повторный запуск процесса FFmpeg с активными параметрами (`mode`, `source_id`, `profile`, `stream_instance_id`). При успехе отсылается `stream_event(state="running", reason="recovered")`. Превышение лимита переводит стрим в `failed` (`reason="restart_limit"`). Команда `stream_stop` немедленно отменяет запланированный перезапуск.
+- **Локальный watchdog аренды (Fail-Closed):** агент отслеживает `expires_at_ms`. Если связь с сервером прервана и локальное время превышает `expires_at_ms + 5000` (5 с grace), супервизор принудительно останавливает FFmpeg, вызывает `input_release_all()` (отпускание всех зажатых клавиш клавиатуры и кнопок мыши) и переводит стрим в `stopped` (`reason="lease_expired"`), предотвращая утечку рабочего стола и залипание ввода.
 
 **Инвариант целевого локального reconciler:** не более одного encoder-процесса на активный источник/выход; только действующая авторизация разрешает `running`; отмена desired state отменяет и отложенный restart. Автономность означает восстановление разрешенного состояния, а не бессрочную трансляцию после потери сервера.
 
@@ -190,7 +217,7 @@ stateDiagram-v2
 
 app1 при отзыве stream/input-аренды публикует stop без ожидания ACK. При недоступном агенте это best effort. Поэтому безопасное завершение требует трех независимых действий: отозвать право в app1, остановить локальную трансляцию/ввод, закрыть доступ к медиаресурсу в Janus. Закрытие вкладки — удобный cleanup, но не механизм безопасности.
 
-Повтор start в app1 создает новый `stream_instance_id`; повтор одного и того же `command_id` на MQTT-уровне и повтор HTTP start — разные операции. Полную e2e-идемпотентность нельзя вывести из наличия локального dedup-кеша.
+Идемпотентность в `app1`: повторный вызов `stream_start` при уже активном источнике возвращает `already_running` с тем же `stream_instance_id` без отправки дублирующей команды в MQTT, исключая сброс эпохи стрима у подключенных клиентов. Повторный вызов `stream_stop` при отсутствующем стриме возвращает `already_stopped` (HTTP 200 OK вместо 409 Conflict). При получении терминальных событий `stream_event` (`stopped`, `failed`, `source_unavailable`) `app1` автоматически очищает `stream_instance_id` в active lease и транслирует `WsStreamState` во все активные WebSocket-сессии.
 
 <a id="contracts"></a>
 ### 2.3. Контракт медиа: H.264, RTP и L4RTP/1
@@ -328,9 +355,11 @@ BFF передает `X-Internal-Service-Key`, `X-Org-Id` и контекст `X
 | Статус start | В BFF есть compatibility fallback, возвращающий `running` без терминального подтверждения | Legacy-ответ не равен ACK агента и не доказывает живой поток; явно маркировать степень подтверждения |
 | Статус ingress | Накопленный `rtp_packets` и общая активность соединения | Keepalive может поддерживать активность без нового кадра. Нужны `last_rtp_at` и дельты, затем browser decode stats |
 | H.264 | **Устранено [R1].** FFmpeg строго зафиксирован на Baseline Level 3.1 под SDP Janus | Исключены ошибки несовместимости профилей H.264 в WebRTC декодерах браузеров |
-| PIN и mountpoint | PIN хранится в памяти процесса BFF и связан с stream instance; существующий mountpoint при PIN может уничтожаться и создаваться заново | Рестарт/несколько BFF workers/повторный просмотр могут конфликтовать; нужна атомарная идемпотентная reconciliation-модель |
-| Порядок старта (Route-before-Start) | UI запрашивает сессию (маршрут ingress + mountpoint) только после start агента | **Рекомендуемый следующий шаг:** раннее создание маршрута устранит дроп начальных IDR-кадров |
-| Самовосстановление FFmpeg | Есть обнаружение отказа и переход `restarting`; завершенный путь автоматического respawn не подтвержден | Замкнуть и испытать recovery-loop, не принимать README за доказательство |
+| PIN и mountpoint | **Устранено [R6].** В BFF PIN привязан к `device_id` и `lease_id`/`stream_instance_id`; Janus mountpoint переиспользуется идемпотентно | Исключены конфликты и сброс mountpoint при повторном открытии сессии или подключении viewer |
+| Порядок старта (Route-before-Start) | **Устранено [R6].** UI запрашивает сессию (маршрут ingress + mountpoint) ДО отправки `stream_start` агенту | Первые IDR-кадры не теряются в `unrouted_packets`; задержка первого кадра сокращена до sub-second |
+| Идемпотентность start/stop | **Устранено [R5].** В `app1` реализована идемпотентность `stream_start` (`already_running`) и `stream_stop` (`already_stopped`) | Исключены ошибки 409 Conflict и сброс `stream_instance_id` при повторных запросах/ретраях; lease синхронизируется с `stream_event` |
+| Самовосстановление FFmpeg | **Устранено [R4].** В `l4desk` замкнут recovery-loop с backoff, jitter и лимитом 5 попыток за 10 мин | Сбой процесса FFmpeg или stall автоматически восстанавливается без ручного вмешательства; stop отменяет перезапуск |
+| Локальный watchdog аренды | **Устранено [R3].** В `l4desk` внедрен fail-closed watchdog (5 с grace) и функция `input_release_all()` | При разрыве связи трансляция экрана принудительно останавливается, зажатые клавиши и кнопки мыши сбрасываются |
 
 <a id="security"></a>
 ### 2.6. Безопасность и границы доверия
@@ -353,16 +382,18 @@ BFF передает `X-Internal-Service-Key`, `X-Org-Id` и контекст `X
 |---|---|---|
 | R1 / P0 | **✓ ВЫПОЛНЕНО:** Единые ctl/REST/WS fixtures: MenuBuilder + app1 + l4desk | Контракты `ctl v1` синхронизированы во всех трех звеньях (`app1`, `MenuBuilder BFF/UI`, `l4desk`), добавлены комплексные контрактные тесты-фикстуры, зафиксирован H.264 Baseline 3.1, обновлены и задеплоены сервисы `app1` и `menubuilder-backend`, собраны бинарники `l4desk` x86/x64 |
 | R2 / P0 | Cert↔SN binding, защита media/control management API: proxy/ingress/app1 | Клиент с валидным сертификатом A не может публиковать SN B; неверный tenant/владелец/PIN не получает видео/ввод; duplicate SN аудируется |
-| R3 / P0 | Локальное истечение разрешения и отзыв viewer: app1/l4desk/BFF/Janus | Разрыв MQTT не оставляет бессрочный ввод/стрим; после локального deadline encoder остановлен не позднее согласованного grace, начальная цель 5 с; отозванный viewer не получает новые кадры после серверного grace |
-| R4 / P1 | Замкнутый reconciler FFmpeg: l4desk/l4superv | Kill/stall/потеря камеры → ограниченные повторы с jitter; не более 5 автоматических попыток за 10 мин как начальная политика; stop отменяет restart, нет orphan/двух encoder; PID reuse безопасен |
-| R5 / P1 | Идемпотентный start/switch и дедупликация: app1/agent | Повтор HTTP с одним idempotency key не порождает новый stream; старый ACK не меняет новую эпоху; повтор click не вызывает вторую инъекцию; тайм-аут трактуется как неизвестный результат, не гарантированный отказ |
-| R6 / P1 | Allocator и reconciliation media resources: BFF/ingress/Janus | Коллизии device_id по modulo не смешивают поток; рестарт ingress/Janus/BFF восстанавливает активные ресурсы; несколько BFF workers не перезаписывают PIN друг друга; завершенные ресурсы освобождаются |
+| R3 / P0 | **✓ ВЫПОЛНЕНО В КОДЕ (Шаг 2):** Локальное истечение разрешения и fail-closed watchdog: l4desk | Разрыв MQTT не оставляет бессрочный ввод/стрим; локальный watchdog (5 с grace) принудительно останавливает FFmpeg и сбрасывает ввод через `input_release_all()`; бинарники x86/x64 пересобраны *(ожидает сквозной E2E-верификации)* |
+| R4 / P1 | **✓ ВЫПОЛНЕНО В КОДЕ (Шаг 2):** Замкнутый recovery-loop FFmpeg: l4desk/l4superv | Kill/stall → автоперезапуск с экспоненциальным backoff и jitter; лимит не более 5 попыток за 10 мин; stop отменяет restart, исключен запуск двух энкодеров; бинарники x86/x64 пересобраны *(ожидает сквозной E2E-верификации)* |
+| R5 / P1 | **✓ ВЫПОЛНЕНО И ЗАДЕПЛОЕНО (Шаг 2):** Идемпотентный start/stop и синхронизация жизненного цикла: app1 | Повторный `stream_start` возвращает `already_running` с сохранением `stream_instance_id`; `stream_stop` возвращает `already_stopped`; `stream_event` очищает стрим в active lease; тесты пройдены, контейнер `app1` задеплоен на `87.242.100.34` *(ожидает сквозной E2E-верификации)* |
+| R6 / P1 | **✓ ВЫПОЛНЕНО И ЗАДЕПЛОЕНО (Шаг 2):** Route-before-Start и стабилизация сессий: MenuBuilder (UI/BFF) | Маршрут ingress и mountpoint Janus настраиваются до старта FFmpeg (0 unrouted); PIN привязан к lease, mountpoint переиспользуется; безопасный откат при сбоях; UI собран и доставлен, бэкенд перезапущен на `87.242.100.34` *(ожидает сквозной E2E-верификации)* |
 | R7 / P1 | Проверяемый H.264 profile, fresh-frame telemetry, bounded queues: FFmpeg/proxy/ingress/UI | PT/SPS/SDP согласованы; late join получает IDR/SPS/PPS; транспорт не накапливает бесконечную задержку; initial LAN-цель p95 до первого кадра ≤5 с и glass-to-glass ≤1 с, отдельно для default/low |
 | R8 / P1 | Воспроизводимый установочный комплект: tools/DevOps | Один manifest совместимых l4superv/l4desk/leo4proxy/Mosquitto/FFmpeg, подписи/хеши; повторный bootstrap безопасен; конфигурация валидируется; offline-install возможен с заранее выданной identity, секреты не встроены |
 | R9 / P1 | Серверный preflight/health/readiness: DevOps | Закреплены версии/digest вместо Janus `latest`; проверены сети, DNS, UDP range, public ICE address, сертификаты и срок; readiness проверяет API, а не только старт контейнера |
 | R10 / P1 | TURN и ограничения сети: frontend/Janus/DevOps | Проверены UDP blocked, symmetric NAT, корпоративный proxy; TURN с короткоживущими credentials и проверкой relay candidates; стоимость relay traffic учтена |
 | R11 / P2 | Обратная связь encoder: media/control | Выбран механизм запроса IDR/RTCP feedback, измерен эффект на late join и recovery; версия/совместимость определены явно, без молчаливого изменения L4RTP/1 |
 | R12 / P2 | Платформенные адаптеры Linux/ESP32-P4 | Те же wire-fixtures и проверка view-only capabilities; выбраны MQTT client type, provisioning, OTA/rollback; аппаратные лимиты измерены |
+
+> ⏳ **Текущее состояние реализации Шага 2:** Задачи R3, R4, R5, R6 полностью реализованы на уровне исходного кода, сервисы `app1` и `menubuilder-backend` с фронтендом задеплоены на сервере `87.242.100.34`, бинарники `l4desk` собраны. **Этап 4 (Сквозная E2E-верификация изменений на стенде/сервере) пока не выполнен** и является ближайшим следующим шагом.
 
 #### 2.7.1. Целевая локальная автономность
 

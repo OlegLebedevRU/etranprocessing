@@ -4,6 +4,12 @@
 
 Цель этапа — устранить задержку старта WebRTC-видео (до 2 с ожидания ключевого кадра из-за дропа первых пакетов в `unrouted`), замкнуть локальный цикл самовосстановления супервизора FFmpeg на терминале и обеспечить идемпотентность управления потоком на бэкенде.
 
+> 📌 **Текущий статус выполнения Шага 2:**
+> - ✓ **Этап 1 (`iot-rpc-rest-app` / `app1`): ВЫПОЛНЕНО И ЗАДЕПЛОЕНО.** Идемпотентность `stream_start`/`stream_stop`, синхронизация `stream_event` с lease и presence, деплой `app1` на прод-сервер `87.242.100.34`.
+> - ✓ **Этап 2 (`MenuBuilder` BFF + UI): ВЫПОЛНЕНО И ЗАДЕПЛОЕНО.** Паттерн Route-before-Start, привязка PIN mountpoint к `lease_id`/`stream_instance_id`, идемпотентность mountpoint, безопасный откат при сбоях, сборка и доставка UI, перезапуск `menubuilder-backend` на `87.242.100.34`.
+> - ✓ **Этап 3 (`tools/l4desk`): ВЫПОЛНЕНО В КОДЕ.** Замкнутый recovery-loop супервизора FFmpeg с backoff/jitter и лимитом 5/10 мин, локальный fail-closed watchdog аренды с 5 с grace и `input_release_all()`, чистая сборка бинарников x86 и x64.
+> - ⏳ **Этап 4 (Сквозная E2E-верификация): ПОКА НЕ ВЫПОЛНЕН** (ожидает стендовой проверки на прод-сервере и терминале).
+
 ---
 
 ## 1. Состав стеков и изолированные промпты шага 2
@@ -98,23 +104,23 @@ sequenceDiagram
 
 ---
 
-## 3. Рекомендуемый порядок выполнения работ
+## 3. Порядок выполнения работ и актуальный статус
 
 ```mermaid
 flowchart TD
-    A[1. Агент app1: Идемпотентность start/stop + синхронизация stream_event + деплой app1] --> B[2. Агент MenuBuilder: Route-before-Start в UI/BFF + PIN кэш + сборка UI]
-    C[3. Агент l4desk: Recovery-loop FFmpeg + lease watchdog + сборка x86/x64] --> D[4. Сквозная E2E верификация: запуск без unrouted, kill-restart, timeout-stop]
+    A[✓ 1. Агент app1: Идемпотентность start/stop + синхронизация stream_event + деплой app1] --> B[✓ 2. Агент MenuBuilder: Route-before-Start в UI/BFF + PIN кэш + сборка UI]
+    C[✓ 3. Агент l4desk: Recovery-loop FFmpeg + lease watchdog + сборка x86/x64] --> D[⏳ 4. Сквозная E2E верификация: запуск без unrouted, kill-restart, timeout-stop]
     B --> D
     A --> D
 ```
 
-1. **Этап 1: `iot-rpc-rest-app` (`app1`)**
-   Реализует безопасную идемпотентность `stream_start` (`already_running`) и `stream_stop` (`already_stopped`). Гарантирует очистку состояния стрима в lease при падении процесса. Выполняет тесты и деплой на `87.242.100.34`.
-2. **Этап 2: `MenuBuilder` (Backend + Frontend)**
-   Переносит `createVideoSession` перед `startDeviceStream`. Обеспечивает стабильность mountpoint PIN в рамках активной аренды. Доставляет бандл фронтенда в `/home/user1/MenuBuilder/frontend/dist/` и перезапускает бэкенд.
-3. **Этап 3: `tools/l4desk`**
-   Реализует в `ffmpeg_supervisor.c` рабочий recovery-loop (перезапуск упавшего FFmpeg с backoff и лимитом 5 попыток за 10 мин) и локальный lease watchdog (принудительный останов при отсутствии продления аренды > 5 с). Собирает чистые бинарники `l4desk.exe` под x86 и x64.
-4. **Этап 4: Сквозная верификация**
+1. **✓ Этап 1: `iot-rpc-rest-app` (`app1`) [ВЫПОЛНЕНО И ЗАДЕПЛОЕНО]**
+   Реализована идемпотентность `stream_start` (`already_running`) и `stream_stop` (`already_stopped`). Обеспечена очистка `stream_instance_id` в active lease при терминальных `stream_event(failed/stopped)` и рассылка `WsStreamState`. Выполнены тесты и деплой на прод-сервер `87.242.100.34`.
+2. **✓ Этап 2: `MenuBuilder` (Backend + Frontend) [ВЫПОЛНЕНО И ЗАДЕПЛОЕНО]**
+   Реализован порядок Route-before-Start (`createVideoSession` вызывается до `startDeviceStream`). PIN mountpoint привязан к `lease_id`/`stream_instance_id`, Janus mountpoint переиспользуется идемпотентно, реализован безопасный откат при ошибках старта. Фронтенд собран и доставлен в `/home/user1/MenuBuilder/frontend/dist/`, бэкенд перезапущен на `87.242.100.34`.
+3. **✓ Этап 3: `tools/l4desk` [ВЫПОЛНЕНО В КОДЕ]**
+   В `ffmpeg_supervisor.c` замкнут recovery-loop (перезапуск упавшего FFmpeg с экспоненциальным backoff, jitter и лимитом 5 попыток за 10 мин, отмена при stop) и локальный fail-closed watchdog аренды (принудительный останов при отсутствии продления аренды > 5 с, сброс всех зажатых клавиш и кнопок мыши через `input_release_all()`). Собраны чистые бинарники `l4desk.exe` под x86 и x64.
+4. **⏳ Этап 4: Сквозная верификация [ПОКА НЕ ВЫПОЛНЕН]**
    - Проверка старта видео: в статистике `l4media-ingress` (`GET /stats`) `unrouted_packets` равен 0.
    - Проверка задержки: видео начинает воспроизводиться менее чем за 1 секунду после клика "Запустить".
    - Проверка устойчивости: принудительное завершение `ffmpeg.exe` в диспетчере задач терминала приводит к автоматическому перезапуску агентом `l4desk` с сохранением WebRTC-потока.
