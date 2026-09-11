@@ -101,11 +101,12 @@ ACL) и после доставки должен быть удалён вмес�
 
 1. Локальные тесты и проверка diff; commit/push согласованных файлов (без секретов).
 2. Из **этого SHA** подготовить архив `deploy/beta` и доставить через scp на builder
-   в закрытый `/home/user1/etran-beta-bootstrap/`. Передать ключ отдельно по SSH.
+   в закрытый `/home/user1/etran-beta-bootstrap/`. Передать ключ отдельно по SSH
+   под именем `deploy-key` (имя `deploy` занято каталогом исходников архива).
 3. Выполнить на builder из этого каталога:
 
 ```sh
-sudo python3 deploy/beta/install.py --revision <SHA> --deploy-key deploy --known-hosts known_hosts
+sudo python3 deploy/beta/install.py --revision <SHA> --deploy-key deploy-key --known-hosts known_hosts
 ```
 
 4. На production доставить только `authorize_key.py` и публичный `deploy.pub`,

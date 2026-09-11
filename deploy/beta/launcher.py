@@ -83,6 +83,7 @@ def main():
                 "deploy/beta",
                 "MenuBuilder",
                 "ProcessingBackend/backend",
+                "ProcessingBackend/nginx-mutual-legacy/nginx-configs",
                 "shared",
                 "l4media",
                 "nginx-configs",

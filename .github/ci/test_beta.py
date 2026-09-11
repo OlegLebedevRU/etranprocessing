@@ -13,6 +13,10 @@ DIGEST = "sha256:" + "d" * 64
 
 
 class SelectionTests(unittest.TestCase):
+    def test_checkout_includes_processing_proxy_contract_fixture(self):
+        source = (beta.ROOT / "deploy/beta/launcher.py").read_text()
+        self.assertIn('"ProcessingBackend/nginx-mutual-legacy/nginx-configs"', source)
+
     def state(self):
         return {
             "schema": 1,
