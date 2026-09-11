@@ -396,6 +396,26 @@ export default function BillingPage() {
     }
   };
 
+  const handlePinIssued = useCallback(() => {
+    fetchSummary();
+    fetchTerminalsData();
+  }, [fetchSummary, fetchTerminalsData]);
+
+  const handleClosePinModal = useCallback(() => {
+    setPinModal({ open: false, terminal: null });
+  }, []);
+
+  const handleCheckoutPaid = useCallback(() => {
+    setSelection({});
+    setSelectedTerminalsMap({});
+    fetchSummary();
+    fetchTerminalsData();
+  }, [fetchSummary, fetchTerminalsData]);
+
+  const handleCloseCheckoutModal = useCallback(() => {
+    setCheckoutOpen(false);
+  }, []);
+
   const toggle = (terminalId: number, field: keyof Selection, on: boolean) => {
     setSelection((prev) => {
       const current = prev[terminalId] || { license: false, cert: false };
@@ -1252,24 +1272,16 @@ export default function BillingPage() {
         lines={cartLines}
         advancePeriods={advancePeriods}
         billingMode={summary?.billing_mode}
-        onClose={() => setCheckoutOpen(false)}
-        onPaid={() => {
-          setSelection({});
-          setSelectedTerminalsMap({});
-          fetchSummary();
-          fetchTerminalsData();
-        }}
+        onClose={handleCloseCheckoutModal}
+        onPaid={handleCheckoutPaid}
       />
 
       {/* Certificate PIN issuance modal */}
       <CertificatePinModal
         open={pinModal.open}
         terminal={pinModal.terminal}
-        onClose={() => setPinModal({ open: false, terminal: null })}
-        onIssued={() => {
-          fetchSummary();
-          fetchTerminalsData();
-        }}
+        onClose={handleClosePinModal}
+        onIssued={handlePinIssued}
       />
     </div>
   );

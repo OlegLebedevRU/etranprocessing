@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   Button,
@@ -29,7 +29,11 @@ const { Text, Paragraph } = Typography;
 
 interface CertificatePinModalProps {
   open: boolean;
-  terminal: { terminal_id: number; device_id: number } | null;
+  terminal: {
+    terminal_id: number;
+    device_id: number;
+    cert_pin_pending?: boolean;
+  } | null;
   onClose: () => void;
   /** Called once a PIN has been successfully issued (paid or free). */
   onIssued?: () => void;
@@ -57,28 +61,45 @@ export default function CertificatePinModal({
   const [paying, setPaying] = useState(false);
   const [revealed, setRevealed] = useState(false);
 
+  const terminalId = terminal?.terminal_id;
+  const isAlreadyPending = terminal?.cert_pin_pending;
+
+  const onIssuedRef = useRef(onIssued);
+  onIssuedRef.current = onIssued;
+
+  const hasNotifiedRef = useRef(false);
+
   const load = useCallback(async () => {
-    if (!terminal) return;
+    if (!terminalId) return;
     setStep("checking");
     setErrorMsg(null);
     try {
-      const res = await requestCertificatePin(terminal.terminal_id);
+      const res = await requestCertificatePin(terminalId);
       setResult(res);
       setStep(res.status === "pin_ready" ? "pin_ready" : "payment_required");
-      if (res.status === "pin_ready") onIssued?.();
+      // Only notify parent if a new PIN was issued (not one that was already pending before opening)
+      // and only once during this modal session.
+      if (res.status === "pin_ready" && !isAlreadyPending && !hasNotifiedRef.current) {
+        hasNotifiedRef.current = true;
+        onIssuedRef.current?.();
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Ошибка получения PIN";
       setErrorMsg(msg);
       setStep("error");
     }
-  }, [terminal, onIssued]);
+  }, [terminalId, isAlreadyPending]);
+
+  const loadRef = useRef(load);
+  loadRef.current = load;
 
   useEffect(() => {
-    if (open) {
+    if (open && terminalId) {
+      hasNotifiedRef.current = false;
       setRevealed(false);
-      load();
+      loadRef.current();
     }
-  }, [open, load]);
+  }, [open, terminalId]);
 
   const handlePay = async () => {
     if (result?.status !== "payment_required") return;
@@ -93,7 +114,10 @@ export default function CertificatePinModal({
       setResult(res);
       if (res.status === "pin_ready") {
         setStep("pin_ready");
-        onIssued?.();
+        if (!hasNotifiedRef.current) {
+          hasNotifiedRef.current = true;
+          onIssuedRef.current?.();
+        }
       } else {
         // Should not normally happen — surface as payment_required again.
         setStep("payment_required");
