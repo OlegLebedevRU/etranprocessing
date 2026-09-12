@@ -25,6 +25,7 @@ Skills описывают **как работать**, карточки — **ч
 | Docs Curator | [Регламент](../docs/etran_dev-agent-context-workflow.md) | documentation-and-context-curation | индекс + актуальные карточки |
 | Release Agent | [Deployment](operations/deployment-invariants.md), handoff компонентов | verification-matrix | release order / rollback |
 | MQTT probe | [Terminal 773](testing/mqtt-device-probe-terminal-773.md), MQTT matrix | mqtt-device-probe-testing | scoped probe result |
+| System Architect | [Overview](system-overview.md), контракты изменяемого flow | architecture-decision-record, performance-and-resilience-risk-analysis | ADR + комплаенс контрактов + оценка рисков |
 
 ## Контракты
 - [MQTT topic matrix](contracts/mqtt-topic-matrix.md) — ctl, console, presence; не весь MQTT платформы.
@@ -47,6 +48,8 @@ Skills описывают **как работать**, карточки — **ч
 - [incident-triage-and-evidence](../.claude/skills/incident-triage-and-evidence/SKILL.md)
 - [documentation-and-context-curation](../.claude/skills/documentation-and-context-curation/SKILL.md)
 - [mqtt-device-probe-testing](../.claude/skills/mqtt-device-probe-testing/SKILL.md)
+- [architecture-decision-record](../.claude/skills/architecture-decision-record/SKILL.md)
+- [performance-and-resilience-risk-analysis](../.claude/skills/performance-and-resilience-risk-analysis/SKILL.md)
 
 Ранее существовавшие навыки сохраняются; они не отменяют scope, secrets policy,
 SSH host verification или обязательный readiness. Legacy-навыки не загружать без разрешения.
