@@ -86,7 +86,7 @@ typedef struct {
     int  stream_idle_timeout_sec;
 
     /* RTP tunnel settings (L4RTP/1) */
-    int  rtp_tunnel_enabled;                /* opt-in, default 0 */
+    int  rtp_tunnel_enabled;                /* default 1 (Lazy Connect), opt-out via --no-rtp-tunnel */
     char rtp_tunnel_local_host[MAX_HOST_LEN];
     int  rtp_tunnel_rtp_port;
     int  rtp_tunnel_rtcp_port;

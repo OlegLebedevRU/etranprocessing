@@ -2,7 +2,42 @@
 
 All notable changes to the `l4superv` and `l4install` suite will be documented in this file.
 
-## [1.3.0] - 2026-09-09
+## [1.7.1] - 2026-09-13
+
+### Changed
+- Включение rtp_tunnel_enabled: true по умолчанию (Lazy Connect для видеопотока L4RTP/1) и запуск службы Leo4Proxy с аргументом --rtp-tunnel.
+
+## [1.7.0] - 2026-09-13
+
+### Changed
+- **Умный Cert Guard**: автоматическое разрешение обновления сертификата по новому PIN-коду при сроке действия <= 30 дней без флага принудительного перевыпуска (`--force` / `--force-reissue`).
+
+## [1.6.0] - 2026-09-12
+
+### Added & Improved
+- **Active Wait Tick in Standby Mode (`S10`)**:
+  - Reduced poll interval during Standby mode to 5 seconds (`standby_poll_sec`, configurable, default 5s).
+  - Standby to Active transition completes and starts `l4desk` in <= 15 seconds after certificate appearance, measured and logged as `[WAIT] activation completed in N ms`.
+- **Cert Discovery Integration in Orchestrator Tick**:
+  - Integrated `cert_discovery` scanning `LocalMachine\MY` on each tick.
+  - Added warning log `proxy_cert_mismatch` when certificate is `CERT_VALID` in Windows store but `leo4proxy` reports `certificate_found: false` for > 2 consecutive ticks.
+- **Delayed PIN Provisioning (`pending_pin.json`)**:
+  - Periodic check in Standby mode every 30 seconds (`pending_pin_check_sec`, default 30s).
+  - Automatic validation of `schema: 1` and `expires_at` (expired files securely overwritten with zeros and deleted with `pending_pin_expired` log).
+  - Decrypts `pin_dpapi` using DPAPI machine scope (`CryptUnprotectData`, `CRYPTPROTECT_UI_FORBIDDEN`).
+  - Probes CA reachability with 5-second TCP connection check (`http_local` or cloud `iot-processing.ru:443`).
+  - Executes `%base%\l4pin\l4pin.exe <PIN>` with 60-second timeout, piping and masking stdout (`pin=***`).
+  - Immediately zeroes command line and PIN memory with `SecureZeroMemory` after `CreateProcessW`.
+  - Automatically deletes file and fires force-tick on success (code 0 and `CERT_VALID`), deletes file on CA PIN rejection (code 25), and retains for retry on network/transient failures.
+- **Force-Tick Control Mechanism**:
+  - Added `SERVICE_CONTROL 128` handling in `HandlerEx` for immediate cycle wake-up via event signaling.
+  - Added CLI command `l4superv.exe --tick` to send control 128 to running service via Windows `ControlService`.
+  - Added CLI command `l4superv.exe --version` / `-v`.
+- **State Schema Extension & Key Preservation (`state.json`)**:
+  - Added `installed_version` (SemVer resolved from `VERSIONINFO` or preserved if written by installer), `installer_summary_path`, and `last_cert_state`.
+  - Dynamic preservation of all unknown JSON keys on state update and reserialize.
+- **Diagnostics Logging**:
+  - Standardized wait tick log formats: `[WAIT] standby: cert_state=... pending_pin=... ca=... next=...`, `[WAIT] pending_pin found, expires_at=..., ca=reachable -> l4pin`, `[WAIT] activation completed in N ms`.
 
 ### Added & Improved
 - **User Session Process Orchestration (`session_proc`)**:

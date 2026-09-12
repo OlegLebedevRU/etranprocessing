@@ -6,6 +6,25 @@
 
 #pragma comment(lib, "winhttp.lib")
 
+static bool json_get_bool_field(const char* json, const char* key, bool* out_val) {
+    if (!json || !key || !out_val) return false;
+    char search[128];
+    snprintf(search, sizeof(search), "\"%s\"", key);
+    const char* p = strstr(json, search);
+    if (!p) return false;
+
+    p += strlen(search);
+    while (*p && (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n' || *p == ':')) p++;
+    if (_strnicmp(p, "true", 4) == 0) {
+        *out_val = true;
+        return true;
+    } else if (_strnicmp(p, "false", 5) == 0) {
+        *out_val = false;
+        return true;
+    }
+    return false;
+}
+
 static bool json_get_field(const char* json, const char* key, char* out_val, size_t out_val_size) {
     if (!json || !key || !out_val || out_val_size == 0) return false;
     out_val[0] = '\0';
@@ -146,9 +165,20 @@ bool proxy_client_query_info(const wchar_t* url, int timeout_ms, Leo4ProxyInfo* 
         json_get_field(resp_buffer, "thumbprint", out_info->thumbprint, sizeof(out_info->thumbprint));
         json_get_field(resp_buffer, "not_after", out_info->not_after, sizeof(out_info->not_after));
 
+        bool bval = false;
+        if (json_get_bool_field(resp_buffer, "certificate_found", &bval)) {
+            out_info->certificate_found = bval;
+        }
+
         if (strcmp(out_info->status, "ready") == 0 && out_info->sn[0] != '\0') {
             out_info->cert_ready = true;
+            if (!out_info->certificate_found) {
+                out_info->certificate_found = true;
+            }
         }
+
+        json_get_field(resp_buffer, "http_local", out_info->http_local, sizeof(out_info->http_local));
+        json_get_field(resp_buffer, "http_remote", out_info->upstreams_http_remote, sizeof(out_info->upstreams_http_remote));
 
         free(resp_buffer);
     }

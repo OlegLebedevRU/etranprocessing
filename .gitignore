@@ -98,3 +98,18 @@ edge_netlog.json
 # Local problem investigation dumps
 menulistfiles-problem/
 
+# Tools release and distribution artifacts (Zero-Touch stage 1)
+tools/*.zip
+tools/dist/*.exe
+tools/dist/*.zip
+tools/dist/*.bin
+tools/dist/*.sha256
+tools/dist/.stage/
+tools/dist/l4tools-release.json
+tools/dist/SHA256SUMS
+tools/dist_win7_sp1/*
+!tools/dist_win7_sp1/README.md
+tools/l4setup/res/payload.rc
+tools/l4setup/res/version.h
+tools/l4setup/res/*.bin
+

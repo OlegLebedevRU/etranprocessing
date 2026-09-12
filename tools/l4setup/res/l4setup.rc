@@ -1,0 +1,59 @@
+#include <windows.h>
+#include "resource.h"
+#include "../src/version.h"
+
+// Manifest
+1 RT_MANIFEST "l4setup.manifest"
+
+// Dialog: PIN prompt
+IDD_PIN_DIALOG DIALOGEX 0, 0, 270, 110
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Leo4 Setup - Активация терминала"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    LTEXT           "Введите 6-значный PIN-код терминала для выпуска сертификата:", IDC_STATIC_PIN_PROMPT, 15, 15, 240, 20
+    EDITTEXT        IDC_PIN_EDIT, 15, 40, 240, 14, ES_AUTOHSCROLL | ES_UPPERCASE
+    DEFPUSHBUTTON   "Установить", IDOK, 60, 75, 75, 16
+    PUSHBUTTON      "Пропустить — ввести позже", IDCANCEL, 145, 75, 110, 16
+END
+
+// Version Information
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     L4SETUP_VERSION_MAJOR,L4SETUP_VERSION_MINOR,L4SETUP_VERSION_PATCH,L4SETUP_VERSION_BUILD
+PRODUCTVERSION  L4SETUP_VERSION_MAJOR,L4SETUP_VERSION_MINOR,L4SETUP_VERSION_PATCH,L4SETUP_VERSION_BUILD
+FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+#ifdef _DEBUG
+FILEFLAGS       VS_FF_DEBUG
+#else
+FILEFLAGS       0x0L
+#endif
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VFT_APP
+FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName",      "Leo4\0"
+            VALUE "FileDescription",  "Leo4 Zero-Touch Setup\0"
+            VALUE "FileVersion",      L4SETUP_VERSION_STRING "\0"
+            VALUE "InternalName",     "l4setup\0"
+            VALUE "OriginalFilename", "l4setup.exe\0"
+            VALUE "ProductName",      "Leo4 Terminal Tools\0"
+            VALUE "ProductVersion",   L4SETUP_VERSION_STRING "\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
+
+#ifdef EMBED_PAYLOAD_X86
+PAYLOAD_X86 RCDATA "payload_x86.bin"
+#endif
+
+#ifdef EMBED_PAYLOAD_X64
+PAYLOAD_X64 RCDATA "payload_x64.bin"
+#endif

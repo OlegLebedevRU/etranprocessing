@@ -16,6 +16,8 @@ set(SUPERV_SOURCES
     src/supervisor_main.c
     src/proxy_client.c
     src/orchestrator.c
+    src/session_proc.c
+    src/cert_discovery.c
     ${COMMON_SOURCES}
 )
 
@@ -41,14 +43,14 @@ target_include_directories(l4install PRIVATE src res)
 
 if(MSVC)
     target_compile_options(l4superv PRIVATE /W4 /utf-8 /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE)
-    target_link_libraries(l4superv PRIVATE advapi32 crypt32 winhttp ws2_32 user32 shlwapi)
+    target_link_libraries(l4superv PRIVATE advapi32 crypt32 winhttp ws2_32 user32 shlwapi wtsapi32 userenv ncrypt version)
 
     target_compile_options(l4install PRIVATE /W4 /utf-8 /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE)
-    target_link_libraries(l4install PRIVATE advapi32 crypt32 winhttp ws2_32 user32 shlwapi shell32)
+    target_link_libraries(l4install PRIVATE advapi32 crypt32 winhttp ws2_32 user32 shlwapi shell32 version)
 else()
     target_compile_options(l4superv PRIVATE -O2 -Wall -Wextra -DUNICODE -D_UNICODE -DWIN32_LEAN_AND_MEAN)
-    target_link_libraries(l4superv PRIVATE -static -ladvapi32 -lcrypt32 -lwinhttp -lws2_32 -luser32 -lshlwapi)
+    target_link_libraries(l4superv PRIVATE -static -ladvapi32 -lcrypt32 -lwinhttp -lws2_32 -luser32 -lshlwapi -lwtsapi32 -luserenv -lncrypt -lversion)
 
     target_compile_options(l4install PRIVATE -O2 -Wall -Wextra -DUNICODE -D_UNICODE -DWIN32_LEAN_AND_MEAN)
-    target_link_libraries(l4install PRIVATE -static -ladvapi32 -lcrypt32 -lwinhttp -lws2_32 -luser32 -lshlwapi -lshell32)
+    target_link_libraries(l4install PRIVATE -static -ladvapi32 -lcrypt32 -lwinhttp -lws2_32 -luser32 -lshlwapi -lshell32 -lversion)
 endif()

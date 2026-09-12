@@ -125,6 +125,8 @@ void config_init_defaults(L4SupervConfig* cfg, const wchar_t* exe_path) {
     wcscpy_s(cfg->proxy_url, 256, L4_DEFAULT_PROXY_URL);
     cfg->poll_interval_sec = L4_DEFAULT_POLL_INTERVAL_SEC;
     cfg->watchdog_interval_sec = L4_DEFAULT_WATCHDOG_INTERVAL_SEC;
+    cfg->standby_poll_sec = L4_DEFAULT_STANDBY_POLL_SEC;
+    cfg->pending_pin_check_sec = L4_DEFAULT_PENDING_PIN_CHECK_SEC;
     cfg->watchdog_enabled = true;
     cfg->mosquitto_port = L4_DEFAULT_MOSQUITTO_PORT;
     swprintf_s(cfg->mosquitto_template_path, MAX_PATH, L"%s\\mosquitto.conf.tmpl", cfg->base_path);
@@ -173,6 +175,9 @@ bool config_load_json(L4SupervConfig* cfg, const wchar_t* json_path) {
     if (json_get_string(buffer, "proxy_url", val, sizeof(val))) {
         MultiByteToWideChar(CP_UTF8, 0, val, -1, cfg->proxy_url, 256);
     }
+    if (json_get_string(buffer, "proxy_info_url", val, sizeof(val))) {
+        MultiByteToWideChar(CP_UTF8, 0, val, -1, cfg->proxy_url, 256);
+    }
     if (json_get_string(buffer, "mosquitto_template", val, sizeof(val))) {
         MultiByteToWideChar(CP_UTF8, 0, val, -1, cfg->mosquitto_template_path, MAX_PATH);
     }
@@ -183,6 +188,12 @@ bool config_load_json(L4SupervConfig* cfg, const wchar_t* json_path) {
     }
     if (json_get_int(buffer, "watchdog_interval_sec", &int_val) && int_val > 0) {
         cfg->watchdog_interval_sec = int_val;
+    }
+    if (json_get_int(buffer, "standby_poll_sec", &int_val) && int_val > 0) {
+        cfg->standby_poll_sec = int_val;
+    }
+    if (json_get_int(buffer, "pending_pin_check_sec", &int_val) && int_val > 0) {
+        cfg->pending_pin_check_sec = int_val;
     }
     if (json_get_int(buffer, "mosquitto_port", &int_val) && int_val > 0) {
         cfg->mosquitto_port = int_val;
@@ -261,6 +272,8 @@ bool config_save_json(const L4SupervConfig* cfg, const wchar_t* json_path) {
     fprintf(f, "  \"proxy_url\": \"%s\",\n", utf8_proxy);
     fprintf(f, "  \"poll_interval_sec\": %d,\n", cfg->poll_interval_sec);
     fprintf(f, "  \"watchdog_interval_sec\": %d,\n", cfg->watchdog_interval_sec);
+    fprintf(f, "  \"standby_poll_sec\": %d,\n", cfg->standby_poll_sec);
+    fprintf(f, "  \"pending_pin_check_sec\": %d,\n", cfg->pending_pin_check_sec);
     fprintf(f, "  \"watchdog_enabled\": %s,\n", cfg->watchdog_enabled ? "true" : "false");
     fprintf(f, "  \"mosquitto_port\": %d,\n", cfg->mosquitto_port);
     fprintf(f, "  \"auto_reset_on_clone\": %s,\n", cfg->auto_reset_on_clone ? "true" : "false");

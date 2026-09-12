@@ -21,6 +21,7 @@ set(SOURCES
     src/xml_utils.c
     src/cng_crypto.c
     src/cert_store.c
+    src/cert_discovery.c
     res/app.rc
 )
 

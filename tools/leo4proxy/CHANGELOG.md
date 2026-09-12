@@ -2,6 +2,11 @@
 
 All notable changes to the `leo4proxy` component will be documented in this file.
 
+## [1.7.1] - 2026-09-13
+
+### Changed
+- Включение rtp_tunnel_enabled: true по умолчанию (Lazy Connect для видеопотока L4RTP/1) и запуск службы Leo4Proxy с аргументом --rtp-tunnel.
+
 ## [1.2.0] - 2026-09-07
 
 ### Added

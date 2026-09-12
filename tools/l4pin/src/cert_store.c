@@ -267,11 +267,13 @@ bool cert_store_install_pkcs7(
                 if (_stricmp(enum_email, new_cert_email) == 0) {
                     char serial_hex[128] = { 0 };
                     char subj_name[256] = { 0 };
+                    char thumb_hex[128] = { 0 };
                     cert_get_serial_hex(pEnum, serial_hex, sizeof(serial_hex));
+                    cert_get_thumbprint_hex(pEnum, thumb_hex, sizeof(thumb_hex));
                     CertGetNameStringA(pEnum, CERT_NAME_SIMPLE_DISPLAY_TYPE, 0, NULL, subj_name, sizeof(subj_name));
 
-                    printf("[STORE] Deleting existing certificate: Email=%s, Serial=%s, Subject=%s\n",
-                           enum_email, serial_hex, subj_name);
+                    printf("[STORE] Deleting existing certificate: Thumbprint=%s, Email=%s, Serial=%s, Subject=%s\n",
+                           thumb_hex, enum_email, serial_hex, subj_name);
 
                     PCCERT_CONTEXT pToDelete = CertDuplicateCertificateContext(pEnum);
                     if (CertDeleteCertificateFromStore(pToDelete)) {

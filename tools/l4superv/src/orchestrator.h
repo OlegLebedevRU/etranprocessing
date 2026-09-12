@@ -22,6 +22,11 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
 void orchestrator_run_loop(const L4SupervConfig* cfg, volatile bool* p_stop_flag);
 
 /**
+ * Trigger an immediate orchestration cycle (force-tick).
+ */
+void orchestrator_trigger_force_tick(void);
+
+/**
  * Query current runtime status of l4desk user session process.
  */
 bool orchestrator_get_l4desk_status(DWORD* out_pid, DWORD* out_session);

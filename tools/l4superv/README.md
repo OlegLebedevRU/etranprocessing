@@ -145,6 +145,8 @@ Usage: l4superv.exe [OPTIONS]
   --restart          Перезапуск службы L4Superv
   --status           Просмотр статуса всех служб и состояния оркестратора
   --check            Единоразовая проверка и синхронизация конфигов
+  --tick             Отправка форс-такта (SERVICE_CONTROL 128) работающей службе
+  --version, -v      Вывод версии (SemVer)
   --help, -h         Справка
 ```
 
@@ -158,6 +160,8 @@ Usage: l4superv.exe [OPTIONS]
   "proxy_url": "http://127.0.0.1:18443/_leo4/info",
   "poll_interval_sec": 15,
   "watchdog_interval_sec": 10,
+  "standby_poll_sec": 5,
+  "pending_pin_check_sec": 30,
   "watchdog_enabled": true,
   "mosquitto_port": 1883,
   "auto_reset_on_clone": true,
@@ -169,6 +173,13 @@ Usage: l4superv.exe [OPTIONS]
   }
 }
 ```
+
+### Параметры такта ожидания и отложенного PIN:
+- `standby_poll_sec`: интервал опроса прокси в режиме ожидания активации (по умолчанию `5` с; в активном режиме действует `watchdog_interval_sec`, по умолчанию `10` с).
+- `pending_pin_check_sec`: период проверки файла `pending_pin.json` в режиме ожидания (по умолчанию `30` с).
+- `proxy_info_url`: альтернативный псевдоним для `proxy_url` (поддерживает перенаправление на тестовый двойник).
+- `pending_pin.json`: файл отложенного выпуска сертификата (`{ "schema": 1, "expires_at": "...", "pin_dpapi": "..." }`), шифрованный DPAPI Machine Scope. При доступности CA расшифровывается в памяти, передается в `l4pin.exe`, зануляется и удаляется, вызывая немедленный форс-такт.
+- `state.json`: расширен полями `installed_version`, `installer_summary_path`, `last_cert_state` с гарантией сохранения всех неизвестных ключей.
 
 ---
 

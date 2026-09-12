@@ -1,0 +1,46 @@
+{
+  "status": "active",
+  "sn": "a4b0000773c82116d210826",
+  "thumbprint": "CC88419A4C3763150A4C0905261EC073C58CFC09",
+  "not_after": "2027-08-29 17:09:40 UTC",
+  "hw_fingerprint": "86a27449-e358-4b13-8875-7b8cf318c84d:B0E860DB",
+  "installed_version": "1.6.0",
+  "installer_summary_path": "C:\\l4tools\\install_summary.json",
+  "last_cert_state": "valid",
+  "installer_base_path": "C:\\l4tools",
+  "services": {
+    "mosquitto": {
+      "installed_path": "C:\\l4tools\\mosquitto\\mosquitto.exe",
+      "runtime_pid": 118776,
+      "runtime_exe": "C:\\l4tools\\mosquitto\\mosquitto.exe",
+      "config_path": "C:\\l4tools\\mosquitto\\mosquitto.conf",
+      "log_path": "C:\\l4tools\\mosquitto\\log\\mosquitto.log",
+      "path_match": true,
+      "status": "RUNNING"
+    },
+    "leo4proxy": {
+      "installed_path": "C:\\l4tools\\leo4proxy\\leo4proxy.exe",
+      "runtime_pid": 88144,
+      "runtime_exe": "C:\\l4tools\\leo4proxy\\leo4proxy.exe",
+      "path_match": true,
+      "status": "RUNNING"
+    },
+    "l4con": {
+      "installed_path": "C:\\l4tools\\l4con\\l4con.exe",
+      "runtime_pid": 109412,
+      "runtime_exe": "C:\\l4tools\\l4con\\l4con.exe",
+      "path_match": true,
+      "status": "RUNNING"
+    },
+    "l4superv": {
+      "installed_path": "C:\\l4tools\\l4superv\\l4superv.exe",
+      "runtime_pid": 92120,
+      "runtime_exe": "C:\\l4tools\\l4superv\\l4superv.exe",
+      "config_path": "C:\\l4tools\\l4superv.json",
+      "path_match": true,
+      "status": "RUNNING"
+    }
+  },
+  "last_check": 1789247341,
+  "updated_at": 1789247174
+}

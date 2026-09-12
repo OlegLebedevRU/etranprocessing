@@ -71,6 +71,7 @@
 | `menu_ui` | `menu_ui-patterns-and-tokens.md` | Шаблоны интерфейса, конвенции Ant Design 6 и дизайн-токены |
 | `menu_bill` | `menu_bill-cart-ux-requirements.md` | Спецификация интерфейса корзины биллинга лицензий |
 | `term_tool` | `term_tool-architecture-guide.md` | Архитектура терминальных утилит L4 Suite |
+| `term_tool` | `term_tool-zero-touch-installer-and-remote-runtime-plan.md` | Архитектура и план перехода к Zero-Touch комплексу tools: единый установщик, адаптация любого начального состояния Windows, автостарт |
 | `term_tool` | `term_tool-user-guide.md` | Руководство оператора по терминальным утилитам |
 | `term_tool` | `term_tool-developer-guide.md` | Руководство разработчика терминальных приложений киосков |
 | `term_conn` | `term_conn-device-connection-and-audit.md` | Спецификация REST API состояния связи терминалов и аудита клонов |

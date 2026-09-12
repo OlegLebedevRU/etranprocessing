@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "timestamp": "2026-09-12T21:12:18Z",
+  "installer_version": "1.6.0",
+  "os": "Windows 10 Home (10.0.19045) x64",
+  "target_arch": "x64",
+  "dest": "C:\\l4tools",
+  "status": "ready_with_warnings",
+  "exit_code": 12,
+  "cert": {
+    "state": "valid",
+    "reused": false,
+    "reissued": true,
+    "thumbprint": "28F037130768DFD8B3215133A29274A08BE3DDC3",
+    "sn": "a4b0000773c82116d210826",
+    "not_after": "2027-09-12T21:12:13Z"
+  },
+  "drainage": {
+    "services_stopped": [],
+    "processes_killed": [],
+    "ports_freed": []
+  },
+  "probes": {
+    "proxy_info": "ok",
+    "mosquitto_port": "ok",
+    "user_session_id": 1,
+    "l4desk_running": false,
+    "ffmpeg_smoke_capture": "ok",
+    "desktop_locked": false
+  },
+  "warnings": []
+}

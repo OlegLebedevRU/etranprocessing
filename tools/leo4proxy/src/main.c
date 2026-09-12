@@ -309,7 +309,7 @@ void proxy_config_init_defaults(ProxyConfig* config) {
     config->stream_max_clients = DEFAULT_STREAM_MAX_CLIENTS;
     config->stream_idle_timeout_sec = DEFAULT_STREAM_IDLE_TIMEOUT;
 
-    config->rtp_tunnel_enabled = 0;
+    config->rtp_tunnel_enabled = 1;
     strncpy_s(config->rtp_tunnel_local_host, sizeof(config->rtp_tunnel_local_host), DEFAULT_RTP_TUNNEL_LOCAL_HOST, _TRUNCATE);
     config->rtp_tunnel_rtp_port = DEFAULT_RTP_TUNNEL_RTP_PORT;
     config->rtp_tunnel_rtcp_port = DEFAULT_RTP_TUNNEL_RTCP_PORT;

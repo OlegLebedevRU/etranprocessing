@@ -9,6 +9,7 @@
 #include "xml_utils.h"
 #include "cng_crypto.h"
 #include "cert_store.h"
+#include "cert_discovery.h"
 
 #define DEFAULT_KEY_NAME L"EtranTerminalKey"
 
@@ -18,8 +19,13 @@ static void print_usage(const char* prog_name) {
     printf("  %s <PIN> [options]\n", prog_name);
     printf("  %s --pin <PIN> [options]\n", prog_name);
     printf("  %s -pin <PIN> [options]\n", prog_name);
+    printf("  %s --check [--sn <SN>] [--json] [--store <machine|user>]\n", prog_name);
     printf("  %s --status [--store <machine|user>] [--email <email>]\n\n", prog_name);
     printf("Options:\n");
+    printf("  --check                  Check certificate status in target store and exit\n");
+    printf("  --sn <SN>                Expected terminal serial number / Common Name\n");
+    printf("  --json                   Output in JSON format (used with --check)\n");
+    printf("  --force, -f              Force reissue even if valid certificate exists\n");
     printf("  --pin, -pin, -p <PIN>    6-character terminal certificate PIN code\n");
     printf("  --url, -url, -u <URL>    Base URL override (default: auto-detected via leo4proxy -> fallback)\n");
     printf("  --store, -store, -s <S>  Target store: 'machine' (LocalMachine\\MY, default) or 'user' (CurrentUser\\MY)\n");
@@ -29,8 +35,10 @@ static void print_usage(const char* prog_name) {
     printf("  --help, -h, /?           Show this help message\n\n");
     printf("Examples:\n");
     printf("  %s 021358\n", prog_name);
+    printf("  %s --check --json\n", prog_name);
+    printf("  %s --check --sn a4b0000773c82116d210826\n", prog_name);
+    printf("  %s --force 021358\n", prog_name);
     printf("  %s --pin 021358 --store machine\n", prog_name);
-    printf("  %s -pin 021358\n", prog_name);
     printf("  %s --status\n", prog_name);
 }
 
@@ -45,6 +53,10 @@ int main(int argc, char* argv[]) {
     bool is_machine_store = true; // Default is LocalMachine\MY
     WCHAR key_name[128] = DEFAULT_KEY_NAME;
     bool status_mode = false;
+    bool check_mode = false;
+    bool is_json = false;
+    bool force_reissue = false;
+    char cli_sn[128] = { 0 };
     char filter_email[256] = { 0 };
 
     for (int i = 1; i < argc; i++) {
@@ -55,6 +67,25 @@ int main(int argc, char* argv[]) {
             _stricmp(arg, "/h") == 0 || _stricmp(arg, "/?") == 0) {
             print_usage(argv[0]);
             return 0;
+        } else if (_stricmp(arg, "--check") == 0 || _stricmp(arg, "-check") == 0 ||
+                   _stricmp(arg, "/check") == 0) {
+            check_mode = true;
+        } else if (_stricmp(arg, "--json") == 0 || _stricmp(arg, "-json") == 0 ||
+                   _stricmp(arg, "/json") == 0) {
+            is_json = true;
+        } else if (_stricmp(arg, "--force") == 0 || _stricmp(arg, "-force") == 0 ||
+                   _stricmp(arg, "-f") == 0 || _stricmp(arg, "/force") == 0 ||
+                   _stricmp(arg, "/f") == 0) {
+            force_reissue = true;
+        } else if (_stricmp(arg, "--sn") == 0 || _stricmp(arg, "-sn") == 0 ||
+                   _stricmp(arg, "/sn") == 0) {
+            if (i + 1 < argc) {
+                strncpy(cli_sn, argv[++i], sizeof(cli_sn) - 1);
+            }
+        } else if (_strnicmp(arg, "--sn=", 5) == 0) {
+            strncpy(cli_sn, arg + 5, sizeof(cli_sn) - 1);
+        } else if (_strnicmp(arg, "-sn=", 4) == 0) {
+            strncpy(cli_sn, arg + 4, sizeof(cli_sn) - 1);
         } else if (_stricmp(arg, "--status") == 0 || _stricmp(arg, "-status") == 0 ||
                    _stricmp(arg, "-l") == 0 || _stricmp(arg, "--list") == 0 ||
                    _stricmp(arg, "-list") == 0 || _stricmp(arg, "/status") == 0 ||
@@ -117,6 +148,63 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
+    if (check_mode) {
+        wchar_t w_sn[128] = { 0 };
+        const wchar_t* p_expected_sn = NULL;
+        if (cli_sn[0] != '\0') {
+            MultiByteToWideChar(CP_UTF8, 0, cli_sn, -1, w_sn, 128);
+            p_expected_sn = w_sn;
+        }
+
+        cert_info info = { 0 };
+        cert_state st;
+        if (is_machine_store) {
+            st = cert_discover(p_expected_sn, &info);
+        } else {
+            HCERTSTORE hUserStore = CertOpenStore(
+                CERT_STORE_PROV_SYSTEM_W,
+                0,
+                0,
+                CERT_SYSTEM_STORE_CURRENT_USER | CERT_STORE_READONLY_FLAG,
+                L"MY"
+            );
+            if (hUserStore) {
+                st = cert_discover_in_store(hUserStore, p_expected_sn, &info);
+                CertCloseStore(hUserStore, 0);
+            } else {
+                st = CERT_STORE_ERROR;
+            }
+        }
+
+        if (st >= 20) {
+            if (is_json) {
+                printf("{\n  \"state\": \"error\",\n  \"error_code\": %d,\n  \"message\": \"Failed to access certificate store (administrator privileges may be required)\"\n}\n", (int)st);
+            } else {
+                fprintf(stderr, "Error: Failed to access certificate store (error %d). Administrator privileges may be required.\n", (int)st);
+            }
+            return (int)st;
+        }
+
+        if (is_json) {
+            printf("{\n  \"state\": \"%s\",\n  \"thumbprint\": \"%s\",\n  \"sn\": \"%s\",\n  \"not_after\": \"%s\",\n  \"days_left\": %d\n}\n",
+                   cert_state_to_str(st),
+                   info.thumbprint_hex,
+                   info.sn,
+                   info.not_after_utc,
+                   info.days_left);
+        } else {
+            printf("Certificate Discovery Status:\n");
+            printf("  State:       %s\n", cert_state_to_str(st));
+            printf("  Thumbprint:  %s\n", info.thumbprint_hex[0] ? info.thumbprint_hex : "(none)");
+            printf("  SN:          %s\n", info.sn[0] ? info.sn : "(none)");
+            printf("  Not After:   %s\n", info.not_after_utc[0] ? info.not_after_utc : "(none)");
+            printf("  Days Left:   %d\n", info.days_left);
+            printf("  Duplicates:  %d\n", info.cert_duplicates);
+        }
+
+        return (int)st;
+    }
+
     if (pin[0] == '\0') {
         printf("Enter terminal PIN code: ");
         if (fgets(pin, sizeof(pin), stdin)) {
@@ -133,6 +221,64 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // -----------------------------------------------------------------------
+    // Certificate Discovery & Guard (Contract 4.1)
+    // -----------------------------------------------------------------------
+    wchar_t w_disc_sn[128] = { 0 };
+    const wchar_t* p_disc_expected_sn = NULL;
+    if (cli_sn[0] != '\0') {
+        MultiByteToWideChar(CP_UTF8, 0, cli_sn, -1, w_disc_sn, 128);
+        p_disc_expected_sn = w_disc_sn;
+    }
+
+    cert_info disc_info = { 0 };
+    cert_state disc_st;
+    if (is_machine_store) {
+        disc_st = cert_discover(p_disc_expected_sn, &disc_info);
+    } else {
+        HCERTSTORE hUserStore = CertOpenStore(
+            CERT_STORE_PROV_SYSTEM_W,
+            0,
+            0,
+            CERT_SYSTEM_STORE_CURRENT_USER | CERT_STORE_READONLY_FLAG,
+            L"MY"
+        );
+        if (hUserStore) {
+            disc_st = cert_discover_in_store(hUserStore, p_disc_expected_sn, &disc_info);
+            CertCloseStore(hUserStore, 0);
+        } else {
+            disc_st = CERT_STORE_ERROR;
+        }
+    }
+
+    printf("[CERT DISCOVERY] state: %s, thumbprint: %s, days_left: %d, duplicates: %d\n",
+           cert_state_to_str(disc_st),
+           disc_info.thumbprint_hex[0] ? disc_info.thumbprint_hex : "(none)",
+           disc_info.days_left,
+           disc_info.cert_duplicates);
+
+    if (disc_st == CERT_VALID && !force_reissue) {
+        printf("Certificate %s for %s is valid until %s; reissue not required (use --force to override)\n",
+               disc_info.thumbprint_hex,
+               disc_info.sn[0] ? disc_info.sn : "(unknown)",
+               disc_info.not_after_utc);
+        return 0;
+    }
+
+    if (disc_st == CERT_EXPIRING && !force_reissue) {
+        printf("[WARN] Existing certificate %s for %s is expiring in %d days (until %s). Proceeding with renewal...\n",
+               disc_info.thumbprint_hex,
+               disc_info.sn[0] ? disc_info.sn : "(unknown)",
+               disc_info.days_left,
+               disc_info.not_after_utc);
+    } else if (disc_st == CERT_BROKEN) {
+        printf("[WARN] Existing certificate is broken or mismatch (state: broken). Proceeding with enrollment...\n");
+    } else if (disc_st == CERT_ABSENT) {
+        printf("[INFO] No existing certificate found (state: absent). Proceeding with enrollment...\n");
+    } else if (force_reissue) {
+        printf("[WARN] Force reissue requested (--force). Reissuing certificate regardless of current state...\n");
+    }
+
     // Resolve base URL via url-finder strategy
     if (!resolve_certificates_url(cli_url_provided ? cli_url : NULL, base_url, sizeof(base_url))) {
         fprintf(stderr, "[ERROR] Failed to resolve target certificates URL.\n");
@@ -143,7 +289,7 @@ int main(int argc, char* argv[]) {
     printf("  Leo4 Terminal Certificate Setup - l4pin (CNG / v=26)\n");
     printf("=================================================================\n");
     printf("Target Endpoint:     %s\n", base_url);
-    printf("PIN Code:            %s\n", pin);
+    printf("PIN Code:            ***\n");
     printf("Target Store:        %s\\MY\n", is_machine_store ? "LocalMachine" : "CurrentUser");
     printf("CNG Key Container:   %ls\n", key_name);
     printf("-----------------------------------------------------------------\n\n");

@@ -2,12 +2,14 @@
 #include <windows.h>
 #include <stdbool.h>
 
-#define L4_SUPERV_VERSION_STR L"1.0.0"
+#define L4_SUPERV_VERSION_STR L"1.7.1"
 #define L4_DEFAULT_BASE_PATH  L"C:\\l4tools"
 #define L4_DEFAULT_PROXY_URL  L"http://127.0.0.1:18443/_leo4/info"
 #define L4_DEFAULT_MOSQUITTO_PORT 1883
 #define L4_DEFAULT_POLL_INTERVAL_SEC 15
 #define L4_DEFAULT_WATCHDOG_INTERVAL_SEC 10
+#define L4_DEFAULT_STANDBY_POLL_SEC 5
+#define L4_DEFAULT_PENDING_PIN_CHECK_SEC 30
 
 typedef struct {
     wchar_t base_path[MAX_PATH];
@@ -15,6 +17,8 @@ typedef struct {
     wchar_t proxy_url[256];
     int     poll_interval_sec;
     int     watchdog_interval_sec;
+    int     standby_poll_sec;
+    int     pending_pin_check_sec;
     bool    watchdog_enabled;
     int     mosquitto_port;
     wchar_t mosquitto_template_path[MAX_PATH];

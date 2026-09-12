@@ -18,7 +18,11 @@ static SERVICE_STATUS_HANDLE g_svcStatusHandle;
 static HANDLE                g_svcStopEvent = NULL;
 static volatile bool         g_stopFlag = false;
 
-static void WINAPI ServiceCtrlHandler(DWORD dwCtrl) {
+static DWORD WINAPI ServiceCtrlHandlerEx(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOID lpContext) {
+    (void)dwEventType;
+    (void)lpEventData;
+    (void)lpContext;
+
     switch (dwCtrl) {
         case SERVICE_CONTROL_STOP:
         case SERVICE_CONTROL_SHUTDOWN:
@@ -28,10 +32,16 @@ static void WINAPI ServiceCtrlHandler(DWORD dwCtrl) {
             if (g_svcStopEvent) {
                 SetEvent(g_svcStopEvent);
             }
-            break;
+            return NO_ERROR;
+
+        case 128:
+            orchestrator_trigger_force_tick();
+            return NO_ERROR;
+
         default:
             break;
     }
+    return ERROR_CALL_NOT_IMPLEMENTED;
 }
 
 static void WINAPI ServiceMain(DWORD dwArgc, LPWSTR *lpszArgv) {
@@ -40,7 +50,7 @@ static void WINAPI ServiceMain(DWORD dwArgc, LPWSTR *lpszArgv) {
 
     sp_enable_system_privileges();
 
-    g_svcStatusHandle = RegisterServiceCtrlHandlerW(SVC_NAME_L4SUPERV, ServiceCtrlHandler);
+    g_svcStatusHandle = RegisterServiceCtrlHandlerExW(SVC_NAME_L4SUPERV, ServiceCtrlHandlerEx, NULL);
     if (!g_svcStatusHandle) {
         return;
     }
@@ -164,6 +174,37 @@ static void print_status(const L4SupervConfig* cfg) {
     wprintf(L"===============================================================\n\n");
 }
 
+static int send_force_tick(void) {
+    SC_HANDLE schSCManager = OpenSCManagerW(NULL, NULL, SC_MANAGER_CONNECT);
+    if (!schSCManager) {
+        DWORD err = GetLastError();
+        wprintf(L"[ERROR] Failed to open Service Control Manager (err=%lu)\n", err);
+        return 1;
+    }
+
+    SC_HANDLE schService = OpenServiceW(schSCManager, SVC_NAME_L4SUPERV, SERVICE_USER_DEFINED_CONTROL);
+    if (!schService) {
+        DWORD err = GetLastError();
+        wprintf(L"[ERROR] Failed to open service %ls (err=%lu)\n", SVC_NAME_L4SUPERV, err);
+        CloseServiceHandle(schSCManager);
+        return 1;
+    }
+
+    SERVICE_STATUS status;
+    if (!ControlService(schService, 128, &status)) {
+        DWORD err = GetLastError();
+        wprintf(L"[ERROR] Failed to send control 128 to service %ls (err=%lu)\n", SVC_NAME_L4SUPERV, err);
+        CloseServiceHandle(schService);
+        CloseServiceHandle(schSCManager);
+        return 1;
+    }
+
+    wprintf(L"[OK] Force tick (control 128) sent to %ls successfully.\n", SVC_NAME_L4SUPERV);
+    CloseServiceHandle(schService);
+    CloseServiceHandle(schSCManager);
+    return 0;
+}
+
 static void print_usage(void) {
     wprintf(L"Usage: l4superv.exe [OPTIONS]\n\n");
     wprintf(L"Options:\n");
@@ -175,6 +216,8 @@ static void print_usage(void) {
     wprintf(L"  --restart          Restart L4Superv service\n");
     wprintf(L"  --status           Display status of all Leo4 services and orchestrator\n");
     wprintf(L"  --check            Execute a single orchestration cycle and exit\n");
+    wprintf(L"  --tick             Send force-tick control 128 to running L4Superv service\n");
+    wprintf(L"  --version, -v      Print version and exit\n");
     wprintf(L"  --help, -h         Show this help message\n\n");
 }
 
@@ -203,6 +246,11 @@ int wmain(int argc, wchar_t* argv[]) {
             return 0;
         } else if (_wcsicmp(argv[1], L"--status") == 0) {
             print_status(&cfg);
+            return 0;
+        } else if (_wcsicmp(argv[1], L"--tick") == 0) {
+            return send_force_tick();
+        } else if (_wcsicmp(argv[1], L"--version") == 0 || _wcsicmp(argv[1], L"-v") == 0) {
+            wprintf(L"%ls\n", L4_SUPERV_VERSION_STR);
             return 0;
         } else if (_wcsicmp(argv[1], L"--install") == 0 || _wcsicmp(argv[1], L"-i") == 0) {
             wchar_t cmd[MAX_PATH * 2];

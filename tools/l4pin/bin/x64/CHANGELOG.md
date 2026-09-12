@@ -2,6 +2,46 @@
 
 All notable changes to the `l4pin` (Leo4 Terminal Certificate Installer) component will be documented in this file.
 
+## [1.7.0] - 2026-09-13
+
+### Changed
+- **Умный Cert Guard**: автоматическое разрешение обновления сертификата по новому PIN-коду при сроке действия <= 30 дней без флага принудительного перевыпуска (`--force` / `--force-reissue`).
+
+## [1.2.0] - 2026-09-12
+
+### Added
+- **Certificate Discovery Module (`cert_discovery.c` / `cert_discovery.h`)**:
+  - Implemented standalone discovery engine adhering to Stage 1 Contract 4.1.
+  - Inspects `LocalMachine\MY` (or `CurrentUser\MY`) targeting issuer CN containing `iot.leo4.ru`.
+  - Verifies CNG private key accessibility (`CryptAcquireCertificatePrivateKey` with `CRYPT_ACQUIRE_SILENT_FLAG | CRYPT_ACQUIRE_ONLY_NCRYPT_KEY_FLAG | CRYPT_ACQUIRE_CACHE_FLAG`) and non-expired status (`NotAfter > now`).
+  - Evaluates candidate certificates, selects candidate with maximum `NotAfter`, and tallies duplicate candidate count (`cert_duplicates`).
+  - Returns canonical states: `CERT_VALID` (`0`), `CERT_EXPIRING` (`1`), `CERT_BROKEN` (`2`), `CERT_ABSENT` (`3`), `CERT_STORE_ERROR` (`>= 20`).
+- **Enrollment Pre-flight Guard ("Do Not Touch Valid Certificate")**:
+  - Before initiating network calls or `GET /api/certificates/?function=check`, `l4pin.exe <PIN>` queries `cert_discover`.
+  - If existing certificate is `CERT_VALID` and `--force` is absent: logs discovery state, outputs notification `Certificate <thumbprint> for <SN> is valid until <NotAfter>; reissue not required (use --force to override)`, and terminates with exit code `0` with zero network calls and zero store mutations.
+  - If existing certificate is `CERT_EXPIRING`: issues warning and continues with certificate renewal.
+  - Supports `--force` (`-force`, `-f`) to override existing valid certificate and force full reissue flow.
+- **CLI Check Mode (`--check`)**:
+  - Added non-destructive inspection command: `l4pin.exe --check [--sn <SN>] [--json] [--store <machine|user>]`.
+  - Supports human-readable output as well as structured JSON: `{"state":"valid|expiring|broken|absent", "thumbprint", "sn", "not_after", "days_left"}`.
+  - Returns matching exit codes: `0` (valid), `1` (expiring), `2` (broken), `3` (absent), or `>= 20` (store error).
+- **Unit Test Suite (`tests/test_cert_discovery.c`)**:
+  - Added standalone in-memory test runner creating temporary self-signed certificates with CNG keys in `CERT_STORE_PROV_MEMORY`.
+  - Covers 7 unit scenarios: ABSENT, VALID, EXPIRING, BROKEN (missing key), BROKEN (wrong SN), DUPLICATES (highest NotAfter selection), and non-Leo4 issuer rejection.
+- **Application Manifest**:
+  - Added `res/l4pin.manifest` specifying `requestedExecutionLevel level="asInvoker"` and Windows compatibility IDs to eliminate legacy UAC Installer Detection heuristic for 32-bit binaries.
+
+### Changed
+- **Privacy & Security Masking**:
+  - Masked PIN code display across console output and logs (`pin=***`).
+  - Enhanced certificate cleanup logging to output deleted certificate thumbprint, serial, and subject without logging PIN or CA response payloads.
+- **Resource Metadata**:
+  - Updated `res/app.rc` with standard `VS_VERSION_INFO` version `1.2.0.0` and embedded application manifest.
+- **Build System**:
+  - Integrated `cert_discovery.c` and in-memory unit test execution into `build.cmd` (`build.cmd all`, `build.cmd test`).
+
+---
+
 ## [1.1.0] - 2026-08-29
 
 ### Added
