@@ -1,4 +1,5 @@
 #include "ctl_protocol.h"
+#include "config.h"
 #include "json_min.h"
 #include "dedup_cache.h"
 #include "input_inject.h"
@@ -67,16 +68,18 @@ int ctl_build_presence_payload(char* buf, size_t max_len,
 
     if (strcmp(status, "online") == 0 && screen) {
         return snprintf(buf, max_len,
-            "{\"v\":1,\"type\":\"presence\",\"agent\":\"l4desk\",\"status\":\"online\","
+            "{\"v\":1,\"type\":\"presence\",\"agent\":\"l4desk\",\"version\":\"%s\",\"capabilities\":[\"quick_actions\",\"shortcut_action\",\"right_click\"],\"status\":\"online\","
             "\"desktop_available\":%s,\"screen\":{\"virtual_x\":%d,\"virtual_y\":%d,\"virtual_width\":%d,\"virtual_height\":%d},"
             "\"timestamp\":\"%s\"}",
+            L4DESK_VERSION_STR,
             desktop_available ? "true" : "false",
             screen->virtual_x, screen->virtual_y, screen->virtual_width, screen->virtual_height,
             iso_time);
     } else {
         return snprintf(buf, max_len,
-            "{\"v\":1,\"type\":\"presence\",\"agent\":\"l4desk\",\"status\":\"%s\","
+            "{\"v\":1,\"type\":\"presence\",\"agent\":\"l4desk\",\"version\":\"%s\",\"capabilities\":[\"quick_actions\",\"shortcut_action\",\"right_click\"],\"status\":\"%s\","
             "\"desktop_available\":%s,\"timestamp\":\"%s\"}",
+            L4DESK_VERSION_STR,
             status, desktop_available ? "true" : "false", iso_time);
     }
 }
@@ -93,8 +96,9 @@ int ctl_build_extended_presence_payload(char* buf, size_t max_len,
     DWORD session_id = desktop_get_current_session_id();
 
     int offset = snprintf(buf, max_len,
-        "{\"v\":1,\"type\":\"presence\",\"agent\":\"l4desk\",\"status\":\"%s\","
+        "{\"v\":1,\"type\":\"presence\",\"agent\":\"l4desk\",\"version\":\"%s\",\"capabilities\":[\"quick_actions\",\"shortcut_action\",\"right_click\"],\"status\":\"%s\","
         "\"desktop_available\":%s,\"session_id\":%u,",
+        L4DESK_VERSION_STR,
         status, desktop_available ? "true" : "false", session_id);
 
     if (screen && offset > 0 && (size_t)offset < max_len) {

@@ -10,6 +10,13 @@
 
 #define L4_STOP_GRACE_DEFAULT_MS 8000
 
+#ifndef SECURITY_MANDATORY_HIGH_RID
+#define SECURITY_MANDATORY_HIGH_RID (0x00003000L)
+#endif
+#ifndef SECURITY_MANDATORY_MEDIUM_RID
+#define SECURITY_MANDATORY_MEDIUM_RID (0x00002000L)
+#endif
+
 typedef enum {
     SP_TOKEN_OK = 0,
     SP_TOKEN_ERR_NO_SESSION = 1,
@@ -32,7 +39,7 @@ DWORD sp_get_token_integrity_level(HANDLE hToken);
 SpLaunchStatus sp_select_target_token(
     HANDLE hUserToken,
     DWORD expected_session_id,
-    bool require_high_il,
+    bool strict_high_il,
     HANDLE* out_token,
     DWORD* out_selected_il
 );
@@ -42,7 +49,7 @@ BOOL sp_start_in_session_ex(
     const wchar_t* exe,
     const wchar_t* cmdline,
     const wchar_t* workdir,
-    bool require_high_il,
+    bool strict_high_il,
     PROCESS_INFORMATION* out_pi,
     HANDLE* out_job,
     SpLaunchStatus* out_status

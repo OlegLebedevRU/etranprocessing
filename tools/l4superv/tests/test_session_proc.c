@@ -54,6 +54,8 @@ int main(void) {
     SpLaunchStatus status = sp_select_target_token(hCurrentToken, current_session, false, &hSelected, &selectedIL);
     ASSERT_EQ(status, SP_TOKEN_OK);
     ASSERT_TRUE(hSelected != NULL);
+    if (hSelected && hSelected != hCurrentToken) CloseHandle(hSelected);
+    hSelected = NULL;
 
     // Test with mismatched session ID (e.g. current_session + 12345)
     status = sp_select_target_token(hCurrentToken, current_session + 12345, false, &hSelected, &selectedIL);
@@ -70,16 +72,34 @@ int main(void) {
     GetTokenInformation(hCurrentToken, TokenElevationType, &elevType, sizeof(elevType), &len);
 
     if (elevType == TokenElevationTypeDefault && currentIL < 0x3000) {
-        // Standard user token without linked token capability: require_high_il MUST fail with insufficient_integrity
+        // Standard user token without linked token capability: strict_high_il MUST fail with insufficient_integrity
         status = sp_select_target_token(hCurrentToken, current_session, true, &hSelected, &selectedIL);
         ASSERT_EQ(status, SP_TOKEN_ERR_INSUFFICIENT_INTEGRITY);
-        printf("       Confirmed: Standard user + require_high_il -> insufficient_integrity without prompt\n");
+        printf("       Confirmed: Standard user + strict_high_il -> insufficient_integrity without prompt\n");
+
+        // Adaptive mode: standard user succeeds with default IL
+        status = sp_select_target_token(hCurrentToken, current_session, false, &hSelected, &selectedIL);
+        ASSERT_EQ(status, SP_TOKEN_OK);
+        ASSERT_EQ(selectedIL, currentIL);
+        printf("       Confirmed: Standard user + adaptive mode -> succeeds with default IL\n");
+        if (hSelected && hSelected != hCurrentToken) CloseHandle(hSelected);
+        hSelected = NULL;
+    } else if (elevType == TokenElevationTypeLimited) {
+        // Limited token (split-token admin): sp_select_target_token extracts linked token to reach High IL
+        status = sp_select_target_token(hCurrentToken, current_session, false, &hSelected, &selectedIL);
+        ASSERT_EQ(status, SP_TOKEN_OK);
+        ASSERT_TRUE(selectedIL >= 0x3000);
+        printf("       Confirmed: Limited token elevates to High IL via TokenLinkedToken in adaptive mode\n");
+        if (hSelected && hSelected != hCurrentToken) CloseHandle(hSelected);
+        hSelected = NULL;
     } else if (elevType == TokenElevationTypeFull) {
-        // Full elevated token: require_high_il succeeds without switching to linked token
+        // Full elevated token: strict_high_il succeeds without switching to linked token
         status = sp_select_target_token(hCurrentToken, current_session, true, &hSelected, &selectedIL);
         ASSERT_EQ(status, SP_TOKEN_OK);
         ASSERT_TRUE(selectedIL >= 0x3000);
         printf("       Confirmed: Full elevated token preserved with High IL\n");
+        if (hSelected && hSelected != hCurrentToken) CloseHandle(hSelected);
+        hSelected = NULL;
     }
 
     CloseHandle(hCurrentToken);

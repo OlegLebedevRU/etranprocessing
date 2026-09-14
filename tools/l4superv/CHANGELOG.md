@@ -2,6 +2,15 @@
 
 All notable changes to the `l4superv` and `l4install` suite will be documented in this file.
 
+## [1.7.4] - 2026-09-14
+
+### Changed & Improved
+- **Адаптивное повышение прав токена (`sp_select_target_token`)**:
+  - Реализован автоматический (best-effort) выбор `TokenLinkedToken` (High Integrity Level) для сессий с `TokenElevationTypeLimited` (UAC Split-Token администратора) для устранения блокировок UIPI при работе ПО киоска от имени Администратора.
+  - Режим `l4desk_mode` по умолчанию переведен в `user_session_high_il`.
+  - Безопасный fallback для непривилегированных учетных записей (`TokenElevationTypeDefault`) без сбоев `insufficient_integrity`.
+  - В журнал сторожевого таймера (`orchestrator`) добавлено логирование фактического уровня целостности (`High`, `Medium`, `Low`) запущенного процесса `l4desk`.
+
 ## [1.7.2] - 2026-09-14
 
 ### Changed & Improved

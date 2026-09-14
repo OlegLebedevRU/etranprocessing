@@ -115,9 +115,10 @@ static void ui_on_pipeline_finish(int exit_code, const char* final_status, void*
 
 static DWORD WINAPI SetupWorkerThread(LPVOID lpParam) {
     HWND hDlg = (HWND)lpParam;
-    UNREFERENCED_PARAMETER(hDlg);
+    g_ui_ctx.user_data = (void*)hDlg;
 
     engine_run_pipeline(&g_ui_ctx);
+    PostMessageW(hDlg, WM_SETUP_FINISHED, (WPARAM)g_ui_ctx.final_exit_code, 0);
     return 0;
 }
 
@@ -133,6 +134,8 @@ static void append_text_to_edit(HWND hEdit, const wchar_t* text) {
 static INT_PTR CALLBACK MainDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
         case WM_INITDIALOG: {
+            g_ui_ctx.user_data = (void*)hDlg;
+
             // Set window icon if available
             HICON hIcon = LoadIconW(g_ui_ctx.hInstance, MAKEINTRESOURCEW(IDI_APP_ICON));
             if (hIcon) {
@@ -243,7 +246,8 @@ static INT_PTR CALLBACK MainDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM l
 
             SetDlgItemTextW(hDlg, IDC_BTN_ACTION, L"Finish");
             EnableWindow(GetDlgItem(hDlg, IDC_BTN_ACTION), TRUE);
-            EnableWindow(GetDlgItem(hDlg, IDCANCEL), FALSE);
+            SetDlgItemTextW(hDlg, IDCANCEL, L"Close");
+            EnableWindow(GetDlgItem(hDlg, IDCANCEL), TRUE);
 
             if (g_ui_ctx.final_exit_code != 0 && g_ui_ctx.final_exit_code != 10 &&
                 g_ui_ctx.final_exit_code != 11 && g_ui_ctx.final_exit_code != 12) {
@@ -290,11 +294,18 @@ static INT_PTR CALLBACK MainDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM l
                 return TRUE;
             } else if (wmId == IDCANCEL) {
                 if (g_setup_started && !g_setup_finished) {
-                    g_ui_ctx.cancel_requested = true;
-                    SetDlgItemTextW(hDlg, IDC_STATIC_STATUS, L"Finishing the current operation safely...");
-                    EnableWindow(GetDlgItem(hDlg, IDCANCEL), FALSE);
+                    bool thread_alive = (g_hWorkerThread && WaitForSingleObject(g_hWorkerThread, 0) == WAIT_TIMEOUT);
+                    if (!thread_alive) {
+                        g_setup_finished = true;
+                        EndDialog(hDlg, g_ui_ctx.final_exit_code);
+                    } else if (g_ui_ctx.cancel_requested) {
+                        EndDialog(hDlg, 31);
+                    } else {
+                        g_ui_ctx.cancel_requested = true;
+                        SetDlgItemTextW(hDlg, IDC_STATIC_STATUS, L"Finishing current operation safely (press Cancel/Close again to force exit)...");
+                    }
                 } else {
-                    EndDialog(hDlg, 31);
+                    EndDialog(hDlg, g_setup_finished ? g_ui_ctx.final_exit_code : 31);
                 }
                 return TRUE;
             }
@@ -303,9 +314,16 @@ static INT_PTR CALLBACK MainDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM l
 
         case WM_CLOSE: {
             if (g_setup_started && !g_setup_finished) {
-                g_ui_ctx.cancel_requested = true;
-                SetDlgItemTextW(hDlg, IDC_STATIC_STATUS, L"Finishing the current operation safely...");
-                EnableWindow(GetDlgItem(hDlg, IDCANCEL), FALSE);
+                bool thread_alive = (g_hWorkerThread && WaitForSingleObject(g_hWorkerThread, 0) == WAIT_TIMEOUT);
+                if (!thread_alive) {
+                    g_setup_finished = true;
+                    EndDialog(hDlg, g_ui_ctx.final_exit_code);
+                } else if (g_ui_ctx.cancel_requested) {
+                    EndDialog(hDlg, 31);
+                } else {
+                    g_ui_ctx.cancel_requested = true;
+                    SetDlgItemTextW(hDlg, IDC_STATIC_STATUS, L"Finishing current operation safely (press Close again to force exit)...");
+                }
                 return TRUE;
             } else {
                 EndDialog(hDlg, g_setup_finished ? g_ui_ctx.final_exit_code : 31);
@@ -340,7 +358,7 @@ int ui_run_interactive_setup(HINSTANCE hInstance, CliOptions* opts) {
     );
 
     if (g_hWorkerThread) {
-        WaitForSingleObject(g_hWorkerThread, 5000);
+        WaitForSingleObject(g_hWorkerThread, 1500);
         CloseHandle(g_hWorkerThread);
         g_hWorkerThread = NULL;
     }

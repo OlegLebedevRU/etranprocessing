@@ -20,8 +20,8 @@ if exist "%~dp0version.txt" (
     set /p L4TOOLS_VERSION=<"%~dp0version.txt"
     goto :version_set
 )
-set "L4TOOLS_VERSION=1.7.2"
-echo 1.7.2>"%~dp0version.txt"
+set "L4TOOLS_VERSION=1.7.4"
+echo 1.7.4>"%~dp0version.txt"
 
 :version_set
 set "L4TOOLS_VERSION=%L4TOOLS_VERSION: =%"
@@ -36,7 +36,7 @@ for /f "tokens=1,2,3 delims=." %%a in ("%L4TOOLS_VERSION%") do (
 )
 if "%VER_MAJ%"=="" set "VER_MAJ=1"
 if "%VER_MIN%"=="" set "VER_MIN=7"
-if "%VER_PATCH%"=="" set "VER_PATCH=2"
+if "%VER_PATCH%"=="" set "VER_PATCH=4"
 
 :: Generate tools/l4setup/res/version.h
 if not exist "%~dp0l4setup\res" md "%~dp0l4setup\res"

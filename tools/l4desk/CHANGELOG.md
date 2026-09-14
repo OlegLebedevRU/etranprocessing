@@ -1,5 +1,18 @@
 # CHANGELOG: l4desk
 
+## [1.7.4] - 2026-09-14
+
+### Changed & Improved
+- Версия компонента синхронизирована до 1.7.4 в заголовках, манифестах, ресурсах и протокольных тестах.
+- Обеспечена совместимость с запуском под повышенным уровнем целостности High Integrity Level из `l4superv` для инъекции событий ввода в окна приложений Администратора.
+
+## [1.7.3] - 2026-09-14
+
+### Added & Fixed
+- В сообщения presence (`ctl_build_presence_payload`, `ctl_build_extended_presence_payload`) добавлена явная передача версии (`"version": "1.7.3"`) и поддерживаемых возможностей (`"capabilities": ["quick_actions", "shortcut_action", "right_click"]`).
+- Устранена ошибка `consumer_version_unsupported` при отправке быстрых действий (`shortcut_action` F12, win_d, alt_f4) и клике правой кнопкой мыши из Web UI Menubuilder.
+- Стабилизированы тесты краш-детекции оркестратора FFmpeg (`tests/test_orchestrator.c`).
+
 ## [1.7.2] - 2026-09-14
 
 ### Added & Changed

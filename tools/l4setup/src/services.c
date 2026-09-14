@@ -121,14 +121,24 @@ static bool register_or_update_service(
 
     SC_HANDLE hSvc = OpenServiceW(hSCM, svc_name, SERVICE_QUERY_CONFIG | SERVICE_CHANGE_CONFIG);
     if (hSvc) {
-        // Service already exists: check if binary path matches
+        // Service already exists: check if binary path and dependencies match
         DWORD bytesNeeded = 0;
         QueryServiceConfigW(hSvc, NULL, 0, &bytesNeeded);
         if (bytesNeeded > 0) {
             LPQUERY_SERVICE_CONFIGW pConfig = (LPQUERY_SERVICE_CONFIGW)malloc(bytesNeeded);
             if (pConfig) {
                 if (QueryServiceConfigW(hSvc, pConfig, bytesNeeded, &bytesNeeded)) {
-                    if (_wcsicmp(pConfig->lpBinaryPathName, cmd_line) == 0) {
+                    bool bin_matches = (_wcsicmp(pConfig->lpBinaryPathName, cmd_line) == 0);
+                    bool deps_match = false;
+                    if (!dependencies || dependencies[0] == L'\0') {
+                        deps_match = (!pConfig->lpDependencies || pConfig->lpDependencies[0] == L'\0');
+                    } else if (pConfig->lpDependencies) {
+                        size_t dep_len = wcslen(dependencies);
+                        deps_match = (wcscmp(pConfig->lpDependencies, dependencies) == 0 &&
+                                      pConfig->lpDependencies[dep_len + 1] == L'\0');
+                    }
+
+                    if (bin_matches && deps_match) {
                         log_info("Service %ls already configured with correct path (%ls).", svc_name, cmd_line);
                         free(pConfig);
                         CloseServiceHandle(hSvc);
@@ -148,11 +158,15 @@ static bool register_or_update_service(
             cmd_line,
             NULL,
             NULL,
-            dependencies,
+            dependencies ? dependencies : L"",
             NULL,
             NULL,
             display_name
         );
+        if (!changed) {
+            DWORD err = GetLastError();
+            log_err("Failed to update service config for %ls (error %lu)", svc_name, err);
+        }
         CloseServiceHandle(hSvc);
         return (changed != FALSE);
     }
@@ -223,12 +237,13 @@ bool services_ensure_all_registered(const wchar_t* dest_dir) {
             L"Mosquitto Broker",
             cmd,
             L"Mosquitto MQTT local broker and bridge to Leo4",
-            SVC_NAME_LEO4PROXY)) {
+            NULL)) {
         CloseServiceHandle(hSCM);
         return false;
     }
 
-    // 3. L4Con
+    // 3. L4Con (strictly depends on mosquitto, double null-terminated: L"mosquitto\0\0")
+    static const wchar_t l4con_deps[] = L"mosquitto\0";
     swprintf_s(cmd, sizeof(cmd)/sizeof(wchar_t), L"\"%ls\\l4con\\l4con.exe\" --service", dest_dir);
     if (!register_or_update_service(
             hSCM,
@@ -236,7 +251,7 @@ bool services_ensure_all_registered(const wchar_t* dest_dir) {
             L"Leo4 Diagnostic Console Agent",
             cmd,
             L"Leo4 Diagnostic Console Agent (l4con)",
-            SVC_NAME_MOSQUITTO)) {
+            l4con_deps)) {
         CloseServiceHandle(hSCM);
         return false;
     }

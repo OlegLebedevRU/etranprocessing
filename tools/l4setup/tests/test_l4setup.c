@@ -54,7 +54,7 @@ static bool test_cli_parser(void) {
         TEST_ASSERT(cli_parse(1, argv, &opts, err, sizeof(err)), "Failed to parse defaults");
         TEST_ASSERT(wcscmp(opts.dest, L"C:\\l4tools") == 0, "Default dest should be C:\\l4tools");
         TEST_ASSERT(!opts.silent, "Default silent should be false");
-        TEST_ASSERT(!opts.interactive, "Default interactive should be false");
+        TEST_ASSERT(opts.interactive, "Default interactive should be true");
         TEST_ASSERT(!opts.force_reissue, "Default force_reissue should be false");
         TEST_ASSERT(!opts.no_pin, "Default no_pin should be false");
         TEST_ASSERT(!opts.repair, "Default repair should be false");
@@ -90,7 +90,20 @@ static bool test_cli_parser(void) {
         CliOptions opts;
         TEST_ASSERT(cli_parse(2, argv, &opts, NULL, 0), "Failed --silent");
         TEST_ASSERT(opts.silent, "silent should be true");
+        TEST_ASSERT(!opts.interactive, "interactive should be false in silent mode");
         TEST_ASSERT(opts.no_pin, "no_pin should be implied in silent mode without pin");
+
+        wchar_t* argv_unatt[] = { L"l4setup.exe", L"--unattended" };
+        CliOptions opts_unatt;
+        TEST_ASSERT(cli_parse(2, argv_unatt, &opts_unatt, NULL, 0), "Failed --unattended");
+        TEST_ASSERT(opts_unatt.silent, "silent should be true for --unattended");
+        TEST_ASSERT(!opts_unatt.interactive, "interactive should be false for --unattended");
+
+        wchar_t* argv_s[] = { L"l4setup.exe", L"-s" };
+        CliOptions opts_s;
+        TEST_ASSERT(cli_parse(2, argv_s, &opts_s, NULL, 0), "Failed -s");
+        TEST_ASSERT(opts_s.silent, "silent should be true for -s");
+        TEST_ASSERT(!opts_s.interactive, "interactive should be false for -s");
     }
 
     // 3b. Flags: --interactive and conflict with --silent
@@ -99,6 +112,7 @@ static bool test_cli_parser(void) {
         CliOptions opts;
         TEST_ASSERT(cli_parse(2, argv_inter, &opts, NULL, 0), "Failed --interactive");
         TEST_ASSERT(opts.interactive, "interactive should be true");
+        TEST_ASSERT(!opts.silent, "silent should be false");
 
         wchar_t* argv_conflict[] = { L"l4setup.exe", L"--interactive", L"--silent" };
         char err_conflict[128] = { 0 };

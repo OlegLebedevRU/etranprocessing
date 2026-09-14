@@ -138,7 +138,7 @@ void config_init_defaults(L4SupervConfig* cfg, const wchar_t* exe_path) {
     cfg->leo4proxy_args[0] = L'\0';
     cfg->l4con_args[0] = L'\0';
     wcscpy_s(cfg->l4desk_args, 512, L"--run --presence-interval 30");
-    wcscpy_s(cfg->l4desk_mode, 64, L"user_session");
+    wcscpy_s(cfg->l4desk_mode, 64, L"user_session_high_il");
 }
 
 bool config_load_json(L4SupervConfig* cfg, const wchar_t* json_path) {
@@ -248,11 +248,13 @@ bool config_save_json(const L4SupervConfig* cfg, const wchar_t* json_path) {
     char utf8_proxy[512] = { 0 };
     char utf8_tmpl[MAX_PATH * 3] = { 0 };
     char utf8_l4desk_args[512] = { 0 };
+    char utf8_l4desk_mode[64] = { 0 };
 
     WideCharToMultiByte(CP_UTF8, 0, cfg->base_path, -1, utf8_base, sizeof(utf8_base), NULL, NULL);
     WideCharToMultiByte(CP_UTF8, 0, cfg->proxy_url, -1, utf8_proxy, sizeof(utf8_proxy), NULL, NULL);
     WideCharToMultiByte(CP_UTF8, 0, cfg->mosquitto_template_path, -1, utf8_tmpl, sizeof(utf8_tmpl), NULL, NULL);
     WideCharToMultiByte(CP_UTF8, 0, cfg->l4desk_args, -1, utf8_l4desk_args, sizeof(utf8_l4desk_args), NULL, NULL);
+    WideCharToMultiByte(CP_UTF8, 0, cfg->l4desk_mode[0] ? cfg->l4desk_mode : L"user_session_high_il", -1, utf8_l4desk_mode, sizeof(utf8_l4desk_mode), NULL, NULL);
 
     // Escape backslashes for valid JSON
     char escaped_base[MAX_PATH * 4] = { 0 };
@@ -281,8 +283,10 @@ bool config_save_json(const L4SupervConfig* cfg, const wchar_t* json_path) {
     fprintf(f, "    \"leo4proxy\": { \"auto_start\": %s },\n", cfg->auto_start_leo4proxy ? "true" : "false");
     fprintf(f, "    \"mosquitto\": { \"auto_start\": %s },\n", cfg->auto_start_mosquitto ? "true" : "false");
     fprintf(f, "    \"l4con\":     { \"auto_start\": %s },\n", cfg->auto_start_l4con ? "true" : "false");
-    fprintf(f, "    \"l4desk\":    { \"auto_start\": %s, \"mode\": \"user_session\", \"args\": \"%s\" }\n",
-            cfg->auto_start_l4desk ? "true" : "false", utf8_l4desk_args);
+    fprintf(f, "    \"l4desk\":    { \"auto_start\": %s, \"mode\": \"%s\", \"args\": \"%s\" }\n",
+            cfg->auto_start_l4desk ? "true" : "false",
+            utf8_l4desk_mode[0] ? utf8_l4desk_mode : "user_session_high_il",
+            utf8_l4desk_args);
     fprintf(f, "  }\n");
     fprintf(f, "}\n");
 

@@ -54,7 +54,7 @@ $defaultL4supervJson = @'
     "leo4proxy": { "auto_start": true },
     "mosquitto": { "auto_start": true },
     "l4con":     { "auto_start": true },
-    "l4desk":    { "auto_start": true, "mode": "user_session", "args": "--run --presence-interval 30" }
+    "l4desk":    { "auto_start": true, "mode": "user_session_high_il", "args": "--run --presence-interval 30" }
   }
 }
 '@

@@ -819,11 +819,19 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
 
                                 log_info("[WATCHDOG] Launching l4desk in active console session %lu...", active_session);
                                 sp_enable_system_privileges();
-                                bool require_high_il = (_wcsicmp(cfg->l4desk_mode, L"high_il") == 0 || _wcsicmp(cfg->l4desk_mode, L"user_session_high_il") == 0);
+                                bool strict_high_il = (_wcsicmp(cfg->l4desk_mode, L"strict_high_il") == 0);
                                 SpLaunchStatus launch_status = SP_TOKEN_OK;
-                                if (sp_start_in_session_ex(active_session, l4desk_exe, cmdline, workdir, require_high_il, &g_l4desk_pi, &g_l4desk_job, &launch_status)) {
-                                    log_info("[WATCHDOG] l4desk started in session %lu (PID: %lu, Job: %p)",
-                                             active_session, g_l4desk_pi.dwProcessId, g_l4desk_job);
+                                if (sp_start_in_session_ex(active_session, l4desk_exe, cmdline, workdir, strict_high_il, &g_l4desk_pi, &g_l4desk_job, &launch_status)) {
+                                    HANDLE hDeskToken = NULL;
+                                    DWORD deskIL = 0;
+                                    if (OpenProcessToken(g_l4desk_pi.hProcess, TOKEN_QUERY, &hDeskToken)) {
+                                        deskIL = sp_get_token_integrity_level(hDeskToken);
+                                        CloseHandle(hDeskToken);
+                                    }
+                                    const char* il_name = (deskIL >= SECURITY_MANDATORY_HIGH_RID) ? "High" :
+                                                          (deskIL >= SECURITY_MANDATORY_MEDIUM_RID ? "Medium" : "Low");
+                                    log_info("[WATCHDOG] l4desk started in session %lu (PID: %lu, IL: 0x%04lx [%s], Job: %p)",
+                                             active_session, g_l4desk_pi.dwProcessId, deskIL, il_name, g_l4desk_job);
                                     g_l4desk_session = active_session;
                                     g_l4desk_backoff_sec = 5;
                                     if (p_action_taken) *p_action_taken = true;

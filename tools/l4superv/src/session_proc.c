@@ -137,7 +137,7 @@ DWORD sp_get_active_console_session(void) {
 SpLaunchStatus sp_select_target_token(
     HANDLE hUserToken,
     DWORD expected_session_id,
-    bool require_high_il,
+    bool strict_high_il,
     HANDLE* out_token,
     DWORD* out_selected_il
 ) {
@@ -172,40 +172,33 @@ SpLaunchStatus sp_select_target_token(
 
     switch (elevType) {
         case TokenElevationTypeLimited: {
-            if (require_high_il) {
-                TOKEN_LINKED_TOKEN linked = { 0 };
-                if (!GetTokenInformation(hUserToken, TokenLinkedToken, &linked, sizeof(linked), &len) || !linked.LinkedToken) {
-                    return SP_TOKEN_ERR_INSUFFICIENT_INTEGRITY;
-                }
-
+            // Adaptive / best-effort: always attempt to extract TokenLinkedToken for split-token admin
+            TOKEN_LINKED_TOKEN linked = { 0 };
+            if (GetTokenInformation(hUserToken, TokenLinkedToken, &linked, sizeof(linked), &len) && linked.LinkedToken) {
                 // Verify linked token session ID
                 DWORD linkedSession = 0;
-                if (!GetTokenInformation(linked.LinkedToken, TokenSessionId, &linkedSession, sizeof(linkedSession), &len) ||
-                    linkedSession != tokenSession) {
-                    CloseHandle(linked.LinkedToken);
-                    return SP_TOKEN_ERR_INVALID_SESSION;
+                if (GetTokenInformation(linked.LinkedToken, TokenSessionId, &linkedSession, sizeof(linkedSession), &len) &&
+                    linkedSession == tokenSession) {
+                    // Verify linked token user SID
+                    BYTE userBuf2[256] = { 0 };
+                    PSID sid2 = get_token_user_sid(linked.LinkedToken, userBuf2, sizeof(userBuf2));
+                    if (sid2 && EqualSid(sid1, sid2)) {
+                        // Verify linked token actual elevation / integrity level
+                        DWORD linkedIL = sp_get_token_integrity_level(linked.LinkedToken);
+                        TOKEN_ELEVATION elev = { 0 };
+                        GetTokenInformation(linked.LinkedToken, TokenElevation, &elev, sizeof(elev), &len);
+                        if (elev.TokenIsElevated || linkedIL >= SECURITY_MANDATORY_HIGH_RID) {
+                            *out_token = linked.LinkedToken;
+                            *out_selected_il = linkedIL ? linkedIL : SECURITY_MANDATORY_HIGH_RID;
+                            return SP_TOKEN_OK;
+                        }
+                    }
                 }
+                CloseHandle(linked.LinkedToken);
+            }
 
-                // Verify linked token user SID
-                BYTE userBuf2[256] = { 0 };
-                PSID sid2 = get_token_user_sid(linked.LinkedToken, userBuf2, sizeof(userBuf2));
-                if (!sid2 || !EqualSid(sid1, sid2)) {
-                    CloseHandle(linked.LinkedToken);
-                    return SP_TOKEN_ERR_INVALID_SID;
-                }
-
-                // Verify linked token actual elevation / integrity level
-                DWORD linkedIL = sp_get_token_integrity_level(linked.LinkedToken);
-                TOKEN_ELEVATION elev = { 0 };
-                GetTokenInformation(linked.LinkedToken, TokenElevation, &elev, sizeof(elev), &len);
-                if (!elev.TokenIsElevated && linkedIL < SECURITY_MANDATORY_HIGH_RID) {
-                    CloseHandle(linked.LinkedToken);
-                    return SP_TOKEN_ERR_INSUFFICIENT_INTEGRITY;
-                }
-
-                *out_token = linked.LinkedToken;
-                *out_selected_il = linkedIL ? linkedIL : SECURITY_MANDATORY_HIGH_RID;
-                return SP_TOKEN_OK;
+            if (strict_high_il) {
+                return SP_TOKEN_ERR_INSUFFICIENT_INTEGRITY;
             } else {
                 *out_token = hUserToken;
                 *out_selected_il = sp_get_token_integrity_level(hUserToken);
@@ -223,8 +216,8 @@ SpLaunchStatus sp_select_target_token(
         default: {
             // No linked token exists. Check real rights and integrity level.
             DWORD defIL = sp_get_token_integrity_level(hUserToken);
-            if (require_high_il && defIL < SECURITY_MANDATORY_HIGH_RID) {
-                // Standard user without elevation capability: cannot satisfy High IL requirement
+            if (strict_high_il && defIL < SECURITY_MANDATORY_HIGH_RID) {
+                // Standard user without elevation capability: cannot satisfy strict High IL requirement
                 return SP_TOKEN_ERR_INSUFFICIENT_INTEGRITY;
             }
             *out_token = hUserToken;
@@ -239,7 +232,7 @@ BOOL sp_start_in_session_ex(
     const wchar_t* exe,
     const wchar_t* cmdline,
     const wchar_t* workdir,
-    bool require_high_il,
+    bool strict_high_il,
     PROCESS_INFORMATION* out,
     HANDLE* out_job,
     SpLaunchStatus* out_status
@@ -279,7 +272,7 @@ BOOL sp_start_in_session_ex(
 
     HANDLE hSelectedToken = NULL;
     DWORD selectedIL = 0;
-    SpLaunchStatus selStatus = sp_select_target_token(hUserToken, session_id, require_high_il, &hSelectedToken, &selectedIL);
+    SpLaunchStatus selStatus = sp_select_target_token(hUserToken, session_id, strict_high_il, &hSelectedToken, &selectedIL);
     if (selStatus != SP_TOKEN_OK) {
         CloseHandle(hUserToken);
         if (out_status) *out_status = selStatus;
@@ -381,7 +374,7 @@ BOOL sp_start_in_session_ex(
                 verify_ok = false;
             }
         }
-        if (require_high_il) {
+        if (strict_high_il) {
             DWORD childIL = sp_get_token_integrity_level(hChildToken);
             if (childIL < SECURITY_MANDATORY_HIGH_RID) {
                 verify_ok = false;

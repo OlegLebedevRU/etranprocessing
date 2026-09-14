@@ -8,7 +8,7 @@ void cli_init_defaults(CliOptions* opts) {
     if (!opts) return;
     memset(opts, 0, sizeof(CliOptions));
     wcscpy_s(opts->dest, MAX_PATH, L"C:\\l4tools");
-    opts->interactive = false;
+    opts->interactive = true;
     opts->silent = false;
 }
 
@@ -31,6 +31,9 @@ bool cli_parse(int argc, wchar_t* argv[], CliOptions* opts, char* err_buf, size_
     if (!opts) return false;
     cli_init_defaults(opts);
 
+    bool explicit_interactive = false;
+    bool explicit_silent = false;
+
     for (int i = 1; i < argc; i++) {
         const wchar_t* arg = argv[i];
 
@@ -51,11 +54,14 @@ bool cli_parse(int argc, wchar_t* argv[], CliOptions* opts, char* err_buf, size_
             opts->no_pin = true;
         } else if (_wcsicmp(arg, L"--silent") == 0 || _wcsicmp(arg, L"-silent") == 0 ||
                    _wcsicmp(arg, L"/silent") == 0 || _wcsicmp(arg, L"/S") == 0 || 
-                   _wcsicmp(arg, L"/s") == 0) {
-            opts->silent = true;
+                   _wcsicmp(arg, L"/s") == 0 || _wcsicmp(arg, L"-s") == 0 ||
+                   _wcsicmp(arg, L"--unattended") == 0 || _wcsicmp(arg, L"-unattended") == 0 ||
+                   _wcsicmp(arg, L"/unattended") == 0) {
+            explicit_silent = true;
         } else if (_wcsicmp(arg, L"--interactive") == 0 || _wcsicmp(arg, L"-interactive") == 0 ||
-                   _wcsicmp(arg, L"/interactive") == 0 || _wcsicmp(arg, L"-i") == 0) {
-            opts->interactive = true;
+                   _wcsicmp(arg, L"/interactive") == 0 || _wcsicmp(arg, L"-i") == 0 ||
+                   _wcsicmp(arg, L"/i") == 0) {
+            explicit_interactive = true;
         } else if (_wcsicmp(arg, L"--repair") == 0 || _wcsicmp(arg, L"-repair") == 0 ||
                    _wcsicmp(arg, L"/repair") == 0) {
             opts->repair = true;
@@ -116,11 +122,19 @@ bool cli_parse(int argc, wchar_t* argv[], CliOptions* opts, char* err_buf, size_
     }
 
     // Validate conflict between --interactive and --silent
-    if (opts->interactive && opts->silent) {
+    if (explicit_interactive && explicit_silent) {
         if (err_buf && err_buf_size > 0) {
             snprintf(err_buf, err_buf_size, "Conflict: --interactive and --silent cannot be specified together");
         }
         return false;
+    }
+
+    if (explicit_silent) {
+        opts->silent = true;
+        opts->interactive = false;
+    } else {
+        opts->interactive = true;
+        opts->silent = false;
     }
 
     // Validate PIN if specified
@@ -153,8 +167,9 @@ void cli_print_usage(const wchar_t* prog_name) {
     wprintf(L"  --pin, -p <PIN>    6-digit terminal certificate PIN code\n");
     wprintf(L"  --force-reissue    Allow certificate reissuance even if existing cert is valid\n");
     wprintf(L"  --no-pin           Do not ask for PIN; if certificate absent, enter standby\n");
-    wprintf(L"  --interactive, -i  Interactive GUI mode for attended service/maintenance\n");
-    wprintf(L"  --silent, /S       Silent execution (no GUI windows or dialog prompts)\n");
+    wprintf(L"  --interactive, -i  Interactive GUI mode (default if run without arguments)\n");
+    wprintf(L"  --silent, -s, /S   Silent/unattended execution (no GUI windows or dialog prompts)\n");
+    wprintf(L"  --unattended       Alias for --silent\n");
     wprintf(L"  --dest, -d <DIR>   Target installation directory (default: C:\\l4tools)\n");
     wprintf(L"  --repair           Force reinstallation of binaries and services even if version matches\n");
     wprintf(L"  --smoke-only       Execute only Phase 5 smoke checks on existing installation\n");

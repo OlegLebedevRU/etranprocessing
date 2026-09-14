@@ -155,6 +155,14 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     // 4. Elevation Check: Product Exit Code 20 (Win32 ERROR_ACCESS_DENIED is 5)
     // Never self-elevate or call runas
     if (!uac_is_elevated()) {
+        if (cli_opts.interactive) {
+            MessageBoxW(
+                NULL,
+                L"Administrator privileges are required to run Leo4 Setup.\nPlease right-click l4setup.exe and select 'Run as administrator'.",
+                L"Leo4 Setup",
+                MB_ICONERROR | MB_OK
+            );
+        }
         fprintf(stderr, "Administrator privileges are required. No changes were made.\n");
         return 20;
     }

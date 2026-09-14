@@ -190,12 +190,13 @@ int main(int argc, char* argv[]) {
                                  "default", &inv, result, sizeof(result),
                                  err_code, sizeof(err_code), err_msg, sizeof(err_msg));
     ASSERT_TRUE(ok);
-    Sleep(200); /* Allow process to crash */
-
     bool changed = false;
     char nstate[32] = { 0 };
     char nreason[64] = { 0 };
-    ffmpeg_supervisor_tick(&inv, &changed, nstate, sizeof(nstate), nreason, sizeof(nreason));
+    for (int i = 0; i < 20 && !changed; i++) {
+        Sleep(50);
+        ffmpeg_supervisor_tick(&inv, &changed, nstate, sizeof(nstate), nreason, sizeof(nreason));
+    }
     ASSERT_TRUE(changed);
     ASSERT_TRUE(strcmp(nstate, "restarting") == 0);
     printf("  [OK] Crash detected, transitioned to 'restarting'\n");
@@ -277,12 +278,13 @@ int main(int argc, char* argv[]) {
                                  "default", &inv, result, sizeof(result),
                                  err_code, sizeof(err_code), err_msg, sizeof(err_msg));
     ASSERT_TRUE(ok);
-    Sleep(200); /* Wait for process crash */
-
     changed = false;
     memset(nstate, 0, sizeof(nstate));
     memset(nreason, 0, sizeof(nreason));
-    ffmpeg_supervisor_tick(&inv, &changed, nstate, sizeof(nstate), nreason, sizeof(nreason));
+    for (int i = 0; i < 20 && !changed; i++) {
+        Sleep(50);
+        ffmpeg_supervisor_tick(&inv, &changed, nstate, sizeof(nstate), nreason, sizeof(nreason));
+    }
     ASSERT_TRUE(changed);
     ASSERT_TRUE(strcmp(nstate, "restarting") == 0);
     ASSERT_TRUE(strcmp(nreason, "unexpected_exit") == 0);
