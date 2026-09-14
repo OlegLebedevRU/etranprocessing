@@ -143,10 +143,11 @@ class StreamStateResponse(BaseModel):
 
 class ControlEventRequest(BaseModel):
     lease_id: str
-    type: Literal["pointer_move", "mouse_click", "key", "key_event"]
+    type: Literal["pointer_move", "mouse_click", "key", "key_event", "shortcut_action"]
     x: int | None = Field(default=None, ge=0, le=65535)
     y: int | None = Field(default=None, ge=0, le=65535)
-    button: Literal["left"] = "left"
+    button: Literal["left", "right"] = "left"
+    action: Literal["f12", "alt_f4", "win_d"] | None = None
     client_ref: str | None = Field(default=None, max_length=64)
     kind: Literal["down", "up", "press"] | None = None
     vk: int | None = Field(default=None, ge=0, le=255)
@@ -167,7 +168,15 @@ class WsInboundClick(BaseModel):
     type: Literal["mouse_click"]
     x: int = Field(ge=0, le=65535)
     y: int = Field(ge=0, le=65535)
-    button: Literal["left"] = "left"
+    button: Literal["left", "right"] = "left"
+    client_ref: str | None = Field(default=None, max_length=64)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class WsInboundShortcut(BaseModel):
+    type: Literal["shortcut_action"]
+    action: Literal["f12", "alt_f4", "win_d"]
     client_ref: str | None = Field(default=None, max_length=64)
 
     model_config = ConfigDict(extra="forbid")
@@ -466,6 +475,32 @@ async def acquire_device_control_lease(
 
     terminal = await _verify_device_access(device_id, user, db)
     org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
+
+    if scope == "input":
+        try:
+            status_data = await iot_client.remote_input_status(
+                terminal.sn, org_id=org_id, user=user
+            )
+            stream_info = (status_data.get("agent") or {}).get("stream") or {}
+            if stream_info.get("state") == "running":
+                if stream_info.get("mode") == "usb-camera":
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Ввод запрещён в режиме трансляции камеры (требуется рабочий стол)",
+                    )
+                if stream_info.get("profile") and stream_info.get("profile") not in (
+                    "low",
+                    "480p",
+                ):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Удалённое управление разрешено только в режиме качества 480p",
+                    )
+        except HTTPException:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Could not pre-check stream status for input lease: %s", exc)
+
     custom_user = dict(user)
     if body and body.session_id:
         custom_user["session_id"] = body.session_id
@@ -521,6 +556,23 @@ async def change_device_control_scope(
     status_data = await iot_client.remote_input_status(
         terminal.sn, org_id=org_id, user=user
     )
+    if body.scope == "input":
+        stream_info = (status_data.get("agent") or {}).get("stream") or {}
+        if stream_info.get("state") == "running":
+            if stream_info.get("mode") == "usb-camera":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Ввод запрещён в режиме трансляции камеры (требуется рабочий стол)",
+                )
+            if stream_info.get("profile") and stream_info.get("profile") not in (
+                "low",
+                "480p",
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Удалённое управление разрешено только в режиме качества 480p",
+                )
+
     lease_info = status_data.get("lease") or {}
     if not lease_info.get("active") or not lease_info.get("lease_id"):
         raise HTTPException(
@@ -718,10 +770,7 @@ async def start_device_stream(
             if isinstance(exc.detail, dict)
             else ""
         )
-        if exc.status_code in (
-            status.HTTP_409_CONFLICT,
-            status.HTTP_504_GATEWAY_TIMEOUT,
-        ) and any(c in err_detail for c in ("unsupported", "terminal_timeout")):
+        if exc.status_code == status.HTTP_409_CONFLICT and "unsupported" in err_detail:
             logger.warning(
                 "Terminal %s stream_start not supported by agent (%s), proceeding in legacy streaming mode",
                 terminal.sn,
@@ -921,9 +970,48 @@ async def send_device_control_event(
     user: dict[str, Any] = Depends(require_operator_user),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
-    """REST fallback for sending pointer movement, mouse clicks, or keyboard events."""
+    """REST fallback for sending pointer movement, mouse clicks, keyboard events, or shortcut actions."""
     terminal = await _verify_device_access(device_id, user, db)
     org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
+
+    status_data = await iot_client.remote_input_status(
+        terminal.sn, org_id=org_id, user=user
+    )
+    lease_info = status_data.get("lease") or {}
+    agent_info = status_data.get("agent") or {}
+    stream_info = agent_info.get("stream") or {}
+
+    if lease_info.get("lease_id") or iot_client.base_url:
+        if (
+            not lease_info.get("active")
+            or str(lease_info.get("lease_id")) != event.lease_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Недействительная или неактивная аренда управления",
+            )
+        if lease_info.get("scope", "input") != "input":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Ввод не разрешён: требуется аренда со scope input",
+            )
+        if stream_info.get("mode") == "usb-camera":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Ввод запрещён в режиме трансляции камеры",
+            )
+        if stream_info.get("profile") and stream_info.get("profile") not in (
+            "low",
+            "480p",
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Удалённое управление разрешено только в режиме качества 480p",
+            )
+
+    desktop_id = lease_info.get("selected_desktop_id") or lease_info.get("desktop_id")
+    stream_inst_id = str(lease_info.get("stream_instance_id") or "") or None
+
     if event.type == "pointer_move":
         if event.x is None or event.y is None:
             raise HTTPException(
@@ -946,6 +1034,7 @@ async def send_device_control_event(
             lease_id=event.lease_id,
             x=event.x,
             y=event.y,
+            button=event.button,
             client_ref=event.client_ref,
             org_id=org_id,
             user=user,
@@ -961,6 +1050,22 @@ async def send_device_control_event(
             vk=event.vk,
             text=event.text,
             client_ref=event.client_ref,
+            desktop_id=desktop_id,
+            stream_instance_id=stream_inst_id,
+            org_id=org_id,
+            user=user,
+        )
+    elif event.type == "shortcut_action":
+        if event.action is None:
+            raise HTTPException(
+                status_code=422, detail="action is required for shortcut_action"
+            )
+        return await iot_client.remote_input_shortcut(
+            lease_id=event.lease_id,
+            action=event.action,
+            client_ref=event.client_ref,
+            desktop_id=desktop_id,
+            stream_instance_id=stream_inst_id,
             org_id=org_id,
             user=user,
         )
@@ -1040,6 +1145,14 @@ async def control_ws_proxy(
         await websocket.close(code=4403)
         return
 
+    agent_info = status_res.get("agent") or {}
+    stream_info = agent_info.get("stream") or {}
+    is_camera = stream_info.get("mode") == "usb-camera"
+    is_non_480p = bool(
+        stream_info.get("profile") and stream_info.get("profile") not in ("low", "480p")
+    )
+    is_input_scope = lease_info.get("scope", "input") == "input"
+
     await websocket.accept()
 
     session_id = user.get("session_id")
@@ -1081,6 +1194,9 @@ async def control_ws_proxy(
                             click_count += 1
                         elif msg_type in ("key", "key_event"):
                             validated = WsInboundKey.model_validate(data)
+                        elif msg_type == "shortcut_action":
+                            validated = WsInboundShortcut.model_validate(data)
+                            click_count += 1
                         elif msg_type == "keepalive":
                             validated = WsInboundKeepalive.model_validate(data)
                         elif msg_type == "release":
@@ -1097,10 +1213,70 @@ async def control_ws_proxy(
                         )
                         continue
 
+                    if msg_type in (
+                        "pointer_move",
+                        "mouse_click",
+                        "key",
+                        "key_event",
+                        "shortcut_action",
+                    ):
+                        client_ref = getattr(validated, "client_ref", None)
+                        if not is_input_scope:
+                            await websocket.send_text(
+                                json.dumps(
+                                    {
+                                        "type": "error"
+                                        if msg_type == "pointer_move"
+                                        else "click_result",
+                                        "result": "nack",
+                                        "code": "action_blocked_policy",
+                                        "message": "Ввод не разрешён: требуется аренда со scope input",
+                                        "client_ref": client_ref,
+                                    }
+                                )
+                            )
+                            continue
+                        if is_camera:
+                            await websocket.send_text(
+                                json.dumps(
+                                    {
+                                        "type": "error"
+                                        if msg_type == "pointer_move"
+                                        else "click_result",
+                                        "result": "nack",
+                                        "code": "action_blocked_policy",
+                                        "message": "Ввод запрещён в режиме трансляции камеры",
+                                        "client_ref": client_ref,
+                                    }
+                                )
+                            )
+                            continue
+                        if is_non_480p:
+                            await websocket.send_text(
+                                json.dumps(
+                                    {
+                                        "type": "error"
+                                        if msg_type == "pointer_move"
+                                        else "click_result",
+                                        "result": "nack",
+                                        "code": "action_blocked_policy",
+                                        "message": "Удалённое управление разрешено только в режиме качества 480p",
+                                        "client_ref": client_ref,
+                                    }
+                                )
+                            )
+                            continue
+
                     payload = validated.model_dump(exclude_none=True)
                     if msg_type in ("key", "key_event"):
                         payload["type"] = "key_event"
-                    if msg_type in ("pointer_move", "mouse_click", "key", "key_event"):
+                    if msg_type in (
+                        "pointer_move",
+                        "mouse_click",
+                        "key",
+                        "key_event",
+                        "shortcut_action",
+                    ):
                         desktop_id = lease_info.get(
                             "selected_desktop_id"
                         ) or lease_info.get("desktop_id")
@@ -1149,11 +1325,21 @@ async def control_ws_proxy(
                         parsed = json.loads(raw_msg)
                         if isinstance(parsed, dict):
                             out_type = parsed.get("type")
-                            if out_type == "click_result":
+                            if out_type in ("click_result", "action_result"):
+                                parsed_lease = parsed.get("lease_id")
+                                if parsed_lease and str(parsed_lease) != lease_id:
+                                    logger.warning(
+                                        "Dropping late %s event for stale lease=%s (current lease=%s)",
+                                        out_type,
+                                        parsed_lease,
+                                        lease_id,
+                                    )
+                                    continue
                                 click_results.append(
                                     {
                                         "command_id": parsed.get("command_id"),
                                         "result": parsed.get("result"),
+                                        "code": parsed.get("code"),
                                         "latency_ms": parsed.get("latency_ms"),
                                     }
                                 )

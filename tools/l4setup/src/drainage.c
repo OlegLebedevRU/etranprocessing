@@ -1,4 +1,5 @@
 #include "drainage.h"
+#include "services.h"
 #include "log.h"
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -69,64 +70,6 @@ static bool check_active_ffmpeg_stream(const wchar_t* dest_dir) {
     }
 
     return false;
-}
-
-static bool stop_service(const wchar_t* svc_name, DrainageResult* out_result) {
-    SC_HANDLE hSCM = OpenSCManagerW(NULL, NULL, SC_MANAGER_ALL_ACCESS);
-    if (!hSCM) return false;
-
-    SC_HANDLE hSvc = OpenServiceW(hSCM, svc_name, SERVICE_STOP | SERVICE_QUERY_STATUS);
-    if (!hSvc) {
-        CloseServiceHandle(hSCM);
-        return true; // Service not installed - nothing to stop
-    }
-
-    SERVICE_STATUS_PROCESS ssp;
-    DWORD bytesNeeded = 0;
-    if (QueryServiceStatusEx(hSvc, SC_STATUS_PROCESS_INFO, (LPBYTE)&ssp, sizeof(ssp), &bytesNeeded)) {
-        if (ssp.dwCurrentState == SERVICE_STOPPED) {
-            CloseServiceHandle(hSvc);
-            CloseServiceHandle(hSCM);
-            return true;
-        }
-    }
-
-    log_info("Stopping service %ls (PID: %lu)...", svc_name, ssp.dwProcessId);
-    SERVICE_STATUS ss;
-    ControlService(hSvc, SERVICE_CONTROL_STOP, &ss);
-
-    // Wait up to 5 seconds
-    bool stopped = false;
-    for (int i = 0; i < 20; i++) {
-        Sleep(250);
-        if (QueryServiceStatusEx(hSvc, SC_STATUS_PROCESS_INFO, (LPBYTE)&ssp, sizeof(ssp), &bytesNeeded)) {
-            if (ssp.dwCurrentState == SERVICE_STOPPED) {
-                stopped = true;
-                break;
-            }
-        }
-    }
-
-    if (!stopped && ssp.dwProcessId > 0) {
-        log_warn("Service %ls did not stop within 5s; terminating PID %lu...", svc_name, ssp.dwProcessId);
-        HANDLE hProc = OpenProcess(PROCESS_TERMINATE, FALSE, ssp.dwProcessId);
-        if (hProc) {
-            TerminateProcess(hProc, 1);
-            CloseHandle(hProc);
-            stopped = true;
-        }
-    }
-
-    if (stopped && out_result && out_result->services_stopped_count < DRAINAGE_MAX_ITEMS) {
-        char a_name[64] = { 0 };
-        WideCharToMultiByte(CP_UTF8, 0, svc_name, -1, a_name, sizeof(a_name), NULL, NULL);
-        strncpy_s(out_result->services_stopped[out_result->services_stopped_count++],
-                  sizeof(out_result->services_stopped[0]), a_name, _TRUNCATE);
-    }
-
-    CloseServiceHandle(hSvc);
-    CloseServiceHandle(hSCM);
-    return stopped;
 }
 
 static void kill_orphaned_processes(const wchar_t* dest_dir, DrainageResult* out_result) {
@@ -238,7 +181,34 @@ static bool free_loopback_ports(const wchar_t* dest_dir, DrainageResult* out_res
     return all_freed;
 }
 
-bool drainage_execute(const wchar_t* dest_dir, bool silent, DrainageResult* out_result) {
+static void drainage_service_cb(
+    const wchar_t* svc_name,
+    ServiceLifecycleStatus status,
+    DWORD elapsed_sec,
+    const char* notice,
+    void* user_data
+) {
+    UNREFERENCED_PARAMETER(elapsed_sec);
+    UNREFERENCED_PARAMETER(notice);
+    DrainageResult* out_result = (DrainageResult*)user_data;
+    if (out_result && status == SVC_STATUS_STOPPED && out_result->services_stopped_count < DRAINAGE_MAX_ITEMS) {
+        char a_name[64] = { 0 };
+        WideCharToMultiByte(CP_UTF8, 0, svc_name, -1, a_name, sizeof(a_name), NULL, NULL);
+        bool already = false;
+        for (int i = 0; i < out_result->services_stopped_count; i++) {
+            if (strcmp(out_result->services_stopped[i], a_name) == 0) {
+                already = true;
+                break;
+            }
+        }
+        if (!already) {
+            strncpy_s(out_result->services_stopped[out_result->services_stopped_count++],
+                      sizeof(out_result->services_stopped[0]), a_name, _TRUNCATE);
+        }
+    }
+}
+
+bool drainage_execute(const wchar_t* dest_dir, const char* sn, bool silent, DrainageResult* out_result) {
     if (!dest_dir) return false;
     if (out_result) memset(out_result, 0, sizeof(DrainageResult));
 
@@ -255,8 +225,8 @@ bool drainage_execute(const wchar_t* dest_dir, bool silent, DrainageResult* out_
 
         int resp = MessageBoxW(
             NULL,
-            L"Обнаружен активный видеострим ffmpeg.\nПрервать стрим и продолжить установку?",
-            L"Leo4 Setup - Предупреждение",
+            L"An active video stream (ffmpeg) was detected.\nStopping services will interrupt the active stream.\nDo you want to proceed?",
+            L"Leo4 Setup - Active Stream Detected",
             MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2
         );
         if (resp != IDYES) {
@@ -267,12 +237,12 @@ bool drainage_execute(const wchar_t* dest_dir, bool silent, DrainageResult* out_
     }
 
     // 2. Stop services in reverse dependency order: L4Superv -> L4Con -> mosquitto -> Leo4Proxy
-    const wchar_t* services[] = { L"L4Superv", L"L4Con", L"mosquitto", L"Leo4Proxy" };
-    for (int i = 0; i < 4; i++) {
-        stop_service(services[i], out_result);
+    // services_stop_all_in_order signals Global\L4Desk_Stop_<SN> when stopping L4Superv
+    if (!services_stop_all_in_order(sn, drainage_service_cb, out_result)) {
+        log_warn("One or more services did not stop cleanly within 120s timeout.");
     }
 
-    // 3. Kill orphaned ffmpeg and l4desk
+    // 3. Clean up any orphaned child processes that belong to dest_dir (only after graceful stop wait)
     kill_orphaned_processes(dest_dir, out_result);
 
     // 4. Free loopback ports 1883, 18443, 18883

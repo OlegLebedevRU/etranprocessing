@@ -48,6 +48,7 @@ static void WINAPI ServiceMain(DWORD dwArgc, LPWSTR *lpszArgv) {
     (void)dwArgc;
     (void)lpszArgv;
 
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
     sp_enable_system_privileges();
 
     g_svcStatusHandle = RegisterServiceCtrlHandlerExW(SVC_NAME_L4SUPERV, ServiceCtrlHandlerEx, NULL);
@@ -222,6 +223,7 @@ static void print_usage(void) {
 }
 
 int wmain(int argc, wchar_t* argv[]) {
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
     sp_enable_system_privileges();
 
     wchar_t exe_path[MAX_PATH];

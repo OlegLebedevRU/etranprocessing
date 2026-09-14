@@ -207,7 +207,7 @@ try {
     $gitSha = (& git -C $ToolsRoot rev-parse HEAD 2>$null)
     if ($gitSha) { $gitSha = $gitSha.Trim() } else { $gitSha = "unknown" }
     $statusOut = (& git -C $ToolsRoot status --porcelain 2>$null) | Where-Object { $_ -and $_.Trim() -ne "" }
-    $dirty = $false
+    $dirty = ($statusOut.Count -gt 0)
 } finally {
     $ErrorActionPreference = $prevEAP
 }
@@ -237,8 +237,22 @@ function Get-ToolVersion([string]$name, [string]$fallback) {
                         return $matches[1]
                     }
                 }
+                $cl = "$ToolsRoot\l4superv\CHANGELOG.md"
+                if (Test-Path $cl) {
+                    $content = Get-Content $cl -Raw
+                    if ($content -match '##\s*\[([0-9]+\.[0-9]+\.[0-9]+)\]') {
+                        return $matches[1]
+                    }
+                }
             }
             "l4desk" {
+                $h = "$ToolsRoot\l4desk\src\config.h"
+                if (Test-Path $h) {
+                    $content = Get-Content $h -Raw
+                    if ($content -match '#define\s+L4DESK_VERSION_STR\s+"([^"]+)"') {
+                        return $matches[1]
+                    }
+                }
                 $cl = "$ToolsRoot\l4desk\CHANGELOG.md"
                 if (Test-Path $cl) {
                     $content = Get-Content $cl -Raw
@@ -249,6 +263,22 @@ function Get-ToolVersion([string]$name, [string]$fallback) {
             }
             "l4pin" {
                 $cl = "$ToolsRoot\l4pin\CHANGELOG.md"
+                if (Test-Path $cl) {
+                    $content = Get-Content $cl -Raw
+                    if ($content -match '##\s*\[([0-9]+\.[0-9]+\.[0-9]+)\]') {
+                        return $matches[1]
+                    }
+                }
+            }
+            "l4con" {
+                $h = "$ToolsRoot\l4con\src\config.h"
+                if (Test-Path $h) {
+                    $content = Get-Content $h -Raw
+                    if ($content -match '#define\s+L4CON_APP_VERSION\s+"([^"]+)"') {
+                        return $matches[1]
+                    }
+                }
+                $cl = "$ToolsRoot\l4con\CHANGELOG.md"
                 if (Test-Path $cl) {
                     $content = Get-Content $cl -Raw
                     if ($content -match '##\s*\[([0-9]+\.[0-9]+\.[0-9]+)\]') {
@@ -283,10 +313,10 @@ function Get-ToolVersion([string]$name, [string]$fallback) {
 
 $components = [ordered]@{
     "leo4proxy" = (Get-ToolVersion "leo4proxy" "1.2.0")
-    "l4superv"  = (Get-ToolVersion "l4superv" "1.7.1")
-    "l4desk"    = (Get-ToolVersion "l4desk" "1.5.0")
-    "l4pin"     = (Get-ToolVersion "l4pin" "1.2.0")
-    "l4con"     = "1.0.0"
+    "l4superv"  = (Get-ToolVersion "l4superv" "1.7.2")
+    "l4desk"    = (Get-ToolVersion "l4desk" "1.7.2")
+    "l4pin"     = (Get-ToolVersion "l4pin" "1.7.2")
+    "l4con"     = (Get-ToolVersion "l4con" "1.7.2")
     "l4sql"     = "1.0.0"
     "mosquitto" = (Get-ToolVersion "mosquitto" "2.1.2")
     "ffmpeg"    = (Get-ToolVersion "ffmpeg" "9.0")

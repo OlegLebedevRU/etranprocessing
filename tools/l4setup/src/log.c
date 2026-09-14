@@ -9,6 +9,7 @@
 static CRITICAL_SECTION g_log_cs;
 static bool g_cs_inited = false;
 static FILE* g_log_fp = NULL;
+static wchar_t g_log_path[MAX_PATH] = { 0 };
 
 void log_mask_pin(const char* input, char* output, size_t output_size) {
     if (!input || !output || output_size == 0) return;
@@ -73,10 +74,14 @@ void log_init(const wchar_t* dest_dir) {
     }
 
     if (dest_dir && dest_dir[0] != L'\0') {
-        wchar_t log_path[MAX_PATH];
-        swprintf_s(log_path, MAX_PATH, L"%s\\l4setup.log", dest_dir);
-        _wfopen_s(&g_log_fp, log_path, L"a, ccs=UTF-8");
+        swprintf_s(g_log_path, MAX_PATH, L"%ls\\l4setup.log", dest_dir);
+        _wfopen_s(&g_log_fp, g_log_path, L"a, ccs=UTF-8");
     }
+}
+
+void log_get_path(wchar_t* out_path, size_t out_size) {
+    if (!out_path || out_size == 0) return;
+    wcsncpy_s(out_path, out_size, g_log_path, _TRUNCATE);
 }
 
 void log_close(void) {

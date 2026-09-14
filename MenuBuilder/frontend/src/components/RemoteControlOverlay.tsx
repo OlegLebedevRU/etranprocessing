@@ -7,7 +7,7 @@ export interface RemoteControlOverlayProps {
   active: boolean;
   presence: ControlAgentStatus | null;
   sendMove: (x: number, y: number) => void;
-  sendClick: (x: number, y: number) => Promise<any>;
+  sendClick: (x: number, y: number, button?: "left" | "right") => Promise<any>;
   sendKey?: (kind: "down" | "up" | "press", vk: number, text?: string) => boolean | Promise<any>;
   isCameraMode?: boolean;
   streamMode?: string;
@@ -207,7 +207,22 @@ export default function RemoteControlOverlay({
     );
     if (!coords) return;
 
-    void sendClick(coords.x, coords.y);
+    void sendClick(coords.x, coords.y, "left");
+  };
+
+  const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!active || isCameraMode || streamMode !== "desktop" || !geometryKnown) return;
+    const coords = getNormalizedCoordinates(
+      e as unknown as React.PointerEvent<HTMLDivElement>
+    );
+    if (!coords) {
+      // Do not suppress or send if click is on video bars / outside active desktop
+      return;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+    void sendClick(coords.x, coords.y, "right");
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -270,11 +285,11 @@ export default function RemoteControlOverlay({
       tabIndex={0}
       onPointerMove={handlePointerMove}
       onClick={handleClick}
+      onContextMenu={handleContextMenu}
       onKeyDown={handleKeyDown}
       onKeyUp={handleKeyUp}
-      onContextMenu={(e) => e.preventDefault()}
       onMouseDown={(e) => {
-        if (e.button !== 0) e.preventDefault();
+        if (e.button === 1) e.preventDefault();
       }}
       style={{
         position: "absolute",

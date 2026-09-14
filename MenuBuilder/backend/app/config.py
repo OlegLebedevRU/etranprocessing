@@ -129,6 +129,8 @@ class Settings(BaseSettings):
     iot_rpc_base_url: str = ""
     iot_rpc_service_token: str = ""
     iot_rpc_timeout_seconds: float = 10.0
+    iot_rpc_stream_start_timeout_seconds: float = 20.0
+    iot_rpc_inventory_timeout_seconds: float = 10.0
 
     @property
     def internal_api_base_url(self) -> str:

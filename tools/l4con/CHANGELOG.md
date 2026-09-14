@@ -2,6 +2,11 @@
 
 All notable changes to the `l4con` component will be documented in this file.
 
+## [1.7.2] - 2026-09-14
+
+### Changed
+- Версионирование компонентов синхронизировано до 1.7.2.
+
 ## [1.2.0] - 2026-09-02
 
 ### Fixed & Improved

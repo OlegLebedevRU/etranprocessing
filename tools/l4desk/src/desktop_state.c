@@ -6,6 +6,12 @@
 #pragma comment(lib, "wtsapi32.lib")
 #pragma comment(lib, "user32.lib")
 
+static int s_test_override = -1;
+
+void desktop_set_test_override(int override_status) {
+    s_test_override = override_status;
+}
+
 DWORD desktop_get_current_session_id(void) {
     DWORD sessionId = 0;
     if (!ProcessIdToSessionId(GetCurrentProcessId(), &sessionId)) {
@@ -14,34 +20,48 @@ DWORD desktop_get_current_session_id(void) {
     return sessionId;
 }
 
-bool desktop_is_interactive_available(void) {
+DesktopAccessStatus desktop_check_input_access(void) {
+    if (s_test_override >= 0) {
+        return (DesktopAccessStatus)s_test_override;
+    }
+
     // 1. Session 0 cannot receive interactive input injection
     DWORD sessionId = desktop_get_current_session_id();
     if (sessionId == 0) {
-        return false;
+        return DESKTOP_ACCESS_SESSION_UNAVAILABLE;
     }
 
-    // 2. Open current active input desktop
+    // 2. Check active console session ID matches current session
+    DWORD activeConsoleSession = WTSGetActiveConsoleSessionId();
+    if (activeConsoleSession == 0xFFFFFFFF || activeConsoleSession != sessionId) {
+        return DESKTOP_ACCESS_SESSION_UNAVAILABLE;
+    }
+
+    // 3. Open current active input desktop
     HDESK hDesk = OpenInputDesktop(0, FALSE, GENERIC_READ);
     if (!hDesk) {
-        return false;
+        return DESKTOP_ACCESS_LOCKED;
     }
 
-    // 3. Verify desktop name is "Default" (not "Winlogon", "Screen-saver", etc.)
-    char nameBuf[256] = { 0 };
+    // 4. Verify desktop name is "Default" (not "Winlogon", "Screen-saver", etc.)
+    wchar_t nameBuf[256] = { 0 };
     DWORD needed = 0;
-    BOOL ok = GetUserObjectInformationA(hDesk, UOI_NAME, nameBuf, sizeof(nameBuf) - 1, &needed);
+    BOOL ok = GetUserObjectInformationW(hDesk, UOI_NAME, nameBuf, sizeof(nameBuf), &needed);
     CloseDesktop(hDesk);
 
     if (!ok) {
-        return false;
+        return DESKTOP_ACCESS_LOCKED;
     }
 
-    if (_stricmp(nameBuf, "Default") != 0) {
-        return false;
+    if (_wcsicmp(nameBuf, L"Default") != 0) {
+        return DESKTOP_ACCESS_LOCKED;
     }
 
-    return true;
+    return DESKTOP_ACCESS_OK;
+}
+
+bool desktop_is_interactive_available(void) {
+    return desktop_check_input_access() == DESKTOP_ACCESS_OK;
 }
 
 void desktop_get_screen_metrics(ScreenMetrics* out) {

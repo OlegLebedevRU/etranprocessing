@@ -26,6 +26,10 @@ void config_init_defaults(L4DeskConfig* cfg) {
     cfg->run_mode = false;
     cfg->console_mode = true;
     cfg->sn_explicitly_set = false;
+    cfg->allow_f12 = false;
+    cfg->allow_alt_f4 = false;
+    cfg->allow_win_d = false;
+    cfg->kiosk_process[0] = L'\0';
 
     // Check environment variable DEVICE_SN as fallback for console/debug
     char* env_sn = getenv("DEVICE_SN");
@@ -111,6 +115,22 @@ bool config_parse_args(L4DeskConfig* cfg, int argc, char* argv[]) {
         }
         if (_stricmp(argv[i], "--reconnect") == 0 && i + 1 < argc) {
             cfg->reconnect_sec = atoi(argv[++i]);
+            continue;
+        }
+        if (_stricmp(argv[i], "--allow-f12") == 0) {
+            cfg->allow_f12 = true;
+            continue;
+        }
+        if (_stricmp(argv[i], "--allow-alt-f4") == 0) {
+            cfg->allow_alt_f4 = true;
+            continue;
+        }
+        if (_stricmp(argv[i], "--allow-win-d") == 0) {
+            cfg->allow_win_d = true;
+            continue;
+        }
+        if (_stricmp(argv[i], "--kiosk-process") == 0 && i + 1 < argc) {
+            MultiByteToWideChar(CP_UTF8, 0, argv[++i], -1, cfg->kiosk_process, MAX_PATH);
             continue;
         }
         if (_stricmp(argv[i], "--log") == 0 && i + 1 < argc) {

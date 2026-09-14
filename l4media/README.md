@@ -1,7 +1,8 @@
 # Подпроект `l4media`: Серверный Alpha-MVP для видеостримов L4RTP/1 и WebRTC
 
 > 📖 **Полная архитектурная спецификация:**  
-> Детальное описание архитектуры, матрицы портов, формата видеопотока и способов интеграции с `MenuBuilder` представлено в **[`ARCHITECTURE.md`](ARCHITECTURE.md)** и **[`docs/etran_arch-l4media-streaming-architecture.md`](../docs/etran_arch-l4media-streaming-architecture.md)**.
+> Детальное описание архитектуры, матрицы портов, формата видеопотока и способов интеграции с `MenuBuilder` представлено в **[`ARCHITECTURE.md`](ARCHITECTURE.md)** и **[`docs/etran_arch-l4media-streaming-architecture.md`](../docs/etran_arch-l4media-streaming-architecture.md)**.  
+> 📊 **Профилирование ресурсов, юнит-бюджеты и расчет емкости (480p vs 720p):** **[`docs/etran_arch-l4media-resource-profiling-and-unit-budgets.md`](../docs/etran_arch-l4media-resource-profiling-and-unit-budgets.md)**.
 
 Изолированный серверный программный стек для приёма видеостримов от терминалов под управлением `leo4proxy` (протокол **L4RTP/1**) через защищённый взаимный TLS (**mTLS**), демультиплексирования потоков по серийному номеру (**SN**) и ретрансляции в медиа-сервер **Janus Gateway** для последующей раздачи в WebRTC.
 

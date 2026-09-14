@@ -9,6 +9,7 @@ extern "C" {
 
 void log_init(const wchar_t* dest_dir);
 void log_close(void);
+void log_get_path(wchar_t* out_path, size_t out_size);
 
 void log_info(const char* fmt, ...);
 void log_warn(const char* fmt, ...);

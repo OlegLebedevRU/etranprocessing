@@ -10,13 +10,8 @@
 #include "cli.h"
 #include "log.h"
 #include "uac.h"
-#include "preflight.h"
-#include "drainage.h"
-#include "unpack.h"
-#include "services.h"
-#include "cert_phase.h"
-#include "smoke.h"
-#include "summary.h"
+#include "engine.h"
+#include "ui.h"
 
 static void init_console(void) {
     HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -74,6 +69,50 @@ static void determine_default_dest(wchar_t* out_dest, size_t max_len) {
     }
 }
 
+static void unattended_on_phase_change(SetupPhase phase, const char* phase_name, const char* status_text, void* user_data) {
+    UNREFERENCED_PARAMETER(phase);
+    UNREFERENCED_PARAMETER(user_data);
+    printf("[PHASE] %s: %s\n", phase_name, status_text);
+    fflush(stdout);
+}
+
+static void unattended_on_service_status(
+    int service_idx,
+    const wchar_t* svc_name,
+    ServiceLifecycleStatus status,
+    DWORD elapsed_sec,
+    const char* notice,
+    void* user_data
+) {
+    UNREFERENCED_PARAMETER(service_idx);
+    UNREFERENCED_PARAMETER(user_data);
+
+    const char* st_str = "PENDING";
+    switch (status) {
+        case SVC_STATUS_STARTING: st_str = "STARTING"; break;
+        case SVC_STATUS_RUNNING:  st_str = "RUNNING";  break;
+        case SVC_STATUS_STOPPING: st_str = "STOPPING"; break;
+        case SVC_STATUS_STOPPED:  st_str = "STOPPED";  break;
+        case SVC_STATUS_CHECKING: st_str = "CHECKING"; break;
+        case SVC_STATUS_READY:    st_str = "READY";    break;
+        case SVC_STATUS_FAILED:   st_str = "FAILED";   break;
+        default: break;
+    }
+
+    if (notice && notice[0]) {
+        wprintf(L"[SERVICE] %ls: %hs (%lus) - %hs\n", svc_name, st_str, elapsed_sec, notice);
+    } else {
+        wprintf(L"[SERVICE] %ls: %hs (%lus)\n", svc_name, st_str, elapsed_sec);
+    }
+    fflush(stdout);
+}
+
+static void unattended_on_notice(const char* notice_text, void* user_data) {
+    UNREFERENCED_PARAMETER(user_data);
+    printf("[NOTICE] %s\n", notice_text);
+    fflush(stdout);
+}
+
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(pCmdLine);
@@ -113,205 +152,77 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
     LocalFree(argv);
 
-    // 4. UAC Elevation Manager
+    // 4. Elevation Check: Product Exit Code 20 (Win32 ERROR_ACCESS_DENIED is 5)
+    // Never self-elevate or call runas
     if (!uac_is_elevated()) {
-        bool user_cancelled = false;
-        const wchar_t* args = uac_get_arguments(GetCommandLineW());
-        DWORD code = uac_relaunch_elevated(args, &user_cancelled);
-        if (user_cancelled) {
-            fprintf(stderr, "[ERROR] Administrator privileges are required to run l4setup (UAC elevation declined, code 20).\n");
-            return 20;
-        }
-        return (int)code;
+        fprintf(stderr, "Administrator privileges are required. No changes were made.\n");
+        return 20;
     }
 
-    // 5. Preflight Phase
-    PreflightInfo preflight;
-    preflight_check(&preflight);
-
-    if (!preflight.is_supported_os) {
-        fprintf(stderr, "[ERROR] Unsupported OS version: %s. Minimum required: Windows 7 SP1 (6.1+). Exit code 21.\n",
-                preflight.os_display_name);
-        return 21;
-    }
-
-    if (preflight.is_win7) {
-        preflight_configure_win7_tls12();
-    }
-
-    // 6. Resolve Destination directory
+    // 5. Resolve Destination directory
     if (!cli_opts.dest_specified) {
         determine_default_dest(cli_opts.dest, MAX_PATH);
     }
 
-    // Initialize logger
+    // 6. Initialize Logger
     log_init(cli_opts.dest);
 
     log_info("=================================================================");
     log_info("  Leo4 Zero-Touch Setup (l4setup) v%s", L4SETUP_VERSION_STRING);
     log_info("=================================================================");
-    log_info("OS:          %s", preflight.os_display_name);
-    log_info("Target Arch: %s", preflight.target_arch);
     log_info("Destination: %ls", cli_opts.dest);
-    log_info("Silent:      %s", cli_opts.silent ? "yes" : "no");
+    log_info("Mode:        %s", cli_opts.interactive ? "interactive" : (cli_opts.silent ? "silent" : "unattended"));
     log_info("Repair:      %s", cli_opts.repair ? "yes" : "no");
     log_info("Smoke Only:  %s", cli_opts.smoke_only ? "yes" : "no");
 
-    InstallSummaryData summary;
-    memset(&summary, 0, sizeof(summary));
-    strncpy_s(summary.installer_version, 32, L4SETUP_VERSION_STRING, _TRUNCATE);
-    strncpy_s(summary.os, 128, preflight.os_display_name, _TRUNCATE);
-    strncpy_s(summary.target_arch, 16, preflight.target_arch, _TRUNCATE);
-    wcsncpy_s(summary.dest, MAX_PATH, cli_opts.dest, _TRUNCATE);
-
-    if (!preflight.ucrtbase_present) {
-        summary_add_warning(&summary, "ucrtbase_missing");
-        log_warn("Universal C Runtime (ucrtbase.dll) is not installed in system directory.");
-    }
-
-    // 7. Handle --smoke-only mode
-    if (cli_opts.smoke_only) {
-        log_info("Executing in smoke-only mode...");
-        cert_info ci;
-        memset(&ci, 0, sizeof(ci));
-        cert_state cst = cert_discover(NULL, &ci);
-        summary.cert.state = cst;
-        summary.cert.reused = true;
-        strncpy_s(summary.cert.thumbprint, 64, ci.thumbprint_hex, _TRUNCATE);
-        strncpy_s(summary.cert.sn, 64, ci.sn, _TRUNCATE);
-        strncpy_s(summary.cert.not_after, 64, ci.not_after_utc, _TRUNCATE);
-
-        bool is_active = (cst == CERT_VALID && ci.has_private_key);
-        smoke_run_probes(cli_opts.dest, is_active, &summary.probes);
-
-        summary.exit_code = summary.probes.calculated_exit_code;
-        if (summary.exit_code == 0) {
-            strcpy_s(summary.status, sizeof(summary.status), "ready");
-        } else if (summary.exit_code == 12) {
-            strcpy_s(summary.status, sizeof(summary.status), "ready_with_warnings");
-        } else {
-            strcpy_s(summary.status, sizeof(summary.status), "failed");
-        }
-
-        summary_write_json(&summary, cli_opts.dest);
-        wchar_t summary_path[MAX_PATH];
-        swprintf_s(summary_path, MAX_PATH, L"%ls\\install_summary.json", cli_opts.dest);
-        state_patch_version(cli_opts.dest, L4SETUP_VERSION_STRING, summary_path);
-
-        log_info("Smoke-only run complete. Exit code: %d, Status: %s", summary.exit_code, summary.status);
-        log_close();
-        return summary.exit_code;
-    }
-
-    // 8. Configure Firewall rules
-    preflight_setup_firewall(cli_opts.dest);
-
-    // 9. Idempotency Check
-    bool is_idempotent = unpack_is_idempotent(cli_opts.dest, L4SETUP_VERSION_STRING);
-    if (is_idempotent && !cli_opts.repair) {
-        log_info("Version %s already installed and binaries verified intact.", L4SETUP_VERSION_STRING);
-        log_info("Skipping drainage, unpacking, and service registration (idempotent path).");
-    } else {
-        // Phase 1.4: Drainage
-        DrainageResult drainage_res;
-        if (!drainage_execute(cli_opts.dest, cli_opts.silent, &drainage_res)) {
-            if (drainage_res.active_stream_detected && cli_opts.silent) {
-                summary_add_warning(&summary, "active_stream");
-            }
-            summary.drainage = drainage_res;
-            summary.exit_code = 22;
-            strcpy_s(summary.status, sizeof(summary.status), "failed");
-            summary_write_json(&summary, cli_opts.dest);
-            log_err("Drainage failed. Aborting installation with exit code 22.");
+    // 7. Interactive vs Unattended execution
+    if (cli_opts.interactive) {
+        DWORD sess_id = 0;
+        ProcessIdToSessionId(GetCurrentProcessId(), &sess_id);
+        if (sess_id == 0) {
+            log_err("Interactive mode is not available in Session 0. Aborting.");
+            fprintf(stderr, "Error: Interactive mode is not available in Session 0 or non-interactive desktop.\n");
             log_close();
             cli_clean_pin(&cli_opts);
-            return 22;
-        }
-        summary.drainage = drainage_res;
-
-        // Phase 2.1: Unpack payload
-        if (!unpack_payload(cli_opts.dest, preflight.target_arch,
-                            cli_opts.payload_dir_specified ? cli_opts.payload_dir : NULL,
-                            L4SETUP_VERSION_STRING)) {
-            summary.exit_code = 23;
-            strcpy_s(summary.status, sizeof(summary.status), "failed");
-            summary_write_json(&summary, cli_opts.dest);
-            log_err("Payload unpacking failed. Aborting with exit code 23.");
-            log_close();
-            cli_clean_pin(&cli_opts);
-            return 23;
+            return 1;
         }
 
-        // Phase 2.2: Services and Environment
-        services_configure_environment(cli_opts.dest);
-        if (!services_ensure_all_registered(cli_opts.dest)) {
-            summary.exit_code = 24;
-            strcpy_s(summary.status, sizeof(summary.status), "failed");
-            summary_write_json(&summary, cli_opts.dest);
-            log_err("Service registration failed. Aborting with exit code 24.");
-            log_close();
-            cli_clean_pin(&cli_opts);
-            return 24;
-        }
-    }
-
-    // 10. Phase 3: Certificate Discovery & Provisioning
-    CertPhaseResult cert_res;
-    bool cert_phase_ok = cert_phase_execute(cli_opts.dest, &cli_opts, hInstance, &cert_res);
-    summary.cert = cert_res;
-    for (int w = 0; w < cert_res.warnings_count; w++) {
-        summary_add_warning(&summary, cert_res.warnings[w]);
-    }
-
-    if (!cert_phase_ok) {
-        // Fatal error during Phase 3 (code 25 or 26)
-        summary.exit_code = cert_res.exit_code;
-        strcpy_s(summary.status, sizeof(summary.status), cert_res.status);
-        summary_write_json(&summary, cli_opts.dest);
-        log_err("Phase 3 failed with exit code %d (%s). Aborting.", cert_res.exit_code, cert_res.status);
-        log_close();
+        int exit_code = ui_run_interactive_setup(hInstance, &cli_opts);
         cli_clean_pin(&cli_opts);
-        return cert_res.exit_code;
+        log_close();
+        return exit_code;
     }
 
-    // 11. Phase 4: Start services
-    services_start_all_in_order();
+    // 8. Unattended execution pipeline
+    SetupContext ctx;
+    memset(&ctx, 0, sizeof(SetupContext));
+    ctx.opts = &cli_opts;
+    ctx.hInstance = hInstance;
+    ctx.is_interactive = false;
 
-    // 12. Phase 5: Smoke Tests
-    bool is_active_status = (strcmp(cert_res.status, "ready") == 0);
-    smoke_run_probes(cli_opts.dest, is_active_status, &summary.probes);
+    ctx.on_phase_change = unattended_on_phase_change;
+    ctx.on_service_status = unattended_on_service_status;
+    ctx.on_notice = unattended_on_notice;
 
-    // 13. Determine final exit code & status
-    if (cert_res.exit_code == 10) {
-        summary.exit_code = 10;
-        strcpy_s(summary.status, sizeof(summary.status), "standby_waiting_pin");
-    } else if (cert_res.exit_code == 11) {
-        summary.exit_code = 11;
-        strcpy_s(summary.status, sizeof(summary.status), "ready_for_online");
-    } else if (summary.probes.critical_failed) {
-        summary.exit_code = 27;
-        strcpy_s(summary.status, sizeof(summary.status), "failed");
-    } else if (summary.probes.has_warnings) {
-        summary.exit_code = 12;
-        strcpy_s(summary.status, sizeof(summary.status), "ready_with_warnings");
-    } else {
-        summary.exit_code = 0;
-        strcpy_s(summary.status, sizeof(summary.status), "ready");
+    if (!engine_phase_check(&ctx)) {
+        int code = ctx.final_exit_code;
+        if (ctx.hMutex) {
+            CloseHandle(ctx.hMutex);
+            ctx.hMutex = NULL;
+        }
+        cli_clean_pin(&cli_opts);
+        log_close();
+        return code;
     }
 
-    // 14. Write install_summary.json and patch state.json
-    summary_write_json(&summary, cli_opts.dest);
+    int exit_code = engine_run_pipeline(&ctx);
 
-    wchar_t summary_path[MAX_PATH];
-    swprintf_s(summary_path, MAX_PATH, L"%ls\\install_summary.json", cli_opts.dest);
-    state_patch_version(cli_opts.dest, L4SETUP_VERSION_STRING, summary_path);
-
-    log_info("=================================================================");
-    log_info("  l4setup finished with exit code %d (status: %s)", summary.exit_code, summary.status);
-    log_info("=================================================================");
+    if (ctx.hMutex) {
+        CloseHandle(ctx.hMutex);
+        ctx.hMutex = NULL;
+    }
 
     cli_clean_pin(&cli_opts);
     log_close();
-
-    return summary.exit_code;
+    return exit_code;
 }

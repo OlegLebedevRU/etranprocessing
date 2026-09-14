@@ -151,6 +151,30 @@ export interface ClickResult {
   latency_ms?: number;
 }
 
+export function getNackMessage(code?: string, defaultMsg?: string): string {
+  switch (code) {
+    case "action_blocked_policy":
+      return "Действие запрещено настройками киоска";
+    case "action_blocked_winlogon_guard":
+      return "Действие отклонено: небезопасное или изменившееся активное окно";
+    case "desktop_locked":
+      return "Рабочий стол заблокирован. Удалённый ввод недоступен.";
+    case "session_unavailable":
+      return "Сессия пользователя недоступна. Удалённый ввод отключён.";
+    case "insufficient_integrity":
+      return "Недостаточный уровень прав для выполнения действия.";
+    case "input_injection_failed":
+    case "ack_timeout":
+      return "Результат ввода не подтвержден. Проверьте изображение перед повторным действием.";
+    case "invalid_payload":
+      return "Некорректные параметры команды.";
+    case "expired":
+      return "Срок действия команды истёк.";
+    default:
+      return defaultMsg || "Команда отклонена терминалом";
+  }
+}
+
 export type ControlWsOutbound =
   | { type: "hello"; v: number }
   | {
@@ -171,12 +195,12 @@ export type ControlWsOutbound =
       reason?: string;
     }
   | {
-      type: "click_result";
+      type: "click_result" | "action_result";
       command_id?: string;
       lease_id?: string;
       sn?: string;
       client_ref?: string;
-      result: "injected" | "nack";
+      result: "injected" | "nack" | "unconfirmed";
       code?: string;
       message?: string;
       latency_ms?: number;
@@ -199,10 +223,17 @@ export interface ControlWsKey {
   client_ref?: string;
 }
 
+export interface ControlWsShortcut {
+  type: "shortcut_action";
+  action: "f12" | "alt_f4" | "win_d";
+  client_ref?: string;
+}
+
 export type ControlWsInbound =
   | { type: "pointer_move"; x: number; y: number }
-  | { type: "mouse_click"; x: number; y: number; button: "left"; client_ref?: string }
+  | { type: "mouse_click"; x: number; y: number; button?: "left" | "right"; client_ref?: string }
   | ControlWsKey
+  | ControlWsShortcut
   | { type: "keepalive" }
   | { type: "release" };
 
@@ -299,10 +330,29 @@ export async function sendControlEvent(
   deviceId: number,
   event:
     | { lease_id: string; type: "pointer_move"; x: number; y: number }
-    | { lease_id: string; type: "mouse_click"; x: number; y: number; button?: "left"; client_ref?: string }
+    | { lease_id: string; type: "mouse_click"; x: number; y: number; button?: "left" | "right"; client_ref?: string }
     | { lease_id: string; type: "key" | "key_event"; kind: "down" | "up" | "press"; vk: number; text?: string; client_ref?: string }
+    | { lease_id: string; type: "shortcut_action"; action: "f12" | "alt_f4" | "win_d"; client_ref?: string }
 ): Promise<any> {
   const { data } = await client.post(`/v1/video/devices/${deviceId}/control/events`, event);
+  return data;
+}
+
+export async function sendControlShortcut(
+  deviceId: number,
+  leaseId: string,
+  action: "f12" | "alt_f4" | "win_d",
+  clientRef?: string
+): Promise<ClickResult> {
+  const { data } = await client.post<ClickResult>(
+    `/v1/video/devices/${deviceId}/control/events`,
+    {
+      lease_id: leaseId,
+      type: "shortcut_action",
+      action,
+      client_ref: clientRef,
+    }
+  );
   return data;
 }
 

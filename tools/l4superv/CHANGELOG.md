@@ -2,6 +2,12 @@
 
 All notable changes to the `l4superv` and `l4install` suite will be documented in this file.
 
+## [1.7.2] - 2026-09-14
+
+### Changed & Improved
+- Версионирование синхронизировано до 1.7.2.
+- Завершение службы l4superv и дочерних процессов производится через сигналы SCM и событие `Global\L4Desk_Stop_<SN>`, завершающее Job Object и дочерние процессы без использования taskkill.
+
 ## [1.7.1] - 2026-09-13
 
 ### Changed

@@ -1,17 +1,24 @@
-import React from "react";
-import { Button, Card, Collapse, Popconfirm, Space, Tag, theme, Tooltip, Typography } from "antd";
+import React, { useState } from "react";
 import {
+  Button,
+  Popconfirm,
+  Space,
+  Switch,
+  Tag,
+  theme,
+  Tooltip,
+  Typography,
+} from "antd";
+import {
+  CloseCircleOutlined,
   DesktopOutlined,
   EnterOutlined,
-  KeyOutlined,
-  LockOutlined,
-  PoweroffOutlined,
-  SafetyCertificateOutlined,
   StopOutlined,
   ThunderboltOutlined,
+  ToolOutlined,
   WindowsOutlined,
 } from "@ant-design/icons";
-import type { ControlAgentStatus, ControlLease } from "../../api/video";
+import type { ClickResult, ControlAgentStatus, ControlLease } from "../../api/video";
 import type { RemoteControlStatus } from "../../hooks/useRemoteControl";
 
 const { Text } = Typography;
@@ -24,9 +31,12 @@ export interface RemoteControlPanelProps {
   isSessionActive: boolean;
   isCameraMode: boolean;
   isTerminalOnline: boolean;
+  selectedProfile?: string;
   onEnableControl: () => void;
   onDisableControl: () => void;
-  onSendKey: (kind: "down" | "up" | "press", vk: number, text?: string) => boolean | Promise<any>;
+  onSendShortcut?: (action: "f12" | "alt_f4" | "win_d") => Promise<any>;
+  onSendKey?: (kind: "down" | "up" | "press", vk: number, text?: string) => boolean | Promise<any>;
+  lastCommandResult?: ClickResult | null;
   isMobile?: boolean;
 }
 
@@ -38,12 +48,16 @@ export const RemoteControlPanel: React.FC<RemoteControlPanelProps> = ({
   isSessionActive,
   isCameraMode,
   isTerminalOnline,
+  selectedProfile,
   onEnableControl,
   onDisableControl,
+  onSendShortcut,
   onSendKey,
+  lastCommandResult,
   isMobile = false,
 }) => {
   const { token } = theme.useToken();
+  const [maintenanceAllowed, setMaintenanceAllowed] = useState(false);
 
   const isControlActive = rcStatus === "active";
   const isAcquiring = rcStatus === "acquiring";
@@ -58,6 +72,8 @@ export const RemoteControlPanel: React.FC<RemoteControlPanelProps> = ({
     disabledReason = "Запустите видеотрансляцию для включения удалённого управления.";
   } else if (isCameraMode) {
     disabledReason = "Управление недоступно в режиме камеры. Переключитесь на рабочий стол.";
+  } else if (selectedProfile && selectedProfile !== "low" && selectedProfile !== "480p") {
+    disabledReason = "Удалённое управление разрешено только в режиме качества 480p (Эконом).";
   } else if (!isAgentOnline) {
     disabledReason = "Агент удалённого управления l4desk на терминале не отвечает.";
   } else if (!isDesktopAvailable) {
@@ -68,41 +84,19 @@ export const RemoteControlPanel: React.FC<RemoteControlPanelProps> = ({
 
   const canEnable = !disabledReason && !isControlActive && !isAcquiring;
 
-  // Безопасная отправка нажатия функциональных клавиш
-  const handleKeyPress = (vk: number, label: string) => {
-    if (!isControlActive) return;
+  // Безопасная отправка нажатия базовых функциональных клавиш
+  const handleKeyPress = (vk: number) => {
+    if (!isControlActive || !onSendKey) return;
     onSendKey("down", vk);
     setTimeout(() => {
       onSendKey("up", vk);
     }, 50);
   };
 
-  // Комбинация Win + D (Свернуть все окна)
-  const handleWinD = () => {
-    if (!isControlActive) return;
-    onSendKey("down", 91); // VK_LWIN
-    onSendKey("down", 68); // 'D'
-    setTimeout(() => {
-      onSendKey("up", 68);
-      onSendKey("up", 91);
-    }, 60);
-  };
-
-  // Комбинация Ctrl + Alt + Del
-  const handleCtrlAltDel = () => {
-    if (!isControlActive) return;
-    onSendKey("down", 17); // VK_CONTROL
-    onSendKey("down", 18); // VK_MENU (Alt)
-    onSendKey("down", 46); // VK_DELETE
-    setTimeout(() => {
-      onSendKey("up", 46);
-      onSendKey("up", 18);
-      onSendKey("up", 17);
-    }, 80);
-  };
-
   return (
     <div
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
       style={{
         padding: "14px 16px",
         borderRadius: 8,
@@ -156,7 +150,7 @@ export const RemoteControlPanel: React.FC<RemoteControlPanelProps> = ({
 
           <Text type="secondary" style={{ fontSize: 12 }}>
             {isControlActive
-              ? "Управление активно: клики мышью по видео передаются на рабочий стол терминала."
+              ? "Управление активно (480p): клики мышью по видео передаются на рабочий стол терминала."
               : disabledReason || "Активируйте режим управления для отправки мыши и клавиатуры."}
           </Text>
         </div>
@@ -173,7 +167,7 @@ export const RemoteControlPanel: React.FC<RemoteControlPanelProps> = ({
               Отключить управление
             </Button>
           ) : (
-            <Tooltip title={disabledReason || "Запросить эксклюзивный доступ к вводу на терминале"}>
+            <Tooltip title={disabledReason || "Запросить эксклюзивный доступ к вводу на терминале (режим 480p)"}>
               <span>
                 <Button
                   type="default"
@@ -205,22 +199,112 @@ export const RemoteControlPanel: React.FC<RemoteControlPanelProps> = ({
           pointerEvents: isControlActive ? "auto" : "none",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
           <Text strong style={{ fontSize: 11, textTransform: "uppercase", color: token.colorTextTertiary }}>
-            Быстрые клавиши терминала
+            Быстрые действия и клавиши
           </Text>
-          {!isControlActive && (
-            <Text type="secondary" style={{ fontSize: 11 }}>
-              (Доступно при активном управлении)
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <Switch
+              size="small"
+              checked={maintenanceAllowed}
+              onChange={setMaintenanceAllowed}
+              disabled={!isControlActive}
+            />
+            <Text style={{ fontSize: 11, color: maintenanceAllowed ? token.colorWarningText : token.colorTextSecondary }}>
+              Профиль обслуживания
             </Text>
-          )}
+          </div>
         </div>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+          {/* F12 Shortcut */}
+          <Tooltip title="Отправить F12 (для проверенного профиля приложения киоска; не гарантирует открытие консоли на всех терминалах)">
+            <Button
+              size="small"
+              icon={<ToolOutlined />}
+              onClick={() => onSendShortcut?.("f12")}
+              disabled={!isControlActive}
+              style={{ minHeight: isMobile ? 38 : "auto" }}
+            >
+              F12
+            </Button>
+          </Tooltip>
+
+          {/* Alt+F4 Shortcut with Browser Confirmation */}
+          {maintenanceAllowed ? (
+            <Popconfirm
+              title="Закрыть разрешенное активное окно? Это может прервать его работу."
+              description="Подтверждение оператора в браузере. Действие проверяется политикой киоска."
+              okText="Закрыть окно"
+              cancelText="Отмена"
+              okButtonProps={{ danger: true }}
+              onConfirm={() => onSendShortcut?.("alt_f4")}
+              disabled={!isControlActive}
+            >
+              <Button
+                size="small"
+                danger
+                icon={<CloseCircleOutlined />}
+                disabled={!isControlActive}
+                style={{ minHeight: isMobile ? 38 : "auto" }}
+              >
+                Alt + F4
+              </Button>
+            </Popconfirm>
+          ) : (
+            <Tooltip title="Alt+F4 отключён по умолчанию на киоске для защиты от выхода из приложения. Требуется подтверждённый профиль обслуживания.">
+              <span>
+                <Button
+                  size="small"
+                  disabled
+                  icon={<CloseCircleOutlined />}
+                  style={{ minHeight: isMobile ? 38 : "auto" }}
+                >
+                  Alt + F4
+                </Button>
+              </span>
+            </Tooltip>
+          )}
+
+          {/* Win+D Shortcut with Browser Confirmation */}
+          {maintenanceAllowed ? (
+            <Popconfirm
+              title="Свернуть окна и показать рабочий стол?"
+              description="Подтверждение оператора в браузере. Действие проверяется политикой киоска."
+              okText="Свернуть окна"
+              cancelText="Отмена"
+              onConfirm={() => onSendShortcut?.("win_d")}
+              disabled={!isControlActive}
+            >
+              <Button
+                size="small"
+                icon={<WindowsOutlined />}
+                disabled={!isControlActive}
+                style={{ minHeight: isMobile ? 38 : "auto" }}
+              >
+                Win + D
+              </Button>
+            </Popconfirm>
+          ) : (
+            <Tooltip title="Win+D отключён по умолчанию на киоске для защиты от выхода из приложения. Требуется подтверждённый профиль обслуживания.">
+              <span>
+                <Button
+                  size="small"
+                  disabled
+                  icon={<WindowsOutlined />}
+                  style={{ minHeight: isMobile ? 38 : "auto" }}
+                >
+                  Win + D
+                </Button>
+              </span>
+            </Tooltip>
+          )}
+
+          {/* Базовые клавиши навигации */}
           <Button
             size="small"
             icon={<EnterOutlined />}
-            onClick={() => handleKeyPress(13, "Enter")}
+            onClick={() => handleKeyPress(13)}
             disabled={!isControlActive}
             style={{ minHeight: isMobile ? 38 : "auto" }}
           >
@@ -229,7 +313,7 @@ export const RemoteControlPanel: React.FC<RemoteControlPanelProps> = ({
 
           <Button
             size="small"
-            onClick={() => handleKeyPress(27, "Esc")}
+            onClick={() => handleKeyPress(27)}
             disabled={!isControlActive}
             style={{ minHeight: isMobile ? 38 : "auto" }}
           >
@@ -238,7 +322,7 @@ export const RemoteControlPanel: React.FC<RemoteControlPanelProps> = ({
 
           <Button
             size="small"
-            onClick={() => handleKeyPress(9, "Tab")}
+            onClick={() => handleKeyPress(9)}
             disabled={!isControlActive}
             style={{ minHeight: isMobile ? 38 : "auto" }}
           >
@@ -247,54 +331,53 @@ export const RemoteControlPanel: React.FC<RemoteControlPanelProps> = ({
 
           <Button
             size="small"
-            onClick={() => handleKeyPress(32, "Space")}
+            onClick={() => handleKeyPress(32)}
             disabled={!isControlActive}
             style={{ minHeight: isMobile ? 38 : "auto" }}
           >
             Пробел
           </Button>
-
-          <Tooltip title="Свернуть все окна на рабочем столе (Win + D)">
-            <Button
-              size="small"
-              icon={<WindowsOutlined />}
-              onClick={handleWinD}
-              disabled={!isControlActive}
-              style={{ minHeight: isMobile ? 38 : "auto" }}
-            >
-              Win + D
-            </Button>
-          </Tooltip>
-
-          <Button
-            size="small"
-            onClick={() => handleKeyPress(116, "F5")}
-            disabled={!isControlActive}
-            style={{ minHeight: isMobile ? 38 : "auto" }}
-          >
-            F5 (Обновить)
-          </Button>
-
-          {/* Безопасное действие с подтверждением через Popconfirm */}
-          <Popconfirm
-            title="Отправка комбинации клавиш"
-            description="Отправить системную комбинацию Ctrl + Alt + Del на терминал?"
-            okText="Отправить"
-            cancelText="Отмена"
-            onConfirm={handleCtrlAltDel}
-            disabled={!isControlActive}
-          >
-            <Button
-              size="small"
-              danger
-              icon={<SafetyCertificateOutlined />}
-              disabled={!isControlActive}
-              style={{ minHeight: isMobile ? 38 : "auto", marginLeft: "auto" }}
-            >
-              Ctrl + Alt + Del
-            </Button>
-          </Popconfirm>
         </div>
+
+        {/* Компактный статус последней команды */}
+        {lastCommandResult && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 12,
+              marginTop: 4,
+              paddingTop: 6,
+              borderTop: `1px dashed ${token.colorBorderSecondary}`,
+              flexWrap: "wrap",
+            }}
+          >
+            <Text type="secondary" style={{ fontSize: 11 }}>
+              Последняя команда:
+            </Text>
+            <Tag
+              color={
+                lastCommandResult.result === "injected"
+                  ? "success"
+                  : lastCommandResult.result === "unconfirmed"
+                  ? "warning"
+                  : "error"
+              }
+              style={{ margin: 0, fontSize: 11 }}
+            >
+              {lastCommandResult.result === "injected"
+                ? "Ввод передан"
+                : lastCommandResult.result === "unconfirmed"
+                ? "Не подтверждено"
+                : "Отклонено"}
+            </Tag>
+            <Text type="secondary" style={{ fontSize: 11 }}>
+              {lastCommandResult.message || (lastCommandResult.code ? `Код: ${lastCommandResult.code}` : "")}
+              {typeof lastCommandResult.latency_ms === "number" ? ` (${lastCommandResult.latency_ms} мс)` : ""}
+            </Text>
+          </div>
+        )}
       </div>
     </div>
   );

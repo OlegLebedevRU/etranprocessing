@@ -211,25 +211,13 @@ static bool extract_zip_resource(const wchar_t* res_name, const wchar_t* dest_di
 bool unpack_is_idempotent(const wchar_t* dest_dir, const char* current_version) {
     if (!dest_dir || !current_version) return false;
 
-    wchar_t state_path[MAX_PATH];
-    swprintf_s(state_path, MAX_PATH, L"%s\\state.json", dest_dir);
-    if (!file_exists(state_path)) return false;
+    char installed_ver[64] = { 0 };
+    if (!unpack_read_installed_version(dest_dir, installed_ver, sizeof(installed_ver))) {
+        return false;
+    }
 
-    // Read state.json to find installed_version
-    FILE* fp = NULL;
-    if (_wfopen_s(&fp, state_path, L"r") != 0 || !fp) return false;
-
-    char buf[4096] = { 0 };
-    fread(buf, 1, sizeof(buf) - 1, fp);
-    fclose(fp);
-
-    char search_pattern[128];
-    snprintf(search_pattern, sizeof(search_pattern), "\"installed_version\": \"%s\"", current_version);
-    if (!strstr(buf, search_pattern)) {
-        snprintf(search_pattern, sizeof(search_pattern), "\"installed_version\":\"%s\"", current_version);
-        if (!strstr(buf, search_pattern)) {
-            return false;
-        }
+    if (version_compare(installed_ver, current_version) != 0) {
+        return false;
     }
 
     // Verify key executables are present
@@ -249,6 +237,249 @@ bool unpack_is_idempotent(const wchar_t* dest_dir, const char* current_version) 
         if (!file_exists(exe)) return false;
     }
 
+    return true;
+}
+
+int version_compare(const char* v1, const char* v2) {
+    if (!v1 && !v2) return 0;
+    if (!v1) return -1;
+    if (!v2) return 1;
+
+    int p1[4] = { 0, 0, 0, 0 };
+    int p2[4] = { 0, 0, 0, 0 };
+
+    sscanf_s(v1, "%d.%d.%d.%d", &p1[0], &p1[1], &p1[2], &p1[3]);
+    sscanf_s(v2, "%d.%d.%d.%d", &p2[0], &p2[1], &p2[2], &p2[3]);
+
+    for (int i = 0; i < 4; i++) {
+        if (p1[i] < p2[i]) return -1;
+        if (p1[i] > p2[i]) return 1;
+    }
+    return 0;
+}
+
+bool unpack_read_installed_version(const wchar_t* dest_dir, char* out_version, size_t out_size) {
+    if (!dest_dir || !out_version || out_size == 0) return false;
+    out_version[0] = '\0';
+
+    wchar_t state_file[MAX_PATH];
+    swprintf_s(state_file, MAX_PATH, L"%ls\\state.json", dest_dir);
+    if (!file_exists(state_file)) return false;
+
+    FILE* fp = NULL;
+    if (_wfopen_s(&fp, state_file, L"rb") != 0 || !fp) return false;
+
+    char buf[4096] = { 0 };
+    size_t n = fread(buf, 1, sizeof(buf) - 1, fp);
+    fclose(fp);
+    if (n == 0) return false;
+
+    const char* key = "\"installed_version\":";
+    const char* p = strstr(buf, key);
+    if (!p) {
+        key = "\"installed_version\" :";
+        p = strstr(buf, key);
+    }
+    if (!p) return false;
+
+    p = strchr(p, ':');
+    if (!p) return false;
+    p = strchr(p, '"');
+    if (!p) return false;
+    p++; // Skip opening quote
+
+    size_t idx = 0;
+    while (*p && *p != '"' && idx + 1 < out_size) {
+        out_version[idx++] = *p++;
+    }
+    out_version[idx] = '\0';
+    return (idx > 0);
+}
+
+bool unpack_has_incomplete_marker(const wchar_t* dest_dir, char* out_phase, size_t out_phase_size) {
+    if (!dest_dir) return false;
+    if (out_phase && out_phase_size > 0) out_phase[0] = '\0';
+
+    wchar_t marker_path[MAX_PATH];
+    swprintf_s(marker_path, MAX_PATH, L"%ls\\.install_in_progress.json", dest_dir);
+    if (!file_exists(marker_path)) return false;
+
+    if (out_phase && out_phase_size > 0) {
+        FILE* fp = NULL;
+        if (_wfopen_s(&fp, marker_path, L"r") == 0 && fp) {
+            char buf[512] = { 0 };
+            fread(buf, 1, sizeof(buf) - 1, fp);
+            fclose(fp);
+            const char* p = strstr(buf, "\"phase\":");
+            if (p) {
+                p = strchr(p, ':');
+                if (p) p = strchr(p, '"');
+                if (p) {
+                    p++;
+                    size_t idx = 0;
+                    while (*p && *p != '"' && idx + 1 < out_phase_size) {
+                        out_phase[idx++] = *p++;
+                    }
+                    out_phase[idx] = '\0';
+                }
+            }
+        }
+    }
+    return true;
+}
+
+bool unpack_set_incomplete_marker(const wchar_t* dest_dir, const char* phase, const char* old_ver, const char* target_ver) {
+    if (!dest_dir) return false;
+
+    wchar_t marker_path[MAX_PATH];
+    swprintf_s(marker_path, MAX_PATH, L"%ls\\.install_in_progress.json", dest_dir);
+
+    FILE* fp = NULL;
+    if (_wfopen_s(&fp, marker_path, L"wb") != 0 || !fp) return false;
+
+    fprintf(fp, "{\n  \"phase\": \"%s\",\n  \"old_version\": \"%s\",\n  \"target_version\": \"%s\"\n}\n",
+            phase ? phase : "update",
+            old_ver ? old_ver : "none",
+            target_ver ? target_ver : "unknown");
+    fflush(fp);
+    fclose(fp);
+    return true;
+}
+
+bool unpack_clear_incomplete_marker(const wchar_t* dest_dir) {
+    if (!dest_dir) return false;
+    wchar_t marker_path[MAX_PATH];
+    swprintf_s(marker_path, MAX_PATH, L"%ls\\.install_in_progress.json", dest_dir);
+    SetFileAttributesW(marker_path, FILE_ATTRIBUTE_NORMAL);
+    DeleteFileW(marker_path);
+    return true;
+}
+
+bool unpack_check_files_locked(const wchar_t* dest_dir, DWORD wait_timeout_ms) {
+    if (!dest_dir) return true;
+
+    const wchar_t* bins[] = {
+        L"leo4proxy\\leo4proxy.exe",
+        L"mosquitto\\mosquitto.exe",
+        L"l4con\\l4con.exe",
+        L"l4superv\\l4superv.exe",
+        L"l4pin\\l4pin.exe",
+        L"l4desk\\l4desk.exe",
+        L"ffmpeg\\ffmpeg.exe"
+    };
+
+    ULONGLONG start = GetTickCount64();
+    while (true) {
+        bool any_locked = false;
+        for (int i = 0; i < (int)(sizeof(bins)/sizeof(bins[0])); i++) {
+            wchar_t path[MAX_PATH];
+            swprintf_s(path, MAX_PATH, L"%ls\\%ls", dest_dir, bins[i]);
+            if (!file_exists(path)) continue;
+
+            HANDLE hFile = CreateFileW(path, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+            if (hFile == INVALID_HANDLE_VALUE) {
+                DWORD err = GetLastError();
+                if (err == ERROR_SHARING_VIOLATION || err == ERROR_LOCK_VIOLATION || err == ERROR_ACCESS_DENIED) {
+                    any_locked = true;
+                    break;
+                }
+            } else {
+                CloseHandle(hFile);
+            }
+        }
+
+        if (!any_locked) return true;
+
+        if ((GetTickCount64() - start) >= wait_timeout_ms) {
+            log_err("Target executable files in %ls are locked by running processes.", dest_dir);
+            return false;
+        }
+
+        Sleep(500);
+    }
+}
+
+bool unpack_rollback(const wchar_t* dest_dir, const char* prev_version) {
+    if (!dest_dir || !prev_version || prev_version[0] == '\0') return false;
+
+    wchar_t rollback_dir[MAX_PATH];
+    swprintf_s(rollback_dir, MAX_PATH, L"%ls\\rollback\\%S", dest_dir, prev_version);
+    if (!dir_exists(rollback_dir)) {
+        log_warn("Rollback directory %ls does not exist; cannot restore.", rollback_dir);
+        return false;
+    }
+
+    log_info("Rolling back files from %ls to %ls...", rollback_dir, dest_dir);
+
+    const wchar_t* subdirs[] = {
+        L"leo4proxy",
+        L"mosquitto",
+        L"l4con",
+        L"l4superv",
+        L"l4pin",
+        L"l4desk",
+        L"ffmpeg",
+        L"l4sql"
+    };
+
+    for (int i = 0; i < (int)(sizeof(subdirs)/sizeof(subdirs[0])); i++) {
+        wchar_t roll_sub[MAX_PATH];
+        wchar_t cur_sub[MAX_PATH];
+        swprintf_s(roll_sub, MAX_PATH, L"%ls\\%ls", rollback_dir, subdirs[i]);
+        swprintf_s(cur_sub, MAX_PATH, L"%ls\\%ls", dest_dir, subdirs[i]);
+
+        if (dir_exists(roll_sub)) {
+            recursive_delete(cur_sub);
+            MoveFileExW(roll_sub, cur_sub, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+        }
+    }
+
+    log_info("Rollback completed.");
+    return true;
+}
+
+bool unpack_recover_from_crash(const wchar_t* dest_dir) {
+    if (!dest_dir) return false;
+
+    char phase[64] = { 0 };
+    if (!unpack_has_incomplete_marker(dest_dir, phase, sizeof(phase))) {
+        return false; // No crash marker
+    }
+
+    log_warn("Detected interrupted previous installation (phase: %s)! Initiating crash recovery...", phase);
+
+    // Read old_version from marker
+    wchar_t marker_path[MAX_PATH];
+    swprintf_s(marker_path, MAX_PATH, L"%ls\\.install_in_progress.json", dest_dir);
+
+    char old_ver[64] = "prev";
+    FILE* fp = NULL;
+    if (_wfopen_s(&fp, marker_path, L"r") == 0 && fp) {
+        char buf[512] = { 0 };
+        fread(buf, 1, sizeof(buf) - 1, fp);
+        fclose(fp);
+        const char* p = strstr(buf, "\"old_version\":");
+        if (p) {
+            p = strchr(p, ':');
+            if (p) p = strchr(p, '"');
+            if (p) {
+                p++;
+                size_t idx = 0;
+                while (*p && *p != '"' && idx + 1 < sizeof(old_ver)) {
+                    old_ver[idx++] = *p++;
+                }
+                old_ver[idx] = '\0';
+            }
+        }
+    }
+
+    // Attempt rollback
+    unpack_rollback(dest_dir, old_ver);
+
+    // Clear marker
+    unpack_clear_incomplete_marker(dest_dir);
+
+    log_info("Crash recovery completed successfully.");
     return true;
 }
 
@@ -393,6 +624,16 @@ bool unpack_payload(
         has_user_mosq_conf = true;
     }
 
+    // Check that target files in dest_dir are not locked
+    if (!unpack_check_files_locked(dest_dir, 10000)) {
+        log_err("Files in %ls are still locked by another process. Aborting update.", dest_dir);
+        recursive_delete(staging_dir);
+        return false;
+    }
+
+    // Set incomplete installation marker before modifying live files
+    unpack_set_incomplete_marker(dest_dir, "update", prev_version, current_version);
+
     // 6. Atomically swap subdirectories
     const wchar_t* subdirs[] = {
         L"leo4proxy",
@@ -405,6 +646,7 @@ bool unpack_payload(
         L"l4sql"
     };
 
+    bool swap_failed = false;
     for (int i = 0; i < (int)(sizeof(subdirs)/sizeof(subdirs[0])); i++) {
         wchar_t cur_sub[MAX_PATH];
         wchar_t roll_sub[MAX_PATH];
@@ -415,12 +657,27 @@ bool unpack_payload(
         swprintf_s(stg_sub, MAX_PATH, L"%ls\\%ls", staging_dir, subdirs[i]);
 
         if (dir_exists(cur_sub)) {
-            MoveFileExW(cur_sub, roll_sub, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+            if (!MoveFileExW(cur_sub, roll_sub, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+                log_err("Failed to move %ls to rollback %ls (error %lu)", cur_sub, roll_sub, GetLastError());
+                swap_failed = true;
+                break;
+            }
         }
 
         if (dir_exists(stg_sub)) {
-            MoveFileExW(stg_sub, cur_sub, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+            if (!MoveFileExW(stg_sub, cur_sub, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+                log_err("Failed to move %ls to dest %ls (error %lu)", stg_sub, cur_sub, GetLastError());
+                swap_failed = true;
+                break;
+            }
         }
+    }
+
+    if (swap_failed) {
+        log_err("File swap failed. Initiating automatic rollback...");
+        unpack_rollback(dest_dir, prev_version);
+        recursive_delete(staging_dir);
+        return false;
     }
 
     // Restore user mosquitto.conf if previously existed

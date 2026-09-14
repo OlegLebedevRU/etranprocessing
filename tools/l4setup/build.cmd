@@ -48,7 +48,7 @@ if errorlevel 1 (
 
 echo.
 echo [2/2] Compiling and linking l4setup.exe (x86 /MT /SUBSYSTEM:WINDOWS,6.01)...
-cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && cl.exe /nologo /O2 /MT /W4 /wd4100 /wd4127 /wd4244 /wd4702 /wd4706 /utf-8 /DWIN32_LEAN_AND_MEAN /D_WINSOCK_DEPRECATED_NO_WARNINGS /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /I res /I ..\l4pin\src /I ..\l4superv\src /Foobj\ src\main.c src\cli.c src\log.c src\uac.c src\preflight.c src\drainage.c src\unpack.c src\services.c src\cert_phase.c src\smoke.c src\summary.c ..\l4pin\src\cert_discovery.c ..\l4superv\src\hardware_fingerprint.c ..\l4superv\src\miniz.c obj\l4setup.res /link /SUBSYSTEM:WINDOWS,6.01 /OUT:bin\l4setup.exe kernel32.lib user32.lib gdi32.lib shell32.lib advapi32.lib crypt32.lib ncrypt.lib winhttp.lib ws2_32.lib iphlpapi.lib shlwapi.lib wtsapi32.lib ole32.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && cl.exe /nologo /O2 /MT /W4 /wd4100 /wd4127 /wd4244 /wd4702 /wd4706 /utf-8 /DWIN32_LEAN_AND_MEAN /D_WINSOCK_DEPRECATED_NO_WARNINGS /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /I res /I ..\l4pin\src /I ..\l4superv\src /Foobj\ src\main.c src\cli.c src\log.c src\uac.c src\preflight.c src\drainage.c src\unpack.c src\services.c src\cert_phase.c src\smoke.c src\summary.c src\engine.c src\ui.c ..\l4pin\src\cert_discovery.c ..\l4superv\src\hardware_fingerprint.c ..\l4superv\src\miniz.c obj\l4setup.res /link /SUBSYSTEM:WINDOWS,6.01 /OUT:bin\l4setup.exe kernel32.lib user32.lib gdi32.lib shell32.lib advapi32.lib crypt32.lib ncrypt.lib winhttp.lib ws2_32.lib iphlpapi.lib shlwapi.lib wtsapi32.lib ole32.lib"
 if errorlevel 1 (
     echo [ERROR] Compilation failed!
     exit /b 1

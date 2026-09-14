@@ -69,15 +69,31 @@ bool summary_write_json(const InstallSummaryData* data, const wchar_t* dest_dir)
     char not_after_iso[64] = { 0 };
     format_not_after_iso(data->cert.not_after, not_after_iso, sizeof(not_after_iso));
 
+    char log_escaped[MAX_PATH * 4] = { 0 };
+    escape_json_path(data->log_path, log_escaped, sizeof(log_escaped));
+
     fprintf(fp, "{\n");
     fprintf(fp, "  \"schema\": 1,\n");
     fprintf(fp, "  \"timestamp\": \"%s\",\n", ts);
     fprintf(fp, "  \"installer_version\": \"%s\",\n", data->installer_version);
+    fprintf(fp, "  \"installed_version\": \"%s\",\n", data->installed_version[0] ? data->installed_version : data->installer_version);
     fprintf(fp, "  \"os\": \"%s\",\n", data->os);
     fprintf(fp, "  \"target_arch\": \"%s\",\n", data->target_arch);
     fprintf(fp, "  \"dest\": \"%s\",\n", dest_escaped);
     fprintf(fp, "  \"status\": \"%s\",\n", data->status);
     fprintf(fp, "  \"exit_code\": %d,\n", data->exit_code);
+    fprintf(fp, "  \"phase\": \"%s\",\n", data->phase[0] ? data->phase : "finish");
+    fprintf(fp, "  \"error_reason\": \"%s\",\n", data->error_reason);
+    fprintf(fp, "  \"rollback\": \"%s\",\n", data->rollback[0] ? data->rollback : "none");
+    fprintf(fp, "  \"log_path\": \"%s\",\n", log_escaped);
+
+    // services
+    fprintf(fp, "  \"services\": {\n");
+    fprintf(fp, "    \"leo4proxy\": \"%s\",\n", data->service_leo4proxy[0] ? data->service_leo4proxy : "running");
+    fprintf(fp, "    \"mosquitto\": \"%s\",\n", data->service_mosquitto[0] ? data->service_mosquitto : "running");
+    fprintf(fp, "    \"l4con\": \"%s\",\n", data->service_l4con[0] ? data->service_l4con : "running");
+    fprintf(fp, "    \"l4superv\": \"%s\"\n", data->service_l4superv[0] ? data->service_l4superv : "running");
+    fprintf(fp, "  },\n");
 
     // cert
     fprintf(fp, "  \"cert\": {\n");
@@ -117,7 +133,9 @@ bool summary_write_json(const InstallSummaryData* data, const wchar_t* dest_dir)
     fprintf(fp, "    \"user_session_id\": %d,\n", data->probes.user_session_id);
     fprintf(fp, "    \"l4desk_running\": %s,\n", data->probes.l4desk_running ? "true" : "false");
     fprintf(fp, "    \"ffmpeg_smoke_capture\": \"%s\",\n", data->probes.ffmpeg_smoke_capture[0] ? data->probes.ffmpeg_smoke_capture : "ok");
-    fprintf(fp, "    \"desktop_locked\": %s\n", data->probes.desktop_locked ? "true" : "false");
+    fprintf(fp, "    \"desktop_locked\": %s,\n", data->probes.desktop_locked ? "true" : "false");
+    fprintf(fp, "    \"network\": \"%s\",\n", data->probes.network[0] ? data->probes.network : "reachable");
+    fprintf(fp, "    \"remote_input\": \"%s\"\n", data->probes.remote_input[0] ? data->probes.remote_input : "available");
     fprintf(fp, "  },\n");
 
     // warnings

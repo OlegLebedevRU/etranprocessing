@@ -259,10 +259,43 @@ bool services_ensure_all_registered(const wchar_t* dest_dir) {
     return true;
 }
 
-static bool start_single_service(SC_HANDLE hSCM, const wchar_t* svc_name) {
+DWORD services_query_status(const wchar_t* svc_name) {
+    if (!svc_name) return 0;
+    SC_HANDLE hSCM = OpenSCManagerW(NULL, NULL, SC_MANAGER_CONNECT);
+    if (!hSCM) return 0;
+
+    SC_HANDLE hSvc = OpenServiceW(hSCM, svc_name, SERVICE_QUERY_STATUS);
+    if (!hSvc) {
+        CloseServiceHandle(hSCM);
+        return 0;
+    }
+
+    SERVICE_STATUS_PROCESS ssp;
+    DWORD bytesNeeded = 0;
+    DWORD state = 0;
+    if (QueryServiceStatusEx(hSvc, SC_STATUS_PROCESS_INFO, (LPBYTE)&ssp, sizeof(ssp), &bytesNeeded)) {
+        state = ssp.dwCurrentState;
+    }
+
+    CloseServiceHandle(hSvc);
+    CloseServiceHandle(hSCM);
+    return state;
+}
+
+bool services_start_single_service(
+    SC_HANDLE hSCM,
+    const wchar_t* svc_name,
+    DWORD timeout_sec,
+    ServiceLifecycleCallback cb,
+    void* user_data
+) {
+    if (!hSCM || !svc_name) return false;
+    if (timeout_sec == 0) timeout_sec = 120;
+
     SC_HANDLE hSvc = OpenServiceW(hSCM, svc_name, SERVICE_START | SERVICE_QUERY_STATUS);
     if (!hSvc) {
         log_err("Cannot open service %ls to start (error %lu)", svc_name, GetLastError());
+        if (cb) cb(svc_name, SVC_STATUS_FAILED, 0, "Cannot open service in SCM", user_data);
         return false;
     }
 
@@ -270,51 +303,265 @@ static bool start_single_service(SC_HANDLE hSCM, const wchar_t* svc_name) {
     DWORD bytesNeeded = 0;
     if (QueryServiceStatusEx(hSvc, SC_STATUS_PROCESS_INFO, (LPBYTE)&ssp, sizeof(ssp), &bytesNeeded)) {
         if (ssp.dwCurrentState == SERVICE_RUNNING) {
+            log_info("Service %ls is already RUNNING (PID: %lu). Verifying without restart.", svc_name, ssp.dwProcessId);
+            if (cb) cb(svc_name, SVC_STATUS_RUNNING, 0, "Already running", user_data);
             CloseServiceHandle(hSvc);
             return true;
         }
     }
 
+    if (cb) cb(svc_name, SVC_STATUS_STARTING, 0, NULL, user_data);
     log_info("Starting service %ls...", svc_name);
-    if (!StartServiceW(hSvc, 0, NULL)) {
-        DWORD err = GetLastError();
-        if (err != ERROR_SERVICE_ALREADY_RUNNING) {
-            log_err("Failed to start service %ls (error %lu)", svc_name, err);
-            CloseServiceHandle(hSvc);
-            return false;
-        }
-    }
 
-    // Wait up to 10 seconds for service to reach running state
-    for (int i = 0; i < 40; i++) {
-        Sleep(250);
-        if (QueryServiceStatusEx(hSvc, SC_STATUS_PROCESS_INFO, (LPBYTE)&ssp, sizeof(ssp), &bytesNeeded)) {
-            if (ssp.dwCurrentState == SERVICE_RUNNING) {
-                log_info("Service %ls is RUNNING (PID: %lu).", svc_name, ssp.dwProcessId);
+    if (ssp.dwCurrentState != SERVICE_START_PENDING) {
+        if (!StartServiceW(hSvc, 0, NULL)) {
+            DWORD err = GetLastError();
+            if (err == ERROR_SERVICE_ALREADY_RUNNING) {
+                // Re-query state
+                if (QueryServiceStatusEx(hSvc, SC_STATUS_PROCESS_INFO, (LPBYTE)&ssp, sizeof(ssp), &bytesNeeded)) {
+                    if (ssp.dwCurrentState == SERVICE_RUNNING) {
+                        log_info("Service %ls is RUNNING.", svc_name);
+                        if (cb) cb(svc_name, SVC_STATUS_RUNNING, 0, NULL, user_data);
+                        CloseServiceHandle(hSvc);
+                        return true;
+                    }
+                }
+            } else {
+                log_err("StartServiceW failed for %ls (error %lu)", svc_name, err);
+                if (cb) cb(svc_name, SVC_STATUS_FAILED, 0, "StartServiceW call failed", user_data);
                 CloseServiceHandle(hSvc);
-                return true;
+                return false;
             }
         }
     }
 
-    log_warn("Service %ls did not reach RUNNING state within 10 seconds.", svc_name);
-    CloseServiceHandle(hSvc);
-    return false;
+    ULONGLONG start_tick = GetTickCount64();
+    bool notice_30s_given = false;
+
+    while (true) {
+        DWORD elapsed_sec = (DWORD)((GetTickCount64() - start_tick) / 1000);
+
+        if (!notice_30s_given && elapsed_sec >= 30) {
+            notice_30s_given = true;
+            log_warn("Service %ls taking longer than usual; still waiting...", svc_name);
+            if (cb) cb(svc_name, SVC_STATUS_STARTING, elapsed_sec, "Taking longer than usual; still waiting...", user_data);
+        }
+
+        if (elapsed_sec >= timeout_sec) {
+            log_err("Service %ls did not reach RUNNING within %lu seconds timeout.", svc_name, timeout_sec);
+            if (cb) cb(svc_name, SVC_STATUS_FAILED, elapsed_sec, "Startup timed out", user_data);
+            CloseServiceHandle(hSvc);
+            return false;
+        }
+
+        if (!QueryServiceStatusEx(hSvc, SC_STATUS_PROCESS_INFO, (LPBYTE)&ssp, sizeof(ssp), &bytesNeeded)) {
+            log_err("QueryServiceStatusEx failed for %ls (error %lu)", svc_name, GetLastError());
+            CloseServiceHandle(hSvc);
+            return false;
+        }
+
+        if (ssp.dwCurrentState == SERVICE_RUNNING) {
+            log_info("Service %ls reached RUNNING (PID: %lu) in %lu seconds.", svc_name, ssp.dwProcessId, elapsed_sec);
+            if (cb) cb(svc_name, SVC_STATUS_RUNNING, elapsed_sec, NULL, user_data);
+            CloseServiceHandle(hSvc);
+            return true;
+        }
+
+        // Check for immediate failure when service stopped with an exit code
+        if (ssp.dwCurrentState == SERVICE_STOPPED) {
+            if (ssp.dwWin32ExitCode != NO_ERROR || ssp.dwServiceSpecificExitCode != 0) {
+                log_err("Service %ls stopped immediately with error code: win32=%lu, specific=%lu",
+                        svc_name, ssp.dwWin32ExitCode, ssp.dwServiceSpecificExitCode);
+                if (cb) cb(svc_name, SVC_STATUS_FAILED, elapsed_sec, "Service stopped immediately with error", user_data);
+                CloseServiceHandle(hSvc);
+                return false;
+            }
+        }
+
+        // Wait based on service wait hint (clamped between 500ms and 2000ms)
+        DWORD wait_time = ssp.dwWaitHint / 10;
+        if (wait_time < 500) wait_time = 500;
+        if (wait_time > 2000) wait_time = 2000;
+
+        Sleep(wait_time);
+        if (cb) cb(svc_name, SVC_STATUS_STARTING, (DWORD)((GetTickCount64() - start_tick) / 1000), NULL, user_data);
+    }
 }
 
-bool services_start_all_in_order(void) {
-    SC_HANDLE hSCM = OpenSCManagerW(NULL, NULL, SC_MANAGER_ALL_ACCESS);
-    if (!hSCM) return false;
+bool services_stop_single_service(
+    SC_HANDLE hSCM,
+    const wchar_t* svc_name,
+    const char* sn,
+    DWORD timeout_sec,
+    ServiceLifecycleCallback cb,
+    void* user_data
+) {
+    if (!hSCM || !svc_name) return false;
+    if (timeout_sec == 0) timeout_sec = 120;
 
-    log_info("Starting services in order: Leo4Proxy -> mosquitto -> L4Con -> L4Superv...");
-    bool ok = true;
-    ok = ok && start_single_service(hSCM, SVC_NAME_LEO4PROXY);
-    ok = ok && start_single_service(hSCM, SVC_NAME_MOSQUITTO);
-    ok = ok && start_single_service(hSCM, SVC_NAME_L4CON);
-    ok = ok && start_single_service(hSCM, SVC_NAME_L4SUPERV);
+    SC_HANDLE hSvc = OpenServiceW(hSCM, svc_name, SERVICE_STOP | SERVICE_QUERY_STATUS);
+    if (!hSvc) {
+        // If service does not exist or cannot be opened, it's not running
+        DWORD err = GetLastError();
+        if (err == ERROR_SERVICE_DOES_NOT_EXIST) {
+            return true;
+        }
+        log_warn("Cannot open service %ls to stop (error %lu)", svc_name, err);
+        return true;
+    }
+
+    SERVICE_STATUS_PROCESS ssp;
+    DWORD bytesNeeded = 0;
+    if (QueryServiceStatusEx(hSvc, SC_STATUS_PROCESS_INFO, (LPBYTE)&ssp, sizeof(ssp), &bytesNeeded)) {
+        if (ssp.dwCurrentState == SERVICE_STOPPED) {
+            CloseServiceHandle(hSvc);
+            if (cb) cb(svc_name, SVC_STATUS_STOPPED, 0, NULL, user_data);
+            return true;
+        }
+    }
+
+    if (cb) cb(svc_name, SVC_STATUS_STOPPING, 0, NULL, user_data);
+    log_info("Stopping service %ls...", svc_name);
+
+    // If stopping L4Superv: signal Global\L4Desk_Stop_<SN> event before sending SCM STOP
+    if (_wcsicmp(svc_name, SVC_NAME_L4SUPERV) == 0 && sn && sn[0]) {
+        wchar_t stop_evt[128];
+        swprintf_s(stop_evt, 128, L"Global\\L4Desk_Stop_%hs", sn);
+        HANDLE hEvt = OpenEventW(EVENT_MODIFY_STATE, FALSE, stop_evt);
+        if (!hEvt) {
+            hEvt = CreateEventW(NULL, TRUE, FALSE, stop_evt);
+        }
+        if (hEvt) {
+            log_info("Signaling event %ls for graceful l4desk termination...", stop_evt);
+            SetEvent(hEvt);
+            CloseHandle(hEvt);
+        }
+    }
+
+    if (ssp.dwCurrentState != SERVICE_STOP_PENDING) {
+        SERVICE_STATUS ss;
+        if (!ControlService(hSvc, SERVICE_CONTROL_STOP, &ss)) {
+            DWORD err = GetLastError();
+            if (err != ERROR_SERVICE_NOT_ACTIVE) {
+                log_warn("ControlService(STOP) for %ls returned %lu", svc_name, err);
+            }
+        }
+    }
+
+    ULONGLONG start_tick = GetTickCount64();
+    bool notice_30s_given = false;
+
+    while (true) {
+        DWORD elapsed_sec = (DWORD)((GetTickCount64() - start_tick) / 1000);
+
+        if (!notice_30s_given && elapsed_sec >= 30) {
+            notice_30s_given = true;
+            log_warn("Stopping service %ls is taking longer than usual; still waiting...", svc_name);
+            if (cb) cb(svc_name, SVC_STATUS_STOPPING, elapsed_sec, "Taking longer than usual; still waiting...", user_data);
+        }
+
+        if (elapsed_sec >= timeout_sec) {
+            log_err("Service %ls did not reach STOPPED within %lu seconds timeout.", svc_name, timeout_sec);
+            if (cb) cb(svc_name, SVC_STATUS_FAILED, elapsed_sec, "Stop timed out", user_data);
+            CloseServiceHandle(hSvc);
+            return false;
+        }
+
+        if (!QueryServiceStatusEx(hSvc, SC_STATUS_PROCESS_INFO, (LPBYTE)&ssp, sizeof(ssp), &bytesNeeded)) {
+            CloseServiceHandle(hSvc);
+            return true;
+        }
+
+        if (ssp.dwCurrentState == SERVICE_STOPPED) {
+            log_info("Service %ls stopped in %lu seconds.", svc_name, elapsed_sec);
+            if (cb) cb(svc_name, SVC_STATUS_STOPPED, elapsed_sec, NULL, user_data);
+            CloseServiceHandle(hSvc);
+            return true;
+        }
+
+        DWORD wait_time = ssp.dwWaitHint / 10;
+        if (wait_time < 500) wait_time = 500;
+        if (wait_time > 2000) wait_time = 2000;
+
+        Sleep(wait_time);
+        if (cb) cb(svc_name, SVC_STATUS_STOPPING, (DWORD)((GetTickCount64() - start_tick) / 1000), NULL, user_data);
+    }
+}
+
+bool services_start_all_in_order(
+    ServiceLifecycleCallback cb,
+    void* user_data
+) {
+    SC_HANDLE hSCM = OpenSCManagerW(NULL, NULL, SC_MANAGER_ALL_ACCESS);
+    if (!hSCM) {
+        log_err("Failed to open SCM with ALL_ACCESS for starting services (error %lu)", GetLastError());
+        return false;
+    }
+
+    log_info("Starting services in strict order: Leo4Proxy -> mosquitto -> L4Con -> L4Superv...");
+    ULONGLONG overall_start = GetTickCount64();
+    const DWORD max_overall_sec = 480;
+
+    const wchar_t* svcs[] = {
+        SVC_NAME_LEO4PROXY,
+        SVC_NAME_MOSQUITTO,
+        SVC_NAME_L4CON,
+        SVC_NAME_L4SUPERV
+    };
+
+    bool all_ok = true;
+    for (int i = 0; i < 4; i++) {
+        DWORD elapsed = (DWORD)((GetTickCount64() - overall_start) / 1000);
+        if (elapsed >= max_overall_sec) {
+            log_err("Overall service start deadline (480s) exceeded.");
+            all_ok = false;
+            break;
+        }
+
+        DWORD remaining = max_overall_sec - elapsed;
+        DWORD timeout = (remaining < 120) ? remaining : 120;
+
+        if (!services_start_single_service(hSCM, svcs[i], timeout, cb, user_data)) {
+            log_err("Failed to start service %ls", svcs[i]);
+            all_ok = false;
+            break;
+        }
+    }
 
     CloseServiceHandle(hSCM);
-    return ok;
+    return all_ok;
+}
+
+bool services_stop_all_in_order(
+    const char* sn,
+    ServiceLifecycleCallback cb,
+    void* user_data
+) {
+    SC_HANDLE hSCM = OpenSCManagerW(NULL, NULL, SC_MANAGER_ALL_ACCESS);
+    if (!hSCM) {
+        log_err("Failed to open SCM with ALL_ACCESS for stopping services (error %lu)", GetLastError());
+        return false;
+    }
+
+    log_info("Stopping services in reverse order: L4Superv -> L4Con -> mosquitto -> Leo4Proxy...");
+
+    const wchar_t* svcs[] = {
+        SVC_NAME_L4SUPERV,
+        SVC_NAME_L4CON,
+        SVC_NAME_MOSQUITTO,
+        SVC_NAME_LEO4PROXY
+    };
+
+    bool all_ok = true;
+    for (int i = 0; i < 4; i++) {
+        if (!services_stop_single_service(hSCM, svcs[i], sn, 120, cb, user_data)) {
+            log_warn("Failed to stop service %ls cleanly within timeout", svcs[i]);
+            all_ok = false;
+        }
+    }
+
+    CloseServiceHandle(hSCM);
+    return all_ok;
 }
 
 bool services_control_l4superv(DWORD control_code) {

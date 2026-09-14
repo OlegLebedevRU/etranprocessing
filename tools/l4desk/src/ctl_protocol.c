@@ -604,15 +604,19 @@ bool ctl_handle_command(const char* payload, size_t payload_len,
         return false;
     }
 
-    /* 4. Remote input commands: pointer_move, mouse_click, key_event */
+    /* 4. Remote input commands: pointer_move, mouse_click, key_event, shortcut_action */
     bool is_move = (strcmp(cmd_type, "pointer_move") == 0);
     bool is_click = (strcmp(cmd_type, "mouse_click") == 0);
     bool is_key = (strcmp(cmd_type, "key_event") == 0);
+    bool is_shortcut = (strcmp(cmd_type, "shortcut_action") == 0);
 
-    if (is_move || is_click || is_key) {
+    if (is_move || is_click || is_key || is_shortcut) {
         char desktop_id[64] = { 0 };
         char stream_instance_id[64] = { 0 };
         json_extract_str(payload, "desktop_id", desktop_id, sizeof(desktop_id));
+        if (desktop_id[0] == '\0') {
+            json_extract_str(payload, "source_id", desktop_id, sizeof(desktop_id));
+        }
         json_extract_str(payload, "stream_instance_id", stream_instance_id, sizeof(stream_instance_id));
 
         StreamStateInfo stream;
@@ -718,6 +722,37 @@ bool ctl_handle_command(const char* payload, size_t payload_len,
             }
         }
 
+        /* Common input gate: Session and Input Desktop access check */
+        DesktopAccessStatus acc = desktop_check_input_access();
+        if (acc == DESKTOP_ACCESS_SESSION_UNAVAILABLE) {
+            log_warn("Input rejected: session_unavailable");
+            if (!is_move) {
+                int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
+                                                 "session_unavailable", "Active console session unavailable", now_ms);
+                if (len > 0) {
+                    dedup_cache_put(cmd_id, out_resp, (size_t)len, expires_at_ms);
+                    *out_resp_len = (size_t)len;
+                    *p_should_publish = true;
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (acc != DESKTOP_ACCESS_OK) {
+            log_warn("Input rejected: desktop_locked");
+            if (!is_move) {
+                int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
+                                                 "desktop_locked", "Input desktop is unavailable or locked", now_ms);
+                if (len > 0) {
+                    dedup_cache_put(cmd_id, out_resp, (size_t)len, expires_at_ms);
+                    *out_resp_len = (size_t)len;
+                    *p_should_publish = true;
+                    return true;
+                }
+            }
+            return false;
+        }
+
         /* Refresh local lease watchdog on valid control input */
         if (expires_at_ms > 0) {
             ffmpeg_supervisor_update_lease(stream.lease_id, (uint64_t)expires_at_ms);
@@ -770,8 +805,24 @@ bool ctl_handle_command(const char* payload, size_t payload_len,
                 *p_should_publish = false;
                 return true;
             } else {
-                char button[16] = "left";
+                char button[32] = "left";
                 json_extract_str(payload, "button", button, sizeof(button));
+                if (button[0] == '\0') {
+                    strcpy_s(button, sizeof(button), "left");
+                }
+
+                if (_stricmp(button, "left") != 0 && _stricmp(button, "right") != 0) {
+                    log_warn("Click rejected: invalid button '%s' (only left and right allowed)", button);
+                    int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
+                                                     "invalid_payload", "Invalid button (only left and right allowed)", now_ms);
+                    if (len > 0) {
+                        dedup_cache_put(cmd_id, out_resp, (size_t)len, expires_at_ms);
+                        *out_resp_len = (size_t)len;
+                        *p_should_publish = true;
+                        return true;
+                    }
+                    return false;
+                }
 
                 bool ok = input_inject_click_norm(nx, ny, button,
                                                   stream.desktop_rect.left, stream.desktop_rect.top,
@@ -781,7 +832,7 @@ bool ctl_handle_command(const char* payload, size_t payload_len,
                     len = ctl_build_ack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn, now_ms);
                 } else {
                     len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
-                                                 "inject_failed", "Click injection failed", now_ms);
+                                                 "input_injection_failed", "Click injection failed", now_ms);
                 }
                 if (len > 0) {
                     dedup_cache_put(cmd_id, out_resp, (size_t)len, expires_at_ms);
@@ -791,6 +842,98 @@ bool ctl_handle_command(const char* payload, size_t payload_len,
                 }
                 return false;
             }
+        }
+
+        /* Handle shortcut_action */
+        if (is_shortcut) {
+            char action[64] = { 0 };
+            json_extract_str(payload, "action", action, sizeof(action));
+
+            if (action[0] == '\0') {
+                int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
+                                                 "invalid_payload", "Missing action in shortcut_action", now_ms);
+                if (len > 0) {
+                    dedup_cache_put(cmd_id, out_resp, (size_t)len, expires_at_ms);
+                    *out_resp_len = (size_t)len;
+                    *p_should_publish = true;
+                    return true;
+                }
+                return false;
+            }
+
+            DWORD err = 0;
+            bool ok = false;
+            const char* nack_code = NULL;
+            const char* nack_msg = NULL;
+
+            if (_stricmp(action, "f12") == 0) {
+                bool allow_f12 = false, dummy1 = false, dummy2 = false;
+                input_get_shortcut_policy(&allow_f12, &dummy1, &dummy2);
+                if (!allow_f12) {
+                    nack_code = "action_blocked_policy";
+                    nack_msg = "F12 is disabled on this kiosk";
+                } else {
+                    ok = input_inject_shortcut_f12(&err);
+                    if (!ok) {
+                        nack_code = (err == ERROR_BUSY) ? "desktop_locked" : "input_injection_failed";
+                        nack_msg = "F12 injection failed";
+                    }
+                }
+            } else if (_stricmp(action, "alt_f4") == 0) {
+                bool allow_alt_f4 = false, dummy1 = false, dummy2 = false;
+                input_get_shortcut_policy(&dummy1, &allow_alt_f4, &dummy2);
+                if (!allow_alt_f4) {
+                    nack_code = "action_blocked_policy";
+                    nack_msg = "Alt+F4 is disabled on this kiosk";
+                } else {
+                    ok = input_inject_shortcut_alt_f4(&err);
+                    if (!ok) {
+                        if (err == ERROR_INVALID_TARGET_HANDLE) {
+                            nack_code = "action_blocked_winlogon_guard";
+                            nack_msg = "Target window is protected or focus changed";
+                        } else if (err == ERROR_BUSY) {
+                            nack_code = "desktop_locked";
+                            nack_msg = "Desktop locked";
+                        } else {
+                            nack_code = "input_injection_failed";
+                            nack_msg = "Alt+F4 injection failed";
+                        }
+                    }
+                }
+            } else if (_stricmp(action, "win_d") == 0) {
+                bool allow_win_d = false, dummy1 = false, dummy2 = false;
+                input_get_shortcut_policy(&dummy1, &dummy2, &allow_win_d);
+                if (!allow_win_d) {
+                    nack_code = "action_blocked_policy";
+                    nack_msg = "Win+D is disabled on this kiosk";
+                } else {
+                    ok = input_inject_shortcut_win_d(&err);
+                    if (!ok) {
+                        nack_code = (err == ERROR_BUSY) ? "desktop_locked" : "input_injection_failed";
+                        nack_msg = "Win+D injection failed";
+                    }
+                }
+            } else {
+                nack_code = "invalid_payload";
+                nack_msg = "Unknown shortcut action (expected f12, alt_f4, or win_d)";
+            }
+
+            int len = 0;
+            if (ok) {
+                len = ctl_build_ack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn, now_ms);
+            } else {
+                len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
+                                             nack_code ? nack_code : "input_injection_failed",
+                                             nack_msg ? nack_msg : "Shortcut action failed", now_ms);
+            }
+
+            if (len > 0) {
+                dedup_cache_put(cmd_id, out_resp, (size_t)len, expires_at_ms);
+                *out_resp_len = (size_t)len;
+                *p_should_publish = true;
+                return true;
+            }
+            return false;
         }
 
         /* Handle key_event */
@@ -806,7 +949,7 @@ bool ctl_handle_command(const char* payload, size_t payload_len,
             if (vk > 0 && !input_is_vk_allowed(vk)) {
                 log_warn("Key rejected: vk %d is forbidden or not whitelisted", vk);
                 int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
-                                                 "source_not_allowed", "Virtual key not allowed", now_ms);
+                                                 "action_blocked_policy", "Virtual key not allowed by policy", now_ms);
                 if (len > 0) {
                     dedup_cache_put(cmd_id, out_resp, (size_t)len, expires_at_ms);
                     *out_resp_len = (size_t)len;
@@ -823,7 +966,7 @@ bool ctl_handle_command(const char* payload, size_t payload_len,
                 len = ctl_build_ack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn, now_ms);
             } else {
                 len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
-                                             "inject_failed", "Key injection failed", now_ms);
+                                             "input_injection_failed", "Key injection failed", now_ms);
             }
             if (len > 0) {
                 dedup_cache_put(cmd_id, out_resp, (size_t)len, expires_at_ms);

@@ -132,7 +132,12 @@ static void test_keyboard_whitelist(void) {
     ASSERT_TRUE(input_is_vk_allowed(VK_UP));
     ASSERT_TRUE(input_is_vk_allowed(VK_DOWN));
     ASSERT_TRUE(input_is_vk_allowed(VK_F1));
+    /* By default F12 is disallowed by policy */
+    ASSERT_TRUE(!input_is_vk_allowed(VK_F12));
+    input_set_shortcut_policy(true, false, false, NULL);
     ASSERT_TRUE(input_is_vk_allowed(VK_F12));
+    input_set_shortcut_policy(false, false, false, NULL);
+    ASSERT_TRUE(!input_is_vk_allowed(VK_F12));
     ASSERT_TRUE(input_is_vk_allowed(VK_DELETE));
     ASSERT_TRUE(input_is_vk_allowed(VK_INSERT));
 
@@ -450,6 +455,117 @@ static void test_command_handling_validation(void) {
     printf("[PASS] test_command_handling_validation\n");
 }
 
+static void test_input_gate_and_shortcuts(void) {
+    SystemInventory inv;
+    memset(&inv, 0, sizeof(inv));
+    inv.display_count = 1;
+    strcpy_s(inv.displays[0].desktop_id, sizeof(inv.displays[0].desktop_id), "disp:11223344");
+    strcpy_s(inv.displays[0].policy, sizeof(inv.displays[0].policy), "input");
+
+    char resp[8192];
+    size_t resp_len = 0;
+    bool should_pub = false;
+    uint8_t qos = 1;
+
+    ffmpeg_supervisor_init("C:\\l4tools", "TERM001");
+
+    char start_res[32], start_err_code[64], start_err_msg[256];
+    ffmpeg_supervisor_start("s_input_test", "lease_input", "desktop", "disp:11223344", "default", &inv,
+                            start_res, sizeof(start_res), start_err_code, sizeof(start_err_code), start_err_msg, sizeof(start_err_msg));
+
+    /* 1. Desktop locked check */
+    desktop_set_test_override(DESKTOP_ACCESS_LOCKED);
+    const char* cmd_clk_locked = "{\"v\":1,\"type\":\"mouse_click\",\"command_id\":\"clk_lock_01\",\"lease_id\":\"lease_input\","
+                                 "\"desktop_id\":\"disp:11223344\",\"stream_instance_id\":\"s_input_test\",\"x\":0.5,\"y\":0.5}";
+    ASSERT_TRUE(ctl_handle_command(cmd_clk_locked, strlen(cmd_clk_locked), "TERM001", &inv, resp, sizeof(resp), &resp_len, &should_pub, &qos));
+    ASSERT_TRUE(should_pub);
+    ASSERT_TRUE(strstr(resp, "\"code\":\"desktop_locked\"") != NULL);
+
+    /* 2. Session unavailable check */
+    desktop_set_test_override(DESKTOP_ACCESS_SESSION_UNAVAILABLE);
+    const char* cmd_clk_nosess = "{\"v\":1,\"type\":\"mouse_click\",\"command_id\":\"clk_nosess_01\",\"lease_id\":\"lease_input\","
+                                 "\"desktop_id\":\"disp:11223344\",\"stream_instance_id\":\"s_input_test\",\"x\":0.5,\"y\":0.5}";
+    ASSERT_TRUE(ctl_handle_command(cmd_clk_nosess, strlen(cmd_clk_nosess), "TERM001", &inv, resp, sizeof(resp), &resp_len, &should_pub, &qos));
+    ASSERT_TRUE(should_pub);
+    ASSERT_TRUE(strstr(resp, "\"code\":\"session_unavailable\"") != NULL);
+
+    /* Reset desktop override to OK for remaining input tests */
+    desktop_set_test_override(DESKTOP_ACCESS_OK);
+
+    /* 3. Mouse click: middle button rejected */
+    const char* cmd_clk_middle = "{\"v\":1,\"type\":\"mouse_click\",\"command_id\":\"clk_mid_01\",\"lease_id\":\"lease_input\","
+                                 "\"desktop_id\":\"disp:11223344\",\"stream_instance_id\":\"s_input_test\",\"button\":\"middle\",\"x\":0.5,\"y\":0.5}";
+    ASSERT_TRUE(ctl_handle_command(cmd_clk_middle, strlen(cmd_clk_middle), "TERM001", &inv, resp, sizeof(resp), &resp_len, &should_pub, &qos));
+    ASSERT_TRUE(should_pub);
+    ASSERT_TRUE(strstr(resp, "\"code\":\"invalid_payload\"") != NULL);
+
+    /* 4. Mouse click: unknown button rejected */
+    const char* cmd_clk_unknown = "{\"v\":1,\"type\":\"mouse_click\",\"command_id\":\"clk_unk_01\",\"lease_id\":\"lease_input\","
+                                  "\"desktop_id\":\"disp:11223344\",\"stream_instance_id\":\"s_input_test\",\"button\":\"wheel_up\",\"x\":0.5,\"y\":0.5}";
+    ASSERT_TRUE(ctl_handle_command(cmd_clk_unknown, strlen(cmd_clk_unknown), "TERM001", &inv, resp, sizeof(resp), &resp_len, &should_pub, &qos));
+    ASSERT_TRUE(should_pub);
+    ASSERT_TRUE(strstr(resp, "\"code\":\"invalid_payload\"") != NULL);
+
+    /* 5. Shortcuts policy: default policy is all false */
+    input_set_shortcut_policy(false, false, false, NULL);
+
+    // f12 disabled by policy
+    const char* cmd_sc_f12_blocked = "{\"v\":1,\"type\":\"shortcut_action\",\"command_id\":\"sc_f12_01\",\"lease_id\":\"lease_input\","
+                                     "\"source_id\":\"disp:11223344\",\"stream_instance_id\":\"s_input_test\",\"action\":\"f12\"}";
+    ASSERT_TRUE(ctl_handle_command(cmd_sc_f12_blocked, strlen(cmd_sc_f12_blocked), "TERM001", &inv, resp, sizeof(resp), &resp_len, &should_pub, &qos));
+    ASSERT_TRUE(should_pub);
+    ASSERT_TRUE(strstr(resp, "\"code\":\"action_blocked_policy\"") != NULL);
+
+    // alt_f4 disabled by policy
+    const char* cmd_sc_altf4_blocked = "{\"v\":1,\"type\":\"shortcut_action\",\"command_id\":\"sc_af4_01\",\"lease_id\":\"lease_input\","
+                                       "\"source_id\":\"disp:11223344\",\"stream_instance_id\":\"s_input_test\",\"action\":\"alt_f4\"}";
+    ASSERT_TRUE(ctl_handle_command(cmd_sc_altf4_blocked, strlen(cmd_sc_altf4_blocked), "TERM001", &inv, resp, sizeof(resp), &resp_len, &should_pub, &qos));
+    ASSERT_TRUE(should_pub);
+    ASSERT_TRUE(strstr(resp, "\"code\":\"action_blocked_policy\"") != NULL);
+
+    // win_d disabled by policy
+    const char* cmd_sc_wind_blocked = "{\"v\":1,\"type\":\"shortcut_action\",\"command_id\":\"sc_wd_01\",\"lease_id\":\"lease_input\","
+                                      "\"source_id\":\"disp:11223344\",\"stream_instance_id\":\"s_input_test\",\"action\":\"win_d\"}";
+    ASSERT_TRUE(ctl_handle_command(cmd_sc_wind_blocked, strlen(cmd_sc_wind_blocked), "TERM001", &inv, resp, sizeof(resp), &resp_len, &should_pub, &qos));
+    ASSERT_TRUE(should_pub);
+    ASSERT_TRUE(strstr(resp, "\"code\":\"action_blocked_policy\"") != NULL);
+
+    // unknown action rejected
+    const char* cmd_sc_unk = "{\"v\":1,\"type\":\"shortcut_action\",\"command_id\":\"sc_unk_01\",\"lease_id\":\"lease_input\","
+                             "\"source_id\":\"disp:11223344\",\"stream_instance_id\":\"s_input_test\",\"action\":\"ctrl_alt_del\"}";
+    ASSERT_TRUE(ctl_handle_command(cmd_sc_unk, strlen(cmd_sc_unk), "TERM001", &inv, resp, sizeof(resp), &resp_len, &should_pub, &qos));
+    ASSERT_TRUE(should_pub);
+    ASSERT_TRUE(strstr(resp, "\"code\":\"invalid_payload\"") != NULL);
+
+    // Enable f12 policy -> now f12 action succeeds
+    input_set_shortcut_policy(true, false, false, NULL);
+    const char* cmd_sc_f12_ok = "{\"v\":1,\"type\":\"shortcut_action\",\"command_id\":\"sc_f12_02\",\"lease_id\":\"lease_input\","
+                                "\"source_id\":\"disp:11223344\",\"stream_instance_id\":\"s_input_test\",\"action\":\"f12\"}";
+    ASSERT_TRUE(ctl_handle_command(cmd_sc_f12_ok, strlen(cmd_sc_f12_ok), "TERM001", &inv, resp, sizeof(resp), &resp_len, &should_pub, &qos));
+    ASSERT_TRUE(should_pub);
+    ASSERT_TRUE(strstr(resp, "\"type\":\"ack\"") != NULL);
+    ASSERT_TRUE(strstr(resp, "\"result\":\"injected\"") != NULL);
+
+    // Key event with VK_F12 when allow_f12 is enabled
+    const char* cmd_key_f12 = "{\"v\":1,\"type\":\"key_event\",\"command_id\":\"key_f12_01\",\"lease_id\":\"lease_input\","
+                              "\"desktop_id\":\"disp:11223344\",\"stream_instance_id\":\"s_input_test\",\"kind\":\"press\",\"vk\":123}";
+    ASSERT_TRUE(ctl_handle_command(cmd_key_f12, strlen(cmd_key_f12), "TERM001", &inv, resp, sizeof(resp), &resp_len, &should_pub, &qos));
+    ASSERT_TRUE(should_pub);
+    ASSERT_TRUE(strstr(resp, "\"type\":\"ack\"") != NULL);
+
+    // Disable f12 policy -> VK_F12 in key_event must now be blocked
+    input_set_shortcut_policy(false, false, false, NULL);
+    const char* cmd_key_f12_blocked = "{\"v\":1,\"type\":\"key_event\",\"command_id\":\"key_f12_02\",\"lease_id\":\"lease_input\","
+                                      "\"desktop_id\":\"disp:11223344\",\"stream_instance_id\":\"s_input_test\",\"kind\":\"press\",\"vk\":123}";
+    ASSERT_TRUE(ctl_handle_command(cmd_key_f12_blocked, strlen(cmd_key_f12_blocked), "TERM001", &inv, resp, sizeof(resp), &resp_len, &should_pub, &qos));
+    ASSERT_TRUE(should_pub);
+    ASSERT_TRUE(strstr(resp, "\"code\":\"action_blocked_policy\"") != NULL);
+
+    desktop_set_test_override(-1);
+    ffmpeg_supervisor_stop(NULL, NULL, start_res, sizeof(start_res), start_err_code, sizeof(start_err_code), start_err_msg, sizeof(start_err_msg));
+    printf("[PASS] test_input_gate_and_shortcuts\n");
+}
+
 int main(void) {
     printf("=== Running l4desk Unit Tests (Protocol & Inventory & Input) ===\n");
     test_json_min();
@@ -458,6 +574,7 @@ int main(void) {
     test_keyboard_whitelist();
     test_protocol_payloads();
     test_command_handling_validation();
+    test_input_gate_and_shortcuts();
     printf("=== ALL PROTOCOL UNIT TESTS PASSED ===\n");
     return 0;
 }

@@ -2,7 +2,9 @@
 
 > 📌 **Центральный архитектурный документ проекта:**  
 > Полная официальная версия документа зарегистрирована в общесистемном каталоге документации платформы:  
-> **[`docs/etran_arch-l4media-streaming-architecture.md`](../docs/etran_arch-l4media-streaming-architecture.md)**.
+> **[`docs/etran_arch-l4media-streaming-architecture.md`](../docs/etran_arch-l4media-streaming-architecture.md)**.  
+> 📊 **Профилирование ресурсов, юнит-бюджеты и расчет емкости (480p vs 720p):**  
+> **[`docs/etran_arch-l4media-resource-profiling-and-unit-budgets.md`](../docs/etran_arch-l4media-resource-profiling-and-unit-budgets.md)**.
 
 ---
 

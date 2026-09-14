@@ -9,7 +9,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define L4DESK_VERSION_STR "1.0.0"
+#define L4DESK_VERSION_STR "1.7.2"
 #define DEFAULT_MQTT_HOST "127.0.0.1"
 #define DEFAULT_MQTT_PORT 1883
 #define DEFAULT_PROXY_HTTP_PORT 18443
@@ -35,6 +35,10 @@ typedef struct {
     bool verbose;
     bool run_mode;      // true if launched with --run by l4superv
     bool console_mode;  // true if launched with --console or -f
+    bool allow_f12;     // default false
+    bool allow_alt_f4;  // default false
+    bool allow_win_d;   // default false
+    wchar_t kiosk_process[MAX_PATH];
 } L4DeskConfig;
 
 void config_init_defaults(L4DeskConfig* cfg);

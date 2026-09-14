@@ -489,8 +489,9 @@ class IotPlatformClient:
 
         url = f"{self.base_url}/api/internal/v1/remote-input/devices/{sn}/inventory"
         headers = self._get_headers(org_id=org_id, user=user)
+        timeout = settings.iot_rpc_inventory_timeout_seconds
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 resp = await client.get(
                     url, params={"refresh": refresh}, headers=headers
                 )
@@ -499,6 +500,15 @@ class IotPlatformClient:
         except httpx.HTTPStatusError as exc:
             self._handle_app1_http_error(exc)
             raise
+        except httpx.TimeoutException as exc:
+            logger.error("Timeout fetching inventory for %s: %s", sn, exc)
+            raise HTTPException(
+                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                detail={
+                    "code": "terminal_timeout",
+                    "message": "Истекло время ожидания ответа от терминала при получении инвентаря",
+                },
+            ) from exc
         except httpx.RequestError as exc:
             logger.error("Failed to get inventory for %s: %s", sn, exc)
             raise HTTPException(
@@ -525,14 +535,24 @@ class IotPlatformClient:
         url = f"{self.base_url}/api/internal/v1/remote-input/lease/{lease_id}/stream/start"
         headers = self._get_headers(org_id=org_id, user=user)
         payload = {"mode": mode, "source_id": str(source_id), "profile": profile}
+        timeout = settings.iot_rpc_stream_start_timeout_seconds
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 resp = await client.post(url, json=payload, headers=headers)
                 resp.raise_for_status()
                 return resp.json()
         except httpx.HTTPStatusError as exc:
             self._handle_app1_http_error(exc)
             raise
+        except httpx.TimeoutException as exc:
+            logger.error("Timeout starting stream for lease %s: %s", lease_id, exc)
+            raise HTTPException(
+                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                detail={
+                    "code": "terminal_timeout",
+                    "message": "Истекло время ожидания ответа от терминала при запуске видеопотока",
+                },
+            ) from exc
         except httpx.RequestError as exc:
             logger.error("Failed to start stream for lease %s: %s", lease_id, exc)
             raise HTTPException(
@@ -721,6 +741,7 @@ class IotPlatformClient:
         lease_id: str,
         x: int,
         y: int,
+        button: str = "left",
         client_ref: str | None = None,
         org_id: int | None = None,
         user: dict[str, Any] | None = None,
@@ -739,7 +760,7 @@ class IotPlatformClient:
         payload: dict[str, Any] = {
             "x": x,
             "y": y,
-            "button": "left",
+            "button": button,
         }
         if client_ref:
             payload["client_ref"] = client_ref
@@ -752,8 +773,70 @@ class IotPlatformClient:
         except httpx.HTTPStatusError as exc:
             self._handle_app1_http_error(exc)
             raise
+        except httpx.TimeoutException:
+            # 2A confirmed: HTTP 200 result="unconfirmed", code="ack_timeout" without auto-retry
+            return {
+                "result": "unconfirmed",
+                "code": "ack_timeout",
+                "message": "Результат ввода не подтвержден. Проверьте изображение перед повторным действием.",
+                "client_ref": client_ref,
+            }
         except httpx.RequestError as exc:
             logger.error("Failed to send mouse click for lease %s: %s", lease_id, exc)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Недоступен сервис управления iot-rpc-rest-app: {exc}",
+            ) from exc
+
+    async def remote_input_shortcut(
+        self,
+        lease_id: str,
+        action: str,
+        client_ref: str | None = None,
+        desktop_id: str | None = None,
+        stream_instance_id: str | None = None,
+        org_id: int | None = None,
+        user: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Send shortcut action (f12, alt_f4, win_d) on app1."""
+        if not self.base_url or not settings.remote_control_enabled:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="remote control unavailable",
+            )
+
+        url = f"{self.base_url}/api/internal/v1/remote-input/lease/{lease_id}/shortcut"
+        headers = self._get_headers(org_id=org_id, user=user)
+        payload: dict[str, Any] = {
+            "action": action,
+        }
+        if client_ref is not None:
+            payload["client_ref"] = client_ref
+        if desktop_id is not None:
+            payload["desktop_id"] = desktop_id
+        if stream_instance_id is not None:
+            payload["stream_instance_id"] = stream_instance_id
+        timeout = settings.remote_control_click_timeout_sec
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post(url, json=payload, headers=headers)
+                resp.raise_for_status()
+                return resp.json()
+        except httpx.HTTPStatusError as exc:
+            self._handle_app1_http_error(exc)
+            raise
+        except httpx.TimeoutException:
+            # 2A confirmed: HTTP 200 result="unconfirmed", code="ack_timeout" without auto-retry
+            return {
+                "result": "unconfirmed",
+                "code": "ack_timeout",
+                "message": "Результат ввода не подтвержден. Проверьте изображение перед повторным действием.",
+                "client_ref": client_ref,
+            }
+        except httpx.RequestError as exc:
+            logger.error(
+                "Failed to send shortcut action for lease %s: %s", lease_id, exc
+            )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=f"Недоступен сервис управления iot-rpc-rest-app: {exc}",

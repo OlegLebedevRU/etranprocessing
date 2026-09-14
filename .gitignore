@@ -112,4 +112,5 @@ tools/dist_win7_sp1/*
 tools/l4setup/res/payload.rc
 tools/l4setup/res/version.h
 tools/l4setup/res/*.bin
+artifacts/stand_download_5b/
 

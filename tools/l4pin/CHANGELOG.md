@@ -2,6 +2,11 @@
 
 All notable changes to the `l4pin` (Leo4 Terminal Certificate Installer) component will be documented in this file.
 
+## [1.7.2] - 2026-09-14
+
+### Changed
+- Версионирование компонентов синхронизировано до 1.7.2.
+
 ## [1.7.0] - 2026-09-13
 
 ### Changed

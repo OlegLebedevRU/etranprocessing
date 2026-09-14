@@ -12,11 +12,21 @@ extern "C" {
 
 typedef struct {
     char installer_version[32];
+    char installed_version[32];
     char os[128];
     char target_arch[16];
     wchar_t dest[MAX_PATH];
-    char status[32];
+    char status[32]; // "ready", "activation_required", "degraded", "failed", "cancelled"
     int exit_code;
+    char phase[32]; // "check", "prepare", "stop", "update", "start", "verify", "finish"
+    char error_reason[128];
+    char rollback[32]; // "none", "restored", "failed"
+    wchar_t log_path[MAX_PATH];
+
+    char service_leo4proxy[32];
+    char service_mosquitto[32];
+    char service_l4con[32];
+    char service_l4superv[32];
 
     CertPhaseResult cert;
     DrainageResult drainage;

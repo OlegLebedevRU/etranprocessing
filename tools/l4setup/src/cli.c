@@ -8,6 +8,16 @@ void cli_init_defaults(CliOptions* opts) {
     if (!opts) return;
     memset(opts, 0, sizeof(CliOptions));
     wcscpy_s(opts->dest, MAX_PATH, L"C:\\l4tools");
+    opts->interactive = false;
+    opts->silent = false;
+}
+
+static bool is_valid_6digit_pin(const wchar_t* pin) {
+    if (!pin || wcslen(pin) != 6) return false;
+    for (int i = 0; i < 6; i++) {
+        if (pin[i] < L'0' || pin[i] > L'9') return false;
+    }
+    return true;
 }
 
 void cli_clean_pin(CliOptions* opts) {
@@ -43,6 +53,9 @@ bool cli_parse(int argc, wchar_t* argv[], CliOptions* opts, char* err_buf, size_
                    _wcsicmp(arg, L"/silent") == 0 || _wcsicmp(arg, L"/S") == 0 || 
                    _wcsicmp(arg, L"/s") == 0) {
             opts->silent = true;
+        } else if (_wcsicmp(arg, L"--interactive") == 0 || _wcsicmp(arg, L"-interactive") == 0 ||
+                   _wcsicmp(arg, L"/interactive") == 0 || _wcsicmp(arg, L"-i") == 0) {
+            opts->interactive = true;
         } else if (_wcsicmp(arg, L"--repair") == 0 || _wcsicmp(arg, L"-repair") == 0 ||
                    _wcsicmp(arg, L"/repair") == 0) {
             opts->repair = true;
@@ -102,6 +115,24 @@ bool cli_parse(int argc, wchar_t* argv[], CliOptions* opts, char* err_buf, size_
         }
     }
 
+    // Validate conflict between --interactive and --silent
+    if (opts->interactive && opts->silent) {
+        if (err_buf && err_buf_size > 0) {
+            snprintf(err_buf, err_buf_size, "Conflict: --interactive and --silent cannot be specified together");
+        }
+        return false;
+    }
+
+    // Validate PIN if specified
+    if (opts->pin_specified) {
+        if (!is_valid_6digit_pin(opts->pin)) {
+            if (err_buf && err_buf_size > 0) {
+                snprintf(err_buf, err_buf_size, "PIN must be exactly 6 digits (0-9)");
+            }
+            return false;
+        }
+    }
+
     // In silent mode without --pin, behaves as --no-pin
     if (opts->silent && !opts->pin_specified) {
         opts->no_pin = true;
@@ -119,9 +150,10 @@ void cli_print_usage(const wchar_t* prog_name) {
     wprintf(L"Leo4 Zero-Touch Setup (l4setup) v%ls\n\n", L4SETUP_VERSION_WSTRING);
     wprintf(L"Usage: %ls [options]\n\n", prog_name ? prog_name : L"l4setup.exe");
     wprintf(L"Options:\n");
-    wprintf(L"  --pin, -p <PIN>    6-character terminal certificate PIN code\n");
+    wprintf(L"  --pin, -p <PIN>    6-digit terminal certificate PIN code\n");
     wprintf(L"  --force-reissue    Allow certificate reissuance even if existing cert is valid\n");
     wprintf(L"  --no-pin           Do not ask for PIN; if certificate absent, enter standby\n");
+    wprintf(L"  --interactive, -i  Interactive GUI mode for attended service/maintenance\n");
     wprintf(L"  --silent, /S       Silent execution (no GUI windows or dialog prompts)\n");
     wprintf(L"  --dest, -d <DIR>   Target installation directory (default: C:\\l4tools)\n");
     wprintf(L"  --repair           Force reinstallation of binaries and services even if version matches\n");
@@ -129,17 +161,21 @@ void cli_print_usage(const wchar_t* prog_name) {
     wprintf(L"  --version          Print version information and exit\n");
     wprintf(L"  --help, -h, /?     Show this help message and exit\n\n");
     wprintf(L"Exit Codes:\n");
-    wprintf(L"   0  Ready (active + smoke OK)\n");
-    wprintf(L"  10  Ready for PIN (standby, PIN not provided)\n");
+    wprintf(L"   0  Ready (active + all 4 services healthy + verified)\n");
+    wprintf(L"  10  Ready for PIN (standby / activation_required, PIN not provided)\n");
     wprintf(L"  11  Ready for Online (PIN saved to pending_pin.json, CA unreachable)\n");
-    wprintf(L"  12  Ready with warnings (smoke check warnings)\n");
-    wprintf(L"  20  Access denied / UAC elevation declined\n");
+    wprintf(L"  12  Ready with warnings / Degraded (local services ok, network/upstream down)\n");
+    wprintf(L"  20  Access denied / Administrator privileges required\n");
     wprintf(L"  21  Unsupported OS version (< Windows 7 SP1 / 6.1)\n");
-    wprintf(L"  22  Drainage failed (active stream, port or service occupied)\n");
+    wprintf(L"  22  Drainage failed (service stop failure, active stream, port occupied)\n");
     wprintf(L"  23  Payload extraction failed\n");
     wprintf(L"  24  Service registration failed\n");
     wprintf(L"  25  Certificate issuance failed (PIN rejected by CA)\n");
     wprintf(L"  26  Activation timeout (_leo4/info status not ready within 15s)\n");
     wprintf(L"  27  Critical smoke probe failure\n");
+    wprintf(L"  28  Setup busy (another l4setup instance is running)\n");
+    wprintf(L"  29  Downgrade blocked (installed version is newer than package)\n");
+    wprintf(L"  30  Preflight failed (insufficient disk space, etc.)\n");
+    wprintf(L"  31  Setup cancelled by user\n");
     fflush(stdout);
 }

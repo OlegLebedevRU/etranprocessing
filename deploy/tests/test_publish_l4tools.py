@@ -218,6 +218,15 @@ class TestPublishL4Tools(unittest.TestCase):
             head_resp.__enter__.return_value = head_resp
             mock_responses.append(head_resp)
 
+        # 3. GET responses for phase 4 verification
+        for filename in publish_l4tools.UPLOAD_ORDER:
+            content = (self.artifacts_dir / filename).read_bytes()
+            get_resp = MagicMock()
+            get_resp.status = 200
+            get_resp.read.side_effect = [content, b""]
+            get_resp.__enter__.return_value = get_resp
+            mock_responses.append(get_resp)
+
         mock_urlopen.side_effect = mock_responses
 
         record_dir = self.artifacts_dir / "artifacts"
@@ -287,6 +296,51 @@ class TestPublishL4Tools(unittest.TestCase):
                 dry_run=False,
             )
             self.assertEqual(code, 3)
+
+    def test_record_release_skips_duplicate(self):
+        self._create_sample_artifacts()
+        manifest, sha256_map, size_map = publish_l4tools.verify_artifacts(
+            self.artifacts_dir
+        )
+        record_dir = self.artifacts_dir / "artifacts"
+        releases_file = self.artifacts_dir / "releases.jsonl"
+
+        publish_l4tools.record_release(
+            version="1.6.0",
+            manifest=manifest,
+            sha256_map=sha256_map,
+            size_map=size_map,
+            record_dir=record_dir,
+            releases_file=releases_file,
+        )
+        # Call record_release second time
+        publish_l4tools.record_release(
+            version="1.6.0",
+            manifest=manifest,
+            sha256_map=sha256_map,
+            size_map=size_map,
+            record_dir=record_dir,
+            releases_file=releases_file,
+        )
+
+        lines = releases_file.read_text(encoding="utf-8").strip().splitlines()
+        self.assertEqual(len(lines), 1)
+
+    @patch("deploy.publish_l4tools.verify_downloaded_artifacts", return_value=True)
+    def test_publish_already_published_identical_idempotent(self, mock_verify):
+        self._create_sample_artifacts()
+        record_dir = self.artifacts_dir / "artifacts"
+        releases_file = self.artifacts_dir / "releases.jsonl"
+        with patch("deploy.publish_l4tools.check_remote_version", return_value=2):
+            code = publish_l4tools.publish_release(
+                artifacts_dir=self.artifacts_dir,
+                dry_run=False,
+                record_dir=record_dir,
+                releases_file=releases_file,
+            )
+            self.assertEqual(code, 0)
+            mock_verify.assert_called_once()
+            self.assertTrue((record_dir / "1.6.0.json").is_file())
 
 
 if __name__ == "__main__":

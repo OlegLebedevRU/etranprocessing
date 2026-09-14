@@ -819,15 +819,23 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
 
                                 log_info("[WATCHDOG] Launching l4desk in active console session %lu...", active_session);
                                 sp_enable_system_privileges();
-                                if (sp_start_in_session(active_session, l4desk_exe, cmdline, workdir, &g_l4desk_pi, &g_l4desk_job)) {
+                                bool require_high_il = (_wcsicmp(cfg->l4desk_mode, L"high_il") == 0 || _wcsicmp(cfg->l4desk_mode, L"user_session_high_il") == 0);
+                                SpLaunchStatus launch_status = SP_TOKEN_OK;
+                                if (sp_start_in_session_ex(active_session, l4desk_exe, cmdline, workdir, require_high_il, &g_l4desk_pi, &g_l4desk_job, &launch_status)) {
                                     log_info("[WATCHDOG] l4desk started in session %lu (PID: %lu, Job: %p)",
                                              active_session, g_l4desk_pi.dwProcessId, g_l4desk_job);
                                     g_l4desk_session = active_session;
                                     g_l4desk_backoff_sec = 5;
                                     if (p_action_taken) *p_action_taken = true;
                                 } else {
-                                    log_info("[WARN] Failed to start l4desk in session %lu (err=%lu)", active_session, GetLastError());
-                                    g_l4desk_backoff_sec = (g_l4desk_backoff_sec < 30) ? (g_l4desk_backoff_sec == 5 ? 10 : 30) : 30;
+                                    log_info("[WARN] Failed to start l4desk in session %lu (status=%s, err=%lu)",
+                                             active_session, sp_launch_status_to_string(launch_status), GetLastError());
+                                    if (launch_status == SP_TOKEN_ERR_INSUFFICIENT_INTEGRITY) {
+                                        log_info("[WATCHDOG] l4desk startup aborted: insufficient_integrity (cannot elevate standard user token). Backing off for 300s.");
+                                        g_l4desk_backoff_sec = 300;
+                                    } else {
+                                        g_l4desk_backoff_sec = (g_l4desk_backoff_sec < 30) ? (g_l4desk_backoff_sec == 5 ? 10 : 30) : 30;
+                                    }
                                 }
                             }
                         }

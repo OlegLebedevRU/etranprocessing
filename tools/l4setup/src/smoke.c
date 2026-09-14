@@ -174,6 +174,18 @@ static void check_ffmpeg_capture(const wchar_t* dest_dir, int session_id, char* 
     }
 }
 
+static bool check_network_reachability(void) {
+    ADDRINFOA hints, *res = NULL;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    if (getaddrinfo("iot.leo4.ru", "443", &hints, &res) == 0 && res != NULL) {
+        freeaddrinfo(res);
+        return true;
+    }
+    return false;
+}
+
 static bool check_desktop_locked(void) {
     HDESK hDesk = OpenInputDesktop(0, FALSE, DESKTOP_READOBJECTS);
     if (hDesk != NULL) {
@@ -207,7 +219,7 @@ bool smoke_run_probes(
     DWORD session_id = WTSGetActiveConsoleSessionId();
     out_result->user_session_id = (int)session_id;
 
-    if (is_active_status) {
+    if (is_active_status && session_id != 0 && session_id != 0xFFFFFFFF) {
         out_result->l4desk_running = check_l4desk_in_session(session_id);
     } else {
         out_result->l4desk_running = false;
@@ -223,6 +235,23 @@ bool smoke_run_probes(
     out_result->desktop_locked = check_desktop_locked();
     log_info("Smoke probe [desktop_locked]: %s", out_result->desktop_locked ? "true" : "false");
 
+    // 6. Remote input determination
+    if (out_result->user_session_id == 0 || out_result->user_session_id == (int)0xFFFFFFFF) {
+        strcpy_s(out_result->remote_input, sizeof(out_result->remote_input), "session_unavailable");
+    } else if (out_result->desktop_locked) {
+        strcpy_s(out_result->remote_input, sizeof(out_result->remote_input), "desktop_locked");
+    } else if (out_result->l4desk_running) {
+        strcpy_s(out_result->remote_input, sizeof(out_result->remote_input), "available");
+    } else {
+        strcpy_s(out_result->remote_input, sizeof(out_result->remote_input), "disabled");
+    }
+    log_info("Smoke probe [remote_input]: %s", out_result->remote_input);
+
+    // 7. Network reachability check
+    bool net_ok = check_network_reachability();
+    strcpy_s(out_result->network, sizeof(out_result->network), net_ok ? "reachable" : "unreachable");
+    log_info("Smoke probe [network]: %s", out_result->network);
+
     // Evaluate
     if (!proxy_ok || !mosq_ok) {
         out_result->critical_failed = true;
@@ -232,15 +261,13 @@ bool smoke_run_probes(
         return false;
     }
 
-    if ((is_active_status && !out_result->l4desk_running) ||
-        out_result->desktop_locked ||
-        strcmp(out_result->ffmpeg_smoke_capture, "skipped") == 0) {
+    if (!net_ok || (is_active_status && session_id != 0 && !out_result->l4desk_running)) {
         out_result->has_warnings = true;
-        out_result->calculated_exit_code = 12; // Ready with warnings
-        log_warn("Smoke completed with warnings (code 12).");
+        out_result->calculated_exit_code = 12; // Degraded / ready with warnings
+        log_warn("Smoke completed with degraded status (code 12).");
     } else {
         out_result->calculated_exit_code = 0; // All smoke probes cleanly passed
-        log_info("Smoke probes completed successfully with no warnings (code 0).");
+        log_info("Smoke probes completed successfully (code 0).");
     }
 
     return true;

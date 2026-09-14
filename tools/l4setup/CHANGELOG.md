@@ -1,5 +1,12 @@
 # Changelog — Leo4 Setup (`l4setup`)
 
+## [1.7.2] — 2026-09-14
+
+### Changed & Improved
+- Обновление версионирования до 1.7.2.
+- Зафиксированы контракты кодов возврата CLI (0=ready, 10=activation_required, 11=ready_for_online, 12=degraded, 20=access_denied, 21=unsupported_os, 22=drainage_failed, 23=payload_failed, 24=service_failed, 25=pin_rejected, 26=activation_timeout, 27=critical_smoke_failed, 28=setup_busy, 29=downgrade_blocked, 30=preflight_failed, 31=cancelled).
+- Поддержка события graceful stop `Global\L4Desk_Stop_<SN>` и таймаутов служб.
+
 ## [1.7.1] — 2026-09-13
 
 ### Changed

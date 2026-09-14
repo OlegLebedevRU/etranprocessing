@@ -5,6 +5,7 @@
 #include "config.h"
 #include "mqtt_client.h"
 #include "desktop_state.h"
+#include "input_inject.h"
 #include "log.h"
 #include <winsock2.h>
 #include <windows.h>
@@ -59,6 +60,8 @@ static DWORD WINAPI supervisor_stop_watcher_thread(LPVOID param) {
 }
 
 int main(int argc, char* argv[]) {
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
+
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
 
@@ -68,6 +71,8 @@ int main(int argc, char* argv[]) {
     L4DeskConfig config;
     config_init_defaults(&config);
     config_parse_args(&config, argc, argv);
+
+    input_set_shortcut_policy(config.allow_f12, config.allow_alt_f4, config.allow_win_d, config.kiosk_process);
 
     // Initialize logger
     log_init(config.log_file, config.verbose, config.console_mode);

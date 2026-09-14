@@ -7,6 +7,45 @@ extern "C" {
 #endif
 
 /**
+ * Compare two version strings numerically by components (major.minor.patch.build).
+ * Returns:
+ *   > 0 if v1 > v2
+ *  == 0 if v1 == v2
+ *   < 0 if v1 < v2
+ */
+int version_compare(const char* v1, const char* v2);
+
+/**
+ * Read installed_version from state.json in dest_dir.
+ * Returns true if found and parsed, false otherwise.
+ */
+bool unpack_read_installed_version(const wchar_t* dest_dir, char* out_version, size_t out_size);
+
+/**
+ * Incomplete install marker management in state.json:
+ * Records phase, old_version, and target_version prior to updating live files.
+ */
+bool unpack_has_incomplete_marker(const wchar_t* dest_dir, char* out_phase, size_t out_phase_size);
+bool unpack_set_incomplete_marker(const wchar_t* dest_dir, const char* phase, const char* old_ver, const char* target_ver);
+bool unpack_clear_incomplete_marker(const wchar_t* dest_dir);
+
+/**
+ * Recover from interrupted install/power loss if incomplete marker is found.
+ */
+bool unpack_recover_from_crash(const wchar_t* dest_dir);
+
+/**
+ * Verify that executables in dest_dir are not locked by other processes.
+ * Waits up to wait_timeout_ms (e.g. 10000ms).
+ */
+bool unpack_check_files_locked(const wchar_t* dest_dir, DWORD wait_timeout_ms);
+
+/**
+ * Roll back previous version from dest\rollback\<prev_version>.
+ */
+bool unpack_rollback(const wchar_t* dest_dir, const char* prev_version);
+
+/**
  * Check if the existing installation in dest_dir matches current_version
  * and all required executables are present and intact.
  */

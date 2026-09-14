@@ -143,7 +143,7 @@ export default function VideoSurveillancePage() {
   const [inventory, setInventory] = useState<DeviceInventory | null>(null);
   const [loadingInventory, setLoadingInventory] = useState<boolean>(false);
   const [selectedSourceKey, setSelectedSourceKey] = useState<string>("");
-  const [selectedProfile, setSelectedProfile] = useState<string>("default");
+  const [selectedProfile, setSelectedProfile] = useState<string>("low");
 
   // Статус потока
   const [activeStream, setActiveStream] = useState<StreamPresenceInfo | null>(null);
@@ -224,13 +224,9 @@ export default function VideoSurveillancePage() {
 
   // Обработчики кликов удалённого управления
   const handleClickResult = useCallback((res: ClickResult) => {
-    if (res.result === "injected") {
-      const ms = res.latency_ms !== undefined ? ` (${res.latency_ms} мс)` : "";
-      message.success(`Клик выполнен${ms}`);
-    } else if (res.result === "unconfirmed") {
-      message.warning("Клик не подтверждён — повторите вручную");
-    } else if (res.result === "nack") {
-      message.error(`Клик отклонён агентом: ${res.code || res.message || "ошибка"}`);
+    // Компактный статус отображается в панели RemoteControlPanel; не показываем success-toast на каждый клик
+    if (res.result === "unconfirmed") {
+      message.warning(res.message || "Результат ввода не подтвержден. Проверьте изображение перед повторным действием.");
     }
   }, []);
 
@@ -689,8 +685,12 @@ export default function VideoSurveillancePage() {
         message.warning("Управление мышью доступно только в подтверждённом режиме рабочего стола");
         return;
       }
+      if (selectedProfile !== "low" && selectedProfile !== "480p") {
+        message.warning("Удалённое управление разрешено только в режиме качества 480p (Эконом)");
+        return;
+      }
       try {
-        await rc.enable();
+        await rc.enable(selectedProfile);
         message.success("Управление активировано");
       } catch (err: any) {
         // обработано в хуке
@@ -950,9 +950,12 @@ export default function VideoSurveillancePage() {
                   isSessionActive={isSessionActive}
                   isCameraMode={isCameraMode}
                   isTerminalOnline={selectedDevice.status === "online"}
+                  selectedProfile={selectedProfile}
                   onEnableControl={handleToggleControl}
                   onDisableControl={handleToggleControl}
+                  onSendShortcut={rc.sendShortcut}
                   onSendKey={rc.sendKey}
+                  lastCommandResult={rc.lastClickResult}
                   isMobile={isMobile}
                 />
               )}

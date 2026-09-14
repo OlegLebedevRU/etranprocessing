@@ -11,12 +11,19 @@ echo.
 if /i "%1"=="legacy" goto :build_legacy
 
 :: Step 1: Read version
+if not "%1"=="" (
+    set "L4TOOLS_VERSION=%1"
+    echo %1>"%~dp0version.txt"
+    goto :version_set
+)
 if exist "%~dp0version.txt" (
     set /p L4TOOLS_VERSION=<"%~dp0version.txt"
-) else (
-    set "L4TOOLS_VERSION=1.7.1"
-    echo 1.7.1>"%~dp0version.txt"
+    goto :version_set
 )
+set "L4TOOLS_VERSION=1.7.2"
+echo 1.7.2>"%~dp0version.txt"
+
+:version_set
 set "L4TOOLS_VERSION=%L4TOOLS_VERSION: =%"
 
 echo Target Version: %L4TOOLS_VERSION%
@@ -28,8 +35,8 @@ for /f "tokens=1,2,3 delims=." %%a in ("%L4TOOLS_VERSION%") do (
     set "VER_PATCH=%%c"
 )
 if "%VER_MAJ%"=="" set "VER_MAJ=1"
-if "%VER_MIN%"=="" set "VER_MIN=0"
-if "%VER_PATCH%"=="" set "VER_PATCH=0"
+if "%VER_MIN%"=="" set "VER_MIN=7"
+if "%VER_PATCH%"=="" set "VER_PATCH=2"
 
 :: Generate tools/l4setup/res/version.h
 if not exist "%~dp0l4setup\res" md "%~dp0l4setup\res"
@@ -51,8 +58,18 @@ if not exist "%~dp0l4setup\res" md "%~dp0l4setup\res"
     echo #define VER_PRODUCTVERSION_STR "%L4TOOLS_VERSION%\0"
 ) > "%~dp0l4setup\res\version.h"
 
-:: Pass /DL4TOOLS_VERSION to components that support cl via CL environment variable
-set "CL=/DL4TOOLS_VERSION=\"%L4TOOLS_VERSION%\" %CL%"
+:: Also ensure tools/l4setup/src/version.h is in sync
+if not exist "%~dp0l4setup\src" md "%~dp0l4setup\src"
+(
+    echo #pragma once
+    echo.
+    echo #define L4SETUP_VERSION_MAJOR %VER_MAJ%
+    echo #define L4SETUP_VERSION_MINOR %VER_MIN%
+    echo #define L4SETUP_VERSION_PATCH %VER_PATCH%
+    echo #define L4SETUP_VERSION_BUILD 0
+    echo #define L4SETUP_VERSION_STRING "%L4TOOLS_VERSION%"
+    echo #define L4SETUP_VERSION_WSTRING L"%L4TOOLS_VERSION%"
+) > "%~dp0l4setup\src\version.h"
 
 :: Step 2: Build all 6 components in order
 echo.

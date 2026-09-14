@@ -363,6 +363,59 @@ def verify_uploaded_digest(
         return False
 
 
+def verify_downloaded_artifacts(
+    version: str,
+    sha256_map: dict[str, str],
+    size_map: dict[str, int],
+    registry_base: str = DEFAULT_REGISTRY,
+    timeout: int = 120,
+) -> bool:
+    """Perform HTTPS GET for each artifact in UPLOAD_ORDER, compute sha256 and verify matching."""
+    registry_base = registry_base.rstrip("/")
+    for filename in UPLOAD_ORDER:
+        url = f"{registry_base}/l4tools/{version}/{filename}"
+        expected_sha = sha256_map.get(filename, "").lower()
+        expected_size = size_map.get(filename)
+        req = urllib.request.Request(
+            url, headers={"User-Agent": "publish_l4tools-verify/1.0"}
+        )
+        hasher = hashlib.sha256()
+        total_bytes = 0
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                if resp.status != 200:
+                    print(f"[ERROR] GET {url} returned HTTP {resp.status}")
+                    return False
+                while True:
+                    chunk = resp.read(65536)
+                    if not chunk:
+                        break
+                    hasher.update(chunk)
+                    total_bytes += len(chunk)
+        except Exception as ex:
+            print(f"[ERROR] Failed HTTPS GET {url}: {ex}")
+            return False
+
+        computed_sha = hasher.hexdigest().lower()
+        if expected_size is not None and total_bytes != expected_size:
+            print(
+                f"[ERROR] Size mismatch for {url}: downloaded {total_bytes} != expected {expected_size}"
+            )
+            return False
+
+        if computed_sha != expected_sha:
+            print(
+                f"[ERROR] SHA-256 mismatch for {url}: downloaded {computed_sha} != expected {expected_sha}"
+            )
+            return False
+
+        print(
+            f"[VERIFY-GET] OK: {filename} ({total_bytes} bytes, sha256={computed_sha})"
+        )
+
+    return True
+
+
 def record_release(
     version: str,
     manifest: dict,
@@ -403,19 +456,40 @@ def record_release(
     if releases_file:
         try:
             releases_file.parent.mkdir(parents=True, exist_ok=True)
-            journal_entry = {
-                "component": "l4tools",
-                "version": version,
-                "revision": manifest.get("git_sha", ""),
-                "flow_revision": manifest.get("git_sha", ""),
-                "tag": f"tools/v{version}",
-                "digest": sha256_map.get("l4setup.exe", ""),
-                "built_at": manifest.get("built_at", ""),
-                "published_at": published_at,
-            }
-            with releases_file.open("a", encoding="utf-8") as f:
-                f.write(json.dumps(journal_entry) + "\n")
-            print(f"[RECORD] Appended release to {releases_file}")
+            already_recorded = False
+            if releases_file.is_file():
+                for line in releases_file.read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                        if (
+                            entry.get("component") == "l4tools"
+                            and entry.get("version") == version
+                        ):
+                            already_recorded = True
+                            break
+                    except Exception:
+                        pass
+            if already_recorded:
+                print(
+                    f"[RECORD] Entry for {version} already exists in {releases_file}; skipping duplicate append."
+                )
+            else:
+                journal_entry = {
+                    "component": "l4tools",
+                    "version": version,
+                    "revision": manifest.get("git_sha", ""),
+                    "flow_revision": manifest.get("git_sha", ""),
+                    "tag": f"tools/v{version}",
+                    "digest": sha256_map.get("l4setup.exe", ""),
+                    "built_at": manifest.get("built_at", ""),
+                    "published_at": published_at,
+                }
+                with releases_file.open("a", encoding="utf-8") as f:
+                    f.write(json.dumps(journal_entry) + "\n")
+                print(f"[RECORD] Appended release to {releases_file}")
         except Exception as ex:
             print(f"[WARN] Failed to write to {releases_file}: {ex}", file=sys.stderr)
 
@@ -431,6 +505,7 @@ def publish_release(
     record_dir: Path = DEFAULT_RECORD_DIR,
     releases_file: Path | None = DEFAULT_RELEASES_FILE,
     env_file: Path | None = None,
+    expected_version: str | None = None,
 ) -> int:
     """Execute complete release publication flow.
 
@@ -451,6 +526,12 @@ def publish_release(
         return 1
 
     version = manifest["version"]
+    if expected_version and version != expected_version:
+        print(
+            f"[ERROR] Version in manifest ({version}) does not match expected version ({expected_version}).",
+            file=sys.stderr,
+        )
+        return 1
     print(f"[OK] Artifacts verified for version {version}:")
     for f in UPLOAD_ORDER:
         print(f"  - {f}: {size_map[f]} bytes, sha256={sha256_map[f]}")
@@ -461,9 +542,36 @@ def publish_release(
         check_code = check_remote_version(version, registry_base=registry_base)
         if check_code == 2:
             print(
-                f"[HALT] Version {version} already exists in registry. Immutable registry rejects overwriting."
+                f"[CHECK] Version {version} already exists in registry. Verifying if all published artifacts are identical..."
             )
-            return 2
+            if verify_downloaded_artifacts(
+                version=version,
+                sha256_map=sha256_map,
+                size_map=size_map,
+                registry_base=registry_base,
+            ):
+                print(
+                    f"[INFO] Version {version} is already published with identical SHA-256 checksums."
+                )
+                print(
+                    "[INFO] Idempotent publication confirmed; skipping upload, recording audit if missing."
+                )
+                if not dry_run:
+                    record_release(
+                        version=version,
+                        manifest=manifest,
+                        sha256_map=sha256_map,
+                        size_map=size_map,
+                        registry_base=registry_base,
+                        record_dir=record_dir,
+                        releases_file=releases_file,
+                    )
+                return 0
+            else:
+                print(
+                    f"[HALT] Version {version} already exists in registry with differing artifacts or partial publication. Overwrite is prohibited."
+                )
+                return 2
         if check_code != 0:
             print(f"[ERROR] Remote check failed (code {check_code}).")
             return 1
@@ -520,8 +628,29 @@ def publish_release(
             )
             return 3
 
-    # 5. Record
-    print("\n=== 4. Recording publication metadata ===")
+    # 5. Full HTTPS GET byte verification
+    print(
+        f"\n=== 4. Verifying downloaded bytes via HTTPS GET ({'DRY-RUN' if dry_run else 'LIVE'}) ==="
+    )
+    if dry_run:
+        for filename in UPLOAD_ORDER:
+            print(
+                f"[DRY-RUN] GET {registry_base}/l4tools/{version}/{filename} -> compute sha256 == {sha256_map[filename]}"
+            )
+    else:
+        if not verify_downloaded_artifacts(
+            version=version,
+            sha256_map=sha256_map,
+            size_map=size_map,
+            registry_base=registry_base,
+        ):
+            print(
+                f"[ERROR] HTTPS GET byte verification failed for version {version}! Publication incomplete; aborting record."
+            )
+            return 3
+
+    # 6. Record
+    print("\n=== 5. Recording publication metadata ===")
     if dry_run:
         print(f"[DRY-RUN] Would write record to {record_dir}/{version}.json")
         if releases_file:
@@ -553,8 +682,35 @@ def main() -> int:
     parser.add_argument(
         "--env-file", type=Path, default=None, help="Path to .env file with credentials"
     )
+    parser.add_argument(
+        "--dist", type=Path, default=None, help="Artifacts directory (e.g. tools/dist)"
+    )
+    parser.add_argument("--version", default=None, help="Release version (e.g. 1.7.2)")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Simulate upload without network changes"
+    )
+    parser.add_argument(
+        "--allow-dirty",
+        action="store_true",
+        help="Allow release built from dirty git tree",
+    )
+    parser.add_argument(
+        "--skip-check", action="store_true", help="Skip remote pre-check"
+    )
+    parser.add_argument(
+        "--record-dir",
+        type=Path,
+        default=DEFAULT_RECORD_DIR,
+        help="Directory for release JSON",
+    )
+    parser.add_argument(
+        "--releases-file",
+        type=Path,
+        default=DEFAULT_RELEASES_FILE,
+        help="Path to releases.jsonl",
+    )
 
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers = parser.add_subparsers(dest="command", required=False)
 
     # verify
     sub_verify = subparsers.add_parser(
@@ -633,6 +789,16 @@ def main() -> int:
 
     args = parser.parse_args()
 
+    if args.command is None:
+        if args.dist:
+            args.command = "publish"
+            args.dir = args.dist
+            if not getattr(args, "allow_dirty", False):
+                args.allow_dirty = True
+        else:
+            parser.print_help()
+            return 1
+
     if args.command == "verify":
         try:
             manifest, sha256_map, size_map = verify_artifacts(
@@ -659,6 +825,7 @@ def main() -> int:
             record_dir=args.record_dir,
             releases_file=args.releases_file,
             env_file=args.env_file,
+            expected_version=getattr(args, "version", None),
         )
 
     if args.command == "record":

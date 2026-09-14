@@ -11,7 +11,7 @@
 #include <windows.h>
 
 #define L4CON_APP_NAME        "l4con"
-#define L4CON_APP_VERSION     "1.0.0"
+#define L4CON_APP_VERSION     "1.7.2"
 
 #define L4CON_SERVICE_NAME    L"L4Con"
 #define L4CON_DISPLAY_NAME    L"Leo4 Remote Diagnostics and Console Agent (l4con)"

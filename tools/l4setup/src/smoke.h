@@ -8,11 +8,13 @@ extern "C" {
 
 typedef struct {
     char proxy_info[16];           // "ok", "fail"
-    char mosquitto_port[16];        // "ok", "fail"
+    char mosquitto_port[16];       // "ok", "fail"
     int user_session_id;
     bool l4desk_running;
     char ffmpeg_smoke_capture[16]; // "ok", "skipped", "fail"
     bool desktop_locked;
+    char network[16];              // "reachable", "unreachable"
+    char remote_input[32];         // "available", "session_unavailable", "desktop_locked", etc.
 
     bool critical_failed;
     bool has_warnings;

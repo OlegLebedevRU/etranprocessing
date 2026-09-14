@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { notification } from "antd";
 import {
   acquireControlLease,
   getControlWsUrl,
   releaseControlLease,
+  getNackMessage,
   ClickResult,
   ControlAgentStatus,
   ControlLease,
@@ -186,8 +188,19 @@ export function useRemoteControl({
     [sharedLease, isSessionActive]
   );
 
-  const enable = useCallback(async () => {
+  const enable = useCallback(async (profile?: string) => {
     if (!deviceId || !isSessionActive) {
+      return;
+    }
+
+    if (profile && profile !== "low" && profile !== "480p") {
+      const msg = "Удалённое управление разрешено только в режиме качества 480p";
+      setErrorMessage(msg);
+      if (onErrorMessage) onErrorMessage(msg);
+      notification.warning({
+        message: "Качество видеопотока",
+        description: msg,
+      });
       return;
     }
 
@@ -268,13 +281,36 @@ export function useRemoteControl({
               return;
             }
 
-            if (data.type === "click_result") {
+            if (data.type === "click_result" || data.type === "action_result") {
+              if (data.lease_id && leaseRef.current && data.lease_id !== leaseRef.current.lease_id) {
+                return;
+              }
+
+              let messageText = data.message;
+              if (data.result === "injected") {
+                messageText = "Ввод передан терминалу";
+              } else if (data.result === "nack") {
+                messageText = getNackMessage(data.code, data.message);
+                notification.warning({
+                  message: "Действие отклонено",
+                  description: messageText,
+                  duration: 4,
+                });
+              } else if (data.result === "unconfirmed") {
+                messageText = "Результат ввода не подтвержден. Проверьте изображение перед повторным действием.";
+                notification.warning({
+                  message: "Результат не подтверждён",
+                  description: messageText,
+                  duration: 4,
+                });
+              }
+
               const res: ClickResult = {
                 command_id: data.command_id,
                 client_ref: data.client_ref,
                 result: data.result,
                 code: data.code,
-                message: data.message,
+                message: messageText,
                 latency_ms: data.latency_ms,
               };
               setLastClickResult(res);
@@ -460,7 +496,11 @@ export function useRemoteControl({
   );
 
   const sendClick = useCallback(
-    async (x: number, y: number): Promise<ClickResult> => {
+    async (
+      x: number,
+      y: number,
+      button: "left" | "right" = "left"
+    ): Promise<ClickResult> => {
       if (status !== "active" || streamMode !== "desktop") {
         return { result: "unconfirmed", message: "Управление не активно" };
       }
@@ -482,14 +522,16 @@ export function useRemoteControl({
           const unconfResult: ClickResult = {
             client_ref: clientRef,
             result: "unconfirmed",
-            message: "Клик не подтверждён — повторите вручную",
+            code: "ack_timeout",
+            message:
+              "Результат ввода не подтвержден. Проверьте изображение перед повторным действием.",
           };
           setLastClickResult(unconfResult);
           if (onClickResult) {
             onClickResult(unconfResult);
           }
           resolve(unconfResult);
-        }, 7000);
+        }, 5000);
 
         pendingClicksRef.current.set(clientRef, { resolve, timer });
 
@@ -497,7 +539,7 @@ export function useRemoteControl({
           type: "mouse_click",
           x: clampedX,
           y: clampedY,
-          button: "left",
+          button,
           client_ref: clientRef,
         });
 
@@ -506,8 +548,61 @@ export function useRemoteControl({
           pendingClicksRef.current.delete(clientRef);
           const failResult: ClickResult = {
             result: "unconfirmed",
+            code: "send_failed",
             message: "Не удалось отправить команду клика",
           };
+          setLastClickResult(failResult);
+          if (onClickResult) onClickResult(failResult);
+          resolve(failResult);
+        }
+      });
+    },
+    [status, streamMode, sendWsMessage, onClickResult]
+  );
+
+  const sendShortcut = useCallback(
+    async (action: "f12" | "alt_f4" | "win_d"): Promise<ClickResult> => {
+      if (status !== "active" || streamMode !== "desktop") {
+        return { result: "unconfirmed", message: "Управление не активно" };
+      }
+
+      const clientRef = `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+      return new Promise<ClickResult>((resolve) => {
+        const timer = setTimeout(() => {
+          pendingClicksRef.current.delete(clientRef);
+          const unconfResult: ClickResult = {
+            client_ref: clientRef,
+            result: "unconfirmed",
+            code: "ack_timeout",
+            message:
+              "Результат ввода не подтвержден. Проверьте изображение перед повторным действием.",
+          };
+          setLastClickResult(unconfResult);
+          if (onClickResult) {
+            onClickResult(unconfResult);
+          }
+          resolve(unconfResult);
+        }, 5000);
+
+        pendingClicksRef.current.set(clientRef, { resolve, timer });
+
+        const sent = sendWsMessage({
+          type: "shortcut_action",
+          action,
+          client_ref: clientRef,
+        });
+
+        if (!sent) {
+          clearTimeout(timer);
+          pendingClicksRef.current.delete(clientRef);
+          const failResult: ClickResult = {
+            result: "unconfirmed",
+            code: "send_failed",
+            message: "Не удалось отправить команду действия",
+          };
+          setLastClickResult(failResult);
+          if (onClickResult) onClickResult(failResult);
           resolve(failResult);
         }
       });
@@ -580,6 +675,7 @@ export function useRemoteControl({
       disable,
       sendMove,
       sendClick,
+      sendShortcut,
       sendKey,
       setPresence,
     }),
@@ -594,6 +690,7 @@ export function useRemoteControl({
       disable,
       sendMove,
       sendClick,
+      sendShortcut,
       sendKey,
     ]
   );

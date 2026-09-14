@@ -12,6 +12,7 @@ typedef struct {
     bool force_reissue;
     bool no_pin;
     bool silent;
+    bool interactive;
     wchar_t dest[MAX_PATH];
     bool dest_specified;
     bool repair;

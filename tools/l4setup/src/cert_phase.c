@@ -54,16 +54,32 @@ static INT_PTR CALLBACK PinDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lP
                     p[--len] = L'\0';
                 }
 
-                if (len == 0) {
-                    MessageBoxW(hDlg, L"Пожалуйста, введите PIN-код терминала или нажмите «Пропустить».",
-                                L"Leo4 Setup", MB_OK | MB_ICONINFORMATION);
+                if (len != 6) {
+                    MessageBoxW(hDlg, L"Please enter a 6-digit terminal PIN.",
+                                L"Leo4 Setup", MB_OK | MB_ICONWARNING);
                     return TRUE;
+                }
+                for (int i = 0; i < 6; i++) {
+                    if (p[i] < L'0' || p[i] > L'9') {
+                        MessageBoxW(hDlg, L"PIN must contain digits only (0-9).",
+                                    L"Leo4 Setup", MB_OK | MB_ICONWARNING);
+                        return TRUE;
+                    }
                 }
 
                 if (pTargetPin) {
                     wcsncpy_s(pTargetPin, 64, p, _TRUNCATE);
                 }
                 EndDialog(hDlg, IDOK);
+                return TRUE;
+            } else if (wmId == IDC_BTN_SKIP) {
+                int resp = MessageBoxW(hDlg,
+                    L"Skipping activation will leave the terminal unactivated (activation_required).\nAre you sure you want to skip activation?",
+                    L"Leo4 Setup - Skip Activation",
+                    MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
+                if (resp == IDYES) {
+                    EndDialog(hDlg, IDC_BTN_SKIP);
+                }
                 return TRUE;
             } else if (wmId == IDCANCEL) {
                 EndDialog(hDlg, IDCANCEL);
@@ -432,9 +448,9 @@ bool cert_phase_execute(
     // 3. Acquire PIN if not provided
     if (!cli_opts->pin_specified) {
         if (cli_opts->silent || cli_opts->no_pin) {
-            log_info("No PIN provided and running in silent/no-pin mode. Entering standby_waiting_pin.");
+            log_info("No PIN provided and running in silent/no-pin mode. Entering activation_required.");
             out_result->exit_code = 10;
-            strcpy_s(out_result->status, sizeof(out_result->status), "standby_waiting_pin");
+            strcpy_s(out_result->status, sizeof(out_result->status), "activation_required");
             return true;
         }
 
@@ -449,11 +465,16 @@ bool cert_phase_execute(
 
         if (res == IDOK && cli_opts->pin[0] != L'\0') {
             cli_opts->pin_specified = true;
-        } else {
-            log_info("User skipped PIN entry or cancelled dialog. Entering standby_waiting_pin.");
+        } else if (res == IDC_BTN_SKIP) {
+            log_info("User skipped PIN entry. Entering activation_required.");
             out_result->exit_code = 10;
-            strcpy_s(out_result->status, sizeof(out_result->status), "standby_waiting_pin");
+            strcpy_s(out_result->status, sizeof(out_result->status), "activation_required");
             return true;
+        } else {
+            log_info("User cancelled PIN entry dialog.");
+            out_result->exit_code = 31;
+            strcpy_s(out_result->status, sizeof(out_result->status), "cancelled");
+            return false;
         }
     }
 

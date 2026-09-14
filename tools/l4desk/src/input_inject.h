@@ -35,4 +35,12 @@ bool input_inject_key(const char* kind, int vk, const char* text, DWORD* out_err
 /* Release all injected/active keys and mouse buttons */
 void input_release_all(void);
 
+/* Shortcut policy and actions */
+void input_set_shortcut_policy(bool allow_f12, bool allow_alt_f4, bool allow_win_d, const wchar_t* kiosk_process);
+bool input_get_shortcut_policy(bool* out_f12, bool* out_alt_f4, bool* out_win_d);
+bool input_verify_alt_f4_target(HWND* out_target);
+bool input_inject_shortcut_f12(DWORD* out_error);
+bool input_inject_shortcut_alt_f4(DWORD* out_error);
+bool input_inject_shortcut_win_d(DWORD* out_error);
+
 #endif /* L4DESK_INPUT_INJECT_H */

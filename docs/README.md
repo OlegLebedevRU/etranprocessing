@@ -19,6 +19,7 @@
 - **[`etran_cert-infrastructure-architecture.md`](etran_cert-infrastructure-architecture.md)** — Сквозная спецификация инфраструктуры сертификатов и mTLS: двухфакторный выпуск через PIN, терминальный установщик на C, проверка подлинности на Nginx и PowerShell-скрипты аудита.
 - **[`etran_arch-serverless-email-integration.md`](etran_arch-serverless-email-integration.md)** — Архитектура и спецификация интеграции serverless-сервиса отправки email: email организации, подтверждение адресов, отправка финансовых и сменных отчетов, mTLS-проброс от терминалов.
 - **[`etran_arch-l4media-streaming-architecture.md`](etran_arch-l4media-streaming-architecture.md)** — Архитектура подсистемы видеотрансляций `l4media`: прием mTLS видеопотоков L4RTP/1 от киосков (`leo4proxy`), декапсуляция, Janus WebRTC Gateway и интеграция с `MenuBuilder`.
+- **[`etran_arch-l4media-resource-profiling-and-unit-budgets.md`](etran_arch-l4media-resource-profiling-and-unit-budgets.md)** — Профилирование аппаратных и сетевых ресурсов, юнит-бюджеты и расчет емкости стека видеотрансляций `l4media`: сравнительный анализ 480p против 720p на сервере 87.242.100.34.
 - **[`etran_arch-video-remote-desktop-e2e.md`](etran_arch-video-remote-desktop-e2e.md)** — Единая E2E-архитектура видеонаблюдения и удаленного управления: краткая и детальная части, схемы media/control/signaling, оркестрация и контракты MenuBuilder/app1/l4desk, задачи надежности и развертывания, направления Linux и ESP32-P4.
 
 ---

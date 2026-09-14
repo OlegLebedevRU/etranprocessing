@@ -8,6 +8,7 @@
 #include "../src/version.h"
 #include "../src/cli.h"
 #include "../src/log.h"
+#include "../src/unpack.h"
 #include "../src/summary.h"
 #include "../../l4pin/src/cert_discovery.h"
 
@@ -53,13 +54,14 @@ static bool test_cli_parser(void) {
         TEST_ASSERT(cli_parse(1, argv, &opts, err, sizeof(err)), "Failed to parse defaults");
         TEST_ASSERT(wcscmp(opts.dest, L"C:\\l4tools") == 0, "Default dest should be C:\\l4tools");
         TEST_ASSERT(!opts.silent, "Default silent should be false");
+        TEST_ASSERT(!opts.interactive, "Default interactive should be false");
         TEST_ASSERT(!opts.force_reissue, "Default force_reissue should be false");
         TEST_ASSERT(!opts.no_pin, "Default no_pin should be false");
         TEST_ASSERT(!opts.repair, "Default repair should be false");
         TEST_ASSERT(!opts.smoke_only, "Default smoke_only should be false");
     }
 
-    // 2. Flags: --pin and -p
+    // 2. Flags: --pin and -p (strictly 6 digits)
     {
         wchar_t* argv[] = { L"l4setup.exe", L"--pin", L"123456" };
         CliOptions opts;
@@ -70,6 +72,16 @@ static bool test_cli_parser(void) {
         cli_clean_pin(&opts);
         TEST_ASSERT(!opts.pin_specified, "pin_specified should be false after clean");
         TEST_ASSERT(opts.pin[0] == L'\0', "pin should be wiped");
+
+        // Invalid pins: 5 digits, 7 digits, non-digits
+        wchar_t* argv_short[] = { L"l4setup.exe", L"--pin", L"12345" };
+        TEST_ASSERT(!cli_parse(3, argv_short, &opts, NULL, 0), "5-digit PIN should be rejected");
+
+        wchar_t* argv_long[] = { L"l4setup.exe", L"--pin", L"1234567" };
+        TEST_ASSERT(!cli_parse(3, argv_long, &opts, NULL, 0), "7-digit PIN should be rejected");
+
+        wchar_t* argv_alpha[] = { L"l4setup.exe", L"--pin", L"12345a" };
+        TEST_ASSERT(!cli_parse(3, argv_alpha, &opts, NULL, 0), "Non-digit PIN should be rejected");
     }
 
     // 3. Flags: --silent without pin implies no_pin
@@ -79,6 +91,19 @@ static bool test_cli_parser(void) {
         TEST_ASSERT(cli_parse(2, argv, &opts, NULL, 0), "Failed --silent");
         TEST_ASSERT(opts.silent, "silent should be true");
         TEST_ASSERT(opts.no_pin, "no_pin should be implied in silent mode without pin");
+    }
+
+    // 3b. Flags: --interactive and conflict with --silent
+    {
+        wchar_t* argv_inter[] = { L"l4setup.exe", L"--interactive" };
+        CliOptions opts;
+        TEST_ASSERT(cli_parse(2, argv_inter, &opts, NULL, 0), "Failed --interactive");
+        TEST_ASSERT(opts.interactive, "interactive should be true");
+
+        wchar_t* argv_conflict[] = { L"l4setup.exe", L"--interactive", L"--silent" };
+        char err_conflict[128] = { 0 };
+        TEST_ASSERT(!cli_parse(3, argv_conflict, &opts, err_conflict, sizeof(err_conflict)), "Conflict should be rejected");
+        TEST_ASSERT(strstr(err_conflict, "Conflict") != NULL, "Expected conflict error message");
     }
 
     // 4. Flags: /S with pin
@@ -363,6 +388,13 @@ static bool test_summary_and_state(void) {
     data.probes.l4desk_running = true;
     strcpy_s(data.probes.ffmpeg_smoke_capture, 16, "ok");
     data.probes.desktop_locked = false;
+    strcpy_s(data.probes.network, 16, "reachable");
+    strcpy_s(data.probes.remote_input, 32, "available");
+
+    strcpy_s(data.service_leo4proxy, 32, "running");
+    strcpy_s(data.service_mosquitto, 32, "running");
+    strcpy_s(data.service_l4con, 32, "running");
+    strcpy_s(data.service_l4superv, 32, "running");
 
     // 1. Write summary
     TEST_ASSERT(summary_write_json(&data, test_dir), "summary_write_json failed");
@@ -383,6 +415,9 @@ static bool test_summary_and_state(void) {
     TEST_ASSERT(strstr(buf, "\"state\": \"valid\"") != NULL, "Missing cert.state");
     TEST_ASSERT(strstr(buf, "\"thumbprint\": \"CC88419A4C3763150A4C0905261EC073C58CFC09\"") != NULL, "Missing thumbprint");
     TEST_ASSERT(strstr(buf, "\"proxy_info\": \"ok\"") != NULL, "Missing probe");
+    TEST_ASSERT(strstr(buf, "\"services\":") != NULL, "Missing services object");
+    TEST_ASSERT(strstr(buf, "\"network\": \"reachable\"") != NULL, "Missing network probe");
+    TEST_ASSERT(strstr(buf, "\"remote_input\": \"available\"") != NULL, "Missing remote_input probe");
 
     // 2. State patch test
     wchar_t state_file[MAX_PATH];
@@ -415,6 +450,88 @@ static bool test_summary_and_state(void) {
 }
 
 // ---------------------------------------------------------------------------
+// 6. Numeric Version Comparison Tests
+// ---------------------------------------------------------------------------
+static bool test_numeric_version_compare(void) {
+    TEST_ASSERT(version_compare("1.7.1", "1.7.2") < 0, "1.7.1 < 1.7.2");
+    TEST_ASSERT(version_compare("1.7.2", "1.7.2") == 0, "1.7.2 == 1.7.2");
+    TEST_ASSERT(version_compare("1.7.2", "1.7.1") > 0, "1.7.2 > 1.7.1");
+
+    // Critical: numeric vs lexical comparison (1.10.0 > 1.7.2)
+    TEST_ASSERT(version_compare("1.10.0", "1.7.2") > 0, "1.10.0 > 1.7.2 numerically");
+    TEST_ASSERT(version_compare("1.7.2", "1.10.0") < 0, "1.7.2 < 1.10.0 numerically");
+
+    // 4 components and trailing zero equivalences
+    TEST_ASSERT(version_compare("2.0.0.0", "1.9.9.9") > 0, "2.0.0.0 > 1.9.9.9");
+    TEST_ASSERT(version_compare("1.7.1", "1.7.1.0") == 0, "1.7.1 == 1.7.1.0");
+
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// 7. Incomplete Marker & Crash Recovery Tests
+// ---------------------------------------------------------------------------
+static bool test_incomplete_marker_and_recovery(void) {
+    wchar_t test_dir[MAX_PATH];
+    GetTempPathW(MAX_PATH, test_dir);
+    wcscat_s(test_dir, MAX_PATH, L"l4setup_crash_test");
+    CreateDirectoryW(test_dir, NULL);
+
+    // 1. Set marker
+    TEST_ASSERT(unpack_set_incomplete_marker(test_dir, "update", "1.7.0", "1.7.2"), "Failed to set incomplete marker");
+
+    char phase[64] = { 0 };
+    TEST_ASSERT(unpack_has_incomplete_marker(test_dir, phase, sizeof(phase)), "Failed to detect incomplete marker");
+    TEST_ASSERT(strcmp(phase, "update") == 0, "Marker phase mismatch");
+
+    // 2. Setup mock rollback structure: dest\rollback\1.7.0\l4pin\l4pin.exe
+    wchar_t rb_parent[MAX_PATH];
+    swprintf_s(rb_parent, MAX_PATH, L"%ls\\rollback", test_dir);
+    CreateDirectoryW(rb_parent, NULL);
+
+    wchar_t rb_ver[MAX_PATH];
+    swprintf_s(rb_ver, MAX_PATH, L"%ls\\rollback\\1.7.0", test_dir);
+    CreateDirectoryW(rb_ver, NULL);
+
+    wchar_t rb_dir[MAX_PATH];
+    swprintf_s(rb_dir, MAX_PATH, L"%ls\\rollback\\1.7.0\\l4pin", test_dir);
+    CreateDirectoryW(rb_dir, NULL);
+
+    wchar_t rb_file[MAX_PATH];
+    swprintf_s(rb_file, MAX_PATH, L"%ls\\l4pin.exe", rb_dir);
+    FILE* fp = NULL;
+    _wfopen_s(&fp, rb_file, L"wb");
+    TEST_ASSERT(fp != NULL, "Failed to create mock rollback file");
+    fputs("mock_l4pin_binary_content", fp);
+    fclose(fp);
+
+    // 3. Trigger crash recovery
+    TEST_ASSERT(unpack_recover_from_crash(test_dir), "Crash recovery failed");
+
+    // 4. Verify restored file in dest
+    wchar_t restored_file[MAX_PATH];
+    swprintf_s(restored_file, MAX_PATH, L"%ls\\l4pin\\l4pin.exe", test_dir);
+    TEST_ASSERT(GetFileAttributesW(restored_file) != INVALID_FILE_ATTRIBUTES, "Restored file not found in dest");
+
+    // 5. Verify marker cleared
+    TEST_ASSERT(!unpack_has_incomplete_marker(test_dir, NULL, 0), "Marker should be cleared after recovery");
+
+    // Cleanup
+    DeleteFileW(restored_file);
+    wchar_t restored_dir[MAX_PATH];
+    swprintf_s(restored_dir, MAX_PATH, L"%ls\\l4pin", test_dir);
+    RemoveDirectoryW(restored_dir);
+
+    DeleteFileW(rb_file);
+    RemoveDirectoryW(rb_dir);
+    RemoveDirectoryW(rb_ver);
+    RemoveDirectoryW(rb_parent);
+    RemoveDirectoryW(test_dir);
+
+    return true;
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 int main(int argc, char* argv[]) {
@@ -440,6 +557,8 @@ int main(int argc, char* argv[]) {
     RUN_TEST(test_payload_selection);
     RUN_TEST(test_phase3_matrix);
     RUN_TEST(test_summary_and_state);
+    RUN_TEST(test_numeric_version_compare);
+    RUN_TEST(test_incomplete_marker_and_recovery);
 
     printf("=======================================================\n");
     printf(" Unit Tests Summary: %d / %d passed\n", g_tests_passed, g_tests_run);

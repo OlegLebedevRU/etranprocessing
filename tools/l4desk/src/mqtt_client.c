@@ -10,6 +10,7 @@
 #include "ffmpeg_supervisor.h"
 #include "dedup_cache.h"
 #include "sn_discovery.h"
+#include "json_min.h"
 #include "log.h"
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -39,6 +40,21 @@ typedef struct {
     char pending_stream_state[32];
     char pending_stream_reason[64];
 } MqttState;
+
+typedef struct {
+    char payload[4096];
+    size_t payload_len;
+} InputTask;
+
+typedef struct {
+    InputTask queue[2];
+    int count;
+    CRITICAL_SECTION cs;
+    HANDLE hEvent;
+    HANDLE hThread;
+    volatile bool stop;
+    MqttState* st;
+} InputWorker;
 
 static uint16_t get_next_packet_id(MqttState* st) {
     st->packet_id_counter++;
@@ -135,6 +151,70 @@ static bool screen_changed(const ScreenMetrics* a, const ScreenMetrics* b) {
             a->virtual_height != b->virtual_height);
 }
 
+static DWORD WINAPI input_worker_proc(LPVOID lpParam) {
+    InputWorker* w = (InputWorker*)lpParam;
+    while (!w->stop) {
+        DWORD wr = WaitForSingleObject(w->hEvent, 200);
+        if (w->stop) break;
+        if (wr != WAIT_OBJECT_0) continue;
+
+        InputTask task;
+        bool has_task = false;
+
+        EnterCriticalSection(&w->cs);
+        if (w->count > 0) {
+            task = w->queue[0];
+            if (w->count > 1) {
+                w->queue[0] = w->queue[1];
+            }
+            w->count--;
+            has_task = true;
+        }
+        LeaveCriticalSection(&w->cs);
+
+        if (!has_task) continue;
+
+        /* Check TTL/expiration before executing injection */
+        int64_t expires_at_ms = 0;
+        int64_t now_ms = (int64_t)time(NULL) * 1000LL;
+        if (json_extract_int64(task.payload, "expires_at_ms", &expires_at_ms) &&
+            expires_at_ms > 0 && expires_at_ms <= now_ms) {
+            char cmd_id[64] = { 0 };
+            char lease_id[64] = { 0 };
+            json_extract_str(task.payload, "command_id", cmd_id, sizeof(cmd_id));
+            json_extract_str(task.payload, "lease_id", lease_id, sizeof(lease_id));
+
+            char resp_buf[1024];
+            int len = ctl_build_nack_payload(resp_buf, sizeof(resp_buf), cmd_id, lease_id, w->st->sn,
+                                             "expired", "Command expired before execution", now_ms);
+            if (len > 0 && w->st->sock != INVALID_SOCKET) {
+                char out_topic[128];
+                snprintf(out_topic, sizeof(out_topic), "dev/%s/ctl", w->st->sn);
+                send_publish_packet(w->st, out_topic, resp_buf, (size_t)len, 1, 0);
+            }
+            continue;
+        }
+
+        char resp_buf[8192];
+        size_t resp_len = 0;
+        bool should_pub = false;
+        uint8_t resp_qos = 1;
+
+        if (ctl_handle_command(task.payload, task.payload_len, w->st->sn,
+                               &w->st->inventory,
+                               resp_buf, sizeof(resp_buf), &resp_len,
+                               &should_pub, &resp_qos)) {
+            if (should_pub && resp_len > 0 && w->st->sock != INVALID_SOCKET) {
+                char out_topic[128];
+                snprintf(out_topic, sizeof(out_topic), "dev/%s/ctl", w->st->sn);
+                send_publish_packet(w->st, out_topic, resp_buf, resp_len, resp_qos, 0);
+                log_debug("Worker published ACK/NACK to %s: %s", out_topic, resp_buf);
+            }
+        }
+    }
+    return 0;
+}
+
 int mqtt_client_run(const L4DeskConfig* config, HANDLE hStopEvent) {
     if (!config) return 1;
 
@@ -149,6 +229,13 @@ int mqtt_client_run(const L4DeskConfig* config, HANDLE hStopEvent) {
     inventory_refresh(config->base_path, &state.inventory);
     state.last_inventory_hash = state.inventory.hash;
     state.last_inventory_time = time(NULL);
+
+    InputWorker worker;
+    memset(&worker, 0, sizeof(worker));
+    worker.st = &state;
+    InitializeCriticalSection(&worker.cs);
+    worker.hEvent = CreateEventW(NULL, FALSE, FALSE, NULL);
+    worker.hThread = CreateThread(NULL, 0, input_worker_proc, &worker, 0, NULL);
 
     /* 1. Resolve terminal SN */
     if (config->sn_explicitly_set && config->sn[0] != '\0') {
@@ -345,25 +432,63 @@ int mqtt_client_run(const L4DeskConfig* config, HANDLE hStopEvent) {
                                 payload_str[0] = '\0';
                             }
 
-                            if (ctl_handle_command(payload_str, payload_len, state.sn,
-                                                   &state.inventory,
-                                                   resp_buf, sizeof(resp_buf), &resp_len,
-                                                   &should_pub, &resp_qos)) {
-                                if (should_pub && resp_len > 0) {
-                                    char out_topic[128];
-                                    snprintf(out_topic, sizeof(out_topic), "dev/%s/ctl", state.sn);
-                                    send_publish_packet(&state, out_topic, resp_buf, resp_len, resp_qos, 0);
-                                    log_debug("Published ACK/NACK to %s: %s", out_topic, resp_buf);
-                                }
+                            char cmd_type[64] = { 0 };
+                            json_extract_str(payload_str, "type", cmd_type, sizeof(cmd_type));
+                            bool is_input_cmd = (strcmp(cmd_type, "mouse_click") == 0 ||
+                                                 strcmp(cmd_type, "shortcut_action") == 0 ||
+                                                 strcmp(cmd_type, "key_event") == 0);
 
-                                /* Check if stream state changed after command (if not already published) */
-                                StreamStateInfo cur_stream;
-                                ffmpeg_supervisor_get_info(&cur_stream);
-                                if (strcmp(cur_stream.state, state.last_stream_state) != 0) {
-                                    publish_stream_event(&state, cur_stream.stream_instance_id,
-                                                         cur_stream.state, cur_stream.reason);
-                                    publish_presence(&state, "online");
-                                    strcpy_s(state.last_stream_state, sizeof(state.last_stream_state), cur_stream.state);
+                            if (is_input_cmd) {
+                                int64_t expires_at_ms = 0;
+                                int64_t now_ms = (int64_t)time(NULL) * 1000LL;
+                                if (json_extract_int64(payload_str, "expires_at_ms", &expires_at_ms) &&
+                                    expires_at_ms > 0 && expires_at_ms <= now_ms) {
+                                    char cmd_id[64] = { 0 };
+                                    char lease_id[64] = { 0 };
+                                    json_extract_str(payload_str, "command_id", cmd_id, sizeof(cmd_id));
+                                    json_extract_str(payload_str, "lease_id", lease_id, sizeof(lease_id));
+                                    int len = ctl_build_nack_payload(resp_buf, sizeof(resp_buf), cmd_id, lease_id, state.sn,
+                                                                     "expired", "Command expired before processing", now_ms);
+                                    if (len > 0) {
+                                        char out_topic[128];
+                                        snprintf(out_topic, sizeof(out_topic), "dev/%s/ctl", state.sn);
+                                        send_publish_packet(&state, out_topic, resp_buf, (size_t)len, 1, 0);
+                                    }
+                                } else {
+                                    EnterCriticalSection(&worker.cs);
+                                    if (worker.count < 2) {
+                                        size_t copy_len = payload_len < sizeof(worker.queue[0].payload) ? payload_len : sizeof(worker.queue[0].payload) - 1;
+                                        memcpy(worker.queue[worker.count].payload, payload_str, copy_len);
+                                        worker.queue[worker.count].payload[copy_len] = '\0';
+                                        worker.queue[worker.count].payload_len = copy_len;
+                                        worker.count++;
+                                        SetEvent(worker.hEvent);
+                                    } else {
+                                        log_warn("Input worker queue full (depth 2), dropping command to prevent unbounded queue");
+                                    }
+                                    LeaveCriticalSection(&worker.cs);
+                                }
+                            } else {
+                                if (ctl_handle_command(payload_str, payload_len, state.sn,
+                                                       &state.inventory,
+                                                       resp_buf, sizeof(resp_buf), &resp_len,
+                                                       &should_pub, &resp_qos)) {
+                                    if (should_pub && resp_len > 0) {
+                                        char out_topic[128];
+                                        snprintf(out_topic, sizeof(out_topic), "dev/%s/ctl", state.sn);
+                                        send_publish_packet(&state, out_topic, resp_buf, resp_len, resp_qos, 0);
+                                        log_debug("Published ACK/NACK to %s: %s", out_topic, resp_buf);
+                                    }
+
+                                    /* Check if stream state changed after command (if not already published) */
+                                    StreamStateInfo cur_stream;
+                                    ffmpeg_supervisor_get_info(&cur_stream);
+                                    if (strcmp(cur_stream.state, state.last_stream_state) != 0) {
+                                        publish_stream_event(&state, cur_stream.stream_instance_id,
+                                                             cur_stream.state, cur_stream.reason);
+                                        publish_presence(&state, "online");
+                                        strcpy_s(state.last_stream_state, sizeof(state.last_stream_state), cur_stream.state);
+                                    }
                                 }
                             }
                         }
@@ -465,6 +590,15 @@ int mqtt_client_run(const L4DeskConfig* config, HANDLE hStopEvent) {
         }
         current_backoff = current_backoff < 60 ? current_backoff * 2 : 60;
     }
+
+    worker.stop = true;
+    SetEvent(worker.hEvent);
+    if (worker.hThread) {
+        WaitForSingleObject(worker.hThread, 3000);
+        CloseHandle(worker.hThread);
+    }
+    if (worker.hEvent) CloseHandle(worker.hEvent);
+    DeleteCriticalSection(&worker.cs);
 
     ffmpeg_supervisor_set_event_callback(NULL, NULL);
     ffmpeg_supervisor_cleanup();
