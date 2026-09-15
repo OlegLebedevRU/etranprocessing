@@ -9,8 +9,9 @@
 #include "sql_validator.h"
 #include "db_odbc.h"
 #include "output_formatter.h"
+#include "auth_adaptive.h"
 
-#define L4SQL_VERSION "1.0.0"
+#define L4SQL_VERSION "1.7.6"
 
 static void print_version() {
     printf("l4sql version %s (Leo4 / Platerra Terminal SQL Utility)\n", L4SQL_VERSION);
@@ -44,6 +45,7 @@ static void print_help(const char* prog) {
     printf("  -j, --json                 Shortcut for --format json\n");
     printf("  -c, --csv                  Shortcut for --format csv\n");
     printf("  -n, --no-headers           Suppress column headers and summary footer\n");
+    printf("  -G, --grant-system-access  Self-provisioning: grant NT AUTHORITY\\SYSTEM db_datareader rights\n");
     printf("  -v, --verbose              Enable verbose discovery and connection logging\n");
     printf("  -V, --version              Print version information and exit\n");
     printf("  -h, --help                 Display this help message and exit\n\n");
@@ -73,6 +75,7 @@ int main(int argc, char* argv[]) {
     OutputFormat format = OUTPUT_FORMAT_TABLE;
     bool no_headers = false;
     bool verbose = false;
+    bool grant_system_access = false;
 
     char query_buf[8192] = {0};
     size_t query_len = 0;
@@ -90,6 +93,10 @@ int main(int argc, char* argv[]) {
         }
         if (strcmp(arg, "-v") == 0 || strcmp(arg, "--verbose") == 0) {
             verbose = true;
+            continue;
+        }
+        if (strcmp(arg, "-G") == 0 || strcmp(arg, "--grant-system-access") == 0) {
+            grant_system_access = true;
             continue;
         }
         if (strcmp(arg, "-j") == 0 || strcmp(arg, "--json") == 0) {
@@ -175,7 +182,7 @@ int main(int argc, char* argv[]) {
     }
 
     // If query was not passed on command line, check stdin
-    if (query_len == 0) {
+    if (query_len == 0 && !grant_system_access) {
         HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
         DWORD fileType = GetFileType(hStdin);
         if (fileType == FILE_TYPE_PIPE || fileType == FILE_TYPE_DISK) {
@@ -187,7 +194,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    if (query_len == 0) {
+    if (query_len == 0 && !grant_system_access) {
         print_help(argv[0]);
         return 0;
     }
@@ -201,6 +208,29 @@ int main(int argc, char* argv[]) {
             if (!user_set && strlen(disc_cfg.user) > 0) strncpy(cfg.user, disc_cfg.user, sizeof(cfg.user) - 1);
             if (!pass_set && strlen(disc_cfg.password) > 0) strncpy(cfg.password, disc_cfg.password, sizeof(cfg.password) - 1);
             if (!auth_set) cfg.auth_type = disc_cfg.auth_type;
+        }
+    }
+
+    // Special maintenance mode: grant system access
+    if (grant_system_access) {
+        SQLHENV hEnv = NULL;
+        SQLHDBC hDbc = NULL;
+        char conn_err[1024] = {0};
+        if (!db_odbc_connect_adaptive(&cfg, &hEnv, &hDbc, conn_err, sizeof(conn_err), verbose)) {
+            fprintf(stderr, "Error: Failed to connect to MS SQL Server for self-provisioning:\n%s\n", conn_err);
+            return 3;
+        }
+
+        char grant_err[1024] = {0};
+        bool grant_ok = l4sql_grant_system_access(hDbc, cfg.database, grant_err, sizeof(grant_err), verbose);
+        db_odbc_disconnect(hEnv, hDbc);
+
+        if (grant_ok) {
+            printf("[OK] Successfully granted NT AUTHORITY\\SYSTEM db_datareader rights to database '%s'.\n", cfg.database);
+            return 0;
+        } else {
+            fprintf(stderr, "Error: Failed to grant permissions: %s\n", grant_err);
+            return 1;
         }
     }
 
@@ -225,11 +255,11 @@ int main(int argc, char* argv[]) {
         return 2; // Security rejection exit code
     }
 
-    // 4. Connect to MS SQL Server
+    // 4. Connect to MS SQL Server using adaptive connection pipeline
     SQLHENV hEnv = NULL;
     SQLHDBC hDbc = NULL;
     char conn_err[1024];
-    if (!db_odbc_connect(&cfg, &hEnv, &hDbc, conn_err, sizeof(conn_err), verbose)) {
+    if (!db_odbc_connect_adaptive(&cfg, &hEnv, &hDbc, conn_err, sizeof(conn_err), verbose)) {
         QueryResult err_res;
         query_result_init(&err_res, limit);
         strncpy(err_res.error_message, conn_err, sizeof(err_res.error_message) - 1);

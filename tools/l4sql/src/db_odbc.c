@@ -20,17 +20,23 @@ static void get_odbc_error(SQLSMALLINT handleType, SQLHANDLE handle, char* out_m
     if (!out_msg || out_max == 0) return;
     out_msg[0] = '\0';
 
-    SQLCHAR sqlState[6];
+    SQLWCHAR sqlStateW[6];
     SQLINTEGER nativeError;
-    SQLCHAR messageText[512];
+    SQLWCHAR messageTextW[512];
     SQLSMALLINT textLength;
     SQLSMALLINT i = 1;
 
     size_t written = 0;
-    while (SQLGetDiagRecA(handleType, handle, i++, sqlState, &nativeError,
-                          messageText, sizeof(messageText), &textLength) == SQL_SUCCESS) {
+    while (SQLGetDiagRecW(handleType, handle, i++, sqlStateW, &nativeError,
+                          messageTextW, (SQLSMALLINT)(sizeof(messageTextW) / sizeof(SQLWCHAR)),
+                          &textLength) == SQL_SUCCESS) {
+        char state_u8[32] = {0};
+        char msg_u8[2048] = {0};
+        WideCharToMultiByte(CP_UTF8, 0, (LPCWCH)sqlStateW, -1, state_u8, sizeof(state_u8), NULL, NULL);
+        WideCharToMultiByte(CP_UTF8, 0, (LPCWCH)messageTextW, -1, msg_u8, sizeof(msg_u8), NULL, NULL);
+
         int n = snprintf(out_msg + written, out_max - written,
-                         "[%s] (Error %ld): %s\n", sqlState, (long)nativeError, messageText);
+                         "[%s] (Error %ld): %s\n", state_u8, (long)nativeError, msg_u8);
         if (n <= 0 || (size_t)n >= out_max - written) break;
         written += (size_t)n;
     }
@@ -199,20 +205,22 @@ bool db_odbc_execute(SQLHDBC hDbc, const char* sql, int limit,
     }
 
     for (SQLSMALLINT i = 1; i <= col_count; i++) {
-        SQLCHAR col_name[128];
+        SQLWCHAR col_name[128];
         SQLSMALLINT name_len = 0;
         SQLSMALLINT data_type = 0;
         SQLULEN col_size = 0;
         SQLSMALLINT dec_digits = 0;
         SQLSMALLINT nullable = 0;
 
-        SQLDescribeColA(hStmt, i, col_name, sizeof(col_name), &name_len,
+        SQLDescribeColW(hStmt, i, col_name, (SQLSMALLINT)(sizeof(col_name) / sizeof(SQLWCHAR)), &name_len,
                         &data_type, &col_size, &dec_digits, &nullable);
 
         if (name_len == 0) {
             snprintf(out_result->columns[i - 1].name, sizeof(out_result->columns[i - 1].name), "Column%d", i);
         } else {
-            strncpy(out_result->columns[i - 1].name, (char*)col_name, sizeof(out_result->columns[i - 1].name) - 1);
+            WideCharToMultiByte(CP_UTF8, 0, (LPCWCH)col_name, -1,
+                                out_result->columns[i - 1].name,
+                                sizeof(out_result->columns[i - 1].name), NULL, NULL);
         }
         out_result->columns[i - 1].sql_type = data_type;
         out_result->columns[i - 1].max_content_len = strlen(out_result->columns[i - 1].name);
@@ -220,19 +228,24 @@ bool db_odbc_execute(SQLHDBC hDbc, const char* sql, int limit,
 
     char** row_values = (char**)calloc((size_t)col_count, sizeof(char*));
     bool* row_nulls = (bool*)calloc((size_t)col_count, sizeof(bool));
-    char (*cell_bufs)[4096] = (char (*)[4096])calloc((size_t)col_count, sizeof(char[4096]));
+    char (*cell_bufs)[8192] = (char (*)[8192])calloc((size_t)col_count, sizeof(char[8192]));
+    SQLWCHAR (*wcell_bufs)[4096] = (SQLWCHAR (*)[4096])calloc((size_t)col_count, sizeof(SQLWCHAR[4096]));
 
     while ((ret = SQLFetch(hStmt)) == SQL_SUCCESS || ret == SQL_SUCCESS_WITH_INFO) {
         for (SQLSMALLINT i = 1; i <= col_count; i++) {
             SQLLEN indicator = 0;
-            cell_bufs[i - 1][0] = '\0';
-            SQLRETURN get_ret = SQLGetData(hStmt, i, SQL_C_CHAR, cell_bufs[i - 1], sizeof(cell_bufs[i - 1]) - 1, &indicator);
+            wcell_bufs[i - 1][0] = L'\0';
+            SQLRETURN get_ret = SQLGetData(hStmt, i, SQL_C_WCHAR, wcell_bufs[i - 1],
+                                           sizeof(wcell_bufs[i - 1]) - sizeof(SQLWCHAR), &indicator);
 
             if (indicator == SQL_NULL_DATA || !SQL_SUCCEEDED(get_ret)) {
                 row_nulls[i - 1] = true;
                 row_values[i - 1] = NULL;
             } else {
                 row_nulls[i - 1] = false;
+                wcell_bufs[i - 1][(sizeof(wcell_bufs[i - 1]) / sizeof(SQLWCHAR)) - 1] = L'\0';
+                WideCharToMultiByte(CP_UTF8, 0, (LPCWCH)wcell_bufs[i - 1], -1,
+                                    cell_bufs[i - 1], sizeof(cell_bufs[i - 1]), NULL, NULL);
                 row_values[i - 1] = cell_bufs[i - 1];
             }
         }
@@ -242,6 +255,7 @@ bool db_odbc_execute(SQLHDBC hDbc, const char* sql, int limit,
         }
     }
 
+    free(wcell_bufs);
     free(cell_bufs);
     free(row_values);
     free(row_nulls);

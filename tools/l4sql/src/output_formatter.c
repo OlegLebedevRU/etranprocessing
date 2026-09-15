@@ -48,6 +48,42 @@ bool query_result_set_columns(QueryResult* res, int col_count) {
     return true;
 }
 
+static size_t utf8_char_count(const char* s) {
+    if (!s) return 0;
+    size_t count = 0;
+    for (const unsigned char* p = (const unsigned char*)s; *p; p++) {
+        if ((*p & 0xC0) != 0x80) {
+            count++;
+        }
+    }
+    return count;
+}
+
+static void utf8_safe_copy(char* dest, size_t dest_size, const char* src, size_t max_chars) {
+    if (!dest || dest_size == 0) return;
+    dest[0] = '\0';
+    if (!src) return;
+
+    size_t chars = 0;
+    size_t bytes = 0;
+    const unsigned char* p = (const unsigned char*)src;
+
+    while (*p && chars < max_chars && bytes + 1 < dest_size) {
+        size_t cp_len = 1;
+        if ((*p & 0xE0) == 0xC0) cp_len = 2;
+        else if ((*p & 0xF0) == 0xE0) cp_len = 3;
+        else if ((*p & 0xF8) == 0xF0) cp_len = 4;
+
+        if (bytes + cp_len >= dest_size) break;
+        for (size_t k = 0; k < cp_len && p[k]; k++) {
+            dest[bytes++] = (char)p[k];
+        }
+        p += cp_len;
+        chars++;
+    }
+    dest[bytes] = '\0';
+}
+
 bool query_result_add_row(QueryResult* res, char** values, const bool* is_null) {
     if (!res || !values || !is_null) return false;
 
@@ -73,7 +109,7 @@ bool query_result_add_row(QueryResult* res, char** values, const bool* is_null) 
     for (int j = 0; j < res->col_count; j++) {
         r->is_null[j] = is_null[j];
         if (!is_null[j] && values[j]) {
-            size_t len = strlen(values[j]);
+            size_t len = utf8_char_count(values[j]);
             r->values[j] = _strdup(values[j]);
             if (len > res->columns[j].max_content_len) {
                 res->columns[j].max_content_len = len;
@@ -214,7 +250,7 @@ void output_formatter_print(const QueryResult* res, OutputFormat format, bool no
     if (!col_widths) return;
 
     for (int j = 0; j < res->col_count; j++) {
-        size_t name_len = strlen(res->columns[j].name);
+        size_t name_len = utf8_char_count(res->columns[j].name);
         size_t max_len = (res->columns[j].max_content_len > name_len) ? res->columns[j].max_content_len : name_len;
         if (max_len < 3) max_len = 3;
         if (max_len > 60) max_len = 60; // Clamp column width to 60 for terminal readability
@@ -223,7 +259,15 @@ void output_formatter_print(const QueryResult* res, OutputFormat format, bool no
 
     if (!no_headers) {
         for (int j = 0; j < res->col_count; j++) {
-            printf("%-*.*s", col_widths[j], col_widths[j], res->columns[j].name);
+            size_t name_chars = utf8_char_count(res->columns[j].name);
+            if (name_chars > (size_t)col_widths[j]) {
+                char truncated[256];
+                utf8_safe_copy(truncated, sizeof(truncated), res->columns[j].name, (size_t)col_widths[j]);
+                printf("%s", truncated);
+            } else {
+                printf("%s", res->columns[j].name);
+                for (size_t k = name_chars; k < (size_t)col_widths[j]; k++) putchar(' ');
+            }
             if (j < res->col_count - 1) printf(" | ");
         }
         printf("\n");
@@ -240,7 +284,16 @@ void output_formatter_print(const QueryResult* res, OutputFormat format, bool no
             if (res->rows[i].is_null[j] || !res->rows[i].values[j]) {
                 printf("%-*s", col_widths[j], "<NULL>");
             } else {
-                printf("%-*.*s", col_widths[j], col_widths[j], res->rows[i].values[j]);
+                const char* val = res->rows[i].values[j];
+                size_t val_chars = utf8_char_count(val);
+                if (val_chars > (size_t)col_widths[j]) {
+                    char truncated[512];
+                    utf8_safe_copy(truncated, sizeof(truncated), val, (size_t)col_widths[j]);
+                    printf("%s", truncated);
+                } else {
+                    printf("%s", val);
+                    for (size_t k = val_chars; k < (size_t)col_widths[j]; k++) putchar(' ');
+                }
             }
             if (j < res->col_count - 1) printf(" | ");
         }

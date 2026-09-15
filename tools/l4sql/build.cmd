@@ -64,7 +64,7 @@ goto :summary
 :do_build_x86
 echo.
 echo [Build x86] 32-bit universal static binary (Windows 7 SP1+ compatible)...
-cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\l4sql.res res\l4sql.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x86\ src\main.c src\xml_parser.c src\db_discovery.c src\sql_validator.c src\db_odbc.c src\output_formatter.c obj\x86\l4sql.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\l4sql.exe odbc32.lib advapi32.lib user32.lib shlwapi.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\l4sql.res res\l4sql.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x86\ src\main.c src\xml_parser.c src\db_discovery.c src\sql_validator.c src\db_odbc.c src\output_formatter.c src\auth_adaptive.c obj\x86\l4sql.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\l4sql.exe odbc32.lib advapi32.lib user32.lib shlwapi.lib wtsapi32.lib"
 if errorlevel 1 (
     echo [ERROR] x86 build failed!
     set BUILD_FAILED=1
@@ -78,7 +78,7 @@ exit /b 0
 :do_build_x64
 echo.
 echo [Build x64] 64-bit static binary...
-cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /fo obj\x64\l4sql.res res\l4sql.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x64\ src\main.c src\xml_parser.c src\db_discovery.c src\sql_validator.c src\db_odbc.c src\output_formatter.c obj\x64\l4sql.res /link /OUT:bin\x64\l4sql.exe odbc32.lib advapi32.lib user32.lib shlwapi.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /fo obj\x64\l4sql.res res\l4sql.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x64\ src\main.c src\xml_parser.c src\db_discovery.c src\sql_validator.c src\db_odbc.c src\output_formatter.c src\auth_adaptive.c obj\x64\l4sql.res /link /OUT:bin\x64\l4sql.exe odbc32.lib advapi32.lib user32.lib shlwapi.lib wtsapi32.lib"
 if errorlevel 1 (
     echo [ERROR] x64 build failed!
     set BUILD_FAILED=1

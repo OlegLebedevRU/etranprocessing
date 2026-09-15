@@ -1,8 +1,8 @@
 #include <windows.h>
 
 1 VERSIONINFO
-FILEVERSION 1,0,0,0
-PRODUCTVERSION 1,0,0,0
+FILEVERSION 1,7,6,0
+PRODUCTVERSION 1,7,6,0
 FILEFLAGSMASK 0x3fL
 FILEFLAGS 0x0L
 FILEOS VOS_NT_WINDOWS32
@@ -15,11 +15,11 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Leo4 / Platerra"
             VALUE "FileDescription", "Leo4 Terminal SQL Client Utility (l4sql)"
-            VALUE "FileVersion", "1.0.0.0"
+            VALUE "FileVersion", "1.7.6.0"
             VALUE "InternalName", "l4sql"
             VALUE "OriginalFilename", "l4sql.exe"
             VALUE "ProductName", "Leo4 IoT Platform Tools"
-            VALUE "ProductVersion", "1.0.0.0"
+            VALUE "ProductVersion", "1.7.6"
         END
     END
     BLOCK "VarFileInfo"

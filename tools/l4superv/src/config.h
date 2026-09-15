@@ -2,7 +2,7 @@
 #include <windows.h>
 #include <stdbool.h>
 
-#define L4_SUPERV_VERSION_STR L"1.7.5"
+#define L4_SUPERV_VERSION_STR L"1.7.6"
 #define L4_DEFAULT_BASE_PATH  L"C:\\l4tools"
 #define L4_DEFAULT_PROXY_URL  L"http://127.0.0.1:18443/_leo4/info"
 #define L4_DEFAULT_MOSQUITTO_PORT 1883

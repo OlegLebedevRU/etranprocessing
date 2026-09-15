@@ -9,7 +9,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define L4DESK_VERSION_STR "1.7.5"
+#define L4DESK_VERSION_STR "1.7.6"
 #define DEFAULT_MQTT_HOST "127.0.0.1"
 #define DEFAULT_MQTT_PORT 1883
 #define DEFAULT_PROXY_HTTP_PORT 18443
