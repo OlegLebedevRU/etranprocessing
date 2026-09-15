@@ -224,7 +224,7 @@ static void test_protocol_payloads(void) {
     len = ctl_build_extended_presence_payload(buf, sizeof(buf), "online", true, &sm, &inv, &sinfo);
     ASSERT_TRUE(len > 0);
     ASSERT_TRUE(strstr(buf, "\"type\":\"presence\"") != NULL);
-    ASSERT_TRUE(strstr(buf, "\"version\":\"1.7.4\"") != NULL);
+    ASSERT_TRUE(strstr(buf, "\"version\":\"1.7.5\"") != NULL);
     ASSERT_TRUE(strstr(buf, "\"capabilities\":[\"quick_actions\",\"shortcut_action\",\"right_click\"]") != NULL);
     ASSERT_TRUE(strstr(buf, "\"inventory\"") != NULL);
     ASSERT_TRUE(strstr(buf, "\"disp:12345678\"") != NULL);

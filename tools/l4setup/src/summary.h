@@ -21,6 +21,8 @@ typedef struct {
     char phase[32]; // "check", "prepare", "stop", "update", "start", "verify", "finish"
     char error_reason[128];
     char rollback[32]; // "none", "restored", "failed"
+    bool ca_root_installed;
+    bool firewall_configured;
     wchar_t log_path[MAX_PATH];
 
     char service_leo4proxy[32];

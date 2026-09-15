@@ -68,7 +68,7 @@ foreach ($arch in @("x86", "x64")) {
     New-Item -ItemType Directory -Path $targetStage -Force | Out-Null
 
     # Required subdirectories
-    $subdirs = @("leo4proxy", "mosquitto\log", "l4con", "l4superv", "l4pin", "l4desk", "l4sql", "ffmpeg\log")
+    $subdirs = @("leo4proxy", "mosquitto\log", "l4con", "l4superv", "l4pin", "l4desk", "l4sql", "ffmpeg\log", "crt")
     foreach ($sub in $subdirs) {
         $p = "$targetStage\$sub"
         if (-not (Test-Path $p)) { New-Item -ItemType Directory -Path $p -Force | Out-Null }
@@ -171,6 +171,12 @@ foreach ($arch in @("x86", "x64")) {
     if (Test-Path "$ToolsRoot\ffmpeg\SOURCES.md") { Copy-Item "$ToolsRoot\ffmpeg\SOURCES.md" "$targetStage\ffmpeg\" -Force }
     if (Test-Path "$RepoRoot\ffmpeg-win32\$arch\ffmpeg.sha256") {
         Copy-Item "$RepoRoot\ffmpeg-win32\$arch\ffmpeg.sha256" "$targetStage\ffmpeg\" -Force
+    }
+
+    # 9. Root CA certificate (iot_leo4_ca.crt)
+    $srcCaCrt = "$RepoRoot\iot_leo4_ca.crt"
+    if (Test-Path $srcCaCrt) {
+        Copy-Item $srcCaCrt "$targetStage\crt\iot_leo4_ca.crt" -Force
     }
 
     # Staging Root files

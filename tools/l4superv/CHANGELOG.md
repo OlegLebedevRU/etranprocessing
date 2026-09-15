@@ -2,6 +2,12 @@
 
 All notable changes to the `l4superv` and `l4install` suite will be documented in this file.
 
+## [1.7.5] - 2026-09-15
+
+### Changed & Improved
+- Версия компонента синхронизирована до 1.7.5 в ресурсах, заголовках и манифестах.
+- Согласован запуск с преднастроенными правилами Windows Defender Firewall для FFmpeg.
+
 ## [1.7.4] - 2026-09-14
 
 ### Changed & Improved

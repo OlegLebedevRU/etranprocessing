@@ -10,6 +10,7 @@
 #include "../src/log.h"
 #include "../src/unpack.h"
 #include "../src/summary.h"
+#include "../src/preflight.h"
 #include "../../l4pin/src/cert_discovery.h"
 
 static int g_tests_run = 0;
@@ -382,6 +383,8 @@ static bool test_summary_and_state(void) {
     wcscpy_s(data.dest, MAX_PATH, test_dir);
     strcpy_s(data.status, sizeof(data.status), "ready");
     data.exit_code = 0;
+    data.ca_root_installed = true;
+    data.firewall_configured = true;
 
     data.cert.state = CERT_VALID;
     data.cert.reused = true;
@@ -426,6 +429,8 @@ static bool test_summary_and_state(void) {
     // Verify schema and fields
     TEST_ASSERT(strstr(buf, "\"schema\": 1") != NULL, "Missing schema");
     TEST_ASSERT(strstr(buf, "\"installer_version\": \"1.7.1\"") != NULL, "Missing installer_version");
+    TEST_ASSERT(strstr(buf, "\"ca_root_installed\": true") != NULL, "Missing ca_root_installed");
+    TEST_ASSERT(strstr(buf, "\"firewall_configured\": true") != NULL, "Missing firewall_configured");
     TEST_ASSERT(strstr(buf, "\"state\": \"valid\"") != NULL, "Missing cert.state");
     TEST_ASSERT(strstr(buf, "\"thumbprint\": \"CC88419A4C3763150A4C0905261EC073C58CFC09\"") != NULL, "Missing thumbprint");
     TEST_ASSERT(strstr(buf, "\"proxy_info\": \"ok\"") != NULL, "Missing probe");
@@ -457,6 +462,13 @@ static bool test_summary_and_state(void) {
 
     // Cleanup test dir
     DeleteFileW(sum_file);
+    wchar_t legacy_sum[MAX_PATH];
+    swprintf_s(legacy_sum, MAX_PATH, L"%ls\\summary.json", test_dir);
+    FILE* fp_leg = NULL;
+    _wfopen_s(&fp_leg, legacy_sum, L"rb");
+    TEST_ASSERT(fp_leg != NULL, "summary.json alias was not created");
+    if (fp_leg) fclose(fp_leg);
+    DeleteFileW(legacy_sum);
     DeleteFileW(state_file);
     RemoveDirectoryW(test_dir);
 
@@ -546,6 +558,35 @@ static bool test_incomplete_marker_and_recovery(void) {
 }
 
 // ---------------------------------------------------------------------------
+// 8. Root CA Certificate and Idempotency Unit Tests
+// ---------------------------------------------------------------------------
+static bool test_root_ca_install_and_idempotency(void) {
+    // 1. Call install_root_ca_certificate() - idempotent check and verification
+    TEST_ASSERT(install_root_ca_certificate(), "install_root_ca_certificate failed");
+
+    // 2. Open LocalMachine\ROOT store and verify SHA1 thumbprint B0A01EB219110CAC1077DD5171EF42A442AE5A87 is present
+    HCERTSTORE hStore = CertOpenStore(CERT_STORE_PROV_SYSTEM_W, 0, 0, CERT_SYSTEM_STORE_LOCAL_MACHINE | CERT_STORE_READONLY_FLAG, L"ROOT");
+    TEST_ASSERT(hStore != NULL, "Failed to open LocalMachine\\ROOT");
+
+    BYTE thumbprint[20] = {
+        0xB0, 0xA0, 0x1E, 0xB2, 0x19, 0x11, 0x0C, 0xAC, 0x10, 0x77,
+        0xDD, 0x51, 0x71, 0xEF, 0x42, 0xA4, 0x42, 0xAE, 0x5A, 0x87
+    };
+    CRYPT_HASH_BLOB hashBlob;
+    hashBlob.cbData = sizeof(thumbprint);
+    hashBlob.pbData = thumbprint;
+
+    PCCERT_CONTEXT pCert = CertFindCertificateInStore(hStore, X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, 0, CERT_FIND_SHA1_HASH, &hashBlob, NULL);
+    TEST_ASSERT(pCert != NULL, "Root CA certificate with thumbprint B0A01EB219110CAC1077DD5171EF42A442AE5A87 not found in LocalMachine\\ROOT");
+    if (pCert) {
+        CertFreeCertificateContext(pCert);
+    }
+    CertCloseStore(hStore, 0);
+
+    return true;
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 int main(int argc, char* argv[]) {
@@ -573,6 +614,7 @@ int main(int argc, char* argv[]) {
     RUN_TEST(test_summary_and_state);
     RUN_TEST(test_numeric_version_compare);
     RUN_TEST(test_incomplete_marker_and_recovery);
+    RUN_TEST(test_root_ca_install_and_idempotency);
 
     printf("=======================================================\n");
     printf(" Unit Tests Summary: %d / %d passed\n", g_tests_passed, g_tests_run);

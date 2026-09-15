@@ -25,7 +25,7 @@ CAPTION "Leo4 Setup - Installation & Lifecycle"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
     LTEXT           "Leo4 Zero-Touch Setup", IDC_STATIC_HEADER, 15, 10, 330, 14
-    LTEXT           "Target Version: 1.7.4 | Operation: Install", IDC_STATIC_VER_INFO, 15, 25, 330, 10
+    LTEXT           "Target Version: 1.7.5 | Operation: Install", IDC_STATIC_VER_INFO, 15, 25, 330, 10
     LTEXT           "Destination: C:\\l4tools", IDC_STATIC_PATH_INFO, 15, 37, 330, 10
     LTEXT           "No automatic reboot or logoff will be performed.", IDC_STATIC_NOTICE, 15, 49, 330, 10
 

@@ -85,6 +85,8 @@ bool summary_write_json(const InstallSummaryData* data, const wchar_t* dest_dir)
     fprintf(fp, "  \"phase\": \"%s\",\n", data->phase[0] ? data->phase : "finish");
     fprintf(fp, "  \"error_reason\": \"%s\",\n", data->error_reason);
     fprintf(fp, "  \"rollback\": \"%s\",\n", data->rollback[0] ? data->rollback : "none");
+    fprintf(fp, "  \"ca_root_installed\": %s,\n", data->ca_root_installed ? "true" : "false");
+    fprintf(fp, "  \"firewall_configured\": %s,\n", data->firewall_configured ? "true" : "false");
     fprintf(fp, "  \"log_path\": \"%s\",\n", log_escaped);
 
     // services
@@ -153,6 +155,11 @@ bool summary_write_json(const InstallSummaryData* data, const wchar_t* dest_dir)
         log_err("Failed to atomically replace install_summary.json (error %lu)", GetLastError());
         return false;
     }
+
+    // Also write alias summary.json for backward compatibility and automated tooling
+    wchar_t summary_alias_path[MAX_PATH];
+    swprintf_s(summary_alias_path, MAX_PATH, L"%ls\\summary.json", dest_dir);
+    CopyFileW(final_path, summary_alias_path, FALSE);
 
     log_info("Successfully generated %ls", final_path);
     return true;

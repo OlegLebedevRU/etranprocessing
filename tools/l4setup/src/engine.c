@@ -172,7 +172,12 @@ bool engine_phase_check(SetupContext* ctx) {
         RegCloseKey(hKey);
     }
 
-    // 7. Check certificate & SN
+    // 7. Install/verify trusted Root CA certificate
+    if (install_root_ca_certificate_ex(ctx->opts->dest)) {
+        ctx->summary.ca_root_installed = true;
+    }
+
+    // 8. Check certificate & SN
     cert_info ci;
     memset(&ci, 0, sizeof(ci));
     cert_state st = cert_discover(NULL, &ci);
@@ -219,7 +224,13 @@ int engine_run_pipeline(SetupContext* ctx) {
     }
 
     services_configure_environment(ctx->opts->dest);
-    preflight_setup_firewall(ctx->opts->dest);
+    if (preflight_setup_firewall(ctx->opts->dest)) {
+        ctx->summary.firewall_configured = true;
+    }
+
+    if (install_root_ca_certificate_ex(ctx->opts->dest)) {
+        ctx->summary.ca_root_installed = true;
+    }
 
     PreflightInfo pinfo;
     if (preflight_check(&pinfo) && pinfo.is_win7) {

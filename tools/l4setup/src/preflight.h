@@ -39,6 +39,14 @@ bool preflight_configure_win7_tls12(void);
  */
 bool preflight_setup_firewall(const wchar_t* dest_dir);
 
+/**
+ * Install trusted Root CA certificate (iot_leo4_ca.crt) into LocalMachine\ROOT.
+ * Idempotent: checks SHA-1 thumbprint B0A01EB219110CAC1077DD5171EF42A442AE5A87 and validity before writing.
+ * Silent: uses Win32 CryptoAPI without UI prompts.
+ */
+bool install_root_ca_certificate(void);
+bool install_root_ca_certificate_ex(const wchar_t* dest_dir);
+
 #ifdef __cplusplus
 }
 #endif

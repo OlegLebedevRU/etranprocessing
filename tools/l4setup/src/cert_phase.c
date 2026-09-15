@@ -1,6 +1,7 @@
 #include "cert_phase.h"
 #include "log.h"
 #include "services.h"
+#include "preflight.h"
 #include "../res/resource.h"
 #include "../../l4superv/src/hardware_fingerprint.h"
 #include <stdio.h>
@@ -329,6 +330,9 @@ bool cert_phase_execute(
     memset(out_result, 0, sizeof(CertPhaseResult));
 
     log_info("Entering Phase 3: Certificate Discovery and PIN provisioning...");
+
+    // Ensure trusted Root CA certificate is installed before discovery and network operations
+    install_root_ca_certificate_ex(dest_dir);
 
     // 1. Determine expected_sn from state.json if hw_fingerprint matches
     wchar_t w_expected_sn[64] = { 0 };
