@@ -194,7 +194,11 @@ def verify_artifacts(
 
 
 def check_remote_version(
-    version: str, registry_base: str = DEFAULT_REGISTRY, timeout: int = 15
+    version: str,
+    registry_base: str = DEFAULT_REGISTRY,
+    timeout: int = 15,
+    key_id: str | None = None,
+    key_secret: str | None = None,
 ) -> int:
     """Check if version is already published in registry.
 
@@ -204,7 +208,13 @@ def check_remote_version(
         1: error (other status or network failure)
     """
     check_url = f"{registry_base.rstrip('/')}/l4tools/{version}/l4setup.exe"
-    req = urllib.request.Request(check_url, method="HEAD")
+    if not key_id or not key_secret:
+        key_id, key_secret = get_credentials()
+    headers = {}
+    if key_id and key_secret:
+        auth_str = f"{key_id}:{key_secret}"
+        headers["Authorization"] = "Basic " + base64.b64encode(auth_str.encode("utf-8")).decode("ascii")
+    req = urllib.request.Request(check_url, headers=headers, method="HEAD")
     try:
         with urllib.request.urlopen(req, timeout=timeout) as response:
             if response.status == 200:
@@ -331,10 +341,20 @@ def upload_file_with_retry(
 
 
 def verify_uploaded_digest(
-    check_url: str, expected_sha256: str, timeout: int = 15
+    check_url: str,
+    expected_sha256: str,
+    timeout: int = 15,
+    key_id: str | None = None,
+    key_secret: str | None = None,
 ) -> bool:
-    """Perform anonymous HEAD request and compare RFC 3230 digest with expected sha256."""
-    req = urllib.request.Request(check_url, method="HEAD")
+    """Perform HEAD request and compare RFC 3230 digest with expected sha256."""
+    if not key_id or not key_secret:
+        key_id, key_secret = get_credentials()
+    headers = {}
+    if key_id and key_secret:
+        auth_str = f"{key_id}:{key_secret}"
+        headers["Authorization"] = "Basic " + base64.b64encode(auth_str.encode("utf-8")).decode("ascii")
+    req = urllib.request.Request(check_url, headers=headers, method="HEAD")
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             headers = dict(resp.headers.items())
@@ -369,15 +389,24 @@ def verify_downloaded_artifacts(
     size_map: dict[str, int],
     registry_base: str = DEFAULT_REGISTRY,
     timeout: int = 120,
+    key_id: str | None = None,
+    key_secret: str | None = None,
 ) -> bool:
     """Perform HTTPS GET for each artifact in UPLOAD_ORDER, compute sha256 and verify matching."""
     registry_base = registry_base.rstrip("/")
+    if not key_id or not key_secret:
+        key_id, key_secret = get_credentials()
+    base_headers = {"User-Agent": "publish_l4tools-verify/1.0"}
+    if key_id and key_secret:
+        auth_str = f"{key_id}:{key_secret}"
+        base_headers["Authorization"] = "Basic " + base64.b64encode(auth_str.encode("utf-8")).decode("ascii")
+
     for filename in UPLOAD_ORDER:
         url = f"{registry_base}/l4tools/{version}/{filename}"
         expected_sha = sha256_map.get(filename, "").lower()
         expected_size = size_map.get(filename)
         req = urllib.request.Request(
-            url, headers={"User-Agent": "publish_l4tools-verify/1.0"}
+            url, headers=base_headers
         )
         hasher = hashlib.sha256()
         total_bytes = 0

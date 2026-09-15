@@ -6,45 +6,47 @@
 1 RT_MANIFEST "l4setup.manifest"
 
 // Dialog: PIN prompt
-IDD_PIN_DIALOG DIALOGEX 0, 0, 275, 110
+IDD_PIN_DIALOG DIALOGEX 0, 0, 280, 115
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Leo4 Setup - Terminal Activation"
-FONT 8, "MS Shell Dlg", 400, 0, 0x1
+FONT 9, "Segoe UI", 400, 0, 0x1
 BEGIN
-    LTEXT           "Enter the 6-digit terminal PIN to issue a certificate:", IDC_STATIC_PIN_PROMPT, 15, 15, 245, 16
-    EDITTEXT        IDC_PIN_EDIT, 15, 38, 245, 14, ES_AUTOHSCROLL | ES_UPPERCASE | ES_NUMBER
-    DEFPUSHBUTTON   "Activate", IDOK, 20, 75, 65, 16
-    PUSHBUTTON      "Skip activation", IDC_BTN_SKIP, 95, 75, 90, 16
-    PUSHBUTTON      "Cancel", IDCANCEL, 195, 75, 65, 16
+    LTEXT           "Enter the 6-digit terminal PIN to issue a certificate:", IDC_STATIC_PIN_PROMPT, 15, 15, 250, 16
+    EDITTEXT        IDC_PIN_EDIT, 15, 38, 250, 14, ES_AUTOHSCROLL | ES_UPPERCASE | ES_NUMBER
+    DEFPUSHBUTTON   "Activate", IDOK, 20, 80, 70, 16
+    PUSHBUTTON      "Skip activation", IDC_BTN_SKIP, 95, 80, 95, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 195, 80, 70, 16
 END
 
 // Dialog: Main Setup UI
-IDD_MAIN_DIALOG DIALOGEX 0, 0, 360, 260
+IDD_MAIN_DIALOG DIALOGEX 0, 0, 380, 280
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX
 CAPTION "Leo4 Setup - Installation & Lifecycle"
-FONT 8, "MS Shell Dlg", 400, 0, 0x1
+FONT 9, "Segoe UI", 400, 0, 0x1
 BEGIN
-    LTEXT           "Leo4 Zero-Touch Setup", IDC_STATIC_HEADER, 15, 10, 330, 14
-    LTEXT           "Target Version: 1.7.5 | Operation: Install", IDC_STATIC_VER_INFO, 15, 25, 330, 10
-    LTEXT           "Destination: C:\\l4tools", IDC_STATIC_PATH_INFO, 15, 37, 330, 10
-    LTEXT           "No automatic reboot or logoff will be performed.", IDC_STATIC_NOTICE, 15, 49, 330, 10
+    LTEXT           "Leo4 Zero-Touch Setup", IDC_STATIC_HEADER, 15, 10, 350, 16
+    LTEXT           "Target Version: 1.7.7 | Operation: Install", IDC_STATIC_VER_INFO, 15, 27, 350, 11
+    LTEXT           "Destination: C:\\l4tools", IDC_STATIC_PATH_INFO, 15, 39, 350, 11
+    LTEXT           "Safe zero-touch lifecycle (no automatic reboot).", IDC_STATIC_NOTICE, 15, 51, 350, 11
 
-    GROUPBOX        "Services Status", -1, 15, 62, 330, 68
-    LTEXT           "Leo4Proxy:  Pending", IDC_SVC_LEO4PROXY, 25, 75, 310, 10
-    LTEXT           "mosquitto:  Pending", IDC_SVC_MOSQUITTO, 25, 87, 310, 10
-    LTEXT           "L4Con:      Pending", IDC_SVC_L4CON, 25, 99, 310, 10
-    LTEXT           "L4Superv:   Pending", IDC_SVC_L4SUPERV, 25, 111, 310, 10
+    GROUPBOX        "Background Services", IDC_STATIC_SERVICES_LBL, 15, 64, 350, 65
+    LTEXT           "Leo4Proxy:  Pending", IDC_SVC_LEO4PROXY, 25, 76, 330, 11
+    LTEXT           "mosquitto:  Pending", IDC_SVC_MOSQUITTO, 25, 88, 330, 11
+    LTEXT           "L4Con:      Pending", IDC_SVC_L4CON, 25, 100, 330, 11
+    LTEXT           "L4Superv:   Pending", IDC_SVC_L4SUPERV, 25, 112, 330, 11
 
-    LTEXT           "Phase: Check (Ready)", IDC_STATIC_PHASE, 15, 134, 330, 10
-    LTEXT           "Status: Ready to begin.", IDC_STATIC_STATUS, 15, 146, 330, 10
-    LTEXT           "Elapsed: 0s", IDC_STATIC_ELAPSED, 15, 158, 120, 10
+    LTEXT           "Phase: Ready", IDC_STATIC_PHASE, 15, 134, 270, 11
+    RTEXT           "0%", IDC_STATIC_PERCENT, 290, 134, 75, 11
+    CONTROL         "", IDC_PROGRESS_BAR, "msctls_progress32", PBS_SMOOTH | WS_CHILD | WS_VISIBLE, 15, 146, 350, 14
+    LTEXT           "Status: Ready to begin.", IDC_STATIC_STATUS, 15, 163, 270, 11
+    RTEXT           "Elapsed: 0s", IDC_STATIC_ELAPSED, 290, 163, 75, 11
 
-    EDITTEXT        IDC_EDIT_DETAILS, 15, 172, 330, 56, ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL
+    EDITTEXT        IDC_EDIT_DETAILS, 15, 177, 350, 68, ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL | WS_BORDER
 
-    DEFPUSHBUTTON   "Install", IDC_BTN_ACTION, 15, 235, 65, 16
-    PUSHBUTTON      "Retry", IDC_BTN_RETRY, 85, 235, 60, 16, WS_DISABLED
-    PUSHBUTTON      "View Details", IDC_BTN_DETAILS, 150, 235, 75, 16
-    PUSHBUTTON      "Cancel", IDCANCEL, 280, 235, 65, 16
+    DEFPUSHBUTTON   "Install", IDC_BTN_ACTION, 15, 254, 75, 16
+    PUSHBUTTON      "Retry", IDC_BTN_RETRY, 95, 254, 65, 16, WS_DISABLED
+    PUSHBUTTON      "Hide Details", IDC_BTN_DETAILS, 165, 254, 80, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 300, 254, 65, 16
 END
 
 // Version Information

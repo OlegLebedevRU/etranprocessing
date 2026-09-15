@@ -120,16 +120,27 @@ if (-not $SkipVerifications) {
     }
     Write-Host "  [OK] Payload sizes verified (uncompressed > 20 MB, compressed > 10 MB; FFmpeg present)."
 
-    # 2. Version CLI check
+    # 2. Version check (PE FileVersion / ProductVersion or CLI fallback)
     try {
-        $verOut = (& $SetupExe --version 2>&1 | Out-String).Trim()
-        Write-Host "  [INFO] $SetupExe --version output: $verOut"
-        if (-not ($verOut -match [regex]::Escape($Version))) {
-            throw "Validation Failed: $SetupExe --version output '$verOut' does not contain expected version '$Version'"
+        $peVer = (Get-Item $SetupExe).VersionInfo.ProductVersion
+        Write-Host "  [INFO] $SetupExe PE ProductVersion: $peVer"
+        if ($peVer -and ($peVer -match [regex]::Escape($Version))) {
+            Write-Host "  [OK] l4setup.exe PE version matches $Version."
+        } else {
+            $verOut = (& $SetupExe --version 2>&1 | Out-String).Trim()
+            Write-Host "  [INFO] $SetupExe --version output: $verOut"
+            if (-not ($verOut -match [regex]::Escape($Version))) {
+                throw "Validation Failed: $SetupExe version does not contain expected version '$Version'"
+            }
+            Write-Host "  [OK] l4setup.exe version matches $Version."
         }
-        Write-Host "  [OK] l4setup.exe version matches $Version."
     } catch {
-        throw "Validation Failed running '$SetupExe --version': $_"
+        $peVer = (Get-Item $SetupExe).VersionInfo.ProductVersion
+        if ($peVer -and ($peVer -match [regex]::Escape($Version))) {
+            Write-Host "  [OK] l4setup.exe PE version matches $Version ($peVer)."
+        } else {
+            throw "Validation Failed checking version for '$SetupExe': $_"
+        }
     }
 
     # 3. Authenticode check

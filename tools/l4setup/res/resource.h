@@ -24,4 +24,8 @@
 #define IDC_BTN_DETAILS         1024
 #define IDC_EDIT_DETAILS        1025
 
+#define IDC_PROGRESS_BAR        1026
+#define IDC_STATIC_PERCENT      1027
+#define IDC_STATIC_SERVICES_LBL 1028
+
 #define IDI_APP_ICON            201

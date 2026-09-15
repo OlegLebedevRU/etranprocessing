@@ -2,9 +2,12 @@
 #include "engine.h"
 #include "log.h"
 #include "../res/resource.h"
+#include <commctrl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#pragma comment(lib, "comctl32.lib")
 
 #define WM_SETUP_PHASE_UPDATE    (WM_APP + 1)
 #define WM_SETUP_SERVICE_UPDATE  (WM_APP + 2)
@@ -18,6 +21,11 @@ static bool g_setup_started = false;
 static bool g_setup_finished = false;
 static HANDLE g_hWorkerThread = NULL;
 
+static HFONT g_hFontTitle = NULL;
+static HFONT g_hFontBold = NULL;
+static HFONT g_hFontNormal = NULL;
+static HFONT g_hFontMono = NULL;
+
 typedef struct {
     int phase;
     wchar_t phase_name[64];
@@ -26,8 +34,22 @@ typedef struct {
 
 typedef struct {
     int service_idx;
+    ServiceLifecycleStatus status;
     wchar_t text[128];
 } MsgServiceData;
+
+static void update_progress_ui(HWND hDlg, int percent) {
+    if (percent < 0) percent = 0;
+    if (percent > 100) percent = 100;
+
+    HWND hProg = GetDlgItem(hDlg, IDC_PROGRESS_BAR);
+    if (hProg) {
+        SendMessageW(hProg, PBM_SETPOS, (WPARAM)percent, 0);
+    }
+    wchar_t buf[32];
+    swprintf_s(buf, sizeof(buf) / sizeof(wchar_t), L"%d%%", percent);
+    SetDlgItemTextW(hDlg, IDC_STATIC_PERCENT, buf);
+}
 
 static void ui_on_phase_change(SetupPhase phase, const char* phase_name, const char* status_text, void* user_data) {
     HWND hDlg = (HWND)user_data;
@@ -58,25 +80,26 @@ static void ui_on_service_status(
     if (!msg) return;
 
     msg->service_idx = service_idx;
+    msg->status = status;
 
-    const wchar_t* st_str = L"Pending";
+    const wchar_t* st_badge = L"[  ...  ] Pending";
     switch (status) {
-        case SVC_STATUS_STARTING: st_str = L"Starting"; break;
-        case SVC_STATUS_RUNNING:  st_str = L"Running"; break;
-        case SVC_STATUS_STOPPING: st_str = L"Stopping"; break;
-        case SVC_STATUS_STOPPED:  st_str = L"Stopped"; break;
-        case SVC_STATUS_CHECKING: st_str = L"Checking"; break;
-        case SVC_STATUS_READY:    st_str = L"Ready"; break;
-        case SVC_STATUS_FAILED:   st_str = L"Failed"; break;
+        case SVC_STATUS_STARTING: st_badge = L"[ START ] Starting"; break;
+        case SVC_STATUS_RUNNING:  st_badge = L"[  OK   ] Running"; break;
+        case SVC_STATUS_STOPPING: st_badge = L"[ STOP  ] Stopping"; break;
+        case SVC_STATUS_STOPPED:  st_badge = L"[ STOP  ] Stopped"; break;
+        case SVC_STATUS_CHECKING: st_badge = L"[ CHECK ] Checking"; break;
+        case SVC_STATUS_READY:    st_badge = L"[ READY ] Ready"; break;
+        case SVC_STATUS_FAILED:   st_badge = L"[ FAIL  ] FAILED"; break;
         default: break;
     }
 
     if (notice && notice[0]) {
-        swprintf_s(msg->text, 128, L"%-11ls %ls (%hs)", svc_name, st_str, notice);
+        swprintf_s(msg->text, 128, L"%-10ls  %ls (%hs)", svc_name, st_badge, notice);
     } else if (status == SVC_STATUS_STARTING || status == SVC_STATUS_STOPPING) {
-        swprintf_s(msg->text, 128, L"%-11ls %ls (%lus)", svc_name, st_str, elapsed_sec);
+        swprintf_s(msg->text, 128, L"%-10ls  %ls (%lus)", svc_name, st_badge, elapsed_sec);
     } else {
-        swprintf_s(msg->text, 128, L"%-11ls %ls", svc_name, st_str);
+        swprintf_s(msg->text, 128, L"%-10ls  %ls", svc_name, st_badge);
     }
 
     PostMessageW(hDlg, WM_SETUP_SERVICE_UPDATE, 0, (LPARAM)msg);
@@ -125,6 +148,11 @@ static DWORD WINAPI SetupWorkerThread(LPVOID lpParam) {
 static void append_text_to_edit(HWND hEdit, const wchar_t* text) {
     if (!hEdit || !text) return;
     int len = GetWindowTextLengthW(hEdit);
+    if (len > 300000) {
+        SendMessageW(hEdit, EM_SETSEL, 0, 50000);
+        SendMessageW(hEdit, EM_REPLACESEL, FALSE, (LPARAM)L"[... log truncated ...]\r\n");
+        len = GetWindowTextLengthW(hEdit);
+    }
     SendMessageW(hEdit, EM_SETSEL, (WPARAM)len, (LPARAM)len);
     SendMessageW(hEdit, EM_REPLACESEL, FALSE, (LPARAM)text);
     SendMessageW(hEdit, EM_REPLACESEL, FALSE, (LPARAM)L"\r\n");
@@ -136,12 +164,62 @@ static INT_PTR CALLBACK MainDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM l
         case WM_INITDIALOG: {
             g_ui_ctx.user_data = (void*)hDlg;
 
+            // Initialize log stream callback so details are captured live
+            log_set_callback(ui_on_log_line, (void*)hDlg);
+
             // Set window icon if available
             HICON hIcon = LoadIconW(g_ui_ctx.hInstance, MAKEINTRESOURCEW(IDI_APP_ICON));
             if (hIcon) {
                 SendMessageW(hDlg, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
                 SendMessageW(hDlg, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
             }
+
+            // Create modern Segoe UI and Consolas fonts
+            g_hFontTitle = CreateFontW(-19, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
+                                       DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                                       CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+            g_hFontBold = CreateFontW(-13, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+                                      DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                                      CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+            g_hFontNormal = CreateFontW(-13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                                        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                                        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+            g_hFontMono = CreateFontW(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                                      DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                                      CLEARTYPE_QUALITY, FIXED_PITCH | FF_MODERN, L"Consolas");
+
+            if (g_hFontTitle) {
+                SendDlgItemMessageW(hDlg, IDC_STATIC_HEADER, WM_SETFONT, (WPARAM)g_hFontTitle, TRUE);
+            }
+            if (g_hFontBold) {
+                SendDlgItemMessageW(hDlg, IDC_STATIC_PHASE, WM_SETFONT, (WPARAM)g_hFontBold, TRUE);
+                SendDlgItemMessageW(hDlg, IDC_STATIC_PERCENT, WM_SETFONT, (WPARAM)g_hFontBold, TRUE);
+                SendDlgItemMessageW(hDlg, IDC_STATIC_SERVICES_LBL, WM_SETFONT, (WPARAM)g_hFontBold, TRUE);
+            }
+            if (g_hFontNormal) {
+                SendDlgItemMessageW(hDlg, IDC_STATIC_VER_INFO, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+                SendDlgItemMessageW(hDlg, IDC_STATIC_PATH_INFO, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+                SendDlgItemMessageW(hDlg, IDC_STATIC_NOTICE, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+                SendDlgItemMessageW(hDlg, IDC_STATIC_STATUS, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+                SendDlgItemMessageW(hDlg, IDC_STATIC_ELAPSED, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+                SendDlgItemMessageW(hDlg, IDC_SVC_LEO4PROXY, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+                SendDlgItemMessageW(hDlg, IDC_SVC_MOSQUITTO, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+                SendDlgItemMessageW(hDlg, IDC_SVC_L4CON, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+                SendDlgItemMessageW(hDlg, IDC_SVC_L4SUPERV, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+                SendDlgItemMessageW(hDlg, IDC_BTN_ACTION, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+                SendDlgItemMessageW(hDlg, IDC_BTN_RETRY, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+                SendDlgItemMessageW(hDlg, IDC_BTN_DETAILS, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+                SendDlgItemMessageW(hDlg, IDCANCEL, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+            }
+            if (g_hFontMono) {
+                SendDlgItemMessageW(hDlg, IDC_EDIT_DETAILS, WM_SETFONT, (WPARAM)g_hFontMono, TRUE);
+            }
+
+            // Setup Details Edit limit
+            SendDlgItemMessageW(hDlg, IDC_EDIT_DETAILS, EM_SETLIMITTEXT, 0, 0);
+
+            // Initialize progress bar
+            update_progress_ui(hDlg, 0);
 
             // Center dialog
             RECT rc, rcOwner;
@@ -186,6 +264,24 @@ static INT_PTR CALLBACK MainDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM l
             return TRUE;
         }
 
+        case WM_CTLCOLORSTATIC: {
+            HDC hdc = (HDC)wParam;
+            HWND hCtrl = (HWND)lParam;
+            int ctrlId = GetDlgCtrlID(hCtrl);
+            if (ctrlId == IDC_STATIC_HEADER) {
+                SetTextColor(hdc, RGB(0, 51, 102));
+                SetBkMode(hdc, TRANSPARENT);
+                return (INT_PTR)GetSysColorBrush(COLOR_BTNFACE);
+            }
+            if (ctrlId == IDC_STATIC_PHASE || ctrlId == IDC_STATIC_PERCENT) {
+                SetTextColor(hdc, RGB(16, 76, 140));
+                SetBkMode(hdc, TRANSPARENT);
+                return (INT_PTR)GetSysColorBrush(COLOR_BTNFACE);
+            }
+            SetBkMode(hdc, TRANSPARENT);
+            return (INT_PTR)GetSysColorBrush(COLOR_BTNFACE);
+        }
+
         case WM_TIMER: {
             if (g_setup_started && !g_setup_finished) {
                 g_elapsed_sec++;
@@ -203,6 +299,19 @@ static INT_PTR CALLBACK MainDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM l
                 swprintf_s(ph_buf, 128, L"Phase: %ls", pData->phase_name);
                 SetDlgItemTextW(hDlg, IDC_STATIC_PHASE, ph_buf);
                 SetDlgItemTextW(hDlg, IDC_STATIC_STATUS, pData->status_text);
+
+                int pct = 0;
+                switch (pData->phase) {
+                    case SETUP_PHASE_CHECK:    pct = 5;  break;
+                    case SETUP_PHASE_PREPARE:  pct = 15; break;
+                    case SETUP_PHASE_STOP:     pct = 30; break;
+                    case SETUP_PHASE_UPDATE:   pct = 55; break;
+                    case SETUP_PHASE_START:    pct = 70; break;
+                    case SETUP_PHASE_VERIFY:   pct = 90; break;
+                    case SETUP_PHASE_FINISH:   pct = 100; break;
+                    default: break;
+                }
+                update_progress_ui(hDlg, pct);
                 free(pData);
             }
             return TRUE;
@@ -217,6 +326,11 @@ static INT_PTR CALLBACK MainDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM l
                 else if (sData->service_idx == 3) ctrl_id = IDC_SVC_L4SUPERV;
 
                 SetDlgItemTextW(hDlg, ctrl_id, sData->text);
+
+                if (sData->status == SVC_STATUS_RUNNING) {
+                    int svc_pct = 70 + (sData->service_idx + 1) * 4;
+                    update_progress_ui(hDlg, svc_pct);
+                }
                 free(sData);
             }
             return TRUE;
@@ -252,6 +366,10 @@ static INT_PTR CALLBACK MainDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM l
             if (g_ui_ctx.final_exit_code != 0 && g_ui_ctx.final_exit_code != 10 &&
                 g_ui_ctx.final_exit_code != 11 && g_ui_ctx.final_exit_code != 12) {
                 EnableWindow(GetDlgItem(hDlg, IDC_BTN_RETRY), TRUE);
+            }
+
+            if (g_ui_ctx.final_exit_code == 0) {
+                update_progress_ui(hDlg, 100);
             }
 
             wchar_t final_msg[256];
@@ -290,6 +408,7 @@ static INT_PTR CALLBACK MainDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM l
                 if (hEdit) {
                     BOOL is_visible = IsWindowVisible(hEdit);
                     ShowWindow(hEdit, is_visible ? SW_HIDE : SW_SHOW);
+                    SetDlgItemTextW(hDlg, IDC_BTN_DETAILS, is_visible ? L"Show Details" : L"Hide Details");
                 }
                 return TRUE;
             } else if (wmId == IDCANCEL) {
@@ -330,6 +449,15 @@ static INT_PTR CALLBACK MainDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM l
                 return TRUE;
             }
         }
+
+        case WM_DESTROY: {
+            log_set_callback(NULL, NULL);
+            if (g_hFontTitle)  { DeleteObject(g_hFontTitle);  g_hFontTitle = NULL; }
+            if (g_hFontBold)   { DeleteObject(g_hFontBold);   g_hFontBold = NULL; }
+            if (g_hFontNormal) { DeleteObject(g_hFontNormal); g_hFontNormal = NULL; }
+            if (g_hFontMono)   { DeleteObject(g_hFontMono);   g_hFontMono = NULL; }
+            return TRUE;
+        }
     }
 
     return FALSE;
@@ -337,6 +465,11 @@ static INT_PTR CALLBACK MainDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM l
 
 int ui_run_interactive_setup(HINSTANCE hInstance, CliOptions* opts) {
     if (!opts) return 1;
+
+    INITCOMMONCONTROLSEX icex;
+    icex.dwSize = sizeof(INITCOMMONCONTROLSEX);
+    icex.dwICC = ICC_WIN95_CLASSES | ICC_PROGRESS_CLASS | ICC_STANDARD_CLASSES;
+    InitCommonControlsEx(&icex);
 
     memset(&g_ui_ctx, 0, sizeof(SetupContext));
     g_ui_ctx.opts = opts;

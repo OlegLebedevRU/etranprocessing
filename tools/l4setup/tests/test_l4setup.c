@@ -587,6 +587,24 @@ static bool test_root_ca_install_and_idempotency(void) {
 }
 
 // ---------------------------------------------------------------------------
+// 9. Log Callback and Live Stream Tests
+// ---------------------------------------------------------------------------
+static void test_log_cb(const char* line, void* user_data) {
+    int* counter = (int*)user_data;
+    if (counter) (*counter)++;
+}
+
+static bool test_log_callback(void) {
+    int count = 0;
+    log_set_callback(test_log_cb, &count);
+    log_info("Test callback line 1");
+    log_warn("Test callback line 2 with pin=999888");
+    TEST_ASSERT(count >= 2, "Callback should have received at least 2 lines");
+    log_set_callback(NULL, NULL);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 int main(int argc, char* argv[]) {
@@ -615,6 +633,7 @@ int main(int argc, char* argv[]) {
     RUN_TEST(test_numeric_version_compare);
     RUN_TEST(test_incomplete_marker_and_recovery);
     RUN_TEST(test_root_ca_install_and_idempotency);
+    RUN_TEST(test_log_callback);
 
     printf("=======================================================\n");
     printf(" Unit Tests Summary: %d / %d passed\n", g_tests_passed, g_tests_run);

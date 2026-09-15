@@ -11,6 +11,32 @@ static bool g_cs_inited = false;
 static FILE* g_log_fp = NULL;
 static wchar_t g_log_path[MAX_PATH] = { 0 };
 
+static LogCallback g_log_cb = NULL;
+static void* g_log_cb_user = NULL;
+
+#define LOG_REPLAY_BUFFER_SIZE 64
+#define LOG_REPLAY_LINE_MAX 512
+static char g_replay_lines[LOG_REPLAY_BUFFER_SIZE][LOG_REPLAY_LINE_MAX];
+static size_t g_replay_count = 0;
+
+void log_set_callback(LogCallback cb, void* user_data) {
+    if (!g_cs_inited) {
+        InitializeCriticalSection(&g_log_cs);
+        g_cs_inited = true;
+    }
+
+    EnterCriticalSection(&g_log_cs);
+    g_log_cb = cb;
+    g_log_cb_user = user_data;
+
+    if (cb && g_replay_count > 0) {
+        for (size_t i = 0; i < g_replay_count; i++) {
+            cb(g_replay_lines[i], user_data);
+        }
+    }
+    LeaveCriticalSection(&g_log_cs);
+}
+
 void log_mask_pin(const char* input, char* output, size_t output_size) {
     if (!input || !output || output_size == 0) return;
     output[0] = '\0';
@@ -113,13 +139,21 @@ static void log_write(const char* level, const char* fmt, va_list args) {
     snprintf(time_str, sizeof(time_str), "%04u-%02u-%02u %02u:%02u:%02u UTC",
              st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
 
+    char formatted_line[2200];
+    snprintf(formatted_line, sizeof(formatted_line), "[%s] [%s] %s", time_str, level, masked_buf);
+
     if (g_cs_inited) {
         EnterCriticalSection(&g_log_cs);
     }
 
+    // Store in replay buffer
+    if (g_replay_count < LOG_REPLAY_BUFFER_SIZE) {
+        strncpy_s(g_replay_lines[g_replay_count++], LOG_REPLAY_LINE_MAX, formatted_line, _TRUNCATE);
+    }
+
     // Print to console (stdout / stderr)
     FILE* stream = (strcmp(level, "ERROR") == 0) ? stderr : stdout;
-    fprintf(stream, "[%s] [%s] %s\n", time_str, level, masked_buf);
+    fprintf(stream, "%s\n", formatted_line);
     fflush(stream);
 
     // Print to log file if open
@@ -129,6 +163,11 @@ static void log_write(const char* level, const char* fmt, va_list args) {
         MultiByteToWideChar(CP_UTF8, 0, masked_buf, -1, w_buf, 2048);
         fwprintf(g_log_fp, L"[%S] [%S] %s\n", time_str, level, w_buf);
         fflush(g_log_fp);
+    }
+
+    // Notify registered UI callback
+    if (g_log_cb) {
+        g_log_cb(formatted_line, g_log_cb_user);
     }
 
     if (g_cs_inited) {
