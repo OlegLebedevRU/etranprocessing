@@ -13,17 +13,17 @@ producer_prompt_id: L4D-03-MB
 producer_scope_project: MenuBuilder
 producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-03-MB-report.md
 producer_branch: l4desk/l4d-03-mb
-producer_commit: d1b5a76a290efe6d0e77b4648fa8c2c777271b75
+producer_commit: 4da76eca24bab856bdad764df6e6a1dc9de44f1c
 accepted_at_utc: 2026-09-17T22:20:00Z
 contract_version: 1.0.0
 schema_revision: 2026-09-17-v1
 artifact_version: 1.0.0
 artifact_paths:
-  - MenuBuilder/docs/l4desk/handoffs/L4D-03-MB-report.md
   - MenuBuilder/backend/tests/fixtures/iot_event_feed_examples_v1.json
+  - MenuBuilder/backend/tests/test_iot_event_feed_consumer.py
 artifact_sha256:
-  - f8eb3049b9eeeec0e1a7dd3a199078d1ccf484fa1160a515e2fc4fe6937e1a17
   - 1fafb1d27010917f43f5d36502cbfaa1decd5cce36c80a6dc397f4180556df2b
+  - 6664cc17db932fd4c84566c197cd8182a7521bb73589256a78fd3fa530ca9589
 consumed_contracts:
   - handoff_id: H-L4D-02-IOT-v1
     contract_id: iot_event_feed_contract_v1
@@ -98,7 +98,7 @@ next_prompt_id: L4D-04A-SHARED
 - **Ветка:** `l4desk/l4d-03-mb`
 - **Проект (Scope):** `MenuBuilder` (`D:\repo\platerra\Public\etranprocessing\MenuBuilder`)
 - **Статус выполнения:** `ACCEPTED`
-- **Кодовый коммит:** `d1b5a76a290efe6d0e77b4648fa8c2c777271b75`
+- **Кодовый коммит:** `4da76eca24bab856bdad764df6e6a1dc9de44f1c`
 - **Развертывание:** Production сервер `87.242.100.34`, контейнер `menubuilder-backend` (`Up`, status `200` OK, dark consumer flag `iot_consumer_enabled = false`).
 
 ---
@@ -263,7 +263,7 @@ next_prompt_id: L4D-04A-SHARED
 1. **Мгновенный откат без деплоя:**
    Если консьюмер был активирован переменной окружения `IOT_CONSUMER_ENABLED=true`, отключить его, выставив `IOT_CONSUMER_ENABLED=false` в `/home/user1/MenuBuilder/backend/.env` и перезапустив контейнер `sudo docker restart menubuilder-backend`.
 2. **Кодовый откат:**
-   - Выполнить `git revert d1b5a76a290efe6d0e77b4648fa8c2c777271b75`.
+   - Выполнить `git revert 4da76eca24bab856bdad764df6e6a1dc9de44f1c`.
    - Скопировать предыдущую версию `app/` на сервер и пересобрать контейнер.
 
 ---
