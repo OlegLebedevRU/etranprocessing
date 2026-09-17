@@ -2,10 +2,10 @@
 
 ## Candidate H-L4D-03-MB-v1
 
-```yaml
 <!-- HANDOFF:H-L4D-03-MB-v1:BEGIN -->
+```yaml
 handoff_id: H-L4D-03-MB-v1
-status: CANDIDATE
+status: ACCEPTED
 contract_kinds:
   - REPORT
   - DEPLOYMENT
@@ -13,8 +13,8 @@ producer_prompt_id: L4D-03-MB
 producer_scope_project: MenuBuilder
 producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-03-MB-report.md
 producer_branch: l4desk/l4d-03-mb
-producer_commit: a7db68449d871398c496a76fbddda81d381e4558
-created_at_utc: 2026-09-17T22:20:00Z
+producer_commit: d1b5a76a290efe6d0e77b4648fa8c2c777271b75
+accepted_at_utc: 2026-09-17T22:20:00Z
 contract_version: 1.0.0
 schema_revision: 2026-09-17-v1
 artifact_version: 1.0.0
@@ -22,7 +22,7 @@ artifact_paths:
   - MenuBuilder/docs/l4desk/handoffs/L4D-03-MB-report.md
   - MenuBuilder/backend/tests/fixtures/iot_event_feed_examples_v1.json
 artifact_sha256:
-  - pending-report-sha256
+  - f8eb3049b9eeeec0e1a7dd3a199078d1ccf484fa1160a515e2fc4fe6937e1a17
   - 1fafb1d27010917f43f5d36502cbfaa1decd5cce36c80a6dc397f4180556df2b
 consumed_contracts:
   - handoff_id: H-L4D-02-IOT-v1
@@ -52,23 +52,41 @@ deployed_environment: production
 feature_flags:
   iot_consumer_enabled: false
   iot_consumer_shadow_mode: true
-storage_semantics:
-  checkpoint_model: IotConsumerCheckpoint (table: iot_consumer_checkpoints, last_cursor: BigInteger)
-  inbox_model: IotEventInbox (table: iot_event_inbox, event_id: primary_key)
-  quarantine_model: IotEventQuarantine (table: iot_event_quarantine, error_code: String)
-tests:
-  suite: MenuBuilder/backend/tests/test_iot_event_feed_consumer.py
-  passed: 14
-  failed: 0
-  coverage: duplicate page/event, resume, empty feed, pagination, out-of-order rejection, commercial injection quarantine, restart resilience, status api
-rollback:
-  flag_disable: Set IOT_CONSUMER_ENABLED=false in environment or MenuBuilder/backend/.env
-  code_revert: git revert 4da82c4abc1cc9909d8fc1f15017448d0b09cb45
+contract_payload:
+  identifiers:
+    consumer_id: "menubuilder_iot_event_consumer"
+    cursor_type: "int64 (BIGSERIAL monotonic, strictly positive)"
+    event_id_pattern: "^evt_[a-z0-9_]+$"
+    session_id_pattern: "^sess-(console|video)-[a-z0-9-]+$"
+  models:
+    checkpoint_model: "IotConsumerCheckpoint (table: iot_consumer_checkpoints, last_cursor: BigInteger)"
+    inbox_model: "IotEventInbox (table: iot_event_inbox, event_id: primary key)"
+    quarantine_model: "IotEventQuarantine (table: iot_event_quarantine, quarantine_id: primary key, error_code: String)"
+  endpoints:
+    - method: GET
+      path: "/api/internal/v1/iot-consumer/status"
+      auth: "Bearer superuser or X-Internal-Service-Key"
+    - method: POST
+      path: "/api/internal/v1/iot-consumer/poll"
+      auth: "Bearer superuser or X-Internal-Service-Key"
+  invariants:
+    - "Strict scope isolation: MenuBuilder does not mutate financial ledger, balances, or license entitlements"
+    - "Dark consumer defaults: iot_consumer_enabled=false, iot_consumer_shadow_mode=true"
+    - "Monotonic cursor tracking: checkpoint cursor advances only upon contiguous, error-free event consumption"
+    - "Idempotent inbox: duplicate events suppressed by event_id without cursor regression"
+    - "Strict quarantine: contract-violating payloads or out-of-order anomalies quarantined without blocking valid stream"
+    - "Zero alternative flows: remote session telemetry feeds solely into inbox/projection tables"
+supersedes:
+  - H-L4D-00E-MB-v1
+known_risks:
+  - "Consumer relies on polling /api/internal/v1/remote-session-events; real-time latency bounded by poll_interval_seconds (default 5.0s)"
+  - "Dark consumer is disabled by default (iot_consumer_enabled=false) and in shadow mode (iot_consumer_shadow_mode=true) until L4D-04C-MB activation"
+  - "Storage schema migrations in MenuBuilder use idempotent DDL on startup; central Alembic migrations remain in ProcessingBackend"
 consumers:
   - L4D-04A-SHARED
 next_prompt_id: L4D-04A-SHARED
-<!-- HANDOFF:H-L4D-03-MB-v1:END -->
 ```
+<!-- HANDOFF:H-L4D-03-MB-v1:END -->
 
 ---
 
@@ -80,7 +98,7 @@ next_prompt_id: L4D-04A-SHARED
 - **Ветка:** `l4desk/l4d-03-mb`
 - **Проект (Scope):** `MenuBuilder` (`D:\repo\platerra\Public\etranprocessing\MenuBuilder`)
 - **Статус выполнения:** `ACCEPTED`
-- **Кодовый коммит:** `4da82c4abc1cc9909d8fc1f15017448d0b09cb45`
+- **Кодовый коммит:** `d1b5a76a290efe6d0e77b4648fa8c2c777271b75`
 - **Развертывание:** Production сервер `87.242.100.34`, контейнер `menubuilder-backend` (`Up`, status `200` OK, dark consumer flag `iot_consumer_enabled = false`).
 
 ---
@@ -245,7 +263,7 @@ next_prompt_id: L4D-04A-SHARED
 1. **Мгновенный откат без деплоя:**
    Если консьюмер был активирован переменной окружения `IOT_CONSUMER_ENABLED=true`, отключить его, выставив `IOT_CONSUMER_ENABLED=false` в `/home/user1/MenuBuilder/backend/.env` и перезапустив контейнер `sudo docker restart menubuilder-backend`.
 2. **Кодовый откат:**
-   - Выполнить `git revert 4da82c4abc1cc9909d8fc1f15017448d0b09cb45`.
+   - Выполнить `git revert d1b5a76a290efe6d0e77b4648fa8c2c777271b75`.
    - Скопировать предыдущую версию `app/` на сервер и пересобрать контейнер.
 
 ---
