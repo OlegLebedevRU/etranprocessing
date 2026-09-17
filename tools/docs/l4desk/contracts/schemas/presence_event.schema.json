@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://etranprocessing.org/contracts/l4desk/schemas/presence_event.schema.json",
+  "title": "AgentPresenceEventSchema",
+  "description": "Validates presence events published by L4Desk Agent or LWT on dev/{SN}/app and dev/{SN}/svc",
+  "type": "string",
+  "enum": [
+    "app_online",
+    "app_offline",
+    "svc_online",
+    "svc_offline"
+  ]
+}

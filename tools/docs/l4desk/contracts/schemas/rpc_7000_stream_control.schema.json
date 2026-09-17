@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://etranprocessing.org/contracts/l4desk/schemas/rpc_7000_stream_control.schema.json",
+  "title": "RPC7000StreamControlSchema",
+  "description": "JSON Schema defining Method 7000 (Stream Control, Display Inventory, and Remote Input) payloads",
+  "definitions": {
+    "request": {
+      "type": "object",
+      "required": ["method_code", "action", "command_id", "sn"],
+      "properties": {
+        "method_code": { "const": 7000 },
+        "action": {
+          "type": "string",
+          "enum": [
+            "inventory_get",
+            "stream_start",
+            "lease_renew",
+            "stream_stop",
+            "mouse_click",
+            "key_event",
+            "shortcut_action"
+          ]
+        },
+        "command_id": { "type": "string", "minLength": 1 },
+        "sn": { "type": "string", "pattern": "^[0-9A-Za-z_-]{6,32}$" },
+        "stream_instance_id": { "type": "string" },
+        "stream_mode": { "type": "string", "enum": ["desktop", "camera"] },
+        "display_index": { "type": "integer", "minimum": 0 },
+        "camera_index": { "type": "integer", "minimum": 0 },
+        "fps": { "type": "integer", "minimum": 1, "maximum": 60 },
+        "bitrate_kbps": { "type": "integer", "minimum": 100, "maximum": 20000 },
+        "lease_sec": { "type": "integer", "minimum": 5, "maximum": 3600 },
+        "input_enabled": { "type": "boolean" },
+        "x_norm": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "y_norm": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "button": { "type": "string", "enum": ["left", "right", "middle", "double_left"] },
+        "click_type": { "type": "string", "enum": ["click", "down", "up", "double"] },
+        "vk": { "type": "integer", "minimum": 1, "maximum": 255 },
+        "scan_code": { "type": "integer", "minimum": 0 },
+        "is_down": { "type": "boolean" },
+        "is_extended": { "type": "boolean" },
+        "shortcut": { "type": "string", "enum": ["ctrl_alt_del", "win_l", "alt_tab", "win_d", "enter", "escape"] }
+      },
+      "additionalProperties": false
+    },
+    "response": {
+      "type": "object",
+      "required": ["status", "command_id"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["ok", "started", "renewed", "stopped", "injected", "error", "busy", "unsupported"]
+        },
+        "command_id": { "type": "string" },
+        "error": { "type": ["string", "null"] },
+        "displays": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["device_name", "display_index"],
+            "properties": {
+              "device_name": { "type": "string" },
+              "display_index": { "type": "integer" },
+              "width": { "type": "integer" },
+              "height": { "type": "integer" },
+              "is_primary": { "type": "boolean" }
+            }
+          }
+        },
+        "cameras": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["device_name", "camera_index"],
+            "properties": {
+              "device_name": { "type": "string" },
+              "camera_index": { "type": "integer" }
+            }
+          }
+        },
+        "active_stream": { "type": ["object", "null"] },
+        "stream_instance_id": { "type": "string" },
+        "stream_mode": { "type": "string", "enum": ["desktop", "camera"] },
+        "display_index": { "type": "integer" },
+        "camera_index": { "type": "integer" },
+        "fps": { "type": "integer" },
+        "bitrate_kbps": { "type": "integer" },
+        "lease_sec": { "type": "integer" },
+        "expires_at_ms": { "type": "integer" },
+        "rtp_port": { "type": "integer" },
+        "rtcp_port": { "type": "integer" },
+        "input_enabled": { "type": "boolean" },
+        "desktop_locked": { "type": "boolean" },
+        "session_available": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

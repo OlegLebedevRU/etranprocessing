@@ -1,0 +1,14 @@
+[project]
+name = "l4tools-contract-tests"
+version = "1.0.0"
+description = "L4Desk Agent Compatibility Contract v1 and Backward-Compatibility Test Suite"
+requires-python = ">=3.10"
+dependencies = [
+    "pytest>=8.0.0",
+    "pydantic>=2.0.0",
+    "jsonschema>=4.20.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
