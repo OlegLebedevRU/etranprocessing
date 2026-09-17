@@ -12,7 +12,7 @@ producer_prompt_id: L4D-00D-MEDIA
 producer_scope_project: l4media
 producer_report_path: l4media/docs/l4desk/handoffs/L4D-00D-MEDIA-report.md
 producer_branch: l4desk/l4d-00d-media
-producer_commit: PENDING_COMMIT_SHA
+producer_commit: db5e27d43ea5b95087866ce9a39f3b1b9bd05407
 created_at_utc: 2026-09-17T18:35:00Z
 contract_version: 1.0.0
 schema_revision: N/A
