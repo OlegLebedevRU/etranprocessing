@@ -483,29 +483,35 @@ async def test_reconciliation_response_parsing(raw_fixture: dict[str, Any]):
 async def test_consumer_status_api_endpoint():
     """Verify GET /api/internal/v1/iot-consumer/status authorization and schema."""
     from app.main import app
+    from app.services.iot_event_consumer import iot_event_consumer
 
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
-    ) as ac:
-        # 1. Unauthenticated -> 403
-        r_unauth = await ac.get("/api/internal/v1/iot-consumer/status")
-        assert r_unauth.status_code == 403
+    orig_storage = iot_event_consumer.storage
+    iot_event_consumer.storage = InMemoryIotConsumerStorage()
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+        ) as ac:
+            # 1. Unauthenticated -> 403
+            r_unauth = await ac.get("/api/internal/v1/iot-consumer/status")
+            assert r_unauth.status_code == 403
 
-        # 2. Authenticated via superuser token
-        from app.auth import create_access_token
+            # 2. Authenticated via superuser token
+            from app.auth import create_access_token
 
-        su_token = create_access_token(
-            {"sub": "o.lebedev", "role": "superuser", "is_superuser": True}
-        )
-        r_auth = await ac.get(
-            "/api/internal/v1/iot-consumer/status",
-            headers={"Authorization": f"Bearer {su_token}"},
-        )
-        assert r_auth.status_code == 200
-        data = r_auth.json()
-        assert "consumer_id" in data
-        assert "checkpoint_cursor" in data
-        assert "cursor_lag" in data
-        assert "enabled" in data
-        assert data["enabled"] is False  # Dark consumer by default
-        assert data["shadow_mode"] is True  # Shadow mode by default
+            su_token = create_access_token(
+                {"sub": "o.lebedev", "role": "superuser", "is_superuser": True}
+            )
+            r_auth = await ac.get(
+                "/api/internal/v1/iot-consumer/status",
+                headers={"Authorization": f"Bearer {su_token}"},
+            )
+            assert r_auth.status_code == 200
+            data = r_auth.json()
+            assert "consumer_id" in data
+            assert "checkpoint_cursor" in data
+            assert "cursor_lag" in data
+            assert "enabled" in data
+            assert data["enabled"] is False  # Dark consumer by default
+            assert data["shadow_mode"] is True  # Shadow mode by default
+    finally:
+        iot_event_consumer.storage = orig_storage
