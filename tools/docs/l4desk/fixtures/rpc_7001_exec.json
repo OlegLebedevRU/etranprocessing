@@ -1,0 +1,112 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RPC Method 7001: CMD_DIAG_EXEC Golden Fixtures",
+  "description": "Baseline fixtures for remote diagnostics command execution via MQTT RPC",
+  "method_code": 7001,
+  "flow": {
+    "request_topic": "srv/{SN}/rsp",
+    "request_forwarded_from": "srv/{SN}/tsk",
+    "output_stream_topic": "dev/{SN}/out",
+    "response_topic": "dev/{SN}/res",
+    "qos": 1
+  },
+  "examples": {
+    "exec_cmd_hostname": {
+      "request": {
+        "topic": "srv/000100773/rsp",
+        "mqtt_v5_properties": {
+          "CorrelationData": "01020304-corr-exec-0001",
+          "UserProperty": [
+            { "name": "taskId", "value": "task-exec-1001" }
+          ]
+        },
+        "payload": {
+          "id": "task-exec-1001",
+          "method_code": 7001,
+          "session_id": "sess-exec-9001",
+          "command_line": "hostname",
+          "shell": "cmd",
+          "ttl_sec": 30,
+          "topic": "dev/000100773/out"
+        }
+      },
+      "stream_output_chunk": {
+        "topic": "dev/000100773/out",
+        "payload": {
+          "session_id": "sess-exec-9001",
+          "seq": 1,
+          "data": "TERM-KIOSK-01\r\n",
+          "eof": false
+        }
+      },
+      "stream_output_eof": {
+        "topic": "dev/000100773/out",
+        "payload": {
+          "session_id": "sess-exec-9001",
+          "seq": 2,
+          "data": "",
+          "eof": true,
+          "exit_code": 0
+        }
+      },
+      "response": {
+        "topic": "dev/000100773/res",
+        "mqtt_v5_properties": {
+          "CorrelationData": "01020304-corr-exec-0001"
+        },
+        "payload": {
+          "id": "task-exec-1001",
+          "session_id": "sess-exec-9001",
+          "method_code": 7001,
+          "status": "completed",
+          "exit_code": 0,
+          "execution_time_ms": 48
+        }
+      }
+    },
+    "exec_powershell_date": {
+      "request": {
+        "topic": "srv/000100773/rsp",
+        "payload": {
+          "id": "task-exec-1002",
+          "method_code": 7001,
+          "session_id": "sess-exec-9002",
+          "command_line": "Get-Date -Format 'yyyy-MM-dd HH:mm:ss'",
+          "shell": "powershell",
+          "ttl_sec": 15,
+          "topic": "dev/000100773/out"
+        }
+      },
+      "stream_output_chunk": {
+        "topic": "dev/000100773/out",
+        "payload": {
+          "session_id": "sess-exec-9002",
+          "seq": 1,
+          "data": "2026-09-17 16:30:00\r\n",
+          "eof": false
+        }
+      },
+      "stream_output_eof": {
+        "topic": "dev/000100773/out",
+        "payload": {
+          "session_id": "sess-exec-9002",
+          "seq": 2,
+          "data": "",
+          "eof": true,
+          "exit_code": 0
+        }
+      },
+      "response": {
+        "topic": "dev/000100773/res",
+        "payload": {
+          "id": "task-exec-1002",
+          "session_id": "sess-exec-9002",
+          "method_code": 7001,
+          "status": "completed",
+          "exit_code": 0,
+          "execution_time_ms": 312
+        }
+      }
+    }
+  }
+}

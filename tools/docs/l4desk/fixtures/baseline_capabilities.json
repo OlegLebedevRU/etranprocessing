@@ -1,0 +1,83 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Agent Baseline Capabilities and Incompatibilities Matrix",
+  "description": "Baseline capabilities of deployed l4tools v1.7.7 on terminal/host",
+  "artifact": {
+    "version": "1.7.7",
+    "git_sha": "297068f8044b5e40e51257e828c50d6137c9af7c",
+    "sha256": "874f5444d2d4cc9bdee39e7c25a1265a2dd98f388aca49ef205ffb764531cd88",
+    "size_bytes": 28730368,
+    "url": "https://l4tools-generic.ar.cloud.ru/l4tools/1.7.7/l4setup.exe",
+    "deployment_status": "PUBLISHED"
+  },
+  "min_os_version": {
+    "windows": "6.1.7601",
+    "windows_name": "Windows 7 SP1 (or Windows Server 2008 R2 SP1)",
+    "tls_requirements": "SChannel TLS 1.2 enabled (KB3140245 or native)"
+  },
+  "components": {
+    "leo4proxy": "1.2.0",
+    "l4superv": "1.7.6",
+    "l4desk": "1.7.6",
+    "l4pin": "1.7.2",
+    "l4con": "1.7.2",
+    "l4sql": "1.0.0",
+    "mosquitto": "2.1.2",
+    "ffmpeg": "9.0"
+  },
+  "methods": {
+    "7000": {
+      "name": "CMD_DIAG_STREAM_CONTROL",
+      "actions": [
+        "inventory_get",
+        "stream_start",
+        "stream_stop",
+        "lease_renew",
+        "mouse_click",
+        "key_event",
+        "shortcut_action"
+      ],
+      "supported_codecs": ["h264"],
+      "default_transport": "rtp_over_udp -> leo4proxy L4RTP/1 mTLS tunnel -> l4media ingress (dev.leo4.ru:8443)",
+      "default_ports": { "rtp": 5004, "rtcp": 5005 }
+    },
+    "7001": {
+      "name": "CMD_DIAG_EXEC",
+      "supported_shells": ["cmd", "powershell"],
+      "streaming_output": true,
+      "streaming_topic": "dev/{SN}/out",
+      "default_ttl_sec": 30,
+      "max_ttl_sec": 300
+    },
+    "7002": {
+      "name": "CMD_DIAG_CANCEL",
+      "description": "Terminates active process tree spawned by 7001 execution task"
+    }
+  },
+  "known_incompatibilities_and_constraints": [
+    {
+      "code": "L4D-INC-01",
+      "scope": "input_injection",
+      "issue": "Direct input injection (mouse/keyboard) is rejected if desktop is locked (WTS_SESSION_LOCK) or user session is unavailable.",
+      "mitigation": "Agent returns desktop_locked=true or session_unavailable=true in stream status; frontend must inform operator."
+    },
+    {
+      "code": "L4D-INC-02",
+      "scope": "input_injection",
+      "issue": "Ctrl+Alt+Del injection requires elevated SYSTEM service with Secure Desktop interaction or software SAS policy enabled.",
+      "mitigation": "Handled via shortcut_action 'ctrl_alt_del' using SendSAS / simulated credential manager where supported."
+    },
+    {
+      "code": "L4D-INC-03",
+      "scope": "tls_ciphers",
+      "issue": "Windows 7 SP1 out-of-the-box does not support modern TLS 1.3 or ECDHE ciphers without KB3140245.",
+      "mitigation": "leo4proxy uses Windows SChannel API with client certificate in LocalMachine store, connecting to Nginx mTLS port 8443 and Mosquitto bridge on 8883."
+    },
+    {
+      "code": "L4D-INC-04",
+      "scope": "single_stream",
+      "issue": "Agent supports exactly one concurrent active video stream at a time per terminal.",
+      "mitigation": "Attempting stream_start while a stream is running returns already_running or performs controlled switch if requested."
+    }
+  ]
+}

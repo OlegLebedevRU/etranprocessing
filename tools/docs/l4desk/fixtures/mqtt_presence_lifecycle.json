@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MQTT Presence Lifecycle Golden Fixtures",
+  "description": "Baseline fixtures for MQTT presence and LWT (Last Will and Testament) status",
+  "roles": {
+    "main_app": {
+      "topic": "dev/{SN}/app",
+      "connect_will": {
+        "topic": "dev/{SN}/app",
+        "payload": "app_offline",
+        "qos": 1,
+        "retain": true
+      },
+      "connack_publish": {
+        "topic": "dev/{SN}/app",
+        "payload": "app_online",
+        "qos": 1,
+        "retain": true
+      },
+      "clean_shutdown_publish": {
+        "topic": "dev/{SN}/app",
+        "payload": "app_offline",
+        "qos": 1,
+        "retain": true
+      }
+    },
+    "extra_service": {
+      "topic": "dev/{SN}/svc",
+      "connect_will": {
+        "topic": "dev/{SN}/svc",
+        "payload": "svc_offline",
+        "qos": 1,
+        "retain": true
+      },
+      "connack_publish": {
+        "topic": "dev/{SN}/svc",
+        "payload": "svc_online",
+        "qos": 1,
+        "retain": true
+      },
+      "clean_shutdown_publish": {
+        "topic": "dev/{SN}/svc",
+        "payload": "svc_offline",
+        "qos": 1,
+        "retain": true
+      }
+    }
+  },
+  "examples": {
+    "terminal_extra_service_connect": {
+      "will_message": {
+        "topic": "dev/000100773/svc",
+        "payload": "svc_offline",
+        "qos": 1,
+        "retain": true
+      },
+      "online_message": {
+        "topic": "dev/000100773/svc",
+        "payload": "svc_online",
+        "qos": 1,
+        "retain": true
+      }
+    },
+    "terminal_extra_service_shutdown": {
+      "offline_message": {
+        "topic": "dev/000100773/svc",
+        "payload": "svc_offline",
+        "qos": 1,
+        "retain": true
+      }
+    }
+  }
+}

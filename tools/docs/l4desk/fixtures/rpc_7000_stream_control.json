@@ -1,0 +1,226 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RPC Method 7000: CMD_DIAG_STREAM_CONTROL Golden Fixtures",
+  "description": "Baseline fixtures for video streaming control, inventory, and input injection via MQTT RPC",
+  "method_code": 7000,
+  "flow": {
+    "request_topic": "srv/{SN}/rsp",
+    "request_forwarded_from": "srv/{SN}/tsk",
+    "response_topic": "dev/{SN}/res",
+    "qos": 1
+  },
+  "examples": {
+    "inventory_get": {
+      "request": {
+        "topic": "srv/000100773/rsp",
+        "mqtt_v5_properties": {
+          "CorrelationData": "01020304-corr-inv-0001",
+          "UserProperty": [
+            { "name": "taskId", "value": "task-inv-1001" },
+            { "name": "clientId", "value": "menubuilder-backend" }
+          ]
+        },
+        "payload": {
+          "method_code": 7000,
+          "action": "inventory_get",
+          "command_id": "inv_001",
+          "sn": "000100773"
+        }
+      },
+      "response": {
+        "topic": "dev/000100773/res",
+        "mqtt_v5_properties": {
+          "CorrelationData": "01020304-corr-inv-0001",
+          "UserProperty": [
+            { "name": "status", "value": "ok" }
+          ]
+        },
+        "payload": {
+          "status": "ok",
+          "command_id": "inv_001",
+          "error": null,
+          "displays": [
+            {
+              "device_name": "\\\\.\\DISPLAY1",
+              "display_index": 0,
+              "width": 1920,
+              "height": 1080,
+              "is_primary": true
+            }
+          ],
+          "cameras": [
+            {
+              "device_name": "Integrated Camera",
+              "camera_index": 0
+            }
+          ],
+          "active_stream": null
+        }
+      }
+    },
+    "stream_start_desktop": {
+      "request": {
+        "topic": "srv/000100773/rsp",
+        "mqtt_v5_properties": {
+          "CorrelationData": "01020304-corr-str-0001",
+          "UserProperty": [
+            { "name": "taskId", "value": "task-str-1001" }
+          ]
+        },
+        "payload": {
+          "method_code": 7000,
+          "action": "stream_start",
+          "command_id": "str_001",
+          "sn": "000100773",
+          "stream_mode": "desktop",
+          "display_index": 0,
+          "camera_index": 0,
+          "fps": 25,
+          "bitrate_kbps": 2000,
+          "lease_sec": 60,
+          "input_enabled": true
+        }
+      },
+      "response": {
+        "topic": "dev/000100773/res",
+        "mqtt_v5_properties": {
+          "CorrelationData": "01020304-corr-str-0001"
+        },
+        "payload": {
+          "status": "started",
+          "command_id": "str_001",
+          "error": null,
+          "stream_instance_id": "s_000100773_1726593684",
+          "stream_mode": "desktop",
+          "display_index": 0,
+          "camera_index": 0,
+          "fps": 25,
+          "bitrate_kbps": 2000,
+          "lease_sec": 60,
+          "expires_at_ms": 1726593744000,
+          "rtp_port": 5004,
+          "rtcp_port": 5005,
+          "input_enabled": true,
+          "desktop_locked": false,
+          "session_available": true
+        }
+      }
+    },
+    "lease_renew": {
+      "request": {
+        "topic": "srv/000100773/rsp",
+        "mqtt_v5_properties": {
+          "CorrelationData": "01020304-corr-rnw-0001"
+        },
+        "payload": {
+          "method_code": 7000,
+          "action": "lease_renew",
+          "command_id": "rnw_001",
+          "sn": "000100773",
+          "stream_instance_id": "s_000100773_1726593684",
+          "lease_sec": 60
+        }
+      },
+      "response": {
+        "topic": "dev/000100773/res",
+        "payload": {
+          "status": "renewed",
+          "command_id": "rnw_001",
+          "error": null,
+          "stream_instance_id": "s_000100773_1726593684",
+          "expires_at_ms": 1726593804000
+        }
+      }
+    },
+    "mouse_click": {
+      "request": {
+        "topic": "srv/000100773/rsp",
+        "payload": {
+          "method_code": 7000,
+          "action": "mouse_click",
+          "command_id": "clk_001",
+          "sn": "000100773",
+          "stream_instance_id": "s_000100773_1726593684",
+          "x_norm": 0.5234,
+          "y_norm": 0.2811,
+          "button": "left",
+          "click_type": "click"
+        }
+      },
+      "response": {
+        "topic": "dev/000100773/res",
+        "payload": {
+          "status": "injected",
+          "command_id": "clk_001",
+          "error": null
+        }
+      }
+    },
+    "key_event": {
+      "request": {
+        "topic": "srv/000100773/rsp",
+        "payload": {
+          "method_code": 7000,
+          "action": "key_event",
+          "command_id": "key_001",
+          "sn": "000100773",
+          "stream_instance_id": "s_000100773_1726593684",
+          "vk": 65,
+          "scan_code": 30,
+          "is_down": true,
+          "is_extended": false
+        }
+      },
+      "response": {
+        "topic": "dev/000100773/res",
+        "payload": {
+          "status": "injected",
+          "command_id": "key_001",
+          "error": null
+        }
+      }
+    },
+    "shortcut_action": {
+      "request": {
+        "topic": "srv/000100773/rsp",
+        "payload": {
+          "method_code": 7000,
+          "action": "shortcut_action",
+          "command_id": "sc_001",
+          "sn": "000100773",
+          "stream_instance_id": "s_000100773_1726593684",
+          "shortcut": "win_d"
+        }
+      },
+      "response": {
+        "topic": "dev/000100773/res",
+        "payload": {
+          "status": "injected",
+          "command_id": "sc_001",
+          "error": null
+        }
+      }
+    },
+    "stream_stop": {
+      "request": {
+        "topic": "srv/000100773/rsp",
+        "payload": {
+          "method_code": 7000,
+          "action": "stream_stop",
+          "command_id": "stp_001",
+          "sn": "000100773",
+          "stream_instance_id": "s_000100773_1726593684"
+        }
+      },
+      "response": {
+        "topic": "dev/000100773/res",
+        "payload": {
+          "status": "stopped",
+          "command_id": "stp_001",
+          "error": null,
+          "stream_instance_id": "s_000100773_1726593684"
+        }
+      }
+    }
+  }
+}
