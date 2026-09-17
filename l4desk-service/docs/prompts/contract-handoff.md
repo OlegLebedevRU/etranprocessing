@@ -624,3 +624,255 @@ consumers:
 next_prompt_id: L4D-01A-TOOLS
 ```
 <!-- HANDOFF:H-L4D-00G-DOCS-v1:END -->
+
+<!-- HANDOFF:H-L4D-01A-TOOLS-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-01A-TOOLS-v1
+status: ACCEPTED
+contract_kinds:
+  - FIXTURES
+producer_prompt_id: L4D-01A-TOOLS
+producer_scope_project: tools
+producer_report_path: tools/docs/l4desk/handoffs/L4D-01A-TOOLS-report.md
+producer_branch: l4desk/l4d-01a-tools
+producer_commit: c33030bc5f9ac07a010d5ff8c9b996c80c1def85
+accepted_at_utc: 2026-09-17T20:45:00Z
+contract_version: 1.0.0
+schema_revision: 2026-09-17-v1
+artifact_version: 1.7.7
+artifact_paths:
+  - tools/docs/l4desk/contracts/agent_compatibility_contract_v1.json
+  - tools/docs/l4desk/contracts/schemas/agent_contract_v1.schema.json
+  - tools/docs/l4desk/contracts/schemas/presence_event.schema.json
+  - tools/docs/l4desk/contracts/schemas/rpc_7000_stream_control.schema.json
+  - tools/docs/l4desk/contracts/schemas/rpc_7001_exec.schema.json
+  - tools/docs/l4desk/contracts/schemas/rpc_7002_cancel.schema.json
+  - tools/docs/l4desk/contracts/schemas/l4rtp_wire_protocol.schema.json
+  - tools/docs/l4desk/fixtures/golden_vectors_v1.json
+  - tools/tests/test_agent_compatibility_contract_v1.py
+artifact_sha256:
+  - 38e4ae5f13d563b3ae57a83259d63f9a63049d528d9667ae33efbd5a1e71267a
+  - f065dd53101c4bf90b237c85082a05eea212e1a2b3de39d2bf890708e3a42f1d
+  - fd061b7a1a113ec4ba518208e5693ffad98593cd8096d9a013f34a0ca7748d07
+  - d7ed9deaeddc4a8a5f668cd59ac95aa0941aeff083e4ef6d94a1c9e75ba4ab6e
+  - fb511cfb368f809fb042dbece552d7f24aeedb384f7186915f82e1dfb561ee1b
+  - a1dac309f324b1d0e2073ac8ab251ed70f6cfd191c46ae38f3c9192854079a8f
+  - b38aeeda96a5df81561117a0acb13606b417f136abb5250e72d41d38b630bd53
+  - b4f3c1a465e88babf89c0850cfd8dffc29a4cd921ec51a73e2112e6cf9c3034b
+  - 7e6ce52fc9351cc8a95134bcde0304fc208e0fdbec3287f279b2a7bfd0db0d52
+compatibility:
+  backward_compatible_with:
+    - 1.7.6
+    - 1.7.7
+  breaking_changes: false
+  notes: Исполняемый контракт совместимости Agent Compatibility Contract v1 и golden vectors для l4tools 1.7.7/1.7.6. Фиксация тем топиков, кодов методов (7000, 7001, 7002), JSON схем запросов и ответов, LWT/presence, L4RTP/1 wire protocol без изменения бинарных файлов агента.
+deployment_status: PUBLISHED
+deployed_environment: artifact-registry
+feature_flags:
+  l4con_cmd_exec: enabled
+  l4desk_desktop_stream: enabled
+contract_payload:
+  identifiers:
+    sn_pattern: "^[0-9A-Za-z_-]{6,32}$"
+    cert_dn_pattern: "CN={SN}"
+    task_id_pattern: "^task-[a-z0-9-]+$"
+    session_id_pattern: "^sess-[a-z0-9-]+$"
+  operations_events:
+    presence_topics:
+      - "dev/{SN}/app"
+      - "dev/{SN}/svc"
+    rpc_topics:
+      - "srv/{SN}/tsk"
+      - "srv/{SN}/rsp"
+      - "dev/{SN}/out"
+      - "dev/{SN}/res"
+    methods:
+      - code: 7000
+        name: "STREAM_CONTROL"
+        actions: ["inventory_get", "stream_start", "lease_renew", "stream_stop", "mouse_click", "key_event", "shortcut_action"]
+      - code: 7001
+        name: "EXEC_COMMAND"
+        shells: ["cmd", "powershell"]
+      - code: 7002
+        name: "CANCEL_TASK"
+        statuses: ["cancelled", "not_found", "already_finished"]
+  errors:
+    stream_errors: ["desktop_locked", "session_unavailable", "already_running", "invalid_button", "forbidden_key", "unsupported_action", "device_not_found", "encoder_failure"]
+    exec_errors: ["timed_out", "failed", "cancelled"]
+  invariants:
+    - "No financial, billing, entitlement, or organization fields in agent payloads or topics"
+    - "All device topics strictly prefixed with dev/{SN}/ and server topics with srv/{SN}/"
+    - "Presence messages published with QoS 1 and retain = true"
+    - "Method codes 7000, 7001, 7002 and action names are immutable and backward-compatible"
+    - "Streaming output chunks over dev/{SN}/out have monotonic sequence numbering and boolean eof"
+    - "No MQTT client was created or modified in tools"
+    - "Published agent binary release remains 1.7.7"
+supersedes:
+  - H-L4D-00A-TOOLS-v1
+known_risks:
+  - "Interactive mouse/key input injection is rejected if screen is locked or session unavailable"
+  - "L4RTP UDP loopback fallback on legacy Windows systems without native loopback fast path"
+consumers:
+  - L4D-01B-IOT
+next_prompt_id: L4D-01B-IOT
+```
+<!-- HANDOFF:H-L4D-01A-TOOLS-v1:END -->
+
+<!-- HANDOFF:H-L4D-01B-IOT-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-01B-IOT-v1
+status: ACCEPTED
+contract_kinds:
+  - DEPLOYMENT
+  - FIXTURES
+producer_prompt_id: L4D-01B-IOT
+producer_scope_project: iot-rpc-rest-app
+producer_report_path: docs/l4desk/handoffs/L4D-01B-IOT-report.md
+producer_branch: l4desk/l4d-01b-iot
+producer_commit: 0307dd7953b339ee48c3068a490732c82ea4e401
+accepted_at_utc: 2026-09-17T21:45:00Z
+contract_version: 1.0.0
+schema_revision: 2026-09-17-v1
+artifact_version: 1.0.0
+artifact_paths:
+  - app-service/core/adapters/agent_contract_v1.py
+  - app-service/tests/core/test_l4d_01b_agent_contract_v1.py
+  - docs/l4desk/handoffs/L4D-01B-IOT-report.md
+artifact_sha256:
+  - 4c22174762d570dd70cbcbea28fc419748184a9a65ae9296f3f7577d7fa584e8
+  - 0c5005d42935736030c793af7b4e3c9e08ba382523750d742d5a2d169e768a7f
+  - 9e7bec92783a8cdab71777296d7e0440f2df0a56183f689883974cf0e390f69a
+compatibility:
+  backward_compatible_with:
+    - 1.7.6
+    - 1.7.7
+  breaking_changes: false
+  notes: Реализован и протестирован AgentContractV1Adapter (app-service/core/adapters/agent_contract_v1.py), обеспечивающий полную совместимость с Agent Compatibility Contract v1 (агенты 1.7.6 и 1.7.7). Подтверждена неизменяемость топиков dev/{SN}/app, dev/{SN}/svc, srv/{SN}/rsp, srv/{SN}/ctl, dev/{SN}/out, dev/{SN}/res, методов 7000/7001/7002, wire protocol L4RTP/1. Внедрен assert_no_commercial_fields, исключающий передачу биллинговых/финансовых полей. Пройдены все 25 golden vectors, 24 теста контракта, 357 тестов в репозитории.
+deployment_status: DEPLOYED
+deployed_environment: production
+feature_flags:
+  agent_contract_v1: enabled
+  alpha_billing: enabled
+contract_payload:
+  identifiers:
+    sn_pattern: "^[0-9A-Za-z_-]{6,32}$"
+    session_id_pattern: "^(sess-[a-z0-9-]+|[0-9a-fA-F-]{36})$"
+    command_id_pattern: "^[a-z0-9_-]{1,64}$"
+    task_id_pattern: "^task-[a-z0-9-]+$"
+  operations_events:
+    presence_topics:
+      - "dev/{SN}/app"
+      - "dev/{SN}/svc"
+    rpc_topics:
+      - "srv/{SN}/rsp"
+      - "srv/{SN}/ctl"
+      - "dev/{SN}/out"
+      - "dev/{SN}/res"
+    methods:
+      - code: 7000
+        name: "STREAM_CONTROL"
+        actions: ["inventory_get", "stream_start", "lease_renew", "stream_stop", "mouse_click", "key_event", "shortcut_action"]
+      - code: 7001
+        name: "EXEC_COMMAND"
+        shells: ["cmd", "powershell"]
+      - code: 7002
+        name: "CANCEL_TASK"
+        statuses: ["cancelled", "not_found", "already_finished"]
+  errors:
+    stream_errors: ["desktop_locked", "session_unavailable", "already_running", "invalid_button", "forbidden_key", "unsupported_action", "device_not_found", "encoder_failure"]
+    exec_errors: ["timed_out", "failed", "cancelled"]
+  invariants:
+    - "No financial, billing, entitlement, or organization fields transmitted to Agent"
+    - "Existing MQTT client preserved; no new client created"
+    - "Streaming output chunks over dev/{SN}/out have monotonic seq >= 1 and boolean eof"
+    - "Single-worker invariant preserved (WEB_CONCURRENCY=1)"
+    - "Deployed container app1 running on etranprocessing (87.242.100.34)"
+supersedes:
+  - H-L4D-00B-IOT-v1
+known_risks:
+  - "In-memory session registry requires WEB_CONCURRENCY=1 until distributed Redis storage is added (L4D-07-IOT)"
+  - "Interactive mouse/key input injection is rejected if screen is locked or session unavailable"
+consumers:
+  - L4D-01C-DOCS
+next_prompt_id: L4D-01C-DOCS
+```
+<!-- HANDOFF:H-L4D-01B-IOT-v1:END -->
+
+<!-- HANDOFF:H-L4D-01C-DOCS-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-01C-DOCS-v1
+status: ACCEPTED
+contract_kinds:
+  - SEQUENCE_GATE
+  - FIXTURES
+producer_prompt_id: L4D-01C-DOCS
+producer_scope_project: l4desk-service
+producer_report_path: l4desk-service/docs/handoffs/L4D-01C-DOCS-report.md
+producer_branch: l4desk/l4d-01c-docs
+producer_commit: b07962f8805666581d87a7d4b064dcafb2e869fb
+accepted_at_utc: 2026-09-17T22:05:00Z
+contract_version: 1.0.0
+schema_revision: 2026-09-17-v1
+artifact_version: 1.7.7
+artifact_paths:
+  - l4desk-service/docs/handoffs/L4D-01C-DOCS-report.md
+  - tools/docs/l4desk/contracts/agent_compatibility_contract_v1.json
+  - tools/docs/l4desk/fixtures/golden_vectors_v1.json
+artifact_sha256:
+  - 130b56a4e67bd9b3b87df52629e85e5ac6230657c59e49d2b6aebc98a8fac358
+  - 38e4ae5f13d563b3ae57a83259d63f9a63049d528d9667ae33efbd5a1e71267a
+  - b4f3c1a465e88babf89c0850cfd8dffc29a4cd921ec51a73e2112e6cf9c3034b
+compatibility:
+  backward_compatible_with:
+    - 1.7.6
+    - 1.7.7
+  breaking_changes: false
+  notes: Зарегистрирована и нормативно принята доказанная пара контрактов Agent Compatibility Contract v1 (tools 1.7.7/1.7.6) и deployed provider AgentContractV1Adapter (iot-rpc-rest-app 1.0.0). Подтверждено нулевое расхождение по топикам, кодам методов (7000/7001/7002), LWT presence, L4RTP/1 wire protocol и кодам ошибок. Подтверждена изоляция коммерческих полей (assert_no_commercial_fields) и прохождение всех 25 golden vectors.
+deployment_status: DOCS_PUBLISHED
+deployed_environment: documentation
+feature_flags:
+  agent_contract_v1: enabled
+  alpha_billing: enabled
+contract_payload:
+  identifiers:
+    sn_pattern: "^[0-9A-Za-z_-]{6,32}$"
+    session_id_pattern: "^(sess-[a-z0-9-]+|[0-9a-fA-F-]{36})$"
+    command_id_pattern: "^[a-z0-9_-]{1,64}$"
+    task_id_pattern: "^task-[a-z0-9-]+$"
+  operations_events:
+    presence_topics:
+      - "dev/{SN}/app"
+      - "dev/{SN}/svc"
+    rpc_topics:
+      - "srv/{SN}/rsp"
+      - "srv/{SN}/ctl"
+      - "dev/{SN}/out"
+      - "dev/{SN}/res"
+    methods:
+      - code: 7000
+        name: "STREAM_CONTROL"
+        actions: ["inventory_get", "stream_start", "lease_renew", "stream_stop", "mouse_click", "key_event", "shortcut_action"]
+      - code: 7001
+        name: "EXEC_COMMAND"
+        shells: ["cmd", "powershell"]
+      - code: 7002
+        name: "CANCEL_TASK"
+        statuses: ["cancelled", "not_found", "already_finished"]
+  errors:
+    stream_errors: ["desktop_locked", "session_unavailable", "already_running", "invalid_button", "forbidden_key", "unsupported_action", "device_not_found", "encoder_failure"]
+    exec_errors: ["timed_out", "failed", "cancelled"]
+  invariants:
+    - "No financial, billing, entitlement, or organization fields transmitted to Agent"
+    - "Monotonic chunk sequencing seq >= 1 and boolean eof for command output"
+    - "Zero changes to Agent MQTT protocol allowed in downstream prompts"
+    - "Single-worker invariant preserved (WEB_CONCURRENCY=1) until L4D-07-IOT"
+supersedes:
+  - H-L4D-00G-DOCS-v1
+known_risks:
+  - "In-memory session registry requires WEB_CONCURRENCY=1 until distributed Redis storage is added (L4D-07-IOT)"
+  - "Interactive mouse/key input injection is rejected if screen is locked or session unavailable"
+consumers:
+  - L4D-02-IOT
+next_prompt_id: L4D-02-IOT
+```
+<!-- HANDOFF:H-L4D-01C-DOCS-v1:END -->
