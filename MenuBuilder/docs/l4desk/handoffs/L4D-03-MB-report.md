@@ -13,7 +13,7 @@ producer_prompt_id: L4D-03-MB
 producer_scope_project: MenuBuilder
 producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-03-MB-report.md
 producer_branch: l4desk/l4d-03-mb
-producer_commit: 4da82c4abc1cc9909d8fc1f15017448d0b09cb45
+producer_commit: a7db68449d871398c496a76fbddda81d381e4558
 created_at_utc: 2026-09-17T22:20:00Z
 contract_version: 1.0.0
 schema_revision: 2026-09-17-v1
@@ -198,7 +198,7 @@ next_prompt_id: L4D-04A-SHARED
    - Результат: **PASSED** (0 errors, 0 warnings, 0 informations).
 4. **Consumer Contract Tests (Pytest)**:
    - Команда: `uv run pytest -v tests/test_iot_event_feed_consumer.py`
-   - Результат: **14 passed** за 21.99s.
+   - Результат: **14 passed** за 3.58s.
    - Покрытие сценариев:
      - `test_client_auth_error_mapping`: маппинг 403 Forbidden в `IotEventFeedAuthError`.
      - `test_client_validation_and_not_found_errors`: маппинг 400 и 404.
