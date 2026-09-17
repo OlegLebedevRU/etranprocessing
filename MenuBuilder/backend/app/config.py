@@ -155,6 +155,30 @@ class Settings(BaseSettings):
     remote_control_ws_connect_timeout_sec: float = 5.0
     remote_control_click_timeout_sec: float = 7.0  # > app1 click_ack_timeout (5 s)
 
+    # IoT Contract Consumer v1 (L4Desk event feed)
+    iot_event_feed_base_url: str = ""
+    iot_event_feed_service_token: str = ""
+    iot_event_feed_timeout_seconds: float = 10.0
+    iot_event_feed_max_retries: int = 3
+    iot_event_feed_retry_backoff_sec: float = 0.5
+    iot_consumer_enabled: bool = False  # Dark consumer disabled by default
+    iot_consumer_shadow_mode: bool = (
+        True  # Shadow mode: technical ingest only, zero commercial mutation
+    )
+    iot_consumer_poll_interval_sec: float = 5.0
+    iot_consumer_batch_size: int = 100
+    iot_consumer_id: str = "menubuilder_iot_event_consumer"
+
+    @property
+    def event_feed_effective_url(self) -> str:
+        return self.iot_event_feed_base_url or self.internal_api_base_url or ""
+
+    @property
+    def event_feed_effective_token(self) -> str:
+        return (
+            self.iot_event_feed_service_token or self.internal_service_key_value or ""
+        )
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

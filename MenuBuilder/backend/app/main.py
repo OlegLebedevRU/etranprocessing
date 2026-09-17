@@ -18,6 +18,7 @@ from app.routers import (
     dashboard,
     groups,
     integrations,
+    iot_consumer,
     mcp_proxy,
     menu_variants,
     monitoring,
@@ -32,6 +33,7 @@ from app.routers import (
 from app.routers import (
     settings as settings_router,
 )
+from app.services.iot_event_consumer import iot_event_consumer
 from app.user_store import get_user_store
 
 logging.basicConfig(
@@ -58,8 +60,11 @@ async def _cleanup_expired_sessions_task() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     cleanup_task: asyncio.Task | None = None
+    consumer_task: asyncio.Task | None = None
     if settings.session_cleanup_enabled:
         cleanup_task = asyncio.create_task(_cleanup_expired_sessions_task())
+    if settings.iot_consumer_enabled:
+        consumer_task = asyncio.create_task(iot_event_consumer.run_worker())
     try:
         yield
     finally:
@@ -67,6 +72,10 @@ async def lifespan(app: FastAPI):
             cleanup_task.cancel()
             with suppress(asyncio.CancelledError):
                 await cleanup_task
+        if consumer_task is not None:
+            consumer_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await consumer_task
 
 
 app = FastAPI(title="MenuBuilder API", version="0.2.0", lifespan=lifespan)
@@ -126,3 +135,4 @@ app.include_router(monitoring.router)
 app.include_router(reports.router)
 app.include_router(video.router)
 app.include_router(video_control.router)
+app.include_router(iot_consumer.router)
