@@ -16,6 +16,11 @@ os.environ.setdefault(
 )
 
 from app.config import settings
+from app.services.jwt_issuer import jwt_issuer_client
+from app.user_store import get_user_store
 
 settings.jwt_issuer_mock_enabled = True
 settings.session_cleanup_enabled = False
+settings.schema_compatibility_check_enabled = False
+jwt_issuer_client.mock_enabled = True
+get_user_store()._db_available = False

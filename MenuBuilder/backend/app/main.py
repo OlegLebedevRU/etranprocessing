@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
 
 from app.config import settings
+from app.database import engine
 from app.routers import (
     admin_organizations,
     admin_tenants,
@@ -33,6 +34,7 @@ from app.routers import (
 from app.routers import (
     settings as settings_router,
 )
+from app.schema_compatibility import verify_schema_compatibility
 from app.services.iot_event_consumer import iot_event_consumer
 from app.user_store import get_user_store
 
@@ -59,6 +61,13 @@ async def _cleanup_expired_sessions_task() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Schema compatibility verification at startup (strictly read-only, zero automatic DDL)
+    if settings.database_url and settings.schema_compatibility_check_enabled:
+        await verify_schema_compatibility(
+            engine,
+            expected_revision=settings.required_alembic_revision,
+        )
+
     cleanup_task: asyncio.Task | None = None
     consumer_task: asyncio.Task | None = None
     if settings.session_cleanup_enabled:

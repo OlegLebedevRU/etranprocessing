@@ -1171,3 +1171,84 @@ consumers:
 next_prompt_id: L4D-04C-MB
 ```
 <!-- HANDOFF:H-L4D-04B-PB-v1:END -->
+
+<!-- HANDOFF:H-L4D-04C-MB-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-04C-MB-v1
+status: ACCEPTED
+contract_kinds:
+  - SCHEMA
+  - DEPLOYMENT
+producer_prompt_id: L4D-04C-MB
+producer_scope_project: MenuBuilder
+producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-04C-MB-report.md
+producer_branch: l4desk/l4d-04c-mb
+producer_commit: PENDING_COMMIT_SHA
+accepted_at_utc: 2026-09-18T12:40:00Z
+contract_version: 1.0.0
+schema_revision: "027"
+artifact_version: 0.1.1
+artifact_paths:
+  - MenuBuilder/backend/app/schema_compatibility.py
+  - MenuBuilder/backend/app/models_l4desk.py
+  - MenuBuilder/backend/app/repositories/l4desk_repository.py
+  - MenuBuilder/backend/tests/test_schema_compatibility.py
+artifact_sha256:
+  - 670e8d1e780e503625865a41d61b004b28b14adc93be4e5710aadb73dfa8630e
+  - 7f708171cec710524a3f042701bec31524d7cd2ebb07f0dbf501aa4b019d5131
+  - 316adf73ab2765377b64d55f26cadb2b41b541b260b1e0c63f55be817ebeeb89
+  - 055e43be0acd36c34b3e932dcfc30b67d4afe51b66e6df3b82cbcdacbd9e978f
+consumed_contracts:
+  - handoff_id: H-L4D-04A-SHARED-v1
+    contract_id: l4desk_shared_schema_v1
+    contract_version: 1.0.0
+    schema_revision: L4D-04A-v1
+    producer: shared
+    package_name: etranprocessing-db
+    package_version: 0.1.1
+    package_source_sha256: 364efa7b369cdcb8da12025b377518834b6013fd693a28f321a81dcbe18a68c6
+  - handoff_id: H-L4D-04B-PB-v1
+    contract_id: alembic_migration_027
+    contract_version: 1.0.0
+    schema_revision: "027"
+    producer: ProcessingBackend
+    alembic_head: "027"
+    deployed_host: 87.242.100.34
+compatibility:
+  backward_compatible_with:
+    - 0.1.0
+  breaking_changes: false
+  notes: "MenuBuilder connected to published etranprocessing-db==0.1.1 and deployed expand schema 027 in dark mode. Replaced duplicate local IoT model declarations with shared package re-exports. Added strict startup schema compatibility verification (reads alembic_version and 23 required tables; zero automatic DDL). Added dark mode feature flags (registration, billing, ui all disabled by default). Verified backward compatibility and rolling deploy resilience."
+deployment_status: DEPLOYED
+deployed_environment: production
+feature_flags:
+  l4desk_registration_enabled: false
+  l4desk_billing_enabled: false
+  l4desk_ui_enabled: false
+  schema_compatibility_check_enabled: true
+  required_alembic_revision: "027"
+contract_payload:
+  package_name: etranprocessing-db
+  package_version: 0.1.1
+  package_source_sha256: 364efa7b369cdcb8da12025b377518834b6013fd693a28f321a81dcbe18a68c6
+  alembic_head: "027"
+  schema_revision: "027"
+  deployed_host: 87.242.100.34
+  deployed_service: menubuilder-backend
+  deployed_image: user1-menubuilder-backend:latest
+  tables_checked_count: 23
+  invariants:
+    - "Strict scope: MenuBuilder performs zero automatic DDL at startup (auto-DDL disabled in storage and lifespan)"
+    - "Startup guard: verify_schema_compatibility verifies alembic_version == '027' and presence of all 23 L4Desk tables; aborts startup on mismatch"
+    - "Dark mode: L4Desk features disabled by default via config flags (l4desk_registration_enabled=false, l4desk_billing_enabled=false, l4desk_ui_enabled=false)"
+    - "Shared package integration: etranprocessing-db==0.1.1 consumed via etranprocessing_db.l4desk; duplicate local models reconciled"
+    - "Rolling deploy resilience: models support omitted optional columns via null defaults and load_only queries"
+supersedes: []
+known_risks:
+  - "L4Desk business routes (registration, billing, UI) remain dark and inaccessible until L4D-05-MB and subsequent prompts"
+  - "Startup compatibility check requires PostgreSQL database connection; aborts startup if database schema revision is not 027"
+consumers:
+  - L4D-05-MB
+next_prompt_id: L4D-05-MB
+```
+<!-- HANDOFF:H-L4D-04C-MB-v1:END -->

@@ -179,6 +179,14 @@ class Settings(BaseSettings):
             self.iot_event_feed_service_token or self.internal_service_key_value or ""
         )
 
+    # L4Desk Dark Mode Feature Flags & Schema Compatibility (L4D-04C-MB)
+    l4desk_enabled: bool = False
+    l4desk_registration_enabled: bool = False
+    l4desk_billing_enabled: bool = False
+    l4desk_ui_enabled: bool = False
+    schema_compatibility_check_enabled: bool = True
+    required_alembic_revision: str = "027"
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

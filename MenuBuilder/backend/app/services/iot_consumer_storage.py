@@ -4,12 +4,12 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any
 
-from sqlalchemy import Table, func, select
+from sqlalchemy import func, select
 
 from app.config import settings
-from app.database import Base, async_session, engine
+from app.database import async_session
 from app.models_iot_consumer import (
     IotConsumerCheckpoint,
     IotEventInbox,
@@ -191,25 +191,8 @@ class DatabaseIotConsumerStorage(IotConsumerStorage):
     async def _ensure_tables(self) -> None:
         if self._tables_ensured or not settings.database_url:
             return
-        try:
-
-            def _sync_create_tables(sync_conn: Any) -> None:
-                tables = [
-                    cast(Table, IotConsumerCheckpoint.__table__),
-                    cast(Table, IotEventInbox.__table__),
-                    cast(Table, IotEventQuarantine.__table__),
-                ]
-                Base.metadata.create_all(
-                    sync_conn,
-                    tables=tables,
-                    checkfirst=True,
-                )
-
-            async with engine.begin() as conn:
-                await conn.run_sync(_sync_create_tables)
-            self._tables_ensured = True
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Could not ensure consumer tables in DB: %s", exc)
+        # Zero automatic DDL: schema is managed by Alembic migrations and verified at startup.
+        self._tables_ensured = True
 
     async def get_checkpoint(self, consumer_id: str) -> CheckpointData:
         if not settings.database_url:
