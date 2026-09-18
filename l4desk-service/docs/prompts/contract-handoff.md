@@ -876,3 +876,298 @@ consumers:
 next_prompt_id: L4D-02-IOT
 ```
 <!-- HANDOFF:H-L4D-01C-DOCS-v1:END -->
+
+<!-- HANDOFF:H-L4D-02-IOT-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-02-IOT-v1
+status: ACCEPTED
+contract_kinds:
+  - API
+  - EVENT
+  - DEPLOYMENT
+producer_prompt_id: L4D-02-IOT
+producer_scope_project: iot-rpc-rest-app
+producer_report_path: docs/l4desk/handoffs/L4D-02-IOT-report.md
+producer_branch: l4desk/l4d-02-iot
+producer_commit: a5524d356dda343eca96010d16535d9f37ff4ece
+accepted_at_utc: 2026-09-17T23:30:00Z
+contract_version: 1.0.0
+schema_revision: 2026-09-17-v1
+artifact_version: 1.0.0
+artifact_paths:
+  - docs/l4desk/contracts/iot_event_feed_contract_v1.json
+  - docs/l4desk/contracts/schemas/iot_event_feed_openapi.json
+  - docs/l4desk/contracts/schemas/remote_session_event.schema.json
+  - docs/l4desk/contracts/schemas/remote_session.schema.json
+  - docs/l4desk/fixtures/iot_event_feed_examples_v1.json
+artifact_sha256:
+  - 7acd49cb4d761a074e6e41f04380bef5db78d465fa8f6417bdf1fb16167e46c3
+  - 07b0b3e4e54b96e08ffc716b00f9e1a4dabe0f0ba90ca09708485cf068ccba56
+  - 230a22727a493b2980ba85cb2735e50d5ac42ac9b110cf3a6f3ba03ea0ebb12b
+  - 1de26a6fc47ebbe1d97d2f93108c3760ebf4a742908825c7d73e5a905da18f36
+  - 1fafb1d27010917f43f5d36502cbfaa1decd5cce36c80a6dc397f4180556df2b
+compatibility:
+  backward_compatible_with:
+    - 0.2.1
+    - 1.7.7
+  breaking_changes: false
+  notes: Durable session facts and monotonic cursor event feed added via additive internal REST API (/api/internal/v1/remote-session-events and /api/internal/v1/remote-sessions). Agent MQTT protocol and existing broker topologies completely untouched and binary backward-compatible. Commercial/financial fields strictly excluded.
+deployment_status: DEPLOYED
+deployed_environment: production
+feature_flags:
+  remote_session_events_feed: enabled
+  durable_session_facts: enabled
+contract_payload:
+  identifiers:
+    cursor_type: "int64 (BIGSERIAL monotonic, strictly positive)"
+    event_id_pattern: "^evt_[a-z0-9_]+$"
+    session_id_pattern: "^sess-(console|video)-[a-z0-9-]+$"
+    operation_id_pattern: "^[0-9a-fA-F-]{36}$"
+    sn_pattern: "^[0-9A-Za-z_-]{6,32}$"
+  endpoints:
+    - method: GET
+      path: "/api/internal/v1/remote-session-events"
+      params: ["after", "limit", "tenant_id", "sn", "session_id", "event_type"]
+    - method: GET
+      path: "/api/internal/v1/remote-session-events/reconciliation"
+      params: ["tenant_id", "from_cursor", "to_cursor", "from_time", "to_time"]
+    - method: POST
+      path: "/api/internal/v1/remote-sessions"
+    - method: GET
+      path: "/api/internal/v1/remote-sessions/{session_id}"
+    - method: POST
+      path: "/api/internal/v1/remote-sessions/{session_id}/stop"
+  events:
+    - "device_online"
+    - "remote_session_start_requested"
+    - "remote_session_active"
+    - "remote_session_stop_requested"
+    - "remote_session_closed"
+    - "remote_session_failed"
+    - "console_command_started"
+    - "console_command_completed"
+    - "console_command_timed_out"
+  errors:
+    - code: 400
+      name: "BAD_REQUEST"
+      reasons: ["negative_cursor", "limit_out_of_bounds", "commercial_field_detected"]
+    - code: 403
+      name: "FORBIDDEN"
+      reasons: ["missing_or_invalid_internal_service_key"]
+    - code: 404
+      name: "NOT_FOUND"
+      reasons: ["remote_session_not_found"]
+  cursor_rules:
+    - "Monotonically increasing sequence; no holes on successful commits"
+    - "Query parameter 'after' returns items where cursor > after"
+    - "Result ordered strictly by cursor ASC"
+    - "Consumers resume from next_cursor returned in feed response"
+    - "Duplicate event deliveries by event_id or operation_id are deduplicated without cursor progression"
+supersedes:
+  - H-L4D-01C-DOCS-v1
+known_risks:
+  - "Consumer must store last processed cursor in durable storage to ensure fault-tolerant resume after crash"
+  - "Polling frequency should be configured based on SLA; typical interval 1-5 seconds"
+consumers:
+  - L4D-03-MB
+next_prompt_id: L4D-03-MB
+```
+<!-- HANDOFF:H-L4D-02-IOT-v1:END -->
+
+<!-- HANDOFF:H-L4D-03-MB-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-03-MB-v1
+status: ACCEPTED
+contract_kinds:
+  - REPORT
+  - DEPLOYMENT
+producer_prompt_id: L4D-03-MB
+producer_scope_project: MenuBuilder
+producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-03-MB-report.md
+producer_branch: l4desk/l4d-03-mb
+producer_commit: 4da76eca24bab856bdad764df6e6a1dc9de44f1c
+accepted_at_utc: 2026-09-17T22:20:00Z
+contract_version: 1.0.0
+schema_revision: 2026-09-17-v1
+artifact_version: 1.0.0
+artifact_paths:
+  - MenuBuilder/backend/tests/fixtures/iot_event_feed_examples_v1.json
+  - MenuBuilder/backend/tests/test_iot_event_feed_consumer.py
+artifact_sha256:
+  - 1fafb1d27010917f43f5d36502cbfaa1decd5cce36c80a6dc397f4180556df2b
+  - 6664cc17db932fd4c84566c197cd8182a7521bb73589256a78fd3fa530ca9589
+compatibility:
+  backward_compatible_with:
+    - 0.1.0
+    - 0.2.0
+  breaking_changes: false
+  notes: Versioned IoT event feed consumer v1 connected strictly in MenuBuilder scope. Zero financial mutations or alternative session state; technical projections stored in idempotent inbox. Monotonic cursor checkpointing with lag observability and quarantine for contract violations. Dark consumer deployed with iot_consumer_enabled=false and shadow mode active.
+deployment_status: DEPLOYED
+deployed_environment: production
+feature_flags:
+  iot_consumer_enabled: false
+  iot_consumer_shadow_mode: true
+contract_payload:
+  identifiers:
+    consumer_id: "menubuilder_iot_event_consumer"
+    cursor_type: "int64 (BIGSERIAL monotonic, strictly positive)"
+    event_id_pattern: "^evt_[a-z0-9_]+$"
+    session_id_pattern: "^sess-(console|video)-[a-z0-9-]+$"
+  models:
+    checkpoint_model: "IotConsumerCheckpoint (table: iot_consumer_checkpoints, last_cursor: BigInteger)"
+    inbox_model: "IotEventInbox (table: iot_event_inbox, event_id: primary key)"
+    quarantine_model: "IotEventQuarantine (table: iot_event_quarantine, quarantine_id: primary key, error_code: String)"
+  endpoints:
+    - method: GET
+      path: "/api/internal/v1/iot-consumer/status"
+      auth: "Bearer superuser or X-Internal-Service-Key"
+    - method: POST
+      path: "/api/internal/v1/iot-consumer/poll"
+      auth: "Bearer superuser or X-Internal-Service-Key"
+  invariants:
+    - "Strict scope isolation: MenuBuilder does not mutate financial ledger, balances, or license entitlements"
+    - "Dark consumer defaults: iot_consumer_enabled=false, iot_consumer_shadow_mode=true"
+    - "Monotonic cursor tracking: checkpoint cursor advances only upon contiguous, error-free event consumption"
+    - "Idempotent inbox: duplicate events suppressed by event_id without cursor regression"
+    - "Strict quarantine: contract-violating payloads or out-of-order anomalies quarantined without blocking valid stream"
+    - "Zero alternative flows: remote session telemetry feeds solely into inbox/projection tables"
+supersedes:
+  - H-L4D-00E-MB-v1
+known_risks:
+  - "Consumer relies on polling /api/internal/v1/remote-session-events; real-time latency bounded by poll_interval_seconds (default 5.0s)"
+  - "Dark consumer is disabled by default (iot_consumer_enabled=false) and in shadow mode (iot_consumer_shadow_mode=true) until L4D-04C-MB activation"
+  - "Storage schema migrations in MenuBuilder use idempotent DDL on startup; central Alembic migrations remain in ProcessingBackend"
+consumers:
+  - L4D-04A-SHARED
+next_prompt_id: L4D-04A-SHARED
+```
+<!-- HANDOFF:H-L4D-03-MB-v1:END -->
+
+<!-- HANDOFF:H-L4D-04A-SHARED-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-04A-SHARED-v1
+status: ACCEPTED
+contract_kinds:
+  - SCHEMA
+producer_prompt_id: L4D-04A-SHARED
+producer_scope_project: shared/etranprocessing_db
+producer_report_path: shared/docs/l4desk/handoffs/L4D-04A-SHARED-report.md
+producer_branch: l4desk/l4d-04a-shared
+producer_commit: 537a1e493c83d1fa8e8cb765228be8d1b24a1d62
+accepted_at_utc: 2026-09-18T00:45:41Z
+contract_version: 1.0.0
+schema_revision: L4D-04A-v1
+artifact_version: 0.1.1
+artifact_paths:
+  - shared/docs/l4desk/schema-v1.json
+  - shared/docs/l4desk/schema-v1.md
+  - shared/docs/l4desk/package-source-v011.json
+artifact_sha256:
+  - 52f481dd3d9985c54b5388a1d9e63062a8fdbe626870b58a83b3461c3e08e49f
+  - d80626d6f84bab0e44d2236a172b3ffa385c7779bccd26b42c2947b071f77935
+  - 364efa7b369cdcb8da12025b377518834b6013fd693a28f321a81dcbe18a68c6
+compatibility:
+  backward_compatible_with:
+    - 0.1.0
+  breaking_changes: false
+  notes: "23 opt-in declarative models; 31 legacy tables/root exports unchanged. Existing IoT DDL/client defaults preserved. Replace MenuBuilder-local IoT declarations before opt-in import; update consumer lockfiles. No migration or policy activation. Source package published through Git by explicit user approval."
+deployment_status: PUBLISHED
+deployed_environment: artifact-registry
+feature_flags: {}
+contract_payload:
+  package_name: etranprocessing-db
+  package_version: 0.1.1
+  delivery: git-source
+  source_repository: https://github.com/OlegLebedevRU/etranprocessing.git
+  source_root: shared
+  package_source_sha256: 364efa7b369cdcb8da12025b377518834b6013fd693a28f321a81dcbe18a68c6
+  schema_import: etranprocessing_db.l4desk
+  identifiers:
+    tenant_user_terminal: "Integer; tenant=orgs.org_id, user=users.id; durable terminal identity retains original terminals.id"
+    external_event_session_operation_correlation_terminal: "Opaque String(128), not UUID-only"
+    cursor: "BigInteger; inbox primary key event_id; quarantine primary key id"
+    archive: "String(128) batch id, composite manifest PK (id, source_project)"
+  operations_events: "Schema only; no new HTTP/MQTT contract or runtime behavior"
+  errors: "Named PK/FK/UNIQUE/CHECK violations; exact names and PostgreSQL DDL in schema-v1.json"
+  invariants:
+    - "Financial table/constraint/index names start fin_; integer kopecks; timezone-aware timestamps"
+    - "Unique original terminal/date usage, terminal/cycle charge, provider payment, tenant/cycle/type notification"
+    - "One reserved/start_requested/active/stop_requested console-or-video reservation per terminal"
+    - "Calculated = posted + discarded; 0 <= discarded < 100; posted/payment/ledger amounts are whole rubles"
+    - "Ledger metadata supports balanced transactions; cross-row entry totals and append-only require consumer/DB guards"
+    - "Financial source identifiers/hashes have no mandatory FK to purgeable technical events"
+    - "Source-only additive rollout; no destructive changes, migration, feature activation or main merge"
+  verification:
+    shared_tests: "65 passed"
+    lint_format_type_build: "passed; pyright 0 errors/0 warnings; wheel/sdist and isolated wheel import verified"
+    post_publish_smoke: "20 Git blob SHA-256 checks and 2 package tests passed; origin ref matched producer commit"
+supersedes: []
+known_risks:
+  - "04B must reconcile live IoT DDL and run PostgreSQL Alembic tests; this provider did not access the live DB"
+  - "04C must replace duplicate local IoT declarations before opt-in import; both consumers must update their lockfiles"
+  - "Cross-row ledger balance/account ownership/append-only enforcement and archive retention verification are not implemented in this thin package"
+  - "Local wheel/sdist are verification artifacts only; required published artifact is Git source at producer_commit"
+consumers:
+  - L4D-04B-PB
+next_prompt_id: L4D-04B-PB
+```
+<!-- HANDOFF:H-L4D-04A-SHARED-v1:END -->
+
+<!-- HANDOFF:H-L4D-04B-PB-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-04B-PB-v1
+status: ACCEPTED
+contract_kinds:
+  - SCHEMA
+  - DEPLOYMENT
+producer_prompt_id: L4D-04B-PB
+producer_scope_project: ProcessingBackend
+producer_report_path: ProcessingBackend/docs/l4desk/handoffs/L4D-04B-PB-report.md
+producer_branch: l4desk/l4d-04b-pb
+producer_commit: c889ec5f9b0366d3a61e908f82dcd2e8f4c0b367
+accepted_at_utc: 2026-09-18T08:35:00Z
+contract_version: 1.0.0
+schema_revision: "027"
+artifact_version: 0.1.1
+artifact_paths:
+  - ProcessingBackend/backend/alembic/versions/027_add_l4desk_and_fin_ledger.py
+  - ProcessingBackend/docs/l4desk/schema-027.sql
+  - ProcessingBackend/backend/tests/test_schema_migration.py
+artifact_sha256:
+  - 5993027230ffc6121e4bd76988cbbf21d2a2602f64bdcfd39aad72f5efe6177d
+  - dfbf10b1249da4d9486309701722cc22b093dc335a1d73949081fc7a6a7ddbd0
+  - dbbc3bf5f053eefbaea8bbcc71775796a5beba410a8277271e16f39ddc43557e
+compatibility:
+  backward_compatible_with:
+    - "026"
+  breaking_changes: false
+  notes: "Non-destructive expand migration 027 deployed to production PostgreSQL. Added 23 tables (14 fin_*, 3 iot_*, 6 l4desk_*). Existing 31 core tables and application endpoints untouched. Clean transactional rollback 027->026 verified. menubuilder-backend restarted and healthy."
+deployment_status: DEPLOYED
+deployed_environment: production
+feature_flags: {}
+contract_payload:
+  alembic_head: "027"
+  alembic_down_revision: "026"
+  package_name: etranprocessing-db
+  package_version: 0.1.1
+  input_schema_sha256: 52f481dd3d9985c54b5388a1d9e63062a8fdbe626870b58a83b3461c3e08e49f
+  input_package_source_sha256: 364efa7b369cdcb8da12025b377518834b6013fd693a28f321a81dcbe18a68c6
+  ddl_snapshot_sha256: dfbf10b1249da4d9486309701722cc22b093dc335a1d73949081fc7a6a7ddbd0
+  deployed_tables_count: 23
+  deployed_host: 87.242.100.34
+  mcp_ops_readiness: UNAVAILABLE (fallback to SSH)
+  verification:
+    pytest_tests: "113 passed"
+    linters: "ruff check passed, ruff format passed, pyright 0 errors/0 warnings"
+    live_db_check: "alembic current is 027 (head); all 23 tables confirmed present in public schema"
+    rollback_readiness: "alembic downgrade --sql 027:026 verified and transactional"
+    service_health: "menubuilder-backend restarted and Up, processing-backend Up"
+supersedes: []
+known_risks:
+  - "L4D-04C-MB must reconcile local IoT model classes with shared package models to avoid duplicate Base declarations"
+  - "Financial triggers / balanced transaction invariants must be enforced in business logic prior to enabling financial writes"
+consumers:
+  - L4D-04C-MB
+next_prompt_id: L4D-04C-MB
+```
+<!-- HANDOFF:H-L4D-04B-PB-v1:END -->

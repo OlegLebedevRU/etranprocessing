@@ -1,9 +1,12 @@
 import asyncio
+import contextlib
 from logging.config import fileConfig
 
-from etranprocessing_db.base import Base
-
 # Import all models so Alembic can detect them
+with contextlib.suppress(ImportError):
+    import etranprocessing_db.l4desk  # noqa: F401
+
+from etranprocessing_db.base import Base
 from etranprocessing_db.models import (  # noqa: F401
     ApiToken,
     BalanceTerminalTsp,
