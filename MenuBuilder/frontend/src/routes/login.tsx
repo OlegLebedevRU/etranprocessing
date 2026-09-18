@@ -1,8 +1,8 @@
-import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router";
 import { Button, Card, Form, Input, Typography, message } from "antd";
 import { UserOutlined, LockOutlined } from "@ant-design/icons";
-import { login } from "../api/auth";
+import { getRegistrationStatus, login } from "../api/auth";
 import { scheduleRefresh } from "../api/session";
 import { useSession } from "../session/SessionContext";
 
@@ -10,8 +10,33 @@ const { Title, Text } = Typography;
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
+  const [registrationEnabled, setRegistrationEnabled] = useState(false);
   const navigate = useNavigate();
   const { refreshUser } = useSession();
+
+  useEffect(() => {
+    let mounted = true;
+    async function checkReg() {
+      try {
+        const envFlag = (import.meta as unknown as { env?: Record<string, string | undefined> })
+          .env?.VITE_L4DESK_REGISTRATION_ENABLED;
+        if (envFlag === "true") {
+          if (mounted) setRegistrationEnabled(true);
+          return;
+        }
+        const res = await getRegistrationStatus();
+        if (mounted) {
+          setRegistrationEnabled(res.enabled);
+        }
+      } catch {
+        // Ignore network errors on login page
+      }
+    }
+    checkReg();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const onFinish = async (values: { username: string; password: string }) => {
     setLoading(true);
@@ -98,6 +123,16 @@ export default function LoginPage() {
               Войти
             </Button>
           </Form.Item>
+          {registrationEnabled && (
+            <div style={{ textAlign: "center", marginTop: 16 }}>
+              <Text type="secondary" style={{ fontSize: 13 }}>
+                Нет аккаунта?{" "}
+                <Link to="/register" style={{ color: "#2563eb", fontWeight: 500 }}>
+                  Регистрация в L4Desk
+                </Link>
+              </Text>
+            </div>
+          )}
         </Form>
       </Card>
 

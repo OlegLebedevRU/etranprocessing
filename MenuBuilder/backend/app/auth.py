@@ -20,7 +20,14 @@ ROLE_SUPERUSER = 1
 ROLE_ADMIN = 2
 ROLE_USER = 3
 ROLE_VIEWER = 4
-ROLE_ID_TO_NAME: dict[int, str] = {1: "superuser", 2: "admin", 3: "user", 4: "viewer"}
+ROLE_L4DESK_OWNER = 5
+ROLE_ID_TO_NAME: dict[int, str] = {
+    1: "superuser",
+    2: "admin",
+    3: "user",
+    4: "viewer",
+    5: "l4desk_owner",
+}
 NAME_TO_ROLE_ID: dict[str, int] = {v: k for k, v in ROLE_ID_TO_NAME.items()}
 
 
@@ -233,19 +240,22 @@ async def get_current_user(
     except TypeError, ValueError:
         role_id = 3
 
-    # External issuer emits role as a numeric string ("1"/"2"/"3"/"4"); normalize to names
-    role_names = {1: "superuser", 2: "admin", 3: "user", 4: "viewer"}
+    # External issuer emits role as a numeric string ("1"/"2"/"3"/"4"/"5"); normalize to names
+    role_names = {1: "superuser", 2: "admin", 3: "user", 4: "viewer", 5: "l4desk_owner"}
     if role.isdigit():
         role = role_names.get(int(role), "user")
 
     if role == "viewer" or role_id == 4:
         role = "viewer"
         role_id = 4
+    elif role == "l4desk_owner" or role_id == 5:
+        role = "l4desk_owner"
+        role_id = 5
 
     username = payload.get("username") or payload.get("sub") or str(user_id)
     is_su = bool(
         (payload.get("is_superuser") or role in ("superuser", "admin") or role_id == 1)
-        and role_id != 4
+        and role_id not in (4, 5)
     )
     if is_su and role not in ("superuser", "admin"):
         role = "superuser"
@@ -253,15 +263,15 @@ async def get_current_user(
     token_type = payload.get("token_type", "tenant")
     orig_sub = payload.get("orig_sub") or username
     # v2 issuer sends is_imp explicitly; for older tokens derive it: superuser inside a tenant
-    if role_id == 4:
+    if role_id in (4, 5):
         is_imp = False
     elif "is_imp" in payload:
         is_imp = bool(payload.get("is_imp"))
     else:
         is_imp = bool(is_su and org_id is not None and org_id > 0)
 
-    # Permissions resolution: roles 1, 2, 3 and superusers always have full access
-    if role_id in (1, 2, 3) or is_su:
+    # Permissions resolution: roles 1, 2, 3, 5 and superusers always have full access
+    if role_id in (1, 2, 3, 5) or is_su:
         from app.security.permissions import ALL_PERMISSIONS
 
         user_perms = list(ALL_PERMISSIONS)

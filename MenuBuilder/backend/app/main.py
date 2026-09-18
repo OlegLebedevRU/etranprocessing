@@ -24,6 +24,7 @@ from app.routers import (
     menu_variants,
     monitoring,
     profile,
+    registration,
     reports,
     services,
     settings_users,
@@ -109,7 +110,16 @@ async def csrf_protection_middleware(request: Request, call_next):
         not has_bearer
         and "accessToken" in request.cookies
         and request.method in ("POST", "PUT", "PATCH", "DELETE")
-        and not request.url.path.endswith(("/auth/login", "/auth/refresh"))
+        and not request.url.path.endswith(
+            (
+                "/auth/login",
+                "/auth/refresh",
+                "/auth/register",
+                "/auth/register/confirm",
+                "/auth/register/resend",
+                "/confirm-email",
+            )
+        )
         and request.headers.get("X-Requested-With") != "XMLHttpRequest"
     ):
         return JSONResponse(
@@ -120,6 +130,7 @@ async def csrf_protection_middleware(request: Request, call_next):
 
 
 app.include_router(auth.router, prefix="/api", tags=["auth"])
+app.include_router(registration.router, prefix="/api", tags=["registration"])
 app.include_router(admin_users.router, prefix="/api", tags=["admin-users"])
 app.include_router(admin_tenants.router, prefix="/api", tags=["admin-tenants"])
 # Browser-facing alias /api/auth/switch-tenant (refreshToken cookie path = /api/auth)

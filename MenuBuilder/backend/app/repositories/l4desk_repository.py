@@ -91,6 +91,33 @@ class L4DeskRepository:
         )
         await self.session.execute(stmt)
 
+    async def update_registration_token(
+        self,
+        registration_id: int,
+        *,
+        token_hash: str,
+        expires_at: datetime,
+        password_hash: str | None = None,
+        timezone: str | None = None,
+        terms_version: str | None = None,
+    ) -> None:
+        values: dict[str, Any] = {
+            "token_hash": token_hash,
+            "expires_at": expires_at,
+        }
+        if password_hash is not None:
+            values["password_hash"] = password_hash
+        if timezone is not None:
+            values["timezone"] = timezone
+        if terms_version is not None:
+            values["terms_version"] = terms_version
+        stmt = (
+            update(L4DeskRegistration)
+            .where(L4DeskRegistration.id == registration_id)
+            .values(**values)
+        )
+        await self.session.execute(stmt)
+
     # -------------------------------------------------------------------------
     # Tenant Profiles & Memberships
     # -------------------------------------------------------------------------

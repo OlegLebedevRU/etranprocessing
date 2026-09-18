@@ -187,6 +187,14 @@ class Settings(BaseSettings):
     schema_compatibility_check_enabled: bool = True
     required_alembic_revision: str = "027"
 
+    # L4Desk Self-Registration & Security (L4D-05-MB)
+    l4desk_registration_token_expire_hours: int = 24
+    l4desk_terms_current_version: str = "v1"
+    l4desk_rate_limit_ip_max: int = 5
+    l4desk_rate_limit_ip_window_sec: int = 600
+    l4desk_rate_limit_resend_cooldown_sec: int = 60
+    l4desk_rate_limit_resend_max_per_hour: int = 3
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

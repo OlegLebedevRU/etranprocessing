@@ -71,3 +71,75 @@ export async function getMe(forceFresh = false): Promise<UserInfo> {
     60_000
   );
 }
+
+// -----------------------------------------------------------------------------
+// L4Desk Public Self-Registration (L4D-05-MB)
+// -----------------------------------------------------------------------------
+
+export interface RegisterRequest {
+  email: string;
+  password: string;
+  terms_version?: string;
+  timezone?: string;
+  source?: string;
+  return_url?: string;
+}
+
+export interface RegisterResponse {
+  status: string;
+  message: string;
+  email?: string;
+  return_url?: string;
+}
+
+export interface ConfirmRegistrationRequest {
+  token: string;
+  return_url?: string;
+}
+
+export interface ConfirmRegistrationResponse {
+  status: string;
+  message: string;
+  tenant_id?: number | null;
+  user_id?: number | null;
+  email?: string | null;
+  return_url?: string;
+}
+
+export interface ResendConfirmationRequest {
+  email: string;
+  return_url?: string;
+}
+
+export interface RegistrationStatusResponse {
+  enabled: boolean;
+  terms_version: string;
+  token_expire_hours: number;
+}
+
+export async function getRegistrationStatus(): Promise<RegistrationStatusResponse> {
+  const { data } = await client.get<RegistrationStatusResponse>("/auth/register/status");
+  return data;
+}
+
+export async function registerAccount(payload: RegisterRequest): Promise<RegisterResponse> {
+  const { data } = await client.post<RegisterResponse>("/auth/register", payload);
+  return data;
+}
+
+export async function confirmRegistration(
+  payload: ConfirmRegistrationRequest
+): Promise<ConfirmRegistrationResponse> {
+  const { data } = await client.post<ConfirmRegistrationResponse>(
+    "/auth/register/confirm",
+    payload
+  );
+  return data;
+}
+
+export async function resendConfirmation(
+  payload: ResendConfirmationRequest
+): Promise<RegisterResponse> {
+  const { data } = await client.post<RegisterResponse>("/auth/register/resend", payload);
+  return data;
+}

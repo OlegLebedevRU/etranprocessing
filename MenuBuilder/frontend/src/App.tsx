@@ -19,6 +19,8 @@ const { Paragraph } = Typography;
 
 const AppLayout = lazy(() => import("./routes/layout"));
 const LoginPage = lazy(() => import("./routes/login"));
+const RegisterPage = lazy(() => import("./routes/register"));
+const ConfirmRegistrationPage = lazy(() => import("./routes/register-confirm"));
 const MenuManagementLayout = lazy(() => import("./routes/menu-management"));
 const TerminalsPage = lazy(() => import("./routes/terminals"));
 const VariantsPage = lazy(() => import("./routes/variants"));
@@ -176,6 +178,8 @@ export default function App() {
       <Suspense fallback={<LoadingFallback />}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/register/confirm" element={<ConfirmRegistrationPage />} />
           <Route path="/settings/verify-email" element={<VerifyEmailPage />} />
           <Route
             element={
