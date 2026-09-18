@@ -1637,3 +1637,92 @@ original_journal_bytes: 72781
 original_journal_sha256: 329844b0b829bf1f0a4d8dbe7f47fd8b5048852e435b33d0e8b376bf4c198802
 ```
 <!-- CORRECTIVE_REGISTRATION:R-L4D-06B-IOT-FIX-01-v2:END -->
+
+## 10. Нормативное определение составных схем и допуск FIX v3
+
+Операция контроллера по явному запросу пользователя устранить блокировку смежного агента
+(BLOCKED_CONTRACT на этапе contract gate из-за внутренней ссылки `$ref: #/$defs/RemoteSessionType`
+в артефакте `docs/l4desk/contracts/schemas/remote_session.schema.json` входного контракта
+`H-L4D-02-IOT-v1`, producer_commit `a5524d356dda343eca96010d16535d9f37ff4ece`, привязка
+`B-L4D-02-IOT-GIT-v1`).
+
+Контроллер каскада нормативно устанавливает следующее обязательное правило интерпретации:
+1. Артефакт `docs/l4desk/contracts/schemas/remote_session.schema.json` является составным
+   каталогом моделей (multi-schema bundle). Корневой объект `RemoteSessionSchemas` служит
+   пространством имён / контейнером определений (`definitions`).
+2. Каждая подсхема под `#/definitions/<ModelName>` (`RemoteSessionCreate`, `RemoteSessionResponse`,
+   `RemoteSessionStop`) нормативно признаётся самостоятельным, изолированным документом схемы
+   соответствующей модели (autonomous standalone schema document).
+3. Базой разрешения внутренних JSON Pointer / `$ref` фрагментов (`#`) внутри каждой подсхемы
+   является корень соответствующей подсхемы `#/definitions/<ModelName>`, где расположен её
+   локальный блок `$defs: {"RemoteSessionType": ...}`.
+4. Ссылка `#/definitions/RemoteSessionCreate/properties/session_type/$ref: #/$defs/RemoteSessionType`
+   признаётся нормативно корректной и полностью разрешимой в автономном контексте подсхемы
+   `RemoteSessionCreate`. Отсутствие корневого `$defs` на уровне внешнего контейнера
+   `RemoteSessionSchemas` не является дефектом контракта и не блокирует contract gate.
+5. При проверке схем входного контракта валидация и разрешение ссылок должны проводиться для
+   каждой подсхемы модели автономно (per-subschema evaluation), либо при интегральной проверке
+   в качестве базового URI для подсхемы принимается её локальный контекст.
+
+Ниже оформлены отзыв регистрации v2 и ввод регистрации v3 с фиксацией нормативного правила.
+Исходный коммит и Git-байты `B-L4D-02-IOT-GIT-v1` остаются неизменными.
+
+<!-- CORRECTIVE_REGISTRATION_REVOCATION:R-L4D-06B-IOT-FIX-01-v2:BEGIN -->
+```yaml
+registration_id: R-L4D-06B-IOT-FIX-01-v2
+status: REVOKED
+revoked_at_utc: 2026-09-19T01:25:00Z
+reason: "Establish normative resolution rule for multi-schema bundle remote_session.schema.json (#/$defs/RemoteSessionType resolves in RemoteSessionCreate context); issue replacement registration v3."
+replacement_registration_id: R-L4D-06B-IOT-FIX-01-v3
+```
+<!-- CORRECTIVE_REGISTRATION_REVOCATION:R-L4D-06B-IOT-FIX-01-v2:END -->
+
+<!-- CORRECTIVE_REGISTRATION:R-L4D-06B-IOT-FIX-01-v3:BEGIN -->
+```yaml
+registration_id: R-L4D-06B-IOT-FIX-01-v3
+status: AUTHORIZED
+authorized_by: Cascade Controller
+authorization_basis: explicit_user_request_and_normative_multi_schema_resolution_rule
+registered_at_utc: 2026-09-19T01:25:00Z
+prompt_id: L4D-06B-IOT-FIX-01
+prompt_path: l4desk-service/docs/prompts/etran_dev-l4d-06b-iot-fix-01.md
+scope_project: iot-rpc-rest-app
+scope_root: D:\work\iot.leo4.ru\iot-rpc-rest-app
+blocked_prompt_id: L4D-06B-IOT
+authorized_inputs:
+  - handoff_id: H-L4D-06A-PB-CONTRACT-01-v1
+    contract_version: 1.0.0
+    producer_commit: 1971e51f1e7764a31d586174e42513160f8598eb
+  - handoff_id: H-L4D-02-IOT-v1
+    contract_version: 1.0.0
+    producer_commit: a5524d356dda343eca96010d16535d9f37ff4ece
+artifact_byte_binding_ids: [B-L4D-02-IOT-GIT-v1]
+external_artifact_reads:
+  - handoff_id: H-L4D-06A-PB-CONTRACT-01-v1
+    artifact_commit: 1971e51f1e7764a31d586174e42513160f8598eb
+    paths:
+      - l4desk-service/docs/prompts/contracts/certificate-pin-v1/contract.md
+      - l4desk-service/docs/prompts/contracts/certificate-pin-v1/schemas.json
+      - l4desk-service/docs/prompts/contracts/certificate-pin-v1/examples.json
+      - l4desk-service/docs/prompts/contracts/certificate-pin-v1/verification.md
+sequence_gate_handoff_id: H-L4D-06A-PB-v1
+output_handoff_id: H-L4D-06B-IOT-FIX-01-v1
+next_prompt_id: L4D-06B-IOT
+report_path: docs/l4desk/handoffs/L4D-06B-IOT-FIX-01-report.md
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: docs/l4desk/handoffs/L4D-06B-IOT-FIX-01-candidate.md
+publication_required_before_execution: true
+grant_scope: consumer_addressing_and_finite_data_only_reads
+schema_interpretation_rules:
+  - artifact_path: docs/l4desk/contracts/schemas/remote_session.schema.json
+    rule: MULTI_SCHEMA_BUNDLE_AUTONOMOUS_SUBSCHEMAS
+    definitions_scope: ["RemoteSessionCreate", "RemoteSessionResponse", "RemoteSessionStop"]
+    ref_resolution_base: subschema_root
+    notes: "Subschema #/definitions/RemoteSessionCreate resolves #/$defs/RemoteSessionType against its local $defs. Absence of root-level $defs in outer container does not violate contract gate."
+runtime_acceptance: NOT_GRANTED
+blocked_next_prompt_id: L4D-06C-MB
+original_journal_bytes: 81789
+original_journal_sha256: d6a9e33b3ee3316b2cde18ea25ed9371d74346af49ca1ccf45c754b349bbf293
+```
+<!-- CORRECTIVE_REGISTRATION:R-L4D-06B-IOT-FIX-01-v3:END -->
