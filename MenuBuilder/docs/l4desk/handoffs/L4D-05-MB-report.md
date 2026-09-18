@@ -5,7 +5,7 @@
 <!-- HANDOFF:H-L4D-05-MB-v1:BEGIN -->
 ```yaml
 handoff_id: H-L4D-05-MB-v1
-status: READY_FOR_REVIEW
+status: ACCEPTED
 contract_kinds:
   - API
   - DEPLOYMENT
