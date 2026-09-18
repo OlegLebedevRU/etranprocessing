@@ -1252,3 +1252,180 @@ consumers:
 next_prompt_id: L4D-05-MB
 ```
 <!-- HANDOFF:H-L4D-04C-MB-v1:END -->
+
+<!-- HANDOFF:H-L4D-05-MB-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-05-MB-v1
+status: ACCEPTED
+contract_kinds:
+  - API
+  - DEPLOYMENT
+producer_prompt_id: L4D-05-MB
+producer_scope_project: MenuBuilder
+producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-05-MB-report.md
+producer_branch: l4desk/l4d-05-mb
+producer_commit: 8902059485471f64fa4bf5f4605c633bcfeaa7b5
+accepted_at_utc: 2026-09-18T14:15:00Z
+contract_version: 1.0.0
+schema_revision: "027"
+artifact_version: 0.1.1
+artifact_paths:
+  - MenuBuilder/backend/app/routers/registration.py
+  - MenuBuilder/backend/app/services/registration_service.py
+  - MenuBuilder/backend/app/repositories/l4desk_repository.py
+  - MenuBuilder/backend/tests/test_l4desk_registration.py
+  - MenuBuilder/frontend/src/routes/register.tsx
+  - MenuBuilder/frontend/src/routes/register-confirm.tsx
+artifact_sha256:
+  - 8c091b91b37ed0df5835d6d7c4267d178541f2c83fdff23c65338cb3668209ef
+  - 986ca0b5acf6fae6f774cbf8bfc5119c9c8ad5c8bc2fe75ddb9b54799927e40e
+  - 4cc8b00440f3217ebb592e7dacaa5c37c84de2fa607f08f655cd141fbba3c08d
+  - 0150737921c0d5ffeb3b917d64b703ec96365742e7f40372df59741685a54693
+  - bfd8a5419ff8714744fed4d507691fdea7fece9b22ec5c5e25f34273e3388519
+  - ff684f883240171cc02919da75888ac4fc302dda9c468485c4529acdb3e57786
+consumed_contracts:
+  - handoff_id: H-L4D-04C-MB-v1
+    contract_id: menubuilder_expand_schema_v1
+    contract_version: 1.0.0
+    schema_revision: "027"
+    producer: MenuBuilder
+    alembic_head: "027"
+    deployed_host: 87.242.100.34
+compatibility:
+  backward_compatible_with:
+    - 0.1.0
+    - 0.1.1
+  breaking_changes: false
+  notes: "L4Desk public self-registration and email confirmation endpoints implemented in MenuBuilder under dark mode feature flag (l4desk_registration_enabled). Anti-enumeration responses prevent email discovery. Verification tokens are one-time use and hashed with SHA-256 in database. Atomic provisioning on confirmation creates Org, OrgBillingSettings (free package), OrgStatus, L4DeskTenantProfile, User with role_id=5 (l4desk_owner), L4DeskMembership (is_owner=True), and immutable audit event. Replay confirmation is idempotent. Rate limiting protects IP and resend cooldown. Malicious return URLs are sanitized against open redirect vulnerabilities. Existing auth and tenant sessions remain backward-compatible."
+deployment_status: DEPLOYED
+deployed_environment: production
+feature_flags:
+  l4desk_registration_enabled: false
+  l4desk_billing_enabled: false
+  l4desk_ui_enabled: false
+  schema_compatibility_check_enabled: true
+  required_alembic_revision: "027"
+contract_payload:
+  endpoints:
+    - method: POST
+      path: /api/auth/register
+      description: "Public self-registration endpoint for tenant owners (anti-enumeration generic 200 response)"
+    - method: POST
+      path: /api/auth/register/confirm
+      description: "One-time token verification and atomic tenant + user role 5 provisioning"
+    - method: POST
+      path: /api/auth/register/resend
+      description: "Resend verification email with cooldown rate limits"
+    - method: GET
+      path: /api/auth/register/status
+      description: "Public feature flag status check"
+  roles:
+    role_id_5:
+      name: l4desk_owner
+      permissions: ALL_PERMISSIONS
+      is_tenant_admin: true
+  invariants:
+    - "Dark mode: endpoints guarded by l4desk_registration_enabled flag (returns 403 when disabled)"
+    - "Security: token in database is hashed with SHA-256 (plaintext never persisted)"
+    - "Anti-enumeration: registration and resend return generic message regardless of email existence"
+    - "Atomicity: single PostgreSQL transaction creates Org, OrgBillingSettings, OrgStatus, TenantProfile, User (role=5), Membership, and Audit"
+    - "Idempotency: replaying confirmation token returns already_confirmed without duplicate entities"
+    - "Open redirect safety: return_url validated against whitelist and restricted to safe relative paths"
+supersedes: []
+known_risks:
+  - "L4Desk registration remains disabled in production until explicitly activated via configuration flag"
+  - "Billing payment processing and terminal provisioning are deferred to subsequent prompts (L4D-06A-PB / L4D-06B-MB)"
+consumers:
+  - L4D-06A-PB
+next_prompt_id: L4D-06A-PB
+```
+<!-- HANDOFF:H-L4D-05-MB-v1:END -->
+
+<!-- HANDOFF:H-L4D-06A-PB-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-06A-PB-v1
+status: ACCEPTED
+contract_kinds:
+  - API
+  - DEPLOYMENT
+producer_prompt_id: L4D-06A-PB
+producer_scope_project: ProcessingBackend
+producer_report_path: ProcessingBackend/docs/l4desk/handoffs/L4D-06A-PB-report.md
+producer_branch: l4desk/l4d-06a-pb
+producer_commit: 083138f223b723098e9a188803e3fc802e8a6011
+accepted_at_utc: 2026-09-18T15:45:00Z
+contract_version: 1.0.0
+artifact_paths:
+  - ProcessingBackend/backend/app/routers/certificates.py
+  - ProcessingBackend/backend/app/schemas/certificates.py
+  - ProcessingBackend/backend/app/services/cert_billing.py
+  - ProcessingBackend/backend/app/dependencies.py
+  - ProcessingBackend/backend/app/config.py
+  - ProcessingBackend/backend/app/models.py
+  - ProcessingBackend/backend/tests/test_certificate_pin_contract.py
+artifact_sha256:
+  - 0a0e925b1dfad9c6b96f5063cc33b5bea822cd558062681d9b011f0fe02ed93a
+  - 5e5327e51703cabb08c696c72477fed5abb75093782bd1514c43649b8681b6f0
+  - 50ccee8cb7311e2a55d47ae127ffdcb41e48b2f121aeb1c6a2c8606026770ce5
+  - 9b716bf58d274ef478f220ee398c13560d02919092a340fce008178ca955018c
+  - 8873a6ecff0b01e045b6e3f66f39e866c0cbb8476aa2ecf6f97ca4b60b30c0ba
+  - 5d6b0c36127443bc2d02f90341ad494a7fd86c021f60ef7ff5d81ff3574f403a
+  - 4eaa876994b3be8037763685188ef0ade2b1a36a9a1a9c947de0300bf8dae37e
+compatibility:
+  backward_compatible_with:
+    - H-L4D-00C-PB-v1
+    - H-L4D-00G-DOCS-v1
+  breaking_changes: false
+  notes: "Additive service-to-service PIN issuance and query endpoints (/api/certificates/pins/issue, /api/certificates/pins/by-operation/{operation_id}). Existing terminal endpoints (function=check, function=setup) preserved with full backward compatibility and reinforced with row-level locking, CSR signature checking, CSR mismatch rejection, and safe retry caching."
+deployment_status: DEPLOYED
+deployed_environment: production
+feature_flags: {}
+contract_payload:
+  endpoints:
+    - path: /api/certificates/pins/issue
+      method: POST
+      auth: require_service_auth
+      request_schema: IssueCertificatePinRequest
+      response_schema: IssueCertificatePinResponse
+      status_codes:
+        201: Created (new PIN issued)
+        200: OK (idempotent replay of existing operation_id)
+        400: Bad Request (SERIAL_NUMBER_MISMATCH)
+        401: Unauthorized (SERVICE_AUTH_FAILED)
+        403: Forbidden (TENANT_OWNERSHIP_MISMATCH)
+        404: Not Found (TERMINAL_NOT_FOUND)
+        409: Conflict (OPERATION_ID_CONFLICT)
+    - path: /api/certificates/pins/by-operation/{operation_id}
+      method: GET
+      auth: require_service_auth
+      response_schema: IssueCertificatePinResponse
+      status_codes:
+        200: OK
+        401: Unauthorized (SERVICE_AUTH_FAILED)
+        404: Not Found (OPERATION_NOT_FOUND)
+  identifiers:
+    tenant_id: int
+    terminal_id: int
+    sn: str
+    operation_id: str
+    correlation_id: str | None
+  idempotency_semantics:
+    replayed_flag: boolean
+    conflict_on_parameter_change: true
+    duplicate_pin_issuance: prohibited
+    consumed_pin_visibility: "pin=None, pin_masked preserved, status=consumed"
+    expired_pin_visibility: "pin=None, pin_masked preserved, status=expired"
+  deployed_host: 87.242.100.34
+  mcp_ops_readiness: UNAVAILABLE (fallback to SSH)
+  verification:
+    pytest_tests: "130 passed"
+    linters: "ruff check passed, ruff format passed, pyright 0 errors/0 warnings"
+    live_smoke_probes: "health 200, check code=2, issue 404/403 with error_code"
+supersedes: []
+known_risks: []
+consumers:
+  - L4D-06B-IOT
+  - L4D-06C-MB
+next_prompt_id: L4D-06B-IOT
+```
+<!-- HANDOFF:H-L4D-06A-PB-v1:END -->
