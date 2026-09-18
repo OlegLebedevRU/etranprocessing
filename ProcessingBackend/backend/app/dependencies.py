@@ -1,4 +1,5 @@
 import logging
+import secrets
 import urllib.parse
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -8,6 +9,7 @@ from fastapi import Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.models import License, OrgStatus, Terminal, TerminalCertHistory
 from app.services.cert_discovery import record_terminal_discovery
@@ -392,3 +394,44 @@ async def get_terminal_license_state(
         return TerminalLicenseState(license=license_, state="error")
 
     return TerminalLicenseState(license=license_, state="ok")
+
+
+async def require_service_auth(request: Request) -> str:
+    """Verify service-to-service authentication token.
+
+    Accepts:
+      - Authorization: Bearer <token>
+      - X-Service-Token: <token>
+      - X-Internal-Service-Key: <token>
+
+    If settings.service_auth_token or settings.internal_service_key is configured,
+    the incoming token must match using constant-time comparison.
+    If no service token is configured in environment, requests are permitted (for local dev/testing).
+    """
+    configured_token = settings.service_auth_token or settings.internal_service_key
+    auth_header = request.headers.get("Authorization", "")
+    token = ""
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:].strip()
+    elif "X-Service-Token" in request.headers:
+        token = request.headers["X-Service-Token"].strip()
+    elif "X-Internal-Service-Key" in request.headers:
+        token = request.headers["X-Internal-Service-Key"].strip()
+
+    if configured_token and (
+        not token or not secrets.compare_digest(token, configured_token)
+    ):
+        logger.warning(
+            "Service auth failed for path=%s client_ip=%s",
+            request.url.path,
+            request.client.host if request.client else "unknown",
+        )
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "error": "unauthorized",
+                "message": "Invalid or missing service authentication token",
+                "error_code": "SERVICE_AUTH_FAILED",
+            },
+        )
+    return token

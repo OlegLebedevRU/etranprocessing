@@ -12,6 +12,14 @@ class Settings(BaseSettings):
     # when CN does not match DB sn, logging the real certificate details into terminal_cert_discovery.
     transition_ou_fallback_auth: bool = True
 
+    # Service-to-service authentication token for internal contracts (e.g. MenuBuilder -> ProcessingBackend)
+    service_auth_token: str = ""
+    # Optional alias for backward compatibility / env vars (e.g. INTERNAL_SERVICE_KEY)
+    internal_service_key: str = ""
+
+    # Default PIN TTL in seconds for certificate enrollment (24 hours)
+    cert_pin_ttl_seconds: int = 86400
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 
