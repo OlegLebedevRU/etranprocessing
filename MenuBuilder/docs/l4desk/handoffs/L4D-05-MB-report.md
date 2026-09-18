@@ -13,7 +13,7 @@ producer_prompt_id: L4D-05-MB
 producer_scope_project: MenuBuilder
 producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-05-MB-report.md
 producer_branch: l4desk/l4d-05-mb
-producer_commit: 1bb7671c3cb992efef2734b87fddf2af44d2f9c0
+producer_commit: 8902059485471f64fa4bf5f4605c633bcfeaa7b5
 accepted_at_utc: 2026-09-18T14:15:00Z
 contract_version: 1.0.0
 schema_revision: "027"
