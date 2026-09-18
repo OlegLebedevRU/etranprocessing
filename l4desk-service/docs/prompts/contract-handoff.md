@@ -1183,7 +1183,7 @@ producer_prompt_id: L4D-04C-MB
 producer_scope_project: MenuBuilder
 producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-04C-MB-report.md
 producer_branch: l4desk/l4d-04c-mb
-producer_commit: PENDING_COMMIT_SHA
+producer_commit: a726ec94022517697a59fee6644f598dc3b978d8
 accepted_at_utc: 2026-09-18T12:40:00Z
 contract_version: 1.0.0
 schema_revision: "027"
