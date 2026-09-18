@@ -1470,3 +1470,170 @@ original_journal_bytes: 70039
 original_journal_sha256: 1205e0e16e14ee29ba1cd68f9175e128c7a89a50aa69db87afcf4758a0f525c0
 ```
 <!-- CORRECTIVE_REGISTRATION:R-L4D-06B-IOT-FIX-01-v1:END -->
+
+## 9. Самостоятельный provider-пакет и допуск FIX v2
+
+Операция контроллера по явному поручению пользователя подготовить всё необходимое для
+L4D-06B-IOT-FIX-01 и отдельному подтверждению публикации нового документационного пакета.
+По §10 PROMPT-STANDARD 1.2.0 выполнен документационный шаг L4D-06A-PB-CONTRACT-01.
+Ниже оформлены его результат, точная привязка Git-байтов 02-IOT и замена регистрации FIX.
+Это адресное дополнение правил чтения/digest §1 журнала, не правка прежних handoff.
+H-L4D-06A-PB-v1 остаётся только sequence gate для FIX; исходный 06B не принят,
+переход к L4D-06C-MB закрыт. Runtime provider не изменён и повторно не принимался.
+
+<!-- HANDOFF:H-L4D-06A-PB-CONTRACT-01-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-06A-PB-CONTRACT-01-v1
+status: ACCEPTED
+contract_kinds: [API]
+producer_prompt_id: L4D-06A-PB-CONTRACT-01
+producer_scope_project: l4desk-service
+producer_report_path: l4desk-service/docs/prompts/contracts/certificate-pin-v1/verification.md
+producer_branch: l4desk/l4d-06a-pb
+producer_commit: 1971e51f1e7764a31d586174e42513160f8598eb
+accepted_at_utc: 2026-09-18T21:36:36Z
+contract_version: 1.0.0
+schema_revision: 2026-09-18-pin-docs-v1
+artifact_version: 1.0.0
+artifact_paths:
+  - l4desk-service/docs/prompts/contracts/certificate-pin-v1/contract.md
+  - l4desk-service/docs/prompts/contracts/certificate-pin-v1/schemas.json
+  - l4desk-service/docs/prompts/contracts/certificate-pin-v1/examples.json
+  - l4desk-service/docs/prompts/contracts/certificate-pin-v1/verification.md
+artifact_sha256:
+  - 1c2787fc2c34343d9b46658bd304cb2110bf554019667712c5596eae8ce6c7f4
+  - 563a00aabf4a539c92f6fccad36596dd63fea05bfc088ca1cf7ddbb8e16f26c0
+  - 92a3beeb8323d4697e89ef3978d1d54de07202e5c87debec1adb53779cc48737
+  - 59f24caaf5439b0b6134535fab2ff055740c9760db5c52ad68d50496255efa92
+artifact_urls:
+  - https://raw.githubusercontent.com/OlegLebedevRU/etranprocessing/1971e51f1e7764a31d586174e42513160f8598eb/l4desk-service/docs/prompts/contracts/certificate-pin-v1/contract.md
+  - https://raw.githubusercontent.com/OlegLebedevRU/etranprocessing/1971e51f1e7764a31d586174e42513160f8598eb/l4desk-service/docs/prompts/contracts/certificate-pin-v1/schemas.json
+  - https://raw.githubusercontent.com/OlegLebedevRU/etranprocessing/1971e51f1e7764a31d586174e42513160f8598eb/l4desk-service/docs/prompts/contracts/certificate-pin-v1/examples.json
+  - https://raw.githubusercontent.com/OlegLebedevRU/etranprocessing/1971e51f1e7764a31d586174e42513160f8598eb/l4desk-service/docs/prompts/contracts/certificate-pin-v1/verification.md
+compatibility:
+  backward_compatible_with: [H-L4D-06A-PB-v1]
+  breaking_changes: false
+  notes: "Documentation export of unchanged PIN API; precise auth/replay/error semantics and limitations, no runtime guarantee added. Old source artifacts are provenance, not recursive inputs."
+deployment_status: DOCS_PUBLISHED
+deployed_environment: documentation
+feature_flags: {}
+contract_payload:
+  verification_status: VERIFIED
+  source_handoff_id: H-L4D-06A-PB-v1
+  source_commit: 083138f223b723098e9a188803e3fc802e8a6011
+  source_project: ProcessingBackend
+  runtime_verification: NOT_REPEATED
+  endpoints:
+    - method: POST
+      path: /api/certificates/pins/issue
+      request_schema: schemas.json#/$defs/IssueRequest
+      response_schema: schemas.json#/$defs/IssueResponse
+    - method: GET
+      path: /api/certificates/pins/by-operation/{operation_id}
+      response_schema: schemas.json#/$defs/IssueResponse
+  error_schemas: [schemas.json#/$defs/ErrorResponse, schemas.json#/$defs/ValidationErrorResponse]
+  auth_and_semantics: contract.md
+  examples: examples.json
+  verification:
+    schema_fixtures: 20
+    additional_boundary_checks: 22
+    provider_request_ast: MATCHED
+    docs_publish_commit: 1971e51f1e7764a31d586174e42513160f8598eb
+    remote_ref_verified_at_utc: 2026-09-18T21:09:50Z
+  authorization_basis: explicit_user_request_and_confirmation_of_two_stage_docs_publication
+supersedes: []
+known_risks:
+  - "Provider permits requests when both server credentials are empty; production configuration not verified by this export."
+  - "Service credential is not tenant-scoped; GET requires consumer-side ownership enforcement."
+  - "Concurrent first PIN issuance guarantee not established; no new provider runtime tests or deployment performed."
+consumers: [L4D-06B-IOT-FIX-01]
+next_prompt_id: L4D-06B-IOT-FIX-01
+```
+<!-- HANDOFF:H-L4D-06A-PB-CONTRACT-01-v1:END -->
+
+<!-- ARTIFACT_BYTE_BINDING:B-L4D-02-IOT-GIT-v1:BEGIN -->
+```yaml
+binding_id: B-L4D-02-IOT-GIT-v1
+status: VERIFIED
+verified_at_utc: 2026-09-18T21:36:36Z
+handoff_id: H-L4D-02-IOT-v1
+contract_version: 1.0.0
+producer_commit: a5524d356dda343eca96010d16535d9f37ff4ece
+consumers: [L4D-06B-IOT-FIX-01]
+reason: LF_CRLF_ONLY
+byte_source: git_blob
+evidence_report: l4desk-service/docs/prompts/contracts/certificate-pin-v1/verification.md
+evidence_commit: 1971e51f1e7764a31d586174e42513160f8598eb
+artifacts:
+  - path: docs/l4desk/contracts/iot_event_feed_contract_v1.json
+    historical_sha256: 7acd49cb4d761a074e6e41f04380bef5db78d465fa8f6417bdf1fb16167e46c3
+    git_blob_sha256: 07be82d70e768ae0a44f24f6e5de6b948a039b746a798ce9c08179fbae810a77
+  - path: docs/l4desk/contracts/schemas/iot_event_feed_openapi.json
+    historical_sha256: 07b0b3e4e54b96e08ffc716b00f9e1a4dabe0f0ba90ca09708485cf068ccba56
+    git_blob_sha256: 8196befa2b3e103ec27cfbd39f65cbd230de55de037cadfbb890b06792d4d324
+  - path: docs/l4desk/contracts/schemas/remote_session_event.schema.json
+    historical_sha256: 230a22727a493b2980ba85cb2735e50d5ac42ac9b110cf3a6f3ba03ea0ebb12b
+    git_blob_sha256: 4d7393d0dcd1ae62f04e0ad488b6bab519d8d7e357f0cad569809743cb6270e9
+  - path: docs/l4desk/contracts/schemas/remote_session.schema.json
+    historical_sha256: 1de26a6fc47ebbe1d97d2f93108c3760ebf4a742908825c7d73e5a905da18f36
+    git_blob_sha256: c05027474d31f993954451d388667370caadcaeee044997a7a5a97e066cbb1ad
+  - path: docs/l4desk/fixtures/iot_event_feed_examples_v1.json
+    historical_sha256: 1fafb1d27010917f43f5d36502cbfaa1decd5cce36c80a6dc397f4180556df2b
+    git_blob_sha256: 41734c7b68850b083eefc07891183c91965c88d0a6589f15e265be0563006f61
+runtime_acceptance: NOT_GRANTED
+```
+<!-- ARTIFACT_BYTE_BINDING:B-L4D-02-IOT-GIT-v1:END -->
+
+<!-- CORRECTIVE_REGISTRATION_REVOCATION:R-L4D-06B-IOT-FIX-01-v1:BEGIN -->
+```yaml
+registration_id: R-L4D-06B-IOT-FIX-01-v1
+status: REVOKED
+revoked_at_utc: 2026-09-18T21:36:36Z
+reason: "Replace source-only PIN input with published data-only contract and finite read grant; explicit IOT Git-byte binding. No runtime handoff revoked."
+replacement_registration_id: R-L4D-06B-IOT-FIX-01-v2
+```
+<!-- CORRECTIVE_REGISTRATION_REVOCATION:R-L4D-06B-IOT-FIX-01-v1:END -->
+
+<!-- CORRECTIVE_REGISTRATION:R-L4D-06B-IOT-FIX-01-v2:BEGIN -->
+```yaml
+registration_id: R-L4D-06B-IOT-FIX-01-v2
+status: AUTHORIZED
+authorized_by: Cascade Controller
+authorization_basis: explicit_user_request_and_confirmation_of_two_stage_docs_publication
+registered_at_utc: 2026-09-18T21:36:36Z
+prompt_id: L4D-06B-IOT-FIX-01
+prompt_path: l4desk-service/docs/prompts/etran_dev-l4d-06b-iot-fix-01.md
+scope_project: iot-rpc-rest-app
+scope_root: D:\work\iot.leo4.ru\iot-rpc-rest-app
+blocked_prompt_id: L4D-06B-IOT
+authorized_inputs:
+  - handoff_id: H-L4D-06A-PB-CONTRACT-01-v1
+    contract_version: 1.0.0
+    producer_commit: 1971e51f1e7764a31d586174e42513160f8598eb
+  - handoff_id: H-L4D-02-IOT-v1
+    contract_version: 1.0.0
+    producer_commit: a5524d356dda343eca96010d16535d9f37ff4ece
+artifact_byte_binding_ids: [B-L4D-02-IOT-GIT-v1]
+external_artifact_reads:
+  - handoff_id: H-L4D-06A-PB-CONTRACT-01-v1
+    artifact_commit: 1971e51f1e7764a31d586174e42513160f8598eb
+    paths:
+      - l4desk-service/docs/prompts/contracts/certificate-pin-v1/contract.md
+      - l4desk-service/docs/prompts/contracts/certificate-pin-v1/schemas.json
+      - l4desk-service/docs/prompts/contracts/certificate-pin-v1/examples.json
+      - l4desk-service/docs/prompts/contracts/certificate-pin-v1/verification.md
+sequence_gate_handoff_id: H-L4D-06A-PB-v1
+output_handoff_id: H-L4D-06B-IOT-FIX-01-v1
+next_prompt_id: L4D-06B-IOT
+report_path: docs/l4desk/handoffs/L4D-06B-IOT-FIX-01-report.md
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: docs/l4desk/handoffs/L4D-06B-IOT-FIX-01-candidate.md
+publication_required_before_execution: true
+grant_scope: consumer_addressing_and_finite_data_only_reads
+runtime_acceptance: NOT_GRANTED
+blocked_next_prompt_id: L4D-06C-MB
+original_journal_bytes: 72781
+original_journal_sha256: 329844b0b829bf1f0a4d8dbe7f47fd8b5048852e435b33d0e8b376bf4c198802
+```
+<!-- CORRECTIVE_REGISTRATION:R-L4D-06B-IOT-FIX-01-v2:END -->

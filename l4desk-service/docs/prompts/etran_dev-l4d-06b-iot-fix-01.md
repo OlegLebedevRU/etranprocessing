@@ -6,8 +6,17 @@ scope_project: iot-rpc-rest-app
 scope_root: D:\work\iot.leo4.ru\iot-rpc-rest-app
 prompt_type: corrective-provider
 blocked_prompt_id: L4D-06B-IOT
-registration_id: R-L4D-06B-IOT-FIX-01-v1
-required_handoff_ids: [H-L4D-06A-PB-v1, H-L4D-02-IOT-v1]
+registration_id: R-L4D-06B-IOT-FIX-01-v2
+required_handoff_ids: [H-L4D-06A-PB-CONTRACT-01-v1, H-L4D-02-IOT-v1]
+artifact_byte_binding_ids: [B-L4D-02-IOT-GIT-v1]
+external_artifact_reads:
+  - handoff_id: H-L4D-06A-PB-CONTRACT-01-v1
+    artifact_commit: 1971e51f1e7764a31d586174e42513160f8598eb
+    paths:
+      - l4desk-service/docs/prompts/contracts/certificate-pin-v1/contract.md
+      - l4desk-service/docs/prompts/contracts/certificate-pin-v1/schemas.json
+      - l4desk-service/docs/prompts/contracts/certificate-pin-v1/examples.json
+      - l4desk-service/docs/prompts/contracts/certificate-pin-v1/verification.md
 sequence_gate_handoff_id: H-L4D-06A-PB-v1
 output_handoff_id: H-L4D-06B-IOT-FIX-01-v1
 next_prompt_id: L4D-06B-IOT
@@ -22,16 +31,22 @@ architecture_sections: [3, 4, 5, 6, 11, 12, 14, 16, 17]
 
 Прочитай только разрешённые внешние документы:
 
-- `D:\repo\platerra\Public\etranprocessing\l4desk-service\docs\prompts\PROMPT-STANDARD.md` (версия 1.1.0 или совместимая последующая);
+- `D:\repo\platerra\Public\etranprocessing\l4desk-service\docs\prompts\PROMPT-STANDARD.md` (версия 1.2.0 или совместимая последующая);
 - `D:\repo\platerra\Public\etranprocessing\l4desk-service\docs\prompts\contract-handoff.md`.
 
-В журнале должна находиться ровно одна запись `CORRECTIVE_REGISTRATION:R-L4D-06B-IOT-FIX-01-v1:BEGIN/END` со статусом `AUTHORIZED`, без отзыва, с совпадающими метаданными этого задания. Зафиксируй commit опубликованного пакета, предоставленный оператором; одна локальная запись не подтверждает commit/push. Не выполняй команды в соседнем проекте для восстановления публикации: при отсутствии подтверждения запроси его и верни `BLOCKED_CONTRACT`.
+В журнале должна находиться ровно одна запись `CORRECTIVE_REGISTRATION:R-L4D-06B-IOT-FIX-01-v2:BEGIN/END` со статусом `AUTHORIZED`, без отзыва, с совпадающими метаданными этого задания. Регистрация v1 явно отозвана и больше не используется. Зафиксируй **новый** commit опубликованного пакета B из сообщения запуска оператора и подтверждение его push; `ddf39184d22e03ecf076569c982c06ab7ddfcd83` содержит только прежний допуск и недостаточен. Нормативная версия prompt/стандарта/журнала — raw bytes B по `https://raw.githubusercontent.com/OlegLebedevRU/etranprocessing/<B>/l4desk-service/docs/prompts/<имя-файла>`, где B берётся ровно из сообщения запуска. Локальные пути — удобство навигации; при иной версии или CRLF checkout используй опубликованные bytes B, не исправляй чужие файлы и не объявляй CRLF-копию опубликованным byte artifact. Git-команды в соседнем проекте запрещены. Допускается подтверждение публикации контроллером из сообщения запуска; повторное согласие пользователя не нужно.
 
-Выполни весь contract gate по §2 и §8 стандарта. Исходные handoff ID сохранены: регистрация дополняет только адресацию к текущему FIX, не является вместо них входным контрактом. Проверь по исходным блокам версии, producer commits, digest/доступность артефактов, полноту семантики, совместимость, deployment и отсутствие отзыва. Никакой иной недостаток входного контракта этим допуском не снимается.
+Выполни весь contract gate по §2, §8 и §10 стандарта. Это обновлённые метаданные контроллера, а не самостоятельная подмена входов исполнителем:
 
-Sequence gate — `H-L4D-06A-PB-v1`, а не непринятый `H-L4D-06B-IOT-v1`. Поле `consumers` исходных блоков не исправлять и `ALL_FOLLOWING` не приписывать. Старое утверждение отчёта о consumers `H-L4D-02-IOT-v1` было неверным; текущий допуск происходит исключительно из регистрации контроллера.
+1. Предметный вход PIN — `H-L4D-06A-PB-CONTRACT-01-v1`, версия 1.0.0, producer commit `1971e51f1e7764a31d586174e42513160f8598eb`, статус публикации `DOCS_PUBLISHED`. Проверь все четыре артефакта, включая отчёт, по точным SHA-256 и immutable URLs из блока. Разрешено читать **только** эти data-only документы согласно external_artifact_reads; скачивание/хеширование из своего scope разрешено до анализа кода. Не импортируй и не выполняй их. Ни один путь к исходнику, упомянутый в provenance, не является разрешением его открыть.
+2. Предметный вход IOT — `H-L4D-02-IOT-v1`, версия 1.0.0, producer commit `a5524d356dda343eca96010d16535d9f37ff4ece`, исторический статус `DEPLOYED`. Его пять JSON находятся **в твоём проекте**. Примени точную привязку `B-L4D-02-IOT-GIT-v1` по §10.4: проверь старые digest против исходного блока и сырые Git bytes producer commit против git_blob_sha256. Это адресное согласование LF/CRLF, не освобождение от digest. `git show`/read-only проверка Git своего scope разрешены во время gate. Не переписывай локальные файлы и не хешируй PowerShell-текстовый pipeline вместо bytes.
+3. Для обоих входов проверь уникальность, отсутствие отзыва/несовместимой замены, версии, адресацию, полноту, совместимость и фактическую доступность. Запиши digest/version/source в отчёт. Source handoff, provenance, backward_compatible_with и упоминания старых отчётов **не требуют рекурсивного чтения**: проверяются прямые required inputs. PIN source commit `083138f...` — provenance, а не producer_commit нового документационного входа.
+
+Sequence-only gate — `H-L4D-06A-PB-v1`, а не непринятый `H-L4D-06B-IOT-v1`. Проверь принятие/уникальность/отсутствие отзыва по журналу; **не читай и не хешируй его семь .py-артефактов**: этот ID больше не входит в required_handoff_ids. Это не объявление старого artifact gate успешным. Поле consumers исходных блоков не исправлять и ALL_FOLLOWING не приписывать. Старое утверждение отчёта о consumers H-L4D-02-IOT-v1 было неверным; адресный допуск FIX дан регистрацией v2.
 
 Формат отдельного candidate уже явно согласован пользователем и закреплён в регистрации. Повторное согласование `DETACHED_V1` не требуется. При несовпадении регистрации, публикации или входного контракта остановись до анализа кода и изменений со статусом `BLOCKED_CONTRACT`.
+
+Известные ограничения PIN (пустая server auth конфигурация, отсутствие tenant-фильтра GET, недоказанная конкурентная first-issue гарантия) явно описаны в контракте и не скрыты. FIX не реализует вызовы PIN provider и не требует его live probes; он исправляет evidence собственного provisioning. Не объявляй эти ограничения новым недостатком **документальной полноты**, но при фактической зависимости твоего кода от отсутствующей гарантии укажи конкретный сценарий и BLOCKED_CONTRACT, а не обходи безопасность.
 
 ## 2. Цель и границы
 
