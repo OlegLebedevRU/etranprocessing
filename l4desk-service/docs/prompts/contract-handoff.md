@@ -1429,3 +1429,44 @@ consumers:
 next_prompt_id: L4D-06B-IOT
 ```
 <!-- HANDOFF:H-L4D-06A-PB-v1:END -->
+
+## 8. Регистрация корректирующего шага L4D-06B-IOT-FIX-01
+
+Контроллер добавил эту отдельную запись по явному подтверждению пользователя на регистрацию FIX, адресный допуск и отдельный candidate с digest отчёта без самоссылки. Основание — BLOCKED_CONTRACT исполнителя: FIX отсутствовал в реестре и consumers обоих входных handoff. Запись дополняет только проверку адресации из §1 этого журнала по §8 PROMPT-STANDARD.md (1.1.0); прежние принятые блоки, их payload, версии и consumers не изменены.
+
+Это не приёмка H-L4D-06B-IOT-v1 или H-L4D-06B-IOT-FIX-01-v1, не новый provider-релиз и не доказательство тестов/deploy. Последний принятый основной шаг остаётся H-L4D-06A-PB-v1. До запуска corrective требуется публикация пакета документов по README и полный gate исходных артефактов; до повторной приёмки исходного 06B переход к L4D-06C-MB закрыт.
+
+<!-- CORRECTIVE_REGISTRATION:R-L4D-06B-IOT-FIX-01-v1:BEGIN -->
+```yaml
+registration_id: R-L4D-06B-IOT-FIX-01-v1
+status: AUTHORIZED
+authorized_by: Cascade Controller
+authorization_basis: explicit_user_confirmation_in_current_session
+registered_at_utc: 2026-09-18T19:17:53Z
+prompt_id: L4D-06B-IOT-FIX-01
+prompt_path: l4desk-service/docs/prompts/etran_dev-l4d-06b-iot-fix-01.md
+scope_project: iot-rpc-rest-app
+scope_root: D:\work\iot.leo4.ru\iot-rpc-rest-app
+blocked_prompt_id: L4D-06B-IOT
+authorized_inputs:
+  - handoff_id: H-L4D-06A-PB-v1
+    contract_version: 1.0.0
+    producer_commit: 083138f223b723098e9a188803e3fc802e8a6011
+  - handoff_id: H-L4D-02-IOT-v1
+    contract_version: 1.0.0
+    producer_commit: a5524d356dda343eca96010d16535d9f37ff4ece
+sequence_gate_handoff_id: H-L4D-06A-PB-v1
+output_handoff_id: H-L4D-06B-IOT-FIX-01-v1
+next_prompt_id: L4D-06B-IOT
+report_path: docs/l4desk/handoffs/L4D-06B-IOT-FIX-01-report.md
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: docs/l4desk/handoffs/L4D-06B-IOT-FIX-01-candidate.md
+publication_required_before_execution: true
+grant_scope: consumer_addressing_only
+runtime_acceptance: NOT_GRANTED
+blocked_next_prompt_id: L4D-06C-MB
+original_journal_bytes: 70039
+original_journal_sha256: 1205e0e16e14ee29ba1cd68f9175e128c7a89a50aa69db87afcf4758a0f525c0
+```
+<!-- CORRECTIVE_REGISTRATION:R-L4D-06B-IOT-FIX-01-v1:END -->
