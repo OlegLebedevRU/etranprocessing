@@ -1,0 +1,5621 @@
+{
+  "api_tokens": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "jti",
+        "type": "VARCHAR(36)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "user_id",
+        "type": "VARCHAR(100)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(200)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "expires_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "last_used_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "revoked_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE api_tokens (\n\tid SERIAL NOT NULL, \n\tjti VARCHAR(36) NOT NULL, \n\tuser_id VARCHAR(100) NOT NULL, \n\tname VARCHAR(200), \n\texpires_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tlast_used_at TIMESTAMP WITH TIME ZONE, \n\trevoked_at TIMESTAMP WITH TIME ZONE, \n\tPRIMARY KEY (id), \n\tUNIQUE (jti)\n)",
+    "indexes": [
+      "CREATE INDEX idx_api_tokens_jti ON api_tokens (jti)",
+      "CREATE INDEX idx_api_tokens_user ON api_tokens (user_id)"
+    ]
+  },
+  "balance_terminal_tsp": {
+    "columns": [
+      {
+        "name": "rec_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "int_day",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "org_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "terminal_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "tsp_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "menu_snapshot_id",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "menu_version",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "amount",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "0",
+        "onupdate": null
+      },
+      {
+        "name": "count",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "0",
+        "onupdate": null
+      },
+      {
+        "name": "update_datetime",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": "now()"
+      }
+    ],
+    "ddl": "CREATE TABLE balance_terminal_tsp (\n\trec_id SERIAL NOT NULL, \n\tint_day INTEGER NOT NULL, \n\torg_id INTEGER NOT NULL, \n\tterminal_id INTEGER NOT NULL, \n\ttsp_id INTEGER NOT NULL, \n\tmenu_snapshot_id INTEGER, \n\tmenu_version INTEGER, \n\tamount BIGINT NOT NULL, \n\tcount INTEGER NOT NULL, \n\tupdate_datetime TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tPRIMARY KEY (rec_id), \n\tCONSTRAINT uq_balance_day_terminal_tsp_ver UNIQUE (int_day, terminal_id, tsp_id, menu_version), \n\tFOREIGN KEY(org_id) REFERENCES orgs (org_id), \n\tFOREIGN KEY(terminal_id) REFERENCES terminals (id), \n\tFOREIGN KEY(tsp_id) REFERENCES tsp (tsp_id), \n\tFOREIGN KEY(menu_snapshot_id) REFERENCES menu_variant_snapshots (id) ON DELETE SET NULL\n)",
+    "indexes": [
+      "CREATE INDEX idx_balance_int_day ON balance_terminal_tsp (int_day)",
+      "CREATE INDEX idx_balance_menu_snapshot_id ON balance_terminal_tsp (menu_snapshot_id)",
+      "CREATE INDEX idx_balance_menu_version ON balance_terminal_tsp (menu_version)",
+      "CREATE INDEX idx_balance_org_id ON balance_terminal_tsp (org_id)",
+      "CREATE INDEX idx_balance_terminal_id ON balance_terminal_tsp (terminal_id)",
+      "CREATE INDEX idx_balance_tsp_id ON balance_terminal_tsp (tsp_id)",
+      "CREATE INDEX ix_balance_terminal_tsp_menu_version ON balance_terminal_tsp (menu_version)"
+    ]
+  },
+  "billing_order_items": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "order_id",
+        "type": "UUID",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "terminal_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "operation",
+        "type": "VARCHAR(20)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "periods_due",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "advance_periods",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "billing_period_months",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "monthly_price_minor",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "amount_minor",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "old_expires_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "new_expires_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "cert_policy_snapshot",
+        "type": "JSONB",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE billing_order_items (\n\tid SERIAL NOT NULL, \n\torder_id UUID NOT NULL, \n\tterminal_id INTEGER NOT NULL, \n\toperation VARCHAR(20) NOT NULL, \n\tperiods_due INTEGER NOT NULL, \n\tadvance_periods INTEGER NOT NULL, \n\tbilling_period_months INTEGER NOT NULL, \n\tmonthly_price_minor BIGINT NOT NULL, \n\tamount_minor BIGINT NOT NULL, \n\told_expires_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tnew_expires_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tcert_policy_snapshot JSONB, \n\tPRIMARY KEY (id), \n\tCONSTRAINT ck_billing_order_items_operation CHECK (operation IN ('renewal', 'reactivation', 'cert_pin')), \n\tFOREIGN KEY(order_id) REFERENCES billing_orders (id), \n\tFOREIGN KEY(terminal_id) REFERENCES terminals (id)\n)",
+    "indexes": [
+      "CREATE INDEX idx_billing_order_items_order_id ON billing_order_items (order_id)",
+      "CREATE INDEX idx_billing_order_items_terminal_id ON billing_order_items (terminal_id)"
+    ]
+  },
+  "billing_orders": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "UUID",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": "uuid4",
+        "onupdate": null
+      },
+      {
+        "name": "org_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(20)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "pending",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "currency",
+        "type": "VARCHAR(3)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "RUB",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "amount_minor",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "provider",
+        "type": "VARCHAR(50)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "provider_order_id",
+        "type": "VARCHAR(200)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "payment_url",
+        "type": "TEXT",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "paid_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "expires_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE billing_orders (\n\tid UUID NOT NULL, \n\torg_id INTEGER NOT NULL, \n\tstatus VARCHAR(20) DEFAULT 'pending' NOT NULL, \n\tcurrency VARCHAR(3) DEFAULT 'RUB' NOT NULL, \n\tamount_minor BIGINT NOT NULL, \n\tprovider VARCHAR(50), \n\tprovider_order_id VARCHAR(200), \n\tpayment_url TEXT, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tpaid_at TIMESTAMP WITH TIME ZONE, \n\texpires_at TIMESTAMP WITH TIME ZONE, \n\tPRIMARY KEY (id)\n)",
+    "indexes": [
+      "CREATE INDEX idx_billing_orders_org_id ON billing_orders (org_id)",
+      "CREATE INDEX idx_billing_orders_status ON billing_orders (status)"
+    ]
+  },
+  "catalog_categories": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "org_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "parent_id",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "sort_order",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "0",
+        "client_default": "0",
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": "now()"
+      }
+    ],
+    "ddl": "CREATE TABLE catalog_categories (\n\tid SERIAL NOT NULL, \n\torg_id INTEGER NOT NULL, \n\tname VARCHAR(255) NOT NULL, \n\tparent_id INTEGER, \n\tsort_order INTEGER DEFAULT '0' NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(parent_id) REFERENCES catalog_categories (id) ON DELETE CASCADE\n)",
+    "indexes": [
+      "CREATE INDEX ix_catalog_categories_org_id ON catalog_categories (org_id)",
+      "CREATE INDEX ix_catalog_categories_parent_id ON catalog_categories (parent_id)"
+    ]
+  },
+  "catalog_items": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "org_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "category_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "tsp_code",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "printname",
+        "type": "VARCHAR(255)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "price",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "0",
+        "client_default": "0",
+        "onupdate": null
+      },
+      {
+        "name": "protypenumber",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "0",
+        "client_default": "0",
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": "now()"
+      }
+    ],
+    "ddl": "CREATE TABLE catalog_items (\n\tid SERIAL NOT NULL, \n\torg_id INTEGER NOT NULL, \n\tcategory_id INTEGER NOT NULL, \n\ttsp_code INTEGER NOT NULL, \n\tname VARCHAR(255) NOT NULL, \n\tprintname VARCHAR(255), \n\tprice INTEGER DEFAULT '0' NOT NULL, \n\tprotypenumber INTEGER DEFAULT '0' NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tPRIMARY KEY (id), \n\tCONSTRAINT uq_catalog_org_tsp UNIQUE (org_id, tsp_code), \n\tFOREIGN KEY(category_id) REFERENCES catalog_categories (id) ON DELETE CASCADE\n)",
+    "indexes": [
+      "CREATE INDEX ix_catalog_items_category_id ON catalog_items (category_id)",
+      "CREATE INDEX ix_catalog_items_org_id ON catalog_items (org_id)"
+    ]
+  },
+  "certificate_pins": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "pin",
+        "type": "VARCHAR(10)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "terminal_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "org_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "order_item_id",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "created_by",
+        "type": "VARCHAR(100)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "creation_source",
+        "type": "VARCHAR(20)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "system",
+        "onupdate": null
+      },
+      {
+        "name": "payment_required",
+        "type": "BOOLEAN",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "False",
+        "onupdate": null
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(20)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "pending",
+        "onupdate": null
+      },
+      {
+        "name": "expires_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "used_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE certificate_pins (\n\tid SERIAL NOT NULL, \n\tpin VARCHAR(10) NOT NULL, \n\tterminal_id INTEGER NOT NULL, \n\torg_id INTEGER NOT NULL, \n\torder_item_id INTEGER, \n\tcreated_by VARCHAR(100), \n\tcreation_source VARCHAR(20) NOT NULL, \n\tpayment_required BOOLEAN NOT NULL, \n\tstatus VARCHAR(20) NOT NULL, \n\texpires_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tused_at TIMESTAMP WITH TIME ZONE, \n\tPRIMARY KEY (id), \n\tCONSTRAINT ck_certificate_pins_status CHECK (status IN ('pending', 'used', 'expired', 'cancelled')), \n\tCONSTRAINT ck_certificate_pins_creation_source CHECK (creation_source IN ('tenant', 'global_admin', 'system')), \n\tUNIQUE (pin), \n\tFOREIGN KEY(terminal_id) REFERENCES terminals (id), \n\tFOREIGN KEY(order_item_id) REFERENCES billing_order_items (id)\n)",
+    "indexes": [
+      "CREATE INDEX idx_cert_pins_order_item ON certificate_pins (order_item_id)",
+      "CREATE INDEX idx_cert_pins_org ON certificate_pins (org_id)",
+      "CREATE INDEX idx_cert_pins_status ON certificate_pins (status)",
+      "CREATE INDEX idx_cert_pins_terminal ON certificate_pins (terminal_id)"
+    ]
+  },
+  "email_logs": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "org_id",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "user_id",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "device_id",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "recipients",
+        "type": "VARCHAR(1000)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "subject",
+        "type": "VARCHAR(500)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(50)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "sent",
+        "onupdate": null
+      },
+      {
+        "name": "postbox_message_id",
+        "type": "VARCHAR(255)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "storage_path",
+        "type": "VARCHAR(1000)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "error_message",
+        "type": "TEXT",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE email_logs (\n\tid SERIAL NOT NULL, \n\torg_id INTEGER, \n\tuser_id INTEGER, \n\tdevice_id VARCHAR(128) NOT NULL, \n\trecipients VARCHAR(1000) NOT NULL, \n\tsubject VARCHAR(500), \n\tstatus VARCHAR(50) NOT NULL, \n\tpostbox_message_id VARCHAR(255), \n\tstorage_path VARCHAR(1000), \n\terror_message TEXT, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(org_id) REFERENCES orgs (org_id) ON DELETE SET NULL, \n\tFOREIGN KEY(user_id) REFERENCES users (id) ON DELETE SET NULL\n)",
+    "indexes": [
+      "CREATE INDEX idx_email_logs_created_at ON email_logs (created_at)",
+      "CREATE INDEX idx_email_logs_device_id ON email_logs (device_id)",
+      "CREATE INDEX idx_email_logs_org_id ON email_logs (org_id)",
+      "CREATE INDEX ix_email_logs_device_id ON email_logs (device_id)",
+      "CREATE INDEX ix_email_logs_org_id ON email_logs (org_id)",
+      "CREATE INDEX ix_email_logs_user_id ON email_logs (user_id)"
+    ]
+  },
+  "email_verifications": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "org_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "user_id",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "email",
+        "type": "VARCHAR(255)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "token_hash",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "otp_code",
+        "type": "VARCHAR(6)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "attempts_left",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "5",
+        "client_default": "5",
+        "onupdate": null
+      },
+      {
+        "name": "expires_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "is_used",
+        "type": "BOOLEAN",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "false",
+        "client_default": "False",
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE email_verifications (\n\tid SERIAL NOT NULL, \n\torg_id INTEGER NOT NULL, \n\tuser_id INTEGER, \n\temail VARCHAR(255) NOT NULL, \n\ttoken_hash VARCHAR(64) NOT NULL, \n\totp_code VARCHAR(6) NOT NULL, \n\tattempts_left INTEGER DEFAULT '5' NOT NULL, \n\texpires_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tis_used BOOLEAN DEFAULT 'false' NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(org_id) REFERENCES orgs (org_id) ON DELETE CASCADE, \n\tFOREIGN KEY(user_id) REFERENCES users (id) ON DELETE SET NULL\n)",
+    "indexes": [
+      "CREATE INDEX idx_email_verif_org ON email_verifications (org_id)",
+      "CREATE INDEX idx_email_verif_token ON email_verifications (token_hash)",
+      "CREATE INDEX ix_email_verifications_org_id ON email_verifications (org_id)",
+      "CREATE INDEX ix_email_verifications_user_id ON email_verifications (user_id)",
+      "CREATE UNIQUE INDEX ix_email_verifications_token_hash ON email_verifications (token_hash)"
+    ]
+  },
+  "fin_accounts": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "tenant_id",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "kind",
+        "type": "VARCHAR(32)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "currency",
+        "type": "VARCHAR(3)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "RUB",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE fin_accounts (\n\tid BIGSERIAL NOT NULL, \n\ttenant_id INTEGER, \n\tkind VARCHAR(32) NOT NULL, \n\tcurrency VARCHAR(3) DEFAULT 'RUB' NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tCONSTRAINT fin_account_pk PRIMARY KEY (id), \n\tCONSTRAINT fin_account_currency_ck CHECK (currency = 'RUB'), \n\tCONSTRAINT fin_account_scope_ck CHECK ((kind = 'tenant_settlement' AND tenant_id IS NOT NULL) OR (kind IN ('payment_clearing', 'usage_revenue') AND tenant_id IS NULL)), \n\tCONSTRAINT fin_account_tenant_kind_uq UNIQUE (tenant_id, kind), \n\tCONSTRAINT fin_account_tenant_fk FOREIGN KEY(tenant_id) REFERENCES orgs (org_id) ON DELETE RESTRICT\n)",
+    "indexes": [
+      "CREATE UNIQUE INDEX fin_account_global_kind_uq ON fin_accounts (kind) WHERE tenant_id IS NULL"
+    ]
+  },
+  "fin_archive_batches": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "source_project",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "schema_version",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "archive_month",
+        "type": "DATE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "source_types",
+        "type": "JSON",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "row_count",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "min_occurred_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "max_occurred_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "through_cursor",
+        "type": "BIGINT",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "consumers_passed_cursor",
+        "type": "BIGINT",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "storage_reference",
+        "type": "TEXT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "checksum_sha256",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "manifest",
+        "type": "JSON",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(16)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "pending",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "verified_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "purged_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "retain_until",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "actor",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "correlation_id",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE fin_archive_batches (\n\tid VARCHAR(128) NOT NULL, \n\tsource_project VARCHAR(64) NOT NULL, \n\tschema_version VARCHAR(64) NOT NULL, \n\tarchive_month DATE NOT NULL, \n\tsource_types JSON NOT NULL, \n\trow_count BIGINT NOT NULL, \n\tmin_occurred_at TIMESTAMP WITH TIME ZONE, \n\tmax_occurred_at TIMESTAMP WITH TIME ZONE, \n\tthrough_cursor BIGINT, \n\tconsumers_passed_cursor BIGINT, \n\tstorage_reference TEXT NOT NULL, \n\tchecksum_sha256 VARCHAR(64) NOT NULL, \n\tmanifest JSON NOT NULL, \n\tstatus VARCHAR(16) DEFAULT 'pending' NOT NULL, \n\tverified_at TIMESTAMP WITH TIME ZONE, \n\tpurged_at TIMESTAMP WITH TIME ZONE, \n\tretain_until TIMESTAMP WITH TIME ZONE NOT NULL, \n\tactor VARCHAR(128) NOT NULL, \n\tcorrelation_id VARCHAR(128) NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tCONSTRAINT fin_archive_pk PRIMARY KEY (id, source_project), \n\tCONSTRAINT fin_archive_values_ck CHECK (row_count >= 0 AND length(checksum_sha256) = 64), \n\tCONSTRAINT fin_archive_interval_ck CHECK (max_occurred_at >= min_occurred_at), \n\tCONSTRAINT fin_archive_cursor_ck CHECK (through_cursor >= 0 AND consumers_passed_cursor >= 0), \n\tCONSTRAINT fin_archive_status_ck CHECK (status IN ('pending', 'verified', 'failed')), \n\tCONSTRAINT fin_archive_verified_ck CHECK (status != 'verified' OR verified_at IS NOT NULL), \n\tCONSTRAINT fin_archive_purge_ck CHECK (purged_at IS NULL OR (status = 'verified' AND verified_at IS NOT NULL AND (through_cursor IS NULL OR (consumers_passed_cursor IS NOT NULL AND consumers_passed_cursor >= through_cursor))))\n)",
+    "indexes": [
+      "CREATE INDEX fin_archive_project_month_ix ON fin_archive_batches (source_project, archive_month)"
+    ]
+  },
+  "fin_balance_projections": {
+    "columns": [
+      {
+        "name": "tenant_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "account_id",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "balance_kopecks",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "0",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "version",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "0",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "last_transaction_id",
+        "type": "BIGINT",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE fin_balance_projections (\n\ttenant_id INTEGER NOT NULL, \n\taccount_id BIGINT NOT NULL, \n\tbalance_kopecks BIGINT DEFAULT '0' NOT NULL, \n\tversion BIGINT DEFAULT '0' NOT NULL, \n\tlast_transaction_id BIGINT, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tCONSTRAINT fin_balance_pk PRIMARY KEY (tenant_id), \n\tCONSTRAINT fin_balance_account_uq UNIQUE (account_id), \n\tCONSTRAINT fin_balance_transaction_fk FOREIGN KEY(last_transaction_id, tenant_id) REFERENCES fin_ledger_transactions (id, tenant_id) ON DELETE RESTRICT, \n\tCONSTRAINT fin_balance_version_ck CHECK (version >= 0), \n\tCONSTRAINT fin_balance_rubles_ck CHECK (balance_kopecks %% 100 = 0), \n\tCONSTRAINT fin_balance_tenant_fk FOREIGN KEY(tenant_id) REFERENCES orgs (org_id) ON DELETE RESTRICT, \n\tCONSTRAINT fin_balance_account_fk FOREIGN KEY(account_id) REFERENCES fin_accounts (id) ON DELETE RESTRICT\n)",
+    "indexes": []
+  },
+  "fin_billing_cycles": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "tenant_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "sequence",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "starts_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "ends_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "grace_deadline",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "timezone",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "closed_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE fin_billing_cycles (\n\tid BIGSERIAL NOT NULL, \n\ttenant_id INTEGER NOT NULL, \n\tsequence INTEGER NOT NULL, \n\tstarts_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tends_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tgrace_deadline TIMESTAMP WITH TIME ZONE NOT NULL, \n\ttimezone VARCHAR(64) NOT NULL, \n\tclosed_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT fin_cycle_pk PRIMARY KEY (id), \n\tCONSTRAINT fin_cycle_tenant_uq UNIQUE (id, tenant_id), \n\tCONSTRAINT fin_cycle_sequence_uq UNIQUE (tenant_id, sequence), \n\tCONSTRAINT fin_cycle_start_uq UNIQUE (tenant_id, starts_at), \n\tCONSTRAINT fin_cycle_sequence_ck CHECK (sequence >= 0), \n\tCONSTRAINT fin_cycle_interval_ck CHECK (starts_at < grace_deadline AND grace_deadline < ends_at), \n\tCONSTRAINT fin_cycle_profile_fk FOREIGN KEY(tenant_id) REFERENCES fin_billing_profiles (tenant_id) ON DELETE RESTRICT\n)",
+    "indexes": [
+      "CREATE INDEX fin_cycle_end_ix ON fin_billing_cycles (ends_at)"
+    ]
+  },
+  "fin_billing_profiles": {
+    "columns": [
+      {
+        "name": "tenant_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "anchor_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "anchor_day",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "anchor_timezone",
+        "type": "VARCHAR(64)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "first_payment_transaction_id",
+        "type": "BIGINT",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "entitlement",
+        "type": "VARCHAR(16)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "free",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "entitlement_changed_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE fin_billing_profiles (\n\ttenant_id INTEGER NOT NULL, \n\tanchor_at TIMESTAMP WITH TIME ZONE, \n\tanchor_day INTEGER, \n\tanchor_timezone VARCHAR(64), \n\tfirst_payment_transaction_id BIGINT, \n\tentitlement VARCHAR(16) DEFAULT 'free' NOT NULL, \n\tentitlement_changed_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tCONSTRAINT fin_profile_pk PRIMARY KEY (tenant_id), \n\tCONSTRAINT fin_profile_first_payment_fk FOREIGN KEY(first_payment_transaction_id, tenant_id) REFERENCES fin_ledger_transactions (id, tenant_id) ON DELETE RESTRICT, \n\tCONSTRAINT fin_profile_anchor_day_ck CHECK (anchor_day BETWEEN 1 AND 31), \n\tCONSTRAINT fin_profile_anchor_ck CHECK ((anchor_at IS NULL AND anchor_day IS NULL AND anchor_timezone IS NULL AND first_payment_transaction_id IS NULL) OR (anchor_at IS NOT NULL AND anchor_day IS NOT NULL AND anchor_timezone IS NOT NULL AND first_payment_transaction_id IS NOT NULL)), \n\tCONSTRAINT fin_profile_entitlement_ck CHECK (entitlement IN ('free', 'active', 'grace', 'blocked')), \n\tCONSTRAINT fin_profile_paid_ck CHECK (entitlement NOT IN ('active', 'grace') OR anchor_at IS NOT NULL), \n\tCONSTRAINT fin_profile_tenant_fk FOREIGN KEY(tenant_id) REFERENCES orgs (org_id) ON DELETE RESTRICT\n)",
+    "indexes": []
+  },
+  "fin_ledger_entries": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "transaction_id",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "tenant_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "line_number",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "account_id",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "debit_kopecks",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "0",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "credit_kopecks",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "0",
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE fin_ledger_entries (\n\tid BIGSERIAL NOT NULL, \n\ttransaction_id BIGINT NOT NULL, \n\ttenant_id INTEGER NOT NULL, \n\tline_number INTEGER NOT NULL, \n\taccount_id BIGINT NOT NULL, \n\tdebit_kopecks BIGINT DEFAULT '0' NOT NULL, \n\tcredit_kopecks BIGINT DEFAULT '0' NOT NULL, \n\tCONSTRAINT fin_entry_pk PRIMARY KEY (id), \n\tCONSTRAINT fin_entry_transaction_fk FOREIGN KEY(transaction_id, tenant_id) REFERENCES fin_ledger_transactions (id, tenant_id) ON DELETE RESTRICT, \n\tCONSTRAINT fin_entry_line_uq UNIQUE (transaction_id, line_number), \n\tCONSTRAINT fin_entry_line_ck CHECK (line_number > 0), \n\tCONSTRAINT fin_entry_side_ck CHECK ((debit_kopecks > 0 AND credit_kopecks = 0) OR (credit_kopecks > 0 AND debit_kopecks = 0)), \n\tCONSTRAINT fin_entry_rubles_ck CHECK (debit_kopecks %% 100 = 0 AND credit_kopecks %% 100 = 0), \n\tCONSTRAINT fin_entry_account_fk FOREIGN KEY(account_id) REFERENCES fin_accounts (id) ON DELETE RESTRICT\n)",
+    "indexes": [
+      "CREATE INDEX fin_entry_account_transaction_ix ON fin_ledger_entries (account_id, transaction_id)"
+    ]
+  },
+  "fin_ledger_transactions": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "tenant_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "operation_id",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "kind",
+        "type": "VARCHAR(32)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(16)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "draft",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "corrects_transaction_id",
+        "type": "BIGINT",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "debit_kopecks",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "credit_kopecks",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "source_project",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "source_type",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "source_id",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "source_event_id",
+        "type": "VARCHAR(128)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "source_events_hash",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "archive_batch_id",
+        "type": "VARCHAR(128)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "calculation_snapshot",
+        "type": "JSON",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "actor",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "correlation_id",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "posted_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE fin_ledger_transactions (\n\tid BIGSERIAL NOT NULL, \n\ttenant_id INTEGER NOT NULL, \n\toperation_id VARCHAR(128) NOT NULL, \n\tkind VARCHAR(32) NOT NULL, \n\tstatus VARCHAR(16) DEFAULT 'draft' NOT NULL, \n\tcorrects_transaction_id BIGINT, \n\tdebit_kopecks BIGINT NOT NULL, \n\tcredit_kopecks BIGINT NOT NULL, \n\tsource_project VARCHAR(64) NOT NULL, \n\tsource_type VARCHAR(64) NOT NULL, \n\tsource_id VARCHAR(128) NOT NULL, \n\tsource_event_id VARCHAR(128), \n\tsource_events_hash VARCHAR(64) NOT NULL, \n\tarchive_batch_id VARCHAR(128), \n\tcalculation_snapshot JSON, \n\tactor VARCHAR(128) NOT NULL, \n\tcorrelation_id VARCHAR(128) NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tposted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT fin_transaction_pk PRIMARY KEY (id), \n\tCONSTRAINT fin_transaction_tenant_uq UNIQUE (id, tenant_id), \n\tCONSTRAINT fin_transaction_operation_uq UNIQUE (tenant_id, operation_id), \n\tCONSTRAINT fin_transaction_source_uq UNIQUE (tenant_id, source_project, source_type, source_id), \n\tCONSTRAINT fin_transaction_corrects_fk FOREIGN KEY(corrects_transaction_id, tenant_id) REFERENCES fin_ledger_transactions (id, tenant_id) ON DELETE RESTRICT, \n\tCONSTRAINT fin_transaction_kind_ck CHECK (kind IN ('payment', 'usage', 'terminal_month', 'adjustment', 'reversal')), \n\tCONSTRAINT fin_transaction_status_ck CHECK (status IN ('draft', 'posted')), \n\tCONSTRAINT fin_transaction_posted_ck CHECK ((status = 'posted') = (posted_at IS NOT NULL)), \n\tCONSTRAINT fin_transaction_balance_ck CHECK (debit_kopecks >= 0 AND debit_kopecks = credit_kopecks AND debit_kopecks %% 100 = 0), \n\tCONSTRAINT fin_transaction_self_ck CHECK (corrects_transaction_id IS NULL OR corrects_transaction_id != id), \n\tCONSTRAINT fin_transaction_correction_ck CHECK ((kind IN ('adjustment', 'reversal')) = (corrects_transaction_id IS NOT NULL)), \n\tCONSTRAINT fin_transaction_tenant_fk FOREIGN KEY(tenant_id) REFERENCES orgs (org_id) ON DELETE RESTRICT\n)",
+    "indexes": [
+      "CREATE INDEX fin_transaction_correlation_ix ON fin_ledger_transactions (correlation_id)",
+      "CREATE INDEX fin_transaction_tenant_time_ix ON fin_ledger_transactions (tenant_id, created_at)"
+    ]
+  },
+  "fin_manual_payments": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "tenant_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "operation_id",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "amount_kopecks",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "received_on",
+        "type": "DATE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "document_number",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "purpose",
+        "type": "TEXT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "payer",
+        "type": "VARCHAR(500)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "comment",
+        "type": "TEXT",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "evidence_reference",
+        "type": "TEXT",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "created_by_user_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "ledger_transaction_id",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "correlation_id",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE fin_manual_payments (\n\tid BIGSERIAL NOT NULL, \n\ttenant_id INTEGER NOT NULL, \n\toperation_id VARCHAR(128) NOT NULL, \n\tamount_kopecks BIGINT NOT NULL, \n\treceived_on DATE NOT NULL, \n\tdocument_number VARCHAR(128) NOT NULL, \n\tpurpose TEXT NOT NULL, \n\tpayer VARCHAR(500) NOT NULL, \n\tcomment TEXT, \n\tevidence_reference TEXT, \n\tcreated_by_user_id INTEGER NOT NULL, \n\tledger_transaction_id BIGINT NOT NULL, \n\tcorrelation_id VARCHAR(128) NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tCONSTRAINT fin_manual_pk PRIMARY KEY (id), \n\tCONSTRAINT fin_manual_operation_uq UNIQUE (tenant_id, operation_id), \n\tCONSTRAINT fin_manual_transaction_uq UNIQUE (ledger_transaction_id), \n\tCONSTRAINT fin_manual_transaction_fk FOREIGN KEY(ledger_transaction_id, tenant_id) REFERENCES fin_ledger_transactions (id, tenant_id) ON DELETE RESTRICT, \n\tCONSTRAINT fin_manual_amount_ck CHECK (amount_kopecks > 0 AND amount_kopecks %% 100 = 0), \n\tCONSTRAINT fin_manual_creator_fk FOREIGN KEY(created_by_user_id) REFERENCES users (id) ON DELETE RESTRICT\n)",
+    "indexes": [
+      "CREATE INDEX fin_manual_tenant_date_ix ON fin_manual_payments (tenant_id, received_on)"
+    ]
+  },
+  "fin_notification_deliveries": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "tenant_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "billing_cycle_id",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "notification_type",
+        "type": "VARCHAR(32)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "scheduled_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(16)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "pending",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "attempts",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "0",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "sent_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "provider_message_id",
+        "type": "VARCHAR(128)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "last_error",
+        "type": "VARCHAR(500)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "correlation_id",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE fin_notification_deliveries (\n\tid BIGSERIAL NOT NULL, \n\ttenant_id INTEGER NOT NULL, \n\tbilling_cycle_id BIGINT NOT NULL, \n\tnotification_type VARCHAR(32) NOT NULL, \n\tscheduled_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tstatus VARCHAR(16) DEFAULT 'pending' NOT NULL, \n\tattempts INTEGER DEFAULT '0' NOT NULL, \n\tsent_at TIMESTAMP WITH TIME ZONE, \n\tprovider_message_id VARCHAR(128), \n\tlast_error VARCHAR(500), \n\tcorrelation_id VARCHAR(128) NOT NULL, \n\tCONSTRAINT fin_notification_pk PRIMARY KEY (id), \n\tCONSTRAINT fin_notification_cycle_fk FOREIGN KEY(billing_cycle_id, tenant_id) REFERENCES fin_billing_cycles (id, tenant_id) ON DELETE RESTRICT, \n\tCONSTRAINT fin_notification_cycle_type_uq UNIQUE (tenant_id, billing_cycle_id, notification_type), \n\tCONSTRAINT fin_notification_type_ck CHECK (notification_type IN ('cycle_minus_7', 'cycle_minus_3', 'cycle_minus_1', 'grace', 'blocked')), \n\tCONSTRAINT fin_notification_status_ck CHECK (status IN ('pending', 'sending', 'sent', 'failed') AND attempts >= 0), \n\tCONSTRAINT fin_notification_sent_ck CHECK (status != 'sent' OR sent_at IS NOT NULL)\n)",
+    "indexes": [
+      "CREATE INDEX fin_notification_due_ix ON fin_notification_deliveries (status, scheduled_at)"
+    ]
+  },
+  "fin_payments": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "tenant_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "operation_id",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "provider",
+        "type": "VARCHAR(32)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "yookassa",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "provider_payment_id",
+        "type": "VARCHAR(128)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(32)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "pending",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "amount_kopecks",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "currency",
+        "type": "VARCHAR(3)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "RUB",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "confirmation_url",
+        "type": "TEXT",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "provider_receipt_id",
+        "type": "VARCHAR(128)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "receipt_status",
+        "type": "VARCHAR(32)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "receipt_snapshot",
+        "type": "JSON",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "verified_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "succeeded_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "ledger_transaction_id",
+        "type": "BIGINT",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "actor",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "correlation_id",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE fin_payments (\n\tid BIGSERIAL NOT NULL, \n\ttenant_id INTEGER NOT NULL, \n\toperation_id VARCHAR(128) NOT NULL, \n\tprovider VARCHAR(32) DEFAULT 'yookassa' NOT NULL, \n\tprovider_payment_id VARCHAR(128), \n\tstatus VARCHAR(32) DEFAULT 'pending' NOT NULL, \n\tamount_kopecks BIGINT NOT NULL, \n\tcurrency VARCHAR(3) DEFAULT 'RUB' NOT NULL, \n\tconfirmation_url TEXT, \n\tprovider_receipt_id VARCHAR(128), \n\treceipt_status VARCHAR(32), \n\treceipt_snapshot JSON, \n\tverified_at TIMESTAMP WITH TIME ZONE, \n\tsucceeded_at TIMESTAMP WITH TIME ZONE, \n\tledger_transaction_id BIGINT, \n\tactor VARCHAR(128) NOT NULL, \n\tcorrelation_id VARCHAR(128) NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tCONSTRAINT fin_payment_pk PRIMARY KEY (id), \n\tCONSTRAINT fin_payment_operation_uq UNIQUE (tenant_id, operation_id), \n\tCONSTRAINT fin_payment_provider_uq UNIQUE (provider, provider_payment_id), \n\tCONSTRAINT fin_payment_transaction_uq UNIQUE (ledger_transaction_id), \n\tCONSTRAINT fin_payment_transaction_fk FOREIGN KEY(ledger_transaction_id, tenant_id) REFERENCES fin_ledger_transactions (id, tenant_id) ON DELETE RESTRICT, \n\tCONSTRAINT fin_payment_amount_ck CHECK (amount_kopecks > 0 AND amount_kopecks %% 100 = 0 AND currency = 'RUB'), \n\tCONSTRAINT fin_payment_status_ck CHECK (status IN ('pending', 'waiting_for_capture', 'succeeded', 'canceled')), \n\tCONSTRAINT fin_payment_verified_ck CHECK (status != 'succeeded' OR (verified_at IS NOT NULL AND succeeded_at IS NOT NULL AND provider_payment_id IS NOT NULL)), \n\tCONSTRAINT fin_payment_posting_ck CHECK (ledger_transaction_id IS NULL OR status = 'succeeded'), \n\tCONSTRAINT fin_payment_tenant_fk FOREIGN KEY(tenant_id) REFERENCES orgs (org_id) ON DELETE RESTRICT\n)",
+    "indexes": [
+      "CREATE INDEX fin_payment_status_time_ix ON fin_payments (status, created_at)",
+      "CREATE INDEX fin_payment_tenant_time_ix ON fin_payments (tenant_id, created_at)"
+    ]
+  },
+  "fin_reconciliation_runs": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "tenant_id",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "operation_id",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "period_start",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "period_end",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(16)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "pending",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "calculated_kopecks",
+        "type": "BIGINT",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "posted_kopecks",
+        "type": "BIGINT",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "discarded_kopecks",
+        "type": "BIGINT",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "debit_kopecks",
+        "type": "BIGINT",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "credit_kopecks",
+        "type": "BIGINT",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "balance_difference_kopecks",
+        "type": "BIGINT",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "mismatch_count",
+        "type": "BIGINT",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "source_events_hash",
+        "type": "VARCHAR(64)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "details",
+        "type": "JSON",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "actor",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "correlation_id",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "started_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "finished_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE fin_reconciliation_runs (\n\tid BIGSERIAL NOT NULL, \n\ttenant_id INTEGER, \n\toperation_id VARCHAR(128) NOT NULL, \n\tperiod_start TIMESTAMP WITH TIME ZONE NOT NULL, \n\tperiod_end TIMESTAMP WITH TIME ZONE NOT NULL, \n\tstatus VARCHAR(16) DEFAULT 'pending' NOT NULL, \n\tcalculated_kopecks BIGINT, \n\tposted_kopecks BIGINT, \n\tdiscarded_kopecks BIGINT, \n\tdebit_kopecks BIGINT, \n\tcredit_kopecks BIGINT, \n\tbalance_difference_kopecks BIGINT, \n\tmismatch_count BIGINT, \n\tsource_events_hash VARCHAR(64), \n\tdetails JSON, \n\tactor VARCHAR(128) NOT NULL, \n\tcorrelation_id VARCHAR(128) NOT NULL, \n\tstarted_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tfinished_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT fin_reconciliation_pk PRIMARY KEY (id), \n\tCONSTRAINT fin_reconciliation_operation_uq UNIQUE (operation_id), \n\tCONSTRAINT fin_reconciliation_period_ck CHECK (period_end > period_start), \n\tCONSTRAINT fin_reconciliation_status_ck CHECK (status IN ('pending', 'matched', 'mismatch', 'failed')), \n\tCONSTRAINT fin_reconciliation_count_ck CHECK (mismatch_count >= 0), \n\tCONSTRAINT fin_reconciliation_matched_ck CHECK (status != 'matched' OR (finished_at IS NOT NULL AND mismatch_count IS NOT NULL AND mismatch_count = 0 AND calculated_kopecks IS NOT NULL AND posted_kopecks IS NOT NULL AND discarded_kopecks IS NOT NULL AND calculated_kopecks = posted_kopecks + discarded_kopecks AND debit_kopecks IS NOT NULL AND credit_kopecks IS NOT NULL AND debit_kopecks = credit_kopecks AND balance_difference_kopecks IS NOT NULL AND balance_difference_kopecks = 0)), \n\tCONSTRAINT fin_reconciliation_tenant_fk FOREIGN KEY(tenant_id) REFERENCES orgs (org_id) ON DELETE RESTRICT\n)",
+    "indexes": [
+      "CREATE INDEX fin_reconciliation_tenant_time_ix ON fin_reconciliation_runs (tenant_id, started_at)"
+    ]
+  },
+  "fin_tariff_versions": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "version",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "effective_from",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "terminal_month_kopecks",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "hourly_rate_kopecks",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "free_daily_seconds",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "actor",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "correlation_id",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE fin_tariff_versions (\n\tid BIGSERIAL NOT NULL, \n\tversion VARCHAR(64) NOT NULL, \n\teffective_from TIMESTAMP WITH TIME ZONE NOT NULL, \n\tterminal_month_kopecks BIGINT NOT NULL, \n\thourly_rate_kopecks BIGINT NOT NULL, \n\tfree_daily_seconds INTEGER NOT NULL, \n\tactor VARCHAR(128) NOT NULL, \n\tcorrelation_id VARCHAR(128) NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tCONSTRAINT fin_tariff_pk PRIMARY KEY (id), \n\tCONSTRAINT fin_tariff_version_uq UNIQUE (version), \n\tCONSTRAINT fin_tariff_effective_uq UNIQUE (effective_from), \n\tCONSTRAINT fin_tariff_values_ck CHECK (terminal_month_kopecks >= 0 AND hourly_rate_kopecks >= 0 AND free_daily_seconds >= 0)\n)",
+    "indexes": []
+  },
+  "fin_terminal_monthly_charges": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "tenant_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "terminal_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "billing_cycle_id",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "tariff_version_id",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "is_free",
+        "type": "BOOLEAN",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "first_online_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "calculated_kopecks",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "posted_kopecks",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "discarded_kopecks",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "source_project",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "source_event_id",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "source_events_hash",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "archive_batch_id",
+        "type": "VARCHAR(128)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "ledger_transaction_id",
+        "type": "BIGINT",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "actor",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "correlation_id",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "posted_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE fin_terminal_monthly_charges (\n\tid BIGSERIAL NOT NULL, \n\ttenant_id INTEGER NOT NULL, \n\tterminal_id INTEGER NOT NULL, \n\tbilling_cycle_id BIGINT NOT NULL, \n\ttariff_version_id BIGINT NOT NULL, \n\tis_free BOOLEAN NOT NULL, \n\tfirst_online_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tcalculated_kopecks BIGINT NOT NULL, \n\tposted_kopecks BIGINT NOT NULL, \n\tdiscarded_kopecks BIGINT NOT NULL, \n\tsource_project VARCHAR(64) NOT NULL, \n\tsource_event_id VARCHAR(128) NOT NULL, \n\tsource_events_hash VARCHAR(64) NOT NULL, \n\tarchive_batch_id VARCHAR(128), \n\tledger_transaction_id BIGINT, \n\tactor VARCHAR(128) NOT NULL, \n\tcorrelation_id VARCHAR(128) NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tposted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT fin_monthly_pk PRIMARY KEY (id), \n\tCONSTRAINT fin_monthly_terminal_fk FOREIGN KEY(terminal_id, tenant_id) REFERENCES l4desk_terminals (terminal_id, tenant_id) ON DELETE RESTRICT, \n\tCONSTRAINT fin_monthly_cycle_fk FOREIGN KEY(billing_cycle_id, tenant_id) REFERENCES fin_billing_cycles (id, tenant_id) ON DELETE RESTRICT, \n\tCONSTRAINT fin_monthly_transaction_fk FOREIGN KEY(ledger_transaction_id, tenant_id) REFERENCES fin_ledger_transactions (id, tenant_id) ON DELETE RESTRICT, \n\tCONSTRAINT fin_monthly_terminal_cycle_uq UNIQUE (terminal_id, billing_cycle_id), \n\tCONSTRAINT fin_monthly_transaction_uq UNIQUE (ledger_transaction_id), \n\tCONSTRAINT fin_monthly_rounding_ck CHECK (posted_kopecks >= 0 AND calculated_kopecks = posted_kopecks + discarded_kopecks AND discarded_kopecks >= 0 AND discarded_kopecks < 100 AND posted_kopecks %% 100 = 0), \n\tCONSTRAINT fin_monthly_free_ck CHECK (NOT is_free OR calculated_kopecks = 0), \n\tCONSTRAINT fin_monthly_posted_ck CHECK ((posted_at IS NULL) = (ledger_transaction_id IS NULL)), \n\tCONSTRAINT fin_monthly_tariff_fk FOREIGN KEY(tariff_version_id) REFERENCES fin_tariff_versions (id) ON DELETE RESTRICT\n)",
+    "indexes": [
+      "CREATE INDEX fin_monthly_tenant_cycle_ix ON fin_terminal_monthly_charges (tenant_id, billing_cycle_id)"
+    ]
+  },
+  "fin_usage_daily": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "tenant_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "terminal_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "local_date",
+        "type": "DATE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "timezone",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "tariff_version_id",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "source_seconds",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "video_seconds",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "console_seconds",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "free_seconds",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "billable_seconds",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "rounded_billable_hours",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "rate_kopecks",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "calculated_kopecks",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "posted_kopecks",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "discarded_kopecks",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "source_project",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "source_event_id",
+        "type": "VARCHAR(128)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "source_events_hash",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "archive_batch_id",
+        "type": "VARCHAR(128)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "ledger_transaction_id",
+        "type": "BIGINT",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "actor",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "correlation_id",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "posted_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE fin_usage_daily (\n\tid BIGSERIAL NOT NULL, \n\ttenant_id INTEGER NOT NULL, \n\tterminal_id INTEGER NOT NULL, \n\tlocal_date DATE NOT NULL, \n\ttimezone VARCHAR(64) NOT NULL, \n\ttariff_version_id BIGINT NOT NULL, \n\tsource_seconds BIGINT NOT NULL, \n\tvideo_seconds BIGINT NOT NULL, \n\tconsole_seconds BIGINT NOT NULL, \n\tfree_seconds BIGINT NOT NULL, \n\tbillable_seconds BIGINT NOT NULL, \n\trounded_billable_hours INTEGER NOT NULL, \n\trate_kopecks BIGINT NOT NULL, \n\tcalculated_kopecks BIGINT NOT NULL, \n\tposted_kopecks BIGINT NOT NULL, \n\tdiscarded_kopecks BIGINT NOT NULL, \n\tsource_project VARCHAR(64) NOT NULL, \n\tsource_event_id VARCHAR(128), \n\tsource_events_hash VARCHAR(64) NOT NULL, \n\tarchive_batch_id VARCHAR(128), \n\tledger_transaction_id BIGINT, \n\tactor VARCHAR(128) NOT NULL, \n\tcorrelation_id VARCHAR(128) NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tposted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT fin_usage_pk PRIMARY KEY (id), \n\tCONSTRAINT fin_usage_terminal_fk FOREIGN KEY(terminal_id, tenant_id) REFERENCES l4desk_terminals (terminal_id, tenant_id) ON DELETE RESTRICT, \n\tCONSTRAINT fin_usage_transaction_fk FOREIGN KEY(ledger_transaction_id, tenant_id) REFERENCES fin_ledger_transactions (id, tenant_id) ON DELETE RESTRICT, \n\tCONSTRAINT fin_usage_day_uq UNIQUE (terminal_id, local_date), \n\tCONSTRAINT fin_usage_transaction_uq UNIQUE (ledger_transaction_id), \n\tCONSTRAINT fin_usage_values_ck CHECK (video_seconds >= 0 AND console_seconds >= 0 AND free_seconds >= 0 AND billable_seconds >= 0 AND rounded_billable_hours >= 0 AND rate_kopecks >= 0), \n\tCONSTRAINT fin_usage_seconds_ck CHECK (source_seconds = video_seconds + console_seconds AND source_seconds = free_seconds + billable_seconds), \n\tCONSTRAINT fin_usage_rounding_ck CHECK (posted_kopecks >= 0 AND calculated_kopecks = posted_kopecks + discarded_kopecks AND discarded_kopecks >= 0 AND discarded_kopecks < 100 AND posted_kopecks %% 100 = 0), \n\tCONSTRAINT fin_usage_posted_ck CHECK ((posted_at IS NULL) = (ledger_transaction_id IS NULL)), \n\tCONSTRAINT fin_usage_tariff_fk FOREIGN KEY(tariff_version_id) REFERENCES fin_tariff_versions (id) ON DELETE RESTRICT\n)",
+    "indexes": [
+      "CREATE INDEX fin_usage_pending_ix ON fin_usage_daily (local_date) WHERE posted_at IS NULL",
+      "CREATE INDEX fin_usage_tenant_date_ix ON fin_usage_daily (tenant_id, local_date)"
+    ]
+  },
+  "gate_gauge_records": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "device_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "sn",
+        "type": "VARCHAR(100)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "gauge_data",
+        "type": "JSONB",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "raw_data",
+        "type": "TEXT",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE gate_gauge_records (\n\tid SERIAL NOT NULL, \n\tdevice_id INTEGER NOT NULL, \n\tsn VARCHAR(100), \n\tgauge_data JSONB NOT NULL, \n\traw_data TEXT, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tPRIMARY KEY (id)\n)",
+    "indexes": [
+      "CREATE INDEX idx_gauge_created_at ON gate_gauge_records (created_at)",
+      "CREATE INDEX idx_gauge_device_id ON gate_gauge_records (device_id)"
+    ]
+  },
+  "groups": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "menu_variant_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "org_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "number",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "parent_id",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE groups (\n\tid SERIAL NOT NULL, \n\tmenu_variant_id INTEGER NOT NULL, \n\torg_id INTEGER NOT NULL, \n\tnumber INTEGER NOT NULL, \n\tname VARCHAR(255) NOT NULL, \n\tparent_id INTEGER, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(menu_variant_id) REFERENCES menu_variants (id) ON DELETE CASCADE, \n\tFOREIGN KEY(parent_id) REFERENCES groups (id) ON DELETE SET NULL\n)",
+    "indexes": [
+      "CREATE INDEX ix_groups_menu_variant_id ON groups (menu_variant_id)",
+      "CREATE INDEX ix_groups_org_id ON groups (org_id)",
+      "CREATE INDEX ix_groups_parent_id ON groups (parent_id)"
+    ]
+  },
+  "iot_consumer_checkpoints": {
+    "columns": [
+      {
+        "name": "consumer_id",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "feed_name",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "remote_session_events",
+        "onupdate": null
+      },
+      {
+        "name": "last_cursor",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "0",
+        "onupdate": null
+      },
+      {
+        "name": "last_event_id",
+        "type": "VARCHAR(128)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "last_event_occurred_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "<lambda>",
+        "onupdate": "<lambda>"
+      }
+    ],
+    "ddl": "CREATE TABLE iot_consumer_checkpoints (\n\tconsumer_id VARCHAR(64) NOT NULL, \n\tfeed_name VARCHAR(64) NOT NULL, \n\tlast_cursor BIGINT NOT NULL, \n\tlast_event_id VARCHAR(128), \n\tlast_event_occurred_at TIMESTAMP WITH TIME ZONE, \n\tupdated_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tPRIMARY KEY (consumer_id)\n)",
+    "indexes": []
+  },
+  "iot_event_inbox": {
+    "columns": [
+      {
+        "name": "event_id",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "cursor",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "event_type",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "event_version",
+        "type": "VARCHAR(32)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "1.0.0",
+        "onupdate": null
+      },
+      {
+        "name": "occurred_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "tenant_id",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "terminal_id",
+        "type": "VARCHAR(128)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "device_id",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "sn",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "session_id",
+        "type": "VARCHAR(128)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "session_type",
+        "type": "VARCHAR(32)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "lifecycle_state",
+        "type": "VARCHAR(32)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "reason",
+        "type": "VARCHAR(128)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "operation_id",
+        "type": "VARCHAR(128)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "correlation_id",
+        "type": "VARCHAR(128)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "payload",
+        "type": "JSON",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "received_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "<lambda>",
+        "onupdate": null
+      },
+      {
+        "name": "processed_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(32)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "processed",
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE iot_event_inbox (\n\tevent_id VARCHAR(128) NOT NULL, \n\tcursor BIGINT NOT NULL, \n\tevent_type VARCHAR(64) NOT NULL, \n\tevent_version VARCHAR(32) NOT NULL, \n\toccurred_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\ttenant_id INTEGER, \n\tterminal_id VARCHAR(128), \n\tdevice_id INTEGER, \n\tsn VARCHAR(128) NOT NULL, \n\tsession_id VARCHAR(128), \n\tsession_type VARCHAR(32), \n\tlifecycle_state VARCHAR(32), \n\treason VARCHAR(128), \n\toperation_id VARCHAR(128), \n\tcorrelation_id VARCHAR(128), \n\tpayload JSON, \n\treceived_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tprocessed_at TIMESTAMP WITH TIME ZONE, \n\tstatus VARCHAR(32) NOT NULL, \n\tPRIMARY KEY (event_id)\n)",
+    "indexes": [
+      "CREATE INDEX ix_iot_event_inbox_cursor ON iot_event_inbox (cursor)",
+      "CREATE INDEX ix_iot_event_inbox_event_type ON iot_event_inbox (event_type)",
+      "CREATE INDEX ix_iot_event_inbox_operation_id ON iot_event_inbox (operation_id)",
+      "CREATE INDEX ix_iot_event_inbox_session_id ON iot_event_inbox (session_id)",
+      "CREATE INDEX ix_iot_event_inbox_sn ON iot_event_inbox (sn)",
+      "CREATE INDEX ix_iot_event_inbox_tenant_id ON iot_event_inbox (tenant_id)"
+    ]
+  },
+  "iot_event_quarantine": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "event_id",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "cursor",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "error_code",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "error_detail",
+        "type": "TEXT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "raw_event",
+        "type": "JSON",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "quarantined_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "<lambda>",
+        "onupdate": null
+      },
+      {
+        "name": "retry_count",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "0",
+        "onupdate": null
+      },
+      {
+        "name": "resolved",
+        "type": "BOOLEAN",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "False",
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE iot_event_quarantine (\n\tid SERIAL NOT NULL, \n\tevent_id VARCHAR(128) NOT NULL, \n\tcursor BIGINT NOT NULL, \n\terror_code VARCHAR(64) NOT NULL, \n\terror_detail TEXT NOT NULL, \n\traw_event JSON NOT NULL, \n\tquarantined_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tretry_count INTEGER NOT NULL, \n\tresolved BOOLEAN NOT NULL, \n\tPRIMARY KEY (id)\n)",
+    "indexes": [
+      "CREATE INDEX ix_iot_event_quarantine_event_id ON iot_event_quarantine (event_id)"
+    ]
+  },
+  "l4desk_audit_events": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "tenant_id",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "actor",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "event_type",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "subject_type",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "subject_id",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "operation_id",
+        "type": "VARCHAR(128)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "correlation_id",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "outcome",
+        "type": "VARCHAR(32)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "details",
+        "type": "JSON",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "occurred_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE l4desk_audit_events (\n\tid BIGSERIAL NOT NULL, \n\ttenant_id INTEGER, \n\tactor VARCHAR(128) NOT NULL, \n\tevent_type VARCHAR(64) NOT NULL, \n\tsubject_type VARCHAR(64) NOT NULL, \n\tsubject_id VARCHAR(128) NOT NULL, \n\toperation_id VARCHAR(128), \n\tcorrelation_id VARCHAR(128) NOT NULL, \n\toutcome VARCHAR(32) NOT NULL, \n\tdetails JSON, \n\toccurred_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(tenant_id) REFERENCES orgs (org_id) ON DELETE SET NULL\n)",
+    "indexes": [
+      "CREATE INDEX l4desk_audit_correlation_ix ON l4desk_audit_events (correlation_id)",
+      "CREATE INDEX l4desk_audit_tenant_time_ix ON l4desk_audit_events (tenant_id, occurred_at)"
+    ]
+  },
+  "l4desk_memberships": {
+    "columns": [
+      {
+        "name": "tenant_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "user_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "role_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "5",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "is_owner",
+        "type": "BOOLEAN",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "false",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE l4desk_memberships (\n\ttenant_id INTEGER NOT NULL, \n\tuser_id INTEGER NOT NULL, \n\trole_id INTEGER DEFAULT '5' NOT NULL, \n\tis_owner BOOLEAN DEFAULT 'false' NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tPRIMARY KEY (tenant_id, user_id), \n\tCONSTRAINT l4desk_membership_role_ck CHECK (role_id = 5), \n\tFOREIGN KEY(tenant_id) REFERENCES orgs (org_id) ON DELETE RESTRICT, \n\tFOREIGN KEY(user_id) REFERENCES users (id) ON DELETE RESTRICT\n)",
+    "indexes": [
+      "CREATE INDEX l4desk_membership_user_ix ON l4desk_memberships (user_id)",
+      "CREATE UNIQUE INDEX l4desk_membership_owner_uq ON l4desk_memberships (tenant_id) WHERE is_owner"
+    ]
+  },
+  "l4desk_registrations": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "email_normalized",
+        "type": "VARCHAR(255)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "password_hash",
+        "type": "VARCHAR(255)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "token_hash",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "terms_version",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "timezone",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR(128)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "correlation_id",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "expires_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "consumed_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "user_id",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "tenant_id",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE l4desk_registrations (\n\tid BIGSERIAL NOT NULL, \n\temail_normalized VARCHAR(255) NOT NULL, \n\tpassword_hash VARCHAR(255) NOT NULL, \n\ttoken_hash VARCHAR(64) NOT NULL, \n\tterms_version VARCHAR(64) NOT NULL, \n\ttimezone VARCHAR(64) NOT NULL, \n\tsource VARCHAR(128), \n\tcorrelation_id VARCHAR(128) NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\texpires_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tconsumed_at TIMESTAMP WITH TIME ZONE, \n\tuser_id INTEGER, \n\ttenant_id INTEGER, \n\tPRIMARY KEY (id), \n\tCONSTRAINT l4desk_registration_expiry_ck CHECK (expires_at > created_at), \n\tCONSTRAINT l4desk_registration_consumed_ck CHECK (consumed_at IS NULL OR consumed_at >= created_at), \n\tUNIQUE (email_normalized), \n\tUNIQUE (token_hash), \n\tFOREIGN KEY(user_id) REFERENCES users (id) ON DELETE SET NULL, \n\tFOREIGN KEY(tenant_id) REFERENCES orgs (org_id) ON DELETE SET NULL\n)",
+    "indexes": [
+      "CREATE INDEX l4desk_registration_expiry_ix ON l4desk_registrations (expires_at)"
+    ]
+  },
+  "l4desk_remote_sessions": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "tenant_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "terminal_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "operation_id",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "correlation_id",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "provider_session_id",
+        "type": "VARCHAR(128)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "requested_by_user_id",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "session_type",
+        "type": "VARCHAR(32)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "state",
+        "type": "VARCHAR(32)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "reserved",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "requested_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "active_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "closed_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "reason",
+        "type": "VARCHAR(128)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "last_event_id",
+        "type": "VARCHAR(128)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "last_cursor",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "0",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "source_events_hash",
+        "type": "VARCHAR(64)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE l4desk_remote_sessions (\n\tid BIGSERIAL NOT NULL, \n\ttenant_id INTEGER NOT NULL, \n\tterminal_id INTEGER NOT NULL, \n\toperation_id VARCHAR(128) NOT NULL, \n\tcorrelation_id VARCHAR(128) NOT NULL, \n\tprovider_session_id VARCHAR(128), \n\trequested_by_user_id INTEGER, \n\tsession_type VARCHAR(32) NOT NULL, \n\tstate VARCHAR(32) DEFAULT 'reserved' NOT NULL, \n\trequested_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tactive_at TIMESTAMP WITH TIME ZONE, \n\tclosed_at TIMESTAMP WITH TIME ZONE, \n\treason VARCHAR(128), \n\tlast_event_id VARCHAR(128), \n\tlast_cursor BIGINT DEFAULT '0' NOT NULL, \n\tsource_events_hash VARCHAR(64), \n\tPRIMARY KEY (id), \n\tCONSTRAINT l4desk_session_terminal_fk FOREIGN KEY(terminal_id, tenant_id) REFERENCES l4desk_terminals (terminal_id, tenant_id) ON DELETE RESTRICT, \n\tCONSTRAINT l4desk_session_operation_uq UNIQUE (tenant_id, operation_id), \n\tCONSTRAINT l4desk_session_type_ck CHECK (session_type IN ('console', 'video')), \n\tCONSTRAINT l4desk_session_state_ck CHECK (state IN ('reserved', 'start_requested', 'active', 'stop_requested', 'closed', 'failed')), \n\tCONSTRAINT l4desk_session_cursor_ck CHECK (last_cursor >= 0), \n\tCONSTRAINT l4desk_session_interval_ck CHECK (closed_at IS NULL OR active_at IS NULL OR closed_at >= active_at), \n\tCONSTRAINT l4desk_session_closed_ck CHECK (state NOT IN ('closed', 'failed') OR closed_at IS NOT NULL), \n\tCONSTRAINT l4desk_session_active_ck CHECK (state != 'active' OR active_at IS NOT NULL), \n\tUNIQUE (provider_session_id), \n\tFOREIGN KEY(requested_by_user_id) REFERENCES users (id) ON DELETE SET NULL\n)",
+    "indexes": [
+      "CREATE INDEX l4desk_session_correlation_ix ON l4desk_remote_sessions (correlation_id)",
+      "CREATE INDEX l4desk_session_state_ix ON l4desk_remote_sessions (state)",
+      "CREATE INDEX l4desk_session_tenant_time_ix ON l4desk_remote_sessions (tenant_id, requested_at)",
+      "CREATE UNIQUE INDEX l4desk_session_reservation_uq ON l4desk_remote_sessions (terminal_id) WHERE state IN ('reserved', 'start_requested', 'active', 'stop_requested')"
+    ]
+  },
+  "l4desk_tenant_profiles": {
+    "columns": [
+      {
+        "name": "tenant_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "timezone",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "pending_timezone",
+        "type": "VARCHAR(64)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "timezone_effective_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE l4desk_tenant_profiles (\n\ttenant_id INTEGER NOT NULL, \n\ttimezone VARCHAR(64) NOT NULL, \n\tpending_timezone VARCHAR(64), \n\ttimezone_effective_at TIMESTAMP WITH TIME ZONE, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tPRIMARY KEY (tenant_id), \n\tCONSTRAINT l4desk_timezone_pending_ck CHECK ((pending_timezone IS NULL) = (timezone_effective_at IS NULL)), \n\tFOREIGN KEY(tenant_id) REFERENCES orgs (org_id) ON DELETE RESTRICT\n)",
+    "indexes": []
+  },
+  "l4desk_terminals": {
+    "columns": [
+      {
+        "name": "terminal_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "tenant_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "runtime_terminal_id",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "ordinal",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "sn",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "external_terminal_id",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "device_id",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "operation_id",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "correlation_id",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "provisioning_state",
+        "type": "VARCHAR(32)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "pending",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "pin_state",
+        "type": "VARCHAR(32)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "pending",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "certificate_reference",
+        "type": "VARCHAR(128)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "last_error",
+        "type": "VARCHAR(500)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "first_online_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "last_online_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "deleted_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE l4desk_terminals (\n\tterminal_id INTEGER NOT NULL, \n\ttenant_id INTEGER NOT NULL, \n\truntime_terminal_id INTEGER, \n\tordinal BIGINT NOT NULL, \n\tsn VARCHAR(128) NOT NULL, \n\texternal_terminal_id VARCHAR(128) NOT NULL, \n\tdevice_id INTEGER, \n\toperation_id VARCHAR(128) NOT NULL, \n\tcorrelation_id VARCHAR(128) NOT NULL, \n\tprovisioning_state VARCHAR(32) DEFAULT 'pending' NOT NULL, \n\tpin_state VARCHAR(32) DEFAULT 'pending' NOT NULL, \n\tcertificate_reference VARCHAR(128), \n\tlast_error VARCHAR(500), \n\tfirst_online_at TIMESTAMP WITH TIME ZONE, \n\tlast_online_at TIMESTAMP WITH TIME ZONE, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tPRIMARY KEY (terminal_id), \n\tCONSTRAINT l4desk_terminal_tenant_uq UNIQUE (terminal_id, tenant_id), \n\tCONSTRAINT l4desk_terminal_ordinal_uq UNIQUE (tenant_id, ordinal), \n\tCONSTRAINT l4desk_terminal_external_uq UNIQUE (tenant_id, external_terminal_id), \n\tCONSTRAINT l4desk_terminal_ordinal_ck CHECK (ordinal > 0), \n\tCONSTRAINT l4desk_terminal_provisioning_ck CHECK (provisioning_state IN ('pending', 'ready', 'failed')), \n\tCONSTRAINT l4desk_terminal_pin_ck CHECK (pin_state IN ('pending', 'issued', 'consumed', 'expired', 'failed')), \n\tFOREIGN KEY(tenant_id) REFERENCES orgs (org_id) ON DELETE RESTRICT, \n\tUNIQUE (runtime_terminal_id), \n\tFOREIGN KEY(runtime_terminal_id) REFERENCES terminals (id) ON DELETE SET NULL, \n\tUNIQUE (operation_id)\n)",
+    "indexes": [
+      "CREATE INDEX l4desk_terminal_correlation_ix ON l4desk_terminals (correlation_id)"
+    ]
+  },
+  "licenses": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "terminal_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "org_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "license_type",
+        "type": "VARCHAR(50)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "standard",
+        "onupdate": null
+      },
+      {
+        "name": "expires_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "balance",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "0",
+        "onupdate": null
+      },
+      {
+        "name": "billing_period_months",
+        "type": "SMALLINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "1",
+        "client_default": "1",
+        "onupdate": null
+      },
+      {
+        "name": "monthly_price_override_minor",
+        "type": "BIGINT",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": "now()"
+      }
+    ],
+    "ddl": "CREATE TABLE licenses (\n\tid SERIAL NOT NULL, \n\tterminal_id INTEGER NOT NULL, \n\torg_id INTEGER NOT NULL, \n\tlicense_type VARCHAR(50) NOT NULL, \n\texpires_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tbalance INTEGER NOT NULL, \n\tbilling_period_months SMALLINT DEFAULT '1' NOT NULL, \n\tmonthly_price_override_minor BIGINT, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tPRIMARY KEY (id), \n\tCONSTRAINT ck_license_price_non_negative CHECK (monthly_price_override_minor >= 0), \n\tCONSTRAINT ck_billing_period_months_positive CHECK (billing_period_months > 0), \n\tFOREIGN KEY(terminal_id) REFERENCES terminals (id) ON DELETE CASCADE\n)",
+    "indexes": [
+      "CREATE INDEX idx_licenses_expires_at ON licenses (expires_at)",
+      "CREATE INDEX idx_licenses_org_id ON licenses (org_id)",
+      "CREATE INDEX idx_licenses_terminal_id ON licenses (terminal_id)"
+    ]
+  },
+  "menu_variant_snapshots": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "menu_variant_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "version",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "snapshot_data",
+        "type": "JSONB",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE menu_variant_snapshots (\n\tid SERIAL NOT NULL, \n\tmenu_variant_id INTEGER NOT NULL, \n\tversion INTEGER NOT NULL, \n\tsnapshot_data JSONB NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tPRIMARY KEY (id), \n\tCONSTRAINT uq_snapshot_variant_version UNIQUE (menu_variant_id, version), \n\tFOREIGN KEY(menu_variant_id) REFERENCES menu_variants (id) ON DELETE CASCADE\n)",
+    "indexes": [
+      "CREATE INDEX idx_snapshot_variant_version ON menu_variant_snapshots (menu_variant_id, version)",
+      "CREATE INDEX ix_menu_variant_snapshots_menu_variant_id ON menu_variant_snapshots (menu_variant_id)"
+    ]
+  },
+  "menu_variants": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "org_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "version",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "1",
+        "client_default": "1",
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": "now()"
+      }
+    ],
+    "ddl": "CREATE TABLE menu_variants (\n\tid SERIAL NOT NULL, \n\torg_id INTEGER NOT NULL, \n\tname VARCHAR(255) NOT NULL, \n\tversion INTEGER DEFAULT '1' NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tPRIMARY KEY (id), \n\tCONSTRAINT uq_menu_variants_org_name UNIQUE (org_id, name)\n)",
+    "indexes": [
+      "CREATE INDEX ix_menu_variants_org_id ON menu_variants (org_id)"
+    ]
+  },
+  "org_billing_settings": {
+    "columns": [
+      {
+        "name": "org_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "monthly_price_minor",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "100000",
+        "client_default": "100000",
+        "onupdate": null
+      },
+      {
+        "name": "currency",
+        "type": "VARCHAR(3)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "RUB",
+        "client_default": "RUB",
+        "onupdate": null
+      },
+      {
+        "name": "billing_mode",
+        "type": "VARCHAR(30)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "standard",
+        "client_default": "standard",
+        "onupdate": null
+      },
+      {
+        "name": "min_billing_periods",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "1",
+        "client_default": "1",
+        "onupdate": null
+      },
+      {
+        "name": "allowed_billing_periods",
+        "type": "VARCHAR(50)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "default_selection_mode",
+        "type": "VARCHAR(30)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "all_due",
+        "client_default": "all_due",
+        "onupdate": null
+      },
+      {
+        "name": "cert_billing_mode",
+        "type": "VARCHAR(20)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "none",
+        "client_default": "none",
+        "onupdate": null
+      },
+      {
+        "name": "cert_price_minor",
+        "type": "BIGINT",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "tenant_pin_creation_enabled",
+        "type": "BOOLEAN",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "false",
+        "client_default": "False",
+        "onupdate": null
+      },
+      {
+        "name": "cert_charge_primary_issue",
+        "type": "BOOLEAN",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "true",
+        "client_default": "True",
+        "onupdate": null
+      },
+      {
+        "name": "cert_charge_reissue",
+        "type": "BOOLEAN",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "true",
+        "client_default": "True",
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": "now()"
+      }
+    ],
+    "ddl": "CREATE TABLE org_billing_settings (\n\torg_id SERIAL NOT NULL, \n\tmonthly_price_minor BIGINT DEFAULT '100000' NOT NULL, \n\tcurrency VARCHAR(3) DEFAULT 'RUB' NOT NULL, \n\tbilling_mode VARCHAR(30) DEFAULT 'standard' NOT NULL, \n\tmin_billing_periods INTEGER DEFAULT '1' NOT NULL, \n\tallowed_billing_periods VARCHAR(50), \n\tdefault_selection_mode VARCHAR(30) DEFAULT 'all_due' NOT NULL, \n\tcert_billing_mode VARCHAR(20) DEFAULT 'none' NOT NULL, \n\tcert_price_minor BIGINT, \n\ttenant_pin_creation_enabled BOOLEAN DEFAULT 'false' NOT NULL, \n\tcert_charge_primary_issue BOOLEAN DEFAULT 'true' NOT NULL, \n\tcert_charge_reissue BOOLEAN DEFAULT 'true' NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tPRIMARY KEY (org_id), \n\tCONSTRAINT ck_org_billing_price_non_negative CHECK (monthly_price_minor >= 0), \n\tCONSTRAINT ck_org_cert_price_non_negative CHECK (cert_price_minor IS NULL OR cert_price_minor >= 0), \n\tCONSTRAINT ck_org_cert_mode CHECK (cert_billing_mode IN ('none', 'per_operation'))\n)",
+    "indexes": []
+  },
+  "org_statuses": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "org_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(20)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "active",
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": "now()"
+      }
+    ],
+    "ddl": "CREATE TABLE org_statuses (\n\tid SERIAL NOT NULL, \n\torg_id INTEGER NOT NULL, \n\tstatus VARCHAR(20) NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tPRIMARY KEY (id), \n\tUNIQUE (org_id)\n)",
+    "indexes": []
+  },
+  "orgs": {
+    "columns": [
+      {
+        "name": "org_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "org_name",
+        "type": "VARCHAR(150)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(150)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "status",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "1",
+        "onupdate": null
+      },
+      {
+        "name": "is_active",
+        "type": "BOOLEAN",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "True",
+        "onupdate": null
+      },
+      {
+        "name": "timezone",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "Europe/Moscow",
+        "client_default": "Europe/Moscow",
+        "onupdate": null
+      },
+      {
+        "name": "email",
+        "type": "VARCHAR(255)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "phone",
+        "type": "VARCHAR(50)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "notify_by_email",
+        "type": "BOOLEAN",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "true",
+        "client_default": "True",
+        "onupdate": null
+      },
+      {
+        "name": "send_reports",
+        "type": "BOOLEAN",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "true",
+        "client_default": "True",
+        "onupdate": null
+      },
+      {
+        "name": "is_email_verified",
+        "type": "BOOLEAN",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "false",
+        "client_default": "False",
+        "onupdate": null
+      },
+      {
+        "name": "email_verified_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": "now()"
+      }
+    ],
+    "ddl": "CREATE TABLE orgs (\n\torg_id SERIAL NOT NULL, \n\torg_name VARCHAR(150) NOT NULL, \n\tname VARCHAR(150) NOT NULL, \n\tstatus INTEGER NOT NULL, \n\tis_active BOOLEAN NOT NULL, \n\ttimezone VARCHAR(64) DEFAULT 'Europe/Moscow' NOT NULL, \n\temail VARCHAR(255), \n\tphone VARCHAR(50), \n\tnotify_by_email BOOLEAN DEFAULT 'true' NOT NULL, \n\tsend_reports BOOLEAN DEFAULT 'true' NOT NULL, \n\tis_email_verified BOOLEAN DEFAULT 'false' NOT NULL, \n\temail_verified_at TIMESTAMP WITH TIME ZONE, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tPRIMARY KEY (org_id)\n)",
+    "indexes": [
+      "CREATE INDEX idx_orgs_status ON orgs (status)"
+    ]
+  },
+  "payment_params": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "paym_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "param_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "param_value",
+        "type": "VARCHAR(2000)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE payment_params (\n\tid SERIAL NOT NULL, \n\tpaym_id INTEGER NOT NULL, \n\tparam_id INTEGER NOT NULL, \n\tparam_value VARCHAR(2000), \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(paym_id) REFERENCES payments (paym_id) ON DELETE CASCADE, \n\tFOREIGN KEY(param_id) REFERENCES tsp_parameter_codes (param_id)\n)",
+    "indexes": [
+      "CREATE INDEX idx_payment_params_param_id ON payment_params (param_id)",
+      "CREATE INDEX idx_payment_params_paym_id ON payment_params (paym_id)"
+    ]
+  },
+  "payments": {
+    "columns": [
+      {
+        "name": "paym_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "paym_datetime",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "paym_amount",
+        "type": "BIGINT",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "paym_ext_id",
+        "type": "VARCHAR(20)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "paym_tsp_code",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "terminal_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "org_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "paym_state",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "0",
+        "onupdate": null
+      },
+      {
+        "name": "pay_type_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "0",
+        "onupdate": null
+      },
+      {
+        "name": "menu_snapshot_id",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "menu_version",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE payments (\n\tpaym_id SERIAL NOT NULL, \n\tpaym_datetime TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tpaym_amount BIGINT NOT NULL, \n\tpaym_ext_id VARCHAR(20) NOT NULL, \n\tpaym_tsp_code INTEGER NOT NULL, \n\tterminal_id INTEGER NOT NULL, \n\torg_id INTEGER NOT NULL, \n\tpaym_state INTEGER NOT NULL, \n\tpay_type_id INTEGER NOT NULL, \n\tmenu_snapshot_id INTEGER, \n\tmenu_version INTEGER, \n\tPRIMARY KEY (paym_id), \n\tFOREIGN KEY(terminal_id) REFERENCES terminals (id), \n\tFOREIGN KEY(org_id) REFERENCES orgs (org_id), \n\tFOREIGN KEY(menu_snapshot_id) REFERENCES menu_variant_snapshots (id) ON DELETE SET NULL\n)",
+    "indexes": [
+      "CREATE INDEX idx_payments_datetime ON payments (paym_datetime)",
+      "CREATE INDEX idx_payments_ext_id ON payments (paym_ext_id)",
+      "CREATE INDEX idx_payments_menu_snapshot_id ON payments (menu_snapshot_id)",
+      "CREATE INDEX idx_payments_org_id ON payments (org_id)",
+      "CREATE INDEX idx_payments_terminal_id ON payments (terminal_id)",
+      "CREATE INDEX idx_payments_tsp_code ON payments (paym_tsp_code)",
+      "CREATE INDEX idx_payments_tsp_code_menu_version ON payments (paym_tsp_code, menu_version)",
+      "CREATE INDEX ix_payments_menu_version ON payments (menu_version)"
+    ]
+  },
+  "services": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "menu_variant_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "group_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "tsp_code",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "printname",
+        "type": "VARCHAR(255)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "price",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "0",
+        "onupdate": null
+      },
+      {
+        "name": "protypenumber",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "0",
+        "onupdate": null
+      },
+      {
+        "name": "catalog_item_id",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE services (\n\tid SERIAL NOT NULL, \n\tmenu_variant_id INTEGER NOT NULL, \n\tgroup_id INTEGER NOT NULL, \n\ttsp_code INTEGER NOT NULL, \n\tname VARCHAR(255) NOT NULL, \n\tprintname VARCHAR(255), \n\tprice INTEGER NOT NULL, \n\tprotypenumber INTEGER NOT NULL, \n\tcatalog_item_id INTEGER, \n\tPRIMARY KEY (id), \n\tCONSTRAINT uq_service_variant_tsp UNIQUE (menu_variant_id, tsp_code), \n\tFOREIGN KEY(menu_variant_id) REFERENCES menu_variants (id) ON DELETE CASCADE, \n\tFOREIGN KEY(group_id) REFERENCES groups (id) ON DELETE CASCADE, \n\tFOREIGN KEY(catalog_item_id) REFERENCES catalog_items (id) ON DELETE SET NULL\n)",
+    "indexes": [
+      "CREATE INDEX ix_services_catalog_item_id ON services (catalog_item_id)",
+      "CREATE INDEX ix_services_group_id ON services (group_id)",
+      "CREATE INDEX ix_services_menu_variant_id ON services (menu_variant_id)"
+    ]
+  },
+  "tech_gate_records": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "device_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "sn",
+        "type": "VARCHAR(100)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "function_name",
+        "type": "VARCHAR(50)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "request_data",
+        "type": "JSONB",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "raw_params",
+        "type": "TEXT",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "response_status",
+        "type": "VARCHAR(20)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE tech_gate_records (\n\tid SERIAL NOT NULL, \n\tdevice_id INTEGER NOT NULL, \n\tsn VARCHAR(100), \n\tfunction_name VARCHAR(50) NOT NULL, \n\trequest_data JSONB NOT NULL, \n\traw_params TEXT, \n\tresponse_status VARCHAR(20), \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tPRIMARY KEY (id)\n)",
+    "indexes": [
+      "CREATE INDEX idx_techgate_created_at ON tech_gate_records (created_at)",
+      "CREATE INDEX idx_techgate_device_id ON tech_gate_records (device_id)",
+      "CREATE INDEX idx_techgate_function ON tech_gate_records (function_name)"
+    ]
+  },
+  "terminal_cert_discovery": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "sn",
+        "type": "VARCHAR(100)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "cert_serial",
+        "type": "VARCHAR(100)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "cert_dn",
+        "type": "VARCHAR(500)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "ou",
+        "type": "VARCHAR(50)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "o",
+        "type": "VARCHAR(50)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "is_valid",
+        "type": "BOOLEAN",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "False",
+        "onupdate": null
+      },
+      {
+        "name": "validation_status",
+        "type": "VARCHAR(50)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "unknown",
+        "onupdate": null
+      },
+      {
+        "name": "terminal_id",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "db_cert_serial",
+        "type": "VARCHAR(100)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "request_count",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "1",
+        "onupdate": null
+      },
+      {
+        "name": "last_endpoint",
+        "type": "VARCHAR(100)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "client_ip",
+        "type": "VARCHAR(50)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "first_seen_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "last_seen_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": "now()"
+      }
+    ],
+    "ddl": "CREATE TABLE terminal_cert_discovery (\n\tid SERIAL NOT NULL, \n\tsn VARCHAR(100), \n\tcert_serial VARCHAR(100), \n\tcert_dn VARCHAR(500), \n\tou VARCHAR(50), \n\to VARCHAR(50), \n\tis_valid BOOLEAN NOT NULL, \n\tvalidation_status VARCHAR(50) NOT NULL, \n\tterminal_id INTEGER, \n\tdb_cert_serial VARCHAR(100), \n\trequest_count INTEGER NOT NULL, \n\tlast_endpoint VARCHAR(100), \n\tclient_ip VARCHAR(50), \n\tfirst_seen_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tlast_seen_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(terminal_id) REFERENCES terminals (id) ON DELETE SET NULL\n)",
+    "indexes": [
+      "CREATE INDEX idx_terminal_cert_discovery_last_seen ON terminal_cert_discovery (last_seen_at)",
+      "CREATE INDEX idx_terminal_cert_discovery_sn_serial ON terminal_cert_discovery (sn, cert_serial)",
+      "CREATE INDEX idx_terminal_cert_discovery_status ON terminal_cert_discovery (validation_status)",
+      "CREATE INDEX ix_terminal_cert_discovery_cert_serial ON terminal_cert_discovery (cert_serial)",
+      "CREATE INDEX ix_terminal_cert_discovery_sn ON terminal_cert_discovery (sn)",
+      "CREATE INDEX ix_terminal_cert_discovery_terminal_id ON terminal_cert_discovery (terminal_id)"
+    ]
+  },
+  "terminal_cert_history": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "terminal_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "cert_serial",
+        "type": "VARCHAR(100)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "not_valid_after",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "pin_id",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR(20)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "setup",
+        "onupdate": null
+      },
+      {
+        "name": "issued_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE terminal_cert_history (\n\tid SERIAL NOT NULL, \n\tterminal_id INTEGER NOT NULL, \n\tcert_serial VARCHAR(100) NOT NULL, \n\tnot_valid_after TIMESTAMP WITH TIME ZONE, \n\tpin_id INTEGER, \n\tsource VARCHAR(20) NOT NULL, \n\tissued_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(terminal_id) REFERENCES terminals (id), \n\tFOREIGN KEY(pin_id) REFERENCES certificate_pins (id)\n)",
+    "indexes": [
+      "CREATE INDEX idx_terminal_cert_history_terminal ON terminal_cert_history (terminal_id)"
+    ]
+  },
+  "terminal_gauge_states": {
+    "columns": [
+      {
+        "name": "device_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "sn",
+        "type": "VARCHAR(100)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "last_tick_epoch",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "0",
+        "onupdate": null
+      },
+      {
+        "name": "slots_bitmask",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "0",
+        "onupdate": null
+      },
+      {
+        "name": "gauge_data",
+        "type": "JSONB",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "dict",
+        "onupdate": null
+      },
+      {
+        "name": "last_payment_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "last_inkass_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "license_expires_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "internal_enrichment",
+        "type": "JSONB",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "dict",
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE terminal_gauge_states (\n\tdevice_id INTEGER NOT NULL, \n\tsn VARCHAR(100), \n\tupdated_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tlast_tick_epoch INTEGER NOT NULL, \n\tslots_bitmask INTEGER NOT NULL, \n\tgauge_data JSONB NOT NULL, \n\tlast_payment_at TIMESTAMP WITH TIME ZONE, \n\tlast_inkass_at TIMESTAMP WITH TIME ZONE, \n\tlicense_expires_at TIMESTAMP WITH TIME ZONE, \n\tinternal_enrichment JSONB NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tPRIMARY KEY (device_id), \n\tFOREIGN KEY(device_id) REFERENCES terminals (device_id) ON DELETE CASCADE\n)",
+    "indexes": [
+      "CREATE INDEX ix_terminal_gauge_states_sn ON terminal_gauge_states (sn)"
+    ]
+  },
+  "terminal_menu_bindings": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "device_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "menu_variant_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "loaded_version",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "loaded_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE terminal_menu_bindings (\n\tid SERIAL NOT NULL, \n\tdevice_id INTEGER NOT NULL, \n\tmenu_variant_id INTEGER NOT NULL, \n\tloaded_version INTEGER, \n\tloaded_at TIMESTAMP WITH TIME ZONE, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(menu_variant_id) REFERENCES menu_variants (id) ON DELETE CASCADE\n)",
+    "indexes": [
+      "CREATE INDEX ix_terminal_menu_bindings_menu_variant_id ON terminal_menu_bindings (menu_variant_id)",
+      "CREATE UNIQUE INDEX ix_terminal_menu_bindings_device_id ON terminal_menu_bindings (device_id)"
+    ]
+  },
+  "terminal_types": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(100)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "description",
+        "type": "VARCHAR(255)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE terminal_types (\n\tid SERIAL NOT NULL, \n\tname VARCHAR(100) NOT NULL, \n\tdescription VARCHAR(255), \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tPRIMARY KEY (id)\n)",
+    "indexes": []
+  },
+  "terminals": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "device_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "sn",
+        "type": "VARCHAR(100)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "cert_serial",
+        "type": "VARCHAR(100)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "cert_not_valid_after",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "org_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "is_active",
+        "type": "BOOLEAN",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": "True",
+        "onupdate": null
+      },
+      {
+        "name": "timezone",
+        "type": "VARCHAR(64)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "address",
+        "type": "VARCHAR(500)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "note",
+        "type": "VARCHAR(500)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "terminal_type_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "0",
+        "client_default": "0",
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": "now()"
+      },
+      {
+        "name": "show_in_monitoring",
+        "type": "BOOLEAN",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "true",
+        "client_default": "True",
+        "onupdate": null
+      },
+      {
+        "name": "iot_provisioned",
+        "type": "BOOLEAN",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "false",
+        "client_default": "False",
+        "onupdate": null
+      },
+      {
+        "name": "iot_provisioned_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "iot_last_sync_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "iot_is_online",
+        "type": "BOOLEAN",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "false",
+        "client_default": "False",
+        "onupdate": null
+      },
+      {
+        "name": "iot_last_connected_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE terminals (\n\tid SERIAL NOT NULL, \n\tdevice_id INTEGER NOT NULL, \n\tsn VARCHAR(100) NOT NULL, \n\tcert_serial VARCHAR(100), \n\tcert_not_valid_after TIMESTAMP WITH TIME ZONE, \n\torg_id INTEGER NOT NULL, \n\tis_active BOOLEAN NOT NULL, \n\ttimezone VARCHAR(64), \n\taddress VARCHAR(500), \n\tnote VARCHAR(500), \n\tterminal_type_id INTEGER DEFAULT '0' NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tshow_in_monitoring BOOLEAN DEFAULT 'true' NOT NULL, \n\tiot_provisioned BOOLEAN DEFAULT 'false' NOT NULL, \n\tiot_provisioned_at TIMESTAMP WITH TIME ZONE, \n\tiot_last_sync_at TIMESTAMP WITH TIME ZONE, \n\tiot_is_online BOOLEAN DEFAULT 'false' NOT NULL, \n\tiot_last_connected_at TIMESTAMP WITH TIME ZONE, \n\tPRIMARY KEY (id), \n\tUNIQUE (device_id), \n\tUNIQUE (sn), \n\tFOREIGN KEY(terminal_type_id) REFERENCES terminal_types (id)\n)",
+    "indexes": [
+      "CREATE INDEX idx_terminals_cert_serial ON terminals (cert_serial)",
+      "CREATE INDEX idx_terminals_org_id ON terminals (org_id)",
+      "CREATE INDEX idx_terminals_sn ON terminals (sn)",
+      "CREATE INDEX idx_terminals_terminal_type_id ON terminals (terminal_type_id)"
+    ]
+  },
+  "tsp": {
+    "columns": [
+      {
+        "name": "tsp_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "tsp_code",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "tsp_name",
+        "type": "VARCHAR(255)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE tsp (\n\ttsp_id SERIAL NOT NULL, \n\ttsp_code INTEGER NOT NULL, \n\ttsp_name VARCHAR(255) NOT NULL, \n\tPRIMARY KEY (tsp_id), \n\tUNIQUE (tsp_code)\n)",
+    "indexes": [
+      "CREATE INDEX idx_tsp_code ON tsp (tsp_code)"
+    ]
+  },
+  "tsp_parameter_codes": {
+    "columns": [
+      {
+        "name": "param_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "prototypenumber",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "parameter_code",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "code_description",
+        "type": "VARCHAR(255)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE tsp_parameter_codes (\n\tparam_id SERIAL NOT NULL, \n\tprototypenumber INTEGER NOT NULL, \n\tparameter_code INTEGER NOT NULL, \n\tcode_description VARCHAR(255), \n\tPRIMARY KEY (param_id), \n\tCONSTRAINT uq_prototype_param_code UNIQUE (prototypenumber, parameter_code)\n)",
+    "indexes": [
+      "CREATE INDEX idx_tsp_param_prototype ON tsp_parameter_codes (prototypenumber)"
+    ]
+  },
+  "user_sessions": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "user_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "refresh_token",
+        "type": "VARCHAR(255)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "refresh_token_hash",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "ip_address",
+        "type": "VARCHAR(45)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "user_agent",
+        "type": "VARCHAR(500)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "expires_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "last_used_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "is_revoked",
+        "type": "BOOLEAN",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "false",
+        "client_default": "False",
+        "onupdate": null
+      },
+      {
+        "name": "active_org_id",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      }
+    ],
+    "ddl": "CREATE TABLE user_sessions (\n\tid SERIAL NOT NULL, \n\tuser_id INTEGER NOT NULL, \n\trefresh_token VARCHAR(255) NOT NULL, \n\trefresh_token_hash VARCHAR(64) NOT NULL, \n\tip_address VARCHAR(45), \n\tuser_agent VARCHAR(500), \n\texpires_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tlast_used_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tis_revoked BOOLEAN DEFAULT 'false' NOT NULL, \n\tactive_org_id INTEGER, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE\n)",
+    "indexes": [
+      "CREATE INDEX idx_user_sessions_active_org_id ON user_sessions (active_org_id)",
+      "CREATE INDEX idx_user_sessions_refresh_hash ON user_sessions (refresh_token_hash)",
+      "CREATE INDEX idx_user_sessions_user_id ON user_sessions (user_id)",
+      "CREATE INDEX ix_user_sessions_active_org_id ON user_sessions (active_org_id)",
+      "CREATE INDEX ix_user_sessions_refresh_token ON user_sessions (refresh_token)",
+      "CREATE INDEX ix_user_sessions_user_id ON user_sessions (user_id)",
+      "CREATE UNIQUE INDEX ix_user_sessions_refresh_token_hash ON user_sessions (refresh_token_hash)"
+    ]
+  },
+  "users": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "username",
+        "type": "VARCHAR(100)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "md5_password",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "org_id",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "role_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "3",
+        "client_default": "3",
+        "onupdate": null
+      },
+      {
+        "name": "role",
+        "type": "VARCHAR(30)",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "user",
+        "client_default": "user",
+        "onupdate": null
+      },
+      {
+        "name": "is_active",
+        "type": "BOOLEAN",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "true",
+        "client_default": "True",
+        "onupdate": null
+      },
+      {
+        "name": "is_superuser",
+        "type": "BOOLEAN",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "false",
+        "client_default": "False",
+        "onupdate": null
+      },
+      {
+        "name": "last_org_id",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "full_name",
+        "type": "VARCHAR(255)",
+        "nullable": true,
+        "primary_key": false,
+        "server_default": null,
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "permissions",
+        "type": "JSONB",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "'[]'::jsonb",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": null
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMP WITH TIME ZONE",
+        "nullable": false,
+        "primary_key": false,
+        "server_default": "now()",
+        "client_default": null,
+        "onupdate": "now()"
+      }
+    ],
+    "ddl": "CREATE TABLE users (\n\tid SERIAL NOT NULL, \n\tusername VARCHAR(100) NOT NULL, \n\tmd5_password VARCHAR(64) NOT NULL, \n\torg_id INTEGER, \n\trole_id INTEGER DEFAULT '3' NOT NULL, \n\trole VARCHAR(30) DEFAULT 'user' NOT NULL, \n\tis_active BOOLEAN DEFAULT 'true' NOT NULL, \n\tis_superuser BOOLEAN DEFAULT 'false' NOT NULL, \n\tlast_org_id INTEGER, \n\tfull_name VARCHAR(255), \n\tpermissions JSONB DEFAULT '[]'::jsonb NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tPRIMARY KEY (id), \n\tCONSTRAINT chk_users_role4_tenant CHECK (role_id != 4 OR (org_id IS NOT NULL AND org_id > 0)), \n\tFOREIGN KEY(org_id) REFERENCES orgs (org_id) ON DELETE SET NULL\n)",
+    "indexes": [
+      "CREATE INDEX idx_users_org_id ON users (org_id)",
+      "CREATE INDEX idx_users_permissions ON users USING gin (permissions)",
+      "CREATE INDEX idx_users_username ON users (username)",
+      "CREATE INDEX ix_users_org_id ON users (org_id)",
+      "CREATE UNIQUE INDEX ix_users_username ON users (username)"
+    ]
+  }
+}
