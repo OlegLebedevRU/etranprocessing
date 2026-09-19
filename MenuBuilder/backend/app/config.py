@@ -195,6 +195,31 @@ class Settings(BaseSettings):
     l4desk_rate_limit_resend_cooldown_sec: int = 60
     l4desk_rate_limit_resend_max_per_hour: int = 3
 
+    # L4Desk Terminal Onboarding (L4D-06C-MB)
+    l4desk_terminal_onboarding_enabled: bool = False
+    processing_backend_url: str = ""
+    processing_backend_service_token: str = ""
+    agent_release_url: str = (
+        "https://l4tools-generic.ar.cloud.ru/l4tools/1.7.7/l4setup.exe"
+    )
+    agent_release_version: str = "1.7.7"
+
+    @property
+    def processing_backend_effective_url(self) -> str:
+        return self.processing_backend_url or "http://processing-backend:8000"
+
+    @property
+    def processing_backend_effective_token(self) -> str:
+        return (
+            self.processing_backend_service_token
+            or self.internal_service_key_value
+            or ""
+        )
+
+    @property
+    def is_terminal_onboarding_enabled(self) -> bool:
+        return self.l4desk_terminal_onboarding_enabled or self.l4desk_enabled
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

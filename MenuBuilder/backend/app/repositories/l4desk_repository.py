@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models_l4desk import (
@@ -175,15 +175,98 @@ class L4DeskRepository:
     # -------------------------------------------------------------------------
     # Terminals (L4D-06-MB)
     # -------------------------------------------------------------------------
-    async def get_terminal(self, terminal_id: int) -> L4DeskTerminal | None:
+    async def get_terminal(
+        self, terminal_id: int, tenant_id: int | None = None
+    ) -> L4DeskTerminal | None:
         stmt = select(L4DeskTerminal).where(L4DeskTerminal.terminal_id == terminal_id)
+        if tenant_id is not None:
+            stmt = stmt.where(L4DeskTerminal.tenant_id == tenant_id)
         res = await self.session.execute(stmt)
         return res.scalar_one_or_none()
 
-    async def list_terminals_by_tenant(self, tenant_id: int) -> list[L4DeskTerminal]:
+    async def get_terminal_by_operation_id(
+        self, operation_id: str
+    ) -> L4DeskTerminal | None:
+        stmt = select(L4DeskTerminal).where(L4DeskTerminal.operation_id == operation_id)
+        res = await self.session.execute(stmt)
+        return res.scalar_one_or_none()
+
+    async def get_terminal_by_sn(self, sn: str) -> L4DeskTerminal | None:
+        stmt = select(L4DeskTerminal).where(
+            L4DeskTerminal.sn == sn, L4DeskTerminal.deleted_at.is_(None)
+        )
+        res = await self.session.execute(stmt)
+        return res.scalar_one_or_none()
+
+    async def get_next_ordinal_for_tenant(self, tenant_id: int) -> int:
+        stmt = select(func.coalesce(func.max(L4DeskTerminal.ordinal), 0) + 1).where(
+            L4DeskTerminal.tenant_id == tenant_id
+        )
+        res = await self.session.execute(stmt)
+        return int(res.scalar_one())
+
+    async def get_earliest_active_terminal_id(self, tenant_id: int) -> int | None:
+        stmt = (
+            select(L4DeskTerminal.terminal_id)
+            .where(
+                L4DeskTerminal.tenant_id == tenant_id,
+                L4DeskTerminal.deleted_at.is_(None),
+            )
+            .order_by(L4DeskTerminal.ordinal.asc(), L4DeskTerminal.created_at.asc())
+            .limit(1)
+        )
+        res = await self.session.execute(stmt)
+        return res.scalar_one_or_none()
+
+    async def list_terminals_by_tenant(
+        self, tenant_id: int, include_deleted: bool = False
+    ) -> list[L4DeskTerminal]:
         stmt = select(L4DeskTerminal).where(L4DeskTerminal.tenant_id == tenant_id)
+        if not include_deleted:
+            stmt = stmt.where(L4DeskTerminal.deleted_at.is_(None))
+        stmt = stmt.order_by(L4DeskTerminal.ordinal.asc())
         res = await self.session.execute(stmt)
         return list(res.scalars().all())
+
+    async def soft_delete_terminal(
+        self, terminal_id: int, tenant_id: int
+    ) -> L4DeskTerminal | None:
+        term = await self.get_terminal(terminal_id, tenant_id)
+        if not term or term.deleted_at is not None:
+            return None
+        term.deleted_at = datetime.now(UTC)
+        await self.session.flush()
+        return term
+
+    async def update_terminal_states(
+        self,
+        terminal_id: int,
+        *,
+        provisioning_state: str | None = None,
+        pin_state: str | None = None,
+        device_id: int | None = None,
+        certificate_reference: str | None = None,
+        last_error: str | None = None,
+    ) -> None:
+        values: dict[str, Any] = {}
+        if provisioning_state is not None:
+            values["provisioning_state"] = provisioning_state
+        if pin_state is not None:
+            values["pin_state"] = pin_state
+        if device_id is not None:
+            values["device_id"] = device_id
+        if certificate_reference is not None:
+            values["certificate_reference"] = certificate_reference
+        if last_error is not None:
+            values["last_error"] = last_error
+        if values:
+            stmt = (
+                update(L4DeskTerminal)
+                .where(L4DeskTerminal.terminal_id == terminal_id)
+                .values(**values)
+            )
+            await self.session.execute(stmt)
+            await self.session.flush()
 
     async def create_terminal(
         self,
