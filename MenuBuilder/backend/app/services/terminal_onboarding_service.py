@@ -384,10 +384,21 @@ class TerminalOnboardingService:
                     detail=f"OPERATION_ID_CONFLICT: Operation ID '{operation_id}' belongs to another tenant",
                 )
             # Replay existing terminal
+            plain_pin = None
+            pin_expires_at = None
+            if existing_l4.pin_state == "issued":
+                with contextlib.suppress(Exception):
+                    q_res = await self.pin_client.get_by_operation(
+                        existing_l4.operation_id
+                    )
+                    if q_res and q_res.status == "issued":
+                        plain_pin = q_res.pin
+                        pin_expires_at = q_res.expires_at
             return await self._build_onboard_response(
                 existing_l4,
                 actor=actor,
-                plain_pin=None,
+                plain_pin=plain_pin,
+                pin_expires_at=pin_expires_at,
             )
 
         # ---------------------------------------------------------------------
@@ -472,7 +483,7 @@ class TerminalOnboardingService:
         # 4. Post-Commit Saga: IoT Provisioning & PIN Issuance
         # Partial failures do not delete the committed terminal record.
         # ---------------------------------------------------------------------
-        plain_pin, _ = await self._run_saga_steps(
+        plain_pin, pin_expires_at, _ = await self._run_saga_steps(
             l4_terminal=l4_terminal,
             actor=actor,
             correlation_id=correlation_id,
@@ -485,6 +496,7 @@ class TerminalOnboardingService:
             l4_terminal,
             actor=actor,
             plain_pin=plain_pin,
+            pin_expires_at=pin_expires_at,
         )
 
     async def retry_terminal_saga(
@@ -512,7 +524,7 @@ class TerminalOnboardingService:
 
         actor = str(user.get("username") or user.get("sub") or f"user_{user.get('id')}")
 
-        plain_pin, _ = await self._run_saga_steps(
+        plain_pin, pin_expires_at, _ = await self._run_saga_steps(
             l4_terminal=l4_terminal,
             actor=actor,
             correlation_id=l4_terminal.correlation_id,
@@ -525,6 +537,7 @@ class TerminalOnboardingService:
             l4_terminal,
             actor=actor,
             plain_pin=plain_pin,
+            pin_expires_at=pin_expires_at,
         )
 
     async def delete_terminal(
@@ -609,10 +622,20 @@ class TerminalOnboardingService:
             )
 
         actor = str(user.get("username") or user.get("sub") or f"user_{user.get('id')}")
+        plain_pin = None
+        pin_expires_at = None
+        if l4_terminal.pin_state == "issued":
+            with contextlib.suppress(Exception):
+                q_res = await self.pin_client.get_by_operation(l4_terminal.operation_id)
+                if q_res and q_res.status == "issued":
+                    plain_pin = q_res.pin
+                    pin_expires_at = q_res.expires_at
+
         return await self._build_onboard_response(
             l4_terminal,
             actor=actor,
-            plain_pin=None,
+            plain_pin=plain_pin,
+            pin_expires_at=pin_expires_at,
         )
 
     # -------------------------------------------------------------------------
@@ -625,12 +648,13 @@ class TerminalOnboardingService:
         l4_terminal: L4DeskTerminal,
         actor: str,
         correlation_id: str,
-    ) -> tuple[str | None, str | None]:
+    ) -> tuple[str | None, datetime | None, str | None]:
         """Execute or retry IoT provisioning and Certificate PIN issuance.
 
-        Returns (plain_pin, last_error).
+        Returns (plain_pin, pin_expires_at, last_error).
         """
         plain_pin: str | None = None
+        pin_expires_at: datetime | None = None
         errors: list[str] = []
 
         # ---------------------------------------------------------------------
@@ -687,6 +711,10 @@ class TerminalOnboardingService:
                         outcome="failed",
                         details={"error": str(exc)[:200]},
                     )
+            finally:
+                # Commit Step A state to release row locks before calling ProcessingBackend
+                await self.db.commit()
+                await self.db.refresh(l4_terminal)
 
         # ---------------------------------------------------------------------
         # Step B: Certificate PIN Issuance (if not already issued or consumed)
@@ -706,6 +734,7 @@ class TerminalOnboardingService:
                 l4_terminal.pin_state = pin_res.status
                 l4_terminal.certificate_reference = pin_res.pin_masked
                 plain_pin = pin_res.pin
+                pin_expires_at = pin_res.expires_at
 
                 # CRITICAL: Record audit event with masked PIN only
                 await self.repo.record_audit_event(
@@ -740,24 +769,32 @@ class TerminalOnboardingService:
                         outcome="failed",
                         details={"error": str(exc)[:200]},
                     )
+            finally:
+                # Commit Step B state to persist PIN outcome
+                await self.db.commit()
+                await self.db.refresh(l4_terminal)
         elif l4_terminal.pin_state == "issued" and plain_pin is None:
             # Replay lookup of active PIN via provider query endpoint
             with contextlib.suppress(Exception):
                 q_res = await self.pin_client.get_by_operation(l4_terminal.operation_id)
                 if q_res and q_res.status == "issued":
                     plain_pin = q_res.pin
+                    pin_expires_at = q_res.expires_at
 
         last_error = "; ".join(errors) if errors else None
         if not errors:
             l4_terminal.last_error = None
+            await self.db.commit()
+            await self.db.refresh(l4_terminal)
 
-        return plain_pin, last_error
+        return plain_pin, pin_expires_at, last_error
 
     async def _build_onboard_response(
         self,
         l4_terminal: L4DeskTerminal,
         actor: str,
         plain_pin: str | None,
+        pin_expires_at: datetime | None = None,
     ) -> TerminalOnboardResponse:
         # Check free marker
         earliest_active_id = await self.repo.get_earliest_active_terminal_id(
@@ -820,7 +857,7 @@ class TerminalOnboardingService:
             readiness=readiness,
             pin=effective_pin,
             pin_masked=l4_terminal.certificate_reference,
-            pin_expires_at=None,
+            pin_expires_at=pin_expires_at,
             agent_release_url=settings.agent_release_url,
             agent_version=settings.agent_release_version,
             created_at=l4_terminal.created_at or datetime.now(UTC),
