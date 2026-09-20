@@ -27,7 +27,8 @@ if [ ! -f .env ]; then
 fi
 
 # Ensure new variables from .env.example are present in .env
-for var in JANUS_HOST JANUS_ADMIN_PORT JANUS_ADMIN_SECRET L4MEDIA_SERVICE_TOKEN; do
+for var in JANUS_HOST JANUS_ADMIN_PORT JANUS_ADMIN_SECRET L4MEDIA_SERVICE_TOKEN \
+           L4MEDIA_ARCHIVE_WORKER_ENABLED L4MEDIA_ARCHIVE_DRY_RUN L4MEDIA_ARCHIVE_VOLUME_ROOT L4MEDIA_HOT_TELEMETRY_DIR; do
     if ! grep -q "^${var}=" .env; then
         grep "^${var}=" .env.example >> .env || true
         echo "Added ${var} to .env"
@@ -119,9 +120,12 @@ else
     ssh -n -i "${SSH_KEY}" -o BatchMode=yes "${SERVER_USER}@${SERVER_HOST}" "mkdir -p /home/${SERVER_USER}/l4media/crt"
     scp -i "${SSH_KEY}" -r \
         "${L4MEDIA_DIR}/compose.yaml" \
+        "${L4MEDIA_DIR}/pyproject.toml" \
         "${L4MEDIA_DIR}/.env.example" \
         "${L4MEDIA_DIR}/README.md" \
         "${L4MEDIA_DIR}/ARCHITECTURE.md" \
+        "${L4MEDIA_DIR}/archive" \
+        "${L4MEDIA_DIR}/tests" \
         "${L4MEDIA_DIR}/nginx" \
         "${L4MEDIA_DIR}/ingress" \
         "${L4MEDIA_DIR}/janus" \

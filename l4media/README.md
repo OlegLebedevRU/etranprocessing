@@ -82,10 +82,25 @@
 
 ```text
 l4media/
-├── compose.yaml                 # Docker Compose стек l4media (nginx, ingress, janus)
+├── compose.yaml                 # Docker Compose стек l4media (nginx, ingress, janus, archive-worker)
+├── pyproject.toml               # Конфигурация пакета l4media-archive, ruff, pyright, pytest
 ├── README.md                    # Руководство по запуску, деплою и тестированию
-├── ARCHITECTURE.md              # Архитектура, порты, формат стрима и интеграция
+├── ARCHITECTURE.md              # Архитектура, порты, формат стрима, API и архивный контракт
 ├── .env.example                 # Шаблон переменных окружения
+├── archive/                     # Модуль детерминированной архивации (L4D-15C-MEDIA)
+│   ├── canonical.py             # RecordEnvelope, ArchiveManifest, валидация Draft 2020-12 схем
+│   ├── guards.py                # Барьеры: RetentionGuard (>3 мес), PathSecurity, ActiveStreams, Verification
+│   ├── store.py                 # Горячее хранилище телеметрии TelemetryStore (SQLite) и session summaries
+│   ├── pipeline.py              # Жизненный цикл temp -> sha256 -> verify -> atomic rename -> purge
+│   ├── restore.py               # Инструмент инспекции, восстановления и аудита трёхлетнего хранения
+│   ├── worker.py                # Фоновый воркер архивации (по умолчанию отключен)
+│   └── cli.py                   # Интерфейс CLI l4media-archive (status, archive, verify, restore, check-retention)
+├── tests/                       # Набор тестов архивации (21/21 passed)
+│   ├── test_archive_canonical.py
+│   ├── test_archive_guards.py
+│   ├── test_archive_pipeline.py
+│   ├── test_archive_restore.py
+│   └── test_archive_cli.py
 ├── nginx/
 │   ├── Dockerfile               # Образ nginx:stable-alpine со stream mTLS модулем
 │   ├── nginx.conf               # Корневой конфиг Nginx со stream {} блоком
@@ -94,15 +109,20 @@ l4media/
 │   ├── Dockerfile               # Двухэтапная сборка минимального C-бинарника (Alpine)
 │   ├── Makefile                 # Сборка gcc/musl с флагом -static
 │   ├── routes.conf              # Таблица маршрутизации SN -> RTP/RTCP
-│   └── src/
-│       └── l4media_ingress.c    # POSIX epoll ingress-сервер и HTTP control API
+│   ├── src/
+│   │   ├── l4media_ingress.c    # POSIX epoll ingress-сервер и HTTP control API
+│   │   └── media_lifecycle.h    # On-demand media lifecycle API, Janus orchestration, reconciliation
+│   └── tests/
+│       ├── test_ingress_regression.py
+│       ├── test_ingress_unit.c
+│       └── test_media_lifecycle.py
 ├── janus/
 │   ├── janus.jcfg               # Конфигурация ядра Janus (nat_1_1, rtp_port_range)
 │   ├── janus.plugin.streaming.jcfg # Статический RTP mountpoint 1 (H.264)
 │   └── janus.transport.http.jcfg   # Настройка внутренних API 8088 и 7088
 └── deploy/
     ├── deploy.sh                # Идемпотентный скрипт сборки и деплоя на сервер
-    └── check.sh                 # Скрипт проверки статуса, логов, портов и mTLS
+    └── check.sh                 # Скрипт проверки статуса, логов, портов, mTLS и архиватора
 ```
 
 ---
@@ -216,7 +236,55 @@ sudo docker exec l4media-ingress curl -s http://127.0.0.1:9100/stats
 
 ---
 
-## 7. Известные ограничения Alpha-MVP
+## 7. Архивация технических подробностей и управление хранением (L4D-15C-MEDIA)
+
+Подсистема реализует требования шага **`L4D-15C-MEDIA`** и единого **Archive Manifest Contract v1** (`H-L4D-15A-DOCS-v1`).
+
+### 7.1. Основные характеристики
+* **Владелец архива (`owner_project`):** `l4media`.
+* **Типы архивных записей (`record_types`):**
+  * `media_stream_samples`: высокообъёмные периодические технические метрики потока (битрейт, fps, rtp/rtcp-пакеты, переданные байты, джиттер, rtt, потери, геометрия кадра).
+  * `media_quality_events`: дискретные события деградации качества сессий (packet loss spike, freeze, keyframe request).
+* **Горячие данные (STRICT HOT INVARIANT — никогда не удаляются):**
+  * Таблицы маршрутизации Ingress (`routes.conf`, dynamic routing table).
+  * Сводные строки и метаданные сессий (`tb_media_session_summaries`: длительность, итоговые счётчики пакетов/байт, причина завершения, тайминги).
+  * Активные видеопотоки и данные, необходимые для активного обслуживания и реконсиляции.
+* **Временной барьер (> 3 полных месяцев):**
+  Архивируются и очищаются только данные закрытых месяцев старше 3 полных календарных месяцев. Попытка архивации более свежих месяцев отклоняется (`HOT_RETENTION_VIOLATION`).
+* **Инвариант No-Purge-On-Mismatch:**
+  Удаление горячих деталей допускается исключительно при 100% совпадении SHA-256, совпадении счётчиков строк, успешной выборочной декомпрессии и отсутствии активных потоков. При любом расхождении пакет помечается `failed`, а горячие данные не трогаются.
+
+### 7.2. Команды CLI (`archive.cli`)
+```bash
+# Проверка конфигурации воркера и доступных закрытых месяцев:
+python3 -m archive.cli status
+
+# Выполнение пробной архивации без удаления (dry-run):
+python3 -m archive.cli archive --month 2026-04 --dry-run
+
+# Выполнение полной архивации с очисткой проверенных записей:
+python3 -m archive.cli archive --month 2026-04
+
+# Верификация контрольных сумм и структуры пакета на томе:
+python3 -m archive.cli verify --batch-dir /mnt/l4desk-archive/2026/04/l4media/arch-media-2026-04-xxxx
+
+# Восстановление записей из архива в SQLite или JSONL:
+python3 -m archive.cli restore --batch-dir /mnt/l4desk-archive/2026/04/l4media/arch-media-2026-04-xxxx --output-jsonl /tmp/restored.jsonl
+
+# Аудит 3-летнего хранения и видимости резервных копий (read-only):
+python3 -m archive.cli check-retention --volume-root /mnt/l4desk-archive
+```
+
+### 7.3. Фоновый воркер и переменные окружения
+Воркер запускается модулем `archive.worker`. По умолчанию он отключён для безопасности:
+* `L4MEDIA_ARCHIVE_WORKER_ENABLED=false` (включение: `true`).
+* `L4MEDIA_ARCHIVE_DRY_RUN=false` (режим симуляции без удаления).
+* `L4MEDIA_ARCHIVE_VOLUME_ROOT=/mnt/l4desk-archive` (корень архивного тома).
+* `L4MEDIA_HOT_TELEMETRY_DIR=/var/lib/l4media/telemetry` (каталог оперативной базы телеметрии).
+
+---
+
+## 8. Известные ограничения Alpha-MVP
 
 1. **Серверный TLS-сертификат**: Используется self-signed сертификат (`CN=87.242.100.34`). Клиент `leo4proxy` подключается в режиме `insecure_server_cert` (по умолчанию в alpha). Для production потребуется выпуск доверенного сертификата (Let's Encrypt / внутренний CA).
 2. **Статический Mountpoint**: В конфигурации зафиксирован один тестовый mountpoint `id = 1` (`rtp:6000`, `rtcp:6001`). Динамическое добавление mountpoint'ов через Janus Admin API планируется на этапе интеграции с MenuBuilder.

@@ -117,10 +117,16 @@ fi
 
 echo ""
 echo "========================================================"
-echo " [CHECK 7/7] Running media lifecycle & regression test suites"
+echo " [CHECK 7/8] Running media lifecycle & regression test suites"
 echo "========================================================"
 python3 /home/user1/l4media/ingress/tests/test_media_lifecycle.py "${INGRESS_IP}" 9100 "${JANUS_IP}" 7088
 python3 /home/user1/l4media/ingress/tests/test_ingress_regression.py "${INGRESS_IP}" 9000 9100
+
+echo ""
+echo "========================================================"
+echo " [CHECK 8/8] Checking l4media-archive worker & CLI status"
+echo "========================================================"
+PYTHONPATH="/home/user1/l4media" python3 -m archive.cli status
 
 echo ""
 echo "========================================================"

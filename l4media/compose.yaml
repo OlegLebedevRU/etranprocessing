@@ -65,6 +65,31 @@ services:
       - l4media_net
       - user1_default
 
+  archive-worker:
+    image: python:3.14-slim
+    container_name: l4media-archive-worker
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      - L4MEDIA_ARCHIVE_WORKER_ENABLED=${L4MEDIA_ARCHIVE_WORKER_ENABLED:-false}
+      - L4MEDIA_ARCHIVE_DRY_RUN=${L4MEDIA_ARCHIVE_DRY_RUN:-false}
+      - L4MEDIA_ARCHIVE_VOLUME_ROOT=${L4MEDIA_ARCHIVE_VOLUME_ROOT:-/mnt/l4desk-archive}
+      - L4MEDIA_HOT_TELEMETRY_DIR=${L4MEDIA_HOT_TELEMETRY_DIR:-/var/lib/l4media/telemetry}
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - .:/app:ro
+      - ${L4MEDIA_ARCHIVE_VOLUME_ROOT:-/mnt/l4desk-archive}:${L4MEDIA_ARCHIVE_VOLUME_ROOT:-/mnt/l4desk-archive}
+      - ${L4MEDIA_HOT_TELEMETRY_DIR:-/var/lib/l4media/telemetry}:${L4MEDIA_HOT_TELEMETRY_DIR:-/var/lib/l4media/telemetry}
+    command: ["python3", "-m", "archive.worker"]
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    networks:
+      - l4media_net
+    profiles:
+      - archive
+
 networks:
   l4media_net:
     name: l4media_net
