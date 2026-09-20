@@ -40,6 +40,7 @@ const AdminLayout = lazy(() => import("./routes/admin-layout"));
 const AdminOrganizationsPage = lazy(() => import("./routes/admin-organizations"));
 const AdminTerminalsPage = lazy(() => import("./routes/admin-terminals"));
 const AdminUsersPage = lazy(() => import("./routes/admin-users"));
+const AdminHubPage = lazy(() => import("./pages/AdminHubPage"));
 const SettingsLayout = lazy(() => import("./routes/settings-layout"));
 const ProfileSettingsPage = lazy(() => import("./routes/settings/ProfileSettingsPage"));
 const TerminalsSettingsPage = lazy(() => import("./routes/settings/TerminalsSettingsPage"));
@@ -294,7 +295,9 @@ export default function App() {
               <Route path="organizations" element={<AdminOrganizationsPage />} />
               <Route path="terminals" element={<AdminTerminalsPage />} />
               <Route path="users" element={<AdminUsersPage />} />
+              <Route path="hub" element={<AdminHubPage />} />
             </Route>
+            <Route path="hub" element={<Navigate to="/admin/hub" replace />} />
             {/* Legacy paths kept so existing bookmarks keep working */}
             <Route
               path="terminals"

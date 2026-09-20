@@ -12,7 +12,12 @@ from app.models_l4desk import (
     FinAccount,
     FinLedgerEntry,
     FinLedgerTransaction,
+    FinManualPayment,
+    FinPayment,
     FinReconciliationRun,
+    FinTerminalMonthlyCharge,
+    FinUsageDaily,
+    L4DeskRemoteSession,
 )
 from app.services.financial_core.accounts import FinAccountService
 from app.services.financial_core.exceptions import FinValidationError
@@ -45,6 +50,11 @@ class FinReconciliationService:
             "tenant_isolation_violations": [],
             "projection_mismatches": [],
             "duplicate_postings": [],
+            "calculated_discarded_mismatches": [],
+            "rounding_violations": [],
+            "source_hash_violations": [],
+            "coverage_violations": [],
+            "unposted_charges_or_payments": [],
         }
 
         # 1. Fetch transactions in the period
@@ -76,15 +86,55 @@ class FinReconciliationService:
                 total_credit += tx.credit_kopecks
                 total_posted += tx.debit_kopecks
 
-                # Accumulate discarded kopecks from calculation snapshot if available
+                # Invariant: posted % 100 == 0
+                if tx.debit_kopecks % 100 != 0 or tx.credit_kopecks % 100 != 0:
+                    mismatch_count += 1
+                    details["rounding_violations"].append(
+                        {
+                            "type": "transaction",
+                            "transaction_id": tx.id,
+                            "debit_kopecks": tx.debit_kopecks,
+                            "credit_kopecks": tx.credit_kopecks,
+                        }
+                    )
+
+                # Invariant: source hash presence
+                if not tx.source_events_hash or not str(tx.source_events_hash).strip():
+                    mismatch_count += 1
+                    details["source_hash_violations"].append(
+                        {
+                            "type": "transaction",
+                            "transaction_id": tx.id,
+                            "reason": "Missing source_events_hash",
+                        }
+                    )
+
+                # Accumulate discarded kopecks and check calculation snapshot
                 if tx.calculation_snapshot and isinstance(
                     tx.calculation_snapshot, dict
                 ):
                     disc = tx.calculation_snapshot.get("discarded_kopecks", 0)
                     if isinstance(disc, int) and disc >= 0:
                         total_discarded += disc
+                    calc = tx.calculation_snapshot.get("calculated_kopecks")
+                    if isinstance(calc, int) and isinstance(disc, int):
+                        snap_posted = tx.calculation_snapshot.get(
+                            "posted_kopecks", tx.debit_kopecks
+                        )
+                        if isinstance(snap_posted, int) and (
+                            calc != snap_posted + disc or disc < 0 or disc >= 100
+                        ):
+                            mismatch_count += 1
+                            details["calculated_discarded_mismatches"].append(
+                                {
+                                    "transaction_id": tx.id,
+                                    "calculated": calc,
+                                    "posted": snap_posted,
+                                    "discarded": disc,
+                                }
+                            )
 
-            # Invariant: Transaction header balance
+            # Invariant: Transaction header balance (debit == credit)
             if tx.debit_kopecks != tx.credit_kopecks or tx.debit_kopecks <= 0:
                 mismatch_count += 1
                 details["imbalanced_transactions"].append(
@@ -168,6 +218,269 @@ class FinReconciliationService:
                             "account_id": e.account_id,
                             "account_tenant": acc.tenant_id,
                             "tx_tenant": tx.tenant_id,
+                        }
+                    )
+
+        # 3. Check Daily Usage invariants (calculated = posted + discarded, posted % 100 == 0, source_events_hash)
+        stmt_usage = select(FinUsageDaily).where(
+            FinUsageDaily.local_date >= request.period_start.date(),
+            FinUsageDaily.local_date <= request.period_end.date(),
+        )
+        if request.tenant_id is not None:
+            stmt_usage = stmt_usage.where(FinUsageDaily.tenant_id == request.tenant_id)
+        usage_rows = (await db.execute(stmt_usage)).scalars().all()
+
+        for u in usage_rows:
+            tenants_in_scope.add(u.tenant_id)
+            if u.calculated_kopecks != (u.posted_kopecks + u.discarded_kopecks):
+                mismatch_count += 1
+                details["calculated_discarded_mismatches"].append(
+                    {
+                        "usage_id": u.id,
+                        "tenant_id": u.tenant_id,
+                        "terminal_id": u.terminal_id,
+                        "local_date": str(u.local_date),
+                        "calculated_kopecks": u.calculated_kopecks,
+                        "posted_kopecks": u.posted_kopecks,
+                        "discarded_kopecks": u.discarded_kopecks,
+                    }
+                )
+            if u.discarded_kopecks < 0 or u.discarded_kopecks >= 100:
+                mismatch_count += 1
+                details["calculated_discarded_mismatches"].append(
+                    {
+                        "usage_id": u.id,
+                        "reason": "Discarded kopecks out of bounds [0, 99]",
+                        "discarded_kopecks": u.discarded_kopecks,
+                    }
+                )
+            if u.posted_kopecks % 100 != 0:
+                mismatch_count += 1
+                details["rounding_violations"].append(
+                    {
+                        "type": "usage_daily",
+                        "usage_id": u.id,
+                        "posted_kopecks": u.posted_kopecks,
+                    }
+                )
+            if not u.source_events_hash or not str(u.source_events_hash).strip():
+                mismatch_count += 1
+                details["source_hash_violations"].append(
+                    {
+                        "type": "usage_daily",
+                        "usage_id": u.id,
+                        "reason": "Missing source_events_hash",
+                    }
+                )
+            if u.ledger_transaction_id is not None:
+                ref_tx = await db.get(FinLedgerTransaction, u.ledger_transaction_id)
+                if not ref_tx or ref_tx.status != "posted":
+                    mismatch_count += 1
+                    details["coverage_violations"].append(
+                        {
+                            "type": "usage_daily",
+                            "usage_id": u.id,
+                            "ledger_transaction_id": u.ledger_transaction_id,
+                            "reason": "Referenced ledger transaction not found or unposted",
+                        }
+                    )
+
+        # 4. Check Closed Sessions source_events_hash coverage
+        stmt_sess = select(L4DeskRemoteSession).where(
+            L4DeskRemoteSession.closed_at >= request.period_start,
+            L4DeskRemoteSession.closed_at < request.period_end,
+        )
+        if request.tenant_id is not None:
+            stmt_sess = stmt_sess.where(
+                L4DeskRemoteSession.tenant_id == request.tenant_id
+            )
+        sessions = (await db.execute(stmt_sess)).scalars().all()
+
+        for s in sessions:
+            if s.active_at is not None and (
+                not s.source_events_hash or not str(s.source_events_hash).strip()
+            ):
+                mismatch_count += 1
+                details["source_hash_violations"].append(
+                    {
+                        "type": "remote_session",
+                        "session_id": s.id,
+                        "operation_id": s.operation_id,
+                        "reason": "Closed active session missing source_events_hash",
+                    }
+                )
+
+        # 5. Check Monthly Charges and Payment postings uniqueness & coverage
+        stmt_charges = select(FinTerminalMonthlyCharge).where(
+            FinTerminalMonthlyCharge.created_at >= request.period_start,
+            FinTerminalMonthlyCharge.created_at < request.period_end,
+        )
+        if request.tenant_id is not None:
+            stmt_charges = stmt_charges.where(
+                FinTerminalMonthlyCharge.tenant_id == request.tenant_id
+            )
+        charges = (await db.execute(stmt_charges)).scalars().all()
+
+        seen_charges: set[tuple[int, int]] = set()
+        for ch in charges:
+            tenants_in_scope.add(ch.tenant_id)
+            charge_key = (ch.terminal_id, ch.billing_cycle_id)
+            if charge_key in seen_charges:
+                mismatch_count += 1
+                details["duplicate_postings"].append(
+                    {
+                        "type": "monthly_charge",
+                        "charge_id": ch.id,
+                        "terminal_id": ch.terminal_id,
+                        "billing_cycle_id": ch.billing_cycle_id,
+                        "reason": "Duplicate monthly charge for same terminal and cycle",
+                    }
+                )
+            seen_charges.add(charge_key)
+
+            if ch.posted_kopecks % 100 != 0:
+                mismatch_count += 1
+                details["rounding_violations"].append(
+                    {
+                        "type": "monthly_charge",
+                        "charge_id": ch.id,
+                        "posted_kopecks": ch.posted_kopecks,
+                    }
+                )
+
+            if not ch.is_free and ch.posted_kopecks > 0:
+                if ch.ledger_transaction_id is None:
+                    mismatch_count += 1
+                    details["unposted_charges_or_payments"].append(
+                        {
+                            "type": "monthly_charge",
+                            "charge_id": ch.id,
+                            "reason": "Paid monthly charge missing ledger_transaction_id",
+                        }
+                    )
+                else:
+                    ref_tx = await db.get(
+                        FinLedgerTransaction, ch.ledger_transaction_id
+                    )
+                    if not ref_tx or ref_tx.status != "posted":
+                        mismatch_count += 1
+                        details["unposted_charges_or_payments"].append(
+                            {
+                                "type": "monthly_charge",
+                                "charge_id": ch.id,
+                                "ledger_transaction_id": ch.ledger_transaction_id,
+                                "reason": "Referenced transaction not found or unposted",
+                            }
+                        )
+
+        # Check YooKassa Payments
+        stmt_pay = select(FinPayment).where(
+            FinPayment.created_at >= request.period_start,
+            FinPayment.created_at < request.period_end,
+        )
+        if request.tenant_id is not None:
+            stmt_pay = stmt_pay.where(FinPayment.tenant_id == request.tenant_id)
+        payments = (await db.execute(stmt_pay)).scalars().all()
+
+        seen_pay_txs: set[int] = set()
+        for pay in payments:
+            tenants_in_scope.add(pay.tenant_id)
+            if pay.amount_kopecks <= 0 or pay.amount_kopecks % 100 != 0:
+                mismatch_count += 1
+                details["rounding_violations"].append(
+                    {
+                        "type": "payment",
+                        "payment_id": pay.id,
+                        "amount_kopecks": pay.amount_kopecks,
+                    }
+                )
+            if pay.status == "succeeded":
+                if pay.ledger_transaction_id is None:
+                    mismatch_count += 1
+                    details["unposted_charges_or_payments"].append(
+                        {
+                            "type": "payment",
+                            "payment_id": pay.id,
+                            "reason": "Succeeded payment missing ledger_transaction_id",
+                        }
+                    )
+                else:
+                    if pay.ledger_transaction_id in seen_pay_txs:
+                        mismatch_count += 1
+                        details["duplicate_postings"].append(
+                            {
+                                "type": "payment",
+                                "payment_id": pay.id,
+                                "ledger_transaction_id": pay.ledger_transaction_id,
+                                "reason": "Duplicate posting for payment",
+                            }
+                        )
+                    seen_pay_txs.add(pay.ledger_transaction_id)
+                    ref_tx = await db.get(
+                        FinLedgerTransaction, pay.ledger_transaction_id
+                    )
+                    if not ref_tx or ref_tx.status != "posted":
+                        mismatch_count += 1
+                        details["unposted_charges_or_payments"].append(
+                            {
+                                "type": "payment",
+                                "payment_id": pay.id,
+                                "ledger_transaction_id": pay.ledger_transaction_id,
+                                "reason": "Referenced payment transaction not found or unposted",
+                            }
+                        )
+
+        # Check Manual Payments
+        stmt_mp = select(FinManualPayment).where(
+            FinManualPayment.created_at >= request.period_start,
+            FinManualPayment.created_at < request.period_end,
+        )
+        if request.tenant_id is not None:
+            stmt_mp = stmt_mp.where(FinManualPayment.tenant_id == request.tenant_id)
+        manual_payments = (await db.execute(stmt_mp)).scalars().all()
+
+        seen_mp_txs: set[int] = set()
+        for mp in manual_payments:
+            tenants_in_scope.add(mp.tenant_id)
+            if mp.amount_kopecks <= 0 or mp.amount_kopecks % 100 != 0:
+                mismatch_count += 1
+                details["rounding_violations"].append(
+                    {
+                        "type": "manual_payment",
+                        "manual_payment_id": mp.id,
+                        "amount_kopecks": mp.amount_kopecks,
+                    }
+                )
+            if mp.ledger_transaction_id is None:
+                mismatch_count += 1
+                details["unposted_charges_or_payments"].append(
+                    {
+                        "type": "manual_payment",
+                        "manual_payment_id": mp.id,
+                        "reason": "Manual payment missing ledger_transaction_id",
+                    }
+                )
+            else:
+                if mp.ledger_transaction_id in seen_mp_txs:
+                    mismatch_count += 1
+                    details["duplicate_postings"].append(
+                        {
+                            "type": "manual_payment",
+                            "manual_payment_id": mp.id,
+                            "ledger_transaction_id": mp.ledger_transaction_id,
+                            "reason": "Duplicate posting for manual payment",
+                        }
+                    )
+                seen_mp_txs.add(mp.ledger_transaction_id)
+                ref_tx = await db.get(FinLedgerTransaction, mp.ledger_transaction_id)
+                if not ref_tx or ref_tx.status != "posted":
+                    mismatch_count += 1
+                    details["unposted_charges_or_payments"].append(
+                        {
+                            "type": "manual_payment",
+                            "manual_payment_id": mp.id,
+                            "ledger_transaction_id": mp.ledger_transaction_id,
+                            "reason": "Referenced transaction not found or unposted",
                         }
                     )
 

@@ -19,6 +19,7 @@ from app.routers import (
     dashboard,
     finance,
     groups,
+    hub,
     integrations,
     iot_consumer,
     mcp_proxy,
@@ -172,3 +173,4 @@ app.include_router(remote_sessions.router, prefix="/api/v1")
 app.include_router(remote_sessions.router, prefix="/api")
 app.include_router(iot_consumer.router)
 app.include_router(finance.router)
+app.include_router(hub.router)
