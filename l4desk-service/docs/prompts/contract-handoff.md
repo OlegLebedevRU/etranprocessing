@@ -2227,3 +2227,40 @@ consumers:
 next_prompt_id: L4D-08B-MB
 ```
 <!-- HANDOFF:H-L4D-08A-MEDIA-v1:END -->
+
+## 16. Регистрация корректирующего шага L4D-08B-MB-FIX-01 (шаг 22 MenuBuilder)
+
+Регистрация корректирующего шага `L4D-08B-MB-FIX-01` для устранения дефектов схемы candidate-блока, актуализации контрольных сумм SHA-256 артефактов и привязки проверенного коммита реализации `ad5a13d9fce804746f4f961812b8a026ba416bf4` в соответствии с §8 и §9 `PROMPT-STANDARD.md`.
+
+<!-- CORRECTIVE_REGISTRATION:R-L4D-08B-MB-FIX-01-v1:BEGIN -->
+```yaml
+registration_id: R-L4D-08B-MB-FIX-01-v1
+status: AUTHORIZED
+authorized_by: Cascade Controller
+authorization_basis: explicit_user_request_and_controller_rejection_findings
+registered_at_utc: 2026-09-20T11:20:00Z
+prompt_id: L4D-08B-MB-FIX-01
+prompt_path: l4desk-service/docs/prompts/L4D-08B-MB-FIX-01.md
+scope_project: MenuBuilder
+scope_root: D:\repo\platerra\Public\etranprocessing\MenuBuilder
+blocked_prompt_id: L4D-08B-MB
+authorized_inputs:
+  - handoff_id: H-L4D-07-IOT-v1
+    contract_version: 1.0.0
+    producer_commit: 55462cf8e847c1ba420d9f485db7112ea1bc8fe8
+  - handoff_id: H-L4D-08A-MEDIA-v1
+    contract_version: 1.0.0
+    producer_commit: 37adfd01e5492e6b61e8ecb243579389ae2d858e
+sequence_gate_handoff_id: H-L4D-08A-MEDIA-v1
+output_handoff_id: H-L4D-08B-MB-FIX-01-v1
+next_prompt_id: L4D-08B-MB
+report_path: MenuBuilder/docs/l4desk/handoffs/L4D-08B-MB-FIX-01-report.md
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-08B-MB-FIX-01-candidate.md
+publication_required_before_execution: true
+grant_scope: consumer_addressing_and_finite_data_only_reads
+runtime_acceptance: NOT_GRANTED
+blocked_next_prompt_id: L4D-09-MB
+```
+<!-- CORRECTIVE_REGISTRATION:R-L4D-08B-MB-FIX-01-v1:END -->
