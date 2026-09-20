@@ -3114,10 +3114,37 @@ next_prompt_id: L4D-14-MB
 ```
 <!-- HANDOFF:H-L4D-13-MB-v1:END -->
 
+## 24. Принятие handoff H-L4D-14-MB-v1 (шаг 28 MenuBuilder)
+
+Фиксация контроллером каскада принятого контракта `H-L4D-14-MB-v1` шага 28 (`MenuBuilder`) по результатам приёмки отчёта `MenuBuilder/docs/l4desk/handoffs/L4D-14-MB-report.md` и кандидата `MenuBuilder/docs/l4desk/handoffs/L4D-14-MB-candidate.md`.
+
+Все проверки выполнены и подтверждены инструментально:
+1. Коммит проверенной реализации: `877dc00ac6e5131c65375c5494659d36ff31822e` (ветка `l4desk/l4d-14-mb`, коммит ветки в origin: `40eb0fc18be3dc299dd5cacd1ae283f253b20472`).
+2. Sequence gate пройден: предшествующий обязательный handoff `H-L4D-13-MB-v1` (шаг 27 MenuBuilder) принят в журнале со статусом `ACCEPTED`. Дубликаты отсутствуют.
+3. В `MenuBuilder` полностью реализован superuser Хаб и всесторонний аудит финансовой сверки `source facts → usage → ledger → balance`:
+   - Архитектурная изоляция (Gates): Хаб обращается исключительно к локальным моделям `MenuBuilder` через SQLAlchemy 2.0; сетевые запросы к чужим БД и внутренним очередям IoT/RabbitMQ исключены.
+   - 5 канонических вкладок Хаба (`AdminHubPage`): `registrations` (реестр саморегистраций с таймзонами и первой оплатой), `terminals` (реестр терминалов, 1-й бесплатный / платные, provisioning/PIN/cert/online), `sessions` (объединённое управление сессиями video/console и суточный регистр потребления `FinUsageDaily`), `finance` (коммерческий обзор, B2C/B2B платежи, запуск и история сверки), `notifications` (статусы доставки писем и системный аудит-лог).
+   - Система фильтрации: фильтры по `tenant_id`, `terminal_id/sn`, `period`, `user/email`, `session_type`, статусу подписки, типу терминала, источнику платежа, а также селектор `only_errors / only_unreconciled` на каждой вкладке.
+   - Сквозной аудит (Correlation Drill-Down): автоматическое построение графа фактов `registration → terminal → pin_provisioning → online_session → usage → ledger_payment` со строгим правилом отсутствующих звеньев (`present: false, mismatch: true, fact: null`, без дорисовывания фактов).
+   - Всесторонние инварианты финансовой сверки (`FinReconciliationService`): `debit = credit`, `projection rebuild`, `calculated = posted + discarded` (`0 <= discarded < 100`), `posted % 100 = 0`, `source hash / event coverage`, `unique monthly charge / payment posting`.
+   - Защита ручных операций и сторно: создание банковского платежа и сторнирование требуют подтверждения секретным кодом `"11"`, валидируются бэкендом и фиксируются в `L4DeskAuditEvent`.
+4. Побайтно проверены контрольные суммы SHA-256 для всех 12 артефактов и отдельного файла кандидата `L4D-14-MB-candidate.md` (`3f929ee9f9f61064e2f69d19d0210107521832508ab254491d4728f1b999a055`) — полное совпадение на 100%.
+5. Тестовый набор успешно пройден:
+   - Backend: 4 комплексных теста в `test_hub_and_reconciliation.py` пройдены, общий прогон финансовых тестов 59 passed in 3.66s.
+   - Статический анализ и форматирование: `ruff check` — all passed, `ruff format` — clean (124 files), `pyright` — 0 errors, 0 warnings.
+   - Frontend: 10 тест-файлов, 51 passed в vitest (включая `l4desk-hub-and-reconciliation.test.ts`).
+   - Production bundle build: `tsc -b && vite build` выполнен успешно (exit code 0), сгенерирован чанк `AdminHubPage-C_UpKLXQ.js`.
+6. Live smoke evidence на боевом сервере `87.242.100.34`:
+   - Pre-flight проверки хоста: RAM free > 2.2 GiB, Disk 61%, Load average 0.15.
+   - Фронтенд `dist/*` и бэкенд `app/*` доставлены, контейнер `menubuilder-backend` перезапущен, схема БД 027 подтверждена (23 таблицы).
+   - Smoke-запросы к эндпоинтам `/api/internal/v1/hub/terminals` (200 OK), `/api/internal/v1/hub/correlation-drilldown` (200 OK), `/api/internal/v1/hub/reconciliation/run` (200 OK, status `matched`), ручной платёж без кода 11 отклоняется (400 Bad Request).
+7. Кандидат оформлен по стандарту `DETACHED_V1` в файле `MenuBuilder/docs/l4desk/handoffs/L4D-14-MB-candidate.md`.
+8. Разрешён переход к следующему шагу каскада: `L4D-15A-DOCS` (потребитель: `l4desk-service`).
+
 <!-- HANDOFF:H-L4D-14-MB-v1:BEGIN -->
 ```yaml
 handoff_id: H-L4D-14-MB-v1
-status: CANDIDATE
+status: ACCEPTED
 contract_kinds:
   - API
   - DEPLOYMENT
@@ -3127,6 +3154,7 @@ producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-14-MB-report.md
 producer_branch: l4desk/l4d-14-mb
 producer_commit: 877dc00ac6e5131c65375c5494659d36ff31822e
 report_commit: 877dc00ac6e5131c65375c5494659d36ff31822e
+accepted_at_utc: '2026-09-20T20:55:00Z'
 contract_version: 1.0.0
 schema_revision: '027'
 artifact_version: 1.0.0
@@ -3168,8 +3196,8 @@ compatibility:
     - H-L4D-09-MB-v1
   breaking_changes: false
   notes: "Superuser Hub and comprehensive financial subledger reconciliation contract across source facts -> usage -> ledger -> balance. End-to-end correlation drilldown with strict missing fact mismatch policy and safe code 11 manual payment / storno confirmation."
-deployment_status: STAGED
-deployed_environment: staging
+deployment_status: DEPLOYED
+deployed_environment: production
 feature_flags:
   l4desk_hub_enabled: true
   l4desk_financial_reconciliation_enabled: true
@@ -3222,3 +3250,111 @@ consumers:
 next_prompt_id: L4D-15A-DOCS
 ```
 <!-- HANDOFF:H-L4D-14-MB-v1:END -->
+
+## 25. Принятие handoff H-L4D-15A-DOCS-v1 (шаг 29 l4desk-service)
+
+Фиксация контроллером каскада принятого контракта `H-L4D-15A-DOCS-v1` шага 29 (`l4desk-service`) по результатам приёмки отчёта `l4desk-service/docs/handoffs/L4D-15A-DOCS-report.md` и контрактного пакета `l4desk-service/docs/prompts/contracts/archive-manifest-v1/`.
+
+Все проверки выполнены и подтверждены инструментально:
+1. Sequence gate пройден: предшествующий обязательный handoff `H-L4D-14-MB-v1` (шаг 28 MenuBuilder) принят в журнале со статусом `ACCEPTED`. Дубликаты отсутствуют.
+2. В `l4desk-service` полностью опубликован и специфицирован общий нормативный контракт архивации `Archive Manifest Contract v1`:
+   - Архитектурная изоляция: runtime-репозитории не открывались и не модифицировались.
+   - Сквозные идентификаторы: `archive_batch_id`, `owner_project` (`iot-rpc-rest-app`, `l4media`, `MenuBuilder`), `source_month`, `time_range`, `cursor_bounds` (`min_cursor`, `max_cursor`, `through_cursor`, `consumers_passed_cursor`).
+   - Архитектура смонтированного тома: layout `<volume_root>/<year>/<month>/<project>/<archive_batch_id>/`, обязательный staging во временном каталоге `.tmp_<archive_batch_id>_<timestamp>` на том же томе, сброс `fsync` и атомарное переименование (`rename(2)` / `os.replace`) только после успешного контрольного перечитывания.
+   - Детерминированный формат MVP: UTF-8 `JSONL.gz` (без BOM, LF, ключи отсортированы, без лишних пробелов, временные метки ISO 8601 UTC с `Z`, целые копейки, заголовок gzip с `mtime=0`) + сопутствующий `checksum.sha256`.
+   - Защитные барьеры очистки (Purge Guards): запрет очистки оперативной БД до полного перечитывания, совпадения количества строк, проверки хешей SHA-256, успешной пробной выборки (sample restore) и выполнения инварианта курсоров (`consumers_passed_cursor >= through_cursor`).
+   - Инвариант `No-Financial-Purge`: финансовый сабледжер (`fin_*`), платежи, тарифные версии, балансовые проекции, суточные агрегаты `FinUsageDaily` и итоговые строки сессий никогда не подлежат очистке.
+   - Сроки хранения и резервное копирование: строго 3 полных закрытых календарных месяца горячего окна (относительно текущей даты), архивное хранение не менее 3 лет (`retain_until >= created_at + 3 years`), смонтированный том обязан входить в корпоративный backup.
+3. Побайтно проверены контрольные суммы SHA-256 для всех 7 артефактов контрактного пакета и отчёта — полное совпадение на 100%.
+4. Полный набор из 13 приёмочных тестов (Acceptance Suite) успешно выполнен раннером `validate_archive_manifest.py` (13 passed, 0 failed).
+5. Разрешён переход к следующему шагу каскада: `L4D-15B-IOT` (потребитель: `iot-rpc-rest-app`), а также зафиксированы consumers `L4D-15C-MEDIA` и `L4D-16-MB`.
+
+<!-- HANDOFF:H-L4D-15A-DOCS-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-15A-DOCS-v1
+status: ACCEPTED
+contract_kinds:
+  - SCHEMA
+  - FIXTURES
+producer_prompt_id: L4D-15A-DOCS
+producer_scope_project: l4desk-service
+producer_report_path: l4desk-service/docs/handoffs/L4D-15A-DOCS-report.md
+producer_branch: l4desk/l4d-15a-docs
+accepted_at_utc: '2026-09-21T00:30:00Z'
+contract_version: 1.0.0
+schema_revision: '1.0.0'
+artifact_version: 1.0.0
+artifact_paths:
+  - l4desk-service/docs/prompts/contracts/archive-manifest-v1/archive-manifest.schema.json
+  - l4desk-service/docs/prompts/contracts/archive-manifest-v1/schemas.json
+  - l4desk-service/docs/prompts/contracts/archive-manifest-v1/examples.json
+  - l4desk-service/docs/prompts/contracts/archive-manifest-v1/contract.md
+  - l4desk-service/docs/prompts/contracts/archive-manifest-v1/validate_archive_manifest.py
+  - l4desk-service/docs/prompts/contracts/archive-manifest-v1/verification.md
+  - l4desk-service/docs/handoffs/L4D-15A-DOCS-report.md
+artifact_sha256:
+  - fc945431d6ceef34511fa40aea379588deb802a44a302061db102970c3d301fb
+  - b769d3c45e4819e46d4d7455edd055e03fcf4388f6d2f23089d79c810961d55c
+  - a43a07a176dfa28b450dfa5fb456a0451028f95568f0852615168a863245cde2
+  - 71572b916c893c09cc0a11c662f826947f8470eed5b0743ffb86cfebecbc09f6
+  - d9953d93a3fe1f3d635825802c6054cfbca51e2f1b12b0059b2929cc25a77b6b
+  - e27d848f8226415f216a3627a6b63636f5bd92729eddd471a54b2fd92fafa905
+  - 3aa7dfdd4e40f6c92f58174e4e5d708e7f25c2ca246f405b9100d320aecde8c1
+compatibility:
+  backward_compatible_with:
+    - H-L4D-14-MB-v1
+    - H-L4D-00F-SHARED-v1
+    - H-L4D-04B-PB-v1
+  breaking_changes: false
+  notes: "Canonical immutable Archive Manifest Contract v1 establishing deterministic UTF-8 JSONL.gz + manifest.json + sha256 checksums, atomic directory lifecycle on mounted volume, consumer cursor guards, strict 3-month hot window, 3-year archive retention, backup invariant, and non-purgeable financial records."
+deployment_status: DOCS_PUBLISHED
+deployed_environment: documentation
+feature_flags:
+  l4desk_archive_manifest_v1: true
+contract_payload:
+  manifest_version: "1.0.0"
+  schema_id: "https://l4desk.org/schemas/archive-manifest-v1.json"
+  supported_owners:
+    - "iot-rpc-rest-app"
+    - "l4media"
+    - "MenuBuilder"
+  storage_layout_pattern: "<root>/<year>/<month>/<project>/<archive_batch_id>/"
+  compression: "gzip (mtime=0)"
+  serialization: "deterministic UTF-8 JSONL (sort_keys=True, compact separators, ISO 8601 UTC Z)"
+  states:
+    - prepared
+    - verified
+    - purged
+    - failed
+  retention_invariants:
+    hot_details_months: 3
+    archive_retention_years: 3
+    backup_required: true
+  purge_guards:
+    full_reread_required: true
+    sha256_match_required: true
+    row_count_match_required: true
+    restore_sample_required: true
+    cursor_guard_required: true
+    atomic_rename_required: true
+    no_financial_purge: true
+  error_codes:
+    - CHECKSUM_MISMATCH
+    - COUNT_MISMATCH
+    - CURSOR_LAG_DETECTED
+    - RESTORE_SAMPLE_FAILED
+    - HOT_RETENTION_VIOLATION
+    - DISK_SPACE_EXHAUSTED
+    - VOLUME_UNAVAILABLE
+    - ACTIVE_RECORDS_DETECTED
+    - ATOMIC_RENAME_FAILED
+    - PURGE_OPERATION_FAILED
+supersedes: []
+known_risks: []
+consumers:
+  - L4D-15B-IOT
+  - L4D-15C-MEDIA
+  - L4D-16-MB
+next_prompt_id: L4D-15B-IOT
+```
+<!-- HANDOFF:H-L4D-15A-DOCS-v1:END -->
