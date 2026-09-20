@@ -13,6 +13,8 @@ from app.models_l4desk import (
     FinBillingProfile,
     FinLedgerEntry,
     FinLedgerTransaction,
+    FinManualPayment,
+    FinPayment,
     FinReconciliationRun,
     FinTariffVersion,
     FinTerminalMonthlyCharge,
@@ -618,5 +620,71 @@ class L4DeskRepository:
 
     async def list_tariff_versions(self) -> list[FinTariffVersion]:
         stmt = select(FinTariffVersion).order_by(FinTariffVersion.effective_from.asc())
+        res = await self.session.execute(stmt)
+        return list(res.scalars().all())
+
+    # -------------------------------------------------------------------------
+    # Payments (YooKassa & Manual) read/write helpers
+    # -------------------------------------------------------------------------
+    async def get_payment(self, payment_id: int) -> FinPayment | None:
+        stmt = select(FinPayment).where(FinPayment.id == payment_id)
+        res = await self.session.execute(stmt)
+        return res.scalar_one_or_none()
+
+    async def get_payment_by_provider_id(
+        self, provider_payment_id: str
+    ) -> FinPayment | None:
+        stmt = select(FinPayment).where(
+            FinPayment.provider_payment_id == provider_payment_id
+        )
+        res = await self.session.execute(stmt)
+        return res.scalar_one_or_none()
+
+    async def get_payment_by_operation_id(
+        self, tenant_id: int, operation_id: str
+    ) -> FinPayment | None:
+        stmt = select(FinPayment).where(
+            FinPayment.tenant_id == tenant_id, FinPayment.operation_id == operation_id
+        )
+        res = await self.session.execute(stmt)
+        return res.scalar_one_or_none()
+
+    async def list_payments(
+        self,
+        tenant_id: int | None = None,
+        status: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[FinPayment]:
+        stmt = select(FinPayment)
+        if tenant_id is not None:
+            stmt = stmt.where(FinPayment.tenant_id == tenant_id)
+        if status is not None:
+            stmt = stmt.where(FinPayment.status == status)
+        stmt = stmt.order_by(FinPayment.created_at.desc()).offset(offset).limit(limit)
+        res = await self.session.execute(stmt)
+        return list(res.scalars().all())
+
+    async def get_manual_payment(
+        self, manual_payment_id: int
+    ) -> FinManualPayment | None:
+        stmt = select(FinManualPayment).where(FinManualPayment.id == manual_payment_id)
+        res = await self.session.execute(stmt)
+        return res.scalar_one_or_none()
+
+    async def list_manual_payments(
+        self,
+        tenant_id: int | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[FinManualPayment]:
+        stmt = select(FinManualPayment)
+        if tenant_id is not None:
+            stmt = stmt.where(FinManualPayment.tenant_id == tenant_id)
+        stmt = (
+            stmt.order_by(FinManualPayment.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
         res = await self.session.execute(stmt)
         return list(res.scalars().all())

@@ -18,12 +18,14 @@ from app.services.financial_core.exceptions import (
     FinTenantIsolationError,
     FinValidationError,
 )
+from app.services.financial_core.manual_payments import FinManualPaymentService
 from app.services.financial_core.metering import (
     FinMeteringService,
     calculate_daily_amounts,
     calculate_daily_metrics,
     split_interval_by_local_days,
 )
+from app.services.financial_core.payments import FinPaymentService
 from app.services.financial_core.posting import FinPostingService
 from app.services.financial_core.projection import FinProjectionService
 from app.services.financial_core.reconciliation import FinReconciliationService
@@ -35,6 +37,11 @@ from app.services.financial_core.schemas import (
     FinDailyCloseRequest,
     FinLedgerEntryRead,
     FinLedgerTransactionRead,
+    FinManualPaymentCreate,
+    FinManualPaymentRead,
+    FinManualPaymentStornoRequest,
+    FinPaymentCreateRequest,
+    FinPaymentRead,
     FinPostingEntryRequest,
     FinPostingRequest,
     FinProcessOnlineEventRequest,
@@ -46,9 +53,22 @@ from app.services.financial_core.schemas import (
     FinTariffVersionRead,
     FinTerminalMonthlyChargeRead,
     FinUsageDailyRead,
+    FinYooKassaWebhookPayload,
 )
 from app.services.financial_core.tariffs import FinTariffService
 from app.services.financial_core.terminals import FinTerminalService
+from app.services.financial_core.yookassa import (
+    MockYooKassaClient,
+    YooKassaApiError,
+    YooKassaClient,
+    YooKassaClientProtocol,
+    YooKassaError,
+    YooKassaNetworkError,
+    get_yookassa_client,
+    is_ip_trusted,
+    is_safe_return_url,
+    set_yookassa_client_override,
+)
 
 __all__ = [
     "FinAccountNotFoundError",
@@ -68,8 +88,15 @@ __all__ = [
     "FinImmutableError",
     "FinLedgerEntryRead",
     "FinLedgerTransactionRead",
+    "FinManualPaymentCreate",
+    "FinManualPaymentRead",
+    "FinManualPaymentService",
+    "FinManualPaymentStornoRequest",
     "FinMeteringError",
     "FinMeteringService",
+    "FinPaymentCreateRequest",
+    "FinPaymentRead",
+    "FinPaymentService",
     "FinPostingEntryRequest",
     "FinPostingRequest",
     "FinPostingService",
@@ -91,7 +118,18 @@ __all__ = [
     "FinTerminalService",
     "FinUsageDailyRead",
     "FinValidationError",
+    "FinYooKassaWebhookPayload",
+    "MockYooKassaClient",
+    "YooKassaApiError",
+    "YooKassaClient",
+    "YooKassaClientProtocol",
+    "YooKassaError",
+    "YooKassaNetworkError",
     "calculate_daily_amounts",
     "calculate_daily_metrics",
+    "get_yookassa_client",
+    "is_ip_trusted",
+    "is_safe_return_url",
+    "set_yookassa_client_override",
     "split_interval_by_local_days",
 ]

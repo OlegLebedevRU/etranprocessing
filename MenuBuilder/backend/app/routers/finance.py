@@ -24,7 +24,14 @@ from app.services.financial_core import (
     FinImbalanceError,
     FinLedgerEntryRead,
     FinLedgerTransactionRead,
+    FinManualPaymentCreate,
+    FinManualPaymentRead,
+    FinManualPaymentService,
+    FinManualPaymentStornoRequest,
     FinMeteringService,
+    FinPaymentCreateRequest,
+    FinPaymentRead,
+    FinPaymentService,
     FinPostingRequest,
     FinPostingService,
     FinProcessOnlineEventRequest,
@@ -44,6 +51,9 @@ from app.services.financial_core import (
     FinTerminalService,
     FinUsageDailyRead,
     FinValidationError,
+    FinYooKassaWebhookPayload,
+    YooKassaApiError,
+    YooKassaNetworkError,
 )
 
 logger = logging.getLogger(__name__)
@@ -559,3 +569,320 @@ async def internal_close_day(
         actor=body.actor,
     )
     return [FinUsageDailyRead.model_validate(r) for r in rows]
+
+
+# =============================================================================
+# YooKassa Payments Endpoints (L4D-11-MB)
+# =============================================================================
+
+
+@router.post(
+    "/api/v1/finance/payments",
+    response_model=FinPaymentRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_yookassa_payment(
+    body: FinPaymentCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    user: dict[str, Any] = Depends(get_current_user),
+) -> FinPaymentRead:
+    """Create a new payment with YooKassa to top-up tenant balance."""
+    org_id = user.get("org_id")
+    if org_id is None or int(org_id) <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Active organization context required",
+        )
+    tenant_id = int(org_id)
+    user_id = user.get("sub") or user.get("user_id") or user.get("id")
+    user_id_int = int(user_id) if user_id and str(user_id).isdigit() else None
+    customer_email = user.get("email")
+
+    try:
+        payment = await FinPaymentService.create_payment(
+            db,
+            tenant_id=tenant_id,
+            user_id=user_id_int,
+            amount_rubles=body.amount_rubles,
+            return_url=body.return_url,
+            idempotence_key=body.idempotence_key,
+            customer_email=customer_email,
+            correlation_id=f"pay-init-{tenant_id}",
+        )
+        return FinPaymentRead.model_validate(payment)
+    except FinValidationError as err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)
+        ) from err
+    except FinConcurrencyError as err:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(err)
+        ) from err
+    except (YooKassaNetworkError, YooKassaApiError) as err:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail=str(err)
+        ) from err
+
+
+@router.get("/api/v1/finance/payments/{payment_id}", response_model=FinPaymentRead)
+async def get_tenant_payment(
+    payment_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: dict[str, Any] = Depends(get_current_user),
+) -> FinPaymentRead:
+    """Get payment status and details."""
+    org_id = user.get("org_id")
+    if org_id is None or int(org_id) <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Active organization context required",
+        )
+    tenant_id = int(org_id)
+    repo = L4DeskRepository(db)
+    payment = await repo.get_payment(payment_id)
+    if not payment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found"
+        )
+    if payment.tenant_id != tenant_id and not user.get("is_superuser"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
+        )
+    return FinPaymentRead.model_validate(payment)
+
+
+@router.get("/api/v1/finance/payments", response_model=list[FinPaymentRead])
+async def list_tenant_payments(
+    status_filter: str | None = Query(None, alias="status"),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    user: dict[str, Any] = Depends(get_current_user),
+) -> list[FinPaymentRead]:
+    """List payments for the current tenant."""
+    org_id = user.get("org_id")
+    if org_id is None or int(org_id) <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Active organization context required",
+        )
+    tenant_id = int(org_id)
+    repo = L4DeskRepository(db)
+    payments = await repo.list_payments(
+        tenant_id=tenant_id, status=status_filter, limit=limit, offset=offset
+    )
+    return [FinPaymentRead.model_validate(p) for p in payments]
+
+
+@router.post(
+    "/api/v1/finance/payments/{payment_id}/poll", response_model=FinPaymentRead
+)
+async def poll_payment_status(
+    payment_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: dict[str, Any] = Depends(get_current_user),
+) -> FinPaymentRead:
+    """Fallback polling to synchronize payment status with YooKassa."""
+    org_id = user.get("org_id")
+    if org_id is None or int(org_id) <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Active organization context required",
+        )
+    tenant_id = int(org_id)
+    repo = L4DeskRepository(db)
+    payment = await repo.get_payment(payment_id)
+    if not payment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found"
+        )
+    if payment.tenant_id != tenant_id and not user.get("is_superuser"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
+        )
+
+    try:
+        updated = await FinPaymentService.sync_payment_status(
+            db,
+            payment_id=payment_id,
+            trigger_source="polling",
+            actor=f"user_{user.get('sub') or 'poll'}",
+            correlation_id=f"poll-{payment_id}",
+        )
+        return FinPaymentRead.model_validate(updated)
+    except FinValidationError as err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)
+        ) from err
+    except FinTenantIsolationError as err:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=str(err)
+        ) from err
+    except (YooKassaNetworkError, YooKassaApiError) as err:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail=str(err)
+        ) from err
+
+
+@router.post("/api/v1/finance/yookassa/webhook", status_code=status.HTTP_200_OK)
+async def yookassa_webhook(
+    request: Request,
+    body: FinYooKassaWebhookPayload,
+    db: AsyncSession = Depends(get_db),
+    x_yookassa_webhook_secret: str | None = Header(
+        None, alias="X-YooKassa-Webhook-Secret"
+    ),
+) -> dict[str, Any]:
+    """Public webhook endpoint for incoming YooKassa payment notifications."""
+    client_ip = request.headers.get("X-Forwarded-For") or (
+        request.client.host if request.client else None
+    )
+    try:
+        payment = await FinPaymentService.process_webhook(
+            db,
+            body.model_dump(),
+            client_ip=client_ip,
+            webhook_secret=x_yookassa_webhook_secret,
+            correlation_id=request.headers.get("X-Correlation-ID") or "",
+        )
+        return {
+            "status": "ok",
+            "payment_id": payment.id,
+            "payment_status": payment.status,
+        }
+    except FinValidationError as err:
+        logger.warning("YooKassa webhook validation failed: %s", err)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)
+        ) from err
+    except FinTenantIsolationError as err:
+        logger.error("YooKassa webhook tenant isolation failed: %s", err)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=str(err)
+        ) from err
+    except (YooKassaNetworkError, YooKassaApiError) as err:
+        logger.error("YooKassa webhook provider error: %s", err)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail=str(err)
+        ) from err
+
+
+# =============================================================================
+# Manual B2B Bank Payments & Storno Endpoints (L4D-11-MB)
+# =============================================================================
+
+
+@router.post(
+    "/api/internal/v1/finance/manual-payments",
+    response_model=FinManualPaymentRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def internal_create_manual_payment(
+    body: FinManualPaymentCreate,
+    db: AsyncSession = Depends(get_db),
+    auth: dict[str, Any] = Depends(require_internal_or_superuser),
+) -> FinManualPaymentRead:
+    """Register an immutable B2B bank payment by superuser."""
+    actor = auth.get("sub") or auth.get("username") or "superuser"
+    user_id = auth.get("sub") or auth.get("user_id") or auth.get("id") or 1
+    user_id_int = int(user_id) if str(user_id).isdigit() else 1
+
+    try:
+        payment = await FinManualPaymentService.create_manual_payment(
+            db,
+            creator_user_id=user_id_int,
+            tenant_id=body.tenant_id,
+            amount_rubles=body.amount_rubles,
+            received_on=body.received_on,
+            document_number=body.document_number,
+            payer=body.payer,
+            purpose=body.purpose,
+            comment=body.comment,
+            evidence_reference=body.evidence_reference,
+            operation_id=body.operation_id,
+            actor=actor,
+            correlation_id=f"manual-pay-{body.tenant_id}",
+        )
+        return FinManualPaymentRead.model_validate(payment)
+    except FinValidationError as err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)
+        ) from err
+    except (FinDuplicatePostingError, FinConcurrencyError) as err:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(err)
+        ) from err
+
+
+@router.post(
+    "/api/internal/v1/finance/manual-payments/{manual_payment_id}/storno",
+    response_model=FinManualPaymentRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def internal_storno_manual_payment(
+    manual_payment_id: int,
+    body: FinManualPaymentStornoRequest,
+    db: AsyncSession = Depends(get_db),
+    auth: dict[str, Any] = Depends(require_internal_or_superuser),
+) -> FinManualPaymentRead:
+    """Storno (reverse) an existing manual payment record."""
+    actor = auth.get("sub") or auth.get("username") or "superuser"
+    user_id = auth.get("sub") or auth.get("user_id") or auth.get("id") or 1
+    user_id_int = int(user_id) if str(user_id).isdigit() else 1
+    try:
+        storno = await FinManualPaymentService.storno_manual_payment(
+            db,
+            manual_payment_id=manual_payment_id,
+            reversal_reason=body.reversal_reason,
+            comment=body.comment,
+            actor=actor,
+            creator_user_id=user_id_int,
+            correlation_id=f"storno-{manual_payment_id}",
+        )
+        return FinManualPaymentRead.model_validate(storno)
+    except (FinValidationError, FinReversalError) as err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)
+        ) from err
+    except (FinDuplicatePostingError, FinConcurrencyError) as err:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(err)
+        ) from err
+
+
+@router.get(
+    "/api/internal/v1/finance/manual-payments",
+    response_model=list[FinManualPaymentRead],
+)
+async def internal_list_manual_payments(
+    tenant_id: int | None = Query(None, gt=0),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    _auth: dict[str, Any] = Depends(require_internal_or_superuser),
+) -> list[FinManualPaymentRead]:
+    """List manual payments (superuser view)."""
+    repo = L4DeskRepository(db)
+    payments = await repo.list_manual_payments(
+        tenant_id=tenant_id, limit=limit, offset=offset
+    )
+    return [FinManualPaymentRead.model_validate(p) for p in payments]
+
+
+@router.get(
+    "/api/internal/v1/finance/manual-payments/{manual_payment_id}",
+    response_model=FinManualPaymentRead,
+)
+async def internal_get_manual_payment(
+    manual_payment_id: int,
+    db: AsyncSession = Depends(get_db),
+    _auth: dict[str, Any] = Depends(require_internal_or_superuser),
+) -> FinManualPaymentRead:
+    """Get manual payment by ID (superuser view)."""
+    repo = L4DeskRepository(db)
+    payment = await repo.get_manual_payment(manual_payment_id)
+    if not payment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Manual payment not found"
+        )
+    return FinManualPaymentRead.model_validate(payment)

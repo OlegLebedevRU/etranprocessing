@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 FinTransactionKind = Literal[
     "payment", "usage", "terminal_month", "adjustment", "reversal"
@@ -277,3 +277,129 @@ class FinDailyCloseRequest(BaseModel):
     correlation_id: str = Field(default="", max_length=128)
 
     model_config = ConfigDict(extra="forbid")
+
+
+# =============================================================================
+# YooKassa & Manual Payments Schemas (L4D-11-MB)
+# =============================================================================
+
+
+class FinPaymentCreateRequest(BaseModel):
+    amount_rubles: int = Field(..., ge=1, description="Integer amount in rubles (>= 1)")
+    return_url: str | None = Field(
+        default=None,
+        max_length=512,
+        description="Optional safe return URL after payment",
+    )
+    idempotence_key: str | None = Field(
+        default=None, max_length=128, description="Optional unique idempotence key"
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class FinPaymentRead(BaseModel):
+    id: int
+    tenant_id: int
+    operation_id: str
+    provider: str
+    provider_payment_id: str | None
+    status: str
+    amount_kopecks: int
+    currency: str
+    confirmation_url: str | None
+    provider_receipt_id: str | None
+    receipt_status: str | None
+    receipt_snapshot: dict[str, Any] | None
+    verified_at: datetime | None
+    succeeded_at: datetime | None
+    ledger_transaction_id: int | None
+    actor: str
+    correlation_id: str
+    created_at: datetime
+
+    @computed_field
+    @property
+    def amount_rubles(self) -> int:
+        return self.amount_kopecks // 100
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FinYooKassaWebhookObject(BaseModel):
+    id: str
+    status: str
+    amount: dict[str, Any]
+    description: str | None = None
+    recipient: dict[str, Any] | None = None
+    metadata: dict[str, Any] | None = None
+    cancellation_details: dict[str, Any] | None = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class FinYooKassaWebhookPayload(BaseModel):
+    type: str = "notification"
+    event: str
+    object: FinYooKassaWebhookObject
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class FinManualPaymentCreate(BaseModel):
+    tenant_id: int = Field(..., gt=0, description="Target tenant ID")
+    amount_rubles: int = Field(..., ge=1, description="Integer rubles (>= 1)")
+    received_on: date = Field(..., description="Date payment was received by bank")
+    document_number: str = Field(
+        ..., min_length=1, max_length=128, description="Bank order/doc reference"
+    )
+    payer: str = Field(
+        ..., min_length=1, max_length=500, description="Payer legal entity name"
+    )
+    purpose: str = Field(
+        ..., min_length=1, max_length=1000, description="Payment purpose"
+    )
+    comment: str | None = Field(
+        default=None, max_length=1000, description="Optional comment"
+    )
+    evidence_reference: str | None = Field(
+        default=None, max_length=500, description="Evidence URL or reference"
+    )
+    operation_id: str | None = Field(
+        default=None, max_length=128, description="Optional operation ID"
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class FinManualPaymentStornoRequest(BaseModel):
+    reversal_reason: str = Field(
+        ..., min_length=1, max_length=500, description="Reason for reversing payment"
+    )
+    comment: str | None = Field(default=None, max_length=1000)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class FinManualPaymentRead(BaseModel):
+    id: int
+    tenant_id: int
+    operation_id: str
+    amount_kopecks: int
+    received_on: date
+    document_number: str
+    payer: str
+    purpose: str
+    comment: str | None
+    evidence_reference: str | None
+    created_by_user_id: int
+    ledger_transaction_id: int
+    correlation_id: str
+    created_at: datetime
+
+    @computed_field
+    @property
+    def amount_rubles(self) -> int:
+        return self.amount_kopecks // 100
+
+    model_config = ConfigDict(from_attributes=True)

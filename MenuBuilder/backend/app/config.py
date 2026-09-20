@@ -218,6 +218,33 @@ class Settings(BaseSettings):
     # L4Desk Financial Core Double-Entry Subledger (L4D-09-MB)
     l4desk_financial_core_enabled: bool = True
 
+    # YooKassa Payments & Fiscal Configuration (L4D-11-MB)
+    yookassa_enabled: bool = False
+    yookassa_shop_id: str = ""
+    yookassa_secret_key: str = ""
+    yookassa_api_url: str = "https://api.yookassa.ru/v3"
+    yookassa_webhook_secret: str = ""
+    yookassa_ip_filter_enabled: bool = False
+    yookassa_trusted_ips_raw: str = "185.71.76.0/27,185.71.77.0/27,77.75.153.0/25,77.75.156.11/32,77.75.156.35/32,77.75.154.128/25,2a02:5180::/32"
+    yookassa_return_url_base: str = ""
+    yookassa_receipt_enabled: bool = True
+    yookassa_tax_system_code: int | None = None
+    yookassa_vat_code: int = 1  # 1 = without VAT
+    yookassa_payment_subject: str = "service"
+    yookassa_payment_mode: str = "full_prepayment"
+    yookassa_item_description: str = "Пополнение баланса L4Desk"
+    yookassa_request_timeout_sec: float = 15.0
+
+    @property
+    def yookassa_trusted_ips(self) -> list[str]:
+        return [
+            ip.strip() for ip in self.yookassa_trusted_ips_raw.split(",") if ip.strip()
+        ]
+
+    @property
+    def is_yookassa_enabled(self) -> bool:
+        return self.yookassa_enabled or self.l4desk_enabled
+
     @property
     def processing_backend_effective_url(self) -> str:
         return self.processing_backend_url or "http://processing-backend:8000"
