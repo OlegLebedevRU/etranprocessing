@@ -61,13 +61,26 @@ function formatVideoError(err: any): { title: string; message: string } {
   if (status === 403) {
     return {
       title: "Доступ ограничен",
-      message: "У вас нет прав для просмотра или управления видеотрансляцией на данном терминале.",
+      message: raw || "У вас нет прав для просмотра или управления видеотрансляцией на данном терминале.",
     };
   }
   if (status === 404) {
     return {
       title: "Терминал не найден",
       message: "Устройство не найдено или удалено из реестра.",
+    };
+  }
+  if (
+    status === 409 ||
+    raw.includes("lease_taken") ||
+    raw.includes("busy") ||
+    raw.includes("session_busy")
+  ) {
+    return {
+      title: "Терминал занят",
+      message:
+        raw ||
+        "Терминал уже находится под управлением другого пользователя или занят другой сессией.",
     };
   }
   if (raw.includes("offline") || raw.includes("Device is offline")) {
@@ -92,12 +105,6 @@ function formatVideoError(err: any): { title: string; message: string } {
     return {
       title: "Таймаут соединения",
       message: "Терминал не ответил на команду запуска в установленное время.",
-    };
-  }
-  if (raw.includes("lease_taken") || raw.includes("busy")) {
-    return {
-      title: "Терминал занят",
-      message: "Терминал уже находится под управлением другого пользователя.",
     };
   }
 
@@ -125,6 +132,7 @@ export default function VideoSurveillancePage() {
       user?.role_id === 1 ||
         user?.role_id === 2 ||
         user?.role_id === 3 ||
+        user?.role_id === 5 ||
         user?.is_superuser ||
         user?.role === "superuser" ||
         user?.role === "admin"

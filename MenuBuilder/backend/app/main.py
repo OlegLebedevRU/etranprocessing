@@ -25,6 +25,7 @@ from app.routers import (
     monitoring,
     profile,
     registration,
+    remote_sessions,
     reports,
     services,
     settings_users,
@@ -155,4 +156,6 @@ app.include_router(monitoring.router)
 app.include_router(reports.router)
 app.include_router(video.router)
 app.include_router(video_control.router)
+app.include_router(remote_sessions.router, prefix="/api/v1")
+app.include_router(remote_sessions.router, prefix="/api")
 app.include_router(iot_consumer.router)

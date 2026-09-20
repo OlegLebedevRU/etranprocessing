@@ -18,6 +18,7 @@ from fastapi import (
     status,
 )
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import (
@@ -28,6 +29,8 @@ from app.auth import (
 )
 from app.config import settings
 from app.database import async_session, get_db
+from app.models_l4desk import L4DeskRemoteSession
+from app.repositories.l4desk_repository import L4DeskRepository
 from app.routers.video import (
     _destroy_janus_mountpoint,
     _get_ingress_status,
@@ -42,6 +45,8 @@ from app.security.permissions import (
     require_permission,
 )
 from app.services.iot_client import iot_client
+from app.services.media_orchestrator_client import media_orchestrator_client
+from app.services.remote_session_policy import get_remote_session_policy
 
 logger = logging.getLogger(__name__)
 
@@ -440,16 +445,18 @@ async def acquire_device_control_lease(
     is_strictly_superuser = bool(role_id == 1 or user.get("role") == "superuser")
     is_operator = bool(
         is_strictly_superuser
-        or role_id in (1, 2, 3)
+        or role_id in (1, 2, 3, 5)
         or user.get("role") in ("superuser", "admin", "user")
     )
 
     if scope == "console":
-        if not is_strictly_superuser:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Доступ к консоли разрешён только суперадминистраторам",
-            )
+        if not is_strictly_superuser and role_id != 5:
+            user_perms = user.get("permissions") or []
+            if "console" not in user_perms and "*" not in user_perms:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Доступ к консоли разрешён только суперадминистраторам и пользователям L4Desk",
+                )
     elif scope in ("input", "stream"):
         if not is_operator:
             raise HTTPException(
@@ -475,6 +482,41 @@ async def acquire_device_control_lease(
 
     terminal = await _verify_device_access(device_id, user, db)
     org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
+
+    policy = get_remote_session_policy(user)
+    session_type_for_scope = "console" if scope == "console" else "video"
+    decision = await policy.evaluate_session_request(
+        tenant_id=org_id,
+        terminal=terminal,
+        session_type=session_type_for_scope,
+        user=user,
+        db=db,
+    )
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": decision.error_code or "policy_denied",
+                "message": decision.reason or "Сессия отклонена политикой",
+            },
+        )
+
+    repo = L4DeskRepository(db)
+    active_sess = await repo.get_active_session_by_terminal_id(device_id)
+    if (
+        isinstance(active_sess, L4DeskRemoteSession)
+        and active_sess.session_type != session_type_for_scope
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "session_busy",
+                "message": (
+                    f"Терминал {terminal.sn} занят активной сессией "
+                    f"({active_sess.session_type}). Автоматическое переключение запрещено."
+                ),
+            },
+        )
 
     if scope == "input":
         try:
@@ -513,6 +555,35 @@ async def acquire_device_control_lease(
         user=custom_user,
     )
     lease_id = str(res["lease_id"])
+    if scope == "console":
+        await repo.ensure_l4desk_terminal(
+            terminal_id=terminal.id,
+            tenant_id=terminal.org_id,
+            sn=terminal.sn,
+            correlation_id=f"lease-console-{lease_id}",
+        )
+        user_db_id = None
+        with contextlib.suppress(Exception):
+            user_db_id = (
+                int(user["id"])
+                if "id" in user
+                else int(user["user_id"])
+                if "user_id" in user
+                else None
+            )
+        if not active_sess:
+            await repo.create_remote_session(
+                tenant_id=terminal.org_id,
+                terminal_id=terminal.id,
+                operation_id=f"op-console-{lease_id}",
+                correlation_id=f"corr-console-{lease_id}",
+                session_type="console",
+                requested_by_user_id=user_db_id,
+                provider_session_id=str(res.get("owner_session_id") or lease_id),
+                state="active",
+            )
+            await db.flush()
+
     return ControlLeaseResponse(
         lease_id=lease_id,
         expires_at=str(res["expires_at"]),
@@ -699,6 +770,23 @@ async def start_device_stream(
     terminal = await _verify_device_access(device_id, user, db)
     org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
 
+    repo = L4DeskRepository(db)
+    active_sess = await repo.get_active_session_by_terminal_id(device_id)
+    if (
+        isinstance(active_sess, L4DeskRemoteSession)
+        and active_sess.session_type == "console"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "session_busy",
+                "message": (
+                    f"Терминал {terminal.sn} занят активной сессией консоли. "
+                    f"Автоматическое переключение на видео запрещено."
+                ),
+            },
+        )
+
     lease_id = body.lease_id
     if not lease_id:
         status_data = await iot_client.remote_input_status(
@@ -757,6 +845,33 @@ async def start_device_stream(
         stream_inst_id = str(res.get("stream_instance_id", ""))
         if stream_inst_id:
             set_mountpoint_stream_instance(device_id, stream_inst_id)
+            await repo.ensure_l4desk_terminal(
+                terminal_id=terminal.id,
+                tenant_id=terminal.org_id,
+                sn=terminal.sn,
+                correlation_id=f"stream-{stream_inst_id}",
+            )
+            user_db_id = None
+            with contextlib.suppress(Exception):
+                user_db_id = (
+                    int(user["id"])
+                    if "id" in user
+                    else int(user["user_id"])
+                    if "user_id" in user
+                    else None
+                )
+            if not active_sess:
+                await repo.create_remote_session(
+                    tenant_id=terminal.org_id,
+                    terminal_id=terminal.id,
+                    operation_id=f"op-stream-{stream_inst_id}",
+                    correlation_id=f"corr-stream-{stream_inst_id}",
+                    session_type="video",
+                    requested_by_user_id=user_db_id,
+                    provider_session_id=stream_inst_id,
+                    state="active",
+                )
+                await db.flush()
         return StreamStartResponse(
             stream_instance_id=stream_inst_id,
             result=str(res.get("result", "")),
@@ -825,6 +940,23 @@ async def stop_device_stream(
             cached = _mountpoint_pins.get(device_id)
             if not cached or cached.get("lease_id") == lease_id:
                 await _destroy_janus_mountpoint(device_id)
+
+        repo = L4DeskRepository(db)
+        active_sess = await repo.get_active_session_by_terminal_id(device_id)
+        if (
+            isinstance(active_sess, L4DeskRemoteSession)
+            and active_sess.session_type == "video"
+        ):
+            active_sess.state = "closed"
+            active_sess.closed_at = func.now()
+            active_sess.reason = "stream_stopped"
+            await db.flush()
+            if active_sess.provider_session_id:
+                with contextlib.suppress(Exception):
+                    await media_orchestrator_client.stop_session(
+                        session_id=active_sess.provider_session_id,
+                        reason="stream_stopped",
+                    )
         return StreamStopResponse(result=str(res.get("result", "stopped")))
     except HTTPException as exc:
         err_detail = (
@@ -861,6 +993,16 @@ async def stop_device_stream(
                 cached = _mountpoint_pins.get(device_id)
                 if not cached or cached.get("lease_id") == lease_id:
                     await _destroy_janus_mountpoint(device_id)
+            repo = L4DeskRepository(db)
+            active_sess = await repo.get_active_session_by_terminal_id(device_id)
+            if (
+                isinstance(active_sess, L4DeskRemoteSession)
+                and active_sess.session_type == "video"
+            ):
+                active_sess.state = "closed"
+                active_sess.closed_at = func.now()
+                active_sess.reason = "stream_stopped"
+                await db.flush()
             return StreamStopResponse(result="stopped")
         raise
 
@@ -961,6 +1103,13 @@ async def release_device_control_lease(
             cached = _mountpoint_pins.get(device_id)
             if not cached or cached.get("lease_id") == lease_id:
                 await _destroy_janus_mountpoint(device_id)
+        repo = L4DeskRepository(db)
+        active_sess = await repo.get_active_session_by_terminal_id(device_id)
+        if isinstance(active_sess, L4DeskRemoteSession):
+            active_sess.state = "closed"
+            active_sess.closed_at = func.now()
+            active_sess.reason = "lease_released"
+            await db.flush()
 
 
 @router.post("/devices/{device_id}/control/events")

@@ -147,13 +147,24 @@ class Settings(BaseSettings):
     # L4media Video Surveillance
     l4media_ingress_url: str = "http://l4media-ingress:9100"
     l4media_janus_url: str = "http://l4media-janus:8088/janus"
+    l4media_service_token: str = ""
     video_port_base: int = 6000
     video_port_slots: int = 50
 
-    # Remote Input Control
+    @property
+    def l4media_effective_token(self) -> str:
+        return self.l4media_service_token or self.internal_service_key_value or ""
+
+    # Remote Input Control & Unified Session Orchestration (L4D-08B-MB)
     remote_control_enabled: bool = True
     remote_control_ws_connect_timeout_sec: float = 5.0
     remote_control_click_timeout_sec: float = 7.0  # > app1 click_ack_timeout (5 s)
+    l4desk_session_orchestration_enabled: bool = True
+    l4desk_policy_enforcement_enabled: bool = (
+        False  # Disabled in 08B (permissive legacy policy)
+    )
+    remote_session_start_timeout_sec: float = 20.0
+    remote_session_watchdog_ttl_sec: int = 600
 
     # IoT Contract Consumer v1 (L4Desk event feed)
     iot_event_feed_base_url: str = ""

@@ -2144,3 +2144,86 @@ consumers:
 next_prompt_id: L4D-08A-MEDIA
 ```
 <!-- HANDOFF:H-L4D-07-IOT-v1:END -->
+
+## 15. Принятие handoff H-L4D-08A-MEDIA-v1 (шаг 21 l4media)
+
+Фиксация контроллером каскада принятого контракта `H-L4D-08A-MEDIA-v1` шага 21 (`l4media`) по результатам приёмки отчёта `l4media/docs/l4desk/handoffs/L4D-08A-MEDIA-report.md`.
+
+Все проверки выполнены и подтверждены инструментально:
+1. Коммит проверенной реализации: `37adfd01e5492e6b61e8ecb243579389ae2d858e` (ветка `l4desk/l4d-08a-media`). Коммит отчёта: `aba1339a315bcc5956bb8686a0ad5cc113eee8fd`.
+2. Sequence gate пройден: предшествующий обязательный handoff `H-L4D-07-IOT-v1` принят в журнале (шаг 20), совместимость с baseline `H-L4D-00D-MEDIA-v1` подтверждена.
+3. Реализован и развернут аддитивный API управления жизненным циклом медиасессий по требованию на порту 9100 сервиса `l4media-ingress` (`/api/v1/media/sessions/start`, `/sessions/{session_id}`, `/sessions/{session_id}/stop`, `/reconcile`, `/metrics`, `/openapi.json`) со служебной авторизацией (`X-Media-Service-Token`).
+4. Гарантии надежности и предотвращения утечек ресурсов: компенсирующий откат (compensating rollback), сторожевой таймер сессий (TTL watchdog), автоматическая периодическая (каждые 60 с) и ручная reconciliation для удаления orphan-маунтпоинтов Janus и маршрутов Ingress, изоляция устройств (409 Conflict `session_busy`), детерминированная идемпотентность повторных вызовов start/stop.
+5. Инструментально проверены контрольные суммы SHA-256 артефактов:
+   - `l4media/ingress/openapi.json`: `ba2b4a19fd5c568a4b758b57121b01bf3062533906fcbd9e55991fc59157fcec` (совпадение 100%)
+   - `l4media/docs/l4desk/handoffs/L4D-08A-MEDIA-report.md`: `449a8b1a6a4e6ac3bdbb153058e8823f3134fa613aa3f446a04bec47163eacb1`
+6. Тестирование и верификация: 7/7 C unit-тестов успешно пройдены, 9/9 интеграционных тестов `test_media_lifecycle.py` пройдены, 6/6 регрессионных тестов `test_ingress_regression.py` пройдены, 7/7 проверок `check.sh` на хосте 87.242.100.34 пройдены. Внешние контейнеры не затронуты.
+
+<!-- HANDOFF:H-L4D-08A-MEDIA-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-08A-MEDIA-v1
+status: ACCEPTED
+contract_kinds:
+  - API
+  - DEPLOYMENT
+producer_prompt_id: L4D-08A-MEDIA
+producer_scope_project: l4media
+producer_report_path: l4media/docs/l4desk/handoffs/L4D-08A-MEDIA-report.md
+producer_branch: l4desk/l4d-08a-media
+producer_commit: 37adfd01e5492e6b61e8ecb243579389ae2d858e
+report_commit: aba1339a315bcc5956bb8686a0ad5cc113eee8fd
+accepted_at_utc: 2026-09-20T08:37:00Z
+contract_version: 1.0.0
+schema_revision: 1.0.0
+artifact_version: 1.0.0
+artifact_paths:
+  - l4media/ingress/openapi.json
+artifact_sha256:
+  - ba2b4a19fd5c568a4b758b57121b01bf3062533906fcbd9e55991fc59157fcec
+compatibility:
+  backward_compatible_with:
+    - H-L4D-00D-MEDIA-v1
+  breaking_changes: false
+  notes: Additive service-authenticated on-demand media session lifecycle API on l4media-ingress port 9100. Retains 100% backward compatibility for legacy /health, /stats, /routes. Provides atomic start, health monitoring, stop, automated reconciliation of orphan Janus mountpoints/routes, and TTL watchdog.
+deployment_status: DEPLOYED
+deployed_environment: production
+feature_flags: {}
+contract_payload:
+  identifiers:
+    session_id: correlation session identifier from 07 external contract (string)
+    operation_id: client idempotency operation identifier (string)
+    sn: terminal serial number (ASCII string)
+    device_id: numeric device ID / Janus mountpoint ID (integer)
+    rtp_port: dynamically allocated Janus video RTP port in range 6010-6200 (integer)
+    rtcp_port: dynamically allocated Janus video RTCP port (rtp_port + 1) (integer)
+  operations_events:
+    - POST /api/v1/media/sessions/start (start session, allocate ports, create Janus mountpoint, insert ingress route, idempotent repeat)
+    - GET /api/v1/media/sessions/{session_id} (session health, state, freshness, timestamps, elapsed/remaining TTL)
+    - POST /api/v1/media/sessions/{session_id}/stop (stop session, harvest final stats, delete ingress route, destroy Janus mountpoint, idempotent repeat)
+    - POST /api/v1/media/reconcile (reconciliation of orphan Janus mountpoints and Ingress routes)
+    - GET /api/v1/media/metrics (aggregate technical and audit metrics)
+    - GET /api/v1/openapi.json (OpenAPI 3.0.3 specification)
+  errors:
+    400: invalid_request (missing session_id or sn)
+    401: unauthorized (missing or invalid X-Media-Service-Token / Bearer token)
+    404: session_not_found (no session with specified session_id)
+    409: session_busy (active session already exists on device sn), session_terminated
+    502: janus_error (Janus Admin API gateway communication failure)
+    503: port_exhaustion (RTP port range exhausted), max_sessions_exceeded
+  invariants:
+    - Service authentication enforced on all /api/v1/media/* endpoints via X-Media-Service-Token or Authorization: Bearer
+    - Deterministic repeated start returns 200 OK with identical session connection parameters
+    - Deterministic repeated stop returns 200 OK with state=stopped
+    - Stop of non-existent or already-stopped session returns 200 OK
+    - Exactly one active session per terminal SN at any given time (enforces device mutual exclusion)
+    - Atomic rollback on partial start: failure during route upsert triggers compensating destroy of Janus mountpoint
+    - Automated TTL watchdog terminates sessions and frees resources upon ttl_sec expiration
+    - Periodic background reconciliation every 60s prunes orphan Janus mountpoints and routes while protecting static routes and default mountpoint 1
+    - Technical timestamps (created_at, started_at, stopped_at, last_rtp_at) and streaming counters (rtp_packets, bytes) provided for audit; no billing decisions made in media layer
+supersedes: []
+known_risks: []
+consumers:
+  - L4D-08B-MB
+next_prompt_id: L4D-08B-MB
+```
+<!-- HANDOFF:H-L4D-08A-MEDIA-v1:END -->

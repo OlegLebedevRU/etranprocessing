@@ -344,6 +344,15 @@ export default function DeviceConsoleTab({
             : "другим пользователем";
           const exp = detail.expires_at ? ` до ${new Date(detail.expires_at).toLocaleTimeString()}` : "";
           appendLine("error", `[ERROR] Терминал занят ${owner}${exp}.`);
+        } else if (
+          detail &&
+          typeof detail === "object" &&
+          (detail.code === "session_busy" || detail.message)
+        ) {
+          appendLine(
+            "error",
+            `[ERROR] ${detail.message || "Терминал занят другой сессией (видео или консоль)."}`
+          );
         } else {
           appendLine(
             "error",
@@ -351,7 +360,10 @@ export default function DeviceConsoleTab({
           );
         }
       } else if (err.response?.status === 403) {
-        appendLine("error", `[ERROR] Доступ к консоли разрешён только суперадминистраторам.`);
+        const msg =
+          (typeof detail === "object" ? detail.message : detail) ||
+          "Доступ к консоли разрешён администраторам и пользователям L4Desk.";
+        appendLine("error", `[ERROR] ${msg}`);
       } else {
         appendLine("error", `[ERROR] Ошибка получения аренды: ${err.response?.data?.detail || err.message}`);
       }

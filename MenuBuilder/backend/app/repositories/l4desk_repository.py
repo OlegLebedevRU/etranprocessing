@@ -342,6 +342,85 @@ class L4DeskRepository:
         res = await self.session.execute(stmt)
         return res.scalar_one_or_none()
 
+    async def get_active_session_by_terminal_id(
+        self, terminal_id: int
+    ) -> L4DeskRemoteSession | None:
+        stmt = select(L4DeskRemoteSession).where(
+            L4DeskRemoteSession.terminal_id == terminal_id,
+            L4DeskRemoteSession.state.in_(
+                ["reserved", "start_requested", "active", "stop_requested"]
+            ),
+        )
+        res = await self.session.execute(stmt)
+        if hasattr(res, "scalar_one_or_none"):
+            ret: Any = res.scalar_one_or_none()
+            if hasattr(ret, "__await__"):
+                ret = await ret  # pyright: ignore[reportGeneralTypeIssues]
+            if isinstance(ret, L4DeskRemoteSession):
+                return ret
+        return None
+
+    async def create_remote_session(
+        self,
+        *,
+        tenant_id: int,
+        terminal_id: int,
+        operation_id: str,
+        correlation_id: str,
+        session_type: str,
+        requested_by_user_id: int | None = None,
+        provider_session_id: str | None = None,
+        state: str = "reserved",
+    ) -> L4DeskRemoteSession:
+        sess = L4DeskRemoteSession(
+            tenant_id=tenant_id,
+            terminal_id=terminal_id,
+            operation_id=operation_id,
+            correlation_id=correlation_id,
+            session_type=session_type,
+            requested_by_user_id=requested_by_user_id,
+            provider_session_id=provider_session_id,
+            state=state,
+        )
+        self.session.add(sess)
+        await self.session.flush()
+        return sess
+
+    async def ensure_l4desk_terminal(
+        self,
+        *,
+        terminal_id: int,
+        tenant_id: int,
+        sn: str,
+        correlation_id: str,
+    ) -> L4DeskTerminal:
+        existing = await self.get_terminal(terminal_id, tenant_id)
+        if existing is not None:
+            return existing
+
+        ord_stmt = select(func.coalesce(func.max(L4DeskTerminal.ordinal), 0) + 1).where(
+            L4DeskTerminal.tenant_id == tenant_id
+        )
+        ord_res = await self.session.execute(ord_stmt)
+        next_ord = ord_res.scalar_one()
+
+        term = L4DeskTerminal(
+            terminal_id=terminal_id,
+            tenant_id=tenant_id,
+            ordinal=next_ord,
+            sn=sn,
+            external_terminal_id=str(terminal_id),
+            operation_id=f"legacy-init-{terminal_id}",
+            correlation_id=correlation_id,
+            runtime_terminal_id=terminal_id,
+            device_id=terminal_id,
+            provisioning_state="ready",
+            pin_state="issued",
+        )
+        self.session.add(term)
+        await self.session.flush()
+        return term
+
     async def get_session_by_operation_id(
         self, tenant_id: int, operation_id: str
     ) -> L4DeskRemoteSession | None:

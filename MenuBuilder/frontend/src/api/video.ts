@@ -362,3 +362,62 @@ export function getControlWsUrl(wsPath: string): string {
   const path = wsPath.startsWith("/") ? wsPath : `/${wsPath}`;
   return `${proto}//${host}${path}`;
 }
+
+export interface RemoteSessionInfo {
+  session_id: string;
+  local_session_id?: number;
+  terminal_id: number;
+  sn: string;
+  session_type: "console" | "video";
+  state: "reserved" | "starting" | "active" | "stopping" | "closed" | "failed";
+  mountpoint_id?: number | null;
+  janus_ws?: string | null;
+  pin?: string | null;
+  lease_id?: string | null;
+  ws_path?: string | null;
+  ttl_sec?: number;
+}
+
+export async function startRemoteSession(params: {
+  device_id: number;
+  session_type: "console" | "video";
+  operation_id?: string;
+  correlation_id?: string;
+  mode?: string;
+  source_id?: string;
+  profile?: string;
+  start_terminal_stream?: boolean;
+}): Promise<RemoteSessionInfo> {
+  const { data } = await client.post<RemoteSessionInfo>(
+    "/v1/remote-sessions/start",
+    params
+  );
+  return data;
+}
+
+export async function stopRemoteSession(params: {
+  device_id?: number;
+  session_id?: string;
+  reason?: string;
+}): Promise<{ status: string; session_id?: string; state: string }> {
+  const { data } = await client.post(
+    "/v1/remote-sessions/stop",
+    params
+  );
+  return data;
+}
+
+export async function getActiveRemoteSession(
+  deviceId: number
+): Promise<{
+  active: boolean;
+  session_id?: string;
+  session_type?: string;
+  state?: string;
+  streaming?: boolean;
+}> {
+  const { data } = await client.get(
+    `/v1/remote-sessions/devices/${deviceId}/active`
+  );
+  return data;
+}
