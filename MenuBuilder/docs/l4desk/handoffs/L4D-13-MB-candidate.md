@@ -39,6 +39,7 @@ artifact_paths:
   - MenuBuilder/frontend/src/tests/l4desk-profile-navigation.test.ts
   - MenuBuilder/frontend/src/tests/l4desk-refusal-reasons.test.ts
   - MenuBuilder/frontend/src/utils/navigationProfile.ts
+  - nginx-configs/port_3000.conf
   - MenuBuilder/docs/l4desk/handoffs/L4D-13-MB-report.md
 artifact_sha256:
   - 296e0ef944a9e1abcda254a28f19a77b4741e97b6c82b8a01c1379b1313cad06
@@ -62,6 +63,7 @@ artifact_sha256:
   - 80b11223a85e23fe1456914a8280b098a48a495a1a7ec4b7067b1ca71353035e
   - 95bc280c549c10e7354932bcfff576c660f0a686de26fe9b4cb098a542efa506
   - bbbf70d9eed9d8e2c2e84960a2195f301a1ba7e1ec0d76662ae8452aee4f2f3d
+  - e76037bdee1d28411ff843d6ee8dc3e0e8dff3c95382e2e972566afda1f6ef0d
   - b9027374de01a8e01b2c56e7cc30467747fbc35a8aae646ac6a6eadbe7886c1b
 compatibility:
   backward_compatible_with:
