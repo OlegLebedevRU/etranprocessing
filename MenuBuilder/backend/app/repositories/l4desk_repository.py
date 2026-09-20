@@ -9,6 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models_l4desk import (
     FinAccount,
     FinBalanceProjection,
+    FinLedgerEntry,
+    FinLedgerTransaction,
+    FinReconciliationRun,
     L4DeskAuditEvent,
     L4DeskMembership,
     L4DeskRegistration,
@@ -473,3 +476,52 @@ class L4DeskRepository:
         )
         res = await self.session.execute(stmt)
         return res.scalar_one_or_none()
+
+    async def get_ledger_transaction(
+        self, transaction_id: int, tenant_id: int
+    ) -> FinLedgerTransaction | None:
+        stmt = select(FinLedgerTransaction).where(
+            FinLedgerTransaction.id == transaction_id,
+            FinLedgerTransaction.tenant_id == tenant_id,
+        )
+        res = await self.session.execute(stmt)
+        return res.scalar_one_or_none()
+
+    async def list_ledger_transactions(
+        self, tenant_id: int, limit: int = 50, offset: int = 0
+    ) -> list[FinLedgerTransaction]:
+        stmt = (
+            select(FinLedgerTransaction)
+            .where(FinLedgerTransaction.tenant_id == tenant_id)
+            .order_by(FinLedgerTransaction.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        res = await self.session.execute(stmt)
+        return list(res.scalars().all())
+
+    async def list_ledger_entries(self, transaction_id: int) -> list[FinLedgerEntry]:
+        stmt = (
+            select(FinLedgerEntry)
+            .where(FinLedgerEntry.transaction_id == transaction_id)
+            .order_by(FinLedgerEntry.line_number)
+        )
+        res = await self.session.execute(stmt)
+        return list(res.scalars().all())
+
+    async def get_reconciliation_run(self, run_id: int) -> FinReconciliationRun | None:
+        stmt = select(FinReconciliationRun).where(FinReconciliationRun.id == run_id)
+        res = await self.session.execute(stmt)
+        return res.scalar_one_or_none()
+
+    async def list_reconciliation_runs(
+        self, tenant_id: int | None = None, limit: int = 50
+    ) -> list[FinReconciliationRun]:
+        stmt = select(FinReconciliationRun).order_by(
+            FinReconciliationRun.started_at.desc()
+        )
+        if tenant_id is not None:
+            stmt = stmt.where(FinReconciliationRun.tenant_id == tenant_id)
+        stmt = stmt.limit(limit)
+        res = await self.session.execute(stmt)
+        return list(res.scalars().all())

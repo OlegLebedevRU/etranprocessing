@@ -215,6 +215,9 @@ class Settings(BaseSettings):
     )
     agent_release_version: str = "1.7.7"
 
+    # L4Desk Financial Core Double-Entry Subledger (L4D-09-MB)
+    l4desk_financial_core_enabled: bool = True
+
     @property
     def processing_backend_effective_url(self) -> str:
         return self.processing_backend_url or "http://processing-backend:8000"
@@ -230,6 +233,10 @@ class Settings(BaseSettings):
     @property
     def is_terminal_onboarding_enabled(self) -> bool:
         return self.l4desk_terminal_onboarding_enabled or self.l4desk_enabled
+
+    @property
+    def is_financial_core_enabled(self) -> bool:
+        return self.l4desk_financial_core_enabled or self.l4desk_enabled
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

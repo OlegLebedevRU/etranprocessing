@@ -17,6 +17,7 @@ from app.routers import (
     billing,
     catalog,
     dashboard,
+    finance,
     groups,
     integrations,
     iot_consumer,
@@ -159,3 +160,4 @@ app.include_router(video_control.router)
 app.include_router(remote_sessions.router, prefix="/api/v1")
 app.include_router(remote_sessions.router, prefix="/api")
 app.include_router(iot_consumer.router)
+app.include_router(finance.router)
