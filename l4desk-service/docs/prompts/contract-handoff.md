@@ -2264,3 +2264,837 @@ runtime_acceptance: NOT_GRANTED
 blocked_next_prompt_id: L4D-09-MB
 ```
 <!-- CORRECTIVE_REGISTRATION:R-L4D-08B-MB-FIX-01-v1:END -->
+
+## 17. Принятие handoff H-L4D-08B-MB-FIX-01-v1 (DETACHED_V1)
+
+Фиксация контроллером каскада принятого корректирующего контракта `H-L4D-08B-MB-FIX-01-v1` по результатам проверки отчёта `MenuBuilder/docs/l4desk/handoffs/L4D-08B-MB-FIX-01-report.md` и отдельного кандидата `MenuBuilder/docs/l4desk/handoffs/L4D-08B-MB-FIX-01-candidate.md` в формате `DETACHED_V1` согласно §9 `PROMPT-STANDARD.md` и нормативной регистрации `R-L4D-08B-MB-FIX-01-v1`.
+
+Все 4 основания первичного отказа устранены и подтверждены контрольной проверкой:
+1. `HASH_MISMATCH` и структурный дефект схемы устранены: количество путей в `artifact_paths` (14) строго равно количеству сумм в `artifact_sha256` (14), `main.py` включён, файл конфигурации хоста `port_3000.conf` исключён из scope `MenuBuilder`.
+2. Коммит реализации зафиксирован как `producer_commit: ad5a13d9fce804746f4f961812b8a026ba416bf4` (ветка `l4desk/l4d-08b-mb`), изменения строго изолированы в проекте `MenuBuilder`. Коммит публикации отчётов: `report_commit: 8bd1bc52cf2614188f82745c0dcc49a8562792b6`. Коммит отдельного кандидата: `ebcead566ca270e61dc6a10e1c9c8e8bd077e6db`.
+3. Candidate-блок вынесен в отдельный файл `candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-08B-MB-FIX-01-candidate.md` (`DETACHED_V1`).
+4. Ошибка базы данных (нарушение check-констрейнта `l4desk_session_active_ck` на легаси-эндпоинтах `/control/lease` и `/stream/start`) устранена в репозитории и роутере, подтверждена регрессионными тестами и live smoke-проверками в контейнере `menubuilder-backend` на хосте `87.242.100.34`.
+5. Контрольные суммы SHA-256 всех 14 артефактов проверены побайтно и полностью совпадают на 100%. Sequence gate `H-L4D-08A-MEDIA-v1` и регистрация `R-L4D-08B-MB-FIX-01-v1` подтверждены.
+
+<!-- HANDOFF:H-L4D-08B-MB-FIX-01-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-08B-MB-FIX-01-v1
+status: ACCEPTED
+contract_kinds:
+  - API
+  - DEPLOYMENT
+producer_prompt_id: L4D-08B-MB-FIX-01
+producer_scope_project: MenuBuilder
+producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-08B-MB-FIX-01-report.md
+producer_branch: l4desk/l4d-08b-mb
+producer_commit: ad5a13d9fce804746f4f961812b8a026ba416bf4
+report_commit: 8bd1bc52cf2614188f82745c0dcc49a8562792b6
+accepted_at_utc: 2026-09-20T11:40:00Z
+contract_version: 1.0.0
+schema_revision: 1.0.0
+artifact_version: 1.0.0
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-08B-MB-FIX-01-candidate.md
+artifact_paths:
+  - MenuBuilder/backend/app/services/remote_session_use_case.py
+  - MenuBuilder/backend/app/services/media_orchestrator_client.py
+  - MenuBuilder/backend/app/services/remote_session_policy.py
+  - MenuBuilder/backend/app/routers/remote_sessions.py
+  - MenuBuilder/backend/app/routers/video_control.py
+  - MenuBuilder/backend/app/routers/video.py
+  - MenuBuilder/backend/app/repositories/l4desk_repository.py
+  - MenuBuilder/backend/app/config.py
+  - MenuBuilder/backend/app/main.py
+  - MenuBuilder/frontend/src/api/video.ts
+  - MenuBuilder/frontend/src/routes/video-surveillance.tsx
+  - MenuBuilder/frontend/src/routes/devices/DeviceConsoleTab.tsx
+  - MenuBuilder/backend/tests/test_remote_session_orchestration.py
+  - MenuBuilder/docs/l4desk/handoffs/L4D-08B-MB-FIX-01-report.md
+artifact_sha256:
+  - e83af253732b11d89e63c18562b563420ae6b228492f40eee74d27de07df2389
+  - 65b07e3b35eccbfa412ec75a8b1362f1cdf682107af51385e5e06e4d8652ed8a
+  - 688e4d3d31ab4c623d4bc85f602ede31bb935ee39394e88fd3de08c5444e5ca5
+  - f6612a7f679e6e1c73d74128911dcbe608778fb9d8212ac2f93096777e94dd72
+  - 0ec7212e941b825407a15e47d68fd499298b5f230e6e1e963848f94e09f1d69b
+  - ac7856605aa42cc24db1ec8657d5f5959e6496a35e5940ff68dbc614f78f03bc
+  - 46947572410dab6e163f7ca9f3f22644ef8c33c3629edef51709915a81aefb23
+  - 31782a1eb607a3f84375ef798ed000e614de33c09161e7353d0855b6db6a3116
+  - d54d19cfe79fc00a2c1d3db397cb83c44759f02c018742c0131676e716626e55
+  - ae38c22884ad8246cbcaefb70aa49be5b42687dfa477f7b19860b0224c789ea7
+  - 87f8dbc8e396bad3d6c35005d1672cc9a48815afbb894323378bf9e095b72d14
+  - d8b93b0ab0285781f33efba06dfca6d3469ddf2872ec48ec8b3333e7fc7a1cf5
+  - c34880ca65b4ac4b81a25b26034d1c2317f9f224c46a189cbcd450fcf3c030f1
+  - 3d242f40722d1e8b9e65a8c7808a11c9c58ce27688534ef85bbc525afef38460
+compatibility:
+  backward_compatible_with:
+    - H-L4D-07-IOT-v1
+    - H-L4D-08A-MEDIA-v1
+  breaking_changes: false
+  notes: "Corrective handoff package resolving HASH_MISMATCH, schema alignment, and PostgreSQL check constraint l4desk_session_active_ck on remote session creation."
+deployment_status: DEPLOYED
+deployed_environment: production
+feature_flags:
+  l4desk_session_orchestration_enabled: true
+  l4desk_policy_enforcement_enabled: false
+contract_payload:
+  corrects_candidate: H-L4D-08B-MB-v1
+  registration_id: R-L4D-08B-MB-FIX-01-v1
+  evidence_source: L4D-08B-MB-FIX-01
+  endpoints:
+    start_session: /api/v1/remote-sessions/start
+    stop_session: /api/v1/remote-sessions/stop
+    stop_session_by_id: /api/v1/remote-sessions/{session_id}/stop
+    device_active_session: /api/v1/remote-sessions/devices/{device_id}/active
+  policy_seam:
+    interface: RemoteSessionPolicy
+    legacy_implementation: PermissiveLegacyPolicy
+    commercial_implementation: L4DeskEntitlementPolicy (disabled in 08B)
+  error_mapping:
+    400: invalid_request
+    401: unauthorized
+    403: tenant_forbidden, permission_denied, policy_denied
+    404: terminal_not_found
+    409: session_busy (active session conflict, automatic switch forbidden), lease_conflict
+    502: iot_gateway_error, media_gateway_error
+  invariants:
+    - Exactly one active remote session per terminal device across both console and video
+    - Automatic cross-switching between console and video is strictly forbidden
+    - Replay with identical operation_id returns active session parameters idempotently
+    - Partial failure during media or stream launch executes compensating stop on IoT and releases control lease
+supersedes: []
+known_risks: []
+consumers:
+  - L4D-08B-MB
+next_prompt_id: L4D-08B-MB
+```
+<!-- HANDOFF:H-L4D-08B-MB-FIX-01-v1:END -->
+
+## 18. Повторная приёмка основного шага 22 L4D-08B-MB (H-L4D-08B-MB-v1)
+
+Повторная приёмка контроллером каскада основного шага 22 `L4D-08B-MB` (`MenuBuilder`) на основе исправленного и проверенного пакета `L4D-08B-MB-FIX-01` (коммит реализации `ad5a13d9fce804746f4f961812b8a026ba416bf4`, ветка `l4desk/l4d-08b-mb`).
+
+Все требования к приёмке основного шага выполнены:
+1. Входные sequence gates `H-L4D-07-IOT-v1`, `H-L4D-08A-MEDIA-v1` и промежуточный корректирующий handoff `H-L4D-08B-MB-FIX-01-v1` приняты в журнале.
+2. Единая оркестрация удалённых сессий консоли и видео (`RemoteSessionUseCase`) реализована с изоляцией тенантов, взаимным исключением (HTTP 409 `session_busy`), запретом автопереключения между консолью и видео, компенсирующим откатом при частичных сбоях медиа/стрима и policy seam (`PermissiveLegacyPolicy` по умолчанию, подготовлен шов к `L4D-12-MB`).
+3. Контрольные суммы SHA-256 всех 14 артефактов проверены инструментально и совпадают на 100%.
+4. Кандидат оформлен по стандарту `DETACHED_V1` в файле `MenuBuilder/docs/l4desk/handoffs/L4D-08B-MB-candidate.md`.
+5. Разрешён переход к следующему шагу каскада: `L4D-09-MB` (потребитель: `MenuBuilder`).
+
+<!-- HANDOFF:H-L4D-08B-MB-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-08B-MB-v1
+status: ACCEPTED
+contract_kinds:
+  - API
+  - DEPLOYMENT
+producer_prompt_id: L4D-08B-MB
+producer_scope_project: MenuBuilder
+producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-08B-MB-report.md
+producer_branch: l4desk/l4d-08b-mb
+producer_commit: ad5a13d9fce804746f4f961812b8a026ba416bf4
+report_commit: 8bd1bc52cf2614188f82745c0dcc49a8562792b6
+accepted_at_utc: 2026-09-20T11:41:00Z
+contract_version: 1.0.0
+schema_revision: 1.0.0
+artifact_version: 1.0.0
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-08B-MB-candidate.md
+artifact_paths:
+  - MenuBuilder/backend/app/services/remote_session_use_case.py
+  - MenuBuilder/backend/app/services/media_orchestrator_client.py
+  - MenuBuilder/backend/app/services/remote_session_policy.py
+  - MenuBuilder/backend/app/routers/remote_sessions.py
+  - MenuBuilder/backend/app/routers/video_control.py
+  - MenuBuilder/backend/app/routers/video.py
+  - MenuBuilder/backend/app/repositories/l4desk_repository.py
+  - MenuBuilder/backend/app/config.py
+  - MenuBuilder/backend/app/main.py
+  - MenuBuilder/frontend/src/api/video.ts
+  - MenuBuilder/frontend/src/routes/video-surveillance.tsx
+  - MenuBuilder/frontend/src/routes/devices/DeviceConsoleTab.tsx
+  - MenuBuilder/backend/tests/test_remote_session_orchestration.py
+  - MenuBuilder/docs/l4desk/handoffs/L4D-08B-MB-report.md
+artifact_sha256:
+  - e83af253732b11d89e63c18562b563420ae6b228492f40eee74d27de07df2389
+  - 65b07e3b35eccbfa412ec75a8b1362f1cdf682107af51385e5e06e4d8652ed8a
+  - 688e4d3d31ab4c623d4bc85f602ede31bb935ee39394e88fd3de08c5444e5ca5
+  - f6612a7f679e6e1c73d74128911dcbe608778fb9d8212ac2f93096777e94dd72
+  - 0ec7212e941b825407a15e47d68fd499298b5f230e6e1e963848f94e09f1d69b
+  - ac7856605aa42cc24db1ec8657d5f5959e6496a35e5940ff68dbc614f78f03bc
+  - 46947572410dab6e163f7ca9f3f22644ef8c33c3629edef51709915a81aefb23
+  - 31782a1eb607a3f84375ef798ed000e614de33c09161e7353d0855b6db6a3116
+  - d54d19cfe79fc00a2c1d3db397cb83c44759f02c018742c0131676e716626e55
+  - ae38c22884ad8246cbcaefb70aa49be5b42687dfa477f7b19860b0224c789ea7
+  - 87f8dbc8e396bad3d6c35005d1672cc9a48815afbb894323378bf9e095b72d14
+  - d8b93b0ab0285781f33efba06dfca6d3469ddf2872ec48ec8b3333e7fc7a1cf5
+  - c34880ca65b4ac4b81a25b26034d1c2317f9f224c46a189cbcd450fcf3c030f1
+  - 7c442c52c20e5944c667d14869f791f455d7e0de12802e511f79c672a9b206f9
+compatibility:
+  backward_compatible_with:
+    - H-L4D-07-IOT-v1
+    - H-L4D-08A-MEDIA-v1
+  breaking_changes: false
+  notes: "Unified RemoteSessionUseCase for console and video session orchestration across legacy MenuBuilder users and L4Desk commercial profile. Enforces mutual exclusion (session_busy 409, no auto-switch), compensating stop upon partial provider failures, and provides a policy seam with disabled entitlement flag. Verified and confirmed under corrective step L4D-08B-MB-FIX-01."
+deployment_status: DEPLOYED
+deployed_environment: production
+feature_flags:
+  l4desk_session_orchestration_enabled: true
+  l4desk_policy_enforcement_enabled: false
+contract_payload:
+  evidence_source: L4D-08B-MB-FIX-01
+  verified_by_handoff: H-L4D-08B-MB-FIX-01-v1
+  endpoints:
+    start_session: /api/v1/remote-sessions/start
+    stop_session: /api/v1/remote-sessions/stop
+    stop_session_by_id: /api/v1/remote-sessions/{session_id}/stop
+    device_active_session: /api/v1/remote-sessions/devices/{device_id}/active
+  policy_seam:
+    interface: RemoteSessionPolicy
+    legacy_implementation: PermissiveLegacyPolicy
+    commercial_implementation: L4DeskEntitlementPolicy (disabled in 08B)
+  error_mapping:
+    400: invalid_request
+    401: unauthorized
+    403: tenant_forbidden, permission_denied, policy_denied
+    404: terminal_not_found
+    409: session_busy (active session conflict, automatic switch forbidden), lease_conflict
+    502: iot_gateway_error, media_gateway_error
+  invariants:
+    - Exactly one active remote session per terminal device across both console and video
+    - Automatic cross-switching between console and video is strictly forbidden
+    - Replay with identical operation_id returns active session parameters idempotently
+    - Partial failure during media or stream launch executes compensating stop on IoT and releases control lease
+supersedes: []
+known_risks: []
+consumers:
+  - L4D-09-MB
+next_prompt_id: L4D-09-MB
+```
+<!-- HANDOFF:H-L4D-08B-MB-v1:END -->
+
+## 19. Принятие handoff H-L4D-09-MB-v1 (шаг 23 MenuBuilder)
+
+Фиксация контроллером каскада принятого контракта `H-L4D-09-MB-v1` шага 23 (`MenuBuilder`) по результатам приёмки отчёта `MenuBuilder/docs/l4desk/handoffs/L4D-09-MB-report.md` и кандидата `MenuBuilder/docs/l4desk/handoffs/L4D-09-MB-candidate.md`.
+
+Все проверки выполнены и подтверждены инструментально:
+1. Коммит проверенной реализации: `3d0dddba68df211a1d6c89844e0311b43bccd44d` (ветка `l4desk/l4d-09-mb`). Коммит отчёта и кандидата: `d487bc23011d90cad1ab9945abf480fca73e397a`.
+2. Sequence gate пройден: предшествующий обязательный handoff `H-L4D-08B-MB-v1` (шаг 22) и промежуточный `H-L4D-04C-MB-v1` приняты в журнале со статусом `ACCEPTED`. Архитектурные разделы §3, §5, §7, §9, §10, §13, §14, §15, §16, §17 соблюдены.
+3. Финансовое ядро двойной записи (`fin_*` subledger) и быстрая проекция баланса реализованы в `MenuBuilder`:
+   - `FinAccountService`: обеспечение системных счетов (`payment_clearing`, `usage_revenue`) и расчетных счетов тенантов (`tenant_settlement`).
+   - `FinPostingService`: строгий append-only аудит (`FinLedgerTransaction`, `FinLedgerEntry`), инвариант двойной записи (`sum(debit) == sum(credit) > 0`), запрет `float`, целочисленные рубли (кратность 100 копейкам), односторонность строк, идемпотентность и строгая изоляция тенантов.
+   - `FinProjectionService`: баланс тенанта $\text{credits} - \text{debits}$, атомарное обновление проекции `fin_balance_projections` с оптимистической блокировкой версий, возможность полного пересчета/восстановления из журнала проводок.
+   - `FinReversalService`: корректирующие транзакции (`reversal`) с инверсией проводок и ссылкой `corrects_transaction_id`.
+   - `FinReconciliationService`: регламентный аудит и сверка целостности за период, проверка констрейнтов и авто-пересчет.
+   - REST API эндпоинты (`/api/v1/finance/balance`, `/api/v1/finance/transactions`, `/api/internal/v1/finance/*`).
+4. Побайтно проверены контрольные суммы SHA-256 для всех 14 артефактов реализации и отчёта — совпадают на 100%.
+5. Тестовый набор успешно пройден: 20 passed в `test_financial_core.py`, полный набор `MenuBuilder/backend` 376 passed (0 failures, 0 errors).
+6. Live smoke evidence на боевом сервере `87.242.100.34` подтверждён (транзакция пополнения -> сторно -> сверка -> пересчет проекции, баланс возвращен в 0).
+7. Кандидат оформлен по стандарту `DETACHED_V1` в файле `MenuBuilder/docs/l4desk/handoffs/L4D-09-MB-candidate.md`.
+8. Разрешён переход к следующему шагу каскада: `L4D-10-MB` (потребитель: `MenuBuilder`).
+
+<!-- HANDOFF:H-L4D-09-MB-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-09-MB-v1
+status: ACCEPTED
+contract_kinds:
+  - SCHEMA
+  - API
+  - DEPLOYMENT
+producer_prompt_id: L4D-09-MB
+producer_scope_project: MenuBuilder
+producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-09-MB-report.md
+producer_branch: l4desk/l4d-09-mb
+producer_commit: 3d0dddba68df211a1d6c89844e0311b43bccd44d
+report_commit: d487bc23011d90cad1ab9945abf480fca73e397a
+accepted_at_utc: '2026-09-20T13:00:00Z'
+contract_version: 1.0.0
+schema_revision: '027'
+artifact_version: 1.0.0
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-09-MB-candidate.md
+artifact_paths:
+  - MenuBuilder/backend/app/config.py
+  - MenuBuilder/backend/app/main.py
+  - MenuBuilder/backend/app/repositories/l4desk_repository.py
+  - MenuBuilder/backend/app/routers/finance.py
+  - MenuBuilder/backend/app/services/financial_core/__init__.py
+  - MenuBuilder/backend/app/services/financial_core/accounts.py
+  - MenuBuilder/backend/app/services/financial_core/exceptions.py
+  - MenuBuilder/backend/app/services/financial_core/posting.py
+  - MenuBuilder/backend/app/services/financial_core/projection.py
+  - MenuBuilder/backend/app/services/financial_core/reconciliation.py
+  - MenuBuilder/backend/app/services/financial_core/reversal.py
+  - MenuBuilder/backend/app/services/financial_core/schemas.py
+  - MenuBuilder/backend/tests/test_financial_core.py
+  - MenuBuilder/docs/l4desk/handoffs/L4D-09-MB-report.md
+artifact_sha256:
+  - a5157b6de75e801a9e8c169fb40f4b0e3af2172d5ccf9282f99bb6a0ec49ba07
+  - ea8e5f4bc9ff71ffd45d8aee6533be20fc2081304d73f6f5dfd66fcb2e0ac74a
+  - 5cd4aa664214126f3cb8dba146d1da14400081cf551992a4a944e3d24cfabcb7
+  - 2b9cfab30ae756600b413fa2b2dd2c111f22c93a712643a1d22569d33ea93974
+  - 8fb7e50c8d1b8c0da185f3daf785c821d16270ccb47a71442fbc4d01055d582b
+  - 731512c8cc5e10c65325b6f746c259f5a01cc0c15e39eaba39e612c8b060c2a8
+  - d075e093ca2e8c33503af5a2b16f84946dbcf7b3412f6f6a9d86e31d8fda173d
+  - e0033fcf38e1d0a704a3aabb9c8decd44bfb0533c3e8eac67e27879e3557a30b
+  - 765a69fad521a893d7cd5fe0f7325f190d53645627aa609ae8e0297a71654af0
+  - 64169deadcc64c71187ed0b3f9131a27c36ee8e8490faddd75bbcde91f83064f
+  - a0c39a49c132b88f159e6dcd7c5df1e733941ffe073b1b2701a93dc8bee8c7a1
+  - 6f839a54bacc139225a20164a3c22623e4e71e845fd112891a4edfb09c8984f0
+  - 5b01420ff87ed7d42af838344e79c63b2087d41c39cc74ac404984dac4279aea
+  - 729436d7a0ba76b601acc1261287b6264391fc48a5a44f888fc37d71ba8791b8
+compatibility:
+  backward_compatible_with:
+    - H-L4D-08B-MB-v1
+    - H-L4D-04C-MB-v1
+  breaking_changes: false
+  notes: Minimal double-entry fin_* subledger and fast balance projection for MenuBuilder with strict append-only constraints, whole-ruble kopecks, optimistic version locking, reversal support, and periodic reconciliation audits.
+deployment_status: DEPLOYED
+deployed_environment: production
+feature_flags:
+  l4desk_financial_core_enabled: true
+  l4desk_billing_enabled: false
+contract_payload:
+  account_kinds:
+    - tenant_settlement
+    - payment_clearing
+    - usage_revenue
+  currency: RUB
+  subledger_invariants:
+    - "double_entry: sum(debit_kopecks) == sum(credit_kopecks) > 0"
+    - "integer_only: integer kopecks strictly required, float prohibited"
+    - "whole_rubles_rule: debit_kopecks % 100 == 0, credit_kopecks % 100 == 0"
+    - "single_sided_entries: exactly one positive side per entry (debit xor credit)"
+    - "immutability: update and delete of posted transactions and entries strictly prohibited"
+    - "tenant_isolation: all transaction entries and tenant accounts must match transaction tenant_id"
+    - "reversal_rule: corrections reference original via corrects_transaction_id with inverse entries"
+  balance_projection_rule: "balance_kopecks = credits(tenant_settlement) - debits(tenant_settlement)"
+  projection_concurrency: "optimistic locking with version increment and row locking in same DB transaction"
+  reconciliation_checks:
+    - ledger_balance
+    - reversal_invariants
+    - tenant_isolation
+    - projection_consistency
+    - duplicate_posting
+    - corruption_detection
+  endpoints:
+    tenant_balance: GET /api/v1/finance/balance
+    tenant_transactions: GET /api/v1/finance/transactions
+    internal_post: POST /api/internal/v1/finance/post
+    internal_reversal: POST /api/internal/v1/finance/reversal
+    internal_rebuild: POST /api/internal/v1/finance/rebuild-projection/{tenant_id}
+    internal_reconciliation: POST /api/internal/v1/finance/reconciliation
+    internal_reconciliation_runs: GET /api/internal/v1/finance/reconciliation/runs
+supersedes: []
+known_risks:
+  - "Dark deployment active: automated recurring user usage deductions remain disabled until L4D-10-MB meter engine is introduced."
+  - "Optimistic concurrency conflict (HTTP 409) requires retry if multiple concurrent operations target the same tenant simultaneously."
+consumers:
+  - L4D-10-MB
+next_prompt_id: L4D-10-MB
+```
+<!-- HANDOFF:H-L4D-09-MB-v1:END -->
+
+## 20. Принятие handoff H-L4D-10-MB-v1 (шаг 24 MenuBuilder)
+
+Фиксация контроллером каскада принятого контракта `H-L4D-10-MB-v1` шага 24 (`MenuBuilder`) по результатам приёмки отчёта `MenuBuilder/docs/l4desk/handoffs/L4D-10-MB-report.md` и кандидата `MenuBuilder/docs/l4desk/handoffs/L4D-10-MB-candidate.md`.
+
+Все проверки выполнены и подтверждены инструментально:
+1. Коммит проверенной реализации: `2d567c2262e8b37022312427e2f77ba21b61f144` (ветка `l4desk/l4d-10-mb`). Коммит отчёта и кандидата: `d7fa495eacd8f80f72dfefa0dcc4d23b5a6b1be8`.
+2. Sequence gate пройден: предшествующий обязательный handoff `H-L4D-09-MB-v1` (шаг 23), а также зависимые `H-L4D-03-MB-v1` и `H-L4D-02-IOT-v1` приняты в журнале со статусом `ACCEPTED`. Архитектурные разделы §2, §3, §5, §6, §7, §9, §10, §13, §14, §15, §16, §17 соблюдены.
+3. Версионированные тарифы, индивидуальные биллинговые циклы и движок учёта потребления (metering engine) реализованы в `MenuBuilder`:
+   - `FinTariffService`: снимки неизменяемых тарифов в `fin_tariff_versions` (базовый `v1.0`: 10000 коп./мес, 100 коп./час, 7200 с бесплатной суточной квоты) и выбор эффективного тарифа `get_effective_tariff(as_of)`.
+   - `FinBillingCycleService`: индивидуальная фиксация якорной даты по первому платежу тенанта, правило `add_months` с сохранением времени и правилом последнего существующего дня месяца, расчёт границ циклов и льготного окна `starts_at < grace_deadline < ends_at` (3 календарных дня). Неизменность якоря при повторных платежах и событиях `device_online`.
+   - `FinTerminalService`: постоянная льгота первого терминала (`ordinal ASC` среди `deleted_at IS NULL`) с передачей строго вперёд при удалении. Ежемесячный сбор 10000 копеек за платный терминал при первом `device_online` в цикле с дедупликацией по `(terminal_id, billing_cycle_id)`.
+   - `FinMeteringService`: нарезка сессий по локальным полуночам тенанта (`Europe/London`, DST-safe), суточное округление часов `ceil(billable_seconds / 3600)`, универсальная формула округления тарифа `calculated = posted + discarded` (`0 <= discarded < 100`, кратность рублям). Неизменяемость проведённых суток и создание корректирующих проводок `kind='adjustment'` для late events со ссылкой `corrects_transaction_id`.
+   - REST API эндпоинты (`/api/v1/finance/profile`, `/api/v1/finance/cycles`, `/api/v1/finance/tariffs/current`, `/api/v1/finance/usage`, `/api/v1/finance/monthly-charges`, `/api/internal/v1/finance/*`).
+4. Побайтно проверены контрольные суммы SHA-256 для всех 13 артефактов реализации и отчёта, а также отдельного кандидатского файла `L4D-10-MB-candidate.md` (`776e89ed66ea293a0d9c55cb5847f059d7d8fcb136b1ee39722eaf868ab51285`) — совпадают на 100%.
+5. Тестовый набор успешно пройден: 14 passed в `test_tariffs_and_metering.py`, полный набор `MenuBuilder/backend` 390 passed (0 failures, 0 errors), `shared` 65 passed, linters и static analysis (ruff, pyright) 0 errors/warnings.
+6. Live smoke evidence на боевом сервере `87.242.100.34` подтверждён в Shadow Mode (разрешение тарифа -> правило add_months -> границы цикла -> расчёт метрик 120м/120м01с -> инварианты округления -> live сверка сабреджера matched).
+7. Кандидат оформлен по стандарту `DETACHED_V1` в файле `MenuBuilder/docs/l4desk/handoffs/L4D-10-MB-candidate.md`.
+8. Разрешён переход к следующему шагу каскада: `L4D-11-MB` (потребитель: `MenuBuilder`).
+
+<!-- HANDOFF:H-L4D-10-MB-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-10-MB-v1
+status: ACCEPTED
+contract_kinds:
+  - API
+  - DEPLOYMENT
+producer_prompt_id: L4D-10-MB
+producer_scope_project: MenuBuilder
+producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-10-MB-report.md
+producer_branch: l4desk/l4d-10-mb
+producer_commit: 2d567c2262e8b37022312427e2f77ba21b61f144
+report_commit: d7fa495eacd8f80f72dfefa0dcc4d23b5a6b1be8
+accepted_at_utc: '2026-09-20T17:00:00Z'
+contract_version: 1.0.0
+schema_revision: '027'
+artifact_version: 1.0.0
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-10-MB-candidate.md
+artifact_paths:
+  - MenuBuilder/backend/app/repositories/l4desk_repository.py
+  - MenuBuilder/backend/app/routers/finance.py
+  - MenuBuilder/backend/app/services/financial_core/__init__.py
+  - MenuBuilder/backend/app/services/financial_core/cycles.py
+  - MenuBuilder/backend/app/services/financial_core/exceptions.py
+  - MenuBuilder/backend/app/services/financial_core/metering.py
+  - MenuBuilder/backend/app/services/financial_core/schemas.py
+  - MenuBuilder/backend/app/services/financial_core/tariffs.py
+  - MenuBuilder/backend/app/services/financial_core/terminals.py
+  - MenuBuilder/backend/app/services/financial_core/timezones.py
+  - MenuBuilder/backend/tests/test_tariffs_and_metering.py
+  - MenuBuilder/backend/tests/test_terminal_onboarding.py
+  - MenuBuilder/docs/l4desk/handoffs/L4D-10-MB-report.md
+artifact_sha256:
+  - 78b98c9bd4d92c64e7e9161084cb2f226a796ee5bd06242c8feea6377d738085
+  - 29e5e214ab32e270f3320d4cc22b32a537d3377a8b2e143dd59f543cf61eda4f
+  - 73cbaa7f3784d4983331353ca11c394f96de2816736280a339d231f9f821c746
+  - bc72f8e02692feba1d7294185b7511880d1fba324ba599694f0e35424189dcb8
+  - 19fa02c95d11aa6c1b80eb99150652c73322835d14f6086c12713c862b6d9067
+  - f4b05a9f574ea94b121400e1f493e19998d880b4b6306fc98b993af192ca4835
+  - cf92379b04b71cd37d49d268a63796ad2b0504bb81f139caa9eb91c3f643123d
+  - a09e6c426441e0d9dffa9ccf8389b35c36aaf5f5d1ed480f4c1b8ca87c2f8855
+  - cdce9eec1abfcb91aa23b587dba7616a3daf65ce440c7dce9a412218dce49eaf
+  - d0d8a075cecbc4f4cfe372e0f19340d593fa44f52abec095c48e73b7077e6935
+  - 19164d31773a7bb624276d5c070f6b8bbc556b3e94e0f71c71428ddf84e639bf
+  - 0ab63806bcc023406611f669f9424ff2bbad6993a7c0f62d025cc4b63db9fd8c
+  - 8bca1e950bfcc9c873c07d3845e38118800586962e41f4777efcf5439bf627b7
+compatibility:
+  backward_compatible_with:
+    - H-L4D-09-MB-v1
+    - H-L4D-03-MB-v1
+    - H-L4D-02-IOT-v1
+  breaking_changes: false
+  notes: Versioned immutable tariffs, individual anchor-based billing cycles with last existing day add_months rules, earliest terminal free privilege with forward-only deletion transfer, 10000 kopecks monthly charge on first online per cycle, and daily session metering split by local tenant midnights with rounding ceil(billable_sec/3600) and general tariff rounding invariants.
+deployment_status: DEPLOYED
+deployed_environment: production
+feature_flags:
+  l4desk_financial_core_enabled: true
+  l4desk_billing_enabled: false
+  l4desk_metering_enabled: true
+contract_payload:
+  tariffs:
+    baseline_version: v1.0
+    terminal_month_kopecks: 10000
+    hourly_rate_kopecks: 100
+    free_daily_seconds: 7200
+  billing_cycles:
+    anchor_rule: "First successful payment sets anchor; subsequent payments or device_online never shift anchor."
+    month_addition: "add_months(anchor, n) with last existing calendar day rule and DST preservation."
+    grace_window: "starts_at < grace_deadline < ends_at; grace_deadline = starts_at + 3 calendar days."
+  terminal_privileges:
+    free_terminal_rule: "Earliest existing terminal (min ordinal where deleted_at IS NULL) is free."
+    deletion_transfer: "On deletion, privilege transfers forward only to next existing ordinal; closed periods not retroactively altered."
+    monthly_charge: "Non-free terminal charged 10000 kopecks on first authenticated device_online in cycle with unique constraint (terminal_id, billing_cycle_id)."
+  metering_engine:
+    day_splitting: "Intervals partitioned at local tenant midnights into calendar days."
+    concurrency_exclusion: "Console and video sessions never overlap."
+    billable_seconds:
+      free_terminal: "max(0, console + video - 7200)"
+      paid_terminal: "console + video"
+    paid_hours: "ceil(billable_seconds / 3600)"
+    general_tariff_formula:
+      calculated: "paid_hours * hourly_rate_kopecks"
+      posted: "floor(calculated / 100) * 100"
+      discarded: "calculated - posted"
+      invariants: "calculated == posted + discarded; 0 <= discarded < 100; posted % 100 == 0; discarded not carried over"
+    late_events_policy: "Posted daily usage rows are immutable; late events create adjustment ledger transaction with corrects_transaction_id."
+  endpoints:
+    tenant_profile: GET /api/v1/finance/profile
+    tenant_cycles: GET /api/v1/finance/cycles
+    tenant_current_tariff: GET /api/v1/finance/tariffs/current
+    tenant_daily_usage: GET /api/v1/finance/usage
+    tenant_monthly_charges: GET /api/v1/finance/monthly-charges
+    internal_tariffs_list: GET /api/internal/v1/finance/tariffs
+    internal_tariff_create: POST /api/internal/v1/finance/tariffs
+    internal_metering_online: POST /api/internal/v1/finance/metering/online
+    internal_metering_record_usage: POST /api/internal/v1/finance/metering/record-usage
+    internal_metering_close_day: POST /api/internal/v1/finance/metering/close-day
+supersedes: []
+known_risks:
+  - "Shadow mode active: automatic recurring user debits operate with dark posting until user billing cart UX (L4D-11-MB) is enabled."
+  - "Historical late events spanning across closed days create delta adjustments that affect ledger balance without mutating past usage records."
+consumers:
+  - L4D-11-MB
+next_prompt_id: L4D-11-MB
+```
+<!-- HANDOFF:H-L4D-10-MB-v1:END -->
+
+## 21. Принятие handoff H-L4D-11-MB-v1 (шаг 25 MenuBuilder)
+
+Фиксация контроллером каскада принятого контракта `H-L4D-11-MB-v1` шага 25 (`MenuBuilder`) по результатам приёмки отчёта `MenuBuilder/docs/l4desk/handoffs/L4D-11-MB-report.md` и кандидата `MenuBuilder/docs/l4desk/handoffs/L4D-11-MB-candidate.md`.
+
+Все проверки выполнены и подтверждены инструментально:
+1. Коммит проверенной реализации: `b6f793ad9880cf20489fe37366edc66af8229464` (ветка `l4desk/l4d-11-mb`). Коммит отчёта и кандидата: `221f36dbbe36c581c69a3a65deeb1378b90ab123`.
+2. Sequence gate пройден: предшествующий обязательный handoff `H-L4D-10-MB-v1` (шаг 24), а также зависимый `H-L4D-09-MB-v1` (шаг 23) приняты в журнале со статусом `ACCEPTED`. Архитектурные разделы §2, §3, §5, §7, §9, §10, §13, §14, §15, §16, §17 соблюдены.
+3. Интеграция с ЮKassa и ручные банковские платежи юрлиц реализованы в `MenuBuilder`:
+   - `yookassa.py`: официальный контракт ЮKassa v3, протокол `YooKassaClientProtocol`, мок-клиент `MockYooKassaClient`, безопасный возврат `is_safe_return_url`, валидация доверенных IP-сетей ЮKassa `is_ip_trusted` (`185.71.76.0/27`, `185.71.77.0/27`, `77.75.153.0/25`, `77.75.156.11/32`, `77.75.156.35/32`, `77.75.154.128/25`, `2a02:5180::/32`).
+   - `payments.py`: сервис пополнения баланса физических лиц, строгая валидация сумм (только целые рубли >= 1), идемпотентность по `operation_id`, авторитетная синхронизация только через `GET /payments/{id}` с блокировкой `with_for_update()`, двойные проверки безопасности (security mismatch checks), проводка сабреджера `Dr payment_clearing, Cr tenant_settlement` и атомарная фиксация даты якоря биллингового цикла `anchor_at` при первом успешном платеже.
+   - `manual_payments.py`: неизменяемая регистрация банковских поручений юрлиц суперпользователем (`role 1 / is_superuser`), проведение транзакции сабреджера, сторнирование через обратную транзакцию `Dr tenant_settlement, Cr payment_clearing` (`FinReversalService`) с генерацией нового документа `STORNO-{doc_number}` и блокировкой повторного сторно.
+   - `config.py`: вынесены все ключи фискализации (54-ФЗ) и шлюза ЮKassa без хардкода секретов.
+   - REST API эндпоинты (`/api/v1/finance/payments`, `/api/v1/finance/payments/{id}`, `/api/v1/finance/payments/{id}/poll`, `/api/v1/finance/yookassa/webhook`, `/api/internal/v1/finance/manual-payments`, `/api/internal/v1/finance/manual-payments/{id}/storno`, `/api/internal/v1/finance/manual-payments`).
+4. Побайтно проверены контрольные суммы SHA-256 для всех 10 артефактов реализации и отчёта, а также отдельного кандидатского файла `L4D-11-MB-candidate.md` (`a9ef5d36ed2fac6e59e8bf39a51da24b974d52d6649da02ceb05fa6a98ba3fe6`) — совпадают на 100%.
+5. Тестовый набор успешно пройден: 10 passed в `test_yookassa_and_manual_payments.py`, полный набор `MenuBuilder/backend` 400 passed (0 failures, 0 errors), `shared` 65 passed, linters и static analysis (ruff, pyright) 0 errors/warnings, `MenuBuilder/frontend` build успешен.
+6. Live smoke evidence на боевом сервере `87.242.100.34` подтверждён (проверка сетевых гардов, контракт ЮKassa v3, реальная сверка сабреджера PostgreSQL `status=matched, mismatches=0, diff=0`).
+7. Кандидат оформлен по стандарту `DETACHED_V1` в файле `MenuBuilder/docs/l4desk/handoffs/L4D-11-MB-candidate.md`.
+8. Разрешён переход к следующему шагу каскада: `L4D-12-MB` (потребитель: `MenuBuilder`).
+
+<!-- HANDOFF:H-L4D-11-MB-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-11-MB-v1
+status: ACCEPTED
+contract_kinds:
+  - API
+  - DEPLOYMENT
+producer_prompt_id: L4D-11-MB
+producer_scope_project: MenuBuilder
+producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-11-MB-report.md
+producer_branch: l4desk/l4d-11-mb
+producer_commit: b6f793ad9880cf20489fe37366edc66af8229464
+report_commit: 221f36dbbe36c581c69a3a65deeb1378b90ab123
+accepted_at_utc: '2026-09-20T16:35:00Z'
+contract_version: 1.0.0
+schema_revision: '027'
+artifact_version: 1.0.0
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-11-MB-candidate.md
+artifact_paths:
+  - MenuBuilder/backend/app/config.py
+  - MenuBuilder/backend/app/repositories/l4desk_repository.py
+  - MenuBuilder/backend/app/routers/finance.py
+  - MenuBuilder/backend/app/services/financial_core/__init__.py
+  - MenuBuilder/backend/app/services/financial_core/schemas.py
+  - MenuBuilder/backend/app/services/financial_core/payments.py
+  - MenuBuilder/backend/app/services/financial_core/manual_payments.py
+  - MenuBuilder/backend/app/services/financial_core/yookassa.py
+  - MenuBuilder/backend/tests/test_yookassa_and_manual_payments.py
+  - MenuBuilder/docs/l4desk/handoffs/L4D-11-MB-report.md
+artifact_sha256:
+  - 8944bbd842e287f55863172cbf92afcb65a9f26f7579c8b25edecaecc9b67498
+  - b8670d8abb462ae2a0a61bf6e782e82482403bf683ddc31345cc3c369e7d5714
+  - afeb55ca680d92a754923a575bbc3ee7eeb509322da9ecfebb8b957e7efadb45
+  - 6693513b08f168e6cb3a21f4bce6ec06773a59e3970654c2994ef78446907ae7
+  - 86c06f08d3f556925d3d8a9ae44d1a514a0a27f948e4af28b8a43605aaa53576
+  - 6abbe80dbc69d60e0c79abc08391a3bb0f3df13cc8a36a4c86af36394f65c401
+  - dd68c81271233654ca31a64cf57a7a559718b264225191157475f559042a1950
+  - aac015319eb62683c884c2a52933b26f41b49792ebc72c1272e78823dba10713
+  - 655b60e3206ad5ac039f3fe794afb83254327876bf5682eb102b47e20c97098e
+  - f61b7a366875c07c908161f04e65f6431197cb44f9bd1e5194fe6111be50decf
+compatibility:
+  backward_compatible_with:
+    - H-L4D-10-MB-v1
+    - H-L4D-09-MB-v1
+  breaking_changes: false
+  notes: YooKassa top-up flow for individuals, immutable B2B manual payment registration by superuser, double-entry reversal/storno mechanics, and atomic cycle anchor fixation on first successful payment.
+deployment_status: DEPLOYED
+deployed_environment: production
+feature_flags:
+  l4desk_financial_core_enabled: true
+  yookassa_enabled: false
+  yookassa_ip_filter_enabled: false
+  yookassa_receipt_enabled: true
+contract_payload:
+  payment_states:
+    - pending
+    - waiting_for_capture
+    - succeeded
+    - canceled
+  idempotency:
+    yookassa: "Idempotence-Key header / operation_id on payment creation and replay-safe lookup"
+    webhook_and_poll: "Server authoritative GET /payments/{id} verification before ledger posting; duplicate webhook or poll is a safe no-op"
+  ledger_posting:
+    yookassa_succeeded: "Dr payment_clearing, Cr tenant_settlement"
+    manual_payment: "Dr payment_clearing, Cr tenant_settlement"
+    manual_storno: "Dr tenant_settlement, Cr payment_clearing (kind=reversal, corrects_transaction_id)"
+  cycle_anchor:
+    rule: "First successful payment (YooKassa or manual) fixes immutable cycle anchor_at; subsequent payments never shift existing anchor"
+  manual_payments:
+    role_required: "Superuser only (role 1 / is_superuser)"
+    immutability: "Posted manual payment records are append-only; corrections executed strictly via storno + new document"
+  fiscal_configuration:
+    config_keys:
+      - YOOKASSA_ENABLED
+      - YOOKASSA_SHOP_ID
+      - YOOKASSA_SECRET_KEY
+      - YOOKASSA_API_URL
+      - YOOKASSA_WEBHOOK_SECRET
+      - YOOKASSA_IP_FILTER_ENABLED
+      - YOOKASSA_TRUSTED_IPS_RAW
+      - YOOKASSA_RETURN_URL_BASE
+      - YOOKASSA_RECEIPT_ENABLED
+      - YOOKASSA_TAX_SYSTEM_CODE
+      - YOOKASSA_VAT_CODE
+      - YOOKASSA_PAYMENT_SUBJECT
+      - YOOKASSA_PAYMENT_MODE
+      - YOOKASSA_ITEM_DESCRIPTION
+      - YOOKASSA_REQUEST_TIMEOUT_SEC
+  endpoints:
+    payment_create: POST /api/v1/finance/payments
+    payment_get: GET /api/v1/finance/payments/{payment_id}
+    payment_list: GET /api/v1/finance/payments
+    payment_poll: POST /api/v1/finance/payments/{payment_id}/poll
+    yookassa_webhook: POST /api/v1/finance/yookassa/webhook
+    manual_payment_create: POST /api/internal/v1/finance/manual-payments
+    manual_payment_storno: POST /api/internal/v1/finance/manual-payments/{manual_payment_id}/storno
+    manual_payment_list: GET /api/internal/v1/finance/manual-payments
+    manual_payment_get: GET /api/internal/v1/finance/manual-payments/{manual_payment_id}
+supersedes: []
+known_risks:
+  - "Production YooKassa credentials default to disabled/sandbox until production merchant keys are injected into .env."
+consumers:
+  - L4D-12-MB
+next_prompt_id: L4D-12-MB
+```
+<!-- HANDOFF:H-L4D-11-MB-v1:END -->
+
+## 22. Принятие handoff H-L4D-12-MB-v1 (шаг 26 MenuBuilder)
+
+Фиксация контроллером каскада принятого контракта `H-L4D-12-MB-v1` шага 26 (`MenuBuilder`) по результатам приёмки отчёта `MenuBuilder/docs/l4desk/handoffs/L4D-12-MB-report.md` и кандидата `MenuBuilder/docs/l4desk/handoffs/L4D-12-MB-candidate.md`.
+
+Все проверки выполнены и подтверждены инструментально:
+1. Коммит проверенной реализации: `95ba8b7915c1d9e34e76169706b5aa862c2e9954` (ветка `l4desk/l4d-12-mb`). Коммит отчёта и кандидата: `385155dc394f2bd4479f1545695d61a03b485b9b`.
+2. Sequence gate пройден: предшествующие обязательные handoff `H-L4D-11-MB-v1` (шаг 25), `H-L4D-10-MB-v1` (шаг 24), `H-L4D-07-IOT-v1` (шаг 20) и `H-L4D-08B-MB-v1` (шаг 22) приняты в журнале со статусом `ACCEPTED`. Архитектурные разделы §2, §3, §5, §6, §8, §9, §10, §13, §14, §15, §16, §17 соблюдены.
+3. Коммерческий механизм entitlement, cycle-bound grace, Stop Outbox с повторными попытками и идемпотентные email-уведомления реализованы в `MenuBuilder`:
+   - `entitlement.py`: `FinEntitlementService` авторитетно вычисляет статус тенанта (`free`, `active`, `grace`, `blocked`), суточный пул бесплатной квоты 120 минут для первого терминала (`FinTerminalService.is_terminal_free`), немедленную блокировку вторичных терминалов на бесплатном тарифе (`unpaid_secondary_terminal`), завершение сессий при исчерпании квоты при нулевом балансе (`free_quota_exceeded`), платное продолжение при балансе > 0, строгую привязку grace к календарной границе цикла (`cycle_start + 3 days`) без смещения при событиях онлайн, и иммунитет якоря `anchor_at` при поздних платежах.
+   - `notifications.py`: `FinNotificationService` обеспечивает строго идемпотентное планирование и диспетчеризацию уведомлений по ключу `(tenant_id, billing_cycle_id, notification_type)` для стадий `-7d`, `-3d`, `-1d`, `grace`, `blocked`, устойчивость к сбоям почтового провайдера с лимитом попыток и audit events.
+   - `stop_outbox.py`: `FinStopOutboxService` обеспечивает координированную остановку активных сессий заблокированных тенантов (немедленный teardown WebRTC для видео, ожидание команды / таймаут по контракту `H-L4D-07-IOT-v1` для консоли) с сохранением состояния `stop_requested` в БД и надежным повтором через `process_stop_outbox`.
+   - `worker.py`: `FinEntitlementWorker` выполняет периодический аудит всех активных тенантов, проверку границ циклов, генерацию уведомлений, перевод сессий в Stop Outbox и их обработку.
+   - `remote_session_policy.py`: интеграция `L4DeskEntitlementPolicy` с поддержкой режимов shadow (по умолчанию) и enforced.
+   - `finance.py`: REST API эндпоинты (`/api/v1/finance/entitlement`, `/api/v1/finance/notifications`, `/api/internal/v1/finance/entitlement/{tenant_id}`, `/api/internal/v1/finance/entitlement/worker/tick`, `/api/internal/v1/finance/stop-outbox/process`, `/api/internal/v1/finance/notifications`).
+4. Побайтно проверены контрольные суммы SHA-256 для всех 14 артефактов реализации и отчёта, а также отдельного кандидатского файла `L4D-12-MB-candidate.md` (`684730abe4b4dae83e73dafd353c60acec7b2841f392e25c9c6d08a3056f91d4`) — совпадают на 100%.
+5. Тестовый набор успешно пройден: 11 passed в `test_l4d_12_entitlement_grace_and_notifications.py`, полный набор `MenuBuilder/backend` 411 passed (0 failures, 0 errors), линтеры и статический анализ (ruff, pyright) 0 errors/warnings.
+6. Live smoke evidence на боевом сервере `87.242.100.34` подтверждён (проверка такта воркера entitlement, аудит состояния Stop Outbox и реестра доставок уведомлений).
+7. Кандидат оформлен по стандарту `DETACHED_V1` в файле `MenuBuilder/docs/l4desk/handoffs/L4D-12-MB-candidate.md`.
+8. Разрешён переход к следующему шагу каскада: `L4D-13-MB` (потребитель: `MenuBuilder`).
+
+<!-- HANDOFF:H-L4D-12-MB-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-12-MB-v1
+status: ACCEPTED
+contract_kinds:
+  - API
+  - DEPLOYMENT
+producer_prompt_id: L4D-12-MB
+producer_scope_project: MenuBuilder
+producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-12-MB-report.md
+producer_branch: l4desk/l4d-12-mb
+producer_commit: 95ba8b7915c1d9e34e76169706b5aa862c2e9954
+report_commit: 385155dc394f2bd4479f1545695d61a03b485b9b
+accepted_at_utc: '2026-09-20T17:45:00Z'
+contract_version: 1.0.0
+schema_revision: '027'
+artifact_version: 1.0.0
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-12-MB-candidate.md
+artifact_paths:
+  - MenuBuilder/backend/app/config.py
+  - MenuBuilder/backend/app/main.py
+  - MenuBuilder/backend/app/repositories/l4desk_repository.py
+  - MenuBuilder/backend/app/routers/finance.py
+  - MenuBuilder/backend/app/routers/video_control.py
+  - MenuBuilder/backend/app/services/financial_core/__init__.py
+  - MenuBuilder/backend/app/services/financial_core/entitlement.py
+  - MenuBuilder/backend/app/services/financial_core/notifications.py
+  - MenuBuilder/backend/app/services/financial_core/schemas.py
+  - MenuBuilder/backend/app/services/financial_core/stop_outbox.py
+  - MenuBuilder/backend/app/services/financial_core/worker.py
+  - MenuBuilder/backend/app/services/remote_session_policy.py
+  - MenuBuilder/backend/tests/test_l4d_12_entitlement_grace_and_notifications.py
+  - MenuBuilder/docs/l4desk/handoffs/L4D-12-MB-report.md
+artifact_sha256:
+  - 71ea749442cb9c791863fc15e86633d49c3d36d87064ef9cc677b6254686f018
+  - a57b8afddfbaac01772f3f05dbae4b7892a864bcf24283eddb3ce1cad1e3f091
+  - d6b7c1421174016861b75375483463b74eb24336686c9f4da76922d927ec38b0
+  - 5b0bf751e3149681624ae213cc2ccd4747f55093c76cf1a3ab5c8770731938b1
+  - 08af1e5fcd9f7e24ac4aba869dcc84eccfb16b304ff2026f89495d1785d2e7c1
+  - 1e7d2698992f0ecbaf07698279d880731b53bb10372e8096bb89e8fd831e03a1
+  - c8928efcd52530c71975bbe9b009e5841b8026d0222ee9d1af114d2003976f57
+  - fd414844d5f26a86607057e947f8a87aa54904deee81f6262f5b3266f8e6759b
+  - 8438eda2f13c5cc9729a3398e15390a2453f2cdc55e992f1b3b20db12401b468
+  - 45119132562a10f1eac9e017c54600c751ff015e67806e1c23b73a6989c127d4
+  - d4e485c04a30af8471fb095476719dcd15169de91945ed232a696acb186e13d3
+  - 1778f36290937ef239415a55d8581ca812c3e6517b7e6186a90ab6100fa9574e
+  - 560ae3a021a1ac0943d02f0acfac8091cd14adae75ad175dac0f4ba9d54fbfbd
+  - a04349eff17353edabd0b24dc8612fcd996caeb17e78c87488fd15158aee0873
+compatibility:
+  backward_compatible_with:
+    - H-L4D-11-MB-v1
+    - H-L4D-10-MB-v1
+    - H-L4D-08B-MB-v1
+    - H-L4D-07-IOT-v1
+  breaking_changes: false
+  notes: Commercial start/continue/stop decisioning, cycle-bound grace state machine, Stop Outbox retry pattern, and idempotent email notifications for L4Desk SaaS.
+deployment_status: DEPLOYED
+deployed_environment: production
+feature_flags:
+  l4desk_policy_enforcement_enabled: false
+  l4desk_policy_shadow_mode: true
+  l4desk_entitlement_worker_enabled: false
+  l4desk_email_notifications_enabled: true
+contract_payload:
+  entitlement_states:
+    - free
+    - active
+    - grace
+    - blocked
+  reason_codes:
+    - entitlement_blocked
+    - free_quota_exceeded
+    - unpaid_secondary_terminal
+    - payment_required
+    - no_terminals
+  notification_types:
+    - cycle_minus_7
+    - cycle_minus_3
+    - cycle_minus_1
+    - grace
+    - blocked
+  normative_rules:
+    free_tier: "Single free terminal with 120 min/local day pooled quota before first payment; secondary terminals blocked; continuation allowed if balance > 0"
+    cycle_bound_grace: "Grace is active only when balance < 0 and now < cycle_start + 3 days in tenant timezone; always bound to cycle boundary, never to online/charge events"
+    late_payment: "Pays off period and preserves immutable anchor_at; balance >= 0 immediately unblocks"
+    session_termination: "Video teardown executed immediately; console stops new commands, waits for running command or bounded timeout, then closes"
+    stop_outbox: "Pending stops tracked in stop_requested state and retried automatically until confirmed by IoT provider"
+    notification_idempotency: "Unique by (tenant_id, billing_cycle_id, notification_type); retries do not produce duplicate records or emails"
+  endpoints:
+    tenant_entitlement: GET /api/v1/finance/entitlement
+    tenant_notifications: GET /api/v1/finance/notifications
+    internal_entitlement: GET /api/internal/v1/finance/entitlement/{tenant_id}
+    internal_worker_tick: POST /api/internal/v1/finance/entitlement/worker/tick
+    internal_stop_outbox_process: POST /api/internal/v1/finance/stop-outbox/process
+    internal_notifications_list: GET /api/internal/v1/finance/notifications
+supersedes: []
+known_risks:
+  - "In production, policy enforcement defaults to shadow mode (l4desk_policy_enforcement_enabled=false) to ensure backward compatibility during rollout."
+consumers:
+  - L4D-13-MB
+next_prompt_id: L4D-13-MB
+```
+<!-- HANDOFF:H-L4D-12-MB-v1:END -->
+
+## 23. Кандидат handoff H-L4D-13-MB-v1 (шаг 27 MenuBuilder)
+
+Фиксация кандидатом контракта `H-L4D-13-MB-v1` шага 27 (`MenuBuilder`) по результатам подготовки отчёта `MenuBuilder/docs/l4desk/handoffs/L4D-13-MB-report.md` и кандидата `MenuBuilder/docs/l4desk/handoffs/L4D-13-MB-candidate.md`.
+
+Выполнено:
+1. Реализован L4Desk navigation profile в единой SPA MenuBuilder без ломки классического интерфейса (доступно по роли 5 и переключателю для смоук-тестов).
+2. 5 разделов L4Desk: Видеонаблюдение (`/video`), Настройки (`/settings`), Консоль (`/console`), MCP (`/mcp`), Лицензии (`/licenses`).
+3. Мастер первого подключения (`OnboardingWizardModal`): создание -> PIN -> загрузка Агента -> опрос 4 статусов готовности -> запуск первой сессии.
+4. Карточка отказа `RefusalReasonCard` с 5 причинами: session conflict, offline, provisioning pending, free quota exhausted, grace/blocked.
+5. Раздел Лицензии (`LicensesPage`): баланс, продление, grace/blocked, 120-минутная суточная бесплатная квота, прозрачные таблицы начислений. Положительный баланс явно разрешает платное продолжение сессий сверх 120 минут.
+6. Раздел MCP (`McpPromoPage`): промо-описание протокола MCP, выбор 4 сценариев и запись в лист ожидания (waitlist).
+7. Тесты: 9 сьютов / 47 тестов фронтенда (vitest) пройдены, 43 теста бэкенда (pytest) пройдены, линтеры ruff и pyright без ошибок, production frontend build выполнен успешно.
+8. Потребитель: `L4D-14-MB`.
+
+<!-- HANDOFF:H-L4D-13-MB-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-13-MB-v1
+status: CANDIDATE
+contract_kinds:
+  - API
+  - DEPLOYMENT
+producer_prompt_id: L4D-13-MB
+producer_scope_project: MenuBuilder
+producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-13-MB-report.md
+producer_branch: l4desk/l4d-13-mb
+producer_commit: pending
+report_commit: pending
+contract_version: 1.0.0
+schema_revision: '027'
+artifact_version: 1.0.0
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-13-MB-candidate.md
+artifact_paths:
+  - MenuBuilder/backend/app/main.py
+  - MenuBuilder/backend/app/routers/auth.py
+  - MenuBuilder/backend/app/routers/mcp_waitlist.py
+  - MenuBuilder/backend/tests/test_mcp_waitlist_and_role5.py
+  - MenuBuilder/frontend/src/App.tsx
+  - MenuBuilder/frontend/src/api/finance.ts
+  - MenuBuilder/frontend/src/api/mcpWaitlist.ts
+  - MenuBuilder/frontend/src/components/OnboardingWizardModal.tsx
+  - MenuBuilder/frontend/src/components/RefusalReasonCard.tsx
+  - MenuBuilder/frontend/src/routes/console/ConsolePage.tsx
+  - MenuBuilder/frontend/src/routes/devices/DeviceConsoleTab.tsx
+  - MenuBuilder/frontend/src/routes/layout.tsx
+  - MenuBuilder/frontend/src/routes/licenses/LicensesPage.tsx
+  - MenuBuilder/frontend/src/routes/mcp/McpPromoPage.tsx
+  - MenuBuilder/frontend/src/routes/settings/TerminalsSettingsPage.tsx
+  - MenuBuilder/frontend/src/routes/video-surveillance.tsx
+  - MenuBuilder/frontend/src/tests/l4desk-accessibility-responsive.test.ts
+  - MenuBuilder/frontend/src/tests/l4desk-licenses-mcp.test.ts
+  - MenuBuilder/frontend/src/tests/l4desk-profile-navigation.test.ts
+  - MenuBuilder/frontend/src/tests/l4desk-refusal-reasons.test.ts
+  - MenuBuilder/frontend/src/utils/navigationProfile.ts
+  - MenuBuilder/docs/l4desk/handoffs/L4D-13-MB-report.md
+artifact_sha256:
+  - 296e0ef944a9e1abcda254a28f19a77b4741e97b6c82b8a01c1379b1313cad06
+  - 0857ae0b33a4d591e319f97f2e2ced8a779b168ad64363b6a864d9e3f75e51a1
+  - 6f2bfdf626572eb4cfccbe12c7424bb426aefea365f447ded5e0876174a43095
+  - e486e24d5d95eec1cc2c1037a4aae342b877216c96d0b6f0385749420a9f96fb
+  - 04856fceb7af3951c448516fb78aad912dd155ca7247fb6d99632139ada9575d
+  - aaafeecbe1d0157ce0e06b2aa211a0ae87676592ef625f1f3b8c7cddde296c54
+  - d1201e858e13306e8d93d70611ce1b9fbaaad9fa0b01793bee988a6ae46e872b
+  - d6497e7df398b0c755071099fa86a45e29fdebe594d61db0e2259f62416b6275
+  - d63dee75b4eea4e9c5ef1311a3ec767431d1010edfc410ab9858132a1cfee12c
+  - 4167364fa0454f01aaf6fb5a4059a885be757fe56a4e59e392d6eb9f19606516
+  - f7ae07658d3024100708242bb399ea87aaa97c63cffa5f2e9f274d677694a797
+  - a858ca421328747205c73a759cfb13088f317523f46d5524ac994b89b3a065ee
+  - 13da06cba68c032efd5372f6881668487d6feeb0eec3369139589b6724725541
+  - 928e63d6b713c9db4c98f615a51a7239d11db96fc581afa8d9fb8ff6ce7ecca5
+  - 4d686b27bf504011da0df285383ff45114e19ebd0523a1526f77af65b8cbcb67
+  - 376b6a5884185a2ab6d912b9a8be8c4fee0db9d3789ef8b2163c4e12e7b9475d
+  - 2515d12f032e3e4c31e92b69232a4a62b21a474335d1c00b8f85e39a90f8debb
+  - 4232e6d90806b8413f465de1682c0422120e0e3f8440c33a1aa887827c21d3fc
+  - 80b11223a85e23fe1456914a8280b098a48a495a1a7ec4b7067b1ca71353035e
+  - 95bc280c549c10e7354932bcfff576c660f0a686de26fe9b4cb098a542efa506
+  - bbbf70d9eed9d8e2c2e84960a2195f301a1ba7e1ec0d76662ae8452aee4f2f3d
+  - b9027374de01a8e01b2c56e7cc30467747fbc35a8aae646ac6a6eadbe7886c1b
+compatibility:
+  backward_compatible_with:
+    - H-L4D-12-MB-v1
+    - H-L4D-06C-MB-v1
+    - H-L4D-08B-MB-v1
+  breaking_changes: false
+  notes: "Unified L4Desk navigation profile and onboarding/licenses UX in single SPA without duplicating console/video components. Classic MenuBuilder profile remains functional and untouched for existing users."
+deployment_status: STAGED
+deployed_environment: staging
+feature_flags:
+  l4desk_navigation_profile_enabled: true
+  l4desk_ui_enabled: true
+contract_payload:
+  navigation_sections:
+    - video: /video
+    - settings: /settings
+    - console: /console
+    - mcp: /mcp
+    - licenses: /licenses
+  rejection_reasons:
+    - session_conflict
+    - offline
+    - provisioning_pending
+    - free_quota_exhausted
+    - grace_blocked
+  onboarding_wizard_steps:
+    - step_0: create_terminal
+    - step_1: pin_and_agent_download
+    - step_2: readiness_online_polling
+    - step_3: launch_single_session
+  mcp_endpoints:
+    join_waitlist: POST /api/v1/mcp/waitlist
+    waitlist_status: GET /api/v1/mcp/waitlist/status
+supersedes: []
+known_risks: []
+consumers:
+  - L4D-14-MB
+next_prompt_id: L4D-14-MB
+```
+<!-- HANDOFF:H-L4D-13-MB-v1:END -->

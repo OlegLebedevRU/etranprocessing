@@ -14,11 +14,14 @@ import {
   ClusterOutlined,
   SettingOutlined,
   VideoCameraOutlined,
+  CodeOutlined,
+  SwapOutlined,
 } from "@ant-design/icons";
 import { logout } from "../api/auth";
 import { notifySessionEvent } from "../api/session";
 import { useSession } from "../session/SessionContext";
 import { OrgSwitcher } from "../components/OrgSwitcher";
+import { useNavigationProfile } from "../utils/navigationProfile";
 import {
   PERMISSION_BILLING_VIEW,
   PERMISSION_MONITORING_VIEW,
@@ -40,6 +43,14 @@ const NAV_ITEMS = [
   { key: "settings", icon: <SettingOutlined />, label: "Настройки" },
 ];
 
+const L4DESK_NAV_ITEMS = [
+  { key: "video", icon: <VideoCameraOutlined />, label: "Видеонаблюдение" },
+  { key: "settings", icon: <SettingOutlined />, label: "Настройки" },
+  { key: "console", icon: <CodeOutlined />, label: "Консоль" },
+  { key: "mcp", icon: <ApiOutlined />, label: "MCP" },
+  { key: "licenses", icon: <DollarOutlined />, label: "Лицензии" },
+];
+
 export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const { user, setUser } = useSession();
@@ -54,6 +65,7 @@ export default function AppLayout() {
   const isRole4 = currentUser?.role_id === 4;
 
   const isPlatformMode = Boolean(isSuperuser && currentUser?.org_id === 0);
+  const [navProfile, setNavProfile] = useNavigationProfile(currentUser);
 
   let navItems;
   if (isPlatformMode) {
@@ -79,6 +91,8 @@ export default function AppLayout() {
         label: "Администрирование",
       },
     ];
+  } else if (navProfile === "l4desk") {
+    navItems = L4DESK_NAV_ITEMS;
   } else if (isRole4) {
     navItems = [];
     if (hasPermission(currentUser, PERMISSION_MONITORING_VIEW)) {
@@ -114,10 +128,12 @@ export default function AppLayout() {
     ];
   }
 
-  const segment = location.pathname.split("/")[1] || (isPlatformMode ? "admin" : "monitoring");
+  const defaultSegment = navProfile === "l4desk" ? "video" : (isPlatformMode ? "admin" : "monitoring");
+  const rawSegment = location.pathname.split("/")[1];
+  const segment = rawSegment || defaultSegment;
   const selectedKey = navItems.some((i) => i.key === segment)
     ? segment
-    : (isPlatformMode ? "admin" : "monitoring");
+    : defaultSegment;
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
@@ -167,7 +183,7 @@ export default function AppLayout() {
               justifyContent: "center",
             }}
           >
-            P
+            {navProfile === "l4desk" ? "L" : "P"}
           </span>
           {!collapsed && (
             <Text
@@ -175,7 +191,7 @@ export default function AppLayout() {
               style={{ fontSize: 14, letterSpacing: -0.2 }}
               ellipsis
             >
-              PlaterraMonitoring
+              {navProfile === "l4desk" ? "L4Desk" : "PlaterraMonitoring"}
             </Text>
           )}
         </div>
@@ -184,8 +200,12 @@ export default function AppLayout() {
           mode="inline"
           selectedKeys={[selectedKey]}
           onClick={({ key }) => {
-            if (key === "settings" && isRole4) {
-              navigate("/settings/terminals");
+            if (key === "settings") {
+              if (isRole4) {
+                navigate("/settings/terminals");
+              } else {
+                navigate("/settings/profile");
+              }
             } else {
               navigate(`/${key}`);
             }
@@ -226,6 +246,18 @@ export default function AppLayout() {
               gap: isXs ? 6 : 12,
             }}
           >
+            {/* Profile switcher for admins / testing smoke */}
+            {(isSuperuser || currentUser?.role_id === 1 || currentUser?.role_id === 2 || currentUser?.role_id === 3) && (
+              <Tooltip title={`Переключить профиль навигации (активен: ${navProfile === "l4desk" ? "L4Desk" : "Platerra"})`}>
+                <Button
+                  size="small"
+                  icon={<SwapOutlined />}
+                  onClick={() => setNavProfile(navProfile === "l4desk" ? "classic" : "l4desk")}
+                >
+                  {!isXs && (navProfile === "l4desk" ? "L4Desk" : "Classic")}
+                </Button>
+              </Tooltip>
+            )}
             <OrgSwitcher currentUser={currentUser} />
             {!isXs && (
               <Text type="secondary" style={{ fontSize: 13 }} ellipsis>
@@ -249,7 +281,7 @@ export default function AppLayout() {
         </Header>
         <Content style={{ padding: isXs ? 8 : 16 }}>
           {isPlatformMode &&
-          ["monitoring", "menu", "reports", "billing", "integrations"].includes(segment) ? (
+          ["monitoring", "menu", "reports", "billing", "integrations", "licenses", "console", "mcp"].includes(segment) ? (
             <div
               style={{
                 textAlign: "center",

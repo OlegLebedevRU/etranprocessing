@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router";
 import {
   Alert,
   Card,
@@ -47,27 +48,38 @@ import { VideoPlayerScreen } from "../components/video/VideoPlayerScreen";
 import { StreamControls, StreamStage } from "../components/video/StreamControls";
 import { SourceSelector } from "../components/video/SourceSelector";
 import { RemoteControlPanel } from "../components/video/RemoteControlPanel";
+import RefusalReasonCard from "../components/RefusalReasonCard";
 
 const { Text } = Typography;
 
 /**
  * Преобразование ошибок терминала и бэкенда в понятные сообщения на русском языке
  */
-function formatVideoError(err: any): { title: string; message: string } {
+function formatVideoError(err: any): { title: string; message: string; code: string } {
   const detail = err?.response?.data?.detail;
   const status = err?.response?.status;
   const raw = typeof detail === "string" ? detail : (detail?.message || err?.message || "");
+
+  if (typeof detail === "object" && detail?.code) {
+    return {
+      title: "Сессия отклонена",
+      message: detail.message || raw,
+      code: detail.code,
+    };
+  }
 
   if (status === 403) {
     return {
       title: "Доступ ограничен",
       message: raw || "У вас нет прав для просмотра или управления видеотрансляцией на данном терминале.",
+      code: "permission_denied",
     };
   }
   if (status === 404) {
     return {
       title: "Терминал не найден",
       message: "Устройство не найдено или удалено из реестра.",
+      code: "terminal_not_found",
     };
   }
   if (
@@ -81,40 +93,47 @@ function formatVideoError(err: any): { title: string; message: string } {
       message:
         raw ||
         "Терминал уже находится под управлением другого пользователя или занят другой сессией.",
+      code: "session_busy",
     };
   }
   if (raw.includes("offline") || raw.includes("Device is offline")) {
     return {
       title: "Терминал не в сети",
       message: "Терминал не на связи (offline). Проверьте питание и подключение к сети.",
+      code: "offline",
     };
   }
   if (raw.includes("source_unavailable") || raw.includes("source")) {
     return {
       title: "Источник недоступен",
       message: "Выбранный экран или камера недоступны на терминале. Выберите другой источник.",
+      code: "source_unavailable",
     };
   }
   if (raw.includes("ffmpeg_missing")) {
     return {
       title: "Компонент не найден",
       message: "На терминале отсутствует утилита захвата видео ffmpeg.",
+      code: "ffmpeg_missing",
     };
   }
   if (raw.includes("terminal_timeout") || raw.includes("timeout")) {
     return {
       title: "Таймаут соединения",
       message: "Терминал не ответил на команду запуска в установленное время.",
+      code: "timeout",
     };
   }
 
   return {
     title: "Ошибка запуска трансляции",
     message: raw || "Не удалось запустить видеопоток. Повторите попытку через несколько секунд.",
+    code: "start_failed",
   };
 }
 
 export default function VideoSurveillancePage() {
+  const navigate = useNavigate();
   const { user, loading: userLoading } = useSession();
   const { token } = theme.useToken();
   const screens = Grid.useBreakpoint();
@@ -873,14 +892,15 @@ export default function VideoSurveillancePage() {
                 isMobile={isMobile}
               />
 
-              {/* Уведомления об ошибках или конфликте аренды */}
+              {/* Уведомления об ошибках или отказе */}
               {bannerError && (
-                <Alert
-                  type="warning"
-                  showIcon
-                  message={bannerError.message}
-                  closable
+                <RefusalReasonCard
+                  code={bannerError.code}
+                  rawMessage={bannerError.message}
                   onClose={() => setBannerError(null)}
+                  onRetry={isOperator ? handleOperatorStart : () => handleViewerConnect(selectedDevice.device_id)}
+                  onTopUp={() => navigate("/licenses")}
+                  onStopActiveSession={handleOperatorStop}
                 />
               )}
 

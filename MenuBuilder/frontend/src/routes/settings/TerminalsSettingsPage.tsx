@@ -42,6 +42,7 @@ import {
   updateTerminalSettings,
 } from "../../api/settings";
 import { useSession } from "../../session/SessionContext";
+import OnboardingWizardModal from "../../components/OnboardingWizardModal";
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -70,6 +71,7 @@ export default function TerminalsSettingsPage() {
   const [form] = Form.useForm();
 
   // Onboarding & PIN delivery states
+  const [wizardOpen, setWizardOpen] = useState(false);
   const [onboardModalVisible, setOnboardModalVisible] = useState(false);
   const [onboardLoading, setOnboardLoading] = useState(false);
   const [pinDeliveryModalVisible, setPinDeliveryModalVisible] = useState(false);
@@ -467,9 +469,9 @@ export default function TerminalsSettingsPage() {
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
-                onClick={handleOpenOnboardModal}
+                onClick={() => setWizardOpen(true)}
               >
-                Подключить терминал
+                Подключить терминал (Мастер)
               </Button>
             )}
           </Space>
@@ -808,6 +810,14 @@ export default function TerminalsSettingsPage() {
           </div>
         </Form>
       </Modal>
+
+      {/* L4Desk Onboarding Wizard */}
+      <OnboardingWizardModal
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        onTerminalCreated={() => fetchTerminals()}
+        orgId={user?.org_id || undefined}
+      />
     </div>
   );
 }

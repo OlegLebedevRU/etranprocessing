@@ -14,6 +14,7 @@ import {
   hasAnyReportPermission,
   hasPermission,
 } from "./utils/permissions";
+import { getNavigationProfile } from "./utils/navigationProfile";
 
 const { Paragraph } = Typography;
 
@@ -32,6 +33,9 @@ const ReportsPage = lazy(() => import("./routes/reports"));
 const IntegrationsPage = lazy(() => import("./routes/integrations"));
 const BillingPage = lazy(() => import("./routes/billing"));
 const DevicesPage = lazy(() => import("./routes/devices"));
+const ConsolePage = lazy(() => import("./routes/console/ConsolePage"));
+const McpPromoPage = lazy(() => import("./routes/mcp/McpPromoPage"));
+const LicensesPage = lazy(() => import("./routes/licenses/LicensesPage"));
 const AdminLayout = lazy(() => import("./routes/admin-layout"));
 const AdminOrganizationsPage = lazy(() => import("./routes/admin-organizations"));
 const AdminTerminalsPage = lazy(() => import("./routes/admin-terminals"));
@@ -47,13 +51,16 @@ function LoadingFallback() {
     <div
       style={{
         display: "flex",
+        flexDirection: "column",
         justifyContent: "center",
         alignItems: "center",
-        minHeight: "40vh",
+        minHeight: "50vh",
         width: "100%",
+        gap: 16,
       }}
     >
       <Spin size="large" />
+      <span style={{ color: "#8c8c8c", fontSize: 14 }}>Загрузка интерфейса...</span>
     </div>
   );
 }
@@ -78,6 +85,10 @@ function DefaultRouteResolver() {
   }
 
   if (user.role_id !== 4) {
+    const profile = getNavigationProfile(user);
+    if (profile === "l4desk") {
+      return <Navigate to="/video" replace />;
+    }
     return <Navigate to="/monitoring" replace />;
   }
 
@@ -235,7 +246,10 @@ export default function App() {
                 </ViewerGuard>
               }
             />
+            <Route path="licenses" element={<LicensesPage />} />
             <Route path="devices" element={<DevicesPage />} />
+            <Route path="console" element={<ConsolePage />} />
+            <Route path="mcp" element={<McpPromoPage />} />
             <Route
               path="integrations"
               element={

@@ -39,6 +39,7 @@ import {
   keepaliveControlLease,
   releaseControlLease,
 } from "../../api/video";
+import RefusalReasonCard from "../../components/RefusalReasonCard";
 
 const { Text } = Typography;
 
@@ -125,6 +126,7 @@ export default function DeviceConsoleTab({
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [elapsedSec, setElapsedSec] = useState<number>(0);
   const [lastExitCode, setLastExitCode] = useState<number | null>(null);
+  const [refusalError, setRefusalError] = useState<{ code: string; message: string } | null>(null);
 
   // Fullscreen and dynamic height state (in-memory only, no localStorage)
   const [isFullScreen, setIsFullScreen] = useState<boolean>(false);
@@ -297,6 +299,7 @@ export default function DeviceConsoleTab({
     }
 
     setConnecting(true);
+    setRefusalError(null);
     lastStatusRef.current = "";
     seenSeqSetRef.current.clear();
 
@@ -337,6 +340,9 @@ export default function DeviceConsoleTab({
     } catch (err: any) {
       setConnecting(false);
       const detail = err.response?.data?.detail;
+      const errCode = typeof detail === "object" ? detail.code : (err.response?.status === 409 ? "session_busy" : (err.response?.status === 403 ? "policy_denied" : undefined));
+      const errMsg = (typeof detail === "object" ? detail.message : (typeof detail === "string" ? detail : err.message)) || "Ошибка получения аренды";
+      setRefusalError({ code: errCode || "error", message: errMsg });
       if (err.response?.status === 409) {
         if (detail && typeof detail === "object" && detail.code === "lease_taken") {
           const owner = detail.owner_role
@@ -822,6 +828,16 @@ export default function DeviceConsoleTab({
             </span>
           }
           style={{ borderRadius: 6 }}
+        />
+      )}
+
+      {/* Refusal Reason Alert */}
+      {refusalError && (
+        <RefusalReasonCard
+          code={refusalError.code}
+          rawMessage={refusalError.message}
+          onClose={() => setRefusalError(null)}
+          onRetry={connectWebSocket}
         />
       )}
 

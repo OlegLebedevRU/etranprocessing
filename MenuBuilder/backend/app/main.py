@@ -22,6 +22,7 @@ from app.routers import (
     integrations,
     iot_consumer,
     mcp_proxy,
+    mcp_waitlist,
     menu_variants,
     monitoring,
     profile,
@@ -161,6 +162,7 @@ app.include_router(settings_router.router, prefix="/api", tags=["settings"])
 app.include_router(settings_users.router, prefix="/api", tags=["settings-users"])
 app.include_router(integrations.router)
 app.include_router(mcp_proxy.router, prefix="/api", tags=["mcp"])
+app.include_router(mcp_waitlist.router)
 app.include_router(dashboard.router)
 app.include_router(monitoring.router)
 app.include_router(reports.router)
