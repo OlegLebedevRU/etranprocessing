@@ -14,7 +14,7 @@ producer_prompt_id: L4D-15C-MEDIA
 producer_scope_project: l4media
 producer_report_path: l4media/docs/l4desk/handoffs/L4D-15C-MEDIA-report.md
 producer_branch: l4desk/l4d-15c-media
-producer_commit: 3f4a95971cead97cca2150aa85a0bec1c1b39122
+producer_commit: fe9dcd10f6071869e5d482ffbb7c66746ef1712a
 created_at_utc: '2026-09-21T02:20:00Z'
 contract_version: 1.0.0
 schema_revision: '1.0.0'
