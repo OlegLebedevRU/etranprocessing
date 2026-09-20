@@ -185,6 +185,7 @@ producer_prompt_id: L4D-08B-MB
 producer_scope_project: MenuBuilder
 producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-08B-MB-report.md
 producer_branch: l4desk/l4d-08b-mb
+producer_commit: 8ba8edbceae6d5a3d2b70ee6d54b97f558d5bdc0
 accepted_at_utc: null
 contract_version: 1.0.0
 schema_revision: 1.0.0
