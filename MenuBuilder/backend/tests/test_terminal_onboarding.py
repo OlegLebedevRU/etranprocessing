@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 from unittest.mock import patch
 
 import pytest
@@ -371,7 +371,7 @@ async def test_terminal_onboarding_success_flow():
     app.dependency_overrides[get_db] = lambda: db
 
     with patch("app.routers.settings.TerminalOnboardingService") as mock_svc_cls:
-        svc = TerminalOnboardingService(db, iot_client=iot, pin_client=pin)
+        svc = TerminalOnboardingService(cast(Any, db), iot_client=iot, pin_client=pin)
         mock_svc_cls.return_value = svc
 
         async with AsyncClient(
@@ -420,7 +420,7 @@ async def test_monotonic_tenant_ordering_and_free_marker_transfer():
     iot = FakeIotClient()
     pin = FakePinClient()
 
-    svc = TerminalOnboardingService(db, iot_client=iot, pin_client=pin)
+    svc = TerminalOnboardingService(cast(Any, db), iot_client=iot, pin_client=pin)
     user_tenant = {"id": 10, "username": "owner", "org_id": 1, "role_id": 5}
 
     # 1. Create first terminal (ordinal 1) -> gets free marker
@@ -477,7 +477,7 @@ async def test_partial_failure_iot_fails_pin_succeeds():
     iot = FakeIotClient(should_fail=True)  # IoT platform fails
     pin = FakePinClient(pin="999888")
 
-    svc = TerminalOnboardingService(db, iot_client=iot, pin_client=pin)
+    svc = TerminalOnboardingService(cast(Any, db), iot_client=iot, pin_client=pin)
     user = {"id": 10, "username": "owner", "org_id": 1, "role_id": 5}
 
     from app.services.terminal_onboarding_service import TerminalOnboardRequest
@@ -503,7 +503,7 @@ async def test_partial_failure_pin_fails_iot_succeeds():
     iot = FakeIotClient()
     pin = FakePinClient(should_fail=True)  # PIN issue fails
 
-    svc = TerminalOnboardingService(db, iot_client=iot, pin_client=pin)
+    svc = TerminalOnboardingService(cast(Any, db), iot_client=iot, pin_client=pin)
     user = {"id": 10, "username": "owner", "org_id": 1, "role_id": 5}
 
     from app.services.terminal_onboarding_service import TerminalOnboardRequest
@@ -533,7 +533,7 @@ async def test_saga_retry_recovers_failed_step():
     iot = FakeIotClient(should_fail=True)
     pin = FakePinClient(pin="555444")
 
-    svc = TerminalOnboardingService(db, iot_client=iot, pin_client=pin)
+    svc = TerminalOnboardingService(cast(Any, db), iot_client=iot, pin_client=pin)
     user = {"id": 10, "username": "owner", "org_id": 1, "role_id": 5}
 
     from app.services.terminal_onboarding_service import TerminalOnboardRequest
@@ -566,7 +566,7 @@ async def test_idempotent_duplicate_clicks():
     iot = FakeIotClient()
     pin = FakePinClient(pin="111222")
 
-    svc = TerminalOnboardingService(db, iot_client=iot, pin_client=pin)
+    svc = TerminalOnboardingService(cast(Any, db), iot_client=iot, pin_client=pin)
     user = {"id": 10, "username": "owner", "org_id": 1, "role_id": 5}
 
     from app.services.terminal_onboarding_service import TerminalOnboardRequest
@@ -602,7 +602,7 @@ async def test_tenant_isolation():
     iot = FakeIotClient()
     pin = FakePinClient()
 
-    svc = TerminalOnboardingService(db, iot_client=iot, pin_client=pin)
+    svc = TerminalOnboardingService(cast(Any, db), iot_client=iot, pin_client=pin)
 
     user_a = {"id": 10, "username": "userA", "org_id": 10, "role_id": 3}
     user_b = {"id": 20, "username": "userB", "org_id": 20, "role_id": 3}
@@ -636,7 +636,7 @@ async def test_provider_pin_semantics_consumed_pin_hidden():
     iot = FakeIotClient()
     pin = FakePinClient(pin="123456", status="consumed")  # already consumed
 
-    svc = TerminalOnboardingService(db, iot_client=iot, pin_client=pin)
+    svc = TerminalOnboardingService(cast(Any, db), iot_client=iot, pin_client=pin)
     user = {"id": 10, "username": "owner", "org_id": 1, "role_id": 5}
 
     from app.services.terminal_onboarding_service import TerminalOnboardRequest

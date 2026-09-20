@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+from datetime import date
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
@@ -14,21 +15,34 @@ from app.repositories.l4desk_repository import L4DeskRepository
 from app.services.financial_core import (
     FinAccountNotFoundError,
     FinBalanceRead,
+    FinBillingCycleRead,
+    FinBillingCycleService,
+    FinBillingProfileRead,
     FinConcurrencyError,
+    FinDailyCloseRequest,
     FinDuplicatePostingError,
     FinImbalanceError,
     FinLedgerEntryRead,
     FinLedgerTransactionRead,
+    FinMeteringService,
     FinPostingRequest,
     FinPostingService,
+    FinProcessOnlineEventRequest,
     FinProjectionService,
     FinReconciliationRequest,
     FinReconciliationRunRead,
     FinReconciliationService,
+    FinRecordUsageRequest,
     FinReversalError,
     FinReversalRequest,
     FinReversalService,
+    FinTariffService,
+    FinTariffVersionCreate,
+    FinTariffVersionRead,
     FinTenantIsolationError,
+    FinTerminalMonthlyChargeRead,
+    FinTerminalService,
+    FinUsageDailyRead,
     FinValidationError,
 )
 
@@ -160,6 +174,105 @@ async def list_tenant_transactions(
             )
         )
     return result
+
+
+@router.get("/api/v1/finance/profile", response_model=FinBillingProfileRead)
+async def get_tenant_billing_profile(
+    db: AsyncSession = Depends(get_db),
+    user: dict[str, Any] = Depends(get_current_user),
+) -> FinBillingProfileRead:
+    """Get the current tenant's billing profile (anchor, cycle schedule, entitlement)."""
+    org_id = user.get("org_id")
+    if org_id is None or int(org_id) <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Active organization context required",
+        )
+    tenant_id = int(org_id)
+    profile = await FinBillingCycleService.ensure_billing_profile(db, tenant_id)
+    return FinBillingProfileRead.model_validate(profile)
+
+
+@router.get("/api/v1/finance/cycles", response_model=list[FinBillingCycleRead])
+async def list_tenant_cycles(
+    limit: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    user: dict[str, Any] = Depends(get_current_user),
+) -> list[FinBillingCycleRead]:
+    """List billing cycles for the current tenant."""
+    org_id = user.get("org_id")
+    if org_id is None or int(org_id) <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Active organization context required",
+        )
+    tenant_id = int(org_id)
+    repo = L4DeskRepository(db)
+    cycles = await repo.list_billing_cycles(tenant_id, limit=limit)
+    return [FinBillingCycleRead.model_validate(c) for c in cycles]
+
+
+@router.get("/api/v1/finance/tariffs/current", response_model=FinTariffVersionRead)
+async def get_current_tariff(
+    db: AsyncSession = Depends(get_db),
+    _user: dict[str, Any] = Depends(get_current_user),
+) -> FinTariffVersionRead:
+    """Get the currently effective tariff version."""
+    tariff = await FinTariffService.get_effective_tariff(db)
+    return FinTariffVersionRead.model_validate(tariff)
+
+
+@router.get("/api/v1/finance/usage", response_model=list[FinUsageDailyRead])
+async def list_tenant_daily_usage(
+    terminal_id: int | None = Query(None, gt=0),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    user: dict[str, Any] = Depends(get_current_user),
+) -> list[FinUsageDailyRead]:
+    """List daily usage entries for the current tenant."""
+    org_id = user.get("org_id")
+    if org_id is None or int(org_id) <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Active organization context required",
+        )
+    tenant_id = int(org_id)
+    repo = L4DeskRepository(db)
+    items = await repo.list_usage_daily(
+        tenant_id,
+        terminal_id=terminal_id,
+        start_date=start_date,
+        end_date=end_date,
+        limit=limit,
+    )
+    return [FinUsageDailyRead.model_validate(i) for i in items]
+
+
+@router.get(
+    "/api/v1/finance/monthly-charges",
+    response_model=list[FinTerminalMonthlyChargeRead],
+)
+async def list_tenant_monthly_charges(
+    billing_cycle_id: int | None = Query(None, gt=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    user: dict[str, Any] = Depends(get_current_user),
+) -> list[FinTerminalMonthlyChargeRead]:
+    """List monthly charges for the current tenant."""
+    org_id = user.get("org_id")
+    if org_id is None or int(org_id) <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Active organization context required",
+        )
+    tenant_id = int(org_id)
+    repo = L4DeskRepository(db)
+    charges = await repo.list_monthly_charges(
+        tenant_id, billing_cycle_id=billing_cycle_id, limit=limit
+    )
+    return [FinTerminalMonthlyChargeRead.model_validate(c) for c in charges]
 
 
 # =============================================================================
@@ -347,3 +460,102 @@ async def list_reconciliation_runs(
     repo = L4DeskRepository(db)
     runs = await repo.list_reconciliation_runs(tenant_id=tenant_id, limit=limit)
     return [FinReconciliationRunRead.model_validate(r) for r in runs]
+
+
+@router.get(
+    "/api/internal/v1/finance/tariffs", response_model=list[FinTariffVersionRead]
+)
+async def internal_list_tariffs(
+    db: AsyncSession = Depends(get_db),
+    _auth: dict[str, Any] = Depends(require_internal_or_superuser),
+) -> list[FinTariffVersionRead]:
+    """List all tariff versions."""
+    tariffs = await FinTariffService.list_tariffs(db)
+    return [FinTariffVersionRead.model_validate(t) for t in tariffs]
+
+
+@router.post(
+    "/api/internal/v1/finance/tariffs",
+    response_model=FinTariffVersionRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def internal_create_tariff(
+    body: FinTariffVersionCreate,
+    db: AsyncSession = Depends(get_db),
+    _auth: dict[str, Any] = Depends(require_internal_or_superuser),
+) -> FinTariffVersionRead:
+    """Create a new immutable tariff version."""
+    try:
+        tariff = await FinTariffService.create_tariff_version(db, body)
+        return FinTariffVersionRead.model_validate(tariff)
+    except FinValidationError as err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)
+        ) from err
+
+
+@router.post(
+    "/api/internal/v1/finance/metering/online",
+    response_model=FinTerminalMonthlyChargeRead | None,
+)
+async def internal_process_device_online(
+    body: FinProcessOnlineEventRequest,
+    db: AsyncSession = Depends(get_db),
+    _auth: dict[str, Any] = Depends(require_internal_or_superuser),
+) -> FinTerminalMonthlyChargeRead | None:
+    """Process device_online event for monthly terminal charge."""
+    charge = await FinTerminalService.process_device_online_monthly_charge(
+        db,
+        tenant_id=body.tenant_id,
+        terminal_id=body.terminal_id,
+        event_id=body.event_id,
+        occurred_at=body.occurred_at,
+        actor=body.actor,
+        correlation_id=body.correlation_id,
+    )
+    if charge is None:
+        return None
+    return FinTerminalMonthlyChargeRead.model_validate(charge)
+
+
+@router.post(
+    "/api/internal/v1/finance/metering/record-usage",
+    response_model=list[FinUsageDailyRead],
+)
+async def internal_record_usage(
+    body: FinRecordUsageRequest,
+    db: AsyncSession = Depends(get_db),
+    _auth: dict[str, Any] = Depends(require_internal_or_superuser),
+) -> list[FinUsageDailyRead]:
+    """Record session usage across local calendar days."""
+    rows = await FinMeteringService.record_session_usage(
+        db,
+        tenant_id=body.tenant_id,
+        terminal_id=body.terminal_id,
+        session_type=body.session_type,
+        start_utc=body.start_utc,
+        end_utc=body.end_utc,
+        event_id=body.event_id,
+        actor=body.actor,
+        correlation_id=body.correlation_id,
+    )
+    return [FinUsageDailyRead.model_validate(r) for r in rows]
+
+
+@router.post(
+    "/api/internal/v1/finance/metering/close-day",
+    response_model=list[FinUsageDailyRead],
+)
+async def internal_close_day(
+    body: FinDailyCloseRequest,
+    db: AsyncSession = Depends(get_db),
+    _auth: dict[str, Any] = Depends(require_internal_or_superuser),
+) -> list[FinUsageDailyRead]:
+    """Close and post daily usage rows for tenant and date."""
+    rows = await FinMeteringService.close_and_post_daily_usage(
+        db,
+        tenant_id=body.tenant_id,
+        local_date=body.local_date,
+        actor=body.actor,
+    )
+    return [FinUsageDailyRead.model_validate(r) for r in rows]

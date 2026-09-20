@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 from sqlalchemy import func, select, update
@@ -9,9 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models_l4desk import (
     FinAccount,
     FinBalanceProjection,
+    FinBillingCycle,
+    FinBillingProfile,
     FinLedgerEntry,
     FinLedgerTransaction,
     FinReconciliationRun,
+    FinTariffVersion,
+    FinTerminalMonthlyCharge,
+    FinUsageDaily,
     L4DeskAuditEvent,
     L4DeskMembership,
     L4DeskRegistration,
@@ -523,5 +528,95 @@ class L4DeskRepository:
         if tenant_id is not None:
             stmt = stmt.where(FinReconciliationRun.tenant_id == tenant_id)
         stmt = stmt.limit(limit)
+        res = await self.session.execute(stmt)
+        return list(res.scalars().all())
+
+    # -------------------------------------------------------------------------
+    # Tariff, Cycle, and Metering read helpers
+    # -------------------------------------------------------------------------
+    async def get_billing_profile(self, tenant_id: int) -> FinBillingProfile | None:
+        stmt = select(FinBillingProfile).where(FinBillingProfile.tenant_id == tenant_id)
+        res = await self.session.execute(stmt)
+        return res.scalar_one_or_none()
+
+    async def get_billing_cycle(self, cycle_id: int) -> FinBillingCycle | None:
+        stmt = select(FinBillingCycle).where(FinBillingCycle.id == cycle_id)
+        res = await self.session.execute(stmt)
+        return res.scalar_one_or_none()
+
+    async def list_billing_cycles(
+        self, tenant_id: int, limit: int = 50
+    ) -> list[FinBillingCycle]:
+        stmt = (
+            select(FinBillingCycle)
+            .where(FinBillingCycle.tenant_id == tenant_id)
+            .order_by(FinBillingCycle.sequence.desc())
+            .limit(limit)
+        )
+        res = await self.session.execute(stmt)
+        return list(res.scalars().all())
+
+    async def get_usage_daily(
+        self, terminal_id: int, local_date: date
+    ) -> FinUsageDaily | None:
+        stmt = select(FinUsageDaily).where(
+            FinUsageDaily.terminal_id == terminal_id,
+            FinUsageDaily.local_date == local_date,
+        )
+        res = await self.session.execute(stmt)
+        return res.scalar_one_or_none()
+
+    async def list_usage_daily(
+        self,
+        tenant_id: int,
+        terminal_id: int | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        limit: int = 50,
+    ) -> list[FinUsageDaily]:
+        stmt = select(FinUsageDaily).where(FinUsageDaily.tenant_id == tenant_id)
+        if terminal_id is not None:
+            stmt = stmt.where(FinUsageDaily.terminal_id == terminal_id)
+        if start_date is not None:
+            stmt = stmt.where(FinUsageDaily.local_date >= start_date)
+        if end_date is not None:
+            stmt = stmt.where(FinUsageDaily.local_date <= end_date)
+        stmt = stmt.order_by(FinUsageDaily.local_date.desc()).limit(limit)
+        res = await self.session.execute(stmt)
+        return list(res.scalars().all())
+
+    async def get_monthly_charge(
+        self, terminal_id: int, billing_cycle_id: int
+    ) -> FinTerminalMonthlyCharge | None:
+        stmt = select(FinTerminalMonthlyCharge).where(
+            FinTerminalMonthlyCharge.terminal_id == terminal_id,
+            FinTerminalMonthlyCharge.billing_cycle_id == billing_cycle_id,
+        )
+        res = await self.session.execute(stmt)
+        return res.scalar_one_or_none()
+
+    async def list_monthly_charges(
+        self, tenant_id: int, billing_cycle_id: int | None = None, limit: int = 50
+    ) -> list[FinTerminalMonthlyCharge]:
+        stmt = select(FinTerminalMonthlyCharge).where(
+            FinTerminalMonthlyCharge.tenant_id == tenant_id
+        )
+        if billing_cycle_id is not None:
+            stmt = stmt.where(
+                FinTerminalMonthlyCharge.billing_cycle_id == billing_cycle_id
+            )
+        stmt = stmt.order_by(FinTerminalMonthlyCharge.first_online_at.desc()).limit(
+            limit
+        )
+        res = await self.session.execute(stmt)
+        return list(res.scalars().all())
+
+    async def get_tariff_version(self, version: str) -> FinTariffVersion | None:
+        stmt = select(FinTariffVersion).where(FinTariffVersion.version == version)
+        res = await self.session.execute(stmt)
+        return res.scalar_one_or_none()
+
+    async def list_tariff_versions(self) -> list[FinTariffVersion]:
+        stmt = select(FinTariffVersion).order_by(FinTariffVersion.effective_from.asc())
         res = await self.session.execute(stmt)
         return list(res.scalars().all())

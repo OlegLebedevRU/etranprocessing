@@ -39,3 +39,19 @@ class FinCorruptedProjectionError(FinError):
 
 class FinImmutableError(FinError):
     """Raised when an attempt is made to mutate or delete posted ledger rows."""
+
+
+class FinTariffNotFoundError(FinError):
+    """Raised when an effective or requested tariff version cannot be found."""
+
+
+class FinCycleNotFoundError(FinError):
+    """Raised when a billing cycle cannot be found or resolved."""
+
+
+class FinBillingProfileNotFoundError(FinError):
+    """Raised when a billing profile cannot be found."""
+
+
+class FinMeteringError(FinError):
+    """Raised when metering aggregation or daily usage processing fails."""

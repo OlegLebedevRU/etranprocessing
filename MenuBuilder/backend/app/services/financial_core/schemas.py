@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -137,3 +137,143 @@ class FinReconciliationRunRead(BaseModel):
     finished_at: datetime | None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class FinTariffVersionRead(BaseModel):
+    id: int
+    version: str
+    effective_from: datetime
+    terminal_month_kopecks: int
+    hourly_rate_kopecks: int
+    free_daily_seconds: int
+    currency: str = "RUB"
+    actor: str
+    correlation_id: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FinTariffVersionCreate(BaseModel):
+    version: str = Field(..., min_length=1, max_length=32)
+    effective_from: datetime
+    terminal_month_kopecks: int = Field(default=10000, ge=0)
+    hourly_rate_kopecks: int = Field(default=100, ge=0)
+    free_daily_seconds: int = Field(default=7200, ge=0)
+    currency: str = Field(default="RUB", min_length=3, max_length=3)
+    actor: str = Field(default="admin", max_length=128)
+    correlation_id: str = Field(default="tariff-create", max_length=128)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class FinBillingProfileRead(BaseModel):
+    tenant_id: int
+    anchor_at: datetime | None
+    anchor_day: int | None
+    anchor_timezone: str | None
+    first_payment_transaction_id: int | None
+    entitlement: str
+    entitlement_changed_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FinBillingCycleRead(BaseModel):
+    id: int
+    tenant_id: int
+    sequence: int
+    starts_at: datetime
+    ends_at: datetime
+    grace_deadline: datetime
+    timezone: str
+    closed_at: datetime | None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FinUsageDailyRead(BaseModel):
+    id: int
+    tenant_id: int
+    terminal_id: int
+    local_date: date
+    timezone: str
+    tariff_version_id: int
+    source_seconds: int
+    video_seconds: int
+    console_seconds: int
+    free_seconds: int
+    billable_seconds: int
+    rounded_billable_hours: int
+    rate_kopecks: int
+    calculated_kopecks: int
+    posted_kopecks: int
+    discarded_kopecks: int
+    source_project: str
+    source_event_id: str | None
+    source_events_hash: str
+    archive_batch_id: str | None
+    ledger_transaction_id: int | None
+    actor: str
+    correlation_id: str
+    created_at: datetime
+    posted_at: datetime | None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FinTerminalMonthlyChargeRead(BaseModel):
+    id: int
+    tenant_id: int
+    terminal_id: int
+    billing_cycle_id: int
+    tariff_version_id: int
+    is_free: bool
+    first_online_at: datetime
+    calculated_kopecks: int
+    posted_kopecks: int
+    discarded_kopecks: int
+    source_project: str
+    source_event_id: str
+    source_events_hash: str
+    archive_batch_id: str | None
+    ledger_transaction_id: int | None
+    actor: str
+    correlation_id: str
+    created_at: datetime
+    posted_at: datetime | None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FinProcessOnlineEventRequest(BaseModel):
+    tenant_id: int = Field(..., gt=0)
+    terminal_id: int = Field(..., gt=0)
+    event_id: str = Field(..., min_length=1, max_length=128)
+    occurred_at: datetime
+    actor: str = Field(default="metering_worker", max_length=128)
+    correlation_id: str = Field(default="", max_length=128)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class FinRecordUsageRequest(BaseModel):
+    tenant_id: int = Field(..., gt=0)
+    terminal_id: int = Field(..., gt=0)
+    session_type: Literal["console", "video"]
+    start_utc: datetime
+    end_utc: datetime
+    event_id: str = Field(..., min_length=1, max_length=128)
+    actor: str = Field(default="metering_worker", max_length=128)
+    correlation_id: str = Field(default="", max_length=128)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class FinDailyCloseRequest(BaseModel):
+    tenant_id: int = Field(..., gt=0)
+    local_date: date
+    actor: str = Field(default="metering_worker", max_length=128)
+    correlation_id: str = Field(default="", max_length=128)
+
+    model_config = ConfigDict(extra="forbid")
