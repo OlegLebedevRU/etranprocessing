@@ -13,6 +13,7 @@ producer_scope_project: MenuBuilder
 producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-09-MB-report.md
 producer_branch: l4desk/l4d-09-mb
 producer_commit: 3d0dddba68df211a1d6c89844e0311b43bccd44d
+report_commit: d487bc23011d90cad1ab9945abf480fca73e397a
 accepted_at_utc: '2026-09-20T13:00:00Z'
 contract_version: 1.0.0
 schema_revision: '027'
