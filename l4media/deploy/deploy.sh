@@ -26,6 +26,14 @@ if [ ! -f .env ]; then
     echo "Created .env from .env.example"
 fi
 
+# Ensure new variables from .env.example are present in .env
+for var in JANUS_HOST JANUS_ADMIN_PORT JANUS_ADMIN_SECRET L4MEDIA_SERVICE_TOKEN; do
+    if ! grep -q "^${var}=" .env; then
+        grep "^${var}=" .env.example >> .env || true
+        echo "Added ${var} to .env"
+    fi
+done
+
 mkdir -p crt
 if [ ! -f crt/server_certificate.pem ] || [ ! -f crt/server_key.pem ]; then
     echo "Generating self-signed server TLS certificate (CN=87.242.100.34)..."

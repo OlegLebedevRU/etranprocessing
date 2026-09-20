@@ -1726,3 +1726,421 @@ original_journal_bytes: 81789
 original_journal_sha256: d6a9e33b3ee3316b2cde18ea25ed9371d74346af49ca1ccf45c754b349bbf293
 ```
 <!-- CORRECTIVE_REGISTRATION:R-L4D-06B-IOT-FIX-01-v3:END -->
+
+## 11. Принятие handoff H-L4D-06B-IOT-FIX-01-v1 (DETACHED_V1)
+
+Фиксация контроллером каскада принятого контракта H-L4D-06B-IOT-FIX-01-v1 по результатам проверки отчёта `docs/l4desk/handoffs/L4D-06B-IOT-FIX-01-report.md` и отдельного кандидата `docs/l4desk/handoffs/L4D-06B-IOT-FIX-01-candidate.md` в формате DETACHED_V1 согласно §9 PROMPT-STANDARD 1.2.0 и нормативной регистрации R-L4D-06B-IOT-FIX-01-v3.
+
+Все 6 оснований отказа исторического отчёта устранены и подтверждены воспроизводимым пакетом evidence:
+1. Линтеры, форматирование и типизация проверены (black, ruff, pyright: 0 errors, 0 warnings).
+2. Полный перечень изменённых файлов с коммитами и назначением зафиксирован.
+3. Деплой и smoke-тесты на хосте 87.242.100.34 (app1) выполнены с реальными выводами и статусами HTTP (403, 404, 201, 200, 409).
+4. Связь запущенного контейнера (Container ID 44add06a41e5, Image sha256:6974b172...) и побайтовое совпадение файлов с коммитом 4a0f9d4b218e96273eed605e9edd0f9ab3564b68 подтверждены.
+5. Контрольные суммы SHA-256 артефактов и отчёта проверены и совпадают.
+6. Входной sequence gate H-L4D-06A-PB-v1 и адресный допуск R-L4D-06B-IOT-FIX-01-v3 проверены.
+
+<!-- HANDOFF:H-L4D-06B-IOT-FIX-01-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-06B-IOT-FIX-01-v1
+status: ACCEPTED
+contract_kinds:
+  - API
+  - EVENT
+  - DEPLOYMENT
+producer_prompt_id: L4D-06B-IOT-FIX-01
+producer_scope_project: iot-rpc-rest-app
+producer_report_path: docs/l4desk/handoffs/L4D-06B-IOT-FIX-01-report.md
+producer_branch: l4desk/l4d-06b-iot-fix-01
+producer_commit: 4a0f9d4b218e96273eed605e9edd0f9ab3564b68
+report_commit: 2bca5e83ec9e4cf0c0774a3f4e1f7dcfb2bb0dfa
+accepted_at_utc: 2026-09-19T03:30:00Z
+contract_version: 1.0.0
+schema_revision: 2026-09-18-v1
+artifact_version: 1.0.0
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: docs/l4desk/handoffs/L4D-06B-IOT-FIX-01-candidate.md
+artifact_paths:
+  - docs/l4desk/contracts/schemas/device_provisioning_openapi.json
+  - docs/l4desk/contracts/schemas/device_provision_request.schema.json
+  - docs/l4desk/contracts/schemas/device_provision_response.schema.json
+  - docs/l4desk/fixtures/device_provisioning_examples_v1.json
+  - docs/l4desk/handoffs/L4D-06B-IOT-FIX-01-report.md
+artifact_sha256:
+  - dccc1beefc97be7b4d89502193cb865e95f7fe3b4a3bbae8d528574c7d736a3d
+  - 3cba891ebef0e1783bda8bdf02821e3eb6f9a12eba080b31a735fb2c5a667081
+  - 0f2914e286fbe665401dc412acb4308aa91741c5f6d3a141acd301e1bf1cf3a8
+  - 86dd26818fadf2d8c4ea07113a77410f19f3cbbf64fb6eccc098100bf893c2fb
+  - 5759fc1ab00dacfe2f16585f4df2753a8b4d5a8bc197af22f5b99c0fcff62d80
+compatibility:
+  backward_compatible_with:
+    - H-L4D-02-IOT-v1
+    - H-L4D-06A-PB-v1
+  breaking_changes: false
+  notes: "Device provisioning REST API (/api/internal/v1/devices/provision) with durable idempotent tracking, single-event emission (device_provisioned) and certificate PIN consumption via X-Internal-Key."
+deployment_status: DEPLOYED
+deployed_environment: production
+feature_flags: {}
+contract_payload:
+  corrects_candidate: H-L4D-06B-IOT-v1
+  architecture_sections: [3, 4, 5, 6, 11, 12, 14, 16, 17]
+  registration_id: R-L4D-06B-IOT-FIX-01-v3
+  service_key_header: X-Internal-Key
+  endpoints:
+    provision: /api/internal/v1/devices/provision
+    get_by_operation: /api/internal/v1/devices/provision/by-operation/{operation_id}
+    get_by_sn: /api/internal/v1/devices/provision/by-sn/{sn}
+    get_by_operation_legacy: /api/internal/v1/devices/provision/{operation_id}
+  durable_event_type: device_provisioned
+  alembic_revision: 0005_device_provisioning
+  tests_passed: 384
+  verification_status: VERIFIED_READY
+supersedes: []
+known_risks:
+  - "WEB_CONCURRENCY=1 invariant required for in-memory state consistency on app1"
+  - "Requires valid certificate PIN issued by ProcessingBackend prior to provisioning"
+consumers:
+  - L4D-06B-IOT
+next_prompt_id: L4D-06B-IOT
+```
+<!-- HANDOFF:H-L4D-06B-IOT-FIX-01-v1:END -->
+
+## 12. Повторная приёмка основного шага 18 L4D-06B-IOT (H-L4D-06B-IOT-v1)
+
+Повторная приёмка контроллером каскада основного шага 18 `L4D-06B-IOT` (`iot-rpc-rest-app`) на основе исправленного и проверенного пакета `L4D-06B-IOT-FIX-01` (коммит реализации `4a0f9d4b218e96273eed605e9edd0f9ab3564b68`, ветка `l4desk/l4d-06b-iot-fix-01`).
+
+Все 6 оснований первичного отказа успешно устранены и верифицированы:
+1. Линтеры, форматирование и типизация (`black`, `ruff`, `pyright`: 0 ошибок/предупреждений).
+2. Полный аудит изменённых файлов (исходных `bab8cfa`..`63f502f` и корректирующих `4a0f9d4`).
+3. Доказательство фактического развёртывания миграции `0005_device_provisioning` и результатов 7 smoke-проверок (HTTP 403, 404, 201, 200, 409).
+4. Подтверждение идентичности работающих байтов в контейнере `app1` (`44add06a41e5`, образ `sha256:6974b172...`) с коммитом `4a0f9d4b218e96273eed605e9edd0f9ab3564b68`.
+5. Контрольные суммы SHA-256 артефактов и отчёта проверены и совпадают.
+6. Входные sequence gates `H-L4D-06A-PB-v1` и промежуточный корректирующий handoff `H-L4D-06B-IOT-FIX-01-v1` приняты в журнале.
+
+<!-- HANDOFF:H-L4D-06B-IOT-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-06B-IOT-v1
+status: ACCEPTED
+contract_kinds:
+  - API
+  - EVENT
+  - DEPLOYMENT
+producer_prompt_id: L4D-06B-IOT
+producer_scope_project: iot-rpc-rest-app
+producer_report_path: docs/l4desk/handoffs/L4D-06B-IOT-report.md
+producer_branch: l4desk/l4d-06b-iot-fix-01
+producer_commit: 4a0f9d4b218e96273eed605e9edd0f9ab3564b68
+accepted_at_utc: 2026-09-19T11:55:00Z
+contract_version: 1.0.0
+schema_revision: 2026-09-18-v1
+artifact_version: 1.0.0
+artifact_paths:
+  - docs/l4desk/contracts/schemas/device_provisioning_openapi.json
+  - docs/l4desk/contracts/schemas/device_provision_request.schema.json
+  - docs/l4desk/contracts/schemas/device_provision_response.schema.json
+  - docs/l4desk/fixtures/device_provisioning_examples_v1.json
+  - docs/l4desk/handoffs/L4D-06B-IOT-FIX-01-report.md
+artifact_sha256:
+  - dccc1beefc97be7b4d89502193cb865e95f7fe3b4a3bbae8d528574c7d736a3d
+  - 3cba891ebef0e1783bda8bdf02821e3eb6f9a12eba080b31a735fb2c5a667081
+  - 0f2914e286fbe665401dc412acb4308aa91741c5f6d3a141acd301e1bf1cf3a8
+  - 86dd26818fadf2d8c4ea07113a77410f19f3cbbf64fb6eccc098100bf893c2fb
+  - 5759fc1ab00dacfe2f16585f4df2753a8b4d5a8bc197af22f5b99c0fcff62d80
+compatibility:
+  backward_compatible_with:
+    - H-L4D-06A-PB-v1
+    - H-L4D-02-IOT-v1
+  breaking_changes: false
+  notes: "Versioned idempotent device and terminal provisioning contract implemented in iot-rpc-rest-app (/api/internal/v1/devices/provision) with evidence verified via L4D-06B-IOT-FIX-01. Supports exact identifier mapping (tenant_id: int, terminal_id: int, sn: str, operation_id: str, correlation_id: str | None), status states (requested, provisioned, failed), stable device_id/SN allocation, identity/tenant conflict protection (409 Conflict), and fact publishing into the durable tb_remote_session_events feed. Agent protocol and broker topologies remain 100% binary backward-compatible."
+deployment_status: DEPLOYED
+deployed_environment: production
+feature_flags:
+  device_provisioning_v1: enabled
+contract_payload:
+  evidence_source: L4D-06B-IOT-FIX-01
+  verified_by_handoff: H-L4D-06B-IOT-FIX-01-v1
+  identifiers:
+    tenant_id: int
+    terminal_id: int
+    sn: str
+    device_id: int
+    operation_id: str
+    correlation_id: str | None
+  states:
+    - requested
+    - provisioned
+    - failed
+  endpoints:
+    - method: POST
+      path: /api/internal/v1/devices/provision
+      auth: require_service_auth
+      request_schema: DeviceProvisionRequest
+      response_schema: DeviceProvisionResponse
+      status_codes:
+        201: Created (new device provisioned, replayed_flag=false)
+        200: OK (idempotent replay of existing operation_id, replayed_flag=true)
+        400: Bad Request (INVALID_PAYLOAD)
+        401: Unauthorized (SERVICE_AUTH_FAILED)
+        403: Forbidden (INVALID_CREDENTIALS)
+        409: Conflict (OPERATION_ID_CONFLICT / IDENTITY_CONFLICT)
+        422: Unprocessable Entity (validation error)
+    - method: GET
+      path: /api/internal/v1/devices/provision/by-operation/{operation_id}
+      auth: require_service_auth
+      response_schema: DeviceProvisionResponse
+      status_codes:
+        200: OK
+        401: Unauthorized
+        403: Forbidden
+        404: Not Found (OPERATION_NOT_FOUND)
+    - method: GET
+      path: /api/internal/v1/devices/provision/by-sn/{sn}
+      auth: require_service_auth
+      response_schema: DeviceProvisionResponse
+      status_codes:
+        200: OK
+        401: Unauthorized
+        403: Forbidden
+        404: Not Found (DEVICE_NOT_FOUND)
+  events:
+    - "device_provision_requested"
+    - "device_provisioned"
+    - "device_provision_failed"
+  idempotency_semantics:
+    replayed_flag: boolean
+    conflict_on_parameter_change: true
+    cross_tenant_sn_protection: enforced
+    terminal_rebind_protection: enforced
+  alembic_revision: 0005_device_provisioning
+  tests_passed: 384
+  verification_status: VERIFIED_READY
+supersedes: []
+known_risks:
+  - "WEB_CONCURRENCY=1 invariant required for in-memory state consistency on app1"
+  - "Requires valid certificate PIN issued by ProcessingBackend prior to provisioning"
+consumers:
+  - L4D-06C-MB
+  - L4D-17C-IOT
+  - L4D-18C-IOT
+next_prompt_id: L4D-06C-MB
+```
+<!-- HANDOFF:H-L4D-06B-IOT-v1:END -->
+
+## 13. Принятие handoff H-L4D-06C-MB-v1 (шаг 19 MenuBuilder)
+
+Фиксация контроллером каскада принятого контракта `H-L4D-06C-MB-v1` шага 19 (`MenuBuilder`) по результатам проверки отчёта `MenuBuilder/docs/l4desk/handoffs/L4D-06C-MB-report.md`, корректирующего отчёта `MenuBuilder/docs/l4desk/handoffs/L4D-06C-MB-FIX-01-report.md` и отдельного кандидата `MenuBuilder/docs/l4desk/handoffs/L4D-06C-MB-FIX-01-candidate.md` в формате `DETACHED_V1` согласно §9 `PROMPT-STANDARD.md`.
+
+Все 4 основания первичного отказа устранены и верифицированы:
+1. Валидный коммит проверенной реализации: `c91b24cc155dc0013500162c6e517897d8074a42` (ветка `l4desk/l4d-06c-mb`).
+2. Причина таймаута выпуска PIN устранена: изолированы границы транзакций в `terminal_onboarding_service.py` (`await self.db.commit()`), снята взаимная блокировка строк `l4desk_terminals` между `MenuBuilder` и `ProcessingBackend`.
+3. Реальный live smoke evidence на продакшен-хосте `87.242.100.34`: полный онбординг выполнен за 0.375 секунды с выдачей статуса `HTTP 201 Created`, получением PIN (`pin_masked: ***468`), созданием записи в IoT (`iot: ready`) и корректным удалением (`HTTP 200 OK`). Идентичность работающего кода в контейнере `menubuilder-backend` (`a04a69c83d0b`) подтверждена по контрольной сумме SHA-256 (`54ba3aff7c3d...`).
+4. Контрольные суммы SHA-256 всех 6 артефактов проверены побайтно и полностью совпадают. Блок кандидата оформлен строго по каноническому стандарту.
+5. Входные sequence gates `H-L4D-06A-PB-v1` и `H-L4D-06B-IOT-v1` приняты в журнале.
+
+<!-- HANDOFF:H-L4D-06C-MB-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-06C-MB-v1
+status: ACCEPTED
+contract_kinds:
+  - API
+  - DEPLOYMENT
+producer_prompt_id: L4D-06C-MB
+producer_scope_project: MenuBuilder
+producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-06C-MB-report.md
+producer_branch: l4desk/l4d-06c-mb
+producer_commit: c91b24cc155dc0013500162c6e517897d8074a42
+accepted_at_utc: 2026-09-19T14:10:00Z
+contract_version: 1.0.0
+schema_revision: 2026-09-19-v1
+artifact_version: 1.0.0
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-06C-MB-FIX-01-candidate.md
+artifact_paths:
+  - MenuBuilder/backend/app/routers/settings.py
+  - MenuBuilder/backend/app/services/terminal_onboarding_service.py
+  - MenuBuilder/frontend/src/routes/settings/TerminalsSettingsPage.tsx
+  - MenuBuilder/frontend/src/api/settings.ts
+  - MenuBuilder/backend/tests/test_terminal_onboarding.py
+  - MenuBuilder/docs/l4desk/handoffs/L4D-06C-MB-FIX-01-report.md
+artifact_sha256:
+  - f9f34368b347dc67e9481d7c319d913dfb3ef5fbb99bd41123b5fe4f34245ad4
+  - 54ba3aff7c3d35a99314d7759cf2714b685deeac8287b564990a33b817606089
+  - 71d4d891c6b573858c1c4a1e1005a8e11847f0d529428178bd1cb509f8706827
+  - a49a54e4a2b4f98cafbc33f62b15ebc140fc60fddf16c9f4c1a93501af16c093
+  - 2d710f66d97adf541ed472cf4ba9914637ffcbb89b7726e818fabcc47262954e
+  - 80c9b55ae6e814a0f3c6709846029f63e32e660dd8f9b544d6cd422bb24429ca
+compatibility:
+  backward_compatible_with:
+    - H-L4D-06A-PB-v1
+    - H-L4D-06B-IOT-v1
+  breaking_changes: false
+  notes: "Unified terminal onboarding consumer in MenuBuilder orchestrating H-L4D-06A-PB-v1 and H-L4D-06B-IOT-v1. Verified and confirmed under corrective step L4D-06C-MB-FIX-01."
+deployment_status: DEPLOYED
+deployed_environment: production
+feature_flags:
+  l4desk_terminal_onboarding_enabled: true
+contract_payload:
+  evidence_source: L4D-06C-MB-FIX-01
+  verified_by_handoff: H-L4D-06C-MB-FIX-01-v1
+  endpoints:
+    onboard_status: /api/settings/terminals/onboard/status
+    onboard_terminal: /api/settings/terminals
+    onboard_terminal_alias: /api/settings/terminals/onboard
+    retry_terminal_saga: /api/settings/terminals/{terminal_id}/retry
+    terminal_readiness: /api/settings/terminals/{terminal_id}/readiness
+    list_terminals: /api/settings/terminals
+    delete_terminal: /api/settings/terminals/{terminal_id}
+  saga_steps:
+    - step_a: "IoT Device Provisioning (POST /api/internal/v1/devices/provision)"
+    - step_b: "Certificate PIN Issuance (POST /api/certificates/pins/issue)"
+  readiness_states:
+    record: ["ready", "pending", "failed"]
+    certificate: ["pending", "issued", "consumed", "expired", "failed"]
+    iot: ["pending", "ready", "failed"]
+    online: ["online", "offline"]
+  quota_rules:
+    free_tier_first_terminal: "ordinal == min_active_ordinal marked is_free=true"
+    deletion_transfer: "free tier automatically reassigns to next earliest active terminal upon soft deletion"
+  audit_security:
+    plain_pin_persistence: "never stored in database or audit logs"
+    audit_masking: "***773 pattern enforced across all audit events"
+    consumer_pin_visibility: "plain PIN delivered on 201 Created and active query only, hidden once consumed or expired"
+  deployed_host: 87.242.100.34
+  live_smoke_evidence:
+    status_code: 201
+    execution_time_seconds: 0.375
+    pin_masked: "***468"
+    pin_state: "issued"
+    provisioning_state: "ready"
+    last_error: null
+  tests_passed: 9
+  full_backend_suite: 344
+  verification_status: VERIFIED_READY
+supersedes: []
+known_risks:
+  - "IoT platform (app1) requires WEB_CONCURRENCY=1 for in-memory session tracking consistency"
+  - "External Agent download URL hosted on cloud.ru generic repository"
+consumers:
+  - L4D-07-IOT
+  - ALL_FOLLOWING
+next_prompt_id: L4D-07-IOT
+```
+<!-- HANDOFF:H-L4D-06C-MB-v1:END -->
+
+## 14. Принятие handoff H-L4D-07-IOT-v1 (шаг 20 iot-rpc-rest-app)
+
+Фиксация контроллером каскада принятого контракта `H-L4D-07-IOT-v1` шага 20 (`iot-rpc-rest-app`) по результатам приёмки отчёта `D:\work\iot.leo4.ru\iot-rpc-rest-app\docs\l4desk\handoffs\L4D-07-IOT-report.md`.
+
+Все проверки выполнены и подтверждены инструментально:
+1. Коммит проверенной реализации: `c4e892f4c1dbf8f967109e8a06c3f63b0c9bd483` (ветка `l4desk/l4d-07-iot`). Коммит отчёта: `2b21f4e3670cdd662999e225625dc3471bb242b9`.
+2. Sequence gate пройден: предшествующий обязательный handoff `H-L4D-06C-MB-v1` принят в журнале, архитектурные разделы §3, §4, §5, §6, §8, §11, §12, §16, §17 соблюдены.
+3. Единый session lock на устройство (`sn`), взаимное исключение между типами сессий (HTTP 409 `session_busy`), расширенный жизненный цикл (`starting`), командно-ориентированный graceful stop с bounded timeout (`asyncio.wait_for`, default 5.0s), media flow teardown и детекция stale-сессий полностью подтверждены. Инвариант контракта Агента v1 (топики MQTT, методы 7000–7002, payload) сохранён на 100%.
+4. Побайтно проверены контрольные суммы SHA-256 для всех 5 артефактов реализации:
+   - `docs/l4desk/contracts/schemas/remote_session.schema.json`: `d72324f4a468e5b94569a6f390d122ce38364581705c90b9fb4a241b56fb68bc`
+   - `docs/l4desk/contracts/schemas/remote_session_event.schema.json`: `230a22727a493b2980ba85cb2735e50d5ac42ac9b110cf3a6f3ba03ea0ebb12b`
+   - `docs/l4desk/contracts/schemas/iot_event_feed_openapi.json`: `621e2ed32a7c82237a44627e2768ba15b1689b5b53ddb51ab9af48a98f08af94`
+   - `app-service/alembic/versions/2026_09_19_0006_add_remote_session_lock.py`: `7de502480a352e113fa7959384b40457f70994ae721a4aa6f46840f739022b4d`
+   - `app-service/tests/core/test_l4d_07_session_lock_and_graceful_stop.py`: `c691b7bfdd6e3bb63c8584fb90f3a00b2df7931a2ebf9e5cdeb69e7d521053e8`
+5. Тестовый сьют `iot-rpc-rest-app` успешно пройден: 396 passed, 0 failed, 0 errors.
+
+<!-- HANDOFF:H-L4D-07-IOT-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-07-IOT-v1
+status: ACCEPTED
+contract_kinds:
+  - API
+  - EVENT
+  - DEPLOYMENT
+producer_prompt_id: L4D-07-IOT
+producer_scope_project: iot-rpc-rest-app
+producer_report_path: docs/l4desk/handoffs/L4D-07-IOT-report.md
+producer_branch: l4desk/l4d-07-iot
+producer_commit: c4e892f4c1dbf8f967109e8a06c3f63b0c9bd483
+report_commit: 2b21f4e3670cdd662999e225625dc3471bb242b9
+accepted_at_utc: 2026-09-19T18:36:14Z
+contract_version: 1.0.0
+schema_revision: 2026-09-19-v1
+artifact_version: 1.0.0
+previous_handoff_ids:
+  - H-L4D-06C-MB-v1
+  - H-L4D-01C-DOCS-v1
+  - H-L4D-02-IOT-v1
+consumers:
+  - L4D-08A-MEDIA
+  - L4D-08B-MB
+  - L4D-12-MB
+architecture_sections:
+  - 3
+  - 4
+  - 5
+  - 6
+  - 8
+  - 11
+  - 12
+  - 16
+  - 17
+artifact_paths:
+  - docs/l4desk/contracts/schemas/remote_session.schema.json
+  - docs/l4desk/contracts/schemas/remote_session_event.schema.json
+  - docs/l4desk/contracts/schemas/iot_event_feed_openapi.json
+  - app-service/alembic/versions/2026_09_19_0006_add_remote_session_lock.py
+  - app-service/tests/core/test_l4d_07_session_lock_and_graceful_stop.py
+artifact_sha256:
+  - d72324f4a468e5b94569a6f390d122ce38364581705c90b9fb4a241b56fb68bc
+  - 230a22727a493b2980ba85cb2735e50d5ac42ac9b110cf3a6f3ba03ea0ebb12b
+  - 621e2ed32a7c82237a44627e2768ba15b1689b5b53ddb51ab9af48a98f08af94
+  - 7de502480a352e113fa7959384b40457f70994ae721a4aa6f46840f739022b4d
+  - c691b7bfdd6e3bb63c8584fb90f3a00b2df7931a2ebf9e5cdeb69e7d521053e8
+compatibility:
+  backward_compatible_with:
+    - H-L4D-02-IOT-v1
+    - H-L4D-06B-IOT-v1
+    - H-L4D-06C-MB-v1
+  breaking_changes: false
+  notes: "Unified session lock and mutual exclusion per device (sn) for console and video remote sessions. Command-aware graceful stop with bounded timeout for console sessions and media flow teardown for video sessions. Strict lifecycle states (requested, starting, active, stopping, closed, failed) published to durable event feed 02. Agent Contract v1 protocol, MQTT topics, and payloads are 100% binary backward-compatible and untouched."
+deployment_status: DEPLOYED
+deployed_environment: production
+feature_flags:
+  session_lock_enabled: true
+  graceful_stop_enabled: true
+contract_payload:
+  session_lock:
+    ownership: "iot-rpc-rest-app"
+    cardinality: "exactly_one_active_or_starting_per_device_sn"
+    enforcement: "uq_active_remote_session_per_sn partial index + transaction lock"
+    conflict_status: 409
+    conflict_code: "session_busy"
+  lifecycle_states:
+    - requested
+    - starting
+    - active
+    - stopping
+    - closed
+    - failed
+  graceful_stop:
+    console: "command_aware_wait_or_timeout_new_commands_rejected"
+    video: "remote_media_flow_teardown_lease_revoked"
+    unbounded_wait: forbidden
+  billable_interval:
+    start_point: "started_at (state: active)"
+    end_point: "closed_at (state: closed)"
+    pre_active_billing: prohibited
+  agent_contract_v1:
+    topics_modified: false
+    methods_modified: false
+    payloads_modified: false
+  alembic_revision: "0006_remote_session_lock"
+  tests_passed: 396
+  verification_status: VERIFIED_READY
+supersedes: []
+known_risks:
+  - "WEB_CONCURRENCY=1 invariant required for in-memory session tracking consistency"
+  - "In-flight commands without terminal response are terminated after bounded timeout_sec (default 5.0s, max 60.0s)"
+consumers:
+  - L4D-08A-MEDIA
+  - L4D-08B-MB
+  - L4D-12-MB
+next_prompt_id: L4D-08A-MEDIA
+```
+<!-- HANDOFF:H-L4D-07-IOT-v1:END -->

@@ -82,5 +82,47 @@ fi
 
 echo ""
 echo "========================================================"
-echo " All alpha-MVP health checks PASSED successfully!"
+echo " [CHECK 6/7] On-demand media lifecycle API & service-auth"
+echo "========================================================"
+INGRESS_IP=$(sudo docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' l4media-ingress | awk '{print $1}')
+JANUS_IP=$(sudo docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' l4media-janus | awk '{print $1}')
+echo "Ingress IP: ${INGRESS_IP}, Janus IP: ${JANUS_IP}"
+
+# Test 1: OpenAPI spec
+OPENAPI=$(sudo docker exec l4media-ingress curl -s http://127.0.0.1:9100/api/v1/openapi.json)
+if echo "${OPENAPI}" | grep -q '"openapi": "3.0.3"'; then
+    echo "SUCCESS: OpenAPI 3.0.3 spec served correctly on /api/v1/openapi.json"
+else
+    echo "ERROR: OpenAPI spec check failed: ${OPENAPI}"
+    exit 1
+fi
+
+# Test 2: Service Auth enforcement (401 without token)
+AUTH_FAIL=$(sudo docker exec l4media-ingress curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:9100/api/v1/media/metrics)
+if [ "${AUTH_FAIL}" = "401" ]; then
+    echo "SUCCESS: Service Auth correctly rejected unauthenticated request with 401."
+else
+    echo "ERROR: Expected 401 without token, got ${AUTH_FAIL}"
+    exit 1
+fi
+
+# Test 3: Service Auth with token
+AUTH_OK=$(sudo docker exec l4media-ingress curl -s -H "X-Media-Service-Token: l4media-service-secret-token" http://127.0.0.1:9100/api/v1/media/metrics)
+if echo "${AUTH_OK}" | grep -q '"status":"ok"'; then
+    echo "SUCCESS: Service Auth accepted valid token: ${AUTH_OK}"
+else
+    echo "ERROR: Service Auth failed with valid token: ${AUTH_OK}"
+    exit 1
+fi
+
+echo ""
+echo "========================================================"
+echo " [CHECK 7/7] Running media lifecycle & regression test suites"
+echo "========================================================"
+python3 /home/user1/l4media/ingress/tests/test_media_lifecycle.py "${INGRESS_IP}" 9100 "${JANUS_IP}" 7088
+python3 /home/user1/l4media/ingress/tests/test_ingress_regression.py "${INGRESS_IP}" 9000 9100
+
+echo ""
+echo "========================================================"
+echo " All l4media health checks & test suites PASSED successfully!"
 echo "========================================================"

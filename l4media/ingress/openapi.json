@@ -1,0 +1,434 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "l4media On-Demand Media Lifecycle API",
+    "description": "Additive service-authenticated REST API for on-demand WebRTC media session lifecycle, route management, and Janus mountpoint orchestration in the L4Desk ecosystem.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://l4media-ingress:9100",
+      "description": "Internal docker network bridge"
+    }
+  ],
+  "paths": {
+    "/api/v1/media/sessions/start": {
+      "post": {
+        "summary": "Start an on-demand media session (Idempotent)",
+        "operationId": "startMediaSession",
+        "security": [
+          { "ServiceTokenAuth": [] },
+          { "BearerAuth": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MediaSessionStartRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Deterministic replay of already starting or active media session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaSessionResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Media session successfully created and activated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request (missing session_id or sn)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized (missing or invalid service token)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Device busy or session conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Janus WebRTC Gateway error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable (session table or port pool exhausted)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/media/sessions/{session_id}": {
+      "get": {
+        "summary": "Get health, state, and streaming metrics of a media session",
+        "operationId": "getMediaSessionHealth",
+        "security": [
+          { "ServiceTokenAuth": [] },
+          { "BearerAuth": [] }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Correlation session identifier from 07"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session details, freshness, and metrics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaSessionHealthResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/media/sessions/{session_id}/stop": {
+      "post": {
+        "summary": "Stop an active media session (Idempotent)",
+        "operationId": "stopMediaSession",
+        "security": [
+          { "ServiceTokenAuth": [] },
+          { "BearerAuth": [] }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Correlation session identifier from 07"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MediaSessionStopRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Session successfully stopped or was already stopped",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaSessionStopResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/media/reconcile": {
+      "post": {
+        "summary": "Reconcile active sessions, Janus mountpoints, and Ingress routes (prunes orphans)",
+        "operationId": "reconcileMediaResources",
+        "security": [
+          { "ServiceTokenAuth": [] },
+          { "BearerAuth": [] }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reconciliation completed and orphan resources pruned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationReport"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/media/metrics": {
+      "get": {
+        "summary": "Get aggregate technical and audit metrics",
+        "operationId": "getMediaMetrics",
+        "responses": {
+          "200": {
+            "description": "Technical metrics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaMetricsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/openapi.json": {
+      "get": {
+        "summary": "OpenAPI specification document",
+        "operationId": "getOpenApiSpec",
+        "responses": {
+          "200": {
+            "description": "OpenAPI 3.0.3 schema document",
+            "content": {
+              "application/json": {}
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ServiceTokenAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Media-Service-Token"
+      },
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "MediaSessionStartRequest": {
+        "type": "object",
+        "required": ["session_id", "sn"],
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "description": "Unique session identifier from 07 external contract"
+          },
+          "operation_id": {
+            "type": "string",
+            "description": "Idempotency operation identifier"
+          },
+          "sn": {
+            "type": "string",
+            "description": "Device serial number"
+          },
+          "device_id": {
+            "type": "integer",
+            "description": "Numeric device identifier (used for Janus mountpoint ID if provided)"
+          },
+          "pin": {
+            "type": "string",
+            "description": "Optional PIN for Janus mountpoint authentication"
+          },
+          "rtp_port": {
+            "type": "integer",
+            "description": "Optional explicit Janus RTP port (allocated dynamically if omitted)"
+          },
+          "rtcp_port": {
+            "type": "integer",
+            "description": "Optional explicit Janus RTCP port (allocated dynamically if omitted)"
+          },
+          "ttl_sec": {
+            "type": "integer",
+            "default": 600,
+            "description": "Session time-to-live in seconds before automated cleanup"
+          }
+        }
+      },
+      "MediaSessionResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "success" },
+          "session_id": { "type": "string" },
+          "operation_id": { "type": "string" },
+          "state": { "type": "string", "enum": ["starting", "active", "stopped", "failed"] },
+          "device_id": { "type": "integer" },
+          "sn": { "type": "string" },
+          "mountpoint_id": { "type": "integer" },
+          "rtp_port": { "type": "integer" },
+          "rtcp_port": { "type": "integer" },
+          "janus_ws": { "type": "string", "example": "/janus-ws" },
+          "pin": { "type": "string" },
+          "ttl_sec": { "type": "integer" },
+          "created_at": { "type": "integer", "description": "Unix timestamp seconds" },
+          "started_at": { "type": "integer", "description": "Unix timestamp seconds" }
+        }
+      },
+      "MediaSessionHealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "ok" },
+          "session_id": { "type": "string" },
+          "operation_id": { "type": "string" },
+          "state": { "type": "string", "enum": ["starting", "active", "stopping", "stopped", "failed"] },
+          "device_id": { "type": "integer" },
+          "sn": { "type": "string" },
+          "mountpoint_id": { "type": "integer" },
+          "rtp_port": { "type": "integer" },
+          "rtcp_port": { "type": "integer" },
+          "pin": { "type": "string" },
+          "ttl_sec": { "type": "integer" },
+          "elapsed_sec": { "type": "integer" },
+          "ttl_remaining_sec": { "type": "integer" },
+          "created_at": { "type": "integer" },
+          "started_at": { "type": "integer" },
+          "stopped_at": { "type": "integer", "nullable": true },
+          "stop_reason": { "type": "string", "nullable": true },
+          "media_state": { "type": "string", "enum": ["live", "stale", "waiting_media", "disconnected"] },
+          "transport_connected": { "type": "boolean" },
+          "fresh_rtp": { "type": "boolean" },
+          "rtp_packets": { "type": "integer" },
+          "bytes": { "type": "integer" },
+          "last_rtp_at": { "type": "integer", "nullable": true },
+          "idle_sec": { "type": "integer" }
+        }
+      },
+      "MediaSessionStopRequest": {
+        "type": "object",
+        "properties": {
+          "operation_id": { "type": "string" },
+          "reason": { "type": "string", "example": "user_closed" }
+        }
+      },
+      "MediaSessionStopResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "success" },
+          "session_id": { "type": "string" },
+          "state": { "type": "string", "example": "stopped" },
+          "duration_sec": { "type": "integer" },
+          "rtp_packets": { "type": "integer" },
+          "bytes": { "type": "integer" },
+          "started_at": { "type": "integer" },
+          "stopped_at": { "type": "integer" },
+          "stop_reason": { "type": "string" },
+          "detail": { "type": "string" }
+        }
+      },
+      "ReconciliationReport": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "ok" },
+          "reconciled_at": { "type": "integer" },
+          "active_sessions": { "type": "integer" },
+          "orphans_cleaned_mountpoints": { "type": "integer" },
+          "orphans_cleaned_routes": { "type": "integer" }
+        }
+      },
+      "MediaMetricsResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "ok" },
+          "uptime_sec": { "type": "integer" },
+          "active_media_sessions": { "type": "integer" },
+          "total_sessions_started": { "type": "integer" },
+          "total_sessions_stopped": { "type": "integer" },
+          "total_sessions_failed": { "type": "integer" },
+          "orphans_cleaned_mountpoints": { "type": "integer" },
+          "orphans_cleaned_routes": { "type": "integer" },
+          "total_rtp_packets": { "type": "integer" },
+          "total_bytes": { "type": "integer" }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string" },
+          "detail": { "type": "string" }
+        }
+      }
+    }
+  }
+}

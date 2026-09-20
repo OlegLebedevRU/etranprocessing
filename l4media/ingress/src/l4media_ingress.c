@@ -57,6 +57,7 @@ typedef struct {
     char sn[128];
     int rtp_port;
     int rtcp_port;
+    bool is_static;
 } RouteEntry;
 
 typedef struct {
@@ -207,7 +208,8 @@ static void load_routes(const char* filepath) {
                 safe_strcpy(g_routes.entries[g_routes.count].sn, sn, sizeof(g_routes.entries[0].sn));
                 g_routes.entries[g_routes.count].rtp_port = rtp;
                 g_routes.entries[g_routes.count].rtcp_port = rtcp;
-                printf("[INGRESS] Route loaded: SN=%s -> RTP:%d RTCP:%d\n", sn, rtp, rtcp);
+                g_routes.entries[g_routes.count].is_static = true;
+                printf("[INGRESS] Route loaded: SN=%s -> RTP:%d RTCP:%d (static)\n", sn, rtp, rtcp);
                 g_routes.count++;
             }
         }
@@ -242,6 +244,7 @@ static bool upsert_route(const char* sn, int rtp, int rtcp, int* out_clients_upd
             safe_strcpy(g_routes.entries[g_routes.count].sn, sn, sizeof(g_routes.entries[0].sn));
             g_routes.entries[g_routes.count].rtp_port = rtp;
             g_routes.entries[g_routes.count].rtcp_port = rtcp;
+            g_routes.entries[g_routes.count].is_static = false;
             g_routes.count++;
         } else {
             fprintf(stderr, "[INGRESS] Route table full (%d), cannot add SN %s\n", MAX_ROUTES, sn);
@@ -276,6 +279,8 @@ static bool delete_route(const char* sn, int* out_clients_updated) {
     }
     return false;
 }
+
+#include "media_lifecycle.h"
 
 /* Socket Listeners */
 static int create_tcp_listener(int port) {
@@ -699,6 +704,35 @@ static void handle_control_request(int client_fd) {
     }
     req_buf[n] = '\0';
 
+    /* Parse headers boundary and check Content-Length to read full body */
+    const char* hdr_end = strstr(req_buf, "\r\n\r\n");
+    int header_len = 0;
+    if (hdr_end) {
+        header_len = (int)(hdr_end - req_buf) + 4;
+    } else {
+        hdr_end = strstr(req_buf, "\n\n");
+        if (hdr_end) header_len = (int)(hdr_end - req_buf) + 2;
+    }
+
+    int content_len = 0;
+    const char* cl_hdr = strcasestr(req_buf, "Content-Length:");
+    if (cl_hdr) {
+        cl_hdr += 15;
+        while (*cl_hdr == ' ' || *cl_hdr == '\t') cl_hdr++;
+        content_len = atoi(cl_hdr);
+    }
+
+    if (header_len > 0 && content_len > 0) {
+        int body_received = (int)n - header_len;
+        while (body_received < content_len && n < (ssize_t)(sizeof(req_buf) - 1)) {
+            ssize_t r = recv(client_fd, req_buf + n, (size_t)(sizeof(req_buf) - 1 - n), 0);
+            if (r <= 0) break;
+            n += r;
+            body_received += (int)r;
+            req_buf[n] = '\0';
+        }
+    }
+
     char method[16] = {0};
     char path[256] = {0};
     sscanf(req_buf, "%15s %255s", method, path);
@@ -717,7 +751,7 @@ static void handle_control_request(int client_fd) {
             "HTTP/1.1 204 No Content\r\n"
             "Access-Control-Allow-Origin: *\r\n"
             "Access-Control-Allow-Methods: GET, PUT, POST, DELETE, OPTIONS\r\n"
-            "Access-Control-Allow-Headers: Content-Type\r\n"
+            "Access-Control-Allow-Headers: Content-Type, X-Media-Service-Token, Authorization\r\n"
             "Content-Length: 0\r\n"
             "Connection: close\r\n"
             "\r\n";
@@ -880,7 +914,63 @@ static void handle_control_request(int client_fd) {
         }
     }
     else if (strcmp(method, "GET") == 0 && strcmp(path, "/health") == 0) {
-        snprintf(resp_body, HTTP_RESP_BUFFER_SIZE, "{\"status\":\"ok\"}\n");
+        snprintf(resp_body, HTTP_RESP_BUFFER_SIZE,
+                 "{\"status\":\"ok\",\"routes\":%d,\"active_media_sessions\":%d}\n",
+                 g_routes.count, g_media_session_count);
+    }
+    else if (strcmp(method, "GET") == 0 && strcmp(path, "/api/v1/openapi.json") == 0) {
+        handle_openapi_spec(resp_body, HTTP_RESP_BUFFER_SIZE, &status_code, &status_text);
+    }
+    else if (strncmp(path, "/api/v1/media/", 14) == 0) {
+        if (!check_service_auth(req_buf)) {
+            status_code = 401;
+            status_text = "Unauthorized";
+            snprintf(resp_body, HTTP_RESP_BUFFER_SIZE,
+                     "{\"error\":\"unauthorized\",\"detail\":\"Invalid or missing service authentication token\"}\n");
+        }
+        else if (strcmp(method, "POST") == 0 && strcmp(path, "/api/v1/media/sessions/start") == 0) {
+            handle_media_session_start(body, resp_body, HTTP_RESP_BUFFER_SIZE, &status_code, &status_text);
+        }
+        else if (strcmp(method, "GET") == 0 && strncmp(path, "/api/v1/media/sessions/", 23) == 0) {
+            char session_id[64] = {0};
+            safe_strcpy(session_id, path + 23, sizeof(session_id));
+            char* q = strchr(session_id, '?');
+            if (q) *q = '\0';
+            get_media_session_health(session_id, resp_body, HTTP_RESP_BUFFER_SIZE, &status_code);
+            status_text = (status_code == 200) ? "OK" : "Not Found";
+        }
+        else if (strcmp(method, "POST") == 0 && strncmp(path, "/api/v1/media/sessions/", 23) == 0 &&
+                 strstr(path + 23, "/stop") != NULL) {
+            char session_id[64] = {0};
+            const char* start_id = path + 23;
+            const char* stop_kw = strstr(start_id, "/stop");
+            size_t id_len = (size_t)(stop_kw - start_id);
+            if (id_len >= sizeof(session_id)) id_len = sizeof(session_id) - 1;
+            memcpy(session_id, start_id, id_len);
+            session_id[id_len] = '\0';
+
+            char op_id[64] = {0};
+            char reason[64] = {0};
+            if (body) {
+                json_get_string(body, "operation_id", op_id, sizeof(op_id));
+                json_get_string(body, "reason", reason, sizeof(reason));
+            }
+            stop_media_session(session_id, op_id, reason, resp_body, HTTP_RESP_BUFFER_SIZE, &status_code);
+            status_text = "OK";
+        }
+        else if (strcmp(method, "POST") == 0 && strcmp(path, "/api/v1/media/reconcile") == 0) {
+            reconcile_resources(resp_body, HTTP_RESP_BUFFER_SIZE);
+            status_code = 200;
+            status_text = "OK";
+        }
+        else if (strcmp(method, "GET") == 0 && strcmp(path, "/api/v1/media/metrics") == 0) {
+            handle_media_metrics(resp_body, HTTP_RESP_BUFFER_SIZE, &status_code, &status_text);
+        }
+        else {
+            status_code = 404;
+            status_text = "Not Found";
+            snprintf(resp_body, HTTP_RESP_BUFFER_SIZE, "{\"error\":\"endpoint not found\"}\n");
+        }
     }
     else {
         status_code = 404;
@@ -893,7 +983,7 @@ static void handle_control_request(int client_fd) {
                        "Content-Type: application/json; charset=utf-8\r\n"
                        "Access-Control-Allow-Origin: *\r\n"
                        "Access-Control-Allow-Methods: GET, PUT, POST, DELETE, OPTIONS\r\n"
-                       "Access-Control-Allow-Headers: Content-Type\r\n"
+                       "Access-Control-Allow-Headers: Content-Type, X-Media-Service-Token, Authorization\r\n"
                        "Content-Length: %zu\r\n"
                        "Connection: close\r\n"
                        "\r\n"
@@ -923,6 +1013,19 @@ int main(int argc, char* argv[]) {
     const char* env_janus = getenv("JANUS_HOST");
     if (env_janus && strlen(env_janus) > 0) {
         safe_strcpy(g_janus_host, env_janus, sizeof(g_janus_host));
+    }
+    const char* env_janus_port = getenv("JANUS_ADMIN_PORT");
+    if (env_janus_port && strlen(env_janus_port) > 0) {
+        int p = atoi(env_janus_port);
+        if (p > 0) g_janus_admin_port = p;
+    }
+    const char* env_janus_secret = getenv("JANUS_ADMIN_SECRET");
+    if (env_janus_secret && strlen(env_janus_secret) > 0) {
+        safe_strcpy(g_janus_admin_secret, env_janus_secret, sizeof(g_janus_admin_secret));
+    }
+    const char* env_token = getenv("L4MEDIA_SERVICE_TOKEN");
+    if (env_token && strlen(env_token) > 0) {
+        safe_strcpy(g_service_token, env_token, sizeof(g_service_token));
     }
     const char* env_routes = getenv("ROUTES_FILE");
     if (env_routes && strlen(env_routes) > 0) {
@@ -997,6 +1100,29 @@ int main(int argc, char* argv[]) {
                 remove_ingress_client(epoll_fd, c);
                 i--; /* Adjust index since remaining elements shift left */
             }
+        }
+
+        /* Check media sessions TTL expiration */
+        for (int i = 0; i < g_media_session_count; i++) {
+            MediaSession* ms = &g_media_sessions[i];
+            if (ms->state == MEDIA_STATE_ACTIVE && ms->ttl_sec > 0) {
+                if (now - ms->started_at >= ms->ttl_sec) {
+                    printf("[INGRESS TTL] Media session %s (SN: %s) expired after %d seconds TTL\n",
+                           ms->session_id, ms->sn, ms->ttl_sec);
+                    char dummy_resp[512];
+                    int dummy_status = 0;
+                    stop_media_session(ms->session_id, "ttl-watchdog", "ttl_expired",
+                                       dummy_resp, sizeof(dummy_resp), &dummy_status);
+                }
+            }
+        }
+
+        /* Periodic reconciliation every 60s */
+        static time_t last_reconcile = 0;
+        if (last_reconcile == 0) last_reconcile = now;
+        if (now - last_reconcile >= 60) {
+            last_reconcile = now;
+            reconcile_resources(NULL, 0);
         }
 
         if (now - last_stats_log >= 10) {
@@ -1080,6 +1206,15 @@ int main(int argc, char* argv[]) {
     }
 
     printf("[INGRESS] Shutting down l4media-ingress...\n");
+    for (int i = 0; i < g_media_session_count; i++) {
+        if (g_media_sessions[i].state == MEDIA_STATE_ACTIVE ||
+            g_media_sessions[i].state == MEDIA_STATE_STARTING) {
+            char dummy_resp[512];
+            int dummy_status = 0;
+            stop_media_session(g_media_sessions[i].session_id, "shutdown", "server_shutdown",
+                               dummy_resp, sizeof(dummy_resp), &dummy_status);
+        }
+    }
     for (int i = g_client_count - 1; i >= 0; i--) {
         remove_ingress_client(epoll_fd, g_clients[i]);
     }

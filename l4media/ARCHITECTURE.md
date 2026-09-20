@@ -153,12 +153,34 @@ ffmpeg.exe -hide_banner -f gdigrab -framerate 8 -i desktop -an ^
    * Фиксированный `mountpoint 1` в `janus.plugin.streaming.jcfg` (videoport=6000, videortcpport=6001).
    * Статический маршрут в `/etc/l4media/routes.conf`.
    * Фронтенд напрямую запрашивает mountpoint 1 через Janus WebSocket.
-3. **Паттерн 2: Динамическая On-Demand оркестрация (Production):**
-   * Оператор нажимает «Смотреть трансляцию» в `MenuBuilder/frontend`.
-   * Бэкенд `MenuBuilder` создаёт mountpoint через Janus Admin API (`POST http://l4media-janus:7088/admin`).
-   * Бэкенд регистрирует маршрут в Ingress: `PUT http://l4media-ingress:9100/routes/<SN>?rtp=<p1>&rtcp=<p2>`.
-   * Бэкенд отправляет команду запуска по MQTT (`7000 STREAM_CONTROL`) в топик `srv/<SN>/tsk`.
-   * Фронтенд отображает видеопоток WebRTC в элементе `<video autoPlay playsInline muted />`.
-   * При закрытии вкладки или таймауте сессия гасится (MQTT 7002, удаление маршрута, destroy маунтпоинта).
+3. **Паттерн 2: Укреплённый On-Demand Media Lifecycle API (L4D-08A):**
+   * Единая точка оркестрации: `POST http://l4media-ingress:9100/api/v1/media/sessions/start`.
+   * Атомарное создание mountpoint в Janus и маршрута в Ingress с компенсирующей очисткой при ошибках.
+   * Идемпотентность по `session_id` и `operation_id` (детерминированный повторный ответ без дублирования ресурсов).
+   * Защита от конфликта сессий устройства (409 Conflict `session_busy`).
+   * Service Authentication через заголовок `X-Media-Service-Token` или `Authorization: Bearer`.
+   * Автоматический watchdog по `ttl_sec` и периодическая reconciliation orphan-маунтпоинтов и маршрутов.
+   * Остановка: `POST http://l4media-ingress:9100/api/v1/media/sessions/<session_id>/stop`.
 4. **Паттерн 3: Защищённый WSS прокси через Nginx:**
    * Проксирование WebSockets Janus через `/janus-ws` основного Nginx MenuBuilder (:443) с авторизацией по сессионным JWT cookie оператора.
+
+---
+
+## 6. On-Demand Media Lifecycle API (v1)
+
+### 6.1. Эндпоинты
+
+| Метод | Путь | Назначение | Авторизация |
+|---|---|---|---|
+| `POST` | `/api/v1/media/sessions/start` | Старт сессии (Janus mountpoint + Ingress route). Идемпотентный. | Service Token |
+| `GET` | `/api/v1/media/sessions/{session_id}` | Статус сессии, свежесть RTP/RTCP, счётчики и тайминги. | Service Token |
+| `POST` | `/api/v1/media/sessions/{session_id}/stop` | Остановка сессии, освобождение портов, удаление mountpoint/route. | Service Token |
+| `POST` | `/api/v1/media/reconcile` | Принудительная сверка и удаление orphan mountpoints и routes. | Service Token |
+| `GET` | `/api/v1/media/metrics` | Агрегированные технические и аудит-метрики. | Service Token |
+| `GET` | `/api/v1/openapi.json` | Машиночитаемая спецификация OpenAPI 3.0.3. | Публичный |
+
+### 6.2. Гарантии контракта
+1. **Идемпотентность:** Повторный вызов `start` с тем же `session_id` возвращает `200 OK` с теми же параметрами подключения. Повторный вызов `stop` (или `stop` для отсутствующей сессии) возвращает `200 OK` с `state: "stopped"`.
+2. **Взаимное исключение устройств:** Для одного серийного номера (`sn`) одновременно может быть активна только одна сессия. Попытка открыть параллельную сессию отклоняется кодом `409 Conflict` (`session_busy`).
+3. **Compensating Rollback:** При ошибке создания mountpoint в Janus или сбое таблицы маршрутов Ingress любые частично созданные ресурсы немедленно уничтожаются, исключая утечку портов.
+4. **Watchdog & Reconciliation:** Сессии с истекшим `ttl_sec` автоматически завершаются демоном. Каждые 60 секунд фоновый процесс reconciliation зачищает любые зависшие mountpoint в Janus и маршруты в Ingress, не затрагивая статические ресурсы.

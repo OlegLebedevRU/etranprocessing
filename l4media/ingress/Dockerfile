@@ -22,6 +22,7 @@ COPY --from=builder /build/l4media-ingress /app/l4media-ingress
 # Default routes configuration location
 RUN mkdir -p /etc/l4media
 COPY routes.conf /etc/l4media/routes.conf
+COPY openapi.json /etc/l4media/openapi.json
 
 EXPOSE 9000 9100
 

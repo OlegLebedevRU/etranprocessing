@@ -5,3 +5,4 @@
 !tests/
 !tests/**
 !routes.conf
+!openapi.json

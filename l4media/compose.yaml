@@ -30,6 +30,9 @@ services:
     restart: unless-stopped
     environment:
       - JANUS_HOST=janus
+      - JANUS_ADMIN_PORT=${JANUS_ADMIN_PORT:-7088}
+      - JANUS_ADMIN_SECRET=${JANUS_ADMIN_SECRET:-janusoverlord}
+      - L4MEDIA_SERVICE_TOKEN=${L4MEDIA_SERVICE_TOKEN:-l4media-service-secret-token}
       - ROUTES_FILE=/etc/l4media/routes.conf
     volumes:
       - ./ingress/routes.conf:/etc/l4media/routes.conf:ro
