@@ -403,3 +403,43 @@ class FinManualPaymentRead(BaseModel):
         return self.amount_kopecks // 100
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class FinEntitlementStatusRead(BaseModel):
+    tenant_id: int
+    entitlement: str  # "free" | "active" | "grace" | "blocked"
+    balance_kopecks: int
+    is_first_paid: bool
+    cycle_id: int | None = None
+    cycle_starts_at: datetime | None = None
+    cycle_ends_at: datetime | None = None
+    grace_deadline: datetime | None = None
+    can_start_sessions: bool
+    free_terminal_id: int | None = None
+    today_usage_seconds: int = 0
+    free_quota_seconds: int = 7200
+    reason_code: str | None = None
+    reason_message: str | None = None
+
+    @computed_field
+    @property
+    def balance_rubles(self) -> float:
+        return self.balance_kopecks / 100.0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FinNotificationDeliveryRead(BaseModel):
+    id: int
+    tenant_id: int
+    billing_cycle_id: int
+    notification_type: str
+    scheduled_at: datetime
+    status: str
+    attempts: int
+    sent_at: datetime | None = None
+    provider_message_id: str | None = None
+    last_error: str | None = None
+    correlation_id: str
+
+    model_config = ConfigDict(from_attributes=True)

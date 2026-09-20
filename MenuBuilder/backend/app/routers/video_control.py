@@ -232,7 +232,7 @@ async def require_operator_user(
         or user.get("role") in ("superuser", "admin")
         or role_id == 1
     )
-    if not is_su and role_id not in (1, 2, 3):
+    if not is_su and role_id not in (1, 2, 3, 5):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Управление доступно только операторам",
@@ -1257,7 +1257,7 @@ async def control_ws_proxy(
         if PERMISSION_VIDEO_VIEW not in user_perms and "*" not in user_perms:
             await websocket.close(code=4403)
             return
-    elif not is_su and role_id not in (1, 2, 3):
+    elif not is_su and role_id not in (1, 2, 3, 5):
         await websocket.close(code=4403)
         return
 

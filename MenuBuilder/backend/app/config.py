@@ -218,6 +218,15 @@ class Settings(BaseSettings):
     # L4Desk Financial Core Double-Entry Subledger (L4D-09-MB)
     l4desk_financial_core_enabled: bool = True
 
+    # L4Desk Entitlement, Grace & Notifications (L4D-12-MB)
+    l4desk_policy_shadow_mode: bool = True
+    l4desk_entitlement_worker_enabled: bool = False
+    l4desk_entitlement_worker_interval_sec: float = 60.0
+    l4desk_stop_outbox_max_retries: int = 5
+    l4desk_stop_outbox_retry_interval_sec: float = 10.0
+    l4desk_email_notifications_enabled: bool = True
+    l4desk_notification_max_retries: int = 3
+
     # YooKassa Payments & Fiscal Configuration (L4D-11-MB)
     yookassa_enabled: bool = False
     yookassa_shop_id: str = ""

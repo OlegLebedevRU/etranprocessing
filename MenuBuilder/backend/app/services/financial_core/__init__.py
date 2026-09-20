@@ -2,6 +2,18 @@ from __future__ import annotations
 
 from app.services.financial_core.accounts import FinAccountService
 from app.services.financial_core.cycles import FinBillingCycleService
+from app.services.financial_core.entitlement import (
+    ENTITLEMENT_ACTIVE,
+    ENTITLEMENT_BLOCKED,
+    ENTITLEMENT_FREE,
+    ENTITLEMENT_GRACE,
+    REASON_ENTITLEMENT_BLOCKED,
+    REASON_FREE_QUOTA_EXCEEDED,
+    REASON_PAYMENT_REQUIRED,
+    REASON_UNPAID_SECONDARY_TERMINAL,
+    FinEntitlementService,
+    FinEntitlementStatus,
+)
 from app.services.financial_core.exceptions import (
     FinAccountNotFoundError,
     FinBillingProfileNotFoundError,
@@ -25,6 +37,14 @@ from app.services.financial_core.metering import (
     calculate_daily_metrics,
     split_interval_by_local_days,
 )
+from app.services.financial_core.notifications import (
+    TYPE_BLOCKED,
+    TYPE_CYCLE_MINUS_1,
+    TYPE_CYCLE_MINUS_3,
+    TYPE_CYCLE_MINUS_7,
+    TYPE_GRACE,
+    FinNotificationService,
+)
 from app.services.financial_core.payments import FinPaymentService
 from app.services.financial_core.posting import FinPostingService
 from app.services.financial_core.projection import FinProjectionService
@@ -35,11 +55,13 @@ from app.services.financial_core.schemas import (
     FinBillingCycleRead,
     FinBillingProfileRead,
     FinDailyCloseRequest,
+    FinEntitlementStatusRead,
     FinLedgerEntryRead,
     FinLedgerTransactionRead,
     FinManualPaymentCreate,
     FinManualPaymentRead,
     FinManualPaymentStornoRequest,
+    FinNotificationDeliveryRead,
     FinPaymentCreateRequest,
     FinPaymentRead,
     FinPostingEntryRequest,
@@ -55,8 +77,13 @@ from app.services.financial_core.schemas import (
     FinUsageDailyRead,
     FinYooKassaWebhookPayload,
 )
+from app.services.financial_core.stop_outbox import FinStopOutboxService
 from app.services.financial_core.tariffs import FinTariffService
 from app.services.financial_core.terminals import FinTerminalService
+from app.services.financial_core.worker import (
+    FinEntitlementWorker,
+    entitlement_worker,
+)
 from app.services.financial_core.yookassa import (
     MockYooKassaClient,
     YooKassaApiError,
@@ -71,6 +98,19 @@ from app.services.financial_core.yookassa import (
 )
 
 __all__ = [
+    "ENTITLEMENT_ACTIVE",
+    "ENTITLEMENT_BLOCKED",
+    "ENTITLEMENT_FREE",
+    "ENTITLEMENT_GRACE",
+    "REASON_ENTITLEMENT_BLOCKED",
+    "REASON_FREE_QUOTA_EXCEEDED",
+    "REASON_PAYMENT_REQUIRED",
+    "REASON_UNPAID_SECONDARY_TERMINAL",
+    "TYPE_BLOCKED",
+    "TYPE_CYCLE_MINUS_1",
+    "TYPE_CYCLE_MINUS_3",
+    "TYPE_CYCLE_MINUS_7",
+    "TYPE_GRACE",
     "FinAccountNotFoundError",
     "FinAccountService",
     "FinBalanceRead",
@@ -83,6 +123,10 @@ __all__ = [
     "FinCycleNotFoundError",
     "FinDailyCloseRequest",
     "FinDuplicatePostingError",
+    "FinEntitlementService",
+    "FinEntitlementStatus",
+    "FinEntitlementStatusRead",
+    "FinEntitlementWorker",
     "FinError",
     "FinImbalanceError",
     "FinImmutableError",
@@ -94,6 +138,8 @@ __all__ = [
     "FinManualPaymentStornoRequest",
     "FinMeteringError",
     "FinMeteringService",
+    "FinNotificationDeliveryRead",
+    "FinNotificationService",
     "FinPaymentCreateRequest",
     "FinPaymentRead",
     "FinPaymentService",
@@ -109,6 +155,7 @@ __all__ = [
     "FinReversalError",
     "FinReversalRequest",
     "FinReversalService",
+    "FinStopOutboxService",
     "FinTariffNotFoundError",
     "FinTariffService",
     "FinTariffVersionCreate",
@@ -127,6 +174,7 @@ __all__ = [
     "YooKassaNetworkError",
     "calculate_daily_amounts",
     "calculate_daily_metrics",
+    "entitlement_worker",
     "get_yookassa_client",
     "is_ip_trusted",
     "is_safe_return_url",

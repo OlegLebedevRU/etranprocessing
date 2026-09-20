@@ -21,6 +21,8 @@ from app.services.financial_core import (
     FinConcurrencyError,
     FinDailyCloseRequest,
     FinDuplicatePostingError,
+    FinEntitlementService,
+    FinEntitlementStatusRead,
     FinImbalanceError,
     FinLedgerEntryRead,
     FinLedgerTransactionRead,
@@ -29,6 +31,7 @@ from app.services.financial_core import (
     FinManualPaymentService,
     FinManualPaymentStornoRequest,
     FinMeteringService,
+    FinNotificationDeliveryRead,
     FinPaymentCreateRequest,
     FinPaymentRead,
     FinPaymentService,
@@ -43,6 +46,7 @@ from app.services.financial_core import (
     FinReversalError,
     FinReversalRequest,
     FinReversalService,
+    FinStopOutboxService,
     FinTariffService,
     FinTariffVersionCreate,
     FinTariffVersionRead,
@@ -54,6 +58,7 @@ from app.services.financial_core import (
     FinYooKassaWebhookPayload,
     YooKassaApiError,
     YooKassaNetworkError,
+    entitlement_worker,
 )
 
 logger = logging.getLogger(__name__)
@@ -201,6 +206,62 @@ async def get_tenant_billing_profile(
     tenant_id = int(org_id)
     profile = await FinBillingCycleService.ensure_billing_profile(db, tenant_id)
     return FinBillingProfileRead.model_validate(profile)
+
+
+@router.get("/api/v1/finance/entitlement", response_model=FinEntitlementStatusRead)
+async def get_tenant_entitlement(
+    db: AsyncSession = Depends(get_db),
+    user: dict[str, Any] = Depends(get_current_user),
+) -> FinEntitlementStatusRead:
+    """Get current commercial entitlement status, grace boundaries, balance and reason codes."""
+    org_id = user.get("org_id")
+    if org_id is None or int(org_id) <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Active organization context required",
+        )
+    tenant_id = int(org_id)
+    status_obj = await FinEntitlementService.get_tenant_entitlement_status(
+        db, tenant_id
+    )
+    return FinEntitlementStatusRead(
+        tenant_id=status_obj.tenant_id,
+        entitlement=status_obj.state,
+        balance_kopecks=status_obj.balance_kopecks,
+        is_first_paid=status_obj.is_first_paid,
+        cycle_id=status_obj.cycle_id,
+        cycle_starts_at=status_obj.cycle_starts_at,
+        cycle_ends_at=status_obj.cycle_ends_at,
+        grace_deadline=status_obj.grace_deadline,
+        can_start_sessions=status_obj.can_start_sessions,
+        free_terminal_id=status_obj.free_terminal_id,
+        today_usage_seconds=status_obj.today_usage_seconds,
+        free_quota_seconds=status_obj.free_quota_seconds,
+        reason_code=status_obj.reason_code,
+        reason_message=status_obj.reason_message,
+    )
+
+
+@router.get(
+    "/api/v1/finance/notifications",
+    response_model=list[FinNotificationDeliveryRead],
+)
+async def list_tenant_notifications(
+    limit: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    user: dict[str, Any] = Depends(get_current_user),
+) -> list[FinNotificationDeliveryRead]:
+    """List notification deliveries for current tenant."""
+    org_id = user.get("org_id")
+    if org_id is None or int(org_id) <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Active organization context required",
+        )
+    tenant_id = int(org_id)
+    repo = L4DeskRepository(db)
+    items = await repo.list_notification_deliveries(tenant_id=tenant_id, limit=limit)
+    return [FinNotificationDeliveryRead.model_validate(i) for i in items]
 
 
 @router.get("/api/v1/finance/cycles", response_model=list[FinBillingCycleRead])
@@ -886,3 +947,88 @@ async def internal_get_manual_payment(
             status_code=status.HTTP_404_NOT_FOUND, detail="Manual payment not found"
         )
     return FinManualPaymentRead.model_validate(payment)
+
+
+# =============================================================================
+# Entitlement & Notification Service Endpoints (L4D-12-MB)
+# =============================================================================
+
+
+@router.get(
+    "/api/internal/v1/finance/entitlement/{tenant_id}",
+    response_model=FinEntitlementStatusRead,
+)
+async def internal_get_tenant_entitlement(
+    tenant_id: int,
+    db: AsyncSession = Depends(get_db),
+    _auth: dict[str, Any] = Depends(require_internal_or_superuser),
+) -> FinEntitlementStatusRead:
+    """Get commercial entitlement status for any tenant (superuser view)."""
+    status_obj = await FinEntitlementService.get_tenant_entitlement_status(
+        db, tenant_id
+    )
+    return FinEntitlementStatusRead(
+        tenant_id=status_obj.tenant_id,
+        entitlement=status_obj.state,
+        balance_kopecks=status_obj.balance_kopecks,
+        is_first_paid=status_obj.is_first_paid,
+        cycle_id=status_obj.cycle_id,
+        cycle_starts_at=status_obj.cycle_starts_at,
+        cycle_ends_at=status_obj.cycle_ends_at,
+        grace_deadline=status_obj.grace_deadline,
+        can_start_sessions=status_obj.can_start_sessions,
+        free_terminal_id=status_obj.free_terminal_id,
+        today_usage_seconds=status_obj.today_usage_seconds,
+        free_quota_seconds=status_obj.free_quota_seconds,
+        reason_code=status_obj.reason_code,
+        reason_message=status_obj.reason_message,
+    )
+
+
+@router.post(
+    "/api/internal/v1/finance/entitlement/worker/tick",
+)
+async def internal_trigger_worker_tick(
+    db: AsyncSession = Depends(get_db),
+    _auth: dict[str, Any] = Depends(require_internal_or_superuser),
+) -> dict[str, Any]:
+    """Manually trigger a single execution pass of FinEntitlementWorker."""
+    return await entitlement_worker.run_single_tick(db)
+
+
+@router.post(
+    "/api/internal/v1/finance/stop-outbox/process",
+)
+async def internal_process_stop_outbox(
+    db: AsyncSession = Depends(get_db),
+    _auth: dict[str, Any] = Depends(require_internal_or_superuser),
+) -> list[dict[str, Any]]:
+    """Manually trigger retry processing for pending stop requests in Stop Outbox."""
+    res = await FinStopOutboxService.process_stop_outbox(db)
+    await db.commit()
+    return res
+
+
+@router.get(
+    "/api/internal/v1/finance/notifications",
+    response_model=list[FinNotificationDeliveryRead],
+)
+async def internal_list_notifications(
+    tenant_id: int | None = Query(None, gt=0),
+    billing_cycle_id: int | None = Query(None, gt=0),
+    status: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    _auth: dict[str, Any] = Depends(require_internal_or_superuser),
+) -> list[FinNotificationDeliveryRead]:
+    """List notification deliveries across tenants (superuser view)."""
+    repo = L4DeskRepository(db)
+    items = await repo.list_notification_deliveries(
+        tenant_id=tenant_id,
+        billing_cycle_id=billing_cycle_id,
+        status=status,
+        limit=limit,
+        offset=offset,
+    )
+    return [FinNotificationDeliveryRead.model_validate(i) for i in items]

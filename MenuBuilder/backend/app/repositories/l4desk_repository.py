@@ -14,6 +14,7 @@ from app.models_l4desk import (
     FinLedgerEntry,
     FinLedgerTransaction,
     FinManualPayment,
+    FinNotificationDelivery,
     FinPayment,
     FinReconciliationRun,
     FinTariffVersion,
@@ -684,6 +685,92 @@ class L4DeskRepository:
         stmt = (
             stmt.order_by(FinManualPayment.created_at.desc())
             .offset(offset)
+            .limit(limit)
+        )
+        res = await self.session.execute(stmt)
+        return list(res.scalars().all())
+
+    # -------------------------------------------------------------------------
+    # Active & Stop-requested Remote Sessions (L4D-12-MB)
+    # -------------------------------------------------------------------------
+    async def get_active_sessions_for_tenant(
+        self, tenant_id: int
+    ) -> list[L4DeskRemoteSession]:
+        stmt = (
+            select(L4DeskRemoteSession)
+            .where(
+                L4DeskRemoteSession.tenant_id == tenant_id,
+                L4DeskRemoteSession.state.in_(
+                    ["reserved", "start_requested", "active", "stop_requested"]
+                ),
+            )
+            .order_by(L4DeskRemoteSession.id.asc())
+        )
+        res = await self.session.execute(stmt)
+        return list(res.scalars().all())
+
+    async def get_stop_requested_sessions(
+        self, limit: int = 50
+    ) -> list[L4DeskRemoteSession]:
+        stmt = (
+            select(L4DeskRemoteSession)
+            .where(L4DeskRemoteSession.state == "stop_requested")
+            .order_by(L4DeskRemoteSession.id.asc())
+            .limit(limit)
+        )
+        res = await self.session.execute(stmt)
+        return list(res.scalars().all())
+
+    # -------------------------------------------------------------------------
+    # Notification Deliveries (L4D-12-MB)
+    # -------------------------------------------------------------------------
+    async def get_notification_delivery(
+        self, tenant_id: int, billing_cycle_id: int, notification_type: str
+    ) -> FinNotificationDelivery | None:
+        stmt = select(FinNotificationDelivery).where(
+            FinNotificationDelivery.tenant_id == tenant_id,
+            FinNotificationDelivery.billing_cycle_id == billing_cycle_id,
+            FinNotificationDelivery.notification_type == notification_type,
+        )
+        res = await self.session.execute(stmt)
+        return res.scalar_one_or_none()
+
+    async def list_notification_deliveries(
+        self,
+        tenant_id: int | None = None,
+        billing_cycle_id: int | None = None,
+        status: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[FinNotificationDelivery]:
+        stmt = select(FinNotificationDelivery)
+        if tenant_id is not None:
+            stmt = stmt.where(FinNotificationDelivery.tenant_id == tenant_id)
+        if billing_cycle_id is not None:
+            stmt = stmt.where(
+                FinNotificationDelivery.billing_cycle_id == billing_cycle_id
+            )
+        if status is not None:
+            stmt = stmt.where(FinNotificationDelivery.status == status)
+        stmt = (
+            stmt.order_by(FinNotificationDelivery.scheduled_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        res = await self.session.execute(stmt)
+        return list(res.scalars().all())
+
+    async def list_pending_notification_deliveries(
+        self, as_of: datetime, limit: int = 50
+    ) -> list[FinNotificationDelivery]:
+        stmt = (
+            select(FinNotificationDelivery)
+            .where(
+                FinNotificationDelivery.status.in_(["pending", "failed"]),
+                FinNotificationDelivery.scheduled_at <= as_of,
+                FinNotificationDelivery.attempts < 3,
+            )
+            .order_by(FinNotificationDelivery.scheduled_at.asc())
             .limit(limit)
         )
         res = await self.session.execute(stmt)
