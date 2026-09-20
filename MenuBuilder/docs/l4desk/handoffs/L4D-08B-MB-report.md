@@ -126,7 +126,7 @@ MenuBuilder Backend (RemoteSessionUseCase)
 ### Backend Test Suite
 - **New Test File:** `MenuBuilder/backend/tests/test_remote_session_orchestration.py`
 - **Execution:** `uv run pytest tests/test_remote_session_orchestration.py -v`
-- **Result:** 10 passed in 3.09s:
+- **Result:** 12 passed:
   1. `test_consumer_gates_fixtures_validation`: Verification of input gates and schemas against fixtures.
   2. `test_tenant_access_and_isolation`: Cross-tenant access rejected (403); superuser allowed across tenants.
   3. `test_role_matrix_console_and_video`: Role 5 allowed for console and video; Viewer (role 4) rejected for console (403).
@@ -137,7 +137,9 @@ MenuBuilder Backend (RemoteSessionUseCase)
   8. `test_graceful_stop_flow`: Graceful session stop cleans up stream, media, IoT lock, and lease.
   9. `test_unified_api_remote_sessions_lifecycle`: Full HTTP API lifecycle on `/api/v1/remote-sessions/start`, `/devices/{id}/active`, `/stop`.
   10. `test_legacy_video_session_endpoint_regression`: Existing `/api/v1/video/devices/{id}/session` continues to work with media orchestrator fallback.
-- **Full Backend Suite:** 354 passed, 0 failed in 96s (`uv run pytest`).
+  11. `test_create_remote_session_check_constraints_and_timestamps`: Verification of `active_at` and `closed_at` auto-population and PostgreSQL check constraint satisfaction (`l4desk_session_active_ck`, `l4desk_session_closed_ck`).
+  12. `test_legacy_video_and_control_endpoints_satisfy_active_session_constraint`: Verification that existing `/control/lease` and `/stream/start` endpoints populate `active_at` and execute without DB constraint violations.
+- **Full Backend Suite:** 356 passed, 0 failed (`uv run pytest`).
 
 ### Code Quality Checks
 - `uv run ruff check app tests` -> All checks passed (0 errors).
@@ -156,6 +158,7 @@ MenuBuilder Backend (RemoteSessionUseCase)
 - **Container Rebuild:** `sudo docker compose build --no-cache menubuilder-backend && sudo docker compose up -d menubuilder-backend` executed successfully.
 - **Frontend Live Mount:** Delivered built artifacts to `/home/user1/MenuBuilder/frontend/dist/`.
 - **Nginx Config:** Added `location /api/v1/remote-sessions/` in `nginx-configs/port_3000.conf` and executed `nginx -s reload`.
+- **Regression Resolution:** Fixed PostgreSQL check constraint violation (`l4desk_session_active_ck`) on legacy `/control/lease` and `/stream/start` endpoints by ensuring `active_at` is always populated when creating or updating active sessions in `l4desk_remote_sessions`.
 - **Live Smoke Verification Output:**
   ```text
   1. Frontend SPA Delivery:

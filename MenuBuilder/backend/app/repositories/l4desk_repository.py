@@ -371,7 +371,16 @@ class L4DeskRepository:
         requested_by_user_id: int | None = None,
         provider_session_id: str | None = None,
         state: str = "reserved",
+        active_at: Any = None,
+        closed_at: Any = None,
+        reason: str | None = None,
     ) -> L4DeskRemoteSession:
+        now_dt = datetime.now(UTC)
+        if state == "active" and active_at is None:
+            active_at = now_dt
+        if state in ("closed", "failed") and closed_at is None:
+            closed_at = now_dt
+
         sess = L4DeskRemoteSession(
             tenant_id=tenant_id,
             terminal_id=terminal_id,
@@ -381,6 +390,9 @@ class L4DeskRepository:
             requested_by_user_id=requested_by_user_id,
             provider_session_id=provider_session_id,
             state=state,
+            active_at=active_at,
+            closed_at=closed_at,
+            reason=reason,
         )
         self.session.add(sess)
         await self.session.flush()

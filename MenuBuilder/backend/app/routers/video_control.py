@@ -3,6 +3,7 @@ import contextlib
 import json
 import logging
 import uuid
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 import websockets
@@ -581,6 +582,7 @@ async def acquire_device_control_lease(
                 requested_by_user_id=user_db_id,
                 provider_session_id=str(res.get("owner_session_id") or lease_id),
                 state="active",
+                active_at=datetime.now(UTC),
             )
             await db.flush()
 
@@ -870,6 +872,7 @@ async def start_device_stream(
                     requested_by_user_id=user_db_id,
                     provider_session_id=stream_inst_id,
                     state="active",
+                    active_at=datetime.now(UTC),
                 )
                 await db.flush()
         return StreamStartResponse(

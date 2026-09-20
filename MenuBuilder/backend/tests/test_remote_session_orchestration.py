@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
@@ -105,12 +106,25 @@ class MockRemoteSessionDb:
         self._next_session_id = 100
         self._next_audit_id = 1
 
+    def _validate_session_constraints(self, s: L4DeskRemoteSession) -> None:
+        if s.state == "active" and s.active_at is None:
+            raise ValueError("violates check constraint l4desk_session_active_ck")
+        if s.state in ("closed", "failed") and s.closed_at is None:
+            raise ValueError("violates check constraint l4desk_session_closed_ck")
+        if (
+            isinstance(s.closed_at, datetime)
+            and isinstance(s.active_at, datetime)
+            and s.closed_at < s.active_at
+        ):
+            raise ValueError("violates check constraint l4desk_session_interval_ck")
+
     def add(self, obj: Any) -> None:
         if isinstance(obj, Terminal):
             self.terminals[obj.id] = obj
         elif isinstance(obj, L4DeskTerminal):
             self.l4_terminals[obj.terminal_id] = obj
         elif isinstance(obj, L4DeskRemoteSession):
+            self._validate_session_constraints(obj)
             if not obj.id:
                 obj.id = self._next_session_id
                 self._next_session_id += 1
@@ -121,7 +135,8 @@ class MockRemoteSessionDb:
             self.audit_events.append(obj)
 
     async def flush(self) -> None:
-        pass
+        for s in self.remote_sessions.values():
+            self._validate_session_constraints(s)
 
     async def commit(self) -> None:
         pass
@@ -385,6 +400,7 @@ async def test_mutual_exclusion_and_no_auto_switch():
         correlation_id="corr-vid-1",
         session_type="video",
         state="active",
+        active_at=datetime.now(UTC),
         provider_session_id="sess-vid-50",
     )
     db.add(existing_video)
@@ -426,6 +442,7 @@ async def test_idempotent_session_start_replay():
         correlation_id="corr-replay-100",
         session_type="video",
         state="active",
+        active_at=datetime.now(UTC),
         provider_session_id="sess-replay-60",
     )
     db.add(existing)
@@ -592,6 +609,7 @@ async def test_graceful_stop_flow():
         correlation_id="corr-stop-70",
         session_type="video",
         state="active",
+        active_at=datetime.now(UTC),
         provider_session_id="sess-active-70",
     )
     db.add(active_sess)
@@ -796,3 +814,137 @@ async def test_legacy_video_session_endpoint_regression():
             assert data["mountpoint_id"] == 25
             assert data["sn"] == "SN-T25"
             assert data["janus_ws"] == "/janus-ws"
+
+
+@pytest.mark.anyio
+async def test_create_remote_session_check_constraints_and_timestamps():
+    from app.repositories.l4desk_repository import L4DeskRepository
+
+    db = MockRemoteSessionDb()
+    repo = L4DeskRepository(db)  # pyright: ignore[reportArgumentType]
+
+    # 1. State active automatically populates active_at
+    s_active = await repo.create_remote_session(
+        tenant_id=1,
+        terminal_id=10,
+        operation_id="op-test-act",
+        correlation_id="corr-test-act",
+        session_type="video",
+        state="active",
+    )
+    assert s_active.state == "active"
+    assert s_active.active_at is not None
+    assert s_active.closed_at is None
+
+    # 2. State closed automatically populates closed_at
+    s_closed = await repo.create_remote_session(
+        tenant_id=1,
+        terminal_id=11,
+        operation_id="op-test-cls",
+        correlation_id="corr-test-cls",
+        session_type="console",
+        state="closed",
+    )
+    assert s_closed.state == "closed"
+    assert s_closed.closed_at is not None
+
+    # 3. State failed automatically populates closed_at
+    s_failed = await repo.create_remote_session(
+        tenant_id=1,
+        terminal_id=12,
+        operation_id="op-test-fail",
+        correlation_id="corr-test-fail",
+        session_type="video",
+        state="failed",
+    )
+    assert s_failed.state == "failed"
+    assert s_failed.closed_at is not None
+
+    # 4. State reserved leaves timestamps null
+    s_res = await repo.create_remote_session(
+        tenant_id=1,
+        terminal_id=13,
+        operation_id="op-test-res",
+        correlation_id="corr-test-res",
+        session_type="console",
+        state="reserved",
+    )
+    assert s_res.state == "reserved"
+    assert s_res.active_at is None
+    assert s_res.closed_at is None
+
+    # Flush passes without check constraint violation
+    await db.flush()
+
+
+@pytest.mark.anyio
+async def test_legacy_video_and_control_endpoints_satisfy_active_session_constraint():
+    from app.repositories.l4desk_repository import L4DeskRepository
+
+    db = MockRemoteSessionDb()
+    repo = L4DeskRepository(db)  # pyright: ignore[reportArgumentType]
+    term = Terminal(id=70, device_id=70, sn="SN-T70", org_id=1)
+    db.add(term)
+
+    app.dependency_overrides[get_db] = lambda: db
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        headers = auth_headers(user_id=1, org_id=1, role_id=1, is_su=True)
+
+        with patch(
+            "app.routers.video_control.iot_client.remote_input_acquire_lease",
+            new_callable=AsyncMock,
+        ) as mock_acq:
+            mock_acq.return_value = {
+                "lease_id": "lease-console-70",
+                "expires_at": "2026-09-20T12:00:00Z",
+                "owner_role": "admin",
+                "owner_masked": "u***1",
+                "owner_user_id": "1",
+                "owner_session_id": "sess-console-70",
+                "scope": "console",
+            }
+            # 1. POST /devices/70/control/lease with scope console
+            resp = await ac.post(
+                "/api/v1/video/devices/70/control/lease",
+                headers=headers,
+                json={"scope": "console"},
+            )
+            assert resp.status_code == 201
+            active = await repo.get_active_session_by_terminal_id(70)
+            assert active is not None
+            assert active.state == "active"
+            assert active.session_type == "console"
+            assert active.active_at is not None
+
+        # Close active console session before starting stream to test stream_start
+        active.state = "closed"
+        active.closed_at = datetime.now(UTC)
+        await db.flush()
+
+        with patch(
+            "app.routers.video_control.iot_client.remote_input_stream_start",
+            new_callable=AsyncMock,
+        ) as mock_stream:
+            mock_stream.return_value = {
+                "stream_instance_id": "stream-inst-70",
+                "result": "started",
+                "state": "running",
+            }
+            # 2. POST /devices/70/stream/start with session_type video
+            resp2 = await ac.post(
+                "/api/v1/video/devices/70/stream/start",
+                headers=headers,
+                json={
+                    "mode": "desktop",
+                    "source_id": "0",
+                    "profile": "480p",
+                    "lease_id": "lease-stream-70",
+                },
+            )
+            assert resp2.status_code == 200
+            active_video = await repo.get_active_session_by_terminal_id(70)
+            assert active_video is not None
+            assert active_video.state == "active"
+            assert active_video.session_type == "video"
+            assert active_video.active_at is not None
