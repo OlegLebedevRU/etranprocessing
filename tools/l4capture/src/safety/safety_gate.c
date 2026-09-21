@@ -87,6 +87,7 @@ l4c_status_t l4c_safety_command(l4c_safety_gate_t *gate, const l4c_message_t *me
         memcpy(gate->lease_id, start->lease_id, 16); memcpy(gate->stream_id, start->stream_id, 16);
         gate->started = true;
         gate->last_command_seq = message->request_seq;
+        gate->last_start = *start;
     } else if (!gate->started) {
         status = L4C_ERR_PROTOCOL;
     } else if (message->type == L4C_CMD_RENEW_LEASE) {

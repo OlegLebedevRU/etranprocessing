@@ -14,6 +14,7 @@ typedef struct {
     bool started, stopped, idr_pending, idr_sent;
     uint64_t last_idr_ms, last_command_seq;
     l4c_status_t reason;
+    l4c_start_t last_start;
 } l4c_safety_gate_t;
 
 typedef struct {

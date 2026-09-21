@@ -8,6 +8,8 @@
 #include "input_inject.h"
 #include "json_min.h"
 #include "log.h"
+#include "media_backend.h"
+#include "l4capture_adapter.h"
 #include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -57,6 +59,8 @@ static char g_base_path[MAX_PATH] = "C:\\l4tools";
 static char g_sn[64] = "UNKNOWN";
 static wchar_t g_custom_ffmpeg_binary[MAX_PATH] = { 0 };
 static HANDLE g_hFfmpegMutex = NULL;
+static char g_media_backend[32] = "ffmpeg";
+static l4d_media_backend_t* g_l4capture_backend = NULL;
 
 static uint64_t get_current_time_ms(void) {
     FILETIME ft;
@@ -353,6 +357,10 @@ void ffmpeg_supervisor_cleanup(void) {
 
     EnterCriticalSection(&g_sup_cs);
     stop_active_process_internal();
+    if (g_l4capture_backend) {
+        g_l4capture_backend->vtable->destroy(g_l4capture_backend);
+        g_l4capture_backend = NULL;
+    }
     if (g_hFfmpegMutex) {
         CloseHandle(g_hFfmpegMutex);
         g_hFfmpegMutex = NULL;
@@ -361,6 +369,12 @@ void ffmpeg_supervisor_cleanup(void) {
 
     DeleteCriticalSection(&g_sup_cs);
     g_sup_cs_inited = false;
+}
+
+void ffmpeg_supervisor_set_media_backend(const char* backend) {
+    if (backend && backend[0] != '\0') {
+        strcpy_s(g_media_backend, sizeof(g_media_backend), backend);
+    }
 }
 
 void ffmpeg_supervisor_set_custom_binary(const wchar_t* path) {
@@ -725,42 +739,6 @@ bool ffmpeg_supervisor_start(const char* stream_instance_id,
         notify_stream_event(prev_stream_id, "stopped", "");
     }
 
-    /* Locate FFmpeg binary */
-    wchar_t ffmpeg_bin[MAX_PATH];
-    if (g_custom_ffmpeg_binary[0] != L'\0') {
-        wcscpy_s(ffmpeg_bin, MAX_PATH, g_custom_ffmpeg_binary);
-    } else {
-        swprintf_s(ffmpeg_bin, MAX_PATH, L"%hs\\ffmpeg\\ffmpeg.exe", g_base_path);
-    }
-
-    if (GetFileAttributesW(ffmpeg_bin) == INVALID_FILE_ATTRIBUTES) {
-        strcpy_s(out_err_code, max_err_code, "ffmpeg_missing");
-        snprintf(out_err_msg, max_err_msg, "FFmpeg binary missing at %ls", ffmpeg_bin);
-        LeaveCriticalSection(&g_sup_cs);
-        return false;
-    }
-
-    /* Build command line */
-    wchar_t cmdline[4096];
-    bool cmd_ok = false;
-    if (_stricmp(mode, "desktop") == 0) {
-        cmd_ok = ffmpeg_build_desktop_cmdline(ffmpeg_bin, stream_instance_id, profile,
-                                              target_disp.x, target_disp.y,
-                                              target_disp.width, target_disp.height,
-                                              cmdline, sizeof(cmdline) / sizeof(wchar_t));
-    } else {
-        cmd_ok = ffmpeg_build_camera_cmdline(ffmpeg_bin, stream_instance_id, profile,
-                                             target_cam.device_path, target_cam.name,
-                                             cmdline, sizeof(cmdline) / sizeof(wchar_t));
-    }
-
-    if (!cmd_ok) {
-        strcpy_s(out_err_code, max_err_code, "ffmpeg_integrity");
-        strcpy_s(out_err_msg, max_err_msg, "Failed to construct FFmpeg command line");
-        LeaveCriticalSection(&g_sup_cs);
-        return false;
-    }
-
     strcpy_s(g_sup.stream_instance_id, sizeof(g_sup.stream_instance_id), stream_instance_id);
     if (lease_id) strcpy_s(g_sup.lease_id, sizeof(g_sup.lease_id), lease_id);
     strcpy_s(g_sup.mode, sizeof(g_sup.mode), mode);
@@ -795,11 +773,93 @@ bool ffmpeg_supervisor_start(const char* stream_instance_id,
     save_state_file();
     notify_stream_event(stream_instance_id, "starting", "");
 
-    bool launched = launch_ffmpeg_process(cmdline, stream_instance_id,
-                                          out_err_code, max_err_code,
-                                          out_err_msg, max_err_msg);
+    bool launched = false;
+
+    /* l4capture backend dispatch for desktop mode */
+    if (_stricmp(g_media_backend, "l4capture") == 0 && _stricmp(mode, "desktop") == 0) {
+        if (!g_l4capture_backend) {
+            char l4c_bin_dir[MAX_PATH];
+            snprintf(l4c_bin_dir, sizeof(l4c_bin_dir), "%s\\l4capture\\bin", g_base_path);
+            g_l4capture_backend = l4d_media_backend_create(L4D_BACKEND_L4CAPTURE, l4c_bin_dir);
+        }
+        if (g_l4capture_backend) {
+            l4d_stream_params_t params;
+            memset(&params, 0, sizeof(params));
+            params.lease_id = lease_id;
+            params.stream_id = stream_instance_id;
+            params.source_id = source_id;
+            params.profile = profile ? profile : "default";
+            params.source_rect = g_sup.desktop_rect;
+            params.geometry_gen = 0;
+            params.rtp_port = 5004;
+            params.rtcp_port = 5005;
+            params.deadline_tick_ms = g_sup.lease_expires_at_ms > 0 ?
+                g_sup.lease_expires_at_ms : get_current_time_ms() + 120000;
+
+            if (g_l4capture_backend->vtable->start(g_l4capture_backend, &params)) {
+                launched = true;
+                g_sup.ffmpeg_pid = 0;
+                notify_stream_event(stream_instance_id, "running", "");
+                strcpy_s(out_result, max_result, is_switched ? "switched" : "started");
+                log_info("l4capture backend started for stream %s", stream_instance_id);
+            } else {
+                log_warn("l4capture backend failed to start, falling back to ffmpeg");
+                /* Destroy failed backend, fall through to ffmpeg */
+                g_l4capture_backend->vtable->destroy(g_l4capture_backend);
+                g_l4capture_backend = NULL;
+            }
+        } else {
+            log_warn("l4capture backend creation failed, falling back to ffmpeg");
+        }
+    }
+
+    /* Fallback: ffmpeg backend */
+    if (!launched) {
+        /* Locate FFmpeg binary */
+        wchar_t ffmpeg_bin[MAX_PATH];
+        if (g_custom_ffmpeg_binary[0] != L'\0') {
+            wcscpy_s(ffmpeg_bin, MAX_PATH, g_custom_ffmpeg_binary);
+        } else {
+            swprintf_s(ffmpeg_bin, MAX_PATH, L"%hs\\ffmpeg\\ffmpeg.exe", g_base_path);
+        }
+
+        if (GetFileAttributesW(ffmpeg_bin) == INVALID_FILE_ATTRIBUTES) {
+            strcpy_s(out_err_code, max_err_code, "ffmpeg_missing");
+            snprintf(out_err_msg, max_err_msg, "FFmpeg binary missing at %ls", ffmpeg_bin);
+            strcpy_s(g_sup.state, sizeof(g_sup.state), "failed");
+            save_state_file();
+            notify_stream_event(stream_instance_id, "failed", out_err_code);
+            LeaveCriticalSection(&g_sup_cs);
+            return false;
+        }
+
+        wchar_t cmdline_buf[4096];
+        bool cmd_ok = false;
+        if (_stricmp(mode, "desktop") == 0) {
+            cmd_ok = ffmpeg_build_desktop_cmdline(ffmpeg_bin, stream_instance_id, profile,
+                                                  target_disp.x, target_disp.y,
+                                                  target_disp.width, target_disp.height,
+                                                  cmdline_buf, sizeof(cmdline_buf) / sizeof(wchar_t));
+        } else {
+            cmd_ok = ffmpeg_build_camera_cmdline(ffmpeg_bin, stream_instance_id, profile,
+                                                 target_cam.device_path, target_cam.name,
+                                                 cmdline_buf, sizeof(cmdline_buf) / sizeof(wchar_t));
+        }
+
+        if (cmd_ok) {
+            launched = launch_ffmpeg_process(cmdline_buf, stream_instance_id,
+                                             out_err_code, max_err_code,
+                                             out_err_msg, max_err_msg);
+        } else {
+            strcpy_s(out_err_code, max_err_code, "ffmpeg_integrity");
+            strcpy_s(out_err_msg, max_err_msg, "Failed to construct FFmpeg command line");
+        }
+    }
+
     if (launched) {
-        notify_stream_event(stream_instance_id, "running", "");
+        if (strcmp(g_sup.state, "starting") == 0) {
+            notify_stream_event(stream_instance_id, "running", "");
+        }
         strcpy_s(out_result, max_result, is_switched ? "switched" : "started");
     } else {
         strcpy_s(g_sup.state, sizeof(g_sup.state), "failed");

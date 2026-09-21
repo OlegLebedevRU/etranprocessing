@@ -252,6 +252,7 @@ int mqtt_client_run(const L4DeskConfig* config, HANDLE hStopEvent) {
 
     /* Initialize supervisor & reconcile orphaned processes */
     ffmpeg_supervisor_init(config->base_path, state.sn);
+    ffmpeg_supervisor_set_media_backend(config->media_backend);
     ffmpeg_supervisor_set_event_callback(on_ffmpeg_stream_event, &state);
     ffmpeg_supervisor_reconcile();
 

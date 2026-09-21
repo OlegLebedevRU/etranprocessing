@@ -306,7 +306,12 @@ static bool wait_for_ready(adapter_ctx_t *ctx, uint32_t timeout_ms) {
             }
         }
         /* Check if process exited */
-        if (WaitForSingleObject(ctx->hProcess, 0) == WAIT_OBJECT_0) return false;
+        if (WaitForSingleObject(ctx->hProcess, 0) == WAIT_OBJECT_0) {
+            DWORD exit_code = 0;
+            GetExitCodeProcess(ctx->hProcess, &exit_code);
+            log_error("l4capture_adapter: child exited during wait_for_ready (code=%lu)", exit_code);
+            return false;
+        }
         Sleep(10);
     }
     return false;
@@ -314,6 +319,20 @@ static bool wait_for_ready(adapter_ctx_t *ctx, uint32_t timeout_ms) {
 
 static uint64_t get_current_tick(void) {
     return GetTickCount64();
+}
+
+/* Convert a string identifier to a 16-byte non-zero ID for IPC */
+static void str_to_id16(const char *str, uint8_t out[16]) {
+    size_t len = str ? strlen(str) : 0;
+    memset(out, 0, 16);
+    if (len > 0) {
+        size_t copy = len < 16 ? len : 16;
+        memcpy(out, str, copy);
+    }
+    /* Ensure non-zero: if all zeros, set first byte to 0x01 */
+    bool all_zero = true;
+    for (int i = 0; i < 16; i++) { if (out[i]) { all_zero = false; break; } }
+    if (all_zero) out[0] = 0x01;
 }
 
 static uint64_t calc_backoff_ms(uint32_t attempt) {
@@ -402,10 +421,10 @@ bool l4d_adapter_start(l4d_media_backend_t *self, const l4d_stream_params_t *par
     /* Build CMD_START payload */
     uint8_t payload[80];
     size_t off = 0;
-    /* lease_id: uuid(16) — fill with zeros (string-based in this impl) */
-    memset(payload + off, 0, 16); off += 16;
+    /* lease_id: uuid(16) */
+    str_to_id16(ctx->lease_id, payload + off); off += 16;
     /* stream_id: uuid(16) */
-    memset(payload + off, 0, 16); off += 16;
+    str_to_id16(ctx->stream_id, payload + off); off += 16;
     /* source_rect: rect(16) — left, top, right, bottom as u32 LE */
     write_u32_le(payload + off, (uint32_t)params->source_rect.left); off += 4;
     write_u32_le(payload + off, (uint32_t)params->source_rect.top); off += 4;
@@ -419,8 +438,6 @@ bool l4d_adapter_start(l4d_media_backend_t *self, const l4d_stream_params_t *par
     write_u16_le(payload + off, params->rtp_port); off += 2;
     /* rtcp_port: u16 */
     write_u16_le(payload + off, params->rtcp_port); off += 2;
-    /* padding to align to u64 */
-    write_u16_le(payload + off, 0); off += 2;
     /* deadline_tick_ms: u64 */
     write_u64_le(payload + off, params->deadline_tick_ms); off += 8;
 
@@ -450,6 +467,7 @@ bool l4d_adapter_start(l4d_media_backend_t *self, const l4d_stream_params_t *par
 bool l4d_adapter_stop(l4d_media_backend_t *self, const char *stream_id) {
     if (!self || !self->impl_ctx) return false;
     adapter_ctx_t *ctx = (adapter_ctx_t *)self->impl_ctx;
+    (void)stream_id;
 
     if (ctx->state == L4D_ADAPTER_IDLE || ctx->state == L4D_ADAPTER_STOPPING) return true;
 
@@ -457,8 +475,9 @@ bool l4d_adapter_stop(l4d_media_backend_t *self, const char *stream_id) {
     ctx->restart_pending = false;
     ctx->state = L4D_ADAPTER_STOPPING;
 
-    if (ctx->hStdinWrite && stream_id && stream_id[0]) {
-        uint8_t payload[16] = {0};
+    if (ctx->hStdinWrite && ctx->stream_id[0]) {
+        uint8_t payload[16];
+        str_to_id16(ctx->stream_id, payload);
         ipc_send(ctx->hStdinWrite, CMD_STOP, payload, 16, ++ctx->request_seq);
     }
 
