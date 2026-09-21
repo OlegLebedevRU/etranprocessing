@@ -62,7 +62,7 @@
 | 3 | `L4C-03-OPENH264-CODEC` | `tools/l4capture` | `H-L4C-02-v1` | `H-L4C-03-v1` | Принят |
 | 4 | `L4C-04-RTP-SENDER` | `tools/l4capture` | `H-L4C-03-v1` | `H-L4C-04-v1` | Принят |
 | 5 | `L4C-05-AGENT-ADAPTER` | `tools/l4desk` + `tools/l4capture` | `H-L4C-04-v1` | `H-L4C-05-v1` | Принят |
-| 6 | `L4C-06-MILESTONE-LIVE-VERIFY` | `tools/l4capture` + `tools/l4desk` | `H-L4C-05-v1` | `H-L4C-06-v1` | Заблокирован sequence gate (M-1 Шлюз) |
+| 6 | `L4C-06-MILESTONE-LIVE-VERIFY` | `tools/l4capture` + `tools/l4desk` | `H-L4C-05-v1` | `H-L4C-06-v1` | BLOCKED_OWNER_APPROVAL (awaiting НОРМ) |
 | 7 | `L4C-07-DXGI-CAPTURE` | `tools/l4capture` | `H-L4C-06-v1` | `H-L4C-07-v1` | Заблокирован sequence gate |
 | 8 | `L4C-08-MF-ENCODER` | `tools/l4capture` | `H-L4C-07-v1` | `H-L4C-08-v1` | Заблокирован sequence gate |
 | 9 | `L4C-09-PROFILES-DEGRADE` | `tools/l4capture` | `H-L4C-08-v1` | `H-L4C-09-v1` | Заблокирован sequence gate |
@@ -522,3 +522,56 @@ consumers:
 next_prompt_id: L4C-06-MILESTONE-LIVE-VERIFY
 ```
 <!-- HANDOFF:H-L4C-05-v1:END -->
+
+---
+
+<!-- HANDOFF:H-L4C-06-v1:BEGIN -->
+```yaml
+handoff_id: H-L4C-06-v1
+status: BLOCKED_OWNER_APPROVAL
+contract_kinds:
+  - MILESTONE_LIVE_VERIFICATION
+  - E2E_NATIVE_PIPELINE
+  - FAULT_MATRIX_R1_R4
+  - KIOSK_FOCUS_LIFECYCLE
+producer_prompt_id: L4C-06-MILESTONE-LIVE-VERIFY
+producer_scope_project: tools/l4capture + tools/l4desk
+producer_report_path: docs/l4capture/handoffs/L4C-06-MILESTONE-LIVE-VERIFY-report.md
+producer_branch: l4capture/l4c-06-milestone-live-verify
+producer_commit: ad5c4dd
+accepted_at_utc: null
+contract_version: 1.0.0
+schema_revision: N/A
+artifact_version: 1.0.0
+artifact_paths:
+  - docs/l4capture/handoffs/L4C-06-MILESTONE-LIVE-VERIFY-report.md
+artifact_sha256:
+  - 89ba30db8979bc6c0a0c46ac47f624f5b04ffe1cfc272f3318558c5af89dc489
+compatibility:
+  backward_compatible_with:
+    - H-L4C-01-v1
+    - H-L4C-02-v1
+    - H-L4C-03-v1
+    - H-L4C-04-v1
+    - H-L4C-05-v1
+  breaking_changes: false
+  notes: M-1 live verification. l4capture native pipeline verified on test terminal (Win10 x64). GDI+OpenH264+RTP, 82s stable. Three adapter integration defects fixed. All R1-R4 PASS. Awaiting owner НОРМ.
+deployment_status: LIVE_VERIFIED_ON_TEST_TERMINAL
+deployed_environment: test_terminal_win10_x64
+feature_flags:
+  l4capture_native_pipeline: live_verified
+  l4capture_backend_adapter: live_verified
+contract_payload:
+  e2e_pipeline: GDI → Scale(854x480) → I420(BT.601) → OpenH264(CBP 3.1) → RTP(127.0.0.1:5004)
+  process_stability: 82s+ running, 34MB WS, 102 handles, clean stop
+  fault_matrix: R1 PASS, R2 PASS, R3 PASS, R4 PASS
+  owner_verdict: PENDING
+supersedes: []
+known_risks:
+  - R1-R4 all verified PASS on test terminal
+consumers:
+  - L4C-07-DXGI-CAPTURE
+  - ALL_FOLLOWING
+next_prompt_id: L4C-07-DXGI-CAPTURE
+```
+<!-- HANDOFF:H-L4C-06-v1:END -->
