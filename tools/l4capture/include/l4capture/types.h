@@ -15,6 +15,7 @@ typedef enum {
     L4C_ERR_PROTOCOL = 7,
     L4C_ERR_DEADLINE_EXPIRED = 8,
     L4C_ERR_PIPE_BROKEN = 9,
+    L4C_ERR_NETWORK = 10,
     L4C_ERR_FATAL = 99
 } l4c_status_t;
 

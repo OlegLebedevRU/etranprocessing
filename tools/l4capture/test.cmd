@@ -48,6 +48,9 @@ cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DWIN32_LEAN_AND_MEAN /D
     "%ROOT%\src\capture\gdi_capture.c" ^
     "%ROOT%\src\pipeline\scale.c" ^
     "%ROOT%\src\pipeline\color_convert.c" ^
+    "%ROOT%\src\network\rtp_packetizer.c" ^
+    "%ROOT%\src\network\rtp_sender.c" ^
+    "%ROOT%\src\network\rtcp_sender.c" ^
     "%ROOT%\tests\test_runner.c" ^
     "%ROOT%\tests\test_ipc_framing.c" ^
     "%ROOT%\tests\test_limits.c" ^
@@ -57,6 +60,9 @@ cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DWIN32_LEAN_AND_MEAN /D
     "%ROOT%\tests\test_gdi_capture.c" ^
     "%ROOT%\tests\test_scale.c" ^
     "%ROOT%\tests\test_color_convert.c" ^
+    "%ROOT%\src\encoder\openh264_encoder.c" ^
+    "%ROOT%\tests\test_openh264_encoder.c" ^
+    "%ROOT%\tests\test_rtp_sender.c" ^
     /c
 if errorlevel 1 (
     echo ERROR: Test compilation failed
@@ -75,6 +81,9 @@ link.exe /nologo /SUBSYSTEM:CONSOLE,6.01 /OUT:"%ROOT%\bin\l4capture_tests.exe" ^
     "%ROOT%\obj\test\gdi_capture.obj" ^
     "%ROOT%\obj\test\scale.obj" ^
     "%ROOT%\obj\test\color_convert.obj" ^
+    "%ROOT%\obj\test\rtp_packetizer.obj" ^
+    "%ROOT%\obj\test\rtp_sender.obj" ^
+    "%ROOT%\obj\test\rtcp_sender.obj" ^
     "%ROOT%\obj\test\test_runner.obj" ^
     "%ROOT%\obj\test\test_ipc_framing.obj" ^
     "%ROOT%\obj\test\test_limits.obj" ^
@@ -84,6 +93,12 @@ link.exe /nologo /SUBSYSTEM:CONSOLE,6.01 /OUT:"%ROOT%\bin\l4capture_tests.exe" ^
     "%ROOT%\obj\test\test_gdi_capture.obj" ^
     "%ROOT%\obj\test\test_scale.obj" ^
     "%ROOT%\obj\test\test_color_convert.obj" ^
+    "%ROOT%\obj\test\openh264_encoder.obj" ^
+    "%ROOT%\obj\test\test_openh264_encoder.obj" ^
+    "%ROOT%\obj\test\test_rtp_sender.obj" ^
+    "%ROOT%\vendor\openh264\builddir_x86\codec\encoder\libencoder.a" ^
+    "%ROOT%\vendor\openh264\builddir_x86\codec\common\libcommon.a" ^
+    "%ROOT%\vendor\openh264\builddir_x86\codec\processing\libprocessing.a" ^
     kernel32.lib user32.lib advapi32.lib gdi32.lib ws2_32.lib ole32.lib
 if errorlevel 1 (
     echo ERROR: Test linking failed

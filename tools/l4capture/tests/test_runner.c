@@ -63,6 +63,19 @@ extern int test_openh264_force_idr_coalescing(void);
 extern int test_openh264_decoder_smoke(void);
 extern int test_openh264_memory_soak(void);
 
+extern int test_rtp_single_nal_small(void);
+extern int test_rtp_boundary_1200_1201(void);
+extern int test_rtp_fua_fragmentation_large(void);
+extern int test_rtp_marker_bit_au_boundary(void);
+extern int test_rtp_timestamp_consistency(void);
+extern int test_rtp_sequence_monotonicity_and_wrap(void);
+extern int test_rtp_timestamp_wrap(void);
+extern int test_rtcp_sr_sdes_generation(void);
+extern int test_rtcp_bye_generation(void);
+extern int test_rtp_fua_reassembly_roundtrip(void);
+extern int test_network_nonblocking_drop_on_error(void);
+extern int test_pipeline_e2e_loopback(void);
+
 typedef struct {
     const char *name;
     int (*fn)(void);
@@ -127,6 +140,19 @@ static const test_entry_t all_tests[] = {
     TEST(test_openh264_force_idr_coalescing),
     TEST(test_openh264_decoder_smoke),
     TEST(test_openh264_memory_soak),
+    /* RTP sender tests */
+    TEST(test_rtp_single_nal_small),
+    TEST(test_rtp_boundary_1200_1201),
+    TEST(test_rtp_fua_fragmentation_large),
+    TEST(test_rtp_marker_bit_au_boundary),
+    TEST(test_rtp_timestamp_consistency),
+    TEST(test_rtp_sequence_monotonicity_and_wrap),
+    TEST(test_rtp_timestamp_wrap),
+    TEST(test_rtcp_sr_sdes_generation),
+    TEST(test_rtcp_bye_generation),
+    TEST(test_rtp_fua_reassembly_roundtrip),
+    TEST(test_network_nonblocking_drop_on_error),
+    TEST(test_pipeline_e2e_loopback),
 };
 
 int main(void) {
