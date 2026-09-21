@@ -54,6 +54,15 @@ extern int test_color_range_clamp(void);
 extern int test_color_stride_alignment(void);
 extern int test_color_create_destroy(void);
 
+extern int test_openh264_create_destroy(void);
+extern int test_openh264_encode_first_frame_idr(void);
+extern int test_openh264_strip_start_codes(void);
+extern int test_openh264_sps_profile_level(void);
+extern int test_openh264_periodic_idr_cadence(void);
+extern int test_openh264_force_idr_coalescing(void);
+extern int test_openh264_decoder_smoke(void);
+extern int test_openh264_memory_soak(void);
+
 typedef struct {
     const char *name;
     int (*fn)(void);
@@ -109,6 +118,15 @@ static const test_entry_t all_tests[] = {
     TEST(test_color_range_clamp),
     TEST(test_color_stride_alignment),
     TEST(test_color_create_destroy),
+    /* OpenH264 encoder tests */
+    TEST(test_openh264_create_destroy),
+    TEST(test_openh264_encode_first_frame_idr),
+    TEST(test_openh264_strip_start_codes),
+    TEST(test_openh264_sps_profile_level),
+    TEST(test_openh264_periodic_idr_cadence),
+    TEST(test_openh264_force_idr_coalescing),
+    TEST(test_openh264_decoder_smoke),
+    TEST(test_openh264_memory_soak),
 };
 
 int main(void) {
