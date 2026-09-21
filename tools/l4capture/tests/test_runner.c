@@ -33,6 +33,27 @@ extern int test_safety_deadline_trigger(void);
 extern int test_safety_session0_reject(void);
 extern int test_safety_pipeline_drain(void);
 
+extern int test_cursor_basic(void);
+extern int test_cursor_negative_origin(void);
+extern int test_cursor_leak_stress(void);
+
+extern int test_gdi_create_destroy(void);
+extern int test_gdi_init_capture_release(void);
+extern int test_gdi_reuse_buffer(void);
+extern int test_gdi_overflow_reject(void);
+
+extern int test_scale_solid_fill(void);
+extern int test_scale_checkerboard(void);
+extern int test_scale_edge_preservation(void);
+extern int test_scale_large_to_480p(void);
+extern int test_scale_invalid_params(void);
+
+extern int test_color_white(void);
+extern int test_color_black(void);
+extern int test_color_range_clamp(void);
+extern int test_color_stride_alignment(void);
+extern int test_color_create_destroy(void);
+
 typedef struct {
     const char *name;
     int (*fn)(void);
@@ -67,6 +88,27 @@ static const test_entry_t all_tests[] = {
     TEST(test_safety_deadline_trigger),
     TEST(test_safety_session0_reject),
     TEST(test_safety_pipeline_drain),
+    /* Cursor tests */
+    TEST(test_cursor_basic),
+    TEST(test_cursor_negative_origin),
+    TEST(test_cursor_leak_stress),
+    /* GDI capture tests */
+    TEST(test_gdi_create_destroy),
+    TEST(test_gdi_init_capture_release),
+    TEST(test_gdi_reuse_buffer),
+    TEST(test_gdi_overflow_reject),
+    /* Scale tests */
+    TEST(test_scale_solid_fill),
+    TEST(test_scale_checkerboard),
+    TEST(test_scale_edge_preservation),
+    TEST(test_scale_large_to_480p),
+    TEST(test_scale_invalid_params),
+    /* Color conversion tests */
+    TEST(test_color_white),
+    TEST(test_color_black),
+    TEST(test_color_range_clamp),
+    TEST(test_color_stride_alignment),
+    TEST(test_color_create_destroy),
 };
 
 int main(void) {
