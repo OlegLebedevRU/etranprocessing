@@ -10,7 +10,7 @@ producer_prompt_id: L4C-06-MILESTONE-LIVE-VERIFY
 producer_scope_project: tools/l4capture + tools/l4desk
 producer_report_path: docs/l4capture/handoffs/L4C-06-MILESTONE-LIVE-VERIFY-report.md
 producer_branch: l4capture/l4c-06-milestone-live-verify
-producer_commit: <pending>
+producer_commit: ad5c4dd
 accepted_at_utc: null
 contract_version: 1.0.0
 schema_revision: N/A
