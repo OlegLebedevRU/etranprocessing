@@ -162,7 +162,7 @@ class Settings(BaseSettings):
         False  # Disabled in 08B (permissive legacy policy)
     )
     remote_session_start_timeout_sec: float = 20.0
-    remote_session_watchdog_ttl_sec: int = 7200
+    remote_session_watchdog_ttl_sec: int = 3600
 
     # IoT Contract Consumer v1 (L4Desk event feed)
     iot_event_feed_base_url: str = ""

@@ -836,7 +836,7 @@ async def start_device_stream(
 
     # Create lifecycle media session before starting terminal stream
     # This ensures reconcile protects the route and mountpoint
-    media_session_id = f"stream-{device_id}-{uuid.uuid4().hex[:8]}"
+    media_session_id = f"media-{terminal.sn}"
     rtp_port, rtcp_port = get_device_ports(device_id)
     pin = get_or_create_mountpoint_pin(device_id, lease_id=lease_id)
     try:
@@ -851,16 +851,26 @@ async def start_device_stream(
             ttl_sec=settings.remote_session_watchdog_ttl_sec,
         )
     except Exception as media_err:
-        logger.error(
-            "Media lifecycle start failed for device %d (%s): %s",
-            device_id,
-            terminal.sn,
-            media_err,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Ошибка подготовки медиаканала: {media_err}",
-        ) from media_err
+        from app.services.media_orchestrator_client import MediaSessionConflictError
+
+        if isinstance(media_err, MediaSessionConflictError):
+            logger.info(
+                "Media session already active for device %d (%s), reusing: %s",
+                device_id,
+                terminal.sn,
+                media_err,
+            )
+        else:
+            logger.error(
+                "Media lifecycle start failed for device %d (%s): %s",
+                device_id,
+                terminal.sn,
+                media_err,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Ошибка подготовки медиаканала: {media_err}",
+            ) from media_err
 
     try:
         res = await iot_client.remote_input_stream_start(
@@ -911,7 +921,7 @@ async def start_device_stream(
         # Compensating stop: clean up media session on terminal stream failure
         with contextlib.suppress(Exception):
             await media_orchestrator_client.stop_session(
-                session_id=media_session_id,
+                session_id=f"media-{terminal.sn}",
                 reason="stream_start_failed",
             )
         err_detail = (
@@ -985,6 +995,10 @@ async def stop_device_stream(
             await db.flush()
             if active_sess.provider_session_id:
                 with contextlib.suppress(Exception):
+                    await media_orchestrator_client.stop_session(
+                        session_id=f"media-{terminal.sn}",
+                        reason="stream_stopped",
+                    )
                     await media_orchestrator_client.stop_session(
                         session_id=active_sess.provider_session_id,
                         reason="stream_stopped",
@@ -1168,7 +1182,7 @@ async def release_device_control_lease(
             if active_sess.session_type == "video" and active_sess.provider_session_id:
                 with contextlib.suppress(Exception):
                     await media_orchestrator_client.stop_session(
-                        session_id=active_sess.provider_session_id,
+                        session_id=f"media-{terminal.sn}",
                         reason="lease_released",
                     )
             active_sess.state = "closed"

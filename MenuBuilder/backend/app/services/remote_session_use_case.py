@@ -106,9 +106,7 @@ class RemoteSessionUseCase:
         user: dict[str, Any],
         session_type: str,
     ) -> Terminal:
-        stmt = select(Terminal).where(
-            (Terminal.device_id == device_id) | (Terminal.id == device_id)
-        )
+        stmt = select(Terminal).where(Terminal.device_id == device_id)
         res = await self.db.execute(stmt)
         terminal = res.scalar_one_or_none()
         if not terminal:
@@ -355,42 +353,70 @@ class RemoteSessionUseCase:
         custom_user = dict(user)
         custom_user["session_id"] = provider_session_id
         lease_id: str | None = None
-        try:
-            lease_res = await self.iot_control.remote_input_acquire_lease(
-                sn=terminal.sn,
-                scope=lease_scope,
-                ttl_sec=settings.remote_session_watchdog_ttl_sec,
-                org_id=terminal.org_id,
-                user=custom_user,
+
+        # Check if user already holds a lease — reuse it instead of acquiring a new one
+        existing_lease_id: str | None = None
+        with contextlib.suppress(Exception):
+            status_data = await self.iot_control.remote_input_status(
+                terminal.sn, org_id=terminal.org_id, user=user
             )
-            lease_id = str(lease_res.get("lease_id"))
-        except Exception as lease_err:
-            logger.warning(
-                "Could not acquire control lease for terminal %d: %s",
-                terminal.id,
-                lease_err,
-            )
-            # If lease fails due to lease_taken, treat as conflict
-            if isinstance(lease_err, HTTPException) and lease_err.status_code == 409:
-                # COMPENSATING STOP on IoT
-                with contextlib.suppress(Exception):
-                    await self.iot_adapter.stop_remote_session(
-                        session_id=provider_session_id,
-                        operation_id=f"comp-{op_id}",
-                        reason="compensating_stop_lease_conflict",
-                        correlation_id=corr_id,
+            lease_info = status_data.get("lease") or {}
+            if lease_info.get("active") and lease_info.get("lease_id"):
+                owner = str(lease_info.get("owner_user_id") or "")
+                user_sub = str(user.get("sub") or "")
+                user_id_str = str(user.get("user_id") or "")
+                is_su = bool(
+                    user.get("is_superuser")
+                    or user.get("role") in ("superuser", "admin")
+                    or role_id == 1
+                )
+                if is_su or owner in (user_sub, user_id_str):
+                    existing_lease_id = str(lease_info["lease_id"])
+                    logger.info(
+                        "Reusing existing lease %s for terminal %d",
+                        existing_lease_id,
+                        terminal.id,
                     )
-                local_session.state = "failed"
-                local_session.reason = "lease_conflict"
-                local_session.closed_at = func.now()
-                await self.db.flush()
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail={
-                        "code": "session_busy",
-                        "message": f"Терминал {terminal.sn} занят арендой другого пользователя.",
-                    },
-                ) from lease_err
+
+        if existing_lease_id:
+            lease_id = existing_lease_id
+        else:
+            try:
+                lease_res = await self.iot_control.remote_input_acquire_lease(
+                    sn=terminal.sn,
+                    scope=lease_scope,
+                    ttl_sec=settings.remote_session_watchdog_ttl_sec,
+                    org_id=terminal.org_id,
+                    user=custom_user,
+                )
+                lease_id = str(lease_res.get("lease_id"))
+            except Exception as lease_err:
+                logger.warning(
+                    "Could not acquire control lease for terminal %d: %s",
+                    terminal.id,
+                    lease_err,
+                )
+                # If lease fails due to lease_taken, treat as conflict
+                if isinstance(lease_err, HTTPException) and lease_err.status_code == 409:
+                    # COMPENSATING STOP on IoT
+                    with contextlib.suppress(Exception):
+                        await self.iot_adapter.stop_remote_session(
+                            session_id=provider_session_id,
+                            operation_id=f"comp-{op_id}",
+                            reason="compensating_stop_lease_conflict",
+                            correlation_id=corr_id,
+                        )
+                    local_session.state = "failed"
+                    local_session.reason = "lease_conflict"
+                    local_session.closed_at = func.now()
+                    await self.db.flush()
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail={
+                            "code": "session_busy",
+                            "message": f"Терминал {terminal.sn} занят арендой другого пользователя.",
+                        },
+                    ) from lease_err
 
         # 3. Media Orchestration (for video)
         mountpoint_id: int | None = None
@@ -398,7 +424,7 @@ class RemoteSessionUseCase:
         ws_path: str | None = None
 
         if session_type == "video":
-            mountpoint_id = terminal.id
+            mountpoint_id = device_id
             pin = get_or_create_mountpoint_pin(
                 device_id,
                 lease_id=lease_id,
@@ -407,8 +433,8 @@ class RemoteSessionUseCase:
             rtp_port, rtcp_port = get_device_ports(device_id)
 
             try:
-                await self.media_orchestrator.start_session(
-                    session_id=provider_session_id,
+                media_res = await self.media_orchestrator.start_session(
+                    session_id=f"media-{terminal.sn}",
                     operation_id=op_id,
                     sn=terminal.sn,
                     device_id=device_id,
@@ -417,6 +443,46 @@ class RemoteSessionUseCase:
                     rtcp_port=rtcp_port,
                     ttl_sec=settings.remote_session_watchdog_ttl_sec,
                 )
+                # Use mountpoint_id from media orchestrator (matches Janus)
+                mountpoint_id = int(media_res.get("mountpoint_id") or device_id)
+                media_pin = media_res.get("pin")
+                if media_pin:
+                    pin = str(media_pin)
+            except MediaSessionConflictError:
+                logger.info(
+                    "Media session already active for %s (sn=%s), stopping old and retrying",
+                    f"media-{terminal.sn}",
+                    terminal.sn,
+                )
+                # Stop old sessions with known IDs to free the device
+                with contextlib.suppress(Exception):
+                    await self.media_orchestrator.stop_session(
+                        session_id=f"media-{terminal.sn}",
+                        reason="superseded_by_new_session",
+                    )
+                with contextlib.suppress(Exception):
+                    await self.media_orchestrator.stop_session(
+                        session_id=provider_session_id,
+                        reason="superseded_by_new_session",
+                    )
+                # Retry with fresh session
+                try:
+                    await self.media_orchestrator.start_session(
+                        session_id=f"media-{terminal.sn}",
+                        operation_id=op_id,
+                        sn=terminal.sn,
+                        device_id=device_id,
+                        pin=pin,
+                        rtp_port=rtp_port,
+                        rtcp_port=rtcp_port,
+                        ttl_sec=settings.remote_session_watchdog_ttl_sec,
+                    )
+                except Exception as retry_err:
+                    logger.warning(
+                        "Retry media start failed for %s: %s",
+                        terminal.sn,
+                        retry_err,
+                    )
             except Exception as media_err:
                 logger.error(
                     "Media orchestrator start failed for terminal %d (%s), executing compensating stop: %s",
@@ -480,7 +546,7 @@ class RemoteSessionUseCase:
                     # --- COMPENSATING STOP ---
                     with contextlib.suppress(Exception):
                         await self.media_orchestrator.stop_session(
-                            session_id=provider_session_id,
+                            session_id=f"media-{terminal.sn}",
                             operation_id=f"comp-media-{op_id}",
                             reason="compensating_stop_stream_failure",
                         )
@@ -614,7 +680,7 @@ class RemoteSessionUseCase:
                         )
             with contextlib.suppress(Exception):
                 await self.media_orchestrator.stop_session(
-                    session_id=prov_id,
+                    session_id=f"media-{terminal.sn}" if terminal else prov_id,
                     reason=reason,
                 )
 
@@ -673,9 +739,7 @@ class RemoteSessionUseCase:
         user: dict[str, Any],
     ) -> RemoteSessionStatusResponse:
         """Get unified status of remote session on device."""
-        stmt = select(Terminal).where(
-            (Terminal.device_id == device_id) | (Terminal.id == device_id)
-        )
+        stmt = select(Terminal).where(Terminal.device_id == device_id)
         res = await self.db.execute(stmt)
         terminal = res.scalar_one_or_none()
         if not terminal:
@@ -716,7 +780,9 @@ class RemoteSessionUseCase:
 
         if active_session.session_type == "video":
             with contextlib.suppress(Exception):
-                health = await self.media_orchestrator.get_session_health(prov_id)
+                health = await self.media_orchestrator.get_session_health(
+                    f"media-{terminal.sn}"
+                )
                 media_state = health.get("media_state")
                 transport_connected = health.get("transport_connected")
                 fresh_rtp = health.get("fresh_rtp")

@@ -1,5 +1,5 @@
+import hashlib
 import logging
-import secrets
 import time
 from typing import Any
 
@@ -49,44 +49,24 @@ def get_or_create_mountpoint_pin(
     lease_id: str | None = None,
     owner_user_id: str | None = None,
 ) -> str:
-    cached = _mountpoint_pins.get(mountpoint_id)
-    if cached and cached.get("pin"):
-        # Match by lease_id
-        if lease_id and cached.get("lease_id") == lease_id:
-            if stream_instance_id and not cached.get("stream_instance_id"):
-                cached["stream_instance_id"] = stream_instance_id
-            if owner_user_id and not cached.get("owner_user_id"):
-                cached["owner_user_id"] = owner_user_id
-            return str(cached["pin"])
+    # Deterministic PIN derived from secret + device_id
+    # Survives restarts, matches Janus mountpoint PIN
+    from app.config import settings
 
-        # Match by stream_instance_id
-        if (
-            stream_instance_id
-            and cached.get("stream_instance_id") == stream_instance_id
-        ):
-            if lease_id and not cached.get("lease_id"):
-                cached["lease_id"] = lease_id
-            if owner_user_id and not cached.get("owner_user_id"):
-                cached["owner_user_id"] = owner_user_id
-            return str(cached["pin"])
+    secret = settings.l4media_effective_token or "l4media-default-secret"
+    pin = hashlib.sha256(f"{secret}:{mountpoint_id}".encode()).hexdigest()[:16]
 
-        # If a pin is already active for this mountpoint (viewer or reconnect)
-        if (not cached.get("lease_id") and not lease_id) or cached.get("janus_pin"):
-            if stream_instance_id and not cached.get("stream_instance_id"):
-                cached["stream_instance_id"] = stream_instance_id
-            if owner_user_id and not cached.get("owner_user_id"):
-                cached["owner_user_id"] = owner_user_id
-            return str(cached["pin"])
-
-    new_pin = secrets.token_hex(8)
-    _mountpoint_pins[mountpoint_id] = {
-        "pin": new_pin,
-        "lease_id": lease_id,
-        "stream_instance_id": stream_instance_id,
-        "owner_user_id": owner_user_id,
-        "created_at": time.time(),
-    }
-    return new_pin
+    _mountpoint_pins.setdefault(mountpoint_id, {})
+    cached = _mountpoint_pins[mountpoint_id]
+    cached["pin"] = pin
+    if lease_id and not cached.get("lease_id"):
+        cached["lease_id"] = lease_id
+    if stream_instance_id and not cached.get("stream_instance_id"):
+        cached["stream_instance_id"] = stream_instance_id
+    if owner_user_id and not cached.get("owner_user_id"):
+        cached["owner_user_id"] = owner_user_id
+    cached.setdefault("created_at", time.time())
+    return pin
 
 
 def set_mountpoint_stream_instance(mountpoint_id: int, stream_instance_id: str) -> None:
