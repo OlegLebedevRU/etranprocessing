@@ -1,6 +1,16 @@
 from __future__ import annotations
 
 from app.services.financial_core.accounts import FinAccountService
+from app.services.financial_core.archive_schemas import (
+    ArchiveManifestImportRequest,
+    ArchiveManifestImportResponse,
+    ArchiveManifestV1,
+    ArchiveRetentionCheckRequest,
+    ArchiveRetentionCheckResponse,
+    HubArchiveBatchesResponse,
+    HubArchiveBatchItem,
+)
+from app.services.financial_core.archive_service import ArchiveService
 from app.services.financial_core.cycles import FinBillingCycleService
 from app.services.financial_core.entitlement import (
     ENTITLEMENT_ACTIVE,
@@ -15,6 +25,10 @@ from app.services.financial_core.entitlement import (
     FinEntitlementStatus,
 )
 from app.services.financial_core.exceptions import (
+    ArchiveConflictError,
+    ArchiveError,
+    ArchiveManifestValidationError,
+    ArchiveStorageUnavailableError,
     FinAccountNotFoundError,
     FinBillingProfileNotFoundError,
     FinConcurrencyError,
@@ -29,6 +43,7 @@ from app.services.financial_core.exceptions import (
     FinTariffNotFoundError,
     FinTenantIsolationError,
     FinValidationError,
+    NoFinancialPurgeViolationError,
 )
 from app.services.financial_core.manual_payments import FinManualPaymentService
 from app.services.financial_core.metering import (
@@ -111,6 +126,16 @@ __all__ = [
     "TYPE_CYCLE_MINUS_3",
     "TYPE_CYCLE_MINUS_7",
     "TYPE_GRACE",
+    "ArchiveConflictError",
+    "ArchiveError",
+    "ArchiveManifestImportRequest",
+    "ArchiveManifestImportResponse",
+    "ArchiveManifestV1",
+    "ArchiveManifestValidationError",
+    "ArchiveRetentionCheckRequest",
+    "ArchiveRetentionCheckResponse",
+    "ArchiveService",
+    "ArchiveStorageUnavailableError",
     "FinAccountNotFoundError",
     "FinAccountService",
     "FinBalanceRead",
@@ -166,7 +191,10 @@ __all__ = [
     "FinUsageDailyRead",
     "FinValidationError",
     "FinYooKassaWebhookPayload",
+    "HubArchiveBatchItem",
+    "HubArchiveBatchesResponse",
     "MockYooKassaClient",
+    "NoFinancialPurgeViolationError",
     "YooKassaApiError",
     "YooKassaClient",
     "YooKassaClientProtocol",

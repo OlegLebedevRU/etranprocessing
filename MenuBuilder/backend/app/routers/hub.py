@@ -10,10 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.routers.finance import require_internal_or_superuser
 from app.services.financial_core import (
+    ArchiveService,
     FinReconciliationRequest,
     FinReconciliationRunRead,
     FinReconciliationService,
     FinValidationError,
+    HubArchiveBatchesResponse,
+    HubArchiveBatchItem,
 )
 from app.services.financial_core.hub_schemas import (
     CorrelationDrilldownResponse,
@@ -361,6 +364,7 @@ async def get_hub_correlation_drilldown(
     session_id: int | None = Query(None, gt=0),
     payment_id: int | None = Query(None, gt=0),
     registration_id: int | None = Query(None, gt=0),
+    archive_batch_id: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
     _auth: dict[str, Any] = Depends(require_internal_or_superuser),
 ) -> CorrelationDrilldownResponse:
@@ -373,6 +377,7 @@ async def get_hub_correlation_drilldown(
         session_id=session_id,
         payment_id=payment_id,
         registration_id=registration_id,
+        archive_batch_id=archive_batch_id,
     )
 
 
@@ -463,3 +468,80 @@ async def trigger_hub_reconciliation(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)
         ) from err
+
+
+# =============================================================================
+# 9. Archives & Retention Tab
+# =============================================================================
+
+
+@router.get(
+    "/api/internal/v1/hub/archives",
+    response_model=HubArchiveBatchesResponse,
+)
+@router.get(
+    "/api/v1/admin/hub/archives",
+    response_model=HubArchiveBatchesResponse,
+)
+async def list_hub_archives(
+    owner_project: str | None = Query(None),
+    state: str | None = Query(None),
+    source_month: str | None = Query(None),
+    only_errors: bool = Query(False),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    auth: dict[str, Any] = Depends(require_internal_or_superuser),
+) -> HubArchiveBatchesResponse:
+    """List archive batches for Hub with masked location references."""
+    is_su = (
+        bool(auth.get("is_superuser"))
+        or auth.get("role") in ("superuser", "admin")
+        or auth.get("roleId") == 1
+        or auth.get("source") == "internal_service"
+    )
+    return await ArchiveService.list_archive_batches(
+        db=db,
+        owner_project=owner_project,
+        state=state,
+        source_month=source_month,
+        only_errors=only_errors,
+        is_superuser=is_su,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get(
+    "/api/internal/v1/hub/archives/{archive_batch_id}",
+    response_model=HubArchiveBatchItem,
+)
+@router.get(
+    "/api/v1/admin/hub/archives/{archive_batch_id}",
+    response_model=HubArchiveBatchItem,
+)
+async def get_hub_archive_detail(
+    archive_batch_id: str,
+    owner_project: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    auth: dict[str, Any] = Depends(require_internal_or_superuser),
+) -> HubArchiveBatchItem:
+    """Get single archive batch details for Hub."""
+    is_su = (
+        bool(auth.get("is_superuser"))
+        or auth.get("role") in ("superuser", "admin")
+        or auth.get("roleId") == 1
+        or auth.get("source") == "internal_service"
+    )
+    batch = await ArchiveService.get_archive_batch(
+        db=db,
+        archive_batch_id=archive_batch_id,
+        owner_project=owner_project,
+        is_superuser=is_su,
+    )
+    if not batch:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Archive batch '{archive_batch_id}' not found",
+        )
+    return batch
