@@ -55,3 +55,23 @@ class FinBillingProfileNotFoundError(FinError):
 
 class FinMeteringError(FinError):
     """Raised when metering aggregation or daily usage processing fails."""
+
+
+class ArchiveError(FinError):
+    """Base exception for archive coordination and retention errors."""
+
+
+class ArchiveManifestValidationError(ArchiveError):
+    """Raised when manifest violates schema, checksum, count, or hot retention constraints."""
+
+
+class ArchiveConflictError(ArchiveError):
+    """Raised when manifest with identical id has conflicting immutable fields."""
+
+
+class ArchiveStorageUnavailableError(ArchiveError):
+    """Raised when target volume or storage layout is inaccessible or unavailable."""
+
+
+class NoFinancialPurgeViolationError(ArchiveError):
+    """Raised when a purge operation targets protected financial subledger or session tables."""

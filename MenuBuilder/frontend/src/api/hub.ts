@@ -361,3 +361,71 @@ export async function triggerHubReconciliation(
   );
   return data;
 }
+
+export interface HubArchiveBatchItem {
+  archive_batch_id: string;
+  owner_project: string;
+  schema_version: string;
+  source_month: string;
+  state: "prepared" | "verified" | "purged" | "failed" | string;
+  status: "pending" | "verified" | "failed" | string;
+  record_types: string[];
+  row_count: number;
+  checksum_sha256: string;
+  min_occurred_at?: string | null;
+  max_occurred_at?: string | null;
+  through_cursor?: number | null;
+  consumers_passed_cursor?: number | null;
+  location_reference: string;
+  storage_reference?: string | null;
+  verified_at?: string | null;
+  purged_at?: string | null;
+  retain_until: string;
+  created_at: string;
+  actor: string;
+  correlation_id: string;
+  has_checksum_mismatch: boolean;
+  has_count_mismatch: boolean;
+  issues: string[];
+  linked_records_count?: number;
+  manifest?: Record<string, unknown> | null;
+}
+
+export interface HubArchiveBatchesResponse {
+  items: HubArchiveBatchItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export async function fetchHubArchives(
+  params?: Record<string, unknown>
+): Promise<HubArchiveBatchesResponse> {
+  const { data } = await client.get<HubArchiveBatchesResponse>("/v1/admin/hub/archives", {
+    params,
+  });
+  return data;
+}
+
+export async function fetchHubArchiveDetail(
+  archiveBatchId: string,
+  params?: Record<string, unknown>
+): Promise<HubArchiveBatchItem> {
+  const { data } = await client.get<HubArchiveBatchItem>(
+    `/v1/admin/hub/archives/${encodeURIComponent(archiveBatchId)}`,
+    { params }
+  );
+  return data;
+}
+
+export async function importHubArchiveManifest(
+  body: {
+    manifest: Record<string, unknown>;
+    actor?: string;
+    correlation_id?: string;
+    check_volume_availability?: boolean;
+  }
+): Promise<unknown> {
+  const { data } = await client.post("/internal/v1/archive/manifests", body);
+  return data;
+}

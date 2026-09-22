@@ -13,6 +13,7 @@ from app.routers import (
     admin_tenants,
     admin_terminals,
     admin_users,
+    archive,
     auth,
     billing,
     catalog,
@@ -174,3 +175,4 @@ app.include_router(remote_sessions.router, prefix="/api")
 app.include_router(iot_consumer.router)
 app.include_router(finance.router)
 app.include_router(hub.router)
+app.include_router(archive.router)

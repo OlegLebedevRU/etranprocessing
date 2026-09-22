@@ -3,13 +3,16 @@ import {
   AuditOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
+  CloudServerOutlined,
   DollarOutlined,
   ExclamationCircleOutlined,
+  FileTextOutlined,
   FilterOutlined,
   LinkOutlined,
   PlusOutlined,
   RollbackOutlined,
   SyncOutlined,
+  UploadOutlined,
 } from "@ant-design/icons";
 import {
   Alert,
@@ -39,6 +42,7 @@ import dayjs from "dayjs";
 
 import {
   CorrelationDrilldownResponse,
+  HubArchiveBatchItem,
   HubAuditEventItem,
   HubNotificationItem,
   HubPaymentItem,
@@ -49,6 +53,7 @@ import {
   HubUsageItem,
   ReconciliationRunResponse,
   createHubManualPayment,
+  fetchHubArchives,
   fetchHubAuditEvents,
   fetchHubCorrelationDrilldown,
   fetchHubFinanceOverview,
@@ -58,6 +63,7 @@ import {
   fetchHubSessions,
   fetchHubTerminals,
   fetchHubUsage,
+  importHubArchiveManifest,
   stornoHubManualPayment,
   triggerHubReconciliation,
 } from "../api/hub";
@@ -143,6 +149,21 @@ export default function AdminHubPage() {
   const [auditPage, setAuditPage] = useState(1);
   const [auditOnlyErrors, setAuditOnlyErrors] = useState(false);
 
+  // Tab 6: Archives & Retention
+  const [archives, setArchives] = useState<HubArchiveBatchItem[]>([]);
+  const [archTotal, setArchTotal] = useState(0);
+  const [archLoading, setArchLoading] = useState(false);
+  const [archPage, setArchPage] = useState(1);
+  const [archFilterOwner, setArchFilterOwner] = useState<string | undefined>();
+  const [archFilterState, setArchFilterState] = useState<string | undefined>();
+  const [archFilterMonth, setArchFilterMonth] = useState<string>("");
+  const [archOnlyErrors, setArchOnlyErrors] = useState(false);
+  const [selectedArchive, setSelectedArchive] = useState<HubArchiveBatchItem | null>(null);
+  const [archDetailModalOpen, setArchDetailModalOpen] = useState(false);
+  const [archImportModalOpen, setArchImportModalOpen] = useState(false);
+  const [archImportJson, setArchImportJson] = useState("");
+  const [archImportLoading, setArchImportLoading] = useState(false);
+
   // Modals state
   const [drilldownModalOpen, setDrilldownModalOpen] = useState(false);
   const [drilldownLoading, setDrilldownLoading] = useState(false);
@@ -150,6 +171,7 @@ export default function AdminHubPage() {
   const [drilldownCorrelationInput, setDrilldownCorrelationInput] = useState("");
   const [drilldownTenantIdInput, setDrilldownTenantIdInput] = useState<number | undefined>();
   const [drilldownTerminalIdInput, setDrilldownTerminalIdInput] = useState<number | undefined>();
+  const [drilldownArchiveBatchInput, setDrilldownArchiveBatchInput] = useState("");
 
   const [manualPayModalOpen, setManualPayModalOpen] = useState(false);
   const [manualPayForm] = Form.useForm();
@@ -306,6 +328,43 @@ export default function AdminHubPage() {
     }
   };
 
+  const loadArchives = async () => {
+    setArchLoading(true);
+    try {
+      const res = await fetchHubArchives({
+        owner_project: archFilterOwner || undefined,
+        state: archFilterState || undefined,
+        source_month: archFilterMonth || undefined,
+        only_errors: archOnlyErrors,
+        page: archPage,
+        page_size: 20,
+      });
+      setArchives(res.items);
+      setArchTotal(res.total);
+    } catch (err: unknown) {
+      message.error("Ошибка загрузки архивов");
+    } finally {
+      setArchLoading(false);
+    }
+  };
+
+  const handleImportManifest = async () => {
+    if (!archImportJson.trim()) return;
+    setArchImportLoading(true);
+    try {
+      const parsed = JSON.parse(archImportJson);
+      await importHubArchiveManifest({ manifest: parsed });
+      message.success("Манифест успешно импортирован");
+      setArchImportModalOpen(false);
+      setArchImportJson("");
+      loadArchives();
+    } catch (err: any) {
+      message.error(err?.response?.data?.detail || "Ошибка валидации или импорта манифеста");
+    } finally {
+      setArchImportLoading(false);
+    }
+  };
+
   // Trigger loads on tab changes
   useEffect(() => {
     if (activeTab === "registrations") {
@@ -321,6 +380,8 @@ export default function AdminHubPage() {
     } else if (activeTab === "notifications") {
       if (subNotifTab === "notifications") loadNotifications();
       else loadAuditEvents();
+    } else if (activeTab === "archives") {
+      loadArchives();
     }
   }, [
     activeTab,
@@ -346,6 +407,10 @@ export default function AdminHubPage() {
     notifOnlyErrors,
     auditPage,
     auditOnlyErrors,
+    archPage,
+    archFilterOwner,
+    archFilterState,
+    archOnlyErrors,
   ]);
 
   // Drilldown handler
@@ -355,6 +420,7 @@ export default function AdminHubPage() {
     terminal_id?: number;
     session_id?: number;
     payment_id?: number;
+    archive_batch_id?: string;
   }) => {
     setDrilldownModalOpen(true);
     setDrilldownLoading(true);
@@ -364,6 +430,7 @@ export default function AdminHubPage() {
       if (params.correlation_id) setDrilldownCorrelationInput(params.correlation_id);
       if (params.tenant_id) setDrilldownTenantIdInput(params.tenant_id);
       if (params.terminal_id) setDrilldownTerminalIdInput(params.terminal_id);
+      if (params.archive_batch_id) setDrilldownArchiveBatchInput(params.archive_batch_id);
     } catch (err: unknown) {
       message.error("Не удалось построить цепочку сверки");
     } finally {
@@ -834,6 +901,118 @@ export default function AdminHubPage() {
       title: "Детали",
       dataIndex: "details",
       render: (det: any) => (det ? <Text code style={{ fontSize: 11 }}>{JSON.stringify(det)}</Text> : "—"),
+    },
+  ];
+
+  const archiveColumns: ColumnsType<HubArchiveBatchItem> = [
+    {
+      title: "Batch ID",
+      dataIndex: "archive_batch_id",
+      key: "archive_batch_id",
+      render: (id: string) => <Tag color="geekblue">{id}</Tag>,
+    },
+    {
+      title: "Источник (Owner)",
+      dataIndex: "owner_project",
+      key: "owner_project",
+      render: (owner: string) => {
+        let color = "blue";
+        if (owner === "l4media") color = "purple";
+        if (owner === "MenuBuilder") color = "green";
+        return <Tag color={color}>{owner}</Tag>;
+      },
+    },
+    {
+      title: "Месяц",
+      dataIndex: "source_month",
+      key: "source_month",
+    },
+    {
+      title: "Состояние",
+      dataIndex: "state",
+      key: "state",
+      render: (st: string) => {
+        let color = "default";
+        if (st === "prepared") color = "orange";
+        if (st === "verified") color = "cyan";
+        if (st === "purged") color = "green";
+        if (st === "failed") color = "red";
+        return <Tag color={color}>{st.toUpperCase()}</Tag>;
+      },
+    },
+    {
+      title: "Типы записей",
+      dataIndex: "record_types",
+      key: "record_types",
+      render: (types: string[]) => (
+        <Space wrap>
+          {(types || []).map((t) => (
+            <Tag key={t}>{t}</Tag>
+          ))}
+        </Space>
+      ),
+    },
+    {
+      title: "Записей",
+      dataIndex: "row_count",
+      key: "row_count",
+      render: (v: number) => (v !== undefined ? v.toLocaleString() : "0"),
+    },
+    {
+      title: "SHA-256",
+      dataIndex: "checksum_sha256",
+      key: "checksum_sha256",
+      render: (sha: string) => (
+        <Text copyable={{ text: sha }}>
+          {sha ? `${sha.slice(0, 8)}...${sha.slice(-8)}` : "—"}
+        </Text>
+      ),
+    },
+    {
+      title: "Канонический URI (Location)",
+      dataIndex: "location_reference",
+      key: "location_reference",
+      render: (ref: string) => (
+        <Tag color="default" title="Физический путь к диску защищён и скрыт">{ref}</Tag>
+      ),
+    },
+    {
+      title: "Срок хранения",
+      dataIndex: "retain_until",
+      key: "retain_until",
+      render: (dt: string) => (dt ? dayjs(dt).format("YYYY-MM-DD") : "—"),
+    },
+    {
+      title: "Нестыковки / Ошибки",
+      key: "issues",
+      render: (_, record) => (
+        <Space wrap>
+          {record.has_checksum_mismatch && <Tag color="error">CHECKSUM_MISMATCH</Tag>}
+          {record.has_count_mismatch && <Tag color="error">COUNT_MISMATCH</Tag>}
+          {record.issues && record.issues.filter(i => i !== "CHECKSUM_MISMATCH" && i !== "COUNT_MISMATCH").map((iss) => (
+            <Tag color="volcano" key={iss}>{iss}</Tag>
+          ))}
+          {!record.has_checksum_mismatch && !record.has_count_mismatch && (!record.issues || record.issues.length === 0) && (
+            <Tag color="success">OK</Tag>
+          )}
+        </Space>
+      ),
+    },
+    {
+      title: "Действия",
+      key: "actions",
+      render: (_, record) => (
+        <Button
+          size="small"
+          icon={<FileTextOutlined />}
+          onClick={() => {
+            setSelectedArchive(record);
+            setArchDetailModalOpen(true);
+          }}
+        >
+          Манифест
+        </Button>
+      ),
     },
   ];
 
@@ -1310,6 +1489,85 @@ export default function AdminHubPage() {
               </Card>
             ),
           },
+          {
+            key: "archives",
+            label: "Архивы и Retention",
+            children: (
+              <Card>
+                <Row gutter={16} align="middle" style={{ marginBottom: 16 }}>
+                  <Col span={5}>
+                    <Select
+                      placeholder="Источник (Owner)"
+                      allowClear
+                      style={{ width: "100%" }}
+                      value={archFilterOwner}
+                      onChange={setArchFilterOwner}
+                      options={[
+                        { label: "Все источники", value: "" },
+                        { label: "iot-rpc-rest-app", value: "iot-rpc-rest-app" },
+                        { label: "l4media", value: "l4media" },
+                        { label: "MenuBuilder", value: "MenuBuilder" },
+                      ]}
+                    />
+                  </Col>
+                  <Col span={4}>
+                    <Select
+                      placeholder="Состояние"
+                      allowClear
+                      style={{ width: "100%" }}
+                      value={archFilterState}
+                      onChange={setArchFilterState}
+                      options={[
+                        { label: "Все состояния", value: "" },
+                        { label: "Prepared", value: "prepared" },
+                        { label: "Verified", value: "verified" },
+                        { label: "Purged", value: "purged" },
+                        { label: "Failed", value: "failed" },
+                      ]}
+                    />
+                  </Col>
+                  <Col span={4}>
+                    <Input
+                      placeholder="Месяц (YYYY-MM)"
+                      allowClear
+                      value={archFilterMonth}
+                      onChange={(e) => setArchFilterMonth(e.target.value)}
+                      onPressEnter={loadArchives}
+                    />
+                  </Col>
+                  <Col span={6}>
+                    <Space>
+                      <Switch checked={archOnlyErrors} onChange={setArchOnlyErrors} />
+                      <span>Только нестыковки и ошибки</span>
+                    </Space>
+                  </Col>
+                  <Col span={5} style={{ textAlign: "right" }}>
+                    <Space>
+                      <Button icon={<FilterOutlined />} type="primary" onClick={loadArchives}>
+                        Применить
+                      </Button>
+                      <Button icon={<UploadOutlined />} onClick={() => setArchImportModalOpen(true)}>
+                        Импорт
+                      </Button>
+                    </Space>
+                  </Col>
+                </Row>
+                <Table
+                  dataSource={archives}
+                  columns={archiveColumns}
+                  rowKey="archive_batch_id"
+                  loading={archLoading}
+                  pagination={{
+                    current: archPage,
+                    total: archTotal,
+                    pageSize: 20,
+                    onChange: setArchPage,
+                    showTotal: (total) => `Всего батчей: ${total}`,
+                  }}
+                />
+              </Card>
+            ),
+          },
         ]}
       />
 
@@ -1323,14 +1581,14 @@ export default function AdminHubPage() {
       >
         <div style={{ marginBottom: 20 }}>
           <Row gutter={12}>
-            <Col span={10}>
+            <Col span={7}>
               <Input
                 placeholder="Correlation ID"
                 value={drilldownCorrelationInput}
                 onChange={(e) => setDrilldownCorrelationInput(e.target.value)}
               />
             </Col>
-            <Col span={6}>
+            <Col span={4}>
               <InputNumber
                 placeholder="Tenant ID"
                 style={{ width: "100%" }}
@@ -1338,12 +1596,20 @@ export default function AdminHubPage() {
                 onChange={(v) => setDrilldownTenantIdInput(v || undefined)}
               />
             </Col>
-            <Col span={5}>
+            <Col span={4}>
               <InputNumber
                 placeholder="Terminal ID"
                 style={{ width: "100%" }}
                 value={drilldownTerminalIdInput}
                 onChange={(v) => setDrilldownTerminalIdInput(v || undefined)}
+              />
+            </Col>
+            <Col span={6}>
+              <Input
+                placeholder="Archive Batch ID"
+                style={{ width: "100%" }}
+                value={drilldownArchiveBatchInput}
+                onChange={(e) => setDrilldownArchiveBatchInput(e.target.value)}
               />
             </Col>
             <Col span={3}>
@@ -1355,6 +1621,7 @@ export default function AdminHubPage() {
                     correlation_id: drilldownCorrelationInput || undefined,
                     tenant_id: drilldownTenantIdInput,
                     terminal_id: drilldownTerminalIdInput,
+                    archive_batch_id: drilldownArchiveBatchInput || undefined,
                   })
                 }
               >
@@ -1404,6 +1671,7 @@ export default function AdminHubPage() {
                 { key: "online_session", label: "4. Online / Сессия" },
                 { key: "usage", label: "5. Потребление (Usage)" },
                 { key: "ledger_payment", label: "6. Проводка / Платёж" },
+                { key: "archive", label: "7. Архивный манифест" },
               ].map((step) => {
                 const node = drilldownData.nodes[step.key];
                 if (!node) return null;
@@ -1694,6 +1962,127 @@ export default function AdminHubPage() {
             )}
           </div>
         )}
+      </Modal>
+
+      {/* Archive Manifest Detail Modal */}
+      <Modal
+        title="Архивный манифест и верификация (RBAC Safe)"
+        open={archDetailModalOpen}
+        onCancel={() => setArchDetailModalOpen(false)}
+        footer={[
+          <Button key="close" onClick={() => setArchDetailModalOpen(false)}>
+            Закрыть
+          </Button>,
+        ]}
+        width={750}
+      >
+        {selectedArchive && (
+          <div>
+            <Alert
+              type="info"
+              message="Канонический архивный манифест"
+              description={`Батч ${selectedArchive.archive_batch_id} (${selectedArchive.owner_project}). Физический путь защищён и скрыт: ${selectedArchive.location_reference}`}
+              style={{ marginBottom: 16 }}
+            />
+            <Row gutter={[16, 12]} style={{ marginBottom: 16 }}>
+              <Col span={12}>
+                <Text strong>Состояние:</Text>{" "}
+                <Tag
+                  color={
+                    selectedArchive.state === "purged"
+                      ? "green"
+                      : selectedArchive.state === "verified"
+                      ? "cyan"
+                      : selectedArchive.state === "failed"
+                      ? "red"
+                      : "orange"
+                  }
+                >
+                  {selectedArchive.state.toUpperCase()}
+                </Tag>
+              </Col>
+              <Col span={12}>
+                <Text strong>Период:</Text> {selectedArchive.source_month}
+              </Col>
+              <Col span={12}>
+                <Text strong>Всего записей:</Text>{" "}
+                {selectedArchive.row_count.toLocaleString()}
+              </Col>
+              <Col span={12}>
+                <Text strong>Срок хранения:</Text>{" "}
+                {dayjs(selectedArchive.retain_until).format("YYYY-MM-DD")}
+              </Col>
+              <Col span={24}>
+                <Text strong>SHA-256:</Text>{" "}
+                <Text code copyable>{selectedArchive.checksum_sha256}</Text>
+              </Col>
+              <Col span={24}>
+                <Text strong>Канонический URI:</Text>{" "}
+                <Text code>{selectedArchive.location_reference}</Text>
+              </Col>
+            </Row>
+            {selectedArchive.issues && selectedArchive.issues.length > 0 && (
+              <Alert
+                type="error"
+                message="Обнаружены нестыковки манифеста"
+                description={
+                  <Space wrap>
+                    {selectedArchive.issues.map((iss) => (
+                      <Tag color="red" key={iss}>
+                        {iss}
+                      </Tag>
+                    ))}
+                  </Space>
+                }
+                style={{ marginBottom: 16 }}
+              />
+            )}
+            <Card size="small" title="Манифест (JSON)">
+              <pre
+                style={{
+                  margin: 0,
+                  fontSize: 11,
+                  maxHeight: 250,
+                  overflow: "auto",
+                }}
+              >
+                {JSON.stringify(
+                  selectedArchive.manifest || selectedArchive,
+                  null,
+                  2
+                )}
+              </pre>
+            </Card>
+          </div>
+        )}
+      </Modal>
+
+      {/* Import Archive Manifest Modal */}
+      <Modal
+        title="Импорт архивного манифеста (Archive Manifest Import)"
+        open={archImportModalOpen}
+        onCancel={() => setArchImportModalOpen(false)}
+        onOk={handleImportManifest}
+        confirmLoading={archImportLoading}
+        okText="Импортировать"
+        cancelText="Отмена"
+        width={700}
+      >
+        <p>
+          Вставьте canonical JSON манифеста v1.0.0 (соответствующий Archive
+          Manifest Contract):
+        </p>
+        <Input.TextArea
+          rows={12}
+          value={archImportJson}
+          onChange={(e) => setArchImportJson(e.target.value)}
+          placeholder={`{
+  "archive_manifest_version": "1.0.0",
+  "archive_batch_id": "arch-iot-2026-05-b91c84f2",
+  "owner_project": "iot-rpc-rest-app",
+  ...
+}`}
+        />
       </Modal>
     </div>
   );

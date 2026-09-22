@@ -11,6 +11,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models_l4desk import (
+    FinArchiveBatch,
     FinBalanceProjection,
     FinBillingCycle,
     FinBillingProfile,
@@ -24,6 +25,7 @@ from app.models_l4desk import (
     L4DeskRemoteSession,
     L4DeskTerminal,
 )
+from app.services.financial_core.archive_service import ArchiveService
 from app.services.financial_core.exceptions import FinValidationError
 from app.services.financial_core.hub_schemas import (
     CorrelationDrilldownResponse,
@@ -853,10 +855,11 @@ class HubService:
         session_id: int | None = None,
         payment_id: int | None = None,
         registration_id: int | None = None,
+        archive_batch_id: str | None = None,
     ) -> CorrelationDrilldownResponse:
         """
         Build full correlation audit chain:
-        registration -> terminal -> pin_provisioning -> online_session -> usage -> ledger_payment.
+        registration -> terminal -> pin_provisioning -> online_session -> usage -> ledger_payment -> archive.
         Strict rule: missing fact is flagged as mismatch and NEVER mocked/hallucinated.
         """
         query_params = {
@@ -866,6 +869,7 @@ class HubService:
             "session_id": session_id,
             "payment_id": payment_id,
             "registration_id": registration_id,
+            "archive_batch_id": archive_batch_id,
         }
 
         mismatches: list[str] = []
@@ -1254,6 +1258,148 @@ class HubService:
             )
             if needs_posting:
                 mismatches.append("LEDGER_POSTING_MISSING")
+
+        # 6. Resolve Archive Batch Fact
+        if archive_batch_id is None:
+            if usage_row and usage_row.archive_batch_id:
+                archive_batch_id = usage_row.archive_batch_id
+            elif ledger_tx and ledger_tx.archive_batch_id:
+                archive_batch_id = ledger_tx.archive_batch_id
+
+        if archive_batch_id is not None:
+            batch_stmt = select(FinArchiveBatch).where(
+                FinArchiveBatch.id == archive_batch_id
+            )
+            b_res = await db.execute(batch_stmt)
+            batch_row: FinArchiveBatch | None = b_res.scalars().first()
+
+            if batch_row:
+                m_dict = batch_row.manifest or {}
+                v_dict = m_dict.get("verification") or {}
+                reread_sha = v_dict.get("reread_checksum_sha256")
+
+                arch_mismatch = False
+                arch_code: str | None = None
+
+                # Checksum mismatch in manifest verification
+                if (
+                    reread_sha
+                    and reread_sha.lower() != batch_row.checksum_sha256.lower()
+                ):
+                    arch_mismatch = True
+                    arch_code = "CHECKSUM_MISMATCH"
+
+                # Source hash mismatch check against linked records
+                local_hash = (
+                    (
+                        ledger_tx.source_events_hash
+                        if ledger_tx and ledger_tx.source_events_hash
+                        else None
+                    )
+                    or (
+                        usage_row.source_events_hash
+                        if usage_row and usage_row.source_events_hash
+                        else None
+                    )
+                    or (
+                        session_row.source_events_hash
+                        if session_row and session_row.source_events_hash
+                        else None
+                    )
+                )
+
+                manifest_source_hashes = m_dict.get("source_hashes") or []
+                if isinstance(manifest_source_hashes, str):
+                    manifest_source_hashes = [manifest_source_hashes]
+
+                if local_hash and (
+                    (
+                        manifest_source_hashes
+                        and local_hash not in manifest_source_hashes
+                    )
+                    or (
+                        m_dict.get("source_events_hash")
+                        and m_dict.get("source_events_hash") != local_hash
+                    )
+                ):
+                    arch_mismatch = True
+                    arch_code = "SOURCE_HASH_MISMATCH"
+
+                err_obj = m_dict.get("error")
+                if err_obj and err_obj.get("code") in (
+                    "CHECKSUM_MISMATCH",
+                    "SOURCE_HASH_MISMATCH",
+                ):
+                    arch_mismatch = True
+                    arch_code = str(err_obj["code"])
+
+                if batch_row.status == "failed" and not arch_code:
+                    arch_mismatch = True
+                    arch_code = (
+                        str(err_obj["code"])
+                        if err_obj and err_obj.get("code")
+                        else None
+                    ) or "ARCHIVE_BATCH_FAILED"
+
+                if arch_mismatch and arch_code:
+                    mismatches.append(arch_code)
+
+                storage_layout = m_dict.get("storage_layout") or {}
+                rel_path = (
+                    storage_layout.get("relative_path") or batch_row.storage_reference
+                )
+                safe_loc = ArchiveService.mask_location_reference(rel_path)
+
+                manifest_state = m_dict.get("state") or (
+                    "purged"
+                    if batch_row.purged_at
+                    else (
+                        "verified"
+                        if batch_row.status == "verified"
+                        else batch_row.status
+                    )
+                )
+
+                nodes["archive"] = CorrelationFactNode(
+                    node_type="archive",
+                    label="Архивный манифест",
+                    present=True,
+                    mismatch=arch_mismatch,
+                    mismatch_code=arch_code,
+                    details=f"Batch: {batch_row.id}, Owner: {batch_row.source_project}, State: {manifest_state}, Records: {batch_row.row_count}",
+                    fact={
+                        "archive_batch_id": batch_row.id,
+                        "owner_project": batch_row.source_project,
+                        "schema_version": batch_row.schema_version,
+                        "source_month": batch_row.archive_month.strftime("%Y-%m"),
+                        "state": manifest_state,
+                        "status": batch_row.status,
+                        "record_types": list(batch_row.source_types or []),
+                        "row_count": batch_row.row_count,
+                        "checksum_sha256": batch_row.checksum_sha256,
+                        "location_reference": safe_loc,
+                        "verified_at": batch_row.verified_at.isoformat()
+                        if batch_row.verified_at
+                        else None,
+                        "purged_at": batch_row.purged_at.isoformat()
+                        if batch_row.purged_at
+                        else None,
+                        "retain_until": batch_row.retain_until.isoformat()
+                        if batch_row.retain_until
+                        else None,
+                    },
+                )
+            else:
+                mismatches.append("ARCHIVE_BATCH_NOT_FOUND")
+                nodes["archive"] = CorrelationFactNode(
+                    node_type="archive",
+                    label="Архивный манифест",
+                    present=False,
+                    mismatch=True,
+                    mismatch_code="ARCHIVE_BATCH_NOT_FOUND",
+                    details=f"Архивный батч '{archive_batch_id}' не найден в fin_archive_batches",
+                    fact=None,
+                )
 
         overall_status = "mismatch" if mismatches else "matched"
 

@@ -39,6 +39,7 @@ typedef struct {
     bool allow_alt_f4;  // default false
     bool allow_win_d;   // default false
     wchar_t kiosk_process[MAX_PATH];
+    char media_backend[32]; /* "l4capture" or "ffmpeg" */
 } L4DeskConfig;
 
 void config_init_defaults(L4DeskConfig* cfg);
