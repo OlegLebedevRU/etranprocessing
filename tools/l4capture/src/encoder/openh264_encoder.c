@@ -60,7 +60,7 @@ static l4c_status_t oh264_init(struct l4c_encoder_backend *self, const l4c_encod
     param.iComplexityMode = LOW_COMPLEXITY;
     param.uiIntraPeriod = (unsigned int)(ctx->fps * 2);
     param.eSpsPpsIdStrategy = CONSTANT_ID;
-    param.bEnableFrameSkip = 1;
+    param.bEnableFrameSkip = 0;
     param.bEnableDenoise = 0;
     param.bEnableBackgroundDetection = 1;
     param.bEnableAdaptiveQuant = 1;

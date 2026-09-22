@@ -33,6 +33,10 @@ typedef struct {
     uint32_t raw_drops;
     uint32_t encoder_drops;
     uint32_t transport_drops;
+    uint32_t frames_captured;
+    uint32_t frames_encoded;
+    uint32_t frames_sent;
+    uint32_t frames_skipped;
 } l4c_pipeline_state_t;
 
 static l4c_args_t parse_args(int argc, char *argv[]) {
@@ -77,9 +81,9 @@ static void send_event_metrics(l4c_ipc_pipe_t *pipe, const l4c_pipeline_state_t 
     msg.body.metrics.encoder_drops = ps->encoder_drops;
     msg.body.metrics.transport_drops = ps->transport_drops;
     msg.body.metrics.encode_p95_ms = 0;
-    msg.body.metrics.queue_depth = 0;
-    msg.body.metrics.private_bytes_kb = 0;
-    msg.body.metrics.gdi_handles = 0;
+    msg.body.metrics.queue_depth = (uint16_t)(ps->frames_sent & 0xFFFF);
+    msg.body.metrics.private_bytes_kb = ps->frames_captured;
+    msg.body.metrics.gdi_handles = ps->frames_encoded;
     if (ps->rtp) {
         l4c_rtp_sender_get_stats(ps->rtp, &rtp_stats);
         msg.body.metrics.transport_drops = rtp_stats.transport_drops;
@@ -185,19 +189,15 @@ static int run(l4c_args_t *args) {
     /* Main loop */
     while (WaitForSingleObject(gate.stop_event, 0) == WAIT_TIMEOUT) {
         uint64_t now = l4c_now_monotonic_ms();
-
-        if (!l4c_session_available(&session)) {
-            l4c_safety_stop(&gate, L4C_ERR_SESSION_UNAVAILABLE);
-            break;
-        }
+        bool session_ok = l4c_session_available(&session);
 
         /* Poll IPC commands */
         status = l4c_pipe_poll(&pipe, now);
         if (status != L4C_OK && status != L4C_ERR_PIPE_BROKEN) break;
         if (WaitForSingleObject(gate.stop_event, 0) != WAIT_TIMEOUT) break;
 
-        /* Safety check */
-        status = l4c_safety_check(&gate, now, l4c_session_available(&session));
+        /* Safety check — pass session_ok so safety gate can handle session loss */
+        status = l4c_safety_check(&gate, now, session_ok);
         if (status != L4C_OK) break;
 
         /* Check pipe stall */
@@ -219,12 +219,14 @@ static int run(l4c_args_t *args) {
             }
         }
 
-        /* Capture → Encode → Send RTP */
-        if (ps.active && l4c_safety_can_send(&gate, now, l4c_session_available(&session))) {
+        /* Capture → Encode → Send RTP (skip frame if session unavailable) */
+        if (ps.active && session_ok && l4c_safety_can_send(&gate, now, session_ok)) {
             if (l4c_pipeline_due(&gate.pipeline, now, TARGET_FPS)) {
                 l4c_frame_view_t frame;
+                static uint32_t s_frame_count = 0;
                 status = ps.capture->vtable->acquire_frame(ps.capture, &frame, 50);
                 if (status == L4C_OK && frame.data) {
+                    ps.frames_captured++;
                     /* Scale to 854x480 */
                     l4c_status_t scale_status;
                     scale_status = l4c_scale_bilinear_bgra(frame.data, frame.width, frame.height, frame.stride,
@@ -232,11 +234,13 @@ static int run(l4c_args_t *args) {
                     ps.capture->vtable->release_frame(ps.capture, &frame);
 
                     if (scale_status == L4C_OK) {
-                        /* Convert BGRA → I420 */
+                        /* Convert BGRA → I420. Use frame-counter PTS for uniform timestamps
+                         * (ffmpeg-style constant frame rate), not wall-clock which has jitter. */
                         l4c_raw_frame_t raw;
                         l4c_access_unit_t au;
+                        uint64_t pts_uniform = (uint64_t)ps.frames_captured * 1000u / TARGET_FPS;
                         status = l4c_color_convert_bgra_to_i420(ps.converter, ps.scaled_buf,
-                                                                TARGET_WIDTH * 4, now, &raw);
+                                                                TARGET_WIDTH * 4, pts_uniform, &raw);
                         if (status != L4C_OK) { ps.raw_drops++; continue; }
 
                         raw.force_idr = l4c_safety_take_idr(&gate, now);
@@ -244,14 +248,19 @@ static int run(l4c_args_t *args) {
                         memset(&au, 0, sizeof(au));
                         status = ps.encoder->vtable->encode(ps.encoder, &raw, &au);
                         if (status == L4C_OK && au.nal_count > 0) {
+                            ps.frames_encoded++;
                             /* Send RTP */
                             l4c_status_t rtp_status = l4c_rtp_send_au(ps.rtp, &au, ps.encoder);
-                            if (rtp_status != L4C_OK) {
+                            if (rtp_status == L4C_OK) {
+                                ps.frames_sent++;
+                            } else {
                                 ps.transport_drops++;
                                 l4c_safety_take_idr(&gate, now);
                             }
                             ps.encoder->vtable->release_au(ps.encoder, &au);
-                        } else if (status != L4C_OK) {
+                        } else if (status == L4C_ERR_NO_FRAME) {
+                            ps.frames_skipped++;
+                        } else {
                             ps.encoder_drops++;
                         }
                     }
@@ -264,6 +273,13 @@ static int run(l4c_args_t *args) {
             if (now - ps.last_metrics_ms >= 1000) {
                 send_event_metrics(&pipe, &ps, now);
                 ps.last_metrics_ms = now;
+            }
+
+            /* RTCP Sender Reports (keepalive for l4media ingress) */
+            if (ps.rtp) {
+                bool pli = false;
+                l4c_rtp_sender_poll_rtcp(ps.rtp, &pli);
+                if (pli) l4c_safety_take_idr(&gate, now);
             }
         }
 

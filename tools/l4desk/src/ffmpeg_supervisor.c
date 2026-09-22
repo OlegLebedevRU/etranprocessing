@@ -793,12 +793,24 @@ bool ffmpeg_supervisor_start(const char* stream_instance_id,
             params.geometry_gen = 0;
             params.rtp_port = 5004;
             params.rtcp_port = 5005;
-            params.deadline_tick_ms = g_sup.lease_expires_at_ms > 0 ?
-                g_sup.lease_expires_at_ms : get_current_time_ms() + 120000;
+            /* Convert lease deadline to GetTickCount64-based (monotonic) for l4capture IPC.
+             * g_sup.lease_expires_at_ms is Unix epoch; adapter/l4capture use GetTickCount64. */
+            {
+                uint64_t now_tick = GetTickCount64();
+                uint64_t now_wall = get_current_time_ms();
+                if (g_sup.lease_expires_at_ms > 0 && g_sup.lease_expires_at_ms > now_wall) {
+                    params.deadline_tick_ms = now_tick + (g_sup.lease_expires_at_ms - now_wall);
+                } else {
+                    params.deadline_tick_ms = now_tick + 120000;
+                }
+            }
 
             if (g_l4capture_backend->vtable->start(g_l4capture_backend, &params)) {
                 launched = true;
                 g_sup.ffmpeg_pid = 0;
+                strcpy_s(g_sup.state, sizeof(g_sup.state), "running");
+                g_sup.reason[0] = '\0';
+                save_state_file();
                 notify_stream_event(stream_instance_id, "running", "");
                 strcpy_s(out_result, max_result, is_switched ? "switched" : "started");
                 log_info("l4capture backend started for stream %s", stream_instance_id);
@@ -929,9 +941,26 @@ bool ffmpeg_supervisor_stop_with_reason(const char* reason) {
 void ffmpeg_supervisor_update_lease(const char* lease_id, uint64_t expires_at_ms) {
     ffmpeg_supervisor_ensure_inited();
     EnterCriticalSection(&g_sup_cs);
+    log_info("update_lease: lease_id='%s' g_sup.lease_id='%s' expires_at=%llu g_sup.expires_at=%llu",
+             lease_id ? lease_id : "(null)", g_sup.lease_id,
+             (unsigned long long)expires_at_ms, (unsigned long long)g_sup.lease_expires_at_ms);
     if (g_sup.lease_id[0] == '\0' || (lease_id && lease_id[0] != '\0' && strcmp(g_sup.lease_id, lease_id) == 0)) {
         if (expires_at_ms > g_sup.lease_expires_at_ms) {
             g_sup.lease_expires_at_ms = expires_at_ms;
+            /* Forward lease renewal to l4capture adapter */
+            if (g_l4capture_backend && g_l4capture_backend->vtable &&
+                g_l4capture_backend->vtable->renew_lease) {
+                /* Convert wall-clock expires_at_ms to GetTickCount64-based deadline.
+                 * expires_at_ms is Unix epoch ms; adapter uses monotonic tick ms.
+                 * Approximate: deadline_tick = GetTickCount64() + remaining_ttl */
+                uint64_t now_wall = get_current_time_ms();
+                uint64_t now_tick = GetTickCount64();
+                uint64_t deadline_tick = now_tick + (expires_at_ms > now_wall ? expires_at_ms - now_wall : 0);
+                log_info("update_lease: forwarding to adapter, deadline_tick=%llu (now_tick=%llu ttl=%lld)",
+                         (unsigned long long)deadline_tick, (unsigned long long)now_tick,
+                         (long long)(expires_at_ms - now_wall));
+                g_l4capture_backend->vtable->renew_lease(g_l4capture_backend, lease_id, deadline_tick);
+            }
         }
     }
     LeaveCriticalSection(&g_sup_cs);
@@ -946,6 +975,22 @@ bool ffmpeg_supervisor_tick(const SystemInventory* inv,
     if (p_state_changed) *p_state_changed = false;
 
     uint64_t now_ms = get_current_time_ms();
+
+    /* 0. Poll l4capture backend if active */
+    if (g_l4capture_backend && g_l4capture_backend->vtable) {
+        g_l4capture_backend->vtable->poll(g_l4capture_backend);
+        /* Check if l4capture process died unexpectedly */
+        if (strcmp(g_sup.state, "running") == 0 && !g_l4capture_backend->vtable->is_running(g_l4capture_backend)) {
+            log_warn("l4capture process exited unexpectedly, state -> failed");
+            strcpy_s(g_sup.state, sizeof(g_sup.state), "failed");
+            strcpy_s(g_sup.reason, sizeof(g_sup.reason), "l4capture_exited");
+            save_state_file();
+            notify_stream_event(g_sup.stream_instance_id, "failed", "l4capture_exited");
+            if (p_state_changed) *p_state_changed = true;
+            if (out_new_state) strcpy_s(out_new_state, max_state_len, "failed");
+            if (out_reason) strcpy_s(out_reason, max_reason_len, "l4capture_exited");
+        }
+    }
 
     /* 1. Local Lease Watchdog (Fail-Closed, 5s grace) */
     if ((strcmp(g_sup.state, "running") == 0 || strcmp(g_sup.state, "restarting") == 0) &&

@@ -56,14 +56,33 @@ static bool rtp_packet_send_cb(const uint8_t *buf, uint32_t len,
                 (const struct sockaddr *)&s->rtp_addr, sizeof(s->rtp_addr));
     if (rc == SOCKET_ERROR) {
         int err = WSAGetLastError();
-        if (err == WSAEWOULDBLOCK || err == WSAECONNRESET || err == WSAENETUNREACH) {
-            ctx->dropped = true;
-            s->stats.transport_drops++;
-            if (ctx->encoder && ctx->encoder->vtable && ctx->encoder->vtable->force_idr) {
-                ctx->encoder->vtable->force_idr(ctx->encoder);
+        if (err == WSAEWOULDBLOCK) {
+            /* Socket buffer temporarily full — retry with brief wait.
+             * On localhost the kernel drains the buffer in microseconds;
+             * up to 50 × Sleep(1) ≈ 50 ms worst-case per packet. */
+            int retries;
+            for (retries = 0; retries < 50; retries++) {
+                Sleep(1);
+                rc = sendto(s->rtp_sock, (const char *)buf, (int)len, 0,
+                            (const struct sockaddr *)&s->rtp_addr, sizeof(s->rtp_addr));
+                if (rc != SOCKET_ERROR) break;
+                err = WSAGetLastError();
+                if (err != WSAEWOULDBLOCK) break;
             }
-            return false; /* Abort remaining packets of this AU */
+            if (rc != SOCKET_ERROR) {
+                s->stats.packets_sent++;
+                s->stats.bytes_sent += (len > L4C_RTP_HEADER_SIZE) ? (len - L4C_RTP_HEADER_SIZE) : 0;
+                s->stats.last_send_tick_ms = l4c_now_monotonic_ms();
+                return true;
+            }
+            /* Retries exhausted or non-WOULDBLOCK error after retry */
         }
+        ctx->dropped = true;
+        s->stats.transport_drops++;
+        if (ctx->encoder && ctx->encoder->vtable && ctx->encoder->vtable->force_idr) {
+            ctx->encoder->vtable->force_idr(ctx->encoder);
+        }
+        return false;
     }
     s->stats.packets_sent++;
     s->stats.bytes_sent += (len > L4C_RTP_HEADER_SIZE) ? (len - L4C_RTP_HEADER_SIZE) : 0;
@@ -134,6 +153,11 @@ l4c_status_t l4c_rtp_sender_create(const l4c_rtp_config_t *config,
     inet_pton(AF_INET, config->dest_ip ? config->dest_ip : L4C_RTP_DEFAULT_HOST,
               &s->rtcp_addr.sin_addr);
 
+    /* Connect UDP sockets — sets default destination, caches routing on Windows.
+     * sendto() still works after connect(); this is purely an optimization. */
+    connect(s->rtp_sock, (const struct sockaddr *)&s->rtp_addr, sizeof(s->rtp_addr));
+    connect(s->rtcp_sock, (const struct sockaddr *)&s->rtcp_addr, sizeof(s->rtcp_addr));
+
     /* Initialize session state with crypto RNG */
     {
         unsigned int rng_val;
@@ -185,8 +209,13 @@ l4c_status_t l4c_rtp_send_au(l4c_rtp_sender_t *sender,
     ctx.dropped = false;
     ctx.encoder = encoder;
 
-    l4c_rtp_packetize_au(au, rtp_ts, sender->seq_num, sender->ssrc,
+    {
+        l4c_status_t pkt_status = l4c_rtp_packetize_au(au, rtp_ts, sender->seq_num, sender->ssrc,
                           sender->payload_type, rtp_packet_send_cb, &ctx);
+        if (pkt_status != L4C_OK && !ctx.dropped) {
+            ctx.dropped = true;
+        }
+    }
 
     if (ctx.dropped) {
         /* Advance seq_num past the dropped AU for correct continuity */
