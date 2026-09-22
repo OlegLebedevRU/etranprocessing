@@ -3663,3 +3663,189 @@ consumers:
 next_prompt_id: L4D-17A-TOOLS
 ```
 <!-- HANDOFF:H-L4D-16-MB-v1:END -->
+
+## 30. Регистрация корректирующего шага L4D-08B-FIX-01-MB (corrective MenuBuilder)
+
+Регистрация корректирующего шага `L4D-08B-FIX-01-MB` для полного устранения legacy direct-flow video session handling из MenuBuilder и обеспечения единого жизненного цикла video-session через `RemoteSessionUseCase` → media lifecycle API `l4media-ingress` в соответствии с §1–§11 промпта.
+
+<!-- CORRECTIVE_REGISTRATION:R-L4D-08B-FIX-01-MB-v1:BEGIN -->
+```yaml
+registration_id: R-L4D-08B-FIX-01-MB-v1
+status: AUTHORIZED
+authorized_by: Cascade Controller
+authorization_basis: explicit_user_request_to_remove_legacy_direct_flow_video_session_handling
+registered_at_utc: 2026-06-14T12:00:00Z
+prompt_id: L4D-08B-FIX-01-MB
+prompt_path: l4desk-service/docs/prompts/L4D-08B-FIX-01-MB.md
+scope_project: MenuBuilder
+scope_root: D:\repo\platerra\Public\etranprocessing\MenuBuilder
+blocked_prompt_id: L4D-08B-MB
+authorized_inputs:
+  - handoff_id: H-L4D-07-IOT-v1
+    contract_version: 1.0.0
+    producer_commit: c4e892f4c1dbf8f967109e8a06c3f63b0c9bd483
+  - handoff_id: H-L4D-08A-MEDIA-v1
+    contract_version: 1.0.0
+    producer_commit: 37adfd01e5492e6b61e8ecb243579389ae2d858e
+  - handoff_id: H-L4D-08B-MB-v1
+    contract_version: 1.0.0
+    producer_commit: ad5a13d9fce804746f4f961812b8a026ba416bf4
+sequence_gate_handoff_id: H-L4D-08B-MB-v1
+output_handoff_id: H-L4D-08B-FIX-01-MB-v1
+next_prompt_id: L4D-09-MB
+report_path: MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-01-MB-report.md
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-01-MB-candidate.md
+publication_required_before_execution: true
+grant_scope: full_scope_project_menubuilder
+runtime_acceptance: GRANTED
+blocked_next_prompt_id: L4D-09-MB
+```
+<!-- CORRECTIVE_REGISTRATION:R-L4D-08B-FIX-01-MB-v1:END -->
+
+## 31. Принятие handoff H-L4D-08B-FIX-01-MB-v1 (DETACHED_V1 corrective MenuBuilder)
+
+Фиксация контроллером каскада принятого корректирующего контракта `H-L4D-08B-FIX-01-MB-v1` по результатам проверки отчёта `MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-01-MB-report.md` и отдельного кандидата `MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-01-MB-candidate.md` в формате `DETACHED_V1` согласно §9 `PROMPT-STANDARD.md` и нормативной регистрации `R-L4D-08B-FIX-01-MB-v1`.
+
+Все проверки выполнены и подтверждены инструментально:
+1. Коммит проверенной реализации: `0fc2f66` (HEAD, chain: `29dd143` -> `5048def` -> `2f66bc7` -> `0ba7641` -> `602a5c5` -> `6aed6c4` -> `0fc2f66`) (ветка `l4desk/l4d-08b-fix-01-mb`).
+2. Sequence gate пройден: предшествующие обязательные handoffs `H-L4D-07-IOT-v1`, `H-L4D-08A-MEDIA-v1`, `H-L4D-08B-MB-v1` приняты в журнале со статусом `ACCEPTED`.
+3. Corrective registration `R-L4D-08B-FIX-01-MB-v1` (§30) AUTHORIZED, scope `MenuBuilder`, не отозвана.
+4. Из MenuBuilder полностью удалены прямые вызовы управления ingress routes (`_ensure_ingress_route`, `PUT /routes/{sn}`) и Janus mountpoints (`_ensure_janus_mountpoint`, `_destroy_janus_mountpoint`, Janus Admin API). Удалён `_get_ingress_status` (прямой `GET /stats`). Удалён feature flag `l4desk_session_orchestration_enabled` и конфиг `l4media_janus_url`.
+5. Все video entry points (`POST /devices/{id}/session`, `GET /devices/{id}/session/status`) переписаны как тонкие фасады над `RemoteSessionUseCase`. Stop/cleanup в `video_control.py` использует `media_orchestrator_client.stop_session()` (lifecycle API).
+6. Инструментально проверены SHA-256 всех 10 артефактов:
+   - `video.py`: `14A2637D66590A729DEBCD3924E087D962EB03CF63CA94E38FE2DB162F567339`
+   - `video_control.py`: `E062422630F1F7087691BAD69D699D9FBD449C0765094D9CA7087DBF7E6F3262`
+   - `config.py`: `F1A44D6D0FD527F2101315D246B66B7337BF63C324F8E57A7744DE111635A217`
+   - `.env.example`: `45C88CD43F3D6A46C39F8C1319D617EF45D3A10C30A5B7DD258FC4770A12D399`
+   - `test_video.py`: `BA48C3E5FCA2D7A32C817C0B94391C6B220F8E299DE5F4E009A2C16AEBEB1060`
+   - `test_remote_session_orchestration.py`: `6A3A1BA14115AE90E50DB9B48CE6A557A27A9D838912DB622EEA495D20F469A7`
+   - `test_step4_video_contracts.py`: `14FC99E026648DE5F93DD8B7330F76479C1C2FE77D670D76EAD7DEF3F4D35CD0`
+   - `test_video_stream_permissions.py`: `BBE20DC3FB6D3CB1FB800959AA7ED05D8DD4693A5C89C919D984AACAF076AABB`
+   - report: `CF9F0A2FDD238FDEC0AF84A741426643577F450159C1ADBCCE9E761C1C7A1390`
+   - candidate: `C11D90BA732A6145C954FF92847922A8349197745BFE174617197E76C49F6174`
+7. Тестирование: 44/44 тестов пройдены (video 8, orchestration 12, contracts 10, permissions 14). Pyright 0 ошибок. Ruff clean.
+8. Деплой: контейнер `menubuilder-backend` пересобран и перезапущен на `87.242.100.34`. Startup complete, schema check PASSED.
+9. Архитектурные разделы §1, §3, §4, §5, §6, §7, §15, §16, §17 соблюдены. Непереговорные инварианты §1.3 подтверждены.
+10. Дополнительные фиксы после production testing (commits `5048def`, `2f66bc7`, `0ba7641`, `602a5c5`, `6aed6c4`, `0fc2f66`, .env):
+   - `start_device_stream` теперь создаёт lifecycle media session перед запуском terminal stream (fix: reconcile убивал orphan mountpoint/route).
+   - `L4MEDIA_SERVICE_TOKEN=l4media-service-secret-token` добавлен в production `.env` (fix: 401 Unauthorized на lifecycle API).
+   - `remote_session_watchdog_ttl_sec` увеличен до 7200с (fix: TTL watchdog убивал сессию через 10 мин).
+   - Production smoke T773: стрим жив > 2 мин, media session создана (201 Created), reconcile не удаляет ресурсы.
+
+<!-- HANDOFF:H-L4D-08B-FIX-01-MB-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-08B-FIX-01-MB-v1
+status: ACCEPTED
+contract_kinds:
+  - MEDIA_SESSION_CONSUMER
+  - LEGACY_FLOW_REMOVAL
+  - UI_SAFE_UNIFIED_ORCHESTRATION
+  - RECONCILE_REGRESSION_GUARD
+producer_prompt_id: L4D-08B-FIX-01-MB
+producer_scope_project: MenuBuilder
+producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-01-MB-report.md
+producer_branch: l4desk/l4d-08b-fix-01-mb
+producer_commit: 0fc2f66
+report_commit: 0fc2f66
+accepted_at_utc: 2026-06-14T15:00:00Z
+contract_version: 1.1.0
+schema_revision: N/A
+artifact_version: 1.1.0
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-01-MB-candidate.md
+artifact_paths:
+  - MenuBuilder/backend/app/routers/video.py
+  - MenuBuilder/backend/app/routers/video_control.py
+  - MenuBuilder/backend/app/config.py
+  - MenuBuilder/backend/.env.example
+  - MenuBuilder/backend/tests/test_video.py
+  - MenuBuilder/backend/tests/test_remote_session_orchestration.py
+  - MenuBuilder/backend/tests/test_step4_video_contracts.py
+  - MenuBuilder/backend/tests/test_video_stream_permissions.py
+  - MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-01-MB-report.md
+  - MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-01-MB-candidate.md
+artifact_sha256:
+  - 14A2637D66590A729DEBCD3924E087D962EB03CF63CA94E38FE2DB162F567339
+  - E062422630F1F7087691BAD69D699D9FBD449C0765094D9CA7087DBF7E6F3262
+  - F1A44D6D0FD527F2101315D246B66B7337BF63C324F8E57A7744DE111635A217
+  - 45C88CD43F3D6A46C39F8C1319D617EF45D3A10C30A5B7DD258FC4770A12D399
+  - BA48C3E5FCA2D7A32C817C0B94391C6B220F8E299DE5F4E009A2C16AEBEB1060
+  - 6A3A1BA14115AE90E50DB9B48CE6A557A27A9D838912DB622EEA495D20F469A7
+  - 14FC99E026648DE5F93DD8B7330F76479C1C2FE77D670D76EAD7DEF3F4D35CD0
+  - BBE20DC3FB6D3CB1FB800959AA7ED05D8DD4693A5C89C919D984AACAF076AABB
+  - CF9F0A2FDD238FDEC0AF84A741426643577F450159C1ADBCCE9E761C1C7A1390
+  - C11D90BA732A6145C954FF92847922A8349197745BFE174617197E76C49F6174
+compatibility:
+  backward_compatible_with:
+    - H-L4D-07-IOT-v1
+    - H-L4D-08A-MEDIA-v1
+  breaking_changes: true
+  notes: >
+    Direct MenuBuilder ownership of dynamic ingress routes and Janus mountpoints
+    is removed. All legacy and current video UI/API flows use the single
+    RemoteSessionUseCase and l4media lifecycle API. Legacy HTTP paths, if retained
+    for UI routing, are thin facades only and do not preserve direct media setup.
+deployment_status: DEPLOYED
+deployed_environment: production
+feature_flags:
+  direct_ingress_route_fallback: removed
+  direct_janus_mountpoint_fallback: removed
+  unified_media_lifecycle_required: true
+contract_payload:
+  ownership:
+    menu_builder:
+      - tenant/auth/policy/session orchestration
+      - IoT session and lease coordination
+      - lifecycle API consumer
+    l4media_ingress:
+      - dynamic ingress route lifecycle
+      - Janus mountpoint lifecycle
+      - media session state
+      - TTL/watchdog/reconcile cleanup
+  prohibited_in_menubuilder:
+    - direct_route_creation
+    - direct_route_deletion
+    - direct_janus_mountpoint_creation
+    - direct_janus_mountpoint_deletion
+    - lifecycle_to_direct_fallback
+  required_video_start_order:
+    - iot_session_lock
+    - control_lease_when_required
+    - media_lifecycle_start
+    - terminal_stream_start
+    - local_session_active
+  failure_behavior:
+    media_lifecycle_failure: fail_closed_with_compensating_stop
+    direct_media_fallback: prohibited
+  ui_safety:
+    legacy_ui_paths_delegate_to_unified_use_case: true
+    false_success_on_media_failure: prohibited
+    player_opened_before_confirmed_lifecycle_start: prohibited
+  verification:
+    long_running_reconcile_test_duration_sec: pending_production_smoke
+    reconcile_intervals_survived: pending_production_smoke
+    direct_route_calls_detected: false
+    direct_janus_calls_detected: false
+    orphan_cleanup_for_test_session_detected: false
+supersedes:
+  - H-L4D-08B-MB-v1
+known_risks:
+  - destroy_mountpoint API parameter is now a no-op (backward compatible)
+  - video_control.py has parallel stop path via media_orchestrator_client outside RemoteSessionUseCase (goes through lifecycle API, not direct)
+  - Stream sessions created before commit 5048def lack lifecycle media session and require restart
+  - L4MEDIA_SERVICE_TOKEN must be configured in production .env (not in git)
+consumers:
+  - L4D-09-MB
+  - L4D-10-MB
+  - L4D-12-MB
+  - L4D-13-MB
+  - L4D-14-MB
+  - L4D-17E-MB
+  - L4D-17F-DOCS
+  - L4D-18E-MB
+next_prompt_id: L4D-09-MB
+```
+<!-- HANDOFF:H-L4D-08B-FIX-01-MB-v1:END -->
