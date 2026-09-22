@@ -3849,3 +3849,37 @@ consumers:
 next_prompt_id: L4D-09-MB
 ```
 <!-- HANDOFF:H-L4D-08B-FIX-01-MB-v1:END -->
+
+## 32. Регистрация корректирующего шага L4D-13-MB-FIX-01 (corrective MenuBuilder)
+
+Регистрация корректирующего шага `L4D-13-MB-FIX-01` для переноса «Терминалы» в корневую навигацию L4Desk выше «Видеонаблюдения», устранения дублирующих точек управления терминалами и обеспечения единого канонического server-side use case создания терминала (SN/`device_id` только на сервере, диапазон новых `device_id` `1000001…1999999`) в соответствии с §1–§13 промпта. Корректирует UX-часть результата `L4D-13-MB` после принятия `H-L4D-13-MB-v1`.
+
+<!-- CORRECTIVE_REGISTRATION:R-L4D-13-MB-FIX-01-v1:BEGIN -->
+```yaml
+registration_id: R-L4D-13-MB-FIX-01-v1
+status: AUTHORIZED
+authorized_by: Cascade Controller
+authorization_basis: explicit_user_request_to_prepare_cascade_and_execute_l4d_13_mb_fix_01
+registered_at_utc: 2026-09-22T22:05:00Z
+prompt_id: L4D-13-MB-FIX-01
+prompt_path: l4desk-service/docs/prompts/L4D-13-MB-FIX-01.md
+scope_project: MenuBuilder
+scope_root: D:\repo\platerra\Public\etranprocessing\MenuBuilder
+blocked_prompt_id: L4D-13-MB
+authorized_inputs:
+  - handoff_id: H-L4D-13-MB-v1
+    contract_version: 1.0.0
+    producer_commit: f5017615a8a84eee318a78b54a992ceb45f91edc
+sequence_gate_handoff_id: H-L4D-13-MB-v1
+output_handoff_id: H-L4D-13-MB-FIX-01-v1
+next_prompt_id: L4D-14-MB
+report_path: MenuBuilder/docs/l4desk/handoffs/L4D-13-MB-FIX-01-report.md
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-13-MB-FIX-01-candidate.md
+publication_required_before_execution: true
+grant_scope: full_scope_project_menubuilder
+runtime_acceptance: GRANTED
+blocked_next_prompt_id: L4D-14-MB
+```
+<!-- CORRECTIVE_REGISTRATION:R-L4D-13-MB-FIX-01-v1:END -->
