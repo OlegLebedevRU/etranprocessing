@@ -12,6 +12,7 @@ general: {
 media: {
 	ipv6 = false
 	rtp_port_range = "20000-20100"
+	ice_lite = true
 }
 
 nat: {
