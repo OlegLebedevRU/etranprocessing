@@ -35,6 +35,8 @@ from app.repositories.l4desk_repository import L4DeskRepository
 from app.routers.video import (
     _verify_device_access,
     clear_mountpoint_pin,
+    get_device_ports,
+    get_or_create_mountpoint_pin,
     set_mountpoint_stream_instance,
 )
 from app.security.permissions import (
@@ -832,6 +834,34 @@ async def start_device_stream(
                 if resolved_id:
                     source_id = resolved_id
 
+    # Create lifecycle media session before starting terminal stream
+    # This ensures reconcile protects the route and mountpoint
+    media_session_id = f"stream-{device_id}-{uuid.uuid4().hex[:8]}"
+    rtp_port, rtcp_port = get_device_ports(device_id)
+    pin = get_or_create_mountpoint_pin(device_id, lease_id=lease_id)
+    try:
+        await media_orchestrator_client.start_session(
+            session_id=media_session_id,
+            operation_id=f"op-stream-{device_id}",
+            sn=terminal.sn,
+            device_id=device_id,
+            pin=pin,
+            rtp_port=rtp_port,
+            rtcp_port=rtcp_port,
+            ttl_sec=600,
+        )
+    except Exception as media_err:
+        logger.error(
+            "Media lifecycle start failed for device %d (%s): %s",
+            device_id,
+            terminal.sn,
+            media_err,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Ошибка подготовки медиаканала: {media_err}",
+        ) from media_err
+
     try:
         res = await iot_client.remote_input_stream_start(
             lease_id=lease_id,
@@ -867,7 +897,7 @@ async def start_device_stream(
                     correlation_id=f"corr-stream-{stream_inst_id}",
                     session_type="video",
                     requested_by_user_id=user_db_id,
-                    provider_session_id=stream_inst_id,
+                    provider_session_id=media_session_id,
                     state="active",
                     active_at=datetime.now(UTC),
                 )
@@ -878,6 +908,12 @@ async def start_device_stream(
             state=res.get("state"),
         )
     except HTTPException as exc:
+        # Compensating stop: clean up media session on terminal stream failure
+        with contextlib.suppress(Exception):
+            await media_orchestrator_client.stop_session(
+                session_id=media_session_id,
+                reason="stream_start_failed",
+            )
         err_detail = (
             str(exc.detail)
             if isinstance(exc.detail, str)

@@ -901,10 +901,20 @@ async def test_legacy_video_and_control_endpoints_satisfy_active_session_constra
         active.closed_at = datetime.now(UTC)
         await db.flush()
 
-        with patch(
-            "app.routers.video_control.iot_client.remote_input_stream_start",
-            new_callable=AsyncMock,
-        ) as mock_stream:
+        with (
+            patch(
+                "app.routers.video_control.iot_client.remote_input_stream_start",
+                new_callable=AsyncMock,
+            ) as mock_stream,
+            patch(
+                "app.routers.video_control.media_orchestrator_client.start_session",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.routers.video_control.media_orchestrator_client.stop_session",
+                new_callable=AsyncMock,
+            ),
+        ):
             mock_stream.return_value = {
                 "stream_instance_id": "stream-inst-70",
                 "result": "started",

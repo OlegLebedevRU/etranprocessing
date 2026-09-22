@@ -369,6 +369,14 @@ async def test_stream_start_stop_events_matrix(
         patch.object(
             iot_client, "remote_input_key", new=AsyncMock(return_value={"result": "ok"})
         ),
+        patch(
+            "app.routers.video_control.media_orchestrator_client.start_session",
+            new=AsyncMock(return_value={"status": "success", "session_id": "test"}),
+        ),
+        patch(
+            "app.routers.video_control.media_orchestrator_client.stop_session",
+            new=AsyncMock(return_value={"status": "success"}),
+        ),
     ):
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
@@ -590,7 +598,17 @@ async def test_app1_409_and_nack_propagation(mock_db_session, operator_token):
             assert d2.get("code") == "stream_not_running"
 
         # 3. nack code propagation on stream start
-        with patch.object(iot_client, "remote_input_stream_start", new=raise_nack):
+        with (
+            patch.object(iot_client, "remote_input_stream_start", new=raise_nack),
+            patch(
+                "app.routers.video_control.media_orchestrator_client.start_session",
+                new=AsyncMock(return_value={"status": "success"}),
+            ),
+            patch(
+                "app.routers.video_control.media_orchestrator_client.stop_session",
+                new=AsyncMock(return_value={"status": "success"}),
+            ),
+        ):
             r3 = await client.post(
                 "/api/v1/video/devices/1/stream/start",
                 json={"mode": "desktop", "source_id": "0", "lease_id": "l-1"},
