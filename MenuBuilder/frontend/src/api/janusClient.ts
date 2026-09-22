@@ -28,6 +28,10 @@ export class JanusStreamingClient {
   private keepaliveTimer: any = null;
   private pendingTransactions = new Map<string, PendingTx>();
   private isDestroyed = false;
+  private isReconnecting = false;
+  private reconnectAttempts = 0;
+  private readonly maxReconnectAttempts = 5;
+  private readonly baseReconnectDelayMs = 1000;
 
   constructor(options: JanusClientOptions) {
     this.wsUrl = options.wsUrl;
@@ -135,8 +139,70 @@ export class JanusStreamingClient {
       this.onStatusChange?.("hangup");
     } else if (janusType === "error") {
       const reason = data?.error?.reason || "Janus event error";
-      this.onError?.(reason);
+      if (
+        reason.includes("Couldn't find any handle") ||
+        reason.includes("Couldn't find any session")
+      ) {
+        this.handleConnectionLoss();
+      } else {
+        this.onError?.(reason);
+      }
     }
+  }
+
+  private cleanup(): void {
+    if (this.keepaliveTimer) {
+      clearInterval(this.keepaliveTimer);
+      this.keepaliveTimer = null;
+    }
+    for (const [, pending] of this.pendingTransactions) {
+      clearTimeout(pending.timer);
+      pending.reject(new Error("Reconnecting"));
+    }
+    this.pendingTransactions.clear();
+    if (this.pc) {
+      this.pc.close();
+      this.pc = null;
+    }
+    if (this.ws) {
+      try {
+        this.ws.close();
+      } catch {
+        /* ignore */
+      }
+      this.ws = null;
+    }
+    this.sessionId = null;
+    this.handleId = null;
+  }
+
+  private async handleConnectionLoss(): Promise<void> {
+    if (this.isDestroyed || this.isReconnecting) return;
+    this.isReconnecting = true;
+
+    while (!this.isDestroyed && this.reconnectAttempts < this.maxReconnectAttempts) {
+      this.cleanup();
+      this.onStatusChange?.("reconnecting");
+
+      const delay = this.baseReconnectDelayMs * Math.pow(2, this.reconnectAttempts);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      if (this.isDestroyed) break;
+
+      this.reconnectAttempts++;
+      try {
+        await this.start();
+        this.reconnectAttempts = 0;
+        this.onStatusChange?.("reconnected");
+        break;
+      } catch {
+        /* retry */
+      }
+    }
+
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      this.onError?.("Не удалось восстановить подключение к видеосервису");
+    }
+    this.isReconnecting = false;
   }
 
   public async start(): Promise<void> {
@@ -155,7 +221,7 @@ export class JanusStreamingClient {
       this.ws.onerror = (e) => reject(new Error("Ошибка WebSocket соединения с Janus"));
       this.ws.onclose = () => {
         if (!this.isDestroyed) {
-          this.onStatusChange?.("disconnected");
+          this.handleConnectionLoss();
         }
       };
       this.ws.onmessage = (event) => {
