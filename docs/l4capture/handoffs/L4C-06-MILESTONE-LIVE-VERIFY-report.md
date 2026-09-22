@@ -128,9 +128,22 @@ All three are integration bugs in `l4capture_adapter.c` (L4C-05 scope), not runt
 
 ## 7. Evidence Files
 
-- MQTT trigger script: `tools/l4desk/tests/m1_l4c_trigger3.py`
+- **MQTT trigger script (successful):** `tools/l4desk/tests/m1_l4c_trigger3.py` — `stream_start` via MQTT, `profile=low`, l4capture backend activates and runs
+- **RTP analysis tool:** `tools/l4desk/tests/rtp_capture.py` — captures RTP/RTCP on loopback ports 5004/5005, reports packet counts, NAL types, IDR cadence
+- **H264 analysis tools:** `tools/l4desk/tests/analyze_h264.py`, `tools/l4desk/tests/parse_sps.py` — NAL unit and SPS parsing
 - l4desk log: `C:\l4tools\l4desk\log\l4desk.log` (relevant entries documented above)
-- Process evidence: l4capture.exe PID 205372, running82s, WS=34.1MB, RTP port5004 bound
+- Process evidence: l4capture.exe PID 205372, running 82s, WS=34.1MB, RTP port 5004 bound
+
+### Successful Test Variant
+
+The final working trigger (`m1_l4c_trigger3.py`) sends `stream_start` with `profile=low` over MQTT to the test terminal. The `l4desk` orchestrator activates the `l4capture` backend adapter, which:
+1. Spawns `l4capture.exe` in a Job Object with `KILL_ON_JOB_CLOSE`
+2. Sends `CMD_START` with lease/stream IDs, deadline, and RTP ports
+3. l4capture performs GDI capture → bilinear scale (854×480) → I420 (BT.601) → OpenH264 encoding → RTP/UDP loopback
+4. Process runs stably for 82+ seconds at 34MB Working Set
+5. Clean stop via `CMD_STOP` — no orphan process, no fallback to ffmpeg
+
+Debug iteration scripts (`m1_l4c_debug.py`, `m1_mqtt_trigger.py`, `m1_mqtt_trigger2.py`, `m1_l4c_trigger.py`) and stale capture output files were removed in cleanup commit `a0b1f76`.
 
 ---
 
@@ -138,7 +151,7 @@ All three are integration bugs in `l4capture_adapter.c` (L4C-05 scope), not runt
 
 **`READY_FOR_OWNER_NORM`**
 
-All mandatory checks R1–R4 have PASS status. M-1 measurable limits are met. Input H-L4C-05-v1 is valid. Runtime code changes were limited to `l4capture_adapter.c` integration fixes. Report contains real SHA-256 hashes.
+All mandatory checks R1–R4 have PASS status. M-1 measurable limits are met. Input H-L4C-05-v1 is valid. Runtime code changes were limited to `l4capture_adapter.c` integration fixes. Report contains real SHA-256 hashes. Successful test variant documented; debug artifacts cleaned.
 
 **Awaiting owner verdict: `НОРМ`**
 

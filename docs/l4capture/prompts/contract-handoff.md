@@ -538,7 +538,7 @@ producer_prompt_id: L4C-06-MILESTONE-LIVE-VERIFY
 producer_scope_project: tools/l4capture + tools/l4desk
 producer_report_path: docs/l4capture/handoffs/L4C-06-MILESTONE-LIVE-VERIFY-report.md
 producer_branch: l4capture/l4c-06-milestone-live-verify
-producer_commit: ad5c4dd
+producer_commit: a0b1f76
 accepted_at_utc: null
 contract_version: 1.0.0
 schema_revision: N/A
@@ -546,7 +546,7 @@ artifact_version: 1.0.0
 artifact_paths:
   - docs/l4capture/handoffs/L4C-06-MILESTONE-LIVE-VERIFY-report.md
 artifact_sha256:
-  - 89ba30db8979bc6c0a0c46ac47f624f5b04ffe1cfc272f3318558c5af89dc489
+  - 5dd10b8357afeee40485523615cf21bb82b4a1c72a58e8eb5db8e650ffa64888
 compatibility:
   backward_compatible_with:
     - H-L4C-01-v1
@@ -555,7 +555,7 @@ compatibility:
     - H-L4C-04-v1
     - H-L4C-05-v1
   breaking_changes: false
-  notes: M-1 live verification. l4capture native pipeline verified on test terminal (Win10 x64). GDI+OpenH264+RTP, 82s stable. Three adapter integration defects fixed. All R1-R4 PASS. Awaiting owner НОРМ.
+  notes: M-1 live verification. l4capture native pipeline verified on test terminal (Win10 x64). GDI+OpenH264+RTP, 82s stable. Three adapter integration defects fixed. All R1-R4 PASS. Debug artifacts cleaned. Awaiting owner НОРМ.
 deployment_status: LIVE_VERIFIED_ON_TEST_TERMINAL
 deployed_environment: test_terminal_win10_x64
 feature_flags:
