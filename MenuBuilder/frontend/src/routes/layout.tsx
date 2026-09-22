@@ -12,6 +12,7 @@ import {
   ApiOutlined,
   ControlOutlined,
   ClusterOutlined,
+  DesktopOutlined,
   SettingOutlined,
   VideoCameraOutlined,
   CodeOutlined,
@@ -44,9 +45,10 @@ const NAV_ITEMS = [
 ];
 
 const L4DESK_NAV_ITEMS = [
+  { key: "terminals", icon: <DesktopOutlined />, label: "Терминалы" },
   { key: "video", icon: <VideoCameraOutlined />, label: "Видеонаблюдение" },
-  { key: "settings", icon: <SettingOutlined />, label: "Настройки" },
   { key: "console", icon: <CodeOutlined />, label: "Консоль" },
+  { key: "settings", icon: <SettingOutlined />, label: "Настройки" },
   { key: "mcp", icon: <ApiOutlined />, label: "MCP" },
   { key: "licenses", icon: <DollarOutlined />, label: "Лицензии" },
 ];
@@ -128,7 +130,7 @@ export default function AppLayout() {
     ];
   }
 
-  const defaultSegment = navProfile === "l4desk" ? "video" : (isPlatformMode ? "admin" : "monitoring");
+  const defaultSegment = navProfile === "l4desk" ? "terminals" : (isPlatformMode ? "admin" : "monitoring");
   const rawSegment = location.pathname.split("/")[1];
   const segment = rawSegment || defaultSegment;
   const selectedKey = navItems.some((i) => i.key === segment)
@@ -201,7 +203,9 @@ export default function AppLayout() {
           selectedKeys={[selectedKey]}
           onClick={({ key }) => {
             if (key === "settings") {
-              if (isRole4) {
+              if (navProfile === "l4desk") {
+                navigate("/settings/profile");
+              } else if (isRole4) {
                 navigate("/settings/terminals");
               } else {
                 navigate("/settings/profile");

@@ -125,15 +125,64 @@ describe("L4Desk Navigation Profile & Route Resolution", () => {
     window.removeEventListener("app_nav_profile_change", listener);
   });
 
-  it("L4Desk navigation profile defines strictly the 5 required sections", () => {
-    const L4DESK_SECTIONS = ["video", "settings", "console", "mcp", "licenses"];
-    expect(L4DESK_SECTIONS).toHaveLength(5);
-    expect(L4DESK_SECTIONS).toEqual(
-      expect.arrayContaining(["video", "settings", "console", "mcp", "licenses"])
+  it("L4Desk navigation profile defines strictly the 6 required sections in order", () => {
+    const L4DESK_SECTIONS = [
+      "terminals",
+      "video",
+      "console",
+      "settings",
+      "mcp",
+      "licenses",
+    ];
+    expect(L4DESK_SECTIONS).toHaveLength(6);
+    expect(L4DESK_SECTIONS[0]).toBe("terminals");
+    expect(L4DESK_SECTIONS.indexOf("terminals")).toBeLessThan(
+      L4DESK_SECTIONS.indexOf("video")
     );
   });
 
-  it("Reuse assertion: ConsolePage imports and reuses DeviceConsoleTab", async () => {
+  it("L4Desk nav source puts Терминалы above Видеонаблюдение and has no nested settings terminals", async () => {
+    // @ts-ignore
+    const fs = await import("node:fs");
+    const layoutSource = fs.readFileSync(
+      new URL("../routes/layout.tsx", import.meta.url),
+      "utf8"
+    );
+    const l4deskBlock = layoutSource.split("L4DESK_NAV_ITEMS")[1] || "";
+    const terminalsIdx = l4deskBlock.indexOf('key: "terminals"');
+    const videoIdx = l4deskBlock.indexOf('key: "video"');
+    expect(terminalsIdx).toBeGreaterThan(-1);
+    expect(videoIdx).toBeGreaterThan(-1);
+    expect(terminalsIdx).toBeLessThan(videoIdx);
+  });
+
+  it("Classic profile menu terminals route is preserved via L4DeskRootTerminalsRoute fallback", async () => {
+    // @ts-ignore
+    const fs = await import("node:fs");
+    const appSource = fs.readFileSync(
+      new URL("../App.tsx", import.meta.url),
+      "utf8"
+    );
+    expect(appSource).toContain("L4DeskRootTerminalsRoute");
+    expect(appSource).toContain("SettingsTerminalsRoute");
+    expect(appSource).toContain('Navigate to="/terminals" replace');
+    expect(appSource).toContain('Navigate to="/menu/terminals" replace');
+  });
+
+  it("Onboarding wizard has no SN/device_id inputs and shows server SN read-only", async () => {
+    // @ts-ignore
+    const fs = await import("node:fs");
+    const wizardSource = fs.readFileSync(
+      new URL("../components/OnboardingWizardModal.tsx", import.meta.url),
+      "utf8"
+    );
+    expect(wizardSource).not.toContain('name="sn"');
+    expect(wizardSource).not.toContain("handleGenerateSn");
+    expect(wizardSource).not.toContain('name="device_id"');
+    expect(wizardSource).toContain("createdTerminal.sn");
+  });
+
+  it("ConsolePage reuses DeviceConsoleTab and does not own terminal creation", async () => {
     // @ts-ignore
     const fs = await import("node:fs");
     const consoleSource = fs.readFileSync(
@@ -142,7 +191,8 @@ describe("L4Desk Navigation Profile & Route Resolution", () => {
     );
     expect(consoleSource).toContain("DeviceConsoleTab");
     expect(consoleSource).toContain("<DeviceConsoleTab");
-    expect(consoleSource).toContain("OnboardingWizardModal");
+    expect(consoleSource).not.toContain("OnboardingWizardModal");
+    expect(consoleSource).toContain("/terminals");
   });
 
   it("Reuse assertion: VideoSurveillancePage reuses RefusalReasonCard and does not duplicate logic", async () => {

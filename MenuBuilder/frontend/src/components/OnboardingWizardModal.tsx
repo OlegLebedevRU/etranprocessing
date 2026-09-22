@@ -106,17 +106,12 @@ export default function OnboardingWizardModal({
     };
   }, []);
 
-  const handleGenerateSn = () => {
-    const randomHex = Math.random().toString(36).substring(2, 8).toUpperCase();
-    form.setFieldsValue({ sn: `L4D-${randomHex}` });
-  };
-
   const handleCreateTerminal = async (values: any) => {
     setLoading(true);
     try {
       const resp = await onboardTerminal(
         {
-          sn: values.sn?.trim() || null,
+          name: values.name?.trim() || null,
           address: values.address?.trim() || null,
           note: values.note?.trim() || null,
           timezone: values.timezone || "Europe/Moscow",
@@ -232,15 +227,12 @@ export default function OnboardingWizardModal({
 
           <Form form={form} layout="vertical" onFinish={handleCreateTerminal}>
             <Form.Item
-              name="sn"
-              label="Серийный номер / Имя терминала"
+              name="name"
+              label="Название терминала"
               rules={[{ required: false }]}
-              extra="Оставьте пустым или нажмите кнопку генерации для автоматического назначения имени."
+              extra="Серийный номер и device_id назначаются сервером и недоступны для ввода."
             >
-              <Space.Compact style={{ width: "100%" }}>
-                <Input placeholder="Например: POS-01 или L4D-A8B2C" />
-                <Button onClick={handleGenerateSn}>Сгенерировать</Button>
-              </Space.Compact>
+              <Input placeholder="Например: POS-01" maxLength={500} />
             </Form.Item>
 
             <Form.Item name="address" label="Адрес установки (опционально)">
@@ -286,6 +278,25 @@ export default function OnboardingWizardModal({
             <Text type="secondary" style={{ fontSize: 13 }}>
               Одноразовый PIN-код активации для {createdTerminal.sn}
             </Text>
+            <div style={{ marginTop: 8, fontSize: 12, color: "#8c8c8c" }}>
+              <div>
+                SN:{" "}
+                <Text copyable={{ text: createdTerminal.sn }} style={{ fontFamily: "monospace" }}>
+                  {createdTerminal.sn}
+                </Text>
+              </div>
+              {createdTerminal.device_id != null && (
+                <div>
+                  device_id:{" "}
+                  <Text
+                    copyable={{ text: String(createdTerminal.device_id) }}
+                    style={{ fontFamily: "monospace" }}
+                  >
+                    {createdTerminal.device_id}
+                  </Text>
+                </div>
+              )}
+            </div>
             <div
               style={{
                 fontSize: 34,

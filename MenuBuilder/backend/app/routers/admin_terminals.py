@@ -34,6 +34,10 @@ from app.schemas import (
     TerminalTypeRead,
 )
 from app.services.iot_client import iot_client
+from app.services.terminal_creation_service import (
+    create_terminal_business_record,
+    peek_next_device_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,18 +46,6 @@ router = APIRouter(
     tags=["admin-terminals"],
     dependencies=[Depends(require_superuser)],
 )
-
-
-def generate_device_sn(device_id: int) -> str:
-    """Generate automatic serial number (sn) according to platform standard:
-    a4b<7-digit device_id>c<5-digit random>d<DDMMYY>
-    """
-    device_part = f"{device_id:07d}"
-    rand_first = str(secrets.randbelow(9) + 1)  # 1-9
-    rand_rest = "".join(str(secrets.randbelow(10)) for _ in range(4))  # 4 digits
-    random_part = rand_first + rand_rest
-    date_part = datetime.now(UTC).strftime("%d%m%y")
-    return f"a4b{device_part}c{random_part}d{date_part}"
 
 
 async def generate_unique_cert_pin(db: AsyncSession) -> str:
@@ -150,15 +142,8 @@ async def get_next_device_id(
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(require_superuser),
 ) -> NextDeviceIdResponse:
-    """Find the first available/unused device_id (Superuser only)."""
-    res = await db.execute(select(Terminal.device_id).order_by(Terminal.device_id))
-    taken_ids = set(res.scalars().all())
-
-    candidate = 1
-    while candidate in taken_ids:
-        candidate += 1
-
-    return NextDeviceIdResponse(next_device_id=candidate)
+    """First free device_id in the new-terminal range 1000001…1999999."""
+    return NextDeviceIdResponse(next_device_id=await peek_next_device_id(db))
 
 
 @router.get("/terminals", response_model=AdminTerminalListResponse)
@@ -291,24 +276,6 @@ async def create_terminal(
     user: dict = Depends(require_superuser),
 ) -> AdminTerminalRead:
     """Create a new terminal with auto-generated SN formula and optional initial license (Superuser only)."""
-    # Validate device_id range (1 to 9999999)
-    if body.device_id < 1 or body.device_id > 9999999:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="device_id must be between 1 and 9999999 (not more than 7 digits)",
-        )
-
-    # Check if device_id already taken
-    existing_term = await db.execute(
-        select(Terminal).where(Terminal.device_id == body.device_id)
-    )
-    if existing_term.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Terminal with device_id {body.device_id} already exists",
-        )
-
-    # Check organization existence
     org = await db.get(Org, body.org_id)
     if not org:
         raise HTTPException(
@@ -316,28 +283,17 @@ async def create_terminal(
             detail=f"Organization {body.org_id} does not exist",
         )
 
-    # Generate SN by platform formula
-    sn = generate_device_sn(body.device_id)
-    # Ensure SN is unique in rare case
-    for _ in range(10):
-        existing_sn = await db.execute(select(Terminal.id).where(Terminal.sn == sn))
-        if not existing_sn.scalar_one_or_none():
-            break
-        sn = generate_device_sn(body.device_id)
-
-    terminal = Terminal(
-        device_id=body.device_id,
-        sn=sn,
+    terminal = await create_terminal_business_record(
+        db,
         org_id=body.org_id,
-        terminal_type_id=body.terminal_type_id,
         address=body.address,
         note=body.note,
         timezone=body.timezone,
+        terminal_type_id=body.terminal_type_id,
         is_active=body.is_active,
         show_in_monitoring=body.show_in_monitoring,
+        device_id=body.device_id,
     )
-    db.add(terminal)
-    await db.flush()
 
     # Initial License
     expires_at = body.license_expires_at or (datetime.now(UTC) + timedelta(days=365))

@@ -3,6 +3,7 @@ import { DesktopOutlined, TeamOutlined, UserOutlined } from "@ant-design/icons";
 import { Button, Result, Spin } from "antd";
 import SectionLayout from "../components/SectionLayout";
 import { useSession } from "../session/SessionContext";
+import { getNavigationProfile } from "../utils/navigationProfile";
 import {
   PERMISSION_SETTINGS_TERMINALS_VIEW,
   hasPermission,
@@ -15,6 +16,7 @@ export default function SettingsLayout() {
   const isRole3 = Boolean(user?.role_id === 3);
   const isRole4 = Boolean(user?.role_id === 4);
   const canViewTerminals = hasPermission(user, PERMISSION_SETTINGS_TERMINALS_VIEW);
+  const isL4Desk = getNavigationProfile(user) === "l4desk";
 
   if (loading) {
     return (
@@ -42,9 +44,24 @@ export default function SettingsLayout() {
     );
   }
 
-  // Build navigation items based on role
+  // Build navigation items based on role. L4Desk has root «Терминалы» — no nested entry.
   let navItems = [];
-  if (isRole4) {
+  if (isL4Desk) {
+    navItems = [
+      {
+        key: "profile",
+        icon: <UserOutlined />,
+        label: "Профиль",
+      },
+    ];
+    if (!isRole4) {
+      navItems.push({
+        key: "users",
+        icon: <TeamOutlined />,
+        label: "Пользователи",
+      });
+    }
+  } else if (isRole4) {
     navItems = [
       {
         key: "terminals",
@@ -72,7 +89,7 @@ export default function SettingsLayout() {
     ];
   }
 
-  const defaultKey = isRole4 ? "terminals" : "profile";
+  const defaultKey = isL4Desk ? "profile" : isRole4 ? "terminals" : "profile";
 
   return (
     <SectionLayout
@@ -81,7 +98,10 @@ export default function SettingsLayout() {
       resolvePath={(key) => `/settings/${key}`}
       resolveKey={(pathname) => {
         const seg = pathname.split("/")[2];
-        if (isRole4 && seg !== "terminals") {
+        if (isL4Desk && seg === "terminals") {
+          return "profile";
+        }
+        if (!isL4Desk && isRole4 && seg !== "terminals") {
           return "terminals";
         }
         return seg || defaultKey;

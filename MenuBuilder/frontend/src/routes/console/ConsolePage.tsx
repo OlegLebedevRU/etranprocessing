@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Card,
   Select,
@@ -9,34 +9,30 @@ import {
   Spin,
   Alert,
   Empty,
-  Row,
-  Col,
 } from "antd";
 import {
   CodeOutlined,
-  PlusOutlined,
   ReloadOutlined,
   CheckCircleOutlined,
   DisconnectOutlined,
   DesktopOutlined,
 } from "@ant-design/icons";
-import { useLocation, useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { getDevices, type DeviceListItem } from "../../api/devices";
 import { useSession } from "../../session/SessionContext";
 import DeviceConsoleTab from "../devices/DeviceConsoleTab";
-import OnboardingWizardModal from "../../components/OnboardingWizardModal";
 
 const { Text, Title, Paragraph } = Typography;
 
 export default function ConsolePage() {
   const { user } = useSession();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const orgId = typeof user?.org_id === "number" ? user.org_id : 1;
 
   const [loading, setLoading] = useState(true);
   const [devices, setDevices] = useState<DeviceListItem[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<DeviceListItem | null>(null);
-  const [wizardOpen, setWizardOpen] = useState(false);
 
   const fetchDevices = useCallback(async () => {
     setLoading(true);
@@ -156,14 +152,6 @@ export default function ConsolePage() {
             >
               Обновить
             </Button>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => setWizardOpen(true)}
-              size="middle"
-            >
-              Подключить терминал
-            </Button>
           </Space>
         </div>
       </Card>
@@ -184,8 +172,8 @@ export default function ConsolePage() {
               <div>
                 <Title level={5}>Нет подключённых терминалов</Title>
                 <Paragraph type="secondary" style={{ maxWidth: 460, margin: "0 auto 16px" }}>
-                  Для использования консоли управления необходимо добавить и активировать хотя бы один
-                  компьютер через мастер первого подключения.
+                  Для использования консоли управления сначала создайте терминал
+                  в разделе «Терминалы».
                 </Paragraph>
               </div>
             }
@@ -193,10 +181,10 @@ export default function ConsolePage() {
             <Button
               type="primary"
               size="large"
-              icon={<PlusOutlined />}
-              onClick={() => setWizardOpen(true)}
+              icon={<DesktopOutlined />}
+              onClick={() => navigate("/terminals")}
             >
-              Запустить мастер подключения
+              Перейти в «Терминалы»
             </Button>
           </Empty>
         </Card>
@@ -226,16 +214,6 @@ export default function ConsolePage() {
           />
         </div>
       )}
-
-      {/* Onboarding Wizard Modal */}
-      <OnboardingWizardModal
-        open={wizardOpen}
-        onClose={() => setWizardOpen(false)}
-        onTerminalCreated={() => {
-          void fetchDevices();
-        }}
-        orgId={orgId}
-      />
     </div>
   );
 }

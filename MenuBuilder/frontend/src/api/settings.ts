@@ -61,7 +61,7 @@ export interface TerminalSettingsItem {
 }
 
 export interface OnboardTerminalPayload {
-  sn?: string | null;
+  name?: string | null;
   address?: string | null;
   note?: string | null;
   timezone?: string | null;

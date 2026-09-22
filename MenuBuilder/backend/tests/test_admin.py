@@ -15,7 +15,7 @@ from app.models import (
     Terminal,
     TerminalType,
 )
-from app.routers.admin_terminals import generate_device_sn
+from app.services.terminal_creation_service import generate_device_sn
 
 
 @pytest.fixture(autouse=True)
@@ -220,9 +220,14 @@ async def test_admin_terminals_flow():
 
     mock_db = AsyncMock()
 
-    # Next Device ID test
+    # Next Device ID test — allocation is limited to 1000001…1999999
     mock_res_device_ids = MagicMock()
-    mock_res_device_ids.scalars.return_value.all.return_value = [1, 2, 3, 5]
+    mock_res_device_ids.scalars.return_value.all.return_value = [
+        1000001,
+        1000002,
+        1000003,
+        1000005,
+    ]
 
     async def mock_execute(stmt):
         res = MagicMock()
@@ -293,11 +298,20 @@ async def test_admin_terminals_flow():
     async def mock_flush():
         pass
 
+    class _MockNested:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
     mock_db.add = MagicMock(side_effect=mock_add)
     mock_db.refresh = AsyncMock(side_effect=mock_refresh)
     mock_db.flush = AsyncMock(side_effect=mock_flush)
     mock_db.commit = AsyncMock(return_value=None)
     mock_db.execute = AsyncMock(side_effect=mock_execute)
+    mock_db.expunge = MagicMock()
+    mock_db.begin_nested = MagicMock(return_value=_MockNested())
     app.dependency_overrides[get_db] = lambda: mock_db
 
     async with AsyncClient(
@@ -307,7 +321,7 @@ async def test_admin_terminals_flow():
         resp = await client.get("/api/admin/terminals/next-device-id", headers=headers)
         assert resp.status_code == 200
         data = resp.json()
-        assert data["next_device_id"] == 4  # gap between 3 and 5
+        assert data["next_device_id"] == 1000004  # gap between 1000003 and 1000005
 
         # 2. Terminal types dictionary
         mock_db.execute = AsyncMock(side_effect=mock_execute)
@@ -334,7 +348,7 @@ async def test_admin_terminals_flow():
 
         mock_db.get = AsyncMock(side_effect=mock_get)
         create_payload = {
-            "device_id": 202,
+            "device_id": 1000202,
             "org_id": 1,
             "terminal_type_id": 0,
             "address": "Nevsky 1",
@@ -347,8 +361,8 @@ async def test_admin_terminals_flow():
         )
         assert resp.status_code == 201
         created_term = resp.json()
-        assert created_term["device_id"] == 202
-        assert created_term["sn"].startswith("a4b0000202c")
+        assert created_term["device_id"] == 1000202
+        assert created_term["sn"].startswith("a4b1000202c")
         assert created_term["address"] == "Nevsky 1"
         assert created_term["is_active"] is True
 

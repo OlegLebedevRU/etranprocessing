@@ -174,7 +174,7 @@ export default function TerminalsSettingsPage() {
     try {
       const res = await onboardTerminal(
         {
-          sn: values.sn?.trim() || undefined,
+          name: values.name?.trim() || undefined,
           address: values.address?.trim() || undefined,
           note: values.note?.trim() || undefined,
           timezone: values.timezone || "Europe/Moscow",
@@ -547,14 +547,11 @@ export default function TerminalsSettingsPage() {
           onFinish={handleOnboardSubmit}
         >
           <Form.Item
-            name="sn"
-            label="Серийный номер (SN)"
-            tooltip="Аппаратный номер терминала. Оставьте пустым для автогенерации."
+            name="name"
+            label="Название терминала"
+            tooltip="Серийный номер и device_id назначаются сервером автоматически"
           >
-            <Input
-              placeholder="Оставьте пустым для автогенерации (например, SN-L4D-1-0001-...)"
-              maxLength={100}
-            />
+            <Input placeholder="Например: POS-01" maxLength={500} />
           </Form.Item>
 
           <Form.Item
