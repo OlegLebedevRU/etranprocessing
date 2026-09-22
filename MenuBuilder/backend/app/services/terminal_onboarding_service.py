@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import contextlib
 import logging
-import secrets
 import uuid
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -10,13 +9,13 @@ from typing import Any, Literal
 import httpx
 from fastapi import HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models import Terminal
 from app.models_l4desk import L4DeskTerminal
 from app.repositories.l4desk_repository import L4DeskRepository
+from app.services.terminal_creation_service import create_terminal_business_record
 
 logger = logging.getLogger(__name__)
 
@@ -52,10 +51,10 @@ class TerminalReadiness(BaseModel):
 class TerminalOnboardRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    sn: str | None = Field(
+    name: str | None = Field(
         default=None,
-        max_length=100,
-        description="Optional terminal serial number. Auto-generated if omitted.",
+        max_length=500,
+        description="Business display name. SN and device_id are server-owned.",
     )
     address: str | None = Field(default=None, max_length=500)
     note: str | None = Field(default=None, max_length=500)
@@ -402,46 +401,30 @@ class TerminalOnboardingService:
             )
 
         # ---------------------------------------------------------------------
-        # 2. Serial Number Resolution & Uniqueness
+        # 2. Canonical SN / device_id via shared terminal creation use case
         # ---------------------------------------------------------------------
         next_ordinal = await self.repo.get_next_ordinal_for_tenant(tenant_id)
-        raw_sn = (req.sn or "").strip()
-        if raw_sn:
-            # Check for conflict in active terminals
-            existing_by_sn = await self.repo.get_terminal_by_sn(raw_sn)
-            if existing_by_sn:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail=f"SN_ALREADY_EXISTS: Terminal with SN '{raw_sn}' already exists",
-                )
-            sn = raw_sn
+        display_name = (req.name or "").strip() or None
+        free_note = (req.note or "").strip() or None
+        if display_name and free_note:
+            note_value = f"{display_name} — {free_note}"
         else:
-            # Generate deterministic, clean hardware serial number
-            rand_suffix = secrets.token_hex(2).upper()
-            sn = f"SN-L4D-{tenant_id}-{next_ordinal:04d}-{rand_suffix}"
+            note_value = display_name or free_note
 
         # ---------------------------------------------------------------------
         # 3. Local DB Transaction: Create Terminal + L4DeskTerminal + Audit
         # ---------------------------------------------------------------------
-        # Determine next device_id for runtime Terminal model
-        dev_id_res = await self.db.execute(
-            select(func.coalesce(func.max(Terminal.device_id), 0) + 1)
-        )
-        next_device_id = int(dev_id_res.scalar_one())
-
-        runtime_terminal = Terminal(
-            device_id=next_device_id,
-            sn=sn,
+        runtime_terminal = await create_terminal_business_record(
+            self.db,
             org_id=tenant_id,
-            address=req.address.strip() if req.address else None,
-            note=req.note.strip() if req.note else None,
-            timezone=req.timezone.strip() if req.timezone else "Europe/Moscow",
-            is_active=True,
+            address=req.address,
+            note=note_value,
+            timezone=req.timezone or "Europe/Moscow",
             terminal_type_id=0,
+            is_active=True,
         )
-        self.db.add(runtime_terminal)
-        await self.db.flush()
-
+        sn = runtime_terminal.sn
+        next_device_id = runtime_terminal.device_id
         terminal_id = runtime_terminal.id
 
         l4_terminal = L4DeskTerminal(
@@ -673,14 +656,23 @@ class TerminalOnboardingService:
                 )
                 prov_res = await self.iot_client.provision_device(prov_req)
                 l4_terminal.provisioning_state = "ready"
+                # SN and device_id are immutable after creation (L4D-13-MB-FIX-01).
                 if prov_res.device_id and prov_res.device_id != l4_terminal.device_id:
-                    l4_terminal.device_id = prov_res.device_id
-                    if l4_terminal.runtime_terminal_id:
-                        rt = await self.db.get(
-                            Terminal, l4_terminal.runtime_terminal_id
-                        )
-                        if rt:
-                            rt.device_id = prov_res.device_id
+                    logger.warning(
+                        "IoT provisioning returned device_id=%s for terminal %s; "
+                        "keeping canonical device_id=%s",
+                        prov_res.device_id,
+                        l4_terminal.terminal_id,
+                        l4_terminal.device_id,
+                    )
+                if prov_res.sn and prov_res.sn != l4_terminal.sn:
+                    logger.warning(
+                        "IoT provisioning returned sn=%s for terminal %s; "
+                        "keeping canonical sn=%s",
+                        prov_res.sn,
+                        l4_terminal.terminal_id,
+                        l4_terminal.sn,
+                    )
 
                 await self.repo.record_audit_event(
                     actor=actor,

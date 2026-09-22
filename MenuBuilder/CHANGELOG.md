@@ -12,6 +12,31 @@
 
 - Периодический опрос состояния app1 заменён watch-сигналами; счётчик кадров берётся из локальной статистики WebRTC без HTTP-опроса. Продление аренды сохранено.
 
+## 2026-09-22
+
+### Added
+
+- Корневой раздел L4Desk «Терминалы» (`/terminals`): список, readiness, read-only SN/`device_id`, «Подключить терминал», повтор provisioning, переходы в консоль и видеонаблюдение.
+- Единый server-side use case создания terminal business record (`terminal_creation_service`) с канонической формулой SN `a4b<device_id>c<random>d<DDMMYY>`.
+
+### Changed
+
+- Порядок корневых разделов L4Desk: Терминалы → Видеонаблюдение → Консоль → Настройки → MCP → Лицензии. Classic profile не изменён.
+- Мастер подключения перенесён из «Консоли» в «Терминалы»; консоль без терминалов направляет в «Терминалы».
+- Новые `device_id` выдаются только в диапазоне `1000001…1999999` (admin и L4Desk).
+- Форма создания терминала больше не принимает SN и `device_id` от пользователя.
+
+### Removed
+
+- Отдельная формула SN `SN-L4D-…` и allocator `max(device_id)+1` в L4Desk onboarding.
+- Вложенный раздел «Терминалы» в L4Desk-настройках (URL `/settings/terminals` в L4Desk redirect на `/terminals`).
+- Действие создания терминала из «Консоли».
+
+### Fixed
+
+- Provisioning больше не переписывает уже выданные SN и `device_id`.
+- Повтор идемпотентной L4Desk-операции не создаёт второй terminal business record.
+
 ## 2026-08-31
 
 ### Added

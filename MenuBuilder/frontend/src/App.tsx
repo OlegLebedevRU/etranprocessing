@@ -46,6 +46,7 @@ const ProfileSettingsPage = lazy(() => import("./routes/settings/ProfileSettings
 const TerminalsSettingsPage = lazy(() => import("./routes/settings/TerminalsSettingsPage"));
 const UserSettingsPage = lazy(() => import("./routes/settings/UserSettingsPage"));
 const VerifyEmailPage = lazy(() => import("./routes/settings/VerifyEmailPage"));
+const L4DeskTerminalsPage = lazy(() => import("./routes/l4desk/L4DeskTerminalsPage"));
 
 function LoadingFallback() {
   return (
@@ -88,7 +89,7 @@ function DefaultRouteResolver() {
   if (user.role_id !== 4) {
     const profile = getNavigationProfile(user);
     if (profile === "l4desk") {
-      return <Navigate to="/video" replace />;
+      return <Navigate to="/terminals" replace />;
     }
     return <Navigate to="/monitoring" replace />;
   }
@@ -139,6 +140,28 @@ function SettingsIndexResolver() {
     return <Navigate to="/settings/terminals" replace />;
   }
   return <Navigate to="/settings/profile" replace />;
+}
+
+function L4DeskRootTerminalsRoute() {
+  const { user } = useSession();
+  const profile = getNavigationProfile(user);
+  if (profile === "l4desk") {
+    return <L4DeskTerminalsPage />;
+  }
+  return <Navigate to="/menu/terminals" replace />;
+}
+
+function SettingsTerminalsRoute() {
+  const { user } = useSession();
+  const profile = getNavigationProfile(user);
+  if (profile === "l4desk") {
+    return <Navigate to="/terminals" replace />;
+  }
+  return (
+    <ViewerGuard permission={PERMISSION_SETTINGS_TERMINALS_VIEW}>
+      <TerminalsSettingsPage />
+    </ViewerGuard>
+  );
 }
 
 function ViewerGuard({
@@ -271,11 +294,7 @@ export default function App() {
               />
               <Route
                 path="terminals"
-                element={
-                  <ViewerGuard permission={PERMISSION_SETTINGS_TERMINALS_VIEW}>
-                    <TerminalsSettingsPage />
-                  </ViewerGuard>
-                }
+                element={<SettingsTerminalsRoute />}
               />
               <Route
                 path="users"
@@ -298,11 +317,8 @@ export default function App() {
               <Route path="hub" element={<AdminHubPage />} />
             </Route>
             <Route path="hub" element={<Navigate to="/admin/hub" replace />} />
-            {/* Legacy paths kept so existing bookmarks keep working */}
-            <Route
-              path="terminals"
-              element={<Navigate to="/menu/terminals" replace />}
-            />
+            {/* Root Terminals section (L4Desk) / classic menu terminals */}
+            <Route path="terminals" element={<L4DeskRootTerminalsRoute />} />
             <Route
               path="variants"
               element={<Navigate to="/menu/variants" replace />}

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
-from typing import Any, cast
+from typing import Any, Self, cast
 from unittest.mock import patch
 
 import pytest
@@ -94,6 +94,14 @@ class MockResult:
         return self._all
 
 
+class _MockNested:
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(self, *args: object) -> bool:
+        return False
+
+
 class MockInMemoryDb:
     def __init__(self) -> None:
         self.terminals: dict[int, Terminal] = {}
@@ -125,6 +133,15 @@ class MockInMemoryDb:
     async def refresh(self, obj: Any) -> None:
         pass
 
+    def expunge(self, obj: Any) -> None:
+        if isinstance(obj, Terminal) and obj.id in self.terminals:
+            del self.terminals[obj.id]
+            if obj.id and obj.id >= self._next_term_id - 1:
+                self._next_term_id = max(1, self._next_term_id - 1)
+
+    def begin_nested(self) -> Any:
+        return _MockNested()
+
     async def get(self, model: Any, ident: Any) -> Any:
         if model is Terminal:
             return self.terminals.get(ident)
@@ -136,6 +153,35 @@ class MockInMemoryDb:
 
     async def execute(self, stmt: Any) -> MockResult:
         sql = str(stmt).lower()
+
+        # select terminals.device_id from terminals where device_id in range (peek)
+        if "from terminals" in sql and "device_id" in sql and "order by" in sql:
+            ids = sorted(t.device_id for t in self.terminals.values())
+            return MockResult(all_items=ids)
+
+        # select terminals.id from terminals where sn = :sn
+        if (
+            "from terminals" in sql
+            and ".sn" in sql
+            or ("from terminals" in sql and "sn =" in sql)
+        ):
+            sn_val = None
+            params = stmt.compile().params if hasattr(stmt, "compile") else {}
+            sn_val = params.get("sn_1") or params.get("sn")
+            for t in self.terminals.values():
+                if sn_val and t.sn == sn_val:
+                    return MockResult(one=t.id)
+            return MockResult(one=None)
+
+        # select terminals.id from terminals where device_id = :device_id
+        if "from terminals" in sql and "device_id" in sql and "order by" not in sql:
+            params = stmt.compile().params if hasattr(stmt, "compile") else {}
+            dev_val = params.get("device_id_1") or params.get("device_id")
+            if dev_val is not None:
+                for t in self.terminals.values():
+                    if t.device_id == int(dev_val):
+                        return MockResult(one=t.id)
+                return MockResult(one=None)
 
         # func.coalesce(func.max(Terminal.device_id), 0) + 1
         if "max(terminals.device_id)" in sql:
@@ -380,9 +426,9 @@ async def test_terminal_onboarding_success_flow():
             resp = await client.post(
                 "/api/settings/terminals",
                 json={
-                    "sn": "SN-TEST-001",
+                    "name": "Main Kiosk",
                     "address": "Moscow, Tverskaya 1",
-                    "note": "Main Kiosk",
+                    "note": "Ground floor",
                     "timezone": "Europe/Moscow",
                 },
                 headers=auth_headers(user_id=10, org_id=1, role_id=3),
@@ -390,7 +436,9 @@ async def test_terminal_onboarding_success_flow():
             assert resp.status_code == 201, resp.text
             data = resp.json()
 
-            assert data["sn"] == "SN-TEST-001"
+            assert data["sn"].startswith("a4b")
+            assert data["device_id"] is not None
+            assert 1000001 <= data["device_id"] <= 1999999
             assert data["tenant_id"] == 1
             assert data["ordinal"] == 1
             assert data["is_free"] is True
@@ -428,7 +476,7 @@ async def test_monotonic_tenant_ordering_and_free_marker_transfer():
 
     t1 = await svc.onboard_terminal(
         user=user_tenant,
-        req=TerminalOnboardRequest(sn="SN-ORD-1"),
+        req=TerminalOnboardRequest(name="SN-ORD-1"),
     )
     assert t1.ordinal == 1
     assert t1.is_free is True
@@ -436,7 +484,7 @@ async def test_monotonic_tenant_ordering_and_free_marker_transfer():
     # 2. Create second terminal (ordinal 2) -> paid
     t2 = await svc.onboard_terminal(
         user=user_tenant,
-        req=TerminalOnboardRequest(sn="SN-ORD-2"),
+        req=TerminalOnboardRequest(name="SN-ORD-2"),
     )
     assert t2.ordinal == 2
     assert t2.is_free is False
@@ -444,7 +492,7 @@ async def test_monotonic_tenant_ordering_and_free_marker_transfer():
     # 3. Create third terminal (ordinal 3) -> paid
     t3 = await svc.onboard_terminal(
         user=user_tenant,
-        req=TerminalOnboardRequest(sn="SN-ORD-3"),
+        req=TerminalOnboardRequest(name="SN-ORD-3"),
     )
     assert t3.ordinal == 3
     assert t3.is_free is False
@@ -484,7 +532,7 @@ async def test_partial_failure_iot_fails_pin_succeeds():
 
     res = await svc.onboard_terminal(
         user=user,
-        req=TerminalOnboardRequest(sn="SN-FAIL-IOT"),
+        req=TerminalOnboardRequest(name="SN-FAIL-IOT"),
     )
 
     # Record must be persisted
@@ -510,7 +558,7 @@ async def test_partial_failure_pin_fails_iot_succeeds():
 
     res = await svc.onboard_terminal(
         user=user,
-        req=TerminalOnboardRequest(sn="SN-FAIL-PIN"),
+        req=TerminalOnboardRequest(name="SN-FAIL-PIN"),
     )
 
     assert res.terminal_id in db.l4_terminals
@@ -541,7 +589,7 @@ async def test_saga_retry_recovers_failed_step():
     # Initial onboarding fails on IoT
     init_res = await svc.onboard_terminal(
         user=user,
-        req=TerminalOnboardRequest(sn="SN-RETRY-01"),
+        req=TerminalOnboardRequest(name="SN-RETRY-01"),
     )
     assert init_res.readiness.iot == "failed"
     saved_op_id = init_res.operation_id
@@ -576,13 +624,13 @@ async def test_idempotent_duplicate_clicks():
     # Click 1
     res1 = await svc.onboard_terminal(
         user=user,
-        req=TerminalOnboardRequest(sn="SN-DUP-01", operation_id=op_id),
+        req=TerminalOnboardRequest(name="SN-DUP-01", operation_id=op_id),
     )
 
     # Click 2 with identical operation_id
     res2 = await svc.onboard_terminal(
         user=user,
-        req=TerminalOnboardRequest(sn="SN-DUP-01", operation_id=op_id),
+        req=TerminalOnboardRequest(name="SN-DUP-01", operation_id=op_id),
     )
 
     assert res1.terminal_id == res2.terminal_id
@@ -610,7 +658,7 @@ async def test_tenant_isolation():
     from app.services.terminal_onboarding_service import TerminalOnboardRequest
 
     t_a = await svc.onboard_terminal(
-        user=user_a, req=TerminalOnboardRequest(sn="SN-TENANT-A")
+        user=user_a, req=TerminalOnboardRequest(name="SN-TENANT-A")
     )
 
     # User B attempts to access tenant A's terminal -> 403 Forbidden
@@ -643,7 +691,7 @@ async def test_provider_pin_semantics_consumed_pin_hidden():
 
     res = await svc.onboard_terminal(
         user=user,
-        req=TerminalOnboardRequest(sn="SN-CONSUMED"),
+        req=TerminalOnboardRequest(name="SN-CONSUMED"),
     )
 
     # Provider returned consumed status -> plain PIN MUST be None

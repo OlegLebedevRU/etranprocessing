@@ -337,7 +337,7 @@ class AdminTerminalListResponse(BaseModel):
 
 
 class AdminTerminalCreate(BaseModel):
-    device_id: int
+    device_id: int | None = None
     org_id: int
     terminal_type_id: int = 0
     address: str | None = None
