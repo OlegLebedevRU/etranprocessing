@@ -13,7 +13,7 @@
 #define L4C_RTP_MAX_FU_PAYLOAD_SIZE  1198
 #define L4C_RTP_HEADER_SIZE          12
 #define L4C_RTCP_SR_INTERVAL_MS      1000
-#define L4C_RTP_SNDBUF_BYTES         (256 * 1024)
+#define L4C_RTP_SNDBUF_BYTES         (4 * 1024 * 1024)
 
 typedef struct l4c_rtp_config {
     const char *dest_ip;

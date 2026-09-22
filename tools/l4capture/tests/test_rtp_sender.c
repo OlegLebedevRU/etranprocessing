@@ -70,19 +70,20 @@ int test_rtp_single_nal_small(void) {
 
     memset(&cap, 0, sizeof(cap));
     st = l4c_rtp_packetize_au(&au, 1000, 0, 0x12345678, 96, capture_cb, &cap);
-    if (st != L4C_OK || cap.count != 2 || cap.aborted) return 1;
+    /* STAP-A: SPS(30) + PPS(8) aggregated into 1 packet (2+30+2+8=42B payload) */
+    if (st != L4C_OK || cap.count != 1 || cap.aborted) return 1;
 
-    /* Packet 0: SPS Single NAL */
-    if (cap.lengths[0] != 12 + 30) return 2;
+    /* Packet 0: STAP-A containing SPS+PPS */
+    if (cap.lengths[0] != L4C_RTP_HEADER_SIZE + 1 + 2 + 30 + 2 + 8) return 2; /* 12+1+42=55 */
     if ((cap.packets[0][0] & 0xC0) != 0x80) return 3; /* V=2 */
     if ((cap.packets[0][1] & 0x7F) != 96) return 4;   /* PT=96 */
-    if (cap.markers[0]) return 5; /* M=0 for first NAL */
-    if (memcmp(cap.packets[0] + 12, sps_buf, 30) != 0) return 6;
-
-    /* Packet 1: PPS Single NAL, last of AU => M=1 */
-    if (cap.lengths[1] != 12 + 8) return 7;
-    if (!cap.markers[1]) return 8; /* M=1 for last NAL */
-    if (memcmp(cap.packets[1] + 12, pps_buf, 8) != 0) return 9;
+    if (!cap.markers[0]) return 5; /* M=1 for last (and only) packet of AU */
+    /* STAP-A header byte: F=0, NRI=3, Type=24 => 0x78 */
+    if (cap.packets[0][L4C_RTP_HEADER_SIZE] != 0x78) return 6;
+    /* First NAL in STAP-A: 2-byte length + SPS data */
+    if (cap.packets[0][L4C_RTP_HEADER_SIZE + 1] != 0) return 7; /* length high byte */
+    if (cap.packets[0][L4C_RTP_HEADER_SIZE + 2] != 30) return 8; /* length low byte */
+    if (memcmp(cap.packets[0] + L4C_RTP_HEADER_SIZE + 3, sps_buf, 30) != 0) return 9;
 
     capture_free(&cap);
     return 0;
@@ -179,7 +180,7 @@ int test_rtp_marker_bit_au_boundary(void) {
     l4c_access_unit_t au;
     capture_ctx_t cap;
     l4c_status_t st;
-    /* SPS(30) + PPS(8) + IDR(5000) = 3 NALs, 5000B IDR => 5 FU-A frags => total 7 packets */
+    /* SPS(30) + PPS(8) => 1 STAP-A packet; IDR(5000) => 5 FU-A frags => total 6 packets */
 
     idr_buf = (uint8_t *)malloc(5000);
     if (!idr_buf) return 1;
@@ -190,17 +191,17 @@ int test_rtp_marker_bit_au_boundary(void) {
 
     memset(&cap, 0, sizeof(cap));
     st = l4c_rtp_packetize_au(&au, 0, 0, 0xCC, 96, capture_cb, &cap);
-    if (st != L4C_OK || cap.count != 7) { free(idr_buf); return 2; }
+    if (st != L4C_OK || cap.count != 6) { free(idr_buf); return 2; }
 
-    /* Packets 0..5: M=0 */
+    /* Packets 0..4: M=0 */
     {
         uint32_t i;
-        for (i = 0; i < 6; ++i) {
+        for (i = 0; i < 5; ++i) {
             if (cap.markers[i]) { free(idr_buf); capture_free(&cap); return 3; }
         }
     }
-    /* Packet 6 (last fragment of last NAL): M=1 */
-    if (!cap.markers[6]) { free(idr_buf); capture_free(&cap); return 4; }
+    /* Packet 5 (last fragment of last NAL): M=1 */
+    if (!cap.markers[5]) { free(idr_buf); capture_free(&cap); return 4; }
 
     free(idr_buf);
     capture_free(&cap);
@@ -225,18 +226,18 @@ int test_rtp_timestamp_consistency(void) {
 
     memset(&cap, 0, sizeof(cap));
     st = l4c_rtp_packetize_au(&au, 9000, 0, 0xDD, 96, capture_cb, &cap);
-    if (st != L4C_OK || cap.count != 7) { free(idr_buf); return 1; }
+    if (st != L4C_OK || cap.count != 6) { free(idr_buf); return 1; }
 
     /* All packets of this AU must have identical timestamp */
     ts0 = cap.timestamps[0];
-    for (i = 1; i < 7; ++i) {
+    for (i = 1; i < 6; ++i) {
         if (cap.timestamps[i] != ts0) { free(idr_buf); capture_free(&cap); return 2; }
     }
     /* Second AU with PTS +100ms => timestamp +9000 */
     capture_free(&cap);
     au.pts_ms = 200;
     memset(&cap, 0, sizeof(cap));
-    st = l4c_rtp_packetize_au(&au, 18000, 7, 0xDD, 96, capture_cb, &cap);
+    st = l4c_rtp_packetize_au(&au, 18000, 6, 0xDD, 96, capture_cb, &cap);
     if (st != L4C_OK || cap.count == 0) { free(idr_buf); return 3; }
     if (cap.timestamps[0] != ts0 + 9000) { free(idr_buf); capture_free(&cap); return 4; }
 
@@ -264,16 +265,16 @@ int test_rtp_sequence_monotonicity_and_wrap(void) {
     /* Test monotonicity from seq=0 */
     memset(&cap, 0, sizeof(cap));
     st = l4c_rtp_packetize_au(&au, 0, 0, 0xEE, 96, capture_cb, &cap);
-    if (st != L4C_OK || cap.count != 7) { free(idr_buf); return 1; }
+    if (st != L4C_OK || cap.count != 6) { free(idr_buf); return 1; }
     for (i = 1; i < cap.count; ++i) {
         if (cap.seq_nums[i] != cap.seq_nums[i - 1] + 1) { free(idr_buf); capture_free(&cap); return 2; }
     }
     capture_free(&cap);
 
-    /* Test wrap: seq=65534, 7 packets => 65534, 65535, 0, 1, 2, 3, 4 */
+    /* Test wrap: seq=65534, 6 packets => 65534, 65535, 0, 1, 2, 3 */
     memset(&cap, 0, sizeof(cap));
     st = l4c_rtp_packetize_au(&au, 0, 65534, 0xEE, 96, capture_cb, &cap);
-    if (st != L4C_OK || cap.count != 7) { free(idr_buf); return 3; }
+    if (st != L4C_OK || cap.count != 6) { free(idr_buf); return 3; }
     if (cap.seq_nums[0] != 65534) { free(idr_buf); capture_free(&cap); return 4; }
     if (cap.seq_nums[1] != 65535) { free(idr_buf); capture_free(&cap); return 5; }
     if (cap.seq_nums[2] != 0) { free(idr_buf); capture_free(&cap); return 6; }
@@ -446,29 +447,36 @@ static bool drop_test_cb(const uint8_t *buf, uint32_t len, bool is_last, void *c
 }
 
 int test_network_nonblocking_drop_on_error(void) {
-    l4c_nal_desc_t nals[2];
-    uint8_t nal1_buf[500], nal2_buf[500];
+    l4c_nal_desc_t nal;
+    uint8_t *nal_buf;
     l4c_access_unit_t au;
     uint32_t drop_count = 0;
     bool aborted_early = false;
     l4c_status_t st;
     drop_ctx_t dctx;
+    /* Single 2500B NAL => payload=2499, ceil(2499/1198)=3 FU-A frags */
+    /* drop_test_cb fails on call 2, so frag[1] fails */
+
+    nal_buf = (uint8_t *)malloc(2500);
+    if (!nal_buf) return 1;
+    memset(nal_buf, 0x42, 2500);
+    nal_buf[0] = 0x65; /* IDR NAL type */
 
     dctx.call_count = 0;
     dctx.drops = &drop_count;
     dctx.aborted = &aborted_early;
 
-    make_test_nal(&nals[0], nal1_buf, 500, 7);
-    make_test_nal(&nals[1], nal2_buf, 500, 8);
-    au.nals = nals; au.nal_count = 2; au.pts_ms = 0; au.is_idr = false; au.total_bytes = 1000;
+    nal.data = nal_buf; nal.length = 2500; nal.nal_type = 5;
+    au.nals = &nal; au.nal_count = 1; au.pts_ms = 0; au.is_idr = true; au.total_bytes = 2500;
 
     st = l4c_rtp_packetize_au(&au, 0, 0, 0x22, 96, drop_test_cb, &dctx);
 
-    if (st != L4C_ERR_NETWORK) return 1;
-    if (drop_count != 1) return 2;
-    if (!aborted_early) return 3;
-    if (dctx.call_count != 2) return 4;
+    if (st != L4C_ERR_NETWORK) { free(nal_buf); return 1; }
+    if (drop_count != 1) { free(nal_buf); return 2; }
+    if (!aborted_early) { free(nal_buf); return 3; }
+    if (dctx.call_count != 2) { free(nal_buf); return 4; }
 
+    free(nal_buf);
     return 0;
 }
 
@@ -577,7 +585,8 @@ int test_pipeline_e2e_loopback(void) {
     dest_addr.sin_port = htons(assigned_port);
     dest_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
-    /* Build a test AU: SPS(30) + PPS(8) + IDR(200) = 3 NALs, 7 RTP packets */
+    /* Build a test AU: SPS(30) + PPS(8) + IDR(200) = 3 NALs
+     * With STAP-A: SPS+PPS aggregated => 2 RTP packets */
     make_test_nal(&nals[0], sps_buf, 30, 7);
     make_test_nal(&nals[1], pps_buf, 8, 8);
     make_test_nal(&nals[2], idr_buf, 200, 5);
@@ -590,8 +599,6 @@ int test_pipeline_e2e_loopback(void) {
         ectx.sock = send_sock;
         ectx.addr = &dest_addr;
 
-        /* Need to define callback at file scope, so use a different approach:
-         * Just call packetize and send manually via a simple callback */
         {
             /* Capture packets first, then send them */
             capture_ctx_t cap;
@@ -599,7 +606,7 @@ int test_pipeline_e2e_loopback(void) {
             memset(&cap, 0, sizeof(cap));
             {
                 l4c_status_t pstat = l4c_rtp_packetize_au(&au, 9000, 0, 0xDEADBEEF, 96, capture_cb, &cap);
-                if (pstat != L4C_OK || cap.count != 3) { closesocket(send_sock); closesocket(recv_sock); WSACleanup(); return 5; }
+                if (pstat != L4C_OK || cap.count != 1) { closesocket(send_sock); closesocket(recv_sock); WSACleanup(); return 5; }
             }
 
             /* Send all captured packets */
@@ -629,10 +636,25 @@ int test_pipeline_e2e_loopback(void) {
                 uint8_t inner_type = recv_buf[13] & 0x1F;
                 if (inner_type == 5) seen_idr = true;
             }
+            /* STAP-A (type 24): parse embedded NALs */
+            else if (nal_type == 24) {
+                uint32_t off = 13; /* after RTP header + STAP-A header byte */
+                while (off + 2 <= (uint32_t)n) {
+                    uint16_t nlen = ((uint16_t)recv_buf[off] << 8) | recv_buf[off + 1];
+                    off += 2;
+                    if (nlen > 0 && off + nlen <= (uint32_t)n) {
+                        uint8_t embedded_type = recv_buf[off] & 0x1F;
+                        if (embedded_type == 7) seen_sps = true;
+                        else if (embedded_type == 8) seen_pps = true;
+                        else if (embedded_type == 5) seen_idr = true;
+                    }
+                    off += nlen;
+                }
+            }
         }
     }
 
-    if (total_packets < 3) result = 7;
+    if (total_packets < 1) result = 7;
     else if (!seen_sps) result = 8;
     else if (!seen_pps) result = 9;
     else if (!seen_idr) result = 10;

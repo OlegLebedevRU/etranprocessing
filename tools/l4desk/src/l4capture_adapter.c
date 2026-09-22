@@ -396,8 +396,15 @@ bool l4d_adapter_start(l4d_media_backend_t *self, const l4d_stream_params_t *par
     adapter_ctx_t *ctx = (adapter_ctx_t *)self->impl_ctx;
 
     if (ctx->state == L4D_ADAPTER_RUNNING || ctx->state == L4D_ADAPTER_STARTING) {
-        log_warn("l4capture_adapter: start called while already active");
-        return false;
+        /* Same stream → already running, return success */
+        if (params->stream_id && ctx->stream_id[0] &&
+            strcmp(ctx->stream_id, params->stream_id) == 0) {
+            log_info("l4capture_adapter: stream already running (%s)", ctx->stream_id);
+            return true;
+        }
+        /* Different stream → stop current, then start new */
+        log_info("l4capture_adapter: switching stream (stopping %s)", ctx->stream_id);
+        l4d_adapter_stop(self, ctx->stream_id);
     }
 
     /* Save params for potential recovery */
@@ -510,20 +517,21 @@ bool l4d_adapter_renew_lease(l4d_media_backend_t *self, const char *lease_id, ui
         return false;
     }
 
-    /* Reject if new deadline <= current (monotonic) */
-    if (new_deadline_tick_ms <= ctx->current_deadline_tick_ms) {
-        log_warn("l4capture_adapter: renew rejected — non-monotonic deadline");
-        return false;
-    }
-
-    /* Dedup: skip if same deadline as last renew */
+    /* Accept if deadline advances. Also accept if it shrinks: the CMD_START
+     * fallback (120s) may exceed the server's actual lease TTL, and the
+     * server's lease is the authority.  Only skip if truly identical (dedup). */
     if (new_deadline_tick_ms == ctx->current_deadline_tick_ms) return true;
+
+    if (new_deadline_tick_ms < ctx->current_deadline_tick_ms) {
+        log_info("l4capture_adapter: renew accepted — deadline shrinks (new=%llu < cur=%llu, server lease is authority)",
+                 (unsigned long long)new_deadline_tick_ms, (unsigned long long)ctx->current_deadline_tick_ms);
+    }
 
     ctx->current_deadline_tick_ms = new_deadline_tick_ms;
 
     /* Send CMD_RENEW_LEASE */
     uint8_t payload[24];
-    memset(payload, 0, 16);
+    str_to_id16(ctx->lease_id, payload);
     write_u64_le(payload + 16, new_deadline_tick_ms);
 
     if (ctx->hStdinWrite) {
@@ -542,7 +550,8 @@ bool l4d_adapter_force_idr(l4d_media_backend_t *self, const char *stream_id) {
     if (!ctx->hStdinWrite) return false;
 
     (void)stream_id;
-    uint8_t payload[16] = {0};
+    uint8_t payload[16];
+    str_to_id16(ctx->stream_id, payload);
     return ipc_send(ctx->hStdinWrite, CMD_FORCE_IDR, payload, 16, ++ctx->request_seq);
 }
 
