@@ -577,6 +577,11 @@ static inline void handle_media_session_start(const char* body, char* resp_body,
     MediaSession* existing = find_session_by_id(session_id);
     if (existing) {
         if (existing->state == MEDIA_STATE_ACTIVE || existing->state == MEDIA_STATE_STARTING) {
+            /* Ensure mountpoint exists — recreate after Janus restart */
+            janus_create_mountpoint(existing->mountpoint_id, existing->rtp_port,
+                                    existing->rtcp_port, existing->pin, NULL, 0);
+            int _clients_updated = 0;
+            upsert_route(existing->sn, existing->rtp_port, existing->rtcp_port, &_clients_updated);
             *status_code = 200;
             *status_text = "OK";
             snprintf(resp_body, resp_sz,
