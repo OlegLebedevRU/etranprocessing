@@ -23,13 +23,10 @@ from app.services.remote_session_use_case import RemoteSessionUseCase
 
 @pytest.fixture(autouse=True)
 def setup_flags():
-    orig_orch = settings.l4desk_session_orchestration_enabled
     orig_policy = settings.l4desk_policy_enforcement_enabled
-    settings.l4desk_session_orchestration_enabled = True
     settings.l4desk_policy_enforcement_enabled = False
     app.dependency_overrides.clear()
     yield
-    settings.l4desk_session_orchestration_enabled = orig_orch
     settings.l4desk_policy_enforcement_enabled = orig_policy
     app.dependency_overrides.clear()
 
@@ -776,35 +773,17 @@ async def test_legacy_video_session_endpoint_regression():
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         headers = auth_headers(user_id=1, org_id=1, role_id=1, is_su=True)
 
-        with (
-            patch(
-                "app.routers.video.iot_client.remote_input_status",
-                new_callable=AsyncMock,
-            ) as mock_status,
-            patch(
-                "app.services.media_orchestrator_client.MediaOrchestratorClient.start_session",
-                new_callable=AsyncMock,
-            ) as mock_media_start,
-        ):
-            mock_status.return_value = {
-                "lease": {
-                    "active": True,
-                    "lease_id": "legacy-lease-25",
-                    "owner_user_id": "user_1",
-                    "scope": "stream",
-                    "stream_instance_id": "stream-25",
-                }
-            }
-            mock_media_start.return_value = {
-                "status": "success",
-                "session_id": "stream-25",
-                "mountpoint_id": 25,
-                "sn": "SN-T25",
-                "janus_ws": "/janus-ws",
-                "ttl_sec": 600,
-                "pin": "pin-1234",
-            }
+        mock_result = AsyncMock()
+        mock_result.mountpoint_id = 25
+        mock_result.sn = "SN-T25"
+        mock_result.janus_ws = "/janus-ws"
+        mock_result.ttl_sec = 600
+        mock_result.pin = "pin-1234"
 
+        with patch(
+            "app.services.remote_session_use_case.RemoteSessionUseCase.start_session",
+            return_value=mock_result,
+        ):
             resp = await ac.post(
                 "/api/v1/video/devices/25/session",
                 headers=headers,

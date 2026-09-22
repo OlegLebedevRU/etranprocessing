@@ -1,6 +1,5 @@
 import asyncio
 import json
-import time
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -13,7 +12,6 @@ from app.database import get_db
 from app.main import app
 from app.models import Terminal
 from app.routers.video import (
-    _get_ingress_status,
     _mountpoint_pins,
 )
 from app.services.iot_client import iot_client
@@ -275,63 +273,6 @@ def test_ws_inbound_keepalive_and_release_with_generation(
 
 
 @pytest.mark.anyio
-async def test_ingress_stale_rtp_not_reported_as_streaming():
-    """Ingress with state=streaming but stale RTP packets (>10s) must report streaming=False and media_state=stale."""
-    now = time.time()
-    fake_ingress_data = {
-        "sessions": [
-            {
-                "sn": "sn0001",
-                "state": "streaming",
-                "rtp_packets": 3867,
-                "bytes": 4463000,
-                "last_activity": now - 1.0,  # RTCP activity was fresh
-                "last_rtp_at": now - 25.0,  # But RTP stopped 25s ago!
-                "idle_sec": 25.0,
-            }
-        ]
-    }
-
-    mock_resp = AsyncMock()
-    mock_resp.status_code = 200
-    mock_resp.json = lambda: fake_ingress_data
-
-    with patch("httpx.AsyncClient.get", return_value=mock_resp):
-        stats = await _get_ingress_status("sn0001")
-        assert stats["streaming"] is False
-        assert stats.get("fresh_rtp") is False
-        assert stats.get("media_state") == "stale"
-        assert stats.get("transport_connected") is True
-
-
-@pytest.mark.anyio
-async def test_ingress_missing_rtp_timestamp_reported_as_unknown():
-    """Ingress with missing last_rtp_at must NOT automatically report as live streaming."""
-    fake_ingress_data = {
-        "sessions": [
-            {
-                "sn": "sn0001",
-                "state": "streaming",
-                "rtp_packets": 0,
-                "bytes": 0,
-                "last_activity": None,
-                "last_rtp_at": None,
-                "idle_sec": None,
-            }
-        ]
-    }
-
-    mock_resp = AsyncMock()
-    mock_resp.status_code = 200
-    mock_resp.json = lambda: fake_ingress_data
-
-    with patch("httpx.AsyncClient.get", return_value=mock_resp):
-        stats = await _get_ingress_status("sn0001")
-        assert stats["streaming"] is False
-        assert stats.get("media_state") in ("unknown", "disconnected")
-
-
-@pytest.mark.anyio
 async def test_duplicate_delete_idempotent(mock_db_session, operator_headers):
     """Multiple DELETE calls on the same lease must return 204 idempotently."""
     mock_delete = AsyncMock(return_value=None)
@@ -468,18 +409,6 @@ async def test_get_device_stream_state_stopped_priority(
             "lease_id": None,
         },
     }
-    fake_ingress = {
-        "streaming": False,
-        "rtp_packets": 0,
-        "bytes": 0,
-        "idle_sec": None,
-        "sn": "sn0001",
-        "last_rtp_at": None,
-        "last_activity": None,
-        "transport_connected": False,
-        "fresh_rtp": False,
-        "media_state": "disconnected",
-    }
 
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -493,10 +422,6 @@ async def test_get_device_stream_state_stopped_priority(
                 iot_client,
                 "remote_input_status",
                 new=AsyncMock(return_value=fake_status),
-            ),
-            patch(
-                "app.routers.video_control._get_ingress_status",
-                new=AsyncMock(return_value=fake_ingress),
             ),
         ):
             resp = await ac.get(

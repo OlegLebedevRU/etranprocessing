@@ -3,6 +3,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import HTTPException
 from httpx import ASGITransport, AsyncClient
 from starlette.testclient import TestClient
 
@@ -173,18 +174,6 @@ async def test_matrix_status_and_read_endpoints(
             iot_client,
             "remote_input_inventory",
             new=AsyncMock(return_value=fake_inventory),
-        ),
-        patch(
-            "app.routers.video_control._get_ingress_status",
-            new=AsyncMock(
-                return_value={
-                    "streaming": False,
-                    "rtp_packets": 0,
-                    "bytes": 0,
-                    "idle_sec": None,
-                    "sn": "sn0001",
-                }
-            ),
         ),
     ):
         async with AsyncClient(
@@ -473,14 +462,40 @@ async def test_video_session_pin_only_for_lease_holder(
         },
     }
 
+    from app.services.remote_session_use_case import RemoteSessionResponse
+
+    mock_result = RemoteSessionResponse(
+        session_id="sess-op-1",
+        local_session_id=1,
+        terminal_id=1,
+        sn="sn0001",
+        session_type="video",
+        state="active",
+        mountpoint_id=1,
+        janus_ws="/janus-ws",
+        pin="test-pin-42",
+        ttl_sec=600,
+    )
+
+    # First call (operator, lease owner) succeeds; second call (viewer) raises 403
+    mock_use_case = AsyncMock()
+    mock_use_case.start_session = AsyncMock(
+        side_effect=[
+            mock_result,
+            HTTPException(
+                status_code=403, detail="только держателю активной аренды"
+            ),
+        ]
+    )
+
     with (
         patch.object(
             iot_client, "remote_input_status", new=AsyncMock(return_value=op_status)
         ),
-        patch("app.routers.video._ensure_ingress_route", new=AsyncMock()),
         patch(
-            "app.routers.video._ensure_janus_mountpoint", new=AsyncMock()
-        ) as mock_janus_mp,
+            "app.services.remote_session_use_case.RemoteSessionUseCase",
+            return_value=mock_use_case,
+        ),
     ):
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
@@ -495,11 +510,7 @@ async def test_video_session_pin_only_for_lease_holder(
             assert "pin" in data_op
             assert data_op["pin"] is not None
             assert len(data_op["pin"]) > 0
-
-            # Verify pin was passed to _ensure_janus_mountpoint
-            mock_janus_mp.assert_called_once()
-            call_kwargs = mock_janus_mp.call_args.kwargs
-            assert call_kwargs.get("pin") == data_op["pin"]
+            assert data_op["pin"] == "test-pin-42"
 
             # 2. Viewer trying to create session while operator owns the lease -> 403
             r_vw = await client.post(

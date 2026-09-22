@@ -33,9 +33,6 @@ from app.database import async_session, get_db
 from app.models_l4desk import L4DeskRemoteSession
 from app.repositories.l4desk_repository import L4DeskRepository
 from app.routers.video import (
-    _destroy_janus_mountpoint,
-    _get_ingress_status,
-    _mountpoint_pins,
     _verify_device_access,
     clear_mountpoint_pin,
     set_mountpoint_stream_instance,
@@ -939,10 +936,6 @@ async def stop_device_stream(
             user=user,
         )
         clear_mountpoint_pin(device_id, lease_id=lease_id)
-        if body and body.destroy_mountpoint:
-            cached = _mountpoint_pins.get(device_id)
-            if not cached or cached.get("lease_id") == lease_id:
-                await _destroy_janus_mountpoint(device_id)
 
         repo = L4DeskRepository(db)
         active_sess = await repo.get_active_session_by_terminal_id(device_id)
@@ -992,10 +985,6 @@ async def stop_device_stream(
             )
         ):
             clear_mountpoint_pin(device_id, lease_id=lease_id)
-            if body and body.destroy_mountpoint:
-                cached = _mountpoint_pins.get(device_id)
-                if not cached or cached.get("lease_id") == lease_id:
-                    await _destroy_janus_mountpoint(device_id)
             repo = L4DeskRepository(db)
             active_sess = await repo.get_active_session_by_terminal_id(device_id)
             if (
@@ -1020,7 +1009,7 @@ async def get_device_stream_state(
     user: dict[str, Any] = Depends(require_permission(PERMISSION_VIDEO_VIEW)),
     db: AsyncSession = Depends(get_db),
 ) -> StreamStateResponse:
-    """Get presence stream state and ingress RTP status."""
+    """Get presence stream state and media lifecycle health status."""
     terminal = await _verify_device_access(device_id, user, db)
     org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
     status_data = await iot_client.remote_input_status(
@@ -1028,7 +1017,42 @@ async def get_device_stream_state(
     )
     lease_info = status_data.get("lease") or {}
     stream_info = (status_data.get("agent") or {}).get("stream")
-    ingress_stats = await _get_ingress_status(terminal.sn)
+
+    ingress_stats: dict[str, Any] = {
+        "streaming": False,
+        "rtp_packets": 0,
+        "bytes": 0,
+        "idle_sec": None,
+        "sn": terminal.sn,
+        "transport_connected": False,
+        "fresh_rtp": False,
+        "media_state": "disconnected",
+    }
+    repo = L4DeskRepository(db)
+    active_sess = await repo.get_active_session_by_terminal_id(device_id)
+    if (
+        active_sess
+        and active_sess.session_type == "video"
+        and active_sess.provider_session_id
+    ):
+        with contextlib.suppress(Exception):
+            health = await media_orchestrator_client.get_session_health(
+                active_sess.provider_session_id
+            )
+            ingress_stats = {
+                "streaming": bool(
+                    health.get("transport_connected") and health.get("fresh_rtp")
+                ),
+                "rtp_packets": int(health.get("rtp_packets") or 0),
+                "bytes": int(health.get("bytes") or 0),
+                "idle_sec": float(health["idle_sec"])
+                if health.get("idle_sec") is not None
+                else None,
+                "sn": terminal.sn,
+                "transport_connected": health.get("transport_connected"),
+                "fresh_rtp": health.get("fresh_rtp"),
+                "media_state": health.get("media_state"),
+            }
 
     # Stopped state of current epoch takes priority over stale running cache
     if (
@@ -1102,13 +1126,15 @@ async def release_device_control_lease(
         )
     finally:
         clear_mountpoint_pin(device_id, lease_id=lease_id)
-        if destroy_mountpoint:
-            cached = _mountpoint_pins.get(device_id)
-            if not cached or cached.get("lease_id") == lease_id:
-                await _destroy_janus_mountpoint(device_id)
         repo = L4DeskRepository(db)
         active_sess = await repo.get_active_session_by_terminal_id(device_id)
         if isinstance(active_sess, L4DeskRemoteSession):
+            if active_sess.session_type == "video" and active_sess.provider_session_id:
+                with contextlib.suppress(Exception):
+                    await media_orchestrator_client.stop_session(
+                        session_id=active_sess.provider_session_id,
+                        reason="lease_released",
+                    )
             active_sess.state = "closed"
             active_sess.closed_at = func.now()
             active_sess.reason = "lease_released"
