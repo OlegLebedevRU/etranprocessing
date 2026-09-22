@@ -3590,8 +3590,8 @@ producer_prompt_id: L4D-16-MB
 producer_scope_project: MenuBuilder
 producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-16-MB-report.md
 producer_branch: l4desk/l4d-16-mb
-producer_commit: ffb92443c28ad3f9a9c70f7cc40ed690ca8f2904
-report_commit: c9fe866a97071c2752f172cf8903342a69b3b050
+producer_commit: f188da00db13de054497ad8a6e2332b2f6127cc7
+report_commit: 907299fe49a064abd8b09a151e41292228791c8c
 accepted_at_utc: '2026-09-22T10:00:00Z'
 contract_version: 1.0.0
 schema_revision: '1.0.0'
