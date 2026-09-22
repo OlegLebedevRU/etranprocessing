@@ -848,7 +848,7 @@ async def start_device_stream(
             pin=pin,
             rtp_port=rtp_port,
             rtcp_port=rtcp_port,
-            ttl_sec=600,
+            ttl_sec=settings.remote_session_watchdog_ttl_sec,
         )
     except Exception as media_err:
         logger.error(
