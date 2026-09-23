@@ -68,6 +68,40 @@ static void profile_bounds(const l4c_pipeline_state_t *ps, uint32_t *w, uint32_t
     if (fps) *fps = ps->current_fps;
 }
 
+/* Local-only diagnostics (§8/§4.4): лог ступеней рядом с exe. Не wire. */
+static void local_log(const char *line) {
+    wchar_t path[MAX_PATH];
+    FILE *f;
+    if (!GetModuleFileNameW(NULL, path, MAX_PATH)) return;
+    {
+        wchar_t *slash = wcsrchr(path, L'\\');
+        if (slash) wcscpy_s(slash + 1, MAX_PATH - (size_t)(slash + 1 - path), L"l4capture_degrade.log");
+        else wcscpy_s(path, MAX_PATH, L"l4capture_degrade.log");
+    }
+    f = _wfopen(path, L"a");
+    if (!f) return;
+    fprintf(f, "%s\n", line);
+    fclose(f);
+}
+
+/* Fault-injection harness (§6.1): delay encode if test_encode_delay_ms.txt sits next to exe. */
+static uint32_t read_test_encode_delay_ms(void) {
+    wchar_t path[MAX_PATH];
+    FILE *f;
+    unsigned value = 0;
+    if (!GetModuleFileNameW(NULL, path, MAX_PATH)) return 0;
+    {
+        wchar_t *slash = wcsrchr(path, L'\\');
+        if (slash) wcscpy_s(slash + 1, MAX_PATH - (size_t)(slash + 1 - path), L"test_encode_delay_ms.txt");
+        else return 0;
+    }
+    f = _wfopen(path, L"r");
+    if (!f) return 0;
+    if (fscanf_s(f, "%u", &value) != 1) value = 0;
+    fclose(f);
+    return value > 5000u ? 5000u : value;
+}
+
 static bool is_single_output(const l4c_rect_t *target_rect) {
     if (!target_rect) return false;
     if (target_rect->left == 0 && target_rect->top == 0 &&
@@ -282,6 +316,7 @@ static l4c_status_t pipeline_reconfigure_raster(l4c_pipeline_state_t *ps, uint16
 static void apply_degrade_action(l4c_pipeline_state_t *ps, l4c_ipc_pipe_t *pipe, l4c_safety_gate_t *gate,
                                  l4c_degrade_action_t act, uint64_t now) {
     l4c_message_t deg;
+    char logline[160];
     switch (act) {
     case L4C_DEG_ACT_D0_DROP_LATE_RAW:
         /* Однократный сброс просроченных pending raw; latest-frame уже действует. */
@@ -315,11 +350,21 @@ static void apply_degrade_action(l4c_pipeline_state_t *ps, l4c_ipc_pipe_t *pipe,
         deg.body.degraded.degrade_state = ps->degrade_state;
         deg.body.degraded.reason = L4C_HIGH_LOAD;
         l4c_pipe_enqueue(pipe, &deg, now);
+        _snprintf_s(logline, sizeof(logline), _TRUNCATE,
+                    "ACT STOP_HIGH_LOAD t=%llu actual=%u fps=%u state=%u gen=%u",
+                    (unsigned long long)now, ps->actual_profile, ps->current_fps,
+                    ps->degrade_state, ps->config_gen);
+        local_log(logline);
         l4c_safety_stop(gate, L4C_ERR_FATAL);
         return;
     default:
         break;
     }
+    _snprintf_s(logline, sizeof(logline), _TRUNCATE,
+                "ACT %u t=%llu actual=%u fps=%u state=%u gen=%u",
+                (unsigned)act, (unsigned long long)now, ps->actual_profile,
+                ps->current_fps, ps->degrade_state, ps->config_gen);
+    local_log(logline);
     memset(&deg, 0, sizeof(deg));
     deg.type = L4C_EVENT_DEGRADED;
     deg.body.degraded.degrade_state = ps->degrade_state;
@@ -463,6 +508,14 @@ static l4c_status_t pipeline_start(l4c_pipeline_state_t *ps, const l4c_start_t *
     if (status != L4C_OK) return status;
 
     ps->active = true;
+    {
+        char logline[160];
+        _snprintf_s(logline, sizeof(logline), _TRUNCATE,
+                    "START requested=%u actual=%ux%u fps=%u cap=%u enc=%u",
+                    ps->requested_profile, ps->target_width, ps->target_height,
+                    ps->current_fps, ps->active_capture_backend, ps->active_encoder_backend);
+        local_log(logline);
+    }
     return L4C_OK;
 }
 
@@ -535,6 +588,8 @@ static int run(l4c_args_t *args) {
 
         /* Capture → Encode → Send RTP (skip frame if session unavailable) */
         if (ps.active && session_ok && l4c_safety_can_send(&gate, now, session_ok)) {
+            uint64_t frame_t0 = now;
+            uint8_t tfps = ps.current_fps;
             accumulate_window_sample(&ps, now);
             /* Закрытие окна детектора каждые 3000 мс */
             if (ps.win_start_ms != 0 && (now - ps.win_start_ms) >= L4C_DEGRADE_WINDOW_MS) {
@@ -550,7 +605,8 @@ static int run(l4c_args_t *args) {
             if (l4c_pipeline_due(&gate.pipeline, now, ps.current_fps)) {
                 l4c_frame_view_t frame;
                 uint32_t tw, th;
-                uint8_t tfps;
+                frame_t0 = now;
+                tfps = ps.current_fps;
                 profile_bounds(&ps, &tw, &th, &tfps);
                 status = ps.capture->vtable->acquire_frame(ps.capture, &frame, 50);
 
@@ -606,7 +662,20 @@ static int run(l4c_args_t *args) {
                         ps.force_next_idr = false;
 
                         memset(&au, 0, sizeof(au));
-                        status = ps.encoder->vtable->encode(ps.encoder, &raw, &au);
+                        {
+                            uint32_t delay_ms = read_test_encode_delay_ms();
+                            if (delay_ms) Sleep(delay_ms);
+                        }
+                        {
+                            uint64_t enc_t0 = l4c_now_monotonic_ms();
+                            status = ps.encoder->vtable->encode(ps.encoder, &raw, &au);
+                            {
+                                uint32_t enc_ms = (uint32_t)(l4c_now_monotonic_ms() - enc_t0);
+                                ps.win_acc.has_processing = true;
+                                if (ps.win_acc.processing_samples < 0xFFFFFFFFu) ps.win_acc.processing_samples++;
+                                if (enc_ms > ps.win_acc.processing_p95_ms) ps.win_acc.processing_p95_ms = enc_ms;
+                            }
+                        }
 
                         /* Check for hardware MFT runtime failure -> controlled fallback to OpenH264 */
                         if (status == L4C_ERR_DEVICE_LOST && ps.active_encoder_backend == 2) {
@@ -670,6 +739,19 @@ static int run(l4c_args_t *args) {
                     }
                 } else {
                     count_raw_drop(&ps);
+                }
+            }
+
+            /* Overload accounting: пропущенные pacing-слоты = raw drops (latest-frame). */
+            if (ps.active && tfps) {
+                uint64_t after = l4c_now_monotonic_ms();
+                uint32_t interval = 1000u / (tfps ? tfps : 10u);
+                if (interval && after > frame_t0 + interval) {
+                    uint32_t missed = (uint32_t)((after - frame_t0) / interval);
+                    uint32_t k;
+                    if (missed > 0) --missed;
+                    if (missed > 20u) missed = 20u;
+                    for (k = 0; k < missed; ++k) count_raw_drop(&ps);
                 }
             }
 

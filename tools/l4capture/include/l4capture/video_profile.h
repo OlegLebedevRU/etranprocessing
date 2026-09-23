@@ -7,10 +7,13 @@
 extern "C" {
 #endif
 
-/* Wire profile_id из CMD_START (l4c_start_t.profile_id). Неизвестные значения не приводятся к low. */
+/* Wire profile_id из CMD_START (l4c_start_t.profile_id) — совпадает с PROFILE_ID_* адаптера l4desk:
+ * 1 = low/480p, 2 = 540p (не стартовый UI), 3 = default/720p.
+ * Неизвестные значения не приводятся к low. */
 enum {
     L4C_PROFILE_REQ_LOW = 1,
-    L4C_PROFILE_REQ_DEFAULT = 2
+    L4C_PROFILE_REQ_540P_WIRE = 2,
+    L4C_PROFILE_REQ_DEFAULT = 3
 };
 
 /* Пригодность профиля для ввода — не авторизация. Gate принадлежит l4desk (L4C-05). */

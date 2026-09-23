@@ -93,6 +93,8 @@ int test_input_gate_allowed_only_low_and_480p(void) {
     if (l4c_profile_input_gate_allows(99, L4C_PROFILE_480P)) return 4;
     if (l4c_profile_parse_request(99, &req)) return 5; /* unknown не становится low */
     if (!l4c_profile_parse_request(L4C_PROFILE_REQ_LOW, &req) || req != L4C_PROFILE_REQ_LOW) return 6;
+    if (!l4c_profile_parse_request(L4C_PROFILE_REQ_DEFAULT, &req) || req != L4C_PROFILE_REQ_DEFAULT) return 7;
+    if (!l4c_profile_parse_request(2, &req) || req != L4C_PROFILE_REQ_DEFAULT) return 8;
     return 0;
 }
 

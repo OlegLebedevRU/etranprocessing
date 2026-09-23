@@ -25,6 +25,11 @@ bool l4c_profile_parse_request(uint16_t wire_profile_id, uint8_t *out_request) {
         *out_request = L4C_PROFILE_REQ_DEFAULT;
         return true;
     }
+    /* 540p не является стартовым UI-профилем; wire 2 от адаптера трактуем как default. */
+    if (wire_profile_id == L4C_PROFILE_REQ_540P_WIRE) {
+        *out_request = L4C_PROFILE_REQ_DEFAULT;
+        return true;
+    }
     return false;
 }
 
