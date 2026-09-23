@@ -39,6 +39,10 @@ md "%STAGING%\l4superv"
 md "%STAGING%\l4superv\x86"
 md "%STAGING%\l4superv\x64"
 
+md "%STAGING%\l4capture"
+md "%STAGING%\l4capture\x86"
+md "%STAGING%\l4capture\x64"
+
 :: 1. Copy leo4proxy
 echo [1/7] Staging leo4proxy...
 if exist "%REPO_TOOLS%\leo4proxy\bin\x86\leo4proxy.exe" (
@@ -152,9 +156,30 @@ if exist "%~dp0CHANGELOG.md" (
     copy /y "%~dp0CHANGELOG.md" "%STAGING%\l4superv\CHANGELOG.md" >nul 2>nul
 )
 
+:: 6b. Copy l4capture
+echo [6b/8] Staging l4capture...
+if exist "%REPO_TOOLS%\l4capture\bin\x86\l4capture.exe" (
+    copy /y "%REPO_TOOLS%\l4capture\bin\x86\l4capture.exe" "%STAGING%\l4capture\x86\l4capture.exe" >nul
+)
+if exist "%REPO_TOOLS%\l4capture\bin\x64\l4capture.exe" (
+    copy /y "%REPO_TOOLS%\l4capture\bin\x64\l4capture.exe" "%STAGING%\l4capture\x64\l4capture.exe" >nul
+)
+if exist "%REPO_TOOLS%\l4capture\OPENH264_LICENSE.txt" (
+    copy /y "%REPO_TOOLS%\l4capture\OPENH264_LICENSE.txt" "%STAGING%\l4capture\OPENH264_LICENSE.txt" >nul
+)
+if exist "%REPO_TOOLS%\l4capture\SBOM.json" (
+    copy /y "%REPO_TOOLS%\l4capture\SBOM.json" "%STAGING%\l4capture\SBOM.json" >nul
+)
+if exist "%REPO_TOOLS%\l4capture\ROLLBACK.md" (
+    copy /y "%REPO_TOOLS%\l4capture\ROLLBACK.md" "%STAGING%\l4capture\ROLLBACK.md" >nul
+)
+
 :: 7. Stage User Guide in package root
-echo [7/8] Staging terminal-tools-user-guide.md in package root...
-if exist "%REPO_TOOLS%\..\docs\terminal-tools-user-guide.md" (
+echo [7/8] Staging term_tool-user-guide.md in package root...
+if exist "%REPO_TOOLS%\..\docs\term_tool-user-guide.md" (
+    copy /y "%REPO_TOOLS%\..\docs\term_tool-user-guide.md" "%STAGING%\term_tool-user-guide.md" >nul
+    copy /y "%REPO_TOOLS%\..\docs\term_tool-user-guide.md" "%~dp0bin\term_tool-user-guide.md" >nul 2>nul
+) else if exist "%REPO_TOOLS%\..\docs\terminal-tools-user-guide.md" (
     copy /y "%REPO_TOOLS%\..\docs\terminal-tools-user-guide.md" "%STAGING%\terminal-tools-user-guide.md" >nul
     copy /y "%REPO_TOOLS%\..\docs\terminal-tools-user-guide.md" "%~dp0bin\terminal-tools-user-guide.md" >nul 2>nul
 ) else if exist "%~dp0bin\terminal-tools-user-guide.md" (

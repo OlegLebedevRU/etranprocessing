@@ -104,6 +104,25 @@ static uint16_t read_u16_le(const uint8_t *p) { return (uint16_t)(p[0]|((uint16_
 static uint32_t read_u32_le(const uint8_t *p) { return (uint32_t)(p[0]|((uint32_t)p[1]<<8)|((uint32_t)p[2]<<16)|((uint32_t)p[3]<<24)); }
 static uint64_t read_u64_le(const uint8_t *p) { uint64_t v=0; for(int i=0;i<8;i++) v|=((uint64_t)p[i])<<(i*8); return v; }
 
+bool l4d_adapter_parse_event_metrics(const uint8_t *payload, uint32_t plen, l4d_backend_metrics_t *out) {
+    if (!payload || !out || plen < 24) return false;
+    out->fps = read_u16_le(payload + 0);
+    out->bitrate_kbps = read_u32_le(payload + 2);
+    out->raw_drops = read_u32_le(payload + 6);
+    out->encoder_drops = read_u32_le(payload + 10);
+    out->transport_drops = read_u32_le(payload + 14);
+    out->encode_p95_ms = read_u16_le(payload + 18);
+    out->queue_depth = read_u16_le(payload + 20);
+    if (plen >= 28) {
+        out->private_bytes_kb = read_u32_le(payload + 22);
+    }
+    /* gdi_handles occupies 26..29 — fits the accepted 30-byte payload. */
+    if (plen >= 30) {
+        out->gdi_handles = read_u32_le(payload + 26);
+    }
+    return true;
+}
+
 static bool ipc_send(HANDLE hWrite, uint16_t type, const uint8_t *payload, uint32_t payload_len, uint64_t seq) {
     uint8_t frame[IPC_MAX_FRAME];
     if (payload_len > IPC_MAX_PAYLOAD) return false;
@@ -555,6 +574,11 @@ bool l4d_adapter_force_idr(l4d_media_backend_t *self, const char *stream_id) {
     return ipc_send(ctx->hStdinWrite, CMD_FORCE_IDR, payload, 16, ++ctx->request_seq);
 }
 
+/* EVENT_METRICS wire (L4C_IPC_VERSION=1): 30 bytes.
+ *  0..1 fps, 2..5 bitrate, 6..9 raw_drops, 10..13 encoder_drops, 14..17 transport_drops,
+ *  18..19 encode_p95, 20..21 queue_depth, 22..25 private_bytes_kb, 26..29 gdi_handles.
+ *  Definition is after LE readers below. */
+
 void l4d_adapter_poll(l4d_media_backend_t *self) {
     if (!self || !self->impl_ctx) return;
     adapter_ctx_t *ctx = (adapter_ctx_t *)self->impl_ctx;
@@ -567,20 +591,7 @@ void l4d_adapter_poll(l4d_media_backend_t *self) {
         ctx->last_event_tick = get_current_tick();
         switch (type) {
         case EVENT_METRICS:
-            if (plen >= 24) {
-                ctx->metrics.fps = read_u16_le(payload + 0);
-                ctx->metrics.bitrate_kbps = read_u32_le(payload + 2);
-                ctx->metrics.raw_drops = read_u32_le(payload + 6);
-                ctx->metrics.encoder_drops = read_u32_le(payload + 10);
-                ctx->metrics.transport_drops = read_u32_le(payload + 14);
-                ctx->metrics.encode_p95_ms = read_u16_le(payload + 18);
-                ctx->metrics.queue_depth = read_u16_le(payload + 20);
-                if (plen >= 28) {
-                    ctx->metrics.private_bytes_kb = read_u32_le(payload + 22);
-                }
-                if (plen >= 32) {
-                    ctx->metrics.gdi_handles = read_u32_le(payload + 26);
-                }
+            if (l4d_adapter_parse_event_metrics(payload, plen, &ctx->metrics)) {
                 ctx->metrics_valid = true;
             }
             break;

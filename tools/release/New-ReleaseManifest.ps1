@@ -315,6 +315,15 @@ function Get-ToolVersion([string]$name, [string]$fallback) {
                     }
                 }
             }
+            "l4capture" {
+                $sbom = "$ToolsRoot\l4capture\SBOM.json"
+                if (Test-Path $sbom) {
+                    try {
+                        $j = Get-Content $sbom -Raw | ConvertFrom-Json
+                        if ($j.version) { return [string]$j.version }
+                    } catch { }
+                }
+            }
         }
         return $fallback
     } finally {
@@ -329,6 +338,7 @@ $components = [ordered]@{
     "l4pin"     = (Get-ToolVersion "l4pin" "1.7.2")
     "l4con"     = (Get-ToolVersion "l4con" "1.7.2")
     "l4sql"     = "1.0.0"
+    "l4capture" = (Get-ToolVersion "l4capture" "1.0.0")
     "mosquitto" = (Get-ToolVersion "mosquitto" "2.1.2")
     "ffmpeg"    = (Get-ToolVersion "ffmpeg" "9.0")
 }

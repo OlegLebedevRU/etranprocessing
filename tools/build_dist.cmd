@@ -71,9 +71,9 @@ if not exist "%~dp0l4setup\src" md "%~dp0l4setup\src"
     echo #define L4SETUP_VERSION_WSTRING L"%L4TOOLS_VERSION%"
 ) > "%~dp0l4setup\src\version.h"
 
-:: Step 2: Build all 6 components in order
+:: Step 2: Build all 7 components in order
 echo.
-echo [1/6] Building l4pin...
+echo [1/7] Building l4pin...
 cd /d "%~dp0l4pin"
 call build.cmd all
 if errorlevel 1 (
@@ -82,7 +82,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [2/6] Building l4superv...
+echo [2/7] Building l4superv...
 cd /d "%~dp0l4superv"
 call build.cmd all
 if errorlevel 1 (
@@ -91,7 +91,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [3/6] Building l4desk...
+echo [3/7] Building l4desk...
 cd /d "%~dp0l4desk"
 call build.cmd all
 if errorlevel 1 (
@@ -100,7 +100,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [4/6] Building l4con...
+echo [4/7] Building l4con...
 cd /d "%~dp0l4con"
 call build.cmd all
 if errorlevel 1 (
@@ -109,7 +109,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [5/6] Building l4sql...
+echo [5/7] Building l4sql...
 cd /d "%~dp0l4sql"
 call build.cmd all
 if errorlevel 1 (
@@ -118,7 +118,16 @@ if errorlevel 1 (
 )
 
 echo.
-echo [6/6] Building leo4proxy...
+echo [6/7] Building l4capture...
+cd /d "%~dp0l4capture"
+call build.cmd all
+if errorlevel 1 (
+    echo [ERROR] Component build failed: l4capture
+    exit /b 1
+)
+
+echo.
+echo [7/7] Building leo4proxy...
 cd /d "%~dp0leo4proxy"
 call build.cmd all
 if errorlevel 1 (

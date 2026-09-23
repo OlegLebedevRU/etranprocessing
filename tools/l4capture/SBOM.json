@@ -1,0 +1,42 @@
+{
+  "name": "l4capture",
+  "version": "1.0.0",
+  "suite_release": "1.8.0",
+  "description": "Desktop capture / OpenH264 / RTP agent for Leo4 Terminal Tools",
+  "source_commit_hint": "see H-L4C-10-v1 / L4C-11 report",
+  "build": {
+    "toolchain": "MSVC 19.x /MT",
+    "flags": "/O2 /MT /W4 /WX /D_WIN32_WINNT=0x0601",
+    "target_os": "Windows 7 SP1 x86/x64 and later"
+  },
+  "components": [
+    {
+      "name": "l4capture.exe",
+      "type": "first_party",
+      "version": "1.0.0",
+      "arch": ["x86", "x64"],
+      "origin": "tools/l4capture",
+      "license": "proprietary"
+    },
+    {
+      "name": "OpenH264",
+      "type": "third_party_static",
+      "version": "see vendor/openh264",
+      "origin": "tools/l4capture/vendor/openh264",
+      "license": "BSD-2-Clause (Cisco OpenH264)",
+      "license_file": "OPENH264_LICENSE.txt",
+      "linkage": "static"
+    },
+    {
+      "name": "nasm",
+      "type": "build_tool",
+      "version": "2.16.03",
+      "origin": "tools/l4capture/vendor/nasm",
+      "shipped": false
+    }
+  ],
+  "runtime_dependencies": {
+    "static_imports": ["KERNEL32", "USER32", "ADVAPI32", "GDI32", "WS2_32", "ole32", "OLEAUT32"],
+    "dynamic_optional": ["psapi", "mfplat", "mf", "dxgi", "d3d11", "dwmapi"]
+  }
+}
