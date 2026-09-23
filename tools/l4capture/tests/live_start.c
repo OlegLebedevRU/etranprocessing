@@ -41,11 +41,12 @@ static void print_event(const l4c_message_t *m) {
                m->body.ready.encoder_backend, (unsigned long long)m->request_seq);
         break;
     case L4C_EVENT_METRICS:
-        printf("[METRICS] fps=%u kbps=%u raw_drop=%u enc_drop=%u tr_drop=%u p95=%u q=%u\n",
+        printf("[METRICS] fps=%u kbps=%u raw_drop=%u enc_drop=%u tr_drop=%u p95=%u q=%u priv_kb=%u gdi=%u\n",
                m->body.metrics.fps, m->body.metrics.bitrate_kbps,
                m->body.metrics.raw_drops, m->body.metrics.encoder_drops,
                m->body.metrics.transport_drops, m->body.metrics.encode_p95_ms,
-               m->body.metrics.queue_depth);
+               m->body.metrics.queue_depth,
+               m->body.metrics.private_bytes_kb, m->body.metrics.gdi_handles);
         break;
     case L4C_EVENT_DEGRADED:
         printf("[DEGRADED] state=%u reason=%u seq=%llu\n",
@@ -150,8 +151,9 @@ int main(int argc, char *argv[]) {
         memset(start.body.start.stream_id, 0x22, 16);
         start.body.start.source_rect.left = 0;
         start.body.start.source_rect.top = 0;
-        start.body.start.source_rect.right = 0;
-        start.body.start.source_rect.bottom = 0;
+        /* safety_gate: нулевой RECT отклоняется (INVALID_ARG); full-screen для live smoke. */
+        start.body.start.source_rect.right = GetSystemMetrics(SM_CXSCREEN);
+        start.body.start.source_rect.bottom = GetSystemMetrics(SM_CYSCREEN);
         start.body.start.geometry_gen = 1;
         start.body.start.profile_id = profile_id;
         start.body.start.rtp_port = 5004;

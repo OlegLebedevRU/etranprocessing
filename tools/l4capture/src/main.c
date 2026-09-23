@@ -16,6 +16,7 @@
 #include "l4capture/video_profile.h"
 #include "l4capture/degrade_controller.h"
 #include "l4capture/telemetry.h"
+#include "l4capture/logger.h"
 
 typedef struct {
     HANDLE pipe_in;
@@ -60,6 +61,12 @@ typedef struct {
     uint64_t bitrate_win_start_ms;
     bool pending_degrade_action;
     l4c_degrade_action_t next_action;
+    /* L4C-10 accurate telemetry windows */
+    l4c_p95_window_t p95_win;
+    l4c_rate_window_t rate_win;
+    uint32_t au_bytes_window;
+    uint32_t au_count_window;
+    uint64_t last_res_log_ms;
 } l4c_pipeline_state_t;
 
 static void profile_bounds(const l4c_pipeline_state_t *ps, uint32_t *w, uint32_t *h, uint8_t *fps) {
@@ -68,20 +75,9 @@ static void profile_bounds(const l4c_pipeline_state_t *ps, uint32_t *w, uint32_t
     if (fps) *fps = ps->current_fps;
 }
 
-/* Local-only diagnostics (§8/§4.4): лог ступеней рядом с exe. Не wire. */
+/* Local-only diagnostics (§8/§4.4): ротируемый l4capture.log. Не wire. */
 static void local_log(const char *line) {
-    wchar_t path[MAX_PATH];
-    FILE *f;
-    if (!GetModuleFileNameW(NULL, path, MAX_PATH)) return;
-    {
-        wchar_t *slash = wcsrchr(path, L'\\');
-        if (slash) wcscpy_s(slash + 1, MAX_PATH - (size_t)(slash + 1 - path), L"l4capture_degrade.log");
-        else wcscpy_s(path, MAX_PATH, L"l4capture_degrade.log");
-    }
-    f = _wfopen(path, L"a");
-    if (!f) return;
-    fprintf(f, "%s\n", line);
-    fclose(f);
+    l4c_logger_line(line);
 }
 
 /* Fault-injection harness (§6.1): delay encode if test_encode_delay_ms.txt sits next to exe. */
@@ -177,25 +173,56 @@ static void send_event_ready(l4c_ipc_pipe_t *pipe, uint64_t now, uint16_t captur
     l4c_pipe_enqueue(pipe, &msg, now);
 }
 
-static void send_event_metrics(l4c_ipc_pipe_t *pipe, const l4c_pipeline_state_t *ps, uint64_t now) {
+static void send_event_metrics(l4c_ipc_pipe_t *pipe, l4c_pipeline_state_t *ps, uint64_t now) {
     l4c_message_t msg;
     l4c_rtp_stats_t rtp_stats;
+    l4c_process_resources_t res;
+    uint16_t meas_fps = 0;
+    uint32_t meas_kbps = 0;
+    uint16_t p95_ms = 0;
+    uint16_t queue_depth = 0;
+
     memset(&msg, 0, sizeof(msg));
+    /* Измеренные fps/битрейт за 1 с; p95 из выборки encode; queue 0..1 (zero-queue). */
+    (void)l4c_rate_window_eval(&ps->rate_win, now, 1000u, &meas_fps, &meas_kbps);
+    (void)l4c_p95_window_eval(&ps->p95_win, &p95_ms);
+    if (ps->rate_win.start_ms == 0 || (now - ps->rate_win.start_ms) >= 1000u) {
+        l4c_rate_window_reset(&ps->rate_win, now);
+        l4c_p95_window_reset(&ps->p95_win);
+    }
+
     msg.type = L4C_EVENT_METRICS;
-    msg.body.metrics.fps = ps->current_fps;
-    msg.body.metrics.bitrate_kbps = ps->bitrate_target;
+    msg.body.metrics.fps = meas_fps;
+    msg.body.metrics.bitrate_kbps = meas_kbps;
     msg.body.metrics.raw_drops = ps->raw_drops;
     msg.body.metrics.encoder_drops = ps->encoder_drops;
     msg.body.metrics.transport_drops = ps->transport_drops;
-    msg.body.metrics.encode_p95_ms = 0;
-    msg.body.metrics.queue_depth = (uint16_t)(ps->frames_sent & 0xFFFF);
-    msg.body.metrics.private_bytes_kb = ps->frames_captured;
-    msg.body.metrics.gdi_handles = ps->frames_encoded;
+    msg.body.metrics.encode_p95_ms = p95_ms;
+    msg.body.metrics.queue_depth = queue_depth;
+    if (l4c_telemetry_process_resources(&res) && res.valid) {
+        msg.body.metrics.private_bytes_kb = res.private_bytes_kb;
+        msg.body.metrics.gdi_handles = res.gdi_handles;
+    }
     if (ps->rtp) {
         l4c_rtp_sender_get_stats(ps->rtp, &rtp_stats);
         msg.body.metrics.transport_drops = rtp_stats.transport_drops;
     }
     l4c_pipe_enqueue(pipe, &msg, now);
+
+    /* Local soak/inventory metrics (не wire): handles, kernel, user, private. */
+    if (now - ps->last_res_log_ms >= 60000u) {
+        ps->last_res_log_ms = now;
+        if (l4c_telemetry_process_resources(&res)) {
+            l4c_logger_write(
+                "SOAK t=%llu private_kb=%u ws_kb=%u gdi=%u user=%u kernel=%u "
+                "fps=%u kbps=%u p95=%u raw=%u enc=%u tr=%u",
+                (unsigned long long)now, res.private_bytes_kb, res.working_set_kb,
+                res.gdi_handles, res.user_handles, res.kernel_handles,
+                (unsigned)meas_fps, (unsigned)meas_kbps, (unsigned)p95_ms,
+                (unsigned)ps->raw_drops, (unsigned)ps->encoder_drops,
+                (unsigned)msg.body.metrics.transport_drops);
+        }
+    }
 }
 
 static void pipeline_cleanup(l4c_pipeline_state_t *ps) {
@@ -508,13 +535,32 @@ static l4c_status_t pipeline_start(l4c_pipeline_state_t *ps, const l4c_start_t *
     if (status != L4C_OK) return status;
 
     ps->active = true;
+    l4c_rate_window_reset(&ps->rate_win, l4c_now_monotonic_ms());
+    l4c_p95_window_reset(&ps->p95_win);
     {
         char logline[160];
+        l4c_inventory_snapshot_t inv;
         _snprintf_s(logline, sizeof(logline), _TRUNCATE,
                     "START requested=%u actual=%ux%u fps=%u cap=%u enc=%u",
                     ps->requested_profile, ps->target_width, ps->target_height,
                     ps->current_fps, ps->active_capture_backend, ps->active_encoder_backend);
         local_log(logline);
+        memset(&inv, 0, sizeof(inv));
+        if (l4c_telemetry_fill_platform_inventory(&inv)) {
+            inv.profile_requested = ps->requested_profile;
+            inv.profile_actual = ps->actual_profile;
+            inv.capture_backend = ps->active_capture_backend;
+            inv.encoder_backend = ps->active_encoder_backend;
+            inv.fallback_reason = ps->fallback_reason;
+            inv.start_fps = ps->current_fps;
+            inv.bitrate_min_kbps = ps->bitrate_min;
+            inv.bitrate_target_kbps = ps->bitrate_target;
+            inv.bitrate_max_kbps = ps->bitrate_max;
+            inv.source_rect = start_params->source_rect;
+            inv.lease_or_loop_ms = (uint32_t)(start_params->deadline_tick_ms & 0xFFFFFFFFu);
+            l4c_logger_startup_inventory(&inv);
+        }
+        l4c_logger_write("INV raster %ux%u", (unsigned)ps->target_width, (unsigned)ps->target_height);
     }
     return L4C_OK;
 }
@@ -529,6 +575,26 @@ static int run(l4c_args_t *args) {
     bool started_reported = false;
 
     memset(&ps, 0, sizeof(ps));
+
+    (void)l4c_logger_init(NULL);
+    (void)l4c_telemetry_init();
+    {
+        l4c_inventory_snapshot_t boot_inv;
+        memset(&boot_inv, 0, sizeof(boot_inv));
+        if (l4c_telemetry_fill_platform_inventory(&boot_inv)) {
+            boot_inv.profile_requested = 0;
+            boot_inv.profile_actual = 0;
+            boot_inv.capture_backend = 0;
+            boot_inv.encoder_backend = 0;
+            boot_inv.fallback_reason = L4C_FALLBACK_NONE;
+            boot_inv.start_fps = 0;
+            boot_inv.bitrate_min_kbps = 0;
+            boot_inv.bitrate_target_kbps = 0;
+            boot_inv.bitrate_max_kbps = 0;
+            boot_inv.lease_or_loop_ms = 0;
+            l4c_logger_startup_inventory(&boot_inv);
+        }
+    }
 
     if (l4c_check_job() != L4C_OK) {
         fprintf(stderr, "l4capture: not in JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE\n");
@@ -578,6 +644,10 @@ static int run(l4c_args_t *args) {
                 l4c_degrade_init(&ps.degrade, ps.actual_profile, ps.current_fps, now);
                 ps.win_start_ms = now;
                 memset(&ps.win_acc, 0, sizeof(ps.win_acc));
+                ps.last_metrics_ms = now;
+                ps.last_res_log_ms = now;
+                l4c_rate_window_reset(&ps.rate_win, now);
+                l4c_p95_window_reset(&ps.p95_win);
                 started_reported = true;
             } else {
                 fprintf(stderr, "l4capture: pipeline start failed (%d)\n", (int)status);
@@ -674,6 +744,7 @@ static int run(l4c_args_t *args) {
                                 ps.win_acc.has_processing = true;
                                 if (ps.win_acc.processing_samples < 0xFFFFFFFFu) ps.win_acc.processing_samples++;
                                 if (enc_ms > ps.win_acc.processing_p95_ms) ps.win_acc.processing_p95_ms = enc_ms;
+                                (void)l4c_p95_window_push(&ps.p95_win, enc_ms);
                             }
                         }
 
@@ -719,6 +790,7 @@ static int run(l4c_args_t *args) {
                             ps.frames_encoded++;
                             count_enc_pass(&ps);
                             ps.au_bytes_10s += (uint32_t)au.total_bytes;
+                            l4c_rate_window_add_au(&ps.rate_win, (uint32_t)au.total_bytes);
                             {
                                 l4c_status_t rtp_status = l4c_rtp_send_au(ps.rtp, &au, ps.encoder);
                                 if (rtp_status == L4C_OK) {
@@ -783,6 +855,9 @@ static int run(l4c_args_t *args) {
     exit_code = (int)l4c_safety_reason(&gate);
     l4c_safety_destroy(&gate);
     l4c_session_close(&session);
+    l4c_logger_write("STOP exit_code=%d", exit_code);
+    l4c_logger_shutdown();
+    l4c_telemetry_fini();
     return exit_code;
 }
 

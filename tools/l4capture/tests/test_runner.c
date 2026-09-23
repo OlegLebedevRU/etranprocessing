@@ -123,6 +123,19 @@ extern int test_start_720p_10_skips_d1(void);
 extern int test_nodata_resets_streaks(void);
 extern int test_reference_timeline_480p_stop_21s(void);
 
+extern int test_telemetry_p95_window_rank(void);
+extern int test_telemetry_p95_window_reset(void);
+extern int test_telemetry_p95_window_capacity(void);
+extern int test_telemetry_rate_window_fps_bitrate(void);
+extern int test_telemetry_rate_window_zero(void);
+extern int test_telemetry_process_resources_smoke(void);
+extern int test_telemetry_private_bytes_nonzero_match_taskmgr_scale(void);
+extern int test_telemetry_platform_inventory_fields(void);
+extern int test_logger_scrub_secrets(void);
+extern int test_logger_write_and_inventory(void);
+extern int test_logger_rotation_5mib_x2(void);
+extern int test_logger_queue_and_p95_wire_contract(void);
+
 typedef struct {
     const char *name;
     int (*fn)(void);
@@ -247,6 +260,19 @@ static const test_entry_t all_tests[] = {
     TEST(test_start_720p_10_skips_d1),
     TEST(test_nodata_resets_streaks),
     TEST(test_reference_timeline_480p_stop_21s),
+    /* Telemetry / inventory logger (L4C-10) */
+    TEST(test_telemetry_p95_window_rank),
+    TEST(test_telemetry_p95_window_reset),
+    TEST(test_telemetry_p95_window_capacity),
+    TEST(test_telemetry_rate_window_fps_bitrate),
+    TEST(test_telemetry_rate_window_zero),
+    TEST(test_telemetry_process_resources_smoke),
+    TEST(test_telemetry_private_bytes_nonzero_match_taskmgr_scale),
+    TEST(test_telemetry_platform_inventory_fields),
+    TEST(test_logger_scrub_secrets),
+    TEST(test_logger_write_and_inventory),
+    TEST(test_logger_rotation_5mib_x2),
+    TEST(test_logger_queue_and_p95_wire_contract),
 };
 
 int main(void) {

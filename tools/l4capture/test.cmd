@@ -41,6 +41,7 @@ cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DWIN32_LEAN_AND_MEAN /D
     "%ROOT%\src\common\limits.c" ^
     "%ROOT%\src\common\deadline.c" ^
     "%ROOT%\src\common\pipeline.c" ^
+    "%ROOT%\src\common\logger.c" ^
     "%ROOT%\src\ipc\ipc_protocol.c" ^
     "%ROOT%\src\ipc\ipc_pipe.c" ^
     "%ROOT%\src\safety\safety_gate.c" ^
@@ -51,6 +52,7 @@ cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DWIN32_LEAN_AND_MEAN /D
     "%ROOT%\src\pipeline\color_convert.c" ^
     "%ROOT%\src\pipeline\video_profile.c" ^
     "%ROOT%\src\pipeline\degrade_controller.c" ^
+    "%ROOT%\src\pipeline\telemetry.c" ^
     "%ROOT%\src\network\rtp_packetizer.c" ^
     "%ROOT%\src\network\rtp_sender.c" ^
     "%ROOT%\src\network\rtcp_sender.c" ^
@@ -70,6 +72,7 @@ cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DWIN32_LEAN_AND_MEAN /D
     "%ROOT%\tests\test_mf_encoder.c" ^
     "%ROOT%\tests\test_rtp_sender.c" ^
     "%ROOT%\tests\test_profiles_degrade.c" ^
+    "%ROOT%\tests\test_telemetry_logger.c" ^
     /c
 if errorlevel 1 (
     echo ERROR: Test compilation failed
@@ -81,6 +84,7 @@ link.exe /nologo /SUBSYSTEM:CONSOLE,6.01 /OUT:"%ROOT%\bin\l4capture_tests.exe" ^
     "%ROOT%\obj\test\limits.obj" ^
     "%ROOT%\obj\test\deadline.obj" ^
     "%ROOT%\obj\test\pipeline.obj" ^
+    "%ROOT%\obj\test\logger.obj" ^
     "%ROOT%\obj\test\ipc_protocol.obj" ^
     "%ROOT%\obj\test\ipc_pipe.obj" ^
     "%ROOT%\obj\test\safety_gate.obj" ^
@@ -91,6 +95,7 @@ link.exe /nologo /SUBSYSTEM:CONSOLE,6.01 /OUT:"%ROOT%\bin\l4capture_tests.exe" ^
     "%ROOT%\obj\test\color_convert.obj" ^
     "%ROOT%\obj\test\video_profile.obj" ^
     "%ROOT%\obj\test\degrade_controller.obj" ^
+    "%ROOT%\obj\test\telemetry.obj" ^
     "%ROOT%\obj\test\rtp_packetizer.obj" ^
     "%ROOT%\obj\test\rtp_sender.obj" ^
     "%ROOT%\obj\test\rtcp_sender.obj" ^
@@ -110,6 +115,7 @@ link.exe /nologo /SUBSYSTEM:CONSOLE,6.01 /OUT:"%ROOT%\bin\l4capture_tests.exe" ^
     "%ROOT%\obj\test\test_mf_encoder.obj" ^
     "%ROOT%\obj\test\test_rtp_sender.obj" ^
     "%ROOT%\obj\test\test_profiles_degrade.obj" ^
+    "%ROOT%\obj\test\test_telemetry_logger.obj" ^
     "%ROOT%\vendor\openh264\builddir_x86\codec\encoder\libencoder.a" ^
     "%ROOT%\vendor\openh264\builddir_x86\codec\common\libcommon.a" ^
     "%ROOT%\vendor\openh264\builddir_x86\codec\processing\libprocessing.a" ^
