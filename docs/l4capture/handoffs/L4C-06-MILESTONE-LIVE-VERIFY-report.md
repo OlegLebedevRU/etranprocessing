@@ -1,8 +1,8 @@
 # L4C-06-MILESTONE-LIVE-VERIFY — M-1 Report
 
-**Status:** `READY_FOR_OWNER_NORM`  
+**Status:** `ACCEPTED`  
 **Branch:** `l4capture/l4c-06-milestone-live-verify`  
-**Date:** 2026-09-22
+**Date:** 2026-09-23
 
 ---
 
@@ -149,10 +149,10 @@ Debug iteration scripts (`m1_l4c_debug.py`, `m1_mqtt_trigger.py`, `m1_mqtt_trigg
 
 ## 8. Итог
 
-**`READY_FOR_OWNER_NORM`**
+**`ACCEPTED`**
 
 All mandatory checks R1–R4 have PASS status. M-1 measurable limits are met. Input H-L4C-05-v1 is valid. Runtime code changes were limited to `l4capture_adapter.c` integration fixes. Report contains real SHA-256 hashes. Successful test variant documented; debug artifacts cleaned.
 
-**Awaiting owner verdict: `НОРМ`**
+**Owner verdict:** `НОРМ` (получен от владельца 2026-09-23)
 
-Without explicit owner confirmation, final status remains: `BLOCKED_OWNER_APPROVAL`
+Milestone M-1 live verification completed successfully. Cascade sequence gate unblocked for L4C-07-DXGI-CAPTURE.

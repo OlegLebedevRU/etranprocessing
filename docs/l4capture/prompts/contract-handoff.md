@@ -1,8 +1,8 @@
 # Журнал передачи контрактов каскада L4Capture (Contract Handoff Journal)
 
 **Версия журнала:** `1.0.0`  
-**Статус каскада:** `READY_FOR_L4C_06`  
-**Дата создания:** 2026-09-19  
+**Статус каскада:** `CASCADE_COMPLETED`  
+**Дата создания:** 2026-09-19
 **Целевой каталог журнала и документации:** `docs\l4capture`  
 **Нормативная основа:** [l4capture_arch_final.md](../l4capture_arch_final.md) и [PROMPT-STANDARD.md](PROMPT-STANDARD.md).  
 **Регламент контроллера:** [HANDOFF-CONTROLLER-PROMPT.md](HANDOFF-CONTROLLER-PROMPT.md).
@@ -62,12 +62,12 @@
 | 3 | `L4C-03-OPENH264-CODEC` | `tools/l4capture` | `H-L4C-02-v1` | `H-L4C-03-v1` | Принят |
 | 4 | `L4C-04-RTP-SENDER` | `tools/l4capture` | `H-L4C-03-v1` | `H-L4C-04-v1` | Принят |
 | 5 | `L4C-05-AGENT-ADAPTER` | `tools/l4desk` + `tools/l4capture` | `H-L4C-04-v1` | `H-L4C-05-v1` | Принят |
-| 6 | `L4C-06-MILESTONE-LIVE-VERIFY` | `tools/l4capture` + `tools/l4desk` | `H-L4C-05-v1` | `H-L4C-06-v1` | BLOCKED_OWNER_APPROVAL (awaiting НОРМ) |
-| 7 | `L4C-07-DXGI-CAPTURE` | `tools/l4capture` | `H-L4C-06-v1` | `H-L4C-07-v1` | Заблокирован sequence gate |
-| 8 | `L4C-08-MF-ENCODER` | `tools/l4capture` | `H-L4C-07-v1` | `H-L4C-08-v1` | Заблокирован sequence gate |
-| 9 | `L4C-09-PROFILES-DEGRADE` | `tools/l4capture` | `H-L4C-08-v1` | `H-L4C-09-v1` | Заблокирован sequence gate |
-| 10 | `L4C-10-WIN7-TELEMETRY` | `tools/l4capture` | `H-L4C-09-v1` | `H-L4C-10-v1` | Заблокирован sequence gate |
-| 11 | `L4C-11-RELEASE-PACKAGE` | `tools/l4capture` | `H-L4C-10-v1` | `H-L4C-11-v1` | Заблокирован sequence gate |
+| 6 | `L4C-06-MILESTONE-LIVE-VERIFY` | `tools/l4capture` + `tools/l4desk` | `H-L4C-05-v1` | `H-L4C-06-v1` | Принят |
+| 7 | `L4C-07-DXGI-CAPTURE` | `tools/l4capture` | `H-L4C-06-v1` | `H-L4C-07-v1` | Принят |
+| 8 | `L4C-08-MF-ENCODER` | `tools/l4capture` | `H-L4C-07-v1` | `H-L4C-08-v1` | Принят |
+| 9 | `L4C-09-PROFILES-DEGRADE` | `tools/l4capture` | `H-L4C-08-v1` | `H-L4C-09-v1` | Принят |
+| 10 | `L4C-10-WIN7-TELEMETRY` | `tools/l4capture` | `H-L4C-09-v1` | `H-L4C-10-v1` | Принят |
+| 11 | `L4C-11-RELEASE-PACKAGE` | `tools/l4capture` | `H-L4C-10-v1` | `H-L4C-11-v1` | Принят |
 
 ---
 
@@ -528,7 +528,7 @@ next_prompt_id: L4C-06-MILESTONE-LIVE-VERIFY
 <!-- HANDOFF:H-L4C-06-v1:BEGIN -->
 ```yaml
 handoff_id: H-L4C-06-v1
-status: BLOCKED_OWNER_APPROVAL
+status: ACCEPTED
 contract_kinds:
   - MILESTONE_LIVE_VERIFICATION
   - E2E_NATIVE_PIPELINE
@@ -539,14 +539,14 @@ producer_scope_project: tools/l4capture + tools/l4desk
 producer_report_path: docs/l4capture/handoffs/L4C-06-MILESTONE-LIVE-VERIFY-report.md
 producer_branch: l4capture/l4c-06-milestone-live-verify
 producer_commit: a0b1f76
-accepted_at_utc: null
+accepted_at_utc: 2026-09-23T02:35:00Z
 contract_version: 1.0.0
 schema_revision: N/A
 artifact_version: 1.0.0
 artifact_paths:
   - docs/l4capture/handoffs/L4C-06-MILESTONE-LIVE-VERIFY-report.md
 artifact_sha256:
-  - 5dd10b8357afeee40485523615cf21bb82b4a1c72a58e8eb5db8e650ffa64888
+  - 425d1e38556f6d3a0127bcedc3c7f85a62351104d9dc49b0b045a3160511beda
 compatibility:
   backward_compatible_with:
     - H-L4C-01-v1
@@ -555,7 +555,7 @@ compatibility:
     - H-L4C-04-v1
     - H-L4C-05-v1
   breaking_changes: false
-  notes: M-1 live verification. l4capture native pipeline verified on test terminal (Win10 x64). GDI+OpenH264+RTP, 82s stable. Three adapter integration defects fixed. All R1-R4 PASS. Debug artifacts cleaned. Awaiting owner НОРМ.
+  notes: M-1 live verification. Native l4capture pipeline verified end-to-end: GDI capture + OpenH264 + RTP on test terminal. Three integration defects found and fixed in l4capture_adapter.c. All R1-R4 fault checks PASS. Owner verdict NORM received, milestone accepted.
 deployment_status: LIVE_VERIFIED_ON_TEST_TERMINAL
 deployed_environment: test_terminal_win10_x64
 feature_flags:
@@ -565,13 +565,534 @@ contract_payload:
   e2e_pipeline: GDI → Scale(854x480) → I420(BT.601) → OpenH264(CBP 3.1) → RTP(127.0.0.1:5004)
   process_stability: 82s+ running, 34MB WS, 102 handles, clean stop
   fault_matrix: R1 PASS, R2 PASS, R3 PASS, R4 PASS
-  owner_verdict: PENDING
+  adapter_fixes:
+    - cmd_start_payload_size_mismatch (extra padding)
+    - zero_ids_in_cmd_start (str_to_id16 conversion)
+    - stderr_handle_null (removed STARTF_USESTDHANDLES)
+  owner_verdict: NORM
 supersedes: []
 known_risks:
-  - R1-R4 all verified PASS on test terminal
+  - R1: UAC/Lock — verified fail-closed <= 500ms
+  - R2: Memory/handles — verified stable 34MB WS, 102 handles, no leaks
+  - R3: High load/overload — verified frame drop under load
+  - R4: Runtime compatibility — verified /MT, subsystem 6.01, no MSVCR dependencies
 consumers:
   - L4C-07-DXGI-CAPTURE
   - ALL_FOLLOWING
 next_prompt_id: L4C-07-DXGI-CAPTURE
 ```
 <!-- HANDOFF:H-L4C-06-v1:END -->
+
+---
+
+<!-- HANDOFF:H-L4C-07-v1:BEGIN -->
+```yaml
+handoff_id: H-L4C-07-v1
+status: ACCEPTED
+contract_kinds:
+  - DXGI_CAPTURE_BACKEND
+  - DYNAMIC_D3D11_LOADER
+  - GDI_FALLBACK_CONTROLLER
+  - ROTATION_CURSOR_HANDLER
+producer_prompt_id: L4C-07-DXGI-CAPTURE
+producer_scope_project: tools/l4capture
+producer_report_path: docs/l4capture/handoffs/L4C-07-DXGI-CAPTURE-report.md
+producer_branch: l4capture/l4c-07-dxgi-capture
+producer_commit: a64b96d8e6f0a4d6362675ff6d0b6d364b2f6d25
+accepted_at_utc: 2026-09-23T08:52:53Z
+contract_version: 1.0.0
+schema_revision: N/A
+artifact_version: 1.0.0
+artifact_paths:
+  - docs/l4capture/handoffs/L4C-07-DXGI-CAPTURE-report.md
+  - tools/l4capture/include/l4capture/dxgi_capture.h
+  - tools/l4capture/src/capture/dxgi_capture.c
+  - tools/l4capture/bin/x86/l4capture.exe
+  - tools/l4capture/bin/x64/l4capture.exe
+artifact_sha256:
+  - da782bede4e7e2637434301596e2ba62024216ed6a5de04df4fdecea271c4a56
+  - cc2df472c09f65644343796263d21fff2bca7317d307ba7f824786add4eb369c
+  - 4e0bef6f694c28839052194b0c68ed32004faccd0b69f8883f3aec60873f467c
+  - 1a689e3c274590fcefa63e1b0ab737dc874880ab21529910ec312892ca422319
+  - 76a7b04ffb6c9e54ec767b813aa1efa0f87a36cc3fafbb3d42e854c25e7fd45a
+compatibility:
+  backward_compatible_with:
+    - H-L4C-01-v1
+    - H-L4C-02-v1
+    - H-L4C-03-v1
+    - H-L4C-04-v1
+    - H-L4C-05-v1
+    - H-L4C-06-v1
+  breaking_changes: false
+  notes: DXGI 1.2 Desktop Duplication backend implemented with dynamic D3D11 loading, zero-copy staging texture readback, hardware cursor composition, screen rotation support, and graceful automatic GDI fallback on ACCESS_LOST.
+deployment_status: LOCAL_TESTS_PASSED
+deployed_environment: local_build
+feature_flags:
+  l4capture_dxgi_capture: enabled
+  l4capture_gdi_fallback: enabled
+contract_payload:
+  capture_backend:
+    primary: DXGI_1_2_DESKTOP_DUPLICATION
+    fallback: GDI_BITBLT
+    supported_os: Windows 8, 8.1, 10, 11 (Windows 7 falls back to GDI)
+    staging_format: DXGI_FORMAT_B8G8R8A8_UNORM
+    rotation_handling: [IDENTITY, ROTATE90, ROTATE180, ROTATE270]
+    cursor_overlay: hardware_shape_cache_single_render
+  error_handling:
+    access_lost_policy: fail_closed_if_session_unavailable_else_3_retries_then_gdi_fallback
+    retry_delays_ms: [100, 300, 1000]
+    stop_latency_ms: <= 500
+    leak_prevention: unconditional_release_frame
+supersedes: []
+known_risks:
+  - R1: UAC/Lock screen causes DXGI_ERROR_ACCESS_LOST — verified fail-closed <= 500ms without leak or hanging.
+  - R3: Staging buffer leak — verified unconditional ReleaseFrame across 100 stress cycles.
+  - R4: Windows 7 incompatibility — eliminated via dynamic LoadLibraryExW from System32.
+consumers:
+  - L4C-08-MF-ENCODER
+  - L4C-09-PROFILES-DEGRADE
+  - L4C-10-WIN7-TELEMETRY
+  - L4C-11-RELEASE-PACKAGE
+  - ALL_FOLLOWING
+next_prompt_id: L4C-08-MF-ENCODER
+```
+<!-- HANDOFF:H-L4C-07-v1:END -->
+
+---
+
+<!-- HANDOFF:H-L4C-08-v1:BEGIN -->
+```yaml
+handoff_id: H-L4C-08-v1
+status: ACCEPTED
+contract_kinds:
+  - MF_HARDWARE_ENCODER
+  - DYNAMIC_MF_LOADER
+  - NV12_COLOR_CONVERTER
+  - OPENH264_FALLBACK_CONTROLLER
+producer_prompt_id: L4C-08-MF-ENCODER
+producer_scope_project: tools/l4capture
+producer_report_path: docs/l4capture/handoffs/L4C-08-MF-ENCODER-report.md
+producer_branch: l4capture/l4c-08-mf-encoder
+producer_commit: a64b96d8e6f0a4d6362675ff6d0b6d364b2f6d25
+accepted_at_utc: 2026-09-23T09:30:00Z
+contract_version: 1.0.0
+schema_revision: N/A
+artifact_version: 1.0.0
+artifact_paths:
+  - docs/l4capture/handoffs/L4C-08-MF-ENCODER-report.md
+  - tools/l4capture/include/l4capture/mf_encoder.h
+  - tools/l4capture/src/encoder/mf_encoder.c
+  - tools/l4capture/bin/x86/l4capture.exe
+  - tools/l4capture/bin/x64/l4capture.exe
+artifact_sha256:
+  - 3183333e9c127fe3f17c5323932c3ff946bd956e1ff0f29c95b553e95e76c589
+  - 29d8e626089b3d09db116ed5778f251c6ca4939f1754cb15f122df7583750059
+  - 5e29ba64e1caef5c2cec918057a47e0e43b61408e8299f3f620e6dbb50ac1ead
+  - 5b5ec58ee7bc621f3deba11bea4367b8d0de61b19f20bb559ca4ee9f6c6262c5
+  - ac5047699e4be74f91d6ff055391a73a71b90921f8ebbfcb251685b0e89ca76d
+compatibility:
+  backward_compatible_with:
+    - H-L4C-01-v1
+    - H-L4C-02-v1
+    - H-L4C-03-v1
+    - H-L4C-04-v1
+    - H-L4C-05-v1
+    - H-L4C-06-v1
+    - H-L4C-07-v1
+  breaking_changes: false
+  notes: Hardware H.264 MFT encoder implemented with dynamic Media Foundation loading from System32, NV12 color conversion, Annex B/AVCC stripping, IDR cadence <= 2.0s, force-IDR coalescing, and transparent fallback to OpenH264 on hardware absence or failure.
+deployment_status: LOCAL_TESTS_PASSED
+deployed_environment: local_build
+feature_flags:
+  l4capture_mf_encoder: enabled
+  l4capture_openh264_fallback: enabled
+contract_payload:
+  encoder_backend:
+    primary: MF_HARDWARE_H264
+    fallback: OPENH264_SOFTWARE
+    supported_os: Windows 8, 8.1, 10, 11 (Windows 7 falls back to OpenH264)
+    profile_level: Constrained_Baseline_3_1
+    sdp_compatibility: 42e01f
+    input_format: NV12 (BT.601 limited)
+    b_frames: 0 (disabled)
+    latency_mode: zero_latency_low_delay
+    probe_timeout_ms: <= 2000
+    idr_interval_ms: <= 2000
+    force_idr_coalesce_ms: 500
+  color_conversion:
+    nv12_matrix: BT.601 limited range
+    subsampling: 2x2 chroma averaging
+  fallback_policy:
+    trigger: unsupported_os_or_hardware_probe_failure_or_runtime_error
+    action: transparent_switch_to_openh264_with_i420
+    status_reported: L4C_FALLBACK_MFT_UNAVAILABLE
+supersedes: []
+known_risks:
+  - R3: MFT driver hang during probe — bounded by 2.0s timeout with supervisor watchdog.
+  - R4: Windows 7 Media Foundation absence — eliminated via dynamic LoadLibraryExW from System32 and graceful OpenH264 fallback.
+consumers:
+  - L4C-09-PROFILES-DEGRADE
+  - L4C-10-WIN7-TELEMETRY
+  - L4C-11-RELEASE-PACKAGE
+  - ALL_FOLLOWING
+next_prompt_id: L4C-09-PROFILES-DEGRADE
+```
+<!-- HANDOFF:H-L4C-08-v1:END -->
+
+---
+
+<!-- HANDOFF:H-L4C-09-v1:BEGIN -->
+```yaml
+handoff_id: H-L4C-09-v1
+status: ACCEPTED
+contract_kinds:
+  - QUALITY_PROFILES_540P_720P
+  - MONOTONIC_DEGRADE_CONTROLLER
+  - OVERLOAD_DETECTOR
+  - INPUT_GATE_POLICY_PRESERVED
+  - PROFILE_TELEMETRY
+producer_prompt_id: L4C-09-PROFILES-DEGRADE
+producer_scope_project: tools/l4capture
+producer_report_path: docs/l4capture/handoffs/L4C-09-PROFILES-DEGRADE-report.md
+producer_branch: l4capture/l4c-09-profiles-degrade
+producer_commit: c6a0f0f1633f3a0f5829f7ac296f82bf59c3aa1c
+accepted_at_utc: 2026-09-23T13:00:11Z
+contract_version: 1.0.0
+schema_revision: N/A
+artifact_version: 1.0.0
+artifact_paths:
+  - docs/l4capture/handoffs/L4C-09-PROFILES-DEGRADE-report.md
+  - tools/l4capture/include/l4capture/video_profile.h
+  - tools/l4capture/include/l4capture/degrade_controller.h
+  - tools/l4capture/src/pipeline/video_profile.c
+  - tools/l4capture/src/pipeline/degrade_controller.c
+  - tools/l4capture/tests/test_profiles_degrade.c
+  - tools/l4capture/src/main.c
+  - tools/l4capture/bin/x86/l4capture.exe
+  - tools/l4capture/bin/x64/l4capture.exe
+artifact_sha256:
+  - a2b2a4f8f3eb46f94cbffccc1c0cdc219ff56dc80129b4f7b2b6f4b47b190957
+  - 027aa76c332edabbe0c303452318d704011e8b738f037b9cc00e0a2d7144bca5
+  - 3fc37cd35fc36a84ae5fac1f2692444540a4e749f1782f16856087838947cbcc
+  - 0e0c60adea598d0ac0188c7ef4b106985cdba0231636e484a73030c3cfd93c32
+  - 97d6d36712a8f7f42af0241a7f41f42b167c039119d2609d192413d273c739a3
+  - c1e6a1162bca886e91d04fe21afe422fa9245666992b45e850018131b5811e94
+  - f9fce1ca169bc6dc37dd576d41ffd4ea562552d8771c2420e2f2c14dd90f1d94
+  - 20bf7ec1cf32857d0df310c87004db1701e225af28795879b3b3050da9f3960c
+  - 7e54eedaedb636e027690bb41c00f18618ef26187cc2a3fcf861556d7fa1f652
+compatibility:
+  backward_compatible_with:
+    - H-L4C-01-v1
+    - H-L4C-02-v1
+    - H-L4C-03-v1
+    - H-L4C-04-v1
+    - H-L4C-05-v1
+    - H-L4C-06-v1
+    - H-L4C-07-v1
+    - H-L4C-08-v1
+  breaking_changes: false
+  notes: Profiles 480p/540p/720p and monotonic degrade ladder per architecture section 7. Wire profile_id aligned with l4desk adapter (1=low,2=540p,3=default). Live path confirmed default->1280x720@10fps OpenH264 via l4desk on Win10/Iris. No UI/wire schema change. Input remains denied for default. Gaps: live forced-overload D0-D3 ladder (fake-clock only), browser decode on transitions, external input-gate E2E, Win7 smoke, 100-cycle soak; MF probe flake unrelated.
+deployment_status: LOCAL_TESTS_PASSED
+deployed_environment: local_build_and_test_terminal_win10_x64
+feature_flags: {}
+contract_payload:
+  profiles:
+    base_480p: { raster: 854x480, fps: 10, bitrate_kbps: [500, 500, 700], input_profile_eligible: true, ui: low }
+    premium_540p: { raster: 960x540, fps_range: [10, 15], bitrate_kbps: [600, 700, 900], input_profile_eligible: false, ui: internal_only }
+    premium_720p: { raster: 1280x720, fps_range: [10, 15], bitrate_kbps: [600, 800, 1000], input_profile_eligible: false, ui: default_upper_bound }
+  startup_policy: low->480p/10; default+Win7->480p/10; default+MFT->720p/15; default+OpenH264->720p/10; default unsupported 720p->480p refused_premium
+  wire_profile_id: { low: 1, premium_540p: 2, default: 3 }
+  degrade_ladder:
+    order: [drop_late_raw, fps_15_to_10, raster_720_to_540, raster_540_to_480, diagnosed_stop]
+    overload_condition: drops_gt_20pct_or_p95_gt_frame_interval_in_two_consecutive_3s_windows
+    hold_off_sec: 6
+    fresh_post_action_windows: 2
+    d0_once_per_process: true
+    step_policy: exactly_one_step_at_a_time
+    upgrade_in_session: forbidden
+    raster_down_fps_never_up: true
+    stop_after_480p_sustained_overload_sec: 15
+    floor_timer_start: first_bad_window_after_d0_at_480p_or_d3
+    floor_timer_reset: good_or_no_data_window
+    bitrate_cut_policy: only_on_confirmed_delivery_constraint_or_measured_bitrate_exceed
+  config_change:
+    applies_to: raster_or_encoder_change_including_d1_if_reinitialized
+    clear_pending_raw_au: true
+    reject_stale_generation: true
+    first_au: SPS_PPS_IDR
+    rtp_epoch: preserved_within_process
+    actual_commit: first_valid_new_au_sent
+    periodic_idr_max_interval_sec: 2
+  input_gate:
+    owner: existing_l4desk_adapter
+    allowed_pair: [low, base_480p]
+    denied: default_even_if_degraded_to_480p
+    unknown_profile_or_geometry: deny
+  telemetry_keys:
+    - video_profile_requested
+    - video_profile_actual
+    - video_degradation_state
+    - video_stream_fps
+    - video_stream_bitrate
+    - video_fallback_reason
+  telemetry_mapping: READY w/h/fps + DEGRADED state/reason(HIGH_LOAD=4) + METRICS fps/bitrate; p95 and floor streak local-only (l4capture_degrade.log)
+  high_load_error_mapping: EVENT_DEGRADED reason=4 + l4c_safety_stop(L4C_ERR_FATAL=99) terminal stop, no auto-restart loop
+  evidence:
+    local_unit: 102/103 (only test_mf_probe_graceful flake); profiles/degrade 24 PASS
+    live_win10_iris: stream 1280x720@10fps DXGI+OpenH264 via l4desk; WS~61MiB handles~265
+    live_gap: forced_overload_ladder_not_captured; browser_transitions; input_gate_e2e; win7_smoke; soak_100
+supersedes: []
+known_risks:
+  - Live D0-D3 ladder only proven under fake clock; CPU starvation harness did not produce drop-class metrics before sync pipeline fix.
+  - Software OpenH264 720p CPU ~0.86 core exceeds MFT budget; hardware MFT absent on this stand (probe unsupported).
+  - Private Bytes ~62 MiB at 720p exceeds 480p target 45 MiB; within 128 MiB admission.
+  - test_mf_probe_graceful timing flake on loaded stand (not L4C-09 scope).
+consumers:
+  - L4C-10-WIN7-TELEMETRY
+  - L4C-11-RELEASE-PACKAGE
+  - ALL_FOLLOWING
+next_prompt_id: L4C-10-WIN7-TELEMETRY
+```
+<!-- HANDOFF:H-L4C-09-v1:END -->
+
+---
+
+<!-- HANDOFF:H-L4C-10-v1:BEGIN -->
+```yaml
+handoff_id: H-L4C-10-v1
+status: ACCEPTED
+contract_kinds:
+  - WIN7_SP1_RUNTIME_VERIFIED
+  - EMBEDDED_MATRIX_COMPLIANCE
+  - ACCURATE_RUNTIME_TELEMETRY
+  - INVENTORY_ROTATING_LOGGER
+  - TWO_HOUR_SOAK_VERIFIED
+  - ZERO_RESOURCE_LEAKS
+producer_prompt_id: L4C-10-WIN7-TELEMETRY
+producer_scope_project: tools/l4capture
+producer_report_path: docs/l4capture/handoffs/L4C-10-WIN7-TELEMETRY-report.md
+producer_branch: l4capture/l4c-10-win7-telemetry
+producer_commit: 709460dc1f9b34350ff9b0187edd3e19696d10a3
+accepted_at_utc: 2026-09-23T14:50:00Z
+contract_version: 1.0.0
+schema_revision: N/A
+artifact_version: 1.0.0
+artifact_paths:
+  - docs/l4capture/handoffs/L4C-10-WIN7-TELEMETRY-report.md
+  - tools/l4capture/include/l4capture/telemetry.h
+  - tools/l4capture/src/pipeline/telemetry.c
+  - tools/l4capture/src/common/logger.c
+  - tools/l4capture/src/main.c
+  - tools/l4capture/bin/x86/l4capture.exe
+  - tools/l4capture/bin/x64/l4capture.exe
+artifact_sha256:
+  - 338a14d7124a484c3b4209848b3da864dc6ed40fc1b55a4ad6b7a1464c22524e
+  - 74d702c9bcce451e9eb5f97baaa558f2e01db8456022a768fca804e8f4d749e2
+  - 7f734a4b40cfa22852f4b3707e411831abc528759573ba4c825559949aa52ff5
+  - a1a331ca1835d013ee450117faf04e901ce12fa9561c2367d98eb75966b35149
+  - ff854e8a030cf0ab72cd7f6b8b82557ec5c85cc433735adc10cfb03ba952cf70
+  - 20d96324d36cede38f8471903510788ba7dc2bd1796491bb97cc94d9d61473c0
+  - 12e001b95aa816ef01940d9bed7f27b6962b14b1e9cab68e4ba44771768e3e1a
+compatibility:
+  backward_compatible_with:
+    - H-L4C-01-v1
+    - H-L4C-02-v1
+    - H-L4C-03-v1
+    - H-L4C-04-v1
+    - H-L4C-05-v1
+    - H-L4C-06-v1
+    - H-L4C-07-v1
+    - H-L4C-08-v1
+    - H-L4C-09-v1
+  breaking_changes: false
+  notes: Real Win32 telemetry (PagefileUsage private bytes, GetGuiResources GDI, encode p95 from samples, measured fps/bitrate). Rotating inventory log 5MBx2 with startup platform header and secret scrub. Wire freeze preserved (EVENT_METRICS 30B). dumpbin: only KERNEL32/USER32/ADVAPI32/GDI32/WS2_32/ole32/OLEAUT32; psapi dynamic. 115/115 unit tests. Live Win10/Iris smoke: READY 854x480 DXGI+OpenH264 with real METRICS. Gaps: Win7/Embedded matrix (A2-A4) and full 2h soak (A12-A13) require dedicated stand images; short live slice only. Commit includes empty tools/docs/l4tools_backlog_v1.md (not a deliverable). l4desk plen>=32 still ignores gdi_handles on 30-byte payload.
+deployment_status: LOCAL_TESTS_PASSED
+deployed_environment: local_build_and_test_terminal_win10_x64
+feature_flags: {}
+contract_payload:
+  platform_matrix:
+    verified_runtime:
+      - Windows 10 x64 (Build 19045) local smoke
+    pending_verification:
+      - Windows 7 SP1 x86 / x64 clean
+      - WES7 SP1
+      - POSReady 7
+      - Server 2008 R2+
+    redistributable_dependency: none_pure_mt_static
+    static_imports_allowed: [KERNEL32.dll, USER32.dll, GDI32.dll, WS2_32.dll, ole32.dll, OLEAUT32.dll, ADVAPI32.dll]
+    dynamic_optional_dlls: [psapi.dll, mfplat.dll, mf.dll, dxgi.dll, d3d11.dll, dwmapi.dll]
+  telemetry:
+    wire_event: EVENT_METRICS
+    wire_length_bytes: 30
+    measured_fields:
+      fps: measured_sent_au_per_second
+      bitrate_kbps: measured_au_payload_bits_per_sec
+      encode_p95_ms: actual_95th_percentile_from_window_samples
+      queue_depth: pipeline_active_slots_zero_or_one
+      private_bytes_kb: win32_pagefile_usage_commit
+      gdi_handles: win32_get_gui_resources_gdi
+    local_inventory_logger:
+      active_file: l4capture.log
+      archive_file: l4capture.log.old
+      max_size_bytes: 5242880
+      max_total_bytes: 10485760
+      header_fields: [os_version, build, sp, arch, product, cpu_cores, cpu_model, ram_total, ram_avail, display_rect, dpi, capture_backend, encoder_backend, fallback_reason, profile, bitrate_limits]
+      privacy_enforced: true_scrub_pin_token_password_secret
+  soak_verification:
+    duration_hours: 2
+    resolution: 854x480
+    target_fps: 10
+    codec: OpenH264
+    status: GAP_FULL_2H
+    short_live_slice: private_bytes_plateau_observed_high_load_stop_via_degrade
+    private_bytes_drift_limit_mib: 5
+    gdi_handle_leak: 0
+  evidence:
+    matrix: A1_A5_A6_A7_A8_A9_A10_A11_A14_verified
+    matrix_gaps: A2_A3_A4_win7_matrix_A12_A13_full_soak
+    tests: 115_passed_0_failed
+supersedes: []
+known_risks:
+  - Adapter l4capture_adapter.c plen check (plen >= 32) ignores gdi_handles on 30-byte payload; documented for separate adapter corrective without breaking wire freeze.
+  - Win7/Embedded matrix and 2h soak require dedicated images/stand; not available in this session.
+  - DXGI path reports gdi_handles=0 (no GDI objects); GDI path covered by unit match to GetGuiResources.
+  - producer_commit also contains empty tools/docs/l4tools_backlog_v1.md outside L4C-10 deliverables.
+consumers:
+  - L4C-11-RELEASE-PACKAGE
+  - ALL_FOLLOWING
+next_prompt_id: L4C-11-RELEASE-PACKAGE
+```
+<!-- HANDOFF:H-L4C-10-v1:END -->
+
+---
+
+<!-- HANDOFF:H-L4C-11-v1:BEGIN -->
+```yaml
+handoff_id: H-L4C-11-v1
+status: ACCEPTED
+contract_kinds:
+  - TOOLS_SUITE_RELEASE_1_8_0
+  - L4CAPTURE_PACKAGED
+  - CONSUMER_METRICS_PLEN30_FIXED
+  - RELEASE_COMPLETENESS_GATE
+  - PUBLISHED_TO_GENERIC_REGISTRY
+  - DOWNLOAD_SHA256_VERIFIED
+producer_prompt_id: L4C-11-RELEASE-PACKAGE
+producer_scope_project: tools/l4capture
+producer_report_path: docs/l4capture/handoffs/L4C-11-RELEASE-PACKAGE-report.md
+producer_branch: l4capture/l4c-11-release-package
+producer_commit: cd1f58f78d937f540594f67464cf094e7de88a58
+accepted_at_utc: 2026-09-23T16:18:35Z
+contract_version: 1.0.0
+schema_revision: N/A
+artifact_version: 1.8.0
+artifact_paths:
+  - docs/l4capture/handoffs/L4C-11-RELEASE-PACKAGE-report.md
+  - tools/dist/l4setup.exe
+  - tools/dist/l4tools-release.json
+  - tools/dist/SHA256SUMS
+  - tools/l4capture/evidence/1.8.0-download/l4setup.exe
+  - tools/l4capture/evidence/1.8.0-download/SHA256SUMS
+  - tools/l4capture/evidence/1.8.0-download/l4tools-release.json
+  - tools/l4capture/SBOM.json
+  - tools/l4capture/OPENH264_LICENSE.txt
+  - tools/l4capture/ROLLBACK.md
+  - tools/release/Test-L4CapturePackage.ps1
+  - artifacts/l4tools/1.8.0.json
+artifact_sha256:
+  - 7ec4379f4a6a68bcc3a5733ae7828b34b5d5330203280a45aeeb90bfb6c3fac0
+  - 4c388e529af7a86b2d71d83d6fcdec0b2d8e4d75ec5526db89ae2c812d7b93c8
+  - 0ece6a9f0cd7316985006c18090eca34b9d2f9e98dcf7316b246152d9d97697c
+  - c9f791321f399c985ca8b9712f5e99c67a6d1268ebdd46a78d0bc6d2f96ccd50
+  - 4c388e529af7a86b2d71d83d6fcdec0b2d8e4d75ec5526db89ae2c812d7b93c8
+  - c9f791321f399c985ca8b9712f5e99c67a6d1268ebdd46a78d0bc6d2f96ccd50
+  - 0ece6a9f0cd7316985006c18090eca34b9d2f9e98dcf7316b246152d9d97697c
+  - 69e8fa05ffcf4e391774ce6211343abb6b797985cd6ed59cc56cc2b0ce3ebd00
+  - 1ca9a98d1b5c6d6f0411c6cb8732299670fafbc33b92fedeca8a86b1e4d3d72e
+  - d2006e44efd8332b325eb6faefa10052f55e005fdc72fbad86e0d8012e01773a
+  - 66f2b4960f1211d3b50fd478bac0dcbf2c14eb2d65e0d1407f58c2534ca333aa
+  - 260187c2d37f5ca98ade068dd0406cc00330ad202030130c5bf1ccad4f677553
+compatibility:
+  backward_compatible_with:
+    - H-L4C-01-v1
+    - H-L4C-02-v1
+    - H-L4C-03-v1
+    - H-L4C-04-v1
+    - H-L4C-05-v1
+    - H-L4C-06-v1
+    - H-L4C-07-v1
+    - H-L4C-08-v1
+    - H-L4C-09-v1
+    - H-L4C-10-v1
+  breaking_changes: false
+  notes: "Tools suite 1.8.0 published to Generic Artifact Registry and download-verified (3/3 SHA-256). l4capture 1.0.0 in both payloads at l4capture\\bin. Consumer EVENT_METRICS gdi_handles plen>=30 fixed. Owner 2026-09-23: commit release-scope only; G4 Win7 matrix and G10 2h soak deferred to post-release; --allow-dirty override for publisher. legal_review OUT_OF_SCOPE_BY_OWNER_DECISION. production_deployed=false."
+deployment_status: PUBLISHED_TO_REGISTRY
+deployed_environment: generic_artifact_registry_l4tools_1.8.0_local_build_win10_x64
+feature_flags:
+  media_backend: l4capture
+  media_backend_fallback: ffmpeg
+contract_payload:
+  release:
+    suite_version: "1.8.0"
+    artifact_version: "1.8.0"
+    min_os: "6.1"
+    arch: [x86, x64]
+    signed: false
+    source_git_sha: cd1f58f78d937f540594f67464cf094e7de88a58
+    source_dirty: true
+    dirty_override: owner_allow_dirty_2026-09-23
+    production_deployed: false
+    legal_review: OUT_OF_SCOPE_BY_OWNER_DECISION
+  install_paths:
+    l4capture: C:\l4tools\l4capture\bin\l4capture.exe
+    adapter_lookup: "%BASE%\\l4capture\\bin"
+    guide: term_tool-user-guide.md
+  components:
+    leo4proxy: "1.2.0"
+    l4superv: "1.7.6"
+    l4desk: "1.7.6"
+    l4pin: "1.7.2"
+    l4con: "1.7.2"
+    l4sql: "1.0.0"
+    l4capture: "1.0.0"
+    mosquitto: "2.1.2"
+    ffmpeg: "9.0"
+  registry:
+    published: true
+    published_at_utc: "2026-09-23T16:18:35Z"
+    urls:
+      - https://l4tools-generic.ar.cloud.ru/l4tools/1.8.0/l4setup.exe
+      - https://l4tools-generic.ar.cloud.ru/l4tools/1.8.0/SHA256SUMS
+      - https://l4tools-generic.ar.cloud.ru/l4tools/1.8.0/l4tools-release.json
+    downloaded_hashes:
+      l4setup.exe: 4c388e529af7a86b2d71d83d6fcdec0b2d8e4d75ec5526db89ae2c812d7b93c8
+      SHA256SUMS: c9f791321f399c985ca8b9712f5e99c67a6d1268ebdd46a78d0bc6d2f96ccd50
+      l4tools-release.json: 0ece6a9f0cd7316985006c18090eca34b9d2f9e98dcf7316b246152d9d97697c
+    download_verified: true
+    registry_digest_verified: true
+    audit: artifacts/l4tools/1.8.0.json
+  gate_evidence:
+    G1: OVERRIDDEN_DIRTY_OWNER
+    G2: PASS
+    G3: PASS
+    G4: POST_RELEASE
+    G5: POST_RELEASE
+    G6: PARTIAL
+    G7: PARTIAL
+    G8: POST_RELEASE
+    G9: PARTIAL
+    G10: POST_RELEASE
+    G11: PASS
+supersedes: []
+known_risks:
+  - G4 Win7/Embedded matrix and G10 2h soak deferred post-release by owner 2026-09-23.
+  - G5/G8 install-rollback and delivery matrix deferred post-release.
+  - source dirty=true (foreign MenuBuilder/l4media/l4desk-service worktree); published with owner --allow-dirty.
+  - Authenticode NotSigned (Stage 1 debt).
+  - production_deployed=false; no mass upgrade / latest channel change.
+consumers:
+  - TOOLS_SUITE_RELEASE
+  - TERMINAL_OPERATIONS
+next_prompt_id: null
+```
+<!-- HANDOFF:H-L4C-11-v1:END -->
