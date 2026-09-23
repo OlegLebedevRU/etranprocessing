@@ -6,15 +6,16 @@
 #include "l4capture/safety_gate.h"
 #include "l4capture/ipc_pipe.h"
 #include "l4capture/gdi_capture.h"
+#include "l4capture/dxgi_capture.h"
 #include "l4capture/openh264_encoder.h"
+#include "l4capture/mf_encoder.h"
 #include "l4capture/rtp_sender.h"
 #include "l4capture/scale.h"
 #include "l4capture/color_convert.h"
 #include "l4capture/types.h"
-
-#define TARGET_WIDTH  854
-#define TARGET_HEIGHT 480
-#define TARGET_FPS    10
+#include "l4capture/video_profile.h"
+#include "l4capture/degrade_controller.h"
+#include "l4capture/telemetry.h"
 
 typedef struct {
     HANDLE pipe_in;
@@ -37,7 +38,78 @@ typedef struct {
     uint32_t frames_encoded;
     uint32_t frames_sent;
     uint32_t frames_skipped;
+    uint16_t active_capture_backend;
+    uint16_t active_encoder_backend;
+    uint16_t fallback_reason;
+    l4c_capture_config_t cap_cfg;
+    /* L4C-09 profiles / degrade */
+    uint8_t requested_profile;
+    uint16_t actual_profile;
+    uint8_t current_fps;
+    uint32_t target_width, target_height;
+    uint16_t bitrate_min, bitrate_target, bitrate_max;
+    l4c_degrade_controller_t degrade;
+    uint32_t config_gen;
+    uint16_t degrade_state;
+    uint64_t win_start_ms;
+    l4c_degrade_window_t win_acc;
+    bool force_next_idr;
+    uint64_t pts_base_ms;
+    uint32_t frames_since_pts_base;
+    uint32_t au_bytes_10s;
+    uint64_t bitrate_win_start_ms;
+    bool pending_degrade_action;
+    l4c_degrade_action_t next_action;
 } l4c_pipeline_state_t;
+
+static void profile_bounds(const l4c_pipeline_state_t *ps, uint32_t *w, uint32_t *h, uint8_t *fps) {
+    if (w) *w = ps->target_width;
+    if (h) *h = ps->target_height;
+    if (fps) *fps = ps->current_fps;
+}
+
+static bool is_single_output(const l4c_rect_t *target_rect) {
+    if (!target_rect) return false;
+    if (target_rect->left == 0 && target_rect->top == 0 &&
+        target_rect->right == 0 && target_rect->bottom == 0) {
+        return (GetSystemMetrics(SM_CMONITORS) == 1);
+    }
+    RECT rc;
+    rc.left = target_rect->left;
+    rc.top = target_rect->top;
+    rc.right = target_rect->right;
+    rc.bottom = target_rect->bottom;
+    HMONITOR hmon = MonitorFromRect(&rc, MONITOR_DEFAULTTONULL);
+    if (!hmon) return false;
+    MONITORINFO mi;
+    memset(&mi, 0, sizeof(mi));
+    mi.cbSize = sizeof(mi);
+    if (!GetMonitorInfoA(hmon, &mi)) return false;
+    return (rc.left >= mi.rcMonitor.left && rc.top >= mi.rcMonitor.top &&
+            rc.right <= mi.rcMonitor.right && rc.bottom <= mi.rcMonitor.bottom);
+}
+
+static bool os_is_win7_or_older(void) {
+    typedef LONG (WINAPI *rtl_get_version_fn)(void *);
+    HMODULE ntdll;
+    rtl_get_version_fn rtl_get_version;
+    struct {
+        ULONG os_version_info_size;
+        ULONG major_version;
+        ULONG minor_version;
+        ULONG build_number;
+        ULONG platform_id;
+        WCHAR service_pack[128];
+    } vi;
+    ntdll = GetModuleHandleW(L"ntdll.dll");
+    if (!ntdll) return true;
+    rtl_get_version = (rtl_get_version_fn)(void *)GetProcAddress(ntdll, "RtlGetVersion");
+    if (!rtl_get_version) return true;
+    memset(&vi, 0, sizeof(vi));
+    vi.os_version_info_size = (ULONG)sizeof(vi);
+    if (rtl_get_version(&vi) != 0) return true;
+    return (vi.major_version < 6u) || (vi.major_version == 6u && vi.minor_version < 2u);
+}
 
 static l4c_args_t parse_args(int argc, char *argv[]) {
     l4c_args_t args;
@@ -57,16 +129,17 @@ static l4c_args_t parse_args(int argc, char *argv[]) {
     return args;
 }
 
-static void send_event_ready(l4c_ipc_pipe_t *pipe, uint64_t now) {
+static void send_event_ready(l4c_ipc_pipe_t *pipe, uint64_t now, uint16_t capture_backend, uint16_t encoder_backend,
+                             uint32_t actual_width, uint32_t actual_height, uint16_t actual_fps) {
     l4c_message_t msg;
     memset(&msg, 0, sizeof(msg));
     msg.type = L4C_EVENT_READY;
     msg.request_seq = 0;
-    msg.body.ready.actual_width = TARGET_WIDTH;
-    msg.body.ready.actual_height = TARGET_HEIGHT;
-    msg.body.ready.actual_fps = TARGET_FPS;
-    msg.body.ready.capture_backend = 1; /* GDI */
-    msg.body.ready.encoder_backend = 1; /* OpenH264 */
+    msg.body.ready.actual_width = actual_width;
+    msg.body.ready.actual_height = actual_height;
+    msg.body.ready.actual_fps = actual_fps;
+    msg.body.ready.capture_backend = capture_backend;
+    msg.body.ready.encoder_backend = encoder_backend;
     l4c_pipe_enqueue(pipe, &msg, now);
 }
 
@@ -75,8 +148,8 @@ static void send_event_metrics(l4c_ipc_pipe_t *pipe, const l4c_pipeline_state_t 
     l4c_rtp_stats_t rtp_stats;
     memset(&msg, 0, sizeof(msg));
     msg.type = L4C_EVENT_METRICS;
-    msg.body.metrics.fps = TARGET_FPS;
-    msg.body.metrics.bitrate_kbps = 500;
+    msg.body.metrics.fps = ps->current_fps;
+    msg.body.metrics.bitrate_kbps = ps->bitrate_target;
     msg.body.metrics.raw_drops = ps->raw_drops;
     msg.body.metrics.encoder_drops = ps->encoder_drops;
     msg.body.metrics.transport_drops = ps->transport_drops;
@@ -100,46 +173,283 @@ static void pipeline_cleanup(l4c_pipeline_state_t *ps) {
     ps->active = false;
 }
 
+static void accumulate_window_sample(l4c_pipeline_state_t *ps, uint64_t now) {
+    if (ps->win_start_ms == 0) {
+        ps->win_start_ms = now;
+        memset(&ps->win_acc, 0, sizeof(ps->win_acc));
+    }
+}
+
+static void count_raw_pass(l4c_pipeline_state_t *ps) { ps->win_acc.raw.passed++; }
+static void count_raw_drop(l4c_pipeline_state_t *ps) { ps->win_acc.raw.dropped++; ps->raw_drops++; }
+static void count_enc_pass(l4c_pipeline_state_t *ps) { ps->win_acc.encoder.passed++; }
+static void count_enc_drop(l4c_pipeline_state_t *ps) { ps->win_acc.encoder.dropped++; ps->encoder_drops++; }
+static void count_tr_pass(l4c_pipeline_state_t *ps) { ps->win_acc.transport.passed++; }
+static void count_tr_drop(l4c_pipeline_state_t *ps) { ps->win_acc.transport.dropped++; ps->transport_drops++; }
+
+/* Транзакция смены растра D2/D3: очистка pending, reinit, первый AU — SPS/PPS+IDR. */
+static l4c_status_t pipeline_reconfigure_raster(l4c_pipeline_state_t *ps, uint16_t new_profile, uint64_t now) {
+    const l4c_profile_params_t *pp = l4c_profile_params(new_profile);
+    l4c_encoder_config_t enc_cfg;
+    l4c_status_t status;
+    uint8_t *new_buf;
+    l4c_color_converter_t *new_conv = NULL;
+
+    if (!pp) return L4C_ERR_INVALID_ARG;
+    /* Бюджет до allocations */
+    if (pp->width == 0 || pp->height == 0) return L4C_ERR_OVERFLOW;
+
+    new_buf = (uint8_t *)malloc((size_t)pp->width * (size_t)pp->height * 4u);
+    if (!new_buf) return L4C_ERR_OUT_OF_MEMORY;
+    status = l4c_color_converter_create(pp->width, pp->height, &new_conv);
+    if (status != L4C_OK) { free(new_buf); return status; }
+
+    if (ps->encoder) {
+        ps->encoder->vtable->destroy(ps->encoder);
+        ps->encoder = NULL;
+    }
+    if (ps->converter) l4c_color_converter_destroy(ps->converter);
+    if (ps->scaled_buf) free(ps->scaled_buf);
+    ps->converter = new_conv;
+    ps->scaled_buf = new_buf;
+    ps->target_width = pp->width;
+    ps->target_height = pp->height;
+    ps->bitrate_target = pp->bitrate_target_kbps;
+    if (ps->bitrate_min < pp->bitrate_min_kbps) ps->bitrate_min = pp->bitrate_min_kbps;
+    if (ps->bitrate_target < ps->bitrate_min) ps->bitrate_target = ps->bitrate_min;
+    ps->actual_profile = new_profile;
+    ps->force_next_idr = true;
+    ps->config_gen++;
+
+    /* Сохраняем backend; MFT отказ — существующий bounded fallback L4C-08 */
+    if (ps->active_encoder_backend == L4C_ENCODER_MF_HARDWARE) {
+        status = l4c_mf_encoder_create(&ps->encoder);
+        if (status == L4C_OK) {
+            memset(&enc_cfg, 0, sizeof(enc_cfg));
+            enc_cfg.width = ps->target_width;
+            enc_cfg.height = ps->target_height;
+            enc_cfg.target_fps = ps->current_fps;
+            enc_cfg.target_bitrate_kbps = ps->bitrate_target;
+            enc_cfg.max_bitrate_kbps = ps->bitrate_max;
+            enc_cfg.input_format = L4C_PIX_FMT_NV12;
+            status = ps->encoder->vtable->init(ps->encoder, &enc_cfg);
+            if (status != L4C_OK) {
+                ps->encoder->vtable->destroy(ps->encoder);
+                ps->encoder = NULL;
+            }
+        }
+        if (!ps->encoder) {
+            status = l4c_openh264_encoder_create(&ps->encoder);
+            if (status != L4C_OK) return status;
+            ps->active_encoder_backend = L4C_ENCODER_OPENH264_SOFTWARE;
+            ps->fallback_reason = L4C_MFT_UNAVAILABLE;
+        }
+    }
+    if (!ps->encoder) {
+        status = l4c_openh264_encoder_create(&ps->encoder);
+        if (status != L4C_OK) return status;
+        ps->active_encoder_backend = L4C_ENCODER_OPENH264_SOFTWARE;
+    }
+    if (ps->active_encoder_backend == L4C_ENCODER_OPENH264_SOFTWARE) {
+        memset(&enc_cfg, 0, sizeof(enc_cfg));
+        enc_cfg.width = ps->target_width;
+        enc_cfg.height = ps->target_height;
+        enc_cfg.target_fps = ps->current_fps;
+        enc_cfg.target_bitrate_kbps = ps->bitrate_target;
+        enc_cfg.max_bitrate_kbps = ps->bitrate_max;
+        enc_cfg.input_format = L4C_PIX_FMT_I420;
+        status = ps->encoder->vtable->init(ps->encoder, &enc_cfg);
+        if (status != L4C_OK) return status;
+    } else if (ps->active_encoder_backend == L4C_ENCODER_MF_HARDWARE) {
+        memset(&enc_cfg, 0, sizeof(enc_cfg));
+        enc_cfg.width = ps->target_width;
+        enc_cfg.height = ps->target_height;
+        enc_cfg.target_fps = ps->current_fps;
+        enc_cfg.target_bitrate_kbps = ps->bitrate_target;
+        enc_cfg.max_bitrate_kbps = ps->bitrate_max;
+        enc_cfg.input_format = L4C_PIX_FMT_NV12;
+        status = ps->encoder->vtable->init(ps->encoder, &enc_cfg);
+        if (status != L4C_OK) return status;
+    }
+    /* Очистка pending raw/AU: drain запрещён. */
+    memset(&ps->win_acc, 0, sizeof(ps->win_acc));
+    ps->win_start_ms = now;
+    l4c_degrade_notify_applied(&ps->degrade, ps->actual_profile, ps->current_fps,
+                               ps->degrade_state, ps->config_gen, now);
+    return L4C_OK;
+}
+
+static void apply_degrade_action(l4c_pipeline_state_t *ps, l4c_ipc_pipe_t *pipe, l4c_safety_gate_t *gate,
+                                 l4c_degrade_action_t act, uint64_t now) {
+    l4c_message_t deg;
+    switch (act) {
+    case L4C_DEG_ACT_D0_DROP_LATE_RAW:
+        /* Однократный сброс просроченных pending raw; latest-frame уже действует. */
+        break;
+    case L4C_DEG_ACT_D1_FPS_THROTTLE:
+        ps->current_fps = 10;
+        ps->degrade_state = L4C_FPS_THROTTLED;
+        l4c_degrade_notify_applied(&ps->degrade, ps->actual_profile, ps->current_fps,
+                                   ps->degrade_state, ps->config_gen, now);
+        break;
+    case L4C_DEG_ACT_D2_RASTER_540P:
+        ps->degrade_state = L4C_DEGRADED_540P;
+        if (pipeline_reconfigure_raster(ps, L4C_PROFILE_540P, now) != L4C_OK) {
+            ps->fallback_reason = L4C_HIGH_LOAD;
+            l4c_safety_stop(gate, L4C_ERR_FATAL);
+            return;
+        }
+        break;
+    case L4C_DEG_ACT_D3_RASTER_480P:
+        ps->degrade_state = L4C_DEGRADED_480P;
+        if (pipeline_reconfigure_raster(ps, L4C_PROFILE_480P, now) != L4C_OK) {
+            ps->fallback_reason = L4C_HIGH_LOAD;
+            l4c_safety_stop(gate, L4C_ERR_FATAL);
+            return;
+        }
+        break;
+    case L4C_DEG_ACT_STOP_HIGH_LOAD:
+        ps->fallback_reason = L4C_HIGH_LOAD;
+        memset(&deg, 0, sizeof(deg));
+        deg.type = L4C_EVENT_DEGRADED;
+        deg.body.degraded.degrade_state = ps->degrade_state;
+        deg.body.degraded.reason = L4C_HIGH_LOAD;
+        l4c_pipe_enqueue(pipe, &deg, now);
+        l4c_safety_stop(gate, L4C_ERR_FATAL);
+        return;
+    default:
+        break;
+    }
+    memset(&deg, 0, sizeof(deg));
+    deg.type = L4C_EVENT_DEGRADED;
+    deg.body.degraded.degrade_state = ps->degrade_state;
+    deg.body.degraded.reason = (act == L4C_DEG_ACT_STOP_HIGH_LOAD) ? L4C_HIGH_LOAD : ps->fallback_reason;
+    l4c_pipe_enqueue(pipe, &deg, now);
+}
+
 static l4c_status_t pipeline_start(l4c_pipeline_state_t *ps, const l4c_start_t *start_params) {
     l4c_status_t status;
     l4c_capture_config_t cap_cfg;
     l4c_encoder_config_t enc_cfg;
     l4c_rtp_config_t rtp_cfg;
+    l4c_profile_resolved_t resolved;
+    const l4c_profile_params_t *pp;
+    uint8_t request = 0;
+    bool mft_720p = false, oh264_720p = false, win7 = false;
 
     memset(ps, 0, sizeof(*ps));
 
+    if (!l4c_profile_parse_request(start_params->profile_id, &request)) {
+        return L4C_ERR_INVALID_ARG;
+    }
+    /* Не определять ОС по выбору GDI/OpenH264. Win7 — явный legacy-путь. */
+    win7 = os_is_win7_or_older();
+    if (!win7 && request == L4C_PROFILE_REQ_DEFAULT) {
+        mft_720p = l4c_mf_encoder_is_supported();
+        oh264_720p = true; /* OpenH264 Baseline 3.1 поддерживает 720p; подтверждается init/SPS */
+    }
+    if (l4c_profile_resolve(request, win7, mft_720p, oh264_720p, &resolved) != L4C_OK) {
+        return L4C_ERR_INVALID_ARG;
+    }
+    pp = l4c_profile_params(resolved.actual_id);
+    if (!pp) return L4C_ERR_INVALID_ARG;
+    ps->requested_profile = request;
+    ps->actual_profile = resolved.actual_id;
+    ps->current_fps = resolved.start_fps;
+    ps->target_width = pp->width;
+    ps->target_height = pp->height;
+    ps->bitrate_min = pp->bitrate_min_kbps;
+    ps->bitrate_target = pp->bitrate_target_kbps;
+    ps->bitrate_max = pp->bitrate_max_kbps;
+    ps->degrade_state = L4C_NOMINAL;
+    ps->config_gen = 1;
+    ps->force_next_idr = true;
+
     /* Allocate working buffers */
-    ps->scaled_buf = (uint8_t *)malloc(TARGET_WIDTH * TARGET_HEIGHT * 4);
+    ps->scaled_buf = (uint8_t *)malloc((size_t)ps->target_width * (size_t)ps->target_height * 4u);
     if (!ps->scaled_buf) return L4C_ERR_OUT_OF_MEMORY;
 
     /* Color converter */
-    status = l4c_color_converter_create(TARGET_WIDTH, TARGET_HEIGHT, &ps->converter);
+    status = l4c_color_converter_create(ps->target_width, ps->target_height, &ps->converter);
     if (status != L4C_OK) return status;
 
-    /* GDI capture */
-    status = l4c_gdi_capture_create(&ps->capture);
-    if (status != L4C_OK) return status;
     memset(&cap_cfg, 0, sizeof(cap_cfg));
     cap_cfg.target_rect.left = start_params->source_rect.left;
     cap_cfg.target_rect.top = start_params->source_rect.top;
     cap_cfg.target_rect.right = start_params->source_rect.right;
     cap_cfg.target_rect.bottom = start_params->source_rect.bottom;
     cap_cfg.capture_cursor = true;
-    status = ps->capture->vtable->init(ps->capture, &cap_cfg);
-    if (status != L4C_OK) return status;
+    ps->cap_cfg = cap_cfg;
 
-    /* OpenH264 encoder */
-    status = l4c_openh264_encoder_create(&ps->encoder);
-    if (status != L4C_OK) return status;
-    memset(&enc_cfg, 0, sizeof(enc_cfg));
-    enc_cfg.width = TARGET_WIDTH;
-    enc_cfg.height = TARGET_HEIGHT;
-    enc_cfg.target_fps = TARGET_FPS;
-    enc_cfg.target_bitrate_kbps = 500;
-    enc_cfg.max_bitrate_kbps = 700;
-    enc_cfg.input_format = L4C_PIX_FMT_I420;
-    status = ps->encoder->vtable->init(ps->encoder, &enc_cfg);
-    if (status != L4C_OK) return status;
+    /* Preferred: DXGI Desktop Duplication if supported and single physical output */
+    ps->active_capture_backend = 0;
+    ps->fallback_reason = L4C_FALLBACK_NONE;
+    if (l4c_dxgi_capture_is_supported() && is_single_output(&cap_cfg.target_rect)) {
+        status = l4c_dxgi_capture_create(&ps->capture);
+        if (status == L4C_OK) {
+            status = ps->capture->vtable->init(ps->capture, &cap_cfg);
+            if (status == L4C_OK) {
+                ps->active_capture_backend = L4C_CAPTURE_DXGI; /* 2 */
+            } else {
+                ps->capture->vtable->destroy(ps->capture);
+                ps->capture = NULL;
+            }
+        }
+    }
+
+    /* Fallback to GDI if DXGI not used or failed */
+    if (!ps->capture) {
+        status = l4c_gdi_capture_create(&ps->capture);
+        if (status != L4C_OK) return status;
+        status = ps->capture->vtable->init(ps->capture, &cap_cfg);
+        if (status != L4C_OK) return status;
+        ps->active_capture_backend = L4C_CAPTURE_GDI; /* 1 */
+        if (l4c_dxgi_capture_is_supported()) {
+            ps->fallback_reason = L4C_DXGI_ACCESS_LOST;
+        }
+    }
+
+    /* Encoder selection: prefer Media Foundation Hardware MFT, fallback to OpenH264 */
+    ps->active_encoder_backend = 0;
+    if (l4c_mf_encoder_is_supported()) {
+        status = l4c_mf_encoder_create(&ps->encoder);
+        if (status == L4C_OK) {
+            memset(&enc_cfg, 0, sizeof(enc_cfg));
+            enc_cfg.width = ps->target_width;
+            enc_cfg.height = ps->target_height;
+            enc_cfg.target_fps = ps->current_fps;
+            enc_cfg.target_bitrate_kbps = ps->bitrate_target;
+            enc_cfg.max_bitrate_kbps = ps->bitrate_max;
+            enc_cfg.input_format = L4C_PIX_FMT_NV12;
+            status = ps->encoder->vtable->init(ps->encoder, &enc_cfg);
+            if (status == L4C_OK) {
+                ps->active_encoder_backend = 2; /* MF_HARDWARE */
+            } else {
+                ps->encoder->vtable->destroy(ps->encoder);
+                ps->encoder = NULL;
+            }
+        }
+    }
+
+    /* Fallback to OpenH264 if MFT not used or failed */
+    if (!ps->encoder) {
+        status = l4c_openh264_encoder_create(&ps->encoder);
+        if (status != L4C_OK) return status;
+        memset(&enc_cfg, 0, sizeof(enc_cfg));
+        enc_cfg.width = ps->target_width;
+        enc_cfg.height = ps->target_height;
+        enc_cfg.target_fps = ps->current_fps;
+        enc_cfg.target_bitrate_kbps = ps->bitrate_target;
+        enc_cfg.max_bitrate_kbps = ps->bitrate_max;
+        enc_cfg.input_format = L4C_PIX_FMT_I420;
+        status = ps->encoder->vtable->init(ps->encoder, &enc_cfg);
+        if (status != L4C_OK) return status;
+
+        ps->active_encoder_backend = 1; /* OPENH264_SOFTWARE */
+        if (l4c_mf_encoder_is_supported()) {
+            ps->fallback_reason = L4C_FALLBACK_MFT_UNAVAILABLE;
+        }
+    }
 
     /* RTP sender */
     memset(&rtp_cfg, 0, sizeof(rtp_cfg));
@@ -210,7 +520,11 @@ static int run(l4c_args_t *args) {
         if (gate.started && !ps.active) {
             status = pipeline_start(&ps, &gate.last_start);
             if (status == L4C_OK) {
-                send_event_ready(&pipe, now);
+                send_event_ready(&pipe, now, ps.active_capture_backend, ps.active_encoder_backend,
+                                 ps.target_width, ps.target_height, ps.current_fps);
+                l4c_degrade_init(&ps.degrade, ps.actual_profile, ps.current_fps, now);
+                ps.win_start_ms = now;
+                memset(&ps.win_acc, 0, sizeof(ps.win_acc));
                 started_reported = true;
             } else {
                 fprintf(stderr, "l4capture: pipeline start failed (%d)\n", (int)status);
@@ -221,51 +535,141 @@ static int run(l4c_args_t *args) {
 
         /* Capture → Encode → Send RTP (skip frame if session unavailable) */
         if (ps.active && session_ok && l4c_safety_can_send(&gate, now, session_ok)) {
-            if (l4c_pipeline_due(&gate.pipeline, now, TARGET_FPS)) {
+            accumulate_window_sample(&ps, now);
+            /* Закрытие окна детектора каждые 3000 мс */
+            if (ps.win_start_ms != 0 && (now - ps.win_start_ms) >= L4C_DEGRADE_WINDOW_MS) {
+                l4c_degrade_window_t wcopy = ps.win_acc;
+                l4c_degrade_action_t act = l4c_degrade_on_window(&ps.degrade, ps.win_start_ms + L4C_DEGRADE_WINDOW_MS, &wcopy);
+                memset(&ps.win_acc, 0, sizeof(ps.win_acc));
+                ps.win_start_ms += L4C_DEGRADE_WINDOW_MS;
+                if (act != L4C_DEG_ACT_NONE) {
+                    apply_degrade_action(&ps, &pipe, &gate, act, now);
+                    if (WaitForSingleObject(gate.stop_event, 0) != WAIT_TIMEOUT) break;
+                }
+            }
+            if (l4c_pipeline_due(&gate.pipeline, now, ps.current_fps)) {
                 l4c_frame_view_t frame;
-                static uint32_t s_frame_count = 0;
+                uint32_t tw, th;
+                uint8_t tfps;
+                profile_bounds(&ps, &tw, &th, &tfps);
                 status = ps.capture->vtable->acquire_frame(ps.capture, &frame, 50);
+
+                if (status == L4C_ERR_SESSION_UNAVAILABLE) {
+                    l4c_safety_stop(&gate, L4C_ERR_SESSION_UNAVAILABLE);
+                    break;
+                }
+
+                if (status == L4C_ERR_DEVICE_LOST && ps.active_capture_backend == L4C_CAPTURE_DXGI) {
+                    /* DXGI ACCESS_LOST 3 retries failed -> controlled fallback to GDI */
+                    ps.capture->vtable->destroy(ps.capture);
+                    ps.capture = NULL;
+                    l4c_status_t gdi_s = l4c_gdi_capture_create(&ps.capture);
+                    if (gdi_s == L4C_OK) {
+                        gdi_s = ps.capture->vtable->init(ps.capture, &ps.cap_cfg);
+                        if (gdi_s == L4C_OK) {
+                            ps.active_capture_backend = L4C_CAPTURE_GDI;
+                            ps.fallback_reason = L4C_DXGI_ACCESS_LOST;
+                            l4c_message_t deg_msg;
+                            memset(&deg_msg, 0, sizeof(deg_msg));
+                            deg_msg.type = L4C_EVENT_DEGRADED;
+                            deg_msg.body.degraded.degrade_state = L4C_NOMINAL;
+                            deg_msg.body.degraded.reason = L4C_DXGI_ACCESS_LOST;
+                            l4c_pipe_enqueue(&pipe, &deg_msg, now);
+                            status = ps.capture->vtable->acquire_frame(ps.capture, &frame, 50);
+                        }
+                    }
+                }
+
                 if (status == L4C_OK && frame.data) {
                     ps.frames_captured++;
-                    /* Scale to 854x480 */
+                    count_raw_pass(&ps);
                     l4c_status_t scale_status;
                     scale_status = l4c_scale_bilinear_bgra(frame.data, frame.width, frame.height, frame.stride,
-                                                           ps.scaled_buf, TARGET_WIDTH, TARGET_HEIGHT, TARGET_WIDTH * 4);
+                                                           ps.scaled_buf, tw, th, tw * 4);
                     ps.capture->vtable->release_frame(ps.capture, &frame);
 
                     if (scale_status == L4C_OK) {
-                        /* Convert BGRA → I420. Use frame-counter PTS for uniform timestamps
-                         * (ffmpeg-style constant frame rate), not wall-clock which has jitter. */
                         l4c_raw_frame_t raw;
                         l4c_access_unit_t au;
-                        uint64_t pts_uniform = (uint64_t)ps.frames_captured * 1000u / TARGET_FPS;
-                        status = l4c_color_convert_bgra_to_i420(ps.converter, ps.scaled_buf,
-                                                                TARGET_WIDTH * 4, pts_uniform, &raw);
-                        if (status != L4C_OK) { ps.raw_drops++; continue; }
+                        uint64_t pts_uniform = (uint64_t)ps.frames_captured * 1000u / (tfps ? tfps : 10u);
 
-                        raw.force_idr = l4c_safety_take_idr(&gate, now);
+                        if (ps.active_encoder_backend == 2) {
+                            status = l4c_color_convert_bgra_to_nv12_frame(ps.converter, ps.scaled_buf,
+                                                                          tw * 4, pts_uniform, &raw);
+                        } else {
+                            status = l4c_color_convert_bgra_to_i420(ps.converter, ps.scaled_buf,
+                                                                    tw * 4, pts_uniform, &raw);
+                        }
+                        if (status != L4C_OK) { count_raw_drop(&ps); continue; }
+
+                        raw.force_idr = ps.force_next_idr || l4c_safety_take_idr(&gate, now);
+                        ps.force_next_idr = false;
 
                         memset(&au, 0, sizeof(au));
                         status = ps.encoder->vtable->encode(ps.encoder, &raw, &au);
+
+                        /* Check for hardware MFT runtime failure -> controlled fallback to OpenH264 */
+                        if (status == L4C_ERR_DEVICE_LOST && ps.active_encoder_backend == 2) {
+                            ps.encoder->vtable->destroy(ps.encoder);
+                            ps.encoder = NULL;
+
+                            l4c_status_t fb_status = l4c_openh264_encoder_create(&ps.encoder);
+                            if (fb_status == L4C_OK) {
+                                l4c_encoder_config_t fb_cfg;
+                                memset(&fb_cfg, 0, sizeof(fb_cfg));
+                                fb_cfg.width = ps.target_width;
+                                fb_cfg.height = ps.target_height;
+                                fb_cfg.target_fps = ps.current_fps;
+                                fb_cfg.target_bitrate_kbps = ps.bitrate_target;
+                                fb_cfg.max_bitrate_kbps = ps.bitrate_max;
+                                fb_cfg.input_format = L4C_PIX_FMT_I420;
+                                fb_status = ps.encoder->vtable->init(ps.encoder, &fb_cfg);
+                                if (fb_status == L4C_OK) {
+                                    ps.active_encoder_backend = 1; /* OPENH264_SOFTWARE */
+                                    ps.fallback_reason = L4C_FALLBACK_MFT_UNAVAILABLE;
+
+                                    l4c_message_t deg_msg;
+                                    memset(&deg_msg, 0, sizeof(deg_msg));
+                                    deg_msg.type = L4C_EVENT_DEGRADED;
+                                    deg_msg.body.degraded.degrade_state = L4C_NOMINAL;
+                                    deg_msg.body.degraded.reason = L4C_FALLBACK_MFT_UNAVAILABLE;
+                                    l4c_pipe_enqueue(&pipe, &deg_msg, now);
+
+                                    /* Re-convert current frame to I420 and retry encode */
+                                    status = l4c_color_convert_bgra_to_i420(ps.converter, ps.scaled_buf,
+                                                                            tw * 4, pts_uniform, &raw);
+                                    if (status == L4C_OK) {
+                                        raw.force_idr = true;
+                                        status = ps.encoder->vtable->encode(ps.encoder, &raw, &au);
+                                    }
+                                }
+                            }
+                        }
+
                         if (status == L4C_OK && au.nal_count > 0) {
                             ps.frames_encoded++;
-                            /* Send RTP */
-                            l4c_status_t rtp_status = l4c_rtp_send_au(ps.rtp, &au, ps.encoder);
-                            if (rtp_status == L4C_OK) {
-                                ps.frames_sent++;
-                            } else {
-                                ps.transport_drops++;
-                                l4c_safety_take_idr(&gate, now);
+                            count_enc_pass(&ps);
+                            ps.au_bytes_10s += (uint32_t)au.total_bytes;
+                            {
+                                l4c_status_t rtp_status = l4c_rtp_send_au(ps.rtp, &au, ps.encoder);
+                                if (rtp_status == L4C_OK) {
+                                    ps.frames_sent++;
+                                    count_tr_pass(&ps);
+                                } else {
+                                    count_tr_drop(&ps);
+                                    l4c_safety_take_idr(&gate, now);
+                                }
                             }
                             ps.encoder->vtable->release_au(ps.encoder, &au);
                         } else if (status == L4C_ERR_NO_FRAME) {
                             ps.frames_skipped++;
+                            count_enc_drop(&ps);
                         } else {
-                            ps.encoder_drops++;
+                            count_enc_drop(&ps);
                         }
                     }
                 } else {
-                    ps.raw_drops++;
+                    count_raw_drop(&ps);
                 }
             }
 
@@ -273,6 +677,11 @@ static int run(l4c_args_t *args) {
             if (now - ps.last_metrics_ms >= 1000) {
                 send_event_metrics(&pipe, &ps, now);
                 ps.last_metrics_ms = now;
+            }
+            if (ps.bitrate_win_start_ms == 0) ps.bitrate_win_start_ms = now;
+            if (now - ps.bitrate_win_start_ms >= 10000) {
+                ps.bitrate_win_start_ms = now;
+                ps.au_bytes_10s = 0;
             }
 
             /* RTCP Sender Reports (keepalive for l4media ingress) */

@@ -8,6 +8,7 @@ enum { L4C_PROFILE_480P = 1, L4C_PROFILE_540P = 2, L4C_PROFILE_720P = 3 };
 enum { L4C_NOMINAL = 0, L4C_FPS_THROTTLED = 1, L4C_DEGRADED_540P = 2, L4C_DEGRADED_480P = 3 };
 enum { L4C_FALLBACK_NONE = 0, L4C_DXGI_ACCESS_LOST = 1, L4C_MFT_UNAVAILABLE = 2,
        L4C_WIN7_LEGACY = 3, L4C_HIGH_LOAD = 4 };
+#define L4C_FALLBACK_MFT_UNAVAILABLE L4C_MFT_UNAVAILABLE
 
 /* Producer -> IPC -> l4desk adapter (L4C-05). Новых внешних полей нет.
  * READY: video_capture_backend, video_encoder_backend, video_hw_accel (encoder == 2).

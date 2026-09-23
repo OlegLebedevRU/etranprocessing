@@ -1,3 +1,5 @@
+#include <windows.h>
+#include <stdio.h>
 #include <string.h>
 #include "l4capture/gdi_capture.h"
 #include "l4capture/limits.h"
@@ -22,9 +24,17 @@ int test_gdi_init_capture_release(void) {
     if (s != L4C_OK) return 1;
     memset(&config, 0, sizeof(config));
     config.capture_cursor = false;
-    /* Use default virtual screen */
+    /* Use primary monitor if virtual screen exceeds 4K max pixels limit */
+    if ((uint64_t)GetSystemMetrics(SM_CXVIRTUALSCREEN) * GetSystemMetrics(SM_CYVIRTUALSCREEN) > L4C_MAX_PIXELS_AREA) {
+        config.target_rect.left = 0;
+        config.target_rect.top = 0;
+        config.target_rect.right = GetSystemMetrics(SM_CXSCREEN);
+        config.target_rect.bottom = GetSystemMetrics(SM_CYSCREEN);
+    }
     s = backend->vtable->init(backend, &config);
-    if (s != L4C_OK) { backend->vtable->destroy(backend); return 2; }
+    if (s != L4C_OK) {
+        backend->vtable->destroy(backend); return 2;
+    }
     /* Capture one frame */
     s = backend->vtable->acquire_frame(backend, &frame, 1000);
     if (s != L4C_OK && s != L4C_ERR_SESSION_UNAVAILABLE) {
@@ -50,6 +60,12 @@ int test_gdi_reuse_buffer(void) {
     if (s != L4C_OK) return 1;
     memset(&config, 0, sizeof(config));
     config.capture_cursor = false;
+    if ((uint64_t)GetSystemMetrics(SM_CXVIRTUALSCREEN) * GetSystemMetrics(SM_CYVIRTUALSCREEN) > L4C_MAX_PIXELS_AREA) {
+        config.target_rect.left = 0;
+        config.target_rect.top = 0;
+        config.target_rect.right = GetSystemMetrics(SM_CXSCREEN);
+        config.target_rect.bottom = GetSystemMetrics(SM_CYSCREEN);
+    }
     s = backend->vtable->init(backend, &config);
     if (s != L4C_OK) { backend->vtable->destroy(backend); return 2; }
     s = backend->vtable->acquire_frame(backend, &frame1, 1000);
