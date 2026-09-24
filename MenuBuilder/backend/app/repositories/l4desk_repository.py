@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from datetime import UTC, date, datetime
 from typing import Any
 
@@ -356,8 +357,26 @@ class L4DeskRepository:
     async def get_active_session_by_terminal_id(
         self, terminal_id: int
     ) -> L4DeskRemoteSession | None:
+        from app.models import Terminal
+
+        matched_ids = [terminal_id]
+        with contextlib.suppress(Exception):
+            stmt_term = select(Terminal.id, Terminal.device_id).where(
+                (Terminal.id == terminal_id) | (Terminal.device_id == terminal_id)
+            )
+            res_term = await self.session.execute(stmt_term)
+            if hasattr(res_term, "fetchall"):
+                rows: Any = res_term.fetchall()
+                if hasattr(rows, "__await__"):
+                    rows = await rows  # pyright: ignore[reportGeneralTypeIssues]
+                for row in rows:
+                    if row[0] is not None and row[0] not in matched_ids:
+                        matched_ids.append(row[0])
+                    if row[1] is not None and row[1] not in matched_ids:
+                        matched_ids.append(row[1])
+
         stmt = select(L4DeskRemoteSession).where(
-            L4DeskRemoteSession.terminal_id == terminal_id,
+            L4DeskRemoteSession.terminal_id.in_(matched_ids),
             L4DeskRemoteSession.state.in_(
                 ["reserved", "start_requested", "active", "stop_requested"]
             ),

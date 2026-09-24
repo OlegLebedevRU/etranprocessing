@@ -31,6 +31,7 @@ import {
   releaseControlLease,
   startDeviceStream,
   stopDeviceStream,
+  stopVideoSession,
   StreamPresenceInfo,
 } from "../api/video";
 import { SessionLifecycleCoordinator } from "../utils/sessionLifecycle";
@@ -550,12 +551,18 @@ export default function VideoSurveillancePage() {
     try {
       // 1. Оператор запрашивает аренду со scope 'stream'
       const leaseRes = await acquireControlLease(selectedDevice.device_id, "stream");
-      setActiveLeaseId(leaseRes.lease_id);
-      leaseRef.current = { id: leaseRes.lease_id, deviceId: selectedDevice.device_id };
+      let effectiveLeaseId = leaseRes.lease_id;
+      setActiveLeaseId(effectiveLeaseId);
+      leaseRef.current = { id: effectiveLeaseId, deviceId: selectedDevice.device_id };
 
       // 2. Route-before-Start: подготовка медиаканала (ingress и Janus mountpoint) ДО запуска FFmpeg
       setStatusText("Подготовка медиаканала (маршрутизация)...");
       const sessionData = await createVideoSession(selectedDevice.device_id);
+      if (sessionData.lease_id) {
+        effectiveLeaseId = sessionData.lease_id;
+        setActiveLeaseId(effectiveLeaseId);
+        leaseRef.current = { id: effectiveLeaseId, deviceId: selectedDevice.device_id };
+      }
 
       // 3. Определение режима и запуск видеопотока на терминале
       const colonIdx = selectedSourceKey.indexOf(":");
@@ -567,13 +574,13 @@ export default function VideoSurveillancePage() {
         mode: mode as "desktop" | "usb-camera",
         source_id: source_id || "0",
         profile: selectedProfile,
-        lease_id: leaseRes.lease_id,
+        lease_id: effectiveLeaseId,
       });
 
       // Запуск координатора сессии (generation tracking и неперекрывающийся keepalive)
       coordinatorRef.current.startSession({
         deviceId: selectedDevice.device_id,
-        leaseId: leaseRes.lease_id,
+        leaseId: effectiveLeaseId,
         streamInstanceId: startRes.stream_instance_id,
         keepaliveIntervalMs: (leaseRes.keepalive_sec ? Math.min(leaseRes.keepalive_sec / 2, 5) : 5) * 1000,
       });
@@ -687,14 +694,19 @@ export default function VideoSurveillancePage() {
     setStreamStage("stopping");
     try {
       const curLease = coordinatorRef.current.session?.leaseId || activeLeaseId;
-      if (curLease) {
-        await stopDeviceStream(selectedDevice.device_id, curLease);
-      }
+      await stopDeviceStream(selectedDevice.device_id, curLease || undefined);
+    } catch {
+      // ignore
+    }
+    try {
+      await stopVideoSession(selectedDevice.device_id);
     } catch {
       // ignore
     }
     await stopSession("operator_stop");
-    message.info("Трансляция остановлена");
+    setBannerError(null);
+    setRefusalNotice(null);
+    message.info("Активная сессия завершена");
   };
 
   // Переключение режима удалённого управления

@@ -6,6 +6,7 @@ export interface VideoSessionResponse {
   janus_ws: string;
   session_ttl_sec: number;
   pin?: string;
+  lease_id?: string | null;
 }
 
 export interface VideoStatusResponse {
@@ -419,5 +420,10 @@ export async function getActiveRemoteSession(
   const { data } = await client.get(
     `/v1/remote-sessions/devices/${deviceId}/active`
   );
+  return data;
+}
+
+export async function stopVideoSession(deviceId: number): Promise<any> {
+  const { data } = await client.delete(`/v1/video/devices/${deviceId}/session`);
   return data;
 }

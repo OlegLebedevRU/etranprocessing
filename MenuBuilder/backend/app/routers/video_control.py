@@ -547,13 +547,99 @@ async def acquire_device_control_lease(
     if body and body.session_id:
         custom_user["session_id"] = body.session_id
 
-    res = await iot_client.remote_input_acquire_lease(
-        sn=terminal.sn,
-        scope=scope,
-        ttl_sec=ttl_sec,
-        org_id=org_id,
-        user=custom_user,
-    )
+    res: dict[str, Any] = {}
+
+    # Check if user already holds an active lease on this terminal — reuse it
+    existing_lease: dict[str, Any] | None = None
+    with contextlib.suppress(Exception):
+        status_data = await iot_client.remote_input_status(
+            terminal.sn, org_id=org_id, user=user
+        )
+        lease_info = status_data.get("lease") or {}
+        if lease_info.get("active") and lease_info.get("lease_id"):
+            owner = str(lease_info.get("owner_user_id") or "")
+            user_sub = str(user.get("sub") or "")
+            user_id_str = str(user.get("user_id") or "")
+            if is_strictly_superuser or (owner and owner in (user_sub, user_id_str)):
+                existing_lease = lease_info
+                logger.info(
+                    "Reusing existing lease %s for device %d (sn=%s)",
+                    lease_info.get("lease_id"),
+                    device_id,
+                    terminal.sn,
+                )
+
+    if existing_lease:
+        cur_scope = existing_lease.get("scope") or "view"
+        if cur_scope != scope:
+            try:
+                res = await iot_client.remote_input_change_scope(
+                    lease_id=str(existing_lease["lease_id"]),
+                    scope=scope,
+                    org_id=org_id,
+                    user=custom_user,
+                )
+            except Exception as change_err:  # noqa: BLE001
+                logger.warning(
+                    "Could not change scope of existing lease %s: %s, falling back to existing",
+                    existing_lease.get("lease_id"),
+                    change_err,
+                )
+                res = existing_lease
+        else:
+            res = existing_lease
+    else:
+        try:
+            res = await iot_client.remote_input_acquire_lease(
+                sn=terminal.sn,
+                scope=scope,
+                ttl_sec=ttl_sec,
+                org_id=org_id,
+                user=custom_user,
+            )
+        except HTTPException as exc:
+            if exc.status_code == status.HTTP_409_CONFLICT:
+                logger.info(
+                    "Lease conflict for %s on device %d, attempting recovery of prior lease",
+                    terminal.sn,
+                    device_id,
+                )
+                recovered = False
+                with contextlib.suppress(Exception):
+                    st = await iot_client.remote_input_status(
+                        terminal.sn, org_id=org_id, user=user
+                    )
+                    st_lease = st.get("lease") or {}
+                    st_owner = str(st_lease.get("owner_user_id") or "")
+                    user_sub = str(user.get("sub") or "")
+                    user_id_str = str(user.get("user_id") or "")
+                    if st_lease.get("lease_id") and (
+                        is_strictly_superuser
+                        or (st_owner and st_owner in (user_sub, user_id_str))
+                    ):
+                        logger.info(
+                            "Releasing prior lease %s for %s and re-acquiring",
+                            st_lease.get("lease_id"),
+                            terminal.sn,
+                        )
+                        await iot_client.remote_input_release(
+                            lease_id=str(st_lease["lease_id"]),
+                            org_id=org_id,
+                            user=user,
+                        )
+                        res = await iot_client.remote_input_acquire_lease(
+                            sn=terminal.sn,
+                            scope=scope,
+                            ttl_sec=ttl_sec,
+                            org_id=org_id,
+                            user=custom_user,
+                        )
+                        recovered = True
+                if not recovered:
+                    raise
+            else:
+                raise
+
     lease_id = str(res["lease_id"])
     if scope == "console":
         await repo.ensure_l4desk_terminal(
@@ -789,17 +875,24 @@ async def start_device_stream(
         )
 
     lease_id = body.lease_id
-    if not lease_id:
+
+    # Always verify/resolve the actual active lease on IoT platform
+    active_iot_lease_id: str | None = None
+    with contextlib.suppress(Exception):
         status_data = await iot_client.remote_input_status(
             terminal.sn, org_id=org_id, user=user
         )
         lease_info = status_data.get("lease") or {}
-        if not lease_info.get("active") or not lease_info.get("lease_id"):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Для запуска трансляции требуется активная аренда",
-            )
-        lease_id = str(lease_info["lease_id"])
+        if lease_info.get("active") and lease_info.get("lease_id"):
+            active_iot_lease_id = str(lease_info["lease_id"])
+
+    if active_iot_lease_id:
+        lease_id = active_iot_lease_id
+    elif not lease_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Для запуска трансляции требуется активная аренда",
+        )
 
     source_id = body.source_id
     if body.mode == "desktop" and source_id in ("0", "disp", "desktop", ""):
@@ -836,13 +929,23 @@ async def start_device_stream(
 
     # Create lifecycle media session before starting terminal stream
     # This ensures reconcile protects the route and mountpoint
-    media_session_id = f"media-{terminal.sn}"
+    active_sess = await repo.get_active_session_by_terminal_id(device_id)
+    if (
+        active_sess
+        and active_sess.session_type == "video"
+        and active_sess.provider_session_id
+    ):
+        media_session_id = active_sess.provider_session_id
+    else:
+        media_session_id = f"sess-video-{device_id}-{uuid.uuid4().hex[:8]}"
+
     rtp_port, rtcp_port = get_device_ports(device_id)
     pin = get_or_create_mountpoint_pin(device_id, lease_id=lease_id)
+    stream_op_id = f"op-stream-{device_id}"
     try:
         await media_orchestrator_client.start_session(
             session_id=media_session_id,
-            operation_id=f"op-stream-{device_id}",
+            operation_id=stream_op_id,
             sn=terminal.sn,
             device_id=device_id,
             pin=pin,
@@ -854,12 +957,63 @@ async def start_device_stream(
         from app.services.media_orchestrator_client import MediaSessionConflictError
 
         if isinstance(media_err, MediaSessionConflictError):
-            logger.info(
-                "Media session already active for device %d (%s), reusing: %s",
-                device_id,
-                terminal.sn,
-                media_err,
-            )
+            err_str = str(media_err).lower()
+            if "terminated" in err_str:
+                logger.info(
+                    "Media session %s was terminated for device %d (%s), reallocating fresh session ID",
+                    media_session_id,
+                    device_id,
+                    terminal.sn,
+                )
+                media_session_id = f"sess-video-{device_id}-{uuid.uuid4().hex[:8]}"
+                await media_orchestrator_client.start_session(
+                    session_id=media_session_id,
+                    operation_id=f"op-stream-{device_id}-{uuid.uuid4().hex[:6]}",
+                    sn=terminal.sn,
+                    device_id=device_id,
+                    pin=pin,
+                    rtp_port=rtp_port,
+                    rtcp_port=rtcp_port,
+                    ttl_sec=settings.remote_session_watchdog_ttl_sec,
+                )
+            elif "busy" in err_str:
+                logger.info(
+                    "Device %d (%s) busy with prior media session, stopping and retrying with fresh session",
+                    device_id,
+                    terminal.sn,
+                )
+                with contextlib.suppress(Exception):
+                    if active_sess and active_sess.provider_session_id:
+                        await media_orchestrator_client.stop_session(
+                            session_id=active_sess.provider_session_id,
+                            reason="superseded_by_new_stream",
+                        )
+                    await media_orchestrator_client.stop_session(
+                        session_id=terminal.sn,
+                        reason="superseded_by_new_stream",
+                    )
+                    await media_orchestrator_client.stop_session(
+                        session_id=f"media-{terminal.sn}",
+                        reason="superseded_by_new_stream",
+                    )
+                media_session_id = f"sess-video-{device_id}-{uuid.uuid4().hex[:8]}"
+                await media_orchestrator_client.start_session(
+                    session_id=media_session_id,
+                    operation_id=f"op-stream-{device_id}-{uuid.uuid4().hex[:6]}",
+                    sn=terminal.sn,
+                    device_id=device_id,
+                    pin=pin,
+                    rtp_port=rtp_port,
+                    rtcp_port=rtcp_port,
+                    ttl_sec=settings.remote_session_watchdog_ttl_sec,
+                )
+            else:
+                logger.info(
+                    "Media session already active for device %d (%s), reusing: %s",
+                    device_id,
+                    terminal.sn,
+                    media_err,
+                )
         else:
             logger.error(
                 "Media lifecycle start failed for device %d (%s): %s",
@@ -872,15 +1026,55 @@ async def start_device_stream(
                 detail=f"Ошибка подготовки медиаканала: {media_err}",
             ) from media_err
 
+    custom_user = dict(user)
+    if not custom_user.get("session_id"):
+        custom_user["session_id"] = media_session_id
+
     try:
-        res = await iot_client.remote_input_stream_start(
-            lease_id=lease_id,
-            mode=body.mode,
-            source_id=source_id,
-            profile=body.profile,
-            org_id=org_id,
-            user=user,
-        )
+        try:
+            res = await iot_client.remote_input_stream_start(
+                lease_id=lease_id,
+                mode=body.mode,
+                source_id=source_id,
+                profile=body.profile,
+                org_id=org_id,
+                user=custom_user,
+            )
+        except HTTPException as start_err:
+            start_err_str = (
+                str(start_err.detail).lower()
+                if isinstance(start_err.detail, str)
+                else str(start_err.detail.get("code", "")).lower()
+                if isinstance(start_err.detail, dict)
+                else ""
+            )
+            if (
+                start_err.status_code == status.HTTP_409_CONFLICT
+                and "lease" in start_err_str
+            ):
+                logger.info(
+                    "Lease %s inactive during stream_start for %s, re-acquiring lease and retrying",
+                    lease_id,
+                    terminal.sn,
+                )
+                lease_res = await iot_client.remote_input_acquire_lease(
+                    sn=terminal.sn,
+                    scope="stream",
+                    ttl_sec=settings.remote_session_watchdog_ttl_sec,
+                    org_id=org_id,
+                    user=custom_user,
+                )
+                lease_id = str(lease_res.get("lease_id", ""))
+                res = await iot_client.remote_input_stream_start(
+                    lease_id=lease_id,
+                    mode=body.mode,
+                    source_id=source_id,
+                    profile=body.profile,
+                    org_id=org_id,
+                    user=custom_user,
+                )
+            else:
+                raise
         stream_inst_id = str(res.get("stream_instance_id", ""))
         if stream_inst_id:
             set_mountpoint_stream_instance(device_id, stream_inst_id)
@@ -899,7 +1093,12 @@ async def start_device_stream(
                     if "user_id" in user
                     else None
                 )
-            if not active_sess:
+            if active_sess and active_sess.session_type == "video":
+                active_sess.provider_session_id = media_session_id
+                await db.flush()
+                with contextlib.suppress(Exception):
+                    await db.commit()
+            elif not active_sess:
                 await repo.create_remote_session(
                     tenant_id=terminal.org_id,
                     terminal_id=terminal.id,
@@ -912,6 +1111,8 @@ async def start_device_stream(
                     active_at=datetime.now(UTC),
                 )
                 await db.flush()
+                with contextlib.suppress(Exception):
+                    await db.commit()
         return StreamStartResponse(
             stream_instance_id=stream_inst_id,
             result=str(res.get("result", "")),
@@ -919,6 +1120,11 @@ async def start_device_stream(
         )
     except HTTPException as exc:
         # Compensating stop: clean up media session on terminal stream failure
+        with contextlib.suppress(Exception):
+            await media_orchestrator_client.stop_session(
+                session_id=media_session_id,
+                reason="stream_start_failed",
+            )
         with contextlib.suppress(Exception):
             await media_orchestrator_client.stop_session(
                 session_id=f"media-{terminal.sn}",
@@ -964,27 +1170,29 @@ async def stop_device_stream(
 
     lease_id = body.lease_id if body else None
     if not lease_id:
-        status_data = await iot_client.remote_input_status(
-            terminal.sn, org_id=org_id, user=user
-        )
-        lease_info = status_data.get("lease") or {}
-        if not lease_info.get("active") or not lease_info.get("lease_id"):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Для остановки трансляции требуется активная аренда",
+        with contextlib.suppress(Exception):
+            status_data = await iot_client.remote_input_status(
+                terminal.sn, org_id=org_id, user=user
             )
-        lease_id = str(lease_info["lease_id"])
+            lease_info = status_data.get("lease") or {}
+            if lease_info.get("active") and lease_info.get("lease_id"):
+                lease_id = str(lease_info["lease_id"])
 
     try:
-        res = await iot_client.remote_input_stream_stop(
-            lease_id=lease_id,
-            org_id=org_id,
-            user=user,
-        )
-        clear_mountpoint_pin(device_id, lease_id=lease_id)
+        res: dict[str, Any] = {"result": "stopped"}
+        if lease_id:
+            with contextlib.suppress(Exception):
+                res = await iot_client.remote_input_stream_stop(
+                    lease_id=lease_id,
+                    org_id=org_id,
+                    user=user,
+                )
+            clear_mountpoint_pin(device_id, lease_id=lease_id)
+        else:
+            clear_mountpoint_pin(device_id)
 
         repo = L4DeskRepository(db)
-        active_sess = await repo.get_active_session_by_terminal_id(device_id)
+        active_sess = await repo.get_active_session_by_terminal_id(terminal.id)
         if (
             isinstance(active_sess, L4DeskRemoteSession)
             and active_sess.session_type == "video"
@@ -993,8 +1201,14 @@ async def stop_device_stream(
             active_sess.closed_at = func.now()
             active_sess.reason = "stream_stopped"
             await db.flush()
+            with contextlib.suppress(Exception):
+                await db.commit()
             if active_sess.provider_session_id:
                 with contextlib.suppress(Exception):
+                    await media_orchestrator_client.stop_session(
+                        session_id=terminal.sn,
+                        reason="stream_stopped",
+                    )
                     await media_orchestrator_client.stop_session(
                         session_id=f"media-{terminal.sn}",
                         reason="stream_stopped",
@@ -1182,6 +1396,16 @@ async def release_device_control_lease(
             if active_sess.session_type == "video" and active_sess.provider_session_id:
                 with contextlib.suppress(Exception):
                     await media_orchestrator_client.stop_session(
+                        session_id=terminal.sn,
+                        reason="lease_released",
+                    )
+                with contextlib.suppress(Exception):
+                    await media_orchestrator_client.stop_session(
+                        session_id=active_sess.provider_session_id,
+                        reason="lease_released",
+                    )
+                with contextlib.suppress(Exception):
+                    await media_orchestrator_client.stop_session(
                         session_id=f"media-{terminal.sn}",
                         reason="lease_released",
                     )
@@ -1189,6 +1413,8 @@ async def release_device_control_lease(
             active_sess.closed_at = func.now()
             active_sess.reason = "lease_released"
             await db.flush()
+            with contextlib.suppress(Exception):
+                await db.commit()
 
 
 @router.post("/devices/{device_id}/control/events")

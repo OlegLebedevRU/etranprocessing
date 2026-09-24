@@ -58,7 +58,12 @@ class IotPlatformClient:
             user_sub = user.get("sub") or user.get("username") or user.get("user_id")
             if user_sub is not None:
                 headers["X-User-Id"] = str(user_sub)
-            session_id = user.get("session_id") or user.get("sid") or user.get("jti")
+            session_id = (
+                user.get("session_id")
+                or user.get("sid")
+                or user.get("jti")
+                or (f"sess-{user_sub}" if user_sub else None)
+            )
             if session_id:
                 headers["X-Session-Id"] = str(session_id)
         return headers

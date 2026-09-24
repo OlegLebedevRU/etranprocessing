@@ -25,6 +25,7 @@ class VideoSessionResponse(BaseModel):
     janus_ws: str
     session_ttl_sec: int
     pin: str | None = None
+    lease_id: str | None = None
 
 
 class VideoStatusResponse(BaseModel):
@@ -140,13 +141,38 @@ async def create_video_session(
         user=user,
         start_terminal_stream=False,
     )
+    await db.commit()
     return VideoSessionResponse(
         mountpoint_id=result.mountpoint_id or device_id,
         sn=result.sn,
         janus_ws=result.janus_ws or "/janus-ws",
         session_ttl_sec=result.ttl_sec,
         pin=result.pin,
+        lease_id=result.lease_id if isinstance(result.lease_id, str) else None,
     )
+
+
+@router.delete(
+    "/devices/{device_id}/session",
+    response_model=dict[str, Any],
+    status_code=status.HTTP_200_OK,
+)
+async def stop_video_session(
+    device_id: int,
+    user: dict[str, Any] = Depends(require_permission(PERMISSION_VIDEO_VIEW)),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Force close an active video session on device."""
+    from app.services.remote_session_use_case import RemoteSessionUseCase
+
+    use_case = RemoteSessionUseCase(db)
+    res = await use_case.stop_session(
+        device_id=device_id,
+        reason="operator_closed",
+        user=user,
+    )
+    await db.commit()
+    return res
 
 
 @router.get(

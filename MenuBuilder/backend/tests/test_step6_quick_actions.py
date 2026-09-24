@@ -16,6 +16,7 @@ from app.main import app
 from app.models import Terminal
 from app.routers.video import _mountpoint_pins
 from app.services.iot_client import iot_client
+from app.services.media_orchestrator_client import media_orchestrator_client
 
 
 @pytest.fixture(autouse=True)
@@ -479,6 +480,18 @@ async def test_stream_start_504_terminal_timeout_not_swallowed(
             patch(
                 "app.routers.video_control.async_session",
                 return_value=FakeSessionContext(mock_db_session),
+            ),
+            patch.object(
+                media_orchestrator_client,
+                "start_session",
+                new=AsyncMock(
+                    return_value={
+                        "status": "success",
+                        "mountpoint_id": 1,
+                        "session_id": "sess-test-1",
+                        "state": "active",
+                    }
+                ),
             ),
             patch.object(
                 iot_client,

@@ -238,25 +238,40 @@ class RemoteSessionUseCase:
                     ttl_sec=settings.remote_session_watchdog_ttl_sec,
                 )
 
-            # Another session is active or starting! Auto-switch is forbidden
-            logger.warning(
-                "Conflict: terminal %s has active %s session (state=%s). Rejecting %s start.",
+            # Cross-session conflict between console and video: auto-switch forbidden
+            if existing.session_type != session_type:
+                logger.warning(
+                    "Conflict: terminal %s has active %s session (state=%s). Rejecting %s start.",
+                    terminal.sn,
+                    existing.session_type,
+                    existing.state,
+                    session_type,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "code": "session_busy",
+                        "message": (
+                            f"Терминал {terminal.sn} занят активной сессией "
+                            f"({existing.session_type}). Автоматическое переключение "
+                            f"между консолью и видео запрещено."
+                        ),
+                    },
+                )
+
+            # Same session type (e.g. video -> video): gracefully stop stale prior session
+            logger.info(
+                "Terminal %s has prior %s session %s. Gracefully stopping before starting new session.",
                 terminal.sn,
                 existing.session_type,
-                existing.state,
-                session_type,
+                existing.provider_session_id,
             )
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={
-                    "code": "session_busy",
-                    "message": (
-                        f"Терминал {terminal.sn} занят активной сессией "
-                        f"({existing.session_type}). Автоматическое переключение "
-                        f"между консолью и видео запрещено."
-                    ),
-                },
-            )
+            with contextlib.suppress(Exception):
+                await self.stop_session(
+                    device_id=device_id,
+                    reason="superseded_by_new_session",
+                    user=user,
+                )
 
         # Ensure L4DeskTerminal record exists for foreign key constraint
         await self.repo.ensure_l4desk_terminal(
@@ -397,7 +412,10 @@ class RemoteSessionUseCase:
                     lease_err,
                 )
                 # If lease fails due to lease_taken, treat as conflict
-                if isinstance(lease_err, HTTPException) and lease_err.status_code == 409:
+                if (
+                    isinstance(lease_err, HTTPException)
+                    and lease_err.status_code == 409
+                ):
                     # COMPENSATING STOP on IoT
                     with contextlib.suppress(Exception):
                         await self.iot_adapter.stop_remote_session(
@@ -432,9 +450,13 @@ class RemoteSessionUseCase:
             )
             rtp_port, rtcp_port = get_device_ports(device_id)
 
+            media_session_id = provider_session_id
+            media_started = False
+            last_media_err: Exception | None = None
+
             try:
                 media_res = await self.media_orchestrator.start_session(
-                    session_id=f"media-{terminal.sn}",
+                    session_id=media_session_id,
                     operation_id=op_id,
                     sn=terminal.sn,
                     device_id=device_id,
@@ -448,27 +470,59 @@ class RemoteSessionUseCase:
                 media_pin = media_res.get("pin")
                 if media_pin:
                     pin = str(media_pin)
-            except MediaSessionConflictError:
+                media_started = True
+            except MediaSessionConflictError as conflict_err:
                 logger.info(
-                    "Media session already active for %s (sn=%s), stopping old and retrying",
-                    f"media-{terminal.sn}",
+                    "Media session conflict for %s (sn=%s): %s, stopping prior sessions and retrying",
+                    media_session_id,
                     terminal.sn,
+                    conflict_err,
                 )
-                # Stop old sessions with known IDs to free the device
+                last_media_err = conflict_err
+                # Try to extract active_session_id from conflict detail if reported by Ingress
+                active_id = None
+                if isinstance(conflict_err.detail, dict):
+                    active_id = conflict_err.detail.get("active_session_id")
+                if active_id:
+                    with contextlib.suppress(Exception):
+                        await self.media_orchestrator.stop_session(
+                            session_id=str(active_id),
+                            reason="superseded_by_new_session",
+                        )
+                # Stop prior sessions by SN and known IDs to free the device
+                with contextlib.suppress(Exception):
+                    await self.media_orchestrator.stop_session(
+                        session_id=terminal.sn,
+                        reason="superseded_by_new_session",
+                    )
+                with contextlib.suppress(Exception):
+                    await self.media_orchestrator.stop_session(
+                        session_id=media_session_id,
+                        reason="superseded_by_new_session",
+                    )
                 with contextlib.suppress(Exception):
                     await self.media_orchestrator.stop_session(
                         session_id=f"media-{terminal.sn}",
                         reason="superseded_by_new_session",
                     )
-                with contextlib.suppress(Exception):
-                    await self.media_orchestrator.stop_session(
-                        session_id=provider_session_id,
-                        reason="superseded_by_new_session",
-                    )
-                # Retry with fresh session
+                old_sess = await self.repo.get_active_session_by_terminal_id(device_id)
+                if (
+                    old_sess
+                    and old_sess.provider_session_id
+                    and old_sess.provider_session_id != media_session_id
+                ):
+                    with contextlib.suppress(Exception):
+                        await self.media_orchestrator.stop_session(
+                            session_id=old_sess.provider_session_id,
+                            reason="superseded_by_new_session",
+                        )
+                # Retry with fresh session_id
+                fresh_media_session_id = (
+                    f"sess-video-{terminal.id}-{uuid.uuid4().hex[:8]}"
+                )
                 try:
-                    await self.media_orchestrator.start_session(
-                        session_id=f"media-{terminal.sn}",
+                    media_res = await self.media_orchestrator.start_session(
+                        session_id=fresh_media_session_id,
                         operation_id=op_id,
                         sn=terminal.sn,
                         device_id=device_id,
@@ -477,13 +531,27 @@ class RemoteSessionUseCase:
                         rtcp_port=rtcp_port,
                         ttl_sec=settings.remote_session_watchdog_ttl_sec,
                     )
-                except Exception as retry_err:
+                    local_session.provider_session_id = fresh_media_session_id
+                    provider_session_id = fresh_media_session_id
+                    mountpoint_id = int(media_res.get("mountpoint_id") or device_id)
+                    media_pin = media_res.get("pin")
+                    if media_pin:
+                        pin = str(media_pin)
+                    media_started = True
+                except Exception as retry_err:  # noqa: BLE001
                     logger.warning(
                         "Retry media start failed for %s: %s",
                         terminal.sn,
                         retry_err,
                     )
-            except Exception as media_err:
+                    last_media_err = retry_err
+            except Exception as media_err:  # noqa: BLE001
+                last_media_err = media_err
+
+            if not media_started:
+                media_err = last_media_err or Exception(
+                    "Неизвестная ошибка медиаоркестратора"
+                )
                 logger.error(
                     "Media orchestrator start failed for terminal %d (%s), executing compensating stop: %s",
                     device_id,
@@ -599,6 +667,8 @@ class RemoteSessionUseCase:
             },
         )
         await self.db.flush()
+        with contextlib.suppress(Exception):
+            await self.db.commit()
 
         return RemoteSessionResponse(
             session_id=provider_session_id,
@@ -680,7 +750,7 @@ class RemoteSessionUseCase:
                         )
             with contextlib.suppress(Exception):
                 await self.media_orchestrator.stop_session(
-                    session_id=f"media-{terminal.sn}" if terminal else prov_id,
+                    session_id=prov_id,
                     reason=reason,
                 )
 
@@ -691,8 +761,8 @@ class RemoteSessionUseCase:
                 reason=reason,
             )
 
-        # 3. Release any control lease
-        if terminal:
+        # 3. Release any control lease (skip if superseded by new session)
+        if terminal and reason != "superseded_by_new_session":
             with contextlib.suppress(Exception):
                 status_data = await self.iot_control.remote_input_status(
                     terminal.sn, org_id=terminal.org_id, user=user
@@ -726,6 +796,8 @@ class RemoteSessionUseCase:
                 details={"session_id": prov_id, "reason": reason},
             )
         await self.db.flush()
+        with contextlib.suppress(Exception):
+            await self.db.commit()
 
         return {
             "status": "success",

@@ -485,6 +485,12 @@ static inline void stop_media_session(const char* session_id, const char* operat
                                       char* resp_body, size_t resp_sz, int* status_code) {
     (void)operation_id;
     MediaSession* s = find_session_by_id(session_id);
+    if (!s) {
+        s = find_active_session_for_sn(session_id);
+    }
+    if (!s && strncmp(session_id, "media-", 6) == 0) {
+        s = find_active_session_for_sn(session_id + 6);
+    }
     if (!s || s->state == MEDIA_STATE_STOPPED) {
         *status_code = 200;
         if (resp_body && resp_sz > 0) {
@@ -621,8 +627,8 @@ static inline void handle_media_session_start(const char* body, char* resp_body,
         *status_code = 409;
         *status_text = "Conflict";
         snprintf(resp_body, resp_sz,
-                 "{\"error\":\"session_busy\",\"detail\":\"Active media session already exists for device '%s'\"}\n",
-                 sn);
+                 "{\"error\":\"session_busy\",\"detail\":\"Active media session already exists for device '%s'\",\"active_session_id\":\"%s\"}\n",
+                 sn, active_on_device->session_id);
         return;
     }
 

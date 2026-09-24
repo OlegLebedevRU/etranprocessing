@@ -187,6 +187,28 @@ async def test_get_video_session_status_uses_lifecycle_health(
             assert data["sn"] == "sn0001"
 
 
+@pytest.mark.anyio
+async def test_stop_video_session_endpoint(mock_db_session, operator_token):
+    """DELETE /api/v1/video/devices/{id}/session delegates to stop_session."""
+    app.dependency_overrides[get_db] = lambda: mock_db_session
+
+    with patch(
+        "app.services.remote_session_use_case.RemoteSessionUseCase.stop_session",
+        new=AsyncMock(return_value={"status": "success", "state": "closed"}),
+    ) as mock_stop:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.delete(
+                "/api/v1/video/devices/1/session",
+                headers={"Authorization": f"Bearer {operator_token}"},
+            )
+            assert resp.status_code == 200
+            assert resp.json()["status"] == "success"
+            assert resp.json()["state"] == "closed"
+            mock_stop.assert_called_once()
+
+
 # ---------------------------------------------------------------------------
 # Regression guards: prove no direct ingress/Janus calls exist in production
 # ---------------------------------------------------------------------------
