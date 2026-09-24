@@ -12,6 +12,7 @@ import argparse
 import base64
 from datetime import UTC, datetime
 import hashlib
+import http.client
 import json
 import os
 from pathlib import Path
