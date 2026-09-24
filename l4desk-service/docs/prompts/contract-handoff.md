@@ -3496,3 +3496,48 @@ consumers:
 next_prompt_id: L4D-08A-MEDIA
 ```
 <!-- HANDOFF:H-L4D-REDIS-IOT-01-v1:END -->
+
+## 40. Регистрация корректирующего шага L4D-REDIS-MEDIA-01 (l4media Redis ownership, DB 2)
+
+Внутренний шаг перевода ownership media-сессий/routes/mountpoints (`g_media_sessions` / dynamic `g_routes`) в Redis **DB 2** без изменения внешних lifecycle API. Явное уточнение: `R-L4D-REDIS-IOT-01-v1` действует только на `iot-rpc-rest-app` (`internal_runtime_state_only`) и **не** является авторизацией изменений `l4media`.
+
+Схема ключей (согласована; TTL ownership = `ttl_sec` сессии + refresh, **не** 5 мин):
+- `media:session:{session_id}`, `media:session-by-sn:{sn}`
+- `media:route:{sn}`, `media:mountpoint:{mountpoint_id}`
+- signaling (следующий шаг): `media:webrtc:*`, `media:peer:*` — 10–300 s
+- hot RTP path (`g_clients`) — **не** в Redis
+
+<!-- CORRECTIVE_REGISTRATION:R-L4D-REDIS-MEDIA-01-v1:BEGIN -->
+```yaml
+registration_id: R-L4D-REDIS-MEDIA-01-v1
+status: AUTHORIZED
+authorized_by: Cascade Controller
+authorization_basis: explicit_user_request_l4media_redis_ownership_db2
+registered_at_utc: '2026-09-25T00:55:00Z'
+prompt_id: L4D-REDIS-MEDIA-01
+scope_project: l4media
+scope_root: D:\repo\platerra\Public\etranprocessing\l4media
+blocked_prompt_id: L4D-08A-FIX-01-MEDIA
+authorized_inputs:
+  - handoff_id: H-L4D-08A-MEDIA-v1
+    contract_version: 1.0.0
+    producer_commit: aba1339
+  - handoff_id: H-L4D-08A-FIX-01-MEDIA-v1
+    contract_version: 1.0.0
+    producer_commit: 29a113a67979e1c45233b60ddcbca31a25425b83
+  - handoff_id: H-L4D-REDIS-IOT-01-v1
+    contract_version: 1.0.0
+    producer_commit: 1745074e5ad5a4bfae6741743f05db5ef32095f9
+sequence_gate_handoff_id: H-L4D-08A-FIX-01-MEDIA-v1
+output_handoff_id: H-L4D-REDIS-MEDIA-01-v1
+next_prompt_id: L4D-14-MB
+report_path: l4media/docs/l4desk/handoffs/L4D-REDIS-MEDIA-01-report.md
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: l4media/docs/l4desk/handoffs/L4D-REDIS-MEDIA-01-candidate.md
+publication_required_before_execution: true
+grant_scope: l4media_ingress_redis_ownership_only
+runtime_acceptance: NOT_GRANTED
+blocked_next_prompt_id: NONE
+```
+<!-- CORRECTIVE_REGISTRATION:R-L4D-REDIS-MEDIA-01-v1:END -->

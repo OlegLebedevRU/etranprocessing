@@ -29,6 +29,8 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
+#include "media_redis.h"
+
 #define MAX_MEDIA_SESSIONS        128
 #define DEFAULT_PORT_BASE         6010
 #define DEFAULT_PORT_MAX          6200
@@ -573,6 +575,47 @@ static inline MediaSession* allocate_session_slot(void) {
     return NULL;
 }
 
+/* Redis ownership restore: one session record -> g_media_sessions + route. */
+static inline void media_redis_restore_one(const char* session_id, const char* operation_id,
+                                          const char* sn, uint32_t device_id, uint32_t mountpoint_id,
+                                          int rtp_port, int rtcp_port, const char* pin,
+                                          int state, int ttl_sec, time_t created_at, time_t started_at,
+                                          void* user) {
+    (void)user;
+    if (!session_id || !session_id[0] || !sn || !sn[0]) return;
+    MediaSession* existing = find_session_by_id(session_id);
+    MediaSession* s = existing ? existing : allocate_session_slot();
+    if (!s) return;
+    if (!existing) memset(s, 0, sizeof(*s));
+    lifecycle_safe_strcpy(s->session_id, session_id, sizeof(s->session_id));
+    lifecycle_safe_strcpy(s->operation_id, operation_id ? operation_id : "", sizeof(s->operation_id));
+    lifecycle_safe_strcpy(s->sn, sn, sizeof(s->sn));
+    s->device_id = device_id;
+    s->mountpoint_id = mountpoint_id;
+    s->rtp_port = rtp_port;
+    s->rtcp_port = rtcp_port;
+    lifecycle_safe_strcpy(s->pin, pin ? pin : "", sizeof(s->pin));
+    s->ttl_sec = ttl_sec;
+    s->created_at = created_at;
+    s->started_at = started_at;
+    /* Only live states survive a restart; stopped stays stopped. */
+    if (state == MEDIA_STATE_ACTIVE || state == MEDIA_STATE_STARTING) {
+        s->state = MEDIA_STATE_ACTIVE;
+        if (s->started_at == 0) s->started_at = time(NULL);
+        int cu = 0;
+        upsert_route(s->sn, s->rtp_port, s->rtcp_port, &cu);
+    } else {
+        s->state = MEDIA_STATE_STOPPED;
+    }
+}
+
+static inline void media_redis_bootstrap(void) {
+    media_redis_init(getenv("REDIS_URL"));
+    if (!media_redis_ok()) return;
+    int n = media_redis_restore_sessions(media_redis_restore_one, NULL);
+    printf("[MEDIA REDIS] restored %d session record(s)\n", n);
+}
+
 /* ========================================================================= */
 /* Lifecycle Operations & Endpoints Handlers                                 */
 /* ========================================================================= */
@@ -615,6 +658,7 @@ static inline void stop_media_session(const char* session_id, const char* operat
     s->state = MEDIA_STATE_STOPPED;
     s->stopped_at = now;
     lifecycle_safe_strcpy(s->stop_reason, reason && reason[0] ? reason : "user_closed", sizeof(s->stop_reason));
+    media_redis_drop_session(s->session_id, s->sn, s->mountpoint_id);
     g_metric_sessions_stopped++;
 
     long duration = (long)(s->stopped_at - s->started_at);
@@ -679,6 +723,13 @@ static inline void handle_media_session_start(const char* body, char* resp_body,
                                           existing->rtcp_port, existing->pin, jerr, sizeof(jerr));
             int _clients_updated = 0;
             upsert_route(existing->sn, existing->rtp_port, existing->rtcp_port, &_clients_updated);
+            media_redis_save_session(existing->session_id, existing->operation_id, existing->sn,
+                                     existing->device_id, existing->mountpoint_id,
+                                     existing->rtp_port, existing->rtcp_port, existing->pin,
+                                     (int)existing->state, existing->ttl_sec,
+                                     existing->created_at, existing->started_at);
+            media_redis_save_route(existing->sn, existing->rtp_port, existing->rtcp_port,
+                                   existing->mountpoint_id, existing->ttl_sec);
             *status_code = 200;
             *status_text = "OK";
             snprintf(resp_body, resp_sz,
@@ -793,6 +844,10 @@ static inline void handle_media_session_start(const char* body, char* resp_body,
     s->state = MEDIA_STATE_ACTIVE;
     s->started_at = time(NULL);
     g_metric_sessions_started++;
+    media_redis_save_session(s->session_id, s->operation_id, s->sn, s->device_id, s->mountpoint_id,
+                             s->rtp_port, s->rtcp_port, s->pin, (int)s->state, s->ttl_sec,
+                             s->created_at, s->started_at);
+    media_redis_save_route(s->sn, s->rtp_port, s->rtcp_port, s->mountpoint_id, s->ttl_sec);
 
     *status_code = 201;
     *status_text = "Created";
@@ -938,6 +993,11 @@ static inline void reconcile_resources(char* resp_body, size_t resp_sz) {
                            mid, rtp_sn);
                     continue;
                 }
+                if (rtp_sn && media_redis_owns_sn(rtp_sn)) {
+                    printf("[INGRESS RECONCILE] keep mountpoint %" PRIu32 " redis_owned sn=%s\n",
+                           mid, rtp_sn);
+                    continue;
+                }
                 printf("[INGRESS RECONCILE] Destroying orphan Janus mountpoint %" PRIu32 "\n", mid);
                 janus_destroy_mountpoint(mid, NULL, 0);
                 cleaned_mountpoints++;
@@ -962,6 +1022,11 @@ static inline void reconcile_resources(char* resp_body, size_t resp_sz) {
         if (!has_active) {
             if (rtp_is_fresh_for_sn(g_routes.entries[i].sn, now)) {
                 printf("[INGRESS RECONCILE] keep route for SN %s rtp_fresh\n",
+                       g_routes.entries[i].sn);
+                continue;
+            }
+            if (media_redis_owns_sn(g_routes.entries[i].sn)) {
+                printf("[INGRESS RECONCILE] keep route for SN %s redis_owned\n",
                        g_routes.entries[i].sn);
                 continue;
             }

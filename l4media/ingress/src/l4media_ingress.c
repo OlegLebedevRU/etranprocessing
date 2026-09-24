@@ -1042,6 +1042,7 @@ int main(int argc, char* argv[]) {
 
     resolve_janus_host();
     load_routes(g_routes_file);
+    media_redis_bootstrap();
 
     g_udp_sock = create_udp_socket();
     if (g_udp_sock < 0) {
@@ -1223,5 +1224,7 @@ int main(int argc, char* argv[]) {
     if (g_udp_sock >= 0) close(g_udp_sock);
     close(epoll_fd);
     printf("[INGRESS] Stopped.\n");
+    handle_signal(SIGTERM); /* set g_running=false if reached */
+    media_redis_close();
     return 0;
 }

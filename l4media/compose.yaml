@@ -34,6 +34,7 @@ services:
       - JANUS_ADMIN_SECRET=${JANUS_ADMIN_SECRET:-janusoverlord}
       - L4MEDIA_SERVICE_TOKEN=${L4MEDIA_SERVICE_TOKEN:-l4media-service-secret-token}
       - ROUTES_FILE=/etc/l4media/routes.conf
+      - REDIS_URL=${L4MEDIA_REDIS_URL:-redis://redis:6379/2}
     volumes:
       - ./ingress/routes.conf:/etc/l4media/routes.conf:ro
     deploy:
