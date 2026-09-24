@@ -357,7 +357,7 @@ typedef struct {
     bool has_pin;
 } JanusMountpointInfo;
 
-/* Probe Janus streaming list for one mountpoint id (ports + pin). */
+/* Probe Janus streaming info for one mountpoint id (ports + pin). */
 static inline int janus_get_mountpoint_info(uint32_t mountpoint_id, JanusMountpointInfo* out) {
     if (!out) return -1;
     memset(out, 0, sizeof(*out));
@@ -366,8 +366,8 @@ static inline int janus_get_mountpoint_info(uint32_t mountpoint_id, JanusMountpo
     snprintf(req, sizeof(req),
              "{\"janus\":\"message_plugin\",\"transaction\":\"mp_info_%" PRIu32 "\","
              "\"admin_secret\":\"%s\",\"plugin\":\"janus.plugin.streaming\","
-             "\"request\":{\"request\":\"list\"}}",
-             mountpoint_id, g_janus_admin_secret);
+             "\"request\":{\"request\":\"info\",\"id\":%" PRIu32 "}}",
+             mountpoint_id, g_janus_admin_secret, mountpoint_id);
 
     char* resp = (char*)malloc(65536);
     if (!resp) return -1;
@@ -380,29 +380,17 @@ static inline int janus_get_mountpoint_info(uint32_t mountpoint_id, JanusMountpo
     const char* b = strstr(resp, "\r\n\r\n");
     if (!b) b = resp;
 
-    char id_key[40];
-    snprintf(id_key, sizeof(id_key), "\"id\":%" PRIu32, mountpoint_id);
-    const char* p = strstr(b, id_key);
-    if (!p) {
-        snprintf(id_key, sizeof(id_key), "\"id\": %" PRIu32, mountpoint_id);
-        p = strstr(b, id_key);
-    }
-    if (!p) {
+    /* Janus info: {"streaming":"info","info":{"id":N,"pin":"...","media":[{"port":P,"rtcpport":Q}]}} */
+    if (!strstr(b, "\"streaming\":\"info\"") && !strstr(b, "\"streaming\": \"info\"")) {
         free(resp);
-        return 0; /* not found */
+        return 0; /* not found / wrong shape */
     }
-
-    const char* next = strstr(p + strlen(id_key), "\"id\":");
-    size_t span = next ? (size_t)(next - p) : strlen(p);
-    if (span > 4095) span = 4095;
-    char block[4096];
-    memcpy(block, p, span);
-    block[span] = '\0';
 
     out->found = true;
-    json_get_int(block, "videoport", &out->videoport);
-    json_get_int(block, "videortcpport", &out->videortcpport);
-    if (json_get_string(block, "pin", out->pin, sizeof(out->pin)) && out->pin[0]) {
+    /* ports live under media[] as "port"/"rtcpport" */
+    json_get_int(b, "port", &out->videoport);
+    json_get_int(b, "rtcpport", &out->videortcpport);
+    if (json_get_string(b, "pin", out->pin, sizeof(out->pin)) && out->pin[0]) {
         out->has_pin = true;
     }
     free(resp);
