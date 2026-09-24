@@ -71,6 +71,7 @@ cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DWIN32_LEAN_AND_MEAN /D
     "%ROOT%\tests\test_openh264_encoder.c" ^
     "%ROOT%\tests\test_mf_encoder.c" ^
     "%ROOT%\tests\test_rtp_sender.c" ^
+    "%ROOT%\tests\test_clock.c" ^
     "%ROOT%\tests\test_profiles_degrade.c" ^
     "%ROOT%\tests\test_telemetry_logger.c" ^
     /c
@@ -114,12 +115,13 @@ link.exe /nologo /SUBSYSTEM:CONSOLE,6.01 /OUT:"%ROOT%\bin\l4capture_tests.exe" ^
     "%ROOT%\obj\test\test_openh264_encoder.obj" ^
     "%ROOT%\obj\test\test_mf_encoder.obj" ^
     "%ROOT%\obj\test\test_rtp_sender.obj" ^
+    "%ROOT%\obj\test\test_clock.obj" ^
     "%ROOT%\obj\test\test_profiles_degrade.obj" ^
     "%ROOT%\obj\test\test_telemetry_logger.obj" ^
     "%ROOT%\vendor\openh264\builddir_x86\codec\encoder\libencoder.a" ^
     "%ROOT%\vendor\openh264\builddir_x86\codec\common\libcommon.a" ^
     "%ROOT%\vendor\openh264\builddir_x86\codec\processing\libprocessing.a" ^
-    kernel32.lib user32.lib advapi32.lib gdi32.lib ws2_32.lib ole32.lib oleaut32.lib
+    kernel32.lib user32.lib advapi32.lib gdi32.lib ws2_32.lib ole32.lib oleaut32.lib mfplat.lib mfuuid.lib
 if errorlevel 1 (
     echo ERROR: Test linking failed
     exit /b 1

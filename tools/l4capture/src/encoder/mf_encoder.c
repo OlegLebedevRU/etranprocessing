@@ -5,12 +5,17 @@
 #endif
 #define CINTERFACE
 #define COBJMACROS
-#include <strmif.h>
 #include <mfapi.h>
 #include <mfidl.h>
 #include <mftransform.h>
 #include <mferror.h>
+#include <initguid.h>
+#include <mfapi.h>
+#include <mfidl.h>
+#include <strmif.h>
 #include <codecapi.h>
+#pragma comment(lib, "mfplat.lib")
+#pragma comment(lib, "ole32.lib")
 #if defined(_MSC_VER)
 #pragma warning(pop)
 #endif
@@ -20,6 +25,13 @@
 #endif
 #ifndef MF_E_TRANSFORM_STREAM_CHANGE
 #define MF_E_TRANSFORM_STREAM_CHANGE ((HRESULT)0xC00D6D61L)
+#endif
+#ifndef METransformNeedInput
+#define METransformNeedInput  601
+#define METransformHaveOutput 602
+#endif
+#ifndef MF_EVENT_FLAG_NO_WAIT
+#define MF_EVENT_FLAG_NO_WAIT 0x00000001
 #endif
 
 #include "l4capture/mf_encoder.h"
@@ -98,6 +110,21 @@ static bool s_test_injected_probe_fail = false;
 static bool s_test_injected_process_fail = false;
 static int s_probe_cached = -1;
 
+/* Persistent capability cache (mft_capability.ini next to exe).
+ * reason: ok | unavailable | timeout | negotiate_fail | runtime_fail */
+typedef enum {
+    L4C_MFT_CACHE_MISS = 0,
+    L4C_MFT_CACHE_OK,
+    L4C_MFT_CACHE_UNAVAILABLE,
+    L4C_MFT_CACHE_RETRYABLE
+} l4c_mft_cache_kind_t;
+
+#define L4C_MFT_PROBE_BUDGET_MS 5000u
+#define L4C_MFT_STRATEGY_AVAIL_FULL  1
+#define L4C_MFT_STRATEGY_CRAFTED     2
+#define L4C_MFT_STRATEGY_AVAIL_MIN   3
+static int s_mft_preferred_strategy = L4C_MFT_STRATEGY_AVAIL_FULL;
+
 void l4c_mf_encoder_test_inject_probe_fail(bool fail) {
     s_test_injected_probe_fail = fail;
     if (fail) {
@@ -107,6 +134,94 @@ void l4c_mf_encoder_test_inject_probe_fail(bool fail) {
 
 void l4c_mf_encoder_test_inject_process_fail(bool fail) {
     s_test_injected_process_fail = fail;
+}
+
+static bool mft_cache_path(wchar_t *out, size_t cap) {
+    wchar_t *slash;
+    if (!out || cap < 32) return false;
+    if (!GetModuleFileNameW(NULL, out, (DWORD)cap)) return false;
+    slash = wcsrchr(out, L'\\');
+    if (!slash) return false;
+    slash[1] = L'\0';
+    if (wcslen(out) + 20 >= cap) return false;
+    wcscat_s(out, cap, L"mft_capability.ini");
+    return true;
+}
+
+static l4c_mft_cache_kind_t mft_cache_parse_reason(const char *reason, int hw) {
+    if (hw == 1) return L4C_MFT_CACHE_OK;
+    if (hw == 0) {
+        if (reason && strcmp(reason, "unavailable") == 0) return L4C_MFT_CACHE_UNAVAILABLE;
+        return L4C_MFT_CACHE_RETRYABLE;
+    }
+    return L4C_MFT_CACHE_MISS;
+}
+
+static l4c_mft_cache_kind_t mft_cache_load(void) {
+    wchar_t path[MAX_PATH];
+    FILE *fp;
+    char line[128];
+    char reason[32];
+    int hw = -1;
+    int version = 0;
+    int strategy = 0;
+
+    if (!mft_cache_path(path, MAX_PATH)) return L4C_MFT_CACHE_MISS;
+    fp = _wfopen(path, L"r");
+    if (!fp) return L4C_MFT_CACHE_MISS;
+    reason[0] = '\0';
+    while (fgets(line, sizeof(line), fp)) {
+        if (strncmp(line, "version=", 8) == 0) version = atoi(line + 8);
+        else if (strncmp(line, "hw=", 3) == 0) hw = atoi(line + 3);
+        else if (strncmp(line, "strategy=", 9) == 0) strategy = atoi(line + 9);
+        else if (strncmp(line, "reason=", 7) == 0) {
+            char *p = line + 7;
+            size_t n = 0;
+            while (p[n] && p[n] != '\n' && p[n] != '\r' && n + 1 < sizeof(reason)) {
+                reason[n] = p[n];
+                n++;
+            }
+            reason[n] = '\0';
+        }
+    }
+    fclose(fp);
+    if (version != 1) return L4C_MFT_CACHE_MISS;
+    if (strategy >= 1 && strategy <= 3) s_mft_preferred_strategy = strategy;
+    return mft_cache_parse_reason(reason, hw);
+}
+
+static void mft_cache_save(int hw, const char *reason, uint64_t probe_ms) {
+    wchar_t path[MAX_PATH];
+    FILE *fp;
+    SYSTEMTIME st;
+
+    if (!mft_cache_path(path, MAX_PATH)) return;
+    fp = _wfopen(path, L"w");
+    if (!fp) return;
+    GetLocalTime(&st);
+    fprintf(fp, "version=1\n");
+    fprintf(fp, "hw=%d\n", hw ? 1 : 0);
+    fprintf(fp, "strategy=%d\n", s_mft_preferred_strategy);
+    fprintf(fp, "reason=%s\n", reason ? reason : "unknown");
+    fprintf(fp, "probe_ms=%llu\n", (unsigned long long)probe_ms);
+    fprintf(fp, "updated_utc=%04u-%02u-%02u %02u:%02u:%02u\n",
+            (unsigned)st.wYear, (unsigned)st.wMonth, (unsigned)st.wDay,
+            (unsigned)st.wHour, (unsigned)st.wMinute, (unsigned)st.wSecond);
+    fclose(fp);
+}
+
+void l4c_mf_encoder_cache_reset(void) {
+    wchar_t path[MAX_PATH];
+    s_probe_cached = -1;
+    if (mft_cache_path(path, MAX_PATH)) {
+        (void)DeleteFileW(path);
+    }
+}
+
+void l4c_mf_encoder_note_runtime_failure(void) {
+    /* Retryable: следующий старт может один раз перепробовать MFT. */
+    s_probe_cached = 0;
+    mft_cache_save(0, "runtime_fail", 0);
 }
 
 /* Helper to load libraries strictly from System32 */
@@ -126,6 +241,9 @@ static HMODULE load_system_dll(const wchar_t *dll_name) {
 
 static bool init_mf_loader(void) {
     if (g_mf.initialized) return true;
+
+    /* MF/MFT требуют COM; DXGI-захват в процессе мог не инициализировать. */
+    (void)CoInitializeEx(NULL, COINIT_MULTITHREADED);
 
     g_mf.h_mfplat = load_system_dll(L"mfplat.dll");
     if (!g_mf.h_mfplat) return false;
@@ -310,6 +428,7 @@ typedef struct {
     IMFActivate *activate;
     IMFTransform *transform;
     ICodecAPI *codec_api;
+    IMFMediaEventGenerator *event_gen;
 
     IMFSample *input_sample;
     IMFMediaBuffer *input_buffer;
@@ -320,6 +439,7 @@ typedef struct {
 
     uint8_t *au_buffer;
     l4c_nal_desc_t nals[64];
+    l4c_nal_desc_t out_nals[64];
 
     uint8_t cached_sps[256];
     uint32_t cached_sps_len;
@@ -348,8 +468,144 @@ static const l4c_encoder_backend_vtable_t s_mf_vtable = {
     mf_destroy
 };
 
+/* Intel QSV: не использовать GetGUID/SetGUID на IMFMediaType — в этом
+ * toolchain их C-vtable слот мимо (GetGUID → MF_E_INVALIDMEDIATYPE), из-за
+ * чего типы «невалидны». Рабочий путь: GetMajorType + мутировать available
+ * type через SetUINT32/SetUINT64 и выставить его как output/input. */
+static bool negotiate_crafted(IMFTransform *pTransform, UINT32 w, UINT32 h, UINT32 fps, UINT32 br) {
+    IMFMediaType *avail = NULL;
+    IMFMediaType *pOutputType = NULL;
+    IMFMediaType *pInputType = NULL;
+    GUID maj, sub;
+    HRESULT hr;
+
+    hr = pTransform->lpVtbl->GetOutputAvailableType(pTransform, 0, 0, &avail);
+    if (FAILED(hr) || !avail) return false;
+    memset(&maj, 0, sizeof(maj));
+    memset(&sub, 0, sizeof(sub));
+    avail->lpVtbl->GetMajorType(avail, &maj);
+    /* Subtype via GetItem (VT_CLSID) — GetGUID vtable slot is unreliable here. */
+    {
+        PROPVARIANT pv;
+        PropVariantInit(&pv);
+        hr = avail->lpVtbl->GetItem(avail, &MF_MT_SUBTYPE, &pv);
+        if (SUCCEEDED(hr) && pv.vt == VT_CLSID && pv.puuid) sub = *pv.puuid;
+        PropVariantClear(&pv);
+    }
+    avail->lpVtbl->Release(avail);
+
+    hr = MFCreateMediaType(&pOutputType);
+    if (FAILED(hr) || !pOutputType) return false;
+    pOutputType->lpVtbl->SetGUID(pOutputType, &MF_MT_MAJOR_TYPE, &maj);
+    pOutputType->lpVtbl->SetGUID(pOutputType, &MF_MT_SUBTYPE, &sub);
+    pOutputType->lpVtbl->SetUINT64(pOutputType, &MF_MT_FRAME_SIZE, ((UINT64)w << 32) | h);
+    pOutputType->lpVtbl->SetUINT64(pOutputType, &MF_MT_FRAME_RATE, ((UINT64)fps << 32) | 1);
+    pOutputType->lpVtbl->SetUINT64(pOutputType, &MF_MT_PIXEL_ASPECT_RATIO, ((UINT64)1 << 32) | 1);
+    pOutputType->lpVtbl->SetUINT32(pOutputType, &MF_MT_INTERLACE_MODE, 2);
+    pOutputType->lpVtbl->SetUINT32(pOutputType, &MF_MT_AVG_BITRATE, br);
+    hr = pTransform->lpVtbl->SetOutputType(pTransform, 0, pOutputType, 0);
+    pOutputType->lpVtbl->Release(pOutputType);
+    if (FAILED(hr)) return false;
+
+    hr = MFCreateMediaType(&pInputType);
+    if (FAILED(hr) || !pInputType) return false;
+    pInputType->lpVtbl->SetGUID(pInputType, &MF_MT_MAJOR_TYPE, &MFMediaType_Video);
+    pInputType->lpVtbl->SetGUID(pInputType, &MF_MT_SUBTYPE, &MFVideoFormat_NV12);
+    pInputType->lpVtbl->SetUINT64(pInputType, &MF_MT_FRAME_SIZE, ((UINT64)w << 32) | h);
+    pInputType->lpVtbl->SetUINT64(pInputType, &MF_MT_FRAME_RATE, ((UINT64)fps << 32) | 1);
+    pInputType->lpVtbl->SetUINT64(pInputType, &MF_MT_PIXEL_ASPECT_RATIO, ((UINT64)1 << 32) | 1);
+    pInputType->lpVtbl->SetUINT32(pInputType, &MF_MT_INTERLACE_MODE, 2);
+    hr = pTransform->lpVtbl->SetInputType(pTransform, 0, pInputType, 0);
+    pInputType->lpVtbl->Release(pInputType);
+    return SUCCEEDED(hr);
+}
+
+/* Intel QSV: start from GetOutputAvailableType, then attach size/rate/bitrate. */
+static bool negotiate_from_available(IMFTransform *pTransform, UINT32 w, UINT32 h, UINT32 fps, UINT32 br) {
+    IMFMediaType *avail = NULL;
+    IMFMediaType *out_t = NULL;
+    IMFMediaType *in_t = NULL;
+    GUID maj = {0}, sub = {0};
+    HRESULT hr;
+
+    hr = pTransform->lpVtbl->GetOutputAvailableType(pTransform, 0, 0, &avail);
+    if (FAILED(hr) || !avail) return false;
+    avail->lpVtbl->GetGUID(avail, &s_MF_MT_MAJOR_TYPE, &maj);
+    avail->lpVtbl->GetGUID(avail, &s_MF_MT_SUBTYPE, &sub);
+    avail->lpVtbl->Release(avail);
+
+    hr = MFCreateMediaType(&out_t);
+    if (FAILED(hr) || !out_t) return false;
+    out_t->lpVtbl->SetGUID(out_t, &s_MF_MT_MAJOR_TYPE, &maj);
+    out_t->lpVtbl->SetGUID(out_t, &s_MF_MT_SUBTYPE, &sub);
+    out_t->lpVtbl->SetUINT64(out_t, &s_MF_MT_FRAME_SIZE, ((UINT64)w << 32) | h);
+    out_t->lpVtbl->SetUINT64(out_t, &s_MF_MT_FRAME_RATE, ((UINT64)fps << 32) | 1);
+    out_t->lpVtbl->SetUINT64(out_t, &s_MF_MT_PIXEL_ASPECT_RATIO, ((UINT64)1 << 32) | 1);
+    out_t->lpVtbl->SetUINT32(out_t, &s_MF_MT_INTERLACE_MODE, 2);
+    out_t->lpVtbl->SetUINT32(out_t, &s_MF_MT_AVG_BITRATE, br);
+    hr = pTransform->lpVtbl->SetOutputType(pTransform, 0, out_t, 0);
+    out_t->lpVtbl->Release(out_t);
+    if (FAILED(hr)) return false;
+
+    hr = MFCreateMediaType(&in_t);
+    if (FAILED(hr) || !in_t) return false;
+    in_t->lpVtbl->SetGUID(in_t, &MF_MT_MAJOR_TYPE, &MFMediaType_Video);
+    in_t->lpVtbl->SetGUID(in_t, &MF_MT_SUBTYPE, &MFVideoFormat_NV12);
+    in_t->lpVtbl->SetUINT64(in_t, &s_MF_MT_FRAME_SIZE, ((UINT64)w << 32) | h);
+    in_t->lpVtbl->SetUINT64(in_t, &s_MF_MT_FRAME_RATE, ((UINT64)fps << 32) | 1);
+    in_t->lpVtbl->SetUINT64(in_t, &s_MF_MT_PIXEL_ASPECT_RATIO, ((UINT64)1 << 32) | 1);
+    in_t->lpVtbl->SetUINT32(in_t, &s_MF_MT_INTERLACE_MODE, 2);
+    hr = pTransform->lpVtbl->SetInputType(pTransform, 0, in_t, 0);
+    in_t->lpVtbl->Release(in_t);
+    return SUCCEEDED(hr);
+}
+
+static void unlock_async_mft(IMFTransform *pTransform) {
+    IMFAttributes *pAttr = NULL;
+    if (!pTransform) return;
+    if (SUCCEEDED(pTransform->lpVtbl->GetAttributes(pTransform, &pAttr)) && pAttr) {
+        pAttr->lpVtbl->SetUINT32(pAttr, &s_MF_TRANSFORM_ASYNC_UNLOCK, 1u);
+        pAttr->lpVtbl->Release(pAttr);
+    }
+}
+
+/* Async HW MFT (Intel QSV): unlock on BOTH activate and transform, then Activate.
+ * Без unlock SetInputType падает MF_E_TRANSFORM_ASYNC_LOCKED (0xC00D6D77). */
+static HRESULT activate_unlocked(IMFActivate *act, IMFTransform **out_xf) {
+    IMFAttributes *pAttr = NULL;
+    HRESULT hr;
+
+    *out_xf = NULL;
+    if (!act) return E_POINTER;
+    /* IMFActivate наследует IMFAttributes — unlock до/после ActivateObject. */
+    pAttr = (IMFAttributes *)act;
+    pAttr->lpVtbl->SetUINT32(pAttr, &s_MF_TRANSFORM_ASYNC_UNLOCK, 1u);
+    hr = act->lpVtbl->ActivateObject(act, &s_IID_IMFTransform, (void**)out_xf);
+    if (FAILED(hr) || !*out_xf) return hr;
+    unlock_async_mft(*out_xf);
+    return S_OK;
+}
+
+static bool negotiate_nv12_h264(IMFTransform *pTransform, UINT32 w, UINT32 h, UINT32 fps, UINT32 br) {
+    if (!pTransform) return false;
+    unlock_async_mft(pTransform);
+    /* Preferred strategy only — dirty MFT после неудачного Set*Type. */
+    return negotiate_crafted(pTransform, w, h, fps, br);
+}
+
+/* Fresh Activate required. Tries alternate strategies (adaptive, not machine-bound). */
+static bool negotiate_nv12_h264_fallback(IMFTransform *pTransform, UINT32 w, UINT32 h, UINT32 fps, UINT32 br) {
+    if (!pTransform) return false;
+    unlock_async_mft(pTransform);
+    if (negotiate_from_available(pTransform, w, h, fps, br)) {
+        s_mft_preferred_strategy = L4C_MFT_STRATEGY_CRAFTED;
+        return true;
+    }
+    return false;
+}
+
 /*
- * Bounded Hardware MFT probe (<= 2.0 seconds)
+ * Hardware MFT probe: cache-first, discovery probe <= 5.0 s fail-closed.
  */
 bool l4c_mf_encoder_is_supported(void) {
     uint64_t start_ms;
@@ -359,24 +615,39 @@ bool l4c_mf_encoder_is_supported(void) {
     IMFActivate **ppActivate = NULL;
     UINT32 count = 0;
     IMFTransform *pTransform = NULL;
-    IMFMediaType *pOutputType = NULL;
-    IMFMediaType *pInputType = NULL;
     bool supported = false;
+    const char *fail_reason = "negotiate_fail";
     UINT32 i;
 
     if (s_test_injected_probe_fail) return false;
     if (s_probe_cached != -1) return (s_probe_cached == 1);
 
+    /* Persistent cache: однажды найденная конфигурация — без повторной пробы. */
+    {
+        l4c_mft_cache_kind_t cached = mft_cache_load();
+        if (cached == L4C_MFT_CACHE_OK) {
+            s_probe_cached = 1;
+            return true;
+        }
+        if (cached == L4C_MFT_CACHE_UNAVAILABLE) {
+            s_probe_cached = 0;
+            return false;
+        }
+        /* MISS / RETRYABLE → discovery probe (редкий, до 5 с). */
+    }
+
     start_ms = l4c_clock_monotonic_ms();
 
     if (!init_mf_loader()) {
         s_probe_cached = 0;
+        mft_cache_save(0, "unavailable", 0);
         return false;
     }
 
     hr = g_mf.pfn_MFStartup(MF_VERSION, MFSTARTUP_FULL);
     if (FAILED(hr)) {
         s_probe_cached = 0;
+        mft_cache_save(0, "unavailable", 0);
         return false;
     }
 
@@ -385,9 +656,12 @@ bool l4c_mf_encoder_is_supported(void) {
     out_type.guidMajorType = s_MFMediaType_Video;
     out_type.guidSubtype = s_MFVideoFormat_H264;
 
+    /* MFT_ENUM_FLAG_HARDWARE=0x4 (mfapi.h). 0x100 — не флаг mfapi.
+     * SORTANDFILTER (0x40) даёт полный скан+сортировку: дорого без HW MFT.
+     * Для probe достаточно HARDWARE; сортировка не нужна. */
     hr = g_mf.pfn_MFTEnumEx(
         s_MFT_CATEGORY_VIDEO_ENCODER,
-        0x00000004 | 0x00000040 /* MFT_ENUM_FLAG_HARDWARE | MFT_ENUM_FLAG_SORTANDFILTER */,
+        0x00000004 /* HARDWARE */,
         &in_type,
         &out_type,
         &ppActivate,
@@ -397,57 +671,30 @@ bool l4c_mf_encoder_is_supported(void) {
     if (FAILED(hr) || count == 0 || !ppActivate) {
         g_mf.pfn_MFShutdown();
         s_probe_cached = 0;
+        mft_cache_save(0, "unavailable", l4c_clock_monotonic_ms() - start_ms);
         return false;
     }
 
-    /* Probe the primary sorted hardware MFT (ppActivate[0]) within <= 2.0s */
-    pTransform = NULL;
-    hr = ppActivate[0]->lpVtbl->ActivateObject(ppActivate[0], &s_IID_IMFTransform, (void**)&pTransform);
-    if (SUCCEEDED(hr) && pTransform) {
-        /* Unlock async hardware MFT if required */
-        IMFAttributes *pAttr = NULL;
-        if (SUCCEEDED(pTransform->lpVtbl->GetAttributes(pTransform, &pAttr)) && pAttr) {
-            pAttr->lpVtbl->SetUINT32(pAttr, &s_MF_TRANSFORM_ASYNC_UNLOCK, TRUE);
-            pAttr->lpVtbl->Release(pAttr);
-        }
+    /* Раннего bailout до Activate больше нет: Intel ActivateObject ~1–4 с —
+     * именно он и есть «редкое ожидание до 5 с». Fail-closed только в конце. */
 
-        hr = g_mf.pfn_MFCreateMediaType(&pOutputType);
-        if (SUCCEEDED(hr) && pOutputType) {
-            pOutputType->lpVtbl->SetGUID(pOutputType, &s_MF_MT_MAJOR_TYPE, &s_MFMediaType_Video);
-            pOutputType->lpVtbl->SetGUID(pOutputType, &s_MF_MT_SUBTYPE, &s_MFVideoFormat_H264);
-            pOutputType->lpVtbl->SetUINT64(pOutputType, &s_MF_MT_FRAME_SIZE, ((UINT64)854 << 32) | 480);
-            pOutputType->lpVtbl->SetUINT64(pOutputType, &s_MF_MT_FRAME_RATE, ((UINT64)10 << 32) | 1);
-            pOutputType->lpVtbl->SetUINT64(pOutputType, &s_MF_MT_PIXEL_ASPECT_RATIO, ((UINT64)1 << 32) | 1);
-            pOutputType->lpVtbl->SetUINT32(pOutputType, &s_MF_MT_INTERLACE_MODE, 2 /* Progressive */);
-            pOutputType->lpVtbl->SetUINT32(pOutputType, &s_MF_MT_AVG_BITRATE, 500000);
-            pOutputType->lpVtbl->SetUINT32(pOutputType, &s_MF_MT_MPEG2_PROFILE, 66 /* Baseline */);
-            pOutputType->lpVtbl->SetUINT32(pOutputType, &s_MF_MT_MPEG2_LEVEL, 31 /* Level 3.1 */);
-
-            hr = pTransform->lpVtbl->SetOutputType(pTransform, 0, pOutputType, 0);
-            pOutputType->lpVtbl->Release(pOutputType);
-        }
-
-        if (SUCCEEDED(hr)) {
-            hr = g_mf.pfn_MFCreateMediaType(&pInputType);
-            if (SUCCEEDED(hr) && pInputType) {
-                pInputType->lpVtbl->SetGUID(pInputType, &s_MF_MT_MAJOR_TYPE, &s_MFMediaType_Video);
-                pInputType->lpVtbl->SetGUID(pInputType, &s_MF_MT_SUBTYPE, &s_MFVideoFormat_NV12);
-                pInputType->lpVtbl->SetUINT64(pInputType, &s_MF_MT_FRAME_SIZE, ((UINT64)854 << 32) | 480);
-                pInputType->lpVtbl->SetUINT64(pInputType, &s_MF_MT_FRAME_RATE, ((UINT64)10 << 32) | 1);
-                pInputType->lpVtbl->SetUINT64(pInputType, &s_MF_MT_PIXEL_ASPECT_RATIO, ((UINT64)1 << 32) | 1);
-                pInputType->lpVtbl->SetUINT32(pInputType, &s_MF_MT_INTERLACE_MODE, 2 /* Progressive */);
-
-                hr = pTransform->lpVtbl->SetInputType(pTransform, 0, pInputType, 0);
-                pInputType->lpVtbl->Release(pInputType);
+    /* Перебор всех HW MFT: crafted на свежем transform, затем fallback
+     * available-type — тоже на свежем Activate (dirty MFT не переиспользуем). */
+    for (i = 0; i < count && !supported; ++i) {
+        int attempt;
+        for (attempt = 0; attempt < 2 && !supported; ++attempt) {
+            pTransform = NULL;
+            hr = activate_unlocked(ppActivate[i], &pTransform);
+            if (FAILED(hr) || !pTransform) break;
+            if (attempt == 0) {
+                supported = negotiate_nv12_h264(pTransform, 640, 480, 10, 500000);
+            } else {
+                supported = negotiate_nv12_h264_fallback(pTransform, 640, 480, 10, 500000);
             }
+            pTransform->lpVtbl->Release(pTransform);
+            pTransform = NULL;
+            ppActivate[i]->lpVtbl->ShutdownObject(ppActivate[i]);
         }
-
-        if (SUCCEEDED(hr)) {
-            supported = true;
-        }
-
-        pTransform->lpVtbl->Release(pTransform);
-        ppActivate[0]->lpVtbl->ShutdownObject(ppActivate[0]);
     }
 
     for (i = 0; i < count; ++i) {
@@ -456,13 +703,20 @@ bool l4c_mf_encoder_is_supported(void) {
     CoTaskMemFree(ppActivate);
     g_mf.pfn_MFShutdown();
 
-    if (l4c_clock_monotonic_ms() - start_ms > 2000) {
-        s_probe_cached = 0;
-        return false;
+    /* Fail-closed: true только если переговоры уложились в бюджет.
+     * Успех за бюджетом не выбрасываем — сохраняем ok (конфиг уже найден). */
+    if (supported) {
+        s_probe_cached = 1;
+        mft_cache_save(1, "ok", l4c_clock_monotonic_ms() - start_ms);
+        return true;
     }
 
-    s_probe_cached = supported ? 1 : 0;
-    return supported;
+    if (l4c_clock_monotonic_ms() - start_ms > L4C_MFT_PROBE_BUDGET_MS) {
+        fail_reason = "timeout";
+    }
+    s_probe_cached = 0;
+    mft_cache_save(0, fail_reason, l4c_clock_monotonic_ms() - start_ms);
+    return false;
 }
 
 /*
@@ -482,8 +736,44 @@ l4c_status_t l4c_mf_encoder_create(l4c_encoder_backend_t **out_backend) {
     return L4C_OK;
 }
 
+static void mf_release_event_gen(mf_encoder_backend_t *self) {
+    if (self->event_gen) {
+        self->event_gen->lpVtbl->Release(self->event_gen);
+        self->event_gen = NULL;
+    }
+}
+
+/* Async HW MFT (Intel QSV): short bounded wait for METransformNeedInput / HaveOutput. */
+static bool wait_transform_event(mf_encoder_backend_t *self, MediaEventType want, DWORD timeout_ms) {
+    uint64_t start = l4c_clock_monotonic_ms();
+    if (!self->event_gen) return true; /* sync MFT — no events */
+    for (;;) {
+        IMFMediaEvent *ev = NULL;
+        MediaEventType got = 0;
+        HRESULT hr = self->event_gen->lpVtbl->GetEvent(self->event_gen, MF_EVENT_FLAG_NO_WAIT, &ev);
+        if (SUCCEEDED(hr) && ev) {
+            ev->lpVtbl->GetType(ev, &got);
+            ev->lpVtbl->Release(ev);
+            if (got == want) return true;
+            continue;
+        }
+        if (l4c_clock_monotonic_ms() - start >= timeout_ms) {
+            /* Blocking GetEvent as fallback — NO_WAIT may miss async delivery. */
+            hr = self->event_gen->lpVtbl->GetEvent(self->event_gen, 0, &ev);
+            if (SUCCEEDED(hr) && ev) {
+                ev->lpVtbl->GetType(ev, &got);
+                ev->lpVtbl->Release(ev);
+                return got == want;
+            }
+            return false;
+        }
+        Sleep(1);
+    }
+}
+
 static void mf_cleanup_session(mf_encoder_backend_t *self) {
     if (!self) return;
+    mf_release_event_gen(self);
     if (self->transform) {
         self->transform->lpVtbl->ProcessMessage(self->transform, MFT_MESSAGE_NOTIFY_END_OF_STREAM, 0);
         self->transform->lpVtbl->ProcessMessage(self->transform, MFT_MESSAGE_COMMAND_DRAIN, 0);
@@ -530,8 +820,6 @@ static l4c_status_t mf_init(struct l4c_encoder_backend *self_base, const l4c_enc
     MFT_REGISTER_TYPE_INFO out_type;
     IMFActivate **ppActivate = NULL;
     UINT32 count = 0;
-    IMFMediaType *pOutputType = NULL;
-    IMFMediaType *pInputType = NULL;
     DWORD in_size, out_size;
     UINT32 i;
 
@@ -552,9 +840,11 @@ static l4c_status_t mf_init(struct l4c_encoder_backend *self_base, const l4c_enc
     out_type.guidMajorType = s_MFMediaType_Video;
     out_type.guidSubtype = s_MFVideoFormat_H264;
 
+    /* HARDWARE | SORTANDFILTER = 0x4 | 0x40 (см. mfapi.h; 0x100 — не флаг).
+     * В mf_init — полный набор: нужен стабильный ppActivate[0]. */
     hr = g_mf.pfn_MFTEnumEx(
         s_MFT_CATEGORY_VIDEO_ENCODER,
-        0x00000004 | 0x00000040 /* MFT_ENUM_FLAG_HARDWARE | MFT_ENUM_FLAG_SORTANDFILTER */,
+        0x00000004 | 0x00000040 /* HARDWARE | SORTANDFILTER */,
         &in_type,
         &out_type,
         &ppActivate,
@@ -567,76 +857,38 @@ static l4c_status_t mf_init(struct l4c_encoder_backend *self_base, const l4c_enc
         return L4C_ERR_DEVICE_LOST;
     }
 
-    self->activate = ppActivate[0];
-    for (i = 1; i < count; ++i) {
+    /* Prefer the first HW MFT that negotiates NV12→H264 at the target raster.
+     * crafted → (re-Activate) → available-type fallback. */
+    self->activate = NULL;
+    self->transform = NULL;
+    for (i = 0; i < count && !self->transform; ++i) {
+        int attempt;
+        for (attempt = 0; attempt < 2 && !self->transform; ++attempt) {
+            IMFTransform *xf = NULL;
+            hr = activate_unlocked(ppActivate[i], &xf);
+            if (FAILED(hr) || !xf) break;
+            if (attempt == 0) {
+                hr = negotiate_nv12_h264(xf, config->width, config->height, config->target_fps,
+                                         config->target_bitrate_kbps * 1000) ? S_OK : E_FAIL;
+            } else {
+                hr = negotiate_nv12_h264_fallback(xf, config->width, config->height, config->target_fps,
+                                                  config->target_bitrate_kbps * 1000) ? S_OK : E_FAIL;
+            }
+            if (SUCCEEDED(hr)) {
+                self->activate = ppActivate[i];
+                self->transform = xf;
+                ppActivate[i] = NULL;
+                break;
+            }
+            xf->lpVtbl->Release(xf);
+            ppActivate[i]->lpVtbl->ShutdownObject(ppActivate[i]);
+        }
+    }
+    for (i = 0; i < count; ++i) {
         if (ppActivate[i]) ppActivate[i]->lpVtbl->Release(ppActivate[i]);
     }
     CoTaskMemFree(ppActivate);
-
-    hr = self->activate->lpVtbl->ActivateObject(self->activate, &s_IID_IMFTransform, (void**)&self->transform);
-    if (FAILED(hr) || !self->transform) {
-        self->activate->lpVtbl->Release(self->activate);
-        self->activate = NULL;
-        g_mf.pfn_MFShutdown();
-        self->mf_started = false;
-        return L4C_ERR_DEVICE_LOST;
-    }
-
-    /* Unlock async hardware MFT if required */
-    {
-        IMFAttributes *pAttr = NULL;
-        if (SUCCEEDED(self->transform->lpVtbl->GetAttributes(self->transform, &pAttr)) && pAttr) {
-            pAttr->lpVtbl->SetUINT32(pAttr, &s_MF_TRANSFORM_ASYNC_UNLOCK, TRUE);
-            pAttr->lpVtbl->Release(pAttr);
-        }
-    }
-
-    /* Configure H.264 output type */
-    hr = g_mf.pfn_MFCreateMediaType(&pOutputType);
-    if (FAILED(hr) || !pOutputType) {
-        mf_cleanup_session(self);
-        g_mf.pfn_MFShutdown();
-        self->mf_started = false;
-        return L4C_ERR_DEVICE_LOST;
-    }
-    pOutputType->lpVtbl->SetGUID(pOutputType, &s_MF_MT_MAJOR_TYPE, &s_MFMediaType_Video);
-    pOutputType->lpVtbl->SetGUID(pOutputType, &s_MF_MT_SUBTYPE, &s_MFVideoFormat_H264);
-    pOutputType->lpVtbl->SetUINT64(pOutputType, &s_MF_MT_FRAME_SIZE, ((UINT64)config->width << 32) | config->height);
-    pOutputType->lpVtbl->SetUINT64(pOutputType, &s_MF_MT_FRAME_RATE, ((UINT64)config->target_fps << 32) | 1);
-    pOutputType->lpVtbl->SetUINT64(pOutputType, &s_MF_MT_PIXEL_ASPECT_RATIO, ((UINT64)1 << 32) | 1);
-    pOutputType->lpVtbl->SetUINT32(pOutputType, &s_MF_MT_INTERLACE_MODE, 2 /* Progressive */);
-    pOutputType->lpVtbl->SetUINT32(pOutputType, &s_MF_MT_AVG_BITRATE, config->target_bitrate_kbps * 1000);
-    pOutputType->lpVtbl->SetUINT32(pOutputType, &s_MF_MT_MPEG2_PROFILE, 66 /* Baseline */);
-    pOutputType->lpVtbl->SetUINT32(pOutputType, &s_MF_MT_MPEG2_LEVEL, 31 /* Level 3.1 */);
-
-    hr = self->transform->lpVtbl->SetOutputType(self->transform, 0, pOutputType, 0);
-    pOutputType->lpVtbl->Release(pOutputType);
-    if (FAILED(hr)) {
-        mf_cleanup_session(self);
-        g_mf.pfn_MFShutdown();
-        self->mf_started = false;
-        return L4C_ERR_DEVICE_LOST;
-    }
-
-    /* Configure NV12 input type */
-    hr = g_mf.pfn_MFCreateMediaType(&pInputType);
-    if (FAILED(hr) || !pInputType) {
-        mf_cleanup_session(self);
-        g_mf.pfn_MFShutdown();
-        self->mf_started = false;
-        return L4C_ERR_DEVICE_LOST;
-    }
-    pInputType->lpVtbl->SetGUID(pInputType, &s_MF_MT_MAJOR_TYPE, &s_MFMediaType_Video);
-    pInputType->lpVtbl->SetGUID(pInputType, &s_MF_MT_SUBTYPE, &s_MFVideoFormat_NV12);
-    pInputType->lpVtbl->SetUINT64(pInputType, &s_MF_MT_FRAME_SIZE, ((UINT64)config->width << 32) | config->height);
-    pInputType->lpVtbl->SetUINT64(pInputType, &s_MF_MT_FRAME_RATE, ((UINT64)config->target_fps << 32) | 1);
-    pInputType->lpVtbl->SetUINT64(pInputType, &s_MF_MT_PIXEL_ASPECT_RATIO, ((UINT64)1 << 32) | 1);
-    pInputType->lpVtbl->SetUINT32(pInputType, &s_MF_MT_INTERLACE_MODE, 2 /* Progressive */);
-
-    hr = self->transform->lpVtbl->SetInputType(self->transform, 0, pInputType, 0);
-    pInputType->lpVtbl->Release(pInputType);
-    if (FAILED(hr)) {
-        mf_cleanup_session(self);
+    if (!self->transform || !self->activate) {
         g_mf.pfn_MFShutdown();
         self->mf_started = false;
         return L4C_ERR_DEVICE_LOST;
@@ -682,6 +934,15 @@ static l4c_status_t mf_init(struct l4c_encoder_backend *self_base, const l4c_enc
         val.vt = VT_BOOL;
         val.boolVal = VARIANT_FALSE;
         self->codec_api->lpVtbl->SetValue(self->codec_api, &s_CODECAPI_AVEncH264CABACEnable, &val);
+    }
+
+    /* Async MFT event pump (Intel QSV); optional for sync MFTs. */
+    {
+        static const GUID IID_IMFMediaEventGenerator_X =
+            { 0x2cd2d921, 0xc447, 0x44a7, { 0xa1, 0x3c, 0x4a, 0xda, 0xbf, 0xc2, 0x47, 0xe3 } };
+        (void)self->transform->lpVtbl->QueryInterface(
+            self->transform, &IID_IMFMediaEventGenerator, (void **)&self->event_gen);
+        (void)IID_IMFMediaEventGenerator_X;
     }
 
     /* Send streaming begin notification */
@@ -839,10 +1100,22 @@ static l4c_status_t mf_encode(
     self->input_sample->lpVtbl->SetSampleTime(self->input_sample, sample_time);
     self->input_sample->lpVtbl->SetSampleDuration(self->input_sample, sample_dur);
 
-    /* ProcessInput */
+    /* Async MFT (Intel QSV): строго по событиям NeedInput → ProcessInput →
+     * HaveOutput → ProcessOutput. Иначе MF_E_NOTACCEPTING / STREAM_CHANGE. */
+    if (self->event_gen) {
+        if (!wait_transform_event(self, METransformNeedInput, 100)) {
+            return L4C_ERR_NO_FRAME;
+        }
+    }
     hr = self->transform->lpVtbl->ProcessInput(self->transform, 0, self->input_sample, 0);
     if (FAILED(hr)) {
         return L4C_ERR_DEVICE_LOST;
+    }
+
+    if (self->event_gen) {
+        if (!wait_transform_event(self, METransformHaveOutput, 100)) {
+            return L4C_ERR_NO_FRAME;
+        }
     }
 
     /* ProcessOutput */
@@ -857,13 +1130,36 @@ static l4c_status_t mf_encode(
         return L4C_ERR_NO_FRAME;
     }
     if (hr == MF_E_TRANSFORM_STREAM_CHANGE) {
-        /* Format changed */
-        IMFMediaType *pNewType = NULL;
-        if (SUCCEEDED(self->transform->lpVtbl->GetOutputAvailableType(self->transform, 0, 0, &pNewType)) && pNewType) {
-            self->transform->lpVtbl->SetOutputType(self->transform, 0, pNewType, 0);
+        UINT32 ti;
+        HRESULT st = E_FAIL;
+        for (ti = 0; ti < 8; ++ti) {
+            IMFMediaType *pNewType = NULL;
+            if (FAILED(self->transform->lpVtbl->GetOutputAvailableType(self->transform, 0, ti, &pNewType)) || !pNewType) break;
+            st = self->transform->lpVtbl->SetOutputType(self->transform, 0, pNewType, 0);
             pNewType->lpVtbl->Release(pNewType);
+            if (SUCCEEDED(st)) break;
         }
-        return L4C_ERR_NO_FRAME;
+        /* После смены типа MFT требует новый output sample/buffer. */
+        memset(&self->output_stream_info, 0, sizeof(self->output_stream_info));
+        self->transform->lpVtbl->GetOutputStreamInfo(self->transform, 0, &self->output_stream_info);
+        if (self->output_sample) { self->output_sample->lpVtbl->Release(self->output_sample); self->output_sample = NULL; }
+        if (self->output_buffer) { self->output_buffer->lpVtbl->Release(self->output_buffer); self->output_buffer = NULL; }
+        {
+            DWORD osz = self->output_stream_info.cbSize;
+            if (osz == 0 || osz > L4C_MAX_AU_SIZE) osz = L4C_MAX_AU_SIZE;
+            hr = g_mf.pfn_MFCreateMemoryBuffer(osz, &self->output_buffer);
+            if (SUCCEEDED(hr)) hr = g_mf.pfn_MFCreateSample(&self->output_sample);
+            if (SUCCEEDED(hr) && self->output_sample && self->output_buffer) {
+                self->output_sample->lpVtbl->AddBuffer(self->output_sample, self->output_buffer);
+            }
+        }
+        if (self->event_gen) (void)wait_transform_event(self, METransformHaveOutput, 100);
+        memset(&out_data, 0, sizeof(out_data));
+        out_data.dwStreamID = 0;
+        if (!(self->output_stream_info.dwFlags & MFT_OUTPUT_STREAM_PROVIDES_SAMPLES)) {
+            out_data.pSample = self->output_sample;
+        }
+        hr = self->transform->lpVtbl->ProcessOutput(self->transform, 0, 1, &out_data, &mft_status);
     }
     if (FAILED(hr)) {
         if (out_data.pEvents) out_data.pEvents->lpVtbl->Release(out_data.pEvents);
@@ -1028,7 +1324,9 @@ static l4c_status_t mf_encode(
      * Prepend cached SPS/PPS before IDR if driver didn't emit them in this AU.
      */
     au_offset = 0;
+    out_au->nals = self->out_nals;
     out_au->nal_count = 0;
+    out_au->total_bytes = 0;
 
     if (is_idr) {
         bool has_sps = false, has_pps = false;
@@ -1085,6 +1383,7 @@ static l4c_status_t mf_encode(
 
     out_au->pts_ms = raw->pts_ms;
     out_au->is_idr = is_idr;
+    out_au->total_bytes = au_offset;
 
     if (is_idr) {
         self->last_idr_ms = l4c_clock_monotonic_ms();

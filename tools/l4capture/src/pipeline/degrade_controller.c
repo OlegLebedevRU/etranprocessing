@@ -39,7 +39,7 @@ static bool window_is_bad(const l4c_degrade_window_t *wm, uint8_t current_fps) {
         l4c_degrade_class_over_threshold(wm->transport)) {
         return true;
     }
-    if (wm->has_processing && wm->processing_samples > 0 && current_fps > 0) {
+    if (wm->has_processing && wm->processing_samples >= L4C_DEGRADE_P95_MIN_SAMPLES && current_fps > 0) {
         /* p95 > 1000/fps  <=>  p95 * fps > 1000 (без усечения 15 FPS до 66 мс) */
         if ((uint64_t)wm->processing_p95_ms * (uint64_t)current_fps > 1000u) {
             return true;

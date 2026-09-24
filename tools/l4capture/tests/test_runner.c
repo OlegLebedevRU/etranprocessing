@@ -83,6 +83,7 @@ extern int test_mf_first_frame_idr_sps_pps(void);
 extern int test_mf_idr_cadence_and_sps_repetition(void);
 extern int test_mf_force_idr_coalescing(void);
 extern int test_mf_mft_failure_openh264_fallback(void);
+extern int test_mf_capability_cache_persist(void);
 extern int test_mf_stress_100_frames_zero_leak(void);
 
 extern int test_rtp_single_nal_small(void);
@@ -97,6 +98,10 @@ extern int test_rtcp_bye_generation(void);
 extern int test_rtp_fua_reassembly_roundtrip(void);
 extern int test_network_nonblocking_drop_on_error(void);
 extern int test_pipeline_e2e_loopback(void);
+extern int test_pts_session_relative_wall(void);
+extern int test_rtp_ts_wall_monotonic_and_idle_gap(void);
+extern int test_rtp_sndbuf_live_budget(void);
+extern int test_network_wouldblock_drops_au_forces_idr(void);
 
 extern int test_profile_params_table(void);
 extern int test_profile_resolve_low_never_upgrades(void);
@@ -115,6 +120,7 @@ extern int test_degrade_does_not_break_input_gate(void);
 extern int test_safety_stop_latency_preserved_under_degrade(void);
 extern int test_no_oscillation_100_cycles_forced_overload(void);
 extern int test_detector_threshold_boundaries(void);
+extern int test_detector_p95_min_samples_guard(void);
 extern int test_detector_classes_independent(void);
 extern int test_p95_from_samples(void);
 extern int test_window_boundary_rejects_partial(void);
@@ -213,6 +219,7 @@ static const test_entry_t all_tests[] = {
     TEST(test_openh264_memory_soak),
     /* Media Foundation hardware encoder tests */
     TEST(test_mf_probe_graceful),
+    TEST(test_mf_capability_cache_persist),
     TEST(test_mf_create_destroy),
     TEST(test_mf_init_types_and_sdp_compat),
     TEST(test_mf_color_convert_bgra_to_nv12),
@@ -235,6 +242,10 @@ static const test_entry_t all_tests[] = {
     TEST(test_rtp_fua_reassembly_roundtrip),
     TEST(test_network_nonblocking_drop_on_error),
     TEST(test_pipeline_e2e_loopback),
+    TEST(test_pts_session_relative_wall),
+    TEST(test_rtp_ts_wall_monotonic_and_idle_gap),
+    TEST(test_rtp_sndbuf_live_budget),
+    TEST(test_network_wouldblock_drops_au_forces_idr),
     /* Profiles / degrade controller */
     TEST(test_profile_params_table),
     TEST(test_profile_resolve_low_never_upgrades),
@@ -253,6 +264,7 @@ static const test_entry_t all_tests[] = {
     TEST(test_safety_stop_latency_preserved_under_degrade),
     TEST(test_no_oscillation_100_cycles_forced_overload),
     TEST(test_detector_threshold_boundaries),
+    TEST(test_detector_p95_min_samples_guard),
     TEST(test_detector_classes_independent),
     TEST(test_p95_from_samples),
     TEST(test_window_boundary_rejects_partial),

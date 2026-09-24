@@ -12,6 +12,10 @@ extern "C" {
 #define L4C_DEGRADE_FLOOR_BAD_WINDOWS   5u    /* 5 * 3s = 15s на 480p */
 #define L4C_DEGRADE_DROP_THRESHOLD_PCT  20u   /* строго > 20% */
 #define L4C_DEGRADE_MAX_P95_SAMPLES     256u
+/* p95 при малой выборке = max и ложно валит окно одиночным IDR.
+ * n>=20: ceil(0.95*n) < n — один выброс не попадает в p95.
+ * Ниже порога p95-критерий не применяется (редкие апдейты != перегрузка). */
+#define L4C_DEGRADE_P95_MIN_SAMPLES     20u
 
 typedef enum {
     L4C_DEG_ACT_NONE = 0,
@@ -35,6 +39,8 @@ typedef struct {
     bool has_processing;
     uint32_t processing_p95_ms;
     uint32_t processing_samples;
+    /* Сырые выборки encode-времён; p95 считается при закрытии окна. */
+    uint32_t processing_ms[L4C_DEGRADE_MAX_P95_SAMPLES];
 } l4c_degrade_window_t;
 
 typedef struct {

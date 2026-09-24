@@ -28,12 +28,13 @@ set "L4TOOLS_VERSION=%L4TOOLS_VERSION: =%"
 
 echo Target Version: %L4TOOLS_VERSION%
 
-:: Parse SemVer for RC resource
+:: Parse SemVer for RC resource (strip pre-release suffix: 1.8.0-beta-2 → patch=0)
 for /f "tokens=1,2,3 delims=." %%a in ("%L4TOOLS_VERSION%") do (
     set "VER_MAJ=%%a"
     set "VER_MIN=%%b"
     set "VER_PATCH=%%c"
 )
+for /f "tokens=1 delims=-" %%p in ("%VER_PATCH%") do set "VER_PATCH=%%p"
 if "%VER_MAJ%"=="" set "VER_MAJ=1"
 if "%VER_MIN%"=="" set "VER_MIN=7"
 if "%VER_PATCH%"=="" set "VER_PATCH=7"

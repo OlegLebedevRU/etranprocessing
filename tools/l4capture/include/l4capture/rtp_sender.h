@@ -13,7 +13,10 @@
 #define L4C_RTP_MAX_FU_PAYLOAD_SIZE  1198
 #define L4C_RTP_HEADER_SIZE          12
 #define L4C_RTCP_SR_INTERVAL_MS      1000
-#define L4C_RTP_SNDBUF_BYTES         (4 * 1024 * 1024)
+/* Live video: bounded send queue — drop stale rather than buffer seconds of RTP. */
+#define L4C_RTP_SNDBUF_BYTES         (64 * 1024)
+/* On WSOULDBLOCK: drop AU + force IDR; no per-packet Sleep retry. */
+#define L4C_RTP_SEND_MAX_WOULDBLOCK_RETRIES 0
 
 typedef struct l4c_rtp_config {
     const char *dest_ip;

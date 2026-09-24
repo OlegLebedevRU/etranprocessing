@@ -388,9 +388,10 @@ def verify_downloaded_artifacts(
     sha256_map: dict[str, str],
     size_map: dict[str, int],
     registry_base: str = DEFAULT_REGISTRY,
-    timeout: int = 120,
+    timeout: int = 300,
     key_id: str | None = None,
     key_secret: str | None = None,
+    max_retries: int = 3,
 ) -> bool:
     """Perform HTTPS GET for each artifact in UPLOAD_ORDER, compute sha256 and verify matching."""
     registry_base = registry_base.rstrip("/")
@@ -408,24 +409,27 @@ def verify_downloaded_artifacts(
         req = urllib.request.Request(
             url, headers=base_headers
         )
-        hasher = hashlib.sha256()
-        total_bytes = 0
-        try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                if resp.status != 200:
-                    print(f"[ERROR] GET {url} returned HTTP {resp.status}")
+        data = None
+        for attempt in range(1, max_retries + 1):
+            try:
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    if resp.status != 200:
+                        print(f"[ERROR] GET {url} returned HTTP {resp.status}")
+                        return False
+                    data = resp.read()
+                break
+            except http.client.IncompleteRead as ex:
+                print(f"[WARN] GET {url} attempt {attempt}/{max_retries}: IncompleteRead ({ex}")
+                if attempt == max_retries:
+                    print(f"[ERROR] GET {url} failed after {max_retries} attempts")
                     return False
-                while True:
-                    chunk = resp.read(65536)
-                    if not chunk:
-                        break
-                    hasher.update(chunk)
-                    total_bytes += len(chunk)
-        except Exception as ex:
-            print(f"[ERROR] Failed HTTPS GET {url}: {ex}")
-            return False
+            except Exception as ex:
+                print(f"[ERROR] Failed HTTPS GET {url}: {ex}")
+                return False
 
-        computed_sha = hasher.hexdigest().lower()
+        total_bytes = len(data)
+        computed_sha = hashlib.sha256(data).hexdigest().lower()
+
         if expected_size is not None and total_bytes != expected_size:
             print(
                 f"[ERROR] Size mismatch for {url}: downloaded {total_bytes} != expected {expected_size}"

@@ -47,6 +47,11 @@ typedef struct {
     uint32_t raw_height;
     uint32_t width;
     uint32_t height;
+    /* ROI in visual/output-local coords (after rotation). Multi-monitor source_rect crop. */
+    uint32_t crop_x;
+    uint32_t crop_y;
+    uint32_t crop_w;
+    uint32_t crop_h;
     int32_t stride;
     size_t buffer_size;
     uint64_t geometry_generation;
@@ -578,8 +583,16 @@ static l4c_status_t dxgi_acquire(struct l4c_capture_backend *self, l4c_frame_vie
         out_frame->stride = (int32_t)ctx->mapped.RowPitch;
     }
 
-    out_frame->width = ctx->width;
-    out_frame->height = ctx->height;
+    /* Apply ROI crop (visual/output-local). Scale/encode only the selected region. */
+    if (ctx->crop_w && ctx->crop_h &&
+        (ctx->crop_x != 0 || ctx->crop_y != 0 ||
+         ctx->crop_w != ctx->width || ctx->crop_h != ctx->height)) {
+        out_frame->data = out_frame->data + (size_t)ctx->crop_y * (size_t)out_frame->stride
+                                          + (size_t)ctx->crop_x * 4u;
+    }
+
+    out_frame->width = ctx->crop_w ? ctx->crop_w : ctx->width;
+    out_frame->height = ctx->crop_h ? ctx->crop_h : ctx->height;
     out_frame->buffer_size = ctx->buffer_size;
     out_frame->physical_rect = ctx->physical_rect;
     out_frame->pts_ms = l4c_now_monotonic_ms();
@@ -714,8 +727,28 @@ static l4c_status_t dxgi_init(struct l4c_capture_backend *self, const l4c_captur
         ctx->physical_rect.top = best_desc.DesktopCoordinates.top;
         ctx->physical_rect.right = best_desc.DesktopCoordinates.left + (LONG)ctx->width;
         ctx->physical_rect.bottom = best_desc.DesktopCoordinates.top + (LONG)ctx->height;
+        ctx->crop_x = 0;
+        ctx->crop_y = 0;
+        ctx->crop_w = ctx->width;
+        ctx->crop_h = ctx->height;
     } else {
+        /* Crop ROI from source_rect (virtual-desktop coords) to output-local visual coords.
+         * Desktop Duplication always returns the full output — without this the whole
+         * monitor is scaled/encoded on multi-desktop setups. */
+        LONG cx = config->target_rect.left - best_desc.DesktopCoordinates.left;
+        LONG cy = config->target_rect.top - best_desc.DesktopCoordinates.top;
+        LONG cw = config->target_rect.right - config->target_rect.left;
+        LONG ch = config->target_rect.bottom - config->target_rect.top;
+        if (cx < 0) { cw += cx; cx = 0; }
+        if (cy < 0) { ch += cy; cy = 0; }
+        if (cx + cw > (LONG)ctx->width) cw = (LONG)ctx->width - cx;
+        if (cy + ch > (LONG)ctx->height) ch = (LONG)ctx->height - cy;
+        if (cw <= 0 || ch <= 0) return L4C_ERR_INVALID_ARG;
         ctx->physical_rect = config->target_rect;
+        ctx->crop_x = (uint32_t)cx;
+        ctx->crop_y = (uint32_t)cy;
+        ctx->crop_w = (uint32_t)cw;
+        ctx->crop_h = (uint32_t)ch;
     }
 
     /* Zero-allocation invariant: Create staging texture once in init */

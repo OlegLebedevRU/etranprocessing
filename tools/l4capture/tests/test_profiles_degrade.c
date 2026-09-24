@@ -22,8 +22,6 @@ static l4c_degrade_window_t make_good_window(void) {
     return w;
 }
 
-
-
 int test_profile_params_table(void) {
     const l4c_profile_params_t *p480 = l4c_profile_params(L4C_PROFILE_480P);
     const l4c_profile_params_t *p540 = l4c_profile_params(L4C_PROFILE_540P);
@@ -320,11 +318,11 @@ int test_detector_threshold_boundaries(void) {
     if (l4c_degrade_class_over_threshold(exact)) return 1; /* 20% — не превышение */
     if (!l4c_degrade_class_over_threshold(over)) return 2;
     if (l4c_degrade_class_over_threshold(empty)) return 3;
-    /* p95 == interval — не bad; > interval — bad */
+    /* p95 == interval — не bad; > interval — bad (нужно >= P95_MIN_SAMPLES семплов) */
     memset(&w, 0, sizeof(w));
     w.raw.passed = 10;
     w.has_processing = true;
-    w.processing_samples = 10;
+    w.processing_samples = L4C_DEGRADE_P95_MIN_SAMPLES;
     w.processing_p95_ms = 100; /* 100 == 1000/10 */
     {
         l4c_degrade_controller_t ctl;
@@ -341,6 +339,28 @@ int test_detector_threshold_boundaries(void) {
         l4c_degrade_on_window(&ctl, 6000, &w);
         if (!ctl.d0_done) return 5;
     }
+    return 0;
+}
+
+/* Малая выборка: p95 = max, одиночный IDR не должен валить окно. */
+int test_detector_p95_min_samples_guard(void) {
+    l4c_degrade_window_t w;
+    l4c_degrade_controller_t ctl;
+    memset(&w, 0, sizeof(w));
+    w.raw.passed = 10;
+    w.has_processing = true;
+    w.processing_samples = L4C_DEGRADE_P95_MIN_SAMPLES - 1;
+    w.processing_p95_ms = 500; /* заведомо > 1000/10 */
+    if (l4c_degrade_init(&ctl, L4C_PROFILE_480P, 10, 0) != L4C_OK) return 1;
+    l4c_degrade_on_window(&ctl, 3000, &w);
+    l4c_degrade_on_window(&ctl, 6000, &w);
+    if (ctl.d0_done) return 2; /* p95-критерий не применился */
+    /* С полной выборкой тот же p95 — bad. */
+    w.processing_samples = L4C_DEGRADE_P95_MIN_SAMPLES;
+    if (l4c_degrade_init(&ctl, L4C_PROFILE_480P, 10, 0) != L4C_OK) return 3;
+    l4c_degrade_on_window(&ctl, 3000, &w);
+    l4c_degrade_on_window(&ctl, 6000, &w);
+    if (!ctl.d0_done) return 4;
     return 0;
 }
 

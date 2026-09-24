@@ -62,8 +62,9 @@ static l4c_status_t oh264_init(struct l4c_encoder_backend *self, const l4c_encod
     param.eSpsPpsIdStrategy = CONSTANT_ID;
     param.bEnableFrameSkip = 0;
     param.bEnableDenoise = 0;
-    param.bEnableBackgroundDetection = 1;
-    param.bEnableAdaptiveQuant = 1;
+    /* BGD/AQ добавляли CPU на каждом кадре без выигрыша для desktop-ROI. */
+    param.bEnableBackgroundDetection = 0;
+    param.bEnableAdaptiveQuant = 0;
     param.bEnableLongTermReference = 0;
     param.iMultipleThreadIdc = 1;
     param.iEntropyCodingModeFlag = 0; /* CAVLC */

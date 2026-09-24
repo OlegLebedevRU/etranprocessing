@@ -68,7 +68,7 @@ l4c_status_t l4c_color_convert_bgra_to_i420(
     sy = converter->stride_y;
     su = converter->stride_u;
     sv = converter->stride_v;
-    /* Y plane: BT.601 limited range per pixel */
+    /* Y plane: BT.601 limited range */
     for (y = 0; y < h; ++y) {
         const uint8_t *row = bgra + (size_t)y * (size_t)bgra_stride;
         uint8_t *y_row = converter->plane_y + (size_t)y * (size_t)sy;
@@ -170,7 +170,7 @@ l4c_status_t l4c_color_convert_bgra_to_nv12(
     }
     if (dst_stride_y < (int32_t)w || dst_stride_uv < (int32_t)w) return L4C_ERR_INVALID_ARG;
 
-    /* Y plane: ITU-R BT.601 limited range per pixel */
+    /* Y plane: ITU-R BT.601 limited range — scalar */
     for (y = 0; y < h; ++y) {
         const uint8_t *row = src_bgra + (size_t)y * (size_t)src_stride;
         uint8_t *y_row = dst_y + (size_t)y * (size_t)dst_stride_y;
