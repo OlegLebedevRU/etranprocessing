@@ -3358,3 +3358,88 @@ consumers:
 next_prompt_id: L4D-15B-IOT
 ```
 <!-- HANDOFF:H-L4D-15A-DOCS-v1:END -->
+
+## 38. Регистрация и принятие H-L4D-08A-FIX-01-MEDIA-v1 (corrective l4media, A+E)
+
+Corrective к `H-L4D-08A-MEDIA-v1`: устранение live-freeze трансляции (статичный кадр при живом RTP) за счёт (A) reuse здорового Janus mountpoint без destroy+recreate и (E) grace reconcile при свежем RTP. Внешние lifecycle API не изменены.
+
+<!-- CORRECTIVE_REGISTRATION:R-L4D-08A-FIX-01-MEDIA-v1:BEGIN -->
+```yaml
+registration_id: R-L4D-08A-FIX-01-MEDIA-v1
+status: AUTHORIZED
+authorized_by: Cascade Controller
+authorization_basis: explicit_user_request_live_freeze_mountpoint_destroy_under_watcher
+registered_at_utc: '2026-09-24T18:30:00Z'
+prompt_id: L4D-08A-FIX-01-MEDIA
+scope_project: l4media
+scope_root: D:\repo\platerra\Public\etranprocessing\l4media
+blocked_prompt_id: L4D-08A-MEDIA
+authorized_inputs:
+  - handoff_id: H-L4D-08A-MEDIA-v1
+    contract_version: 1.0.0
+    producer_commit: aba1339
+  - handoff_id: H-L4D-15C-MEDIA-v1
+    contract_version: 1.0.0
+    producer_commit: 7c4dd64
+sequence_gate_handoff_id: H-L4D-08A-MEDIA-v1
+output_handoff_id: H-L4D-08A-FIX-01-MEDIA-v1
+next_prompt_id: L4D-14-MB
+report_path: l4media/docs/l4desk/handoffs/L4D-08A-FIX-01-MEDIA-report.md
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: l4media/docs/l4desk/handoffs/L4D-08A-FIX-01-MEDIA-candidate.md
+publication_required_before_execution: true
+grant_scope: l4media_ingress_lifecycle_only
+runtime_acceptance: GRANTED
+blocked_next_prompt_id: NONE
+```
+<!-- CORRECTIVE_REGISTRATION:R-L4D-08A-FIX-01-MEDIA-v1:END -->
+
+Все проверки выполнены и подтверждены инструментально:
+1. Цепочка коммитов на `l4desk/l4d-15c-media`: producer `29a113a67979e1c45233b60ddcbca31a25425b83` → probe fix `93943f1c30cc0e83980e055bfdd7bd93b419de8e`.
+2. Sequence gate: `H-L4D-08A-MEDIA-v1`, `H-L4D-15C-MEDIA-v1` — ACCEPTED.
+3. Live deploy `87.242.100.34`: `media_lifecycle.h.bak-pre-AE-20260924`, `docker compose build ingress`, force-recreate.
+4. Suite `test_media_lifecycle.py` **9/9 PASS**.
+5. Сигнатуры A: `Mountpoint 9234 healthy, reusing (ports 6010/6011)`, `Mountpoint 773 healthy, reusing (ports 6046/6047)`. `destroying to recreate` — **нет**.
+6. Сигнатуры E: `keep route for SN test-ae-rtp-1790285305 rtp_fresh` ×2; после 22 s `Removing orphan dynamic route`. True orphans без RTP чистятся.
+7. SHA-256 артефактов совпадают с candidate: `media_lifecycle.h` `9863AED9…CD633`, `test_media_lifecycle.py` `87172025…AD4E7`.
+8. Разрешён переход: `L4D-14-MB`.
+
+<!-- HANDOFF:H-L4D-08A-FIX-01-MEDIA-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-08A-FIX-01-MEDIA-v1
+status: ACCEPTED
+contract_kinds:
+  - MEDIA_LIFECYCLE
+  - JANUS_MOUNTPOINT_STABILITY
+  - RECONCILE_RTP_AWARENESS
+producer_prompt_id: L4D-08A-FIX-01-MEDIA
+producer_scope_project: l4media
+producer_report_path: l4media/docs/l4desk/handoffs/L4D-08A-FIX-01-MEDIA-report.md
+producer_branch: l4desk/l4d-15c-media
+producer_commit: 29a113a67979e1c45233b60ddcbca31a25425b83
+report_commit: 93943f1c30cc0e83980e055bfdd7bd93b419de8e
+accepted_at_utc: '2026-09-24T19:10:00Z'
+registration_id: R-L4D-08A-FIX-01-MEDIA-v1
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: l4media/docs/l4desk/handoffs/L4D-08A-FIX-01-MEDIA-candidate.md
+contract_version: 1.0.0
+schema_revision: '027'
+artifact_version: 1.0.0
+compatibility:
+  backward_compatible_with:
+    - H-L4D-08A-MEDIA-v1
+    - H-L4D-15C-MEDIA-v1
+  breaking_changes: false
+deployment_status: DEPLOYED
+feature_flags:
+  unified_media_lifecycle_required: true
+supersedes: []
+known_risks: []
+consumers:
+  - L4D-14-MB
+  - L4D-16-MB
+next_prompt_id: L4D-14-MB
+```
+<!-- HANDOFF:H-L4D-08A-FIX-01-MEDIA-v1:END -->
