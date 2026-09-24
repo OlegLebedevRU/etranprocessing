@@ -4240,3 +4240,42 @@ consumers:
 next_prompt_id: L4D-14-MB
 ```
 <!-- HANDOFF:H-L4D-08B-FIX-02-MB-v1-ACCEPTED:END -->
+
+## 37. Регистрация корректирующего шага L4D-REDIS-IOT-01 (internal runtime state, iot-rpc-rest-app)
+
+Регистрация внутреннего шага `L4D-REDIS-IOT-01` по переводу оперативного состояния (`LeaseRegistry` / `PresenceRegistry`) сервиса `iot-rpc-rest-app` на Redis **без изменения существующих внешних контрактов**. Регламент инфраструктуры Redis: `D:\work\iot.leo4.ru\iot-rpc-rest-app\docs\redis\redis-integration-guide.md` (DB 0 — iot-rpc-rest-app / l4desk; префиксы `l4d:*` / `iot:*`; обязательный TTL; AOF everysec).
+
+Scope ограничен `internal_runtime_state_only`. Внешние API, MQTT-контракты, wire-форматы и принятые handoffs не изменяются.
+
+<!-- CORRECTIVE_REGISTRATION:R-L4D-REDIS-IOT-01-v1:BEGIN -->
+```yaml
+registration_id: R-L4D-REDIS-IOT-01-v1
+status: AUTHORIZED
+authorized_by: Cascade Controller
+authorization_basis: explicit_user_request_to_enable_redis_runtime_state_in_iot
+registered_at_utc: '2026-09-24T12:00:00Z'
+prompt_id: L4D-REDIS-IOT-01
+prompt_path: docs/redis/prompt-stage2-redis-app.md
+scope_project: iot-rpc-rest-app
+scope_root: D:\work\iot.leo4.ru\iot-rpc-rest-app
+blocked_prompt_id: L4D-07-IOT
+authorized_inputs:
+  - handoff_id: H-L4D-07-IOT-v1
+    contract_version: 1.0.0
+    producer_commit: c4e892f4c1dbf8f967109e8a06c3f63b0c9bd483
+  - handoff_id: H-L4D-02-IOT-v1
+    contract_version: 1.0.0
+    producer_commit: a5524d356dda343eca96010d16535d9f37ff4ece
+sequence_gate_handoff_id: H-L4D-07-IOT-v1
+output_handoff_id: H-L4D-REDIS-IOT-01-v1
+next_prompt_id: L4D-08A-MEDIA
+report_path: docs/l4desk/handoffs/L4D-REDIS-IOT-01-report.md
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: docs/l4desk/handoffs/L4D-REDIS-IOT-01-candidate.md
+publication_required_before_execution: true
+grant_scope: internal_runtime_state_only
+runtime_acceptance: NOT_GRANTED
+blocked_next_prompt_id: L4D-08A-MEDIA
+```
+<!-- CORRECTIVE_REGISTRATION:R-L4D-REDIS-IOT-01-v1:END -->
