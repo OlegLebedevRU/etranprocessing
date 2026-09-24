@@ -36,6 +36,8 @@
 #define DEFAULT_SERVICE_TOKEN     "l4media-service-secret-token"
 #define DEFAULT_JANUS_ADMIN_PORT  7088
 #define DEFAULT_JANUS_ADMIN_SECRET "janusoverlord"
+/* Reconcile grace: keep orphan mountpoint/route while terminal RTP is still fresh. */
+#define L4MEDIA_RTP_FRESH_RECONCILE_SEC 20
 
 typedef enum {
     MEDIA_STATE_EMPTY = 0,
@@ -325,17 +327,13 @@ static inline int janus_create_mountpoint(uint32_t mountpoint_id, int rtp_port, 
         return 0;
     }
 
-    /* If mountpoint already exists, destroy and recreate */
+    /* Already exists: reuse. Never destroy a live mountpoint here —
+     * a watcher's WebRTC track dies with the mountpoint (static frame).
+     * Mismatch handling is janus_mountpoint_ensure()'s job. */
     if (strstr(b, "already exists") || strstr(b, "456")) {
-        printf("[INGRESS JANUS] Mountpoint %" PRIu32 " already exists, destroying to recreate...\n", mountpoint_id);
-        janus_destroy_mountpoint(mountpoint_id, NULL, 0);
-        res = janus_admin_request(req, resp, 16384);
-        b = strstr(resp, "\r\n\r\n");
-        if (!b) b = resp;
-        if (strstr(b, "\"streaming\":\"created\"")) {
-            free(resp);
-            return 0;
-        }
+        printf("[INGRESS JANUS] Mountpoint %" PRIu32 " already exists, reusing\n", mountpoint_id);
+        free(resp);
+        return 0;
     }
 
     if (err_buf && err_sz > 0) {
@@ -349,6 +347,91 @@ static inline int janus_create_mountpoint(uint32_t mountpoint_id, int rtp_port, 
     }
     free(resp);
     return -1;
+}
+
+typedef struct {
+    bool found;
+    int videoport;
+    int videortcpport;
+    char pin[64];
+    bool has_pin;
+} JanusMountpointInfo;
+
+/* Probe Janus streaming list for one mountpoint id (ports + pin). */
+static inline int janus_get_mountpoint_info(uint32_t mountpoint_id, JanusMountpointInfo* out) {
+    if (!out) return -1;
+    memset(out, 0, sizeof(*out));
+
+    char req[512];
+    snprintf(req, sizeof(req),
+             "{\"janus\":\"message_plugin\",\"transaction\":\"mp_info_%" PRIu32 "\","
+             "\"admin_secret\":\"%s\",\"plugin\":\"janus.plugin.streaming\","
+             "\"request\":{\"request\":\"list\"}}",
+             mountpoint_id, g_janus_admin_secret);
+
+    char* resp = (char*)malloc(65536);
+    if (!resp) return -1;
+    int res = janus_admin_request(req, resp, 65536);
+    if (res != 0) {
+        free(resp);
+        return -1;
+    }
+
+    const char* b = strstr(resp, "\r\n\r\n");
+    if (!b) b = resp;
+
+    char id_key[40];
+    snprintf(id_key, sizeof(id_key), "\"id\":%" PRIu32, mountpoint_id);
+    const char* p = strstr(b, id_key);
+    if (!p) {
+        snprintf(id_key, sizeof(id_key), "\"id\": %" PRIu32, mountpoint_id);
+        p = strstr(b, id_key);
+    }
+    if (!p) {
+        free(resp);
+        return 0; /* not found */
+    }
+
+    const char* next = strstr(p + strlen(id_key), "\"id\":");
+    size_t span = next ? (size_t)(next - p) : strlen(p);
+    if (span > 4095) span = 4095;
+    char block[4096];
+    memcpy(block, p, span);
+    block[span] = '\0';
+
+    out->found = true;
+    json_get_int(block, "videoport", &out->videoport);
+    json_get_int(block, "videortcpport", &out->videortcpport);
+    if (json_get_string(block, "pin", out->pin, sizeof(out->pin)) && out->pin[0]) {
+        out->has_pin = true;
+    }
+    free(resp);
+    return 0;
+}
+
+/*
+ * A: ensure mountpoint exists and matches (ports + pin).
+ * Healthy match → reuse (no destroy). Mismatch → destroy + create.
+ * Never destroys a healthy mountpoint under a live watcher.
+ */
+static inline int janus_mountpoint_ensure(uint32_t mountpoint_id, int rtp_port, int rtcp_port,
+                                          const char* pin, char* err_buf, size_t err_sz) {
+    JanusMountpointInfo info;
+    if (janus_get_mountpoint_info(mountpoint_id, &info) == 0 && info.found) {
+        const char* want_pin = (pin && pin[0]) ? pin : "";
+        const char* have_pin = info.has_pin ? info.pin : "";
+        bool ports_ok = (info.videoport == rtp_port && info.videortcpport == rtcp_port);
+        bool pin_ok = (strcmp(want_pin, have_pin) == 0);
+        if (ports_ok && pin_ok) {
+            printf("[INGRESS JANUS] Mountpoint %" PRIu32 " healthy, reusing (ports %d/%d)\n",
+                   mountpoint_id, rtp_port, rtcp_port);
+            return 0;
+        }
+        printf("[INGRESS JANUS] Mountpoint %" PRIu32 " mismatch (ports %d/%d pin %s), recreating\n",
+               mountpoint_id, info.videoport, info.videortcpport, info.has_pin ? "set" : "none");
+        janus_destroy_mountpoint(mountpoint_id, NULL, 0);
+    }
+    return janus_create_mountpoint(mountpoint_id, rtp_port, rtcp_port, pin, err_buf, err_sz);
 }
 
 static inline int janus_list_mountpoints(uint32_t* ids, int max_ids, int* out_count) {
@@ -445,6 +528,31 @@ static inline MediaSession* find_active_session_for_sn(const char* sn) {
         }
     }
     return NULL;
+}
+
+/* Any session record (incl. STOPPED) that owns this mountpoint — used for RTP association. */
+static inline const char* find_sn_for_mountpoint(uint32_t mid) {
+    for (int i = 0; i < g_media_session_count; i++) {
+        if (g_media_sessions[i].mountpoint_id == mid && g_media_sessions[i].sn[0]) {
+            return g_media_sessions[i].sn;
+        }
+    }
+    return NULL;
+}
+
+/* E: true if any ingress client for this SN received RTP within the reconcile grace window. */
+static inline bool rtp_is_fresh_for_sn(const char* sn, time_t now) {
+    if (!sn || !sn[0]) return false;
+    for (int i = 0; i < g_client_count; i++) {
+        IngressClient* c = g_clients[i];
+        if (!c || !c->sn[0]) continue;
+        if (strcmp(c->sn, sn) != 0) continue;
+        if (c->last_rtp_time > 0 &&
+            (now - c->last_rtp_time) <= L4MEDIA_RTP_FRESH_RECONCILE_SEC) {
+            return true;
+        }
+    }
+    return false;
 }
 
 static inline MediaSession* allocate_session_slot(void) {
@@ -577,6 +685,12 @@ static inline void handle_media_session_start(const char* body, char* resp_body,
     MediaSession* existing = find_session_by_id(session_id);
     if (existing) {
         if (existing->state == MEDIA_STATE_ACTIVE || existing->state == MEDIA_STATE_STARTING) {
+            /* A: reuse healthy mountpoint; recreate only on mismatch / after Janus wipe */
+            char jerr[128] = {0};
+            (void)janus_mountpoint_ensure(existing->mountpoint_id, existing->rtp_port,
+                                          existing->rtcp_port, existing->pin, jerr, sizeof(jerr));
+            int _clients_updated = 0;
+            upsert_route(existing->sn, existing->rtp_port, existing->rtcp_port, &_clients_updated);
             *status_code = 200;
             *status_text = "OK";
             snprintf(resp_body, resp_sz,
@@ -658,9 +772,9 @@ static inline void handle_media_session_start(const char* body, char* resp_body,
     s->state = MEDIA_STATE_STARTING;
     s->created_at = time(NULL);
 
-    /* 5. Janus mountpoint creation */
+    /* 5. Janus mountpoint (A: reuse if healthy) */
     char janus_err[256] = {0};
-    if (janus_create_mountpoint(mountpoint_id, rtp_port, rtcp_port, pin, janus_err, sizeof(janus_err)) != 0) {
+    if (janus_mountpoint_ensure(mountpoint_id, rtp_port, rtcp_port, pin, janus_err, sizeof(janus_err)) != 0) {
         s->state = MEDIA_STATE_FAILED;
         lifecycle_safe_strcpy(s->stop_reason, "janus_create_failed", sizeof(s->stop_reason));
         g_metric_sessions_failed++;
@@ -830,6 +944,12 @@ static inline void reconcile_resources(char* resp_body, size_t resp_sz) {
                 }
             }
             if (!has_active) {
+                const char* rtp_sn = find_sn_for_mountpoint(mid);
+                if (rtp_sn && rtp_is_fresh_for_sn(rtp_sn, now)) {
+                    printf("[INGRESS RECONCILE] keep mountpoint %" PRIu32 " rtp_fresh sn=%s\n",
+                           mid, rtp_sn);
+                    continue;
+                }
                 printf("[INGRESS RECONCILE] Destroying orphan Janus mountpoint %" PRIu32 "\n", mid);
                 janus_destroy_mountpoint(mid, NULL, 0);
                 cleaned_mountpoints++;
@@ -852,6 +972,11 @@ static inline void reconcile_resources(char* resp_body, size_t resp_sz) {
             }
         }
         if (!has_active) {
+            if (rtp_is_fresh_for_sn(g_routes.entries[i].sn, now)) {
+                printf("[INGRESS RECONCILE] keep route for SN %s rtp_fresh\n",
+                       g_routes.entries[i].sn);
+                continue;
+            }
             printf("[INGRESS RECONCILE] Removing orphan dynamic route for SN %s\n", g_routes.entries[i].sn);
             int cleared = 0;
             delete_route(g_routes.entries[i].sn, &cleared);

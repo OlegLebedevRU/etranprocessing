@@ -225,7 +225,7 @@ def test_lifecycle_full_flow(base_url: str, janus_host: str, janus_admin_port: i
     print("  [PASS] Full media session lifecycle start -> health -> stop verified.")
 
 
-def test_idempotency_and_repeats(base_url: str):
+def test_idempotency_and_repeats(base_url: str, janus_host: str = "janus", janus_admin_port: int = 7088):
     print("\n[TEST 4] Verifying Idempotency and Deterministic Repeated Responses...")
     headers = {"X-Media-Service-Token": DEFAULT_SERVICE_TOKEN}
     session_id = f"test-sess-idemp-{int(time.time())}"
@@ -262,6 +262,16 @@ def test_idempotency_and_repeats(base_url: str):
     assert resp2.get("rtp_port") == resp1.get("rtp_port")
     assert resp2.get("created_at") == resp1.get("created_at")
     assert resp2.get("state") == "active"
+
+    # A: idempotent start must reuse a healthy mountpoint (no destroy/recreate)
+    mp_id = resp1.get("mountpoint_id")
+    if mp_id:
+        info = janus_admin_call(
+            janus_host,
+            janus_admin_port,
+            {"request": "info", "id": mp_id},
+        )
+        assert info.get("janus") == "success", f"mountpoint {mp_id} missing after idempotent start: {info}"
 
     # Stop session
     status_s1, stop_r1 = http_request(
@@ -558,7 +568,7 @@ def run_all(
     test_openapi_spec(base_url)
     test_service_auth(base_url)
     test_lifecycle_full_flow(base_url, janus_host, janus_admin_port)
-    test_idempotency_and_repeats(base_url)
+    test_idempotency_and_repeats(base_url, janus_host, janus_admin_port)
     test_device_mutual_exclusion(base_url)
     test_concurrency(base_url)
     test_reconciliation_orphan_cleanup(base_url, janus_host, janus_admin_port)
