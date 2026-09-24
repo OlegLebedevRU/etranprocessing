@@ -400,7 +400,13 @@ bool ctl_handle_command(const char* payload, size_t payload_len,
     json_extract_str(payload, "sn", cmd_sn, sizeof(cmd_sn));
     json_extract_str(payload, "type", cmd_type, sizeof(cmd_type));
 
-    log_info("Received command type: '%s', id: '%s'", cmd_type, cmd_id);
+    /* Routine keepalive/probe commands stay out of INFO to keep idle logs readable. */
+    if (strcmp(cmd_type, "lease_renew") == 0 || strcmp(cmd_type, "stream_renew") == 0 ||
+        strcmp(cmd_type, "inventory_get") == 0) {
+        log_debug("Received command type: '%s', id: '%s'", cmd_type, cmd_id);
+    } else {
+        log_info("Received command type: '%s', id: '%s'", cmd_type, cmd_id);
+    }
 
     if (cmd_sn[0] != '\0' && own_sn && own_sn[0] != '\0' && strcmp(cmd_sn, own_sn) != 0) {
         log_warn("Rejected command for foreign SN: '%s' (own: '%s')", cmd_sn, own_sn);
@@ -595,8 +601,8 @@ bool ctl_handle_command(const char* payload, size_t payload_len,
         }
 
         ffmpeg_supervisor_update_lease(lease_id, (uint64_t)expires_at_ms);
-        log_info("Lease renewed for stream %s: new expires_at_ms=%llu",
-                 stream.stream_instance_id, (unsigned long long)expires_at_ms);
+        log_debug("Lease renewed for stream %s: new expires_at_ms=%llu",
+                  stream.stream_instance_id, (unsigned long long)expires_at_ms);
 
         int len = ctl_build_ack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn, now_ms);
         if (len > 0) {
