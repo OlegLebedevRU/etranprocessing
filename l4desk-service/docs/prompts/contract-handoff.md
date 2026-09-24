@@ -3883,3 +3883,360 @@ runtime_acceptance: GRANTED
 blocked_next_prompt_id: L4D-14-MB
 ```
 <!-- CORRECTIVE_REGISTRATION:R-L4D-13-MB-FIX-01-v1:END -->
+
+## 33. Handoff: H-L4D-13-MB-FIX-01-v1 (corrective MenuBuilder)
+
+Результаты выполнения корректирующего промпта `L4D-13-MB-FIX-01` приняты Контроллером каскада:
+1. Выполнена верификация требований §1–§13:
+   - Раздел «Терминалы» вынесен в корень навигации профиля L4Desk выше «Видеонаблюдения» (`/terminals`).
+   - Дублирующий пункт настроек терминалов в профиле L4Desk скрыт при сохранении полного доступа для классического профиля (`SettingsTerminalsNavGuard`).
+   - Создание терминалов из консоли полностью удалено.
+   - Реализован единый канонический серверный юзкейс создания терминала `create_terminal_business_record`.
+   - Серийный номер (`a4b<7-digit device_id>c<5-digit random>d<DDMMYY>`) и `device_id` (`1000001…1999999`) генерируются исключительно сервером. Клиентские `sn`/`device_id` отклоняются.
+   - Провижининг в IoT-контур не перезаписывает выданные идентификаторы.
+   - Идемпотентный вызов для L4Desk возвращает исходные идентификаторы с `provisioning_status: "already_exists"`.
+2. Все файлы изменены строго в пределах проекта `MenuBuilder` (18 артефактов).
+3. producer_commit: `45bd645a1f468a74e4cbfb705caccf309bfd1162`, report_commit: `a5be39c319c92b6a2937ff017a033f84fae4ca0d`, candidate_commit: `a64b96d07d1000b213c95a289626359e9c9a89d9`, ветка: `l4desk/l4d-13-mb-fix-01`.
+4. Побайтно проверены контрольные суммы SHA-256 для всех 18 артефактов и отдельного файла кандидата `L4D-13-MB-FIX-01-candidate.md` (`a4774e9ae7e3b3a46c33480c26896399fe8760dd2620057b96ac7adb73263e51`) — 100% совпадение.
+5. Тестовый набор успешно пройден:
+   - Frontend: 11 сьютов, 58 тестов vitest (`58 passed`).
+   - Production bundle build: `tsc -b && vite build` выполнен успешно.
+   - Backend: 27/27 тестов пройдены (`test_terminal_creation_service.py`, `test_terminal_onboarding.py`, `test_admin.py`, `test_settings_terminals.py`).
+   - Анализ кода: `ruff check` — all passed, `pyright` — 0 errors, 0 warnings.
+6. Live smoke evidence на боевом сервере `87.242.100.34`:
+   - Nginx на порту 3000 (`dev.leo4.ru`) отвечает `HTTP/1.1 200 OK` на маршрут `/terminals`.
+   - Ассеты фронтенда (`L4DeskTerminalsPage-DyVkufhi.js`, `TerminalsSettingsPage-CcFc7jdH.js`) развернуты в `/home/user1/MenuBuilder/frontend/dist/assets/` и отдаются корректно.
+   - Контейнеры `menubuilder-backend` и `nginx-default` работают штатно.
+7. Кандидат оформлен по стандарту `DETACHED_V1` в файле `MenuBuilder/docs/l4desk/handoffs/L4D-13-MB-FIX-01-candidate.md`.
+8. Разрешён переход к следующему шагу каскада: `L4D-14-MB` (потребители: `L4D-14-MB`, `L4D-17E-MB`, `L4D-18E-MB`).
+
+<!-- HANDOFF:H-L4D-13-MB-FIX-01-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-13-MB-FIX-01-v1
+status: ACCEPTED
+contract_kinds:
+  - API
+  - DEPLOYMENT
+  - UX_NAVIGATION
+  - TERMINAL_IDENTITY
+producer_prompt_id: L4D-13-MB-FIX-01
+producer_scope_project: MenuBuilder
+producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-13-MB-FIX-01-report.md
+producer_branch: l4desk/l4d-13-mb-fix-01
+producer_commit: 45bd645a1f468a74e4cbfb705caccf309bfd1162
+report_commit: a5be39c319c92b6a2937ff017a033f84fae4ca0d
+accepted_at_utc: '2026-09-22T23:35:00Z'
+registration_id: R-L4D-13-MB-FIX-01-v1
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-13-MB-FIX-01-candidate.md
+contract_version: 1.1.0
+schema_revision: '027'
+artifact_version: 1.1.0
+artifact_paths:
+  - MenuBuilder/backend/app/services/terminal_creation_service.py
+  - MenuBuilder/backend/app/services/terminal_onboarding_service.py
+  - MenuBuilder/backend/app/routers/admin_terminals.py
+  - MenuBuilder/backend/app/schemas/__init__.py
+  - MenuBuilder/frontend/src/routes/l4desk/L4DeskTerminalsPage.tsx
+  - MenuBuilder/frontend/src/components/OnboardingWizardModal.tsx
+  - MenuBuilder/frontend/src/routes/layout.tsx
+  - MenuBuilder/frontend/src/App.tsx
+  - MenuBuilder/frontend/src/routes/console/ConsolePage.tsx
+  - MenuBuilder/frontend/src/routes/settings-layout.tsx
+  - MenuBuilder/frontend/src/routes/settings/TerminalsSettingsPage.tsx
+  - MenuBuilder/frontend/src/api/settings.ts
+  - MenuBuilder/frontend/src/tests/l4desk-profile-navigation.test.ts
+  - MenuBuilder/backend/tests/test_terminal_creation_service.py
+  - MenuBuilder/backend/tests/test_terminal_onboarding.py
+  - MenuBuilder/backend/tests/test_admin.py
+  - MenuBuilder/CHANGELOG.md
+  - MenuBuilder/docs/l4desk/handoffs/L4D-13-MB-FIX-01-report.md
+artifact_sha256:
+  - 963436ea7f35ab4d8869d840ffc5dca424bd4cb8c4bd546a4e080f6870bc0ee6
+  - f218c9337c8c56719eaa1ee6f33fa93337fc79070459d23a587708312b27d0f9
+  - 57012055e139e21838a4d2fc9cda8d7acb4ed592a7ef8c790f230b8bd50a7bef
+  - 19b7dae418f5d216fb11f7036e1d1b2185516786a860ed5c2e16cb8dd3705af3
+  - 8c2200fbabc968e5a9ee26218ad2a6874abbacabb5408b9a90eabeca0f3d5c49
+  - 68cdf4b8d4d3b59a394f9d3f8f4a3bfb3dfe18573bfb8606ba86f47428e3fa63
+  - 930f9590ee8d4f37b0c775bb4373b5c17421ee9c5ddea1da317b8f364fcc479e
+  - 9fe0438a784effe2833c858a4f33b167c6ace9ac4cd706b8625727a497717f0f
+  - 87993119e88718436a5402fa2f427c2e581423037fb4492950c573ee4be6b4a0
+  - 9dccc20c871653c21cf129e471ba6ed42090a111f65127f96f4fb105ed5747e0
+  - 40e3609d482a386601775589c6816c2e9865db01deec97ad45d224a9c29f2f7d
+  - ac6d7b939c986ebc794a91d5220d6f58a47a6fe9872a15be126beeb4d4dcfcb9
+  - 82d1feddea6a6b76cac6cff6eb63ba35b684f5e5276a7e782b0ad2a9820c1403
+  - 14bb44f249ba5b03bd087c2d08ad8f49029088db03cfcde1dae8b8663a798e33
+  - dd1805f2acbc20cf138050e96cb553a0b167dbd3df48a382a79c344068600dbe
+  - 61c12e74d373f7c12e6c4b942c48e3dde996cd691ac01f3a73b88abd404419bd
+  - c9a32f621e67756a809cbfb26293d0c53a0040de8acaf552b5a702a6f5a28457
+  - 3a848d1126aabb9eac57f268cb4b9b138a6f72d91651fa73023e8fc2abd2ab46
+compatibility:
+  backward_compatible_with:
+    - H-L4D-13-MB-v1
+    - H-L4D-12-MB-v1
+    - H-L4D-08B-MB-v1
+    - H-L4D-06C-MB-v1
+  breaking_changes: false
+  notes: >
+    Corrective step replaces the UX portion of the previous L4D-13 result
+    (H-L4D-13-MB-v1): root L4Desk section «Терминалы» above «Видеонаблюдение»,
+    single canonical server-side terminal creation use case, server-owned SN
+    and device_id in range 1000001…1999999. Classic profile is unchanged.
+    Provisioning no longer overwrites issued SN/device_id. Idempotent L4Desk
+    create still returns the original identifiers.
+  supersedes_ux_of:
+    - H-L4D-13-MB-v1
+deployment_status: DEPLOYED
+deployed_environment: production
+feature_flags:
+  l4desk_terminal_onboarding_enabled: unchanged
+  l4desk_enabled: unchanged
+  l4desk_navigation_profile_enabled: unchanged
+  l4desk_ui_enabled: unchanged
+contract_payload:
+  navigation_sections:
+    - terminals: /terminals
+    - video: /video
+    - console: /console
+    - settings: /settings
+    - mcp: /mcp
+    - licenses: /licenses
+  terminal_identity:
+    sn_formula: a4b<7-digit device_id>c<5-digit random>d<DDMMYY>
+    sn_source: server_only
+    device_id_source: server_only
+    device_id_range: [1000001, 1999999]
+    user_supplied_sn: rejected_ignored
+    user_supplied_device_id: rejected_ignored
+  create_use_case: app.services.terminal_creation_service.create_terminal_business_record
+  provisioning_mutation_of_identity: prohibited
+  console_terminal_creation: prohibited
+  classic_profile_changes: none
+supersedes: []
+known_risks:
+  - "test_step6_quick_actions::test_stream_start_504_terminal_timeout_not_swallowed fails 502 vs 504 in media lifecycle path (outside this prompt scope)."
+  - "Legacy device_id values outside 1000001…1999999 remain in DB and are not migrated."
+consumers:
+  - L4D-14-MB
+  - L4D-17E-MB
+  - L4D-18E-MB
+next_prompt_id: L4D-14-MB
+```
+<!-- HANDOFF:H-L4D-13-MB-FIX-01-v1:END -->
+
+## 34. Регистрация корректирующего шага L4D-08B-FIX-02-MB (corrective MenuBuilder)
+
+Регистрация корректирующего шага `L4D-08B-FIX-02-MB` для устранения коллизии детерминированного `session_id = media-{sn}` в `media_lifecycle`, обеспечения гарантированного повторного пересоздания mountpoint в Janus и закрытия открытого риска теста `test_step6_quick_actions::test_stream_start_504_terminal_timeout_not_swallowed`.
+
+<!-- CORRECTIVE_REGISTRATION:R-L4D-08B-FIX-02-MB-v1:BEGIN -->
+```yaml
+registration_id: R-L4D-08B-FIX-02-MB-v1
+status: AUTHORIZED
+authorized_by: Cascade Controller
+authorization_basis: explicit_user_request_to_fix_media_session_mountpoint_and_test_risks
+registered_at_utc: '2026-09-22T23:55:00Z'
+prompt_id: L4D-08B-FIX-02-MB
+prompt_path: l4desk-service/docs/prompts/L4D-08B-FIX-02-MB.md
+scope_project: MenuBuilder
+scope_root: D:\repo\platerra\Public\etranprocessing\MenuBuilder
+blocked_prompt_id: L4D-08B-FIX-01-MB
+authorized_inputs:
+  - handoff_id: H-L4D-07-IOT-v1
+    contract_version: 1.0.0
+    producer_commit: c4e892f4c1dbf8f967109e8a06c3f63b0c9bd483
+  - handoff_id: H-L4D-08A-MEDIA-v1
+    contract_version: 1.0.0
+    producer_commit: 37adfd01e5492e6b61e8ecb243579389ae2d858e
+  - handoff_id: H-L4D-08B-FIX-01-MB-v1
+    contract_version: 1.1.0
+    producer_commit: 0fc2f66
+  - handoff_id: H-L4D-13-MB-FIX-01-v1
+    contract_version: 1.1.0
+    producer_commit: 45bd645a1f468a74e4cbfb705caccf309bfd1162
+sequence_gate_handoff_id: H-L4D-13-MB-FIX-01-v1
+output_handoff_id: H-L4D-08B-FIX-02-MB-v1
+next_prompt_id: L4D-14-MB
+report_path: MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-02-MB-report.md
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-02-MB-candidate.md
+publication_required_before_execution: true
+grant_scope: full_scope_project_menubuilder
+runtime_acceptance: GRANTED
+blocked_next_prompt_id: L4D-14-MB
+```
+<!-- CORRECTIVE_REGISTRATION:R-L4D-08B-FIX-02-MB-v1:END -->
+
+## 35. Результат корректирующего шага H-L4D-08B-FIX-02-MB-v1 (Candidate DETACHED_V1)
+
+Кандидат `H-L4D-08B-FIX-02-MB-v1` подготовлен по стандарту `DETACHED_V1` на основании отчёта `MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-02-MB-report.md` и кандидата `MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-02-MB-candidate.md`.
+
+<!-- HANDOFF:H-L4D-08B-FIX-02-MB-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-08B-FIX-02-MB-v1
+status: CANDIDATE
+contract_kinds:
+  - MEDIA_SESSION_CONSUMER
+  - RELIABLE_SESSION_LIFECYCLE
+  - TEST_RISK_CLOSURE
+producer_prompt_id: L4D-08B-FIX-02-MB
+producer_scope_project: MenuBuilder
+producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-02-MB-report.md
+producer_branch: l4desk/l4d-08b-fix-02-mb
+registration_id: R-L4D-08B-FIX-02-MB-v1
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-02-MB-candidate.md
+contract_version: 1.2.0
+schema_revision: '027'
+artifact_version: 1.2.0
+artifact_paths:
+  - MenuBuilder/backend/app/routers/video_control.py
+  - MenuBuilder/backend/app/routers/video.py
+  - MenuBuilder/backend/app/repositories/l4desk_repository.py
+  - MenuBuilder/backend/app/services/remote_session_use_case.py
+  - MenuBuilder/backend/app/services/iot_client.py
+  - MenuBuilder/backend/tests/test_step6_quick_actions.py
+  - MenuBuilder/backend/tests/test_video.py
+  - MenuBuilder/frontend/src/api/video.ts
+  - MenuBuilder/frontend/src/routes/video-surveillance.tsx
+  - l4media/ingress/src/media_lifecycle.h
+  - MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-02-MB-report.md
+artifact_sha256:
+  - DB4AB78BBC1D34C430771F6BECC5F476C5B3F984A7477DD3933FB1CEA794C932
+  - 1697AB831BE9A0E68C8FA03F4392AFB24728A35E2DE449F3AADEA64D6C44B59D
+  - 6D389739A5C73C8EC3D883E44369CB1AF19C19847A9972AB8D7EFDC40BB44398
+  - A8F92A468DD2811636F2C469B292C0822068E7E2E61EC07A1399740F61377714
+  - FEEB553AC410EDFBF01CD975F4F6862DCD0317E4BD7D48C8EFF104D0BA9BAF9B
+  - 201D9BD989C368E5BEF9F3167362968F8FD8767766B3548FFD81B3ABF7D9CFF3
+  - 8B176ECDE4B182B2DE6E85B0B36F10E6603137CE261208C4B0E34BB2BEAAD873
+  - 7D3BD7A63EEB0A195809811B4F37B7AC060C6B4D8B43C39B93071FB82024D381
+  - 2563266FEF826E58DD8F8A3BD05E963906A996DABC2DE2D25EDFC75CD9953068
+  - 08ECE1013BA876777C9FF9E204892C86334B91A96DF3C45C2990D91222EA19B1
+  - D99CFC61A5ED08AF633CB4F80E66538DBD37E1B7E89F8EFE529A92E99C229C86
+compatibility:
+  backward_compatible_with:
+    - H-L4D-07-IOT-v1
+    - H-L4D-08A-MEDIA-v1
+    - H-L4D-08B-FIX-01-MB-v1
+    - H-L4D-13-MB-FIX-01-v1
+  breaking_changes: false
+  notes: >
+    Corrective step fixes deterministic session_id collision in media lifecycle,
+    resolves terminal_id vs device_id session resolution, prevents unhandled 500 errors,
+    implements lease reuse and recovery in video_control, implements graceful superseding
+    of prior video sessions with lease preservation, adds DELETE /devices/{device_id}/session endpoint,
+    wires up frontend 'Завершить активную сессию' button, adds fallback X-Session-Id in iot_client,
+    adds stop by SN in Ingress, and fixes mock gap in test_step6_quick_actions.
+deployment_status: DEPLOYED
+deployed_environment: production
+feature_flags:
+  unified_media_lifecycle_required: true
+contract_payload:
+  ownership:
+    menu_builder:
+      - tenant/auth/policy/session orchestration
+      - IoT session and lease coordination
+      - lifecycle API consumer
+      - unique per-session media ID generation
+      - robust dual ID resolution (terminal.id and terminal.device_id)
+      - lease reuse and conflict recovery
+      - graceful session superseding and explicit close endpoint
+      - lease synchronization across stream start phases
+    l4media_ingress:
+      - dynamic ingress route lifecycle
+      - Janus mountpoint lifecycle
+      - media session state
+      - stop by SN and active_session_id feedback
+      - TTL/watchdog/reconcile cleanup
+  reconnect_resilience:
+    deterministic_sn_collision_fixed: true
+    session_terminated_auto_reallocated: true
+    session_busy_auto_superseded: true
+    stopped_mountpoint_recreated_on_restart: true
+    dual_terminal_device_id_resolution: true
+    unhandled_500_prevented: true
+    lease_conflict_auto_recovered: true
+    lease_inactive_auto_recovered: true
+    button_stop_session_wired_to_backend: true
+  test_risk_status:
+    test_stream_start_504_terminal_timeout_not_swallowed: PASSED
+supersedes: []
+known_risks: []
+consumers:
+  - L4D-14-MB
+  - L4D-16-MB
+  - L4D-17E-MB
+  - L4D-18E-MB
+next_prompt_id: L4D-14-MB
+```
+<!-- HANDOFF:H-L4D-08B-FIX-02-MB-v1:END -->
+
+## 36. Принятие handoff H-L4D-08B-FIX-02-MB-v1 (DETACHED_V1 corrective MenuBuilder)
+
+Фиксация контроллером каскада принятого корректирующего контракта `H-L4D-08B-FIX-02-MB-v1` по результатам проверки отчёта `MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-02-MB-report.md` и отдельного кандидата `MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-02-MB-candidate.md` в формате `DETACHED_V1` согласно §9 `PROMPT-STANDARD.md` и нормативной регистрации `R-L4D-08B-FIX-02-MB-v1`.
+
+Все проверки выполнены и подтверждены инструментально:
+1. Цепочка коммитов на ветке `l4desk/l4d-08b-fix-02-mb`: producer `b421cb4` → report R `ab43850` → candidate C `683d7e6`.
+2. Sequence gate пройден: предшествующие обязательные handoffs `H-L4D-07-IOT-v1`, `H-L4D-08A-MEDIA-v1`, `H-L4D-08B-FIX-01-MB-v1`, `H-L4D-13-MB-FIX-01-v1` приняты в журнале со статусом `ACCEPTED`.
+3. Corrective registration `R-L4D-08B-FIX-02-MB-v1` (§34) AUTHORIZED, scope `MenuBuilder` (+ согласованная нормализация `l4media-ingress`), не отозвана.
+4. Инструментально проверены SHA-256 всех 11 артефактов — 100% совпадение с `artifact_sha256` кандидата:
+   - `video_control.py`: `DB4AB78BBC1D34C430771F6BECC5F476C5B3F984A7477DD3933FB1CEA794C932`
+   - `video.py`: `1697AB831BE9A0E68C8FA03F4392AFB24728A35E2DE449F3AADEA64D6C44B59D`
+   - `l4desk_repository.py`: `6D389739A5C73C8EC3D883E44369CB1AF19C19847A9972AB8D7EFDC40BB44398`
+   - `remote_session_use_case.py`: `A8F92A468DD2811636F2C469B292C0822068E7E2E61EC07A1399740F61377714`
+   - `iot_client.py`: `FEEB553AC410EDFBF01CD975F4F6862DCD0317E4BD7D48C8EFF104D0BA9BAF9B`
+   - `test_step6_quick_actions.py`: `201D9BD989C368E5BEF9F3167362968F8FD8767766B3548FFD81B3ABF7D9CFF3`
+   - `test_video.py`: `8B176ECDE4B182B2DE6E85B0B36F10E6603137CE261208C4B0E34BB2BEAAD873`
+   - `video.ts`: `7D3BD7A63EEB0A195809811B4F37B7AC060C6B4D8B43C39B93071FB82024D381`
+   - `video-surveillance.tsx`: `2563266FEF826E58DD8F8A3BD05E963906A996DABC2DE2D25EDFC75CD9953068`
+   - `media_lifecycle.h`: `08ECE1013BA876777C9FF9E204892C86334B91A96DF3C45C2990D91222EA19B1`
+   - report: `D99CFC61A5ED08AF633CB4F80E66538DBD37E1B7E89F8EFE529A92E99C229C86`
+5. Тестирование: **59 passed** (`test_step6_quick_actions`, `test_remote_session_orchestration`, `test_video`, `test_video_control`, `test_video_stream_permissions`). `ruff check` — all passed. `pyright` — 0 errors, 0 warnings. Frontend `tsc -b && vite build` — success.
+6. Закрытые риски: `session_id` collision / `session_terminated` маскировка, `terminal.id` vs `device_id`, unhandled 500, `lease_taken`, `lease inactive`, `No such mountpoint/stream` при повторном старте, кнопка «Завершить активную сессию», mock-gap `test_stream_start_504_terminal_timeout_not_swallowed`.
+7. Кандидат оформлен по стандарту `DETACHED_V1` в файле `MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-02-MB-candidate.md`.
+8. Разрешён переход к следующему шагу каскада: `L4D-14-MB` (потребители: `L4D-14-MB`, `L4D-16-MB`, `L4D-17E-MB`, `L4D-18E-MB`).
+
+<!-- HANDOFF:H-L4D-08B-FIX-02-MB-v1-ACCEPTED:BEGIN -->
+```yaml
+handoff_id: H-L4D-08B-FIX-02-MB-v1
+status: ACCEPTED
+contract_kinds:
+  - MEDIA_SESSION_CONSUMER
+  - RELIABLE_SESSION_LIFECYCLE
+  - TEST_RISK_CLOSURE
+producer_prompt_id: L4D-08B-FIX-02-MB
+producer_scope_project: MenuBuilder
+producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-02-MB-report.md
+producer_branch: l4desk/l4d-08b-fix-02-mb
+producer_commit: b421cb4
+report_commit: ab43850
+accepted_at_utc: '2026-09-24T18:40:00Z'
+registration_id: R-L4D-08B-FIX-02-MB-v1
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-02-MB-candidate.md
+contract_version: 1.2.0
+schema_revision: '027'
+artifact_version: 1.2.0
+compatibility:
+  backward_compatible_with:
+    - H-L4D-07-IOT-v1
+    - H-L4D-08A-MEDIA-v1
+    - H-L4D-08B-FIX-01-MB-v1
+    - H-L4D-13-MB-FIX-01-v1
+  breaking_changes: false
+deployment_status: DEPLOYED
+feature_flags:
+  unified_media_lifecycle_required: true
+supersedes: []
+known_risks: []
+consumers:
+  - L4D-14-MB
+  - L4D-16-MB
+  - L4D-17E-MB
+  - L4D-18E-MB
+next_prompt_id: L4D-14-MB
+```
+<!-- HANDOFF:H-L4D-08B-FIX-02-MB-v1-ACCEPTED:END -->
