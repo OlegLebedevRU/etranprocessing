@@ -3541,3 +3541,58 @@ runtime_acceptance: NOT_GRANTED
 blocked_next_prompt_id: NONE
 ```
 <!-- CORRECTIVE_REGISTRATION:R-L4D-REDIS-MEDIA-01-v1:END -->
+
+## 41. Принятие handoff H-L4D-REDIS-MEDIA-01-v1 (DETACHED_V1, l4media Redis ownership)
+
+Фиксация контроллером принятого контракта `H-L4D-REDIS-MEDIA-01-v1` (Redis DB 2 ownership media-сессий/routes/mountpoints) по отчёту `l4media/docs/l4desk/handoffs/L4D-REDIS-MEDIA-01-report.md` и detached candidate.
+
+Проверки:
+1. Ветка `l4desk/l4d-15c-media`: producer `4979043fe11d16f4cdca7b5887c3750b748dd620` → pin-fix `3748a73`.
+2. Sequence gate `H-L4D-08A-FIX-01-MEDIA-v1` — ACCEPTED; вход `H-L4D-REDIS-IOT-01-v1` (reference, DB 0) — ACCEPTED.
+3. Registration `R-L4D-REDIS-MEDIA-01-v1` (§40) AUTHORIZED; scope `l4media_ingress_redis_ownership_only` соблюдён.
+4. SHA-256 6 артефактов побайтно совпадают с candidate (`media_redis.h`, `media_lifecycle.h`, `l4media_ingress.c`, `Makefile`, `Dockerfile`, `compose.yaml`).
+5. C unit **7/7**; lifecycle suite **9/9**; compile alpine+hiredis OK.
+6. **Restart-soak PASS**: restore N sessions, health `state=active`, reconcile orphans=0, RTP `live`, Janus mountpoint `age_ms` непрерывный (без destroy/recreate).
+7. Ключи DB 2: `media:session:*`, `media:session-by-sn:*`, `media:route:*`, `media:mountpoint:*`; TTL = `ttl_sec+60` + refresh.
+8. Внешние lifecycle API без изменений. Разрешён переход: `L4D-14-MB`.
+
+<!-- HANDOFF:H-L4D-REDIS-MEDIA-01-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-REDIS-MEDIA-01-v1
+status: ACCEPTED
+contract_kinds:
+  - MEDIA_LIFECYCLE
+  - REDIS_OWNERSHIP
+  - DEPLOYMENT
+producer_prompt_id: L4D-REDIS-MEDIA-01
+producer_scope_project: l4media
+producer_report_path: l4media/docs/l4desk/handoffs/L4D-REDIS-MEDIA-01-report.md
+producer_branch: l4desk/l4d-15c-media
+producer_commit: 4979043fe11d16f4cdca7b5887c3750b748dd620
+report_commit: 3748a73
+accepted_at_utc: '2026-09-25T01:30:00Z'
+registration_id: R-L4D-REDIS-MEDIA-01-v1
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: l4media/docs/l4desk/handoffs/L4D-REDIS-MEDIA-01-candidate.md
+contract_version: 1.0.0
+schema_revision: '027'
+artifact_version: 1.0.0
+compatibility:
+  backward_compatible_with:
+    - H-L4D-08A-MEDIA-v1
+    - H-L4D-08A-FIX-01-MEDIA-v1
+    - H-L4D-REDIS-IOT-01-v1
+    - H-L4D-15C-MEDIA-v1
+  breaking_changes: false
+deployment_status: DEPLOYED
+feature_flags:
+  unified_media_lifecycle_required: true
+supersedes: []
+known_risks: []
+consumers:
+  - L4D-14-MB
+  - L4D-16-MB
+next_prompt_id: L4D-14-MB
+```
+<!-- HANDOFF:H-L4D-REDIS-MEDIA-01-v1:END -->
