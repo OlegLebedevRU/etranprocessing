@@ -3443,3 +3443,56 @@ consumers:
 next_prompt_id: L4D-14-MB
 ```
 <!-- HANDOFF:H-L4D-08A-FIX-01-MEDIA-v1:END -->
+
+## 39. Принятие handoff H-L4D-REDIS-IOT-01-v1 (DETACHED_V1, iot-rpc-rest-app)
+
+Фиксация контроллером принятого контракта `H-L4D-REDIS-IOT-01-v1` (перевод `LeaseRegistry` / `PresenceRegistry` / `DiagnosticsSessionRegistry` на Redis DB 0) по отчёту и detached candidate в репозитории `iot-rpc-rest-app`. Регистрация `R-L4D-REDIS-IOT-01-v1` (§37 журнала ветки `l4desk/l4d-08b-fix-02-mb`) AUTHORIZED, не отозвана.
+
+Проверки:
+1. Ветка `l4desk/l4d-redis-iot-01` (`iot-rpc-rest-app`): producer `1745074e5ad5a4bfae6741743f05db5ef32095f9` → report `760cdf92f58e1762c235ae87c53d9e26217469a5` → candidate `d1eddad`.
+2. Sequence gate `H-L4D-07-IOT-v1` + вход `H-L4D-02-IOT-v1` — ACCEPTED.
+3. SHA-256 ключевых артефактов побайтно совпадают с `artifact_sha256` кандидата (`redis_helper.py`, `leases.py`, `presence.py`, `sessions.py`, report).
+4. Тесты **415 passed** (`uv run pytest`), ruff clean, format clean.
+5. Внешние REST/MQTT/L4RTP контракты не изменены; `grant_scope=internal_runtime_state_only` соблюдён.
+6. Redis keys DB 0: `l4d:lease:*`, `l4d:lease:active:<sn>`, `l4d:presence:<sn>`, `l4d:inventory:<sn>`, `l4d:stream:<sn>`, `l4d:diag:session:*`, pubsub `l4d:pubsub:lease_revoked`.
+7. `blocked_next_prompt_id: L4D-08A-MEDIA` снимается; разрешены `L4D-08A-MEDIA` / media Redis ownership (DB 2).
+
+<!-- HANDOFF:H-L4D-REDIS-IOT-01-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-REDIS-IOT-01-v1
+status: ACCEPTED
+contract_kinds:
+  - API
+  - EVENT
+  - DEPLOYMENT
+producer_prompt_id: L4D-REDIS-IOT-01
+producer_scope_project: iot-rpc-rest-app
+producer_report_path: docs/l4desk/handoffs/L4D-REDIS-IOT-01-report.md
+producer_branch: l4desk/l4d-redis-iot-01
+producer_commit: 1745074e5ad5a4bfae6741743f05db5ef32095f9
+report_commit: 760cdf92f58e1762c235ae87c53d9e26217469a5
+candidate_commit: d1eddad
+accepted_at_utc: '2026-09-25T00:40:00Z'
+registration_id: R-L4D-REDIS-IOT-01-v1
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: docs/l4desk/handoffs/L4D-REDIS-IOT-01-candidate.md
+contract_version: 1.0.0
+schema_revision: 2026-09-24-v1
+artifact_version: 1.0.0
+compatibility:
+  backward_compatible_with:
+    - H-L4D-07-IOT-v1
+    - H-L4D-02-IOT-v1
+  breaking_changes: false
+deployment_status: DEPLOYED
+feature_flags:
+  unified_media_lifecycle_required: true
+supersedes: []
+known_risks: []
+consumers:
+  - L4D-08A-MEDIA
+  - L4D-14-MB
+next_prompt_id: L4D-08A-MEDIA
+```
+<!-- HANDOFF:H-L4D-REDIS-IOT-01-v1:END -->
