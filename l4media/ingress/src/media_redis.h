@@ -139,13 +139,15 @@ static inline void media_redis_save_session(const char* session_id, const char* 
                                            int rtp_port, int rtcp_port, const char* pin,
                                            int state, int ttl_sec, time_t created_at, time_t started_at) {
     if (!media_redis_ok() || !session_id || !session_id[0]) return;
+    /* pin may be empty — use "-" so strtok-style parsers never collapse fields. */
+    const char* pin_out = (pin && pin[0]) ? pin : "-";
     char val[512];
     snprintf(val, sizeof(val), "%s|%s|%s|%u|%u|%d|%d|%s|%d|%d|%ld|%ld",
              session_id ? session_id : "",
              operation_id ? operation_id : "",
              sn ? sn : "",
              device_id, mountpoint_id, rtp_port, rtcp_port,
-             pin ? pin : "",
+             pin_out,
              state, ttl_sec, (long)created_at, (long)started_at);
     int ttl = media_redis_ttl_for(ttl_sec);
 
@@ -215,17 +217,24 @@ static inline int media_redis_restore_sessions(media_redis_restore_fn fn, void* 
         char val[512];
         if (!media_redis_get(r->element[i]->str, val, sizeof(val))) continue;
 
+        /* Split on '|' keeping empty fields (strtok_r would collapse "||"). */
         char* fields[12];
         int nf = 0;
-        char* save = NULL;
-        for (char* tok = strtok_r(val, "|", &save); tok && nf < 12; tok = strtok_r(NULL, "|", &save)) {
-            fields[nf++] = tok;
+        char* p = val;
+        while (nf < 12) {
+            fields[nf++] = p;
+            char* bar = strchr(p, '|');
+            if (!bar) break;
+            *bar = '\0';
+            p = bar + 1;
         }
         if (nf < 12) continue;
+
+        const char* pin_f = (strcmp(fields[7], "-") == 0) ? "" : fields[7];
         fn(fields[0], fields[1], fields[2],
            (uint32_t)strtoul(fields[3], NULL, 10),
            (uint32_t)strtoul(fields[4], NULL, 10),
-           atoi(fields[5]), atoi(fields[6]), fields[7],
+           atoi(fields[5]), atoi(fields[6]), pin_f,
            atoi(fields[8]), atoi(fields[9]),
            (time_t)atol(fields[10]), (time_t)atol(fields[11]),
            user);
