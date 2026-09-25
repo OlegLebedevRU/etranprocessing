@@ -1,10 +1,15 @@
 #include <string.h>
 #include "l4capture/video_profile.h"
 
+/* Калибровка vs ffmpeg (l4desk ffmpeg_cmdline.c):
+ *   low     — NATIVE-растр (!), 15 fps, 800k/1000k   ← не 854x480
+ *   default — NATIVE-растр, 25 fps, 2000k/2500k
+ * FFmpeg low НЕ даунскейлит. 854x480 остаётся только для RC/fallback
+ * (input-gate l4desk) и degrade D3. */
 static const l4c_profile_params_t k_profiles[] = {
-    { L4C_PROFILE_480P,  854,  480, 10, 10, 500,  500,  700, true  },
-    { L4C_PROFILE_540P,  960,  540, 15, 10, 600,  700,  900, false },
-    { L4C_PROFILE_720P, 1280,  720, 15, 10, 600,  800, 1000, false }
+    { L4C_PROFILE_480P,  854,  480, 15, 10,  500,  800, 1200, true  },
+    { L4C_PROFILE_540P,  960,  540, 15, 10,  800, 1200, 1600, false },
+    { L4C_PROFILE_720P, 1280,  720, 25, 10, 1500, 2000, 2500, false }
 };
 
 const l4c_profile_params_t *l4c_profile_params(uint16_t actual_id) {
@@ -46,7 +51,7 @@ l4c_status_t l4c_profile_resolve(
 
     if (request == L4C_PROFILE_REQ_LOW) {
         out->actual_id = L4C_PROFILE_480P;
-        out->start_fps = 10;
+        out->start_fps = 15;
         return L4C_OK;
     }
     if (request != L4C_PROFILE_REQ_DEFAULT) {
@@ -54,23 +59,23 @@ l4c_status_t l4c_profile_resolve(
     }
     if (win7_or_legacy) {
         out->actual_id = L4C_PROFILE_480P;
-        out->start_fps = 10;
+        out->start_fps = 15;
         out->win7_legacy = true;
         return L4C_OK;
     }
     if (hardware_mft_720p) {
         out->actual_id = L4C_PROFILE_720P;
-        out->start_fps = 15;
+        out->start_fps = 25;
         return L4C_OK;
     }
     if (openh264_720p_verified) {
         out->actual_id = L4C_PROFILE_720P;
-        out->start_fps = 10;
+        out->start_fps = 15;
         return L4C_OK;
     }
     /* 720p не поддержан проверкой конфигурации — базовый 480p пригоден как fallback resolve. */
     out->actual_id = L4C_PROFILE_480P;
-    out->start_fps = 10;
+    out->start_fps = 15;
     out->refused_premium = true;
     return L4C_OK;
 }

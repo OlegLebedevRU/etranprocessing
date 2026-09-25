@@ -67,6 +67,7 @@ static const GUID s_CODECAPI_AVEncCommonRateControlMode = { 0x1c0608e9, 0x370c, 
 static const GUID s_CODECAPI_AVEncCommonMeanBitRate = { 0xf7222374, 0x2144, 0x4815, { 0xb5, 0x50, 0xa3, 0x7f, 0x8e, 0x12, 0xee, 0x52 } };
 static const GUID s_CODECAPI_AVEncCommonMaxBitRate = { 0x9651eae4, 0x39b9, 0x4ebf, { 0x85, 0xef, 0xd7, 0xf4, 0x44, 0xec, 0x74, 0x65 } };
 static const GUID s_CODECAPI_AVEncCommonLowLatency = { 0x9d3ecd55, 0x89e8, 0x490a, { 0x97, 0x0a, 0x0c, 0x95, 0x48, 0xd5, 0xa5, 0x6e } };
+static const GUID s_CODECAPI_AVEncCommonQualityVsSpeed = { 0x98332df8, 0x03cd, 0x476b, { 0x89, 0xfa, 0x3f, 0x9e, 0x46, 0x76, 0x3b, 0x1a } };
 static const GUID s_CODECAPI_AVEncMPVDefaultBPictureCount = { 0x8d390aac, 0xdc5c, 0x4200, { 0xb5, 0x7f, 0x81, 0x4d, 0x04, 0xba, 0xba, 0xb2 } };
 static const GUID s_CODECAPI_AVEncMPVGOPSize = { 0x95f31b26, 0x95a4, 0x41aa, { 0x93, 0x03, 0x24, 0x6a, 0x7f, 0xc6, 0xee, 0xf1 } };
 static const GUID s_CODECAPI_AVEncH264CABACEnable = { 0xee6cad62, 0xd305, 0x4248, { 0xa5, 0x0e, 0xe1, 0xb2, 0x55, 0xf7, 0xca, 0xf8 } };
@@ -910,10 +911,17 @@ static l4c_status_t mf_init(struct l4c_encoder_backend *self_base, const l4c_enc
         val.ulVal = 0;
         self->codec_api->lpVtbl->SetValue(self->codec_api, &s_CODECAPI_AVEncMPVDefaultBPictureCount, &val);
 
-        /* Rate control: CBR */
+        /* Rate control: PeakConstrainedVBR — на desktop-тексте QSV/CBR
+         * душит IDР и P-кадры (измерено ~700 kbps при target 1500). */
         val.vt = VT_UI4;
-        val.ulVal = 0; /* CBR */
+        val.ulVal = 1; /* eAVEncCommonRateControlMode_PeakConstrainedVBR */
         self->codec_api->lpVtbl->SetValue(self->codec_api, &s_CODECAPI_AVEncCommonRateControlMode, &val);
+
+        /* Quality vs Speed: 0 = best quality, 100 = fastest. QSV по умолчанию
+         * задирает speed — текст/UI-края мылятся. */
+        val.vt = VT_UI4;
+        val.ulVal = 25;
+        self->codec_api->lpVtbl->SetValue(self->codec_api, &s_CODECAPI_AVEncCommonQualityVsSpeed, &val);
 
         /* Mean bitrate */
         val.vt = VT_UI4;

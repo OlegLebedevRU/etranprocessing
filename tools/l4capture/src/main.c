@@ -449,6 +449,26 @@ static l4c_status_t pipeline_start(l4c_pipeline_state_t *ps, const l4c_start_t *
     ps->current_fps = resolved.start_fps;
     ps->target_width = pp->width;
     ps->target_height = pp->height;
+    /* native-растр для default И low (паритет с ffmpeg: low тоже не
+     * даунскейлит — 800k на 1080p даёт чёткий текст). 854x480 остаётся
+     * для Win7/refused_premium и degrade D2/D3. */
+    if (resolved.actual_id == L4C_PROFILE_720P ||
+        (resolved.actual_id == L4C_PROFILE_480P && !resolved.win7_legacy && !resolved.refused_premium)) {
+        uint32_t sw = 0, sh = 0;
+        if (start_params->source_rect.right > start_params->source_rect.left) {
+            sw = (uint32_t)(start_params->source_rect.right - start_params->source_rect.left);
+        }
+        if (start_params->source_rect.bottom > start_params->source_rect.top) {
+            sh = (uint32_t)(start_params->source_rect.bottom - start_params->source_rect.top);
+        }
+        sw &= ~1u;
+        sh &= ~1u;
+        if (sw >= 320 && sh >= 240 &&
+            (uint64_t)sw * (uint64_t)sh <= L4C_MAX_PIXELS_AREA) {
+            ps->target_width = sw;
+            ps->target_height = sh;
+        }
+    }
     ps->bitrate_min = pp->bitrate_min_kbps;
     ps->bitrate_target = pp->bitrate_target_kbps;
     ps->bitrate_max = pp->bitrate_max_kbps;
@@ -768,9 +788,19 @@ static int run(l4c_args_t *args) {
                     frame_attempted = true;
                     count_raw_pass(&ps);
                     l4c_status_t scale_status;
-                    scale_status = l4c_scale_bilinear_bgra(frame.data, frame.width, frame.height, frame.stride,
-                                                           ps.scaled_buf, tw, th, tw * 4);
-                    ps.capture->vtable->release_frame(ps.capture, &frame);
+                    const uint8_t *bgra_src;
+                    int32_t bgra_stride;
+                    /* 1:1 native: skip scale, convert straight from capture buffer. */
+                    if (frame.width == tw && frame.height == th) {
+                        bgra_src = frame.data;
+                        bgra_stride = frame.stride;
+                        scale_status = L4C_OK;
+                    } else {
+                        scale_status = l4c_scale_bicubic_bgra(frame.data, frame.width, frame.height, frame.stride,
+                                                              ps.scaled_buf, tw, th, tw * 4);
+                        bgra_src = ps.scaled_buf;
+                        bgra_stride = (int32_t)(tw * 4u);
+                    }
 
                     if (scale_status == L4C_OK) {
                         l4c_raw_frame_t raw;
@@ -783,12 +813,13 @@ static int run(l4c_args_t *args) {
                         if (pts_rebased) ps.force_next_idr = true;
 
                         if (ps.active_encoder_backend == 2) {
-                            status = l4c_color_convert_bgra_to_nv12_frame(ps.converter, ps.scaled_buf,
-                                                                          tw * 4, pts_ms, &raw);
+                            status = l4c_color_convert_bgra_to_nv12_frame(ps.converter, bgra_src,
+                                                                          bgra_stride, pts_ms, &raw);
                         } else {
-                            status = l4c_color_convert_bgra_to_i420(ps.converter, ps.scaled_buf,
-                                                                    tw * 4, pts_ms, &raw);
+                            status = l4c_color_convert_bgra_to_i420(ps.converter, bgra_src,
+                                                                    bgra_stride, pts_ms, &raw);
                         }
+                        ps.capture->vtable->release_frame(ps.capture, &frame);
                         if (status != L4C_OK) { count_raw_drop(&ps); continue; }
 
                         raw.force_idr = ps.force_next_idr || l4c_safety_take_idr(&gate, now);
@@ -844,8 +875,8 @@ static int run(l4c_args_t *args) {
                                     l4c_pipe_enqueue(&pipe, &deg_msg, now);
 
                                     /* Re-convert current frame to I420 and retry encode */
-                                    status = l4c_color_convert_bgra_to_i420(ps.converter, ps.scaled_buf,
-                                                                            tw * 4, pts_ms, &raw);
+                                    status = l4c_color_convert_bgra_to_i420(ps.converter, bgra_src,
+                                                                            bgra_stride, pts_ms, &raw);
                                     if (status == L4C_OK) {
                                         raw.force_idr = true;
                                         status = ps.encoder->vtable->encode(ps.encoder, &raw, &au);
@@ -886,6 +917,9 @@ static int run(l4c_args_t *args) {
                         } else {
                             count_enc_drop(&ps);
                         }
+                    } else {
+                        ps.capture->vtable->release_frame(ps.capture, &frame);
+                        count_raw_drop(&ps);
                     }
                 } else if (status == L4C_ERR_NO_FRAME) {
                     /* DXGI WAIT_TIMEOUT: экран не менялся. Не drop (latest-frame). */

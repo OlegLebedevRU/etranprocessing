@@ -28,16 +28,16 @@ int test_profile_params_table(void) {
     const l4c_profile_params_t *p720 = l4c_profile_params(L4C_PROFILE_720P);
     if (!p480 || !p540 || !p720) return 1;
     if (p480->width != 854 || p480->height != 480) return 2;
-    if (p480->fps_nominal != 10 || p480->fps_floor != 10) return 3;
-    if (p480->bitrate_min_kbps != 500 || p480->bitrate_target_kbps != 500 || p480->bitrate_max_kbps != 700) return 4;
+    if (p480->fps_nominal != 15 || p480->fps_floor != 10) return 3;
+    if (p480->bitrate_min_kbps != 500 || p480->bitrate_target_kbps != 800 || p480->bitrate_max_kbps != 1200) return 4;
     if (!p480->input_profile_eligible) return 5;
     if (p540->width != 960 || p540->height != 540) return 6;
     if (p540->fps_nominal != 15 || p540->fps_floor != 10) return 7;
-    if (p540->bitrate_min_kbps != 600 || p540->bitrate_target_kbps != 700 || p540->bitrate_max_kbps != 900) return 8;
+    if (p540->bitrate_min_kbps != 800 || p540->bitrate_target_kbps != 1200 || p540->bitrate_max_kbps != 1600) return 8;
     if (p540->input_profile_eligible) return 9;
     if (p720->width != 1280 || p720->height != 720) return 10;
-    if (p720->fps_nominal != 15 || p720->fps_floor != 10) return 11;
-    if (p720->bitrate_min_kbps != 600 || p720->bitrate_target_kbps != 800 || p720->bitrate_max_kbps != 1000) return 12;
+    if (p720->fps_nominal != 25 || p720->fps_floor != 10) return 11;
+    if (p720->bitrate_min_kbps != 1500 || p720->bitrate_target_kbps != 2000 || p720->bitrate_max_kbps != 2500) return 12;
     if (p720->input_profile_eligible) return 13;
     if (l4c_profile_params(99) != NULL) return 14;
     return 0;
@@ -46,26 +46,26 @@ int test_profile_params_table(void) {
 int test_profile_resolve_low_never_upgrades(void) {
     l4c_profile_resolved_t r;
     if (l4c_profile_resolve(L4C_PROFILE_REQ_LOW, false, true, true, &r) != L4C_OK) return 1;
-    if (r.actual_id != L4C_PROFILE_480P || r.start_fps != 10) return 2;
+    if (r.actual_id != L4C_PROFILE_480P || r.start_fps != 15) return 2;
     return 0;
 }
 
 int test_profile_resolve_default_win7_is_480p(void) {
     l4c_profile_resolved_t r;
     if (l4c_profile_resolve(L4C_PROFILE_REQ_DEFAULT, true, true, true, &r) != L4C_OK) return 1;
-    if (r.actual_id != L4C_PROFILE_480P || r.start_fps != 10) return 2;
+    if (r.actual_id != L4C_PROFILE_480P || r.start_fps != 15) return 2;
     if (!r.win7_legacy) return 3;
     return 0;
 }
 
 int test_profile_resolve_default_maps_upper_bound(void) {
     l4c_profile_resolved_t r;
-    /* MFT 720p / 15 */
+    /* MFT 720p / 25 */
     if (l4c_profile_resolve(L4C_PROFILE_REQ_DEFAULT, false, true, false, &r) != L4C_OK) return 1;
-    if (r.actual_id != L4C_PROFILE_720P || r.start_fps != 15) return 2;
-    /* OpenH264 720p / 10 */
+    if (r.actual_id != L4C_PROFILE_720P || r.start_fps != 25) return 2;
+    /* OpenH264 720p / 15 */
     if (l4c_profile_resolve(L4C_PROFILE_REQ_DEFAULT, false, false, true, &r) != L4C_OK) return 3;
-    if (r.actual_id != L4C_PROFILE_720P || r.start_fps != 10) return 4;
+    if (r.actual_id != L4C_PROFILE_720P || r.start_fps != 15) return 4;
     /* 720p unsupported -> 480p refused_premium; GDI/отсутствие MFT != Win7 */
     if (l4c_profile_resolve(L4C_PROFILE_REQ_DEFAULT, false, false, false, &r) != L4C_OK) return 5;
     if (r.actual_id != L4C_PROFILE_480P || !r.refused_premium || r.win7_legacy) return 6;

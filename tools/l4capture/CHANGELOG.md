@@ -2,6 +2,36 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **`low` = native-растр @ 800k (паритет ffmpeg low).** ffmpeg `low`
+  (`ffmpeg_cmdline.c`) кодирует **native** ROI при 800k/15fps, без
+  downscale. Раньше l4capture always stretch-fit в 854x480 — текст
+  уничтожался до кодека, поэтому «480p» была заметно хуже ffmpeg.
+  Теперь low/default оба native; 854x480 остаётся для Win7 /
+  refused_premium и degrade D2/D3. Input-gate l4desk принимает и
+  854x480, и native (>=854x480) при `profile=low`.
+- **Deblock OFF + QP-corridor (OpenH264).** `iLoopFilterDisableIdc=1`
+  — deblock сглаживает края UI-текста; `iMinQp=12/iMaxQp=36`,
+  `iIdrBitrateRatio=200` — IDR получает больше бит, RC не уводит
+  текст в мыло.
+- **Native raster для `default` (паритет с ffmpeg gdigrab).** Раньше ROI
+  1920×1080 всегда сжимался в 1280×720 билинейным scale — текст «плыл» ещё
+  до кодека. Теперь `default` кодирует source_rect 1:1 (как легаси
+  `-video_size` без downscale). При 1:1 scale пропускается, convert идёт
+  из capture-буфера.
+- **Scaler bilinear → Catmull-Rom bicubic** (`l4c_scale_bicubic_bgra`).
+  Лучше держит края UI-текста на downscale (540p/480p degrade, RC 480p).
+- **Профили/битрейт/fps под desktop-текст:** 480p 15 fps 500/800/1200,
+  540p 15 fps 800/1200/1600, 720p 25 fps 1500/2000/2500 (= ffmpeg
+  default 2000k).
+- **MFT/QSV: PeakConstrainedVBR + QualityVsSpeed=25.** CBR и QSV-speed
+  душили IDР на desktop-тексте (измерялось ~700 kbps при target 1500).
+- **OpenH264 Level 4.0 при растере > 720p** (native 1080p выходит за MaxFS
+  Level 3.1); ≤720p остаётся 3.1 / SDP `42e01f`.
+- **UI default profile `low` → `default`** (video-surveillance) — просмотр
+  без RC больше не стартует в 480p/500k.
+
 ### Fixed
 
 - **False `HIGH_LOAD` (exit 99) при низком CPU / sparse desktop.** Missed pacing

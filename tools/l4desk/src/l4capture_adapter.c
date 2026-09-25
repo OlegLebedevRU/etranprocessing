@@ -379,8 +379,11 @@ static bool is_restart_budget_available(adapter_ctx_t *ctx) {
 }
 
 static uint16_t profile_to_id(const char *profile) {
-    if (strcmp(profile, "low") == 0) return PROFILE_ID_480P;
-    if (strcmp(profile, "540p") == 0) return PROFILE_ID_540P;
+    /* UI/remote-sessions шлют и "low", и "480p" — оба = base_480p. */
+    if (profile && (_stricmp(profile, "low") == 0 || _stricmp(profile, "480p") == 0)) {
+        return PROFILE_ID_480P;
+    }
+    if (profile && _stricmp(profile, "540p") == 0) return PROFILE_ID_540P;
     return PROFILE_ID_720P;
 }
 

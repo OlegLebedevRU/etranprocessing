@@ -274,6 +274,29 @@ static void test_adapter_input_gate_low_480p_permitted(void) {
     printf("[PASS] test_adapter_input_gate_low_480p_permitted\n");
 }
 
+/* Input Gate — low + native raster (ffmpeg-low parity) also permitted */
+static void test_adapter_input_gate_low_native_permitted(void) {
+    l4d_input_gate_ctx_t ctx;
+    memset(&ctx, 0, sizeof(ctx));
+
+    ctx.is_desktop_source = true;
+    ctx.has_active_lease = true;
+    ctx.deadline_tick_ms = test_tick() + 60000;
+    ctx.stream_instance_id = 1001;
+    ctx.expected_stream_id = 1001;
+    ctx.geometry_generation = 5;
+    ctx.expected_geometry_gen = 5;
+    ctx.requested_profile = "low";
+    ctx.actual_width = 1920;
+    ctx.actual_height = 1080;
+    ctx.kiosk_mode_enabled = false;
+    ctx.kiosk_running = false;
+    ctx.kiosk_in_focus = false;
+
+    ASSERT_TRUE(l4d_input_gate_check(&ctx));
+    printf("[PASS] test_adapter_input_gate_low_native_permitted\n");
+}
+
 /* =========================================================
  * Test 10: Input Gate — default strictly denied
  * ========================================================= */
@@ -655,6 +678,7 @@ int main(void) {
     test_adapter_wrong_epoch_rejection();
     test_adapter_expiry_strict_500ms_no_grace();
     test_adapter_input_gate_low_480p_permitted();
+    test_adapter_input_gate_low_native_permitted();
     test_adapter_input_gate_default_strictly_denied();
     test_adapter_input_release_on_safety_events();
     test_adapter_recovery_loop_and_backoff_cancel();

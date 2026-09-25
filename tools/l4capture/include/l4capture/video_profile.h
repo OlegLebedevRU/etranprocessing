@@ -20,12 +20,12 @@ enum {
 typedef struct {
     uint16_t id;                 /* L4C_PROFILE_480P / 540P / 720P */
     uint16_t width, height;      /* видимый растр */
-    uint8_t fps_nominal;         /* 10 или 15 */
+    uint8_t fps_nominal;         /* 15 или 25 (под desktop-текст; floor — 10) */
     uint8_t fps_floor;           /* 10 */
     uint16_t bitrate_min_kbps;
     uint16_t bitrate_target_kbps;
     uint16_t bitrate_max_kbps;
-    bool input_profile_eligible; /* true только base_480p */
+    bool input_profile_eligible; /* true только base_480p; native-low тоже допускает input (l4desk gate) */
 } l4c_profile_params_t;
 
 typedef struct {
@@ -43,11 +43,11 @@ bool l4c_profile_parse_request(uint16_t wire_profile_id, uint8_t *out_request);
 
 /*
  * Матрица старта §4.1:
- *  low                -> 480p / 10
- *  default + Win7     -> 480p / 10
- *  default + MFT 720p -> 720p / 15
- *  default + OH264 720p verified -> 720p / 10
- *  default + 720p unsupported -> 480p / 10 (refused_premium) либо отказ вызывающим init
+ *  low                -> 480p / 15
+ *  default + Win7     -> 480p / 15
+ *  default + MFT 720p -> 720p / 25
+ *  default + OH264 720p verified -> 720p / 15
+ *  default + 720p unsupported -> 480p / 15 (refused_premium) либо отказ вызывающим init
  * 540p на старте не выбирается.
  */
 l4c_status_t l4c_profile_resolve(

@@ -111,8 +111,8 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
               style={{ width: 120 }}
               disabled={disabled}
               options={[
-                { label: "720p (HD)", value: "default" },
-                { label: "480p (Эконом)", value: "low" },
+                { label: "HD (default)", value: "default" },
+                { label: "Эконом (low bitrate)", value: "low" },
               ]}
               aria-label="Выбор качества трансляции"
             />

@@ -13,7 +13,7 @@ int test_scale_solid_fill(void) {
         src[i * 4 + 2] = 255; src[i * 4 + 3] = 255;
     }
     memset(dst, 0, sizeof(dst));
-    s = l4c_scale_bilinear_bgra(src, 4, 4, 16, dst, 2, 2, 8);
+    s = l4c_scale_bicubic_bgra(src, 4, 4, 16, dst, 2, 2, 8);
     if (s != L4C_OK) return 1;
     /* All output pixels should be red */
     for (i = 0; i < 2 * 2; ++i) {
@@ -38,7 +38,7 @@ int test_scale_checkerboard(void) {
         }
     }
     memset(dst, 0, sizeof(dst));
-    s = l4c_scale_bilinear_bgra(src, 8, 8, 32, dst, 4, 4, 16);
+    s = l4c_scale_bicubic_bgra(src, 8, 8, 32, dst, 4, 4, 16);
     if (s != L4C_OK) return 1;
     /* Center pixel should be grey (interpolated) */
     return 0;
@@ -54,7 +54,7 @@ int test_scale_edge_preservation(void) {
     src[8] = 0; src[9] = 0; src[10] = 255; src[11] = 255;   /* BL red */
     src[12] = 255; src[13] = 255; src[14] = 255; src[15] = 255; /* BR white */
     memset(dst, 0, sizeof(dst));
-    s = l4c_scale_bilinear_bgra(src, 2, 2, 8, dst, 4, 4, 16);
+    s = l4c_scale_bicubic_bgra(src, 2, 2, 8, dst, 4, 4, 16);
     if (s != L4C_OK) return 1;
     /* Top-left corner should be exactly blue */
     if (dst[0] != 255 || dst[1] != 0 || dst[2] != 0) return 2;
@@ -71,7 +71,7 @@ int test_scale_large_to_480p(void) {
     dst = (uint8_t *)malloc(854u * 480u * 4u);
     if (!src || !dst) { free(src); free(dst); return 0; /* skip if OOM */ }
     memset(src, 128, 1920u * 1080u * 4u);
-    s = l4c_scale_bilinear_bgra(src, 1920, 1080, 1920 * 4, dst, 854, 480, 854 * 4);
+    s = l4c_scale_bicubic_bgra(src, 1920, 1080, 1920 * 4, dst, 854, 480, 854 * 4);
     free(src);
     free(dst);
     if (s != L4C_OK) return 1;
@@ -81,9 +81,9 @@ int test_scale_large_to_480p(void) {
 int test_scale_invalid_params(void) {
     uint8_t buf[64];
     l4c_status_t s;
-    s = l4c_scale_bilinear_bgra(NULL, 2, 2, 8, buf, 1, 1, 4);
+    s = l4c_scale_bicubic_bgra(NULL, 2, 2, 8, buf, 1, 1, 4);
     if (s != L4C_ERR_INVALID_ARG) return 1;
-    s = l4c_scale_bilinear_bgra(buf, 0, 2, 8, buf, 1, 1, 4);
+    s = l4c_scale_bicubic_bgra(buf, 0, 2, 8, buf, 1, 1, 4);
     if (s != L4C_ERR_INVALID_ARG) return 2;
     return 0;
 }

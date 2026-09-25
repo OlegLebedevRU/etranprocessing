@@ -24,8 +24,9 @@ bool l4d_input_gate_check(const l4d_input_gate_ctx_t *ctx) {
         return false;
     }
 
-    /* 6. Actual video profile must be strictly base_480p (854x480) */
-    if (ctx->actual_width != 854 || ctx->actual_height != 480) {
+    /* 6. Raster: base_480p (854x480) ИЛИ native (ffmpeg-low parity).
+     *    Жёсткий 854x480 ломал RC после перехода low→native-растр. */
+    if (ctx->actual_width < 854 || ctx->actual_height < 480) {
         return false;
     }
 

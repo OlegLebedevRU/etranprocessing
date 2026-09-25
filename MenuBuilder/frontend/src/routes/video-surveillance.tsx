@@ -170,7 +170,7 @@ export default function VideoSurveillancePage() {
   const [inventory, setInventory] = useState<DeviceInventory | null>(null);
   const [loadingInventory, setLoadingInventory] = useState<boolean>(false);
   const [selectedSourceKey, setSelectedSourceKey] = useState<string>("");
-  const [selectedProfile, setSelectedProfile] = useState<string>("low");
+  const [selectedProfile, setSelectedProfile] = useState<string>("default");
 
   // Статус потока
   const [activeStream, setActiveStream] = useState<StreamPresenceInfo | null>(null);
