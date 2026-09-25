@@ -4322,6 +4322,9 @@ compatibility:
   notes: Optional tenant_id/SN guards and explicit retryable 503 are additive; legacy stop bodies remain valid.
 deployment_status: DEPLOYED
 deployed_environment: dev.leo4.ru
+feature_flags:
+  session_lock_enabled: true
+  graceful_stop_enabled: true
 deployment_evidence:
   deployed_commit: 22a50a186da25dddb19612c475bf9bcbb4a7fab2
   app1_isolated_recreate: true

@@ -3,6 +3,7 @@
 ## 1. Метаданные
 
 - `prompt_id`: `L4D-08B-FIX-03-MB`
+- `registration_id`: `R-L4D-08B-FIX-03-MB-v1`
 - `scope_project`: `MenuBuilder`
 - `scope_root`: `D:\repo\platerra\Public\etranprocessing\MenuBuilder`
 - `blocked_prompt_id`: `L4D-08B-FIX-02-MB`

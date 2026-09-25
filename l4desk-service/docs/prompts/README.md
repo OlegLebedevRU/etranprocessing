@@ -71,6 +71,7 @@
 | `L4D-08B-MB` | `L4D-08B-MB-FIX-01` / [L4D-08B-MB-FIX-01.md](L4D-08B-MB-FIX-01.md) | `MenuBuilder` | `R-L4D-08B-MB-FIX-01-v1` | Повторная приёмка `L4D-08B-MB`; не запуск `L4D-09-MB` |
 | `L4D-08B-MB` | `L4D-08B-FIX-01-MB` / [L4D-08B-FIX-01-MB.md](L4D-08B-FIX-01-MB.md) | `MenuBuilder` | `R-L4D-08B-FIX-01-MB-v1` | Замена media-flow `H-L4D-08B-MB-v1`; next `L4D-09-MB` |
 | `L4D-08B-MB` | `L4D-08B-FIX-02-MB` / [L4D-08B-FIX-02-MB.md](L4D-08B-FIX-02-MB.md) | `MenuBuilder` | `R-L4D-08B-FIX-02-MB-v1` | Устранение коллизий session_id и закрытие риска тестов; next `L4D-14-MB` |
+| `L4D-08B-FIX-02-MB` | `L4D-08B-FIX-03-MB` / [L4D-08B-FIX-03-MB.md](L4D-08B-FIX-03-MB.md) | `MenuBuilder` | `R-L4D-08B-FIX-03-MB-v1` | Единый durable stop-path по IoT stop-контракту `1.1.0`; next `L4D-14-MB` |
 | `L4D-13-MB` | `L4D-13-MB-FIX-01` / [L4D-13-MB-FIX-01.md](L4D-13-MB-FIX-01.md) | `MenuBuilder` | `R-L4D-13-MB-FIX-01-v1` | Замена UX-части `H-L4D-13-MB-v1`; next `L4D-14-MB` |
 | `L4D-07-IOT` | `L4D-REDIS-IOT-01` / `iot-rpc-rest-app:docs/redis/prompt-stage2-redis-app.md` | `iot-rpc-rest-app` | `R-L4D-REDIS-IOT-01-v1` | Redis `LeaseRegistry`/`PresenceRegistry` (internal only); next `L4D-08A-MEDIA` |
 
