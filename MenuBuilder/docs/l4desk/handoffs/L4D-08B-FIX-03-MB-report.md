@@ -1,7 +1,9 @@
 # L4D-08B-FIX-03-MB — отчёт о реализации и production smoke
 
 Дата: 2026-09-25. Владелец: `MenuBuilder`. Ветка: `l4desk/l4d-08b-fix-03-mb`.
-Implementation commit: `5bf03b9` (полный SHA фиксируется в candidate).
+Статус результата: `ACCEPTED` (реализация, проверки, публикация и production smoke завершены).
+Producer commit: `5bf03b9a689fb7cf8152f012d5d5367bc6a5bf33`.
+Реализация опубликована в ветке `origin/l4desk/l4d-08b-fix-03-mb`.
 Handoff `H-L4D-08B-FIX-03-MB-v1` подготовлен как candidate после UI и production smoke;
 принятие controller остаётся отдельным шагом.
 
