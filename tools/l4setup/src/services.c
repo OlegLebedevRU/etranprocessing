@@ -1,4 +1,5 @@
 #include "services.h"
+#include "service_start_state.h"
 #include "log.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,34 +11,54 @@
 
 static bool set_dir_permissions(const wchar_t* dir_path) {
     if (!dir_path) return false;
-    CreateDirectoryW(dir_path, NULL);
 
     PSECURITY_DESCRIPTOR pSD = NULL;
-    // Grant full control to SYSTEM, Administrators and Everyone
+    // Mosquitto runs as LocalSystem; do not grant Everyone access to its log.
     if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(
-            L"D:(A;OICI;GA;;;SY)(A;OICI;GA;;;BA)(A;OICI;GA;;;WD)",
+            L"D:P(A;OICI;GA;;;SY)(A;OICI;GA;;;BA)",
             SDDL_REVISION_1,
             &pSD,
             NULL)) {
         return false;
     }
 
-    PACL pDacl = NULL;
-    BOOL bDaclPresent = FALSE, bDaclDefaulted = FALSE;
-    GetSecurityDescriptorDacl(pSD, &bDaclPresent, &pDacl, &bDaclDefaulted);
-
-    DWORD res = SetNamedSecurityInfoW(
-        (LPWSTR)dir_path,
-        SE_FILE_OBJECT,
-        DACL_SECURITY_INFORMATION,
-        NULL,
-        NULL,
-        pDacl,
-        NULL
-    );
-
+    BOOL applied = SetFileSecurityW(dir_path,
+        DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION, pSD);
+    DWORD res = applied ? ERROR_SUCCESS : GetLastError();
     LocalFree(pSD);
+    if (res != ERROR_SUCCESS) SetLastError(res);
     return (res == ERROR_SUCCESS);
+}
+
+static bool ensure_directory(const wchar_t* path) {
+    DWORD attributes = GetFileAttributesW(path);
+    if (attributes != INVALID_FILE_ATTRIBUTES) {
+        if (attributes & FILE_ATTRIBUTE_DIRECTORY) return true;
+        log_err("Expected directory %ls, but found a file", path);
+        return false;
+    }
+    if (CreateDirectoryW(path, NULL)) return true;
+    DWORD error = GetLastError();
+    if (error == ERROR_ALREADY_EXISTS) {
+        attributes = GetFileAttributesW(path);
+        if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY)) return true;
+    }
+    log_err("CreateDirectoryW failed for %ls (error %lu)", path, error);
+    return false;
+}
+
+bool services_prepare_mosquitto(const wchar_t* dest_dir) {
+    if (!dest_dir || !ensure_directory(dest_dir)) return false;
+    wchar_t mosq_dir[MAX_PATH];
+    wchar_t log_dir[MAX_PATH];
+    swprintf_s(mosq_dir, MAX_PATH, L"%ls\\mosquitto", dest_dir);
+    swprintf_s(log_dir, MAX_PATH, L"%ls\\mosquitto\\log", dest_dir);
+    if (!ensure_directory(mosq_dir) || !ensure_directory(log_dir)) return false;
+    if (!set_dir_permissions(log_dir)) {
+        log_err("Cannot set LocalSystem/Administrators ACL on %ls (error %lu)", log_dir, GetLastError());
+        return false;
+    }
+    return true;
 }
 
 bool services_configure_environment(const wchar_t* dest_dir) {
@@ -48,16 +69,18 @@ bool services_configure_environment(const wchar_t* dest_dir) {
     // 1. Ensure MOSQUITTO_DIR
     wchar_t mosq_dir[MAX_PATH];
     swprintf_s(mosq_dir, MAX_PATH, L"%ls\\mosquitto", dest_dir);
-    SetEnvironmentVariableW(L"MOSQUITTO_DIR", mosq_dir);
-
-    wchar_t mosq_log[MAX_PATH];
-    swprintf_s(mosq_log, MAX_PATH, L"%ls\\mosquitto\\log", dest_dir);
-    set_dir_permissions(mosq_log);
+    if (!SetEnvironmentVariableW(L"MOSQUITTO_DIR", mosq_dir)) return false;
 
     // 2. Registry Environment
     HKEY hKey = NULL;
     if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment", 0, KEY_READ | KEY_WRITE, &hKey) == ERROR_SUCCESS) {
-        RegSetValueExW(hKey, L"MOSQUITTO_DIR", 0, REG_SZ, (const BYTE*)mosq_dir, (DWORD)((wcslen(mosq_dir) + 1) * sizeof(wchar_t)));
+        LONG env_result = RegSetValueExW(hKey, L"MOSQUITTO_DIR", 0, REG_SZ,
+            (const BYTE*)mosq_dir, (DWORD)((wcslen(mosq_dir) + 1) * sizeof(wchar_t)));
+        if (env_result != ERROR_SUCCESS) {
+            log_err("Cannot set MOSQUITTO_DIR in Machine environment (error %ld)", env_result);
+            RegCloseKey(hKey);
+            return false;
+        }
 
         // Read Path
         DWORD dwType = 0;
@@ -104,6 +127,9 @@ bool services_configure_environment(const wchar_t* dest_dir) {
         // Notify environment change
         DWORD_PTR dwResult = 0;
         SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, (LPARAM)L"Environment", SMTO_ABORTIFHUNG, 2000, &dwResult);
+    } else {
+        log_err("Cannot open Machine environment for MOSQUITTO_DIR (error %lu)", GetLastError());
+        return false;
     }
 
     return true;
@@ -314,15 +340,18 @@ bool services_start_single_service(
         return false;
     }
 
-    SERVICE_STATUS_PROCESS ssp;
+    SERVICE_STATUS_PROCESS ssp = { 0 };
     DWORD bytesNeeded = 0;
-    if (QueryServiceStatusEx(hSvc, SC_STATUS_PROCESS_INFO, (LPBYTE)&ssp, sizeof(ssp), &bytesNeeded)) {
-        if (ssp.dwCurrentState == SERVICE_RUNNING) {
-            log_info("Service %ls is already RUNNING (PID: %lu). Verifying without restart.", svc_name, ssp.dwProcessId);
-            if (cb) cb(svc_name, SVC_STATUS_RUNNING, 0, "Already running", user_data);
-            CloseServiceHandle(hSvc);
-            return true;
-        }
+    if (!QueryServiceStatusEx(hSvc, SC_STATUS_PROCESS_INFO, (LPBYTE)&ssp, sizeof(ssp), &bytesNeeded)) {
+        log_err("Cannot query initial state of service %ls (error %lu)", svc_name, GetLastError());
+        CloseServiceHandle(hSvc);
+        return false;
+    }
+    if (ssp.dwCurrentState == SERVICE_RUNNING) {
+        log_info("Service %ls is already RUNNING (PID: %lu). Verifying without restart.", svc_name, ssp.dwProcessId);
+        if (cb) cb(svc_name, SVC_STATUS_RUNNING, 0, "Already running", user_data);
+        CloseServiceHandle(hSvc);
+        return true;
     }
 
     if (cb) cb(svc_name, SVC_STATUS_STARTING, 0, NULL, user_data);
@@ -375,22 +404,21 @@ bool services_start_single_service(
             return false;
         }
 
-        if (ssp.dwCurrentState == SERVICE_RUNNING) {
+        ServiceStartDecision decision = service_start_decide(&ssp);
+        if (decision == SERVICE_START_SUCCEEDED) {
             log_info("Service %ls reached RUNNING (PID: %lu) in %lu seconds.", svc_name, ssp.dwProcessId, elapsed_sec);
             if (cb) cb(svc_name, SVC_STATUS_RUNNING, elapsed_sec, NULL, user_data);
             CloseServiceHandle(hSvc);
             return true;
         }
 
-        // Check for immediate failure when service stopped with an exit code
-        if (ssp.dwCurrentState == SERVICE_STOPPED) {
-            if (ssp.dwWin32ExitCode != NO_ERROR || ssp.dwServiceSpecificExitCode != 0) {
-                log_err("Service %ls stopped immediately with error code: win32=%lu, specific=%lu",
-                        svc_name, ssp.dwWin32ExitCode, ssp.dwServiceSpecificExitCode);
-                if (cb) cb(svc_name, SVC_STATUS_FAILED, elapsed_sec, "Service stopped immediately with error", user_data);
-                CloseServiceHandle(hSvc);
-                return false;
-            }
+        if (decision == SERVICE_START_FAILED) {
+            log_err("Service %ls failed to start after %lu s: state=%lu, win32=%lu, specific=%lu, pid=%lu, checkpoint=%lu, wait_hint=%lu",
+                    svc_name, elapsed_sec, ssp.dwCurrentState, ssp.dwWin32ExitCode,
+                    ssp.dwServiceSpecificExitCode, ssp.dwProcessId, ssp.dwCheckPoint, ssp.dwWaitHint);
+            if (cb) cb(svc_name, SVC_STATUS_FAILED, elapsed_sec, "Service did not reach RUNNING", user_data);
+            CloseServiceHandle(hSvc);
+            return false;
         }
 
         // Wait based on service wait hint (clamped between 500ms and 2000ms)
@@ -505,45 +533,78 @@ bool services_stop_single_service(
 
 bool services_start_all_in_order(
     ServiceLifecycleCallback cb,
-    void* user_data
+    ServiceFailureDecisionCallback on_failure,
+    void* user_data,
+    bool* out_partial,
+    DWORD out_attempts[4]
 ) {
-    SC_HANDLE hSCM = OpenSCManagerW(NULL, NULL, SC_MANAGER_ALL_ACCESS);
+    if (out_partial) *out_partial = false;
+    if (out_attempts) memset(out_attempts, 0, 4 * sizeof(DWORD));
+    SC_HANDLE hSCM = OpenSCManagerW(NULL, NULL, SC_MANAGER_CONNECT);
     if (!hSCM) {
-        log_err("Failed to open SCM with ALL_ACCESS for starting services (error %lu)", GetLastError());
+        log_err("Failed to open SCM for starting services (error %lu)", GetLastError());
         return false;
     }
 
-    log_info("Starting services in strict order: Leo4Proxy -> mosquitto -> L4Con -> L4Superv...");
+    log_info("Starting services in order: Leo4Proxy -> mosquitto -> L4Con -> L4Superv.");
     ULONGLONG overall_start = GetTickCount64();
     const DWORD max_overall_sec = 480;
-
     const wchar_t* svcs[] = {
-        SVC_NAME_LEO4PROXY,
-        SVC_NAME_MOSQUITTO,
-        SVC_NAME_L4CON,
-        SVC_NAME_L4SUPERV
+        SVC_NAME_LEO4PROXY, SVC_NAME_MOSQUITTO, SVC_NAME_L4CON, SVC_NAME_L4SUPERV
     };
-
+    bool running[4] = { false, false, false, false };
     bool all_ok = true;
+    bool continued = false;
+
     for (int i = 0; i < 4; i++) {
-        DWORD elapsed = (DWORD)((GetTickCount64() - overall_start) / 1000);
-        if (elapsed >= max_overall_sec) {
-            log_err("Overall service start deadline (480s) exceeded.");
+        bool dependencies_ready = i < 2 || (i == 2 ? running[1] :
+            (running[0] && running[1] && running[2]));
+        if (!dependencies_ready) {
+            log_warn("Skipping service %ls: a required service is not RUNNING.", svcs[i]);
+            if (cb) cb(svcs[i], SVC_STATUS_FAILED, 0, "Required service is not running", user_data);
             all_ok = false;
-            break;
+            continue;
         }
 
-        DWORD remaining = max_overall_sec - elapsed;
-        DWORD timeout = (remaining < 120) ? remaining : 120;
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            DWORD elapsed = (DWORD)((GetTickCount64() - overall_start) / 1000);
+            if (elapsed >= max_overall_sec) {
+                log_err("Overall service start deadline (480s) exceeded before %ls attempt %d/3.", svcs[i], attempt);
+                break;
+            }
+            DWORD remaining = max_overall_sec - elapsed;
+            DWORD timeout = remaining < 120 ? remaining : 120;
+            log_info("Starting %ls, attempt %d/3 (timeout %lu s, total budget 480 s).",
+                     svcs[i], attempt, timeout);
+            if (out_attempts) out_attempts[i] = (DWORD)attempt;
+            char notice[96];
+            snprintf(notice, sizeof(notice), "Attempt %d/3; 2 s retry interval; 480 s overall limit",
+                     attempt);
+            if (cb) cb(svcs[i], SVC_STATUS_STARTING, elapsed, notice, user_data);
+            if (services_start_single_service(hSCM, svcs[i], timeout, cb, user_data)) {
+                running[i] = true;
+                break;
+            }
+            if (attempt < 3) {
+                log_warn("Service %ls failed attempt %d/3; retrying after 2 s.", svcs[i], attempt);
+                Sleep(2000);
+            }
+        }
 
-        if (!services_start_single_service(hSCM, svcs[i], timeout, cb, user_data)) {
-            log_err("Failed to start service %ls", svcs[i]);
+        if (!running[i]) {
             all_ok = false;
-            break;
+            log_err("Service %ls did not reach RUNNING after up to 3 attempts.", svcs[i]);
+            if (!on_failure || !on_failure(svcs[i], user_data)) {
+                if (out_partial) *out_partial = false;
+                CloseServiceHandle(hSCM);
+                return false;
+            }
+            continued = true;
         }
     }
 
     CloseServiceHandle(hSCM);
+    if (out_partial) *out_partial = continued;
     return all_ok;
 }
 

@@ -12,6 +12,7 @@
  * Set permissive read/write permissions on directory (Full Control for Everyone, Users, System, Admin).
  */
 bool svc_set_dir_permissions(const wchar_t* dir_path);
+bool svc_set_mosquitto_log_permissions(const wchar_t* dir_path);
 
 /**
  * Retrieve registered binary path of a service from Windows SCM.

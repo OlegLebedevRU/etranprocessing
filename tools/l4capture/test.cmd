@@ -128,7 +128,7 @@ if errorlevel 1 (
 )
 
 echo === Running tests ===
-"%ROOT%\bin\l4capture_tests.exe"
+"%ROOT%\bin\l4capture_tests.exe" %*
 set "TEST_RC=%errorlevel%"
 
 if "%TEST_RC%"=="0" (

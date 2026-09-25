@@ -217,6 +217,7 @@ static void print_usage(void) {
     wprintf(L"  --restart          Restart L4Superv service\n");
     wprintf(L"  --status           Display status of all Leo4 services and orchestrator\n");
     wprintf(L"  --check            Execute a single orchestration cycle and exit\n");
+    wprintf(L"  --prepare-mosquitto <dir>  Create missing standby config without starting services\n");
     wprintf(L"  --tick             Send force-tick control 128 to running L4Superv service\n");
     wprintf(L"  --version, -v      Print version and exit\n");
     wprintf(L"  --help, -h         Show this help message\n\n");
@@ -234,7 +235,21 @@ int wmain(int argc, wchar_t* argv[]) {
     config_load_json(&cfg, cfg.config_file);
 
     if (argc > 1) {
-        if (_wcsicmp(argv[1], L"--console") == 0 || _wcsicmp(argv[1], L"-f") == 0) {
+        if (_wcsicmp(argv[1], L"--prepare-mosquitto") == 0) {
+            if (argc != 3) return 2;
+            wchar_t config_path[MAX_PATH];
+            wchar_t settings_path[MAX_PATH];
+            swprintf_s(config_path, MAX_PATH, L"%ls\\mosquitto\\mosquitto.conf", argv[2]);
+            swprintf_s(settings_path, MAX_PATH, L"%ls\\l4superv.json", argv[2]);
+            DWORD attributes = GetFileAttributesW(config_path);
+            if (attributes != INVALID_FILE_ATTRIBUTES) {
+                return (attributes & FILE_ATTRIBUTE_DIRECTORY) ? 1 : 0;
+            }
+            L4SupervConfig prepare_cfg;
+            config_init_defaults(&prepare_cfg, exe_path);
+            config_load_json(&prepare_cfg, settings_path);
+            return mosquitto_conf_generate_standby(argv[2], prepare_cfg.mosquitto_port) ? 0 : 1;
+        } else if (_wcsicmp(argv[1], L"--console") == 0 || _wcsicmp(argv[1], L"-f") == 0) {
             SetConsoleCtrlHandler(ConsoleCtrlHandler, TRUE);
             orchestrator_run_loop(&cfg, &g_stopFlag);
             return 0;

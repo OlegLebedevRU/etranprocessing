@@ -9,6 +9,24 @@ set "REPO_TOOLS=%~dp0.."
 set "STAGING=%~dp0obj\staging"
 set "OUT_ZIP=%~dp0bin\tools.zip"
 set "DIST_DIR=%REPO_TOOLS%\dist"
+set "CANDIDATE_MODE=0"
+if /i "%~1"=="--candidate" (
+    set "CANDIDATE_MODE=1"
+    set "STAGING=%~dp0obj\staging_candidate_1_8_1"
+    set "DIST_DIR=%REPO_TOOLS%\dist\candidate-1.8.1"
+    set "OUT_ZIP=%REPO_TOOLS%\dist\candidate-1.8.1\tools.zip"
+)
+
+if "%CANDIDATE_MODE%"=="1" (
+    if exist "%STAGING%" (
+        echo [ERROR] Candidate staging already exists: %STAGING%
+        exit /b 1
+    )
+    if exist "%OUT_ZIP%" (
+        echo [ERROR] Candidate archive already exists: %OUT_ZIP%
+        exit /b 1
+    )
+)
 
 if exist "%STAGING%" rd /s /q "%STAGING%"
 md "%STAGING%"
@@ -40,8 +58,9 @@ md "%STAGING%\l4superv\x86"
 md "%STAGING%\l4superv\x64"
 
 md "%STAGING%\l4capture"
-md "%STAGING%\l4capture\x86"
-md "%STAGING%\l4capture\x64"
+md "%STAGING%\l4capture\bin"
+md "%STAGING%\l4capture\bin\x86"
+md "%STAGING%\l4capture\bin\x64"
 
 :: 1. Copy leo4proxy
 echo [1/7] Staging leo4proxy...
@@ -156,22 +175,23 @@ if exist "%~dp0CHANGELOG.md" (
     copy /y "%~dp0CHANGELOG.md" "%STAGING%\l4superv\CHANGELOG.md" >nul 2>nul
 )
 
-:: 6b. Copy l4capture
+:: 6b. Copy l4capture to the path consumed by l4desk after architecture filtering.
 echo [6b/8] Staging l4capture...
-if exist "%REPO_TOOLS%\l4capture\bin\x86\l4capture.exe" (
-    copy /y "%REPO_TOOLS%\l4capture\bin\x86\l4capture.exe" "%STAGING%\l4capture\x86\l4capture.exe" >nul
+for %%a in (x86 x64) do (
+    if not exist "%REPO_TOOLS%\l4capture\bin\%%a\l4capture.exe" (
+        echo [ERROR] Missing l4capture %%a binary.
+        exit /b 1
+    )
+    copy /y "%REPO_TOOLS%\l4capture\bin\%%a\l4capture.exe" "%STAGING%\l4capture\bin\%%a\l4capture.exe" >nul
+    if errorlevel 1 exit /b 1
 )
-if exist "%REPO_TOOLS%\l4capture\bin\x64\l4capture.exe" (
-    copy /y "%REPO_TOOLS%\l4capture\bin\x64\l4capture.exe" "%STAGING%\l4capture\x64\l4capture.exe" >nul
-)
-if exist "%REPO_TOOLS%\l4capture\OPENH264_LICENSE.txt" (
-    copy /y "%REPO_TOOLS%\l4capture\OPENH264_LICENSE.txt" "%STAGING%\l4capture\OPENH264_LICENSE.txt" >nul
-)
-if exist "%REPO_TOOLS%\l4capture\SBOM.json" (
-    copy /y "%REPO_TOOLS%\l4capture\SBOM.json" "%STAGING%\l4capture\SBOM.json" >nul
-)
-if exist "%REPO_TOOLS%\l4capture\ROLLBACK.md" (
-    copy /y "%REPO_TOOLS%\l4capture\ROLLBACK.md" "%STAGING%\l4capture\ROLLBACK.md" >nul
+for %%f in (OPENH264_LICENSE.txt NOTICE-OpenH264.txt SBOM.json ROLLBACK.md) do (
+    if not exist "%REPO_TOOLS%\l4capture\%%f" (
+        echo [ERROR] Missing l4capture release material %%f.
+        exit /b 1
+    )
+    copy /y "%REPO_TOOLS%\l4capture\%%f" "%STAGING%\l4capture\%%f" >nul
+    if errorlevel 1 exit /b 1
 )
 
 :: 7. Stage User Guide in package root
@@ -189,20 +209,28 @@ if exist "%REPO_TOOLS%\..\docs\term_tool-user-guide.md" (
 :: 8. Pack FFmpeg package
 echo [8/8] Packing FFmpeg package via pack_ffmpeg.cmd...
 if exist "%REPO_TOOLS%\ffmpeg\pack_ffmpeg.cmd" (
-    call "%REPO_TOOLS%\ffmpeg\pack_ffmpeg.cmd"
+    if "%CANDIDATE_MODE%"=="1" (
+        call "%REPO_TOOLS%\ffmpeg\pack_ffmpeg.cmd" --candidate
+    ) else (
+        call "%REPO_TOOLS%\ffmpeg\pack_ffmpeg.cmd"
+    )
+    if errorlevel 1 exit /b 1
 )
 
 :: Create zip archive via PowerShell Compress-Archive
 echo Creating zip archive: %OUT_ZIP%...
 powershell -Command "if (Test-Path '%OUT_ZIP%') { Remove-Item '%OUT_ZIP%' -Force }; Compress-Archive -Path '%STAGING%\*' -DestinationPath '%OUT_ZIP%' -Force"
+if errorlevel 1 exit /b 1
 
 if not exist "%OUT_ZIP%" (
     echo [ERROR] Failed to create %OUT_ZIP%
     exit /b 1
 )
 
-copy /y "%OUT_ZIP%" "%~dp0tools.zip" >nul 2>nul
-copy /y "%OUT_ZIP%" "%REPO_TOOLS%\tools.zip" >nul 2>nul
+if "%CANDIDATE_MODE%"=="0" (
+    copy /y "%OUT_ZIP%" "%~dp0tools.zip" >nul 2>nul
+    copy /y "%OUT_ZIP%" "%REPO_TOOLS%\tools.zip" >nul 2>nul
+)
 
 :: Update tools\dist directory
 if not exist "%DIST_DIR%" md "%DIST_DIR%"

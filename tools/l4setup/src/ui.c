@@ -1,5 +1,8 @@
 #include "ui.h"
 #include "engine.h"
+#include "services.h"
+#include "unpack.h"
+#include "version.h"
 #include "log.h"
 #include "../res/resource.h"
 #include <commctrl.h>
@@ -14,6 +17,7 @@
 #define WM_SETUP_NOTICE          (WM_APP + 3)
 #define WM_SETUP_LOG             (WM_APP + 4)
 #define WM_SETUP_FINISHED        (WM_APP + 5)
+#define WM_SETUP_INSPECTION_DONE (WM_APP + 6)
 
 static SetupContext g_ui_ctx;
 static DWORD g_elapsed_sec = 0;
@@ -37,6 +41,75 @@ typedef struct {
     ServiceLifecycleStatus status;
     wchar_t text[128];
 } MsgServiceData;
+
+typedef struct {
+    HWND dialog;
+    wchar_t dest[MAX_PATH];
+    wchar_t payload_dir[MAX_PATH];
+    bool payload_dir_specified;
+    char installed_version[64];
+    SetupOperationType operation;
+    bool payload_present;
+    bool config_present;
+    bool incomplete;
+    DWORD service_states[4];
+} MsgInspectionData;
+
+static bool ui_file_exists(const wchar_t* path) {
+    DWORD attrs = GetFileAttributesW(path);
+    return attrs != INVALID_FILE_ATTRIBUTES && !(attrs & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+static DWORD WINAPI InspectionWorkerThread(LPVOID parameter) {
+    MsgInspectionData* data = (MsgInspectionData*)parameter;
+    unpack_read_installed_version(data->dest, data->installed_version,
+                                  sizeof(data->installed_version));
+    if (data->installed_version[0]) {
+        int cmp = version_compare(data->installed_version, L4SETUP_VERSION_STRING);
+        if (cmp > 0) data->operation = OP_UPGRADE;
+        else if (cmp < 0) data->operation = OP_UPGRADE;
+        else data->operation = unpack_is_idempotent(data->dest, L4SETUP_VERSION_STRING) ?
+            OP_VERIFY : OP_REPAIR;
+    } else {
+        data->operation = OP_INSTALL;
+    }
+    data->incomplete = unpack_has_incomplete_marker(data->dest, NULL, 0);
+    wchar_t config_path[MAX_PATH];
+    swprintf_s(config_path, MAX_PATH, L"%ls\\mosquitto\\mosquitto.conf", data->dest);
+    data->config_present = ui_file_exists(config_path);
+    if (data->payload_dir_specified) {
+        wchar_t archive_path[MAX_PATH];
+        swprintf_s(archive_path, MAX_PATH, L"%ls\\tools.zip", data->payload_dir);
+        data->payload_present = ui_file_exists(archive_path);
+    }
+    if (!data->payload_present) {
+        data->payload_present = FindResourceW(NULL, L"PAYLOAD_X86", RT_RCDATA) != NULL ||
+                                FindResourceW(NULL, L"PAYLOAD_X64", RT_RCDATA) != NULL;
+    }
+    if (!data->payload_present) {
+        wchar_t module_dir[MAX_PATH];
+        DWORD length = GetModuleFileNameW(NULL, module_dir, MAX_PATH);
+        if (length > 0 && length < MAX_PATH) {
+            wchar_t* slash = wcsrchr(module_dir, L'\\');
+            if (slash) {
+                *slash = L'\0';
+                wchar_t archive_path[MAX_PATH];
+                swprintf_s(archive_path, MAX_PATH, L"%ls\\tools.zip", module_dir);
+                data->payload_present = ui_file_exists(archive_path);
+                if (!data->payload_present) {
+                    swprintf_s(archive_path, MAX_PATH, L"%ls\\..\\dist\\tools.zip", module_dir);
+                    data->payload_present = ui_file_exists(archive_path);
+                }
+            }
+        }
+    }
+    data->service_states[0] = services_query_status(SVC_NAME_LEO4PROXY);
+    data->service_states[1] = services_query_status(SVC_NAME_MOSQUITTO);
+    data->service_states[2] = services_query_status(SVC_NAME_L4CON);
+    data->service_states[3] = services_query_status(SVC_NAME_L4SUPERV);
+    if (!PostMessageW(data->dialog, WM_SETUP_INSPECTION_DONE, 0, (LPARAM)data)) free(data);
+    return 0;
+}
 
 static void update_progress_ui(HWND hDlg, int percent) {
     if (percent < 0) percent = 0;
@@ -140,7 +213,7 @@ static DWORD WINAPI SetupWorkerThread(LPVOID lpParam) {
     HWND hDlg = (HWND)lpParam;
     g_ui_ctx.user_data = (void*)hDlg;
 
-    engine_run_pipeline(&g_ui_ctx);
+    if (engine_phase_check(&g_ui_ctx)) engine_run_pipeline(&g_ui_ctx);
     PostMessageW(hDlg, WM_SETUP_FINISHED, (WPARAM)g_ui_ctx.final_exit_code, 0);
     return 0;
 }
@@ -175,16 +248,16 @@ static INT_PTR CALLBACK MainDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM l
             }
 
             // Create modern Segoe UI and Consolas fonts
-            g_hFontTitle = CreateFontW(-19, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
+            g_hFontTitle = CreateFontW(-22, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
                                        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                                        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
-            g_hFontBold = CreateFontW(-13, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+            g_hFontBold = CreateFontW(-16, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
                                       DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                                       CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
-            g_hFontNormal = CreateFontW(-13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+            g_hFontNormal = CreateFontW(-16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                                         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                                         CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
-            g_hFontMono = CreateFontW(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+            g_hFontMono = CreateFontW(-14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                                       DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                                       CLEARTYPE_QUALITY, FIXED_PITCH | FF_MODERN, L"Consolas");
 
@@ -231,36 +304,82 @@ static INT_PTR CALLBACK MainDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM l
                          (rcOwner.bottom - rcOwner.top - (rc.bottom - rc.top)) / 2,
                          0, 0, SWP_NOSIZE);
 
-            // Phase 1: Check
-            bool check_ok = engine_phase_check(&g_ui_ctx);
-
-            wchar_t ver_buf[256];
-            swprintf_s(ver_buf, 256, L"Target Version: %hs | Operation: %hs (Installed: %hs)",
-                       g_ui_ctx.target_version,
-                       engine_op_type_to_str(g_ui_ctx.op_type),
-                       g_ui_ctx.installed_version[0] ? g_ui_ctx.installed_version : "None");
-            SetDlgItemTextW(hDlg, IDC_STATIC_VER_INFO, ver_buf);
-
+            // Inspect only; all system-changing checks start after the action button.
+            SetDlgItemTextW(hDlg, IDC_STATIC_PHASE, L"Phase: Inspect");
+            SetDlgItemTextW(hDlg, IDC_STATIC_STATUS, L"Checking installation, payload and services...");
+            EnableWindow(GetDlgItem(hDlg, IDC_BTN_ACTION), FALSE);
             wchar_t path_buf[MAX_PATH + 32];
-            swprintf_s(path_buf, sizeof(path_buf)/sizeof(wchar_t), L"Destination: %ls", g_ui_ctx.opts->dest);
+            swprintf_s(path_buf, sizeof(path_buf) / sizeof(path_buf[0]),
+                       L"Destination: %ls", g_ui_ctx.opts->dest);
             SetDlgItemTextW(hDlg, IDC_STATIC_PATH_INFO, path_buf);
-
-            // Set button text to match operation
-            const wchar_t* btn_text = L"Install";
-            if (g_ui_ctx.op_type == OP_UPGRADE) btn_text = L"Upgrade";
-            else if (g_ui_ctx.op_type == OP_REPAIR) btn_text = L"Repair";
-            else if (g_ui_ctx.op_type == OP_VERIFY) btn_text = L"Verify";
-            SetDlgItemTextW(hDlg, IDC_BTN_ACTION, btn_text);
-
-            if (!check_ok) {
-                wchar_t err_msg[256];
-                swprintf_s(err_msg, 256, L"Check Failed: %hs (code %d)",
-                           g_ui_ctx.summary.error_reason[0] ? g_ui_ctx.summary.error_reason : "prerequisites not met",
-                           g_ui_ctx.final_exit_code);
-                SetDlgItemTextW(hDlg, IDC_STATIC_STATUS, err_msg);
-                EnableWindow(GetDlgItem(hDlg, IDC_BTN_ACTION), FALSE);
+            MsgInspectionData* data = (MsgInspectionData*)calloc(1, sizeof(MsgInspectionData));
+            if (!data) {
+                SetDlgItemTextW(hDlg, IDC_STATIC_STATUS, L"Cannot allocate inspection state.");
+                return TRUE;
+            }
+            data->dialog = hDlg;
+            wcscpy_s(data->dest, MAX_PATH, g_ui_ctx.opts->dest);
+            data->payload_dir_specified = g_ui_ctx.opts->payload_dir_specified;
+            if (data->payload_dir_specified)
+                wcscpy_s(data->payload_dir, MAX_PATH, g_ui_ctx.opts->payload_dir);
+            HANDLE inspection = CreateThread(NULL, 0, InspectionWorkerThread, data, 0, NULL);
+            if (!inspection) {
+                free(data);
+                SetDlgItemTextW(hDlg, IDC_STATIC_STATUS, L"Cannot start installation inspection.");
+            } else {
+                CloseHandle(inspection);
             }
 
+            return TRUE;
+        }
+
+        case WM_SETUP_INSPECTION_DONE: {
+            MsgInspectionData* data = (MsgInspectionData*)lParam;
+            if (!data) return TRUE;
+            strncpy_s(g_ui_ctx.installed_version, sizeof(g_ui_ctx.installed_version),
+                      data->installed_version, _TRUNCATE);
+            strncpy_s(g_ui_ctx.target_version, sizeof(g_ui_ctx.target_version),
+                      L4SETUP_VERSION_STRING, _TRUNCATE);
+            g_ui_ctx.op_type = data->operation;
+            if (g_ui_ctx.opts->repair && data->installed_version[0] &&
+                version_compare(data->installed_version, L4SETUP_VERSION_STRING) == 0)
+                g_ui_ctx.op_type = OP_REPAIR;
+            wchar_t ver_buf[256];
+            swprintf_s(ver_buf, 256, L"Target: %hs | Operation: %hs | Installed: %hs",
+                       L4SETUP_VERSION_STRING, engine_op_type_to_str(g_ui_ctx.op_type),
+                       data->installed_version[0] ? data->installed_version : "None");
+            SetDlgItemTextW(hDlg, IDC_STATIC_VER_INFO, ver_buf);
+            const wchar_t* names[] = { L"Leo4Proxy", L"mosquitto", L"L4Con", L"L4Superv" };
+            const int controls[] = { IDC_SVC_LEO4PROXY, IDC_SVC_MOSQUITTO,
+                                     IDC_SVC_L4CON, IDC_SVC_L4SUPERV };
+            for (int i = 0; i < 4; i++) {
+                const wchar_t* label = L"Unknown or not registered";
+                if (data->service_states[i] == SERVICE_RUNNING) label = L"Running";
+                else if (data->service_states[i] == SERVICE_STOPPED) label = L"Stopped";
+                else if (data->service_states[i] == SERVICE_START_PENDING) label = L"Starting";
+                wchar_t row[128];
+                swprintf_s(row, 128, L"%ls  %ls", names[i], label);
+                SetDlgItemTextW(hDlg, controls[i], row);
+            }
+            bool downgrade = data->installed_version[0] &&
+                version_compare(data->installed_version, L4SETUP_VERSION_STRING) > 0;
+            if (downgrade) {
+                g_ui_ctx.final_exit_code = 29;
+                SetDlgItemTextW(hDlg, IDC_STATIC_STATUS, L"Installed version is newer; downgrade is blocked.");
+            } else if (!data->payload_present && g_ui_ctx.op_type != OP_VERIFY) {
+                SetDlgItemTextW(hDlg, IDC_STATIC_STATUS, L"No installation payload found; provide tools.zip before continuing.");
+            } else {
+                SetDlgItemTextW(hDlg, IDC_BTN_ACTION,
+                    g_ui_ctx.op_type == OP_UPGRADE ? L"Upgrade" :
+                    g_ui_ctx.op_type == OP_REPAIR ? L"Repair" :
+                    g_ui_ctx.op_type == OP_VERIFY ? L"Verify" : L"Install");
+                SetDlgItemTextW(hDlg, IDC_STATIC_STATUS,
+                    data->incomplete ? L"Interrupted installation detected; recovery will run after you continue." :
+                    data->config_present ? L"Inspection complete; Mosquitto config found." :
+                    L"Inspection complete; Mosquitto config is missing.");
+                EnableWindow(GetDlgItem(hDlg, IDC_BTN_ACTION), TRUE);
+            }
+            free(data);
             return TRUE;
         }
 
@@ -277,6 +396,15 @@ static INT_PTR CALLBACK MainDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM l
                 SetTextColor(hdc, RGB(16, 76, 140));
                 SetBkMode(hdc, TRANSPARENT);
                 return (INT_PTR)GetSysColorBrush(COLOR_BTNFACE);
+            }
+            if (ctrlId == IDC_SVC_LEO4PROXY || ctrlId == IDC_SVC_MOSQUITTO ||
+                ctrlId == IDC_SVC_L4CON || ctrlId == IDC_SVC_L4SUPERV) {
+                wchar_t label[128] = { 0 };
+                GetWindowTextW(hCtrl, label, 128);
+                if (wcsstr(label, L"Running")) SetTextColor(hdc, RGB(0, 100, 42));
+                else if (wcsstr(label, L"FAILED") || wcsstr(label, L"Stopped"))
+                    SetTextColor(hdc, RGB(154, 31, 31));
+                else SetTextColor(hdc, RGB(16, 76, 140));
             }
             SetBkMode(hdc, TRANSPARENT);
             return (INT_PTR)GetSysColorBrush(COLOR_BTNFACE);

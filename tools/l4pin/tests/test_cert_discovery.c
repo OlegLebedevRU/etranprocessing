@@ -12,7 +12,7 @@
 #pragma comment(lib, "ncrypt.lib")
 #pragma comment(lib, "advapi32.lib")
 
-#define TEST_KEY_CONTAINER L"L4PinDiscoveryUnitTestKey"
+static wchar_t g_test_key_container[96];
 
 static int g_tests_run = 0;
 static int g_tests_passed = 0;
@@ -75,7 +75,7 @@ static PCCERT_CONTEXT create_test_cert(
 
     CRYPT_KEY_PROV_INFO kpi;
     memset(&kpi, 0, sizeof(kpi));
-    kpi.pwszContainerName = (LPWSTR)TEST_KEY_CONTAINER;
+    kpi.pwszContainerName = (LPWSTR)g_test_key_container;
     kpi.pwszProvName = (LPWSTR)MS_KEY_STORAGE_PROVIDER;
     kpi.dwProvType = 0;
     kpi.dwFlags = 0; // Current user
@@ -324,19 +324,33 @@ int main(void) {
         return 1;
     }
 
-    // Try to open existing or create new test key
-    ss = NCryptOpenKey(hProv, &hKey, TEST_KEY_CONTAINER, 0, 0);
-    if (ss != ERROR_SUCCESS) {
-        ss = NCryptCreatePersistedKey(hProv, &hKey, BCRYPT_RSA_ALGORITHM, TEST_KEY_CONTAINER, 0, 0);
-        if (ss == ERROR_SUCCESS) {
-            DWORD keyLength = 2048;
-            NCryptSetProperty(hKey, NCRYPT_LENGTH_PROPERTY, (PBYTE)&keyLength, sizeof(keyLength), 0);
-            ss = NCryptFinalizeKey(hKey, 0);
-        }
+    // Create only a fresh test-owned key; never open or delete an existing container.
+    HCRYPTPROV random_provider = 0;
+    BYTE nonce[16] = { 0 };
+    if (!CryptAcquireContextW(&random_provider, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT) ||
+        !CryptGenRandom(random_provider, sizeof(nonce), nonce)) {
+        if (random_provider) CryptReleaseContext(random_provider, 0);
+        NCryptFreeObject(hProv);
+        return 1;
+    }
+    CryptReleaseContext(random_provider, 0);
+    swprintf_s(g_test_key_container, sizeof(g_test_key_container) / sizeof(g_test_key_container[0]),
+        L"L4PinDiscoveryTest-%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X",
+        nonce[0], nonce[1], nonce[2], nonce[3], nonce[4], nonce[5], nonce[6], nonce[7],
+        nonce[8], nonce[9], nonce[10], nonce[11], nonce[12], nonce[13], nonce[14], nonce[15]);
+    SecureZeroMemory(nonce, sizeof(nonce));
+    ss = NCryptCreatePersistedKey(hProv, &hKey, BCRYPT_RSA_ALGORITHM, g_test_key_container, 0, 0);
+    if (ss == ERROR_SUCCESS) {
+        DWORD keyLength = 2048;
+        ss = NCryptSetProperty(hKey, NCRYPT_LENGTH_PROPERTY, (PBYTE)&keyLength, sizeof(keyLength), 0);
+        if (ss == ERROR_SUCCESS) ss = NCryptFinalizeKey(hKey, 0);
     }
 
     if (ss != ERROR_SUCCESS) {
         fprintf(stderr, "Failed to initialize CNG test key: 0x%08lx\n", ss);
+        if (hKey) {
+            if (NCryptDeleteKey(hKey, 0) != ERROR_SUCCESS) NCryptFreeObject(hKey);
+        }
         NCryptFreeObject(hProv);
         return 1;
     }
@@ -350,7 +364,12 @@ int main(void) {
     RUN_TEST_KEY(test_non_leo4_issuer, hKey);
 
     // Cleanup key container
-    NCryptDeleteKey(hKey, 0);
+    if (NCryptDeleteKey(hKey, 0) != ERROR_SUCCESS) {
+        fprintf(stderr, "Failed to remove test-owned CNG key\n");
+        NCryptFreeObject(hKey);
+        NCryptFreeObject(hProv);
+        return 1;
+    }
     NCryptFreeObject(hProv);
 
     printf("\n=======================================================\n");

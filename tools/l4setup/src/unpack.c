@@ -228,6 +228,7 @@ bool unpack_is_idempotent(const wchar_t* dest_dir, const char* current_version) 
         L"l4superv\\l4superv.exe",
         L"l4pin\\l4pin.exe",
         L"l4desk\\l4desk.exe",
+        L"l4capture\\bin\\l4capture.exe",
         L"ffmpeg\\ffmpeg.exe"
     };
 
@@ -350,9 +351,10 @@ bool unpack_clear_incomplete_marker(const wchar_t* dest_dir) {
     if (!dest_dir) return false;
     wchar_t marker_path[MAX_PATH];
     swprintf_s(marker_path, MAX_PATH, L"%ls\\.install_in_progress.json", dest_dir);
-    SetFileAttributesW(marker_path, FILE_ATTRIBUTE_NORMAL);
-    DeleteFileW(marker_path);
-    return true;
+    DWORD attributes = GetFileAttributesW(marker_path);
+    if (attributes == INVALID_FILE_ATTRIBUTES) return GetLastError() == ERROR_FILE_NOT_FOUND;
+    if (!SetFileAttributesW(marker_path, FILE_ATTRIBUTE_NORMAL)) return false;
+    return DeleteFileW(marker_path) != FALSE;
 }
 
 bool unpack_check_files_locked(const wchar_t* dest_dir, DWORD wait_timeout_ms) {
@@ -418,6 +420,7 @@ bool unpack_rollback(const wchar_t* dest_dir, const char* prev_version) {
         L"l4superv",
         L"l4pin",
         L"l4desk",
+        L"l4capture",
         L"ffmpeg",
         L"l4sql"
     };
@@ -429,8 +432,31 @@ bool unpack_rollback(const wchar_t* dest_dir, const char* prev_version) {
         swprintf_s(cur_sub, MAX_PATH, L"%ls\\%ls", dest_dir, subdirs[i]);
 
         if (dir_exists(roll_sub)) {
-            recursive_delete(cur_sub);
-            MoveFileExW(roll_sub, cur_sub, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+            wchar_t replaced_sub[MAX_PATH];
+            swprintf_s(replaced_sub, MAX_PATH, L"%ls\\.rollback-replaced-%lu-%d",
+                       dest_dir, GetCurrentProcessId(), i);
+            if (GetFileAttributesW(replaced_sub) != INVALID_FILE_ATTRIBUTES) {
+                log_err("Rollback staging path %ls already exists; refusing to overwrite it.", replaced_sub);
+                return false;
+            }
+            bool had_current = dir_exists(cur_sub);
+            if (had_current &&
+                !MoveFileExW(cur_sub, replaced_sub, MOVEFILE_WRITE_THROUGH)) {
+                log_err("Rollback cannot move current %ls (error %lu); previous payload remains in %ls",
+                        cur_sub, GetLastError(), roll_sub);
+                return false;
+            }
+            if (!MoveFileExW(roll_sub, cur_sub, MOVEFILE_WRITE_THROUGH)) {
+                DWORD error = GetLastError();
+                log_err("Rollback cannot restore %ls to %ls (error %lu)", roll_sub, cur_sub, error);
+                if (had_current &&
+                    !MoveFileExW(replaced_sub, cur_sub, MOVEFILE_WRITE_THROUGH)) {
+                    log_err("Cannot restore current payload from %ls (error %lu); manual recovery required.",
+                            replaced_sub, GetLastError());
+                }
+                return false;
+            }
+            if (had_current) recursive_delete(replaced_sub);
         }
     }
 
@@ -473,11 +499,15 @@ bool unpack_recover_from_crash(const wchar_t* dest_dir) {
         }
     }
 
-    // Attempt rollback
-    unpack_rollback(dest_dir, old_ver);
-
-    // Clear marker
-    unpack_clear_incomplete_marker(dest_dir);
+    // Keep the marker on failure so recovery can be retried safely.
+    if (!unpack_rollback(dest_dir, old_ver)) {
+        log_err("Crash recovery failed; incomplete marker was retained.");
+        return false;
+    }
+    if (!unpack_clear_incomplete_marker(dest_dir)) {
+        log_err("Rollback completed but incomplete marker could not be cleared.");
+        return false;
+    }
 
     log_info("Crash recovery completed successfully.");
     return true;
@@ -601,6 +631,13 @@ bool unpack_payload(
         }
     }
 
+    // Check live files before touching the previous rollback directory.
+    if (!unpack_check_files_locked(dest_dir, 10000)) {
+        log_err("Files in %ls are still locked by another process. Existing rollback was preserved.", dest_dir);
+        recursive_delete(staging_dir);
+        return false;
+    }
+
     // Remove existing rollback folder (keep only one previous version)
     wchar_t rollback_base[MAX_PATH];
     swprintf_s(rollback_base, MAX_PATH, L"%ls\\rollback", dest_dir);
@@ -624,13 +661,6 @@ bool unpack_payload(
         has_user_mosq_conf = true;
     }
 
-    // Check that target files in dest_dir are not locked
-    if (!unpack_check_files_locked(dest_dir, 10000)) {
-        log_err("Files in %ls are still locked by another process. Aborting update.", dest_dir);
-        recursive_delete(staging_dir);
-        return false;
-    }
-
     // Set incomplete installation marker before modifying live files
     unpack_set_incomplete_marker(dest_dir, "update", prev_version, current_version);
 
@@ -642,6 +672,7 @@ bool unpack_payload(
         L"l4superv",
         L"l4pin",
         L"l4desk",
+        L"l4capture",
         L"ffmpeg",
         L"l4sql"
     };
@@ -675,7 +706,12 @@ bool unpack_payload(
 
     if (swap_failed) {
         log_err("File swap failed. Initiating automatic rollback...");
-        unpack_rollback(dest_dir, prev_version);
+        if (!unpack_rollback(dest_dir, prev_version)) {
+            log_err("Automatic rollback failed; preserving staging and incomplete marker for recovery.");
+            return false;
+        }
+        if (!unpack_clear_incomplete_marker(dest_dir))
+            log_err("Rollback succeeded, but the incomplete marker remains; manual recovery may be required.");
         recursive_delete(staging_dir);
         return false;
     }

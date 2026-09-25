@@ -27,12 +27,24 @@ bool cng_delete_key_container(
     NCRYPT_KEY_HANDLE hKey = 0;
     DWORD flags = is_machine_context ? NCRYPT_MACHINE_KEY_FLAG : 0;
     sec_status = NCryptOpenKey(hProv, &hKey, key_container_name, 0, flags);
+    bool deleted = false;
     if (sec_status == ERROR_SUCCESS && hKey != 0) {
-        NCryptDeleteKey(hKey, 0);
+        sec_status = NCryptDeleteKey(hKey, 0);
+        deleted = (sec_status == ERROR_SUCCESS);
+        if (!deleted) NCryptFreeObject(hKey);
     }
 
     NCryptFreeObject(hProv);
-    return true;
+    return deleted;
+}
+
+static void discard_new_key(NCRYPT_KEY_HANDLE key, const WCHAR* name, bool machine) {
+    SECURITY_STATUS status = NCryptDeleteKey(key, 0);
+    if (status != ERROR_SUCCESS) {
+        fprintf(stderr, "CNG cleanup of new key failed (store=%s, container=%ls, status=0x%08lX). Inspect before retrying.\n",
+                machine ? "machine" : "user", name, status);
+        NCryptFreeObject(key);
+    }
 }
 
 bool cng_generate_key_and_csr(
@@ -52,13 +64,15 @@ bool cng_generate_key_and_csr(
     NCRYPT_PROV_HANDLE hProv = 0;
     SECURITY_STATUS status = NCryptOpenStorageProvider(&hProv, prov, 0);
     if (status != ERROR_SUCCESS) {
-        fprintf(stderr, "NCryptOpenStorageProvider failed: 0x%08lX\n", status);
+        fprintf(stderr, "CNG provider open failed (store=%s, container=%ls, status=0x%08lX). Check KSP availability.\n",
+                is_machine_context ? "machine" : "user", key_container_name, status);
         return false;
     }
 
     // 2. Create persisted key in provider
     NCRYPT_KEY_HANDLE hKey = 0;
-    DWORD create_flags = (is_machine_context ? NCRYPT_MACHINE_KEY_FLAG : 0) | NCRYPT_OVERWRITE_KEY_FLAG;
+    /* Never replace a key that may still back a working terminal certificate. */
+    DWORD create_flags = is_machine_context ? NCRYPT_MACHINE_KEY_FLAG : 0;
     status = NCryptCreatePersistedKey(
         hProv,
         &hKey,
@@ -68,7 +82,8 @@ bool cng_generate_key_and_csr(
         create_flags
     );
     if (status != ERROR_SUCCESS) {
-        fprintf(stderr, "NCryptCreatePersistedKey failed: 0x%08lX (is_machine=%d)\n", status, is_machine_context);
+        fprintf(stderr, "CNG create key failed (store=%s, container=%ls, status=0x%08lX). Check permissions or use a new container.\n",
+                is_machine_context ? "machine" : "user", key_container_name, status);
         NCryptFreeObject(hProv);
         return false;
     }
@@ -83,8 +98,9 @@ bool cng_generate_key_and_csr(
         0
     );
     if (status != ERROR_SUCCESS) {
-        fprintf(stderr, "NCryptSetProperty(NCRYPT_LENGTH_PROPERTY) failed: 0x%08lX\n", status);
-        NCryptFreeObject(hKey);
+        fprintf(stderr, "CNG key length setup failed (store=%s, container=%ls, status=0x%08lX). Check KSP permissions.\n",
+                is_machine_context ? "machine" : "user", key_container_name, status);
+        discard_new_key(hKey, key_container_name, is_machine_context);
         NCryptFreeObject(hProv);
         return false;
     }
@@ -100,8 +116,9 @@ bool cng_generate_key_and_csr(
         0
     );
     if (status != ERROR_SUCCESS) {
-        fprintf(stderr, "NCryptSetProperty(NCRYPT_EXPORT_POLICY_PROPERTY) failed: 0x%08lX\n", status);
-        NCryptFreeObject(hKey);
+        fprintf(stderr, "CNG non-exportable policy setup failed (store=%s, container=%ls, status=0x%08lX). Check KSP permissions.\n",
+                is_machine_context ? "machine" : "user", key_container_name, status);
+        discard_new_key(hKey, key_container_name, is_machine_context);
         NCryptFreeObject(hProv);
         return false;
     }
@@ -109,8 +126,9 @@ bool cng_generate_key_and_csr(
     // 5. Finalize key
     status = NCryptFinalizeKey(hKey, 0);
     if (status != ERROR_SUCCESS) {
-        fprintf(stderr, "NCryptFinalizeKey failed: 0x%08lX\n", status);
-        NCryptFreeObject(hKey);
+        fprintf(stderr, "CNG finalize key failed (store=%s, container=%ls, status=0x%08lX). Check store permissions; the CA setup request has not started.\n",
+                is_machine_context ? "machine" : "user", key_container_name, status);
+        discard_new_key(hKey, key_container_name, is_machine_context);
         NCryptFreeObject(hProv);
         return false;
     }
@@ -128,14 +146,14 @@ bool cng_generate_key_and_csr(
             &cbPubKeyInfo
         )) {
         fprintf(stderr, "CryptExportPublicKeyInfoEx size query failed: %lu\n", GetLastError());
-        NCryptFreeObject(hKey);
+        discard_new_key(hKey, key_container_name, is_machine_context);
         NCryptFreeObject(hProv);
         return false;
     }
 
     PCERT_PUBLIC_KEY_INFO pPubKeyInfo = (PCERT_PUBLIC_KEY_INFO)malloc(cbPubKeyInfo);
     if (!pPubKeyInfo) {
-        NCryptFreeObject(hKey);
+        discard_new_key(hKey, key_container_name, is_machine_context);
         NCryptFreeObject(hProv);
         return false;
     }
@@ -152,7 +170,7 @@ bool cng_generate_key_and_csr(
         )) {
         fprintf(stderr, "CryptExportPublicKeyInfoEx failed: %lu\n", GetLastError());
         free(pPubKeyInfo);
-        NCryptFreeObject(hKey);
+        discard_new_key(hKey, key_container_name, is_machine_context);
         NCryptFreeObject(hProv);
         return false;
     }
@@ -170,7 +188,7 @@ bool cng_generate_key_and_csr(
         )) {
         fprintf(stderr, "CertStrToNameA size query failed: %lu (DN: %s)\n", GetLastError(), dn_with_sign);
         free(pPubKeyInfo);
-        NCryptFreeObject(hKey);
+        discard_new_key(hKey, key_container_name, is_machine_context);
         NCryptFreeObject(hProv);
         return false;
     }
@@ -178,7 +196,7 @@ bool cng_generate_key_and_csr(
     BYTE* pbSubject = (BYTE*)malloc(cbSubject);
     if (!pbSubject) {
         free(pPubKeyInfo);
-        NCryptFreeObject(hKey);
+        discard_new_key(hKey, key_container_name, is_machine_context);
         NCryptFreeObject(hProv);
         return false;
     }
@@ -195,7 +213,7 @@ bool cng_generate_key_and_csr(
         fprintf(stderr, "CertStrToNameA failed: %lu\n", GetLastError());
         free(pbSubject);
         free(pPubKeyInfo);
-        NCryptFreeObject(hKey);
+        discard_new_key(hKey, key_container_name, is_machine_context);
         NCryptFreeObject(hProv);
         return false;
     }
@@ -230,7 +248,7 @@ bool cng_generate_key_and_csr(
         fprintf(stderr, "CryptSignAndEncodeCertificate size query failed: %lu\n", GetLastError());
         free(pbSubject);
         free(pPubKeyInfo);
-        NCryptFreeObject(hKey);
+        discard_new_key(hKey, key_container_name, is_machine_context);
         NCryptFreeObject(hProv);
         return false;
     }
@@ -239,7 +257,7 @@ bool cng_generate_key_and_csr(
     if (!pbDer) {
         free(pbSubject);
         free(pPubKeyInfo);
-        NCryptFreeObject(hKey);
+        discard_new_key(hKey, key_container_name, is_machine_context);
         NCryptFreeObject(hProv);
         return false;
     }
@@ -259,7 +277,7 @@ bool cng_generate_key_and_csr(
         free(pbDer);
         free(pbSubject);
         free(pPubKeyInfo);
-        NCryptFreeObject(hKey);
+        discard_new_key(hKey, key_container_name, is_machine_context);
         NCryptFreeObject(hProv);
         return false;
     }
@@ -277,7 +295,7 @@ bool cng_generate_key_and_csr(
         free(pbDer);
         free(pbSubject);
         free(pPubKeyInfo);
-        NCryptFreeObject(hKey);
+        discard_new_key(hKey, key_container_name, is_machine_context);
         NCryptFreeObject(hProv);
         return false;
     }
@@ -287,7 +305,7 @@ bool cng_generate_key_and_csr(
         free(pbDer);
         free(pbSubject);
         free(pPubKeyInfo);
-        NCryptFreeObject(hKey);
+        discard_new_key(hKey, key_container_name, is_machine_context);
         NCryptFreeObject(hProv);
         return false;
     }
@@ -304,7 +322,7 @@ bool cng_generate_key_and_csr(
         free(pbDer);
         free(pbSubject);
         free(pPubKeyInfo);
-        NCryptFreeObject(hKey);
+        discard_new_key(hKey, key_container_name, is_machine_context);
         NCryptFreeObject(hProv);
         return false;
     }

@@ -12,6 +12,21 @@ set "STAGING=%REPO_TOOLS%\obj\staging_ffmpeg"
 set "DIST_DIR=%REPO_TOOLS%\dist"
 set "OUT_ZIP=%DIST_DIR%\ffmpeg.zip"
 set "STATIC_SRC=%REPO_ROOT%\ffmpeg-win32"
+set "CANDIDATE_MODE=0"
+if /i "%~1"=="--candidate" (
+    set "CANDIDATE_MODE=1"
+    set "STAGING=%REPO_TOOLS%\obj\staging_ffmpeg_candidate_1_8_1"
+    set "DIST_DIR=%REPO_TOOLS%\dist\candidate-1.8.1"
+    set "OUT_ZIP=%REPO_TOOLS%\dist\candidate-1.8.1\ffmpeg.zip"
+    if exist "%REPO_TOOLS%\obj\staging_ffmpeg_candidate_1_8_1" (
+        echo [ERROR] Candidate FFmpeg staging already exists.
+        exit /b 1
+    )
+    if exist "%REPO_TOOLS%\dist\candidate-1.8.1\ffmpeg.zip" (
+        echo [ERROR] Candidate FFmpeg archive already exists.
+        exit /b 1
+    )
+)
 
 :: 1. Locate x64 binary
 set "FFMPEG_X64_EXE="
@@ -140,13 +155,15 @@ copy /y "%~dp0README.md" "%STAGING%\ffmpeg\README.md" >nul
 copy /y "%~dp0SOURCES.md" "%STAGING%\ffmpeg\SOURCES.md" >nul
 
 echo [4/5] Generating SHA-256 manifest (ffmpeg.sha256)...
-powershell -NoProfile -NonInteractive -InputFormat None -ExecutionPolicy Bypass -Command "$b = '%STAGING%\ffmpeg'; (Get-ChildItem -Path $b -Recurse -File | Where-Object { $_.Name -ne 'ffmpeg.sha256' } | ForEach-Object { '{0}  {1}' -f (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash.ToLower(), ($_.FullName.Substring($b.Length + 1) -replace '\\','/') }) | Set-Content -Path ($b + '\ffmpeg.sha256') -Encoding ASCII"
+powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Write-Sha256.ps1" -StageRoot "%STAGING%\ffmpeg"
+if errorlevel 1 exit /b 1
 
 echo [5/5] Creating zip archive %OUT_ZIP%...
 if not exist "%DIST_DIR%" md "%DIST_DIR%"
 if exist "%OUT_ZIP%" del /f /q "%OUT_ZIP%"
 
 powershell -NoProfile -NonInteractive -InputFormat None -ExecutionPolicy Bypass -Command "Compress-Archive -Path '%STAGING%\ffmpeg\*' -DestinationPath '%OUT_ZIP%' -CompressionLevel Fastest -Force"
+if errorlevel 1 exit /b 1
 
 if not exist "%OUT_ZIP%" (
     echo [ERROR] Failed to create %OUT_ZIP%
@@ -154,10 +171,13 @@ if not exist "%OUT_ZIP%" (
 )
 
 echo Generating distribution checksum %OUT_ZIP%.sha256...
-powershell -NoProfile -NonInteractive -InputFormat None -ExecutionPolicy Bypass -Command "'{0}  ffmpeg.zip' -f (Get-FileHash -Path '%OUT_ZIP%' -Algorithm SHA256).Hash.ToLower() | Set-Content -Path '%OUT_ZIP%.sha256' -Encoding ASCII"
+powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Write-Sha256.ps1" -ArchivePath "%OUT_ZIP%"
+if errorlevel 1 exit /b 1
 
-copy /y "%OUT_ZIP%" "%~dp0bin\ffmpeg.zip" >nul 2>nul
-copy /y "%OUT_ZIP%" "%REPO_TOOLS%\l4superv\bin\ffmpeg.zip" >nul 2>nul
+if "%CANDIDATE_MODE%"=="0" (
+    copy /y "%OUT_ZIP%" "%~dp0bin\ffmpeg.zip" >nul 2>nul
+    copy /y "%OUT_ZIP%" "%REPO_TOOLS%\l4superv\bin\ffmpeg.zip" >nul 2>nul
+)
 
 echo ===============================================================
 echo  [OK] Successfully packed FFmpeg package:

@@ -2,6 +2,12 @@
 
 All notable changes to the `l4superv` and `l4install` suite will be documented in this file.
 
+## Unreleased (1.8.1 candidate)
+
+- Package both L4CAPTURE architectures at the path consumed by L4DESK after architecture selection, and require license, SBOM and rollback materials.
+- Candidate packaging now keeps existing archives intact and includes the OpenH264 NOTICE file; FFmpeg SHA-256 generation fails on errors and works with the available PowerShell runtime.
+- Mosquitto configuration preparation is called before service registration/start from L4SETUP.
+
 ## [1.7.5] - 2026-09-15
 
 ### Changed & Improved

@@ -601,10 +601,17 @@ int wmain(int argc, wchar_t* argv[]) {
         CopyFileW(source_guide, target_guide, FALSE);
     }
 
-    // Ensure permissive ACLs on mosquitto\log
+    // Restrict mosquitto log to the service account and administrators.
     wchar_t mosq_log_dir[MAX_PATH];
     swprintf_s(mosq_log_dir, MAX_PATH, L"%ls\\mosquitto\\log", dest_dir);
-    svc_set_dir_permissions(mosq_log_dir);
+    if (!CreateDirectoryW(mosq_log_dir, NULL) && GetLastError() != ERROR_ALREADY_EXISTS) {
+        wprintf(L"[ERROR] Cannot create Mosquitto log directory %ls (error %lu)\n", mosq_log_dir, GetLastError());
+        return 1;
+    }
+    if (!svc_set_mosquitto_log_permissions(mosq_log_dir)) {
+        wprintf(L"[ERROR] Cannot secure Mosquitto log directory %ls (error %lu)\n", mosq_log_dir, GetLastError());
+        return 1;
+    }
 
     // Ensure system environment variable MOSQUITTO_DIR is configured
     wchar_t mosq_dir[MAX_PATH];

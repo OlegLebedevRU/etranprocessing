@@ -1,7 +1,7 @@
 {
   "name": "l4capture",
   "version": "1.0.0",
-  "suite_release": "1.8.0",
+  "suite_release": "1.8.1-beta-1",
   "description": "Desktop capture / OpenH264 / RTP agent for Leo4 Terminal Tools",
   "source_commit_hint": "see H-L4C-10-v1 / L4C-11 report",
   "build": {

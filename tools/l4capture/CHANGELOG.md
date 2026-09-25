@@ -4,6 +4,8 @@
 
 ### Changed
 
+- MF capability probe no longer schedules another hardware activation after its shared 5-second budget and treats a late result as a timeout with OpenH264 fallback. A single synchronous Media Foundation call can still exceed the budget; cold-start timing remains an open gate.
+
 - **`low` = native-растр @ 800k (паритет ffmpeg low).** ffmpeg `low`
   (`ffmpeg_cmdline.c`) кодирует **native** ROI при 800k/15fps, без
   downscale. Раньше l4capture always stretch-fit в 854x480 — текст

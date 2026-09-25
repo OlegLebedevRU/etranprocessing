@@ -76,7 +76,7 @@ bool summary_write_json(const InstallSummaryData* data, const wchar_t* dest_dir)
     fprintf(fp, "  \"schema\": 1,\n");
     fprintf(fp, "  \"timestamp\": \"%s\",\n", ts);
     fprintf(fp, "  \"installer_version\": \"%s\",\n", data->installer_version);
-    fprintf(fp, "  \"installed_version\": \"%s\",\n", data->installed_version[0] ? data->installed_version : data->installer_version);
+    fprintf(fp, "  \"installed_version\": \"%s\",\n", data->installed_version[0] ? data->installed_version : "none");
     fprintf(fp, "  \"os\": \"%s\",\n", data->os);
     fprintf(fp, "  \"target_arch\": \"%s\",\n", data->target_arch);
     fprintf(fp, "  \"dest\": \"%s\",\n", dest_escaped);
@@ -87,14 +87,25 @@ bool summary_write_json(const InstallSummaryData* data, const wchar_t* dest_dir)
     fprintf(fp, "  \"rollback\": \"%s\",\n", data->rollback[0] ? data->rollback : "none");
     fprintf(fp, "  \"ca_root_installed\": %s,\n", data->ca_root_installed ? "true" : "false");
     fprintf(fp, "  \"firewall_configured\": %s,\n", data->firewall_configured ? "true" : "false");
+    fprintf(fp, "  \"payload_deployed\": %s,\n", data->payload_deployed ? "true" : "false");
+    fprintf(fp, "  \"services_registered\": %s,\n", data->services_registered ? "true" : "false");
+    fprintf(fp, "  \"reboot_recommended\": %s,\n", data->reboot_recommended ? "true" : "false");
+    fprintf(fp, "  \"requires_intervention\": %s,\n", data->requires_intervention ? "true" : "false");
     fprintf(fp, "  \"log_path\": \"%s\",\n", log_escaped);
 
     // services
     fprintf(fp, "  \"services\": {\n");
-    fprintf(fp, "    \"leo4proxy\": \"%s\",\n", data->service_leo4proxy[0] ? data->service_leo4proxy : "running");
-    fprintf(fp, "    \"mosquitto\": \"%s\",\n", data->service_mosquitto[0] ? data->service_mosquitto : "running");
-    fprintf(fp, "    \"l4con\": \"%s\",\n", data->service_l4con[0] ? data->service_l4con : "running");
-    fprintf(fp, "    \"l4superv\": \"%s\"\n", data->service_l4superv[0] ? data->service_l4superv : "running");
+    fprintf(fp, "    \"leo4proxy\": \"%s\",\n", data->service_leo4proxy[0] ? data->service_leo4proxy : "not_checked");
+    fprintf(fp, "    \"mosquitto\": \"%s\",\n", data->service_mosquitto[0] ? data->service_mosquitto : "not_checked");
+    fprintf(fp, "    \"l4con\": \"%s\",\n", data->service_l4con[0] ? data->service_l4con : "not_checked");
+    fprintf(fp, "    \"l4superv\": \"%s\"\n", data->service_l4superv[0] ? data->service_l4superv : "not_checked");
+    fprintf(fp, "  },\n");
+    fprintf(fp, "  \"service_start\": {\n");
+    fprintf(fp, "    \"max_attempts\": 3, \"retry_interval_sec\": 2, \"overall_limit_sec\": 480,\n");
+    fprintf(fp, "    \"attempts\": {\"leo4proxy\": %lu, \"mosquitto\": %lu, "
+                "\"l4con\": %lu, \"l4superv\": %lu}\n",
+            data->service_start_attempts[0], data->service_start_attempts[1],
+            data->service_start_attempts[2], data->service_start_attempts[3]);
     fprintf(fp, "  },\n");
 
     // cert

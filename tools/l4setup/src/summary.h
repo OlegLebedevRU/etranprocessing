@@ -23,12 +23,17 @@ typedef struct {
     char rollback[32]; // "none", "restored", "failed"
     bool ca_root_installed;
     bool firewall_configured;
+    bool payload_deployed;
+    bool services_registered;
+    bool reboot_recommended;
+    bool requires_intervention;
     wchar_t log_path[MAX_PATH];
 
     char service_leo4proxy[32];
     char service_mosquitto[32];
     char service_l4con[32];
     char service_l4superv[32];
+    DWORD service_start_attempts[4];
 
     CertPhaseResult cert;
     DrainageResult drainage;

@@ -221,6 +221,16 @@ static bool test_payload_selection(void) {
     // 4. Target x86: skip opposite x64 segment
     TEST_ASSERT(!transform_arch_path(L"leo4proxy\\x64\\leo4proxy.exe", false, L"x86", out, MAX_PATH), "x64 path should be skipped on x86 target");
 
+    // l4capture's package path must resolve to the path launched by l4desk.
+    TEST_ASSERT(transform_arch_path(L"l4capture\\bin\\x86\\l4capture.exe", false, L"x86", out, MAX_PATH),
+                "l4capture x86 transform failed");
+    TEST_ASSERT(wcscmp(out, L"l4capture\\bin\\l4capture.exe") == 0,
+                "l4capture x86 installed path mismatch");
+    TEST_ASSERT(transform_arch_path(L"l4capture\\bin\\x64\\l4capture.exe", false, L"x64", out, MAX_PATH),
+                "l4capture x64 transform failed");
+    TEST_ASSERT(wcscmp(out, L"l4capture\\bin\\l4capture.exe") == 0,
+                "l4capture x64 installed path mismatch");
+
     // 5. Common files: keep as-is
     TEST_ASSERT(transform_arch_path(L"mosquitto\\mosquitto.conf", false, L"x64", out, MAX_PATH), "common file transform failed");
     TEST_ASSERT(wcscmp(out, L"mosquitto\\mosquitto.conf") == 0, "Common file altered");
@@ -371,9 +381,11 @@ static bool test_phase3_matrix(void) {
 // ---------------------------------------------------------------------------
 static bool test_summary_and_state(void) {
     wchar_t test_dir[MAX_PATH];
-    GetTempPathW(MAX_PATH, test_dir);
-    wcscat_s(test_dir, MAX_PATH, L"l4setup_unit_test");
-    CreateDirectoryW(test_dir, NULL);
+    wchar_t temp_root[MAX_PATH];
+    TEST_ASSERT(GetTempPathW(MAX_PATH, temp_root) > 0, "GetTempPathW failed");
+    TEST_ASSERT(GetTempFileNameW(temp_root, L"l4s", 0, test_dir) != 0, "Unique temp name failed");
+    TEST_ASSERT(DeleteFileW(test_dir), "Cannot remove temp placeholder");
+    TEST_ASSERT(CreateDirectoryW(test_dir, NULL), "Cannot create isolated test directory");
 
     InstallSummaryData data;
     memset(&data, 0, sizeof(data));
@@ -499,9 +511,11 @@ static bool test_numeric_version_compare(void) {
 // ---------------------------------------------------------------------------
 static bool test_incomplete_marker_and_recovery(void) {
     wchar_t test_dir[MAX_PATH];
-    GetTempPathW(MAX_PATH, test_dir);
-    wcscat_s(test_dir, MAX_PATH, L"l4setup_crash_test");
-    CreateDirectoryW(test_dir, NULL);
+    wchar_t temp_root[MAX_PATH];
+    TEST_ASSERT(GetTempPathW(MAX_PATH, temp_root) > 0, "GetTempPathW failed");
+    TEST_ASSERT(GetTempFileNameW(temp_root, L"l4s", 0, test_dir) != 0, "Unique temp name failed");
+    TEST_ASSERT(DeleteFileW(test_dir), "Cannot remove temp placeholder");
+    TEST_ASSERT(CreateDirectoryW(test_dir, NULL), "Cannot create isolated test directory");
 
     // 1. Set marker
     TEST_ASSERT(unpack_set_incomplete_marker(test_dir, "update", "1.7.0", "1.7.2"), "Failed to set incomplete marker");
@@ -558,6 +572,62 @@ static bool test_incomplete_marker_and_recovery(void) {
 }
 
 // ---------------------------------------------------------------------------
+// 8. Rollback preserves both trees when a live file blocks directory rename.
+// ---------------------------------------------------------------------------
+static bool test_rollback_locked_l4pin_then_retry(void) {
+    wchar_t root[MAX_PATH], temp_root[MAX_PATH];
+    TEST_ASSERT(GetTempPathW(MAX_PATH, temp_root) > 0, "GetTempPathW failed");
+    TEST_ASSERT(GetTempFileNameW(temp_root, L"l4r", 0, root) != 0, "Unique test path failed");
+    TEST_ASSERT(DeleteFileW(root) && CreateDirectoryW(root, NULL), "Cannot create test root");
+
+    wchar_t live[MAX_PATH], backup[MAX_PATH], rb[MAX_PATH], previous[MAX_PATH];
+    wchar_t live_file[MAX_PATH], backup_file[MAX_PATH];
+    swprintf_s(live, MAX_PATH, L"%ls\\l4pin", root);
+    swprintf_s(rb, MAX_PATH, L"%ls\\rollback", root);
+    swprintf_s(previous, MAX_PATH, L"%ls\\rollback\\prev", root);
+    swprintf_s(backup, MAX_PATH, L"%ls\\rollback\\prev\\l4pin", root);
+    swprintf_s(live_file, MAX_PATH, L"%ls\\l4pin.exe", live);
+    swprintf_s(backup_file, MAX_PATH, L"%ls\\l4pin.exe", backup);
+    TEST_ASSERT(CreateDirectoryW(live, NULL), "Cannot create live directory");
+    TEST_ASSERT(CreateDirectoryW(rb, NULL), "Cannot create rollback parent");
+    TEST_ASSERT(CreateDirectoryW(previous, NULL), "Cannot create rollback version");
+    TEST_ASSERT(CreateDirectoryW(backup, NULL), "Cannot create rollback l4pin");
+
+    FILE* file = NULL;
+    TEST_ASSERT(_wfopen_s(&file, live_file, L"wb") == 0 && file, "Cannot write live sentinel");
+    fputs("live", file);
+    fclose(file);
+    TEST_ASSERT(_wfopen_s(&file, backup_file, L"wb") == 0 && file, "Cannot write rollback sentinel");
+    fputs("previous", file);
+    fclose(file);
+
+    HANDLE lock = CreateFileW(live_file, GENERIC_READ, 0, NULL, OPEN_EXISTING,
+                              FILE_ATTRIBUTE_NORMAL, NULL);
+    TEST_ASSERT(lock != INVALID_HANDLE_VALUE, "Cannot lock live l4pin file");
+    bool blocked = !unpack_rollback(root, "prev");
+    CloseHandle(lock);
+    TEST_ASSERT(blocked, "Rollback should fail while l4pin is locked");
+    TEST_ASSERT(GetFileAttributesW(live_file) != INVALID_FILE_ATTRIBUTES,
+                "Live file lost after blocked rollback");
+    TEST_ASSERT(GetFileAttributesW(backup_file) != INVALID_FILE_ATTRIBUTES,
+                "Rollback file lost after blocked rollback");
+
+    TEST_ASSERT(unpack_rollback(root, "prev"), "Rollback retry after unlock failed");
+    TEST_ASSERT(_wfopen_s(&file, live_file, L"rb") == 0 && file, "Restored file missing");
+    char content[16] = { 0 };
+    fread(content, 1, sizeof(content) - 1, file);
+    fclose(file);
+    TEST_ASSERT(strcmp(content, "previous") == 0, "Rollback restored wrong content");
+
+    TEST_ASSERT(DeleteFileW(live_file), "Cannot remove restored sentinel");
+    TEST_ASSERT(RemoveDirectoryW(live), "Cannot remove restored directory");
+    TEST_ASSERT(RemoveDirectoryW(previous), "Cannot remove rollback version");
+    TEST_ASSERT(RemoveDirectoryW(rb), "Cannot remove rollback parent");
+    TEST_ASSERT(RemoveDirectoryW(root), "Cannot remove test root");
+    return true;
+}
+
+// ---------------------------------------------------------------------------
 // 8. Root CA Certificate and Idempotency Unit Tests
 // ---------------------------------------------------------------------------
 static bool test_root_ca_install_and_idempotency(void) {
@@ -608,8 +678,7 @@ static bool test_log_callback(void) {
 // Main
 // ---------------------------------------------------------------------------
 int main(int argc, char* argv[]) {
-    UNREFERENCED_PARAMETER(argc);
-    UNREFERENCED_PARAMETER(argv);
+    bool safe_only = argc > 1 && strcmp(argv[1], "--safe") == 0;
 
     AttachConsole(ATTACH_PARENT_PROCESS);
     FILE* fp_con = NULL;
@@ -632,7 +701,8 @@ int main(int argc, char* argv[]) {
     RUN_TEST(test_summary_and_state);
     RUN_TEST(test_numeric_version_compare);
     RUN_TEST(test_incomplete_marker_and_recovery);
-    RUN_TEST(test_root_ca_install_and_idempotency);
+    RUN_TEST(test_rollback_locked_l4pin_then_retry);
+    if (!safe_only) RUN_TEST(test_root_ca_install_and_idempotency);
     RUN_TEST(test_log_callback);
 
     printf("=======================================================\n");

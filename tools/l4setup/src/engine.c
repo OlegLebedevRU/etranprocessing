@@ -11,6 +11,34 @@
 #include <stdlib.h>
 #include <string.h>
 
+static bool prepare_mosquitto_config(const wchar_t* dest) {
+    wchar_t command[MAX_PATH * 3];
+    swprintf_s(command, sizeof(command) / sizeof(command[0]),
+        L"\"%ls\\l4superv\\l4superv.exe\" --prepare-mosquitto \"%ls\"", dest, dest);
+    STARTUPINFOW startup = { 0 };
+    PROCESS_INFORMATION process = { 0 };
+    startup.cb = sizeof(startup);
+    if (!CreateProcessW(NULL, command, NULL, NULL, FALSE, CREATE_NO_WINDOW,
+                        NULL, dest, &startup, &process)) {
+        log_err("Cannot run l4superv Mosquitto config preparation (error %lu)", GetLastError());
+        return false;
+    }
+    DWORD wait_result = WaitForSingleObject(process.hProcess, 30000);
+    if (wait_result == WAIT_TIMEOUT) {
+        TerminateProcess(process.hProcess, 1);
+        WaitForSingleObject(process.hProcess, INFINITE);
+    }
+    DWORD exit_code = 1;
+    GetExitCodeProcess(process.hProcess, &exit_code);
+    CloseHandle(process.hThread);
+    CloseHandle(process.hProcess);
+    if (wait_result != WAIT_OBJECT_0 || exit_code != 0) {
+        log_err("l4superv Mosquitto config preparation failed (exit=%lu, wait=%lu)", exit_code, wait_result);
+        return false;
+    }
+    return true;
+}
+
 const char* engine_op_type_to_str(SetupOperationType op) {
     switch (op) {
         case OP_INSTALL: return "Install";
@@ -77,6 +105,38 @@ static void engine_service_lifecycle_cb(
     else if (idx == 3) strncpy_s(ctx->summary.service_l4superv, 32, status_str, _TRUNCATE);
 }
 
+static bool engine_continue_after_service_failure(const wchar_t* svc_name, void* user_data) {
+    SetupContext* ctx = (SetupContext*)user_data;
+    if (!ctx || !ctx->is_interactive) return false;
+    wchar_t message[512];
+    swprintf_s(message, sizeof(message) / sizeof(message[0]),
+        L"%ls did not reach RUNNING after the initial attempt and two retries.\n\n"
+        L"Continue with other services where dependencies allow? Installed files and service registrations will remain. "
+        L"A Windows restart may help start them later, but it will not fix a bad config, ACL or occupied port.\n\n"
+        L"Yes: continue with safe independent services. No: stop further startup.",
+        svc_name);
+    return MessageBoxW((HWND)ctx->user_data, message, L"Service startup failed",
+                       MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2) == IDYES;
+}
+
+static bool engine_write_summary(SetupContext* ctx) {
+    ctx->summary.exit_code = ctx->final_exit_code;
+    return summary_write_json(&ctx->summary, ctx->opts->dest);
+}
+
+static void engine_note_rollback(SetupContext* ctx, bool restored) {
+    strncpy_s(ctx->summary.rollback, sizeof(ctx->summary.rollback),
+              restored ? "restored" : "failed", _TRUNCATE);
+    ctx->summary.requires_intervention = true;
+    if (restored) {
+        if (!unpack_clear_incomplete_marker(ctx->opts->dest))
+            log_err("Rollback restored payload but could not clear the incomplete marker.");
+        ctx->summary.payload_deployed = false;
+        strncpy_s(ctx->summary.installed_version, sizeof(ctx->summary.installed_version),
+                  ctx->installed_version[0] ? ctx->installed_version : "none", _TRUNCATE);
+    }
+}
+
 bool engine_phase_check(SetupContext* ctx) {
     if (!ctx || !ctx->opts) return false;
 
@@ -86,8 +146,12 @@ bool engine_phase_check(SetupContext* ctx) {
     }
 
     // 1. Single-instance mutex
-    ctx->hMutex = CreateMutexW(NULL, TRUE, L"Global\\L4Setup_Instance_Mutex");
-    if (ctx->hMutex && GetLastError() == ERROR_ALREADY_EXISTS) {
+    bool mutex_conflict = false;
+    if (!ctx->hMutex) {
+        ctx->hMutex = CreateMutexW(NULL, TRUE, L"Global\\L4Setup_Instance_Mutex");
+        mutex_conflict = ctx->hMutex && GetLastError() == ERROR_ALREADY_EXISTS;
+    }
+    if (!ctx->hMutex || mutex_conflict) {
         log_err("Another instance of l4setup is already running. Setup is busy (code 28).");
         ctx->final_exit_code = 28;
         strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "failed");
@@ -108,8 +172,15 @@ bool engine_phase_check(SetupContext* ctx) {
     strncpy_s(ctx->os_name, sizeof(ctx->os_name), pinfo.os_display_name, _TRUNCATE);
     strncpy_s(ctx->target_arch, sizeof(ctx->target_arch), pinfo.target_arch, _TRUNCATE);
 
-    // 3. Crash recovery check
-    unpack_recover_from_crash(ctx->opts->dest);
+    // 3. Recover only after explicit start, and stop if recovery cannot complete.
+    if (unpack_has_incomplete_marker(ctx->opts->dest, NULL, 0) &&
+        !unpack_recover_from_crash(ctx->opts->dest)) {
+        ctx->final_exit_code = 23;
+        strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "failed");
+        strncpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason),
+                  "crash_recovery_failed", _TRUNCATE);
+        return false;
+    }
 
     // 4. Version detection
     unpack_read_installed_version(ctx->opts->dest, ctx->installed_version, sizeof(ctx->installed_version));
@@ -188,7 +259,8 @@ bool engine_phase_check(SetupContext* ctx) {
 
     // Initialize summary data
     strncpy_s(ctx->summary.installer_version, sizeof(ctx->summary.installer_version), L4SETUP_VERSION_STRING, _TRUNCATE);
-    strncpy_s(ctx->summary.installed_version, sizeof(ctx->summary.installed_version), ctx->target_version, _TRUNCATE);
+    strncpy_s(ctx->summary.installed_version, sizeof(ctx->summary.installed_version),
+              ctx->installed_version[0] ? ctx->installed_version : "none", _TRUNCATE);
     strncpy_s(ctx->summary.os, sizeof(ctx->summary.os), ctx->os_name, _TRUNCATE);
     strncpy_s(ctx->summary.target_arch, sizeof(ctx->summary.target_arch), ctx->target_arch, _TRUNCATE);
     wcscpy_s(ctx->summary.dest, MAX_PATH, ctx->opts->dest);
@@ -223,7 +295,15 @@ int engine_run_pipeline(SetupContext* ctx) {
         ctx->on_phase_change(SETUP_PHASE_PREPARE, "Prepare", "Configuring environment and staging payload...", ctx->user_data);
     }
 
-    services_configure_environment(ctx->opts->dest);
+    if (!services_configure_environment(ctx->opts->dest)) {
+        log_err("Machine environment preparation failed.");
+        ctx->final_exit_code = 24;
+        strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "failed");
+        strncpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason),
+                  "machine_environment_failed", _TRUNCATE);
+        engine_write_summary(ctx);
+        return 24;
+    }
     if (preflight_setup_firewall(ctx->opts->dest)) {
         ctx->summary.firewall_configured = true;
     }
@@ -258,7 +338,7 @@ int engine_run_pipeline(SetupContext* ctx) {
             ctx->final_exit_code = 22;
             strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "failed");
             strncpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason), "drainage_failed", _TRUNCATE);
-            summary_write_json(&ctx->summary, ctx->opts->dest);
+            engine_write_summary(ctx);
             return 22;
         }
     }
@@ -285,20 +365,36 @@ int engine_run_pipeline(SetupContext* ctx) {
             ctx->final_exit_code = 23;
             strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "failed");
             strncpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason), "payload_extraction_failed", _TRUNCATE);
-            summary_write_json(&ctx->summary, ctx->opts->dest);
+            engine_write_summary(ctx);
             return 23;
+        }
+
+        ctx->summary.payload_deployed = true;
+        strncpy_s(ctx->summary.installed_version, sizeof(ctx->summary.installed_version),
+                  ctx->target_version, _TRUNCATE);
+        if (!services_prepare_mosquitto(ctx->opts->dest) ||
+            !prepare_mosquitto_config(ctx->opts->dest)) {
+            log_err("Mosquitto directory/config preparation failed; restoring previous payload.");
+            engine_note_rollback(ctx, unpack_rollback(ctx->opts->dest,
+                ctx->installed_version[0] ? ctx->installed_version : "prev"));
+            ctx->final_exit_code = 24;
+            strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "failed");
+            strncpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason), "mosquitto_prepare_failed", _TRUNCATE);
+            engine_write_summary(ctx);
+            return 24;
         }
 
         if (!services_ensure_all_registered(ctx->opts->dest)) {
             log_err("Service registration failed (exit code 24). Initiating rollback...");
-            unpack_rollback(ctx->opts->dest, ctx->installed_version[0] ? ctx->installed_version : "prev");
+            engine_note_rollback(ctx, unpack_rollback(ctx->opts->dest,
+                ctx->installed_version[0] ? ctx->installed_version : "prev"));
             ctx->final_exit_code = 24;
             strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "failed");
-            strncpy_s(ctx->summary.rollback, sizeof(ctx->summary.rollback), "restored", _TRUNCATE);
             strncpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason), "service_registration_failed", _TRUNCATE);
-            summary_write_json(&ctx->summary, ctx->opts->dest);
+            engine_write_summary(ctx);
             return 24;
         }
+        ctx->summary.services_registered = true;
     }
 
     if (ctx->cancel_requested) {
@@ -328,7 +424,7 @@ int engine_run_pipeline(SetupContext* ctx) {
         ctx->final_exit_code = ctx->summary.cert.exit_code;
         strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "failed");
         strncpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason), "certificate_enrollment_failed", _TRUNCATE);
-        summary_write_json(&ctx->summary, ctx->opts->dest);
+        engine_write_summary(ctx);
         return ctx->final_exit_code;
     }
 
@@ -337,13 +433,33 @@ int engine_run_pipeline(SetupContext* ctx) {
     }
 
     // Start all 4 services in order
-    bool svcs_started = services_start_all_in_order(engine_service_lifecycle_cb, ctx);
-    if (!svcs_started) {
-        log_err("Service startup timed out or failed (exit code 24).");
+    if (ctx->op_type == OP_VERIFY) ctx->summary.payload_deployed =
+        unpack_is_idempotent(ctx->opts->dest, ctx->target_version);
+    if (ctx->op_type == OP_VERIFY &&
+        (!services_prepare_mosquitto(ctx->opts->dest) ||
+         !prepare_mosquitto_config(ctx->opts->dest))) {
         ctx->final_exit_code = 24;
         strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "failed");
-        strncpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason), "service_start_failed", _TRUNCATE);
-        summary_write_json(&ctx->summary, ctx->opts->dest);
+        strncpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason),
+                  "mosquitto_prepare_failed", _TRUNCATE);
+        engine_write_summary(ctx);
+        return 24;
+    }
+    bool partial_requested = false;
+    bool svcs_started = services_start_all_in_order(
+        engine_service_lifecycle_cb, engine_continue_after_service_failure, ctx,
+        &partial_requested, ctx->summary.service_start_attempts);
+    if (!svcs_started) {
+        log_err("One or more services did not reach RUNNING (exit code 24).");
+        ctx->final_exit_code = 24;
+        strcpy_s(ctx->summary.status, sizeof(ctx->summary.status),
+                 partial_requested ? "partial" : "failed");
+        strncpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason),
+                  partial_requested ? "service_start_partial" : "service_start_failed", _TRUNCATE);
+        ctx->summary.reboot_recommended = true;
+        ctx->summary.requires_intervention = true;
+        summary_add_warning(&ctx->summary, "service_start_reboot_may_help");
+        engine_write_summary(ctx);
         return 24;
     }
 
@@ -395,7 +511,7 @@ int engine_run_pipeline(SetupContext* ctx) {
         state_patch_version(ctx->opts->dest, ctx->target_version, sum_path);
     }
 
-    summary_write_json(&ctx->summary, ctx->opts->dest);
+    engine_write_summary(ctx);
 
     log_info("Setup finished with status: %s (exit code %d).", ctx->summary.status, ctx->final_exit_code);
 

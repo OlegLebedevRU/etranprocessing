@@ -676,14 +676,18 @@ bool l4c_mf_encoder_is_supported(void) {
         return false;
     }
 
-    /* Раннего bailout до Activate больше нет: Intel ActivateObject ~1–4 с —
-     * именно он и есть «редкое ожидание до 5 с». Fail-closed только в конце. */
+    /* A synchronous MFT call cannot be interrupted here. Do not start another
+     * activation once the shared probe budget has elapsed. */
 
     /* Перебор всех HW MFT: crafted на свежем transform, затем fallback
      * available-type — тоже на свежем Activate (dirty MFT не переиспользуем). */
     for (i = 0; i < count && !supported; ++i) {
         int attempt;
         for (attempt = 0; attempt < 2 && !supported; ++attempt) {
+            if (l4c_clock_monotonic_ms() - start_ms >= L4C_MFT_PROBE_BUDGET_MS) {
+                fail_reason = "timeout";
+                break;
+            }
             pTransform = NULL;
             hr = activate_unlocked(ppActivate[i], &pTransform);
             if (FAILED(hr) || !pTransform) break;
@@ -704,8 +708,12 @@ bool l4c_mf_encoder_is_supported(void) {
     CoTaskMemFree(ppActivate);
     g_mf.pfn_MFShutdown();
 
-    /* Fail-closed: true только если переговоры уложились в бюджет.
-     * Успех за бюджетом не выбрасываем — сохраняем ok (конфиг уже найден). */
+    /* A late success still exceeded the advertised discovery budget. Use the
+     * OpenH264 fallback and retry hardware discovery at a later process start. */
+    if (l4c_clock_monotonic_ms() - start_ms > L4C_MFT_PROBE_BUDGET_MS) {
+        supported = false;
+        fail_reason = "timeout";
+    }
     if (supported) {
         s_probe_cached = 1;
         mft_cache_save(1, "ok", l4c_clock_monotonic_ms() - start_ms);

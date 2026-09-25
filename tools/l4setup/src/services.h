@@ -30,6 +30,8 @@ typedef void (*ServiceLifecycleCallback)(
     void* user_data
 );
 
+typedef bool (*ServiceFailureDecisionCallback)(const wchar_t* svc_name, void* user_data);
+
 /**
  * Configure environment:
  * - Update system PATH in HKLM Environment with l4tools subdirectories.
@@ -38,6 +40,7 @@ typedef void (*ServiceLifecycleCallback)(
  * - Set permissions on mosquitto\log.
  */
 bool services_configure_environment(const wchar_t* dest_dir);
+bool services_prepare_mosquitto(const wchar_t* dest_dir);
 
 /**
  * Register or update the 4 core Windows services:
@@ -83,7 +86,10 @@ bool services_stop_single_service(
  */
 bool services_start_all_in_order(
     ServiceLifecycleCallback cb,
-    void* user_data
+    ServiceFailureDecisionCallback on_failure,
+    void* user_data,
+    bool* out_partial,
+    DWORD out_attempts[4]
 );
 
 /**

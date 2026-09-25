@@ -287,12 +287,15 @@ static const test_entry_t all_tests[] = {
     TEST(test_logger_queue_and_p95_wire_contract),
 };
 
-int main(void) {
+int main(int argc, char **argv) {
     int pass = 0, fail = 0;
     size_t i, total = sizeof(all_tests) / sizeof(all_tests[0]);
+    size_t selected = 0;
     printf("l4capture test runner: %zu tests\n\n", total);
     fflush(stdout);
     for (i = 0; i < total; ++i) {
+        if (argc > 1 && strcmp(argv[1], all_tests[i].name) != 0) continue;
+        ++selected;
         int rc = all_tests[i].fn();
         if (rc == 0) {
             printf("  [PASS] %s\n", all_tests[i].name);
@@ -303,7 +306,7 @@ int main(void) {
         }
         fflush(stdout);
     }
-    printf("\n%d passed, %d failed, %zu total\n", pass, fail, total);
+    printf("\n%d passed, %d failed, %zu selected\n", pass, fail, selected);
     fflush(stdout);
-    return fail ? 1 : 0;
+    return (fail || selected == 0) ? 1 : 0;
 }

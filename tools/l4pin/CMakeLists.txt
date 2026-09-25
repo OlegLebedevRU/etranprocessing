@@ -16,6 +16,7 @@ include_directories(src)
 
 set(SOURCES
     src/main.c
+    src/gui.c
     src/url_finder.c
     src/http_client.c
     src/xml_utils.c

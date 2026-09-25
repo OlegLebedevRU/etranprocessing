@@ -2,6 +2,12 @@
 
 All notable changes to the `l4pin` (Leo4 Terminal Certificate Installer) component will be documented in this file.
 
+## Unreleased (1.8.1 candidate)
+
+- Default graphical enrollment flow with masked PIN, issuer-matched certificate list, expiry guard and explicit replacement confirmation; CLI remains available for unattended use.
+- New CNG container per enrollment; local failures clean up only the newly created key. Added operation, store and status diagnostics without logging PIN or CA response bodies.
+- Stage and verify the new certificate/key binding before retiring matching old certificates. Live certificate issuance and failure recovery remain outside the current test plan.
+
 ## [1.7.2] - 2026-09-14
 
 ### Changed

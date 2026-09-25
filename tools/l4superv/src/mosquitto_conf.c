@@ -20,20 +20,24 @@ static void get_forward_slash_path(const wchar_t* in_path, char* out_buf, size_t
     }
 }
 
-static void ensure_log_dir_exists(const wchar_t* base_path) {
+static bool ensure_log_dir_exists(const wchar_t* base_path) {
     wchar_t mosq_dir[MAX_PATH];
     swprintf_s(mosq_dir, MAX_PATH, L"%s\\mosquitto", base_path);
-    CreateDirectoryW(mosq_dir, NULL);
+    if (!CreateDirectoryW(mosq_dir, NULL) && GetLastError() != ERROR_ALREADY_EXISTS) return false;
+    DWORD attributes = GetFileAttributesW(mosq_dir);
+    if (attributes == INVALID_FILE_ATTRIBUTES || !(attributes & FILE_ATTRIBUTE_DIRECTORY)) return false;
 
     wchar_t log_dir[MAX_PATH];
     swprintf_s(log_dir, MAX_PATH, L"%s\\mosquitto\\log", base_path);
-    CreateDirectoryW(log_dir, NULL);
-    svc_set_dir_permissions(log_dir);
+    if (!CreateDirectoryW(log_dir, NULL) && GetLastError() != ERROR_ALREADY_EXISTS) return false;
+    attributes = GetFileAttributesW(log_dir);
+    if (attributes == INVALID_FILE_ATTRIBUTES || !(attributes & FILE_ATTRIBUTE_DIRECTORY)) return false;
+    return svc_set_mosquitto_log_permissions(log_dir);
 }
 
 bool mosquitto_conf_generate_standby(const wchar_t* base_path, int port) {
     if (!base_path) return false;
-    ensure_log_dir_exists(base_path);
+    if (!ensure_log_dir_exists(base_path)) return false;
 
     wchar_t conf_path[MAX_PATH];
     swprintf_s(conf_path, MAX_PATH, L"%s\\mosquitto\\mosquitto.conf", base_path);
@@ -71,7 +75,7 @@ bool mosquitto_conf_generate_active(const wchar_t* base_path,
                                     const char* sn,
                                     const wchar_t* custom_tmpl_path) {
     if (!base_path || !sn || sn[0] == '\0') return false;
-    ensure_log_dir_exists(base_path);
+    if (!ensure_log_dir_exists(base_path)) return false;
 
     wchar_t conf_path[MAX_PATH];
     swprintf_s(conf_path, MAX_PATH, L"%s\\mosquitto\\mosquitto.conf", base_path);

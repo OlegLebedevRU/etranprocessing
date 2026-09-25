@@ -19,34 +19,34 @@ BEGIN
 END
 
 // Dialog: Main Setup UI
-IDD_MAIN_DIALOG DIALOGEX 0, 0, 380, 280
+IDD_MAIN_DIALOG DIALOGEX 0, 0, 400, 330
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX
 CAPTION "Leo4 Setup - Installation & Lifecycle"
-FONT 9, "Segoe UI", 400, 0, 0x1
+FONT 10, "Segoe UI", 400, 0, 0x1
 BEGIN
-    LTEXT           "Leo4 Zero-Touch Setup", IDC_STATIC_HEADER, 15, 10, 350, 16
-    LTEXT           "Target Version: 1.7.7 | Operation: Install", IDC_STATIC_VER_INFO, 15, 27, 350, 11
-    LTEXT           "Destination: C:\\l4tools", IDC_STATIC_PATH_INFO, 15, 39, 350, 11
-    LTEXT           "Safe zero-touch lifecycle (no automatic reboot).", IDC_STATIC_NOTICE, 15, 51, 350, 11
+    LTEXT           "Leo4 Zero-Touch Setup", IDC_STATIC_HEADER, 15, 10, 370, 19
+    LTEXT           "Target Version: 1.8.1-beta-1 | Operation: Install", IDC_STATIC_VER_INFO, 15, 32, 370, 14
+    LTEXT           "Destination: C:\\l4tools", IDC_STATIC_PATH_INFO, 15, 48, 370, 14
+    LTEXT           "Safe lifecycle (no automatic reboot).", IDC_STATIC_NOTICE, 15, 64, 370, 14
 
-    GROUPBOX        "Background Services", IDC_STATIC_SERVICES_LBL, 15, 64, 350, 65
-    LTEXT           "Leo4Proxy:  Pending", IDC_SVC_LEO4PROXY, 25, 76, 330, 11
-    LTEXT           "mosquitto:  Pending", IDC_SVC_MOSQUITTO, 25, 88, 330, 11
-    LTEXT           "L4Con:      Pending", IDC_SVC_L4CON, 25, 100, 330, 11
-    LTEXT           "L4Superv:   Pending", IDC_SVC_L4SUPERV, 25, 112, 330, 11
+    GROUPBOX        "Background Services", IDC_STATIC_SERVICES_LBL, 15, 83, 370, 69
+    LTEXT           "Leo4Proxy:  Pending", IDC_SVC_LEO4PROXY, 25, 97, 350, 13
+    LTEXT           "mosquitto:  Pending", IDC_SVC_MOSQUITTO, 25, 110, 350, 13
+    LTEXT           "L4Con:      Pending", IDC_SVC_L4CON, 25, 123, 350, 13
+    LTEXT           "L4Superv:   Pending", IDC_SVC_L4SUPERV, 25, 136, 350, 13
 
-    LTEXT           "Phase: Ready", IDC_STATIC_PHASE, 15, 134, 270, 11
-    RTEXT           "0%", IDC_STATIC_PERCENT, 290, 134, 75, 11
-    CONTROL         "", IDC_PROGRESS_BAR, "msctls_progress32", PBS_SMOOTH | WS_CHILD | WS_VISIBLE, 15, 146, 350, 14
-    LTEXT           "Status: Ready to begin.", IDC_STATIC_STATUS, 15, 163, 270, 11
-    RTEXT           "Elapsed: 0s", IDC_STATIC_ELAPSED, 290, 163, 75, 11
+    LTEXT           "Phase: Inspect", IDC_STATIC_PHASE, 15, 158, 275, 15
+    RTEXT           "0%", IDC_STATIC_PERCENT, 305, 158, 80, 15
+    CONTROL         "", IDC_PROGRESS_BAR, "msctls_progress32", PBS_SMOOTH | WS_CHILD | WS_VISIBLE, 15, 175, 370, 16
+    LTEXT           "Checking system...", IDC_STATIC_STATUS, 15, 196, 290, 22
+    RTEXT           "Elapsed: 0s", IDC_STATIC_ELAPSED, 305, 196, 80, 22
 
-    EDITTEXT        IDC_EDIT_DETAILS, 15, 177, 350, 68, ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL | WS_BORDER
+    EDITTEXT        IDC_EDIT_DETAILS, 15, 222, 370, 67, ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL | WS_BORDER
 
-    DEFPUSHBUTTON   "Install", IDC_BTN_ACTION, 15, 254, 75, 16
-    PUSHBUTTON      "Retry", IDC_BTN_RETRY, 95, 254, 65, 16, WS_DISABLED
-    PUSHBUTTON      "Hide Details", IDC_BTN_DETAILS, 165, 254, 80, 16
-    PUSHBUTTON      "Cancel", IDCANCEL, 300, 254, 65, 16
+    DEFPUSHBUTTON   "Install", IDC_BTN_ACTION, 15, 298, 90, 24
+    PUSHBUTTON      "Retry", IDC_BTN_RETRY, 110, 298, 75, 24, WS_DISABLED
+    PUSHBUTTON      "Hide Details", IDC_BTN_DETAILS, 190, 298, 95, 24
+    PUSHBUTTON      "Cancel", IDCANCEL, 310, 298, 75, 24
 END
 
 // Version Information

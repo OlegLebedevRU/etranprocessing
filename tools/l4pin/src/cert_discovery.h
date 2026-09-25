@@ -47,6 +47,9 @@ cert_state cert_discover(const wchar_t *expected_sn, cert_info *out);
  */
 cert_state cert_discover_in_store(HCERTSTORE hStore, const wchar_t *expected_sn, cert_info *out);
 
+/** True when the certificate matches the issuer rule used by discovery. */
+bool cert_is_leo4_issuer(PCCERT_CONTEXT cert);
+
 /**
  * Returns string representation of cert_state: "valid", "expiring", "broken", "absent", or "error".
  */

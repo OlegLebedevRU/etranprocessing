@@ -38,6 +38,28 @@ bool svc_set_dir_permissions(const wchar_t* dir_path) {
     return false;
 }
 
+bool svc_set_mosquitto_log_permissions(const wchar_t* dir_path) {
+    if (!dir_path || dir_path[0] == L'\0') return false;
+    DWORD attributes = GetFileAttributesW(dir_path);
+    if (attributes == INVALID_FILE_ATTRIBUTES || !(attributes & FILE_ATTRIBUTE_DIRECTORY)) return false;
+    PSECURITY_DESCRIPTOR descriptor = NULL;
+    if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            L"D:P(A;OICI;GA;;;SY)(A;OICI;GA;;;BA)", SDDL_REVISION_1,
+            &descriptor, NULL)) return false;
+    PACL acl = NULL;
+    BOOL present = FALSE, defaulted = FALSE;
+    bool ok = false;
+    if (GetSecurityDescriptorDacl(descriptor, &present, &acl, &defaulted) && present && acl) {
+        DWORD result = SetNamedSecurityInfoW((LPWSTR)dir_path, SE_FILE_OBJECT,
+            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+            NULL, NULL, acl, NULL);
+        ok = result == ERROR_SUCCESS;
+        if (!ok) SetLastError(result);
+    }
+    LocalFree(descriptor);
+    return ok;
+}
+
 bool svc_get_binary_path(const wchar_t* svc_name, wchar_t* out_bin_path, size_t out_size) {
     if (!svc_name || !out_bin_path || out_size == 0) return false;
     out_bin_path[0] = L'\0';
@@ -484,7 +506,8 @@ bool svc_ensure_all_installed_and_running(const wchar_t* base_path) {
 
     wchar_t mosq_log_dir[MAX_PATH];
     swprintf_s(mosq_log_dir, MAX_PATH, L"%s\\mosquitto\\log", base_path);
-    svc_set_dir_permissions(mosq_log_dir);
+    if (!CreateDirectoryW(mosq_log_dir, NULL) && GetLastError() != ERROR_ALREADY_EXISTS) return false;
+    if (!svc_set_mosquitto_log_permissions(mosq_log_dir)) return false;
 
     // Ensure MOSQUITTO_DIR system and process environment variable is set
     wchar_t mosq_dir[MAX_PATH];

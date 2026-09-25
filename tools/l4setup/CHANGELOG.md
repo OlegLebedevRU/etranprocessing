@@ -1,5 +1,12 @@
 # Changelog — Leo4 Setup (`l4setup`)
 
+## Unreleased (1.8.1 candidate)
+
+- Background read-only inspection on UI open; larger controls and labeled service states.
+- Idempotent Mosquitto log-directory preparation with protected SYSTEM/Administrators ACL, verified in isolated x86/x64 tests.
+- Bounded service start attempts, immediate STOPPED failure, dependency checks, partial-deployment reporting and explicit continuation choice.
+- Preserve rollback trees on lock detection; report actual rollback result and clear the incomplete marker after successful recovery.
+
 ## [1.7.5] — 2026-09-15
 
 ### Added & Changed

@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <windows.h>
+#include <shellapi.h>
 #include <stdbool.h>
 
 #include "http_client.h"
@@ -10,8 +11,26 @@
 #include "cng_crypto.h"
 #include "cert_store.h"
 #include "cert_discovery.h"
+#include "gui.h"
 
 #define DEFAULT_KEY_NAME L"EtranTerminalKey"
+
+static bool create_fresh_key_name(WCHAR* out, size_t capacity) {
+    HCRYPTPROV provider = 0;
+    BYTE random_bytes[16] = { 0 };
+    if (!CryptAcquireContextW(&provider, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT)) return false;
+    BOOL ok = CryptGenRandom(provider, sizeof(random_bytes), random_bytes);
+    CryptReleaseContext(provider, 0);
+    if (!ok) return false;
+    int written = swprintf_s(out, capacity,
+        L"EtranTerminalKey-%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X",
+        random_bytes[0], random_bytes[1], random_bytes[2], random_bytes[3],
+        random_bytes[4], random_bytes[5], random_bytes[6], random_bytes[7],
+        random_bytes[8], random_bytes[9], random_bytes[10], random_bytes[11],
+        random_bytes[12], random_bytes[13], random_bytes[14], random_bytes[15]);
+    SecureZeroMemory(random_bytes, sizeof(random_bytes));
+    return written > 0;
+}
 
 static void print_usage(const char* prog_name) {
     printf("Leo4 Terminal Certificate Installer - l4pin (v=26 CNG Flow)\n\n");
@@ -29,7 +48,7 @@ static void print_usage(const char* prog_name) {
     printf("  --pin, -pin, -p <PIN>    6-character terminal certificate PIN code\n");
     printf("  --url, -url, -u <URL>    Base URL override (default: auto-detected via leo4proxy -> fallback)\n");
     printf("  --store, -store, -s <S>  Target store: 'machine' (LocalMachine\\MY, default) or 'user' (CurrentUser\\MY)\n");
-    printf("  --key-name, -k <NAME>    CNG key container name (default: EtranTerminalKey)\n");
+    printf("  --key-name, -k <NAME>    Explicit CNG key container name (must be unused)\n");
     printf("  --email, -e <EMAIL>      Filter certificates by email (for --status)\n");
     printf("  --status, -l, --list     List installed certificates in target store\n");
     printf("  --help, -h, /?           Show this help message\n\n");
@@ -42,7 +61,47 @@ static void print_usage(const char* prog_name) {
     printf("  %s --status\n", prog_name);
 }
 
-int main(int argc, char* argv[]) {
+static bool process_is_elevated(void) {
+    HANDLE token = NULL;
+    TOKEN_ELEVATION elevation = { 0 };
+    DWORD size = 0;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) return false;
+    BOOL ok = GetTokenInformation(token, TokenElevation, &elevation, sizeof(elevation), &size);
+    CloseHandle(token);
+    return ok && elevation.TokenIsElevated;
+}
+
+static int run_elevated_copy(void) {
+    wchar_t exe[MAX_PATH] = { 0 };
+    if (!GetModuleFileNameW(NULL, exe, MAX_PATH)) return 20;
+    const wchar_t* params = GetCommandLineW();
+    if (*params == L'"') {
+        params++;
+        while (*params && *params != L'"') params++;
+        if (*params) params++;
+    } else {
+        while (*params && *params != L' ' && *params != L'\t') params++;
+    }
+    while (*params == L' ' || *params == L'\t') params++;
+    SHELLEXECUTEINFOW info = { 0 };
+    info.cbSize = sizeof(info);
+    info.fMask = SEE_MASK_NOCLOSEPROCESS;
+    info.lpVerb = L"runas";
+    info.lpFile = exe;
+    info.lpParameters = params;
+    info.nShow = SW_SHOWNORMAL;
+    if (!ShellExecuteExW(&info)) {
+        fprintf(stderr, "Machine certificate store requires administrator privileges (UAC error %lu).\n", GetLastError());
+        return 20;
+    }
+    WaitForSingleObject(info.hProcess, INFINITE);
+    DWORD result = 20;
+    GetExitCodeProcess(info.hProcess, &result);
+    CloseHandle(info.hProcess);
+    return (int)result;
+}
+
+int l4pin_run_cli(int argc, char* argv[]) {
     // Set console output to UTF-8 for clean Russian/English text output
     SetConsoleOutputCP(CP_UTF8);
 
@@ -51,7 +110,8 @@ int main(int argc, char* argv[]) {
     bool cli_url_provided = false;
     char base_url[512] = { 0 };
     bool is_machine_store = true; // Default is LocalMachine\MY
-    WCHAR key_name[128] = DEFAULT_KEY_NAME;
+    WCHAR key_name[128] = { 0 };
+    bool key_name_explicit = false;
     bool status_mode = false;
     bool check_mode = false;
     bool is_json = false;
@@ -130,6 +190,7 @@ int main(int argc, char* argv[]) {
                    _stricmp(arg, "/k") == 0) {
             if (i + 1 < argc) {
                 MultiByteToWideChar(CP_UTF8, 0, argv[++i], -1, key_name, 128);
+                key_name_explicit = true;
             }
         } else if (_stricmp(arg, "--email") == 0 || _stricmp(arg, "-email") == 0 ||
                    _stricmp(arg, "-e") == 0 || _stricmp(arg, "/email") == 0 ||
@@ -141,6 +202,10 @@ int main(int argc, char* argv[]) {
             // Positional argument = PIN
             strncpy(pin, arg, sizeof(pin) - 1);
         }
+    }
+
+    if (!status_mode && !check_mode && is_machine_store && !process_is_elevated()) {
+        return run_elevated_copy();
     }
 
     if (status_mode) {
@@ -265,6 +330,16 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
+    if (disc_st >= CERT_STORE_ERROR) {
+        fprintf(stderr, "[ERROR] Certificate discovery failed; refusing to replace an unverified certificate.\n");
+        return (int)disc_st;
+    }
+
+    if (!key_name_explicit && !create_fresh_key_name(key_name, sizeof(key_name) / sizeof(key_name[0]))) {
+        fprintf(stderr, "[ERROR] Cannot create a fresh CNG container name.\n");
+        return 3;
+    }
+
     if (disc_st == CERT_EXPIRING && !force_reissue) {
         printf("[WARN] Existing certificate %s for %s is expiring in %d days (until %s). Proceeding with renewal...\n",
                disc_info.thumbprint_hex,
@@ -309,7 +384,6 @@ int main(int argc, char* argv[]) {
     if (!http_check(base_url, pin, tosign, "26", &check_xml, &check_xml_len)) {
         fprintf(stderr, "[ERROR] HTTP CHECK request failed.\n");
         if (check_xml) {
-            fprintf(stderr, "Response: %s\n", check_xml);
             free(check_xml);
         }
         return 2;
@@ -318,15 +392,13 @@ int main(int argc, char* argv[]) {
     CheckResponse check_resp;
     if (!parse_check_response(check_xml, &check_resp)) {
         fprintf(stderr, "[ERROR] CHECK failed: code=%d, description='%s'\n",
-                check_resp.code, check_resp.description[0] ? check_resp.description : (check_xml ? check_xml : ""));
+                check_resp.code, check_resp.description[0] ? check_resp.description : "No server description");
         free(check_xml);
         return 2;
     }
     free(check_xml);
 
     printf("      Provider: %s\n", check_resp.prov);
-    printf("      DN:       %s\n", check_resp.dn);
-    printf("      Sign:     %s\n", check_resp.sign);
 
     if (check_resp.sign[0] == '\0') {
         fprintf(stderr, "[ERROR] Server did not return 'sign' in CHECK response.\n");
@@ -347,7 +419,6 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "[ERROR] Failed to format modified Subject DN.\n");
         return 3;
     }
-    printf("      CSR DN:   %s\n", dn_with_sign);
 
     // -----------------------------------------------------------------------
     // Step 3: Generate Non-Exportable RSA 2048 Key in CNG & Create PKCS#10 CSR
@@ -383,7 +454,6 @@ int main(int argc, char* argv[]) {
     if (!http_setup(base_url, pin, check_resp.sign, pkcs10_b64, &setup_xml, &setup_xml_len)) {
         fprintf(stderr, "[ERROR] HTTP SETUP request failed.\n");
         if (setup_xml) {
-            fprintf(stderr, "Response: %s\n", setup_xml);
             free(setup_xml);
         }
         free(pkcs10_b64);
@@ -394,7 +464,7 @@ int main(int argc, char* argv[]) {
     SetupResponse setup_resp;
     if (!parse_setup_response(setup_xml, &setup_resp)) {
         fprintf(stderr, "[ERROR] SETUP failed: code=%d, description='%s'\n",
-                setup_resp.code, setup_resp.description[0] ? setup_resp.description : (setup_xml ? setup_xml : ""));
+                setup_resp.code, setup_resp.description[0] ? setup_resp.description : "No server description");
         if (setup_xml) free(setup_xml);
         free_setup_response(&setup_resp);
         return 4;
@@ -407,7 +477,7 @@ int main(int argc, char* argv[]) {
     // Step 5: Install Certificate in Windows Store & Clean by Email Filter
     // -----------------------------------------------------------------------
     printf("\n[4/5] Installing certificate to %s\\MY...\n", is_machine_store ? "LocalMachine" : "CurrentUser");
-    printf("      Deleting older certificates with matching email [%s]...\n", target_email);
+    printf("      Existing certificates will be removed only after the new certificate and key are verified.\n");
 
     CertDetails installed_details;
     if (!cert_store_install_pkcs7(
@@ -443,4 +513,13 @@ int main(int argc, char* argv[]) {
     printf("=================================================================\n");
 
     return 0;
+}
+
+int main(int argc, char* argv[]) {
+    if (argc == 1) {
+        if (!process_is_elevated()) return run_elevated_copy();
+        FreeConsole();
+        return l4pin_show_gui();
+    }
+    return l4pin_run_cli(argc, argv);
 }
