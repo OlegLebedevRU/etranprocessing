@@ -4322,9 +4322,6 @@ compatibility:
   notes: Optional tenant_id/SN guards and explicit retryable 503 are additive; legacy stop bodies remain valid.
 deployment_status: DEPLOYED
 deployed_environment: dev.leo4.ru
-feature_flags:
-  session_lock_enabled: true
-  graceful_stop_enabled: true
 deployment_evidence:
   deployed_commit: 22a50a186da25dddb19612c475bf9bcbb4a7fab2
   app1_isolated_recreate: true
@@ -4395,3 +4392,26 @@ external_artifact_reads:
     - docs/l4desk/fixtures/iot_event_feed_examples_v1.json
 ```
 <!-- CORRECTIVE_REGISTRATION:R-L4D-08B-FIX-03-MB-v1:END -->
+
+## 40. Уточнение feature flags для H-L4D-07-IOT-STOP-v1
+
+Запись дополняет неизменяемый принятый handoff обязательным полем `feature_flags`. Исходный блок `H-L4D-07-IOT-STOP-v1` сохраняется побайтно в редакции первого опубликованного commit `42d0876a08ae96f46177813307f63505a3f4d0ee`; контрактный payload и статус деплоя не меняются.
+
+<!-- HANDOFF_CLARIFICATION:C-H-L4D-07-IOT-STOP-v1-FEATURE-FLAGS-v1:BEGIN -->
+```yaml
+clarification_id: C-H-L4D-07-IOT-STOP-v1-FEATURE-FLAGS-v1
+status: ACCEPTED
+clarifies_handoff_id: H-L4D-07-IOT-STOP-v1
+immutable_handoff_commit: 42d0876a08ae96f46177813307f63505a3f4d0ee
+accepted_at_utc: 2026-09-25T14:13:00Z
+reason: required_feature_flags_omitted_from_immutable_accepted_handoff
+feature_flags:
+  session_lock_enabled: true
+  graceful_stop_enabled: true
+contract_effect:
+  apply_as_handoff_metadata: true
+  contract_payload_changed: false
+  deployment_status_changed: false
+  compatibility_changed: false
+```
+<!-- HANDOFF_CLARIFICATION:C-H-L4D-07-IOT-STOP-v1-FEATURE-FLAGS-v1:END -->
