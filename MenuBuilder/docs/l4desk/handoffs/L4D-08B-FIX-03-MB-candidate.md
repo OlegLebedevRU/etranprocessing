@@ -1,8 +1,8 @@
-# H-L4D-08B-FIX-03-MB-v1 — Candidate (DETACHED_V1, draft)
+# H-L4D-08B-FIX-03-MB-v1 — Candidate (DETACHED_V1)
 
 ```yaml
 handoff_id: H-L4D-08B-FIX-03-MB-v1
-status: DRAFT
+status: CANDIDATE
 contract_kinds:
   - RELIABLE_SESSION_LIFECYCLE
   - IOT_REMOTE_SESSION_CONSUMER
@@ -17,7 +17,7 @@ detached_candidate_approved: false
 candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-03-MB-candidate.md
 contract_version: 1.1.0
 schema_revision: '2026-09-25-v2'
-artifact_version: 1.0.0-draft
+artifact_version: 1.0.0
 implementation_commit: 5bf03b9a689fb7cf8152f012d5d5367bc6a5bf33
 artifact_paths:
   - MenuBuilder/backend/app/repositories/l4desk_repository.py
@@ -48,7 +48,7 @@ artifact_sha256:
   - 27055D3AA47843C0211CFAB8A94F83202EA929B64FB042E852FB28314666CFAD
   - 096CAF4973D1446892B084CAEDEB570B211DBB1FCAF95BBB980B53897C029C96
   - C90DA8F486629B5A9206C23750FF8C32E754A7435033AA0984708845B82E2AB4
-  - 983520BCDEBF61C36DE32E98F313BC949C3800B4C58ED30A37C0972B2F3F133D
+  - 345D348A839F56CBF0B45D31636590C95EDFC55D65CF01156A24F2E0A599CA27
 compatibility:
   backward_compatible_with:
     - H-L4D-07-IOT-STOP-v1
@@ -57,8 +57,8 @@ compatibility:
   notes: >
     Both stop HTTP paths converge on one durable exact-ID operation. New IoT and media
     sessions share one ID. Existing ambiguous IDs require explicit reconciliation.
-deployment_status: NOT_DEPLOYED
-deployed_environment: null
+deployment_status: DEPLOYED
+deployed_environment: production
 feature_flags:
   exact_session_stop_required: true
 contract_payload:
@@ -76,10 +76,10 @@ contract_payload:
     - IoT exact terminal state
     - media exact stopped state for video
   retry_owner: MenuBuilder billing stop worker
-  tests: 478 passed; ruff passed; pyright app passed
+  tests: 478 passed; ruff passed; pyright app passed; frontend build passed
+  production_smoke: start; exact-ID stop; restart without reload; exact-ID stop
 supersedes: []
 known_risks:
-  - UI and production smoke pending
   - historical media/lease IDs in provider_session_id need manual reconciliation
   - production stop_requested age and mismatch metrics unverified
 consumers:
@@ -87,5 +87,5 @@ consumers:
 next_prompt_id: L4D-14-MB
 ```
 
-Этот файл не является принятым handoff. Перевод в `CANDIDATE` требует UI-проверки,
-контролируемого production smoke и обновления отчёта с фактическим evidence.
+Этот файл является candidate после UI-проверки и production smoke. Принятие handoff
+контроллером пока не зафиксировано (`detached_candidate_approved: false`).

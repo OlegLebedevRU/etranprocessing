@@ -1,8 +1,9 @@
-# L4D-08B-FIX-03-MB — отчёт о локальной реализации
+# L4D-08B-FIX-03-MB — отчёт о реализации и production smoke
 
 Дата: 2026-09-25. Владелец: `MenuBuilder`. Ветка: `l4desk/l4d-08b-fix-03-mb`.
 Implementation commit: `5bf03b9` (полный SHA фиксируется в candidate).
-Handoff `H-L4D-08B-FIX-03-MB-v1` остаётся черновиком до UI и production smoke.
+Handoff `H-L4D-08B-FIX-03-MB-v1` подготовлен как candidate после UI и production smoke;
+принятие controller остаётся отдельным шагом.
 
 ## Контракт и состояние
 
@@ -52,14 +53,31 @@ Redis остаётся состоянием lease/presence у IoT и не явл
 `uv run ruff check --fix app tests`: passed. `uv run ruff format app tests`: passed.
 `uv run pyright app`: 0 errors. `git diff --check`: passed.
 Скан новых строк кода на типовые секреты: совпадений нет.
-Windows 7 и UI-проверки не проводились согласно указанию пользователя.
+Windows 7 не проверялась согласно указанию пользователя. `npm run build` для frontend прошёл;
+код frontend не менялся.
+
+## Deployment и UI smoke
+
+Production deployment выполнен 2026-09-25 через стандартный SCP и
+`sudo docker compose -f /home/user1/compose.yaml up -d --build menubuilder-backend`.
+Перед выкладкой шесть заменяемых backend-файлов на сервере соответствовали базовому commit
+`e64e4f9` по содержимому; SHA-256 всех шести выгруженных файлов совпали с локальными.
+Контейнер запущен, проверка schema revision 027 прошла. Публичная страница ответила 200;
+защищённый API без авторизации — ожидаемым 401. Миграция БД не требовалась.
+
+Оператор проверил в браузере на этой машине терминал 773: первая трансляция показала
+изображение, остановилась без ошибки; повторный запуск без обновления страницы вновь показал
+изображение, вторая остановка также прошла без ошибки. На сервере первая и вторая попытки
+имели разные IoT session ID (`sess-video-d4ae09337078` и `sess-video-f9ee7f4546b3`).
+Для каждой остановки логи подтверждают последовательность exact-ID IoT stop 200,
+media GET 200, exact-ID media stop 200, затем `stream/stop` 200 и удаление UI session 200.
+Это подтверждает успешный штатный цикл start → stop → immediate restart → stop на одном
+терминале. Сценарии timeout/503/409 проверены backend-тестами, но не создавались в production.
 
 ## Rollout, rollback и открытые риски
 
-Deployment и production smoke `stream/stop -> second stop -> immediate start` не проводились.
-До переключения production consumer следует проверить UI-поток с оператором на этой машине,
-затем выполнить контролируемый деплой и smoke на согласованном терминале. При rollback consumer
-нельзя отключать IoT `409 session_busy` либо возвращать старое ложное `closed`.
+Consumer развёрнут и штатный production smoke завершён. При rollback consumer нельзя отключать
+IoT `409 session_busy` либо возвращать старое ложное `closed`.
 
 Старые записи, в которых `provider_session_id` фактически является media ID или lease ID,
 не подменяются автоматически: точный IoT GET/stop для них даст расхождение, и запись останется
@@ -69,8 +87,9 @@ Deployment и production smoke `stream/stop -> second stop -> immediate start` �
 
 Остаточный риск: media lifecycle хранит state в собственной памяти и имеет SN fallback в stop API.
 Consumer теперь делает exact-ID GET до media stop и не вызывает media при неподтверждённом IoT close;
-продовый smoke должен проверить, что запущенная версия media возвращает ожидаемые поля `session_id`,
-`sn`, `state`. Метрики возраста `stop_requested` и числа расхождений на проде ещё не подтверждены.
+production smoke подтвердил совместимость запущенной версии media с exact-ID GET и stop.
+Метрики возраста `stop_requested` и числа расхождений на проде ещё не подтверждены.
 
-Cleanup: локальные тесты не создавали удалённых сессий или учётных данных. Общий worktree и
+Cleanup: обе созданные для UI smoke удалённые сессии остановлены; тестовые учётные данные
+не создавались. Общий worktree и
 соседний IoT репозиторий не изменялись этой задачей.
