@@ -13,8 +13,8 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-CONTRACT_VERSION = "1.0.0"
-SCHEMA_REVISION = "2026-09-17-v1"
+CONTRACT_VERSION = "1.1.0"
+SCHEMA_REVISION = "2026-09-25-v2"
 
 
 # --- Exceptions with Explicit Contract Mapping ---
@@ -132,7 +132,7 @@ class IotEventFeedClient:
     """Versioned async client for IoT Event Feed Contract v1.
 
     Adheres strictly to iot_event_feed_contract_v1:
-    - Version: 1.0.0
+    - Version: 1.1.0
     - Transport: internal_rest_json
     - Endpoints:
         GET /api/internal/v1/remote-session-events
@@ -440,12 +440,16 @@ class IotEventFeedClient:
         operation_id: str | None = None,
         reason: str = "user_requested",
         correlation_id: str | None = None,
+        tenant_id: int | None = None,
+        sn: str | None = None,
     ) -> dict[str, Any]:
         """Stop remote session idempotently."""
         payload = {
             "operation_id": operation_id,
             "reason": reason,
             "correlation_id": correlation_id,
+            "tenant_id": tenant_id,
+            "sn": sn,
         }
         return await self._send_request(
             method="POST",

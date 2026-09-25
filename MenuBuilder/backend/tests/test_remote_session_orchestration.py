@@ -14,6 +14,8 @@ from app.config import settings
 from app.database import get_db
 from app.main import app
 from app.models_l4desk import L4DeskAuditEvent, L4DeskRemoteSession, L4DeskTerminal
+from app.repositories.l4desk_repository import L4DeskRepository
+from app.services.iot_event_feed_client import IotEventFeedServerError
 from app.services.media_orchestrator_client import (
     MediaJanusError,
     MediaOrchestratorClient,
@@ -183,6 +185,8 @@ class MockRemoteSessionDb:
 
         # Active session lookup for terminal
         if "from l4desk_remote_sessions" in sql:
+            params = stmt.compile().params if hasattr(stmt, "compile") else {}
+            terminal_id = params.get("terminal_id_1")
             # Active session query
             if "state in" in sql:
                 active = [
@@ -190,8 +194,19 @@ class MockRemoteSessionDb:
                     for s in self.remote_sessions.values()
                     if s.state
                     in ("reserved", "start_requested", "active", "stop_requested")
+                    and (terminal_id is None or s.terminal_id == terminal_id)
                 ]
                 return MockResult(one=active[0] if active else None)
+
+            if "order by l4desk_remote_sessions.id desc" in sql:
+                matches = [
+                    s
+                    for s in self.remote_sessions.values()
+                    if terminal_id is None or s.terminal_id == terminal_id
+                ]
+                return MockResult(
+                    one=max(matches, key=lambda s: s.id) if matches else None
+                )
 
             # Query by provider_session_id
             if "provider_session_id" in sql:
@@ -228,6 +243,35 @@ class MockRemoteSessionDb:
             return MockResult(one=None)
 
         return MockResult(one=None)
+
+
+@pytest.mark.anyio
+async def test_active_lookup_uses_exact_terminal_primary_id():
+    db = MockRemoteSessionDb()
+    db.add(Terminal(id=70, device_id=700, sn="SN-70", org_id=1))
+    db.add(Terminal(id=700, device_id=70, sn="SN-700", org_id=2))
+    for session_id, tenant_id, terminal_id in ((1, 1, 70), (2, 2, 700)):
+        db.add(
+            L4DeskRemoteSession(
+                id=session_id,
+                tenant_id=tenant_id,
+                terminal_id=terminal_id,
+                operation_id=f"op-{session_id}",
+                correlation_id=f"corr-{session_id}",
+                session_type="video",
+                state="active",
+                active_at=datetime.now(UTC),
+                provider_session_id=f"iot-{session_id}",
+            )
+        )
+
+    repo = L4DeskRepository(db)
+    assert (
+        await repo.get_active_session_by_terminal_id(70)
+    ).provider_session_id == "iot-1"
+    assert (
+        await repo.get_active_session_by_terminal_id(700)
+    ).provider_session_id == "iot-2"
 
 
 # =============================================================================
@@ -496,8 +540,30 @@ async def test_compensating_stop_on_media_failure():
         patch.object(
             use_case.media_orchestrator, "start_session", new_callable=AsyncMock
         ) as mock_media,
+        patch.object(
+            use_case.media_orchestrator, "stop_session", new_callable=AsyncMock
+        ) as mock_media_stop,
+        patch.object(
+            use_case.media_orchestrator, "get_session_health", new_callable=AsyncMock
+        ) as mock_media_health,
     ):
         mock_iot_create.return_value = {"session_id": "sess-iot-compensate"}
+        mock_media_health.return_value = {
+            "session_id": "sess-iot-compensate",
+            "sn": "SN-T14",
+            "state": "active",
+        }
+        mock_iot_stop.return_value = {
+            "session_id": "sess-iot-compensate",
+            "tenant_id": 1,
+            "sn": "SN-T14",
+            "status": "closed",
+        }
+        mock_media_stop.return_value = {
+            "status": "success",
+            "session_id": "sess-iot-compensate",
+            "state": "stopped",
+        }
         mock_lease.return_value = {"lease_id": "lease-compensate-01"}
         # Media start raises Janus 502 error
         mock_media.side_effect = MediaJanusError("Janus gateway failed")
@@ -513,13 +579,12 @@ async def test_compensating_stop_on_media_failure():
         # Verify compensating stop was called on IoT
         mock_iot_stop.assert_awaited_once()
         assert mock_iot_stop.call_args[1]["session_id"] == "sess-iot-compensate"
-        assert "compensating_stop" in mock_iot_stop.call_args[1]["reason"]
-        # Verify lease was released
-        mock_release.assert_awaited_once()
+        assert mock_iot_stop.call_args[1]["reason"] == "media_start_failed"
+        mock_release.assert_not_awaited()
 
-        # Verify local session marked as failed
+        # Both providers confirmed cleanup of the exact ID.
         sess = db.remote_sessions[100]
-        assert sess.state == "failed"
+        assert sess.state == "closed"
         assert sess.reason == "media_start_failed"
 
 
@@ -559,10 +624,29 @@ async def test_compensating_stop_on_stream_start_failure():
             use_case.media_orchestrator, "stop_session", new_callable=AsyncMock
         ) as mock_media_stop,
         patch.object(
+            use_case.media_orchestrator, "get_session_health", new_callable=AsyncMock
+        ) as mock_media_health,
+        patch.object(
             use_case.iot_control, "remote_input_stream_start", new_callable=AsyncMock
         ) as mock_stream_start,
     ):
         mock_iot_create.return_value = {"session_id": "sess-stream-fail"}
+        mock_media_health.return_value = {
+            "session_id": "sess-stream-fail",
+            "sn": "SN-T15",
+            "state": "active",
+        }
+        mock_iot_stop.return_value = {
+            "session_id": "sess-stream-fail",
+            "tenant_id": 1,
+            "sn": "SN-T15",
+            "status": "closed",
+        }
+        mock_media_stop.return_value = {
+            "status": "success",
+            "session_id": "sess-stream-fail",
+            "state": "stopped",
+        }
         mock_lease.return_value = {"lease_id": "lease-stream-fail"}
         mock_media_start.return_value = {
             "status": "success",
@@ -585,10 +669,10 @@ async def test_compensating_stop_on_stream_start_failure():
         # Verify compensating stops on both media and IoT
         mock_media_stop.assert_awaited_once()
         mock_iot_stop.assert_awaited_once()
-        mock_lease_rel.assert_awaited_once()
+        mock_lease_rel.assert_not_awaited()
 
         sess = db.remote_sessions[100]
-        assert sess.state == "failed"
+        assert sess.state == "closed"
         assert sess.reason == "stream_start_failed"
 
 
@@ -628,6 +712,9 @@ async def test_graceful_stop_flow():
             use_case.media_orchestrator, "stop_session", new_callable=AsyncMock
         ) as mock_media_stop,
         patch.object(
+            use_case.media_orchestrator, "get_session_health", new_callable=AsyncMock
+        ) as mock_media_health,
+        patch.object(
             use_case.iot_control, "remote_input_status", new_callable=AsyncMock
         ) as mock_status,
         patch.object(
@@ -635,6 +722,22 @@ async def test_graceful_stop_flow():
         ) as _mock_stream_stop,
     ):
         mock_status.return_value = {"lease": {"active": False}}
+        mock_media_health.return_value = {
+            "session_id": "sess-active-70",
+            "sn": "SN-T16",
+            "state": "active",
+        }
+        mock_iot_stop.return_value = {
+            "session_id": "sess-active-70",
+            "tenant_id": 1,
+            "sn": "SN-T16",
+            "status": "closed",
+        }
+        mock_media_stop.return_value = {
+            "status": "success",
+            "session_id": "sess-active-70",
+            "state": "stopped",
+        }
         res = await use_case.stop_session(
             device_id=16,
             reason="user_closed",
@@ -646,6 +749,48 @@ async def test_graceful_stop_flow():
         assert active_sess.reason == "user_closed"
         mock_media_stop.assert_awaited_once()
         mock_iot_stop.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_stop_does_not_close_when_iot_teardown_is_retryable():
+    db = MockRemoteSessionDb()
+    db.add(Terminal(id=17, device_id=17, sn="SN-T17", org_id=1))
+    sess = L4DeskRemoteSession(
+        id=71,
+        tenant_id=1,
+        terminal_id=17,
+        operation_id="op-start-71",
+        correlation_id="corr-start-71",
+        session_type="video",
+        state="active",
+        active_at=datetime.now(UTC),
+        provider_session_id="iot-session-71",
+    )
+    db.add(sess)
+    use_case = RemoteSessionUseCase(db)
+    user = {"sub": "admin", "org_id": 1, "role_id": 1, "is_superuser": True}
+
+    with (
+        patch.object(
+            use_case.iot_adapter,
+            "stop_remote_session",
+            new_callable=AsyncMock,
+            side_effect=IotEventFeedServerError("teardown failed", status_code=503),
+        ),
+        patch.object(
+            use_case.media_orchestrator, "stop_session", new_callable=AsyncMock
+        ),
+        patch.object(
+            use_case.iot_control, "remote_input_status", new_callable=AsyncMock
+        ) as mock_status,
+    ):
+        mock_status.return_value = {"lease": {"active": False}}
+        with pytest.raises(HTTPException) as exc_info:
+            await use_case.stop_session(device_id=17, user=user)
+
+    assert exc_info.value.status_code == 503
+    assert sess.state == "stop_requested"
+    assert sess.closed_at is None
 
 
 # =============================================================================
@@ -738,6 +883,10 @@ async def test_unified_api_remote_sessions_lifecycle():
                 new_callable=AsyncMock,
             ) as _mock_media_stop,
             patch(
+                "app.services.remote_session_use_case.media_orchestrator_client.get_session_health",
+                new_callable=AsyncMock,
+            ) as _mock_media_health,
+            patch(
                 "app.services.remote_session_use_case.iot_client.remote_input_status",
                 new_callable=AsyncMock,
             ) as mock_input_status,
@@ -747,6 +896,22 @@ async def test_unified_api_remote_sessions_lifecycle():
             ) as _mock_stream_stop,
         ):
             mock_input_status.return_value = {"lease": {"active": False}}
+            _mock_iot_stop.return_value = {
+                "session_id": "sess-api-001",
+                "tenant_id": 1,
+                "sn": "SN-T20",
+                "status": "closed",
+            }
+            _mock_media_stop.return_value = {
+                "status": "success",
+                "session_id": "sess-api-001",
+                "state": "stopped",
+            }
+            _mock_media_health.return_value = {
+                "session_id": "sess-api-001",
+                "sn": "SN-T20",
+                "state": "active",
+            }
             stop_resp = await ac.post(
                 "/api/v1/remote-sessions/stop",
                 headers=headers,
@@ -755,6 +920,45 @@ async def test_unified_api_remote_sessions_lifecycle():
             assert stop_resp.status_code == 200
             assert stop_resp.json()["status"] == "success"
             assert stop_resp.json()["state"] == "closed"
+
+            repeated = await ac.post(
+                "/api/v1/remote-sessions/sess-api-001/stop", headers=headers
+            )
+            assert repeated.status_code == 200
+            _mock_iot_stop.assert_awaited_once()
+
+        # A confirmed close releases the local exclusion immediately.
+        with (
+            patch(
+                "app.services.remote_session_use_case.iot_event_feed_client.create_remote_session",
+                new=AsyncMock(return_value={"session_id": "sess-api-002"}),
+            ),
+            patch(
+                "app.services.remote_session_use_case.iot_client.remote_input_acquire_lease",
+                new=AsyncMock(return_value={"lease_id": "lease-api-002"}),
+            ),
+            patch(
+                "app.services.remote_session_use_case.iot_client.remote_input_status",
+                new=AsyncMock(return_value={"lease": {"active": False}}),
+            ),
+            patch(
+                "app.services.remote_session_use_case.media_orchestrator_client.start_session",
+                new=AsyncMock(
+                    return_value={"session_id": "sess-api-002", "mountpoint_id": 20}
+                ),
+            ),
+            patch(
+                "app.services.remote_session_use_case.iot_client.remote_input_stream_start",
+                new=AsyncMock(return_value={"stream_instance_id": "inst-api-002"}),
+            ),
+        ):
+            restarted = await ac.post(
+                "/api/v1/remote-sessions/start",
+                headers=headers,
+                json={"device_id": 20, "session_type": "video"},
+            )
+            assert restarted.status_code == 200
+            assert restarted.json()["session_id"] == "sess-api-002"
 
 
 # =============================================================================
@@ -870,10 +1074,31 @@ async def test_legacy_video_and_control_endpoints_satisfy_active_session_constra
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         headers = auth_headers(user_id=1, org_id=1, role_id=1, is_su=True)
 
-        with patch(
-            "app.routers.video_control.iot_client.remote_input_acquire_lease",
-            new_callable=AsyncMock,
-        ) as mock_acq:
+        with (
+            patch(
+                "app.routers.video_control.iot_client.remote_input_acquire_lease",
+                new_callable=AsyncMock,
+            ) as mock_acq,
+            patch(
+                "app.services.remote_session_use_case.iot_event_feed_client.create_remote_session",
+                new_callable=AsyncMock,
+            ) as mock_iot_create,
+            patch(
+                "app.routers.video_control.iot_client.remote_input_status",
+                new_callable=AsyncMock,
+            ) as mock_input_status,
+        ):
+            mock_iot_create.return_value = {"session_id": "sess-console-70"}
+            mock_input_status.side_effect = [
+                {"lease": {"active": False}},
+                {
+                    "lease": {
+                        "active": True,
+                        "lease_id": "lease-console-70",
+                        "expires_at": "2026-09-20T12:00:00Z",
+                    }
+                },
+            ]
             mock_acq.return_value = {
                 "lease_id": "lease-console-70",
                 "expires_at": "2026-09-20T12:00:00Z",
@@ -914,7 +1139,24 @@ async def test_legacy_video_and_control_endpoints_satisfy_active_session_constra
                 "app.routers.video_control.media_orchestrator_client.stop_session",
                 new_callable=AsyncMock,
             ),
+            patch(
+                "app.services.remote_session_use_case.iot_event_feed_client.create_remote_session",
+                new_callable=AsyncMock,
+            ) as mock_iot_create,
+            patch(
+                "app.services.remote_session_use_case.media_orchestrator_client.start_session",
+                new_callable=AsyncMock,
+            ) as mock_unified_media,
+            patch(
+                "app.services.remote_session_use_case.iot_client.remote_input_status",
+                new_callable=AsyncMock,
+            ) as mock_input_status,
         ):
+            mock_iot_create.return_value = {"session_id": "iot-stream-70"}
+            mock_unified_media.return_value = {"session_id": "iot-stream-70"}
+            mock_input_status.return_value = {
+                "lease": {"active": True, "lease_id": "lease-stream-70"}
+            }
             mock_stream.return_value = {
                 "stream_instance_id": "stream-inst-70",
                 "result": "started",

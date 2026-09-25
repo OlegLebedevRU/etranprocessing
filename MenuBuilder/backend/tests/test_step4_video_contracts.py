@@ -96,7 +96,11 @@ async def test_stream_stop_conflict_not_swallowed(mock_db_session, operator_head
             ),
             patch.object(
                 iot_client,
-                "remote_input_stream_stop",
+                "remote_input_status",
+                new=AsyncMock(return_value={"lease": {"lease_id": "lease-abc"}}),
+            ),
+            patch(
+                "app.services.remote_session_use_case.RemoteSessionUseCase.stop_session",
                 side_effect=HTTPException(
                     status_code=409,
                     detail={
@@ -137,8 +141,8 @@ async def test_stream_stop_does_not_clear_new_lease_pin(
             ),
             patch.object(
                 iot_client,
-                "remote_input_stream_stop",
-                return_value={"result": "stopped"},
+                "remote_input_status",
+                new=AsyncMock(return_value={"lease": {"lease_id": "new-lease-id"}}),
             ),
         ):
             resp = await ac.post(
@@ -146,7 +150,7 @@ async def test_stream_stop_does_not_clear_new_lease_pin(
                 json={"lease_id": "old-lease-id"},
                 headers=operator_headers,
             )
-            assert resp.status_code == 200
+            assert resp.status_code == 409
             # PIN of new lease must still be intact!
             assert 1 in _mountpoint_pins
             assert _mountpoint_pins[1]["lease_id"] == "new-lease-id"
@@ -313,14 +317,12 @@ async def test_stream_stop_idempotent_known_stopped(mock_db_session, operator_he
             ),
             patch.object(
                 iot_client,
-                "remote_input_stream_stop",
-                side_effect=HTTPException(
-                    status_code=409,
-                    detail={
-                        "code": "already_stopped",
-                        "detail": "Stream already stopped",
-                    },
-                ),
+                "remote_input_status",
+                new=AsyncMock(return_value={"lease": {"lease_id": "lease-abc"}}),
+            ),
+            patch(
+                "app.services.remote_session_use_case.RemoteSessionUseCase.stop_session",
+                new=AsyncMock(return_value={"status": "success", "state": "closed"}),
             ),
         ):
             resp = await ac.post(
@@ -339,12 +341,15 @@ async def test_stream_stop_idempotent_known_stopped(mock_db_session, operator_he
             ),
             patch.object(
                 iot_client,
-                "remote_input_stream_stop",
+                "remote_input_status",
+                new=AsyncMock(return_value={"lease": {"lease_id": "lease-abc"}}),
+            ),
+            patch(
+                "app.services.remote_session_use_case.RemoteSessionUseCase.stop_session",
                 side_effect=HTTPException(
-                    status_code=504,
+                    status_code=503,
                     detail={
-                        "code": "terminal_timeout",
-                        "detail": "Agent command timed out",
+                        "code": "session_stop_pending",
                     },
                 ),
             ),
@@ -354,8 +359,7 @@ async def test_stream_stop_idempotent_known_stopped(mock_db_session, operator_he
                 json={"lease_id": "lease-abc"},
                 headers=operator_headers,
             )
-            assert resp.status_code == 200
-            assert resp.json()["result"] == "stopped"
+            assert resp.status_code == 503
 
 
 @pytest.mark.anyio
@@ -374,7 +378,11 @@ async def test_stream_stop_epoch_and_tenant_conflict_raises(
                 ),
                 patch.object(
                     iot_client,
-                    "remote_input_stream_stop",
+                    "remote_input_status",
+                    new=AsyncMock(return_value={"lease": {"lease_id": "lease-abc"}}),
+                ),
+                patch(
+                    "app.services.remote_session_use_case.RemoteSessionUseCase.stop_session",
                     side_effect=HTTPException(
                         status_code=409,
                         detail={"code": err_code, "detail": f"Conflict: {err_code}"},

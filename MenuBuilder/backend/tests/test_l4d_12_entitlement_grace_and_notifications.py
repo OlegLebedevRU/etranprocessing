@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, cast
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -122,6 +123,8 @@ class MockIotAdapter:
         operation_id: str | None = None,
         reason: str = "user_requested",
         correlation_id: str | None = None,
+        tenant_id: int | None = None,
+        sn: str | None = None,
     ) -> dict[str, Any]:
         if self.fail_always or self.fail_next:
             self.fail_next = False
@@ -135,6 +138,8 @@ class MockIotAdapter:
             "reason": reason,
             "correlation_id": correlation_id,
             "status": "closed",
+            "tenant_id": tenant_id,
+            "sn": sn,
         }
         self.stop_calls.append(call_data)
         return call_data
@@ -788,6 +793,19 @@ async def test_active_session_stop_on_blocked():
 
     mock_iot = MockIotAdapter()
 
+    for terminal_id in (101, 102):
+        fake_db.add(
+            L4DeskTerminal(
+                terminal_id=terminal_id,
+                tenant_id=tenant_id,
+                ordinal=terminal_id - 100,
+                sn=f"SN-TERM-{terminal_id}",
+                external_terminal_id=f"ext-{terminal_id}",
+                operation_id=f"op-term-{terminal_id}",
+                correlation_id=f"corr-term-{terminal_id}",
+            )
+        )
+
     # Active video session
     sess_video = L4DeskRemoteSession(
         id=1,
@@ -818,9 +836,31 @@ async def test_active_session_stop_on_blocked():
     fake_db.add(sess_console)
 
     # Stop worker runs for blocked tenant
-    results = await FinStopOutboxService.stop_sessions_for_blocked_tenant(
-        db, tenant_id=tenant_id, iot_adapter=mock_iot
-    )
+    with (
+        patch(
+            "app.services.financial_core.stop_outbox.media_orchestrator_client.stop_session",
+            new=AsyncMock(
+                return_value={
+                    "status": "success",
+                    "session_id": "iot-video-123",
+                    "state": "stopped",
+                }
+            ),
+        ),
+        patch(
+            "app.services.financial_core.stop_outbox.media_orchestrator_client.get_session_health",
+            new=AsyncMock(
+                return_value={
+                    "session_id": "iot-video-123",
+                    "sn": "SN-TERM-101",
+                    "state": "active",
+                }
+            ),
+        ),
+    ):
+        results = await FinStopOutboxService.stop_sessions_for_blocked_tenant(
+            db, tenant_id=tenant_id, iot_adapter=mock_iot
+        )
     assert len(results) == 2
     assert all(r["status"] == "closed" for r in results)
     assert len(mock_iot.stop_calls) == 2
@@ -842,6 +882,17 @@ async def test_stop_outbox_retry_on_provider_failure():
 
     # Mock adapter that fails on first call, succeeds on retry
     mock_iot = MockIotAdapter(fail_next=True)
+    fake_db.add(
+        L4DeskTerminal(
+            terminal_id=101,
+            tenant_id=tenant_id,
+            ordinal=1,
+            sn="SN-TERM-101",
+            external_terminal_id="ext-101",
+            operation_id="op-term-101",
+            correlation_id="corr-term-101",
+        )
+    )
 
     session = L4DeskRemoteSession(
         id=3,
@@ -863,7 +914,7 @@ async def test_stop_outbox_retry_on_provider_failure():
     )
     assert len(res1) == 1
     assert res1[0]["status"] == "stop_requested"
-    assert "Simulated IoT stop provider timeout" in (res1[0]["error"] or "")
+    assert res1[0]["error"] == "remote stop pending"
     assert session.state == "stop_requested"  # Kept in outbox!
 
     # Second attempt: retry worker processes outbox

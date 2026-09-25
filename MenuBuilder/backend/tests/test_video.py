@@ -134,10 +134,9 @@ async def test_session_cleanup_clears_cached_pin(mock_db_session, operator_token
 
     headers = {"Authorization": f"Bearer {operator_token}"}
 
-    with patch.object(
-        iot_client,
-        "remote_input_stream_stop",
-        new=AsyncMock(return_value={"result": "stopped"}),
+    with patch(
+        "app.services.remote_session_use_case.RemoteSessionUseCase.stop_session",
+        new=AsyncMock(return_value={"status": "success", "state": "closed"}),
     ):
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"

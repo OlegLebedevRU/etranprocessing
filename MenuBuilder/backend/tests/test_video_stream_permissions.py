@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -221,8 +222,22 @@ async def test_console_lease_only_superuser(
         "scope": "console",
     }
 
-    with patch.object(
-        iot_client, "remote_input_acquire_lease", new=AsyncMock(return_value=fake_lease)
+    with (
+        patch(
+            "app.services.remote_session_use_case.RemoteSessionUseCase.start_session",
+            new=AsyncMock(
+                return_value=SimpleNamespace(
+                    lease_id=fake_lease["lease_id"],
+                    ws_path=f"/api/v1/video/devices/1/control/ws/{fake_lease['lease_id']}",
+                    session_id="iot-console-1",
+                )
+            ),
+        ),
+        patch.object(
+            iot_client,
+            "remote_input_status",
+            new=AsyncMock(return_value={"lease": fake_lease}),
+        ),
     ):
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
@@ -377,6 +392,14 @@ async def test_stream_start_stop_events_matrix(
             "app.routers.video_control.media_orchestrator_client.stop_session",
             new=AsyncMock(return_value={"status": "success"}),
         ),
+        patch(
+            "app.services.remote_session_use_case.RemoteSessionUseCase.start_session",
+            new=AsyncMock(return_value=SimpleNamespace(stream_instance_id="inst-1")),
+        ),
+        patch(
+            "app.services.remote_session_use_case.RemoteSessionUseCase.stop_session",
+            new=AsyncMock(return_value={"status": "success", "state": "closed"}),
+        ),
     ):
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
@@ -490,9 +513,7 @@ async def test_video_session_pin_only_for_lease_holder(
     mock_use_case.start_session = AsyncMock(
         side_effect=[
             mock_result,
-            HTTPException(
-                status_code=403, detail="только держателю активной аренды"
-            ),
+            HTTPException(status_code=403, detail="только держателю активной аренды"),
         ]
     )
 
@@ -600,6 +621,10 @@ async def test_app1_409_and_nack_propagation(mock_db_session, operator_token):
         # 3. nack code propagation on stream start
         with (
             patch.object(iot_client, "remote_input_stream_start", new=raise_nack),
+            patch(
+                "app.services.remote_session_use_case.RemoteSessionUseCase.start_session",
+                new=raise_nack,
+            ),
             patch(
                 "app.routers.video_control.media_orchestrator_client.start_session",
                 new=AsyncMock(return_value={"status": "success"}),
