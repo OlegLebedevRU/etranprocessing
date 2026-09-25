@@ -1,5 +1,6 @@
 # H-L4D-08B-FIX-03-MB-v1 — Candidate (DETACHED_V1)
 
+<!-- HANDOFF:H-L4D-08B-FIX-03-MB-v1:BEGIN -->
 ```yaml
 handoff_id: H-L4D-08B-FIX-03-MB-v1
 status: CANDIDATE
@@ -11,14 +12,16 @@ producer_prompt_id: L4D-08B-FIX-03-MB
 producer_scope_project: MenuBuilder
 producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-03-MB-report.md
 producer_branch: l4desk/l4d-08b-fix-03-mb
+producer_commit: 5bf03b9a689fb7cf8152f012d5d5367bc6a5bf33
+report_commit: 4f28187b4f2b6e176f31bfd4b8de4a8533af8d0f
+accepted_at_utc: null
 registration_id: R-L4D-08B-FIX-03-MB-v1
 candidate_format: DETACHED_V1
-detached_candidate_approved: false
+detached_candidate_approved: true
 candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-03-MB-candidate.md
 contract_version: 1.1.0
 schema_revision: '2026-09-25-v2'
 artifact_version: 1.0.0
-implementation_commit: 5bf03b9a689fb7cf8152f012d5d5367bc6a5bf33
 artifact_paths:
   - MenuBuilder/backend/app/repositories/l4desk_repository.py
   - MenuBuilder/backend/app/routers/video_control.py
@@ -35,20 +38,20 @@ artifact_paths:
   - MenuBuilder/backend/tests/test_video_stream_permissions.py
   - MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-03-MB-report.md
 artifact_sha256:
-  - 9A47CF059C0071ADE3D6C4661F6FBDFECD1EFCCCCA6598B42CA84461B16BFB95
-  - F595BCDE4887C1D5F4980BCCA59DFE9C3A76F60905D3DF18601A0F29D8D13526
-  - 62A18783CDDFE85A6B9B5B393CD1C85020F92FF2B9C1BFCB29134D46612D1321
-  - D48984846262486F5850E8BFBE2910C3C085248A6BC8D7685047365F37E615AF
-  - 30DD1A667367A08F3789AAEE99058C6841D7432DF42F66A914E4D8D786B2C5D6
-  - 35056A786984170FFC11BD2A1244A1106BB78F515D486944BDBDE4C01C902DC2
-  - 3E51F00DDBD2165E407F18D57904D75EC43586B6A7849CE876630528E2BB09B7
-  - 74395CB69C4C9A463FF53D81045CEDD195791DE9A05FD01FBE4A938DE7C824C2
-  - D1EA87B2B6EDD0B8D77E287193CF8675E13E53932C364DA6E3CBADED8F7BC9A3
-  - D5331A1C07194C116C89F7FE3871C37B51A1D5C89DC915C63148AB1495937009
-  - 27055D3AA47843C0211CFAB8A94F83202EA929B64FB042E852FB28314666CFAD
-  - 096CAF4973D1446892B084CAEDEB570B211DBB1FCAF95BBB980B53897C029C96
-  - C90DA8F486629B5A9206C23750FF8C32E754A7435033AA0984708845B82E2AB4
-  - 345D348A839F56CBF0B45D31636590C95EDFC55D65CF01156A24F2E0A599CA27
+  - 6c90ccd80b3f5a8bead34347905fc3006f5a5cb5e43211a0d4a90394ccda5dca
+  - 0225ef93ce27d2f02d5cce47264011c94a2527797d34cb656ef1d5372901dec4
+  - 053604b9381f872dfc8293b787a164615790ccf82bea6ea3b5760e1106462f33
+  - 1065a5807d614ece571eabf93fff9646db0c2e53d01f691425d4558330b3015c
+  - 30dd1a667367a08f3789aaee99058c6841d7432df42f66a914e4d8d786b2c5d6
+  - 4743c7b71a1bcc7f62e0a1a640f9621394be48c825ab2a0855f8e457d87848cf
+  - fcf22e75d74ceed9f7fc73c97ae0a5c0aad440135c86a900183471d9b56c4714
+  - b70db0d0513733857083fb66a565d2216f06e9125a429d8d5ac097fa92e2f1c7
+  - d1ea87b2b6edd0b8d77e287193cf8675e13e53932c364da6e3cbaded8f7bc9a3
+  - 216954cf36f5f5c8efe7856cd3809f579566e4051cdf74e8ff2b11b363ded1ac
+  - 9e03fcec978394ce68eb179c9b29396e140287d5b1ba94756ba8efeecacb85c8
+  - ded20d91f962b385bd1dddb34b6aed8115bae30cbbaefa740d6d5aa9b2b11717
+  - c90da8f486629b5a9206c23750ff8c32e754a7435033aa0984708845b82e2ab4
+  - 00fce332bd8206a8d7e648f66c48c78ae78d6021a4b1d1f5dfd139b64ac355e0
 compatibility:
   backward_compatible_with:
     - H-L4D-07-IOT-STOP-v1
@@ -86,6 +89,8 @@ consumers:
   - L4D-14-MB
 next_prompt_id: L4D-14-MB
 ```
+<!-- HANDOFF:H-L4D-08B-FIX-03-MB-v1:END -->
 
 Этот файл является candidate после UI-проверки и production smoke. Принятие handoff
-контроллером пока не зафиксировано (`detached_candidate_approved: false`).
+контроллером пока не зафиксировано. `detached_candidate_approved: true` подтверждает
+разрешённый формат DETACHED_V1 в регистрации, а не принятие результата.
