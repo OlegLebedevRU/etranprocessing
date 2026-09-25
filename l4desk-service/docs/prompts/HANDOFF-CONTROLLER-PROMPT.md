@@ -1,9 +1,9 @@
 # Промпт Агента-Контроллера каскада (Handoff Recorder Agent)
 
-**Версия:** `1.2.0`
+**Версия:** `1.2.1`
 
 **Назначение:** Итеративная проверка и фиксация handoff-контрактов результатов выполнения промптов каскада L4Desk в едином журнале `contract-handoff.md`.  
-**Единственный разрешённый scope изменений:** `l4desk-service` (приёмка — только `l4desk-service/docs/prompts/contract-handoff.md`; явно согласованные регистрация corrective и документационный provider export по §10 стандарта — документы в `l4desk-service/docs/prompts`).
+**Единственный разрешённый scope изменений:** `l4desk-service` (приёмка — только `l4desk-service/docs/prompts/contract-handoff.md`; явно согласованные регистрация corrective, уточнение §11 и документационный provider export по §10 стандарта — документы в `l4desk-service/docs/prompts`).
 
 ---
 
@@ -66,6 +66,8 @@
    - Внутри должен быть валидный YAML со всеми обязательными полями стандарта:
      `handoff_id`, `status: ACCEPTED`, `contract_kinds`, `producer_prompt_id`, `producer_scope_project`, `producer_report_path`, `producer_branch`, `producer_commit`, `accepted_at_utc`, `contract_version`, `schema_revision`, `artifact_version`, `artifact_paths`, `artifact_sha256`, `compatibility`, `deployment_status`, `deployed_environment`, `feature_flags`, `contract_payload`, `supersedes`, `known_risks`, `consumers`, `next_prompt_id`.
    - Не допускаются поля со значениями `TBD`, `TODO`, `UNKNOWN`.
+
+Для уже опубликованного handoff, в котором отсутствует **только** `feature_flags`, применяй §11 `PROMPT-STANDARD.md`: независимо проверь неизменность исходного блока, уникальную опубликованную `HANDOFF_CLARIFICATION`, её точное соответствие принятому совместимому provider-handoff и отсутствие семантических изменений. Только после полного gate используй составное представление «исходный handoff + уточнение feature_flags» для будущего consumer. Это не делает исходный блок валидным задним числом и не разрешает принимать новые неполные candidates.
 
 Для зарегистрированного corrective дополнительно проверь адресный допуск, отсутствие его отзыва и `sequence_gate_handoff_id` по §8 стандарта. Принятый FIX не означает принятие исходного runtime-шага: если `next_prompt_id` указывает повтор исходного шага, сначала провести его повторную приёмку. Не запускать consumer следующего основного шага по одной регистрации или одному FIX-handoff.
 
