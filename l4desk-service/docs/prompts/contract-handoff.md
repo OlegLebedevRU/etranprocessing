@@ -4512,3 +4512,43 @@ consumers:
 next_prompt_id: L4D-14-MB
 ```
 <!-- HANDOFF:H-L4D-08B-FIX-03-MB-v1:END -->
+
+## 42. Регистрация pre-17C corrective L4D-17C-VIDEO-WATCH-IOT-01
+
+Пользователь разрешил архитектурно заменить browser status polling до начала 17C;
+IoT producer выделен в отдельный scope. Runtime приёмка 17C остаётся в ожидании
+до публикации и принятия нового provider handoff. Для этого каскада фиксируется
+один app1 worker; межворкерная доставка событий отложена после каскада.
+
+<!-- CORRECTIVE_REGISTRATION:R-L4D-17C-VIDEO-WATCH-IOT-01-v1:BEGIN -->
+```yaml
+registration_id: R-L4D-17C-VIDEO-WATCH-IOT-01-v1
+status: AUTHORIZED
+authorized_by: Cascade Controller
+authorization_basis: explicit_user_request_for_architectural_video_polling_fix_before_17c
+registered_at_utc: 2026-09-25T20:41:19Z
+prompt_id: L4D-17C-VIDEO-WATCH-IOT-01
+prompt_path: l4desk-service/docs/prompts/L4D-17C-VIDEO-WATCH-IOT-01.md
+scope_project: iot-rpc-rest-app
+scope_root: D:\work\iot.leo4.ru\iot-rpc-rest-app
+blocked_prompt_id: L4D-17C-IOT
+authorized_inputs:
+  - handoff_id: H-L4D-07-IOT-STOP-v1
+    contract_version: 1.1.0
+    producer_commit: 22a50a186da25dddb19612c475bf9bcbb4a7fab2
+sequence_gate_handoff_id: H-L4D-16-MB-v1
+output_handoff_id: H-L4D-17C-VIDEO-WATCH-IOT-01-v1
+next_prompt_id: L4D-17C-IOT
+report_path: docs/l4desk/handoffs/L4D-17C-VIDEO-WATCH-IOT-01-report.md
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: docs/l4desk/handoffs/L4D-17C-VIDEO-WATCH-IOT-01-candidate.md
+publication_required_before_execution: true
+grant_scope: iot_rpc_rest_app_only
+runtime_acceptance: GRANTED
+blocked_next_prompt_id: L4D-17C-IOT
+worker_topology:
+  app1_workers: 1
+  cross_worker_event_fanout: POST_CASCADE
+```
+<!-- CORRECTIVE_REGISTRATION:R-L4D-17C-VIDEO-WATCH-IOT-01-v1:END -->
