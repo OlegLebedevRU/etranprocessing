@@ -51,7 +51,7 @@ reconnect настоящее событие cursor 472 содержит оба �
 ## Локальная валидация
 
 - MenuBuilder: `ruff check --fix app`, `ruff format app`, `pyright app` — pass;
-  `uv run pytest -q` — 487 passed, 50 warnings.
+  `uv run pytest -q` — 490 passed, 50 warnings; frontend `npm run build` — pass.
 - IoT app1: targeted Ruff after removing pre-existing unused imports — pass;
   `uv run pytest -q` — 427 passed, 4 warnings. Existing full-file formatter
   drift in IoT event service remains outside this corrective.
@@ -88,10 +88,20 @@ reconnect настоящее событие cursor 472 содержит оба �
   processed=0, finance_applied_again=0. В tenant 3 ledger sum debit/credit —
   1000/1000 kopecks (существующие тестовые проводки); в monthly таблице только
   tenant 3, один charge. Production consumer flag не включался.
+- Browser smoke под superuser после production deploy подтвердил видео и
+  консоль. Под `info@platerra.ru` видео работало, console acquire вернул 403:
+  админская форма при смене пароля отправила `role_id=3` при текстовой роли
+  `l4desk_owner`. Это не дефект IoT lease: нарушилась идентичность пользователя
+  в MenuBuilder. Исправление `c6a02a7` сохраняет role ID 5 в форме и отклоняет
+  конфликт role/role_id на backend (422). Backend image и frontend dist
+  развёрнуты из этого коммита; hash `index.html` и admin-users bundle совпадают
+  с nginx bind mount. Адресная коррекция тестового user 653 восстановила
+  `(role=l4desk_owner, role_id=5, org_id=3)`; startup 200 и schema check pass.
+  Старый JWT содержит role ID 3, поэтому необходим выход и новый вход.
 
 ## Непроверенное до 17E acceptance
 
-- Browser owner console diagnostics WS и moving frames после production deploy;
+- Browser owner console diagnostics WS после повторного входа;
   повтор stop и отсутствие двойного usage.
 - Полная матрица 17E (DST, grace, archive, reconciliation и другие шаги) и
   17F ещё не выполнены; gate не открыт.
