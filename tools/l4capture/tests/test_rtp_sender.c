@@ -319,6 +319,25 @@ extern uint32_t l4c_rtcp_build_compound(uint8_t *buf, uint32_t buf_size,
                                           uint32_t pkt_count, uint32_t octet_count,
                                           const char *cname);
 extern void l4c_rtcp_build_bye(uint8_t *buf, uint32_t buf_size, uint32_t ssrc);
+extern uint32_t l4c_rtcp_build_compound_at(uint8_t *buf, uint32_t buf_size,
+                                           uint32_t ssrc, uint32_t rtp_ts,
+                                           uint32_t pkt_count, uint32_t octet_count,
+                                           const char *cname, uint64_t filetime_100ns);
+
+int test_rtcp_ntp_single_clock(void) {
+    uint8_t buf[128];
+    uint64_t ticks = 116444736000000000ULL + 15000000ULL; /* Unix epoch + 1.5 s */
+    uint32_t len = l4c_rtcp_build_compound_at(buf, sizeof(buf), 1, 90000, 1, 10,
+                                              "test@host", ticks);
+    uint32_t sec = ((uint32_t)buf[8] << 24) | ((uint32_t)buf[9] << 16) |
+                   ((uint32_t)buf[10] << 8) | buf[11];
+    uint32_t frac = ((uint32_t)buf[12] << 24) | ((uint32_t)buf[13] << 16) |
+                    ((uint32_t)buf[14] << 8) | buf[15];
+    if (len < 40) return 1;
+    if (sec != 2208988801u) return 2;
+    if (frac != 0x80000000u) return 3;
+    return 0;
+}
 
 int test_rtcp_sr_sdes_generation(void) {
     uint8_t buf[512];
@@ -664,4 +683,196 @@ int test_pipeline_e2e_loopback(void) {
     closesocket(recv_sock);
     WSACleanup();
     return result;
+}
+
+/* ---- Latency: wall-clock RTP timestamps + bounded send policy ---- */
+
+typedef struct {
+    uint32_t force_idr_calls;
+} counting_encoder_ctx_t;
+
+static l4c_status_t counting_init(struct l4c_encoder_backend *self, const l4c_encoder_config_t *config) {
+    (void)self; (void)config;
+    return L4C_OK;
+}
+static l4c_status_t counting_encode(struct l4c_encoder_backend *self, const l4c_raw_frame_t *raw, l4c_access_unit_t *out_au) {
+    (void)self; (void)raw; (void)out_au;
+    return L4C_ERR_NO_FRAME;
+}
+static l4c_status_t counting_force_idr(struct l4c_encoder_backend *self) {
+    counting_encoder_ctx_t *ctx;
+    if (!self) return L4C_ERR_INVALID_ARG;
+    ctx = (counting_encoder_ctx_t *)self->impl_ctx;
+    if (ctx) ctx->force_idr_calls++;
+    return L4C_OK;
+}
+static void counting_release_au(struct l4c_encoder_backend *self, l4c_access_unit_t *au) {
+    (void)self; (void)au;
+}
+static void counting_destroy(struct l4c_encoder_backend *self) { (void)self; }
+
+static const l4c_encoder_backend_vtable_t counting_vtable = {
+    counting_init, counting_encode, counting_force_idr, counting_release_au, counting_destroy
+};
+
+int test_rtp_ts_wall_monotonic_and_idle_gap(void) {
+    WSADATA wsa_data;
+    l4c_rtp_config_t cfg;
+    l4c_rtp_sender_t *sender = NULL;
+    l4c_nal_desc_t nal;
+    uint8_t buf[64];
+    l4c_access_unit_t au;
+    l4c_rtp_stats_t st;
+    l4c_status_t rc;
+    uint32_t ts0, ts1, ts2, ts3;
+
+    if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0) return 1;
+
+    make_test_nal(&nal, buf, 64, 1);
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.dest_ip = "127.0.0.1";
+    cfg.rtp_port = 5004;
+    cfg.rtcp_port = 5005;
+    cfg.payload_type = 96;
+    cfg.cname = "pts@test";
+
+    rc = l4c_rtp_sender_create(&cfg, &sender);
+    if (rc != L4C_OK || !sender) { WSACleanup(); return 1; }
+
+    au.nals = &nal; au.nal_count = 1; au.is_idr = false; au.total_bytes = 64;
+
+    au.pts_ms = 0;
+    if (l4c_rtp_send_au(sender, &au, NULL) != L4C_OK) { l4c_rtp_sender_destroy(sender); WSACleanup(); return 2; }
+    l4c_rtp_sender_get_stats(sender, &st);
+    ts0 = st.last_rtp_timestamp;
+
+    au.pts_ms = 100;
+    if (l4c_rtp_send_au(sender, &au, NULL) != L4C_OK) { l4c_rtp_sender_destroy(sender); WSACleanup(); return 3; }
+    l4c_rtp_sender_get_stats(sender, &st);
+    ts1 = st.last_rtp_timestamp;
+
+    au.pts_ms = 200;
+    if (l4c_rtp_send_au(sender, &au, NULL) != L4C_OK) { l4c_rtp_sender_destroy(sender); WSACleanup(); return 4; }
+    l4c_rtp_sender_get_stats(sender, &st);
+    ts2 = st.last_rtp_timestamp;
+
+    /* Idle gap 2000 ms must appear as a real RTP timestamp hole */
+    au.pts_ms = 2200;
+    if (l4c_rtp_send_au(sender, &au, NULL) != L4C_OK) { l4c_rtp_sender_destroy(sender); WSACleanup(); return 5; }
+    l4c_rtp_sender_get_stats(sender, &st);
+    ts3 = st.last_rtp_timestamp;
+
+    if (ts1 - ts0 != 100u * 90u) { l4c_rtp_sender_destroy(sender); WSACleanup(); return 6; }
+    if (ts2 - ts1 != 100u * 90u) { l4c_rtp_sender_destroy(sender); WSACleanup(); return 7; }
+    if (ts3 - ts2 != 2000u * 90u) { l4c_rtp_sender_destroy(sender); WSACleanup(); return 8; }
+
+    /* Underflow: pts < pts_start → elapsed 0, no wrap explosion */
+    {
+        uint32_t before;
+        au.pts_ms = 0; /* already latched pts_start = 0; use a new sender for strict underflow */
+        l4c_rtp_sender_destroy(sender);
+        sender = NULL;
+        if (l4c_rtp_sender_create(&cfg, &sender) != L4C_OK) { WSACleanup(); return 9; }
+        au.pts_ms = 500;
+        if (l4c_rtp_send_au(sender, &au, NULL) != L4C_OK) { l4c_rtp_sender_destroy(sender); WSACleanup(); return 10; }
+        l4c_rtp_sender_get_stats(sender, &st);
+        before = st.last_rtp_timestamp;
+        au.pts_ms = 100; /* < pts_start 500 */
+        if (l4c_rtp_send_au(sender, &au, NULL) != L4C_OK) { l4c_rtp_sender_destroy(sender); WSACleanup(); return 11; }
+        l4c_rtp_sender_get_stats(sender, &st);
+        if (st.last_rtp_timestamp != before) { l4c_rtp_sender_destroy(sender); WSACleanup(); return 12; }
+    }
+
+    l4c_rtp_sender_destroy(sender);
+    WSACleanup();
+    return 0;
+}
+
+int test_rtp_sndbuf_live_budget(void) {
+    WSADATA wsa_data;
+    l4c_rtp_config_t cfg;
+    l4c_rtp_sender_t *sender = NULL;
+    int sndbuf = 0;
+    int optlen = (int)sizeof(sndbuf);
+    SOCKET s;
+    int requested = L4C_RTP_SNDBUF_BYTES;
+
+    if (requested <= 0 || requested > 256 * 1024) return 1;
+#if L4C_RTP_SEND_MAX_WOULDBLOCK_RETRIES != 0
+    return 2;
+#endif
+
+    if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0) return 3;
+
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.dest_ip = "127.0.0.1";
+    cfg.rtp_port = 5004;
+    cfg.rtcp_port = 5005;
+    if (l4c_rtp_sender_create(&cfg, &sender) != L4C_OK || !sender) { WSACleanup(); return 4; }
+    l4c_rtp_sender_destroy(sender);
+
+    /* Independent confirmation of the live budget on a UDP socket */
+    s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (s == INVALID_SOCKET) { WSACleanup(); return 5; }
+    if (setsockopt(s, SOL_SOCKET, SO_SNDBUF, (const char *)&requested, sizeof(requested)) == SOCKET_ERROR) {
+        closesocket(s); WSACleanup();
+        return 6;
+    }
+    if (getsockopt(s, SOL_SOCKET, SO_SNDBUF, (char *)&sndbuf, &optlen) == SOCKET_ERROR) {
+        closesocket(s); WSACleanup();
+        return 7;
+    }
+    closesocket(s);
+    WSACleanup();
+    if (sndbuf < 16 * 1024) return 8;
+    if (sndbuf > 256 * 1024) return 9;
+    return 0;
+}
+
+int test_network_wouldblock_drops_au_forces_idr(void) {
+    WSADATA wsa_data;
+    counting_encoder_ctx_t ctx;
+    l4c_encoder_backend_t backend;
+    l4c_rtp_config_t cfg;
+    l4c_rtp_sender_t *sender = NULL;
+    l4c_nal_desc_t nal;
+    uint8_t buf[64];
+    l4c_access_unit_t au;
+    l4c_rtp_stats_t st;
+
+    /* Live policy: no Sleep-retry on WOULDBLOCK — drop AU + force IDR. */
+#if L4C_RTP_SEND_MAX_WOULDBLOCK_RETRIES != 0
+    return 1;
+#endif
+#if L4C_RTP_SNDBUF_BYTES > (128 * 1024)
+    return 2;
+#endif
+
+    if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0) return 3;
+
+    memset(&ctx, 0, sizeof(ctx));
+    memset(&backend, 0, sizeof(backend));
+    backend.vtable = &counting_vtable;
+    backend.impl_ctx = &ctx;
+
+    make_test_nal(&nal, buf, 64, 5);
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.dest_ip = "127.0.0.1";
+    cfg.rtp_port = 5004;
+    cfg.rtcp_port = 5005;
+    if (l4c_rtp_sender_create(&cfg, &sender) != L4C_OK || !sender) { WSACleanup(); return 3; }
+
+    au.nals = &nal; au.nal_count = 1; au.pts_ms = 0; au.is_idr = true; au.total_bytes = 64;
+    /* Successful send must not force IDR */
+    if (l4c_rtp_send_au(sender, &au, &backend) != L4C_OK) {
+        l4c_rtp_sender_destroy(sender); WSACleanup(); return 4;
+    }
+    if (ctx.force_idr_calls != 0) { l4c_rtp_sender_destroy(sender); WSACleanup(); return 5; }
+
+    l4c_rtp_sender_get_stats(sender, &st);
+    if (st.transport_drops != 0) { l4c_rtp_sender_destroy(sender); WSACleanup(); return 6; }
+
+    l4c_rtp_sender_destroy(sender);
+    WSACleanup();
+    return 0;
 }

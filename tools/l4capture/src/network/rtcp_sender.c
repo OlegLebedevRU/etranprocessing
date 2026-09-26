@@ -1,17 +1,17 @@
 #include <string.h>
-#include <time.h>
 #include "l4capture/rtp_sender.h"
 #include <winsock2.h>
 
-/* NTP epoch offset: seconds between 1900-01-01 and 1970-01-01 */
-#define NTP_EPOCH_OFFSET 2208988800ULL
+/* Seconds between FILETIME epoch (1601) and NTP epoch (1900). */
+#define NTP_FILETIME_OFFSET 9435484800ULL
+#define FILETIME_TICKS_PER_SEC 10000000ULL
 
 /* Build RTCP SR (28 bytes) + SDES CNAME (variable) + optional BYE into buffer.
  * Returns total compound packet size. */
 static uint32_t build_rtcp_compound(uint8_t *buf, uint32_t buf_size,
                                      uint32_t ssrc, uint32_t rtp_ts,
                                      uint32_t pkt_count, uint32_t octet_count,
-                                     const char *cname) {
+                                     const char *cname, uint64_t filetime_100ns) {
     uint32_t pos = 0;
     uint32_t cname_len;
     uint32_t sdes_item_len;
@@ -19,7 +19,6 @@ static uint32_t build_rtcp_compound(uint8_t *buf, uint32_t buf_size,
     uint32_t sdes_words;
     uint64_t ntp_sec;
     uint32_t ntp_frac;
-    time_t now;
 
     /* SR: 28 bytes */
     if (buf_size < 28) return 0;
@@ -32,14 +31,9 @@ static uint32_t build_rtcp_compound(uint8_t *buf, uint32_t buf_size,
     buf[7] = (uint8_t)(ssrc & 0xFF);
 
     /* NTP timestamp */
-    now = time(NULL);
-    ntp_sec = (uint64_t)now + NTP_EPOCH_OFFSET;
-    /* Fractional: use GetTickCount ms -> fraction of 2^32 */
-    {
-        DWORD tick = GetTickCount();
-        uint32_t ms_in_sec = tick % 1000;
-        ntp_frac = (uint32_t)(((uint64_t)ms_in_sec << 32) / 1000);
-    }
+    ntp_sec = filetime_100ns / FILETIME_TICKS_PER_SEC - NTP_FILETIME_OFFSET;
+    ntp_frac = (uint32_t)(((filetime_100ns % FILETIME_TICKS_PER_SEC) << 32) /
+                          FILETIME_TICKS_PER_SEC);
     /* NTP MSW */
     buf[8]  = (uint8_t)(ntp_sec >> 24);
     buf[9]  = (uint8_t)((ntp_sec >> 16) & 0xFF);
@@ -107,7 +101,20 @@ uint32_t l4c_rtcp_build_compound(uint8_t *buf, uint32_t buf_size,
                                   uint32_t ssrc, uint32_t rtp_ts,
                                   uint32_t pkt_count, uint32_t octet_count,
                                   const char *cname) {
-    return build_rtcp_compound(buf, buf_size, ssrc, rtp_ts, pkt_count, octet_count, cname);
+    FILETIME ft;
+    uint64_t ticks;
+    GetSystemTimeAsFileTime(&ft);
+    ticks = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
+    return build_rtcp_compound(buf, buf_size, ssrc, rtp_ts, pkt_count, octet_count,
+                               cname, ticks);
+}
+
+uint32_t l4c_rtcp_build_compound_at(uint8_t *buf, uint32_t buf_size,
+                                    uint32_t ssrc, uint32_t rtp_ts,
+                                    uint32_t pkt_count, uint32_t octet_count,
+                                    const char *cname, uint64_t filetime_100ns) {
+    return build_rtcp_compound(buf, buf_size, ssrc, rtp_ts, pkt_count, octet_count,
+                               cname, filetime_100ns);
 }
 
 void l4c_rtcp_build_bye(uint8_t *buf, uint32_t buf_size, uint32_t ssrc) {

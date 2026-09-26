@@ -283,6 +283,12 @@ static bool stop_active_stream_internal(const char* reason) {
         notify_stream_event(active_stream_id, "stopping", reason ? reason : "");
     }
 
+    if (g_l4capture_backend && g_l4capture_backend->vtable) {
+        if (!g_l4capture_backend->vtable->stop(g_l4capture_backend, active_stream_id)) {
+            log_error("l4capture did not confirm process exit; retaining stopping state");
+            return false;
+        }
+    }
     cleanup_process_handles_internal();
 
     strcpy_s(g_sup.state, sizeof(g_sup.state), "stopped");
@@ -915,7 +921,12 @@ bool ffmpeg_supervisor_stop(const char* stream_instance_id,
     }
 
     input_release_all();
-    stop_active_stream_internal("");
+    if (!stop_active_stream_internal("")) {
+        strcpy_s(out_err_code, max_err_code, "stop_failed");
+        strcpy_s(out_err_msg, max_err_msg, "Media process did not confirm exit");
+        LeaveCriticalSection(&g_sup_cs);
+        return false;
+    }
 
     strcpy_s(out_result, max_result, "stopped");
     LeaveCriticalSection(&g_sup_cs);
@@ -932,7 +943,10 @@ bool ffmpeg_supervisor_stop_with_reason(const char* reason) {
     }
 
     input_release_all();
-    stop_active_stream_internal(reason);
+    if (!stop_active_stream_internal(reason)) {
+        LeaveCriticalSection(&g_sup_cs);
+        return false;
+    }
 
     LeaveCriticalSection(&g_sup_cs);
     return true;
@@ -941,9 +955,9 @@ bool ffmpeg_supervisor_stop_with_reason(const char* reason) {
 void ffmpeg_supervisor_update_lease(const char* lease_id, uint64_t expires_at_ms) {
     ffmpeg_supervisor_ensure_inited();
     EnterCriticalSection(&g_sup_cs);
-    log_info("update_lease: lease_id='%s' g_sup.lease_id='%s' expires_at=%llu g_sup.expires_at=%llu",
-             lease_id ? lease_id : "(null)", g_sup.lease_id,
-             (unsigned long long)expires_at_ms, (unsigned long long)g_sup.lease_expires_at_ms);
+    log_debug("update_lease: lease_id='%s' g_sup.lease_id='%s' expires_at=%llu g_sup.expires_at=%llu",
+              lease_id ? lease_id : "(null)", g_sup.lease_id,
+              (unsigned long long)expires_at_ms, (unsigned long long)g_sup.lease_expires_at_ms);
     if (g_sup.lease_id[0] == '\0' || (lease_id && lease_id[0] != '\0' && strcmp(g_sup.lease_id, lease_id) == 0)) {
         if (expires_at_ms > g_sup.lease_expires_at_ms) {
             g_sup.lease_expires_at_ms = expires_at_ms;
@@ -956,9 +970,9 @@ void ffmpeg_supervisor_update_lease(const char* lease_id, uint64_t expires_at_ms
                 uint64_t now_wall = get_current_time_ms();
                 uint64_t now_tick = GetTickCount64();
                 uint64_t deadline_tick = now_tick + (expires_at_ms > now_wall ? expires_at_ms - now_wall : 0);
-                log_info("update_lease: forwarding to adapter, deadline_tick=%llu (now_tick=%llu ttl=%lld)",
-                         (unsigned long long)deadline_tick, (unsigned long long)now_tick,
-                         (long long)(expires_at_ms - now_wall));
+                log_debug("update_lease: forwarding to adapter, deadline_tick=%llu (now_tick=%llu ttl=%lld)",
+                          (unsigned long long)deadline_tick, (unsigned long long)now_tick,
+                          (long long)(expires_at_ms - now_wall));
                 g_l4capture_backend->vtable->renew_lease(g_l4capture_backend, lease_id, deadline_tick);
             }
         }

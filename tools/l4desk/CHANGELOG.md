@@ -1,5 +1,18 @@
 # CHANGELOG: l4desk
 
+## [Unreleased]
+
+### Fixed
+
+- Запуск `l4capture` использует физические координаты DPI; остановка потока подтверждает завершение дочернего процесса до события `stopped`.
+
+### Changed
+- INFO-лог типовой работы без ошибок очищен от рутинного шума; подробности доступны через `--verbose` (DEBUG):
+  - `MQTT recv bytes_recvd=…` (PINGRESP/PUBACK) → DEBUG;
+  - heartbeat `lease_renew`/`stream_renew`/`inventory_get` (`Received command`, `update_lease…`, `Lease renewed`) → DEBUG;
+  - периодический `Published presence` → DEBUG (payload уже был DEBUG).
+- В INFO остаются: connect/subscribe/shutdown, `stream_start`/`stream_stop`/input, `stream_event`, lifecycle child, WARN/ERROR (отказы, recovery, expiry).
+
 ## [1.7.5] - 2026-09-15
 
 ### Changed & Improved

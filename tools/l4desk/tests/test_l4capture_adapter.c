@@ -274,6 +274,29 @@ static void test_adapter_input_gate_low_480p_permitted(void) {
     printf("[PASS] test_adapter_input_gate_low_480p_permitted\n");
 }
 
+/* Input Gate — low + native raster (ffmpeg-low parity) also permitted */
+static void test_adapter_input_gate_low_native_permitted(void) {
+    l4d_input_gate_ctx_t ctx;
+    memset(&ctx, 0, sizeof(ctx));
+
+    ctx.is_desktop_source = true;
+    ctx.has_active_lease = true;
+    ctx.deadline_tick_ms = test_tick() + 60000;
+    ctx.stream_instance_id = 1001;
+    ctx.expected_stream_id = 1001;
+    ctx.geometry_generation = 5;
+    ctx.expected_geometry_gen = 5;
+    ctx.requested_profile = "low";
+    ctx.actual_width = 1920;
+    ctx.actual_height = 1080;
+    ctx.kiosk_mode_enabled = false;
+    ctx.kiosk_running = false;
+    ctx.kiosk_in_focus = false;
+
+    ASSERT_TRUE(l4d_input_gate_check(&ctx));
+    printf("[PASS] test_adapter_input_gate_low_native_permitted\n");
+}
+
 /* =========================================================
  * Test 10: Input Gate — default strictly denied
  * ========================================================= */
@@ -600,10 +623,51 @@ static void test_kiosk_lifecycle_start_and_status_tracking(void) {
 }
 
 /* =========================================================
+ * Test 21: EVENT_METRICS 30-byte wire parse (L4C-10/11 consumer fix)
+ * ========================================================= */
+static void test_event_metrics_plen30_reads_gdi_handles(void) {
+    uint8_t p[30];
+    l4d_backend_metrics_t m;
+    memset(p, 0, sizeof(p));
+    memset(&m, 0, sizeof(m));
+    /* fps=10 */
+    p[0] = 10; p[1] = 0;
+    /* bitrate=800 */
+    p[2] = 0x20; p[3] = 0x03; p[4] = 0; p[5] = 0;
+    /* private_bytes_kb=70000 @22 */
+    p[22] = 0x70; p[23] = 0x11; p[24] = 0x01; p[25] = 0x00;
+    /* gdi_handles=42 @26 */
+    p[26] = 42; p[27] = 0; p[28] = 0; p[29] = 0;
+
+    if (!l4d_adapter_parse_event_metrics(p, 30, &m)) {
+        printf("[FAIL] test_event_metrics_plen30_reads_gdi_handles (parse failed)\n");
+        exit(1);
+    }
+    if (m.fps != 10 || m.bitrate_kbps != 800) {
+        printf("[FAIL] test_event_metrics_plen30_reads_gdi_handles (fps/bitrate)\n");
+        exit(1);
+    }
+    if (m.private_bytes_kb != 70000) {
+        printf("[FAIL] test_event_metrics_plen30_reads_gdi_handles (private_bytes)\n");
+        exit(1);
+    }
+    if (m.gdi_handles != 42) {
+        printf("[FAIL] test_event_metrics_plen30_reads_gdi_handles (gdi_handles on 30-byte payload)\n");
+        exit(1);
+    }
+    /* plen < 24 must reject */
+    if (l4d_adapter_parse_event_metrics(p, 20, &m)) {
+        printf("[FAIL] test_event_metrics_plen30_reads_gdi_handles (accepted short plen)\n");
+        exit(1);
+    }
+    printf("[PASS] test_event_metrics_plen30_reads_gdi_handles\n");
+}
+
+/* =========================================================
  * Main
  * ========================================================= */
 int main(void) {
-    printf("l4desk test_l4capture_adapter: 20 tests\n\n");
+    printf("l4desk test_l4capture_adapter: 21 tests\n\n");
 
     test_adapter_job_object_kill_on_close();
     test_adapter_handle_allowlist_isolation();
@@ -614,6 +678,7 @@ int main(void) {
     test_adapter_wrong_epoch_rejection();
     test_adapter_expiry_strict_500ms_no_grace();
     test_adapter_input_gate_low_480p_permitted();
+    test_adapter_input_gate_low_native_permitted();
     test_adapter_input_gate_default_strictly_denied();
     test_adapter_input_release_on_safety_events();
     test_adapter_recovery_loop_and_backoff_cancel();
@@ -625,8 +690,9 @@ int main(void) {
     test_kiosk_adaptive_transition_on_app_exit_and_relaunch();
     test_kiosk_lifecycle_graceful_stop_and_kill();
     test_kiosk_lifecycle_start_and_status_tracking();
+    test_event_metrics_plen30_reads_gdi_handles();
 
-    printf("\n20 passed, 0 failed, 20 total\n\n");
+    printf("\n21 passed, 0 failed, 21 total\n\n");
     printf("=== ALL TESTS PASSED ===\n");
     return 0;
 }

@@ -41,8 +41,8 @@ static void add_to_system_path(const wchar_t* base_dir) {
 
     wchar_t tools_path[MAX_PATH * 8];
     swprintf_s(tools_path, sizeof(tools_path)/sizeof(wchar_t),
-               L"%ls;%ls\\l4sql;%ls\\l4pin;%ls\\l4con;%ls\\l4superv;%ls\\l4desk;%ls\\ffmpeg",
-               base_dir, base_dir, base_dir, base_dir, base_dir, base_dir, base_dir);
+               L"%ls;%ls\\l4sql;%ls\\l4pin;%ls\\l4con;%ls\\l4superv;%ls\\l4desk;%ls\\l4capture\\bin;%ls\\ffmpeg",
+               base_dir, base_dir, base_dir, base_dir, base_dir, base_dir, base_dir, base_dir);
 
     if (wcsstr(current_path, base_dir) == NULL) {
         wchar_t new_path[32768];
@@ -571,6 +571,8 @@ int wmain(int argc, wchar_t* argv[]) {
     swprintf_s(sub_dir, MAX_PATH, L"%ls\\l4desk", dest_dir); CreateDirectoryW(sub_dir, NULL);
     swprintf_s(sub_dir, MAX_PATH, L"%ls\\l4desk\\log", dest_dir); CreateDirectoryW(sub_dir, NULL);
     svc_set_dir_permissions(sub_dir);
+    swprintf_s(sub_dir, MAX_PATH, L"%ls\\l4capture", dest_dir); CreateDirectoryW(sub_dir, NULL);
+    swprintf_s(sub_dir, MAX_PATH, L"%ls\\l4capture\\bin", dest_dir); CreateDirectoryW(sub_dir, NULL);
 
     // Register tools in system PATH for interactive sessions
     add_to_system_path(dest_dir);

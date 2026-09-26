@@ -24,7 +24,7 @@ static bool path_starts_with_dir(const wchar_t* path, const wchar_t* dir) {
     return (c == L'\\' || c == L'/' || c == L'\0');
 }
 
-static bool check_active_ffmpeg_stream(const wchar_t* dest_dir) {
+static bool check_active_video_stream(const wchar_t* dest_dir) {
     // 1. Check if ffmpeg_state.json exists and indicates streaming
     wchar_t state_path[MAX_PATH];
     swprintf_s(state_path, MAX_PATH, L"%s\\ffmpeg\\ffmpeg_state.json", dest_dir);
@@ -49,7 +49,8 @@ static bool check_active_ffmpeg_stream(const wchar_t* dest_dir) {
         pe.dwSize = sizeof(pe);
         if (Process32FirstW(hSnap, &pe)) {
             do {
-                if (_wcsicmp(pe.szExeFile, L"ffmpeg.exe") == 0) {
+                if (_wcsicmp(pe.szExeFile, L"ffmpeg.exe") == 0 ||
+                    _wcsicmp(pe.szExeFile, L"l4capture.exe") == 0) {
                     HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pe.th32ProcessID);
                     if (hProc) {
                         wchar_t img_path[MAX_PATH] = { 0 };
@@ -81,7 +82,9 @@ static void kill_orphaned_processes(const wchar_t* dest_dir, DrainageResult* out
 
     if (Process32FirstW(hSnap, &pe)) {
         do {
-            if (_wcsicmp(pe.szExeFile, L"ffmpeg.exe") == 0 || _wcsicmp(pe.szExeFile, L"l4desk.exe") == 0) {
+            if (_wcsicmp(pe.szExeFile, L"ffmpeg.exe") == 0 ||
+                _wcsicmp(pe.szExeFile, L"l4capture.exe") == 0 ||
+                _wcsicmp(pe.szExeFile, L"l4desk.exe") == 0) {
                 HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE, FALSE, pe.th32ProcessID);
                 if (hProc) {
                     wchar_t img_path[MAX_PATH] = { 0 };
@@ -214,26 +217,26 @@ bool drainage_execute(const wchar_t* dest_dir, const char* sn, bool silent, Drai
 
     log_info("Starting drainage phase on %ls...", dest_dir);
 
-    // 1. Check for active ffmpeg stream
-    if (check_active_ffmpeg_stream(dest_dir)) {
+    // 1. Check for an active video stream before interrupting services.
+    if (check_active_video_stream(dest_dir)) {
         if (out_result) out_result->active_stream_detected = true;
 
         if (silent) {
-            log_err("Active ffmpeg stream detected in %ls during silent mode. Drainage aborted.", dest_dir);
+            log_err("Active video stream detected in %ls during silent mode. Drainage aborted.", dest_dir);
             return false;
         }
 
         int resp = MessageBoxW(
             NULL,
-            L"An active video stream (ffmpeg) was detected.\nStopping services will interrupt the active stream.\nDo you want to proceed?",
+            L"An active video stream was detected.\nStopping services will interrupt the active stream.\nDo you want to proceed?",
             L"Leo4 Setup - Active Stream Detected",
             MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2
         );
         if (resp != IDYES) {
-            log_warn("User refused to interrupt active ffmpeg stream. Drainage aborted.");
+            log_warn("User refused to interrupt active video stream. Drainage aborted.");
             return false;
         }
-        log_info("User confirmed interruption of active ffmpeg stream.");
+        log_info("User confirmed interruption of active video stream.");
     }
 
     // 2. Stop services in reverse dependency order: L4Superv -> L4Con -> mosquitto -> Leo4Proxy

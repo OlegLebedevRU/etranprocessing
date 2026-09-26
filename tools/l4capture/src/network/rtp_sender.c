@@ -29,6 +29,7 @@ struct l4c_rtp_sender {
     uint8_t payload_type;
     uint32_t base_ts;
     uint64_t pts_start_ms;
+    uint64_t first_send_tick_ms;
     bool pts_start_set;
     l4c_rtp_stats_t stats;
     uint64_t last_rtcp_ms;
@@ -56,13 +57,11 @@ static bool rtp_packet_send_cb(const uint8_t *buf, uint32_t len,
                 (const struct sockaddr *)&s->rtp_addr, sizeof(s->rtp_addr));
     if (rc == SOCKET_ERROR) {
         int err = WSAGetLastError();
+#if L4C_RTP_SEND_MAX_WOULDBLOCK_RETRIES > 0
         if (err == WSAEWOULDBLOCK) {
-            /* Socket buffer temporarily full — retry with brief wait.
-             * On localhost the kernel drains the buffer in microseconds;
-             * up to 50 × Sleep(1) ≈ 50 ms worst-case per packet. */
+            /* At most one immediate re-send; never Sleep on the media path. */
             int retries;
-            for (retries = 0; retries < 50; retries++) {
-                Sleep(1);
+            for (retries = 0; retries < L4C_RTP_SEND_MAX_WOULDBLOCK_RETRIES; retries++) {
                 rc = sendto(s->rtp_sock, (const char *)buf, (int)len, 0,
                             (const struct sockaddr *)&s->rtp_addr, sizeof(s->rtp_addr));
                 if (rc != SOCKET_ERROR) break;
@@ -75,8 +74,12 @@ static bool rtp_packet_send_cb(const uint8_t *buf, uint32_t len,
                 s->stats.last_send_tick_ms = l4c_now_monotonic_ms();
                 return true;
             }
-            /* Retries exhausted or non-WOULDBLOCK error after retry */
         }
+#else
+        (void)err;
+#endif
+        /* Congestion / hard error: drop the AU immediately and request IDR.
+         * Live policy — queueing old frames creates multi-second latency. */
         ctx->dropped = true;
         s->stats.transport_drops++;
         if (ctx->encoder && ctx->encoder->vtable && ctx->encoder->vtable->force_idr) {
@@ -198,11 +201,19 @@ l4c_status_t l4c_rtp_send_au(l4c_rtp_sender_t *sender,
     /* Record PTS start on first AU */
     if (!sender->pts_start_set) {
         sender->pts_start_ms = au->pts_ms;
+        sender->first_send_tick_ms = l4c_now_monotonic_ms();
         sender->pts_start_set = true;
     }
 
-    /* Compute RTP timestamp: base + elapsed_pts * 90 */
-    rtp_ts = sender->base_ts + (uint32_t)((au->pts_ms - sender->pts_start_ms) * 90);
+    /* Compute RTP timestamp: base + elapsed_pts * 90.
+     * Guard underflow: never cast a negative uint64 delta into uint32. */
+    {
+        uint64_t elapsed_ms = 0;
+        if (au->pts_ms > sender->pts_start_ms) {
+            elapsed_ms = au->pts_ms - sender->pts_start_ms;
+        }
+        rtp_ts = sender->base_ts + (uint32_t)(elapsed_ms * 90u);
+    }
     sender->stats.last_rtp_timestamp = rtp_ts;
 
     ctx.sender = sender;
@@ -244,17 +255,22 @@ l4c_status_t l4c_rtp_sender_poll_rtcp(l4c_rtp_sender_t *sender,
     now = l4c_now_monotonic_ms();
 
     /* Send compound RTCP SR/SDES every 1000ms */
-    if (now - sender->last_rtcp_ms >= L4C_RTCP_SR_INTERVAL_MS) {
+    if (sender->pts_start_set && now - sender->last_rtcp_ms >= L4C_RTCP_SR_INTERVAL_MS) {
+        uint32_t report_rtp_ts = sender->base_ts;
+        if (sender->pts_start_set && now >= sender->first_send_tick_ms) {
+            report_rtp_ts += (uint32_t)((now - sender->first_send_tick_ms) * 90u);
+        }
         rtcp_len = l4c_rtcp_build_compound(rtcp_buf, sizeof(rtcp_buf),
                                             sender->ssrc,
-                                            sender->stats.last_rtp_timestamp,
+                                            report_rtp_ts,
                                             sender->stats.packets_sent,
                                             (uint32_t)(sender->stats.bytes_sent & 0xFFFFFFFF),
                                             sender->cname);
         if (rtcp_len > 0) {
-            sendto(sender->rtcp_sock, (const char *)rtcp_buf, (int)rtcp_len, 0,
-                   (const struct sockaddr *)&sender->rtcp_addr, sizeof(sender->rtcp_addr));
-            sender->stats.rtcp_sr_sent++;
+            if (sendto(sender->rtcp_sock, (const char *)rtcp_buf, (int)rtcp_len, 0,
+                       (const struct sockaddr *)&sender->rtcp_addr,
+                       sizeof(sender->rtcp_addr)) != SOCKET_ERROR)
+                sender->stats.rtcp_sr_sent++;
         }
         sender->last_rtcp_ms = now;
     }

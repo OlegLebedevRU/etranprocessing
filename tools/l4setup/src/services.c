@@ -73,6 +73,7 @@ bool services_configure_environment(const wchar_t* dest_dir) {
                         L"l4con",
                         L"l4superv",
                         L"l4desk",
+                        L"l4capture\\bin",
                         L"ffmpeg"
                     };
 

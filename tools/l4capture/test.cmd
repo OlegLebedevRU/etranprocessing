@@ -41,13 +41,18 @@ cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DWIN32_LEAN_AND_MEAN /D
     "%ROOT%\src\common\limits.c" ^
     "%ROOT%\src\common\deadline.c" ^
     "%ROOT%\src\common\pipeline.c" ^
+    "%ROOT%\src\common\logger.c" ^
     "%ROOT%\src\ipc\ipc_protocol.c" ^
     "%ROOT%\src\ipc\ipc_pipe.c" ^
     "%ROOT%\src\safety\safety_gate.c" ^
     "%ROOT%\src\capture\cursor.c" ^
     "%ROOT%\src\capture\gdi_capture.c" ^
+    "%ROOT%\src\capture\dxgi_capture.c" ^
     "%ROOT%\src\pipeline\scale.c" ^
     "%ROOT%\src\pipeline\color_convert.c" ^
+    "%ROOT%\src\pipeline\video_profile.c" ^
+    "%ROOT%\src\pipeline\degrade_controller.c" ^
+    "%ROOT%\src\pipeline\telemetry.c" ^
     "%ROOT%\src\network\rtp_packetizer.c" ^
     "%ROOT%\src\network\rtp_sender.c" ^
     "%ROOT%\src\network\rtcp_sender.c" ^
@@ -58,11 +63,19 @@ cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DWIN32_LEAN_AND_MEAN /D
     "%ROOT%\tests\test_safety_gate.c" ^
     "%ROOT%\tests\test_cursor.c" ^
     "%ROOT%\tests\test_gdi_capture.c" ^
+    "%ROOT%\tests\test_dxgi_capture.c" ^
     "%ROOT%\tests\test_scale.c" ^
     "%ROOT%\tests\test_color_convert.c" ^
     "%ROOT%\src\encoder\openh264_encoder.c" ^
+    "%ROOT%\src\encoder\mf_encoder.c" ^
     "%ROOT%\tests\test_openh264_encoder.c" ^
+    "%ROOT%\tests\test_mf_encoder.c" ^
+    "%ROOT%\tests\test_mft_event_gate.c" ^
+    "%ROOT%\tests\test_idle_refresh.c" ^
     "%ROOT%\tests\test_rtp_sender.c" ^
+    "%ROOT%\tests\test_clock.c" ^
+    "%ROOT%\tests\test_profiles_degrade.c" ^
+    "%ROOT%\tests\test_telemetry_logger.c" ^
     /c
 if errorlevel 1 (
     echo ERROR: Test compilation failed
@@ -74,13 +87,18 @@ link.exe /nologo /SUBSYSTEM:CONSOLE,6.01 /OUT:"%ROOT%\bin\l4capture_tests.exe" ^
     "%ROOT%\obj\test\limits.obj" ^
     "%ROOT%\obj\test\deadline.obj" ^
     "%ROOT%\obj\test\pipeline.obj" ^
+    "%ROOT%\obj\test\logger.obj" ^
     "%ROOT%\obj\test\ipc_protocol.obj" ^
     "%ROOT%\obj\test\ipc_pipe.obj" ^
     "%ROOT%\obj\test\safety_gate.obj" ^
     "%ROOT%\obj\test\cursor.obj" ^
     "%ROOT%\obj\test\gdi_capture.obj" ^
+    "%ROOT%\obj\test\dxgi_capture.obj" ^
     "%ROOT%\obj\test\scale.obj" ^
     "%ROOT%\obj\test\color_convert.obj" ^
+    "%ROOT%\obj\test\video_profile.obj" ^
+    "%ROOT%\obj\test\degrade_controller.obj" ^
+    "%ROOT%\obj\test\telemetry.obj" ^
     "%ROOT%\obj\test\rtp_packetizer.obj" ^
     "%ROOT%\obj\test\rtp_sender.obj" ^
     "%ROOT%\obj\test\rtcp_sender.obj" ^
@@ -91,15 +109,23 @@ link.exe /nologo /SUBSYSTEM:CONSOLE,6.01 /OUT:"%ROOT%\bin\l4capture_tests.exe" ^
     "%ROOT%\obj\test\test_safety_gate.obj" ^
     "%ROOT%\obj\test\test_cursor.obj" ^
     "%ROOT%\obj\test\test_gdi_capture.obj" ^
+    "%ROOT%\obj\test\test_dxgi_capture.obj" ^
     "%ROOT%\obj\test\test_scale.obj" ^
     "%ROOT%\obj\test\test_color_convert.obj" ^
     "%ROOT%\obj\test\openh264_encoder.obj" ^
+    "%ROOT%\obj\test\mf_encoder.obj" ^
     "%ROOT%\obj\test\test_openh264_encoder.obj" ^
+    "%ROOT%\obj\test\test_mf_encoder.obj" ^
+    "%ROOT%\obj\test\test_mft_event_gate.obj" ^
+    "%ROOT%\obj\test\test_idle_refresh.obj" ^
     "%ROOT%\obj\test\test_rtp_sender.obj" ^
+    "%ROOT%\obj\test\test_clock.obj" ^
+    "%ROOT%\obj\test\test_profiles_degrade.obj" ^
+    "%ROOT%\obj\test\test_telemetry_logger.obj" ^
     "%ROOT%\vendor\openh264\builddir_x86\codec\encoder\libencoder.a" ^
     "%ROOT%\vendor\openh264\builddir_x86\codec\common\libcommon.a" ^
     "%ROOT%\vendor\openh264\builddir_x86\codec\processing\libprocessing.a" ^
-    kernel32.lib user32.lib advapi32.lib gdi32.lib ws2_32.lib ole32.lib
+    kernel32.lib user32.lib advapi32.lib gdi32.lib ws2_32.lib ole32.lib oleaut32.lib mfplat.lib mfuuid.lib
 if errorlevel 1 (
     echo ERROR: Test linking failed
     exit /b 1

@@ -3,8 +3,9 @@
 
 #include "types.h"
 
-/* Билинейное масштабирование BGRA растра в целевое разрешение без обрезки */
-l4c_status_t l4c_scale_bilinear_bgra(
+/* Catmull-Rom bicubic: лучше держит края текста, чем bilinear.
+ * Покрытие: stretch-fit без crop/letterbox (контракт L4C-02). */
+l4c_status_t l4c_scale_bicubic_bgra(
     const uint8_t *src,
     uint32_t src_w,
     uint32_t src_h,

@@ -76,19 +76,23 @@ typedef struct {
     l4d_l4capture_adapter_cfg_t cfg;
 } adapter_ctx_t;
 
-static void cleanup_process(adapter_ctx_t *ctx) {
+static bool cleanup_process(adapter_ctx_t *ctx) {
+    bool exited = true;
     if (ctx->hStdinWrite) { CloseHandle(ctx->hStdinWrite); ctx->hStdinWrite = NULL; }
     if (ctx->hStdoutRead) { CloseHandle(ctx->hStdoutRead); ctx->hStdoutRead = NULL; }
     if (ctx->hProcess) {
         if (WaitForSingleObject(ctx->hProcess, 0) == WAIT_TIMEOUT) {
-            TerminateProcess(ctx->hProcess, 1);
-            WaitForSingleObject(ctx->hProcess, 2000);
+            if (ctx->hJob) TerminateJobObject(ctx->hJob, 1);
+            else TerminateProcess(ctx->hProcess, 1);
+            exited = WaitForSingleObject(ctx->hProcess, 1000) == WAIT_OBJECT_0;
         }
+        if (!exited) return false;
         CloseHandle(ctx->hProcess);
         ctx->hProcess = NULL;
     }
     if (ctx->hJob) { CloseHandle(ctx->hJob); ctx->hJob = NULL; }
     ctx->child_pid = 0;
+    return true;
 }
 
 static bool is_session_interactive(void) {
@@ -103,6 +107,25 @@ static void write_u64_le(uint8_t *p, uint64_t v) { for(int i=0;i<8;i++) p[i]=(ui
 static uint16_t read_u16_le(const uint8_t *p) { return (uint16_t)(p[0]|((uint16_t)p[1]<<8)); }
 static uint32_t read_u32_le(const uint8_t *p) { return (uint32_t)(p[0]|((uint32_t)p[1]<<8)|((uint32_t)p[2]<<16)|((uint32_t)p[3]<<24)); }
 static uint64_t read_u64_le(const uint8_t *p) { uint64_t v=0; for(int i=0;i<8;i++) v|=((uint64_t)p[i])<<(i*8); return v; }
+
+bool l4d_adapter_parse_event_metrics(const uint8_t *payload, uint32_t plen, l4d_backend_metrics_t *out) {
+    if (!payload || !out || plen < 24) return false;
+    out->fps = read_u16_le(payload + 0);
+    out->bitrate_kbps = read_u32_le(payload + 2);
+    out->raw_drops = read_u32_le(payload + 6);
+    out->encoder_drops = read_u32_le(payload + 10);
+    out->transport_drops = read_u32_le(payload + 14);
+    out->encode_p95_ms = read_u16_le(payload + 18);
+    out->queue_depth = read_u16_le(payload + 20);
+    if (plen >= 28) {
+        out->private_bytes_kb = read_u32_le(payload + 22);
+    }
+    /* gdi_handles occupies 26..29 — fits the accepted 30-byte payload. */
+    if (plen >= 30) {
+        out->gdi_handles = read_u32_le(payload + 26);
+    }
+    return true;
+}
 
 static bool ipc_send(HANDLE hWrite, uint16_t type, const uint8_t *payload, uint32_t payload_len, uint64_t seq) {
     uint8_t frame[IPC_MAX_FRAME];
@@ -360,8 +383,11 @@ static bool is_restart_budget_available(adapter_ctx_t *ctx) {
 }
 
 static uint16_t profile_to_id(const char *profile) {
-    if (strcmp(profile, "low") == 0) return PROFILE_ID_480P;
-    if (strcmp(profile, "540p") == 0) return PROFILE_ID_540P;
+    /* UI/remote-sessions шлют и "low", и "480p" — оба = base_480p. */
+    if (profile && (_stricmp(profile, "low") == 0 || _stricmp(profile, "480p") == 0)) {
+        return PROFILE_ID_480P;
+    }
+    if (profile && _stricmp(profile, "540p") == 0) return PROFILE_ID_540P;
     return PROFILE_ID_720P;
 }
 
@@ -476,7 +502,16 @@ bool l4d_adapter_stop(l4d_media_backend_t *self, const char *stream_id) {
     adapter_ctx_t *ctx = (adapter_ctx_t *)self->impl_ctx;
     (void)stream_id;
 
-    if (ctx->state == L4D_ADAPTER_IDLE || ctx->state == L4D_ADAPTER_STOPPING) return true;
+    if (ctx->state == L4D_ADAPTER_IDLE) return true;
+    if (ctx->state == L4D_ADAPTER_STOPPING) {
+        if (!cleanup_process(ctx)) return false;
+        ctx->state = L4D_ADAPTER_IDLE;
+        ctx->stream_id[0] = '\0';
+        ctx->lease_id[0] = '\0';
+        ctx->current_deadline_tick_ms = 0;
+        ctx->has_saved_params = false;
+        return true;
+    }
 
     /* Cancel any pending restart */
     ctx->restart_pending = false;
@@ -490,9 +525,12 @@ bool l4d_adapter_stop(l4d_media_backend_t *self, const char *stream_id) {
 
     /* Wait briefly for process to exit gracefully */
     if (ctx->hProcess) {
-        WaitForSingleObject(ctx->hProcess, 500);
+        WaitForSingleObject(ctx->hProcess, 100);
     }
-    cleanup_process(ctx);
+    if (!cleanup_process(ctx)) {
+        log_error("l4capture_adapter: child did not exit after forced stop");
+        return false;
+    }
 
     ctx->state = L4D_ADAPTER_IDLE;
     ctx->stream_id[0] = '\0';
@@ -555,6 +593,11 @@ bool l4d_adapter_force_idr(l4d_media_backend_t *self, const char *stream_id) {
     return ipc_send(ctx->hStdinWrite, CMD_FORCE_IDR, payload, 16, ++ctx->request_seq);
 }
 
+/* EVENT_METRICS wire (L4C_IPC_VERSION=1): 30 bytes.
+ *  0..1 fps, 2..5 bitrate, 6..9 raw_drops, 10..13 encoder_drops, 14..17 transport_drops,
+ *  18..19 encode_p95, 20..21 queue_depth, 22..25 private_bytes_kb, 26..29 gdi_handles.
+ *  Definition is after LE readers below. */
+
 void l4d_adapter_poll(l4d_media_backend_t *self) {
     if (!self || !self->impl_ctx) return;
     adapter_ctx_t *ctx = (adapter_ctx_t *)self->impl_ctx;
@@ -567,20 +610,7 @@ void l4d_adapter_poll(l4d_media_backend_t *self) {
         ctx->last_event_tick = get_current_tick();
         switch (type) {
         case EVENT_METRICS:
-            if (plen >= 24) {
-                ctx->metrics.fps = read_u16_le(payload + 0);
-                ctx->metrics.bitrate_kbps = read_u32_le(payload + 2);
-                ctx->metrics.raw_drops = read_u32_le(payload + 6);
-                ctx->metrics.encoder_drops = read_u32_le(payload + 10);
-                ctx->metrics.transport_drops = read_u32_le(payload + 14);
-                ctx->metrics.encode_p95_ms = read_u16_le(payload + 18);
-                ctx->metrics.queue_depth = read_u16_le(payload + 20);
-                if (plen >= 28) {
-                    ctx->metrics.private_bytes_kb = read_u32_le(payload + 22);
-                }
-                if (plen >= 32) {
-                    ctx->metrics.gdi_handles = read_u32_le(payload + 26);
-                }
+            if (l4d_adapter_parse_event_metrics(payload, plen, &ctx->metrics)) {
                 ctx->metrics_valid = true;
             }
             break;

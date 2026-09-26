@@ -55,18 +55,30 @@ static l4c_status_t oh264_init(struct l4c_encoder_backend *self, const l4c_encod
     param.sSpatialLayers[0].iSpatialBitrate = (int)ctx->target_bitrate;
     param.sSpatialLayers[0].iMaxSpatialBitrate = (int)ctx->max_bitrate;
     param.sSpatialLayers[0].uiProfileIdc = PRO_BASELINE;
-    param.sSpatialLayers[0].uiLevelIdc = LEVEL_3_1;
+    /* 1080p (native default) выходит за MaxFS Level 3.1 (3600 MB);
+     * 720p и ниже остаются 3.1 для SDP 42e01f. */
+    param.sSpatialLayers[0].uiLevelIdc =
+        ((uint32_t)ctx->width * (uint32_t)ctx->height > 1280u * 720u) ? LEVEL_4_0 : LEVEL_3_1;
     param.sSpatialLayers[0].sSliceArgument.uiSliceMode = SM_SINGLE_SLICE;
-    param.iComplexityMode = LOW_COMPLEXITY;
+    param.iComplexityMode = MEDIUM_COMPLEXITY;
     param.uiIntraPeriod = (unsigned int)(ctx->fps * 2);
     param.eSpsPpsIdStrategy = CONSTANT_ID;
     param.bEnableFrameSkip = 0;
     param.bEnableDenoise = 0;
-    param.bEnableBackgroundDetection = 1;
+    /* BGD на desktop-ROI не нужен; AQ — наоборот, помогает тексту. */
+    param.bEnableBackgroundDetection = 0;
     param.bEnableAdaptiveQuant = 1;
     param.bEnableLongTermReference = 0;
     param.iMultipleThreadIdc = 1;
-    param.iEntropyCodingModeFlag = 0; /* CAVLC */
+    param.iEntropyCodingModeFlag = 0; /* CAVLC — Baseline */
+    /* Deblock сглаживает края UI-текста — главный враг читаемости. */
+    param.iLoopFilterDisableIdc = DEBLOCKING_IDC_1;
+    param.iLoopFilterAlphaC0Offset = 0;
+    param.iLoopFilterBetaOffset = 0;
+    /* QP-коридор: не даём RC уводить текст в «мыло» при всплесках. */
+    param.iMinQp = 12;
+    param.iMaxQp = 36;
+    param.iIdrBitrateRatio = 200;
     rv = (*ctx->encoder)->InitializeExt(ctx->encoder, &param);
     if (rv != 0) {
         WelsDestroySVCEncoder(ctx->encoder);

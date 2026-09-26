@@ -23,6 +23,28 @@ l4c_status_t l4c_color_convert_bgra_to_i420(
     l4c_raw_frame_t *out_raw
 );
 
+/* Преобразование BGRA top-down в полупланарный NV12 (BT.601 limited range) */
+l4c_status_t l4c_color_convert_bgra_to_nv12(
+    l4c_color_converter_t *converter,
+    const uint8_t *src_bgra,
+    int32_t src_stride,
+    uint8_t *dst_y,
+    int32_t dst_stride_y,
+    uint8_t *dst_uv,
+    int32_t dst_stride_uv,
+    uint32_t width,
+    uint32_t height
+);
+
+/* Преобразование BGRA top-down в полупланарный NV12 с заполнением l4c_raw_frame_t */
+l4c_status_t l4c_color_convert_bgra_to_nv12_frame(
+    l4c_color_converter_t *converter,
+    const uint8_t *bgra,
+    int32_t bgra_stride,
+    uint64_t pts_ms,
+    l4c_raw_frame_t *out_raw
+);
+
 /* Уничтожение конвертера и освобождение памяти плоскостей */
 void l4c_color_converter_destroy(l4c_color_converter_t *converter);
 

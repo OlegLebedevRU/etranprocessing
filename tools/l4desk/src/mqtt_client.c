@@ -104,7 +104,7 @@ static void publish_presence(MqttState* st, const char* status) {
                                                   &st->inventory, &stream);
     if (len > 0) {
         send_publish_packet(st, topic, payload, (size_t)len, 1, 1); /* retain=1, qos=1 */
-        log_info("Published presence [%s] (len=%d, retain=1, qos=1)", status, len);
+        log_debug("Published presence [%s] (len=%d, retain=1, qos=1)", status, len);
         log_debug("Presence payload: %s", payload);
         st->last_presence_time = time(NULL);
         st->last_desk_avail = desk_avail;
@@ -378,7 +378,7 @@ int mqtt_client_run(const L4DeskConfig* config, HANDLE hStopEvent) {
                     log_warn("Socket disconnected by broker.");
                     break;
                 }
-                log_info("MQTT recv bytes_recvd=%d (prev rx_buf_len=%zu)", bytes_recvd, rx_buf_len);
+                log_debug("MQTT recv bytes_recvd=%d (prev rx_buf_len=%zu)", bytes_recvd, rx_buf_len);
                 rx_buf_len += (size_t)bytes_recvd;
 
                 /* Process MQTT packets */

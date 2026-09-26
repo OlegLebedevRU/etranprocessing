@@ -54,4 +54,7 @@ bool l4d_adapter_is_running(l4d_media_backend_t *self);
 /* Status query */
 void l4d_adapter_get_status(const l4d_media_backend_t *self, l4d_adapter_status_t *out_status);
 
+/* EVENT_METRICS payload parser (wire length 30). Exposed for unit tests. */
+bool l4d_adapter_parse_event_metrics(const uint8_t *payload, uint32_t plen, l4d_backend_metrics_t *out);
+
 #endif /* L4D_L4CAPTURE_ADAPTER_H */
