@@ -64,6 +64,34 @@
 4. Изолированный install/upgrade/rollback релизного `l4setup` и x86 runtime
    на Windows 7/POSReady 7 остаются за рамками подтверждённого теста.
 
+## Возврат к 17E (2026-09-26)
+
+- §51 журнала принял `H-L4D-17C-VIDEO-WATCH-MB-v1`; исторический
+  `L4D-17E-MB-report.md` остаётся `BLOCKED_CONTRACT` до нового verdict.
+- Изолированный контур уже описан в
+  `MenuBuilder/docs/l4desk/handoffs/L4D-17E-MB-progress-2026-09-26.md` и
+  `L4D-17E-corrective-2026-09-26.md`: test tenant 3, mock email/ЮKassa,
+  успешный платёж без реального списания, owner lease, долговечная закрытая
+  видеосессия с 5 секундами usage и одно бесплатное monthly начисление после
+  подтверждённого `device_online`. Это частичное E2E, не полная 17E приёмка.
+- Для следующего прогона сначала сверить точную версию test-backend с Git
+  candidate и безопасные flags, затем повторить stop и убедиться, что одна
+  закрытая сессия и usage не дублируются. Не прерывать текущую длительную
+  трансляцию 1000003 до её контрольной отметки.
+- Tenant 3 уже содержит posted payment. Сценарий **без платежа** с бесплатным
+  терминалом и 120 минутами нельзя честно заявить на нём: нужен отдельный
+  утверждённый no-payment tenant или чистый изолированный контур. Длительная
+  видеотрансляция 1000003 сама по себе подтверждает медиатракт; коммерческий
+  quota test требует измеренной usage, entitlement и ledger сверки.
+- Затем проверить paid continuation, первый платёжный anchor, online once за
+  месяц, DST/границы месяца, grace/late/block, webhook+poll replay, ручной
+  платёж/storno, double-entry/rebuild, rounding, Hub и archive. Локальные
+  unit/contract tests на эти случаи есть; per-scenario runtime verdict нет.
+- После полного E2E сверить весь release image/source, актуальные app1/media
+  provider версии, flags, migration `027`, rollback и нулевой ledger mismatch;
+  только тогда выпускать новый report/candidate `H-L4D-17E-MB-v1` и передавать
+  контроллеру для append-only приёмки. 17F начнётся после этой записи.
+
 ## Решение для PR
 
 Один draft PR из `release/l4tools-1.8.2-beta-1` в `main`. После закрытия
