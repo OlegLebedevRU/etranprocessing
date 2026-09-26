@@ -310,7 +310,10 @@
 - PostgreSQL `10.0.0.7` продолжает периодически сбрасывать новые asyncpg
   SSL подключения и даёт HTTP 500 даже на finance read и keepalive, а
   `DatabaseUserStore` превращает этот сбой в ложный 401 `Invalid credentials`.
-  Это отдельный production incident и gate перед финальным 17E. Read-only
+  Это отдельный production incident. По решению пользователя 2026-09-27
+  расследование провайдера ведётся вне 17E и не является условием
+  project-local приёмки; нестабильность подключения может сделать отдельный
+  runtime-прогон неубедительным и остаётся release readiness risk. Read-only
   диагностика 2026-09-27: с хоста и трёх контейнеров 38–43 из 80
   соединений получили TCP reset сразу после PostgreSQL SSLRequest, до TLS,
   авторизации и SQL; при темпе 1 запрос/с — 10 из 24 reset. Успешные
@@ -344,6 +347,34 @@
   из двух реплик/маршрута возможна, но по скриншоту не доказана.
 
 ## Решение для PR
+
+### Путь закрытия 17E после бесплатного E2E
+
+1. На уже развёрнутом изолированном backend (tenant 1000, quota 600 s,
+   enforcement on) подтвердить HTTP `403/free_quota_exceeded` на
+   `POST /api/v1/video/devices/1000005/control/lease` под владельцем
+   test04. Затем read-only сверить, что отказ не создал аренду, сессию,
+   usage или ledger запись. Пароль/токен пользователя не переносить в чат.
+2. Исправить распределение `org_id` между MenuBuilder и IoT: регистрация
+   сейчас проверяет свободный ID только в MenuBuilder; tenant 4 реально
+   столкнулся с занятым IoT ID. До единого allocator/reservation нельзя
+   считать публичную регистрацию принятой. Исправление вести в этой же
+   release branch с адресными contract и concurrency проверками.
+3. Составить по пунктам `L4D-17E-MB.md` таблицу evidence: runtime уже
+   подтверждённые free quota, paid usage, payment/webhook, monthly charge,
+   midnight split/post; локально покрытые DST, grace/block,
+   reconciliation/rebuild, rounding, Hub и archive. Непокрытые пункты
+   проверять в изолированном контуре; не выполнять реальные списания,
+   массовые письма или ручную порчу production projection.
+4. Сверить полный candidate image/source, миграцию 027, effective flags и
+   rollback; выполнить ограниченный production smoke при выключенной
+   глобальной коммерческой активации. Выпустить новый 17E report и
+   `DETACHED_V1` candidate для независимой проверки контроллером.
+   Исторический `BLOCKED_CONTRACT` report не переписывать как принятый.
+
+Сбой managed PostgreSQL отслеживается отдельно по решению пользователя;
+неоднозначный из-за него тест следует повторить, но расследование провайдера
+не включать в 17E contract verdict.
 
 Один draft PR из `release/l4tools-1.8.2-beta-1` в `main`. После закрытия
 обязательных gate обновить этот документ, повторить затронутые проверки,
