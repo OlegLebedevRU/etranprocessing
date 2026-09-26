@@ -326,7 +326,7 @@ TCP дает упорядоченную доставку, но при потер
 
 BFF передает `X-Internal-Service-Key`, `X-Org-Id` и контекст `X-User-Id`, `X-Role`, `X-Role-Id`, `X-Session-Id`. Значения выводятся из серверной авторизации, а не из произвольных browser headers. Внутренний ключ не должен попадать в JS, query string, логи или документ. WebSocket не отменяет повторной проверки срока и владельца аренды.
 
-Для видеовкладки MenuBuilder BFF открывает внутренний watch WS app1 после проверки `video:view`, tenant и `device_id → sn`. Браузеру BFF передает только сигнал `invalidate`, затем UI читает собственные REST status endpoints. При переподключении и после сигнала выполняется новый snapshot; hint от старого `stream_instance_id` не восстанавливает `running`. Watch не продлевает lease и не измеряет RTP или декодированные кадры. Поток app1 использует локальные подписки и требует одного worker (`WEB_CONCURRENCY=1`); браузерный BFF watch закрывается и переавторизуется каждые 60 секунд.
+Для видеовкладки MenuBuilder BFF открывает внутренний watch WS app1 после проверки `video:view`, tenant и `device_id → sn`. Браузеру BFF передает только сигнал `invalidate`, затем UI читает собственные REST status endpoints. При переподключении и после сигнала выполняется новый snapshot; hint от старого `stream_instance_id` не восстанавливает `running`. Watch не продлевает lease и не измеряет RTP или декодированные кадры. Счётчик кадров UI читает локально из WebRTC `getStats()` без HTTP-опроса `/session/status`. Поток app1 использует локальные подписки и требует одного worker (`WEB_CONCURRENCY=1`); браузерный BFF watch закрывается и переавторизуется каждые 60 секунд.
 
 #### 2.4.3. MQTT/AMQP и ctl v1
 

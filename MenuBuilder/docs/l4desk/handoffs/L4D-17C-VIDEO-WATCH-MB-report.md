@@ -27,7 +27,7 @@ next_gate: browser_stream_validation
 
 - BFF `/api/v1/video/devices/{device_id}/watch/ws` проверяет cookie/permission/device ownership, подключается к app1 и пересылает только `invalidate`. URL token и чужой Origin отклоняются. Соединение переавторизуется после 60 секунд.
 - Видеовкладка открывает watch для выбранного терминала, перечитывает REST status при подключении, invalidation и reconnect, игнорирует состояние другого `stream_instance_id`, закрывает socket при смене терминала или unmount.
-- При недоступном WS временно работает пятисекундный REST status fallback. RTP status остаётся на пятисекундном таймере. Lease keepalive остаётся отдельным.
+- При недоступном WS временно работает пятисекундный REST status fallback. При открытом WS регулярных status HTTP-запросов нет; BFF переавторизует WS через 60 секунд и UI делает resnapshot при переподключении. Счётчик декодированных кадров берётся локально из WebRTC `getStats()` каждые 5 секунд. Lease keepalive остаётся отдельным.
 - Compose Nginx-конфиг MenuBuilder получил явный WS upgrade. В фактическом `nginx-default` маршруте `/api/v1/video/` WS upgrade уже был; `nginx-configs/port_3000.conf` теперь сохраняет порт в `Host`, чтобы same-origin проверка работала на `:3000`.
 
 ## Контракт
@@ -36,7 +36,7 @@ next_gate: browser_stream_validation
 |---|---|---|---|---|---|---|---|
 | app1 → MenuBuilder BFF | `/api/internal/v1/remote-input/ws/watch/{sn}` | `snapshot`, затем `invalidate`; v1 | N/A | Повторный сигнал вызывает REST resnapshot | send 5 с; BFF socket 60 с | 4403 auth/ownership, 1013 backlog | Старый REST status сохраняется |
 | MenuBuilder BFF → браузер | `/api/v1/video/devices/{device_id}/watch/ws` | только `{type:"invalidate"}` | N/A | refresh coalesced | reconnect 1–15 с | 4401/4403/4404 без автоповтора | REST fallback при недоступном WS |
-| Браузер → BFF | `/control/status`, `/stream/state`, `/session/status` | существующие REST DTO | N/A | повторное чтение безопасно | status fallback 5 с; RTP 5 с | существующие HTTP ошибки | без изменений |
+| Браузер → BFF | `/control/status`, `/stream/state` | существующие REST DTO | N/A | повторное чтение безопасно | status fallback 5 с только без WS | существующие HTTP ошибки | `/session/status` больше не опрашивается UI |
 
 ## Проверено
 
@@ -45,7 +45,7 @@ next_gate: browser_stream_validation
 - [x] Frontend: `npx tsc --noEmit --incremental false` — успешно.
 - [x] Frontend: `npx vite build --configLoader runner --outDir .codex-dist-watch` — успешно. Этот режим сообщил предупреждение существующего Vite plugin о `__dirname`; сборка завершилась.
 - [x] Frontend: `npx vitest run --configLoader runner src/tests/session-lifecycle.test.ts` — 6 passed.
-- [x] Стандартный `npm run build` — успешно; предупреждение только о размере существующего vendor chunk.
+- [x] Стандартный `npm run build` — успешно после перехода на локальную WebRTC статистику; предупреждение только о размере существующего vendor chunk.
 - [x] На сервере MenuBuilder backend импортирует watch route; хеш `video_control.py` совпадает с локальной версией. Публичный frontend bundle содержит `/watch/ws`; главная страница отвечает 200, а анонимный запрос к watch route — 401.
 - [x] Конфиг `port_3000.conf` доставлен из репозитория по разрешению пользователя. `nginx -t` и reload прошли; SHA-256 файла на хосте и в `nginx-default` совпадает с локальным: `bd5df5f187ec7432d5be90b3ad83be0b2d494e2ec31c5ad9216165fa804f4f48`.
 - [x] Текущий runtime app1: `WEB_CONCURRENCY=1`.
@@ -54,7 +54,7 @@ next_gate: browser_stream_validation
 ## Браузерная проверка
 
 1. Открыть видеовкладку и выбрать доступный терминал. В Network должен появиться `101` для `/api/v1/video/devices/{id}/watch/ws`, затем `{type:"invalidate"}`.
-2. Запустить трансляцию. По сигналам watch должны обновляться `control/status` и `stream/state`; `session/status` продолжает опрашивать RTP раз в 5 секунд.
+2. Запустить трансляцию. По сигналам watch должны обновляться `control/status` и `stream/state`; регулярного `/session/status` в Network нет. Частота декодированных кадров берётся из WebRTC stats браузера.
 3. Остановить трансляцию или отключить агент. UI должен перейти из running в stopped/idle без ожидания пятой секунды; reason виден там, где его возвращает REST.
 4. Прервать WS и восстановить сеть: REST status работает во время разрыва, затем соединение повторяется и берётся новый snapshot.
 5. Проверить viewer `video:view` и отказ для пользователя без права или чужой организации.

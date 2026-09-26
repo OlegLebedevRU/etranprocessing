@@ -26,7 +26,6 @@ import {
   getDeviceInventory,
   getDeviceStreamState,
   getJanusWsUrl,
-  getVideoSessionStatus,
   keepaliveControlLease,
   releaseControlLease,
   startDeviceStream,
@@ -188,10 +187,10 @@ export default function VideoSurveillancePage() {
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const janusClientRef = useRef<JanusStreamingClient | null>(null);
-  const pollTimerRef = useRef<any>(null);
+  const statsTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const keepaliveTimerRef = useRef<any>(null);
   const leaseRef = useRef<{ id: string; deviceId: number } | null>(null);
-  const prevPacketsRef = useRef<{ packets: number; time: number } | null>(null);
+  const prevFramesRef = useRef<{ frames: number; time: number } | null>(null);
 
   // Загрузка терминалов и их адресов
   const loadDevices = useCallback(async () => {
@@ -262,7 +261,7 @@ export default function VideoSurveillancePage() {
   }, []);
 
   // Хук удалённого управления (мышь/клавиатура)
-  const lastPacketGrowthTimeRef = useRef<number>(Date.now());
+  const lastFrameGrowthTimeRef = useRef<number>(Date.now());
 
   // Координатор сессии управляет generation/эпохами, keepalive и событиями терминала
   const coordinatorRef = useRef<SessionLifecycleCoordinator>(
@@ -291,9 +290,9 @@ export default function VideoSurveillancePage() {
           void janusClientRef.current.stop();
           janusClientRef.current = null;
         }
-        if (pollTimerRef.current) {
-          clearInterval(pollTimerRef.current);
-          pollTimerRef.current = null;
+        if (statsTimerRef.current) {
+          clearInterval(statsTimerRef.current);
+          statsTimerRef.current = null;
         }
       },
       onLeaseLost: (statusCode, msg) => {
@@ -311,9 +310,9 @@ export default function VideoSurveillancePage() {
           void janusClientRef.current.stop();
           janusClientRef.current = null;
         }
-        if (pollTimerRef.current) {
-          clearInterval(pollTimerRef.current);
-          pollTimerRef.current = null;
+        if (statsTimerRef.current) {
+          clearInterval(statsTimerRef.current);
+          statsTimerRef.current = null;
         }
       },
     })
@@ -343,11 +342,11 @@ export default function VideoSurveillancePage() {
     await rcRef.current.disable("session_stopped");
     await coordinatorRef.current.stopSession(reason);
 
-    if (pollTimerRef.current) {
-      clearInterval(pollTimerRef.current);
-      pollTimerRef.current = null;
+    if (statsTimerRef.current) {
+      clearInterval(statsTimerRef.current);
+      statsTimerRef.current = null;
     }
-    prevPacketsRef.current = null;
+    prevFramesRef.current = null;
 
     if (janusClientRef.current) {
       try {
@@ -536,18 +535,14 @@ export default function VideoSurveillancePage() {
 
     void refresh();
     connect();
-    // During a disconnect, use the existing REST status path. A periodic
-    // resnapshot also covers a missed process-local invalidation.
+    // During a disconnect, use the existing REST status path. The BFF
+    // reconnects after 60 seconds and triggers a fresh snapshot.
     const fallbackTimer = setInterval(() => {
       if (socket?.readyState !== WebSocket.OPEN) void refresh();
     }, 5000);
-    const resyncTimer = setInterval(() => {
-      if (socket?.readyState === WebSocket.OPEN) void refresh();
-    }, 60000);
     return () => {
       disposed = true;
       clearInterval(fallbackTimer);
-      clearInterval(resyncTimer);
       if (retryTimer) clearTimeout(retryTimer);
       socket?.close();
     };
@@ -725,36 +720,35 @@ export default function VideoSurveillancePage() {
       setStatusText("В эфире");
       message.success("Трансляция успешно запущена");
 
-      // 5. Периодический опрос качества и RTP пакетов
-      prevPacketsRef.current = null;
-      lastPacketGrowthTimeRef.current = Date.now();
-      pollTimerRef.current = setInterval(async () => {
+      // Decoded frames come from the local WebRTC connection; no HTTP status poll.
+      prevFramesRef.current = null;
+      lastFrameGrowthTimeRef.current = Date.now();
+      let statsBusy = false;
+      statsTimerRef.current = setInterval(async () => {
+        if (statsBusy || janusClientRef.current !== client) return;
+        statsBusy = true;
         try {
-          const stat = await getVideoSessionStatus(selectedDevice.device_id);
-
+          const stat = await client.getVideoReceiveStats();
+          if (janusClientRef.current !== client || !stat) return;
           const now = Date.now();
-          let pps = 0;
-          if (prevPacketsRef.current) {
-            const dt = (now - prevPacketsRef.current.time) / 1000;
-            const dp = stat.rtp_packets - prevPacketsRef.current.packets;
-            pps = dt > 0 ? Math.max(0, Math.round(dp / dt)) : 0;
+          const previous = prevFramesRef.current;
+          prevFramesRef.current = { frames: stat.framesDecoded, time: stat.timestamp };
+          if (!previous) {
+            if (stat.framesDecoded > 0) lastFrameGrowthTimeRef.current = now;
+            return;
           }
-          prevPacketsRef.current = { packets: stat.rtp_packets, time: now };
-
-          if (stat.streaming && stat.rtp_packets > 0) {
-            if (pps === 0 && now - lastPacketGrowthTimeRef.current > 15000) {
-              setStatusText("В эфире (кадры не поступают)");
-            } else {
-              if (pps > 0) {
-                lastPacketGrowthTimeRef.current = now;
-              }
-              setStatusText(`В эфире (${pps} кадр/сек)`);
-            }
-          } else if (!stat.streaming) {
-            setStatusText("Трансляция не передается");
+          const elapsed = (stat.timestamp - previous.time) / 1000;
+          const decoded = stat.framesDecoded - previous.frames;
+          if (decoded > 0 && elapsed > 0) {
+            lastFrameGrowthTimeRef.current = now;
+            setStatusText(`В эфире (${Math.round(decoded / elapsed)} кадр/сек)`);
+          } else if (now - lastFrameGrowthTimeRef.current > 15000) {
+            setStatusText("В эфире (кадры не поступают)");
           }
         } catch (e) {
-          console.warn("Status poll error", e);
+          console.warn("WebRTC stats error", e);
+        } finally {
+          statsBusy = false;
         }
       }, 5000);
     } catch (err: any) {

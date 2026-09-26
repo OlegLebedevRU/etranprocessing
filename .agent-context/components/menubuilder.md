@@ -19,7 +19,7 @@
 - org_id из JWT приводится к int на auth boundary; UI permission не заменяет серверную проверку.
 - UI, серверная lease и terminal stream — разные состояния; terminal event исправляет UI.
 - `X-Internal-Service-Key` не попадает в browser, логи или карточки.
-- Video watch: BFF проверяет `video:view` и tenant по `device_id`, подключается к app1 `/ws/watch/{sn}` с внутренним ключом и передаёт браузеру только `invalidate`. UI после каждого сигнала и reconnect читает REST snapshot; lease keepalive и RTP status остаются отдельными.
+- Video watch: BFF проверяет `video:view` и tenant по `device_id`, подключается к app1 `/ws/watch/{sn}` с внутренним ключом и передаёт браузеру только `invalidate`. UI после каждого сигнала и reconnect читает REST snapshot; lease keepalive остаётся отдельным, счётчик кадров берётся из WebRTC `getStats()` в браузере.
 
 ## State machine
 Для remote control: idle → acquire → active → stop/error/release;
@@ -33,7 +33,7 @@
 - [useRemoteControl.ts](../../MenuBuilder/frontend/src/hooks/useRemoteControl.ts) — WS/input/keepalive.
 - [RemoteControlPanel.tsx](../../MenuBuilder/frontend/src/components/video/RemoteControlPanel.tsx) — UI control.
 - [RemoteControlOverlay.tsx](../../MenuBuilder/frontend/src/components/RemoteControlOverlay.tsx) — pointer/canvas.
-- [video-surveillance.tsx](../../MenuBuilder/frontend/src/routes/video-surveillance.tsx) — browser watch, REST resnapshot и RTP status.
+- [video-surveillance.tsx](../../MenuBuilder/frontend/src/routes/video-surveillance.tsx) — browser watch, REST resnapshot и локальная статистика WebRTC.
 
 ## Проверка
 Backend code: uv run pytest + ruff/format/pyright; frontend code: npm run build +
@@ -42,7 +42,7 @@ camera/view-only input, stop/unmount timers, late events. См. [матрицу]
 
 ## Известные риски и незавершённые вопросы
 Compatibility fallback `running` не доказывает ACK/кадры. REST и WS keepalive
-нужно проверять раздельно. IoT watch v1 зависит от `WEB_CONCURRENCY=1`; browser E2E и deployed nginx upgrade ещё требуют проверки.
+нужно проверять раздельно. IoT watch v1 зависит от `WEB_CONCURRENCY=1`; browser E2E качества изображения ещё требует проверки.
 
 ## Источники и актуальность
 - Authoritative docs: [ownership](../../docs/etran_data-database-ownership.md),
