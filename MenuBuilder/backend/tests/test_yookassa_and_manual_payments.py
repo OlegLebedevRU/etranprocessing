@@ -940,6 +940,7 @@ async def test_http_api_yookassa_and_manual_payments(
             )
             assert resp_manual.status_code == 201
             m_id = resp_manual.json()["id"]
+            assert fake_db.commit_count == 4
 
             # Balance now 1250 RUB
             resp_bal2 = await client.get(
@@ -956,6 +957,7 @@ async def test_http_api_yookassa_and_manual_payments(
             )
             assert resp_storno.status_code == 201
             assert resp_storno.json()["document_number"] == "STORNO-INV-1"
+            assert fake_db.commit_count == 5
 
             # Balance returns to 250 RUB
             resp_bal3 = await client.get(

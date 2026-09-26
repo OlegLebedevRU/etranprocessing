@@ -366,6 +366,7 @@ async def post_ledger_transaction(
         tx = await FinPostingService.post_transaction(db, body)
         repo = L4DeskRepository(db)
         entries = await repo.list_ledger_entries(tx.id)
+        await db.commit()
         return FinLedgerTransactionRead(
             id=tx.id,
             tenant_id=tx.tenant_id,
@@ -431,6 +432,7 @@ async def reverse_ledger_transaction(
         tx = await FinReversalService.reverse_transaction(db, body)
         repo = L4DeskRepository(db)
         entries = await repo.list_ledger_entries(tx.id)
+        await db.commit()
         return FinLedgerTransactionRead(
             id=tx.id,
             tenant_id=tx.tenant_id,
@@ -487,6 +489,7 @@ async def rebuild_tenant_projection(
     proj, _, _ = await FinProjectionService.rebuild_projection(
         db, tenant_id, actor=actor
     )
+    await db.commit()
     return FinBalanceRead(
         tenant_id=proj.tenant_id,
         account_id=proj.account_id,
@@ -510,6 +513,7 @@ async def trigger_reconciliation(
     """Execute a reconciliation run across subledger transactions and projections."""
     try:
         run = await FinReconciliationService.run_reconciliation(db, body)
+        await db.commit()
         return FinReconciliationRunRead.model_validate(run)
     except FinValidationError as err:
         raise HTTPException(
@@ -558,6 +562,7 @@ async def internal_create_tariff(
     """Create a new immutable tariff version."""
     try:
         tariff = await FinTariffService.create_tariff_version(db, body)
+        await db.commit()
         return FinTariffVersionRead.model_validate(tariff)
     except FinValidationError as err:
         raise HTTPException(
@@ -584,6 +589,7 @@ async def internal_process_device_online(
         actor=body.actor,
         correlation_id=body.correlation_id,
     )
+    await db.commit()
     if charge is None:
         return None
     return FinTerminalMonthlyChargeRead.model_validate(charge)
@@ -610,6 +616,7 @@ async def internal_record_usage(
         actor=body.actor,
         correlation_id=body.correlation_id,
     )
+    await db.commit()
     return [FinUsageDailyRead.model_validate(r) for r in rows]
 
 
@@ -629,6 +636,7 @@ async def internal_close_day(
         local_date=body.local_date,
         actor=body.actor,
     )
+    await db.commit()
     return [FinUsageDailyRead.model_validate(r) for r in rows]
 
 
@@ -867,6 +875,7 @@ async def internal_create_manual_payment(
             actor=actor,
             correlation_id=f"manual-pay-{body.tenant_id}",
         )
+        await db.commit()
         return FinManualPaymentRead.model_validate(payment)
     except FinValidationError as err:
         raise HTTPException(
@@ -903,6 +912,7 @@ async def internal_storno_manual_payment(
             creator_user_id=user_id_int,
             correlation_id=f"storno-{manual_payment_id}",
         )
+        await db.commit()
         return FinManualPaymentRead.model_validate(storno)
     except (FinValidationError, FinReversalError) as err:
         raise HTTPException(
