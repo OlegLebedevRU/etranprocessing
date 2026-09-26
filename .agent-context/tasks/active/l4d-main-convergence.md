@@ -143,6 +143,17 @@
   Адресные тесты 3/3, полный MenuBuilder backend 495/495, Ruff и Pyright pass.
   После наблюдения полуночи нужен отдельный контролируемый rollout только
   изолированного test-backend и runtime-проверка одной проводки, баланса и replay.
+- Полуночный browser E2E: session `466` у terminal `1000003` шла
+  2026-09-26 20:58:14–21:03:31 UTC (317 с), штатно остановлена пользователем.
+  `FinUsageDaily` за 26 сентября выросла с 9305 до 9411 с (+106), за 27-е
+  появилась строка на 211 с; 106+211=317. Новые сутки дали 211 free и 0
+  billable, старые — 7200 free, 2211 billable и 100 копеек расчёта.
+  Ingress до/после midnight имел `fresh_rtp=true`, маршрут и 0 unrouted;
+  после stop route и transport исчезли. **Midnight split/media: PASS**.
+  В 00:06 МСК вчерашняя строка всё ещё без `ledger_transaction_id`, balance
+  tenant 3 = 1000 копеек, ledger содержит только прежний тестовый payment.
+  **Automatic close/post к 00:06 не наблюдался**; новый worker ещё не
+  развёрнут, а иной scheduler до этого момента не сработал. Счёт не менялся.
 - Затем проверить paid continuation, первый платёжный anchor, online once за
   месяц, DST/границы месяца, grace/late/block, webhook+poll replay, ручной
   платёж/storno, double-entry/rebuild, rounding, Hub и archive. Локальные

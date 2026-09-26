@@ -76,6 +76,19 @@ readiness записываются в приватный manifest для пос�
 после проверки верните consumer в shadow/disabled. Повторные события
 `device_online` должны оставить один monthly charge на terminal/cycle.
 
+Для закрытия суточного usage после локальной полуночи включайте отдельный
+worker только для утверждённого тестового tenant:
+`E2E_METERING_CLOSE_WORKER_ENABLED=true` и
+`E2E_METERING_CLOSE_WORKER_TENANT_IDS=[<id тестового tenant>]`.
+Пустой список ничего не проводит; worker ждёт пять минут после локальной
+полуночи. Перед включением остановите тестовые сессии и снимите read-only
+состояние usage/ledger/balance. После одного тика проверьте одну проводку,
+баланс и идемпотентность следующего тика; затем верните флаг в `false`.
+Этот worker не требует включения глобального entitlement worker.
+Для воспроизводимого обновления test-backend можно собрать image из
+зафиксированного Git archive, задать `E2E_BACKEND_IMAGE` его immutable tag и
+пересоздать только `test-backend` с `--no-build --no-deps`.
+
 ## Завершение
 
 Запись терминала 70 и её лицензию не изменять. После проверки остановить

@@ -22,6 +22,7 @@ services:
       - e2e_private
 
   test-backend:
+    image: ${E2E_BACKEND_IMAGE:-l4desk-e2e-test-backend:local}
     build:
       context: ../..
       dockerfile: MenuBuilder/backend/Dockerfile
