@@ -120,9 +120,13 @@ def test_watch_rejects_foreign_tenant_before_upstream() -> None:
 def test_watch_relays_only_invalidate_and_rejects_browser_input() -> None:
     client = TestClient(app)
     upstream = _UpstreamContext()
+    keepalive = AsyncMock()
+    release = AsyncMock()
     with (
         patch("app.routers.video_control.async_session", return_value=_DbContext()),
         patch.object(iot_client, "service_token", "placeholder"),
+        patch.object(iot_client, "remote_input_keepalive", new=keepalive),
+        patch.object(iot_client, "remote_input_release", new=release),
         patch(
             "app.routers.video_control.websockets.connect", return_value=upstream
         ) as connect,
@@ -140,3 +144,5 @@ def test_watch_relays_only_invalidate_and_rejects_browser_input() -> None:
         assert error.value.code == 4403
 
     assert connect.call_args.kwargs["additional_headers"]["X-Org-Id"] == "1"
+    keepalive.assert_not_awaited()
+    release.assert_not_awaited()
