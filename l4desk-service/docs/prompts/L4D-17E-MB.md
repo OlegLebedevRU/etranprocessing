@@ -5,7 +5,7 @@ prompt_id: L4D-17E-MB
 scope_project: MenuBuilder
 scope_root: D:\repo\platerra\Public\etranprocessing\MenuBuilder
 prompt_type: acceptance
-required_handoff_ids: [H-L4D-17D-MEDIA-v1, H-L4D-06C-MB-v1, H-L4D-08B-MB-v1, H-L4D-09-MB-v1, H-L4D-10-MB-v1, H-L4D-11-MB-v1, H-L4D-12-MB-v1, H-L4D-13-MB-v1, H-L4D-14-MB-v1, H-L4D-16-MB-v1]
+required_handoff_ids: [H-L4D-17D-MEDIA-v1, H-L4D-17C-VIDEO-WATCH-MB-v1, H-L4D-06C-MB-v1, H-L4D-08B-MB-v1, H-L4D-09-MB-v1, H-L4D-10-MB-v1, H-L4D-11-MB-v1, H-L4D-12-MB-v1, H-L4D-13-MB-v1, H-L4D-14-MB-v1, H-L4D-16-MB-v1]
 output_handoff_id: H-L4D-17E-MB-v1
 next_prompt_id: L4D-17F-DOCS
 branch: l4desk/l4d-17e-mb

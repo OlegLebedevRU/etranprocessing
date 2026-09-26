@@ -4771,3 +4771,43 @@ consumers:
 next_prompt_id: L4D-17E-MB
 ```
 <!-- HANDOFF:H-L4D-17D-MEDIA-v1:END -->
+
+## 48. Регистрация корректирующего шага L4D-17C-VIDEO-WATCH-MB (consumer MenuBuilder)
+
+Регистрация корректирующего шага `L4D-17C-VIDEO-WATCH-MB` для интеграции read-only video-watch invalidation feed в MenuBuilder (операторский status polling) после принятия provider `H-L4D-17C-VIDEO-WATCH-IOT-01-v1`.
+
+<!-- CORRECTIVE_REGISTRATION:R-L4D-17C-VIDEO-WATCH-MB-v1:BEGIN -->
+```yaml
+registration_id: R-L4D-17C-VIDEO-WATCH-MB-v1
+status: AUTHORIZED
+authorized_by: Cascade Controller
+authorization_basis: user_request_to_register_menuBuilder_video_watch_consumer_after_provider_acceptance
+registered_at_utc: '2026-09-25T22:00:00Z'
+prompt_id: L4D-17C-VIDEO-WATCH-MB
+prompt_path: l4desk-service/docs/prompts/L4D-17C-VIDEO-WATCH-MB.md
+scope_project: MenuBuilder
+scope_root: D:\repo\platerra\Public\etranprocessing\MenuBuilder
+blocked_prompt_id: L4D-17E-MB
+authorized_inputs:
+  - handoff_id: H-L4D-17C-VIDEO-WATCH-IOT-01-v1
+    contract_version: 1.0.0
+    producer_commit: f58dfb5e6ff18f6710282824c91b634fcdf5e378
+sequence_gate_handoff_id: H-L4D-17C-VIDEO-WATCH-IOT-01-v1
+output_handoff_id: H-L4D-17C-VIDEO-WATCH-MB-v1
+next_prompt_id: L4D-17E-MB
+report_path: MenuBuilder/docs/l4desk/handoffs/L4D-17C-VIDEO-WATCH-MB-report.md
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-17C-VIDEO-WATCH-MB-candidate.md
+publication_required_before_execution: true
+grant_scope: menu_builder_only
+runtime_acceptance: GRANTED
+consumer_rules:
+  snapshot_on_connect: true
+  invalidate_requires_rest_resnapshot: true
+  lease_mutation: false
+  restore_running_from_old_event: forbidden
+  web_concurrency: "1"
+  cross_worker_fanout: POST_CASCADE
+```
+<!-- CORRECTIVE_REGISTRATION:R-L4D-17C-VIDEO-WATCH-MB-v1:END -->
