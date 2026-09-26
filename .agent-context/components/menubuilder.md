@@ -62,6 +62,10 @@ tenant из `IOT_CONSUMER_FINANCE_TENANT_IDS` при выключенном shad
 включения публичной регистрации. Периодические сбросы новых asyncpg SSL
 соединений к PostgreSQL дают 500; `DatabaseUserStore` при этом может
 вернуть ложный 401, скрыв сбой БД. Причина и исправление ещё не проверены.
+Изолированный E2E tenant 1000 с квотой 600 секунд прошёл video metering:
+после штатных 635 секунд видео плюс 8 секунд консоли policy seam вернул
+`free_quota_exceeded` при 643/600 и нулевом балансе. HTTP admission в
+изолированном backend ещё не проверен из-за смены тестового пароля.
 
 ## Источники и актуальность
 - Authoritative docs: [ownership](../../docs/etran_data-database-ownership.md),

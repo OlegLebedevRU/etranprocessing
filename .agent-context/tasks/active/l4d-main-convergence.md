@@ -282,9 +282,19 @@
   `stream/start`=200 в 22:30:35 UTC. В БД сессия id 477 active_at
   22:30:35.661123 UTC, tenant 1000, terminal 3720; до неё короткая
   console-сессия дала 8 секунд usage локального дня 2026-09-27. Для
-  исчерпания лимита 600 секунд новую трансляцию следует завершить после
-  22:40:40 UTC (01:40:40 МСК), затем сверить FinUsageDaily и изолированный
-  entitlement/admission. Проверка ещё идёт.
+  исчерпания лимита 600 секунд трансляция завершена штатно в
+  22:41:10.496839 UTC: 634.835716 секунды, округление metering до 635.
+  `FinUsageDaily` локального дня 2026-09-27: video=635, console=8,
+  source=643, free=643, billable=0. Ledger=0 и баланс=0. Изолированный
+  entitlement видит 643/600 секунд; реальная policy seam для нового video
+  admission дала `allowed=false`, `free_quota_exceeded`. До сессии она
+  давала `allowed=true` при 8/600. Проверка с `as_of=2026-09-28 00:01 МСК`
+  дала usage=0 и allowed=true; это симуляция времени, не отдельный midnight
+  runtime E2E. Пользователь подтвердил движение видео и штатную остановку.
+  **Учёт 10 минут и блокировка policy seam: PASS.** HTTP-отказ через
+  изолированный test-backend не проверен: пароль приватного manifest стал
+  устаревшим после смены пользователем. Production backend ещё permissive;
+  повторный старт через обычный сайт не доказывает блокировку.
 - PostgreSQL `10.0.0.7` продолжает периодически сбрасывать новые asyncpg
   SSL подключения и даёт HTTP 500 даже на finance read и keepalive, а
   `DatabaseUserStore` превращает этот сбой в ложный 401 `Invalid credentials`.
