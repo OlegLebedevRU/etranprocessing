@@ -17,6 +17,12 @@
 - Инварианты: lease expiry останавливает агент без recovery; новый stream
   требует новую эпоху; маршрут живёт весь срок трансляции; stop освобождает
   terminal/media/viewing state; `svc_desk` не занимает `dev/{SN}/svc`.
+- Суточное закрытие 17E: MenuBuilder владеет `FinUsageDaily` и ledger posting;
+  producer — завершённая video/console session, consumer — суточная проводка.
+  Только завершившиеся локальные сутки явно разрешённого tenant могут
+  проводиться; повтор не создаёт вторую транзакцию. Проверка — адресные тесты
+  границы суток/allowlist и полный backend suite; runtime финансовую мутацию
+  выполнять лишь в изолированном test tenant после read-only снимка.
 
 ## Единая ветка и происхождение
 
@@ -37,7 +43,7 @@
 | Слой | Команда / факт | Статус |
 |---|---|---|
 | ProcessingBackend | `uv run pytest -q`: 130 passed, 20 warnings | passed |
-| MenuBuilder backend | `uv run pytest -q`: 492 passed, 50 warnings | passed |
+| MenuBuilder backend | `uv run pytest -q`: 495 passed, 50 warnings после close worker | passed |
 | shared DB | `uv run pytest -q --basetemp=.pytest_tmp`: 65 passed; первый запуск с default temp получил WinError 5 | passed после корректировки окружения |
 | Python quality | во всех трёх проектах `ruff check`, `ruff format --check`, `pyright`: clean, 0 type errors | passed |
 | MenuBuilder frontend | `npm ci --ignore-scripts`; `npm run build`; `npm test -- --run`: 58 passed | passed |
@@ -114,6 +120,29 @@
   projection=1000 копеек. В коде есть internal `metering/close-day`, но
   автоматический вызов закрытия суток в репозитории не найден. Это отдельный
   gate финансового завершения 17E, не повод вручную править projection.
+- Перед полуночным прогоном сверены runtime-копии: все 90 канонических Python
+  файлов основного `menubuilder-backend` совпадают по SHA-256 с текущим Git
+  candidate; в контейнере остаются 91 дополнительных старых Python-файл,
+  включая `app/app/`, которые не входят в candidate. Изолированный
+  `l4desk-e2e-test-backend-1` совпадает 87/90: отстают
+  `routers/admin_users.py`, `routers/video_control.py` и
+  `services/media_orchestrator_client.py`. Перед новым 17E E2E тестовый
+  backend нужно пересобрать из того же Git archive и повторить hash-аудит.
+- В репозитории найден только ручной internal `close-day`; вызова по расписанию
+  не найдено. На хосте root/user crontab и systemd timers с признаками finance
+  или metering отсутствуют. После перехода суток сначала read-only проверить
+  проводку, затем решать, как штатно автоматизировать закрытие. Текущий
+  `FinEntitlementWorker.run_single_tick` обходит **все** billing profiles, а
+  notification dispatch и stop outbox тоже глобальные. Включать этот worker
+  в тестовом backend с общей БД до tenant scope нельзя.
+- Локально добавлен отдельный `FinMeteringCloseWorker`: default disabled,
+  пустой allowlist ничего не проводит, для явно указанных tenant проверяет
+  локальную дату каждой открытой положительной строки и ждёт 300 с после
+  полуночи. Повтор использует существующий идемпотентный `close_and_post`.
+  В test compose добавлены opt-in flags, но runtime flags и сервер не менялись.
+  Адресные тесты 3/3, полный MenuBuilder backend 495/495, Ruff и Pyright pass.
+  После наблюдения полуночи нужен отдельный контролируемый rollout только
+  изолированного test-backend и runtime-проверка одной проводки, баланса и replay.
 - Затем проверить paid continuation, первый платёжный anchor, online once за
   месяц, DST/границы месяца, grace/late/block, webhook+poll replay, ручной
   платёж/storno, double-entry/rebuild, rounding, Hub и archive. Локальные

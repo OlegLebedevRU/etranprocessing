@@ -223,6 +223,10 @@ class Settings(BaseSettings):
     l4desk_policy_shadow_mode: bool = True
     l4desk_entitlement_worker_enabled: bool = False
     l4desk_entitlement_worker_interval_sec: float = 60.0
+    l4desk_metering_close_worker_enabled: bool = False
+    l4desk_metering_close_worker_tenant_ids: list[int] = []
+    l4desk_metering_close_worker_interval_sec: float = 60.0
+    l4desk_metering_close_grace_sec: int = 300
     l4desk_stop_outbox_max_retries: int = 5
     l4desk_stop_outbox_retry_interval_sec: float = 10.0
     l4desk_email_notifications_enabled: bool = True

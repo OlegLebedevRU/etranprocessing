@@ -77,6 +77,7 @@ async def lifespan(app: FastAPI):
     cleanup_task: asyncio.Task | None = None
     consumer_task: asyncio.Task | None = None
     entitlement_task: asyncio.Task | None = None
+    metering_close_task: asyncio.Task | None = None
     if settings.session_cleanup_enabled:
         cleanup_task = asyncio.create_task(_cleanup_expired_sessions_task())
     if settings.iot_consumer_enabled:
@@ -85,6 +86,12 @@ async def lifespan(app: FastAPI):
         from app.services.financial_core import entitlement_worker
 
         entitlement_task = asyncio.create_task(entitlement_worker.run_worker())
+    if settings.l4desk_metering_close_worker_enabled:
+        from app.services.financial_core.metering_close_worker import (
+            metering_close_worker,
+        )
+
+        metering_close_task = asyncio.create_task(metering_close_worker.run_worker())
     try:
         yield
     finally:
@@ -100,6 +107,10 @@ async def lifespan(app: FastAPI):
             entitlement_task.cancel()
             with suppress(asyncio.CancelledError):
                 await entitlement_task
+        if metering_close_task is not None:
+            metering_close_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await metering_close_task
 
 
 app = FastAPI(title="MenuBuilder API", version="0.2.0", lifespan=lifespan)
