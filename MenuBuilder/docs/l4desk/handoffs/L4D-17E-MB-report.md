@@ -11,6 +11,8 @@ candidate_status: NOT_CREATED
 next_prompt_id: L4D-17F-DOCS
 ```
 
+Обновление 2026-09-26: это исторический `BLOCKED_CONTRACT` verdict до приёмки video-watch corrective. `H-L4D-17C-VIDEO-WATCH-MB-v1` теперь принят в §51 [журнала](../../../../l4desk-service/docs/prompts/contract-handoff.md). Этот отчёт не переисполнялся и не меняет свой статус: для нового verdict 17E нужны повторный contract/deploy audit и утверждённый безопасный commercial E2E, перечисленные ниже.
+
 ## Task intake
 
 - Цель: подтвердить project-local commercial control plane и consumer contracts перед 17F.

@@ -10,6 +10,8 @@ candidate_status: NOT_CREATED
 next_prompt_id: L4D-18A-SHARED
 ```
 
+Обновление 2026-09-26: video-watch corrective `H-L4D-17C-VIDEO-WATCH-MB-v1` принят в §51 [журнала](../prompts/contract-handoff.md). Этот отчёт остаётся историческим `BLOCKED_CONTRACT`: прямой вход `H-L4D-17E-MB-v1` не принят, а полный black-box E2E 17F не выполнялся. Повторная приёмка 17F требует нового evidence и отдельного verdict.
+
 ## Task intake и граница проверки
 
 Цель — сохранить точную матрицу входов и недостающего evidence перед 17F. Владелец итогового black-box verdict — `l4desk-service`; producer-контракты остаются у соответствующих проектов. Инвентаризация использует опубликованные handoff/отчёты и результаты read-only проверки, не меняет runtime, БД или флаги. `ACCEPTED` возможен только после полного сценария `L4D-17F-DOCS.md` и независимой сверки всех прямых входов.
