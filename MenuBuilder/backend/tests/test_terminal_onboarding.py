@@ -311,8 +311,10 @@ class FakeIotClient(IotProvisioningClient):
     def __init__(self, should_fail: bool = False, device_id: int | None = None) -> None:
         super().__init__()
         self.should_fail = should_fail
+        self.mqtt_should_fail = False
         self.device_id = device_id
         self.calls: list[DeviceProvisionRequest] = []
+        self.mqtt_calls: list[tuple[int, str, int]] = []
 
     async def provision_device(
         self, req: DeviceProvisionRequest
@@ -333,6 +335,13 @@ class FakeIotClient(IotProvisioningClient):
             created_at=datetime.now(UTC),
             provisioned_at=datetime.now(UTC),
         )
+
+    async def provision_mqtt_access(
+        self, *, device_id: int, sn: str, tenant_id: int
+    ) -> None:
+        self.mqtt_calls.append((device_id, sn, tenant_id))
+        if self.mqtt_should_fail:
+            raise RuntimeError("RabbitMQ account unavailable")
 
     async def get_by_operation(
         self, operation_id: str, tenant_id: int | None = None
@@ -628,6 +637,31 @@ async def test_saga_retry_recovers_failed_step():
     assert retry_res.readiness.iot == "ready"
     assert retry_res.readiness.certificate == "issued"
     assert retry_res.last_error is None
+
+
+@pytest.mark.anyio
+async def test_mqtt_access_required_before_iot_ready():
+    db = MockInMemoryDb()
+    iot = FakeIotClient()
+    iot.mqtt_should_fail = True
+    pin = FakePinClient()
+    svc = TerminalOnboardingService(cast(Any, db), iot_client=iot, pin_client=pin)
+    user = {"id": 10, "username": "owner", "org_id": 1, "role_id": 5}
+
+    from app.services.terminal_onboarding_service import TerminalOnboardRequest
+
+    initial = await svc.onboard_terminal(
+        user=user, req=TerminalOnboardRequest(name="SN-MQTT-RETRY")
+    )
+    assert initial.readiness.iot == "failed"
+    assert len(iot.mqtt_calls) == 1
+    assert iot.mqtt_calls[0] == (initial.device_id, initial.sn, 1)
+
+    iot.mqtt_should_fail = False
+    retried = await svc.retry_terminal_saga(user=user, terminal_id=initial.terminal_id)
+    assert retried.readiness.iot == "ready"
+    assert retried.operation_id == initial.operation_id
+    assert len(iot.mqtt_calls) == 2
 
 
 @pytest.mark.anyio

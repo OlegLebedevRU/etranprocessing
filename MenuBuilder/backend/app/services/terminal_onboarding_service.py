@@ -237,6 +237,34 @@ class IotProvisioningClient:
                 f"IoT provisioning returned HTTP {resp.status_code}: {error_text}"
             )
 
+    async def provision_mqtt_access(
+        self, *, device_id: int, sn: str, tenant_id: int
+    ) -> None:
+        """Reconcile the device's RabbitMQ account and topic ACL through IoT."""
+        url = f"{self.base_url}/api/internal/v1/provisioning/terminals"
+        payload = {
+            "device_id": device_id,
+            "sn": sn,
+            "org_id": tenant_id,
+            "tags": {"source": "etranprocessing"},
+        }
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.post(
+                url, json=payload, headers=self._headers(tenant_id)
+            )
+            resp.raise_for_status()
+            result = resp.json()
+        if (
+            result.get("success") is not True
+            or result.get("device_id") != device_id
+            or result.get("sn") != sn
+            or result.get("org_id") != tenant_id
+            or result.get("rmq_user_status") != "ok"
+        ):
+            raise RuntimeError(
+                "IoT MQTT access provisioning failed or identity mismatch"
+            )
+
     async def get_by_operation(
         self, operation_id: str, tenant_id: int | None = None
     ) -> DeviceProvisionResponse | None:
@@ -667,6 +695,12 @@ class TerminalOnboardingService:
                     or prov_res.sn != l4_terminal.sn
                 ):
                     raise RuntimeError("IoT provisioning identity mismatch")
+
+                await self.iot_client.provision_mqtt_access(
+                    device_id=prov_res.device_id,
+                    sn=l4_terminal.sn,
+                    tenant_id=l4_terminal.tenant_id,
+                )
 
                 l4_terminal.provisioning_state = "ready"
                 if l4_terminal.runtime_terminal_id:
