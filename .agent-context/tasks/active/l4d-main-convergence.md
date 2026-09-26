@@ -281,11 +281,10 @@
   mqtt_user=false. Tenant 4 сохранён. В ProcessingBackend `get_current_terminal`
   намеренно распознаёт даже `is_active=false` ради XML ответа
   `/api/licensebilling`, но payment-маршрут не имеет отдельной проверки
-  активности. Поэтому старый mTLS сертификат 1000004 ещё потенциально
-  распознаётся backend. До полного закрытия deprovision требуется
-  authorization gate для операционных маршрутов или штатный отзыв
-  сертификата, с сохранением XML-контракта licensebilling. Старый сертификат
-  пользователь обязался не использовать; runtime попытка не выполнялась.
+  активности. Пользователь 2026-09-27 сообщил, что сертификат 1000004
+  удалён; этот конкретный сертификат больше не является gate для 17E.
+  Общий authorization gate для неактивных терминалов остаётся отдельной
+  задачей по контракту `/api/licensebilling`.
 - Через основной сайт пользователь запустил видео 1000005; в main backend
   `stream/start`=200 в 22:30:35 UTC. В БД сессия id 477 active_at
   22:30:35.661123 UTC, tenant 1000, terminal 3720; до неё короткая
@@ -311,7 +310,19 @@
 - PostgreSQL `10.0.0.7` продолжает периодически сбрасывать новые asyncpg
   SSL подключения и даёт HTTP 500 даже на finance read и keepalive, а
   `DatabaseUserStore` превращает этот сбой в ложный 401 `Invalid credentials`.
-  Это отдельный production incident и gate перед финальным 17E. Тестовый
+  Это отдельный production incident и gate перед финальным 17E. Read-only
+  диагностика 2026-09-27: с хоста и трёх контейнеров 38–43 из 80
+  соединений получили TCP reset сразу после PostgreSQL SSLRequest, до TLS,
+  авторизации и SQL; при темпе 1 запрос/с — 10 из 24 reset. Успешные
+  соединения используют TLS 1.3. Сервер PostgreSQL 18.4 имел
+  `max_connections=100` и около 33 соединений; исчерпания серверного лимита
+  не видно. В Cloud.ru Managed PostgreSQL включён пулер:
+  `default_pool_size=20`, `max_client_conn=100`, `reserve_pool_size=0`,
+  `query_wait_timeout=120s`, `server_idle_timeout=600s`,
+  `server_lifetime=3600s`. `default_pool_size` — серверный пул на БД,
+  а не лимит клиентов. Текущие цифры не объясняют сброс до TLS;
+  требуются графики клиентов/очереди и расследование Cloud.ru входного
+  endpoint/пулера. Параметры и код ещё не менялись. Тестовый
   пароль в manifest действительно отличается от текущего user hash, что
   пользователь подтвердил как намеренную смену пароля.
 
