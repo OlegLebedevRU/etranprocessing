@@ -474,6 +474,17 @@ async def acquire_device_control_lease(
     """Acquire exclusive lease for terminal according to role matrix."""
     scope = body.scope if body and body.scope else "input"
     ttl_sec = body.ttl_sec if body else None
+    canonical_session_id = str(user.get("session_id") or "")
+    if (
+        body
+        and body.session_id
+        and canonical_session_id
+        and body.session_id != canonical_session_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "session_id_mismatch"},
+        )
 
     role_id = int(user.get("role_id", 3))
     is_strictly_superuser = bool(role_id == 1 or user.get("role") == "superuser")
@@ -578,7 +589,7 @@ async def acquire_device_control_lease(
             logger.warning("Could not pre-check stream status for input lease: %s", exc)
 
     custom_user = dict(user)
-    if body and body.session_id:
+    if body and body.session_id and not canonical_session_id:
         custom_user["session_id"] = body.session_id
 
     res = await iot_client.remote_input_acquire_lease(

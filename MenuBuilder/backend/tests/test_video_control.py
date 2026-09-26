@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import HTTPException
 from httpx import ASGITransport, AsyncClient
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
@@ -24,7 +25,13 @@ async def test_owner_lease_looks_up_runtime_terminal_id() -> None:
     )
 
     terminal = Terminal(id=3718, device_id=1000003, sn="test-sn", org_id=3)
-    user = {"role": "l4desk_owner", "role_id": 5, "org_id": 3, "sub": "owner"}
+    user = {
+        "role": "l4desk_owner",
+        "role_id": 5,
+        "org_id": 3,
+        "sub": "owner",
+        "session_id": "jwt-session",
+    }
     db = AsyncMock()
     policy = SimpleNamespace(
         evaluate_session_request=AsyncMock(return_value=SimpleNamespace(allowed=True))
@@ -54,11 +61,24 @@ async def test_owner_lease_looks_up_runtime_terminal_id() -> None:
         ) as upstream,
     ):
         response = await acquire_device_control_lease(
-            1000003, LeaseAcquireRequest(scope="stream"), user, db
+            1000003,
+            LeaseAcquireRequest(scope="stream", session_id="jwt-session"),
+            user,
+            db,
         )
+        with pytest.raises(HTTPException) as mismatch:
+            await acquire_device_control_lease(
+                1000003,
+                LeaseAcquireRequest(scope="stream", session_id="forged-session"),
+                user,
+                db,
+            )
     assert response.lease_id == "lease-1"
+    assert mismatch.value.status_code == 400
     lookup.assert_awaited_once_with(3718)
     assert upstream.await_args.kwargs["user"]["role"] == "l4desk_owner"
+    assert upstream.await_args.kwargs["user"]["session_id"] == "jwt-session"
+    upstream.assert_awaited_once()
 
 
 @pytest.fixture(autouse=True)

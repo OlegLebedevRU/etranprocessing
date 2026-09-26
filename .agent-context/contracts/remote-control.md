@@ -51,6 +51,8 @@ no pointer before lease, stop/unmount/reconnect без второго тайме
 своего tenant; console WS требует явный lease с совпадающими SN, tenant,
 owner_user_id и browser session. Источник — изменения MenuBuilder и app1 по
 17E; до развёртывания и browser E2E это уровень «код + локальные тесты».
+Публичный BFF принимает `session_id` при acquire только если он совпадает с
+каноническим session ID в JWT; release использует тот же JWT context.
 
 ## Источники и актуальность
 - Authoritative docs: [remote-input](../../docs/etran_arch-remote-input-control.md),

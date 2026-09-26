@@ -36,10 +36,16 @@ console подтверждено пользователем в этой сесс
 `docs/etran_arch-remote-input-control.md` и
 `docs/ops_run-remote-console-diagnostics.md` обновлены.
 
+При изолированном API smoke owner stream acquire вернул 201, но release вернул
+403, когда тестовый клиент подставил собственный `session_id`, отличный от JWT.
+Это выявило разрешённый BFF override: теперь несовпадающий client `session_id`
+отклоняется до вызова app1. Повторный E2E release выполняется после нового
+кандидата; тестовая аренда истекла, status показывает `active=false`.
+
 ## Локальная валидация
 
 - MenuBuilder: `ruff check --fix app`, `ruff format app`, `pyright app` — pass;
-  `uv run pytest -q --maxfail=3` — 485 passed, 50 warnings.
+  `uv run pytest -q --maxfail=3` — 486 passed, 50 warnings.
 - IoT app1: `ruff check` на изменённых файлах — pass;
   `uv run pytest -q --maxfail=3` — 426 passed, 4 warnings.
 - Pre-commit scan добавленных строк на assignment секретов — 0 кандидатов;

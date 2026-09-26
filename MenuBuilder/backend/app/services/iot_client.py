@@ -700,9 +700,11 @@ class IotPlatformClient:
                 return
             self._handle_app1_http_error(exc)
         except httpx.RequestError as exc:
-            logger.warning(
-                "Failed to release lease %s (best-effort): %s", lease_id, exc
-            )
+            logger.error("Failed to release lease %s: %s", lease_id, exc)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Недоступен сервис управления iot-rpc-rest-app",
+            ) from exc
 
     async def remote_input_move(
         self,
