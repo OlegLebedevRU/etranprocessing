@@ -51,7 +51,7 @@ reconnect настоящее событие cursor 472 содержит оба �
 ## Локальная валидация
 
 - MenuBuilder: `ruff check --fix app`, `ruff format app`, `pyright app` — pass;
-  `uv run pytest -q` — 490 passed, 50 warnings; frontend `npm run build` — pass.
+  `uv run pytest -q` — 491 passed, 50 warnings; frontend `npm run build` — pass.
 - IoT app1: targeted Ruff after removing pre-existing unused imports — pass;
   `uv run pytest -q` — 427 passed, 4 warnings. Existing full-file formatter
   drift in IoT event service remains outside this corrective.
@@ -98,11 +98,19 @@ reconnect настоящее событие cursor 472 содержит оба �
   с nginx bind mount. Адресная коррекция тестового user 653 восстановила
   `(role=l4desk_owner, role_id=5, org_id=3)`; startup 200 и schema check pass.
   Старый JWT содержит role ID 3, поэтому необходим выход и новый вход.
+- После нового входа owner browser прошёл console→video→video, затем повторная
+  console acquire дала 500. Причина: локальный `provider_session_id` консоли
+  сохранял постоянный browser session ID в уникальном столбце; новая аренда
+  того же браузера нарушала `l4desk_remote_sessions_provider_session_id_key`.
+  Исправление `8bfc2f7` сохраняет уникальный IoT `lease_id` для каждой
+  локальной console сессии. Полный backend suite — 491 passed; образ развёрнут
+  из Git archive, hash изменённого Python-файла совпадает в release, серверном
+  source и контейнере. Повторный browser-тест под `info@platerra.ru` подтвердил
+  подключение консоли и Ping; сервер вернул acquire 201, release 204 без 500.
 
 ## Непроверенное до 17E acceptance
 
-- Browser owner console diagnostics WS после повторного входа;
-  повтор stop и отсутствие двойного usage.
+- Повтор stop и отсутствие двойного usage.
 - Полная матрица 17E (DST, grace, archive, reconciliation и другие шаги) и
   17F ещё не выполнены; gate не открыт.
 
