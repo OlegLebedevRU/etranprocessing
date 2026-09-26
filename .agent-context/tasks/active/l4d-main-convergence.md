@@ -213,9 +213,37 @@
   поэтому его UI сам по себе не доказывает отказ.
 - Локально: новый unit test московской полуночи/600 секунд и изоляции лимита;
   backend pytest 496/496, Ruff check/format и Pyright 0 ошибок.
-  Развёртывание и создание terminal пока не выполнены: требуется отдельное
-  явное разрешение на изменение серверных файлов по AGENTS.md и точный diff
-  действующего E2E compose перед пересозданием контейнеров.
+  Пользователь дал отдельное явное разрешение на изолированный rollout.
+- Коммит `f2f49ec` опубликован в release branch. Git archive для server release
+  `sha256=8b65d514f5b38fb2009bcec2d0899179d8923e160e7dc4a0fcd2f385676d7c71`
+  установлен в `/home/user1/.l4d-releases/f2f49ec`. Из него собраны только
+  `l4desk-e2e-test-backend:f2f49ec` (`sha256:29c4ae6e9aa0...`) и
+  `l4desk-e2e-mock-gateway:f2f49ec` (`sha256:c7770babae34...`); хэши четырёх
+  изменённых Python-файлов совпали между archive и images. Основной backend
+  не пересоздавался.
+- В server `/home/user1/MenuBuilder/e2e/compose.yaml` добавлены ровно три
+  разрешённые строки для test policy/quota; backup — `compose.yaml.pre-f2f49ec`.
+  Существующее отличие сервера по `IOT_CONSUMER_ENABLED: "false"` сохранено.
+  Secrets `.env.e2e.local` не читались и не изменялись.
+- После регистрации без платежа `tenant_id=4`, `user_id=654`, баланс 0.
+  Onboarding через штатный API: `terminal_id=3719`, `device_id=1000004`,
+  SN `a4b1000004c94276d260926`, IoT ready, certificate issued, online offline.
+  PIN передан пользователю в чате, в Git не сохраняется. Изолированный
+  entitlement API: free, 0/600 секунд, free terminal 3719.
+- В test-backend runtime flags через одноразовый `docker compose` вызов:
+  onboarding=true, policy enforcement=true, tenant allowlist=[4], quota=600;
+  entitlement worker, metering close worker и IoT consumer=false. Эти
+  opt-in значения не записаны в `.env.e2e.local`: при последующем compose
+  recreate их надо передать повторно. Проверка значений в запущенном контейнере
+  пройдена.
+- Во время recreate test-backend трижды не прошёл schema check из-за
+  `ConnectionResetError` при asyncpg SSL upgrade к PostgreSQL; через несколько
+  минут повторный `docker start` прошёл, revision 027 и 23 таблицы проверены.
+  Свежий read-only asyncpg connect из основного backend периодически также
+  получает тот же reset, при том что `openssl s_client -starttls postgres`
+  из его контейнера устанавливает TLS. Причина upstream/сети не установлена;
+  риск повторения HTTP 500 у 773 сохраняется. Отдельной правки БД/сервиса не
+  производилось.
 
 ## Решение для PR
 
