@@ -664,10 +664,10 @@ async def change_device_control_scope(
 
     role_id = int(user.get("role_id", 3))
     is_strictly_superuser = bool(role_id == 1 or user.get("role") == "superuser")
-    if body.scope == "console" and not is_strictly_superuser:
+    if body.scope == "console" and not (is_strictly_superuser or role_id == 5):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Доступ к консоли разрешён только суперадминистраторам",
+            detail="Доступ к консоли разрешён только суперадминистраторам и пользователям L4Desk",
         )
 
     status_data = await iot_client.remote_input_status(

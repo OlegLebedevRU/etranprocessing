@@ -81,6 +81,45 @@ async def test_owner_lease_looks_up_runtime_terminal_id() -> None:
     upstream.assert_awaited_once()
 
 
+@pytest.mark.anyio
+async def test_owner_can_change_lease_scope_to_console() -> None:
+    from app.routers.video_control import (
+        ScopeUpgradeRequest,
+        change_device_control_scope,
+    )
+
+    terminal = Terminal(id=3718, device_id=1000003, sn="test-sn", org_id=3)
+    user = {"role": "l4desk_owner", "role_id": 5, "org_id": 3}
+    lease = {
+        "lease_id": "lease-1",
+        "active": True,
+    }
+    changed = {"expires_at": "2026-09-26T17:00:00Z", "scope": "console"}
+    with (
+        patch(
+            "app.routers.video_control._verify_device_access",
+            new=AsyncMock(return_value=terminal),
+        ),
+        patch.object(
+            iot_client,
+            "remote_input_status",
+            new=AsyncMock(return_value={"lease": lease}),
+        ),
+        patch.object(
+            iot_client,
+            "remote_input_change_scope",
+            new=AsyncMock(return_value=changed),
+        ) as upstream,
+    ):
+        response = await change_device_control_scope(
+            1000003, ScopeUpgradeRequest(scope="console"), user, AsyncMock()
+        )
+
+    assert response.scope == "console"
+    upstream.assert_awaited_once()
+    assert upstream.await_args.kwargs["org_id"] == 3
+
+
 @pytest.fixture(autouse=True)
 def reset_dependency_overrides():
     app.dependency_overrides.clear()
