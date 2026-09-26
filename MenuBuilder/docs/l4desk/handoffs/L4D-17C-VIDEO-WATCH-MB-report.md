@@ -73,6 +73,13 @@ next_gate: browser_stream_validation
 - Код зафиксирован в `5fac8ed`; `npm run build` прошёл, `session-lifecycle.test.ts` — 6 passed. Assets доставлены до атомарной замены `index.html` в bind-mounted frontend на `dev.leo4.ru:3000`. SHA-256 `index.html` в локальной сборке и `nginx-default`: `5dddbf003d1b35d007765a0066d9a9b039ae71d4b9bd171b5efc7b3745a97a7a`; JS видеовкладки: `38c06a4411cc2dc4a0bd0b152f5efc72b8a19a83a057d10a67a05089a3e0cc79`. Публичные index и JS отвечают `200`, JS содержит watch и `getStats`, не содержит `/session/status`.
 - Браузер после обновления страницы должен подтвердить отсутствие регулярного `/session/status` при живом watch; lease keepalive и WebSocket Janus остаются штатными. Предыдущий `index.html` сохранён на сервере как `index.html.before-5fac8ed` до пользовательской проверки.
 
+## Подавление heartbeat и объединение resnapshot (2026-09-26)
+
+- Живой лог показал, что app1 отправлял `invalidate` на неизменившийся presence heartbeat каждые 30 секунд. Исправление producer `d7b604a` в `iot-rpc-rest-app` не публикует сигнал, если изменился только `last_seen_at`; смена доступности рабочего стола и другие значимые поля продолжают вызывать invalidation. `app1` собран из Git и перезапущен отдельно, startup прошёл; трансляция после перезапуска восстановилась.
+- После исправления producer в интервале между WS reconnect регулярных status GET не было. Оставались три близких чтения при штатном 60-секундном reconnect: на закрытии, во время короткого разрыва и после первого сигнала нового WS.
+- MenuBuilder `dfb959b` убрал чтение на обычном закрытии и начинает REST fallback только после 5 секунд разрыва. На новом соединении начальный `invalidate` даёт один resnapshot. При отказе `4401`/`4403`/`4404` выполняется одно финальное чтение, затем повторные попытки и fallback выключаются. `npm run build` прошёл; новые assets доставлены до замены `index.html`. SHA-256 активного `index.html`: `56cca6dd19c3c23777988fe917861350a58d5d4567577464bbe970fa17e44dc4`, JS видеовкладки: `d8b661c4ceb6e4548964502024dacd88b306a3040215be25b833802d265b9de2`.
+- Подтверждение числа REST GET после браузерного обновления и полного нового 60-секундного цикла ещё ожидается. `POST control/keepalive` каждые ~5 секунд остаётся частью lease/watchdog контракта и не является status polling.
+
 ## Риски и следующий шаг
 
 - Фактический Nginx после reload использует конфиг с хешем репозитория; `nginx -t` успешен.
