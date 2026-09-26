@@ -1,0 +1,4 @@
+.env*
+*.sqlite3*
+e2e_manifest.json
+__pycache__/

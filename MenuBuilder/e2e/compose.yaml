@@ -1,0 +1,65 @@
+name: l4desk-e2e
+
+services:
+  mock-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: "no"
+    environment:
+      E2E_MOCK_DB_PATH: /data/mock.sqlite3
+      E2E_MOCK_BIND: 0.0.0.0
+      E2E_MOCK_PORT: 8080
+      E2E_MOCK_SHOP_ID: ${E2E_MOCK_SHOP_ID:?required}
+      E2E_MOCK_SHOP_SECRET: ${E2E_MOCK_SHOP_SECRET:?required}
+      E2E_MOCK_CONTROL_TOKEN: ${E2E_MOCK_CONTROL_TOKEN:?required}
+      E2E_WEBHOOK_SECRET: ${E2E_WEBHOOK_SECRET:?required}
+      E2E_REGISTRATION_EMAIL: ${E2E_REGISTRATION_EMAIL:-}
+      E2E_EMAIL_GATEWAY_URL: ${E2E_EMAIL_GATEWAY_URL:-}
+    volumes:
+      - mock_data:/data
+    networks:
+      - e2e_private
+
+  test-backend:
+    build:
+      context: ../..
+      dockerfile: MenuBuilder/backend/Dockerfile
+    restart: "no"
+    env_file:
+      - ${E2E_BACKEND_ENV_FILE:?required}
+    environment:
+      YOOKASSA_API_URL: http://mock-gateway:8080/v3
+      YOOKASSA_SHOP_ID: ${E2E_MOCK_SHOP_ID:?required}
+      YOOKASSA_SECRET_KEY: ${E2E_MOCK_SHOP_SECRET:?required}
+      YOOKASSA_WEBHOOK_SECRET: ${E2E_WEBHOOK_SECRET:?required}
+      YOOKASSA_ENABLED: "true"
+      YOOKASSA_IP_FILTER_ENABLED: "false"
+      SERVERLESS_EMAIL_GATEWAY_URL: ${E2E_EMAIL_GATEWAY_URL:-http://mock-gateway:8080}
+      FRONTEND_BASE_URL: ${E2E_FRONTEND_BASE_URL:-https://dev.leo4.ru:3000}
+      L4DESK_REGISTRATION_ENABLED: "true"
+      L4DESK_BILLING_ENABLED: "true"
+      L4DESK_TERMINAL_ONBOARDING_ENABLED: ${E2E_TERMINAL_ONBOARDING_ENABLED:-false}
+      L4DESK_ENTITLEMENT_WORKER_ENABLED: "false"
+      IOT_CONSUMER_ENABLED: "false"
+      SESSION_CLEANUP_ENABLED: "false"
+      JWT_ISSUER_MOCK_ENABLED: "false"
+      TRUST_PROXY_IDENTITY_HEADERS: "false"
+    ports:
+      - 127.0.0.1:${E2E_BACKEND_PORT:?required}:8000
+    depends_on:
+      mock-gateway:
+        condition: service_started
+    networks:
+      - e2e_private
+      - production_services
+
+networks:
+  e2e_private:
+    internal: true
+  production_services:
+    external: true
+    name: ${E2E_SERVICE_NETWORK:?required}
+
+volumes:
+  mock_data:

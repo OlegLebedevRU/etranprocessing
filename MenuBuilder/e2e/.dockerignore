@@ -1,0 +1,7 @@
+compose.yaml
+README.md
+test_*.py
+.env*
+*.sqlite3*
+e2e_manifest.json
+__pycache__/
