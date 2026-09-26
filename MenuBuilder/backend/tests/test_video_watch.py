@@ -46,11 +46,9 @@ class _DbContext:
 
 
 class _UpstreamContext:
-    def __init__(self) -> None:
+    def __init__(self, *, sn: str = "watch-test-sn") -> None:
         self.messages: asyncio.Queue[str] = asyncio.Queue()
-        self.messages.put_nowait(
-            json.dumps({"type": "snapshot", "data": {"sn": "watch-test-sn"}})
-        )
+        self.messages.put_nowait(json.dumps({"type": "snapshot", "data": {"sn": sn}}))
         self.messages.put_nowait(json.dumps({"type": "invalidate", "kind": "stream"}))
 
     async def __aenter__(self) -> Self:
@@ -115,6 +113,22 @@ def test_watch_rejects_foreign_tenant_before_upstream() -> None:
         pass
     assert error.value.code == 4403
     connect.assert_not_called()
+
+
+def test_watch_rejects_snapshot_for_different_sn() -> None:
+    client = TestClient(app)
+    with (
+        patch("app.routers.video_control.async_session", return_value=_DbContext()),
+        patch.object(iot_client, "service_token", "placeholder"),
+        patch(
+            "app.routers.video_control.websockets.connect",
+            return_value=_UpstreamContext(sn="foreign-sn"),
+        ),
+        pytest.raises(WebSocketDisconnect) as error,
+        client.websocket_connect(WATCH_PATH, cookies={"accessToken": _viewer_token()}),
+    ):
+        pass
+    assert error.value.code == 1011
 
 
 def test_watch_relays_only_invalidate_and_rejects_browser_input() -> None:
