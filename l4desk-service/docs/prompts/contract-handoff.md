@@ -4823,3 +4823,18 @@ consumer_rules:
 - Следующий шаг `L4D-17E-MB` зависит от принятия этого corrective. В 17F/18F сверить все post-acceptance delta, актуальные deployed versions и незакрытые риски до объявления каскада завершённым.
 
 <!-- CASCADE_CHECKPOINT:PRE-17E-2026-09-26:END -->
+
+## 50. Уточнение реализации corrective L4D-17C-VIDEO-WATCH-MB
+
+<!-- CORRECTIVE_SPEC_CLARIFICATION:R-L4D-17C-VIDEO-WATCH-MB-v1:BEGIN -->
+
+По явному подтверждению пользователя 2026-09-26 принимаемый вариант consumer-контракта:
+app1 отдаёт BFF `snapshot` при открытии внутреннего WS; BFF проверяет SN и доступ, передаёт
+браузеру только `invalidate`; браузер читает авторитетные REST status endpoints на событие и
+reconnect. Server-side snapshot cache не требуется. Внутренний ключ и сырой snapshot браузеру
+не передаются; tenant/auth, read-only, отсутствие lease mutation и `WEB_CONCURRENCY=1` остаются
+обязательными. Точный текст задания — `L4D-17C-VIDEO-WATCH-MB.md`.
+
+Это уточнение регистрации §48, не принятие `H-L4D-17C-VIDEO-WATCH-MB-v1` и не разрешение 17E.
+
+<!-- CORRECTIVE_SPEC_CLARIFICATION:R-L4D-17C-VIDEO-WATCH-MB-v1:END -->
