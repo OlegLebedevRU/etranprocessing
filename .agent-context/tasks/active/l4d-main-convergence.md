@@ -96,6 +96,17 @@
   2026-09-29 11:29:27 UTC. Прямое обнуление проекции не проверяет блокировку
   и нарушило бы ledger. Для проверки blocked нужен отдельный изолированный
   time-bound сценарий и штатная проводка, без правки production clock/DB.
+- На обычном backend проверены effective flags: `billing_enabled=false`,
+  `policy_enforcement=false`, `entitlement_worker=false`; изолированный
+  test-backend имеет `billing_enabled=true`, но `policy_enforcement=false` и
+  `entitlement_worker=false`. Обнуление счёта в текущих runtime не может
+  доказать реальную блокировку. Счёт и флаги не менялись.
+- После media soak `fin_usage_daily.id=1` ещё открыт: рассчитано 100 копеек,
+  но `ledger_transaction_id` и `posted_at` отсутствуют. В ledger tenant 3
+  только прежний тестовый платёж: две записи с debit=credit=1000 копеек;
+  projection=1000 копеек. В коде есть internal `metering/close-day`, но
+  автоматический вызов закрытия суток в репозитории не найден. Это отдельный
+  gate финансового завершения 17E, не повод вручную править projection.
 - Затем проверить paid continuation, первый платёжный anchor, online once за
   месяц, DST/границы месяца, grace/late/block, webhook+poll replay, ручной
   платёж/storno, double-entry/rebuild, rounding, Hub и archive. Локальные
