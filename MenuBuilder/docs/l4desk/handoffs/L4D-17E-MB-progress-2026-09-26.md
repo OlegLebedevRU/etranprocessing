@@ -28,23 +28,25 @@ consumer и entitlement worker; наружу доступен только че�
 | Локальные проверки | `ruff check --fix`, `ruff format`, `pyright` прошли; `uv run pytest -q --disable-warnings`: 477 passed, 47 warnings; тесты мока: 2 passed. |
 | Изолированный runtime | test-backend image `sha256:3e63cb1d9610599b0f7d0c839953bde8ff79670295f9878a6246453eefcfbb77`; рабочий MenuBuilder image `sha256:e9559f30045479dbc1a4affc6b87ad9dcff7699c0249c28b18d6082ccdaf82ee` продолжает работать. |
 
-## Терминал 70 и PIN
+## Новый тестовый терминал и PIN
 
-До любых изменений проверены только read-only данные: `terminals.id=820`,
-`device_id=70`, `org_id=1`, 40-символьный serial сертификата нового CA,
-действующая лицензия `id=43`, отдельная запись `l4desk_terminals` c tenant 1.
-IoT status сообщает `org_id=1` и `is_online=true`; кеш MenuBuilder показывает
-offline. Тестовый tenant имеет ID 3. Перенос не выполнен: существующий admin
-endpoint меняет `terminals.org_id` и лицензию, но не синхронизирует
-`l4desk_terminals.tenant_id` и IoT ownership. Нужен согласованный атомарный
-маршрут с rollback и проверкой на живом Agent. PIN не выпускался и пользователю
-пока ничего вводить не требуется.
+Пользователь уточнил маршрут: терминал 70 остаётся у своего владельца; в
+`tenant_id=3` нужно создать **новый** терминал. Канонический endpoint
+`POST /api/settings/terminals` атомарно создаёт runtime и L4Desk записи, затем
+выполняет IoT provisioning и выдаёт краткоживущий PIN. На изолированном backend
+onboarding пока выключен; до шага создания его нужно включить только там.
+После создания проверить выданные `terminal_id`, `device_id`, SN, readiness и
+связь с выбранным тестовым Agent. Если PIN вводится на Agent, ранее обслуживавшем
+терминал 70, сохранить его исходную конфигурацию и путь возврата до ввода.
+Новый терминал ещё не создан, PIN не выпускался и пользователю пока ничего
+вводить не требуется.
 
 ## Оставшиеся проверки и gate
 
-- Закрыть transfer/provisioning для устройства 70 и проверить online, PIN,
-  console/video, usage и возврат устройства исходному владельцу. Текущую
-  лицензию и certificate binding сохранить либо явно восстановить.
+- Создать новый терминал в тестовом tenant через onboarding API, затем проверить
+  provisioning/PIN, Agent online, console/video и usage. Терминал 70 и его
+  лицензию не менять. Если переиспользуется его Agent, вернуть исходную
+  конфигурацию Agent после теста.
 - Выполнить всю матрицу `L4D-17E-MB.md`: free 120 min, paid continuation,
   online once per month, DST/month boundaries, grace/block, manual payment и
   storno, projection rebuild/reconciliation, rounding, Hub и archive.
@@ -53,6 +55,6 @@ endpoint меняет `terminals.org_id` и лицензию, но не синх
 - Не выпускать `H-L4D-17E-MB-v1` и не открывать 17F по этому промежуточному
   evidence. Исторические verdict в исходных отчётах остаются отдельными.
 
-После завершения испытаний отозвать тестовые сессии, вернуть устройство 70,
-деактивировать test user/tenant по утверждённому admin-маршруту, остановить
+После завершения испытаний отозвать тестовые сессии, вернуть тестовый Agent
+в исходное состояние, деактивировать test user/tenant по утверждённому admin-маршруту, остановить
 изолированный Compose и удалить его private volume. Не удалять ledger вручную.
