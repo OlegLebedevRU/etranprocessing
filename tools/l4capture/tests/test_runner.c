@@ -85,6 +85,13 @@ extern int test_mf_force_idr_coalescing(void);
 extern int test_mf_mft_failure_openh264_fallback(void);
 extern int test_mf_capability_cache_persist(void);
 extern int test_mf_stress_100_frames_zero_leak(void);
+extern int test_mft_event_gate_reordered(void);
+extern int test_mft_event_gate_series(void);
+extern int test_mft_event_gate_deadline(void);
+extern int test_idle_refresh_schedule(void);
+extern int test_idle_refresh_motion_defers(void);
+extern int test_quality_limit_width_preserves_full_screen(void);
+extern int test_bootstrap_refresh_is_bounded(void);
 
 extern int test_rtp_single_nal_small(void);
 extern int test_rtp_boundary_1200_1201(void);
@@ -95,6 +102,7 @@ extern int test_rtp_sequence_monotonicity_and_wrap(void);
 extern int test_rtp_timestamp_wrap(void);
 extern int test_rtcp_sr_sdes_generation(void);
 extern int test_rtcp_bye_generation(void);
+extern int test_rtcp_ntp_single_clock(void);
 extern int test_rtp_fua_reassembly_roundtrip(void);
 extern int test_network_nonblocking_drop_on_error(void);
 extern int test_pipeline_e2e_loopback(void);
@@ -229,6 +237,13 @@ static const test_entry_t all_tests[] = {
     TEST(test_mf_force_idr_coalescing),
     TEST(test_mf_mft_failure_openh264_fallback),
     TEST(test_mf_stress_100_frames_zero_leak),
+    TEST(test_mft_event_gate_reordered),
+    TEST(test_mft_event_gate_series),
+    TEST(test_mft_event_gate_deadline),
+    TEST(test_idle_refresh_schedule),
+    TEST(test_idle_refresh_motion_defers),
+    TEST(test_quality_limit_width_preserves_full_screen),
+    TEST(test_bootstrap_refresh_is_bounded),
     /* RTP sender tests */
     TEST(test_rtp_single_nal_small),
     TEST(test_rtp_boundary_1200_1201),
@@ -239,6 +254,7 @@ static const test_entry_t all_tests[] = {
     TEST(test_rtp_timestamp_wrap),
     TEST(test_rtcp_sr_sdes_generation),
     TEST(test_rtcp_bye_generation),
+    TEST(test_rtcp_ntp_single_clock),
     TEST(test_rtp_fua_reassembly_roundtrip),
     TEST(test_network_nonblocking_drop_on_error),
     TEST(test_pipeline_e2e_loopback),

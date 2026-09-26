@@ -319,6 +319,25 @@ extern uint32_t l4c_rtcp_build_compound(uint8_t *buf, uint32_t buf_size,
                                           uint32_t pkt_count, uint32_t octet_count,
                                           const char *cname);
 extern void l4c_rtcp_build_bye(uint8_t *buf, uint32_t buf_size, uint32_t ssrc);
+extern uint32_t l4c_rtcp_build_compound_at(uint8_t *buf, uint32_t buf_size,
+                                           uint32_t ssrc, uint32_t rtp_ts,
+                                           uint32_t pkt_count, uint32_t octet_count,
+                                           const char *cname, uint64_t filetime_100ns);
+
+int test_rtcp_ntp_single_clock(void) {
+    uint8_t buf[128];
+    uint64_t ticks = 116444736000000000ULL + 15000000ULL; /* Unix epoch + 1.5 s */
+    uint32_t len = l4c_rtcp_build_compound_at(buf, sizeof(buf), 1, 90000, 1, 10,
+                                              "test@host", ticks);
+    uint32_t sec = ((uint32_t)buf[8] << 24) | ((uint32_t)buf[9] << 16) |
+                   ((uint32_t)buf[10] << 8) | buf[11];
+    uint32_t frac = ((uint32_t)buf[12] << 24) | ((uint32_t)buf[13] << 16) |
+                    ((uint32_t)buf[14] << 8) | buf[15];
+    if (len < 40) return 1;
+    if (sec != 2208988801u) return 2;
+    if (frac != 0x80000000u) return 3;
+    return 0;
+}
 
 int test_rtcp_sr_sdes_generation(void) {
     uint8_t buf[512];

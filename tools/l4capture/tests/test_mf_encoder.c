@@ -75,7 +75,7 @@ int test_mf_probe_graceful(void) {
     return 0;
 }
 
-/* 1b. Persistent cache: ok sticky across restart; runtime_fail → in-process false. */
+/* 1b. Cached strategy is rechecked with real frames after a process restart. */
 int test_mf_capability_cache_persist(void) {
     uint64_t t0;
     bool first, second;
@@ -89,8 +89,8 @@ int test_mf_capability_cache_persist(void) {
     t0 = l4c_now_monotonic_ms();
     second = l4c_mf_encoder_is_supported();
     if (second != first) return 1;
-    /* Найденная конфигурация (ok) — мгновенный cache hit без probe. */
-    if (first && l4c_now_monotonic_ms() - t0 > 100) return 2;
+    /* Discovery plus synthetic sequence must remain within the startup budget. */
+    if (first && l4c_now_monotonic_ms() - t0 > 5000) return 2;
 
     /* Runtime failure: in-process stays fail-closed (no mid-stream re-probe).
      * Disk is retryable — следующий старт может редко перепробовать. */

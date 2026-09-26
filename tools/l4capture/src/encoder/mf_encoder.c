@@ -38,6 +38,8 @@
 #include "l4capture/clock.h"
 #include "l4capture/limits.h"
 #include "l4capture/telemetry.h"
+#include "l4capture/mft_event_gate.h"
+#include "l4capture/logger.h"
 
 #define l4c_clock_monotonic_ms l4c_now_monotonic_ms
 
@@ -72,6 +74,7 @@ static const GUID s_CODECAPI_AVEncMPVDefaultBPictureCount = { 0x8d390aac, 0xdc5c
 static const GUID s_CODECAPI_AVEncMPVGOPSize = { 0x95f31b26, 0x95a4, 0x41aa, { 0x93, 0x03, 0x24, 0x6a, 0x7f, 0xc6, 0xee, 0xf1 } };
 static const GUID s_CODECAPI_AVEncH264CABACEnable = { 0xee6cad62, 0xd305, 0x4248, { 0xa5, 0x0e, 0xe1, 0xb2, 0x55, 0xf7, 0xca, 0xf8 } };
 static const GUID s_CODECAPI_AVEncVideoForceKeyFrame = { 0x398c1b98, 0x8353, 0x475a, { 0x9e, 0xf2, 0x8f, 0x26, 0x5d, 0x26, 0x03, 0x45 } };
+static const GUID s_CODECAPI_AVEncVideoMaxQP = { 0x3daf6f66, 0xa6a7, 0x45e0, { 0xa8, 0xe5, 0xf2, 0x74, 0x3f, 0x46, 0xa3, 0xa2 } };
 static const GUID s_MF_TRANSFORM_ASYNC_UNLOCK = { 0xe5666d6b, 0x3422, 0x4eb6, { 0xa4, 0x21, 0xda, 0x7d, 0xb1, 0xf8, 0xe2, 0x07 } };
 static const GUID s_MFT_FRIENDLY_NAME_Attribute = { 0x314ffbae, 0x5b41, 0x4c95, { 0x9c, 0x19, 0x4e, 0x7d, 0x58, 0x6f, 0xac, 0xe3 } };
 
@@ -110,6 +113,7 @@ static mf_loader_t g_mf = {0};
 static bool s_test_injected_probe_fail = false;
 static bool s_test_injected_process_fail = false;
 static int s_probe_cached = -1;
+static bool probe_encoded_sequence(void);
 
 /* Persistent capability cache (mft_capability.ini next to exe).
  * reason: ok | unavailable | timeout | negotiate_fail | runtime_fail */
@@ -149,6 +153,18 @@ static bool mft_cache_path(wchar_t *out, size_t cap) {
     return true;
 }
 
+static uint32_t mf_quality_max_qp(void) {
+    wchar_t path[MAX_PATH];
+    wchar_t *slash;
+    UINT qp;
+    if (!GetModuleFileNameW(NULL, path, MAX_PATH)) return 0;
+    slash = wcsrchr(path, L'\\');
+    if (!slash) return 0;
+    wcscpy_s(slash + 1, MAX_PATH - (size_t)(slash + 1 - path), L"idle_refresh.ini");
+    qp = GetPrivateProfileIntW(L"quality", L"max_qp", 0, path);
+    return qp >= 20u && qp <= 40u ? qp : 0;
+}
+
 static l4c_mft_cache_kind_t mft_cache_parse_reason(const char *reason, int hw) {
     if (hw == 1) return L4C_MFT_CACHE_OK;
     if (hw == 0) {
@@ -186,7 +202,7 @@ static l4c_mft_cache_kind_t mft_cache_load(void) {
         }
     }
     fclose(fp);
-    if (version != 1) return L4C_MFT_CACHE_MISS;
+    if (version != 2) return L4C_MFT_CACHE_MISS;
     if (strategy >= 1 && strategy <= 3) s_mft_preferred_strategy = strategy;
     return mft_cache_parse_reason(reason, hw);
 }
@@ -200,7 +216,7 @@ static void mft_cache_save(int hw, const char *reason, uint64_t probe_ms) {
     fp = _wfopen(path, L"w");
     if (!fp) return;
     GetLocalTime(&st);
-    fprintf(fp, "version=1\n");
+    fprintf(fp, "version=2\n");
     fprintf(fp, "hw=%d\n", hw ? 1 : 0);
     fprintf(fp, "strategy=%d\n", s_mft_preferred_strategy);
     fprintf(fp, "reason=%s\n", reason ? reason : "unknown");
@@ -452,6 +468,12 @@ typedef struct {
     bool first_frame;
     bool force_key_frame_pending;
     bool mf_started;
+    l4c_mft_event_gate_t events;
+    bool input_pending;
+    bool input_submitted;
+    uint64_t pending_pts_ms;
+    uint64_t pending_since_ms;
+    uint64_t input_wait_since_ms;
 } mf_encoder_backend_t;
 
 /* Forward declarations */
@@ -623,19 +645,9 @@ bool l4c_mf_encoder_is_supported(void) {
     if (s_test_injected_probe_fail) return false;
     if (s_probe_cached != -1) return (s_probe_cached == 1);
 
-    /* Persistent cache: однажды найденная конфигурация — без повторной пробы. */
-    {
-        l4c_mft_cache_kind_t cached = mft_cache_load();
-        if (cached == L4C_MFT_CACHE_OK) {
-            s_probe_cached = 1;
-            return true;
-        }
-        if (cached == L4C_MFT_CACHE_UNAVAILABLE) {
-            s_probe_cached = 0;
-            return false;
-        }
-        /* MISS / RETRYABLE → discovery probe (редкий, до 5 с). */
-    }
+    /* Cache remembers negotiation strategy only. Hardware/driver updates and
+     * a prior successful type negotiation cannot establish runtime liveness. */
+    (void)mft_cache_load();
 
     start_ms = l4c_clock_monotonic_ms();
 
@@ -704,6 +716,11 @@ bool l4c_mf_encoder_is_supported(void) {
     CoTaskMemFree(ppActivate);
     g_mf.pfn_MFShutdown();
 
+    if (supported) {
+        supported = probe_encoded_sequence();
+        if (!supported) fail_reason = "encode_probe_fail";
+    }
+
     /* Fail-closed: true только если переговоры уложились в бюджет.
      * Успех за бюджетом не выбрасываем — сохраняем ok (конфиг уже найден). */
     if (supported) {
@@ -744,30 +761,45 @@ static void mf_release_event_gen(mf_encoder_backend_t *self) {
     }
 }
 
-/* Async HW MFT (Intel QSV): short bounded wait for METransformNeedInput / HaveOutput. */
-static bool wait_transform_event(mf_encoder_backend_t *self, MediaEventType want, DWORD timeout_ms) {
+typedef enum { MFT_WAIT_READY, MFT_WAIT_TIMEOUT, MFT_WAIT_ERROR } mft_wait_result_t;
+
+/* Poll only: GetEvent without NO_WAIT can park forever in a vendor MFT. Store
+ * both kinds of events because async MFTs do not promise alternating order. */
+static mft_wait_result_t wait_transform_event(mf_encoder_backend_t *self,
+                                              MediaEventType want, DWORD timeout_ms) {
     uint64_t start = l4c_clock_monotonic_ms();
-    if (!self->event_gen) return true; /* sync MFT — no events */
+    if (!self->event_gen) return MFT_WAIT_READY;
     for (;;) {
-        IMFMediaEvent *ev = NULL;
-        MediaEventType got = 0;
-        HRESULT hr = self->event_gen->lpVtbl->GetEvent(self->event_gen, MF_EVENT_FLAG_NO_WAIT, &ev);
-        if (SUCCEEDED(hr) && ev) {
-            ev->lpVtbl->GetType(ev, &got);
+        unsigned i;
+        if (want == METransformNeedInput && l4c_mft_event_gate_take_input(&self->events))
+            return MFT_WAIT_READY;
+        if (want == METransformHaveOutput && l4c_mft_event_gate_take_output(&self->events))
+            return MFT_WAIT_READY;
+        for (i = 0; i < 16; ++i) {
+            IMFMediaEvent *ev = NULL;
+            MediaEventType got = 0;
+            HRESULT event_status = S_OK;
+            HRESULT hr = self->event_gen->lpVtbl->GetEvent(self->event_gen, MF_EVENT_FLAG_NO_WAIT, &ev);
+            if (hr == MF_E_NO_EVENTS_AVAILABLE) break;
+            if (FAILED(hr) || !ev) return MFT_WAIT_ERROR;
+            hr = ev->lpVtbl->GetType(ev, &got);
+            if (SUCCEEDED(hr)) hr = ev->lpVtbl->GetStatus(ev, &event_status);
             ev->lpVtbl->Release(ev);
-            if (got == want) return true;
-            continue;
-        }
-        if (l4c_clock_monotonic_ms() - start >= timeout_ms) {
-            /* Blocking GetEvent as fallback — NO_WAIT may miss async delivery. */
-            hr = self->event_gen->lpVtbl->GetEvent(self->event_gen, 0, &ev);
-            if (SUCCEEDED(hr) && ev) {
-                ev->lpVtbl->GetType(ev, &got);
-                ev->lpVtbl->Release(ev);
-                return got == want;
+            if (FAILED(hr) || FAILED(event_status)) return MFT_WAIT_ERROR;
+            if (got == METransformNeedInput)
+                l4c_mft_event_gate_record(&self->events, L4C_MFT_EVENT_INPUT);
+            else if (got == METransformHaveOutput)
+                l4c_mft_event_gate_record(&self->events, L4C_MFT_EVENT_OUTPUT);
+            if (want == METransformNeedInput && l4c_mft_event_gate_take_input(&self->events))
+                return MFT_WAIT_READY;
+            if (want == METransformHaveOutput && l4c_mft_event_gate_take_output(&self->events))
+                return MFT_WAIT_READY;
+            if (l4c_mft_deadline_expired(start, l4c_clock_monotonic_ms(), timeout_ms)) {
+                return MFT_WAIT_TIMEOUT;
             }
-            return false;
         }
+        if (l4c_mft_deadline_expired(start, l4c_clock_monotonic_ms(), timeout_ms))
+            return MFT_WAIT_TIMEOUT;
         Sleep(1);
     }
 }
@@ -933,6 +965,20 @@ static l4c_status_t mf_init(struct l4c_encoder_backend *self_base, const l4c_enc
         val.ulVal = config->max_bitrate_kbps * 1000;
         self->codec_api->lpVtbl->SetValue(self->codec_api, &s_CODECAPI_AVEncCommonMaxBitRate, &val);
 
+        /* Optional desktop text experiment. The driver may reject the QP cap;
+         * report its HRESULT so a visual A/B result has a known configuration. */
+        {
+            uint32_t max_qp = mf_quality_max_qp();
+            if (max_qp) {
+                val.vt = VT_UI4;
+                val.ulVal = max_qp;
+                hr = self->codec_api->lpVtbl->SetValue(self->codec_api,
+                                                       &s_CODECAPI_AVEncVideoMaxQP, &val);
+                l4c_logger_write("MF_MAX_QP requested=%u hr=0x%08X",
+                                 (unsigned)max_qp, (unsigned)hr);
+            }
+        }
+
         /* GOP size: target_fps * 2 (IDR cadence <= 2.0s) */
         val.vt = VT_UI4;
         val.ulVal = config->target_fps * 2;
@@ -1087,6 +1133,40 @@ static l4c_status_t mf_encode(
         }
     }
 
+    /* A timed-out output may still be in flight. Keep its sample alive and
+     * discard this fresh raw frame until the old output arrives or fails. */
+    if (self->input_pending) goto wait_output;
+
+    if (self->event_gen) {
+        mft_wait_result_t wait = wait_transform_event(self, METransformNeedInput, 100);
+        if (wait == MFT_WAIT_ERROR) return L4C_ERR_DEVICE_LOST;
+        if (wait == MFT_WAIT_TIMEOUT) {
+            uint64_t now = l4c_clock_monotonic_ms();
+            if (!self->input_wait_since_ms) self->input_wait_since_ms = now;
+            if (now - self->input_wait_since_ms >= 500) return L4C_ERR_DEVICE_LOST;
+            return L4C_ERR_NO_FRAME;
+        }
+        self->input_wait_since_ms = 0;
+    }
+
+    /* A vendor MFT may retain the submitted sample beyond ProcessInput.
+     * Allocate a fresh one before writing the next frame; COM refcounts keep
+     * any retained previous sample alive inside the transform. */
+    if (self->input_submitted) {
+        DWORD in_size = w * h + w * half_h;
+        self->input_sample->lpVtbl->Release(self->input_sample);
+        self->input_buffer->lpVtbl->Release(self->input_buffer);
+        self->input_sample = NULL;
+        self->input_buffer = NULL;
+        hr = g_mf.pfn_MFCreateMemoryBuffer(in_size, &self->input_buffer);
+        if (FAILED(hr) || !self->input_buffer) return L4C_ERR_OUT_OF_MEMORY;
+        hr = g_mf.pfn_MFCreateSample(&self->input_sample);
+        if (FAILED(hr) || !self->input_sample) return L4C_ERR_OUT_OF_MEMORY;
+        hr = self->input_sample->lpVtbl->AddBuffer(self->input_sample, self->input_buffer);
+        if (FAILED(hr)) return L4C_ERR_DEVICE_LOST;
+        self->input_submitted = false;
+    }
+
     /* Fill input buffer: Y plane then UV interleaved plane */
     hr = self->input_buffer->lpVtbl->Lock(self->input_buffer, &pInputData, &max_in_len, &cur_in_len);
     if (FAILED(hr) || !pInputData) return L4C_ERR_DEVICE_LOST;
@@ -1108,20 +1188,23 @@ static l4c_status_t mf_encode(
     self->input_sample->lpVtbl->SetSampleTime(self->input_sample, sample_time);
     self->input_sample->lpVtbl->SetSampleDuration(self->input_sample, sample_dur);
 
-    /* Async MFT (Intel QSV): строго по событиям NeedInput → ProcessInput →
-     * HaveOutput → ProcessOutput. Иначе MF_E_NOTACCEPTING / STREAM_CHANGE. */
-    if (self->event_gen) {
-        if (!wait_transform_event(self, METransformNeedInput, 100)) {
-            return L4C_ERR_NO_FRAME;
-        }
-    }
     hr = self->transform->lpVtbl->ProcessInput(self->transform, 0, self->input_sample, 0);
+    if (hr == MF_E_NOTACCEPTING) return L4C_ERR_NO_FRAME;
     if (FAILED(hr)) {
         return L4C_ERR_DEVICE_LOST;
     }
+    self->input_submitted = true;
+    self->input_pending = true;
+    self->pending_pts_ms = raw->pts_ms;
+    self->pending_since_ms = l4c_clock_monotonic_ms();
 
+wait_output:
     if (self->event_gen) {
-        if (!wait_transform_event(self, METransformHaveOutput, 100)) {
+        mft_wait_result_t wait = wait_transform_event(self, METransformHaveOutput, 100);
+        if (wait == MFT_WAIT_ERROR) return L4C_ERR_DEVICE_LOST;
+        if (wait == MFT_WAIT_TIMEOUT) {
+            if (l4c_clock_monotonic_ms() - self->pending_since_ms >= 500)
+                return L4C_ERR_DEVICE_LOST;
             return L4C_ERR_NO_FRAME;
         }
     }
@@ -1135,6 +1218,7 @@ static l4c_status_t mf_encode(
 
     hr = self->transform->lpVtbl->ProcessOutput(self->transform, 0, 1, &out_data, &mft_status);
     if (hr == MF_E_TRANSFORM_NEED_MORE_INPUT) {
+        self->input_pending = false;
         return L4C_ERR_NO_FRAME;
     }
     if (hr == MF_E_TRANSFORM_STREAM_CHANGE) {
@@ -1161,7 +1245,8 @@ static l4c_status_t mf_encode(
                 self->output_sample->lpVtbl->AddBuffer(self->output_sample, self->output_buffer);
             }
         }
-        if (self->event_gen) (void)wait_transform_event(self, METransformHaveOutput, 100);
+        if (self->event_gen && wait_transform_event(self, METransformHaveOutput, 100) == MFT_WAIT_ERROR)
+            return L4C_ERR_DEVICE_LOST;
         memset(&out_data, 0, sizeof(out_data));
         out_data.dwStreamID = 0;
         if (!(self->output_stream_info.dwFlags & MFT_OUTPUT_STREAM_PROVIDES_SAMPLES)) {
@@ -1173,6 +1258,7 @@ static l4c_status_t mf_encode(
         if (out_data.pEvents) out_data.pEvents->lpVtbl->Release(out_data.pEvents);
         return L4C_ERR_DEVICE_LOST;
     }
+    self->input_pending = false;
 
     if (out_data.pEvents) {
         out_data.pEvents->lpVtbl->Release(out_data.pEvents);
@@ -1389,7 +1475,7 @@ static l4c_status_t mf_encode(
         out_data.pSample->lpVtbl->Release(out_data.pSample);
     }
 
-    out_au->pts_ms = raw->pts_ms;
+    out_au->pts_ms = self->pending_pts_ms;
     out_au->is_idr = is_idr;
     out_au->total_bytes = au_offset;
 
@@ -1421,4 +1507,54 @@ static void mf_destroy(struct l4c_encoder_backend *self_base) {
     }
 
     free(self);
+}
+
+static bool probe_encoded_sequence(void) {
+    l4c_encoder_backend_t *backend = NULL;
+    l4c_encoder_config_t cfg;
+    l4c_raw_frame_t raw;
+    l4c_access_unit_t au;
+    uint8_t *nv12;
+    unsigned frame;
+    unsigned outputs = 0;
+    bool ok = false;
+    const uint32_t width = 640, height = 480;
+    nv12 = (uint8_t *)malloc(width * height * 3u / 2u);
+    if (!nv12) return false;
+    memset(nv12, 128, width * height * 3u / 2u);
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.width = width;
+    cfg.height = height;
+    cfg.target_fps = 10;
+    cfg.target_bitrate_kbps = 500;
+    cfg.max_bitrate_kbps = 800;
+    cfg.input_format = L4C_PIX_FMT_NV12;
+    if (l4c_mf_encoder_create(&backend) != L4C_OK) goto done;
+    if (backend->vtable->init(backend, &cfg) != L4C_OK) goto done;
+    memset(&raw, 0, sizeof(raw));
+    raw.planes[0] = nv12;
+    raw.planes[1] = nv12 + width * height;
+    raw.strides[0] = width;
+    raw.strides[1] = width;
+    raw.plane_sizes[0] = width * height;
+    raw.plane_sizes[1] = width * height / 2;
+    raw.width = width;
+    raw.height = height;
+    raw.format = L4C_PIX_FMT_NV12;
+    for (frame = 0; frame < 12; ++frame) {
+        l4c_status_t status;
+        nv12[(frame * 7919u) % (width * height)] = (uint8_t)(frame * 17u);
+        raw.pts_ms = frame * 100u;
+        raw.force_idr = frame == 0;
+        memset(&au, 0, sizeof(au));
+        status = backend->vtable->encode(backend, &raw, &au);
+        if (status != L4C_OK && status != L4C_ERR_NO_FRAME) goto done;
+        if (status == L4C_OK && au.nal_count > 0) ++outputs;
+        backend->vtable->release_au(backend, &au);
+        if (outputs >= 3) { ok = true; break; }
+    }
+done:
+    if (backend) backend->vtable->destroy(backend);
+    free(nv12);
+    return ok;
 }

@@ -29,6 +29,7 @@ struct l4c_rtp_sender {
     uint8_t payload_type;
     uint32_t base_ts;
     uint64_t pts_start_ms;
+    uint64_t first_send_tick_ms;
     bool pts_start_set;
     l4c_rtp_stats_t stats;
     uint64_t last_rtcp_ms;
@@ -200,6 +201,7 @@ l4c_status_t l4c_rtp_send_au(l4c_rtp_sender_t *sender,
     /* Record PTS start on first AU */
     if (!sender->pts_start_set) {
         sender->pts_start_ms = au->pts_ms;
+        sender->first_send_tick_ms = l4c_now_monotonic_ms();
         sender->pts_start_set = true;
     }
 
@@ -253,17 +255,22 @@ l4c_status_t l4c_rtp_sender_poll_rtcp(l4c_rtp_sender_t *sender,
     now = l4c_now_monotonic_ms();
 
     /* Send compound RTCP SR/SDES every 1000ms */
-    if (now - sender->last_rtcp_ms >= L4C_RTCP_SR_INTERVAL_MS) {
+    if (sender->pts_start_set && now - sender->last_rtcp_ms >= L4C_RTCP_SR_INTERVAL_MS) {
+        uint32_t report_rtp_ts = sender->base_ts;
+        if (sender->pts_start_set && now >= sender->first_send_tick_ms) {
+            report_rtp_ts += (uint32_t)((now - sender->first_send_tick_ms) * 90u);
+        }
         rtcp_len = l4c_rtcp_build_compound(rtcp_buf, sizeof(rtcp_buf),
                                             sender->ssrc,
-                                            sender->stats.last_rtp_timestamp,
+                                            report_rtp_ts,
                                             sender->stats.packets_sent,
                                             (uint32_t)(sender->stats.bytes_sent & 0xFFFFFFFF),
                                             sender->cname);
         if (rtcp_len > 0) {
-            sendto(sender->rtcp_sock, (const char *)rtcp_buf, (int)rtcp_len, 0,
-                   (const struct sockaddr *)&sender->rtcp_addr, sizeof(sender->rtcp_addr));
-            sender->stats.rtcp_sr_sent++;
+            if (sendto(sender->rtcp_sock, (const char *)rtcp_buf, (int)rtcp_len, 0,
+                       (const struct sockaddr *)&sender->rtcp_addr,
+                       sizeof(sender->rtcp_addr)) != SOCKET_ERROR)
+                sender->stats.rtcp_sr_sent++;
         }
         sender->last_rtcp_ms = now;
     }

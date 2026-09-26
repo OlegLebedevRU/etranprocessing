@@ -70,6 +70,8 @@ cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DWIN32_LEAN_AND_MEAN /D
     "%ROOT%\src\encoder\mf_encoder.c" ^
     "%ROOT%\tests\test_openh264_encoder.c" ^
     "%ROOT%\tests\test_mf_encoder.c" ^
+    "%ROOT%\tests\test_mft_event_gate.c" ^
+    "%ROOT%\tests\test_idle_refresh.c" ^
     "%ROOT%\tests\test_rtp_sender.c" ^
     "%ROOT%\tests\test_clock.c" ^
     "%ROOT%\tests\test_profiles_degrade.c" ^
@@ -114,6 +116,8 @@ link.exe /nologo /SUBSYSTEM:CONSOLE,6.01 /OUT:"%ROOT%\bin\l4capture_tests.exe" ^
     "%ROOT%\obj\test\mf_encoder.obj" ^
     "%ROOT%\obj\test\test_openh264_encoder.obj" ^
     "%ROOT%\obj\test\test_mf_encoder.obj" ^
+    "%ROOT%\obj\test\test_mft_event_gate.obj" ^
+    "%ROOT%\obj\test\test_idle_refresh.obj" ^
     "%ROOT%\obj\test\test_rtp_sender.obj" ^
     "%ROOT%\obj\test\test_clock.obj" ^
     "%ROOT%\obj\test\test_profiles_degrade.obj" ^

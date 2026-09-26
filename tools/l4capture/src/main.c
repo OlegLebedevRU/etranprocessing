@@ -17,6 +17,8 @@
 #include "l4capture/degrade_controller.h"
 #include "l4capture/telemetry.h"
 #include "l4capture/logger.h"
+#include "l4capture/idle_refresh.h"
+#include "l4capture/quality_raster.h"
 
 typedef struct {
     HANDLE pipe_in;
@@ -26,6 +28,7 @@ typedef struct {
 
 typedef struct {
     l4c_capture_backend_t *capture;
+    l4c_capture_backend_t *refresh_capture;
     l4c_encoder_backend_t *encoder;
     l4c_rtp_sender_t *rtp;
     l4c_color_converter_t *converter;
@@ -38,7 +41,15 @@ typedef struct {
     uint32_t frames_captured;
     uint32_t frames_encoded;
     uint32_t frames_sent;
+    uint32_t idr_sent;
+    uint32_t max_au_bytes;
+    uint64_t last_idr_sent_ms;
     uint32_t frames_skipped;
+    uint32_t idle_refresh_interval_ms;
+    uint32_t idle_refresh_count;
+    uint32_t bootstrap_refresh_count;
+    uint64_t last_dxgi_frame_ms;
+    uint64_t last_refresh_ms;
     uint16_t active_capture_backend;
     uint16_t active_encoder_backend;
     uint16_t fallback_reason;
@@ -105,6 +116,55 @@ static uint32_t read_test_encode_delay_ms(void) {
         l4c_logger_write("FAULT_INJECT encode_delay_ms=%u (test_encode_delay_ms.txt present!)", value);
     }
     return value > 5000u ? 5000u : value;
+}
+
+/* Local diagnostic switch. Zero (the default) leaves the capture path unchanged. */
+static uint32_t read_idle_refresh_interval_ms(void) {
+    wchar_t path[MAX_PATH];
+    wchar_t *slash;
+    UINT interval;
+    if (!GetModuleFileNameW(NULL, path, MAX_PATH)) return 0;
+    slash = wcsrchr(path, L'\\');
+    if (!slash) return 0;
+    wcscpy_s(slash + 1, MAX_PATH - (size_t)(slash + 1 - path), L"idle_refresh.ini");
+    interval = GetPrivateProfileIntW(L"quality", L"idle_refresh_ms", 0, path);
+    return interval >= 500u && interval <= 5000u ? interval : 0;
+}
+
+static uint32_t read_quality_max_width(void) {
+    wchar_t path[MAX_PATH];
+    wchar_t *slash;
+    UINT width;
+    if (!GetModuleFileNameW(NULL, path, MAX_PATH)) return 0;
+    slash = wcsrchr(path, L'\\');
+    if (!slash) return 0;
+    wcscpy_s(slash + 1, MAX_PATH - (size_t)(slash + 1 - path), L"idle_refresh.ini");
+    width = GetPrivateProfileIntW(L"quality", L"max_width", 0, path);
+    return width >= 1280u && width <= 2560u ? width & ~1u : 0;
+}
+
+static uint32_t read_quality_peak_kbps(void) {
+    wchar_t path[MAX_PATH];
+    wchar_t *slash;
+    UINT peak;
+    if (!GetModuleFileNameW(NULL, path, MAX_PATH)) return 0;
+    slash = wcsrchr(path, L'\\');
+    if (!slash) return 0;
+    wcscpy_s(slash + 1, MAX_PATH - (size_t)(slash + 1 - path), L"idle_refresh.ini");
+    peak = GetPrivateProfileIntW(L"quality", L"peak_kbps", 0, path);
+    return peak >= 1200u && peak <= 3000u ? peak : 0;
+}
+
+static uint32_t read_quality_target_kbps(void) {
+    wchar_t path[MAX_PATH];
+    wchar_t *slash;
+    UINT target;
+    if (!GetModuleFileNameW(NULL, path, MAX_PATH)) return 0;
+    slash = wcsrchr(path, L'\\');
+    if (!slash) return 0;
+    wcscpy_s(slash + 1, MAX_PATH - (size_t)(slash + 1 - path), L"idle_refresh.ini");
+    target = GetPrivateProfileIntW(L"quality", L"target_kbps", 0, path);
+    return target >= 800u && target <= 1600u ? target : 0;
 }
 
 static bool is_single_output(const l4c_rect_t *target_rect) {
@@ -195,6 +255,7 @@ static void send_event_metrics(l4c_ipc_pipe_t *pipe, l4c_pipeline_state_t *ps, u
     uint16_t queue_depth = 0;
 
     memset(&msg, 0, sizeof(msg));
+    memset(&rtp_stats, 0, sizeof(rtp_stats));
     /* Измеренные fps/битрейт за 1 с; p95 из выборки encode; queue 0..1 (zero-queue). */
     (void)l4c_rate_window_eval(&ps->rate_win, now, 1000u, &meas_fps, &meas_kbps);
     (void)l4c_p95_window_eval(&ps->p95_win, &p95_ms);
@@ -227,12 +288,19 @@ static void send_event_metrics(l4c_ipc_pipe_t *pipe, l4c_pipeline_state_t *ps, u
         if (l4c_telemetry_process_resources(&res)) {
             l4c_logger_write(
                 "SOAK t=%llu private_kb=%u ws_kb=%u gdi=%u user=%u kernel=%u "
-                "fps=%u kbps=%u p95=%u raw=%u enc=%u tr=%u",
+                "fps=%u kbps=%u p95=%u raw=%u enc=%u tr=%u idle_refresh=%u bootstrap=%u "
+                "idr=%u idr_age_ms=%llu max_au=%u rtp_pkts=%u rtp_bytes=%llu sr=%u",
                 (unsigned long long)now, res.private_bytes_kb, res.working_set_kb,
                 res.gdi_handles, res.user_handles, res.kernel_handles,
                 (unsigned)meas_fps, (unsigned)meas_kbps, (unsigned)p95_ms,
                 (unsigned)ps->raw_drops, (unsigned)ps->encoder_drops,
-                (unsigned)msg.body.metrics.transport_drops);
+                (unsigned)msg.body.metrics.transport_drops,
+                (unsigned)ps->idle_refresh_count, (unsigned)ps->bootstrap_refresh_count,
+                (unsigned)ps->idr_sent,
+                (unsigned long long)(ps->last_idr_sent_ms && now >= ps->last_idr_sent_ms ?
+                                     now - ps->last_idr_sent_ms : 0),
+                (unsigned)ps->max_au_bytes, (unsigned)rtp_stats.packets_sent,
+                (unsigned long long)rtp_stats.bytes_sent, (unsigned)rtp_stats.rtcp_sr_sent);
         }
     }
 }
@@ -241,6 +309,7 @@ static void pipeline_cleanup(l4c_pipeline_state_t *ps) {
     if (ps->rtp) { l4c_rtp_sender_destroy(ps->rtp); ps->rtp = NULL; }
     if (ps->encoder) { ps->encoder->vtable->destroy(ps->encoder); ps->encoder = NULL; }
     if (ps->capture) { ps->capture->vtable->destroy(ps->capture); ps->capture = NULL; }
+    if (ps->refresh_capture) { ps->refresh_capture->vtable->destroy(ps->refresh_capture); ps->refresh_capture = NULL; }
     if (ps->converter) { l4c_color_converter_destroy(ps->converter); ps->converter = NULL; }
     if (ps->scaled_buf) { free(ps->scaled_buf); ps->scaled_buf = NULL; }
     ps->active = false;
@@ -429,6 +498,10 @@ static l4c_status_t pipeline_start(l4c_pipeline_state_t *ps, const l4c_start_t *
     bool mft_720p = false, oh264_720p = false, win7 = false;
 
     memset(ps, 0, sizeof(*ps));
+    ps->idle_refresh_interval_ms = read_idle_refresh_interval_ms();
+    if (ps->idle_refresh_interval_ms) {
+        l4c_logger_write("IDLE_REFRESH enabled interval_ms=%u", ps->idle_refresh_interval_ms);
+    }
 
     if (!l4c_profile_parse_request(start_params->profile_id, &request)) {
         return L4C_ERR_INVALID_ARG;
@@ -469,9 +542,35 @@ static l4c_status_t pipeline_start(l4c_pipeline_state_t *ps, const l4c_start_t *
             ps->target_height = sh;
         }
     }
+    /* Local A/B test: send the complete desktop at a smaller raster within
+     * the same bitrate budget. Preserve aspect ratio and even H.264 sizes. */
+    {
+        uint32_t max_width = read_quality_max_width();
+        if (max_width && ps->target_width > max_width) {
+            uint32_t source_width = ps->target_width;
+            uint32_t source_height = ps->target_height;
+            l4c_quality_limit_width(&ps->target_width, &ps->target_height, max_width);
+            l4c_logger_write("QUALITY_SCALE source=%ux%u encoded=%ux%u",
+                             source_width, source_height,
+                             ps->target_width, ps->target_height);
+        }
+    }
     ps->bitrate_min = pp->bitrate_min_kbps;
     ps->bitrate_target = pp->bitrate_target_kbps;
     ps->bitrate_max = pp->bitrate_max_kbps;
+    if (request == L4C_PROFILE_REQ_LOW) {
+        uint32_t target = read_quality_target_kbps();
+        uint32_t peak = read_quality_peak_kbps();
+        if (target > ps->bitrate_target) ps->bitrate_target = (uint16_t)target;
+        if (peak > ps->bitrate_max) {
+            ps->bitrate_max = (uint16_t)peak;
+        }
+        if (ps->bitrate_max < ps->bitrate_target) ps->bitrate_max = ps->bitrate_target;
+        if (target || peak) {
+            l4c_logger_write("QUALITY_RATE target_kbps=%u peak_kbps=%u",
+                             (unsigned)ps->bitrate_target, (unsigned)ps->bitrate_max);
+        }
+    }
     ps->degrade_state = L4C_NOMINAL;
     ps->config_gen = 1;
     ps->force_next_idr = true;
@@ -748,20 +847,66 @@ static int run(l4c_args_t *args) {
             }
             if (l4c_pipeline_due(&gate.pipeline, now, ps.current_fps)) {
                 l4c_frame_view_t frame;
+                l4c_capture_backend_t *frame_owner = ps.capture;
+                bool bootstrap_frame = false;
                 uint32_t tw, th;
                 tfps = ps.current_fps;
                 profile_bounds(&ps, &tw, &th, &tfps);
                 status = ps.capture->vtable->acquire_frame(ps.capture, &frame, 50);
+
+                if (status == L4C_OK && ps.active_capture_backend == L4C_CAPTURE_DXGI) {
+                    ps.last_dxgi_frame_ms = l4c_now_monotonic_ms();
+                } else if (status == L4C_ERR_NO_FRAME &&
+                           ps.active_capture_backend == L4C_CAPTURE_DXGI &&
+                           (l4c_bootstrap_refresh_due(l4c_now_monotonic_ms(), ps.stage_start_ms,
+                                                      ps.bootstrap_refresh_count) ||
+                            l4c_idle_refresh_due(l4c_now_monotonic_ms(), ps.last_dxgi_frame_ms,
+                                                 ps.last_refresh_ms, ps.idle_refresh_interval_ms))) {
+                    l4c_status_t refresh_status = L4C_OK;
+                    bool bootstrap_due = l4c_bootstrap_refresh_due(l4c_now_monotonic_ms(),
+                                                                     ps.stage_start_ms,
+                                                                     ps.bootstrap_refresh_count);
+                    if (bootstrap_due) ps.bootstrap_refresh_count++;
+                    ps.last_refresh_ms = l4c_now_monotonic_ms();
+                    if (!ps.refresh_capture) {
+                        refresh_status = l4c_gdi_capture_create(&ps.refresh_capture);
+                        if (refresh_status == L4C_OK) {
+                            refresh_status = ps.refresh_capture->vtable->init(ps.refresh_capture, &ps.cap_cfg);
+                        }
+                        if (refresh_status != L4C_OK && ps.refresh_capture) {
+                            ps.refresh_capture->vtable->destroy(ps.refresh_capture);
+                            ps.refresh_capture = NULL;
+                        }
+                    }
+                    if (refresh_status == L4C_OK) {
+                        frame_owner = ps.refresh_capture;
+                        status = frame_owner->vtable->acquire_frame(frame_owner, &frame, 50);
+                        if (status == L4C_OK) {
+                            if (bootstrap_due) bootstrap_frame = true;
+                            else ps.idle_refresh_count++;
+                        }
+                    } else {
+                        status = refresh_status;
+                    }
+                    if (status != L4C_OK && status != L4C_ERR_SESSION_UNAVAILABLE) {
+                        status = L4C_ERR_NO_FRAME;
+                    }
+                }
 
                 if (status == L4C_ERR_SESSION_UNAVAILABLE) {
                     l4c_safety_stop(&gate, L4C_ERR_SESSION_UNAVAILABLE);
                     break;
                 }
 
-                if (status == L4C_ERR_DEVICE_LOST && ps.active_capture_backend == L4C_CAPTURE_DXGI) {
+                if (status == L4C_ERR_DEVICE_LOST && frame_owner == ps.capture &&
+                    ps.active_capture_backend == L4C_CAPTURE_DXGI) {
                     /* DXGI ACCESS_LOST 3 retries failed -> controlled fallback to GDI */
                     ps.capture->vtable->destroy(ps.capture);
                     ps.capture = NULL;
+                    if (ps.refresh_capture) {
+                        ps.refresh_capture->vtable->destroy(ps.refresh_capture);
+                        ps.refresh_capture = NULL;
+                    }
                     l4c_status_t gdi_s = l4c_gdi_capture_create(&ps.capture);
                     if (gdi_s == L4C_OK) {
                         gdi_s = ps.capture->vtable->init(ps.capture, &ps.cap_cfg);
@@ -774,6 +919,7 @@ static int run(l4c_args_t *args) {
                             deg_msg.body.degraded.degrade_state = L4C_NOMINAL;
                             deg_msg.body.degraded.reason = L4C_DXGI_ACCESS_LOST;
                             l4c_pipe_enqueue(&pipe, &deg_msg, now);
+                            frame_owner = ps.capture;
                             status = ps.capture->vtable->acquire_frame(ps.capture, &frame, 50);
                         }
                     }
@@ -819,10 +965,14 @@ static int run(l4c_args_t *args) {
                             status = l4c_color_convert_bgra_to_i420(ps.converter, bgra_src,
                                                                     bgra_stride, pts_ms, &raw);
                         }
-                        ps.capture->vtable->release_frame(ps.capture, &frame);
-                        if (status != L4C_OK) { count_raw_drop(&ps); continue; }
+                        if (status != L4C_OK) {
+                            frame_owner->vtable->release_frame(frame_owner, &frame);
+                            count_raw_drop(&ps);
+                            continue;
+                        }
 
-                        raw.force_idr = ps.force_next_idr || l4c_safety_take_idr(&gate, now);
+                        raw.force_idr = ps.force_next_idr || bootstrap_frame ||
+                                        l4c_safety_take_idr(&gate, now);
                         ps.force_next_idr = false;
 
                         memset(&au, 0, sizeof(au));
@@ -891,9 +1041,18 @@ static int run(l4c_args_t *args) {
                             ps.au_bytes_10s += (uint32_t)au.total_bytes;
                             l4c_rate_window_add_au(&ps.rate_win, (uint32_t)au.total_bytes);
                             {
-                                l4c_status_t rtp_status = l4c_rtp_send_au(ps.rtp, &au, ps.encoder);
+                                l4c_status_t rtp_status = L4C_ERR_DEADLINE_EXPIRED;
+                                if (l4c_safety_can_send(&gate, l4c_now_monotonic_ms(),
+                                                        l4c_session_available(&session))) {
+                                    rtp_status = l4c_rtp_send_au(ps.rtp, &au, ps.encoder);
+                                }
                                 if (rtp_status == L4C_OK) {
                                     ps.frames_sent++;
+                                    if (au.total_bytes > ps.max_au_bytes) ps.max_au_bytes = (uint32_t)au.total_bytes;
+                                    if (au.is_idr) {
+                                        ps.idr_sent++;
+                                        ps.last_idr_sent_ms = l4c_now_monotonic_ms();
+                                    }
                                     count_tr_pass(&ps);
                                     /* P1.3: EVENT_READY = first locally sent SPS/PPS+IDR AU. */
                                     if (!ps.ready_sent && au.is_idr) {
@@ -917,8 +1076,9 @@ static int run(l4c_args_t *args) {
                         } else {
                             count_enc_drop(&ps);
                         }
+                        frame_owner->vtable->release_frame(frame_owner, &frame);
                     } else {
-                        ps.capture->vtable->release_frame(ps.capture, &frame);
+                        frame_owner->vtable->release_frame(frame_owner, &frame);
                         count_raw_drop(&ps);
                     }
                 } else if (status == L4C_ERR_NO_FRAME) {

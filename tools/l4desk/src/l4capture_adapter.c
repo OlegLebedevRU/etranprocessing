@@ -76,19 +76,23 @@ typedef struct {
     l4d_l4capture_adapter_cfg_t cfg;
 } adapter_ctx_t;
 
-static void cleanup_process(adapter_ctx_t *ctx) {
+static bool cleanup_process(adapter_ctx_t *ctx) {
+    bool exited = true;
     if (ctx->hStdinWrite) { CloseHandle(ctx->hStdinWrite); ctx->hStdinWrite = NULL; }
     if (ctx->hStdoutRead) { CloseHandle(ctx->hStdoutRead); ctx->hStdoutRead = NULL; }
     if (ctx->hProcess) {
         if (WaitForSingleObject(ctx->hProcess, 0) == WAIT_TIMEOUT) {
-            TerminateProcess(ctx->hProcess, 1);
-            WaitForSingleObject(ctx->hProcess, 2000);
+            if (ctx->hJob) TerminateJobObject(ctx->hJob, 1);
+            else TerminateProcess(ctx->hProcess, 1);
+            exited = WaitForSingleObject(ctx->hProcess, 1000) == WAIT_OBJECT_0;
         }
+        if (!exited) return false;
         CloseHandle(ctx->hProcess);
         ctx->hProcess = NULL;
     }
     if (ctx->hJob) { CloseHandle(ctx->hJob); ctx->hJob = NULL; }
     ctx->child_pid = 0;
+    return true;
 }
 
 static bool is_session_interactive(void) {
@@ -498,7 +502,16 @@ bool l4d_adapter_stop(l4d_media_backend_t *self, const char *stream_id) {
     adapter_ctx_t *ctx = (adapter_ctx_t *)self->impl_ctx;
     (void)stream_id;
 
-    if (ctx->state == L4D_ADAPTER_IDLE || ctx->state == L4D_ADAPTER_STOPPING) return true;
+    if (ctx->state == L4D_ADAPTER_IDLE) return true;
+    if (ctx->state == L4D_ADAPTER_STOPPING) {
+        if (!cleanup_process(ctx)) return false;
+        ctx->state = L4D_ADAPTER_IDLE;
+        ctx->stream_id[0] = '\0';
+        ctx->lease_id[0] = '\0';
+        ctx->current_deadline_tick_ms = 0;
+        ctx->has_saved_params = false;
+        return true;
+    }
 
     /* Cancel any pending restart */
     ctx->restart_pending = false;
@@ -512,9 +525,12 @@ bool l4d_adapter_stop(l4d_media_backend_t *self, const char *stream_id) {
 
     /* Wait briefly for process to exit gracefully */
     if (ctx->hProcess) {
-        WaitForSingleObject(ctx->hProcess, 500);
+        WaitForSingleObject(ctx->hProcess, 100);
     }
-    cleanup_process(ctx);
+    if (!cleanup_process(ctx)) {
+        log_error("l4capture_adapter: child did not exit after forced stop");
+        return false;
+    }
 
     ctx->state = L4D_ADAPTER_IDLE;
     ctx->stream_id[0] = '\0';

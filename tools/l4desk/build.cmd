@@ -64,7 +64,7 @@ goto :summary
 :do_build_x86
 echo.
 echo [Build x86] 32-bit static binary (Windows 7 SP1+ compatible)...
-cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\l4desk.res res\l4desk.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /I src /I include /I res /Foobj\x86\ src\main.c src\config.c src\sn_discovery.c src\log.c src\json_min.c src\desktop_state.c src\display_inventory.c src\input_inject.c src\dedup_cache.c src\ctl_protocol.c src\mqtt_protocol.c src\mqtt_client.c src\ffmpeg_cmdline.c src\ffmpeg_supervisor.c src\media_backend.c src\l4capture_adapter.c src\input_gate.c src\kiosk_focus.c src\kiosk_lifecycle.c obj\x86\l4desk.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\l4desk.exe ws2_32.lib winhttp.lib advapi32.lib user32.lib wtsapi32.lib ole32.lib oleaut32.lib gdi32.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\l4desk.res res\l4desk.rc && cl.exe /nologo /O2 /Zi /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /I src /I include /I res /Foobj\x86\ src\main.c src\config.c src\sn_discovery.c src\log.c src\json_min.c src\desktop_state.c src\display_inventory.c src\input_inject.c src\dedup_cache.c src\ctl_protocol.c src\mqtt_protocol.c src\mqtt_client.c src\ffmpeg_cmdline.c src\ffmpeg_supervisor.c src\media_backend.c src\l4capture_adapter.c src\input_gate.c src\kiosk_focus.c src\kiosk_lifecycle.c obj\x86\l4desk.res /link /DEBUG /OPT:REF /OPT:ICF /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\l4desk.exe ws2_32.lib winhttp.lib advapi32.lib user32.lib wtsapi32.lib ole32.lib oleaut32.lib gdi32.lib"
 if errorlevel 1 (
     echo [ERROR] x86 build failed!
     set BUILD_FAILED=1
@@ -77,7 +77,7 @@ exit /b 0
 :do_build_x64
 echo.
 echo [Build x64] 64-bit static binary...
-cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /fo obj\x64\l4desk.res res\l4desk.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /I src /I include /I res /Foobj\x64\ src\main.c src\config.c src\sn_discovery.c src\log.c src\json_min.c src\desktop_state.c src\display_inventory.c src\input_inject.c src\dedup_cache.c src\ctl_protocol.c src\mqtt_protocol.c src\mqtt_client.c src\ffmpeg_cmdline.c src\ffmpeg_supervisor.c src\media_backend.c src\l4capture_adapter.c src\input_gate.c src\kiosk_focus.c src\kiosk_lifecycle.c obj\x64\l4desk.res /link /OUT:bin\x64\l4desk.exe ws2_32.lib winhttp.lib advapi32.lib user32.lib wtsapi32.lib ole32.lib oleaut32.lib gdi32.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /fo obj\x64\l4desk.res res\l4desk.rc && cl.exe /nologo /O2 /Zi /MT /W4 /utf-8 /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /I src /I include /I res /Foobj\x64\ src\main.c src\config.c src\sn_discovery.c src\log.c src\json_min.c src\desktop_state.c src\display_inventory.c src\input_inject.c src\dedup_cache.c src\ctl_protocol.c src\mqtt_protocol.c src\mqtt_client.c src\ffmpeg_cmdline.c src\ffmpeg_supervisor.c src\media_backend.c src\l4capture_adapter.c src\input_gate.c src\kiosk_focus.c src\kiosk_lifecycle.c obj\x64\l4desk.res /link /DEBUG /OPT:REF /OPT:ICF /OUT:bin\x64\l4desk.exe ws2_32.lib winhttp.lib advapi32.lib user32.lib wtsapi32.lib ole32.lib oleaut32.lib gdi32.lib"
 if errorlevel 1 (
     echo [ERROR] x64 build failed!
     set BUILD_FAILED=1
