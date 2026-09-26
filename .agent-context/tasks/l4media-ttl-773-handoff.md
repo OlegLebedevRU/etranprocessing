@@ -27,8 +27,9 @@
 ## Stop cleanup follow-up
 
 - The stream later ran for more than 16 minutes and stopped in the browser without HTTP 500; the local `l4capture.exe` exited. The BFF sent `/sessions/{stream_instance_id}/stop` and ingress returned idempotent HTTP 200 for that absent ID, leaving the actual media session, route, and Janus mountpoint active until TTL expiry.
-- The local follow-up changes BFF stop to a service-authenticated ingress `/sessions/stop` after verified terminal stop. It identifies the active media session by SN but requires its ID to match the lease ID or stream instance ID, preventing a stale stop from deleting a newer session. Absence remains idempotent. This follow-up has not yet been deployed or tested end to end.
+- The follow-up changes BFF stop to a service-authenticated ingress `/sessions/stop` after verified terminal stop. It identifies the active media session by SN but requires its ID to match the lease ID or stream instance ID, preventing a stale stop from deleting a newer session. Absence remains idempotent.
 - Follow-up local checks: 13 MenuBuilder video contract tests, Ruff, Pyright, ingress C unit tests and binary build, OpenAPI JSON parsing, and `git diff --check` passed.
+- Follow-up deployed after separate user approval on 2026-09-26. Two short terminal 773 start/stop cycles returned HTTP 200 with no 500; the operator confirmed visible video and clean stop. After stop, ingress reported `route_exists=false`, the 773 media Redis key was absent, and local `l4capture.exe` had exited. Another terminal's media session remained active. The earlier 16-minute stream and these stop cycles cover the observed freeze and cleanup failures; 30-minute mixed-motion and older GPU checks remain open.
 
 ## Deployment boundary
 
