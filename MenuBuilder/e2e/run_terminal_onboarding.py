@@ -66,6 +66,31 @@ def main() -> None:
     if int(profile["org_id"]) != int(manifest["tenant_id"]):
         raise RuntimeError("Authenticated tenant differs from E2E manifest")
 
+    deactivate_id = os.environ.get("E2E_DEACTIVATE_SUPERSEDED_ID", "")
+    if deactivate_id:
+        if (
+            not deactivate_id.isdecimal()
+            or int(deactivate_id) not in manifest.get("superseded_terminal_ids", [])
+            or int(deactivate_id) == manifest.get("terminal_id")
+        ):
+            raise RuntimeError("Deactivation ID must be a superseded manifest terminal")
+        result = _json_request(
+            "DELETE",
+            f"{BACKEND}/api/settings/terminals/{deactivate_id}",
+            headers=auth,
+        )
+        if not result.get("ok") or result.get("earliest_free_terminal_id") != (
+            manifest.get("terminal_id")
+        ):
+            raise RuntimeError("Terminal deactivation or free marker transfer failed")
+        manifest.setdefault("deactivated_terminal_ids", []).append(int(deactivate_id))
+        _save_manifest(manifest)
+        print(
+            f"DEACTIVATED terminal_id={deactivate_id} "
+            f"free_terminal_id={manifest['terminal_id']}"
+        )
+        return
+
     supersede_id = os.environ.get("E2E_SUPERSEDE_TERMINAL_ID", "")
     if supersede_id:
         if not supersede_id.isdecimal() or int(supersede_id) != manifest.get(
