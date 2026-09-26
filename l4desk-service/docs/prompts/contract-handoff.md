@@ -4811,3 +4811,15 @@ consumer_rules:
   cross_worker_fanout: POST_CASCADE
 ```
 <!-- CORRECTIVE_REGISTRATION:R-L4D-17C-VIDEO-WATCH-MB-v1:END -->
+
+## 49. Контрольная точка перед L4D-17E-MB (без приёмки)
+
+<!-- CASCADE_CHECKPOINT:PRE-17E-2026-09-26:BEGIN -->
+
+Статус: `REVIEW_PENDING`. Полная [сверка изменений после принятых handoff и оставшихся gates](L4D-17E-PRELAUNCH-CHECKPOINT.md) зафиксирована 2026-09-26. Этот блок не имеет статуса `ACCEPTED`, не заменяет `HANDOFF` и не меняет §§43–48.
+
+- IoT app1 получил post-acceptance исправление heartbeat `d7b604a` после принятых `H-L4D-17C-VIDEO-WATCH-IOT-01-v1` и `H-L4D-17C-IOT-v1`; его deployed version и совместимость должны войти в следующую приёмку.
+- MenuBuilder watch consumer развёрнут и показал отсутствие периодического status polling при живом WS; отчёт остаётся `READY_FOR_BROWSER_VALIDATION`, отдельный `DETACHED_V1` candidate и handoff `H-L4D-17C-VIDEO-WATCH-MB-v1` пока отсутствуют.
+- Следующий шаг `L4D-17E-MB` зависит от принятия этого corrective. В 17F/18F сверить все post-acceptance delta, актуальные deployed versions и незакрытые риски до объявления каскада завершённым.
+
+<!-- CASCADE_CHECKPOINT:PRE-17E-2026-09-26:END -->
