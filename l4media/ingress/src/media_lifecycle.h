@@ -894,6 +894,39 @@ static inline void renew_media_session(const char* session_id, const char* body,
              s->session_id, s->ttl_sec);
 }
 
+static inline void stop_media_session_for_sn(const char* body,
+                                             char* resp_body, size_t resp_sz, int* status_code) {
+    char sn[128] = {0};
+    char lease_id[64] = {0};
+    char stream_instance_id[64] = {0};
+    char reason[64] = {0};
+    if (body) {
+        json_get_string(body, "sn", sn, sizeof(sn));
+        json_get_string(body, "lease_id", lease_id, sizeof(lease_id));
+        json_get_string(body, "stream_instance_id", stream_instance_id, sizeof(stream_instance_id));
+        json_get_string(body, "reason", reason, sizeof(reason));
+    }
+    if (!sn[0] || !lease_id[0]) {
+        *status_code = 400;
+        snprintf(resp_body, resp_sz, "{\"error\":\"missing_sn_or_lease_id\"}\n");
+        return;
+    }
+    MediaSession* s = find_active_session_for_sn(sn);
+    if (!s) {
+        *status_code = 200;
+        snprintf(resp_body, resp_sz,
+                 "{\"status\":\"success\",\"state\":\"stopped\",\"detail\":\"No active session\"}\n");
+        return;
+    }
+    if (strcmp(s->session_id, lease_id) != 0 &&
+        (!stream_instance_id[0] || strcmp(s->session_id, stream_instance_id) != 0)) {
+        *status_code = 409;
+        snprintf(resp_body, resp_sz, "{\"error\":\"session_mismatch\"}\n");
+        return;
+    }
+    stop_media_session(s->session_id, NULL, reason, resp_body, resp_sz, status_code);
+}
+
 static inline void renew_media_session_for_sn(const char* body,
                                               char* resp_body, size_t resp_sz, int* status_code) {
     char sn[128] = {0};

@@ -371,6 +371,16 @@ static void test_session_lifecycle_unit(void) {
     assert(status == 200);
     assert(strstr(resp_buf, "\"state\":\"stopped\"") != NULL);
     assert(strstr(resp_buf, "Session already stopped or absent") != NULL);
+    stop_media_session_for_sn("{}", resp_buf, sizeof(resp_buf), &status);
+    assert(status == 400);
+    stop_media_session_for_sn("{\"sn\":\"device_sn_001\",\"lease_id\":\"other-lease\"}",
+                              resp_buf, sizeof(resp_buf), &status);
+    assert(status == 409);
+    assert(s1->state == MEDIA_STATE_ACTIVE);
+    stop_media_session_for_sn("{\"sn\":\"absent-device\",\"lease_id\":\"lease-001\"}",
+                              resp_buf, sizeof(resp_buf), &status);
+    assert(status == 200);
+    assert(strstr(resp_buf, "No active session") != NULL);
 
     g_media_session_count = 0;
     printf("  [PASS] Session lifecycle state machine verified.\n");

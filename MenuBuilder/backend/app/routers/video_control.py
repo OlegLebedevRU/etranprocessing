@@ -948,6 +948,20 @@ async def start_device_stream(
         raise
 
 
+async def _stop_active_media_session(
+    sn: str, lease_id: str, stream_instance_id: str | None
+) -> None:
+    try:
+        await media_orchestrator_client.stop_session_for_sn(
+            sn=sn,
+            lease_id=lease_id,
+            stream_instance_id=stream_instance_id,
+            reason="stream_stopped",
+        )
+    except Exception:
+        logger.exception("Could not stop media session for terminal %s", sn)
+
+
 @router.post(
     "/devices/{device_id}/stream/stop",
     response_model=StreamStopResponse,
@@ -995,12 +1009,13 @@ async def stop_device_stream(
             and active_sess.session_type == "video"
         ):
             await _close_local_session(db, terminal.id, "video", "stream_stopped")
-            if active_sess.provider_session_id:
-                with contextlib.suppress(Exception):
-                    await media_orchestrator_client.stop_session(
-                        session_id=active_sess.provider_session_id,
-                        reason="stream_stopped",
-                    )
+        stream_instance_id = (
+            active_sess.provider_session_id
+            if isinstance(active_sess, L4DeskRemoteSession)
+            and active_sess.session_type == "video"
+            else None
+        )
+        await _stop_active_media_session(terminal.sn, lease_id, stream_instance_id)
         return StreamStopResponse(result=str(res.get("result", "stopped")))
     except HTTPException as exc:
         err_detail = (
@@ -1044,6 +1059,13 @@ async def stop_device_stream(
                 and active_sess.session_type == "video"
             ):
                 await _close_local_session(db, terminal.id, "video", "stream_stopped")
+            stream_instance_id = (
+                active_sess.provider_session_id
+                if isinstance(active_sess, L4DeskRemoteSession)
+                and active_sess.session_type == "video"
+                else None
+            )
+            await _stop_active_media_session(terminal.sn, lease_id, stream_instance_id)
             return StreamStopResponse(result="stopped")
         raise
 

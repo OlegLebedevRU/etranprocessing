@@ -931,6 +931,11 @@ static void handle_control_request(int client_fd) {
         else if (strcmp(method, "POST") == 0 && strcmp(path, "/api/v1/media/sessions/start") == 0) {
             handle_media_session_start(body, resp_body, HTTP_RESP_BUFFER_SIZE, &status_code, &status_text);
         }
+        else if (strcmp(method, "POST") == 0 && strcmp(path, "/api/v1/media/sessions/stop") == 0) {
+            stop_media_session_for_sn(body, resp_body, HTTP_RESP_BUFFER_SIZE, &status_code);
+            status_text = (status_code == 200) ? "OK" :
+                          (status_code == 409) ? "Conflict" : "Bad Request";
+        }
         else if (strcmp(method, "POST") == 0 && strcmp(path, "/api/v1/media/sessions/renew") == 0) {
             renew_media_session_for_sn(body, resp_body, HTTP_RESP_BUFFER_SIZE, &status_code);
             status_text = (status_code == 200) ? "OK" : "Not Found";

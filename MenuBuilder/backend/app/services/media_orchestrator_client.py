@@ -235,6 +235,23 @@ class MediaOrchestratorClient:
             json_data=payload,
         )
 
+    async def stop_session_for_sn(
+        self,
+        sn: str,
+        lease_id: str,
+        stream_instance_id: str | None = None,
+        reason: str = "user_closed",
+    ) -> dict[str, Any]:
+        """Stop the active ingress session for a terminal after its stream stops."""
+        payload = {"sn": sn, "lease_id": lease_id, "reason": reason}
+        if stream_instance_id:
+            payload["stream_instance_id"] = stream_instance_id
+        return await self._send_request(
+            method="POST",
+            path="/api/v1/media/sessions/stop",
+            json_data=payload,
+        )
+
     async def reconcile(self) -> dict[str, Any]:
         """Trigger reconciliation of orphan Janus mountpoints and Ingress routes."""
         return await self._send_request(

@@ -24,6 +24,12 @@
 - The corrected stream passed 626 seconds: ingress reported `route_exists=true`, `fresh_rtp=true`, 27,900 RTP packets, and zero unrouted packets. Redis session TTL refreshed to 659 seconds, and ingress renewal plus browser control keepalive both returned HTTP 200. The operator moved a window after the 10-minute mark and confirmed that the browser frame still moved without a 500 error or noticeable delay.
 - The local Compose file requires `L4MEDIA_REDIS_URL` from the private server `.env`; the approved release set that value privately so Redis persistence remains enabled.
 
+## Stop cleanup follow-up
+
+- The stream later ran for more than 16 minutes and stopped in the browser without HTTP 500; the local `l4capture.exe` exited. The BFF sent `/sessions/{stream_instance_id}/stop` and ingress returned idempotent HTTP 200 for that absent ID, leaving the actual media session, route, and Janus mountpoint active until TTL expiry.
+- The local follow-up changes BFF stop to a service-authenticated ingress `/sessions/stop` after verified terminal stop. It identifies the active media session by SN but requires its ID to match the lease ID or stream instance ID, preventing a stale stop from deleting a newer session. Absence remains idempotent. This follow-up has not yet been deployed or tested end to end.
+- Follow-up local checks: 13 MenuBuilder video contract tests, Ruff, Pyright, ingress C unit tests and binary build, OpenAPI JSON parsing, and `git diff --check` passed.
+
 ## Deployment boundary
 
 The user explicitly approved this server deployment after reviewing the affected files and private environment change. Follow the repository release flow for later updates; keep the production and local source versions aligned.

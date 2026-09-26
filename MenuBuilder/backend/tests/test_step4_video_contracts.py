@@ -110,6 +110,9 @@ async def test_stream_stop_conflict_not_swallowed(mock_db_session, operator_head
                     },
                 ),
             ),
+            patch.object(
+                media_orchestrator_client, "stop_session_for_sn"
+            ) as media_stop,
         ):
             resp = await ac.post(
                 "/api/v1/video/devices/1/stream/stop",
@@ -119,6 +122,7 @@ async def test_stream_stop_conflict_not_swallowed(mock_db_session, operator_head
             assert resp.status_code == 409
             data = resp.json()
             assert "owner_conflict" in str(data)
+            media_stop.assert_not_awaited()
 
 
 @pytest.mark.anyio
@@ -145,6 +149,11 @@ async def test_stream_stop_does_not_clear_new_lease_pin(
                 "remote_input_stream_stop",
                 return_value={"result": "stopped"},
             ),
+            patch.object(
+                media_orchestrator_client,
+                "stop_session_for_sn",
+                return_value={"state": "stopped"},
+            ) as media_stop,
         ):
             resp = await ac.post(
                 "/api/v1/video/devices/1/stream/stop",
@@ -156,6 +165,12 @@ async def test_stream_stop_does_not_clear_new_lease_pin(
             assert 1 in _mountpoint_pins
             assert _mountpoint_pins[1]["lease_id"] == "new-lease-id"
             assert _mountpoint_pins[1]["pin"] == "pin-for-new-lease"
+            media_stop.assert_awaited_once_with(
+                sn="sn0001",
+                lease_id="old-lease-id",
+                stream_instance_id=None,
+                reason="stream_stopped",
+            )
 
 
 @pytest.mark.anyio

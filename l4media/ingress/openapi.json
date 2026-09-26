@@ -157,6 +157,31 @@
         }
       }
     },
+    "/api/v1/media/sessions/stop": {
+      "post": {
+        "summary": "Stop the active media session for a device SN after verified stream stop",
+        "operationId": "stopActiveMediaSessionBySn",
+        "security": [{ "ServiceTokenAuth": [] }, { "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "required": ["sn", "lease_id"],
+            "properties": {
+              "sn": { "type": "string" },
+              "lease_id": { "type": "string" },
+              "stream_instance_id": { "type": "string" },
+              "reason": { "type": "string" }
+            }
+          } } }
+        },
+        "responses": {
+          "200": { "description": "Active media session stopped or already absent" },
+          "400": { "description": "Missing SN or lease ID" },
+          "409": { "description": "Active session belongs to a newer lease or stream" }
+        }
+      }
+    },
     "/api/v1/media/sessions/renew": {
       "post": {
         "summary": "Renew the active media session for a device SN after verified lease keepalive",
