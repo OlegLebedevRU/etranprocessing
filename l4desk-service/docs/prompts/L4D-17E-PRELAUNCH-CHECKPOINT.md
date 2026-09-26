@@ -26,6 +26,13 @@
 
 ## Порядок закрытия
 
+### Повторная сверка 2026-09-26 перед 17E/17F
+
+- [17E report](../../../MenuBuilder/docs/l4desk/handoffs/L4D-17E-MB-report.md) создан со статусом `BLOCKED_CONTRACT`: backend 469 tests passed, Ruff/format/Pyright clean; frontend build и 55 tests passed. Активные `config.py`, два video routes и frontend watch assets совпадают по SHA-256 с локальными файлами. Активный IoT watch handler совпадает с `d7b604a`. Коммерческие флаги в текущем MenuBuilder runtime выключены. Image и работающий сервис не менялись.
+- Пользователь подтвердил отсутствие утверждённого test tenant и процедуры для email/YooKassa sandbox. Production-safe commercial smoke не выполнялся; full image/release и финансовые инварианты E2E не подтверждены. Совпадение выбранных файлов не доказывает тождество всего backend image.
+- [17F inventory/report](../handoffs/L4D-17F-DOCS-report.md) создан со статусом `BLOCKED_CONTRACT`: прямой вход `H-L4D-17E-MB-v1` отсутствует, black-box E2E не запускался. Перечень тестовых ресурсов и cleanup для безопасного прогона находится в этом отчёте.
+- Заблокированные отчёты не добавляются в единый журнал как `HANDOFF`; контрольная точка §49 остаётся индексом, а не разрешением перейти к 17F.
+
 1. Завершить corrective `L4D-17C-VIDEO-WATCH-MB`: отчёт `ACCEPTED`, опубликованные байты отчёта, отдельный candidate, независимые SHA-256/deploy/sequence проверки, append-only запись handoff. Если обязательная проверка невозможна — зафиксировать blocker и не подменять его наблюдением из браузера.
 2. Перед 17E сверить latest deployed IoT/MenuBuilder commits с принятыми версиями и документировать post-acceptance delta. `L4D-17E-MB` должен проверить commercial contour по своему полному списку, включая версии/flags/rollback и финансовые инварианты.
 3. В 17F перенести матрицу фактически принятых версий и E2E evidence; в 18F — эксплуатационные риски и точный deployed registry. При оставшемся `PENDING`/`DRIFT` по обязательному контракту cascade close не объявлять.
