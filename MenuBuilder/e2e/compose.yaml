@@ -27,7 +27,8 @@ services:
       dockerfile: MenuBuilder/backend/Dockerfile
     restart: "no"
     env_file:
-      - ${E2E_BACKEND_ENV_FILE:?required}
+      - path: ${E2E_BACKEND_ENV_FILE:?required}
+        format: raw
     environment:
       YOOKASSA_API_URL: http://mock-gateway:8080/v3
       YOOKASSA_SHOP_ID: ${E2E_MOCK_SHOP_ID:?required}
