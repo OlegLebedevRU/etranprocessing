@@ -4551,3 +4551,223 @@ worker_topology:
   cross_worker_event_fanout: POST_CASCADE
 ```
 <!-- CORRECTIVE_REGISTRATION:R-L4D-17C-VIDEO-WATCH-IOT-01-v1:END -->
+
+## 43. Принятие handoff H-L4D-17C-VIDEO-WATCH-IOT-01-v1 (corrective provider iot-rpc-rest-app)
+
+Фиксация контроллером каскада принятого provider-контракта `H-L4D-17C-VIDEO-WATCH-IOT-01-v1` шага corrective `L4D-17C-VIDEO-WATCH-IOT-01` по результатам проверки отчёта `docs/l4desk/handoffs/L4D-17C-VIDEO-WATCH-IOT-01-report.md` и detached candidate `9cdd740` в репозитории `iot-rpc-rest-app`.
+
+Все проверки выполнены и подтверждены инструментально:
+1. Sequence gate пройден: `H-L4D-16-MB-v1` принят; registration `R-L4D-17C-VIDEO-WATCH-IOT-01-v1` AUTHORIZED.
+2. Digests 5/5 artifact candidate MATCH (`remote_input.py`, `test_remote_input_api.py`, `config.py`, contract, report).
+3. `uv run pytest`: 422 passed; changed-file ruff clean.
+4. Runtime: `app1` `WEB_CONCURRENCY=1`; lease mutation forbidden; MQTT unchanged; snapshot-on-connect + invalidate→REST resnapshot.
+5. Production smoke: `WATCH_SNAPSHOT_OK=True`; auth/ownership rejection verified.
+6. Разрешён переход к следующему шагу: `L4D-17C-IOT`.
+
+<!-- HANDOFF:H-L4D-17C-VIDEO-WATCH-IOT-01-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-17C-VIDEO-WATCH-IOT-01-v1
+status: ACCEPTED
+contract_kinds:
+  - API
+  - EVENT
+  - DEPLOYMENT
+producer_prompt_id: L4D-17C-VIDEO-WATCH-IOT-01
+producer_scope_project: iot-rpc-rest-app
+producer_report_path: docs/l4desk/handoffs/L4D-17C-VIDEO-WATCH-IOT-01-report.md
+producer_branch: l4desk/l4d-17c-video-watch-iot-01
+producer_commit: f58dfb5e6ff18f6710282824c91b634fcdf5e378
+report_commit: 00b2433e570e0d7ab72e9a7ed0c50d368acede49
+accepted_at_utc: '2026-09-25T21:40:00Z'
+contract_version: 1.0.0
+schema_revision: 2026-09-26-v1
+artifact_version: 1.0.0
+compatibility:
+  backward_compatible_with:
+    - H-L4D-07-IOT-STOP-v1
+  breaking_changes: false
+  notes: "Read-only tenant-scoped video watch invalidation feed WS /api/internal/v1/remote-input/ws/watch/{sn}. Snapshot on connect; invalidate requires REST resnapshot. Lease mutation forbidden. MQTT unchanged. WEB_CONCURRENCY=1."
+deployment_status: DEPLOYED
+deployed_environment: production
+feature_flags:
+  web_concurrency: "1"
+  cross_worker_fanout: POST_CASCADE
+contract_payload:
+  watch_ws_path: /api/internal/v1/remote-input/ws/watch/{sn}
+  mode: read_only_invalidation_feed
+  lease_mutation: false
+  mqtt_topic_change: false
+supersedes: []
+known_risks:
+  - "Process-local subscriptions; cross-worker fanout deferred until after L4D cascade"
+consumers:
+  - L4D-17C-IOT
+  - L4D-17C-VIDEO-WATCH-MB
+next_prompt_id: L4D-17C-IOT
+```
+<!-- HANDOFF:H-L4D-17C-VIDEO-WATCH-IOT-01-v1:END -->
+
+## 44. Принятие handoff H-L4D-17A-TOOLS-v1 (шаг 33 tools)
+
+Фиксация контроллером каскада принятого контракта `H-L4D-17A-TOOLS-v1` шага 33 (`tools`) по результатам приёмки отчёта `tools/docs/l4desk/handoffs/L4D-17A-TOOLS-report.md`.
+
+Все проверки выполнены и подтверждены инструментально:
+1. Sequence gate пройден: `H-L4D-16-MB-v1`, `H-L4D-01A-TOOLS-v1`, `H-L4D-01C-DOCS-v1` приняты в журнале.
+2. Опубликованный Agent artifact `l4tools 1.7.7` SHA-256 `874f5444d2d4cc9bdee39e7c25a1265a2dd98f388aca49ef205ffb764531cd88` — без подмены локальной сборкой.
+3. Golden fixtures 25/25; contract digests = `H-L4D-01A-TOOLS-v1`; l4desk 7+13+20, l4pin 7/7×2, leo4proxy RTP all PASS.
+4. Backward compatibility с `1.7.6` подтверждена. MQTT client не изменялся.
+5. Разрешён переход к следующему шагу каскада: `L4D-17B-PB`.
+
+<!-- HANDOFF:H-L4D-17A-TOOLS-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-17A-TOOLS-v1
+status: ACCEPTED
+contract_kinds:
+  - REPORT
+  - FIXTURES
+producer_prompt_id: L4D-17A-TOOLS
+producer_scope_project: tools
+producer_report_path: tools/docs/l4desk/handoffs/L4D-17A-TOOLS-report.md
+producer_branch: l4desk/l4d-17a-tools
+producer_commit: 9ed5b22
+accepted_at_utc: '2026-09-25T21:42:00Z'
+contract_version: 1.0.0
+artifact_version: 1.7.7
+compatibility:
+  backward_compatible_with:
+    - 1.7.6
+    - 1.7.7
+  breaking_changes: false
+deployment_status: ACCEPTED
+deployed_environment: artifact-registry
+consumers:
+  - L4D-17B-PB
+next_prompt_id: L4D-17B-PB
+```
+<!-- HANDOFF:H-L4D-17A-TOOLS-v1:END -->
+
+## 45. Принятие handoff H-L4D-17B-PB-v1 (шаг 34 ProcessingBackend)
+
+Фиксация контроллером каскада принятого контракта `H-L4D-17B-PB-v1` шага 34 (`ProcessingBackend`) по результатам приёмки отчёта `ProcessingBackend/docs/l4desk/handoffs/L4D-17B-PB-report.md`.
+
+Все проверки выполнены и подтверждены инструментально:
+1. Sequence gate: `H-L4D-17A-TOOLS-v1`, `H-L4D-06A-PB-v1`, `H-L4D-04B-PB-v1` — в журнале.
+2. Alembic head `027`, API version `0.1.0`, image `user1-processing-backend` (`e2194a9b3341`).
+3. pytest 130/130; ruff/pyright clean; PIN fixtures 17/17 (create/replay/conflict/expired/used/CSR/auth).
+4. Digests `H-L4D-06A` 7/7 MATCH; schema artifacts `H-L4D-04B` MATCH.
+5. Production smoke redacted error-path: health 200, check code=2, 404/403/404.
+6. Разрешён переход к следующему шагу каскада: `L4D-17C-IOT`.
+
+<!-- HANDOFF:H-L4D-17B-PB-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-17B-PB-v1
+status: ACCEPTED
+contract_kinds:
+  - REPORT
+  - DEPLOYMENT
+producer_prompt_id: L4D-17B-PB
+producer_scope_project: ProcessingBackend
+producer_report_path: ProcessingBackend/docs/l4desk/handoffs/L4D-17B-PB-report.md
+producer_branch: l4desk/l4d-17b-pb
+producer_commit: bc4ec6c
+accepted_at_utc: '2026-09-25T21:44:00Z'
+contract_version: 1.0.0
+schema_revision: "027"
+artifact_version: 0.1.0
+compatibility:
+  backward_compatible_with:
+    - H-L4D-06A-PB-v1
+    - H-L4D-04B-PB-v1
+  breaking_changes: false
+deployment_status: ACCEPTED
+deployed_environment: production
+consumers:
+  - L4D-17C-IOT
+next_prompt_id: L4D-17C-IOT
+```
+<!-- HANDOFF:H-L4D-17B-PB-v1:END -->
+
+## 46. Принятие handoff H-L4D-17C-IOT-v1 (шаг 35 iot-rpc-rest-app)
+
+Фиксация контроллером каскада принятого контракта `H-L4D-17C-IOT-v1` шага 35 (`iot-rpc-rest-app`) по результатам приёмки отчёта `docs/l4desk/handoffs/L4D-17C-IOT-report.md` в репозитории `iot-rpc-rest-app`.
+
+Все проверки выполнены и подтверждены инструментально:
+1. Sequence gate: `H-L4D-17B-PB-v1`, `H-L4D-01C-DOCS-v1`, `H-L4D-02-IOT-v1`, `H-L4D-06B-IOT-v1`, `H-L4D-07-IOT-v1`, `H-L4D-15B-IOT-v1`; дополнительный обязательный вход `H-L4D-17C-VIDEO-WATCH-IOT-01-v1` принят (§43).
+2. Full suite 422 passed; targeted fixtures 77 passed; changed-file ruff clean.
+3. Digests video-watch 5/5 MATCH candidate `9cdd740`.
+4. Archive dry-run/restore/cursor/no-purge PASS; session lock mutual-exclusion PASS.
+5. Production-safe smoke: auth 403, ownership 403, `WATCH_SNAPSHOT_OK=True`.
+6. Разрешён переход к следующему шагу каскада: `L4D-17D-MEDIA`.
+
+<!-- HANDOFF:H-L4D-17C-IOT-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-17C-IOT-v1
+status: ACCEPTED
+contract_kinds:
+  - REPORT
+  - DEPLOYMENT
+producer_prompt_id: L4D-17C-IOT
+producer_scope_project: iot-rpc-rest-app
+producer_report_path: docs/l4desk/handoffs/L4D-17C-IOT-report.md
+producer_branch: l4desk/l4d-17c-iot
+producer_commit: 7c6f75f
+accepted_at_utc: '2026-09-25T21:46:00Z'
+contract_version: 1.0.0
+artifact_version: 0.1.1
+compatibility:
+  backward_compatible_with:
+    - H-L4D-17C-VIDEO-WATCH-IOT-01-v1
+    - H-L4D-07-IOT-v1
+    - H-L4D-15B-IOT-v1
+    - H-L4D-06B-IOT-v1
+  breaking_changes: false
+deployment_status: ACCEPTED
+deployed_environment: production
+feature_flags:
+  web_concurrency: "1"
+consumers:
+  - L4D-17D-MEDIA
+next_prompt_id: L4D-17D-MEDIA
+```
+<!-- HANDOFF:H-L4D-17C-IOT-v1:END -->
+
+## 47. Принятие handoff H-L4D-17D-MEDIA-v1 (шаг 36 l4media)
+
+Фиксация контроллером каскада принятого контракта `H-L4D-17D-MEDIA-v1` шага 36 (`l4media`) по результатам приёмки отчёта `l4media/docs/l4desk/handoffs/L4D-17D-MEDIA-report.md`.
+
+Все проверки выполнены и подтверждены инструментально:
+1. Sequence gate: `H-L4D-17C-IOT-v1`, `H-L4D-08A-MEDIA-v1`, `H-L4D-15C-MEDIA-v1` — в журнале.
+2. Digests openapi = `H-L4D-08A`; archive 12/12 = `H-L4D-15C`.
+3. Archive suite 21/21; ruff/pyright (archive) clean.
+4. Production smoke: start 201 → healthy → stop 200 → reconcile orphans=0.
+5. Deterministic / dry-run / restore-sample / no-purge PASS. Real data untouched.
+6. Разрешён переход к следующему шагу каскада: `L4D-17E-MB` (после corrective `L4D-17C-VIDEO-WATCH-MB`).
+
+<!-- HANDOFF:H-L4D-17D-MEDIA-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-17D-MEDIA-v1
+status: ACCEPTED
+contract_kinds:
+  - REPORT
+  - DEPLOYMENT
+producer_prompt_id: L4D-17D-MEDIA
+producer_scope_project: l4media
+producer_report_path: l4media/docs/l4desk/handoffs/L4D-17D-MEDIA-report.md
+producer_branch: l4desk/l4d-17d-media
+producer_commit: 85cd644
+accepted_at_utc: '2026-09-25T21:48:00Z'
+contract_version: 1.0.0
+artifact_version: 0.1.0
+compatibility:
+  backward_compatible_with:
+    - H-L4D-17C-IOT-v1
+    - H-L4D-15C-MEDIA-v1
+    - H-L4D-08A-MEDIA-v1
+  breaking_changes: false
+deployment_status: ACCEPTED
+deployed_environment: production
+consumers:
+  - L4D-17E-MB
+next_prompt_id: L4D-17E-MB
+```
+<!-- HANDOFF:H-L4D-17D-MEDIA-v1:END -->
