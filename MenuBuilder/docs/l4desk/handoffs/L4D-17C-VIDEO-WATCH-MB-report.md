@@ -59,6 +59,14 @@ next_gate: browser_stream_validation
 4. Прервать WS и восстановить сеть: REST status работает во время разрыва, затем соединение повторяется и берётся новый snapshot.
 5. Проверить viewer `video:view` и отказ для пользователя без права или чужой организации.
 
+## Инцидент при первой браузерной проверке (2026-09-26)
+
+- Авторизованный WS `/devices/773/watch/ws` был принят, `control/status` и `stream/state` отвечали `200`. `POST /devices/773/session` возвращал `500`: `Settings` в работающем образе не содержал `l4desk_session_orchestration_enabled`, хотя `video.py` обращался к нему. В том же конфиге отсутствовал `l4media_janus_url`.
+- Источник расхождения — запущенный образ `sha256:7b5e4fe1b6e7c14f9c5c634a28b369436d90bda1653f64cf9844077cca7239e5`: его `app/config.py` отличается от репозиторного двумя отсутствующими полями и значением `remote_session_watchdog_ttl_sec=3600` вместо `600`.
+- По разрешению пользователя создан производный образ от прежнего ID с единственной заменой `/workspace/MenuBuilder/backend/app/config.py` из коммита `0b60a53`. SHA-256 исходного и активного файла: `e4075f7316d676e3d97053fe4146cc0cbea4c61c7e62d6ecf4fbff2965027c86`. Образ `user1-menubuilder-backend:watch-config-0b60a53`, ID `sha256:295996258a458b4e4338767ee2a7755cc620d64ea7677c1e30c7aedd61aa5cdd`, назначен в `user1-menubuilder-backend` и поднят через Compose с `--no-deps --no-build --pull never`. Прежний образ сохранён как `user1-menubuilder-backend:before-watch-config-fix` для отката.
+- После переключения: startup и schema compatibility прошли, оба поля доступны, watch WS принят, REST-статусы `200`. Повторный `POST /session` с пользовательской авторизацией и реальным терминалом ещё не проверен.
+- Конфиг в Git и runtime теперь совпадают. Следующий управляемый выпуск MenuBuilder должен включать этот коммит или его эквивалент; текущий beta builder наблюдает `main`, а исправление пока в `l4desk/l4d-17d-media`. Выпуск из старого `main` вернёт расхождение. До интеграции ветки нельзя считать hotfix устойчивым к следующему релизу.
+
 ## Риски и следующий шаг
 
 - Фактический Nginx после reload использует конфиг с хешем репозитория; `nginx -t` успешен.
