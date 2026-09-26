@@ -165,6 +165,7 @@ async def main() -> None:
                 email_verified_at=source.email_verified_at,
             )
         )
+        await session.flush()
         session.add(
             OrgBillingSettings(
                 org_id=target_id,
