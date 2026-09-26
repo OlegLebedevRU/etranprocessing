@@ -3,6 +3,7 @@ FROM python:3.14-slim@sha256:810da6270e43d30a1f3e0e1eabbeb6fbd9d78ad9dd2e754d529
 WORKDIR /app
 COPY mock_gateway.py /app/mock_gateway.py
 COPY run_payment_smoke.py /app/run_payment_smoke.py
+COPY run_terminal_onboarding.py /app/run_terminal_onboarding.py
 RUN mkdir /data && chown 65532:65532 /data
 USER 65532:65532
 
