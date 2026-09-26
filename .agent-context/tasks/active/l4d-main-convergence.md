@@ -278,8 +278,14 @@
   `tb_device_connections` удалена, запись `DEPROVISIONED` в аудите,
   MQTT-пользователь удалён. Org bind и historical provisioning остались.
   Повторные preflight подтвердили deleted=true, connections=0,
-  mqtt_user=false. Tenant 4 сохранён. Проверить позже судьбу сертификата
-  старого тестового терминала и отсутствие повторного создания MQTT user.
+  mqtt_user=false. Tenant 4 сохранён. В ProcessingBackend `get_current_terminal`
+  намеренно распознаёт даже `is_active=false` ради XML ответа
+  `/api/licensebilling`, но payment-маршрут не имеет отдельной проверки
+  активности. Поэтому старый mTLS сертификат 1000004 ещё потенциально
+  распознаётся backend. До полного закрытия deprovision требуется
+  authorization gate для операционных маршрутов или штатный отзыв
+  сертификата, с сохранением XML-контракта licensebilling. Старый сертификат
+  пользователь обязался не использовать; runtime попытка не выполнялась.
 - Через основной сайт пользователь запустил видео 1000005; в main backend
   `stream/start`=200 в 22:30:35 UTC. В БД сессия id 477 active_at
   22:30:35.661123 UTC, tenant 1000, terminal 3720; до неё короткая

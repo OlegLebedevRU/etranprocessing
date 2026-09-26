@@ -39,9 +39,20 @@ Auth tests используют simulated certificate headers; payment повт�
 Это ownership-карточка, не runtime-аудит gateway. Legacy-совместимость не разрешает
 исследовать исключённые корневые каталоги без явного scope пользователя.
 
+Аудит 2026-09-27: `get_current_terminal` намеренно распознаёт терминал при
+`is_active=false`, чтобы `/api/licensebilling` вернул XML `<state>error</state>`.
+Но `payment` использует эту dependency без отдельной проверки активности.
+После мягкого удаления тестового 1000004 и удаления его MQTT-пользователя
+старый mTLS сертификат остаётся потенциальным средством распознавания в
+ProcessingBackend. Нужна отдельная authorization gate для операций с
+терминалом или штатный отзыв сертификата; глобальная блокировка в
+`get_current_terminal` нарушит подтверждённый XML-контракт.
+
 ## Источники и актуальность
 - Authoritative docs: [backend guidelines](../../ProcessingBackend/GUIDELINES.md),
   [ownership](../../docs/etran_data-database-ownership.md), [AGENTS](../../AGENTS.md).
 - Code references: entry points выше; обработчики здесь не проверялись.
-- Проверено: 2026-09-11, HEAD `63ce6a7`, документальная сверка ролей, не runtime.
+- Проверено: 2026-09-27, чтение `dependencies.py`, `payment.py` и теста
+  `test_licensebilling_contract.py`; runtime проверка старого сертификата
+  не выполнялась.
 - Обновить при: terminal endpoints/auth, ownership, migration policy.
