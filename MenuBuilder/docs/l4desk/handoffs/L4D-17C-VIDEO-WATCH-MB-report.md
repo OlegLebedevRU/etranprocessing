@@ -2,17 +2,17 @@
 
 ```yaml
 handoff_id: H-L4D-17C-VIDEO-WATCH-MB-v1
-status: READY_FOR_BROWSER_VALIDATION
+status: ACCEPTED
 contract_kinds: [API, EVENT, DEPLOYMENT]
 producer: H-L4D-17C-VIDEO-WATCH-IOT-01-v1
 producer_contract_version: 1.0.0
 producer_schema_revision: 2026-09-26-v1
 consumer: MenuBuilder
-consumer_commit: included_in_this_commit
+consumer_commit: 48236d58d809438a448b3c87ae6aa9017d176be3
 browser_path: /api/v1/video/devices/{device_id}/watch/ws
 upstream_path: /api/internal/v1/remote-input/ws/watch/{sn}
 deployment_status: DEPLOYED_TO_DEV_LEO4_3000
-next_gate: browser_stream_validation
+next_gate: detached_candidate_and_controller_acceptance
 ```
 
 ## Task intake
@@ -49,7 +49,7 @@ next_gate: browser_stream_validation
 - [x] На сервере MenuBuilder backend импортирует watch route; хеш `video_control.py` совпадает с локальной версией. Публичный frontend bundle содержит `/watch/ws`; главная страница отвечает 200, а анонимный запрос к watch route — 401.
 - [x] Конфиг `port_3000.conf` доставлен из репозитория по разрешению пользователя. `nginx -t` и reload прошли; SHA-256 файла на хосте и в `nginx-default` совпадает с локальным: `bd5df5f187ec7432d5be90b3ad83be0b2d494e2ec31c5ad9216165fa804f4f48`.
 - [x] Текущий runtime app1: `WEB_CONCURRENCY=1`.
-- [ ] Браузер E2E с авторизованным WS upgrade и живой трансляцией: пользователь проверит на `https://dev.leo4.ru:3000`.
+- [x] Браузер E2E с авторизованным WS upgrade и живой трансляцией: пользователь проверил терминал 773 на `https://dev.leo4.ru:3000` 2026-09-26; подробности ниже.
 
 ## Браузерная проверка
 
@@ -86,3 +86,16 @@ next_gate: browser_stream_validation
 - Vite dev proxy в имеющемся `vite.config.ts` не включает WS upgrade для `/api`; browser gate рассчитан на deployed Nginx.
 - Работающие Janus кадры и RTP не подтверждаются watch и проверяются пользователем отдельно.
 - В этой задаче не создано lease, тестового терминального ввода или удалённых ресурсов.
+
+## Итоговая приёмка consumer (2026-09-26)
+
+- Проверенный scope: `MenuBuilder` BFF `app/routers/video_control.py`, `app/config.py`, видеовкладка `frontend/src/routes/video-surveillance.tsx`, тесты `backend/tests/test_video_watch.py` и `backend/test_video_watch_ws.py`, существующий Nginx route для WS. Provider handoff `H-L4D-17C-VIDEO-WATCH-IOT-01-v1` принят в журнале §43; регистрация corrective `R-L4D-17C-VIDEO-WATCH-MB-v1` разрешена в §48; пользователь подтвердил уточнение `invalidate` + авторитетный REST snapshot, отражённое в §50. Миграций БД нет.
+- Корректирующий код и тесты опубликованы в ветке `l4desk/l4d-17c-video-watch-mb`: проверка same-origin с учётом HTTPS за Nginx `bf4d285`; запрет lease mutation `1141931`; отклонение provider snapshot с чужим SN `48236d58d809438a448b3c87ae6aa9017d176be3`. Последний commit меняет только тест. BFF проверяет cookie, `video:view`, tenant/device ownership и Origin до подключения к provider; URL token и browser input отклоняются. Browser получает только `invalidate`.
+- Полный backend suite после последнего теста: `uv run pytest -q` — **477 passed, 47 warnings**; `uv run ruff check --fix app tests`, `uv run ruff format app tests`, `uv run pyright app` — успешно, 0 ошибок. Предупреждения тестов касаются ранее существующих mock/deprecation. Frontend `npm run build` — успешно, `npm test -- --run` — **55 passed** в 11 файлах. Проверки не меняли runtime.
+- На сервере активен образ MenuBuilder backend `sha256:e9559f30045479dbc1a4affc6b87ad9dcff7699c0249c28b18d6082ccdaf82ee` (`user1-menubuilder-backend:watch-origin-bf4d285`); он построен от уже работающего образа с заменой только `video_control.py`. SHA-256 активных файлов: route `aacdb46edb320e02fcce0e124db89060b94db3b5c32fe2e6678b7d5213ef7023`, config `e4075f7316d676e3d97053fe4146cc0cbea4c61c7e62d6ecf4fbff2965027c86`. Это CRLF-байты рабочей копии, из которой построен образ; Git/raw SHA-256 соответственно `315b483955f3aa959c874a70ee3ca7448025d3c266c8fff51a2083bc6dc2ab8a` и `71ea749442cb9c791863fc15e86633d49c3d36d87064ef9cc677b6254686f018`. Побайтовое сравнение после CRLF→LF даёт точное равенство Git/raw; последующие commits только тестовые. `nginx-default` отдаёт `index.html` с SHA-256 `56cca6dd19c3c23777988fe917861350a58d5d4567577464bbe970fa17e44dc4`, собранный JS видеовкладки с SHA-256 `d8b661c4ceb6e4548964502024dacd88b306a3040215be25b833802d265b9de2`. Рабочий `app1` использует `WEB_CONCURRENCY=1`.
+- Оператор `o.lebedev` подтвердил на терминале 773 движущиеся кадры при живом watch WS, переход UI при Stop и повторном Start и восстановление кадров. После перезапуска MenuBuilder backend с исправлением Origin пользователь обновил вкладку и повторно подтвердил кадры и WS. Серверный журнал 2026-09-26 10:31:58–10:41:14 UTC показывает успешный `watch/ws` примерно раз в 62 секунды и по одной паре `GET /control/status` + `GET /stream/state` с `200` на connect; `/session/status` не появляется. Пример: WS принят 10:41:14.086 UTC, два GET пришли 10:41:14.245 и 10:41:14.262 UTC — около 0.16–0.18 с от WS accept до REST-запросов. Отдельный HTTP `control/keepalive` относится к существующей lease-семантике и не является status polling.
+- Исходная частота status: три GET каждые 5 секунд, то есть около 36 GET/мин. В наблюдаемом устойчивом интервале с живым WS — два GET примерно раз в 62 секунды, то есть около 1.9 GET/мин (снижение приблизительно на 95%). Это измерение числа запросов, не обещание задержки доставки каждого события.
+- Проверка отказов: локальные consumer tests покрывают отсутствие cookie, URL token, запрет права, чужой Origin и схему Origin, чужой tenant и чужой SN provider snapshot, только `invalidate` на browser выходе, запрет browser input и отсутствие вызова keepalive/release через watch. Публичный анонимный WS handshake вернул `401` до BFF upgrade. Production negative test чужого tenant не выполнялся без утверждённых краткоживущих учётных данных; его покрывает локальный тест.
+- Fallback: попытки заблокировать `watch/ws` через DevTools пользователя не дали отказа handshake — новые WS продолжали приниматься backend. Поэтому browser E2E fallback **не подтверждён**. Отдельная локальная проверка извлекла и выполнила текущий `useEffect` из `video-surveillance.tsx` с отказавшим WebSocket и управляемыми часами: в 5-ю и 10-ю секунды выполнено по одной паре REST GET; после reconnect выполнен один resnapshot, при открытом WS периодический GET прекратился. Проверочный файл удалён. Неподтверждённым остаётся поведение конкретного браузера при реальном сетевом отказе WS; это наблюдаемый риск для следующего эксплуатационного soak, а не свидетельство поломки.
+- Rollback: прежний backend image сохранён как `user1-menubuilder-backend:watch-config-0b60a53`; frontend до устранения лишнего polling сохранён на хосте как `index.html.before-5fac8ed`. Возврат к старому frontend вернёт `/session/status` polling, поэтому предпочтительный rollback только при реальном регрессе. Следующий обычный выпуск должен включить route/config/frontend версии из этого отчёта: текущий production hotfix создан из работающего образа, а не полным release build из `main`.
+- Окончательный detached candidate: `MenuBuilder/docs/l4desk/handoffs/L4D-17C-VIDEO-WATCH-MB-candidate.md`. Отчёт публикуется отдельным commit R, candidate — следующим commit C; handoff `H-L4D-17C-VIDEO-WATCH-MB-v1` появляется в общем журнале только после независимой сверки controller. Этот статус `ACCEPTED` относится к реализации consumer и её проверкам, а не сам по себе к разрешению запуска 17E.
