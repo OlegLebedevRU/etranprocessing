@@ -120,6 +120,66 @@ async def test_owner_can_change_lease_scope_to_console() -> None:
     assert upstream.await_args.kwargs["org_id"] == 3
 
 
+@pytest.mark.anyio
+async def test_repeated_console_leases_use_unique_provider_session_ids() -> None:
+    from app.routers.video_control import (
+        LeaseAcquireRequest,
+        acquire_device_control_lease,
+    )
+
+    terminal = Terminal(id=3718, device_id=1000003, sn="test-sn", org_id=3)
+    user = {
+        "role": "l4desk_owner",
+        "role_id": 5,
+        "org_id": 3,
+        "session_id": "same-browser-session",
+    }
+    policy = SimpleNamespace(
+        evaluate_session_request=AsyncMock(return_value=SimpleNamespace(allowed=True))
+    )
+    repo = SimpleNamespace(
+        get_active_session_by_terminal_id=AsyncMock(return_value=None),
+        ensure_l4desk_terminal=AsyncMock(),
+        create_remote_session=AsyncMock(),
+    )
+    leases = [
+        {
+            "lease_id": f"lease-{number}",
+            "owner_session_id": "same-browser-session",
+            "expires_at": "2026-09-26T17:00:00Z",
+            "scope": "console",
+        }
+        for number in (1, 2)
+    ]
+    with (
+        patch(
+            "app.routers.video_control._verify_device_access",
+            new=AsyncMock(return_value=terminal),
+        ),
+        patch(
+            "app.routers.video_control.get_remote_session_policy", return_value=policy
+        ),
+        patch("app.routers.video_control.L4DeskRepository", return_value=repo),
+        patch.object(
+            iot_client,
+            "remote_input_acquire_lease",
+            new=AsyncMock(side_effect=leases),
+        ),
+    ):
+        db = AsyncMock()
+        for _ in leases:
+            await acquire_device_control_lease(
+                1000003, LeaseAcquireRequest(scope="console"), user, db
+            )
+
+    provider_ids = [
+        call.kwargs["provider_session_id"]
+        for call in repo.create_remote_session.await_args_list
+    ]
+    assert provider_ids == ["lease-1", "lease-2"]
+    assert db.commit.await_count == 2
+
+
 @pytest.fixture(autouse=True)
 def reset_dependency_overrides():
     app.dependency_overrides.clear()
