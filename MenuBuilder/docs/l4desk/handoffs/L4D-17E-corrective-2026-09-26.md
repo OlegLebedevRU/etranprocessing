@@ -66,6 +66,13 @@ reconnect настоящее событие cursor 472 содержит оба �
   Python-файлам. Production MenuBuilder собран из того же архива; 90/90 hash
   совпадают, schema revision `027` и все 23 таблицы проходят startup check,
   `/docs` через nginx возвращает 200. Предыдущий образ сохранён как rollback.
+  Файлы app, Dockerfile, pyproject и lock штатным rsync из release archive
+  синхронизированы с `/home/user1/MenuBuilder/backend`; все 90 tracked Python
+  файлов совпадают. В исходном каталоге сервера есть старые дополнительные
+  файлы (`app/app/`, `app/permissions.py`, `app/services/remote_session_stop.py`),
+  которых нет в этом Git archive; их не удаляли. Повторную сборку следует
+  выполнять из зафиксированного release archive, пока старые файлы не будут
+  отдельно разобраны.
 - Owner tenant 3 получил/освободил stream и console lease, scope upgrade
   stream→console; чужой browser session ID дал 400 до IoT вызова. Owner
   test tenant получил 403 на `control/status` устройства 773 другого tenant,
