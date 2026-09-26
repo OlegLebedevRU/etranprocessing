@@ -5,6 +5,7 @@ import logging
 import uuid
 from datetime import UTC, datetime
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 import websockets
 import websockets.exceptions
@@ -1226,6 +1227,114 @@ async def send_device_control_event(
 # ---------------------------------------------------------------------------
 # WebSocket Proxy Endpoint
 # ---------------------------------------------------------------------------
+
+
+@router.websocket("/devices/{device_id}/watch/ws")
+async def watch_device_status_ws(websocket: WebSocket, device_id: int) -> None:
+    """Relay app1 read-only invalidations without exposing its service key."""
+    # Browser credentials must remain in a cookie; never accept a URL token.
+    if "token" in websocket.query_params:
+        await websocket.close(code=4401)
+        return
+    origin = websocket.headers.get("origin")
+    if origin and urlsplit(origin).netloc != websocket.headers.get("host"):
+        await websocket.close(code=4403)
+        return
+    user = await get_ws_user(websocket)
+    if not user:
+        await websocket.close(code=4401)
+        return
+    permissions = user.get("permissions") or []
+    if PERMISSION_VIDEO_VIEW not in permissions and "*" not in permissions:
+        await websocket.close(code=4403)
+        return
+
+    async with async_session() as db:
+        try:
+            terminal = await _verify_device_access(device_id, user, db)
+        except HTTPException as exc:
+            await websocket.close(
+                code=4404 if exc.status_code == status.HTTP_404_NOT_FOUND else 4403
+            )
+            return
+
+    org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
+    if not isinstance(org_id, int) or org_id <= 0 or not iot_client.service_token:
+        await websocket.close(code=4403)
+        return
+    base = iot_client.base_url or "http://app1:8000"
+    if base.startswith("https://"):
+        ws_base = "wss://" + base[8:]
+    elif base.startswith("http://"):
+        ws_base = "ws://" + base[7:]
+    else:
+        ws_base = f"ws://{base}"
+    upstream_url = f"{ws_base}/api/internal/v1/remote-input/ws/watch/{terminal.sn}"
+    headers = {
+        "X-Internal-Service-Key": iot_client.service_token,
+        "X-Org-Id": str(org_id),
+    }
+
+    closed_by_bff = False
+    try:
+        async with websockets.connect(
+            upstream_url,
+            additional_headers=headers,
+            open_timeout=settings.remote_control_ws_connect_timeout_sec,
+        ) as upstream_ws:
+            first = json.loads(await asyncio.wait_for(upstream_ws.recv(), timeout=5))
+            if (
+                not isinstance(first, dict)
+                or first.get("type") != "snapshot"
+                or not isinstance(first.get("data"), dict)
+                or first["data"].get("sn") != terminal.sn
+            ):
+                await websocket.close(code=1011)
+                closed_by_bff = True
+                return
+            await websocket.accept()
+            # The browser always obtains the sanitized, authoritative REST view.
+            await websocket.send_json({"type": "invalidate"})
+
+            async def browser_to_upstream() -> None:
+                nonlocal closed_by_bff
+                while True:
+                    try:
+                        await websocket.receive_text()
+                    except WebSocketDisconnect:
+                        return
+                    # The feed is read-only, including at the BFF boundary.
+                    await websocket.close(code=4403)
+                    closed_by_bff = True
+                    return
+
+            async def upstream_to_browser() -> None:
+                while True:
+                    raw = await upstream_ws.recv()
+                    event = json.loads(raw)
+                    if isinstance(event, dict) and event.get("type") == "invalidate":
+                        await websocket.send_json({"type": "invalidate"})
+
+            tasks = [
+                asyncio.create_task(browser_to_upstream()),
+                asyncio.create_task(upstream_to_browser()),
+            ]
+            try:
+                await asyncio.wait(
+                    tasks, timeout=60, return_when=asyncio.FIRST_COMPLETED
+                )
+            finally:
+                for task in tasks:
+                    task.cancel()
+                for task in tasks:
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await task
+    except TimeoutError, OSError, ValueError, websockets.exceptions.WebSocketException:
+        logger.warning("Video watch upstream unavailable for device_id=%d", device_id)
+    finally:
+        if not closed_by_bff:
+            with contextlib.suppress(Exception):
+                await websocket.close()
 
 
 @router.websocket("/devices/{device_id}/control/ws/{lease_id}")

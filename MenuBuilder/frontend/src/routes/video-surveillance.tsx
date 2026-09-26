@@ -451,6 +451,108 @@ export default function VideoSurveillancePage() {
     []
   );
 
+  // IoT watch is an invalidation feed. REST remains the authoritative snapshot.
+  useEffect(() => {
+    const deviceId = selectedDevice?.device_id;
+    if (!deviceId || !canView) return;
+
+    let disposed = false;
+    let socket: WebSocket | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let refreshing = false;
+    let refreshPending = false;
+    let retryMs = 1000;
+
+    const refresh = async () => {
+      if (disposed) return;
+      if (refreshing) {
+        refreshPending = true;
+        return;
+      }
+      refreshing = true;
+      try {
+        const [state, control] = await Promise.all([
+          getDeviceStreamState(deviceId).catch(() => null),
+          getControlStatus(deviceId).catch(() => null),
+        ]);
+        if (disposed) return;
+        if (!state && !control) throw new Error("Status endpoints unavailable");
+        if (control?.agent) rcRef.current.setPresence(control.agent);
+        const stream = state?.stream || control?.agent?.stream;
+        const activeSession = coordinatorRef.current.session;
+        if (
+          stream &&
+          activeSession &&
+          stream.stream_instance_id &&
+          stream.stream_instance_id !== activeSession.streamInstanceId
+        ) return;
+        if (stream) {
+          coordinatorRef.current.handleStreamStateEvent(stream);
+          setActiveStream(stream);
+          if (!activeSession) {
+            setStreamStage(
+              stream.state === "running" || stream.state === "starting" || stream.state === "stopping"
+                ? stream.state
+                : "idle"
+            );
+          }
+        } else if (!activeSession) {
+          setActiveStream(null);
+          setStreamStage("idle");
+        }
+      } catch (err) {
+        if (!disposed) console.warn("Video watch snapshot refresh failed", err);
+      } finally {
+        refreshing = false;
+        if (refreshPending && !disposed) {
+          refreshPending = false;
+          void refresh();
+        }
+      }
+    };
+
+    const connect = () => {
+      if (disposed) return;
+      const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+      socket = new WebSocket(`${proto}//${window.location.host}/api/v1/video/devices/${deviceId}/watch/ws`);
+      socket.onopen = () => { retryMs = 1000; };
+      socket.onmessage = (event) => {
+        try {
+          if (JSON.parse(event.data)?.type === "invalidate") void refresh();
+        } catch {
+          socket?.close();
+        }
+      };
+      socket.onclose = (event) => {
+        if (disposed) return;
+        socket = null;
+        void refresh();
+        if (event.code === 4401 || event.code === 4403 || event.code === 4404) return;
+        retryTimer = setTimeout(connect, retryMs);
+        retryMs = Math.min(retryMs * 2, 15000);
+      };
+      socket.onerror = () => socket?.close();
+    };
+
+    void refresh();
+    connect();
+    // During a disconnect, use the existing REST status path. A periodic
+    // resnapshot also covers a missed process-local invalidation.
+    const fallbackTimer = setInterval(() => {
+      if (socket?.readyState !== WebSocket.OPEN) void refresh();
+    }, 5000);
+    const resyncTimer = setInterval(() => {
+      if (socket?.readyState === WebSocket.OPEN) void refresh();
+    }, 60000);
+    return () => {
+      disposed = true;
+      clearInterval(fallbackTimer);
+      clearInterval(resyncTimer);
+      if (retryTimer) clearTimeout(retryTimer);
+      socket?.close();
+    };
+  }, [selectedDevice?.device_id, canView]);
+
   // Смена выбранного терминала
   const handleSelectDevice = async (device: DeviceListItem) => {
     if (selectedDevice?.device_id === device.device_id) return;
@@ -628,21 +730,7 @@ export default function VideoSurveillancePage() {
       lastPacketGrowthTimeRef.current = Date.now();
       pollTimerRef.current = setInterval(async () => {
         try {
-          const [stat, stateRes, ctlStat] = await Promise.all([
-            getVideoSessionStatus(selectedDevice.device_id),
-            getDeviceStreamState(selectedDevice.device_id).catch(() => null),
-            getControlStatus(selectedDevice.device_id).catch(() => null),
-          ]);
-
-          if (ctlStat?.agent && rcRef.current.status !== "active") {
-            rcRef.current.setPresence(ctlStat.agent);
-          }
-          if (stateRes?.stream) {
-            coordinatorRef.current.handleStreamStateEvent(stateRes.stream);
-            if (stateRes.stream.state !== "stopped" && stateRes.stream.state !== "failed") {
-              setActiveStream(stateRes.stream);
-            }
-          }
+          const stat = await getVideoSessionStatus(selectedDevice.device_id);
 
           const now = Date.now();
           let pps = 0;

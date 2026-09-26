@@ -321,9 +321,12 @@ TCP дает упорядоченную доставку, но при потер
 | Запуск / остановка | `/lease/{lease_id}/stream/start`, `/lease/{lease_id}/stream/stop` | mode, source_id, profile; stream_instance_id результата |
 | Ввод REST | `/lease/{lease_id}/pointer-move`, `/mouse-click`, `/key` | Координаты либо клавиша; последние два суффикса также под `/lease/{lease_id}` |
 | Ввод WS | `/ws/lease/{lease_id}` | Поток команд/результатов с контекстом сессии |
+| Наблюдение WS | `/ws/watch/{sn}` | Read-only `snapshot`, затем `invalidate` для presence/stream; после сигнала BFF/UI повторно читает REST status |
 | Отзыв по владельцу | `/leases/by-owner` | Cleanup пользовательских сессий |
 
 BFF передает `X-Internal-Service-Key`, `X-Org-Id` и контекст `X-User-Id`, `X-Role`, `X-Role-Id`, `X-Session-Id`. Значения выводятся из серверной авторизации, а не из произвольных browser headers. Внутренний ключ не должен попадать в JS, query string, логи или документ. WebSocket не отменяет повторной проверки срока и владельца аренды.
+
+Для видеовкладки MenuBuilder BFF открывает внутренний watch WS app1 после проверки `video:view`, tenant и `device_id → sn`. Браузеру BFF передает только сигнал `invalidate`, затем UI читает собственные REST status endpoints. При переподключении и после сигнала выполняется новый snapshot; hint от старого `stream_instance_id` не восстанавливает `running`. Watch не продлевает lease и не измеряет RTP или декодированные кадры. Поток app1 использует локальные подписки и требует одного worker (`WEB_CONCURRENCY=1`); браузерный BFF watch закрывается и переавторизуется каждые 60 секунд.
 
 #### 2.4.3. MQTT/AMQP и ctl v1
 
