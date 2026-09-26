@@ -31,6 +31,7 @@ consumer и entitlement worker; наружу доступен только че�
 | Исправление identity | Принятый `L4D-13-MB-FIX-01` включён в текущую ветку коммитом `83a23cb` из `45bd645` (серверный файл совпадал с ним byte-for-byte). Коммит `f08b1e7` передаёт канонический ID в provisioning, требует полного совпадения ответа и выставляет runtime `iot_provisioned` только после успеха. Backend suite: 483 passed, 50 warnings; frontend: 58 passed, build прошёл. |
 | Второй terminal/onboarding | Терминал `3718`, `device_id=1000003`, SN `a4b1000003c96241d260926`. DB, L4Desk и IoT by-operation совпадают по tenant, terminal, device и SN; `provisioning_state=ready`, `pin_state=consumed`, сертификат привязан. Пользователь подтвердил ввод PIN и сообщение Agent о подключении. IoT status на момент проверки всё ещё `is_online=false`, `connected_at=null`; отдельный MQTT/presence evidence отсутствует. Free-маркер перенесён на `3718` после удаления `3717`. |
 | MQTT/IoT доступ нового терминала | RabbitMQ не содержал пользователя/ACL нового SN; в журнале 26 сентября повторялись `invalid credentials`. Контракт `devices/provision` создавал IoT-запись и событие, но не MQTT-доступ. Адресный вызов штатного `POST /api/internal/v1/provisioning/terminals` для `device_id=1000003`, tenant `3` вернул `success=true`, `rmq_user_status=ok` и точную identity. После него RabbitMQ показывает пользователя, vhost/topic ACL `^dev.{client_id}.*` и `^srv.{client_id}.*`, активное MQTT-соединение нового SN; IoT status вернул `is_online=true`, `connected_at=2026-09-26T12:35:13.022000Z`. В onboarding-код добавлен обязательный шаг MQTT access до `provisioning_state=ready`; локальная проверка и развёртывание этого исправления фиксируются отдельно. |
+| Agent ctl и деплой исправления | `GET /api/internal/v1/remote-input/devices/{sn}/status` вернул `agent.online=true`, `desktop_available=true`, `stale=false`, версию `1.7.6`; stream остановлен, аренда отсутствует. Коммит `64f747e` добавил штатный MQTT access в saga, retry при отказе и тест; `ruff`, `pyright` и полный backend suite `484 passed, 50 warnings` прошли. Изолированный test-backend пересобран в image `sha256:863591b928b3ddbdb9829cb144801e4df4d72c9a02a5e1c6dc315d7b8683ecd3`, `/docs` отвечает 200. Рабочий `menubuilder-backend` остался на image `sha256:e9559f30045479dbc1a4affc6b87ad9dcff7699c0249c28b18d6082ccdaf82ee`. |
 
 ## Новый тестовый терминал и PIN
 
@@ -42,9 +43,9 @@ consumer и entitlement worker; наружу доступен только че�
 
 ## Оставшиеся проверки и gate
 
-- Подтвердить `l4desk` ctl presence отдельно от MQTT transport online, затем
-  проверить console/video, usage и полную цепочку 17F. Запись терминала 70 и
-  его лицензия не менялись.
+- Проверить console/video, usage и полную цепочку 17F. MQTT transport online и
+  `l4desk` ctl presence уже подтверждены. Запись терминала 70 и его лицензия
+  не менялись.
 - Разобрать и безопасно убрать осиротевшую IoT provisioning-запись `10000006`
   первого теста, не затрагивая рабочий терминал `3718`.
 - Выполнить всю матрицу `L4D-17E-MB.md`: free 120 min, paid continuation,
