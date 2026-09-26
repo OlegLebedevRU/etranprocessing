@@ -66,6 +66,23 @@ def main() -> None:
     if int(profile["org_id"]) != int(manifest["tenant_id"]):
         raise RuntimeError("Authenticated tenant differs from E2E manifest")
 
+    supersede_id = os.environ.get("E2E_SUPERSEDE_TERMINAL_ID", "")
+    if supersede_id:
+        if not supersede_id.isdecimal() or int(supersede_id) != manifest.get(
+            "terminal_id"
+        ):
+            raise RuntimeError("Supersede ID must match the current manifest terminal")
+        manifest.setdefault("superseded_terminal_ids", []).append(int(supersede_id))
+        for field in (
+            "terminal_operation_id",
+            "terminal_correlation_id",
+            "terminal_id",
+            "terminal_device_id",
+            "terminal_sn",
+        ):
+            manifest.pop(field, None)
+        _save_manifest(manifest)
+
     operation_id = manifest.get("terminal_operation_id")
     if not operation_id:
         operation_id = str(uuid.uuid4())

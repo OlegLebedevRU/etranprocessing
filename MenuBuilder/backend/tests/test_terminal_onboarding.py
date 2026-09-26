@@ -308,7 +308,7 @@ class MockInMemoryDb:
 
 
 class FakeIotClient(IotProvisioningClient):
-    def __init__(self, should_fail: bool = False, device_id: int = 1001) -> None:
+    def __init__(self, should_fail: bool = False, device_id: int | None = None) -> None:
         super().__init__()
         self.should_fail = should_fail
         self.device_id = device_id
@@ -325,7 +325,7 @@ class FakeIotClient(IotProvisioningClient):
             status="provisioned",
             tenant_id=req.tenant_id,
             terminal_id=req.terminal_id,
-            device_id=self.device_id,
+            device_id=self.device_id or req.device_id or 0,
             sn=req.sn,
             contract_version="1.0.0",
             correlation_id=req.correlation_id,
@@ -344,7 +344,7 @@ class FakeIotClient(IotProvisioningClient):
                     status="provisioned",
                     tenant_id=call.tenant_id,
                     terminal_id=call.terminal_id,
-                    device_id=self.device_id,
+                    device_id=self.device_id or call.device_id or 0,
                     sn=call.sn,
                     created_at=datetime.now(UTC),
                 )
@@ -411,7 +411,7 @@ class FakePinClient(ProcessingBackendPinClient):
 async def test_terminal_onboarding_success_flow():
     """Verify standard happy-path onboarding with 4 readiness states and PIN delivery."""
     db = MockInMemoryDb()
-    iot = FakeIotClient(device_id=2001)
+    iot = FakeIotClient()
     pin = FakePinClient(pin="123456")
 
     app.dependency_overrides[get_db] = lambda: db
@@ -452,6 +452,8 @@ async def test_terminal_onboarding_success_flow():
             assert readiness["certificate"] == "issued"
             assert readiness["iot"] == "ready"
             assert readiness["online"] == "offline"
+            assert iot.calls[0].device_id == data["device_id"]
+            assert db.terminals[data["terminal_id"]].iot_provisioned is True
 
             # Check audit event has NO plain pin
             audit_events = db.audit_events
@@ -542,6 +544,27 @@ async def test_partial_failure_iot_fails_pin_succeeds():
     assert res.readiness.certificate == "issued"
     assert res.pin == "999888"
     assert "IoT provisioning failed" in (res.last_error or "")
+
+
+@pytest.mark.anyio
+async def test_provider_device_id_mismatch_does_not_mark_terminal_ready():
+    """A provider-assigned ID cannot silently replace the server-owned terminal ID."""
+    db = MockInMemoryDb()
+    iot = FakeIotClient(device_id=10_000_006)
+    pin = FakePinClient()
+    svc = TerminalOnboardingService(cast(Any, db), iot_client=iot, pin_client=pin)
+    user = {"id": 10, "username": "owner", "org_id": 1, "role_id": 5}
+
+    from app.services.terminal_onboarding_service import TerminalOnboardRequest
+
+    res = await svc.onboard_terminal(
+        user=user,
+        req=TerminalOnboardRequest(name="Mismatch"),
+    )
+    assert iot.calls[0].device_id == res.device_id
+    assert res.readiness.iot == "failed"
+    assert "identity mismatch" in (res.last_error or "")
+    assert db.terminals[res.terminal_id].iot_provisioned is not True
 
 
 @pytest.mark.anyio

@@ -650,29 +650,33 @@ class TerminalOnboardingService:
                     tenant_id=l4_terminal.tenant_id,
                     terminal_id=l4_terminal.terminal_id,
                     sn=l4_terminal.sn,
-                    device_id=None,
+                    device_id=l4_terminal.device_id,
                     correlation_id=correlation_id,
                     requested_by_user_id=actor,
                 )
                 prov_res = await self.iot_client.provision_device(prov_req)
+                if prov_res.status != "provisioned":
+                    raise RuntimeError(
+                        f"IoT provisioning returned status={prov_res.status}"
+                    )
+                if (
+                    prov_res.operation_id != l4_terminal.operation_id
+                    or prov_res.tenant_id != l4_terminal.tenant_id
+                    or prov_res.terminal_id != l4_terminal.terminal_id
+                    or prov_res.device_id != l4_terminal.device_id
+                    or prov_res.sn != l4_terminal.sn
+                ):
+                    raise RuntimeError("IoT provisioning identity mismatch")
+
                 l4_terminal.provisioning_state = "ready"
-                # SN and device_id are immutable after creation (L4D-13-MB-FIX-01).
-                if prov_res.device_id and prov_res.device_id != l4_terminal.device_id:
-                    logger.warning(
-                        "IoT provisioning returned device_id=%s for terminal %s; "
-                        "keeping canonical device_id=%s",
-                        prov_res.device_id,
-                        l4_terminal.terminal_id,
-                        l4_terminal.device_id,
+                if l4_terminal.runtime_terminal_id:
+                    runtime_terminal = await self.db.get(
+                        Terminal, l4_terminal.runtime_terminal_id
                     )
-                if prov_res.sn and prov_res.sn != l4_terminal.sn:
-                    logger.warning(
-                        "IoT provisioning returned sn=%s for terminal %s; "
-                        "keeping canonical sn=%s",
-                        prov_res.sn,
-                        l4_terminal.terminal_id,
-                        l4_terminal.sn,
-                    )
+                    if runtime_terminal:
+                        runtime_terminal.iot_provisioned = True
+                        runtime_terminal.iot_provisioned_at = datetime.now(UTC)
+                        runtime_terminal.iot_last_sync_at = datetime.now(UTC)
 
                 await self.repo.record_audit_event(
                     actor=actor,
