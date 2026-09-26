@@ -294,7 +294,12 @@
   **Учёт 10 минут и блокировка policy seam: PASS.** HTTP-отказ через
   изолированный test-backend не проверен: пароль приватного manifest стал
   устаревшим после смены пользователем. Production backend ещё permissive;
-  повторный старт через обычный сайт не доказывает блокировку.
+  повторный старт через обычный сайт не доказывает блокировку. Пользователь
+  действительно повторно запустил видео на обычном сайте и штатно остановил:
+  session id 478 closed, 72.128374 секунды; cumulative FinUsageDaily
+  video=707, console=8, source=715. Runtime env основного backend прямо
+  подтвердил `L4DESK_POLICY_ENFORCEMENT_ENABLED=false`. Такое повторное
+  включение ожидаемо; включать enforcement глобально пока нельзя.
 - PostgreSQL `10.0.0.7` продолжает периодически сбрасывать новые asyncpg
   SSL подключения и даёт HTTP 500 даже на finance read и keepalive, а
   `DatabaseUserStore` превращает этот сбой в ложный 401 `Invalid credentials`.
