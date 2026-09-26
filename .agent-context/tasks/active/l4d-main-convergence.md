@@ -1,11 +1,13 @@
 # L4D: единый кандидат к main
 
-Дата сверки: 2026-09-26. Статус: **draft merge candidate**, каскад ещё не закрыт.
+Дата сверки: 2026-09-27. Статус: **draft merge candidate**, каскад ещё не закрыт.
 
 ## Task intake
 
 - Цель: свести стабильный L4D/L4C код к одному пути в `main` без продолжения
-  параллельного каскада веток. Эта задача не меняет production server.
+  параллельного каскада веток. Изолированный 17E backend и тестовые данные
+  изменялись по отдельным подтверждённым сценариям; основной production
+  backend не пересоздавался.
 - Владелец данных: `shared/etranprocessing_db`; миграций — ProcessingBackend;
   viewing session/API — MenuBuilder; lease/ctl — внешний app1; media route —
   l4media; терминальный агент — `tools/l4desk` и `l4capture` (`svc_desk`).
@@ -27,8 +29,8 @@
 ## Единая ветка и происхождение
 
 - `origin/main` (`19c1dca`) является предком
-  `release/l4tools-1.8.2-beta-1` (`41b73bc`): 111 коммитов только на стороне
-  кандидата, конфликтов двух веток нет. Между ними 494 изменённых файла.
+  `release/l4tools-1.8.2-beta-1`. GitHub PR #4 остаётся draft и mergeable
+  без конфликтов; по текущей сверке он меняет 500 файлов.
 - Кандидат включает принятый каскад до 17C watch, серверный media renew/stop
   из `228dd57` и проверенный native capture из `4456586`. Сборка
   `l4-tools-1.8.2-beta-1` привязана к source commit `41b73bc`; её хеши и
@@ -43,7 +45,7 @@
 | Слой | Команда / факт | Статус |
 |---|---|---|
 | ProcessingBackend | `uv run pytest -q`: 130 passed, 20 warnings | passed |
-| MenuBuilder backend | `uv run pytest -q`: 495 passed, 50 warnings после close worker | passed |
+| MenuBuilder backend | `uv run pytest -q`: 496 passed, 50 warnings после 17E quota candidate | passed |
 | shared DB | `uv run pytest -q --basetemp=.pytest_tmp`: 65 passed; первый запуск с default temp получил WinError 5 | passed после корректировки окружения |
 | Python quality | во всех трёх проектах `ruff check`, `ruff format --check`, `pyright`: clean, 0 type errors | passed |
 | MenuBuilder frontend | `npm ci --ignore-scripts`; `npm run build`; `npm test -- --run`: 58 passed | passed |
@@ -312,5 +314,6 @@
 Один draft PR из `release/l4tools-1.8.2-beta-1` в `main`. После закрытия
 обязательных gate обновить этот документ, повторить затронутые проверки,
 перевести PR в ready и объединить. До этого не удалять старые ветки и не
-считать кандидата финальным production release. В этой задаче серверные
-файлы, службы и секреты не затрагивались.
+считать кандидата финальным production release. Основной production backend
+в ходе последнего 17E теста не пересоздавался; изолированный backend и
+тестовые tenant/terminal данные изменялись адресно, секреты не раскрывались.
