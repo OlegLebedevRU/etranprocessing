@@ -343,6 +343,28 @@ static void test_session_lifecycle_unit(void) {
     assert(active_sn == s1);
     assert(find_active_session_for_sn("device_sn_002") == NULL);
 
+    s1->started_at = time(NULL) - 590;
+    s1->renewed_at = s1->started_at;
+    char renew_resp[512];
+    int renew_status = 0;
+    renew_media_session("sess-001", "{\"sn\":\"device_sn_001\"}",
+                        renew_resp, sizeof(renew_resp), &renew_status);
+    assert(renew_status == 200);
+    assert(s1->renewed_at > s1->started_at);
+    renew_media_session_for_sn("{\"sn\":\"device_sn_001\"}",
+                               renew_resp, sizeof(renew_resp), &renew_status);
+    assert(renew_status == 200);
+    assert(strstr(renew_resp, "\"session_id\":\"sess-001\"") != NULL);
+    time_t renewed_at = s1->renewed_at;
+    renew_media_session("sess-001", "{\"sn\":\"wrong_sn\"}",
+                        renew_resp, sizeof(renew_resp), &renew_status);
+    assert(renew_status == 404);
+    assert(s1->renewed_at == renewed_at);
+    s1->renewed_at = time(NULL) - 601;
+    renew_media_session("sess-001", "{\"sn\":\"device_sn_001\"}",
+                        renew_resp, sizeof(renew_resp), &renew_status);
+    assert(renew_status == 404);
+
     char resp_buf[512];
     int status = 0;
     stop_media_session("absent-sess", "op-stop", "test", resp_buf, sizeof(resp_buf), &status);

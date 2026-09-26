@@ -1098,12 +1098,21 @@ async def keepalive_device_control_lease(
     terminal = await _verify_device_access(device_id, user, db)
     org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
     try:
-        return await iot_client.remote_input_keepalive(
+        result = await iot_client.remote_input_keepalive(
             lease_id=body.lease_id,
             generation=body.generation,
             org_id=org_id,
             user=user,
         )
+        active_session = await L4DeskRepository(db).get_active_session_by_terminal_id(
+            terminal.id
+        )
+        if (
+            isinstance(active_session, L4DeskRemoteSession)
+            and active_session.session_type == "video"
+        ):
+            await media_orchestrator_client.renew_session(sn=terminal.sn)
+        return result
     except HTTPException as exc:
         if exc.status_code == status.HTTP_404_NOT_FOUND:
             raise HTTPException(

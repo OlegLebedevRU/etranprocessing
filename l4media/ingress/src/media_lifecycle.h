@@ -29,6 +29,8 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
+#include "media_redis.h"
+
 #define MAX_MEDIA_SESSIONS        128
 #define DEFAULT_PORT_BASE         6010
 #define DEFAULT_PORT_MAX          6200
@@ -36,6 +38,8 @@
 #define DEFAULT_SERVICE_TOKEN     "l4media-service-secret-token"
 #define DEFAULT_JANUS_ADMIN_PORT  7088
 #define DEFAULT_JANUS_ADMIN_SECRET "janusoverlord"
+/* Reconcile grace: keep orphan mountpoint/route while terminal RTP is still fresh. */
+#define L4MEDIA_RTP_FRESH_RECONCILE_SEC 20
 
 typedef enum {
     MEDIA_STATE_EMPTY = 0,
@@ -59,6 +63,7 @@ typedef struct {
     int ttl_sec;
     time_t created_at;
     time_t started_at;
+    time_t renewed_at;
     time_t stopped_at;
     char stop_reason[64];
     uint64_t final_rtp_packets;
@@ -325,17 +330,13 @@ static inline int janus_create_mountpoint(uint32_t mountpoint_id, int rtp_port, 
         return 0;
     }
 
-    /* If mountpoint already exists, destroy and recreate */
+    /* Already exists: reuse. Never destroy a live mountpoint here —
+     * a watcher's WebRTC track dies with the mountpoint (static frame).
+     * Mismatch handling is janus_mountpoint_ensure()'s job. */
     if (strstr(b, "already exists") || strstr(b, "456")) {
-        printf("[INGRESS JANUS] Mountpoint %" PRIu32 " already exists, destroying to recreate...\n", mountpoint_id);
-        janus_destroy_mountpoint(mountpoint_id, NULL, 0);
-        res = janus_admin_request(req, resp, 16384);
-        b = strstr(resp, "\r\n\r\n");
-        if (!b) b = resp;
-        if (strstr(b, "\"streaming\":\"created\"")) {
-            free(resp);
-            return 0;
-        }
+        printf("[INGRESS JANUS] Mountpoint %" PRIu32 " already exists, reusing\n", mountpoint_id);
+        free(resp);
+        return 0;
     }
 
     if (err_buf && err_sz > 0) {
@@ -349,6 +350,79 @@ static inline int janus_create_mountpoint(uint32_t mountpoint_id, int rtp_port, 
     }
     free(resp);
     return -1;
+}
+
+typedef struct {
+    bool found;
+    int videoport;
+    int videortcpport;
+    char pin[64];
+    bool has_pin;
+} JanusMountpointInfo;
+
+/* Probe Janus streaming info for one mountpoint id (ports + pin). */
+static inline int janus_get_mountpoint_info(uint32_t mountpoint_id, JanusMountpointInfo* out) {
+    if (!out) return -1;
+    memset(out, 0, sizeof(*out));
+
+    char req[512];
+    snprintf(req, sizeof(req),
+             "{\"janus\":\"message_plugin\",\"transaction\":\"mp_info_%" PRIu32 "\","
+             "\"admin_secret\":\"%s\",\"plugin\":\"janus.plugin.streaming\","
+             "\"request\":{\"request\":\"info\",\"id\":%" PRIu32 "}}",
+             mountpoint_id, g_janus_admin_secret, mountpoint_id);
+
+    char* resp = (char*)malloc(65536);
+    if (!resp) return -1;
+    int res = janus_admin_request(req, resp, 65536);
+    if (res != 0) {
+        free(resp);
+        return -1;
+    }
+
+    const char* b = strstr(resp, "\r\n\r\n");
+    if (!b) b = resp;
+
+    /* Janus info: {"streaming":"info","info":{"id":N,"pin":"...","media":[{"port":P,"rtcpport":Q}]}} */
+    if (!strstr(b, "\"streaming\":\"info\"") && !strstr(b, "\"streaming\": \"info\"")) {
+        free(resp);
+        return 0; /* not found / wrong shape */
+    }
+
+    out->found = true;
+    /* ports live under media[] as "port"/"rtcpport" */
+    json_get_int(b, "port", &out->videoport);
+    json_get_int(b, "rtcpport", &out->videortcpport);
+    if (json_get_string(b, "pin", out->pin, sizeof(out->pin)) && out->pin[0]) {
+        out->has_pin = true;
+    }
+    free(resp);
+    return 0;
+}
+
+/*
+ * A: ensure mountpoint exists and matches (ports + pin).
+ * Healthy match → reuse (no destroy). Mismatch → destroy + create.
+ * Never destroys a healthy mountpoint under a live watcher.
+ */
+static inline int janus_mountpoint_ensure(uint32_t mountpoint_id, int rtp_port, int rtcp_port,
+                                          const char* pin, char* err_buf, size_t err_sz) {
+    JanusMountpointInfo info;
+    if (janus_get_mountpoint_info(mountpoint_id, &info) == 0 && info.found) {
+        const char* want_pin = (pin && pin[0]) ? pin : "";
+        const char* have_pin = info.has_pin ? info.pin : "";
+        bool ports_ok = (info.videoport == rtp_port && info.videortcpport == rtcp_port);
+        bool pin_ok = (strcmp(want_pin, have_pin) == 0);
+        if (ports_ok && pin_ok) {
+            printf("[INGRESS JANUS] Mountpoint %" PRIu32 " healthy, reusing (ports %d/%d)\n",
+                   mountpoint_id, rtp_port, rtcp_port);
+            return 0;
+        }
+        printf("[INGRESS JANUS] Mountpoint %" PRIu32 " mismatch (ports %d/%d pin %s), recreating\n",
+               mountpoint_id, info.videoport, info.videortcpport, info.has_pin ? "set" : "none");
+        janus_destroy_mountpoint(mountpoint_id, NULL, 0);
+    }
+    return janus_create_mountpoint(mountpoint_id, rtp_port, rtcp_port, pin, err_buf, err_sz);
 }
 
 static inline int janus_list_mountpoints(uint32_t* ids, int max_ids, int* out_count) {
@@ -447,6 +521,31 @@ static inline MediaSession* find_active_session_for_sn(const char* sn) {
     return NULL;
 }
 
+/* Any session record (incl. STOPPED) that owns this mountpoint — used for RTP association. */
+static inline const char* find_sn_for_mountpoint(uint32_t mid) {
+    for (int i = 0; i < g_media_session_count; i++) {
+        if (g_media_sessions[i].mountpoint_id == mid && g_media_sessions[i].sn[0]) {
+            return g_media_sessions[i].sn;
+        }
+    }
+    return NULL;
+}
+
+/* E: true if any ingress client for this SN received RTP within the reconcile grace window. */
+static inline bool rtp_is_fresh_for_sn(const char* sn, time_t now) {
+    if (!sn || !sn[0]) return false;
+    for (int i = 0; i < g_client_count; i++) {
+        IngressClient* c = g_clients[i];
+        if (!c || !c->sn[0]) continue;
+        if (strcmp(c->sn, sn) != 0) continue;
+        if (c->last_rtp_time > 0 &&
+            (now - c->last_rtp_time) <= L4MEDIA_RTP_FRESH_RECONCILE_SEC) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static inline MediaSession* allocate_session_slot(void) {
     for (int i = 0; i < g_media_session_count; i++) {
         if (g_media_sessions[i].state == MEDIA_STATE_EMPTY) {
@@ -475,6 +574,52 @@ static inline MediaSession* allocate_session_slot(void) {
         return s;
     }
     return NULL;
+}
+
+/* Redis ownership restore: one session record -> g_media_sessions + route. */
+static inline void media_redis_restore_one(const char* session_id, const char* operation_id,
+                                          const char* sn, uint32_t device_id, uint32_t mountpoint_id,
+                                          int rtp_port, int rtcp_port, const char* pin,
+                                          int state, int ttl_sec, time_t created_at, time_t started_at,
+                                          time_t renewed_at,
+                                          void* user) {
+    (void)user;
+    if (!session_id || !session_id[0] || !sn || !sn[0]) return;
+    MediaSession* existing = find_session_by_id(session_id);
+    MediaSession* s = existing ? existing : allocate_session_slot();
+    if (!s) return;
+    if (!existing) memset(s, 0, sizeof(*s));
+    lifecycle_safe_strcpy(s->session_id, session_id, sizeof(s->session_id));
+    lifecycle_safe_strcpy(s->operation_id, operation_id ? operation_id : "", sizeof(s->operation_id));
+    lifecycle_safe_strcpy(s->sn, sn, sizeof(s->sn));
+    s->device_id = device_id;
+    s->mountpoint_id = mountpoint_id;
+    s->rtp_port = rtp_port;
+    s->rtcp_port = rtcp_port;
+    lifecycle_safe_strcpy(s->pin, pin ? pin : "", sizeof(s->pin));
+    s->ttl_sec = ttl_sec;
+    s->created_at = created_at;
+    s->started_at = started_at;
+    s->renewed_at = renewed_at ? renewed_at : started_at;
+    /* Only live states survive a restart; stopped stays stopped. */
+    if ((state == MEDIA_STATE_ACTIVE || state == MEDIA_STATE_STARTING) &&
+        s->ttl_sec > 0 &&
+        time(NULL) - s->renewed_at < s->ttl_sec) {
+        s->state = MEDIA_STATE_ACTIVE;
+        if (s->started_at == 0) s->started_at = time(NULL);
+        int cu = 0;
+        upsert_route(s->sn, s->rtp_port, s->rtcp_port, &cu);
+    } else {
+        s->state = MEDIA_STATE_STOPPED;
+        media_redis_drop_session(s->session_id, s->sn, s->mountpoint_id);
+    }
+}
+
+static inline void media_redis_bootstrap(void) {
+    media_redis_init(getenv("REDIS_URL"));
+    if (!media_redis_ok()) return;
+    int n = media_redis_restore_sessions(media_redis_restore_one, NULL);
+    printf("[MEDIA REDIS] restored %d session record(s)\n", n);
 }
 
 /* ========================================================================= */
@@ -519,6 +664,7 @@ static inline void stop_media_session(const char* session_id, const char* operat
     s->state = MEDIA_STATE_STOPPED;
     s->stopped_at = now;
     lifecycle_safe_strcpy(s->stop_reason, reason && reason[0] ? reason : "user_closed", sizeof(s->stop_reason));
+    media_redis_drop_session(s->session_id, s->sn, s->mountpoint_id);
     g_metric_sessions_stopped++;
 
     long duration = (long)(s->stopped_at - s->started_at);
@@ -577,6 +723,20 @@ static inline void handle_media_session_start(const char* body, char* resp_body,
     MediaSession* existing = find_session_by_id(session_id);
     if (existing) {
         if (existing->state == MEDIA_STATE_ACTIVE || existing->state == MEDIA_STATE_STARTING) {
+            /* A: reuse healthy mountpoint; recreate only on mismatch / after Janus wipe */
+            char jerr[128] = {0};
+            (void)janus_mountpoint_ensure(existing->mountpoint_id, existing->rtp_port,
+                                          existing->rtcp_port, existing->pin, jerr, sizeof(jerr));
+            int _clients_updated = 0;
+            upsert_route(existing->sn, existing->rtp_port, existing->rtcp_port, &_clients_updated);
+            media_redis_save_session(existing->session_id, existing->operation_id, existing->sn,
+                                     existing->device_id, existing->mountpoint_id,
+                                     existing->rtp_port, existing->rtcp_port, existing->pin,
+                                     (int)existing->state, existing->ttl_sec,
+                                     existing->created_at, existing->started_at,
+                                     existing->renewed_at ? existing->renewed_at : existing->started_at);
+            media_redis_save_route(existing->sn, existing->rtp_port, existing->rtcp_port,
+                                   existing->mountpoint_id, existing->ttl_sec);
             *status_code = 200;
             *status_text = "OK";
             snprintf(resp_body, resp_sz,
@@ -658,9 +818,9 @@ static inline void handle_media_session_start(const char* body, char* resp_body,
     s->state = MEDIA_STATE_STARTING;
     s->created_at = time(NULL);
 
-    /* 5. Janus mountpoint creation */
+    /* 5. Janus mountpoint (A: reuse if healthy) */
     char janus_err[256] = {0};
-    if (janus_create_mountpoint(mountpoint_id, rtp_port, rtcp_port, pin, janus_err, sizeof(janus_err)) != 0) {
+    if (janus_mountpoint_ensure(mountpoint_id, rtp_port, rtcp_port, pin, janus_err, sizeof(janus_err)) != 0) {
         s->state = MEDIA_STATE_FAILED;
         lifecycle_safe_strcpy(s->stop_reason, "janus_create_failed", sizeof(s->stop_reason));
         g_metric_sessions_failed++;
@@ -690,7 +850,12 @@ static inline void handle_media_session_start(const char* body, char* resp_body,
     /* 7. Activation */
     s->state = MEDIA_STATE_ACTIVE;
     s->started_at = time(NULL);
+    s->renewed_at = s->started_at;
     g_metric_sessions_started++;
+    media_redis_save_session(s->session_id, s->operation_id, s->sn, s->device_id, s->mountpoint_id,
+                             s->rtp_port, s->rtcp_port, s->pin, (int)s->state, s->ttl_sec,
+                             s->created_at, s->started_at, s->renewed_at);
+    media_redis_save_route(s->sn, s->rtp_port, s->rtcp_port, s->mountpoint_id, s->ttl_sec);
 
     *status_code = 201;
     *status_text = "Created";
@@ -703,6 +868,43 @@ static inline void handle_media_session_start(const char* body, char* resp_body,
              s->session_id, s->operation_id, s->device_id, s->sn,
              s->mountpoint_id, s->rtp_port, s->rtcp_port, s->pin,
              s->ttl_sec, (long)s->created_at, (long)s->started_at);
+}
+
+static inline void renew_media_session(const char* session_id, const char* body,
+                                       char* resp_body, size_t resp_sz, int* status_code) {
+    char sn[128] = {0};
+    MediaSession* s = find_session_by_id(session_id);
+    if (body) json_get_string(body, "sn", sn, sizeof(sn));
+    time_t now = time(NULL);
+    if (!s || s->state != MEDIA_STATE_ACTIVE || !sn[0] || strcmp(s->sn, sn) != 0 ||
+        now - (s->renewed_at ? s->renewed_at : s->started_at) >= s->ttl_sec) {
+        *status_code = 404;
+        snprintf(resp_body, resp_sz, "{\"error\":\"active_session_not_found\"}\n");
+        return;
+    }
+    s->renewed_at = now;
+    media_redis_save_session(s->session_id, s->operation_id, s->sn, s->device_id,
+                             s->mountpoint_id, s->rtp_port, s->rtcp_port, s->pin,
+                             (int)s->state, s->ttl_sec, s->created_at, s->started_at,
+                             s->renewed_at);
+    media_redis_save_route(s->sn, s->rtp_port, s->rtcp_port, s->mountpoint_id, s->ttl_sec);
+    *status_code = 200;
+    snprintf(resp_body, resp_sz,
+             "{\"status\":\"ok\",\"session_id\":\"%s\",\"ttl_sec\":%d}\n",
+             s->session_id, s->ttl_sec);
+}
+
+static inline void renew_media_session_for_sn(const char* body,
+                                              char* resp_body, size_t resp_sz, int* status_code) {
+    char sn[128] = {0};
+    if (body) json_get_string(body, "sn", sn, sizeof(sn));
+    MediaSession* s = sn[0] ? find_active_session_for_sn(sn) : NULL;
+    if (!s) {
+        *status_code = 404;
+        snprintf(resp_body, resp_sz, "{\"error\":\"active_session_not_found\"}\n");
+        return;
+    }
+    renew_media_session(s->session_id, body, resp_body, resp_sz, status_code);
 }
 
 static inline void get_media_session_health(const char* session_id, char* resp_body, size_t resp_sz, int* status_code) {
@@ -763,7 +965,7 @@ static inline void get_media_session_health(const char* session_id, char* resp_b
 
     long elapsed = (long)((s->stopped_at > 0 ? s->stopped_at : now) - s->started_at);
     if (elapsed < 0) elapsed = 0;
-    long ttl_rem = s->ttl_sec - elapsed;
+    long ttl_rem = s->ttl_sec - (long)(now - (s->renewed_at ? s->renewed_at : s->started_at));
     if (ttl_rem < 0) ttl_rem = 0;
 
     size_t off = 0;
@@ -830,6 +1032,17 @@ static inline void reconcile_resources(char* resp_body, size_t resp_sz) {
                 }
             }
             if (!has_active) {
+                const char* rtp_sn = find_sn_for_mountpoint(mid);
+                if (rtp_sn && rtp_is_fresh_for_sn(rtp_sn, now)) {
+                    printf("[INGRESS RECONCILE] keep mountpoint %" PRIu32 " rtp_fresh sn=%s\n",
+                           mid, rtp_sn);
+                    continue;
+                }
+                if (rtp_sn && media_redis_owns_sn(rtp_sn)) {
+                    printf("[INGRESS RECONCILE] keep mountpoint %" PRIu32 " redis_owned sn=%s\n",
+                           mid, rtp_sn);
+                    continue;
+                }
                 printf("[INGRESS RECONCILE] Destroying orphan Janus mountpoint %" PRIu32 "\n", mid);
                 janus_destroy_mountpoint(mid, NULL, 0);
                 cleaned_mountpoints++;
@@ -852,6 +1065,16 @@ static inline void reconcile_resources(char* resp_body, size_t resp_sz) {
             }
         }
         if (!has_active) {
+            if (rtp_is_fresh_for_sn(g_routes.entries[i].sn, now)) {
+                printf("[INGRESS RECONCILE] keep route for SN %s rtp_fresh\n",
+                       g_routes.entries[i].sn);
+                continue;
+            }
+            if (media_redis_owns_sn(g_routes.entries[i].sn)) {
+                printf("[INGRESS RECONCILE] keep route for SN %s redis_owned\n",
+                       g_routes.entries[i].sn);
+                continue;
+            }
             printf("[INGRESS RECONCILE] Removing orphan dynamic route for SN %s\n", g_routes.entries[i].sn);
             int cleared = 0;
             delete_route(g_routes.entries[i].sn, &cleared);

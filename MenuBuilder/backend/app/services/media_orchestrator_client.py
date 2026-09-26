@@ -210,6 +210,14 @@ class MediaOrchestratorClient:
             path=f"/api/v1/media/sessions/{session_id}",
         )
 
+    async def renew_session(self, sn: str) -> dict[str, Any]:
+        """Refresh the media watchdog after a verified control lease keepalive."""
+        return await self._send_request(
+            method="POST",
+            path="/api/v1/media/sessions/renew",
+            json_data={"sn": sn},
+        )
+
     async def stop_session(
         self,
         session_id: str,

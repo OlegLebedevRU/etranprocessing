@@ -1,6 +1,6 @@
 CC ?= gcc
 CFLAGS ?= -O2 -Wall -Wextra -pedantic -std=c11 -D_GNU_SOURCE
-LDFLAGS ?=
+LDFLAGS ?= -lhiredis
 
 TARGET = l4media-ingress
 SRCS = src/l4media_ingress.c
@@ -21,7 +21,7 @@ test: $(TEST_TARGET)
 	./$(TEST_TARGET)
 
 $(TEST_TARGET): $(TEST_SRCS)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $^
 
 clean:
 	rm -f $(OBJS) $(TARGET) $(TEST_TARGET)

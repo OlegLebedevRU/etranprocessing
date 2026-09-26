@@ -11,6 +11,7 @@ leo4proxy — transport, l4media/Janus — ingress/WebRTC. DB ownership см. к
 | Direction | Transport | Endpoint/topic | Main payload | Guarantees |
 |---|---|---|---|---|
 | UI → BFF | REST | /api/v1/video/{device_id}/session | mountpoint_id, sn, janus_ws, ttl, pin | авторизованный просмотр; PIN секрет |
+| BFF → ingress | REST | /api/v1/media/sessions/renew | sn | только после успешного video lease keepalive; продлевает media TTL единственной активной сессии SN, истекшая сессия отклоняется |
 | UI → BFF | REST | /api/v1/video/{device_id}/status | streaming, rtp_packets, bytes, idle_sec | transport stats, не decoded frame |
 | FFmpeg → proxy → ingress | RTP / L4RTP/1 через TLS | media plane | encoded H.264/RTP | sequence/route, не control lease |
 | Janus ↔ browser | signaling + WebRTC | mountpoint/watch | SDP/ICE + video | успешный signaling не равен frame |

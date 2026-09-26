@@ -931,6 +931,23 @@ static void handle_control_request(int client_fd) {
         else if (strcmp(method, "POST") == 0 && strcmp(path, "/api/v1/media/sessions/start") == 0) {
             handle_media_session_start(body, resp_body, HTTP_RESP_BUFFER_SIZE, &status_code, &status_text);
         }
+        else if (strcmp(method, "POST") == 0 && strcmp(path, "/api/v1/media/sessions/renew") == 0) {
+            renew_media_session_for_sn(body, resp_body, HTTP_RESP_BUFFER_SIZE, &status_code);
+            status_text = (status_code == 200) ? "OK" : "Not Found";
+        }
+        else if (strcmp(method, "POST") == 0 && strncmp(path, "/api/v1/media/sessions/", 23) == 0 &&
+                 strstr(path + 23, "/renew") != NULL &&
+                 strcmp(strstr(path + 23, "/renew"), "/renew") == 0) {
+            char session_id[64] = {0};
+            const char* start_id = path + 23;
+            const char* renew_kw = strstr(start_id, "/renew");
+            size_t id_len = (size_t)(renew_kw - start_id);
+            if (id_len >= sizeof(session_id)) id_len = sizeof(session_id) - 1;
+            memcpy(session_id, start_id, id_len);
+            session_id[id_len] = '\0';
+            renew_media_session(session_id, body, resp_body, HTTP_RESP_BUFFER_SIZE, &status_code);
+            status_text = (status_code == 200) ? "OK" : "Not Found";
+        }
         else if (strcmp(method, "GET") == 0 && strncmp(path, "/api/v1/media/sessions/", 23) == 0) {
             char session_id[64] = {0};
             safe_strcpy(session_id, path + 23, sizeof(session_id));
@@ -1042,6 +1059,7 @@ int main(int argc, char* argv[]) {
 
     resolve_janus_host();
     load_routes(g_routes_file);
+    media_redis_bootstrap();
 
     g_udp_sock = create_udp_socket();
     if (g_udp_sock < 0) {
@@ -1106,7 +1124,7 @@ int main(int argc, char* argv[]) {
         for (int i = 0; i < g_media_session_count; i++) {
             MediaSession* ms = &g_media_sessions[i];
             if (ms->state == MEDIA_STATE_ACTIVE && ms->ttl_sec > 0) {
-                if (now - ms->started_at >= ms->ttl_sec) {
+                if (now - (ms->renewed_at ? ms->renewed_at : ms->started_at) >= ms->ttl_sec) {
                     printf("[INGRESS TTL] Media session %s (SN: %s) expired after %d seconds TTL\n",
                            ms->session_id, ms->sn, ms->ttl_sec);
                     char dummy_resp[512];
@@ -1223,5 +1241,7 @@ int main(int argc, char* argv[]) {
     if (g_udp_sock >= 0) close(g_udp_sock);
     close(epoll_fd);
     printf("[INGRESS] Stopped.\n");
+    handle_signal(SIGTERM); /* set g_running=false if reached */
+    media_redis_close();
     return 0;
 }

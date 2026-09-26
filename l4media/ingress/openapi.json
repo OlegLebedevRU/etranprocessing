@@ -157,6 +157,50 @@
         }
       }
     },
+    "/api/v1/media/sessions/renew": {
+      "post": {
+        "summary": "Renew the active media session for a device SN after verified lease keepalive",
+        "operationId": "renewActiveMediaSessionBySn",
+        "security": [{ "ServiceTokenAuth": [] }, { "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "required": ["sn"],
+            "properties": { "sn": { "type": "string" } }
+          } } }
+        },
+        "responses": {
+          "200": { "description": "Active media watchdog renewed; returns session_id" },
+          "404": { "description": "No active media session for SN" }
+        }
+      }
+    },
+    "/api/v1/media/sessions/{session_id}/renew": {
+      "post": {
+        "summary": "Renew an active media session after control lease keepalive",
+        "operationId": "renewMediaSession",
+        "security": [{ "ServiceTokenAuth": [] }, { "BearerAuth": [] }],
+        "parameters": [{
+          "name": "session_id",
+          "in": "path",
+          "required": true,
+          "schema": { "type": "string" }
+        }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "required": ["sn"],
+            "properties": { "sn": { "type": "string" } }
+          } } }
+        },
+        "responses": {
+          "200": { "description": "Watchdog deadline renewed" },
+          "404": { "description": "Session absent, expired, or device mismatch" }
+        }
+      }
+    },
     "/api/v1/media/sessions/{session_id}/stop": {
       "post": {
         "summary": "Stop an active media session (Idempotent)",
