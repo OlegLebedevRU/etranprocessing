@@ -23,6 +23,9 @@ RPC: 7001 exec, 7002 cancel, 7003 ping, 7004 session keepalive; 7000/7005 опи
 - Неинтерактивное выполнение с TTL/output cap; нет бесконечной shell-сессии через probe.
 - Device identity не получает права server publisher; lease bypass запрещён.
 - Поля console не заменять command_id/lease_id от ctl; корреляция по schema метода.
+- `l4desk_owner` может открыть console только в своём tenant с явным console lease;
+  диагностика сверяет SN, tenant, владельца, browser session и роль аренды.
+  Неявная console lease доступна только `superuser`.
 
 ## State machine
 task announced → parameters requested → running/output(seq) → eof + final result;
@@ -46,4 +49,6 @@ max output, TTL kill, cancel/reconnect и lost consumer. Process kill тольк
 - Authoritative docs: [console protocol](../../docs/ops_run-remote-console-diagnostics.md), [AGENTS](../../AGENTS.md).
 - Code references: entry points выше, не полный аудит.
 - Проверено: 2026-09-11, HEAD `63ce6a7`, документальные контракты.
+- 2026-09-26: правило роли 5 подтверждено пользователем; код app1 и локальные
+  тесты обновлены, runtime owner console ещё не проверен.
 - Обновить при: RPC method/schema, session lease, output framing/limits, cancel или shell policy.

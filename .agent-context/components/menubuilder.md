@@ -44,6 +44,12 @@ camera/view-only input, stop/unmount timers, late events. См. [матрицу]
 Compatibility fallback `running` не доказывает ACK/кадры. REST и WS keepalive
 нужно проверять раздельно. IoT watch v1 зависит от `WEB_CONCURRENCY=1`; browser E2E качества изображения ещё требует проверки.
 
+17E corrective (2026-09-26, код + локальные тесты): video/console session
+create/close фиксируются транзакцией по `terminal.id`; закрытие измеряет
+интервал в `FinUsageDaily`. IoT consumer применяет monthly charge только для
+tenant из `IOT_CONSUMER_FINANCE_TENANT_IDS` при выключенном shadow mode и
+подтверждённом `device_online`. Server/browser E2E остаётся необходимым.
+
 ## Источники и актуальность
 - Authoritative docs: [ownership](../../docs/etran_data-database-ownership.md),
   [E2E](../../docs/etran_arch-video-remote-desktop-e2e.md), [AGENTS](../../AGENTS.md).

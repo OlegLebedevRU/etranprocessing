@@ -20,7 +20,6 @@ from fastapi import (
     status,
 )
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import (
@@ -46,6 +45,7 @@ from app.security.permissions import (
     PERMISSION_VIDEO_VIEW,
     require_permission,
 )
+from app.services.financial_core.metering import FinMeteringService
 from app.services.iot_client import iot_client
 from app.services.media_orchestrator_client import media_orchestrator_client
 from app.services.remote_session_policy import get_remote_session_policy
@@ -53,6 +53,38 @@ from app.services.remote_session_policy import get_remote_session_policy
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/video", tags=["video-control"])
+
+
+async def _close_local_session(
+    db: AsyncSession, terminal_id: int, session_type: str, reason: str
+) -> L4DeskRemoteSession | None:
+    """Close and meter one persisted interval in the same transaction."""
+    session = await L4DeskRepository(db).get_active_session_by_terminal_id(
+        terminal_id, lock=True
+    )
+    if (
+        not isinstance(session, L4DeskRemoteSession)
+        or session.session_type != session_type
+    ):
+        return None
+    closed_at = datetime.now(UTC)
+    session.state = "closed"
+    session.closed_at = closed_at
+    session.reason = reason
+    if session.active_at is not None:
+        await FinMeteringService.record_session_usage(
+            db,
+            tenant_id=session.tenant_id,
+            terminal_id=session.terminal_id,
+            session_type=session.session_type,
+            start_utc=session.active_at,
+            end_utc=closed_at,
+            event_id=f"local-session-closed-{session.id}",
+            actor="remote_session",
+            correlation_id=session.correlation_id,
+        )
+    await db.commit()
+    return session
 
 
 # ---------------------------------------------------------------------------
@@ -504,7 +536,7 @@ async def acquire_device_control_lease(
         )
 
     repo = L4DeskRepository(db)
-    active_sess = await repo.get_active_session_by_terminal_id(device_id)
+    active_sess = await repo.get_active_session_by_terminal_id(terminal.id)
     if (
         isinstance(active_sess, L4DeskRemoteSession)
         and active_sess.session_type != session_type_for_scope
@@ -585,7 +617,7 @@ async def acquire_device_control_lease(
                 state="active",
                 active_at=datetime.now(UTC),
             )
-            await db.flush()
+            await db.commit()
 
     return ControlLeaseResponse(
         lease_id=lease_id,
@@ -774,7 +806,7 @@ async def start_device_stream(
     org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
 
     repo = L4DeskRepository(db)
-    active_sess = await repo.get_active_session_by_terminal_id(device_id)
+    active_sess = await repo.get_active_session_by_terminal_id(terminal.id)
     if (
         isinstance(active_sess, L4DeskRemoteSession)
         and active_sess.session_type == "console"
@@ -875,7 +907,7 @@ async def start_device_stream(
                     state="active",
                     active_at=datetime.now(UTC),
                 )
-                await db.flush()
+                await db.commit()
         return StreamStartResponse(
             stream_instance_id=stream_inst_id,
             result=str(res.get("result", "")),
@@ -946,15 +978,12 @@ async def stop_device_stream(
                 await _destroy_janus_mountpoint(device_id)
 
         repo = L4DeskRepository(db)
-        active_sess = await repo.get_active_session_by_terminal_id(device_id)
+        active_sess = await repo.get_active_session_by_terminal_id(terminal.id)
         if (
             isinstance(active_sess, L4DeskRemoteSession)
             and active_sess.session_type == "video"
         ):
-            active_sess.state = "closed"
-            active_sess.closed_at = func.now()
-            active_sess.reason = "stream_stopped"
-            await db.flush()
+            await _close_local_session(db, terminal.id, "video", "stream_stopped")
             if active_sess.provider_session_id:
                 with contextlib.suppress(Exception):
                     await media_orchestrator_client.stop_session(
@@ -998,15 +1027,12 @@ async def stop_device_stream(
                 if not cached or cached.get("lease_id") == lease_id:
                     await _destroy_janus_mountpoint(device_id)
             repo = L4DeskRepository(db)
-            active_sess = await repo.get_active_session_by_terminal_id(device_id)
+            active_sess = await repo.get_active_session_by_terminal_id(terminal.id)
             if (
                 isinstance(active_sess, L4DeskRemoteSession)
                 and active_sess.session_type == "video"
             ):
-                active_sess.state = "closed"
-                active_sess.closed_at = func.now()
-                active_sess.reason = "stream_stopped"
-                await db.flush()
+                await _close_local_session(db, terminal.id, "video", "stream_stopped")
             return StreamStopResponse(result="stopped")
         raise
 
@@ -1095,25 +1121,22 @@ async def release_device_control_lease(
     """Release active control lease."""
     terminal = await _verify_device_access(device_id, user, db)
     org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
-    try:
-        await iot_client.remote_input_release(
-            lease_id=lease_id,
-            org_id=org_id,
-            user=user,
+    await iot_client.remote_input_release(
+        lease_id=lease_id,
+        org_id=org_id,
+        user=user,
+    )
+    clear_mountpoint_pin(device_id, lease_id=lease_id)
+    if destroy_mountpoint:
+        cached = _mountpoint_pins.get(device_id)
+        if not cached or cached.get("lease_id") == lease_id:
+            await _destroy_janus_mountpoint(device_id)
+    repo = L4DeskRepository(db)
+    active_sess = await repo.get_active_session_by_terminal_id(terminal.id)
+    if isinstance(active_sess, L4DeskRemoteSession):
+        await _close_local_session(
+            db, terminal.id, active_sess.session_type, "lease_released"
         )
-    finally:
-        clear_mountpoint_pin(device_id, lease_id=lease_id)
-        if destroy_mountpoint:
-            cached = _mountpoint_pins.get(device_id)
-            if not cached or cached.get("lease_id") == lease_id:
-                await _destroy_janus_mountpoint(device_id)
-        repo = L4DeskRepository(db)
-        active_sess = await repo.get_active_session_by_terminal_id(device_id)
-        if isinstance(active_sess, L4DeskRemoteSession):
-            active_sess.state = "closed"
-            active_sess.closed_at = func.now()
-            active_sess.reason = "lease_released"
-            await db.flush()
 
 
 @router.post("/devices/{device_id}/control/events")

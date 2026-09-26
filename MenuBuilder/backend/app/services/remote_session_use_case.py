@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from etranprocessing_db.models import Terminal
@@ -20,6 +21,7 @@ from app.routers.video import (
     set_mountpoint_stream_instance,
 )
 from app.security.permissions import PERMISSION_VIDEO_VIEW
+from app.services.financial_core.metering import FinMeteringService
 from app.services.iot_client import IotPlatformClient, iot_client
 from app.services.iot_event_feed_client import (
     IotEventFeedClient,
@@ -288,7 +290,7 @@ class RemoteSessionUseCase:
             requested_by_user_id=user_db_id,
             state="reserved",
         )
-        await self.db.flush()
+        await self.db.commit()
 
         # 2. IoT Session Adapter: acquire technical session lock
         provider_session_id: str | None = None
@@ -317,7 +319,7 @@ class RemoteSessionUseCase:
             local_session.closed_at = func.now()
             if iot_err.status_code == 409 or "busy" in str(iot_err).lower():
                 local_session.reason = "session_busy"
-                await self.db.flush()
+                await self.db.commit()
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail={
@@ -326,7 +328,7 @@ class RemoteSessionUseCase:
                     },
                 ) from iot_err
             local_session.reason = f"iot_error_{iot_err.status_code}"
-            await self.db.flush()
+            await self.db.commit()
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=f"Ошибка взаимодействия с IoT платформой: {iot_err.message}",
@@ -335,7 +337,7 @@ class RemoteSessionUseCase:
             local_session.state = "failed"
             local_session.reason = f"iot_transport_error: {exc}"
             local_session.closed_at = func.now()
-            await self.db.flush()
+            await self.db.commit()
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=f"Сетевая ошибка обращения к IoT платформе: {exc}",
@@ -343,7 +345,7 @@ class RemoteSessionUseCase:
 
         local_session.provider_session_id = provider_session_id
         local_session.state = "start_requested"
-        await self.db.flush()
+        await self.db.commit()
 
         # Synchronize control lease for terminal for WebSocket/control compatibility
         role_id = int(user.get("role_id", 3))
@@ -370,20 +372,22 @@ class RemoteSessionUseCase:
                 terminal.id,
                 lease_err,
             )
-            # If lease fails due to lease_taken, treat as conflict
+            with contextlib.suppress(Exception):
+                await self.iot_adapter.stop_remote_session(
+                    session_id=provider_session_id,
+                    operation_id=f"comp-{op_id}",
+                    reason="compensating_stop_lease_failure",
+                    correlation_id=corr_id,
+                )
+            local_session.state = "failed"
+            local_session.reason = (
+                "lease_conflict"
+                if isinstance(lease_err, HTTPException) and lease_err.status_code == 409
+                else "lease_error"
+            )
+            local_session.closed_at = datetime.now(UTC)
+            await self.db.commit()
             if isinstance(lease_err, HTTPException) and lease_err.status_code == 409:
-                # COMPENSATING STOP on IoT
-                with contextlib.suppress(Exception):
-                    await self.iot_adapter.stop_remote_session(
-                        session_id=provider_session_id,
-                        operation_id=f"comp-{op_id}",
-                        reason="compensating_stop_lease_conflict",
-                        correlation_id=corr_id,
-                    )
-                local_session.state = "failed"
-                local_session.reason = "lease_conflict"
-                local_session.closed_at = func.now()
-                await self.db.flush()
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail={
@@ -391,6 +395,10 @@ class RemoteSessionUseCase:
                         "message": f"Терминал {terminal.sn} занят арендой другого пользователя.",
                     },
                 ) from lease_err
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Не удалось получить аренду управления",
+            ) from lease_err
 
         # 3. Media Orchestration (for video)
         mountpoint_id: int | None = None
@@ -442,7 +450,7 @@ class RemoteSessionUseCase:
                 local_session.state = "failed"
                 local_session.reason = "media_start_failed"
                 local_session.closed_at = func.now()
-                await self.db.flush()
+                await self.db.commit()
 
                 if isinstance(media_err, MediaSessionConflictError):
                     raise HTTPException(
@@ -500,7 +508,7 @@ class RemoteSessionUseCase:
                     local_session.state = "failed"
                     local_session.reason = "stream_start_failed"
                     local_session.closed_at = func.now()
-                    await self.db.flush()
+                    await self.db.commit()
                     raise HTTPException(
                         status_code=status.HTTP_502_BAD_GATEWAY,
                         detail=f"Ошибка запуска видеопотока на терминале: {stream_err}",
@@ -511,7 +519,7 @@ class RemoteSessionUseCase:
 
         # 4. Activation
         local_session.state = "active"
-        local_session.active_at = func.now()
+        local_session.active_at = datetime.now(UTC)
 
         # Audit
         actor_name = str(
@@ -532,7 +540,7 @@ class RemoteSessionUseCase:
                 "lease_id": lease_id,
             },
         )
-        await self.db.flush()
+        await self.db.commit()
 
         return RemoteSessionResponse(
             session_id=provider_session_id,
@@ -562,7 +570,9 @@ class RemoteSessionUseCase:
         terminal = None
 
         if session_id:
-            active_session = await self.repo.get_session_by_provider_id(session_id)
+            active_session = await self.repo.get_session_by_provider_id(
+                session_id, lock=True
+            )
             if active_session and active_session.state in (
                 "reserved",
                 "start_requested",
@@ -572,9 +582,12 @@ class RemoteSessionUseCase:
                 terminal = await self._verify_terminal_access(
                     active_session.terminal_id, user, active_session.session_type
                 )
+            else:
+                active_session = None
         elif device_id:
+            terminal = await self._verify_terminal_access(device_id, user, "video")
             active_session = await self.repo.get_active_session_by_terminal_id(
-                device_id
+                terminal.id, lock=True
             )
             if active_session:
                 terminal = await self._verify_terminal_access(
@@ -640,9 +653,23 @@ class RemoteSessionUseCase:
                     )
 
         # 4. Mark local session as closed
+        closed_at = datetime.now(UTC)
         active_session.state = "closed"
-        active_session.closed_at = func.now()
+        active_session.closed_at = closed_at
         active_session.reason = reason
+
+        if active_session.active_at is not None:
+            await FinMeteringService.record_session_usage(
+                self.db,
+                tenant_id=active_session.tenant_id,
+                terminal_id=active_session.terminal_id,
+                session_type=active_session.session_type,
+                start_utc=active_session.active_at,
+                end_utc=closed_at,
+                event_id=f"local-session-closed-{active_session.id}",
+                actor="remote_session",
+                correlation_id=active_session.correlation_id,
+            )
 
         actor_name = str(
             user.get("username") or user.get("sub") or user.get("email") or "system"
@@ -659,7 +686,7 @@ class RemoteSessionUseCase:
                 tenant_id=terminal.org_id,
                 details={"session_id": prov_id, "reason": reason},
             )
-        await self.db.flush()
+        await self.db.commit()
 
         return {
             "status": "success",
@@ -697,7 +724,7 @@ class RemoteSessionUseCase:
                 detail="Доступ к терминалу другой организации запрещён",
             )
 
-        active_session = await self.repo.get_active_session_by_terminal_id(device_id)
+        active_session = await self.repo.get_active_session_by_terminal_id(terminal.id)
         if not active_session:
             return RemoteSessionStatusResponse(
                 active=False,

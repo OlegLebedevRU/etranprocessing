@@ -179,6 +179,7 @@ class Settings(BaseSettings):
     iot_consumer_poll_interval_sec: float = 5.0
     iot_consumer_batch_size: int = 100
     iot_consumer_id: str = "menubuilder_iot_event_consumer"
+    iot_consumer_finance_tenant_ids: list[int] = []
 
     @property
     def event_feed_effective_url(self) -> str:

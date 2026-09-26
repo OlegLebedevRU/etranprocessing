@@ -67,6 +67,15 @@ readiness записываются в приватный manifest для пос�
 `E2E_DEACTIVATE_SUPERSEDED_ID=<точный terminal_id>`: он soft-delete старую
 тестовую запись и проверит перенос free-маркера на новый терминал.
 
+Для проверки месячного начисления используйте отдельный consumer checkpoint
+(`E2E_IOT_CONSUMER_ID`, по умолчанию `l4desk_17e_test`) и включите
+`E2E_IOT_CONSUMER_ENABLED=true`, `E2E_IOT_CONSUMER_SHADOW_MODE=false`,
+`E2E_IOT_CONSUMER_FINANCE_TENANT_IDS=[<id тестового tenant>]`. Разрешённый список
+по умолчанию пуст: события других tenant не меняют ledger. Перед включением
+сверьте tenant, SN и `device_id` с IoT, активный billing cycle и текущий cursor;
+после проверки верните consumer в shadow/disabled. Повторные события
+`device_online` должны оставить один monthly charge на terminal/cycle.
+
 ## Завершение
 
 Запись терминала 70 и её лицензию не изменять. После проверки остановить

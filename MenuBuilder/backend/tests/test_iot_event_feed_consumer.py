@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 import pytest
 
+from app.config import settings
 from app.services.iot_consumer_storage import InMemoryIotConsumerStorage
 from app.services.iot_event_consumer import IotEventConsumer
 from app.services.iot_event_feed_client import (
@@ -144,6 +145,36 @@ async def test_client_timeout_and_bounded_retry():
 
 
 # --- 2. Consumer Contract Tests against Immutable Fixtures ---
+
+
+@pytest.mark.anyio
+async def test_device_online_finance_is_allowlisted_and_shadow_safe(
+    fixture_events: list[RemoteSessionEventItem], monkeypatch: pytest.MonkeyPatch
+):
+    event = next(e for e in fixture_events if e.event_type == "device_online")
+    monkeypatch.setattr(settings, "iot_consumer_finance_tenant_ids", [event.tenant_id])
+    storage = InMemoryIotConsumerStorage()
+    consumer = IotEventConsumer(storage=storage, consumer_id="finance_fixture")
+
+    monkeypatch.setattr(settings, "iot_consumer_shadow_mode", True)
+    await consumer.process_batch([event])
+    assert storage._inbox[event.event_id]["status"] == "processed"
+
+    active_storage = InMemoryIotConsumerStorage()
+    active_consumer = IotEventConsumer(
+        storage=active_storage, consumer_id="finance_active_fixture"
+    )
+    monkeypatch.setattr(settings, "iot_consumer_shadow_mode", False)
+    await active_consumer.process_batch([event])
+    assert active_storage._inbox[event.event_id]["status"] == "pending_finance"
+
+    other_storage = InMemoryIotConsumerStorage()
+    other_consumer = IotEventConsumer(
+        storage=other_storage, consumer_id="finance_other_fixture"
+    )
+    monkeypatch.setattr(settings, "iot_consumer_finance_tenant_ids", [])
+    await other_consumer.process_batch([event])
+    assert other_storage._inbox[event.event_id]["status"] == "processed"
 
 
 @pytest.mark.anyio

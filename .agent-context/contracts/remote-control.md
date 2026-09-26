@@ -46,6 +46,12 @@ no pointer before lease, stop/unmount/reconnect без второго тайме
 Исторический BFF fallback running не доказывает terminal ACK. 5-секундный UI timer
 не гарантируется фоновой вкладкой. Серверный bind lease↔device↔owner требует app1 проверки.
 
+## 17E corrective, 2026-09-26
+`l4desk_owner` (роль 5) получает view/stream/input и console lease только для
+своего tenant; console WS требует явный lease с совпадающими SN, tenant,
+owner_user_id и browser session. Источник — изменения MenuBuilder и app1 по
+17E; до развёртывания и browser E2E это уровень «код + локальные тесты».
+
 ## Источники и актуальность
 - Authoritative docs: [remote-input](../../docs/etran_arch-remote-input-control.md),
   [E2E](../../docs/etran_arch-video-remote-desktop-e2e.md).

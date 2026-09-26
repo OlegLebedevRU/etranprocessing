@@ -354,7 +354,7 @@ class L4DeskRepository:
         return res.scalar_one_or_none()
 
     async def get_active_session_by_terminal_id(
-        self, terminal_id: int
+        self, terminal_id: int, *, lock: bool = False
     ) -> L4DeskRemoteSession | None:
         stmt = select(L4DeskRemoteSession).where(
             L4DeskRemoteSession.terminal_id == terminal_id,
@@ -362,6 +362,8 @@ class L4DeskRepository:
                 ["reserved", "start_requested", "active", "stop_requested"]
             ),
         )
+        if lock:
+            stmt = stmt.with_for_update()
         res = await self.session.execute(stmt)
         if hasattr(res, "scalar_one_or_none"):
             ret: Any = res.scalar_one_or_none()
@@ -455,11 +457,13 @@ class L4DeskRepository:
         return res.scalar_one_or_none()
 
     async def get_session_by_provider_id(
-        self, provider_session_id: str
+        self, provider_session_id: str, *, lock: bool = False
     ) -> L4DeskRemoteSession | None:
         stmt = select(L4DeskRemoteSession).where(
             L4DeskRemoteSession.provider_session_id == provider_session_id
         )
+        if lock:
+            stmt = stmt.with_for_update()
         res = await self.session.execute(stmt)
         return res.scalar_one_or_none()
 

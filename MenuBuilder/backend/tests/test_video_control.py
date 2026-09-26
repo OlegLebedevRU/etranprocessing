@@ -1,5 +1,6 @@
 import asyncio
 import json
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -13,6 +14,51 @@ from app.database import get_db
 from app.main import app
 from app.models import Terminal
 from app.services.iot_client import iot_client
+
+
+@pytest.mark.anyio
+async def test_owner_lease_looks_up_runtime_terminal_id() -> None:
+    from app.routers.video_control import (
+        LeaseAcquireRequest,
+        acquire_device_control_lease,
+    )
+
+    terminal = Terminal(id=3718, device_id=1000003, sn="test-sn", org_id=3)
+    user = {"role": "l4desk_owner", "role_id": 5, "org_id": 3, "sub": "owner"}
+    db = AsyncMock()
+    policy = SimpleNamespace(
+        evaluate_session_request=AsyncMock(return_value=SimpleNamespace(allowed=True))
+    )
+    lease = {
+        "lease_id": "lease-1",
+        "expires_at": "2026-09-26T17:00:00Z",
+        "scope": "stream",
+    }
+    with (
+        patch(
+            "app.routers.video_control._verify_device_access",
+            new=AsyncMock(return_value=terminal),
+        ),
+        patch(
+            "app.routers.video_control.get_remote_session_policy",
+            return_value=policy,
+        ),
+        patch(
+            "app.routers.video_control.L4DeskRepository.get_active_session_by_terminal_id",
+            new=AsyncMock(return_value=None),
+        ) as lookup,
+        patch.object(
+            iot_client,
+            "remote_input_acquire_lease",
+            new=AsyncMock(return_value=lease),
+        ) as upstream,
+    ):
+        response = await acquire_device_control_lease(
+            1000003, LeaseAcquireRequest(scope="stream"), user, db
+        )
+    assert response.lease_id == "lease-1"
+    lookup.assert_awaited_once_with(3718)
+    assert upstream.await_args.kwargs["user"]["role"] == "l4desk_owner"
 
 
 @pytest.fixture(autouse=True)

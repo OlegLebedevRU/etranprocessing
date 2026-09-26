@@ -6,7 +6,14 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+from etranprocessing_db.models import Terminal
+from sqlalchemy import select
+
 from app.config import settings
+from app.database import async_session
+from app.models_iot_consumer import IotEventInbox
+from app.models_l4desk import L4DeskTerminal
+from app.services.financial_core.terminals import FinTerminalService
 from app.services.iot_consumer_storage import (
     IotConsumerStorage,
     get_iot_consumer_storage,
@@ -232,7 +239,14 @@ class IotEventConsumer:
                 continue
 
             # 5. Save technical projection to inbox
-            saved = await self.storage.save_inbox_event(item, status="processed")
+            finance_enabled = (
+                not settings.iot_consumer_shadow_mode
+                and item.event_type == "device_online"
+                and item.tenant_id in settings.iot_consumer_finance_tenant_ids
+            )
+            saved = await self.storage.save_inbox_event(
+                item, status="pending_finance" if finance_enabled else "processed"
+            )
             if saved:
                 processed_count += 1
                 self.total_processed += 1
@@ -260,6 +274,84 @@ class IotEventConsumer:
             last_cursor=current_cursor,
             lag=lag,
         )
+
+    async def process_pending_finance(self, limit: int = 100) -> int:
+        """Apply authenticated online facts once, including after a worker restart."""
+        if (
+            settings.iot_consumer_shadow_mode
+            or not settings.iot_consumer_finance_tenant_ids
+        ):
+            return 0
+        applied = 0
+        async with async_session() as db:
+            rows = list(
+                (
+                    await db.execute(
+                        select(IotEventInbox)
+                        .where(
+                            IotEventInbox.event_type == "device_online",
+                            IotEventInbox.status == "pending_finance",
+                            IotEventInbox.tenant_id.in_(
+                                settings.iot_consumer_finance_tenant_ids
+                            ),
+                        )
+                        .order_by(IotEventInbox.processed_at, IotEventInbox.cursor)
+                        .limit(limit)
+                        .with_for_update(skip_locked=True)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            for event in rows:
+                terminal_stmt = select(Terminal).where(
+                    Terminal.sn == event.sn,
+                    Terminal.org_id == event.tenant_id,
+                )
+                if event.device_id is not None:
+                    terminal_stmt = terminal_stmt.where(
+                        Terminal.device_id == event.device_id
+                    )
+                terminal = (await db.execute(terminal_stmt)).scalar_one_or_none()
+                if terminal is None:
+                    event.processed_at = datetime.now(UTC)
+                    logger.warning(
+                        "Online event %s has no matching tenant terminal; billing deferred",
+                        event.event_id,
+                    )
+                    continue
+                l4_terminal = await db.get(L4DeskTerminal, terminal.id)
+                if (
+                    l4_terminal is None
+                    or l4_terminal.tenant_id != terminal.org_id
+                    or l4_terminal.sn != event.sn
+                    or l4_terminal.deleted_at is not None
+                ):
+                    event.processed_at = datetime.now(UTC)
+                    logger.warning(
+                        "Online event %s has no active L4Desk terminal; billing deferred",
+                        event.event_id,
+                    )
+                    continue
+                await FinTerminalService.process_device_online_monthly_charge(
+                    db,
+                    tenant_id=terminal.org_id,
+                    terminal_id=terminal.id,
+                    event_id=event.event_id,
+                    occurred_at=event.occurred_at,
+                    actor="iot_event_consumer",
+                    correlation_id=event.correlation_id or event.event_id,
+                )
+                if (
+                    l4_terminal.last_online_at is None
+                    or event.occurred_at > l4_terminal.last_online_at
+                ):
+                    l4_terminal.last_online_at = event.occurred_at
+                event.status = "finance_applied"
+                event.processed_at = datetime.now(UTC)
+                applied += 1
+            await db.commit()
+        return applied
 
     async def poll_once(
         self,
@@ -302,6 +394,7 @@ class IotEventConsumer:
             items=page.items,
             feed_latest_cursor=self.remote_latest_cursor,
         )
+        await self.process_pending_finance()
 
         lag = max(0, self.remote_latest_cursor - batch_res.last_cursor)
 
