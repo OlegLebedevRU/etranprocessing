@@ -55,6 +55,14 @@ tenant из `IOT_CONSUMER_FINANCE_TENANT_IDS` при выключенном shad
 изолированного E2E доступен адресный override 600 секунд, выключенный по
 умолчанию; production admission остаётся permissive до отдельного rollout.
 
+17E runtime correction (2026-09-27): регистрация выделила `org_id=4`,
+проверив свободный ID только в MenuBuilder; в IoT этот ID уже существовал.
+Для теста владелец перенесён в свободный в обоих контурах tenant 1000.
+Кросс-системное выделение org_id или единый реестр — открытый gate до
+включения публичной регистрации. Периодические сбросы новых asyncpg SSL
+соединений к PostgreSQL дают 500; `DatabaseUserStore` при этом может
+вернуть ложный 401, скрыв сбой БД. Причина и исправление ещё не проверены.
+
 ## Источники и актуальность
 - Authoritative docs: [ownership](../../docs/etran_data-database-ownership.md),
   [E2E](../../docs/etran_arch-video-remote-desktop-e2e.md), [AGENTS](../../AGENTS.md).

@@ -225,4 +225,9 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    # CLI boundary: report operational DB failures without echoing the encoded script.
+    except Exception as exc:  # noqa: BLE001
+        print(f"FAILED {type(exc).__name__}: {str(exc).splitlines()[0][:160]}")
+        raise SystemExit(1) from None

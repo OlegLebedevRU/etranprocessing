@@ -245,6 +245,53 @@
   риск повторения HTTP 500 у 773 сохраняется. Отдельной правки БД/сервиса не
   производилось.
 
+## Коррекция test04 после конфликта org_id (2026-09-27)
+
+- Пользователь указал, что `org_id=4` уже занят в IoT, попросил оставить
+  tenant 4, удалить терминал 1000004 и перенести ту же учётную запись
+  `test04@platerra.ru` в новый tenant со свободным ID. Agent 1000004 он
+  остановил. `DELETE /api/settings/terminals/3719` удалил терминал только
+  в MenuBuilder; IoT и MQTT остались и потребовали отдельной очистки.
+- Проверен `org_id=1000`: отсутствовал в `orgs` MenuBuilder, `tb_orgs`,
+  `tb_device_org_binds` и `tb_device_provisionings` IoT. Локальный
+  `MenuBuilder/e2e/reassign_free_test_tenant.py` провёл preflight и
+  транзакционно перенёс пользователя id 654, owner membership и registration
+  в новый tenant. Tenant 4, удалённый терминал и аудит сохранены; активные
+  web-сессии пользователя отозваны. Повторный запуск вернул `ALREADY_MOVED`.
+  Первый вариант скрипта откатился из-за порядка FK flush; исправление
+  содержится в `d77441b`.
+- Изолированный test-backend пересоздан с тем же image `f2f49ec` и флагами
+  `policy_enforcement=true`, `free_quota_test_tenant_ids=[1000]`,
+  `free_quota_test_seconds=600`, onboarding=true. Первый startup снова упал
+  на DB connection reset; повторный `docker start` успешен, `/docs`=200.
+- `MenuBuilder/e2e/onboard_reassigned_tenant.py` через штатный API создал
+  terminal 3720 / device 1000005 / SN `a4b1000005c18263d260926` для
+  tenant 1000: IoT ready, certificate issued. PIN введён пользователем на
+  Agent; он подтвердил online. Скрипт читает прежний приватный manifest,
+  но не меняет его: там остаётся история tenant 4/1000004. Пароль в manifest
+  стал устаревшим после явной смены пользователем пароля test04; текущий
+  пароль не запрашивался и не менялся.
+- `MenuBuilder/e2e/deprovision_conflicted_iot_device.py` выполнил
+  адресную очистку старого 1000004: IoT `tb_devices.is_deleted=true`,
+  `tb_device_connections` удалена, запись `DEPROVISIONED` в аудите,
+  MQTT-пользователь удалён. Org bind и historical provisioning остались.
+  Повторные preflight подтвердили deleted=true, connections=0,
+  mqtt_user=false. Tenant 4 сохранён. Проверить позже судьбу сертификата
+  старого тестового терминала и отсутствие повторного создания MQTT user.
+- Через основной сайт пользователь запустил видео 1000005; в main backend
+  `stream/start`=200 в 22:30:35 UTC. В БД сессия id 477 active_at
+  22:30:35.661123 UTC, tenant 1000, terminal 3720; до неё короткая
+  console-сессия дала 8 секунд usage локального дня 2026-09-27. Для
+  исчерпания лимита 600 секунд новую трансляцию следует завершить после
+  22:40:40 UTC (01:40:40 МСК), затем сверить FinUsageDaily и изолированный
+  entitlement/admission. Проверка ещё идёт.
+- PostgreSQL `10.0.0.7` продолжает периодически сбрасывать новые asyncpg
+  SSL подключения и даёт HTTP 500 даже на finance read и keepalive, а
+  `DatabaseUserStore` превращает этот сбой в ложный 401 `Invalid credentials`.
+  Это отдельный production incident и gate перед финальным 17E. Тестовый
+  пароль в manifest действительно отличается от текущего user hash, что
+  пользователь подтвердил как намеренную смену пароля.
+
 ## Решение для PR
 
 Один draft PR из `release/l4tools-1.8.2-beta-1` в `main`. После закрытия
