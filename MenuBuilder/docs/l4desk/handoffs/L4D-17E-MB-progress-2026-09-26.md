@@ -4,8 +4,8 @@
 prompt_id: L4D-17E-MB
 status: IN_PROGRESS
 handoff_status: NOT_ACCEPTED
-source_commit: 20598d3
-scope: MenuBuilder payment and registration fixture
+source_commit: 97e528d
+scope: MenuBuilder payment, registration and terminal fixture
 ```
 
 ## Владелец и контракт
@@ -26,27 +26,26 @@ consumer и entitlement worker; наружу доступен только че�
 | Платёж | Мок: `payment_id=2`, статус `succeeded`; webhook, повтор webhook и poll прошли. Ledger: `transaction_id=3`, две строки, дебет и кредит по 1000 копеек; одна проводка для платежа. Баланс увеличился на 1000 копеек. Реального списания не было. |
 | Дефект и исправление | Первый прогон вернул 201 на создание платежа без сохранения строки, затем webhook получил 400. Причина: `get_db` не делает commit, а write-маршруты finance не фиксировали транзакции. Исправлены payment/webhook/poll и остальные write-маршруты finance; коммиты `fce24cb`, `20598d3`. Повторный прогон прошёл на том же tenant. Несохранённый первый provider ID оставлен только в приватном моке для аудита. |
 | Локальные проверки | `ruff check --fix`, `ruff format`, `pyright` прошли; `uv run pytest -q --disable-warnings`: 477 passed, 47 warnings; тесты мока: 2 passed. |
-| Изолированный runtime | test-backend image `sha256:3e63cb1d9610599b0f7d0c839953bde8ff79670295f9878a6246453eefcfbb77`; рабочий MenuBuilder image `sha256:e9559f30045479dbc1a4affc6b87ad9dcff7699c0249c28b18d6082ccdaf82ee` продолжает работать. |
+| Изолированный runtime | test-backend image `sha256:57d337e6d84c2a813fb8c2580e92c98243e618cc5cb23cdc75b66fe655c0d167`, доступ только на loopback; рабочий MenuBuilder image `sha256:e9559f30045479dbc1a4affc6b87ad9dcff7699c0249c28b18d6082ccdaf82ee` продолжает работать. |
+| Первый terminal/onboarding | В `tenant_id=3` создан терминал `3717`, локальный `device_id=1000002`. IoT выделил другой ID `10000006`, а MenuBuilder ошибочно пометил provisioning как ready. PIN был потреблён и сертификат установился, но IoT identity не совпала. Терминал `3717` затем soft-delete через owner API; runtime `is_active=false`. IoT-запись `10000006` требует отдельного cleanup по provider-контракту. |
+| Исправление identity | Принятый `L4D-13-MB-FIX-01` включён в текущую ветку коммитом `83a23cb` из `45bd645` (серверный файл совпадал с ним byte-for-byte). Коммит `f08b1e7` передаёт канонический ID в provisioning, требует полного совпадения ответа и выставляет runtime `iot_provisioned` только после успеха. Backend suite: 483 passed, 50 warnings; frontend: 58 passed, build прошёл. |
+| Второй terminal/onboarding | Терминал `3718`, `device_id=1000003`, SN `a4b1000003c96241d260926`. DB, L4Desk и IoT by-operation совпадают по tenant, terminal, device и SN; `provisioning_state=ready`, `pin_state=consumed`, сертификат привязан. Пользователь подтвердил ввод PIN и сообщение Agent о подключении. IoT status на момент проверки всё ещё `is_online=false`, `connected_at=null`; отдельный MQTT/presence evidence отсутствует. Free-маркер перенесён на `3718` после удаления `3717`. |
 
 ## Новый тестовый терминал и PIN
 
-Пользователь уточнил маршрут: терминал 70 остаётся у своего владельца; в
-`tenant_id=3` нужно создать **новый** терминал. Канонический endpoint
-`POST /api/settings/terminals` атомарно создаёт runtime и L4Desk записи, затем
-выполняет IoT provisioning и выдаёт краткоживущий PIN. На изолированном backend
-onboarding пока выключен; до шага создания его нужно включить только там.
-После создания проверить выданные `terminal_id`, `device_id`, SN, readiness и
-связь с выбранным тестовым Agent. Если PIN вводится на Agent, ранее обслуживавшем
-терминал 70, сохранить его исходную конфигурацию и путь возврата до ввода.
-Новый терминал ещё не создан, PIN не выпускался и пользователю пока ничего
-вводить не требуется.
+Пользователь уточнил маршрут: запись терминала 70 и его лицензия остаются без
+изменений; его тестовый Agent используется для установки идентичности нового
+терминала `3718`. Пользователь разрешил не сохранять конфигурацию Agent для
+возврата. Onboarding включён только в изолированном backend. Оба PIN потреблены;
+их значения не записаны в репозиторий или отчёт.
 
 ## Оставшиеся проверки и gate
 
-- Создать новый терминал в тестовом tenant через onboarding API, затем проверить
-  provisioning/PIN, Agent online, console/video и usage. Терминал 70 и его
-  лицензию не менять. Если переиспользуется его Agent, вернуть исходную
-  конфигурацию Agent после теста.
+- Подтвердить MQTT/IoT presence нового `device_id=1000003`, затем проверить
+  console/video, usage и полную цепочку 17F. Установка сертификата доказана,
+  online в IoT пока нет. Запись терминала 70 и его лицензия не менялись.
+- Разобрать и безопасно убрать осиротевшую IoT provisioning-запись `10000006`
+  первого теста, не затрагивая рабочий терминал `3718`.
 - Выполнить всю матрицу `L4D-17E-MB.md`: free 120 min, paid continuation,
   online once per month, DST/month boundaries, grace/block, manual payment и
   storno, projection rebuild/reconciliation, rounding, Hub и archive.
@@ -55,6 +54,6 @@ onboarding пока выключен; до шага создания его ну
 - Не выпускать `H-L4D-17E-MB-v1` и не открывать 17F по этому промежуточному
   evidence. Исторические verdict в исходных отчётах остаются отдельными.
 
-После завершения испытаний отозвать тестовые сессии, вернуть тестовый Agent
-в исходное состояние, деактивировать test user/tenant по утверждённому admin-маршруту, остановить
+После завершения испытаний отозвать тестовые сессии, деактивировать тестовый
+терминал и test user/tenant по утверждённому admin-маршруту, остановить
 изолированный Compose и удалить его private volume. Не удалять ledger вручную.
