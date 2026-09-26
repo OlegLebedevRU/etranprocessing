@@ -19,6 +19,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin/users", tags=["admin-users"])
 
 
+def _require_owner_role_consistency(role: str, role_id: int) -> None:
+    if (role == "l4desk_owner") != (role_id == 5):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={"code": "role_identity_mismatch"},
+        )
+
+
 class UserResponse(BaseModel):
     id: int
     username: str
@@ -168,6 +176,7 @@ async def create_user(
     role_id = body.role_id
     if body.is_superuser and role_id != 1:
         role_id = 1
+    _require_owner_role_consistency(body.role, role_id)
 
     async with async_session() as session:
         # Check org existence if provided
@@ -272,6 +281,12 @@ async def update_user(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"User {user_id} not found",
             )
+
+        effective_role = body.role if body.role is not None else user.role
+        effective_role_id = body.role_id if body.role_id is not None else user.role_id
+        if body.is_superuser:
+            effective_role_id = 1
+        _require_owner_role_consistency(effective_role, effective_role_id)
 
         if body.password:
             user.md5_password = hashlib.md5(body.password.encode("utf-8")).hexdigest()
