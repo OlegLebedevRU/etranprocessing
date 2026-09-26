@@ -154,6 +154,25 @@
   tenant 3 = 1000 копеек, ledger содержит только прежний тестовый payment.
   **Automatic close/post к 00:06 не наблюдался**; новый worker ещё не
   развёрнут, а иной scheduler до этого момента не сработал. Счёт не менялся.
+- После явного одобрения установлен только изолированный test-backend из Git
+  archive `e4ae6b9` (архив SHA-256
+  `ff557a741c306bd7f37dc3ca13afa50226723a597a0afc0f4514c6791f10deee`).
+  Новый image `sha256:6a09ea073c28071d64377d6febef3085b1e4e6a816ce80e51e3672c162c1a762`
+  совпал с архивом по всем 91/91 Python-файлам, без лишних файлов.
+  Server `MenuBuilder/e2e/compose.yaml` получил ровно три подтверждённые
+  строки (image и два metering flags); прежний файл сохранён как
+  `compose.yaml.pre-e4ae6b9`. Его старое расхождение с Git по IoT consumer
+  осталось: сервер жёстко выключает consumer, в Git opt-in через env.
+  Перед будущей полной синхронизацией compose этот diff надо разрешить.
+- Изолированный worker был включён лишь с `tenant_ids=[3]`, при выключенных
+  entitlement worker, policy enforcement и IoT consumer. В 00:14:21 МСК
+  он провёл ровно одну `usage` транзакцию `id=4` на 100 копеек для дня
+  2026-09-26: две записи debit=credit=100, balance 1000→900 копеек,
+  projection version 1→2. Следующий тик не добавил транзакцию и не изменил
+  баланс. День 2026-09-27 остался 211 free seconds, без ledger posting.
+  Затем worker выключен (`enabled=false`, `tenant_ids=[]`), test-backend
+  пересоздан из того же image, `/docs`=200; основной `menubuilder-backend`
+  сохранил прежний image и статус running. **Daily posting/replay: PASS**.
 - Затем проверить paid continuation, первый платёжный anchor, online once за
   месяц, DST/границы месяца, grace/late/block, webhook+poll replay, ручной
   платёж/storno, double-entry/rebuild, rounding, Hub и archive. Локальные
