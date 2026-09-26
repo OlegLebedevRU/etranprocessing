@@ -96,6 +96,7 @@ class FakePaymentsDb:
         self._next_cycle_id = 1
         self._next_payment_id = 1
         self._next_manual_id = 1
+        self.commit_count = 0
 
     def add(self, obj: Any) -> None:
         now_dt = datetime.now(UTC)
@@ -165,7 +166,7 @@ class FakePaymentsDb:
         pass
 
     async def commit(self) -> None:
-        pass
+        self.commit_count += 1
 
     async def execute(self, stmt: Any) -> MockResult:
         params: dict[str, Any] = {}
@@ -860,6 +861,7 @@ async def test_http_api_yookassa_and_manual_payments(
             assert p_data["status"] == "pending"
             assert "confirmation_url" in p_data
             p_id = p_data["id"]
+            assert fake_db.commit_count == 1
 
             # 2. Query payment details
             resp_get = await client.get(
@@ -889,6 +891,7 @@ async def test_http_api_yookassa_and_manual_payments(
             )
             assert resp_hook.status_code == 200
             assert resp_hook.json()["payment_status"] == "succeeded"
+            assert fake_db.commit_count == 2
 
             # 4. Fallback polling returns succeeded
             resp_poll = await client.post(
@@ -897,6 +900,7 @@ async def test_http_api_yookassa_and_manual_payments(
             )
             assert resp_poll.status_code == 200
             assert resp_poll.json()["status"] == "succeeded"
+            assert fake_db.commit_count == 3
 
             # 5. Check balance
             resp_bal = await client.get(

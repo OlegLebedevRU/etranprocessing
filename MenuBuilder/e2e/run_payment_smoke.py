@@ -74,15 +74,28 @@ def _save_manifest(manifest: dict) -> None:
         json.dump(manifest, handle)
 
 
+def _payment_exists(payment_id: int, headers: dict[str, str]) -> bool:
+    request = Request(
+        f"{BACKEND}/api/v1/finance/payments/{payment_id}", headers=headers
+    )
+    try:
+        with urlopen(request, timeout=20):
+            return True
+    except HTTPError as error:
+        if error.code == 404:
+            return False
+        raise RuntimeError(f"Payment lookup failed with HTTP {error.code}") from error
+
+
 def main() -> None:
     if _json_request("GET", f"{MOCK}/health").get("external_delivery") is not False:
         raise RuntimeError("Expected a mock gateway with external delivery disabled")
 
     if MANIFEST.exists():
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
-        if (
-            manifest.get("payment_id")
-            or manifest.get("status") != "awaiting_confirmation"
+        if manifest.get("status") not in (
+            "awaiting_confirmation",
+            "payment_started",
         ):
             raise RuntimeError("Previous E2E run exists; inspect manifest before retry")
     else:
@@ -130,6 +143,14 @@ def main() -> None:
         "POST", f"{BACKEND}/api/auth/login", {"username": email, "password": password}
     )
     auth = {"Authorization": f"Bearer {login['access_token']}"}
+    if manifest.get("payment_id"):
+        prior_payment_id = int(manifest["payment_id"])
+        if _payment_exists(prior_payment_id, auth):
+            raise RuntimeError("Prior payment exists; inspect it before retry")
+        manifest["unpersisted_payment_id"] = prior_payment_id
+        manifest.pop("payment_id")
+        manifest.pop("provider_payment_id", None)
+        _save_manifest(manifest)
     profile = _json_request("GET", f"{BACKEND}/api/auth/me", headers=auth)
     tenant_id = int(profile["org_id"])
     user_id = int(profile["user_id"])

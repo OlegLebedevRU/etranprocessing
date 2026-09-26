@@ -670,6 +670,7 @@ async def create_yookassa_payment(
             customer_email=customer_email,
             correlation_id=f"pay-init-{tenant_id}",
         )
+        await db.commit()
         return FinPaymentRead.model_validate(payment)
     except FinValidationError as err:
         raise HTTPException(
@@ -770,6 +771,7 @@ async def poll_payment_status(
             actor=f"user_{user.get('sub') or 'poll'}",
             correlation_id=f"poll-{payment_id}",
         )
+        await db.commit()
         return FinPaymentRead.model_validate(updated)
     except FinValidationError as err:
         raise HTTPException(
@@ -806,6 +808,7 @@ async def yookassa_webhook(
             webhook_secret=x_yookassa_webhook_secret,
             correlation_id=request.headers.get("X-Correlation-ID") or "",
         )
+        await db.commit()
         return {
             "status": "ok",
             "payment_id": payment.id,
