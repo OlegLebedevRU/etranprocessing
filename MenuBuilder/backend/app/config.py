@@ -221,6 +221,8 @@ class Settings(BaseSettings):
 
     # L4Desk Entitlement, Grace & Notifications (L4D-12-MB)
     l4desk_policy_shadow_mode: bool = True
+    l4desk_free_quota_test_tenant_ids: list[int] = []
+    l4desk_free_quota_test_seconds: int = 7200
     l4desk_entitlement_worker_enabled: bool = False
     l4desk_entitlement_worker_interval_sec: float = 60.0
     l4desk_metering_close_worker_enabled: bool = False

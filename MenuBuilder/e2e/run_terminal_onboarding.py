@@ -53,8 +53,8 @@ def _save_manifest(manifest: dict) -> None:
 
 def main() -> None:
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    if manifest.get("status") != "smoke_passed":
-        raise RuntimeError("Complete registration and payment smoke first")
+    if manifest.get("status") not in ("smoke_passed", "registration_confirmed"):
+        raise RuntimeError("Complete registration before terminal onboarding")
 
     login = _json_request(
         "POST",

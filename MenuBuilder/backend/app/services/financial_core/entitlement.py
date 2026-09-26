@@ -7,6 +7,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.repositories.l4desk_repository import L4DeskRepository
 from app.services.financial_core.cycles import FinBillingCycleService
 from app.services.financial_core.projection import FinProjectionService
@@ -76,18 +77,28 @@ class FinEntitlementService:
         free_term = await FinTerminalService.get_free_terminal(db, tenant_id)
         free_terminal_id = free_term.terminal_id if free_term else None
 
-        effective_tz = profile.anchor_timezone or "UTC"
+        repo = L4DeskRepository(db)
+        tenant_profile = await repo.get_tenant_profile(tenant_id)
+        effective_tz = (
+            tenant_profile.timezone if tenant_profile else profile.anchor_timezone
+        ) or "UTC"
         tz_zone = resolve_timezone(effective_tz)
         local_date = as_of_dt.astimezone(tz_zone).date()
 
         today_usage_seconds = 0
-        repo = L4DeskRepository(db)
         if free_terminal_id is not None:
             usage = await repo.get_usage_daily(free_terminal_id, local_date)
             if usage is not None:
                 today_usage_seconds = usage.video_seconds + usage.console_seconds
 
-        free_quota_seconds = 7200  # 120 minutes
+        free_quota_seconds = (
+            settings.l4desk_free_quota_test_seconds
+            if tenant_id in settings.l4desk_free_quota_test_tenant_ids
+            else 7200
+        )
+        if free_quota_seconds <= 0:
+            raise ValueError("Free quota must be positive")
+        quota_minutes = free_quota_seconds // 60
 
         if not is_first_paid:
             # Free tier before first payment
@@ -104,9 +115,7 @@ class FinEntitlementService:
             elif today_usage_seconds >= free_quota_seconds and balance_kopecks <= 0:
                 can_start_sessions = False
                 reason_code = REASON_FREE_QUOTA_EXCEEDED
-                reason_message = (
-                    "Исчерпан суточный лимит 120 минут бесплатного использования"
-                )
+                reason_message = f"Исчерпан суточный лимит {quota_minutes} минут бесплатного использования"
             else:
                 can_start_sessions = True
                 reason_code = None
@@ -241,7 +250,8 @@ class FinEntitlementService:
                 return {
                     "allowed": False,
                     "reason": (
-                        "Исчерпан суточный лимит 120 минут бесплатного использования. "
+                        f"Исчерпан суточный лимит {status.free_quota_seconds // 60} "
+                        "минут бесплатного использования. "
                         "Для продолжения работы пополните баланс."
                     ),
                     "error_code": REASON_FREE_QUOTA_EXCEEDED,

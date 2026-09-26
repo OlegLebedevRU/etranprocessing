@@ -8,6 +8,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.auth import create_access_token
+from app.config import settings
 from app.database import get_db
 from app.main import app
 from app.models import Terminal, User
@@ -269,6 +270,14 @@ class FakeEntitlementDb:
                 return MockResult(one=p)
             return MockResult(one=None)
 
+        # 3. L4DeskTenantProfile
+        if "l4desk_tenant_profiles" in query_str:
+            values = tuple(statement.compile().params.values())
+            for t_id, prof in self.tenant_profiles.items():
+                if t_id in values:
+                    return MockResult(one=prof)
+            return MockResult(one=None)
+
         # 3. FinBalanceProjection
         if "fin_balance_projections" in query_str:
             for t_id, proj in self.projections.items():
@@ -288,12 +297,10 @@ class FakeEntitlementDb:
 
         # 5. FinUsageDaily
         if "fin_usage_daily" in query_str:
-            # Check terminal_id and local_date
+            values = tuple(statement.compile().params.values())
             for (t_id, l_date), u in self.usage_daily.items():
-                if str(t_id) in query_str:
+                if t_id in values and l_date in values:
                     return MockResult(one=u)
-            if self.usage_daily:
-                return MockResult(one=next(iter(self.usage_daily.values())))
             return MockResult(one=None)
 
         # 6. FinBillingCycle
@@ -478,6 +485,92 @@ async def test_no_payment_free_quota_and_secondary_terminal_block():
     assert status.state == ENTITLEMENT_FREE
     assert status.grace_deadline is None
     assert not status.is_first_paid
+
+
+@pytest.mark.anyio
+async def test_free_quota_uses_tenant_local_day_and_scoped_test_limit(monkeypatch):
+    tenant_id = 601
+    terminal_id = 201
+    fake_db = FakeEntitlementDb()
+    db = cast(Any, fake_db)
+    fake_db.add(
+        FinBillingProfile(
+            tenant_id=tenant_id,
+            anchor_at=None,
+            anchor_day=None,
+            anchor_timezone=None,
+            entitlement="free",
+        )
+    )
+    fake_db.add(L4DeskTenantProfile(tenant_id=tenant_id, timezone="Europe/Moscow"))
+    fake_db.add(
+        FinBalanceProjection(
+            tenant_id=tenant_id,
+            account_id=1,
+            balance_kopecks=0,
+            version=1,
+            last_transaction_id=None,
+            updated_at=datetime.now(UTC),
+        )
+    )
+    fake_db.add(
+        L4DeskTerminal(
+            terminal_id=terminal_id,
+            tenant_id=tenant_id,
+            ordinal=1,
+            sn="SN-TERM-201",
+            external_terminal_id="ext-201",
+            operation_id="op-201",
+            correlation_id="corr-201",
+        )
+    )
+    for usage_date, seconds in ((date(2026, 9, 26), 7200), (date(2026, 9, 27), 600)):
+        fake_db.add(
+            FinUsageDaily(
+                tenant_id=tenant_id,
+                terminal_id=terminal_id,
+                local_date=usage_date,
+                timezone="Europe/Moscow",
+                video_seconds=seconds,
+                console_seconds=0,
+                free_seconds=seconds,
+                billable_seconds=0,
+                rounded_billable_hours=0,
+                rate_kopecks=100,
+                calculated_kopecks=0,
+                posted_kopecks=0,
+                discarded_kopecks=0,
+                source_project="MenuBuilder",
+                source_event_id=f"ev-{usage_date}",
+                source_events_hash=f"hash-{usage_date}",
+                actor="test",
+                correlation_id=f"corr-{usage_date}",
+            )
+        )
+
+    as_of = datetime(2026, 9, 26, 21, 5, tzinfo=UTC)  # 00:05 Moscow, 27 Sep
+    monkeypatch.setattr(settings, "l4desk_free_quota_test_tenant_ids", [tenant_id])
+    monkeypatch.setattr(settings, "l4desk_free_quota_test_seconds", 600)
+    status = await FinEntitlementService.get_tenant_entitlement_status(
+        db, tenant_id, as_of=as_of
+    )
+    assert status.today_usage_seconds == 600
+    assert status.free_quota_seconds == 600
+    assert status.reason_code == REASON_FREE_QUOTA_EXCEEDED
+
+    decision = await FinEntitlementService.evaluate_session_request(
+        db, tenant_id, terminal_id, "video", as_of=as_of
+    )
+    assert not decision["allowed"]
+    assert "10 минут" in decision["reason"]
+
+    monkeypatch.setattr(settings, "l4desk_free_quota_test_tenant_ids", [])
+    normal_status = await FinEntitlementService.get_tenant_entitlement_status(
+        db, tenant_id, as_of=as_of
+    )
+    assert normal_status.free_quota_seconds == 7200
+    assert normal_status.today_usage_seconds == 600
+    assert normal_status.can_start_sessions
 
 
 @pytest.mark.anyio

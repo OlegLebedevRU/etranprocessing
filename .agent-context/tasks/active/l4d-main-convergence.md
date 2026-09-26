@@ -182,6 +182,41 @@
   только тогда выпускать новый report/candidate `H-L4D-17E-MB-v1` и передавать
   контроллеру для append-only приёмки. 17F начнётся после этой записи.
 
+## Оперативная проверка 773 и следующий бесплатный E2E (2026-09-27)
+
+- 773 около 00:26 МСК вернул 500 при старте. В логах основного
+  `menubuilder-backend` сразу несколько запросов к video API завершились
+  `ConnectionResetError: [Errno 104] Connection reset by peer` в
+  `asyncpg.connect_utils._create_ssl_connection` при подключении к PostgreSQL.
+  После обновления страницы пользователь подтвердил нормальный старт;
+  00:28:49 МСК `control/lease`=201 и `stream/start`=200, штатный stop=200
+  и release=204 в 00:29:00. Контейнеры не перезапускались; TCP к DB с
+  backend снова доступен, за следующие 3 минуты новых reset/500 не было.
+  Причина сброса на стороне БД/сети не установлена; это отдельный incident,
+  не доказательство сбоя l4capture или media plane.
+- Пользователь подтвердил email `test04@platerra.ru` и разрешил создать
+  отдельный tenant и terminal+PIN для теста бесплатных 10 минут без платежа.
+  Manifest регистрации находится в приватном volume изолированного E2E;
+  повторный обычный payment smoke запрещён, так как совершил бы mock payment.
+- Локальный candidate вводит `E2E_REGISTRATION_ONLY=true` в payment runner:
+  после подтверждения email он только проверяет login/tenant/нулевой баланс и
+  фиксирует `registration_confirmed`. Onboarding принимает этот статус.
+- Обнаружено расхождение: metering делит сутки по `L4DeskTenantProfile.timezone`,
+  entitlement у ещё не платившего tenant использовал UTC из пустого billing
+  anchor. Исправлено на tenant timezone с fallback к billing anchor/UTC.
+- Для test-backend добавлен выключенный по умолчанию адресный override квоты:
+  `L4DESK_FREE_QUOTA_TEST_TENANT_IDS` и `L4DESK_FREE_QUOTA_TEST_SECONDS`.
+  План E2E: 600 секунд только для tenant test04, `policy_enforcement=true`
+  только в изолированном backend. Это проверяет отказ нового admission после
+  штатного stop и записи usage; текущая трансляция автоматически на 10-й
+  минуте не прекращается. Основной сайт пока работает с enforcement=false,
+  поэтому его UI сам по себе не доказывает отказ.
+- Локально: новый unit test московской полуночи/600 секунд и изоляции лимита;
+  backend pytest 496/496, Ruff check/format и Pyright 0 ошибок.
+  Развёртывание и создание terminal пока не выполнены: требуется отдельное
+  явное разрешение на изменение серверных файлов по AGENTS.md и точный diff
+  действующего E2E compose перед пересозданием контейнеров.
+
 ## Решение для PR
 
 Один draft PR из `release/l4tools-1.8.2-beta-1` в `main`. После закрытия

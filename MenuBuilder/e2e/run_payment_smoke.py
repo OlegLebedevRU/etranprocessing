@@ -156,6 +156,22 @@ def main() -> None:
     user_id = int(profile["user_id"])
     if tenant_id <= 0 or user_id <= 0:
         raise RuntimeError("Test user has no active tenant")
+    if os.environ.get("E2E_REGISTRATION_ONLY") == "true":
+        if manifest.get("status") != "awaiting_confirmation" or manifest.get(
+            "unpersisted_payment_id"
+        ):
+            raise RuntimeError("Registration-only run requires an unpaid registration")
+        balance = _json_request(
+            "GET", f"{BACKEND}/api/v1/finance/balance", headers=auth
+        )
+        if balance["balance_kopecks"] != 0:
+            raise RuntimeError("Registration-only tenant has a nonzero balance")
+        manifest.update(
+            {"tenant_id": tenant_id, "user_id": user_id, "status": "registration_confirmed"}
+        )
+        _save_manifest(manifest)
+        print(f"REGISTRATION_CONFIRMED tenant_id={tenant_id} user_id={user_id}")
+        return
     manifest.update(
         {"tenant_id": tenant_id, "user_id": user_id, "status": "payment_started"}
     )

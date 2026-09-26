@@ -50,6 +50,11 @@ create/close фиксируются транзакцией по `terminal.id`; �
 tenant из `IOT_CONSUMER_FINANCE_TENANT_IDS` при выключенном shadow mode и
 подтверждённом `device_online`. Server/browser E2E остаётся необходимым.
 
+17E free quota candidate (2026-09-27, локальный код + тесты): entitlement
+читает локальную дату из `L4DeskTenantProfile.timezone`, как metering. Для
+изолированного E2E доступен адресный override 600 секунд, выключенный по
+умолчанию; production admission остаётся permissive до отдельного rollout.
+
 ## Источники и актуальность
 - Authoritative docs: [ownership](../../docs/etran_data-database-ownership.md),
   [E2E](../../docs/etran_arch-video-remote-desktop-e2e.md), [AGENTS](../../AGENTS.md).
