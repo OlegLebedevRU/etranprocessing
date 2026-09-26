@@ -1237,9 +1237,25 @@ async def watch_device_status_ws(websocket: WebSocket, device_id: int) -> None:
         await websocket.close(code=4401)
         return
     origin = websocket.headers.get("origin")
-    if origin and urlsplit(origin).netloc != websocket.headers.get("host"):
-        await websocket.close(code=4403)
-        return
+    if origin:
+        origin_url = urlsplit(origin)
+        forwarded_proto = websocket.headers.get("x-forwarded-proto")
+        expected_proto = (
+            forwarded_proto
+            if forwarded_proto in {"http", "https"}
+            else "https"
+            if websocket.url.scheme == "wss"
+            else "http"
+        )
+        if (
+            origin_url.scheme != expected_proto
+            or origin_url.netloc != websocket.headers.get("host")
+            or origin_url.path
+            or origin_url.query
+            or origin_url.fragment
+        ):
+            await websocket.close(code=4403)
+            return
     user = await get_ws_user(websocket)
     if not user:
         await websocket.close(code=4401)

@@ -13,7 +13,11 @@ from app.routers import video_control
 class BrowserSocket:
     def __init__(self) -> None:
         self.query_params: dict[str, str] = {}
-        self.headers = {"host": "portal.example", "origin": "https://portal.example"}
+        self.headers = {
+            "host": "portal.example",
+            "origin": "https://portal.example",
+            "x-forwarded-proto": "https",
+        }
         self.sent: list[dict[str, str]] = []
         self.inbound: asyncio.Queue[str] = asyncio.Queue()
         self.accepted = False
