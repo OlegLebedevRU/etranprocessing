@@ -461,6 +461,8 @@ export default function VideoSurveillancePage() {
     let refreshing = false;
     let refreshPending = false;
     let retryMs = 1000;
+    let disconnectedAt = Date.now();
+    let retryEnabled = true;
 
     const refresh = async () => {
       if (disposed) return;
@@ -514,7 +516,10 @@ export default function VideoSurveillancePage() {
       if (disposed) return;
       const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
       socket = new WebSocket(`${proto}//${window.location.host}/api/v1/video/devices/${deviceId}/watch/ws`);
-      socket.onopen = () => { retryMs = 1000; };
+      socket.onopen = () => {
+        retryMs = 1000;
+        disconnectedAt = 0;
+      };
       socket.onmessage = (event) => {
         try {
           if (JSON.parse(event.data)?.type === "invalidate") void refresh();
@@ -525,20 +530,27 @@ export default function VideoSurveillancePage() {
       socket.onclose = (event) => {
         if (disposed) return;
         socket = null;
-        void refresh();
-        if (event.code === 4401 || event.code === 4403 || event.code === 4404) return;
+        disconnectedAt = Date.now();
+        if (event.code === 4401 || event.code === 4403 || event.code === 4404) {
+          retryEnabled = false;
+          void refresh();
+          return;
+        }
         retryTimer = setTimeout(connect, retryMs);
         retryMs = Math.min(retryMs * 2, 15000);
       };
       socket.onerror = () => socket?.close();
     };
 
-    void refresh();
     connect();
     // During a disconnect, use the existing REST status path. The BFF
     // reconnects after 60 seconds and triggers a fresh snapshot.
     const fallbackTimer = setInterval(() => {
-      if (socket?.readyState !== WebSocket.OPEN) void refresh();
+      if (
+        retryEnabled &&
+        socket?.readyState !== WebSocket.OPEN &&
+        Date.now() - disconnectedAt >= 5000
+      ) void refresh();
     }, 5000);
     return () => {
       disposed = true;
