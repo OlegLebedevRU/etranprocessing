@@ -43,6 +43,14 @@ Backend code: uv run pytest + ruff/format/pyright; frontend code: npm run build 
 camera/view-only input, stop/unmount timers, late events. См. [матрицу](../operations/validation-matrix.md).
 
 ## Известные риски и незавершённые вопросы
+17F Hub correction (2026-09-27, runtime E2E): на основном nginx
+`/api/v1/admin/hub/` маршрутизируется в MenuBuilder с JWT, вместо общего
+`/api/v1/` в app1. `HubService.get_finance_overview` обрабатывает
+`Decimal` из PostgreSQL. После развёртывания browser Hub registrations и
+finance overview вернули 200; роль 5 получила 403, video start/stop
+терминала 1000007 прошли без 500. Отдельно остаются вопросы повторного
+reconciliation operation ID, correlation filters и пустого archive manifest.
+
 Compatibility fallback `running` не доказывает ACK/кадры. REST и WS keepalive
 нужно проверять раздельно. IoT watch v1 зависит от `WEB_CONCURRENCY=1`; browser E2E качества изображения ещё требует проверки.
 
