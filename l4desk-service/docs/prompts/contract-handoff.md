@@ -6464,3 +6464,53 @@ consumers:
 next_prompt_id: L4D-18A-SHARED
 ```
 <!-- HANDOFF:H-L4D-17F-DOCS-FIX-01-v1:END -->
+
+## Адресный допуск к 18A shared release
+
+Исторический `L4D-18A-SHARED.md` требует отсутствующий
+`H-L4D-17F-DOCS-v1`. Принятый результат E2E имеет точный ID
+`H-L4D-17F-DOCS-FIX-01-v1`; старый ID не создаётся и старые блоки
+не меняются. Независимая сверка нашла по одному принятому входу без
+отзыва: 17F FIX — 16/16 Git/raw digest, 04A shared — 3/3 Git/raw digest.
+04A адресован историческому 04B; §8 дополняет адресацию только для
+нового 18A corrective prompt. Регистрация не принимает 18A заранее.
+
+<!-- CORRECTIVE_REGISTRATION:R-L4D-18A-SHARED-FIX-01-v1:BEGIN -->
+```yaml
+registration_id: R-L4D-18A-SHARED-FIX-01-v1
+status: AUTHORIZED
+authorized_by: Cascade Controller
+authorization_basis: explicit_user_request_to_continue_18a_after_accepted_17f
+registered_at_utc: '2026-09-27T18:12:30Z'
+prompt_id: L4D-18A-SHARED-FIX-01
+prompt_path: l4desk-service/docs/prompts/L4D-18A-SHARED-FIX-01.md
+scope_project: shared/etranprocessing_db
+scope_root: D:\repo\platerra\Public\etranprocessing-l4tools-182\shared
+blocked_prompt_id: L4D-18A-SHARED
+authorized_inputs:
+  - handoff_id: H-L4D-17F-DOCS-FIX-01-v1
+    contract_version: 1.0.0
+    producer_commit: a4b98e95e1493c76f0fdfc409a6441065f8e7020
+  - handoff_id: H-L4D-04A-SHARED-v1
+    contract_version: 1.0.0
+    producer_commit: 537a1e493c83d1fa8e8cb765228be8d1b24a1d62
+sequence_gate_handoff_id: H-L4D-17F-DOCS-FIX-01-v1
+artifact_byte_binding_ids: []
+external_artifact_reads:
+  - handoff_id: H-L4D-17F-DOCS-FIX-01-v1
+    artifact_commit: a4b98e95e1493c76f0fdfc409a6441065f8e7020
+    paths:
+      - l4desk-service/docs/handoffs/L4D-17F-DOCS-FIX-01-v2-report.md
+output_handoff_id: H-L4D-18A-SHARED-v1
+next_prompt_id: L4D-18B-PB
+report_path: shared/docs/l4desk/handoffs/L4D-18A-SHARED-FIX-01-report.md
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: shared/docs/l4desk/handoffs/L4D-18A-SHARED-FIX-01-candidate.md
+publication_required_before_execution: true
+grant_scope: consumer_addressing_only
+runtime_acceptance: NOT_GRANTED
+correction_reason: original_18a_requires_absent_17f_docs_handoff; accepted_17f_fix_id_is_exact_input
+package_delivery_note: accepted_04a_git_source_0_1_1_may_be_reused_only_if_18a_release_checks_confirm_identical_bytes
+```
+<!-- CORRECTIVE_REGISTRATION:R-L4D-18A-SHARED-FIX-01-v1:END -->

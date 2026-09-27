@@ -146,3 +146,12 @@ in `contract-handoff.md`. The report/candidate do not enable production
 commercial flags. Before running 18A, its historical required input
 `H-L4D-17F-DOCS-v1` must be addressed to the accepted corrective output
 by the controller; publishing this packet alone does not open that gate.
+
+
+## 18A shared corrective release registration
+
+The historical `L4D-18A-SHARED.md` has an absent 17F handoff ID. Use
+[`L4D-18A-SHARED-FIX-01.md`](L4D-18A-SHARED-FIX-01.md) only after
+`R-L4D-18A-SHARED-FIX-01-v1` is published in `contract-handoff.md`.
+Its exact inputs are accepted `H-L4D-17F-DOCS-FIX-01-v1` and
+`H-L4D-04A-SHARED-v1`; output acceptance remains independent.
