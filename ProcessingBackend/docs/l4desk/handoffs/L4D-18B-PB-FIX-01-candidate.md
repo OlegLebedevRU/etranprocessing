@@ -13,7 +13,8 @@ producer_scope_project: ProcessingBackend
 producer_report_path: ProcessingBackend/docs/l4desk/handoffs/L4D-18B-PB-FIX-01-report.md
 producer_branch: release/l4tools-1.8.2-beta-1
 producer_commit: 67827b607e64d771e368a0a43e1b6c0f09087dd8
-report_commit: bcd9719106b94f2e10fd4346f73acf7132ce32af
+report_commit: 3d76c7d6d5165959e4cd077b4730a5712d7e1f6a
+accepted_at_utc: null
 contract_version: 1.0.0
 schema_revision: "027"
 artifact_version: 0.1.0
@@ -29,7 +30,7 @@ artifact_paths:
   - ProcessingBackend/nginx-mutual-legacy/nginx-configs/legacy_ssl.conf
   - ProcessingBackend/backend/.env.example
 artifact_sha256:
-  - fb15a37985e6c77cc6d20a8c620e196ce2b01a358e5c105772c49dc977906de1
+  - 388f232b5aa3c76408b80c232844cd8b57fc1207d94d060da4da24de19cea0ee
   - 14154b9485efe6d240a682fb122daa7030b22e94107dd1b4c2e1fadbb7cc65ab
   - 0a0e925b1dfad9c6b96f5063cc33b5bea822cd558062681d9b011f0fe02ed93a
   - dff777bcc6b875875e0812d39eb237ea7ce7a10ff990da6ae48b49e3cc2efa78
