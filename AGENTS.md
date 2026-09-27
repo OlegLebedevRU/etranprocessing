@@ -418,6 +418,20 @@ AI-агентам **СТРОГО ЗАПРЕЩЕНО** напрямую изме�
 
 ---
 
+## Browser testing
+
+Use `playwright-cli` for browser interaction and UI testing.
+
+When debugging frontend behavior:
+1. Start the application if necessary.
+2. Open it with `playwright-cli`.
+3. Reproduce the issue in the browser.
+4. Inspect the resulting page state/errors.
+5. Fix the code.
+6. Verify the fix in the browser.
+
+Prefer actually testing UI changes in the browser rather than assuming they work.
+
 ## IDE Integration
 
 Always use the `jetbrains-index` MCP server when applicable for:
