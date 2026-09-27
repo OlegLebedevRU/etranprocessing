@@ -168,3 +168,7 @@ registration does not accept deployment or open 18C.
 ## 18C IoT corrective gate
 
 The historical 18C direct inputs have missing or mismatched Git/raw digests. Published `R-L4D-18C-IOT-FIX-01-v1` registers [`L4D-18C-IOT-FIX-01.md`](L4D-18C-IOT-FIX-01.md) with accepted 18B and a finite data-only IoT evidence export as direct inputs. The export does not prove current runtime. Before build/deploy, the IoT owner must harden the build context against private configuration and verify release readiness. 18C acceptance and 18D remain pending.
+
+## 18D media corrective gate
+
+The historical 18D subject handoffs have missing or mismatched digest and addressing, and 18C includes neighboring implementation artifacts. Published `R-L4D-18D-MEDIA-FIX-01-v1` registers [`L4D-18D-MEDIA-FIX-01.md`](L4D-18D-MEDIA-FIX-01.md) with two finite data-only direct inputs and accepted 18C as sequence-only gate. The registered scope is the clean `etranprocessing-l4d-18d-media` worktree. Publication permits the runtime owner to run the full media release gate; 18D acceptance and 18E remain pending.

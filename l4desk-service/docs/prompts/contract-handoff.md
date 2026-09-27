@@ -7136,3 +7136,128 @@ consumers: [L4D-18D-MEDIA, L4D-18E-MB]
 next_prompt_id: L4D-18D-MEDIA
 ```
 <!-- HANDOFF:H-L4D-18C-IOT-v1:END -->
+
+## 18D media finite evidence export and corrective registration
+
+The controller independently verified the nine exact historical Git/raw data-only copies and verification report in published export commit `583bf8f9982fdaac8e075cd8a94ad6577a03a180`. The earlier accepted 17D data-only export remains a separate direct input. Historical 17D/08A/15C blocks are unchanged and not direct FIX inputs. The accepted 18C IoT handoff is checked only as sequence gate; copied 18C report/archive evidence supplies finite subject context without neighboring source reads. This registration authorizes the exact media worktree and prompt but does not accept its rollout or advance 18E.
+
+<!-- HANDOFF:H-L4D-18D-MEDIA-EVIDENCE-CONTRACT-01-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-18D-MEDIA-EVIDENCE-CONTRACT-01-v1
+status: ACCEPTED
+contract_kinds:
+- REPORT
+- API
+producer_prompt_id: L4D-18D-MEDIA-EVIDENCE-CONTRACT-01
+producer_scope_project: l4desk-service
+producer_report_path: l4desk-service/docs/prompts/contracts/acceptance-18d-media-evidence-v1/verification.md
+producer_branch: release/l4tools-1.8.2-beta-1
+producer_commit: 583bf8f9982fdaac8e075cd8a94ad6577a03a180
+accepted_at_utc: '2026-09-27T21:09:02Z'
+contract_version: 1.0.0
+schema_revision: archive_manifest_1.0.0
+artifact_version: 1.0.0
+artifact_paths:
+- l4desk-service/docs/prompts/contracts/acceptance-18d-media-evidence-v1/08a-openapi.json
+- l4desk-service/docs/prompts/contracts/acceptance-18d-media-evidence-v1/08a-report.md
+- l4desk-service/docs/prompts/contracts/acceptance-18d-media-evidence-v1/15c-report.md
+- l4desk-service/docs/prompts/contracts/acceptance-18d-media-evidence-v1/archive-contract.md
+- l4desk-service/docs/prompts/contracts/acceptance-18d-media-evidence-v1/archive-manifest.schema.json
+- l4desk-service/docs/prompts/contracts/acceptance-18d-media-evidence-v1/archive-examples.json
+- l4desk-service/docs/prompts/contracts/acceptance-18d-media-evidence-v1/18c-report.md
+- l4desk-service/docs/prompts/contracts/acceptance-18d-media-evidence-v1/18c-production-archive.json
+- l4desk-service/docs/prompts/contracts/acceptance-18d-media-evidence-v1/18c-production-final-smoke.json
+- l4desk-service/docs/prompts/contracts/acceptance-18d-media-evidence-v1/verification.md
+artifact_sha256:
+- 831acbc9753bab5d88c036adf9f43d98a28ca45f2143b06d12cb0ce758f80ce4
+- cdd394524f58fc88a04973944d07658c05f2760daa7c60c607a7476192857112
+- 2940be6d37996923bc6ac5e1997fbe09f9ae09b3ceb8a093d7ae7299604bad7d
+- 568ca7ce6535fe5eb9e388a760aa1bbde672e8ce7c4ffea5af33d3b7da53d7bf
+- 3a908c6fe80177126ba783fbf70c3c0de76b8428b3d8fd8a135e08cbd347bfc2
+- 29379c6f4559992f86f48ef194379814228c8e653155af64e219c8c5c686a717
+- 7f8fd3a4b312f75bc70e7bdeea236baae14420331e78d173d2a042f77ae18dc5
+- 8183ac58ca7035ef20b91b12f1017fde6f7ff38df0b39b42a4c4ced8f0791600
+- 042f54ea307fa124bd37f0a87a3ba322fcbd558a7d75bbc49bb7f3c1b5676823
+- b65730ba48bb3e2d71da1a599db27e874bdb8e9f0e141d0d6d4a04e6a5e6b8fe
+compatibility:
+  backward_compatible_with: []
+  breaking_changes: false
+  notes: Exact data-only historical media/IoT contract copies; current media runtime/deploy not verified.
+deployment_status: DOCS_PUBLISHED
+deployed_environment: documentation
+feature_flags: {}
+contract_payload:
+  verification_status: VERIFIED
+  runtime_verification: NOT_REPEATED
+  exact_source_copy_count: 9
+  verification_report_count: 1
+  historical_source_handoffs:
+  - H-L4D-08A-MEDIA-v1
+  - H-L4D-15C-MEDIA-v1
+  - H-L4D-18C-IOT-v1
+  media_baseline_commit: c200d60485d32c805ae00530c57ad7a4b6b2b1ce
+  media_tree_oid: 7146b099451fce222efb000800de5005807c4023
+supersedes: []
+known_risks:
+- Historical 08A/15C digest/addressing defects are not amended; originals are not direct FIX inputs.
+- The export is documentation and cannot establish current media image, management auth, mount, backup or restore readiness.
+consumers:
+- L4D-18D-MEDIA-FIX-01
+next_prompt_id: L4D-18D-MEDIA-FIX-01
+```
+<!-- HANDOFF:H-L4D-18D-MEDIA-EVIDENCE-CONTRACT-01-v1:END -->
+
+<!-- CORRECTIVE_REGISTRATION:R-L4D-18D-MEDIA-FIX-01-v1:BEGIN -->
+```yaml
+registration_id: R-L4D-18D-MEDIA-FIX-01-v1
+status: AUTHORIZED
+authorized_by: Cascade Controller
+authorization_basis: explicit_user_request_to_prepare_and_start_18d_after_accepted_18c
+registered_at_utc: '2026-09-27T21:09:02Z'
+prompt_id: L4D-18D-MEDIA-FIX-01
+prompt_path: l4desk-service/docs/prompts/L4D-18D-MEDIA-FIX-01.md
+scope_project: l4media
+scope_root: D:\repo\platerra\Public\etranprocessing-l4d-18d-media\l4media
+blocked_prompt_id: L4D-18D-MEDIA
+authorized_inputs:
+- handoff_id: H-L4D-17D-MEDIA-CONTRACT-01-v1
+  contract_version: 1.0.0
+  producer_commit: 77a666f17cc5cb154b6a46a8a119ed0594c087c0
+- handoff_id: H-L4D-18D-MEDIA-EVIDENCE-CONTRACT-01-v1
+  contract_version: 1.0.0
+  producer_commit: 583bf8f9982fdaac8e075cd8a94ad6577a03a180
+sequence_gate_handoff_id: H-L4D-18C-IOT-v1
+artifact_byte_binding_ids: []
+external_artifact_reads:
+- handoff_id: H-L4D-17D-MEDIA-CONTRACT-01-v1
+  artifact_commit: 77a666f17cc5cb154b6a46a8a119ed0594c087c0
+  paths:
+  - l4desk-service/docs/prompts/contracts/media-17d-v1/contract.md
+  - l4desk-service/docs/prompts/contracts/media-17d-v1/verification.md
+- handoff_id: H-L4D-18D-MEDIA-EVIDENCE-CONTRACT-01-v1
+  artifact_commit: 583bf8f9982fdaac8e075cd8a94ad6577a03a180
+  paths:
+  - l4desk-service/docs/prompts/contracts/acceptance-18d-media-evidence-v1/08a-openapi.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18d-media-evidence-v1/08a-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18d-media-evidence-v1/15c-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18d-media-evidence-v1/archive-contract.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18d-media-evidence-v1/archive-manifest.schema.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18d-media-evidence-v1/archive-examples.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18d-media-evidence-v1/18c-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18d-media-evidence-v1/18c-production-archive.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18d-media-evidence-v1/18c-production-final-smoke.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18d-media-evidence-v1/verification.md
+output_handoff_id: H-L4D-18D-MEDIA-v1
+next_prompt_id: L4D-18E-MB
+report_path: l4media/docs/l4desk/handoffs/L4D-18D-MEDIA-FIX-01-report.md
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: l4media/docs/l4desk/handoffs/L4D-18D-MEDIA-FIX-01-candidate.md
+media_baseline_commit: c200d60485d32c805ae00530c57ad7a4b6b2b1ce
+media_tree_oid: 7146b099451fce222efb000800de5005807c4023
+publication_required_before_execution: true
+grant_scope: consumer_addressing_only
+runtime_acceptance: NOT_GRANTED
+correction_reason: original_18d_subject_inputs_have_missing_digest_or_neighbor_source; finite_data_only_exports_replace_them_and_18c_is_sequence_only
+```
+<!-- CORRECTIVE_REGISTRATION:R-L4D-18D-MEDIA-FIX-01-v1:END -->
