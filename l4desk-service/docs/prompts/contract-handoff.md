@@ -5798,3 +5798,103 @@ correction_evidence_commit: 5e7acafe43becedd19251c94298284bcf17d9e31
 correction_evidence_sha256: db27b22ae51c747859a4e3f92a70b483e940e0f6306c4df20a63cc36b53953e0
 ```
 <!-- CORRECTIVE_REGISTRATION:R-L4D-17E-MB-FIX-01-v2:END -->
+
+
+## Отзыв 17E FIX v2 и регистрация v3
+
+Независимая проверка candidate v2 сверила 127 входных и 12 выходных digest,
+но обнаружила неверную SHA-256 Git archive в неизменяемом report v2.
+Report и candidate v2 не редактируются; новый отчёт публикуется по v3 path.
+Регистрация не является приёмкой runtime handoff.
+
+<!-- CORRECTIVE_REGISTRATION_REVOCATION:R-L4D-17E-MB-FIX-01-v2:BEGIN -->
+```yaml
+registration_id: R-L4D-17E-MB-FIX-01-v2
+status: REVOKED
+revoked_at_utc: '2026-09-27T12:20:46Z'
+reason: 'Immutable v2 report states an incorrect backend Git archive SHA-256; publish a corrected v3 report and detached candidate.'
+replacement_registration_id: R-L4D-17E-MB-FIX-01-v3
+```
+<!-- CORRECTIVE_REGISTRATION_REVOCATION:R-L4D-17E-MB-FIX-01-v2:END -->
+
+<!-- CORRECTIVE_REGISTRATION:R-L4D-17E-MB-FIX-01-v3:BEGIN -->
+```yaml
+registration_id: R-L4D-17E-MB-FIX-01-v3
+status: AUTHORIZED
+authorized_by: Cascade Controller
+authorization_basis: explicit_user_confirmation_2026-09-27_to_correct_17e_gate
+registered_at_utc: '2026-09-27T12:20:46Z'
+prompt_id: L4D-17E-MB-FIX-01
+prompt_path: l4desk-service/docs/prompts/L4D-17E-MB-FIX-01-v3.md
+scope_project: MenuBuilder
+scope_root: D:\repo\platerra\Public\etranprocessing-l4tools-182\MenuBuilder
+blocked_prompt_id: L4D-17E-MB
+authorized_inputs:
+- handoff_id: H-L4D-17D-MEDIA-CONTRACT-01-v1
+  contract_version: 1.0.0
+  producer_commit: 77a666f17cc5cb154b6a46a8a119ed0594c087c0
+- handoff_id: H-L4D-17C-VIDEO-WATCH-MB-v1
+  contract_version: 1.0.0
+  producer_commit: 48236d58d809438a448b3c87ae6aa9017d176be3
+- handoff_id: H-L4D-06C-MB-v1
+  contract_version: 1.0.0
+  producer_commit: c91b24cc155dc0013500162c6e517897d8074a42
+- handoff_id: H-L4D-08B-MB-v1
+  contract_version: 1.0.0
+  producer_commit: ad5a13d9fce804746f4f961812b8a026ba416bf4
+- handoff_id: H-L4D-09-MB-v1
+  contract_version: 1.0.0
+  producer_commit: 3d0dddba68df211a1d6c89844e0311b43bccd44d
+- handoff_id: H-L4D-10-MB-v1
+  contract_version: 1.0.0
+  producer_commit: 2d567c2262e8b37022312427e2f77ba21b61f144
+- handoff_id: H-L4D-11-MB-v1
+  contract_version: 1.0.0
+  producer_commit: b6f793ad9880cf20489fe37366edc66af8229464
+- handoff_id: H-L4D-12-MB-v1
+  contract_version: 1.0.0
+  producer_commit: 95ba8b7915c1d9e34e76169706b5aa862c2e9954
+- handoff_id: H-L4D-13-MB-v1
+  contract_version: 1.0.0
+  producer_commit: f5017615a8a84eee318a78b54a992ceb45f91edc
+- handoff_id: H-L4D-14-MB-v1
+  contract_version: 1.0.0
+  producer_commit: 877dc00ac6e5131c65375c5494659d36ff31822e
+- handoff_id: H-L4D-16-MB-v1
+  contract_version: 1.0.0
+  producer_commit: f188da00db13de054497ad8a6e2332b2f6127cc7
+sequence_gate_handoff_id: H-L4D-17D-MEDIA-v1
+artifact_byte_binding_ids:
+- B-L4D-06C-MB-GIT-v1
+- B-L4D-08B-MB-GIT-v1
+- B-L4D-09-MB-GIT-v1
+- B-L4D-10-MB-GIT-v1
+- B-L4D-11-MB-GIT-v1
+- B-L4D-12-MB-GIT-v1
+- B-L4D-13-MB-GIT-v1
+- B-L4D-14-MB-GIT-v1
+- B-L4D-16-MB-GIT-v1
+external_artifact_reads:
+- handoff_id: H-L4D-17D-MEDIA-CONTRACT-01-v1
+  artifact_commit: 77a666f17cc5cb154b6a46a8a119ed0594c087c0
+  paths:
+  - l4desk-service/docs/prompts/contracts/media-17d-v1/contract.md
+  - l4desk-service/docs/prompts/contracts/media-17d-v1/verification.md
+- handoff_id: H-L4D-13-MB-v1
+  artifact_commit: 4a6e124d870e06a2001a83464af2beb0123639b5
+  paths:
+  - nginx-configs/port_3000.conf
+output_handoff_id: H-L4D-17E-MB-FIX-01-v1
+next_prompt_id: L4D-17F-DOCS
+report_path: MenuBuilder/docs/l4desk/handoffs/L4D-17E-MB-FIX-01-v3-report.md
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-17E-MB-FIX-01-v3-candidate.md
+publication_required_before_execution: true
+grant_scope: consumer_addressing_only
+runtime_acceptance: NOT_GRANTED
+correction_reason: published_v2_report_contains_incorrect_backend_archive_sha256
+previous_report_commit: 3504987b9eb2f5fdfa76afad403683cc582b01fa
+correct_backend_archive_sha256: 0910dc799ac924213265dba4ca6fd3295f48f90e8cec197b98d7be62258afddf
+```
+<!-- CORRECTIVE_REGISTRATION:R-L4D-17E-MB-FIX-01-v3:END -->
