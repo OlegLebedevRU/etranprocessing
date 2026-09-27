@@ -100,3 +100,11 @@
 - РІ Р¶СѓСЂРЅР°Р»Рµ РЅРµС‚ РєРѕРЅС„Р»РёРєС‚СѓСЋС‰РµРіРѕ handoff.
 
 РЎР°Рј С„Р°РєС‚ РѕС‚РІРµС‚Р° Р°РіРµРЅС‚Р° В«РіРѕС‚РѕРІРѕВ» РЅРµ СЏРІР»СЏРµС‚СЃСЏ acceptance. Р”Р»СЏ Р·Р°РїСѓСЃРєР° РѕС‚РґРµР»СЊРЅРѕРіРѕ Р°РіРµРЅС‚Р°-РєРѕРЅС‚СЂРѕР»Р»РµСЂР° С„РёРєСЃР°С†РёРё handoff РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РїСЂРѕРјРїС‚ `HANDOFF-CONTROLLER-PROMPT.md`.
+
+
+## L4D-17E-MB-FIX-01 handoff readiness
+
+Corrective acceptance prompt: [L4D-17E-MB-FIX-01.md](L4D-17E-MB-FIX-01.md).
+Controller registration: `R-L4D-17E-MB-FIX-01-v1` in `contract-handoff.md`.
+Use the exact input list, byte bindings and external read grants in the registration.
+The original 17E report and candidate remain historical evidence.
