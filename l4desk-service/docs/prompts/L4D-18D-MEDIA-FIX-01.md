@@ -79,12 +79,34 @@ Establish exact current source/image/config/route/flag matrix before mutation.
 Carry out the original 18D production objective only within `l4media`:
 accepted idempotent start/health/stop lifecycle, partial/repeated stop,
 route and Janus mountpoint cleanup, stream continuity, deterministic media
-archive and safe restore sample. Run the full project-local tests, ingress
-build, config validation and provider contract fixtures before release. Use
-current project build rules; do not substitute historical report PASS for
-current verification. Publish immutable source/image evidence and exact
-rollback image/config before any switch. A matching already deployed image
-may be reused only after byte/source/config and live behavior verification.
+archive and safe restore sample. Run the full project-local tests, config
+validation and provider contract fixtures before release. Use current project
+build rules; do not substitute historical report PASS for current verification.
+
+Build both Janus and ingress as isolated containers on the owner-authorized
+`176.108.247.249` build host, using its separate approved identity. Keep its
+existing containers, volumes and configuration intact, and use no production
+credentials in the build context. Build Janus from pinned upstream repository
+source for version 1.1.4 at commit
+`3c39ce8cf11c54cf6f1607030a47ac9db798389a`; a wrapper around a
+prebuilt `canyan` runtime is not a source build. Record the exact upstream
+repository/ref, source archive digest, build recipe and resulting binary
+version/commit. Build ingress from the exact published l4media source commit.
+Validate both images, config and project-local tests on the build host.
+
+Publish only these two validated images to the existing approved registry,
+after checking the destination/visibility and scanning image contents/layers
+for private configuration, keys and tokens. Obtain registry credentials only
+through the existing private mechanism; never print or commit them. Record
+both pushed immutable manifest digests and source provenance. The user has
+authorized this source build and registry publication. The build host is not
+a production deployment target.
+
+Publish immutable source/image evidence and exact rollback image/config before
+the switch. On the production host pull and deploy both images by immutable
+`@sha256:` registry digests, verify the running image IDs and Janus binary
+version/commit, then perform the required smoke. A tag alone does not prove
+the deployed bytes.
 
 Keep management APIs internal and service-authenticated; verify unauthorized
 requests are denied without reading or printing credentials. Do not expose
