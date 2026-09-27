@@ -33,17 +33,42 @@
   Исправлен `producer_commit`: он указывает на реализацию `9bda9ce`,
   тогда как `report_commit` указывает на неизменённый отчёт. Candidate
   остаётся evidence, а не принятым контрактом.
+- Независимый controller review подтвердил `BLOCKED_CONTRACT` и выявил
+  отдельный дефект входа `H-L4D-17D-MEDIA-v1`: у принятого блока
+  `contract_kinds: [REPORT, DEPLOYMENT]` отсутствуют `artifact_paths` и
+  `artifact_sha256`. Это нарушает §1.4 журнала. Допуск адресации §8 и
+  привязка байтов §10.4 не создают недостающие артефакты или digest.
+- Исходный `L4D-17E-MB.md` задаёт `report_path` как
+  `MenuBuilder/docs/l4desk/handoffs/L4D-17E-MB-report.md`, а опубликованный
+  report R и candidate используют
+  `MenuBuilder/docs/l4desk/handoffs/L4D-17E-MB-acceptance-2026-09-27.md`.
+  У исходного prompt нет `registration_id` и `candidate_path`; §8–9 требуют
+  точного совпадения этих метаданных. Report R не редактировать.
+- В report R/матрице нет полной таблицы всех 11 прямых входов с точными
+  `contract_version` и digest, требуемой §2.5. В candidate добавлен
+  `COMMERCIAL_CONTROL`, хотя выход исходного 17E prompt задаёт только
+  `REPORT/DEPLOYMENT`. Исправлять это следует в новом пакете, не в R.
 
 ## Следующее решение контроллера
 
-Контроллеру нужно независимо решить адресацию восьми исторических
-контрактов и допустимость `DETACHED_V1` для 17E, не редактируя принятые
-handoff задним числом. Если будет оформлен точный адресный допуск, его
-`authorized_inputs` по §8 должен совпасть со всеми 11 required ID,
-версиями и `producer_commit` из принятых блоков. После публикации допуска
-нужна новая независимая сверка report/candidate, deploy flags, digest и
-остаточных E2E. Только затем контроллер может добавить `ACCEPTED` в журнал
-и открыть `L4D-17F-DOCS`.
+Минимальный корректный порядок после явного разрешения контроллеру по §8:
+
+1. Выпустить через адресный provider/corrective шаг новый media handoff с
+   immutable report/artifact и digest. Старый `H-L4D-17D-MEDIA-v1` оставить
+   неизменным; использовать его только как `sequence_gate_handoff_id`.
+2. Зарегистрировать отдельный corrective prompt 17E с новым `prompt_id` и
+   точным конечным списком `required_handoff_ids`: новый media handoff и
+   остальные десять входов. В `authorized_inputs` указать те же ID,
+   `contract_version` и `producer_commit`; явно разрешить `DETACHED_V1`.
+   В prompt и регистрации должны совпасть `report_path`, `candidate_path`,
+   scope, output и next. Опубликовать регистрацию до исполнения.
+3. Выпустить новый immutable report R2 с таблицей версий/digest всех прямых
+   входов и новый candidate C2 с `REPORT/DEPLOYMENT`, точными путями и
+   хешами. Старый R (`3d1ff475`) сохранить неизменным как evidence.
+4. Независимо сверить R2/C2, опубликованные байты, runtime image/flags и
+   ограничения E2E; только потом append-only принять handoff и открыть 17F.
+
+Один адресный допуск для исходных 11 входов недостаточен из-за дефекта 17D.
 
 До этого PR #4 остаётся draft. Функциональные результаты 17E — в
 `MenuBuilder/docs/l4desk/handoffs/L4D-17E-MB-acceptance-2026-09-27.md`;
