@@ -1,0 +1,144 @@
+{
+  "checked_at_utc": "2026-09-27T18:19:44.685222+00:00",
+  "registration_commit": "4ed4c78d19d4d443da21a91c5fc714a57d2038c0",
+  "source_commit": "537a1e493c83d1fa8e8cb765228be8d1b24a1d62",
+  "package": "etranprocessing-db",
+  "version": "0.1.1",
+  "delivery": "Git source at immutable producer commit",
+  "source_manifest_path": "shared/docs/l4desk/package-source-v011.json",
+  "source_manifest_git_raw_sha256": "364efa7b369cdcb8da12025b377518834b6013fd693a28f321a81dcbe18a68c6",
+  "accepted_source_file_count": 20,
+  "all_git_source_digests_match": true,
+  "source_files": [
+    {
+      "path": "shared/etranprocessing_db/__init__.py",
+      "git_raw_sha256": "043f21a04d9137f2eb021b7fa88040666256cb35e563af1fb7b74955a4378261"
+    },
+    {
+      "path": "shared/etranprocessing_db/base.py",
+      "git_raw_sha256": "987edfd9dfe38b2c49492c7d1a4e774015d16b72e2281b018e4160be6b47d560"
+    },
+    {
+      "path": "shared/etranprocessing_db/l4desk.py",
+      "git_raw_sha256": "a75ecd79403083de55f7edb929693bf4e5e5aafc2d820ab7b2b23d856a8afd72"
+    },
+    {
+      "path": "shared/etranprocessing_db/models/__init__.py",
+      "git_raw_sha256": "7bad42ec3cc900f2d668185222de2f74e67f94dd823daa033d49d2ecd6c4a88b"
+    },
+    {
+      "path": "shared/etranprocessing_db/models/auth.py",
+      "git_raw_sha256": "903916d7659e364c6f7c1fcee53c7491bcae5fdbae178005102acc77c45f3a1b"
+    },
+    {
+      "path": "shared/etranprocessing_db/models/billing.py",
+      "git_raw_sha256": "f4260965741ed9e79fe40de06706f4f0b84f0232920ea444292df6f13b7837ba"
+    },
+    {
+      "path": "shared/etranprocessing_db/models/catalog.py",
+      "git_raw_sha256": "1a1ce3ed54a80743349282f7a43955c6e6ad5905d9d254f18b832ba2ac5393a6"
+    },
+    {
+      "path": "shared/etranprocessing_db/models/email.py",
+      "git_raw_sha256": "2424e6bffb76f2b81ca2482c836dc7cf6c7f343030dd8e01935014879b670392"
+    },
+    {
+      "path": "shared/etranprocessing_db/models/finance.py",
+      "git_raw_sha256": "fc9d1458da9a8c5d6a609c72f7a9a7b547f07a531988a2442f907714c382b4f5"
+    },
+    {
+      "path": "shared/etranprocessing_db/models/iot.py",
+      "git_raw_sha256": "332242fc24e09db812ece65132487a5907b0d0c4766129a57d6ef5e31b3a5349"
+    },
+    {
+      "path": "shared/etranprocessing_db/models/l4desk.py",
+      "git_raw_sha256": "a9ad8d88128cbfffcbd10785aeb5ffc0c8d4c3ef94930dfaa81358b2086044a3"
+    },
+    {
+      "path": "shared/etranprocessing_db/models/menu.py",
+      "git_raw_sha256": "2b60bd44d4c0f4029391be6f0686f3890208f783ae73e466a4a86b9dd04add9c"
+    },
+    {
+      "path": "shared/etranprocessing_db/models/org.py",
+      "git_raw_sha256": "5bbb799776427b4cd5b2537620ab0494425e9b2340fba8e255afc8239dc9556a"
+    },
+    {
+      "path": "shared/etranprocessing_db/models/payment.py",
+      "git_raw_sha256": "8c4ff22f105a19d0bff9c77910e5e9f62a01c45a8798a105bf9c333afa5470fc"
+    },
+    {
+      "path": "shared/etranprocessing_db/models/telemetry.py",
+      "git_raw_sha256": "dd20ccd8862cd0b36a11a03d2312595c29861856073620f6c02d6759b8cbb388"
+    },
+    {
+      "path": "shared/etranprocessing_db/models/terminal.py",
+      "git_raw_sha256": "332d5266c2fc1711caf6862d3be4e9812de6fc91d74f9e6e558c75b70afe34ff"
+    },
+    {
+      "path": "shared/pyproject.toml",
+      "git_raw_sha256": "7e63aadd922d7df49bb029e364ab719233b3a9921a143504918dc8c863d45117"
+    },
+    {
+      "path": "shared/uv.lock",
+      "git_raw_sha256": "fd69b07afee90d75e99a4adcdd99309e6a9726e66af5ff38b4380551f48899c0"
+    },
+    {
+      "path": "shared/docs/l4desk/schema-v1.json",
+      "git_raw_sha256": "52f481dd3d9985c54b5388a1d9e63062a8fdbe626870b58a83b3461c3e08e49f"
+    },
+    {
+      "path": "shared/docs/l4desk/schema-v1.md",
+      "git_raw_sha256": "d80626d6f84bab0e44d2236a172b3ffa385c7779bccd26b42c2947b071f77935"
+    }
+  ],
+  "schema_artifacts": [
+    {
+      "path": "shared/docs/l4desk/schema-v1.json",
+      "git_raw_sha256": "52f481dd3d9985c54b5388a1d9e63062a8fdbe626870b58a83b3461c3e08e49f"
+    },
+    {
+      "path": "shared/docs/l4desk/schema-v1.md",
+      "git_raw_sha256": "d80626d6f84bab0e44d2236a172b3ffa385c7779bccd26b42c2947b071f77935"
+    }
+  ],
+  "local_builds": {
+    "etranprocessing_db-0.1.1-py3-none-any.whl": {
+      "local_sha256": "f092073efd8506297e450a0e7e928584c9f3a4c103594b44747814bb067f2be2",
+      "second_build_same_bytes": true,
+      "published": false
+    },
+    "etranprocessing_db-0.1.1.tar.gz": {
+      "local_sha256": "de76e01fea8b8b8818e2226fa823a4ba9194446fba44314c3c343f62ae55815d",
+      "second_build_same_bytes": true,
+      "published": false
+    }
+  },
+  "consumers": [
+    {
+      "project": "ProcessingBackend/backend",
+      "requested_version": "0.1.1",
+      "lock_version": "0.1.1",
+      "lock_source": {
+        "editable": "../../shared"
+      }
+    },
+    {
+      "project": "MenuBuilder/backend",
+      "requested_version": "0.1.1",
+      "lock_version": "0.1.1",
+      "lock_source": {
+        "editable": "../../shared"
+      }
+    }
+  ],
+  "checks": {
+    "ruff_check": "PASS",
+    "ruff_format": "22 files unchanged",
+    "pyright": "0 errors 0 warnings",
+    "pytest": "65 passed with project-local --basetemp; initial default temp directory denied by Windows",
+    "build": "wheel+sdist twice byte-identical",
+    "schema": "54 tables, 31 legacy +23 opt-in, verified by package tests against accepted schema-v1.json"
+  },
+  "runtime_deployment": "none",
+  "controller_acceptance": "PENDING"
+}
