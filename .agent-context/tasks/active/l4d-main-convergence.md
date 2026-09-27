@@ -307,6 +307,38 @@
   video=707, console=8, source=715. Runtime env основного backend прямо
   подтвердил `L4DESK_POLICY_ENFORCEMENT_ENABLED=false`. Такое повторное
   включение ожидаемо; включать enforcement глобально пока нельзя.
+- HTTP denial на изолированном backend проверен 2026-09-27 под текущим
+  владельцем test04 без передачи пароля/токена агенту: `POST
+  /api/v1/video/devices/1000005/control/lease` с ровно
+  `{"scope":"stream"}` вернул `403/free_quota_exceeded`. Первый запрос
+  из Swagger вернул `400/session_id_mismatch` до проверки политики;
+  повтор с точным телом без `session_id`
+  прошёл нужную ветку. После отказа read-only БД показывает последнюю
+  remote session `id=480`, созданную 23:31:39 UTC до HTTP-теста,
+  usage tenant 1000 = 726 s (video=718, console=8), ledger=0;
+  новых строк сессий/usage/ledger от отказа нет. Последняя session 480
+  остаётся active от прежнего запуска через основной сайт; пользователь
+  уведомлён. **HTTP free quota admission: PASS.**
+- После указанного пользователем завершения видео около 23:33 UTC UI получил
+  500 на keepalive/release/status: backend traceback заканчивается
+  `ConnectionResetError` в `asyncpg._create_ssl_connection`. Последняя
+  коммерческая session 480 осталась `active`, `closed_at=NULL`, usage не
+  увеличился. Read-only IoT status позже показал `lease.active=false` и
+  `stream.state=failed` (`l4capture_exited`); media ingress видел последние
+  RTP около 23:34 UTC. Точный момент прекращения просмотра не установлен,
+  поэтому закрывать session 480 текущим временем и начислять весь интервал
+  нельзя. Во время следующего запуска 1000005 браузер снова показал
+  периодические 500; серверные логи за последние 10 минут подтвердили
+  `ConnectionResetError` на `control/status` и `control/keepalive`.
+- Локально реализован bounded retry создания нового соединения MenuBuilder:
+  до пяти попыток `asyncpg.connect` при `OSError`/`TimeoutError`/
+  `CannotConnectNow`, максимум 2 секунды на попытку и короткий jitter.
+  `pool_pre_ping` сохранён; SQL и финансовые транзакции не повторяются.
+  500 тестов MenuBuilder, ruff и pyright прошли. Runtime деплой и повторный
+  smoke ещё не выполнены. Это уменьшает 500 при кратком сбросе, но не
+  гарантирует работу при длительной недоступности БД. Для закрытия 17E
+  нужен отдельный механизм сверки и корректного завершения осиротевших
+  коммерческих сессий с доказанным временем окончания и идемпотентным usage.
 - PostgreSQL `10.0.0.7` продолжает периодически сбрасывать новые asyncpg
   SSL подключения и даёт HTTP 500 даже на finance read и keepalive, а
   `DatabaseUserStore` превращает этот сбой в ложный 401 `Invalid credentials`.
@@ -350,11 +382,10 @@
 
 ### Путь закрытия 17E после бесплатного E2E
 
-1. На уже развёрнутом изолированном backend (tenant 1000, quota 600 s,
-   enforcement on) подтвердить HTTP `403/free_quota_exceeded` на
-   `POST /api/v1/video/devices/1000005/control/lease` под владельцем
-   test04. Затем read-only сверить, что отказ не создал аренду, сессию,
-   usage или ledger запись. Пароль/токен пользователя не переносить в чат.
+1. HTTP `403/free_quota_exceeded` под владельцем test04 на изолированном
+   backend и отсутствие новой сессии, usage/ledger записи подтверждены.
+   Кодовая ветка проверяет policy до вызова IoT lease; пароль/токен
+   пользователя агент не получал. Этот шаг закрыт.
 2. Исправить распределение `org_id` между MenuBuilder и IoT: регистрация
    сейчас проверяет свободный ID только в MenuBuilder; tenant 4 реально
    столкнулся с занятым IoT ID. До единого allocator/reservation нельзя
