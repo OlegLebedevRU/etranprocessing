@@ -43,6 +43,15 @@ Backend code: uv run pytest + ruff/format/pyright; frontend code: npm run build 
 camera/view-only input, stop/unmount timers, late events. См. [матрицу](../operations/validation-matrix.md).
 
 ## Известные риски и незавершённые вопросы
+
+17F payment recovery (2026-09-27): успешная оплата и повторный poll теперь
+обновляют cached entitlement в транзакции платежа. На isolated image
+`4184ee9` повтор mock payment 5 восстановил `active` в Hub tenant 10000,
+сохранив баланс 1000 коп., projection version 3 и transaction 9. Production
+source ещё `fb2273c`; полный rollout впереди. Regression проверяет полную
+и частичную оплату без переноса anchor; 529 backend tests passed.
+[Отчёт](../../MenuBuilder/docs/l4desk/handoffs/L4D-17F-MB-PAYMENT-RECOVERY-01-report.md).
+
 17F grace test path (2026-09-27, локальные тесты + runtime E2E):
 изолированный backend поддерживает allowlisted tenant clock offset до 7 дней
 и адресный worker tick для короткой проверки grace/block/stop. Production

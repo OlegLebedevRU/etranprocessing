@@ -115,3 +115,17 @@ Use the published data-only 17A–C, 17D media and 17E exports and the
 addressed [L4D-17F-DOCS-FIX-01.md](L4D-17F-DOCS-FIX-01.md) after its
 registration is published. The exports do not replace current black-box
 runtime verification.
+
+### 17F evidence collected on 2026-09-27
+
+The main 17F verdict remains `BLOCKED_TESTS`; these reports are evidence
+for controller review, not accepted handoffs:
+
+- [Grace, forced stop and recovery](../../../MenuBuilder/docs/l4desk/handoffs/L4D-17F-MB-GRACE-TESTPATH-01-report.md).
+- [Short archive/restore fixture](../handoffs/L4D-17F-MEDIA-ARCHIVE-EVIDENCE-01-report.md).
+- [Archive consumer contract](../../../MenuBuilder/docs/l4desk/handoffs/L4D-17F-MB-ARCHIVE-CONSUMER-EVIDENCE-01-report.md).
+- [Payment recovery and Hub correlation](../../../MenuBuilder/docs/l4desk/handoffs/L4D-17F-MB-PAYMENT-RECOVERY-01-report.md).
+- [Current deployment matrix and remaining gaps](../handoffs/L4D-17F-DEPLOY-EVIDENCE-01-report.md).
+
+The user excludes real three-year retention waiting from technical
+acceptance and authorizes mock payment evidence until the release.
