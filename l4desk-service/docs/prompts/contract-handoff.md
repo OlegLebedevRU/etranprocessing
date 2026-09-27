@@ -4927,3 +4927,62 @@ consumers:
 next_prompt_id: L4D-17E-MB
 ```
 <!-- HANDOFF:H-L4D-17C-VIDEO-WATCH-MB-v1:END -->
+
+## Документальный media export для корректирующей приёмки 17E
+
+По явному поручению пользователя и §10.1 `PROMPT-STANDARD.md` контроллер
+опубликовал самостоятельный data-only пакет доказательств 17D media в
+`77a666f17cc5cb154b6a46a8a119ed0594c087c0`. Remote branch указывала
+на этот commit до добавления блока ниже; Git/raw SHA-256 обоих файлов
+проверены. Исторический `H-L4D-17D-MEDIA-v1` не редактировался и остаётся
+только sequence gate для будущего corrective 17E. Новых runtime-тестов и
+деплоя в этом документальном шаге нет.
+
+<!-- HANDOFF:H-L4D-17D-MEDIA-CONTRACT-01-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-17D-MEDIA-CONTRACT-01-v1
+status: ACCEPTED
+contract_kinds: [REPORT, DEPLOYMENT]
+producer_prompt_id: L4D-17D-MEDIA-CONTRACT-01
+producer_scope_project: l4desk-service
+producer_report_path: l4desk-service/docs/prompts/contracts/media-17d-v1/verification.md
+producer_branch: release/l4tools-1.8.2-beta-1
+producer_commit: 77a666f17cc5cb154b6a46a8a119ed0594c087c0
+accepted_at_utc: '2026-09-27T11:31:27Z'
+contract_version: 1.0.0
+schema_revision: N/A
+artifact_version: 1.0.0
+artifact_paths:
+  - l4desk-service/docs/prompts/contracts/media-17d-v1/contract.md
+  - l4desk-service/docs/prompts/contracts/media-17d-v1/verification.md
+artifact_sha256:
+  - 098fffbf11f8c404354d3680192d2f20e967d69ce79b5cd98798309cc8c64c75
+  - 56d68275e830fdb60d57f712ad338426d42b5d1431c91c06446eb1f4cf66a4ab
+artifact_urls:
+  - https://raw.githubusercontent.com/OlegLebedevRU/etranprocessing/77a666f17cc5cb154b6a46a8a119ed0594c087c0/l4desk-service/docs/prompts/contracts/media-17d-v1/contract.md
+  - https://raw.githubusercontent.com/OlegLebedevRU/etranprocessing/77a666f17cc5cb154b6a46a8a119ed0594c087c0/l4desk-service/docs/prompts/contracts/media-17d-v1/verification.md
+compatibility:
+  backward_compatible_with: [H-L4D-17D-MEDIA-v1]
+  breaking_changes: false
+  notes: "Data-only export of historical 17D media report with Git/raw artifact digests; no new runtime guarantee. Old handoff remains sequence-only."
+deployment_status: DOCS_PUBLISHED
+deployed_environment: documentation
+feature_flags: {}
+contract_payload:
+  verification_status: VERIFIED
+  source_handoff_id: H-L4D-17D-MEDIA-v1
+  source_report_commit: 85cd6440d115bdf8a6f5cb65821dd57a68455388
+  source_project: l4media
+  runtime_verification: NOT_REPEATED
+  source_git_raw_digests: "7/7 including 17D report; see contract.md"
+  historical_crlf_digests: "6/6 explained by LF to CRLF only; see verification.md"
+  remote_ref_verified_at_utc: '2026-09-27T11:31:27Z'
+  authorization_basis: explicit_user_request_to_resolve_media_handoff_blocker
+supersedes: []
+known_risks:
+  - "Historical 17D runtime smoke was not repeated; corrective 17E must independently verify current media runtime and flags."
+  - "The original 17D handoff lacks artifact paths/digests and cannot be a subject input."
+consumers: [L4D-17E-MB-FIX-01]
+next_prompt_id: L4D-17E-MB-FIX-01
+```
+<!-- HANDOFF:H-L4D-17D-MEDIA-CONTRACT-01-v1:END -->
