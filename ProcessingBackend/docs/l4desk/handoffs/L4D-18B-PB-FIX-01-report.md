@@ -1,7 +1,8 @@
 # L4D-18B-PB-FIX-01 — ProcessingBackend production rollout
 
-Result: **VERIFIED, ready for independent controller review**. This report does
-not accept its own handoff. Final candidate:
+Producer verdict: **ACCEPTED** for the ProcessingBackend rollout and its
+checks. The shared handoff remains **PENDING** independent controller review;
+this report does not accept its own handoff. Final candidate:
 `ProcessingBackend/docs/l4desk/handoffs/L4D-18B-PB-FIX-01-candidate.md`.
 
 ## Scope and immutable inputs
