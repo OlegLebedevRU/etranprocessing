@@ -63,6 +63,59 @@ class IotPlatformClient:
                 headers["X-Session-Id"] = str(session_id)
         return headers
 
+    async def reserve_org_id(
+        self,
+        *,
+        operation_id: str,
+        minimum_org_id: int,
+        requested_org_id: int | None = None,
+    ) -> int:
+        """Reserve an org ID in IoT before creating the matching local org."""
+        if not self.base_url or not self.service_token:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={"code": "org_allocator_unavailable"},
+            )
+        payload: dict[str, Any] = {
+            "operation_id": operation_id,
+            "minimum_org_id": minimum_org_id,
+        }
+        if requested_org_id is not None:
+            payload["requested_org_id"] = requested_org_id
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                resp = await client.post(
+                    f"{self.base_url}/api/internal/v1/provisioning/organizations/reserve",
+                    json=payload,
+                    headers=self._get_headers(),
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                reserved = int(data["org_id"])
+                replayed = data.get("replayed") is True
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == status.HTTP_409_CONFLICT:
+                self._handle_app1_http_error(exc)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={"code": "org_allocator_unavailable"},
+            ) from exc
+        except (httpx.RequestError, KeyError, TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={"code": "org_allocator_unavailable"},
+            ) from exc
+        if (
+            reserved < 1
+            or (not replayed and reserved < minimum_org_id)
+            or (requested_org_id is not None and reserved != requested_org_id)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail={"code": "org_allocator_contract_mismatch"},
+            )
+        return reserved
+
     async def provision_terminal(
         self,
         device_id: int,

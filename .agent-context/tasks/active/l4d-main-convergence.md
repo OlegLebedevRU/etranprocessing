@@ -462,15 +462,37 @@
 
 ### Путь закрытия 17E после бесплатного E2E
 
+#### Task intake: коллизия org_id при регистрации
+
+- Цель / тип: исправление кросс-системной выдачи ID организации до 17E.
+- Scope: MenuBuilder registration/admin allocation и внутренний IoT
+  provisioning API; MQTT, media и терминальный протокол не меняются.
+- Владелец: MenuBuilder создаёт tenant/user; IoT владеет `tb_orgs` и
+  резервом ID; миграции IoT — его Alembic, общую ORM не менять.
+- Producer → transport → consumer: MenuBuilder confirmation/admin create →
+  authenticated internal REST reserve → IoT `tb_orgs`/reservation →
+  MenuBuilder `orgs` в своей транзакции.
+- Инварианты: ID нельзя выдать двум разным организациям; повтор той же
+  операции возвращает тот же ID; занятый explicit ID отклоняется; при
+  недоступном IoT регистрация не создаёт локальный tenant; не переносить
+  существующие tenant и не ослаблять внутреннюю авторизацию.
+- Риск: две БД не дают общей транзакции; неиспользованный резерв после
+  сбоя MenuBuilder может остаться в IoT и требует отдельной сверки, но
+  не может привести к коллизии. Исходный IoT worktree содержит чужие
+  незакоммиченные правки, реализация в чистом worktree.
+- Проверка: конкурентные/повторные reserve, конфликт с существующим IoT
+  org, подтверждение регистрации и admin create, отказ транспорта;
+  локальные suites/quality обоих подпроектов и адресный E2E после
+  согласованного деплоя. Серверные файлы менять только по AGENTS.md.
+
 1. HTTP `403/free_quota_exceeded` под владельцем test04 на изолированном
    backend и отсутствие новой сессии, usage/ledger записи подтверждены.
    Кодовая ветка проверяет policy до вызова IoT lease; пароль/токен
    пользователя агент не получал. Этот шаг закрыт.
-2. Исправить распределение `org_id` между MenuBuilder и IoT: регистрация
-   сейчас проверяет свободный ID только в MenuBuilder; tenant 4 реально
-   столкнулся с занятым IoT ID. До единого allocator/reservation нельзя
-   считать публичную регистрацию принятой. Исправление вести в этой же
-   release branch с адресными contract и concurrency проверками.
+2. Исправление `org_id` подготовлено в MenuBuilder и IoT: IoT атомарно
+   вставляет `tb_orgs` и запись резерва; registration/admin получают ID
+   через internal API. Tenant 4 не затрагивается. До развёртывания обеих
+   сторон и адресной E2E проверки публичная регистрация остаётся gate.
 3. Составить по пунктам `L4D-17E-MB.md` таблицу evidence: runtime уже
    подтверждённые free quota, paid usage, payment/webhook, monthly charge,
    midnight split/post; локально покрытые DST, grace/block,

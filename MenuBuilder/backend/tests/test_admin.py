@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from fastapi import HTTPException
 from httpx import ASGITransport, AsyncClient
 
 from app.auth import create_access_token
@@ -15,6 +16,9 @@ from app.models import (
     Terminal,
     TerminalType,
 )
+from app.routers.admin_organizations import create_organization
+from app.schemas import AdminOrgCreate
+from app.services.iot_client import iot_client
 from app.services.terminal_creation_service import generate_device_sn
 
 
@@ -43,6 +47,30 @@ def test_sn_generation_formula():
     sn_large = generate_device_sn(device_id_large)
     assert sn_large.startswith("a4b1234567c")
     assert re.match(r"^a4b1234567c\d{5}d\d{6}$", sn_large) is not None
+
+
+@pytest.mark.anyio
+async def test_admin_explicit_org_id_conflict_in_iot_creates_nothing(monkeypatch):
+    db = AsyncMock()
+    db.get.return_value = None
+    db.add = MagicMock()
+    reserve = AsyncMock(
+        side_effect=HTTPException(
+            status_code=409, detail={"code": "org_id_already_in_use"}
+        )
+    )
+    monkeypatch.setattr(iot_client, "reserve_org_id", reserve)
+
+    with pytest.raises(HTTPException) as exc:
+        await create_organization(
+            AdminOrgCreate(org_id=4, org_name="Example", name="Example"),
+            db=db,
+            user={"is_superuser": True},
+        )
+
+    assert exc.value.status_code == 409
+    assert reserve.await_args.kwargs["requested_org_id"] == 4
+    db.add.assert_not_called()
 
 
 @pytest.mark.anyio
@@ -89,8 +117,13 @@ async def test_admin_endpoints_require_superuser():
 
 
 @pytest.mark.anyio
-async def test_admin_organizations_flow():
+async def test_admin_organizations_flow(monkeypatch):
     """Verify superuser can list, create, and update organizations and their licensing policy."""
+    monkeypatch.setattr(
+        iot_client,
+        "reserve_org_id",
+        AsyncMock(side_effect=lambda **kwargs: kwargs["requested_org_id"]),
+    )
     su_token = create_access_token(
         {
             "sub": "o.lebedev",

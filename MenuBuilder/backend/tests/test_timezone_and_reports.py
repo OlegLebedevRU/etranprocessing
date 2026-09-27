@@ -170,7 +170,14 @@ class TestAuthAndTimezone:
 class TestAdminOrgAndTimezone:
     """Test timezone in admin organizations endpoints."""
 
-    async def test_admin_org_crud_timezone(self):
+    async def test_admin_org_crud_timezone(self, monkeypatch):
+        from app.services.iot_client import iot_client
+
+        monkeypatch.setattr(
+            iot_client,
+            "reserve_org_id",
+            AsyncMock(side_effect=lambda **kwargs: kwargs["minimum_org_id"]),
+        )
         su_token = create_access_token(
             {
                 "sub": "admin",

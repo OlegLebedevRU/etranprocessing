@@ -7,6 +7,7 @@ from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 from httpx import ASGITransport, AsyncClient
 from starlette.requests import Request
@@ -26,6 +27,7 @@ from app.security.permissions import (
     ROLE_L4DESK_OWNER,
     require_tenant_admin,
 )
+from app.services import registration_service
 from app.services.registration_service import (
     EmailDeliveryAdapter,
     InvalidTokenError,
@@ -47,8 +49,13 @@ def anyio_backend():
 
 
 @pytest.fixture(autouse=True)
-def cleanup_overrides_and_flags():
+def cleanup_overrides_and_flags(monkeypatch):
     original_reg_flag = settings.l4desk_registration_enabled
+    monkeypatch.setattr(
+        registration_service.iot_client,
+        "reserve_org_id",
+        AsyncMock(side_effect=lambda **kwargs: kwargs["minimum_org_id"]),
+    )
     app.dependency_overrides.clear()
     yield
     settings.l4desk_registration_enabled = original_reg_flag
@@ -444,6 +451,79 @@ async def test_confirm_registration_happy_path_provisions_tenant_and_user_role_5
     assert audit.details is not None
     assert audit.details["role_id"] == 5
     assert audit.details["is_owner"] is True
+
+
+@pytest.mark.anyio
+async def test_confirmation_uses_iot_reservation_when_local_gap_is_occupied(
+    monkeypatch,
+):
+    fake_session = FakeAsyncSession()
+    for org_id in (1, 2, 3):
+        fake_session.orgs[org_id] = Org(org_id=org_id, org_name=f"Existing {org_id}")
+    token = "collision-token"
+    registration = L4DeskRegistration(
+        id=43,
+        email_normalized="collision@example.com",
+        password_hash="test-hash",
+        token_hash=hashlib.sha256(token.encode()).hexdigest(),
+        terms_version="v1",
+        timezone="Europe/Moscow",
+        correlation_id="collision-43",
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+    )
+    fake_session.registrations_by_token[registration.token_hash] = registration
+    reserve = AsyncMock(return_value=1001)
+    monkeypatch.setattr(registration_service.iot_client, "reserve_org_id", reserve)
+
+    result = await RegistrationService(cast(Any, fake_session)).confirm_registration(
+        token=token
+    )
+
+    assert result["tenant_id"] == 1001
+    assert fake_session.users["collision@example.com"].org_id == 1001
+    assert reserve.await_args.kwargs == {
+        "operation_id": "l4desk-registration:43",
+        "minimum_org_id": 4,
+    }
+
+
+@pytest.mark.anyio
+async def test_confirmation_does_not_create_local_org_when_iot_is_unavailable(
+    monkeypatch,
+):
+    fake_session = FakeAsyncSession()
+    token = "unavailable-token"
+    registration = L4DeskRegistration(
+        id=44,
+        email_normalized="unavailable@example.com",
+        password_hash="test-hash",
+        token_hash=hashlib.sha256(token.encode()).hexdigest(),
+        terms_version="v1",
+        timezone="Europe/Moscow",
+        correlation_id="unavailable-44",
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+    )
+    fake_session.registrations_by_token[registration.token_hash] = registration
+    monkeypatch.setattr(
+        registration_service.iot_client,
+        "reserve_org_id",
+        AsyncMock(
+            side_effect=HTTPException(
+                status_code=503, detail={"code": "org_allocator_unavailable"}
+            )
+        ),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await RegistrationService(cast(Any, fake_session)).confirm_registration(
+            token=token
+        )
+
+    assert exc.value.status_code == 503
+    assert fake_session.orgs == {}
+    assert fake_session.users == {}
+    assert registration.consumed_at is None
+    assert not fake_session.committed
 
 
 @pytest.mark.anyio

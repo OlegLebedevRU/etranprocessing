@@ -23,6 +23,7 @@ from app.models_l4desk import (
 )
 from app.repositories.l4desk_repository import L4DeskRepository
 from app.services.email_service import ServerlessEmailClient
+from app.services.iot_client import iot_client
 
 logger = logging.getLogger(__name__)
 
@@ -446,7 +447,7 @@ class RegistrationService:
         token_hash = hashlib.sha256(clean_token.encode("utf-8")).hexdigest()
 
         # Step 1: Find registration by token hash
-        reg = await self.repo.get_registration_by_token(token_hash)
+        reg = await self.repo.get_registration_by_token(token_hash, lock=True)
         if not reg:
             raise InvalidTokenError("Неверный или несуществующий токен подтверждения")
 
@@ -492,12 +493,14 @@ class RegistrationService:
                 "return_url": safe_return_url,
             }
 
-        # Allocate next org_id
+        # IoT owns the cross-system ID reservation. A replay of this same
+        # confirmation reuses its reservation after an uncertain local commit.
         res_orgs = await self.session.execute(select(Org.org_id).order_by(Org.org_id))
-        existing_ids = set(res_orgs.scalars().all())
-        new_org_id = 1
-        while new_org_id in existing_ids:
-            new_org_id += 1
+        existing_ids = list(res_orgs.scalars().all())
+        new_org_id = await iot_client.reserve_org_id(
+            operation_id=f"l4desk-registration:{reg.id}",
+            minimum_org_id=max(existing_ids, default=0) + 1,
+        )
 
         org_name = f"Организация {reg.email_normalized}"
         org = Org(

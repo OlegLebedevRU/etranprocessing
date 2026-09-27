@@ -8,6 +8,13 @@ Server lease/owner/scope/TTL, ctl publisher, terminal event consumer, console RP
 Исходники app1 вне текущего дерева: до реализации запросить разрешённый checkout и ревизию.
 Владелец его БД/миграций должен быть подтверждён в том репозитории, не назначен по аналогии.
 
+17E org allocation candidate (локальный код, 2026-09-27): внешний репозиторий
+`iot-rpc-rest-app`, ветка `l4desk/fix-org-id-17e`, владеет `tb_orgs`, новой
+`tb_org_reservations` и миграцией `0008_org_reservations`. Защищённый internal
+API атомарно выделяет ID для MenuBuilder и повторяет ответ по `operation_id`.
+Контракт описан в `docs/internal-api-contract-v1.md` внешнего репозитория.
+Это локальный кандидат; runtime и E2E ещё не подтверждены.
+
 ## Внешние контракты
 | Direction | Transport | Endpoint/topic | Main payload | Guarantees |
 |---|---|---|---|---|

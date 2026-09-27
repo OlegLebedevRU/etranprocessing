@@ -65,11 +65,13 @@ class L4DeskRepository:
         return reg
 
     async def get_registration_by_token(
-        self, token_hash: str
+        self, token_hash: str, *, lock: bool = False
     ) -> L4DeskRegistration | None:
         stmt = select(L4DeskRegistration).where(
             L4DeskRegistration.token_hash == token_hash
         )
+        if lock:
+            stmt = stmt.with_for_update()
         res = await self.session.execute(stmt)
         return res.scalar_one_or_none()
 
