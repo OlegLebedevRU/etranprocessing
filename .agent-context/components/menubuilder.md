@@ -43,6 +43,15 @@ Backend code: uv run pytest + ruff/format/pyright; frontend code: npm run build 
 camera/view-only input, stop/unmount timers, late events. См. [матрицу](../operations/validation-matrix.md).
 
 ## Известные риски и незавершённые вопросы
+17F grace test path (2026-09-27, локальные тесты + isolated deploy):
+изолированный backend поддерживает allowlisted tenant clock offset до 7 дней
+и адресный worker tick для короткой проверки grace/block/stop. Production
+clock и commercial flags не менялись. Stop outbox теперь сверяет текущий
+stream epoch в app1, использует lease/stream stop вместо remote-session stop
+для video, освобождает lease и закрывает локальную сессию через metering.
+Локально 524 теста прошли; runtime stop и metering tail ещё не доказаны.
+Сценарий: [17F grace plan](../../l4desk-service/docs/handoffs/L4D-17F-MB-GRACE-TESTPATH-01-plan.md).
+
 17F Hub correction (2026-09-27, runtime E2E): на основном nginx
 `/api/v1/admin/hub/` маршрутизируется в MenuBuilder с JWT, вместо общего
 `/api/v1/` в app1. `HubService.get_finance_overview` обрабатывает

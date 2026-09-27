@@ -1,6 +1,7 @@
 # L4D-17F-MB-GRACE-TESTPATH-01 — короткий runtime-сценарий
 
-Статус: `PREPARED`; выполнение и отдельный отчёт с фактами ещё требуются.
+Статус: `DEPLOYED_READY_FOR_EVENT`; выполнение и отдельный отчёт с фактами
+ещё требуются.
 Сценарий использует существующий tenant 10000 (test05), его основной
 терминал 1000007 и дополнительный 1000006. Новые tenant, терминалы и
 реальные платежи не создаются.
@@ -89,3 +90,26 @@
 неверном allowlist или активной сессии другого tenant в выбранном
 провайдерском ID. При сбое сохранить факты, восстановить параметры
 изолированного backend и закрыть тестовые аренды штатно.
+
+## Подготовленное окружение и уровень доказательства
+
+- Source commits `469fcd4` (tenant-scoped clock/tick) и `9003400`
+  (остановка текущего stream через app1 lease, metering closure) запушены
+  в release branch. Финальный Git archive SHA-256:
+  `5543a13e8de37c2d54236e96efcd68ca7e414a0bee10ef46ef4b4fcfeccbb31d`.
+- Только изолированный test-backend использует image
+  `sha256:ce410ce51cc0c28c8c9c5c348c1a3b8189eaedf353b2b13f87d8eb3ed1d930e9`.
+  Production MenuBuilder сохранил прежний image
+  `sha256:e0d17a09092e34b206eeb313b155186c419e55ee0419a684eb5ae2ce32e50090`.
+  Текущий test config: policy=true, quota tenant `[1000]`/600 с,
+  entitlement clock allowlist `[]`, offset 0, IoT consumer=false.
+  Test `/docs` ответил 200, неавторизованный scoped tick — 403,
+  контейнер running без рестартов. Compose backup сохранён отдельно.
+- Локально `uv run pytest -q --tb=line --disable-warnings`: 524 passed;
+  `ruff check --fix app tests`, `ruff format app tests` и
+  `pyright app tests/test_l4d_12_entitlement_grace_and_notifications.py`
+  прошли. Широкий `pyright app tests` ранее показывал 20 существовавших
+  ошибок в других тестах; изменённый код имеет 0 ошибок.
+- Уровень: локальные тесты и smoke тестового backend. Runtime переход
+  `grace → blocked → stop` пока **не проверен**, так как новый
+  `device_online` 1000006 после anchor ещё не получен.
