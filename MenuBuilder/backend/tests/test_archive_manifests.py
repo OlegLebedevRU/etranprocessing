@@ -12,7 +12,9 @@ Covers contract vectors from Archive Manifest Contract v1 (examples.json):
 from __future__ import annotations
 
 import contextlib
+import json
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 from typing import Any, cast
 from unittest.mock import patch
 
@@ -636,6 +638,69 @@ class _FakeUpdateResult:
 
 
 class TestImportManifestService:
+    @pytest.mark.anyio
+    async def test_import_media_archive_output_and_show_in_hub(self):
+        """Consume the actual synthetic l4media output through the MenuBuilder contract."""
+        manifest_path = (
+            Path(__file__).resolve().parents[3]
+            / "l4desk-service"
+            / "docs"
+            / "handoffs"
+            / "evidence"
+            / "17f-archive-20260927"
+            / "manifest.json"
+        )
+        manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        db = _FakeArchiveDb()
+        reference_date = datetime(2027, 1, 1, tzinfo=UTC)
+
+        batch, linked, location = await ArchiveService.import_manifest(
+            db=cast(Any, db),
+            manifest_data=manifest_data,
+            actor="17f-contract-probe",
+            reference_date=reference_date,
+        )
+        assert batch.status == "verified"
+        assert batch.row_count == 6
+        assert sum(linked.values()) == 0
+        assert location == "vol://2026/09/l4media/arch-media-2026-09-17fprobe"
+
+        same_batch, _, _ = await ArchiveService.import_manifest(
+            db=cast(Any, db),
+            manifest_data=manifest_data,
+            actor="17f-contract-probe",
+            reference_date=reference_date,
+        )
+        assert same_batch is batch
+        assert len(db._rows) == 1
+
+        # The fake DB does not apply the SQLAlchemy server-side timestamp default.
+        batch.created_at = datetime(2026, 9, 27, tzinfo=UTC)
+        hub_item = await ArchiveService.get_archive_batch(
+            db=cast(Any, db),
+            archive_batch_id=batch.id,
+            owner_project="l4media",
+            is_superuser=False,
+        )
+        assert hub_item is not None
+        assert hub_item.state == "verified"
+        assert hub_item.row_count == 6
+        assert hub_item.location_reference == location
+        assert hub_item.storage_reference is None
+        assert hub_item.manifest is None
+        assert hub_item.issues == []
+
+        conflicting = json.loads(json.dumps(manifest_data))
+        conflicting["files"][0]["sha256"] = "a" * 64
+        conflicting["verification"]["reread_checksum_sha256"] = "a" * 64
+        with pytest.raises(ArchiveConflictError):
+            await ArchiveService.import_manifest(
+                db=cast(Any, db),
+                manifest_data=conflicting,
+                actor="17f-contract-probe",
+                reference_date=reference_date,
+            )
+
     @pytest.mark.anyio
     async def test_import_verified_manifest_creates_batch(self):
         """Import a valid verified manifest — batch should be created."""
