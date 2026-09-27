@@ -254,3 +254,12 @@ verdict контроллера ещё не получен.
   локальная сборка; SHA-256 всех пяти совпали. Сам index отличается
   форматированием строк/пустой строкой, но ссылки и содержимое assets
   совпадают; нового frontend rollout не требовалось.
+- Compose warning `admin/hash` устранён: единственным изменённым effective
+  env-полем при `env_file.format: raw` оказался `AUTH_USERS`. In-memory
+  сравнение старого и нового Compose до деплоя показало только этот diff,
+  два предупреждения сменились нулём. Правка в Git commit `7f9d659` и
+  на сервере; backup Compose сохранён. После пересоздания того же image:
+  `AUTH_USERS` восстанавливается с двумя буквальными `$` из `$$`,
+  `settings.get_users()` возвращает одну запись, `/docs`=200,
+  restart count=0, коммерческие flags=false. Active sessions=0,
+  ledger/balance tenant 3/1000 неизменны.

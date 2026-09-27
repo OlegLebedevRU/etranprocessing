@@ -557,3 +557,11 @@ ledger и balance не изменились при выключенном billin
 независимого contract verdict. Manual/storno, Hub/archive и active-stream
 graceful block подтверждены локальным suite, но не отдельным runtime E2E;
 этот предел прямо указан в candidate.
+
+Compose warning `admin/hash` устранён отдельным исправлением `7f9d659`:
+`menubuilder-backend.env_file` теперь имеет `format: raw`, поэтому
+`AUTH_USERS` с экранированными `$` не теряет часть значения. До серверной
+правки проверена единственная effective delta этого env-поля; после
+согласованного деплоя и адресного recreate предупреждений нет,
+`settings.get_users()` возвращает одну запись, image/flags/финансовые
+инварианты не изменились. Backup серверного Compose сохранён.

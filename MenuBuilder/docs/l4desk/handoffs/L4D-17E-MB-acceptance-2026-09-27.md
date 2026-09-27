@@ -62,9 +62,19 @@ next_prompt_id: L4D-17F-DOCS
   (`sha256:08b6d35b2a1322e3f709ae4864ee4308210fa3cc04c7c3ac1b7ed61352880d21`).
   Откат: вернуть этот tag на `user1-menubuilder-backend:latest` и
   пересоздать только `menubuilder-backend` с `--no-build --no-deps`.
-- На серверном Compose при адресном rollout были предупреждения о
-  переменных `admin` и `hash`; остальные сервисы не пересоздавались.
-  Перед полным Compose rollout надо найти источник интерполяции.
+- После адресного rollout выяснено: Compose интерполировал `$admin` и
+  `$hash` внутри приватного `AUTH_USERS` MenuBuilder. До исправления
+  effective значение в контейнере было короче исходного. Локальный
+  `compose.yaml` исправлен в commit `7f9d659` (`env_file.format: raw`),
+  затем с отдельного согласия тот же двухстрочный diff внесён в
+  `/home/user1/compose.yaml`. Backup:
+  `/home/user1/.l4d-releases/compose-pre-auth-users-20260927.yaml`.
+  Проверка Compose после изменения прошла без предупреждений; повторно
+  пересоздан только `menubuilder-backend`. Effective `AUTH_USERS` содержит
+  корректно декодированные два `$$` → `$`, один пользователь разбирается;
+  `/docs`=200, image прежний, restart count=0 и коммерческие флаги false.
+  Read-only ledger/balance tenant 3/1000 и отсутствие active sessions
+  повторно подтверждены. Значение `AUTH_USERS` и хеш не выводились.
 
 ## Остаточные риски и verdict
 

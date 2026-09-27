@@ -36,8 +36,14 @@ export const PERMISSION_LABELS: Record<string, string> = {
 
 export function hasPermission(user: UserInfo | null, permissionCode: string): boolean {
   if (!user) return false;
-  // Роли 1, 2, 3 имеют полный доступ
-  if (user.is_superuser || user.role_id === 1 || user.role_id === 2 || user.role_id === 3) {
+  // Роль владельца L4Desk (5) получает полный набор прав от backend.
+  if (
+    user.is_superuser ||
+    user.role_id === 1 ||
+    user.role_id === 2 ||
+    user.role_id === 3 ||
+    user.role_id === 5
+  ) {
     return true;
   }
   // Роль 4 проверяет наличие права в permissions
