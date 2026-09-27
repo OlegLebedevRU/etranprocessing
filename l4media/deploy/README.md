@@ -1,8 +1,16 @@
 # Media source builds and registry deployment
 
-Build both media images on the approved build host. Production pulls tested
-registry digests; it does not compile Janus or ingress. Registry endpoints and
-credentials belong to the operator environment, not this repository.
+Build ingress on the approved build host. If that host is unavailable, build
+locally with a Linux Docker engine and the same committed Dockerfile and tests.
+In BOTH cases publish to the approved registry, then production pulls the
+tested digest. Direct image save/load delivery to production is not a release
+path. Registry endpoints and credentials belong to the operator environment.
+
+Janus is frozen at the published digest in `baseline-images.json`. Rebuild it
+only upon a separate explicit user command. Routine ingress changes and
+deployments reuse that Janus image. The baseline file also preserves the first
+published ingress digest as the comparison/rollback reference; do not overwrite
+this historical baseline for each subsequent ingress build.
 
 ## Source and build
 
@@ -12,10 +20,21 @@ credentials belong to the operator environment, not this repository.
 2. Set `SOURCE_REVISION` (full commit), `SOURCE_ARCHIVE_SHA256` (verified archive),
    and `REGISTRY_PREFIX` (registry plus optional namespace). Run
    `bash l4media/deploy/build-publish.sh` from the extracted release.
-3. The script builds both images inside Docker, runs isolated synthetic tests,
-   then pushes `l4media-ingress:git-<commit>` and `l4media-janus:git-<commit>`.
+   `DOCKER_COMMAND` defaults to `sudo docker` on the build server; for a local
+   Linux Docker engine available to your user, export `DOCKER_COMMAND=docker`.
+   Run from a Linux shell (for example WSL on Windows).
+3. By default the script builds only ingress, pulls the pinned Janus baseline,
+   runs both through isolated synthetic tests and scans their layers, then
+   pushes `l4media-ingress:git-<commit>`. Only when the user explicitly requests
+   a Janus rebuild, add `--build-janus`; this also builds/tests/publishes Janus.
    Save build/test logs and registry digests with the release evidence.
    Reusing an existing release tag for different bytes is prohibited.
+
+The first source-built pair was published from commit
+`e6e681dcf74fb0e81da5cf1f7f0fc2d39dca7f33`, pulled on production by digest and
+passed a fresh browser video/stop test. Full digests are in the baseline file.
+Ordinary deployment requires no build: retain the selected release digests,
+pull from registry and activate them as described below.
 
 Janus is compiled from upstream commit
 `3c39ce8cf11c54cf6f1607030a47ac9db798389a` (1.1.4), matching the previous

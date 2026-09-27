@@ -1,6 +1,8 @@
 """Read every saved image layer; reject private key material or private env files."""
 
 import io
+import os
+import shlex
 import subprocess
 import sys
 import tarfile
@@ -15,7 +17,10 @@ PRIVATE_MARKERS = (
 
 def main() -> None:
     findings: list[str] = []
-    with subprocess.Popen(["sudo", "docker", "image", "save", sys.argv[1]], stdout=subprocess.PIPE) as process:
+    with subprocess.Popen(
+        shlex.split(os.environ.get("DOCKER_COMMAND", "sudo docker")) + ["image", "save", sys.argv[1]],
+        stdout=subprocess.PIPE,
+    ) as process:
         assert process.stdout is not None
         with tarfile.open(fileobj=process.stdout, mode="r|*") as archive:
             for member in archive:

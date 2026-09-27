@@ -1,0 +1,15 @@
+{
+  "baseline": "18d-first-source-built-pair",
+  "source_revision": "e6e681dcf74fb0e81da5cf1f7f0fc2d39dca7f33",
+  "source_archive_sha256": "71e09b7ce420a5ba1ea00c0451480803e1df4f041bd48c5c2ac8e1d2c5f4975e",
+  "ingress": {
+    "repository": "l4media-ingress",
+    "digest": "sha256:3e0e0341f37702bedef06ca87538c494c7e6bdf8f87152e6d5901e4d792322fd"
+  },
+  "janus": {
+    "repository": "l4media-janus",
+    "digest": "sha256:93265665a92482ec1de2c9571a08d27c87b1dee06efc000f717ed42dfe2438ae",
+    "upstream_revision": "3c39ce8cf11c54cf6f1607030a47ac9db798389a",
+    "rebuild_policy": "explicit_user_command_only"
+  }
+}
