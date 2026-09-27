@@ -1,7 +1,8 @@
 # L4D-17E: матрица приёмки коммерческого контура
 
 Срез: 2026-09-27 UTC. Кандидат: `release/l4tools-1.8.2-beta-1`.
-Статус: **IN_PROGRESS**, `H-L4D-17E-MB-v1` не выпущен. Исторический
+Статус: **READY_FOR_CONTROLLER_REVIEW**, `H-L4D-17E-MB-v1` подготовлен как
+`DETACHED_V1` candidate и ещё не принят контроллером. Исторический
 `L4D-17E-MB-report.md` со статусом `BLOCKED_CONTRACT` сохраняется.
 
 ## Task intake
@@ -69,6 +70,12 @@
    зафиксировать точные версии и окно UTC.
 4. Повторить project-local checks для финальной ревизии, выпустить новый отчёт
    и `DETACHED_V1` candidate; принятие handoff остаётся у контроллера.
+
+Новый [отчёт](../../../MenuBuilder/docs/l4desk/handoffs/L4D-17E-MB-acceptance-2026-09-27.md)
+и [candidate](../../../MenuBuilder/docs/l4desk/handoffs/L4D-17E-MB-candidate.md)
+подготовлены. Project-local и адресный consumer-contract smoke завершены;
+ограничения локальных и runtime проверок сохранены в таблице. Независимый
+verdict контроллера ещё не получен.
 
 ## Проверено в текущей итерации
 

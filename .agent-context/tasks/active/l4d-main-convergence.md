@@ -553,5 +553,7 @@ test tenant 3/1000 без изменений. Предыдущий image сох�
 Пользовательский start/move/stop видео 1000005 на этом image прошёл без
 задержки и 500; новая session 483 закрыта, usage вырос на 130 с,
 ledger и balance не изменились при выключенном billing. 17E handoff пока
-не выпущен: остаются адресные проверки manual/storno, Hub/archive и
-независимый contract verdict.
+не принят: новый report и `DETACHED_V1` candidate подготовлены для
+независимого contract verdict. Manual/storno, Hub/archive и active-stream
+graceful block подтверждены локальным suite, но не отдельным runtime E2E;
+этот предел прямо указан в candidate.
