@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models_l4desk import FinManualPayment
 from app.services.financial_core.accounts import FinAccountService
 from app.services.financial_core.cycles import FinBillingCycleService
+from app.services.financial_core.entitlement import FinEntitlementService
 from app.services.financial_core.exceptions import (
     FinReversalError,
     FinValidationError,
@@ -133,6 +134,7 @@ class FinManualPaymentService:
             payment_tx_id=tx.id,
             paid_at=anchor_dt,
         )
+        await FinEntitlementService.get_tenant_entitlement_status(db, tenant_id)
 
         logger.info(
             "Registered manual payment id=%s (doc=%s, amount=%s RUB, tx=%s)",

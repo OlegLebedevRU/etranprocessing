@@ -12,6 +12,7 @@ from app.config import settings
 from app.models_l4desk import FinPayment
 from app.services.financial_core.accounts import FinAccountService
 from app.services.financial_core.cycles import FinBillingCycleService
+from app.services.financial_core.entitlement import FinEntitlementService
 from app.services.financial_core.exceptions import (
     FinConcurrencyError,
     FinTenantIsolationError,
@@ -191,6 +192,11 @@ class FinPaymentService:
                 payment.id,
                 payment.ledger_transaction_id,
             )
+            # Repair a stale cached entitlement in the caller's transaction,
+            # including payments posted before entitlement refresh was introduced.
+            await FinEntitlementService.get_tenant_entitlement_status(
+                db, payment.tenant_id
+            )
             return payment
 
         target_provider_id = payment.provider_payment_id or provider_payment_id
@@ -324,6 +330,9 @@ class FinPaymentService:
                 tenant_id=payment.tenant_id,
                 payment_tx_id=tx.id,
                 paid_at=now_dt,
+            )
+            await FinEntitlementService.get_tenant_entitlement_status(
+                db, payment.tenant_id
             )
 
             await db.flush()

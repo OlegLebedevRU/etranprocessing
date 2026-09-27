@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import contextlib
 from collections.abc import Generator
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, cast
 
 import pytest
@@ -574,12 +574,16 @@ async def test_duplicate_webhook_and_polling_idempotency(
     assert fake_db.projections[tenant_id].balance_kopecks == 20000
 
     tx_count_before = len(fake_db.transactions)
+    original_anchor = fake_db.profiles[tenant_id].anchor_at
+    fake_db.profiles[tenant_id].entitlement = "blocked"
 
     # Second webhook -> idempotent replay, no duplicate posting
     p2 = await FinPaymentService.process_webhook(session, webhook_payload)
     assert p2.ledger_transaction_id == tx_id
     assert len(fake_db.transactions) == tx_count_before
     assert fake_db.projections[tenant_id].balance_kopecks == 20000
+    assert fake_db.profiles[tenant_id].entitlement == "active"
+    assert fake_db.profiles[tenant_id].anchor_at == original_anchor
 
     # Fallback polling -> same idempotency check
     p3 = await FinPaymentService.sync_payment_status(
@@ -588,6 +592,73 @@ async def test_duplicate_webhook_and_polling_idempotency(
     assert p3.ledger_transaction_id == tx_id
     assert len(fake_db.transactions) == tx_count_before
     assert fake_db.projections[tenant_id].balance_kopecks == 20000
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "amount_rubles,expected_state", [(50, "blocked"), (100, "active")]
+)
+@pytest.mark.parametrize("provider", ["yookassa", "manual"])
+async def test_recovery_payment_updates_cached_entitlement_without_moving_anchor(
+    fake_db: FakePaymentsDb,
+    mock_yookassa: MockYooKassaClient,
+    amount_rubles: int,
+    expected_state: str,
+    provider: str,
+):
+    session = cast(Any, fake_db)
+    tenant_id = 56
+    initial = await FinPaymentService.create_payment(
+        session,
+        tenant_id=tenant_id,
+        user_id=1,
+        amount_rubles=10,
+        idempotence_key="recovery-initial",
+    )
+    assert initial.provider_payment_id is not None
+    mock_yookassa.set_payment_status(initial.provider_payment_id, "succeeded")
+    await FinPaymentService.sync_payment_status(session, payment_id=initial.id)
+
+    now = datetime.now(UTC)
+    original_anchor = now - timedelta(days=4)
+    profile = fake_db.profiles[tenant_id]
+    profile.anchor_at = original_anchor
+    profile.anchor_day = original_anchor.day
+    profile.entitlement = "blocked"
+    cycle = next(iter(fake_db.cycles.values()))
+    cycle.starts_at = original_anchor
+    cycle.ends_at = now + timedelta(days=20)
+    cycle.grace_deadline = now - timedelta(days=1)
+    fake_db.projections[tenant_id].balance_kopecks = -9000
+
+    if provider == "yookassa":
+        payment = await FinPaymentService.create_payment(
+            session,
+            tenant_id=tenant_id,
+            user_id=1,
+            amount_rubles=amount_rubles,
+            idempotence_key="recovery-second",
+        )
+        assert payment.provider_payment_id is not None
+        mock_yookassa.set_payment_status(payment.provider_payment_id, "succeeded")
+        await FinPaymentService.sync_payment_status(session, payment_id=payment.id)
+    else:
+        await FinManualPaymentService.create_manual_payment(
+            session,
+            tenant_id=tenant_id,
+            creator_user_id=1,
+            amount_rubles=amount_rubles,
+            received_on=now.date(),
+            document_number="recovery-second",
+            payer="Test payer",
+            purpose="Recovery",
+        )
+
+    assert profile.entitlement == expected_state
+    assert profile.anchor_at == original_anchor
+    assert profile.first_payment_transaction_id == initial.ledger_transaction_id
+    assert len(fake_db.transactions) == 2
+    assert fake_db.projections[tenant_id].balance_kopecks == -9000 + amount_rubles * 100
 
 
 # =============================================================================
