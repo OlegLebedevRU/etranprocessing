@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -23,6 +24,12 @@ from app.services.iot_event_feed_client import (
 )
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "iot_event_feed_examples_v1.json"
+PROVIDER_V1_1_FIXTURE_PATH = (
+    Path(__file__).parent / "fixtures" / "iot_event_feed_examples_v1_1.json"
+)
+PROVIDER_V1_1_FIXTURE_SHA256 = (
+    "771856c6cfed996aa8a9a99c122a73096afee123a089895f0089c17eb6bac1fe"
+)
 
 
 @pytest.fixture
@@ -43,6 +50,35 @@ def fixture_events(raw_fixture: dict[str, Any]) -> list[RemoteSessionEventItem]:
     items = [RemoteSessionEventItem.model_validate(val) for val in events_map.values()]
     items.sort(key=lambda x: x.cursor)
     return items
+
+
+def test_accepted_provider_v1_1_fixture_is_compatible(
+    raw_fixture: dict[str, Any],
+) -> None:
+    """Keep the accepted provider fixture intact and parse both contract revisions."""
+    provider_bytes = PROVIDER_V1_1_FIXTURE_PATH.read_bytes()
+    assert hashlib.sha256(provider_bytes).hexdigest() == PROVIDER_V1_1_FIXTURE_SHA256
+    provider = json.loads(provider_bytes)
+
+    assert (raw_fixture["contract_version"], raw_fixture["schema_revision"]) == (
+        "1.0.0",
+        "2026-09-17-v1",
+    )
+    assert (provider["contract_version"], provider["schema_revision"]) == (
+        "1.1.0",
+        "2026-09-25-v2",
+    )
+    assert provider["events"] == raw_fixture["events"]
+    assert provider["feed_page_example"] == raw_fixture["feed_page_example"]
+    assert provider["reconciliation_example"] == raw_fixture["reconciliation_example"]
+    for event in provider["events"].values():
+        assert RemoteSessionEventItem.model_validate(event).event_id
+    assert (
+        ReconciliationResponse.model_validate(
+            provider["reconciliation_example"]
+        ).total_events
+        == 9
+    )
 
 
 # --- 1. Client Unit & Error Mapping Tests ---

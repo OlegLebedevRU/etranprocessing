@@ -57,6 +57,12 @@ tenant из `IOT_CONSUMER_FINANCE_TENANT_IDS` при выключенном shad
 изолированного E2E доступен адресный override 600 секунд, выключенный по
 умолчанию; production admission остаётся permissive до отдельного rollout.
 
+17E consumer-contract audit (2026-09-27): принятый IoT fixture stop/feed
+`1.1.0 / 2026-09-25-v2` сохранён отдельной неизменяемой копией в backend
+tests; старый `1.0.0 / 2026-09-17-v1` оставлен. Payload всех девяти событий
+и примеров feed/reconciliation совпадает; локальный consumer валидирует обе
+версии. Это локальная совместимость fixture, не новый runtime feed E2E.
+
 17E runtime correction (2026-09-27): регистрация выделила `org_id=4`,
 проверив свободный ID только в MenuBuilder; в IoT этот ID уже существовал.
 Для теста владелец перенесён в свободный в обоих контурах tenant 1000.

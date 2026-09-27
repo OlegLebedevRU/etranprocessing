@@ -530,6 +530,17 @@ Read-only сверка сервера показала: изолированны
 не соответствует Git `224daaf` по `config.py`, `main.py`, `entitlement.py`;
 в image нет `metering_close_worker.py` и есть лишние старые файлы.
 Адресное поле лимита 600 секунд отсутствует в active `Settings` этого image.
-Нужна чистая воспроизводимая сборка из зафиксированного Git archive и
-повтор 17E checks на новом image. Production MenuBuilder не менялся;
+После отдельного согласия собран чистый image из Git archive `df7598c`:
+92/92 active Python-файла совпали с архивом, `/docs`=200. Test-backend
+пересоздан только с tenant-scoped policy `[1000]`/600 с; HTTP-повтор
+`403/free_quota_exceeded` ожидает пользователя. Production MenuBuilder не менялся;
 его registration, billing, policy и entitlement worker выключены.
+Его image отдельно расходится с Git candidate по шести исходникам, одному
+отсутствующему файлу и двум старым файлам; после нормализации CRLF
+содержательные отличия в трёх исходниках (`config.py`, `main.py`,
+`entitlement.py`). Production rollout остаётся gate. На чистом test image
+tenant 1000 вновь получил `403/free_quota_exceeded`; mock payment 10 руб.
+создал единственную проводку 1000/1000 коп. и баланс +1000 коп. Два webhook
+и последующий poll не дублировали её; paid lease вернул 201, release 204.
+Read-only reconciler на 20-минутном окне дал matched и нулевую разницу.
+Frontend suite: 58 passed; build exit 0. Подробности в матрице.
