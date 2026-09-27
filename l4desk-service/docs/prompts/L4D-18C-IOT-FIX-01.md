@@ -108,8 +108,11 @@ Carry out the original 18C production objective only in `iot-rpc-rest-app`:
 provider compatibility for current/old supported Agents, provisioning,
 durable event feed/resume, single session lock, graceful console response,
 video stop, archive dry-run/cursor guard and rollback. Run the full IoT local
-suite, Ruff check/format, Pyright where configured, provider fixtures and
-immutable image build. Verify schema/migration compatibility, image source,
+suite, `uv run ruff check .` and `uv run black --check .` per the IoT
+`AGENTS.md` and `CONTRIBUTING.md`, Pyright only where configured, provider
+fixtures and immutable image build. Black is the required IoT formatter;
+Ruff format is not an acceptance gate. Verify schema/migration compatibility,
+image source,
 secrets exclusion, effective flags and exact rollback image before deploy.
 No MQTT topic/method/payload change and no destructive cleanup/archive purge.
 
