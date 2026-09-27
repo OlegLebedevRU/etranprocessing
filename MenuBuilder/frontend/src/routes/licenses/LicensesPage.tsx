@@ -400,7 +400,7 @@ export default function LicensesPage() {
           </Text>
         </div>
 
-        <Space>
+        <Space wrap>
           <Button icon={<ReloadOutlined spin={loading} />} onClick={fetchOverview}>
             Обновить
           </Button>
@@ -614,6 +614,7 @@ export default function LicensesPage() {
               children: (
                 <Table
                   dataSource={dailyUsage}
+                  scroll={{ x: 900 }}
                   columns={usageColumns}
                   rowKey="id"
                   loading={tablesLoading}
@@ -632,6 +633,7 @@ export default function LicensesPage() {
               children: (
                 <Table
                   dataSource={monthlyCharges}
+                  scroll={{ x: 850 }}
                   columns={monthlyColumns}
                   rowKey="id"
                   loading={tablesLoading}
@@ -650,6 +652,7 @@ export default function LicensesPage() {
               children: (
                 <Table
                   dataSource={transactions}
+                  scroll={{ x: 1050 }}
                   columns={transactionColumns}
                   rowKey="id"
                   loading={tablesLoading}

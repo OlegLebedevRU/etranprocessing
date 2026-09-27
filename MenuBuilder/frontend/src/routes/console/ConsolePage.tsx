@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Card,
   Select,
@@ -21,10 +21,16 @@ import { useNavigate, useSearchParams } from "react-router";
 import { getDevices, type DeviceListItem } from "../../api/devices";
 import { useSession } from "../../session/SessionContext";
 import DeviceConsoleTab from "../devices/DeviceConsoleTab";
+import { linkedDevice } from "../../utils/deviceSelection";
 
 const { Text, Title, Paragraph } = Typography;
 
 export default function ConsolePage() {
+  const { user } = useSession();
+  return <TenantConsolePage key={user?.org_id ?? "none"} />;
+}
+
+function TenantConsolePage() {
   const { user } = useSession();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -33,22 +39,24 @@ export default function ConsolePage() {
   const [loading, setLoading] = useState(true);
   const [devices, setDevices] = useState<DeviceListItem[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<DeviceListItem | null>(null);
+  const generation = useRef(0);
 
   const fetchDevices = useCallback(async () => {
+    const currentGeneration = ++generation.current;
     setLoading(true);
     try {
       const res = await getDevices(orgId, { page: 1, size: 100 });
-      const items = res.items || [];
+      const items = [...(res.items || [])];
+      for (let page = 2; page <= res.pages; page++) {
+        items.push(...(await getDevices(orgId, { page, size: 100 })).items);
+      }
+      if (currentGeneration !== generation.current) return;
       setDevices(items);
 
-      // Check query param ?sn=...
-      const snParam = searchParams.get("sn");
-      if (snParam) {
-        const found = items.find((d) => d.sn === snParam);
-        if (found) {
-          setSelectedDevice(found);
-          return;
-        }
+      const target = linkedDevice(items, searchParams);
+      if (target !== undefined) {
+        setSelectedDevice(target);
+        return;
       }
 
       setSelectedDevice((prev) => {
@@ -60,19 +68,20 @@ export default function ConsolePage() {
     } catch {
       // ignore
     } finally {
-      setLoading(false);
+      if (currentGeneration === generation.current) setLoading(false);
     }
   }, [orgId, searchParams]);
 
   useEffect(() => {
     void fetchDevices();
+    return () => { generation.current += 1; };
   }, [fetchDevices]);
 
   const handleDeviceChange = (deviceId: number) => {
     const found = devices.find((d) => d.device_id === deviceId);
     if (found) {
       setSelectedDevice(found);
-      setSearchParams({ sn: found.sn });
+      setSearchParams({ device_id: String(found.device_id) });
     }
   };
 
@@ -113,7 +122,7 @@ export default function ConsolePage() {
                   value: d.device_id,
                   label: (
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <span style={{ fontWeight: 500 }}>{d.sn}</span>
+                      <span style={{ fontWeight: 500, whiteSpace: "nowrap" }}>{d.device_id}</span>
                       <Tag
                         color={d.status === "online" ? "success" : "default"}
                         style={{ fontSize: 11, marginLeft: 8 }}

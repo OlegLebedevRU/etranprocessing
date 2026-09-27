@@ -111,6 +111,7 @@ export default function OnboardingWizardModal({
     try {
       const resp = await onboardTerminal(
         {
+          sys: values.sys || "windows",
           name: values.name?.trim() || null,
           address: values.address?.trim() || null,
           note: values.note?.trim() || null,
@@ -121,7 +122,7 @@ export default function OnboardingWizardModal({
       setCreatedTerminal(resp);
       setReadiness(resp.readiness);
       onTerminalCreated?.(resp);
-      message.success(`Терминал ${resp.sn} успешно зарегистрирован! Получен одноразовый PIN-код.`);
+      message.success(`Терминал ${resp.device_id} успешно зарегистрирован! Получен одноразовый PIN-код.`);
       setCurrentStep(1);
     } catch (err: any) {
       message.error(err.response?.data?.detail || "Ошибка при создании терминала");
@@ -182,9 +183,9 @@ export default function OnboardingWizardModal({
 
     onClose();
     if (sessionType === "video") {
-      navigate(`/video?sn=${createdTerminal.sn}`);
+      navigate(`/video?device_id=${createdTerminal.device_id}`);
     } else {
-      navigate(`/console?sn=${createdTerminal.sn}`);
+      navigate(`/console?device_id=${createdTerminal.device_id}`);
     }
   };
 
@@ -226,6 +227,9 @@ export default function OnboardingWizardModal({
           </Paragraph>
 
           <Form form={form} layout="vertical" onFinish={handleCreateTerminal}>
+            <Form.Item name="sys" label="Тип терминала" initialValue="windows" rules={[{ required: true, message: "Выберите тип терминала" }]}>
+              <Select options={[{ value: "windows", label: "Windows" }, { value: "linux", label: "Linux" }, { value: "esp32", label: "ESP32" }]} />
+            </Form.Item>
             <Form.Item
               name="name"
               label="Название терминала"
@@ -276,12 +280,12 @@ export default function OnboardingWizardModal({
             }}
           >
             <Text type="secondary" style={{ fontSize: 13 }}>
-              Одноразовый PIN-код активации для {createdTerminal.sn}
+              Одноразовый PIN-код для терминала {createdTerminal.device_id}
             </Text>
             <div style={{ marginTop: 8, fontSize: 12, color: "#8c8c8c" }}>
               <div>
                 SN:{" "}
-                <Text copyable={{ text: createdTerminal.sn }} style={{ fontFamily: "monospace" }}>
+                <Text copyable={{ text: createdTerminal.sn }} ellipsis={{tooltip: createdTerminal.sn}} style={{ fontFamily: "monospace", width: 220, whiteSpace: "nowrap" }}>
                   {createdTerminal.sn}
                 </Text>
               </div>
@@ -323,7 +327,10 @@ export default function OnboardingWizardModal({
             </div>
           </Card>
 
-          <Card
+          {createdTerminal.sys && createdTerminal.sys !== "windows" ? (
+            <Paragraph>Выбрана платформа {createdTerminal.sys}. Используйте PIN в клиенте для этой платформы. Установщик Windows для неё не подходит.</Paragraph>
+          ) : (
+            <Card
             size="small"
             style={{ background: "#f0f5ff", borderColor: "#adc6ff", marginBottom: 20 }}
           >
@@ -332,7 +339,7 @@ export default function OnboardingWizardModal({
                 Инструкция по установке Агента на компьютер:
               </Text>
               <Paragraph style={{ margin: 0, fontSize: 13, lineHeight: 1.6 }}>
-                1. Скачайте установочный пакет Агента по кнопке ниже на целевой компьютер.
+                1. Используйте утверждённый установочный пакет Агента для Windows.
                 <br />
                 2. Запустите инсталлятор и введите указанный выше <strong>PIN-код</strong>.
                 <br />
@@ -340,7 +347,8 @@ export default function OnboardingWizardModal({
                 перейдёт в режим готовности.
               </Paragraph>
               <div style={{ marginTop: 10 }}>
-                <Button
+                {createdTerminal.agent_release_url ? (
+<Button
                   type="primary"
                   icon={<DownloadOutlined />}
                   href={createdTerminal.agent_release_url}
@@ -349,9 +357,13 @@ export default function OnboardingWizardModal({
                 >
                   Скачать Агент L4Desk (v{createdTerminal.agent_version})
                 </Button>
+                ) : (
+                  <Text type="secondary">Агент v{createdTerminal.agent_version}: ссылка на загрузку пока не опубликована.</Text>
+                )}
               </div>
             </Space>
           </Card>
+          )}
 
           <div style={{ textAlign: "right" }}>
             <Button type="primary" onClick={handleProceedToReadiness} icon={<ArrowRightOutlined />}>

@@ -1,5 +1,5 @@
 import React from "react";
-import { Button, Space, Tag, theme, Tooltip } from "antd";
+import { Button, Space, Typography, theme, Tooltip } from "antd";
 import {
   EnvironmentOutlined,
   ReloadOutlined,
@@ -57,10 +57,14 @@ export const TerminalHeader: React.FC<TerminalHeaderProps> = ({
             size="large"
           />
 
-          <Tag
-            color="default"
+          <Typography.Text
+            copyable={{ text: selectedDevice.sn }}
+            ellipsis={{ tooltip: selectedDevice.sn }}
             style={{
               margin: 0,
+              width: 190,
+              maxWidth: "100%",
+              whiteSpace: "nowrap",
               fontSize: 12,
               fontFamily: "monospace",
               color: token.colorTextSecondary,
@@ -68,7 +72,7 @@ export const TerminalHeader: React.FC<TerminalHeaderProps> = ({
             }}
           >
             SN: {selectedDevice.sn}
-          </Tag>
+          </Typography.Text>
         </div>
 
         {/* Адрес терминала */}

@@ -8,12 +8,13 @@ from typing import Any, Literal
 
 import httpx
 from fastapi import HTTPException, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models import Terminal
-from app.models_l4desk import L4DeskTerminal
+from app.models_l4desk import L4DeskAuditEvent, L4DeskTerminal
 from app.repositories.l4desk_repository import L4DeskRepository
 from app.services.terminal_creation_service import create_terminal_business_record
 
@@ -42,14 +43,16 @@ class TerminalReadiness(BaseModel):
         default="pending",
         description="Leo4 IoT platform device provisioning state",
     )
-    online: Literal["online", "offline"] = Field(
-        default="offline",
+    online: Literal["online", "offline", "unknown"] = Field(
+        default="unknown",
         description="Real-time terminal network presence",
     )
 
 
 class TerminalOnboardRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
+
+    sys: Literal["windows", "linux", "esp32"] = "windows"
 
     name: str | None = Field(
         default=None,
@@ -73,6 +76,8 @@ class TerminalOnboardRequest(BaseModel):
 
 class TerminalOnboardResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
+
+    sys: Literal["windows", "linux", "esp32"] | None = None
 
     terminal_id: int
     tenant_id: int
@@ -163,11 +168,11 @@ class IssueCertificatePinResponse(BaseModel):
     tenant_id: int
     terminal_id: int
     sn: str
-    pin: str | None = None
+    pin: str | None = Field(default=None, pattern=r"^[0-9]{6}$")
     pin_masked: str
     status: Literal["issued", "consumed", "expired"]
-    expires_at: datetime
-    created_at: datetime
+    expires_at: AwareDatetime
+    created_at: AwareDatetime
     replayed: bool = False
 
 
@@ -205,6 +210,29 @@ class IotProvisioningClient:
             headers["X-Org-Id"] = str(tenant_id)
         return headers
 
+    async def get_device_online(
+        self, *, device_id: int, sn: str, tenant_id: int
+    ) -> bool | None:
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.get(
+                    f"{self.base_url}/api/internal/v1/devices/",
+                    params={"device_id": device_id, "page": 1, "size": 1},
+                    headers=self._headers(tenant_id),
+                )
+                response.raise_for_status()
+                items = response.json().get("items", [])
+            for item in items:
+                if item.get("device_id") == device_id and item.get("sn") == sn:
+                    connection = item.get("connection")
+                    if isinstance(connection, dict):
+                        return bool(connection.get("last_checked_result")) and not bool(
+                            connection.get("is_blocked")
+                        )
+        except (httpx.HTTPError, ValueError, TypeError, AttributeError) as exc:
+            logger.warning("IoT presence unavailable: %s", type(exc).__name__)
+        return None
+
     async def provision_device(
         self, req: DeviceProvisionRequest
     ) -> DeviceProvisionResponse:
@@ -238,7 +266,7 @@ class IotProvisioningClient:
             )
 
     async def provision_mqtt_access(
-        self, *, device_id: int, sn: str, tenant_id: int
+        self, *, device_id: int, sn: str, tenant_id: int, platform: str | None = None
     ) -> None:
         """Reconcile the device's RabbitMQ account and topic ACL through IoT."""
         url = f"{self.base_url}/api/internal/v1/provisioning/terminals"
@@ -248,6 +276,8 @@ class IotProvisioningClient:
             "org_id": tenant_id,
             "tags": {"source": "etranprocessing"},
         }
+        if platform is not None:
+            payload["tags"]["sys"] = platform
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             resp = await client.post(
                 url, json=payload, headers=self._headers(tenant_id)
@@ -484,6 +514,7 @@ class TerminalOnboardingService:
                 "ordinal": next_ordinal,
                 "sn": sn,
                 "device_id": next_device_id,
+                "sys": req.sys,
             },
         )
 
@@ -653,6 +684,32 @@ class TerminalOnboardingService:
     # Internal Saga Orchestration & Response Construction
     # -------------------------------------------------------------------------
 
+    async def _get_requested_platform(
+        self, terminal: L4DeskTerminal
+    ) -> Literal["windows", "linux", "esp32"] | None:
+        """Recover the immutable onboarding choice after a process/network failure."""
+        result = await self.db.execute(
+            select(L4DeskAuditEvent.details)
+            .where(
+                L4DeskAuditEvent.tenant_id == terminal.tenant_id,
+                L4DeskAuditEvent.subject_id == str(terminal.terminal_id),
+                L4DeskAuditEvent.operation_id == terminal.operation_id,
+                L4DeskAuditEvent.event_type == "terminal.created",
+            )
+            .order_by(L4DeskAuditEvent.id.asc())
+            .limit(1)
+        )
+        details = result.scalar_one_or_none()
+        platform = details.get("sys") if isinstance(details, dict) else None
+        # Historical requests did not select a platform: do not overwrite IoT tags.
+        if platform == "windows":
+            return "windows"
+        if platform == "linux":
+            return "linux"
+        if platform == "esp32":
+            return "esp32"
+        return None
+
     async def _run_saga_steps(
         self,
         *,
@@ -700,6 +757,7 @@ class TerminalOnboardingService:
                     device_id=prov_res.device_id,
                     sn=l4_terminal.sn,
                     tenant_id=l4_terminal.tenant_id,
+                    platform=await self._get_requested_platform(l4_terminal),
                 )
 
                 l4_terminal.provisioning_state = "ready"
@@ -836,15 +894,15 @@ class TerminalOnboardingService:
             else False
         )
 
-        # Check online presence
-        is_online = bool(
-            l4_terminal.last_online_at is not None
-            and (datetime.now(UTC) - l4_terminal.last_online_at).total_seconds() < 300
+        is_online = (
+            await self.iot_client.get_device_online(
+                device_id=l4_terminal.device_id,
+                sn=l4_terminal.sn,
+                tenant_id=l4_terminal.tenant_id,
+            )
+            if l4_terminal.device_id is not None
+            else None
         )
-        if not is_online and l4_terminal.runtime_terminal_id:
-            rt = await self.db.get(Terminal, l4_terminal.runtime_terminal_id)
-            if rt and rt.iot_is_online:
-                is_online = True
 
         # Build readiness model
         rec_state: Literal["ready", "pending", "failed"] = (
@@ -861,8 +919,8 @@ class TerminalOnboardingService:
             if l4_terminal.provisioning_state in ("pending", "ready", "failed")
             else "pending"
         )
-        online_state: Literal["online", "offline"] = (
-            "online" if is_online else "offline"
+        online_state: Literal["online", "offline", "unknown"] = (
+            "unknown" if is_online is None else "online" if is_online else "offline"
         )
 
         readiness = TerminalReadiness(
@@ -876,6 +934,7 @@ class TerminalOnboardingService:
         effective_pin = plain_pin if cert_state == "issued" else None
 
         return TerminalOnboardResponse(
+            sys=await self._get_requested_platform(l4_terminal),
             terminal_id=l4_terminal.terminal_id,
             tenant_id=l4_terminal.tenant_id,
             ordinal=l4_terminal.ordinal,

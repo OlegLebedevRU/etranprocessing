@@ -5,6 +5,7 @@ import re
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
@@ -25,11 +26,13 @@ from app.security.permissions import (
 from app.services.cert_billing import mask_pin
 from app.services.email_service import send_email_with_logging
 from app.services.terminal_onboarding_service import (
+    IssueCertificatePinResponse,
     TerminalOnboardingService,
     TerminalOnboardRequest,
     TerminalOnboardResponse,
     TerminalReadiness,
 )
+from app.services.terminal_pin_service import TerminalPinService
 from app.user_store import verify_password
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -142,6 +145,10 @@ class TerminalSettingsListResponse(BaseModel):
     total_count: int
     page: int
     page_size: int
+
+
+class RenewTerminalPinRequest(BaseModel):
+    operation_id: UUID
 
 
 class UpdateTerminalSettingsRequest(BaseModel):
@@ -835,6 +842,35 @@ async def update_terminal_settings(
 
 
 # --- Endpoints: L4Desk Terminal Onboarding (L4D-06C-MB) ---
+
+
+@router.get(
+    "/terminals/{terminal_id}/pin", response_model=IssueCertificatePinResponse | None
+)
+async def get_terminal_pin(
+    terminal_id: int,
+    response: Response,
+    user: dict[str, Any] = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> IssueCertificatePinResponse | None:
+    _check_settings_access(user)
+    _ensure_not_superuser(user)
+    response.headers["Cache-Control"] = "no-store"
+    return await TerminalPinService(db).current(terminal_id, user)
+
+
+@router.post("/terminals/{terminal_id}/pin", response_model=IssueCertificatePinResponse)
+async def renew_terminal_pin(
+    terminal_id: int,
+    req: RenewTerminalPinRequest,
+    response: Response,
+    user: dict[str, Any] = Depends(require_readonly_guard),
+    db: AsyncSession = Depends(get_db),
+) -> IssueCertificatePinResponse:
+    _check_settings_access(user)
+    _ensure_not_superuser(user)
+    response.headers["Cache-Control"] = "no-store"
+    return await TerminalPinService(db).issue(terminal_id, user, req.operation_id)
 
 
 @router.get("/terminals/onboard/status")

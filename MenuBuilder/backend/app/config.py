@@ -212,10 +212,8 @@ class Settings(BaseSettings):
     l4desk_terminal_onboarding_enabled: bool = False
     processing_backend_url: str = ""
     processing_backend_service_token: str = ""
-    agent_release_url: str = (
-        "https://l4tools-generic.ar.cloud.ru/l4tools/1.7.7/l4setup.exe"
-    )
-    agent_release_version: str = "1.7.7"
+    agent_release_url: str = ""
+    agent_release_version: str = "1.8.2-beta-1"
 
     # L4Desk Financial Core Double-Entry Subledger (L4D-09-MB)
     l4desk_financial_core_enabled: bool = True

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
+import { linkedDevice } from "../utils/deviceSelection";
 import {
   Alert,
   Card,
@@ -132,7 +133,13 @@ function formatVideoError(err: any): { title: string; message: string; code: str
 }
 
 export default function VideoSurveillancePage() {
+  const { user } = useSession();
+  return <TenantVideoSurveillancePage key={user?.org_id ?? "none"} />;
+}
+
+function TenantVideoSurveillancePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, loading: userLoading } = useSession();
   const { token } = theme.useToken();
   const screens = Grid.useBreakpoint();
@@ -193,7 +200,9 @@ export default function VideoSurveillancePage() {
   const prevFramesRef = useRef<{ frames: number; time: number } | null>(null);
 
   // Загрузка терминалов и их адресов
+  const deviceGeneration = useRef(0);
   const loadDevices = useCallback(async () => {
+    const currentGeneration = ++deviceGeneration.current;
     setLoadingDevices(true);
     try {
       const [res, settingsData] = await Promise.all([
@@ -226,26 +235,31 @@ export default function VideoSurveillancePage() {
         }
       }
 
+      if (currentGeneration !== deviceGeneration.current) return;
       setTerminalAddresses(addrMap);
       setDevices(allItems);
 
       setSelectedDevice((prev) => {
+        const target = linkedDevice(allItems, searchParams);
+        if (target !== undefined) return target;
         if (prev && allItems.some((d) => d.device_id === prev.device_id)) {
           return prev;
         }
         return allItems.length > 0 ? allItems[0] : null;
       });
     } catch (err: any) {
+      if (currentGeneration !== deviceGeneration.current) return;
       message.error(err?.message || "Ошибка загрузки списка терминалов");
     } finally {
-      setLoadingDevices(false);
+      if (currentGeneration === deviceGeneration.current) setLoadingDevices(false);
     }
-  }, [orgId]);
+  }, [orgId, searchParams]);
 
   useEffect(() => {
     if (!userLoading) {
       loadDevices();
     }
+    return () => { deviceGeneration.current += 1; };
   }, [loadDevices, userLoading]);
 
   // Обработчики кликов удалённого управления

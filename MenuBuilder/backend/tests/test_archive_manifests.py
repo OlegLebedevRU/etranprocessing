@@ -642,13 +642,7 @@ class TestImportManifestService:
     async def test_import_media_archive_output_and_show_in_hub(self):
         """Consume the actual synthetic l4media output through the MenuBuilder contract."""
         manifest_path = (
-            Path(__file__).resolve().parents[3]
-            / "l4desk-service"
-            / "docs"
-            / "handoffs"
-            / "evidence"
-            / "17f-archive-20260927"
-            / "manifest.json"
+            Path(__file__).parent / "fixtures" / "accepted-17f-archive-manifest.json"
         )
         manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
         db = _FakeArchiveDb()

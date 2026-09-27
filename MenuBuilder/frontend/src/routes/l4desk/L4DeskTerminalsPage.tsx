@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   Button,
@@ -15,10 +15,10 @@ import {
   CheckCircleOutlined,
   ClockCircleOutlined,
   CodeOutlined,
-  CopyOutlined,
   DesktopOutlined,
   DisconnectOutlined,
   PlusOutlined,
+  KeyOutlined,
   ReloadOutlined,
   SafetyCertificateOutlined,
   SyncOutlined,
@@ -28,19 +28,23 @@ import { useNavigate } from "react-router";
 import {
   listTerminalsSettings,
   retryTerminalOnboarding,
+  getTerminalPin,
+  renewTerminalPin,
+  type TerminalPin,
   type TerminalSettingsItem,
 } from "../../api/settings";
 import { useSession } from "../../session/SessionContext";
 import OnboardingWizardModal from "../../components/OnboardingWizardModal";
+import { getDevices, type DeviceListItem } from "../../api/devices";
 
 const { Text, Title, Paragraph } = Typography;
 
-function readinessTag(item: TerminalSettingsItem) {
-  const r = item.readiness;
-  if (!r) {
-    return <Tag>{item.is_active ? "Активен" : "Неактивен"}</Tag>;
+function readinessTag(device?: DeviceListItem) {
+  if (!device?.connection) {
+    return <Tag>Неизвестен</Tag>;
   }
-  if (r.online === "online") {
+  if (device.status === "blocked") return <Tag color="warning">Заблокирован</Tag>;
+  if (device.status === "online") {
     return (
       <Tag icon={<CheckCircleOutlined />} color="success">
         Online
@@ -81,39 +85,110 @@ export default function L4DeskTerminalsPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [terminals, setTerminals] = useState<TerminalSettingsItem[]>([]);
+  const [listTenant, setListTenant] = useState<number | null | undefined>(user?.org_id);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [retryingId, setRetryingId] = useState<number | null>(null);
+  const [devices, setDevices] = useState<Map<number, DeviceListItem>>(new Map());
+  const fetching = useRef(false);
+  const generation = useRef(0);
+  const [pins, setPins] = useState<Map<number, TerminalPin | null>>(new Map());
+  const [issuingPin, setIssuingPin] = useState<number | null>(null);
+  const pinOperations = useRef(new Map<number, string>());
 
-  const fetchTerminals = useCallback(async () => {
-    setLoading(true);
+  const fetchTerminals = useCallback(async (silent = false) => {
+    if (fetching.current) return;
+    const currentGeneration = generation.current;
+    fetching.current = true;
+    if (!silent) setLoading(true);
     try {
       const data = await listTerminalsSettings({
         org_id: user?.org_id || undefined,
         page: 1,
         page_size: 100,
       });
+      if (currentGeneration !== generation.current) return;
+      setListTenant(user?.org_id);
       setTerminals(data.items || []);
+      const loadPins = (async () => {
+      // Renewal is provider-owned; the onboarding pin_state may still be consumed.
+      const pendingPins = data.items;
+      const nextPins = new Map<number, TerminalPin | null>();
+      // Bound provider concurrency even on a large page.
+      for (let offset = 0; offset < pendingPins.length; offset += 5) {
+        await Promise.all(pendingPins.slice(offset, offset + 5).map(async item => {
+          try { nextPins.set(item.id, await getTerminalPin(item.id)); }
+          catch { nextPins.set(item.id, null); }
+        }));
+      }
+      if (currentGeneration !== generation.current) return;
+      setPins(nextPins);
+      })();
+      // Use the management screen's connection view; database flags are not live presence.
+      try {
+        const current = new Map<number, DeviceListItem>();
+        const missing = new Set(data.items.map(item => item.device_id));
+        let page = 1;
+        while (missing.size) {
+          const result = await getDevices({ orgId: user?.org_id ?? undefined, page, size: 100 });
+          for (const device of result.items) {
+            if (missing.delete(device.device_id)) current.set(device.device_id, device);
+          }
+          if (page >= result.pages || result.items.length === 0) break;
+          page += 1;
+        }
+        if (currentGeneration === generation.current) setDevices(current);
+      } catch {
+        if (currentGeneration === generation.current) setDevices(new Map());
+      }
+      await loadPins;
     } catch {
-      message.error("Не удалось загрузить список терминалов");
+      if (currentGeneration === generation.current) {
+        setTerminals([]);
+        setPins(new Map());
+        setDevices(new Map());
+        message.error("Не удалось загрузить список терминалов");
+      }
     } finally {
-      setLoading(false);
+      if (currentGeneration === generation.current) {
+        setLoading(false);
+        fetching.current = false;
+      }
     }
   }, [user?.org_id]);
 
   useEffect(() => {
+    generation.current += 1;
+    fetching.current = false;
+    setTerminals([]);
+    setPins(new Map());
+    setDevices(new Map());
+    setIssuingPin(null);
+    setRetryingId(null);
+    setWizardOpen(false);
+    pinOperations.current.clear();
     void fetchTerminals();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void fetchTerminals(true);
+    }, 30_000);
+    return () => {
+      generation.current += 1;
+      window.clearInterval(timer);
+    };
   }, [fetchTerminals]);
 
   const handleRetry = async (record: TerminalSettingsItem) => {
+    const currentGeneration = generation.current;
     setRetryingId(record.id);
     try {
       await retryTerminalOnboarding(record.id);
-      message.success(`Повторный provisioning для ${record.sn} запущен`);
+      if (currentGeneration !== generation.current) return;
+      message.success(`Повторное подключение терминала ${record.device_id ?? ""} запущено`);
       void fetchTerminals();
     } catch (err: any) {
+      if (currentGeneration !== generation.current) return;
       message.error(err.response?.data?.detail || "Ошибка повторного provisioning");
     } finally {
-      setRetryingId(null);
+      if (currentGeneration === generation.current) setRetryingId(null);
     }
   };
 
@@ -123,33 +198,69 @@ export default function L4DeskTerminalsPage() {
     item.pin_state === "failed" ||
     item.pin_state === "pending";
 
+  const handleNewPin = async (record: TerminalSettingsItem) => {
+    if (issuingPin !== null) return;
+    const currentGeneration = generation.current;
+    const storageKey = `l4desk-pin-operation:${user?.org_id}:${record.id}`;
+    const operation = pinOperations.current.get(record.id) ?? sessionStorage.getItem(storageKey) ?? crypto.randomUUID();
+    sessionStorage.setItem(storageKey, operation);
+    pinOperations.current.set(record.id, operation);
+    setIssuingPin(record.id);
+    try {
+      const pin = await renewTerminalPin(record.id, operation);
+      sessionStorage.removeItem(storageKey);
+      if (currentGeneration !== generation.current) return;
+      setPins(previous => new Map(previous).set(record.id, pin));
+      setTerminals(previous => previous.map(item => item.id === record.id ? {...item, pin_state: pin.status} : item));
+      pinOperations.current.delete(record.id);
+      message.success("PIN получен");
+    } catch (error: any) {
+      if (currentGeneration !== generation.current) return;
+      if (error.response?.status === 409) {
+        sessionStorage.removeItem(storageKey);
+        pinOperations.current.delete(record.id);
+        message.error("Запрос заменён. Обновите список перед получением нового PIN.");
+        void fetchTerminals(true);
+      } else {
+        message.error("Не удалось получить PIN. Повторите запрос — операция сохранена.");
+      }
+    } finally {
+      if (currentGeneration === generation.current) setIssuingPin(null);
+    }
+  };
+
   const columns: ColumnsType<TerminalSettingsItem> = [
+    {
+      title: "Терминал",
+      dataIndex: "device_id",
+      key: "device_id",
+      width: 135,
+      render: (v: number | null) => (
+        <Text strong copyable={v != null ? { text: String(v) } : false} style={{ whiteSpace: "nowrap" }}>
+          {v ?? "—"}
+        </Text>
+      ),
+    },
     {
       title: "SN",
       dataIndex: "sn",
       key: "sn",
+      width: 170,
       render: (sn: string) => (
-        <Space size={4}>
-          <Text copyable={{ text: sn }} style={{ fontFamily: "monospace", fontSize: 12 }}>
-            {sn}
-          </Text>
-        </Space>
-      ),
-    },
-    {
-      title: "device_id",
-      dataIndex: "device_id",
-      key: "device_id",
-      width: 110,
-      render: (v: number) => (
-        <Text copyable={{ text: String(v) }} style={{ fontFamily: "monospace" }}>
-          {v}
+        <Text
+          type="secondary"
+          copyable={{ text: sn }}
+          ellipsis={{ tooltip: sn }}
+          style={{ display: "block", width: 138, whiteSpace: "nowrap", fontFamily: "monospace", fontSize: 12 }}
+        >
+          {sn}
         </Text>
       ),
     },
     {
       title: "Название / адрес",
       key: "label",
+      width: 220,
       render: (_, r) => (
         <div>
           <div>{r.note || "—"}</div>
@@ -165,10 +276,10 @@ export default function L4DeskTerminalsPage() {
       title: "Статус",
       key: "status",
       width: 120,
-      render: (_, r) => readinessTag(r),
+      render: (_, r) => readinessTag(devices.get(r.device_id)),
     },
     {
-      title: "Provisioning / PIN",
+      title: "Подключение / PIN",
       key: "prov",
       width: 180,
       render: (_, r) => (
@@ -176,7 +287,13 @@ export default function L4DeskTerminalsPage() {
           <Tag color={r.provisioning_state === "ready" ? "success" : "default"}>
             IoT: {r.provisioning_state || "pending"}
           </Tag>
-          {pinTag(r)}
+          {pinTag({...r, pin_state: pins.get(r.id)?.status ?? r.pin_state})}
+          {pins.get(r.id)?.status === "issued" && pins.get(r.id)?.pin && (
+            <Text strong copyable={{text: pins.get(r.id)!.pin!}} style={{whiteSpace: "nowrap", fontFamily: "monospace"}}>
+              {pins.get(r.id)!.pin}
+            </Text>
+          )}
+          {r.pin_state === "issued" && pins.has(r.id) && !pins.get(r.id) && <Text type="secondary">PIN недоступен</Text>}
         </Space>
       ),
     },
@@ -186,17 +303,20 @@ export default function L4DeskTerminalsPage() {
       width: 280,
       render: (_, r) => (
         <Space wrap>
+          <Button size="small" icon={<KeyOutlined />} loading={issuingPin === r.id} disabled={issuingPin !== null && issuingPin !== r.id} onClick={() => void handleNewPin(r)}>
+            Новый PIN
+          </Button>
           <Button
             size="small"
             icon={<CodeOutlined />}
-            onClick={() => navigate(`/console?sn=${encodeURIComponent(r.sn)}`)}
+            onClick={() => navigate(`/console?device_id=${r.device_id}`)}
           >
             Консоль
           </Button>
           <Button
             size="small"
             icon={<VideoCameraOutlined />}
-            onClick={() => navigate(`/video?sn=${encodeURIComponent(r.sn)}`)}
+            onClick={() => navigate(`/video?device_id=${r.device_id}`)}
           >
             Видео
           </Button>
@@ -237,8 +357,8 @@ export default function L4DeskTerminalsPage() {
               Терминалы
             </Title>
           </Space>
-          <Space>
-            <Button icon={<ReloadOutlined spin={loading} />} onClick={fetchTerminals}>
+          <Space wrap>
+            <Button icon={<ReloadOutlined spin={loading} />} onClick={() => void fetchTerminals()}>
               Обновить
             </Button>
             <Button
@@ -256,8 +376,8 @@ export default function L4DeskTerminalsPage() {
         type="info"
         showIcon
         style={{ marginBottom: 16 }}
-        message="Серийный номер и device_id назначаются сервером"
-        description="SN и device_id доступны только для чтения и копирования. Создание и подключение терминала выполняется здесь."
+        message="Подключение терминалов"
+        description="Для поиска и управления используйте номер терминала. Полный SN доступен при наведении и копировании."
       />
 
       {!loading && terminals.length === 0 && (
@@ -289,15 +409,17 @@ export default function L4DeskTerminalsPage() {
           <Table
             rowKey="id"
             columns={columns}
-            dataSource={terminals}
+            dataSource={listTenant === user?.org_id ? terminals : []}
             loading={loading}
             pagination={false}
+            scroll={{ x: 1105 }}
             locale={{ emptyText: "Нет терминалов" }}
           />
         </Card>
       )}
 
       <OnboardingWizardModal
+        key={user?.org_id}
         open={wizardOpen}
         onClose={() => setWizardOpen(false)}
         onTerminalCreated={() => {

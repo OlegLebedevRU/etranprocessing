@@ -63,6 +63,11 @@ const COMMON_TIMEZONES = [
 
 export default function TerminalsSettingsPage() {
   const { user } = useSession();
+  return <TenantTerminalsSettingsPage key={user?.org_id ?? "none"} />;
+}
+
+function TenantTerminalsSettingsPage() {
+  const { user } = useSession();
   const [loading, setLoading] = useState(true);
   const [terminals, setTerminals] = useState<TerminalSettingsItem[]>([]);
   const [editingTerminal, setEditingTerminal] = useState<TerminalSettingsItem | null>(null);
@@ -175,13 +180,14 @@ export default function TerminalsSettingsPage() {
       const res = await onboardTerminal(
         {
           name: values.name?.trim() || undefined,
+          sys: values.sys || "windows",
           address: values.address?.trim() || undefined,
           note: values.note?.trim() || undefined,
           timezone: values.timezone || "Europe/Moscow",
         },
         user?.org_id || undefined
       );
-      message.success(`Терминал ${res.sn} успешно подключен`);
+      message.success(`Терминал ${res.device_id} успешно подключен`);
       setOnboardModalVisible(false);
       onboardForm.resetFields();
       setPinDeliveryData(res);
@@ -199,7 +205,7 @@ export default function TerminalsSettingsPage() {
     setRetryingId(record.id);
     try {
       const res = await retryTerminalOnboarding(record.id);
-      message.success(`Повторный запрос для терминала ${res.sn} выполнен`);
+      message.success(`Повторный запрос для терминала ${res.device_id} выполнен`);
       if (res.pin) {
         setPinDeliveryData(res);
         setPinDeliveryModalVisible(true);
@@ -257,7 +263,7 @@ export default function TerminalsSettingsPage() {
       render: (sn: string) => (
         <Space>
           <DesktopOutlined style={{ color: "#1677ff" }} />
-          <Text copyable>{sn}</Text>
+          <Text copyable={{ text: sn }} ellipsis={{ tooltip: sn }} style={{ width: 132, whiteSpace: "nowrap" }}>{sn}</Text>
         </Space>
       ),
     },
@@ -518,6 +524,7 @@ export default function TerminalsSettingsPage() {
           columns={columns}
           dataSource={terminals}
           rowKey="id"
+          scroll={{ x: 1350 }}
           loading={loading}
           onChange={handleTableChange}
           pagination={false}
@@ -546,7 +553,10 @@ export default function TerminalsSettingsPage() {
           layout="vertical"
           onFinish={handleOnboardSubmit}
         >
-          <Form.Item
+          <Form.Item name="sys" label="Тип терминала" initialValue="windows" rules={[{ required: true, message: "Выберите тип терминала" }]}>
+              <Select options={[{ value: "windows", label: "Windows" }, { value: "linux", label: "Linux" }, { value: "esp32", label: "ESP32" }]} />
+            </Form.Item>
+            <Form.Item
             name="name"
             label="Название терминала"
             tooltip="Серийный номер и device_id назначаются сервером автоматически"
@@ -641,7 +651,7 @@ export default function TerminalsSettingsPage() {
 
             <div style={{ textAlign: "center", margin: "24px 0" }}>
               <Text type="secondary" style={{ display: "block", marginBottom: 8 }}>
-                Терминал: <Text strong>{pinDeliveryData.sn}</Text> (ID: {pinDeliveryData.terminal_id})
+                Терминал: <Text strong>{pinDeliveryData.device_id}</Text>
               </Text>
               {pinDeliveryData.pin ? (
                 <div
@@ -687,6 +697,9 @@ export default function TerminalsSettingsPage() {
               )}
             </div>
 
+            {pinDeliveryData.sys && pinDeliveryData.sys !== "windows" ? (
+            <Paragraph>Выбрана платформа {pinDeliveryData.sys}. Используйте PIN в клиенте для этой платформы. Установщик Windows для неё не подходит.</Paragraph>
+          ) : (
             <Card
               size="small"
               style={{ background: "#f0f5ff", borderColor: "#adc6ff", marginBottom: 16 }}
@@ -694,7 +707,7 @@ export default function TerminalsSettingsPage() {
               <Space direction="vertical" style={{ width: "100%" }}>
                 <Text strong>Установка и активация Агента:</Text>
                 <Paragraph style={{ margin: 0, fontSize: 13 }}>
-                  1. Скачайте установочный пакет Агента по ссылке ниже.
+                  1. Используйте утверждённый установочный пакет Агента для Windows.
                   <br />
                   2. Запустите инсталлятор на целевом компьютере.
                   <br />
@@ -703,7 +716,8 @@ export default function TerminalsSettingsPage() {
                   4. После выпуска сертификата терминал автоматически перейдёт в онлайн.
                 </Paragraph>
                 <div style={{ marginTop: 8 }}>
-                  <Button
+                  {pinDeliveryData.agent_release_url ? (
+<Button
                     type="primary"
                     icon={<DownloadOutlined />}
                     href={pinDeliveryData.agent_release_url}
@@ -712,9 +726,13 @@ export default function TerminalsSettingsPage() {
                   >
                     Скачать Агент L4Desk (v{pinDeliveryData.agent_version})
                   </Button>
+                ) : (
+                  <Text type="secondary">Агент v{pinDeliveryData.agent_version}: ссылка на загрузку пока не опубликована.</Text>
+                )}
                 </div>
               </Space>
             </Card>
+          )}
 
             <div style={{ fontSize: 12, color: "#8c8c8c" }}>
               Тариф: {pinDeliveryData.is_free ? "Льготный (0 ₽/цикл)" : "Стандартный"} | Ordinal: №{pinDeliveryData.ordinal}

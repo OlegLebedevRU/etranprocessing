@@ -25,13 +25,7 @@ from app.schema_compatibility import (
     verify_schema_compatibility,
 )
 
-SCHEMA_JSON_PATH = (
-    Path(__file__).resolve().parents[3]
-    / "shared"
-    / "docs"
-    / "l4desk"
-    / "schema-v1.json"
-)
+SCHEMA_JSON_PATH = Path(__file__).parent / "fixtures" / "accepted-18a-schema.json"
 
 
 @pytest.fixture

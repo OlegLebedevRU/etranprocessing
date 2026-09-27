@@ -34,7 +34,7 @@ export interface TerminalReadiness {
   record: "ready" | "pending" | "failed";
   certificate: "pending" | "issued" | "consumed" | "expired" | "failed";
   iot: "pending" | "ready" | "failed";
-  online: "online" | "offline";
+  online: "online" | "offline" | "unknown";
 }
 
 export interface TerminalSettingsItem {
@@ -61,6 +61,7 @@ export interface TerminalSettingsItem {
 }
 
 export interface OnboardTerminalPayload {
+  sys?: "windows" | "linux" | "esp32";
   name?: string | null;
   address?: string | null;
   note?: string | null;
@@ -70,6 +71,7 @@ export interface OnboardTerminalPayload {
 }
 
 export interface TerminalOnboardResponse {
+  sys?: "windows" | "linux" | "esp32" | null;
   terminal_id: number;
   tenant_id: number;
   ordinal: number;
@@ -228,5 +230,22 @@ export async function deleteTerminal(
   const { data } = await client.delete<{ ok: boolean; message: string; earliest_free_terminal_id?: number | null }>(
     `/settings/terminals/${terminalId}`
   );
+  return data;
+}
+
+export interface TerminalPin {
+  operation_id: string;
+  pin: string | null;
+  status: "issued" | "consumed" | "expired";
+  expires_at: string;
+}
+
+export async function getTerminalPin(terminalId: number): Promise<TerminalPin | null> {
+  const { data } = await client.get<TerminalPin | null>(`/settings/terminals/${terminalId}/pin`);
+  return data;
+}
+
+export async function renewTerminalPin(terminalId: number, operationId: string): Promise<TerminalPin> {
+  const { data } = await client.post<TerminalPin>(`/settings/terminals/${terminalId}/pin`, {operation_id: operationId});
   return data;
 }

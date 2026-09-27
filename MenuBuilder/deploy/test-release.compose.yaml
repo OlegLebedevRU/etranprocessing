@@ -1,0 +1,3 @@
+services:
+  test-backend:
+    image: ${MENUBUILDER_BACKEND_IMAGE:?Set the verified registry image with @sha256 digest}

@@ -1,7 +1,10 @@
+import json
 from pathlib import Path
 
 NGINX_CONFIG = Path(__file__).parents[2] / "nginx.conf"
-PUBLIC_NGINX_CONFIG = Path(__file__).parents[3] / "nginx-configs" / "port_3000.conf"
+PUBLIC_NGINX_CONTRACT = (
+    Path(__file__).parent / "fixtures" / "accepted-public-hub-nginx-contract.json"
+)
 
 
 def _location(config: str, marker: str) -> str:
@@ -37,8 +40,9 @@ def test_public_auth_routes_clear_forwarded_identity_headers():
 
 
 def test_public_hub_routes_reach_menu_builder_with_verified_identity():
-    config = PUBLIC_NGINX_CONFIG.read_text(encoding="utf-8")
-    location = _location(config, "location /api/v1/admin/hub/ {")
+    contract = json.loads(PUBLIC_NGINX_CONTRACT.read_text(encoding="utf-8"))
+    assert contract["location"] == "/api/v1/admin/hub/"
+    location = contract["required_directives"]
 
     assert "auth_jwt_location COOKIE=accessToken;" in location
     assert "proxy_pass $menubuilder_upstream;" in location

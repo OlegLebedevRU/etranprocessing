@@ -154,6 +154,18 @@ class MockInMemoryDb:
     async def execute(self, stmt: Any) -> MockResult:
         sql = str(stmt).lower()
 
+        if "from l4desk_audit_events" in sql:
+            params = stmt.compile().params
+            events = [
+                e
+                for e in self.audit_events
+                if e.tenant_id == params.get("tenant_id_1")
+                and e.subject_id == params.get("subject_id_1")
+                and e.operation_id == params.get("operation_id_1")
+                and e.event_type == params.get("event_type_1")
+            ]
+            return MockResult(one=events[0].details if events else None)
+
         # select terminals.device_id from terminals where device_id in range (peek)
         if "from terminals" in sql and "device_id" in sql and "order by" in sql:
             ids = sorted(t.device_id for t in self.terminals.values())
@@ -315,6 +327,12 @@ class FakeIotClient(IotProvisioningClient):
         self.device_id = device_id
         self.calls: list[DeviceProvisionRequest] = []
         self.mqtt_calls: list[tuple[int, str, int]] = []
+        self.platforms: list[str | None] = []
+
+    async def get_device_online(
+        self, *, device_id: int, sn: str, tenant_id: int
+    ) -> bool | None:
+        return False
 
     async def provision_device(
         self, req: DeviceProvisionRequest
@@ -337,9 +355,10 @@ class FakeIotClient(IotProvisioningClient):
         )
 
     async def provision_mqtt_access(
-        self, *, device_id: int, sn: str, tenant_id: int
+        self, *, device_id: int, sn: str, tenant_id: int, platform: str | None = None
     ) -> None:
         self.mqtt_calls.append((device_id, sn, tenant_id))
+        self.platforms.append(platform)
         if self.mqtt_should_fail:
             raise RuntimeError("RabbitMQ account unavailable")
 
@@ -453,8 +472,8 @@ async def test_terminal_onboarding_success_flow():
             assert data["is_free"] is True
             assert data["pin"] == "123456"
             assert data["pin_masked"] == "***773"
-            assert data["agent_version"] == "1.7.7"
-            assert "l4setup.exe" in data["agent_release_url"]
+            assert data["agent_version"] == "1.8.2-beta-1"
+            assert data["agent_release_url"] == ""
 
             readiness = data["readiness"]
             assert readiness["record"] == "ready"
@@ -782,3 +801,80 @@ async def test_auth_and_role_guards():
             headers=auth_headers(user_id=40, org_id=1, role_id=4),
         )
         assert viewer_resp.status_code == 403
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("platform", ["windows", "linux", "esp32"])
+async def test_platform_survives_failed_provisioning_and_new_service_instance(platform):
+    from app.services.terminal_onboarding_service import TerminalOnboardRequest
+
+    db = MockInMemoryDb()
+    iot = FakeIotClient(should_fail=True)
+    pin = FakePinClient()
+    user = {"org_id": 1000, "role_id": 5, "sub": "owner"}
+    service = TerminalOnboardingService(cast(Any, db), iot_client=iot, pin_client=pin)
+    created = await service.onboard_terminal(
+        user=user, req=TerminalOnboardRequest(sys=platform)
+    )
+    assert created.readiness.iot == "failed"
+    assert created.sys == platform
+    iot.should_fail = False
+    restarted = TerminalOnboardingService(cast(Any, db), iot_client=iot, pin_client=pin)
+    retried = await restarted.retry_terminal_saga(
+        user=user, terminal_id=created.terminal_id
+    )
+    assert retried.readiness.iot == "ready"
+    assert iot.platforms == [platform]
+    assert retried.sys == platform
+    assert len(db.terminals) == 1
+
+
+def test_platform_enum_rejects_unsupported_values():
+    from pydantic import ValidationError
+
+    from app.services.terminal_onboarding_service import TerminalOnboardRequest
+
+    with pytest.raises(ValidationError):
+        TerminalOnboardRequest(sys="android")
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "connection, expected",
+    [
+        ({"last_checked_result": True, "is_blocked": False}, True),
+        ({"last_checked_result": False, "is_blocked": False}, False),
+        ({"last_checked_result": True, "is_blocked": True}, False),
+        (None, None),
+    ],
+)
+async def test_live_presence_uses_management_connection_view(
+    monkeypatch, connection, expected
+):
+    import httpx
+
+    from app.services import terminal_onboarding_service as module
+
+    real_client = httpx.AsyncClient
+
+    def handler(request):
+        assert request.headers["X-Org-Id"] == "1000"
+        assert request.url.params["device_id"] == "1000007"
+        return httpx.Response(
+            200,
+            json={
+                "items": [
+                    {"device_id": 1000007, "sn": "synthetic", "connection": connection}
+                ]
+            },
+        )
+
+    monkeypatch.setattr(
+        module.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_client(transport=httpx.MockTransport(handler)),
+    )
+    actual = await IotProvisioningClient(base_url="http://localhost").get_device_online(
+        device_id=1000007, sn="synthetic", tenant_id=1000
+    )
+    assert actual is expected
