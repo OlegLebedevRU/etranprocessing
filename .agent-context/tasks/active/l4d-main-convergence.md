@@ -578,3 +578,10 @@ test04 получил watch WS 101 и оба status ответа 200; финал
 start/move/stop 1000005 прошёл без задержки и 500. Read-only БД: session
 484 `closed`, active sessions=0, source/free usage 1048→1074 с,
 billable=0, ledger debit=credit=1000 и balance=1000 коп. неизменны.
+
+Перед объединением в `main` обязательный scan tracked files обнаружил
+`ProcessingBackend/keys/ca.key` с PEM private key. В commit `c315e92`
+ключ удалён из текущего Git tree и добавлен в `.gitignore`; локальная копия
+сохранена. Нужно установить, использовалась ли эта CA, при необходимости
+выполнить ротацию и согласованно очистить историческую экспозицию Git.
+Содержимое ключа в отчёты и серверные команды не выводилось.
