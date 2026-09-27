@@ -81,6 +81,7 @@ contract_payload:
   watch_rollback_image: sha256:42fa63c0495d71e4e9700564595aba9a4506f3ea6cefde4698f0b822223e301b
 supersedes: []
 known_risks:
+  - 'Isolated 600-second quota uses Compose invocation overrides; preserve E2E_POLICY_ENFORCEMENT_ENABLED=true, E2E_FREE_QUOTA_TEST_TENANT_IDS=[1000], and E2E_FREE_QUOTA_TEST_SECONDS=600 on every test-backend recreate.'
   - 'Manual payment/storno, Hub, archive, active-stream graceful block and projection rebuild have local tests but no separate isolated runtime E2E.'
   - 'Production commercial policy and billing remain disabled; real YooKassa was not used.'
   - 'Backend suite has 51 warnings from test mocks and upstream deprecations; no Ruff or Pyright warnings.'
