@@ -79,7 +79,8 @@ services:
     container_name: menubuilder-backend
     restart: always
     env_file:
-      - ./MenuBuilder/backend/.env
+      - path: ./MenuBuilder/backend/.env
+        format: raw
 
   app1:
     build:
