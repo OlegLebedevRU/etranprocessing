@@ -6257,3 +6257,72 @@ consumers: [L4D-17F-DOCS-FIX-01]
 next_prompt_id: L4D-17F-DOCS-FIX-01
 ```
 <!-- HANDOFF:H-L4D-17F-MB-EVIDENCE-CONTRACT-01-v1:END -->
+
+
+## Отзыв путей 17F FIX v1 и адресная регистрация v2
+
+Исторический отчёт `L4D-17F-DOCS-FIX-01-report.md` имеет статус
+`BLOCKED_TESTS` и сохраняется неизменным. После дополнительных тестовых
+срезов окончательный результат должен публиковаться отдельным R/C пакетом.
+Решение пользователя: Agent `l4tools 1.8.2-beta-1` принимается в release
+baseline как есть; пересборка и изменение Agent не требуются. Разрешены
+существующие test05/tenant 10000/terminal 1000007, mock YooKassa и
+короткие периоды; ожидание трёх лет исключено из технического gate.
+Для 17F архивный порог — безопасный manifest/restore dry-run и consumer
+contract. Production archive worker и backup volume относятся к 18*.
+Ни регистрация, ни этот текст не принимают 17F заранее.
+
+<!-- CORRECTIVE_REGISTRATION_REVOCATION:R-L4D-17F-DOCS-FIX-01-v1:BEGIN -->
+```yaml
+registration_id: R-L4D-17F-DOCS-FIX-01-v1
+status: REVOKED
+revoked_at_utc: '2026-09-27T17:56:51Z'
+reason: 'The immutable v1 report has BLOCKED_TESTS; final R/C need new exact paths and the accepted scoped evidence export.'
+replacement_registration_id: R-L4D-17F-DOCS-FIX-01-v2
+```
+<!-- CORRECTIVE_REGISTRATION_REVOCATION:R-L4D-17F-DOCS-FIX-01-v1:END -->
+
+<!-- CORRECTIVE_REGISTRATION:R-L4D-17F-DOCS-FIX-01-v2:BEGIN -->
+```yaml
+registration_id: R-L4D-17F-DOCS-FIX-01-v2
+status: AUTHORIZED
+authorized_by: Cascade Controller
+authorization_basis: explicit_user_request_to_complete_17f_and_accept_l4tools_1_8_2_beta_1_as_release_baseline
+registered_at_utc: '2026-09-27T17:56:51Z'
+prompt_id: L4D-17F-DOCS-FIX-01
+prompt_path: l4desk-service/docs/prompts/L4D-17F-DOCS-FIX-01-v2.md
+scope_project: l4desk-service
+scope_root: D:\repo\platerra\Public\etranprocessing-l4tools-182\l4desk-service
+blocked_prompt_id: L4D-17F-DOCS
+authorized_inputs:
+  - handoff_id: H-L4D-17ABC-CONTRACT-01-v1
+    contract_version: 1.0.0
+    producer_commit: 9fe68c32391e0310fc857c098be7cf5e2f43cfdf
+  - handoff_id: H-L4D-17D-MEDIA-CONTRACT-01-v1
+    contract_version: 1.0.0
+    producer_commit: 77a666f17cc5cb154b6a46a8a119ed0594c087c0
+  - handoff_id: H-L4D-17E-CONTRACT-01-v1
+    contract_version: 1.0.0
+    producer_commit: 937fd39c461ef77ef8d5400879ea6933d6c189be
+  - handoff_id: H-L4D-17F-MB-EVIDENCE-CONTRACT-01-v1
+    contract_version: 1.0.0
+    producer_commit: d15f32bff63be22e2aefb3e59969e90965b57285
+sequence_gate_handoff_id: H-L4D-17E-MB-FIX-01-v1
+artifact_byte_binding_ids: []
+external_artifact_reads: []
+output_handoff_id: H-L4D-17F-DOCS-FIX-01-v1
+next_prompt_id: L4D-18A-SHARED
+report_path: l4desk-service/docs/handoffs/L4D-17F-DOCS-FIX-01-v2-report.md
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: l4desk-service/docs/handoffs/L4D-17F-DOCS-FIX-01-v2-candidate.md
+publication_required_before_execution: true
+grant_scope: consumer_addressing_only
+runtime_acceptance: NOT_GRANTED
+correction_reason: historical_v1_report_is_immutable_BLOCKED_TESTS_and_final_result_requires_new_paths
+agent_release_baseline: "l4tools 1.8.2-beta-1 as-is"
+approved_test_scope: "existing test05/tenant10000/terminal1000007; mock YooKassa; short periods"
+three_year_wait_required_for_technical_17f: false
+archive_17f_threshold: "producer manifest/restore dry-run plus consumer contract; production worker/backup volume reserved for 18*"
+```
+<!-- CORRECTIVE_REGISTRATION:R-L4D-17F-DOCS-FIX-01-v2:END -->
