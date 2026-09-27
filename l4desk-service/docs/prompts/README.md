@@ -118,8 +118,8 @@ runtime verification.
 
 ### 17F evidence collected on 2026-09-27
 
-The main 17F verdict remains `BLOCKED_TESTS`; these reports are evidence
-for controller review, not accepted handoffs:
+The historical 17F verdict was `BLOCKED_TESTS`; these reports preserve
+the evidence collected before the final v2 packet:
 
 - [Grace, forced stop and recovery](../../../MenuBuilder/docs/l4desk/handoffs/L4D-17F-MB-GRACE-TESTPATH-01-report.md).
 - [Short archive/restore fixture](../handoffs/L4D-17F-MEDIA-ARCHIVE-EVIDENCE-01-report.md).
@@ -129,3 +129,20 @@ for controller review, not accepted handoffs:
 
 The user excludes real three-year retention waiting from technical
 acceptance and authorizes mock payment evidence until the release.
+
+### Final 17F packet
+
+Use [the registered v2 prompt](L4D-17F-DOCS-FIX-01-v2.md), which preserves
+the original reports and consumes four accepted data-only inputs.
+
+- [Final report](../handoffs/L4D-17F-DOCS-FIX-01-v2-report.md).
+- [Detached candidate](../handoffs/L4D-17F-DOCS-FIX-01-v2-candidate.md).
+- [Git input verification](../handoffs/evidence/17f-deploy-20260927/final-contract-gate.json).
+- [Media build provenance and TTL equivalence](../handoffs/L4D-17F-MEDIA-PROVENANCE-02-report.md).
+
+Agent `1.8.2-beta-1` is the owner's approved release baseline, unchanged.
+The producer verdict is complete; independent acceptance is recorded only
+in `contract-handoff.md`. The report/candidate do not enable production
+commercial flags. Before running 18A, its historical required input
+`H-L4D-17F-DOCS-v1` must be addressed to the accepted corrective output
+by the controller; publishing this packet alone does not open that gate.
