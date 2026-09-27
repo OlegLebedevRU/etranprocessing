@@ -6145,3 +6145,49 @@ consumers: [L4D-17F-DOCS-FIX-01]
 next_prompt_id: L4D-17F-DOCS-FIX-01
 ```
 <!-- HANDOFF:H-L4D-17E-CONTRACT-01-v1:END -->
+
+## Адресная регистрация корректирующего 17F после 17E FIX
+
+Пользователь поручил следующий шаг подготовки 17F после принятия 17E.
+Три новых data-only входа опубликованы до этой регистрации. Исходный
+17F prompt остаётся историческим и не запускается; старые handoff не
+меняются. Эта запись дополняет только адресацию media export к новому
+consumer. Runtime-приёмка не предоставляется заранее.
+
+<!-- CORRECTIVE_REGISTRATION:R-L4D-17F-DOCS-FIX-01-v1:BEGIN -->
+```yaml
+registration_id: R-L4D-17F-DOCS-FIX-01-v1
+status: AUTHORIZED
+authorized_by: Cascade Controller
+authorization_basis: explicit_user_request_to_do_next_17f_step
+registered_at_utc: '2026-09-27T12:48:51Z'
+prompt_id: L4D-17F-DOCS-FIX-01
+prompt_path: l4desk-service/docs/prompts/L4D-17F-DOCS-FIX-01.md
+scope_project: l4desk-service
+scope_root: D:\repo\platerra\Public\etranprocessing-l4tools-182\l4desk-service
+blocked_prompt_id: L4D-17F-DOCS
+authorized_inputs:
+  - handoff_id: H-L4D-17ABC-CONTRACT-01-v1
+    contract_version: 1.0.0
+    producer_commit: 9fe68c32391e0310fc857c098be7cf5e2f43cfdf
+  - handoff_id: H-L4D-17D-MEDIA-CONTRACT-01-v1
+    contract_version: 1.0.0
+    producer_commit: 77a666f17cc5cb154b6a46a8a119ed0594c087c0
+  - handoff_id: H-L4D-17E-CONTRACT-01-v1
+    contract_version: 1.0.0
+    producer_commit: 937fd39c461ef77ef8d5400879ea6933d6c189be
+sequence_gate_handoff_id: H-L4D-17E-MB-FIX-01-v1
+artifact_byte_binding_ids: []
+external_artifact_reads: []
+output_handoff_id: H-L4D-17F-DOCS-FIX-01-v1
+next_prompt_id: L4D-18A-SHARED
+report_path: l4desk-service/docs/handoffs/L4D-17F-DOCS-FIX-01-report.md
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: l4desk-service/docs/handoffs/L4D-17F-DOCS-FIX-01-candidate.md
+publication_required_before_execution: true
+grant_scope: consumer_addressing_only
+runtime_acceptance: NOT_GRANTED
+correction_reason: original_17f_inputs_have_no_artifact_digests_or_unaccepted_17e_id
+```
+<!-- CORRECTIVE_REGISTRATION:R-L4D-17F-DOCS-FIX-01-v1:END -->

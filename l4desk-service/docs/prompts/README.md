@@ -102,9 +102,16 @@
 РЎР°Рј С„Р°РєС‚ РѕС‚РІРµС‚Р° Р°РіРµРЅС‚Р° В«РіРѕС‚РѕРІРѕВ» РЅРµ СЏРІР»СЏРµС‚СЃСЏ acceptance. Р”Р»СЏ Р·Р°РїСѓСЃРєР° РѕС‚РґРµР»СЊРЅРѕРіРѕ Р°РіРµРЅС‚Р°-РєРѕРЅС‚СЂРѕР»Р»РµСЂР° С„РёРєСЃР°С†РёРё handoff РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РїСЂРѕРјРїС‚ `HANDOFF-CONTROLLER-PROMPT.md`.
 
 
-## L4D-17E-MB-FIX-01 handoff readiness
+## L4D-17E FIX and 17F handoff readiness
 
-Corrective acceptance prompt: [L4D-17E-MB-FIX-01.md](L4D-17E-MB-FIX-01.md).
-Controller registration: `R-L4D-17E-MB-FIX-01-v2` (v1 revoked after a failed config artifact read grant) in `contract-handoff.md`.
-Use the exact input list, byte bindings and external read grants in the registration.
-The original 17E report and candidate remain historical evidence.
+`H-L4D-17E-MB-FIX-01-v1` is accepted in `contract-handoff.md` from the
+published v3 [report](../../../MenuBuilder/docs/l4desk/handoffs/L4D-17E-MB-FIX-01-v3-report.md)
+and [detached candidate](../../../MenuBuilder/docs/l4desk/handoffs/L4D-17E-MB-FIX-01-v3-candidate.md).
+Earlier 17E reports and registrations remain historical evidence.
+
+The original `L4D-17F-DOCS.md` stays closed because four historical inputs
+have no artifact digests and it names the unaccepted original 17E output.
+Use the published data-only 17A–C, 17D media and 17E exports and the
+addressed [L4D-17F-DOCS-FIX-01.md](L4D-17F-DOCS-FIX-01.md) after its
+registration is published. The exports do not replace current black-box
+runtime verification.
