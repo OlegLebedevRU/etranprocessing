@@ -11,7 +11,7 @@ producer_scope_project: MenuBuilder
 producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-18D-AUTH-MB-FIX-01-report.md
 producer_branch: l4desk/l4d-18d-mb-auth
 producer_commit: 04560ca396f5590a8d25542382ebd4641d8e7ccf
-report_commit: 9bc90ea95e7b64e54a30be1da6d7e0f58e6846d6
+report_commit: 7af9517dfea82d01a1cc6f62c8eb176e70353b97
 accepted_at_utc: null
 contract_version: 1.0.0
 schema_revision: media_management_openapi_1.0.0
@@ -19,9 +19,9 @@ artifact_version: 1.0.0
 artifact_paths:
 - MenuBuilder/docs/l4desk/handoffs/L4D-18D-AUTH-MB-FIX-01-report.md
 artifact_sha256:
-- 5ffaad9965fac2c5196d259d5a89eab933de41daa03123b557a894ae134c5eda
+- 61d74d4ff286f8d31c3d842b04bcedd0b96224425e7c1fe2f711137c00c0d010
 artifact_commits:
-- 9bc90ea95e7b64e54a30be1da6d7e0f58e6846d6
+- 7af9517dfea82d01a1cc6f62c8eb176e70353b97
 compatibility:
   backward_compatible_with: [H-L4D-18D-MEDIA-AUTH-CONTRACT-01-v1]
   breaking_changes: false
