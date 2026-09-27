@@ -63,7 +63,7 @@ compatibility:
   breaking_changes: false
   notes: Accepted Agent 1.8.2-beta-1 unchanged; technical pre-rollout acceptance, not global commercial activation.
 deployment_status: DOCS_PUBLISHED
-deployed_environment: documentation; production and isolated test runtime evidence in report
+deployed_environment: documentation
 feature_flags:
   production_policy_enforcement: false
   production_registration: false
@@ -80,6 +80,7 @@ feature_flags:
   isolated_test_clock_offset_seconds: 0
   archive_purge: false
 contract_payload:
+  runtime_environment_evidence: production and isolated test runtime; see immutable report
   registration_id: R-L4D-17F-DOCS-FIX-01-v2
   registration_commit: 3de3524f35552b32c485a285a03be9f7768ea799
   required_handoff_ids: *id001
