@@ -83,30 +83,39 @@ archive and safe restore sample. Run the full project-local tests, config
 validation and provider contract fixtures before release. Use current project
 build rules; do not substitute historical report PASS for current verification.
 
-Build both Janus and ingress as isolated containers on the owner-authorized
-`176.108.247.249` build host, using its separate approved identity. Keep its
-existing containers, volumes and configuration intact, and use no production
-credentials in the build context. Build Janus from pinned upstream repository
-source for version 1.1.4 at commit
-`3c39ce8cf11c54cf6f1607030a47ac9db798389a`; a wrapper around a
-prebuilt `canyan` runtime is not a source build. Record the exact upstream
-repository/ref, source archive digest, build recipe and resulting binary
-version/commit. Build ingress from the exact published l4media source commit.
-Validate both images, config and project-local tests on the build host.
+Rebuild Janus **only on an explicit user command**. For this release the user
+explicitly requested a source build of Janus 1.1.4 at upstream commit
+`3c39ce8cf11c54cf6f1607030a47ac9db798389a`. Build it from that pinned
+upstream repository source; a wrapper around a prebuilt `canyan` runtime is
+not a source build. Record the exact repository/ref, source archive digest,
+build recipe and resulting binary version/commit. For later ingress-only
+changes, retain the published pinned Janus digest without rebuilding Janus
+until another explicit user command.
 
-Publish only these two validated images to the existing approved registry,
-after checking the destination/visibility and scanning image contents/layers
-for private configuration, keys and tokens. Obtain registry credentials only
-through the existing private mechanism; never print or commit them. Record
-both pushed immutable manifest digests and source provenance. The user has
-authorized this source build and registry publication. The build host is not
-a production deployment target.
+Build ingress from the exact published l4media source commit in an isolated
+container on the owner-authorized `176.108.247.249` build host by default,
+using its separate approved identity. If that host is unavailable, build in
+an isolated local Linux container in this l4media worktree; record the
+fallback reason. Janus, when explicitly requested, uses the same isolated
+container build rule. Keep existing build-host containers, volumes and
+configuration intact, and use no production credentials in build contexts.
+Validate each newly built image, config and project-local tests. Neither
+build location is a production deployment target; do not build on production.
 
-Publish immutable source/image evidence and exact rollback image/config before
-the switch. On the production host pull and deploy both images by immutable
-`@sha256:` registry digests, verify the running image IDs and Janus binary
-version/commit, then perform the required smoke. A tag alone does not prove
-the deployed bytes.
+Every newly built image must be published to the existing approved registry
+before production use. Confirm destination/visibility and scan image
+contents/layers for private configuration, keys and tokens before push.
+Obtain registry credentials only through the existing private mechanism;
+never print or commit them. Record the pushed immutable manifest digest and
+source provenance for each image. The user authorized registry publication
+for the two current release images.
+
+Publish immutable source/image evidence and exact rollback image/config
+before the switch. On production pull each selected image from the registry
+by immutable `@sha256:` digest and deploy only affected l4media components.
+Do not deliver images directly to production with `docker save`/`docker load`
+or an unverified tag. Verify running image IDs and Janus binary version/commit,
+then perform the required smoke.
 
 Keep management APIs internal and service-authenticated; verify unauthorized
 requests are denied without reading or printing credentials. Do not expose
