@@ -1042,13 +1042,23 @@ int main(int argc, char* argv[]) {
         if (p > 0) g_janus_admin_port = p;
     }
     const char* env_janus_secret = getenv("JANUS_ADMIN_SECRET");
-    if (env_janus_secret && strlen(env_janus_secret) > 0) {
-        safe_strcpy(g_janus_admin_secret, env_janus_secret, sizeof(g_janus_admin_secret));
-    }
     const char* env_token = getenv("L4MEDIA_SERVICE_TOKEN");
-    if (env_token && strlen(env_token) > 0) {
-        safe_strcpy(g_service_token, env_token, sizeof(g_service_token));
+    if (!env_janus_secret || strlen(env_janus_secret) < 32 ||
+        strlen(env_janus_secret) >= sizeof(g_janus_admin_secret) ||
+        !env_token || strlen(env_token) < 32 || strlen(env_token) >= sizeof(g_service_token)) {
+        fprintf(stderr, "[INGRESS] Private JANUS_ADMIN_SECRET and L4MEDIA_SERVICE_TOKEN (32..127 characters) are required\n");
+        return 1;
     }
+    /* Secrets enter HTTP headers / JSON. Reject separators and control bytes. */
+    const char* secrets[] = { env_janus_secret, env_token };
+    for (size_t i = 0; i < sizeof(secrets) / sizeof(secrets[0]); i++) {
+        if (strspn(secrets[i], "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") != strlen(secrets[i])) {
+            fprintf(stderr, "[INGRESS] Private credentials must use ASCII letters, digits, underscore or hyphen\n");
+            return 1;
+        }
+    }
+    safe_strcpy(g_janus_admin_secret, env_janus_secret, sizeof(g_janus_admin_secret));
+    safe_strcpy(g_service_token, env_token, sizeof(g_service_token));
     const char* env_routes = getenv("ROUTES_FILE");
     if (env_routes && strlen(env_routes) > 0) {
         safe_strcpy(g_routes_file, env_routes, sizeof(g_routes_file));

@@ -35,9 +35,7 @@
 #define DEFAULT_PORT_BASE         6010
 #define DEFAULT_PORT_MAX          6200
 #define OPENAPI_FILE_PATH         "/etc/l4media/openapi.json"
-#define DEFAULT_SERVICE_TOKEN     "l4media-service-secret-token"
 #define DEFAULT_JANUS_ADMIN_PORT  7088
-#define DEFAULT_JANUS_ADMIN_SECRET "janusoverlord"
 /* Reconcile grace: keep orphan mountpoint/route while terminal RTP is still fresh. */
 #define L4MEDIA_RTP_FRESH_RECONCILE_SEC 20
 
@@ -73,8 +71,8 @@ typedef struct {
 
 /* Lifecycle configuration and metrics */
 static int g_janus_admin_port = DEFAULT_JANUS_ADMIN_PORT;
-static char g_janus_admin_secret[128] = DEFAULT_JANUS_ADMIN_SECRET;
-static char g_service_token[128] = DEFAULT_SERVICE_TOKEN;
+static char g_janus_admin_secret[128] = "";
+static char g_service_token[128] = "";
 
 static uint64_t g_metric_sessions_started = 0;
 static uint64_t g_metric_sessions_stopped = 0;
@@ -160,7 +158,7 @@ static inline bool json_get_uint32(const char* json, const char* key, uint32_t* 
 
 static inline bool check_service_auth(const char* req_buf) {
     if (!g_service_token[0]) {
-        return true; /* Disabled if token is explicitly empty */
+        return false; /* Missing configuration must never disable authentication. */
     }
 
     size_t tok_len = strlen(g_service_token);

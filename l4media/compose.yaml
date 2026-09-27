@@ -23,6 +23,7 @@ services:
       - ingress
 
   ingress:
+    image: ${L4MEDIA_INGRESS_IMAGE:-l4media-ingress:local}
     build:
       context: ./ingress
       dockerfile: Dockerfile
@@ -31,8 +32,8 @@ services:
     environment:
       - JANUS_HOST=janus
       - JANUS_ADMIN_PORT=${JANUS_ADMIN_PORT:-7088}
-      - JANUS_ADMIN_SECRET=${JANUS_ADMIN_SECRET:-janusoverlord}
-      - L4MEDIA_SERVICE_TOKEN=${L4MEDIA_SERVICE_TOKEN:-l4media-service-secret-token}
+      - JANUS_ADMIN_SECRET=${JANUS_ADMIN_SECRET:?Private JANUS_ADMIN_SECRET required}
+      - L4MEDIA_SERVICE_TOKEN=${L4MEDIA_SERVICE_TOKEN:?Private L4MEDIA_SERVICE_TOKEN required}
       - ROUTES_FILE=/etc/l4media/routes.conf
       - REDIS_URL=${L4MEDIA_REDIS_URL}
     volumes:
@@ -48,9 +49,14 @@ services:
       - janus
 
   janus:
-    image: canyan/janus-gateway:latest
+    image: ${L4MEDIA_JANUS_IMAGE:-l4media-janus:local}
+    build:
+      context: ./janus
+      dockerfile: Dockerfile
     container_name: l4media-janus
     restart: unless-stopped
+    environment:
+      - JANUS_ADMIN_SECRET=${JANUS_ADMIN_SECRET:?Private JANUS_ADMIN_SECRET required}
     volumes:
       - ./janus/janus.jcfg:/usr/local/etc/janus/janus.jcfg:ro
       - ./janus/janus.plugin.streaming.jcfg:/usr/local/etc/janus/janus.plugin.streaming.jcfg:ro

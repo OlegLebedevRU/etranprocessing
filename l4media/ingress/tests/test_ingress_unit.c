@@ -295,8 +295,9 @@ static void test_service_auth_unit(void) {
     assert(check_service_auth(req4) == false);
 
     g_service_token[0] = '\0';
-    assert(check_service_auth(req4) == true);
-    strcpy(g_service_token, DEFAULT_SERVICE_TOKEN);
+    assert(check_service_auth(req4) == false);
+    assert(check_service_auth(req1) == false);
+    strcpy(g_service_token, "my-secret-token");
 
     printf("  [PASS] Service Authentication checking verified.\n");
 }

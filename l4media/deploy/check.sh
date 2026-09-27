@@ -107,7 +107,7 @@ else
 fi
 
 # Test 3: Service Auth with token
-AUTH_OK=$(sudo docker exec l4media-ingress curl -s -H "X-Media-Service-Token: l4media-service-secret-token" http://127.0.0.1:9100/api/v1/media/metrics)
+AUTH_OK=$(sudo docker exec l4media-ingress sh -c 'printf "header = \"X-Media-Service-Token: %s\"\n" "$L4MEDIA_SERVICE_TOKEN" | curl -s --config - http://127.0.0.1:9100/api/v1/media/metrics')
 if echo "${AUTH_OK}" | grep -q '"status":"ok"'; then
     echo "SUCCESS: Service Auth accepted valid token: ${AUTH_OK}"
 else

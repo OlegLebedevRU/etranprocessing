@@ -6,7 +6,7 @@ general: {
 	loggers_folder = "/usr/local/lib/janus/loggers"
 
 	debug_level = 3
-	admin_secret = "janusoverlord"
+	admin_secret = "@JANUS_ADMIN_SECRET@"
 }
 
 media: {

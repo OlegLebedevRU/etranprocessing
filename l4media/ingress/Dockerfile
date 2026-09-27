@@ -17,6 +17,10 @@ FROM alpine:3.19@sha256:b58899f069c47216f6002a6850143dc6fae0d35eb8b0df9300bbe632
 RUN apk add --no-cache curl ca-certificates hiredis
 
 WORKDIR /app
+ARG SOURCE_REVISION
+ARG SOURCE_ARCHIVE_SHA256
+LABEL org.opencontainers.image.revision=$SOURCE_REVISION \
+      io.l4desk.source-archive-sha256=$SOURCE_ARCHIVE_SHA256
 COPY --from=builder /build/l4media-ingress /app/l4media-ingress
 
 # Default routes configuration location
