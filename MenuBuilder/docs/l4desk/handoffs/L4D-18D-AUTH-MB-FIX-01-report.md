@@ -1,6 +1,6 @@
 # L4D-18D-AUTH-MB-FIX-01 — private media credential rotation
 
-Status: READY_FOR_CONTROLLER_REVIEW; runtime verified 2026-09-27T21:48:49Z.
+Producer verdict: ACCEPTED; controller handoff acceptance: PENDING. Runtime verified 2026-09-27T21:48:49Z.
 This MB-owned step does not accept 18D or open 18E.
 
 ## Gate and ownership
