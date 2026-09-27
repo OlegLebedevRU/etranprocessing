@@ -71,6 +71,7 @@ async def _watch_relay_scenario(monkeypatch):
         AsyncMock(
             return_value={
                 "org_id": 7,
+                "role_id": 4,
                 "permissions": [video_control.PERMISSION_VIDEO_VIEW],
             }
         ),

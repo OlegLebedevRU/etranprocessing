@@ -31,6 +31,19 @@ def _viewer_token(*, org_id: int = 1, permissions: list[str] | None = None) -> s
     )
 
 
+def _owner_token() -> str:
+    return create_access_token(
+        {
+            "sub": "watch-owner",
+            "userId": 102,
+            "org_id": 1,
+            "role": "l4desk_owner",
+            "roleId": 5,
+            "token_type": "tenant",
+        }
+    )
+
+
 class _DbContext:
     def __init__(self) -> None:
         self.session = AsyncMock()
@@ -113,6 +126,23 @@ def test_watch_rejects_foreign_tenant_before_upstream() -> None:
         pass
     assert error.value.code == 4403
     connect.assert_not_called()
+
+
+def test_watch_accepts_owner_without_explicit_permission_claim() -> None:
+    client = TestClient(app)
+    upstream = _UpstreamContext()
+    with (
+        patch("app.routers.video_control.async_session", return_value=_DbContext()),
+        patch.object(iot_client, "service_token", "placeholder"),
+        patch(
+            "app.routers.video_control.websockets.connect", return_value=upstream
+        ) as connect,
+        client.websocket_connect(
+            WATCH_PATH, cookies={"accessToken": _owner_token()}
+        ) as socket,
+    ):
+        assert socket.receive_json() == {"type": "invalidate"}
+    assert connect.call_args.kwargs["additional_headers"]["X-Org-Id"] == "1"
 
 
 def test_watch_rejects_snapshot_for_different_sn() -> None:

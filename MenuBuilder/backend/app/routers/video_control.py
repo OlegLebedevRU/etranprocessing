@@ -1511,8 +1511,20 @@ async def watch_device_status_ws(websocket: WebSocket, device_id: int) -> None:
     if not user:
         await websocket.close(code=4401)
         return
+    try:
+        role_id = int(user.get("role_id", 0))
+    except TypeError, ValueError:
+        role_id = 0
+    is_su = bool(user.get("is_superuser") or role_id == 1)
     permissions = user.get("permissions") or []
-    if PERMISSION_VIDEO_VIEW not in permissions and "*" not in permissions:
+    if (
+        role_id == 4
+        and PERMISSION_VIDEO_VIEW not in permissions
+        and "*" not in permissions
+    ):
+        await websocket.close(code=4403)
+        return
+    if not is_su and role_id not in (1, 2, 3, 4, 5):
         await websocket.close(code=4403)
         return
 
