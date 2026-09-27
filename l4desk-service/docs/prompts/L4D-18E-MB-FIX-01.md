@@ -93,6 +93,14 @@ in a project-scoped deploy overlay, leaving other service entries untouched.
 Registry credentials and private runtime config stay outside Git, logs and
 report.
 
+Include the owner-reported narrow-browser responsive defect in the MB
+frontend scope: reproduce the affected monitoring, video and licenses views
+at narrow widths, keep table text readable with an appropriate minimum
+column width and horizontal scrolling, adapt forms where needed, and add
+focused browser/UI regression checks. Do not change provider protocols or
+neighboring components for this layout work. Record the exact reproduced
+viewports and user-visible result.
+
 The user retired the beta deployment scheme for this release. The 176 build
 host `etran-beta.timer` was already disabled and stopped by the authorized
 runtime owner; verify it remains disabled/inactive and its service inactive.
@@ -112,6 +120,16 @@ send mass email, charge live YooKassa, or use production credentials as test
 fixtures. Payment tests use the approved mock. Use bounded 10–30 minute
 period-dependent tests and existing 120-minute historical evidence; do not
 claim a fresh 120-minute or three-year wait without observing one.
+
+The read-only preflight found production YooKassa effective disabled with
+shop/key/webhook absent; the isolated test backend uses a nonofficial mock
+endpoint. Do not infer live payment readiness from the mock. In current MB
+configuration, enabling `l4desk_enabled` may implicitly enable YooKassa
+even without its private credentials. Before any phase that enables this
+umbrella flag, demonstrate an explicit, effective mock-only boundary and
+negative test for live provider calls. If that cannot be proven, leave
+payment/commercial flags disabled and report the exact blocker. Never set
+live provider credentials or make a real charge in this step.
 
 Verify registration/link replay and collision handling, ownership/PIN,
 console and moving video/start/stop, exact financial ledger double-entry,
