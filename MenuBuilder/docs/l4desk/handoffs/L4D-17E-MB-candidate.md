@@ -12,7 +12,7 @@ producer_prompt_id: L4D-17E-MB
 producer_scope_project: MenuBuilder
 producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-17E-MB-acceptance-2026-09-27.md
 producer_branch: release/l4tools-1.8.2-beta-1
-producer_commit: 3d1ff47586c52fd367d4bba4495439aeb4571949
+producer_commit: 9bda9ce498332960f7f706abb03cae09b0fff206
 report_commit: 3d1ff47586c52fd367d4bba4495439aeb4571949
 accepted_at_utc: null
 contract_version: 1.0.0
@@ -81,6 +81,7 @@ contract_payload:
   watch_rollback_image: sha256:42fa63c0495d71e4e9700564595aba9a4506f3ea6cefde4698f0b822223e301b
 supersedes: []
 known_risks:
+  - 'Formal contract gate remains BLOCKED: eight required historical handoffs do not address L4D-17E-MB and no controller address grant or DETACHED_V1 registration for 17E is recorded. This candidate cannot be accepted until the controller resolves the gate.'
   - 'Isolated 600-second quota uses Compose invocation overrides; preserve E2E_POLICY_ENFORCEMENT_ENABLED=true, E2E_FREE_QUOTA_TEST_TENANT_IDS=[1000], and E2E_FREE_QUOTA_TEST_SECONDS=600 on every test-backend recreate.'
   - 'Manual payment/storno, Hub, archive, active-stream graceful block and projection rebuild have local tests but no separate isolated runtime E2E.'
   - 'Production commercial policy and billing remain disabled; real YooKassa was not used.'

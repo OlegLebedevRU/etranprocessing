@@ -1,8 +1,9 @@
 # L4D-17E: матрица приёмки коммерческого контура
 
 Срез: 2026-09-27 UTC. Кандидат: `release/l4tools-1.8.2-beta-1`.
-Статус: **READY_FOR_CONTROLLER_REVIEW**, `H-L4D-17E-MB-v1` подготовлен как
-`DETACHED_V1` candidate и ещё не принят контроллером. Исторический
+Статус: **BLOCKED_CONTRACT для формальной приёмки** после независимой
+сверки адресации входов: `H-L4D-17E-MB-v1` подготовлен как evidence candidate,
+но не допущен к `ACCEPTED`. Исторический
 `L4D-17E-MB-report.md` со статусом `BLOCKED_CONTRACT` сохраняется.
 
 ## Task intake
@@ -76,6 +77,13 @@
 подготовлены. Project-local и адресный consumer-contract smoke завершены;
 ограничения локальных и runtime проверок сохранены в таблице. Независимый
 verdict контроллера ещё не получен.
+
+Формальная сверка 2026-09-27 обнаружила, что восемь из 11 обязательных
+`ACCEPTED` handoff не адресованы `L4D-17E-MB`; адресного допуска контроллера
+нет. Для `DETACHED_V1` также отсутствует отдельная регистрация 17E с
+`detached_candidate_approved: true`. Точный список и последующие действия —
+в [аудите gate](2026-09-27-l4d-17e-formal-gate.md). Выполненные runtime
+проверки сохраняют силу как evidence; они не заменяют contract gate.
 
 После production smoke обнаружены два связанных с ролью 5 дефекта video UI:
 frontend не запускал status/watch, затем watch WebSocket возвращал 403.
