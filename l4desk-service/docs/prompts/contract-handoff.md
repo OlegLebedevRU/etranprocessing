@@ -7604,3 +7604,143 @@ runtime_acceptance: NOT_GRANTED
 correction_reason: original_18e_names_missing_historical_17e_17f_ids_and_neighbor_source_artifacts;_finite_accepted_data_export_replaces_subject_inputs_and_18d_is_sequence_only
 ```
 <!-- CORRECTIVE_REGISTRATION:R-L4D-18E-MB-FIX-01-v1:END -->
+
+## 18E supplemental device/PIN export and corrected registration
+
+The controller verified the ten finite IoT source provenance files at accepted 18C commit `35f1fce054e388a2206af45f1416b9572b0614a9` and three exact accepted PB PIN contract copies in published documentation commit `57b7b015778ef46ea1d9f4b4b993e80c54042034`. The first 18E registration is revoked append-only because the user added device identity/status, PIN renewal and sys-tag requirements; its prior bytes and the original 18E prompt remain intact. Registration v2 adds only the finite data-only direct input and retains the accepted 18D sequence gate, MenuBuilder scope and detached output paths. It does not accept an 18E runtime rollout or advance 18F.
+
+<!-- HANDOFF:H-L4D-18E-MB-DEVICE-PIN-CONTRACT-01-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-18E-MB-DEVICE-PIN-CONTRACT-01-v1
+status: ACCEPTED
+contract_kinds:
+- API
+- SCHEMA
+- REPORT
+producer_prompt_id: L4D-18E-MB-DEVICE-PIN-CONTRACT-01
+producer_scope_project: l4desk-service
+producer_report_path: l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/verification.md
+producer_branch: release/l4tools-1.8.2-beta-1
+producer_commit: 57b7b015778ef46ea1d9f4b4b993e80c54042034
+accepted_at_utc: '2026-09-27T22:53:25Z'
+contract_version: 1.0.0
+schema_revision: IoT 0008_org_reservations; PB 027; PIN 1.0.0
+artifact_version: 1.0.0
+artifact_paths:
+- l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/iot-device-contract.md
+- l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/iot-device-schemas.json
+- l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/iot-device-examples.json
+- l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/pin-contract.md
+- l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/pin-schemas.json
+- l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/pin-examples.json
+- l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/verification.md
+artifact_sha256:
+- 7f09c681d7824ca760e3f655db471e8d8d77b1aba35e0389ff400d3df4fd1562
+- cf068c2c934b25af5c0e37de8da524d61c039aa1f7cbb86e58c82849b088b118
+- 8a02bbb4cab324b9952c843ed60535dc20c709436326d5dc4b285257a1ce47ea
+- 1c2787fc2c34343d9b46658bd304cb2110bf554019667712c5596eae8ce6c7f4
+- 563a00aabf4a539c92f6fccad36596dd63fea05bfc088ca1cf7ddbb8e16f26c0
+- 92a3beeb8323d4697e89ef3978d1d54de07202e5c87debec1adb53779cc48737
+- dbcfd084752b2e3db5981af7bd73c26d4f51369fc66636bc25bf0bf7cdb1e085
+compatibility:
+  backward_compatible_with:
+  - H-L4D-18B-PB-EVIDENCE-CONTRACT-01-v1
+  - H-L4D-18C-IOT-v1
+  breaking_changes: false
+  notes: Finite data-only IoT device projection and exact accepted PB PIN contract; no provider runtime change.
+deployment_status: DOCS_PUBLISHED
+deployed_environment: documentation
+feature_flags: {}
+contract_payload:
+  verification_status: VERIFIED
+  runtime_verification: NOT_REPEATED
+  iot_source_commit: 35f1fce054e388a2206af45f1416b9572b0614a9
+  iot_provenance_file_count: 10
+  pin_exact_copy_count: 3
+  device_key: device_id
+  required_provider_sn: provisioning_and_PIN_issue
+  sys_enum_owner: MenuBuilder
+supersedes: []
+known_risks:
+- IoT device presence is sampled; absent connection or request error is not proof of offline.
+- PIN issue requires an authentic SN and business terminal ID; device_id cannot substitute.
+- This export does not change provider semantics or repeat live runtime verification.
+consumers:
+- L4D-18E-MB-FIX-01
+next_prompt_id: L4D-18E-MB-FIX-01
+```
+<!-- HANDOFF:H-L4D-18E-MB-DEVICE-PIN-CONTRACT-01-v1:END -->
+
+<!-- CORRECTIVE_REGISTRATION_REVOCATION:R-L4D-18E-MB-FIX-01-v1:BEGIN -->
+```yaml
+registration_id: R-L4D-18E-MB-FIX-01-v1
+status: REVOKED
+revoked_at_utc: '2026-09-27T22:53:25Z'
+reason: User added terminal status, device_id, renewal PIN and sys-tag requirements that require an additional finite IoT/PB
+  data contract.
+replacement_registration_id: R-L4D-18E-MB-FIX-01-v2
+```
+<!-- CORRECTIVE_REGISTRATION_REVOCATION:R-L4D-18E-MB-FIX-01-v1:END -->
+
+<!-- CORRECTIVE_REGISTRATION:R-L4D-18E-MB-FIX-01-v2:BEGIN -->
+```yaml
+registration_id: R-L4D-18E-MB-FIX-01-v2
+status: AUTHORIZED
+authorized_by: Cascade Controller
+authorization_basis: explicit_user_18e_runtime_request_plus_device_id_presence_PIN_sys_and_manual_176_registry_digest_release
+registered_at_utc: '2026-09-27T22:53:25Z'
+prompt_id: L4D-18E-MB-FIX-01
+prompt_path: l4desk-service/docs/prompts/L4D-18E-MB-FIX-01.md
+scope_project: MenuBuilder
+scope_root: D:\repo\platerra\Public\etranprocessing-l4d-18e-mb\MenuBuilder
+blocked_prompt_id: L4D-18E-MB
+authorized_inputs:
+- handoff_id: H-L4D-18E-MB-EVIDENCE-CONTRACT-01-v1
+  contract_version: 1.0.0
+  producer_commit: 7e1fc3c0eabcdb3fc333d0dbe88b938ae09acdab
+- handoff_id: H-L4D-18E-MB-DEVICE-PIN-CONTRACT-01-v1
+  contract_version: 1.0.0
+  producer_commit: 57b7b015778ef46ea1d9f4b4b993e80c54042034
+sequence_gate_handoff_id: H-L4D-18D-MEDIA-v1
+artifact_byte_binding_ids: []
+external_artifact_reads:
+- handoff_id: H-L4D-18E-MB-EVIDENCE-CONTRACT-01-v1
+  artifact_commit: 7e1fc3c0eabcdb3fc333d0dbe88b938ae09acdab
+  paths:
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/17e-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/17f-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/17f-final-gate.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18a-schema.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18a-package-source.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18a-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18b-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18c-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18c-final-smoke.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18d-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18d-evidence.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18d-openapi.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18d-mb-auth-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/verification.md
+- handoff_id: H-L4D-18E-MB-DEVICE-PIN-CONTRACT-01-v1
+  artifact_commit: 57b7b015778ef46ea1d9f4b4b993e80c54042034
+  paths:
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/iot-device-contract.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/iot-device-schemas.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/iot-device-examples.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/pin-contract.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/pin-schemas.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/pin-examples.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/verification.md
+output_handoff_id: H-L4D-18E-MB-v1
+next_prompt_id: L4D-18F-DOCS
+report_path: MenuBuilder/docs/l4desk/handoffs/L4D-18E-MB-FIX-01-report.md
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-18E-MB-FIX-01-candidate.md
+mb_code_baseline_commit: 4184ee930e869ddfb044029512e51e7a69ed20f6
+publication_required_before_execution: true
+grant_scope: consumer_addressing_only
+runtime_acceptance: NOT_GRANTED
+correction_reason: v1_revoked_for_finite_IoT_device_presence_tag_and_PB_PIN_contract_under_user_18e_requirements
+```
+<!-- CORRECTIVE_REGISTRATION:R-L4D-18E-MB-FIX-01-v2:END -->

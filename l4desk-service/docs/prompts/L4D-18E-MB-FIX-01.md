@@ -5,9 +5,9 @@ prompt_id: L4D-18E-MB-FIX-01
 scope_project: MenuBuilder
 scope_root: D:\repo\platerra\Public\etranprocessing-l4d-18e-mb\MenuBuilder
 prompt_type: corrective-production-rollout
-registration_id: R-L4D-18E-MB-FIX-01-v1
+registration_id: R-L4D-18E-MB-FIX-01-v2
 blocked_prompt_id: L4D-18E-MB
-required_handoff_ids: [H-L4D-18E-MB-EVIDENCE-CONTRACT-01-v1]
+required_handoff_ids: [H-L4D-18E-MB-EVIDENCE-CONTRACT-01-v1, H-L4D-18E-MB-DEVICE-PIN-CONTRACT-01-v1]
 sequence_gate_handoff_id: H-L4D-18D-MEDIA-v1
 artifact_byte_binding_ids: []
 external_artifact_reads:
@@ -28,6 +28,16 @@ external_artifact_reads:
       - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18d-openapi.json
       - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18d-mb-auth-report.md
       - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/verification.md
+  - handoff_id: H-L4D-18E-MB-DEVICE-PIN-CONTRACT-01-v1
+    artifact_commit: 57b7b015778ef46ea1d9f4b4b993e80c54042034
+    paths:
+      - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/iot-device-contract.md
+      - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/iot-device-schemas.json
+      - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/iot-device-examples.json
+      - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/pin-contract.md
+      - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/pin-schemas.json
+      - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/pin-examples.json
+      - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/verification.md
 output_handoff_id: H-L4D-18E-MB-v1
 next_prompt_id: L4D-18F-DOCS
 branch: l4desk/l4d-18e-mb
@@ -41,14 +51,14 @@ architecture_sections: [1, 2, 3, 4, 5, 6, 7, 9, 10, 13, 14, 15, 16, 17, 18, 19]
 ## Gate and baseline
 
 Read the standard, this prompt and the journal first. Verify the unique §8
-registration, accepted data-only direct input, all 14 Git/raw artifact digests,
+registration, both accepted data-only direct inputs, all 21 Git/raw artifact digests,
 versions, compatibility, no revocation, and accepted H-L4D-18D-MEDIA-v1 as
 sequence-only gate. The original 18E prompt names historical 17E/17F IDs
 that were never accepted. The accepted FIX handoffs and 18A/18B/18C/18D
 provider handoffs are provenance for the finite export, not extra direct
 inputs. Do not recursively gate them or read neighboring source, tests or
 private files through report links. All cross-project data reads are the
-14 exact copies above, from the published immutable export commit.
+21 exact documents above, from the two published immutable export commits.
 
 Use a clean separate worktree at the exact `scope_root` and branch above,
 created from the published controller registration commit. Its MenuBuilder
@@ -61,6 +71,14 @@ from the 4184ee9 test candidate. The accepted 18D MB auth step rotated
 private media credentials without changing either MB application image.
 Verify actual running image/config/flags before changing anything; report
 any drift. Do not read or print secret values.
+
+The MB backend build may resolve and import the already accepted unchanged
+`etranprocessing-db==0.1.1` package through its own pinned lock/Dockerfile
+as a build dependency. The approved delivery is exact Git source per the
+exported 18A manifest; no Python index wheel is assumed. This packaging
+step is not a grant to inspect, edit, run commands/tests in, or publish the
+neighboring `shared` project. Verify the package version and lock and keep
+the accepted source bytes; a shared code/schema change is `BLOCKED_SCOPE`.
 
 ## MenuBuilder release and staged activation
 
@@ -100,6 +118,46 @@ column width and horizontal scrolling, adapt forms where needed, and add
 focused browser/UI regression checks. Do not change provider protocols or
 neighboring components for this layout work. Record the exact reproduced
 viewports and user-visible result.
+
+Use `device_id` as the primary terminal identity in L4Desk selection,
+ownership and navigation. Serial numbers are incomplete for some devices;
+resolve/use `SN` only where an accepted provider protocol requires it, and
+handle absent `SN` without hiding a valid tenant-owned device or binding it
+to another tenant. Align L4Desk online/offline presentation with the same
+authoritative status source and freshness rules already used by MenuBuilder
+terminal management; do not hard-code `offline` or infer live presence from
+a missing serial. Add negative tests for partial/missing SN and cross-tenant
+device IDs, and a UI parity check against terminal management status.
+
+The current public onboarding status advertises Agent `1.7.7` and its old
+installer URL. The owner accepted Agent `1.8.2-beta-1` unchanged, but no
+approved download URL for that version is in the finite input packet.
+Do not present the 1.7.7 installer as the current Agent or invent a beta URL.
+Show the accepted version and omit/disable the download action until an
+approved published artifact URL is available. Record this as a release-link
+limitation; do not rebuild or alter Agent binaries in MenuBuilder scope.
+
+Allow an authenticated tenant user with the existing terminal-management
+authorization to request a new certificate-renewal PIN for their own terminal
+through the existing accepted PIN contract. Do
+not add a new commercial entitlement, quota or arbitrary UI eligibility
+restriction to this action. Preserve authentication, tenant ownership,
+provider-side PIN lifecycle and abuse controls already required by the
+accepted contract. Display the current unactivated PIN and its pending state
+to that authorized user instead of concealing it; do not expose it in public
+responses, logs, telemetry, URLs or another tenant's view. Test issuance,
+pending display after refresh, activation transition and cross-tenant denial.
+If the existing accepted provider contract lacks an endpoint or exact field
+needed for this behavior, stop that part with `BLOCKED_CONTRACT` and request
+a finite controller grant; do not infer provider semantics from source links.
+
+At onboarding, let the authorized user choose the device type represented
+by the existing `sys` tag: exactly `windows`, `linux` or `esp32`. Preserve
+the chosen value through the existing MenuBuilder/device-tag contract and
+show it on return to the form. Validate the enum and tenant ownership in
+backend and UI, including rejection of unknown values. Do not change IoT
+implementation or invent a new tag endpoint; if the accepted contract lacks
+the required write/read semantics, stop this part at the contract gate.
 
 The user retired the beta deployment scheme for this release. The 176 build
 host `etran-beta.timer` was already disabled and stopped by the authorized
