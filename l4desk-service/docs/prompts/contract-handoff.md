@@ -6088,3 +6088,60 @@ consumers: [L4D-17F-DOCS-FIX-01]
 next_prompt_id: L4D-17F-DOCS-FIX-01
 ```
 <!-- HANDOFF:H-L4D-17ABC-CONTRACT-01-v1:END -->
+
+## Документальный экспорт принятого 17E FIX для корректирующего 17F
+
+По поручению пользователя и §10.1 PROMPT-STANDARD опубликован data-only
+пакет из принятой записи 17E FIX и неизменяемого MenuBuilder report R3.
+Commit A `937fd39c461ef77ef8d5400879ea6933d6c189be`; remote ref и
+Git/raw SHA-256 обоих файлов проверены. Исходный handoff не менялся.
+Runtime и код MenuBuilder в этом документальном шаге не проверялись.
+
+<!-- HANDOFF:H-L4D-17E-CONTRACT-01-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-17E-CONTRACT-01-v1
+status: ACCEPTED
+contract_kinds: [REPORT, DEPLOYMENT]
+producer_prompt_id: L4D-17E-CONTRACT-01
+producer_scope_project: l4desk-service
+producer_report_path: l4desk-service/docs/prompts/contracts/acceptance-17e-v1/verification.md
+producer_branch: release/l4tools-1.8.2-beta-1
+producer_commit: 937fd39c461ef77ef8d5400879ea6933d6c189be
+accepted_at_utc: '2026-09-27T12:46:30Z'
+contract_version: 1.0.0
+schema_revision: N/A
+artifact_version: 1.0.0
+artifact_paths:
+  - l4desk-service/docs/prompts/contracts/acceptance-17e-v1/contract.md
+  - l4desk-service/docs/prompts/contracts/acceptance-17e-v1/verification.md
+artifact_sha256:
+  - 0f70346eb3348b821ef3930da345a023043e4cf25d29870f815e8dd3976ad010
+  - d5cb97764098e894e21e593edd72972b9e286b8c2a2fce6ce3707a02fa2de0c4
+artifact_urls:
+  - https://raw.githubusercontent.com/OlegLebedevRU/etranprocessing/937fd39c461ef77ef8d5400879ea6933d6c189be/l4desk-service/docs/prompts/contracts/acceptance-17e-v1/contract.md
+  - https://raw.githubusercontent.com/OlegLebedevRU/etranprocessing/937fd39c461ef77ef8d5400879ea6933d6c189be/l4desk-service/docs/prompts/contracts/acceptance-17e-v1/verification.md
+compatibility:
+  backward_compatible_with: [H-L4D-17E-MB-FIX-01-v1]
+  breaking_changes: false
+  notes: 'Data-only export of accepted 17E evidence; no new runtime guarantee.'
+deployment_status: DOCS_PUBLISHED
+deployed_environment: documentation
+feature_flags: {}
+contract_payload:
+  verification_status: VERIFIED
+  source_handoff_id: H-L4D-17E-MB-FIX-01-v1
+  source_journal_commit: fa5a64452d43f00561086d9188d900c176ec849c
+  source_block_raw_sha256: f7de03532d9af9fd543d000fe585ef55dc8564b32c60a507d5dc89ec02bfda3e
+  source_report_commit: f031b963f43d9c52fbf28aee9f978157386721f1
+  source_report_raw_sha256: 6dfa6654b7472351da1147f9a526634d6839507f917294fe75f9781f0f2e1be0
+  runtime_verification: NOT_REPEATED
+  remote_ref_verified_at_utc: '2026-09-27T12:46:30Z'
+  authorization_basis: explicit_user_request_to_do_next_17f_step
+supersedes: []
+known_risks:
+  - 'Current image, flags, ledger and sessions require fresh 17F black-box verification.'
+  - 'Original 17E FIX source artifacts are outside 17F scope; source handoff remains sequence-only.'
+consumers: [L4D-17F-DOCS-FIX-01]
+next_prompt_id: L4D-17F-DOCS-FIX-01
+```
+<!-- HANDOFF:H-L4D-17E-CONTRACT-01-v1:END -->
