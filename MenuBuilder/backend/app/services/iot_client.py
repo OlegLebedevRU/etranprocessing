@@ -647,6 +647,7 @@ class IotPlatformClient:
         generation: int | None = None,
         org_id: int | None = None,
         user: dict[str, Any] | None = None,
+        wait_ack: bool = False,
     ) -> dict[str, Any]:
         """Send keepalive for lease on app1."""
         if not self.base_url or not settings.remote_control_enabled:
@@ -663,7 +664,10 @@ class IotPlatformClient:
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 resp = await client.post(
-                    url, json=payload if payload else None, headers=headers
+                    url,
+                    params={"wait_ack": "true"} if wait_ack else None,
+                    json=payload if payload else None,
+                    headers=headers,
                 )
                 resp.raise_for_status()
                 return resp.json()

@@ -220,7 +220,13 @@ async def test_video_keepalive_renews_matching_media_session(
     ) as ac:
         with (
             patch.object(
-                iot_client, "remote_input_keepalive", return_value={"result": "ok"}
+                iot_client,
+                "remote_input_keepalive",
+                return_value={
+                    "result": "ok",
+                    "stream_instance_id": "provider-session-773",
+                    "stream_state": "running",
+                },
             ) as lease_keepalive,
             patch.object(
                 L4DeskRepository,

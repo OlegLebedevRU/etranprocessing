@@ -8,8 +8,15 @@ from datetime import UTC, date, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models_l4desk import FinBillingProfile, FinUsageDaily, L4DeskTenantProfile
+from app.models_l4desk import (
+    FinBillingProfile,
+    FinLedgerTransaction,
+    FinUsageDaily,
+    L4DeskAuditEvent,
+    L4DeskTenantProfile,
+)
 from app.services.financial_core.accounts import FinAccountService
+from app.services.financial_core.exceptions import FinValidationError
 from app.services.financial_core.posting import FinPostingService
 from app.services.financial_core.schemas import (
     FinPostingEntryRequest,
@@ -133,6 +140,59 @@ def calculate_daily_metrics(
 
 class FinMeteringService:
     """Service for daily usage metering, midnight session splitting, and late-event delta corrections."""
+
+    @staticmethod
+    async def _posted_usage_baseline(
+        db: AsyncSession, row: FinUsageDaily
+    ) -> tuple[int, int, int]:
+        """Return the latest durable cumulative seconds and posted amount."""
+        audit_stmt = (
+            select(L4DeskAuditEvent)
+            .where(
+                L4DeskAuditEvent.tenant_id == row.tenant_id,
+                L4DeskAuditEvent.event_type == "fin_usage_late_period",
+                L4DeskAuditEvent.subject_type == "fin_usage_daily",
+                L4DeskAuditEvent.subject_id == str(row.id),
+            )
+            .order_by(L4DeskAuditEvent.id.desc())
+            .limit(1)
+        )
+        audit = (await db.execute(audit_stmt)).scalar_one_or_none()
+        if audit is not None and isinstance(audit.details, dict):
+            details = audit.details
+            return (
+                int(details["video_seconds"]),
+                int(details["console_seconds"]),
+                int(details["posted_kopecks"]),
+            )
+
+        adjustment_stmt = (
+            select(FinLedgerTransaction)
+            .where(
+                FinLedgerTransaction.tenant_id == row.tenant_id,
+                FinLedgerTransaction.corrects_transaction_id
+                == row.ledger_transaction_id,
+                FinLedgerTransaction.source_type == "daily_adjustment",
+            )
+            .order_by(FinLedgerTransaction.id.desc())
+            .limit(1)
+        )
+        adjustment = (await db.execute(adjustment_stmt)).scalar_one_or_none()
+        if adjustment is not None and isinstance(adjustment.calculation_snapshot, dict):
+            snapshot = adjustment.calculation_snapshot
+            if (
+                "new_video_seconds" not in snapshot
+                or "new_console_seconds" not in snapshot
+            ):
+                raise FinValidationError(
+                    f"Posted usage {row.id} has an older adjustment without a session-type breakdown"
+                )
+            return (
+                int(snapshot["new_video_seconds"]),
+                int(snapshot["new_console_seconds"]),
+                int(snapshot["new_posted_kopecks"]),
+            )
+        return row.video_seconds, row.console_seconds, row.posted_kopecks
 
     @staticmethod
     async def record_session_usage(
@@ -269,9 +329,15 @@ class FinMeteringService:
 
             else:
                 # Row is ALREADY POSTED: original row is IMMUTABLE!
-                # Calculate delta and post an adjustment transaction
-                new_v = row.video_seconds + (sec if session_type == "video" else 0)
-                new_c = row.console_seconds + (sec if session_type == "console" else 0)
+                # Keep every late portion in an audit event, even when it does
+                # not change money. The next portion uses that durable total.
+                (
+                    old_v,
+                    old_c,
+                    old_posted,
+                ) = await FinMeteringService._posted_usage_baseline(db, row)
+                new_v = old_v + (sec if session_type == "video" else 0)
+                new_c = old_c + (sec if session_type == "console" else 0)
                 new_metrics = calculate_daily_metrics(
                     new_v,
                     new_c,
@@ -279,7 +345,7 @@ class FinMeteringService:
                     tariff.free_daily_seconds,
                     tariff.hourly_rate_kopecks,
                 )
-                delta_posted = new_metrics["posted_kopecks"] - row.posted_kopecks
+                delta_posted = new_metrics["posted_kopecks"] - old_posted
 
                 if delta_posted != 0:
                     (
@@ -302,9 +368,13 @@ class FinMeteringService:
                         "original_usage_id": row.id,
                         "terminal_id": terminal_id,
                         "local_date": str(local_date),
-                        "old_seconds": row.source_seconds,
+                        "old_seconds": old_v + old_c,
                         "new_seconds": new_metrics["source_seconds"],
-                        "old_posted_kopecks": row.posted_kopecks,
+                        "old_video_seconds": old_v,
+                        "old_console_seconds": old_c,
+                        "new_video_seconds": new_v,
+                        "new_console_seconds": new_c,
+                        "old_posted_kopecks": old_posted,
                         "new_posted_kopecks": new_metrics["posted_kopecks"],
                         "delta_kopecks": delta_posted,
                         "late_event_id": event_id,
@@ -362,6 +432,28 @@ class FinMeteringService:
                         row.id,
                         local_date,
                     )
+                db.add(
+                    L4DeskAuditEvent(
+                        tenant_id=tenant_id,
+                        actor=actor,
+                        event_type="fin_usage_late_period",
+                        subject_type="fin_usage_daily",
+                        subject_id=str(row.id),
+                        operation_id=event_id,
+                        correlation_id=correlation_id
+                        or f"usage-{terminal_id}-{local_date}",
+                        outcome="recorded",
+                        details={
+                            "event_id": event_id,
+                            "period_seconds": sec,
+                            "video_seconds": new_v,
+                            "console_seconds": new_c,
+                            "posted_kopecks": new_metrics["posted_kopecks"],
+                        },
+                        occurred_at=datetime.now(UTC),
+                    )
+                )
+                await db.flush()
                 rows.append(row)
 
         return rows

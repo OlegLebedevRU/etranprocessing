@@ -20,6 +20,7 @@
 - UI, серверная lease и terminal stream — разные состояния; terminal event исправляет UI.
 - `X-Internal-Service-Key` не попадает в browser, логи или карточки.
 - Video watch: BFF проверяет `video:view` и tenant по `device_id`, подключается к app1 `/ws/watch/{sn}` с внутренним ключом и передаёт браузеру только `invalidate`. UI после каждого сигнала и reconnect читает REST snapshot; lease keepalive остаётся отдельным, счётчик кадров берётся из WebRTC `getStats()` в браузере.
+- Video/console usage: `L4DeskRemoteSession.last_cursor` — последняя учтённая целая UTC-секунда. Подтверждённые периоды по 60 с, финальный хвост и курсор фиксируются атомарно в PostgreSQL. Для истёкшего provider epoch BFF закрывает старую сессию с waiver недоказанного хвоста; новая эпоха получает отдельную сессию. Округление к целым секундам выполняется один раз для сессии в пользу потребителя.
 
 ## State machine
 Для remote control: idle → acquire → active → stop/error/release;
@@ -29,6 +30,7 @@
 ## Ключевые исходники
 - [video_control.py](../../MenuBuilder/backend/app/routers/video_control.py) — DTO, auth и BFF control.
 - [iot_client.py](../../MenuBuilder/backend/app/services/iot_client.py) — app1 client/error mapping.
+- [remote_session_metering.py](../../MenuBuilder/backend/app/services/remote_session_metering.py) — порции, курсор, audit и waiver.
 - [video.py](../../MenuBuilder/backend/app/routers/video.py) — session, ingress/Janus/PIN.
 - [useRemoteControl.ts](../../MenuBuilder/frontend/src/hooks/useRemoteControl.ts) — WS/input/keepalive.
 - [RemoteControlPanel.tsx](../../MenuBuilder/frontend/src/components/video/RemoteControlPanel.tsx) — UI control.

@@ -22,6 +22,7 @@ from app.models_l4desk import (
     FinTariffVersion,
     FinTerminalMonthlyCharge,
     FinUsageDaily,
+    L4DeskAuditEvent,
     L4DeskTenantProfile,
     L4DeskTerminal,
 )
@@ -93,6 +94,7 @@ class FakeMeterFinancialDb:
         self.terminals: dict[int, L4DeskTerminal] = {}
         self.tenant_profiles: dict[int, L4DeskTenantProfile] = {}
         self.usage_daily: dict[int, FinUsageDaily] = {}
+        self.audit_events: dict[int, L4DeskAuditEvent] = {}
         self.monthly_charges: dict[int, FinTerminalMonthlyCharge] = {}
 
         self._next_account_id = 1
@@ -102,6 +104,7 @@ class FakeMeterFinancialDb:
         self._next_tariff_id = 1
         self._next_cycle_id = 1
         self._next_usage_id = 1
+        self._next_audit_id = 1
         self._next_monthly_id = 1
 
     def add(self, obj: Any) -> None:
@@ -154,6 +157,11 @@ class FakeMeterFinancialDb:
                 obj.id = self._next_usage_id
                 self._next_usage_id += 1
             self.usage_daily[obj.id] = obj
+        elif isinstance(obj, L4DeskAuditEvent):
+            if not getattr(obj, "id", None):
+                obj.id = self._next_audit_id
+                self._next_audit_id += 1
+            self.audit_events[obj.id] = obj
         elif isinstance(obj, FinTerminalMonthlyCharge):
             if not getattr(obj, "id", None):
                 obj.id = self._next_monthly_id
@@ -250,7 +258,12 @@ class FakeMeterFinancialDb:
                     t
                     for t in self.transactions.values()
                     if t.corrects_transaction_id == corr_id
+                    and (
+                        _get_param(params, "source_type") is None
+                        or t.source_type == _get_param(params, "source_type")
+                    )
                 ]
+                res.sort(key=lambda t: t.id, reverse=True)
                 return MockResult(one=res[0] if res else None, all_items=res)
             tx_id = _get_param(params, "id")
             if tx_id is not None:
@@ -380,6 +393,18 @@ class FakeMeterFinancialDb:
             return MockResult(one="UTC")
 
         # 10. Usage Daily
+        if "from l4desk_audit_events" in sql:
+            res = [
+                event
+                for event in self.audit_events.values()
+                if event.tenant_id == _get_param(params, "tenant_id")
+                and event.event_type == _get_param(params, "event_type")
+                and event.subject_type == _get_param(params, "subject_type")
+                and event.subject_id == _get_param(params, "subject_id")
+            ]
+            res.sort(key=lambda event: event.id, reverse=True)
+            return MockResult(one=res[0] if res else None, all_items=res)
+
         if "from fin_usage_daily" in sql:
             usage_id = _get_param(params, "id")
             if usage_id is not None:
@@ -958,6 +983,80 @@ async def test_open_closed_daily_usage_and_late_event_delta():
     assert adj.calculation_snapshot["delta_kopecks"] == 100
     assert adj.calculation_snapshot["old_seconds"] == 3600
     assert adj.calculation_snapshot["new_seconds"] == 7200
+
+
+@pytest.mark.anyio
+async def test_multiple_late_periods_accumulate_even_when_one_has_zero_money_delta():
+    db = FakeMeterFinancialDb()
+    tenant_id = 330
+    terminal_id = 331
+    await FinAccountService.ensure_system_accounts(cast(Any, db))
+    await FinAccountService.ensure_tenant_settlement_account(cast(Any, db), tenant_id)
+    await FinTariffService.ensure_default_tariff(cast(Any, db))
+    db.add(
+        L4DeskTerminal(
+            terminal_id=330,
+            tenant_id=tenant_id,
+            ordinal=1,
+            sn="SN-330",
+            external_terminal_id="term-330",
+            operation_id="prov-330",
+            correlation_id="corr-330",
+        )
+    )
+    db.add(
+        L4DeskTerminal(
+            terminal_id=terminal_id,
+            tenant_id=tenant_id,
+            ordinal=2,
+            sn="SN-331",
+            external_terminal_id="term-331",
+            operation_id="prov-331",
+            correlation_id="corr-331",
+        )
+    )
+    start = datetime(2026, 9, 18, 10, tzinfo=UTC)
+    row = (
+        await FinMeteringService.record_session_usage(
+            cast(Any, db),
+            tenant_id=tenant_id,
+            terminal_id=terminal_id,
+            session_type="video",
+            start_utc=start,
+            end_utc=start + timedelta(hours=1),
+            event_id="base-hour",
+        )
+    )[0]
+    await FinMeteringService.close_and_post_daily_usage(
+        cast(Any, db), tenant_id=tenant_id, local_date=start.date()
+    )
+    assert row.posted_kopecks == 100
+
+    cursor = start + timedelta(hours=1)
+    for index, seconds in enumerate((60, 60, 3480, 60), start=1):
+        end = cursor + timedelta(seconds=seconds)
+        await FinMeteringService.record_session_usage(
+            cast(Any, db),
+            tenant_id=tenant_id,
+            terminal_id=terminal_id,
+            session_type="video",
+            start_utc=cursor,
+            end_utc=end,
+            event_id=f"late-period-{index}",
+        )
+        cursor = end
+
+    adjustments = [
+        tx
+        for tx in db.transactions.values()
+        if tx.corrects_transaction_id == row.ledger_transaction_id
+    ]
+    assert [tx.debit_kopecks for tx in adjustments] == [100, 100]
+    assert adjustments[-1].calculation_snapshot["old_seconds"] == 7200
+    assert adjustments[-1].calculation_snapshot["new_seconds"] == 7260
+    assert row.source_seconds == 3600  # Posted original remains immutable.
+    assert len(db.audit_events) == 4
+    assert db.audit_events[4].details["video_seconds"] == 7260
 
 
 # =============================================================================

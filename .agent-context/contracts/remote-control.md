@@ -24,6 +24,7 @@ l4desk — terminal validation/action; l4media не владеет lease. Общ
 - Trusted headers формирует backend, не browser. Key/PIN/JWT не логировать.
 - Ввод только при активном desktop control; camera/view-only — без pointer/key.
 - Keepalive только подтверждённой сессии; stop/error/unmount/lost rights выключают таймеры.
+- Для коммерческого учёта BFF раз в 60 с запрашивает подтверждённый terminal ACK через `wait_ack=true`. Подтверждённый интервал и UTC-курсор записываются вместе; при штатном stop записывается остаток, при недоказанном окончании старой stream epoch остаток не начисляется. Это внутренняя политика MenuBuilder, а не новый MQTT-контракт.
 - Terminal event имеет приоритет над оптимистичным UI running; stopped/error показывает reason.
 
 ## State machine
