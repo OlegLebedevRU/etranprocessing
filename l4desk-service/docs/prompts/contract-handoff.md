@@ -7261,3 +7261,94 @@ runtime_acceptance: NOT_GRANTED
 correction_reason: original_18d_subject_inputs_have_missing_digest_or_neighbor_source; finite_data_only_exports_replace_them_and_18c_is_sequence_only
 ```
 <!-- CORRECTIVE_REGISTRATION:R-L4D-18D-MEDIA-FIX-01-v1:END -->
+
+## 18D coordinated media credential rotation: MB owner step
+
+The user explicitly authorized a separate consumer rotation. The controller verified the finite media auth export published in `1c2ad9eb1bc252908a839247036849959d7ed3b6`; it contains one exact OpenAPI and data-only contract/verification, with no secret values. This MB-only registration addresses the consumer side of a bounded provider/consumer private rotation. The media owner retains its separate 18D scope and provider/Janus configuration; this handoff/registration does not accept 18D or open 18E.
+
+<!-- HANDOFF:H-L4D-18D-MEDIA-AUTH-CONTRACT-01-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-18D-MEDIA-AUTH-CONTRACT-01-v1
+status: ACCEPTED
+contract_kinds:
+- API
+- REPORT
+producer_prompt_id: L4D-18D-MEDIA-AUTH-CONTRACT-01
+producer_scope_project: l4desk-service
+producer_report_path: l4desk-service/docs/prompts/contracts/media-auth-18d-v1/verification.md
+producer_branch: release/l4tools-1.8.2-beta-1
+producer_commit: 1c2ad9eb1bc252908a839247036849959d7ed3b6
+accepted_at_utc: '2026-09-27T21:23:14Z'
+contract_version: 1.0.0
+schema_revision: media_management_openapi_1.0.0
+artifact_version: 1.0.0
+artifact_paths:
+- l4desk-service/docs/prompts/contracts/media-auth-18d-v1/contract.md
+- l4desk-service/docs/prompts/contracts/media-auth-18d-v1/media-management-openapi.json
+- l4desk-service/docs/prompts/contracts/media-auth-18d-v1/verification.md
+artifact_sha256:
+- 21b7f49b4cfc38ee13a0af15541cc0271ec33f6046cdef4f4d626fb191a4b291
+- 02298c2cba4c311e24d7ba893edc206ac01cb902746a931976c28225514cfd1c
+- 8e7b5699674c6dd879657ede2b1882abe269b1936c7b860f8ef70f6970b98213
+compatibility:
+  backward_compatible_with: []
+  breaking_changes: false
+  notes: Data-only media management header and correction target; no current provider or MB deploy claim.
+deployment_status: DOCS_PUBLISHED
+deployed_environment: documentation
+feature_flags: {}
+contract_payload:
+  verification_status: VERIFIED
+  runtime_verification: NOT_REPEATED
+  provider_source_commit: c200d60485d32c805ae00530c57ad7a4b6b2b1ce
+  service_token_header: X-Media-Service-Token
+  provider_env_key: L4MEDIA_SERVICE_TOKEN
+  janus_admin_env_key: JANUS_ADMIN_SECRET
+  secret_values_exported: false
+supersedes: []
+known_risks:
+- Current media source/runtime still requires fail-closed/no-default correction and private rotation.
+- Actual MB consumer key and isolated test backend use must be checked in the MB-owned scope.
+consumers:
+- L4D-18D-AUTH-MB-FIX-01
+next_prompt_id: L4D-18D-AUTH-MB-FIX-01
+```
+<!-- HANDOFF:H-L4D-18D-MEDIA-AUTH-CONTRACT-01-v1:END -->
+
+<!-- CORRECTIVE_REGISTRATION:R-L4D-18D-AUTH-MB-FIX-01-v1:BEGIN -->
+```yaml
+registration_id: R-L4D-18D-AUTH-MB-FIX-01-v1
+status: AUTHORIZED
+authorized_by: Cascade Controller
+authorization_basis: explicit_user_approval_for_separate_mb_consumer_rotation_step
+registered_at_utc: '2026-09-27T21:23:14Z'
+prompt_id: L4D-18D-AUTH-MB-FIX-01
+prompt_path: l4desk-service/docs/prompts/L4D-18D-AUTH-MB-FIX-01.md
+scope_project: MenuBuilder
+scope_root: D:\repo\platerra\Public\etranprocessing-l4d-18d-mb-auth\MenuBuilder
+blocked_prompt_id: L4D-18D-MEDIA-FIX-01
+authorized_inputs:
+- handoff_id: H-L4D-18D-MEDIA-AUTH-CONTRACT-01-v1
+  contract_version: 1.0.0
+  producer_commit: 1c2ad9eb1bc252908a839247036849959d7ed3b6
+sequence_gate_handoff_id: H-L4D-18C-IOT-v1
+artifact_byte_binding_ids: []
+external_artifact_reads:
+- handoff_id: H-L4D-18D-MEDIA-AUTH-CONTRACT-01-v1
+  artifact_commit: 1c2ad9eb1bc252908a839247036849959d7ed3b6
+  paths:
+  - l4desk-service/docs/prompts/contracts/media-auth-18d-v1/contract.md
+  - l4desk-service/docs/prompts/contracts/media-auth-18d-v1/media-management-openapi.json
+  - l4desk-service/docs/prompts/contracts/media-auth-18d-v1/verification.md
+output_handoff_id: H-L4D-18D-AUTH-MB-v1
+next_prompt_id: L4D-18D-MEDIA-FIX-01
+report_path: MenuBuilder/docs/l4desk/handoffs/L4D-18D-AUTH-MB-FIX-01-report.md
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-18D-AUTH-MB-FIX-01-candidate.md
+publication_required_before_execution: true
+grant_scope: consumer_addressing_only
+runtime_acceptance: NOT_GRANTED
+correction_reason: separate_menu_builder_owner_step_for_media_service_credential_rotation
+```
+<!-- CORRECTIVE_REGISTRATION:R-L4D-18D-AUTH-MB-FIX-01-v1:END -->

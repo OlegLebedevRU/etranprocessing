@@ -172,3 +172,7 @@ The historical 18C direct inputs have missing or mismatched Git/raw digests. Pub
 ## 18D media corrective gate
 
 The historical 18D subject handoffs have missing or mismatched digest and addressing, and 18C includes neighboring implementation artifacts. Published `R-L4D-18D-MEDIA-FIX-01-v1` registers [`L4D-18D-MEDIA-FIX-01.md`](L4D-18D-MEDIA-FIX-01.md) with two finite data-only direct inputs and accepted 18C as sequence-only gate. The registered scope is the clean `etranprocessing-l4d-18d-media` worktree. Publication permits the runtime owner to run the full media release gate; 18D acceptance and 18E remain pending.
+
+## 18D media credential consumer rotation
+
+User-approved separate MenuBuilder owner step [`L4D-18D-AUTH-MB-FIX-01.md`](L4D-18D-AUTH-MB-FIX-01.md) is registered as `R-L4D-18D-AUTH-MB-FIX-01-v1`. Its only direct input is the finite media auth data-only export. It changes only confirmed MB private consumers in coordination with the media owner; it does not accept 18D or open 18E.
