@@ -1221,6 +1221,19 @@ async def test_rest_api_finance_profile_cycles_tariffs_and_metering():
         assert t_data["hourly_rate_kopecks"] == 100
 
         # 4. POST /api/internal/v1/finance/metering/online
+        missing_terminal = await client.post(
+            "/api/internal/v1/finance/metering/online",
+            json={
+                "tenant_id": tenant_id,
+                "terminal_id": terminal_id + 1,
+                "event_id": "api_evt_missing_terminal",
+                "occurred_at": (paid_at + timedelta(hours=1)).isoformat(),
+            },
+            headers=internal_headers,
+        )
+        assert missing_terminal.status_code == 409
+        assert missing_terminal.json()["detail"]["code"] == "terminal_not_enrolled"
+
         res_onl = await client.post(
             "/api/internal/v1/finance/metering/online",
             json={

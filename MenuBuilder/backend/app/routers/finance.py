@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.config import settings
 from app.database import get_db
+from app.models_l4desk import L4DeskTerminal
 from app.repositories.l4desk_repository import L4DeskRepository
 from app.services.financial_core import (
     FinAccountNotFoundError,
@@ -580,6 +581,16 @@ async def internal_process_device_online(
     _auth: dict[str, Any] = Depends(require_internal_or_superuser),
 ) -> FinTerminalMonthlyChargeRead | None:
     """Process device_online event for monthly terminal charge."""
+    terminal = await db.get(L4DeskTerminal, body.terminal_id)
+    if (
+        terminal is None
+        or terminal.tenant_id != body.tenant_id
+        or terminal.deleted_at is not None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "terminal_not_enrolled"},
+        )
     charge = await FinTerminalService.process_device_online_monthly_charge(
         db,
         tenant_id=body.tenant_id,
