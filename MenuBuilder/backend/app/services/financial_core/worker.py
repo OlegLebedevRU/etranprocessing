@@ -119,6 +119,46 @@ class FinEntitlementWorker:
             "outbox_retries_processed": len(outbox_stops),
         }
 
+    async def run_scoped_test_tick(
+        self,
+        db: AsyncSession,
+        tenant_id: int,
+        iot_adapter: Any = None,
+    ) -> dict[str, Any]:
+        """Evaluate and stop one allowlisted E2E tenant without scanning others."""
+        if tenant_id not in settings.l4desk_entitlement_test_tenant_ids:
+            raise ValueError("Tenant is not enabled for entitlement E2E")
+        as_of_dt = FinEntitlementService.resolve_as_of(tenant_id)
+        status = await FinEntitlementService.get_tenant_entitlement_status(
+            db, tenant_id, as_of=as_of_dt
+        )
+        notifications = (
+            await FinNotificationService.check_and_schedule_cycle_notifications(
+                db, tenant_id, as_of=as_of_dt
+            )
+        )
+        stops: list[dict[str, Any]] = []
+        if status.state == ENTITLEMENT_BLOCKED:
+            stops = await FinStopOutboxService.stop_sessions_for_blocked_tenant(
+                db, tenant_id, iot_adapter=iot_adapter or self.iot_adapter
+            )
+        retries = await FinStopOutboxService.process_stop_outbox(
+            db, iot_adapter=iot_adapter or self.iot_adapter, tenant_id=tenant_id
+        )
+        await db.commit()
+        return {
+            "tenant_id": tenant_id,
+            "as_of": as_of_dt.isoformat(),
+            "state": status.state,
+            "balance_kopecks": status.balance_kopecks,
+            "grace_deadline": status.grace_deadline.isoformat()
+            if status.grace_deadline
+            else None,
+            "notifications_scheduled": len(notifications),
+            "sessions_stopped": len(stops),
+            "outbox_retries_processed": len(retries),
+        }
+
     async def run_worker(self) -> None:
         """Continuous background execution loop."""
         self._running = True

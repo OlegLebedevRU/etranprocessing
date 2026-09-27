@@ -1,6 +1,7 @@
 import json
 from contextlib import suppress
 
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 DEFAULT_JWT_PUBLIC_KEY = """-----BEGIN PUBLIC KEY-----
@@ -223,6 +224,9 @@ class Settings(BaseSettings):
     l4desk_policy_shadow_mode: bool = True
     l4desk_free_quota_test_tenant_ids: list[int] = []
     l4desk_free_quota_test_seconds: int = 7200
+    # Isolated E2E clock; empty allowlist keeps production on real time.
+    l4desk_entitlement_test_tenant_ids: list[int] = []
+    l4desk_entitlement_test_offset_seconds: int = Field(default=0, ge=0, le=604800)
     l4desk_entitlement_worker_enabled: bool = False
     l4desk_entitlement_worker_interval_sec: float = 60.0
     l4desk_metering_close_worker_enabled: bool = False

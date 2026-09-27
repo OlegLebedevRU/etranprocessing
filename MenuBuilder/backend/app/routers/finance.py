@@ -1009,6 +1009,20 @@ async def internal_trigger_worker_tick(
     return await entitlement_worker.run_single_tick(db)
 
 
+@router.post("/api/internal/v1/finance/entitlement/test-tenant/{tenant_id}/tick")
+async def internal_trigger_scoped_test_tick(
+    tenant_id: int,
+    db: AsyncSession = Depends(get_db),
+    _auth: dict[str, Any] = Depends(require_internal_or_superuser),
+) -> dict[str, Any]:
+    """Run a tenant-scoped E2E tick only when that tenant is explicitly enabled."""
+    if tenant_id not in settings.l4desk_entitlement_test_tenant_ids:
+        raise HTTPException(
+            status_code=404, detail="Entitlement test tenant not enabled"
+        )
+    return await entitlement_worker.run_scoped_test_tick(db, tenant_id)
+
+
 @router.post(
     "/api/internal/v1/finance/stop-outbox/process",
 )

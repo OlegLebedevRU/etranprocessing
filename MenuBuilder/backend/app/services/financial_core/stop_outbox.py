@@ -133,10 +133,13 @@ class FinStopOutboxService:
         db: AsyncSession,
         iot_adapter: Any = None,
         actor: str = "stop_outbox_retry_worker",
+        tenant_id: int | None = None,
     ) -> list[dict[str, Any]]:
         """Retry pending stop requests in the outbox."""
         repo = L4DeskRepository(db)
-        pending_sessions = await repo.get_stop_requested_sessions(limit=50)
+        pending_sessions = await repo.get_stop_requested_sessions(
+            limit=50, tenant_id=tenant_id
+        )
         if not pending_sessions:
             return []
 

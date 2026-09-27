@@ -42,6 +42,7 @@ from app.services.financial_core import (
     FinNotificationService,
     FinStopOutboxService,
 )
+from app.services.financial_core.worker import FinEntitlementWorker
 from app.services.remote_session_policy import (
     L4DeskEntitlementPolicy,
 )
@@ -1446,3 +1447,107 @@ async def test_http_endpoints_and_worker_tick():
             assert "notifications_scheduled" in tick_data
     finally:
         app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.mark.anyio
+async def test_scoped_entitlement_clock_and_tick_isolation(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    tenant_id = 512
+    other_tenant_id = 513
+    monkeypatch.setattr(settings, "l4desk_entitlement_test_tenant_ids", [tenant_id])
+    monkeypatch.setattr(settings, "l4desk_entitlement_test_offset_seconds", 172800)
+
+    real_now = datetime.now(UTC)
+    shifted = FinEntitlementService.resolve_as_of(tenant_id)
+    normal = FinEntitlementService.resolve_as_of(other_tenant_id)
+    assert timedelta(seconds=172799) < shifted - real_now < timedelta(seconds=172801)
+    assert abs((normal - real_now).total_seconds()) < 1
+
+    fake_db = FakeEntitlementDb()
+    db = cast(Any, fake_db)
+    cycle_start = shifted - timedelta(days=2, hours=23)
+    cycle_end = cycle_start + timedelta(days=31)
+    deadline = cycle_start + timedelta(days=3)
+    fake_db.add(
+        FinBillingProfile(
+            tenant_id=tenant_id,
+            anchor_at=cycle_start,
+            anchor_day=cycle_start.day,
+            anchor_timezone="UTC",
+            entitlement="active",
+        )
+    )
+    fake_db.add(
+        FinBillingCycle(
+            tenant_id=tenant_id,
+            sequence=0,
+            starts_at=cycle_start,
+            ends_at=cycle_end,
+            grace_deadline=deadline,
+            timezone="UTC",
+        )
+    )
+    fake_db.add(
+        FinBalanceProjection(
+            tenant_id=tenant_id,
+            account_id=1,
+            balance_kopecks=-100,
+            version=1,
+            updated_at=real_now,
+        )
+    )
+    worker = FinEntitlementWorker()
+    with pytest.raises(ValueError, match="not enabled"):
+        await worker.run_scoped_test_tick(db, other_tenant_id)
+
+    grace = await worker.run_scoped_test_tick(db, tenant_id)
+    assert grace["state"] == ENTITLEMENT_GRACE
+    assert grace["sessions_stopped"] == 0
+    assert grace["grace_deadline"] == deadline.isoformat()
+
+    session = L4DeskRemoteSession(
+        tenant_id=tenant_id,
+        terminal_id=101,
+        operation_id="scoped-e2e-session",
+        correlation_id="scoped-e2e",
+        provider_session_id="provider-scoped-e2e",
+        session_type="video",
+        state="active",
+        requested_at=real_now,
+        active_at=real_now,
+    )
+    fake_db.add(session)
+    mock_iot = MockIotAdapter()
+    monkeypatch.setattr(settings, "l4desk_entitlement_test_offset_seconds", 176400)
+    blocked = await worker.run_scoped_test_tick(db, tenant_id, iot_adapter=mock_iot)
+    assert blocked["state"] == ENTITLEMENT_BLOCKED
+    assert blocked["tenant_id"] == tenant_id
+    assert blocked["sessions_stopped"] == 1
+    assert session.state == "closed"
+    assert mock_iot.stop_calls[0]["session_id"] == "provider-scoped-e2e"
+
+
+@pytest.mark.anyio
+async def test_scoped_test_tick_requires_superuser_and_allowlist(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(settings, "l4desk_entitlement_test_tenant_ids", [512])
+    tenant_token = create_access_token(
+        data={"sub": "100", "role": "user", "role_id": 5, "org_id": 512}
+    )
+    superuser_token = create_access_token(
+        data={"sub": "1", "role": "superuser", "is_superuser": True}
+    )
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        denied = await client.post(
+            "/api/internal/v1/finance/entitlement/test-tenant/512/tick",
+            headers={"Authorization": f"Bearer {tenant_token}"},
+        )
+        assert denied.status_code == 403
+        disabled = await client.post(
+            "/api/internal/v1/finance/entitlement/test-tenant/513/tick",
+            headers={"Authorization": f"Bearer {superuser_token}"},
+        )
+        assert disabled.status_code == 404

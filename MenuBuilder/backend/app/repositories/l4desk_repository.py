@@ -716,14 +716,14 @@ class L4DeskRepository:
         return list(res.scalars().all())
 
     async def get_stop_requested_sessions(
-        self, limit: int = 50
+        self, limit: int = 50, tenant_id: int | None = None
     ) -> list[L4DeskRemoteSession]:
-        stmt = (
-            select(L4DeskRemoteSession)
-            .where(L4DeskRemoteSession.state == "stop_requested")
-            .order_by(L4DeskRemoteSession.id.asc())
-            .limit(limit)
+        stmt = select(L4DeskRemoteSession).where(
+            L4DeskRemoteSession.state == "stop_requested"
         )
+        if tenant_id is not None:
+            stmt = stmt.where(L4DeskRemoteSession.tenant_id == tenant_id)
+        stmt = stmt.order_by(L4DeskRemoteSession.id.asc()).limit(limit)
         res = await self.session.execute(stmt)
         return list(res.scalars().all())
 

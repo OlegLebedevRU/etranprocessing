@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -61,14 +61,24 @@ class FinEntitlementService:
     """
 
     @staticmethod
+    def resolve_as_of(tenant_id: int, as_of: datetime | None = None) -> datetime:
+        """Use a bounded future clock only for an explicitly allowed E2E tenant."""
+        if as_of is not None:
+            return as_of.replace(tzinfo=UTC) if as_of.tzinfo is None else as_of
+        now = datetime.now(UTC)
+        if tenant_id in settings.l4desk_entitlement_test_tenant_ids:
+            return now + timedelta(
+                seconds=settings.l4desk_entitlement_test_offset_seconds
+            )
+        return now
+
+    @staticmethod
     async def get_tenant_entitlement_status(
         db: AsyncSession,
         tenant_id: int,
         as_of: datetime | None = None,
     ) -> FinEntitlementStatus:
-        as_of_dt = as_of or datetime.now(UTC)
-        if as_of_dt.tzinfo is None:
-            as_of_dt = as_of_dt.replace(tzinfo=UTC)
+        as_of_dt = FinEntitlementService.resolve_as_of(tenant_id, as_of)
 
         profile = await FinBillingCycleService.ensure_billing_profile(db, tenant_id)
         balance_kopecks = await FinProjectionService.get_balance_kopecks(db, tenant_id)
