@@ -7352,3 +7352,53 @@ runtime_acceptance: NOT_GRANTED
 correction_reason: separate_menu_builder_owner_step_for_media_service_credential_rotation
 ```
 <!-- CORRECTIVE_REGISTRATION:R-L4D-18D-AUTH-MB-FIX-01-v1:END -->
+
+## Independent controller acceptance: MB media auth rotation
+
+Controller verified the exact §8 registration, accepted direct media auth export (3/3 Git/raw digests), accepted 18C sequence gate, final producer report R `7af9517dfea82d01a1cc6f62c8eb176e70353b97` (SHA-256 `61d74d4ff286f8d31c3d842b04bcedd0b96224425e7c1fe2f711137c00c0d010`) and detached candidate C `97e39dd143b766440db06cbf23931ddf72d9c5dd` (SHA-256 `f4dc9a9a18a7e98a91b1bbf2c9265e47f10c813fc83d553e8caae319ad1f9468`). Read-only production verification confirmed both affected MenuBuilder backend containers running with their reported unchanged application images and restart counts 0. From each container, the configured private environment token was present; authenticated GET `/api/v1/media/metrics` returned 200, missing and wrong synthetic tokens returned 401. No secret value or digest was exported. The report records provider/Janus credential rotation, private backup and coordinated rollback as operator evidence; full media/archive/browser acceptance remains the separate 18D gate. This handoff does not open 18E.
+
+<!-- HANDOFF:H-L4D-18D-AUTH-MB-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-18D-AUTH-MB-v1
+status: ACCEPTED
+candidate_format: DETACHED_V1
+contract_kinds: [REPORT]
+producer_prompt_id: L4D-18D-AUTH-MB-FIX-01
+producer_scope_project: MenuBuilder
+producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-18D-AUTH-MB-FIX-01-report.md
+producer_branch: l4desk/l4d-18d-mb-auth
+producer_commit: 04560ca396f5590a8d25542382ebd4641d8e7ccf
+report_commit: 7af9517dfea82d01a1cc6f62c8eb176e70353b97
+accepted_at_utc: '2026-09-27T21:55:22Z'
+contract_version: 1.0.0
+schema_revision: media_management_openapi_1.0.0
+artifact_version: 1.0.0
+artifact_paths:
+- MenuBuilder/docs/l4desk/handoffs/L4D-18D-AUTH-MB-FIX-01-report.md
+artifact_sha256:
+- 61d74d4ff286f8d31c3d842b04bcedd0b96224425e7c1fe2f711137c00c0d010
+artifact_commits:
+- 7af9517dfea82d01a1cc6f62c8eb176e70353b97
+compatibility:
+  backward_compatible_with: [H-L4D-18D-MEDIA-AUTH-CONTRACT-01-v1]
+  breaking_changes: false
+  notes: API unchanged; private token rotated in both affected consumers.
+deployment_status: DEPLOYED
+deployed_environment: production
+feature_flags: {}
+contract_payload:
+  verification_status: VERIFIED
+  consumer_env_key: L4MEDIA_SERVICE_TOKEN
+  consumers_recreated: [menubuilder-backend, l4desk-e2e-test-backend-1]
+  both_authorized_metrics_http: 200
+  missing_wrong_old_token_http: 401
+  unrelated_container_ids_unchanged: true
+  application_images_unchanged: true
+  secrets_exported: false
+supersedes: []
+known_risks:
+- Full media/browser/archive acceptance remains owned by 18D media step.
+consumers: [L4D-18D-MEDIA-FIX-01]
+next_prompt_id: L4D-18D-MEDIA-FIX-01
+```
+<!-- HANDOFF:H-L4D-18D-AUTH-MB-v1:END -->
