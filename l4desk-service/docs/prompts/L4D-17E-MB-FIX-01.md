@@ -5,7 +5,7 @@ prompt_id: L4D-17E-MB-FIX-01
 scope_project: MenuBuilder
 scope_root: D:\repo\platerra\Public\etranprocessing-l4tools-182\MenuBuilder
 prompt_type: corrective-acceptance
-registration_id: R-L4D-17E-MB-FIX-01-v1
+registration_id: R-L4D-17E-MB-FIX-01-v2
 blocked_prompt_id: L4D-17E-MB
 required_handoff_ids:
   - H-L4D-17D-MEDIA-CONTRACT-01-v1
@@ -37,15 +37,15 @@ external_artifact_reads:
       - l4desk-service/docs/prompts/contracts/media-17d-v1/contract.md
       - l4desk-service/docs/prompts/contracts/media-17d-v1/verification.md
   - handoff_id: H-L4D-13-MB-v1
-    artifact_commit: f5017615a8a84eee318a78b54a992ceb45f91edc
+    artifact_commit: 4a6e124d870e06a2001a83464af2beb0123639b5
     paths:
       - nginx-configs/port_3000.conf
 output_handoff_id: H-L4D-17E-MB-FIX-01-v1
 next_prompt_id: L4D-17F-DOCS
 branch: release/l4tools-1.8.2-beta-1
-report_path: MenuBuilder/docs/l4desk/handoffs/L4D-17E-MB-FIX-01-report.md
+report_path: MenuBuilder/docs/l4desk/handoffs/L4D-17E-MB-FIX-01-v2-report.md
 candidate_format: DETACHED_V1
-candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-17E-MB-FIX-01-candidate.md
+candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-17E-MB-FIX-01-v2-candidate.md
 architecture_sections: [1, 2, 3, 4, 5, 6, 7, 9, 10, 13, 14, 15, 16, 17]
 ```
 
@@ -70,7 +70,9 @@ handoff; не нормализуй текст для принятия. Если 
 Read grant разрешает только чтение и SHA-256 двух media Markdown-файлов и
 декларативного `nginx-configs/port_3000.conf`, перечисленных выше. Последний
 лежит вне `MenuBuilder`, но входит в `artifact_paths` принятого 13-го
-handoff. Не исполняй конфигурацию, не открывай другие файлы соседних
+handoff. Его SHA-256 привязан к отдельному `report_commit` 13-го handoff;
+первый допуск v1 был отозван после несовпадения на `producer_commit`.
+Не исполняй конфигурацию, не открывай другие файлы соседних
 проектов и не обходи ссылки внутри документов. Все остальные артефакты
 проверяй внутри scope `MenuBuilder`.
 

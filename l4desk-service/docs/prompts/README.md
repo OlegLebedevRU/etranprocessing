@@ -105,6 +105,6 @@
 ## L4D-17E-MB-FIX-01 handoff readiness
 
 Corrective acceptance prompt: [L4D-17E-MB-FIX-01.md](L4D-17E-MB-FIX-01.md).
-Controller registration: `R-L4D-17E-MB-FIX-01-v1` in `contract-handoff.md`.
+Controller registration: `R-L4D-17E-MB-FIX-01-v2` (v1 revoked after a failed config artifact read grant) in `contract-handoff.md`.
 Use the exact input list, byte bindings and external read grants in the registration.
 The original 17E report and candidate remain historical evidence.
