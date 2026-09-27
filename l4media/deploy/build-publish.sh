@@ -18,6 +18,9 @@ for component in ingress janus; do
         -t "${REGISTRY_PREFIX}/l4media-${component}:${tag}" "$root/$component"
 done
 bash "$root/deploy/smoke-images.sh" "$ingress" "$janus"
+for image in "$ingress" "$janus"; do
+    python3 "$root/deploy/scan-image.py" "$image"
+done
 # Existing host credential store supplies registry auth. Never pass secrets as args.
 for image in "$ingress" "$janus"; do
     sudo docker push "$image"
