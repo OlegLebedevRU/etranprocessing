@@ -115,6 +115,11 @@ warnings concern existing asynchronous mocks and TestClient deprecation.
 The next consumer must configure the private service credential before
 requesting a PIN.
 
+The tracked checkout has no unrelated diff. Two untracked local pytest temp
+directories from this task remain: automatic approval review rejected both
+safe cleanup attempts with `blocked by policy`. They are outside published
+R/C, image and artifact digests; manual local housekeeping remains.
+
 Output candidate is `H-L4D-18B-PB-v1`, addressed to
 `L4D-18C-IOT` and `L4D-18E-MB`. Only the independent controller may append
 ACCEPTED to the common journal.
