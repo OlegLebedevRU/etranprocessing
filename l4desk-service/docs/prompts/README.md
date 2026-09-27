@@ -155,3 +155,12 @@ The historical `L4D-18A-SHARED.md` has an absent 17F handoff ID. Use
 `R-L4D-18A-SHARED-FIX-01-v1` is published in `contract-handoff.md`.
 Its exact inputs are accepted `H-L4D-17F-DOCS-FIX-01-v1` and
 `H-L4D-04A-SHARED-v1`; output acceptance remains independent.
+
+## 18B ProcessingBackend corrective rollout registration
+
+The historical 18B inputs include missing and mismatched artifact digests.
+Use [`L4D-18B-PB-FIX-01.md`](L4D-18B-PB-FIX-01.md) after published
+`R-L4D-18B-PB-FIX-01-v1`. Direct inputs are accepted 18A shared and
+`H-L4D-18B-PB-EVIDENCE-CONTRACT-01-v1`; the latter is a finite data-only
+export of historical PB reports and the accepted PIN contract. The
+registration does not accept deployment or open 18C.

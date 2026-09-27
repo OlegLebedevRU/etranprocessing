@@ -6638,3 +6638,134 @@ consumers:
 next_prompt_id: L4D-18B-PB
 ```
 <!-- HANDOFF:H-L4D-18A-SHARED-v1:END -->
+
+## Конечный документальный экспорт ProcessingBackend для 18B
+
+Commit A `61d79a9ae9790ab6eee991ad64539e893aab6ade` опубликован и
+независимо проверен: шесть файлов побайтно совпадают с указанными
+исходными Git/raw версиями, седьмой содержит provenance и ограничения.
+Исходный 17B блок не имеет artifact digest; у 04B один digest не
+объясняется LF/CRLF; у 06A шесть исторических digest отражают CRLF.
+Эти блоки не переписываются и не становятся прямыми входами 18B FIX.
+Экспорт не подтверждает текущий deploy и не принимает 18B заранее.
+
+<!-- HANDOFF:H-L4D-18B-PB-EVIDENCE-CONTRACT-01-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-18B-PB-EVIDENCE-CONTRACT-01-v1
+status: ACCEPTED
+contract_kinds: [REPORT]
+producer_prompt_id: L4D-18B-PB-EVIDENCE-CONTRACT-01
+producer_scope_project: l4desk-service
+producer_report_path: l4desk-service/docs/prompts/contracts/acceptance-18b-pb-evidence-v1/verification.md
+producer_branch: release/l4tools-1.8.2-beta-1
+producer_commit: 61d79a9ae9790ab6eee991ad64539e893aab6ade
+accepted_at_utc: '2026-09-27T18:38:28Z'
+contract_version: 1.0.0
+schema_revision: PB 027
+artifact_version: 1.0.0
+artifact_paths:
+  - l4desk-service/docs/prompts/contracts/acceptance-18b-pb-evidence-v1/pb-17b-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18b-pb-evidence-v1/pb-04b-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18b-pb-evidence-v1/pb-06a-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18b-pb-evidence-v1/pin-contract.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18b-pb-evidence-v1/pin-schemas.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18b-pb-evidence-v1/pin-examples.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18b-pb-evidence-v1/verification.md
+artifact_sha256:
+  - 6d58d9af79eba50eea09ebdb5d3fe0254fe1b426b6eaaf0ef33b41a26c84ea56
+  - db6595242565600d81f34196c6c1b4501d2ca658d69f86b2ecfa2472a0607a69
+  - 3120cc31b8360db092ceede22edb663adc8d7c20157a071b37a9083afc35d202
+  - 1c2787fc2c34343d9b46658bd304cb2110bf554019667712c5596eae8ce6c7f4
+  - 563a00aabf4a539c92f6fccad36596dd63fea05bfc088ca1cf7ddbb8e16f26c0
+  - 92a3beeb8323d4697e89ef3978d1d54de07202e5c87debec1adb53779cc48737
+  - a740e3e31d507c4ee4e076b48f29615601e526b1583213d05fdb864c890f2319
+compatibility:
+  backward_compatible_with: []
+  breaking_changes: false
+  notes: Exact data-only copies; no replacement PB runtime or API version is claimed.
+deployment_status: DOCS_PUBLISHED
+deployed_environment: documentation
+feature_flags: {}
+contract_payload:
+  verification_status: VERIFIED
+  runtime_verification: NOT_REPEATED
+  historical_reports: [H-L4D-17B-PB-v1, H-L4D-04B-PB-v1, H-L4D-06A-PB-v1]
+  accepted_pin_contract_source: H-L4D-06A-PB-CONTRACT-01-v1
+  source_report_count: 3
+  exact_source_copy_count: 6
+  source_commit_17b: bc4ec6c3ece48d75c08ff98773af7488da4ace84
+  source_commit_04b: c889ec5f9b0366d3a61e908f82dcd2e8f4c0b367
+  source_report_commit_06a: 291b075f33b2a4f37a84091e2f60d383cbed8fcf
+supersedes: []
+known_risks:
+  - Historical reports do not prove current image, schema, backup or rollback readiness.
+  - Original 17B/04B/06A handoffs have missing or mismatched artifact digest and are not direct FIX inputs.
+consumers: [L4D-18B-PB-FIX-01]
+next_prompt_id: L4D-18B-PB-FIX-01
+```
+<!-- HANDOFF:H-L4D-18B-PB-EVIDENCE-CONTRACT-01-v1:END -->
+
+## Адресная регистрация 18B ProcessingBackend rollout
+
+Принятый 18A — последний sequence gate. Предметные входы нового FIX:
+18A и самостоятельный документальный экспорт выше. Исторические
+17B/04B/06A остаются provenance, не обходятся рекурсивно и не получают
+новых адресов. Регистрация не является разрешением считать rollout
+успешным; перед изменением сервера исполнитель обязан пройти полный
+contract gate и production readiness из нового prompt.
+
+<!-- CORRECTIVE_REGISTRATION:R-L4D-18B-PB-FIX-01-v1:BEGIN -->
+```yaml
+registration_id: R-L4D-18B-PB-FIX-01-v1
+status: AUTHORIZED
+authorized_by: Cascade Controller
+authorization_basis: explicit_user_request_to_continue_18b_after_accepted_18a
+registered_at_utc: '2026-09-27T18:38:28Z'
+prompt_id: L4D-18B-PB-FIX-01
+prompt_path: l4desk-service/docs/prompts/L4D-18B-PB-FIX-01.md
+scope_project: ProcessingBackend
+scope_root: D:\repo\platerra\Public\etranprocessing-l4tools-182\ProcessingBackend
+blocked_prompt_id: L4D-18B-PB
+authorized_inputs:
+  - handoff_id: H-L4D-18A-SHARED-v1
+    contract_version: 1.0.0
+    producer_commit: 537a1e493c83d1fa8e8cb765228be8d1b24a1d62
+  - handoff_id: H-L4D-18B-PB-EVIDENCE-CONTRACT-01-v1
+    contract_version: 1.0.0
+    producer_commit: 61d79a9ae9790ab6eee991ad64539e893aab6ade
+sequence_gate_handoff_id: H-L4D-18A-SHARED-v1
+artifact_byte_binding_ids: []
+external_artifact_reads:
+  - handoff_id: H-L4D-18A-SHARED-v1
+    artifact_commit: 537a1e493c83d1fa8e8cb765228be8d1b24a1d62
+    paths:
+      - shared/docs/l4desk/schema-v1.json
+      - shared/docs/l4desk/schema-v1.md
+      - shared/docs/l4desk/package-source-v011.json
+  - handoff_id: H-L4D-18A-SHARED-v1
+    artifact_commit: 2b38855000d67f06269ddf40e6305382abe2d3a9
+    paths:
+      - shared/docs/l4desk/handoffs/L4D-18A-SHARED-FIX-01-report.md
+      - shared/docs/l4desk/handoffs/evidence/18a-release-checks.json
+  - handoff_id: H-L4D-18B-PB-EVIDENCE-CONTRACT-01-v1
+    artifact_commit: 61d79a9ae9790ab6eee991ad64539e893aab6ade
+    paths:
+      - l4desk-service/docs/prompts/contracts/acceptance-18b-pb-evidence-v1/pb-17b-report.md
+      - l4desk-service/docs/prompts/contracts/acceptance-18b-pb-evidence-v1/pb-04b-report.md
+      - l4desk-service/docs/prompts/contracts/acceptance-18b-pb-evidence-v1/pb-06a-report.md
+      - l4desk-service/docs/prompts/contracts/acceptance-18b-pb-evidence-v1/pin-contract.md
+      - l4desk-service/docs/prompts/contracts/acceptance-18b-pb-evidence-v1/pin-schemas.json
+      - l4desk-service/docs/prompts/contracts/acceptance-18b-pb-evidence-v1/pin-examples.json
+      - l4desk-service/docs/prompts/contracts/acceptance-18b-pb-evidence-v1/verification.md
+output_handoff_id: H-L4D-18B-PB-v1
+next_prompt_id: L4D-18C-IOT
+report_path: ProcessingBackend/docs/l4desk/handoffs/L4D-18B-PB-FIX-01-report.md
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: ProcessingBackend/docs/l4desk/handoffs/L4D-18B-PB-FIX-01-candidate.md
+publication_required_before_execution: true
+grant_scope: consumer_addressing_only
+runtime_acceptance: NOT_GRANTED
+correction_reason: original_18b_inputs_include_missing_and_non_lf_crlf_digest; exact_data_only_export_replaces_historical_pb_direct_inputs
+```
+<!-- CORRECTIVE_REGISTRATION:R-L4D-18B-PB-FIX-01-v1:END -->
