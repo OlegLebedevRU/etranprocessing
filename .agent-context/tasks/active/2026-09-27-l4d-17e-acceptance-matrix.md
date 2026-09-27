@@ -41,7 +41,7 @@
 | Регистрация, письмо, tenant и owner | Подтверждение создаёт согласованный org ID и единственного owner | test05: tenant 10000 в MenuBuilder/IoT, роль 5, повтор ссылки идемпотентен | passed (E2E) | Production registration выключена |
 | Коллизия org ID | Занятый IoT ID не выдаётся новому tenant | IoT ID 4 → 409; новый резерв 10000 совпал в двух системах | passed (E2E) | Неиспользованные резервы после сбоя требуют аудита |
 | Terminal onboarding/readiness | PIN, certificate, MQTT и identity согласованы | 1000003 и 1000005 online; исходные несовпадения исправлены | passed (E2E) | Повторить на финальном candidate image |
-| Owner video/console; old/new; взаимное исключение | Движущиеся кадры, консоль и 409 при занятой lease | 1000003 и 1000005: видео/console/stop подтверждены; lease_taken=409; 1000005 повторён на чистом production backend image без задержки и 500, session 483 закрыта | passed (E2E) | Console/mutual exclusion на новом image опираются на исторический E2E и локальный suite |
+| Owner video/console; old/new; взаимное исключение | Движущиеся кадры, консоль и 409 при занятой lease | 1000003 и 1000005: видео/console/stop подтверждены; lease_taken=409; на image `9bda9ce` владелец получил watch WS 101, status 200/200, повторный start/move/stop 1000005 без задержки и 500, session 484 закрыта | passed (E2E) | Console/mutual exclusion на новом image опираются на исторический E2E и локальный suite |
 | Бесплатный terminal и лимит | Только разрешённый terminal; после лимита 403 | tenant 1000, 600 с opt-in, исторически 913 доказанных секунд; на чистом `df7598c` под правильным test04 повторно получен `403/free_quota_exceeded` без создания сессии или проводки | passed (E2E) | Production 7200 с проверен локально |
 | Порции внутри сессии, retry и округление | Курсор не дублируется, хвост округлён вниз | session 481: 62+62+62+1=187 с из 187,85 с; повторного начисления нет | passed (E2E) | Провайдер БД иногда сбрасывает новые соединения |
 | Paid continuation после free | Положительный баланс допускает сессию | tenant 1000: mock payment 10 руб. posted, баланс +1000 коп.; тот же HTTP lease после 403 принят с 201, release=204; local test | passed (E2E + local) | Полное видео на новом image не запускалось, проверено admission |
@@ -57,8 +57,8 @@
 | Hub filters/correlation/mismatch | Поиск и drilldown сохраняют источник, mismatch обнаруживается | `test_correlation_drilldown_nodes_and_mismatches`, `test_hub_http_api_rbac_and_views` | passed (local) | Нет browser/runtime E2E |
 | Archive import/retention | Manifest, запрет удаления финансовых данных | `test_archive_manifests.py` | passed (local) | Нет runtime import/retention E2E |
 | Immutable consumer fixtures | Старый/новый контракт совместим | Принятый IoT fixture `1.1.0 / 2026-09-25-v2` скопирован без изменений из provider commit `22a50a1`, SHA-256 совпал с handoff; девять событий и примеры ответов совпадают со старым `1.0.0`, обе версии валидируются локальным consumer | passed (local contract) | Runtime feed app1 отдельно подтверждён историческим E2E; текущий тест не вызывает provider |
-| Full release parity, migration, flags, rollback | Полный source/image match, 027 и disabled/restricted флаги | Test и production backend используют image `sha256:42fa63c0…`; в production 92/92 Python-файла совпали с archive `df7598c`; schema 027, коммерческие флаги false, старый image сохранён; пять frontend assets, на которые ссылается index, совпали с локальной сборкой | passed (MenuBuilder deployment) | Внешние providers остаются отдельными handoff |
-| Production-safe smoke | Изолированный tenant, остальные не затронуты | Production backend running/restart=0, `/docs`=200, registration/billing/policy/workers=false; 1000005 video start/move/stop без задержки и 500; session 483 closed, active sessions=0, ledger и balance неизменны | passed (runtime smoke) | Billing disabled: новый usage помечен free; коммерческий admission проверен в изолированном контуре |
+| Full release parity, migration, flags, rollback | Полный source/image match, 027 и disabled/restricted флаги | Test и production backend используют image `sha256:c70a11d88eef…` из Git archive `9bda9ce`; в обоих 92/92 Python-файла `app/` совпали с архивом, mismatch/missing/extra=0; schema 027, production commercial flags false, test policy=true/tenant 1000/600 с, предыдущий image сохранён; frontend index указывает на новые assets из `20cee55` | passed (MenuBuilder deployment) | Внешние providers остаются отдельными handoff |
+| Production-safe smoke | Изолированный tenant, остальные не затронуты | Production backend running/restart=0, `/docs`=200, registration/billing/policy/workers=false; на image `9bda9ce` 1000005 video start/move/stop без задержки и 500; session 484 closed, active sessions=0, source/free usage 1048→1074 с, ledger и balance неизменны | passed (runtime smoke) | Billing disabled: новый usage помечен free; коммерческий admission проверен в изолированном контуре |
 
 ## Условия выпуска handoff
 
@@ -76,6 +76,18 @@
 подготовлены. Project-local и адресный consumer-contract smoke завершены;
 ограничения локальных и runtime проверок сохранены в таблице. Независимый
 verdict контроллера ещё не получен.
+
+После production smoke обнаружены два связанных с ролью 5 дефекта video UI:
+frontend не запускал status/watch, затем watch WebSocket возвращал 403.
+Frontend commit `20cee55` установлен адресно; `control/status` и
+`stream/state` отвечают 200. Backend commit `9bda9ce` применён в production
+и изолированном 17E image `sha256:c70a11d88eef…`; пользователь подтвердил
+`/watch/ws` 101 под test04/tenant 1000. Локально: frontend 60 тестов и build,
+backend 519 тестов, Ruff/format/Pyright чистые. Viewer без `video:view` и
+чужой tenant продолжают получать отказ. Финальный start/move/stop на новом
+image прошёл: движение без задержки, stop без 500; read-only SQL показал
+session 484 `closed`, active sessions=0, source/free usage 1074 с,
+billable=0, ledger debit=credit=1000 коп., balance=1000 коп.
 
 ## Проверено в текущей итерации
 

@@ -565,3 +565,16 @@ Compose warning `admin/hash` устранён отдельным исправл�
 согласованного деплоя и адресного recreate предупреждений нет,
 `settings.get_users()` возвращает одну запись, image/flags/финансовые
 инварианты не изменились. Backup серверного Compose сохранён.
+
+Финальная проверка роли владельца выявила два дефекта: frontend не
+запускал status/watch для роли 5, а backend watch WebSocket требовал
+отдельный `video:view` в JWT владельца. Frontend commit `20cee55`
+(60 тестов, build) установлен адресно. Backend commit `9bda9ce`
+(519 тестов, Ruff/format/Pyright) развёрнут одним image
+`sha256:c70a11d88eef…` в production и изолированном 17E; предыдущий image
+сохранён под `pre-watch-9bda9ce`. Production commercial flags=false;
+test-backend policy=true, tenant `[1000]`, quota=600 с. На обычном сайте
+test04 получил watch WS 101 и оба status ответа 200; финальный
+start/move/stop 1000005 прошёл без задержки и 500. Read-only БД: session
+484 `closed`, active sessions=0, source/free usage 1048→1074 с,
+billable=0, ledger debit=credit=1000 и balance=1000 коп. неизменны.
