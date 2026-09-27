@@ -164,3 +164,7 @@ Use [`L4D-18B-PB-FIX-01.md`](L4D-18B-PB-FIX-01.md) after published
 `H-L4D-18B-PB-EVIDENCE-CONTRACT-01-v1`; the latter is a finite data-only
 export of historical PB reports and the accepted PIN contract. The
 registration does not accept deployment or open 18C.
+
+## 18C IoT corrective gate
+
+The historical 18C direct inputs have missing or mismatched Git/raw digests. Published `R-L4D-18C-IOT-FIX-01-v1` registers [`L4D-18C-IOT-FIX-01.md`](L4D-18C-IOT-FIX-01.md) with accepted 18B and a finite data-only IoT evidence export as direct inputs. The export does not prove current runtime. Before build/deploy, the IoT owner must harden the build context against private configuration and verify release readiness. 18C acceptance and 18D remain pending.

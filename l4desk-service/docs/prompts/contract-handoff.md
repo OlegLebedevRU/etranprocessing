@@ -6866,3 +6866,159 @@ consumers: [L4D-18C-IOT, L4D-18E-MB]
 next_prompt_id: L4D-18C-IOT
 ```
 <!-- HANDOFF:H-L4D-18B-PB-v1:END -->
+
+## 18C IoT: finite evidence export and corrective registration
+
+The controller independently verified the 20 exact historical Git/raw data-only copies and the verification report in published commit `e7a03f8e089537fd91fcaad62659ffdd2c349515`. The report records the provenance and limits; this handoff confirms documentation publication only. Historical 01C/02/06B/07/15B/17C blocks remain unchanged and are not direct FIX inputs. The accepted 18B handoff remains the sequence gate. This registration addresses only the new prompt and grants finite reads; it does not accept 18C runtime or authorize a later cascade step.
+
+<!-- HANDOFF:H-L4D-18C-IOT-EVIDENCE-CONTRACT-01-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-18C-IOT-EVIDENCE-CONTRACT-01-v1
+status: ACCEPTED
+contract_kinds:
+- REPORT
+producer_prompt_id: L4D-18C-IOT-EVIDENCE-CONTRACT-01
+producer_scope_project: l4desk-service
+producer_report_path: l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/verification.md
+producer_branch: release/l4tools-1.8.2-beta-1
+producer_commit: e7a03f8e089537fd91fcaad62659ffdd2c349515
+accepted_at_utc: '2026-09-27T19:58:00Z'
+contract_version: 1.0.0
+schema_revision: historical_IoT_contracts
+artifact_version: 1.0.0
+artifact_paths:
+- l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/01c-report.md
+- l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/01c-agent-compatibility.json
+- l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/01c-golden-vectors.json
+- l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/02-event-feed-contract.json
+- l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/02-event-feed-openapi.json
+- l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/02-remote-session-event.schema.json
+- l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/02-remote-session.schema.json
+- l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/02-event-feed-examples.json
+- l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/06b-provision-openapi.json
+- l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/06b-provision-request.schema.json
+- l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/06b-provision-response.schema.json
+- l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/06b-provision-examples.json
+- l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/06b-report.md
+- l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/07-remote-session.schema.json
+- l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/07-remote-session-event.schema.json
+- l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/07-event-feed-openapi.json
+- l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/07-report.md
+- l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/15b-report.md
+- l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/17c-report.md
+- l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/17c-video-watch-contract.md
+- l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/verification.md
+artifact_sha256:
+- 1c412fa34400a53163694fb1891b20b5e0088d5fdb57ddb315ffd20a879fa34b
+- 51a29c80272b1e92c2d80b65057b413c4bdad9c7df6b8d0c274b83037ba8db4d
+- 0ae6f4b2815d95f41c41eba80712ed1184f05cd81740a2597246b54dfa24a202
+- 07be82d70e768ae0a44f24f6e5de6b948a039b746a798ce9c08179fbae810a77
+- 8196befa2b3e103ec27cfbd39f65cbd230de55de037cadfbb890b06792d4d324
+- 4d7393d0dcd1ae62f04e0ad488b6bab519d8d7e357f0cad569809743cb6270e9
+- c05027474d31f993954451d388667370caadcaeee044997a7a5a97e066cbb1ad
+- 41734c7b68850b083eefc07891183c91965c88d0a6589f15e265be0563006f61
+- bf15db6fff2fd6cddd7b14eea50e7be6c62ca22fd640706e564578e5d408a7b3
+- baad69034c08785c2fab3f3c2affbeba938da6340513ceb5bfbf8972a18520fa
+- e1bbb431378086b6b9b57ded34764d6ce251041522a4c5fd95d4b6ed0a096802
+- abe3a4c8e1136103ca16e45ed5b778c4ba55f0cddb8f693bdd338cfa096c3653
+- 5759fc1ab00dacfe2f16585f4df2753a8b4d5a8bc197af22f5b99c0fcff62d80
+- db102accadce58a7055ede40e6d4896b9d2a82004157a25b8b9c3e2a80df315b
+- 4d7393d0dcd1ae62f04e0ad488b6bab519d8d7e357f0cad569809743cb6270e9
+- dddc1d913e6ac94d82a09312060642bbc99c0d2c39c28b52b649aaea40aac81a
+- 857cbe719dc7a035b79e8218aab9417a6176933ddc076b1884fcf4004e5cd0bd
+- dcfcd947f0e141fc8a7d687a1c3e35d8354c12432b1a3fd5f363db26d022aa3a
+- 100ea273756776d445722e7c9d129894b63ffaca04cb80b2bcb25ace1277b949
+- ef924d9992b4d319e3a876f01834175ba3fb8b2438698cfb289ccaed40bd5e42
+- 00d6a8d1090b6386cc7006c15821c6ee9681024dad467ba3266ad486e4053427
+compatibility:
+  backward_compatible_with: []
+  breaking_changes: false
+  notes: Exact data-only historical copies; no current IoT runtime/deploy claim.
+deployment_status: DOCS_PUBLISHED
+deployed_environment: documentation
+feature_flags: {}
+contract_payload:
+  verification_status: VERIFIED
+  runtime_verification: NOT_REPEATED
+  exact_source_copy_count: 20
+  verification_report_count: 1
+  source_handoffs:
+  - H-L4D-01C-DOCS-v1
+  - H-L4D-02-IOT-v1
+  - H-L4D-06B-IOT-v1
+  - H-L4D-07-IOT-v1
+  - H-L4D-15B-IOT-v1
+  - H-L4D-17C-IOT-v1
+  published_export_commit: e7a03f8e089537fd91fcaad62659ffdd2c349515
+supersedes: []
+known_risks:
+- Historical documents do not prove current source, image, schema, secret hygiene, deployment or rollback.
+- Original source handoffs have missing, CRLF-only or displaced digest and are not direct FIX inputs.
+consumers:
+- L4D-18C-IOT-FIX-01
+next_prompt_id: L4D-18C-IOT-FIX-01
+```
+<!-- HANDOFF:H-L4D-18C-IOT-EVIDENCE-CONTRACT-01-v1:END -->
+
+<!-- CORRECTIVE_REGISTRATION:R-L4D-18C-IOT-FIX-01-v1:BEGIN -->
+```yaml
+registration_id: R-L4D-18C-IOT-FIX-01-v1
+status: AUTHORIZED
+authorized_by: Cascade Controller
+authorization_basis: explicit_user_request_to_prepare_18c_after_accepted_18b
+registered_at_utc: '2026-09-27T19:58:00Z'
+prompt_id: L4D-18C-IOT-FIX-01
+prompt_path: l4desk-service/docs/prompts/L4D-18C-IOT-FIX-01.md
+scope_project: iot-rpc-rest-app
+scope_root: D:\work\iot.leo4.ru\iot-rpc-rest-app-18c
+blocked_prompt_id: L4D-18C-IOT
+authorized_inputs:
+- handoff_id: H-L4D-18B-PB-v1
+  contract_version: 1.0.0
+  producer_commit: 67827b607e64d771e368a0a43e1b6c0f09087dd8
+- handoff_id: H-L4D-18C-IOT-EVIDENCE-CONTRACT-01-v1
+  contract_version: 1.0.0
+  producer_commit: e7a03f8e089537fd91fcaad62659ffdd2c349515
+sequence_gate_handoff_id: H-L4D-18B-PB-v1
+artifact_byte_binding_ids: []
+external_artifact_reads:
+- handoff_id: H-L4D-18B-PB-v1
+  artifact_commit: 3d76c7d6d5165959e4cd077b4730a5712d7e1f6a
+  paths:
+  - ProcessingBackend/docs/l4desk/handoffs/L4D-18B-PB-FIX-01-report.md
+- handoff_id: H-L4D-18C-IOT-EVIDENCE-CONTRACT-01-v1
+  artifact_commit: e7a03f8e089537fd91fcaad62659ffdd2c349515
+  paths:
+  - l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/01c-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/01c-agent-compatibility.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/01c-golden-vectors.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/02-event-feed-contract.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/02-event-feed-openapi.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/02-remote-session-event.schema.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/02-remote-session.schema.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/02-event-feed-examples.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/06b-provision-openapi.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/06b-provision-request.schema.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/06b-provision-response.schema.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/06b-provision-examples.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/06b-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/07-remote-session.schema.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/07-remote-session-event.schema.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/07-event-feed-openapi.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/07-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/15b-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/17c-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/17c-video-watch-contract.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/verification.md
+output_handoff_id: H-L4D-18C-IOT-v1
+next_prompt_id: L4D-18D-MEDIA
+report_path: docs/l4desk/handoffs/L4D-18C-IOT-FIX-01-report.md
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: docs/l4desk/handoffs/L4D-18C-IOT-FIX-01-candidate.md
+publication_required_before_execution: true
+grant_scope: consumer_addressing_only
+runtime_acceptance: NOT_GRANTED
+correction_reason: original_18c_inputs_have_missing_or_non_git_raw_digest; exact_data_only_export_replaces_historical_iot_direct_inputs
+```
+<!-- CORRECTIVE_REGISTRATION:R-L4D-18C-IOT-FIX-01-v1:END -->
