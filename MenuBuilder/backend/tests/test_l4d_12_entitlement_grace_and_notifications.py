@@ -305,7 +305,48 @@ class FakeEntitlementDb:
 
         # 6. FinBillingCycle
         if "fin_billing_cycles" in query_str:
+            if "max(fin_billing_cycles.sequence)" in query_str:
+                return MockResult(
+                    one=max(
+                        (cycle.sequence for cycle in self.cycles.values()), default=-1
+                    )
+                )
             if self.cycles:
+                if "fin_billing_cycles.sequence =" in query_str:
+                    sequence = next(
+                        (
+                            value
+                            for key, value in statement.compile().params.items()
+                            if key.startswith("sequence_")
+                        ),
+                        None,
+                    )
+                    matching = [
+                        cycle
+                        for cycle in self.cycles.values()
+                        if cycle.sequence == sequence
+                    ]
+                    return MockResult(
+                        one=matching[0] if matching else None,
+                        all_items=matching,
+                    )
+                if "fin_billing_cycles.starts_at <=" in query_str:
+                    timestamps = [
+                        value
+                        for value in statement.compile().params.values()
+                        if isinstance(value, datetime)
+                    ]
+                    if timestamps:
+                        at = timestamps[0]
+                        matching = [
+                            cycle
+                            for cycle in self.cycles.values()
+                            if cycle.starts_at <= at < cycle.ends_at
+                        ]
+                        return MockResult(
+                            one=matching[0] if matching else None,
+                            all_items=matching,
+                        )
                 # Return latest or matching
                 all_c = list(self.cycles.values())
                 all_c.sort(key=lambda c: c.sequence, reverse=True)
@@ -732,6 +773,87 @@ async def test_all_cycle_and_grace_boundaries():
     )
     assert not dec["allowed"]
     assert dec["error_code"] == REASON_ENTITLEMENT_BLOCKED
+
+
+@pytest.mark.anyio
+async def test_entitlement_transitions_on_short_cycle_fixture():
+    """Exercise admission at exact boundaries on a 30-minute test timeline."""
+    fake_db = FakeEntitlementDb()
+    db = cast(Any, fake_db)
+    tenant_id = 1503
+    cycle_start = datetime(2026, 10, 1, 10, 0, tzinfo=UTC)
+    grace_deadline = cycle_start + timedelta(minutes=10)
+    cycle_end = cycle_start + timedelta(minutes=30)
+
+    fake_db.add(
+        FinBillingProfile(
+            tenant_id=tenant_id,
+            anchor_at=cycle_start,
+            anchor_day=1,
+            anchor_timezone="UTC",
+            entitlement=ENTITLEMENT_ACTIVE,
+        )
+    )
+    fake_db.add(
+        FinBillingCycle(
+            tenant_id=tenant_id,
+            sequence=0,
+            timezone="UTC",
+            starts_at=cycle_start,
+            ends_at=cycle_end,
+            grace_deadline=grace_deadline,
+        )
+    )
+    fake_db.add(
+        FinBillingCycle(
+            tenant_id=tenant_id,
+            sequence=1,
+            timezone="UTC",
+            starts_at=cycle_end,
+            ends_at=cycle_end + timedelta(minutes=30),
+            grace_deadline=cycle_end + timedelta(minutes=10),
+        )
+    )
+    projection = FinBalanceProjection(
+        tenant_id=tenant_id,
+        account_id=1,
+        balance_kopecks=100,
+        version=1,
+        last_transaction_id=None,
+        updated_at=cycle_start,
+    )
+    fake_db.add(projection)
+
+    async def decision(at: datetime) -> dict[str, Any]:
+        return await FinEntitlementService.evaluate_session_request(
+            db,
+            tenant_id=tenant_id,
+            terminal_id=1,
+            session_type="video",
+            as_of=at,
+        )
+
+    assert (await decision(cycle_start))["allowed"]
+    projection.balance_kopecks = -100
+    before_deadline = await decision(grace_deadline - timedelta(seconds=1))
+    assert before_deadline["allowed"]
+    assert before_deadline["entitlement_state"] == ENTITLEMENT_GRACE
+
+    at_deadline = await decision(grace_deadline)
+    assert not at_deadline["allowed"]
+    assert at_deadline["error_code"] == REASON_ENTITLEMENT_BLOCKED
+
+    projection.balance_kopecks = 100
+    after_payment = await decision(grace_deadline + timedelta(minutes=1))
+    assert after_payment["allowed"]
+    assert after_payment["entitlement_state"] == ENTITLEMENT_ACTIVE
+    assert fake_db.profiles[tenant_id].anchor_at == cycle_start
+
+    projection.balance_kopecks = -100
+    next_cycle = await decision(cycle_end)
+    assert next_cycle["allowed"]
+    assert next_cycle["entitlement_state"] == ENTITLEMENT_GRACE
+    assert not (await decision(cycle_end + timedelta(minutes=10)))["allowed"]
 
 
 @pytest.mark.anyio

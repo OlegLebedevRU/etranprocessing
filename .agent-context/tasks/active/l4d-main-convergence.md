@@ -517,3 +517,19 @@
 считать кандидата финальным production release. Основной production backend
 в ходе последнего 17E теста не пересоздавался; изолированный backend и
 тестовые tenant/terminal данные изменялись адресно, секреты не раскрывались.
+
+### 17E acceptance audit 2026-09-27
+
+Текущая [матрица](2026-09-27-l4d-17e-acceptance-matrix.md) разделяет
+runtime E2E, локальные проверки и незакрытые gates. Добавлен локальный тест
+30-минутного цикла и 10-минутного grace на заранее заданных границах;
+полный MenuBuilder backend suite — 517 passed, ruff/format/pyright прошли.
+Реальный тест бесплатной квоты остаётся 600 секунд для tenant 1000.
+
+Read-only сверка сервера показала: изолированный image с тегом `224daaf`
+не соответствует Git `224daaf` по `config.py`, `main.py`, `entitlement.py`;
+в image нет `metering_close_worker.py` и есть лишние старые файлы.
+Адресное поле лимита 600 секунд отсутствует в active `Settings` этого image.
+Нужна чистая воспроизводимая сборка из зафиксированного Git archive и
+повтор 17E checks на новом image. Production MenuBuilder не менялся;
+его registration, billing, policy и entitlement worker выключены.
