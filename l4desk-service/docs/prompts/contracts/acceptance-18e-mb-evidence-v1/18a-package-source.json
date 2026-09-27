@@ -1,0 +1,29 @@
+{
+  "package": "etranprocessing-db",
+  "version": "0.1.1",
+  "delivery": "git-source",
+  "source_root": "shared",
+  "normalization": "UTF-8 files, CRLF normalized to LF (Git blob bytes)",
+  "files": {
+    "etranprocessing_db/__init__.py": "043f21a04d9137f2eb021b7fa88040666256cb35e563af1fb7b74955a4378261",
+    "etranprocessing_db/base.py": "987edfd9dfe38b2c49492c7d1a4e774015d16b72e2281b018e4160be6b47d560",
+    "etranprocessing_db/l4desk.py": "a75ecd79403083de55f7edb929693bf4e5e5aafc2d820ab7b2b23d856a8afd72",
+    "etranprocessing_db/models/__init__.py": "7bad42ec3cc900f2d668185222de2f74e67f94dd823daa033d49d2ecd6c4a88b",
+    "etranprocessing_db/models/auth.py": "903916d7659e364c6f7c1fcee53c7491bcae5fdbae178005102acc77c45f3a1b",
+    "etranprocessing_db/models/billing.py": "f4260965741ed9e79fe40de06706f4f0b84f0232920ea444292df6f13b7837ba",
+    "etranprocessing_db/models/catalog.py": "1a1ce3ed54a80743349282f7a43955c6e6ad5905d9d254f18b832ba2ac5393a6",
+    "etranprocessing_db/models/email.py": "2424e6bffb76f2b81ca2482c836dc7cf6c7f343030dd8e01935014879b670392",
+    "etranprocessing_db/models/finance.py": "fc9d1458da9a8c5d6a609c72f7a9a7b547f07a531988a2442f907714c382b4f5",
+    "etranprocessing_db/models/iot.py": "332242fc24e09db812ece65132487a5907b0d0c4766129a57d6ef5e31b3a5349",
+    "etranprocessing_db/models/l4desk.py": "a9ad8d88128cbfffcbd10785aeb5ffc0c8d4c3ef94930dfaa81358b2086044a3",
+    "etranprocessing_db/models/menu.py": "2b60bd44d4c0f4029391be6f0686f3890208f783ae73e466a4a86b9dd04add9c",
+    "etranprocessing_db/models/org.py": "5bbb799776427b4cd5b2537620ab0494425e9b2340fba8e255afc8239dc9556a",
+    "etranprocessing_db/models/payment.py": "8c4ff22f105a19d0bff9c77910e5e9f62a01c45a8798a105bf9c333afa5470fc",
+    "etranprocessing_db/models/telemetry.py": "dd20ccd8862cd0b36a11a03d2312595c29861856073620f6c02d6759b8cbb388",
+    "etranprocessing_db/models/terminal.py": "332d5266c2fc1711caf6862d3be4e9812de6fc91d74f9e6e558c75b70afe34ff",
+    "pyproject.toml": "7e63aadd922d7df49bb029e364ab719233b3a9921a143504918dc8c863d45117",
+    "uv.lock": "fd69b07afee90d75e99a4adcdd99309e6a9726e66af5ff38b4380551f48899c0",
+    "docs/l4desk/schema-v1.json": "52f481dd3d9985c54b5388a1d9e63062a8fdbe626870b58a83b3461c3e08e49f",
+    "docs/l4desk/schema-v1.md": "d80626d6f84bab0e44d2236a172b3ffa385c7779bccd26b42c2947b071f77935"
+  }
+}

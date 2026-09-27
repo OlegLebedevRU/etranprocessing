@@ -1,0 +1,124 @@
+{
+  "utc": "2026-09-27T22:07:58.847560+00:00",
+  "metrics": {
+    "http": 200,
+    "data": {
+      "status": "ok",
+      "uptime_sec": 1273,
+      "active_media_sessions": 0,
+      "total_sessions_started": 3,
+      "total_sessions_stopped": 3,
+      "total_sessions_failed": 0,
+      "orphans_cleaned_mountpoints": 0,
+      "orphans_cleaned_routes": 0,
+      "total_rtp_packets": 10497,
+      "total_bytes": 10926315
+    }
+  },
+  "session": {
+    "http": 200,
+    "data": {
+      "state": "stopped",
+      "stop_reason": "stream_stopped",
+      "ttl_sec": 600,
+      "elapsed_sec": 81,
+      "rtp_packets": 10497,
+      "bytes": 10926315,
+      "transport_connected": false,
+      "fresh_rtp": false
+    }
+  },
+  "route": {
+    "http": 404,
+    "data": {}
+  },
+  "mountpoint_error_code": 455,
+  "images": [
+    {
+      "container": "/l4media-ingress",
+      "configured_image": "l4media-ingress@sha256:3e0e0341f37702bedef06ca87538c494c7e6bdf8f87152e6d5901e4d792322fd",
+      "labels": {
+        "io.l4desk.source-archive-sha256": "71e09b7ce420a5ba1ea00c0451480803e1df4f041bd48c5c2ac8e1d2c5f4975e",
+        "org.opencontainers.image.revision": "e6e681dcf74fb0e81da5cf1f7f0fc2d39dca7f33"
+      },
+      "binary_sha256": "1669166cf580ba688868e2f064f99aa1c22f76c6858331db4cf342ecf7308de8"
+    },
+    {
+      "container": "/l4media-janus",
+      "configured_image": "l4media-janus@sha256:93265665a92482ec1de2c9571a08d27c87b1dee06efc000f717ed42dfe2438ae",
+      "labels": {
+        "io.l4desk.janus-upstream-revision": "3c39ce8cf11c54cf6f1607030a47ac9db798389a",
+        "io.l4desk.janus-upstream-sha256": "a3e211e601980f0f618e1189705a2d23d36abc2b81c178a4c5cf20072edb19e5",
+        "io.l4desk.source-archive-sha256": "71e09b7ce420a5ba1ea00c0451480803e1df4f041bd48c5c2ac8e1d2c5f4975e",
+        "org.opencontainers.image.revision": "e6e681dcf74fb0e81da5cf1f7f0fc2d39dca7f33"
+      },
+      "binary_sha256": "85d7979e0a7aa15c1ad402983b5669ada5f0067f5528d170c287c5ee7d3ffee7"
+    }
+  ],
+  "public_config_sha256": {
+    "compose.yaml": "c4d19374739410eeeb008ffccdf7325ae31c20f9fcad7d0fea7ad6b8e1905326",
+    "janus/janus.jcfg": "9ae8c7dbabf16db3403deaded822fd7f037087428916d964fb7d59d39a139c5c",
+    "janus/janus.transport.http.jcfg": "c314c5fb76aba3a8b8770b8c740a44c65a864ffcd32e5de117cc7a16b2d91ffe",
+    "janus/janus.plugin.streaming.jcfg": "55ecc30fe1be965ccd7f15493fdcba90dee7bc6451914e6b7abf3dc603440e96",
+    "ingress/src/l4media_ingress.c": "05434f048f2b4b3f9b791f42707609a1d42e682d6141c7ce8f7f0e07cbd5266f",
+    "ingress/src/media_lifecycle.h": "3e4014e151991fe505d316038f02eab4e59e43f8580aeb67a45eadeb07a3a2e1",
+    "ingress/openapi.json": "0a4090070a81247d9221213531ff214ef8a3151a173f91324bf2f82fa54c38cf"
+  },
+  "build_binary_hashes_match_production": true,
+  "tests": {
+    "c_unit": "passed",
+    "media_lifecycle": 9,
+    "ingress_regression": 6,
+    "archive_python": 21,
+    "ruff": "passed",
+    "pyright_errors": 0,
+    "missing_credentials_exit_code": 1,
+    "layer_private_key_env_scan": "passed"
+  },
+  "archive": {
+    "dry_run": true,
+    "purge": false,
+    "manifest_schema_validated": true,
+    "manifest_state": "verified",
+    "files_verified": true,
+    "hot_records_preserved": 8,
+    "session_summaries_preserved": 1,
+    "restored_records": 8,
+    "sample_backup_sha256": "45e17313356cfca93a4e529de653c3a19f9ee5030c8482f379f9ead054bb0847",
+    "backup_restore_verified": true,
+    "production_files_unchanged": true,
+    "temporary_sample_removed": true,
+    "archive_existing_file_count": 0,
+    "archive_free_bytes": 15034753024,
+    "host_path_bind_verified": true,
+    "archive_worker_enabled": false,
+    "archive_worker_container_exists": false
+  },
+  "auth": {
+    "missing_http": 401,
+    "wrong_http": 401,
+    "old_http": 401,
+    "new_http": 200,
+    "both_consumers_metrics_http": 200,
+    "janus_missing_old_error_code": 403,
+    "janus_new": "success",
+    "secrets_exported": false
+  },
+  "synthetic_lifecycle": {
+    "start": 201,
+    "repeat_start": 200,
+    "health": 200,
+    "partial_stop": 200,
+    "repeat_stop": 200,
+    "route_and_mountpoint_removed": true,
+    "duration_ms": 7
+  },
+  "browser": {
+    "device_id": 1000007,
+    "verification": "human confirmed moving video and normal stop; concurrent provider stats corroborate fresh RTP",
+    "live_rtp_packets_sample": 5331,
+    "live_unrouted_packets": 0,
+    "first_smoke_counters_inconclusive": true,
+    "bounded_repeat_verified": true
+  }
+}
