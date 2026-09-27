@@ -85,3 +85,5 @@ configuration reconciliation without committing secret files.
 Limitations: independent controller acceptance pending; full media/archive
 and browser acceptance are owned by L4D-18D-MEDIA-FIX-01 and are not claimed
 by this credential handoff.
+
+Detached candidate: MenuBuilder/docs/l4desk/handoffs/L4D-18D-AUTH-MB-FIX-01-candidate.md.
