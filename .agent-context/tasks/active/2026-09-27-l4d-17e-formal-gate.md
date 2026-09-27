@@ -1,6 +1,7 @@
 # L4D-17E-MB: формальный contract gate
 
-Срез 2026-09-27. Статус: **BLOCKED_CONTRACT для принятия handoff**.
+Срез 2026-09-27. Исходный `L4D-17E-MB` остаётся **BLOCKED_CONTRACT**;
+зарегистрированный `L4D-17E-MB-FIX-01` готов к исполнению, но не принят.
 Это аудит документов и Git; runtime и инфраструктура не изменялись.
 
 ## Проверено
@@ -64,7 +65,28 @@
 input после регистрации этого corrective prompt. Старый 17D допустим только
 как sequence gate. Export подтверждает исторический отчёт, а не новый
 runtime smoke; текущее состояние media следует проверить в приёмке 17E.
-Остальные блокировки 17E остаются, статус `BLOCKED_CONTRACT` не изменён.
+Исходный 17E остаётся `BLOCKED_CONTRACT`; дальнейший путь — corrective.
+
+## Передача 17E FIX
+
+В `ccab98730d6fde1f2e5335c35bad63e3303f4227` опубликованы точный
+prompt `L4D-17E-MB-FIX-01.md` и регистрация
+`R-L4D-17E-MB-FIX-01-v1`. Remote ref подтверждён. Регистрация содержит
+11 прямых входов, старый 17D только как sequence gate, `DETACHED_V1`,
+точные report/candidate paths и конечный read grant. Промпт и регистрация
+совпали по всем обязательным полям и спискам.
+
+Девять `ARTIFACT_BYTE_BINDING` доказывают 112 исторических пар
+LF/CRLF для входов 06C, 08B–14 и 16; read-only отчёт опубликован в
+`c3cd78449e34708783ae5013bb216045ccbce4a8`. Каждая пара повторно
+сверена с принятым handoff, raw Git blob и указанным artifact commit.
+Для 06C FIX-отчёт найден в отдельном commit `8004b5b`, что зафиксировано
+в binding. Вход 17C совпадает с Git/raw без binding.
+
+Это готовность **contract gate к передаче исполнителю**, а не приёмка
+коммерческого контура. Исполнитель должен пройти локальные и runtime
+критерии исходного 17E, выпустить новый report R2 и candidate C2;
+контроллер обязан проверить их независимо. Исходный report R не менять.
 
 ## Следующее решение контроллера
 
@@ -73,12 +95,8 @@ runtime smoke; текущее состояние media следует прове
 1. Media handoff выполнен: использовать
    `H-L4D-17D-MEDIA-CONTRACT-01-v1` как предметный input; старый
    `H-L4D-17D-MEDIA-v1` — только `sequence_gate_handoff_id`.
-2. Зарегистрировать отдельный corrective prompt 17E с новым `prompt_id` и
-   точным конечным списком `required_handoff_ids`: новый media handoff и
-   остальные десять входов. В `authorized_inputs` указать те же ID,
-   `contract_version` и `producer_commit`; явно разрешить `DETACHED_V1`.
-   В prompt и регистрации должны совпасть `report_path`, `candidate_path`,
-   scope, output и next. Опубликовать регистрацию до исполнения.
+2. Регистрация и prompt corrective 17E выполнены в `ccab987`; передать
+   исполнителю этот commit и путь к `L4D-17E-MB-FIX-01.md`.
 3. Выпустить новый immutable report R2 с таблицей версий/digest всех прямых
    входов и новый candidate C2 с `REPORT/DEPLOYMENT`, точными путями и
    хешами. Старый R (`3d1ff475`) сохранить неизменным как evidence.

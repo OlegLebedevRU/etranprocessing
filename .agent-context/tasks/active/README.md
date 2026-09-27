@@ -11,3 +11,6 @@
 - [17E acceptance matrix, 2026-09-27](2026-09-27-l4d-17e-acceptance-matrix.md) —
   выполненные слои, устранённый parity defect изолированного образа и
   оставшиеся production/runtime gates.
+- [17E FIX transfer, 2026-09-27](2026-09-27-l4d-17e-fix-transfer.md) —
+  опубликованные входы, byte bindings, адресная регистрация и критерии
+  дальнейшей приёмки.
