@@ -447,9 +447,18 @@
   waived в пользу потребителя; audit event 271
   (`tenant1000-session480-consumer-waiver-20260927`). После коррекции
   `FinUsageDaily.id=4`: 913 source/free seconds = 905 video + 8 console,
-  billable 0, posted 0. Сессии 480/481 закрыты. Не проверено после этого:
-  browser HTTP admission изолированного 17E при лимите 600 с; usage уже
-  выше этого тестового лимита, поэтому ожидается 403.
+  billable 0, posted 0. Сессии 480/481 закрыты. Usage выше тестового
+  лимита 600 с; повторный HTTP admission описан ниже.
+- Повторный HTTP admission после коррекции: test-backend
+  `l4desk-e2e-test-backend:f2f49ec` работает с
+  `policy_enforcement=true`, tenant allowlist `[1000]` и лимитом 600 с.
+  Владелец test04 выполнил через Swagger точный POST lease для 1000005
+  с `{"scope":"stream"}` и получил `403/free_quota_exceeded`; лог
+  test-backend подтвердил HTTP 403. До и после отказа последняя session
+  `481 closed`, usage `913 = 905 video + 8 console`, ledger count `0`.
+  Один read-only DB connect исчерпал пять попыток на provider reset;
+  повторный read-only connect прошёл после двух сбросов. Отказ не создал
+  коммерческих записей. HTTP free quota admission после коррекции: PASS.
 
 ### Путь закрытия 17E после бесплатного E2E
 
