@@ -7471,3 +7471,136 @@ consumers: [L4D-18E-MB]
 next_prompt_id: L4D-18E-MB
 ```
 <!-- HANDOFF:H-L4D-18D-MEDIA-v1:END -->
+
+## 18E finite consumer evidence and corrective registration
+
+The controller verified and published export commit `7e1fc3c0eabcdb3fc333d0dbe88b938ae09acdab`: 13 exact accepted Git/raw data-only copies plus the verification report. The original 18E prompt remains blocked by missing historical 17E/17F handoff IDs and neighboring implementation artifacts. This registration authorizes only the corrected MenuBuilder step; it does not accept its runtime rollout or advance 18F. The user directed a manual 176 container build, registry publication and production pull by immutable digest; the beta deployment framework is excluded.
+
+<!-- HANDOFF:H-L4D-18E-MB-EVIDENCE-CONTRACT-01-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-18E-MB-EVIDENCE-CONTRACT-01-v1
+status: ACCEPTED
+contract_kinds:
+- REPORT
+- SCHEMA
+- API
+producer_prompt_id: L4D-18E-MB-EVIDENCE-CONTRACT-01
+producer_scope_project: l4desk-service
+producer_report_path: l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/verification.md
+producer_branch: release/l4tools-1.8.2-beta-1
+producer_commit: 7e1fc3c0eabcdb3fc333d0dbe88b938ae09acdab
+accepted_at_utc: '2026-09-27T22:30:39Z'
+contract_version: 1.0.0
+schema_revision: PB 027; IoT 0008_org_reservations; shared 0.1.1; media API 1.0.0
+artifact_version: 1.0.0
+artifact_paths:
+- l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/17e-report.md
+- l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/17f-report.md
+- l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/17f-final-gate.json
+- l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18a-schema.json
+- l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18a-package-source.json
+- l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18a-report.md
+- l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18b-report.md
+- l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18c-report.md
+- l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18c-final-smoke.json
+- l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18d-report.md
+- l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18d-evidence.json
+- l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18d-openapi.json
+- l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18d-mb-auth-report.md
+- l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/verification.md
+artifact_sha256:
+- 6dfa6654b7472351da1147f9a526634d6839507f917294fe75f9781f0f2e1be0
+- 82b603df099f48e66f0ba86db362b1d041920ec47e14518ca962502daed76abb
+- ddb5d97380f623a415d5249488ebc7c9c5d5bd2cf9d2f05dd902ef03775c3703
+- 52f481dd3d9985c54b5388a1d9e63062a8fdbe626870b58a83b3461c3e08e49f
+- 364efa7b369cdcb8da12025b377518834b6013fd693a28f321a81dcbe18a68c6
+- c7a6bebcba52dce053d01715699421d04edb301b0e3d858d1afba508d393b12a
+- 388f232b5aa3c76408b80c232844cd8b57fc1207d94d060da4da24de19cea0ee
+- 7f8fd3a4b312f75bc70e7bdeea236baae14420331e78d173d2a042f77ae18dc5
+- 042f54ea307fa124bd37f0a87a3ba322fcbd558a7d75bbc49bb7f3c1b5676823
+- 85f554fc140ee10a2b7ba0b11d096a4e010af57a013dc2e723f37962b8f22b30
+- 7ddc676e9fd3f002a9b68ff21fe30146fe44367f925f5baed945b9a5e90896b6
+- 02298c2cba4c311e24d7ba893edc206ac01cb902746a931976c28225514cfd1c
+- 61d74d4ff286f8d31c3d842b04bcedd0b96224425e7c1fe2f711137c00c0d010
+- 45a1fd76694011e80308d9e7fde31c94208c74e45b0d4e7ba4d3e756026a93ce
+compatibility:
+  backward_compatible_with:
+  - H-L4D-17E-MB-FIX-01-v1
+  - H-L4D-17F-DOCS-FIX-01-v1
+  - H-L4D-18A-SHARED-v1
+  - H-L4D-18B-PB-v1
+  - H-L4D-18C-IOT-v1
+  - H-L4D-18D-MEDIA-v1
+  breaking_changes: false
+  notes: Exact accepted data-only bytes copied; no API, source or runtime change.
+deployment_status: DOCS_PUBLISHED
+deployed_environment: documentation
+feature_flags: {}
+contract_payload:
+  verification_status: VERIFIED
+  runtime_verification: NOT_REPEATED
+  exact_source_copy_count: 13
+  verification_report_count: 1
+  accepted_agent_baseline: 1.8.2-beta-1
+  provider_gate: H-L4D-18D-MEDIA-v1 sequence-only
+  commercial_scope: restricted existing test tenants; mock payments only
+supersedes: []
+known_risks:
+- Historical 17E/17F IDs in the original 18E prompt do not exist as accepted handoffs; originals are not direct FIX inputs.
+- Provider reports are historical evidence, not fresh 18E live activation or financial acceptance.
+- Production archive worker/purge remain disabled; off-host backup and retention rollout are not attested.
+consumers:
+- L4D-18E-MB-FIX-01
+next_prompt_id: L4D-18E-MB-FIX-01
+```
+<!-- HANDOFF:H-L4D-18E-MB-EVIDENCE-CONTRACT-01-v1:END -->
+
+<!-- CORRECTIVE_REGISTRATION:R-L4D-18E-MB-FIX-01-v1:BEGIN -->
+```yaml
+registration_id: R-L4D-18E-MB-FIX-01-v1
+status: AUTHORIZED
+authorized_by: Cascade Controller
+authorization_basis: explicit_user_request_to_prepare_implement_deploy_and_independently_review_18e_with_manual_176_registry_digest_release
+registered_at_utc: '2026-09-27T22:30:39Z'
+prompt_id: L4D-18E-MB-FIX-01
+prompt_path: l4desk-service/docs/prompts/L4D-18E-MB-FIX-01.md
+scope_project: MenuBuilder
+scope_root: D:\repo\platerra\Public\etranprocessing-l4d-18e-mb\MenuBuilder
+blocked_prompt_id: L4D-18E-MB
+authorized_inputs:
+- handoff_id: H-L4D-18E-MB-EVIDENCE-CONTRACT-01-v1
+  contract_version: 1.0.0
+  producer_commit: 7e1fc3c0eabcdb3fc333d0dbe88b938ae09acdab
+sequence_gate_handoff_id: H-L4D-18D-MEDIA-v1
+artifact_byte_binding_ids: []
+external_artifact_reads:
+- handoff_id: H-L4D-18E-MB-EVIDENCE-CONTRACT-01-v1
+  artifact_commit: 7e1fc3c0eabcdb3fc333d0dbe88b938ae09acdab
+  paths:
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/17e-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/17f-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/17f-final-gate.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18a-schema.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18a-package-source.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18a-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18b-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18c-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18c-final-smoke.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18d-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18d-evidence.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18d-openapi.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18d-mb-auth-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/verification.md
+output_handoff_id: H-L4D-18E-MB-v1
+next_prompt_id: L4D-18F-DOCS
+report_path: MenuBuilder/docs/l4desk/handoffs/L4D-18E-MB-FIX-01-report.md
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-18E-MB-FIX-01-candidate.md
+mb_code_baseline_commit: 4184ee930e869ddfb044029512e51e7a69ed20f6
+publication_required_before_execution: true
+grant_scope: consumer_addressing_only
+runtime_acceptance: NOT_GRANTED
+correction_reason: original_18e_names_missing_historical_17e_17f_ids_and_neighbor_source_artifacts;_finite_accepted_data_export_replaces_subject_inputs_and_18d_is_sequence_only
+```
+<!-- CORRECTIVE_REGISTRATION:R-L4D-18E-MB-FIX-01-v1:END -->
