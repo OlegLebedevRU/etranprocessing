@@ -6027,3 +6027,64 @@ consumers:
 next_prompt_id: L4D-17F-DOCS
 ```
 <!-- HANDOFF:H-L4D-17E-MB-FIX-01-v1:END -->
+
+## Документальный экспорт 17A–17C для корректирующего 17F
+
+По поручению пользователя и §10.1 PROMPT-STANDARD опубликована data-only
+копия трёх принятых журнальных блоков. Commit A:
+`9fe68c32391e0310fc857c098be7cf5e2f43cfdf`; remote ref и raw SHA-256
+обоих файлов проверены. Исходные 17A/17B/17C блоки не изменены.
+Это не повторная runtime-приёмка Agent, ProcessingBackend или IoT.
+
+<!-- HANDOFF:H-L4D-17ABC-CONTRACT-01-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-17ABC-CONTRACT-01-v1
+status: ACCEPTED
+contract_kinds: [REPORT, DEPLOYMENT]
+producer_prompt_id: L4D-17ABC-CONTRACT-01
+producer_scope_project: l4desk-service
+producer_report_path: l4desk-service/docs/prompts/contracts/acceptance-17abc-v1/verification.md
+producer_branch: release/l4tools-1.8.2-beta-1
+producer_commit: 9fe68c32391e0310fc857c098be7cf5e2f43cfdf
+accepted_at_utc: '2026-09-27T12:43:31Z'
+contract_version: 1.0.0
+schema_revision: N/A
+artifact_version: 1.0.0
+artifact_paths:
+  - l4desk-service/docs/prompts/contracts/acceptance-17abc-v1/contract.md
+  - l4desk-service/docs/prompts/contracts/acceptance-17abc-v1/verification.md
+artifact_sha256:
+  - 07237f0d8099dd4a758becdfbecd2b8439219042313b23fecf71df031b8dd263
+  - 0f9745abd4082f855fa640803293f4879c3d111cb9bb9bf75603f3ba1784c1e6
+artifact_urls:
+  - https://raw.githubusercontent.com/OlegLebedevRU/etranprocessing/9fe68c32391e0310fc857c098be7cf5e2f43cfdf/l4desk-service/docs/prompts/contracts/acceptance-17abc-v1/contract.md
+  - https://raw.githubusercontent.com/OlegLebedevRU/etranprocessing/9fe68c32391e0310fc857c098be7cf5e2f43cfdf/l4desk-service/docs/prompts/contracts/acceptance-17abc-v1/verification.md
+compatibility:
+  backward_compatible_with:
+    - H-L4D-17A-TOOLS-v1
+    - H-L4D-17B-PB-v1
+    - H-L4D-17C-IOT-v1
+  breaking_changes: false
+  notes: 'Data-only export of accepted journal facts; no source-code or current runtime attestation.'
+deployment_status: DOCS_PUBLISHED
+deployed_environment: documentation
+feature_flags: {}
+contract_payload:
+  verification_status: VERIFIED
+  source_journal_commit: 2ad0c8b868a092143f3e36a3719238b3a31aa17f
+  source_handoff_ids: [H-L4D-17A-TOOLS-v1, H-L4D-17B-PB-v1, H-L4D-17C-IOT-v1]
+  source_block_raw_sha256:
+    H-L4D-17A-TOOLS-v1: 3be6e23993f02f5a73bc7bed4dfe4358d9c7f93745f662ad1d4243b34e058f6d
+    H-L4D-17B-PB-v1: c2c6ccccf7161bf2744672b904cbc4a7475c6ec473246c14e418f7c6a7488f01
+    H-L4D-17C-IOT-v1: 0b7addc5428f859321661b1f4c738ce7bbde813f5679bed752771f0025b63a55
+  runtime_verification: NOT_REPEATED
+  remote_ref_verified_at_utc: '2026-09-27T12:43:31Z'
+  authorization_basis: explicit_user_request_to_do_next_17f_step
+supersedes: []
+known_risks:
+  - 'Original 17A/17B/17C handoffs have no artifact paths/digests and remain provenance only.'
+  - 'Source reports and runtime images were not reread; 17F must verify active interfaces and versions.'
+consumers: [L4D-17F-DOCS-FIX-01]
+next_prompt_id: L4D-17F-DOCS-FIX-01
+```
+<!-- HANDOFF:H-L4D-17ABC-CONTRACT-01-v1:END -->
