@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import contextlib
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
@@ -275,6 +277,14 @@ class FakeHubDb:
                 tot = sum(p.balance_kopecks for p in self.projections.values())
                 return MockResult(one=tot)
             tenant_id = _get_param(params, "tenant_id")
+            if isinstance(tenant_id, list):
+                return MockResult(
+                    all_items=[
+                        (p.tenant_id, p.balance_kopecks)
+                        for p in self.projections.values()
+                        if p.tenant_id in tenant_id
+                    ]
+                )
             if tenant_id is not None:
                 return MockResult(one=self.projections.get(tenant_id))
             if "in" in sql:
@@ -391,6 +401,11 @@ class FakeHubDb:
 
         # 10. Terminals
         if "from l4desk_terminals" in sql:
+            if "group by" in sql and "count(" in sql:
+                counts: dict[int, int] = {}
+                for terminal in self.terminals.values():
+                    counts[terminal.tenant_id] = counts.get(terminal.tenant_id, 0) + 1
+                return MockResult(all_items=list(counts.items()))
             if "count" in sql:
                 return MockResult(one=len(self.terminals))
             if "select l4desk_terminals.terminal_id, l4desk_terminals.sn" in sql:
@@ -461,6 +476,24 @@ class FakeHubDb:
 @pytest.fixture
 def fake_db() -> FakeHubDb:
     return FakeHubDb()
+
+
+@pytest.mark.anyio
+async def test_hub_finance_overview_accepts_decimal_balance(fake_db: FakeHubDb):
+    fake_db.profiles[200] = cast(
+        FinBillingProfile,
+        SimpleNamespace(tenant_id=200, entitlement="active", anchor_day=27),
+    )
+    fake_db.projections[200] = cast(
+        FinBalanceProjection,
+        SimpleNamespace(tenant_id=200, balance_kopecks=Decimal(125)),
+    )
+
+    overview = await HubService.get_finance_overview(cast(Any, fake_db))
+
+    assert overview.total_balance_rubles == 1.25
+    assert overview.tenants[0].balance_kopecks == 125
+    assert overview.tenants[0].balance_rubles == 1.25
 
 
 @pytest.mark.anyio

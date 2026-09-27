@@ -4,6 +4,7 @@ import contextlib
 import logging
 import uuid
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from typing import Any
 
 from etranprocessing_db.models.org import Org
@@ -501,7 +502,7 @@ class HubService:
             select(func.coalesce(func.sum(FinBalanceProjection.balance_kopecks), 0))
         )
         total_balance_kopecks = all_proj_res.scalar() or 0
-        total_balance_rubles = round(total_balance_kopecks / 100.0, 2)
+        total_balance_rubles = float(Decimal(total_balance_kopecks) / 100)
 
         count_stmt = select(func.count()).select_from(query.subquery())
         total_res = await db.execute(count_stmt)
@@ -576,7 +577,7 @@ class HubService:
                     tenant_id=p.tenant_id,
                     tenant_name=org_names.get(p.tenant_id),
                     balance_kopecks=bal_kop,
-                    balance_rubles=round(bal_kop / 100.0, 2),
+                    balance_rubles=float(Decimal(bal_kop) / 100),
                     entitlement=p.entitlement,
                     anchor_day=p.anchor_day,
                     current_cycle_ends_at=c_ends,
