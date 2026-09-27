@@ -34,7 +34,7 @@ not accept its own handoff. Final candidate:
 | Running image | `sha256:8b61162f2b7544a9f733bf4bdddf1bf063c3e3e99034438c5e82f82e042ae43a`; immutable tag `user1-processing-backend:18b-551f5c7-gitraw` and revision/archive SHA labels match the row above |
 | Installed packages | `processing-backend==0.1.0`, `etranprocessing-db==0.1.1`; Python 3.14.7, pinned uv lock |
 | Schema | Alembic `027 (head)` before and after; no migration was required and no DDL or downgrade was run |
-| Public ingress change | `f5dc263`: exact and prefix PIN service paths now return nginx 404; live config SHA-256 `b8e84e1e5a3bc0f1a22d9938900b3d2f3e8a0a31c2bd35b4ce56fe1ba432dea0` |
+| Public ingress change | `f5dc263`: exact and prefix PIN service paths now return nginx 404; live config SHA-256 `d896848147230f514bd76f2e26b0269bbe9ae3c868367fe083942f2ce7e43d13`, equal to its Git/raw blob |
 | Configuration template | `67827b6`: empty `SERVICE_AUTH_TOKEN=` placeholder only; no secret committed |
 
 The first isolated build used Windows Git's CRLF archive conversion. It passed
@@ -44,6 +44,8 @@ representative running app/migration files were checked against exact Git
 blob SHA-256, including the certificate router and revision 027. The running
 image uses the newer uv/`/workspace` Docker layout; the previous image used
 pip/`/app`. This difference was tested, not assumed equivalent.
+The nginx configuration was likewise reinstalled from Git/raw bytes after its
+first Windows archive had CRLF conversion; its live SHA now matches the blob.
 
 ## Validation and production readiness
 
