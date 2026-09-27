@@ -28,6 +28,10 @@
    значениями по умолчанию: пустой tenant allowlist и offset 0. Проверить,
    что production image не менялся и тестовый endpoint возвращает 404 для
    tenant вне allowlist. В коде offset ограничен 604800 секундами.
+   Stop outbox должен адресовать текущий video `stream_instance_id` через
+   app1 lease/stream API, сверять epoch до stop и закрывать локальную
+   сессию штатной функцией metering. Старый вызов remote-session API с
+   `stream_instance_id` не подходит для этого потока.
 3. Для задолженности требуется **новый настоящий** `device_online` от
    1000006 после anchor. Событие 1000006 от 13:48 UTC возникло до первой
    оплаты и для начисления не используется. Владелец тестовой машины

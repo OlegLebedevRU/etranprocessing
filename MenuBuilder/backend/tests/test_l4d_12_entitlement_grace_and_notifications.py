@@ -3,10 +3,12 @@ from __future__ import annotations
 import contextlib
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, cast
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+import app.services.financial_core.stop_outbox as stop_outbox_module
 from app.auth import create_access_token
 from app.config import settings
 from app.database import get_db
@@ -29,6 +31,7 @@ from app.models_l4desk import (
     L4DeskTenantProfile,
     L4DeskTerminal,
 )
+from app.repositories.l4desk_repository import L4DeskRepository
 from app.services.financial_core import (
     ENTITLEMENT_ACTIVE,
     ENTITLEMENT_BLOCKED,
@@ -1551,3 +1554,68 @@ async def test_scoped_test_tick_requires_superuser_and_allowlist(
             headers={"Authorization": f"Bearer {superuser_token}"},
         )
         assert disabled.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_blocked_video_stop_uses_matching_stream_epoch(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    tenant_id = 514
+    stream_id = "video-epoch-1"
+    lease_id = "lease-1"
+    term = L4DeskTerminal(tenant_id=tenant_id, terminal_id=201, sn="test-sn")
+    session = L4DeskRemoteSession(
+        tenant_id=tenant_id,
+        terminal_id=201,
+        session_type="video",
+        provider_session_id=stream_id,
+        operation_id="op-video-stop",
+        correlation_id="corr-video-stop",
+        reason="entitlement_blocked",
+    )
+    monkeypatch.setattr(L4DeskRepository, "get_terminal", AsyncMock(return_value=term))
+    status_mock = AsyncMock(
+        return_value={
+            "lease": {
+                "active": True,
+                "lease_id": lease_id,
+                "stream_instance_id": "newer-epoch",
+            }
+        }
+    )
+    stream_stop = AsyncMock(return_value={"result": "stopped"})
+    release = AsyncMock(return_value=None)
+    media_stop = AsyncMock(return_value={"status": "stopped"})
+    monkeypatch.setattr(
+        stop_outbox_module.iot_client, "remote_input_status", status_mock
+    )
+    monkeypatch.setattr(
+        stop_outbox_module.iot_client, "remote_input_stream_stop", stream_stop
+    )
+    monkeypatch.setattr(stop_outbox_module.iot_client, "remote_input_release", release)
+    monkeypatch.setattr(
+        stop_outbox_module.media_orchestrator_client,
+        "stop_session_for_sn",
+        media_stop,
+    )
+
+    unmatched = await FinStopOutboxService._stop_provider_session(
+        cast(Any, object()), session
+    )
+    assert unmatched is False
+    stream_stop.assert_not_awaited()
+    release.assert_not_awaited()
+
+    status_mock.return_value["lease"]["stream_instance_id"] = stream_id
+    matched = await FinStopOutboxService._stop_provider_session(
+        cast(Any, object()), session
+    )
+    assert matched is True
+    stream_stop.assert_awaited_once()
+    release.assert_awaited_once()
+    media_stop.assert_awaited_once_with(
+        sn="test-sn",
+        lease_id=lease_id,
+        stream_instance_id=stream_id,
+        reason="entitlement_blocked",
+    )
