@@ -49,13 +49,30 @@
   `COMMERCIAL_CONTROL`, хотя выход исходного 17E prompt задаёт только
   `REPORT/DEPLOYMENT`. Исправлять это следует в новом пакете, не в R.
 
+## Media blocker: опубликованное исправление
+
+По прямому поручению пользователя выполнен документационный export §10.1:
+`H-L4D-17D-MEDIA-CONTRACT-01-v1` со статусом `ACCEPTED` опубликован в
+журнале commit `31122c3a2c2b4c38436794a23e92169c608bf231`.
+Два data-only файла находятся в Git commit
+`77a666f17cc5cb154b6a46a8a119ed0594c087c0`; их SHA-256 проверены
+по raw Git bytes и внесены в новый handoff. Исторические шесть digest
+17D совпали 6/6 только после LF → CRLF; новые суммы привязаны к
+опубликованным LF-байтам. Старый `H-L4D-17D-MEDIA-v1` не редактировался.
+
+Новый handoff адресован `L4D-17E-MB-FIX-01` и пригоден как предметный media
+input после регистрации этого corrective prompt. Старый 17D допустим только
+как sequence gate. Export подтверждает исторический отчёт, а не новый
+runtime smoke; текущее состояние media следует проверить в приёмке 17E.
+Остальные блокировки 17E остаются, статус `BLOCKED_CONTRACT` не изменён.
+
 ## Следующее решение контроллера
 
 Минимальный корректный порядок после явного разрешения контроллеру по §8:
 
-1. Выпустить через адресный provider/corrective шаг новый media handoff с
-   immutable report/artifact и digest. Старый `H-L4D-17D-MEDIA-v1` оставить
-   неизменным; использовать его только как `sequence_gate_handoff_id`.
+1. Media handoff выполнен: использовать
+   `H-L4D-17D-MEDIA-CONTRACT-01-v1` как предметный input; старый
+   `H-L4D-17D-MEDIA-v1` — только `sequence_gate_handoff_id`.
 2. Зарегистрировать отдельный corrective prompt 17E с новым `prompt_id` и
    точным конечным списком `required_handoff_ids`: новый media handoff и
    остальные десять входов. В `authorized_inputs` указать те же ID,

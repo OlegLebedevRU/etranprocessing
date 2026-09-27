@@ -622,3 +622,8 @@ draft, GitHub показывает `MERGEABLE`, но обязательных CI
 зарегистрированного corrective 17E с новым неизменяемым отчётом/candidate.
 Подробный порядок — в
 [формальном аудите](2026-09-27-l4d-17e-formal-gate.md).
+
+Media-вход для corrective 17E теперь доступен: контроллер опубликовал
+data-only export `H-L4D-17D-MEDIA-CONTRACT-01-v1` в commit `31122c3`.
+Исходный 17D handoff остался неизменным и должен использоваться только
+как sequence gate. Остальные contract blockers 17E не сняты.
