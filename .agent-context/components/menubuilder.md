@@ -63,8 +63,10 @@ tenant из `IOT_CONSUMER_FINANCE_TENANT_IDS` при выключенном shad
 Исправление 17E резервирует ID в IoT через защищённый internal API до
 создания tenant и повторно использует резерв по ID регистрации. Commit
 `224daaf` развёрнут на 87.242.100.34 2026-09-27; API из backend получил
-`409 org_id_already_in_use` для занятого IoT ID 4. Публичная регистрация
-остаётся gate до положительной E2E проверки нового tenant.
+`409 org_id_already_in_use` для занятого IoT ID 4. В изолированном 17E
+backend test05 зарегистрирован с `org_id=10000`, ролью владельца 5 и
+одной owner membership; повтор ссылки не создал дубликатов. Gate коллизии
+`org_id` закрыт, глобальный production registration flag остаётся выключен.
 Периодические сбросы новых asyncpg SSL
 соединений к PostgreSQL дают 500; `DatabaseUserStore` при этом может
 вернуть ложный 401, скрыв сбой БД. Причина и исправление ещё не проверены.

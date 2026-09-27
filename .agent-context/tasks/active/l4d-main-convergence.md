@@ -489,10 +489,12 @@
    backend и отсутствие новой сессии, usage/ledger записи подтверждены.
    Кодовая ветка проверяет policy до вызова IoT lease; пароль/токен
    пользователя агент не получал. Этот шаг закрыт.
-2. Исправление `org_id` подготовлено в MenuBuilder и IoT: IoT атомарно
-   вставляет `tb_orgs` и запись резерва; registration/admin получают ID
-   через internal API. Tenant 4 не затрагивается. До развёртывания обеих
-   сторон и адресной E2E проверки публичная регистрация остаётся gate.
+2. Gate коллизии `org_id` закрыт: MenuBuilder `224daaf` и IoT `60f7762`
+   развёрнуты; занятый IoT ID 4 даёт `409`. Изолированная регистрация test05
+   через письмо создала tenant/IoT org/reservation с ID 10000, owner role 5;
+   повтор ссылки дал already confirmed, в обеих БД осталось по одной записи.
+   Существующие tenant 4/1000 не менялись, production registration flag
+   остаётся выключен. Evidence: `l4d-17e-org-id-handoff.md`.
 3. Составить по пунктам `L4D-17E-MB.md` таблицу evidence: runtime уже
    подтверждённые free quota, paid usage, payment/webhook, monthly charge,
    midnight split/post; локально покрытые DST, grace/block,

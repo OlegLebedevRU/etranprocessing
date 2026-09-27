@@ -16,7 +16,9 @@ API атомарно выделяет ID для MenuBuilder и повторяе�
 IoT commit `60f7762` развёрнут на 87.242.100.34 2026-09-27:
 `alembic current` = `0008_org_reservations`, app1 отвечает `/docs` 200.
 Отрицательная межсервисная проверка из MenuBuilder для занятого ID 4
-вернула `409 org_id_already_in_use`; выдача нового tenant ещё не проверена.
+вернула `409 org_id_already_in_use`. Положительная регистрация `test05`
+выделила `org_id=10000`: в IoT ровно одна организация и одна резервация
+`l4desk-registration:4`.
 
 ## Внешние контракты
 | Direction | Transport | Endpoint/topic | Main payload | Guarantees |
