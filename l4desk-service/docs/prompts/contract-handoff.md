@@ -6191,3 +6191,69 @@ runtime_acceptance: NOT_GRANTED
 correction_reason: original_17f_inputs_have_no_artifact_digests_or_unaccepted_17e_id
 ```
 <!-- CORRECTIVE_REGISTRATION:R-L4D-17F-DOCS-FIX-01-v1:END -->
+
+
+## Документальный экспорт адресного MenuBuilder evidence для 17F
+
+По поручению пользователя и §10.1 опубликованы data-only копии трёх
+MenuBuilder отчётов и конечные извлечения исторического media soak,
+release baseline Agent и регистрации test05. Commit A
+`d15f32bff63be22e2aefb3e59969e90965b57285` проверен в remote;
+Git/raw SHA-256 всех семи файлов совпали. Этот экспорт не подтверждает
+новое runtime-состояние и не принимает итоговый 17F.
+
+<!-- HANDOFF:H-L4D-17F-MB-EVIDENCE-CONTRACT-01-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-17F-MB-EVIDENCE-CONTRACT-01-v1
+status: ACCEPTED
+contract_kinds: [REPORT]
+producer_prompt_id: L4D-17F-MB-EVIDENCE-CONTRACT-01
+producer_scope_project: l4desk-service
+producer_report_path: l4desk-service/docs/prompts/contracts/acceptance-17f-mb-evidence-v1/verification.md
+producer_branch: release/l4tools-1.8.2-beta-1
+producer_commit: d15f32bff63be22e2aefb3e59969e90965b57285
+accepted_at_utc: '2026-09-27T17:54:55Z'
+contract_version: 1.0.0
+schema_revision: N/A
+artifact_version: 1.0.0
+artifact_paths:
+  - l4desk-service/docs/prompts/contracts/acceptance-17f-mb-evidence-v1/grace.md
+  - l4desk-service/docs/prompts/contracts/acceptance-17f-mb-evidence-v1/payment-recovery.md
+  - l4desk-service/docs/prompts/contracts/acceptance-17f-mb-evidence-v1/archive-consumer.md
+  - l4desk-service/docs/prompts/contracts/acceptance-17f-mb-evidence-v1/media-soak-extract.md
+  - l4desk-service/docs/prompts/contracts/acceptance-17f-mb-evidence-v1/agent-release-baseline.md
+  - l4desk-service/docs/prompts/contracts/acceptance-17f-mb-evidence-v1/registration-evidence.md
+  - l4desk-service/docs/prompts/contracts/acceptance-17f-mb-evidence-v1/verification.md
+artifact_sha256:
+  - 1c1c1d7ec8d7105043723b5e300641dbf12249d8242af0440b3182fd4bc628a6
+  - 8f8d30d661456be5081ac146ea27af6f8d6f9fbcbe64df158b723e16c02618dd
+  - 2f497f0c72a3d79a6d33825bcaa945bec603faaa80ba99269828821ae0b6d4ad
+  - 814f6cd3f6ca5bc6d2b04a5f587efc782e718f57d779d5e101c2358c4259570b
+  - 61c6df8716ce735a92c4ccd17e0436e2bceebddfc1db4aa2f830652c73b7db98
+  - 1831592b319099525b25240c79c576618b0667c0be7c3ee7aa5c364e5c0e52f6
+  - 6b5070ccc8a9cebd8965b24e0b7a19cddf27486f2fb6a667b10b34171796c596
+compatibility:
+  backward_compatible_with: []
+  breaking_changes: false
+  notes: 'Data-only export; source reports and older handoffs remain immutable.'
+deployment_status: DOCS_PUBLISHED
+deployed_environment: documentation
+feature_flags: {}
+contract_payload:
+  verification_status: VERIFIED
+  source_artifact_count: 6
+  runtime_verification: NOT_REPEATED
+  agent_release_baseline: 'l4tools 1.8.2-beta-1 as-is, per user decision'
+  source_mb_commits:
+    grace: 7c510b8d9bf79b45c66ccdc05102f72efe73cb2a
+    payment_recovery: b5d0e2a5b90188d8c0964dd3423fb8230ee21007
+    archive_consumer: db6a24a5f22015e8a35525cc798301c6f74dc889
+supersedes: []
+known_risks:
+  - 'Grace and payment recovery were tested in the isolated backend; production activation was not part of the export.'
+  - 'Archive consumer used an in-memory DB double; no production Hub import or volume restore is claimed.'
+  - 'Media soak and registration extracts are historical evidence; 17F must verify current deployed interfaces separately.'
+consumers: [L4D-17F-DOCS-FIX-01]
+next_prompt_id: L4D-17F-DOCS-FIX-01
+```
+<!-- HANDOFF:H-L4D-17F-MB-EVIDENCE-CONTRACT-01-v1:END -->
