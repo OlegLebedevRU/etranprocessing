@@ -43,14 +43,20 @@ Backend code: uv run pytest + ruff/format/pyright; frontend code: npm run build 
 camera/view-only input, stop/unmount timers, late events. См. [матрицу](../operations/validation-matrix.md).
 
 ## Известные риски и незавершённые вопросы
-17F grace test path (2026-09-27, локальные тесты + isolated deploy):
+17F grace test path (2026-09-27, локальные тесты + runtime E2E):
 изолированный backend поддерживает allowlisted tenant clock offset до 7 дней
 и адресный worker tick для короткой проверки grace/block/stop. Production
 clock и commercial flags не менялись. Stop outbox теперь сверяет текущий
 stream epoch в app1, использует lease/stream stop вместо remote-session stop
 для video, освобождает lease и закрывает локальную сессию через metering.
-Локально 524 теста прошли; runtime stop и metering tail ещё не доказаны.
-Сценарий: [17F grace plan](../../l4desk-service/docs/handoffs/L4D-17F-MB-GRACE-TESTPATH-01-plan.md).
+Локально 524 теста прошли. В test-backend на tenant 10000 подтверждены
+один monthly charge и идемпотентный повтор события, grace → blocked,
+принудительная остановка живого video stream, отказ нового lease и
+восстановление через mock-платёж. Первый сеанс прервала сеть до stop:
+недоказанный хвост прощён; stop доказан повторным сеансом. Платёж,
+email и полный deployment gate вне этого evidence. Test clock возвращён
+к offset 0, production image не менялся. [Отчёт MenuBuilder](../../MenuBuilder/docs/l4desk/handoffs/L4D-17F-MB-GRACE-TESTPATH-01-report.md),
+[детальная хронология](../../l4desk-service/docs/handoffs/L4D-17F-MB-GRACE-TESTPATH-01-plan.md).
 
 17F Hub correction (2026-09-27, runtime E2E): на основном nginx
 `/api/v1/admin/hub/` маршрутизируется в MenuBuilder с JWT, вместо общего

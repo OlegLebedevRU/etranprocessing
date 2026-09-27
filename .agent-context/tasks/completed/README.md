@@ -5,5 +5,8 @@
 Логи/длинные исследования — docs/history; secrets и connection profile запрещены.
 
 ## Индекс
+- [2026-09-27 — 17F grace runtime](2026-09-27-l4d-17f-grace-runtime.md):
+  monthly charge, blocked stop живого видео и mock recovery; общая
+  приёмка 17F остаётся отдельным gate.
 - [2026-09-11 — агентская рабочая память](2026-09-11-agent-context-bootstrap.md):
   документальное внедрение, проверка ссылок/формата, runtime/E2E и автоматизация отложены.
