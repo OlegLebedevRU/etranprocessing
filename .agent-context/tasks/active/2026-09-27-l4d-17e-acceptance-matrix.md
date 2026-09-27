@@ -21,8 +21,8 @@
   10 минут. Календарные месяцы, три дня grace, DST и даты в production
   проверяются отдельными детерминированными тестами с `as_of`. Глобальное
   время сервера и длительность production цикла не меняются.
-- Неизвестное: полный deployed image/source parity, текущая сверка ledger,
-  оплаченный E2E после quota, ручной платёж/storno, Hub и архив на стенде.
+- Неизвестное: ручной платёж/storno, Hub и архив на стенде; runtime
+  блокировка уже активного потока и полная внешняя release parity.
 - Проверка: локальный suite/quality; read-only аудит runtime; адресные E2E
   только в согласованном изолированном контуре и на утверждённых tenant.
 
@@ -40,7 +40,7 @@
 | Регистрация, письмо, tenant и owner | Подтверждение создаёт согласованный org ID и единственного owner | test05: tenant 10000 в MenuBuilder/IoT, роль 5, повтор ссылки идемпотентен | passed (E2E) | Production registration выключена |
 | Коллизия org ID | Занятый IoT ID не выдаётся новому tenant | IoT ID 4 → 409; новый резерв 10000 совпал в двух системах | passed (E2E) | Неиспользованные резервы после сбоя требуют аудита |
 | Terminal onboarding/readiness | PIN, certificate, MQTT и identity согласованы | 1000003 и 1000005 online; исходные несовпадения исправлены | passed (E2E) | Повторить на финальном candidate image |
-| Owner video/console; old/new; взаимное исключение | Движущиеся кадры, консоль и 409 при занятой lease | 1000003 и 1000005: видео/console/stop подтверждены; lease_taken=409 | passed (E2E) | Повторить на финальном candidate image |
+| Owner video/console; old/new; взаимное исключение | Движущиеся кадры, консоль и 409 при занятой lease | 1000003 и 1000005: видео/console/stop подтверждены; lease_taken=409; 1000005 повторён на чистом production backend image без задержки и 500, session 483 закрыта | passed (E2E) | Console/mutual exclusion на новом image опираются на исторический E2E и локальный suite |
 | Бесплатный terminal и лимит | Только разрешённый terminal; после лимита 403 | tenant 1000, 600 с opt-in, исторически 913 доказанных секунд; на чистом `df7598c` под правильным test04 повторно получен `403/free_quota_exceeded` без создания сессии или проводки | passed (E2E) | Production 7200 с проверен локально |
 | Порции внутри сессии, retry и округление | Курсор не дублируется, хвост округлён вниз | session 481: 62+62+62+1=187 с из 187,85 с; повторного начисления нет | passed (E2E) | Провайдер БД иногда сбрасывает новые соединения |
 | Paid continuation после free | Положительный баланс допускает сессию | tenant 1000: mock payment 10 руб. posted, баланс +1000 коп.; тот же HTTP lease после 403 принят с 201, release=204; local test | passed (E2E + local) | Полное видео на новом image не запускалось, проверено admission |
@@ -56,8 +56,8 @@
 | Hub filters/correlation/mismatch | Поиск и drilldown сохраняют источник, mismatch обнаруживается | `test_correlation_drilldown_nodes_and_mismatches`, `test_hub_http_api_rbac_and_views` | passed (local) | Нет browser/runtime E2E |
 | Archive import/retention | Manifest, запрет удаления финансовых данных | `test_archive_manifests.py` | passed (local) | Нет runtime import/retention E2E |
 | Immutable consumer fixtures | Старый/новый контракт совместим | Принятый IoT fixture `1.1.0 / 2026-09-25-v2` скопирован без изменений из provider commit `22a50a1`, SHA-256 совпал с handoff; девять событий и примеры ответов совпадают со старым `1.0.0`, обе версии валидируются локальным consumer | passed (local contract) | Runtime feed app1 отдельно подтверждён историческим E2E; текущий тест не вызывает provider |
-| Full release parity, migration, flags, rollback | Полный source/image match, 027 и disabled/restricted флаги | Чистый test-backend `df7598c`: 92/92 active Python-файла совпали с Git archive; schema 027; flags адресные; старый image сохранён | partial | Production image ещё расходится с Git candidate; весь release не принят |
-| Production-safe smoke | Изолированный tenant, остальные не затронуты | Новый `/docs`=200, test-backend flags `true/true/true/[1000]/600`, production registration/billing/policy/worker=false; quota, mock payment и paid lease проверены, ledger/usage read-only инварианты нулевые | partial (runtime) | Production image ещё не обновлён; остальные контрактные сценарии |
+| Full release parity, migration, flags, rollback | Полный source/image match, 027 и disabled/restricted флаги | Test и production backend используют image `sha256:42fa63c0…`; в production 92/92 Python-файла совпали с archive `df7598c`; schema 027, коммерческие флаги false, старый image сохранён; пять frontend assets, на которые ссылается index, совпали с локальной сборкой | passed (MenuBuilder deployment) | Внешние providers остаются отдельными handoff |
+| Production-safe smoke | Изолированный tenant, остальные не затронуты | Production backend running/restart=0, `/docs`=200, registration/billing/policy/workers=false; 1000005 video start/move/stop без задержки и 500; session 483 closed, active sessions=0, ledger и balance неизменны | passed (runtime smoke) | Billing disabled: новый usage помечен free; коммерческий admission проверен в изолированном контуре |
 
 ## Условия выпуска handoff
 
@@ -207,3 +207,43 @@
   теста `uv run pytest -q --disable-warnings`: **518 passed**, 50 warnings,
   exit 0; `uv run ruff check --fix app tests`, `uv run ruff format app tests`,
   `uv run pyright app`: exit 0, 0 ошибок/предупреждений Pyright.
+
+## Production-safe backend smoke
+
+- Получено отдельное подтверждение пользователя. Непосредственно перед
+  переключением: available RAM 1976 MiB, root disk 84%, load 0.16,
+  незавершённых remote sessions=0; старый production image
+  `sha256:08b6d35b2a1322e3f709ae4864ee4308210fa3cc04c7c3ac1b7ed61352880d21`.
+- Старый image сохранён как `user1-menubuilder-backend:pre17e-20260927`.
+  Уже проверенный чистый image `sha256:42fa63c0495d71e4e9700564595aba9a4506f3ea6cefde4698f0b822223e301b`
+  помечен `user1-menubuilder-backend:latest`. Только `menubuilder-backend`
+  пересоздан существующим `/home/user1/compose.yaml` с `--no-build --no-deps`;
+  файлы Compose, env, исходников на сервере и схема БД не менялись.
+- После запуска: container `running`, restart count=0, startup complete,
+  `/docs` внутри контейнера HTTP 200. Effective flags registration=false,
+  billing=false, policy=false, entitlement worker=false,
+  metering close worker=false, IoT consumer=false. Production `app/`:
+  92 файла, побайтно совпадают с каноническим archive `df7598c`; missing=0,
+  extra=0. `c42f7f0` меняет только тест, fixture, документацию и root Compose,
+  поэтому backend runtime source остаётся `df7598c`.
+- Read-only SQL после запуска: schema `027`; незавершённых sessions=0;
+  tenant 3 ledger 2 transaction, debit=credit=1100 коп., 4 entry balanced,
+  projection=900 коп./version 2; tenant 1000 ledger 1 transaction,
+  debit=credit=1000 коп., 2 entry balanced, payment 3 `succeeded` →
+  transaction 5, projection=1000 коп./version 1. Tenant 10000 ledger пуст.
+- Compose при адресном `up` сообщил о неустановленных переменных `admin`
+  и `hash` в общем файле; другие сервисы не пересоздавались. Перед будущим
+  полным Compose rollout надо выяснить источник интерполяции. Smoke backend
+  завершился без ошибки.
+- Пользователь под test04 на обычном сайте запустил видео 1000005, подвигал
+  окно и штатно остановил: изображение появилось и двигалось без задержки,
+  HTTP 500 не было. Read-only БД: новая session 483 `closed`, timestamps
+  active/closed присутствуют, незавершённых sessions tenant 1000=0.
+  `FinUsageDaily.source_seconds` вырос с 918 до 1048; поскольку production
+  billing flag выключен, это новые бесплатные секунды, billable=0.
+  Ledger остался с одной payment проводкой 1000/1000 коп., projection=1000;
+  это smoke видеопути и сохранения учёта, не новая проверка платного тарифа.
+- Frontend index на сервере ссылается на те же пять asset-файлов, что и
+  локальная сборка; SHA-256 всех пяти совпали. Сам index отличается
+  форматированием строк/пустой строкой, но ссылки и содержимое assets
+  совпадают; нового frontend rollout не требовалось.

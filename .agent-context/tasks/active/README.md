@@ -9,4 +9,5 @@
 Длинные отчёты — docs/history, а не context. Активных packets в начальном наборе нет.
 
 - [17E acceptance matrix, 2026-09-27](2026-09-27-l4d-17e-acceptance-matrix.md) —
-  выполненные слои, текущий parity defect изолированного образа и открытые gates.
+  выполненные слои, устранённый parity defect изолированного образа и
+  оставшиеся production/runtime gates.

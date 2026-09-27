@@ -544,3 +544,14 @@ tenant 1000 вновь получил `403/free_quota_exceeded`; mock payment 10
 и последующий poll не дублировали её; paid lease вернул 201, release 204.
 Read-only reconciler на 20-минутном окне дал matched и нулевую разницу.
 Frontend suite: 58 passed; build exit 0. Подробности в матрице.
+
+После отдельного согласия production `menubuilder-backend` пересоздан из того
+же чистого `df7598c` image без изменения серверных Compose/env/исходников и
+без коммерческой активации. Все 92 Python-файла production image совпали с
+архивом, schema 027, `/docs`=200, restart count=0, финансовые инварианты
+test tenant 3/1000 без изменений. Предыдущий image сохранён для отката.
+Пользовательский start/move/stop видео 1000005 на этом image прошёл без
+задержки и 500; новая session 483 закрыта, usage вырос на 130 с,
+ledger и balance не изменились при выключенном billing. 17E handoff пока
+не выпущен: остаются адресные проверки manual/storno, Hub/archive и
+независимый contract verdict.
