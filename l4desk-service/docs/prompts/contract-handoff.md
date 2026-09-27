@@ -7744,3 +7744,136 @@ runtime_acceptance: NOT_GRANTED
 correction_reason: v1_revoked_for_finite_IoT_device_presence_tag_and_PB_PIN_contract_under_user_18e_requirements
 ```
 <!-- CORRECTIVE_REGISTRATION:R-L4D-18E-MB-FIX-01-v2:END -->
+
+
+## 18E finite full-suite fixtures and third registration
+
+Commit 088ade1279547af90f7d0e682547293768f453fb published the exact synthetic 17F archive manifest and a data-only projection of the public Hub nginx header directives, with provenance in its verification report. Registration v2 is revoked append-only because the complete MenuBuilder suite contains two historical reads outside MenuBuilder scope. Registration v3 adds only the accepted fixture input and exact read grant; it retains the same MenuBuilder scope, sequence gate and detached output paths. This does not accept 18E runtime or advance 18F.
+
+<!-- HANDOFF:H-L4D-18E-MB-FIXTURE-CONTRACT-01-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-18E-MB-FIXTURE-CONTRACT-01-v1
+status: ACCEPTED
+contract_kinds: [SCHEMA, REPORT]
+producer_prompt_id: L4D-18E-MB-FIXTURE-CONTRACT-01
+producer_scope_project: l4desk-service
+producer_report_path: l4desk-service/docs/prompts/contracts/acceptance-18e-mb-fixtures-v1/verification.md
+producer_branch: release/l4tools-1.8.2-beta-1
+producer_commit: 088ade1279547af90f7d0e682547293768f453fb
+accepted_at_utc: '2026-09-27T23:47:33Z'
+contract_version: 1.0.0
+schema_revision: accepted 17F synthetic archive manifest; public Hub nginx directive fixture
+artifact_version: 1.0.0
+artifact_paths:
+- l4desk-service/docs/prompts/contracts/acceptance-18e-mb-fixtures-v1/17f-archive-manifest.json
+- l4desk-service/docs/prompts/contracts/acceptance-18e-mb-fixtures-v1/public-hub-nginx-contract.json
+- l4desk-service/docs/prompts/contracts/acceptance-18e-mb-fixtures-v1/verification.md
+artifact_sha256:
+- 0fdf5c04e8373b66ce9a448f038881588c7aa2a04e7aad259ca390a2171a642f
+- daf76685fe8037b13ef12aa49f2c5b7906949833523cc01a720f52785eae7d32
+- 8761427c1e0017850a9f47f3351dd27de0f7f9cf9789725157a97a32080c1650
+compatibility:
+  backward_compatible_with: [H-L4D-17F-DOCS-FIX-01-v1, H-L4D-18E-MB-EVIDENCE-CONTRACT-01-v1]
+  breaking_changes: false
+  notes: Test-fixture export only; no public nginx deploy or production archive claim.
+deployment_status: DOCS_PUBLISHED
+deployed_environment: documentation
+feature_flags: {}
+contract_payload:
+  verification_status: VERIFIED
+  runtime_verification: NOT_REPEATED
+  archive_source_commit: d00992e0655ad4dfb401033b17f9a3709804db25
+  archive_source_sha256: 0fdf5c04e8373b66ce9a448f038881588c7aa2a04e7aad259ca390a2171a642f
+  nginx_source_commit: fb2273c0bb633426067b2a9487538d84155ef446
+  nginx_source_sha256: 69aa8d4f8649edaea353acbffa0ef1f72265599852b751952f0de96888adc6b5
+  nginx_selected_directive_count: 8
+supersedes: []
+known_risks:
+- The archive manifest is synthetic; no production archive worker or purge behavior is asserted.
+- The nginx projection checks source directives only, not the currently deployed proxy config.
+consumers: [L4D-18E-MB-FIX-01]
+next_prompt_id: L4D-18E-MB-FIX-01
+```
+<!-- HANDOFF:H-L4D-18E-MB-FIXTURE-CONTRACT-01-v1:END -->
+
+<!-- CORRECTIVE_REGISTRATION_REVOCATION:R-L4D-18E-MB-FIX-01-v2:BEGIN -->
+```yaml
+registration_id: R-L4D-18E-MB-FIX-01-v2
+status: REVOKED
+revoked_at_utc: '2026-09-27T23:47:33Z'
+reason: Full MenuBuilder suite needs two bounded historical test fixtures; v3 adds a finite accepted data-only input.
+replacement_registration_id: R-L4D-18E-MB-FIX-01-v3
+```
+<!-- CORRECTIVE_REGISTRATION_REVOCATION:R-L4D-18E-MB-FIX-01-v2:END -->
+
+<!-- CORRECTIVE_REGISTRATION:R-L4D-18E-MB-FIX-01-v3:BEGIN -->
+```yaml
+registration_id: R-L4D-18E-MB-FIX-01-v3
+status: AUTHORIZED
+authorized_by: Cascade Controller
+authorization_basis: explicit_user_18e_runtime_request_plus_device_id_presence_PIN_sys_full_suite_fixtures_and_manual_176_registry_digest_release
+registered_at_utc: '2026-09-27T23:47:33Z'
+prompt_id: L4D-18E-MB-FIX-01
+prompt_path: l4desk-service/docs/prompts/L4D-18E-MB-FIX-01.md
+scope_project: MenuBuilder
+scope_root: D:\repo\platerra\Public\etranprocessing-l4d-18e-mb\MenuBuilder
+blocked_prompt_id: L4D-18E-MB
+authorized_inputs:
+- handoff_id: H-L4D-18E-MB-EVIDENCE-CONTRACT-01-v1
+  contract_version: 1.0.0
+  producer_commit: 7e1fc3c0eabcdb3fc333d0dbe88b938ae09acdab
+- handoff_id: H-L4D-18E-MB-DEVICE-PIN-CONTRACT-01-v1
+  contract_version: 1.0.0
+  producer_commit: 57b7b015778ef46ea1d9f4b4b993e80c54042034
+- handoff_id: H-L4D-18E-MB-FIXTURE-CONTRACT-01-v1
+  contract_version: 1.0.0
+  producer_commit: 088ade1279547af90f7d0e682547293768f453fb
+sequence_gate_handoff_id: H-L4D-18D-MEDIA-v1
+artifact_byte_binding_ids: []
+external_artifact_reads:
+- handoff_id: H-L4D-18E-MB-EVIDENCE-CONTRACT-01-v1
+  artifact_commit: 7e1fc3c0eabcdb3fc333d0dbe88b938ae09acdab
+  paths:
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/17e-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/17f-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/17f-final-gate.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18a-schema.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18a-package-source.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18a-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18b-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18c-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18c-final-smoke.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18d-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18d-evidence.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18d-openapi.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18d-mb-auth-report.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/verification.md
+- handoff_id: H-L4D-18E-MB-DEVICE-PIN-CONTRACT-01-v1
+  artifact_commit: 57b7b015778ef46ea1d9f4b4b993e80c54042034
+  paths:
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/iot-device-contract.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/iot-device-schemas.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/iot-device-examples.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/pin-contract.md
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/pin-schemas.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/pin-examples.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/verification.md
+- handoff_id: H-L4D-18E-MB-FIXTURE-CONTRACT-01-v1
+  artifact_commit: 088ade1279547af90f7d0e682547293768f453fb
+  paths:
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-fixtures-v1/17f-archive-manifest.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-fixtures-v1/public-hub-nginx-contract.json
+  - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-fixtures-v1/verification.md
+output_handoff_id: H-L4D-18E-MB-v1
+next_prompt_id: L4D-18F-DOCS
+report_path: MenuBuilder/docs/l4desk/handoffs/L4D-18E-MB-FIX-01-report.md
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-18E-MB-FIX-01-candidate.md
+mb_code_baseline_commit: 4184ee930e869ddfb044029512e51e7a69ed20f6
+publication_required_before_execution: true
+grant_scope: consumer_addressing_only
+runtime_acceptance: NOT_GRANTED
+correction_reason: v2_revoked_for_finite_full_suite_fixture_export_under_user_18e_request
+```
+<!-- CORRECTIVE_REGISTRATION:R-L4D-18E-MB-FIX-01-v3:END -->

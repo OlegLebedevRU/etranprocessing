@@ -5,9 +5,9 @@ prompt_id: L4D-18E-MB-FIX-01
 scope_project: MenuBuilder
 scope_root: D:\repo\platerra\Public\etranprocessing-l4d-18e-mb\MenuBuilder
 prompt_type: corrective-production-rollout
-registration_id: R-L4D-18E-MB-FIX-01-v2
+registration_id: R-L4D-18E-MB-FIX-01-v3
 blocked_prompt_id: L4D-18E-MB
-required_handoff_ids: [H-L4D-18E-MB-EVIDENCE-CONTRACT-01-v1, H-L4D-18E-MB-DEVICE-PIN-CONTRACT-01-v1]
+required_handoff_ids: [H-L4D-18E-MB-EVIDENCE-CONTRACT-01-v1, H-L4D-18E-MB-DEVICE-PIN-CONTRACT-01-v1, H-L4D-18E-MB-FIXTURE-CONTRACT-01-v1]
 sequence_gate_handoff_id: H-L4D-18D-MEDIA-v1
 artifact_byte_binding_ids: []
 external_artifact_reads:
@@ -38,6 +38,12 @@ external_artifact_reads:
       - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/pin-schemas.json
       - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/pin-examples.json
       - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/verification.md
+  - handoff_id: H-L4D-18E-MB-FIXTURE-CONTRACT-01-v1
+    artifact_commit: 088ade1279547af90f7d0e682547293768f453fb
+    paths:
+      - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-fixtures-v1/17f-archive-manifest.json
+      - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-fixtures-v1/public-hub-nginx-contract.json
+      - l4desk-service/docs/prompts/contracts/acceptance-18e-mb-fixtures-v1/verification.md
 output_handoff_id: H-L4D-18E-MB-v1
 next_prompt_id: L4D-18F-DOCS
 branch: l4desk/l4d-18e-mb
@@ -51,14 +57,24 @@ architecture_sections: [1, 2, 3, 4, 5, 6, 7, 9, 10, 13, 14, 15, 16, 17, 18, 19]
 ## Gate and baseline
 
 Read the standard, this prompt and the journal first. Verify the unique §8
-registration, both accepted data-only direct inputs, all 21 Git/raw artifact digests,
+registration, three accepted data-only direct inputs, all 24 Git/raw artifact digests,
 versions, compatibility, no revocation, and accepted H-L4D-18D-MEDIA-v1 as
 sequence-only gate. The original 18E prompt names historical 17E/17F IDs
 that were never accepted. The accepted FIX handoffs and 18A/18B/18C/18D
 provider handoffs are provenance for the finite export, not extra direct
 inputs. Do not recursively gate them or read neighboring source, tests or
 private files through report links. All cross-project data reads are the
-21 exact documents above, from the two published immutable export commits.
+24 exact documents above, from the three published immutable export commits.
+
+The full MenuBuilder suite has three historical test reads outside its own
+scope. Use the already granted `18a-schema.json` as a MenuBuilder-owned test
+fixture. For the other two, consume only the accepted fixture export above:
+copy its exact synthetic archive manifest into a MenuBuilder-owned fixture and
+retarget `test_archive_manifests.py`; use its data-only public Hub directive
+contract in `test_nginx_header_contract.py`. Do not open the historical 17F
+manifest or root nginx config from the runtime worktree. Preserve the tests'
+assertions and run the complete suite. The export is test data, not an nginx
+deployment file or fresh production archive evidence.
 
 Use a clean separate worktree at the exact `scope_root` and branch above,
 created from the published controller registration commit. Its MenuBuilder
