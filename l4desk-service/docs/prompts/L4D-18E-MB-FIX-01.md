@@ -137,6 +137,25 @@ Show the accepted version and omit/disable the download action until an
 approved published artifact URL is available. Record this as a release-link
 limitation; do not rebuild or alter Agent binaries in MenuBuilder scope.
 
+The accepted 18B provider has a privately configured service-auth token for
+its internal certificate PIN API. Renewal in MenuBuilder may require the
+same existing value in its server-only `PROCESSING_BACKEND_SERVICE_TOKEN`.
+The user authorized this bounded private configuration action. Transfer the
+opaque value on the production host through the approved private operations
+path into the MenuBuilder backend private env file; production and isolated
+MB backend consumers use that same env file. The agent must not read, print,
+hash, log, place in a command argument, commit, or put the value in an image
+or report. Do not inspect the raw PB env file, rotate/change PB credentials,
+edit PB files or recreate PB. Save a restricted MB env rollback copy before
+the transfer; replace only the MB key, preserve other settings and permissions,
+and recreate only affected MB backend consumers. Verify configured presence
+without revealing the value, missing/wrong credentials return 401, and an
+authorized lookup of a nonexistent operation returns the provider's 404.
+Then test renewal only for an approved tenant-owned terminal. If a safe
+opaque transfer is unavailable, stop this part and request an operator
+private-config step rather than exposing the credential. Restore the MB
+private backup and affected containers on rollback; PB stays unchanged.
+
 Allow an authenticated tenant user with the existing terminal-management
 authorization to request a new certificate-renewal PIN for their own terminal
 through the existing accepted PIN contract. Do
