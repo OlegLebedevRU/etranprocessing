@@ -1,4 +1,5 @@
-import { UserInfo } from "../api/auth";
+import type { UserInfo } from "../api/auth";
+import { getNavigationProfile } from "./navigationProfile";
 
 export const PERMISSION_MONITORING_VIEW = "monitoring:view";
 export const PERMISSION_REPORTS_INKASS_VIEW = "reports:inkass:view";
@@ -69,6 +70,9 @@ export function hasAnyReportPermission(user: UserInfo | null): boolean {
 export function getDefaultRouteForViewer(user: UserInfo | null): string | null {
   if (!user) return null;
   if (user.role_id !== 4) return "/monitoring";
+  if (getNavigationProfile(user) === "l4desk") {
+    return hasPermission(user, PERMISSION_VIDEO_VIEW) ? "/video" : null;
+  }
   if (hasPermission(user, PERMISSION_MONITORING_VIEW)) return "/monitoring";
   if (hasPermission(user, PERMISSION_VIDEO_VIEW)) return "/video";
   if (hasPermission(user, PERMISSION_REPORTS_PAYMENTS_VIEW)) return "/reports?tab=payments";

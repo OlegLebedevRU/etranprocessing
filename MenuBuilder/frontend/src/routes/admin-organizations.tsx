@@ -62,6 +62,7 @@ export default function AdminOrganizationsPage() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingOrg, setEditingOrg] = useState<AdminOrg | null>(null);
   const [editForm] = Form.useForm();
+  const editSiteMode = Form.useWatch("site_mode", editForm);
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editCertMode, setEditCertMode] = useState("none");
 
@@ -177,6 +178,10 @@ export default function AdminOrganizationsPage() {
       tenant_pin_creation_enabled: org.tenant_pin_creation_enabled,
       cert_charge_primary_issue: org.cert_charge_primary_issue,
       cert_charge_reissue: org.cert_charge_reissue,
+      site_mode: org.site_mode || "both",
+      default_site: org.default_site || undefined,
+      classic_licenses_enabled: org.classic_licenses_enabled !== false,
+      l4desk_licenses_enabled: org.l4desk_licenses_enabled !== false,
     });
     setEditModalOpen(true);
   };
@@ -212,6 +217,10 @@ export default function AdminOrganizationsPage() {
         tenant_pin_creation_enabled: Boolean(values.tenant_pin_creation_enabled),
         cert_charge_primary_issue: Boolean(values.cert_charge_primary_issue),
         cert_charge_reissue: Boolean(values.cert_charge_reissue),
+        site_mode: values.site_mode,
+        default_site: values.site_mode === "both" ? (values.default_site || null) : values.site_mode,
+        classic_licenses_enabled: Boolean(values.classic_licenses_enabled),
+        l4desk_licenses_enabled: Boolean(values.l4desk_licenses_enabled),
       };
 
       await updateAdminOrganization(editingOrg.org_id, payload);
@@ -737,6 +746,31 @@ export default function AdminOrganizationsPage() {
           onFinish={handleEditSubmit}
           style={{ marginTop: 16 }}
         >
+          <Divider style={{ margin: "8px 0 12px", fontSize: 14 }}>Доступ к сайту</Divider>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Form.Item name="site_mode" label="Версии сайта" rules={[{ required: true }]}>
+              <Select onChange={mode => editForm.setFieldValue("default_site", mode === "both" ? undefined : mode)} options={[
+                { value: "classic", label: "Только Classic" },
+                { value: "l4desk", label: "Только L4Desk" },
+                { value: "both", label: "Обе версии" },
+              ]} />
+            </Form.Item>
+            <Form.Item name="default_site" label="Версия по умолчанию" tooltip="Если оставить пустым при выборе обеих версий, действуют прежние правила по роли пользователя">
+              <Select allowClear disabled={editSiteMode !== "both"} placeholder="По роли пользователя" options={[
+                { value: "classic", label: "Classic" },
+                { value: "l4desk", label: "L4Desk" },
+              ]} />
+            </Form.Item>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Form.Item name="classic_licenses_enabled" label="Лицензии в Classic" valuePropName="checked">
+              <Switch checkedChildren="Показать" unCheckedChildren="Скрыть" />
+            </Form.Item>
+            <Form.Item name="l4desk_licenses_enabled" label="Лицензии в L4Desk" valuePropName="checked">
+              <Switch checkedChildren="Показать" unCheckedChildren="Скрыть" />
+            </Form.Item>
+          </div>
+          <Divider style={{ margin: "8px 0 12px", fontSize: 14 }}>Организация и биллинг</Divider>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <Form.Item
               name="org_name"

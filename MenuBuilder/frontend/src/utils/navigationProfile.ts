@@ -7,20 +7,29 @@ const PROFILE_STORAGE_KEY = "app_nav_profile";
 const PROFILE_CHANGE_EVENT = "app_nav_profile_change";
 
 /**
- * Determine the active navigation profile.
- * - If user.role_id === 5 (l4desk_owner), returns "l4desk".
- * - If URL contains ?profile=l4desk or ?profile=classic, stores and returns that.
- * - If localStorage contains "l4desk", returns "l4desk".
- * - Otherwise defaults to "classic" for existing users.
+ * The tenant's single-site policy is authoritative. With both sites available,
+ * an explicit user choice takes precedence over the tenant default. A null
+ * default preserves the historical role-based behavior.
  */
+function storageKey(user: UserInfo | null): string {
+  return `${PROFILE_STORAGE_KEY}:${user?.org_id ?? "platform"}`;
+}
+
+export function isProfileAllowed(user: UserInfo | null, profile: NavigationProfile): boolean {
+  return !user?.site_mode || user.site_mode === "both" || user.site_mode === profile;
+}
+
 export function getNavigationProfile(user: UserInfo | null): NavigationProfile {
+  if (user?.site_mode === "classic" || user?.site_mode === "l4desk") {
+    return user.site_mode;
+  }
   if (typeof window !== "undefined") {
     // Check URL parameters for explicit override/testing
     const params = new URLSearchParams(window.location.search);
     const paramProfile = params.get("profile");
     if (paramProfile === "l4desk" || paramProfile === "classic") {
       try {
-        localStorage.setItem(PROFILE_STORAGE_KEY, paramProfile);
+        localStorage.setItem(storageKey(user), paramProfile);
       } catch {
         // ignore storage errors
       }
@@ -28,21 +37,19 @@ export function getNavigationProfile(user: UserInfo | null): NavigationProfile {
     }
   }
 
-  // L4Desk self-registered owners always default to l4desk profile
-  if (user?.role_id === 5 || user?.role === "l4desk_owner") {
-    return "l4desk";
-  }
-
   if (typeof window !== "undefined") {
     try {
-      const stored = localStorage.getItem(PROFILE_STORAGE_KEY);
-      if (stored === "l4desk") {
-        return "l4desk";
+      const stored = localStorage.getItem(storageKey(user));
+      if (stored === "l4desk" || stored === "classic") {
+        return stored;
       }
     } catch {
       // ignore storage errors
     }
   }
+
+  if (user?.default_site) return user.default_site;
+  if (user?.role_id === 5 || user?.role === "l4desk_owner") return "l4desk";
 
   return "classic";
 }
@@ -50,10 +57,11 @@ export function getNavigationProfile(user: UserInfo | null): NavigationProfile {
 /**
  * Set the navigation profile and notify listeners.
  */
-export function setNavigationProfile(profile: NavigationProfile): void {
+export function setNavigationProfile(profile: NavigationProfile, user: UserInfo | null = null): void {
   if (typeof window === "undefined") return;
+  if (!isProfileAllowed(user, profile)) return;
   try {
-    localStorage.setItem(PROFILE_STORAGE_KEY, profile);
+    localStorage.setItem(storageKey(user), profile);
     window.dispatchEvent(new CustomEvent(PROFILE_CHANGE_EVENT, { detail: profile }));
   } catch {
     // ignore
@@ -94,7 +102,7 @@ export function useNavigationProfile(user: UserInfo | null): [
   }, [user]);
 
   const updateProfile = (newProfile: NavigationProfile) => {
-    setNavigationProfile(newProfile);
+    setNavigationProfile(newProfile, user);
     setProfileState(newProfile);
   };
 

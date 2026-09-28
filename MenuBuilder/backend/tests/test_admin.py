@@ -184,6 +184,8 @@ async def test_admin_organizations_flow(monkeypatch):
         assert data[0]["monthly_price_minor"] == 150_000
         assert data[0]["cert_billing_mode"] == "per_operation"
         assert data[0]["tenant_pin_creation_enabled"] is True
+        assert data[0]["site_mode"] == "both"
+        assert data[0]["classic_licenses_enabled"] is True
 
         # 2. Test create organization
         mock_db.get.return_value = None  # not existing yet
@@ -214,6 +216,9 @@ async def test_admin_organizations_flow(monkeypatch):
             "org_name": "Platerra Updated",
             "monthly_price_minor": 180_000,
             "cert_billing_mode": "none",
+            "site_mode": "l4desk",
+            "classic_licenses_enabled": False,
+            "l4desk_licenses_enabled": True,
         }
         resp = await client.put(
             "/api/admin/organizations/1", json=update_payload, headers=headers
@@ -223,6 +228,16 @@ async def test_admin_organizations_flow(monkeypatch):
         assert updated_org["org_id"] == 1
         assert updated_org["org_name"] == "Platerra Updated"
         assert updated_org["monthly_price_minor"] == 180_000
+        assert updated_org["site_mode"] == "l4desk"
+        assert updated_org["default_site"] == "l4desk"
+        assert updated_org["classic_licenses_enabled"] is False
+
+        invalid = await client.patch(
+            "/api/admin/organizations/1",
+            json={"site_mode": "classic", "default_site": "l4desk"},
+            headers=headers,
+        )
+        assert invalid.status_code == 422
 
         # 4. Test master mode update with 0 price (ensure 0 is retained and not converted to 100_000)
         master_payload = {

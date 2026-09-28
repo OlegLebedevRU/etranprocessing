@@ -108,18 +108,33 @@ def test_schema_contract_gate_indexes_and_constraints():
 
 
 def test_alembic_linear_history():
-    """Verify Alembic history is linear and 027 is the single head following 026."""
+    """Verify Alembic history stays linear after the tenant navigation extension."""
     config = Config("alembic.ini")
     script = ScriptDirectory.from_config(config)
 
     heads = script.get_heads()
-    assert heads == ["027"], f"Expected single head '027', got {heads}"
+    assert heads == ["028"], f"Expected single head '028', got {heads}"
+
+    rev_028 = script.get_revision("028")
+    assert rev_028 is not None
+    assert rev_028.down_revision == "027"
 
     rev_027 = script.get_revision("027")
     assert rev_027 is not None
     assert rev_027.down_revision == "026", (
         f"Expected down_revision '026', got {rev_027.down_revision}"
     )
+
+
+def test_tenant_navigation_upgrade_sql_generation():
+    config = Config("alembic.ini")
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        command.upgrade(config, "027:028", sql=True)
+    sql = buf.getvalue()
+    assert "ADD COLUMN site_mode" in sql
+    assert "ADD COLUMN classic_licenses_enabled" in sql
+    assert "ADD COLUMN l4desk_licenses_enabled" in sql
 
 
 def test_clean_upgrade_sql_generation():

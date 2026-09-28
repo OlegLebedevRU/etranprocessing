@@ -39,10 +39,10 @@ import {
   listTerminalsSettings,
   onboardTerminal,
   retryTerminalOnboarding,
-  updateTerminalSettings,
 } from "../../api/settings";
 import { useSession } from "../../session/SessionContext";
 import OnboardingWizardModal from "../../components/OnboardingWizardModal";
+import TerminalSettingsEditModal from "../../components/TerminalSettingsEditModal";
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -71,9 +71,6 @@ function TenantTerminalsSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [terminals, setTerminals] = useState<TerminalSettingsItem[]>([]);
   const [editingTerminal, setEditingTerminal] = useState<TerminalSettingsItem | null>(null);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [form] = Form.useForm();
 
   // Onboarding & PIN delivery states
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -137,32 +134,6 @@ function TenantTerminalsSettingsPage() {
 
   const handleEditClick = (term: TerminalSettingsItem) => {
     setEditingTerminal(term);
-    form.setFieldsValue({
-      address: term.address || "",
-      note: term.note || "",
-      timezone: term.timezone || undefined,
-    });
-    setModalVisible(true);
-  };
-
-  const handleSaveTerminal = async (values: any) => {
-    if (!editingTerminal || isReadOnly) return;
-    setSaving(true);
-    try {
-      const updated = await updateTerminalSettings(editingTerminal.id, {
-        address: values.address,
-        note: values.note,
-        timezone: values.timezone,
-      });
-      message.success(`Настройки терминала ${updated.sn} обновлены`);
-      setModalVisible(false);
-      setEditingTerminal(null);
-      fetchTerminals();
-    } catch (err: any) {
-      message.error(err.response?.data?.detail || "Ошибка сохранения терминала");
-    } finally {
-      setSaving(false);
-    }
   };
 
   // Onboard new terminal
@@ -741,90 +712,12 @@ function TenantTerminalsSettingsPage() {
         )}
       </Modal>
 
-      {/* Edit Modal */}
-      <Modal
-        title={`${isReadOnly ? "Просмотр параметров терминала" : "Редактирование терминала"} ${editingTerminal?.sn || ""}`}
-        open={modalVisible}
-        onCancel={() => setModalVisible(false)}
-        footer={null}
-        destroyOnClose
-      >
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message={isReadOnly ? "Режим только для чтения" : "Ограничение параметров"}
-          description={
-            isReadOnly
-              ? "Параметры терминала доступны только для просмотра."
-              : "В данном разделе можно изменять только адрес, примечание и часовой пояс терминала."
-          }
-        />
-
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={handleSaveTerminal}
-          disabled={isReadOnly}
-        >
-          <Form.Item
-            name="address"
-            label="Адрес установки"
-            tooltip="Фактический адрес размещения терминала самообслуживания"
-          >
-            <Input.TextArea
-              rows={2}
-              placeholder="г. Москва, ул. Примерная, д. 10, ТЦ 'Пример'"
-              maxLength={500}
-              showCount
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="note"
-            label="Примечание"
-            tooltip="Внутренние заметки, контакты инкассатора или арендодателя"
-          >
-            <Input.TextArea
-              rows={2}
-              placeholder="Терминал у главного входа, контакт: +7 (900) 000-00-00"
-              maxLength={500}
-              showCount
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="timezone"
-            label="Часовой пояс терминала"
-            tooltip="Часовой пояс для Z-отчетов и смен данного терминала"
-          >
-            <Select
-              options={COMMON_TIMEZONES}
-              showSearch
-              allowClear
-              optionFilterProp="label"
-              placeholder="По умолчанию (часовой пояс организации)"
-            />
-          </Form.Item>
-
-          <div style={{ textAlign: "right", marginTop: 24 }}>
-            <Space>
-              <Button onClick={() => setModalVisible(false)}>
-                {isReadOnly ? "Закрыть" : "Отмена"}
-              </Button>
-              {!isReadOnly && (
-                <Button
-                  type="primary"
-                  htmlType="submit"
-                  loading={saving}
-                >
-                  Сохранить
-                </Button>
-              )}
-            </Space>
-          </div>
-        </Form>
-      </Modal>
+      <TerminalSettingsEditModal
+        terminal={editingTerminal}
+        readOnly={isReadOnly}
+        onClose={() => setEditingTerminal(null)}
+        onSaved={() => void fetchTerminals()}
+      />
 
       {/* L4Desk Onboarding Wizard */}
       <OnboardingWizardModal

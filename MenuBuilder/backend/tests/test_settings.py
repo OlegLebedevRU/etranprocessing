@@ -488,6 +488,27 @@ async def test_settings_terminals_flow(role3_headers, superuser_headers):
         assert updated["note"] == "Updated Note 1"
         assert updated["timezone"] == "Asia/Novosibirsk"
 
+        cleared = await client.patch(
+            "/api/settings/terminals/1",
+            json={"address": "", "note": None, "timezone": None},
+            headers=role3_headers,
+        )
+        assert cleared.status_code == 200
+        assert cleared.json()["address"] is None
+        assert cleared.json()["note"] is None
+        assert cleared.json()["timezone"] is None
+
+        owner_token = create_access_token(
+            {"sub": "owner", "org_id": 10, "role": "l4desk_owner", "role_id": 5, "token_type": "tenant"}
+        )
+        owner_update = await client.patch(
+            "/api/settings/terminals/1",
+            json={"address": "Owner address"},
+            headers={"Authorization": f"Bearer {owner_token}"},
+        )
+        assert owner_update.status_code == 200
+        assert owner_update.json()["address"] == "Owner address"
+
 
 @pytest.mark.anyio
 async def test_settings_terminals_pagination_and_comma_search(role3_headers):

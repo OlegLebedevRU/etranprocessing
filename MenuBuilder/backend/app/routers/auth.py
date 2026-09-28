@@ -57,6 +57,10 @@ class UserInfo(BaseModel):
     token_type: str = "tenant"
     is_impersonated: bool = False
     org_name: str | None = None
+    site_mode: str = "both"
+    default_site: str | None = None
+    classic_licenses_enabled: bool = True
+    l4desk_licenses_enabled: bool = True
     timezone: str = "Europe/Moscow"
     expires_at: str | None = None
     full_name: str | None = None
@@ -481,11 +485,22 @@ async def me(user: dict = Depends(get_current_user)):
     org_id = user.get("org_id")
     org_name = None
     org_timezone = "Europe/Moscow"
+    site_mode = "both"
+    default_site = None
+    classic_licenses_enabled = True
+    l4desk_licenses_enabled = True
     if org_id:
         try:
             async with async_session() as session:
                 result = await session.execute(
-                    select(Org.org_name, Org.timezone).where(Org.org_id == org_id)
+                    select(
+                        Org.org_name,
+                        Org.timezone,
+                        Org.site_mode,
+                        Org.default_site,
+                        Org.classic_licenses_enabled,
+                        Org.l4desk_licenses_enabled,
+                    ).where(Org.org_id == org_id)
                 )
                 row = result.first()
                 if row is not None and type(row).__name__ not in (
@@ -499,12 +514,25 @@ async def me(user: dict = Depends(get_current_user)):
                             if len(row) > 1 and row[1] is not None
                             else "Europe/Moscow"
                         )
+                        if len(row) > 2:
+                            site_mode = row[2] or "both"
+                            default_site = row[3]
+                            classic_licenses_enabled = bool(row[4])
+                            l4desk_licenses_enabled = bool(row[5])
                     elif hasattr(row, "org_name") and type(
                         getattr(row, "org_name", None)
                     ).__name__ not in ("MagicMock", "AsyncMock"):
                         org_name = getattr(row, "org_name", None)
                         org_timezone = (
                             getattr(row, "timezone", "Europe/Moscow") or "Europe/Moscow"
+                        )
+                        site_mode = getattr(row, "site_mode", "both") or "both"
+                        default_site = getattr(row, "default_site", None)
+                        classic_licenses_enabled = getattr(
+                            row, "classic_licenses_enabled", True
+                        )
+                        l4desk_licenses_enabled = getattr(
+                            row, "l4desk_licenses_enabled", True
                         )
                 else:
                     with suppress(Exception):
@@ -583,6 +611,10 @@ async def me(user: dict = Depends(get_current_user)):
         token_type=user.get("token_type", "tenant"),
         is_impersonated=bool(user.get("is_impersonated", False)),
         org_name=org_name,
+        site_mode=site_mode,
+        default_site=default_site,
+        classic_licenses_enabled=classic_licenses_enabled,
+        l4desk_licenses_enabled=l4desk_licenses_enabled,
         timezone=org_timezone,
         expires_at=expires_at,
         full_name=full_name,

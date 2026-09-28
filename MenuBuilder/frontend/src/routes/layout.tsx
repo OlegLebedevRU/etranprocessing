@@ -27,6 +27,7 @@ import {
   PERMISSION_BILLING_VIEW,
   PERMISSION_MONITORING_VIEW,
   PERMISSION_SETTINGS_TERMINALS_VIEW,
+  PERMISSION_VIDEO_VIEW,
   hasAnyReportPermission,
   hasPermission,
 } from "../utils/permissions";
@@ -68,6 +69,7 @@ export default function AppLayout() {
 
   const isPlatformMode = Boolean(isSuperuser && currentUser?.org_id === 0);
   const [navProfile, setNavProfile] = useNavigationProfile(currentUser);
+  const canSwitchProfile = !currentUser?.site_mode || currentUser.site_mode === "both";
 
   let navItems;
   if (isPlatformMode) {
@@ -94,7 +96,11 @@ export default function AppLayout() {
       },
     ];
   } else if (navProfile === "l4desk") {
-    navItems = L4DESK_NAV_ITEMS;
+    navItems = isRole4
+      ? (hasPermission(currentUser, PERMISSION_VIDEO_VIEW) ? [L4DESK_NAV_ITEMS[1]] : [])
+      : L4DESK_NAV_ITEMS.filter(item =>
+          item.key !== "licenses" || currentUser?.l4desk_licenses_enabled !== false
+        );
   } else if (isRole4) {
     navItems = [];
     if (hasPermission(currentUser, PERMISSION_MONITORING_VIEW)) {
@@ -104,7 +110,7 @@ export default function AppLayout() {
     if (hasAnyReportPermission(currentUser)) {
       navItems.push({ key: "reports", icon: <FileTextOutlined />, label: "Отчёты" });
     }
-    if (hasPermission(currentUser, PERMISSION_BILLING_VIEW)) {
+    if (currentUser?.classic_licenses_enabled !== false && hasPermission(currentUser, PERMISSION_BILLING_VIEW)) {
       navItems.push({ key: "billing", icon: <DollarOutlined />, label: "Лицензии" });
     }
     if (hasPermission(currentUser, PERMISSION_SETTINGS_TERMINALS_VIEW)) {
@@ -131,9 +137,12 @@ export default function AppLayout() {
           ]
         : []),
     ];
+    if (currentUser?.classic_licenses_enabled === false) {
+      navItems = navItems.filter(item => item.key !== "billing");
+    }
   }
 
-  const defaultSegment = navProfile === "l4desk" ? "terminals" : (isPlatformMode ? "admin" : "monitoring");
+  const defaultSegment = navProfile === "l4desk" ? (isRole4 ? "video" : "terminals") : (isPlatformMode ? "admin" : "monitoring");
   const rawSegment = location.pathname.split("/")[1];
   const segment = rawSegment || defaultSegment;
   const selectedKey = navItems.some((i) => i.key === segment)
@@ -254,7 +263,7 @@ export default function AppLayout() {
             }}
           >
             {/* Profile switcher for admins / testing smoke */}
-            {(isSuperuser || currentUser?.role_id === 1 || currentUser?.role_id === 2 || currentUser?.role_id === 3) && (
+            {canSwitchProfile && (isSuperuser || currentUser?.role_id === 1 || currentUser?.role_id === 2 || currentUser?.role_id === 3 || currentUser?.role_id === 4 || currentUser?.role_id === 5) && (
               <Tooltip title={`Переключить профиль навигации (активен: ${navProfile === "l4desk" ? "L4Desk" : "Platerra"})`}>
                 <Button
                   size="small"

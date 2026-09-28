@@ -20,6 +20,22 @@ router = APIRouter(
 )
 
 
+def _site_fields(org: Org) -> dict:
+    return {
+        "site_mode": org.site_mode or "both",
+        "default_site": org.default_site,
+        "classic_licenses_enabled": org.classic_licenses_enabled is not False,
+        "l4desk_licenses_enabled": org.l4desk_licenses_enabled is not False,
+    }
+
+
+def _validate_site_policy(mode: str, default_site: str | None) -> None:
+    if mode != "both" and default_site not in (None, mode):
+        raise HTTPException(
+            status_code=422, detail="Версия по умолчанию должна быть разрешена"
+        )
+
+
 @router.get("", response_model=list[AdminOrgRead])
 async def list_organizations(
     db: AsyncSession = Depends(get_db),
@@ -39,6 +55,7 @@ async def list_organizations(
         bs = settings_map.get(org.org_id)
         result.append(
             AdminOrgRead(
+                **_site_fields(org),
                 org_id=org.org_id,
                 org_name=org.org_name,
                 name=org.name,
@@ -136,7 +153,12 @@ async def create_organization(
         email=body.email,
         phone=body.phone,
         notify_by_email=body.notify_by_email,
+        site_mode=body.site_mode,
+        default_site=body.default_site if body.site_mode == "both" else body.site_mode,
+        classic_licenses_enabled=body.classic_licenses_enabled,
+        l4desk_licenses_enabled=body.l4desk_licenses_enabled,
     )
+    _validate_site_policy(body.site_mode, body.default_site)
     db.add(org)
 
     # Billing settings
@@ -168,6 +190,7 @@ async def create_organization(
     await db.refresh(billing_settings)
 
     return AdminOrgRead(
+        **_site_fields(org),
         org_id=org.org_id,
         org_name=org.org_name,
         name=org.name,
@@ -226,6 +249,21 @@ async def update_organization(
         org.phone = body.phone
     if body.notify_by_email is not None:
         org.notify_by_email = body.notify_by_email
+    if body.site_mode is not None:
+        org.site_mode = body.site_mode
+    org.site_mode = org.site_mode or "both"
+    if "default_site" in body.model_fields_set:
+        org.default_site = body.default_site
+    _validate_site_policy(
+        org.site_mode or "both",
+        org.default_site if "default_site" in body.model_fields_set else None,
+    )
+    if org.site_mode != "both":
+        org.default_site = org.site_mode
+    if body.classic_licenses_enabled is not None:
+        org.classic_licenses_enabled = body.classic_licenses_enabled
+    if body.l4desk_licenses_enabled is not None:
+        org.l4desk_licenses_enabled = body.l4desk_licenses_enabled
 
     # Update billing settings
     bs = await db.get(OrgBillingSettings, org_id)
@@ -297,6 +335,7 @@ async def update_organization(
     await db.refresh(bs)
 
     return AdminOrgRead(
+        **_site_fields(org),
         org_id=org.org_id,
         org_name=org.org_name,
         name=org.name,

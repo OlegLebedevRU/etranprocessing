@@ -146,6 +146,9 @@ function L4DeskRootTerminalsRoute() {
   const { user } = useSession();
   const profile = getNavigationProfile(user);
   if (profile === "l4desk") {
+    if (user?.role_id === 4) {
+      return <Navigate to={getDefaultRouteForViewer(user) || "/"} replace />;
+    }
     return <L4DeskTerminalsPage />;
   }
   return <Navigate to="/menu/terminals" replace />;
@@ -162,6 +165,22 @@ function SettingsTerminalsRoute() {
       <TerminalsSettingsPage />
     </ViewerGuard>
   );
+}
+
+function SiteRoute({ site, children, licenses = false }: {
+  site: "classic" | "l4desk";
+  children: React.ReactNode;
+  licenses?: boolean;
+}) {
+  const { user } = useSession();
+  if (user?.site_mode && user.site_mode !== "both" && user.site_mode !== site) {
+    return <Navigate to="/" replace />;
+  }
+  if (licenses && ((site === "classic" && user?.classic_licenses_enabled === false) ||
+    (site === "l4desk" && user?.l4desk_licenses_enabled === false))) {
+    return <Navigate to="/" replace />;
+  }
+  return <>{children}</>;
 }
 
 function ViewerGuard({
@@ -228,7 +247,7 @@ export default function App() {
               path="monitoring"
               element={
                 <ViewerGuard permission={PERMISSION_MONITORING_VIEW}>
-                  <MonitoringPage />
+                  <SiteRoute site="classic"><MonitoringPage /></SiteRoute>
                 </ViewerGuard>
               }
             />
@@ -244,7 +263,7 @@ export default function App() {
               path="menu"
               element={
                 <ViewerGuard forbiddenForRole4>
-                  <MenuManagementLayout />
+                  <SiteRoute site="classic"><MenuManagementLayout /></SiteRoute>
                 </ViewerGuard>
               }
             >
@@ -258,7 +277,7 @@ export default function App() {
               path="reports"
               element={
                 <ViewerGuard permission="reports">
-                  <ReportsPage />
+                  <SiteRoute site="classic"><ReportsPage /></SiteRoute>
                 </ViewerGuard>
               }
             />
@@ -266,11 +285,11 @@ export default function App() {
               path="billing"
               element={
                 <ViewerGuard permission={PERMISSION_BILLING_VIEW}>
-                  <BillingPage />
+                  <SiteRoute site="classic" licenses><BillingPage /></SiteRoute>
                 </ViewerGuard>
               }
             />
-            <Route path="licenses" element={<LicensesPage />} />
+            <Route path="licenses" element={<SiteRoute site="l4desk" licenses><LicensesPage /></SiteRoute>} />
             <Route path="devices" element={<DevicesPage />} />
             <Route path="console" element={<ConsolePage />} />
             <Route path="mcp" element={<McpPromoPage />} />
@@ -278,7 +297,7 @@ export default function App() {
               path="integrations"
               element={
                 <ViewerGuard forbiddenForRole4>
-                  <IntegrationsPage />
+                  <SiteRoute site="classic"><IntegrationsPage /></SiteRoute>
                 </ViewerGuard>
               }
             />

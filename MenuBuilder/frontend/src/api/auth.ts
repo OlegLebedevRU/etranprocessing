@@ -26,6 +26,10 @@ export interface UserInfo {
   token_type?: string;
   is_impersonated?: boolean;
   org_name?: string | null;
+  site_mode?: "classic" | "l4desk" | "both";
+  default_site?: "classic" | "l4desk" | null;
+  classic_licenses_enabled?: boolean;
+  l4desk_licenses_enabled?: boolean;
   timezone?: string;
   expires_at?: string | null;
   full_name?: string | null;

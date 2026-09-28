@@ -11,6 +11,10 @@ export interface AdminOrg {
   email?: string | null;
   phone?: string | null;
   notify_by_email?: boolean;
+  site_mode: "classic" | "l4desk" | "both";
+  default_site?: "classic" | "l4desk" | null;
+  classic_licenses_enabled: boolean;
+  l4desk_licenses_enabled: boolean;
   created_at?: string | null;
   updated_at?: string | null;
   monthly_price_minor: number;
@@ -36,6 +40,10 @@ export interface AdminOrgCreateInput {
   email?: string;
   phone?: string;
   notify_by_email?: boolean;
+  site_mode?: "classic" | "l4desk" | "both";
+  default_site?: "classic" | "l4desk" | null;
+  classic_licenses_enabled?: boolean;
+  l4desk_licenses_enabled?: boolean;
   monthly_price_minor?: number;
   currency?: string;
   billing_mode?: string;
@@ -58,6 +66,10 @@ export interface AdminOrgUpdateInput {
   email?: string | null;
   phone?: string | null;
   notify_by_email?: boolean;
+  site_mode?: "classic" | "l4desk" | "both";
+  default_site?: "classic" | "l4desk" | null;
+  classic_licenses_enabled?: boolean;
+  l4desk_licenses_enabled?: boolean;
   monthly_price_minor?: number;
   currency?: string;
   billing_mode?: string;

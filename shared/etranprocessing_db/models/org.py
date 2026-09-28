@@ -42,6 +42,16 @@ class Org(Base):
     is_email_verified: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="false", nullable=False
     )
+    site_mode: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="both", server_default="both"
+    )
+    default_site: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    classic_licenses_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    l4desk_licenses_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
     email_verified_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -52,7 +62,20 @@ class Org(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    __table_args__ = (Index("idx_orgs_status", "status"),)
+    __table_args__ = (
+        Index("idx_orgs_status", "status"),
+        CheckConstraint(
+            "site_mode IN ('classic', 'l4desk', 'both')", name="ck_orgs_site_mode"
+        ),
+        CheckConstraint(
+            "default_site IS NULL OR default_site IN ('classic', 'l4desk')",
+            name="ck_orgs_default_site",
+        ),
+        CheckConstraint(
+            "site_mode = 'both' OR default_site IS NULL OR default_site = site_mode",
+            name="ck_orgs_site_default_allowed",
+        ),
+    )
 
 
 class OrgBillingSettings(Base):

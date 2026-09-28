@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, field_validator
 
@@ -218,6 +219,10 @@ class AdminOrgRead(BaseModel):
     email: str | None = None
     phone: str | None = None
     notify_by_email: bool = True
+    site_mode: Literal["classic", "l4desk", "both"] = "both"
+    default_site: Literal["classic", "l4desk"] | None = None
+    classic_licenses_enabled: bool = True
+    l4desk_licenses_enabled: bool = True
     created_at: datetime | None = None
     updated_at: datetime | None = None
     monthly_price_minor: int = 100_000
@@ -245,6 +250,10 @@ class AdminOrgCreate(BaseModel):
     email: str | None = None
     phone: str | None = None
     notify_by_email: bool = True
+    site_mode: Literal["classic", "l4desk", "both"] = "both"
+    default_site: Literal["classic", "l4desk"] | None = None
+    classic_licenses_enabled: bool = True
+    l4desk_licenses_enabled: bool = True
     monthly_price_minor: int = 100_000
     currency: str = "RUB"
     billing_mode: str = "standard"
@@ -267,6 +276,10 @@ class AdminOrgUpdate(BaseModel):
     email: str | None = None
     phone: str | None = None
     notify_by_email: bool | None = None
+    site_mode: Literal["classic", "l4desk", "both"] | None = None
+    default_site: Literal["classic", "l4desk"] | None = None
+    classic_licenses_enabled: bool | None = None
+    l4desk_licenses_enabled: bool | None = None
     monthly_price_minor: int | None = None
     currency: str | None = None
     billing_mode: str | None = None

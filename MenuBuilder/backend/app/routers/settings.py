@@ -873,12 +873,12 @@ async def update_terminal_settings(
         )
 
     # Strictly update ONLY address, note, and timezone
-    if req.address is not None:
-        terminal.address = req.address.strip() or None
-    if req.note is not None:
-        terminal.note = req.note.strip() or None
-    if req.timezone is not None:
-        terminal.timezone = req.timezone.strip() or None
+    if "address" in req.model_fields_set:
+        terminal.address = (req.address or "").strip() or None
+    if "note" in req.model_fields_set:
+        terminal.note = (req.note or "").strip() or None
+    if "timezone" in req.model_fields_set:
+        terminal.timezone = (req.timezone or "").strip() or None
 
     terminal.updated_at = datetime.now(UTC)
     await db.commit()

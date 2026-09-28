@@ -96,7 +96,7 @@ describe("L4Desk Navigation Profile & Route Resolution", () => {
     };
     const profile = getNavigationProfile(user);
     expect(profile).toBe("l4desk");
-    expect(mockLocalStorage.getItem("app_nav_profile")).toBe("l4desk");
+    expect(mockLocalStorage.getItem("app_nav_profile:1")).toBe("l4desk");
   });
 
   it("URL parameter ?profile=classic forces classic profile even for role 5", () => {
@@ -119,10 +119,24 @@ describe("L4Desk Navigation Profile & Route Resolution", () => {
     window.addEventListener("app_nav_profile_change", listener);
 
     setNavigationProfile("l4desk");
-    expect(mockLocalStorage.getItem("app_nav_profile")).toBe("l4desk");
+    expect(mockLocalStorage.getItem("app_nav_profile:platform")).toBe("l4desk");
     expect(receivedEvent).toBe("l4desk");
 
     window.removeEventListener("app_nav_profile_change", listener);
+  });
+
+  it("a single-site tenant ignores URL and saved overrides", () => {
+    (globalThis as any).window.location.search = "?profile=classic";
+    const user: UserInfo = { username: "owner", org_id: 42, role_id: 5, site_mode: "l4desk" };
+    mockLocalStorage.setItem("app_nav_profile:42", "classic");
+    expect(getNavigationProfile(user)).toBe("l4desk");
+  });
+
+  it("a tenant default applies until its user selects another allowed site", () => {
+    const user: UserInfo = { username: "operator", org_id: 43, role_id: 3, site_mode: "both", default_site: "l4desk" };
+    expect(getNavigationProfile(user)).toBe("l4desk");
+    setNavigationProfile("classic", user);
+    expect(getNavigationProfile(user)).toBe("classic");
   });
 
   it("L4Desk navigation profile defines strictly the 6 required sections in order", () => {

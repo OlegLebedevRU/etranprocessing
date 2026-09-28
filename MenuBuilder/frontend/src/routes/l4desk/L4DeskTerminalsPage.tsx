@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   Empty,
+  Tooltip,
   Input,
   Pagination,
   Select,
@@ -19,6 +20,7 @@ import {
   ClockCircleOutlined,
   CodeOutlined,
   DesktopOutlined,
+  EditOutlined,
   DisconnectOutlined,
   PlusOutlined,
   KeyOutlined,
@@ -39,6 +41,7 @@ import {
 import { useSession } from "../../session/SessionContext";
 import OnboardingWizardModal from "../../components/OnboardingWizardModal";
 import { getDevices, type DeviceListItem } from "../../api/devices";
+import TerminalSettingsEditModal from "../../components/TerminalSettingsEditModal";
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -85,6 +88,7 @@ function pinTag(item: TerminalSettingsItem) {
 
 export default function L4DeskTerminalsPage() {
   const { user } = useSession();
+  const canChangeTerminals = !user?.is_superuser && (user?.role_id === 3 || user?.role_id === 5);
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [terminals, setTerminals] = useState<TerminalSettingsItem[]>([]);
@@ -99,6 +103,7 @@ export default function L4DeskTerminalsPage() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [listTenant, setListTenant] = useState<number | null | undefined>(user?.org_id);
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [editingTerminal, setEditingTerminal] = useState<TerminalSettingsItem | null>(null);
   const [retryingId, setRetryingId] = useState<number | null>(null);
   const [devices, setDevices] = useState<Map<number, DeviceListItem>>(new Map());
   const fetching = useRef(false);
@@ -259,7 +264,7 @@ export default function L4DeskTerminalsPage() {
       title: "Терминал",
       dataIndex: "device_id",
       key: "device_id",
-      width: 135,
+      width: 105,
       render: (v: number | null) => (
         <Text strong copyable={v != null ? { text: String(v) } : false} style={{ whiteSpace: "nowrap" }}>
           {v ?? "—"}
@@ -270,13 +275,13 @@ export default function L4DeskTerminalsPage() {
       title: "SN",
       dataIndex: "sn",
       key: "sn",
-      width: 170,
+      width: 135,
       render: (sn: string) => (
         <Text
           type="secondary"
           copyable={{ text: sn }}
           ellipsis={{ tooltip: sn }}
-          style={{ display: "block", width: 138, whiteSpace: "nowrap", fontFamily: "monospace", fontSize: 12 }}
+          style={{ display: "block", width: 105, whiteSpace: "nowrap", fontFamily: "monospace", fontSize: 12 }}
         >
           {sn}
         </Text>
@@ -285,12 +290,12 @@ export default function L4DeskTerminalsPage() {
     {
       title: "Название / адрес",
       key: "label",
-      width: 220,
+      width: 190,
       render: (_, r) => (
-        <div>
-          <div>{r.note || "—"}</div>
+        <div style={{ minWidth: 0 }}>
+          <Text ellipsis={{ tooltip: r.note || undefined }} style={{ display: "block" }}>{r.note || "—"}</Text>
           {r.address && (
-            <Text type="secondary" style={{ fontSize: 12 }}>
+            <Text type="secondary" ellipsis={{ tooltip: r.address }} style={{ display: "block", fontSize: 12 }}>
               {r.address}
             </Text>
           )}
@@ -301,19 +306,19 @@ export default function L4DeskTerminalsPage() {
       title: "Последний PIN",
       dataIndex: "last_pin_issued_at",
       key: "last_pin_issued_at",
-      width: 150,
-      render: (value: string | null) => value ? new Date(value).toLocaleString("ru-RU") : <Text type="secondary">—</Text>,
+      width: 115,
+      render: (value: string | null) => value ? <span style={{ whiteSpace: "nowrap", fontSize: 12 }}>{new Date(value).toLocaleDateString("ru-RU")}<br />{new Date(value).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</span> : <Text type="secondary">—</Text>,
     },
     {
       title: "Статус",
       key: "status",
-      width: 120,
+      width: 95,
       render: (_, r) => readinessTag(devices.get(r.device_id)),
     },
     {
       title: "Подключение / PIN",
       key: "prov",
-      width: 180,
+      width: 155,
       render: (_, r) => (
         <Space direction="vertical" size={4}>
           <Tag color={r.provisioning_state === "ready" ? "success" : "default"}>
@@ -332,35 +337,21 @@ export default function L4DeskTerminalsPage() {
     {
       title: "Действия",
       key: "actions",
-      width: 280,
+      width: 150,
       render: (_, r) => (
-        <Space wrap>
-          <Button size="small" icon={<KeyOutlined />} loading={issuingPin === r.id} disabled={issuingPin !== null && issuingPin !== r.id} onClick={() => void handleNewPin(r)}>
-            Новый PIN
-          </Button>
-          <Button
-            size="small"
-            icon={<CodeOutlined />}
-            onClick={() => navigate(`/console?device_id=${r.device_id}`)}
-          >
-            Консоль
-          </Button>
-          <Button
-            size="small"
-            icon={<VideoCameraOutlined />}
-            onClick={() => navigate(`/video?device_id=${r.device_id}`)}
-          >
-            Видео
-          </Button>
-          {canRetry(r) && (
-            <Button
+        <Space size={4}>
+          <Tooltip title="Редактировать"><Button size="small" aria-label={`Редактировать ${r.device_id}`} icon={<EditOutlined />} onClick={() => setEditingTerminal(r)} /></Tooltip>
+          {canChangeTerminals && <Tooltip title="Новый PIN"><Button size="small" aria-label={`Новый PIN ${r.device_id}`} icon={<KeyOutlined />} loading={issuingPin === r.id} disabled={issuingPin !== null && issuingPin !== r.id} onClick={() => void handleNewPin(r)} /></Tooltip>}
+          <Tooltip title="Консоль"><Button size="small" aria-label={`Консоль ${r.device_id}`} icon={<CodeOutlined />} onClick={() => navigate(`/console?device_id=${r.device_id}`)} /></Tooltip>
+          <Tooltip title="Видео"><Button size="small" aria-label={`Видео ${r.device_id}`} icon={<VideoCameraOutlined />} onClick={() => navigate(`/video?device_id=${r.device_id}`)} /></Tooltip>
+          {canChangeTerminals && canRetry(r) && (
+            <Tooltip title="Повторить подключение"><Button
               size="small"
+              aria-label={`Повторить ${r.device_id}`}
               icon={<SyncOutlined spin={retryingId === r.id} />}
               onClick={() => handleRetry(r)}
               loading={retryingId === r.id}
-            >
-              Повторить
-            </Button>
+            /></Tooltip>
           )}
         </Space>
       ),
@@ -368,7 +359,7 @@ export default function L4DeskTerminalsPage() {
   ];
 
   return (
-    <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+    <div style={{ width: "100%", minWidth: 0 }}>
       <Card
         size="small"
         style={{ marginBottom: 16, borderRadius: 8 }}
@@ -393,13 +384,13 @@ export default function L4DeskTerminalsPage() {
             <Button icon={<ReloadOutlined spin={loading} />} onClick={() => void fetchTerminals()}>
               Обновить
             </Button>
-            <Button
+            {canChangeTerminals && <Button
               type="primary"
               icon={<PlusOutlined />}
               onClick={() => setWizardOpen(true)}
             >
               Подключить терминал
-            </Button>
+            </Button>}
           </Space>
         </div>
       </Card>
@@ -480,31 +471,40 @@ export default function L4DeskTerminalsPage() {
               </div>
             }
           >
-            <Button
+            {canChangeTerminals && <Button
               type="primary"
               size="large"
               icon={<PlusOutlined />}
               onClick={() => setWizardOpen(true)}
             >
               Подключить терминал
-            </Button>
+            </Button>}
           </Empty>
         </Card>
       )}
 
       {(totalCount > 0 || loading || Boolean(search) || Boolean(deviceFilter)) && (
-        <Card>
+        <Card styles={{ body: { padding: 12 } }}>
           <Table
             rowKey="id"
             columns={columns}
             dataSource={listTenant === user?.org_id ? terminals : []}
             loading={loading}
             pagination={false}
-            scroll={{ x: 1255 }}
+            size="small"
+            tableLayout="fixed"
+            scroll={{ x: 980 }}
             locale={{ emptyText: "Терминалы по запросу не найдены" }}
           />
         </Card>
       )}
+
+      <TerminalSettingsEditModal
+        terminal={editingTerminal}
+        readOnly={!canChangeTerminals}
+        onClose={() => setEditingTerminal(null)}
+        onSaved={() => void fetchTerminals()}
+      />
 
       <OnboardingWizardModal
         key={user?.org_id}
