@@ -44,11 +44,13 @@ camera/view-only input, stop/unmount timers, late events. См. [матрицу]
 
 ## Известные риски и незавершённые вопросы
 
-Post-18E кандидат `093f985` (2026-09-28, только локально): tenant policy для
+Post-18E пакет `093f985` (2026-09-28, развёрнут, приёмка ожидается): tenant policy для
 Classic/L4Desk и страниц лицензий читается из `orgs` через `/auth/me`; schema
 `028` должна быть установлена до нового MenuBuilder image. Это ограничение
 страниц, а не изменение финансовых API. Общая форма редактирования терминала
-используется в Classic и L4Desk. Production E2E кандидата ещё не выполнялся;
+используется в Classic и L4Desk. Production read-only browser smoke выполнен;
+startup guard обновлён в `bacea78`. Сценарий изменения tenant policy остаётся
+локально проверенным и требует независимой проверки на тестовом tenant;
 см. `MenuBuilder/docs/l4desk/handoffs/L4D-18E-MB-POSTFIX-01-report.md`.
 
 17F payment recovery (2026-09-27): успешная оплата и повторный poll теперь
