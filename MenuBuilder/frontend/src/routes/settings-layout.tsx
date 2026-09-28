@@ -13,7 +13,7 @@ export default function SettingsLayout() {
   const navigate = useNavigate();
   const { user, loading } = useSession();
   const isSuperuser = Boolean(user?.is_superuser || user?.role_id === 1);
-  const isRole3 = Boolean(user?.role_id === 3);
+  const isOwner = user?.role_id === 3 || user?.role_id === 5;
   const isRole4 = Boolean(user?.role_id === 4);
   const canViewTerminals = hasPermission(user, PERMISSION_SETTINGS_TERMINALS_VIEW);
   const isL4Desk = getNavigationProfile(user) === "l4desk";
@@ -26,8 +26,8 @@ export default function SettingsLayout() {
     );
   }
 
-  // Access allowed for role 1, 3, or role 4 with settings:terminals:view
-  const hasSettingsAccess = isSuperuser || isRole3 || (isRole4 && canViewTerminals);
+  // Match backend settings access for owners; viewers retain terminal-only access.
+  const hasSettingsAccess = isSuperuser || isOwner || (isRole4 && canViewTerminals);
 
   if (!hasSettingsAccess) {
     return (
