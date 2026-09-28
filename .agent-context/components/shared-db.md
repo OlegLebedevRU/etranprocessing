@@ -35,6 +35,11 @@ backend, downstream импорты, upgrade с предыдущего head и у
 Валидация backfill: count/NULL/constraints; tenant scope и старый consumer с новой схемой.
 
 ## Известные риски и незавершённые вопросы
+
+Кандидат `093f985` (2026-09-28): additive migration `028` расширяет `orgs`
+политикой навигации и видимости двух страниц лицензий. В production пока `027`;
+новый MenuBuilder reader нельзя запускать до `028`. Старые readers совместимы
+с расширенной схемой. Это локальный код, не evidence развёртывания.
 Временные прямые чтения не-владельца — compatibility paths, не шаблон расширения.
 Схема внешнего app1 не покрывается этой ownership matrix.
 
