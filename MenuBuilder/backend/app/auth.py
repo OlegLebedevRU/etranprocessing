@@ -7,8 +7,11 @@ from typing import Any
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import jwt
+from sqlalchemy import select
 
 from app.config import settings
+from app.database import async_session
+from app.models import ApiToken, User
 from app.user_store import UserRecord
 
 logger = logging.getLogger(__name__)
@@ -151,6 +154,22 @@ def decode_token(token: str) -> dict[str, Any]:
     except Exception:  # noqa: S110, BLE001
         pass
 
+    # User-issued API tokens are separately signed and checked against
+    # api_tokens at each allowed MenuBuilder endpoint.
+    if settings.jwt_secret_bytes:
+        try:
+            api_payload = jwt.decode(
+                token,
+                settings.jwt_secret_bytes,
+                algorithms=["HS256"],
+                audience="l4mcp",
+                issuer="menubuilder-api-token",
+            )
+            if api_payload.get("token_type") == "api_token":
+                return api_payload
+        except Exception:  # noqa: S110, BLE001
+            pass
+
     # 2/3. Test-only fallbacks, gated by mock mode
     if settings.jwt_issuer_mock_enabled:
         try:
@@ -261,6 +280,46 @@ async def get_current_user(
         role = "superuser"
 
     token_type = payload.get("token_type", "tenant")
+    if token_type == "api_token":
+        jti = str(payload.get("jti") or "")
+        if not jti:
+            raise HTTPException(status_code=401, detail="API token ID is missing")
+        async with async_session() as db:
+            row = (
+                await db.execute(
+                    select(ApiToken, User)
+                    .join(User, ApiToken.user_id == User.username)
+                    .where(
+                        ApiToken.jti == jti,
+                        ApiToken.revoked_at.is_(None),
+                        ApiToken.expires_at > datetime.now(UTC),
+                        User.is_active.is_(True),
+                    )
+                )
+            ).one_or_none()
+        if row is None:
+            raise HTTPException(status_code=401, detail="API token revoked or expired")
+        _, token_user = row
+        if token_user.role_id not in (1, 3, 5):
+            raise HTTPException(status_code=403, detail="L4mcp access denied")
+        req_path = request.url.path
+        allowed_path = (
+            req_path.startswith("/api/mcp/")
+            or req_path.startswith("/api/v1/video/devices/")
+            and "/control/lease" in req_path
+            or req_path.startswith("/api/billing/terminals/")
+            and req_path.endswith("/certificate-pin")
+        )
+        if not allowed_path:
+            raise HTTPException(status_code=403, detail="API token is limited to L4mcp")
+        username = token_user.username
+        user_id = token_user.id
+        role_id = token_user.role_id
+        org_id = int(payload.get("orgId") or 0) if role_id == 1 else token_user.org_id
+        if org_id is None or org_id <= 0:
+            raise HTTPException(status_code=403, detail="Choose an organization first")
+        role = token_user.role
+        is_su = role_id == 1
     orig_sub = payload.get("orig_sub") or username
     # v2 issuer sends is_imp explicitly; for older tokens derive it: superuser inside a tenant
     if role_id in (4, 5):

@@ -13,17 +13,6 @@ services:
     networks:
       - pg_network
 
-  mcp-pin-server:
-    build: ./mcp-pin-server
-    container_name: mcp-pin-server
-    restart: unless-stopped
-    env_file:
-      - ./mcp-pin-server/.env
-    networks:
-      - pg_network
-    depends_on:
-      - processing-backend
-
 networks:
   pg_network:
     external: true

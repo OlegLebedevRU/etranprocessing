@@ -152,7 +152,7 @@ etranprocessing/
 │   │   │   └── services/          # ca.py, cert_billing.py, payment_service.py, sn.py
 │   │   ├── alembic/               # Database migrations (Sole source of truth for migrations)
 │   │   └── pyproject.toml
-│   └── mcp-pin-server/            # FastMCP server for PIN operations & certificate tools
+│   └── (MCP moved to MenuBuilder/l4mcp)
 ├── MenuBuilder/
 │   ├── backend/                   # Tenant admin portal & User Billing API
 │   │   ├── app/
@@ -315,7 +315,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> AuthenticatedUser:
 - Connect via SSH: `ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34`.
 - Rebuild containers with unified compose file:
   ```bash
-  sudo docker compose -f /home/user1/compose.yaml up -d --build processing-backend mcp-pin-server
+  sudo docker compose -f /home/user1/compose.yaml up -d --build processing-backend l4mcp
   sudo docker compose -f /home/user1/compose.yaml up -d --build menubuilder-backend
   ```
 - Use `ssh -n ...` when executing remote commands from Windows PowerShell to prevent stdin stream blocking.

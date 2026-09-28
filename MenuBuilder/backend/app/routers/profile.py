@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from jose import jwt
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.auth import get_current_user
@@ -14,8 +14,8 @@ router = APIRouter()
 
 
 class CreateTokenRequest(BaseModel):
-    name: str = "API Token"
-    expires_days: int = 30
+    name: str = Field(default="L4mcp", min_length=1, max_length=100)
+    expires_days: int = Field(default=30, ge=1, le=365)
 
 
 class TokenResponse(BaseModel):
@@ -33,6 +33,12 @@ async def create_token(
     user: dict = Depends(get_current_user),
 ):
     """Create a long-lived API token (returned once as JWT)."""
+    if int(user.get("role_id") or 0) not in (1, 3, 5):
+        raise HTTPException(status_code=403, detail="L4mcp access denied")
+    if int(user.get("org_id") or 0) <= 0:
+        raise HTTPException(status_code=403, detail="Choose an organization first")
+    if not settings.jwt_secret_bytes:
+        raise HTTPException(status_code=503, detail="API token signing is unavailable")
     jti = str(uuid.uuid4())
     expires_at = datetime.now(UTC) + timedelta(days=req.expires_days)
 
@@ -57,9 +63,17 @@ async def create_token(
         "exp": expires_at,
         "iat": datetime.now(UTC),
     }
-    token = jwt.encode(
-        payload, settings.jwt_secret_bytes, algorithm=settings.jwt_algorithm
+    payload.update(
+        {
+            "orgId": int(user["org_id"]),
+            "roleId": int(user["role_id"]),
+            "role": user["role"],
+            "token_type": "api_token",
+            "iss": "menubuilder-api-token",
+            "aud": "l4mcp",
+        }
     )
+    token = jwt.encode(payload, settings.jwt_secret_bytes, algorithm="HS256")
 
     return {
         "token": token,

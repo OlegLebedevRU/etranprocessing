@@ -88,7 +88,7 @@ Detailed backend code standards, architecture rules, and patterns are documented
 | **`ProcessingBackend/backend`** | Python 3.14, FastAPI, SQLAlchemy (asyncpg), Alembic | Core mTLS payment processing gateway, terminal XML/SOAP handlers (`/api/payment`, `/api/techgate`, `/api/gategauge`, `/api/licensebilling`, `/api/certificates`, `GET /api/ListMenuFile`). Sole authority for Alembic migrations. **No user-facing JWT routes.** | `uvicorn app.main:app` |
 | **`MenuBuilder/backend`** | Python 3.14, FastAPI, SQLAlchemy | Tenant & admin web portal, terminal menu management, and **user-facing billing API** (`/api/billing`, `/api/certificate-pin`, `/api/admin/organizations`, JWT authentication). | `uvicorn app.main:app` |
 | **`MenuBuilder/frontend`** | React 19, TypeScript, Vite, Ant Design v6 | Web UI for tenant administrators, terminal menu builder, license cart, and admin panels (Code Splitting, Design Tokens, multi-tenant). | `npm run build` / `npm run dev` |
-| **`ProcessingBackend/mcp-pin-server`** | Python 3.14, FastMCP / MCP SDK | Model Context Protocol server for PIN operations & certificate tools. | `python -m pin_server.server` |
+| **`MenuBuilder/l4mcp`** | Python 3.14, FastMCP / MCP SDK | Tenant-scoped MCP for console, certificate PINs, and reports. | `python -m l4mcp.server` |
 | **`tools/`** | C (Win32/CNG/CryptoAPI) / Python | Auxiliary CLI utilities for terminals and server management (`leo4proxy`, `mosquitto`, `l4con`, `l4sql`, `l4pin`, `l4superv`, `l4install`). | `tools/` |
 
 ## L4 Tools Suite & Terminal Architecture Rules
@@ -150,7 +150,7 @@ For building native Windows utilities in `tools/` (or examples like `D:\work\iot
   - **ОБЯЗАТЕЛЬНОЕ ПРАВИЛО ДЕПЛОЯ**: Деплой выполняется **ВСЕГДА** на хост `ssh user1@87.242.100.34 -i d:\.ssh\id_ed25519`.
   - **СЕРВЕР `176.108.247.249`**: Сервер `176.108.247.249` **удалён из документации деплоя**. Использование сервера `176.108.247.249` допускается **ТОЛЬКО по прямому указанию в промпте**.
   - Orchestration: `/home/user1/compose.yaml` in Docker network `user1_default`.
-  - Runs Docker containers: `processing-backend` (:8000), `menubuilder-backend` (:8000), `nginx-default` (:80, :3000, :1443, :1444), `app1` (:8000), `mcp-pin-server` (:8001), `rabbitmq` (:5672, :8883).
+  - Runs Docker containers: `processing-backend` (:8000), `menubuilder-backend` (:8000), `nginx-default` (:80, :3000, :1443, :1444), `app1` (:8000), `l4mcp` (:8001), `rabbitmq` (:5672, :8883).
   - External mTLS Proxy: `nginx-mutual-legacy` (:443) managed via `/home/user1/nginx-mutual-legacy/docker-compose.yml`, connected to network `user1_default`. Terminates client mTLS for terminals (`iot-processing.ru`) and locally forwards requests to `http://processing-backend:8000`.
 - **Managed Database Server**: `10.0.0.7:5432` (Managed PostgreSQL 18)
   - Databases: `etran` (processing and menubuilder models), `iot_rpc` (IoT platform models).

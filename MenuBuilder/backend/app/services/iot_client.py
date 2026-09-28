@@ -200,7 +200,25 @@ class IotPlatformClient:
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             resp = await client.post(url, json=payload, headers=self._get_headers())
             resp.raise_for_status()
-            return resp.json().get("statuses", [])
+        return resp.json().get("statuses", [])
+
+    async def get_console_device(
+        self, device_id: int, org_id: int
+    ) -> dict[str, Any] | None:
+        """Fetch one IoT device, including sys tag and l4con presence."""
+        if not self.base_url or not self.service_token:
+            raise HTTPException(status_code=503, detail="IoT device status unavailable")
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.get(
+                f"{self.base_url}/api/internal/v1/devices/",
+                params={"org_id": org_id, "device_id": device_id, "size": 1},
+                headers=self._get_headers(org_id=org_id),
+            )
+            resp.raise_for_status()
+            items = resp.json().get("items", [])
+        return next(
+            (item for item in items if item.get("device_id") == device_id), None
+        )
 
     async def provision_api_key(
         self,

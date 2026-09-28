@@ -278,7 +278,7 @@ $$\text{RAM}_{480p} = \text{RAM}_{720p} \approx 18 + N \times 1.0 + M \times 2.0
 
 ### 8.1. Границы доступных ресурсов хоста
 
-На хосте `87.242.100.34` параллельно функционирует полный стек платформы: `processing-backend`, `menubuilder-backend`, `nginx-default`, `rabbitmq`, `app1`, `mcp-pin-server` и фоновые демоны ОС.
+На хосте `87.242.100.34` параллельно функционирует полный стек платформы: `processing-backend`, `menubuilder-backend`, `nginx-default`, `rabbitmq`, `app1`, `l4mcp` и фоновые демоны ОС.
 
 - **Суммарный пул хоста:** 2.0 vCPU (200%), 3.8 GiB RAM.
 - **Резерв на ядро платформы:** 40% CPU (0.8 vCPU) и 2.5 GiB RAM.

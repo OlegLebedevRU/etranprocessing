@@ -3,7 +3,7 @@ from contextlib import suppress
 from datetime import UTC, date, datetime, time, timedelta, tzinfo
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pin_server.db import Database
+from l4mcp.db import Database
 
 DEFAULT_TIMEZONE = "Europe/Moscow"
 

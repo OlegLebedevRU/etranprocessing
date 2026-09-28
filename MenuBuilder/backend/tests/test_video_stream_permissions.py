@@ -217,7 +217,7 @@ async def test_matrix_status_and_read_endpoints(
 
 
 @pytest.mark.anyio
-async def test_console_lease_only_superuser(
+async def test_console_lease_roles_one_three_five(
     mock_db_session,
     superuser_token,
     admin_token,
@@ -253,16 +253,15 @@ async def test_console_lease_only_superuser(
                 headers={"Authorization": f"Bearer {admin_token}"},
             )
             assert r_admin.status_code == 403
-            assert "только суперадминистраторам" in r_admin.json()["detail"]
+            assert "ролям 1, 3 и 5" in r_admin.json()["detail"]
 
-            # 3. Operator (role 3) -> 403
+            # 3. Operator (role 3) -> 201 by birth
             r_op = await client.post(
                 "/api/v1/video/devices/1/control/lease",
                 json={"scope": "console"},
                 headers={"Authorization": f"Bearer {operator_token}"},
             )
-            assert r_op.status_code == 403
-            assert "только суперадминистраторам" in r_op.json()["detail"]
+            assert r_op.status_code == 201
 
             # 4. Viewer (role 4) -> 403
             r_v = await client.post(

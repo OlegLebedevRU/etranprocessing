@@ -17,6 +17,7 @@ nQIDAQAB
 
 class Settings(BaseSettings):
     database_url: str = ""
+    l4mcp_url: str = ""
     cors_origins: list[str] = []
 
     # JWT Settings (RS256 terminated at Nginx and verified in backend)

@@ -551,13 +551,11 @@ async def acquire_device_control_lease(
     )
 
     if scope == "console":
-        if not is_strictly_superuser and role_id != 5:
-            user_perms = user.get("permissions") or []
-            if "console" not in user_perms and "*" not in user_perms:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Доступ к консоли разрешён только суперадминистраторам и пользователям L4Desk",
-                )
+        if role_id not in (1, 3, 5):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Доступ к консоли разрешён ролям 1, 3 и 5",
+            )
     elif scope in ("input", "stream"):
         if not is_operator:
             raise HTTPException(
@@ -729,11 +727,10 @@ async def change_device_control_scope(
     org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
 
     role_id = int(user.get("role_id", 3))
-    is_strictly_superuser = bool(role_id == 1 or user.get("role") == "superuser")
-    if body.scope == "console" and not (is_strictly_superuser or role_id == 5):
+    if body.scope == "console" and role_id not in (1, 3, 5):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Доступ к консоли разрешён только суперадминистраторам и пользователям L4Desk",
+            detail="Доступ к консоли разрешён ролям 1, 3 и 5",
         )
 
     status_data = await iot_client.remote_input_status(

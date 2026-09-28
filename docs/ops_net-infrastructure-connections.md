@@ -27,7 +27,7 @@
 │   • Бэкенды: processing-backend (:8000), menubuilder-backend (:8000)   │
 │   • IoT платформа: app1 (:8000)                                        │
 │   • Брокер: rabbitmq (:5672, :8883)                                    │
-│   • MCP Сервер: mcp-pin-server (:8001), server-ops                     │
+│   • MCP Сервер: l4mcp (:8001), server-ops                             │
 │   • Web & JWT Gateway: nginx-default (:80, :3000, :1443, :1444)        │
 │   • Terminal mTLS Gateway: nginx-mutual-legacy (:443)                  │
 └───────────────────────────────────┬────────────────────────────────────┘
@@ -86,7 +86,7 @@
   * `nginx-default`: Nginx веб-интерфейс MenuBuilder и JWT API gateway (порты 80, 3000, 1443, 1444).
   * `app1`: IoT platform backend (порт 8000).
   * `rabbitmq`: Очереди сообщений и MQTT (порты 5672, 8883).
-  * `mcp-pin-server`: MCP сервер управления PIN-кодами (порт 8001).
+  * `l4mcp`: MCP сервер MenuBuilder для консоли, сертификатов и отчётов (порт 8001).
   * `nginx-mutual-legacy-nginx-mutual-1`: mTLS терминальный шлюз (порт 443).
 
 ### 2.3. Новая база данных (Managed PostgreSQL 18)

@@ -197,10 +197,10 @@ Signature: HMAC-SHA256(base64(header).base64(payload), secret)
 ### Проверка токена
 
 ```python
-import hmac, hashlib, base64, json
+import hmac, hashlib, base64, json, os
 
-secret = bytes.fromhex("176b79312cfae3cf5e6c0200548f32c7c47e7b06b933eb11c9b2936bfe2644bc")
-token = "eyJhbGci..."
+secret = bytes.fromhex(os.environ["JWT_SECRET_HEX"])
+token = os.environ["TEST_TOKEN"]
 header, payload, signature = token.split(".")
 
 # Проверка подписи
@@ -226,7 +226,7 @@ services:
   menubuilder-backend:
     build: ./backend
     environment:
-      - DATABASE_URL=postgresql+asyncpg://etran:etran@pg:5432/etranprocessing
+      - DATABASE_URL=${DATABASE_URL}
       - JWT_SECRET_HEX=${JWT_SECRET_HEX}    # из .env файла
       - AUTH_USERS=${AUTH_USERS}              # из .env файла
     networks:
@@ -250,7 +250,7 @@ services:
 
 **Важно:** nginx.conf монтируется как `.template` — entrypoint выполняет `envsubst` и создаёт `.conf`.
 
-### ProcessingBackend + MCP
+### ProcessingBackend + L4mcp
 
 ```yaml
 services:
@@ -260,12 +260,10 @@ services:
     networks:
       - pg_network
 
-  mcp-pin-server:
-    build: ./mcp-pin-server
+  l4mcp:
+    build: ./MenuBuilder/l4mcp
     env_file:
-      - ./mcp-pin-server/.env  # must contain DATABASE_URL, MCP_PORT
-    networks:
-      - pg_network      # доступ к PostgreSQL
+      - ./MenuBuilder/backend/.env
 ```
 
 ---

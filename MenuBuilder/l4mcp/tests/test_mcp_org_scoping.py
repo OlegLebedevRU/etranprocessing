@@ -3,40 +3,20 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from pin_server.reports import (
+from l4mcp.access import Principal
+from l4mcp.console_tools import _preflight
+from l4mcp.reports import (
     report_balance_by_terminal,
     report_balance_by_tsp,
     report_inkass,
     report_payments,
 )
-from pin_server.server import _resolve_terminal
 
 
 @pytest.mark.asyncio
-async def test_resolve_terminal_org_scoping():
-    mock_db = AsyncMock()
-
-    # Terminal belongs to org 1
-    t1 = {"id": 1, "device_id": 1001, "sn": "SN1001", "org_id": 1}
-
-    async def mock_fetchrow(query, *args):
-        if len(args) == 2 and args[1] == 1:
-            return t1
-        if len(args) == 2 and args[1] != 1:
-            return None
-        if len(args) == 1:
-            return t1
-        return None
-
-    mock_db.fetchrow = AsyncMock(side_effect=mock_fetchrow)
-
-    # Scoped to org 1 -> success
-    term = await _resolve_terminal(mock_db, "1001", org_id=1)
-    assert term["org_id"] == 1
-
-    # Scoped to org 2 -> not found
-    with pytest.raises(ValueError, match="Terminal not found"):
-        await _resolve_terminal(mock_db, "1001", org_id=2)
+async def test_console_requires_exact_device_id_before_network_request():
+    principal = Principal("Bearer test", 1, "user", 3, 3, "session")
+    assert (await _preflight(principal, None))["reason"] == "device_id_required"
 
 
 @pytest.mark.asyncio

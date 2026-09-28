@@ -38,7 +38,7 @@ MenuBuilder backend (порт 8000) ────┘
 MenuBuilder nginx/frontend ─────► Leo4 IoT platform (app1:8000)
 ```
 
-В состав развертывания также входит `ProcessingBackend/mcp-pin-server`, который изолирует PIN/certificate-инструменты от основного HTTP API. Он зависит от processing backend и подключён к общей PostgreSQL-сети, но не является владельцем предметной схемы.
+В состав развертывания входит `MenuBuilder/l4mcp` для PIN, сертификатов, отчётов и консоли. Авторизацию и выдачу API-токенов выполняет MenuBuilder; MCP не владеет предметной схемой. Актуальный контракт описан в [`menu_arch-l4mcp-v1.md`](menu_arch-l4mcp-v1.md).
 
 ## 3. Компоненты и ответственность
 
@@ -152,7 +152,7 @@ MenuBuilder обращается к Leo4 через internal API v1. Для ча
 
 ## 6. Развёртывание и эксплуатационная модель
 
-- Единый compose-файл `/home/user1/compose.yaml` на сервере `87.242.100.34` запускает сервисы экосистемы (`processing-backend`, `menubuilder-backend`, `nginx-default`, `app1`, `mcp-pin-server`, `rabbitmq`) в общей Docker-сети `user1_default` с подключением к Managed PostgreSQL (`10.0.0.7:5432`).
+- Единый compose-файл `/home/user1/compose.yaml` на сервере `87.242.100.34` запускает сервисы экосистемы (`processing-backend`, `menubuilder-backend`, `nginx-default`, `app1`, `l4mcp`, `rabbitmq`) в общей Docker-сети `user1_default` с подключением к Managed PostgreSQL (`10.0.0.7:5432`).
 - Внешний mTLS шлюз `nginx-mutual-legacy` (порт 443 хоста `87.242.100.34`) подключен к сети `user1_default` и маршрутизирует запросы терминалов напрямую в локальный `processing-backend:8000`.
 - Frontend `dist` подключён read-only volume, поэтому новая сборка assets становится доступна без пересборки nginx-контейнера.
 - Миграции применяются только из processing-контейнера (`alembic upgrade head`); при изменении shared schema оба backend должны работать с совместимыми версиями модели.

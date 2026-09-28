@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+### Removed
+
+- Alpha MCP-сервис вынесен в `MenuBuilder/l4mcp`; ProcessingBackend больше не содержит пользовательский MCP runtime.
+
 ### Fixed
 
 - Публичный mTLS ingress не пропускает внутренний API выдачи PIN; терминальные XML-маршруты сертификатов сохранены.

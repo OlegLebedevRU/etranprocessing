@@ -64,13 +64,16 @@ services:
     volumes:
       - ./ProcessingBackend/keys:/function/storage/keys:ro
 
-  mcp-pin-server:
+  l4mcp:
     build:
-      context: ./ProcessingBackend/mcp-pin-server
-    container_name: mcp-pin-server
+      context: ./MenuBuilder/l4mcp
+    container_name: l4mcp
     restart: unless-stopped
     env_file:
-      - ./ProcessingBackend/mcp-pin-server/.env
+      - path: ./MenuBuilder/backend/.env
+        format: raw
+    environment:
+      MENUBUILDER_API_URL: ${L4MCP_MENUBUILDER_API_URL:-}
 
   menubuilder-backend:
     build:
@@ -81,6 +84,8 @@ services:
     env_file:
       - path: ./MenuBuilder/backend/.env
         format: raw
+    environment:
+      L4MCP_URL: ${L4MCP_URL:-}
 
   app1:
     build:

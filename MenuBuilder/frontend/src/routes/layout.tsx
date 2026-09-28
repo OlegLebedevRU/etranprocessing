@@ -113,6 +113,9 @@ export default function AppLayout() {
   } else {
     navItems = [
       ...NAV_ITEMS,
+      ...([1, 3].includes(currentUser?.role_id ?? -1)
+        ? [{ key: "mcp", icon: <ApiOutlined />, label: "MCP" }]
+        : []),
       ...(isSuperuser
         ? [
             {

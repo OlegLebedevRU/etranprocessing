@@ -192,7 +192,7 @@ sudo docker exec -it <container> bash
 | `menubuilder-backend` | Menu management and Billing API (:8000) | `user1_default` | `/home/user1/compose.yaml` |
 | `nginx-default` | Web UI & JWT API gateway (:80, :3000, :1443, :1444) | `user1_default` | `/home/user1/compose.yaml` |
 | `app1` | IoT platform backend (:8000) | `user1_default` | `/home/user1/compose.yaml` |
-| `mcp-pin-server` | MCP server for PIN operations (:8001) | `user1_default` | `/home/user1/compose.yaml` |
+| `l4mcp` | MenuBuilder MCP service (:8001) | `user1_default` | `/home/user1/compose.yaml` |
 | `rabbitmq` | Message broker (:5672, :8883) | `user1_default` | `/home/user1/compose.yaml` |
 | `nginx-mutual-legacy-nginx-mutual-1` | Terminal mTLS ingress (:443) | `user1_default` | `/home/user1/nginx-mutual-legacy/docker-compose.yml` |
 
@@ -457,7 +457,7 @@ sudo docker exec processing-backend ping pg
 
 ```bash
 # Database
-DATABASE_URL=postgresql+asyncpg://etran:etran@pg:5432/etranprocessing
+DATABASE_URL=${DATABASE_URL}
 
 # CORS
 CORS_ORIGINS=["http://localhost:8080","https://dev.leo4.ru:4443"]

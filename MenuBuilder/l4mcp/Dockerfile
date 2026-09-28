@@ -14,4 +14,4 @@ RUN uv pip install --system --no-cache .
 
 EXPOSE 8001
 
-CMD ["python", "-m", "pin_server.server"]
+CMD ["python", "-m", "l4mcp.server"]
