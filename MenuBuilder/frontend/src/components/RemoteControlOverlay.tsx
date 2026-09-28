@@ -242,7 +242,9 @@ export default function RemoteControlOverlay({
     }
     e.preventDefault();
     e.stopPropagation();
-    sendKey("up", e.keyCode, e.key.length === 1 ? e.key : undefined);
+    // The key-up event releases the virtual key; sending text again inserts
+    // the same printable character a second time on the terminal.
+    sendKey("up", e.keyCode);
   };
 
   if (!active) {
