@@ -1,0 +1,1 @@
+{"tenant_id": 10000, "provider": "mock", "monthly_charge_kopecks": 10000, "duplicate_postings": 0, "grace_window_seconds": 600, "grace_allowed": true, "boundary_refusal": "entitlement_blocked", "mock_stop_calls": 1, "session_state": "closed", "source_hash_present": true, "reconciliation": "matched", "debit_kopecks": 10000, "credit_kopecks": 10000, "rollback_verified": true}

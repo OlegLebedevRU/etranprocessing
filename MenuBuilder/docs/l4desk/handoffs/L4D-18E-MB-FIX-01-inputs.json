@@ -1,0 +1,169 @@
+{
+  "packet": "L4D-18E-MB-FIX-01-v3",
+  "registration_id": "R-L4D-18E-MB-FIX-01-v3",
+  "controller_commit": "8743eff635da35359def624725a2c67059610179",
+  "files": [
+    {
+      "path": "l4desk-service/docs/prompts/PROMPT-STANDARD.md",
+      "commit": "8743eff635da35359def624725a2c67059610179",
+      "sha256": "8911cc0a63f20265e80ddd379bb982030f27010ade6aafbf0b651d066c7929ba",
+      "bytes": 27534
+    },
+    {
+      "path": "l4desk-service/docs/prompts/contract-handoff.md",
+      "commit": "8743eff635da35359def624725a2c67059610179",
+      "sha256": "6527b8cffd4cc7130dc02c07b7a9685b493d1541baf785dd7898818a166c30df",
+      "bytes": 452327
+    },
+    {
+      "path": "l4desk-service/docs/prompts/L4D-18E-MB-FIX-01.md",
+      "commit": "8743eff635da35359def624725a2c67059610179",
+      "sha256": "145c575e38399462d5f6b8176d8a4d07de5bd4ea9a678dcc00fb2aa0e6d2fd8f",
+      "bytes": 16306
+    },
+    {
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/17e-report.md",
+      "commit": "7e1fc3c0eabcdb3fc333d0dbe88b938ae09acdab",
+      "sha256": "6dfa6654b7472351da1147f9a526634d6839507f917294fe75f9781f0f2e1be0",
+      "bytes": 47936
+    },
+    {
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/17f-report.md",
+      "commit": "7e1fc3c0eabcdb3fc333d0dbe88b938ae09acdab",
+      "sha256": "82b603df099f48e66f0ba86db362b1d041920ec47e14518ca962502daed76abb",
+      "bytes": 19422
+    },
+    {
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/17f-final-gate.json",
+      "commit": "7e1fc3c0eabcdb3fc333d0dbe88b938ae09acdab",
+      "sha256": "ddb5d97380f623a415d5249488ebc7c9c5d5bd2cf9d2f05dd902ef03775c3703",
+      "bytes": 4918
+    },
+    {
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18a-schema.json",
+      "commit": "7e1fc3c0eabcdb3fc333d0dbe88b938ae09acdab",
+      "sha256": "52f481dd3d9985c54b5388a1d9e63062a8fdbe626870b58a83b3461c3e08e49f",
+      "bytes": 185309
+    },
+    {
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18a-package-source.json",
+      "commit": "7e1fc3c0eabcdb3fc333d0dbe88b938ae09acdab",
+      "sha256": "364efa7b369cdcb8da12025b377518834b6013fd693a28f321a81dcbe18a68c6",
+      "bytes": 2336
+    },
+    {
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18a-report.md",
+      "commit": "7e1fc3c0eabcdb3fc333d0dbe88b938ae09acdab",
+      "sha256": "c7a6bebcba52dce053d01715699421d04edb301b0e3d858d1afba508d393b12a",
+      "bytes": 9456
+    },
+    {
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18b-report.md",
+      "commit": "7e1fc3c0eabcdb3fc333d0dbe88b938ae09acdab",
+      "sha256": "388f232b5aa3c76408b80c232844cd8b57fc1207d94d060da4da24de19cea0ee",
+      "bytes": 7835
+    },
+    {
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18c-report.md",
+      "commit": "7e1fc3c0eabcdb3fc333d0dbe88b938ae09acdab",
+      "sha256": "7f8fd3a4b312f75bc70e7bdeea236baae14420331e78d173d2a042f77ae18dc5",
+      "bytes": 8947
+    },
+    {
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18c-final-smoke.json",
+      "commit": "7e1fc3c0eabcdb3fc333d0dbe88b938ae09acdab",
+      "sha256": "042f54ea307fa124bd37f0a87a3ba322fcbd558a7d75bbc49bb7f3c1b5676823",
+      "bytes": 477
+    },
+    {
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18d-report.md",
+      "commit": "7e1fc3c0eabcdb3fc333d0dbe88b938ae09acdab",
+      "sha256": "85f554fc140ee10a2b7ba0b11d096a4e010af57a013dc2e723f37962b8f22b30",
+      "bytes": 10120
+    },
+    {
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18d-evidence.json",
+      "commit": "7e1fc3c0eabcdb3fc333d0dbe88b938ae09acdab",
+      "sha256": "7ddc676e9fd3f002a9b68ff21fe30146fe44367f925f5baed945b9a5e90896b6",
+      "bytes": 4447
+    },
+    {
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18d-openapi.json",
+      "commit": "7e1fc3c0eabcdb3fc333d0dbe88b938ae09acdab",
+      "sha256": "02298c2cba4c311e24d7ba893edc206ac01cb902746a931976c28225514cfd1c",
+      "bytes": 16578
+    },
+    {
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/18d-mb-auth-report.md",
+      "commit": "7e1fc3c0eabcdb3fc333d0dbe88b938ae09acdab",
+      "sha256": "61d74d4ff286f8d31c3d842b04bcedd0b96224425e7c1fe2f711137c00c0d010",
+      "bytes": 4792
+    },
+    {
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18e-mb-evidence-v1/verification.md",
+      "commit": "7e1fc3c0eabcdb3fc333d0dbe88b938ae09acdab",
+      "sha256": "45a1fd76694011e80308d9e7fde31c94208c74e45b0d4e7ba4d3e756026a93ce",
+      "bytes": 5752
+    },
+    {
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/iot-device-contract.md",
+      "commit": "57b7b015778ef46ea1d9f4b4b993e80c54042034",
+      "sha256": "7f09c681d7824ca760e3f655db471e8d8d77b1aba35e0389ff400d3df4fd1562",
+      "bytes": 3394
+    },
+    {
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/iot-device-schemas.json",
+      "commit": "57b7b015778ef46ea1d9f4b4b993e80c54042034",
+      "sha256": "cf068c2c934b25af5c0e37de8da524d61c039aa1f7cbb86e58c82849b088b118",
+      "bytes": 2640
+    },
+    {
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/iot-device-examples.json",
+      "commit": "57b7b015778ef46ea1d9f4b4b993e80c54042034",
+      "sha256": "8a02bbb4cab324b9952c843ed60535dc20c709436326d5dc4b285257a1ce47ea",
+      "bytes": 865
+    },
+    {
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/pin-contract.md",
+      "commit": "57b7b015778ef46ea1d9f4b4b993e80c54042034",
+      "sha256": "1c2787fc2c34343d9b46658bd304cb2110bf554019667712c5596eae8ce6c7f4",
+      "bytes": 13266
+    },
+    {
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/pin-schemas.json",
+      "commit": "57b7b015778ef46ea1d9f4b4b993e80c54042034",
+      "sha256": "563a00aabf4a539c92f6fccad36596dd63fea05bfc088ca1cf7ddbb8e16f26c0",
+      "bytes": 3920
+    },
+    {
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/pin-examples.json",
+      "commit": "57b7b015778ef46ea1d9f4b4b993e80c54042034",
+      "sha256": "92a3beeb8323d4697e89ef3978d1d54de07202e5c87debec1adb53779cc48737",
+      "bytes": 5453
+    },
+    {
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18e-mb-device-pin-v1/verification.md",
+      "commit": "57b7b015778ef46ea1d9f4b4b993e80c54042034",
+      "sha256": "dbcfd084752b2e3db5981af7bd73c26d4f51369fc66636bc25bf0bf7cdb1e085",
+      "bytes": 4266
+    },
+    {
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18e-mb-fixtures-v1/17f-archive-manifest.json",
+      "commit": "088ade1279547af90f7d0e682547293768f453fb",
+      "sha256": "0fdf5c04e8373b66ce9a448f038881588c7aa2a04e7aad259ca390a2171a642f",
+      "bytes": 1488
+    },
+    {
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18e-mb-fixtures-v1/public-hub-nginx-contract.json",
+      "commit": "088ade1279547af90f7d0e682547293768f453fb",
+      "sha256": "daf76685fe8037b13ef12aa49f2c5b7906949833523cc01a720f52785eae7d32",
+      "bytes": 658
+    },
+    {
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18e-mb-fixtures-v1/verification.md",
+      "commit": "088ade1279547af90f7d0e682547293768f453fb",
+      "sha256": "8761427c1e0017850a9f47f3351dd27de0f7f9cf9789725157a97a32080c1650",
+      "bytes": 1535
+    }
+  ]
+}

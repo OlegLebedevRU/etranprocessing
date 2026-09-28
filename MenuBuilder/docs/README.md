@@ -4,6 +4,12 @@
 
 См. главный навигатор: **[`docs/README.md`](../../docs/README.md)**.
 
+### Передача 18E
+
+- [Отчёт ограниченного релиза MenuBuilder](l4desk/handoffs/L4D-18E-MB-FIX-01-report.md)
+- [Входные артефакты и Git/raw SHA-256](l4desk/handoffs/L4D-18E-MB-FIX-01-inputs.json)
+- [Финансовый прогон с откатом](l4desk/handoffs/L4D-18E-MB-FIX-01-finance-probe.json)
+
 ### Ключевые документы по MenuBuilder
 - **[`docs/menu_ui-frontend-architecture.md`](../../docs/menu_ui-frontend-architecture.md)** — Архитектура SPA на React 19 / TypeScript, маршруты, контексты и состояние
 - **[`docs/menu_auth-multi-tenant-architecture.md`](../../docs/menu_auth-multi-tenant-architecture.md)** — Мультитенантная аутентификация и авторизация (RS256 JWT, cookie, сессии)
