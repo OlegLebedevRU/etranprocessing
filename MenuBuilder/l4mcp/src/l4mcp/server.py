@@ -1,5 +1,6 @@
 import logging
 import sys
+from datetime import date
 
 from fastmcp import Context, FastMCP
 from fastmcp.server.lifespan import lifespan
@@ -41,12 +42,22 @@ register_pin_tools(mcp)
 register_console_tools(mcp)
 
 
-def _report_scope_required(*values: object) -> dict | None:
-    if any(value is not None and value != "" for value in values):
+def _report_scope_required(
+    date_from: str | None, date_to: str | None, device_ids: str | None
+) -> dict | None:
+    if device_ids:
+        ids = [part.strip() for part in device_ids.split(",")]
+        if not 1 <= len(ids) <= 20 or any(not part.isdigit() for part in ids):
+            raise ValueError("Specify 1–20 exact numeric device IDs")
+        return None
+    if date_from and date_to:
+        start, end = date.fromisoformat(date_from), date.fromisoformat(date_to)
+        if not 0 <= (end - start).days <= 30:
+            raise ValueError("Date range must be 0–30 days")
         return None
     return {
         "status": "filters_required",
-        "next_step": "Ask the user for exact device IDs or a bounded date range before querying reports.",
+        "next_step": "Ask the user for 1–20 exact device IDs or both dates within 30 days before querying reports.",
     }
 
 
@@ -74,12 +85,14 @@ async def report_payments_tool(
         device_ids: Comma-separated device IDs
         tsp_code: Filter by TSP code
         paym_state: Payment state (0=New, 1=Processing, 2=Paid, 3=Not paid, 4=Stopped, 5=Restart, 6=Quarantine)
-        top: Max results (10-1000, default 100)
+        top: Max results (1-100, default 100)
         org_id: Optional organization ID filter for tenant isolation
     """
     assert ctx is not None
-    if missing := _report_scope_required(date_from, date_to, device_ids, tsp_code):
+    if missing := _report_scope_required(date_from, date_to, device_ids):
         return missing
+    if not 1 <= top <= 100:
+        raise ValueError("top must be 1–100")
     db: Database = ctx.lifespan_context["db"]
     org_id = (await current_principal()).scoped_org(org_id)
     return await report_payments(
@@ -106,7 +119,7 @@ async def report_balance_by_terminal_tool(
         org_id: Optional organization ID filter for tenant isolation
     """
     assert ctx is not None
-    if missing := _report_scope_required(date_from, date_to, device_ids, tsp_code):
+    if missing := _report_scope_required(date_from, date_to, device_ids):
         return missing
     db: Database = ctx.lifespan_context["db"]
     org_id = (await current_principal()).scoped_org(org_id)
@@ -158,12 +171,14 @@ async def report_inkass_tool(
         date_to: End date (YYYY-MM-DD)
         device_ids: Comma-separated device IDs
         page: Page number (default 1)
-        size: Page size (10-500, default 100)
+        size: Page size (1-100, default 100)
         org_id: Optional organization ID filter for tenant isolation
     """
     assert ctx is not None
     if missing := _report_scope_required(date_from, date_to, device_ids):
         return missing
+    if page < 1 or not 1 <= size <= 100:
+        raise ValueError("page must be positive and size must be 1–100")
     db: Database = ctx.lifespan_context["db"]
     org_id = (await current_principal()).scoped_org(org_id)
     return await report_inkass(

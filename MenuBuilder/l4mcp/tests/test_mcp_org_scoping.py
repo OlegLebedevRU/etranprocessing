@@ -11,12 +11,23 @@ from l4mcp.reports import (
     report_inkass,
     report_payments,
 )
+from l4mcp.server import _report_scope_required
 
 
 @pytest.mark.asyncio
 async def test_console_requires_exact_device_id_before_network_request():
     principal = Principal("Bearer test", 1, "user", 3, 3, "session")
     assert (await _preflight(principal, None))["reason"] == "device_id_required"
+
+
+def test_reports_require_bounded_user_scope():
+    assert _report_scope_required(None, None, None)["status"] == "filters_required"
+    assert (
+        _report_scope_required("2026-09-01", None, None)["status"] == "filters_required"
+    )
+    assert _report_scope_required(None, None, "773") is None
+    with pytest.raises(ValueError, match="0–30 days"):
+        _report_scope_required("2026-01-01", "2026-09-01", None)
 
 
 @pytest.mark.asyncio
