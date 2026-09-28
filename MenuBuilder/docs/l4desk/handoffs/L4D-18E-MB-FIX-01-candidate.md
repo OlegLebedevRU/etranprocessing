@@ -10,7 +10,7 @@ producer_scope_project: MenuBuilder
 producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-18E-MB-FIX-01-report.md
 producer_branch: l4desk/l4d-18e-mb
 producer_commit: 4f72dc6dbe03acc7975463bd4fa92832c4684638
-report_commit: e35494b961175f7ca88822249d6aad6e774f0fce
+report_commit: c590c45476913935276a7639673380e0a53e29fc
 accepted_at_utc: null
 contract_version: 1.0.0
 schema_revision: '027'
@@ -18,7 +18,7 @@ artifact_version: 18E-restricted-1
 candidate_format: DETACHED_V1
 detached_candidate_approved: true
 candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-18E-MB-FIX-01-candidate.md
-artifact_commit: e35494b961175f7ca88822249d6aad6e774f0fce
+artifact_commit: c590c45476913935276a7639673380e0a53e29fc
 artifact_paths:
   - MenuBuilder/docs/l4desk/handoffs/L4D-18E-MB-FIX-01-report.md
   - MenuBuilder/docs/l4desk/handoffs/L4D-18E-MB-FIX-01-inputs.json
@@ -26,7 +26,7 @@ artifact_paths:
   - MenuBuilder/deploy/verify-finance-rollback.py
   - MenuBuilder/deploy/README.md
 artifact_sha256:
-  - 2cd403b7ef0408c2a93ce286a763ecdf731ab1af484f586c01367f788a0f8cdb
+  - a139ee2cb320c80c701f85cfee6c026348341e362617ab2f251bd6086a2b9653
   - d3890e5f27d71e5e61568501fc853c1db88aec48ec63f00a808aa76ae1ce147a
   - d9a51c5026b3e64667bdcaaad5684979f2ec24c6471ebcf8c17c95e6a60c0dc1
   - e16e1eb644e9729420052f62f2eaeaefa422a7572fca5630b8b6605888c75fc0
