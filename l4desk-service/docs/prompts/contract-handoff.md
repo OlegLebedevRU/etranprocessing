@@ -7960,3 +7960,82 @@ consumers: [L4D-18F-DOCS]
 next_prompt_id: L4D-18F-DOCS
 ```
 <!-- HANDOFF:H-L4D-18E-MB-v1:END -->
+
+
+## 18F release documentation corrective gate
+
+The original 18F prompt names five accepted handoffs, but the historical
+`consumers` of 18A–18D do not include `L4D-18F-DOCS`. The exact accepted 18E
+controller block was restored to main in `dfc7fe7` without changing its Git
+bytes. The user authorized this docs-only corrective registration on
+2026-09-28 UTC. It grants finite report/evidence reads and addressability;
+it neither accepts 18F nor activates restricted commercial features.
+
+<!-- CORRECTIVE_REGISTRATION:R-L4D-18F-DOCS-FIX-01-v1:BEGIN -->
+```yaml
+registration_id: R-L4D-18F-DOCS-FIX-01-v1
+status: AUTHORIZED
+authorized_by: Cascade Controller
+authorization_basis: explicit_user_request_to_register_18f_corrective_docs_and_address_five_accepted_inputs
+registered_at_utc: '2026-09-28T22:00:33Z'
+prompt_id: L4D-18F-DOCS-FIX-01
+prompt_path: l4desk-service/docs/prompts/L4D-18F-DOCS-FIX-01.md
+scope_project: l4desk-service
+scope_root: D:\repo\platerra\Public\etranprocessing-l4d-18f-docs\l4desk-service
+blocked_prompt_id: L4D-18F-DOCS
+authorized_inputs:
+  - handoff_id: H-L4D-18A-SHARED-v1
+    contract_version: 1.0.0
+    producer_commit: 537a1e493c83d1fa8e8cb765228be8d1b24a1d62
+  - handoff_id: H-L4D-18B-PB-v1
+    contract_version: 1.0.0
+    producer_commit: 67827b607e64d771e368a0a43e1b6c0f09087dd8
+  - handoff_id: H-L4D-18C-IOT-v1
+    contract_version: 1.0.0
+    producer_commit: 35f1fce054e388a2206af45f1416b9572b0614a9
+  - handoff_id: H-L4D-18D-MEDIA-v1
+    contract_version: 1.0.0
+    producer_commit: e6e681dcf74fb0e81da5cf1f7f0fc2d39dca7f33
+  - handoff_id: H-L4D-18E-MB-v1
+    contract_version: 1.0.0
+    producer_commit: 4f72dc6dbe03acc7975463bd4fa92832c4684638
+sequence_gate_handoff_id: H-L4D-18E-MB-v1
+artifact_byte_binding_ids: []
+external_artifact_reads:
+  - handoff_id: H-L4D-18A-SHARED-v1
+    artifact_commit: 2b38855000d67f06269ddf40e6305382abe2d3a9
+    paths:
+      - shared/docs/l4desk/handoffs/L4D-18A-SHARED-FIX-01-report.md
+      - shared/docs/l4desk/package-source-v011.json
+  - handoff_id: H-L4D-18B-PB-v1
+    artifact_commit: 3d76c7d6d5165959e4cd077b4730a5712d7e1f6a
+    paths:
+      - ProcessingBackend/docs/l4desk/handoffs/L4D-18B-PB-FIX-01-report.md
+  - handoff_id: H-L4D-18C-IOT-v1
+    artifact_commit: fa7a91a631ced5134104e8bef61a69aa620c26a3
+    paths:
+      - docs/l4desk/handoffs/L4D-18C-IOT-FIX-01-report.md
+      - docs/l4desk/handoffs/evidence/18c-rollout/18c-production-image-final.json
+      - docs/l4desk/handoffs/evidence/18c-rollout/18c-production-archive.json
+  - handoff_id: H-L4D-18D-MEDIA-v1
+    artifact_commit: ed453db73b2dad4855cb099dfa5fdf9cf94ff655
+    paths:
+      - l4media/docs/l4desk/handoffs/L4D-18D-MEDIA-FIX-01-report.md
+      - l4media/docs/l4desk/handoffs/L4D-18D-MEDIA-FIX-01-evidence.json
+  - handoff_id: H-L4D-18E-MB-v1
+    artifact_commit: c590c45476913935276a7639673380e0a53e29fc
+    paths:
+      - MenuBuilder/docs/l4desk/handoffs/L4D-18E-MB-FIX-01-report.md
+      - MenuBuilder/docs/l4desk/handoffs/L4D-18E-MB-FIX-01-inputs.json
+output_handoff_id: H-L4D-18F-DOCS-v1
+next_prompt_id: NONE
+report_path: l4desk-service/docs/handoffs/L4D-18F-DOCS-FIX-01-report.md
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: l4desk-service/docs/handoffs/L4D-18F-DOCS-FIX-01-candidate.md
+publication_required_before_execution: true
+grant_scope: consumer_addressing_and_finite_data_only_reads
+runtime_acceptance: NOT_GRANTED
+correction_reason: historical_18a_to_18d_consumers_omit_18f_and_original_18f_retention_gate_exceeds_user_requirement
+```
+<!-- CORRECTIVE_REGISTRATION:R-L4D-18F-DOCS-FIX-01-v1:END -->

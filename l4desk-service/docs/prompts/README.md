@@ -176,3 +176,13 @@ The historical 18D subject handoffs have missing or mismatched digest and addres
 ## 18D media credential consumer rotation
 
 User-approved separate MenuBuilder owner step [`L4D-18D-AUTH-MB-FIX-01.md`](L4D-18D-AUTH-MB-FIX-01.md) is registered as `R-L4D-18D-AUTH-MB-FIX-01-v1`. Its only direct input is the finite media auth data-only export. It changes only confirmed MB private consumers in coordination with the media owner; it does not accept 18D or open 18E.
+
+## 18F release documentation corrective gate
+
+The original [`L4D-18F-DOCS.md`](L4D-18F-DOCS.md) is blocked because the
+accepted 18A–18D handoffs do not address it. The accepted 18E controller
+handoff has been restored to `main` without editing its original block.
+User-authorized `R-L4D-18F-DOCS-FIX-01-v1` registers
+[`L4D-18F-DOCS-FIX-01.md`](L4D-18F-DOCS-FIX-01.md) with exact access to five
+accepted inputs and finite report/evidence reads. This registration permits
+the docs-only release audit; it does not accept 18F or close the cascade.
