@@ -70,6 +70,7 @@
 | **Device ➔ Server** | `dev/<SN>/res` | 1 | 0 | **Финальный отчет о задаче**: результат выполнения, `status_code`, `exit_code`, `duration_ms`. |
 | **Device ➔ Server** | `dev/<SN>/out` | 0 / 1 | 0 | **Потоковый вывод (Volatile Stream)**: фрагменты вывода stdout/stderr с порядковым номером `seq` и `eof`. |
 | **Device ➔ Server** | `dev/<SN>/svc` | 1 | **1 (True)** | **Presence / LWT вспомогательного сервиса**: статус агента диагностики (`svc_online` / `svc_offline`). |
+| **Device ➔ Server** | `dev/<SN>/evt` | 1 | 0 | **Системное событие 75**: `l4con` сообщает о подключении с действующим сертификатом после сверки SN/thumbprint с Leo4Proxy. Параметры 324, 440–443; MQTT 3.1.1 передаёт 101/102/200 и `correlationData` в JSON. |
 | **Device ➔ Server** | `dev/<SN>/app` | 1 | **1 (True)** | **Presence / LWT основного приложения**: статус ПО терминала (`app_online` / `app_offline`). |
 
 ---

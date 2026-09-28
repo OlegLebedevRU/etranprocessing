@@ -2,6 +2,11 @@
 
 All notable changes to the `l4con` component will be documented in this file.
 
+## Unreleased
+
+### Added
+- Системное событие 75 после MQTT CONNACK и подтверждения совпадения активной личности Leo4Proxy с локальным сертификатом. `extra_service` presence в `dev/{SN}/svc` сохранён.
+
 ## [1.7.2] - 2026-09-14
 
 ### Changed

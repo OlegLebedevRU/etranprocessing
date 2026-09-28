@@ -72,7 +72,7 @@ goto :summary
 :do_build_x86
 echo.
 echo [Build x86] 32-bit universal static binary (Windows 7 SP1+ compatible)...
-cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /i res /fo obj\x86\app.res res\app.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /I res /Foobj\x86\ src\main.c src\url_finder.c src\http_client.c src\xml_utils.c src\cng_crypto.c src\cert_store.c src\cert_discovery.c obj\x86\app.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\l4pin.exe ncrypt.lib crypt32.lib winhttp.lib advapi32.lib shell32.lib user32.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /i res /fo obj\x86\app.res res\app.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /I res /Foobj\x86\ src\main.c src\gui.c src\url_finder.c src\http_client.c src\xml_utils.c src\cng_crypto.c src\cert_store.c src\cert_discovery.c obj\x86\app.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\l4pin.exe ncrypt.lib crypt32.lib bcrypt.lib winhttp.lib advapi32.lib shell32.lib user32.lib gdi32.lib"
 if errorlevel 1 (
     echo [ERROR] x86 build failed!
     set BUILD_FAILED=1
@@ -86,7 +86,7 @@ exit /b 0
 :do_build_x64
 echo.
 echo [Build x64] 64-bit static binary...
-cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /i res /fo obj\x64\app.res res\app.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /I res /Foobj\x64\ src\main.c src\url_finder.c src\http_client.c src\xml_utils.c src\cng_crypto.c src\cert_store.c src\cert_discovery.c obj\x64\app.res /link /OUT:bin\x64\l4pin.exe ncrypt.lib crypt32.lib winhttp.lib advapi32.lib shell32.lib user32.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /i res /fo obj\x64\app.res res\app.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /I res /Foobj\x64\ src\main.c src\gui.c src\url_finder.c src\http_client.c src\xml_utils.c src\cng_crypto.c src\cert_store.c src\cert_discovery.c obj\x64\app.res /link /OUT:bin\x64\l4pin.exe ncrypt.lib crypt32.lib bcrypt.lib winhttp.lib advapi32.lib shell32.lib user32.lib gdi32.lib"
 if errorlevel 1 (
     echo [ERROR] x64 build failed!
     set BUILD_FAILED=1
@@ -98,7 +98,7 @@ exit /b 0
 :do_build_tests
 echo.
 echo [Build and Run Tests] In-memory Cert Discovery unit tests (x86 and x64)...
-cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x86\ tests\test_cert_discovery.c src\cert_discovery.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\test_cert_discovery.exe ncrypt.lib crypt32.lib advapi32.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x86\ tests\test_cert_discovery.c src\cert_discovery.c src\cert_store.c src\xml_utils.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\test_cert_discovery.exe ncrypt.lib crypt32.lib advapi32.lib"
 if errorlevel 1 (
     echo [ERROR] x86 test build failed!
     set BUILD_FAILED=1
@@ -111,7 +111,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && cl.exe /nologo /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x64\ tests\test_cert_discovery.c src\cert_discovery.c /link /OUT:bin\x64\test_cert_discovery.exe ncrypt.lib crypt32.lib advapi32.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && cl.exe /nologo /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x64\ tests\test_cert_discovery.c src\cert_discovery.c src\cert_store.c src\xml_utils.c /link /OUT:bin\x64\test_cert_discovery.exe ncrypt.lib crypt32.lib advapi32.lib"
 if errorlevel 1 (
     echo [ERROR] x64 test build failed!
     set BUILD_FAILED=1

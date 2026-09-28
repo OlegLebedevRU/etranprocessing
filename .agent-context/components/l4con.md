@@ -14,9 +14,11 @@ Native Windows consumer удалённых console/diagnostics задач и п�
 | app1 → l4con | MQTT | srv/{SN}/tsk,rsp,cmt | method/task/session | отдельный RPC flow |
 | l4con → app1 | MQTT | dev/{SN}/req,res,out | request, result, seq/eof | no retain |
 | l4con → server | MQTT | dev/{SN}/svc | svc_online/offline | extra_service retained LWT |
+| l4con → app1 | MQTT | dev/{SN}/evt | type 75, tags 324/440–443 | QoS 1, no retain; after CONNECT and matching local/proxy certificate identity |
 
 ## Инварианты
 - svc topic не разделять с l4desk; не менять тип клиента без обязательного уточнения.
+- Событие 75 системное и не тарифицируется; MQTT 3.1.1 передаёт 101/102/200 и correlationData в JSON payload. Серверный контракт: iot-rpc-rest-app docs/event-types-reference.md и event-property-tags.md.
 - Process/output limits и cleanup обязательны; не превращать диагностику в bypass shell.
 - Packaging/installer не менять без прямой задачи; static Win32 /MT и x86/x64/default.
 

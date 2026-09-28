@@ -27,6 +27,9 @@ typedef struct cert_info {
     int cert_duplicates;
 } cert_info;
 
+/* True only for certificates issued by the configured Leo4 terminal CA. */
+bool cert_is_leo4_issuer(PCCERT_CONTEXT cert);
+
 /**
  * Discover terminal certificate in LocalMachine\MY store according to Contract 4.1.
  *

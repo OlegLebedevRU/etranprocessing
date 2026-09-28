@@ -7,6 +7,7 @@
 #include <assert.h>
 
 #include "cert_discovery.h"
+#include "cert_store.h"
 
 #pragma comment(lib, "crypt32.lib")
 #pragma comment(lib, "ncrypt.lib")
@@ -39,9 +40,10 @@ static int g_tests_passed = 0;
     } \
 } while(0)
 
-static PCCERT_CONTEXT create_test_cert(
+static PCCERT_CONTEXT create_test_cert_with_start(
     NCRYPT_KEY_HANDLE hKey,
     const char* dn,
+    int start_offset_days,
     int days_valid,
     bool bind_cng_key
 ) {
@@ -53,6 +55,17 @@ static PCCERT_CONTEXT create_test_cert(
     ULARGE_INTEGER uli;
     uli.LowPart = ftNow.dwLowDateTime;
     uli.HighPart = ftNow.dwHighDateTime;
+    if (start_offset_days < 0) {
+        uli.QuadPart -= (ULONGLONG)(-start_offset_days) * 864000000000ULL;
+    } else {
+        uli.QuadPart += (ULONGLONG)start_offset_days * 864000000000ULL;
+    }
+
+    FILETIME ftStart;
+    ftStart.dwLowDateTime = uli.LowPart;
+    ftStart.dwHighDateTime = uli.HighPart;
+    FileTimeToSystemTime(&ftStart, &stStart);
+
     uli.QuadPart += (ULONGLONG)days_valid * 864000000000ULL;
 
     FILETIME ftEnd;
@@ -97,6 +110,56 @@ static PCCERT_CONTEXT create_test_cert(
     }
 
     return pCert;
+}
+
+static PCCERT_CONTEXT create_test_cert(NCRYPT_KEY_HANDLE hKey, const char* dn,
+                                      int days_valid, bool bind_cng_key) {
+    return create_test_cert_with_start(hKey, dn, 0, days_valid, bind_cng_key);
+}
+
+static bool test_cleanup_keeps_backdated_new_cert(NCRYPT_KEY_HANDLE hKey) {
+    HCERTSTORE store = CertOpenStore(CERT_STORE_PROV_MEMORY, 0, 0, 0, NULL);
+    if (!store) return false;
+
+    const char* terminal_dn = "CN=iot.leo4.ru, E=terminal@example.invalid";
+    PCCERT_CONTEXT old1 = create_test_cert(hKey, terminal_dn, 90, false);
+    PCCERT_CONTEXT old2 = create_test_cert(hKey, "CN=iot.leo4.ru, E=previous@example.invalid", 120, false);
+    PCCERT_CONTEXT fresh = create_test_cert_with_start(hKey, terminal_dn, -1, 366, false);
+    PCCERT_CONTEXT unrelated = create_test_cert(hKey, "CN=other, E=other@example.invalid", 90, false);
+    PCCERT_CONTEXT installed = NULL;
+    bool ok = old1 && old2 && fresh && unrelated &&
+        CertAddCertificateContextToStore(store, old1, CERT_STORE_ADD_ALWAYS, NULL) &&
+        CertAddCertificateContextToStore(store, old2, CERT_STORE_ADD_ALWAYS, NULL) &&
+        CertAddCertificateContextToStore(store, unrelated, CERT_STORE_ADD_ALWAYS, NULL) &&
+        CertAddCertificateContextToStore(store, fresh, CERT_STORE_ADD_ALWAYS, &installed);
+
+    int removed = -1;
+    if (ok) {
+        ok = CompareFileTime(&fresh->pCertInfo->NotBefore, &old1->pCertInfo->NotBefore) < 0 &&
+             cert_store_cleanup_previous(store, installed, "terminal@example.invalid", &removed) &&
+             removed == 2;
+    }
+
+    int count = 0;
+    bool found_installed = false;
+    bool found_unrelated = false;
+    PCCERT_CONTEXT current = NULL;
+    while ((current = CertEnumCertificatesInStore(store, current)) != NULL) {
+        count++;
+        if (installed && CertCompareCertificate(X509_ASN_ENCODING, current->pCertInfo,
+                                                installed->pCertInfo)) found_installed = true;
+        if (unrelated && CertCompareCertificate(X509_ASN_ENCODING, current->pCertInfo,
+                                                unrelated->pCertInfo)) found_unrelated = true;
+    }
+    ok = ok && count == 2 && found_installed && found_unrelated;
+
+    if (installed) CertFreeCertificateContext(installed);
+    if (old1) CertFreeCertificateContext(old1);
+    if (old2) CertFreeCertificateContext(old2);
+    if (fresh) CertFreeCertificateContext(fresh);
+    if (unrelated) CertFreeCertificateContext(unrelated);
+    CertCloseStore(store, 0);
+    return ok;
 }
 
 static bool test_absent(void) {
@@ -348,6 +411,7 @@ int main(void) {
     RUN_TEST_KEY(test_broken_wrong_sn, hKey);
     RUN_TEST_KEY(test_duplicates, hKey);
     RUN_TEST_KEY(test_non_leo4_issuer, hKey);
+    RUN_TEST_KEY(test_cleanup_keeps_backdated_new_cert, hKey);
 
     // Cleanup key container
     NCryptDeleteKey(hKey, 0);

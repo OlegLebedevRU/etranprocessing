@@ -8,6 +8,7 @@
 #include "mqtt_client.h"
 #include "mqtt_protocol.h"
 #include "command_runner.h"
+#include "../../l4pin/src/cert_discovery.h"
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
@@ -15,6 +16,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <ctype.h>
+#include <objbase.h>
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -27,11 +30,71 @@ typedef struct {
     HANDLE hWorkerThread;
 } MqttClientState;
 
+static bool send_publish_packet(MqttClientState* state, const char* topic,
+                                const char* payload, size_t payload_len,
+                                uint8_t qos, uint8_t retain);
+
 static void get_iso_timestamp(char* out_ts, size_t size) {
     SYSTEMTIME st;
     GetLocalTime(&st);
     snprintf(out_ts, size, "%04u-%02u-%02u %02u:%02u:%02u",
              st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+}
+
+static bool ascii_identifier(const char* value, bool hex_only) {
+    if (!value || !value[0]) return false;
+    for (const unsigned char* p = (const unsigned char*)value; *p; p++) {
+        if (hex_only ? !isxdigit(*p) : !(isalnum(*p) || *p == '-' || *p == '_')) return false;
+    }
+    return true;
+}
+
+static bool publish_certificate_connected_event(MqttClientState* state, int proxy_port) {
+    ProxyIdentity identity;
+    cert_info local_cert = { 0 };
+    cert_state local_state = cert_discover(NULL, &local_cert);
+    if (config_query_identity_from_proxy(proxy_port, &identity) != 0 ||
+        (local_state != CERT_VALID && local_state != CERT_EXPIRING) ||
+        local_cert.cert_duplicates != 0 ||
+        strcmp(identity.sn, state->sn) != 0 ||
+        strcmp(identity.sn, local_cert.sn) != 0 ||
+        _stricmp(identity.thumbprint, local_cert.thumbprint_hex) != 0 ||
+        !ascii_identifier(identity.sn, false) ||
+        strlen(identity.thumbprint) != 40 ||
+        !ascii_identifier(identity.thumbprint, true) ||
+        !ascii_identifier(identity.serial, true) ||
+        strlen(identity.not_after) < 19) {
+        printf("[CERT] Active proxy identity is not ready or does not match MQTT SN; event deferred\n");
+        return false;
+    }
+
+    GUID guid;
+    if (FAILED(CoCreateGuid(&guid))) return false;
+    unsigned event_id = guid.Data1 & 0x7fffffffU;
+    if (!event_id) event_id = 1;
+    SYSTEMTIME utc;
+    GetSystemTime(&utc);
+    char timestamp[32];
+    snprintf(timestamp, sizeof(timestamp), "%04u-%02u-%02uT%02u:%02u:%02uZ",
+             utc.wYear, utc.wMonth, utc.wDay, utc.wHour, utc.wMinute, utc.wSecond);
+    char not_after[24];
+    memcpy(not_after, identity.not_after, 19);
+    not_after[19] = '\0';
+    not_after[10] = 'T';
+    strcat_s(not_after, sizeof(not_after), "Z");
+
+    char topic[160], payload[1024];
+    snprintf(topic, sizeof(topic), "dev/%s/evt", state->sn);
+    int length = snprintf(payload, sizeof(payload),
+        "{\"101\":%u,\"102\":\"%s\",\"200\":75,\"300\":[{\"324\":\"%s\",\"440\":\"l4con\",\"441\":\"%s\",\"442\":\"%s\",\"443\":\"%s\"}],\"correlationData\":\"%08lX-%04hX-%04hX-%02X%02X-%02X%02X%02X%02X%02X%02X\"}",
+        event_id, timestamp, state->sn, identity.thumbprint, identity.serial, not_after,
+        guid.Data1, guid.Data2, guid.Data3,
+        guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3],
+        guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7]);
+    if (length <= 0 || (size_t)length >= sizeof(payload)) return false;
+    if (!send_publish_packet(state, topic, payload, (size_t)length, 1, 0)) return false;
+    printf("[CERT] Published identity event 75 for SN %s (qos=1, retain=0)\n", state->sn);
+    return true;
 }
 
 static uint16_t get_next_packet_id(MqttClientState* state) {
@@ -419,6 +482,7 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
     printf("  RPC Sub Topic:   %s\n", tsk_sub_topic);
     printf("  Target Broker:   %s:%d (Keepalive: %ds)\n\n", config->mqtt_host, config->mqtt_port, config->keepalive_sec);
 
+    bool cert_event_sent = false;
     while (WaitForSingleObject(hStopEvent, 0) != WAIT_OBJECT_0) {
         get_iso_timestamp(ts_buf, sizeof(ts_buf));
         printf("[%s] Connecting to MQTT broker at %s:%d...\n", ts_buf, config->mqtt_host, config->mqtt_port);
@@ -492,6 +556,11 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
         // 3. Publish dev/{SN}/svc = svc_online (retain=1, qos=1)
         send_publish_packet(&state, pub_topic, online_payload, strlen(online_payload), 1, 1);
         printf("[%s] [OK] Published: %s = %s (retain=1, qos=1)\n", ts_buf, pub_topic, online_payload);
+
+        if (!cert_event_sent && !use_cli_sn) {
+            cert_event_sent = publish_certificate_connected_event(&state, config->proxy_http_port);
+        }
+        time_t last_cert_event_attempt = time(NULL);
 
         // 4. Subscriptions (qos=1) - strictly srv/<SN>/tsk and srv/<SN>/rsp
         const char* sub_suffixes[] = {"tsk", "rsp", NULL};
@@ -597,6 +666,12 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
 
             // Periodic PINGREQ keepalive
             time_t now = time(NULL);
+            if (!cert_event_sent && !use_cli_sn &&
+                now - last_cert_event_attempt >= 15) {
+                last_cert_event_attempt = now;
+                cert_event_sent = publish_certificate_connected_event(&state,
+                                                                       config->proxy_http_port);
+            }
             if (now - last_ping_time >= ping_interval) {
                 unsigned char ping_buf[2];
                 int p_len = mqtt_build_pingreq(ping_buf);

@@ -1,4 +1,5 @@
 #include "cert_store.h"
+#include "cert_discovery.h"
 #include "xml_utils.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -137,6 +138,95 @@ static void fill_cert_details(PCCERT_CONTEXT pCert, CertDetails* details) {
     }
 }
 
+bool cert_store_cleanup_previous(HCERTSTORE store, PCCERT_CONTEXT installed_cert,
+                                 const char* email, int* removed_count) {
+    if (removed_count) *removed_count = 0;
+    if (!store || !installed_cert || !email || !email[0]) return false;
+    char installed_email[256] = { 0 };
+    if (!cert_is_leo4_issuer(installed_cert) ||
+        !cert_get_email(installed_cert, installed_email, sizeof(installed_email)) ||
+        _stricmp(installed_email, email) != 0) return false;
+
+    PCCERT_CONTEXT* previous = NULL;
+    size_t count = 0;
+    size_t capacity = 0;
+    PCCERT_CONTEXT current = NULL;
+    bool success = true;
+    while ((current = CertEnumCertificatesInStore(store, current)) != NULL) {
+        if (CertCompareCertificate(X509_ASN_ENCODING, current->pCertInfo,
+                                   installed_cert->pCertInfo) ||
+            !cert_is_leo4_issuer(current)) continue;
+
+        if (count == capacity) {
+            size_t new_capacity = capacity ? capacity * 2 : 8;
+            PCCERT_CONTEXT* grown = realloc(previous, new_capacity * sizeof(*previous));
+            if (!grown) { success = false; break; }
+            previous = grown;
+            capacity = new_capacity;
+        }
+        previous[count] = CertDuplicateCertificateContext(current);
+        if (!previous[count]) { success = false; break; }
+        count++;
+    }
+    if (current) CertFreeCertificateContext(current);
+
+    size_t removed = 0;
+    if (success) {
+        for (size_t i = 0; i < count; i++) {
+            PCCERT_CONTEXT to_delete = CertDuplicateCertificateContext(previous[i]);
+            if (!to_delete || !CertDeleteCertificateFromStore(to_delete)) {
+                if (!to_delete) fprintf(stderr, "[STORE] Could not duplicate old certificate\n");
+                else fprintf(stderr, "[STORE] Could not remove old certificate: %lu\n", GetLastError());
+                success = false;
+                break;
+            }
+            removed++;
+        }
+    }
+
+    if (success) {
+        size_t matching = 0;
+        bool found_new = false;
+        current = NULL;
+        while ((current = CertEnumCertificatesInStore(store, current)) != NULL) {
+            if (!cert_is_leo4_issuer(current)) continue;
+            matching++;
+            if (CertCompareCertificate(X509_ASN_ENCODING, current->pCertInfo,
+                                       installed_cert->pCertInfo)) found_new = true;
+        }
+        success = matching == 1 && found_new;
+        if (!success) fprintf(stderr, "[STORE] Cleanup verification failed: %zu matching certificates\n", matching);
+    }
+
+    bool restored = true;
+    if (!success && removed > 0) {
+        for (size_t i = 0; i < count; i++) {
+            if (!CertAddCertificateContextToStore(store, previous[i],
+                                                  CERT_STORE_ADD_REPLACE_EXISTING, NULL)) {
+                fprintf(stderr, "[STORE] CRITICAL: Could not restore previous certificate: %lu\n",
+                        GetLastError());
+                restored = false;
+            }
+        }
+    }
+    if (!success && !restored) {
+        fprintf(stderr, "[STORE] CRITICAL: Previous certificate set could not be fully restored; inspect LocalMachine\\MY before restarting services\n");
+    }
+    for (size_t i = 0; i < count; i++) CertFreeCertificateContext(previous[i]);
+    free(previous);
+    if (success && removed_count) *removed_count = (int)removed;
+    return success;
+}
+
+static void rollback_installed_certificate(PCCERT_CONTEXT installed_cert) {
+    if (!installed_cert) return;
+    PCCERT_CONTEXT to_delete = CertDuplicateCertificateContext(installed_cert);
+    if (!to_delete || !CertDeleteCertificateFromStore(to_delete)) {
+        fprintf(stderr, "[STORE] CRITICAL: Could not roll back new certificate: %lu\n",
+                GetLastError());
+    }
+}
+
 bool cert_store_install_pkcs7(
     const char* pkcs7_b64,
     const WCHAR* key_container_name,
@@ -231,8 +321,14 @@ bool cert_store_install_pkcs7(
     // Determine target email for filtering
     char new_cert_email[256] = { 0 };
     cert_get_email(pLeafCert, new_cert_email, sizeof(new_cert_email));
-    if (new_cert_email[0] == '\0' && expected_email && expected_email[0] != '\0') {
-        strncpy(new_cert_email, expected_email, sizeof(new_cert_email) - 1);
+    if (new_cert_email[0] == '\0' ||
+        (expected_email && expected_email[0] && _stricmp(new_cert_email, expected_email) != 0)) {
+        fprintf(stderr, "[STORE] Signed certificate email is missing or differs from CHECK; refusing replacement\n");
+        CertFreeCertificateContext(pLeafCert);
+        if (pCaCert) CertFreeCertificateContext(pCaCert);
+        CertCloseStore(hPkcs7Store, 0);
+        free(pbDer);
+        return false;
     }
 
     printf("[STORE] New certificate target email: [%s]\n", new_cert_email);
@@ -257,37 +353,7 @@ bool cert_store_install_pkcs7(
         return false;
     }
 
-    // 5. Delete all existing certificates with matching email
-    if (new_cert_email[0] != '\0') {
-        int deleted_count = 0;
-        PCCERT_CONTEXT pEnum = NULL;
-        while ((pEnum = CertEnumCertificatesInStore(hMyStore, pEnum)) != NULL) {
-            char enum_email[256] = { 0 };
-            if (cert_get_email(pEnum, enum_email, sizeof(enum_email)) && enum_email[0] != '\0') {
-                if (_stricmp(enum_email, new_cert_email) == 0) {
-                    char serial_hex[128] = { 0 };
-                    char subj_name[256] = { 0 };
-                    char thumb_hex[128] = { 0 };
-                    cert_get_serial_hex(pEnum, serial_hex, sizeof(serial_hex));
-                    cert_get_thumbprint_hex(pEnum, thumb_hex, sizeof(thumb_hex));
-                    CertGetNameStringA(pEnum, CERT_NAME_SIMPLE_DISPLAY_TYPE, 0, NULL, subj_name, sizeof(subj_name));
-
-                    printf("[STORE] Deleting existing certificate: Thumbprint=%s, Email=%s, Serial=%s, Subject=%s\n",
-                           thumb_hex, enum_email, serial_hex, subj_name);
-
-                    PCCERT_CONTEXT pToDelete = CertDuplicateCertificateContext(pEnum);
-                    if (CertDeleteCertificateFromStore(pToDelete)) {
-                        deleted_count++;
-                    } else {
-                        fprintf(stderr, "[STORE] Warning: failed to delete matching certificate: %lu\n", GetLastError());
-                    }
-                }
-            }
-        }
-        printf("[STORE] Deleted %d existing certificate(s) matching email [%s]\n", deleted_count, new_cert_email);
-    }
-
-    // 6. Add new leaf certificate to MY store
+    // 5. Add new leaf certificate before touching the previous identity.
     PCCERT_CONTEXT pAddedCert = NULL;
     if (!CertAddCertificateContextToStore(
             hMyStore,
@@ -304,7 +370,7 @@ bool cert_store_install_pkcs7(
         return false;
     }
 
-    // 7. Bind CNG Key Storage Provider to the installed certificate
+    // 6. Bind CNG Key Storage Provider to the installed certificate
     CRYPT_KEY_PROV_INFO provInfo;
     memset(&provInfo, 0, sizeof(provInfo));
     provInfo.pwszContainerName = (LPWSTR)key_container_name;
@@ -320,8 +386,41 @@ bool cert_store_install_pkcs7(
             &provInfo
         )) {
         fprintf(stderr, "CertSetCertificateContextProperty(CERT_KEY_PROV_INFO_PROP_ID) failed: %lu\n", GetLastError());
+        rollback_installed_certificate(pAddedCert);
+        CertFreeCertificateContext(pAddedCert);
+        CertCloseStore(hMyStore, 0);
+        CertFreeCertificateContext(pLeafCert);
+        if (pCaCert) CertFreeCertificateContext(pCaCert);
+        CertCloseStore(hPkcs7Store, 0);
+        free(pbDer);
+        return false;
     } else {
         printf("[STORE] Successfully bound CNG private key [%ls] to certificate\n", key_container_name);
+    }
+
+    CertDetails installed_details;
+    fill_cert_details(pAddedCert, &installed_details);
+    if (!installed_details.has_private_key) {
+        fprintf(stderr, "[STORE] New certificate key is not accessible; previous certificates retained\n");
+        rollback_installed_certificate(pAddedCert);
+        CertFreeCertificateContext(pAddedCert);
+        CertCloseStore(hMyStore, 0);
+        CertFreeCertificateContext(pLeafCert);
+        if (pCaCert) CertFreeCertificateContext(pCaCert);
+        CertCloseStore(hPkcs7Store, 0);
+        free(pbDer);
+        return false;
+    }
+
+    // 7. Remove previous identities only after the new key is usable.
+    int removed_count = 0;
+    bool cleanup_ok = cert_store_cleanup_previous(hMyStore, pAddedCert,
+                                                   new_cert_email, &removed_count);
+    printf("[STORE] Removed %d previous certificate(s) for email [%s]\n",
+           removed_count, new_cert_email);
+    if (!cleanup_ok) {
+        rollback_installed_certificate(pAddedCert);
+        fprintf(stderr, "[STORE] Certificate replacement failed; check CRITICAL rollback messages and inspect the store before restarting services\n");
     }
 
     // 8. If CA certificate is present, install to CA store
@@ -342,8 +441,8 @@ bool cert_store_install_pkcs7(
     }
 
     // 9. Output details
-    if (out_installed_details) {
-        fill_cert_details(pAddedCert, out_installed_details);
+    if (cleanup_ok && out_installed_details) {
+        *out_installed_details = installed_details;
     }
 
     if (pAddedCert) CertFreeCertificateContext(pAddedCert);
@@ -354,7 +453,7 @@ bool cert_store_install_pkcs7(
     CertCloseStore(hPkcs7Store, 0);
     free(pbDer);
 
-    return true;
+    return cleanup_ok;
 }
 
 bool cert_store_list(bool is_machine_store, const char* filter_email) {

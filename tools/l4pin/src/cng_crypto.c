@@ -58,7 +58,8 @@ bool cng_generate_key_and_csr(
 
     // 2. Create persisted key in provider
     NCRYPT_KEY_HANDLE hKey = 0;
-    DWORD create_flags = (is_machine_context ? NCRYPT_MACHINE_KEY_FLAG : 0) | NCRYPT_OVERWRITE_KEY_FLAG;
+    // Never overwrite a key still used by the previous certificate.
+    DWORD create_flags = is_machine_context ? NCRYPT_MACHINE_KEY_FLAG : 0;
     status = NCryptCreatePersistedKey(
         hProv,
         &hKey,
