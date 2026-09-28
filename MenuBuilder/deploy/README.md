@@ -52,3 +52,17 @@ tracing; do not pipe its private subprocess output into logs. It does not change
 the provider. Recreate the two MenuBuilder consumers using the approved images,
 then check missing/wrong-auth 401 and authorized absent-operation 404. The rollback
 is the saved private env plus the exact previous MenuBuilder image selections.
+
+`verify-finance-rollback.py` is an explicitly invoked release check for existing
+test tenant 10000, not a background worker. Run the published script from a
+read-only mount in a disposable container using the exact released backend
+image and the private runtime environment. Set a whole-container timeout of
+120 seconds and remove the container afterwards. Do not copy it into a running
+service. It checks a new monthly charge and its replay, a 600-second simulated
+grace boundary, a mock stop and reconciliation inside an outer PostgreSQL
+transaction. Service commits release savepoints; the outer transaction always
+rolls back. Post-checks compare tenant balance and counts of ledger, sessions,
+cycles, charges, reconciliation and audit rows. Sequence values may advance.
+The test requires no live tenant session and refuses a concurrent session.
+It proves service behavior with PostgreSQL, not a real provider stop or a
+durable charge. Production commercial flags and provider settings stay unchanged.
