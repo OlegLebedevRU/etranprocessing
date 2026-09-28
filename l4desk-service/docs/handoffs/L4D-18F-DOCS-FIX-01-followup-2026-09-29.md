@@ -4,7 +4,7 @@
 prompt_id: L4D-18F-DOCS-FIX-01
 registration_id: R-L4D-18F-DOCS-FIX-01-v1
 status: BLOCKED_DEPLOY
-observed_at_utc: '2026-09-28T23:27:15Z'
+observed_at_utc: '2026-09-28T23:52:08Z'
 cascade_closed: false
 scope: l4desk-service documentation and read-only production inventory
 ```
@@ -92,18 +92,22 @@ OCI revision из контейнерных labels: ProcessingBackend и L4mcp
 production-файлы и сервисы не менялись.
 
 Текущий snapshot образов, schema, flags и health получен. Свежей сверки
-archive backup/restore и browser video start/stop в этом проходе пока нет.
-Их нельзя подменять успешной проверкой прошлого образа.
+фактического archive backup/restore в этом проходе нет.
 
-Попытка browser smoke на доступном тестовом терминале `1000011` остановилась
-при входе на сайт: `POST /api/auth/login` вернул 502. Логи работающего
-MenuBuilder показывают две попытки вызова внешнего JWT issuer и ответ
-`HTTP 502` на обе; отдельный GET того же issuer с production-хоста также
-вернул 502 примерно за 1 секунду. `nginx-default` и MenuBuilder остаются
-running с restart count 0, `/openapi.json` внутри backend отвечает 200.
-Причина текущего отказа лежит на пути внешней выдачи JWT; точное состояние
-функции за API Gateway без доступа к её журналу не установлено. Видео/stop
-на текущем образе из-за этого не проверены; `BLOCKED_DEPLOY` сохраняется.
+Первый browser smoke на `1000011` остановился при входе: несколько реальных
+`POST /api/auth/login` вернули 502 вслед за двумя 502 от внешнего JWT issuer.
+Однако в 23:50:48 UTC тот же реальный login и POST к issuer вернули 200.
+Пользователь затем проверил доступный `1000009`: движущееся видео и штатный
+stop без ошибки. В 23:52:08 UTC ingress после stop сообщил
+`active_media_sessions=0`. Это подтверждает текущий video/stop smoke.
+
+Диагностический POST с пустым JSON к issuer по-прежнему возвращает 502; он не
+моделирует корректный login и не является признаком недоступности для валидных
+запросов. OPTIONS preflight с `Origin: https://dev.leo4.ru` вернул 204 и
+`Access-Control-Allow-Origin: https://dev.leo4.ru`; POST с этим Origin и без
+него имели одинаковый результат. Ранее сделанный вывод о продолжающейся
+недоступности issuer по пустому POST отозван. Причина временной серии реальных
+502 без журнала функции за API Gateway не установлена; оставить её как риск.
 
 Archive paths `/mnt/l4desk-archive` и `/var/lib/l4media/telemetry` существуют
 на корневой файловой системе; на верхнем уровне обоих каталогов сейчас 0
@@ -119,9 +123,8 @@ Archive worker и purge остаются выключенными. Фактич�
 1. Зафиксировать эксплуатационный план archive backup/restore и hot retention
    отдельно от уже проверенной синтетической процедуры; текущий read-only
    version/health inventory завершён.
-2. После восстановления внешнего JWT issuer на текущих образах подтвердить
-   коротким browser smoke `1000011`: движущиеся кадры и штатный stop без 500;
-   сверить `active_media_sessions=0` после остановки.
+2. Текущий browser video/stop smoke `1000009` выполнен; в итоговом отчёте
+   отделить его от неудачной первоначальной попытки входа на `1000011`.
 3. Зафиксировать проверенные archive backup/restore и фактическую hot
    retention; трёхлетний срок описать только как процедурную политику.
 4. Сверить эксплуатационные показатели регистрации, PIN, online, usage/event
