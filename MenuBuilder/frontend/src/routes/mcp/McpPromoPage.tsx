@@ -62,10 +62,15 @@ export default function McpPage() {
       <Card title="Подключение к агенту">
         <Paragraph>Сохраните токен в переменной окружения <Text code>L4MCP_TOKEN</Text> на своей машине. В <Text code>bearer_token_env_var</Text> укажите только имя переменной, не сам токен. Не вставляйте токен в конфигурацию проекта или переписку.</Paragraph>
         <Text strong>Codex: ~/.codex/config.toml</Text>
-        <pre>{`[mcp_servers.l4mcp]\nurl = "${url}"\nbearer_token_env_var = "L4MCP_TOKEN"`}</pre>
+        <pre>{`mcp_optional_startup_grace_ms = 0
+
+[mcp_servers.l4mcp]
+url = "${url}"
+bearer_token_env_var = "L4MCP_TOKEN"
+default_tools_approval_mode = "writes"`}</pre>
         <Text strong>Claude Code: .mcp.json</Text>
         <pre>{JSON.stringify({ mcpServers: { l4mcp: { type: "http", url, headers: { Authorization: "Bearer ${L4MCP_TOKEN}" } } } }, null, 2)}</pre>
-        <Paragraph type="secondary">Перезапустите агент после изменения настроек. Запрашивайте один терминал или ограниченный диапазон; PIN выдаётся максимум для пяти терминалов за вызов.</Paragraph>
+        <Paragraph type="secondary">Для Codex настройка writes пропускает просмотр без подтверждения; выдача и отзыв PIN и выполнение команды требуют разрешения. Перезапустите агент после изменения настроек. Запрашивайте один терминал или ограниченный диапазон; PIN выдаётся максимум для пяти терминалов за вызов.</Paragraph>
       </Card>
     </Space>
   );
