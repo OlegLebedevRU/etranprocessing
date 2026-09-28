@@ -389,8 +389,10 @@ function TenantVideoSurveillancePage() {
   stopSessionRef.current = stopSession;
 
   // Загрузка инвентаря устройств и состояния стрима
+  const inventoryGeneration = useRef(0);
   const fetchDeviceInfo = useCallback(
     async (deviceId: number, refresh = false) => {
+      const currentGeneration = ++inventoryGeneration.current;
       setLoadingInventory(true);
       try {
         const [inv, stateRes, ctlStat] = await Promise.all([
@@ -403,6 +405,8 @@ function TenantVideoSurveillancePage() {
           getDeviceStreamState(deviceId).catch(() => null),
           getControlStatus(deviceId).catch(() => null),
         ]);
+
+        if (currentGeneration !== inventoryGeneration.current) return;
 
         const displays: DisplaySource[] = (inv?.displays || []).filter(
           (d: DisplaySource) => d.policy !== "denied"
@@ -456,13 +460,20 @@ function TenantVideoSurveillancePage() {
           setSelectedSourceKey(`usb-camera:${cameras[0].id || cameras[0].camera_id || "0"}`);
         }
       } catch (err: any) {
-        console.warn("Failed to fetch device inventory/state", err);
+        if (currentGeneration === inventoryGeneration.current) console.warn("Failed to fetch device inventory/state", err);
       } finally {
-        setLoadingInventory(false);
+        if (currentGeneration === inventoryGeneration.current) setLoadingInventory(false);
       }
     },
     []
   );
+
+  useEffect(() => {
+    setInventory(null);
+    setSelectedSourceKey("");
+    if (selectedDevice && canView) void fetchDeviceInfo(selectedDevice.device_id);
+    return () => { inventoryGeneration.current += 1; };
+  }, [selectedDevice?.device_id, canView, fetchDeviceInfo]);
 
   // IoT watch is an invalidation feed. REST remains the authoritative snapshot.
   useEffect(() => {
@@ -582,7 +593,6 @@ function TenantVideoSurveillancePage() {
     await stopSession();
     setSelectedDevice(device);
     setStatusText("Не запущена");
-    await fetchDeviceInfo(device.device_id);
 
     // Автоматическое подключение для зрителя (viewer)
     if (isViewer && canView && device.status === "online") {
