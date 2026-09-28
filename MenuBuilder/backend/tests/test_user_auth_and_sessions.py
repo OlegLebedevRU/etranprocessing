@@ -119,7 +119,7 @@ async def test_auth_refresh_and_logout():
 
 
 @pytest.mark.anyio
-async def test_auth_me_endpoint():
+async def test_auth_me_endpoint(mock_auth_org_policy):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         login_resp = await ac.post(

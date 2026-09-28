@@ -66,7 +66,7 @@ def switched_superuser_token() -> str:
 
 
 @pytest.mark.anyio
-async def test_auth_me_permissions_and_role():
+async def test_auth_me_permissions_and_role(mock_auth_org_policy):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         # Override current user as role 4

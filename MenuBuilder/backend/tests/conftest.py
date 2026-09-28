@@ -1,4 +1,7 @@
 import os
+from types import SimpleNamespace
+
+import pytest
 
 os.environ["JWT_ISSUER_MOCK_ENABLED"] = "true"
 os.environ.setdefault("JWT_SECRET", "test-secret-key-12345678901234567890")
@@ -24,3 +27,28 @@ settings.session_cleanup_enabled = False
 settings.schema_compatibility_check_enabled = False
 jwt_issuer_client.mock_enabled = True
 get_user_store()._db_available = False
+
+
+@pytest.fixture
+def mock_auth_org_policy(monkeypatch):
+    """Supply an existing organization for auth tests unrelated to DB availability."""
+
+    class Session:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def execute(self, _query):
+            row = SimpleNamespace(
+                org_name="Test Org",
+                timezone="Europe/Moscow",
+                site_mode="both",
+                default_site=None,
+                classic_licenses_enabled=True,
+                l4desk_licenses_enabled=True,
+            )
+            return SimpleNamespace(first=lambda: row)
+
+    monkeypatch.setattr("app.routers.auth.async_session", Session)

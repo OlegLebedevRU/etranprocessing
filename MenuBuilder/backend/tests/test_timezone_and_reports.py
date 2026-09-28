@@ -97,7 +97,14 @@ class TestAuthAndTimezone:
 
         mock_session = AsyncMock()
         mock_result = MagicMock()
-        mock_result.first.return_value = ("Тюмень Орг", "Asia/Yekaterinburg")
+        mock_result.first.return_value = (
+            "Тюмень Орг",
+            "Asia/Yekaterinburg",
+            "both",
+            None,
+            True,
+            True,
+        )
         mock_session.execute = AsyncMock(return_value=mock_result)
 
         mock_cm = AsyncMock()

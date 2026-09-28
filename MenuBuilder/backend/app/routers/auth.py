@@ -503,48 +503,37 @@ async def me(user: dict = Depends(get_current_user)):
                     ).where(Org.org_id == org_id)
                 )
                 row = result.first()
-                if row is not None and type(row).__name__ not in (
-                    "MagicMock",
-                    "AsyncMock",
-                ):
-                    if isinstance(row, (tuple, list)):
-                        org_name = str(row[0]) if row[0] is not None else None
-                        org_timezone = (
-                            str(row[1])
-                            if len(row) > 1 and row[1] is not None
-                            else "Europe/Moscow"
-                        )
-                        if len(row) > 2:
-                            site_mode = row[2] or "both"
-                            default_site = row[3]
-                            classic_licenses_enabled = bool(row[4])
-                            l4desk_licenses_enabled = bool(row[5])
-                    elif hasattr(row, "org_name") and type(
-                        getattr(row, "org_name", None)
-                    ).__name__ not in ("MagicMock", "AsyncMock"):
-                        org_name = getattr(row, "org_name", None)
-                        org_timezone = (
-                            getattr(row, "timezone", "Europe/Moscow") or "Europe/Moscow"
-                        )
-                        site_mode = getattr(row, "site_mode", "both") or "both"
-                        default_site = getattr(row, "default_site", None)
-                        classic_licenses_enabled = getattr(
-                            row, "classic_licenses_enabled", True
-                        )
-                        l4desk_licenses_enabled = getattr(
-                            row, "l4desk_licenses_enabled", True
-                        )
+                if row is None:
+                    raise HTTPException(
+                        status_code=404, detail="Организация не найдена"
+                    )
+                if isinstance(row, (tuple, list)):
+                    org_name = str(row[0]) if row[0] is not None else None
+                    org_timezone = (
+                        str(row[1]) if row[1] is not None else "Europe/Moscow"
+                    )
+                    site_mode = row[2] or "both"
+                    default_site = row[3]
+                    classic_licenses_enabled = bool(row[4])
+                    l4desk_licenses_enabled = bool(row[5])
+                elif hasattr(row, "org_name") and type(
+                    getattr(row, "org_name", None)
+                ).__name__ not in ("MagicMock", "AsyncMock"):
+                    org_name = row.org_name
+                    org_timezone = row.timezone or "Europe/Moscow"
+                    site_mode = row.site_mode or "both"
+                    default_site = row.default_site
+                    classic_licenses_enabled = bool(row.classic_licenses_enabled)
+                    l4desk_licenses_enabled = bool(row.l4desk_licenses_enabled)
                 else:
-                    with suppress(Exception):
-                        scalar_val = result.scalar_one_or_none()
-                        if scalar_val is not None and type(scalar_val).__name__ not in (
-                            "MagicMock",
-                            "AsyncMock",
-                        ):
-                            org_name = str(scalar_val)
-        except Exception:  # noqa: BLE001
-            org_name = None
-            org_timezone = "Europe/Moscow"
+                    raise ValueError("Organization policy row has an unsupported shape")
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.warning("Cannot load policy for org_id=%s", org_id, exc_info=True)
+            raise HTTPException(
+                status_code=503, detail="Настройки организации временно недоступны"
+            ) from exc
 
     if org_name is not None and (
         type(org_name).__name__ in ("MagicMock", "AsyncMock")

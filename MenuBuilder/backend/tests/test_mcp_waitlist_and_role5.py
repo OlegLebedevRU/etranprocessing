@@ -181,7 +181,7 @@ async def test_mcp_waitlist_validation_and_auth():
 
 
 @pytest.mark.anyio
-async def test_role5_l4desk_owner_permissions():
+async def test_role5_l4desk_owner_permissions(mock_auth_org_policy):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         token_role5 = create_access_token(

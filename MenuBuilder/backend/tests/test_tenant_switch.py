@@ -445,7 +445,14 @@ async def test_auth_me_endpoint_returns_superuser_flag():
 
         mock_session = AsyncMock()
         mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = "PLATERRA"
+        mock_result.first.return_value = (
+            "PLATERRA",
+            "Europe/Moscow",
+            "both",
+            None,
+            True,
+            True,
+        )
         mock_session.execute.return_value = mock_result
 
         with patch("app.routers.auth.async_session") as mock_async_session:
@@ -551,7 +558,14 @@ async def test_step4_ttl_and_me_expires_at():
 
     mock_session = AsyncMock()
     mock_result = MagicMock()
-    mock_result.scalar_one_or_none.return_value = "PLATERRA"
+    mock_result.first.return_value = (
+        "PLATERRA",
+        "Europe/Moscow",
+        "both",
+        None,
+        True,
+        True,
+    )
     mock_session.execute.return_value = mock_result
 
     with patch("app.routers.auth.async_session") as mock_async_session:
