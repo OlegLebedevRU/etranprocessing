@@ -434,8 +434,10 @@ async def test_settings_terminals_flow(role3_headers, superuser_headers):
         sql_str = str(stmt)
         if "terminals.id ==" in sql_str or "terminals.id =" in sql_str:
             res.scalar_one_or_none.return_value = t1
+        elif "count(" in sql_str:
+            res.scalar_one.return_value = 1
         elif "FROM terminals" in sql_str:
-            res.scalars.return_value.all.return_value = [t1]
+            res.all.return_value = [(t1, None)]
             res.scalar_one_or_none.return_value = t1
         else:
             res.scalar_one_or_none.return_value = None
@@ -525,7 +527,7 @@ async def test_settings_terminals_pagination_and_comma_search(role3_headers):
         if "count(" in sql_str:
             res.scalar_one.return_value = 2
         else:
-            res.scalars.return_value.all.return_value = [t1, t2]
+            res.all.return_value = [(t1, None), (t2, None)]
         return res
 
     mock_db.execute = AsyncMock(side_effect=mock_execute)

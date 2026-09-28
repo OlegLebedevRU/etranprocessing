@@ -4,6 +4,9 @@ import {
   Button,
   Card,
   Empty,
+  Input,
+  Pagination,
+  Select,
   Space,
   Table,
   Tag,
@@ -85,6 +88,15 @@ export default function L4DeskTerminalsPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [terminals, setTerminals] = useState<TerminalSettingsItem[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [deviceInput, setDeviceInput] = useState("");
+  const [deviceFilter, setDeviceFilter] = useState("");
+  const [sortBy, setSortBy] = useState("last_pin_issued_at");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [listTenant, setListTenant] = useState<number | null | undefined>(user?.org_id);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [retryingId, setRetryingId] = useState<number | null>(null);
@@ -103,12 +115,18 @@ export default function L4DeskTerminalsPage() {
     try {
       const data = await listTerminalsSettings({
         org_id: user?.org_id || undefined,
-        page: 1,
-        page_size: 100,
+        search: search || undefined,
+        device_filter: deviceFilter || undefined,
+        sort_by: sortBy,
+        sort_order: sortOrder,
+        page,
+        page_size: pageSize,
       });
       if (currentGeneration !== generation.current) return;
       setListTenant(user?.org_id);
       setTerminals(data.items || []);
+      setTotalCount(data.total_count);
+      setLoading(false);
       const loadPins = (async () => {
       // Renewal is provider-owned; the onboarding pin_state may still be consumed.
       const pendingPins = data.items;
@@ -141,12 +159,14 @@ export default function L4DeskTerminalsPage() {
         if (currentGeneration === generation.current) setDevices(new Map());
       }
       await loadPins;
-    } catch {
+    } catch (error: any) {
       if (currentGeneration === generation.current) {
         setTerminals([]);
+        setTotalCount(0);
         setPins(new Map());
         setDevices(new Map());
-        message.error("Не удалось загрузить список терминалов");
+        const detail = error?.response?.data?.detail;
+        message.error(typeof detail === "string" ? detail : "Не удалось загрузить список терминалов");
       }
     } finally {
       if (currentGeneration === generation.current) {
@@ -154,12 +174,13 @@ export default function L4DeskTerminalsPage() {
         fetching.current = false;
       }
     }
-  }, [user?.org_id]);
+  }, [user?.org_id, search, deviceFilter, sortBy, sortOrder, page, pageSize]);
 
   useEffect(() => {
     generation.current += 1;
     fetching.current = false;
     setTerminals([]);
+    setTotalCount(0);
     setPins(new Map());
     setDevices(new Map());
     setIssuingPin(null);
@@ -214,6 +235,10 @@ export default function L4DeskTerminalsPage() {
       setTerminals(previous => previous.map(item => item.id === record.id ? {...item, pin_state: pin.status} : item));
       pinOperations.current.delete(record.id);
       message.success("PIN получен");
+      if (sortBy === "last_pin_issued_at") {
+        if (page === 1) void fetchTerminals(true);
+        else setPage(1);
+      }
     } catch (error: any) {
       if (currentGeneration !== generation.current) return;
       if (error.response?.status === 409) {
@@ -271,6 +296,13 @@ export default function L4DeskTerminalsPage() {
           )}
         </div>
       ),
+    },
+    {
+      title: "Последний PIN",
+      dataIndex: "last_pin_issued_at",
+      key: "last_pin_issued_at",
+      width: 150,
+      render: (value: string | null) => value ? new Date(value).toLocaleString("ru-RU") : <Text type="secondary">—</Text>,
     },
     {
       title: "Статус",
@@ -380,7 +412,63 @@ export default function L4DeskTerminalsPage() {
         description="Для поиска и управления используйте номер терминала. Полный SN доступен при наведении и копировании."
       />
 
-      {!loading && terminals.length === 0 && (
+      <Card size="small" style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 12 }}>
+          <Input.Search
+            aria-label="Поиск терминалов"
+            placeholder="Поиск по SN, адресу, названию"
+            allowClear
+            value={searchInput}
+            onChange={event => setSearchInput(event.target.value)}
+            onSearch={value => { setSearch(value.trim()); setPage(1); }}
+            style={{ flex: "1 1 230px", maxWidth: 350 }}
+          />
+          <Input.Search
+            aria-label="Номера терминалов"
+            placeholder="773, 1000009 или 1000000-1000010"
+            allowClear
+            value={deviceInput}
+            onChange={event => setDeviceInput(event.target.value)}
+            onSearch={value => { setDeviceFilter(value.trim()); setPage(1); }}
+            style={{ flex: "1 1 260px", maxWidth: 390 }}
+          />
+          <Select
+            aria-label="Сортировка терминалов"
+            value={sortBy}
+            onChange={value => { setSortBy(value); setPage(1); }}
+            style={{ minWidth: 210, flex: "1 1 210px" }}
+            options={[
+              { value: "last_pin_issued_at", label: "По последнему PIN" },
+              { value: "device_id", label: "По номеру" },
+              { value: "created_at", label: "По дате создания" },
+              { value: "sn", label: "По SN" },
+              { value: "address", label: "По адресу" },
+            ]}
+          />
+          <Select
+            aria-label="Порядок сортировки"
+            value={sortOrder}
+            onChange={value => { setSortOrder(value); setPage(1); }}
+            style={{ minWidth: 150 }}
+            options={[{ value: "desc", label: "По убыванию" }, { value: "asc", label: "По возрастанию" }]}
+          />
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+          <Text type="secondary">Номера можно перечислить через запятую или указать диапазон через дефис.</Text>
+          <Pagination
+            size="small"
+            current={page}
+            pageSize={pageSize}
+            total={totalCount}
+            showSizeChanger
+            pageSizeOptions={["20", "50", "100"]}
+            showTotal={(total, range) => `${range[0]}–${range[1]} из ${total}`}
+            onChange={(nextPage, nextSize) => { setPage(nextPage); setPageSize(nextSize); }}
+          />
+        </div>
+      </Card>
+
+      {!loading && totalCount === 0 && !search && !deviceFilter && (
         <Card style={{ textAlign: "center", padding: "48px 24px" }}>
           <Empty
             description={
@@ -404,7 +492,7 @@ export default function L4DeskTerminalsPage() {
         </Card>
       )}
 
-      {(terminals.length > 0 || loading) && (
+      {(totalCount > 0 || loading || Boolean(search) || Boolean(deviceFilter)) && (
         <Card>
           <Table
             rowKey="id"
@@ -412,8 +500,8 @@ export default function L4DeskTerminalsPage() {
             dataSource={listTenant === user?.org_id ? terminals : []}
             loading={loading}
             pagination={false}
-            scroll={{ x: 1105 }}
-            locale={{ emptyText: "Нет терминалов" }}
+            scroll={{ x: 1255 }}
+            locale={{ emptyText: "Терминалы по запросу не найдены" }}
           />
         </Card>
       )}

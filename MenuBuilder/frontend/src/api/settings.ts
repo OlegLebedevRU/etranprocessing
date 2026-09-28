@@ -49,6 +49,7 @@ export interface TerminalSettingsItem {
   cert_not_valid_after: string | null;
   created_at: string | null;
   updated_at: string | null;
+  last_pin_issued_at?: string | null;
   // L4Desk fields
   ordinal?: number | null;
   is_free?: boolean;
@@ -106,6 +107,7 @@ export interface TerminalSettingsListResponse {
 export interface ListTerminalsSettingsParams {
   org_id?: number;
   search?: string;
+  device_filter?: string;
   sort_by?: string;
   sort_order?: "asc" | "desc";
   page?: number;

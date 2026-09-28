@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.config import settings
 from app.database import get_db
-from app.models import EmailVerification, Org, Terminal, User
+from app.models import CertificatePin, EmailVerification, Org, Terminal, User
 from app.models_l4desk import L4DeskTerminal
 from app.repositories.l4desk_repository import L4DeskRepository
 from app.security.permissions import (
@@ -129,6 +129,7 @@ class TerminalSettingsItem(BaseModel):
     cert_not_valid_after: str | None
     created_at: str | None
     updated_at: str | None
+    last_pin_issued_at: str | None = None
     # L4Desk fields
     ordinal: int | None = None
     is_free: bool = False
@@ -586,6 +587,36 @@ def _visible_terminals_query(org_id: int) -> Select[tuple[Terminal]]:
     return select(Terminal).where(Terminal.org_id == org_id, ~deleted)
 
 
+def _device_filter_condition(raw: str):
+    """Exact device IDs and inclusive ranges, bounded by the number of clauses."""
+    parts = raw.split(",")
+    if len(parts) > 100 or len(raw) > 1024:
+        raise HTTPException(422, "Укажите не более 100 номеров или диапазонов")
+    clauses = []
+    for part in parts:
+        match = re.fullmatch(r"\s*(\d+)(?:\s*-\s*(\d+))?\s*", part)
+        if match is None:
+            raise HTTPException(422, "Номера: 773, 1000009 или 1000000-1000010")
+        start = int(match[1])
+        end = int(match[2]) if match[2] is not None else start
+        if start < 1 or end < start or end > 2_147_483_647:
+            raise HTTPException(422, "Некорректный диапазон номеров терминалов")
+        clauses.append(Terminal.device_id.between(start, end))
+    return or_(*clauses)
+
+
+def _latest_pin_subquery(org_id: int):
+    return (
+        select(
+            CertificatePin.terminal_id.label("terminal_id"),
+            func.max(CertificatePin.created_at).label("last_pin_issued_at"),
+        )
+        .where(CertificatePin.org_id == org_id)
+        .group_by(CertificatePin.terminal_id)
+        .subquery()
+    )
+
+
 @router.get(
     "/terminals",
     response_model=TerminalSettingsListResponse,
@@ -596,8 +627,12 @@ async def list_terminals_settings(
         None,
         description="Search by device_id (single or comma-separated), sn, address, note",
     ),
+    device_filter: str | None = Query(
+        None, description="Exact device IDs and inclusive ranges, comma-separated"
+    ),
     sort_by: str = Query(
-        "device_id", description="Sort by field: device_id, created_at, sn, address"
+        "device_id",
+        description="Sort by field: device_id, created_at, last_pin_issued_at, sn, address",
     ),
     sort_order: str = Query("asc", description="Sort order: asc, desc"),
     page: int = Query(1, ge=1, description="Page number"),
@@ -630,6 +665,9 @@ async def list_terminals_settings(
 
     query = _visible_terminals_query(effective_org_id)
 
+    if device_filter and device_filter.strip():
+        query = query.where(_device_filter_condition(device_filter))
+
     if search and isinstance(search, str):
         raw_search = search.strip()
         search_pattern = f"%{raw_search}%"
@@ -659,12 +697,18 @@ async def list_terminals_settings(
     total_count = (await db.execute(count_query)).scalar_one()
 
     # Sorting
+    latest_pin = _latest_pin_subquery(effective_org_id)
+    query = query.outerjoin(
+        latest_pin, latest_pin.c.terminal_id == Terminal.id
+    ).add_columns(latest_pin.c.last_pin_issued_at)
     order_str = sort_order if isinstance(sort_order, str) else "asc"
     field_str = sort_by if isinstance(sort_by, str) else "device_id"
 
     sort_col: Any = Terminal.device_id
     if field_str == "created_at":
         sort_col = Terminal.created_at
+    elif field_str == "last_pin_issued_at":
+        sort_col = latest_pin.c.last_pin_issued_at
     elif field_str == "sn":
         sort_col = Terminal.sn
     elif field_str == "address":
@@ -672,16 +716,18 @@ async def list_terminals_settings(
     elif field_str == "id":
         sort_col = Terminal.id
 
-    if order_str.lower() == "desc":
-        query = query.order_by(sort_col.desc())
-    else:
-        query = query.order_by(sort_col.asc())
+    order = sort_col.desc() if order_str.lower() == "desc" else sort_col.asc()
+    if field_str == "last_pin_issued_at":
+        order = order.nulls_last()
+    query = query.order_by(order, Terminal.id.asc())
 
     if not should_fetch_all:
         query = query.offset((cur_page - 1) * cur_page_size).limit(cur_page_size)
 
     res = await db.execute(query)
-    terminals = res.scalars().all()
+    rows = res.all()
+    terminals = [row[0] for row in rows]
+    pin_times = {row[0].id: row[1] for row in rows}
 
     # Enrich with L4Desk metadata
     terminal_ids = [t.id for t in terminals]
@@ -772,6 +818,9 @@ async def list_terminals_settings(
                 ),
                 created_at=t.created_at.isoformat() if t.created_at else None,
                 updated_at=t.updated_at.isoformat() if t.updated_at else None,
+                last_pin_issued_at=(
+                    pin_times[t.id].isoformat() if pin_times[t.id] else None
+                ),
                 ordinal=ordinal,
                 is_free=is_free,
                 readiness=readiness,
