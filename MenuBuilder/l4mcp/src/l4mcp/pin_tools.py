@@ -31,7 +31,7 @@ def _db(ctx: Context) -> Database:
 
 
 def register_pin_tools(mcp: FastMCP) -> None:
-    @mcp.tool
+    @mcp.tool(annotations={"readOnlyHint": True})
     async def certificate_summary(ctx: Context) -> dict:
         """Count expired, expiring, valid, and unknown certificates in your tenant."""
         principal = await current_principal()
@@ -54,7 +54,7 @@ def register_pin_tools(mcp: FastMCP) -> None:
         }
         return {"org_id": principal.org_id, "expiring_within_days": SOON_DAYS, **counts}
 
-    @mcp.tool
+    @mcp.tool(annotations={"readOnlyHint": True})
     async def inspect_terminals(
         ctx: Context,
         device_ids: list[int] | None = None,

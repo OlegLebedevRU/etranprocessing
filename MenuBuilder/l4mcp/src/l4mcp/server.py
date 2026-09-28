@@ -64,7 +64,7 @@ def _report_scope_required(
 # === Report Tools ===
 
 
-@mcp.tool
+@mcp.tool(annotations={"readOnlyHint": True})
 async def report_payments_tool(
     date_from: str | None = None,
     date_to: str | None = None,
@@ -100,7 +100,7 @@ async def report_payments_tool(
     )
 
 
-@mcp.tool
+@mcp.tool(annotations={"readOnlyHint": True})
 async def report_balance_by_terminal_tool(
     date_from: str | None = None,
     date_to: str | None = None,
@@ -128,7 +128,7 @@ async def report_balance_by_terminal_tool(
     )
 
 
-@mcp.tool
+@mcp.tool(annotations={"readOnlyHint": True})
 async def report_balance_by_tsp_tool(
     date_from: str | None = None,
     date_to: str | None = None,
@@ -154,7 +154,7 @@ async def report_balance_by_tsp_tool(
     )
 
 
-@mcp.tool
+@mcp.tool(annotations={"readOnlyHint": True})
 async def report_inkass_tool(
     date_from: str | None = None,
     date_to: str | None = None,

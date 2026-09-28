@@ -52,7 +52,7 @@ async def _preflight(principal: Principal, device_id: int | None) -> dict:
 
 
 def register_console_tools(mcp: FastMCP) -> None:
-    @mcp.tool
+    @mcp.tool(annotations={"readOnlyHint": True})
     async def console_preflight(device_id: int | None = None) -> dict:
         """Check one exact terminal before console use. Ask user for device_id if missing."""
         return await _preflight(await current_principal(), device_id)
