@@ -7,6 +7,13 @@ set -euo pipefail
 [[ "$REGISTRY_PREFIX" != *"@"* && "$REGISTRY_PREFIX" != *"://"* ]]
 backend="$REGISTRY_PREFIX/menubuilder-backend:$SOURCE_REVISION"
 frontend="$REGISTRY_PREFIX/menubuilder-frontend:$SOURCE_REVISION"
+# The host's classic Docker builder does not honor Dockerfile-specific ignores.
+# Materialize our tracked policy only in this isolated archive's build context.
+if [[ -e .dockerignore ]] && ! cmp -s MenuBuilder/backend/Dockerfile.dockerignore .dockerignore; then
+  echo "Unexpected build-context ignore policy" >&2
+  exit 1
+fi
+cp MenuBuilder/backend/Dockerfile.dockerignore .dockerignore
 sudo docker build --target verification \
   -f MenuBuilder/backend/Dockerfile \
   --label "org.opencontainers.image.revision=$SOURCE_REVISION" \

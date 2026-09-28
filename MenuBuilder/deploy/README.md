@@ -7,6 +7,8 @@ Build on the approved build host from a published Git archive containing
 
 1. Record the source commit and archive SHA-256; verify the accepted shared package
    manifest before building. Set `org.opencontainers.image.revision` on both images.
+   Create the archive with `git -c core.autocrlf=false archive` and verify its
+   files against Git blobs, so Windows checkout conversion cannot alter it.
 2. Build backend Dockerfile target `verification`; require pytest, Ruff, format
    and Pyright success. Build target `release` from the same archive. The release
    image contains production dependencies only.
