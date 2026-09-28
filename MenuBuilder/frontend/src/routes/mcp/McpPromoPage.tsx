@@ -60,7 +60,7 @@ export default function McpPage() {
         </Space>
       </Card>
       <Card title="Подключение к агенту">
-        <Paragraph>Сохраните токен в переменной окружения <Text code>L4MCP_TOKEN</Text> на своей машине. Не вставляйте его в конфигурацию проекта или переписку.</Paragraph>
+        <Paragraph>Сохраните токен в переменной окружения <Text code>L4MCP_TOKEN</Text> на своей машине. В <Text code>bearer_token_env_var</Text> укажите только имя переменной, не сам токен. Не вставляйте токен в конфигурацию проекта или переписку.</Paragraph>
         <Text strong>Codex: ~/.codex/config.toml</Text>
         <pre>{`[mcp_servers.l4mcp]\nurl = "${url}"\nbearer_token_env_var = "L4MCP_TOKEN"`}</pre>
         <Text strong>Claude Code: .mcp.json</Text>
