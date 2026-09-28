@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 logger = logging.getLogger(__name__)
 
-REQUIRED_ALEMBIC_REVISION = "027"
-COMPATIBLE_ALEMBIC_REVISIONS: set[str] = {"027"}
+REQUIRED_ALEMBIC_REVISION = "028"
+COMPATIBLE_ALEMBIC_REVISIONS: set[str] = {"028"}
 
 L4DESK_TABLES: list[str] = [
     "fin_accounts",

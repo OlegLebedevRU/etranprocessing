@@ -126,7 +126,7 @@ def test_startup_error_on_wrong_revision():
         sync_engine.connect() as conn,
         pytest.raises(
             SchemaCompatibilityError,
-            match=r"Database schema revision mismatch: expected one of \['027'\]",
+            match=r"Database schema revision mismatch: expected one of \['028'\]",
         ),
     ):
         check_schema_compatibility_sync(conn)
@@ -137,7 +137,7 @@ def test_startup_error_on_missing_required_tables():
     sync_engine = create_engine("sqlite:///:memory:")
     with sync_engine.begin() as conn:
         conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32));"))
-        conn.execute(text("INSERT INTO alembic_version VALUES ('027');"))
+        conn.execute(text("INSERT INTO alembic_version VALUES ('028');"))
         # Only create 1 table instead of 23
         conn.execute(
             text("CREATE TABLE l4desk_registrations (id INTEGER PRIMARY KEY);")
@@ -154,11 +154,11 @@ def test_startup_error_on_missing_required_tables():
 
 
 def test_startup_success_when_revision_and_tables_match():
-    """check_schema_compatibility_sync succeeds cleanly when revision 027 and all tables exist."""
+    """check_schema_compatibility_sync succeeds cleanly when revision 028 and all tables exist."""
     sync_engine = create_engine("sqlite:///:memory:")
     with sync_engine.begin() as conn:
         conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32));"))
-        conn.execute(text("INSERT INTO alembic_version VALUES ('027');"))
+        conn.execute(text("INSERT INTO alembic_version VALUES ('028');"))
         for t in L4DESK_TABLES:
             conn.execute(text(f"CREATE TABLE {t} (id INTEGER PRIMARY KEY);"))
 
@@ -173,7 +173,7 @@ async def test_verify_schema_compatibility_async():
     sync_engine = create_engine("sqlite:///:memory:")
     with sync_engine.begin() as conn:
         conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32));"))
-        conn.execute(text("INSERT INTO alembic_version VALUES ('027');"))
+        conn.execute(text("INSERT INTO alembic_version VALUES ('028');"))
         for t in L4DESK_TABLES:
             conn.execute(text(f"CREATE TABLE {t} (id INTEGER PRIMARY KEY);"))
 
@@ -235,7 +235,7 @@ def test_compatibility_against_migrated_db():
     with sync_engine.begin() as conn:
         # Setup alembic_version
         conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32));"))
-        conn.execute(text("INSERT INTO alembic_version VALUES ('027');"))
+        conn.execute(text("INSERT INTO alembic_version VALUES ('028');"))
 
         # Setup supporting legacy tables
         conn.execute(text("CREATE TABLE orgs (org_id INTEGER PRIMARY KEY, name TEXT);"))

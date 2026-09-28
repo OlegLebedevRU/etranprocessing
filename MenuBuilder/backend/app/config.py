@@ -199,7 +199,7 @@ class Settings(BaseSettings):
     l4desk_billing_enabled: bool = False
     l4desk_ui_enabled: bool = False
     schema_compatibility_check_enabled: bool = True
-    required_alembic_revision: str = "027"
+    required_alembic_revision: str = "028"
 
     # L4Desk Self-Registration & Security (L4D-05-MB)
     l4desk_registration_token_expire_hours: int = 24
