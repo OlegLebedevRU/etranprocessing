@@ -24,10 +24,8 @@ import time
 import urllib.error
 import urllib.request
 
-DEFAULT_SERVICE_TOKEN = os.getenv(
-    "L4MEDIA_SERVICE_TOKEN", "l4media-service-secret-token"
-)
-DEFAULT_JANUS_ADMIN_SECRET = os.getenv("JANUS_ADMIN_SECRET", "janusoverlord")
+DEFAULT_SERVICE_TOKEN = os.getenv("L4MEDIA_SERVICE_TOKEN", "")
+DEFAULT_JANUS_ADMIN_SECRET = os.getenv("JANUS_ADMIN_SECRET", "")
 
 
 def http_request(
@@ -209,6 +207,12 @@ def test_lifecycle_full_flow(base_url: str, janus_host: str, janus_admin_port: i
     assert stop_resp.get("status") == "success"
     assert stop_resp.get("state") == "stopped"
     assert stop_resp.get("stop_reason") == "operator_quit"
+
+    status, public_health = http_request(f"{base_url}/health")
+    assert status == 200
+    status, metrics = http_request(f"{base_url}/api/v1/media/metrics", headers=headers)
+    assert status == 200
+    assert public_health["active_media_sessions"] == metrics["active_media_sessions"] == 0
 
     # Step 6: Verify mountpoint destroyed in Janus
     j_info_after = janus_admin_call(
@@ -544,6 +548,8 @@ def run_all(
     janus_host: str = "127.0.0.1",
     janus_admin_port: int = 7088,
 ):
+    if not DEFAULT_SERVICE_TOKEN or not DEFAULT_JANUS_ADMIN_SECRET:
+        raise RuntimeError("Set L4MEDIA_SERVICE_TOKEN and JANUS_ADMIN_SECRET for integration tests")
     base_url = f"http://{host}:{control_port}"
     print(
         "================================================================================"

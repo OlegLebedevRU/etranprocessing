@@ -295,8 +295,8 @@ static void test_service_auth_unit(void) {
     assert(check_service_auth(req4) == false);
 
     g_service_token[0] = '\0';
-    assert(check_service_auth(req4) == true);
-    strcpy(g_service_token, DEFAULT_SERVICE_TOKEN);
+    assert(check_service_auth(req4) == false);
+    strcpy(g_service_token, "my-secret-token");
 
     printf("  [PASS] Service Authentication checking verified.\n");
 }
@@ -334,6 +334,10 @@ static void test_session_lifecycle_unit(void) {
     s1->state = MEDIA_STATE_ACTIVE;
     s1->started_at = 1000;
     s1->ttl_sec = 600;
+    assert(media_active_session_count() == 1);
+    s1->state = MEDIA_STATE_STOPPED;
+    assert(media_active_session_count() == 0);
+    s1->state = MEDIA_STATE_ACTIVE;
 
     MediaSession* found = find_session_by_id("sess-001");
     assert(found == s1);

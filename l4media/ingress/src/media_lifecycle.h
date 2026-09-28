@@ -35,9 +35,7 @@
 #define DEFAULT_PORT_BASE         6010
 #define DEFAULT_PORT_MAX          6200
 #define OPENAPI_FILE_PATH         "/etc/l4media/openapi.json"
-#define DEFAULT_SERVICE_TOKEN     "l4media-service-secret-token"
 #define DEFAULT_JANUS_ADMIN_PORT  7088
-#define DEFAULT_JANUS_ADMIN_SECRET "janusoverlord"
 /* Reconcile grace: keep orphan mountpoint/route while terminal RTP is still fresh. */
 #define L4MEDIA_RTP_FRESH_RECONCILE_SEC 20
 
@@ -73,8 +71,8 @@ typedef struct {
 
 /* Lifecycle configuration and metrics */
 static int g_janus_admin_port = DEFAULT_JANUS_ADMIN_PORT;
-static char g_janus_admin_secret[128] = DEFAULT_JANUS_ADMIN_SECRET;
-static char g_service_token[128] = DEFAULT_SERVICE_TOKEN;
+static char g_janus_admin_secret[128] = {0};
+static char g_service_token[128] = {0};
 
 static uint64_t g_metric_sessions_started = 0;
 static uint64_t g_metric_sessions_stopped = 0;
@@ -84,6 +82,17 @@ static uint64_t g_metric_orphans_routes = 0;
 
 static MediaSession g_media_sessions[MAX_MEDIA_SESSIONS];
 static int g_media_session_count = 0;
+
+static inline int media_active_session_count(void) {
+    int count = 0;
+    for (int i = 0; i < g_media_session_count; i++) {
+        if (g_media_sessions[i].state == MEDIA_STATE_ACTIVE ||
+            g_media_sessions[i].state == MEDIA_STATE_STARTING) {
+            count++;
+        }
+    }
+    return count;
+}
 
 /* ========================================================================= */
 /* String and JSON Helper Functions                                          */
@@ -160,7 +169,7 @@ static inline bool json_get_uint32(const char* json, const char* key, uint32_t* 
 
 static inline bool check_service_auth(const char* req_buf) {
     if (!g_service_token[0]) {
-        return true; /* Disabled if token is explicitly empty */
+        return false;
     }
 
     size_t tok_len = strlen(g_service_token);
@@ -1117,13 +1126,7 @@ static inline void reconcile_resources(char* resp_body, size_t resp_sz) {
         }
     }
 
-    int active_sessions = 0;
-    for (int s = 0; s < g_media_session_count; s++) {
-        if (g_media_sessions[s].state == MEDIA_STATE_ACTIVE ||
-            g_media_sessions[s].state == MEDIA_STATE_STARTING) {
-            active_sessions++;
-        }
-    }
+    int active_sessions = media_active_session_count();
 
     if (resp_body && resp_sz > 0) {
         snprintf(resp_body, resp_sz,
@@ -1135,15 +1138,11 @@ static inline void reconcile_resources(char* resp_body, size_t resp_sz) {
 
 static inline void handle_media_metrics(char* resp_body, size_t resp_sz, int* status_code, const char** status_text) {
     time_t now = time(NULL);
-    int active_sessions = 0;
+    int active_sessions = media_active_session_count();
     uint64_t total_rtp = 0;
     uint64_t total_bytes = 0;
 
     for (int i = 0; i < g_media_session_count; i++) {
-        if (g_media_sessions[i].state == MEDIA_STATE_ACTIVE ||
-            g_media_sessions[i].state == MEDIA_STATE_STARTING) {
-            active_sessions++;
-        }
         total_rtp += g_media_sessions[i].final_rtp_packets;
         total_bytes += g_media_sessions[i].final_bytes;
     }

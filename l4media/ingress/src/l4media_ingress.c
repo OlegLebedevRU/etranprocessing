@@ -916,7 +916,7 @@ static void handle_control_request(int client_fd) {
     else if (strcmp(method, "GET") == 0 && strcmp(path, "/health") == 0) {
         snprintf(resp_body, HTTP_RESP_BUFFER_SIZE,
                  "{\"status\":\"ok\",\"routes\":%d,\"active_media_sessions\":%d}\n",
-                 g_routes.count, g_media_session_count);
+                 g_routes.count, media_active_session_count());
     }
     else if (strcmp(method, "GET") == 0 && strcmp(path, "/api/v1/openapi.json") == 0) {
         handle_openapi_spec(resp_body, HTTP_RESP_BUFFER_SIZE, &status_code, &status_text);
@@ -1048,6 +1048,10 @@ int main(int argc, char* argv[]) {
     const char* env_token = getenv("L4MEDIA_SERVICE_TOKEN");
     if (env_token && strlen(env_token) > 0) {
         safe_strcpy(g_service_token, env_token, sizeof(g_service_token));
+    }
+    if (!g_janus_admin_secret[0] || !g_service_token[0]) {
+        fprintf(stderr, "[INGRESS] JANUS_ADMIN_SECRET and L4MEDIA_SERVICE_TOKEN are required\n");
+        return 1;
     }
     const char* env_routes = getenv("ROUTES_FILE");
     if (env_routes && strlen(env_routes) > 0) {

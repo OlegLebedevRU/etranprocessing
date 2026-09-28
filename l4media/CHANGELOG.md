@@ -11,3 +11,5 @@
 ### Fixed
 
 - Watchdog отсчитывает TTL от последнего успешного продления; Redis-запись получает тот же срок и восстанавливает его после рестарта ingress. При прекращении keepalive маршрут и mountpoint удаляются автоматически.
+- `/health.active_media_sessions` считает только ACTIVE/STARTING, как защищённый `/api/v1/media/metrics`; завершённые записи больше не выглядят активными.
+- Ingress требует `L4MEDIA_SERVICE_TOKEN` и `JANUS_ADMIN_SECRET` из окружения и не запускается с резервными значениями из исходников.
