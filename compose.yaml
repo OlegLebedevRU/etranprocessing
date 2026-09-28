@@ -54,9 +54,7 @@ services:
       - ./iot-rpc-rest-app/crt/key_0000.pem:/crt/server_key.pem:ro
 
   processing-backend:
-    build:
-      context: .
-      dockerfile: ProcessingBackend/backend/Dockerfile
+    image: dev-leo4-ru.cr.cloud.ru/etran/processingbackend@sha256:bc0e5b131b4e47ec43e0695e7f87d8cc3e158bb26756bc2fb88023aa76a75a00
     container_name: processing-backend
     restart: always
     env_file:
@@ -65,8 +63,7 @@ services:
       - ./ProcessingBackend/keys:/function/storage/keys:ro
 
   l4mcp:
-    build:
-      context: ./MenuBuilder/l4mcp
+    image: dev-leo4-ru.cr.cloud.ru/etran/l4mcp@sha256:7dcc28d19286d8ce99aedbdd4ccd2c4492ab0f7d7163416e9d9f947813069f4e
     container_name: l4mcp
     restart: unless-stopped
     env_file:
@@ -86,9 +83,7 @@ services:
       L4MCP_URL: ${L4MCP_URL:-}
 
   app1:
-    build:
-      context: ./iot-rpc-rest-app
-      dockerfile: ./docker-files/app-service/Dockerfile
+    image: dev-leo4-ru.cr.cloud.ru/etran/app1@sha256:ab09311d2bfbcefd774ef283c0e8f6142c42b479ed378eb2a9be6df6da1a292b
     container_name: app1
     restart: always
     env_file:

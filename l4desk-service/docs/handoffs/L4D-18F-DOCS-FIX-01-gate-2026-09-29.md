@@ -81,3 +81,14 @@ Ingress `/health`: `status=ok`, `routes=0`, `active_media_sessions=16`.
 загружается из статического `ingress/routes.conf` для терминала 773 и сам
 по себе не является media-сессией. Пункт 4 выше в части счётчика закрыт;
 требования по flags, архиву и retention остаются открытыми.
+
+## Дополнение: доставка owner-образов
+
+После исходного snapshot четыре локальных owner-образа заменены через pull из
+приватного registry: ProcessingBackend `bc0e5b1`, L4mcp `7dcc28d`, IoT app1
+`ab09311` и media nginx `fb13764`. Deployer проверил health, revision и
+фактический image ID каждого контейнера; соседние сервисы не пересоздавались.
+MenuBuilder backend, media ingress и Janus уже работали по digest. Полная
+матрица и правила повторного выпуска — в `docs/ops_run-beta-ci-cd.md`.
+Первый пункт блока выше в части owner-образов теперь закрыт. Это не закрывает
+оставшийся smoke, коммерческие evidence, flags и архивные проверки 18F.

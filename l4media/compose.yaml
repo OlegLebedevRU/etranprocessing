@@ -2,9 +2,7 @@ name: l4media
 
 services:
   nginx:
-    build:
-      context: ./nginx
-      dockerfile: Dockerfile
+    image: dev-leo4-ru.cr.cloud.ru/etran/l4media-nginx@sha256:fb137647e25bed749f1cf87cc0398eb8f072a900b7dfa124222cb9655fe911bd
     container_name: l4media-nginx
     restart: unless-stopped
     ports:
@@ -23,16 +21,14 @@ services:
       - ingress
 
   ingress:
-    build:
-      context: ./ingress
-      dockerfile: Dockerfile
+    image: dev-leo4-ru.cr.cloud.ru/etran/l4media-ingress@sha256:1b9242b290d975e769acd3a35eb5d16a286f91e71b08356458643863c58b1cd7
     container_name: l4media-ingress
     restart: unless-stopped
     environment:
       - JANUS_HOST=janus
       - JANUS_ADMIN_PORT=${JANUS_ADMIN_PORT:-7088}
-      - JANUS_ADMIN_SECRET=${JANUS_ADMIN_SECRET:-janusoverlord}
-      - L4MEDIA_SERVICE_TOKEN=${L4MEDIA_SERVICE_TOKEN:-l4media-service-secret-token}
+      - JANUS_ADMIN_SECRET=${JANUS_ADMIN_SECRET:?Private JANUS_ADMIN_SECRET required}
+      - L4MEDIA_SERVICE_TOKEN=${L4MEDIA_SERVICE_TOKEN:?Private L4MEDIA_SERVICE_TOKEN required}
       - ROUTES_FILE=/etc/l4media/routes.conf
       - REDIS_URL=${L4MEDIA_REDIS_URL}
     volumes:
@@ -48,9 +44,11 @@ services:
       - janus
 
   janus:
-    image: canyan/janus-gateway:latest
+    image: dev-leo4-ru.cr.cloud.ru/l4media-janus@sha256:93265665a92482ec1de2c9571a08d27c87b1dee06efc000f717ed42dfe2438ae
     container_name: l4media-janus
     restart: unless-stopped
+    environment:
+      - JANUS_ADMIN_SECRET=${JANUS_ADMIN_SECRET:?Private JANUS_ADMIN_SECRET required}
     volumes:
       - ./janus/janus.jcfg:/usr/local/etc/janus/janus.jcfg:ro
       - ./janus/janus.plugin.streaming.jcfg:/usr/local/etc/janus/janus.plugin.streaming.jcfg:ro

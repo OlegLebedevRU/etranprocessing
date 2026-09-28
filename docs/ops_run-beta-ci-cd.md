@@ -2,6 +2,43 @@
 
 ## Статус
 
+### Единый порядок доставки серверных владельцев (2026-09-29)
+
+Для собственных сервисов L4D действует один release contract: принятый полный
+Git SHA → проверки и build на 176 → уникальный тег в приватном registry →
+immutable OCI digest → production pull → Compose override одного сервиса с
+`--no-deps --no-build` → health и проверка image ID. При ошибке deployer
+возвращает предыдущий образ. Базовые Compose закрепляются по тем же digest и
+не содержат `build` для перечисленных ниже сервисов.
+
+| Владелец / контейнер | Источник сборки | Production digest |
+| --- | --- | --- |
+| ProcessingBackend / `processing-backend` | `etranprocessing` main `7da3e07`, beta launcher | `dev-leo4-ru.cr.cloud.ru/etran/processingbackend@sha256:bc0e5b131b4e47ec43e0695e7f87d8cc3e158bb26756bc2fb88023aa76a75a00` |
+| MenuBuilder / `menubuilder-backend` | `etranprocessing` main `2dd1473`, beta launcher | `dev-leo4-ru.cr.cloud.ru/etran/menubuilder-backend@sha256:0a67f0ffd0326c2ed968b3e42d2cdd7728b4dd4df5c71582e059c061edbf5c89` |
+| MenuBuilder / `l4mcp` | `etranprocessing` main `7da3e07`, beta launcher | `dev-leo4-ru.cr.cloud.ru/etran/l4mcp@sha256:7dcc28d19286d8ce99aedbdd4ccd2c4492ab0f7d7163416e9d9f947813069f4e` |
+| IoT / `app1` | `iot-rpc-rest-app` master `a50c571`, `deploy/registry_app1.py` | `dev-leo4-ru.cr.cloud.ru/etran/app1@sha256:ab09311d2bfbcefd774ef283c0e8f6142c42b479ed378eb2a9be6df6da1a292b` |
+| Media / `l4media-ingress` | `etranprocessing` main `801186d`, beta launcher | `dev-leo4-ru.cr.cloud.ru/etran/l4media-ingress@sha256:1b9242b290d975e769acd3a35eb5d16a286f91e71b08356458643863c58b1cd7` |
+| Media / `l4media-nginx` | `etranprocessing` main `7da3e07`, beta launcher | `dev-leo4-ru.cr.cloud.ru/etran/l4media-nginx@sha256:fb137647e25bed749f1cf87cc0398eb8f072a900b7dfa124222cb9655fe911bd` |
+| Media / `l4media-janus` | ранее принятый собственный образ; пересборка только по команде пользователя | `dev-leo4-ru.cr.cloud.ru/l4media-janus@sha256:93265665a92482ec1de2c9571a08d27c87b1dee06efc000f717ed42dfe2438ae` |
+
+`app1` остаётся отдельным Git-репозиторием: его SHA нельзя подменять SHA
+`etranprocessing`. Сборочный скрипт IoT проверяет чистый `origin/master`,
+locked dependencies, тесты и digest; общий production deployer знает `app1`
+только как внешний компонент и не пытается собирать его из другого дерева.
+`app1` сам запускает Alembic при старте, поэтому совместимость миграций и
+отката образа проверяется до выпуска.
+
+Frontend `dist` по решению пользователя остаётся отдельным статическим
+артефактом. `nginx-default` и `nginx-mutual-legacy` — инфраструктурные proxy,
+а RabbitMQ/Redis — сторонние образы; они не входят в матрицу владельцев L4D.
+Пересборка Janus не входит в обычный выпуск.
+
+Для повторного релиза `etranprocessing` использовать адресный `--component`
+launcher; IoT выпускать из его master по `docs/manual-app1-deploy-runbook.md`.
+После любого release сверять digest, revision label, здоровье контейнера и
+неизменность соседних контейнеров. Старый `up --build` для этих владельцев
+не применять.
+
 ### Зафиксированный выпуск L4D MenuBuilder backend (2026-09-28 UTC)
 
 - Источник: принятый `main`, commit
