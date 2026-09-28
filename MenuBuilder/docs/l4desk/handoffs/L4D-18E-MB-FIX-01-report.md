@@ -2,7 +2,18 @@
 
 ## Result and boundaries
 
-Prepared for independent controller review under `R-L4D-18E-MB-FIX-01-v3`.
+Producer verdict under `R-L4D-18E-MB-FIX-01-v3`:
+
+```yaml
+status: ACCEPTED
+acceptance_scope: restricted_MenuBuilder_18E
+general_commercial_activation: BLOCKED
+controller_handoff_acceptance: PENDING
+```
+
+This status describes completed producer changes, checks, publication and the
+restricted rollout. The detached candidate remains CANDIDATE until the controller
+independently records acceptance in the cascade journal.
 MenuBuilder is deployed; general commercial activation is **not approved**.
 The producer does not accept its own handoff or open 18F.
 Observation date: 2026-09-28 UTC. Runtime source:
@@ -136,6 +147,37 @@ Existing users are covered by unchanged classic navigation tests and actual
 superuser login/Hub access; no new user credentials were generated.
 
 ## Effective phases and limits
+
+### UTC chronology and executed checks
+
+Intervals below are enclosing observation windows, not invented per-request
+timestamps. Exact completion times come from the retained host file timestamps;
+where an earlier check lacks a retained UTC timestamp, that limitation is explicit.
+All dated entries are 2026-09-28 UTC.
+
+| Phase | UTC observation/completion | Actually executed check | Result |
+|---|---|---|---|
+| Initial PIN/private consumer integration | Recorded earlier in this task; exact UTC not retained | Provider absent operation: missing/wrong authorization; authorized lookup. Browser/API POST/GET `/api/settings/terminals/{id}/pin`, replay, reload and cross-tenant denial | 401/401/404; own PIN issue/replay/current 200; foreign 404; consumed plaintext absent |
+| Existing mock payment | Recorded earlier before isolated backend shutdown; exact UTC not retained | Two POST `/api/v1/finance/payments/5/poll` in isolated mock configuration; compare transaction ID and balance | Both succeeded/transaction 9; no extra balance credit |
+| Moving video | 00:23:24.076100–00:25:33.156211 (session 508 DB times) | Actual browser start, `video.getVideoPlaybackQuality()`/decoded size and playback progression, UI stop | 1570 frames, 1920×1080, stop 200; closed/hash/128 seconds |
+| Console | Recorded after video and before 00:43:17 deployment; exact UTC not retained in the producer log | Actual browser console connect, `ver`, disconnect | Windows response; session 509 closed/hash |
+| Final frontend local checks | 00:38:00–00:43:17 enclosing window | `npm test`; `npm run build`; Playwright candidate profile request/form | 63 passed; build passed; role5 profile 200 |
+| Final build/registry publication | Build log completed 00:42:03.318603 UTC | `bash MenuBuilder/deploy/build-release.sh` with published SOURCE_REVISION and approved REGISTRY_PREFIX | Verification/release/frontend targets, artifact scan and both registry pushes passed |
+| Final production install | Deployment record completed 00:43:17.781531 UTC | `sudo docker pull` both immutable digests; scoped `docker compose ... up -d --no-build --no-deps menubuilder-backend`; frontend extraction and atomic index replacement | Running revision and SPA hash match report; no unclosed session before restart |
+| Profile, Hub, platform choices | 00:38:00–01:00:43 enclosing browser window | `playwright-cli -s=l4d18e run-code` authenticated GETs and UI navigation; `/api/settings/profile`, `/api/v1/admin/hub/*`, onboarding selector | Profile 200, Hub superuser 200/owner 403, exactly three platform choices |
+| Monthly charge/grace/stop | Probe result written 00:51:10.477373 UTC | Disposable current backend image, read-only published `verify-finance-rollback.py`, private env, whole-process timeout 120 s; `python /probe.py` | Exit 0; monthly 10000 once, 600-second simulated boundary, mock stop, matched reconciliation, rollback verified |
+| Final registration/payment/grace contracts | 00:51:10–01:00:43 enclosing check window | `sudo docker run --rm --network none menubuilder-verification:4f72dc6dbe03acc7975463bd4fa92832c4684638 uv run pytest -q tests/test_l4desk_registration.py tests/test_iot_org_reservation.py tests/test_yookassa_and_manual_payments.py tests/test_l4d_12_entitlement_grace_and_notifications.py` | 54 passed in 1.91 s; no network/provider access |
+| Final accounting/window | 00:51:10–01:00:43 enclosing check window | `FinReconciliationService.run_reconciliation` for existing tenants 1000/10000; period starts 00:00 UTC, auto_rebuild_projection=False | Durable runs 12/13 matched, mismatch/difference zero |
+| Responsive final UI | 00:51:10–01:00:43 enclosing browser window | Playwright resize 600/900/1440, allow two animation frames for responsive state, measure body width | Settled licences/video body width equals viewport; table scroll remains internal |
+
+Backend build verification commands are the tracked Dockerfile's
+`uv run ruff check app`, `uv run ruff format --check app`, `uv run pyright app`,
+`uv run pytest -q`. Before the probe commit, the producer additionally executed
+`uv run ruff check --fix ../deploy/verify-finance-rollback.py`,
+`uv run ruff format ../deploy/verify-finance-rollback.py`, and
+`uv run pyright ../deploy/verify-finance-rollback.py`: all passed.
+Commands requiring credentials used private runtime inputs; their values are
+deliberately absent from this record. No new credentials were minted for a check.
 
 Production final flags: umbrella, registration, billing, policy enforcement,
 entitlement worker, metering-close worker and effective YooKassa **false**;
