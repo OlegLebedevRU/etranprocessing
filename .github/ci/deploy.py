@@ -154,7 +154,7 @@ def wait_healthy(component, container):
         try:
             health(component, container)
             return
-        except subprocess.CalledProcessError, RuntimeError:
+        except (subprocess.CalledProcessError, RuntimeError):
             if attempt == 23:
                 raise
             time.sleep(5)
