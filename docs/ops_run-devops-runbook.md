@@ -219,15 +219,20 @@ ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker restart menubuilde
 
 ### Deploy MenuBuilder
 
+MenuBuilder backend собирается на 176.108.247.249 и публикуется в registry.
+Production использует только образ по digest; базовый Compose не содержит `build`
+для этого сервиса. Текущий зафиксированный выпуск и проверки — в
+[`ops_run-beta-ci-cd.md`](ops_run-beta-ci-cd.md). Frontend пока доставляется как
+статический `dist`.
+
 ```bash
-# 1. Sync shared models and MenuBuilder backend
-scp -i d:\.ssh\id_ed25519 -r shared/* user1@87.242.100.34:/home/user1/shared/
-scp -i d:\.ssh\id_ed25519 -r MenuBuilder/backend/* user1@87.242.100.34:/home/user1/MenuBuilder/backend/
+# Сборка, публикация и штатный деплой backend из принятого main.
+ssh -n -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249 "sudo -n -u github-runner -H python3 /opt/etran-beta/launcher.py --component menubuilder-backend"
 
-# 2. Rebuild and restart MenuBuilder backend
-ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker compose -f /home/user1/compose.yaml build menubuilder-backend && sudo docker compose -f /home/user1/compose.yaml up -d menubuilder-backend"
+# Проверка фактического immutable образа на production.
+ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker inspect --format '{{.Config.Image}}' menubuilder-backend"
 
-# 3. Build frontend locally and upload dist
+# Frontend: сборка и доставка dist отдельно.
 cd MenuBuilder/frontend
 npm run build
 scp -i d:\.ssh\id_ed25519 -r dist/* user1@87.242.100.34:/home/user1/MenuBuilder/frontend/dist/
@@ -244,14 +249,13 @@ scp -i d:\.ssh\id_ed25519 -r dist/* user1@87.242.100.34:/home/user1/MenuBuilder/
 # 1. Проверка доступности Internal API в app1 (предварительное условие)
 ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "curl -s http://127.0.0.1:8000/api/internal/v1/remote-input/devices/test/status | head -c 50"
 
-# 2. Синхронизация бэкенда MenuBuilder и обновление .env
-scp -i d:\.ssh\id_ed25519 -r MenuBuilder/backend/* user1@87.242.100.34:/home/user1/MenuBuilder/backend/
+# 2. Конфигурация production backend остаётся в приватном .env
 
 # Убедитесь, что в /home/user1/MenuBuilder/backend/.env добавлена переменная:
 # REMOTE_CONTROL_ENABLED=true
 
-# 3. Пересборка и перезапуск контейнера menubuilder-backend (БЕЗ перезапуска других сервисов)
-ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker compose -f /home/user1/compose.yaml build menubuilder-backend && sudo docker compose -f /home/user1/compose.yaml up -d --no-deps menubuilder-backend"
+# 3. Выпуск backend только через builder и registry (см. Deploy MenuBuilder выше)
+ssh -n -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249 "sudo -n -u github-runner -H python3 /opt/etran-beta/launcher.py --component menubuilder-backend"
 
 # 4. Сборка и доставка фронтенда MenuBuilder
 cd MenuBuilder/frontend

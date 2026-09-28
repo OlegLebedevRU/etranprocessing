@@ -2,9 +2,30 @@
 
 ## Статус
 
-Бета-сценарий установлен и проверен end-to-end (2026-09-11 UTC).
-`etran-beta.timer` enabled/active; запуск службы завершился с
-`Result=success`, `ExecMainStatus=0`, без повторных сборок при неизменном коде.
+### Зафиксированный выпуск L4D MenuBuilder backend (2026-09-28 UTC)
+
+- Источник: принятый `main`, commit
+  `2dd1473b37b545ae8caa745f81ff2d6c33bb426f` (post-18E и Alembic 028).
+- Сборка и публикация: builder 176.108.247.249, launcher `--component
+  menubuilder-backend --build-only`, затем штатный `--component menubuilder-backend`.
+- Уникальный тег:
+  `2dd1473b37b545ae8caa745f81ff2d6c33bb426f-20260928T213756884255Z`.
+- Immutable production image:
+  `dev-leo4-ru.cr.cloud.ru/etran/menubuilder-backend@sha256:0a67f0ffd0326c2ed968b3e42d2cdd7728b4dd4df5c71582e059c061edbf5c89`.
+- Проверено: 28 CI-тестов, 565 backend-тестов, Ruff/Pyright, registry digest,
+  revision label и image ID запущенного контейнера, schema guard 028,
+  `/openapi.json` 200, браузерный `/api/auth/me` и список терминалов 200.
+- Production override: `/home/user1/.etran-ci/user1-images.json` указывает на
+  этот digest. Базовый Compose закреплён на том же digest без `build`.
+  Frontend остаётся отдельным `dist`, registry для него не обязателен.
+- `etran-beta.timer` сейчас disabled/inactive: публикация и деплой выполнены
+  адресным ручным запуском launcher; автоматическое наблюдение не включалось.
+
+### Исторический ввод beta-контура (2026-09-11 UTC)
+
+Бета-сценарий был установлен и проверен end-to-end; тогда `etran-beta.timer`
+был enabled/active, запуск службы завершился с `Result=success` и
+`ExecMainStatus=0`, без повторных сборок при неизменном коде.
 
 - Установленный launcher: `52e93a952defdca8eaa05b26dfb734db7c0697d5`.
 - Последний выпуск MenuBuilder backend / worker:

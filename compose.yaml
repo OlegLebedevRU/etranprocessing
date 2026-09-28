@@ -76,9 +76,7 @@ services:
       MENUBUILDER_API_URL: ${L4MCP_MENUBUILDER_API_URL:-}
 
   menubuilder-backend:
-    build:
-      context: .
-      dockerfile: MenuBuilder/backend/Dockerfile
+    image: dev-leo4-ru.cr.cloud.ru/etran/menubuilder-backend@sha256:0a67f0ffd0326c2ed968b3e42d2cdd7728b4dd4df5c71582e059c061edbf5c89
     container_name: menubuilder-backend
     restart: always
     env_file:

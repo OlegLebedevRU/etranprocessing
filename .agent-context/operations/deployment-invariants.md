@@ -28,9 +28,10 @@ ProcessingBackend применяет общие Alembic. Runtime host не за�
 - Для явно согласованного бета-контура действует [бета-регламент](../../docs/ops_run-beta-ci-cd.md):
   `etran-beta.timer` на отдельном builder, frontend как artifact-only image,
   production только pull по digest. GitHub Actions отключён для исключения двойного выпуска.
-- Базовый Compose не перезаписывается; штатный up/pull требует image override
-  `/home/user1/.etran-ci/user1-images.json` (l4media: `l4media-images.json`).
-  Старый up --build без override не использовать для управляемых компонентов.
+- MenuBuilder backend в базовом Compose закреплён по registry digest без `build`;
+  штатный выпуск обновляет image override `/home/user1/.etran-ci/user1-images.json`.
+  Для других управляемых компонентов использовать их действующие overrides;
+  старый `up --build` для них не применять.
 
 ## State machine
 requested → authorized → preflight → validated artifacts → deploy/migrate → verify → handoff;
