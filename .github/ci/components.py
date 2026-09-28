@@ -23,6 +23,13 @@ COMPONENTS = {
         "service": "nginx",
         "compose": "/home/user1/compose.yaml",
     },
+    "l4mcp": {
+        "directory": "MenuBuilder/l4mcp",
+        "context": "MenuBuilder/l4mcp",
+        "project": "user1",
+        "service": "l4mcp",
+        "compose": "/home/user1/compose.yaml",
+    },
     "l4media-ingress": {
         "directory": "l4media/ingress",
         "context": "l4media/ingress",
@@ -38,6 +45,17 @@ COMPONENTS = {
         "compose": "/home/user1/l4media/compose.yaml",
     },
 }
+
+# app1 is built from the separate iot-rpc-rest-app repository. It uses the
+# same digest-only production deployer, but never the etranprocessing builder.
+EXTERNAL_COMPONENTS = {
+    "app1": {
+        "project": "user1",
+        "service": "app1",
+        "compose": "/home/user1/compose.yaml",
+    }
+}
+DEPLOY_COMPONENTS = {**COMPONENTS, **EXTERNAL_COMPONENTS}
 
 
 def select_components(paths, event, component="all", bootstrap=""):

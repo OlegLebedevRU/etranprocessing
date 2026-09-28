@@ -13,7 +13,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from components import COMPONENTS, REGISTRY
+from components import DEPLOY_COMPONENTS, REGISTRY
 
 STATE = Path("/home/user1/.etran-ci")
 STATIC = Path("/home/user1/MenuBuilder/frontend/dist")
@@ -31,7 +31,7 @@ def docker(*args, capture=False):
 
 
 def image_reference(component, revision, digest):
-    if component not in COMPONENTS:
+    if component not in DEPLOY_COMPONENTS:
         raise ValueError("Unknown component")
     if not re.fullmatch(r"[0-9a-f]{40}", revision):
         raise ValueError("A full Git SHA is required")
@@ -62,7 +62,7 @@ def atomic_json(path, data):
 
 
 def compose_command(component, override):
-    spec = COMPONENTS[component]
+    spec = DEPLOY_COMPONENTS[component]
     return [
         "sudo",
         "-n",
@@ -122,6 +122,26 @@ def health(component, container):
         )
     elif component == "l4media-nginx":
         docker("exec", container, "nginx", "-t")
+    elif component == "l4mcp":
+        docker(
+            "exec",
+            container,
+            "python",
+            "-c",
+            "import urllib.request; "
+            "r=urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=5); "
+            "assert r.status == 200",
+        )
+    elif component == "app1":
+        docker(
+            "exec",
+            container,
+            "python",
+            "-c",
+            "import urllib.request; "
+            "r=urllib.request.urlopen('http://127.0.0.1:8000/docs', timeout=5); "
+            "assert r.status == 200",
+        )
     state = json.loads(
         docker("inspect", "--format", "{{json .State}}", container, capture=True)
     )
@@ -134,14 +154,14 @@ def wait_healthy(component, container):
         try:
             health(component, container)
             return
-        except (subprocess.CalledProcessError, RuntimeError):
+        except subprocess.CalledProcessError, RuntimeError:
             if attempt == 23:
                 raise
             time.sleep(5)
 
 
 def deploy_service(component, image, revision):
-    spec = COMPONENTS[component]
+    spec = DEPLOY_COMPONENTS[component]
     override = STATE / (spec["project"] + "-images.json")
     previous = (
         json.loads(override.read_text()) if override.exists() else {"services": {}}
@@ -301,7 +321,7 @@ def main():
     import fcntl
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("component", choices=COMPONENTS)
+    parser.add_argument("component", choices=DEPLOY_COMPONENTS)
     parser.add_argument("revision")
     parser.add_argument("digest")
     args = parser.parse_args()

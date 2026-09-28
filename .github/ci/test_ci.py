@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import deploy
-from components import COMPONENTS, select_components
+from components import COMPONENTS, EXTERNAL_COMPONENTS, select_components
 from deploy import compose_command, image_reference, publish_static, update_override
 
 
@@ -73,8 +73,27 @@ class MatrixTests(unittest.TestCase):
     def test_linux_case_is_preserved(self):
         self.assertEqual(self.selected(["menubuilder/backend/app.py"]), set())
 
+    def test_external_owner_is_not_built_from_this_repository(self):
+        self.assertIn("app1", EXTERNAL_COMPONENTS)
+        self.assertNotIn("app1", COMPONENTS)
+        self.assertNotIn("app1", self.selected(event="workflow_dispatch"))
+
 
 class DeploymentTests(unittest.TestCase):
+    def test_external_owner_uses_same_digest_only_deployment(self):
+        ref = image_reference("app1", "a" * 40, "sha256:" + "b" * 64)
+        self.assertEqual(ref, "dev-leo4-ru.cr.cloud.ru/etran/app1@sha256:" + "b" * 64)
+        command = compose_command("app1", Path("images.json"))
+        self.assertIn("/home/user1/compose.yaml", command)
+        with patch.object(deploy, "docker", return_value='{"Running": true}') as docker:
+            deploy.health("app1", "container")
+        self.assertIn("/docs", docker.call_args_list[0].args[-1])
+
+    def test_l4mcp_has_its_own_health_check(self):
+        with patch.object(deploy, "docker", return_value='{"Running": true}') as docker:
+            deploy.health("l4mcp", "container")
+        self.assertIn("8001/health", docker.call_args_list[0].args[-1])
+
     def test_processing_health_uses_api_prefix(self):
         with patch.object(
             deploy, "docker", return_value='{"Running": true}'

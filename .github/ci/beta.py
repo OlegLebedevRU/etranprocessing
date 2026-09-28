@@ -155,8 +155,9 @@ def prepare_builder():
 
 def test_component(component):
     execute(sys.executable, "-m", "unittest", "discover", "-s", ".github/ci", "-v")
-    if component in {"processingbackend", "menubuilder-backend"}:
+    if component in {"processingbackend", "menubuilder-backend", "l4mcp"}:
         directory = ROOT / COMPONENTS[component]["directory"]
+        source_dir = "src" if component == "l4mcp" else "app"
         uv = "/home/github-runner/.local/bin/uv"
         execute(uv, "sync", "--locked", cwd=directory)
         execute(
@@ -167,15 +168,22 @@ def test_component(component):
             "-m",
             "compileall",
             "-q",
-            "app",
+            source_dir,
             "tests",
             cwd=directory,
         )
-        execute(uv, "run", "--locked", "ruff", "check", "app", cwd=directory)
+        execute(uv, "run", "--locked", "ruff", "check", source_dir, cwd=directory)
         execute(
-            uv, "run", "--locked", "ruff", "format", "--check", "app", cwd=directory
+            uv,
+            "run",
+            "--locked",
+            "ruff",
+            "format",
+            "--check",
+            source_dir,
+            cwd=directory,
         )
-        execute(uv, "run", "--locked", "pyright", "app", cwd=directory)
+        execute(uv, "run", "--locked", "pyright", source_dir, cwd=directory)
         execute(uv, "run", "--locked", "pytest", cwd=directory)
 
 
