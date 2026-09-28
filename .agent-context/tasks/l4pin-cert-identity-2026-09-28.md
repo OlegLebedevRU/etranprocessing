@@ -25,13 +25,16 @@
 - [x] `l4con` MQTT 5 packet tests passed on x86/x64. App1 prototype tests passed (434), but that branch was withdrawn and is not part of the delivery.
 - [x] Local Mosquitto integration: MQTT 5 CONNECT, retained `svc_online`, RPC 7003 `pong` all passed using an isolated test EXE mutex. Temporary EXE and broker process were removed.
 - [x] On terminal 773, user stopped L4Superv/L4Con; three x64 EXEs copied to `C:\l4tools` and SHA-256 verified. User restarted L4Superv. Existing app1 persisted `tb_dev_events.id=1356471`, `device_id=773`, `event_type_code=75`, correct SN/source, UTC timestamp, correlation and inventory tags 441–443.
-- [ ] GUI visual check and live certificate reissue on a test agent: pending user interaction. Terminal 773 certificate was not changed.
+- [x] User visually accepted the updated l4pin GUI on 773 without entering a PIN.
+- [x] On separate test agent 1000011, user installed the same three x64 EXEs and restarted L4Superv. Existing app1 persisted `tb_dev_events.id=1356473`, type 75, for 1000011.
+- [x] User obtained a new PIN for existing 1000009 and installed it with Force while L4Superv ran. IoT showed 1000009 online, 1000011 offline, and new type 75 event `id=1356474` with expected SN, source, 40-character thumbprint and correlation. User's local `l4pin --status` showed exactly one Leo4 certificate, OU=1000009.
+- [ ] Early CHECK refusal, failed reissue after CHECK/CSR, and long-running reconnection were not exercised. The user no longer has the consumed one-time PIN, so no refusal test was attempted.
 
 ## Риски и следующие действия
 - Do not deploy or modify app1. Its existing `evt` path counts event 75 as one event message; the September counter for org 1 was 7 after this test, but no before snapshot exists to attribute an exact delta.
-- On a separate test terminal with services stopped by the user, install the new Windows binaries and verify failed enrollment retains the old certificate, successful reissue leaves exactly one Leo4 certificate, services reconnect under the new SN, and event 75 appears once.
+- For a later refusal test, use a controlled invalid or expired PIN and verify preservation of the sole 1000009 certificate. A failure after CHECK/CSR would need a controlled CA/network fault test. Do not consume a new valid PIN solely to reproduce the early refusal.
 - Keep accepted `l4tools-1.8.2-beta-1` unchanged; package this fix as a separate candidate after runtime checks.
-- No certificate or server file was modified in this test. No temporary broker process or test EXE remains.
+- The certificate on the separate test agent was replaced with the existing terminal 1000009 identity. No server file was modified. No temporary broker process or test EXE remains.
 
 ## Context distillates
 - `../components/l4con.md` and `../../docs/ops_run-remote-console-diagnostics.md` updated with event 75.
