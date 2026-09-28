@@ -29,14 +29,14 @@
 |  - Мост WebSocket <-> MQTT RPC (публикация задач, подписка на dev/{SN}/out и dev/{SN}/res)         |
 |  - Реактивное глушение (Active Silencing): отправка 7002 при чанках с неизвестным session_id        |
 +----------------------------------------------------------------------------------------------------+
-                                             │ ▲ MQTT 3.1.1 (TCP / mTLS)
+                                             │ ▲ MQTT 5 (TCP / mTLS bridge)
                                              ▼ │ (JSON RPC: tsk, req, rsp, res, out, svc)
 +----------------------------------------------------------------------------------------------------+
 |                                 3. Central / Local MQTT Broker                                     |
 |  - Изоляция по Serial Number (SN) устройства                                                       |
 |  - Поддержка LWT (Last Will & Testament) и Retain для отслеживания онлайн-статуса                  |
 +----------------------------------------------------------------------------------------------------+
-                                             │ ▲ MQTT TCP (127.0.0.1:1883 или remote broker)
+                                             │ ▲ MQTT 5 TCP (127.0.0.1:1883 или remote broker)
                                              ▼ │
 +----------------------------------------------------------------------------------------------------+
 |                           4. Diagnostic Agent l4con (Windows Terminal)                             |
@@ -70,7 +70,7 @@
 | **Device ➔ Server** | `dev/<SN>/res` | 1 | 0 | **Финальный отчет о задаче**: результат выполнения, `status_code`, `exit_code`, `duration_ms`. |
 | **Device ➔ Server** | `dev/<SN>/out` | 0 / 1 | 0 | **Потоковый вывод (Volatile Stream)**: фрагменты вывода stdout/stderr с порядковым номером `seq` и `eof`. |
 | **Device ➔ Server** | `dev/<SN>/svc` | 1 | **1 (True)** | **Presence / LWT вспомогательного сервиса**: статус агента диагностики (`svc_online` / `svc_offline`). |
-| **Device ➔ Server** | `dev/<SN>/evt` | 1 | 0 | **Системное событие 75**: `l4con` сообщает о подключении с действующим сертификатом после сверки SN/thumbprint с Leo4Proxy. Параметры 324, 440–443; MQTT 3.1.1 передаёт 101/102/200 и `correlationData` в JSON. |
+| **Device ➔ Server** | `dev/<SN>/evt` | 1 | 0 | **Системное событие 75**: `l4con` сообщает о подключении с действующим сертификатом после сверки SN/thumbprint с Leo4Proxy. Параметры 324, 440–443; MQTT 5 User Properties содержат `event_type_code`, `dev_event_id`, `dev_timestamp`, `correlationData`. |
 | **Device ➔ Server** | `dev/<SN>/app` | 1 | **1 (True)** | **Presence / LWT основного приложения**: статус ПО терминала (`app_online` / `app_offline`). |
 
 ---

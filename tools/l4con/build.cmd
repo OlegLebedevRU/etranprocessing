@@ -87,6 +87,17 @@ if errorlevel 1 (
 exit /b 0
 
 :summary
+if %BUILD_FAILED% neq 0 goto :print_summary
+if /i "%TARGET_ARCH%"=="x64" goto :only_test_x64
+if /i "%TARGET_ARCH%"=="64" goto :only_test_x64
+call :do_test_x86
+if /i "%TARGET_ARCH%"=="all" call :do_test_x64
+goto :print_summary
+
+:only_test_x64
+call :do_test_x64
+
+:print_summary
 echo.
 echo =======================================================
 if %BUILD_FAILED% equ 0 (
@@ -116,3 +127,13 @@ if %BUILD_FAILED% equ 0 (
 )
 echo =======================================================
 exit /b %BUILD_FAILED%
+
+:do_test_x86
+cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && cl.exe /nologo /W4 /utf-8 /D_CRT_SECURE_NO_WARNINGS /Foobj\x86\ tests\test_mqtt5_protocol.c src\mqtt_protocol.c /link /OUT:obj\x86\test_mqtt5_protocol.exe && obj\x86\test_mqtt5_protocol.exe"
+if errorlevel 1 set BUILD_FAILED=1
+exit /b 0
+
+:do_test_x64
+cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && cl.exe /nologo /W4 /utf-8 /D_CRT_SECURE_NO_WARNINGS /Foobj\x64\ tests\test_mqtt5_protocol.c src\mqtt_protocol.c /link /OUT:obj\x64\test_mqtt5_protocol.exe && obj\x64\test_mqtt5_protocol.exe"
+if errorlevel 1 set BUILD_FAILED=1
+exit /b 0

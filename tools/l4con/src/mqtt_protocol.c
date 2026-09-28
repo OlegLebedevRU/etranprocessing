@@ -59,22 +59,26 @@ int mqtt_build_connect(unsigned char* buf, size_t max_len,
 
     // Protocol Name: "MQTT"
     p_pos += write_utf8_string(payload_buf + p_pos, "MQTT");
-    // Protocol Level: 4 (MQTT 3.1.1)
-    payload_buf[p_pos++] = 4;
+    // Protocol Level: 5 (MQTT 5.0)
+    payload_buf[p_pos++] = 5;
     // Flags: UserName | WillRetain | WillQoS1 | WillFlag | CleanSession
     payload_buf[p_pos++] = MQTT_FLAG_USERNAME | MQTT_FLAG_WILL_RETAIN | MQTT_FLAG_WILL_QOS1 | MQTT_FLAG_WILL_FLAG | MQTT_FLAG_CLEAN_SESSION;
     // Keepalive
     payload_buf[p_pos++] = (unsigned char)((keepalive_sec >> 8) & 0xFF);
     payload_buf[p_pos++] = (unsigned char)(keepalive_sec & 0xFF);
+    // CONNECT properties: none.
+    payload_buf[p_pos++] = 0;
 
     // Payload:
     // 1. Client Identifier
     p_pos += write_utf8_string(payload_buf + p_pos, client_id);
-    // 2. Will Topic
+    // 2. Will properties: none.
+    payload_buf[p_pos++] = 0;
+    // 3. Will Topic
     p_pos += write_utf8_string(payload_buf + p_pos, will_topic);
-    // 3. Will Payload
+    // 4. Will Payload
     p_pos += write_utf8_string(payload_buf + p_pos, will_payload);
-    // 4. Username
+    // 5. Username
     p_pos += write_utf8_string(payload_buf + p_pos, username);
 
     int out_pos = 0;
@@ -93,9 +97,40 @@ int mqtt_build_publish(unsigned char* buf, size_t max_len,
                        uint16_t packet_id,
                        uint8_t qos,
                        uint8_t retain) {
+    return mqtt_build_publish_with_properties(buf, max_len, topic, payload,
+                                              payload_len, packet_id, qos, retain,
+                                              NULL, 0);
+}
+
+int mqtt_build_publish_with_properties(unsigned char* buf, size_t max_len,
+                                       const char* topic, const void* payload,
+                                       size_t payload_len, uint16_t packet_id,
+                                       uint8_t qos, uint8_t retain,
+                                       const MqttUserProperty* properties,
+                                       size_t property_count) {
+    if (!buf || !topic || qos > 1 || (property_count && !properties)) return -1;
     size_t topic_len = strlen(topic);
-    size_t var_header_len = 2 + topic_len + (qos > 0 ? 2 : 0);
+    if (topic_len > UINT16_MAX || (payload_len && !payload)) return -1;
+    unsigned char property_buf[1024];
+    size_t property_len = 0;
+    for (size_t i = 0; i < property_count; i++) {
+        if (!properties[i].name || !properties[i].value) return -1;
+        size_t name_len = strlen(properties[i].name);
+        size_t value_len = strlen(properties[i].value);
+        size_t added = 1 + 2 + name_len + 2 + value_len;
+        if (name_len > UINT16_MAX || value_len > UINT16_MAX ||
+            added > sizeof(property_buf) - property_len) return -1;
+        property_buf[property_len++] = 0x26; // MQTT 5 User Property
+        property_len += write_utf8_string(property_buf + property_len, properties[i].name);
+        property_len += write_utf8_string(property_buf + property_len, properties[i].value);
+    }
+    unsigned char property_len_encoded[4];
+    int property_len_bytes = mqtt_encode_remaining_length(property_len_encoded,
+                                                           (uint32_t)property_len);
+    size_t var_header_len = 2 + topic_len + (qos > 0 ? 2 : 0) +
+                            (size_t)property_len_bytes + property_len;
     size_t rem_len = var_header_len + payload_len;
+    if (rem_len > 268435455U || rem_len + 5 > max_len) return -1;
 
     uint8_t header_byte = (uint8_t)(MQTT_PKT_PUBLISH | ((qos & 0x03) << 1) | (retain & 0x01));
 
@@ -110,6 +145,12 @@ int mqtt_build_publish(unsigned char* buf, size_t max_len,
     if (qos > 0) {
         buf[out_pos++] = (unsigned char)((packet_id >> 8) & 0xFF);
         buf[out_pos++] = (unsigned char)(packet_id & 0xFF);
+    }
+    memcpy(buf + out_pos, property_len_encoded, (size_t)property_len_bytes);
+    out_pos += property_len_bytes;
+    if (property_len) {
+        memcpy(buf + out_pos, property_buf, property_len);
+        out_pos += (int)property_len;
     }
 
     // Payload
@@ -126,7 +167,7 @@ int mqtt_build_subscribe(unsigned char* buf, size_t max_len,
                          uint16_t packet_id,
                          uint8_t qos) {
     size_t topic_len = strlen(topic);
-    size_t var_payload_len = 2 + (2 + topic_len) + 1; // packet_id (2) + topic (2+len) + req_qos (1)
+    size_t var_payload_len = 2 + 1 + (2 + topic_len) + 1; // packet_id + empty MQTT 5 properties + topic + req_qos
 
     int out_pos = 0;
     buf[out_pos++] = (unsigned char)MQTT_PKT_SUBSCRIBE;
@@ -136,6 +177,7 @@ int mqtt_build_subscribe(unsigned char* buf, size_t max_len,
 
     buf[out_pos++] = (unsigned char)((packet_id >> 8) & 0xFF);
     buf[out_pos++] = (unsigned char)(packet_id & 0xFF);
+    buf[out_pos++] = 0; // SUBSCRIBE properties: none.
 
     out_pos += write_utf8_string(buf + out_pos, topic);
     buf[out_pos++] = qos & 0x03;
@@ -189,6 +231,15 @@ int mqtt_parse_publish(const unsigned char* var_header_and_payload,
     } else {
         if (out_packet_id) *out_packet_id = 0;
     }
+
+    uint32_t property_len = 0;
+    int property_len_bytes = 0;
+    if (mqtt_decode_remaining_length(var_header_and_payload + pos,
+                                     rem_len - pos, &property_len,
+                                     &property_len_bytes) != 0) return -1;
+    pos += (size_t)property_len_bytes;
+    if (property_len > rem_len - pos) return -1;
+    pos += property_len;
 
     *out_payload = (const char*)(var_header_and_payload + pos);
     *out_payload_len = rem_len - pos;

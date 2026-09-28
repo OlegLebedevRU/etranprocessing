@@ -18,7 +18,7 @@ Native Windows consumer удалённых console/diagnostics задач и п�
 
 ## Инварианты
 - svc topic не разделять с l4desk; не менять тип клиента без обязательного уточнения.
-- Событие 75 системное и не тарифицируется; MQTT 3.1.1 передаёт 101/102/200 и correlationData в JSON payload. Серверный контракт: iot-rpc-rest-app docs/event-types-reference.md и event-property-tags.md.
+- Событие 75 передаётся по MQTT 5 с User Properties `event_type_code`, `dev_event_id`, `dev_timestamp`, `correlationData`; JSON дублирует `101/102/200` и содержит теги 324/440–443. Действующий app1 учитывает его как обычное событие `evt`; финансовый эффект проверять отдельно. Справочники кодов: iot-rpc-rest-app docs/event-types-reference.md и event-property-tags.md.
 - Process/output limits и cleanup обязательны; не превращать диагностику в bypass shell.
 - Packaging/installer не менять без прямой задачи; static Win32 /MT и x86/x64/default.
 

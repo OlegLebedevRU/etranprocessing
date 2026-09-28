@@ -7,6 +7,9 @@ All notable changes to the `l4con` component will be documented in this file.
 ### Added
 - Системное событие 75 после MQTT CONNACK и подтверждения совпадения активной личности Leo4Proxy с локальным сертификатом. `extra_service` presence в `dev/{SN}/svc` сохранён.
 
+### Changed
+- MQTT-соединение переведено на v5, чтобы передавать свойства события без изменения app1. CONNECT, Will, SUBSCRIBE и входящий PUBLISH используют MQTT 5 framing.
+
 ## [1.7.2] - 2026-09-14
 
 ### Changed

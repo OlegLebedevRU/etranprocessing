@@ -21,6 +21,11 @@
 #define MQTT_FLAG_WILL_RETAIN   0x20
 #define MQTT_FLAG_USERNAME      0x80
 
+typedef struct {
+    const char* name;
+    const char* value;
+} MqttUserProperty;
+
 int mqtt_encode_remaining_length(unsigned char* buf, uint32_t length);
 int mqtt_decode_remaining_length(const unsigned char* buf, size_t buf_len, uint32_t* out_length, int* out_bytes_used);
 
@@ -38,6 +43,13 @@ int mqtt_build_publish(unsigned char* buf, size_t max_len,
                        uint16_t packet_id,
                        uint8_t qos,
                        uint8_t retain);
+
+int mqtt_build_publish_with_properties(unsigned char* buf, size_t max_len,
+                                       const char* topic, const void* payload,
+                                       size_t payload_len, uint16_t packet_id,
+                                       uint8_t qos, uint8_t retain,
+                                       const MqttUserProperty* properties,
+                                       size_t property_count);
 
 int mqtt_build_subscribe(unsigned char* buf, size_t max_len,
                          const char* topic,

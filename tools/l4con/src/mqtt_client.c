@@ -33,6 +33,11 @@ typedef struct {
 static bool send_publish_packet(MqttClientState* state, const char* topic,
                                 const char* payload, size_t payload_len,
                                 uint8_t qos, uint8_t retain);
+static bool send_publish_with_properties(MqttClientState* state, const char* topic,
+                                         const char* payload, size_t payload_len,
+                                         uint8_t qos, uint8_t retain,
+                                         const MqttUserProperty* properties,
+                                         size_t property_count);
 
 static void get_iso_timestamp(char* out_ts, size_t size) {
     SYSTEMTIME st;
@@ -84,6 +89,8 @@ static bool publish_certificate_connected_event(MqttClientState* state, int prox
     strcat_s(not_after, sizeof(not_after), "Z");
 
     char topic[160], payload[1024];
+    char event_id_text[16];
+    snprintf(event_id_text, sizeof(event_id_text), "%u", event_id);
     snprintf(topic, sizeof(topic), "dev/%s/evt", state->sn);
     int length = snprintf(payload, sizeof(payload),
         "{\"101\":%u,\"102\":\"%s\",\"200\":75,\"300\":[{\"324\":\"%s\",\"440\":\"l4con\",\"441\":\"%s\",\"442\":\"%s\",\"443\":\"%s\"}],\"correlationData\":\"%08lX-%04hX-%04hX-%02X%02X-%02X%02X%02X%02X%02X%02X\"}",
@@ -92,7 +99,17 @@ static bool publish_certificate_connected_event(MqttClientState* state, int prox
         guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3],
         guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7]);
     if (length <= 0 || (size_t)length >= sizeof(payload)) return false;
-    if (!send_publish_packet(state, topic, payload, (size_t)length, 1, 0)) return false;
+    char correlation_id[40] = { 0 };
+    if (!json_extract_string(payload, "correlationData",
+                             correlation_id, sizeof(correlation_id))) return false;
+    const MqttUserProperty event_properties[] = {
+        { "event_type_code", "75" },
+        { "dev_event_id", event_id_text },
+        { "dev_timestamp", timestamp },
+        { "correlationData", correlation_id },
+    };
+    if (!send_publish_with_properties(state, topic, payload, (size_t)length,
+                                      1, 0, event_properties, 4)) return false;
     printf("[CERT] Published identity event 75 for SN %s (qos=1, retain=0)\n", state->sn);
     return true;
 }
@@ -113,17 +130,63 @@ static bool socket_send_all(SOCKET sock, const unsigned char* buf, size_t len) {
     return true;
 }
 
-static bool send_publish_packet(MqttClientState* state, const char* topic, const char* payload, size_t payload_len, uint8_t qos, uint8_t retain) {
+static bool send_publish_with_properties(MqttClientState* state, const char* topic,
+                                         const char* payload, size_t payload_len,
+                                         uint8_t qos, uint8_t retain,
+                                         const MqttUserProperty* properties,
+                                         size_t property_count) {
     unsigned char buf[32768];
     EnterCriticalSection(&state->send_cs);
     uint16_t pkt_id = (qos > 0) ? get_next_packet_id(state) : 0;
-    int pkt_len = mqtt_build_publish(buf, sizeof(buf), topic, payload, payload_len, pkt_id, qos, retain);
+    int pkt_len = mqtt_build_publish_with_properties(buf, sizeof(buf), topic, payload,
+                                                      payload_len, pkt_id, qos, retain,
+                                                      properties, property_count);
     bool ok = false;
     if (pkt_len > 0) {
         ok = socket_send_all(state->sock, buf, (size_t)pkt_len);
     }
     LeaveCriticalSection(&state->send_cs);
     return ok;
+}
+
+static bool socket_recv_all(SOCKET sock, unsigned char* buf, size_t len) {
+    size_t used = 0;
+    while (used < len) {
+        int received = recv(sock, (char*)buf + used, (int)(len - used), 0);
+        if (received <= 0) return false;
+        used += (size_t)received;
+    }
+    return true;
+}
+
+static bool read_connack_v5(SOCKET sock, unsigned char* out_reason) {
+    unsigned char fixed = 0, length_bytes[4], body[1024];
+    if (!socket_recv_all(sock, &fixed, 1) || fixed != MQTT_PKT_CONNACK) return false;
+    uint32_t remaining = 0;
+    int used = 0;
+    do {
+        if (used == 4 || !socket_recv_all(sock, &length_bytes[used], 1)) return false;
+        used++;
+    } while (length_bytes[used - 1] & 0x80);
+    int parsed = 0;
+    if (mqtt_decode_remaining_length(length_bytes, (size_t)used,
+                                     &remaining, &parsed) != 0 ||
+        remaining < 3 || remaining > sizeof(body) ||
+        !socket_recv_all(sock, body, remaining)) return false;
+    uint32_t properties_len = 0;
+    int property_len_bytes = 0;
+    if (mqtt_decode_remaining_length(body + 2, remaining - 2,
+                                     &properties_len, &property_len_bytes) != 0 ||
+        2U + (uint32_t)property_len_bytes + properties_len != remaining) return false;
+    *out_reason = body[1];
+    return true;
+}
+
+static bool send_publish_packet(MqttClientState* state, const char* topic,
+                                const char* payload, size_t payload_len,
+                                uint8_t qos, uint8_t retain) {
+    return send_publish_with_properties(state, topic, payload, payload_len,
+                                        qos, retain, NULL, 0);
 }
 
 static void output_chunk_callback(const char* topic, const char* json_envelope, size_t json_len, void* user_data) {
@@ -539,11 +602,11 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
             continue;
         }
 
-        // 2. Read CONNACK
-        unsigned char ack_buf[4];
-        int r = recv(s, (char*)ack_buf, sizeof(ack_buf), 0);
-        if (r < 4 || ack_buf[0] != MQTT_PKT_CONNACK || ack_buf[3] != 0x00) {
-            fprintf(stderr, "[ERROR] Invalid CONNACK received (len=%d, rc=%d)\n", r, r >= 4 ? ack_buf[3] : -1);
+        // 2. Read MQTT 5 CONNACK, including its property length.
+        unsigned char connack_reason = 0xFF;
+        if (!read_connack_v5(s, &connack_reason) || connack_reason != 0) {
+            fprintf(stderr, "[ERROR] MQTT 5 CONNACK failed (reason=%u)\n",
+                    (unsigned)connack_reason);
             closesocket(s);
             state.sock = INVALID_SOCKET;
             WaitForSingleObject(hStopEvent, config->reconnect_sec * 1000);
