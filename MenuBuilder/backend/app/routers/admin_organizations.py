@@ -1,4 +1,5 @@
 import logging
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -8,6 +9,7 @@ from app.auth import require_superuser
 from app.database import get_db
 from app.models import Org, OrgBillingSettings, OrgStatus
 from app.schemas import AdminOrgCreate, AdminOrgRead, AdminOrgUpdate
+from app.services.iot_client import iot_client
 
 logger = logging.getLogger(__name__)
 
@@ -103,23 +105,26 @@ async def create_organization(
     user: dict = Depends(require_superuser),
 ) -> AdminOrgRead:
     """Create a new organization with licensing parameters (Superuser only)."""
-    # Determine org_id
+    # IoT reserves the ID before this database creates the matching org.
     if body.org_id is not None:
-        org_id = body.org_id
         # Check if already exists
-        existing = await db.get(Org, org_id)
+        existing = await db.get(Org, body.org_id)
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Organization with ID {org_id} already exists",
+                detail=f"Organization with ID {body.org_id} already exists",
             )
+        minimum_org_id = 1
     else:
-        # Find next available org_id
+        # Start above the local high-water mark; IoT may allocate higher.
         res = await db.execute(select(Org.org_id).order_by(Org.org_id))
-        existing_ids = set(res.scalars().all())
-        org_id = 1
-        while org_id in existing_ids:
-            org_id += 1
+        minimum_org_id = max(res.scalars().all(), default=0) + 1
+
+    org_id = await iot_client.reserve_org_id(
+        operation_id=f"l4desk-admin-org:{uuid.uuid4()}",
+        minimum_org_id=minimum_org_id,
+        requested_org_id=body.org_id,
+    )
 
     org = Org(
         org_id=org_id,

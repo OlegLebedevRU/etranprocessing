@@ -39,7 +39,7 @@ if errorlevel 1 (
 
 echo.
 echo [2/2] Running Unit Tests...
-bin\test_l4setup.exe
+bin\test_l4setup.exe %*
 if errorlevel 1 (
     echo.
     echo [ERROR] Unit tests failed!

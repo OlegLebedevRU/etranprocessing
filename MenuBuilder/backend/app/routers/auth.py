@@ -558,10 +558,12 @@ async def me(user: dict = Depends(get_current_user)):
     role_name = user.get("role", "user")
     if role_id == 4:
         role_name = "viewer"
+    elif role_id == 5:
+        role_name = "l4desk_owner"
 
     from app.security.permissions import ALL_PERMISSIONS
 
-    if role_id in (1, 2, 3) or is_su:
+    if role_id in (1, 2, 3, 5) or is_su:
         permissions = list(ALL_PERMISSIONS)
     elif role_id == 4:
         permissions = list(user.get("permissions") or [])

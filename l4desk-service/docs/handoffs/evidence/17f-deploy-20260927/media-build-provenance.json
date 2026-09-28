@@ -1,0 +1,85 @@
+{
+  "checked_at_utc": "2026-09-27T17:48:56.020341+00:00",
+  "source_commit": "c200d60485d32c805ae00530c57ad7a4b6b2b1ce",
+  "archive_sha256": "6310ca345c356ad0059437f4b85d45b72d3a87dbabc925a62e5e0acc2bfd720e",
+  "live_image": "sha256:f201ff382eaa9ca127681cee16314e86deffa9d2441f6c293f3e10ff57e61c9f",
+  "rebuilt_image": "sha256:81f45c26fa5ab7734e399efc9e12393049019da24bd3d5e8c244401b30d6892b",
+  "binary_sha256_both": "1e7f48b11b518ebba4e63eaf84326632e1da1dac4cc024f8767490510be20f91",
+  "openapi_live_sha256": "0a4090070a81247d9221213531ff214ef8a3151a173f91324bf2f82fa54c38cf",
+  "openapi_rebuilt_sha256": "ab1f1a2ba1d9d396383ee60867a2b80d69e6c997eef373a0d7bf5b637c8b7672",
+  "openapi_lf_equal": true,
+  "host_files": [
+    {
+      "path": "l4media/ingress/.dockerignore",
+      "git_sha256": "16380545151fdd329608c8ddef9dabe371f42046391736ebae6e8a0435b597a7",
+      "host_sha256": "16380545151fdd329608c8ddef9dabe371f42046391736ebae6e8a0435b597a7",
+      "lf_equal": true
+    },
+    {
+      "path": "l4media/ingress/Dockerfile",
+      "git_sha256": "342ac337d41c66b5cac72ba83c76fd75d36c7b769cb2efbfbeeaa5281f3b742c",
+      "host_sha256": "342ac337d41c66b5cac72ba83c76fd75d36c7b769cb2efbfbeeaa5281f3b742c",
+      "lf_equal": true
+    },
+    {
+      "path": "l4media/ingress/Makefile",
+      "git_sha256": "8fe553762f21dce0b7843f883d27cc017b303efb3916aad9515d02303d15a6d7",
+      "host_sha256": "c3033d9ed6eabcbb0d2e68704aad71b786750323109dc3049abc250ce774aeed",
+      "lf_equal": true
+    },
+    {
+      "path": "l4media/ingress/openapi.json",
+      "git_sha256": "ab1f1a2ba1d9d396383ee60867a2b80d69e6c997eef373a0d7bf5b637c8b7672",
+      "host_sha256": "0a4090070a81247d9221213531ff214ef8a3151a173f91324bf2f82fa54c38cf",
+      "lf_equal": true
+    },
+    {
+      "path": "l4media/ingress/routes.conf",
+      "git_sha256": "efbdfe298eda7c88a025c52de3a3bf6642e03db9c22cecd77b6c304554b12168",
+      "host_sha256": "d604e1537abd7ff69c68c1c6e2eef95759df5dee0e90eda413f8301958d4ec62",
+      "lf_equal": true
+    },
+    {
+      "path": "l4media/ingress/src/l4media_ingress.c",
+      "git_sha256": "f9113eb403986827c73818cbe2876c8b2e79308d8cbda9f9d4ead238ae806890",
+      "host_sha256": "90b98bd2462973d300824dd14bfb1381e722c0dfad5dd28e028d9a89f1f53098",
+      "lf_equal": true
+    },
+    {
+      "path": "l4media/ingress/src/media_lifecycle.h",
+      "git_sha256": "068d88c1d2acce7c86529131133f8e7522882ad9a70758a429fdc20049ef2435",
+      "host_sha256": "5b44ea2b4ddc81cf2d470aa5c6a18f8496c3b1db7cae2a4bfc293d15ad0cc664",
+      "lf_equal": true
+    },
+    {
+      "path": "l4media/ingress/src/media_redis.h",
+      "git_sha256": "e692e22a69bc2d59b9d6ba4fc5e426d13fe975cadd6b8323ba6a30d3f37bc2ae",
+      "host_sha256": "918e4845e6fee4fbf932202b9122c03703458c75fb4a4d090faff67c6b68fe1c",
+      "lf_equal": true
+    },
+    {
+      "path": "l4media/ingress/tests/test_ingress_regression.py",
+      "git_sha256": "fc00841922564965e0c589c04d571fb9061a3a92c44e82db65c121bcf7dbb0b1",
+      "host_sha256": "fc00841922564965e0c589c04d571fb9061a3a92c44e82db65c121bcf7dbb0b1",
+      "lf_equal": true
+    },
+    {
+      "path": "l4media/ingress/tests/test_ingress_unit.c",
+      "git_sha256": "700e7a27583a017da378e654031ff2cc07cc415d8fd5469696996b7ad209042d",
+      "host_sha256": "7b29af2dbfc2dbbb5556636fef1651182d20486a8712185d37d1e1da66194173",
+      "lf_equal": false
+    },
+    {
+      "path": "l4media/ingress/tests/test_media_lifecycle.py",
+      "git_sha256": "511977a2c6c2757d2abb7ce1233cbf6d31b74519d7b2cbce787e874902922e60",
+      "host_sha256": "511977a2c6c2757d2abb7ce1233cbf6d31b74519d7b2cbce787e874902922e60",
+      "lf_equal": true
+    }
+  ],
+  "host_test_drift_resolution": {
+    "path": "l4media/ingress/tests/test_ingress_unit.c",
+    "action": "deployed exact file from the checked Git archive after successful isolated build; live service not restarted",
+    "sha256_after": "700e7a27583a017da378e654031ff2cc07cc415d8fd5469696996b7ad209042d",
+    "reason": "host test source lacked renew and stop regression cases; compiled live binary already matches source build"
+  }
+}

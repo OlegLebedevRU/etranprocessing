@@ -1,8 +1,10 @@
 import asyncio
 import json
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import HTTPException
 from httpx import ASGITransport, AsyncClient
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
@@ -13,6 +15,169 @@ from app.database import get_db
 from app.main import app
 from app.models import Terminal
 from app.services.iot_client import iot_client
+
+
+@pytest.mark.anyio
+async def test_owner_lease_looks_up_runtime_terminal_id() -> None:
+    from app.routers.video_control import (
+        LeaseAcquireRequest,
+        acquire_device_control_lease,
+    )
+
+    terminal = Terminal(id=3718, device_id=1000003, sn="test-sn", org_id=3)
+    user = {
+        "role": "l4desk_owner",
+        "role_id": 5,
+        "org_id": 3,
+        "sub": "owner",
+        "session_id": "jwt-session",
+    }
+    db = AsyncMock()
+    policy = SimpleNamespace(
+        evaluate_session_request=AsyncMock(return_value=SimpleNamespace(allowed=True))
+    )
+    lease = {
+        "lease_id": "lease-1",
+        "expires_at": "2026-09-26T17:00:00Z",
+        "scope": "stream",
+    }
+    with (
+        patch(
+            "app.routers.video_control._verify_device_access",
+            new=AsyncMock(return_value=terminal),
+        ),
+        patch(
+            "app.routers.video_control.get_remote_session_policy",
+            return_value=policy,
+        ),
+        patch(
+            "app.routers.video_control.L4DeskRepository.get_active_session_by_terminal_id",
+            new=AsyncMock(return_value=None),
+        ) as lookup,
+        patch.object(
+            iot_client,
+            "remote_input_acquire_lease",
+            new=AsyncMock(return_value=lease),
+        ) as upstream,
+    ):
+        response = await acquire_device_control_lease(
+            1000003,
+            LeaseAcquireRequest(scope="stream", session_id="jwt-session"),
+            user,
+            db,
+        )
+        with pytest.raises(HTTPException) as mismatch:
+            await acquire_device_control_lease(
+                1000003,
+                LeaseAcquireRequest(scope="stream", session_id="forged-session"),
+                user,
+                db,
+            )
+    assert response.lease_id == "lease-1"
+    assert mismatch.value.status_code == 400
+    lookup.assert_awaited_once_with(3718)
+    assert upstream.await_args.kwargs["user"]["role"] == "l4desk_owner"
+    assert upstream.await_args.kwargs["user"]["session_id"] == "jwt-session"
+    upstream.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_owner_can_change_lease_scope_to_console() -> None:
+    from app.routers.video_control import (
+        ScopeUpgradeRequest,
+        change_device_control_scope,
+    )
+
+    terminal = Terminal(id=3718, device_id=1000003, sn="test-sn", org_id=3)
+    user = {"role": "l4desk_owner", "role_id": 5, "org_id": 3}
+    lease = {
+        "lease_id": "lease-1",
+        "active": True,
+    }
+    changed = {"expires_at": "2026-09-26T17:00:00Z", "scope": "console"}
+    with (
+        patch(
+            "app.routers.video_control._verify_device_access",
+            new=AsyncMock(return_value=terminal),
+        ),
+        patch.object(
+            iot_client,
+            "remote_input_status",
+            new=AsyncMock(return_value={"lease": lease}),
+        ),
+        patch.object(
+            iot_client,
+            "remote_input_change_scope",
+            new=AsyncMock(return_value=changed),
+        ) as upstream,
+    ):
+        response = await change_device_control_scope(
+            1000003, ScopeUpgradeRequest(scope="console"), user, AsyncMock()
+        )
+
+    assert response.scope == "console"
+    upstream.assert_awaited_once()
+    assert upstream.await_args.kwargs["org_id"] == 3
+
+
+@pytest.mark.anyio
+async def test_repeated_console_leases_use_unique_provider_session_ids() -> None:
+    from app.routers.video_control import (
+        LeaseAcquireRequest,
+        acquire_device_control_lease,
+    )
+
+    terminal = Terminal(id=3718, device_id=1000003, sn="test-sn", org_id=3)
+    user = {
+        "role": "l4desk_owner",
+        "role_id": 5,
+        "org_id": 3,
+        "session_id": "same-browser-session",
+    }
+    policy = SimpleNamespace(
+        evaluate_session_request=AsyncMock(return_value=SimpleNamespace(allowed=True))
+    )
+    repo = SimpleNamespace(
+        get_active_session_by_terminal_id=AsyncMock(return_value=None),
+        ensure_l4desk_terminal=AsyncMock(),
+        create_remote_session=AsyncMock(),
+    )
+    leases = [
+        {
+            "lease_id": f"lease-{number}",
+            "owner_session_id": "same-browser-session",
+            "expires_at": "2026-09-26T17:00:00Z",
+            "scope": "console",
+        }
+        for number in (1, 2)
+    ]
+    with (
+        patch(
+            "app.routers.video_control._verify_device_access",
+            new=AsyncMock(return_value=terminal),
+        ),
+        patch(
+            "app.routers.video_control.get_remote_session_policy", return_value=policy
+        ),
+        patch("app.routers.video_control.L4DeskRepository", return_value=repo),
+        patch.object(
+            iot_client,
+            "remote_input_acquire_lease",
+            new=AsyncMock(side_effect=leases),
+        ),
+    ):
+        db = AsyncMock()
+        for _ in leases:
+            await acquire_device_control_lease(
+                1000003, LeaseAcquireRequest(scope="console"), user, db
+            )
+
+    provider_ids = [
+        call.kwargs["provider_session_id"]
+        for call in repo.create_remote_session.await_args_list
+    ]
+    assert provider_ids == ["lease-1", "lease-2"]
+    assert db.commit.await_count == 2
 
 
 @pytest.fixture(autouse=True)

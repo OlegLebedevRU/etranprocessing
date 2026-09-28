@@ -32,6 +32,14 @@ from etranprocessing_db.models import (
     User,
     UserSession,
 )
+from etranprocessing_db.models.l4desk import (
+    L4DeskAuditEvent,
+    L4DeskMembership,
+    L4DeskRegistration,
+    L4DeskRemoteSession,
+    L4DeskTenantProfile,
+    L4DeskTerminal,
+)
 
 __all__ = [
     "ApiToken",
@@ -43,6 +51,12 @@ __all__ = [
     "EmailVerification",
     "GateGaugeRecord",
     "Group",
+    "L4DeskAuditEvent",
+    "L4DeskMembership",
+    "L4DeskRegistration",
+    "L4DeskRemoteSession",
+    "L4DeskTenantProfile",
+    "L4DeskTerminal",
     "License",
     "MenuVariant",
     "MenuVariantSnapshot",

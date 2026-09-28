@@ -144,7 +144,7 @@ export default function AdminUsersPage() {
     try {
       const isSu = Boolean(values.is_superuser);
       const role = values.role || (isSu ? "admin" : "user");
-      const roleId = isSu ? 1 : role === "admin" ? 1 : 3;
+      const roleId = isSu ? 1 : role === "admin" ? 1 : role === "l4desk_owner" ? 5 : 3;
 
       const payload: CreateUserData = {
         username: values.username.trim(),
@@ -189,7 +189,7 @@ export default function AdminUsersPage() {
     try {
       const isSu = Boolean(values.is_superuser);
       const role = values.role || (isSu ? "admin" : "user");
-      const roleId = isSu ? 1 : role === "admin" ? 1 : 3;
+      const roleId = isSu ? 1 : role === "admin" ? 1 : role === "l4desk_owner" ? 5 : 3;
 
       const payload: UpdateUserData = {
         password: values.password ? values.password : null,
@@ -656,6 +656,9 @@ export default function AdminUsersPage() {
               options={[
                 { label: "Пользователь (role_id: 3)", value: "user" },
                 { label: "Администратор (role_id: 1)", value: "admin" },
+                ...(editingUser?.role === "l4desk_owner"
+                  ? [{ label: "Владелец L4Desk (role_id: 5)", value: "l4desk_owner" }]
+                  : []),
               ]}
             />
           </Form.Item>

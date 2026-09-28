@@ -1,0 +1,35 @@
+{
+  "source_month": "2026-09",
+  "source_data_day": "2026-09-26",
+  "virtual_as_of": "2027-01-01T00:00:00+00:00",
+  "batch_id": "arch-media-2026-09-17fprobe",
+  "batch_state": "verified",
+  "manifest_sha256": "0fdf5c04e8373b66ce9a448f038881588c7aa2a04e7aad259ca390a2171a642f",
+  "files_verified": true,
+  "file_count": 2,
+  "original_counts": {
+    "media_stream_samples": 4,
+    "media_quality_events": 2,
+    "total_records": 6
+  },
+  "hot_counts_after": {
+    "media_stream_samples": 4,
+    "media_quality_events": 2,
+    "total_records": 6
+  },
+  "hot_summaries_after": 1,
+  "restoration": {
+    "status": "success",
+    "archive_batch_id": "arch-media-2026-09-17fprobe",
+    "restored_counts": {
+      "media_stream_samples": 4,
+      "media_quality_events": 2
+    },
+    "total_restored": 6
+  },
+  "restored_counts": {
+    "media_stream_samples": 4,
+    "media_quality_events": 2,
+    "total_records": 6
+  }
+}

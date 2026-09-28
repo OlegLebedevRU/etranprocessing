@@ -66,7 +66,7 @@
 ## 3. Единая модель аренды (Unified Exclusive Lease Model)
 
 ### 3.1. Области действия (Scope)
-- `console`: Диагностическая сессия консоли (`/api/internal/v1/diagnostics/ws/devices/{sn}`). Доступна **только** роли `superuser`. Взаимно исключает `stream`, `input` и `view`.
+- `console`: Диагностическая сессия консоли (`/api/internal/v1/diagnostics/ws/devices/{sn}`). Доступна `superuser` и `l4desk_owner` только для устройства своего tenant. Для `l4desk_owner` обязателен явный console lease; неявный захват в diagnostics WS недоступен. Взаимно исключает `stream`, `input` и `view`.
 - `view`: Только просмотр активной видеотрансляции (для роли `viewer` с правом «Видеонаблюдение»). Выдаётся **только**, если `presence.stream.state == "running"`, иначе `409 stream_not_running`. Ввод команд мыши/клавиатуры заблокирован.
 - `stream`: Управление видеотрансляцией (`stream/start`, `stream/stop`), получение инвентаря. Ввод заблокирован.
 - `input`: Полный доступ к видеотрансляции и интерактивному вводу (`pointer_move`, `mouse_click`, `key_event`). По умолчанию при `POST /devices/{sn}/lease` без указания scope для обратной совместимости.
@@ -96,7 +96,7 @@
 stateDiagram-v2
     [*] --> Idle: Терминал свободен
     
-    Idle --> ConsoleLease: acquire(scope=console, superuser)
+    Idle --> ConsoleLease: acquire(scope=console, superuser или l4desk_owner своего tenant)
     Idle --> StreamLease: acquire(scope=stream)
     Idle --> InputLease: acquire(scope=input)
     Idle --> ViewLease: acquire(scope=view, stream.running==True)

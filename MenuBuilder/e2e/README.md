@@ -1,0 +1,103 @@
+# Изолированный E2E-мок ЮKassa и почты
+
+Контур запускает отдельный MenuBuilder backend на `127.0.0.1` хоста и отдельный
+mock gateway во внутренней Docker-сети без опубликованного порта. Общий backend,
+его конфигурация и маршруты не переключаются. Тестовый backend использует
+согласованную БД, поэтому создаваемые tenant, user и финансовые записи требуют
+учёта и последующего архивирования. Мок не делает внешних HTTP-запросов.
+
+## Подготовка
+
+В локальном незакоммиченном `.env.e2e.local` задайте:
+
+- `E2E_BACKEND_ENV_FILE`: существующий env-файл backend, доступный Docker Compose
+  только на тестовом хосте; не копируйте его в репозиторий;
+- `E2E_SERVICE_NETWORK`: существующая Docker-сеть БД и внутренних сервисов;
+- `E2E_BACKEND_PORT`: свободный порт, который Compose привяжет только к loopback;
+- `E2E_MOCK_SHOP_ID`, `E2E_MOCK_SHOP_SECRET`, `E2E_MOCK_CONTROL_TOKEN`,
+  `E2E_WEBHOOK_SECRET`: отдельные случайные значения только для E2E;
+- `E2E_EMAIL_GATEWAY_URL`: необязательно. По умолчанию письма перехватывает мок,
+  который принимает только получателей домена `.invalid`.
+- `E2E_REGISTRATION_EMAIL`: необязательно. Укажите только заранее согласованный
+  реальный адрес вместе с отдельным `E2E_EMAIL_GATEWAY_URL`, если проверяете
+  настоящую доставку письма. Тогда runner приостанавливается после регистрации:
+  владелец нажимает ссылку в письме, затем runner запускается повторно.
+
+Не включайте `JWT_ISSUER_MOCK_ENABLED` и не задавайте реальные ключи ЮKassa в
+E2E-переменных. Контейнер test-backend получает `YOOKASSA_API_URL` только от
+Compose и направляет запросы в `mock-gateway`. Mock возвращает
+`https://example.invalid/...` как ссылку на оплату: её не нужно открывать.
+
+## Запуск и проверка
+
+```sh
+docker compose --env-file .env.e2e.local -f compose.yaml config --quiet
+docker compose --env-file .env.e2e.local -f compose.yaml up -d --build
+docker compose --env-file .env.e2e.local -f compose.yaml exec -T mock-gateway \
+  python /app/run_payment_smoke.py
+```
+
+На сервере используйте `sudo docker compose`. Runner создаёт адрес
+`@e2e.invalid` по умолчанию, регистрирует user/tenant через HTTP, извлекает
+одноразовую ссылку из приватного почтового sink, входит через штатный JWT issuer, создаёт платёж,
+переводит его в `succeeded` через закрытый control API и проверяет webhook,
+повторную доставку, poll и единственную запись в ledger. Он печатает только ID и
+результат. Пароль и IDs лежат в `/data/e2e_manifest.json` внутри приватного
+volume с правами `0600`; содержимое нельзя копировать в отчёты или чат.
+
+При реальном адресе первая команда выводит `AWAITING_EMAIL_CONFIRMATION`, а
+вторая после клика завершает платёжный сценарий. Используйте только адрес,
+который владелец явно разрешил; одно письмо не является массовой рассылкой.
+Физический терминал и PIN также не затрагиваются runner. Эти сценарии должны
+получить собственное evidence для 17E/17F.
+
+После успешного payment smoke включите `E2E_TERMINAL_ONBOARDING_ENABLED=true`
+только в тестовом Compose и пересоздайте `test-backend`. Затем выполните внутри
+`mock-gateway` `python /app/run_terminal_onboarding.py`. Runner через тестового
+owner создаёт один терминал в его tenant, сохраняет operation ID до HTTP-вызова
+для безопасного повтора и печатает краткоживущий шестизначный PIN только в
+операторский вывод. Не записывайте PIN в отчёт, Git или логи. Пользователь
+вводит PIN на согласованном тестовом Agent; `terminal_id`, `device_id`, SN и
+readiness записываются в приватный manifest для последующих проверок.
+Если provisioning вернул другой `device_id`, runner сохранит исходный terminal
+для аудита; после исправления контракта новый запуск с
+`E2E_SUPERSEDE_TERMINAL_ID=<точный terminal_id>` создаст новую операцию. Старый
+терминал отдельно деактивируется после проверки нового Agent.
+После подтверждения нового Agent запустите тот же runner с
+`E2E_DEACTIVATE_SUPERSEDED_ID=<точный terminal_id>`: он soft-delete старую
+тестовую запись и проверит перенос free-маркера на новый терминал.
+
+Для проверки месячного начисления используйте отдельный consumer checkpoint
+(`E2E_IOT_CONSUMER_ID`, по умолчанию `l4desk_17e_test`) и включите
+`E2E_IOT_CONSUMER_ENABLED=true`, `E2E_IOT_CONSUMER_SHADOW_MODE=false`,
+`E2E_IOT_CONSUMER_FINANCE_TENANT_IDS=[<id тестового tenant>]`. Разрешённый список
+по умолчанию пуст: события других tenant не меняют ledger. Перед включением
+сверьте tenant, SN и `device_id` с IoT, активный billing cycle и текущий cursor;
+после проверки верните consumer в shadow/disabled. Повторные события
+`device_online` должны оставить один monthly charge на terminal/cycle.
+
+Для закрытия суточного usage после локальной полуночи включайте отдельный
+worker только для утверждённого тестового tenant:
+`E2E_METERING_CLOSE_WORKER_ENABLED=true` и
+`E2E_METERING_CLOSE_WORKER_TENANT_IDS=[<id тестового tenant>]`.
+Пустой список ничего не проводит; worker ждёт пять минут после локальной
+полуночи. Перед включением остановите тестовые сессии и снимите read-only
+состояние usage/ledger/balance. После одного тика проверьте одну проводку,
+баланс и идемпотентность следующего тика; затем верните флаг в `false`.
+Этот worker не требует включения глобального entitlement worker.
+Для воспроизводимого обновления test-backend можно собрать image из
+зафиксированного Git archive, задать `E2E_BACKEND_IMAGE` его immutable tag и
+пересоздать только `test-backend` с `--no-build --no-deps`.
+
+## Завершение
+
+Запись терминала 70 и её лицензию не изменять. После проверки остановить
+тестовые сессии, деактивировать новый терминал и test user/tenant через
+утверждённые API. Финансовые записи оставить как неизменяемый тестовый
+аудит внутри деактивированного tenant; не удалять ledger вручную. После сбора
+evidence остановить Compose и удалить mock volume, включая тестовые токены и
+письма. До проверки точных IDs из manifest никаких массовых cleanup-команд.
+
+Мок подтверждает только сценарии, которые прошли через test-backend. Принятие
+17E требует всей матрицы его задания; 17F требует отдельного black-box E2E с
+реальным Agent, provisioning/PIN, архивом и сверкой версий.

@@ -15,12 +15,21 @@ from app.auth import get_current_user
 from app.config import settings
 from app.database import get_db
 from app.models import EmailVerification, Org, Terminal, User
+from app.models_l4desk import L4DeskTerminal
+from app.repositories.l4desk_repository import L4DeskRepository
 from app.security.permissions import (
     PERMISSION_SETTINGS_TERMINALS_VIEW,
     require_permission,
     require_readonly_guard,
 )
+from app.services.cert_billing import mask_pin
 from app.services.email_service import send_email_with_logging
+from app.services.terminal_onboarding_service import (
+    TerminalOnboardingService,
+    TerminalOnboardRequest,
+    TerminalOnboardResponse,
+    TerminalReadiness,
+)
 from app.user_store import verify_password
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -28,14 +37,19 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
-def _check_settings_access(user: dict[str, Any]) -> None:
-    """Ensure user is either role_id == 3 or superuser."""
+def _check_settings_access(user: dict[str, Any] | None) -> None:
+    """Ensure user is authenticated and is role_id in (3, 5) or superuser."""
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Требуется аутентификация",
+        )
     is_su = bool(user.get("is_superuser") or user.get("role_id") == 1)
     role_id = int(user.get("role_id", 0))
-    if not is_su and role_id != 3:
+    if not is_su and role_id not in (3, 5):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Доступ к разделу Настройки разрешен только для пользователей с ролью 3 и суперпользователя",
+            detail="Доступ к разделу Настройки разрешен только для пользователей с ролью 3, 5 и суперпользователя",
         )
 
 
@@ -48,10 +62,10 @@ def _ensure_not_superuser(user: dict[str, Any]) -> None:
             detail="Суперпользователь имеет доступ к разделу Настройки только для чтения. Для управления используйте раздел Администрирование.",
         )
     role_id = int(user.get("role_id", 0))
-    if role_id != 3:
+    if role_id not in (3, 5):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Изменение настроек разрешено только для пользователей с ролью 3",
+            detail="Изменение настроек разрешено только для пользователей с ролью 3 или 5",
         )
 
 
@@ -112,6 +126,15 @@ class TerminalSettingsItem(BaseModel):
     cert_not_valid_after: str | None
     created_at: str | None
     updated_at: str | None
+    # L4Desk fields
+    ordinal: int | None = None
+    is_free: bool = False
+    readiness: TerminalReadiness | None = None
+    provisioning_state: str | None = None
+    pin_state: str | None = None
+    pin_masked: str | None = None
+    last_error: str | None = None
+    operation_id: str | None = None
 
 
 class TerminalSettingsListResponse(BaseModel):
@@ -640,8 +663,78 @@ async def list_terminals_settings(
     res = await db.execute(query)
     terminals = res.scalars().all()
 
+    # Enrich with L4Desk metadata
+    terminal_ids = [t.id for t in terminals]
+    l4_map: dict[int, L4DeskTerminal] = {}
+    earliest_active_id: int | None = None
+    if terminal_ids and effective_org_id > 0:
+        repo = L4DeskRepository(db)
+        earliest_active_id = await repo.get_earliest_active_terminal_id(
+            effective_org_id
+        )
+        l4_res = await db.execute(
+            select(L4DeskTerminal).where(
+                L4DeskTerminal.tenant_id == effective_org_id,
+                or_(
+                    L4DeskTerminal.terminal_id.in_(terminal_ids),
+                    L4DeskTerminal.runtime_terminal_id.in_(terminal_ids),
+                ),
+            )
+        )
+        for l4_obj in l4_res.scalars().all():
+            if isinstance(l4_obj, L4DeskTerminal):
+                l4_map[l4_obj.terminal_id] = l4_obj
+                if l4_obj.runtime_terminal_id:
+                    l4_map[l4_obj.runtime_terminal_id] = l4_obj
+
     items = []
     for t in terminals:
+        l4 = l4_map.get(t.id)
+        if l4:
+            is_free = (l4.terminal_id == earliest_active_id) and (l4.deleted_at is None)
+            is_online = bool(
+                t.iot_is_online
+                or (
+                    l4.last_online_at is not None
+                    and (datetime.now(UTC) - l4.last_online_at).total_seconds() < 300
+                )
+            )
+            readiness = TerminalReadiness(
+                record="ready" if l4.terminal_id else "pending",
+                certificate=(
+                    l4.pin_state
+                    if l4.pin_state
+                    in ("pending", "issued", "consumed", "expired", "failed")
+                    else "pending"
+                ),
+                iot=(
+                    l4.provisioning_state
+                    if l4.provisioning_state in ("pending", "ready", "failed")
+                    else "pending"
+                ),
+                online="online" if is_online else "offline",
+            )
+            ordinal = l4.ordinal
+            prov_state = l4.provisioning_state
+            pin_st = l4.pin_state
+            pin_msk = l4.certificate_reference
+            last_err = l4.last_error
+            op_id = l4.operation_id
+        else:
+            is_free = False
+            readiness = TerminalReadiness(
+                record="ready",
+                certificate="consumed" if t.cert_serial else "pending",
+                iot="ready" if t.iot_provisioned else "pending",
+                online="online" if t.iot_is_online else "offline",
+            )
+            ordinal = None
+            prov_state = "ready" if t.iot_provisioned else "pending"
+            pin_st = "consumed" if t.cert_serial else "pending"
+            pin_msk = mask_pin(t.cert_serial) if t.cert_serial else None
+            last_err = None
+            op_id = None
+
         items.append(
             TerminalSettingsItem(
                 id=t.id,
@@ -659,6 +752,14 @@ async def list_terminals_settings(
                 ),
                 created_at=t.created_at.isoformat() if t.created_at else None,
                 updated_at=t.updated_at.isoformat() if t.updated_at else None,
+                ordinal=ordinal,
+                is_free=is_free,
+                readiness=readiness,
+                provisioning_state=prov_state,
+                pin_state=pin_st,
+                pin_masked=pin_msk,
+                last_error=last_err,
+                operation_id=op_id,
             )
         )
 
@@ -730,4 +831,94 @@ async def update_terminal_settings(
         ),
         created_at=(terminal.created_at.isoformat() if terminal.created_at else None),
         updated_at=(terminal.updated_at.isoformat() if terminal.updated_at else None),
+    )
+
+
+# --- Endpoints: L4Desk Terminal Onboarding (L4D-06C-MB) ---
+
+
+@router.get("/terminals/onboard/status")
+async def get_terminal_onboarding_status() -> dict[str, Any]:
+    """Return whether L4Desk terminal onboarding is enabled and agent release info."""
+    return {
+        "enabled": settings.is_terminal_onboarding_enabled,
+        "agent_release_url": settings.agent_release_url,
+        "agent_version": settings.agent_release_version,
+    }
+
+
+@router.post(
+    "/terminals",
+    response_model=TerminalOnboardResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+@router.post(
+    "/terminals/onboard",
+    response_model=TerminalOnboardResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def onboard_terminal(
+    req: TerminalOnboardRequest,
+    org_id: int | None = Query(None, description="Org ID for superuser onboarding"),
+    user: dict[str, Any] = Depends(require_readonly_guard),
+    db: AsyncSession = Depends(get_db),
+) -> TerminalOnboardResponse:
+    """Create a new business terminal with monotonic tenant order and execute outbox saga."""
+    _check_settings_access(user)
+    service = TerminalOnboardingService(db)
+    return await service.onboard_terminal(
+        user=user,
+        req=req,
+        target_org_id=org_id,
+    )
+
+
+@router.post(
+    "/terminals/{terminal_id}/retry",
+    response_model=TerminalOnboardResponse,
+)
+async def retry_terminal_onboarding(
+    terminal_id: int,
+    user: dict[str, Any] = Depends(require_readonly_guard),
+    db: AsyncSession = Depends(get_db),
+) -> TerminalOnboardResponse:
+    """Retry any pending or failed saga steps for terminal onboarding."""
+    _check_settings_access(user)
+    service = TerminalOnboardingService(db)
+    return await service.retry_terminal_saga(
+        user=user,
+        terminal_id=terminal_id,
+    )
+
+
+@router.get(
+    "/terminals/{terminal_id}/readiness",
+    response_model=TerminalOnboardResponse,
+)
+async def get_terminal_readiness(
+    terminal_id: int,
+    user: dict[str, Any] = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> TerminalOnboardResponse:
+    """Get the four readiness indicators and enrollment metadata for a terminal."""
+    _check_settings_access(user)
+    service = TerminalOnboardingService(db)
+    return await service.get_terminal_readiness(
+        user=user,
+        terminal_id=terminal_id,
+    )
+
+
+@router.delete("/terminals/{terminal_id}")
+async def delete_terminal(
+    terminal_id: int,
+    user: dict[str, Any] = Depends(require_readonly_guard),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Soft-delete terminal and automatically transfer free quota to next earliest terminal."""
+    _check_settings_access(user)
+    service = TerminalOnboardingService(db)
+    return await service.delete_terminal(
+        user=user,
+        terminal_id=terminal_id,
     )

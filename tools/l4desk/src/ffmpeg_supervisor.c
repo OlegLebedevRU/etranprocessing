@@ -8,6 +8,8 @@
 #include "input_inject.h"
 #include "json_min.h"
 #include "log.h"
+#include "media_backend.h"
+#include "l4capture_adapter.h"
 #include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -57,6 +59,8 @@ static char g_base_path[MAX_PATH] = "C:\\l4tools";
 static char g_sn[64] = "UNKNOWN";
 static wchar_t g_custom_ffmpeg_binary[MAX_PATH] = { 0 };
 static HANDLE g_hFfmpegMutex = NULL;
+static char g_media_backend[32] = "ffmpeg";
+static l4d_media_backend_t* g_l4capture_backend = NULL;
 
 static uint64_t get_current_time_ms(void) {
     FILETIME ft;
@@ -279,6 +283,12 @@ static bool stop_active_stream_internal(const char* reason) {
         notify_stream_event(active_stream_id, "stopping", reason ? reason : "");
     }
 
+    if (g_l4capture_backend && g_l4capture_backend->vtable) {
+        if (!g_l4capture_backend->vtable->stop(g_l4capture_backend, active_stream_id)) {
+            log_error("l4capture did not confirm process exit; retaining stopping state");
+            return false;
+        }
+    }
     cleanup_process_handles_internal();
 
     strcpy_s(g_sup.state, sizeof(g_sup.state), "stopped");
@@ -353,6 +363,10 @@ void ffmpeg_supervisor_cleanup(void) {
 
     EnterCriticalSection(&g_sup_cs);
     stop_active_process_internal();
+    if (g_l4capture_backend) {
+        g_l4capture_backend->vtable->destroy(g_l4capture_backend);
+        g_l4capture_backend = NULL;
+    }
     if (g_hFfmpegMutex) {
         CloseHandle(g_hFfmpegMutex);
         g_hFfmpegMutex = NULL;
@@ -361,6 +375,12 @@ void ffmpeg_supervisor_cleanup(void) {
 
     DeleteCriticalSection(&g_sup_cs);
     g_sup_cs_inited = false;
+}
+
+void ffmpeg_supervisor_set_media_backend(const char* backend) {
+    if (backend && backend[0] != '\0') {
+        strcpy_s(g_media_backend, sizeof(g_media_backend), backend);
+    }
 }
 
 void ffmpeg_supervisor_set_custom_binary(const wchar_t* path) {
@@ -725,42 +745,6 @@ bool ffmpeg_supervisor_start(const char* stream_instance_id,
         notify_stream_event(prev_stream_id, "stopped", "");
     }
 
-    /* Locate FFmpeg binary */
-    wchar_t ffmpeg_bin[MAX_PATH];
-    if (g_custom_ffmpeg_binary[0] != L'\0') {
-        wcscpy_s(ffmpeg_bin, MAX_PATH, g_custom_ffmpeg_binary);
-    } else {
-        swprintf_s(ffmpeg_bin, MAX_PATH, L"%hs\\ffmpeg\\ffmpeg.exe", g_base_path);
-    }
-
-    if (GetFileAttributesW(ffmpeg_bin) == INVALID_FILE_ATTRIBUTES) {
-        strcpy_s(out_err_code, max_err_code, "ffmpeg_missing");
-        snprintf(out_err_msg, max_err_msg, "FFmpeg binary missing at %ls", ffmpeg_bin);
-        LeaveCriticalSection(&g_sup_cs);
-        return false;
-    }
-
-    /* Build command line */
-    wchar_t cmdline[4096];
-    bool cmd_ok = false;
-    if (_stricmp(mode, "desktop") == 0) {
-        cmd_ok = ffmpeg_build_desktop_cmdline(ffmpeg_bin, stream_instance_id, profile,
-                                              target_disp.x, target_disp.y,
-                                              target_disp.width, target_disp.height,
-                                              cmdline, sizeof(cmdline) / sizeof(wchar_t));
-    } else {
-        cmd_ok = ffmpeg_build_camera_cmdline(ffmpeg_bin, stream_instance_id, profile,
-                                             target_cam.device_path, target_cam.name,
-                                             cmdline, sizeof(cmdline) / sizeof(wchar_t));
-    }
-
-    if (!cmd_ok) {
-        strcpy_s(out_err_code, max_err_code, "ffmpeg_integrity");
-        strcpy_s(out_err_msg, max_err_msg, "Failed to construct FFmpeg command line");
-        LeaveCriticalSection(&g_sup_cs);
-        return false;
-    }
-
     strcpy_s(g_sup.stream_instance_id, sizeof(g_sup.stream_instance_id), stream_instance_id);
     if (lease_id) strcpy_s(g_sup.lease_id, sizeof(g_sup.lease_id), lease_id);
     strcpy_s(g_sup.mode, sizeof(g_sup.mode), mode);
@@ -795,11 +779,105 @@ bool ffmpeg_supervisor_start(const char* stream_instance_id,
     save_state_file();
     notify_stream_event(stream_instance_id, "starting", "");
 
-    bool launched = launch_ffmpeg_process(cmdline, stream_instance_id,
-                                          out_err_code, max_err_code,
-                                          out_err_msg, max_err_msg);
+    bool launched = false;
+
+    /* l4capture backend dispatch for desktop mode */
+    if (_stricmp(g_media_backend, "l4capture") == 0 && _stricmp(mode, "desktop") == 0) {
+        if (!g_l4capture_backend) {
+            char l4c_bin_dir[MAX_PATH];
+            snprintf(l4c_bin_dir, sizeof(l4c_bin_dir), "%s\\l4capture\\bin", g_base_path);
+            g_l4capture_backend = l4d_media_backend_create(L4D_BACKEND_L4CAPTURE, l4c_bin_dir);
+        }
+        if (g_l4capture_backend) {
+            l4d_stream_params_t params;
+            memset(&params, 0, sizeof(params));
+            params.lease_id = lease_id;
+            params.stream_id = stream_instance_id;
+            params.source_id = source_id;
+            params.profile = profile ? profile : "default";
+            params.source_rect = g_sup.desktop_rect;
+            params.geometry_gen = 0;
+            params.rtp_port = 5004;
+            params.rtcp_port = 5005;
+            /* Convert lease deadline to GetTickCount64-based (monotonic) for l4capture IPC.
+             * g_sup.lease_expires_at_ms is Unix epoch; adapter/l4capture use GetTickCount64. */
+            {
+                uint64_t now_tick = GetTickCount64();
+                uint64_t now_wall = get_current_time_ms();
+                if (g_sup.lease_expires_at_ms > 0 && g_sup.lease_expires_at_ms > now_wall) {
+                    params.deadline_tick_ms = now_tick + (g_sup.lease_expires_at_ms - now_wall);
+                } else {
+                    params.deadline_tick_ms = now_tick + 120000;
+                }
+            }
+
+            if (g_l4capture_backend->vtable->start(g_l4capture_backend, &params)) {
+                launched = true;
+                g_sup.ffmpeg_pid = 0;
+                strcpy_s(g_sup.state, sizeof(g_sup.state), "running");
+                g_sup.reason[0] = '\0';
+                save_state_file();
+                notify_stream_event(stream_instance_id, "running", "");
+                strcpy_s(out_result, max_result, is_switched ? "switched" : "started");
+                log_info("l4capture backend started for stream %s", stream_instance_id);
+            } else {
+                log_warn("l4capture backend failed to start, falling back to ffmpeg");
+                /* Destroy failed backend, fall through to ffmpeg */
+                g_l4capture_backend->vtable->destroy(g_l4capture_backend);
+                g_l4capture_backend = NULL;
+            }
+        } else {
+            log_warn("l4capture backend creation failed, falling back to ffmpeg");
+        }
+    }
+
+    /* Fallback: ffmpeg backend */
+    if (!launched) {
+        /* Locate FFmpeg binary */
+        wchar_t ffmpeg_bin[MAX_PATH];
+        if (g_custom_ffmpeg_binary[0] != L'\0') {
+            wcscpy_s(ffmpeg_bin, MAX_PATH, g_custom_ffmpeg_binary);
+        } else {
+            swprintf_s(ffmpeg_bin, MAX_PATH, L"%hs\\ffmpeg\\ffmpeg.exe", g_base_path);
+        }
+
+        if (GetFileAttributesW(ffmpeg_bin) == INVALID_FILE_ATTRIBUTES) {
+            strcpy_s(out_err_code, max_err_code, "ffmpeg_missing");
+            snprintf(out_err_msg, max_err_msg, "FFmpeg binary missing at %ls", ffmpeg_bin);
+            strcpy_s(g_sup.state, sizeof(g_sup.state), "failed");
+            save_state_file();
+            notify_stream_event(stream_instance_id, "failed", out_err_code);
+            LeaveCriticalSection(&g_sup_cs);
+            return false;
+        }
+
+        wchar_t cmdline_buf[4096];
+        bool cmd_ok = false;
+        if (_stricmp(mode, "desktop") == 0) {
+            cmd_ok = ffmpeg_build_desktop_cmdline(ffmpeg_bin, stream_instance_id, profile,
+                                                  target_disp.x, target_disp.y,
+                                                  target_disp.width, target_disp.height,
+                                                  cmdline_buf, sizeof(cmdline_buf) / sizeof(wchar_t));
+        } else {
+            cmd_ok = ffmpeg_build_camera_cmdline(ffmpeg_bin, stream_instance_id, profile,
+                                                 target_cam.device_path, target_cam.name,
+                                                 cmdline_buf, sizeof(cmdline_buf) / sizeof(wchar_t));
+        }
+
+        if (cmd_ok) {
+            launched = launch_ffmpeg_process(cmdline_buf, stream_instance_id,
+                                             out_err_code, max_err_code,
+                                             out_err_msg, max_err_msg);
+        } else {
+            strcpy_s(out_err_code, max_err_code, "ffmpeg_integrity");
+            strcpy_s(out_err_msg, max_err_msg, "Failed to construct FFmpeg command line");
+        }
+    }
+
     if (launched) {
-        notify_stream_event(stream_instance_id, "running", "");
+        if (strcmp(g_sup.state, "starting") == 0) {
+            notify_stream_event(stream_instance_id, "running", "");
+        }
         strcpy_s(out_result, max_result, is_switched ? "switched" : "started");
     } else {
         strcpy_s(g_sup.state, sizeof(g_sup.state), "failed");
@@ -843,7 +921,12 @@ bool ffmpeg_supervisor_stop(const char* stream_instance_id,
     }
 
     input_release_all();
-    stop_active_stream_internal("");
+    if (!stop_active_stream_internal("")) {
+        strcpy_s(out_err_code, max_err_code, "stop_failed");
+        strcpy_s(out_err_msg, max_err_msg, "Media process did not confirm exit");
+        LeaveCriticalSection(&g_sup_cs);
+        return false;
+    }
 
     strcpy_s(out_result, max_result, "stopped");
     LeaveCriticalSection(&g_sup_cs);
@@ -860,7 +943,10 @@ bool ffmpeg_supervisor_stop_with_reason(const char* reason) {
     }
 
     input_release_all();
-    stop_active_stream_internal(reason);
+    if (!stop_active_stream_internal(reason)) {
+        LeaveCriticalSection(&g_sup_cs);
+        return false;
+    }
 
     LeaveCriticalSection(&g_sup_cs);
     return true;
@@ -869,9 +955,26 @@ bool ffmpeg_supervisor_stop_with_reason(const char* reason) {
 void ffmpeg_supervisor_update_lease(const char* lease_id, uint64_t expires_at_ms) {
     ffmpeg_supervisor_ensure_inited();
     EnterCriticalSection(&g_sup_cs);
+    log_debug("update_lease: lease_id='%s' g_sup.lease_id='%s' expires_at=%llu g_sup.expires_at=%llu",
+              lease_id ? lease_id : "(null)", g_sup.lease_id,
+              (unsigned long long)expires_at_ms, (unsigned long long)g_sup.lease_expires_at_ms);
     if (g_sup.lease_id[0] == '\0' || (lease_id && lease_id[0] != '\0' && strcmp(g_sup.lease_id, lease_id) == 0)) {
         if (expires_at_ms > g_sup.lease_expires_at_ms) {
             g_sup.lease_expires_at_ms = expires_at_ms;
+            /* Forward lease renewal to l4capture adapter */
+            if (g_l4capture_backend && g_l4capture_backend->vtable &&
+                g_l4capture_backend->vtable->renew_lease) {
+                /* Convert wall-clock expires_at_ms to GetTickCount64-based deadline.
+                 * expires_at_ms is Unix epoch ms; adapter uses monotonic tick ms.
+                 * Approximate: deadline_tick = GetTickCount64() + remaining_ttl */
+                uint64_t now_wall = get_current_time_ms();
+                uint64_t now_tick = GetTickCount64();
+                uint64_t deadline_tick = now_tick + (expires_at_ms > now_wall ? expires_at_ms - now_wall : 0);
+                log_debug("update_lease: forwarding to adapter, deadline_tick=%llu (now_tick=%llu ttl=%lld)",
+                          (unsigned long long)deadline_tick, (unsigned long long)now_tick,
+                          (long long)(expires_at_ms - now_wall));
+                g_l4capture_backend->vtable->renew_lease(g_l4capture_backend, lease_id, deadline_tick);
+            }
         }
     }
     LeaveCriticalSection(&g_sup_cs);
@@ -886,6 +989,22 @@ bool ffmpeg_supervisor_tick(const SystemInventory* inv,
     if (p_state_changed) *p_state_changed = false;
 
     uint64_t now_ms = get_current_time_ms();
+
+    /* 0. Poll l4capture backend if active */
+    if (g_l4capture_backend && g_l4capture_backend->vtable) {
+        g_l4capture_backend->vtable->poll(g_l4capture_backend);
+        /* Check if l4capture process died unexpectedly */
+        if (strcmp(g_sup.state, "running") == 0 && !g_l4capture_backend->vtable->is_running(g_l4capture_backend)) {
+            log_warn("l4capture process exited unexpectedly, state -> failed");
+            strcpy_s(g_sup.state, sizeof(g_sup.state), "failed");
+            strcpy_s(g_sup.reason, sizeof(g_sup.reason), "l4capture_exited");
+            save_state_file();
+            notify_stream_event(g_sup.stream_instance_id, "failed", "l4capture_exited");
+            if (p_state_changed) *p_state_changed = true;
+            if (out_new_state) strcpy_s(out_new_state, max_state_len, "failed");
+            if (out_reason) strcpy_s(out_reason, max_reason_len, "l4capture_exited");
+        }
+    }
 
     /* 1. Local Lease Watchdog (Fail-Closed, 5s grace) */
     if ((strcmp(g_sup.state, "running") == 0 || strcmp(g_sup.state, "restarting") == 0) &&

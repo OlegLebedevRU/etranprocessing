@@ -1,0 +1,657 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "contract_version": "1.0.0",
+  "agent_version": "1.7.7",
+  "generated_at_utc": "2026-09-17T20:30:00Z",
+  "description": "Executable golden test vectors for L4Desk Agent Compatibility Contract v1",
+  "presence_vectors": [
+    {
+      "id": "pres-001",
+      "name": "main_app_connect",
+      "client_type": "main_app",
+      "topic": "dev/000100773/app",
+      "payload": "app_online",
+      "qos": 1,
+      "retain": true,
+      "phase": "after_connack"
+    },
+    {
+      "id": "pres-002",
+      "name": "main_app_shutdown",
+      "client_type": "main_app",
+      "topic": "dev/000100773/app",
+      "payload": "app_offline",
+      "qos": 1,
+      "retain": true,
+      "phase": "normal_shutdown"
+    },
+    {
+      "id": "pres-003",
+      "name": "main_app_lwt",
+      "client_type": "main_app",
+      "topic": "dev/000100773/app",
+      "payload": "app_offline",
+      "qos": 1,
+      "retain": true,
+      "phase": "will_message"
+    },
+    {
+      "id": "pres-004",
+      "name": "extra_service_connect",
+      "client_type": "extra_service",
+      "topic": "dev/000100773/svc",
+      "payload": "svc_online",
+      "qos": 1,
+      "retain": true,
+      "phase": "after_connack"
+    },
+    {
+      "id": "pres-005",
+      "name": "extra_service_shutdown",
+      "client_type": "extra_service",
+      "topic": "dev/000100773/svc",
+      "payload": "svc_offline",
+      "qos": 1,
+      "retain": true,
+      "phase": "normal_shutdown"
+    },
+    {
+      "id": "pres-006",
+      "name": "extra_service_lwt",
+      "client_type": "extra_service",
+      "topic": "dev/000100773/svc",
+      "payload": "svc_offline",
+      "qos": 1,
+      "retain": true,
+      "phase": "will_message"
+    }
+  ],
+  "method_7000_vectors": [
+    {
+      "id": "vec-7000-inv-01",
+      "action": "inventory_get",
+      "description": "Query available displays and camera devices",
+      "request": {
+        "topic": "srv/000100773/rsp",
+        "payload": {
+          "method_code": 7000,
+          "action": "inventory_get",
+          "command_id": "inv_001",
+          "sn": "000100773"
+        }
+      },
+      "expected_response": {
+        "topic": "dev/000100773/res",
+        "payload": {
+          "status": "ok",
+          "command_id": "inv_001",
+          "error": null,
+          "displays": [
+            {
+              "device_name": "\\\\.\\DISPLAY1",
+              "display_index": 0,
+              "width": 1920,
+              "height": 1080,
+              "is_primary": true
+            }
+          ],
+          "cameras": [
+            {
+              "device_name": "Integrated Camera",
+              "camera_index": 0
+            }
+          ],
+          "active_stream": null
+        }
+      }
+    },
+    {
+      "id": "vec-7000-str-desktop-01",
+      "action": "stream_start",
+      "description": "Start primary desktop video streaming session",
+      "request": {
+        "topic": "srv/000100773/rsp",
+        "payload": {
+          "method_code": 7000,
+          "action": "stream_start",
+          "command_id": "str_001",
+          "sn": "000100773",
+          "stream_mode": "desktop",
+          "display_index": 0,
+          "camera_index": 0,
+          "fps": 25,
+          "bitrate_kbps": 2000,
+          "lease_sec": 60,
+          "input_enabled": true
+        }
+      },
+      "expected_response": {
+        "topic": "dev/000100773/res",
+        "payload": {
+          "status": "started",
+          "command_id": "str_001",
+          "error": null,
+          "stream_instance_id": "s_000100773_1726593684",
+          "stream_mode": "desktop",
+          "display_index": 0,
+          "camera_index": 0,
+          "fps": 25,
+          "bitrate_kbps": 2000,
+          "lease_sec": 60,
+          "expires_at_ms": 1726593744000,
+          "rtp_port": 5004,
+          "rtcp_port": 5005,
+          "input_enabled": true,
+          "desktop_locked": false,
+          "session_available": true
+        }
+      }
+    },
+    {
+      "id": "vec-7000-str-camera-01",
+      "action": "stream_start",
+      "description": "Start camera video streaming session",
+      "request": {
+        "topic": "srv/000100773/rsp",
+        "payload": {
+          "method_code": 7000,
+          "action": "stream_start",
+          "command_id": "str_cam_001",
+          "sn": "000100773",
+          "stream_mode": "camera",
+          "display_index": 0,
+          "camera_index": 0,
+          "fps": 20,
+          "bitrate_kbps": 1500,
+          "lease_sec": 60,
+          "input_enabled": false
+        }
+      },
+      "expected_response": {
+        "topic": "dev/000100773/res",
+        "payload": {
+          "status": "started",
+          "command_id": "str_cam_001",
+          "error": null,
+          "stream_instance_id": "s_000100773_1726593900",
+          "stream_mode": "camera",
+          "display_index": 0,
+          "camera_index": 0,
+          "fps": 20,
+          "bitrate_kbps": 1500,
+          "lease_sec": 60,
+          "expires_at_ms": 1726593960000,
+          "rtp_port": 5004,
+          "rtcp_port": 5005,
+          "input_enabled": false,
+          "desktop_locked": false,
+          "session_available": true
+        }
+      }
+    },
+    {
+      "id": "vec-7000-rnw-01",
+      "action": "lease_renew",
+      "description": "Renew active stream lease duration",
+      "request": {
+        "topic": "srv/000100773/rsp",
+        "payload": {
+          "method_code": 7000,
+          "action": "lease_renew",
+          "command_id": "rnw_001",
+          "sn": "000100773",
+          "stream_instance_id": "s_000100773_1726593684",
+          "lease_sec": 60
+        }
+      },
+      "expected_response": {
+        "topic": "dev/000100773/res",
+        "payload": {
+          "status": "renewed",
+          "command_id": "rnw_001",
+          "error": null,
+          "stream_instance_id": "s_000100773_1726593684",
+          "expires_at_ms": 1726593804000
+        }
+      }
+    },
+    {
+      "id": "vec-7000-clk-01",
+      "action": "mouse_click",
+      "description": "Inject normalized mouse click into active desktop session",
+      "request": {
+        "topic": "srv/000100773/rsp",
+        "payload": {
+          "method_code": 7000,
+          "action": "mouse_click",
+          "command_id": "clk_001",
+          "sn": "000100773",
+          "stream_instance_id": "s_000100773_1726593684",
+          "x_norm": 0.5234,
+          "y_norm": 0.2811,
+          "button": "left",
+          "click_type": "click"
+        }
+      },
+      "expected_response": {
+        "topic": "dev/000100773/res",
+        "payload": {
+          "status": "injected",
+          "command_id": "clk_001",
+          "error": null
+        }
+      }
+    },
+    {
+      "id": "vec-7000-key-01",
+      "action": "key_event",
+      "description": "Inject key down/up event into active desktop session",
+      "request": {
+        "topic": "srv/000100773/rsp",
+        "payload": {
+          "method_code": 7000,
+          "action": "key_event",
+          "command_id": "key_001",
+          "sn": "000100773",
+          "stream_instance_id": "s_000100773_1726593684",
+          "vk": 65,
+          "scan_code": 30,
+          "is_down": true,
+          "is_extended": false
+        }
+      },
+      "expected_response": {
+        "topic": "dev/000100773/res",
+        "payload": {
+          "status": "injected",
+          "command_id": "key_001",
+          "error": null
+        }
+      }
+    },
+    {
+      "id": "vec-7000-sc-01",
+      "action": "shortcut_action",
+      "description": "Inject system shortcut (Win+D) into desktop session",
+      "request": {
+        "topic": "srv/000100773/rsp",
+        "payload": {
+          "method_code": 7000,
+          "action": "shortcut_action",
+          "command_id": "sc_001",
+          "sn": "000100773",
+          "stream_instance_id": "s_000100773_1726593684",
+          "shortcut": "win_d"
+        }
+      },
+      "expected_response": {
+        "topic": "dev/000100773/res",
+        "payload": {
+          "status": "injected",
+          "command_id": "sc_001",
+          "error": null
+        }
+      }
+    },
+    {
+      "id": "vec-7000-stp-01",
+      "action": "stream_stop",
+      "description": "Stop running stream instance",
+      "request": {
+        "topic": "srv/000100773/rsp",
+        "payload": {
+          "method_code": 7000,
+          "action": "stream_stop",
+          "command_id": "stp_001",
+          "sn": "000100773",
+          "stream_instance_id": "s_000100773_1726593684"
+        }
+      },
+      "expected_response": {
+        "topic": "dev/000100773/res",
+        "payload": {
+          "status": "stopped",
+          "command_id": "stp_001",
+          "error": null,
+          "stream_instance_id": "s_000100773_1726593684"
+        }
+      }
+    },
+    {
+      "id": "vec-7000-err-locked",
+      "action": "stream_start",
+      "description": "Stream start failed because Windows desktop is locked",
+      "request": {
+        "topic": "srv/000100773/rsp",
+        "payload": {
+          "method_code": 7000,
+          "action": "stream_start",
+          "command_id": "str_err_lock",
+          "sn": "000100773",
+          "stream_mode": "desktop",
+          "display_index": 0,
+          "camera_index": 0,
+          "fps": 25,
+          "bitrate_kbps": 2000,
+          "lease_sec": 60,
+          "input_enabled": true
+        }
+      },
+      "expected_response": {
+        "topic": "dev/000100773/res",
+        "payload": {
+          "status": "error",
+          "command_id": "str_err_lock",
+          "error": "desktop_locked",
+          "desktop_locked": true,
+          "session_available": false
+        }
+      }
+    },
+    {
+      "id": "vec-7000-err-busy",
+      "action": "stream_start",
+      "description": "Stream start failed because another stream is already running",
+      "request": {
+        "topic": "srv/000100773/rsp",
+        "payload": {
+          "method_code": 7000,
+          "action": "stream_start",
+          "command_id": "str_err_busy",
+          "sn": "000100773",
+          "stream_mode": "desktop",
+          "display_index": 0,
+          "camera_index": 0,
+          "fps": 25,
+          "bitrate_kbps": 2000,
+          "lease_sec": 60,
+          "input_enabled": true
+        }
+      },
+      "expected_response": {
+        "topic": "dev/000100773/res",
+        "payload": {
+          "status": "busy",
+          "command_id": "str_err_busy",
+          "error": "already_running"
+        }
+      }
+    }
+  ],
+  "method_7001_vectors": [
+    {
+      "id": "vec-7001-cmd-hostname",
+      "description": "Execute hostname command in cmd shell",
+      "request": {
+        "topic": "srv/000100773/rsp",
+        "payload": {
+          "id": "task-exec-1001",
+          "method_code": 7001,
+          "session_id": "sess-exec-9001",
+          "command_line": "hostname",
+          "shell": "cmd",
+          "ttl_sec": 30,
+          "topic": "dev/000100773/out"
+        }
+      },
+      "stream_chunks": [
+        {
+          "topic": "dev/000100773/out",
+          "payload": {
+            "session_id": "sess-exec-9001",
+            "seq": 1,
+            "data": "TERM-KIOSK-01\r\n",
+            "stream": "stdout",
+            "eof": false
+          }
+        },
+        {
+          "topic": "dev/000100773/out",
+          "payload": {
+            "session_id": "sess-exec-9001",
+            "seq": 2,
+            "data": "",
+            "eof": true,
+            "exit_code": 0
+          }
+        }
+      ],
+      "final_response": {
+        "topic": "dev/000100773/res",
+        "payload": {
+          "id": "task-exec-1001",
+          "session_id": "sess-exec-9001",
+          "method_code": 7001,
+          "status": "completed",
+          "exit_code": 0,
+          "execution_time_ms": 48
+        }
+      }
+    },
+    {
+      "id": "vec-7001-ps-date",
+      "description": "Execute Get-Date command in powershell",
+      "request": {
+        "topic": "srv/000100773/rsp",
+        "payload": {
+          "id": "task-exec-1002",
+          "method_code": 7001,
+          "session_id": "sess-exec-9002",
+          "command_line": "Get-Date -Format 'yyyy-MM-dd HH:mm:ss'",
+          "shell": "powershell",
+          "ttl_sec": 15,
+          "topic": "dev/000100773/out"
+        }
+      },
+      "stream_chunks": [
+        {
+          "topic": "dev/000100773/out",
+          "payload": {
+            "session_id": "sess-exec-9002",
+            "seq": 1,
+            "data": "2026-09-17 16:30:00\r\n",
+            "stream": "stdout",
+            "eof": false
+          }
+        },
+        {
+          "topic": "dev/000100773/out",
+          "payload": {
+            "session_id": "sess-exec-9002",
+            "seq": 2,
+            "data": "",
+            "eof": true,
+            "exit_code": 0
+          }
+        }
+      ],
+      "final_response": {
+        "topic": "dev/000100773/res",
+        "payload": {
+          "id": "task-exec-1002",
+          "session_id": "sess-exec-9002",
+          "method_code": 7001,
+          "status": "completed",
+          "exit_code": 0,
+          "execution_time_ms": 312
+        }
+      }
+    },
+    {
+      "id": "vec-7001-err-failed",
+      "description": "Execute failing command returning exit_code = 1",
+      "request": {
+        "topic": "srv/000100773/rsp",
+        "payload": {
+          "id": "task-exec-1003",
+          "method_code": 7001,
+          "session_id": "sess-exec-9003",
+          "command_line": "dir non_existing_file_never_there.txt",
+          "shell": "cmd",
+          "ttl_sec": 15,
+          "topic": "dev/000100773/out"
+        }
+      },
+      "stream_chunks": [
+        {
+          "topic": "dev/000100773/out",
+          "payload": {
+            "session_id": "sess-exec-9003",
+            "seq": 1,
+            "data": "File Not Found\r\n",
+            "stream": "stderr",
+            "eof": false
+          }
+        },
+        {
+          "topic": "dev/000100773/out",
+          "payload": {
+            "session_id": "sess-exec-9003",
+            "seq": 2,
+            "data": "",
+            "eof": true,
+            "exit_code": 1
+          }
+        }
+      ],
+      "final_response": {
+        "topic": "dev/000100773/res",
+        "payload": {
+          "id": "task-exec-1003",
+          "session_id": "sess-exec-9003",
+          "method_code": 7001,
+          "status": "failed",
+          "exit_code": 1,
+          "execution_time_ms": 35
+        }
+      }
+    },
+    {
+      "id": "vec-7001-timeout",
+      "description": "Command execution exceeding ttl_sec leading to timeout",
+      "request": {
+        "topic": "srv/000100773/rsp",
+        "payload": {
+          "id": "task-exec-1004",
+          "method_code": 7001,
+          "session_id": "sess-exec-9004",
+          "command_line": "ping -n 100 127.0.0.1",
+          "shell": "cmd",
+          "ttl_sec": 2,
+          "topic": "dev/000100773/out"
+        }
+      },
+      "stream_chunks": [
+        {
+          "topic": "dev/000100773/out",
+          "payload": {
+            "session_id": "sess-exec-9004",
+            "seq": 1,
+            "data": "Pinging 127.0.0.1 with 32 bytes of data:\r\n",
+            "stream": "stdout",
+            "eof": false
+          }
+        },
+        {
+          "topic": "dev/000100773/out",
+          "payload": {
+            "session_id": "sess-exec-9004",
+            "seq": 2,
+            "data": "",
+            "eof": true,
+            "exit_code": -1
+          }
+        }
+      ],
+      "final_response": {
+        "topic": "dev/000100773/res",
+        "payload": {
+          "id": "task-exec-1004",
+          "session_id": "sess-exec-9004",
+          "method_code": 7001,
+          "status": "timed_out",
+          "exit_code": -1,
+          "execution_time_ms": 2005
+        }
+      }
+    }
+  ],
+  "method_7002_vectors": [
+    {
+      "id": "vec-7002-cncl-01",
+      "description": "Cancel currently active command execution task",
+      "request": {
+        "topic": "srv/000100773/rsp",
+        "payload": {
+          "id": "task-cncl-1001",
+          "method_code": 7002,
+          "target_task_id": "task-exec-1001",
+          "target_session_id": "sess-exec-9001"
+        }
+      },
+      "expected_response": {
+        "topic": "dev/000100773/res",
+        "payload": {
+          "id": "task-cncl-1001",
+          "method_code": 7002,
+          "target_task_id": "task-exec-1001",
+          "status": "cancelled",
+          "message": "Task was successfully cancelled"
+        }
+      }
+    },
+    {
+      "id": "vec-7002-cncl-not-found",
+      "description": "Cancel request for non-existent or completed task",
+      "request": {
+        "topic": "srv/000100773/rsp",
+        "payload": {
+          "id": "task-cncl-1002",
+          "method_code": 7002,
+          "target_task_id": "task-unknown-9999",
+          "target_session_id": "sess-unknown-9999"
+        }
+      },
+      "expected_response": {
+        "topic": "dev/000100773/res",
+        "payload": {
+          "id": "task-cncl-1002",
+          "method_code": 7002,
+          "target_task_id": "task-unknown-9999",
+          "status": "not_found",
+          "message": "Target task is not active or already finished"
+        }
+      }
+    }
+  ],
+  "l4rtp_wire_vectors": [
+    {
+      "id": "vec-rtp-preamble",
+      "description": "L4RTP/1 initial connection preamble",
+      "wire_hex": "4c34525401000009303030313030373733",
+      "expected_parsed": {
+        "magic": "L4RT",
+        "version": 1,
+        "reserved": 0,
+        "sn_len": 9,
+        "sn": "000100773"
+      }
+    },
+    {
+      "id": "vec-rtp-video-frame",
+      "description": "L4RTP/1 multiplexed video packet header",
+      "channel": 1,
+      "channel_name": "RTP",
+      "header_hex": "01000578",
+      "expected_length": 1400
+    },
+    {
+      "id": "vec-rtp-rtcp-frame",
+      "description": "L4RTP/1 multiplexed RTCP feedback packet header",
+      "channel": 2,
+      "channel_name": "RTCP",
+      "header_hex": "02000048",
+      "expected_length": 72
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 import json
 from contextlib import suppress
 
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 DEFAULT_JWT_PUBLIC_KEY = """-----BEGIN PUBLIC KEY-----
@@ -147,13 +148,142 @@ class Settings(BaseSettings):
     # L4media Video Surveillance
     l4media_ingress_url: str = "http://l4media-ingress:9100"
     l4media_janus_url: str = "http://l4media-janus:8088/janus"
+    l4media_service_token: str = ""
     video_port_base: int = 6000
     video_port_slots: int = 50
 
-    # Remote Input Control
+    @property
+    def l4media_effective_token(self) -> str:
+        return self.l4media_service_token or self.internal_service_key_value or ""
+
+    # Remote Input Control & Unified Session Orchestration (L4D-08B-MB)
     remote_control_enabled: bool = True
     remote_control_ws_connect_timeout_sec: float = 5.0
     remote_control_click_timeout_sec: float = 7.0  # > app1 click_ack_timeout (5 s)
+    l4desk_session_orchestration_enabled: bool = True
+    l4desk_policy_enforcement_enabled: bool = (
+        False  # Disabled in 08B (permissive legacy policy)
+    )
+    remote_session_start_timeout_sec: float = 20.0
+    remote_session_watchdog_ttl_sec: int = 600
+
+    # IoT Contract Consumer v1 (L4Desk event feed)
+    iot_event_feed_base_url: str = ""
+    iot_event_feed_service_token: str = ""
+    iot_event_feed_timeout_seconds: float = 10.0
+    iot_event_feed_max_retries: int = 3
+    iot_event_feed_retry_backoff_sec: float = 0.5
+    iot_consumer_enabled: bool = False  # Dark consumer disabled by default
+    iot_consumer_shadow_mode: bool = (
+        True  # Shadow mode: technical ingest only, zero commercial mutation
+    )
+    iot_consumer_poll_interval_sec: float = 5.0
+    iot_consumer_batch_size: int = 100
+    iot_consumer_id: str = "menubuilder_iot_event_consumer"
+    iot_consumer_finance_tenant_ids: list[int] = []
+
+    @property
+    def event_feed_effective_url(self) -> str:
+        return self.iot_event_feed_base_url or self.internal_api_base_url or ""
+
+    @property
+    def event_feed_effective_token(self) -> str:
+        return (
+            self.iot_event_feed_service_token or self.internal_service_key_value or ""
+        )
+
+    # L4Desk Dark Mode Feature Flags & Schema Compatibility (L4D-04C-MB)
+    l4desk_enabled: bool = False
+    l4desk_registration_enabled: bool = False
+    l4desk_billing_enabled: bool = False
+    l4desk_ui_enabled: bool = False
+    schema_compatibility_check_enabled: bool = True
+    required_alembic_revision: str = "027"
+
+    # L4Desk Self-Registration & Security (L4D-05-MB)
+    l4desk_registration_token_expire_hours: int = 24
+    l4desk_terms_current_version: str = "v1"
+    l4desk_rate_limit_ip_max: int = 5
+    l4desk_rate_limit_ip_window_sec: int = 600
+    l4desk_rate_limit_resend_cooldown_sec: int = 60
+    l4desk_rate_limit_resend_max_per_hour: int = 3
+
+    # L4Desk Terminal Onboarding (L4D-06C-MB)
+    l4desk_terminal_onboarding_enabled: bool = False
+    processing_backend_url: str = ""
+    processing_backend_service_token: str = ""
+    agent_release_url: str = (
+        "https://l4tools-generic.ar.cloud.ru/l4tools/1.7.7/l4setup.exe"
+    )
+    agent_release_version: str = "1.7.7"
+
+    # L4Desk Financial Core Double-Entry Subledger (L4D-09-MB)
+    l4desk_financial_core_enabled: bool = True
+
+    # L4Desk Entitlement, Grace & Notifications (L4D-12-MB)
+    l4desk_policy_shadow_mode: bool = True
+    l4desk_free_quota_test_tenant_ids: list[int] = []
+    l4desk_free_quota_test_seconds: int = 7200
+    # Isolated E2E clock; empty allowlist keeps production on real time.
+    l4desk_entitlement_test_tenant_ids: list[int] = []
+    l4desk_entitlement_test_offset_seconds: int = Field(default=0, ge=0, le=604800)
+    l4desk_entitlement_worker_enabled: bool = False
+    l4desk_entitlement_worker_interval_sec: float = 60.0
+    l4desk_metering_close_worker_enabled: bool = False
+    l4desk_metering_close_worker_tenant_ids: list[int] = []
+    l4desk_metering_close_worker_interval_sec: float = 60.0
+    l4desk_metering_close_grace_sec: int = 300
+    l4desk_stop_outbox_max_retries: int = 5
+    l4desk_stop_outbox_retry_interval_sec: float = 10.0
+    l4desk_email_notifications_enabled: bool = True
+    l4desk_notification_max_retries: int = 3
+
+    # YooKassa Payments & Fiscal Configuration (L4D-11-MB)
+    yookassa_enabled: bool = False
+    yookassa_shop_id: str = ""
+    yookassa_secret_key: str = ""
+    yookassa_api_url: str = "https://api.yookassa.ru/v3"
+    yookassa_webhook_secret: str = ""
+    yookassa_ip_filter_enabled: bool = False
+    yookassa_trusted_ips_raw: str = "185.71.76.0/27,185.71.77.0/27,77.75.153.0/25,77.75.156.11/32,77.75.156.35/32,77.75.154.128/25,2a02:5180::/32"
+    yookassa_return_url_base: str = ""
+    yookassa_receipt_enabled: bool = True
+    yookassa_tax_system_code: int | None = None
+    yookassa_vat_code: int = 1  # 1 = without VAT
+    yookassa_payment_subject: str = "service"
+    yookassa_payment_mode: str = "full_prepayment"
+    yookassa_item_description: str = "Пополнение баланса L4Desk"
+    yookassa_request_timeout_sec: float = 15.0
+
+    @property
+    def yookassa_trusted_ips(self) -> list[str]:
+        return [
+            ip.strip() for ip in self.yookassa_trusted_ips_raw.split(",") if ip.strip()
+        ]
+
+    @property
+    def is_yookassa_enabled(self) -> bool:
+        return self.yookassa_enabled or self.l4desk_enabled
+
+    @property
+    def processing_backend_effective_url(self) -> str:
+        return self.processing_backend_url or "http://processing-backend:8000"
+
+    @property
+    def processing_backend_effective_token(self) -> str:
+        return (
+            self.processing_backend_service_token
+            or self.internal_service_key_value
+            or ""
+        )
+
+    @property
+    def is_terminal_onboarding_enabled(self) -> bool:
+        return self.l4desk_terminal_onboarding_enabled or self.l4desk_enabled
+
+    @property
+    def is_financial_core_enabled(self) -> bool:
+        return self.l4desk_financial_core_enabled or self.l4desk_enabled
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

@@ -228,6 +228,7 @@ bool unpack_is_idempotent(const wchar_t* dest_dir, const char* current_version) 
         L"l4superv\\l4superv.exe",
         L"l4pin\\l4pin.exe",
         L"l4desk\\l4desk.exe",
+        L"l4capture\\bin\\l4capture.exe",
         L"ffmpeg\\ffmpeg.exe"
     };
 
@@ -365,6 +366,7 @@ bool unpack_check_files_locked(const wchar_t* dest_dir, DWORD wait_timeout_ms) {
         L"l4superv\\l4superv.exe",
         L"l4pin\\l4pin.exe",
         L"l4desk\\l4desk.exe",
+        L"l4capture\\bin\\l4capture.exe",
         L"ffmpeg\\ffmpeg.exe"
     };
 
@@ -418,6 +420,7 @@ bool unpack_rollback(const wchar_t* dest_dir, const char* prev_version) {
         L"l4superv",
         L"l4pin",
         L"l4desk",
+        L"l4capture",
         L"ffmpeg",
         L"l4sql"
     };
@@ -642,6 +645,7 @@ bool unpack_payload(
         L"l4superv",
         L"l4pin",
         L"l4desk",
+        L"l4capture",
         L"ffmpeg",
         L"l4sql"
     };

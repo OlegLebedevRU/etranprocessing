@@ -1,0 +1,322 @@
+{
+  "subproject": "MenuBuilder",
+  "backend_routes_count": 26,
+  "backend_routes": [
+    {
+      "path": "",
+      "methods": [],
+      "name": "",
+      "tags": []
+    },
+    {
+      "path": "",
+      "methods": [],
+      "name": "",
+      "tags": []
+    },
+    {
+      "path": "",
+      "methods": [],
+      "name": "",
+      "tags": []
+    },
+    {
+      "path": "",
+      "methods": [],
+      "name": "",
+      "tags": []
+    },
+    {
+      "path": "",
+      "methods": [],
+      "name": "",
+      "tags": []
+    },
+    {
+      "path": "",
+      "methods": [],
+      "name": "",
+      "tags": []
+    },
+    {
+      "path": "",
+      "methods": [],
+      "name": "",
+      "tags": []
+    },
+    {
+      "path": "",
+      "methods": [],
+      "name": "",
+      "tags": []
+    },
+    {
+      "path": "",
+      "methods": [],
+      "name": "",
+      "tags": []
+    },
+    {
+      "path": "",
+      "methods": [],
+      "name": "",
+      "tags": []
+    },
+    {
+      "path": "",
+      "methods": [],
+      "name": "",
+      "tags": []
+    },
+    {
+      "path": "",
+      "methods": [],
+      "name": "",
+      "tags": []
+    },
+    {
+      "path": "",
+      "methods": [],
+      "name": "",
+      "tags": []
+    },
+    {
+      "path": "",
+      "methods": [],
+      "name": "",
+      "tags": []
+    },
+    {
+      "path": "",
+      "methods": [],
+      "name": "",
+      "tags": []
+    },
+    {
+      "path": "",
+      "methods": [],
+      "name": "",
+      "tags": []
+    },
+    {
+      "path": "",
+      "methods": [],
+      "name": "",
+      "tags": []
+    },
+    {
+      "path": "",
+      "methods": [],
+      "name": "",
+      "tags": []
+    },
+    {
+      "path": "",
+      "methods": [],
+      "name": "",
+      "tags": []
+    },
+    {
+      "path": "",
+      "methods": [],
+      "name": "",
+      "tags": []
+    },
+    {
+      "path": "",
+      "methods": [],
+      "name": "",
+      "tags": []
+    },
+    {
+      "path": "",
+      "methods": [],
+      "name": "",
+      "tags": []
+    },
+    {
+      "path": "/docs",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "name": "swagger_ui_html",
+      "tags": []
+    },
+    {
+      "path": "/docs/oauth2-redirect",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "name": "swagger_ui_redirect",
+      "tags": []
+    },
+    {
+      "path": "/openapi.json",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "name": "openapi",
+      "tags": []
+    },
+    {
+      "path": "/redoc",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "name": "redoc_html",
+      "tags": []
+    }
+  ],
+  "rbac_roles": {
+    "1": "SUPERUSER / ADMIN (all rights, multi-tenant switch)",
+    "2": "ROLE_2 (legacy operator)",
+    "3": "USER / TENANT_ADMIN (own tenant menu, terminals, billing, users)",
+    "4": "VIEWER (read-only monitoring, reports, video, terminals per permissions array)"
+  },
+  "shared_db_models": [
+    "Terminal",
+    "TerminalMenu",
+    "Variant",
+    "Group",
+    "Service",
+    "Org",
+    "OrgBillingSettings",
+    "OrgBillingStatus",
+    "License",
+    "LicenseBillingCycle",
+    "BillingOrder",
+    "BillingOrderItem",
+    "User",
+    "UserSession",
+    "AuditLog",
+    "DeviceViolation",
+    "DeviceAuditEvent"
+  ],
+  "frontend_routes": [
+    {
+      "path": "/login",
+      "component": "LoginPage",
+      "access": "public"
+    },
+    {
+      "path": "/monitoring",
+      "component": "MonitoringPage",
+      "access": "PERMISSION_MONITORING_VIEW"
+    },
+    {
+      "path": "/video",
+      "component": "VideoSurveillancePage",
+      "access": "PERMISSION_VIDEO_VIEW"
+    },
+    {
+      "path": "/menu/terminals",
+      "component": "TerminalsPage",
+      "access": "forbiddenForRole4"
+    },
+    {
+      "path": "/menu/variants",
+      "component": "VariantsPage",
+      "access": "forbiddenForRole4"
+    },
+    {
+      "path": "/menu/catalog",
+      "component": "CatalogPage",
+      "access": "forbiddenForRole4"
+    },
+    {
+      "path": "/menu/help",
+      "component": "MenuHelpPage",
+      "access": "forbiddenForRole4"
+    },
+    {
+      "path": "/reports",
+      "component": "ReportsPage",
+      "access": "PERMISSION_REPORTS_*"
+    },
+    {
+      "path": "/billing",
+      "component": "BillingPage",
+      "access": "PERMISSION_BILLING_VIEW"
+    },
+    {
+      "path": "/devices",
+      "component": "DevicesPage",
+      "access": "tenant_context"
+    },
+    {
+      "path": "/integrations",
+      "component": "IntegrationsPage",
+      "access": "forbiddenForRole4"
+    },
+    {
+      "path": "/settings/profile",
+      "component": "ProfileSettingsPage",
+      "access": "forbiddenForRole4"
+    },
+    {
+      "path": "/settings/terminals",
+      "component": "TerminalsSettingsPage",
+      "access": "PERMISSION_SETTINGS_TERMINALS_VIEW"
+    },
+    {
+      "path": "/settings/users",
+      "component": "UserSettingsPage",
+      "access": "requireTenantAdmin"
+    },
+    {
+      "path": "/settings/verify-email",
+      "component": "VerifyEmailPage",
+      "access": "public_with_token"
+    },
+    {
+      "path": "/admin/organizations",
+      "component": "AdminOrganizationsPage",
+      "access": "superuser"
+    },
+    {
+      "path": "/admin/terminals",
+      "component": "AdminTerminalsPage",
+      "access": "superuser"
+    },
+    {
+      "path": "/admin/users",
+      "component": "AdminUsersPage",
+      "access": "superuser"
+    }
+  ],
+  "adapters_and_integrations": {
+    "iot_rpc": {
+      "service": "app1 (iot-rpc-rest-app)",
+      "base_url_config": "iot_rpc_base_url (default: http://app1:8000)",
+      "auth": "X-Internal-Service-Key",
+      "capabilities": [
+        "provisioning",
+        "remote_input_lease",
+        "stream_control",
+        "keyboard_mouse_input",
+        "ws_proxy",
+        "device_inventory"
+      ]
+    },
+    "l4media": {
+      "service": "l4media-ingress / l4media-janus",
+      "ingress_url_config": "l4media_ingress_url (default: http://l4media-ingress:9100)",
+      "janus_url_config": "l4media_janus_url (default: http://l4media-janus:8088/janus)",
+      "ws_path": "/janus-ws -> l4media-janus:8188",
+      "capabilities": [
+        "on_demand_session",
+        "mountpoint_pin_validation",
+        "webrtc_desktop_view",
+        "camera_view"
+      ]
+    },
+    "email_gateway": {
+      "service": "serverless_email_gateway_url",
+      "auth": "service_to_yc_service_secret"
+    }
+  }
+}

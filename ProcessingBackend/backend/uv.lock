@@ -196,7 +196,7 @@ wheels = [
 
 [[package]]
 name = "etranprocessing-db"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "../../shared" }
 dependencies = [
     { name = "asyncpg" },
@@ -212,6 +212,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "pyright", extras = ["nodejs"], specifier = ">=1.1.400" },
+    { name = "pytest", specifier = ">=9.1.1" },
     { name = "ruff", specifier = ">=0.12.0" },
 ]
 

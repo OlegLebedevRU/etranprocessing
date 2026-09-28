@@ -37,8 +37,8 @@ services:
       - "1443:1443"
       - "1444:1444"
     environment:
-      - JWT_SECRET_HEX=d9c7bb690cfb5cfae60e87b7a66e133bc7ce4599a16f2c5e533d1b8209da029b
-      - INTERNAL_SERVICE_KEY=internal-service-key-dev
+      - JWT_SECRET_HEX=${JWT_SECRET_HEX:?required}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?required}
     volumes:
       - ./MenuBuilder/frontend/dist:/usr/share/nginx/html:ro
       - ./nginx-configs/port_80.conf:/etc/nginx/conf.d/port_80.conf:ro
@@ -79,7 +79,8 @@ services:
     container_name: menubuilder-backend
     restart: always
     env_file:
-      - ./MenuBuilder/backend/.env
+      - path: ./MenuBuilder/backend/.env
+        format: raw
 
   app1:
     build:

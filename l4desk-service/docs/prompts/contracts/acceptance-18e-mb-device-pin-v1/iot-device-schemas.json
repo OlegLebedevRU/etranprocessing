@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:l4desk:18e:iot-device-bridge:1.0.0",
+  "title": "Accepted IoT device bridge projection for MenuBuilder",
+  "$defs": {
+    "tag": {
+      "type": "object",
+      "required": ["tag"],
+      "properties": {
+        "tag": {"type": "string"},
+        "value": {"type": ["string", "null"]}
+      },
+      "additionalProperties": true
+    },
+    "connection": {
+      "type": "object",
+      "properties": {
+        "last_checked_result": {"type": "boolean"},
+        "is_blocked": {"type": "boolean"},
+        "checked_at": {"type": ["string", "null"], "format": "date-time"}
+      },
+      "additionalProperties": true
+    },
+    "deviceListResponse": {
+      "type": "object",
+      "required": ["items", "total", "page", "size", "pages", "stats"],
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["device_id", "sn"],
+            "properties": {
+              "device_id": {"type": "integer"},
+              "sn": {"type": "string"},
+              "connection": {"oneOf": [{"$ref": "#/$defs/connection"}, {"type": "null"}]},
+              "device_tags": {
+                "type": "array",
+                "items": {"oneOf": [{"$ref": "#/$defs/tag"}, {"type": "null"}]}
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "total": {"type": "integer", "minimum": 0},
+        "page": {"type": "integer", "minimum": 1},
+        "size": {"type": "integer", "minimum": 1, "maximum": 100},
+        "pages": {"type": "integer", "minimum": 0},
+        "stats": {"type": "object"}
+      },
+      "additionalProperties": true
+    },
+    "terminalProvisionRequest": {
+      "type": "object",
+      "required": ["device_id", "sn", "org_id"],
+      "properties": {
+        "device_id": {"type": "integer"},
+        "sn": {"type": "string"},
+        "org_id": {"type": "integer"},
+        "name": {"type": ["string", "null"]},
+        "tags": {
+          "type": ["object", "null"],
+          "additionalProperties": {"type": "string"}
+        }
+      },
+      "additionalProperties": true
+    },
+    "terminalProvisionResult": {
+      "type": "object",
+      "required": ["device_id", "sn", "org_id", "success"],
+      "properties": {
+        "device_id": {"type": "integer"},
+        "sn": {"type": "string"},
+        "org_id": {"type": "integer"},
+        "success": {"type": "boolean"},
+        "is_online": {"type": "boolean"},
+        "error": {"type": ["string", "null"]}
+      },
+      "additionalProperties": true
+    }
+  }
+}

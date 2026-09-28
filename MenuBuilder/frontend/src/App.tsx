@@ -14,11 +14,14 @@ import {
   hasAnyReportPermission,
   hasPermission,
 } from "./utils/permissions";
+import { getNavigationProfile } from "./utils/navigationProfile";
 
 const { Paragraph } = Typography;
 
 const AppLayout = lazy(() => import("./routes/layout"));
 const LoginPage = lazy(() => import("./routes/login"));
+const RegisterPage = lazy(() => import("./routes/register"));
+const ConfirmRegistrationPage = lazy(() => import("./routes/register-confirm"));
 const MenuManagementLayout = lazy(() => import("./routes/menu-management"));
 const TerminalsPage = lazy(() => import("./routes/terminals"));
 const VariantsPage = lazy(() => import("./routes/variants"));
@@ -30,28 +33,36 @@ const ReportsPage = lazy(() => import("./routes/reports"));
 const IntegrationsPage = lazy(() => import("./routes/integrations"));
 const BillingPage = lazy(() => import("./routes/billing"));
 const DevicesPage = lazy(() => import("./routes/devices"));
+const ConsolePage = lazy(() => import("./routes/console/ConsolePage"));
+const McpPromoPage = lazy(() => import("./routes/mcp/McpPromoPage"));
+const LicensesPage = lazy(() => import("./routes/licenses/LicensesPage"));
 const AdminLayout = lazy(() => import("./routes/admin-layout"));
 const AdminOrganizationsPage = lazy(() => import("./routes/admin-organizations"));
 const AdminTerminalsPage = lazy(() => import("./routes/admin-terminals"));
 const AdminUsersPage = lazy(() => import("./routes/admin-users"));
+const AdminHubPage = lazy(() => import("./pages/AdminHubPage"));
 const SettingsLayout = lazy(() => import("./routes/settings-layout"));
 const ProfileSettingsPage = lazy(() => import("./routes/settings/ProfileSettingsPage"));
 const TerminalsSettingsPage = lazy(() => import("./routes/settings/TerminalsSettingsPage"));
 const UserSettingsPage = lazy(() => import("./routes/settings/UserSettingsPage"));
 const VerifyEmailPage = lazy(() => import("./routes/settings/VerifyEmailPage"));
+const L4DeskTerminalsPage = lazy(() => import("./routes/l4desk/L4DeskTerminalsPage"));
 
 function LoadingFallback() {
   return (
     <div
       style={{
         display: "flex",
+        flexDirection: "column",
         justifyContent: "center",
         alignItems: "center",
-        minHeight: "40vh",
+        minHeight: "50vh",
         width: "100%",
+        gap: 16,
       }}
     >
       <Spin size="large" />
+      <span style={{ color: "#8c8c8c", fontSize: 14 }}>Загрузка интерфейса...</span>
     </div>
   );
 }
@@ -76,6 +87,10 @@ function DefaultRouteResolver() {
   }
 
   if (user.role_id !== 4) {
+    const profile = getNavigationProfile(user);
+    if (profile === "l4desk") {
+      return <Navigate to="/terminals" replace />;
+    }
     return <Navigate to="/monitoring" replace />;
   }
 
@@ -127,6 +142,28 @@ function SettingsIndexResolver() {
   return <Navigate to="/settings/profile" replace />;
 }
 
+function L4DeskRootTerminalsRoute() {
+  const { user } = useSession();
+  const profile = getNavigationProfile(user);
+  if (profile === "l4desk") {
+    return <L4DeskTerminalsPage />;
+  }
+  return <Navigate to="/menu/terminals" replace />;
+}
+
+function SettingsTerminalsRoute() {
+  const { user } = useSession();
+  const profile = getNavigationProfile(user);
+  if (profile === "l4desk") {
+    return <Navigate to="/terminals" replace />;
+  }
+  return (
+    <ViewerGuard permission={PERMISSION_SETTINGS_TERMINALS_VIEW}>
+      <TerminalsSettingsPage />
+    </ViewerGuard>
+  );
+}
+
 function ViewerGuard({
   children,
   permission,
@@ -176,6 +213,8 @@ export default function App() {
       <Suspense fallback={<LoadingFallback />}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/register/confirm" element={<ConfirmRegistrationPage />} />
           <Route path="/settings/verify-email" element={<VerifyEmailPage />} />
           <Route
             element={
@@ -231,7 +270,10 @@ export default function App() {
                 </ViewerGuard>
               }
             />
+            <Route path="licenses" element={<LicensesPage />} />
             <Route path="devices" element={<DevicesPage />} />
+            <Route path="console" element={<ConsolePage />} />
+            <Route path="mcp" element={<McpPromoPage />} />
             <Route
               path="integrations"
               element={
@@ -252,11 +294,7 @@ export default function App() {
               />
               <Route
                 path="terminals"
-                element={
-                  <ViewerGuard permission={PERMISSION_SETTINGS_TERMINALS_VIEW}>
-                    <TerminalsSettingsPage />
-                  </ViewerGuard>
-                }
+                element={<SettingsTerminalsRoute />}
               />
               <Route
                 path="users"
@@ -276,12 +314,11 @@ export default function App() {
               <Route path="organizations" element={<AdminOrganizationsPage />} />
               <Route path="terminals" element={<AdminTerminalsPage />} />
               <Route path="users" element={<AdminUsersPage />} />
+              <Route path="hub" element={<AdminHubPage />} />
             </Route>
-            {/* Legacy paths kept so existing bookmarks keep working */}
-            <Route
-              path="terminals"
-              element={<Navigate to="/menu/terminals" replace />}
-            />
+            <Route path="hub" element={<Navigate to="/admin/hub" replace />} />
+            {/* Root Terminals section (L4Desk) / classic menu terminals */}
+            <Route path="terminals" element={<L4DeskRootTerminalsRoute />} />
             <Route
               path="variants"
               element={<Navigate to="/menu/variants" replace />}

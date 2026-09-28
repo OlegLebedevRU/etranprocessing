@@ -13,6 +13,11 @@ interface PendingTx {
   timer: any;
 }
 
+export interface VideoReceiveStats {
+  framesDecoded: number;
+  timestamp: number;
+}
+
 export class JanusStreamingClient {
   private wsUrl: string;
   private mountpointId: number;
@@ -245,6 +250,27 @@ export class JanusStreamingClient {
       handle_id: this.handleId,
       body: watchBody,
     });
+  }
+
+  public async getVideoReceiveStats(): Promise<VideoReceiveStats | null> {
+    if (!this.pc || this.isDestroyed) return null;
+    const reports = await this.pc.getStats();
+    let video: VideoReceiveStats | null = null;
+    reports.forEach((report) => {
+      const inbound = report as RTCStats & {
+        kind?: string;
+        mediaType?: string;
+        framesDecoded?: number;
+      };
+      if (
+        inbound.type === "inbound-rtp" &&
+        (inbound.kind === "video" || inbound.mediaType === "video") &&
+        typeof inbound.framesDecoded === "number"
+      ) {
+        video = { framesDecoded: inbound.framesDecoded, timestamp: inbound.timestamp };
+      }
+    });
+    return video;
   }
 
   public async stop(): Promise<void> {

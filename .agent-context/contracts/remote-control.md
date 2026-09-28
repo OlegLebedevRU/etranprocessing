@@ -24,6 +24,7 @@ l4desk — terminal validation/action; l4media не владеет lease. Общ
 - Trusted headers формирует backend, не browser. Key/PIN/JWT не логировать.
 - Ввод только при активном desktop control; camera/view-only — без pointer/key.
 - Keepalive только подтверждённой сессии; stop/error/unmount/lost rights выключают таймеры.
+- Для коммерческого учёта BFF раз в 60 с запрашивает подтверждённый terminal ACK через `wait_ack=true`. Подтверждённый интервал и UTC-курсор записываются вместе; при штатном stop записывается остаток, при недоказанном окончании старой stream epoch остаток не начисляется. Это внутренняя политика MenuBuilder, а не новый MQTT-контракт.
 - Terminal event имеет приоритет над оптимистичным UI running; stopped/error показывает reason.
 
 ## State machine
@@ -45,6 +46,14 @@ no pointer before lease, stop/unmount/reconnect без второго тайме
 ## Известные риски и незавершённые вопросы
 Исторический BFF fallback running не доказывает terminal ACK. 5-секундный UI timer
 не гарантируется фоновой вкладкой. Серверный bind lease↔device↔owner требует app1 проверки.
+
+## 17E corrective, 2026-09-26
+`l4desk_owner` (роль 5) получает view/stream/input и console lease только для
+своего tenant; console WS требует явный lease с совпадающими SN, tenant,
+owner_user_id и browser session. Источник — изменения MenuBuilder и app1 по
+17E; до развёртывания и browser E2E это уровень «код + локальные тесты».
+Публичный BFF принимает `session_id` при acquire только если он совпадает с
+каноническим session ID в JWT; release использует тот же JWT context.
 
 ## Источники и актуальность
 - Authoritative docs: [remote-input](../../docs/etran_arch-remote-input-control.md),

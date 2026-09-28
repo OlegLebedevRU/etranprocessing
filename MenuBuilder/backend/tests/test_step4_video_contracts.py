@@ -12,11 +12,14 @@ from app.auth import create_access_token
 from app.database import get_db
 from app.main import app
 from app.models import Terminal
+from app.models_l4desk import L4DeskRemoteSession
+from app.repositories.l4desk_repository import L4DeskRepository
 from app.routers.video import (
     _get_ingress_status,
     _mountpoint_pins,
 )
 from app.services.iot_client import iot_client
+from app.services.media_orchestrator_client import media_orchestrator_client
 
 
 @pytest.fixture(autouse=True)
@@ -107,6 +110,9 @@ async def test_stream_stop_conflict_not_swallowed(mock_db_session, operator_head
                     },
                 ),
             ),
+            patch.object(
+                media_orchestrator_client, "stop_session_for_sn"
+            ) as media_stop,
         ):
             resp = await ac.post(
                 "/api/v1/video/devices/1/stream/stop",
@@ -116,6 +122,7 @@ async def test_stream_stop_conflict_not_swallowed(mock_db_session, operator_head
             assert resp.status_code == 409
             data = resp.json()
             assert "owner_conflict" in str(data)
+            media_stop.assert_not_awaited()
 
 
 @pytest.mark.anyio
@@ -142,6 +149,11 @@ async def test_stream_stop_does_not_clear_new_lease_pin(
                 "remote_input_stream_stop",
                 return_value={"result": "stopped"},
             ),
+            patch.object(
+                media_orchestrator_client,
+                "stop_session_for_sn",
+                return_value={"state": "stopped"},
+            ) as media_stop,
         ):
             resp = await ac.post(
                 "/api/v1/video/devices/1/stream/stop",
@@ -153,6 +165,12 @@ async def test_stream_stop_does_not_clear_new_lease_pin(
             assert 1 in _mountpoint_pins
             assert _mountpoint_pins[1]["lease_id"] == "new-lease-id"
             assert _mountpoint_pins[1]["pin"] == "pin-for-new-lease"
+            media_stop.assert_awaited_once_with(
+                sn="sn0001",
+                lease_id="old-lease-id",
+                stream_instance_id=None,
+                reason="stream_stopped",
+            )
 
 
 @pytest.mark.anyio
@@ -188,6 +206,47 @@ async def test_keepalive_404_normalized_error_contract(
             assert data["detail"].get("code") == "lease_not_found"
             assert data["detail"].get("lease_id") == "released-lease-773"
             assert data["detail"].get("generation") == 4
+
+
+@pytest.mark.anyio
+async def test_video_keepalive_renews_matching_media_session(
+    mock_db_session, operator_headers
+):
+    active = L4DeskRemoteSession(
+        session_type="video", provider_session_id="provider-session-773"
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as ac:
+        with (
+            patch.object(
+                iot_client,
+                "remote_input_keepalive",
+                return_value={
+                    "result": "ok",
+                    "stream_instance_id": "provider-session-773",
+                    "stream_state": "running",
+                },
+            ) as lease_keepalive,
+            patch.object(
+                L4DeskRepository,
+                "get_active_session_by_terminal_id",
+                return_value=active,
+            ),
+            patch.object(
+                media_orchestrator_client,
+                "renew_session",
+                return_value={"status": "ok"},
+            ) as media_renew,
+        ):
+            resp = await ac.post(
+                "/api/v1/video/devices/1/control/keepalive",
+                json={"lease_id": "lease-773"},
+                headers=operator_headers,
+            )
+    assert resp.status_code == 200
+    lease_keepalive.assert_awaited_once()
+    media_renew.assert_awaited_once_with(sn="sn0001")
 
 
 def test_ws_inbound_keepalive_and_release_with_generation(

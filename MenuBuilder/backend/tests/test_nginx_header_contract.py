@@ -1,6 +1,7 @@
 from pathlib import Path
 
 NGINX_CONFIG = Path(__file__).parents[2] / "nginx.conf"
+PUBLIC_NGINX_CONFIG = Path(__file__).parents[3] / "nginx-configs" / "port_3000.conf"
 
 
 def _location(config: str, marker: str) -> str:
@@ -33,3 +34,17 @@ def test_public_auth_routes_clear_forwarded_identity_headers():
     assert 'proxy_set_header X-User-Id "";' in location
     assert 'proxy_set_header X-Org-Id "";' in location
     assert 'proxy_set_header X-User-Role "";' in location
+
+
+def test_public_hub_routes_reach_menu_builder_with_verified_identity():
+    config = PUBLIC_NGINX_CONFIG.read_text(encoding="utf-8")
+    location = _location(config, "location /api/v1/admin/hub/ {")
+
+    assert "auth_jwt_location COOKIE=accessToken;" in location
+    assert "proxy_pass $menubuilder_upstream;" in location
+    assert "proxy_set_header X-User-Id $jwt_claim_userId;" in location
+    assert "proxy_set_header X-Org-Id $jwt_claim_orgId;" in location
+    assert "proxy_set_header X-Role-Id $jwt_claim_roleId;" in location
+    assert 'proxy_set_header jwt-sub "";' in location
+    assert 'proxy_set_header jwt-org "";' in location
+    assert 'proxy_set_header jwt-role "";' in location

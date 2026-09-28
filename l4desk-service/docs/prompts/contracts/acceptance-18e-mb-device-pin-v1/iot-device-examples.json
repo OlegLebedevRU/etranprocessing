@@ -1,0 +1,37 @@
+{
+  "note": "Synthetic contract examples, not production responses",
+  "device_list": {
+    "items": [
+      {
+        "device_id": 12345,
+        "sn": "EXAMPLE-DEVICE",
+        "connection": {
+          "last_checked_result": true,
+          "is_blocked": false,
+          "checked_at": "2026-09-27T20:00:00Z"
+        },
+        "device_tags": [{"tag": "sys", "value": "windows"}]
+      }
+    ],
+    "total": 1,
+    "page": 1,
+    "size": 20,
+    "pages": 1,
+    "stats": {"total": 1, "online": 1, "offline": 0, "blocked": 0}
+  },
+  "provision_request": {
+    "device_id": 12345,
+    "sn": "EXAMPLE-DEVICE",
+    "org_id": 10000,
+    "name": "Example terminal",
+    "tags": {"sys": "windows"}
+  },
+  "provision_result": {
+    "device_id": 12345,
+    "sn": "EXAMPLE-DEVICE",
+    "org_id": 10000,
+    "success": true,
+    "is_online": false,
+    "error": null
+  }
+}

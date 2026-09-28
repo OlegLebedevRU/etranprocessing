@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router";
-import { BankOutlined, DesktopOutlined, UserOutlined } from "@ant-design/icons";
+import { AuditOutlined, BankOutlined, DesktopOutlined, UserOutlined } from "@ant-design/icons";
 import { Button, Result, Spin } from "antd";
 import SectionLayout from "../components/SectionLayout";
 import { useSession } from "../session/SessionContext";
@@ -19,6 +19,11 @@ const ADMIN_NAV_ITEMS = [
     key: "users",
     icon: <UserOutlined />,
     label: "Пользователи",
+  },
+  {
+    key: "hub",
+    icon: <AuditOutlined />,
+    label: "Хаб и финсверка",
   },
 ];
 

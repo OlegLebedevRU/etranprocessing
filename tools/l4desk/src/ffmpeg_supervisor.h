@@ -39,6 +39,7 @@ void ffmpeg_supervisor_cleanup(void);
 void ffmpeg_supervisor_set_event_callback(FFmpegEventCallback cb, void* user_data);
 
 void ffmpeg_supervisor_set_custom_binary(const wchar_t* path);
+void ffmpeg_supervisor_set_media_backend(const char* backend);
 
 void ffmpeg_supervisor_reconcile(void);
 

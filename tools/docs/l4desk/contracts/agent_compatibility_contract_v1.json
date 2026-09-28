@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "id": "https://etranprocessing.org/contracts/l4desk/agent-compatibility-contract-v1.json",
+  "contract_name": "L4Desk Agent Compatibility Contract",
+  "contract_version": "1.0.0",
+  "contract_status": "IMMUTABLE_SPECIFICATION",
+  "schema_revision": "2026-09-17-v1",
+  "published_agent_versions": [
+    "1.7.6",
+    "1.7.7"
+  ],
+  "target_platforms": [
+    "Windows NT 6.1+ (Windows 7 SP1, Windows Server 2008 R2)",
+    "Windows 10",
+    "Windows 11",
+    "Windows Server 2012+",
+    "Windows Server 2016+",
+    "Windows Server 2019+",
+    "Windows Server 2022+"
+  ],
+  "transport_layer": {
+    "protocol": "MQTT v3.1.1 over TLS 1.2",
+    "tls_library": "Windows SChannel (native SSPI / CryptoAPI)",
+    "mutual_tls": true,
+    "client_certificate_subject_dn_pattern": "CN={SN}",
+    "broker_default_endpoint": "ssl://iot.leo4.ru:8883",
+    "keep_alive_seconds_default": 60,
+    "clean_session": true
+  },
+  "presence_topology": {
+    "main_app": {
+      "topic_pattern": "dev/{SN}/app",
+      "qos": 1,
+      "retain": true,
+      "lwt_payload": "app_offline",
+      "connect_payload": "app_online",
+      "shutdown_payload": "app_offline"
+    },
+    "extra_service": {
+      "topic_pattern": "dev/{SN}/svc",
+      "qos": 1,
+      "retain": true,
+      "lwt_payload": "svc_offline",
+      "connect_payload": "svc_online",
+      "shutdown_payload": "svc_offline"
+    }
+  },
+  "rpc_topology": {
+    "task_request": {
+      "topic_pattern": "srv/{SN}/tsk",
+      "qos": 1,
+      "retain": false,
+      "direction": "server_to_agent"
+    },
+    "server_response": {
+      "topic_pattern": "srv/{SN}/rsp",
+      "qos": 1,
+      "retain": false,
+      "direction": "server_to_agent"
+    },
+    "streaming_output": {
+      "topic_pattern": "dev/{SN}/out",
+      "qos": 1,
+      "retain": false,
+      "direction": "agent_to_server"
+    },
+    "task_result": {
+      "topic_pattern": "dev/{SN}/res",
+      "qos": 1,
+      "retain": false,
+      "direction": "agent_to_server"
+    }
+  },
+  "methods": {
+    "7000": {
+      "name": "STREAM_CONTROL",
+      "component": "l4desk",
+      "description": "Video streaming lifecycle, camera/desktop capture, display inventory and interactive remote input control",
+      "actions": [
+        "inventory_get",
+        "stream_start",
+        "lease_renew",
+        "stream_stop",
+        "mouse_click",
+        "key_event",
+        "shortcut_action"
+      ],
+      "stream_modes": [
+        "desktop",
+        "camera"
+      ],
+      "error_codes": [
+        "desktop_locked",
+        "session_unavailable",
+        "already_running",
+        "invalid_button",
+        "forbidden_key",
+        "unsupported_action",
+        "device_not_found",
+        "encoder_failure"
+      ]
+    },
+    "7001": {
+      "name": "EXEC_COMMAND",
+      "component": "l4con",
+      "description": "Remote console command execution with real-time streaming chunks, timeout enforcement and exit code reporting",
+      "supported_shells": [
+        "cmd",
+        "powershell"
+      ],
+      "streaming": {
+        "channel": "dev/{SN}/out",
+        "ordering": "monotonically_increasing_seq",
+        "eof_marker": "boolean flag eof=true"
+      },
+      "result_statuses": [
+        "completed",
+        "timed_out",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "7002": {
+      "name": "CANCEL_TASK",
+      "component": "l4superv / l4con",
+      "description": "Abort running asynchronous execution task by task_id",
+      "result_statuses": [
+        "cancelled",
+        "not_found",
+        "already_finished"
+      ]
+    }
+  },
+  "wire_protocol": {
+    "l4rtp": {
+      "preamble_magic": "L4RT",
+      "preamble_hex": "4c345254",
+      "version": 1,
+      "channels": {
+        "1": "RTP_VIDEO_MEDIA",
+        "2": "RTCP_FEEDBACK_CONTROL"
+      },
+      "framing": "4-byte magic + 1-byte version + 1-byte channel + 2-byte uint16-BE length + RFC 3550 payload"
+    }
+  },
+  "normative_invariants": [
+    "No financial, billing, entitlement, tariff, or organization attributes may be included in agent payloads or topic names.",
+    "All topic patterns dev/{SN}/* and srv/{SN}/* must strictly use device serial number matching client certificate CN.",
+    "Presence messages dev/{SN}/app and dev/{SN}/svc MUST be published with QoS 1 and retain = true.",
+    "Streaming output chunks over dev/{SN}/out MUST have seq >= 1 and monotonically increasing without gaps.",
+    "The final output chunk MUST have eof = true, followed by exactly one dev/{SN}/res completion payload.",
+    "Method codes 7000, 7001, 7002 and action names are immutable and backward-compatible with agent versions 1.7.6 and 1.7.7.",
+    "Agent binary release remains 1.7.7 without new builds or binary modification."
+  ]
+}

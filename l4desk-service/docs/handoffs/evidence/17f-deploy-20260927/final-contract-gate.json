@@ -1,0 +1,123 @@
+{
+  "checked_at_utc": "2026-09-27T17:58:54.237016+00:00",
+  "status": "PASS",
+  "registration_id": "R-L4D-17F-DOCS-FIX-01-v2",
+  "registration_commit": "3de3524f35552b32c485a285a03be9f7768ea799",
+  "remote_ref_at_check": "3de3524f35552b32c485a285a03be9f7768ea799",
+  "prompt_path": "l4desk-service/docs/prompts/L4D-17F-DOCS-FIX-01-v2.md",
+  "input_artifact_count": 13,
+  "inputs": [
+    {
+      "handoff_id": "H-L4D-17ABC-CONTRACT-01-v1",
+      "status": "ACCEPTED",
+      "contract_version": "1.0.0",
+      "producer_commit": "9fe68c32391e0310fc857c098be7cf5e2f43cfdf",
+      "deployment_status": "DOCS_PUBLISHED",
+      "addressing": "direct consumer",
+      "artifacts": [
+        {
+          "path": "l4desk-service/docs/prompts/contracts/acceptance-17abc-v1/contract.md",
+          "sha256": "07237f0d8099dd4a758becdfbecd2b8439219042313b23fecf71df031b8dd263",
+          "bytes": 5784
+        },
+        {
+          "path": "l4desk-service/docs/prompts/contracts/acceptance-17abc-v1/verification.md",
+          "sha256": "0f9745abd4082f855fa640803293f4879c3d111cb9bb9bf75603f3ba1784c1e6",
+          "bytes": 3931
+        }
+      ]
+    },
+    {
+      "handoff_id": "H-L4D-17D-MEDIA-CONTRACT-01-v1",
+      "status": "ACCEPTED",
+      "contract_version": "1.0.0",
+      "producer_commit": "77a666f17cc5cb154b6a46a8a119ed0594c087c0",
+      "deployment_status": "DOCS_PUBLISHED",
+      "addressing": "exact registration grant",
+      "artifacts": [
+        {
+          "path": "l4desk-service/docs/prompts/contracts/media-17d-v1/contract.md",
+          "sha256": "098fffbf11f8c404354d3680192d2f20e967d69ce79b5cd98798309cc8c64c75",
+          "bytes": 4186
+        },
+        {
+          "path": "l4desk-service/docs/prompts/contracts/media-17d-v1/verification.md",
+          "sha256": "56d68275e830fdb60d57f712ad338426d42b5d1431c91c06446eb1f4cf66a4ab",
+          "bytes": 2252
+        }
+      ]
+    },
+    {
+      "handoff_id": "H-L4D-17E-CONTRACT-01-v1",
+      "status": "ACCEPTED",
+      "contract_version": "1.0.0",
+      "producer_commit": "937fd39c461ef77ef8d5400879ea6933d6c189be",
+      "deployment_status": "DOCS_PUBLISHED",
+      "addressing": "direct consumer",
+      "artifacts": [
+        {
+          "path": "l4desk-service/docs/prompts/contracts/acceptance-17e-v1/contract.md",
+          "sha256": "0f70346eb3348b821ef3930da345a023043e4cf25d29870f815e8dd3976ad010",
+          "bytes": 7371
+        },
+        {
+          "path": "l4desk-service/docs/prompts/contracts/acceptance-17e-v1/verification.md",
+          "sha256": "d5cb97764098e894e21e593edd72972b9e286b8c2a2fce6ce3707a02fa2de0c4",
+          "bytes": 2864
+        }
+      ]
+    },
+    {
+      "handoff_id": "H-L4D-17F-MB-EVIDENCE-CONTRACT-01-v1",
+      "status": "ACCEPTED",
+      "contract_version": "1.0.0",
+      "producer_commit": "d15f32bff63be22e2aefb3e59969e90965b57285",
+      "deployment_status": "DOCS_PUBLISHED",
+      "addressing": "direct consumer",
+      "artifacts": [
+        {
+          "path": "l4desk-service/docs/prompts/contracts/acceptance-17f-mb-evidence-v1/grace.md",
+          "sha256": "1c1c1d7ec8d7105043723b5e300641dbf12249d8242af0440b3182fd4bc628a6",
+          "bytes": 7661
+        },
+        {
+          "path": "l4desk-service/docs/prompts/contracts/acceptance-17f-mb-evidence-v1/payment-recovery.md",
+          "sha256": "8f8d30d661456be5081ac146ea27af6f8d6f9fbcbe64df158b723e16c02618dd",
+          "bytes": 5166
+        },
+        {
+          "path": "l4desk-service/docs/prompts/contracts/acceptance-17f-mb-evidence-v1/archive-consumer.md",
+          "sha256": "2f497f0c72a3d79a6d33825bcaa945bec603faaa80ba99269828821ae0b6d4ad",
+          "bytes": 3332
+        },
+        {
+          "path": "l4desk-service/docs/prompts/contracts/acceptance-17f-mb-evidence-v1/media-soak-extract.md",
+          "sha256": "814f6cd3f6ca5bc6d2b04a5f587efc782e718f57d779d5e101c2358c4259570b",
+          "bytes": 1976
+        },
+        {
+          "path": "l4desk-service/docs/prompts/contracts/acceptance-17f-mb-evidence-v1/agent-release-baseline.md",
+          "sha256": "61c6df8716ce735a92c4ccd17e0436e2bceebddfc1db4aa2f830652c73b7db98",
+          "bytes": 5119
+        },
+        {
+          "path": "l4desk-service/docs/prompts/contracts/acceptance-17f-mb-evidence-v1/registration-evidence.md",
+          "sha256": "1831592b319099525b25240c79c576618b0667c0be7c3ee7aa5c364e5c0e52f6",
+          "bytes": 1328
+        },
+        {
+          "path": "l4desk-service/docs/prompts/contracts/acceptance-17f-mb-evidence-v1/verification.md",
+          "sha256": "6b5070ccc8a9cebd8965b24e0b7a19cddf27486f2fb6a667b10b34171796c596",
+          "bytes": 3558
+        }
+      ]
+    }
+  ],
+  "sequence_gate": {
+    "handoff_id": "H-L4D-17E-MB-FIX-01-v1",
+    "status": "ACCEPTED",
+    "producer_commit": "9bda9ce498332960f7f706abb03cae09b0fff206"
+  },
+  "output_handoff_id": "H-L4D-17F-DOCS-FIX-01-v1",
+  "controller_acceptance": "PENDING"
+}

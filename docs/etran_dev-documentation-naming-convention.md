@@ -77,6 +77,7 @@
 | `term_tool` | `term_tool-developer-guide.md` | Руководство разработчика терминальных приложений киосков |
 | `term_conn` | `term_conn-device-connection-and-audit.md` | Спецификация REST API состояния связи терминалов и аудита клонов |
 | `term_conn` | `term_conn-schannel-mqtt-cert-store.md` | Руководство по mTLS MQTT через Windows Certificate Store |
+| `term_dev` | `term_dev-main-app-mqtt-client.md` | Краткая инструкция разработчика внутреннего MQTT-клиента main_app (C#) |
 | `ops_run` | `ops_run-devops-runbook.md` | Регламент развертывания и эксплуатации сервисов |
 | `ops_run` | `ops_run-remote-console-diagnostics.md` | Регламент удаленной веб-диагностики терминалов и серверов |
 | `ops_net` | `ops_net-nginx-config-guide.md` | Справочник конфигурации Nginx (порты 443 и 4443) |

@@ -7,21 +7,29 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
 
 from app.config import settings
+from app.database import engine
 from app.routers import (
     admin_organizations,
     admin_tenants,
     admin_terminals,
     admin_users,
+    archive,
     auth,
     billing,
     catalog,
     dashboard,
+    finance,
     groups,
+    hub,
     integrations,
+    iot_consumer,
     mcp_proxy,
+    mcp_waitlist,
     menu_variants,
     monitoring,
     profile,
+    registration,
+    remote_sessions,
     reports,
     services,
     settings_users,
@@ -32,6 +40,8 @@ from app.routers import (
 from app.routers import (
     settings as settings_router,
 )
+from app.schema_compatibility import verify_schema_compatibility
+from app.services.iot_event_consumer import iot_event_consumer
 from app.user_store import get_user_store
 
 logging.basicConfig(
@@ -57,9 +67,31 @@ async def _cleanup_expired_sessions_task() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Schema compatibility verification at startup (strictly read-only, zero automatic DDL)
+    if settings.database_url and settings.schema_compatibility_check_enabled:
+        await verify_schema_compatibility(
+            engine,
+            expected_revision=settings.required_alembic_revision,
+        )
+
     cleanup_task: asyncio.Task | None = None
+    consumer_task: asyncio.Task | None = None
+    entitlement_task: asyncio.Task | None = None
+    metering_close_task: asyncio.Task | None = None
     if settings.session_cleanup_enabled:
         cleanup_task = asyncio.create_task(_cleanup_expired_sessions_task())
+    if settings.iot_consumer_enabled:
+        consumer_task = asyncio.create_task(iot_event_consumer.run_worker())
+    if settings.l4desk_entitlement_worker_enabled:
+        from app.services.financial_core import entitlement_worker
+
+        entitlement_task = asyncio.create_task(entitlement_worker.run_worker())
+    if settings.l4desk_metering_close_worker_enabled:
+        from app.services.financial_core.metering_close_worker import (
+            metering_close_worker,
+        )
+
+        metering_close_task = asyncio.create_task(metering_close_worker.run_worker())
     try:
         yield
     finally:
@@ -67,6 +99,18 @@ async def lifespan(app: FastAPI):
             cleanup_task.cancel()
             with suppress(asyncio.CancelledError):
                 await cleanup_task
+        if consumer_task is not None:
+            consumer_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await consumer_task
+        if entitlement_task is not None:
+            entitlement_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await entitlement_task
+        if metering_close_task is not None:
+            metering_close_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await metering_close_task
 
 
 app = FastAPI(title="MenuBuilder API", version="0.2.0", lifespan=lifespan)
@@ -91,7 +135,16 @@ async def csrf_protection_middleware(request: Request, call_next):
         not has_bearer
         and "accessToken" in request.cookies
         and request.method in ("POST", "PUT", "PATCH", "DELETE")
-        and not request.url.path.endswith(("/auth/login", "/auth/refresh"))
+        and not request.url.path.endswith(
+            (
+                "/auth/login",
+                "/auth/refresh",
+                "/auth/register",
+                "/auth/register/confirm",
+                "/auth/register/resend",
+                "/confirm-email",
+            )
+        )
         and request.headers.get("X-Requested-With") != "XMLHttpRequest"
     ):
         return JSONResponse(
@@ -102,6 +155,7 @@ async def csrf_protection_middleware(request: Request, call_next):
 
 
 app.include_router(auth.router, prefix="/api", tags=["auth"])
+app.include_router(registration.router, prefix="/api", tags=["registration"])
 app.include_router(admin_users.router, prefix="/api", tags=["admin-users"])
 app.include_router(admin_tenants.router, prefix="/api", tags=["admin-tenants"])
 # Browser-facing alias /api/auth/switch-tenant (refreshToken cookie path = /api/auth)
@@ -121,8 +175,15 @@ app.include_router(settings_router.router, prefix="/api", tags=["settings"])
 app.include_router(settings_users.router, prefix="/api", tags=["settings-users"])
 app.include_router(integrations.router)
 app.include_router(mcp_proxy.router, prefix="/api", tags=["mcp"])
+app.include_router(mcp_waitlist.router)
 app.include_router(dashboard.router)
 app.include_router(monitoring.router)
 app.include_router(reports.router)
 app.include_router(video.router)
 app.include_router(video_control.router)
+app.include_router(remote_sessions.router, prefix="/api/v1")
+app.include_router(remote_sessions.router, prefix="/api")
+app.include_router(iot_consumer.router)
+app.include_router(finance.router)
+app.include_router(hub.router)
+app.include_router(archive.router)

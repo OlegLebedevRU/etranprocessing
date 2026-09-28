@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "L4RTP/1 Protocol Wire Layout and Golden Fixtures",
+  "description": "Baseline fixtures for L4RTP/1 multiplexed streaming over mTLS TCP tunnel (port 8443)",
+  "protocol": "L4RTP/1",
+  "preamble": {
+    "format": "Magic[4] ('L4RT') | Version[1] (0x01) | Reserved[1] (0x00) | SN_Length[2] (Big-Endian uint16) | SN_ASCII[N]",
+    "example_sn": "000100773",
+    "sn_length_bytes": 9,
+    "hex_wire_bytes": "4c34525401000009303030313030373733",
+    "decoded": {
+      "magic": "L4RT",
+      "version": 1,
+      "reserved": 0,
+      "sn_len": 9,
+      "sn": "000100773"
+    }
+  },
+  "stream_frames": {
+    "header_format": "Channel_ID[1] (0x01=RTP, 0x02=RTCP) | Reserved[1] (0x00) | Payload_Length[2] (Big-Endian uint16)",
+    "channels": {
+      "0x01": "RTP Video Packets (H.264/RTP over UDP -> TCP)",
+      "0x02": "RTCP Feedback Packets (Sender Reports / Receiver Reports)"
+    },
+    "example_rtp_frame": {
+      "channel": 1,
+      "channel_name": "RTP",
+      "payload_length_bytes": 1400,
+      "header_hex": "01000578",
+      "description": "0x01 (RTP) + 0x00 (Reserved) + 0x0578 (1400 bytes payload length)"
+    },
+    "example_rtcp_frame": {
+      "channel": 2,
+      "channel_name": "RTCP",
+      "payload_length_bytes": 72,
+      "header_hex": "02000048",
+      "description": "0x02 (RTCP) + 0x00 (Reserved) + 0x0048 (72 bytes payload length)"
+    }
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RPC Method 7002: CMD_DIAG_CANCEL Golden Fixtures",
+  "description": "Baseline fixtures for cancelling a running diagnostics task via MQTT RPC",
+  "method_code": 7002,
+  "flow": {
+    "request_topic": "srv/{SN}/rsp",
+    "request_forwarded_from": "srv/{SN}/tsk",
+    "response_topic": "dev/{SN}/res",
+    "qos": 1
+  },
+  "examples": {
+    "cancel_running_task": {
+      "request": {
+        "topic": "srv/000100773/rsp",
+        "mqtt_v5_properties": {
+          "CorrelationData": "01020304-corr-cncl-0001",
+          "UserProperty": [
+            { "name": "taskId", "value": "task-cncl-1001" }
+          ]
+        },
+        "payload": {
+          "id": "task-cncl-1001",
+          "method_code": 7002,
+          "target_task_id": "task-exec-1001",
+          "target_session_id": "sess-exec-9001"
+        }
+      },
+      "response": {
+        "topic": "dev/000100773/res",
+        "mqtt_v5_properties": {
+          "CorrelationData": "01020304-corr-cncl-0001"
+        },
+        "payload": {
+          "id": "task-cncl-1001",
+          "method_code": 7002,
+          "target_task_id": "task-exec-1001",
+          "status": "cancelled",
+          "message": "Task was successfully cancelled"
+        }
+      }
+    },
+    "cancel_nonexistent_task": {
+      "request": {
+        "topic": "srv/000100773/rsp",
+        "payload": {
+          "id": "task-cncl-1002",
+          "method_code": 7002,
+          "target_task_id": "task-unknown-9999",
+          "target_session_id": "sess-unknown-9999"
+        }
+      },
+      "response": {
+        "topic": "dev/000100773/res",
+        "payload": {
+          "id": "task-cncl-1002",
+          "method_code": 7002,
+          "target_task_id": "task-unknown-9999",
+          "status": "not_found",
+          "message": "Target task is not active or already finished"
+        }
+      }
+    }
+  }
+}

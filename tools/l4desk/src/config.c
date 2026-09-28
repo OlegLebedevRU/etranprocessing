@@ -30,6 +30,7 @@ void config_init_defaults(L4DeskConfig* cfg) {
     cfg->allow_alt_f4 = false;
     cfg->allow_win_d = false;
     cfg->kiosk_process[0] = L'\0';
+    strcpy_s(cfg->media_backend, sizeof(cfg->media_backend), "l4capture");
 
     // Check environment variable DEVICE_SN as fallback for console/debug
     char* env_sn = getenv("DEVICE_SN");
@@ -131,6 +132,10 @@ bool config_parse_args(L4DeskConfig* cfg, int argc, char* argv[]) {
         }
         if (_stricmp(argv[i], "--kiosk-process") == 0 && i + 1 < argc) {
             MultiByteToWideChar(CP_UTF8, 0, argv[++i], -1, cfg->kiosk_process, MAX_PATH);
+            continue;
+        }
+        if (_stricmp(argv[i], "--media-backend") == 0 && i + 1 < argc) {
+            strcpy_s(cfg->media_backend, sizeof(cfg->media_backend), argv[++i]);
             continue;
         }
         if (_stricmp(argv[i], "--log") == 0 && i + 1 < argc) {

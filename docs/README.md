@@ -19,7 +19,7 @@
 - **[`etran_cert-infrastructure-architecture.md`](etran_cert-infrastructure-architecture.md)** — Сквозная спецификация инфраструктуры сертификатов и mTLS: двухфакторный выпуск через PIN, терминальный установщик на C, проверка подлинности на Nginx и PowerShell-скрипты аудита.
 - **[`etran_arch-serverless-email-integration.md`](etran_arch-serverless-email-integration.md)** — Архитектура и спецификация интеграции serverless-сервиса отправки email: email организации, подтверждение адресов, отправка финансовых и сменных отчетов, mTLS-проброс от терминалов.
 - **[`etran_arch-l4media-streaming-architecture.md`](etran_arch-l4media-streaming-architecture.md)** — Архитектура подсистемы видеотрансляций `l4media`: прием mTLS видеопотоков L4RTP/1 от киосков (`leo4proxy`), декапсуляция, Janus WebRTC Gateway и интеграция с `MenuBuilder`.
-- **[`etran_arch-l4media-resource-profiling-and-unit-budgets.md`](etran_arch-l4media-resource-profiling-and-unit-budgets.md)** — Профилирование аппаратных и сетевых ресурсов, юнит-бюджеты и расчет емкости стека видеотрансляций `l4media`: сравнительный анализ 480p против 720p на сервере 87.242.100.34.
+- **[`etran_arch-l4media-resource-profiling-and-unit-budgets.md`](etran_arch-l4media-resource-profiling-and-unit-budgets.md)** — Профилирование аппаратных и сетевых ресурсов, юнит-бюджеты и расчет емкости стека видеотрансляций `l4media`: сравнительный анализ 480p против 720p и масштабирование на 2 одновременных стрима на сервере 87.242.100.34.
 - **[`etran_arch-video-remote-desktop-e2e.md`](etran_arch-video-remote-desktop-e2e.md)** — Единая E2E-архитектура видеонаблюдения и удаленного управления: краткая и детальная части, схемы media/control/signaling, оркестрация и контракты MenuBuilder/app1/l4desk, задачи надежности и развертывания, направления Linux и ESP32-P4.
 
 ---
@@ -54,6 +54,7 @@
 - **[`term_tool-developer-guide.md`](term_tool-developer-guide.md)** — Руководство разработчика терминальных клиентских приложений: спецификации протоколов взаимодействия с локальным супервайзером.
 - **[`term_conn-device-connection-and-audit.md`](term_conn-device-connection-and-audit.md)** — Спецификация REST API состояния связи терминалов: структура объекта `connection`, фиксация клонов устройств (`DEVICE_CLONE`) и коллизий сертификатов (`SN_COLLISION`), журнал аудита жизненного цикла.
 - **[`term_conn-schannel-mqtt-cert-store.md`](term_conn-schannel-mqtt-cert-store.md)** — Руководство по организации mTLS для MQTT с использованием неэкспортируемых сертификатов из Windows Certificate Store через Python SChannel TLS Proxy.
+- **[`term_dev-main-app-mqtt-client.md`](term_dev-main-app-mqtt-client.md)** — Краткая инструкция разработчика внутреннего MQTT-клиента основного приложения терминала (`main_app`, C#): параметры подключения, получение SN, сценарий LWT и соглашение по топикам.
 
 ---
 

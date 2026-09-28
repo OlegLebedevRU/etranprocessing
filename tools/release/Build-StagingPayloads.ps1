@@ -68,7 +68,7 @@ foreach ($arch in @("x86", "x64")) {
     New-Item -ItemType Directory -Path $targetStage -Force | Out-Null
 
     # Required subdirectories
-    $subdirs = @("leo4proxy", "mosquitto\log", "l4con", "l4superv", "l4pin", "l4desk", "l4sql", "ffmpeg\log", "crt")
+    $subdirs = @("leo4proxy", "mosquitto\log", "l4con", "l4superv", "l4pin", "l4desk", "l4sql", "l4capture\bin", "ffmpeg\log", "crt")
     foreach ($sub in $subdirs) {
         $p = "$targetStage\$sub"
         if (-not (Test-Path $p)) { New-Item -ItemType Directory -Path $p -Force | Out-Null }
@@ -156,6 +156,19 @@ foreach ($arch in @("x86", "x64")) {
     Copy-Item $srcSql "$targetStage\l4sql\l4sql.exe" -Force
     if (Test-Path "$ToolsRoot\l4sql\README.md") { Copy-Item "$ToolsRoot\l4sql\README.md" "$targetStage\l4sql\" -Force }
 
+    # 7b. l4capture (desktop capture/encode/RTP; path matches l4desk adapter: l4capture\bin\l4capture.exe)
+    $srcCap = "$ToolsRoot\l4capture\bin\$arch\l4capture.exe"
+    if (-not (Test-Path $srcCap)) { throw "Binary not found: $srcCap" }
+    Copy-Item $srcCap "$targetStage\l4capture\bin\l4capture.exe" -Force
+    $qualityConfig = "$ToolsRoot\l4capture\idle_refresh.ini"
+    if (-not (Test-Path $qualityConfig)) { throw "Capture quality config not found: $qualityConfig" }
+    Copy-Item $qualityConfig "$targetStage\l4capture\bin\idle_refresh.ini" -Force
+    foreach ($doc in @("OPENH264_LICENSE.txt", "NOTICE-OpenH264.txt", "SBOM.json", "README.md", "ROLLBACK.md")) {
+        if (Test-Path "$ToolsRoot\l4capture\$doc") {
+            Copy-Item "$ToolsRoot\l4capture\$doc" "$targetStage\l4capture\" -Force
+        }
+    }
+
     # 8. ffmpeg
     $srcFfmpeg = "$RepoRoot\ffmpeg-win32\$arch\ffmpeg.exe"
     if (-not (Test-Path $srcFfmpeg)) {
@@ -180,7 +193,9 @@ foreach ($arch in @("x86", "x64")) {
     }
 
     # Staging Root files
-    if (Test-Path "$RepoRoot\docs\terminal-tools-user-guide.md") {
+    if (Test-Path "$RepoRoot\docs\term_tool-user-guide.md") {
+        Copy-Item "$RepoRoot\docs\term_tool-user-guide.md" "$targetStage\term_tool-user-guide.md" -Force
+    } elseif (Test-Path "$RepoRoot\docs\terminal-tools-user-guide.md") {
         Copy-Item "$RepoRoot\docs\terminal-tools-user-guide.md" "$targetStage\terminal-tools-user-guide.md" -Force
     } elseif (Test-Path "$ToolsRoot\dist_win7_sp1\terminal-tools-user-guide.md") {
         Copy-Item "$ToolsRoot\dist_win7_sp1\terminal-tools-user-guide.md" "$targetStage\terminal-tools-user-guide.md" -Force

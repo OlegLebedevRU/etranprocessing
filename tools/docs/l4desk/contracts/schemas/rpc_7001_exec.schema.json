@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://etranprocessing.org/contracts/l4desk/schemas/rpc_7001_exec.schema.json",
+  "title": "RPC7001ExecSchema",
+  "description": "JSON Schema defining Method 7001 (Command Execution and Streaming Chunks) payloads",
+  "definitions": {
+    "request": {
+      "type": "object",
+      "required": ["id", "method_code", "session_id", "command_line", "shell"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "method_code": { "const": 7001 },
+        "session_id": { "type": "string", "minLength": 1 },
+        "command_line": { "type": "string", "minLength": 1 },
+        "shell": { "type": "string", "enum": ["cmd", "powershell"] },
+        "ttl_sec": { "type": "integer", "minimum": 1, "maximum": 3600 },
+        "topic": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "stream_chunk": {
+      "type": "object",
+      "required": ["session_id", "seq", "data", "eof"],
+      "properties": {
+        "session_id": { "type": "string", "minLength": 1 },
+        "seq": { "type": "integer", "minimum": 1 },
+        "data": { "type": "string" },
+        "stream": { "type": "string", "enum": ["stdout", "stderr"] },
+        "eof": { "type": "boolean" },
+        "exit_code": { "type": "integer" }
+      },
+      "additionalProperties": false
+    },
+    "response": {
+      "type": "object",
+      "required": ["id", "session_id", "method_code", "status", "exit_code"],
+      "properties": {
+        "id": { "type": "string" },
+        "session_id": { "type": "string" },
+        "method_code": { "const": 7001 },
+        "status": {
+          "type": "string",
+          "enum": ["completed", "timed_out", "failed", "cancelled"]
+        },
+        "exit_code": { "type": "integer" },
+        "execution_time_ms": { "type": "integer", "minimum": 0 },
+        "error": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    }
+  }
+}

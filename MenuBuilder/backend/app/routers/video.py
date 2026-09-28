@@ -581,6 +581,36 @@ async def create_video_session(
     rtp_port, rtcp_port = get_device_ports(device_id)
     mountpoint_id = device_id
 
+    session_id = stream_instance_id or lease_id or f"sess-video-{device_id}"
+    if settings.l4desk_session_orchestration_enabled:
+        from app.services.media_orchestrator_client import (
+            media_orchestrator_client,
+        )
+
+        try:
+            media_res = await media_orchestrator_client.start_session(
+                session_id=session_id,
+                operation_id=f"op-media-{device_id}-{session_id}",
+                sn=terminal.sn,
+                device_id=device_id,
+                pin=pin,
+                rtp_port=rtp_port,
+                rtcp_port=rtcp_port,
+                ttl_sec=600,
+            )
+            return VideoSessionResponse(
+                mountpoint_id=int(media_res.get("mountpoint_id") or mountpoint_id),
+                sn=str(media_res.get("sn") or terminal.sn),
+                janus_ws=str(media_res.get("janus_ws") or "/janus-ws"),
+                session_ttl_sec=int(media_res.get("ttl_sec") or 600),
+                pin=media_res.get("pin") or pin,
+            )
+        except Exception as media_err:  # noqa: BLE001
+            logger.info(
+                "Media orchestrator client error or unavailable, falling back to direct route/Janus setup: %s",
+                media_err,
+            )
+
     await _ensure_ingress_route(terminal.sn, rtp_port, rtcp_port)
     await _ensure_janus_mountpoint(
         mountpoint_id, device_id, rtp_port, rtcp_port, pin=pin

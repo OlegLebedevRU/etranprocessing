@@ -8,6 +8,18 @@ Server lease/owner/scope/TTL, ctl publisher, terminal event consumer, console RP
 Исходники app1 вне текущего дерева: до реализации запросить разрешённый checkout и ревизию.
 Владелец его БД/миграций должен быть подтверждён в том репозитории, не назначен по аналогии.
 
+17E org allocation candidate (локальный код, 2026-09-27): внешний репозиторий
+`iot-rpc-rest-app`, ветка `l4desk/fix-org-id-17e`, владеет `tb_orgs`, новой
+`tb_org_reservations` и миграцией `0008_org_reservations`. Защищённый internal
+API атомарно выделяет ID для MenuBuilder и повторяет ответ по `operation_id`.
+Контракт описан в `docs/internal-api-contract-v1.md` внешнего репозитория.
+IoT commit `60f7762` развёрнут на 87.242.100.34 2026-09-27:
+`alembic current` = `0008_org_reservations`, app1 отвечает `/docs` 200.
+Отрицательная межсервисная проверка из MenuBuilder для занятого ID 4
+вернула `409 org_id_already_in_use`. Положительная регистрация `test05`
+выделила `org_id=10000`: в IoT ровно одна организация и одна резервация
+`l4desk-registration:4`.
+
 ## Внешние контракты
 | Direction | Transport | Endpoint/topic | Main payload | Guarantees |
 |---|---|---|---|---|

@@ -28,12 +28,13 @@ set "L4TOOLS_VERSION=%L4TOOLS_VERSION: =%"
 
 echo Target Version: %L4TOOLS_VERSION%
 
-:: Parse SemVer for RC resource
+:: Parse SemVer for RC resource (strip pre-release suffix: 1.8.0-beta-2 → patch=0)
 for /f "tokens=1,2,3 delims=." %%a in ("%L4TOOLS_VERSION%") do (
     set "VER_MAJ=%%a"
     set "VER_MIN=%%b"
     set "VER_PATCH=%%c"
 )
+for /f "tokens=1 delims=-" %%p in ("%VER_PATCH%") do set "VER_PATCH=%%p"
 if "%VER_MAJ%"=="" set "VER_MAJ=1"
 if "%VER_MIN%"=="" set "VER_MIN=7"
 if "%VER_PATCH%"=="" set "VER_PATCH=7"
@@ -71,9 +72,9 @@ if not exist "%~dp0l4setup\src" md "%~dp0l4setup\src"
     echo #define L4SETUP_VERSION_WSTRING L"%L4TOOLS_VERSION%"
 ) > "%~dp0l4setup\src\version.h"
 
-:: Step 2: Build all 6 components in order
+:: Step 2: Build all 7 components in order
 echo.
-echo [1/6] Building l4pin...
+echo [1/7] Building l4pin...
 cd /d "%~dp0l4pin"
 call build.cmd all
 if errorlevel 1 (
@@ -82,7 +83,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [2/6] Building l4superv...
+echo [2/7] Building l4superv...
 cd /d "%~dp0l4superv"
 call build.cmd all
 if errorlevel 1 (
@@ -91,7 +92,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [3/6] Building l4desk...
+echo [3/7] Building l4desk...
 cd /d "%~dp0l4desk"
 call build.cmd all
 if errorlevel 1 (
@@ -100,7 +101,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [4/6] Building l4con...
+echo [4/7] Building l4con...
 cd /d "%~dp0l4con"
 call build.cmd all
 if errorlevel 1 (
@@ -109,7 +110,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [5/6] Building l4sql...
+echo [5/7] Building l4sql...
 cd /d "%~dp0l4sql"
 call build.cmd all
 if errorlevel 1 (
@@ -118,7 +119,16 @@ if errorlevel 1 (
 )
 
 echo.
-echo [6/6] Building leo4proxy...
+echo [6/7] Building l4capture...
+cd /d "%~dp0l4capture"
+call build.cmd all
+if errorlevel 1 (
+    echo [ERROR] Component build failed: l4capture
+    exit /b 1
+)
+
+echo.
+echo [7/7] Building leo4proxy...
 cd /d "%~dp0leo4proxy"
 call build.cmd all
 if errorlevel 1 (
@@ -159,7 +169,12 @@ cd /d "%~dp0"
 :: Step 6 & 7: Generate Release Manifest, SHA256SUMS and perform verification
 echo.
 echo [*] Generating release manifest and running verifications...
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0release\New-ReleaseManifest.ps1" -Version "%L4TOOLS_VERSION%" -ToolsRoot "%~dp0." -DistDir "%~dp0dist"
+where pwsh.exe >nul 2>nul
+if not errorlevel 1 (
+    pwsh -NoProfile -File "%~dp0release\New-ReleaseManifest.ps1" -Version "%L4TOOLS_VERSION%" -ToolsRoot "%~dp0." -DistDir "%~dp0dist"
+) else (
+    powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0release\New-ReleaseManifest.ps1" -Version "%L4TOOLS_VERSION%" -ToolsRoot "%~dp0." -DistDir "%~dp0dist"
+)
 if errorlevel 1 (
     echo [ERROR] Release manifest generation or verification failed!
     exit /b 1

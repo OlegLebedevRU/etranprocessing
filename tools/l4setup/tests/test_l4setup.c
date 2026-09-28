@@ -605,11 +605,59 @@ static bool test_log_callback(void) {
 }
 
 // ---------------------------------------------------------------------------
+// l4capture rollback in an isolated directory. Never use a live tools path.
+static bool test_l4capture_rollback(void) {
+    wchar_t temp_root[MAX_PATH];
+    TEST_ASSERT(GetTempPathW(MAX_PATH, temp_root) > 0, "No temp directory");
+    wchar_t dest[MAX_PATH];
+    swprintf_s(dest, MAX_PATH, L"%lsl4setup_capture_%lu", temp_root, GetCurrentProcessId());
+    TEST_ASSERT(CreateDirectoryW(dest, NULL), "Test directory already exists");
+
+    wchar_t current_dir[MAX_PATH], current_bin[MAX_PATH], current_exe[MAX_PATH];
+    wchar_t rollback_dir[MAX_PATH], version_dir[MAX_PATH], old_dir[MAX_PATH];
+    wchar_t old_bin[MAX_PATH], old_exe[MAX_PATH];
+    swprintf_s(current_dir, MAX_PATH, L"%ls\\l4capture", dest);
+    swprintf_s(current_bin, MAX_PATH, L"%ls\\bin", current_dir);
+    swprintf_s(current_exe, MAX_PATH, L"%ls\\l4capture.exe", current_bin);
+    swprintf_s(rollback_dir, MAX_PATH, L"%ls\\rollback", dest);
+    swprintf_s(version_dir, MAX_PATH, L"%ls\\1.8.1-beta-1", rollback_dir);
+    swprintf_s(old_dir, MAX_PATH, L"%ls\\l4capture", version_dir);
+    swprintf_s(old_bin, MAX_PATH, L"%ls\\bin", old_dir);
+    swprintf_s(old_exe, MAX_PATH, L"%ls\\l4capture.exe", old_bin);
+    TEST_ASSERT(CreateDirectoryW(current_dir, NULL), "Current capture directory");
+    TEST_ASSERT(CreateDirectoryW(current_bin, NULL), "Current capture bin");
+    TEST_ASSERT(CreateDirectoryW(rollback_dir, NULL), "Rollback directory");
+    TEST_ASSERT(CreateDirectoryW(version_dir, NULL), "Rollback version directory");
+    TEST_ASSERT(CreateDirectoryW(old_dir, NULL), "Old capture directory");
+    TEST_ASSERT(CreateDirectoryW(old_bin, NULL), "Old capture bin");
+
+    FILE* fp = NULL;
+    TEST_ASSERT(_wfopen_s(&fp, current_exe, L"wb") == 0 && fp, "Current capture file");
+    fputs("new", fp);
+    fclose(fp);
+    TEST_ASSERT(_wfopen_s(&fp, old_exe, L"wb") == 0 && fp, "Old capture file");
+    fputs("old", fp);
+    fclose(fp);
+
+    TEST_ASSERT(unpack_rollback(dest, "1.8.1-beta-1"), "Capture rollback failed");
+    TEST_ASSERT(_wfopen_s(&fp, current_exe, L"rb") == 0 && fp, "Restored capture missing");
+    char content[4] = {0};
+    TEST_ASSERT(fread(content, 1, 3, fp) == 3, "Restored capture unreadable");
+    fclose(fp);
+    TEST_ASSERT(strcmp(content, "old") == 0, "Rollback kept the new capture");
+
+    TEST_ASSERT(DeleteFileW(current_exe), "Delete restored capture");
+    TEST_ASSERT(RemoveDirectoryW(current_bin), "Delete restored bin");
+    TEST_ASSERT(RemoveDirectoryW(current_dir), "Delete restored directory");
+    TEST_ASSERT(RemoveDirectoryW(version_dir), "Delete rollback version directory");
+    TEST_ASSERT(RemoveDirectoryW(rollback_dir), "Delete rollback directory");
+    TEST_ASSERT(RemoveDirectoryW(dest), "Delete isolated test directory");
+    return true;
+}
+
 // Main
 // ---------------------------------------------------------------------------
 int main(int argc, char* argv[]) {
-    UNREFERENCED_PARAMETER(argc);
-    UNREFERENCED_PARAMETER(argv);
 
     AttachConsole(ATTACH_PARENT_PROCESS);
     FILE* fp_con = NULL;
@@ -624,6 +672,11 @@ int main(int argc, char* argv[]) {
     printf("=======================================================\n");
     printf(" Running tools/l4setup Unit Tests\n");
     printf("=======================================================\n");
+
+    if (argc == 2 && strcmp(argv[1], "--unpack-only") == 0) {
+        RUN_TEST(test_l4capture_rollback);
+        return g_tests_passed == g_tests_run ? 0 : 1;
+    }
 
     RUN_TEST(test_cli_parser);
     RUN_TEST(test_pin_masking);

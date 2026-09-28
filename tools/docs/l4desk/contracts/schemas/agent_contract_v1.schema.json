@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://etranprocessing.org/contracts/l4desk/schemas/agent_contract_v1.schema.json",
+  "title": "AgentContractV1MetaSchema",
+  "description": "Meta-schema and container schema validating Agent Compatibility Contract v1 structure and artifacts",
+  "type": "object",
+  "required": [
+    "contract_name",
+    "contract_version",
+    "contract_status",
+    "published_agent_versions",
+    "transport_layer",
+    "presence_topology",
+    "rpc_topology",
+    "methods",
+    "wire_protocol",
+    "normative_invariants"
+  ],
+  "properties": {
+    "contract_name": { "type": "string" },
+    "contract_version": { "type": "string" },
+    "contract_status": { "type": "string" },
+    "schema_revision": { "type": "string" },
+    "published_agent_versions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "target_platforms": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "transport_layer": { "type": "object" },
+    "presence_topology": { "type": "object" },
+    "rpc_topology": { "type": "object" },
+    "methods": { "type": "object" },
+    "wire_protocol": { "type": "object" },
+    "normative_invariants": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

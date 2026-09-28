@@ -1,11 +1,27 @@
 from __future__ import annotations
 
 import pytest
+from fastapi import HTTPException
 from httpx import ASGITransport, AsyncClient
 
 from app.auth import create_master_token, create_tenant_token
 from app.main import app
+from app.routers.admin_users import _require_owner_role_consistency
 from app.user_store import UserRecord
+
+
+@pytest.mark.parametrize(
+    ("role", "role_id"),
+    [("l4desk_owner", 3), ("user", 5)],
+)
+def test_admin_user_rejects_mismatched_owner_identity(role: str, role_id: int) -> None:
+    with pytest.raises(HTTPException) as error:
+        _require_owner_role_consistency(role, role_id)
+    assert error.value.status_code == 422
+
+
+def test_admin_user_accepts_owner_identity() -> None:
+    _require_owner_role_consistency("l4desk_owner", 5)
 
 
 @pytest.fixture

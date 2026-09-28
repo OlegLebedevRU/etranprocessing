@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router";
 import {
   Alert,
   Card,
@@ -25,7 +26,6 @@ import {
   getDeviceInventory,
   getDeviceStreamState,
   getJanusWsUrl,
-  getVideoSessionStatus,
   keepaliveControlLease,
   releaseControlLease,
   startDeviceStream,
@@ -47,67 +47,92 @@ import { VideoPlayerScreen } from "../components/video/VideoPlayerScreen";
 import { StreamControls, StreamStage } from "../components/video/StreamControls";
 import { SourceSelector } from "../components/video/SourceSelector";
 import { RemoteControlPanel } from "../components/video/RemoteControlPanel";
+import RefusalReasonCard from "../components/RefusalReasonCard";
 
 const { Text } = Typography;
 
 /**
  * Преобразование ошибок терминала и бэкенда в понятные сообщения на русском языке
  */
-function formatVideoError(err: any): { title: string; message: string } {
+function formatVideoError(err: any): { title: string; message: string; code: string } {
   const detail = err?.response?.data?.detail;
   const status = err?.response?.status;
   const raw = typeof detail === "string" ? detail : (detail?.message || err?.message || "");
 
+  if (typeof detail === "object" && detail?.code) {
+    return {
+      title: "Сессия отклонена",
+      message: detail.message || raw,
+      code: detail.code,
+    };
+  }
+
   if (status === 403) {
     return {
       title: "Доступ ограничен",
-      message: "У вас нет прав для просмотра или управления видеотрансляцией на данном терминале.",
+      message: raw || "У вас нет прав для просмотра или управления видеотрансляцией на данном терминале.",
+      code: "permission_denied",
     };
   }
   if (status === 404) {
     return {
       title: "Терминал не найден",
       message: "Устройство не найдено или удалено из реестра.",
+      code: "terminal_not_found",
+    };
+  }
+  if (
+    status === 409 ||
+    raw.includes("lease_taken") ||
+    raw.includes("busy") ||
+    raw.includes("session_busy")
+  ) {
+    return {
+      title: "Терминал занят",
+      message:
+        raw ||
+        "Терминал уже находится под управлением другого пользователя или занят другой сессией.",
+      code: "session_busy",
     };
   }
   if (raw.includes("offline") || raw.includes("Device is offline")) {
     return {
       title: "Терминал не в сети",
       message: "Терминал не на связи (offline). Проверьте питание и подключение к сети.",
+      code: "offline",
     };
   }
   if (raw.includes("source_unavailable") || raw.includes("source")) {
     return {
       title: "Источник недоступен",
       message: "Выбранный экран или камера недоступны на терминале. Выберите другой источник.",
+      code: "source_unavailable",
     };
   }
   if (raw.includes("ffmpeg_missing")) {
     return {
       title: "Компонент не найден",
       message: "На терминале отсутствует утилита захвата видео ffmpeg.",
+      code: "ffmpeg_missing",
     };
   }
   if (raw.includes("terminal_timeout") || raw.includes("timeout")) {
     return {
       title: "Таймаут соединения",
       message: "Терминал не ответил на команду запуска в установленное время.",
-    };
-  }
-  if (raw.includes("lease_taken") || raw.includes("busy")) {
-    return {
-      title: "Терминал занят",
-      message: "Терминал уже находится под управлением другого пользователя.",
+      code: "timeout",
     };
   }
 
   return {
     title: "Ошибка запуска трансляции",
     message: raw || "Не удалось запустить видеопоток. Повторите попытку через несколько секунд.",
+    code: "start_failed",
   };
 }
 
 export default function VideoSurveillancePage() {
+  const navigate = useNavigate();
   const { user, loading: userLoading } = useSession();
   const { token } = theme.useToken();
   const screens = Grid.useBreakpoint();
@@ -125,6 +150,7 @@ export default function VideoSurveillancePage() {
       user?.role_id === 1 ||
         user?.role_id === 2 ||
         user?.role_id === 3 ||
+        user?.role_id === 5 ||
         user?.is_superuser ||
         user?.role === "superuser" ||
         user?.role === "admin"
@@ -161,10 +187,10 @@ export default function VideoSurveillancePage() {
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const janusClientRef = useRef<JanusStreamingClient | null>(null);
-  const pollTimerRef = useRef<any>(null);
+  const statsTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const keepaliveTimerRef = useRef<any>(null);
   const leaseRef = useRef<{ id: string; deviceId: number } | null>(null);
-  const prevPacketsRef = useRef<{ packets: number; time: number } | null>(null);
+  const prevFramesRef = useRef<{ frames: number; time: number } | null>(null);
 
   // Загрузка терминалов и их адресов
   const loadDevices = useCallback(async () => {
@@ -235,7 +261,7 @@ export default function VideoSurveillancePage() {
   }, []);
 
   // Хук удалённого управления (мышь/клавиатура)
-  const lastPacketGrowthTimeRef = useRef<number>(Date.now());
+  const lastFrameGrowthTimeRef = useRef<number>(Date.now());
 
   // Координатор сессии управляет generation/эпохами, keepalive и событиями терминала
   const coordinatorRef = useRef<SessionLifecycleCoordinator>(
@@ -264,9 +290,9 @@ export default function VideoSurveillancePage() {
           void janusClientRef.current.stop();
           janusClientRef.current = null;
         }
-        if (pollTimerRef.current) {
-          clearInterval(pollTimerRef.current);
-          pollTimerRef.current = null;
+        if (statsTimerRef.current) {
+          clearInterval(statsTimerRef.current);
+          statsTimerRef.current = null;
         }
       },
       onLeaseLost: (statusCode, msg) => {
@@ -284,9 +310,9 @@ export default function VideoSurveillancePage() {
           void janusClientRef.current.stop();
           janusClientRef.current = null;
         }
-        if (pollTimerRef.current) {
-          clearInterval(pollTimerRef.current);
-          pollTimerRef.current = null;
+        if (statsTimerRef.current) {
+          clearInterval(statsTimerRef.current);
+          statsTimerRef.current = null;
         }
       },
     })
@@ -316,11 +342,11 @@ export default function VideoSurveillancePage() {
     await rcRef.current.disable("session_stopped");
     await coordinatorRef.current.stopSession(reason);
 
-    if (pollTimerRef.current) {
-      clearInterval(pollTimerRef.current);
-      pollTimerRef.current = null;
+    if (statsTimerRef.current) {
+      clearInterval(statsTimerRef.current);
+      statsTimerRef.current = null;
     }
-    prevPacketsRef.current = null;
+    prevFramesRef.current = null;
 
     if (janusClientRef.current) {
       try {
@@ -423,6 +449,116 @@ export default function VideoSurveillancePage() {
     },
     []
   );
+
+  // IoT watch is an invalidation feed. REST remains the authoritative snapshot.
+  useEffect(() => {
+    const deviceId = selectedDevice?.device_id;
+    if (!deviceId || !canView) return;
+
+    let disposed = false;
+    let socket: WebSocket | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let refreshing = false;
+    let refreshPending = false;
+    let retryMs = 1000;
+    let disconnectedAt = Date.now();
+    let retryEnabled = true;
+
+    const refresh = async () => {
+      if (disposed) return;
+      if (refreshing) {
+        refreshPending = true;
+        return;
+      }
+      refreshing = true;
+      try {
+        const [state, control] = await Promise.all([
+          getDeviceStreamState(deviceId).catch(() => null),
+          getControlStatus(deviceId).catch(() => null),
+        ]);
+        if (disposed) return;
+        if (!state && !control) throw new Error("Status endpoints unavailable");
+        if (control?.agent) rcRef.current.setPresence(control.agent);
+        const stream = state?.stream || control?.agent?.stream;
+        const activeSession = coordinatorRef.current.session;
+        if (
+          stream &&
+          activeSession &&
+          stream.stream_instance_id &&
+          stream.stream_instance_id !== activeSession.streamInstanceId
+        ) return;
+        if (stream) {
+          coordinatorRef.current.handleStreamStateEvent(stream);
+          setActiveStream(stream);
+          if (!activeSession) {
+            setStreamStage(
+              stream.state === "running" || stream.state === "starting" || stream.state === "stopping"
+                ? stream.state
+                : "idle"
+            );
+          }
+        } else if (!activeSession) {
+          setActiveStream(null);
+          setStreamStage("idle");
+        }
+      } catch (err) {
+        if (!disposed) console.warn("Video watch snapshot refresh failed", err);
+      } finally {
+        refreshing = false;
+        if (refreshPending && !disposed) {
+          refreshPending = false;
+          void refresh();
+        }
+      }
+    };
+
+    const connect = () => {
+      if (disposed) return;
+      const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+      socket = new WebSocket(`${proto}//${window.location.host}/api/v1/video/devices/${deviceId}/watch/ws`);
+      socket.onopen = () => {
+        retryMs = 1000;
+        disconnectedAt = 0;
+      };
+      socket.onmessage = (event) => {
+        try {
+          if (JSON.parse(event.data)?.type === "invalidate") void refresh();
+        } catch {
+          socket?.close();
+        }
+      };
+      socket.onclose = (event) => {
+        if (disposed) return;
+        socket = null;
+        disconnectedAt = Date.now();
+        if (event.code === 4401 || event.code === 4403 || event.code === 4404) {
+          retryEnabled = false;
+          void refresh();
+          return;
+        }
+        retryTimer = setTimeout(connect, retryMs);
+        retryMs = Math.min(retryMs * 2, 15000);
+      };
+      socket.onerror = () => socket?.close();
+    };
+
+    connect();
+    // During a disconnect, use the existing REST status path. The BFF
+    // reconnects after 60 seconds and triggers a fresh snapshot.
+    const fallbackTimer = setInterval(() => {
+      if (
+        retryEnabled &&
+        socket?.readyState !== WebSocket.OPEN &&
+        Date.now() - disconnectedAt >= 5000
+      ) void refresh();
+    }, 5000);
+    return () => {
+      disposed = true;
+      clearInterval(fallbackTimer);
+      if (retryTimer) clearTimeout(retryTimer);
+      socket?.close();
+    };
+  }, [selectedDevice?.device_id, canView]);
 
   // Смена выбранного терминала
   const handleSelectDevice = async (device: DeviceListItem) => {
@@ -596,50 +732,35 @@ export default function VideoSurveillancePage() {
       setStatusText("В эфире");
       message.success("Трансляция успешно запущена");
 
-      // 5. Периодический опрос качества и RTP пакетов
-      prevPacketsRef.current = null;
-      lastPacketGrowthTimeRef.current = Date.now();
-      pollTimerRef.current = setInterval(async () => {
+      // Decoded frames come from the local WebRTC connection; no HTTP status poll.
+      prevFramesRef.current = null;
+      lastFrameGrowthTimeRef.current = Date.now();
+      let statsBusy = false;
+      statsTimerRef.current = setInterval(async () => {
+        if (statsBusy || janusClientRef.current !== client) return;
+        statsBusy = true;
         try {
-          const [stat, stateRes, ctlStat] = await Promise.all([
-            getVideoSessionStatus(selectedDevice.device_id),
-            getDeviceStreamState(selectedDevice.device_id).catch(() => null),
-            getControlStatus(selectedDevice.device_id).catch(() => null),
-          ]);
-
-          if (ctlStat?.agent && rcRef.current.status !== "active") {
-            rcRef.current.setPresence(ctlStat.agent);
-          }
-          if (stateRes?.stream) {
-            coordinatorRef.current.handleStreamStateEvent(stateRes.stream);
-            if (stateRes.stream.state !== "stopped" && stateRes.stream.state !== "failed") {
-              setActiveStream(stateRes.stream);
-            }
-          }
-
+          const stat = await client.getVideoReceiveStats();
+          if (janusClientRef.current !== client || !stat) return;
           const now = Date.now();
-          let pps = 0;
-          if (prevPacketsRef.current) {
-            const dt = (now - prevPacketsRef.current.time) / 1000;
-            const dp = stat.rtp_packets - prevPacketsRef.current.packets;
-            pps = dt > 0 ? Math.max(0, Math.round(dp / dt)) : 0;
+          const previous = prevFramesRef.current;
+          prevFramesRef.current = { frames: stat.framesDecoded, time: stat.timestamp };
+          if (!previous) {
+            if (stat.framesDecoded > 0) lastFrameGrowthTimeRef.current = now;
+            return;
           }
-          prevPacketsRef.current = { packets: stat.rtp_packets, time: now };
-
-          if (stat.streaming && stat.rtp_packets > 0) {
-            if (pps === 0 && now - lastPacketGrowthTimeRef.current > 15000) {
-              setStatusText("В эфире (кадры не поступают)");
-            } else {
-              if (pps > 0) {
-                lastPacketGrowthTimeRef.current = now;
-              }
-              setStatusText(`В эфире (${pps} кадр/сек)`);
-            }
-          } else if (!stat.streaming) {
-            setStatusText("Трансляция не передается");
+          const elapsed = (stat.timestamp - previous.time) / 1000;
+          const decoded = stat.framesDecoded - previous.frames;
+          if (decoded > 0 && elapsed > 0) {
+            lastFrameGrowthTimeRef.current = now;
+            setStatusText(`В эфире (${Math.round(decoded / elapsed)} кадр/сек)`);
+          } else if (now - lastFrameGrowthTimeRef.current > 15000) {
+            setStatusText("В эфире (кадры не поступают)");
           }
         } catch (e) {
-          console.warn("Status poll error", e);
+          console.warn("WebRTC stats error", e);
+        } finally {
+          statsBusy = false;
         }
       }, 5000);
     } catch (err: any) {
@@ -865,14 +986,15 @@ export default function VideoSurveillancePage() {
                 isMobile={isMobile}
               />
 
-              {/* Уведомления об ошибках или конфликте аренды */}
+              {/* Уведомления об ошибках или отказе */}
               {bannerError && (
-                <Alert
-                  type="warning"
-                  showIcon
-                  message={bannerError.message}
-                  closable
+                <RefusalReasonCard
+                  code={bannerError.code}
+                  rawMessage={bannerError.message}
                   onClose={() => setBannerError(null)}
+                  onRetry={isOperator ? handleOperatorStart : () => handleViewerConnect(selectedDevice.device_id)}
+                  onTopUp={() => navigate("/licenses")}
+                  onStopActiveSession={handleOperatorStop}
                 />
               )}
 

@@ -12,12 +12,14 @@ ROLE_SUPERUSER = 1
 ROLE_ADMIN = 2
 ROLE_USER = 3
 ROLE_VIEWER = 4
+ROLE_L4DESK_OWNER = 5
 
 ROLE_ID_TO_NAME: dict[int, str] = {
     1: "superuser",
     2: "admin",
     3: "user",
     4: "viewer",
+    5: "l4desk_owner",
 }
 NAME_TO_ROLE_ID: dict[str, int] = {v: k for k, v in ROLE_ID_TO_NAME.items()}
 
@@ -150,7 +152,12 @@ def require_permission(permission_code: str):
             or user.get("role") in ("superuser", "admin")
             or role_id == ROLE_SUPERUSER
         )
-        if is_su or role_id in (ROLE_SUPERUSER, ROLE_ADMIN, ROLE_USER):
+        if is_su or role_id in (
+            ROLE_SUPERUSER,
+            ROLE_ADMIN,
+            ROLE_USER,
+            ROLE_L4DESK_OWNER,
+        ):
             return user
 
         if role_id == ROLE_VIEWER:
@@ -184,7 +191,7 @@ async def require_tenant_admin(
         or user.get("role") in ("superuser", "admin")
         or role_id == ROLE_SUPERUSER
     )
-    if not is_su and role_id not in (ROLE_SUPERUSER, ROLE_USER):
+    if not is_su and role_id not in (ROLE_SUPERUSER, ROLE_USER, ROLE_L4DESK_OWNER):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Доступ разрешен только администратору организации",
