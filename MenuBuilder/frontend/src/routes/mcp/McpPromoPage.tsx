@@ -1,10 +1,20 @@
 import { useEffect, useState } from "react";
-import { Alert, Button, Card, Input, Modal, Space, Table, Tag, Typography, message } from "antd";
-import { CopyOutlined, DeleteOutlined, PlusOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Col, Form, Input, Modal, Row, Space, Table, Tag, Typography, message } from "antd";
+import { CopyOutlined, DeleteOutlined, PlusOutlined, SendOutlined } from "@ant-design/icons";
 import { useSession } from "../../session/SessionContext";
 import { createToken, listTokens, revokeToken, type TokenInfo } from "../../api/profile";
+import { getMcpWaitlistStatus, joinMcpWaitlist } from "../../api/mcpWaitlist";
 
 const { Paragraph, Text, Title } = Typography;
+
+const IDEAS = [
+  { key: "auto_triage", title: "Диагностика и восстановление", description: "Подсказки по причинам сбоев и проверенным шагам восстановления." },
+  { key: "log_telemetry_analysis", title: "Логи и телеметрия", description: "Поиск аномалий в журналах и показателях терминалов." },
+  { key: "fleet_nlp_control", title: "Управление парком через диалог", description: "Типовые операции с терминалами через текстовые запросы." },
+  { key: "security_audit", title: "Аудит безопасности", description: "Проверка версий ПО, сертификатов и настроек устройств." },
+];
+
+type FeedbackValues = { contact_email?: string; note?: string };
 
 export default function McpPage() {
   const { user } = useSession();
@@ -12,6 +22,10 @@ export default function McpPage() {
   const [name, setName] = useState("L4mcp");
   const [created, setCreated] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [feedbackBusy, setFeedbackBusy] = useState(false);
+  const [feedbackSent, setFeedbackSent] = useState(false);
+  const [selectedIdea, setSelectedIdea] = useState(IDEAS[0].key);
+  const [feedbackForm] = Form.useForm<FeedbackValues>();
   const allowed = [1, 3, 5].includes(user?.role_id ?? -1);
   const url = `${window.location.origin}/api/mcp/proxy`;
 
@@ -19,6 +33,14 @@ export default function McpPage() {
     if (allowed) setTokens(await listTokens());
   };
   useEffect(() => { void refresh().catch(() => message.error("Не удалось загрузить токены")); }, [allowed]);
+  useEffect(() => {
+    if (!allowed) return;
+    void getMcpWaitlistStatus().then(status => {
+      if (!status.registered) return;
+      if (IDEAS.some(idea => idea.key === status.use_case)) setSelectedIdea(status.use_case!);
+      feedbackForm.setFieldsValue({ note: status.note ?? "" });
+    }).catch(() => undefined);
+  }, [allowed, feedbackForm]);
 
   const issue = async () => {
     setBusy(true);
@@ -35,6 +57,23 @@ export default function McpPage() {
     content: "Подключённый агент сразу потеряет доступ к L4mcp.",
     onOk: async () => { await revokeToken(jti); await refresh(); },
   });
+
+  const sendFeedback = async (values: FeedbackValues) => {
+    setFeedbackBusy(true);
+    try {
+      await joinMcpWaitlist({
+        use_case: selectedIdea,
+        contact_email: values.contact_email?.trim() || undefined,
+        note: values.note?.trim() || undefined,
+      });
+      setFeedbackSent(true);
+      message.success("Пожелание отправлено");
+    } catch {
+      message.error("Не удалось отправить пожелание. Проверьте организацию и повторите попытку.");
+    } finally {
+      setFeedbackBusy(false);
+    }
+  };
 
   if (!allowed) return <Alert type="warning" message="L4mcp доступен ролям 1, 3 и 5." />;
 
@@ -62,15 +101,41 @@ export default function McpPage() {
       <Card title="Подключение к агенту">
         <Paragraph>Сохраните токен в переменной окружения <Text code>L4MCP_TOKEN</Text> на своей машине. В <Text code>bearer_token_env_var</Text> укажите только имя переменной, не сам токен. Не вставляйте токен в конфигурацию проекта или переписку.</Paragraph>
         <Text strong>Codex: ~/.codex/config.toml</Text>
-        <pre>{`mcp_optional_startup_grace_ms = 0
+        <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{`mcp_optional_startup_grace_ms = 0
 
 [mcp_servers.l4mcp]
 url = "${url}"
 bearer_token_env_var = "L4MCP_TOKEN"
 default_tools_approval_mode = "writes"`}</pre>
         <Text strong>Claude Code: .mcp.json</Text>
-        <pre>{JSON.stringify({ mcpServers: { l4mcp: { type: "http", url, headers: { Authorization: "Bearer ${L4MCP_TOKEN}" } } } }, null, 2)}</pre>
+        <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{JSON.stringify({ mcpServers: { l4mcp: { type: "http", url, headers: { Authorization: "Bearer ${L4MCP_TOKEN}" } } } }, null, 2)}</pre>
         <Paragraph type="secondary">Для Codex настройка writes пропускает просмотр без подтверждения; выдача и отзыв PIN и выполнение команды требуют разрешения. Перезапустите агент после изменения настроек. Запрашивайте один терминал или ограниченный диапазон; PIN выдаётся максимум для пяти терминалов за вызов.</Paragraph>
+      </Card>
+      <Card title="Что добавить в L4mcp дальше" style={{ width: "100%" }}>
+        <Paragraph type="secondary">Выберите интересное направление и отправьте пожелание. Эти идеи пока не входят в текущий набор инструментов MCP.</Paragraph>
+        <Row gutter={[12, 12]} style={{ marginBottom: 20 }}>
+          {IDEAS.map(idea => <Col xs={24} sm={12} key={idea.key}>
+            <Card
+              hoverable
+              size="small"
+              onClick={() => setSelectedIdea(idea.key)}
+              style={{ height: "100%", borderColor: selectedIdea === idea.key ? "#1677ff" : undefined, background: selectedIdea === idea.key ? "#f0f7ff" : undefined }}
+            >
+              <Space style={{ display: "flex", flexWrap: "wrap", marginBottom: 8 }}><Text strong>{idea.title}</Text>{selectedIdea === idea.key && <Tag color="blue">Выбрано</Tag>}</Space>
+              <Paragraph type="secondary" style={{ marginBottom: 0 }}>{idea.description}</Paragraph>
+            </Card>
+          </Col>)}
+        </Row>
+        <Form form={feedbackForm} layout="vertical" onFinish={sendFeedback} initialValues={{ contact_email: user?.username?.includes("@") ? user.username : "" }}>
+          <Form.Item name="contact_email" label="Email для ответа" rules={[{ type: "email", message: "Введите корректный email" }]}>
+            <Input autoComplete="email" maxLength={128} />
+          </Form.Item>
+          <Form.Item name="note" label="Пожелание" rules={[{ required: true, whitespace: true, message: "Опишите пожелание" }]}>
+            <Input.TextArea rows={3} maxLength={500} showCount placeholder="Что вам нужно от MCP в работе с терминалами?" />
+          </Form.Item>
+          {feedbackSent && <Alert type="success" showIcon message="Пожелание сохранено. Его можно дополнить и отправить снова." style={{ marginBottom: 12 }} />}
+          <Button type="primary" htmlType="submit" icon={<SendOutlined />} loading={feedbackBusy}>Отправить пожелание</Button>
+        </Form>
       </Card>
     </Space>
   );
