@@ -23,13 +23,15 @@
 - [x] Read-only production `tb_dev_events` code/tag audit: event 75 and tags 440–443 absent at audit time.
 - [x] `l4pin`, `l4con`, `l4superv`: x86/x64 MSVC /MT builds passed; `l4pin` in-memory tests 8/8 per architecture.
 - [x] `l4con` MQTT 5 packet tests passed on x86/x64. App1 prototype tests passed (434), but that branch was withdrawn and is not part of the delivery.
-- [ ] Terminal live reissue, GUI visual check and event 75 in production: not yet deployed or tested.
+- [x] Local Mosquitto integration: MQTT 5 CONNECT, retained `svc_online`, RPC 7003 `pong` all passed using an isolated test EXE mutex. Temporary EXE and broker process were removed.
+- [x] On terminal 773, user stopped L4Superv/L4Con; three x64 EXEs copied to `C:\l4tools` and SHA-256 verified. User restarted L4Superv. Existing app1 persisted `tb_dev_events.id=1356471`, `device_id=773`, `event_type_code=75`, correct SN/source, UTC timestamp, correlation and inventory tags 441–443.
+- [ ] GUI visual check and live certificate reissue on a test agent: pending user interaction. Terminal 773 certificate was not changed.
 
 ## Риски и следующие действия
-- Do not deploy or modify app1. Verify event 75 through existing event API/DB after the new `l4con` is installed. Existing app1 bills normal `evt` messages; quantify this single event in the test.
-- On a test terminal with services stopped by the user, install the new Windows binaries and verify failed enrollment retains the old certificate, successful reissue leaves exactly one Leo4 certificate, services reconnect under the new SN, and event 75 appears once.
+- Do not deploy or modify app1. Its existing `evt` path counts event 75 as one event message; the September counter for org 1 was 7 after this test, but no before snapshot exists to attribute an exact delta.
+- On a separate test terminal with services stopped by the user, install the new Windows binaries and verify failed enrollment retains the old certificate, successful reissue leaves exactly one Leo4 certificate, services reconnect under the new SN, and event 75 appears once.
 - Keep accepted `l4tools-1.8.2-beta-1` unchanged; package this fix as a separate candidate after runtime checks.
-- No test sessions, certificates or server files were modified during this handoff preparation.
+- No certificate or server file was modified in this test. No temporary broker process or test EXE remains.
 
 ## Context distillates
 - `../components/l4con.md` and `../../docs/ops_run-remote-console-diagnostics.md` updated with event 75.
