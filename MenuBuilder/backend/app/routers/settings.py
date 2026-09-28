@@ -9,7 +9,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
-from sqlalchemy import String, cast, desc, func, or_, select
+from sqlalchemy import Select, String, cast, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
@@ -573,6 +573,19 @@ async def confirm_email_token(
 # --- Endpoints: Terminals ---
 
 
+def _visible_terminals_query(org_id: int) -> Select[tuple[Terminal]]:
+    deleted = (
+        select(L4DeskTerminal.terminal_id)
+        .where(
+            L4DeskTerminal.terminal_id == Terminal.id,
+            L4DeskTerminal.tenant_id == org_id,
+            L4DeskTerminal.deleted_at.is_not(None),
+        )
+        .exists()
+    )
+    return select(Terminal).where(Terminal.org_id == org_id, ~deleted)
+
+
 @router.get(
     "/terminals",
     response_model=TerminalSettingsListResponse,
@@ -615,7 +628,7 @@ async def list_terminals_settings(
             items=[], total_count=0, page=cur_page, page_size=cur_page_size
         )
 
-    query = select(Terminal).where(Terminal.org_id == effective_org_id)
+    query = _visible_terminals_query(effective_org_id)
 
     if search and isinstance(search, str):
         raw_search = search.strip()
