@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Alert, Button, Card, Col, Form, Input, Modal, Row, Space, Table, Tag, Typography, message } from "antd";
-import { CopyOutlined, DeleteOutlined, PlusOutlined, SendOutlined } from "@ant-design/icons";
+import { CopyOutlined, DeleteOutlined, LineChartOutlined, PlusOutlined, RobotOutlined, SecurityScanOutlined, SendOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import { useSession } from "../../session/SessionContext";
 import { createToken, listTokens, revokeToken, type TokenInfo } from "../../api/profile";
 import { getMcpWaitlistStatus, joinMcpWaitlist } from "../../api/mcpWaitlist";
@@ -8,10 +8,10 @@ import { getMcpWaitlistStatus, joinMcpWaitlist } from "../../api/mcpWaitlist";
 const { Paragraph, Text, Title } = Typography;
 
 const IDEAS = [
-  { key: "auto_triage", title: "Диагностика и восстановление", description: "Подсказки по причинам сбоев и проверенным шагам восстановления." },
-  { key: "log_telemetry_analysis", title: "Логи и телеметрия", description: "Поиск аномалий в журналах и показателях терминалов." },
-  { key: "fleet_nlp_control", title: "Управление парком через диалог", description: "Типовые операции с терминалами через текстовые запросы." },
-  { key: "security_audit", title: "Аудит безопасности", description: "Проверка версий ПО, сертификатов и настроек устройств." },
+  { key: "auto_triage", title: "Диагностика и восстановление", description: "Подсказки по причинам сбоев и проверенным шагам восстановления.", color: "#d48806", icon: <ThunderboltOutlined /> },
+  { key: "log_telemetry_analysis", title: "Логи и телеметрия", description: "Поиск аномалий в журналах и показателях терминалов.", color: "#1677ff", icon: <LineChartOutlined /> },
+  { key: "fleet_nlp_control", title: "Управление парком через диалог", description: "Типовые операции с терминалами через текстовые запросы.", color: "#389e0d", icon: <RobotOutlined /> },
+  { key: "security_audit", title: "Аудит безопасности", description: "Проверка версий ПО, сертификатов и настроек устройств.", color: "#722ed1", icon: <SecurityScanOutlined /> },
 ];
 
 type FeedbackValues = { contact_email?: string; note?: string };
@@ -111,7 +111,7 @@ default_tools_approval_mode = "writes"`}</pre>
         <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{JSON.stringify({ mcpServers: { l4mcp: { type: "http", url, headers: { Authorization: "Bearer ${L4MCP_TOKEN}" } } } }, null, 2)}</pre>
         <Paragraph type="secondary">Для Codex настройка writes пропускает просмотр без подтверждения; выдача и отзыв PIN и выполнение команды требуют разрешения. Перезапустите агент после изменения настроек. Запрашивайте один терминал или ограниченный диапазон; PIN выдаётся максимум для пяти терминалов за вызов.</Paragraph>
       </Card>
-      <Card title="Что добавить в L4mcp дальше" style={{ width: "100%" }}>
+      <Card title="Что добавить в L4mcp дальше" style={{ width: "100%", borderColor: "#d6e4ff", background: "linear-gradient(135deg, #f8fbff, #fff)" }}>
         <Paragraph type="secondary">Выберите интересное направление и отправьте пожелание. Эти идеи пока не входят в текущий набор инструментов MCP.</Paragraph>
         <Row gutter={[12, 12]} style={{ marginBottom: 20 }}>
           {IDEAS.map(idea => <Col xs={24} sm={12} key={idea.key}>
@@ -119,9 +119,9 @@ default_tools_approval_mode = "writes"`}</pre>
               hoverable
               size="small"
               onClick={() => setSelectedIdea(idea.key)}
-              style={{ height: "100%", borderColor: selectedIdea === idea.key ? "#1677ff" : undefined, background: selectedIdea === idea.key ? "#f0f7ff" : undefined }}
+              style={{ height: "100%", borderColor: selectedIdea === idea.key ? idea.color : "#e6eaf0", background: selectedIdea === idea.key ? "#f0f7ff" : "#fff" }}
             >
-              <Space style={{ display: "flex", flexWrap: "wrap", marginBottom: 8 }}><Text strong>{idea.title}</Text>{selectedIdea === idea.key && <Tag color="blue">Выбрано</Tag>}</Space>
+              <Space style={{ display: "flex", flexWrap: "wrap", marginBottom: 8 }}><span style={{ color: idea.color, fontSize: 22 }}>{idea.icon}</span><Text strong>{idea.title}</Text><Tag color={selectedIdea === idea.key ? "blue" : "default"}>{selectedIdea === idea.key ? "Выбрано" : "Идея"}</Tag></Space>
               <Paragraph type="secondary" style={{ marginBottom: 0 }}>{idea.description}</Paragraph>
             </Card>
           </Col>)}
