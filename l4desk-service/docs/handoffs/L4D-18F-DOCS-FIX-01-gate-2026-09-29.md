@@ -64,3 +64,20 @@ Ingress `/health`: `status=ok`, `routes=0`, `active_media_sessions=16`.
 18F output candidate и запись `CLOSED_ACCEPTED` не создавались. После
 адресных owner-выпусков нужно повторить текущую матрицу, короткий smoke и
 независимый controller review итогового report/candidate.
+
+## Дополнение: проверка media-счётчика
+
+Позднее подтверждено: в исходном ingress `/health` выводил число занятых
+слотов таблицы сессий, включая `STOPPED`. Авторизованный `/api/v1/media/metrics`
+показывал `active_media_sessions=0`, `total_sessions_started=16` и
+`total_sessions_stopped=16`; `/stats` показывал `active_connections=0` и
+`sessions=[]`. Следовательно, число 16 не означало действующие сессии.
+
+Исправление `801186d` собрано на 176, опубликовано как
+`dev-leo4-ru.cr.cloud.ru/etran/l4media-ingress@sha256:1b9242b290d975e769acd3a35eb5d16a286f91e71b08356458643863c58b1cd7`
+и установлено в production штатным pull. Новый `/health` показывает
+`active_media_sessions=0`; `/stats` по-прежнему показывает
+`active_connections=0`, `sessions=[]`. Единственный маршрут в `/routes`
+загружается из статического `ingress/routes.conf` для терминала 773 и сам
+по себе не является media-сессией. Пункт 4 выше в части счётчика закрыт;
+требования по flags, архиву и retention остаются открытыми.
