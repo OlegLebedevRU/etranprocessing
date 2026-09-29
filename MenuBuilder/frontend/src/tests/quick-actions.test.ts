@@ -169,18 +169,4 @@ describe("Step 6 Quick Actions & Remote Input Contracts", () => {
     });
   });
 
-  // 6. 480p quality constraint
-  describe("480p quality policy", () => {
-    it("restricts remote control activation to 480p (low) mode only", () => {
-      const isControlAllowedForProfile = (profile?: string) => {
-        return profile === "low" || profile === "480p";
-      };
-
-      expect(isControlAllowedForProfile("low")).toBe(true);
-      expect(isControlAllowedForProfile("480p")).toBe(true);
-      expect(isControlAllowedForProfile("default")).toBe(false); // 720p HD
-      expect(isControlAllowedForProfile("1080p")).toBe(false);
-      expect(isControlAllowedForProfile(undefined)).toBe(false);
-    });
-  });
 });

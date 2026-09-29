@@ -832,13 +832,10 @@ function TenantVideoSurveillancePage() {
         message.warning("Управление мышью доступно только в подтверждённом режиме рабочего стола");
         return;
       }
-      if (selectedProfile !== "low" && selectedProfile !== "480p") {
-        message.warning("Удалённое управление разрешено только в режиме Medium");
-        return;
-      }
       try {
-        await rc.enable(selectedProfile);
-        message.success("Управление активировано");
+        if (await rc.enable()) {
+          message.success("Управление активировано");
+        }
       } catch (err: any) {
         // обработано в хуке
       }
@@ -1084,7 +1081,6 @@ function TenantVideoSurveillancePage() {
                   isSessionActive={isSessionActive}
                   isCameraMode={isCameraMode}
                   isTerminalOnline={selectedDevice.status === "online"}
-                  selectedProfile={selectedProfile}
                   onEnableControl={handleToggleControl}
                   onDisableControl={handleToggleControl}
                   onSendShortcut={rc.sendShortcut}

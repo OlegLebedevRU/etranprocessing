@@ -312,7 +312,7 @@ async def test_rest_shortcut_action_valid_and_invalid(
 
 
 # ---------------------------------------------------------------------------
-# 3. Policy Guardrails: Scope, Camera Mode, and 480p Quality Requirement
+# 3. Policy Guardrails: Scope and Camera Mode
 # ---------------------------------------------------------------------------
 
 
@@ -353,8 +353,8 @@ async def test_rest_input_denied_when_camera_mode(mock_db_session, operator_head
 
 
 @pytest.mark.anyio
-async def test_rest_input_denied_when_not_480p(mock_db_session, operator_headers):
-    """Input is denied with 400 when stream profile is not 480p (low)."""
+async def test_rest_input_allowed_for_hd_desktop(mock_db_session, operator_headers):
+    """Desktop input is independent of the stream's quality profile."""
     hd_status = {
         "sn": "sn0001",
         "agent": {
@@ -376,14 +376,19 @@ async def test_rest_input_denied_when_not_480p(mock_db_session, operator_headers
             patch.object(
                 iot_client, "remote_input_status", new=AsyncMock(return_value=hd_status)
             ),
+            patch.object(
+                iot_client,
+                "remote_input_click",
+                new=AsyncMock(return_value={"result": "injected"}),
+            ) as mock_click,
         ):
             resp = await ac.post(
                 "/api/v1/video/devices/1/control/events",
                 json={"lease_id": "lease-1", "type": "mouse_click", "x": 100, "y": 100},
                 headers=operator_headers,
             )
-            assert resp.status_code == 400
-            assert "480p" in resp.json()["detail"]
+            assert resp.status_code == 200
+            mock_click.assert_awaited_once()
 
 
 @pytest.mark.anyio
@@ -425,10 +430,8 @@ async def test_rest_input_denied_when_scope_not_input(
 
 
 @pytest.mark.anyio
-async def test_acquire_lease_input_enforces_480p_policy(
-    mock_db_session, operator_headers
-):
-    """Acquiring input lease fails with 400 when stream is running in 720p (default) quality."""
+async def test_acquire_lease_input_allows_hd_desktop(mock_db_session, operator_headers):
+    """Acquiring input lease works while HD desktop stream is running."""
     running_hd_status = {
         "sn": "sn0001",
         "agent": {
@@ -452,14 +455,25 @@ async def test_acquire_lease_input_enforces_480p_policy(
                 "remote_input_status",
                 new=AsyncMock(return_value=running_hd_status),
             ),
+            patch.object(
+                iot_client,
+                "remote_input_acquire_lease",
+                new=AsyncMock(
+                    return_value={
+                        "lease_id": "lease-1",
+                        "expires_at": "2026-09-29T15:00:00Z",
+                        "scope": "input",
+                    }
+                ),
+            ) as mock_acquire,
         ):
             resp = await ac.post(
                 "/api/v1/video/devices/1/control/lease",
                 json={"scope": "input"},
                 headers=operator_headers,
             )
-            assert resp.status_code == 400
-            assert "480p" in resp.json()["detail"]
+            assert resp.status_code == 201
+            mock_acquire.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------

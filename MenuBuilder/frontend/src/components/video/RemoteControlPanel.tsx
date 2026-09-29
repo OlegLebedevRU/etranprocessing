@@ -31,7 +31,6 @@ export interface RemoteControlPanelProps {
   isSessionActive: boolean;
   isCameraMode: boolean;
   isTerminalOnline: boolean;
-  selectedProfile?: string;
   onEnableControl: () => void;
   onDisableControl: () => void;
   onSendShortcut?: (action: "f12" | "alt_f4" | "win_d") => Promise<any>;
@@ -49,7 +48,6 @@ export const RemoteControlPanel: React.FC<RemoteControlPanelProps> = ({
   isSessionActive,
   isCameraMode,
   isTerminalOnline,
-  selectedProfile,
   onEnableControl,
   onDisableControl,
   onSendShortcut,
@@ -75,8 +73,6 @@ export const RemoteControlPanel: React.FC<RemoteControlPanelProps> = ({
     disabledReason = "Запустите видеотрансляцию для включения удалённого управления.";
   } else if (isCameraMode) {
     disabledReason = "Управление недоступно в режиме камеры. Переключитесь на рабочий стол.";
-  } else if (selectedProfile && selectedProfile !== "low" && selectedProfile !== "480p") {
-    disabledReason = "Удалённое управление разрешено только в режиме Medium.";
   } else if (!isAgentOnline) {
     disabledReason = "Агент удалённого управления l4desk на терминале не отвечает.";
   } else if (!isDesktopAvailable) {

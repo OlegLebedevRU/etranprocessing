@@ -631,20 +631,14 @@ async def acquire_device_control_lease(
                 terminal.sn, org_id=org_id, user=user
             )
             stream_info = (status_data.get("agent") or {}).get("stream") or {}
-            if stream_info.get("state") == "running":
-                if stream_info.get("mode") == "usb-camera":
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Ввод запрещён в режиме трансляции камеры (требуется рабочий стол)",
-                    )
-                if stream_info.get("profile") and stream_info.get("profile") not in (
-                    "low",
-                    "480p",
-                ):
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Удалённое управление разрешено только в режиме качества 480p",
-                    )
+            if (
+                stream_info.get("state") == "running"
+                and stream_info.get("mode") == "usb-camera"
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Ввод запрещён в режиме трансляции камеры (требуется рабочий стол)",
+                )
         except HTTPException:
             raise
         except Exception as exc:  # noqa: BLE001
@@ -738,20 +732,14 @@ async def change_device_control_scope(
     )
     if body.scope == "input":
         stream_info = (status_data.get("agent") or {}).get("stream") or {}
-        if stream_info.get("state") == "running":
-            if stream_info.get("mode") == "usb-camera":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Ввод запрещён в режиме трансляции камеры (требуется рабочий стол)",
-                )
-            if stream_info.get("profile") and stream_info.get("profile") not in (
-                "low",
-                "480p",
-            ):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Удалённое управление разрешено только в режиме качества 480p",
-                )
+        if (
+            stream_info.get("state") == "running"
+            and stream_info.get("mode") == "usb-camera"
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Ввод запрещён в режиме трансляции камеры (требуется рабочий стол)",
+            )
 
     lease_info = status_data.get("lease") or {}
     if not lease_info.get("active") or not lease_info.get("lease_id"):
@@ -1401,14 +1389,6 @@ async def send_device_control_event(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Ввод запрещён в режиме трансляции камеры",
             )
-        if stream_info.get("profile") and stream_info.get("profile") not in (
-            "low",
-            "480p",
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Удалённое управление разрешено только в режиме качества 480p",
-            )
 
     desktop_id = lease_info.get("selected_desktop_id") or lease_info.get("desktop_id")
     stream_inst_id = str(lease_info.get("stream_instance_id") or "") or None
@@ -1685,9 +1665,6 @@ async def control_ws_proxy(
     agent_info = status_res.get("agent") or {}
     stream_info = agent_info.get("stream") or {}
     is_camera = stream_info.get("mode") == "usb-camera"
-    is_non_480p = bool(
-        stream_info.get("profile") and stream_info.get("profile") not in ("low", "480p")
-    )
     is_input_scope = lease_info.get("scope", "input") == "input"
 
     await websocket.accept()
@@ -1783,21 +1760,6 @@ async def control_ws_proxy(
                                         "result": "nack",
                                         "code": "action_blocked_policy",
                                         "message": "Ввод запрещён в режиме трансляции камеры",
-                                        "client_ref": client_ref,
-                                    }
-                                )
-                            )
-                            continue
-                        if is_non_480p:
-                            await websocket.send_text(
-                                json.dumps(
-                                    {
-                                        "type": "error"
-                                        if msg_type == "pointer_move"
-                                        else "click_result",
-                                        "result": "nack",
-                                        "code": "action_blocked_policy",
-                                        "message": "Удалённое управление разрешено только в режиме качества 480p",
                                         "client_ref": client_ref,
                                     }
                                 )

@@ -188,27 +188,16 @@ export function useRemoteControl({
     [sharedLease, isSessionActive]
   );
 
-  const enable = useCallback(async (profile?: string) => {
+  const enable = useCallback(async (): Promise<boolean> => {
     if (!deviceId || !isSessionActive) {
-      return;
-    }
-
-    if (profile && profile !== "low" && profile !== "480p") {
-      const msg = "Удалённое управление разрешено только в режиме качества 480p";
-      setErrorMessage(msg);
-      if (onErrorMessage) onErrorMessage(msg);
-      notification.warning({
-        message: "Качество видеопотока",
-        description: msg,
-      });
-      return;
+      return false;
     }
 
     if (streamMode && streamMode !== "desktop") {
       const msg = "Управление доступно только в режиме рабочего стола";
       setErrorMessage(msg);
       if (onErrorMessage) onErrorMessage(msg);
-      return;
+      return false;
     }
 
     setStatus("acquiring");
@@ -222,7 +211,7 @@ export function useRemoteControl({
         if (!sharedLease) {
           void releaseControlLease(deviceId, leaseData.lease_id).catch(() => {});
         }
-        return;
+        return false;
       }
 
       leaseRef.current = leaseData;
@@ -390,10 +379,10 @@ export function useRemoteControl({
       });
 
       await helloPromise;
+      return true;
     } catch (err: any) {
-      if (wsRef.current === null && leaseRef.current === null) {
-        // Was explicitly disabled / aborted while acquiring or connecting
-        return;
+      if (activeDeviceIdRef.current !== deviceId) {
+        return false;
       }
       const respData = err?.response?.data;
       const detail = respData?.detail;
@@ -421,14 +410,15 @@ export function useRemoteControl({
         }
       } else {
         setStatus("error");
-        const msg =
-          err?.message ||
-          err?.response?.data?.detail ||
-          "Ошибка включения управления";
+        const detailMessage = typeof detail === "string"
+          ? detail
+          : detail?.message || detail?.detail || detail?.code;
+        const msg = detailMessage || err?.message || "Ошибка включения управления";
         setErrorMessage(msg);
         if (onErrorMessage) onErrorMessage(msg);
       }
       await disable("failed");
+      return false;
     }
   }, [
     deviceId,
