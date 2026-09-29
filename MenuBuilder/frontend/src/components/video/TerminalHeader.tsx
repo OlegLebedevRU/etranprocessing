@@ -18,6 +18,7 @@ export interface TerminalHeaderProps {
   onOpenPermissionsModal?: () => void;
   canManagePermissions?: boolean;
   isMobile?: boolean;
+  compact?: boolean;
 }
 
 export const TerminalHeader: React.FC<TerminalHeaderProps> = ({
@@ -29,6 +30,7 @@ export const TerminalHeader: React.FC<TerminalHeaderProps> = ({
   onOpenPermissionsModal,
   canManagePermissions = false,
   isMobile = false,
+  compact = false,
 }) => {
   const { token } = theme.useToken();
   const isOnline = selectedDevice.status === "online";
@@ -42,7 +44,7 @@ export const TerminalHeader: React.FC<TerminalHeaderProps> = ({
         justifyContent: "space-between",
         alignItems: isMobile ? "flex-start" : "center",
         gap: 12,
-        padding: "12px 16px",
+        padding: compact ? "6px 10px" : "12px 16px",
         borderRadius: 8,
         backgroundColor: token.colorBgContainer,
         border: `1px solid ${token.colorBorderSecondary}`,
@@ -76,7 +78,7 @@ export const TerminalHeader: React.FC<TerminalHeaderProps> = ({
         </div>
 
         {/* Адрес терминала */}
-        <div
+        {!compact && <div
           style={{
             display: "flex",
             alignItems: "center",
@@ -88,7 +90,7 @@ export const TerminalHeader: React.FC<TerminalHeaderProps> = ({
         >
           <EnvironmentOutlined style={{ color: token.colorTextTertiary, flexShrink: 0 }} />
           <span>{displayAddress}</span>
-        </div>
+        </div>}
       </div>
 
       {/* Кнопки действий контекста терминала */}

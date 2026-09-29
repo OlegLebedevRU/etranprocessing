@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router";
 import { Layout, Menu, Button, Tooltip, Typography, theme, Grid } from "antd";
 import {
@@ -55,11 +55,15 @@ const L4DESK_NAV_ITEMS = [
 ];
 
 export default function AppLayout() {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => window.location.pathname.split("/")[1] === "video");
   const { user, setUser } = useSession();
   const currentUser = user;
   const navigate = useNavigate();
   const location = useLocation();
+  const isVideoRoute = location.pathname.split("/")[1] === "video";
+  useEffect(() => {
+    if (isVideoRoute) setCollapsed(true);
+  }, [isVideoRoute]);
   const { token } = theme.useToken();
   const screens = Grid.useBreakpoint();
   const isXs = screens.xs;
@@ -159,7 +163,7 @@ export default function AppLayout() {
         width={196}
         collapsedWidth={56}
         breakpoint="lg"
-        onBreakpoint={(broken) => setCollapsed(broken)}
+        onBreakpoint={(broken) => setCollapsed(broken || isVideoRoute)}
         trigger={null}
         style={{
           borderInlineEnd: `1px solid ${token.colorBorderSecondary}`,
@@ -295,7 +299,7 @@ export default function AppLayout() {
             </Tooltip>
           </div>
         </Header>
-        <Content style={{ padding: isXs ? 8 : 16 }}>
+        <Content style={{ padding: isVideoRoute ? 8 : isXs ? 8 : 16 }}>
           {isPlatformMode &&
           ["monitoring", "menu", "reports", "billing", "integrations", "licenses", "console", "mcp"].includes(segment) ? (
             <div

@@ -38,6 +38,7 @@ export interface RemoteControlPanelProps {
   onSendKey?: (kind: "down" | "up" | "press", vk: number, text?: string) => boolean | Promise<any>;
   lastCommandResult?: ClickResult | null;
   isMobile?: boolean;
+  compact?: boolean;
 }
 
 export const RemoteControlPanel: React.FC<RemoteControlPanelProps> = ({
@@ -55,9 +56,11 @@ export const RemoteControlPanel: React.FC<RemoteControlPanelProps> = ({
   onSendKey,
   lastCommandResult,
   isMobile = false,
+  compact = false,
 }) => {
   const { token } = theme.useToken();
   const [maintenanceAllowed, setMaintenanceAllowed] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
 
   const isControlActive = rcStatus === "active";
   const isAcquiring = rcStatus === "acquiring";
@@ -73,7 +76,7 @@ export const RemoteControlPanel: React.FC<RemoteControlPanelProps> = ({
   } else if (isCameraMode) {
     disabledReason = "Управление недоступно в режиме камеры. Переключитесь на рабочий стол.";
   } else if (selectedProfile && selectedProfile !== "low" && selectedProfile !== "480p") {
-    disabledReason = "Удалённое управление разрешено только в режиме качества 480p (Эконом).";
+    disabledReason = "Удалённое управление разрешено только в режиме Medium.";
   } else if (!isAgentOnline) {
     disabledReason = "Агент удалённого управления l4desk на терминале не отвечает.";
   } else if (!isDesktopAvailable) {
@@ -98,14 +101,14 @@ export const RemoteControlPanel: React.FC<RemoteControlPanelProps> = ({
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
       style={{
-        padding: "14px 16px",
+        padding: compact ? "8px 12px" : "14px 16px",
         borderRadius: 8,
         backgroundColor: token.colorBgContainer,
         border: `1px solid ${isControlActive ? token.colorPrimaryBorder : token.colorBorderSecondary}`,
         boxShadow: isControlActive ? `0 0 0 1px ${token.colorPrimaryBorder}` : "none",
         display: "flex",
         flexDirection: "column",
-        gap: 12,
+        gap: compact ? 6 : 12,
         transition: "border 0.2s ease, box-shadow 0.2s ease",
       }}
     >
@@ -148,11 +151,11 @@ export const RemoteControlPanel: React.FC<RemoteControlPanelProps> = ({
             )}
           </div>
 
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          {!compact && <Text type="secondary" style={{ fontSize: 12 }}>
             {isControlActive
-              ? "Управление активно (480p): клики мышью по видео передаются на рабочий стол терминала."
+              ? "Управление активно: клики мышью по видео передаются на рабочий стол терминала."
               : disabledReason || "Активируйте режим управления для отправки мыши и клавиатуры."}
-          </Text>
+          </Text>}
         </div>
 
         {/* Кнопка активации / деактивации */}
@@ -167,7 +170,7 @@ export const RemoteControlPanel: React.FC<RemoteControlPanelProps> = ({
               Отключить управление
             </Button>
           ) : (
-            <Tooltip title={disabledReason || "Запросить эксклюзивный доступ к вводу на терминале (режим 480p)"}>
+            <Tooltip title={disabledReason || "Запросить эксклюзивный доступ к вводу на терминале (режим Medium)"}>
               <span>
                 <Button
                   type="default"
@@ -185,8 +188,14 @@ export const RemoteControlPanel: React.FC<RemoteControlPanelProps> = ({
         </div>
       </div>
 
-      {/* Панель быстрых действий оператора (клавиши и сервис) */}
-      <div
+      {compact && isControlActive && (
+        <Button size="small" type="link" onClick={() => setShowShortcuts((visible) => !visible)} style={{ alignSelf: "flex-start", padding: 0 }}>
+          {showShortcuts ? "Скрыть клавиши" : "Показать клавиши и быстрые действия"}
+        </Button>
+      )}
+
+      {/* Дополнительные клавиши доступны по запросу, основной переключатель всегда виден. */}
+      {(!compact || (isControlActive && showShortcuts)) && <div
         style={{
           padding: "10px 12px",
           backgroundColor: token.colorFillAlter,
@@ -378,7 +387,7 @@ export const RemoteControlPanel: React.FC<RemoteControlPanelProps> = ({
             </Text>
           </div>
         )}
-      </div>
+      </div>}
     </div>
   );
 };

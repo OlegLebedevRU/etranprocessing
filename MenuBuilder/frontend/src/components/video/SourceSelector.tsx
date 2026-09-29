@@ -19,6 +19,7 @@ export interface SourceSelectorProps {
   loadingInventory: boolean;
   onRefreshInventory: () => void;
   disabled?: boolean;
+  compact?: boolean;
 }
 
 /**
@@ -64,6 +65,7 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
   loadingInventory,
   onRefreshInventory,
   disabled = false,
+  compact = false,
 }) => {
   const { token } = theme.useToken();
 
@@ -74,13 +76,13 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
   return (
     <div
       style={{
-        padding: "12px 16px",
+        padding: compact ? "8px 12px" : "12px 16px",
         borderRadius: 8,
         backgroundColor: token.colorFillAlter,
         border: `1px solid ${token.colorBorderSecondary}`,
         display: "flex",
         flexDirection: "column",
-        gap: 10,
+        gap: compact ? 0 : 10,
       }}
     >
       {/* Верхняя строка с заголовком, качеством и кнопкой обновления */}
@@ -93,15 +95,36 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
           gap: 8,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <Text strong style={{ fontSize: 13 }}>
-            Источник видео:
-          </Text>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flex: compact ? "1 1 260px" : undefined, minWidth: 0 }}>
+          {compact ? (
+            <Select
+              aria-label="Источник видео"
+              placeholder="Выберите экран или камеру"
+              value={selectedSourceKey || undefined}
+              onChange={onSelectSourceKey}
+              loading={loadingInventory}
+              disabled={disabled || !hasSources}
+              style={{ width: "100%", minWidth: 0 }}
+              options={[
+                ...displays.map((disp, idx) => ({
+                  label: `${getDisplayName(disp, idx)}${disp.resolution ? ` · ${disp.resolution}` : ""}`,
+                  value: `desktop:${disp.id || disp.desktop_id || String(idx)}`,
+                })),
+                ...cameras.map((cam, idx) => ({
+                  label: getCameraName(cam, idx),
+                  value: `usb-camera:${cam.id || cam.camera_id || String(idx)}`,
+                  disabled: cam.available === false,
+                })),
+              ]}
+            />
+          ) : (
+            <Text strong style={{ fontSize: 13 }}>Источник видео:</Text>
+          )}
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flex: compact ? "1 1 330px" : undefined, minWidth: 0, flexWrap: "wrap" }}>
           <Space size="small">
-            <Text type="secondary" style={{ fontSize: 12 }}>
+            <Text type="secondary" style={{ fontSize: 12, whiteSpace: "nowrap" }}>
               Качество:
             </Text>
             <Select
@@ -111,8 +134,8 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
               style={{ width: 120 }}
               disabled={disabled}
               options={[
-                { label: "720p (HD)", value: "default" },
-                { label: "480p (Эконом)", value: "low" },
+                { label: "HD", value: "default" },
+                { label: "Medium", value: "low" },
               ]}
               aria-label="Выбор качества трансляции"
             />
@@ -132,7 +155,7 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
       </div>
 
       {/* Список источников или спиннер */}
-      {loadingInventory ? (
+      {compact ? null : loadingInventory ? (
         <div style={{ textAlign: "center", padding: "16px 0" }}>
           <Spin size="small" tip="Опрос видеоустройств терминала..." />
         </div>

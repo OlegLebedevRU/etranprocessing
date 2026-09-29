@@ -138,3 +138,8 @@ backend test05 зарегистрирован с `org_id=10000`, ролью вл
 - Code references: BFF keepalive/IoT client просмотрены; UI-точки — навигация, не полный аудит.
 - Watch сверено 2026-09-26 по provider contract `H-L4D-17C-VIDEO-WATCH-IOT-01-v1` и локальному коду app1; BFF/UI проверены локальными тестами и сборкой, browser E2E не выполнялся.
 - Обновить при: auth, routes/DTO, UI timers/state, billing или ownership.
+
+## Video page step 1 (2026-09-29, local code and mocked browser)
+- MenuBuilder frontend labels `low` as Medium and `default` as HD. The wire values and terminal rate policy are unchanged; neither label proves a WAN limit.
+- The video page collapses navigation on entry and frees viewport space after device selection. The player uses decoded `videoWidth`/`videoHeight` for aspect ratio and offers browser-only Fit / Native size. Native size is unavailable while remote input is active; the overlay refreshes its coordinate geometry when control activates.
+- Local TypeScript and Vite build passed; browser layout was checked with mocked API responses at desktop and mobile sizes. Live video and control E2E remain open. Details: [step 1 handoff](../tasks/active/video-page-medium-hd-frontend-step1.md).

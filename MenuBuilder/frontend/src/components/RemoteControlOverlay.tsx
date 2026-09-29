@@ -146,7 +146,7 @@ export default function RemoteControlOverlay({
         video.removeEventListener("resize", updateRects);
       }
     };
-  }, [updateRects, videoRef]);
+  }, [updateRects, videoRef, active]);
 
   // Non-passive wheel event listener to prevent page scrolling during remote control
   useEffect(() => {

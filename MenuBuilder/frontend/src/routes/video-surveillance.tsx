@@ -3,14 +3,15 @@ import { useNavigate, useSearchParams } from "react-router";
 import { linkedDevice } from "../utils/deviceSelection";
 import {
   Alert,
+  Button,
   Card,
   Drawer,
   Grid,
   message,
-  Space,
   theme,
   Typography,
 } from "antd";
+import { UnorderedListOutlined } from "@ant-design/icons";
 import {
   DeviceListItem,
   getDevices,
@@ -37,7 +38,6 @@ import { SessionLifecycleCoordinator } from "../utils/sessionLifecycle";
 import { listTerminalsSettings } from "../api/settings";
 import { JanusStreamingClient } from "../api/janusClient";
 import { useSession } from "../session/SessionContext";
-import PageHeader from "../components/PageHeader";
 import { useRemoteControl } from "../hooks/useRemoteControl";
 import { hasPermission, PERMISSION_VIDEO_VIEW } from "../utils/permissions";
 
@@ -171,6 +171,7 @@ function TenantVideoSurveillancePage() {
 
   // Мобильный / планшетный Drawer выбора терминала
   const [isDeviceDrawerOpen, setIsDeviceDrawerOpen] = useState(false);
+  const [showTerminalList, setShowTerminalList] = useState(false);
 
   // Источники видео (дисплеи, камеры)
   const [inventory, setInventory] = useState<DeviceInventory | null>(null);
@@ -588,6 +589,7 @@ function TenantVideoSurveillancePage() {
   // Смена выбранного терминала
   const handleSelectDevice = async (device: DeviceListItem) => {
     if (selectedDevice?.device_id === device.device_id) return;
+    setShowTerminalList(false);
     setBannerError(null);
     setRefusalNotice(null);
     await stopSession();
@@ -831,7 +833,7 @@ function TenantVideoSurveillancePage() {
         return;
       }
       if (selectedProfile !== "low" && selectedProfile !== "480p") {
-        message.warning("Удалённое управление разрешено только в режиме качества 480p (Эконом)");
+        message.warning("Удалённое управление разрешено только в режиме Medium");
         return;
       }
       try {
@@ -917,27 +919,36 @@ function TenantVideoSurveillancePage() {
   const isCameraMode = activeStream?.mode === "usb-camera";
 
   return (
-    <div style={{ padding: isMobile ? "0 12px 16px" : "0 24px 24px" }}>
-      <PageHeader
-        title="Видеонаблюдение"
-        subtitle="Просмотр видеотрансляций с терминалов и удаленное управление"
-      />
+    <div style={{ padding: "0 0 12px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+        <Text strong style={{ fontSize: 16 }}>Видеонаблюдение</Text>
+        {selectedDevice && isDesktop && (
+          <Button
+            size="small"
+            icon={<UnorderedListOutlined />}
+            onClick={() => setShowTerminalList((visible) => !visible)}
+            aria-label={showTerminalList ? "Скрыть список терминалов" : "Показать список терминалов"}
+          >
+            {showTerminalList ? "Скрыть терминалы" : "Терминалы"}
+          </Button>
+        )}
+      </div>
 
       {/* Основная адаптивная раскладка */}
       <div
         style={{
           display: "flex",
-          gap: 16,
+          gap: 8,
           alignItems: "flex-start",
-          marginTop: 12,
+          marginTop: 8,
         }}
       >
         {/* Левая панель списка терминалов (видна на Desktop) */}
-        {isDesktop && (
+        {isDesktop && (!selectedDevice || showTerminalList) && (
           <div
             style={{
-              width: 320,
-              flex: "0 0 320px",
+              width: 260,
+              flex: "0 0 260px",
               position: "sticky",
               top: 72,
               maxHeight: "calc(100vh - 90px)",
@@ -995,7 +1006,7 @@ function TenantVideoSurveillancePage() {
             minWidth: 0,
             display: "flex",
             flexDirection: "column",
-            gap: 14,
+            gap: 8,
           }}
         >
           {selectedDevice ? (
@@ -1008,6 +1019,7 @@ function TenantVideoSurveillancePage() {
                 onRefreshDevice={() => fetchDeviceInfo(selectedDevice.device_id, true)}
                 loadingRefresh={loadingInventory}
                 isMobile={isMobile}
+                compact
               />
 
               {/* Уведомления об ошибках или отказе */}
@@ -1033,7 +1045,57 @@ function TenantVideoSurveillancePage() {
                 />
               )}
 
-              {/* 2. Главный видеоэкран с поддержкой 16:9 и всех состояний */}
+              {/* Источник и профиль доступны до запуска в одной компактной строке. */}
+              {isOperator && (
+                <SourceSelector
+                  inventory={inventory}
+                  selectedSourceKey={selectedSourceKey}
+                  onSelectSourceKey={setSelectedSourceKey}
+                  selectedProfile={selectedProfile}
+                  onChangeProfile={setSelectedProfile}
+                  loadingInventory={loadingInventory}
+                  onRefreshInventory={() => fetchDeviceInfo(selectedDevice.device_id, true)}
+                  disabled={isSessionActive}
+                  compact
+                />
+              )}
+
+              {/* Основные действия занимают одну строку на широком экране. */}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "stretch" }}>
+                <div style={{ flex: "1 1 410px", minWidth: 0 }}><StreamControls
+                isSessionActive={isSessionActive}
+                streamStage={streamStage}
+                isTerminalOnline={selectedDevice.status === "online"}
+                isOperator={isOperator}
+                isViewer={isViewer}
+                onStart={handleOperatorStart}
+                onStop={handleOperatorStop}
+                hasSources={hasSources}
+                activeSourceLabel={activeSourceLabel || undefined}
+                isMobile={isMobile}
+                /></div>
+
+              {isOperator && (
+                <div style={{ flex: "1 1 520px", minWidth: 0 }}><RemoteControlPanel
+                  rcStatus={rc.status}
+                  presence={rc.presence}
+                  lease={rc.lease}
+                  busyOwner={rc.busyOwner}
+                  isSessionActive={isSessionActive}
+                  isCameraMode={isCameraMode}
+                  isTerminalOnline={selectedDevice.status === "online"}
+                  selectedProfile={selectedProfile}
+                  onEnableControl={handleToggleControl}
+                  onDisableControl={handleToggleControl}
+                  onSendShortcut={rc.sendShortcut}
+                  onSendKey={rc.sendKey}
+                  lastCommandResult={rc.lastClickResult}
+                  isMobile={isMobile}
+                  compact
+                /></div>
+              )}
+              </div>
+
               <VideoPlayerScreen
                 selectedDevice={selectedDevice}
                 videoRef={videoRef}
@@ -1058,53 +1120,6 @@ function TenantVideoSurveillancePage() {
                 }}
               />
 
-              {/* 3. Панель управления трансляцией (Запустить / Остановить) */}
-              <StreamControls
-                isSessionActive={isSessionActive}
-                streamStage={streamStage}
-                isTerminalOnline={selectedDevice.status === "online"}
-                isOperator={isOperator}
-                isViewer={isViewer}
-                onStart={handleOperatorStart}
-                onStop={handleOperatorStop}
-                hasSources={hasSources}
-                activeSourceLabel={activeSourceLabel || undefined}
-                isMobile={isMobile}
-              />
-
-              {/* 4. Выбор источника видео (экраны и камеры) для операторов */}
-              {isOperator && (
-                <SourceSelector
-                  inventory={inventory}
-                  selectedSourceKey={selectedSourceKey}
-                  onSelectSourceKey={setSelectedSourceKey}
-                  selectedProfile={selectedProfile}
-                  onChangeProfile={setSelectedProfile}
-                  loadingInventory={loadingInventory}
-                  onRefreshInventory={() => fetchDeviceInfo(selectedDevice.device_id, true)}
-                  disabled={isSessionActive}
-                />
-              )}
-
-              {/* 5. Блок удалённого управления терминалом */}
-              {isOperator && (
-                <RemoteControlPanel
-                  rcStatus={rc.status}
-                  presence={rc.presence}
-                  lease={rc.lease}
-                  busyOwner={rc.busyOwner}
-                  isSessionActive={isSessionActive}
-                  isCameraMode={isCameraMode}
-                  isTerminalOnline={selectedDevice.status === "online"}
-                  selectedProfile={selectedProfile}
-                  onEnableControl={handleToggleControl}
-                  onDisableControl={handleToggleControl}
-                  onSendShortcut={rc.sendShortcut}
-                  onSendKey={rc.sendKey}
-                  lastCommandResult={rc.lastClickResult}
-                  isMobile={isMobile}
-                />
-              )}
             </>
           ) : (
             <Card style={{ textAlign: "center", padding: "64px 24px" }}>

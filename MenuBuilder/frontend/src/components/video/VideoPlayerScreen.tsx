@@ -1,5 +1,5 @@
-import React, { useRef, useState } from "react";
-import { Alert, Button, Empty, Space, Spin, Tag, theme, Tooltip, Typography } from "antd";
+import React, { useEffect, useRef, useState } from "react";
+import { Alert, Button, Empty, Segmented, Space, Spin, Tag, theme, Tooltip, Typography } from "antd";
 import {
   AlertOutlined,
   ApiOutlined,
@@ -63,6 +63,9 @@ export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
   const { token } = theme.useToken();
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [displayMode, setDisplayMode] = useState<"fit" | "native">("fit");
+  const [videoSize, setVideoSize] = useState({ width: 0, height: 0 });
+  const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight);
 
   const isTerminalOnline = selectedDevice?.status === "online";
   const isControlActive = isSessionActive && rc.status === "active";
@@ -70,6 +73,24 @@ export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
   const isStopping = streamStage === "stopping";
   const isLive = isSessionActive && streamStage === "running";
   const isFailed = streamStage === "failed" || Boolean(errorMessage);
+  const isNativeSize = isLive && !isControlActive && displayMode === "native" && videoSize.width > 0;
+  const sourceAspect = videoSize.width > 0 && videoSize.height > 0 ? videoSize.width / videoSize.height : 16 / 9;
+  const reservedHeight = isOperator ? 265 : 195;
+
+  useEffect(() => {
+    const onFullscreenChange = () => setIsFullscreen(document.fullscreenElement === playerContainerRef.current);
+    const onResize = () => setViewportHeight(window.innerHeight);
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    window.addEventListener("resize", onResize);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+      window.removeEventListener("resize", onResize);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isLive) setVideoSize({ width: 0, height: 0 });
+  }, [isLive, selectedDevice?.device_id]);
 
   // Полноэкранный режим плеера
   const toggleFullscreen = () => {
@@ -77,9 +98,9 @@ export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
     if (!container) return;
 
     if (!document.fullscreenElement) {
-      void container.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+      void container.requestFullscreen().catch(() => {});
     } else {
-      void document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+      void document.exitFullscreen().catch(() => {});
     }
   };
 
@@ -200,9 +221,14 @@ export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
       style={{
         position: "relative",
         width: "100%",
-        aspectRatio: "16 / 9",
-        minHeight: "260px",
-        maxHeight: "calc(100vh - 280px)",
+        maxWidth: isLive && videoSize.width > 0 && !isFullscreen
+          ? Math.max(260, Math.floor((viewportHeight - reservedHeight) * sourceAspect))
+          : undefined,
+        marginInline: "auto",
+        aspectRatio: isFullscreen ? undefined : `${sourceAspect}`,
+        height: isFullscreen ? "100vh" : undefined,
+        minHeight: isFullscreen || isLive ? undefined : "260px",
+        maxHeight: isFullscreen ? undefined : `max(260px, calc(100dvh - ${reservedHeight}px))`,
         backgroundColor: "#000000",
         borderRadius: 8,
         overflow: "hidden",
@@ -216,21 +242,35 @@ export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
         transition: "border 0.2s ease, box-shadow 0.2s ease",
       }}
     >
-      {/* HTML5 Video элемент */}
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        muted
-        controls={false}
+      {/* Browser-side display only: native size never changes the encoded WebRTC stream. */}
+      <div
         style={{
-          width: "100%",
-          height: "100%",
-          objectFit: "contain",
-          display: isLive ? "block" : "none",
-          backgroundColor: "#000000",
+          position: "absolute",
+          inset: 0,
+          overflow: isNativeSize ? "auto" : "hidden",
+          display: isNativeSize ? "block" : "flex",
+          alignItems: "center",
+          justifyContent: "center",
         }}
-      />
+      >
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          controls={false}
+          onLoadedMetadata={(event) => setVideoSize({ width: event.currentTarget.videoWidth, height: event.currentTarget.videoHeight })}
+          onResize={(event) => setVideoSize({ width: event.currentTarget.videoWidth, height: event.currentTarget.videoHeight })}
+          style={{
+            width: isNativeSize ? videoSize.width : "100%",
+            height: isNativeSize ? videoSize.height : "100%",
+            flexShrink: 0,
+            objectFit: "contain",
+            display: isLive ? "block" : "none",
+            backgroundColor: "#000000",
+          }}
+        />
+      </div>
 
       {/* Оверлей управления мышью и клавиатурой */}
       <RemoteControlOverlay
@@ -280,7 +320,25 @@ export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
               • {activeSourceLabel}
             </span>
           )}
+          {videoSize.width > 0 && (
+            <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 11 }}>
+              • {videoSize.width}×{videoSize.height}
+            </span>
+          )}
         </div>
+      )}
+
+      {isLive && (
+        <Tooltip title={isControlActive ? "Во время удалённого управления доступно только вписывание кадра: координаты кликов должны совпадать с изображением." : "Исходный размер показывает кадр без уменьшения. Прокрутите изображение, если оно больше окна. На трафик этот выбор не влияет."}>
+          <Segmented
+            size="small"
+            aria-label="Масштаб видео в браузере"
+            options={[{ label: "Вписать", value: "fit" }, { label: "Исходный размер", value: "native", disabled: isControlActive }]}
+            value={isControlActive ? "fit" : displayMode}
+            onChange={(value) => setDisplayMode(value as "fit" | "native")}
+            style={{ position: "absolute", bottom: 12, left: 12, zIndex: 15, backgroundColor: "rgba(255,255,255,0.92)" }}
+          />
+        </Tooltip>
       )}
 
       {/* Кнопка полноэкранного режима */}
@@ -407,7 +465,7 @@ export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
           <div style={{ color: "rgba(255, 255, 255, 0.6)", fontSize: 13, maxWidth: 440 }}>
             {isViewer
               ? "Ожидание запуска видеотрансляции оператором терминала."
-              : "Выберите источник видео ниже и нажмите «Запустить трансляцию»."}
+              : "Выберите источник видео над плеером и нажмите «Запустить трансляцию»."}
           </div>
 
           {isOperator && (
