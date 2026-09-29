@@ -324,7 +324,7 @@ After CONNACK:
 Normal shutdown:
   PUBLISH dev/{SN}/ctl = presence status=offline (retain=true) → DISCONNECT
 
-Запреты: не публиковать в dev/{SN}/svc|app|evt|out|res; команды/ACK/NACK — без retain; только pointer_move/mouse_click(left).
+Запреты: не публиковать в dev/{SN}/svc|app|evt|out|res; команды/ACK/NACK — без retain. Удалённый ввод разрешён только при активной input-аренде, desktop stream и локальной политике дисплея. Поддерживаются pointer_move, mouse_click, mouse_drag (атомарный left down/move/up), mouse_wheel, key_event и утверждённые shortcut_action; drag/wheel требуют отдельные capabilities агента.
 Спецификация протокола: см. [`docs/etran_arch-remote-input-control.md`](docs/etran_arch-remote-input-control.md),
 [`docs/etran_arch-video-remote-desktop-e2e.md`](docs/etran_arch-video-remote-desktop-e2e.md)
 и [карточку MQTT с известными расхождениями](.agent-context/contracts/mqtt-topic-matrix.md).

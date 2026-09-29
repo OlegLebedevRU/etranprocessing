@@ -345,7 +345,9 @@ BFF передает `X-Internal-Service-Key`, `X-Org-Id` и контекст `X
 | `stream_stop` | `lease_id`, необязательный `stream_instance_id` | Остановить, учитывать повторы и чужой stream |
 | `lease_renew` | `lease_id`, `ttl_sec`, `expires_at_ms` | Продлить локальный таймер аренды watchdog в l4desk (также `stream_renew`) |
 | `pointer_move` | `lease_id`, координаты, привязка к desktop/stream | Высокочастотное движение; без поштучного ACK |
-| `mouse_click` | Аналогично, `button` в локальном протоколе | app1 ограничивает текущий e2e API левой кнопкой |
+| `mouse_click` | Аналогично, `button` в локальном протоколе | Правая кнопка допускается при соответствующей capability агента |
+| `mouse_drag` | `x/y`, `to_x/to_y` в диапазоне `0..65535` | Одно атомарное перетаскивание левой кнопкой после отпускания указателя в UI; TTL как у клика, только input lease и desktop stream |
+| `mouse_wheel` | `x/y`, `delta` в диапазоне `-1200..1200` | Колесо над экраном; отрицательное значение прокручивает вниз, только input lease и desktop stream |
 | `key_event` | `lease_id`, desktop/stream, `kind`, `vk`, опциональный `text` | `down`, `up`, `press`; whitelist и политика агента |
 
 Точная обязательность/nullable-поля и поля срока действия определяются DTO app1 и C-парсером, а не сокращенной таблицей. Основные результаты `ack.result`: `started`, `already_running`, `switched`, `stopped`, `already_stopped`, `injected`. ACK/NACK коррелируются по `command_id`; ACK содержит SN и может нести inventory/stream. Примеры отказов: `lease_mismatch`, `desktop_mismatch`, `stream_mismatch`, `source_not_allowed`, `source_unavailable`, `session_unavailable`, `busy_transition`, `ffmpeg_missing`, `invalid_profile`, `expired`, `unsupported`, `inject_failed`.

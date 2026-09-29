@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$PfxPath,
-    [string]$Version = '1.9.1'
+    [string]$Version = '1.9.2'
 )
 
 $ErrorActionPreference = 'Stop'

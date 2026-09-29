@@ -232,6 +232,8 @@ export interface ControlWsShortcut {
 export type ControlWsInbound =
   | { type: "pointer_move"; x: number; y: number }
   | { type: "mouse_click"; x: number; y: number; button?: "left" | "right"; client_ref?: string }
+  | { type: "mouse_drag"; x: number; y: number; to_x: number; to_y: number }
+  | { type: "mouse_wheel"; x: number; y: number; delta: number }
   | ControlWsKey
   | ControlWsShortcut
   | { type: "keepalive" }

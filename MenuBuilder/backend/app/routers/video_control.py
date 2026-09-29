@@ -269,6 +269,25 @@ class WsInboundClick(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class WsInboundDrag(BaseModel):
+    type: Literal["mouse_drag"]
+    x: int = Field(ge=0, le=65535)
+    y: int = Field(ge=0, le=65535)
+    to_x: int = Field(ge=0, le=65535)
+    to_y: int = Field(ge=0, le=65535)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class WsInboundWheel(BaseModel):
+    type: Literal["mouse_wheel"]
+    x: int = Field(ge=0, le=65535)
+    y: int = Field(ge=0, le=65535)
+    delta: int = Field(ge=-1200, le=1200)
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class WsInboundShortcut(BaseModel):
     type: Literal["shortcut_action"]
     action: Literal["f12", "alt_f4", "win_d"]
@@ -1707,6 +1726,12 @@ async def control_ws_proxy(
                         elif msg_type == "mouse_click":
                             validated = WsInboundClick.model_validate(data)
                             click_count += 1
+                        elif msg_type == "mouse_drag":
+                            validated = WsInboundDrag.model_validate(data)
+                            click_count += 1
+                        elif msg_type == "mouse_wheel":
+                            validated = WsInboundWheel.model_validate(data)
+                            click_count += 1
                         elif msg_type in ("key", "key_event"):
                             validated = WsInboundKey.model_validate(data)
                         elif msg_type == "shortcut_action":
@@ -1731,6 +1756,8 @@ async def control_ws_proxy(
                     if msg_type in (
                         "pointer_move",
                         "mouse_click",
+                        "mouse_drag",
+                        "mouse_wheel",
                         "key",
                         "key_event",
                         "shortcut_action",
@@ -1773,6 +1800,8 @@ async def control_ws_proxy(
                     if msg_type in (
                         "pointer_move",
                         "mouse_click",
+                        "mouse_drag",
+                        "mouse_wheel",
                         "key",
                         "key_event",
                         "shortcut_action",

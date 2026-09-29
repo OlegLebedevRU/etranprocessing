@@ -8,6 +8,8 @@ export interface RemoteControlOverlayProps {
   presence: ControlAgentStatus | null;
   sendMove: (x: number, y: number) => void;
   sendClick: (x: number, y: number, button?: "left" | "right") => Promise<any>;
+  sendDrag: (x: number, y: number, toX: number, toY: number) => boolean;
+  sendWheel: (x: number, y: number, delta: number) => boolean;
   sendKey?: (kind: "down" | "up" | "press", vk: number, text?: string) => boolean | Promise<any>;
   isCameraMode?: boolean;
   streamMode?: string;
@@ -27,6 +29,8 @@ export default function RemoteControlOverlay({
   presence,
   sendMove,
   sendClick,
+  sendDrag,
+  sendWheel,
   sendKey,
   isCameraMode = false,
   streamMode: propStreamMode,
@@ -36,6 +40,8 @@ export default function RemoteControlOverlay({
   const [desktopRect, setDesktopRect] = useState<Rect | null>(null);
   const [geometryKnown, setGeometryKnown] = useState<boolean>(true);
   const [pointerPaused, setPointerPaused] = useState(false);
+  const dragStartRef = useRef<{ pointerId: number; x: number; y: number } | null>(null);
+  const suppressClickRef = useRef(false);
 
   useEffect(() => {
     if (!active) setPointerPaused(false);
@@ -153,18 +159,29 @@ export default function RemoteControlOverlay({
     };
   }, [updateRects, videoRef, active]);
 
-  // Non-passive wheel event listener to prevent page scrolling during remote control
+  // Native non-passive listener keeps the browser page still while scrolling the terminal.
   useEffect(() => {
     const el = containerRef.current;
     if (!el || !active || isCameraMode || streamMode !== "desktop") return;
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
+      if (pointerPaused || !desktopRect) return;
+      const rect = el.getBoundingClientRect();
+      const px = e.clientX - rect.left - desktopRect.left;
+      const py = e.clientY - rect.top - desktopRect.top;
+      if (px < 0 || py < 0 || px > desktopRect.width || py > desktopRect.height || e.deltaY === 0) return;
+      const x = Math.max(0, Math.min(65535, Math.round(px / desktopRect.width * 65535)));
+      const y = Math.max(0, Math.min(65535, Math.round(py / desktopRect.height * 65535)));
+      const units = e.deltaMode === WheelEvent.DOM_DELTA_LINE ? e.deltaY * 40
+        : e.deltaMode === WheelEvent.DOM_DELTA_PAGE ? e.deltaY * 600 : e.deltaY;
+      const ticks = Math.max(1, Math.min(10, Math.round(Math.abs(units) / 100)));
+      sendWheel(x, y, -Math.sign(units) * ticks * 120);
     };
     el.addEventListener("wheel", handleWheel, { passive: false });
     return () => {
       el.removeEventListener("wheel", handleWheel);
     };
-  }, [active, isCameraMode, streamMode]);
+  }, [active, isCameraMode, streamMode, pointerPaused, desktopRect, sendWheel]);
 
   const getNormalizedCoordinates = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!desktopRect || !containerRef.current) return null;
@@ -195,12 +212,17 @@ export default function RemoteControlOverlay({
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!active || pointerPaused || isCameraMode || streamMode !== "desktop" || !geometryKnown) return;
+    if (dragStartRef.current) return;
     const coords = getNormalizedCoordinates(e);
     if (!coords) return;
     sendMove(coords.x, coords.y);
   };
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
     if (!active || pointerPaused || isCameraMode || streamMode !== "desktop" || !geometryKnown) return;
     // Left-click only, no modifiers
     if (e.button !== 0 || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) {
@@ -213,6 +235,28 @@ export default function RemoteControlOverlay({
     if (!coords) return;
 
     void sendClick(coords.x, coords.y, "left");
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!active || pointerPaused || isCameraMode || streamMode !== "desktop" || !geometryKnown ||
+        e.button !== 0 || e.target !== e.currentTarget) return;
+    const start = getNormalizedCoordinates(e);
+    if (!start) return;
+    suppressClickRef.current = false;
+    dragStartRef.current = { pointerId: e.pointerId, ...start };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const start = dragStartRef.current;
+    if (!start || start.pointerId !== e.pointerId) return;
+    dragStartRef.current = null;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    const end = getNormalizedCoordinates(e);
+    if (end && Math.hypot(end.x - start.x, end.y - start.y) > 500) {
+      suppressClickRef.current = true;
+      sendDrag(start.x, start.y, end.x, end.y);
+    }
   };
 
   const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -298,6 +342,9 @@ export default function RemoteControlOverlay({
       ref={containerRef}
       tabIndex={0}
       onPointerMove={handlePointerMove}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={() => { dragStartRef.current = null; }}
       onClick={handleClick}
       onContextMenu={handleContextMenu}
       onKeyDown={handleKeyDown}

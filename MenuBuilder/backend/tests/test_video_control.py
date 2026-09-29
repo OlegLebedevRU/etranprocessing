@@ -877,14 +877,19 @@ def test_ws_proxy_key_normalization_and_enrichment(
             }
         )
 
-        # 5. Send keepalive -> NOT enriched with desktop_id / stream_instance_id
+        ws.send_json(
+            {"type": "mouse_drag", "x": 100, "y": 200, "to_x": 500, "to_y": 600}
+        )
+        ws.send_json({"type": "mouse_wheel", "x": 400, "y": 500, "delta": -120})
+
+        # Keepalive is not enriched with desktop or stream context.
         ws.send_json({"type": "keepalive"})
 
         # Send release to finish cleanly
         ws.send_json({"type": "release"})
 
     sent = fake_connect.ws.sent
-    assert len(sent) == 6
+    assert len(sent) == 8
 
     # Verify key -> key_event
     msg_key = sent[0]
@@ -921,8 +926,15 @@ def test_ws_proxy_key_normalization_and_enrichment(
     assert msg_click["desktop_id"] == "disp:3f8a12bc"
     assert msg_click["stream_instance_id"] == "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
 
+    assert sent[4]["type"] == "mouse_drag"
+    assert sent[4]["to_x"] == 500
+    assert sent[4]["desktop_id"] == "disp:3f8a12bc"
+    assert sent[5]["type"] == "mouse_wheel"
+    assert sent[5]["delta"] == -120
+    assert sent[5]["stream_instance_id"] == "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+
     # Verify keepalive has no desktop_id / stream_instance_id
-    msg_keepalive = sent[4]
+    msg_keepalive = sent[6]
     assert msg_keepalive == {"type": "keepalive"}
 
 

@@ -62,3 +62,6 @@ All notable changes to the `l4con` component will be documented in this file.
   - Streaming stdout/stderr output chunking with sequence numbers.
 - **Dynamic SN Discovery**: Queries `GET http://127.0.0.1:18443/_leo4/info` to obtain device SN upon startup.
 - **Windows SCM Service Integration**: Runs as `L4Con` background service.
+## [1.9.2] - 2026-09-30
+
+- Поле 445 события 75 берёт версию установленного пакета из успешного `install_summary.json`, если `state.json` содержит устаревшую версию.
