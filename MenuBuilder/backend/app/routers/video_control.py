@@ -1666,6 +1666,7 @@ async def control_ws_proxy(
     stream_info = agent_info.get("stream") or {}
     is_camera = stream_info.get("mode") == "usb-camera"
     is_input_scope = lease_info.get("scope", "input") == "input"
+    has_stream_lease = is_input_scope and bool(lease_info.get("stream_instance_id"))
 
     await websocket.accept()
 
@@ -1907,15 +1908,18 @@ async def control_ws_proxy(
         with contextlib.suppress(Exception):
             await websocket.close()
 
-        # Idempotent best-effort release of the lease on disconnect (safe bounded fallback)
-        if close_reason != "lease_revoked":
+        # The video coordinator owns a lease that also carries input. Closing
+        # only its control socket must leave the stream and keepalive intact.
+        release_lease = not has_stream_lease or close_reason == "client_release"
+        if close_reason != "lease_revoked" and release_lease:
             with contextlib.suppress(Exception):
                 await iot_client.remote_input_release(
                     lease_id=lease_id,
                     org_id=target_org_id,
                     user=user,
                 )
-        clear_mountpoint_pin(device_id, lease_id=lease_id)
+        if release_lease or close_reason == "lease_revoked":
+            clear_mountpoint_pin(device_id, lease_id=lease_id)
 
         logger.info(
             "WebSocket session finished lease=%s device_id=%d sn=%s org_id=%s user=%s close_reason=%s upstream_code=%s clicks=%d results=%s",

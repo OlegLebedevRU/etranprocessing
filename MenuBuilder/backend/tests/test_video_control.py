@@ -719,6 +719,73 @@ def test_ws_relay_happy_path_and_release(org1_operator_token, mock_db_session):
     mock_release.assert_awaited_once()
 
 
+def test_ws_disconnect_preserves_active_stream_lease(
+    org1_operator_token, mock_db_session
+):
+    """Detaching input must not release the lease owned by the video stream."""
+    client = TestClient(app)
+    fake_status = {
+        "sn": "sn0001",
+        "agent": {"online": True, "desktop_available": True},
+        "lease": {
+            "active": True,
+            "lease_id": "test-lease",
+            "owner_user_id": "operator1",
+            "scope": "input",
+            "stream_instance_id": "stream-1",
+        },
+    }
+
+    class FakeSessionContext:
+        async def __aenter__(self):
+            return mock_db_session
+
+        async def __aexit__(self, *args):
+            pass
+
+    class FakeUpstreamWs:
+        def __init__(self):
+            self.incoming = asyncio.Queue()
+            self.incoming.put_nowait(json.dumps({"type": "hello", "v": 1}))
+
+        async def recv(self):
+            return await self.incoming.get()
+
+    class FakeUpstreamConnect:
+        def __init__(self):
+            self.ws = FakeUpstreamWs()
+
+        async def __aenter__(self):
+            return self.ws
+
+        async def __aexit__(self, *args):
+            pass
+
+    mock_release = AsyncMock()
+    with (
+        patch(
+            "app.routers.video_control.async_session", return_value=FakeSessionContext()
+        ),
+        patch.object(
+            iot_client, "remote_input_status", new=AsyncMock(return_value=fake_status)
+        ),
+        patch.object(iot_client, "remote_input_release", new=mock_release),
+        patch("app.routers.video_control.clear_mountpoint_pin") as mock_clear_pin,
+        patch(
+            "app.routers.video_control.websockets.connect",
+            return_value=FakeUpstreamConnect(),
+        ),
+        client.websocket_connect(
+            "/api/v1/video/devices/1/control/ws/test-lease",
+            cookies={"accessToken": org1_operator_token},
+        ) as ws,
+    ):
+        assert ws.receive_json()["type"] == "hello"
+
+    mock_release.assert_not_awaited()
+    mock_clear_pin.assert_not_called()
+
+
 def test_ws_proxy_key_normalization_and_enrichment(
     org1_operator_token, mock_db_session
 ):
