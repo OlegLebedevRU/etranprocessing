@@ -6,7 +6,7 @@
 static const l4c_profile_params_t k_profiles[] = {
     { L4C_PROFILE_480P,  854,  480, 15, 10,  650, 1300, 1650, true  },
     { L4C_PROFILE_540P,  960,  540, 15, 10,  750, 1100, 1400, false },
-    { L4C_PROFILE_720P, 1280,  720, 25, 10, 1200, 2500, 3000, false }
+    { L4C_PROFILE_720P, 1280,  720, 25, 10, 1200, 2100, 2600, false }
 };
 
 void l4c_profile_rate_for_raster(uint8_t request, uint32_t width, uint32_t height,

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed (l4tools 1.9.0, 2026-09-29)
+
+- HD H.264 target/peak reduced from 2500/3000 to 2100/2600 kbit/s after a one-viewer dynamic-desktop measurement exceeded the 3500 kbit/s combined ingress/egress goal. Raster and 25 fps target are unchanged.
+
 ### Changed
 
 - **`low` = native-растр @ 800k (паритет ffmpeg low).** ffmpeg `low`

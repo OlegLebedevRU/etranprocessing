@@ -115,3 +115,4 @@ tools/l4setup/res/version.h
 tools/l4setup/res/*.bin
 artifacts/stand_download_5b/
 
+.playwright-cli/

@@ -37,7 +37,7 @@ int test_profile_params_table(void) {
     if (p540->input_profile_eligible) return 9;
     if (p720->width != 1280 || p720->height != 720) return 10;
     if (p720->fps_nominal != 25 || p720->fps_floor != 10) return 11;
-    if (p720->bitrate_min_kbps != 1200 || p720->bitrate_target_kbps != 2500 || p720->bitrate_max_kbps != 3000) return 12;
+    if (p720->bitrate_min_kbps != 1200 || p720->bitrate_target_kbps != 2100 || p720->bitrate_max_kbps != 2600) return 12;
     if (p720->input_profile_eligible) return 13;
     if (l4c_profile_params(99) != NULL) return 14;
     {

@@ -384,8 +384,11 @@ static void test_command_handling_validation(void) {
 
     /* 11. Start stream, then lease_renew with wrong lease_id -> lease_mismatch */
     char start_res[32], start_err_code[64], start_err_msg[256];
-    ffmpeg_supervisor_start("s_test", "lease_valid", "desktop", "disp:11223344", "default", &inv,
-                            start_res, sizeof(start_res), start_err_code, sizeof(start_err_code), start_err_msg, sizeof(start_err_msg));
+    if (!ffmpeg_supervisor_start("s_test", "lease_valid", "desktop", "disp:11223344", "default", &inv,
+                                 start_res, sizeof(start_res), start_err_code, sizeof(start_err_code), start_err_msg, sizeof(start_err_msg))) {
+        printf("stream start failed: %s: %s\n", start_err_code, start_err_msg);
+        ASSERT_TRUE(false);
+    }
 
     const char* cmd_renew_badlease = "{\"v\":1,\"type\":\"lease_renew\",\"command_id\":\"rnw_002\",\"lease_id\":\"lease_wrong\","
                                      "\"sn\":\"TERM001\",\"expires_at_ms\":4102444800000}";
