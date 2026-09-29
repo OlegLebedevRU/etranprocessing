@@ -200,6 +200,13 @@ sudo docker exec -it <container> bash
 
 Deployments must be strictly reproducible from the Git repository.
 
+Для управляемых образов при прямо согласованном маршруте builder → registry →
+production используйте [бета-регламент](ops_run-beta-ci-cd.md) и
+[порядок Git/release](ops_run-git-and-release-flow.md). Команды `scp` и
+`docker compose build` ниже относятся к ручному пути на production; они не
+должны подменять выбранный immutable digest выпуск. Builder `176.108.247.249`
+допустим только по прямому указанию пользователя согласно `AGENTS.md`.
+
 ### Deploy ProcessingBackend
 
 ```bash

@@ -190,6 +190,10 @@ Comprehensive documentation for the certificate subsystem, mTLS proxying, native
 
 ## Deployment invariants
 
+Рабочий порядок GitHub, выбора базовой ветки, builder/registry/pull и очистки
+локальных копий: [`docs/ops_run-git-and-release-flow.md`](docs/ops_run-git-and-release-flow.md).
+Он не меняет ограничения доступа к builder и production ниже.
+
 Keep only durable invariants here. Use the current runbook under `docs/` for environment-specific hosts, paths and step-by-step commands.
 
 - **`docker` on the server requires `sudo`.** Plain `docker ...` / `docker

@@ -32,8 +32,10 @@ ProcessingBackend применяет общие Alembic. Runtime host не за�
   media ingress/nginx/Janus закрепляются по immutable registry digest без
   локального `build`. Штатный выпуск обновляет Compose image override;
   `up --build` для них не применять. Janus пересобирать только по прямой команде.
-- IoT `app1` собирается из отдельного `origin/master` на builder 176; его SHA
-  фиксируется отдельно от SHA `etranprocessing`.
+- IoT `app1` берётся из отдельного `origin/master`; его SHA фиксируется отдельно
+  от SHA `etranprocessing`. Его собственный manual runbook задаёт прямую сборку
+  на production по умолчанию. Builder 176 → registry → production был явно
+  выбран для выпуска 2026-09-29 и требует прямого указания для нового выпуска.
 
 ## State machine
 requested → authorized → preflight → validated artifacts → deploy/migrate → verify → handoff;
@@ -58,6 +60,8 @@ MCP state changes с confirmationId подтверждаются явно; secre
 - [release handoff](../tasks/release-handoff-template.md) — evidence/compatibility/rollback gates.
 - [beta worker](../../.github/ci/beta.py), [установка](../../deploy/beta),
   [бета-регламент](../../docs/ops_run-beta-ci-cd.md) — актуальный автономный flow.
+- [Git/release и локальная очистка](../../docs/ops_run-git-and-release-flow.md)
+  — профили GitHub, выбор маршрута и проверка временных копий.
 
 ## Известные риски и незавершённые вопросы
 2026-09-11 UTC: бета-проверка через SSH, MCP Ops UNAVAILABLE. Builder/production
@@ -69,6 +73,9 @@ MCP state changes с confirmationId подтверждаются явно; secre
 ## Источники и актуальность
 - Authoritative docs: [runbook](../../docs/ops_run-devops-runbook.md), [AGENTS](../../AGENTS.md),
   текущие пользовательские guidelines (host, sudo, readiness thresholds).
-- Проверено: 2026-09-11 UTC, worker `cd5658c`, launcher `52e93a9`; SSH/build/push/pull,
-  API health и первый systemd-run подтверждены. Исторический GitHub flow заблокирован billing.
+- Runtime evidence бета-пути: 2026-09-11 UTC, worker `cd5658c`, launcher `52e93a9`;
+  SSH/build/push/pull, API health и первый systemd-run подтверждены для того выпуска.
+- Документы и локальный Git повторно сверены 2026-09-30: `gh auth status` и
+  `git fetch` работают в профиле `oleg_`; это не подтверждает доступность
+  production в следующем окне. Для app1 прочитаны его AGENTS и manual runbook.
 - Обновить при: deploy host, mounts, orchestration, migration/release policy.
