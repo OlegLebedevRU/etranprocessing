@@ -182,11 +182,7 @@ bool tool_inventory_build(char *out, size_t capacity, char digest[65]) {
     return sha256_bytes((const BYTE *)out, (DWORD)used, digest);
 }
 
-bool tool_inventory_package_version(char out[64]) {
-    wchar_t root[MAX_PATH], path[MAX_PATH];
-    out[0] = '\0';
-    if (!inventory_root(root) ||
-        swprintf_s(path, MAX_PATH, L"%ls\\state.json", root) < 0) return false;
+static bool read_json_version(const wchar_t *path, bool require_success, char out[64]) {
     FILE *file = NULL;
     if (_wfopen_s(&file, path, L"rb") != 0 || !file) return false;
     char json[65536];
@@ -195,6 +191,14 @@ bool tool_inventory_package_version(char out[64]) {
     fclose(file);
     if (!complete) return false;
     json[count] = '\0';
+    if (require_success && !strstr(json, "\"status\": \"ready\"") &&
+        !strstr(json, "\"status\":\"ready\"") &&
+        !strstr(json, "\"status\": \"ready_for_online\"") &&
+        !strstr(json, "\"status\":\"ready_for_online\"") &&
+        !strstr(json, "\"status\": \"activation_required\"") &&
+        !strstr(json, "\"status\":\"activation_required\"") &&
+        !strstr(json, "\"status\": \"degraded\"") &&
+        !strstr(json, "\"status\":\"degraded\"")) return false;
     const char *value = strstr(json, "\"installed_version\"");
     if (!value) return false;
     value += strlen("\"installed_version\"");
@@ -210,4 +214,16 @@ bool tool_inventory_package_version(char out[64]) {
     }
     out[length] = '\0';
     return length > 0 && *value == '"';
+}
+
+bool tool_inventory_package_version(char out[64]) {
+    wchar_t root[MAX_PATH], path[MAX_PATH];
+    out[0] = '\0';
+    if (!inventory_root(root)) return false;
+    /* A completed setup summary records the installed package.  state.json is
+       also written by the supervisor and can contain a stale cached version. */
+    if (swprintf_s(path, MAX_PATH, L"%ls\\install_summary.json", root) >= 0 &&
+        read_json_version(path, true, out)) return true;
+    if (swprintf_s(path, MAX_PATH, L"%ls\\state.json", root) < 0) return false;
+    return read_json_version(path, false, out);
 }

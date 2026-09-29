@@ -376,8 +376,33 @@ bool state_save(const wchar_t* base_path, const L4State* state) {
     wchar_t state_file[MAX_PATH];
     swprintf_s(state_file, MAX_PATH, L"%s\\state.json", base_path);
 
+    /* l4setup can replace state.json while the supervisor is running.  Read
+       the installed package version at save time so a cached L4State does not
+       restore the version that was present before setup. */
+    char installed_version[64] = { 0 };
+    FILE* current = NULL;
+    if (_wfopen_s(&current, state_file, L"rb") == 0 && current) {
+        char* json = (char*)malloc(1024 * 1024 + 1);
+        size_t count = json ? fread(json, 1, 1024 * 1024, current) : 0;
+        bool complete = json && feof(current) != 0;
+        fclose(current);
+        if (complete) {
+            json[count] = '\0';
+            json_get_string(json, "installed_version", installed_version,
+                            sizeof(installed_version));
+        }
+        free(json);
+    }
+    if (!installed_version[0]) {
+        strcpy_s(installed_version, sizeof(installed_version),
+                 state->installed_version[0] ? state->installed_version : "1.6.0");
+    }
+
+    wchar_t temp_file[MAX_PATH];
+    if (swprintf_s(temp_file, MAX_PATH, L"%s\\state.json.superv.%lu.tmp",
+                   base_path, GetCurrentProcessId()) < 0) return false;
     FILE* f = NULL;
-    if (_wfopen_s(&f, state_file, L"wb") != 0 || !f) {
+    if (_wfopen_s(&f, temp_file, L"wb") != 0 || !f) {
         return false;
     }
 
@@ -387,7 +412,7 @@ bool state_save(const wchar_t* base_path, const L4State* state) {
     fprintf(f, "  \"thumbprint\": \"%s\",\n", state->thumbprint);
     fprintf(f, "  \"not_after\": \"%s\",\n", state->not_after);
     fprintf(f, "  \"hw_fingerprint\": \"%s\",\n", state->hw_fingerprint);
-    fprintf(f, "  \"installed_version\": \"%s\",\n", state->installed_version[0] ? state->installed_version : "1.6.0");
+    fprintf(f, "  \"installed_version\": \"%s\",\n", installed_version);
     if (state->installer_summary_path[0] != '\0') {
         fprintf(f, "  \"installer_summary_path\": "); write_json_escaped_string(f, state->installer_summary_path); fprintf(f, ",\n");
     }
@@ -411,6 +436,11 @@ bool state_save(const wchar_t* base_path, const L4State* state) {
     }
     fprintf(f, "\n}\n");
 
-    fclose(f);
+    if (fclose(f) != 0 ||
+        !MoveFileExW(temp_file, state_file,
+                     MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        DeleteFileW(temp_file);
+        return false;
+    }
     return true;
 }
