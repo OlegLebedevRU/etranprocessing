@@ -23,6 +23,7 @@ l4desk — локальный expiry, FFmpeg и освобождение вво�
   строгая валидация expires_at_ms > now_ms (и stream_instance_id при наличии) внедрена в Step 4.
 - Stop/release отменяет recovery; reconcile не оставляет orphan и ложный UI running.
 - Отключение ввода (detach input) не удаляет общую видеотрансляцию (sharedLease в SessionLifecycleCoordinator).
+- В app1 разрыв control WebSocket спустя 10 с отзывает аренду без активного video `stream_instance_id`; для общей video lease со scope `stream`/`input` действуют keepalive и TTL, а закрытие сокета ввода не публикует `stream_stop`.
 
 ## State machine
 Концептуальная lease: `created → active → renewed → expired → stopped`.
@@ -60,7 +61,8 @@ restart агента и доставка события в UI. [Полная м�
   BFF нормализовал 404 (`lease_not_found`) и поддержал `generation`.
 - **F6 (l4desk):** Введена строгая валидация `expires_at_ms > now_ms` и верхнего предела эпохи;
   при невалидном времени или несоответствии `stream_instance_id` (если передан) возвращается NACK `invalid_payload` / `stream_mismatch`.
-- **Остаточный этап:** Сквозная стендовая верификация (E2E) с реальным терминалом.
+- **Стенд:** Основной shared-lease сценарий проверен на реальном 1000009; расширенная матрица recovery остаётся отдельной задачей.
+- **2026-09-29 runtime:** IoT `bb661bb` устранил отзыв общей video lease по `ws_disconnect_timeout`. На 1000009 после отключения input WS HD оставался активен более 40 с со свежим RTP и keepalive 200, затем штатный stop завершил поток. Подробности: [handoff](../tasks/active/2026-09-29-medium-hd-l4desk-input.md).
 
 ## Источники и актуальность
 - Authoritative docs: [remote-input](../../docs/etran_arch-remote-input-control.md),

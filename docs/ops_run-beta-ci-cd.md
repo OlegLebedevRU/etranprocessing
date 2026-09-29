@@ -14,9 +14,9 @@ immutable OCI digest → production pull → Compose override одного се�
 | Владелец / контейнер | Источник сборки | Production digest |
 | --- | --- | --- |
 | ProcessingBackend / `processing-backend` | `etranprocessing` main `7da3e07`, beta launcher | `dev-leo4-ru.cr.cloud.ru/etran/processingbackend@sha256:bc0e5b131b4e47ec43e0695e7f87d8cc3e158bb26756bc2fb88023aa76a75a00` |
-| MenuBuilder / `menubuilder-backend` | `etranprocessing` main `2dd1473`, beta launcher | `dev-leo4-ru.cr.cloud.ru/etran/menubuilder-backend@sha256:0a67f0ffd0326c2ed968b3e42d2cdd7728b4dd4df5c71582e059c061edbf5c89` |
+| MenuBuilder / `menubuilder-backend` | `etranprocessing` main `434620d`, beta launcher | `dev-leo4-ru.cr.cloud.ru/etran/menubuilder-backend@sha256:6622d49a03570b626c2206783f0c95fbda425d5971164ab12453ba75513356d7` |
 | MenuBuilder / `l4mcp` | `etranprocessing` main `7da3e07`, beta launcher | `dev-leo4-ru.cr.cloud.ru/etran/l4mcp@sha256:7dcc28d19286d8ce99aedbdd4ccd2c4492ab0f7d7163416e9d9f947813069f4e` |
-| IoT / `app1` | `iot-rpc-rest-app` master `a50c571`, `deploy/registry_app1.py` | `dev-leo4-ru.cr.cloud.ru/etran/app1@sha256:ab09311d2bfbcefd774ef283c0e8f6142c42b479ed378eb2a9be6df6da1a292b` |
+| IoT / `app1` | `iot-rpc-rest-app` master `bb661bb`, `deploy/registry_app1.py` | `dev-leo4-ru.cr.cloud.ru/etran/app1@sha256:957b08ce2b3a6ec44514f99c05d55c4e3d1ff4f9f885b86a9da7eadf3bffa36d` |
 | Media / `l4media-ingress` | `etranprocessing` main `801186d`, beta launcher | `dev-leo4-ru.cr.cloud.ru/etran/l4media-ingress@sha256:1b9242b290d975e769acd3a35eb5d16a286f91e71b08356458643863c58b1cd7` |
 | Media / `l4media-nginx` | `etranprocessing` main `7da3e07`, beta launcher | `dev-leo4-ru.cr.cloud.ru/etran/l4media-nginx@sha256:fb137647e25bed749f1cf87cc0398eb8f072a900b7dfa124222cb9655fe911bd` |
 | Media / `l4media-janus` | ранее принятый собственный образ; пересборка только по команде пользователя | `dev-leo4-ru.cr.cloud.ru/l4media-janus@sha256:93265665a92482ec1de2c9571a08d27c87b1dee06efc000f717ed42dfe2438ae` |
@@ -27,6 +27,14 @@ locked dependencies, тесты и digest; общий production deployer зна
 только как внешний компонент и не пытается собирать его из другого дерева.
 `app1` сам запускает Alembic при старте, поэтому совместимость миграций и
 отката образа проверяется до выпуска.
+
+29 сентября `bb661bb` исправил преждевременный `stream_stop` при отключении
+управления общим video lease. Builder опубликовал immutable digest из чистого
+IoT master, production deployer сменил только `app1`, проверил revision label,
+health и image ID. В браузерном HD-сеансе 1000009 после отключения input WS
+поток сохранил свежий RTP и keepalive 200 более 40 с, затем штатный stop
+завершил видео. Подробный timeline — в
+`.agent-context/tasks/active/2026-09-29-medium-hd-l4desk-input.md`.
 
 Frontend `dist` по решению пользователя остаётся отдельным статическим
 артефактом. `nginx-default` и `nginx-mutual-legacy` — инфраструктурные proxy,
