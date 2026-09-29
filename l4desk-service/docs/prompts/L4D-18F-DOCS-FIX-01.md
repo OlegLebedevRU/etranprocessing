@@ -64,6 +64,14 @@ read-only операционные интерфейсы. Различать пр
 последующие изменения: Alembic 028, post-18E MenuBuilder, его registry digest
 и текущий frontend `dist`. Исторический report не доказывает текущий runtime.
 
+Браузерные изменения после 18E учесть по
+[`L4D-18F-VIDEO-UX-DELTA.md`](L4D-18F-VIDEO-UX-DELTA.md): source commits
+`239345b` и `23cc4cb` требуют отдельной сверки раздаваемого `dist` и
+browser smoke для Medium/HD, размера кадра и локальной паузы F8. Этот индекс
+не расширяет `external_artifact_reads` регистрации и не превращает новый
+код в исторически принятый 18E. Если изменения входят в целевой выпуск,
+отсутствие runtime/browser evidence является открытым `PENDING`/`DRIFT`.
+
 Выпустить единый реестр: Git commit → image/package digest → deployed service,
 schema/API/Agent versions, feature flags и границы активации; матрицу
 совместимости; владельцев, endpoints без секретов и порядок rollback. Привести

@@ -186,3 +186,8 @@ User-authorized `R-L4D-18F-DOCS-FIX-01-v1` registers
 [`L4D-18F-DOCS-FIX-01.md`](L4D-18F-DOCS-FIX-01.md) with exact access to five
 accepted inputs and finite report/evidence reads. This registration permits
 the docs-only release audit; it does not accept 18F or close the cascade.
+
+The post-18E MenuBuilder browser video changes are indexed in
+[`L4D-18F-VIDEO-UX-DELTA.md`](L4D-18F-VIDEO-UX-DELTA.md). The 18F audit
+must reconcile their source commits with the deployed frontend and browser
+evidence; the index does not amend accepted handoffs.
