@@ -392,7 +392,17 @@ int engine_run_pipeline(SetupContext* ctx) {
         // Update state.json with installed_version
         wchar_t sum_path[MAX_PATH];
         swprintf_s(sum_path, MAX_PATH, L"%ls\\install_summary.json", ctx->opts->dest);
-        state_patch_version(ctx->opts->dest, ctx->target_version, sum_path);
+        char saved_version[64] = { 0 };
+        if (!state_patch_version(ctx->opts->dest, ctx->target_version, sum_path) ||
+            !unpack_read_installed_version(ctx->opts->dest, saved_version, sizeof(saved_version)) ||
+            strcmp(saved_version, ctx->target_version) != 0) {
+            log_err("Failed to persist and verify installed_version in state.json.");
+            ctx->final_exit_code = 31;
+            ctx->summary.exit_code = 31;
+            strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "failed");
+            strcpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason),
+                     "installed_version_persist_failed");
+        }
     }
 
     summary_write_json(&ctx->summary, ctx->opts->dest);

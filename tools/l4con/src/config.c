@@ -95,6 +95,77 @@ int config_query_sn_from_proxy(int proxy_port, char* out_sn, size_t out_sn_size)
     return rc;
 }
 
+static bool proxy_json_string(const char* json, const char* key, char* out, size_t capacity) {
+    char quoted_key[64];
+    if (snprintf(quoted_key, sizeof(quoted_key), "\"%s\"", key) < 0) return false;
+    const char* value = strstr(json, quoted_key);
+    if (!value) return false;
+    value = strchr(value + strlen(quoted_key), ':');
+    if (!value) return false;
+    value++;
+    while (*value == ' ' || *value == '\t' || *value == '\r' || *value == '\n') value++;
+    if (*value++ != '"') return false;
+    size_t length = 0;
+    while (value[length] && value[length] != '"') {
+        unsigned char ch = (unsigned char)value[length];
+        if (ch < 32 || ch == '\\' || length + 1 >= capacity) return false;
+        length++;
+    }
+    if (value[length] != '"' || length == 0) return false;
+    memcpy(out, value, length);
+    out[length] = '\0';
+    return true;
+}
+
+int config_query_identity_from_proxy(int proxy_port, ProxyIdentity* out_identity) {
+    if (!out_identity) return -1;
+    memset(out_identity, 0, sizeof(*out_identity));
+    HINTERNET session = WinHttpOpen(L"L4Con/1.8", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+                                    WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!session) return -1;
+    WinHttpSetTimeouts(session, 1000, 1000, 2000, 2000);
+    HINTERNET connection = WinHttpConnect(session, L"127.0.0.1", (INTERNET_PORT)proxy_port, 0);
+    HINTERNET request = connection ? WinHttpOpenRequest(connection, L"GET", L"/_leo4/info",
+                                                        NULL, WINHTTP_NO_REFERER,
+                                                        WINHTTP_DEFAULT_ACCEPT_TYPES, 0) : NULL;
+    int result = -1;
+    if (request && WinHttpSendRequest(request, WINHTTP_NO_ADDITIONAL_HEADERS, 0,
+                                      WINHTTP_NO_REQUEST_DATA, 0, 0, 0) &&
+        WinHttpReceiveResponse(request, NULL)) {
+        DWORD status = 0, status_size = sizeof(status);
+        if (WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                                WINHTTP_HEADER_NAME_BY_INDEX, &status, &status_size,
+                                WINHTTP_NO_HEADER_INDEX) && status == 200) {
+            char body[16384];
+            size_t used = 0;
+            DWORD received = 0;
+            while (used + 1 < sizeof(body) &&
+                   WinHttpReadData(request, body + used,
+                                   (DWORD)(sizeof(body) - used - 1), &received) && received) {
+                used += received;
+            }
+            body[used] = '\0';
+            char proxy_status[16] = { 0 };
+            if (strstr(body, "\"certificate_found\": true") &&
+                proxy_json_string(body, "status", proxy_status, sizeof(proxy_status)) &&
+                strcmp(proxy_status, "ready") == 0 &&
+                proxy_json_string(body, "sn", out_identity->sn, sizeof(out_identity->sn)) &&
+                proxy_json_string(body, "thumbprint", out_identity->thumbprint,
+                                  sizeof(out_identity->thumbprint)) &&
+                proxy_json_string(body, "serial", out_identity->serial,
+                                  sizeof(out_identity->serial)) &&
+                proxy_json_string(body, "not_after", out_identity->not_after,
+                                  sizeof(out_identity->not_after))) {
+                result = 0;
+            }
+        }
+    }
+    if (request) WinHttpCloseHandle(request);
+    if (connection) WinHttpCloseHandle(connection);
+    WinHttpCloseHandle(session);
+    return result;
+}
+
 static void parse_uri(const char* uri, char* host, size_t host_len, int* port) {
     if (!uri) return;
     const char* p = uri;

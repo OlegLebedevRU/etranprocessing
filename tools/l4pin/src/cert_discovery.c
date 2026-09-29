@@ -95,6 +95,10 @@ static bool discovery_is_issuer_leo4(PCCERT_CONTEXT pCert, char* out_issuer_cn, 
     return matched;
 }
 
+bool cert_is_leo4_issuer(PCCERT_CONTEXT cert) {
+    return cert && discovery_is_issuer_leo4(cert, NULL, 0);
+}
+
 static void discovery_filetime_to_str(const FILETIME* ft, char* out_str, size_t out_str_size) {
     if (!ft || !out_str || out_str_size == 0) return;
     SYSTEMTIME st;

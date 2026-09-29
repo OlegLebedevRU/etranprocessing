@@ -275,26 +275,21 @@ bool unpack_read_installed_version(const wchar_t* dest_dir, char* out_version, s
     fclose(fp);
     if (n == 0) return false;
 
-    const char* key = "\"installed_version\":";
+    const char* key = "\"installed_version\"";
     const char* p = strstr(buf, key);
-    if (!p) {
-        key = "\"installed_version\" :";
-        p = strstr(buf, key);
-    }
     if (!p) return false;
-
-    p = strchr(p, ':');
-    if (!p) return false;
-    p = strchr(p, '"');
-    if (!p) return false;
-    p++; // Skip opening quote
+    p += strlen(key);
+    while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
+    if (*p++ != ':') return false;
+    while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
+    if (*p++ != '"') return false;
 
     size_t idx = 0;
     while (*p && *p != '"' && idx + 1 < out_size) {
         out_version[idx++] = *p++;
     }
     out_version[idx] = '\0';
-    return (idx > 0);
+    return idx > 0 && *p == '"';
 }
 
 bool unpack_has_incomplete_marker(const wchar_t* dest_dir, char* out_phase, size_t out_phase_size) {

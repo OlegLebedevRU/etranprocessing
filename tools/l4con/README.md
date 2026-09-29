@@ -7,7 +7,8 @@
 ## 1. Назначение и функциональность
 
 - **Роль**: `extra_service`
-- **Протокол**: MQTT 3.1.1 (TCP Plain No-SSL) к локальному мосту Mosquitto (`127.0.0.1:1883`) или удалённому брокеру
+- **Протокол**: MQTT 5 (TCP Plain No-SSL) к локальному мосту Mosquitto (`127.0.0.1:1883`) или удалённому брокеру
+- **Событие сертификата**: после CONNACK и сверки SN/thumbprint Leo4Proxy с единственным действующим сертификатом LocalMachine\\MY публикует событие 75 в `dev/{SN}/evt` (QoS 1, retain 0). При временной неготовности Leo4Proxy повторяет проверку через 15 секунд до успешной отправки. MQTT 5 User Properties передают `event_type_code`, `dev_event_id`, `dev_timestamp`, `correlationData`; JSON содержит `101`, `102`, `200` и параметры сертификата `324`, `440`–`443` в `300[0]`.
 - **Presence & LWT сценарий (согласно регламенту)**:
   1. При подключении (CONNECT):
      - `will_topic = dev/{SN}/svc`

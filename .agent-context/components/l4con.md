@@ -1,5 +1,17 @@
 # l4con
 
+## 2026-09-30 update: event 75
+
+The release 1.9.1 source in this worktree publishes event 75 to
+`dev/{SN}/evt` (QoS 1, no retain) after verifying the active proxy and local
+certificate identities. Tags 444 and 445 carry the installed EXE inventory
+and the package version from `state.json`. It scans every 60 seconds and
+publishes changes. See [event 75 inventory](../../docs/term_tool-event75-inventory.md).
+App1's event collector stores the JSON payload without tag-specific schema;
+this was checked in `app-service/core/services/device_events_collect.py` in
+the external app1 repository. MQTT runtime delivery was not tested on a
+terminal. The original remote input drag and wheel regression remains open.
+
 ## Назначение
 Native Windows consumer удалённых console/diagnostics задач и потокового вывода.
 

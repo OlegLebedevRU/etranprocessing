@@ -248,13 +248,17 @@ bool state_patch_version(const wchar_t* dest_dir, const char* version, const wch
     if (_wfopen_s(&fp, state_file, L"rb") != 0 || !fp) {
         // state.json does not exist yet: create a minimal valid state.json
         if (_wfopen_s(&fp, state_tmp, L"wb") == 0 && fp) {
-            fprintf(fp, "{\n");
-            fprintf(fp, "  \"installed_version\": \"%s\",\n", version);
-            fprintf(fp, "  \"installer_summary_path\": \"%s\",\n", summary_escaped);
-            fprintf(fp, "  \"installer_base_path\": \"%s\"\n", dest_escaped);
-            fprintf(fp, "}\n");
-            fclose(fp);
-            MoveFileExW(state_tmp, state_file, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+            bool written = fprintf(fp,
+                "{\n  \"installed_version\": \"%s\",\n"
+                "  \"installer_summary_path\": \"%s\",\n"
+                "  \"installer_base_path\": \"%s\"\n}\n",
+                version, summary_escaped, dest_escaped) > 0;
+            if (fclose(fp) != 0) written = false;
+            if (!written || !MoveFileExW(state_tmp, state_file,
+                                          MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+                DeleteFileW(state_tmp);
+                return false;
+            }
             log_info("Created initial %ls with installed_version: %s", state_file, version);
             return true;
         }
@@ -275,7 +279,11 @@ bool state_patch_version(const wchar_t* dest_dir, const char* version, const wch
         fclose(fp);
         return false;
     }
-    fread(content, 1, sz, fp);
+    if (fread(content, 1, sz, fp) != (size_t)sz) {
+        fclose(fp);
+        free(content);
+        return false;
+    }
     content[sz] = '\0';
     fclose(fp);
 
@@ -297,11 +305,20 @@ bool state_patch_version(const wchar_t* dest_dir, const char* version, const wch
         return false;
     }
 
-    fwrite(patched2, 1, strlen(patched2), fp);
-    fclose(fp);
+    size_t content_size = strlen(patched2);
+    bool written = fwrite(patched2, 1, content_size, fp) == content_size;
+    if (fclose(fp) != 0) written = false;
     free(patched2);
 
-    MoveFileExW(state_tmp, state_file, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+    if (!written) {
+        DeleteFileW(state_tmp);
+        return false;
+    }
+
+    if (!MoveFileExW(state_tmp, state_file, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        DeleteFileW(state_tmp);
+        return false;
+    }
     log_info("Updated installed_version and installer_summary_path in %ls.", state_file);
     return true;
 }

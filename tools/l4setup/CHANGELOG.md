@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Release 1.9.1 shows installed tool PE versions in Details before and after
+  installation and verifies the saved package version in state.json.
+
 ### Fixed
 
 - Установка 1.8.2 включает `l4capture` в проверку готовности, проверку занятых файлов, атомарную замену и rollback. Перед обновлением обнаруживается активный аппаратный видеопоток, а осиротевший процесс из каталога tools завершается после штатной остановки служб.
