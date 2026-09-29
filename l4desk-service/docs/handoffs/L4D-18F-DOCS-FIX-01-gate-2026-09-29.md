@@ -102,3 +102,31 @@ MenuBuilder backend, media ingress и Janus уже работали по digest.
 пять принятых входов 18F и не выдаёт новый `ACCEPTED`. Фактический `dist` и
 browser smoke для F8 не подтверждены; при включении delta в выпуск они
 остаются обязательным `PENDING` до закрытия 18F.
+
+## Дополнение: актуальный restricted snapshot и исправление shared lease
+
+29 сентября 2026 года прежний `BLOCKED_DEPLOY` snapshot перепроверен.
+ProcessingBackend, MenuBuilder backend, L4mcp, app1, ingress и media nginx
+работают из immutable registry digest; Janus закреплён по digest. На app1
+развёрнут IoT `bb661bb` / `sha256:957b08ce2b3a6ec44514f99c05d55c4e3d1ff4f9f885b86a9da7eadf3bffa36d`.
+MenuBuilder backend — `434620d` / `sha256:6622d49a03570b626c2206783f0c95fbda425d5971164ab12453ba75513356d7`.
+Frontend release — `6ddc97a`; установленный и обслуживаемый nginx
+`index.html` совпали по SHA-256 `147d95bee5cda0b279600099b30c5c07002717101d9b36f69685a50f66bcd3c8`.
+Alembic — `028 (head)`, перечисленные контейнеры running, restart count 0.
+
+После закрытия control WS в HD на 1000009 в 14:55:01 UTC поток оставался
+активен более 40 с со свежим RTP и keepalive 200; штатный stop в 14:55:59
+показал «Не запущена», ingress затем `active_media_sessions=0`, route=false.
+Это закрывает прежний поздний `stream_stop` и текущий video smoke. Medium/HD,
+F8 и экранный UX проверены в браузере ранее в тот же день. Подробный
+restricted registry и границы доказательств вынесены в
+[итоговый report](L4D-18F-DOCS-FIX-01-report.md).
+
+Эффективные production-флаги коммерции и workers выключены; текущий
+`/mnt/l4desk-archive` не отдельный mount, production backup/restore и
+hot-retention не доказаны. Пять исторических source hashes tenant 1000
+отсутствуют. Пользователь вывел юридические и глобальные технические
+проверки, невыполнимые сейчас, за рамки каскада и принял риск. Это
+разрешает подготовить restricted candidate, но не заявлять общую
+коммерческую активацию и не присваивать самостоятельно `CLOSED_ACCEPTED`:
+окончательный verdict остаётся за независимым контроллером.
