@@ -1,16 +1,28 @@
 #include <string.h>
 #include "l4capture/video_profile.h"
 
-/* Калибровка vs ffmpeg (l4desk ffmpeg_cmdline.c):
- *   low     — NATIVE-растр (!), 15 fps, 800k/1000k   ← не 854x480
- *   default — NATIVE-растр, 25 fps, 2000k/2500k
- * FFmpeg low НЕ даунскейлит. 854x480 остаётся только для RC/fallback
- * (input-gate l4desk) и degrade D3. */
+/* Encoder budgets leave room for RTP/TLS overhead in a single-viewer WAN.
+ * Medium <= 1280x960, HD <= 1920x1080; small sources keep their raster. */
 static const l4c_profile_params_t k_profiles[] = {
-    { L4C_PROFILE_480P,  854,  480, 15, 10,  500,  800, 1200, true  },
-    { L4C_PROFILE_540P,  960,  540, 15, 10,  800, 1200, 1600, false },
-    { L4C_PROFILE_720P, 1280,  720, 25, 10, 1500, 2000, 2500, false }
+    { L4C_PROFILE_480P,  854,  480, 15, 10,  650, 1300, 1650, true  },
+    { L4C_PROFILE_540P,  960,  540, 15, 10,  750, 1100, 1400, false },
+    { L4C_PROFILE_720P, 1280,  720, 25, 10, 1200, 2500, 3000, false }
 };
+
+void l4c_profile_rate_for_raster(uint8_t request, uint32_t width, uint32_t height,
+                                  uint16_t *target_kbps, uint16_t *max_kbps) {
+    uint64_t pixels = (uint64_t)width * height;
+    if (!target_kbps || !max_kbps) return;
+    if (pixels <= 800u * 600u) {
+        if (*target_kbps > (request == L4C_PROFILE_REQ_LOW ? 900u : 1100u))
+            *target_kbps = request == L4C_PROFILE_REQ_LOW ? 900u : 1100u;
+        if (*max_kbps > (request == L4C_PROFILE_REQ_LOW ? 1200u : 1400u))
+            *max_kbps = request == L4C_PROFILE_REQ_LOW ? 1200u : 1400u;
+    } else if (request == L4C_PROFILE_REQ_DEFAULT && pixels <= 1280u * 720u) {
+        if (*target_kbps > 1800u) *target_kbps = 1800u;
+        if (*max_kbps > 2300u) *max_kbps = 2300u;
+    }
+}
 
 const l4c_profile_params_t *l4c_profile_params(uint16_t actual_id) {
     size_t i;

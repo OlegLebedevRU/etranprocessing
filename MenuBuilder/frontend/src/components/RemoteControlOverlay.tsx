@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Tooltip } from "antd";
+import { Alert, Button, Tooltip } from "antd";
 import { ControlAgentStatus } from "../api/video";
 
 export interface RemoteControlOverlayProps {
@@ -35,6 +35,11 @@ export default function RemoteControlOverlay({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [desktopRect, setDesktopRect] = useState<Rect | null>(null);
   const [geometryKnown, setGeometryKnown] = useState<boolean>(true);
+  const [pointerPaused, setPointerPaused] = useState(false);
+
+  useEffect(() => {
+    if (!active) setPointerPaused(false);
+  }, [active]);
 
   const streamMode = propStreamMode ?? presence?.stream?.mode;
 
@@ -189,14 +194,14 @@ export default function RemoteControlOverlay({
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!active || isCameraMode || streamMode !== "desktop" || !geometryKnown) return;
+    if (!active || pointerPaused || isCameraMode || streamMode !== "desktop" || !geometryKnown) return;
     const coords = getNormalizedCoordinates(e);
     if (!coords) return;
     sendMove(coords.x, coords.y);
   };
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!active || isCameraMode || streamMode !== "desktop" || !geometryKnown) return;
+    if (!active || pointerPaused || isCameraMode || streamMode !== "desktop" || !geometryKnown) return;
     // Left-click only, no modifiers
     if (e.button !== 0 || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) {
       return;
@@ -211,7 +216,7 @@ export default function RemoteControlOverlay({
   };
 
   const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!active || isCameraMode || streamMode !== "desktop" || !geometryKnown) return;
+    if (!active || pointerPaused || isCameraMode || streamMode !== "desktop" || !geometryKnown) return;
     const coords = getNormalizedCoordinates(
       e as unknown as React.PointerEvent<HTMLDivElement>
     );
@@ -226,7 +231,14 @@ export default function RemoteControlOverlay({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!active || isCameraMode || streamMode !== "desktop" || !sendKey) return;
+    if (!active || isCameraMode || streamMode !== "desktop") return;
+    if (e.key === "F8") {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!e.repeat) setPointerPaused((paused) => !paused);
+      return;
+    }
+    if (pointerPaused || !sendKey) return;
     if (e.key === "F5" || e.key === "F12" || (e.ctrlKey && e.key === "r")) {
       return;
     }
@@ -236,7 +248,7 @@ export default function RemoteControlOverlay({
   };
 
   const handleKeyUp = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!active || isCameraMode || streamMode !== "desktop" || !sendKey) return;
+    if (!active || pointerPaused || isCameraMode || streamMode !== "desktop" || !sendKey || e.key === "F8") return;
     if (e.key === "F5" || e.key === "F12" || (e.ctrlKey && e.key === "r")) {
       return;
     }
@@ -300,12 +312,24 @@ export default function RemoteControlOverlay({
         width: "100%",
         height: "100%",
         zIndex: 10,
-        cursor: "crosshair",
+        cursor: pointerPaused ? "default" : "crosshair",
         userSelect: "none",
         touchAction: "none",
         outline: "none",
       }}
     >
+      <Tooltip title={pointerPaused ? "F8: возобновить удалённый ввод" : "F8: удержать удалённый курсор, пока вы переходите к быстрым действиям"}>
+        <Button
+          size="small"
+          type={pointerPaused ? "primary" : "default"}
+          aria-pressed={pointerPaused}
+          onClick={(event) => { event.stopPropagation(); setPointerPaused((paused) => !paused); }}
+          onPointerMove={(event) => event.stopPropagation()}
+          style={{ position: "absolute", top: 10, left: 10, zIndex: 12, pointerEvents: "auto" }}
+        >
+          {pointerPaused ? "Курсор удержан · F8" : "Удержать курсор · F8"}
+        </Button>
+      </Tooltip>
       {/* Visual boundary of active desktop screen */}
       {desktopRect && (
         <div

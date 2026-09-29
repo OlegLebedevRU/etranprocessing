@@ -59,6 +59,7 @@ typedef struct {
     uint16_t actual_profile;
     uint8_t current_fps;
     uint32_t target_width, target_height;
+    uint32_t source_width, source_height;
     uint16_t bitrate_min, bitrate_target, bitrate_max;
     l4c_degrade_controller_t degrade;
     uint32_t config_gen;
@@ -341,9 +342,12 @@ static l4c_status_t pipeline_reconfigure_raster(l4c_pipeline_state_t *ps, uint16
     /* Бюджет до allocations */
     if (pp->width == 0 || pp->height == 0) return L4C_ERR_OVERFLOW;
 
-    new_buf = (uint8_t *)malloc((size_t)pp->width * (size_t)pp->height * 4u);
+    uint32_t next_width = ps->source_width ? ps->source_width : ps->target_width;
+    uint32_t next_height = ps->source_height ? ps->source_height : ps->target_height;
+    l4c_quality_fit_raster(&next_width, &next_height, pp->width, pp->height);
+    new_buf = (uint8_t *)malloc((size_t)next_width * (size_t)next_height * 4u);
     if (!new_buf) return L4C_ERR_OUT_OF_MEMORY;
-    status = l4c_color_converter_create(pp->width, pp->height, &new_conv);
+    status = l4c_color_converter_create(next_width, next_height, &new_conv);
     if (status != L4C_OK) { free(new_buf); return status; }
 
     if (ps->encoder) {
@@ -354,11 +358,13 @@ static l4c_status_t pipeline_reconfigure_raster(l4c_pipeline_state_t *ps, uint16
     if (ps->scaled_buf) free(ps->scaled_buf);
     ps->converter = new_conv;
     ps->scaled_buf = new_buf;
-    ps->target_width = pp->width;
-    ps->target_height = pp->height;
-    ps->bitrate_target = pp->bitrate_target_kbps;
-    if (ps->bitrate_min < pp->bitrate_min_kbps) ps->bitrate_min = pp->bitrate_min_kbps;
-    if (ps->bitrate_target < ps->bitrate_min) ps->bitrate_target = ps->bitrate_min;
+    ps->target_width = next_width;
+    ps->target_height = next_height;
+    if (ps->bitrate_target > pp->bitrate_target_kbps) ps->bitrate_target = pp->bitrate_target_kbps;
+    if (ps->bitrate_max > pp->bitrate_max_kbps) ps->bitrate_max = pp->bitrate_max_kbps;
+    l4c_profile_rate_for_raster(ps->requested_profile, next_width, next_height,
+                                &ps->bitrate_target, &ps->bitrate_max);
+    if (ps->bitrate_min > ps->bitrate_target) ps->bitrate_min = ps->bitrate_target;
     ps->actual_profile = new_profile;
     ps->force_next_idr = true;
     ps->config_gen++;
@@ -522,49 +528,46 @@ static l4c_status_t pipeline_start(l4c_pipeline_state_t *ps, const l4c_start_t *
     ps->current_fps = resolved.start_fps;
     ps->target_width = pp->width;
     ps->target_height = pp->height;
-    /* native-растр для default И low (паритет с ffmpeg: low тоже не
-     * даунскейлит — 800k на 1080p даёт чёткий текст). 854x480 остаётся
-     * для Win7/refused_premium и degrade D2/D3. */
-    if (resolved.actual_id == L4C_PROFILE_720P ||
-        (resolved.actual_id == L4C_PROFILE_480P && !resolved.win7_legacy && !resolved.refused_premium)) {
-        uint32_t sw = 0, sh = 0;
-        if (start_params->source_rect.right > start_params->source_rect.left) {
-            sw = (uint32_t)(start_params->source_rect.right - start_params->source_rect.left);
-        }
-        if (start_params->source_rect.bottom > start_params->source_rect.top) {
-            sh = (uint32_t)(start_params->source_rect.bottom - start_params->source_rect.top);
-        }
-        sw &= ~1u;
-        sh &= ~1u;
-        if (sw >= 320 && sh >= 240 &&
-            (uint64_t)sw * (uint64_t)sh <= L4C_MAX_PIXELS_AREA) {
+    if (start_params->source_rect.right > start_params->source_rect.left &&
+        start_params->source_rect.bottom > start_params->source_rect.top) {
+        uint32_t sw = (uint32_t)(start_params->source_rect.right - start_params->source_rect.left) & ~1u;
+        uint32_t sh = (uint32_t)(start_params->source_rect.bottom - start_params->source_rect.top) & ~1u;
+        if (sw >= 320 && sh >= 240 && (uint64_t)sw * sh <= L4C_MAX_PIXELS_AREA) {
+            ps->source_width = sw;
+            ps->source_height = sh;
             ps->target_width = sw;
             ps->target_height = sh;
         }
     }
-    /* Local A/B test: send the complete desktop at a smaller raster within
-     * the same bitrate budget. Preserve aspect ratio and even H.264 sizes. */
     {
-        uint32_t max_width = read_quality_max_width();
-        if (max_width && ps->target_width > max_width) {
-            uint32_t source_width = ps->target_width;
-            uint32_t source_height = ps->target_height;
-            l4c_quality_limit_width(&ps->target_width, &ps->target_height, max_width);
+        uint32_t max_width = request == L4C_PROFILE_REQ_LOW ? 1280u : 1920u;
+        uint32_t max_height = request == L4C_PROFILE_REQ_LOW ? 960u : 1080u;
+        uint32_t configured_width = read_quality_max_width();
+        if (resolved.win7_legacy || resolved.refused_premium) {
+            max_width = pp->width;
+            max_height = pp->height;
+        }
+        if (configured_width && configured_width < max_width) max_width = configured_width;
+        l4c_quality_fit_raster(&ps->target_width, &ps->target_height, max_width, max_height);
+        if (ps->source_width && (ps->target_width != ps->source_width || ps->target_height != ps->source_height)) {
             l4c_logger_write("QUALITY_SCALE source=%ux%u encoded=%ux%u",
-                             source_width, source_height,
+                             ps->source_width, ps->source_height,
                              ps->target_width, ps->target_height);
         }
     }
     ps->bitrate_min = pp->bitrate_min_kbps;
     ps->bitrate_target = pp->bitrate_target_kbps;
     ps->bitrate_max = pp->bitrate_max_kbps;
+    l4c_profile_rate_for_raster(request, ps->target_width, ps->target_height,
+                                &ps->bitrate_target, &ps->bitrate_max);
+    if (ps->bitrate_min > ps->bitrate_target) ps->bitrate_min = ps->bitrate_target;
     if (request == L4C_PROFILE_REQ_LOW) {
         uint32_t target = read_quality_target_kbps();
         uint32_t peak = read_quality_peak_kbps();
-        if (target > ps->bitrate_target) ps->bitrate_target = (uint16_t)target;
-        if (peak > ps->bitrate_max) {
-            ps->bitrate_max = (uint16_t)peak;
-        }
+        if (target > ps->bitrate_target && target <= 1300u) ps->bitrate_target = (uint16_t)target;
+        if (peak > ps->bitrate_max && peak <= 1650u) ps->bitrate_max = (uint16_t)peak;
+        l4c_profile_rate_for_raster(request, ps->target_width, ps->target_height,
+                                    &ps->bitrate_target, &ps->bitrate_max);
         if (ps->bitrate_max < ps->bitrate_target) ps->bitrate_max = ps->bitrate_target;
         if (target || peak) {
             l4c_logger_write("QUALITY_RATE target_kbps=%u peak_kbps=%u",

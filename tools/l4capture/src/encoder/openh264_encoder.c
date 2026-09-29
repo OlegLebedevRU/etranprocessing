@@ -63,7 +63,8 @@ static l4c_status_t oh264_init(struct l4c_encoder_backend *self, const l4c_encod
     param.iComplexityMode = MEDIUM_COMPLEXITY;
     param.uiIntraPeriod = (unsigned int)(ctx->fps * 2);
     param.eSpsPpsIdStrategy = CONSTANT_ID;
-    param.bEnableFrameSkip = 0;
+    /* OpenH264 cannot enforce RC_BITRATE_MODE without frame skipping. */
+    param.bEnableFrameSkip = 1;
     param.bEnableDenoise = 0;
     /* BGD на desktop-ROI не нужен; AQ — наоборот, помогает тексту. */
     param.bEnableBackgroundDetection = 0;

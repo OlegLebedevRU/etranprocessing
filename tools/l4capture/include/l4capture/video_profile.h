@@ -38,6 +38,10 @@ typedef struct {
 /* NULL для неизвестного id. */
 const l4c_profile_params_t *l4c_profile_params(uint16_t actual_id);
 
+/* Lower encoder targets for small screens; never increases either limit. */
+void l4c_profile_rate_for_raster(uint8_t request, uint32_t width, uint32_t height,
+                                  uint16_t *target_kbps, uint16_t *max_kbps);
+
 /* Парсер requested. false для неизвестного значения (не маппится в low). */
 bool l4c_profile_parse_request(uint16_t wire_profile_id, uint8_t *out_request);
 

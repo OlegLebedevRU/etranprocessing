@@ -29,17 +29,28 @@ int test_profile_params_table(void) {
     if (!p480 || !p540 || !p720) return 1;
     if (p480->width != 854 || p480->height != 480) return 2;
     if (p480->fps_nominal != 15 || p480->fps_floor != 10) return 3;
-    if (p480->bitrate_min_kbps != 500 || p480->bitrate_target_kbps != 800 || p480->bitrate_max_kbps != 1200) return 4;
+    if (p480->bitrate_min_kbps != 650 || p480->bitrate_target_kbps != 1300 || p480->bitrate_max_kbps != 1650) return 4;
     if (!p480->input_profile_eligible) return 5;
     if (p540->width != 960 || p540->height != 540) return 6;
     if (p540->fps_nominal != 15 || p540->fps_floor != 10) return 7;
-    if (p540->bitrate_min_kbps != 800 || p540->bitrate_target_kbps != 1200 || p540->bitrate_max_kbps != 1600) return 8;
+    if (p540->bitrate_min_kbps != 750 || p540->bitrate_target_kbps != 1100 || p540->bitrate_max_kbps != 1400) return 8;
     if (p540->input_profile_eligible) return 9;
     if (p720->width != 1280 || p720->height != 720) return 10;
     if (p720->fps_nominal != 25 || p720->fps_floor != 10) return 11;
-    if (p720->bitrate_min_kbps != 1500 || p720->bitrate_target_kbps != 2000 || p720->bitrate_max_kbps != 2500) return 12;
+    if (p720->bitrate_min_kbps != 1200 || p720->bitrate_target_kbps != 2500 || p720->bitrate_max_kbps != 3000) return 12;
     if (p720->input_profile_eligible) return 13;
     if (l4c_profile_params(99) != NULL) return 14;
+    {
+        uint16_t target = p480->bitrate_target_kbps, peak = p480->bitrate_max_kbps;
+        l4c_profile_rate_for_raster(L4C_PROFILE_REQ_LOW, 800, 600, &target, &peak);
+        if (target != 900 || peak != 1200) return 15;
+        target = p720->bitrate_target_kbps; peak = p720->bitrate_max_kbps;
+        l4c_profile_rate_for_raster(L4C_PROFILE_REQ_DEFAULT, 800, 600, &target, &peak);
+        if (target != 1100 || peak != 1400) return 16;
+        target = p720->bitrate_target_kbps; peak = p720->bitrate_max_kbps;
+        l4c_profile_rate_for_raster(L4C_PROFILE_REQ_DEFAULT, 1280, 720, &target, &peak);
+        if (target != 1800 || peak != 2300) return 17;
+    }
     return 0;
 }
 

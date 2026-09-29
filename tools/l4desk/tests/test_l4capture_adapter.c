@@ -271,6 +271,11 @@ static void test_adapter_input_gate_low_480p_permitted(void) {
     ctx.kiosk_in_focus = false;
 
     ASSERT_TRUE(l4d_input_gate_check(&ctx));
+    ctx.actual_width = 800;
+    ctx.actual_height = 600;
+    ASSERT_TRUE(l4d_input_gate_check(&ctx));
+    ctx.actual_width = 318;
+    ASSERT_FALSE(l4d_input_gate_check(&ctx));
     printf("[PASS] test_adapter_input_gate_low_480p_permitted\n");
 }
 

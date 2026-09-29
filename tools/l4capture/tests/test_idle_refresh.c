@@ -25,6 +25,15 @@ int test_quality_limit_width_preserves_full_screen(void) {
     w = 1920; h = 1080;
     l4c_quality_limit_width(&w, &h, 1920);
     if (w != 1920 || h != 1080) return 2;
+    w = 1920; h = 1080;
+    l4c_quality_fit_raster(&w, &h, 1280, 960);
+    if (w != 1280 || h != 720) return 3;
+    w = 1600; h = 1200;
+    l4c_quality_fit_raster(&w, &h, 1920, 1080);
+    if (w != 1440 || h != 1080) return 4;
+    w = 800; h = 600;
+    l4c_quality_fit_raster(&w, &h, 1280, 960);
+    if (w != 800 || h != 600) return 5;
     return 0;
 }
 

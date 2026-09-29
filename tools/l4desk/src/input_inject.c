@@ -572,7 +572,9 @@ bool input_inject_shortcut_alt_f4(DWORD* out_error) {
     inps_down[1].ki.wVk = VK_F4;
     inps_down[1].ki.wScan = scan_f4;
 
-    if (SendInput(2, inps_down, sizeof(INPUT)) != 2) {
+    UINT sent_down = SendInput(2, inps_down, sizeof(INPUT));
+    if (sent_down != 2) {
+        if (sent_down == 1) s_key_is_down[VK_MENU] = true;
         if (out_error) *out_error = GetLastError() ? GetLastError() : ERROR_GEN_FAILURE;
         input_release_all();
         return false;
@@ -600,9 +602,12 @@ bool input_inject_shortcut_alt_f4(DWORD* out_error) {
     inps_up[1].ki.wScan = scan_alt;
     inps_up[1].ki.dwFlags = KEYEVENTF_KEYUP;
 
-    if (SendInput(2, inps_up, sizeof(INPUT)) != 2) {
+    UINT sent_up = SendInput(2, inps_up, sizeof(INPUT));
+    if (sent_up != 2) {
+        if (sent_up == 1) s_key_is_down[VK_F4] = false;
         s_pending_cleanup = true;
         if (out_error) *out_error = GetLastError() ? GetLastError() : ERROR_GEN_FAILURE;
+        input_release_all();
         return false;
     }
     s_key_is_down[VK_F4] = false;
@@ -637,7 +642,9 @@ bool input_inject_shortcut_win_d(DWORD* out_error) {
     inps_down[1].ki.wVk = 'D';
     inps_down[1].ki.wScan = scan_d;
 
-    if (SendInput(2, inps_down, sizeof(INPUT)) != 2) {
+    UINT sent_down = SendInput(2, inps_down, sizeof(INPUT));
+    if (sent_down != 2) {
+        if (sent_down == 1) s_key_is_down[VK_LWIN] = true;
         if (out_error) *out_error = GetLastError() ? GetLastError() : ERROR_GEN_FAILURE;
         input_release_all();
         return false;
@@ -665,9 +672,12 @@ bool input_inject_shortcut_win_d(DWORD* out_error) {
     inps_up[1].ki.wScan = scan_win;
     inps_up[1].ki.dwFlags = KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP;
 
-    if (SendInput(2, inps_up, sizeof(INPUT)) != 2) {
+    UINT sent_up = SendInput(2, inps_up, sizeof(INPUT));
+    if (sent_up != 2) {
+        if (sent_up == 1) s_key_is_down['D'] = false;
         s_pending_cleanup = true;
         if (out_error) *out_error = GetLastError() ? GetLastError() : ERROR_GEN_FAILURE;
+        input_release_all();
         return false;
     }
     s_key_is_down['D'] = false;

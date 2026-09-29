@@ -24,9 +24,9 @@ bool l4d_input_gate_check(const l4d_input_gate_ctx_t *ctx) {
         return false;
     }
 
-    /* 6. Raster: base_480p (854x480) ИЛИ native (ffmpeg-low parity).
-     *    Жёсткий 854x480 ломал RC после перехода low→native-растр. */
-    if (ctx->actual_width < 854 || ctx->actual_height < 480) {
+    /* 6. Keep small native desktops (for example 800x600) controllable.
+     * Geometry generation and the stream epoch are validated above. */
+    if (ctx->actual_width < 320 || ctx->actual_height < 240) {
         return false;
     }
 
