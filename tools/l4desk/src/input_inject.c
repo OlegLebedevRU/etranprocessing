@@ -188,6 +188,80 @@ bool input_inject_click_norm(double nx, double ny, const char* button,
     return input_inject_click_abs(norm_x, norm_y, button, out_error);
 }
 
+bool input_inject_drag_norm(double start_x, double start_y, double end_x, double end_y,
+                            int rect_x, int rect_y, int rect_w, int rect_h,
+                            DWORD* out_error) {
+    int x1, y1, x2, y2;
+    input_map_coordinates(start_x, start_y, rect_x, rect_y, rect_w, rect_h, &x1, &y1);
+    input_map_coordinates(end_x, end_y, rect_x, rect_y, rect_w, rect_h, &x2, &y2);
+    if (out_error) *out_error = 0;
+    if (desktop_check_input_access() != DESKTOP_ACCESS_OK) {
+        if (out_error) *out_error = ERROR_BUSY;
+        return false;
+    }
+    input_check_pending_cleanup();
+    if (!input_inject_move(x1, y1, out_error)) return false;
+
+    INPUT button = { 0 };
+    button.type = INPUT_MOUSE;
+    button.mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
+    if (SendInput(1, &button, sizeof(button)) != 1) {
+        if (out_error) *out_error = GetLastError() ? GetLastError() : ERROR_GEN_FAILURE;
+        return false;
+    }
+    s_mouse_button_down[0] = true;
+    Sleep(60);
+
+    bool ok = true;
+    for (int step = 1; step <= 12; step++) {
+        if (desktop_check_input_access() != DESKTOP_ACCESS_OK) {
+            if (out_error) *out_error = ERROR_BUSY;
+            ok = false;
+            break;
+        }
+        int x = x1 + (int)(((long long)x2 - x1) * step / 12);
+        int y = y1 + (int)(((long long)y2 - y1) * step / 12);
+        if (!input_inject_move(x, y, out_error)) { ok = false; break; }
+        Sleep(12);
+    }
+    button.mi.dwFlags = MOUSEEVENTF_LEFTUP;
+    if (desktop_check_input_access() == DESKTOP_ACCESS_OK) {
+        if (SendInput(1, &button, sizeof(button)) == 1) {
+            s_mouse_button_down[0] = false;
+        } else {
+            if (out_error) *out_error = GetLastError() ? GetLastError() : ERROR_GEN_FAILURE;
+            s_pending_cleanup = true;
+            ok = false;
+        }
+    } else {
+        s_pending_cleanup = true;
+        ok = false;
+    }
+    return ok;
+}
+
+bool input_inject_wheel_norm(double nx, double ny, int delta,
+                             int rect_x, int rect_y, int rect_w, int rect_h,
+                             DWORD* out_error) {
+    if (out_error) *out_error = 0;
+    if (delta == 0 || delta < -1200 || delta > 1200) {
+        if (out_error) *out_error = ERROR_INVALID_PARAMETER;
+        return false;
+    }
+    int x, y;
+    input_map_coordinates(nx, ny, rect_x, rect_y, rect_w, rect_h, &x, &y);
+    if (!input_inject_move(x, y, out_error)) return false;
+    INPUT wheel = { 0 };
+    wheel.type = INPUT_MOUSE;
+    wheel.mi.mouseData = (DWORD)delta;
+    wheel.mi.dwFlags = MOUSEEVENTF_WHEEL;
+    if (SendInput(1, &wheel, sizeof(wheel)) != 1) {
+        if (out_error) *out_error = GetLastError() ? GetLastError() : ERROR_GEN_FAILURE;
+        return false;
+    }
+    return true;
+}
+
 bool input_inject_move(int x, int y, DWORD* out_error) {
     if (out_error) *out_error = 0;
 

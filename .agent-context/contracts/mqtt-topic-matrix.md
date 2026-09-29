@@ -1,5 +1,12 @@
 # MQTT: remote control, console и presence
 
+## 2026-09-30 addition
+
+`l4con` (`extra_service`) publishes event 75 to `dev/{SN}/evt` with QoS 1
+and retain false. The payload and tags are documented in
+[event 75 inventory](../../docs/term_tool-event75-inventory.md). This does
+not change `dev/{SN}/svc` presence or console RPC topics.
+
 ## Назначение
 Сжатая матрица утверждённых топиков этих flow. Не разрешает остальные топики платформы.
 

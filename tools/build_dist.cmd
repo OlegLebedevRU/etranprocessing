@@ -156,6 +156,13 @@ if errorlevel 1 (
     echo [ERROR] l4setup compilation failed!
     exit /b 1
 )
+if defined L4TOOLS_SIGN_PFX (
+    powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0release\Sign-Executables.ps1" -TargetPath "%~dp0l4setup\bin\l4setup.exe"
+    if errorlevel 1 (
+        echo [ERROR] l4setup signing failed!
+        exit /b 1
+    )
+)
 
 if not exist "%~dp0dist" md "%~dp0dist"
 copy /y "%~dp0l4setup\bin\l4setup.exe" "%~dp0dist\l4setup.exe" >nul

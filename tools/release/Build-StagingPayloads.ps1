@@ -209,6 +209,10 @@ foreach ($arch in @("x86", "x64")) {
 
     Write-Host "  [OK] Staged files for $arch."
 
+    if ($env:L4TOOLS_SIGN_PFX) {
+        & "$PSScriptRoot\Sign-Executables.ps1" -TargetPath $targetStage
+    }
+
     # Pack into zip payload
     $outBin = "$ResDir\payload_$arch.bin"
     $stageCopyBin = "$StageDir\payload_$arch.bin"

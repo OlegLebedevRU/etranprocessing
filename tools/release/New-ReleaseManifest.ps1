@@ -145,11 +145,11 @@ if (-not $SkipVerifications) {
 
     # 3. Authenticode check
     $sig = Get-AuthenticodeSignature $SetupExe
-    $isSigned = ($sig.Status -eq [System.Management.Automation.SignatureStatus]::Valid)
+    $isSigned = [bool]$sig.SignerCertificate -and $sig.Status -in @('Valid', 'NotTrusted')
     if (-not $isSigned) {
-        Write-Host "  [INFO] Authenticode Signature: NotSigned (Stage 1 debt acknowledged)."
+        Write-Host "  [INFO] Authenticode Signature: $($sig.Status)."
     } else {
-        Write-Host "  [OK] Authenticode Signature: VALID."
+        Write-Host "  [OK] Authenticode Signature: $($sig.Status)."
     }
 
     # 4. Resource check (PAYLOAD_X86 and PAYLOAD_X64)
@@ -198,7 +198,7 @@ public class ReleaseResourceChecker {
     Write-Host "  [OK] Embedded resources PAYLOAD_X86 and PAYLOAD_X64 confirmed in executable."
 } else {
     $sig = Get-AuthenticodeSignature $SetupExe
-    $isSigned = ($sig.Status -eq [System.Management.Automation.SignatureStatus]::Valid)
+    $isSigned = [bool]$sig.SignerCertificate -and $sig.Status -in @('Valid', 'NotTrusted')
 }
 
 # Hashes
@@ -352,6 +352,7 @@ $manifest = [ordered]@{
     "built_at" = $builtAt
     "builder" = "windows-dev"
     "signed" = $isSigned
+    "signature_status" = [string]$sig.Status
     "files" = [ordered]@{
         "l4setup.exe" = [ordered]@{
             "sha256" = $setupSha

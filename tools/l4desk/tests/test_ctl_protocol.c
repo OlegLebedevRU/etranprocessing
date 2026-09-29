@@ -224,8 +224,9 @@ static void test_protocol_payloads(void) {
     len = ctl_build_extended_presence_payload(buf, sizeof(buf), "online", true, &sm, &inv, &sinfo);
     ASSERT_TRUE(len > 0);
     ASSERT_TRUE(strstr(buf, "\"type\":\"presence\"") != NULL);
-    ASSERT_TRUE(strstr(buf, "\"version\":\"1.7.6\"") != NULL);
-    ASSERT_TRUE(strstr(buf, "\"capabilities\":[\"quick_actions\",\"shortcut_action\",\"right_click\"]") != NULL);
+    ASSERT_TRUE(strstr(buf, "\"version\":\"1.9.2\"") != NULL);
+    ASSERT_TRUE(strstr(buf, "\"mouse_drag\"") != NULL);
+    ASSERT_TRUE(strstr(buf, "\"mouse_wheel\"") != NULL);
     ASSERT_TRUE(strstr(buf, "\"inventory\"") != NULL);
     ASSERT_TRUE(strstr(buf, "\"disp:12345678\"") != NULL);
     ASSERT_TRUE(strstr(buf, "\"cam:87654321\"") != NULL);
@@ -341,6 +342,18 @@ static void test_command_handling_validation(void) {
     const char* cmd_click = "{\"v\":1,\"type\":\"mouse_click\",\"command_id\":\"clk_001\",\"lease_id\":\"l1\","
                             "\"desktop_id\":\"disp:11223344\",\"stream_instance_id\":\"s1\",\"x\":0.5,\"y\":0.5}";
     ASSERT_TRUE(ctl_handle_command(cmd_click, strlen(cmd_click), "TERM001", &inv, resp, sizeof(resp), &resp_len, &should_pub, &qos));
+    ASSERT_TRUE(should_pub);
+    ASSERT_TRUE(strstr(resp, "\"code\":\"stream_mismatch\"") != NULL);
+
+    const char* cmd_drag = "{\"v\":1,\"type\":\"mouse_drag\",\"command_id\":\"drag_001\",\"lease_id\":\"l1\","
+                           "\"sn\":\"TERM001\",\"x\":100,\"y\":200,\"to_x\":300,\"to_y\":400}";
+    ASSERT_TRUE(ctl_handle_command(cmd_drag, strlen(cmd_drag), "TERM001", &inv, resp, sizeof(resp), &resp_len, &should_pub, &qos));
+    ASSERT_TRUE(should_pub);
+    ASSERT_TRUE(strstr(resp, "\"code\":\"stream_mismatch\"") != NULL);
+
+    const char* cmd_wheel = "{\"v\":1,\"type\":\"mouse_wheel\",\"command_id\":\"wheel_001\",\"lease_id\":\"l1\","
+                            "\"sn\":\"TERM001\",\"x\":100,\"y\":200,\"delta\":-120}";
+    ASSERT_TRUE(ctl_handle_command(cmd_wheel, strlen(cmd_wheel), "TERM001", &inv, resp, sizeof(resp), &resp_len, &should_pub, &qos));
     ASSERT_TRUE(should_pub);
     ASSERT_TRUE(strstr(resp, "\"code\":\"stream_mismatch\"") != NULL);
 

@@ -1,0 +1,17 @@
+---
+name: l4-browser-terminal-event-e2e
+description: Trace an L4 terminal action across the browser, app1/MQTT, terminal logs, and IoT DeviceEvent records; use for end-to-end control, video, and telemetry investigations.
+---
+
+# L4 browser → terminal → event check
+
+Use this when an L4 workflow must be verified on a real terminal. First read the relevant component cards and protocol contracts from `.agent-context`, and obey the repository's terminal and MQTT access rules. A successful browser action alone is not end-to-end proof.
+
+1. In an authenticated browser session, identify the exact terminal and source. Capture the before state. For interactive control, record the outbound WebSocket message types and parameters without copying credentials or session tokens. Perform only the user-authorized action; capture the after state. End the control lease and video stream when done.
+2. Trace the same time window through MenuBuilder/app1 and the terminal. For terminal logs, use `l4mcp` exact-device inspection and console preflight before a bounded, read-only `console_run`. Filter by time, command type, and command ID. Confirm whether the command reached l4desk, and distinguish transport failure from input injection failure. If `l4mcp` is unavailable, use the approved runbook; do not infer delivery from the browser alone.
+3. For telemetry, inspect the actual IoT event record, not just the terminal's publish log. In the Classic portal, **Интеграции → Подключение по API** shows the organization API key. Reuse an existing key when authorized. Creating, rotating, or revoking a key changes external authentication state and requires task authorization. Never print the key, place it in a tool command, save it in a tracked file, or return it in a diagnostic error. The current app1 API expects the raw value in `X-API-Key`; the older example that prefixes the header value with `ApiKey ` is inconsistent with `app-service/api/api_v1/api_depends.py`.
+4. Query `GET /api/v1/device-events/?device_id=<ID>&events_include=<CODE>` on app1 with the organization key. If the public documented hostname routes to legacy IIS or a certificate mismatch, use the approved server route to app1. Pass the key to any helper over stdin or another private in-memory channel. Catch and sanitize HTTP client errors because some clients echo request headers. Do not treat a 200 HTML fallback as an API response. For event 75, inspect `payload["300"]` and tags `440`–`445`, plus server event ID and timestamp.
+5. Compare event fields with the actual terminal files. `state.json.installed_version` may be stale; compare `install_summary.json` after a successful setup and the executable's PE version, size, SHA256, and file time. The installed package version and each component's PE version are different facts. On a terminal, package extraction may install only the selected architecture as the `default` path; missing `x86`/`x64` siblings do not by themselves mean a failed install.
+6. Report one evidence chain: browser action → outbound command → app1/MQTT forwarding when observable → terminal log/injection → visible result → IoT event where applicable. Include timestamps with time zones, event ID, mismatches, and any unverified hop. Clean up temporary helpers, sessions, and credentials created solely for the test.
+
+For a changed protocol, verify both producer and consumer and update the relevant protocol documents in the same task. Tests on unchanged tools are unnecessary when only another tool changed.

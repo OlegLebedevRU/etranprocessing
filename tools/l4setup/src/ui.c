@@ -1,11 +1,13 @@
 #include "ui.h"
 #include "engine.h"
+#include "unpack.h"
 #include "log.h"
 #include "../res/resource.h"
 #include <commctrl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <winver.h>
 
 #pragma comment(lib, "comctl32.lib")
 
@@ -159,6 +161,58 @@ static void append_text_to_edit(HWND hEdit, const wchar_t* text) {
     SendMessageW(hEdit, EM_SCROLLCARET, 0, 0);
 }
 
+static void show_installed_tool_versions(HWND hDlg) {
+    static const struct { const wchar_t* name; const wchar_t* path; } tools[] = {
+        { L"l4capture", L"l4capture\\bin\\l4capture.exe" },
+        { L"l4con", L"l4con\\l4con.exe" },
+        { L"l4desk", L"l4desk\\l4desk.exe" },
+        { L"l4pin", L"l4pin\\l4pin.exe" },
+        { L"l4sql", L"l4sql\\l4sql.exe" },
+        { L"l4superv", L"l4superv\\l4superv.exe" },
+        { L"leo4proxy", L"leo4proxy\\leo4proxy.exe" },
+        { L"mosquitto", L"mosquitto\\mosquitto.exe" },
+        { L"ffmpeg", L"ffmpeg\\ffmpeg.exe" },
+        { L"l4setup", L"l4setup.exe" },
+    };
+    HWND details = GetDlgItem(hDlg, IDC_EDIT_DETAILS);
+    char package[64] = { 0 };
+    unpack_read_installed_version(g_ui_ctx.opts->dest, package, sizeof(package));
+    wchar_t line[256];
+    swprintf_s(line, 256, L"Installed package (state.json): %hs", package[0] ? package : "unknown");
+    append_text_to_edit(details, line);
+    for (size_t i = 0; i < sizeof(tools) / sizeof(tools[0]); i++) {
+        wchar_t path[MAX_PATH];
+        if (wcscmp(tools[i].name, L"l4setup") == 0) {
+            if (!GetModuleFileNameW(NULL, path, MAX_PATH)) continue;
+        } else if (swprintf_s(path, MAX_PATH, L"%ls\\%ls",
+                              g_ui_ctx.opts->dest, tools[i].path) < 0) continue;
+        const wchar_t* version = L"missing";
+        wchar_t version_buf[64];
+        if (GetFileAttributesW(path) != INVALID_FILE_ATTRIBUTES) {
+            version = L"unknown";
+            DWORD ignored = 0;
+            DWORD size = GetFileVersionInfoSizeW(path, &ignored);
+            if (size && size <= 65536) {
+                BYTE* block = (BYTE*)malloc(size);
+                VS_FIXEDFILEINFO* info = NULL;
+                UINT length = 0;
+                if (block && GetFileVersionInfoW(path, 0, size, block) &&
+                    VerQueryValueW(block, L"\\", (LPVOID*)&info, &length) &&
+                    length >= sizeof(*info) && info->dwSignature == 0xFEEF04BD) {
+                    swprintf_s(version_buf, 64, L"%u.%u.%u.%u",
+                               HIWORD(info->dwFileVersionMS), LOWORD(info->dwFileVersionMS),
+                               HIWORD(info->dwFileVersionLS), LOWORD(info->dwFileVersionLS));
+                    version = version_buf;
+                }
+                free(block);
+            }
+        }
+        swprintf_s(line, 256, L"  %ls: PE file version %ls (%ls)",
+                   tools[i].name, version, tools[i].path);
+        append_text_to_edit(details, line);
+    }
+}
+
 static INT_PTR CALLBACK MainDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
         case WM_INITDIALOG: {
@@ -240,6 +294,7 @@ static INT_PTR CALLBACK MainDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM l
                        engine_op_type_to_str(g_ui_ctx.op_type),
                        g_ui_ctx.installed_version[0] ? g_ui_ctx.installed_version : "None");
             SetDlgItemTextW(hDlg, IDC_STATIC_VER_INFO, ver_buf);
+            show_installed_tool_versions(hDlg);
 
             wchar_t path_buf[MAX_PATH + 32];
             swprintf_s(path_buf, sizeof(path_buf)/sizeof(wchar_t), L"Destination: %ls", g_ui_ctx.opts->dest);
@@ -357,6 +412,19 @@ static INT_PTR CALLBACK MainDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM l
         case WM_SETUP_FINISHED: {
             g_setup_finished = true;
             KillTimer(hDlg, 1);
+            show_installed_tool_versions(hDlg);
+
+            // Show the version persisted by the completed installation, not the
+            // value captured before the worker started.
+            char installed_version[64] = { 0 };
+            if (unpack_read_installed_version(g_ui_ctx.opts->dest, installed_version,
+                                              sizeof(installed_version))) {
+                wchar_t ver_buf[256];
+                swprintf_s(ver_buf, 256, L"Target Version: %hs | Operation: %hs (Installed: %hs)",
+                           g_ui_ctx.target_version, engine_op_type_to_str(g_ui_ctx.op_type),
+                           installed_version);
+                SetDlgItemTextW(hDlg, IDC_STATIC_VER_INFO, ver_buf);
+            }
 
             SetDlgItemTextW(hDlg, IDC_BTN_ACTION, L"Finish");
             EnableWindow(GetDlgItem(hDlg, IDC_BTN_ACTION), TRUE);

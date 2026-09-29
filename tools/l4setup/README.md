@@ -1,5 +1,16 @@
 # Leo4 Zero-Touch Setup (`l4setup`)
 
+For release 1.9.1, the Details panel lists the installed package version from
+`state.json` and the actual PE file versions of the installed tools. After an
+installation, the panel rereads `state.json` and refreshes this list.
+
+To sign a prepared release from a regular Windows PowerShell session, run
+`tools/release/Complete-SignedRelease.ps1 -PfxPath <PFX path> -Version 1.9.1`.
+This signs every staged EXE, rebuilds both embedded payloads, signs
+`l4setup.exe`, and regenerates the manifest and checksums. The private key
+stays outside the repository. If the PFX is encrypted, set
+`L4TOOLS_SIGN_PFX_PASSWORD` in the process environment before running.
+
 Единый 32-битный bootstrapper-инсталлятор (`l4setup.exe`) терминального стека утилит **Leo4 Tools** для ОС Windows (начиная с Windows 7 SP1 x86/x64 до Windows 11 / Server 2022).
 
 ---

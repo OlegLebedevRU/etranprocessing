@@ -148,6 +148,17 @@ static void test_state_unknown_keys_preservation(void) {
     strcpy_s(st.status, sizeof(st.status), "active");
     strcpy_s(st.last_cert_state, sizeof(st.last_cert_state), "expiring");
 
+    // Setup updates the file while this supervisor state is still in memory.
+    const char* setup_json =
+        "{\"installed_version\":\"1.9.1\",\"custom_int\":42,"
+        "\"custom_str\":\"hello_world\","
+        "\"custom_obj\":{\"nested\":\"val\",\"count\":10},"
+        "\"flags\":[1,2,3]}";
+    _wfopen_s(&f, state_file, L"wb");
+    assert(f != NULL);
+    assert(fwrite(setup_json, 1, strlen(setup_json), f) == strlen(setup_json));
+    fclose(f);
+
     bool save_ok = state_save(temp_dir, &st);
     assert(save_ok);
 
@@ -159,7 +170,7 @@ static void test_state_unknown_keys_preservation(void) {
     assert(strcmp(st2.status, "active") == 0);
     assert(strcmp(st2.last_cert_state, "expiring") == 0);
     assert(strcmp(st2.sn, "TEST_SN_999") == 0);
-    assert(strcmp(st2.installed_version, "1.6.0") == 0);
+    assert(strcmp(st2.installed_version, "1.9.1") == 0);
     assert(st2.num_unknown_keys == 4);
 
     // Verify unknown keys are preserved in content

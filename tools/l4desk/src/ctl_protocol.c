@@ -68,7 +68,7 @@ int ctl_build_presence_payload(char* buf, size_t max_len,
 
     if (strcmp(status, "online") == 0 && screen) {
         return snprintf(buf, max_len,
-            "{\"v\":1,\"type\":\"presence\",\"agent\":\"l4desk\",\"version\":\"%s\",\"capabilities\":[\"quick_actions\",\"shortcut_action\",\"right_click\"],\"status\":\"online\","
+            "{\"v\":1,\"type\":\"presence\",\"agent\":\"l4desk\",\"version\":\"%s\",\"capabilities\":[\"quick_actions\",\"shortcut_action\",\"right_click\",\"mouse_drag\",\"mouse_wheel\"],\"status\":\"online\","
             "\"desktop_available\":%s,\"screen\":{\"virtual_x\":%d,\"virtual_y\":%d,\"virtual_width\":%d,\"virtual_height\":%d},"
             "\"timestamp\":\"%s\"}",
             L4DESK_VERSION_STR,
@@ -77,7 +77,7 @@ int ctl_build_presence_payload(char* buf, size_t max_len,
             iso_time);
     } else {
         return snprintf(buf, max_len,
-            "{\"v\":1,\"type\":\"presence\",\"agent\":\"l4desk\",\"version\":\"%s\",\"capabilities\":[\"quick_actions\",\"shortcut_action\",\"right_click\"],\"status\":\"%s\","
+            "{\"v\":1,\"type\":\"presence\",\"agent\":\"l4desk\",\"version\":\"%s\",\"capabilities\":[\"quick_actions\",\"shortcut_action\",\"right_click\",\"mouse_drag\",\"mouse_wheel\"],\"status\":\"%s\","
             "\"desktop_available\":%s,\"timestamp\":\"%s\"}",
             L4DESK_VERSION_STR,
             status, desktop_available ? "true" : "false", iso_time);
@@ -96,7 +96,7 @@ int ctl_build_extended_presence_payload(char* buf, size_t max_len,
     DWORD session_id = desktop_get_current_session_id();
 
     int offset = snprintf(buf, max_len,
-        "{\"v\":1,\"type\":\"presence\",\"agent\":\"l4desk\",\"version\":\"%s\",\"capabilities\":[\"quick_actions\",\"shortcut_action\",\"right_click\"],\"status\":\"%s\","
+        "{\"v\":1,\"type\":\"presence\",\"agent\":\"l4desk\",\"version\":\"%s\",\"capabilities\":[\"quick_actions\",\"shortcut_action\",\"right_click\",\"mouse_drag\",\"mouse_wheel\"],\"status\":\"%s\","
         "\"desktop_available\":%s,\"session_id\":%u,",
         L4DESK_VERSION_STR,
         status, desktop_available ? "true" : "false", session_id);
@@ -614,13 +614,15 @@ bool ctl_handle_command(const char* payload, size_t payload_len,
         return false;
     }
 
-    /* 4. Remote input commands: pointer_move, mouse_click, key_event, shortcut_action */
+    /* 4. Remote input commands */
     bool is_move = (strcmp(cmd_type, "pointer_move") == 0);
     bool is_click = (strcmp(cmd_type, "mouse_click") == 0);
+    bool is_drag = (strcmp(cmd_type, "mouse_drag") == 0);
+    bool is_wheel = (strcmp(cmd_type, "mouse_wheel") == 0);
     bool is_key = (strcmp(cmd_type, "key_event") == 0);
     bool is_shortcut = (strcmp(cmd_type, "shortcut_action") == 0);
 
-    if (is_move || is_click || is_key || is_shortcut) {
+    if (is_move || is_click || is_drag || is_wheel || is_key || is_shortcut) {
         char desktop_id[64] = { 0 };
         char stream_instance_id[64] = { 0 };
         json_extract_str(payload, "desktop_id", desktop_id, sizeof(desktop_id));
@@ -768,8 +770,8 @@ bool ctl_handle_command(const char* payload, size_t payload_len,
             ffmpeg_supervisor_update_lease(stream.lease_id, (uint64_t)expires_at_ms);
         }
 
-        /* Handle pointer_move / mouse_click */
-        if (is_move || is_click) {
+        /* Handle pointer_move / mouse_click / mouse_drag / mouse_wheel */
+        if (is_move || is_click || is_drag || is_wheel) {
             double nx = 0.0, ny = 0.0;
             bool has_x = json_extract_double(payload, "x", &nx);
             bool has_y = json_extract_double(payload, "y", &ny);
@@ -785,7 +787,7 @@ bool ctl_handle_command(const char* payload, size_t payload_len,
             }
 
             if (!has_x || !has_y) {
-                if (is_click) {
+                if (!is_move) {
                     int len = ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
                                                      "invalid_payload", "Missing coordinates", now_ms);
                     if (len > 0) {
@@ -814,6 +816,43 @@ bool ctl_handle_command(const char* payload, size_t payload_len,
                                        rect_w, rect_h, &err);
                 *p_should_publish = false;
                 return true;
+            } else if (is_drag || is_wheel) {
+                bool ok = false;
+                if (is_drag) {
+                    int to_x = -1, to_y = -1;
+                    if (json_extract_int(payload, "to_x", &to_x) &&
+                        json_extract_int(payload, "to_y", &to_y) &&
+                        to_x >= 0 && to_x <= 65535 && to_y >= 0 && to_y <= 65535) {
+                        ok = input_inject_drag_norm(nx, ny, (double)to_x / 65535.0,
+                                                    (double)to_y / 65535.0,
+                                                    stream.desktop_rect.left, stream.desktop_rect.top,
+                                                    rect_w, rect_h, &err);
+                    } else {
+                        err = ERROR_INVALID_PARAMETER;
+                    }
+                } else {
+                    int delta = 0;
+                    if (json_extract_int(payload, "delta", &delta) &&
+                        delta != 0 && delta >= -1200 && delta <= 1200) {
+                        ok = input_inject_wheel_norm(nx, ny, delta,
+                                                     stream.desktop_rect.left, stream.desktop_rect.top,
+                                                     rect_w, rect_h, &err);
+                    } else {
+                        err = ERROR_INVALID_PARAMETER;
+                    }
+                }
+                int len = ok
+                    ? ctl_build_ack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn, now_ms)
+                    : ctl_build_nack_payload(out_resp, max_resp, cmd_id, lease_id, own_sn,
+                                             err == ERROR_INVALID_PARAMETER ? "invalid_payload" : "input_injection_failed",
+                                             "Mouse action failed", now_ms);
+                if (len > 0) {
+                    dedup_cache_put(cmd_id, out_resp, (size_t)len, expires_at_ms);
+                    *out_resp_len = (size_t)len;
+                    *p_should_publish = true;
+                    return true;
+                }
+                return false;
             } else {
                 char button[32] = "left";
                 json_extract_str(payload, "button", button, sizeof(button));

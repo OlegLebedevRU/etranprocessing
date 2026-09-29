@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "component": "l4tools",
+  "version": "1.9.1",
+  "git_sha": "1a06f6c13091b985f1e0596d4d36f385c35bb9f8",
+  "published_at": "2026-09-29T21:13:50.879401+00:00",
+  "publisher": "publish_l4tools-cli",
+  "registry_url": "https://l4tools-generic.ar.cloud.ru",
+  "urls": {
+    "l4setup.exe": "https://l4tools-generic.ar.cloud.ru/l4tools/1.9.1/l4setup.exe",
+    "SHA256SUMS": "https://l4tools-generic.ar.cloud.ru/l4tools/1.9.1/SHA256SUMS",
+    "l4tools-release.json": "https://l4tools-generic.ar.cloud.ru/l4tools/1.9.1/l4tools-release.json"
+  },
+  "sha256": {
+    "l4setup.exe": "7e7b28bc937373aaf0ec61c40d078b12bed6a415c56d9326653d91d28ee1684c",
+    "SHA256SUMS": "a9d7438cc5e09b9a3490ddf5aa88183b2c5529b3ddc0f35c68874d941d963ae0",
+    "l4tools-release.json": "89d1edf25eed1f2c5172be3f549cc84bf7ee7727b018e6dd110e4e464a82578b"
+  },
+  "size": {
+    "l4setup.exe": 29462208,
+    "SHA256SUMS": 165,
+    "l4tools-release.json": 1356
+  },
+  "registry_digest_verified": true,
+  "signed": true,
+  "dirty": true
+}

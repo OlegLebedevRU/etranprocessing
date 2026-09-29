@@ -2,6 +2,20 @@
 
 All notable changes to the `l4con` component will be documented in this file.
 
+## [1.7.3] - 2026-09-30
+
+- Event 75 includes installed EXE versions, sizes, UTC modification times,
+  SHA-256 hashes, and the package version from state.json. The agent scans
+  every 60 seconds and publishes changes.
+
+## Unreleased
+
+### Added
+- Системное событие 75 после MQTT CONNACK и подтверждения совпадения активной личности Leo4Proxy с локальным сертификатом. `extra_service` presence в `dev/{SN}/svc` сохранён.
+
+### Changed
+- MQTT-соединение переведено на v5, чтобы передавать свойства события без изменения app1. CONNECT, Will, SUBSCRIBE и входящий PUBLISH используют MQTT 5 framing.
+
 ## [1.7.2] - 2026-09-14
 
 ### Changed
@@ -48,3 +62,6 @@ All notable changes to the `l4con` component will be documented in this file.
   - Streaming stdout/stderr output chunking with sequence numbers.
 - **Dynamic SN Discovery**: Queries `GET http://127.0.0.1:18443/_leo4/info` to obtain device SN upon startup.
 - **Windows SCM Service Integration**: Runs as `L4Con` background service.
+## [1.9.2] - 2026-09-30
+
+- Поле 445 события 75 берёт версию установленного пакета из успешного `install_summary.json`, если `state.json` содержит устаревшую версию.

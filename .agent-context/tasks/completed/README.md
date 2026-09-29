@@ -5,6 +5,8 @@
 Логи/длинные исследования — docs/history; secrets и connection profile запрещены.
 
 ## Индекс
+- [2026-09-30 — L4 Tools 1.9.2 and remote control deployment review](2026-09-30-l4tools-192-deploy-review.md):
+  source and registry provenance, deployment evidence, browser trace and remaining terminal visual check.
 - [2026-09-27 — 17F grace runtime](2026-09-27-l4d-17f-grace-runtime.md):
   monthly charge, blocked stop живого видео и mock recovery; общая
   приёмка 17F остаётся отдельным gate.

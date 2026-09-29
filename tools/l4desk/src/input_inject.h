@@ -23,6 +23,12 @@ bool input_inject_move_norm(double nx, double ny,
 bool input_inject_click_norm(double nx, double ny, const char* button,
                              int rect_x, int rect_y, int rect_w, int rect_h,
                              DWORD* out_error);
+bool input_inject_drag_norm(double start_x, double start_y, double end_x, double end_y,
+                            int rect_x, int rect_y, int rect_w, int rect_h,
+                            DWORD* out_error);
+bool input_inject_wheel_norm(double nx, double ny, int delta,
+                             int rect_x, int rect_y, int rect_w, int rect_h,
+                             DWORD* out_error);
 
 /* Legacy raw coordinate helpers */
 bool input_inject_move(int x, int y, DWORD* out_error);

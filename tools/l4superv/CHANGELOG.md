@@ -125,3 +125,6 @@ All notable changes to the `l4superv` and `l4install` suite will be documented i
 - **State Management**:
   - Atomic JSON persistence in `state.json`.
   - Non-destructive CLI diagnostics (`l4superv.exe --status`, `l4superv.exe --check`).
+## [1.9.2] - 2026-09-30
+
+- Сохранение `state.json` учитывает актуальную версию пакета на диске после работы `l4setup` и заменяет файл атомарно.
