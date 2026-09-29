@@ -550,6 +550,25 @@ export function useRemoteControl({
     [status, streamMode, sendWsMessage, onClickResult]
   );
 
+  const sendDrag = useCallback(
+    (x: number, y: number, toX: number, toY: number) => {
+      if (status !== "active" || streamMode !== "desktop") return false;
+      clearMoveThrottle();
+      return sendWsMessage({
+        type: "mouse_drag", x, y, to_x: toX, to_y: toY,
+      });
+    },
+    [status, streamMode, sendWsMessage]
+  );
+
+  const sendWheel = useCallback(
+    (x: number, y: number, delta: number) => {
+      if (status !== "active" || streamMode !== "desktop") return false;
+      return sendWsMessage({ type: "mouse_wheel", x, y, delta });
+    },
+    [status, streamMode, sendWsMessage]
+  );
+
   const sendShortcut = useCallback(
     async (action: "f12" | "alt_f4" | "win_d"): Promise<ClickResult> => {
       if (status !== "active" || streamMode !== "desktop") {
@@ -665,6 +684,8 @@ export function useRemoteControl({
       disable,
       sendMove,
       sendClick,
+      sendDrag,
+      sendWheel,
       sendShortcut,
       sendKey,
       setPresence,
@@ -680,6 +701,8 @@ export function useRemoteControl({
       disable,
       sendMove,
       sendClick,
+      sendDrag,
+      sendWheel,
       sendShortcut,
       sendKey,
     ]

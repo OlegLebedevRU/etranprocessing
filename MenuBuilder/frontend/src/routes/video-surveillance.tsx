@@ -1111,6 +1111,8 @@ function TenantVideoSurveillancePage() {
                   presence: rc.presence,
                   sendMove: rc.sendMove,
                   sendClick: rc.sendClick,
+                  sendDrag: rc.sendDrag,
+                  sendWheel: rc.sendWheel,
                   sendKey: rc.sendKey,
                   busyOwner: rc.busyOwner,
                 }}

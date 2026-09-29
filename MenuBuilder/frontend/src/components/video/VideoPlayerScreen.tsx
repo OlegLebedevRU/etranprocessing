@@ -39,6 +39,8 @@ export interface VideoPlayerScreenProps {
     presence: ControlAgentStatus | null;
     sendMove: (x: number, y: number) => void;
     sendClick: (x: number, y: number) => Promise<any>;
+    sendDrag: (x: number, y: number, toX: number, toY: number) => boolean;
+    sendWheel: (x: number, y: number, delta: number) => boolean;
     sendKey?: (kind: "down" | "up" | "press", vk: number, text?: string) => boolean | Promise<any>;
     busyOwner: string | null;
   };
@@ -279,6 +281,8 @@ export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
         presence={rc.presence}
         sendMove={rc.sendMove}
         sendClick={rc.sendClick}
+        sendDrag={rc.sendDrag}
+        sendWheel={rc.sendWheel}
         sendKey={rc.sendKey}
         isCameraMode={isCameraMode}
         streamMode={streamMode}
