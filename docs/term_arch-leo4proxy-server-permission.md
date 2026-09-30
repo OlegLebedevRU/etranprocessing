@@ -175,10 +175,11 @@ ProcessingBackend владеет вычислением и терминальн�
 | Терминальный Nginx | Использован существующий nginx-mutual-legacy, обслуживающий certificates/licensebilling; nginx -t и reload прошли; policy не зеркалируется на legacy |
 | SHA256 развернутого nginx config | `0d1e52c51718dd67761037c7b4e6041bebd2ba7b0d3e90b9837f270c7f4f6cf4` |
 | Публичный маршрут без сертификата | GET `https://iot-processing.ru/api/leo4proxy/policy` → 401 JSON `Missing client certificate headers`, без redirect и без legacy fallback |
+| Authenticated запрос терминала 773 | По прямому разрешению пользователя GET через `http://127.0.0.1:18443/api/leo4proxy/policy` → 200, application/json, Cache-Control: no-store; SN совпал с локальными /_leo4/info и /_leo4/sn; оба разрешения true, stop_facts=[] |
 | Схема работающего API | OpenAPI содержит GET и Leo4ProxyPolicy, включая outgoing_https_allowed с текущей константой true |
 | Соседние контейнеры | ID, образы и время старта app1, MenuBuilder backend, l4mcp, l4media-ingress и терминального Nginx не изменились |
 
-Успешный ответ 200 с клиентским сертификатом и переключение реального терминала в отключенное состояние на production в этой задаче не проверялись. Выделенные краткосрочные тестовые credentials не выпускались; найденный локальный сертификат действующего терминала не использовался для authenticated deployment test. Оба состояния и отказы identity покрыты локальными и builder-тестами, но это не доказательство authenticated E2E.
+Успешный authenticated ответ проверен через установленный на этой машине leo4proxy и сертификат терминала 773 по прямому указанию пользователя. Локальный proxy вернул ready, certificate_found=true и SN `a4b0000773c82116d210826`; policy вернул тот же SN, v=1, mqtt_rtp_allowed=true, outgoing_https_allowed=true и пустой stop_facts. Сертификат не экспортировался, новые credentials не создавались, identity headers не подменялись. Реальный терминал не переключался в отключенное состояние; этот сценарий и отказы identity по-прежнему покрыты только локальными и builder-тестами.
 
 ## Внедрение leo4proxy по развернутому API
 

@@ -28,10 +28,11 @@
 - [x] Linux builder: 138 backend tests и 31 release-flow test; Ruff/format/Pyright прошли.
 - [x] Read-only scan 12 подготовленных tracked files на credential URLs, private keys и tokens: 0 совпадений.
 - [x] Production: digest/revision/health/restart count; Nginx config SHA, nginx -t/reload; публичный policy без сертификата возвращает 401; схема проверена в работающем OpenAPI; соседние контейнеры не пересозданы.
-- [ ] Authenticated 200 и отключение реального терминала на production не проверялись: выделенные краткосрочные test credentials не выпускались. Действующий локальный сертификат не использовался; оба состояния покрыты настоящей auth dependency с mock DB.
+- [x] По дополнительному прямому разрешению пользователя проверен authenticated GET через установленный leo4proxy на http://127.0.0.1:18443 для терминала 773. Local info/SN: 200, ready, certificate_found=true, a4b0000773c82116d210826; policy: 200, application/json, no-store, оба флага true, stop_facts=[]. Сертификат не экспортировался, headers не подменялись.
+- [ ] Отключение реального терминала на production не проверялось: состояние не менялось. Оба состояния покрыты настоящей auth dependency с mock DB.
 - [ ] Runtime tools, native build и E2E клиентской политики не выполнялись: клиентский код еще не реализован.
 - N/A: MenuBuilder/shared и native checks — код этих компонентов не изменен.
-- Уровень evidence: статический server/tools код, Windows/Linux tests, registry release и production runtime без authenticated terminal success. Production secrets не читались, тестовые credentials не создавались.
+- Уровень evidence: статический server/tools код, Windows/Linux tests, registry release, production runtime и authenticated policy GET через реальный proxy терминала 773. Production secrets не читались, тестовые credentials не создавались.
 
 ## Следующий шаг
 
