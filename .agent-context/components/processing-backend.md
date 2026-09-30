@@ -34,6 +34,8 @@ Payment ledger/balances, terminal requests, certificate audit/discovery и вы�
 ## Проверка
 
 `test_leo4proxy_policy.py` проверяет контракт через настоящую terminal auth dependency с mock DB: активный/отключенный терминал, отсутствие сертификата, serial mismatch, неизвестный SN, запрет выбора чужого SN через query и OpenAPI. `test_nginx_routing_contract.py` проверяет явный маршрут policy и перезапись cert headers. Клиент leo4proxy пока не реализован; release evidence находится в [отчете](../../docs/term_arch-leo4proxy-server-permission.md).
+
+Выпуск 2026-10-01 MSK: source main `1b8fdb5`, builder → registry → production pull, image digest `sha256:20307553eec9231d7724f6df13e6a7eef9bdd40cbf0e46fd3782024bcce1867e`. Windows/Linux: 138 backend tests, quality checks; production: health, revision/digest и публичный unauthenticated 401 проверены. Authenticated 200 на production не проверен. Policy location использует тот же терминальный nginx-mutual-legacy и не содержит mirror.
 Из ProcessingBackend\backend: `uv run pytest`, quality по [матрице](../operations/validation-matrix.md).
 Auth tests используют simulated certificate headers; payment повторы/ошибки/tenant isolation
 проверять в профильных тестах. Shared changes требуют также MenuBuilder и migration checks.
