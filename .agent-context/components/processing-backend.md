@@ -13,6 +13,7 @@ Payment ledger/balances, terminal requests, certificate audit/discovery и вы�
 |---|---|---|---|---|
 | Terminal → backend | mTLS HTTPS через Nginx | payment, techgate, gategauge, licensebilling, certificates | request + X-Client-Cert-DN/Serial | terminal auth/license check |
 | Terminal → backend | HTTPS | GET /api/ListMenuFile | terminal menu request | опубликованная версия/аудит выдачи |
+| Terminal → backend | mTLS HTTPS | GET /api/leo4proxy/policy | v, sn, mqtt_rtp_allowed, outgoing_https_allowed, stop_facts | MQTT/RTP по Terminal.is_active; HTTPS пока всегда true; inactive terminal получает 200; no-store |
 | Backend → shared DB | async SQLAlchemy | payment/ledger/audit | declarative models | owner-scoped запись |
 
 ## Инварианты
@@ -31,6 +32,8 @@ Payment ledger/balances, terminal requests, certificate audit/discovery и вы�
 - [shared models](../../shared/etranprocessing_db/models) — общая схема.
 
 ## Проверка
+
+`test_leo4proxy_policy.py` проверяет контракт через настоящую terminal auth dependency с mock DB: активный/отключенный терминал, отсутствие сертификата, serial mismatch, неизвестный SN, запрет выбора чужого SN через query и OpenAPI. `test_nginx_routing_contract.py` проверяет явный маршрут policy и перезапись cert headers. Клиент leo4proxy пока не реализован; release evidence находится в [отчете](../../docs/term_arch-leo4proxy-server-permission.md).
 Из ProcessingBackend\backend: `uv run pytest`, quality по [матрице](../operations/validation-matrix.md).
 Auth tests используют simulated certificate headers; payment повторы/ошибки/tenant isolation
 проверять в профильных тестах. Shared changes требуют также MenuBuilder и migration checks.
