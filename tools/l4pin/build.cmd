@@ -131,7 +131,17 @@ call :do_http_test x86
 if errorlevel 1 goto :tests_failed
 call :do_http_test x64
 if errorlevel 1 goto :tests_failed
+call :do_gui_test x86
+if errorlevel 1 goto :tests_failed
+call :do_gui_test x64
+if errorlevel 1 goto :tests_failed
 exit /b 0
+
+:do_gui_test
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && rc.exe /nologo /i res /fo obj\%1\app.res res\app.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\%1\ tests\test_gui_layout.c src\cert_discovery.c src\cert_store.c src\xml_utils.c obj\%1\app.res /link /OUT:bin\%1\test_gui_layout.exe ncrypt.lib crypt32.lib advapi32.lib user32.lib gdi32.lib"
+if errorlevel 1 exit /b 1
+bin\%1\test_gui_layout.exe
+exit /b %ERRORLEVEL%
 
 :do_http_test
 cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\%1\ tests\test_http_discovery.c src\url_finder.c src\http_client.c ..\leo4proxy\src\policy_json.c /link /OUT:bin\%1\test_http_discovery.exe winhttp.lib crypt32.lib ws2_32.lib"

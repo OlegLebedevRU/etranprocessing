@@ -1,4 +1,4 @@
-﻿# L4 Tools: стабилизация, UI и выпуск
+# L4 Tools: стабилизация, UI и выпуск
 
 ## Task intake
 - Цель: поднять финальные tools, сохранить l4pin GUI/безопасную замену сертификата,
@@ -52,3 +52,18 @@
 - Далее: конкретная operator-coordinated service stop для controlled runtime; backup перед заменой.
   Потом existing signing handoff (tools/release/README.md), verify signatures+timestamps+hashes,
   publish exact signed package. Не rebuild components после подписания.
+
+- Контрольная точка: последняя UI сборка x86/x64/default exit0; RCDATA SHA256 равны payload. Backup установленного набора сохранён в tools/dist/.runtime-backup/20261002-cascade; службы пока не менялись.
+
+## Контролируемый runtime начат
+
+Оператор остановил службы; проверены SCM Stopped/PID0 и отсутствие native processes.
+После проверки backup SHA заменены только x64 EXE proxy1.7.3/con1.9.5/superv1.9.3/
+pin1.7.3/desk1.9.3. Оператор запустил четыре службы; issuer iot.leo4.ru/SN773,
+ready и MQTT установлены. Сертификаты/PIN не менялись. Оператор отключил773;
+серверный policy false подтверждён через HTTP forwarding18443, ожидается штатный polling.
+Runtime samples/log sizes: tools/dist/.runtime-backup/20261002-cascade/runtime-samples.jsonl.
+Mosquitto log text inaccessible by ACL (SYSTEM-only); size metadata available, ACL unchanged.
+Incoming443 TLS12 with exact certificate pin: HTTP200 before policy denial.
+
+- Runtime deny/allow завершён: все четыре PID прежние, System7034 нет, ready/HTTPS/internal MQTT сохранены;20 UDP dropped без upstream. UI setup/pin приняты пользователем. Финальный pin UI добавлен и собран x86/x64, fixture800x600 failures0; новый x64 pin установлен. Следующий шаг — restage и actual GUI upgrade перед подписью.

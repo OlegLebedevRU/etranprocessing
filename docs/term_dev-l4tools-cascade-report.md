@@ -1,4 +1,4 @@
-﻿# L4 Tools: единый отчёт каскада
+# L4 Tools: единый отчёт каскада
 
 ## Формат отчёта этапа
 
@@ -158,7 +158,7 @@
   API headers и6 library files восстановлены из локального l4capture-debug vendor;
   library SHA256 совпали после копирования. l4capture EXE пересобран из актуального main source.
 - Ограничения: выпуска в registry, установки нового пакета и подписи пока нет.
-- Следующий шаг: полный unsigned build, runtime проверка, операторская подпись и финальная верификация.
+- Следующий шаг: runtime проверка, операторская подпись и финальная верификация.
 
 ## Общий барьер перед выпуском
 
@@ -171,3 +171,63 @@
   Более узкий read-only GUI preview разрешён и выполнен; проверка рабочего cert остаётся невыполненной.
 - После runtime: оператор подписывает existing Complete-SignedRelease.ps1 с RFC3161;
   затем проверяются все signatures/timestamps, staged-vs-embedded hashes и только этот пакет публикуется.
+
+## Контрольная точка перед runtime
+
+- Финальные правки UI пересобраны штатным build.cmd all для x86/x64/default, exit0.
+- Unsigned l4setup1.9.4: 29 521 920 байт. Manifest привязан к исходникам ae36bd86f5f968847998699aea421df63ebe4754; dirty=true отмечает незакоммиченные артефакты сборки.
+- PAYLOAD_X86: 13 265 748 байт; PAYLOAD_X64: 15 993 135 байт.
+  Извлечённые RCDATA побайтно совпали по SHA256 с подготовленными payload.
+- Резервные копии установленного leo4proxy/l4con/l4superv/l4pin/l4desk и mosquitto.conf
+  сохранены до замены в tools/dist/.runtime-backup/20261002-cascade; manifest содержит хеши.
+- Службы, установленные EXE, сертификаты и PIN пока не изменены.
+
+## 08 — Контролируемая установка в боевую папку
+
+- Статус: EXE установлены, запуск оператором ожидается.
+- Проверки: SCM подтвердил остановку Leo4Proxy/mosquitto/L4Con/L4Superv и PID=0;
+  процессы заменяемых native tools отсутствовали. До копирования проверены хеши
+  установленных файлов и резервных копий, после — совпадение с x64 build.
+- Установлены: leo4proxy1.7.3, l4con1.9.5, l4superv1.9.3, l4pin1.7.3, l4desk1.9.3.
+- Сертификаты/PIN не менялись, mosquitto.conf не перезаписывался при копировании.
+- Baseline SCM/log sizes сохранён рядом с backup в runtime-baseline.json.
+- Следующий шаг: оператор запускает proxy → mosquitto → con → superv;
+  затем проверяются identity/ready, PID стабильность, MQTT и policy/log growth.
+
+- После подтверждения запуска: все четыре службы Running; PID proxy197180,
+  mosquitto178000, con219560, superv196820. Первоначальный baseline уже захватил
+  старт proxy/mosquitto, поэтому это не полностью остановленный baseline.
+- Local info: ready, version1.7.3, SN a4b0000773c82116d210826, issuer CN=iot.leo4.ru;
+  policy успешно получена, storage_pending=false, внешнее MQTT подключено.
+- Оператор отключил773. GET /api/leo4proxy/policy через обычный HTTP forwarding
+  leo4proxy вернул200, mqtt_rtp_allowed=false, outgoing_https_allowed=true,
+  stop_facts=[terminal_inactive]. Ожидается штатный polling без рестартов.
+- Текст mosquitto.log не доступен текущему процессу по ACL (только SYSTEM),
+  метаданные размера доступны. ACL не изменялся.
+
+## 09 — Runtime policy и приёмка UI
+
+- Статус: policy deny/allow и визуальная приёмка выполнены; настоящее installer upgrade ожидается.
+- Результат: серверный false применён первым штатным polling, без offline grace;
+  active MQTT стал0, local ready остался ready. После true MQTT восстановился следующим polling.
+- Проверки: неизменные PID четырёх служб в течение цикла, System7034 отсутствуют.
+  Локальный con→mosquitto TCP сохранялся. Входящий443 TLS12 с точным certificate pin дал200
+  до и после запрета; исходящий HTTPS через18443 дал policy200 при запрете.
+ 20 локальных RTP/RTCP datagrams отброшены, upstream connections/bytes не увеличились.
+- Проверки логов: 575 секунд измеренного denied состояния, рост3773 байта;
+  последние293 секунды рост1415 байт (около290 Б/мин, экстраполяция около408 КиБ/сутки).
+  После MQTT recovery размер не менялся в оставшемся наблюдении.
+  Это измерение короткого окна, не гарантия долгосрочной ротации. ACL оставлен неизменным.
+  У con/superv/proxy файлы stdout logs в собственных каталогах отсутствуют;
+  это не доказательство отсутствия любых Windows/внешних журналов.
+- UI: пользователь принял новый setup preview и финальный pin UI.
+  l4pin выделяет Terminal0000773 из стандартного CN, сохраняет ведущие нули,
+  показывает O/OU; увеличены PIN/Force, work-area fit и размер кнопок.
+  [Снимок текущего l4pin](assets/l4pin-ui-1.7.3.png).
+- Проверки l4pin: x86/x64/default сборки, certificate8/8, HTTP/profile fixtures;
+  native GUI fixture x86/x64 на800x600 с taskbar40px: окно713x534,
+  PIN font33px, все контролы внутри client, failures0. Issuance/store в fixture выключены.
+  Обновлённый x64 pin EXE установлен с hash match; службы при этой замене не перезапускались.
+- Ограничения: настоящий активный RTP session не создавался; проверены deny/drain/no-connect.
+  Перевыпуск боевого сертификата/cleanup пользовательских MY не выполнялся.
+- Следующий шаг: restage1.9.4 с финальным pin, настоящее UI upgrade, operator signing RFC3161.

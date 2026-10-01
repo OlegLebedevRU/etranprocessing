@@ -1,4 +1,12 @@
 # l4con
+## 2026-10-02: stabilization cascade (1.9.5)
+
+Source ae36bd86f5f968847998699aea421df63ebe4754: bounded NO_PROXY proxy discovery,
+strict ready/certificate JSON and SN validation. MQTT extra_service presence,
+4096-character commands and user-event IPC/Job/rate/payload contracts unchanged.
+x86/x64 builds, MQTT5, discovery and user-event fixtures passed. x64 installed
+in C:\l4tools\l4con after operator stopped services; operator restarted, PID219560.
+Production event E2E was not repeated in this cascade. See cascade report/runtime handoff.
 
 ## 2026-10-01: command buffers (1.9.4)
 
