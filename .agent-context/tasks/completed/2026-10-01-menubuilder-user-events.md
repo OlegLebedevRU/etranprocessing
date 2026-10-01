@@ -45,8 +45,16 @@ tenant1; это не gate реализации MenuBuilder. Временный M
 
 ## Выпуск
 
-Статус на момент подготовки: проверки/выпуск выполняются. Итоговые SHA,
-digest, health и стабильность соседей дописать после фактического deploy.
+Развёрнуто2026-10-01 около19:38UTC. Source SHA
+`4a730fb7ba3ddf5526839e1880d8d2168332ae39` принят в main; образ
+`sha256:59e2bc7214d88cfd42418f61a62126a9c55dc3dcc633c72f08be18e5aa1bbafa`.
+Builder176 повторил CI/backend checks и опубликовал образ. Deployer подтвердил
+revision label, image ID и health после штатного повторного стартового poll.
+На production новый маршрут в OpenAPI, без bearer401; restart-count0,
+startup complete,0 ERROR/Traceback в окне проверки. Только menubuilder-backend
+сменил ID; app1, l4mcp и остальные соседи сохранили прежние ID. При authenticated
+E2E reader будет проверен на реальном новом событии; эта проверка не заявляется
+выполненной сейчас.
 Rollback — previous MenuBuilder image; миграции для этого изменения нет.
 Рабочие773 и его службы не останавливались, событий не отправляли.
 Worktree сохраняется для дальнейшего MCP этапа.

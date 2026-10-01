@@ -2,7 +2,7 @@
 
 Дата: 2026-10-01. Статус: IoT реализован, принят в master и развёрнут
 по отдельной команде пользователя «деплой», source SHA `2cda32f`.
-MenuBuilder reader реализован локально, выпуск выполняется отдельным этапом;
+MenuBuilder reader развёрнут через176/registry/pull, source SHA `4a730fb`;
 l4mcp ещё не изменён. Результаты выпуска IoT и
 оставшиеся runtime проверки записаны в `docs/user-event-history-iot-handoff.md`
 репозитория IoT. Перенос проверен локально; положительный runtime поиск
@@ -328,3 +328,14 @@ server-derived X-Org-Id и internal key. Для reader не передаются
 Порядок выпуска: уже развёрнутый IoT → MenuBuilder через176/registry/pull
 только menubuilder-backend → l4mcp тем же путём, только его контейнер → E2E.
 Native l4con/l4tools и конфигурация773 в этом этапе не изменяются.
+
+## Выпуск MenuBuilder 2026-10-01
+
+Source `4a730fb7ba3ddf5526839e1880d8d2168332ae39` принят в main.
+Digest `sha256:59e2bc7214d88cfd42418f61a62126a9c55dc3dcc633c72f08be18e5aa1bbafa`.
+Локально590 tests passed, Ruff/format/Pyright прошли; builder повторил checks,
+собрал и опубликовал образ, production pull/deployer подтвердил health/image.
+Новый route есть в OpenAPI; без bearer401. Restart-count0, startup без ошибок,
+соседние контейнеры не пересоздавались. Новых миграций MenuBuilder нет.
+Positive history/E2E выполняются после шага3 на773 tenant1 с новым временным
+MCP token; сейчас native службы и сертификат не менялись.
