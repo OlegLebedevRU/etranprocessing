@@ -9,6 +9,7 @@ from l4mcp.access import current_principal
 from l4mcp.config import load_config
 from l4mcp.console_tools import register_console_tools
 from l4mcp.db import Database
+from l4mcp.event_tools import register_event_tools
 from l4mcp.pin_tools import register_pin_tools
 from l4mcp.reports import (
     report_balance_by_terminal,
@@ -40,6 +41,7 @@ async def app_lifespan(server):
 mcp = FastMCP("L4mcp", lifespan=app_lifespan)
 register_pin_tools(mcp)
 register_console_tools(mcp)
+register_event_tools(mcp)
 
 
 def _report_scope_required(

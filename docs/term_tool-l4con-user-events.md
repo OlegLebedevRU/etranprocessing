@@ -88,7 +88,10 @@ $LASTEXITCODE
 ## Использование из l4mcp
 
 Сначала `console_preflight(device_id=<точный ID>)`, затем штатный
-`console_run` с тем же ID. Нового MCP-инструмента или endpoint нет:
+`console_run` с тем же ID. Это прежний явный способ отправки; дополнительно
+реализованы console_send_event и terminal_events_search с tenant-scoped
+историей. Контракт: [l4mcp user events](menu_arch-l4mcp-user-events-plan.md#реализованный-интерфейс-l4mcp).
+Пример raw console_run:
 
 ```json
 {

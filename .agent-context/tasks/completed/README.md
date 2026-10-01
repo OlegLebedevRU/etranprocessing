@@ -6,6 +6,9 @@
 
 ## Индекс
 
+- [2026-10-01 — l4mcp900–999](2026-10-01-l4mcp-user-events.md):
+  структурированная отправка, read-only tenant history, корреляция и E2E.
+
 - [2026-10-01 — MenuBuilder history900–999](2026-10-01-menubuilder-user-events.md):
   tenant-scoped MCP reader, internal IoT integration и план следующего E2E.
 

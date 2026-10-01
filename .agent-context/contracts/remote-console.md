@@ -42,6 +42,15 @@ Read-only preset/ping сначала; exec → seq/eof/res, duplicate task, stal
 max output, TTL kill, cancel/reconnect и lost consumer. Process kill только test-owned PID.
 
 ## Известные риски и незавершённые вопросы
+
+2026-10-01: l4mcp добавляет console_send_event через тот же lease/executor;
+correlation_id возвращается с console_session_id, raw command не дополняется.
+Только фиксированный безопасно сгенерированный вызов имеет cap4096 (IoT API);
+raw console_run сохраняет cap2048. История900–999 читается через MenuBuilder,
+без lease и event offset; UUID448 не является правом доступа. Пустая история
+773 после IoT migration объясняется неизвестным tenant старых строк; новые
+строки получают tenant. Проверки и состояние:
+[план](../../docs/menu_arch-l4mcp-user-events-plan.md).
 Текущие l4con/app1 handlers не исследованы этой карточкой; matrix — утверждённый документ,
 не runtime evidence. Вывод shell может содержать секреты — редактировать evidence до сохранения.
 

@@ -10,6 +10,7 @@ async def test_read_only_tools_are_distinct_from_mutations() -> None:
         "certificate_summary",
         "inspect_terminals",
         "console_preflight",
+        "terminal_events_search",
         "report_payments_tool",
         "report_balance_by_terminal_tool",
         "report_balance_by_tsp_tool",
@@ -19,6 +20,11 @@ async def test_read_only_tools_are_distinct_from_mutations() -> None:
         assert annotations is not None
         assert annotations.read_only_hint is True
 
-    for name in ("issue_certificate_pins", "revoke_pending_pin", "console_run"):
+    for name in (
+        "issue_certificate_pins",
+        "revoke_pending_pin",
+        "console_run",
+        "console_send_event",
+    ):
         annotations = tools[name].annotations
         assert annotations is None or annotations.read_only_hint is not True

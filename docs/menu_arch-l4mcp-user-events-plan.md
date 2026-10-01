@@ -3,7 +3,7 @@
 Дата: 2026-10-01. Статус: IoT реализован, принят в master и развёрнут
 по отдельной команде пользователя «деплой», source SHA `2cda32f`.
 MenuBuilder reader развёрнут через176/registry/pull, source SHA `4a730fb`;
-l4mcp ещё не изменён. Результаты выпуска IoT и
+l4mcp реализован локально; выпуск и E2E выполняются следующим этапом. Результаты выпуска IoT и
 оставшиеся runtime проверки записаны в `docs/user-event-history-iot-handoff.md`
 репозитория IoT. Перенос проверен локально; положительный runtime поиск
 нового события и перенос отдельного тестового устройства ещё не подтверждены.
@@ -339,3 +339,50 @@ Digest `sha256:59e2bc7214d88cfd42418f61a62126a9c55dc3dcc633c72f08be18e5aa1bbafa`
 соседние контейнеры не пересоздавались. Новых миграций MenuBuilder нет.
 Positive history/E2E выполняются после шага3 на773 tenant1 с новым временным
 MCP token; сейчас native службы и сертификат не менялись.
+
+## Реализованный интерфейс l4mcp
+
+`terminal_events_search(device_id, correlation_id?, events_include?,
+after_event_id?, created_from?, created_to?, limit=50)` — read-only tool.
+Параметра org_id нет. Каждый вызов проверяет текущий API token и читает
+MenuBuilder /api/mcp/events/{device_id}; internal key/IoT DB здесь не используются.
+К исходным items добавлены payload_text, event_exit_code и correlation_id
+из446–448; original payload и server IDs/time сохраняются. Ошибка API
+не заменяется успешным пустым ответом. История не требует online/preflight/lease.
+
+`console_send_event(device_id, event_code=999, payload?, event_exit_code=0,
+correlation_id?, timeout_sec=20)` — изменяющий tool. Тип900–999 обязателен,
+payload передаётся текстом. Int32 вне диапазона/невалидная строка дают−1;
+oversize свыше1024UTF-8 байт исключает payload и задаёт−2 ещё до encoding,
+затем l4con отправляет событие с этим кодом. Событие не отбрасывается.
+NUL в передаваемом argv недопустим. UUID отсутствует —448 отсутствует;
+явно невалидный UUID отклоняется до dispatch.
+
+Используется существующий executor, console preflight, lease и RPC7001.
+Новая отправка дополнительно ограничена tenant principal даже для role1.
+Фиксированный PowerShell5.1 Start-Process передаёт l4con.exe CRT-экранированные
+аргументы одной строкой; данные переносятся UTF-8/base64 и не являются shell
+выражением. CLI не повышает права и не получает новое MQTT-соединение.
+Raw console_run поддерживает cmd/powershell и прежний лимит2048 символа.
+Только сгенерированный вызов ограничен4096 — действующим max_length IoT API;
+timeout1–20s и output cap прежние. Повторов/очереди не добавлено.
+
+console_run принимает correlation_id и возвращает его с console_session_id;
+это не изменяет raw command. При completed/timeout/backend error после
+создания сеанса metadata сохраняется. CLI exit_code, event_exit_code и факт
+записи в IoT — отдельные результаты. Ошибка подтверждения release остаётся
+ошибкой tool, не успешным завершением.
+
+Пример последовательности (UUID выбирает вызывающая система):
+
+```json
+{"tool":"console_send_event","arguments":{"device_id":773,"event_code":991,"payload":"{\"result\":\"ok\"}","event_exit_code":7,"correlation_id":"12345678-1234-1234-1234-123456789abc"}}
+```
+
+```json
+{"tool":"terminal_events_search","arguments":{"device_id":773,"correlation_id":"12345678-1234-1234-1234-123456789abc","limit":50}}
+```
+
+UUID допускает несколько событий этапов. Запись можно читать в новом
+MCP-сеансе; автоматического повторного выполнения команды по отсутствию
+события нет. Payload остаётся недоверенным текстом.
