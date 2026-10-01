@@ -25,8 +25,16 @@
 - [x] Read-only secret scan: совпадения — существующие шаблоны команд и фиктивные ключи backend unit tests; новые credentials не добавлены.
 - [x] PowerShell AST parsing signing scripts и `git diff --check`.
 - [x] Registry version 1.9.3 до подписи: отсутствует (404).
-- [ ] Подпись оператором всех 19 EXE и независимая проверка timestamp/Authenticode.
-- [ ] Публикация immutable 1.9.3 и проверка скачанных файлов, запись release metadata.
+- [x] Оператор выполнил подпись. Независимая проверка всех 19 EXE: Authenticode Valid, присутствует TimeStamperCertificate, `signtool verify /pa /all /tw` exit 0; один signing certificate.
+- [x] Встроенные ресурсы PAYLOAD_X86/X64 извлечены через Win32 resource API: SHA-256 совпадает с manifest и ZIP файлами; все 18 встроенных EXE побайтно совпадают с подписанным stage.
+- [x] Source snapshot `ac320caa518960094e717766129f09103f6e8504` опубликован в main, checkout был clean при генерации подписанного manifest (`dirty=false`).
+- [x] Все три immutable файла 1.9.3 загружены с HTTP 200; registry HEAD digest совпадает. Две GET проверки штатным Python publisher завершились ошибкой неполного тела (28 964 588 и 27 581 627 вместо 29 585 464 байт); результат не объявлялся успешным, файлы не перезаписывались.
+- [x] Независимый HTTPS GET через curl HTTP/1.1 завершён полностью: installer 29 585 464 байта, SHA256SUMS 165 байт, manifest 1 357 байт. Размер и SHA-256 каждого скачанного файла совпадают с локальными; downloaded installer Authenticode Valid с timestamp.
+- [x] После полной проверки вызван штатный `publish_l4tools.py record tools/dist`: запись `artifacts/l4tools/1.9.3.json` и journal `releases.jsonl`, published_at `2026-10-01T12:09:09.379762+00:00`.
 
-## Следующий шаг
-Сначала сохранить проверенный source/build snapshot в базовой ветке и обновить manifest из clean checkout. Затем дать оператору команду `Complete-SignedRelease.ps1`. После его подтверждения независимо проверить все подписи, payload и SHA256, выполнить штатный `deploy/publish_l4tools.py` без `--allow-dirty`, записать результат. Изолированный checkout сохраняется до окончания подписи/публикации.
+## Результат и границы
+- Installer: `https://l4tools-generic.ar.cloud.ru/l4tools/1.9.3/l4setup.exe`.
+- SHA-256: `a0c512355a2348230c35362d8f8f40ae6dd8c4f948190c078b00c99ff881c924`.
+- Публикация завершена; установка общего пакета на терминал не выполнялась. Ранее проверенные отдельные leo4proxy/l4con в боевых папках сохранены.
+- Причина неполных Python GET не установлена; отдельная доработка publisher не входила в задачу. Полнота именно этого выпуска подтверждена независимым скачиванием.
+- Изолированный checkout с подписанными build artifacts сохранён. Автоматическая проверка запретила удаление временных контрольных downloads; они оставлены в `tools/dist/.verify` и исключены локально из Git. PFX/пароль не копировались и не сохранялись агентом.
