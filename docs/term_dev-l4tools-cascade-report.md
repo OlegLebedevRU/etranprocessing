@@ -231,3 +231,37 @@
 - Ограничения: настоящий активный RTP session не создавался; проверены deny/drain/no-connect.
   Перевыпуск боевого сертификата/cleanup пользовательских MY не выполнялся.
 - Следующий шаг: restage1.9.4 с финальным pin, настоящее UI upgrade, operator signing RFC3161.
+
+## 10 — Финальный кандидат для actual upgrade
+
+- Статус: подготовлен; оператору отправлена команда GUI upgrade --no-pin.
+- Исходники: 3a2e48c, предыдущие eca0b8a и ae36bd8 сохранены; push/publish ещё не выполнены.
+- Кандидат1.9.4: setup30 245 376 байт; x86 payload13 551 466, x64 payload16 430 931.
+  Embedded SHA равны payload; l4pin внутри обоих ZIP совпадает с финальными builds.
+  Staged18 EXE. Manifest signed=false; подписи/registry — следующие этапы.
+- Runtime state сообщает installed_version1.7.2 (индивидуальные EXE обновлялись отдельно).
+  Обычный запуск должен выбрать Upgrade к1.9.4; сертификат сохраняется, PIN не предоставляется.
+- После actual upgrade: summary/state, хеши установленного набора, services/ready/identity,
+  отсутствие ошибочных7034; затем existing Complete-SignedRelease.ps1 с RFC3161.
+- После подписи components не rebuild. Если actual upgrade уже установил unsigned1.9.4,
+  установка финального signed набора выполняется явным Repair того же пакета.
+
+## 11 — Настоящее обновление l4setup
+
+- Статус: выполнен, код0/status ready/phase finish.
+- Результат: оператор выполнил GUI Upgrade --no-pin; state/package обновлён до1.9.4.
+- Проверки: все9 установленых x64 EXE SHA совпадают с финальным staging.
+  Четыре службы Running; drainage перечисляет остановку superv/con/mosquitto/proxy,
+  processes_killed=[]; System7034 при обновлении отсутствуют.
+  Proxy ready с прежними SN/сертификатом; MQTT и media policy разрешены.
+- Сертификат: state valid/reused=true/reissued=false; боевой сертификат не перевыпускался.
+  Штатные ROOT CA/firewall этапы installer выполнены, summary сообщает true.
+- Smoke: proxy_info/mosquitto_port/ffmpeg_smoke_capture ok; l4desk_running=true,
+  network reachable, remote_input available. Это результаты штатных локальных probes,
+  не E2E удалённого ввода или активного RTP stream.
+- Ограничения: текущая ОС Windows10 Home19045 x64, а исходный fail case был Win10Pro;
+  проблемный WPAD/AV фильтр в этом runtime не воспроизводился.
+  Warning pending_reboot_detected; автоматической перезагрузки не было.
+  Actual cancel/rollback и live all-profile certificate cleanup не испытывались.
+- Следующий шаг: operator RFC3161 signature → signature/hash verification;
+  signed Repair при необходимости заменить installed unsigned EXE, затем publish/base push.

@@ -67,3 +67,5 @@ Mosquitto log text inaccessible by ACL (SYSTEM-only); size metadata available, A
 Incoming443 TLS12 with exact certificate pin: HTTP200 before policy denial.
 
 - Runtime deny/allow завершён: все четыре PID прежние, System7034 нет, ready/HTTPS/internal MQTT сохранены;20 UDP dropped без upstream. UI setup/pin приняты пользователем. Финальный pin UI добавлен и собран x86/x64, fixture800x600 failures0; новый x64 pin установлен. Следующий шаг — restage и actual GUI upgrade перед подписью.
+
+- Actual GUI Upgrade --no-pin завершён ready/0, package/state1.9.4; cert reused, все9 x64 SHA совпали со stage. Drainage без kill,7034 отсутствуют. Probes OK, warning pending_reboot_detected. Подпись/registry/base push не выполнялись; далее существующий operator signing script с RFC3161, verify, signed Repair и публикация.
