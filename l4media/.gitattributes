@@ -1,0 +1,2 @@
+# Linux build archives must retain LF even when exported from Windows.
+* text=auto eol=lf

@@ -21,7 +21,7 @@ services:
       - ingress
 
   ingress:
-    image: dev-leo4-ru.cr.cloud.ru/etran/l4media-ingress@sha256:1b9242b290d975e769acd3a35eb5d16a286f91e71b08356458643863c58b1cd7
+    image: ${L4MEDIA_INGRESS_IMAGE:-dev-leo4-ru.cr.cloud.ru/etran/l4media-ingress@sha256:1b9242b290d975e769acd3a35eb5d16a286f91e71b08356458643863c58b1cd7}
     container_name: l4media-ingress
     restart: unless-stopped
     environment:
@@ -44,7 +44,7 @@ services:
       - janus
 
   janus:
-    image: dev-leo4-ru.cr.cloud.ru/l4media-janus@sha256:93265665a92482ec1de2c9571a08d27c87b1dee06efc000f717ed42dfe2438ae
+    image: ${L4MEDIA_JANUS_IMAGE:-dev-leo4-ru.cr.cloud.ru/l4media-janus@sha256:93265665a92482ec1de2c9571a08d27c87b1dee06efc000f717ed42dfe2438ae}
     container_name: l4media-janus
     restart: unless-stopped
     environment:

@@ -4,6 +4,11 @@
 
 ### Added
 
+- Consolidated the accepted 18D source-build/registry scripts and historical
+  handoff into main without replacing newer ingress lifecycle code or rolling
+  back pinned image digests. Optional image overrides come from private env;
+  Janus rebuild remains an explicitly requested operation.
+
 - Перенесены в репозиторий уже работавшие на сервере Redis-сохранение медиасессий и маршрутов, а также проверка существующего Janus mountpoint перед повторным использованием.
 - Авторизованный сервисный `POST /api/v1/media/sessions/renew` продлевает TTL единственной активной медиасессии по SN после подтверждения lease keepalive.
 - Авторизованный сервисный `POST /api/v1/media/sessions/stop` штатно удаляет активную медиасессию по SN после остановки потока.

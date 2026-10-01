@@ -1,5 +1,16 @@
 # l4media
 
+## 2026-10-01: consolidation of accepted18D build flow
+
+Source-built Janus Dockerfile/private entrypoint, registry scripts, immutable
+baseline and historical18D handoff restored into main. Newer ingress lifecycle
+code/current digest defaults retained; optional image overrides use env.
+Routine builds reuse the frozen Janus digest; a rebuild requires explicit scope.
+Image-layer scanner rejects unrecognized layouts instead of claiming success.
+Linux C unit/build, script syntax, scanner tests and quality checks passed;
+actual image smoke was not rerun (local Docker engine unavailable). No deploy.
+See [consolidation handoff](../tasks/completed/2026-10-01-server-stack-consolidation.md).
+
 ## Назначение
 Медиаконтур приёма терминального видеопотока и доставки в browser через Janus/WebRTC.
 
