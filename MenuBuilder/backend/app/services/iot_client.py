@@ -5,8 +5,10 @@ from typing import Any
 
 import httpx
 from fastapi import HTTPException, status
+from pydantic import ValidationError
 
 from app.config import settings
+from app.schemas.mcp_events import UserEventFilters, UserEventPage
 
 logger = logging.getLogger(__name__)
 
@@ -219,6 +221,37 @@ class IotPlatformClient:
         return next(
             (item for item in items if item.get("device_id") == device_id), None
         )
+
+    async def search_user_events(
+        self, device_id: int, org_id: int, filters: UserEventFilters
+    ) -> UserEventPage:
+        """Read history with server-derived tenant headers and no consumer offset."""
+        if not self.base_url or not self.service_token or org_id <= 0:
+            raise HTTPException(status_code=503, detail="IoT event history unavailable")
+        params: list[tuple[str, str]] = [("device_id", str(device_id))]
+        for key, value in filters.model_dump(mode="json", exclude_none=True).items():
+            if isinstance(value, list):
+                params.extend((key, str(item)) for item in value)
+            else:
+                params.append((key, str(value)))
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.get(
+                    f"{self.base_url}/api/internal/v1/device-events/search",
+                    params=tuple(params),
+                    headers=self._get_headers(org_id=org_id),
+                )
+                response.raise_for_status()
+                page = UserEventPage.model_validate(response.json())
+            if len(page.items) > filters.limit or any(
+                item.device_id != device_id for item in page.items
+            ):
+                raise ValueError("Unexpected device or page size in IoT response")
+        except (httpx.HTTPError, ValidationError, ValueError) as exc:
+            raise HTTPException(
+                status_code=503, detail="IoT event history unavailable"
+            ) from exc
+        return page
 
     async def provision_api_key(
         self,

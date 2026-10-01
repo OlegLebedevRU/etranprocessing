@@ -44,6 +44,14 @@ camera/view-only input, stop/unmount timers, late events. См. [матрицу]
 
 ## Известные риски и незавершённые вопросы
 
+2026-10-01: добавлен read-only MCP GET /api/mcp/events/{device_id} для истории
+900–999 через internal IoT search. Token/current tenant проверяются на каждой
+странице; даже superuser не выходит за active tenant. Offline чтение без lease,
+проверяются SN/device binding; API не пишет consumer offset. План и состояние:
+[user events](../../docs/menu_arch-l4mcp-user-events-plan.md),
+[handoff](../tasks/completed/2026-10-01-menubuilder-user-events.md).
+Positive E2E переносится на последующий этап l4mcp по решению пользователя.
+
 Post-18E пакет `093f985` (2026-09-29, развёрнут и принят контроллером): tenant policy для
 Classic/L4Desk и страниц лицензий читается из `orgs` через `/auth/me`; schema
 `028` должна быть установлена до нового MenuBuilder image. Это ограничение

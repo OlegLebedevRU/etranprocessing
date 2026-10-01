@@ -1252,8 +1252,16 @@ async def test_email_provider_failure_and_retry_resilience():
 
 
 @pytest.mark.anyio
-async def test_remote_session_policy_shadow_vs_enforced_mode():
+async def test_remote_session_policy_shadow_vs_enforced_mode(monkeypatch):
     """Verify L4DeskEntitlementPolicy behavior in shadow mode vs enforced mode."""
+    # Keep this blocked scenario outside the new-cycle grace window on any run date.
+    monkeypatch.setattr(
+        FinEntitlementService,
+        "resolve_as_of",
+        staticmethod(
+            lambda tenant_id, as_of=None: as_of or datetime(2026, 9, 15, tzinfo=UTC)
+        ),
+    )
     fake_db = FakeEntitlementDb()
     db = cast(Any, fake_db)
     tenant_id = 510

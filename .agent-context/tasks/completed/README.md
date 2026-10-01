@@ -6,6 +6,9 @@
 
 ## Индекс
 
+- [2026-10-01 — MenuBuilder history900–999](2026-10-01-menubuilder-user-events.md):
+  tenant-scoped MCP reader, internal IoT integration и план следующего E2E.
+
 - [2026-10-01 — l4con user events](2026-10-01-l4con-user-events-handoff.md):
   native IPC/remote Job, теги446–448, ограничение потока и реальная приемка773.
 - [2026-09-30 — Git/release и временные локальные копии](2026-09-30-git-release-local-residue-review.md):

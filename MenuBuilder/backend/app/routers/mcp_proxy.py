@@ -3,20 +3,52 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Annotated, Any
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_user
+from app.auth import get_current_user, resolve_org_id
 from app.config import settings
 from app.database import get_db
 from app.routers.video import _verify_device_access
+from app.schemas.mcp_events import UserEventFilters, UserEventPage
 from app.services.iot_client import iot_client
 
 router = APIRouter()
+
+
+@router.get("/mcp/events/{device_id}", response_model=UserEventPage)
+async def user_event_history(
+    device_id: Annotated[int, Path(gt=0)],
+    filters: Annotated[UserEventFilters, Query()],
+    request: Request,
+    user: dict[str, Any] = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> UserEventPage:
+    """Read one terminal's tenant history, including while the terminal is offline."""
+    _require_mcp_user(request, user)
+    org_id = resolve_org_id(user)
+    terminal = await _verify_device_access(device_id, user, db)
+    # Existing access helpers allow superusers across tenants; this reader does not.
+    if terminal.org_id != org_id:
+        raise HTTPException(status_code=403, detail="Terminal is outside active tenant")
+    try:
+        device = await iot_client.get_console_device(device_id, org_id)
+    except (httpx.HTTPError, ValueError, TypeError, AttributeError) as exc:
+        raise HTTPException(
+            status_code=503, detail="IoT device lookup unavailable"
+        ) from exc
+    if (
+        not isinstance(device, dict)
+        or device.get("device_id") != device_id
+        or not terminal.sn
+        or device.get("sn") != terminal.sn
+    ):
+        raise HTTPException(status_code=409, detail="IoT terminal binding mismatch")
+    return await iot_client.search_user_events(device_id, org_id, filters)
 
 
 @router.get("/mcp/console/preflight/{device_id}")

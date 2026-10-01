@@ -63,6 +63,8 @@ async def test_l4mcp_token_is_live_scoped_and_revocable(monkeypatch):
         return Request({"type": "http", "method": "GET", "path": path, "headers": []})
 
     user = await auth.get_current_user(request("/api/mcp/identity"), creds)
+    history_user = await auth.get_current_user(request("/api/mcp/events/773"), creds)
+    assert history_user["org_id"] == 1000
     assert (user["role_id"], user["org_id"], user["token_type"]) == (
         5,
         1000,
@@ -72,6 +74,9 @@ async def test_l4mcp_token_is_live_scoped_and_revocable(monkeypatch):
         await auth.get_current_user(request("/api/admin/users"), creds)
     assert denied.value.status_code == 403
     active = False
+    with pytest.raises(HTTPException) as history_revoked:
+        await auth.get_current_user(request("/api/mcp/events/773"), creds)
+    assert history_revoked.value.status_code == 401
     with pytest.raises(HTTPException) as revoked:
         await auth.get_current_user(request("/api/mcp/identity"), creds)
     assert revoked.value.status_code == 401
