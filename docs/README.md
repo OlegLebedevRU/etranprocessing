@@ -103,3 +103,7 @@
 > - **[`docs/history/implementation-logs/`](history/implementation-logs/)** — Детальные пошаговые журналы реализации (tenant access log, models duplicate implementation)
 > - **[`docs/history/planning-and-research/`](history/planning-and-research/)** — Исторические планы и исследования легаси-сервисов
 > - **[`docs/history/prompts-and-drafts/`](history/prompts-and-drafts/)** — Архивные промпты и черновики активной разработки
+
+- [L4 Tools: финальные изменения, стабилизация, UI и подписанный выпуск](term_dev-l4tools-stabilization-ui-release-plan.md) — план от 2026-10-02.
+
+- [Единый отчёт каскада L4 Tools](term_dev-l4tools-cascade-report.md) — результат и проверки каждого этапа.

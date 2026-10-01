@@ -3,6 +3,8 @@
 #include <string.h>
 #include <windows.h>
 #include <stdbool.h>
+#include <bcrypt.h>
+#include <shellapi.h>
 
 #include "http_client.h"
 #include "url_finder.h"
@@ -10,8 +12,24 @@
 #include "cng_crypto.h"
 #include "cert_store.h"
 #include "cert_discovery.h"
+#include "gui.h"
 
 #define DEFAULT_KEY_NAME L"EtranTerminalKey"
+
+static bool make_issuance_key_name(const WCHAR* base, WCHAR out[128]) {
+    BYTE random_bytes[16];
+    if (!base || wcslen(base) > 80 ||
+        BCryptGenRandom(NULL, random_bytes, sizeof(random_bytes),
+                        BCRYPT_USE_SYSTEM_PREFERRED_RNG) != 0) return false;
+    int used = swprintf_s(out, 128, L"%ls-", base);
+    if (used < 0) return false;
+    for (size_t i = 0; i < sizeof(random_bytes); i++) {
+        int written = swprintf_s(out + used, 128 - used, L"%02X", random_bytes[i]);
+        if (written != 2) return false;
+        used += written;
+    }
+    return true;
+}
 
 static void print_usage(const char* prog_name) {
     printf("Leo4 Terminal Certificate Installer - l4pin (v=26 CNG Flow)\n\n");
@@ -42,7 +60,7 @@ static void print_usage(const char* prog_name) {
     printf("  %s --status\n", prog_name);
 }
 
-int main(int argc, char* argv[]) {
+int l4pin_run_cli(int argc, char* argv[]) {
     // Set console output to UTF-8 for clean Russian/English text output
     SetConsoleOutputCP(CP_UTF8);
 
@@ -285,13 +303,19 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    WCHAR issued_key_name[128] = { 0 };
+    if (!make_issuance_key_name(key_name, issued_key_name)) {
+        fprintf(stderr, "[ERROR] Could not create a unique CNG key name. Previous key retained.\n");
+        return 3;
+    }
+
     printf("\n=================================================================\n");
     printf("  Leo4 Terminal Certificate Setup - l4pin (CNG / v=26)\n");
     printf("=================================================================\n");
     printf("Target Endpoint:     %s\n", base_url);
     printf("PIN Code:            ***\n");
     printf("Target Store:        %s\\MY\n", is_machine_store ? "LocalMachine" : "CurrentUser");
-    printf("CNG Key Container:   %ls\n", key_name);
+    printf("CNG Key Container:   %ls\n", issued_key_name);
     printf("-----------------------------------------------------------------\n\n");
 
     // -----------------------------------------------------------------------
@@ -361,7 +385,7 @@ int main(int argc, char* argv[]) {
     char* pkcs10_b64 = NULL;
     if (!cng_generate_key_and_csr(
             w_prov[0] ? w_prov : NULL,
-            key_name,
+            issued_key_name,
             dn_with_sign,
             2048,
             is_machine_store,
@@ -407,12 +431,12 @@ int main(int argc, char* argv[]) {
     // Step 5: Install Certificate in Windows Store & Clean by Email Filter
     // -----------------------------------------------------------------------
     printf("\n[4/5] Installing certificate to %s\\MY...\n", is_machine_store ? "LocalMachine" : "CurrentUser");
-    printf("      Deleting older certificates with matching email [%s]...\n", target_email);
+    printf("      Previous terminal certificates will be cleaned from Machine MY and all Windows profiles after verification.\n");
 
     CertDetails installed_details;
     if (!cert_store_install_pkcs7(
             setup_resp.certdata,
-            key_name,
+            issued_key_name,
             is_machine_store,
             target_email,
             &installed_details
@@ -439,8 +463,45 @@ int main(int argc, char* argv[]) {
     printf("Valid To:        %s\n", installed_details.not_after);
     printf("Private Key:     %s\n", installed_details.has_private_key ? "BOUND & ACCESSIBLE via CNG (Non-Exportable)" : "ERROR: NOT ACCESSIBLE");
     printf("Store Location:  %s\\MY\n", is_machine_store ? "LocalMachine" : "CurrentUser");
-    printf("Key Container:   %ls\n", key_name);
+    printf("Key Container:   %ls\n", issued_key_name);
     printf("=================================================================\n");
+    printf("[ACTION] Restart L4Superv, L4Con, Leo4Proxy and mosquitto to use the new identity.\n");
 
     return 0;
+}
+
+static bool process_is_elevated(void) {
+    HANDLE token = NULL;
+    TOKEN_ELEVATION elevation = { 0 };
+    DWORD size = 0;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) return false;
+    BOOL ok = GetTokenInformation(token, TokenElevation, &elevation, sizeof(elevation), &size);
+    CloseHandle(token);
+    return ok && elevation.TokenIsElevated;
+}
+
+static int run_elevated_copy(void) {
+    wchar_t exe[MAX_PATH] = { 0 };
+    if (!GetModuleFileNameW(NULL, exe, MAX_PATH)) return 20;
+    SHELLEXECUTEINFOW info = { 0 };
+    info.cbSize = sizeof(info);
+    info.fMask = SEE_MASK_NOCLOSEPROCESS;
+    info.lpVerb = L"runas";
+    info.lpFile = exe;
+    info.nShow = SW_SHOWNORMAL;
+    if (!ShellExecuteExW(&info)) return 20;
+    WaitForSingleObject(info.hProcess, INFINITE);
+    DWORD result = 20;
+    GetExitCodeProcess(info.hProcess, &result);
+    CloseHandle(info.hProcess);
+    return (int)result;
+}
+
+int main(int argc, char* argv[]) {
+    if (argc == 1) {
+        if (!process_is_elevated()) return run_elevated_copy();
+        FreeConsole();
+        return l4pin_show_gui();
+    }
+    return l4pin_run_cli(argc, argv);
 }

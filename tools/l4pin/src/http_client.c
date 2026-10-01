@@ -9,6 +9,8 @@
 #pragma comment(lib, "crypt32.lib")
 
 #define USER_AGENT L"l4pin/1.0"
+#define HTTP_RESPONSE_LIMIT (1024 * 1024)
+
 
 bool generate_tosign(char* out_tosign, size_t out_tosign_size) {
     if (!out_tosign || out_tosign_size < 32) return false;
@@ -50,7 +52,7 @@ static bool parse_url(const char* url_str, ParsedUrl* parsed) {
     memset(parsed, 0, sizeof(ParsedUrl));
 
     WCHAR w_url[1024];
-    MultiByteToWideChar(CP_UTF8, 0, url_str, -1, w_url, 1024);
+    if (!MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, url_str, -1, w_url, 1024)) return false;
 
     URL_COMPONENTS urlComp;
     memset(&urlComp, 0, sizeof(urlComp));
@@ -63,6 +65,9 @@ static bool parse_url(const char* url_str, ParsedUrl* parsed) {
         return false;
     }
 
+    if (!urlComp.dwHostNameLength || urlComp.dwHostNameLength >= 256 ||
+        urlComp.dwUrlPathLength >= 480 ||
+        (urlComp.nScheme != INTERNET_SCHEME_HTTP && urlComp.nScheme != INTERNET_SCHEME_HTTPS)) return false;
     wcsncpy(parsed->host, urlComp.lpszHostName, urlComp.dwHostNameLength);
     parsed->host[urlComp.dwHostNameLength] = L'\0';
 
@@ -105,7 +110,7 @@ static bool send_http_request(
 
     HINTERNET hSession = WinHttpOpen(
         USER_AGENT,
-        WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+        WINHTTP_ACCESS_TYPE_NO_PROXY,
         WINHTTP_NO_PROXY_NAME,
         WINHTTP_NO_PROXY_BYPASS,
         0
@@ -114,6 +119,12 @@ static bool send_http_request(
         fprintf(stderr, "WinHttpOpen failed: %lu\n", GetLastError());
         return false;
     }
+
+    if (!WinHttpSetTimeouts(hSession, 5000, 5000, 10000, 10000)) {
+        WinHttpCloseHandle(hSession);
+        return false;
+    }
+    ULONGLONG deadline = GetTickCount64() + 30000;
 
     HINTERNET hConnect = WinHttpConnect(hSession, parsed->host, parsed->port, 0);
     if (!hConnect) {
@@ -209,6 +220,9 @@ static bool send_http_request(
     if (status_code != 200) {
         fprintf(stderr, "HTTP error status: %lu\n", status_code);
     }
+    DWORD expected_length = 0, expected_size = sizeof(expected_length);
+    bool has_length = WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_CONTENT_LENGTH | WINHTTP_QUERY_FLAG_NUMBER,
+        WINHTTP_HEADER_NAME_BY_INDEX, &expected_length, &expected_size, WINHTTP_NO_HEADER_INDEX) != FALSE;
 
     // Read response body
     size_t capacity = 4096;
@@ -222,7 +236,10 @@ static bool send_http_request(
     }
 
     DWORD bytes_available = 0;
-    while (WinHttpQueryDataAvailable(hRequest, &bytes_available) && bytes_available > 0) {
+    bool complete = false;
+    while (GetTickCount64() < deadline && WinHttpQueryDataAvailable(hRequest, &bytes_available)) {
+        if (!bytes_available) { complete = true; break; }
+        if (bytes_available > HTTP_RESPONSE_LIMIT - total_read) break;
         if (total_read + bytes_available + 1 > capacity) {
             capacity = (total_read + bytes_available + 1) * 2;
             char* new_buf = (char*)realloc(resp_buf, capacity);
@@ -242,6 +259,7 @@ static bool send_http_request(
         } else {
             break;
         }
+        if (!bytes_read) break;
     }
 
     resp_buf[total_read] = '\0';
@@ -250,12 +268,18 @@ static bool send_http_request(
     WinHttpCloseHandle(hConnect);
     WinHttpCloseHandle(hSession);
 
+    if (!complete || status_code != 200 || (has_length && total_read != expected_length)) {
+        free(resp_buf);
+        fprintf(stderr, "HTTP response incomplete, timed out or exceeds size limit.\n");
+        return false;
+    }
+
     if (out_response) *out_response = resp_buf;
     else free(resp_buf);
 
     if (out_response_len) *out_response_len = total_read;
 
-    return (status_code == 200 || total_read > 0);
+    return status_code == 200;
 }
 
 bool http_check(
@@ -329,7 +353,7 @@ bool http_get_simple(
     if (!url_str || url_str[0] == '\0') return false;
 
     WCHAR w_url[1024];
-    MultiByteToWideChar(CP_UTF8, 0, url_str, -1, w_url, 1024);
+    if (!MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, url_str, -1, w_url, 1024)) return false;
 
     URL_COMPONENTS urlComp;
     memset(&urlComp, 0, sizeof(urlComp));
@@ -342,6 +366,9 @@ bool http_get_simple(
         return false;
     }
 
+    if (!urlComp.dwHostNameLength || urlComp.dwHostNameLength >= 255 ||
+        (urlComp.nScheme != INTERNET_SCHEME_HTTP && urlComp.nScheme != INTERNET_SCHEME_HTTPS) ||
+        urlComp.dwUrlPathLength + urlComp.dwExtraInfoLength >= 1023) return false;
     WCHAR host[256] = { 0 };
     if (urlComp.dwHostNameLength > 0 && urlComp.dwHostNameLength < 255) {
         wcsncpy(host, urlComp.lpszHostName, urlComp.dwHostNameLength);
@@ -365,16 +392,19 @@ bool http_get_simple(
 
     HINTERNET hSession = WinHttpOpen(
         USER_AGENT,
-        WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+        WINHTTP_ACCESS_TYPE_NO_PROXY,
         WINHTTP_NO_PROXY_NAME,
         WINHTTP_NO_PROXY_BYPASS,
         0
     );
     if (!hSession) return false;
 
-    if (timeout_ms > 0) {
-        WinHttpSetTimeouts(hSession, timeout_ms, timeout_ms, timeout_ms, timeout_ms);
+    if (timeout_ms <= 0) timeout_ms = 1200;
+    if (!WinHttpSetTimeouts(hSession, timeout_ms, timeout_ms, timeout_ms, timeout_ms)) {
+        WinHttpCloseHandle(hSession);
+        return false;
     }
+    ULONGLONG deadline = GetTickCount64() + (DWORD)timeout_ms;
 
     HINTERNET hConnect = WinHttpConnect(hSession, host, port, 0);
     if (!hConnect) {
@@ -442,6 +472,9 @@ bool http_get_simple(
         WinHttpCloseHandle(hSession);
         return false;
     }
+    DWORD expected_length = 0, expected_size = sizeof(expected_length);
+    bool has_length = WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_CONTENT_LENGTH | WINHTTP_QUERY_FLAG_NUMBER,
+        WINHTTP_HEADER_NAME_BY_INDEX, &expected_length, &expected_size, WINHTTP_NO_HEADER_INDEX) != FALSE;
 
     size_t capacity = 4096;
     size_t total_read = 0;
@@ -454,7 +487,10 @@ bool http_get_simple(
     }
 
     DWORD bytes_available = 0;
-    while (WinHttpQueryDataAvailable(hRequest, &bytes_available) && bytes_available > 0) {
+    bool complete = false;
+    while (GetTickCount64() < deadline && WinHttpQueryDataAvailable(hRequest, &bytes_available)) {
+        if (!bytes_available) { complete = true; break; }
+        if (bytes_available > 16384 - total_read) break;
         if (total_read + bytes_available + 1 > capacity) {
             capacity = (total_read + bytes_available + 1) * 2;
             char* new_buf = (char*)realloc(resp_buf, capacity);
@@ -474,6 +510,7 @@ bool http_get_simple(
         } else {
             break;
         }
+        if (!bytes_read) break;
     }
 
     resp_buf[total_read] = '\0';
@@ -481,6 +518,8 @@ bool http_get_simple(
     WinHttpCloseHandle(hRequest);
     WinHttpCloseHandle(hConnect);
     WinHttpCloseHandle(hSession);
+
+    if (!complete || (has_length && total_read != expected_length)) { free(resp_buf); return false; }
 
     if (out_response) *out_response = resp_buf;
     else free(resp_buf);

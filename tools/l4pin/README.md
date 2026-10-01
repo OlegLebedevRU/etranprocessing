@@ -1,6 +1,6 @@
 # Leo4 Terminal Certificate Installer — l4pin (C / CNG / Win32)
 
-Автономная нативная CLI-утилита `l4pin` для Windows, реализующая процедуру выпуска и установки сертификата терминала по PIN-коду (флоу `v=26` / CNG KSP / RSA 2048) с **запретом экспорта закрытого ключа**, умным поиском эндпоинта (`url-finder`), модулем обнаружения сертификатов (**Cert Discovery**) с защитой «не трогать валидный сертификат» и автоматической очисткой старых сертификатов по совпадению `email`.
+Автономная нативная утилита `l4pin` для Windows с графическим окном при запуске без аргументов и CLI для установки сертификата по PIN-коду (флоу `v=26` / CNG KSP / RSA 2048). Закрытый ключ неэкспортируемый; перед удалением прежнего сертификата новый ключ проверяется.
 
 ---
 
@@ -37,7 +37,9 @@
 - **Маскирование PIN и безопасность логов:**
   - PIN-код маскируется (`***`) во всех сообщениях и диагностических логах.
 - **Очистка устаревших сертификатов:**
-  - В ветке реального выпуска (после успешного ответа CA) удаляет из целевого хранилища (`LocalMachine\MY`) ранее установленные сертификаты с совпадающим адресом `email`, логируя их отпечатки (thumbprint).
+  - Для каждого выпуска создаёт отдельный неэкспортируемый CNG-ключ, сохраняя прежний ключ при ошибке CA или установки.
+  - Сначала устанавливает новый сертификат и проверяет доступность ключа, затем удаляет все прежние сертификаты терминального CA `iot.leo4.ru` из `LocalMachine\MY`, даже если у них другой SN или email. Успех возвращается только после проверки, что остался ровно один сертификат этого CA; при ошибке очистки выполняется откат и возвращается отказ.
+  - После успешной смены SN требуется перезапуск `L4Superv`, `L4Con`, `Leo4Proxy` и `mosquitto`.
 - **Zero Dependencies:**
   - Нативный бинарник без зависимостей от сторонних DLL, .NET или Python runtime.
   - Статическая линковка CRT (`/MT`).
@@ -82,6 +84,8 @@ cmake --build build --config Release
 
 ## Использование
 
+Запуск `l4pin.exe` без аргументов открывает окно установки: PIN виден при вводе, а флажок `Force reissue` разрешает замену действующего сертификата. Старые сертификаты удаляются по обязательному правилу после проверки нового ключа; отключить очистку через окно нельзя.
+
 ### 1. Проверка состояния сертификата (Cert Discovery, без изменения хранилища и сети):
 ```cmd
 :: Человекочитаемый вывод
@@ -115,3 +119,7 @@ l4pin.exe --pin 021358 --url https://iot-processing.ru/api/certificates --store 
 ```cmd
 l4pin.exe --status
 ```
+
+## 1.7.3: direct HTTP and cross-profile replacement
+Native HTTP uses direct connections (NO_PROXY). CHECK/SETUP have finite phase timeouts and bounded responses; truncated bodies and HTTP errors fail. Discovery uses only the known local HTTP listener and validates the JSON listeners object and loopback address.
+After verifying the new iot.leo4.ru issuer, validity, email and accessible CNG key, replacement cleans old IoT and terminal certsrv records from Machine MY and MY of all registered Windows profiles. Inaccessible profiles fail before deletion; deletion failures restore captured certificate contexts. Unrelated certsrv credentials and old private key containers are preserved. GUI confirmation explicitly describes this scope. See the cascade report for tests and outstanding runtime checks.

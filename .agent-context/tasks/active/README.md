@@ -14,3 +14,5 @@
 - [17E FIX transfer, 2026-09-27](2026-09-27-l4d-17e-fix-transfer.md) —
   опубликованные входы, byte bindings, адресная регистрация и критерии
   дальнейшей приёмки.
+
+- [L4 Tools: стабилизация, l4pin/l4setup UI и подписанный выпуск](2026-10-02-l4tools-stabilization-ui-release.md) — финальные ветки, исследование Windows10, постоянный signing flow.

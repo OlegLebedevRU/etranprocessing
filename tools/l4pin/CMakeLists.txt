@@ -16,7 +16,9 @@ include_directories(src)
 
 set(SOURCES
     src/main.c
+    src/gui.c
     src/url_finder.c
+    ../leo4proxy/src/policy_json.c
     src/http_client.c
     src/xml_utils.c
     src/cng_crypto.c
@@ -30,19 +32,23 @@ add_executable(l4pin ${SOURCES})
 if(MSVC)
     target_link_libraries(l4pin
         ncrypt.lib
+        bcrypt.lib
         crypt32.lib
         winhttp.lib
         advapi32.lib
         shell32.lib
         user32.lib
+        gdi32.lib
     )
 else()
     target_link_libraries(l4pin
         -lncrypt
+        -lbcrypt
         -lcrypt32
         -lwinhttp
         -ladvapi32
         -lshell32
         -luser32
+        -lgdi32
     )
 endif()

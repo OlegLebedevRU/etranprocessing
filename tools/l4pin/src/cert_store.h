@@ -36,8 +36,22 @@ bool cert_get_serial_hex(PCCERT_CONTEXT pCert, char* out_serial, size_t out_seri
 bool cert_get_thumbprint_hex(PCCERT_CONTEXT pCert, char* out_thumbprint, size_t out_thumbprint_size);
 
 /**
+ * Remove all previous Leo4 CA terminal certificates from a store, regardless
+ * of their old SN or email. The new certificate must have the expected email.
+ * The installed certificate is always retained. Returns false on any failure.
+ */
+bool cert_store_cleanup_previous(HCERTSTORE store, PCCERT_CONTEXT installed_cert,
+                                 const char* email, int* removed_count);
+
+/* Machine MY + MY of all local Windows profiles; snapshots before mutation. */
+bool cert_store_cleanup_all_profiles(HCERTSTORE target, PCCERT_CONTEXT installed,
+                                    int* removed_count);
+bool cert_is_obsolete_terminal(PCCERT_CONTEXT cert, PCCERT_CONTEXT installed);
+
+/**
  * Install PKCS#7 certificate chain into Windows Certificate Store (LocalMachine\MY or CurrentUser\MY),
- * delete all previous certificates with matching email, and bind CNG private key.
+ * bind and verify the CNG private key, then delete previous certificates
+ * issued by the Leo4 terminal CA.
  * 
  * pkcs7_b64: raw Base64 string of the PKCS#7 response
  * key_container_name: CNG key container name (e.g. L"EtranTerminalKey")

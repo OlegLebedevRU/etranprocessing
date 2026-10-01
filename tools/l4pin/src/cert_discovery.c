@@ -96,7 +96,9 @@ static bool discovery_is_issuer_leo4(PCCERT_CONTEXT pCert, char* out_issuer_cn, 
 }
 
 bool cert_is_leo4_issuer(PCCERT_CONTEXT cert) {
-    return cert && discovery_is_issuer_leo4(cert, NULL, 0);
+    char issuer[256] = { 0 };
+    return cert && discovery_get_cn(cert, true, issuer, sizeof(issuer)) &&
+        !_stricmp(issuer, "iot.leo4.ru");
 }
 
 static void discovery_filetime_to_str(const FILETIME* ft, char* out_str, size_t out_str_size) {

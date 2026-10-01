@@ -8,12 +8,14 @@
 extern "C" {
 #endif
 
+bool certificates_url_from_info(const char* text, size_t length, char* out, size_t size);
+
 #define DEFAULT_CERTIFICATES_URL "https://iot-processing.ru/api/certificates"
 
 /**
  * Resolves the certificate endpoint URL according to the strategy:
  * 1. CLI argument (if provided and non-empty)
- * 2. leo4proxy detection (https://127.0.0.1/_leo4/info?format=json or http://127.0.0.1:18443/_leo4/info)
+ * 2. Known local HTTP listener http://127.0.0.1:18443/_leo4/info
  *    extracts listeners.http_local -> https://<http_local>/api/certificates (or http://...)
  * 3. Default fallback: https://iot-processing.ru/api/certificates
  *
