@@ -61,3 +61,8 @@ MB/PB tests/builds not run: this step changes documentation only, per AGENTS.
 All three selected stacks are integrated in their base branches after separate
 checks. No force push, production deployment, native tools update, or Janus rebuild.
 Unrelated landing work and controller prompt edits remain outside this scope.
+MenuBuilder consolidation published as863b30a13ec4ddb0ac521b7f762d046f0cb25d2d.
+Final audit verified original MB/media report/evidence bytes against their source
+branches and LF shell/Dockerfile content in git archive. Local Docker Compose
+frontends were unusable, so Compose CLI validation also remains not run;
+the local C build, script syntax and scanner tests are the actual checks above.
