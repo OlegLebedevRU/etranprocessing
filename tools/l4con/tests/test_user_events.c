@@ -198,6 +198,57 @@ static void test_runner(void) {
     CHECK(cli_call() == EVENT_DENIED);
 }
 
+static int error_eof_seen;
+static void capture_error(const char* topic, const char* json, size_t length, void* context) {
+    (void)topic; (void)length; (void)context;
+    if (strstr(json, "\"eof\":true") && strstr(json, "\"exit_code\":126")) ++error_eof_seen;
+}
+
+static void test_command_bounds(void) {
+    char text[16];
+    CHECK(json_extract_string_strict("{}", "command_line", text, sizeof(text)) == 0);
+    CHECK(json_extract_string_strict("{\"command_line\":\"abc\"}", "command_line", text, 4) == 1);
+    CHECK(strcmp(text, "abc") == 0);
+    CHECK(json_extract_string_strict("{\"command_line\":\"abcd\"}", "command_line", text, 4) == -1 && text[0] == 0);
+    CHECK(json_extract_string_strict("{\"command_line\":\"abc", "command_line", text, sizeof(text)) == -1);
+    CHECK(json_extract_string_strict("{\"command_line\":\"\\u0000\"}", "command_line", text, sizeof(text)) == -1);
+    CHECK(json_extract_string_strict("{\"command_line\":\"\\uD83D\\uDE00\"}", "command_line", text, sizeof(text)) == 1);
+    CHECK(strcmp(text, "\xF0\x9F\x98\x80") == 0);
+    CHECK(json_extract_string_strict("{\"command_line\":\"\\uD83D\"}", "command_line", text, sizeof(text)) == -1);
+
+    CommandContext ctx;
+    command_runner_init_context(&ctx);
+    strcpy_s(ctx.session_id, sizeof(ctx.session_id), "command-boundary-test");
+    ctx.shell = SHELL_POWERSHELL;
+    ctx.ttl_sec = 10;
+    ctx.enable_blacklist = false;
+    strcpy_s(ctx.command_line, sizeof(ctx.command_line), "exit 7;#");
+    memset(ctx.command_line + 8, 'x', L4CON_COMMAND_CHARS - 8);
+    ctx.command_line[L4CON_COMMAND_CHARS] = 0;
+    int code = 0;
+    CHECK(command_runner_execute(&ctx, NULL, NULL, &code, NULL) == 7 && code == 7);
+    /* Same 4096 characters, with 4088 non-ASCII characters (8184 bytes). */
+    for (int i = 8; i < L4CON_COMMAND_CHARS; ++i) {
+        memcpy(ctx.command_line + 8 + (i - 8) * 2, "\xD1\x8F", 2);
+    }
+    ctx.command_line[8 + (L4CON_COMMAND_CHARS - 8) * 2] = 0;
+    CHECK(command_runner_execute(&ctx, NULL, NULL, &code, NULL) == 7 && code == 7);
+    for (int i = 8; i < L4CON_COMMAND_CHARS; ++i)
+        memcpy(ctx.command_line + 8 + (i - 8) * 4, "\xF0\x9F\x98\x80", 4);
+    ctx.command_line[8 + (L4CON_COMMAND_CHARS - 8) * 4] = 0;
+    CHECK(command_runner_execute(&ctx, NULL, NULL, &code, NULL) == 7 && code == 7);
+    strcat_s(ctx.command_line, sizeof(ctx.command_line), "x");
+    CHECK(command_runner_execute(&ctx, capture_error, NULL, &code, NULL) == 126 && code == 126);
+    CHECK(error_eof_seen == 1);
+    memset(ctx.command_line, 0xFF, 1);
+    ctx.command_line[1] = 0;
+    CHECK(command_runner_execute(&ctx, capture_error, NULL, &code, NULL) == 126);
+    ctx.command_invalid = true;
+    strcpy_s(ctx.command_line, sizeof(ctx.command_line), "exit 7");
+    CHECK(command_runner_execute(&ctx, capture_error, NULL, &code, NULL) == 126);
+    CHECK(error_eof_seen == 3);
+}
+
 int main(int argc, char** argv) {
     if (argc > 1 && strcmp(argv[1], "--send-event") == 0) {
         int count;
@@ -224,6 +275,7 @@ int main(int argc, char** argv) {
     CHECK(event_ipc_start(stop, fake_publish, NULL));
     test_ipc();
     test_runner();
+    test_command_bounds();
     SetEvent(stop);
     event_ipc_stop();
     CloseHandle(stop); CloseHandle(seen);

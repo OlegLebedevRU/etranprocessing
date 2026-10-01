@@ -51,7 +51,10 @@ raw console_run сохраняет cap2048. История900–999 читает
 773 после IoT migration объясняется неизвестным tenant старых строк; новые
 строки получают tenant. Проверки и состояние:
 [план](../../docs/menu_arch-l4mcp-user-events-plan.md).
-Текущие l4con/app1 handlers не исследованы этой карточкой; matrix — утверждённый документ,
+E2E выявил native truncation1023 bytes; l4con1.9.4 согласован с4096 Unicode
+characters и strict error/EOF126, x86/x64 проверены. Установлен на773;
+full1024-byte payload, UUID, history, tenant refusal и storm прошли.
+Остальные l4con/app1 handlers не исследованы этой карточкой; matrix — утверждённый документ,
 не runtime evidence. Вывод shell может содержать секреты — редактировать evidence до сохранения.
 
 ## Источники и актуальность

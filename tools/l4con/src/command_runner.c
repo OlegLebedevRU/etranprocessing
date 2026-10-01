@@ -329,10 +329,21 @@ int command_runner_execute(CommandContext* ctx,
     uint32_t seq = 0;
     int exit_code = 0;
 
-    // Check blacklist first
-    if (ctx->enable_blacklist && command_runner_is_blacklisted(ctx->command_line)) {
+    /* Validate the complete UTF-8 input before creating any process or pipe. */
+    wchar_t w_usercmd[L4CON_COMMAND_CHARS * 2 + 1];
+    int converted = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
+        ctx->command_line, -1, w_usercmd, (int)(sizeof(w_usercmd) / sizeof(w_usercmd[0])));
+    size_t characters = 0;
+    if (converted > 0) {
+        for (const unsigned char* p = (const unsigned char*)ctx->command_line; *p; ++p)
+            if ((*p & 0xC0) != 0x80) ++characters;
+    }
+    bool invalid = ctx->command_invalid || converted == 0 || characters > L4CON_COMMAND_CHARS;
+    if (invalid || (ctx->enable_blacklist && command_runner_is_blacklisted(ctx->command_line))) {
         char err_msg[512];
-        snprintf(err_msg, sizeof(err_msg),
+        if (invalid) strcpy_s(err_msg, sizeof(err_msg),
+            "Invalid command_line: expected valid UTF-8, at most 4096 Unicode characters.\r\n");
+        else snprintf(err_msg, sizeof(err_msg),
                  "Execution blocked by security policy: command '%s' contains blacklisted pattern.\r\n",
                  ctx->command_line);
 
@@ -371,13 +382,12 @@ int command_runner_execute(CommandContext* ctx,
 
     // Build CommandLine
     wchar_t shell_exe[MAX_PATH];
-    wchar_t w_cmdline[4096];
-    wchar_t w_usercmd[2048];
-    MultiByteToWideChar(CP_UTF8, 0, ctx->command_line, -1, w_usercmd, 2048);
+    wchar_t w_cmdline[23000];
+    int command_length;
 
     if (ctx->shell == SHELL_POWERSHELL) {
         resolve_powershell_path(shell_exe, MAX_PATH);
-        wchar_t encoded[5500];
+        wchar_t encoded[21852]; /* 8192 UTF-16 units -> base64 plus NUL. */
         DWORD encoded_length = (DWORD)(sizeof(encoded) / sizeof(encoded[0]));
         if (!CryptBinaryToStringW((const BYTE*)w_usercmd,
                 (DWORD)(wcslen(w_usercmd) * sizeof(wchar_t)),
@@ -387,14 +397,21 @@ int command_runner_execute(CommandContext* ctx,
             if (out_exit_code) *out_exit_code = -1;
             return -1;
         }
-        _snwprintf(w_cmdline, sizeof(w_cmdline)/sizeof(wchar_t),
+        command_length = _snwprintf(w_cmdline, sizeof(w_cmdline)/sizeof(wchar_t),
                    L"\"%ls\" -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand %ls",
                    shell_exe, encoded);
     } else {
         resolve_cmd_path(shell_exe, MAX_PATH);
-        _snwprintf(w_cmdline, sizeof(w_cmdline)/sizeof(wchar_t),
+        command_length = _snwprintf(w_cmdline, sizeof(w_cmdline)/sizeof(wchar_t),
                    L"\"%ls\" /c %ls",
                    shell_exe, w_usercmd);
+    }
+
+    if (command_length < 0 || command_length >= (int)(sizeof(w_cmdline)/sizeof(wchar_t))) {
+        CloseHandle(hReadPipe);
+        CloseHandle(hWritePipe);
+        if (out_exit_code) *out_exit_code = -1;
+        return -1;
     }
 
     wchar_t* w_workdir = NULL;

@@ -310,8 +310,9 @@ static DWORD WINAPI command_worker_thread(LPVOID lpParam) {
 }
 
 static void handle_incoming_publish(MqttClientState* state, const char* topic, const char* payload, size_t payload_len, const AppConfig* config) {
-    char payload_str[8192];
-    size_t copy_len = payload_len < sizeof(payload_str) - 1 ? payload_len : sizeof(payload_str) - 1;
+    char payload_str[65536];
+    if (payload_len >= sizeof(payload_str)) return; /* Never execute a partial JSON message. */
+    size_t copy_len = payload_len;
     memcpy(payload_str, payload, copy_len);
     payload_str[copy_len] = '\0';
 
@@ -427,7 +428,8 @@ static void handle_incoming_publish(MqttClientState* state, const char* topic, c
         // CMD_DIAG_EXEC
         char session_id[64] = {0};
         char task_id_str[128] = {0};
-        char cmd_line[1024] = {0};
+        char cmd_line[L4CON_COMMAND_UTF8_CAP] = {0};
+        bool command_invalid = false;
         char shell_str[32] = {0};
         char topic_out[128] = {0};
         int task_id = 0;
@@ -442,7 +444,9 @@ static void handle_incoming_publish(MqttClientState* state, const char* topic, c
         json_extract_int(payload_str, "task_id", &task_id);
 
         // Try extracting command_line or command_id / args
-        if (!json_extract_string(payload_str, "command_line", cmd_line, sizeof(cmd_line)) || strlen(cmd_line) == 0) {
+        int command_status = json_extract_string_strict(payload_str, "command_line", cmd_line, sizeof(cmd_line));
+        command_invalid = command_status < 0;
+        if (command_status == 0 || (command_status == 1 && strlen(cmd_line) == 0)) {
             char command_id[128] = {0};
             if (json_extract_string(payload_str, "command_id", command_id, sizeof(command_id)) && strlen(command_id) > 0) {
                 if (strcmp(command_id, "system_info") == 0) strncpy(cmd_line, "systeminfo", sizeof(cmd_line) - 1);
@@ -457,7 +461,7 @@ static void handle_incoming_publish(MqttClientState* state, const char* topic, c
             }
         }
 
-        if (strlen(cmd_line) == 0) {
+        if (!command_invalid && strlen(cmd_line) == 0) {
             return; // Not a valid execution task
         }
 
@@ -481,6 +485,7 @@ static void handle_incoming_publish(MqttClientState* state, const char* topic, c
         state->current_cmd.task_id = task_id;
         snprintf(state->current_cmd.task_id_str, sizeof(state->current_cmd.task_id_str), "%s", task_id_str);
         snprintf(state->current_cmd.command_line, sizeof(state->current_cmd.command_line), "%s", cmd_line);
+        state->current_cmd.command_invalid = command_invalid;
         state->current_cmd.shell = (_stricmp(shell_str, "powershell") == 0 || _stricmp(shell_str, "ps") == 0) ? SHELL_POWERSHELL : SHELL_CMD;
         state->current_cmd.ttl_sec = ttl_sec > 0 ? ttl_sec : config->default_cmd_timeout;
         state->current_cmd.max_output_bytes = max_bytes > 0 ? max_bytes : 1048576;
@@ -717,7 +722,7 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
         time_t last_ping_time = time(NULL);
         time_t ping_interval = config->keepalive_sec > 4 ? config->keepalive_sec / 2 : 2;
 
-        unsigned char rx_buf[16384];
+        unsigned char rx_buf[65536];
         size_t rx_buf_len = 0;
 
         while (WaitForSingleObject(hStopEvent, 0) != WAIT_OBJECT_0) {

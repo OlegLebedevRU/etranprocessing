@@ -15,11 +15,16 @@ typedef enum {
     SHELL_POWERSHELL
 } ShellType;
 
+/* IoT command_line contract: at most 4096 Unicode code points. */
+#define L4CON_COMMAND_CHARS 4096
+#define L4CON_COMMAND_UTF8_CAP (L4CON_COMMAND_CHARS * 4 + 1)
+
 typedef struct {
     char session_id[64];
     int  task_id;
     char task_id_str[128];
-    char command_line[1024];
+    char command_line[L4CON_COMMAND_UTF8_CAP];
+    bool command_invalid;
     ShellType shell;
     char working_dir[256];
     int  ttl_sec;

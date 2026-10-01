@@ -328,6 +328,87 @@ bool json_extract_string(const char* json, const char* key, char* out_val, size_
     return true;
 }
 
+static int json_hex4(const char* p, unsigned* value) {
+    unsigned result = 0;
+    for (int i = 0; i < 4; ++i) {
+        unsigned char c = (unsigned char)p[i];
+        unsigned digit;
+        if (c >= '0' && c <= '9') digit = c - '0';
+        else if (c >= 'a' && c <= 'f') digit = c - 'a' + 10;
+        else if (c >= 'A' && c <= 'F') digit = c - 'A' + 10;
+        else return 0;
+        result = result * 16 + digit;
+    }
+    *value = result;
+    return 1;
+}
+
+int json_extract_string_strict(const char* json, const char* key, char* out_val, size_t cap) {
+    if (!json || !key || !out_val || !cap) return -1;
+    out_val[0] = 0;
+    const char* p = find_key(json, key);
+    if (!p) return 0;
+    while (isspace((unsigned char)*p)) ++p;
+    if (*p++ != '"') return -1;
+    size_t used = 0;
+    while (*p && *p != '"') {
+        unsigned char bytes[4];
+        size_t count = 1;
+        unsigned c = (unsigned char)*p++;
+        if (c < 32) goto invalid;
+        if (c == '\\') {
+            c = (unsigned char)*p++;
+            switch (c) {
+                case '"': case '\\': case '/': break;
+                case 'b': c = '\b'; break;
+                case 'f': c = '\f'; break;
+                case 'n': c = '\n'; break;
+                case 'r': c = '\r'; break;
+                case 't': c = '\t'; break;
+                case 'u': {
+                    if (!json_hex4(p, &c)) goto invalid;
+                    p += 4;
+                    if (c >= 0xD800 && c <= 0xDBFF) {
+                        unsigned low;
+                        if (p[0] != '\\' || p[1] != 'u' || !json_hex4(p + 2, &low) ||
+                            low < 0xDC00 || low > 0xDFFF) goto invalid;
+                        p += 6;
+                        c = 0x10000 + ((c - 0xD800) << 10) + low - 0xDC00;
+                    } else if (c >= 0xDC00 && c <= 0xDFFF) goto invalid;
+                    if (!c) goto invalid; /* Embedded NUL cannot be a shell command. */
+                    if (c < 0x80) bytes[0] = (unsigned char)c;
+                    else if (c < 0x800) {
+                        count = 2; bytes[0] = (unsigned char)(0xC0 | (c >> 6));
+                        bytes[1] = (unsigned char)(0x80 | (c & 63));
+                    } else if (c < 0x10000) {
+                        count = 3; bytes[0] = (unsigned char)(0xE0 | (c >> 12));
+                        bytes[1] = (unsigned char)(0x80 | ((c >> 6) & 63));
+                        bytes[2] = (unsigned char)(0x80 | (c & 63));
+                    } else {
+                        count = 4; bytes[0] = (unsigned char)(0xF0 | (c >> 18));
+                        bytes[1] = (unsigned char)(0x80 | ((c >> 12) & 63));
+                        bytes[2] = (unsigned char)(0x80 | ((c >> 6) & 63));
+                        bytes[3] = (unsigned char)(0x80 | (c & 63));
+                    }
+                    goto append;
+                }
+                default: goto invalid;
+            }
+        }
+        bytes[0] = (unsigned char)c;
+append:
+        if (count >= cap - used) goto invalid;
+        memcpy(out_val + used, bytes, count);
+        used += count;
+    }
+    if (*p != '"') goto invalid;
+    out_val[used] = 0;
+    return 1;
+invalid:
+    out_val[0] = 0;
+    return -1;
+}
+
 bool json_extract_int(const char* json, const char* key, int* out_val) {
     if (!json || !key || !out_val) return false;
 

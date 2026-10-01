@@ -8,6 +8,17 @@
 
 ---
 
+## Ограничение command_line в l4con 1.9.4
+
+IoT принимает до 4096 Unicode-символов в command_line. l4con 1.9.4 хранит
+полную UTF-8 строку, декодирует JSON Unicode escapes и проверяет длину перед
+CreateProcess. PowerShell EncodedCommand имеет отдельный достаточный буфер.
+Переполнение, неверный UTF-8 или некорректная строка дают error/EOF и exit_code
+126 без запуска процесса; command_id не используется взамен неверного
+command_line. MQTT presence, TTL, Job и права запуска не меняются.
+В 1.9.3 command_line мог молча обрезаться до 1023 UTF-8 байт. Для полного
+payload 1024 байта в console_send_event требуется l4con 1.9.4.
+
 ## 1. Архитектура и сквозной поток данных (End-to-End Flow)
 
 ```

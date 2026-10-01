@@ -1,5 +1,22 @@
 # l4con
 
+## 2026-10-01: command buffers (1.9.4)
+
+The structured MCP E2E exposed silent truncation of command_line to1023
+UTF-8 bytes in1.9.3. User approved a minimal native correction to1.9.4.
+The consumer now supports4096 Unicode code points (IoT contract), decodes
+JSON Unicode escapes, validates UTF-8 and rejects invalid/oversized commands
+with error/EOF and exit126 before launching. Invalid command_line never
+falls back to command_id. Shell/account/Job/TTL/presence stay the same.
+x86/x64/default builds and MQTT protocol tests passed; isolated native tests
+cover4096 ASCII, Cyrillic and supplementary characters, overflow, IPC/Job.
+x64 SHA256867e7eda78bc8305ba05024dfcd734bd44227bc789f17ff54c2bf72f62f5caa6
+installed in C:\\l4tools\\l4con with previous EXE backup. User restarted services;
+full1024-byte payload (Unicode and all quotes), oversize/-2, invalid int32/-1,
+optional UUID/invalid UUID2, storm0/5 and local caller denial3 passed via MCP
+and persisted IoT history. L4Con PID188684 remained unchanged during tests.
+No suite package built. See the l4mcp event handoff for subsequent runtime results.
+
 ## 2026-10-01: user events (1.9.3 working tree)
 
 `--send-event` is a quiet native IPC client, not another MQTT client.

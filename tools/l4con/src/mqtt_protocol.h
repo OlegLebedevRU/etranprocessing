@@ -71,6 +71,8 @@ int mqtt_parse_publish(const unsigned char* var_header_and_payload,
 /* Simple JSON helper functions */
 void json_escape_string(const char* src, size_t src_len, char* dst, size_t dst_max_len);
 bool json_extract_string(const char* json, const char* key, char* out_val, size_t out_max_len);
+/* 0: absent, 1: complete string, -1: invalid or too large; never returns a prefix. */
+int json_extract_string_strict(const char* json, const char* key, char* out_val, size_t out_max_len);
 bool json_extract_int(const char* json, const char* key, int* out_val);
 bool json_extract_bool(const char* json, const char* key, bool* out_val);
 

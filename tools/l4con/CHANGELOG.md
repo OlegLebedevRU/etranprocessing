@@ -2,6 +2,17 @@
 
 All notable changes to the `l4con` component will be documented in this file.
 
+## [1.9.4] - 2026-10-01
+
+- Remote command buffers support the IoT limit of 4096 Unicode characters,
+  including the PowerShell UTF-16/base64 wrapper. Previously commands were
+  silently truncated to 1023 UTF-8 bytes, breaking full-size user event payloads.
+- Strict command JSON decoding handles Unicode escapes, rejects malformed,
+  oversized and invalid UTF-8 commands with error/EOF and exit 126 before
+  process creation. An invalid command_line cannot fall back to command_id.
+- x86/x64 tests cover full 4096-character ASCII/Unicode PowerShell execution,
+  overflow refusal, complete JSON decoding and unchanged IPC/job lifecycle.
+
 ## [1.9.3] - 2026-10-01
 
 - Quiet `--send-event` IPC mode for user events 900–999 through the existing
