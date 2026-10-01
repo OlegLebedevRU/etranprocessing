@@ -29,4 +29,35 @@ Local Docker engine unavailable, so image smoke/layer scan of actual images
 not run. Janus was not rebuilt; production and builder were not accessed.
 Historical18D handoff is preserved as prior release evidence, not current E2E.
 
-IoT and MenuBuilder results will be appended after their separate steps.
+Published l4media step: e5dcc6db0d4d20a6852541b19dcabe40e926b681 in main.
+
+## IoT event75 (2026-10-02)
+
+Published 987c5badbd810b55642be6c21870f5c9f0027640 in origin/master.
+Updated the current MQTT5 contract with inventory444/package445 and existing
+certificate tags. Old320ceac MQTT3 fallback decoder not copied; normal collector
+and tenant isolation unchanged. Only75 is exempt from evt/activity billing.
+Current result received_at tracking and durable RPC result path retained.
+Changed subscriber quality required explicit missing-correlation REQ/RES refusal
+and specific parser catches/debug logging; added tests and preserved intentional
+nonfatal billing/optional relay behavior. No migration/native change/deployment.
+Full pytest463 passed/7 skipped; Ruff/format/Pyright passed on changed sources.
+Six history DB tests need explicit local DSN and were skipped; no live MQTT E2E.
+Detailed integration record: IoT docs/handoffs/2026-10-02-event75-consolidation.md.
+
+## MenuBuilder
+
+Producer04560ca is already reachable from main. Restored only final historical
+18D-AUTH report/candidate from97e39dd, with original immutable producer/report
+SHAs and acceptance wording. No source/env changes or new credential rotation.
+Report SHA25661d74d4ff286f8d31c3d842b04bcedd0b96224425e7c1fe2f711137c00c0d010
+matches candidate. Restored media report/evidence hashes also match its candidate.
+The report distinguishes producer acceptance from pending controller acceptance;
+consolidation does not rewrite those historical verdicts or prove current runtime.
+MB/PB tests/builds not run: this step changes documentation only, per AGENTS.
+
+## Completion boundaries
+
+All three selected stacks are integrated in their base branches after separate
+checks. No force push, production deployment, native tools update, or Janus rebuild.
+Unrelated landing work and controller prompt edits remain outside this scope.

@@ -1,5 +1,12 @@
 # MenuBuilder
 
+## 2026-10-02: media auth acceptance records
+
+Final historical18D-AUTH report/candidate restored from97e39dd into main;
+producer04560ca was already reachable. Report hash matches its candidate;
+original immutable SHAs/verdicts preserved. No code, env, rotation or deployment.
+See [consolidation handoff](../tasks/completed/2026-10-01-server-stack-consolidation.md).
+
 ## Назначение
 Пользовательский портал, tenant/admin flows, billing, BFF управления терминалами.
 

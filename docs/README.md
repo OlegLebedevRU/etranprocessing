@@ -23,6 +23,7 @@
 - **[`etran_arch-video-remote-desktop-e2e.md`](etran_arch-video-remote-desktop-e2e.md)** — Единая E2E-архитектура видеонаблюдения и удаленного управления: краткая и детальная части, схемы media/control/signaling, оркестрация и контракты MenuBuilder/app1/l4desk, задачи надежности и развертывания, направления Linux и ESP32-P4.
 - **[`menu_arch-l4mcp-v1.md`](menu_arch-l4mcp-v1.md)** — MCP-доступ ролей 1/3/5, безопасная проверка агента перед консолью, PIN и порядок подключения клиентов.
 - **[`menu_arch-l4mcp-user-events-plan.md`](menu_arch-l4mcp-user-events-plan.md)** — История событий900–999, tenant-контекст internal API, этапы MenuBuilder/l4mcp и E2E-проверки.
+- **[`menu_arch-l4mcp-scenario-practice.md`](menu_arch-l4mcp-scenario-practice.md)** — События как память удалённых сценариев, формат результатов и пример предупредительного обслуживания Windows-клиентов; предложения следующих этапов.
 - **[`ops_run-l4mcp-release.md`](ops_run-l4mcp-release.md)** — Адресный выпуск L4mcp с сохранением серверного Redis, приватного env и процедурой отката.
 
 ---

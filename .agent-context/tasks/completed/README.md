@@ -6,6 +6,9 @@
 
 ## Индекс
 
+- [2026-10-01/02 — server stack consolidation](2026-10-01-server-stack-consolidation.md):
+  l4media source/registry flow, IoT75 contract/billing and final MB auth records.
+
 - [2026-10-01 — l4mcp900–999](2026-10-01-l4mcp-user-events.md):
   структурированная отправка, read-only tenant history, корреляция и E2E.
 
