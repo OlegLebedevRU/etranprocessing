@@ -1,4 +1,4 @@
-#ifndef L4DESK_CONFIG_H
+﻿#ifndef L4DESK_CONFIG_H
 #define L4DESK_CONFIG_H
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -9,7 +9,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define L4DESK_VERSION_STR "1.9.2"
+#define L4DESK_VERSION_STR "1.9.3"
 #define DEFAULT_MQTT_HOST "127.0.0.1"
 #define DEFAULT_MQTT_PORT 1883
 #define DEFAULT_PROXY_HTTP_PORT 18443

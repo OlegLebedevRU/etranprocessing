@@ -1,4 +1,4 @@
-#include "cert_discovery.h"
+﻿#include "cert_discovery.h"
 
 #include <windows.h>
 #include <wincrypt.h>
@@ -11,18 +11,6 @@
 #pragma comment(lib, "crypt32.lib")
 #pragma comment(lib, "ncrypt.lib")
 #pragma comment(lib, "advapi32.lib")
-
-static const char* stristr(const char* haystack, const char* needle) {
-    if (!haystack || !needle) return NULL;
-    if (!*needle) return haystack;
-    size_t needle_len = strlen(needle);
-    for (; *haystack; haystack++) {
-        if (_strnicmp(haystack, needle, needle_len) == 0) {
-            return haystack;
-        }
-    }
-    return NULL;
-}
 
 static bool discovery_get_cn(PCCERT_CONTEXT pCert, bool is_issuer, char* out_cn, size_t out_cn_size) {
     if (!pCert || !out_cn || out_cn_size == 0) return false;
@@ -71,19 +59,7 @@ static bool discovery_is_issuer_leo4(PCCERT_CONTEXT pCert, char* out_issuer_cn, 
     char issuer_cn[128] = { 0 };
     discovery_get_cn(pCert, true, issuer_cn, sizeof(issuer_cn));
 
-    char szIssuerDn[1024] = { 0 };
-    CertNameToStrA(
-        X509_ASN_ENCODING,
-        &pCert->pCertInfo->Issuer,
-        CERT_X500_NAME_STR,
-        szIssuerDn,
-        sizeof(szIssuerDn)
-    );
-
-    bool matched = false;
-    if (stristr(issuer_cn, "iot.leo4.ru") != NULL || stristr(szIssuerDn, "iot.leo4.ru") != NULL) {
-        matched = true;
-    }
+    bool matched = (_stricmp(issuer_cn, "iot.leo4.ru") == 0);
 
     if (matched && out_issuer_cn && out_size > 0) {
         if (issuer_cn[0] != '\0') {

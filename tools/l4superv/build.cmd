@@ -54,6 +54,14 @@ exit /b 1
 :build_all
 call :do_build_x86
 call :do_build_x64
+call :do_identity_test x86
+if errorlevel 1 goto :shutdown_test_failed
+call :do_identity_test x64
+if errorlevel 1 goto :shutdown_test_failed
+call :do_shutdown_test x86
+if errorlevel 1 goto :shutdown_test_failed
+call :do_shutdown_test x64
+if errorlevel 1 goto :shutdown_test_failed
 goto :summary
 
 :build_tests
@@ -66,12 +74,20 @@ goto :summary
 
 :build_x64
 call :do_build_x64
+call :do_identity_test x86
+if errorlevel 1 goto :shutdown_test_failed
+call :do_identity_test x64
+if errorlevel 1 goto :shutdown_test_failed
+call :do_shutdown_test x86
+if errorlevel 1 goto :shutdown_test_failed
+call :do_shutdown_test x64
+if errorlevel 1 goto :shutdown_test_failed
 goto :summary
 
 :do_build_x86
 echo.
 echo [Build x86] 32-bit static binaries (Windows 7 SP1+ compatible)...
-cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\l4superv.res res\l4superv.rc && rc.exe /nologo /fo obj\x86\l4install.res res\l4install.rc && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_WIN32_WINNT=0x0601 /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x86\ src\supervisor_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\proxy_client.c src\session_proc.c src\orchestrator.c src\cert_discovery.c obj\x86\l4superv.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\l4superv.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib wtsapi32.lib userenv.lib ncrypt.lib version.lib && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_WIN32_WINNT=0x0601 /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x86\ src\installer_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\miniz.c src\zip_extractor.c obj\x86\l4install.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\l4install_x86.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib shell32.lib version.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\l4superv.res res\l4superv.rc && rc.exe /nologo /fo obj\x86\l4install.res res\l4install.rc && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_WIN32_WINNT=0x0601 /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x86\ src\supervisor_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\proxy_client.c ..\l4pin\src\http_client.c ..\leo4proxy\src\policy_json.c src\session_proc.c src\orchestrator.c src\cert_discovery.c obj\x86\l4superv.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\l4superv.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib wtsapi32.lib userenv.lib ncrypt.lib version.lib && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_WIN32_WINNT=0x0601 /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x86\ src\installer_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\miniz.c src\zip_extractor.c obj\x86\l4install.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\l4install_x86.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib shell32.lib version.lib"
 if errorlevel 1 (
     echo [ERROR] x86 build failed!
     set BUILD_FAILED=1
@@ -87,7 +103,7 @@ exit /b 0
 :do_build_x64
 echo.
 echo [Build x64] 64-bit static binaries...
-cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /fo obj\x64\l4superv.res res\l4superv.rc && rc.exe /nologo /fo obj\x64\l4install.res res\l4install.rc && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x64\ src\supervisor_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\proxy_client.c src\session_proc.c src\orchestrator.c src\cert_discovery.c obj\x64\l4superv.res /link /OUT:bin\x64\l4superv.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib wtsapi32.lib userenv.lib ncrypt.lib version.lib && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x64\ src\installer_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\miniz.c src\zip_extractor.c obj\x64\l4install.res /link /OUT:bin\x64\l4install_x64.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib shell32.lib version.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /fo obj\x64\l4superv.res res\l4superv.rc && rc.exe /nologo /fo obj\x64\l4install.res res\l4install.rc && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x64\ src\supervisor_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\proxy_client.c ..\l4pin\src\http_client.c ..\leo4proxy\src\policy_json.c src\session_proc.c src\orchestrator.c src\cert_discovery.c obj\x64\l4superv.res /link /OUT:bin\x64\l4superv.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib wtsapi32.lib userenv.lib ncrypt.lib version.lib && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x64\ src\installer_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\miniz.c src\zip_extractor.c obj\x64\l4install.res /link /OUT:bin\x64\l4install_x64.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib shell32.lib version.lib"
 if errorlevel 1 (
     echo [ERROR] x64 build failed!
     set BUILD_FAILED=1
@@ -101,7 +117,7 @@ exit /b 0
 :do_build_tests
 echo.
 echo [Build and Run Tests] Unit and Component Tests (x64)...
-cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && cl.exe /nologo /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x64\ tests\test_pending_pin.c src\state_mgr.c src\service_mgr.c src\cert_discovery.c /link /OUT:bin\x64\test_pending_pin.exe advapi32.lib crypt32.lib user32.lib shlwapi.lib version.lib ncrypt.lib && cl.exe /nologo /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x64\ tests\test_wait_active_component.c src\orchestrator.c src\proxy_client.c src\mosquitto_conf.c src\state_mgr.c src\service_mgr.c src\hardware_fingerprint.c src\session_proc.c src\config.c src\cert_discovery.c /link /OUT:bin\x64\test_wait_active_component.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib wtsapi32.lib userenv.lib ncrypt.lib version.lib && cl.exe /nologo /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x64\ tests\test_session_proc.c src\session_proc.c /link /OUT:bin\x64\test_session_proc.exe advapi32.lib user32.lib wtsapi32.lib userenv.lib shlwapi.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && cl.exe /nologo /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x64\ tests\test_pending_pin.c src\state_mgr.c src\service_mgr.c src\cert_discovery.c /link /OUT:bin\x64\test_pending_pin.exe advapi32.lib crypt32.lib user32.lib shlwapi.lib version.lib ncrypt.lib && cl.exe /nologo /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x64\ tests\test_wait_active_component.c src\orchestrator.c src\proxy_client.c ..\l4pin\src\http_client.c ..\leo4proxy\src\policy_json.c src\mosquitto_conf.c src\state_mgr.c src\service_mgr.c src\hardware_fingerprint.c src\session_proc.c src\config.c src\cert_discovery.c /link /OUT:bin\x64\test_wait_active_component.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib wtsapi32.lib userenv.lib ncrypt.lib version.lib && cl.exe /nologo /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x64\ tests\test_session_proc.c src\session_proc.c /link /OUT:bin\x64\test_session_proc.exe advapi32.lib user32.lib wtsapi32.lib userenv.lib shlwapi.lib"
 if errorlevel 1 (
     echo [ERROR] x64 test build failed!
     set BUILD_FAILED=1
@@ -128,7 +144,7 @@ if errorlevel 1 (
 
 echo.
 echo [Build and Run Tests] Unit and Component Tests (x86)...
-cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x86\ tests\test_pending_pin.c src\state_mgr.c src\service_mgr.c src\cert_discovery.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\test_pending_pin.exe advapi32.lib crypt32.lib user32.lib shlwapi.lib version.lib ncrypt.lib && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x86\ tests\test_wait_active_component.c src\orchestrator.c src\proxy_client.c src\mosquitto_conf.c src\state_mgr.c src\service_mgr.c src\hardware_fingerprint.c src\session_proc.c src\config.c src\cert_discovery.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\test_wait_active_component.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib wtsapi32.lib userenv.lib ncrypt.lib version.lib && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x86\ tests\test_session_proc.c src\session_proc.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\test_session_proc.exe advapi32.lib user32.lib wtsapi32.lib userenv.lib shlwapi.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x86\ tests\test_pending_pin.c src\state_mgr.c src\service_mgr.c src\cert_discovery.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\test_pending_pin.exe advapi32.lib crypt32.lib user32.lib shlwapi.lib version.lib ncrypt.lib && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x86\ tests\test_wait_active_component.c src\orchestrator.c src\proxy_client.c ..\l4pin\src\http_client.c ..\leo4proxy\src\policy_json.c src\mosquitto_conf.c src\state_mgr.c src\service_mgr.c src\hardware_fingerprint.c src\session_proc.c src\config.c src\cert_discovery.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\test_wait_active_component.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib wtsapi32.lib userenv.lib ncrypt.lib version.lib && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x86\ tests\test_session_proc.c src\session_proc.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\test_session_proc.exe advapi32.lib user32.lib wtsapi32.lib userenv.lib shlwapi.lib"
 if errorlevel 1 (
     echo [ERROR] x86 test build failed!
     set BUILD_FAILED=1
@@ -153,6 +169,22 @@ if errorlevel 1 (
     exit /b 1
 )
 exit /b 0
+
+:do_shutdown_test
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\%1\ tests\test_service_shutdown.c /link /OUT:bin\%1\test_service_shutdown.exe advapi32.lib user32.lib"
+if errorlevel 1 exit /b 1
+bin\%1\test_service_shutdown.exe
+exit /b %ERRORLEVEL%
+
+:shutdown_test_failed
+set BUILD_FAILED=1
+goto :summary
+
+:do_identity_test
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\%1\ tests\test_identity_transition.c src\config.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\hardware_fingerprint.c src\session_proc.c src\cert_discovery.c /link /OUT:bin\%1\test_identity_transition.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib wtsapi32.lib userenv.lib ncrypt.lib version.lib"
+if errorlevel 1 exit /b 1
+bin\%1\test_identity_transition.exe
+exit /b %ERRORLEVEL%
 
 :summary
 echo.

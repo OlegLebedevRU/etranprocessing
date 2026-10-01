@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file main.c
  * @brief Leo4Proxy - Unified Windows SChannel mTLS Proxy and Reverse HTTPS Gateway for Leo4 & Etranprocessing.
  */
@@ -244,6 +244,9 @@ static void on_tray_action(int action_id, void* user_data) {
 }
 
 static void pause_if_explorer(void) {
+    /* No console prompt in SCM/session0: a crash must let recovery proceed. */
+    DWORD session_id = 0;
+    if (!ProcessIdToSessionId(GetCurrentProcessId(), &session_id) || session_id == 0) return;
     DWORD pids[2];
     DWORD count = GetConsoleProcessList(pids, 2);
     if (count <= 1) {
@@ -255,7 +258,14 @@ static void pause_if_explorer(void) {
 
 static LONG WINAPI unhandled_exception_handler(EXCEPTION_POINTERS* pExp) {
     FILE* f = NULL;
-    fopen_s(&f, "leo4proxy_crash.log", "a");
+    wchar_t crash_path[MAX_PATH] = { 0 };
+    DWORD path_length = GetModuleFileNameW(NULL, crash_path, MAX_PATH);
+    wchar_t* separator = path_length && path_length < MAX_PATH ? wcsrchr(crash_path, L'\\') : NULL;
+    if (separator) {
+        *(separator + 1) = 0;
+        if (wcscat_s(crash_path, MAX_PATH, L"leo4proxy_crash.log") == 0)
+            _wfopen_s(&f, crash_path, L"a");
+    }
     if (f) {
         fprintf(f, "\n=== LEO4PROXY CRASH REPORT ===\n");
         fprintf(f, "Exception Code:    0x%08lX\n", pExp->ExceptionRecord->ExceptionCode);
@@ -269,7 +279,6 @@ static LONG WINAPI unhandled_exception_handler(EXCEPTION_POINTERS* pExp) {
     fprintf(stderr, "Crash details saved to leo4proxy_crash.log\n");
     fprintf(stderr, "===============================================================================\n");
 
-    pause_if_explorer();
     return EXCEPTION_EXECUTE_HANDLER;
 }
 
@@ -334,7 +343,7 @@ void proxy_config_init_defaults(ProxyConfig* config) {
     config->is_machine_store = 1;      // Default: LocalMachine\MY
     config->insecure_server_cert = 1;  // Default: ignore untrusted server CA for dev/migration
     config->cert_poll_interval = DEFAULT_CERT_POLL_INTERVAL; // Default: 30s poll in service mode
-    config->drop_on_expire = 0;        // Default: keep expired cert and let remote server decide
+    config->drop_on_expire = 0;        // Compatibility flag; selection requires a valid new-CA certificate
 
     config->http_local_ssl = 0;
     config->mqtt_local_ssl = 0;

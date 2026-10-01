@@ -1,4 +1,4 @@
-#include "cert_store.h"
+﻿#include "cert_store.h"
 #include "cert_discovery.h"
 #include "xml_utils.h"
 #include <stdio.h>
@@ -582,8 +582,10 @@ bool cert_store_install_pkcs7(
     printf("[STORE] Removed %d previous certificate(s) for email [%s]\n",
            removed_count, new_cert_email);
     if (!cleanup_ok) {
-        rollback_installed_certificate(pAddedCert);
-        fprintf(stderr, "[STORE] Certificate replacement failed; check CRITICAL rollback messages and inspect the store before restarting services\n");
+        /* SETUP already consumed the PIN and bound the new serial at the backend.
+         * Never destroy a usable new identity because another profile was locked.
+         * Cleanup failure remains an explicit non-success, with old records restored. */
+        fprintf(stderr, "[STORE] New verified certificate retained, but cross-profile cleanup failed; inspect the profile errors before retrying. Do not consume another PIN solely for cleanup\n");
     }
 
     // 8. If CA certificate is present, install to CA store
@@ -604,7 +606,7 @@ bool cert_store_install_pkcs7(
     }
 
     // 9. Output details
-    if (cleanup_ok && out_installed_details) {
+    if (out_installed_details) {
         *out_installed_details = installed_details;
     }
 

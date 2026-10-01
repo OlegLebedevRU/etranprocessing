@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file rtp_tunnel.h
  * @brief Primary video media tunnel: local RTP/RTCP UDP -> framed mTLS/TCP (L4RTP/1) for Leo4Proxy.
  */
@@ -14,6 +14,7 @@
 typedef struct {
     const ProxyConfig* config;
     const CertDetails* certDetails;
+    CertDetails identity;
     CredHandle hClientCred;
     SOCKET rtpSocket;
     SOCKET rtcpSocket;

@@ -1,4 +1,4 @@
-#include "service_mgr.h"
+﻿#include "service_mgr.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -334,7 +334,7 @@ bool svc_get_status(const wchar_t* svc_name, DWORD* out_state, DWORD* out_pid) {
         return false;
     }
 
-    SERVICE_STATUS_PROCESS ssp;
+    SERVICE_STATUS_PROCESS ssp = { 0 };
     DWORD bytesNeeded = 0;
     BOOL ok = QueryServiceStatusEx(hSvc, SC_STATUS_PROCESS_INFO, (LPBYTE)&ssp, sizeof(ssp), &bytesNeeded);
 
@@ -373,7 +373,7 @@ bool svc_start(const wchar_t* svc_name) {
         return false;
     }
 
-    SERVICE_STATUS_PROCESS ssp;
+    SERVICE_STATUS_PROCESS ssp = { 0 };
     DWORD bytesNeeded = 0;
     if (QueryServiceStatusEx(hSvc, SC_STATUS_PROCESS_INFO, (LPBYTE)&ssp, sizeof(ssp), &bytesNeeded)) {
         if (ssp.dwCurrentState == SERVICE_RUNNING) {
@@ -405,7 +405,8 @@ bool svc_start(const wchar_t* svc_name) {
 
     CloseServiceHandle(hSvc);
     CloseServiceHandle(hSCM);
-    return true;
+    SetLastError(ERROR_SERVICE_REQUEST_TIMEOUT);
+    return false;
 }
 
 bool svc_stop(const wchar_t* svc_name) {
@@ -420,7 +421,7 @@ bool svc_stop(const wchar_t* svc_name) {
         return false;
     }
 
-    SERVICE_STATUS_PROCESS ssp;
+    SERVICE_STATUS_PROCESS ssp = { 0 };
     DWORD bytesNeeded = 0;
     if (QueryServiceStatusEx(hSvc, SC_STATUS_PROCESS_INFO, (LPBYTE)&ssp, sizeof(ssp), &bytesNeeded)) {
         if (ssp.dwCurrentState == SERVICE_STOPPED) {
@@ -431,9 +432,14 @@ bool svc_stop(const wchar_t* svc_name) {
     }
 
     SERVICE_STATUS ss;
-    ControlService(hSvc, SERVICE_CONTROL_STOP, &ss);
+    if (ssp.dwCurrentState != SERVICE_STOP_PENDING && !ControlService(hSvc, SERVICE_CONTROL_STOP, &ss) &&
+        GetLastError() != ERROR_SERVICE_NOT_ACTIVE) {
+        CloseServiceHandle(hSvc);
+        CloseServiceHandle(hSCM);
+        return false;
+    }
 
-    for (int i = 0; i < 20; i++) {
+    for (int i = 0; i < 40; i++) {
         Sleep(250);
         if (QueryServiceStatusEx(hSvc, SC_STATUS_PROCESS_INFO, (LPBYTE)&ssp, sizeof(ssp), &bytesNeeded)) {
             if (ssp.dwCurrentState == SERVICE_STOPPED) {
@@ -446,31 +452,49 @@ bool svc_stop(const wchar_t* svc_name) {
 
     CloseServiceHandle(hSvc);
     CloseServiceHandle(hSCM);
-    return true;
+    SetLastError(ERROR_SERVICE_REQUEST_TIMEOUT);
+    return false;
 }
 
 bool svc_stop_and_kill(const wchar_t* svc_name) {
     if (!svc_name) return false;
-
-    DWORD state = 0, pid = 0;
-    if (svc_get_status(svc_name, &state, &pid)) {
-        if (state != SERVICE_STOPPED) {
-            svc_stop(svc_name);
-        }
-        if (pid > 0) {
-            HANDLE hProc = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
-            if (hProc) {
-                TerminateProcess(hProc, 1);
-                CloseHandle(hProc);
-            }
-        }
+    SC_HANDLE manager = OpenSCManagerW(NULL, NULL, SC_MANAGER_CONNECT);
+    if (!manager) return false;
+    SC_HANDLE service = OpenServiceW(manager, svc_name, SERVICE_QUERY_STATUS);
+    if (!service) { CloseServiceHandle(manager); return false; }
+    SERVICE_STATUS_PROCESS initial = { 0 }, current = { 0 };
+    DWORD bytes = 0;
+    bool result = false;
+    HANDLE process = NULL;
+    if (!QueryServiceStatusEx(service, SC_STATUS_PROCESS_INFO, (BYTE*)&initial, sizeof(initial), &bytes)) goto done;
+    if (initial.dwCurrentState == SERVICE_STOPPED) { result = true; goto done; }
+    /* Pin the process object before stop: its PID cannot target a later process. */
+    if (initial.dwProcessId && initial.dwServiceType == SERVICE_WIN32_OWN_PROCESS)
+        process = OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE, FALSE, initial.dwProcessId);
+    if (svc_stop(svc_name)) { result = true; goto done; }
+    if (!QueryServiceStatusEx(service, SC_STATUS_PROCESS_INFO, (BYTE*)&current, sizeof(current), &bytes)) goto done;
+    if (current.dwCurrentState == SERVICE_STOPPED) { result = true; goto done; }
+    if (!process || current.dwServiceType != SERVICE_WIN32_OWN_PROCESS ||
+        current.dwProcessId != initial.dwProcessId || current.dwCurrentState != SERVICE_STOP_PENDING ||
+        WaitForSingleObject(process, 0) != WAIT_TIMEOUT) goto done;
+    fprintf(stderr, "[SERVICE] Stop timeout: %ls PID %lu; terminating pinned own-process service\n",
+            svc_name, initial.dwProcessId);
+    if (!TerminateProcess(process, 1) || WaitForSingleObject(process, 5000) != WAIT_OBJECT_0) goto done;
+    for (int i = 0; i < 20; i++) {
+        if (!QueryServiceStatusEx(service, SC_STATUS_PROCESS_INFO, (BYTE*)&current, sizeof(current), &bytes)) goto done;
+        if (current.dwCurrentState == SERVICE_STOPPED) { result = true; break; }
+        Sleep(250);
     }
-    return true;
+done:
+    if (!result) fprintf(stderr, "[SERVICE] Stop failed: %ls; restart not attempted\n", svc_name);
+    if (process) CloseHandle(process);
+    CloseServiceHandle(service);
+    CloseServiceHandle(manager);
+    return result;
 }
 
 bool svc_restart(const wchar_t* svc_name) {
-    svc_stop_and_kill(svc_name);
-    Sleep(500);
+    if (!svc_stop_and_kill(svc_name)) return false;
     return svc_start(svc_name);
 }
 

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #define IDD_PIN_DIALOG          101
 #define IDC_PIN_EDIT            1001
@@ -29,3 +29,6 @@
 #define IDC_STATIC_SERVICES_LBL 1028
 
 #define IDI_APP_ICON            201
+
+#define IDC_STATIC_LOG_TITLE 1029
+#define IDC_STATIC_LOG_COUNTS 1030

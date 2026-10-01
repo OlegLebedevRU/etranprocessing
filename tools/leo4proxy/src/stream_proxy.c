@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file stream_proxy.c
  * @brief Plain TCP <-> SChannel TLS Stream Forwarder (RTP/RTSP/MPEG-TS over mTLS) for Leo4Proxy.
  */
@@ -15,8 +15,11 @@ typedef struct {
     struct sockaddr_in clientAddr;
     const ProxyConfig* config;
     StreamProxyServer* server;
+    LONG generation;
     CredHandle hClientCred;
 } StreamClientWorkerArgs;
+
+static volatile LONG next_generation;
 
 static int send_all_socket(SOCKET s, const BYTE* data, int len) {
     int total = 0;
@@ -35,6 +38,7 @@ static unsigned __stdcall stream_client_worker(void* param) {
     const ProxyConfig* config = args->config;
     StreamProxyServer* server = args->server;
     CredHandle hClientCred = args->hClientCred;
+    LONG generation = args->generation;
     free(args);
 
     InterlockedIncrement(&g_proxyStats.stream_active_clients);
@@ -108,7 +112,7 @@ static unsigned __stdcall stream_client_worker(void* param) {
     ULONGLONG lastActivityTime = GetTickCount64();
     bool running = true;
 
-    while (running && (!server || server->isRunning) && policy_media_allowed()) {
+    while (running && (!server || (server->isRunning && server->generation == generation)) && policy_media_allowed()) {
         /* Idle timeout check */
         if (config->stream_idle_timeout_sec > 0) {
             ULONGLONG now = GetTickCount64();
@@ -270,6 +274,7 @@ static unsigned __stdcall stream_listener_thread(void* param) {
                     args->clientAddr = clientAddr;
                     args->config = config;
                     args->server = server;
+                    args->generation = server->generation;
                     args->hClientCred = server->hClientCred;
 
                     HANDLE hWorker = (HANDLE)_beginthreadex(NULL, 0, stream_client_worker, args, 0, NULL);
@@ -292,12 +297,19 @@ static unsigned __stdcall stream_listener_thread(void* param) {
 bool stream_proxy_start(StreamProxyServer* server, const ProxyConfig* config,
                         const CertDetails* certDetails, CredHandle hClientCred) {
     if (!server || !config || !certDetails) return false;
+    if (server->hThread) {
+        if (WaitForSingleObject(server->hThread, 0) != WAIT_OBJECT_0) return false;
+        CloseHandle(server->hThread);
+        server->hThread = NULL;
+    }
     memset(server, 0, sizeof(StreamProxyServer));
 
     server->config = config;
-    server->certDetails = certDetails;
+    server->identity = *certDetails;
+    server->certDetails = &server->identity;
     server->hClientCred = hClientCred;
     server->listenSock = INVALID_SOCKET;
+    server->generation = InterlockedIncrement(&next_generation);
     server->isRunning = true;
 
     struct sockaddr_in addr = { 0 };
@@ -364,8 +376,11 @@ void stream_proxy_stop(StreamProxyServer* server) {
     }
 
     if (server->hThread) {
-        WaitForSingleObject(server->hThread, 2000);
-        CloseHandle(server->hThread);
-        server->hThread = NULL;
+        if (WaitForSingleObject(server->hThread, 2000) == WAIT_OBJECT_0) {
+            CloseHandle(server->hThread);
+            server->hThread = NULL;
+        } else {
+            fprintf(stderr, "[PROXY] Listener still stopping; state retained until thread exits.\n");
+        }
     }
 }

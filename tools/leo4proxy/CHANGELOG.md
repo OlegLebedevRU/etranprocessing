@@ -1,7 +1,17 @@
-# Changelog — Leo4Proxy
+﻿# Changelog — Leo4Proxy
 
 All notable changes to the `leo4proxy` component will be documented in this file.
 
+## [1.7.3] - 2026-10-02
+
+- Activate only currently valid iot.leo4.ru certificates with an accessible key;
+  legacy certsrv stays in certificate-wait mode, including explicit thumbprint selection.
+- Choose the latest NotAfter within certificate priority; retain diagnostic listeners in standby.
+- Hold TLS credentials/certificate references until sessions close; use unique ownership tokens
+  so recycled SSPI handles cannot revive old references. Snapshot request identity on rotation.
+- Retain live listener state on stop timeout and retry after exit; fence old MQTT/stream workers.
+- Write crash diagnostics beside the EXE and never pause for console input in a service crash.
+- Add x86/x64 certificate, ownership, loopback TLS retirement and existing policy checks.
 ## [1.7.2] - 2026-10-01
 
 ### Added

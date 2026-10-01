@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file stream_proxy.h
  * @brief Plain TCP <-> SChannel TLS Stream Forwarder (RTP/RTSP/MPEG-TS over mTLS) for Leo4Proxy.
  */
@@ -14,9 +14,11 @@
 typedef struct {
     const ProxyConfig* config;
     const CertDetails* certDetails;
+    CertDetails identity;
     CredHandle hClientCred;
     SOCKET listenSock;
     volatile bool isRunning;
+    LONG generation;
     HANDLE hThread;
 } StreamProxyServer;
 

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file cert_store.c
  * @brief Windows Certificate Store inspection and certificate selection for Leo4Proxy.
  */
@@ -392,15 +392,23 @@ static int get_cert_tier(const char* email, const char* subject) {
     return 0;
 }
 
-static bool search_in_single_store(HCERTSTORE hStore, const ProxyConfig* config, CertDetails* out_details) {
+bool cert_store_find_in_store(HCERTSTORE hStore, const ProxyConfig* config, CertDetails* out_details) {
     if (!hStore || !out_details) return false;
 
     PCCERT_CONTEXT pBestCert = NULL;
     int bestTier = 0;
-    FILETIME bestNotBefore = { 0, 0 };
+    FILETIME bestNotAfter = { 0, 0 };
 
     PCCERT_CONTEXT pCur = NULL;
     while ((pCur = CertEnumCertificatesInStore(hStore, pCur)) != NULL) {
+        /* Legacy certsrv never activates the new native stack, even when valid
+         * or explicitly selected by thumbprint. Keep local diagnostics in standby. */
+        char issuer[256] = { 0 }, cn[128] = { 0 };
+        CertGetNameStringA(pCur, CERT_NAME_ATTR_TYPE, CERT_NAME_ISSUER_FLAG,
+                          szOID_COMMON_NAME, issuer, sizeof(issuer));
+        CertGetNameStringA(pCur, CERT_NAME_ATTR_TYPE, 0, szOID_COMMON_NAME, cn, sizeof(cn));
+        if (_stricmp(issuer, "iot.leo4.ru") || !cn[0] ||
+            CertVerifyTimeValidity(NULL, pCur->pCertInfo) != 0) continue;
         // 1. Must have accessible private key
         if (!cert_check_private_key(pCur)) {
             continue;
@@ -448,12 +456,12 @@ static bool search_in_single_store(HCERTSTORE hStore, const ProxyConfig* config,
             }
             if (str_contains_case_insensitive(email, pattern) ||
                 str_contains_case_insensitive(subject, pattern)) {
-                int isNewer = (pBestCert == NULL) || (CompareFileTime(&pCur->pCertInfo->NotBefore, &bestNotBefore) > 0);
+                int isNewer = (pBestCert == NULL) || (CompareFileTime(&pCur->pCertInfo->NotAfter, &bestNotAfter) > 0);
                 if (isNewer) {
                     if (pBestCert) CertFreeCertificateContext(pBestCert);
                     pBestCert = CertDuplicateCertificateContext(pCur);
                     bestTier = 9;
-                    bestNotBefore = pCur->pCertInfo->NotBefore;
+                    bestNotAfter = pCur->pCertInfo->NotAfter;
                 }
             }
             continue;
@@ -466,7 +474,7 @@ static bool search_in_single_store(HCERTSTORE hStore, const ProxyConfig* config,
             if (currentTier > bestTier) {
                 selectThis = true;
             } else if (currentTier == bestTier) {
-                if (CompareFileTime(&pCur->pCertInfo->NotBefore, &bestNotBefore) > 0) {
+                if (CompareFileTime(&pCur->pCertInfo->NotAfter, &bestNotAfter) > 0) {
                     selectThis = true;
                 }
             }
@@ -475,7 +483,7 @@ static bool search_in_single_store(HCERTSTORE hStore, const ProxyConfig* config,
                 if (pBestCert) CertFreeCertificateContext(pBestCert);
                 pBestCert = CertDuplicateCertificateContext(pCur);
                 bestTier = currentTier;
-                bestNotBefore = pCur->pCertInfo->NotBefore;
+                bestNotAfter = pCur->pCertInfo->NotAfter;
             }
         }
     }
@@ -512,7 +520,7 @@ bool cert_store_find_best_cert(const ProxyConfig* config, CertDetails* out_detai
 
     bool found = false;
     if (hStore) {
-        found = search_in_single_store(hStore, config, out_details);
+        found = cert_store_find_in_store(hStore, config, out_details);
         CertCloseStore(hStore, 0);
     }
 
@@ -526,7 +534,7 @@ bool cert_store_find_best_cert(const ProxyConfig* config, CertDetails* out_detai
             storeName
         );
         if (hStore) {
-            found = search_in_single_store(hStore, config, out_details);
+            found = cert_store_find_in_store(hStore, config, out_details);
             CertCloseStore(hStore, 0);
         }
     }

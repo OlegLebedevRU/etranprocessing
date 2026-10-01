@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+﻿cmake_minimum_required(VERSION 3.20)
 project(l4superv C)
 
 set(CMAKE_C_STANDARD 11)
@@ -15,6 +15,8 @@ set(COMMON_SOURCES
 set(SUPERV_SOURCES
     src/supervisor_main.c
     src/proxy_client.c
+    ../l4pin/src/http_client.c
+    ../leo4proxy/src/policy_json.c
     src/orchestrator.c
     src/session_proc.c
     src/cert_discovery.c

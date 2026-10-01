@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file http_proxy.h
  * @brief HTTP -> HTTPS SChannel mTLS Proxy and Device Info Endpoint for Leo4Proxy.
  */
@@ -14,6 +14,8 @@
 typedef struct {
     const ProxyConfig* config;
     const CertDetails* certDetails;
+    CertDetails identity;
+    SRWLOCK identityLock;
     CredHandle hClientCred;
     CredHandle hServerCred;
     SOCKET listenSock;

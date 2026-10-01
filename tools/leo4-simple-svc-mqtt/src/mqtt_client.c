@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file mqtt_client.c
  * @brief Lightweight zero-dependency MQTT 3.1.1 Presence and LWT client (extra_service).
  */
@@ -49,7 +49,7 @@ int mqtt_client_query_sn(int proxy_port, char* out_sn, size_t out_sn_size) {
     out_sn[0] = '\0';
 
     HINTERNET hSession = WinHttpOpen(L"Leo4SimpleSvcMqtt/1.0",
-                                    WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+                                    WINHTTP_ACCESS_TYPE_NO_PROXY,
                                     WINHTTP_NO_PROXY_NAME,
                                     WINHTTP_NO_PROXY_BYPASS, 0);
     if (!hSession) return -1;

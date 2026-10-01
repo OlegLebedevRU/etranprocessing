@@ -1,4 +1,4 @@
-#include <windows.h>
+﻿#include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -685,7 +685,9 @@ int main(int argc, char* argv[]) {
     RUN_TEST(test_summary_and_state);
     RUN_TEST(test_numeric_version_compare);
     RUN_TEST(test_incomplete_marker_and_recovery);
-    RUN_TEST(test_root_ca_install_and_idempotency);
+    bool allow_machine_ca = (argc == 2 && strcmp(argv[1], "--allow-machine-ca") == 0);
+    if (allow_machine_ca) RUN_TEST(test_root_ca_install_and_idempotency);
+    else printf("[SKIP] Machine ROOT mutation: opt in with --allow-machine-ca for controlled runtime only.\n");
     RUN_TEST(test_log_callback);
 
     printf("=======================================================\n");

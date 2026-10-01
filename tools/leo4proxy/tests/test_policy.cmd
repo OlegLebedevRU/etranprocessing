@@ -11,7 +11,7 @@ call :test x64
 if errorlevel 1 exit /b 1
 exit /b 0
 :test
-cmd /c ""%POLICY_VS%" -arch=%1 -no_logo && cl /nologo /W4 /WX /MT /utf-8 /D_CRT_SECURE_NO_WARNINGS /DUNICODE /D_UNICODE /D_WIN32_WINNT=0x0601 /I src /Foobj\%1\ tests\test_policy.c src\policy_json.c src\rtp_tunnel.c src\schannel_tls.c /Feobj\%1\test_policy.exe /link ws2_32.lib crypt32.lib advapi32.lib shell32.lib winhttp.lib secur32.lib"
+cmd /c ""%POLICY_VS%" -arch=%1 -no_logo && cl /nologo /W4 /WX /MT /utf-8 /D_CRT_SECURE_NO_WARNINGS /DUNICODE /D_UNICODE /D_WIN32_WINNT=0x0601 /I src /Foobj\%1\ tests\test_policy.c src\policy_json.c src\rtp_tunnel.c src\schannel_tls.c src\credential_lifetime.c /Feobj\%1\test_policy.exe /link ws2_32.lib crypt32.lib advapi32.lib shell32.lib winhttp.lib secur32.lib"
 if errorlevel 1 exit /b 1
 obj\%1\test_policy.exe
 exit /b %errorlevel%

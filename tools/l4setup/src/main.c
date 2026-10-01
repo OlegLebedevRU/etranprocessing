@@ -1,4 +1,4 @@
-#include <winsock2.h>
+﻿#include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
 #include <shellapi.h>
@@ -151,6 +151,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     }
 
     LocalFree(argv);
+
+    if (cli_opts.preview_ui) {
+        return ui_run_interactive_setup(hInstance, &cli_opts);
+    }
 
     // 4. Elevation Check: Product Exit Code 20 (Win32 ERROR_ACCESS_DENIED is 5)
     // Never self-elevate or call runas

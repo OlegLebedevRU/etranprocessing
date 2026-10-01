@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file c_client_example.c
  * @brief C Client Example (extra_service role) using Eclipse Paho MQTT C (No-SSL).
  *
@@ -67,7 +67,7 @@ static void get_iso_time_with_offset(char* out_time, size_t size) {
 
 /* Queries active Device SN from local Leo4Proxy REST endpoint */
 static int query_device_sn(char* out_sn, size_t out_sn_size) {
-    HINTERNET hSession = WinHttpOpen(L"Leo4Client/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    HINTERNET hSession = WinHttpOpen(L"Leo4Client/1.0", WINHTTP_ACCESS_TYPE_NO_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!hSession) return -1;
 
     HINTERNET hConnect = WinHttpConnect(hSession, L"127.0.0.1", PROXY_HTTP_PORT, 0);

@@ -1,4 +1,4 @@
-#include "cli.h"
+﻿#include "cli.h"
 #include "version.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -37,12 +37,15 @@ bool cli_parse(int argc, wchar_t* argv[], CliOptions* opts, char* err_buf, size_
     for (int i = 1; i < argc; i++) {
         const wchar_t* arg = argv[i];
 
-        if (_wcsicmp(arg, L"--version") == 0 || _wcsicmp(arg, L"-version") == 0 || 
+        if (_wcsicmp(arg, L"--preview-ui") == 0) {
+            opts->preview_ui = true;
+            explicit_interactive = true;
+        } else if (_wcsicmp(arg, L"--version") == 0 || _wcsicmp(arg, L"-version") == 0 ||
             _wcsicmp(arg, L"/version") == 0 || _wcsicmp(arg, L"-v") == 0) {
             opts->show_version = true;
             return true;
-        } else if (_wcsicmp(arg, L"--help") == 0 || _wcsicmp(arg, L"-help") == 0 || 
-                   _wcsicmp(arg, L"/help") == 0 || _wcsicmp(arg, L"-h") == 0 || 
+        } else if (_wcsicmp(arg, L"--help") == 0 || _wcsicmp(arg, L"-help") == 0 ||
+                   _wcsicmp(arg, L"/help") == 0 || _wcsicmp(arg, L"-h") == 0 ||
                    _wcsicmp(arg, L"/?") == 0) {
             opts->show_help = true;
             return true;
@@ -53,7 +56,7 @@ bool cli_parse(int argc, wchar_t* argv[], CliOptions* opts, char* err_buf, size_
                    _wcsicmp(arg, L"/no-pin") == 0) {
             opts->no_pin = true;
         } else if (_wcsicmp(arg, L"--silent") == 0 || _wcsicmp(arg, L"-silent") == 0 ||
-                   _wcsicmp(arg, L"/silent") == 0 || _wcsicmp(arg, L"/S") == 0 || 
+                   _wcsicmp(arg, L"/silent") == 0 || _wcsicmp(arg, L"/S") == 0 ||
                    _wcsicmp(arg, L"/s") == 0 || _wcsicmp(arg, L"-s") == 0 ||
                    _wcsicmp(arg, L"--unattended") == 0 || _wcsicmp(arg, L"-unattended") == 0 ||
                    _wcsicmp(arg, L"/unattended") == 0) {
@@ -69,7 +72,7 @@ bool cli_parse(int argc, wchar_t* argv[], CliOptions* opts, char* err_buf, size_
                    _wcsicmp(arg, L"/smoke-only") == 0) {
             opts->smoke_only = true;
         } else if (_wcsicmp(arg, L"--pin") == 0 || _wcsicmp(arg, L"-pin") == 0 ||
-                   _wcsicmp(arg, L"-p") == 0 || _wcsicmp(arg, L"/pin") == 0 || 
+                   _wcsicmp(arg, L"-p") == 0 || _wcsicmp(arg, L"/pin") == 0 ||
                    _wcsicmp(arg, L"/p") == 0) {
             if (i + 1 < argc) {
                 wcsncpy_s(opts->pin, 64, argv[++i], _TRUNCATE);
@@ -173,6 +176,7 @@ void cli_print_usage(const wchar_t* prog_name) {
     wprintf(L"  --dest, -d <DIR>   Target installation directory (default: C:\\l4tools)\n");
     wprintf(L"  --repair           Force reinstallation of binaries and services even if version matches\n");
     wprintf(L"  --smoke-only       Execute only Phase 5 smoke checks on existing installation\n");
+    wprintf(L"  --preview-ui       Read-only interactive UI preview; no installer operations\n");
     wprintf(L"  --version          Print version information and exit\n");
     wprintf(L"  --help, -h, /?     Show this help message and exit\n\n");
     wprintf(L"Exit Codes:\n");

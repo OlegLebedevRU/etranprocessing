@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file mqtt_proxy.h
  * @brief Plain TCP <-> SChannel TLS MQTT Proxy for Leo4Proxy.
  */
@@ -14,10 +14,12 @@
 typedef struct {
     const ProxyConfig* config;
     const CertDetails* certDetails;
+    CertDetails identity;
     CredHandle hClientCred;
     CredHandle hServerCred;
     SOCKET listenSock;
     volatile bool isRunning;
+    LONG generation;
     HANDLE hThread;
 } MqttProxyServer;
 

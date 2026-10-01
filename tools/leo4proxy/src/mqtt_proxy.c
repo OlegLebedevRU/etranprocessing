@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file mqtt_proxy.c
  * @brief Plain TCP <-> SChannel TLS MQTT Proxy for Leo4Proxy.
  */
@@ -13,9 +13,12 @@ typedef struct {
     SOCKET clientSock;
     const ProxyConfig* config;
     MqttProxyServer* server;
+    LONG generation;
     CredHandle hClientCred;
     CredHandle hServerCred;
 } MqttClientWorkerArgs;
+
+static volatile LONG next_generation;
 
 static int send_all_socket(SOCKET s, const BYTE* data, int len) {
     int total = 0;
@@ -34,6 +37,7 @@ static unsigned __stdcall mqtt_client_worker(void* param) {
     MqttProxyServer* server = args->server;
     CredHandle hClientCred = args->hClientCred;
     CredHandle hServerCred = args->hServerCred;
+    LONG generation = args->generation;
     free(args);
 
     InterlockedIncrement(&g_proxyStats.mqtt_active_clients);
@@ -98,7 +102,7 @@ static unsigned __stdcall mqtt_client_worker(void* param) {
     BYTE buf[16384];
     bool running = true;
 
-    while (running && (!server || server->isRunning) && policy_media_allowed()) {
+    while (running && (!server || (server->isRunning && server->generation == generation)) && policy_media_allowed()) {
         // 1. If we have leftover decrypted plaintext from broker, deliver to client
         if (brokerTlsSession.plainBufLen > brokerTlsSession.plainBufOffset) {
             int recvd = schannel_recv(&brokerTlsSession, buf, sizeof(buf));
@@ -258,6 +262,7 @@ static unsigned __stdcall mqtt_listener_thread(void* param) {
                     args->clientSock = clientSock;
                     args->config = config;
                     args->server = server;
+                    args->generation = server->generation;
                     args->hClientCred = server->hClientCred;
                     args->hServerCred = server->hServerCred;
 
@@ -281,13 +286,20 @@ static unsigned __stdcall mqtt_listener_thread(void* param) {
 bool mqtt_proxy_start(MqttProxyServer* server, const ProxyConfig* config, const CertDetails* certDetails, CredHandle hClientCred, CredHandle hServerCred) {
     policy_identity(certDetails);
     if (!server || !config || !certDetails) return false;
+    if (server->hThread) {
+        if (WaitForSingleObject(server->hThread, 0) != WAIT_OBJECT_0) return false;
+        CloseHandle(server->hThread);
+        server->hThread = NULL;
+    }
     memset(server, 0, sizeof(MqttProxyServer));
 
     server->config = config;
-    server->certDetails = certDetails;
+    server->identity = *certDetails;
+    server->certDetails = &server->identity;
     server->hClientCred = hClientCred;
     server->hServerCred = hServerCred;
     server->listenSock = INVALID_SOCKET;
+    server->generation = InterlockedIncrement(&next_generation);
     server->isRunning = true;
 
     struct sockaddr_in addr = { 0 };
@@ -355,8 +367,11 @@ void mqtt_proxy_stop(MqttProxyServer* server) {
     }
 
     if (server->hThread) {
-        WaitForSingleObject(server->hThread, 2000);
-        CloseHandle(server->hThread);
-        server->hThread = NULL;
+        if (WaitForSingleObject(server->hThread, 2000) == WAIT_OBJECT_0) {
+            CloseHandle(server->hThread);
+            server->hThread = NULL;
+        } else {
+            fprintf(stderr, "[PROXY] Listener still stopping; state retained until thread exits.\n");
+        }
     }
 }

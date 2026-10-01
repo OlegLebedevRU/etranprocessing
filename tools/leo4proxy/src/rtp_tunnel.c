@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file rtp_tunnel.c
  * @brief Primary video media tunnel: local RTP/RTCP UDP -> framed mTLS/TCP (L4RTP/1) for Leo4Proxy.
  */
@@ -417,6 +417,11 @@ static unsigned __stdcall rtp_tunnel_worker_thread(void* param) {
 bool rtp_tunnel_start(RtpTunnelServer* server, const ProxyConfig* config,
                       const CertDetails* certDetails, CredHandle hClientCred) {
     if (!server || !config || !certDetails) return false;
+    if (server->hThread) {
+        if (WaitForSingleObject(server->hThread, 0) != WAIT_OBJECT_0) return false;
+        CloseHandle(server->hThread);
+        server->hThread = NULL;
+    }
     memset(server, 0, sizeof(RtpTunnelServer));
 
     /* Strict SN validation: SN must be from certDetails->sn and length 1..127 */
@@ -454,7 +459,8 @@ bool rtp_tunnel_start(RtpTunnelServer* server, const ProxyConfig* config,
     }
 
     server->config = config;
-    server->certDetails = certDetails;
+    server->identity = *certDetails;
+    server->certDetails = &server->identity;
     server->hClientCred = hClientCred;
     server->isRunning = true;
 
@@ -492,8 +498,11 @@ void rtp_tunnel_stop(RtpTunnelServer* server) {
     }
 
     if (server->hThread) {
-        WaitForSingleObject(server->hThread, 3000);
-        CloseHandle(server->hThread);
-        server->hThread = NULL;
+        if (WaitForSingleObject(server->hThread, 3000) == WAIT_OBJECT_0) {
+            CloseHandle(server->hThread);
+            server->hThread = NULL;
+        } else {
+            fprintf(stderr, "[PROXY] Listener still stopping; state retained until thread exits.\n");
+        }
     }
 }

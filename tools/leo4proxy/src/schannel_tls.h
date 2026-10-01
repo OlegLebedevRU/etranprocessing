@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file schannel_tls.h
  * @brief Windows SChannel SSPI mTLS client implementation for Leo4Proxy.
  */
@@ -16,6 +16,7 @@
 typedef struct {
     PolicySocket policy_socket;
     CredHandle hCred;
+    void* credential_lease;
     CtxtHandle hCtx;
     SOCKET sock;
     SecPkgContext_StreamSizes streamSizes;

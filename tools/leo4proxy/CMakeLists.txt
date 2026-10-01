@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+﻿cmake_minimum_required(VERSION 3.16)
 project(leo4proxy C)
 
 set(CMAKE_C_STANDARD 11)
@@ -10,6 +10,7 @@ set(SOURCES
     src/policy_json.c
     src/cert_store.c
     src/schannel_tls.c
+    src/credential_lifetime.c
     src/mqtt_proxy.c
     src/stream_proxy.c
     src/rtp_tunnel.c

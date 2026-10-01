@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+﻿cmake_minimum_required(VERSION 3.20)
 project(l4con C)
 
 set(CMAKE_C_STANDARD 11)
@@ -7,6 +7,8 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(SOURCES
     src/main.c
     src/config.c
+    ../leo4proxy/src/policy_json.c
+    ../l4pin/src/http_client.c
     src/mqtt_protocol.c
     src/command_runner.c
     src/mqtt_client.c

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file reverse_proxy.c
  * @brief Reverse HTTPS Proxy and TLS Termination for Leo4Proxy.
  */
@@ -14,13 +14,13 @@ typedef struct {
     SOCKET clientSock;
     struct sockaddr_storage clientAddr;
     const ProxyConfig* config;
-    const CertDetails* certDetails;
+    CertDetails identity;
     CredHandle hServerCred;
 } ReverseClientWorkerArgs;
 
 typedef struct {
     SOCKET clientSock;
-    const CertDetails* certDetails;
+    CertDetails identity;
 } HttpRedirectWorkerArgs;
 
 static int send_all_socket(SOCKET s, const BYTE* data, int len) {
@@ -501,7 +501,8 @@ static unsigned __stdcall reverse_client_worker(void* arg) {
 
     SOCKET clientSock = args->clientSock;
     const ProxyConfig* config = args->config;
-    const CertDetails* certDetails = args->certDetails;
+    CertDetails identity = args->identity;
+    const CertDetails* certDetails = &identity;
     CredHandle hServerCred = args->hServerCred;
 
     char clientIp[64] = { 0 };
@@ -827,7 +828,7 @@ static unsigned __stdcall reverse_listener_thread(void* arg) {
                         args->clientSock = clientSock;
                         args->clientAddr = clientAddr;
                         args->config = server->config;
-                        args->certDetails = server->certDetails;
+                        args->identity = server->identity;
                         args->hServerCred = server->hServerCred;
 
                         HANDLE hWorker = (HANDLE)_beginthreadex(NULL, 0, reverse_client_worker, args, 0, NULL);
@@ -854,7 +855,8 @@ static unsigned __stdcall http_redirect_worker(void* arg) {
     if (!args) return 0;
 
     SOCKET s = args->clientSock;
-    const CertDetails* certDetails = args->certDetails;
+    CertDetails identity = args->identity;
+    const CertDetails* certDetails = &identity;
     free(args);
 
     char buf[2048] = { 0 };
@@ -935,7 +937,7 @@ static unsigned __stdcall http_redirect_listener_thread(void* arg) {
                     HttpRedirectWorkerArgs* args = (HttpRedirectWorkerArgs*)malloc(sizeof(HttpRedirectWorkerArgs));
                     if (args) {
                         args->clientSock = clientSock;
-                        args->certDetails = server->certDetails;
+                        args->identity = server->identity;
 
                         HANDLE hWorker = (HANDLE)_beginthreadex(NULL, 0, http_redirect_worker, args, 0, NULL);
                         if (hWorker) {
@@ -957,10 +959,21 @@ static unsigned __stdcall http_redirect_listener_thread(void* arg) {
 
 bool reverse_proxy_start(ReverseProxyServer* server, const ProxyConfig* config, const CertDetails* certDetails, CredHandle hServerCred) {
     if (!server || !config || !certDetails || !SecIsValidHandle(&hServerCred)) return false;
+    if (server->hThread) {
+        if (WaitForSingleObject(server->hThread, 0) != WAIT_OBJECT_0) return false;
+        CloseHandle(server->hThread);
+        server->hThread = NULL;
+    }
+    if (server->hHttpThread) {
+        if (WaitForSingleObject(server->hHttpThread, 0) != WAIT_OBJECT_0) return false;
+        CloseHandle(server->hHttpThread);
+        server->hHttpThread = NULL;
+    }
     memset(server, 0, sizeof(ReverseProxyServer));
 
     server->config = config;
-    server->certDetails = certDetails;
+    server->identity = *certDetails;
+    server->certDetails = &server->identity;
     server->hServerCred = hServerCred;
     server->listenSock = INVALID_SOCKET;
     server->listenSock6 = INVALID_SOCKET;
@@ -1099,13 +1112,19 @@ void reverse_proxy_stop(ReverseProxyServer* server) {
     }
 
     if (server->hThread) {
-        WaitForSingleObject(server->hThread, 2000);
-        CloseHandle(server->hThread);
-        server->hThread = NULL;
+        if (WaitForSingleObject(server->hThread, 2000) == WAIT_OBJECT_0) {
+            CloseHandle(server->hThread);
+            server->hThread = NULL;
+        } else {
+            fprintf(stderr, "[PROXY] Listener still stopping; state retained until thread exits.\n");
+        }
     }
     if (server->hHttpThread) {
-        WaitForSingleObject(server->hHttpThread, 2000);
-        CloseHandle(server->hHttpThread);
-        server->hHttpThread = NULL;
+        if (WaitForSingleObject(server->hHttpThread, 2000) == WAIT_OBJECT_0) {
+            CloseHandle(server->hHttpThread);
+            server->hHttpThread = NULL;
+        } else {
+            fprintf(stderr, "[PROXY] Listener still stopping; state retained until thread exits.\n");
+        }
     }
 }

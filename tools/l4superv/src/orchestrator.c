@@ -1,4 +1,4 @@
-#ifndef WIN32_LEAN_AND_MEAN
+﻿#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <winsock2.h>
@@ -30,6 +30,8 @@ static int                 g_l4desk_backoff_sec = 5;
 
 static HANDLE              g_hForceTickEvent = NULL;
 static int                 g_proxy_cert_mismatch_ticks = 0;
+static ULONGLONG           g_last_proxy_identity_restart = 0;
+static DWORD               g_proxy_identity_retry_ms = 30000;
 static time_t              g_last_pending_pin_check = 0;
 
 void orchestrator_trigger_force_tick(void) {
@@ -573,14 +575,14 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
 
     if (state->hw_fingerprint[0] != '\0' && current_fp[0] != '\0' &&
         strcmp(state->hw_fingerprint, current_fp) != 0) {
-        
+
         log_info("[WARN] Hardware fingerprint mismatch detected! (Old: %s, Current: %s, Cert: %s)",
                  state->hw_fingerprint, current_fp, cert_state_to_str(cs));
 
         if (cfg->auto_reset_on_clone) {
             log_info("[WARN] Auto-reset on clone is enabled. Cleaning certificates and resetting to Standby...");
             hw_clean_terminal_certificates();
-            
+
             state_init(state);
             strcpy_s(state->hw_fingerprint, sizeof(state->hw_fingerprint), current_fp);
             state_update_services(cfg->base_path, state);
@@ -605,14 +607,39 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
         state_save(cfg->base_path, state);
     }
 
+    ULONGLONG t_activation_start = 0;
+    bool was_standby = (strcmp(state->status, "active") != 0);
     // 2. Query Leo4Proxy
     Leo4ProxyInfo proxy_info;
     bool query_ok = proxy_client_query_info(cfg->proxy_url, 3000, &proxy_info);
     state->last_check = time(NULL);
 
+    /* A failed HTTP probe is not a certificate transition. Keep the last known
+     * identity/bridge; service health is checked separately through SCM. */
+    if (!query_ok) goto service_health;
+
+    // A newly installed certificate can replace the only terminal identity in
+    // LocalMachine\\MY while Leo4Proxy is still serving its cached old identity.
+    // Never publish the old proxy SN as the current state in that situation.
+    if ((cs == CERT_VALID || cs == CERT_EXPIRING) && cinfo.cert_duplicates == 0 &&
+        cinfo.thumbprint_hex[0] && query_ok && proxy_info.cert_ready &&
+        _stricmp(cinfo.thumbprint_hex, proxy_info.thumbprint) != 0) {
+        ULONGLONG now = GetTickCount64();
+        if (!g_last_proxy_identity_restart || now - g_last_proxy_identity_restart >= g_proxy_identity_retry_ms) {
+            log_info("[CERT] Store/proxy identity mismatch: store SN %s, proxy SN %s; waiting for Leo4Proxy to load the new certificate",
+                     cinfo.sn, proxy_info.sn);
+            g_last_proxy_identity_restart = now;
+            g_proxy_identity_retry_ms = g_proxy_identity_retry_ms < 150000 ? g_proxy_identity_retry_ms * 2 : 300000;
+            if (!svc_restart(SVC_NAME_LEO4PROXY)) {
+                log_info("[CERT] Leo4Proxy restart failed; identity transition remains pending");
+            } else if (p_action_taken) {
+                *p_action_taken = true;
+            }
+        }
+        return false;
+    }
+
     // 3. Handle Certificate Status Transitions
-    ULONGLONG t_activation_start = 0;
-    bool was_standby = (strcmp(state->status, "active") != 0);
 
     if (query_ok && proxy_info.cert_ready && proxy_info.sn[0] != '\0') {
         // --- Certificate is active & valid ---
@@ -629,12 +656,19 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
             log_info("[STATE] Transitioning to ACTIVE (SN: %s, Thumbprint: %.8s...)",
                      proxy_info.sn, proxy_info.thumbprint);
 
-            mosquitto_conf_generate_active(cfg->base_path, cfg->mosquitto_port, proxy_info.sn, cfg->mosquitto_template_path);
-            svc_restart(SVC_NAME_MOSQUITTO);
-            
+            if (!mosquitto_conf_generate_active(cfg->base_path, cfg->mosquitto_port,
+                                                proxy_info.sn, cfg->mosquitto_template_path) ||
+                !svc_restart(SVC_NAME_MOSQUITTO)) {
+                log_info("[CERT] MQTT configuration or restart failed; identity transition remains pending");
+                return false;
+            }
+
             if (sn_changed) {
                 // l4con caches SN on start; restart it to fetch new SN
-                svc_restart(SVC_NAME_L4CON);
+                if (!svc_restart(SVC_NAME_L4CON)) {
+                    log_info("[CERT] L4Con restart failed; identity transition remains pending");
+                    return false;
+                }
 
                 // l4desk also caches SN on start; restart it
                 if (sp_is_alive(g_l4desk_pi.hProcess)) {
@@ -645,13 +679,18 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
                 }
             }
 
+            L4State previous_state = *state;
             strcpy_s(state->status, sizeof(state->status), "active");
             strcpy_s(state->sn, sizeof(state->sn), proxy_info.sn);
             strcpy_s(state->thumbprint, sizeof(state->thumbprint), proxy_info.thumbprint);
             strcpy_s(state->not_after, sizeof(state->not_after), proxy_info.not_after);
             state->updated_at = time(NULL);
             state_update_services(cfg->base_path, state);
-            state_save(cfg->base_path, state);
+            if (!state_save(cfg->base_path, state)) {
+                *state = previous_state;
+                log_info("[CERT] Could not persist new identity; transition will retry");
+                return false;
+            }
 
             if (p_action_taken) *p_action_taken = true;
 
@@ -661,13 +700,21 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
                      proxy_info.sn, proxy_info.thumbprint);
 
             // Restart mosquitto to reconnect TLS bridge to updated proxy
-            svc_restart(SVC_NAME_MOSQUITTO);
+            if (!svc_restart(SVC_NAME_MOSQUITTO)) {
+                log_info("[CERT] MQTT restart failed; certificate renewal remains pending");
+                return false;
+            }
 
+            L4State previous_state = *state;
             strcpy_s(state->thumbprint, sizeof(state->thumbprint), proxy_info.thumbprint);
             strcpy_s(state->not_after, sizeof(state->not_after), proxy_info.not_after);
             state->updated_at = time(NULL);
             state_update_services(cfg->base_path, state);
-            state_save(cfg->base_path, state);
+            if (!state_save(cfg->base_path, state)) {
+                *state = previous_state;
+                log_info("[CERT] Could not persist renewed identity; transition will retry");
+                return false;
+            }
 
             if (p_action_taken) *p_action_taken = true;
         } else {
@@ -681,6 +728,8 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
         }
 
         g_proxy_cert_mismatch_ticks = 0;
+        g_last_proxy_identity_restart = 0;
+        g_proxy_identity_retry_ms = 30000;
 
     } else {
         // --- Certificate is missing or proxy in standby ---
@@ -689,9 +738,12 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
 
         if (was_active || !conf_in_standby) {
             log_info("[STATE] Standby mode: no certificate loaded in leo4proxy. Configuring local Mosquitto...");
-            
-            mosquitto_conf_generate_standby(cfg->base_path, cfg->mosquitto_port);
-            svc_restart(SVC_NAME_MOSQUITTO);
+
+            if (!mosquitto_conf_generate_standby(cfg->base_path, cfg->mosquitto_port) ||
+                !svc_restart(SVC_NAME_MOSQUITTO)) {
+                log_info("[WARN] Standby bridge transition incomplete; identity retained.");
+                goto service_health;
+            }
 
             strcpy_s(state->status, sizeof(state->status), "standby");
             state->sn[0] = '\0';
@@ -707,7 +759,7 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
         // Check proxy cert mismatch: CERT_VALID in store, but leo4proxy certificate_found is false
         if (cs == CERT_VALID && !proxy_info.certificate_found) {
             g_proxy_cert_mismatch_ticks++;
-            if (g_proxy_cert_mismatch_ticks > 2) {
+            if (g_proxy_cert_mismatch_ticks == 3) {
                 log_info("[WARN] proxy_cert_mismatch: cert_state is CERT_VALID, but leo4proxy certificate_found is false for %d ticks",
                          g_proxy_cert_mismatch_ticks);
             }
@@ -741,13 +793,21 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
             ca_diag = "unreachable";
         }
 
-        log_info("[WAIT] standby: cert_state=%s pending_pin=%s ca=%s next=%ds",
-                 cert_state_to_str(cs),
-                 has_pending_pin ? "yes" : "no",
-                 ca_diag,
-                 cfg->standby_poll_sec > 0 ? cfg->standby_poll_sec : 5);
+        static ULONGLONG last_wait_log;
+        static char last_wait_state[128];
+        char wait_state[128];
+        sprintf_s(wait_state, sizeof(wait_state), "cert_state=%s pending_pin=%s ca=%s",
+                  cert_state_to_str(cs), has_pending_pin ? "yes" : "no", ca_diag);
+        ULONGLONG wait_now = GetTickCount64();
+        if (!last_wait_log || strcmp(wait_state, last_wait_state) || wait_now-last_wait_log >= 300000) {
+            log_info("[WAIT] standby: %s next=%ds", wait_state,
+                     cfg->standby_poll_sec > 0 ? cfg->standby_poll_sec : 5);
+            strcpy_s(last_wait_state, sizeof(last_wait_state), wait_state);
+            last_wait_log = wait_now;
+        }
     }
 
+service_health:
     // 4. Watchdog Process & Path Enforcement
     if (cfg->watchdog_enabled) {
         if (cfg->auto_start_leo4proxy) {

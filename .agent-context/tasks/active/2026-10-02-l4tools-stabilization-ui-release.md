@@ -1,9 +1,9 @@
-# L4 Tools: стабилизация, UI и выпуск
+﻿# L4 Tools: стабилизация, UI и выпуск
 
 ## Task intake
 - Цель: поднять финальные tools, сохранить l4pin GUI/безопасную замену сертификата,
   стабилизировать сетевые/служебные пути, переработать l4setup UI, закрепить подпись.
-- Scope: весь tools; текущая стадия — исследование и документирование плана.
+- Scope: весь tools; код и unsigned build выполнены, ожидается controlled runtime и подпись.
 - Владелец: native-инструменты; упаковка l4setup + tools/release. Серверные API без изменений.
 - Flow: final source → x86/x64 build → signed stage → embedded payload → signed setup → registry.
 - Инварианты: сертификат сохраняется при отказе; shutdown ограничен и безопасен;
@@ -28,3 +28,27 @@
 
 ## Реализация разрешена 2026-10-02
 Ветка feat/l4tools-stabilization-cascade. [Единый отчёт](../../../docs/term_dev-l4tools-cascade-report.md). Этап00 завершён; этап01 l4pin выполняется. Неподтверждённые runtime/подпись отмечаются отдельно.
+
+## Текущий handoff
+
+- Ветка feat/l4tools-stabilization-cascade от main84bf3aa; implementation checkout
+  D:\work\etranprocessing-mcp-user-events. Пользовательский dirty root/native files не заменяются.
+- Отчёт этапов00–07: docs/term_dev-l4tools-cascade-report.md; read-only preview PNG приложен.
+- Решения пользователя: normal native HTTP NO_PROXY; legacy certsrv не запускает MQTT/RTP;
+  после verified new certificate cleanup legacy/old iot in Machine MY и всех profile MY.
+- Собраны package1.9.4, pin1.7.3, proxy1.7.3, con1.9.5, superv/install1.9.3, desk1.9.3;
+  l4capture актуального main1.0.0 и sql1.7.6. Staged18 EXE; unsigned, registry не обновлялся.
+- Tests: pin certificate8/8, bounded HTTP/JSON/profile registry fixtures; superv mock SCM/process/identity;
+  con MQTT5, user-event IPC/Job/rate и discovery; proxy policy/selection/lifetime + real loopback TLS
+  with retired credentials; setup isolated8/8. Архитектуры x86/x64. Backend/frontend tests не запускались.
+- Не запускать старый superv test_wait_active_component: использует live SCM names.
+  Setup Machine ROOT test теперь только явный --allow-machine-ca; default isolated tests безопасны.
+- OpenH264 vendor не tracked; восстановлены API headers и6 libs из локального capture-debug cache
+  с совпадающими SHA256. Не копировались старые first-party EXE. Этот cache сохраняется для builds.
+- Runtime MY/profile hive issuance/PIN, services under superv, media policy/log growth, actual installer
+  upgrade/cancel и physical mixed-DPI transitions не проверены. Установленные EXE не заменялись.
+- Automatic approval review отклонил составной live-cert diagnostic command (blocked by policy,
+  без подробной причины). Не повторять его обходом; narrower read-only UI preview разрешён.
+- Далее: конкретная operator-coordinated service stop для controlled runtime; backup перед заменой.
+  Потом existing signing handoff (tools/release/README.md), verify signatures+timestamps+hashes,
+  publish exact signed package. Не rebuild components после подписания.

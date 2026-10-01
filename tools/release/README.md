@@ -1,9 +1,9 @@
-# L4 Tools release signing
+﻿# L4 Tools release signing
 
 For every `l4setup` build, pause after preparing the unsigned staging
 payloads. Give the operator the command below and wait for confirmation that
 it completed. Resume release verification and publication only after checking
-the signatures of all 18 staged EXE files and `tools/dist/l4setup.exe`.
+the signatures of every staged EXE file (enumerated recursively in both architectures) and `tools/dist/l4setup.exe`.
 
 From the repository worktree in a regular Windows PowerShell session:
 
@@ -27,3 +27,11 @@ make modified executables or revoked/untrusted signatures valid.
 The component build gate is `tools/build_dist.cmd <version>`. If a test fails,
 record the failure explicitly. An unsigned build or a failed signature check
 must not be published as a signed release.
+
+Do not run `tools/build_dist.cmd` after signing: it rebuilds unsigned components.
+The operator uses the existing `Complete-SignedRelease.ps1`; the agent then
+verifies the exact signed staging/payload/installer hashes and publishes those
+artifacts. Any source change after signing requires another build/sign/verify cycle.
+Component versions in the manifest come from staged PE resources and must agree
+between architectures. The universal installer remains x86; x64 is also built
+for compilation/compatibility checks.

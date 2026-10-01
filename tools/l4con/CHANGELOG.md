@@ -1,7 +1,12 @@
-# Changelog — l4con (Leo4 Diagnostic Console Agent)
+﻿# Changelog — l4con (Leo4 Diagnostic Console Agent)
 
 All notable changes to the `l4con` component will be documented in this file.
 
+## [1.9.5] - 2026-10-02
+
+- Use direct NO_PROXY and bounded complete-response discovery; validate root JSON identity fields.
+- Preserve 1.9.4 command limits, events900–999, tags446/447/448, Job authorization and rate limit.
+- Add isolated malformed/nested/partial identity fixtures to x86/x64 build checks.
 ## [1.9.4] - 2026-10-01
 
 - Remote command buffers support the IoT limit of 4096 Unicode characters,

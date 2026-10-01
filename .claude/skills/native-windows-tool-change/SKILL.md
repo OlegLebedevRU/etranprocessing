@@ -1,4 +1,4 @@
----
+﻿---
 name: native-windows-tool-change
 description: Изменения разрешённой tools-утилиты на C/C++, WinAPI/CNG/MQTT с проверкой ownership, cleanup, контрактов и штатной сборкой x86/x64/default.
 ---
@@ -30,3 +30,11 @@ description: Изменения разрешённой tools-утилиты на
 ## Результат
 Diff scope, [l4desk context](../../../.agent-context/components/l4desk.md),
 контрактная матрица, build artifacts/exit codes и непроверенные сценарии в handoff.
+## Mandatory signing handoff for L4 Tools releases
+
+For every l4setup/L4 Tools release, follow `tools/release/README.md` and use the
+existing `Complete-SignedRelease.ps1`. Prepare unsigned staging, give the operator
+the concrete command, and wait for successful signing. Verify every staged EXE,
+the embedded payload and final installer, including RFC3161 timestamp and hashes.
+Do not publish unsigned artifacts or rebuild components after signing. Certificate
+and PFX passwords stay outside tracked files and come from the environment.

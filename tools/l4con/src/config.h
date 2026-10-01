@@ -1,4 +1,4 @@
-#ifndef L4CON_CONFIG_H
+﻿#ifndef L4CON_CONFIG_H
 #define L4CON_CONFIG_H
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -11,7 +11,7 @@
 #include <windows.h>
 
 #define L4CON_APP_NAME        "l4con"
-#define L4CON_APP_VERSION     "1.9.4"
+#define L4CON_APP_VERSION     "1.9.5"
 
 #define L4CON_SERVICE_NAME    L"L4Con"
 #define L4CON_DISPLAY_NAME    L"Leo4 Remote Diagnostics and Console Agent (l4con)"

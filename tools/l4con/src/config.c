@@ -1,4 +1,4 @@
-#ifndef WIN32_LEAN_AND_MEAN
+﻿#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
 
@@ -9,6 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include "config.h"
+#include "../../l4pin/src/http_client.h"
+#include "../../leo4proxy/src/policy_json.h"
 
 #pragma comment(lib, "winhttp.lib")
 
@@ -31,141 +33,39 @@ void config_init_defaults(AppConfig* config) {
 }
 
 int config_query_sn_from_proxy(int proxy_port, char* out_sn, size_t out_sn_size) {
-    if (!out_sn || out_sn_size == 0) return -1;
+    if (!out_sn || out_sn_size == 0 || proxy_port < 1 || proxy_port > 65535) return -1;
     out_sn[0] = '\0';
-
-    HINTERNET hSession = WinHttpOpen(L"L4Con/1.0",
-                                    WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
-                                    WINHTTP_NO_PROXY_NAME,
-                                    WINHTTP_NO_PROXY_BYPASS, 0);
-    if (!hSession) return -1;
-
-    WinHttpSetTimeouts(hSession, 1000, 1000, 2000, 2000);
-
-    HINTERNET hConnect = WinHttpConnect(hSession, L"127.0.0.1", (INTERNET_PORT)proxy_port, 0);
-    if (!hConnect) {
-        WinHttpCloseHandle(hSession);
-        return -1;
+    char url[128]; sprintf_s(url, sizeof(url), "http://127.0.0.1:%d/_leo4/sn", proxy_port);
+    char* body = NULL; size_t size = 0;
+    if (!http_get_simple(url, 1200, &body, &size)) return -1;
+    while (size && (body[size-1] == '\r' || body[size-1] == '\n' || body[size-1] == ' ' || body[size-1] == '\t')) size--;
+    bool valid = size > 0 && size < out_sn_size;
+    for (size_t i=0; i<size; i++) {
+        unsigned char ch = (unsigned char)body[i];
+        if (ch <= 32 || ch >= 127 || ch == '/' || ch == '\\' || ch == '"') valid = false;
     }
-
-    HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"GET", L"/_leo4/sn",
-                                           NULL, WINHTTP_NO_REFERER,
-                                           WINHTTP_DEFAULT_ACCEPT_TYPES, 0);
-    if (!hRequest) {
-        WinHttpCloseHandle(hConnect);
-        WinHttpCloseHandle(hSession);
-        return -1;
-    }
-
-    int rc = -1;
-    if (WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0,
-                           WINHTTP_NO_REQUEST_DATA, 0, 0, 0) &&
-        WinHttpReceiveResponse(hRequest, NULL)) {
-
-        DWORD dwStatusCode = 0;
-        DWORD dwStatusSize = sizeof(dwStatusCode);
-        if (WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-                                WINHTTP_HEADER_NAME_BY_INDEX, &dwStatusCode, &dwStatusSize, WINHTTP_NO_HEADER_INDEX)) {
-            if (dwStatusCode == 200) {
-                DWORD dwSize = 0;
-                WinHttpQueryDataAvailable(hRequest, &dwSize);
-                if (dwSize > 0 && dwSize < out_sn_size) {
-                    DWORD dwDownloaded = 0;
-                    if (WinHttpReadData(hRequest, out_sn, dwSize, &dwDownloaded)) {
-                        out_sn[dwDownloaded] = '\0';
-                        for (int i = (int)dwDownloaded - 1; i >= 0; i--) {
-                            if (out_sn[i] == '\r' || out_sn[i] == '\n' || out_sn[i] == ' ' || out_sn[i] == '\t') {
-                                out_sn[i] = '\0';
-                            } else {
-                                break;
-                            }
-                        }
-                        if (strlen(out_sn) > 0) {
-                            rc = 0;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    WinHttpCloseHandle(hRequest);
-    WinHttpCloseHandle(hConnect);
-    WinHttpCloseHandle(hSession);
-    return rc;
-}
-
-static bool proxy_json_string(const char* json, const char* key, char* out, size_t capacity) {
-    char quoted_key[64];
-    if (snprintf(quoted_key, sizeof(quoted_key), "\"%s\"", key) < 0) return false;
-    const char* value = strstr(json, quoted_key);
-    if (!value) return false;
-    value = strchr(value + strlen(quoted_key), ':');
-    if (!value) return false;
-    value++;
-    while (*value == ' ' || *value == '\t' || *value == '\r' || *value == '\n') value++;
-    if (*value++ != '"') return false;
-    size_t length = 0;
-    while (value[length] && value[length] != '"') {
-        unsigned char ch = (unsigned char)value[length];
-        if (ch < 32 || ch == '\\' || length + 1 >= capacity) return false;
-        length++;
-    }
-    if (value[length] != '"' || length == 0) return false;
-    memcpy(out, value, length);
-    out[length] = '\0';
-    return true;
+    if (valid) { memcpy(out_sn, body, size); out_sn[size] = '\0'; }
+    free(body); return valid ? 0 : -1;
 }
 
 int config_query_identity_from_proxy(int proxy_port, ProxyIdentity* out_identity) {
-    if (!out_identity) return -1;
+    if (!out_identity || proxy_port < 1 || proxy_port > 65535) return -1;
     memset(out_identity, 0, sizeof(*out_identity));
-    HINTERNET session = WinHttpOpen(L"L4Con/1.8", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
-                                    WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
-    if (!session) return -1;
-    WinHttpSetTimeouts(session, 1000, 1000, 2000, 2000);
-    HINTERNET connection = WinHttpConnect(session, L"127.0.0.1", (INTERNET_PORT)proxy_port, 0);
-    HINTERNET request = connection ? WinHttpOpenRequest(connection, L"GET", L"/_leo4/info",
-                                                        NULL, WINHTTP_NO_REFERER,
-                                                        WINHTTP_DEFAULT_ACCEPT_TYPES, 0) : NULL;
-    int result = -1;
-    if (request && WinHttpSendRequest(request, WINHTTP_NO_ADDITIONAL_HEADERS, 0,
-                                      WINHTTP_NO_REQUEST_DATA, 0, 0, 0) &&
-        WinHttpReceiveResponse(request, NULL)) {
-        DWORD status = 0, status_size = sizeof(status);
-        if (WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-                                WINHTTP_HEADER_NAME_BY_INDEX, &status, &status_size,
-                                WINHTTP_NO_HEADER_INDEX) && status == 200) {
-            char body[16384];
-            size_t used = 0;
-            DWORD received = 0;
-            while (used + 1 < sizeof(body) &&
-                   WinHttpReadData(request, body + used,
-                                   (DWORD)(sizeof(body) - used - 1), &received) && received) {
-                used += received;
-            }
-            body[used] = '\0';
-            char proxy_status[16] = { 0 };
-            if (strstr(body, "\"certificate_found\": true") &&
-                proxy_json_string(body, "status", proxy_status, sizeof(proxy_status)) &&
-                strcmp(proxy_status, "ready") == 0 &&
-                proxy_json_string(body, "sn", out_identity->sn, sizeof(out_identity->sn)) &&
-                proxy_json_string(body, "thumbprint", out_identity->thumbprint,
-                                  sizeof(out_identity->thumbprint)) &&
-                proxy_json_string(body, "serial", out_identity->serial,
-                                  sizeof(out_identity->serial)) &&
-                proxy_json_string(body, "not_after", out_identity->not_after,
-                                  sizeof(out_identity->not_after))) {
-                result = 0;
-            }
-        }
-    }
-    if (request) WinHttpCloseHandle(request);
-    if (connection) WinHttpCloseHandle(connection);
-    WinHttpCloseHandle(session);
-    return result;
+    char url[128]; sprintf_s(url,sizeof(url),"http://127.0.0.1:%d/_leo4/info",proxy_port);
+    char* body = NULL; size_t length = 0;
+    if (!http_get_simple(url,1200,&body,&length)) return -1;
+    PolicyJson json; bool found = false; char status[32]; ProxyIdentity identity = {0};
+    bool valid = policy_json_parse(&json,body,length) &&
+        policy_json_string(&json,policy_json_field(&json,0,"status"),status,sizeof(status)) && !strcmp(status,"ready") &&
+        policy_json_bool(&json,policy_json_field(&json,0,"certificate_found"),&found) && found &&
+        policy_json_string(&json,policy_json_field(&json,0,"sn"),identity.sn,sizeof(identity.sn)) && identity.sn[0] &&
+        policy_json_string(&json,policy_json_field(&json,0,"thumbprint"),identity.thumbprint,sizeof(identity.thumbprint)) &&
+        strlen(identity.thumbprint) == 40 &&
+        policy_json_string(&json,policy_json_field(&json,0,"serial"),identity.serial,sizeof(identity.serial)) && identity.serial[0] &&
+        policy_json_string(&json,policy_json_field(&json,0,"not_after"),identity.not_after,sizeof(identity.not_after)) && identity.not_after[0];
+    if (valid) *out_identity = identity;
+    free(body); return valid ? 0 : -1;
 }
-
 static void parse_uri(const char* uri, char* host, size_t host_len, int* port) {
     if (!uri) return;
     const char* p = uri;

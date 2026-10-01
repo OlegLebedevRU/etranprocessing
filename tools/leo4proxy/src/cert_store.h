@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file cert_store.h
  * @brief Windows Certificate Store inspection and certificate selection for Leo4Proxy.
  */
@@ -33,18 +33,20 @@ typedef struct {
 
 /**
  * @brief Searches the Windows Certificate Store for the newest terminal certificate.
- * 
+ *
+ * Only currently valid iot.leo4.ru certificates with accessible private keys qualify.
  * Priority order:
  * 1. Exact match by thumbprint (if specified).
  * 2. Match by custom email pattern (if specified).
- * 3. Primary default: ends with @leo4.ru (newest NotBefore).
- * 4. Fallback default: ends with @forpay.ru (newest NotBefore).
- * 
+ * 3. Primary default: ends with @leo4.ru (latest NotAfter).
+ * 4. Fallback default: ends with @forpay.ru (latest NotAfter).
+ *
  * @param config Configuration options.
  * @param out_details Output structure with certificate details and PCCERT_CONTEXT handle.
  * @return true if a valid certificate with private key was found, false otherwise.
  */
 bool cert_store_find_best_cert(const ProxyConfig* config, CertDetails* out_details);
+bool cert_store_find_in_store(HCERTSTORE store, const ProxyConfig* config, CertDetails* out_details);
 
 /**
  * @brief Frees resources allocated in CertDetails (e.g. pCertContext).

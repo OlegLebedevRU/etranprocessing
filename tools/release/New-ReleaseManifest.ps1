@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$Version,
     [string]$DistDir,
@@ -227,6 +227,21 @@ $builtAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 
 # Component versions
 function Get-ToolVersion([string]$name, [string]$fallback) {
+    # Report the staged artifact, not a source header or stale hardcoded value.
+    $relativeExe = if ($name -eq 'l4capture') { 'l4capture\bin\l4capture.exe' }
+        else { "$name\$name.exe" }
+    $stagedVersions = @()
+    foreach ($architecture in @('x86','x64')) {
+        $stagedExe = Join-Path "$DistDir\.stage\$architecture" $relativeExe
+        if (Test-Path -LiteralPath $stagedExe -PathType Leaf) {
+            $actual = (Get-Item -LiteralPath $stagedExe).VersionInfo.ProductVersion
+            if ($actual) { $stagedVersions += $actual.Trim([char]0).Trim() }
+            elseif ($name -notin @('ffmpeg','mosquitto')) { throw "Missing PE version: $stagedExe" }
+        }
+    }
+    $distinctVersions = @($stagedVersions | Sort-Object -Unique)
+    if ($distinctVersions.Count -gt 1) { throw "Architecture version mismatch for $name" }
+    if ($distinctVersions.Count -eq 1) { return $distinctVersions[0] }
     $prev = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
@@ -337,7 +352,7 @@ $components = [ordered]@{
     "l4desk"    = (Get-ToolVersion "l4desk" "1.7.2")
     "l4pin"     = (Get-ToolVersion "l4pin" "1.7.2")
     "l4con"     = (Get-ToolVersion "l4con" "1.7.2")
-    "l4sql"     = "1.0.0"
+    "l4sql"     = (Get-ToolVersion "l4sql" "1.7.6")
     "l4capture" = (Get-ToolVersion "l4capture" "1.0.0")
     "mosquitto" = (Get-ToolVersion "mosquitto" "2.1.2")
     "ffmpeg"    = (Get-ToolVersion "ffmpeg" "9.0")

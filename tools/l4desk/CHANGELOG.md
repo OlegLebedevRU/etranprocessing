@@ -1,5 +1,9 @@
-# CHANGELOG: l4desk
+﻿# CHANGELOG: l4desk
 
+## [1.9.3] - 2026-10-02
+
+- Use direct NO_PROXY and bounded complete-response SN discovery through the existing local proxy.
+- Preserve svc_desk MQTT presence/control, native capture profiles and local input/lease policy.
 ## [Unreleased]
 
 ### Added / Fixed (2026-09-29)

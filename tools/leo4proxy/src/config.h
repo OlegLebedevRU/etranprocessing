@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file config.h
  * @brief Configuration and defaults for Leo4Proxy (C / Windows SChannel TLS Proxy).
  */
@@ -14,7 +14,7 @@
 #include <windows.h>
 #include <stdbool.h>
 
-#define LEO4_PROXY_VERSION "1.7.2"
+#define LEO4_PROXY_VERSION "1.7.3"
 #define LEO4_SERVICE_NAME L"Leo4Proxy"
 #define LEO4_SERVICE_DISPLAY_NAME L"Leo4 IoT SChannel Proxy Service"
 #define LEO4_SERVICE_DESC L"Leo4 IoT SChannel mTLS Proxy for MQTT (18883), HTTPS (18443), Stream (8554) and RTP Tunnel (5004/5005) using Windows Certificate Store."
@@ -116,7 +116,7 @@ typedef struct {
     int  is_machine_store;      /* 1 for LocalMachine, 0 for CurrentUser */
     int  insecure_server_cert;  /* 1 to ignore untrusted server CA (default: 1) */
     int  cert_poll_interval;    /* Interval in seconds for certificate change polling (default: 30) */
-    int  drop_on_expire;        /* 1 to transition to standby mode if cert expires and no valid cert in store (default: 0) */
+    int  drop_on_expire;        /* Compatibility option; selection always requires a currently valid new-CA certificate. */
 
     int  http_local_ssl;        /* 1 to enforce SSL on local HTTP listener */
     int  mqtt_local_ssl;        /* 1 to enforce SSL on local MQTT listener */

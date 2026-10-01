@@ -1,7 +1,17 @@
-# Changelog — l4superv (Leo4 Supervisor & Orchestrator Suite)
+﻿# Changelog — l4superv (Leo4 Supervisor & Orchestrator Suite)
 
 All notable changes to the `l4superv` and `l4install` suite will be documented in this file.
 
+## [1.9.3] - 2026-10-02
+
+- Consolidate certificate/proxy identity transitions without rolling back later tool inventory.
+- Wait for graceful service shutdown; force termination only after a timeout against a pinned
+  own-process service, matching PID and STOP_PENDING. Failed stop prevents restart.
+- Use bounded NO_PROXY HTTP probes with complete JSON; failed probes retain identity and bridge
+  while SCM health recovery continues. Bound certificate mismatch restart retries.
+- Commit identity only after successful bridge generation/restart/state persistence.
+- Log unchanged standby waits every five minutes instead of every poll.
+- Add isolated x86/x64 SCM, PID, shared-process and identity-transition checks.
 ## [1.7.5] - 2026-09-15
 
 ### Changed & Improved

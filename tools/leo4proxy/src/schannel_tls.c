@@ -1,9 +1,10 @@
-/**
+﻿/**
  * @file schannel_tls.c
  * @brief Windows SChannel SSPI mTLS client implementation for Leo4Proxy.
  */
 
 #include "schannel_tls.h"
+#include "credential_lifetime.h"
 #include <ws2tcpip.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -50,6 +51,11 @@ bool schannel_init_client_creds(PCCERT_CONTEXT pCert, int insecure_server, CredH
         return false;
     }
 
+    if (!credential_register(out_hCred, pCert)) {
+        FreeCredentialsHandle(out_hCred);
+        SecInvalidateHandle(out_hCred);
+        return false;
+    }
     return true;
 }
 
@@ -83,14 +89,16 @@ bool schannel_init_server_creds(PCCERT_CONTEXT pCert, CredHandle* out_hCred) {
         return false;
     }
 
+    if (!credential_register(out_hCred, pCert)) {
+        FreeCredentialsHandle(out_hCred);
+        SecInvalidateHandle(out_hCred);
+        return false;
+    }
     return true;
 }
 
 void schannel_free_creds(CredHandle* hCred) {
-    if (hCred && SecIsValidHandle(hCred)) {
-        FreeCredentialsHandle(hCred);
-        SecInvalidateHandle(hCred);
-    }
+    credential_retire(hCred);
 }
 
 static SOCKET tcp_connect_impl(const char* host, int port, int timeout_ms, PolicySocket* policy_node) {
@@ -350,8 +358,11 @@ static bool schannel_connect_impl(SChannelSession* session, CredHandle* hCred, c
 
     // 1. Establish plain TCP connection
     if (media && !policy_media_allowed()) return false;
+    session->credential_lease = credential_borrow(hCred);
+    if (!session->credential_lease) return false;
     session->sock = tcp_connect_impl(host, port, timeout_ms, media ? &session->policy_socket : NULL);
     if (session->sock == INVALID_SOCKET) {
+        schannel_close(session);
         return false;
     }
     if (media && !policy_media_allowed()) { schannel_close(session); return false; }
@@ -372,7 +383,7 @@ static bool schannel_connect_impl(SChannelSession* session, CredHandle* hCred, c
     }
 
     // 2. Perform SChannel mTLS Handshake
-    if (!perform_handshake(session, hCred, host, insecure_server) || (media && !policy_media_allowed())) {
+    if (!perform_handshake(session, credential_handle(session->credential_lease), host, insecure_server) || (media && !policy_media_allowed())) {
         schannel_close(session);
         return false;
     }
@@ -410,6 +421,8 @@ bool schannel_accept(SChannelSession* session, const CredHandle* hServerCred, SO
     memset(session, 0, sizeof(SChannelSession));
     session->sock = clientSock;
     SecInvalidateHandle(&session->hCtx);
+    session->credential_lease = credential_borrow(hServerCred);
+    if (!session->credential_lease) { schannel_close(session); return false; }
 
     session->recvBufAlloc = 65536;
     session->plainBufAlloc = 65536;
@@ -471,7 +484,7 @@ bool schannel_accept(SChannelSession* session, const CredHandle* hServerCred, SO
         PCtxtHandle phCtxIn = SecIsValidHandle(&session->hCtx) ? &session->hCtx : NULL;
 
         ss = AcceptSecurityContext(
-            (PCredHandle)hServerCred,
+            credential_handle(session->credential_lease),
             phCtxIn,
             &inDesc,
             fContextReq,
@@ -808,4 +821,6 @@ void schannel_close(SChannelSession* session) {
     session->plainBufOffset = 0;
     session->isConnected = false;
     session->isHandshakeComplete = false;
+    credential_release(session->credential_lease);
+    session->credential_lease = NULL;
 }

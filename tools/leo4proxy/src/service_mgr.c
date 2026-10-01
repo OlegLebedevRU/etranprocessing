@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file service_mgr.c
  * @brief Windows Service management and service dispatcher for Leo4Proxy.
  */
@@ -350,6 +350,19 @@ static void WINAPI service_main(DWORD argc, LPWSTR* argv) {
                 isCertLoaded = false;
                 g_proxyStats.cert_ready = 0;
             }
+        }
+
+        /* A listener that exceeded its stop budget retains its thread handle.
+         * Retry only after that old thread has exited; never overwrite live state. */
+        if (isCertLoaded) {
+            if (!isMqttStarted)
+                isMqttStarted = mqtt_proxy_start(&mqttServer, &g_serviceConfig, &certDetails, hClientCred, hServerCred);
+            if (!isStreamStarted && g_serviceConfig.stream_proxy_enabled)
+                isStreamStarted = stream_proxy_start(&streamServer, &g_serviceConfig, &certDetails, hClientCred);
+            if (!isRtpTunnelStarted && g_serviceConfig.rtp_tunnel_enabled)
+                isRtpTunnelStarted = rtp_tunnel_start(&rtpTunnelServer, &g_serviceConfig, &certDetails, hClientCred);
+            if (!isReverseStarted && g_serviceConfig.reverse_proxy_enabled && SecIsValidHandle(&hServerCred))
+                isReverseStarted = reverse_proxy_start(&reverseServer, &g_serviceConfig, &certDetails, hServerCred);
         }
 
         // Wait poll interval or until stop signal

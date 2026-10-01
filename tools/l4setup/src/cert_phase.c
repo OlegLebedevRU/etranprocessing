@@ -1,3 +1,4 @@
+﻿#include "proxy_probe.h"
 #include "cert_phase.h"
 #include "log.h"
 #include "services.h"
@@ -93,55 +94,16 @@ static INT_PTR CALLBACK PinDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lP
 }
 
 static bool poll_proxy_ready(int timeout_seconds) {
-    HINTERNET hSession = WinHttpOpen(L"l4setup/1.6.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
-                                     WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
-    if (!hSession) return false;
-
-    DWORD timeout = 2000;
-    WinHttpSetTimeouts(hSession, timeout, timeout, timeout, timeout);
-
-    int max_attempts = timeout_seconds * 2;
-    bool ready = false;
-
-    for (int i = 0; i < max_attempts; i++) {
-        Sleep(500);
-
-        HINTERNET hConnect = WinHttpConnect(hSession, L"127.0.0.1", 18443, 0);
-        if (!hConnect) continue;
-
-        HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"GET", L"/_leo4/info", NULL,
-                                                WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, 0);
-        if (hRequest) {
-            if (WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0) &&
-                WinHttpReceiveResponse(hRequest, NULL)) {
-                DWORD status_code = 0;
-                DWORD status_code_size = sizeof(status_code);
-                WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-                                    WINHTTP_HEADER_NAME_BY_INDEX, &status_code, &status_code_size, WINHTTP_NO_HEADER_INDEX);
-
-                if (status_code == 200) {
-                    char buf[2048] = { 0 };
-                    DWORD bytes_read = 0;
-                    if (WinHttpReadData(hRequest, buf, sizeof(buf) - 1, &bytes_read) && bytes_read > 0) {
-                        buf[bytes_read] = '\0';
-                        if (strstr(buf, "\"status\":\"ready\"") || strstr(buf, "\"status\": \"ready\"")) {
-                            ready = true;
-                            WinHttpCloseHandle(hRequest);
-                            WinHttpCloseHandle(hConnect);
-                            break;
-                        }
-                    }
-                }
-            }
-            WinHttpCloseHandle(hRequest);
-        }
-        WinHttpCloseHandle(hConnect);
+    ULONGLONG deadline=GetTickCount64()+(ULONGLONG)(timeout_seconds > 0 ? timeout_seconds : 1)*1000;
+    while(GetTickCount64() < deadline) {
+        ULONGLONG now=GetTickCount64();
+        if(now>=deadline) break;
+        ULONGLONG remaining=deadline-now;
+        if(setup_proxy_probe(18443,true,(int)(remaining < 1200 ? remaining : 1200))) return true;
+        if(GetTickCount64() < deadline) Sleep(200);
     }
-
-    WinHttpCloseHandle(hSession);
-    return ready;
+    return false;
 }
-
 static bool save_pending_pin(const wchar_t* dest_dir, const wchar_t* pin) {
     if (!dest_dir || !pin || pin[0] == L'\0') return false;
 

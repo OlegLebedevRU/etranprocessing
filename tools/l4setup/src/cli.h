@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <windows.h>
 #include <stdbool.h>
 
@@ -19,6 +19,7 @@ typedef struct {
     bool smoke_only;
     bool show_version;
     bool show_help;
+    bool preview_ui;
     wchar_t payload_dir[MAX_PATH];
     bool payload_dir_specified;
 } CliOptions;

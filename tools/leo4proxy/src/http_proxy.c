@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file http_proxy.c
  * @brief HTTP -> HTTPS SChannel mTLS Proxy and Device Info Endpoint for Leo4Proxy.
  */
@@ -399,9 +399,13 @@ static unsigned __stdcall http_client_worker(void* param) {
     getpeername(clientSock, (struct sockaddr*)&peerAddr, &peerLen);
     bool is_local = is_loopback_sockaddr((struct sockaddr*)&peerAddr);
 
-    const CertDetails* certDetails = server->certDetails;
+    CertDetails identity;
+    AcquireSRWLockShared(&server->identityLock);
+    identity = server->identity;
+    const CertDetails* certDetails = server->certDetails ? &identity : NULL;
     CredHandle hClientCred = server->hClientCred;
     CredHandle hServerCred = server->hServerCred;
+    ReleaseSRWLockShared(&server->identityLock);
     bool cert_ready = (certDetails != NULL && certDetails->sn[0] != '\0' && g_proxyStats.cert_ready);
     const char* active_sn = cert_ready ? certDetails->sn : "";
 
@@ -714,10 +718,13 @@ static unsigned __stdcall http_listener_thread(void* param) {
 bool http_proxy_start(HttpProxyServer* server, const ProxyConfig* config, const CertDetails* certDetails, CredHandle hClientCred, CredHandle hServerCred) {
     if (!server || !config) return false;
     memset(server, 0, sizeof(HttpProxyServer));
+    InitializeSRWLock(&server->identityLock);
 
     server->config = config;
     policy_identity(certDetails);
-    server->certDetails = certDetails;
+    if (certDetails) server->identity = *certDetails;
+    else memset(&server->identity, 0, sizeof(server->identity));
+    server->certDetails = certDetails ? &server->identity : NULL;
     server->hClientCred = hClientCred;
     server->hServerCred = hServerCred;
     server->listenSock = INVALID_SOCKET;
@@ -781,10 +788,13 @@ bool http_proxy_start(HttpProxyServer* server, const ProxyConfig* config, const 
 void http_proxy_update_creds(HttpProxyServer* server, const CertDetails* certDetails, CredHandle hClientCred, CredHandle hServerCred) {
     if (!server) return;
     policy_identity(certDetails);
-    server->certDetails = certDetails;
+    AcquireSRWLockExclusive(&server->identityLock);
+    if (certDetails) server->identity = *certDetails;
+    else memset(&server->identity, 0, sizeof(server->identity));
+    server->certDetails = certDetails ? &server->identity : NULL;
     server->hClientCred = hClientCred;
     server->hServerCred = hServerCred;
-    MemoryBarrier();
+    ReleaseSRWLockExclusive(&server->identityLock);
 }
 
 void http_proxy_stop(HttpProxyServer* server) {

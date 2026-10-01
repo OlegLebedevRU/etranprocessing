@@ -1,4 +1,4 @@
-#include "gui.h"
+﻿#include "gui.h"
 #include "cert_discovery.h"
 #include "cert_store.h"
 #include "../res/resource.h"
@@ -208,6 +208,7 @@ static INT_PTR CALLBACK gui_proc(HWND dialog, UINT message, WPARAM wparam, LPARA
                 const wchar_t* action = L"Review certificate store and retry safely.";
                 if (last_result == 2 || last_result == 4) action = L"Check PIN and CA connectivity before retrying.";
                 else if (last_result == 3) action = L"Check CNG key store permissions.";
+                else if (last_result == 5) action = L"A new certificate may already be installed. Review profile cleanup errors before using another PIN.";
                 else if (last_result == 20) action = L"Administrator access is required.";
                 swprintf_s(result, sizeof(result) / sizeof(result[0]),
                     L"Enrollment failed (code %d). %ls", last_result, action);

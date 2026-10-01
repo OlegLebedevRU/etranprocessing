@@ -1,4 +1,4 @@
-#include <stdio.h>
+﻿#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <windows.h>
@@ -441,7 +441,7 @@ int l4pin_run_cli(int argc, char* argv[]) {
             target_email,
             &installed_details
         )) {
-        fprintf(stderr, "[ERROR] Failed to install certificate into Windows Certificate Store.\n");
+        fprintf(stderr, "[ERROR] Certificate installation or cleanup incomplete. A verified new certificate is retained if profile cleanup fails; inspect preceding errors before retrying.\n");
         free_setup_response(&setup_resp);
         return 5;
     }

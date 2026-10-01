@@ -1,3 +1,4 @@
+﻿#pragma code_page(65001)
 #include <windows.h>
 #include "resource.h"
 #include "../src/version.h"
@@ -18,37 +19,33 @@ BEGIN
     PUSHBUTTON      "Cancel", IDCANCEL, 195, 80, 70, 16
 END
 
-// Dialog: Main Setup UI
-IDD_MAIN_DIALOG DIALOGEX 0, 0, 380, 280
-STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX
-CAPTION "Leo4 Setup - Installation & Lifecycle"
-FONT 9, "Segoe UI", 400, 0, 0x1
+// Main window: all controls are laid out in DPI-aware client pixels by ui.c.
+IDD_MAIN_DIALOG DIALOGEX 0, 0, 700, 460
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_THICKFRAME
+CAPTION "L4 Tools — установка и обновление"
+FONT 11, "Segoe UI", 400, 0, 0x1
 BEGIN
-    LTEXT           "Leo4 Zero-Touch Setup", IDC_STATIC_HEADER, 15, 10, 350, 16
-    LTEXT           "Target Version: 1.7.7 | Operation: Install", IDC_STATIC_VER_INFO, 15, 27, 350, 11
-    LTEXT           "Destination: C:\\l4tools", IDC_STATIC_PATH_INFO, 15, 39, 350, 11
-    LTEXT           "Safe zero-touch lifecycle (no automatic reboot).", IDC_STATIC_NOTICE, 15, 51, 350, 11
-
-    GROUPBOX        "Background Services", IDC_STATIC_SERVICES_LBL, 15, 64, 350, 65
-    LTEXT           "Leo4Proxy:  Pending", IDC_SVC_LEO4PROXY, 25, 76, 330, 11
-    LTEXT           "mosquitto:  Pending", IDC_SVC_MOSQUITTO, 25, 88, 330, 11
-    LTEXT           "L4Con:      Pending", IDC_SVC_L4CON, 25, 100, 330, 11
-    LTEXT           "L4Superv:   Pending", IDC_SVC_L4SUPERV, 25, 112, 330, 11
-
-    LTEXT           "Phase: Ready", IDC_STATIC_PHASE, 15, 134, 270, 11
-    RTEXT           "0%", IDC_STATIC_PERCENT, 290, 134, 75, 11
-    CONTROL         "", IDC_PROGRESS_BAR, "msctls_progress32", PBS_SMOOTH | WS_CHILD | WS_VISIBLE, 15, 146, 350, 14
-    LTEXT           "Status: Ready to begin.", IDC_STATIC_STATUS, 15, 163, 270, 11
-    RTEXT           "Elapsed: 0s", IDC_STATIC_ELAPSED, 290, 163, 75, 11
-
-    EDITTEXT        IDC_EDIT_DETAILS, 15, 177, 350, 68, ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL | WS_BORDER
-
-    DEFPUSHBUTTON   "Install", IDC_BTN_ACTION, 15, 254, 75, 16
-    PUSHBUTTON      "Retry", IDC_BTN_RETRY, 95, 254, 65, 16, WS_DISABLED
-    PUSHBUTTON      "Hide Details", IDC_BTN_DETAILS, 165, 254, 80, 16
-    PUSHBUTTON      "Cancel", IDCANCEL, 300, 254, 65, 16
+    LTEXT "Установка L4 Tools", IDC_STATIC_HEADER, 15, 10, 350, 32
+    LTEXT "Проверка, обновление и запуск компонентов терминала. Автоматической перезагрузки нет.", IDC_STATIC_NOTICE, 15, 45, 660, 28
+    LTEXT "Проверяем установленный пакет…", IDC_STATIC_VER_INFO, 15, 80, 220, 48
+    LTEXT "Папка установки", IDC_STATIC_PATH_INFO, 15, 132, 220, 32
+    LTEXT "Состояние служб", IDC_STATIC_SERVICES_LBL, 15, 168, 220, 22
+    LTEXT "Leo4Proxy: ожидание", IDC_SVC_LEO4PROXY, 15, 196, 220, 18
+    LTEXT "Mosquitto: ожидание", IDC_SVC_MOSQUITTO, 15, 220, 220, 18
+    LTEXT "L4Con: ожидание", IDC_SVC_L4CON, 15, 244, 220, 18
+    LTEXT "L4Superv: ожидание", IDC_SVC_L4SUPERV, 15, 268, 220, 18
+    LTEXT "Подготовка", IDC_STATIC_PHASE, 15, 304, 165, 20
+    RTEXT "0%", IDC_STATIC_PERCENT, 185, 304, 50, 20
+    CONTROL "", IDC_PROGRESS_BAR, "msctls_progress32", PBS_SMOOTH | WS_CHILD | WS_VISIBLE, 15, 328, 220, 12
+    LTEXT "Ожидание проверки", IDC_STATIC_STATUS, 15, 348, 220, 40
+    LTEXT "Прошло: 0 с", IDC_STATIC_ELAPSED, 15, 401, 220, 20
+    LTEXT "Журнал установки", IDC_STATIC_LOG_TITLE, 255, 80, 300, 22
+    PUSHBUTTON "Копировать", IDC_BTN_DETAILS, 587, 78, 90, 22
+    CONTROL "", IDC_EDIT_DETAILS, "RICHEDIT50W", ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL | WS_BORDER | WS_TABSTOP, 255, 110, 422, 286
+    LTEXT "Ошибки: 0   Предупреждения: 0", IDC_STATIC_LOG_COUNTS, 255, 410, 205, 22
+    DEFPUSHBUTTON "Установить", IDC_BTN_ACTION, 490, 410, 115, 26
+    PUSHBUTTON "Отмена", IDCANCEL, 616, 410, 61, 26
 END
-
 // Version Information
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION     L4SETUP_VERSION_MAJOR,L4SETUP_VERSION_MINOR,L4SETUP_VERSION_PATCH,L4SETUP_VERSION_BUILD

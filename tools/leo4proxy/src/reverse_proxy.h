@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file reverse_proxy.h
  * @brief Reverse HTTPS Proxy and TLS Termination for Leo4Proxy.
  */
@@ -15,6 +15,7 @@
 typedef struct {
     const ProxyConfig* config;
     const CertDetails* certDetails;
+    CertDetails identity;
     CredHandle hServerCred;
     SOCKET listenSock;
     SOCKET listenSock6;
