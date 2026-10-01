@@ -64,7 +64,7 @@ goto :summary
 :do_build_x86
 echo.
 echo [Build x86] 32-bit static binary (Windows 7 SP1+ compatible)...
-cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\l4con.res res\l4con.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /I ..\l4pin\src /Foobj\x86\ src\main.c src\config.c src\mqtt_protocol.c src\command_runner.c src\mqtt_client.c src\tool_inventory.c src\service_mgr.c ..\l4pin\src\cert_discovery.c obj\x86\l4con.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\l4con.exe ws2_32.lib winhttp.lib advapi32.lib user32.lib shlwapi.lib ole32.lib crypt32.lib ncrypt.lib version.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\l4con.res res\l4con.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /I ..\l4pin\src /Foobj\x86\ src\main.c src\config.c src\mqtt_protocol.c src\command_runner.c src\mqtt_client.c src\event_ipc.c src\tool_inventory.c src\service_mgr.c ..\l4pin\src\cert_discovery.c obj\x86\l4con.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\l4con.exe ws2_32.lib winhttp.lib advapi32.lib user32.lib shlwapi.lib ole32.lib shell32.lib crypt32.lib ncrypt.lib version.lib"
 if errorlevel 1 (
     echo [ERROR] x86 build failed!
     set BUILD_FAILED=1
@@ -77,7 +77,7 @@ exit /b 0
 :do_build_x64
 echo.
 echo [Build x64] 64-bit static binary...
-cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /fo obj\x64\l4con.res res\l4con.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /I ..\l4pin\src /Foobj\x64\ src\main.c src\config.c src\mqtt_protocol.c src\command_runner.c src\mqtt_client.c src\tool_inventory.c src\service_mgr.c ..\l4pin\src\cert_discovery.c obj\x64\l4con.res /link /OUT:bin\x64\l4con.exe ws2_32.lib winhttp.lib advapi32.lib user32.lib shlwapi.lib ole32.lib crypt32.lib ncrypt.lib version.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /fo obj\x64\l4con.res res\l4con.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /I ..\l4pin\src /Foobj\x64\ src\main.c src\config.c src\mqtt_protocol.c src\command_runner.c src\mqtt_client.c src\event_ipc.c src\tool_inventory.c src\service_mgr.c ..\l4pin\src\cert_discovery.c obj\x64\l4con.res /link /OUT:bin\x64\l4con.exe ws2_32.lib winhttp.lib advapi32.lib user32.lib shlwapi.lib ole32.lib shell32.lib crypt32.lib ncrypt.lib version.lib"
 if errorlevel 1 (
     echo [ERROR] x64 build failed!
     set BUILD_FAILED=1

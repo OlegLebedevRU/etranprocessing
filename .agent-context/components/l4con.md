@@ -1,5 +1,24 @@
 # l4con
 
+## 2026-10-01: user events (1.9.3 working tree)
+
+`--send-event` is a quiet native IPC client, not another MQTT client.
+Only processes belonging to the current remotely launched command's Job may
+publish events 900–999 through the service's existing connection. Tags 446
+(raw text <=1024 UTF-8 bytes), 447 (int32), 448 (optional external UUID)
+are described in [user events](../../docs/term_tool-l4con-user-events.md).
+Missing448 is omitted; supplied invalid448 rejects the call. A global
+1000ms limiter has no burst/queue/retry/refusal logs. Cancel/TTL/end revoke
+the grant; descendants share the TTL even when the root exits earlier.
+Source/resource version1.9.3; x86/x64 builds and isolated native IPC/job tests
+passed. Final x64 installed/retained on773; real MCP console calls and IoT API
+confirmed string/int32/UUID/UTF8/overflow/default fields and one server event
+for five rapid calls (CLI0,5,5,5,5). Local callers remain denied3.
+PowerShell launch uses EncodedCommand to preserve the original quotes.
+[Handoff](../tasks/completed/2026-10-01-l4con-user-events-handoff.md) records
+checks and Windows7 runtime limitation. Configured MCP principal denied773;
+runtime used separate temporary credentials explicitly supplied by the user.
+
 ## 2026-09-30 update: event 75
 
 The release 1.9.1 source in this worktree publishes event 75 to

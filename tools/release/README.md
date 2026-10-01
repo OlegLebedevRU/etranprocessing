@@ -16,6 +16,14 @@ the installer, and regenerates `l4tools-release.json` and `SHA256SUMS`. For an
 encrypted PFX, supply `L4TOOLS_SIGN_PFX_PASSWORD` through the process
 environment. Keep the PFX and private key outside the repository.
 
+Both payloads and the rebuilt installer receive an RFC 3161 timestamp with
+SHA-256 (`signtool /tr /td SHA256`). The default endpoint is
+`http://timestamp.digicert.com`; override with `-TimestampUrl` on
+`Complete-SignedRelease.ps1`. Timestamp failure, missing timestamp certificate,
+or failed Authenticode verification stops signing/publication. The timestamp
+preserves verification after the signing certificate expires; it does not
+make modified executables or revoked/untrusted signatures valid.
+
 The component build gate is `tools/build_dist.cmd <version>`. If a test fails,
 record the failure explicitly. An unsigned build or a failed signature check
 must not be published as a signed release.

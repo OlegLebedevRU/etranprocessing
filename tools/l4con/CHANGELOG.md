@@ -2,6 +2,19 @@
 
 All notable changes to the `l4con` component will be documented in this file.
 
+## [1.9.3] - 2026-10-01
+
+- Quiet `--send-event` IPC mode for user events 900–999 through the existing
+  MQTT connection; only processes in the active remote command's Job may send.
+- Text tag 446 (1024 UTF-8 bytes), int32 tag 447, optional validated external
+  UUID tag 448. Oversized text is omitted and overrides tag 447 with -2.
+- Global one-second publication limit, no queue, automatic retries or refusal logs.
+- PowerShell launch uses EncodedCommand to preserve quotes and expressions;
+  live tests exposed quote loss in the previous unquoted Command launch.
+- Remote command workers share cancellation state, are joined before reuse,
+  and revoke event access on completion/cancel/TTL. Descendants remain bounded
+  by the same Job and TTL after the root shell exits.
+
 ## [1.7.3] - 2026-09-30
 
 - Event 75 includes installed EXE versions, sizes, UTC modification times,

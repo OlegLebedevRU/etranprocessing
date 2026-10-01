@@ -7,12 +7,14 @@
 #define LEO4_SCHANNEL_TLS_H
 
 #include "config.h"
+#include "policy.h"
 #define SECURITY_WIN32
 #include <security.h>
 #include <schnlsp.h>
 #include <stdbool.h>
 
 typedef struct {
+    PolicySocket policy_socket;
     CredHandle hCred;
     CtxtHandle hCtx;
     SOCKET sock;
@@ -58,6 +60,7 @@ void schannel_free_creds(CredHandle* hCred);
  * @brief Connects to remote host over TCP and establishes SChannel TLS / mTLS session.
  */
 bool schannel_connect(SChannelSession* session, CredHandle* hCred, const char* host, int port, int timeout_ms, int insecure_server);
+bool schannel_connect_media(SChannelSession* session, CredHandle* hCred, const char* host, int port, int timeout_ms, int insecure_server);
 
 /**
  * @brief Performs inbound SChannel TLS handshake on an accepted incoming client socket.

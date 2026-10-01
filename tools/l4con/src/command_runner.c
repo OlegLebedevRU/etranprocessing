@@ -3,7 +3,9 @@
 #endif
 
 #include "command_runner.h"
+#include "event_ipc.h"
 #include "mqtt_protocol.h"
+#include <wincrypt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -242,9 +244,6 @@ void command_runner_init_context(CommandContext* ctx) {
 void command_runner_request_cancel(CommandContext* ctx) {
     if (!ctx) return;
     ctx->cancel_requested = true;
-    if (ctx->dwProcessId != 0) {
-        command_runner_kill_process_tree(ctx->dwProcessId);
-    }
 }
 
 void command_runner_kill_process_tree(DWORD pid) {
@@ -378,9 +377,19 @@ int command_runner_execute(CommandContext* ctx,
 
     if (ctx->shell == SHELL_POWERSHELL) {
         resolve_powershell_path(shell_exe, MAX_PATH);
+        wchar_t encoded[5500];
+        DWORD encoded_length = (DWORD)(sizeof(encoded) / sizeof(encoded[0]));
+        if (!CryptBinaryToStringW((const BYTE*)w_usercmd,
+                (DWORD)(wcslen(w_usercmd) * sizeof(wchar_t)),
+                CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, encoded, &encoded_length)) {
+            CloseHandle(hReadPipe);
+            CloseHandle(hWritePipe);
+            if (out_exit_code) *out_exit_code = -1;
+            return -1;
+        }
         _snwprintf(w_cmdline, sizeof(w_cmdline)/sizeof(wchar_t),
-                   L"\"%ls\" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command %ls",
-                   shell_exe, w_usercmd);
+                   L"\"%ls\" -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand %ls",
+                   shell_exe, encoded);
     } else {
         resolve_cmd_path(shell_exe, MAX_PATH);
         _snwprintf(w_cmdline, sizeof(w_cmdline)/sizeof(wchar_t),
@@ -435,7 +444,7 @@ int command_runner_execute(CommandContext* ctx,
     BOOL wow64_disabled = disable_wow64_redirection(&wow64_old_val);
 
     BOOL proc_created = CreateProcessW(NULL, w_cmdline, NULL, NULL, TRUE,
-                                       CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP,
+                                       CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP | CREATE_SUSPENDED,
                                        NULL, w_workdir, &si, &pi);
     DWORD dwErr = GetLastError();
 
@@ -474,6 +483,22 @@ int command_runner_execute(CommandContext* ctx,
     ctx->hProcess = pi.hProcess;
     ctx->dwProcessId = pi.dwProcessId;
     ctx->is_running = true;
+    HANDLE job = CreateJobObjectW(NULL, NULL);
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits = { 0 };
+    limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    if (job && (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, &limits, sizeof(limits)) ||
+                !AssignProcessToJobObject(job, pi.hProcess))) {
+        CloseHandle(job);
+        job = NULL;
+    }
+    ctx->hJob = job;
+    if (job) event_job_register(job, &ctx->cancel_requested,
+                      GetTickCount64() + (ULONGLONG)ctx->ttl_sec * 1000);
+    else fprintf(stderr, "[CMD] Job isolation unavailable; user event sending is disabled for this command\n");
+    if (ResumeThread(pi.hThread) == (DWORD)-1) {
+        ctx->cancel_requested = true;
+        TerminateProcess(pi.hProcess, 130);
+    }
 
     char raw_buf[3072];
     char utf8_buf[6144];
@@ -503,7 +528,8 @@ int command_runner_execute(CommandContext* ctx,
     while (true) {
         // 1. Check for cancellation
         if (ctx->cancel_requested) {
-            command_runner_kill_process_tree(pi.dwProcessId);
+            if (job) { event_job_revoke(job); TerminateJobObject(job, 130); }
+            else command_runner_kill_process_tree(pi.dwProcessId);
             exit_code = 130;
 
             char cancel_json[512];
@@ -520,7 +546,8 @@ int command_runner_execute(CommandContext* ctx,
         // 2. Check for TTL expiration
         uint64_t elapsed_ms = get_tick_ms() - proc_start_tick;
         if (elapsed_ms >= max_wait_ms) {
-            command_runner_kill_process_tree(pi.dwProcessId);
+            if (job) { event_job_revoke(job); TerminateJobObject(job, 124); }
+            else command_runner_kill_process_tree(pi.dwProcessId);
             exit_code = 124;
 
             char timeout_json[512];
@@ -559,7 +586,8 @@ int command_runner_execute(CommandContext* ctx,
                 // Check max output byte limit
                 if (ctx->max_output_bytes > 0 && total_output_bytes >= (size_t)ctx->max_output_bytes) {
                     is_truncated = true;
-                    command_runner_kill_process_tree(pi.dwProcessId);
+                    if (job) { event_job_revoke(job); TerminateJobObject(job, 1); }
+                    else command_runner_kill_process_tree(pi.dwProcessId);
                     exit_code = 1;
 
                     seq++;
@@ -578,6 +606,12 @@ int command_runner_execute(CommandContext* ctx,
         // 4. Check if process has terminated
         DWORD wait_res = WaitForSingleObject(pi.hProcess, 50);
         if (wait_res == WAIT_OBJECT_0) {
+            JOBOBJECT_BASIC_ACCOUNTING_INFORMATION accounting = { 0 };
+            if (job && QueryInformationJobObject(job, JobObjectBasicAccountingInformation,
+                    &accounting, sizeof(accounting), NULL) && accounting.ActiveProcesses > 0) {
+                Sleep(50);
+                continue;
+            }
             // Drain remaining pipe bytes
             while (PeekNamedPipe(hReadPipe, NULL, 0, NULL, &bytes_avail, NULL) && bytes_avail > 0) {
                 DWORD to_read = (DWORD)(sizeof(raw_buf) - 1);
@@ -614,6 +648,8 @@ int command_runner_execute(CommandContext* ctx,
         }
     }
 
+    if (job) { event_job_revoke(job); CloseHandle(job); }
+    ctx->hJob = NULL;
     ctx->is_running = false;
     CloseHandle(hReadPipe);
     CloseHandle(pi.hProcess);

@@ -1,9 +1,15 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][string]$TargetPath
+    [Parameter(Mandatory = $true)][string]$TargetPath,
+    [string]$TimestampUrl = 'http://timestamp.digicert.com'
 )
 
 $ErrorActionPreference = 'Stop'
+$timestampUri = $null
+if (-not [Uri]::TryCreate($TimestampUrl, [UriKind]::Absolute, [ref]$timestampUri) -or
+    $timestampUri.Scheme -notin @('http', 'https')) {
+    throw 'TimestampUrl must be an absolute HTTP(S) RFC 3161 endpoint.'
+}
 $pfxPath = $env:L4TOOLS_SIGN_PFX
 $password = $env:L4TOOLS_SIGN_PFX_PASSWORD
 if (-not $pfxPath -or -not (Test-Path -LiteralPath $pfxPath -PathType Leaf)) {
@@ -29,16 +35,20 @@ if ($executables.Count -eq 0) { throw 'No executable files to sign.' }
 foreach ($exe in $executables) {
     # The password is read from the environment and is never printed or stored in a tracked file.
     if ($password) {
-        $signOutput = & $signtool sign /fd SHA256 /f $pfxPath /p $password $exe.FullName 2>&1
+        $signOutput = & $signtool sign /fd SHA256 /tr $TimestampUrl /td SHA256 /f $pfxPath /p $password $exe.FullName 2>&1
     } else {
-        $signOutput = & $signtool sign /fd SHA256 /f $pfxPath $exe.FullName 2>&1
+        $signOutput = & $signtool sign /fd SHA256 /tr $TimestampUrl /td SHA256 /f $pfxPath $exe.FullName 2>&1
     }
     if ($LASTEXITCODE -ne 0) { throw "Signing failed for $($exe.FullName): $($signOutput -join ' ')" }
     $signature = Get-AuthenticodeSignature -LiteralPath $exe.FullName
-    if (-not $signature.SignerCertificate -or
+    if (-not $signature.SignerCertificate -or -not $signature.TimeStamperCertificate -or
         $signature.SignerCertificate.Thumbprint -ne $expectedThumbprint -or
         $signature.Status -notin @('Valid', 'NotTrusted')) {
         throw "Signature verification failed for $($exe.FullName): $($signature.Status)"
+    }
+    $verifyOutput = & $signtool verify /pa /all /tw $exe.FullName 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Timestamped signature verification failed for $($exe.FullName): $($verifyOutput -join ' ')"
     }
     Write-Host "Signed: $($exe.FullName) (status: $($signature.Status))"
 }

@@ -39,6 +39,12 @@ static unsigned __stdcall mqtt_client_worker(void* param) {
     InterlockedIncrement(&g_proxyStats.mqtt_active_clients);
     InterlockedIncrement(&g_proxyStats.mqtt_total_connections);
 
+    if (!policy_media_allowed()) {
+        closesocket(clientSock);
+        InterlockedDecrement(&g_proxyStats.mqtt_active_clients);
+        return 0;
+    }
+
     BOOL keepAlive = TRUE;
     setsockopt(clientSock, SOL_SOCKET, SO_KEEPALIVE, (const char*)&keepAlive, sizeof(keepAlive));
 
@@ -75,7 +81,7 @@ static unsigned __stdcall mqtt_client_worker(void* param) {
     }
 
     SChannelSession brokerTlsSession;
-    if (!schannel_connect(&brokerTlsSession, &hClientCred, config->mqtt_remote_host, config->mqtt_remote_port, 10000, config->insecure_server_cert)) {
+    if (!schannel_connect_media(&brokerTlsSession, &hClientCred, config->mqtt_remote_host, config->mqtt_remote_port, 10000, config->insecure_server_cert)) {
         fprintf(stderr, "[MQTT-PROXY] Failed to establish mTLS connection to %s:%d\n",
                 config->mqtt_remote_host, config->mqtt_remote_port);
         if (isClientTls) schannel_close(&clientTlsSession);
@@ -92,7 +98,7 @@ static unsigned __stdcall mqtt_client_worker(void* param) {
     BYTE buf[16384];
     bool running = true;
 
-    while (running && (!server || server->isRunning)) {
+    while (running && (!server || server->isRunning) && policy_media_allowed()) {
         // 1. If we have leftover decrypted plaintext from broker, deliver to client
         if (brokerTlsSession.plainBufLen > brokerTlsSession.plainBufOffset) {
             int recvd = schannel_recv(&brokerTlsSession, buf, sizeof(buf));
@@ -273,6 +279,7 @@ static unsigned __stdcall mqtt_listener_thread(void* param) {
 }
 
 bool mqtt_proxy_start(MqttProxyServer* server, const ProxyConfig* config, const CertDetails* certDetails, CredHandle hClientCred, CredHandle hServerCred) {
+    policy_identity(certDetails);
     if (!server || !config || !certDetails) return false;
     memset(server, 0, sizeof(MqttProxyServer));
 

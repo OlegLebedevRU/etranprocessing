@@ -326,6 +326,10 @@ static void handle_info_request_ext(SOCKET s, SChannelSession* tlsSession, const
                 config->reverse_target_host, config->reverse_target_port
             );
         }
+        char policyBuf[1536];
+        policy_diagnostics(policyBuf, sizeof(policyBuf));
+        char* closing = strrchr(jsonBuf, '}');
+        if (closing) snprintf(closing, sizeof(jsonBuf) - (size_t)(closing-jsonBuf), ",\n  \"policy\": %s\n}", policyBuf);
         send_http_response_ext(s, tlsSession, 200, "OK", "application/json; charset=utf-8", jsonBuf, cert_ready ? certDetails->sn : NULL);
     } else {
         char jsonBuf[2048];
@@ -522,6 +526,14 @@ static unsigned __stdcall http_client_worker(void* param) {
         return 0;
     }
 
+    if (!policy_https_path_allowed(path)) {
+        send_http_response_ext(clientSock, isClientTls ? &clientTlsSession : NULL, 403, "Forbidden",
+            "application/json; charset=utf-8", "{\"error\":\"Outgoing route denied by server policy\"}", active_sn);
+        free(reqBuf); free(modifiedReq);
+        if (isClientTls) schannel_close(&clientTlsSession); else closesocket(clientSock);
+        return 0;
+    }
+
     // 4. Check if upstream proxy routes are active
     if (!cert_ready || !SecIsValidHandle(&hClientCred)) {
         const char* errJson = "{\"error\": \"Proxy routes disabled: waiting for certificate\"}\r\n";
@@ -704,6 +716,7 @@ bool http_proxy_start(HttpProxyServer* server, const ProxyConfig* config, const 
     memset(server, 0, sizeof(HttpProxyServer));
 
     server->config = config;
+    policy_identity(certDetails);
     server->certDetails = certDetails;
     server->hClientCred = hClientCred;
     server->hServerCred = hServerCred;
@@ -767,6 +780,7 @@ bool http_proxy_start(HttpProxyServer* server, const ProxyConfig* config, const 
 
 void http_proxy_update_creds(HttpProxyServer* server, const CertDetails* certDetails, CredHandle hClientCred, CredHandle hServerCred) {
     if (!server) return;
+    policy_identity(certDetails);
     server->certDetails = certDetails;
     server->hClientCred = hClientCred;
     server->hServerCred = hServerCred;

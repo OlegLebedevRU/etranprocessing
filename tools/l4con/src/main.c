@@ -10,6 +10,8 @@
 #include "service_mgr.h"
 #include "mqtt_client.h"
 #include "command_runner.h"
+#include "event_ipc.h"
+#include <shellapi.h>
 
 static HANDLE g_consoleStopEvent = NULL;
 
@@ -30,6 +32,17 @@ static BOOL WINAPI console_ctrl_handler(DWORD ctrlType) {
 }
 
 int main(int argc, char* argv[]) {
+    int wide_argc = 0;
+    wchar_t** wide_argv = CommandLineToArgvW(GetCommandLineW(), &wide_argc);
+    if (!wide_argv) return EVENT_BAD_ARGS;
+    for (int i = 1; i < wide_argc; ++i) {
+        if (_wcsicmp(wide_argv[i], L"--send-event") == 0) {
+            int result = event_cli(wide_argc, wide_argv);
+            LocalFree(wide_argv);
+            return result;
+        }
+    }
+    LocalFree(wide_argv);
     // Disable stdout/stderr buffering for real-time logs
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);

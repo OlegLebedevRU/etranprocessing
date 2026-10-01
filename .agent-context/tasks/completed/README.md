@@ -5,6 +5,9 @@
 Логи/длинные исследования — docs/history; secrets и connection profile запрещены.
 
 ## Индекс
+
+- [2026-10-01 — l4con user events](2026-10-01-l4con-user-events-handoff.md):
+  native IPC/remote Job, теги446–448, ограничение потока и реальная приемка773.
 - [2026-09-30 — Git/release и временные локальные копии](2026-09-30-git-release-local-residue-review.md):
   профили GitHub, условный builder-маршрут и проверяемый cleanup manifest.
 - [2026-09-30 — L4 Tools 1.9.2 and remote control deployment review](2026-09-30-l4tools-192-deploy-review.md):

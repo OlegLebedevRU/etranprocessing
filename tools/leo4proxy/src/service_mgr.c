@@ -4,6 +4,7 @@
  */
 
 #include "service_mgr.h"
+#include "policy.h"
 #include "cert_store.h"
 #include "schannel_tls.h"
 #include "mqtt_proxy.h"
@@ -128,6 +129,8 @@ static void WINAPI service_main(DWORD argc, LPWSTR* argv) {
 
     // Report service as RUNNING immediately
     report_service_status(SERVICE_RUNNING, NO_ERROR, 0);
+
+    policy_init(&g_serviceConfig);
 
     // Start HTTP diagnostic listener in standby mode (route proxying disabled until cert is loaded)
     bool isHttpStarted = http_proxy_start(&httpServer, &g_serviceConfig, NULL, hClientCred, hServerCred);
@@ -358,6 +361,7 @@ static void WINAPI service_main(DWORD argc, LPWSTR* argv) {
 
     // Service Stop & Cleanup
     report_service_status(SERVICE_STOP_PENDING, NO_ERROR, 5000);
+    policy_stop();
 
     if (isDiscoveryStarted) discovery_stop(&discoveryServer);
     if (isReverseStarted) reverse_proxy_stop(&reverseServer);

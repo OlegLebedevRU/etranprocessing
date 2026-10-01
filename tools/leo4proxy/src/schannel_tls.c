@@ -93,7 +93,7 @@ void schannel_free_creds(CredHandle* hCred) {
     }
 }
 
-SOCKET tcp_connect(const char* host, int port, int timeout_ms) {
+static SOCKET tcp_connect_impl(const char* host, int port, int timeout_ms, PolicySocket* policy_node) {
     struct addrinfo hints = { 0 };
     struct addrinfo* res = NULL;
     char port_str[16];
@@ -118,7 +118,8 @@ SOCKET tcp_connect(const char* host, int port, int timeout_ms) {
     u_long mode = 1;
     ioctlsocket(s, FIONBIO, &mode);
 
-    int rc = connect(s, res->ai_addr, (int)res->ai_addrlen);
+    int rc = policy_node ? policy_media_connect(policy_node, s, res->ai_addr, (int)res->ai_addrlen)
+                         : connect(s, res->ai_addr, (int)res->ai_addrlen);
     if (rc == SOCKET_ERROR) {
         int err = WSAGetLastError();
         if (err == WSAEWOULDBLOCK || err == WSAEINPROGRESS) {
@@ -128,17 +129,23 @@ SOCKET tcp_connect(const char* host, int port, int timeout_ms) {
             FD_SET(s, &write_fds);
             FD_SET(s, &err_fds);
 
-            struct timeval tv;
-            tv.tv_sec = timeout_ms / 1000;
-            tv.tv_usec = (timeout_ms % 1000) * 1000;
-
-            int sel = select((int)s + 1, NULL, &write_fds, &err_fds, &tv);
+            int sel = 0;
+            ULONGLONG deadline = GetTickCount64() + (ULONGLONG)timeout_ms;
+            do {
+                FD_ZERO(&write_fds); FD_ZERO(&err_fds);
+                FD_SET(s, &write_fds); FD_SET(s, &err_fds);
+                struct timeval tv = {0, 100000};
+                sel = select((int)s + 1, NULL, &write_fds, &err_fds, &tv);
+                if (policy_node && !policy_media_allowed()) { sel = -1; break; }
+            } while (sel == 0 && GetTickCount64() < deadline);
             if (sel <= 0 || FD_ISSET(s, &err_fds)) {
+                if (policy_node) policy_socket_unregister(policy_node);
                 closesocket(s);
                 freeaddrinfo(res);
                 return INVALID_SOCKET;
             }
         } else {
+            if (policy_node) policy_socket_unregister(policy_node);
             closesocket(s);
             freeaddrinfo(res);
             return INVALID_SOCKET;
@@ -328,7 +335,11 @@ static bool perform_handshake(SChannelSession* session, CredHandle* hCred, const
     return (ss == SEC_E_OK);
 }
 
-bool schannel_connect(SChannelSession* session, CredHandle* hCred, const char* host, int port, int timeout_ms, int insecure_server) {
+SOCKET tcp_connect(const char* host, int port, int timeout_ms) {
+    return tcp_connect_impl(host, port, timeout_ms, NULL);
+}
+
+static bool schannel_connect_impl(SChannelSession* session, CredHandle* hCred, const char* host, int port, int timeout_ms, int insecure_server, bool media) {
     if (!session || !hCred || !host) return false;
     memset(session, 0, sizeof(SChannelSession));
     SecInvalidateHandle(&session->hCtx);
@@ -338,10 +349,12 @@ bool schannel_connect(SChannelSession* session, CredHandle* hCred, const char* h
     session->targetPort = port;
 
     // 1. Establish plain TCP connection
-    session->sock = tcp_connect(host, port, timeout_ms);
+    if (media && !policy_media_allowed()) return false;
+    session->sock = tcp_connect_impl(host, port, timeout_ms, media ? &session->policy_socket : NULL);
     if (session->sock == INVALID_SOCKET) {
         return false;
     }
+    if (media && !policy_media_allowed()) { schannel_close(session); return false; }
 
     // Allocate receive buffer
     session->recvBufAlloc = PROXY_BUFFER_SIZE;
@@ -359,7 +372,7 @@ bool schannel_connect(SChannelSession* session, CredHandle* hCred, const char* h
     }
 
     // 2. Perform SChannel mTLS Handshake
-    if (!perform_handshake(session, hCred, host, insecure_server)) {
+    if (!perform_handshake(session, hCred, host, insecure_server) || (media && !policy_media_allowed())) {
         schannel_close(session);
         return false;
     }
@@ -383,6 +396,13 @@ bool schannel_connect(SChannelSession* session, CredHandle* hCred, const char* h
     session->isConnected = true;
     session->isHandshakeComplete = true;
     return true;
+}
+
+bool schannel_connect(SChannelSession* session, CredHandle* hCred, const char* host, int port, int timeout_ms, int insecure_server) {
+    return schannel_connect_impl(session,hCred,host,port,timeout_ms,insecure_server,false);
+}
+bool schannel_connect_media(SChannelSession* session, CredHandle* hCred, const char* host, int port, int timeout_ms, int insecure_server) {
+    return schannel_connect_impl(session,hCred,host,port,timeout_ms,insecure_server,true);
 }
 
 bool schannel_accept(SChannelSession* session, const CredHandle* hServerCred, SOCKET clientSock) {
@@ -520,6 +540,7 @@ bool schannel_accept(SChannelSession* session, const CredHandle* hServerCred, SO
 }
 
 int schannel_send(SChannelSession* session, const void* data, int len) {
+    if (session && session->policy_socket.registered && !policy_media_allowed()) return -1;
     if (!session || !session->isConnected || session->sock == INVALID_SOCKET || len <= 0) {
         return -1;
     }
@@ -753,6 +774,7 @@ int schannel_recv(SChannelSession* session, void* out_data, int max_len) {
 
 void schannel_close(SChannelSession* session) {
     if (!session) return;
+    policy_socket_unregister(&session->policy_socket);
 
     if (SecIsValidHandle(&session->hCtx)) {
         DeleteSecurityContext(&session->hCtx);

@@ -32,6 +32,7 @@ typedef struct {
     volatile bool is_running;
     HANDLE hProcess;
     DWORD  dwProcessId;
+    HANDLE hJob;
 } CommandContext;
 
 typedef void (*OutputChunkCallback)(const char* topic, const char* json_envelope, size_t json_len, void* user_data);

@@ -4,6 +4,7 @@
  */
 
 #include "config.h"
+#include "policy.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -757,11 +758,15 @@ int main(int argc, char* argv[]) {
 
     g_proxyStats.cert_ready = 1;
 
+    policy_init(&config);
+    policy_identity(&certDetails);
+
     // Start Forward Proxies (MQTT & HTTP)
     bool mqttOk = mqtt_proxy_start(&g_app.mqttServer, &config, &certDetails, hClientCred, hServerCred);
     bool httpOk = http_proxy_start(&g_app.httpServer, &config, &certDetails, hClientCred, hServerCred);
 
     if (!mqttOk || !httpOk) {
+        policy_stop();
         fprintf(stderr, "\n[FATAL] Failed to start forward proxy listeners.\n");
         if (mqttOk) mqtt_proxy_stop(&g_app.mqttServer);
         if (httpOk) http_proxy_stop(&g_app.httpServer);
@@ -854,6 +859,7 @@ int main(int argc, char* argv[]) {
         Sleep(500);
     }
 
+    policy_stop();
     printf("[LEO4PROXY] Stopping proxies & tray...\n");
     tray_icon_stop(&g_app.trayCtx);
     if (g_app.isDiscoveryRunning) {

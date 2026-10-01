@@ -2,6 +2,17 @@
 
 All notable changes to the `leo4proxy` component will be documented in this file.
 
+## [1.7.2] - 2026-10-01
+
+### Added
+- Terminal policy polling over certificate-authenticated HTTPS every 600 seconds. A server deny closes external MQTT/media connections and prevents reconnect while retaining local listeners, identity readiness, incoming HTTPS and policy polling.
+- Persisted MQTT/RTP decision and 72-hour API-outage grace in registry (shared x86/x64 view) and atomic JSON copy, with customer-favoring recovery and accessible storage fallbacks. No certificate removal or tamper sanctions.
+- Independent outgoing HTTPS permission: only explicit false in a valid policy blocks ordinary routes; policy, certificates and licensebilling remain available. Missing/invalid policy defaults HTTPS to allowed.
+- Local info policy diagnostics and x86/x64 tests for schema, grace, storage recovery, HTTPS exceptions, socket cancellation and UDP draining.
+
+### Changed
+- Executable and Windows resource versions synchronized to 1.7.2. No MQTT presence/topic changes; leo4proxy remains a transparent proxy. The l4tools package is not rebuilt in this task.
+
 ## [1.7.1] - 2026-09-13
 
 ### Changed

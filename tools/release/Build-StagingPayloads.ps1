@@ -63,7 +63,13 @@ foreach ($arch in @("x86", "x64")) {
     $targetStage = "$StageDir\$arch"
     Write-Host "`nStaging architecture: $arch -> $targetStage"
     if (Test-Path $targetStage) {
-        Remove-Item -Path $targetStage -Recurse -Force
+        $resolvedStage = (Resolve-Path -LiteralPath $targetStage).Path
+        $expectedArchStage = [IO.Path]::GetFullPath((Join-Path $StageDir $arch))
+        if ($resolvedStage -ne $expectedArchStage -or
+            -not $resolvedStage.StartsWith([IO.Path]::GetFullPath($StageDir).TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Unexpected architecture staging path: $resolvedStage"
+        }
+        Remove-Item -LiteralPath $resolvedStage -Recurse -Force
     }
     New-Item -ItemType Directory -Path $targetStage -Force | Out-Null
 

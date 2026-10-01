@@ -6,6 +6,8 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 
 set(SOURCES
     src/main.c
+    src/policy.c
+    src/policy_json.c
     src/cert_store.c
     src/schannel_tls.c
     src/mqtt_proxy.c
@@ -22,6 +24,8 @@ set(SOURCES
 
 set(HEADERS
     src/config.h
+    src/policy.h
+    src/policy_json.h
     src/cert_store.h
     src/schannel_tls.h
     src/mqtt_proxy.h
@@ -55,6 +59,7 @@ target_link_libraries(leo4proxy PRIVATE
     user32
     gdi32
     iphlpapi
+    winhttp
 )
 
 set_target_properties(leo4proxy PROPERTIES

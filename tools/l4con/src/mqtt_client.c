@@ -9,6 +9,7 @@
 #include "mqtt_protocol.h"
 #include "command_runner.h"
 #include "tool_inventory.h"
+#include "event_ipc.h"
 #include "../../l4pin/src/cert_discovery.h"
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -29,7 +30,9 @@ typedef struct {
     char sn[128];
     CommandContext current_cmd;
     HANDLE hWorkerThread;
+    bool connected;
 } MqttClientState;
+static bool ascii_identifier(const char* value, bool hex_only);
 
 static bool send_publish_packet(MqttClientState* state, const char* topic,
                                 const char* payload, size_t payload_len,
@@ -45,6 +48,39 @@ static void get_iso_timestamp(char* out_ts, size_t size) {
     GetLocalTime(&st);
     snprintf(out_ts, size, "%04u-%02u-%02u %02u:%02u:%02u",
              st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+}
+
+static bool publish_user_event(const UserEvent* event, void* context) {
+    MqttClientState* state = (MqttClientState*)context;
+    GUID guid;
+    if (FAILED(CoCreateGuid(&guid))) return false;
+    unsigned id = guid.Data1 & 0x7fffffffU;
+    if (!id) id = 1;
+    SYSTEMTIME utc;
+    GetSystemTime(&utc);
+    char timestamp[32], correlation[40], id_text[16], code_text[16];
+    snprintf(timestamp, sizeof(timestamp), "%04u-%02u-%02uT%02u:%02u:%02uZ",
+        utc.wYear, utc.wMonth, utc.wDay, utc.wHour, utc.wMinute, utc.wSecond);
+    snprintf(correlation, sizeof(correlation), "%08lX-%04hX-%04hX-%02X%02X-%02X%02X%02X%02X%02X%02X",
+        guid.Data1, guid.Data2, guid.Data3, guid.Data4[0], guid.Data4[1], guid.Data4[2],
+        guid.Data4[3], guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7]);
+    snprintf(id_text, sizeof(id_text), "%u", id);
+    snprintf(code_text, sizeof(code_text), "%d", event->code);
+    char payload[7000], topic[160];
+    EnterCriticalSection(&state->send_cs);
+    bool ok = false;
+    if (state->connected && state->sock != INVALID_SOCKET && ascii_identifier(state->sn, false)) {
+        snprintf(topic, sizeof(topic), "dev/%s/evt", state->sn);
+        int length = event_json(event, state->sn, id, timestamp, correlation, payload, sizeof(payload));
+        const MqttUserProperty properties[] = {
+            { "event_type_code", code_text }, { "dev_event_id", id_text },
+            { "dev_timestamp", timestamp }, { "correlationData", correlation }
+        };
+        if (length > 0 && (size_t)length < sizeof(payload))
+            ok = send_publish_with_properties(state, topic, payload, (size_t)length, 1, 0, properties, 4);
+    }
+    LeaveCriticalSection(&state->send_cs);
+    return ok;
 }
 
 static bool ascii_identifier(const char* value, bool hex_only) {
@@ -158,6 +194,10 @@ static bool send_publish_with_properties(MqttClientState* state, const char* top
                                          size_t property_count) {
     unsigned char buf[32768];
     EnterCriticalSection(&state->send_cs);
+    if (!state->connected || state->sock == INVALID_SOCKET) {
+        LeaveCriticalSection(&state->send_cs);
+        return false;
+    }
     uint16_t pkt_id = (qos > 0) ? get_next_packet_id(state) : 0;
     int pkt_len = mqtt_build_publish_with_properties(buf, sizeof(buf), topic, payload,
                                                       payload_len, pkt_id, qos, retain,
@@ -212,14 +252,13 @@ static bool send_publish_packet(MqttClientState* state, const char* topic,
 
 static void output_chunk_callback(const char* topic, const char* json_envelope, size_t json_len, void* user_data) {
     MqttClientState* state = (MqttClientState*)user_data;
-    if (!state || state->sock == INVALID_SOCKET) return;
+    if (!state) return;
 
     send_publish_packet(state, topic, json_envelope, json_len, 1, 0);
 }
 
 typedef struct {
     MqttClientState* state;
-    CommandContext ctx;
 } WorkerTaskParams;
 
 static DWORD WINAPI command_worker_thread(LPVOID lpParam) {
@@ -227,7 +266,7 @@ static DWORD WINAPI command_worker_thread(LPVOID lpParam) {
     if (!params) return 1;
 
     MqttClientState* state = params->state;
-    CommandContext* ctx = &params->ctx;
+    CommandContext* ctx = &state->current_cmd;
 
     int exit_code = 0;
     uint64_t duration_ms = 0;
@@ -429,13 +468,14 @@ static void handle_incoming_publish(MqttClientState* state, const char* topic, c
             snprintf(topic_out, sizeof(topic_out), "dev/%s/out", state->sn);
         }
 
-        EnterCriticalSection(&state->send_cs);
-        if (state->current_cmd.is_running) {
-            // Cancel current or reject
+        if (state->hWorkerThread) {
+            // Join the old worker before reusing its context or job registration.
             command_runner_request_cancel(&state->current_cmd);
-            Sleep(100);
+            WaitForSingleObject(state->hWorkerThread, INFINITE);
+            CloseHandle(state->hWorkerThread);
+            state->hWorkerThread = NULL;
         }
-
+        EnterCriticalSection(&state->send_cs);
         command_runner_init_context(&state->current_cmd);
         snprintf(state->current_cmd.session_id, sizeof(state->current_cmd.session_id), "%s", session_id);
         state->current_cmd.task_id = task_id;
@@ -451,15 +491,14 @@ static void handle_incoming_publish(MqttClientState* state, const char* topic, c
         WorkerTaskParams* params = (WorkerTaskParams*)malloc(sizeof(WorkerTaskParams));
         if (params) {
             params->state = state;
-            params->ctx = state->current_cmd;
             HANDLE hThread = CreateThread(NULL, 0, command_worker_thread, params, 0, NULL);
             if (hThread) {
-                CloseHandle(hThread);
+                state->hWorkerThread = hThread;
             } else {
                 free(params);
                 state->current_cmd.is_running = false;
             }
-        }
+        } else state->current_cmd.is_running = false;
         LeaveCriticalSection(&state->send_cs);
     }
 }
@@ -567,6 +606,8 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
     printf("  Target Broker:   %s:%d (Keepalive: %ds)\n\n", config->mqtt_host, config->mqtt_port, config->keepalive_sec);
 
     bool cert_event_sent = false;
+    if (!event_ipc_start(hStopEvent, publish_user_event, &state))
+        fprintf(stderr, "[EVENT] Local event endpoint unavailable; console commands remain available\n");
     while (WaitForSingleObject(hStopEvent, 0) != WAIT_OBJECT_0) {
         get_iso_timestamp(ts_buf, sizeof(ts_buf));
         printf("[%s] Connecting to MQTT broker at %s:%d...\n", ts_buf, config->mqtt_host, config->mqtt_port);
@@ -608,7 +649,9 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
             continue;
         }
 
+        EnterCriticalSection(&state.send_cs);
         state.sock = s;
+        LeaveCriticalSection(&state.send_cs);
 
         // 1. Send CONNECT packet
         unsigned char pkt_buf[4096];
@@ -617,8 +660,10 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
                                           config->role, (uint16_t)config->keepalive_sec);
         if (conn_len <= 0 || !socket_send_all(s, pkt_buf, (size_t)conn_len)) {
             fprintf(stderr, "[ERROR] Sending CONNECT packet failed\n");
+            EnterCriticalSection(&state.send_cs);
             closesocket(s);
             state.sock = INVALID_SOCKET;
+            LeaveCriticalSection(&state.send_cs);
             WaitForSingleObject(hStopEvent, config->reconnect_sec * 1000);
             continue;
         }
@@ -628,14 +673,19 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
         if (!read_connack_v5(s, &connack_reason) || connack_reason != 0) {
             fprintf(stderr, "[ERROR] MQTT 5 CONNACK failed (reason=%u)\n",
                     (unsigned)connack_reason);
+            EnterCriticalSection(&state.send_cs);
             closesocket(s);
             state.sock = INVALID_SOCKET;
+            LeaveCriticalSection(&state.send_cs);
             WaitForSingleObject(hStopEvent, config->reconnect_sec * 1000);
             continue;
         }
 
         get_iso_timestamp(ts_buf, sizeof(ts_buf));
         printf("[%s] [OK] MQTT Connected successfully. (rc=0)\n", ts_buf);
+        EnterCriticalSection(&state.send_cs);
+        state.connected = true;
+        LeaveCriticalSection(&state.send_cs);
 
         // 3. Publish dev/{SN}/svc = svc_online (retain=1, qos=1)
         send_publish_packet(&state, pub_topic, online_payload, strlen(online_payload), 1, 1);
@@ -790,17 +840,29 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
             socket_send_all(s, disc_buf, (size_t)d_len);
             LeaveCriticalSection(&state.send_cs);
 
-            closesocket(s);
+            EnterCriticalSection(&state.send_cs);
+            state.connected = false;
             state.sock = INVALID_SOCKET;
+            closesocket(s);
+            LeaveCriticalSection(&state.send_cs);
             break;
         }
 
-        closesocket(s);
+        EnterCriticalSection(&state.send_cs);
+        state.connected = false;
         state.sock = INVALID_SOCKET;
+        closesocket(s);
+        LeaveCriticalSection(&state.send_cs);
         printf("[WARN] Connection lost. Reconnecting in %d seconds...\n", config->reconnect_sec);
         WaitForSingleObject(hStopEvent, config->reconnect_sec * 1000);
     }
 
+    event_ipc_stop();
+    if (state.hWorkerThread) {
+        command_runner_request_cancel(&state.current_cmd);
+        WaitForSingleObject(state.hWorkerThread, INFINITE);
+        CloseHandle(state.hWorkerThread);
+    }
     DeleteCriticalSection(&state.send_cs);
     if (hMutex) {
         CloseHandle(hMutex);

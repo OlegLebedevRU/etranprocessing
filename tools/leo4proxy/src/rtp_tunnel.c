@@ -100,6 +100,25 @@ static unsigned __stdcall rtp_tunnel_worker_thread(void* param) {
     bool pendingIsRtcp = false;
 
     while (server->isRunning) {
+        if (!policy_media_allowed()) {
+            if (remote.isConnected) schannel_close(&remote);
+            InterlockedExchange(&g_proxyStats.rtp_tunnel_active, 0);
+            pendingLen = 0;
+            state = STATE_IDLE;
+            fd_set readSet;
+            FD_ZERO(&readSet);
+            FD_SET(server->rtpSocket, &readSet);
+            FD_SET(server->rtcpSocket, &readSet);
+            struct timeval tv = {0, 200000};
+            int selected = select(0, &readSet, NULL, NULL, &tv);
+            if (selected > 0) {
+                if (FD_ISSET(server->rtpSocket, &readSet) && recvfrom(server->rtpSocket, (char*)buf+4, 65535, 0, NULL, NULL) > 0)
+                    InterlockedIncrement64(&g_proxyStats.rtp_tunnel_dropped_no_upstream);
+                if (FD_ISSET(server->rtcpSocket, &readSet) && recvfrom(server->rtcpSocket, (char*)buf+4, 65535, 0, NULL, NULL) > 0)
+                    InterlockedIncrement64(&g_proxyStats.rtp_tunnel_dropped_no_upstream);
+            }
+            continue;
+        }
         switch (state) {
             case STATE_IDLE: {
                 InterlockedExchange(&g_proxyStats.rtp_tunnel_active, 0);
@@ -139,7 +158,7 @@ static unsigned __stdcall rtp_tunnel_worker_thread(void* param) {
                            config->rtp_tunnel_remote_host, config->rtp_tunnel_remote_port);
                 }
 
-                bool ok = schannel_connect(&remote, (CredHandle*)&server->hClientCred,
+                bool ok = schannel_connect_media(&remote, (CredHandle*)&server->hClientCred,
                                           config->rtp_tunnel_remote_host,
                                           config->rtp_tunnel_remote_port,
                                           DEFAULT_RTP_TUNNEL_CONNECT_TIMEOUT,
@@ -329,7 +348,7 @@ static unsigned __stdcall rtp_tunnel_worker_thread(void* param) {
                 ULONGLONG backoffMs = (ULONGLONG)current_backoff_sec * 1000ULL;
                 bool trafficSeenDuringBackoff = false;
 
-                while (server->isRunning && (GetTickCount64() - backoffStart) < backoffMs) {
+                while (server->isRunning && policy_media_allowed() && (GetTickCount64() - backoffStart) < backoffMs) {
                     fd_set dropSet;
                     FD_ZERO(&dropSet);
                     FD_SET(server->rtpSocket, &dropSet);

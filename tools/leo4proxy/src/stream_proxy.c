@@ -40,6 +40,12 @@ static unsigned __stdcall stream_client_worker(void* param) {
     InterlockedIncrement(&g_proxyStats.stream_active_clients);
     InterlockedIncrement(&g_proxyStats.stream_total_connections);
 
+    if (!policy_media_allowed()) {
+        closesocket(clientSock);
+        InterlockedDecrement(&g_proxyStats.stream_active_clients);
+        return 0;
+    }
+
     char clientIp[64] = { 0 };
     inet_ntop(AF_INET, &clientAddr.sin_addr, clientIp, sizeof(clientIp));
 
@@ -56,7 +62,7 @@ static unsigned __stdcall stream_client_worker(void* param) {
 
     /* Connect to cloud media ingress over mTLS */
     SChannelSession remoteTlsSession;
-    if (!schannel_connect(&remoteTlsSession, &hClientCred, config->stream_remote_host, config->stream_remote_port, 10000, config->insecure_server_cert)) {
+    if (!schannel_connect_media(&remoteTlsSession, &hClientCred, config->stream_remote_host, config->stream_remote_port, 10000, config->insecure_server_cert)) {
         fprintf(stderr, "[STREAM-PROXY] Failed to establish mTLS connection to %s:%d\n",
                 config->stream_remote_host, config->stream_remote_port);
         closesocket(clientSock);
@@ -102,7 +108,7 @@ static unsigned __stdcall stream_client_worker(void* param) {
     ULONGLONG lastActivityTime = GetTickCount64();
     bool running = true;
 
-    while (running && (!server || server->isRunning)) {
+    while (running && (!server || server->isRunning) && policy_media_allowed()) {
         /* Idle timeout check */
         if (config->stream_idle_timeout_sec > 0) {
             ULONGLONG now = GetTickCount64();

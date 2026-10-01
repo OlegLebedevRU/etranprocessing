@@ -270,4 +270,8 @@ void config_print_help(const char* exe_name) {
     printf("  --verbose          Enable verbose debug output\n");
     printf("  --version, -v      Show version information\n");
     printf("  --help, -h         Show this help message\n");
+    printf("  --send-event -event-code=999 -event-payload=<text> -event-exit-code=0\n");
+    printf("                    Quiet IPC send; only descendants of active remote commands\n");
+    printf("                    Codes 900..999; text <=1024 UTF-8 bytes; exit code is int32\n");
+    printf("                    Optional -event-correlation-id=<UUID> is tag 448\n");
 }
