@@ -6,6 +6,8 @@ param(
     [Parameter(Mandatory = $true)][string]$ProductionKey,
     [Parameter(Mandatory = $true)][ValidatePattern('^[a-f0-9]{40}$')][string]$Revision,
     [string]$KnownHostsPath = '',
+    [string]$SourcePath = '',
+    [switch]$Publish,
     [switch]$Execute
 )
 
@@ -17,6 +19,7 @@ Set-StrictMode -Version Latest
 if (-not $Execute) {
     Write-Output "Preview: main $Revision -> builder $BuilderHost -> registry -> production $ProductionHost"
     Write-Output 'Order: menubuilder-backend, then menubuilder-frontend (static dist).'
+    if ($Publish) { Write-Output 'Publish the specified clean local commit before deployment.' }
     Write-Output 'Run with -Execute to build and deploy.'
     return
 }
@@ -34,7 +37,9 @@ $sshOptions = @('-n', '-o', 'BatchMode=yes', '-o', 'IdentitiesOnly=yes', '-o', '
 
 function Shell-Quote([string]$Value) {
     $quote = "'"
-    return $quote + $Value.Replace($quote, $quote + '"' + $quote + '"' + $quote) + $quote
+    # POSIX single-quote escaping without double quotes: Windows PowerShell 5
+    # strips embedded double quotes when marshalling native ssh arguments.
+    return $quote + $Value.Replace($quote, $quote + '\' + $quote + $quote) + $quote
 }
 
 function Read-Ssh([string]$Server, [string]$Key, [string]$Command) {
@@ -50,6 +55,61 @@ function Assert-Main {
         throw 'main changed. Review the new revision before deploying; do not simply replace Revision.'
     }
 }
+
+function Publish-Revision {
+    if (-not $SourcePath) {
+        $repositoryRoot = Split-Path $PSScriptRoot -Parent
+        $releaseCheckout = Join-Path $repositoryRoot '.ui-release-checkout'
+        $SourcePath = if (Test-Path -LiteralPath $releaseCheckout -PathType Container) { $releaseCheckout } else { $repositoryRoot }
+    }
+    $source = (Resolve-Path -LiteralPath $SourcePath).Path
+    $head = & git -C $source rev-parse HEAD
+    if ($LASTEXITCODE -ne 0 -or $head -ne $Revision) { throw 'Local source HEAD does not match Revision.' }
+    $state = & git -C $source status --porcelain
+    if ($LASTEXITCODE -ne 0 -or $state) { throw 'Source checkout must be clean before publication.' }
+    $remote = & git -C $source remote get-url origin
+    if ($LASTEXITCODE -ne 0 -or $remote -ne 'https://github.com/OlegLebedevRU/etranprocessing.git') {
+        throw 'Unexpected source remote.'
+    }
+    $published = & git ls-remote $remote refs/heads/main
+    if ($LASTEXITCODE -ne 0 -or -not $published) { throw 'Cannot verify publication baseline.' }
+    $publishedSha = ([string]$published -split '\s+')[0]
+    if ($publishedSha -eq $Revision) { return }
+    $parent = & git -C $source rev-parse 'HEAD^'
+    if ($LASTEXITCODE -ne 0 -or $publishedSha -ne $parent) {
+        throw 'main changed or local commit has an unexpected parent. Review before publication.'
+    }
+    Get-Command gh -ErrorAction Stop | Out-Null
+    # Bypass the failing credential-helper subprocess using an ephemeral HTTP
+    # header for normal git push. Never store the token in a file or Git config.
+    $previousGitCount = [Environment]::GetEnvironmentVariable('GIT_CONFIG_COUNT')
+    if ($previousGitCount -and $previousGitCount -notmatch '^\d+$') { throw 'Invalid process Git override count.' }
+    $configIndex = if ($previousGitCount) { [int]$previousGitCount } else { 0 }
+    $headerKey = 'GIT_CONFIG_KEY_' + $configIndex
+    $headerValue = 'GIT_CONFIG_VALUE_' + $configIndex
+    if ([Environment]::GetEnvironmentVariable($headerKey) -or [Environment]::GetEnvironmentVariable($headerValue)) {
+        throw 'Unexpected process Git override at the new header index.'
+    }
+    $taskToken = & gh auth token --hostname github.com
+    if ($LASTEXITCODE -ne 0 -or -not $taskToken) { throw 'GitHub login is unavailable in this Windows profile.' }
+    try {
+        $env:GIT_CONFIG_COUNT = [string]($configIndex + 1)
+        [Environment]::SetEnvironmentVariable($headerKey, 'http.https://github.com/.extraheader')
+        [Environment]::SetEnvironmentVariable($headerValue, 'Authorization: Basic ' + [Convert]::ToBase64String(
+            [Text.Encoding]::UTF8.GetBytes('OlegLebedevRU:' + $taskToken)))
+        & git -C $source push origin ($Revision + ':refs/heads/main')
+        if ($LASTEXITCODE -ne 0) { throw 'git push failed; deployment was not started.' }
+    } finally {
+        [Environment]::SetEnvironmentVariable($headerKey, $null)
+        [Environment]::SetEnvironmentVariable($headerValue, $null)
+        [Environment]::SetEnvironmentVariable('GIT_CONFIG_COUNT', $previousGitCount)
+        $taskToken = $null
+    }
+    Assert-Main
+    Write-Output "Published and verified: $Revision"
+}
+
+if ($Publish) { Publish-Revision }
 
 $resourceProbe = @'
 import json, os

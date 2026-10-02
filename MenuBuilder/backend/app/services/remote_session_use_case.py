@@ -114,7 +114,7 @@ class RemoteSessionUseCase:
             (Terminal.device_id == device_id) | (Terminal.id == device_id)
         )
         if lock:
-            stmt = stmt.with_for_update()
+            stmt = stmt.with_for_update(of=Terminal)
         res = await self.db.execute(stmt)
         terminal = res.scalar_one_or_none()
         if not terminal:

@@ -22,7 +22,7 @@ import { logout } from "../api/auth";
 import { notifySessionEvent } from "../api/session";
 import { useSession } from "../session/SessionContext";
 import { OrgSwitcher } from "../components/OrgSwitcher";
-import { useNavigationProfile } from "../utils/navigationProfile";
+import { isProfileAllowed, useNavigationProfile } from "../utils/navigationProfile";
 import {
   PERMISSION_BILLING_VIEW,
   PERMISSION_MONITORING_VIEW,
@@ -73,7 +73,7 @@ export default function AppLayout() {
 
   const isPlatformMode = Boolean(isSuperuser && currentUser?.org_id === 0);
   const [navProfile, setNavProfile] = useNavigationProfile(currentUser);
-  const canSwitchProfile = !currentUser?.site_mode || currentUser.site_mode === "both";
+  const canSwitchProfile = isProfileAllowed(currentUser, "classic") && isProfileAllowed(currentUser, "l4desk");
 
   let navItems;
   if (isPlatformMode) {

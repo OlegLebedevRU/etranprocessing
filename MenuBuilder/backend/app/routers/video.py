@@ -196,7 +196,7 @@ async def _verify_device_access(
 ) -> Terminal:
     query = select(Terminal).where(Terminal.device_id == device_id)
     if require_active:
-        query = query.with_for_update()
+        query = query.with_for_update(of=Terminal)
     terminal = await db.scalar(query)
     if not terminal:
         raise HTTPException(

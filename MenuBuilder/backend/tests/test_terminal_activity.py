@@ -3,12 +3,14 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy.dialects import postgresql
 from starlette.requests import Request
 
 from app.models import Terminal
 from app.routers.settings import TerminalActivityRequest, set_terminal_activity
 from app.routers.video import _verify_device_access
 from app.security.permissions import PERMISSION_MONITORING_VIEW, require_permission
+from app.services.remote_session_use_case import RemoteSessionUseCase
 
 
 @pytest.fixture
@@ -41,6 +43,9 @@ async def test_activity_retry_sets_target_without_toggling_and_preserves_identit
             db.scalar.call_args.args[0].compile(compile_kwargs={"literal_binds": True})
         )
         assert "terminals.id = 7" in compiled
+        sql = str(db.scalar.call_args.args[0].compile(dialect=postgresql.dialect()))
+        assert "LEFT OUTER JOIN terminal_types" in sql
+        assert sql.endswith("FOR UPDATE OF terminals")
 
 
 @pytest.mark.anyio
@@ -97,7 +102,24 @@ async def test_disabled_terminal_denies_new_video_access_but_allows_cleanup():
     with pytest.raises(HTTPException) as error:
         await _verify_device_access(9, user, db, require_active=True)
     assert error.value.status_code == 403
+    sql = str(db.scalar.call_args.args[0].compile(dialect=postgresql.dialect()))
+    assert "LEFT OUTER JOIN terminal_types" in sql
+    assert sql.endswith("FOR UPDATE OF terminals")
     assert await _verify_device_access(9, user, db) is terminal
+
+
+@pytest.mark.anyio
+async def test_remote_session_locks_terminal_without_locking_nullable_type_join():
+    db = AsyncMock()
+    terminal = Terminal(id=7, device_id=9, org_id=10000, is_active=True)
+    db.execute.return_value = SimpleNamespace(scalar_one_or_none=lambda: terminal)
+    result = await RemoteSessionUseCase(db)._verify_terminal_access(
+        9, {"org_id": 10000, "role_id": 5}, "video", lock=True
+    )
+    assert result is terminal
+    sql = str(db.execute.call_args.args[0].compile(dialect=postgresql.dialect()))
+    assert "LEFT OUTER JOIN terminal_types" in sql
+    assert sql.endswith("FOR UPDATE OF terminals")
 
 
 @pytest.mark.anyio

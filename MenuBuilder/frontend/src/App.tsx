@@ -14,7 +14,7 @@ import {
   hasAnyReportPermission,
   hasPermission,
 } from "./utils/permissions";
-import { getNavigationProfile } from "./utils/navigationProfile";
+import { getNavigationProfile, isProfileAllowed } from "./utils/navigationProfile";
 
 const { Paragraph } = Typography;
 
@@ -174,7 +174,7 @@ function SiteRoute({ site, children, licenses = false }: {
   licenses?: boolean;
 }) {
   const { user } = useSession();
-  if (user?.site_mode && user.site_mode !== "both" && user.site_mode !== site) {
+  if (!isProfileAllowed(user, site)) {
     return <Navigate to="/" replace />;
   }
   if (licenses && ((site === "classic" && user?.classic_licenses_enabled === false) ||

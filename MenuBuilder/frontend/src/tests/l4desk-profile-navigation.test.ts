@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   getNavigationProfile,
+  isProfileAllowed,
   setNavigationProfile,
   type NavigationProfile,
 } from "../utils/navigationProfile";
@@ -99,16 +100,23 @@ describe("L4Desk Navigation Profile & Route Resolution", () => {
     expect(mockLocalStorage.getItem("app_nav_profile:1")).toBe("l4desk");
   });
 
-  it("URL parameter ?profile=classic forces classic profile even for role 5", () => {
+  it("Role 5 rejects Classic URL, saved choice and tenant default", () => {
     (globalThis as any).window.location.search = "?profile=classic";
     const user: UserInfo = {
       user_id: 404,
       username: "l4desk_user",
       role_id: 5,
       org_id: 10,
+      site_mode: "both",
+      default_site: "classic",
     };
+    mockLocalStorage.setItem("app_nav_profile:10", "classic");
     const profile = getNavigationProfile(user);
-    expect(profile).toBe("classic");
+    expect(profile).toBe("l4desk");
+    expect(isProfileAllowed(user, "classic")).toBe(false);
+    expect(isProfileAllowed(user, "l4desk")).toBe(true);
+    setNavigationProfile("classic", user);
+    expect(getNavigationProfile(user)).toBe("l4desk");
   });
 
   it("setNavigationProfile updates storage and dispatches change event", () => {
@@ -132,11 +140,18 @@ describe("L4Desk Navigation Profile & Route Resolution", () => {
     expect(getNavigationProfile(user)).toBe("l4desk");
   });
 
-  it("a tenant default applies until its user selects another allowed site", () => {
+  it("Role 5 does not bypass tenant site restrictions", () => {
+    const user: UserInfo = { username: "owner", role_id: 5, site_mode: "classic" };
+    expect(isProfileAllowed(user, "classic")).toBe(false);
+    expect(isProfileAllowed(user, "l4desk")).toBe(false);
+  });
+
+  it("Role 3 starts in Classic and may explicitly switch to L4Desk", () => {
     const user: UserInfo = { username: "operator", org_id: 43, role_id: 3, site_mode: "both", default_site: "l4desk" };
-    expect(getNavigationProfile(user)).toBe("l4desk");
-    setNavigationProfile("classic", user);
     expect(getNavigationProfile(user)).toBe("classic");
+    expect(isProfileAllowed(user, "l4desk")).toBe(true);
+    setNavigationProfile("l4desk", user);
+    expect(getNavigationProfile(user)).toBe("l4desk");
   });
 
   it("L4Desk navigation profile defines strictly the 6 required sections in order", () => {

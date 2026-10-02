@@ -7,19 +7,20 @@ const PROFILE_STORAGE_KEY = "app_nav_profile";
 const PROFILE_CHANGE_EVENT = "app_nav_profile_change";
 
 /**
- * The tenant's single-site policy is authoritative. With both sites available,
- * an explicit user choice takes precedence over the tenant default. A null
- * default preserves the historical role-based behavior.
+ * Role 5 always uses L4Desk. Tenant site restrictions still gate site access;
+ * stored choices and URL overrides only apply to roles allowed to switch.
  */
 function storageKey(user: UserInfo | null): string {
   return `${PROFILE_STORAGE_KEY}:${user?.org_id ?? "platform"}`;
 }
 
 export function isProfileAllowed(user: UserInfo | null, profile: NavigationProfile): boolean {
+  if ((user?.role_id === 5 || user?.role === "l4desk_owner") && profile === "classic") return false;
   return !user?.site_mode || user.site_mode === "both" || user.site_mode === profile;
 }
 
 export function getNavigationProfile(user: UserInfo | null): NavigationProfile {
+  if (user?.role_id === 5 || user?.role === "l4desk_owner") return "l4desk";
   if (user?.site_mode === "classic" || user?.site_mode === "l4desk") {
     return user.site_mode;
   }
@@ -48,8 +49,8 @@ export function getNavigationProfile(user: UserInfo | null): NavigationProfile {
     }
   }
 
+  if (user?.role_id === 3) return "classic";
   if (user?.default_site) return user.default_site;
-  if (user?.role_id === 5 || user?.role === "l4desk_owner") return "l4desk";
 
   return "classic";
 }
@@ -84,13 +85,8 @@ export function useNavigationProfile(user: UserInfo | null): [
   }, [user]);
 
   useEffect(() => {
-    const handleProfileChange = (e: Event) => {
-      const customEvent = e as CustomEvent<NavigationProfile>;
-      if (customEvent.detail) {
-        setProfileState(customEvent.detail);
-      } else {
-        setProfileState(getNavigationProfile(user));
-      }
+    const handleProfileChange = () => {
+      setProfileState(getNavigationProfile(user));
     };
 
     window.addEventListener(PROFILE_CHANGE_EVENT, handleProfileChange);
@@ -102,6 +98,7 @@ export function useNavigationProfile(user: UserInfo | null): [
   }, [user]);
 
   const updateProfile = (newProfile: NavigationProfile) => {
+    if (!isProfileAllowed(user, newProfile)) return;
     setNavigationProfile(newProfile, user);
     setProfileState(newProfile);
   };

@@ -178,7 +178,7 @@ async def set_terminal_activity(
     terminal = await db.scalar(
         _visible_terminals_query(org_id)
         .where(Terminal.id == terminal_id)
-        .with_for_update()
+        .with_for_update(of=Terminal)
     )
     if terminal is None:
         raise HTTPException(404, "Терминал не найден")
