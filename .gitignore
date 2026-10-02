@@ -117,3 +117,6 @@ tools/l4setup/res/*.bin
 artifacts/stand_download_5b/
 
 .playwright-cli/
+
+# Independent local checkout used to prepare reviewed releases
+/.ui-release-checkout/

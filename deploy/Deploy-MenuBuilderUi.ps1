@@ -63,11 +63,15 @@ function Publish-Revision {
         $SourcePath = if (Test-Path -LiteralPath $releaseCheckout -PathType Container) { $releaseCheckout } else { $repositoryRoot }
     }
     $source = (Resolve-Path -LiteralPath $SourcePath).Path
-    $head = & git -C $source rev-parse HEAD
-    if ($LASTEXITCODE -ne 0 -or $head -ne $Revision) { throw 'Local source HEAD does not match Revision.' }
-    $state = & git -C $source status --porcelain
+    # The reviewed checkout belongs to the sandbox account. Trust this exact
+    # directory only for these commands when run from the operator's account.
+    $sourceGitOptions = @('-c', ('safe.directory=' + $source.Replace('\', '/')), '-C', $source)
+    $head = & git @sourceGitOptions rev-parse HEAD
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect the local source checkout.' }
+    if ($head -ne $Revision) { throw 'Local source HEAD does not match Revision.' }
+    $state = & git @sourceGitOptions status --porcelain
     if ($LASTEXITCODE -ne 0 -or $state) { throw 'Source checkout must be clean before publication.' }
-    $remote = & git -C $source remote get-url origin
+    $remote = & git @sourceGitOptions remote get-url origin
     if ($LASTEXITCODE -ne 0 -or $remote -ne 'https://github.com/OlegLebedevRU/etranprocessing.git') {
         throw 'Unexpected source remote.'
     }
@@ -75,7 +79,7 @@ function Publish-Revision {
     if ($LASTEXITCODE -ne 0 -or -not $published) { throw 'Cannot verify publication baseline.' }
     $publishedSha = ([string]$published -split '\s+')[0]
     if ($publishedSha -eq $Revision) { return }
-    $parent = & git -C $source rev-parse 'HEAD^'
+    $parent = & git @sourceGitOptions rev-parse 'HEAD^'
     if ($LASTEXITCODE -ne 0 -or $publishedSha -ne $parent) {
         throw 'main changed or local commit has an unexpected parent. Review before publication.'
     }
@@ -97,7 +101,7 @@ function Publish-Revision {
         [Environment]::SetEnvironmentVariable($headerKey, 'http.https://github.com/.extraheader')
         [Environment]::SetEnvironmentVariable($headerValue, 'Authorization: Basic ' + [Convert]::ToBase64String(
             [Text.Encoding]::UTF8.GetBytes('OlegLebedevRU:' + $taskToken)))
-        & git -C $source push origin ($Revision + ':refs/heads/main')
+        & git @sourceGitOptions push origin ($Revision + ':refs/heads/main')
         if ($LASTEXITCODE -ne 0) { throw 'git push failed; deployment was not started.' }
     } finally {
         [Environment]::SetEnvironmentVariable($headerKey, $null)

@@ -159,9 +159,10 @@ backend test05 зарегистрирован с `org_id=10000`, ролью вл
 - The video page collapses navigation on entry and frees viewport space after device selection. The player uses decoded `videoWidth`/`videoHeight` for aspect ratio and offers browser-only Fit / Native size. Native size is unavailable while remote input is active; the overlay refreshes its coordinate geometry when control activates.
 - Local TypeScript and Vite build passed; browser layout was checked with mocked API responses at desktop and mobile sizes. Live video and control E2E remain open. Details: [step 1 handoff](../tasks/active/video-page-medium-hd-frontend-step1.md).
 
-## L4Desk UI (2026-10-02, working tree; local tests + mocked browser)
-- Role 5 is denied monitoring at menu, direct route and API permission boundaries; default/login route is terminals.
+## L4Desk UI (2026-10-03, code + release log + browser repro)
+- Main includes the UI in `d538b74` and the profile/locking correction in `e9091fe`. Role 5 uses only L4Desk, cannot access Classic routes or monitoring, and defaults to terminals. Role 3 defaults to Classic for both-site tenants and may explicitly switch; tenant site restrictions remain enforced.
 - Terminal activity PATCH is tenant-scoped, sets a target flag and rejects disabling with unfinished remote sessions. Video/console admission rejects inactive terminals; cleanup remains available. Certificate identity and shared models are unchanged.
 - Terminal filters operate on the complete authorized settings list before UI pagination; Video/Console selectors intersect provider snapshots with active portal-visible terminals.
 - Video uses an Online-first Drawer and a single toolbar; the live badge requires fresh decoded browser frames. Native size remains unavailable during active input.
-- Backend/frontend tests, TypeScript/Vite, Ruff/Pyright and mocked browser scenarios passed. No deploy or new live media E2E. [Handoff](../tasks/active/2026-10-02-menubuilder-l4desk-ui.md).
+- The user's release log confirms backend/frontend `5b4a880`, runtime image verification, health, HTTP static delivery and unchanged neighboring containers. Live Playwright reproduced stale Classic navigation and 500 on control/lease; `e9091fe` corrects both, with PostgreSQL locks scoped to terminals. Corrective deployment and live media/input E2E remain unconfirmed.
+- Corrective checks: 48 backend tests including schema compatibility, 70 frontend tests, TypeScript/Vite, Ruff/Pyright and mocked browser role scenarios passed. Shared models/schema/data are unchanged; no migrations are required. [Handoff](../tasks/active/2026-10-02-menubuilder-l4desk-ui.md).
