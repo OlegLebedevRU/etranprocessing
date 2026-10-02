@@ -388,3 +388,11 @@
 - Evidence summary/log сохранены в ignored second-clean. Остаются отдельные gates: автостарт после reboot, remote55 и live fresh x86; это не remote input/video E2E. Пакет ещё не опубликован.
 
 - Пользователь отказался от reboot и поручил продолжить. Автостарт после перезагрузки записан как непроверенный, не блокирует согласованный выпуск. Установленная signed1.9.6 остаётся на773; сертификат/службы повторно не меняются.
+
+### Этап15 — выпуск1.9.6 завершён
+
+- Source/signed artifact checkpoint a76e586032a518e33540ce45406ee6c2a462af9a запушен в main и проверен git ls-remote. Manifest signed=true/dirty=false, source SHA совпадает; setup hash не изменён после подписи.
+- [Signed1.9.6 installer](https://l4tools-generic.ar.cloud.ru/l4tools/1.9.6/l4setup.exe):29653560bytes, SHA83c261fd018b51c011b6b1b9ae6e520e9c4d15477d9aefbf6911d8e244ec71ef.
+- Registry: version absent до загрузки; initial PUT network reset автоматически повторён publisher, затем3PUT200/Digest match. Python GET отверг усечённый29508510/29653560bytes ответ без записи успеха. Direct curl NO_PROXY полностью скачал3файла с точным size/SHA; скачанный setup Valid/timestamp. После этого штатный record создал artifacts/l4tools/1.9.6.json и releases.jsonl. Повторного ручного publish/overwrite/allow-dirty не было.
+- Remote manifest4721bytes SHA42e3025795743b0fb818d467929229eaa86a8de13a32ebea0e4b20e0f6fbb8a5; sums165bytes SHA86604b130ae6fa2484c0a53d178c96ed6e719fb6f080cfd5749f0f836523f6b6. Инвентарь обеих архитектур содержит9EXE.
+- Итог: signed1.9.6 опубликован, чистый Install773 ready/0 подтверждён, текущая установка оставлена. Непроверены reboot (пользователь отказался), новая версия на55/live fresh x86 и active remote input/video E2E. Server stacks не менялись; исходный грязный checkout сохранён.
