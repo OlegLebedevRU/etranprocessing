@@ -4,6 +4,7 @@
 #include <string.h>
 #include <aclapi.h>
 #include <sddl.h>
+#include "mosquitto_log_acl.h"
 
 #pragma comment(lib, "advapi32.lib")
 
@@ -330,13 +331,16 @@ bool svc_get_status(const wchar_t* svc_name, DWORD* out_state, DWORD* out_pid) {
 
     SC_HANDLE hSvc = OpenServiceW(hSCM, svc_name, SERVICE_QUERY_STATUS);
     if (!hSvc) {
+        DWORD error = GetLastError();
         CloseServiceHandle(hSCM);
+        SetLastError(error);
         return false;
     }
 
     SERVICE_STATUS_PROCESS ssp = { 0 };
     DWORD bytesNeeded = 0;
     BOOL ok = QueryServiceStatusEx(hSvc, SC_STATUS_PROCESS_INFO, (LPBYTE)&ssp, sizeof(ssp), &bytesNeeded);
+    DWORD error = ok ? ERROR_SUCCESS : GetLastError();
 
     if (ok) {
         if (out_state) *out_state = ssp.dwCurrentState;
@@ -345,6 +349,7 @@ bool svc_get_status(const wchar_t* svc_name, DWORD* out_state, DWORD* out_pid) {
 
     CloseServiceHandle(hSvc);
     CloseServiceHandle(hSCM);
+    if (!ok) SetLastError(error);
     return (ok != 0);
 }
 
@@ -369,7 +374,9 @@ bool svc_start(const wchar_t* svc_name) {
 
     SC_HANDLE hSvc = OpenServiceW(hSCM, svc_name, SERVICE_START | SERVICE_QUERY_STATUS);
     if (!hSvc) {
+        DWORD error = GetLastError();
         CloseServiceHandle(hSCM);
+        SetLastError(error);
         return false;
     }
 
@@ -388,6 +395,7 @@ bool svc_start(const wchar_t* svc_name) {
         if (err != ERROR_SERVICE_ALREADY_RUNNING) {
             CloseServiceHandle(hSvc);
             CloseServiceHandle(hSCM);
+            SetLastError(err);
             return false;
         }
     }
@@ -409,6 +417,18 @@ bool svc_start(const wchar_t* svc_name) {
     return false;
 }
 
+bool svc_configure_mosquitto_log(const wchar_t* base_path) {
+    wchar_t directory[MAX_PATH];
+    if (!base_path || swprintf_s(directory, MAX_PATH, L"%ls\\mosquitto\\log", base_path) < 0) {
+        SetLastError(ERROR_INVALID_PARAMETER); return false;
+    }
+    if (l4_mosquitto_log_acl(directory)) return true;
+    DWORD error = GetLastError();
+    fprintf(stderr, "[WARN] Mosquitto log ACL could not be updated; error=%lu\n", error);
+    SetLastError(error);
+    return false;
+}
+
 bool svc_stop(const wchar_t* svc_name) {
     if (!svc_name) return false;
 
@@ -417,7 +437,9 @@ bool svc_stop(const wchar_t* svc_name) {
 
     SC_HANDLE hSvc = OpenServiceW(hSCM, svc_name, SERVICE_STOP | SERVICE_QUERY_STATUS);
     if (!hSvc) {
+        DWORD error = GetLastError();
         CloseServiceHandle(hSCM);
+        SetLastError(error);
         return false;
     }
 
@@ -434,8 +456,10 @@ bool svc_stop(const wchar_t* svc_name) {
     SERVICE_STATUS ss;
     if (ssp.dwCurrentState != SERVICE_STOP_PENDING && !ControlService(hSvc, SERVICE_CONTROL_STOP, &ss) &&
         GetLastError() != ERROR_SERVICE_NOT_ACTIVE) {
+        DWORD error = GetLastError();
         CloseServiceHandle(hSvc);
         CloseServiceHandle(hSCM);
+        SetLastError(error);
         return false;
     }
 
@@ -459,43 +483,98 @@ bool svc_stop(const wchar_t* svc_name) {
 bool svc_stop_and_kill(const wchar_t* svc_name) {
     if (!svc_name) return false;
     SC_HANDLE manager = OpenSCManagerW(NULL, NULL, SC_MANAGER_CONNECT);
-    if (!manager) return false;
+    if (!manager) {
+        fprintf(stderr, "[SERVICE] Stop failed: %ls; stage=open_manager error=%lu\n", svc_name, GetLastError());
+        return false;
+    }
     SC_HANDLE service = OpenServiceW(manager, svc_name, SERVICE_QUERY_STATUS);
-    if (!service) { CloseServiceHandle(manager); return false; }
+    if (!service) {
+        DWORD error = GetLastError();
+        fprintf(stderr, "[SERVICE] Stop failed: %ls; stage=open_service error=%lu\n", svc_name, error);
+        CloseServiceHandle(manager); SetLastError(error); return false;
+    }
     SERVICE_STATUS_PROCESS initial = { 0 }, current = { 0 };
     DWORD bytes = 0;
     bool result = false;
+    DWORD error = ERROR_SUCCESS;
+    const char* stage = "query_initial";
     HANDLE process = NULL;
-    if (!QueryServiceStatusEx(service, SC_STATUS_PROCESS_INFO, (BYTE*)&initial, sizeof(initial), &bytes)) goto done;
+    if (!QueryServiceStatusEx(service, SC_STATUS_PROCESS_INFO, (BYTE*)&initial, sizeof(initial), &bytes)) {
+        error = GetLastError(); goto done;
+    }
     if (initial.dwCurrentState == SERVICE_STOPPED) { result = true; goto done; }
     /* Pin the process object before stop: its PID cannot target a later process. */
     if (initial.dwProcessId && initial.dwServiceType == SERVICE_WIN32_OWN_PROCESS)
         process = OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE, FALSE, initial.dwProcessId);
+    stage = "stop";
     if (svc_stop(svc_name)) { result = true; goto done; }
-    if (!QueryServiceStatusEx(service, SC_STATUS_PROCESS_INFO, (BYTE*)&current, sizeof(current), &bytes)) goto done;
+    error = GetLastError();
+    if (!QueryServiceStatusEx(service, SC_STATUS_PROCESS_INFO, (BYTE*)&current, sizeof(current), &bytes)) {
+        stage = "query_after_stop"; error = GetLastError(); goto done;
+    }
     if (current.dwCurrentState == SERVICE_STOPPED) { result = true; goto done; }
     if (!process || current.dwServiceType != SERVICE_WIN32_OWN_PROCESS ||
         current.dwProcessId != initial.dwProcessId || current.dwCurrentState != SERVICE_STOP_PENDING ||
         WaitForSingleObject(process, 0) != WAIT_TIMEOUT) goto done;
     fprintf(stderr, "[SERVICE] Stop timeout: %ls PID %lu; terminating pinned own-process service\n",
             svc_name, initial.dwProcessId);
-    if (!TerminateProcess(process, 1) || WaitForSingleObject(process, 5000) != WAIT_OBJECT_0) goto done;
+    stage = "terminate_pinned_process";
+    if (!TerminateProcess(process, 1)) { error = GetLastError(); goto done; }
+    if (WaitForSingleObject(process, 5000) != WAIT_OBJECT_0) { error = ERROR_TIMEOUT; goto done; }
+    stage = "wait_stopped";
+    error = ERROR_SERVICE_REQUEST_TIMEOUT;
     for (int i = 0; i < 20; i++) {
         if (!QueryServiceStatusEx(service, SC_STATUS_PROCESS_INFO, (BYTE*)&current, sizeof(current), &bytes)) goto done;
         if (current.dwCurrentState == SERVICE_STOPPED) { result = true; break; }
         Sleep(250);
     }
 done:
-    if (!result) fprintf(stderr, "[SERVICE] Stop failed: %ls; restart not attempted\n", svc_name);
+    if (!result) fprintf(stderr, "[SERVICE] Stop failed: %ls; stage=%s error=%lu; restart not attempted\n",
+                         svc_name, stage, error);
     if (process) CloseHandle(process);
     CloseServiceHandle(service);
     CloseServiceHandle(manager);
+    if (!result) SetLastError(error);
     return result;
 }
 
 bool svc_restart(const wchar_t* svc_name) {
     if (!svc_stop_and_kill(svc_name)) return false;
-    return svc_start(svc_name);
+    if (svc_start(svc_name)) return true;
+    DWORD error = GetLastError();
+    fprintf(stderr, "[SERVICE] Start failed: %ls; error=%lu\n", svc_name, error);
+    SetLastError(error);
+    return false;
+}
+
+bool svc_restart_mqtt_stack(void) {
+    DWORD con_state = SERVICE_STOPPED;
+    if (!svc_get_status(SVC_NAME_L4CON, &con_state, NULL)) {
+        DWORD error = GetLastError();
+        if (error != ERROR_SERVICE_DOES_NOT_EXIST) {
+            fprintf(stderr, "[SERVICE] MQTT restart failed: query L4Con; error=%lu\n", error);
+            SetLastError(error);
+            return false;
+        }
+        con_state = SERVICE_STOPPED;
+    }
+    bool restore_con = con_state != SERVICE_STOPPED;
+    if (restore_con && !svc_stop_and_kill(SVC_NAME_L4CON)) return false;
+    if (!svc_restart(SVC_NAME_MOSQUITTO)) {
+        DWORD error = GetLastError();
+        /* Restore availability if broker restart failed but it remains running. */
+        if (restore_con && svc_is_running(SVC_NAME_MOSQUITTO) && !svc_start(SVC_NAME_L4CON))
+            fprintf(stderr, "[SERVICE] L4Con restore failed; error=%lu\n", GetLastError());
+        SetLastError(error);
+        return false;
+    }
+    if (restore_con && !svc_start(SVC_NAME_L4CON)) {
+        DWORD error = GetLastError();
+        fprintf(stderr, "[SERVICE] MQTT restart failed: start L4Con; error=%lu\n", error);
+        SetLastError(error);
+        return false;
+    }
+    return true;
 }
 
 static bool file_exists(const wchar_t* path) {
@@ -506,9 +585,7 @@ static bool file_exists(const wchar_t* path) {
 bool svc_ensure_all_installed_and_running(const wchar_t* base_path) {
     if (!base_path) return false;
 
-    wchar_t mosq_log_dir[MAX_PATH];
-    swprintf_s(mosq_log_dir, MAX_PATH, L"%s\\mosquitto\\log", base_path);
-    svc_set_dir_permissions(mosq_log_dir);
+    svc_configure_mosquitto_log(base_path);
 
     // Ensure MOSQUITTO_DIR system and process environment variable is set
     wchar_t mosq_dir[MAX_PATH];

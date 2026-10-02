@@ -429,6 +429,8 @@ int engine_run_pipeline(SetupContext* ctx) {
     } else if (ctx->summary.probes.calculated_exit_code == 12) {
         ctx->final_exit_code = 12;
         strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "degraded");
+        strcpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason),
+                 strcmp(ctx->summary.probes.network, "unreachable") == 0 ? "network_unreachable" : "l4desk_not_ready");
     } else {
         ctx->final_exit_code = 0;
         strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "ready");

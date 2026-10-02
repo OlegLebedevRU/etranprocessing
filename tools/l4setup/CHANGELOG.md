@@ -1,5 +1,12 @@
 # Changelog — Leo4 Setup (`l4setup`)
 
+## [1.9.6] — 2026-10-02
+
+- Package l4superv 1.9.5 with dependency-aware Mosquitto/L4Con restart and accurate standalone l4desk status. Other component versions and current l4capture implementation are unchanged.
+- Configure Mosquitto log read permissions for ordinary Windows Users, including the existing file; warn on failure and retry in supervisor service startup. Do not grant ordinary users log write/delete access.
+- Wait up to15s for asynchronous l4desk startup before declaring degraded; preserve genuine timeout detection and skip invalid/no interactive session. Include an explicit reason for degraded results.
+- Apply log ACL only after payload/configuration preparation, avoiding a spurious path-not-found warning on clean installation.
+
 ## [1.9.5] — 2026-10-02
 
 - Fix fresh installation after certificate enrollment: verify the certificate in the store before starting services; check proxy ready/standby after startup.

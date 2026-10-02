@@ -12,6 +12,7 @@
  * Set permissive read/write permissions on directory (Full Control for Everyone, Users, System, Admin).
  */
 bool svc_set_dir_permissions(const wchar_t* dir_path);
+bool svc_configure_mosquitto_log(const wchar_t* base_path);
 
 /**
  * Retrieve registered binary path of a service from Windows SCM.
@@ -72,6 +73,9 @@ bool svc_stop_and_kill(const wchar_t* svc_name);
  * Restart a service (stop then start).
  */
 bool svc_restart(const wchar_t* svc_name);
+
+/* Restart the broker after draining L4Con; restore L4Con only if it was running. */
+bool svc_restart_mqtt_stack(void);
 
 /**
  * Get service state (e.g. SERVICE_RUNNING, SERVICE_STOPPED) and process ID.

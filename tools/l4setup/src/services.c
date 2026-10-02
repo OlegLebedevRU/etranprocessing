@@ -5,6 +5,7 @@
 #include <string.h>
 #include <aclapi.h>
 #include <sddl.h>
+#include "mosquitto_log_acl.h"
 
 #pragma comment(lib, "advapi32.lib")
 
@@ -29,39 +30,13 @@ bool services_prepare_mosquitto(const wchar_t* dest_dir) {
     CloseHandle(pi.hThread);
     CloseHandle(pi.hProcess);
     if (!ok) log_err("Mosquitto configuration preparation failed (wait=%lu, code=%lu)", wait, code);
-    return ok;
-}
-
-static bool set_dir_permissions(const wchar_t* dir_path) {
-    if (!dir_path) return false;
-    CreateDirectoryW(dir_path, NULL);
-
-    PSECURITY_DESCRIPTOR pSD = NULL;
-    // Grant full control to SYSTEM, Administrators and Everyone
-    if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(
-            L"D:(A;OICI;GA;;;SY)(A;OICI;GA;;;BA)(A;OICI;GA;;;WD)",
-            SDDL_REVISION_1,
-            &pSD,
-            NULL)) {
-        return false;
+    if (ok) {
+        wchar_t log_dir[MAX_PATH];
+        swprintf_s(log_dir, MAX_PATH, L"%ls\\mosquitto\\log", dest_dir);
+        if (!l4_mosquitto_log_acl(log_dir))
+            log_warn("Mosquitto log read permissions could not be updated (error %lu); supervisor will retry at startup", GetLastError());
     }
-
-    PACL pDacl = NULL;
-    BOOL bDaclPresent = FALSE, bDaclDefaulted = FALSE;
-    GetSecurityDescriptorDacl(pSD, &bDaclPresent, &pDacl, &bDaclDefaulted);
-
-    DWORD res = SetNamedSecurityInfoW(
-        (LPWSTR)dir_path,
-        SE_FILE_OBJECT,
-        DACL_SECURITY_INFORMATION,
-        NULL,
-        NULL,
-        pDacl,
-        NULL
-    );
-
-    LocalFree(pSD);
-    return (res == ERROR_SUCCESS);
+    return ok;
 }
 
 bool services_configure_environment(const wchar_t* dest_dir) {
@@ -73,10 +48,6 @@ bool services_configure_environment(const wchar_t* dest_dir) {
     wchar_t mosq_dir[MAX_PATH];
     swprintf_s(mosq_dir, MAX_PATH, L"%ls\\mosquitto", dest_dir);
     SetEnvironmentVariableW(L"MOSQUITTO_DIR", mosq_dir);
-
-    wchar_t mosq_log[MAX_PATH];
-    swprintf_s(mosq_log, MAX_PATH, L"%ls\\mosquitto\\log", dest_dir);
-    set_dir_permissions(mosq_log);
 
     // 2. Registry Environment
     HKEY hKey = NULL;

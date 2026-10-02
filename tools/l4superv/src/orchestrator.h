@@ -29,7 +29,7 @@ void orchestrator_trigger_force_tick(void);
 /**
  * Query current runtime status of l4desk user session process.
  */
-bool orchestrator_get_l4desk_status(DWORD* out_pid, DWORD* out_session);
+bool orchestrator_get_l4desk_status(const wchar_t* base_path, DWORD* out_pid, DWORD* out_session);
 
 /**
  * Query current runtime status of FFmpeg process from l4desk state file.

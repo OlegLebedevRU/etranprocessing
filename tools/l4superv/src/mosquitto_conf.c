@@ -28,7 +28,7 @@ static void ensure_log_dir_exists(const wchar_t* base_path) {
     wchar_t log_dir[MAX_PATH];
     swprintf_s(log_dir, MAX_PATH, L"%s\\mosquitto\\log", base_path);
     CreateDirectoryW(log_dir, NULL);
-    svc_set_dir_permissions(log_dir);
+    svc_configure_mosquitto_log(base_path);
 }
 
 bool mosquitto_conf_generate_standby(const wchar_t* base_path, int port) {

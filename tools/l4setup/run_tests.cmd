@@ -49,9 +49,13 @@ cl.exe /nologo /O2 /MT /W4 /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /D
 if errorlevel 1 exit /b 1
 bin\test_certificate_phase.exe
 if errorlevel 1 exit /b 1
-cl.exe /nologo /O2 /MT /W4 /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\ tests\test_service_start.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\test_service_start.exe kernel32.lib user32.lib advapi32.lib
+cl.exe /nologo /O2 /MT /W4 /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /I ..\l4superv\src /Foobj\ tests\test_service_start.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\test_service_start.exe kernel32.lib user32.lib advapi32.lib
 if errorlevel 1 exit /b 1
 bin\test_service_start.exe
+if errorlevel 1 exit /b 1
+cl.exe /nologo /O2 /MT /W4 /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\ tests\test_desk_startup_wait.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\test_desk_startup_wait.exe kernel32.lib user32.lib ws2_32.lib wtsapi32.lib winhttp.lib
+if errorlevel 1 exit /b 1
+bin\test_desk_startup_wait.exe
 if errorlevel 1 exit /b 1
 bin\test_l4setup.exe %*
 if errorlevel 1 (

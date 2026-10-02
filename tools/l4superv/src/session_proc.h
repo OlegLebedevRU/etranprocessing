@@ -57,6 +57,8 @@ BOOL sp_start_in_session_ex(
 
 BOOL sp_start_in_session(DWORD session_id, const wchar_t* exe, const wchar_t* cmdline, const wchar_t* workdir, PROCESS_INFORMATION* out_pi, HANDLE* out_job);
 BOOL sp_is_alive(HANDLE hProcess);
+/* Read-only discovery, matching full executable path and interactive session. */
+bool sp_find_session_process(const wchar_t* exe, DWORD session, DWORD* out_pid, DWORD* out_session);
 void sp_stop(PROCESS_INFORMATION* pi, HANDLE* phJob, const wchar_t* stop_event_name, DWORD grace_ms);
 
 #endif /* L4SUPERV_SESSION_PROC_H */

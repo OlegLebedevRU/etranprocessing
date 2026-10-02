@@ -27,6 +27,7 @@ static bool fake_probe(const wchar_t* url, int timeout, Leo4ProxyInfo* info) {
     return probe_ok;
 }
 static bool fake_restart(const wchar_t* name) { (void)name; restarts++; return restart_ok; }
+static bool fake_mqtt_restart(void) { restarts++; return restart_ok; }
 static bool fake_start(const wchar_t* name) { (void)name; starts++; return true; }
 static bool fake_running(const wchar_t* name) { (void)name; return service_running; }
 static bool fake_exists(const wchar_t* name) { (void)name; return true; }
@@ -40,6 +41,7 @@ static bool fake_active(const wchar_t* path, const char* sn) { (void)path; (void
 #define cert_discover fake_discover
 #define proxy_client_query_info fake_probe
 #define svc_restart fake_restart
+#define svc_restart_mqtt_stack fake_mqtt_restart
 #define svc_start fake_start
 #define svc_is_running fake_running
 #define svc_exists fake_exists
@@ -85,7 +87,7 @@ int main(void) {
     CHECK(!orchestrator_step(&cfg, &state, &action)); CHECK(!strcmp(state.sn, "old-sn"));
     state_cleanup(&state);
     setup(&cfg, &state);
-    CHECK(orchestrator_step(&cfg, &state, &action)); CHECK(!strcmp(state.sn, "new-sn")); CHECK(restarts == 2);
+    CHECK(orchestrator_step(&cfg, &state, &action)); CHECK(!strcmp(state.sn, "new-sn")); CHECK(restarts == 1);
     state_cleanup(&state);
     setup(&cfg, &state); matching = false;
     CHECK(!orchestrator_step(&cfg, &state, &action)); CHECK(!strcmp(state.sn, "old-sn")); CHECK(restarts == 1);

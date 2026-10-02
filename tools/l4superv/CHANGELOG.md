@@ -1,5 +1,14 @@
 ﻿# Changelog — l4superv (Leo4 Supervisor & Orchestrator Suite)
 
+## [1.9.5] — 2026-10-02
+
+- Stop L4Con before restarting Mosquitto; restore it after the broker starts. Preserve an initially stopped or absent L4Con. A failed step does not commit the identity transition.
+- Apply dependency-aware broker restart to activation, certificate renewal, standby and bridge repair. Avoid a duplicate L4Con restart on SN change.
+- Log service stop/start failures with Windows error code and stop stage; retain pinned-process safeguards.
+- Fix separate --status invocation: discover live l4desk by full executable path and active console session instead of inspecting only this process's handles. Discovery is read-only.
+- Add x86/x64 dependency/failure-order and process-discovery regression tests.
+- Give Builtin Users read access to the Mosquitto log directory and existing log; SYSTEM/Admins retain full control. Repair protected file ACLs at supervisor startup as SYSTEM, with warnings on failure and no log truncation. Other suite directories are unchanged.
+
 ## [1.9.4] — 2026-10-02
 
 - Add --prepare-mosquitto --dest <absolute path> for installer bootstrap: create a missing local-only config with the existing generator, preserve existing config, and exit without orchestration, state/certificate changes or service startup.

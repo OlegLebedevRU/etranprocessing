@@ -480,7 +480,7 @@ static bool process_pending_pin(const L4SupervConfig* cfg, const Leo4ProxyInfo* 
     }
 }
 
-bool orchestrator_get_l4desk_status(DWORD* out_pid, DWORD* out_session) {
+bool orchestrator_get_l4desk_status(const wchar_t* base_path, DWORD* out_pid, DWORD* out_session) {
     if (out_pid) *out_pid = 0;
     if (out_session) *out_session = 0;
 
@@ -490,11 +490,11 @@ bool orchestrator_get_l4desk_status(DWORD* out_pid, DWORD* out_session) {
         ProcessIdToSessionId(g_l4desk_pi.dwProcessId, &sid);
         if (out_session) *out_session = sid ? sid : g_l4desk_session;
         return true;
-    } else if (g_l4desk_pi.hProcess || g_l4desk_job) {
-        sp_stop(&g_l4desk_pi, &g_l4desk_job, NULL, 0);
-        g_l4desk_session = 0;
     }
-    return false;
+    wchar_t exe[MAX_PATH];
+    if (!base_path || swprintf_s(exe, MAX_PATH, L"%ls\\l4desk\\l4desk.exe", base_path) < 0)
+        return false;
+    return sp_find_session_process(exe, sp_get_active_console_session(), out_pid, out_session);
 }
 
 bool orchestrator_get_ffmpeg_status(const wchar_t* base_path, FFmpegStatus* out_status) {
@@ -589,7 +589,7 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
             state_save(cfg->base_path, state);
 
             mosquitto_conf_generate_standby(cfg->base_path, cfg->mosquitto_port);
-            svc_restart(SVC_NAME_MOSQUITTO);
+            svc_restart_mqtt_stack();
             svc_restart(SVC_NAME_LEO4PROXY);
             svc_restart(SVC_NAME_L4CON);
 
@@ -658,18 +658,12 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
 
             if (!mosquitto_conf_generate_active(cfg->base_path, cfg->mosquitto_port,
                                                 proxy_info.sn, cfg->mosquitto_template_path) ||
-                !svc_restart(SVC_NAME_MOSQUITTO)) {
+                !svc_restart_mqtt_stack()) {
                 log_info("[CERT] MQTT configuration or restart failed; identity transition remains pending");
                 return false;
             }
 
             if (sn_changed) {
-                // l4con caches SN on start; restart it to fetch new SN
-                if (!svc_restart(SVC_NAME_L4CON)) {
-                    log_info("[CERT] L4Con restart failed; identity transition remains pending");
-                    return false;
-                }
-
                 // l4desk also caches SN on start; restart it
                 if (sp_is_alive(g_l4desk_pi.hProcess)) {
                     wchar_t stop_evt[128];
@@ -700,7 +694,7 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
                      proxy_info.sn, proxy_info.thumbprint);
 
             // Restart mosquitto to reconnect TLS bridge to updated proxy
-            if (!svc_restart(SVC_NAME_MOSQUITTO)) {
+            if (!svc_restart_mqtt_stack()) {
                 log_info("[CERT] MQTT restart failed; certificate renewal remains pending");
                 return false;
             }
@@ -721,8 +715,11 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
             // Check if active mosquitto.conf was accidentally corrupted or overwritten
             if (!mosquitto_conf_is_active_with_sn(cfg->base_path, proxy_info.sn)) {
                 log_info("[REPAIR] Active mosquitto.conf was missing/corrupted. Regenerating for SN: %s...", proxy_info.sn);
-                mosquitto_conf_generate_active(cfg->base_path, cfg->mosquitto_port, proxy_info.sn, cfg->mosquitto_template_path);
-                svc_restart(SVC_NAME_MOSQUITTO);
+                if (!mosquitto_conf_generate_active(cfg->base_path, cfg->mosquitto_port, proxy_info.sn, cfg->mosquitto_template_path) ||
+                    !svc_restart_mqtt_stack()) {
+                    log_info("[REPAIR] MQTT configuration or restart failed; repair will retry");
+                    return false;
+                }
                 if (p_action_taken) *p_action_taken = true;
             }
         }
@@ -740,7 +737,7 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
             log_info("[STATE] Standby mode: no certificate loaded in leo4proxy. Configuring local Mosquitto...");
 
             if (!mosquitto_conf_generate_standby(cfg->base_path, cfg->mosquitto_port) ||
-                !svc_restart(SVC_NAME_MOSQUITTO)) {
+                !svc_restart_mqtt_stack()) {
                 log_info("[WARN] Standby bridge transition incomplete; identity retained.");
                 goto service_health;
             }
@@ -948,6 +945,8 @@ void orchestrator_run_loop(const L4SupervConfig* cfg, volatile bool* p_stop_flag
     log_info(" Watchdog:          %s", cfg->watchdog_enabled ? "Enabled" : "Disabled");
     log_info("=======================================================");
 
+    /* Run once as the service identity, including an existing SYSTEM-only log. */
+    svc_configure_mosquitto_log(cfg->base_path);
     L4State state;
     state_load(cfg->base_path, &state);
 

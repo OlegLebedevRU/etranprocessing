@@ -1,5 +1,7 @@
 # Active task packets
 
+- [L4 Tools1.9.6 service dependencies](2026-10-02-l4superv-service-dependencies.md) — terminal55 error1051, supervisor transition/status correction, build/sign acceptance.
+
 Здесь только короткие packets выполняемых задач по [handoff template](../handoff-template.md).
 Имя: `YYYY-MM-DD-task-slug.md`, без токенов, connection profile или приватного вывода.
 Записывай scope/owner, подтверждённые факты, blockers и следующий минимальный шаг.

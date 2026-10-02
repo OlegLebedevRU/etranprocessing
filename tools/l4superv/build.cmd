@@ -62,6 +62,10 @@ call :do_shutdown_test x86
 if errorlevel 1 goto :shutdown_test_failed
 call :do_shutdown_test x64
 if errorlevel 1 goto :shutdown_test_failed
+call :do_restart_status_test x86
+if errorlevel 1 goto :shutdown_test_failed
+call :do_restart_status_test x64
+if errorlevel 1 goto :shutdown_test_failed
 goto :summary
 
 :build_tests
@@ -174,6 +178,18 @@ exit /b 0
 cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\%1\ tests\test_service_shutdown.c /link /OUT:bin\%1\test_service_shutdown.exe advapi32.lib user32.lib"
 if errorlevel 1 exit /b 1
 bin\%1\test_service_shutdown.exe
+exit /b %ERRORLEVEL%
+
+:do_restart_status_test
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\%1\ tests\test_mqtt_restart.c /link /OUT:bin\%1\test_mqtt_restart.exe advapi32.lib user32.lib && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\%1\ tests\test_process_discovery.c /link /OUT:bin\%1\test_process_discovery.exe advapi32.lib user32.lib wtsapi32.lib userenv.lib shlwapi.lib"
+if errorlevel 1 exit /b 1
+bin\%1\test_mqtt_restart.exe
+if errorlevel 1 exit /b 1
+bin\%1\test_process_discovery.exe
+if errorlevel 1 exit /b 1
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\%1\ tests\test_mosquitto_log_acl.c /link /OUT:bin\%1\test_mosquitto_log_acl.exe advapi32.lib"
+if errorlevel 1 exit /b 1
+bin\%1\test_mosquitto_log_acl.exe
 exit /b %ERRORLEVEL%
 
 :shutdown_test_failed

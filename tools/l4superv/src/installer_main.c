@@ -603,10 +603,10 @@ int wmain(int argc, wchar_t* argv[]) {
         CopyFileW(source_guide, target_guide, FALSE);
     }
 
-    // Ensure permissive ACLs on mosquitto\log
+    // Users may read Mosquitto logs; only SYSTEM/Admins may modify them.
     wchar_t mosq_log_dir[MAX_PATH];
     swprintf_s(mosq_log_dir, MAX_PATH, L"%ls\\mosquitto\\log", dest_dir);
-    svc_set_dir_permissions(mosq_log_dir);
+    svc_configure_mosquitto_log(dest_dir);
 
     // Ensure system environment variable MOSQUITTO_DIR is configured
     wchar_t mosq_dir[MAX_PATH];

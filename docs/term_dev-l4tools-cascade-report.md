@@ -341,3 +341,50 @@
 - Registry1.9.5: все3PUT HTTP200 и digest match. Python GET оказался обрезан29465227/29646904bytes и был отвергнут. Повторной загрузки/перезаписи immutable release не было. Direct curl NO_PROXY скачал все3полных файла с точным size/SHA; скачанный setup Valid/timestamp. Затем штатный publisher record сохранил artifacts/l4tools/1.9.5.json и releases.jsonl.
 - Remote installer29646904bytes; manifest9665bytes SHAeaa757b0b1477bb2536dd02f2eb52f066ef7c3a7b4e74531be6cd5da623ab64d; sums165bytes SHA12e209bd270f1342d242e0cd946eca8b6a2deff9fe88eb31b44d4ac7ec8558e0.
 - Осталось непроверенным: полный fresh x86/новый live CA cert и1.9.5 наterm35. Исходная причина проверена кодом, isolated regression и штатным восстановлениемterm35; реальную чистую установку на рабочемterm35 не имитировали удалением сертификата/конфига.
+
+## Этап 15 — зависимые службы и достоверный status, пакет1.9.6
+
+- Статус: код исправлен, полный unsigned пакет подготовлен; ожидается операторская подпись штатным Complete-SignedRelease.ps1 с RFC3161.
+- Владелец/scope: l4superv, версии l4setup/package и release inventory. MQTT-клиенты/топики, серверы, сертификаты и текущий код l4capture не менялись.
+- Причина: terminal55 — proxy ready с правильной идентичностью, но supervisor остаётся standby. Операторский sc enumdepend показал работающий L4Con; sc stop mosquitto вернул1051. После остановки supervisor/L4Con/Mosquitto и запуска supervisor состояние active, четыре службы Running, l4desk PID2732/session1. Это evidence оператора удалённого терминала.
+- Изменение: остановка L4Con перед перезапуском Mosquitto, возврат после запуска брокера; изначально остановленный/отсутствующий L4Con не запускается helper, его запуск определяется watchdog. При отказе брокера восстановление L4Con возможно только если брокер остаётся Running; переход идентичности не фиксируется при неуспехе. Activation/renewal/standby/repair используют общий helper; повторный restart L4Con при смене SN удалён.
+- Диагностика: ошибки SCM содержат этап/Windows code. Отдельный --status больше не проверяет только свои статические handles: поиск живого l4desk по полному пути и active console session без остановки процессов; требуется доступ на чтение пути процесса.
+- Версии: setup/package1.9.6, superv1.9.5. Остальные PE versions сохранены, capture1.0.0.0 текущего кода. SBOM suite_release и assembly identity установщика1.9.6.0 актуализированы.
+- Проверено: build_dist.cmd1.9.6 exit0; все семь компонентов x86/x64/default; новые dependency/failure-order и process discovery fixtures на обеих архитектурах плюс существующие gates. Реальный read-only --status обеих архитектур на773 находит PID202120/session1, PID четырёх служб не изменились. Bootstrap x86/x64 temporary directories: missing/existing config, spaces, invalid destinations, no state mutation — exit0.
+- Проверено: inventory9EXE каждой архитектуры; все61embedded files каждого payload совпали со staging; capture PE sections совпали со свежей сборкой. Unsigned setup SHA5c86a4effae1e2cba7ff79e4ea250eb0416d93f6007e6dca50d68684e9fd50fb. Manifest signed=false/dirty=true — это подготовка, не опубликованный релиз.
+- Сбои проверок: первоначально не собрались fixture macros из-за конфликтующих имён; первая suite попытка выявила ошибку отсутствующего L4Con после сброса output SCM query. Исправлены, финальные проверки прошли. Старые Windows SDK sqlext.h C4201 warnings не относятся к изменённому supervisor.
+- Ограничения: новая версия ещё не подписана, не установлена в боевую папку, не опубликована. Исправленный transition проверен isolated SCM fixtures; live transition/reboot на55 и удалённые input/video E2E ещё не проверены. Работающие cert/state не удалялись.
+- Следующий шаг: operator signing → подписи/timestamp/embedded hashes → согласованная установка и приёмка → clean release checkpoint, base push и registry. Логи/backup предыдущего signed1.9.5 сохранены в ignored tools/dist/.runtime-backup/20261002-supervisor-dependencies.
+
+### Этап15 — ACL Mosquitto и подготовка чистой установки
+
+- По уточнению пользователя журнал должен читаться обычными Windows Users. Настройка только каталога не исправляла защищённый SYSTEM-only ACL существующего файла. Общий helper для installer/supervisor ограничен mosquitto/log и mosquitto.log: SYSTEM/Admins full control, Builtin Users чтение/проход; без изменения владельца, содержимого и других папок. Отказ ACL даёт предупреждение; supervisor повторяет один раз при запуске службы от SYSTEM. Пути reparse отвергаются.
+- Проверено actual Windows AccessCheck с токеном без прав Administrators x86/x64: новый наследуемый log и старый защищённый SYSTEM-only log читаются; запись и создание файлов для обычного токена запрещены, содержимое сохранено. Временные файлы удалены. После исправления диагностической переменной legacy installer полный build_dist1.9.6 exit0; оба61-file payload/current capture gates прошли. Bootstrap проверки обеих архитектур повторены и прошли.
+- Текущий unsigned installer29536256bytes SHAe2bf056639dbc72b7b58b81e8d26a1947055cb02f1e62b2cc3b5c77ce94b708f; прежний unsigned SHA этапа15 заменён. Подпись ещё не выполнена.
+- Оператор очистил локальную773 для настоящей первой установки. Read-only baseline2026-10-02T12:45:48Z: C:\l4tools отсутствует, четыре службы/процессы tools отсутствуют, порты1883/18883/18443 не заняты. Нового сертификата773 нет в MachineMY/CurrentUserMY; другие профили здесь не проверялись. Пользователь приготовил новый PIN; он не сохраняется в context/logs.
+- Следующий шаг: операторская подпись → signature/embedded verification → GUI чистая установка с PIN → summary/SCM/SN/bridge/l4desk/ACL probes → отдельно reboot и remote55 acceptance. Чистая установка ещё не выполнена.
+
+### Этап15 — подпись проверена, чистая установка ожидается
+
+- Complete-SignedRelease.ps1 выполнен оператором.19EXE Valid с меткой времени и одним signer; signtool /pa /all /tw прошёл на каждом. SHA256SUMS и61-file embedded checks обеих архитектур прошли; current capture сохранён. Signed first-party build outputs синхронизированы без пересборки.
+- Signed setup SHA02862805f490de064318f5b0acab4d0f34365cc2f586fab0236643e2e25bfd62. До установки C:\l4tools отсутствует, SCM registrations suite отсутствуют. Запрошена операторская чистая GUI установка773 с новым PIN; результат ещё не получен.
+
+### Этап15 — первая чистая приёмка и поправка smoke
+
+- Фактический Install77312:57:13–12:57:49UTC: installed none/cert absent → новый сертификат verified → четыре службы зарегистрированы/запущены, но summary degraded12 из-за l4desk false. Сам l4desk стартовал12:57:49.635UTC, после однократного probe в ту же секунду. Последующая проверка: active, четыре Auto/LocalSystem Running, l4desk211416/session1, MQTT proxy active1, правильный SN/новая thumbprint, policy разрешает. Ошибка1051 устранена. Это не input/video E2E.
+- ACL действующего mosquitto.log: SYSTEM/Admins F, Builtin Users R. Предупреждение error3 в Prepare возникло раньше распаковки, когда parent directory не существовал, а не из-за итогового отказа прав.
+- Доправка l4setup в рамках ещё неопубликованного1.9.6: ограниченное ожидание l4desk15s (без старта/рестарта процесса), genuine timeout остаётся degraded с причиной; проверка ACL после подготовки payload/config. Новые x86/x64 readiness fixtures плюс existing pipeline/cert/start gates; второй signed цикл и чистая приёмка ещё ожидаются.
+- Оператор решил снова обнулить773 и использовать новый PIN. Агент сам не очищает службы/сертификаты. Первый signed артефакт и приёмочный log/summary сохранены в ignored first-clean-signed backup.
+
+- Поправка проверена: x86/x64 readiness fixtures (immediate/delayed/15s timeout/invalid/changed session), pipeline11cases, certificate phase2cases и STOPPED/zero-exit. Test service fixture initially lacked new ACL header include; include path corrected, both runs passed. Setup x86/x64/default rebuilt exit0 with existing signed native payload; refreshed manifest и61-file embedded gates прошли. Unsigned correction29645824bytes SHA9e32ff38e25e12537e061380ad98ec098e7fbc8bde421cb88cdaee30a7f95a67; требуется повторная operator signature и новая чистая приёмка.
+
+- Повторная подпись подтверждена:19EXE Valid/timestamp/same signer, signtool /pa /all /tw, SHA256SUMS и61-file embedded checks обеих архитектур прошли. Signed correction SHA83c261fd018b51c011b6b1b9ae6e520e9c4d15477d9aefbf6911d8e244ec71ef. Outputs синхронизированы без пересборки компонентов. Вторая clean baseline773 подтверждена: нет C:\l4tools/служб/процессов и нового CA773 в MachineMY/CurrentUserMY. Результат второй установки ожидается.
+
+### Этап15 — вторая чистая установка ready/0
+
+- Install773 Windows10Home19045x64,13:10:21–13:10:43UTC: none/absent → новый сертификат verified → ready/exit0. Ожидание l4desk13:10:41→13:10:42 успешно. Ошибки ACL error3 нет; единственное предупреждение pending_reboot_detected.
+- Текущий runtime: четыре службы Running, supervisor active с правильным SN/новой thumbprint, l4desk19956/session1; proxy ready, MQTT active client1, policy разрешает. Новый сертификат валиден до2027-10-02T13:10:39Z.
+- Все9installed EXE совпали со signed x64 staging/inventory, Valid/timestamp. Реальный ACL log: SYSTEM/Admins FullControl, Builtin Users SID S-1-5-32-545 Read/Synchronize. Новые права не дают записи обычным пользователям.
+- Evidence summary/log сохранены в ignored second-clean. Остаются отдельные gates: автостарт после reboot, remote55 и live fresh x86; это не remote input/video E2E. Пакет ещё не опубликован.
+
+- Пользователь отказался от reboot и поручил продолжить. Автостарт после перезагрузки записан как непроверенный, не блокирует согласованный выпуск. Установленная signed1.9.6 остаётся на773; сертификат/службы повторно не меняются.

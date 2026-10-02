@@ -4,11 +4,42 @@
 #include <shlwapi.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <tlhelp32.h>
 
 #pragma comment(lib, "wtsapi32.lib")
 #pragma comment(lib, "userenv.lib")
 #pragma comment(lib, "advapi32.lib")
 #pragma comment(lib, "shlwapi.lib")
+
+bool sp_find_session_process(const wchar_t* exe, DWORD session, DWORD* out_pid, DWORD* out_session) {
+    if (out_pid) *out_pid = 0;
+    if (out_session) *out_session = 0;
+    if (!exe || !exe[0] || !session || session == MAXDWORD) return false;
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE) return false;
+    bool found = false;
+    PROCESSENTRY32W entry = { 0 };
+    entry.dwSize = sizeof(entry);
+    for (BOOL more = Process32FirstW(snapshot, &entry); more; more = Process32NextW(snapshot, &entry)) {
+        if (_wcsicmp(entry.szExeFile, PathFindFileNameW(exe)) != 0) continue;
+        DWORD candidate_session = 0;
+        if (!ProcessIdToSessionId(entry.th32ProcessID, &candidate_session) || candidate_session != session) continue;
+        HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, FALSE, entry.th32ProcessID);
+        if (!process) continue;
+        wchar_t image[MAX_PATH];
+        DWORD length = MAX_PATH;
+        found = QueryFullProcessImageNameW(process, 0, image, &length) &&
+                _wcsicmp(image, exe) == 0 && WaitForSingleObject(process, 0) == WAIT_TIMEOUT;
+        CloseHandle(process);
+        if (found) {
+            if (out_pid) *out_pid = entry.th32ProcessID;
+            if (out_session) *out_session = candidate_session;
+            break;
+        }
+    }
+    CloseHandle(snapshot);
+    return found;
+}
 
 #ifndef SECURITY_MANDATORY_HIGH_RID
 #define SECURITY_MANDATORY_HIGH_RID (0x00003000L)

@@ -140,7 +140,7 @@ static void print_status(const L4SupervConfig* cfg) {
     }
 
     DWORD desk_pid = 0, desk_session = 0;
-    bool desk_running = orchestrator_get_l4desk_status(&desk_pid, &desk_session);
+    bool desk_running = orchestrator_get_l4desk_status(cfg->base_path, &desk_pid, &desk_session);
     FFmpegStatus ffmpeg_st = { 0 };
     bool ffmpeg_found = orchestrator_get_ffmpeg_status(cfg->base_path, &ffmpeg_st);
 

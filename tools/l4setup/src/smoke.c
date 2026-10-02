@@ -87,6 +87,18 @@ static bool check_l4desk_in_session(DWORD target_session_id) {
     return running;
 }
 
+/* SCM RUNNING precedes supervisor's asynchronous identity/desktop startup. */
+static bool wait_l4desk_in_session(DWORD session_id) {
+    if (session_id == 0 || session_id == MAXDWORD) return false;
+    ULONGLONG deadline = GetTickCount64() + 15000;
+    for (;;) {
+        if (WTSGetActiveConsoleSessionId() != session_id) return false;
+        if (check_l4desk_in_session(session_id)) return true;
+        if (GetTickCount64() >= deadline) return false;
+        Sleep(250);
+    }
+}
+
 static void check_ffmpeg_capture(const wchar_t* dest_dir, int session_id, char* out_status, size_t out_size) {
     if (!out_status || out_size == 0) return;
 
@@ -185,7 +197,8 @@ bool smoke_run_probes(
     out_result->user_session_id = (int)session_id;
 
     if (is_active_status && session_id != 0 && session_id != 0xFFFFFFFF) {
-        out_result->l4desk_running = check_l4desk_in_session(session_id);
+        log_info("Waiting for l4desk in session %lu (up to 15s)...", session_id);
+        out_result->l4desk_running = wait_l4desk_in_session(session_id);
     } else {
         out_result->l4desk_running = false;
     }
@@ -226,7 +239,7 @@ bool smoke_run_probes(
         return false;
     }
 
-    if (!net_ok || (is_active_status && session_id != 0 && !out_result->l4desk_running)) {
+    if (!net_ok || (is_active_status && session_id != 0 && session_id != MAXDWORD && !out_result->l4desk_running)) {
         out_result->has_warnings = true;
         out_result->calculated_exit_code = 12; // Degraded / ready with warnings
         log_warn("Smoke completed with degraded status (code 12).");
