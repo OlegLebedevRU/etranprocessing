@@ -35,3 +35,20 @@ artifacts. Any source change after signing requires another build/sign/verify cy
 Component versions in the manifest come from staged PE resources and must agree
 between architectures. The universal installer remains x86; x64 is also built
 for compilation/compatibility checks.
+
+After verification, synchronize the signed first-party binaries from staging
+into their build-output paths and commit the intended source/artifact changes.
+Keep runtime backups under the ignored `tools/dist/.runtime-backup/` directory.
+Refresh only the manifest/checksums from the clean checkpoint with
+`New-ReleaseManifest.ps1`; confirm that the installer hash has not changed.
+Use strict `deploy/publish_l4tools.py` verification; production releases must
+not require `--allow-dirty`.
+
+Publication requires complete HTTPS downloads of the installer, manifest and
+checksums with matching sizes/SHA256. A matching registry HEAD Digest alone is
+insufficient. If the publisher download is truncated, leave the immutable
+version intact and verify complete downloads separately (for example, direct
+`curl.exe --noproxy '*'`). Use the publisher's `record` command only after all
+three downloads have been verified. Commit/push the release record afterwards.
+The 1.9.4 cascade used this fallback after two truncated Python downloads;
+the cause of the transport difference was not established.

@@ -1,5 +1,7 @@
 # L4 Tools: единый отчёт каскада
 
+Каскад завершён выпуском подписанного1.9.4. Этапы ниже сохраняют хронологию; итоговые runtime/publication результаты и непроверенные сценарии приведены в09–13. [Completed handoff](../.agent-context/tasks/completed/2026-10-02-l4tools-stabilization-ui-release.md).
+
 ## Формат отчёта этапа
 
 Каждый этап содержит: ID/компонент, статус, результат, изменения, проверки
@@ -284,3 +286,25 @@
 - Registry preflight: version1.9.4 отсутствует (HEAD404).
 - Следующий шаг: clean Git checkpoint/base push, manifest provenance refresh без изменения EXE,
   strict publisher verification и upload/HTTPS GET/hash verification; затем release record/base push.
+
+## 13 — Registry и базовая ветка
+
+- Статус: выполнен; release record и итоговый audit готовы к финальному push.
+- Результат: clean checkpoint b76cf83dbb0e3e3ce7f995993904ca60f356c42f запушен
+  в origin/main; manifest signed=true/dirty=false с этим source/artifact SHA.
+- Registry: PUT трёх файлов1.9.4 вернул200, HEAD Digest совпал.
+  Два Python GET оборвались раньше ожидаемого размера; publisher корректно
+  не создал audit record по неполному чтению. Immutable version не перезаписывалась.
+- Проверки: direct curl --noproxy '*' GET installer получил все29 643 832 байта
+  за14.85s; SHA совпал, скачанная подпись Valid/timestamp есть.
+  Direct HTTPS GET manifest/SHA256SUMS тоже совпал с локальными SHA.
+  Причина различия Python/curl transport не установлена; это не доказанный дефект registry.
+- После полной проверки создан штатный artifacts/l4tools/1.9.4.json и запись releases.jsonl.
+  [Подписанный установщик](https://l4tools-generic.ar.cloud.ru/l4tools/1.9.4/l4setup.exe).
+- Финальный runtime: подписанный1.9.4 оставлен в C:\l4tools,773 активен,
+  исходный сертификат сохранён. Source/vendor cache/backup сохраняются для восстановления.
+- Ограничения остаются перечисленными в этапах: Windows7/actual faulty Win10Pro,
+  actual cancel/rollback, live all-profile certificate cleanup, active RTP session,
+  physical mixed-monitor DPI и долгосрочная ротация журнала не проверялись.
+- Следующий шаг: отдельные адресные проверки этих сценариев при воспроизводимом кейсе.
+  Нового build/sign цикла сейчас не требуется: после подписи native code/resources не менялись.

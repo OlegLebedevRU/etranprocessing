@@ -106,6 +106,7 @@ tools/dist/*.zip
 tools/dist/*.bin
 tools/dist/*.sha256
 tools/dist/.stage/
+tools/dist/.runtime-backup/
 tools/dist/l4tools-release.json
 tools/dist/SHA256SUMS
 tools/dist_win7_sp1/*

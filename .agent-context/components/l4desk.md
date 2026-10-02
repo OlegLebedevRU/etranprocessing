@@ -1,5 +1,9 @@
 # l4desk
 
+## 2026-10-02 stabilization1.9.3
+Bounded NO_PROXY SN discovery; ctl/presence/input contracts unchanged. x86/x64 build passed; signed1.9.4 suite installed773, local l4desk/capture probes passed. Remote injection E2E was not repeated. [Handoff](../tasks/completed/2026-10-02-l4tools-stabilization-ui-release.md).
+
+
 ## Назначение
 Windows-агент remote desktop input и жизненного цикла видеопроцесса
 (`l4capture` при доступности, FFmpeg как fallback).

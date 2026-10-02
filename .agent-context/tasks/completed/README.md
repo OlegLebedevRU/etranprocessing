@@ -28,3 +28,6 @@
   документальное внедрение, проверка ссылок/формата, runtime/E2E и автоматизация отложены.
 - [2026-10-01 — L4 Tools 1.9.3](2026-10-01-l4tools-193-release-handoff.md):
   leo4proxy 1.7.2, l4con 1.9.3, подпись всех EXE с timestamp и проверенная публикация в registry.
+
+- [2026-10-02 — L4 Tools 1.9.4 stabilization/UI/signed release](2026-10-02-l4tools-stabilization-ui-release.md):
+  NO_PROXY, new-CA standby, lifecycle/credentials safety, accepted UI, real policy/Upgrade/Repair and verified registry publication.
