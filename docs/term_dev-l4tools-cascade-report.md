@@ -323,3 +323,10 @@
 - Проверено: семь компонентов собраны x86/x64 штатными build.cmd, unsigned staging/resources/setup/manifests подготовлены. Первое staging упало на недоступном Get-FileHash в дочернем Windows PowerShell; заменено SHA256 .NET, staging и manifest gates прошли. Сбой не скрыт как успешная полная build_dist команда.
 - Ограничения: это isolated/local regression, не реальная чистая установка x86 с новым сертификатом. Работающие терминалы35/773, сертификаты, службы и registry release1.9.4 не изменялись. Signed release, signed Repair/Upgrade и публикация1.9.5 ещё не выполнены.
 - Следующий шаг: operator Complete-SignedRelease.ps1 → все подписи/RFC3161/inventory/embedded hash → согласованная реальная приёмка → чистый release checkpoint и registry. До подписи unsigned пакет не публиковать.
+
+
+### Этап14 — подпись подтверждена
+
+- Оператор выполнил Complete-SignedRelease.ps1 для1.9.5. Все19EXE (18в двух staging и installer) проверены: один signer, Authenticode Valid, RFC3161 timestamp, signtool /pa /all /tw; SHA256SUMS совпали.
+- Оба61-file embedded payload совпали с подписанным staging; capture code/data/resource PE sections совпали со свежей сборкой. Подписанные first-party EXE синхронизированы обратно в build outputs без пересборки.
+- Setup29646904bytes, SHA3737d86ee322b458744a9a7b2bac8c9c1f9839eaefd67382f7c0baedfa5618f4. Подписанный пакет ещё не опубликован; операторская проверка Upgrade на773 запрошена.

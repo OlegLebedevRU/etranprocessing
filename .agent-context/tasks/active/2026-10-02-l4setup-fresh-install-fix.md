@@ -22,9 +22,11 @@
 - [x] Real superv bootstrap x86/x64: fresh/existing config, spaces, invalid path, no state file; fixtures cleaned.
 - [x] Capture129/129; current source preserves MF stabilization plus later profile tuning.
 - [x] Both embedded payloads61 files match staging; capture matches fresh build.
-- [ ] Operator signing/RFC3161 then signed integrity checks.
+- [x] Operator signing; all19 EXEs Valid Authenticode/same signer/RFC3161, signtool /pa /all /tw and SHA256SUMS passed. Both61-file embedded payloads match signed staging and current capture PE sections.
 - [ ] Real corrected Repair/Upgrade, fresh x86 install E2E in isolated terminal/VM.
 - [ ] Signed clean source/artifact checkpoint and publication; immutable1.9.4 unchanged.
 - No local or remote terminal services/certificates changed by this task.
 - First packaging attempt failed due to unavailable Get-FileHash; fixed using .NET SHA256 and resumed staging/setup/manifest checks.
 - Long report: [cascade step14](../../../docs/term_dev-l4tools-cascade-report.md).
+
+- Signed setup SHA3737d86ee322b458744a9a7b2bac8c9c1f9839eaefd67382f7c0baedfa5618f4,29646904bytes. Operator Upgrade on773 requested; no runtime result yet.
