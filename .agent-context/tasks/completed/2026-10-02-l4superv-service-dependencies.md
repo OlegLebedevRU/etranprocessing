@@ -7,6 +7,7 @@
 - Worktree D:\work\etranprocessing-mcp-user-events; signed source/artifact checkpoint a76e586032a518e33540ce45406ee6c2a462af9a pushed and verified on origin/main. Original dirty checkout preserved.
 
 ## Result
+- Durable decisions and verification limits: [stabilization reference](../../../docs/term_arch-l4tools-stabilization-decisions.md); operator summary/status guidance updated for schema2.
 - Suite/setup1.9.6, superv1.9.5; other PE versions unchanged. Current capture1.0.0.0 preserves MF stability and later profiles.
 - L4Con stops before broker restart and returns afterwards if previously running; initially absent/stopped client left to watchdog. Failure does not commit transition. Error code/stage logged.
 - Separate --status discovers live l4desk by exact executable path/session, without changing processes.

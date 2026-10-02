@@ -3,6 +3,12 @@
 ## 2026-10-02 stabilization1.9.3
 Bounded NO_PROXY SN discovery; ctl/presence/input contracts unchanged. x86/x64 build passed; signed1.9.4 suite installed773, local l4desk/capture probes passed. Remote injection E2E was not repeated. [Handoff](../tasks/completed/2026-10-02-l4tools-stabilization-ui-release.md).
 
+Suite1.9.6 retains l4desk1.9.3. Supervisor status now discovers the live process
+by exact EXE path/console session; setup waits up to15s for asynchronous launch.
+Clean signed install773 passed local probes; reboot and remote input/video E2E
+remain untested. [Decisions](../../docs/term_arch-l4tools-stabilization-decisions.md),
+[release handoff](../tasks/completed/2026-10-02-l4superv-service-dependencies.md).
+
 
 ## Назначение
 Windows-агент remote desktop input и жизненного цикла видеопроцесса
