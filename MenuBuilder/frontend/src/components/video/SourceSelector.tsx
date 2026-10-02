@@ -25,7 +25,7 @@ export interface SourceSelectorProps {
 /**
  * Человекочитаемое форматирование имени дисплея (без артефактов вроде desktop #0)
  */
-function getDisplayName(disp: DisplaySource, index: number): string {
+export function getDisplayName(disp: DisplaySource, index: number): string {
   const isPrimary = Boolean(disp.is_primary ?? disp.primary);
   let name = disp.name?.trim();
 
@@ -48,7 +48,7 @@ function getDisplayName(disp: DisplaySource, index: number): string {
 /**
  * Человекочитаемое форматирование имени камеры
  */
-function getCameraName(cam: CameraSource, index: number): string {
+export function getCameraName(cam: CameraSource, index: number): string {
   const name = cam.name?.trim();
   if (name && !name.startsWith("#") && name !== "0") {
     return name;

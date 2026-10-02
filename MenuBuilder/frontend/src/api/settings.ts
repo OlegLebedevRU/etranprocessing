@@ -105,6 +105,7 @@ export interface TerminalSettingsListResponse {
 }
 
 export interface ListTerminalsSettingsParams {
+  all?: boolean;
   org_id?: number;
   search?: string;
   device_filter?: string;
@@ -195,6 +196,11 @@ export async function updateTerminalSettings(
   payload: UpdateTerminalSettingsPayload
 ): Promise<TerminalSettingsItem> {
   const { data } = await client.patch<TerminalSettingsItem>(`/settings/terminals/${terminalId}`, payload);
+  return data;
+}
+
+export async function setTerminalActivity(terminalId: number, isActive: boolean): Promise<{ id: number; is_active: boolean }> {
+  const { data } = await client.patch(`/settings/terminals/${terminalId}/activity`, { is_active: isActive });
   return data;
 }
 

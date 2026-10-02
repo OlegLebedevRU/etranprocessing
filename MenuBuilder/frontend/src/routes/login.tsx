@@ -46,12 +46,12 @@ export default function LoginPage() {
       if (authTransport === "bearer") {
         localStorage.setItem("mb_token", result.access_token);
       }
-      await refreshUser(true);
+      const currentUser = await refreshUser(true);
       if (result.expires_in) {
         scheduleRefresh(result.expires_in);
       }
       message.success("Вход выполнен");
-      navigate("/monitoring", { replace: true });
+      navigate(currentUser?.role_id === 5 ? "/terminals" : "/", { replace: true });
     } catch (e: unknown) {
       const err = e as Error;
       message.error(err.message || "Ошибка авторизации");

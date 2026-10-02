@@ -188,9 +188,16 @@ def get_device_ports(device_id: int) -> tuple[int, int]:
 
 
 async def _verify_device_access(
-    device_id: int, user: dict[str, Any], db: AsyncSession
+    device_id: int,
+    user: dict[str, Any],
+    db: AsyncSession,
+    *,
+    require_active: bool = False,
 ) -> Terminal:
-    terminal = await db.scalar(select(Terminal).where(Terminal.device_id == device_id))
+    query = select(Terminal).where(Terminal.device_id == device_id)
+    if require_active:
+        query = query.with_for_update()
+    terminal = await db.scalar(query)
     if not terminal:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -204,6 +211,8 @@ async def _verify_device_access(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Доступ к устройству {device_id} запрещен",
         )
+    if require_active and terminal.is_active is False:
+        raise HTTPException(403, "Терминал отключён")
     return terminal
 
 
@@ -521,7 +530,7 @@ async def create_video_session(
     user: dict[str, Any] = Depends(require_permission(PERMISSION_VIDEO_VIEW)),
     db: AsyncSession = Depends(get_db),
 ) -> VideoSessionResponse:
-    terminal = await _verify_device_access(device_id, user, db)
+    terminal = await _verify_device_access(device_id, user, db, require_active=True)
     org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
 
     # Verify that caller holds active lease on app1

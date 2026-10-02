@@ -107,10 +107,14 @@ class RemoteSessionUseCase:
         device_id: int,
         user: dict[str, Any],
         session_type: str,
+        *,
+        lock: bool = False,
     ) -> Terminal:
         stmt = select(Terminal).where(
             (Terminal.device_id == device_id) | (Terminal.id == device_id)
         )
+        if lock:
+            stmt = stmt.with_for_update()
         res = await self.db.execute(stmt)
         terminal = res.scalar_one_or_none()
         if not terminal:
@@ -186,7 +190,12 @@ class RemoteSessionUseCase:
         start_terminal_stream: bool = True,
     ) -> RemoteSessionResponse:
         """Start or replay a remote session (console or video)."""
-        terminal = await self._verify_terminal_access(device_id, user, session_type)
+        terminal = await self._verify_terminal_access(
+            device_id, user, session_type, lock=True
+        )
+
+        if terminal.is_active is False:
+            raise HTTPException(status_code=403, detail="Терминал отключён")
 
         effective_policy = self.policy or get_remote_session_policy(user)
         decision = await effective_policy.evaluate_session_request(

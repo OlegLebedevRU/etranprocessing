@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import {
   Button,
   Popconfirm,
+  Popover,
   Space,
   Switch,
   Tag,
@@ -11,6 +12,9 @@ import {
 } from "antd";
 import {
   CloseCircleOutlined,
+  ApiOutlined,
+  LockOutlined,
+  QuestionCircleOutlined,
   DesktopOutlined,
   EnterOutlined,
   StopOutlined,
@@ -92,6 +96,25 @@ export const RemoteControlPanel: React.FC<RemoteControlPanelProps> = ({
     }, 50);
   };
 
+  if (compact) {
+    const agentHint = isAgentOnline ? "Агент на связи" : "Агент офлайн";
+    const screenHint = !isAgentOnline ? "Состояние экрана неизвестно" : isDesktopAvailable ? "Экран доступен" : "Экран заблокирован или недоступен";
+    return <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <Tooltip title={agentHint}><span tabIndex={0} aria-label={agentHint} style={{ color: isAgentOnline ? token.colorSuccess : token.colorTextTertiary }}><ApiOutlined /></span></Tooltip>
+      <Tooltip title={screenHint}><span tabIndex={0} aria-label={screenHint} style={{ color: !isAgentOnline ? token.colorTextTertiary : isDesktopAvailable ? token.colorSuccess : token.colorWarning }}>{!isAgentOnline ? <QuestionCircleOutlined /> : isDesktopAvailable ? <DesktopOutlined /> : <LockOutlined />}</span></Tooltip>
+      <Tooltip title={isControlActive ? "Управление мышью активно. Нажмите, чтобы отключить." : disabledReason || "Включить управление мышью"}>
+        <span><Button aria-label={isControlActive ? "Отключить управление" : "Включить управление"} type={isControlActive ? "primary" : "default"} disabled={!isControlActive && !canEnable} loading={isAcquiring} icon={<DesktopOutlined />} onClick={isControlActive ? onDisableControl : onEnableControl}>Мышь</Button></span>
+      </Tooltip>
+      <Popover trigger="click" placement="bottomRight" content={<div style={{ maxWidth: 420 }}><RemoteControlPanel
+        rcStatus={rcStatus} presence={presence} lease={lease} busyOwner={busyOwner}
+        isSessionActive={isSessionActive} isCameraMode={isCameraMode} isTerminalOnline={isTerminalOnline}
+        onEnableControl={onEnableControl} onDisableControl={onDisableControl}
+        onSendShortcut={onSendShortcut} onSendKey={onSendKey} lastCommandResult={lastCommandResult}
+        isMobile={false}
+      /></div>}><Button aria-label="Клавиши и быстрые действия" icon={<ToolOutlined />} /></Popover>
+    </div>;
+  }
+
   return (
     <div
       onClick={(e) => e.stopPropagation()}
@@ -142,7 +165,7 @@ export const RemoteControlPanel: React.FC<RemoteControlPanelProps> = ({
               </Tag>
             ) : (
               <Tag color="warning" style={{ margin: 0, fontSize: 11 }}>
-                Экран заблокирован
+                {isAgentOnline ? "Экран заблокирован или недоступен" : "Состояние экрана неизвестно"}
               </Tag>
             )}
           </div>

@@ -158,6 +158,45 @@ class UpdateTerminalSettingsRequest(BaseModel):
     timezone: str | None = None
 
 
+class TerminalActivityRequest(BaseModel):
+    is_active: bool
+
+
+@router.patch("/terminals/{terminal_id}/activity")
+async def set_terminal_activity(
+    terminal_id: int,
+    req: TerminalActivityRequest,
+    user: dict[str, Any] = Depends(require_readonly_guard),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Set the administrative flag; never toggle on retry or alter certificate identity."""
+    _check_settings_access(user)
+    _ensure_not_superuser(user)
+    org_id = int(user.get("org_id", 0))
+    if org_id <= 0:
+        raise HTTPException(400, "Пользователь не привязан к организации")
+    terminal = await db.scalar(
+        _visible_terminals_query(org_id)
+        .where(Terminal.id == terminal_id)
+        .with_for_update()
+    )
+    if terminal is None:
+        raise HTTPException(404, "Терминал не найден")
+    if terminal.is_active != req.is_active:
+        if not req.is_active:
+            active = await L4DeskRepository(db).get_active_session_by_terminal_id(
+                terminal.id
+            )
+            if active is not None:
+                raise HTTPException(
+                    409, "Завершите сеанс консоли или видео перед отключением терминала"
+                )
+        terminal.is_active = req.is_active
+        terminal.updated_at = datetime.now(UTC)
+        await db.commit()
+    return {"id": terminal.id, "is_active": terminal.is_active}
+
+
 # --- Endpoints: Profile ---
 
 

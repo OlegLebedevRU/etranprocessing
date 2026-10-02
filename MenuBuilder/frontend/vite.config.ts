@@ -2,14 +2,17 @@ import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const configDirectory = path.dirname(fileURLToPath(import.meta.url));
 
 function exportMethodCodesPlugin(): Plugin {
   return {
     name: "export-method-codes",
     buildStart() {
       try {
-        const srcJsonPath = path.resolve(__dirname, "src/routes/devices/domain/methodCodes.json");
-        const publicDir = path.resolve(__dirname, "public");
+        const srcJsonPath = path.resolve(configDirectory, "src/routes/devices/domain/methodCodes.json");
+        const publicDir = path.resolve(configDirectory, "public");
         const publicJsonPath = path.resolve(publicDir, "methodCodes.json");
         if (fs.existsSync(srcJsonPath)) {
           if (!fs.existsSync(publicDir)) {

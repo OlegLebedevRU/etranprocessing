@@ -146,6 +146,7 @@ export default function AppLayout() {
     }
   }
 
+  navItems = navItems.filter(item => item.key !== "monitoring" || hasPermission(currentUser, PERMISSION_MONITORING_VIEW));
   const defaultSegment = navProfile === "l4desk" ? (isRole4 ? "video" : "terminals") : (isPlatformMode ? "admin" : "monitoring");
   const rawSegment = location.pathname.split("/")[1];
   const segment = rawSegment || defaultSegment;

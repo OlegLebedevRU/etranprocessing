@@ -1,13 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Alert, Button, Empty, Segmented, Space, Spin, Tag, theme, Tooltip, Typography } from "antd";
+import { Button, Empty, Segmented, Spin, theme } from "antd";
 import {
   AlertOutlined,
-  ApiOutlined,
   DisconnectOutlined,
   FullscreenExitOutlined,
   FullscreenOutlined,
   LockOutlined,
-  PlayCircleOutlined,
   ReloadOutlined,
   VideoCameraOutlined,
 } from "@ant-design/icons";
@@ -17,20 +15,20 @@ import type { ControlAgentStatus } from "../../api/video";
 import type { RemoteControlStatus } from "../../hooks/useRemoteControl";
 import type { StreamStage } from "./StreamControls";
 
-const { Text, Title } = Typography;
-
 export interface VideoPlayerScreenProps {
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  displayMode: "fit" | "native";
+  onDisplayMode: (mode: "fit" | "native") => void;
+  onFrameStateChange: (fresh: boolean) => void;
+  onResolutionChange: (resolution: string) => void;
   selectedDevice: DeviceListItem | null;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   isSessionActive: boolean;
   streamStage: StreamStage;
   errorMessage?: string | null;
-  isOperator: boolean;
   isViewer: boolean;
-  activeSourceLabel?: string;
   isCameraMode: boolean;
   streamMode?: string;
-  onStartStream: () => void;
   onRetryStream?: () => void;
   onRefreshTerminal?: () => void;
   // Remote control
@@ -47,27 +45,29 @@ export interface VideoPlayerScreenProps {
 }
 
 export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
+  containerRef: playerContainerRef,
+  displayMode,
+  onDisplayMode,
+  onFrameStateChange,
+  onResolutionChange,
   selectedDevice,
   videoRef,
   isSessionActive,
   streamStage,
   errorMessage,
-  isOperator,
   isViewer,
-  activeSourceLabel,
   isCameraMode,
   streamMode,
-  onStartStream,
   onRetryStream,
   onRefreshTerminal,
   rc,
 }) => {
   const { token } = theme.useToken();
-  const playerContainerRef = useRef<HTMLDivElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [displayMode, setDisplayMode] = useState<"fit" | "native">("fit");
   const [videoSize, setVideoSize] = useState({ width: 0, height: 0 });
   const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight);
+  const [fullscreenControlsVisible, setFullscreenControlsVisible] = useState(true);
+  const hideControlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isTerminalOnline = selectedDevice?.status === "online";
   const isControlActive = isSessionActive && rc.status === "active";
@@ -77,7 +77,7 @@ export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
   const isFailed = streamStage === "failed" || Boolean(errorMessage);
   const isNativeSize = isLive && !isControlActive && displayMode === "native" && videoSize.width > 0;
   const sourceAspect = videoSize.width > 0 && videoSize.height > 0 ? videoSize.width / videoSize.height : 16 / 9;
-  const reservedHeight = isOperator ? 265 : 195;
+  const reservedHeight = window.innerWidth < 700 ? 210 : 140;
 
   useEffect(() => {
     const onFullscreenChange = () => setIsFullscreen(document.fullscreenElement === playerContainerRef.current);
@@ -93,6 +93,47 @@ export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
   useEffect(() => {
     if (!isLive) setVideoSize({ width: 0, height: 0 });
   }, [isLive, selectedDevice?.device_id]);
+
+  useEffect(() => {
+    onResolutionChange(videoSize.width ? `${videoSize.width}×${videoSize.height}` : "");
+  }, [videoSize, onResolutionChange]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    onFrameStateChange(false);
+    if (!isLive || !video) return;
+    let lastFrameAt = 0;
+    let frameCallback = 0;
+    let cancelled = false;
+    const frame = () => {
+      if (cancelled) return;
+      lastFrameAt = Date.now();
+      frameCallback = video.requestVideoFrameCallback(frame);
+    };
+    frameCallback = video.requestVideoFrameCallback(frame);
+    const timer = window.setInterval(() => onFrameStateChange(lastFrameAt > 0 && Date.now() - lastFrameAt < 5000), 1000);
+    return () => {
+      cancelled = true;
+      video.cancelVideoFrameCallback(frameCallback);
+      window.clearInterval(timer);
+      onFrameStateChange(false);
+    };
+  }, [isLive, selectedDevice?.device_id, videoRef, onFrameStateChange]);
+
+  useEffect(() => () => {
+    if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
+  }, []);
+
+  const showFullscreenControls = () => {
+    setFullscreenControlsVisible(true);
+    if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
+    hideControlsTimer.current = setTimeout(() => setFullscreenControlsVisible(!!document.activeElement?.closest("[data-fullscreen-controls]")), 2500);
+  };
+
+  useEffect(() => {
+    if (isFullscreen) showFullscreenControls();
+    return () => { if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current); };
+  }, [isFullscreen]);
 
   // Полноэкранный режим плеера
   const toggleFullscreen = () => {
@@ -114,7 +155,7 @@ export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
           width: "100%",
           aspectRatio: "16 / 9",
           minHeight: "260px",
-          maxHeight: "calc(100vh - 280px)",
+          maxHeight: `calc(100dvh - ${reservedHeight}px)`,
           backgroundColor: "#0d1117",
           borderRadius: 8,
           border: "1px solid #30363d",
@@ -144,7 +185,7 @@ export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
           width: "100%",
           aspectRatio: "16 / 9",
           minHeight: "260px",
-          maxHeight: "calc(100vh - 280px)",
+          maxHeight: `calc(100dvh - ${reservedHeight}px)`,
           backgroundColor: "#161b22",
           borderRadius: 8,
           border: "1px solid #30363d",
@@ -186,7 +227,7 @@ export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
           width: "100%",
           aspectRatio: "16 / 9",
           minHeight: "260px",
-          maxHeight: "calc(100vh - 280px)",
+          maxHeight: `calc(100dvh - ${reservedHeight}px)`,
           backgroundColor: "#161b22",
           borderRadius: 8,
           border: "1px solid #30363d",
@@ -220,6 +261,8 @@ export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
   return (
     <div
       ref={playerContainerRef}
+      data-testid="video-player"
+      onPointerMove={isFullscreen ? showFullscreenControls : undefined}
       style={{
         position: "relative",
         width: "100%",
@@ -288,103 +331,11 @@ export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
         streamMode={streamMode}
       />
 
-      {/* Индикатор прямого эфира поверх видео */}
-      {isLive && (
-        <div
-          style={{
-            position: "absolute",
-            top: 12,
-            left: 12,
-            zIndex: 12,
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            backgroundColor: "rgba(0, 0, 0, 0.65)",
-            padding: "4px 8px",
-            borderRadius: 6,
-            backdropFilter: "blur(4px)",
-            pointerEvents: "none",
-          }}
-        >
-          <span
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              backgroundColor: "#52c41a",
-              boxShadow: "0 0 6px #52c41a",
-              display: "inline-block",
-            }}
-          />
-          <span style={{ color: "#ffffff", fontSize: 11, fontWeight: 700, letterSpacing: 0.8 }}>
-            В ЭФИРЕ
-          </span>
-          {activeSourceLabel && (
-            <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 11 }}>
-              • {activeSourceLabel}
-            </span>
-          )}
-          {videoSize.width > 0 && (
-            <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 11 }}>
-              • {videoSize.width}×{videoSize.height}
-            </span>
-          )}
-        </div>
-      )}
+      {isFullscreen && <div data-fullscreen-controls onFocus={showFullscreenControls} style={{ position: "absolute", bottom: 12, right: 12, zIndex: 20, display: "flex", gap: 8, opacity: fullscreenControlsVisible ? 1 : 0, pointerEvents: fullscreenControlsVisible ? "auto" : "none", transition: "opacity .2s" }}>
+        <Segmented aria-label="Масштаб видео в браузере" value={isControlActive ? "fit" : displayMode} onChange={value => onDisplayMode(value as "fit" | "native")} options={[{ label: "Вписать", value: "fit" }, { label: "Исходный размер", value: "native", disabled: isControlActive }]} />
+        <Button aria-label="Выйти из полноэкранного режима" icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />} onClick={toggleFullscreen} />
+      </div>}
 
-      {isLive && (
-        <Tooltip title={isControlActive ? "Во время удалённого управления доступно только вписывание кадра: координаты кликов должны совпадать с изображением." : "Исходный размер показывает кадр без уменьшения. Прокрутите изображение, если оно больше окна. На трафик этот выбор не влияет."}>
-          <Segmented
-            size="small"
-            aria-label="Масштаб видео в браузере"
-            options={[{ label: "Вписать", value: "fit" }, { label: "Исходный размер", value: "native", disabled: isControlActive }]}
-            value={isControlActive ? "fit" : displayMode}
-            onChange={(value) => setDisplayMode(value as "fit" | "native")}
-            style={{ position: "absolute", bottom: 12, left: 12, zIndex: 15, backgroundColor: "rgba(255,255,255,0.92)" }}
-          />
-        </Tooltip>
-      )}
-
-      {/* Кнопка полноэкранного режима */}
-      {isLive && (
-        <Tooltip title={isFullscreen ? "Выйти из полноэкранного режима" : "Во весь экран"}>
-          <Button
-            type="text"
-            icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
-            onClick={toggleFullscreen}
-            style={{
-              position: "absolute",
-              bottom: 12,
-              right: 12,
-              zIndex: 15,
-              color: "#ffffff",
-              backgroundColor: "rgba(0,0,0,0.55)",
-              border: "1px solid rgba(255,255,255,0.2)",
-              backdropFilter: "blur(4px)",
-            }}
-            aria-label="Полноэкранный режим видео"
-          />
-        </Tooltip>
-      )}
-
-      {/* Индикатор активного удалённого управления */}
-      {isControlActive && (
-        <div
-          style={{
-            position: "absolute",
-            top: 12,
-            right: 12,
-            zIndex: 12,
-            pointerEvents: "none",
-          }}
-        >
-          <Tag color="blue" style={{ margin: 0, fontWeight: 600, fontSize: 12 }}>
-            Управление мышью активно
-          </Tag>
-        </div>
-      )}
-
-      {/* Состояние: идёт подключение к трансляции */}
       {isStarting && (
         <div
           style={{
@@ -472,21 +423,7 @@ export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
               : "Выберите источник видео над плеером и нажмите «Запустить трансляцию»."}
           </div>
 
-          {isOperator && (
-            <Button
-              type="primary"
-              size="middle"
-              icon={<PlayCircleOutlined />}
-              onClick={onStartStream}
-              style={{
-                marginTop: 6,
-                fontWeight: 600,
-                boxShadow: "0 2px 8px rgba(22, 119, 255, 0.35)",
-              }}
-            >
-              Запустить трансляцию
-            </Button>
-          )}
+
         </div>
       )}
     </div>

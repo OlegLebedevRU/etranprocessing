@@ -158,3 +158,10 @@ backend test05 зарегистрирован с `org_id=10000`, ролью вл
 - MenuBuilder frontend labels `low` as Medium and `default` as HD. The wire values and terminal rate policy are unchanged; neither label proves a WAN limit.
 - The video page collapses navigation on entry and frees viewport space after device selection. The player uses decoded `videoWidth`/`videoHeight` for aspect ratio and offers browser-only Fit / Native size. Native size is unavailable while remote input is active; the overlay refreshes its coordinate geometry when control activates.
 - Local TypeScript and Vite build passed; browser layout was checked with mocked API responses at desktop and mobile sizes. Live video and control E2E remain open. Details: [step 1 handoff](../tasks/active/video-page-medium-hd-frontend-step1.md).
+
+## L4Desk UI (2026-10-02, working tree; local tests + mocked browser)
+- Role 5 is denied monitoring at menu, direct route and API permission boundaries; default/login route is terminals.
+- Terminal activity PATCH is tenant-scoped, sets a target flag and rejects disabling with unfinished remote sessions. Video/console admission rejects inactive terminals; cleanup remains available. Certificate identity and shared models are unchanged.
+- Terminal filters operate on the complete authorized settings list before UI pagination; Video/Console selectors intersect provider snapshots with active portal-visible terminals.
+- Video uses an Online-first Drawer and a single toolbar; the live badge requires fresh decoded browser frames. Native size remains unavailable during active input.
+- Backend/frontend tests, TypeScript/Vite, Ruff/Pyright and mocked browser scenarios passed. No deploy or new live media E2E. [Handoff](../tasks/active/2026-10-02-menubuilder-l4desk-ui.md).

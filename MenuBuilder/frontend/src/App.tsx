@@ -87,6 +87,7 @@ function DefaultRouteResolver() {
   }
 
   if (user.role_id !== 4) {
+    if (user.role_id === 5) return <Navigate to="/terminals" replace />;
     const profile = getNavigationProfile(user);
     if (profile === "l4desk") {
       return <Navigate to="/terminals" replace />;
@@ -196,6 +197,9 @@ function ViewerGuard({
 }) {
   const { user } = useSession();
   if (!user) return <Navigate to="/login" replace />;
+  if (permission === PERMISSION_MONITORING_VIEW && user.role_id === 5) {
+    return <Navigate to="/terminals" replace />;
+  }
 
   if (forbiddenForRole4 && user.role_id === 4) {
     const fallback = getDefaultRouteForViewer(user);

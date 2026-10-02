@@ -7,6 +7,7 @@ import type { DeviceListItem } from "../../api/devices";
 export interface TerminalListItemProps {
   device: DeviceListItem;
   address?: string | null;
+  name?: string;
   isSelected: boolean;
   onSelect: (device: DeviceListItem) => void;
   disabled?: boolean;
@@ -15,6 +16,7 @@ export interface TerminalListItemProps {
 export const TerminalListItem: React.FC<TerminalListItemProps> = ({
   device,
   address,
+  name,
   isSelected,
   onSelect,
   disabled = false,
@@ -55,7 +57,7 @@ export const TerminalListItem: React.FC<TerminalListItemProps> = ({
       aria-pressed={isSelected}
       aria-disabled={disabled}
       aria-label={`Терминал №${device.device_id}, ${isOnline ? "на связи" : "не в сети"}. Адрес: ${displayAddress}`}
-      title={`Терминал №${device.device_id} (${isOnline ? "В сети" : "Не в сети"})\nАдрес: ${displayAddress}`}
+      title={`Терминал №${device.device_id} (${isOnline ? "В сети" : "Не в сети"})\n${name || ""}\nАдрес: ${displayAddress}\nSN: ${device.sn}`}
       onClick={() => {
         if (!disabled) onSelect(device);
       }}
@@ -81,6 +83,7 @@ export const TerminalListItem: React.FC<TerminalListItemProps> = ({
         position: "relative",
       }}
     >
+      {name && <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>{name}</span>}
       {/* Первая строка: только номер терминала в бейдже со статусом (без текста online/offline) */}
       <div
         style={{

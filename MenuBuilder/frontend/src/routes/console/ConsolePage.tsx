@@ -22,6 +22,8 @@ import { getDevices, type DeviceListItem } from "../../api/devices";
 import { useSession } from "../../session/SessionContext";
 import DeviceConsoleTab from "../devices/DeviceConsoleTab";
 import { linkedDevice } from "../../utils/deviceSelection";
+import { listTerminalsSettings } from "../../api/settings";
+import { selectableDevices } from "../../utils/terminalPresentation";
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -45,12 +47,13 @@ function TenantConsolePage() {
     const currentGeneration = ++generation.current;
     setLoading(true);
     try {
-      const res = await getDevices(orgId, { page: 1, size: 100 });
-      const items = [...(res.items || [])];
+      const [res, terminals] = await Promise.all([getDevices(orgId, { page: 1, size: 100 }), listTerminalsSettings({ org_id: orgId, all: true })]);
+      let items = [...(res.items || [])];
       for (let page = 2; page <= res.pages; page++) {
         items.push(...(await getDevices(orgId, { page, size: 100 })).items);
       }
       if (currentGeneration !== generation.current) return;
+      items = selectableDevices(items, terminals.items);
       setDevices(items);
 
       const target = linkedDevice(items, searchParams);
@@ -66,7 +69,7 @@ function TenantConsolePage() {
         return items.length > 0 ? items[0] : null;
       });
     } catch {
-      // ignore
+      if (currentGeneration === generation.current) { setDevices([]); setSelectedDevice(null); }
     } finally {
       if (currentGeneration === generation.current) setLoading(false);
     }

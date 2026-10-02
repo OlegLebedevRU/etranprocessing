@@ -11,6 +11,7 @@ import type { DeviceListItem } from "../../api/devices";
 export interface TerminalListProps {
   devices: DeviceListItem[];
   terminalAddresses: Record<number, string>;
+  terminalNames?: Record<number, string>;
   selectedDevice: DeviceListItem | null;
   onSelectDevice: (device: DeviceListItem) => void;
   loading?: boolean;
@@ -23,6 +24,7 @@ type StatusFilter = "all" | "online" | "offline";
 export const TerminalList: React.FC<TerminalListProps> = ({
   devices,
   terminalAddresses,
+  terminalNames = {},
   selectedDevice,
   onSelectDevice,
   loading = false,
@@ -31,7 +33,7 @@ export const TerminalList: React.FC<TerminalListProps> = ({
 }) => {
   const { token } = theme.useToken();
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("online");
 
   // Подсчет онлайн / офлайн
   const { onlineCount, offlineCount } = useMemo(() => {
@@ -60,9 +62,9 @@ export const TerminalList: React.FC<TerminalListProps> = ({
       const address = terminalAddresses[dev.device_id]?.toLowerCase() || "";
       const addressMatch = address.includes(q);
 
-      return idMatch || snMatch || addressMatch;
+      return idMatch || snMatch || addressMatch || terminalNames[dev.device_id]?.toLowerCase().includes(q);
     });
-  }, [devices, searchQuery, statusFilter, terminalAddresses]);
+  }, [devices, searchQuery, statusFilter, terminalAddresses, terminalNames]);
 
   return (
     <div
@@ -173,6 +175,7 @@ export const TerminalList: React.FC<TerminalListProps> = ({
               key={dev.device_id}
               device={dev}
               address={terminalAddresses[dev.device_id]}
+              name={terminalNames[dev.device_id]}
               isSelected={selectedDevice?.device_id === dev.device_id}
               onSelect={onSelectDevice}
               disabled={dev.is_blocked}

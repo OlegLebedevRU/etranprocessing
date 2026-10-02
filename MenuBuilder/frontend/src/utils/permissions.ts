@@ -37,6 +37,7 @@ export const PERMISSION_LABELS: Record<string, string> = {
 
 export function hasPermission(user: UserInfo | null, permissionCode: string): boolean {
   if (!user) return false;
+  if (user.role_id === 5 && permissionCode === PERMISSION_MONITORING_VIEW) return false;
   // Роль владельца L4Desk (5) получает полный набор прав от backend.
   if (
     user.is_superuser ||
@@ -69,6 +70,7 @@ export function hasAnyReportPermission(user: UserInfo | null): boolean {
 
 export function getDefaultRouteForViewer(user: UserInfo | null): string | null {
   if (!user) return null;
+  if (user.role_id === 5) return "/terminals";
   if (user.role_id !== 4) return "/monitoring";
   if (getNavigationProfile(user) === "l4desk") {
     return hasPermission(user, PERMISSION_VIDEO_VIEW) ? "/video" : null;

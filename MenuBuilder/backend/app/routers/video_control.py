@@ -598,7 +598,7 @@ async def acquire_device_control_lease(
             detail=f"Недопустимый уровень аренды: {scope}",
         )
 
-    terminal = await _verify_device_access(device_id, user, db)
+    terminal = await _verify_device_access(device_id, user, db, require_active=True)
     org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
 
     policy = get_remote_session_policy(user)
@@ -736,7 +736,7 @@ async def change_device_control_scope(
     db: AsyncSession = Depends(get_db),
 ) -> ControlLeaseResponse:
     """Change lease scope on app1."""
-    terminal = await _verify_device_access(device_id, user, db)
+    terminal = await _verify_device_access(device_id, user, db, require_active=True)
     org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
 
     role_id = int(user.get("role_id", 3))
@@ -883,7 +883,7 @@ async def start_device_stream(
     db: AsyncSession = Depends(get_db),
 ) -> StreamStartResponse:
     """Start or switch media stream on terminal (requires stream lease)."""
-    terminal = await _verify_device_access(device_id, user, db)
+    terminal = await _verify_device_access(device_id, user, db, require_active=True)
     org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
 
     repo = L4DeskRepository(db)
@@ -1379,7 +1379,7 @@ async def send_device_control_event(
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """REST fallback for sending pointer movement, mouse clicks, keyboard events, or shortcut actions."""
-    terminal = await _verify_device_access(device_id, user, db)
+    terminal = await _verify_device_access(device_id, user, db, require_active=True)
     org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
 
     status_data = await iot_client.remote_input_status(

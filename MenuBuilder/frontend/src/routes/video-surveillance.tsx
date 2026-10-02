@@ -8,7 +8,6 @@ import {
   Drawer,
   Grid,
   message,
-  theme,
   Typography,
 } from "antd";
 import { UnorderedListOutlined } from "@ant-design/icons";
@@ -43,11 +42,10 @@ import { hasPermission, PERMISSION_VIDEO_VIEW } from "../utils/permissions";
 
 // Новые переработанные UX/UI компоненты
 import { TerminalList } from "../components/video/TerminalList";
-import { TerminalHeader } from "../components/video/TerminalHeader";
+import { VideoToolbar } from "../components/video/VideoToolbar";
+import { selectableDevices } from "../utils/terminalPresentation";
 import { VideoPlayerScreen } from "../components/video/VideoPlayerScreen";
-import { StreamControls, StreamStage } from "../components/video/StreamControls";
-import { SourceSelector } from "../components/video/SourceSelector";
-import { RemoteControlPanel } from "../components/video/RemoteControlPanel";
+import type { StreamStage } from "../components/video/StreamControls";
 import RefusalReasonCard from "../components/RefusalReasonCard";
 
 const { Text } = Typography;
@@ -139,12 +137,10 @@ export default function VideoSurveillancePage() {
 
 function TenantVideoSurveillancePage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user, loading: userLoading } = useSession();
-  const { token } = theme.useToken();
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
-  const isDesktop = Boolean(screens.lg);
 
   const orgId = typeof user?.org_id === "number" ? user.org_id : 1;
 
@@ -166,12 +162,17 @@ function TenantVideoSurveillancePage() {
   // Список устройств и словарь адресов (device_id -> address)
   const [devices, setDevices] = useState<DeviceListItem[]>([]);
   const [terminalAddresses, setTerminalAddresses] = useState<Record<number, string>>({});
+  const [terminalNames, setTerminalNames] = useState<Record<number, string>>({});
   const [loadingDevices, setLoadingDevices] = useState<boolean>(true);
   const [selectedDevice, setSelectedDevice] = useState<DeviceListItem | null>(null);
 
   // Мобильный / планшетный Drawer выбора терминала
-  const [isDeviceDrawerOpen, setIsDeviceDrawerOpen] = useState(false);
-  const [showTerminalList, setShowTerminalList] = useState(false);
+  const [isDeviceDrawerOpen, setIsDeviceDrawerOpen] = useState(!searchParams.has("device_id") && !searchParams.has("sn"));
+  const [displayMode, setDisplayMode] = useState<"fit" | "native">("fit");
+  const [freshFrames, setFreshFrames] = useState(false);
+  const [videoResolution, setVideoResolution] = useState("");
+  const playerContainerRef = useRef<HTMLDivElement | null>(null);
+  const selectionPending = useRef(false);
 
   // Источники видео (дисплеи, камеры)
   const [inventory, setInventory] = useState<DeviceInventory | null>(null);
@@ -208,7 +209,7 @@ function TenantVideoSurveillancePage() {
     try {
       const [res, settingsData] = await Promise.all([
         getDevices(orgId, { page: 1, size: 100 }),
-        listTerminalsSettings(orgId).catch(() => ({ items: [] })),
+        listTerminalsSettings({ org_id: orgId, all: true }),
       ]);
       const settingsList = "items" in settingsData ? settingsData.items : [];
 
@@ -237,16 +238,18 @@ function TenantVideoSurveillancePage() {
       }
 
       if (currentGeneration !== deviceGeneration.current) return;
+      allItems = selectableDevices(allItems, settingsList);
       setTerminalAddresses(addrMap);
+      setTerminalNames(Object.fromEntries(settingsList.map(item => [item.device_id, item.note || ""])));
       setDevices(allItems);
 
       setSelectedDevice((prev) => {
         const target = linkedDevice(allItems, searchParams);
         if (target !== undefined) return target;
         if (prev && allItems.some((d) => d.device_id === prev.device_id)) {
-          return prev;
+          return allItems.find(d => d.device_id === prev.device_id) || null;
         }
-        return allItems.length > 0 ? allItems[0] : null;
+        return null;
       });
     } catch (err: any) {
       if (currentGeneration !== deviceGeneration.current) return;
@@ -262,6 +265,10 @@ function TenantVideoSurveillancePage() {
     }
     return () => { deviceGeneration.current += 1; };
   }, [loadDevices, userLoading]);
+
+  useEffect(() => {
+    if (!loadingDevices && !selectedDevice) setIsDeviceDrawerOpen(true);
+  }, [loadingDevices, selectedDevice]);
 
   // Обработчики кликов удалённого управления
   const handleClickResult = useCallback((res: ClickResult) => {
@@ -588,17 +595,27 @@ function TenantVideoSurveillancePage() {
 
   // Смена выбранного терминала
   const handleSelectDevice = async (device: DeviceListItem) => {
+    if (selectionPending.current) return;
+    setIsDeviceDrawerOpen(false);
     if (selectedDevice?.device_id === device.device_id) return;
-    setShowTerminalList(false);
-    setBannerError(null);
-    setRefusalNotice(null);
-    await stopSession();
-    setSelectedDevice(device);
-    setStatusText("Не запущена");
+    selectionPending.current = true;
+    try {
+      setBannerError(null);
+      setRefusalNotice(null);
+      await stopSession();
+      setSelectedDevice(device);
+      setSearchParams({ device_id: String(device.device_id) }, { replace: true });
+      setFreshFrames(false);
+      setVideoResolution("");
+      setDisplayMode("fit");
+      setStatusText("Не запущена");
 
     // Автоматическое подключение для зрителя (viewer)
-    if (isViewer && canView && device.status === "online") {
-      void handleViewerConnect(device.device_id);
+      if (isViewer && canView && device.status === "online") {
+        void handleViewerConnect(device.device_id);
+      }
+    } finally {
+      selectionPending.current = false;
     }
   };
 
@@ -912,25 +929,10 @@ function TenantVideoSurveillancePage() {
     return "Источник видео";
   }, [activeStream, inventory]);
 
-  const hasSources = (inventory?.displays?.length ?? 0) > 0 || (inventory?.cameras?.length ?? 0) > 0;
   const isCameraMode = activeStream?.mode === "usb-camera";
 
   return (
     <div style={{ padding: "0 0 12px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-        <Text strong style={{ fontSize: 16 }}>Видеонаблюдение</Text>
-        {selectedDevice && isDesktop && (
-          <Button
-            size="small"
-            icon={<UnorderedListOutlined />}
-            onClick={() => setShowTerminalList((visible) => !visible)}
-            aria-label={showTerminalList ? "Скрыть список терминалов" : "Показать список терминалов"}
-          >
-            {showTerminalList ? "Скрыть терминалы" : "Терминалы"}
-          </Button>
-        )}
-      </div>
-
       {/* Основная адаптивная раскладка */}
       <div
         style={{
@@ -941,39 +943,6 @@ function TenantVideoSurveillancePage() {
         }}
       >
         {/* Левая панель списка терминалов (видна на Desktop) */}
-        {isDesktop && (!selectedDevice || showTerminalList) && (
-          <div
-            style={{
-              width: 260,
-              flex: "0 0 260px",
-              position: "sticky",
-              top: 72,
-              maxHeight: "calc(100vh - 90px)",
-            }}
-          >
-            <Card
-              size="small"
-              styles={{ body: { padding: 12 } }}
-              style={{
-                borderRadius: 8,
-                border: `1px solid ${token.colorBorderSecondary}`,
-                height: "100%",
-              }}
-            >
-              <TerminalList
-                devices={devices}
-                terminalAddresses={terminalAddresses}
-                selectedDevice={selectedDevice}
-                onSelectDevice={handleSelectDevice}
-                loading={loadingDevices}
-                onRefresh={loadDevices}
-                maxHeight="calc(100vh - 240px)"
-              />
-            </Card>
-          </div>
-        )}
-
-        {/* Выдвижной Drawer со списком терминалов для мобильных и планшетов */}
         <Drawer
           title="Выбор терминала"
           placement="left"
@@ -985,6 +954,7 @@ function TenantVideoSurveillancePage() {
           <TerminalList
             devices={devices}
             terminalAddresses={terminalAddresses}
+            terminalNames={terminalNames}
             selectedDevice={selectedDevice}
             onSelectDevice={(dev) => {
               void handleSelectDevice(dev);
@@ -1009,17 +979,6 @@ function TenantVideoSurveillancePage() {
           {selectedDevice ? (
             <>
               {/* 1. Контекст выбранного терминала */}
-              <TerminalHeader
-                selectedDevice={selectedDevice}
-                address={terminalAddresses[selectedDevice.device_id]}
-                onOpenDeviceDrawer={() => setIsDeviceDrawerOpen(true)}
-                onRefreshDevice={() => fetchDeviceInfo(selectedDevice.device_id, true)}
-                loadingRefresh={loadingInventory}
-                isMobile={isMobile}
-                compact
-              />
-
-              {/* Уведомления об ошибках или отказе */}
               {bannerError && (
                 <RefusalReasonCard
                   code={bannerError.code}
@@ -1043,67 +1002,36 @@ function TenantVideoSurveillancePage() {
               )}
 
               {/* Источник и профиль доступны до запуска в одной компактной строке. */}
-              {isOperator && (
-                <SourceSelector
-                  inventory={inventory}
-                  selectedSourceKey={selectedSourceKey}
-                  onSelectSourceKey={setSelectedSourceKey}
-                  selectedProfile={selectedProfile}
-                  onChangeProfile={setSelectedProfile}
-                  loadingInventory={loadingInventory}
-                  onRefreshInventory={() => fetchDeviceInfo(selectedDevice.device_id, true)}
-                  disabled={isSessionActive}
-                  compact
-                />
-              )}
-
-              {/* Основные действия занимают одну строку на широком экране. */}
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "stretch" }}>
-                <div style={{ flex: "1 1 410px", minWidth: 0 }}><StreamControls
-                isSessionActive={isSessionActive}
-                streamStage={streamStage}
-                isTerminalOnline={selectedDevice.status === "online"}
-                isOperator={isOperator}
-                isViewer={isViewer}
-                onStart={handleOperatorStart}
-                onStop={handleOperatorStop}
-                hasSources={hasSources}
-                activeSourceLabel={activeSourceLabel || undefined}
-                isMobile={isMobile}
-                /></div>
-
-              {isOperator && (
-                <div style={{ flex: "1 1 520px", minWidth: 0 }}><RemoteControlPanel
-                  rcStatus={rc.status}
-                  presence={rc.presence}
-                  lease={rc.lease}
-                  busyOwner={rc.busyOwner}
-                  isSessionActive={isSessionActive}
-                  isCameraMode={isCameraMode}
-                  isTerminalOnline={selectedDevice.status === "online"}
-                  onEnableControl={handleToggleControl}
-                  onDisableControl={handleToggleControl}
-                  onSendShortcut={rc.sendShortcut}
-                  onSendKey={rc.sendKey}
-                  lastCommandResult={rc.lastClickResult}
-                  isMobile={isMobile}
-                  compact
-                /></div>
-              )}
-              </div>
-
+              <VideoToolbar
+                device={selectedDevice} name={terminalNames[selectedDevice.device_id]} address={terminalAddresses[selectedDevice.device_id]}
+                inventory={inventory} source={selectedSourceKey} profile={selectedProfile}
+                onSource={setSelectedSourceKey} onProfile={setSelectedProfile} loadingInventory={loadingInventory}
+                onRefresh={() => fetchDeviceInfo(selectedDevice.device_id, true)}
+                onSelectTerminal={() => setIsDeviceDrawerOpen(true)}
+                stage={streamStage} active={isSessionActive} freshFrames={freshFrames} statusText={statusText}
+                sourceLabel={activeSourceLabel || undefined} resolution={videoResolution}
+                operator={isOperator} onStart={handleOperatorStart} onStop={handleOperatorStop}
+                displayMode={displayMode} onDisplayMode={setDisplayMode}
+                onFullscreen={() => { void playerContainerRef.current?.requestFullscreen().catch(() => message.warning("Полноэкранный режим недоступен")); }}
+                control={{
+                  rcStatus: rc.status, presence: rc.presence, lease: rc.lease, busyOwner: rc.busyOwner,
+                  isSessionActive, isCameraMode, isTerminalOnline: selectedDevice.status === "online",
+                  onEnableControl: handleToggleControl, onDisableControl: handleToggleControl,
+                  onSendShortcut: rc.sendShortcut, onSendKey: rc.sendKey, lastCommandResult: rc.lastClickResult, isMobile,
+                }}
+              />
               <VideoPlayerScreen
+                containerRef={playerContainerRef}
+                displayMode={displayMode} onDisplayMode={setDisplayMode}
+                onFrameStateChange={setFreshFrames} onResolutionChange={setVideoResolution}
                 selectedDevice={selectedDevice}
                 videoRef={videoRef}
                 isSessionActive={isSessionActive}
                 streamStage={streamStage}
                 errorMessage={bannerError?.message}
-                isOperator={isOperator}
                 isViewer={isViewer}
-                activeSourceLabel={activeSourceLabel || undefined}
                 isCameraMode={isCameraMode}
                 streamMode={activeStream?.mode}
-                onStartStream={isOperator ? handleOperatorStart : () => handleViewerConnect(selectedDevice.device_id)}
                 onRetryStream={isOperator ? handleOperatorStart : () => handleViewerConnect(selectedDevice.device_id)}
                 onRefreshTerminal={() => fetchDeviceInfo(selectedDevice.device_id, true)}
                 rc={{
@@ -1124,6 +1052,7 @@ function TenantVideoSurveillancePage() {
               <Text type="secondary" style={{ fontSize: 15 }}>
                 Выберите терминал в списке для начала видеонаблюдения
               </Text>
+              <div style={{ marginTop: 16 }}><Button type="primary" icon={<UnorderedListOutlined />} onClick={() => setIsDeviceDrawerOpen(true)}>Выбрать терминал</Button></div>
             </Card>
           )}
         </div>

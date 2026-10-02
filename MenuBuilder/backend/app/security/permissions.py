@@ -147,6 +147,13 @@ def require_permission(permission_code: str):
             role_id = int(role_id_raw)
         except ValueError, TypeError:
             role_id = ROLE_USER
+        if (
+            role_id == ROLE_L4DESK_OWNER
+            and permission_code == PERMISSION_MONITORING_VIEW
+        ):
+            raise HTTPException(
+                status_code=403, detail="Мониторинг недоступен для роли L4Desk"
+            )
         is_su = bool(
             user.get("is_superuser")
             or user.get("role") in ("superuser", "admin")
