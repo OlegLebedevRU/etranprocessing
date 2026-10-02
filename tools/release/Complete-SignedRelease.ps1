@@ -24,6 +24,7 @@ try {
             throw "Missing staged payload: $stage"
         }
         & "$PSScriptRoot\Sign-Executables.ps1" -TargetPath $stage -TimestampUrl $TimestampUrl
+        & "$PSScriptRoot\New-PayloadInventory.ps1" -Stage $stage -Arch $arch -Version $Version
         $payload = "$resourceDir\payload_$arch.bin"
         $stagePayload = "$stageRoot\payload_$arch.bin"
         if (Test-Path -LiteralPath $payload) { Remove-Item -LiteralPath $payload -Force }
@@ -47,6 +48,7 @@ try {
     if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw 'Manifest generation failed.' }
     $manifest = Get-Content -LiteralPath "$distDir\l4tools-release.json" -Raw | ConvertFrom-Json
     if ($manifest.version -ne $Version) { throw 'Release version mismatch.' }
+    & "$PSScriptRoot\Test-PayloadIntegrity.ps1" -ToolsRoot $toolsRoot
     $signature = Get-AuthenticodeSignature -LiteralPath "$distDir\l4setup.exe"
     if (-not $signature.SignerCertificate -or -not $signature.TimeStamperCertificate -or $signature.Status -ne 'Valid') {
         throw 'Final setup signature is missing or damaged.'

@@ -1,6 +1,6 @@
 # L4 Tools: единый отчёт каскада
 
-Каскад завершён выпуском подписанного1.9.4. Этапы ниже сохраняют хронологию; итоговые runtime/publication результаты и непроверенные сценарии приведены в09–13. [Completed handoff](../.agent-context/tasks/completed/2026-10-02-l4tools-stabilization-ui-release.md).
+Каскад выпущен в подписанном1.9.4; после инцидента чистой установки начат корректирующий этап14 для1.9.5. Этапы ниже сохраняют хронологию; итоговые runtime/publication результаты и непроверенные сценарии приведены в09–13. [Completed handoff](../.agent-context/tasks/completed/2026-10-02-l4tools-stabilization-ui-release.md).
 
 ## Формат отчёта этапа
 
@@ -308,3 +308,18 @@
   physical mixed-monitor DPI и долгосрочная ротация журнала не проверялись.
 - Следующий шаг: отдельные адресные проверки этих сценариев при воспроизводимом кейсе.
   Нового build/sign цикла сейчас не требуется: после подписи native code/resources не менялись.
+
+
+## Этап 14 — первая установка, отчёт и payload 1.9.5
+
+- Статус: код исправлен, unsigned пакет подготовлен; ожидается подпись оператора и реальная приёмка обновления.
+- Владелец/scope: l4setup, локальный bootstrap l4superv, release scripts; capture runtime source и MQTT-контракты не изменены. Server stacks не затронуты.
+- Причина: terminal35/Win10Pro19045 x86 — сертификат установлен, но ready ожидался до запуска служб; повторная попытка запускала Mosquitto без конфигурации. Операторский запуск L4Superv восстановил четыре службы и правильный SN. Это evidence удалённого терминала, а не самостоятельный E2E агента.
+- Изменение: certificate discovery после enrollment без HTTP/SCM; missing config через существующий генератор l4superv в одноразовом local-only режиме; после запуска служб ожидание ready/standby. STOPPED/zero-exit больше не ждёт120с.
+- Отчёт: schema2, реальный exit_code и SCM status, unknown/not_run/null вместо выдуманных успехов; установленная версия отдельно от target_version. PE без версии отображается как установленный файл с неизвестной версией.
+- Версии: пакет/setup1.9.5, superv1.9.4; legacy install1.9.3 не менялся. Capture1.0.0.0 — собственная PE-версия текущего кода, не версия всего пакета. MF-stability4456586 уже включена; сохранены поздние23cc4cb/4b2713a medium/HD настройки. SBOM suite_release/source hint актуализированы, старый checkout не копировался поверх нового.
+- Манифесты: устанавливаемый l4superv/package-components.json для каждой архитектуры с9EXE, PE versions/size/SHA; обновляется после подписи. Release manifest содержит оба inventory и сверяет хеши/две версии first-party; setup version — точное сравнение. Embedded gate сверяет все61файл каждого payload со staging и capture PE sections со свежей сборкой.
+- Проверено: setup x86/x64 сборка; на обеих архитектурах11сценариев actual engine с mock collaborators,2сценария actual certificate phase с fixture child (без CA/store/SCM), STOPPED/zero-exit regression,8существующих unit tests. Реальные superv x86/x64 bootstrap tests в временных папках: создание, сохранение существующего, пути с пробелами, invalid destinations, без state.json. Capture suite129/129.
+- Проверено: семь компонентов собраны x86/x64 штатными build.cmd, unsigned staging/resources/setup/manifests подготовлены. Первое staging упало на недоступном Get-FileHash в дочернем Windows PowerShell; заменено SHA256 .NET, staging и manifest gates прошли. Сбой не скрыт как успешная полная build_dist команда.
+- Ограничения: это isolated/local regression, не реальная чистая установка x86 с новым сертификатом. Работающие терминалы35/773, сертификаты, службы и registry release1.9.4 не изменялись. Signed release, signed Repair/Upgrade и публикация1.9.5 ещё не выполнены.
+- Следующий шаг: operator Complete-SignedRelease.ps1 → все подписи/RFC3161/inventory/embedded hash → согласованная реальная приёмка → чистый release checkpoint и registry. До подписи unsigned пакет не публиковать.

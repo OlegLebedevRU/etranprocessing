@@ -73,10 +73,11 @@ bool summary_write_json(const InstallSummaryData* data, const wchar_t* dest_dir)
     escape_json_path(data->log_path, log_escaped, sizeof(log_escaped));
 
     fprintf(fp, "{\n");
-    fprintf(fp, "  \"schema\": 1,\n");
+    fprintf(fp, "  \"schema\": 2,\n");
     fprintf(fp, "  \"timestamp\": \"%s\",\n", ts);
     fprintf(fp, "  \"installer_version\": \"%s\",\n", data->installer_version);
-    fprintf(fp, "  \"installed_version\": \"%s\",\n", data->installed_version[0] ? data->installed_version : data->installer_version);
+    fprintf(fp, "  \"installed_version\": \"%s\",\n", data->installed_version);
+    fprintf(fp, "  \"target_version\": \"%s\",\n", data->target_version);
     fprintf(fp, "  \"os\": \"%s\",\n", data->os);
     fprintf(fp, "  \"target_arch\": \"%s\",\n", data->target_arch);
     fprintf(fp, "  \"dest\": \"%s\",\n", dest_escaped);
@@ -91,10 +92,10 @@ bool summary_write_json(const InstallSummaryData* data, const wchar_t* dest_dir)
 
     // services
     fprintf(fp, "  \"services\": {\n");
-    fprintf(fp, "    \"leo4proxy\": \"%s\",\n", data->service_leo4proxy[0] ? data->service_leo4proxy : "running");
-    fprintf(fp, "    \"mosquitto\": \"%s\",\n", data->service_mosquitto[0] ? data->service_mosquitto : "running");
-    fprintf(fp, "    \"l4con\": \"%s\",\n", data->service_l4con[0] ? data->service_l4con : "running");
-    fprintf(fp, "    \"l4superv\": \"%s\"\n", data->service_l4superv[0] ? data->service_l4superv : "running");
+    fprintf(fp, "    \"leo4proxy\": \"%s\",\n", data->service_leo4proxy[0] ? data->service_leo4proxy : "unknown");
+    fprintf(fp, "    \"mosquitto\": \"%s\",\n", data->service_mosquitto[0] ? data->service_mosquitto : "unknown");
+    fprintf(fp, "    \"l4con\": \"%s\",\n", data->service_l4con[0] ? data->service_l4con : "unknown");
+    fprintf(fp, "    \"l4superv\": \"%s\"\n", data->service_l4superv[0] ? data->service_l4superv : "unknown");
     fprintf(fp, "  },\n");
 
     // cert
@@ -130,14 +131,18 @@ bool summary_write_json(const InstallSummaryData* data, const wchar_t* dest_dir)
 
     // probes
     fprintf(fp, "  \"probes\": {\n");
-    fprintf(fp, "    \"proxy_info\": \"%s\",\n", data->probes.proxy_info[0] ? data->probes.proxy_info : "ok");
-    fprintf(fp, "    \"mosquitto_port\": \"%s\",\n", data->probes.mosquitto_port[0] ? data->probes.mosquitto_port : "ok");
-    fprintf(fp, "    \"user_session_id\": %d,\n", data->probes.user_session_id);
-    fprintf(fp, "    \"l4desk_running\": %s,\n", data->probes.l4desk_running ? "true" : "false");
-    fprintf(fp, "    \"ffmpeg_smoke_capture\": \"%s\",\n", data->probes.ffmpeg_smoke_capture[0] ? data->probes.ffmpeg_smoke_capture : "ok");
-    fprintf(fp, "    \"desktop_locked\": %s,\n", data->probes.desktop_locked ? "true" : "false");
-    fprintf(fp, "    \"network\": \"%s\",\n", data->probes.network[0] ? data->probes.network : "reachable");
-    fprintf(fp, "    \"remote_input\": \"%s\"\n", data->probes.remote_input[0] ? data->probes.remote_input : "available");
+    fprintf(fp, "    \"proxy_info\": \"%s\",\n", data->probes.proxy_info[0] ? data->probes.proxy_info : "not_run");
+    fprintf(fp, "    \"mosquitto_port\": \"%s\",\n", data->probes.mosquitto_port[0] ? data->probes.mosquitto_port : "not_run");
+    if (data->probes.remote_input[0]) {
+        fprintf(fp, "    \"user_session_id\": %d,\n", data->probes.user_session_id);
+        fprintf(fp, "    \"l4desk_running\": %s,\n", data->probes.l4desk_running ? "true" : "false");
+        fprintf(fp, "    \"desktop_locked\": %s,\n", data->probes.desktop_locked ? "true" : "false");
+    } else {
+        fprintf(fp, "    \"user_session_id\": null,\n    \"l4desk_running\": null,\n    \"desktop_locked\": null,\n");
+    }
+    fprintf(fp, "    \"ffmpeg_smoke_capture\": \"%s\",\n", data->probes.ffmpeg_smoke_capture[0] ? data->probes.ffmpeg_smoke_capture : "not_run");
+    fprintf(fp, "    \"network\": \"%s\",\n", data->probes.network[0] ? data->probes.network : "not_run");
+    fprintf(fp, "    \"remote_input\": \"%s\"\n", data->probes.remote_input[0] ? data->probes.remote_input : "not_run");
     fprintf(fp, "  },\n");
 
     // warnings

@@ -187,6 +187,12 @@ if errorlevel 1 (
     exit /b 1
 )
 
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0release\Test-PayloadIntegrity.ps1" -ToolsRoot "%~dp0."
+if errorlevel 1 (
+    echo [ERROR] Embedded payload integrity verification failed!
+    exit /b 1
+)
+
 echo.
 echo ===============================================================
 echo  [OK] Release build v%L4TOOLS_VERSION% completed successfully!

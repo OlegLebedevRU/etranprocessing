@@ -7,6 +7,7 @@
 #include "cert_phase.h"
 #include "smoke.h"
 #include "summary.h"
+#include "proxy_probe.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,6 +33,35 @@ const char* engine_phase_to_str(SetupPhase phase) {
         case SETUP_PHASE_FINISH:  return "Finish";
         default:                  return "Unknown";
     }
+}
+
+static void engine_write_summary(SetupContext* ctx) {
+    ctx->summary.exit_code = ctx->final_exit_code;
+    const wchar_t* names[] = { SVC_NAME_LEO4PROXY, SVC_NAME_MOSQUITTO, SVC_NAME_L4CON, SVC_NAME_L4SUPERV };
+    char* values[] = { ctx->summary.service_leo4proxy, ctx->summary.service_mosquitto,
+                      ctx->summary.service_l4con, ctx->summary.service_l4superv };
+    for (int i = 0; i < 4; ++i) {
+        DWORD state = services_query_status(names[i]);
+        const char* value = state == SERVICE_RUNNING ? "running" :
+            state == SERVICE_STOPPED ? "stopped" : state == SERVICE_START_PENDING ? "starting" :
+            state == SERVICE_STOP_PENDING ? "stopping" : "unknown";
+        strcpy_s(values[i], 32, value);
+    }
+    for (int i = 0; i < ctx->summary.cert.warnings_count; ++i)
+        summary_add_warning(&ctx->summary, ctx->summary.cert.warnings[i]);
+    summary_write_json(&ctx->summary, ctx->opts->dest);
+}
+
+static bool wait_proxy_after_start(bool require_ready) {
+    ULONGLONG deadline = GetTickCount64() + 15000;
+    do {
+        ULONGLONG now = GetTickCount64();
+        if (now >= deadline) break;
+        int remaining = (int)(deadline - now);
+        if (setup_proxy_probe(18443, require_ready, remaining < 1200 ? remaining : 1200)) return true;
+        Sleep(200);
+    } while (GetTickCount64() < deadline);
+    return false;
 }
 
 static int service_name_to_idx(const wchar_t* svc_name) {
@@ -188,7 +218,8 @@ bool engine_phase_check(SetupContext* ctx) {
 
     // Initialize summary data
     strncpy_s(ctx->summary.installer_version, sizeof(ctx->summary.installer_version), L4SETUP_VERSION_STRING, _TRUNCATE);
-    strncpy_s(ctx->summary.installed_version, sizeof(ctx->summary.installed_version), ctx->target_version, _TRUNCATE);
+    strncpy_s(ctx->summary.installed_version, sizeof(ctx->summary.installed_version), ctx->installed_version, _TRUNCATE);
+    strncpy_s(ctx->summary.target_version, sizeof(ctx->summary.target_version), ctx->target_version, _TRUNCATE);
     strncpy_s(ctx->summary.os, sizeof(ctx->summary.os), ctx->os_name, _TRUNCATE);
     strncpy_s(ctx->summary.target_arch, sizeof(ctx->summary.target_arch), ctx->target_arch, _TRUNCATE);
     wcscpy_s(ctx->summary.dest, MAX_PATH, ctx->opts->dest);
@@ -211,6 +242,7 @@ int engine_run_pipeline(SetupContext* ctx) {
         log_warn("Setup cancelled by user prior to execution.");
         ctx->final_exit_code = 31;
         strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "cancelled");
+        engine_write_summary(ctx);
         return 31;
     }
 
@@ -240,6 +272,7 @@ int engine_run_pipeline(SetupContext* ctx) {
     if (ctx->cancel_requested) {
         ctx->final_exit_code = 31;
         strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "cancelled");
+        engine_write_summary(ctx);
         return 31;
     }
 
@@ -258,7 +291,7 @@ int engine_run_pipeline(SetupContext* ctx) {
             ctx->final_exit_code = 22;
             strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "failed");
             strncpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason), "drainage_failed", _TRUNCATE);
-            summary_write_json(&ctx->summary, ctx->opts->dest);
+            engine_write_summary(ctx);
             return 22;
         }
     }
@@ -266,6 +299,7 @@ int engine_run_pipeline(SetupContext* ctx) {
     if (ctx->cancel_requested) {
         ctx->final_exit_code = 31;
         strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "cancelled");
+        engine_write_summary(ctx);
         return 31;
     }
 
@@ -285,7 +319,7 @@ int engine_run_pipeline(SetupContext* ctx) {
             ctx->final_exit_code = 23;
             strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "failed");
             strncpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason), "payload_extraction_failed", _TRUNCATE);
-            summary_write_json(&ctx->summary, ctx->opts->dest);
+            engine_write_summary(ctx);
             return 23;
         }
 
@@ -296,7 +330,7 @@ int engine_run_pipeline(SetupContext* ctx) {
             strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "failed");
             strncpy_s(ctx->summary.rollback, sizeof(ctx->summary.rollback), "restored", _TRUNCATE);
             strncpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason), "service_registration_failed", _TRUNCATE);
-            summary_write_json(&ctx->summary, ctx->opts->dest);
+            engine_write_summary(ctx);
             return 24;
         }
     }
@@ -304,6 +338,7 @@ int engine_run_pipeline(SetupContext* ctx) {
     if (ctx->cancel_requested) {
         ctx->final_exit_code = 31;
         strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "cancelled");
+        engine_write_summary(ctx);
         return 31;
     }
 
@@ -322,18 +357,29 @@ int engine_run_pipeline(SetupContext* ctx) {
         if (ctx->summary.cert.exit_code == 31) {
             ctx->final_exit_code = 31;
             strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "cancelled");
+            engine_write_summary(ctx);
             return 31;
         }
         log_err("Certificate provisioning failed (exit code %d).", ctx->summary.cert.exit_code);
         ctx->final_exit_code = ctx->summary.cert.exit_code;
         strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "failed");
         strncpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason), "certificate_enrollment_failed", _TRUNCATE);
-        summary_write_json(&ctx->summary, ctx->opts->dest);
+        engine_write_summary(ctx);
         return ctx->final_exit_code;
     }
 
     if (ctx->summary.cert.sn[0]) {
         strncpy_s(ctx->sn, sizeof(ctx->sn), ctx->summary.cert.sn, _TRUNCATE);
+    }
+
+    // A fresh package intentionally contains no terminal-specific bridge.
+    // Prepare local-only bootstrap through the supervisor's existing generator.
+    if (!services_prepare_mosquitto(ctx->opts->dest)) {
+        ctx->final_exit_code = 24;
+        strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "failed");
+        strcpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason), "mosquitto_configuration_failed");
+        engine_write_summary(ctx);
+        return 24;
     }
 
     // Start all 4 services in order
@@ -343,7 +389,7 @@ int engine_run_pipeline(SetupContext* ctx) {
         ctx->final_exit_code = 24;
         strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "failed");
         strncpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason), "service_start_failed", _TRUNCATE);
-        summary_write_json(&ctx->summary, ctx->opts->dest);
+        engine_write_summary(ctx);
         return 24;
     }
 
@@ -356,7 +402,17 @@ int engine_run_pipeline(SetupContext* ctx) {
         ctx->on_phase_change(SETUP_PHASE_VERIFY, "Verify", "Running local and remote health probes (budget <= 60s)...", ctx->user_data);
     }
 
-    bool is_active_cert = (ctx->summary.cert.state == CERT_VALID);
+    bool is_active_cert = (ctx->summary.cert.state == CERT_VALID || ctx->summary.cert.state == CERT_EXPIRING);
+    log_info("Waiting for Leo4Proxy after service startup (up to 15s, certificate required: %s)...",
+             is_active_cert ? "yes" : "no");
+    if (!wait_proxy_after_start(is_active_cert)) {
+        ctx->final_exit_code = 27;
+        strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "failed");
+        strcpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason), "proxy_ready_timeout");
+        strcpy_s(ctx->summary.probes.proxy_info, sizeof(ctx->summary.probes.proxy_info), "fail");
+        engine_write_summary(ctx);
+        return 27;
+    }
     smoke_run_probes(ctx->opts->dest, is_active_cert, &ctx->summary.probes);
 
     // Determine exit code and status
@@ -402,10 +458,12 @@ int engine_run_pipeline(SetupContext* ctx) {
             strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "failed");
             strcpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason),
                      "installed_version_persist_failed");
+        } else {
+            strcpy_s(ctx->summary.installed_version, sizeof(ctx->summary.installed_version), saved_version);
         }
     }
 
-    summary_write_json(&ctx->summary, ctx->opts->dest);
+    engine_write_summary(ctx);
 
     log_info("Setup finished with status: %s (exit code %d).", ctx->summary.status, ctx->final_exit_code);
 

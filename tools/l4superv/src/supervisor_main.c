@@ -217,6 +217,7 @@ static void print_usage(void) {
     wprintf(L"  --restart          Restart L4Superv service\n");
     wprintf(L"  --status           Display status of all Leo4 services and orchestrator\n");
     wprintf(L"  --check            Execute a single orchestration cycle and exit\n");
+    wprintf(L"  --prepare-mosquitto --dest <path>  Create missing local-only config; do not start services\n");
     wprintf(L"  --tick             Send force-tick control 128 to running L4Superv service\n");
     wprintf(L"  --version, -v      Print version and exit\n");
     wprintf(L"  --help, -h         Show this help message\n\n");
@@ -224,6 +225,19 @@ static void print_usage(void) {
 
 int wmain(int argc, wchar_t* argv[]) {
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
+    /* Installer bootstrap: explicit destination, no state/certificate changes,
+     * orchestration, inherited environment or external connections. */
+    if (argc > 1 && _wcsicmp(argv[1], L"--prepare-mosquitto") == 0) {
+        if (argc != 4 || _wcsicmp(argv[2], L"--dest") != 0 ||
+            !argv[3][0] || PathIsRelativeW(argv[3])) return 2;
+        wchar_t conf[MAX_PATH];
+        if (swprintf_s(conf, MAX_PATH, L"%ls\\mosquitto\\mosquitto.conf", argv[3]) < 0) return 2;
+        DWORD attrs = GetFileAttributesW(conf);
+        if (attrs != INVALID_FILE_ATTRIBUTES) return (attrs & FILE_ATTRIBUTE_DIRECTORY) ? 1 : 0;
+        DWORD err = GetLastError();
+        if (err != ERROR_FILE_NOT_FOUND && err != ERROR_PATH_NOT_FOUND) return 1;
+        return mosquitto_conf_generate_standby(argv[3], L4_DEFAULT_MOSQUITTO_PORT) ? 0 : 1;
+    }
     sp_enable_system_privileges();
 
     wchar_t exe_path[MAX_PATH];

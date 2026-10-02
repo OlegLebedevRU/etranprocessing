@@ -13,6 +13,7 @@ extern "C" {
 typedef struct {
     char installer_version[32];
     char installed_version[32];
+    char target_version[32];
     char os[128];
     char target_arch[16];
     wchar_t dest[MAX_PATH];

@@ -1,9 +1,9 @@
 {
   "name": "l4capture",
   "version": "1.0.0",
-  "suite_release": "1.8.0",
+  "suite_release": "1.9.5",
   "description": "Desktop capture / OpenH264 / RTP agent for Leo4 Terminal Tools",
-  "source_commit_hint": "see H-L4C-10-v1 / L4C-11 report",
+  "source_commit_hint": "MF stability 4456586; current medium/HD profile tuning 23cc4cb and 4b2713a; build from release git_sha",
   "build": {
     "toolchain": "MSVC 19.x /MT",
     "flags": "/O2 /MT /W4 /WX /D_WIN32_WINNT=0x0601",

@@ -51,6 +51,10 @@ bool services_configure_environment(const wchar_t* dest_dir);
  */
 bool services_ensure_all_registered(const wchar_t* dest_dir);
 
+/* Ask the suite's existing generator to prepare a missing local-only config.
+ * Does not start services or overwrite an existing configuration. */
+bool services_prepare_mosquitto(const wchar_t* dest_dir);
+
 /**
  * Start a single service with query-first logic, wait hints, 30s notice, and 120s max timeout.
  * If service is already RUNNING, verifies without restarting.

@@ -1,5 +1,10 @@
 ﻿# Changelog — l4superv (Leo4 Supervisor & Orchestrator Suite)
 
+## [1.9.4] — 2026-10-02
+
+- Add --prepare-mosquitto --dest <absolute path> for installer bootstrap: create a missing local-only config with the existing generator, preserve existing config, and exit without orchestration, state/certificate changes or service startup.
+
+
 All notable changes to the `l4superv` and `l4install` suite will be documented in this file.
 
 ## [1.9.3] - 2026-10-02

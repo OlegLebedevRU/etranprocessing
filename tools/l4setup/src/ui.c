@@ -190,7 +190,9 @@ static void installed_versions(HWND dialog) {
         wchar_t path[MAX_PATH],text[512];
         if(swprintf_s(path,MAX_PATH,L"%ls\\%ls",context.opts->dest,paths[i])<0) continue;
         DWORD ignored=0,size=GetFileVersionInfoSizeW(path,&ignored);
-        const wchar_t* value=L"не установлен"; wchar_t version[64];
+        DWORD attrs=GetFileAttributesW(path);
+        const wchar_t* value=attrs!=INVALID_FILE_ATTRIBUTES && !(attrs & FILE_ATTRIBUTE_DIRECTORY)
+            ? L"файл установлен; версия не указана в EXE" : L"не установлен"; wchar_t version[64];
         if(size && size<=65536) {
             BYTE* block=(BYTE*)malloc(size); VS_FIXEDFILEINFO* info=NULL; UINT count=0;
             if(block && GetFileVersionInfoW(path,0,size,block) && VerQueryValueW(block,L"\\",(void**)&info,&count) &&

@@ -1,5 +1,14 @@
 # Changelog — Leo4 Setup (`l4setup`)
 
+## [1.9.5] — 2026-10-02
+
+- Fix fresh installation after certificate enrollment: verify the certificate in the store before starting services; check proxy ready/standby after startup.
+- Prepare a missing local-only broker config through l4superv before starting Mosquitto. Preserve existing config on Repair/Upgrade.
+- Fail promptly if a service exits to STOPPED even with zero SCM exit codes.
+- Summary schema 2 reports actual exit codes and SCM states, not_run/null for unobserved probes, and separates installed_version from target_version.
+- Existing EXEs without a PE version resource no longer appear as missing in the UI.
+- Signed payload inventory records per-architecture PE versions/sizes/SHA256; embedded files and current l4capture build are verified.
+
 ## Unreleased
 
 - Release 1.9.1 shows installed tool PE versions in Details before and after

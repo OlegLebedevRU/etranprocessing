@@ -52,3 +52,14 @@ version intact and verify complete downloads separately (for example, direct
 three downloads have been verified. Commit/push the release record afterwards.
 The 1.9.4 cascade used this fallback after two truncated Python downloads;
 the cause of the transport difference was not established.
+
+
+For 1.9.5+, `New-PayloadInventory.ps1` writes `l4superv/package-components.json`
+inside each staging tree. `Complete-SignedRelease.ps1` refreshes it after signing
+and before ZIP creation. The release manifest includes these exact EXE hashes and
+versions; both first-party architectures are mandatory and setup PE version must
+match exactly. `Test-PayloadIntegrity.ps1` compares every embedded payload file
+with staging and all capture PE sections with the current build (signature header
+changes and appended certificates do not change those sections). This gate runs
+in both unsigned build and signed completion. Never regenerate only the external
+manifest when embedded inventory hashes are stale; repack and re-sign setup.

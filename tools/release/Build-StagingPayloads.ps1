@@ -220,6 +220,8 @@ foreach ($arch in @("x86", "x64")) {
     }
 
     # Pack into zip payload
+    & "$PSScriptRoot\New-PayloadInventory.ps1" -Stage $targetStage -Arch $arch `
+        -Version ((Get-Content -LiteralPath "$ToolsRoot\version.txt" -Raw).Trim())
     $outBin = "$ResDir\payload_$arch.bin"
     $stageCopyBin = "$StageDir\payload_$arch.bin"
 

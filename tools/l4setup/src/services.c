@@ -8,6 +8,30 @@
 
 #pragma comment(lib, "advapi32.lib")
 
+bool services_prepare_mosquitto(const wchar_t* dest_dir) {
+    wchar_t exe[MAX_PATH], command[MAX_PATH * 3];
+    if (!dest_dir || swprintf_s(exe, MAX_PATH, L"%ls\\l4superv\\l4superv.exe", dest_dir) < 0 ||
+        swprintf_s(command, _countof(command), L"\"%ls\" --prepare-mosquitto --dest \"%ls\"", exe, dest_dir) < 0)
+        return false;
+    STARTUPINFOW si = { sizeof(si) };
+    PROCESS_INFORMATION pi = { 0 };
+    log_info("Preparing missing Mosquitto configuration through l4superv (local-only bootstrap)...");
+    if (!CreateProcessW(exe, command, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, dest_dir, &si, &pi)) {
+        log_err("Cannot run l4superv configuration preparation (error %lu)", GetLastError());
+        return false;
+    }
+    DWORD wait = WaitForSingleObject(pi.hProcess, 30000), code = 1;
+    bool ok = wait == WAIT_OBJECT_0 && GetExitCodeProcess(pi.hProcess, &code) && code == 0;
+    if (wait != WAIT_OBJECT_0) {
+        TerminateProcess(pi.hProcess, 1); /* Only the child created above. */
+        WaitForSingleObject(pi.hProcess, 5000);
+    }
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    if (!ok) log_err("Mosquitto configuration preparation failed (wait=%lu, code=%lu)", wait, code);
+    return ok;
+}
+
 static bool set_dir_permissions(const wchar_t* dir_path) {
     if (!dir_path) return false;
     CreateDirectoryW(dir_path, NULL);
@@ -383,15 +407,14 @@ bool services_start_single_service(
             return true;
         }
 
-        // Check for immediate failure when service stopped with an exit code
+        // A service that returned to STOPPED did not start, even if it exited
+        // with zero (Mosquitto can do this when configuration is missing).
         if (ssp.dwCurrentState == SERVICE_STOPPED) {
-            if (ssp.dwWin32ExitCode != NO_ERROR || ssp.dwServiceSpecificExitCode != 0) {
-                log_err("Service %ls stopped immediately with error code: win32=%lu, specific=%lu",
-                        svc_name, ssp.dwWin32ExitCode, ssp.dwServiceSpecificExitCode);
-                if (cb) cb(svc_name, SVC_STATUS_FAILED, elapsed_sec, "Service stopped immediately with error", user_data);
-                CloseServiceHandle(hSvc);
-                return false;
-            }
+            log_err("Service %ls stopped during startup: win32=%lu, specific=%lu",
+                    svc_name, ssp.dwWin32ExitCode, ssp.dwServiceSpecificExitCode);
+            if (cb) cb(svc_name, SVC_STATUS_FAILED, elapsed_sec, "Service stopped during startup", user_data);
+            CloseServiceHandle(hSvc);
+            return false;
         }
 
         // Wait based on service wait hint (clamped between 500ms and 2000ms)

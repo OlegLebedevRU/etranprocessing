@@ -93,17 +93,6 @@ static INT_PTR CALLBACK PinDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lP
     return FALSE;
 }
 
-static bool poll_proxy_ready(int timeout_seconds) {
-    ULONGLONG deadline=GetTickCount64()+(ULONGLONG)(timeout_seconds > 0 ? timeout_seconds : 1)*1000;
-    while(GetTickCount64() < deadline) {
-        ULONGLONG now=GetTickCount64();
-        if(now>=deadline) break;
-        ULONGLONG remaining=deadline-now;
-        if(setup_proxy_probe(18443,true,(int)(remaining < 1200 ? remaining : 1200))) return true;
-        if(GetTickCount64() < deadline) Sleep(200);
-    }
-    return false;
-}
 static bool save_pending_pin(const wchar_t* dest_dir, const wchar_t* pin) {
     if (!dest_dir || !pin || pin[0] == L'\0') return false;
 
@@ -485,22 +474,18 @@ bool cert_phase_execute(
     cli_clean_pin(cli_opts);
     out_result->reissued = true;
 
-    // 5. Signal L4Superv (SERVICE_CONTROL 128) and wait for _leo4/info ready up to 15 seconds
-    log_info("Sending SERVICE_CONTROL 128 to L4Superv...");
-    services_control_l4superv(128);
-
-    log_info("Waiting for _leo4/info to report ready status (up to 15s)...");
-    if (!poll_proxy_ready(15)) {
-        log_err("Timeout waiting for _leo4/info status ready after certificate enrollment.");
+    // Verify the installed certificate independently of stopped services.
+    // The engine checks proxy readiness only after service startup.
+    cert_info new_info;
+    memset(&new_info, 0, sizeof(new_info));
+    cert_state new_st = cert_discover(NULL, &new_info);
+    if ((new_st != CERT_VALID && new_st != CERT_EXPIRING) ||
+        !new_info.sn[0] || !new_info.thumbprint_hex[0]) {
+        log_err("Installed certificate did not pass certificate discovery after enrollment.");
         out_result->exit_code = 26;
         strcpy_s(out_result->status, sizeof(out_result->status), "failed");
         return false;
     }
-
-    // Refresh certificate info
-    cert_info new_info;
-    memset(&new_info, 0, sizeof(new_info));
-    cert_state new_st = cert_discover(NULL, &new_info);
     out_result->state = new_st;
     strncpy_s(out_result->thumbprint, 64, new_info.thumbprint_hex, _TRUNCATE);
     strncpy_s(out_result->sn, 64, new_info.sn, _TRUNCATE);

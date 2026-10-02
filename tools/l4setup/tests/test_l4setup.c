@@ -427,7 +427,7 @@ static bool test_summary_and_state(void) {
     fclose(fp);
 
     // Verify schema and fields
-    TEST_ASSERT(strstr(buf, "\"schema\": 1") != NULL, "Missing schema");
+    TEST_ASSERT(strstr(buf, "\"schema\": 2") != NULL, "Missing schema");
     TEST_ASSERT(strstr(buf, "\"installer_version\": \"1.7.1\"") != NULL, "Missing installer_version");
     TEST_ASSERT(strstr(buf, "\"ca_root_installed\": true") != NULL, "Missing ca_root_installed");
     TEST_ASSERT(strstr(buf, "\"firewall_configured\": true") != NULL, "Missing firewall_configured");
@@ -437,6 +437,26 @@ static bool test_summary_and_state(void) {
     TEST_ASSERT(strstr(buf, "\"services\":") != NULL, "Missing services object");
     TEST_ASSERT(strstr(buf, "\"network\": \"reachable\"") != NULL, "Missing network probe");
     TEST_ASSERT(strstr(buf, "\"remote_input\": \"available\"") != NULL, "Missing remote_input probe");
+
+    // A failed/unobserved stage must never serialize fabricated successes.
+    InstallSummaryData failed;
+    memset(&failed, 0, sizeof(failed));
+    strcpy_s(failed.installer_version, 32, "1.9.5");
+    strcpy_s(failed.target_version, 32, "1.9.5");
+    strcpy_s(failed.status, 32, "failed");
+    failed.exit_code = 24;
+    TEST_ASSERT(summary_write_json(&failed, test_dir), "Failed summary write");
+    _wfopen_s(&fp, sum_file, L"rb");
+    TEST_ASSERT(fp != NULL, "Failed summary read");
+    memset(buf, 0, sizeof(buf)); fread(buf, 1, sizeof(buf)-1, fp); fclose(fp);
+    TEST_ASSERT(strstr(buf, "\"exit_code\": 24"), "Wrong failure code");
+    TEST_ASSERT(strstr(buf, "\"installed_version\": \"\""), "Target misreported as installed");
+    TEST_ASSERT(strstr(buf, "\"target_version\": \"1.9.5\""), "Target missing");
+    TEST_ASSERT(strstr(buf, "\"l4con\": \"unknown\""), "Unobserved service misreported");
+    TEST_ASSERT(strstr(buf, "\"mosquitto_port\": \"not_run\""), "Unrun probe misreported");
+    TEST_ASSERT(strstr(buf, "\"user_session_id\": null"), "Unobserved session misreported");
+    TEST_ASSERT(strstr(buf, "\"remote_input\": \"not_run\""), "Unobserved input misreported");
+    TEST_ASSERT(strstr(buf, "\"network\": \"not_run\""), "Unrun network probe misreported");
 
     // 2. State patch test
     wchar_t state_file[MAX_PATH];

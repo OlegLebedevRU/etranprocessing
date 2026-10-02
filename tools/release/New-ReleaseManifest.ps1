@@ -120,28 +120,12 @@ if (-not $SkipVerifications) {
     }
     Write-Host "  [OK] Payload sizes verified (uncompressed > 20 MB, compressed > 10 MB; FFmpeg present)."
 
-    # 2. Version check (PE FileVersion / ProductVersion or CLI fallback)
-    try {
-        $peVer = (Get-Item $SetupExe).VersionInfo.ProductVersion
-        Write-Host "  [INFO] $SetupExe PE ProductVersion: $peVer"
-        if ($peVer -and ($peVer -match [regex]::Escape($Version))) {
-            Write-Host "  [OK] l4setup.exe PE version matches $Version."
-        } else {
-            $verOut = (& $SetupExe --version 2>&1 | Out-String).Trim()
-            Write-Host "  [INFO] $SetupExe --version output: $verOut"
-            if (-not ($verOut -match [regex]::Escape($Version))) {
-                throw "Validation Failed: $SetupExe version does not contain expected version '$Version'"
-            }
-            Write-Host "  [OK] l4setup.exe version matches $Version."
-        }
-    } catch {
-        $peVer = (Get-Item $SetupExe).VersionInfo.ProductVersion
-        if ($peVer -and ($peVer -match [regex]::Escape($Version))) {
-            Write-Host "  [OK] l4setup.exe PE version matches $Version ($peVer)."
-        } else {
-            throw "Validation Failed checking version for '$SetupExe': $_"
-        }
+    # 2. Exact package PE version; substring matching accepts 1.9.50 as 1.9.5.
+    $peVer = (Get-Item -LiteralPath $SetupExe).VersionInfo.ProductVersion
+    if (-not $peVer -or $peVer.Trim([char]0).Trim() -ne $Version) {
+        throw "Validation Failed: setup PE version '$peVer' differs from '$Version'"
     }
+    Write-Host "  [OK] l4setup.exe PE version exactly matches $Version."
 
     # 3. Authenticode check
     $sig = Get-AuthenticodeSignature $SetupExe
@@ -240,6 +224,9 @@ function Get-ToolVersion([string]$name, [string]$fallback) {
         }
     }
     $distinctVersions = @($stagedVersions | Sort-Object -Unique)
+    if ($name -notin @('ffmpeg','mosquitto') -and $stagedVersions.Count -ne 2) {
+        throw "Both staged architectures with PE versions are required for $name"
+    }
     if ($distinctVersions.Count -gt 1) { throw "Architecture version mismatch for $name" }
     if ($distinctVersions.Count -eq 1) { return $distinctVersions[0] }
     $prev = $ErrorActionPreference
@@ -379,12 +366,28 @@ $manifest = [ordered]@{
         "x64" = $payloadX64Sha
     }
     "components" = $components
+    "component_artifacts" = [ordered]@{}
     "min_os" = "6.1"
     "arch" = @("x86", "x64")
 }
 
+foreach ($architecture in @('x86','x64')) {
+    $inventoryPath = "$DistDir\.stage\$architecture\l4superv\package-components.json"
+    $inventory = Get-Content -LiteralPath $inventoryPath -Raw | ConvertFrom-Json
+    if ($inventory.version -ne $Version -or $inventory.arch -ne $architecture) {
+        throw "Payload inventory version/architecture mismatch: $inventoryPath"
+    }
+    foreach ($entry in $inventory.components) {
+        $artifact = Join-Path "$DistDir\.stage\$architecture" $entry.path
+        if ((Get-FileSha256 $artifact) -ne $entry.sha256) {
+            throw "Payload inventory hash mismatch: $artifact"
+        }
+    }
+    $manifest.component_artifacts[$architecture] = $inventory.components
+}
+
 $manifestJsonPath = "$DistDir\l4tools-release.json"
-$manifestJson = $manifest | ConvertTo-Json -Depth 5
+$manifestJson = $manifest | ConvertTo-Json -Depth 7
 [System.IO.File]::WriteAllText($manifestJsonPath, $manifestJson, (New-Object System.Text.UTF8Encoding($false)))
 Write-Host "  [OK] Manifest created: $manifestJsonPath"
 

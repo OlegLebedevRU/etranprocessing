@@ -95,9 +95,11 @@ l4setup.exe [options]
 
 ```json
 {
-  "schema": 1,
+  "schema": 2,
   "timestamp": "2026-09-12T18:00:00Z",
-  "installer_version": "1.6.0",
+  "installer_version": "1.9.5",
+  "installed_version": "1.9.5",
+  "target_version": "1.9.5",
   "os": "Windows 10 Pro (10.0.19045) x64",
   "target_arch": "x64",
   "dest": "C:\\l4tools",
@@ -129,6 +131,20 @@ l4setup.exe [options]
 ```
 
 ---
+
+Schema 2 distinguishes the committed installed package version from the target version.
+An early failure records the real exit code and current SCM service states (or `unknown`
+when not readable). Unexecuted string probes are `not_run`; unobserved session/desktop
+values are `null`. Consumers of schema 1 must allow these values and must not infer
+success from file extraction or from a target version.
+
+The payload installs `l4superv/package-components.json`: package version, selected
+architecture, and each EXE's actual PE product version, size and SHA-256. Third-party
+EXEs without a PE version have `null`; this does not mean the file is missing.
+The release manifest includes both inventories. They are regenerated after signing.
+A certificate is verified independently of services; a missing Mosquitto configuration
+is prepared through `l4superv --prepare-mosquitto --dest <absolute path>` before service
+startup. Only then does setup wait for proxy ready/standby and run smoke probes.
 
 ## 6. Безопасность и хранение секретов
 
