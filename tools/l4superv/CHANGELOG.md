@@ -1,5 +1,11 @@
 ﻿# Changelog — l4superv (Leo4 Supervisor & Orchestrator Suite)
 
+## [1.9.6] — 2026-10-02
+
+- Enable existing F12, Alt+F4 and Win+D on every supervised l4desk launch. Append allow flags after configured arguments so retained configuration works after Upgrade/Repair.
+- Preserve l4desk and its lease/session/display policy, secure-desktop and Alt+F4 target guards.
+- Add `build.cmd supervisor` for an isolated x86/x64/default supervisor build without rebuilding l4install or running unrelated checks.
+
 ## [1.9.5] — 2026-10-02
 
 - Stop L4Con before restarting Mosquitto; restore it after the broker starts. Preserve an initially stopped or absent L4Con. A failed step does not commit the identity transition.

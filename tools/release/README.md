@@ -63,3 +63,14 @@ with staging and all capture PE sections with the current build (signature heade
 changes and appended certificates do not change those sections). This gate runs
 in both unsigned build and signed completion. Never regenerate only the external
 manifest when embedded inventory hashes are stale; repack and re-sign setup.
+
+## Incremental supervisor-only release
+
+For a supervisor-only update, use `tools/l4superv/build.cmd supervisor`, reuse the
+previous signed outputs of every other tool, and rebuild staging/setup only.
+Use `Complete-SignedRelease.ps1 -PfxPath '<path to signing PFX>' -Version '<release version>' -SignOnly l4superv`.
+This signs only staged l4superv x86/x64 and the universal installer, all with the
+same mandatory RFC3161 timestamp. Other staged EXEs keep their existing signatures.
+The package/inventory/hash gates still run; the unrelated capture source comparison
+is skipped. Do not use the full component build gate for this explicitly limited flow.
+No live terminal checks are performed unless the operator requests them.

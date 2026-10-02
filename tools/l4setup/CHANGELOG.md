@@ -1,5 +1,10 @@
 # Changelog — Leo4 Setup (`l4setup`)
 
+## [1.9.7] — 2026-10-02
+
+- Package l4superv 1.9.6 with existing F12, Alt+F4 and Win+D actions enabled on all supervised terminals, including retained configuration after Upgrade/Repair.
+- Reuse other tools from signed 1.9.6 without rebuilding. Live remote-input verification is deferred to the operator.
+
 ## [1.9.6] — 2026-10-02
 
 - Package l4superv 1.9.5 with dependency-aware Mosquitto/L4Con restart and accurate standalone l4desk status. Other component versions and current l4capture implementation are unchanged.

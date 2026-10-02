@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$ToolsRoot)
+param([string]$ToolsRoot, [switch]$SkipCaptureComparison)
 $ErrorActionPreference = 'Stop'
 if (-not $ToolsRoot) { $ToolsRoot = (Resolve-Path "$PSScriptRoot\..").Path }
 Add-Type -AssemblyName System.IO.Compression
@@ -77,8 +77,8 @@ foreach ($arch in @('x86','x64')) {
             try { if ((Stream-Hash $stream) -ne (File-Hash $file.FullName)) { throw "Stale payload file: $relative" } }
             finally { $stream.Dispose() }
         }
-        if ((Program-Hash "$stage\l4capture\bin\l4capture.exe") -ne
+        if (-not $SkipCaptureComparison -and (Program-Hash "$stage\l4capture\bin\l4capture.exe") -ne
             (Program-Hash "$ToolsRoot\l4capture\bin\$arch\l4capture.exe")) { throw "Stale l4capture in $arch staging" }
-        Write-Host "PASS ${arch}: $($files.Count) embedded files match staging; l4capture matches current build"
+        Write-Host "PASS ${arch}: $($files.Count) embedded files match staging (capture source comparison skipped=$SkipCaptureComparison)"
     } finally { if ($zip) { $zip.Dispose() }; $memory.Dispose() }
 }

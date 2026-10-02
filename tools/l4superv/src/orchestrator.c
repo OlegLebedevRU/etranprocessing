@@ -869,7 +869,8 @@ service_health:
 
                             if (PathFileExistsW(l4desk_exe)) {
                                 wchar_t cmdline[1024];
-                                swprintf_s(cmdline, 1024, L"\"%ls\" %ls", l4desk_exe,
+                                /* Enable approved actions also with retained pre-upgrade l4desk.args. */
+                                swprintf_s(cmdline, 1024, L"\"%ls\" %ls --allow-f12 --allow-alt-f4 --allow-win-d", l4desk_exe,
                                            cfg->l4desk_args[0] ? cfg->l4desk_args : L"--run --presence-interval 30");
                                 wchar_t workdir[MAX_PATH];
                                 swprintf_s(workdir, MAX_PATH, L"%ls\\l4desk", cfg->base_path);

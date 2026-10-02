@@ -37,6 +37,7 @@ if not exist obj\x64 mkdir obj\x64
 
 set BUILD_FAILED=0
 
+if /i "%TARGET_ARCH%"=="supervisor" goto :build_supervisor_only
 if /i "%TARGET_ARCH%"=="all" goto :build_all
 if /i "%TARGET_ARCH%"=="x86" goto :build_x86
 if /i "%TARGET_ARCH%"=="32" goto :build_x86
@@ -48,8 +49,21 @@ if /i "%TARGET_ARCH%"=="64" goto :build_x64
 if /i "%TARGET_ARCH%"=="test" goto :build_tests
 if /i "%TARGET_ARCH%"=="tests" goto :build_tests
 
-echo Unknown architecture "%TARGET_ARCH%". Valid options: all, x86, win7, x64, test
+echo Unknown architecture "%TARGET_ARCH%". Valid options: all, x86, win7, x64, supervisor, test
 exit /b 1
+
+:build_supervisor_only
+call :do_build_supervisor_only x86
+if errorlevel 1 exit /b 1
+call :do_build_supervisor_only x64
+if errorlevel 1 exit /b 1
+copy /y bin\x86\l4superv.exe bin\l4superv.exe >nul
+exit /b %errorlevel%
+
+:do_build_supervisor_only
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && rc.exe /nologo /fo obj\%1\l4superv.res res\l4superv.rc && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_WIN32_WINNT=0x0601 /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\%1\ src\supervisor_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\proxy_client.c ..\l4pin\src\http_client.c ..\leo4proxy\src\policy_json.c src\session_proc.c src\orchestrator.c src\cert_discovery.c obj\%1\l4superv.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\%1\l4superv.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib wtsapi32.lib userenv.lib ncrypt.lib version.lib"
+exit /b %errorlevel%
+
 
 :build_all
 call :do_build_x86
