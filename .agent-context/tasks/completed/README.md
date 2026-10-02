@@ -31,3 +31,5 @@
 
 - [2026-10-02 — L4 Tools 1.9.4 stabilization/UI/signed release](2026-10-02-l4tools-stabilization-ui-release.md):
   NO_PROXY, new-CA standby, lifecycle/credentials safety, accepted UI, real policy/Upgrade/Repair and verified registry publication.
+
+- [L4 Tools 1.9.5: fresh-install correction and signed publication](2026-10-02-l4setup-fresh-install-fix.md) — Upgrade773 ready/0; full registry bytes verified; fresh x86 E2E remains untested.

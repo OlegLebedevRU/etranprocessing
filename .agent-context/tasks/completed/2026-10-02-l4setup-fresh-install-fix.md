@@ -23,10 +23,14 @@
 - [x] Capture129/129; current source preserves MF stabilization plus later profile tuning.
 - [x] Both embedded payloads61 files match staging; capture matches fresh build.
 - [x] Operator signing; all19 EXEs Valid Authenticode/same signer/RFC3161, signtool /pa /all /tw and SHA256SUMS passed. Both61-file embedded payloads match signed staging and current capture PE sections.
-- [ ] Real corrected Repair/Upgrade, fresh x86 install E2E in isolated terminal/VM.
-- [ ] Signed clean source/artifact checkpoint and publication; immutable1.9.4 unchanged.
-- No local or remote terminal services/certificates changed by this task.
+- [x] Real signed Upgrade773, ready/0, schema2, four services running, original certificate retained;9installed EXE match signed stage/inventory and signatures/timestamps.
+- [ ] Fresh x86/live new CA installation and1.9.5 onterm35 not exercised; do not delete working cert/config to reproduce.
+- [x] Clean signed checkpoint8bf2410 onorigin/main; strict verify and all3full registry downloads size/SHA/signature checked, record written; immutable1.9.4 unchanged.
+- Operator upgraded local773 through the installer; no manual agent service/certificate changes. Remote35 unchanged after earlier operator bootstrap.
 - First packaging attempt failed due to unavailable Get-FileHash; fixed using .NET SHA256 and resumed staging/setup/manifest checks.
 - Long report: [cascade step14](../../../docs/term_dev-l4tools-cascade-report.md).
 
-- Signed setup SHA3737d86ee322b458744a9a7b2bac8c9c1f9839eaefd67382f7c0baedfa5618f4,29646904bytes. Operator Upgrade on773 requested; no runtime result yet.
+- Signed setup SHA3737d86ee322b458744a9a7b2bac8c9c1f9839eaefd67382f7c0baedfa5618f4,29646904bytes. Operator Upgrade773 ready/0 confirmed; one pending_reboot_detected warning, no reboot. All local smoke probes ok (not active RTP/input E2E).
+
+- Publisher Python GET truncated29465227/29646904bytes: rejected; direct curl fetched all3full files with exact SHA/size and downloaded EXE Valid/timestamp, then standard record. No overwrite/allow-dirty/rebuild after signing.
+- Record: [1.9.5](../../../artifacts/l4tools/1.9.5.json); signature and runtime receipts remain under ignored tools/dist/.runtime-backup/20261002-install-fix. Temporary bootstrap/certificate fixture directories cleaned.

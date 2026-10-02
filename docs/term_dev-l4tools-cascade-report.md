@@ -1,6 +1,6 @@
 # L4 Tools: единый отчёт каскада
 
-Каскад выпущен в подписанном1.9.4; после инцидента чистой установки начат корректирующий этап14 для1.9.5. Этапы ниже сохраняют хронологию; итоговые runtime/publication результаты и непроверенные сценарии приведены в09–13. [Completed handoff](../.agent-context/tasks/completed/2026-10-02-l4tools-stabilization-ui-release.md).
+Каскад выпущен в подписанном1.9.4; после инцидента чистой установки выпущен корректирующий этап14 в подписанном1.9.5. Этапы ниже сохраняют хронологию; итоговые runtime/publication результаты и непроверенные сценарии приведены в09–13. [Completed handoff](../.agent-context/tasks/completed/2026-10-02-l4tools-stabilization-ui-release.md).
 
 ## Формат отчёта этапа
 
@@ -312,7 +312,7 @@
 
 ## Этап 14 — первая установка, отчёт и payload 1.9.5
 
-- Статус: код исправлен, unsigned пакет подготовлен; ожидается подпись оператора и реальная приёмка обновления.
+- Статус: подписанный1.9.5 опубликован; реальное Upgrade на773 завершилось ready/0. Полная чистая x86 установка с новым сертификатом остаётся отдельной непроведённой проверкой.
 - Владелец/scope: l4setup, локальный bootstrap l4superv, release scripts; capture runtime source и MQTT-контракты не изменены. Server stacks не затронуты.
 - Причина: terminal35/Win10Pro19045 x86 — сертификат установлен, но ready ожидался до запуска служб; повторная попытка запускала Mosquitto без конфигурации. Операторский запуск L4Superv восстановил четыре службы и правильный SN. Это evidence удалённого терминала, а не самостоятельный E2E агента.
 - Изменение: certificate discovery после enrollment без HTTP/SCM; missing config через существующий генератор l4superv в одноразовом local-only режиме; после запуска служб ожидание ready/standby. STOPPED/zero-exit больше не ждёт120с.
@@ -330,3 +330,14 @@
 - Оператор выполнил Complete-SignedRelease.ps1 для1.9.5. Все19EXE (18в двух staging и installer) проверены: один signer, Authenticode Valid, RFC3161 timestamp, signtool /pa /all /tw; SHA256SUMS совпали.
 - Оба61-file embedded payload совпали с подписанным staging; capture code/data/resource PE sections совпали со свежей сборкой. Подписанные first-party EXE синхронизированы обратно в build outputs без пересборки.
 - Setup29646904bytes, SHA3737d86ee322b458744a9a7b2bac8c9c1f9839eaefd67382f7c0baedfa5618f4. Подписанный пакет ещё не опубликован; операторская проверка Upgrade на773 запрошена.
+
+
+### Этап14 — приёмка и публикация завершены
+
+- Оператор выполнил подписанный Upgrade на773 (Windows10Home19045 x64): summary schema2 ready/0, installed_version=target_version=1.9.5, phase finish. Единственное предупреждение pending_reboot_detected; перезагрузка не выполнялась.
+- Четыре службы Running; штатный Stop/Start без processes_killed. Сертификат reused=true/reissued=false, прежние SN/thumbprint сохранены; proxy ready/policy разрешает MQTT/RTP и HTTPS. Локальные smoke probes ok; это не отдельный E2E удалённого ввода/активного RTP.
+- Установленный l4superv/package-components.json version1.9.5/archx64; все9EXE совпали по SHA со signed staging и inventory, Authenticode Valid и timestamp присутствуют. Новая l4capture сборка сохранена в payload/установке.
+- Signed artifact checkpoint8bf2410b85f2037d5de9a092eac19f1f2f6273ae запушен в origin/main; manifest clean/signed, installer SHA3737d86ee322b458744a9a7b2bac8c9c1f9839eaefd67382f7c0baedfa5618f4 не изменился.
+- Registry1.9.5: все3PUT HTTP200 и digest match. Python GET оказался обрезан29465227/29646904bytes и был отвергнут. Повторной загрузки/перезаписи immutable release не было. Direct curl NO_PROXY скачал все3полных файла с точным size/SHA; скачанный setup Valid/timestamp. Затем штатный publisher record сохранил artifacts/l4tools/1.9.5.json и releases.jsonl.
+- Remote installer29646904bytes; manifest9665bytes SHAeaa757b0b1477bb2536dd02f2eb52f066ef7c3a7b4e74531be6cd5da623ab64d; sums165bytes SHA12e209bd270f1342d242e0cd946eca8b6a2deff9fe88eb31b44d4ac7ec8558e0.
+- Осталось непроверенным: полный fresh x86/новый live CA cert и1.9.5 наterm35. Исходная причина проверена кодом, isolated regression и штатным восстановлениемterm35; реальную чистую установку на рабочемterm35 не имитировали удалением сертификата/конфига.

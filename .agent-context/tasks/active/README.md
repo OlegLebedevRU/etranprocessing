@@ -14,5 +14,3 @@
 - [17E FIX transfer, 2026-09-27](2026-09-27-l4d-17e-fix-transfer.md) —
   опубликованные входы, byte bindings, адресная регистрация и критерии
   дальнейшей приёмки.
-
-- [L4 Tools 1.9.5: first installation and manifest correction](2026-10-02-l4setup-fresh-install-fix.md) — unsigned prepared; operator signing and runtime acceptance pending.
