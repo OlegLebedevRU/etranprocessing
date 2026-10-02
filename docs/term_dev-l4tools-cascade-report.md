@@ -265,3 +265,22 @@
   Actual cancel/rollback и live all-profile certificate cleanup не испытывались.
 - Следующий шаг: operator RFC3161 signature → signature/hash verification;
   signed Repair при необходимости заменить installed unsigned EXE, затем publish/base push.
+
+## 12 — Операторская подпись и signed Repair
+
+- Статус: выполнен.
+- Результат: existing Complete-SignedRelease.ps1 подписал18 staged EXE и setup;
+  RFC3161 timestamp, SHA256. Все19 Authenticode Valid, signtool /pa /all /tw exit0,
+  единственный согласованный signer. Компоненты после подписи не пересобирались.
+- Проверки: embedded x86/x64 SHA совпадают с signed payload/manifest;
+  все60 файлов каждого ZIP совпадают со staging. Manifest/SHA256SUMS согласованы.
+  Signed setup SHA59180db4c1d3a11a4b16b5916d39013630a0e17d1b070d6f7d588337371d6a82.
+- Оператор выполнил GUI --repair --no-pin, ошибок0/status ready.
+  Все9 installed x64 EXE byte/hash совпадают со signed stage, подписи Valid и timestamps есть.
+  Cert reused=true/reissued=false; исходный thumbprint/SN сохранены.
+  Четыре службы Running; local ready, policy media/HTTPS true, storage_pending=false.
+- Signed first-party bin artifacts синхронизированы из stage без компиляции;
+  локальный runtime backup исключён через git/info/exclude, в Git/registry он не попадает.
+- Registry preflight: version1.9.4 отсутствует (HEAD404).
+- Следующий шаг: clean Git checkpoint/base push, manifest provenance refresh без изменения EXE,
+  strict publisher verification и upload/HTTPS GET/hash verification; затем release record/base push.
