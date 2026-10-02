@@ -36,7 +36,18 @@
 - [x] Signed supervisor synchronized to x86/x64/default outputs; no rebuild.
 - Setup:29655096 bytes, SHA256
   `1ddc01ef388244f0608d9849e9d38cb8a77ef15cdbef6dc948c498f7db11faeb`.
-- [ ] Clean source/signed checkpoint, strict registry publication, base branch push.
+- [x] Clean signed checkpoint `04b20972f74046d3fc0018ba76f524b2db83a42e`
+  pushed to main; manifest signed=true/dirty=false, setup hash unchanged.
+- [x] Three PUT200/Digest checks passed. Python full GET was truncated
+  (28677163/29655096 bytes), publisher refused recording. Full direct curl NO_PROXY
+  downloads of all three files passed exact size/SHA; downloaded setup Valid/timestamp
+  and signtool passed. Standard publisher record ran only after these checks.
+- Release: [signed installer](https://l4tools-generic.ar.cloud.ru/l4tools/1.9.7/l4setup.exe),
+  [record](../../../artifacts/l4tools/1.9.7.json). No overwrite/allow-dirty/source rebuild.
+- Public manifest4721 bytes SHA25695f62e9f084f0c1559220adb9c2d7008ffa88fd2118d13c9e796812498a13c39;
+  sums165 bytes SHA256cef36da48928959c95c30843ea9b5e9561639177747037f1dfe0f7e33439a7b6.
+- Publication evidence in ignored backup/public-verified; existing signed1.9.6 remains
+  installed on773. No services/certificates changed. Operator may install/test1.9.7 later.
 - [ ] Live input: intentionally deferred by user. F12 requires a responsive focused
   application; Alt+F4 must target an allowed disposable application, never an editor
   with unsaved work. Win+D does not guarantee a visible change in every kiosk shell.

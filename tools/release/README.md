@@ -50,7 +50,7 @@ insufficient. If the publisher download is truncated, leave the immutable
 version intact and verify complete downloads separately (for example, direct
 `curl.exe --noproxy '*'`). Use the publisher's `record` command only after all
 three downloads have been verified. Commit/push the release record afterwards.
-The 1.9.4 cascade and the 1.9.5/1.9.6 releases used this fallback after truncated
+The 1.9.4 cascade and the 1.9.5/1.9.6/1.9.7 releases used this fallback after truncated
 Python downloads; the cause of the transport difference was not established.
 
 

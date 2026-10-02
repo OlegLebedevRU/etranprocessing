@@ -6,6 +6,9 @@
 
 ## Индекс
 
+- [2026-10-02 — l4tools1.9.7 quick actions](2026-10-02-l4tools-197-shortcuts.md):
+  supervised F12/Win+D/Alt+F4 enabled; signed registry release, other EXEs unchanged, live deferred.
+
 - [2026-10-02 — L4 Tools1.9.6](2026-10-02-l4superv-service-dependencies.md):
   SCM dependencies/status/log ACL, clean Install773 ready/0, signed registry release; reboot not tested by user choice.
 

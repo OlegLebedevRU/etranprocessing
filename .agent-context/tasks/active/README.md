@@ -15,4 +15,3 @@
   опубликованные входы, byte bindings, адресная регистрация и критерии
   дальнейшей приёмки.
 
-- [l4tools1.9.7 quick actions](2026-10-02-l4tools-197-shortcuts.md) — supervisor/setup only; operator signing pending, no live tests.
