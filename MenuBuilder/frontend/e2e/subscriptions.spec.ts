@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 async function portal(page: Page, enabled: boolean) {
   const free = {
     terminal_id: 1,
+    device_id: 1000009,
     name: "Бесплатный терминал",
     state: "free",
     is_free: true,
@@ -15,6 +16,7 @@ async function portal(page: Page, enabled: boolean) {
   const extra = {
     ...free,
     terminal_id: 2,
+    device_id: 1000010,
     name: "Дополнительный терминал",
     state: enabled ? "unpaid" : "payments_disabled",
     is_free: false,
@@ -132,6 +134,9 @@ test("Reviewed cart retry uses the same order key and grants only the selected t
   page,
 }) => {
   const requests = await portal(page, true);
+  await expect(page.getByRole("columnheader", { name: "Номер терминала" })).toBeVisible();
+  await expect(page.getByText("1000009", { exact: true })).toBeVisible();
+  await expect(page.getByText("1000010", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Подключить", exact: true }).click();
   await expect(page.getByRole("dialog")).toContainText(
     "Дополнительный терминал",

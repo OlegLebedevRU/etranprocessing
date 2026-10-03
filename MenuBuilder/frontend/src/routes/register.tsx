@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { AuthCaptcha } from "../components/AuthCaptcha";
 import { Link, useSearchParams } from "react-router";
 import {
   Alert,
@@ -43,6 +44,8 @@ export default function RegisterPage() {
       : "/monitoring";
 
   const [loading, setLoading] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaAttempt, setCaptchaAttempt] = useState(0);
   const [checkingStatus, setCheckingStatus] = useState(true);
   const [registrationEnabled, setRegistrationEnabled] = useState(false);
   const [termsVersion, setTermsVersion] = useState("v1");
@@ -95,10 +98,12 @@ export default function RegisterPage() {
     timezone: string;
     agreeTerms: boolean;
   }) => {
+    if (captchaToken === null || loading) return;
     setLoading(true);
     setErrorMessage(null);
     try {
       const payload: RegisterRequest = {
+        captcha_token: captchaToken,
         email: values.email,
         password: values.password,
         terms_version: termsVersion,
@@ -113,22 +118,26 @@ export default function RegisterPage() {
       const detail = e.response?.data?.detail || e.message || "Не удалось отправить форму регистрации.";
       setErrorMessage(detail);
     } finally {
+      setCaptchaToken(null);
+      setCaptchaAttempt(value => value + 1);
       setLoading(false);
     }
   };
 
   const handleResend = async () => {
-    if (!successEmail || resendCooldown > 0) return;
+    if (!successEmail || resendCooldown > 0 || captchaToken === null || resending) return;
     setResending(true);
     setErrorMessage(null);
     try {
-      await resendConfirmation({ email: successEmail, return_url: safeReturnUrl });
+      await resendConfirmation({ email: successEmail, return_url: safeReturnUrl, captcha_token: captchaToken });
       setResendCooldown(60);
     } catch (err: unknown) {
       const e = err as { response?: { data?: { detail?: string } }; message?: string };
       const detail = e.response?.data?.detail || e.message || "Не удалось отправить письмо повторно.";
       setErrorMessage(detail);
     } finally {
+      setCaptchaToken(null);
+      setCaptchaAttempt(value => value + 1);
       setResending(false);
     }
   };
@@ -246,11 +255,12 @@ export default function RegisterPage() {
             }
             extra={
               <Space direction="vertical" style={{ width: "100%" }}>
+                <AuthCaptcha key={captchaAttempt} onChange={setCaptchaToken} />
                 <Button
                   icon={<SendOutlined />}
                   onClick={handleResend}
                   loading={resending}
-                  disabled={resendCooldown > 0}
+                  disabled={resendCooldown > 0 || captchaToken === null || resending}
                   block
                 >
                   {resendCooldown > 0
@@ -365,7 +375,8 @@ export default function RegisterPage() {
             </Form.Item>
 
             <Form.Item style={{ marginBottom: 12 }}>
-              <Button type="primary" htmlType="submit" loading={loading} block>
+              <AuthCaptcha key={captchaAttempt} onChange={setCaptchaToken} />
+              <Button type="primary" htmlType="submit" loading={loading} disabled={captchaToken === null || loading} block>
                 Зарегистрироваться
               </Button>
             </Form.Item>

@@ -38,8 +38,8 @@ export interface UserInfo {
   sub?: string;
 }
 
-export async function login(username: string, password: string): Promise<LoginResponse> {
-  const { data } = await client.post<LoginResponse>("/auth/login", { username, password });
+export async function login(username: string, password: string, captcha_token?: string): Promise<LoginResponse> {
+  const { data } = await client.post<LoginResponse>("/auth/login", { username, password, captcha_token });
   return data;
 }
 
@@ -81,6 +81,7 @@ export async function getMe(forceFresh = false): Promise<UserInfo> {
 // -----------------------------------------------------------------------------
 
 export interface RegisterRequest {
+  captcha_token?: string;
   email: string;
   password: string;
   terms_version?: string;
@@ -111,6 +112,7 @@ export interface ConfirmRegistrationResponse {
 }
 
 export interface ResendConfirmationRequest {
+  captcha_token?: string;
   email: string;
   return_url?: string;
 }
@@ -123,6 +125,11 @@ export interface RegistrationStatusResponse {
 
 export async function getRegistrationStatus(): Promise<RegistrationStatusResponse> {
   const { data } = await client.get<RegistrationStatusResponse>("/auth/register/status");
+  return data;
+}
+
+export async function getCaptchaConfig(): Promise<{ enabled: boolean; site_key: string }> {
+  const { data } = await client.get<{ enabled: boolean; site_key: string }>("/auth/captcha");
   return data;
 }
 

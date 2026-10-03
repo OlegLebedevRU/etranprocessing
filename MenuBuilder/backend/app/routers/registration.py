@@ -18,6 +18,7 @@ from app.services.registration_service import (
     TokenExpiredError,
     ValidationError,
 )
+from app.services.smartcaptcha import verify_captcha
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ router = APIRouter(prefix="/auth", tags=["registration"])
 
 
 class RegisterRequest(BaseModel):
+    captcha_token: str | None = None
     email: str = Field(..., description="Email пользователя для регистрации")
     password: str = Field(
         ..., min_length=8, max_length=128, description="Пароль пользователя"
@@ -42,6 +44,7 @@ class RegisterRequest(BaseModel):
 
 
 class ResendConfirmationRequest(BaseModel):
+    captcha_token: str | None = None
     email: str = Field(
         ..., description="Email пользователя для повторной отправки ссылки"
     )
@@ -113,6 +116,7 @@ async def register_account(
 
     Returns generic anti-enumeration response to protect user privacy.
     """
+    await verify_captcha(body.captcha_token)
     client_ip = _get_client_ip(request)
     service = RegistrationService(db)
 
@@ -157,6 +161,7 @@ async def resend_confirmation_email(
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """Resend email verification link with rate limits and anti-enumeration."""
+    await verify_captcha(body.captcha_token)
     client_ip = _get_client_ip(request)
     service = RegistrationService(db)
 

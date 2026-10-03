@@ -188,7 +188,17 @@ function TerminalSubscriptionsPage() {
     };
   }, [usageDays, usageTerminal]);
   const columns: ColumnsType<Subscription> = [
-    { title: "Терминал", dataIndex: "name" },
+    {
+      title: "Номер терминала",
+      dataIndex: "device_id",
+      width: 150,
+      render: (value: number | null | undefined) => (
+        <Typography.Text strong copyable={value != null ? { text: String(value) } : false} style={{ whiteSpace: "nowrap" }}>
+          {value ?? "—"}
+        </Typography.Text>
+      ),
+    },
+    { title: "Название", dataIndex: "name" },
     {
       title: "Статус",
       render: (_, t) => (

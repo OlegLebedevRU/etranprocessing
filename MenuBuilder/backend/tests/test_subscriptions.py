@@ -10,7 +10,9 @@ from app.services.subscriptions import add_months, subscription_status
 
 def state(*, free=False, paid=None, enabled=True, active=True, at=None):
     terminal = L4DeskTerminal(terminal_id=2, tenant_id=1, ordinal=2, paid_until=paid)
-    runtime = Terminal(id=2, org_id=1, sn="subscription-test", is_active=active)
+    runtime = Terminal(
+        id=2, device_id=1000009, org_id=1, sn="subscription-test", is_active=active
+    )
     return subscription_status(
         terminal,
         runtime,
@@ -22,6 +24,8 @@ def state(*, free=False, paid=None, enabled=True, active=True, at=None):
 
 
 def test_free_is_unlimited_even_without_payment_provider():
+    assert state(free=True).device_id == 1000009
+    assert state(free=True).terminal_id == 2
     assert state(free=True, enabled=False).allowed
     assert state(free=True, enabled=False).state == "free"
 

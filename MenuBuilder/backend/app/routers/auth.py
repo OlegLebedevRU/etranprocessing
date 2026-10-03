@@ -16,6 +16,7 @@ from app.config import settings
 from app.database import async_session
 from app.models import Org
 from app.services.jwt_issuer import jwt_issuer_client
+from app.services.smartcaptcha import verify_captcha
 from app.user_store import get_user_store
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 class LoginRequest(BaseModel):
     username: str | None = None
     password: str | None = None
+    captcha_token: str | None = None
 
 
 class RefreshTokenRequest(BaseModel):
@@ -147,6 +149,16 @@ def _set_auth_cookies(
         )
 
 
+@router.get("/captcha")
+async def captcha_config():
+    return {
+        "enabled": settings.smartcaptcha_enabled,
+        "site_key": settings.smartcaptcha_site_key
+        if settings.smartcaptcha_enabled
+        else "",
+    }
+
+
 @router.post("/login", response_model=TokenResponse)
 async def login(
     request: Request,
@@ -169,6 +181,7 @@ async def login(
             detail="Username and password are required",
         )
 
+    await verify_captcha(body.captcha_token if body else None)
     store = get_user_store()
     user = await store.authenticate(username, password)
     if not user:

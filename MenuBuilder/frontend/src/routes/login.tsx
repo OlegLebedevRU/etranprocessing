@@ -5,11 +5,14 @@ import { UserOutlined, LockOutlined } from "@ant-design/icons";
 import { getRegistrationStatus, login } from "../api/auth";
 import { scheduleRefresh } from "../api/session";
 import { useSession } from "../session/SessionContext";
+import { AuthCaptcha } from "../components/AuthCaptcha";
 
 const { Title, Text } = Typography;
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaAttempt, setCaptchaAttempt] = useState(0);
   const [registrationEnabled, setRegistrationEnabled] = useState(false);
   const navigate = useNavigate();
   const { refreshUser } = useSession();
@@ -39,9 +42,10 @@ export default function LoginPage() {
   }, []);
 
   const onFinish = async (values: { username: string; password: string }) => {
+    if (captchaToken === null || loading) return;
     setLoading(true);
     try {
-      const result = await login(values.username, values.password);
+      const result = await login(values.username, values.password, captchaToken);
       const authTransport = (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_AUTH_TRANSPORT;
       if (authTransport === "bearer") {
         localStorage.setItem("mb_token", result.access_token);
@@ -56,6 +60,8 @@ export default function LoginPage() {
       const err = e as Error;
       message.error(err.message || "Ошибка авторизации");
     } finally {
+      setCaptchaToken(null);
+      setCaptchaAttempt(value => value + 1);
       setLoading(false);
     }
   };
@@ -119,7 +125,8 @@ export default function LoginPage() {
             <Input.Password prefix={<LockOutlined />} placeholder="Пароль" />
           </Form.Item>
           <Form.Item style={{ marginBottom: 0 }}>
-            <Button type="primary" htmlType="submit" loading={loading} block>
+            <AuthCaptcha key={captchaAttempt} onChange={setCaptchaToken} />
+            <Button type="primary" htmlType="submit" loading={loading} disabled={captchaToken === null || loading} block>
               Войти
             </Button>
           </Form.Item>

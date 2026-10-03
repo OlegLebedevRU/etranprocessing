@@ -1,0 +1,70 @@
+--- a/site/index.html
++++ b/site/index.html
+@@ -6,7 +6,7 @@
+   <meta name="description" content="L4Desk — удалённый экран, консоль и состояние устройства в браузере. L4MCP и API для инженерных сценариев и AI-агентов. Экспериментальный preview." />
+   <title>L4Desk — откройте устройство и проверьте</title>
+   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+-  <link rel="stylesheet" href="css/styles.css?v=20261003-video" />
++  <link rel="stylesheet" href="css/styles.css?v=20261003-auth" />
+ </head>
+ <body>
+   <header class="site-header" id="top">
+@@ -22,7 +22,10 @@
+         <a href="#ai">AI &amp; API</a>
+         <a href="#trust">Безопасность</a>
+       </nav>
+-      <a class="btn btn-primary btn-sm" href="#demo">Написать нам <span aria-hidden="true">↗</span></a>
++      <div class="header-auth" aria-label="Личный кабинет">
++        <a class="btn btn-ghost btn-sm" href="https://dev.leo4.ru:3000/login">Войти</a>
++        <a class="btn btn-primary btn-sm" href="https://dev.leo4.ru:3000/register">Регистрация</a>
++      </div>
+       <button class="nav-toggle" type="button" aria-label="Меню" aria-expanded="false">
+         <span></span><span></span><span></span>
+       </button>
+@@ -41,7 +44,8 @@
+             Когда нужен следующий шаг, подключите своего AI-агента через L4MCP или стройте сценарий через API.
+           </p>
+           <div class="hero-cta">
+-            <a class="btn btn-primary" href="#demo">Обсудить задачу <span aria-hidden="true">↗</span></a>
++            <a class="btn btn-primary" href="https://dev.leo4.ru:3000/register">Зарегистрироваться <span aria-hidden="true">↗</span></a>
++            <a class="btn btn-ghost" href="https://dev.leo4.ru:3000/login">Войти в кабинет</a>
+             <a class="btn btn-ghost" href="#how">Посмотреть интерфейс <span aria-hidden="true">↓</span></a>
+           </div>
+           <ul class="hero-pills" aria-label="Ключевые возможности">
+--- a/site/css/styles.css
++++ b/site/css/styles.css
+@@ -77,6 +77,34 @@
+ }
+ 
+ /* Header */
++.header-auth {
++  display: flex;
++  align-items: center;
++  gap: 0.5rem;
++  margin-left: auto;
++  flex-shrink: 0;
++}
++
++@media (max-width: 1100px) and (min-width: 861px) {
++  .header-inner { gap: 0.75rem; }
++  .nav { gap: 0.6rem; }
++  .nav a { font-size: 0.8rem; }
++}
++
++@media (max-width: 860px) {
++  .header-inner .header-auth .btn-sm {
++    display: inline-flex;
++    padding: 0.4rem 0.6rem;
++    font-size: 0.8rem;
++  }
++  .header-inner { gap: 0.5rem; }
++  .header-inner .nav-toggle { margin-left: 0; }
++}
++
++@media (max-width: 380px) {
++  .header-inner .logo-text { display: none; }
++}
++
+ .site-header {
+   position: sticky;
+   top: 0;

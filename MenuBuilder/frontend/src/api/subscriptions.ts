@@ -2,6 +2,7 @@ import client from "./client";
 
 export interface Subscription {
   terminal_id: number;
+  device_id?: number | null;
   name: string;
   state:
     | "free"

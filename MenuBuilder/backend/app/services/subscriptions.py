@@ -17,6 +17,7 @@ from app.services.resource_time import resolve_timezone
 
 class TerminalSubscription(BaseModel):
     terminal_id: int
+    device_id: int | None = None
     name: str
     state: Literal[
         "free",
@@ -124,6 +125,7 @@ def subscription_status(
         )
     return TerminalSubscription(
         terminal_id=terminal.terminal_id,
+        device_id=runtime.device_id,
         name=runtime.note or runtime.sn,
         state=state,
         allowed=allowed,

@@ -4,6 +4,8 @@ from types import SimpleNamespace
 import pytest
 
 os.environ["JWT_ISSUER_MOCK_ENABLED"] = "true"
+# Existing auth tests exercise credentials independently; CAPTCHA has dedicated tests.
+os.environ["SMARTCAPTCHA_ENABLED"] = "false"
 os.environ.setdefault("JWT_SECRET", "test-secret-key-12345678901234567890")
 os.environ.setdefault(
     "JWT_SECRET_HEX",

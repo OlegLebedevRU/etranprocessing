@@ -17,6 +17,10 @@ nQIDAQAB
 
 class Settings(BaseSettings):
     database_url: str = ""
+    smartcaptcha_enabled: bool = True
+    smartcaptcha_site_key: str = ""
+    smartcaptcha_secret_key: str = ""
+    smartcaptcha_allowed_hosts: list[str] = []
     l4mcp_url: str = ""
     cors_origins: list[str] = []
 
