@@ -98,7 +98,10 @@ client.interceptors.response.use(
         localStorage.removeItem("mb_token");
         localStorage.removeItem("mb_user");
         notifySessionEvent({ type: "logout" });
-        if (window.location.pathname !== "/login") {
+        const publicAuthPage = ["/login", "/register", "/register/confirm"].includes(
+          window.location.pathname.replace(/\/$/, ""),
+        );
+        if (!publicAuthPage) {
           window.location.href = "/login";
         }
         return Promise.reject(refreshErr);

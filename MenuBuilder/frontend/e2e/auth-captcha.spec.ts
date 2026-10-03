@@ -37,13 +37,31 @@ test("login requires CAPTCHA and resets it after failed credentials", async ({ p
 });
 
 test("registration is closed when CAPTCHA configuration cannot load", async ({ page }) => {
+  let refreshFailed = false;
   await page.route("**/api/**", async route => {
     const path = new URL(route.request().url()).pathname;
     if (path === "/api/auth/register/status") return route.fulfill({ json: { enabled: true, terms_version: "v1", token_expire_hours: 24 } });
+    if (path === "/api/auth/me" || path === "/api/auth/refresh") {
+      if (path === "/api/auth/refresh") refreshFailed = true;
+      return route.fulfill({ status: 401, json: { detail: "Unauthorized" } });
+    }
     return route.fulfill({ status: 503, json: { detail: "Unavailable" } });
   });
   await page.goto("/register");
   await expect(page.getByRole("button", { name: "Зарегистрироваться", exact: true })).toBeDisabled();
   await expect(page.getByText("Не удалось загрузить CAPTCHA. Проверьте соединение и повторите.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Повторить", exact: true })).toBeVisible();
+  await expect.poll(() => refreshFailed).toBe(true);
+  await expect(page).toHaveURL(/\/register$/);
+});
+
+test("email confirmation remains public after anonymous refresh fails", async ({ page }) => {
+  let refreshFailed = false;
+  await page.route("**/api/**", async route => {
+    if (new URL(route.request().url()).pathname === "/api/auth/refresh") refreshFailed = true;
+    return route.fulfill({ status: 401, json: { detail: "Unauthorized" } });
+  });
+  await page.goto("/register/confirm");
+  await expect.poll(() => refreshFailed).toBe(true);
+  await expect(page).toHaveURL(/\/register\/confirm$/);
 });
