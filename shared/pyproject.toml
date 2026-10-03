@@ -21,6 +21,8 @@ include = [
     "/pyproject.toml",
     "/docs/l4desk/schema-v1.json",
     "/docs/l4desk/schema-v1.md",
+    "/docs/l4desk/schema-v029.json",
+    "/docs/l4desk/schema-v029.md",
 ]
 
 [dependency-groups]

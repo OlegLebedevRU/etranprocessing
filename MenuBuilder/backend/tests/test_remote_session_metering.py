@@ -7,13 +7,13 @@ import pytest
 from app.models_l4desk import L4DeskRemoteSession
 from app.repositories.l4desk_repository import L4DeskRepository
 from app.routers import video_control
-from app.services.financial_core.metering import FinMeteringService
 from app.services.remote_session_metering import (
     checkpoint_due,
     checkpoint_remote_session,
     close_remote_session,
     initial_metering_cursor,
 )
+from app.services.usage import UsageService
 
 
 def _session(at: datetime, *, cursor: int | None = None) -> L4DeskRemoteSession:
@@ -42,7 +42,7 @@ def metering_fakes(monkeypatch):
         L4DeskRepository, "get_active_session_by_terminal_id", get_active
     )
     monkeypatch.setattr(L4DeskRepository, "record_audit_event", audit)
-    monkeypatch.setattr(FinMeteringService, "record_session_usage", record_usage)
+    monkeypatch.setattr(UsageService, "record_session_usage", record_usage)
     return db, get_active, audit, record_usage
 
 

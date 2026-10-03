@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     database_url: str = ""
     cors_origins: list[str] = []
+    yookassa_enabled: bool = False
 
     # Auto-populate cert_serial on licensebilling if unset (e.g. legacy migrated terminal)
     auto_set_cert_serial_on_licensebilling: bool = True

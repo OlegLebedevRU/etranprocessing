@@ -21,7 +21,6 @@ from app.routers.video import (
     set_mountpoint_stream_instance,
 )
 from app.security.permissions import PERMISSION_VIDEO_VIEW
-from app.services.financial_core.metering import FinMeteringService
 from app.services.iot_client import IotPlatformClient, iot_client
 from app.services.iot_event_feed_client import (
     IotEventFeedClient,
@@ -32,6 +31,10 @@ from app.services.media_orchestrator_client import (
     MediaOrchestratorClient,
     MediaSessionConflictError,
     media_orchestrator_client,
+)
+from app.services.remote_session_metering import (
+    close_remote_session,
+    initial_metering_cursor,
 )
 from app.services.remote_session_policy import (
     RemoteSessionPolicy,
@@ -79,7 +82,7 @@ class RemoteSessionUseCase:
 
     Orchestrates:
     - Tenant boundary and role-based access verification
-    - RemoteSessionPolicy evaluation seam (legacy permissive + disabled L4Desk policy flag)
+    - Terminal subscription policy independent of technical usage
     - Local DB session reservation (l4desk_remote_sessions)
     - Mutual exclusion enforcement (IoT session lock, reject 409 session_busy, no auto-switch)
     - IoT session adapter & control lease synchronization
@@ -528,7 +531,9 @@ class RemoteSessionUseCase:
 
         # 4. Activation
         local_session.state = "active"
-        local_session.active_at = datetime.now(UTC)
+        active_at = datetime.now(UTC)
+        local_session.active_at = active_at
+        local_session.last_cursor = initial_metering_cursor(active_at)
 
         # Audit
         actor_name = str(
@@ -641,11 +646,13 @@ class RemoteSessionUseCase:
                 )
 
         # 2. Stop session on IoT (graceful bounded stop)
+        confirmed_end = False
         with contextlib.suppress(Exception):
             await self.iot_adapter.stop_remote_session(
                 session_id=prov_id,
                 reason=reason,
             )
+            confirmed_end = True
 
         # 3. Release any control lease
         if terminal:
@@ -661,24 +668,16 @@ class RemoteSessionUseCase:
                         user=user,
                     )
 
-        # 4. Mark local session as closed
-        closed_at = datetime.now(UTC)
-        active_session.state = "closed"
-        active_session.closed_at = closed_at
-        active_session.reason = reason
-
-        if active_session.active_at is not None:
-            await FinMeteringService.record_session_usage(
-                self.db,
-                tenant_id=active_session.tenant_id,
-                terminal_id=active_session.terminal_id,
-                session_type=active_session.session_type,
-                start_utc=active_session.active_at,
-                end_utc=closed_at,
-                event_id=f"local-session-closed-{active_session.id}",
-                actor="remote_session",
-                correlation_id=active_session.correlation_id,
-            )
+        # Keep the technical watermark: only a confirmed, unrecorded tail is counted.
+        await close_remote_session(
+            self.db,
+            terminal_id=active_session.terminal_id,
+            session_type=active_session.session_type,
+            reason=reason,
+            at=datetime.now(UTC),
+            confirmed_end=confirmed_end,
+            expected_provider_session_id=active_session.provider_session_id,
+        )
 
         actor_name = str(
             user.get("username") or user.get("sub") or user.get("email") or "system"

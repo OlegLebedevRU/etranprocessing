@@ -13,8 +13,8 @@ from app.config import settings
 from app.database import async_session
 from app.models_iot_consumer import IotEventInbox
 from app.models_l4desk import L4DeskTerminal
-from app.services.financial_core.terminals import FinTerminalService
 from app.services.iot_consumer_storage import (
+    DatabaseIotConsumerStorage,
     IotConsumerStorage,
     get_iot_consumer_storage,
 )
@@ -239,14 +239,7 @@ class IotEventConsumer:
                 continue
 
             # 5. Save technical projection to inbox
-            finance_enabled = (
-                not settings.iot_consumer_shadow_mode
-                and item.event_type == "device_online"
-                and item.tenant_id in settings.iot_consumer_finance_tenant_ids
-            )
-            saved = await self.storage.save_inbox_event(
-                item, status="pending_finance" if finance_enabled else "processed"
-            )
+            saved = await self.storage.save_inbox_event(item, status="processed")
             if saved:
                 processed_count += 1
                 self.total_processed += 1
@@ -276,11 +269,8 @@ class IotEventConsumer:
         )
 
     async def process_pending_finance(self, limit: int = 100) -> int:
-        """Apply authenticated online facts once, including after a worker restart."""
-        if (
-            settings.iot_consumer_shadow_mode
-            or not settings.iot_consumer_finance_tenant_ids
-        ):
+        """Drain historical finance backlog as technical presence only; never charge."""
+        if not isinstance(self.storage, DatabaseIotConsumerStorage):
             return 0
         applied = 0
         async with async_session() as db:
@@ -291,9 +281,6 @@ class IotEventConsumer:
                         .where(
                             IotEventInbox.event_type == "device_online",
                             IotEventInbox.status == "pending_finance",
-                            IotEventInbox.tenant_id.in_(
-                                settings.iot_consumer_finance_tenant_ids
-                            ),
                         )
                         .order_by(IotEventInbox.processed_at, IotEventInbox.cursor)
                         .limit(limit)
@@ -314,9 +301,10 @@ class IotEventConsumer:
                     )
                 terminal = (await db.execute(terminal_stmt)).scalar_one_or_none()
                 if terminal is None:
+                    event.status = "processed"
                     event.processed_at = datetime.now(UTC)
                     logger.warning(
-                        "Online event %s has no matching tenant terminal; billing deferred",
+                        "Historical online event %s has no matching tenant terminal",
                         event.event_id,
                     )
                     continue
@@ -327,27 +315,19 @@ class IotEventConsumer:
                     or l4_terminal.sn != event.sn
                     or l4_terminal.deleted_at is not None
                 ):
+                    event.status = "processed"
                     event.processed_at = datetime.now(UTC)
                     logger.warning(
-                        "Online event %s has no active L4Desk terminal; billing deferred",
+                        "Historical online event %s has no active L4Desk terminal",
                         event.event_id,
                     )
                     continue
-                await FinTerminalService.process_device_online_monthly_charge(
-                    db,
-                    tenant_id=terminal.org_id,
-                    terminal_id=terminal.id,
-                    event_id=event.event_id,
-                    occurred_at=event.occurred_at,
-                    actor="iot_event_consumer",
-                    correlation_id=event.correlation_id or event.event_id,
-                )
                 if (
                     l4_terminal.last_online_at is None
                     or event.occurred_at > l4_terminal.last_online_at
                 ):
                     l4_terminal.last_online_at = event.occurred_at
-                event.status = "finance_applied"
+                event.status = "processed"
                 event.processed_at = datetime.now(UTC)
                 applied += 1
             await db.commit()

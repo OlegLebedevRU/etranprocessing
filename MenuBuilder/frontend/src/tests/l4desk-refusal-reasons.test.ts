@@ -44,18 +44,12 @@ describe("L4Desk Rejection & Refusal Reason Classification", () => {
     expect(res3.type).toBe("provisioning_pending");
   });
 
-  it("Reason 4: Classifies free quota exhausted without paid access correctly", () => {
-    const res1 = classifyRefusalReason("free_quota_exceeded");
-    expect(res1.type).toBe("free_quota_exhausted");
-    expect(res1.title).toBe("Бесплатная квота исчерпана");
-    expect(res1.badge).toBe("Квота 120 мин исчерпана");
-    expect(res1.color).toBe("warning");
-
-    const res2 = classifyRefusalReason("unpaid_secondary_terminal");
-    expect(res2.type).toBe("free_quota_exhausted");
-
-    const res3 = classifyRefusalReason(undefined, "Бесплатная квота 120 минут исчерпана");
-    expect(res3.type).toBe("free_quota_exhausted");
+  it("Explains unpaid terminal and unavailable payments separately", () => {
+    expect(classifyRefusalReason("subscription_unpaid").type).toBe("subscription_required");
+    expect(classifyRefusalReason("subscription_unpaid").description).toContain("выберите терминал");
+    expect(classifyRefusalReason("subscription_payments_disabled").color).toBe("info");
+    expect(classifyRefusalReason("subscription_admin_disabled").description).toContain("не отменяет");
+    expect(classifyRefusalReason("subscription_expired").description).toContain("не влияет на остальные");
   });
 
   it("Reason 5: Classifies grace / blocked state correctly", () => {

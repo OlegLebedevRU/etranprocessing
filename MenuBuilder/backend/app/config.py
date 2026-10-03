@@ -195,11 +195,11 @@ class Settings(BaseSettings):
 
     # L4Desk Dark Mode Feature Flags & Schema Compatibility (L4D-04C-MB)
     l4desk_enabled: bool = False
-    l4desk_registration_enabled: bool = False
+    l4desk_registration_enabled: bool = True
     l4desk_billing_enabled: bool = False
     l4desk_ui_enabled: bool = False
     schema_compatibility_check_enabled: bool = True
-    required_alembic_revision: str = "028"
+    required_alembic_revision: str = "029"
 
     # L4Desk Self-Registration & Security (L4D-05-MB)
     l4desk_registration_token_expire_hours: int = 24
@@ -210,7 +210,9 @@ class Settings(BaseSettings):
     l4desk_rate_limit_resend_max_per_hour: int = 3
 
     # L4Desk Terminal Onboarding (L4D-06C-MB)
-    l4desk_terminal_onboarding_enabled: bool = False
+    l4desk_terminal_onboarding_enabled: bool = True
+    subscription_month_price_kopecks: int = Field(default=10000, gt=0, multiple_of=100)
+    subscription_worker_interval_seconds: float = Field(default=60.0, gt=0)
     processing_backend_url: str = ""
     processing_backend_service_token: str = ""
     agent_release_url: str = ""
@@ -251,7 +253,7 @@ class Settings(BaseSettings):
     yookassa_vat_code: int = 1  # 1 = without VAT
     yookassa_payment_subject: str = "service"
     yookassa_payment_mode: str = "full_prepayment"
-    yookassa_item_description: str = "Пополнение баланса L4Desk"
+    yookassa_item_description: str = "Подписка L4Desk на дополнительные терминалы"
     yookassa_request_timeout_sec: float = 15.0
 
     @property
@@ -262,7 +264,7 @@ class Settings(BaseSettings):
 
     @property
     def is_yookassa_enabled(self) -> bool:
-        return self.yookassa_enabled or self.l4desk_enabled
+        return self.yookassa_enabled
 
     @property
     def processing_backend_effective_url(self) -> str:

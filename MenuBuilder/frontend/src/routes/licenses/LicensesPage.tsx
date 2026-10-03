@@ -1,742 +1,503 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Card,
-  Row,
-  Col,
-  Typography,
-  Button,
-  Tag,
-  Progress,
   Alert,
-  Tabs,
-  Table,
+  Button,
+  Card,
+  Empty,
   Modal,
-  Form,
-  InputNumber,
-  Radio,
+  Select,
   Space,
-  Badge,
   Spin,
-  Statistic,
+  Table,
+  Tabs,
+  Tag,
+  Typography,
   message,
-  Tooltip,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import {
-  DollarOutlined,
-  CheckCircleOutlined,
-  WarningOutlined,
-  StopOutlined,
-  ClockCircleOutlined,
-  CreditCardOutlined,
-  ReloadOutlined,
-  InfoCircleOutlined,
-  ArrowUpOutlined,
-  HistoryOutlined,
-  CalendarOutlined,
-  CalculatorOutlined,
-} from "@ant-design/icons";
-import {
-  getTenantBalance,
-  getTenantEntitlement,
-  getTenantBillingProfile,
-  listTenantDailyUsage,
-  listTenantMonthlyCharges,
-  listTenantTransactions,
-  getCurrentTariff,
-  createTopUpPayment,
-  type FinBalance,
-  type FinEntitlementStatus,
-  type FinBillingProfile,
-  type FinUsageDaily,
-  type FinTerminalMonthlyCharge,
-  type FinLedgerTransaction,
-  type FinTariff,
-} from "../../api/finance";
 import { useSession } from "../../session/SessionContext";
+import {
+  checkOrder,
+  createOrder,
+  getOrders,
+  getQuote,
+  getSubscriptions,
+  getUsage,
+  type Order,
+  type Quote,
+  type Subscription,
+  type SubscriptionSummary,
+  type UsageDay,
+} from "../../api/subscriptions";
 
-const { Title, Text, Paragraph } = Typography;
+import {
+  canPurchase,
+  duration,
+  subscriptionLabels as labels,
+  usageByDay,
+  usageTotals,
+} from "../../utils/subscriptionPresentation";
 
-export default function LicensesPage() {
-  const { user } = useSession();
-  const [loading, setLoading] = useState(true);
-  const [balance, setBalance] = useState<FinBalance | null>(null);
-  const [entitlement, setEntitlement] = useState<FinEntitlementStatus | null>(null);
-  const [profile, setProfile] = useState<FinBillingProfile | null>(null);
-  const [tariff, setTariff] = useState<FinTariff | null>(null);
-
-  // Detail tables
-  const [dailyUsage, setDailyUsage] = useState<FinUsageDaily[]>([]);
-  const [monthlyCharges, setMonthlyCharges] = useState<FinTerminalMonthlyCharge[]>([]);
-  const [transactions, setTransactions] = useState<FinLedgerTransaction[]>([]);
-  const [tablesLoading, setTablesLoading] = useState(false);
-
-  // Top-up Modal
-  const [topUpModalOpen, setTopUpModalOpen] = useState(false);
-  const [topUpAmount, setTopUpAmount] = useState<number>(1000);
-  const [topUpSubmitting, setTopUpSubmitting] = useState(false);
-
-  const fetchOverview = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [balRes, entRes, profRes, tarRes] = await Promise.all([
-        getTenantBalance().catch(() => null),
-        getTenantEntitlement().catch(() => null),
-        getTenantBillingProfile().catch(() => null),
-        getCurrentTariff().catch(() => null),
-      ]);
-      setBalance(balRes);
-      setEntitlement(entRes);
-      setProfile(profRes);
-      setTariff(tarRes);
-    } catch {
-      // quiet fallback
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const fetchTables = useCallback(async () => {
-    setTablesLoading(true);
-    try {
-      const [usageRes, chargesRes, txRes] = await Promise.all([
-        listTenantDailyUsage({ limit: 50 }).catch(() => []),
-        listTenantMonthlyCharges(undefined, 50).catch(() => []),
-        listTenantTransactions(50, 0).catch(() => []),
-      ]);
-      setDailyUsage(usageRes);
-      setMonthlyCharges(chargesRes);
-      setTransactions(txRes);
-    } catch {
-      // quiet fallback
-    } finally {
-      setTablesLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void fetchOverview();
-    void fetchTables();
-  }, [fetchOverview, fetchTables]);
-
-  const handleTopUpSubmit = async () => {
-    if (!topUpAmount || topUpAmount < 100) {
-      message.warning("Минимальная сумма пополнения — 100 ₽");
-      return;
-    }
-    setTopUpSubmitting(true);
-    try {
-      const payment = await createTopUpPayment({
-        amount_rubles: topUpAmount,
-        return_url: window.location.href,
-      });
-      message.success("Платёж создан. Перенаправление на оплату...");
-      setTopUpModalOpen(false);
-      if (payment.confirmation_url) {
-        window.location.href = payment.confirmation_url;
-      } else {
-        void fetchOverview();
-      }
-    } catch (err: any) {
-      message.error(err.response?.data?.detail || "Ошибка при создании платежа");
-    } finally {
-      setTopUpSubmitting(false);
-    }
-  };
-
-  // Calculations for today's pooled usage (120 minutes free)
-  const freeQuotaSec = entitlement?.free_quota_seconds || 7200; // 120 mins
-  const todayUsedSec = entitlement?.today_usage_seconds || 0;
-  const usedMinutes = Math.floor(todayUsedSec / 60);
-  const freeLimitMinutes = Math.floor(freeQuotaSec / 60);
-  const percentUsed = Math.min(100, Math.round((todayUsedSec / freeQuotaSec) * 100));
-  const hasPositiveBalance = (balance?.balance_rubles || 0) > 0;
-  const isGrace = entitlement?.entitlement === "grace";
-  const isBlocked = entitlement?.entitlement === "blocked";
-
-  // Remaining grace calculation
-  const remainingGraceText = useMemo(() => {
-    if (!isGrace || !entitlement?.grace_deadline) return null;
-    const deadlineMs = new Date(entitlement.grace_deadline).getTime();
-    const diffMs = deadlineMs - Date.now();
-    if (diffMs <= 0) return "Grace-период истёк";
-    const hours = Math.floor(diffMs / (1000 * 60 * 60));
-    const days = Math.floor(hours / 24);
-    const remHours = hours % 24;
-    return days > 0 ? `${days} дн. ${remHours} ч.` : `${hours} ч.`;
-  }, [isGrace, entitlement?.grace_deadline]);
-
-  // Next renewal date
-  const nextRenewalDate = useMemo(() => {
-    const rawDate = entitlement?.cycle_ends_at;
-    if (!rawDate) return "По окончании цикла";
-    try {
-      return new Date(rawDate).toLocaleDateString("ru-RU", {
+const money = (kopecks: number) =>
+  new Intl.NumberFormat("ru-RU", {
+    style: "currency",
+    currency: "RUB",
+    maximumFractionDigits: 0,
+  }).format(kopecks / 100);
+const date = (at: string | null) =>
+  at
+    ? new Date(at).toLocaleString("ru-RU", {
         day: "numeric",
         month: "long",
         year: "numeric",
-      });
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "—";
+
+const orderLabels: Record<Order["status"], string> = {
+  pending: "Платёж проверяется",
+  waiting_for_capture: "Платёж проверяется",
+  succeeded: "Оплачен",
+  canceled: "Отменён",
+};
+
+function TerminalSubscriptionsPage() {
+  const [summary, setSummary] = useState<SubscriptionSummary | null>(null);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [usage, setUsage] = useState<UsageDay[]>([]);
+  const [usageDays, setUsageDays] = useState(30);
+  const [usageTerminal, setUsageTerminal] = useState<number | undefined>();
+  const [usageError, setUsageError] = useState("");
+  const totals = useMemo(() => usageTotals(usage), [usage]);
+  const daily = useMemo(() => usageByDay(usage), [usage]);
+  const maxDaily = Math.max(1, ...daily.map((d) => d.seconds));
+  const [selected, setSelected] = useState<number[]>([]);
+  const [months, setMonths] = useState(1);
+  const [quote, setQuote] = useState<Quote | null>(null);
+  const [operationId, setOperationId] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(async () => {
+    try {
+      const [s, o] = await Promise.all([getSubscriptions(), getOrders()]);
+      setSummary(s);
+      setOrders(o);
+      setError("");
     } catch {
-      return rawDate;
+      setError(
+        "Не удалось загрузить подписки. Обновите страницу или повторите позже.",
+      );
     }
-  }, [entitlement?.cycle_ends_at]);
-
-  // Daily Usage table columns
-  const usageColumns: ColumnsType<FinUsageDaily> = [
-    {
-      title: "Дата",
-      dataIndex: "local_date",
-      key: "local_date",
-      render: (val: string) => <Text strong>{val}</Text>,
-    },
-    {
-      title: "Терминал",
-      dataIndex: "terminal_id",
-      key: "terminal_id",
-      render: (id: number) => <Tag color="blue">#{id}</Tag>,
-    },
-    {
-      title: "Консоль",
-      dataIndex: "console_seconds",
-      key: "console_seconds",
-      render: (sec: number) => `${Math.round(sec / 60)} мин`,
-    },
-    {
-      title: "Видео",
-      dataIndex: "video_seconds",
-      key: "video_seconds",
-      render: (sec: number) => `${Math.round(sec / 60)} мин`,
-    },
-    {
-      title: "Всего время",
-      dataIndex: "total_seconds",
-      key: "total_seconds",
-      render: (sec: number) => (
-        <Text strong style={{ color: sec > 7200 ? "#cf1322" : undefined }}>
-          {Math.round(sec / 60)} мин
-        </Text>
-      ),
-    },
-    {
-      title: "Бесплатно",
-      dataIndex: "free_seconds",
-      key: "free_seconds",
-      render: (sec: number) => `${Math.round(sec / 60)} мин`,
-    },
-    {
-      title: "Платно",
-      dataIndex: "chargeable_seconds",
-      key: "chargeable_seconds",
-      render: (sec: number) => (
-        <span style={{ color: sec > 0 ? "#d46b08" : undefined }}>
-          {Math.round(sec / 60)} мин
-        </span>
-      ),
-    },
-    {
-      title: "Сумма списания",
-      dataIndex: "charged_amount_kopecks",
-      key: "charged_amount_kopecks",
-      render: (kop: number) => (
-        <Text strong style={{ color: kop > 0 ? "#cf1322" : "#389e0d" }}>
-          {kop > 0 ? `-${(kop / 100).toFixed(2)} ₽` : "0 ₽"}
-        </Text>
-      ),
-    },
+  }, []);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  const refreshPayment = async (id: number) => {
+    setBusy(true);
+    try {
+      const o = await checkOrder(id);
+      message.info(orderLabels[o.status]);
+      await load();
+    } catch {
+      message.warning(
+        "Платёж пока не подтверждён. Повторите проверку этого же заказа позже.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  useEffect(() => {
+    if (
+      !orders.some(
+        (o) => o.status === "pending" || o.status === "waiting_for_capture",
+      )
+    )
+      return;
+    const timer = window.setInterval(() => {
+      void load();
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, [orders, load]);
+  const review = async (targets = selected) => {
+    setBusy(true);
+    try {
+      setQuote(
+        await getQuote(targets.map((terminal_id) => ({ terminal_id, months }))),
+      );
+      setOperationId(crypto.randomUUID());
+    } catch {
+      message.error(
+        "Не удалось подготовить корзину. Обновите данные и попробуйте снова.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  const pay = async () => {
+    if (!quote || !operationId) return;
+    setBusy(true);
+    try {
+      const order = await createOrder(
+        quote.snapshot.items,
+        quote.quote_hash,
+        operationId,
+      );
+      await load();
+      if (
+        order.confirmation_url &&
+        (order.status === "pending" || order.status === "waiting_for_capture")
+      )
+        window.location.assign(order.confirmation_url);
+      else {
+        message.info(orderLabels[order.status]);
+        setQuote(null);
+        setOperationId(null);
+      }
+    } catch {
+      message.warning(
+        "Заказ мог быть создан. Проверьте историю платежей; повтор этой корзины использует тот же номер заказа.",
+      );
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  };
+  useEffect(() => {
+    let active = true;
+    const end = new Date();
+    const start = new Date(end);
+    start.setDate(start.getDate() - usageDays + 1);
+    void getUsage({
+      start: start.toISOString().slice(0, 10),
+      end: end.toISOString().slice(0, 10),
+      terminal_id: usageTerminal,
+    })
+      .then((rows) => {
+        if (active) {
+          setUsage(rows);
+          setUsageError("");
+        }
+      })
+      .catch(() => {
+        if (active)
+          setUsageError("Не удалось загрузить статистику за выбранный период.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [usageDays, usageTerminal]);
+  const columns: ColumnsType<Subscription> = [
+    { title: "Терминал", dataIndex: "name" },
     {
       title: "Статус",
-      dataIndex: "status",
-      key: "status",
-      render: (st: string) => (
-        <Tag color={st === "posted" ? "success" : "processing"}>
-          {st === "posted" ? "Проведено" : "Открыто"}
-        </Tag>
-      ),
-    },
-  ];
-
-  // Monthly charges columns
-  const monthlyColumns: ColumnsType<FinTerminalMonthlyCharge> = [
-    {
-      title: "Терминал",
-      dataIndex: "terminal_id",
-      key: "terminal_id",
-      render: (id: number) => <Tag color="blue">#{id}</Tag>,
-    },
-    {
-      title: "Платёжный цикл",
-      dataIndex: "billing_cycle_id",
-      key: "billing_cycle_id",
-      render: (cid: number) => `Цикл #${cid}`,
-    },
-    {
-      title: "Сумма тарифа",
-      dataIndex: "amount_kopecks",
-      key: "amount_kopecks",
-      render: (kop: number) => (
-        <Text strong style={{ color: kop === 0 ? "#52c41a" : undefined }}>
-          {kop === 0 ? "0 ₽ (Льготный первый терминал)" : `${(kop / 100).toFixed(2)} ₽`}
-        </Text>
-      ),
-    },
-    {
-      title: "Дата проведения",
-      dataIndex: "posted_at",
-      key: "posted_at",
-      render: (dt: string) => (dt ? new Date(dt).toLocaleString("ru-RU") : "—"),
-    },
-    {
-      title: "Статус",
-      dataIndex: "status",
-      key: "status",
-      render: (st: string) => (
-        <Tag color={st === "posted" ? "success" : "default"}>
-          {st === "posted" ? "Списано" : st}
-        </Tag>
-      ),
-    },
-  ];
-
-  // Transactions columns
-  const transactionColumns: ColumnsType<FinLedgerTransaction> = [
-    {
-      title: "№ / Дата",
-      dataIndex: "posted_at",
-      key: "posted_at",
-      render: (dt: string, rec: FinLedgerTransaction) => (
-        <div>
-          <Text strong>#{rec.id}</Text>
-          <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-            {dt ? new Date(dt).toLocaleString("ru-RU") : "—"}
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: "Тип операции",
-      dataIndex: "kind",
-      key: "kind",
-      render: (kind: string) => {
-        const labels: Record<string, string> = {
-          initial_grant: "Начальное начисление",
-          monthly_subscription: "Ежемесячная абонплата",
-          usage_charge: "Поминутная тарификация",
-          topup_yookassa: "Пополнение через ЮKassa",
-          topup_manual: "Банковский перевод",
-          reversal: "Сторно / Корректировка",
-        };
-        return <Tag color="purple">{labels[kind] || kind}</Tag>;
-      },
-    },
-    {
-      title: "Сумма",
-      key: "amount",
-      render: (_: any, rec: FinLedgerTransaction) => {
-        if (rec.credit_kopecks > 0) {
-          return (
-            <Text strong style={{ color: "#389e0d" }}>
-              +{(rec.credit_kopecks / 100).toFixed(2)} ₽
-            </Text>
-          );
-        }
-        return (
-          <Text strong style={{ color: "#cf1322" }}>
-            -{(rec.debit_kopecks / 100).toFixed(2)} ₽
-          </Text>
-        );
-      },
-    },
-    {
-      title: "Детали расчёта",
-      dataIndex: "calculation_snapshot",
-      key: "calculation_snapshot",
-      render: (snap: any) => {
-        if (!snap) return <Text type="secondary">—</Text>;
-        if (snap.chargeable_seconds !== undefined) {
-          return (
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              {Math.round(snap.chargeable_seconds / 60)} платных мин по тарифу{" "}
-              {snap.hourly_rate_rubles || 90} ₽/час
-            </Text>
-          );
-        }
-        if (snap.description) {
-          return <Text type="secondary">{snap.description}</Text>;
-        }
-        return <Text type="secondary">{JSON.stringify(snap)}</Text>;
-      },
-    },
-    {
-      title: "Статус",
-      dataIndex: "status",
-      key: "status",
-      render: (st: string) => (
-        <Tag color={st === "posted" ? "success" : "default"}>
-          {st === "posted" ? "Проведено" : st}
-        </Tag>
-      ),
-    },
-  ];
-
-  return (
-    <div style={{ maxWidth: 1400, margin: "0 auto", paddingBottom: 40 }}>
-      {/* Header bar */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 16,
-          flexWrap: "wrap",
-          gap: 12,
-        }}
-      >
-        <div>
-          <Title level={3} style={{ margin: 0 }}>
-            Лицензии и баланс
-          </Title>
-          <Text type="secondary" style={{ fontSize: 14 }}>
-            Коммерческие условия, квоты потребления и финансовый журнал операций L4Desk
-          </Text>
-        </div>
-
-        <Space wrap>
-          <Button icon={<ReloadOutlined spin={loading} />} onClick={fetchOverview}>
-            Обновить
-          </Button>
-          <Button
-            type="primary"
-            icon={<DollarOutlined />}
-            size="large"
-            onClick={() => setTopUpModalOpen(true)}
+      render: (_, t) => (
+        <Space direction="vertical">
+          <Tag
+            color={
+              t.allowed ? (t.state === "grace" ? "orange" : "green") : "default"
+            }
           >
-            Пополнить баланс
-          </Button>
+            {labels[t.state]}
+          </Tag>
+          <Typography.Text type="secondary">{t.reason}</Typography.Text>
         </Space>
-      </div>
-
-      {/* Critical Status Alerts */}
-      {isGrace && (
+      ),
+    },
+    {
+      title: "Срок",
+      render: (_, t) =>
+        t.is_free ? (
+          "Без ограничения времени"
+        ) : (
+          <>
+            <div>Оплачен до {date(t.paid_until)}</div>
+            {t.state === "grace" && (
+              <div>Продлите до {date(t.grace_until)}</div>
+            )}
+          </>
+        ),
+    },
+    {
+      title: "Действие",
+      render: (_, t) =>
+        t.is_free ? (
+          "Оплата не нужна"
+        ) : (
+          <Button
+            aria-label={t.action || "Оплата пока недоступна"}
+            disabled={busy || !canPurchase(t, !!summary?.payments_enabled)}
+            loading={busy}
+            onClick={() => {
+              setSelected([t.terminal_id]);
+              void review([t.terminal_id]);
+            }}
+          >
+            {t.action || "Оплата пока недоступна"}
+          </Button>
+        ),
+    },
+  ];
+  if (error)
+    return (
+      <Alert
+        type="error"
+        title={error}
+        action={<Button onClick={() => void load()}>Повторить</Button>}
+      />
+    );
+  if (!summary) return <Spin />;
+  const urgent = summary.items.filter(
+    (t) => t.state === "grace" || t.state === "expired",
+  );
+  const subscriptionContent = (
+    <Space orientation="vertical" style={{ width: "100%" }} size="large">
+      <Alert
+        type={summary.payments_enabled ? "info" : "warning"}
+        title={
+          summary.payments_enabled
+            ? `Один терминал бесплатно. Каждый дополнительный — ${money(summary.month_price_kopecks)} в месяц.`
+            : "Сейчас доступен один бесплатный терминал. Ещё два можно подготовить, но подключить их получится после запуска оплаты."
+        }
+        description="Время использования не влияет на стоимость. Автосписаний нет: подписку продлеваете вы."
+      />
+      {urgent.length > 0 && (
         <Alert
           type="warning"
-          showIcon
-          icon={<WarningOutlined />}
-          style={{ marginBottom: 16, borderRadius: 8 }}
-          message={
-            <Text strong style={{ fontSize: 14 }}>
-              Действует льготный grace-период оплаты (осталось: {remainingGraceText || "несколько дней"})
-            </Text>
-          }
-          description="Платёжный цикл завершился, баланс организации недостаточен для автоматического продления. Пополните баланс лицевого счёта, чтобы избежать приостановки обслуживания."
-          action={
-            <Button
-              type="primary"
-              size="small"
-              icon={<DollarOutlined />}
-              onClick={() => setTopUpModalOpen(true)}
-            >
-              Пополнить сейчас
-            </Button>
-          }
+          title={`Требуют внимания: ${urgent.map((t) => t.name).join(", ")}`}
+          description="Выберите терминалы ниже и продлите подписку, чтобы сохранить или восстановить доступ."
         />
       )}
-
-      {isBlocked && (
-        <Alert
-          type="error"
-          showIcon
-          icon={<StopOutlined />}
-          style={{ marginBottom: 16, borderRadius: 8 }}
-          message={
-            <Text strong style={{ fontSize: 14 }}>
-              Обслуживание приостановлено: задолженность по лицевому счёту
-            </Text>
-          }
-          description="Запуск новых удалённых сессий консоли и видеонаблюдения заблокирован. Для разблокировки пополните баланс на сумму продления подписки."
-          action={
-            <Button
-              type="primary"
-              danger
-              size="small"
-              icon={<DollarOutlined />}
-              onClick={() => setTopUpModalOpen(true)}
-            >
-              Погасить задолженность
-            </Button>
-          }
-        />
-      )}
-
-      {/* Overview Cards Row */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        {/* Card 1: Balance */}
-        <Col xs={24} md={8}>
-          <Card
-            style={{ height: "100%", borderRadius: 8 }}
-            styles={{ body: { padding: 20 } }}
+      <Table
+        rowKey="terminal_id"
+        columns={columns}
+        dataSource={summary.items}
+        scroll={{ x: 720 }}
+        locale={{
+          emptyText: (
+            <Empty description="Создайте первый терминал — он будет бесплатным" />
+          ),
+        }}
+        rowSelection={{
+          selectedRowKeys: selected,
+          onChange: (keys) => {
+            setSelected(keys.map(Number));
+            setQuote(null);
+            setOperationId(null);
+          },
+          getCheckboxProps: (t) => ({
+            disabled: !canPurchase(t, summary.payments_enabled),
+          }),
+        }}
+      />
+      <Card title="Продление выбранных терминалов">
+        <Space wrap>
+          <Select
+            value={months}
+            onChange={(value) => {
+              setMonths(value);
+              setQuote(null);
+              setOperationId(null);
+            }}
+            options={[1, 3, 6, 12].map((value) => ({
+              value,
+              label: `${value} мес.`,
+            }))}
+          />
+          <Button
+            type="primary"
+            disabled={!summary.payments_enabled || selected.length === 0}
+            loading={busy}
+            onClick={() => void review()}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <Text type="secondary" style={{ fontSize: 13, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                Баланс счёта
-              </Text>
-              <DollarOutlined style={{ fontSize: 22, color: "#1677ff" }} />
-            </div>
-
-            <div style={{ margin: "12px 0 8px 0" }}>
-              <span style={{ fontSize: 32, fontWeight: 700, color: hasPositiveBalance ? "#389e0d" : "#262626" }}>
-                {balance ? `${balance.balance_rubles.toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽` : "0,00 ₽"}
-              </span>
-            </div>
-
-            {hasPositiveBalance ? (
-              <Tag color="success" style={{ fontSize: 12, padding: "2px 8px", whiteSpace: "normal" }}>
-                ✓ Положительный баланс явно разрешает платное продолжение сессий после 120 минут
-              </Tag>
-            ) : (
-              <Tag color="warning" style={{ fontSize: 12, padding: "2px 8px", whiteSpace: "normal" }}>
-                Нулевой баланс: продолжение сессий сверх 120 мин/день ограничено
-              </Tag>
-            )}
-
-            <div style={{ marginTop: 16 }}>
-              <Button
-                type="dashed"
-                block
-                icon={<ArrowUpOutlined />}
-                onClick={() => setTopUpModalOpen(true)}
-              >
-                Пополнить баланс
-              </Button>
-            </div>
-          </Card>
-        </Col>
-
-        {/* Card 2: Entitlement & Cycle Renewal */}
-        <Col xs={24} md={8}>
-          <Card
-            style={{ height: "100%", borderRadius: 8 }}
-            styles={{ body: { padding: 20 } }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <Text type="secondary" style={{ fontSize: 13, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                Статус подписки
-              </Text>
-              <CalendarOutlined style={{ fontSize: 22, color: "#52c41a" }} />
-            </div>
-
-            <div style={{ margin: "12px 0 8px 0" }}>
-              {entitlement?.entitlement === "active" && (
-                <Tag color="success" style={{ fontSize: 14, padding: "4px 10px", fontWeight: 600 }}>
-                  ● Подписка активна
-                </Tag>
-              )}
-              {entitlement?.entitlement === "free" && (
-                <Tag color="processing" style={{ fontSize: 14, padding: "4px 10px", fontWeight: 600 }}>
-                  ● Бесплатный тариф
-                </Tag>
-              )}
-              {entitlement?.entitlement === "grace" && (
-                <Tag color="warning" style={{ fontSize: 14, padding: "4px 10px", fontWeight: 600 }}>
-                  ● Grace-период
-                </Tag>
-              )}
-              {entitlement?.entitlement === "blocked" && (
-                <Tag color="error" style={{ fontSize: 14, padding: "4px 10px", fontWeight: 600 }}>
-                  ● Заблокировано
-                </Tag>
-              )}
-            </div>
-
-            <div style={{ fontSize: 13, color: "#595959", marginTop: 8 }}>
-              Следующее продление: <strong>{nextRenewalDate}</strong>
-            </div>
-
-            <div style={{ fontSize: 12, color: "#8c8c8c", marginTop: 4 }}>
-              Платёжный якорь: <strong>{profile?.billing_anchor_day || 1}-е число месяца</strong>
-            </div>
-
-            <div style={{ marginTop: 14, fontSize: 12, color: "#595959" }}>
-              Тариф: Первый терминал — <strong>0 ₽/мес</strong>. Дополнительные —{" "}
-              <strong>{((tariff?.additional_terminal_monthly_kopecks || 49000) / 100).toFixed(0)} ₽/мес</strong>.
-            </div>
-          </Card>
-        </Col>
-
-        {/* Card 3: Today Pooled Free Quota (120 mins) */}
-        <Col xs={24} md={8}>
-          <Card
-            style={{ height: "100%", borderRadius: 8 }}
-            styles={{ body: { padding: 20 } }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <Text type="secondary" style={{ fontSize: 13, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                Бесплатная квота сегодня
-              </Text>
-              <ClockCircleOutlined style={{ fontSize: 22, color: "#faad14" }} />
-            </div>
-
-            <div style={{ margin: "12px 0 6px 0" }}>
-              <span style={{ fontSize: 26, fontWeight: 700 }}>
-                {usedMinutes} / {freeLimitMinutes} мин
-              </span>
-              <span style={{ fontSize: 13, color: "#8c8c8c", marginLeft: 8 }}>
-                ({percentUsed}%)
-              </span>
-            </div>
-
-            <Progress
-              percent={percentUsed}
-              status={percentUsed >= 100 ? "exception" : percentUsed > 75 ? "active" : "normal"}
-              strokeColor={percentUsed >= 100 ? "#ff4d4f" : percentUsed > 75 ? "#faad14" : "#1677ff"}
-            />
-
-            <div style={{ fontSize: 12, color: "#595959", marginTop: 8 }}>
-              Суммарная квота на видео и консоль. Сверх 120 мин/день тарифицируется по{" "}
-              <strong>{((tariff?.usage_hourly_kopecks || 9000) / 6000).toFixed(2)} ₽/мин</strong>{" "}
-              (1,50 ₽/мин).
-            </div>
-          </Card>
-        </Col>
-      </Row>
-
-      {/* Transparent Detailed Records Tabs */}
-      <Card style={{ borderRadius: 8 }}>
-        <Tabs
-          defaultActiveKey="usage"
-          items={[
-            {
-              key: "usage",
-              label: (
-                <span>
-                  <CalculatorOutlined /> Потребление по дням ({dailyUsage.length})
-                </span>
-              ),
-              children: (
-                <Table
-                  dataSource={dailyUsage}
-                  scroll={{ x: 900 }}
-                  columns={usageColumns}
-                  rowKey="id"
-                  loading={tablesLoading}
-                  pagination={{ pageSize: 10 }}
-                  size="small"
-                />
-              ),
-            },
-            {
-              key: "charges",
-              label: (
-                <span>
-                  <CalendarOutlined /> Ежемесячные списания ({monthlyCharges.length})
-                </span>
-              ),
-              children: (
-                <Table
-                  dataSource={monthlyCharges}
-                  scroll={{ x: 850 }}
-                  columns={monthlyColumns}
-                  rowKey="id"
-                  loading={tablesLoading}
-                  pagination={{ pageSize: 10 }}
-                  size="small"
-                />
-              ),
-            },
-            {
-              key: "transactions",
-              label: (
-                <span>
-                  <HistoryOutlined /> Финансовые проводки ({transactions.length})
-                </span>
-              ),
-              children: (
-                <Table
-                  dataSource={transactions}
-                  scroll={{ x: 1050 }}
-                  columns={transactionColumns}
-                  rowKey="id"
-                  loading={tablesLoading}
-                  pagination={{ pageSize: 10 }}
-                  size="small"
-                />
-              ),
-            },
-          ]}
-        />
+            {summary.payments_enabled
+              ? "Посмотреть стоимость"
+              : "Оплата пока недоступна"}
+          </Button>
+        </Space>
       </Card>
-
-      {/* Top-up Modal */}
-      <Modal
-        title={
-          <Space>
-            <CreditCardOutlined style={{ color: "#1677ff" }} />
-            <span>Пополнение баланса организации</span>
-          </Space>
-        }
-        open={topUpModalOpen}
-        onCancel={() => setTopUpModalOpen(false)}
-        footer={null}
-        destroyOnClose
-      >
-        <div style={{ marginTop: 12 }}>
-          <Paragraph type="secondary" style={{ fontSize: 13 }}>
-            Пополнение баланса позволяет подключать дополнительные терминалы и продолжать сессии
-            управления сверх бесплатного лимита 120 минут в день.
-          </Paragraph>
-
-          <Form layout="vertical" onFinish={handleTopUpSubmit}>
-            <Form.Item label="Выберите сумму пополнения">
-              <Radio.Group
-                value={topUpAmount}
-                onChange={(e) => setTopUpAmount(e.target.value)}
-                style={{ width: "100%", marginBottom: 12 }}
-              >
-                <Space direction="vertical" style={{ width: "100%" }}>
-                  <Radio value={500}>500 ₽</Radio>
-                  <Radio value={1000}>1 000 ₽ (Рекомендуется)</Radio>
-                  <Radio value={3000}>3 000 ₽ (С запасом на 3 месяца)</Radio>
-                  <Radio value={5000}>5 000 ₽</Radio>
-                </Space>
-              </Radio.Group>
-            </Form.Item>
-
-            <Form.Item label="Или введите другую сумму (в рублях)">
-              <InputNumber
-                style={{ width: "100%" }}
-                min={100}
-                max={500000}
-                step={100}
-                value={topUpAmount}
-                onChange={(val) => setTopUpAmount(val || 100)}
-                addonAfter="₽"
-              />
-            </Form.Item>
-
-            <Alert
-              type="info"
-              showIcon
-              style={{ marginBottom: 16 }}
-              message="Безопасная оплата через ЮKassa"
-              description="После нажатия кнопки вы будете перенаправлены на защищённую платёжную страницу ЮKassa для ввода данных банковской карты или СБП."
-            />
-
-            <div style={{ textAlign: "right" }}>
-              <Space>
-                <Button onClick={() => setTopUpModalOpen(false)}>Отмена</Button>
+    </Space>
+  );
+  const historyContent = (
+    <Table
+      rowKey="id"
+      dataSource={orders}
+      scroll={{ x: 560 }}
+      columns={[
+        { title: "Дата", render: (_, o) => date(o.created_at) },
+        {
+          title: "Назначение",
+          render: (_, o) =>
+            o.items
+              .map(
+                (i) =>
+                  `${summary.items.find((t) => t.terminal_id === i.terminal_id)?.name || `№${i.terminal_id}`}: ${i.months} мес.`,
+              )
+              .join(", "),
+        },
+        { title: "Сумма", render: (_, o) => money(o.amount_kopecks) },
+        { title: "Результат", render: (_, o) => orderLabels[o.status] },
+        {
+          title: "Действие",
+          render: (_, o) =>
+            o.status === "pending" || o.status === "waiting_for_capture" ? (
+              <Space wrap>
+                {o.confirmation_url && summary.payments_enabled && (
+                  <Button href={o.confirmation_url}>Продолжить оплату</Button>
+                )}
                 <Button
-                  type="primary"
-                  htmlType="submit"
-                  size="large"
-                  loading={topUpSubmitting}
-                  icon={<DollarOutlined />}
+                  loading={busy}
+                  onClick={() => void refreshPayment(o.id)}
                 >
-                  Оплатить {topUpAmount} ₽
+                  Проверить платёж
                 </Button>
               </Space>
-            </div>
-          </Form>
-        </div>
-      </Modal>
-    </div>
+            ) : (
+              "—"
+            ),
+        },
+      ]}
+    />
   );
+  const usageContent = (
+    <Space orientation="vertical" style={{ width: "100%" }}>
+      <Alert
+        type="info"
+        title="Использование ресурсов"
+        description="Подтверждённое время видео и консоли. Эти показатели помогают планировать нагрузку и не влияют на оплату. Длительности сессий суммируются; это не измерение CPU или сетевого трафика."
+      />
+      <Space wrap>
+        <Select
+          aria-label="Период статистики"
+          value={usageDays}
+          onChange={setUsageDays}
+          options={[7, 30, 90].map((value) => ({
+            value,
+            label: `Последние ${value} дней`,
+          }))}
+        />
+        <Select
+          aria-label="Терминал статистики"
+          style={{ minWidth: 220 }}
+          allowClear
+          placeholder="Все терминалы"
+          value={usageTerminal}
+          onChange={setUsageTerminal}
+          options={summary.items.map((t) => ({
+            value: t.terminal_id,
+            label: t.name,
+          }))}
+        />
+      </Space>
+      {usageError && <Alert type="error" title={usageError} />}
+      <Card>
+        <Space wrap size="large">
+          <Typography.Text>Видео: {duration(totals.video)}</Typography.Text>
+          <Typography.Text>Консоль: {duration(totals.console)}</Typography.Text>
+          <Typography.Text strong>
+            Всего: {duration(totals.video + totals.console)}
+          </Typography.Text>
+        </Space>
+      </Card>
+      <div role="img" aria-label="Длительность использования по дням">
+        {daily.map((day) => (
+          <div
+            key={day.date}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              marginBottom: 4,
+            }}
+          >
+            <span style={{ minWidth: 90 }}>{day.date}</span>
+            <div
+              style={{
+                width: `${(day.seconds / maxDaily) * 65}%`,
+                minWidth: 2,
+                height: 12,
+                background: "#1677ff",
+                borderRadius: 3,
+              }}
+            />
+            <span>{duration(day.seconds)}</span>
+          </div>
+        ))}
+      </div>
+      <Table
+        rowKey={(d) => `${d.terminal_id}:${d.date}`}
+        dataSource={usage}
+        columns={[
+          { title: "Дата", dataIndex: "date" },
+          {
+            title: "Терминал",
+            render: (_, d) =>
+              summary.items.find((t) => t.terminal_id === d.terminal_id)
+                ?.name || String(d.terminal_id),
+          },
+          { title: "Видео", render: (_, d) => duration(d.video_seconds) },
+          { title: "Консоль", render: (_, d) => duration(d.console_seconds) },
+          {
+            title: "Всего",
+            render: (_, d) => duration(d.video_seconds + d.console_seconds),
+          },
+        ]}
+      />
+    </Space>
+  );
+  return (
+    <Space orientation="vertical" style={{ width: "100%" }} size="large">
+      <Typography.Title level={2}>Подписки</Typography.Title>
+      <Button onClick={() => void load()}>Обновить</Button>
+      <Tabs
+        items={[
+          {
+            key: "subscriptions",
+            label: "Подписки",
+            children: subscriptionContent,
+          },
+          { key: "history", label: "Платежи", children: historyContent },
+          { key: "usage", label: "Использование", children: usageContent },
+        ]}
+      />
+      <Modal
+        title="Проверьте покупку"
+        open={quote !== null}
+        onCancel={() => {
+          if (!busy) setQuote(null);
+        }}
+        footer={
+          <Button
+            type="primary"
+            loading={busy}
+            aria-label={`Оплатить ${money(quote?.snapshot.amount_kopecks || 0)}`}
+            disabled={busy || !quote?.available}
+            onClick={() => void pay()}
+          >
+            Оплатить {money(quote?.snapshot.amount_kopecks || 0)}
+          </Button>
+        }
+      >
+        <p>Пакет: {months} мес. для каждого выбранного терминала.</p>
+        {quote?.preview.map((item) => (
+          <p key={item.terminal_id}>
+            {
+              summary.items.find((t) => t.terminal_id === item.terminal_id)
+                ?.name
+            }
+            : новый срок до {date(item.paid_until)}
+          </p>
+        ))}
+        <p>
+          Всего: {money(quote?.snapshot.amount_kopecks || 0)}. Автосписаний нет.
+        </p>
+      </Modal>
+    </Space>
+  );
+}
+
+export default function LicensesPage() {
+  const { user } = useSession();
+  // Changing tenants discards the previous cart, quote and all pending UI responses.
+  return <TerminalSubscriptionsPage key={`${user?.org_id}:${user?.role_id}`} />;
 }

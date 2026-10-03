@@ -505,7 +505,7 @@ export default function OnboardingWizardModal({
               rawMessage={sessionError.message}
               onClose={() => setSessionError(null)}
               onRetry={() => setSessionError(null)}
-              onTopUp={() => {
+              onSubscriptions={() => {
                 onClose();
                 navigate("/licenses");
               }}

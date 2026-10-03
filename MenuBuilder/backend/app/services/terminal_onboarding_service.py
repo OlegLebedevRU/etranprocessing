@@ -461,6 +461,9 @@ class TerminalOnboardingService:
         # ---------------------------------------------------------------------
         # 2. Canonical SN / device_id via shared terminal creation use case
         # ---------------------------------------------------------------------
+        from app.services.subscriptions import check_creation_limit
+
+        await check_creation_limit(self.db, tenant_id)
         next_ordinal = await self.repo.get_next_ordinal_for_tenant(tenant_id)
         display_name = (req.name or "").strip() or None
         free_note = (req.note or "").strip() or None
@@ -588,7 +591,7 @@ class TerminalOnboardingService:
         user: dict[str, Any],
         terminal_id: int,
     ) -> dict[str, Any]:
-        """Soft-delete terminal and automatically transfer free quota to next earliest terminal."""
+        """Soft-delete terminal and automatically transfer free privilege to next earliest terminal."""
         is_su = bool(user.get("is_superuser") or user.get("role_id") == 1)
         tenant_id = int(user.get("org_id", 0))
 
@@ -604,6 +607,16 @@ class TerminalOnboardingService:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied: Terminal belongs to another tenant",
             )
+
+        from app.services.subscription_payments import check_pending_orders
+        from app.services.subscriptions import lock_tenant
+
+        await lock_tenant(self.db, l4_terminal.tenant_id)
+        await check_pending_orders(self.db, l4_terminal.tenant_id)
+
+        await self.db.refresh(l4_terminal)
+        if l4_terminal.deleted_at is not None:
+            raise HTTPException(404, "Терминал уже удалён")
 
         # Soft delete L4DeskTerminal
         l4_terminal.deleted_at = datetime.now(UTC)

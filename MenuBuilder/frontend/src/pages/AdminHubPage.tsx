@@ -9,8 +9,6 @@ import {
   FileTextOutlined,
   FilterOutlined,
   LinkOutlined,
-  PlusOutlined,
-  RollbackOutlined,
   SyncOutlined,
   UploadOutlined,
 } from "@ant-design/icons";
@@ -20,12 +18,9 @@ import {
   Button,
   Card,
   Col,
-  DatePicker,
-  Form,
   Input,
   InputNumber,
   Modal,
-  Popconfirm,
   Row,
   Select,
   Space,
@@ -51,8 +46,6 @@ import {
   HubTenantFinanceItem,
   HubTerminalItem,
   HubUsageItem,
-  ReconciliationRunResponse,
-  createHubManualPayment,
   fetchHubArchives,
   fetchHubAuditEvents,
   fetchHubCorrelationDrilldown,
@@ -64,9 +57,9 @@ import {
   fetchHubTerminals,
   fetchHubUsage,
   importHubArchiveManifest,
-  stornoHubManualPayment,
-  triggerHubReconciliation,
 } from "../api/hub";
+
+import AdminSubscriptionsPanel from "../components/AdminSubscriptionsPanel";
 
 const { Title, Text } = Typography;
 
@@ -172,20 +165,6 @@ export default function AdminHubPage() {
   const [drilldownTenantIdInput, setDrilldownTenantIdInput] = useState<number | undefined>();
   const [drilldownTerminalIdInput, setDrilldownTerminalIdInput] = useState<number | undefined>();
   const [drilldownArchiveBatchInput, setDrilldownArchiveBatchInput] = useState("");
-
-  const [manualPayModalOpen, setManualPayModalOpen] = useState(false);
-  const [manualPayForm] = Form.useForm();
-  const [manualPayLoading, setManualPayLoading] = useState(false);
-
-  const [stornoModalOpen, setStornoModalOpen] = useState(false);
-  const [stornoForm] = Form.useForm();
-  const [stornoTargetPaymentId, setStornoTargetPaymentId] = useState<number | null>(null);
-  const [stornoLoading, setStornoLoading] = useState(false);
-
-  const [recModalOpen, setRecModalOpen] = useState(false);
-  const [recForm] = Form.useForm();
-  const [recLoading, setRecLoading] = useState(false);
-  const [recResult, setRecResult] = useState<ReconciliationRunResponse | null>(null);
 
   // Loaders
   const loadRegistrations = async () => {
@@ -438,90 +417,6 @@ export default function AdminHubPage() {
     }
   };
 
-  // Manual payment submit handler
-  const handleManualPaymentSubmit = async (values: any) => {
-    if (values.confirmation_code !== "11") {
-      message.error("Контрольный код должен быть равен '11'");
-      return;
-    }
-    setManualPayLoading(true);
-    try {
-      await createHubManualPayment({
-        tenant_id: values.tenant_id,
-        amount_rubles: values.amount_rubles,
-        received_on: values.received_on.format("YYYY-MM-DD"),
-        document_number: values.document_number,
-        purpose: values.purpose,
-        payer: values.payer,
-        comment: values.comment,
-        evidence_reference: values.evidence_reference,
-        confirmation_code: values.confirmation_code,
-      });
-      message.success("Ручной платёж успешно проведён с подтверждением 11");
-      setManualPayModalOpen(false);
-      manualPayForm.resetFields();
-      if (activeTab === "finance") {
-        loadFinanceOverview();
-        loadPayments();
-      }
-    } catch (err: any) {
-      message.error(err?.response?.data?.detail || "Ошибка создания платежа");
-    } finally {
-      setManualPayLoading(false);
-    }
-  };
-
-  // Storno submit handler
-  const handleStornoSubmit = async (values: any) => {
-    if (!stornoTargetPaymentId) return;
-    if (values.confirmation_code !== "11") {
-      message.error("Контрольный код должен быть равен '11'");
-      return;
-    }
-    setStornoLoading(true);
-    try {
-      await stornoHubManualPayment(stornoTargetPaymentId, {
-        reversal_reason: values.reversal_reason,
-        comment: values.comment,
-        confirmation_code: values.confirmation_code,
-      });
-      message.success("Сторно успешно проведено с подтверждением 11");
-      setStornoModalOpen(false);
-      stornoForm.resetFields();
-      setStornoTargetPaymentId(null);
-      if (activeTab === "finance") {
-        loadFinanceOverview();
-        loadPayments();
-      }
-    } catch (err: any) {
-      message.error(err?.response?.data?.detail || "Ошибка сторнирования платежа");
-    } finally {
-      setStornoLoading(false);
-    }
-  };
-
-  // Reconciliation run handler
-  const handleReconciliationRun = async (values: any) => {
-    setRecLoading(true);
-    try {
-      const res = await triggerHubReconciliation({
-        period_start: values.period[0].toISOString(),
-        period_end: values.period[1].toISOString(),
-        tenant_id: values.tenant_id || undefined,
-        auto_rebuild_projection: values.auto_rebuild_projection || false,
-      });
-      setRecResult(res);
-      if (res.status === "matched") {
-        message.success("Сверка завершена успешно: расхождений не обнаружено!");
-      } else {
-        message.warning(`Сверка выявила ${res.mismatch_count} расхождений!`);
-      }
-    } catch (err: any) {
-      message.error(err?.response?.data?.detail || "Ошибка выполнения сверки");
-    } finally {
-      setRecLoading(false);
-    }
-  };
 
   // Table Columns
   const regColumns: ColumnsType<HubRegistrationItem> = [
@@ -776,17 +671,7 @@ export default function AdminHubPage() {
           >
             Drill-down
           </Button>
-          <Button
-            size="small"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => {
-              manualPayForm.setFieldsValue({ tenant_id: r.tenant_id });
-              setManualPayModalOpen(true);
-            }}
-          >
-            Платёж 11
-          </Button>
+
         </Space>
       ),
     },
@@ -840,20 +725,7 @@ export default function AdminHubPage() {
           >
             Drill-down
           </Button>
-          {r.source === "manual" && !r.reference.startsWith("STORNO-") && (
-            <Button
-              size="small"
-              danger
-              icon={<RollbackOutlined />}
-              onClick={() => {
-                setStornoTargetPaymentId(r.id);
-                stornoForm.resetFields();
-                setStornoModalOpen(true);
-              }}
-            >
-              Сторно 11
-            </Button>
-          )}
+
         </Space>
       ),
     },
@@ -1023,7 +895,7 @@ export default function AdminHubPage() {
         <Col>
           <Title level={2} style={{ margin: 0 }}>
             <AuditOutlined style={{ marginRight: 8, color: "#1677ff" }} />
-            Хаб и финансовая сверка (L4Desk Hub)
+            Администрирование L4Desk
           </Title>
           <Text type="secondary">
             Единый суперпользовательский пульт сквозного контроля: registrations → terminals → provisioning → sessions → usage → ledger → balance
@@ -1031,29 +903,8 @@ export default function AdminHubPage() {
         </Col>
         <Col>
           <Space>
-            <Button
-              type="primary"
-              icon={<SyncOutlined />}
-              onClick={() => {
-                recForm.setFieldsValue({
-                  period: [dayjs().subtract(30, "days"), dayjs()],
-                  auto_rebuild_projection: false,
-                });
-                setRecResult(null);
-                setRecModalOpen(true);
-              }}
-            >
-              Запустить фин. сверку
-            </Button>
-            <Button
-              icon={<DollarOutlined />}
-              onClick={() => {
-                manualPayForm.resetFields();
-                setManualPayModalOpen(true);
-              }}
-            >
-              Ручной платёж (11)
-            </Button>
+
+
             <Button
               icon={<LinkOutlined />}
               onClick={() => {
@@ -1073,6 +924,7 @@ export default function AdminHubPage() {
         onChange={setActiveTab}
         type="card"
         items={[
+          { key: "subscriptions", label: "Подписки", children: <AdminSubscriptionsPanel /> },
           {
             key: "registrations",
             label: "Регистрации",
@@ -1276,7 +1128,7 @@ export default function AdminHubPage() {
           },
           {
             key: "finance",
-            label: "Лицензии, финансы и сверка",
+            label: "История прежних финансов",
             children: (
               <Card>
                 {/* Statistics Row */}
@@ -1388,16 +1240,7 @@ export default function AdminHubPage() {
                               />
                             </Col>
                             <Col span={18} style={{ textAlign: "right" }}>
-                              <Button
-                                type="primary"
-                                icon={<PlusOutlined />}
-                                onClick={() => {
-                                  manualPayForm.resetFields();
-                                  setManualPayModalOpen(true);
-                                }}
-                              >
-                                Новый ручной платёж (11)
-                              </Button>
+
                             </Col>
                           </Row>
                           <Table
@@ -1720,246 +1563,6 @@ export default function AdminHubPage() {
                 );
               })}
             </Row>
-          </div>
-        )}
-      </Modal>
-
-      {/* Manual Payment Modal (with Superuser Code 11 Confirmation) */}
-      <Modal
-        title="Ручная регистрация банковской оплаты юрлица (Код подтверждения: 11)"
-        open={manualPayModalOpen}
-        onCancel={() => setManualPayModalOpen(false)}
-        footer={null}
-        width={650}
-      >
-        <Alert
-          type="info"
-          message="Безопасная суперпользовательская операция"
-          description="Регистрация оплаты b2b создаёт двойную запись в subledger и немедленно фиксирует anchor-день расчётного цикла. Операция необратима напрямую и требует подтверждения кодом '11'."
-          style={{ marginBottom: 16 }}
-        />
-        <Form form={manualPayForm} layout="vertical" onFinish={handleManualPaymentSubmit}>
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="tenant_id"
-                label="ID организации (Tenant)"
-                rules={[{ required: true, message: "Укажите ID организации" }]}
-              >
-                <InputNumber style={{ width: "100%" }} min={1} placeholder="Например: 10" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                name="amount_rubles"
-                label="Сумма оплаты (целые рубли)"
-                rules={[{ required: true, message: "Укажите сумму в рублях" }]}
-              >
-                <InputNumber style={{ width: "100%" }} min={1} placeholder="Например: 10000" />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="received_on"
-                label="Дата выписки / поступления"
-                rules={[{ required: true, message: "Выберите дату поступления" }]}
-                initialValue={dayjs()}
-              >
-                <DatePicker style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                name="document_number"
-                label="Номер платёжного поручения"
-                rules={[{ required: true, message: "Укажите номер документа" }]}
-              >
-                <Input placeholder="ПП № 1024 от банка" />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Form.Item
-            name="payer"
-            label="Плательщик (наименование юрлица / ИНН)"
-            rules={[{ required: true, message: "Укажите наименование плательщика" }]}
-          >
-            <Input placeholder="ООО 'Северсталь-Авто' ИНН 7701234567" />
-          </Form.Item>
-
-          <Form.Item
-            name="purpose"
-            label="Назначение платежа"
-            rules={[{ required: true, message: "Укажите назначение платежа" }]}
-            initialValue="Оплата лицензии L4Desk по счёту"
-          >
-            <Input placeholder="Оплата по счёту № 45 за терминалы" />
-          </Form.Item>
-
-          <Form.Item name="comment" label="Внутренний комментарий">
-            <Input.TextArea rows={2} placeholder="Поступило через р/с Сбербанк" />
-          </Form.Item>
-
-          <Form.Item
-            name="confirmation_code"
-            label={
-              <Space>
-                <strong style={{ color: "#cf1322" }}>Контрольный код подтверждения:</strong>
-                <Tag color="red">Введите "11"</Tag>
-              </Space>
-            }
-            rules={[
-              { required: true, message: "Введите '11' для подтверждения действия" },
-              {
-                validator: (_, value) =>
-                  value === "11"
-                    ? Promise.resolve()
-                    : Promise.reject(new Error("Необходимо ввести строго '11'")),
-              },
-            ]}
-          >
-            <Input placeholder="11" maxLength={2} style={{ width: 120, fontSize: 16, fontWeight: "bold" }} />
-          </Form.Item>
-
-          <Row justify="end" gutter={8}>
-            <Col>
-              <Button onClick={() => setManualPayModalOpen(false)}>Отмена</Button>
-            </Col>
-            <Col>
-              <Button type="primary" htmlType="submit" loading={manualPayLoading} icon={<CheckCircleOutlined />}>
-                Подтвердить и провести платёж (11)
-              </Button>
-            </Col>
-          </Row>
-        </Form>
-      </Modal>
-
-      {/* Storno Modal (Requires Superuser Code 11 Confirmation) */}
-      <Modal
-        title={`Сторно платежа #${stornoTargetPaymentId} (Код подтверждения: 11)`}
-        open={stornoModalOpen}
-        onCancel={() => setStornoModalOpen(false)}
-        footer={null}
-        width={550}
-      >
-        <Alert
-          type="warning"
-          message="Внимание: Финансовое сторнирование"
-          description="Сторнирование создаёт зеркальную корректировочную проводку Reversal в subledger. Сумма списывается с депозита организации. Требуется подтверждение кодом '11'."
-          style={{ marginBottom: 16 }}
-        />
-        <Form form={stornoForm} layout="vertical" onFinish={handleStornoSubmit}>
-          <Form.Item
-            name="reversal_reason"
-            label="Причина сторнирования"
-            rules={[{ required: true, message: "Укажите причину сторнирования" }]}
-          >
-            <Input placeholder="Ошибочное зачисление / возврат средств клиенту" />
-          </Form.Item>
-
-          <Form.Item name="comment" label="Комментарий">
-            <Input.TextArea rows={2} placeholder="Акт возврата платежа №..." />
-          </Form.Item>
-
-          <Form.Item
-            name="confirmation_code"
-            label={
-              <Space>
-                <strong style={{ color: "#cf1322" }}>Контрольный код подтверждения:</strong>
-                <Tag color="red">Введите "11"</Tag>
-              </Space>
-            }
-            rules={[
-              { required: true, message: "Введите '11' для подтверждения действия" },
-              {
-                validator: (_, value) =>
-                  value === "11"
-                    ? Promise.resolve()
-                    : Promise.reject(new Error("Необходимо ввести строго '11'")),
-              },
-            ]}
-          >
-            <Input placeholder="11" maxLength={2} style={{ width: 120, fontSize: 16, fontWeight: "bold" }} />
-          </Form.Item>
-
-          <Row justify="end" gutter={8}>
-            <Col>
-              <Button onClick={() => setStornoModalOpen(false)}>Отмена</Button>
-            </Col>
-            <Col>
-              <Button type="primary" danger htmlType="submit" loading={stornoLoading} icon={<RollbackOutlined />}>
-                Сторнировать с кодом 11
-              </Button>
-            </Col>
-          </Row>
-        </Form>
-      </Modal>
-
-      {/* Reconciliation Modal */}
-      <Modal
-        title="Запуск финансовой сверки (Subledger Reconciliation)"
-        open={recModalOpen}
-        onCancel={() => setRecModalOpen(false)}
-        footer={null}
-        width={750}
-      >
-        <Form form={recForm} layout="vertical" onFinish={handleReconciliationRun}>
-          <Form.Item
-            name="period"
-            label="Период сверки"
-            rules={[{ required: true, message: "Выберите диапазон дат" }]}
-          >
-            <DatePicker.RangePicker showTime style={{ width: "100%" }} />
-          </Form.Item>
-
-          <Form.Item name="tenant_id" label="Организация (оставьте пустым для сверки всех организаций)">
-            <InputNumber style={{ width: "100%" }} placeholder="Все организации" min={1} />
-          </Form.Item>
-
-          <Form.Item name="auto_rebuild_projection" valuePropName="checked">
-            <Switch />
-            <span style={{ marginLeft: 8 }}>
-              Автоматически перестроить проекцию баланса при обнаружении расхождения
-            </span>
-          </Form.Item>
-
-          <Form.Item>
-            <Button type="primary" htmlType="submit" loading={recLoading} icon={<SyncOutlined />}>
-              Выполнить сверку
-            </Button>
-          </Form.Item>
-        </Form>
-
-        {recResult && (
-          <div style={{ marginTop: 20 }}>
-            {recResult.status === "matched" ? (
-              <Alert
-                type="success"
-                showIcon
-                icon={<CheckCircleOutlined />}
-                message="Сверка успешно завершена (MATCHED)"
-                description={`Период сверен: ${recResult.debit_kopecks} коп debits = ${recResult.credit_kopecks} коп credits. Расхождений: 0.`}
-              />
-            ) : (
-              <div>
-                <Alert
-                  type="error"
-                  showIcon
-                  icon={<CloseCircleOutlined />}
-                  message={`Обнаружены нестыковки в периоде: ${recResult.mismatch_count} (MISMATCH)`}
-                  description={`Разница в балансах: ${recResult.balance_difference_kopecks} коп. Подробности см. ниже.`}
-                  style={{ marginBottom: 12 }}
-                />
-                <Card size="small" title="Детали нестыковок">
-                  <pre style={{ margin: 0, fontSize: 11, maxHeight: 200, overflow: "auto" }}>
-                    {JSON.stringify(recResult.details, null, 2)}
-                  </pre>
-                </Card>
-              </div>
-            )}
           </div>
         )}
       </Modal>

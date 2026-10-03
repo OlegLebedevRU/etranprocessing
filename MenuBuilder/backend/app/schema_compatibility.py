@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 logger = logging.getLogger(__name__)
 
-REQUIRED_ALEMBIC_REVISION = "028"
-COMPATIBLE_ALEMBIC_REVISIONS: set[str] = {"028"}
+REQUIRED_ALEMBIC_REVISION = "029"
+COMPATIBLE_ALEMBIC_REVISIONS: set[str] = {"029"}
 
 L4DESK_TABLES: list[str] = [
     "fin_accounts",
@@ -85,6 +85,14 @@ def check_schema_compatibility_sync(
         raise SchemaCompatibilityError(
             f"Missing required schema tables in database: {sorted(missing_tables)}. "
             "Database schema is not fully migrated."
+        )
+
+    terminal_columns = {
+        column["name"] for column in inspector.get_columns("l4desk_terminals")
+    }
+    if "paid_until" not in terminal_columns:
+        raise SchemaCompatibilityError(
+            "Missing l4desk_terminals.paid_until; apply migration 029 before starting MenuBuilder."
         )
 
     logger.info(

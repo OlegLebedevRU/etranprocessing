@@ -1272,7 +1272,7 @@ async def keepalive_device_control_lease(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Extend active control lease."""
-    terminal = await _verify_device_access(device_id, user, db)
+    terminal = await _verify_device_access(device_id, user, db, require_active=True)
     org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
     try:
         active_session = await L4DeskRepository(db).get_active_session_by_terminal_id(

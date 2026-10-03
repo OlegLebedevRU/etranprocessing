@@ -47,7 +47,7 @@ SCHEMA_JSON_PATH = (
     / "shared"
     / "docs"
     / "l4desk"
-    / "schema-v1.json"
+    / "schema-v029.json"
 )
 
 
@@ -113,7 +113,7 @@ def test_alembic_linear_history():
     script = ScriptDirectory.from_config(config)
 
     heads = script.get_heads()
-    assert heads == ["028"], f"Expected single head '028', got {heads}"
+    assert heads == ["029"], f"Expected single head '029', got {heads}"
 
     rev_028 = script.get_revision("028")
     assert rev_028 is not None

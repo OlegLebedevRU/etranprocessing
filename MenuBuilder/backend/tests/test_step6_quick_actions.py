@@ -56,6 +56,7 @@ def operator_headers(operator_token):
 @pytest.fixture
 def mock_db_session():
     mock_db = AsyncMock()
+    mock_db.get.return_value = None
     terminal_1 = Terminal(
         device_id=1,
         sn="sn0001",

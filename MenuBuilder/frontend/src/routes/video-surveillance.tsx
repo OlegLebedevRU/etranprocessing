@@ -985,7 +985,7 @@ function TenantVideoSurveillancePage() {
                   rawMessage={bannerError.message}
                   onClose={() => setBannerError(null)}
                   onRetry={isOperator ? handleOperatorStart : () => handleViewerConnect(selectedDevice.device_id)}
-                  onTopUp={() => navigate("/licenses")}
+                  onSubscriptions={() => navigate("/licenses")}
                   onStopActiveSession={handleOperatorStop}
                 />
               )}

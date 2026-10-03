@@ -16,7 +16,7 @@ from etranprocessing_db import Base
 
 HERE = Path(__file__).parent
 BASELINE = json.loads(
-    (HERE / "fixtures" / "baseline_schema_v010.json").read_text(encoding="utf-8")
+    (HERE / "fixtures" / "baseline_schema_v028.json").read_text(encoding="utf-8")
 )
 
 
@@ -118,7 +118,7 @@ def test_model_modules_are_declarative_only():
 
 def test_published_schema_matches_models():
     importlib.import_module("etranprocessing_db.l4desk")
-    path = HERE.parent / "docs" / "l4desk" / "schema-v1.json"
+    path = HERE.parent / "docs" / "l4desk" / "schema-v029.json"
     assert describe_metadata(Base.metadata) == json.loads(
         path.read_text(encoding="utf-8")
     )

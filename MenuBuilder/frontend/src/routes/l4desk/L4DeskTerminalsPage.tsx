@@ -47,6 +47,9 @@ import { getDevices, type DeviceListItem } from "../../api/devices";
 import TerminalSettingsEditModal from "../../components/TerminalSettingsEditModal";
 import { certificatePresentation, filterTerminals, terminalStatus, type TerminalFilter } from "../../utils/terminalPresentation";
 
+import { getSubscriptions, type SubscriptionSummary } from "../../api/subscriptions";
+import { subscriptionLabels } from "../../utils/subscriptionPresentation";
+
 const { Text, Title } = Typography;
 
 function pinTag(item: TerminalSettingsItem) {
@@ -76,6 +79,7 @@ export default function L4DeskTerminalsPage() {
   const canChangeTerminals = !user?.is_superuser && (user?.role_id === 3 || user?.role_id === 5);
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [subscriptions, setSubscriptions] = useState<SubscriptionSummary | null>(null);
   const [terminals, setTerminals] = useState<TerminalSettingsItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(1);
@@ -118,6 +122,9 @@ export default function L4DeskTerminalsPage() {
       setListTenant(user?.org_id);
       setTerminals(data.items || []);
       setTotalCount(data.total_count);
+      const finance = await getSubscriptions().catch(() => null);
+      if (currentGeneration !== generation.current) return;
+      setSubscriptions(finance);
       // Use the management screen's connection view; database flags are not live presence.
       try {
         const current = new Map<number, DeviceListItem>();
@@ -158,6 +165,7 @@ export default function L4DeskTerminalsPage() {
     setTerminals([]);
     setTotalCount(0);
     setPins(new Map());
+    setSubscriptions(null);
     setDevices(new Map());
     setIssuingPin(null);
     setActivityPending(null);
@@ -319,8 +327,8 @@ export default function L4DeskTerminalsPage() {
       width: 160,
       render: (_, r) => (
         <Space size={8}>
-          <Tooltip title="Консоль"><Button style={{ width: 38, height: 38 }} disabled={!r.is_active || devices.get(r.device_id)?.is_blocked} aria-label={`Консоль ${r.device_id}`} icon={<CodeOutlined style={{ fontSize: 21 }} />} onClick={() => navigate(`/console?device_id=${r.device_id}`)} /></Tooltip>
-          <Tooltip title="Видео"><Button style={{ width: 38, height: 38 }} disabled={!r.is_active || devices.get(r.device_id)?.is_blocked} aria-label={`Видео ${r.device_id}`} icon={<VideoCameraOutlined style={{ fontSize: 21 }} />} onClick={() => navigate(`/video?device_id=${r.device_id}`)} /></Tooltip>
+          <Tooltip title="Консоль"><Button style={{ width: 38, height: 38 }} disabled={!r.is_active || devices.get(r.device_id)?.is_blocked || subscriptions?.items.some(t => t.terminal_id === r.id && !t.allowed)} aria-label={`Консоль ${r.device_id}`} icon={<CodeOutlined style={{ fontSize: 21 }} />} onClick={() => navigate(`/console?device_id=${r.device_id}`)} /></Tooltip>
+          <Tooltip title="Видео"><Button style={{ width: 38, height: 38 }} disabled={!r.is_active || devices.get(r.device_id)?.is_blocked || subscriptions?.items.some(t => t.terminal_id === r.id && !t.allowed)} aria-label={`Видео ${r.device_id}`} icon={<VideoCameraOutlined style={{ fontSize: 21 }} />} onClick={() => navigate(`/video?device_id=${r.device_id}`)} /></Tooltip>
           <Popover trigger="click" title={`Подключение №${r.device_id}`} onOpenChange={open => { if (open) void loadPin(r); }} content={
             <Space direction="vertical">
               <Text>IoT: {r.provisioning_state || "pending"}</Text>
@@ -335,6 +343,10 @@ export default function L4DeskTerminalsPage() {
           }><Button type="text" aria-label={`Подключение и PIN ${r.device_id}`} icon={<KeyOutlined />} /></Popover>
         </Space>
       ),
+    },
+    {
+      title: "Подписка", key: "subscription", width: 170,
+      render: (_, r) => { const state = subscriptions?.items.find(t => t.terminal_id === r.id); return state ? <Tooltip title={state.reason}><Button type="link" onClick={() => navigate("/licenses")}>{subscriptionLabels[state.state]}</Button></Tooltip> : "—"; },
     },
     {
       title: "",
@@ -383,6 +395,7 @@ export default function L4DeskTerminalsPage() {
             {canChangeTerminals && <Button
               type="primary"
               icon={<PlusOutlined />}
+              disabled={subscriptions !== null && !subscriptions.can_create}
               onClick={() => setWizardOpen(true)}
             >
               Подключить терминал
@@ -390,6 +403,7 @@ export default function L4DeskTerminalsPage() {
           </Space>
         </div>
       </Card>
+      {subscriptions && !subscriptions.can_create && <Alert style={{marginBottom: 16}} type="info" title="Созданы три терминала" description="Для добавления следующих нужна активная подписка дополнительного терминала." action={<Button onClick={() => navigate("/licenses")}>Открыть подписки</Button>} />}
 
       <Card size="small" style={{ marginBottom: 16 }}>
         <Segmented<TerminalFilter>

@@ -16,7 +16,7 @@ export type RefusalReasonType =
   | "session_conflict"
   | "offline"
   | "provisioning_pending"
-  | "free_quota_exhausted"
+  | "subscription_required"
   | "grace_blocked"
   | "unknown";
 
@@ -28,14 +28,7 @@ export interface RefusalReasonInfo {
   color: "warning" | "error" | "info";
 }
 
-/**
- * Classify error code or message into one of the 5 canonical refusal reasons:
- * 1. session conflict (session_busy, 409)
- * 2. offline (offline, not reachable)
- * 3. provisioning/certificate pending (pending, certificate_pending)
- * 4. free quota exhausted without paid access (free_quota_exceeded, unpaid_secondary_terminal)
- * 5. grace/blocked (grace, entitlement_blocked, blocked)
- */
+/** Explain the server admission decision and the next action. */
 export function classifyRefusalReason(code?: string, rawMessage?: string): RefusalReasonInfo {
   const c = (code || "").toLowerCase();
   const m = (rawMessage || "").toLowerCase();
@@ -99,27 +92,19 @@ export function classifyRefusalReason(code?: string, rawMessage?: string): Refus
     };
   }
 
-  // 4. Free quota exhausted without paid access
-  if (
-    c === "free_quota_exceeded" ||
-    c === "unpaid_secondary_terminal" ||
-    m.includes("free_quota_exceeded") ||
-    m.includes("бесплатная квота") ||
-    m.includes("квота исчерпана") ||
-    m.includes("120 минут")
-  ) {
-    return {
-      type: "free_quota_exhausted",
-      title: "Бесплатная квота исчерпана",
-      description:
-        "Бесплатный лимит 120 минут в сутки для данного терминала исчерпан. Для продолжения работы сверх 120 минут пополните баланс лицевого счёта организации.",
-      badge: "Квота 120 мин исчерпана",
-      color: "warning",
-    };
+  if (c === "subscription_payments_disabled") {
+    return { type: "unknown", title: "Платные подключения пока недоступны", description: "Сейчас можно пользоваться бесплатным терминалом. Дополнительные терминалы подключатся после запуска оплаты и покупки подписки.", badge: "Оплата пока недоступна", color: "info" };
+  }
+  if (c === "subscription_admin_disabled" || c === "subscription_deleted") {
+    return { type: "unknown", title: "Терминал отключён", description: "Обратитесь к администратору. Оплата не отменяет административное отключение.", badge: "Отключён", color: "error" };
+  }
+  if (c === "subscription_unpaid" || c === "subscription_required" || c === "terminal_limit_reached") {
+    return { type: "subscription_required", title: "Требуется подписка", description: c === "terminal_limit_reached" ? "Без активной платной подписки можно создать три терминала. Откройте «Подписки» и подключите дополнительный терминал." : "Для этого дополнительного терминала нужна подписка. Откройте «Подписки», выберите терминал и срок подключения.", badge: "Требуется подписка", color: "warning" };
   }
 
   // 5. Grace / Blocked
   if (
+    c === "subscription_expired" ||
     c === "entitlement_blocked" ||
     c === "grace_blocked" ||
     c === "grace" ||
@@ -134,7 +119,7 @@ export function classifyRefusalReason(code?: string, rawMessage?: string): Refus
       type: "grace_blocked",
       title: "Действие подписки приостановлено",
       description:
-        "Удалённые сессии заблокированы из-за задолженности по подписке или истечения grace-периода. Пополните баланс лицевого счёта для немедленной разблокировки всех функций.",
+        "Подписка этого терминала закончилась. Откройте «Подписки» и продлите срок, чтобы восстановить доступ. Оплата одного терминала не влияет на остальные.",
       badge: "Блокировка подписки",
       color: "error",
     };
@@ -154,7 +139,7 @@ export function classifyRefusalReason(code?: string, rawMessage?: string): Refus
 export interface RefusalReasonCardProps {
   code?: string;
   rawMessage?: string;
-  onTopUp?: () => void;
+  onSubscriptions?: () => void;
   onRetry?: () => void;
   onStopActiveSession?: () => void;
   onViewPin?: () => void;
@@ -165,7 +150,7 @@ export interface RefusalReasonCardProps {
 export default function RefusalReasonCard({
   code,
   rawMessage,
-  onTopUp,
+  onSubscriptions,
   onRetry,
   onStopActiveSession,
   onViewPin,
@@ -182,7 +167,7 @@ export default function RefusalReasonCard({
         return <DisconnectOutlined style={{ color: "#ff4d4f" }} />;
       case "provisioning_pending":
         return <ClockCircleOutlined style={{ color: "#1890ff" }} />;
-      case "free_quota_exhausted":
+      case "subscription_required":
         return <DollarOutlined style={{ color: "#faad14" }} />;
       case "grace_blocked":
         return <StopOutlined style={{ color: "#ff4d4f" }} />;
@@ -194,7 +179,7 @@ export default function RefusalReasonCard({
   const getTagColor = () => {
     switch (info.type) {
       case "session_conflict":
-      case "free_quota_exhausted":
+      case "subscription_required":
         return "warning";
       case "offline":
       case "grace_blocked":
@@ -229,9 +214,9 @@ export default function RefusalReasonCard({
           </p>
           <Space wrap size="small">
             {/* Actions depending on reason */}
-            {(info.type === "free_quota_exhausted" || info.type === "grace_blocked") && onTopUp && (
-              <Button type="primary" size="small" icon={<DollarOutlined />} onClick={onTopUp}>
-                Пополнить баланс
+            {(info.type === "subscription_required" || info.type === "grace_blocked") && onSubscriptions && (
+              <Button type="primary" size="small" icon={<DollarOutlined />} onClick={onSubscriptions}>
+                Открыть подписки
               </Button>
             )}
 

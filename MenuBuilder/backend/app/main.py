@@ -18,7 +18,6 @@ from app.routers import (
     billing,
     catalog,
     dashboard,
-    finance,
     groups,
     hub,
     integrations,
@@ -33,6 +32,7 @@ from app.routers import (
     reports,
     services,
     settings_users,
+    subscriptions,
     terminal_bindings,
     video,
     video_control,
@@ -74,24 +74,24 @@ async def lifespan(app: FastAPI):
             expected_revision=settings.required_alembic_revision,
         )
 
+    if settings.yookassa_enabled and (
+        not settings.yookassa_shop_id
+        or not settings.yookassa_secret_key
+        or not settings.yookassa_return_url_base.startswith("https://")
+    ):
+        raise RuntimeError(
+            "Enabled YooKassa requires configured credentials and HTTPS return URL"
+        )
     cleanup_task: asyncio.Task | None = None
     consumer_task: asyncio.Task | None = None
-    entitlement_task: asyncio.Task | None = None
-    metering_close_task: asyncio.Task | None = None
+    subscription_task: asyncio.Task | None = None
     if settings.session_cleanup_enabled:
         cleanup_task = asyncio.create_task(_cleanup_expired_sessions_task())
     if settings.iot_consumer_enabled:
         consumer_task = asyncio.create_task(iot_event_consumer.run_worker())
-    if settings.l4desk_entitlement_worker_enabled:
-        from app.services.financial_core import entitlement_worker
+    from app.services.subscription_worker import run_worker
 
-        entitlement_task = asyncio.create_task(entitlement_worker.run_worker())
-    if settings.l4desk_metering_close_worker_enabled:
-        from app.services.financial_core.metering_close_worker import (
-            metering_close_worker,
-        )
-
-        metering_close_task = asyncio.create_task(metering_close_worker.run_worker())
+    subscription_task = asyncio.create_task(run_worker())
     try:
         yield
     finally:
@@ -103,14 +103,10 @@ async def lifespan(app: FastAPI):
             consumer_task.cancel()
             with suppress(asyncio.CancelledError):
                 await consumer_task
-        if entitlement_task is not None:
-            entitlement_task.cancel()
+        if subscription_task is not None:
+            subscription_task.cancel()
             with suppress(asyncio.CancelledError):
-                await entitlement_task
-        if metering_close_task is not None:
-            metering_close_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await metering_close_task
+                await subscription_task
 
 
 app = FastAPI(title="MenuBuilder API", version="0.2.0", lifespan=lifespan)
@@ -184,6 +180,7 @@ app.include_router(video_control.router)
 app.include_router(remote_sessions.router, prefix="/api/v1")
 app.include_router(remote_sessions.router, prefix="/api")
 app.include_router(iot_consumer.router)
-app.include_router(finance.router)
+app.include_router(subscriptions.router, prefix="/api/v1")
+app.include_router(subscriptions.router, prefix="/api", include_in_schema=False)
 app.include_router(hub.router)
 app.include_router(archive.router)

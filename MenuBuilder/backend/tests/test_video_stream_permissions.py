@@ -29,6 +29,7 @@ def anyio_backend():
 @pytest.fixture
 def mock_db_session():
     mock_db = AsyncMock()
+    mock_db.get.return_value = None
     terminal_1 = Terminal(device_id=1, sn="sn0001", org_id=1)
     terminal_2 = Terminal(device_id=2, sn="sn0002", org_id=2)
 

@@ -139,6 +139,7 @@ class L4DeskTerminal(Base):
     last_error: Mapped[str | None] = mapped_column(String(500))
     first_online_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_online_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    paid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

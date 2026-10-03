@@ -51,7 +51,7 @@ const L4DESK_NAV_ITEMS = [
   { key: "console", icon: <CodeOutlined />, label: "Консоль" },
   { key: "settings", icon: <SettingOutlined />, label: "Настройки" },
   { key: "mcp", icon: <ApiOutlined />, label: "MCP" },
-  { key: "licenses", icon: <DollarOutlined />, label: "Лицензии" },
+  { key: "licenses", icon: <DollarOutlined />, label: "Подписки" },
 ];
 
 export default function AppLayout() {

@@ -14,3 +14,6 @@
 - [17E FIX transfer, 2026-09-27](2026-09-27-l4d-17e-fix-transfer.md) —
   опубликованные входы, byte bindings, адресная регистрация и критерии
   дальнейшей приёмки.
+- [Контекст упрощения биллинга L4Desk, 2026-10-03](2026-10-03-l4desk-billing-simplification-context.md) —
+  исторический baseline до реализации; актуальная delta и границы проверки
+  описаны в [handoff подписок](2026-10-03-l4desk-terminal-subscriptions-handoff.md).

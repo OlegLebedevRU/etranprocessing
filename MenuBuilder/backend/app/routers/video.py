@@ -213,6 +213,18 @@ async def _verify_device_access(
         )
     if require_active and terminal.is_active is False:
         raise HTTPException(403, "Терминал отключён")
+    if require_active:
+        from app.services.subscriptions import check_terminal
+
+        subscription = await check_terminal(db, terminal.org_id, terminal)
+        if subscription is not None and not subscription.allowed:
+            raise HTTPException(
+                403,
+                detail={
+                    "code": f"subscription_{subscription.state}",
+                    "message": subscription.reason,
+                },
+            )
     return terminal
 
 

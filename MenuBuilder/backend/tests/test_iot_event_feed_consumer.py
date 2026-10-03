@@ -184,7 +184,7 @@ async def test_client_timeout_and_bounded_retry():
 
 
 @pytest.mark.anyio
-async def test_device_online_finance_is_allowlisted_and_shadow_safe(
+async def test_device_online_never_schedules_financial_charges(
     fixture_events: list[RemoteSessionEventItem], monkeypatch: pytest.MonkeyPatch
 ):
     event = next(e for e in fixture_events if e.event_type == "device_online")
@@ -202,7 +202,7 @@ async def test_device_online_finance_is_allowlisted_and_shadow_safe(
     )
     monkeypatch.setattr(settings, "iot_consumer_shadow_mode", False)
     await active_consumer.process_batch([event])
-    assert active_storage._inbox[event.event_id]["status"] == "pending_finance"
+    assert active_storage._inbox[event.event_id]["status"] == "processed"
 
     other_storage = InMemoryIotConsumerStorage()
     other_consumer = IotEventConsumer(

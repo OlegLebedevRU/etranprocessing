@@ -151,6 +151,11 @@ class MockInMemoryDb:
             return self.orgs.get(ident)
         return None
 
+    async def scalar(self, stmt: Any) -> Any:
+        if "from orgs" in str(stmt).lower():
+            return stmt.compile().params.get("org_id_1")
+        return (await self.execute(stmt)).scalar_one_or_none()
+
     async def execute(self, stmt: Any) -> MockResult:
         sql = str(stmt).lower()
 

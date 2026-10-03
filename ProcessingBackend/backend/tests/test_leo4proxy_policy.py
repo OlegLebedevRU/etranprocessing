@@ -23,6 +23,7 @@ def anyio_backend():
 @pytest.fixture
 def policy_db(monkeypatch):
     database = AsyncMock()
+    database.get.return_value = None
 
     async def override_db():
         yield database
@@ -125,3 +126,32 @@ def test_policy_is_published_in_openapi():
     assert operation["responses"]["200"]["content"]["application/json"]["schema"] == {
         "$ref": "#/components/schemas/Leo4ProxyPolicy"
     }
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("free,enabled,days,deleted,allowed", [
+    (True,False,None,False,True),
+    (False,False,10,False,False),
+    (False,True,None,False,False),
+    (False,True,10,False,True),
+    (False,True,-1,False,True),
+    (False,True,-4,False,False),
+    (True,True,10,True,False),
+])
+async def test_transport_matches_subscription_admission(monkeypatch,free,enabled,days,deleted,allowed):
+    from datetime import UTC,datetime,timedelta
+    from app.config import settings
+    from app.services.leo4proxy_policy import subscription_allowance,get_leo4proxy_policy
+    from etranprocessing_db.l4desk import L4DeskTenantProfile,L4DeskTerminal
+    now=datetime.now(UTC)
+    db=AsyncMock()
+    db.get.return_value=L4DeskTenantProfile(tenant_id=1,timezone="UTC")
+    record=L4DeskTerminal(terminal_id=2,tenant_id=1,ordinal=2,paid_until=now+timedelta(days=days) if days is not None else None,deleted_at=now if deleted else None)
+    db.scalar.side_effect=[record,2 if free else 1,None]
+    monkeypatch.setattr(settings,"yookassa_enabled",enabled)
+    terminal=Terminal(id=2,device_id=2,org_id=1,sn="scoped-terminal",is_active=True)
+    actual=await subscription_allowance(db,terminal)
+    assert actual is allowed
+    assert get_leo4proxy_policy(terminal,actual).outgoing_https_allowed
+    terminal.is_active=False
+    assert not get_leo4proxy_policy(terminal,actual).mqtt_rtp_allowed

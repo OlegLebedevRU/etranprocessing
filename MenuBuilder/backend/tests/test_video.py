@@ -39,6 +39,7 @@ def anyio_backend():
 @pytest.fixture
 def mock_db_session():
     mock_db = AsyncMock()
+    mock_db.get.return_value = None
     terminal_1 = Terminal(device_id=1, sn="sn0001", org_id=1)
 
     async def mock_scalar(stmt, *args, **kwargs):

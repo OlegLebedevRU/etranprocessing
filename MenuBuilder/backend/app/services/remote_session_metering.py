@@ -1,4 +1,4 @@
-"""Durable, consumer-favouring metering checkpoints for remote sessions."""
+"""Durable, technical metering checkpoints for remote sessions."""
 
 import hashlib
 import math
@@ -8,13 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models_l4desk import L4DeskRemoteSession
 from app.repositories.l4desk_repository import L4DeskRepository
-from app.services.financial_core.metering import FinMeteringService
+from app.services.usage import UsageService
 
 CHECKPOINT_SECONDS = 60
 
 
 def initial_metering_cursor(active_at: datetime) -> int:
-    """Start at the next whole UTC second so fractional time is never billed."""
+    """Start at the next whole UTC second so fractional seconds are not counted twice."""
     return math.ceil(active_at.timestamp())
 
 
@@ -24,7 +24,7 @@ def checkpoint_due(session: L4DeskRemoteSession | None, at: datetime) -> bool:
     if not session.last_cursor or session.last_cursor < initial_metering_cursor(
         session.active_at
     ):
-        return True  # Existing sessions need a fresh, unbilled starting point.
+        return True  # Existing sessions need a fresh, unrecorded starting point.
     return int(at.timestamp()) - session.last_cursor >= CHECKPOINT_SECONDS
 
 
@@ -65,7 +65,7 @@ async def _record_period(
     if end_epoch <= start_epoch:
         return 0
     event_id = f"remote-session-{session.id}-through-{end_epoch}"
-    await FinMeteringService.record_session_usage(
+    await UsageService.record_session_usage(
         db,
         tenant_id=session.tenant_id,
         terminal_id=session.terminal_id,
@@ -117,7 +117,7 @@ async def checkpoint_remote_session(
         session.active_at
     ):
         # Sessions opened by the old code have no durable watermark. Their
-        # earlier interval cannot be proved and is waived for the customer.
+        # earlier interval cannot be proved and is excluded from technical statistics.
         session.last_cursor = max(
             initial_metering_cursor(session.active_at),
             initial_metering_cursor(at),
@@ -150,7 +150,7 @@ async def close_remote_session(
     confirmed_end: bool,
     expected_provider_session_id: str | None = None,
 ) -> L4DeskRemoteSession | None:
-    """Bill the confirmed tail, or waive an end time that cannot be proved."""
+    """Record the confirmed tail; exclude an end time that cannot be proved."""
     session = await L4DeskRepository(db).get_active_session_by_terminal_id(
         terminal_id, lock=True
     )

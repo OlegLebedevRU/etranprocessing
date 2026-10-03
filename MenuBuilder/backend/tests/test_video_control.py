@@ -33,6 +33,7 @@ async def test_owner_lease_looks_up_runtime_terminal_id() -> None:
         "session_id": "jwt-session",
     }
     db = AsyncMock()
+    db.get.return_value = None
     policy = SimpleNamespace(
         evaluate_session_request=AsyncMock(return_value=SimpleNamespace(allowed=True))
     )
@@ -167,6 +168,7 @@ async def test_repeated_console_leases_use_unique_provider_session_ids() -> None
         ),
     ):
         db = AsyncMock()
+        db.get.return_value = None
         for _ in leases:
             await acquire_device_control_lease(
                 1000003, LeaseAcquireRequest(scope="console"), user, db
@@ -259,6 +261,7 @@ def org1_viewer_headers(org1_viewer_token):
 @pytest.fixture
 def mock_db_session():
     mock_db = AsyncMock()
+    mock_db.get.return_value = None
 
     terminal_1 = Terminal(
         device_id=1,

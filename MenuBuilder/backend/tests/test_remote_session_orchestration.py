@@ -22,7 +22,9 @@ from app.services.remote_session_use_case import RemoteSessionUseCase
 
 
 @pytest.fixture(autouse=True)
-def setup_flags():
+def setup_flags(monkeypatch):
+    # Duration persistence has dedicated unit and PostgreSQL contract tests.
+    monkeypatch.setattr("app.services.remote_session_metering.UsageService.record_session_usage", AsyncMock())
     orig_orch = settings.l4desk_session_orchestration_enabled
     orig_policy = settings.l4desk_policy_enforcement_enabled
     settings.l4desk_session_orchestration_enabled = True
@@ -143,6 +145,11 @@ class MockRemoteSessionDb:
 
     async def refresh(self, obj: Any) -> None:
         pass
+
+    async def get(self, model: Any, ident: Any) -> Any:
+        return (
+            None  # Classic fixture: technical records do not enroll in subscriptions.
+        )
 
     async def scalar(self, stmt: Any) -> Any:
         res = await self.execute(stmt)

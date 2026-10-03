@@ -2,17 +2,14 @@ from __future__ import annotations
 
 import contextlib
 from datetime import UTC, date, datetime, timedelta
+from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import pytest
-from httpx import ASGITransport, AsyncClient
 
-import app.services.financial_core.stop_outbox as stop_outbox_module
-from app.auth import create_access_token
+import app.services.remote_session_stop as stop_outbox_module
 from app.config import settings
-from app.database import get_db
-from app.main import app
 from app.models import Terminal, User
 from app.models_l4desk import (
     FinAccount,
@@ -46,9 +43,6 @@ from app.services.financial_core import (
     FinStopOutboxService,
 )
 from app.services.financial_core.worker import FinEntitlementWorker
-from app.services.remote_session_policy import (
-    L4DeskEntitlementPolicy,
-)
 
 
 class MockResult:
@@ -1053,11 +1047,17 @@ async def test_active_session_stop_on_blocked():
 
 
 @pytest.mark.anyio
-async def test_stop_outbox_retry_on_provider_failure():
+async def test_stop_outbox_retry_on_provider_failure(monkeypatch):
     """Verify stop outbox retains stop_requested status on failure and retries successfully."""
     fake_db = FakeEntitlementDb()
     db = cast(Any, fake_db)
     tenant_id = 507
+    # Retry is still needed only when the current terminal policy denies access.
+    fake_db.get = AsyncMock(return_value=Terminal(id=101, org_id=tenant_id))
+    monkeypatch.setattr(
+        "app.services.subscriptions.check_terminal",
+        AsyncMock(return_value=SimpleNamespace(allowed=False)),
+    )
 
     # Mock adapter that fails on first call, succeeds on retry
     mock_iot = MockIotAdapter(fail_next=True)
@@ -1252,215 +1252,6 @@ async def test_email_provider_failure_and_retry_resilience():
 
 
 @pytest.mark.anyio
-async def test_remote_session_policy_shadow_vs_enforced_mode(monkeypatch):
-    """Verify L4DeskEntitlementPolicy behavior in shadow mode vs enforced mode."""
-    # Keep this blocked scenario outside the new-cycle grace window on any run date.
-    monkeypatch.setattr(
-        FinEntitlementService,
-        "resolve_as_of",
-        staticmethod(
-            lambda tenant_id, as_of=None: as_of or datetime(2026, 9, 15, tzinfo=UTC)
-        ),
-    )
-    fake_db = FakeEntitlementDb()
-    db = cast(Any, fake_db)
-    tenant_id = 510
-
-    # Tenant is blocked
-    past_anchor = datetime(2026, 8, 1, 0, 0, 0, tzinfo=UTC)
-    past_grace = datetime(2026, 8, 4, 0, 0, 0, tzinfo=UTC)
-    past_end = datetime(2026, 9, 1, 0, 0, 0, tzinfo=UTC)
-
-    profile = FinBillingProfile(
-        tenant_id=tenant_id,
-        anchor_at=past_anchor,
-        anchor_day=1,
-        anchor_timezone="UTC",
-        entitlement="blocked",
-    )
-    fake_db.add(profile)
-
-    cycle = FinBillingCycle(
-        id=50,
-        tenant_id=tenant_id,
-        sequence=0,
-        timezone="UTC",
-        starts_at=past_anchor,
-        ends_at=past_end,
-        grace_deadline=past_grace,
-    )
-    fake_db.add(cycle)
-
-    proj = FinBalanceProjection(
-        tenant_id=tenant_id,
-        account_id=1,
-        balance_kopecks=-1000,
-        version=1,
-        last_transaction_id=None,
-        updated_at=datetime.now(UTC),
-    )
-    fake_db.add(proj)
-
-    term = Terminal(
-        id=301,
-        org_id=tenant_id,
-        sn="SN-301",
-    )
-    user_context = {"role_id": 5, "org_id": tenant_id, "is_l4desk": True}
-
-    # 1. Shadow Mode (enforcement_enabled = False): allows start, retains decision metadata
-    policy_shadow = L4DeskEntitlementPolicy(enforcement_enabled=False)
-    dec_shadow = await policy_shadow.evaluate_session_request(
-        tenant_id=tenant_id,
-        terminal=term,
-        session_type="console",
-        user=user_context,
-        db=db,
-    )
-    assert dec_shadow.allowed  # Allowed in shadow mode!
-    assert dec_shadow.entitlement_state == "blocked"
-    assert dec_shadow.error_code == REASON_ENTITLEMENT_BLOCKED
-
-    # 2. Strict Mode (enforcement_enabled = True): strictly blocks session!
-    policy_enforced = L4DeskEntitlementPolicy(enforcement_enabled=True)
-    dec_enforced = await policy_enforced.evaluate_session_request(
-        tenant_id=tenant_id,
-        terminal=term,
-        session_type="console",
-        user=user_context,
-        db=db,
-    )
-    assert not dec_enforced.allowed  # Denied in enforced mode!
-    assert dec_enforced.entitlement_state == "blocked"
-    assert dec_enforced.error_code == REASON_ENTITLEMENT_BLOCKED
-
-
-@pytest.mark.anyio
-async def test_http_endpoints_and_worker_tick():
-    """Verify HTTP REST API endpoints for entitlement, notifications, and worker tick."""
-    fake_db = FakeEntitlementDb()
-    tenant_id = 511
-
-    # User tokens
-    tenant_token = create_access_token(
-        data={"sub": "100", "role": "user", "role_id": 5, "org_id": tenant_id}
-    )
-    superuser_token = create_access_token(
-        data={
-            "sub": "1",
-            "role": "superuser",
-            "role_id": 1,
-            "is_superuser": True,
-            "org_id": 1,
-        }
-    )
-
-    profile = FinBillingProfile(
-        tenant_id=tenant_id,
-        anchor_at=datetime(2026, 10, 1, 0, 0, 0, tzinfo=UTC),
-        anchor_day=1,
-        anchor_timezone="UTC",
-        entitlement="grace",
-    )
-    fake_db.add(profile)
-
-    cycle = FinBillingCycle(
-        id=60,
-        tenant_id=tenant_id,
-        sequence=0,
-        timezone="UTC",
-        starts_at=datetime(2026, 10, 1, 0, 0, 0, tzinfo=UTC),
-        ends_at=datetime(2026, 11, 1, 0, 0, 0, tzinfo=UTC),
-        grace_deadline=datetime(2026, 10, 4, 0, 0, 0, tzinfo=UTC),
-    )
-    fake_db.add(cycle)
-
-    proj = FinBalanceProjection(
-        tenant_id=tenant_id,
-        account_id=1,
-        balance_kopecks=-500,
-        version=1,
-        last_transaction_id=None,
-        updated_at=datetime.now(UTC),
-    )
-    fake_db.add(proj)
-
-    notif = FinNotificationDelivery(
-        id=201,
-        tenant_id=tenant_id,
-        billing_cycle_id=60,
-        notification_type="grace",
-        scheduled_at=datetime.now(UTC),
-        status="sent",
-        attempts=1,
-        sent_at=datetime.now(UTC),
-        provider_message_id="msg-ok-1",
-        correlation_id="corr-n-201",
-    )
-    fake_db.add(notif)
-
-    async def get_test_db():
-        yield cast(Any, fake_db)
-
-    app.dependency_overrides[get_db] = get_test_db
-
-    try:
-        transport = ASGITransport(app=app)
-        async with AsyncClient(
-            transport=transport, base_url="http://testserver"
-        ) as client:
-            # 1. GET /api/v1/finance/entitlement
-            resp_ent = await client.get(
-                "/api/v1/finance/entitlement",
-                headers={"Authorization": f"Bearer {tenant_token}"},
-            )
-            assert resp_ent.status_code == 200
-            ent_data = resp_ent.json()
-            assert ent_data["tenant_id"] == tenant_id
-            assert ent_data["balance_kopecks"] == -500
-            assert ent_data["is_first_paid"] is True
-            assert ent_data["cycle_id"] == 60
-
-            # 2. GET /api/v1/finance/notifications
-            resp_notifs = await client.get(
-                "/api/v1/finance/notifications",
-                headers={"Authorization": f"Bearer {tenant_token}"},
-            )
-            assert resp_notifs.status_code == 200
-            notifs_data = resp_notifs.json()
-            assert len(notifs_data) >= 1
-            assert notifs_data[0]["notification_type"] == "grace"
-            assert notifs_data[0]["status"] == "sent"
-
-            # 3. GET /api/internal/v1/finance/entitlement/{tenant_id} as superuser
-            resp_su_ent = await client.get(
-                f"/api/internal/v1/finance/entitlement/{tenant_id}",
-                headers={"Authorization": f"Bearer {superuser_token}"},
-            )
-            assert resp_su_ent.status_code == 200
-            assert resp_su_ent.json()["tenant_id"] == tenant_id
-
-            # 4. POST /api/internal/v1/finance/stop-outbox/process as superuser
-            resp_outbox = await client.post(
-                "/api/internal/v1/finance/stop-outbox/process",
-                headers={"Authorization": f"Bearer {superuser_token}"},
-            )
-            assert resp_outbox.status_code == 200
-
-            # 5. POST /api/internal/v1/finance/entitlement/worker/tick as superuser
-            resp_tick = await client.post(
-                "/api/internal/v1/finance/entitlement/worker/tick",
-                headers={"Authorization": f"Bearer {superuser_token}"},
-            )
-            assert resp_tick.status_code == 200
-            tick_data = resp_tick.json()
-            assert "tenants_evaluated" in tick_data
-            assert "notifications_scheduled" in tick_data
-    finally:
-        app.dependency_overrides.pop(get_db, None)
-
-
-@pytest.mark.anyio
 async def test_scoped_entitlement_clock_and_tick_isolation(
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -1537,31 +1328,6 @@ async def test_scoped_entitlement_clock_and_tick_isolation(
     assert blocked["sessions_stopped"] == 1
     assert session.state == "closed"
     assert mock_iot.stop_calls[0]["session_id"] == "provider-scoped-e2e"
-
-
-@pytest.mark.anyio
-async def test_scoped_test_tick_requires_superuser_and_allowlist(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    monkeypatch.setattr(settings, "l4desk_entitlement_test_tenant_ids", [512])
-    tenant_token = create_access_token(
-        data={"sub": "100", "role": "user", "role_id": 5, "org_id": 512}
-    )
-    superuser_token = create_access_token(
-        data={"sub": "1", "role": "superuser", "is_superuser": True}
-    )
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        denied = await client.post(
-            "/api/internal/v1/finance/entitlement/test-tenant/512/tick",
-            headers={"Authorization": f"Bearer {tenant_token}"},
-        )
-        assert denied.status_code == 403
-        disabled = await client.post(
-            "/api/internal/v1/finance/entitlement/test-tenant/513/tick",
-            headers={"Authorization": f"Bearer {superuser_token}"},
-        )
-        assert disabled.status_code == 404
 
 
 @pytest.mark.anyio

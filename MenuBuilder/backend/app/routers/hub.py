@@ -13,8 +13,6 @@ from app.services.financial_core import (
     ArchiveService,
     FinReconciliationRequest,
     FinReconciliationRunRead,
-    FinReconciliationService,
-    FinValidationError,
     HubArchiveBatchesResponse,
     HubArchiveBatchItem,
 )
@@ -401,18 +399,9 @@ async def create_hub_manual_payment(
     db: AsyncSession = Depends(get_db),
     auth: dict[str, Any] = Depends(require_internal_or_superuser),
 ) -> FinManualPaymentRead:
-    """Register legal entity manual bank payment (requires confirmation code '11')."""
-    actor = auth.get("sub") or auth.get("username") or "superuser"
-    user_id = auth.get("userId") or auth.get("id") or 1
-    try:
-        res = await HubService.create_manual_payment_with_code11(
-            db, body, actor=str(actor), user_id=int(user_id)
-        )
-        return res
-    except FinValidationError as err:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)
-        ) from err
+    raise HTTPException(
+        410, "Прежняя финансовая модель закрыта; используйте подписки терминалов"
+    )
 
 
 @router.post(
@@ -429,17 +418,9 @@ async def storno_hub_manual_payment(
     db: AsyncSession = Depends(get_db),
     auth: dict[str, Any] = Depends(require_internal_or_superuser),
 ) -> FinManualPaymentRead:
-    """Storno/reverse manual bank payment (requires confirmation code '11')."""
-    actor = auth.get("sub") or auth.get("username") or "superuser"
-    try:
-        res = await HubService.storno_manual_payment_with_code11(
-            db, manual_payment_id, body, actor=str(actor)
-        )
-        return res
-    except FinValidationError as err:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)
-        ) from err
+    raise HTTPException(
+        410, "Прежняя финансовая модель закрыта; используйте подписки терминалов"
+    )
 
 
 # =============================================================================
@@ -460,14 +441,9 @@ async def trigger_hub_reconciliation(
     db: AsyncSession = Depends(get_db),
     _auth: dict[str, Any] = Depends(require_internal_or_superuser),
 ) -> FinReconciliationRunRead:
-    """Execute financial reconciliation run from Hub."""
-    try:
-        run = await FinReconciliationService.run_reconciliation(db, body)
-        return FinReconciliationRunRead.model_validate(run)
-    except FinValidationError as err:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)
-        ) from err
+    raise HTTPException(
+        410, "Прежняя финансовая модель закрыта; используйте подписки терминалов"
+    )
 
 
 # =============================================================================

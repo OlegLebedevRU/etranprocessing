@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Any
 
 from etranprocessing_db.models.org import Org
-from sqlalchemy import func, or_, select
+from sqlalchemy import String, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models_l4desk import (
@@ -617,7 +617,17 @@ class HubService:
 
         # 1. YooKassa Payments
         if payment_source in (None, "yookassa"):
-            q_pay = select(FinPayment)
+            # Subscription payments deliberately have no legacy ledger posting.
+            # Keep them out of this frozen history and its "missing posting" alerts.
+            q_pay = select(FinPayment).where(
+                ~exists(
+                    select(L4DeskAuditEvent.id).where(
+                        L4DeskAuditEvent.tenant_id == FinPayment.tenant_id,
+                        L4DeskAuditEvent.event_type == "subscription.order",
+                        L4DeskAuditEvent.subject_id == FinPayment.id.cast(String),
+                    )
+                )
+            )
             if tenant_id is not None:
                 q_pay = q_pay.where(FinPayment.tenant_id == tenant_id)
             if status:
