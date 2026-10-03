@@ -2,6 +2,16 @@
 
 ## Статус
 
+### Выпуск подписок L4Desk (2026-10-03 UTC)
+
+ProcessingBackend, MenuBuilder backend и frontend выпущены адресно из main
+`8bb035944e709ace5b53df8d76586a4d596cfe89` по builder → registry → production
+pull. Schema029 применена новым PB образом, YooKassa OFF; оба backend health200,
+frontend index сверён с registry artifact. ID соседних контейнеров сохранены,
+Nginx не перезапускался; timer остаётся inactive. Новые backend digest закреплены
+в persistent override и базовом Compose. Точные digests, проверки и ограничения:
+[release handoff](../.agent-context/tasks/completed/2026-10-03-l4desk-terminal-subscriptions-release.md).
+
 ### Единый порядок доставки серверных владельцев (2026-09-29)
 
 Для собственных сервисов L4D действует один release contract: принятый полный

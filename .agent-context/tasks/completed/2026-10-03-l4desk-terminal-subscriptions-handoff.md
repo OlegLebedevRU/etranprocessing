@@ -3,8 +3,8 @@
 ## Контекст задачи
 
 - Scope: упрощение модели подписок и UI по варианту A ревизии 2 исходного плана и дополнениям пользователя. Владелец подписок/API — MenuBuilder; ORM — shared; migration — ProcessingBackend. Сессии/epoch/duration остаются техническим ядром.
-- Ветка: `feat/l4desk-terminal-subscriptions`, base `origin/main` = `9cb98b8baa4344645c2bb33ffaa0886d601b3cf0`; реализация в working tree без commit и без publication.
-- Проверки: 2026-10-03, Windows/Python 3.14; разрешённый 176 builder, изолированная PostgreSQL 18. Локальный Docker недоступен. Production не изменён; реальная ЮKassa не использовалась.
+- Реализация опубликована в main: `8bb035944e709ace5b53df8d76586a4d596cfe89`, base `9cb98b8baa4344645c2bb33ffaa0886d601b3cf0`. [Production release](2026-10-03-l4desk-terminal-subscriptions-release.md) завершён после перечисленных ниже изолированных проверок.
+- Проверки реализации: 2026-10-03, Windows/Python 3.14; разрешённый 176 builder, изолированная PostgreSQL 18. Локальный Docker недоступен. Реальная ЮKassa не использовалась; последующий production smoke описан отдельно.
 - Применены repo-intake-and-routing, api-and-data-ownership, verification-matrix; карточки компонентов и session/media contracts. Исключённые каталоги не исследовались; MQTT-клиенты не менялись.
 - `[MCP Ops Readiness: UNAVAILABLE]`: ops tools в сессии отсутствуют. Для разрешённых проверок использован SSH. Начальный builder preflight: свободная RAM 2798 MiB, диск 57%, load 0.08; production только read-only preflight.
 
@@ -45,7 +45,8 @@
 - [x] Builder собрал runtime-образ MenuBuilder (`--target runtime`) и образ ProcessingBackend из текущих исходников, exit 0. Начальная попытка `--target release` с сокращённым test archive не нашла `MenuBuilder/nginx.conf`; для runtime использована корректная target без verification stage. Production release image flow ещё не выполнялся.
 - [x] Runtime MenuBuilder на выделенной PostgreSQL со schema revision 029 и YooKassa OFF: lifespan startup/schema check/shutdown — exit 0, `LIFESPAN_OK_SCHEMA029_PAYMENTS_OFF`; 23 обязательные таблицы найдены. Test schema stamp задавался только в disposable DB, не в production.
 - [x] Read-only secret scan изменённых/новых текстовых файлов: 4 совпадения, все проверены — явно тестовые literals (`hash`, `test-only`, test internal key). Реальные credentials не обнаружены.
-- [ ] Production rollout, actual provider purchase, реальные MQTT/RTP policy responses и терминальные stop — не выполнялись. Их результаты не подменены unit/browser тестами.
+- [x] Последующий production rollout применён, см. [release evidence](2026-10-03-l4desk-terminal-subscriptions-release.md).
+- [ ] Actual provider purchase, hardware MQTT/RTP и терминальные stop E2E — не выполнялись. Их результаты не подменены unit/browser тестами или DB policy smoke.
 
 ## Evidence и ограничения
 
@@ -55,7 +56,7 @@
 
 ## Остаток и переход
 
-- Реализация кода завершена; применение schema 029 и согласованный rollout остаются отдельным операционным шагом по [порядку перехода](../../../docs/menu_bill-terminal-subscription.md). Цена/default регистрации в коде не доказывают текущие значения deployed env.
+- Реализация кода, schema029 и согласованный rollout завершены по [порядку перехода](../../../docs/menu_bill-terminal-subscription.md). Текущие проверенные production значения и digest записаны в release handoff.
 - Коммерческое включение требует env credentials/return URL/чека и одного согласованного `YOOKASSA_ENABLED`, затем отдельной проверки настоящего разрешённого тестового платежа. Архивные billing flags больше не являются коммерческим gate.
 - Email outbox best effort: crash после отправки и до commit может повторить письмо. Сроки выдаются в DB атомарно и от этой доставки не зависят.
 - Cleanup выполнен: собственные test containers (включая PostgreSQL и его anonymous volume), network, четыре image tag, удалённые archive/source directory и локальные временные archive/logs/test output удалены. Проверка на builder вернула `TASK_RESOURCES_REMOVED`, без оставшихся `l4desk-subscription*` ресурсов. Чужие сервисы/данные не изменены.
@@ -64,4 +65,4 @@
 
 - [Исторический baseline](2026-10-03-l4desk-billing-simplification-context.md) помечен как состояние до реализации.
 - [План по стекам](../../../plans/menu_bill-terminal-subscription-implementation-plan.md) обновлён статусом реализации.
-- [Правила и переход](../../../docs/menu_bill-terminal-subscription.md), docs index, MenuBuilder CHANGELOG обновлены. Packet оставлен active до rollout, без ложного production acceptance.
+- [Правила и переход](../../../docs/menu_bill-terminal-subscription.md), docs index, MenuBuilder CHANGELOG обновлены. После rollout packet перенесён в completed; границы provider/hardware acceptance сохранены.

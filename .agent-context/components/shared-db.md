@@ -1,5 +1,12 @@
 # Shared DB: etranprocessing_db
 
+## 2026-10-03: production schema029
+
+Аддитивная migration029 добавила nullable timestamptz `L4DeskTerminal.paid_until`.
+Новых таблиц/drop/конвертации старых финансов нет. PB и MB обновлены из 8bb0359;
+MB проверяет revision и колонку. Schema/provenance artifacts v029 — текущий
+контракт source package. [Release evidence](../tasks/completed/2026-10-03-l4desk-terminal-subscriptions-release.md).
+
 ## Назначение
 Единый тонкий декларативный ORM-контракт для ProcessingBackend и MenuBuilder.
 

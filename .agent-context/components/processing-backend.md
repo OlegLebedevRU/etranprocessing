@@ -1,5 +1,13 @@
 # ProcessingBackend
 
+## 2026-10-03: production subscription transport policy
+
+Ревизия 8bb0359 и schema029: MQTT/RTP admission учитывает admin is_active AND
+вычисляемую terminal subscription; outgoing HTTPS сохранён. Classic без tenant
+profile не включается в подписки. YooKassa OFF совпадает с MB; оплачиваемые
+терминалы заблокированы. Migration029 принадлежит PB и выполнена новым образом.
+[Release evidence](../tasks/completed/2026-10-03-l4desk-terminal-subscriptions-release.md).
+
 ## Назначение
 Терминальный payment/mTLS gateway и единая цепочка Alembic общей PostgreSQL-схемы.
 

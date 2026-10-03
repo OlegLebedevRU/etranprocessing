@@ -1,6 +1,6 @@
 # Реализация подписок L4Desk и понятного финансового интерфейса
 
-Дата: 2026-10-03. Статус: реализовано в рабочей ветке по стекам; production не изменён. Результат и проверки: [handoff](../.agent-context/tasks/active/2026-10-03-l4desk-terminal-subscriptions-handoff.md). Правила и переход: [документ реализации](../docs/menu_bill-terminal-subscription.md).
+Дата: 2026-10-03. Статус: реализовано по стекам и выпущено в production, ревизия 8bb0359, schema029, YooKassa OFF. [Релиз](../.agent-context/tasks/completed/2026-10-03-l4desk-terminal-subscriptions-release.md), [реализация и проверки](../.agent-context/tasks/completed/2026-10-03-l4desk-terminal-subscriptions-handoff.md). Правила и переход: [документ реализации](../docs/menu_bill-terminal-subscription.md).
 
 Исходный документ: `D:/repo/platerra/Public/etranprocessing/plans/menu_bill-terminal-subscription-plan.md`, вариант A, ревизия 2. Дополнения пользователя имеют приоритет. Каскад L4D принимается завершённым для совместимых технических механизмов; повторное прохождение всего каскада не является условием этой переработки. Исторические production-флаги не определяют целевое поведение.
 

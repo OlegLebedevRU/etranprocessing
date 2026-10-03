@@ -1,6 +1,6 @@
 # Подписки L4Desk: правила и переход
 
-Дата: 2026-10-03. Описывает новую реализацию в рабочей ветке, а не состояние production.
+Дата: 2026-10-03. Реализация `8bb0359` выпущена в production через builder/registry/pull; схема 029, YooKassa OFF. [Результат релиза](../.agent-context/tasks/completed/2026-10-03-l4desk-terminal-subscriptions-release.md).
 
 ## Что видит пользователь
 
@@ -48,4 +48,4 @@ MenuBuilder проверяет revision 029 и наличие колонки п�
 3. Обновить ProcessingBackend и MenuBuilder на согласованные образы; выпустить frontend. Проверить schema readiness, бесплатный терминал, запрет дополнительных при выключенных оплатах, остановку адресных сессий и статистику без проводок. Учесть старые явные `L4DESK_REGISTRATION_ENABLED` / onboarding значения окружения, которые переопределяют новые defaults.
 4. Для коммерческого включения настроить ключи магазина, HTTPS return URL и чек через окружение; включить `YOOKASSA_ENABLED` в обоих backend. Старые `l4desk_billing_*` flags не должны запускать архивную модель. Проверить отдельным разрешённым тестовым платежом весь provider flow и фактические MQTT/RTP решения.
 
-Применение production-релиза и настоящий платёж не выполнялись в рамках описанных ниже проверок. Проверки кода, браузера с mock API и PostgreSQL 18 описаны в [handoff](../.agent-context/tasks/active/2026-10-03-l4desk-terminal-subscriptions-handoff.md); они не являются hardware E2E или проверкой реальной ЮKassa.
+Production-релиз применён, но настоящий платёж и hardware E2E не выполнялись. Проверки кода, браузера с mock API и PostgreSQL 18 описаны в [handoff](../.agent-context/tasks/completed/2026-10-03-l4desk-terminal-subscriptions-handoff.md); production smoke и immutable digests — в [release handoff](../.agent-context/tasks/completed/2026-10-03-l4desk-terminal-subscriptions-release.md).

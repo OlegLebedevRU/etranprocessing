@@ -1,5 +1,15 @@
 # MenuBuilder
 
+## 2026-10-03: terminal subscriptions, production 8bb0359
+
+Schema029; первый неудалённый терминал бесплатен, дополнительные — по paid_until
+и трём календарным дням grace. YooKassa OFF блокирует их платные возможности;
+один согласованный флаг открывает коммерческий режим. Старые money workers/API
+заморожены; session/duration остаются техническим ядром без posting. UI показывает
+состояние, следующий шаг, корзину, историю и отдельное время использования.
+[Правила](../../docs/menu_bill-terminal-subscription.md),
+[production evidence](../tasks/completed/2026-10-03-l4desk-terminal-subscriptions-release.md).
+
 ## 2026-10-02: media auth acceptance records
 
 Final historical18D-AUTH report/candidate restored from97e39dd into main;
