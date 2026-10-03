@@ -1,5 +1,14 @@
 # MenuBuilder
 
+## 2026-10-03: public auth CAPTCHA and subscription numbers
+
+Production backend c5db1c2 / frontend b066e59: runtime Yandex SmartCaptcha config,
+server verification before login/register/resend; same key pair as landing via env.
+Anonymous register/confirm stay public after refresh 401. Subscription rows expose
+device_id; UI «Номер терминала» uses it, purchase identity stays terminal_id.
+No schema changes. [Rules](../../docs/menu_auth-smartcaptcha.md),
+[release evidence](../tasks/completed/2026-10-03-l4desk-auth-captcha.md).
+
 ## 2026-10-03: terminal subscriptions, production 8bb0359
 
 Schema029; первый неудалённый терминал бесплатен, дополнительные — по paid_until

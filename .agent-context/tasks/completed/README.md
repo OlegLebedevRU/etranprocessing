@@ -6,6 +6,9 @@
 
 ## Индекс
 
+- [2026-10-03 — landing login/register, SmartCaptcha и номера терминалов](2026-10-03-l4desk-auth-captcha.md):
+  опубликовано; исправлен anonymous registration redirect; manual challenge/auth E2E не выполнялся.
+
 - [2026-10-03 — подписки L4Desk, production release](2026-10-03-l4desk-terminal-subscriptions-release.md):
   builder/registry/pull, единая ревизия 8bb0359, schema029, YooKassa OFF,
   новый UI и duration без денег; hardware/provider E2E не выполнялся.

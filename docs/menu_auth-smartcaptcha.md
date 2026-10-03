@@ -1,5 +1,8 @@
 # CAPTCHA при входе и регистрации
 
+Опубликовано 2026-10-03: backend c5db1c2, frontend b066e59.
+[Проверки и ограничения](../.agent-context/tasks/completed/2026-10-03-l4desk-auth-captcha.md).
+
 MenuBuilder использует Yandex SmartCaptcha с той же парой ключей, что и форма
 обращений l4desk.ru. Ключи берутся из окружения, в Git не сохраняются.
 
