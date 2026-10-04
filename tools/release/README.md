@@ -122,7 +122,15 @@ proxy's read-only probes instead; a code fix requires a separate signed release.
 
 These publication-status documentation edits were made after signing; embedded README snapshots remain unchanged. Do not repack the immutable release for text updates. Operator Upgrade773 to 1.10.2 accepted at 2026-10-04 16:36 UTC: ready/0, proxy1.8.1, MQTT/HTTPS/RTP valid. Outage/Win7/PIN and post-upgrade video acceptance remain open.
 
-## RPC7011 incremental release 1.11.0 (unsigned preparation)
+## RPC7011 incremental release 1.11.0 (published)
+
+[Publication record](../../artifacts/l4tools/1.11.0.json): 19 timestamped signed EXEs,
+130 embedded files matched staging; all three complete HTTPS downloads verified.
+Setup SHA256 `3ee234ff1f5ab716a0de43a1b9d26303f9ad11432adc939bbb1e7d73cc1960ac`.
+Operator confirmed successful installation of1.11.0 on773. Server migration030
+and compatible PB/IoT/MenuBuilder deployed; real7011 rotation acceptance remains open.
+Embedded README snapshots remain immutable. The following preparation/signing steps
+are historical; do not rerun them against the published version.
 
 Replace only staged leo4proxy1.8.2, l4con1.10.0 and l4pin1.8.0 for x86/x64.
 Keep all other signed components from1.10.2 byte-for-byte. Backup prior staging

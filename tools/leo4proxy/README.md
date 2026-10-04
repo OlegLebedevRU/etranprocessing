@@ -2,7 +2,7 @@
 
 **`leo4proxy.exe`** — это высокопроизводительный нативный Win32 прокси-сервер и системная служба Windows (Windows Service) на чистом C, обеспечивающий прозрачное mTLS-подключение клиентских приложений (MQTT и HTTPS) к облачной платформе **Leo4 IoT** (`dev.leo4.ru:8883`) и бэкенду **Etranprocessing** (`https://iot-processing.ru:443`) с использованием клиентских сертификатов и **неэкспортируемых (non-exportable) приватных ключей** из **Windows Certificate Store** (`LocalMachine\MY`).
 
-## 1.8.2 / suite 1.11.0 (подготовка, не опубликовано)
+## 1.8.2 / suite 1.11.0 (подписано и опубликовано)
 
 Policy автоматически закрывает MQTT/RTP при missing/expired/not-yet-valid
 активном сертификате даже при недоступном PB. Valid cert сохраняет прежний

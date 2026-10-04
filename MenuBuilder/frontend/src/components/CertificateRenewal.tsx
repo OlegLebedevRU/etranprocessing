@@ -54,7 +54,7 @@ export default function CertificateRenewal({ deviceId }: { deviceId: number }) {
       } else message.error(error.message || "Постановка не подтверждена. Можно повторить вручную.");
     } finally { if (current === generation.current) { sending.current = false; setBusy(false); } }
   };
-  return <Space direction="vertical">
+  return <Space orientation="vertical">
     <Typography.Text>{snapshot ? labels[snapshot.status] || snapshot.status : "Проверка доступности…"}</Typography.Text>
     <Space wrap>
       <Button type="primary" disabled={!snapshot?.allowed || Date.now() < cooldown} onClick={() => {
@@ -64,12 +64,12 @@ export default function CertificateRenewal({ deviceId }: { deviceId: number }) {
     </Space>
     {snapshot?.reason && <Typography.Text type="secondary">{snapshot.reason}</Typography.Text>}
     <Modal title="Удалённое продление сертификата" open={open} onCancel={() => { if (!busy) setOpen(false); }}
-      closable={!busy} maskClosable={!busy} footer={<Space>
+      closable={!busy} mask={{ closable: !busy }} footer={<Space>
         <Button disabled={busy} onClick={() => setOpen(false)}>Закрыть</Button>
         {!taskId && <Button type="primary" loading={busy} onClick={() => void send()}>
           {failed ? `Повторить (${retries + 1}/3)` : "Заказать продление"}</Button>}
       </Space>}>
-      <Alert type={taskId ? "success" : "info"} showIcon message={taskId ? "Команда поставлена в очередь" : "Сервер создаст PIN и поставит команду в очередь"}
+      <Alert type={taskId ? "success" : "info"} showIcon title={taskId ? "Команда поставлена в очередь" : "Сервер создаст PIN и поставит команду в очередь"}
         description="Терминал может быть оффлайн. Он выполнит продление после подключения, пока срок ожидания не истёк. Результат доступен по кнопке проверки и в истории команд." />
       {taskId && <Typography.Paragraph copyable>{taskId}</Typography.Paragraph>}
       {snapshot?.expires_at && <Typography.Text>Срок ожидания: {new Date(snapshot.expires_at).toLocaleString()}</Typography.Text>}

@@ -2,7 +2,7 @@
 
 Легковесный автономный MQTT-клиент диагностики и удалённой веб-консоли (роль `extra_service`) для Windows, предназначенный для выполнения команд Windows CLI (`cmd.exe` / `PowerShell`), потоковой передачи вывода (`dev/{SN}/out`) и управления через MQTT RPC (`7001` Exec, `7002` Cancel).
 
-## 1.10.0 / suite 1.11.0 (подготовка, не опубликовано)
+## 1.10.0 / suite 1.11.0 (подписано и опубликовано)
 
 Строгие RPC7001/7002/7003/7011 через payload.dt, корректные MQTT status/result_uid,
 TSK/RSP dedup и capability queue poll после reconnect / каждые60 s простоя.
