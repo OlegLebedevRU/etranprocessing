@@ -147,3 +147,14 @@ adding redacted history payload. IoT8c2be80 deduplicates by task_id instead of t
 whole row. An actual SQLAlchemy ORM JSON result/join regression was added; Linux
 builder tests and real historical task/detail reads passed after rollout.
 This source correction does not change signed native components.
+
+## PostgreSQL terminal-lock correction
+
+First real773 UI order found a DB-level failure before PIN creation:
+Terminal eager optional terminal_type LEFT JOIN conflicts with unqualified
+FOR UPDATE. Both providerPIN and renewSETUP now lock OF terminals explicitly;
+PIN lock remains OF certificate_pins. Regression compiles the actual handler
+queries with PostgreSQL dialect; production scoped-lock rollback passed.
+CorrectedPB0b561ce deployed, actual773 provider201 and samePIN retry passed.
+This preserves serialization/ownership checks; no broad lock removal or
+nullable-schema change. Real7011 issuance acceptance remains separate.

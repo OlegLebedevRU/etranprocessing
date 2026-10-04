@@ -38,7 +38,7 @@ PB revision3.2. Native consumes producer fixtures; no contract invented at stack
 
 | Component | Production immutable digest |
 |---|---|
-| ProcessingBackend | sha256:09b29c2d57bf831bd3e699761974a77ae8581402c6345e933bedd4e4845fa646 |
+| ProcessingBackend | sha256:731f5f1355bbd2691edf0e62db8ca09402b2bc7aa56409ec95e49095c72579ad |
 | MenuBuilder backend | sha256:1069e663926e496a780dfeb7cd68afe0dcd71bf187b96fe97e5af31afda483ae |
 | IoT app1 | sha256:0b51e5b174ce37087cd4f6b1a89291ae72361e2b65c0fe9c73052fe700085d74 |
 | MenuBuilder frontend | sha256:4d8a3fe0e99d112bb956570c47eb8d271f5ec6eb4eab6bad55663fe0e1d1829a |
@@ -140,4 +140,12 @@ Both providerPIN and renewSETUP now use FOR UPDATE OF terminals; PIN lock
 remains scoped to CertificatePin. Generated PostgreSQL SQL assertions added
 for both actual handler queries; PB176tests/quality passed. Scoped terminal
 lock executed successfully on production PostgreSQL and transaction rolled
-back without changing any certificate/PIN. PB-only image rollout follows.
+back without changing any certificate/PIN. PB-only image deployed from0b561ce7fa40fcfd2c10ea36a6576f4fa5821e0f, digest
+sha256:731f5f1355bbd2691edf0e62db8ca09402b2bc7aa56409ec95e49095c72579ad.
+Builder176tests/quality passed; productionhealth passed. MB/IoT/nginx IDs
+unchanged. BaseCompose image updated after candidatevalidation, no recreate.
+Actual MBservice→PBprovider request for773 returned201, pin_id302; repeat
+with returnedpin_id reused the same hiddenPIN. NoCSR/issuance happened in
+this check; this pendingPIN is reserved for the operator's retry, not orphan
+scratchdata. User asked to repeatUI order. Unrelated403 browserentries are
+unconfirmed: Response details no longer available, no authorization weakened.

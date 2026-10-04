@@ -1,5 +1,14 @@
 # ProcessingBackend
 
+## 2026-10-05: authenticated renewal / scoped locks
+
+Schema030/PB0b561ce deployed. Dedicated live-newCA/SN/serial renew route and
+purpose=renew PIN provider are separate from anonymous certificates/setup.
+FOR UPDATE OF terminals is mandatory for both renewal terminal locks because
+Terminal eagerly LEFT JOINs nullable terminal_types; unqualifiedlock failed
+on realPostgreSQL. PINprovider773201/samePINretry passed; actual7011 issuance
+remains open. [Evidence](../tasks/active/2026-10-04-rpc7011-implementation.md).
+
 ## 2026-10-03: production subscription transport policy
 
 Ревизия 8bb0359 и schema029: MQTT/RTP admission учитывает admin is_active AND
