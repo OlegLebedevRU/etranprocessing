@@ -1,6 +1,6 @@
 # leo4proxy: проверка DNS/SRV-концепции и контекст реализации
 
-Статус: policy и media TLS внедрены; подписанные tools 1.10.0 опубликованы, чистая приёмка терминала 773 остаётся за оператором.
+Статус: policy и media TLS внедрены; tools 1.10.0 установлены на 773, исправленный подписанный setup 1.10.1 опубликован, повторная приёмка остаётся за оператором.
 Дата: 2026-10-04. Код сверялся в worktree на HEAD `c58f607`, leo4proxy `1.7.3`.
 Исходное ревью ниже относится к HEAD `c58f607`; текущий статус внедрения и runtime приведены в отдельном разделе.
 
@@ -65,8 +65,13 @@ SHA-256 прочитанной версии: `F8CA892F87215D7BF158E0A8D5FACCCCC2
   False RTP probe_failed воспроизведён в setup pipe reader 5/5; после drain
   финальных bytes на process exit — 5/5 valid. Прямой installed proxy strict
   MQTT/HTTPS/RTP TLS valid. Setup-only 1.10.1 собран x86/x64, regression tests
-  passed, 61/61 payload files совпадают, компонентные EXE hashes не изменены;
-  новый установщик ожидает подписи, релиз 1.10.0 остаётся immutable.
+  passed, 61/61 payload files совпадают. Оператор повторно подписал компоненты:
+  полные hashes изменились, все 18 PE code/data/resource sections совпадают с 1.10.0.
+  19 signatures/timestamps Valid; 1.10.1 опубликован из clean main 7259be4,
+  полные HTTPS downloads всех трёх файлов совпали по sizes/SHA256.
+  [Установщик 1.10.1](https://l4tools-generic.ar.cloud.ru/l4tools/1.10.1/l4setup.exe),
+  [release record](../artifacts/l4tools/1.10.1.json). Следующий шаг — --smoke-only;
+  релиз 1.10.0 остаётся immutable.
 
 ## Исходный task intake ревью
 

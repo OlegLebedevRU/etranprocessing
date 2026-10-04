@@ -38,7 +38,9 @@ strict numeric bootstrap GET valid in both architectures. Signed tools 1.10.0
 published, payload gate 61 files per arch. Install773/Windows10 x64: four services
 running, reused valid certificate, local smoke passed. Installer reported false
 RTP probe_failed: child pipe exit race reproduced 5/5; direct installed proxy RTP
-TLS valid. Fixed reader returns valid 5/5; setup-only 1.10.1 awaits signature.
+TLS valid. Fixed reader returns valid 5/5; signed setup 1.10.1 published.
+All 19 signatures/timestamps valid; complete HTTPS downloads matched sizes/hashes.
+Components re-signed, all 18 PE code/data/resource sections match 1.10.0.
 
 ## Ограничения / следующие проверки
 IPv4 и первый A-address; CRL/OCSP не проверяются. Локальное время влияет на trust.
