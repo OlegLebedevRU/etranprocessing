@@ -6,6 +6,8 @@
 
 ## Индекс
 
+- [2026-10-04 — leo4proxy DNS/SRV/IP release](2026-10-04-leo4proxy-dns-srv-implementation.md) — policy/media внедрены, signed tools 1.10.1 опубликованы; Upgrade773 ready/0, strict MQTT/HTTPS/RTP TLS valid; enrollment/outage/video E2E остаются непроверенными.
+
 - [2026-10-04 — leo4proxy DNS/SRV review](2026-10-04-leo4proxy-dns-srv-review.md) — статическая проверка концепции, решения на согласование и контекст внедрения.
 
 - [2026-10-03 — landing login/register, SmartCaptcha и номера терминалов](2026-10-03-l4desk-auth-captcha.md):
