@@ -171,3 +171,15 @@ Trustedroot fingerprint matches existing ingressCA and terminalroot.
 PB181tests/quality passed, including forgedleaf withSUCCESS/FAILED header denial.
 Only publicCA resource packaged, no privatekeys or learned client trustanchor.
 CorrectedPBimage rollout and runtimeverifiednewroute remain to complete.
+
+
+PBb928f5f3549f713dc0e36e09e398dbb3ed25c1ab deployed with181tests/quality passed;
+digest sha256:6a17f70ff84c7ea590cea7aedfde52f4ed85da780db76c2905c6b5bacb8146db.
+Onlynewnginxrenewlocation applied/reloaded afterPBdeployment; byte-equality
+assertion proves allotherconfigincludingglobalTLSunchanged. NoCAadvertisement/
+trustlistchange remains. Runtimecurrentclient reachesrenewCHECK (dummyPINnotfound),
+provingactualCA signature verification; anonymousrenew403. Policy returned200
+and currentserial discovery is_validTrue afterused_at. Brief503 duringreload
+resolved onnextquery. UsedPIN302 and freshdiscovery confirm actualinstallation.
+MenuBuilder632tests/20skipped plusqualitypassed: accepts validnewCA21–40hex
+representation, denieslegacy≤20/malformed/too-long. MB-onlyrolloutfollows.

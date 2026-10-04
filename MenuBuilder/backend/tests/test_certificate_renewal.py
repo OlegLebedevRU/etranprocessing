@@ -194,3 +194,30 @@ async def test_admission_admin_expiry_and_subscription(monkeypatch):
         AsyncMock(return_value=SimpleNamespace(allowed=False, reason="unpaid")),
     )
     assert await flow.admission(target, MagicMock()) == "unpaid"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("serial", ["A" * 21, "E" * 39, "0" + "E" * 39])
+async def test_renewal_admission_accepts_variable_width_new_ca_serial(
+    monkeypatch, serial
+):
+    target = terminal()
+    target.cert_serial = serial
+    monkeypatch.setattr(
+        flow, "check_terminal", AsyncMock(return_value=SimpleNamespace(allowed=True))
+    )
+    assert await flow.admission(target, MagicMock()) is None
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("serial", ["A" * 20, "A" * 41, "Z" * 39])
+async def test_renewal_admission_denies_legacy_or_malformed_serial(monkeypatch, serial):
+    target = terminal()
+    target.cert_serial = serial
+    monkeypatch.setattr(
+        flow, "check_terminal", AsyncMock(return_value=SimpleNamespace(allowed=True))
+    )
+    assert (
+        await flow.admission(target, MagicMock())
+        == "Требуется действующий сертификат нового CA"
+    )

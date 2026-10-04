@@ -63,7 +63,11 @@ async def admission(terminal: Terminal, db: AsyncSession) -> str | None:
     subscription = await check_terminal(db, terminal.org_id, terminal)
     if subscription is not None and not subscription.allowed:
         return subscription.reason
-    if not terminal.cert_serial or len(terminal.cert_serial) != 40:
+    if (
+        not terminal.cert_serial
+        or not 20 < len(terminal.cert_serial) <= 40
+        or any(c not in "0123456789abcdefABCDEF" for c in terminal.cert_serial)
+    ):
         return "Требуется действующий сертификат нового CA"
     if (
         not terminal.cert_not_valid_after
