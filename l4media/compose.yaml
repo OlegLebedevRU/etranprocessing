@@ -9,8 +9,8 @@ services:
       - "${L4MEDIA_PORT:-8443}:8443"
     volumes:
       - ${CA_CERT_PATH:-/home/user1/iot-rpc-rest-app/crt/iot_leo4_ca.crt}:/crt/ca_certificate.pem:ro
-      - ./crt/server_certificate.pem:/crt/server_certificate.pem:ro
-      - ./crt/server_key.pem:/crt/server_key.pem:ro
+      - ${MEDIA_SERVER_CERT_PATH:-/home/user1/iot-rpc-rest-app/crt/cert_0000.pem}:/crt/server_certificate.pem:ro
+      - ${MEDIA_SERVER_KEY_PATH:-/home/user1/iot-rpc-rest-app/crt/key_0000.pem}:/crt/server_key.pem:ro
     deploy:
       resources:
         limits:

@@ -1,5 +1,16 @@
 # l4media
 
+## 2026-10-04: server TLS invariant
+
+Media требует CA-issued `dev.leo4.ru` (serverAuth, сроки, соответствие ключа).
+Compose монтирует canonical cert/key из iot-rpc-rest-app, без копии media/crt.
+Entrypoint и pre-deploy gate отклоняют неверную пару; self-signed генерация удалена.
+После обновления файлов используется `l4media/deploy/reload-media.sh`: gate
+перед пересозданием только nginx, чтобы обновить file bind mounts.
+Production CA-пара установлена и nginx reload проверен; новый image ещё требует
+выпуска. CRL/OCSP и E2E видео этой проверкой не подтверждены.
+См. [активный handoff](../tasks/active/2026-10-04-media-tls.md).
+
 ## 2026-10-01: consolidation of accepted18D build flow
 
 Source-built Janus Dockerfile/private entrypoint, registry scripts, immutable

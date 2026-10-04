@@ -121,6 +121,7 @@ def health(component, container):
             "http://127.0.0.1:9100/health",
         )
     elif component == "l4media-nginx":
+        docker("exec", container, "/docker-entrypoint.d/40-verify-media-certificate.sh")
         docker("exec", container, "nginx", "-t")
     elif component == "l4mcp":
         docker(
@@ -187,6 +188,17 @@ def deploy_service(component, image, revision):
     atomic_json(candidate, update_override(previous, spec["service"], image))
     command = compose_command(component, candidate)
     run(*command, "config", "--quiet")
+    if component == "l4media-nginx":
+        # Inspect the candidate image's actual mounts before replacing live TLS.
+        run(
+            *command,
+            "run",
+            "--rm",
+            "--no-deps",
+            "--entrypoint",
+            "/docker-entrypoint.d/40-verify-media-certificate.sh",
+            spec["service"],
+        )
     if component == "processingbackend":
         # Migrate using the new image before replacing the running application.
         # Image rollback deliberately never downgrades the database schema.

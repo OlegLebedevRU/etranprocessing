@@ -3,8 +3,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import deploy
 from components import COMPONENTS, EXTERNAL_COMPONENTS, select_components
+
+import deploy
 from deploy import compose_command, image_reference, publish_static, update_override
 
 
@@ -119,11 +120,11 @@ class DeploymentTests(unittest.TestCase):
                     "wait_healthy",
                     side_effect=[RuntimeError("unhealthy"), None],
                 ),
+                self.assertRaisesRegex(RuntimeError, "unhealthy"),
             ):
-                with self.assertRaisesRegex(RuntimeError, "unhealthy"):
-                    deploy.deploy_service(
-                        "menubuilder-backend", "candidate-image", "a" * 40
-                    )
+                deploy.deploy_service(
+                    "menubuilder-backend", "candidate-image", "a" * 40
+                )
             import json
 
             candidate = json.loads(
@@ -154,13 +155,31 @@ class DeploymentTests(unittest.TestCase):
                 patch.object(deploy, "STATE", Path(tmp)),
                 patch.object(deploy, "run", side_effect=execute),
                 patch.object(deploy, "docker", return_value="previous-image"),
+                self.assertRaisesRegex(RuntimeError, "migration failed"),
             ):
-                with self.assertRaisesRegex(RuntimeError, "migration failed"):
-                    deploy.deploy_service(
-                        "processingbackend", "candidate-image", "a" * 40
-                    )
+                deploy.deploy_service("processingbackend", "candidate-image", "a" * 40)
             self.assertFalse(any("up" in call for call in calls))
             self.assertFalse((Path(tmp) / "user1-images.json").exists())
+
+    def test_media_certificate_failure_leaves_running_nginx_untouched(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            calls = []
+
+            def execute(*args, capture=False):
+                calls.append(args)
+                if "/docker-entrypoint.d/40-verify-media-certificate.sh" in args:
+                    raise RuntimeError("invalid media certificate")
+                return "container-id" if capture else ""
+
+            with (
+                patch.object(deploy, "STATE", Path(tmp)),
+                patch.object(deploy, "run", side_effect=execute),
+                patch.object(deploy, "docker", return_value="previous-image"),
+                self.assertRaisesRegex(RuntimeError, "invalid media certificate"),
+            ):
+                deploy.deploy_service("l4media-nginx", "candidate-image", "a" * 40)
+            self.assertFalse(any("up" in call for call in calls))
+            self.assertFalse((Path(tmp) / "l4media-images.json").exists())
 
     def test_only_allowlisted_digest_images(self):
         ref = image_reference("menubuilder-backend", "a" * 40, "sha256:" + "b" * 64)
