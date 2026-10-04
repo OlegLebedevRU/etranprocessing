@@ -36,7 +36,7 @@ Root implementation checkpoint0b0c48d38971721f9762819093709a9628305784;
 frontend final9adae354a96d9e66b30a81f4aef0332a9752cabe;
 IoT accepted master8c2be800567f074b079bc0c61e993e98184bd897.
 Fixtures: docs/contracts/{rpc7xxx-gate1,pb-renewal-gate3,rpc7011-gate4}.json,
-PB revision3.2. Native consumes producer fixtures; no contract invented at stack entry.
+PB revision3.3 (route-only trust/serial representation clarification; API DTO unchanged). Native consumes producer fixtures; no contract invented at stack entry.
 
 | Component | Production immutable digest |
 |---|---|
@@ -85,7 +85,7 @@ PIN-provider routes return404 externally. nginx -t passed, media unaffected.
   Production JSONB uniqueness500 corrected in IoT8c2be80 by unique task ID;
   actualSQLAlchemy JSON result/join regression verifies this boundary.
 - Service-key MB→PB invalid terminal0 gets422, not401; noPIN created.
-  Anonymous externalrenew401 / publicPIN-provider404; no insecure TLS bypass.
+  Anonymous externalrenew403 / publicPIN-provider404; no insecure TLS bypass.
 - Final PB api/health, MB openapi.json, IoT docs200. Initial check used a wrong
   PB /health URL and got404; corrected to actual /api/health, which passed.
 - nginx-default and mutual-nginx container IDs unchanged vs predeployment.
@@ -202,3 +202,10 @@ representation. UIuser should onlyclick «Проверить результат�
 No realoldSubCAterminal tested duringthiswindow; configpreservation/legacyunit
 coverage is notlegacyfleet E2E proof. TemporaryglobalCAtrust wasreverted promptly
 on user'sconstraint; it isnotpart ofcommittedfinalnginxconfiguration.
+
+
+Operator final acceptance: «Проверить результат» shows «Новый сертификат
+используется терминалом» without the newCA warning (userconfirmed yes).
+All implementation/deployment/happy-path acceptance gates complete. Remaining
+fault/reboot/Win7/legacyfleet tests are explicitly scoped limitations above,
+not claims of completed fault-injection coverage. Signed tools unchanged.
