@@ -92,3 +92,15 @@ Run from this worktree in regular Windows PowerShell:
 Unsigned setup SHA256 04dc2c644a95267ea23a51eb44d2050d5ab46510e2db07f1f21ffde6ef7253b7
 is preparation evidence only; signing/repacking will change it. Do not publish this hash
 as a signed release or regenerate native tools after successful signing.
+
+## Signed checkpoint / rollout started
+
+Operator signed1.11.0. All19EXEs Valid with timestamp;130 embedded files match
+staging. Signed setup SHA2563ee234ff1f5ab716a0de43a1b9d26303f9ad11432adc939bbb1e7d73cc1960ac.
+Changed signed first-party binaries synchronized; no component rebuild.
+IoT accepted master c151d93. etranprocessing implementation939bcf4 merged
+latestorigin/main bd0e893 (docs-only), without native source changes.
+[MCP Ops Readiness: UNAVAILABLE]; SSH preflight passed production RAM2114MiB,
+root42%,load0.26; builder RAM2733MiB,root57%,load0.01.
+Next: clean checkpoint/strict tools publication, PB030 migration/deploy, IoT
+registry release, MenuBuilder and explicit terminal upgrade/E2E acceptance.

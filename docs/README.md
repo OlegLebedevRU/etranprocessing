@@ -77,6 +77,12 @@
 
 ---
 
+## RPC7xxx и authenticated renewal7011
+
+- [Фактический flow и матрица таймингов](term_arch-rpc7011-flow-matrix.md) — контракты, очереди, защита установки, recovery и acceptance.
+- [План RPC7011](term_arch-rpc-7011-certificate-renewal-plan.md) — согласованные решения и этапы с переходом к реализованной матрице.
+- [Аудит RPC7xxx](term_arch-rpc-7xxx-contract-audit.md) — исходные расхождения форматов, tasks/history и маршрута cancel.
+
 ## 5. DevOps, эксплуатация и мониторинг
 
 Регламенты развертывания, управления инфраструктурой и диагностических операций:
