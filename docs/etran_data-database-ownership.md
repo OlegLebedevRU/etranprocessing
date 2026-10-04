@@ -1,7 +1,7 @@
 # Владение общей PostgreSQL-схемой
 
 **Владелец документа:** архитектура backend-платформы
-**Проверено:** 2026-10-04 (добавлены таблицы L4Desk/fin ledger — миграции 027/029)
+**Проверено:** 2026-10-04 (L4Desk/fin ledger — миграции 027/029; подписки L4Desk — логика MB, колонка `l4desk_terminals.paid_until`)
 **Область:** `shared/etranprocessing_db`, `ProcessingBackend`, `MenuBuilder`
 
 ## Правила владения
@@ -11,6 +11,8 @@
 - Запись не-владельца запрещена, кроме явно указанных ниже use-case/column scoped исключений.
 - Новые междоменные записи реализуются через API/use-case владельца. Существующие прямые чтения допустимы как временные compatibility paths и не расширяются.
 - Запрос всегда ограничивается tenant scope, когда таблица содержит `org_id` либо связана с организацией через terminal/menu/billing aggregate.
+- **Подписки L4Desk** не имеют отдельной таблицы: владелец логики — **MB** (`app/services/subscriptions.py`, `subscription_payments.py`, `subscription_worker.py`, `subscription_notifications.py`, `app/routers/subscriptions.py`); состояние хранится в `l4desk_terminals` (включая `paid_until`). Миграцию `029_terminal_subscription` физически создаёт PB как sole Alembic owner.
+- **Transport policy (leo4proxy)** — вычисляемая логика **PB** (`app/services/leo4proxy_policy.py`) поверх чтения `l4desk_terminals` / terminal context; отдельной таблицы политики нет.
 
 ## Матрица таблиц
 

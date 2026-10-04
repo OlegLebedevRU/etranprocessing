@@ -2,7 +2,7 @@
 
 **База сверки:** кодовая база ветки `origin/main` (= состояние production, HEAD `9e529c5`).
 **Ограничения:** актуальность документации по `tools/` не проверялась (только референс); детальная сверка `l4media/*` и `iot-rpc-rest-app` (app1, вне репозитория) не проводилась.
-**Статус:** Волна 0 (синхронизация) и Волна 1 (P0: секреты, quickstart, единый порядок деплоя) — **выполнены**, изменения в рабочей копии, не закоммичены. Волны 2–4 — ниже.
+**Статус:** Волны 0–3 выполнены. Волна 1R (остатки P0) — за владельцем. Волна 4 — отдельные кодовые задачи.
 
 ---
 
@@ -26,54 +26,34 @@
 **Остатки Волны 1 (за владельцем):**
 - ⚠️ **Ротация секретов**: `ai-agent` (MS SQL 172.17.100.1) и `SIGN_KEY` — значения остались в Git-истории.
 - ⚠️ **AGENTS.md**: строка «176.108.247.249 удалён из документации деплоя, только по прямому указанию» противоречит подтверждённому штатному пути — требуется правка владельцем (файл правил агентов, вне doc-scope).
+- ⚠️ **AGENTS.md**: перечень RPC-методов консоли (7001–7003) не упоминает 7004 Keepalive Lease — правка владельцем.
 - ⚠️ **Сервер builder 176**: установленные `/etc/systemd/system/etran-beta.{service,timer}` (disabled/inactive) — удаление на сервере по протоколу серверных правок с подтверждением.
 
 ---
 
-## Волна 2 — P1: фактические расхождения «доки ↔ код» (не начата)
+## Волна 2 — P1: фактические расхождения «доки ↔ код» (выполнена 2026-10-04)
 
-### 2.1. `docs/proc_pay-backend-architecture.md`
-- Структура роутеров неполна: нет `devices_legacy.py`, `gate_gauge.py`, `leo4proxy.py`, `list_menu.py`; сервисы: `ca`, `cert_billing`, `cert_discovery`, `companion_cert`, `email_service`, `gauge_engine`, `leo4proxy_policy`, `sn`.
-- DevOps-секция: `cd /home/user1/ProcessingBackend && docker compose up -d --build` → единый `/home/user1/compose.yaml`, digest-образы, без build.
-- «docker cp migration.py» → Alembic 001–029 (владелец PB; применяется из нового образа при релизе).
-- Compose-фрагмент (build, external `iot-rpc-rest-app_pg_network`) не соответствует `compose.yaml`; PostgreSQL 15 → 18; имя контейнера nginx → `nginx-mutual-legacy-nginx-mutual-1`.
-- Добавить инвариант auto-bind `cert_serial` (legacy ≤ 20 hex, никогда не перезаписывать 40-символьный new CA serial).
+Сверка с HEAD выполнена explore-ревью routers/services/models/compose/frontend. Основная масса правок уже была в Волнах 0–1; в этой волне закрыты остатки:
 
-### 2.2. `docs/proc_cert-issuance-flow.md`
-- File Structure: `billing.py` и PIN-эндпоинт — в **MenuBuilder**, не в ProcessingBackend; фактический путь `POST /api/billing/terminals/{terminal_id}/certificate-pin`.
-- `nginx-mutual-ssl.conf` → `ProcessingBackend/nginx-mutual-legacy/nginx-configs/legacy_ssl.conf`; модели — `shared/etranprocessing_db`.
-- Nginx-секция: привести полную матрицу маршрутов (`/certificates/`, `/certificates`, `/certificates/Dispatcher.ashx`, `/api/certificates/pins`, `/api/leo4proxy/policy`).
-
-### 2.3. `docs/ops_net-infrastructure-connections.md` §2.3
-Колонки легаси-схемы заменить на актуальные (сверено с `shared/etranprocessing_db/models/`): `org_statuses.status` (varchar active/blocked); `terminals.sn/is_active` (не `device_sn/status_id`); `licenses.expires_at/balance/license_type/billing_period_months` (не `license_until`).
-
-### 2.4. `docs/etran_data-database-ownership.md`
-Матрица не включает ~23 таблицы L4Desk/fin ledger (миграция 027) и `l4desk_terminals.paid_until` (029). Владельцы по коду: подписки — MB (`subscriptions.py`, `subscription_payments.py`, `subscription_worker.py`); transport policy — PB (`leo4proxy_policy.py`). Обновить «Проверено».
-
-### 2.5. `docs/ops_run-beta-ci-cd.md`
-Таблица production digest'ов (срез 2026-09-29) не совпадает с актуальным `compose.yaml` (264cc058/0a67f0ff/ab09311d): пометить «срез на дату» + ссылка на compose как источник истины. Указать, что l4media-сервисы — отдельный `l4media/compose.yaml`.
-
-### 2.6. `docs/menu_ui-frontend-architecture.md`
-Дополнить новыми областями: `routes/licenses|l4desk|console|mcp|settings`, `video-surveillance.tsx`, `api/subscriptions|janusClient|certificate-pin`, `AdminSubscriptionsPanel`, Playwright e2e.
-
-### 2.7. `docs/ops_net-nginx-config-guide.md`
-Порты 4443/443 не соответствуют прод-раскладке (mTLS=443 nginx-mutual-legacy; JWT=1443/1444 nginx-default). Перепроверить по `nginx-configs/*` и `legacy_ssl.conf`.
-
-### 2.8. `docs/etran_arch-architecture-analysis.md`
-Срез 2026-08-31: нет retired finance API, подписок, YooKassa, SmartCaptcha, событий 900–999, L4Desk/video. Актуализировать или пометить «исторический срез».
-
-### 2.9. Реестр `docs/README.md`
-Не зарегистрированы: `etran_arch-remote-input-control.md`, `menu_auth-smartcaptcha.md`, `term_tool-event75-inventory.md`, `legacy-terminal-integration-guide.md`, `terminal-tools-user-guide.md`, подкаталоги `ingress_iot/`, `l4capture/`. Для `ingress_iot/remote-input-protocol.md` определить статус относительно `etran_arch-remote-input-control.md`.
+1. **`proc_pay-backend-architecture.md`** — роутеры (payment, tech_gate, gate_gauge, licensebilling, certificates, leo4proxy, list_menu, devices_legacy, health) и services (payment_service, ca, cert_billing, cert_discovery, companion_cert, email_service, gauge_engine, leo4proxy_policy, sn) совпадают с кодом; Alembic 001–029; PostgreSQL 18; cert_serial auto-bind; production compose digest без `build`.
+2. **`proc_cert-issuance-flow.md`** — billing.py/PIN — MenuBuilder (`POST /api/billing/terminals/{id}/certificate-pin`); `legacy_ssl.conf`; pins на public gateway → `404` (internal `require_service_auth`); `shared/etranprocessing_db`.
+3. **`ops_net-infrastructure-connections.md`** — `org_statuses.status`, `terminals.sn/is_active`, `licenses.expires_at/balance/license_type/billing_period_months`.
+4. **`etran_data-database-ownership.md`** — L4Desk/fin ledger (027/029); явно: подписки — логика MB без отдельной таблицы (`l4desk_terminals.paid_until`); transport policy — PB `leo4proxy_policy.py` без таблицы.
+5. **`ops_run-beta-ci-cd.md`** — digest-таблица = «срез на 2026-09-29», истина — `compose.yaml`; l4media — отдельный `l4media/compose.yaml`.
+6. **`menu_ui-frontend-architecture.md`** — routes licenses/l4desk/console/mcp/settings, video-surveillance, janusClient/certificate-pin/subscriptions, AdminSubscriptionsPanel; **исправлено**: vitest + Playwright e2e (`e2e/*.spec.ts`) существуют (ранее ошибочно «нет scripts»).
+7. **`ops_net-nginx-config-guide.md`** — mTLS :443 nginx-mutual-legacy; JWT :3000/:1443/:1444 nginx-default.
+8. **`etran_arch-architecture-analysis.md`** — помечен как срез 2026-08-31 с list of post-snapshot changes.
+9. **`docs/README.md`** — реестр дополнен; статус `ingress_iot/remote-input-protocol.md` определён относительно `etran_arch-remote-input-control.md` (эталон — arch-спецификация).
 
 ---
 
-## Волна 3 — P2: именование и гигиена (не начата)
+## Волна 3 — P2: именование и гигиена (выполнена 2026-10-04)
 
-1. `legacy-terminal-integration-guide.md` и `terminal-tools-user-guide.md` — нарушают naming convention: переименовать с префиксом или перенести в `docs/history/`.
-2. `terminal-tools-user-guide.md` ↔ `term_tool-user-guide.md` — проверить дублирование, слить/архивировать.
-3. AGENTS.md ↔ [`ops_run-remote-console-diagnostics.md`](../docs/ops_run-remote-console-diagnostics.md): перечень RPC-методов (AGENTS.md не знает 7004 Keepalive Lease) — синхронизировать (правка AGENTS.md — за владельцем).
-4. Судьба извлечённых уникальных доков: `term_net-leo4proxy-dns-srv-endpoints.md` слить с продовым `term_net-leo4proxy-dns-srv-implementation-context.md`; `menu_arch-l4mcp-tenant-skill-library.md` — зарегистрировать или перенести в history (не реализовано в проде).
-5. `ops_run-remote-console-diagnostics.md`: убрать ProcessingBackend из перечня бэкендов консоли (консоль = MenuBuilder + app1 + l4con).
+1. `legacy-terminal-integration-guide.md`, `terminal-tools-user-guide.md` — **перенесены** в `docs/history/planning-and-research/` (naming convention).
+2. `terminal-tools-user-guide.md` ↔ `term_tool-user-guide.md` — дублей не осталось: актуальный `term_tool-user-guide.md` (1.10.2); legacy ZIP-маршрут в history.
+3. AGENTS.md ↔ 7004 — **за владельцем** (см. остатки Волны 1).
+4. `term_net-leo4proxy-dns-srv-endpoints.md` — помечен как исторический план с ссылкой на `term_net-leo4proxy-dns-srv-implementation-context.md` + reliability matrix. `menu_arch-l4mcp-tenant-skill-library.md` — **перенесён** в history (design, не реализован).
+5. `ops_run-remote-console-diagnostics.md` — убран ProcessingBackend из перечня бэкендов консоли (консоль = MenuBuilder + app1 + l4con).
 
 ---
 
@@ -92,9 +72,9 @@
 |---|---|---|---|
 | 0. Синхронизация | Локальная копия = прод; извлечение уникального контента | ✅ Выполнена | `git status` ревью; стэш сохранён |
 | 1. P0 | Секреты, quickstart, единый порядок деплоя, выпиливание GH Actions/timer | ✅ Выполнена | Нет кредов в доках; один путь деплоя; 32 CI-теста OK |
-| 1R. Остатки P0 | Ротация секретов; AGENTS.md; юниты на builder | ⏳ За владельцем | Секреты ротированы; противоречий AGENTS.md нет |
-| 2. P1-факты | §2.1–2.9 пофайлово | ⬜ Не начата | Каждый факт сверен с HEAD; таблицы/колонки/порты/digest совпадают |
-| 3. P2-гигиена | Реестр, именование, дубли, AGENTS.md-синхронизация, судьба уникальных доков | ⬜ Не начата | Все .md зарегистрированы и соответствуют naming convention |
+| 1R. Остатки P0 | Ротация секретов; AGENTS.md (176/7004); юниты на builder | ⏳ За владельцем | Секреты ротированы; противоречий AGENTS.md нет |
+| 2. P1-факты | §2.1–2.9 пофайлово | ✅ Выполнена | Каждый факт сверен с HEAD; таблицы/колонки/порты/digest совпадают |
+| 3. P2-гигиена | Реестр, именование, дубли, судьба уникальных доков | ✅ Выполнена | Все .md в реестре; naming convention (без правок AGENTS.md) |
 | 4. Кодовые правки | Dead code, rabbitmq-креды, UpdateScript, compat-контракт | ⬜ Отдельные задачи | С тестами (ruff/pyright/pytest по правилам AGENTS.md) |
 
 **Верификация каждой волны:** `git grep` по убранным секретам; сверка таблиц/колонок с `shared/etranprocessing_db/models/`; digest — с `compose.yaml`; для доков «единого источника правды» (remote-console, cert-infrastructure, database-ownership) — перекрёстная проверка ссылок между собой и с AGENTS.md.

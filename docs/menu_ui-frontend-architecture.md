@@ -326,13 +326,15 @@ In-memory TTL-кэш уменьшает повторные загрузки пр
 
 ## 12. Проверка качества
 
-Production-команда из каталога `MenuBuilder/frontend`:
+Команды из каталога `MenuBuilder/frontend`:
 
 ```powershell
-npm run build
+npm run build    # tsc -b && vite build → dist/
+npm run test     # vitest run (unit)
+npm run test:e2e # playwright test (e2e/)
 ```
 
-Она последовательно запускает `tsc -b` и `vite build`, то есть проверяет типы и создаёт `dist/`. Отдельных scripts для unit-, component- или e2e-тестов в текущем `package.json` нет. Поэтому build является обязательной, но недостаточной проверкой сложных пользовательских сценариев.
+`npm run build` проверяет типы и создаёт production bundle и остаётся обязательной командой. Unit-тесты — Vitest (`vitest run`); e2e — Playwright (`playwright.config.ts`, сценарии в `e2e/`, например `auth-captcha.spec.ts`, `subscriptions.spec.ts`). Покрытие e2e точечное: build и перечисленные suites не заменяют ручную smoke-проверку критических потоков.
 
 Минимальная ручная smoke-проверка после изменений должна охватывать:
 
@@ -356,7 +358,7 @@ Vite создаёт статический production bundle в `MenuBuilder/fro
 2. **Ручное управление server state.** Loading/error/refetch/cache-invalidation реализуются в каждом экране отдельно; отсутствуют дедупликация запросов и согласованная политика retries для большинства данных.
 3. ~~**Разрозненный session context.**~~ [СНЯТО — решено в целевой архитектуре] Реализован централизованный `SessionContext` с источником истины в `/api/auth/me` и межвкладочной синхронизацией через `BroadcastChannel`.
 4. ~~**JWT в localStorage.**~~ [СНЯТО — решено в целевой архитектуре] Токены полностью переведены на HttpOnly cookie (`accessToken` с path `/` и `refreshToken` с path `/api/auth`) с CSRF-защитой через `X-Requested-With: XMLHttpRequest`. Безусловная запись в `localStorage` устранена.
-5. **Неполная автоматизированная проверка.** Нет unit/component/e2e test scripts, а build не проверяет поведение критических потоков.
+5. **Неполная автоматизированная проверка.** Есть Vitest (`npm run test`) и точечные Playwright e2e (`npm run test:e2e`), но покрытие критических потоков неполное; build не проверяет поведение сценариев.
 6. **Неоднородная готовность интеграций.** Часть интерфейса витрины имеет демонстрационное локальное поведение без сохранения на backend.
 7. **Нет общей observability-границы.** Ошибки в основном показываются локально; отсутствуют error boundary, correlation ID и централизованный сбор frontend exceptions.
 
