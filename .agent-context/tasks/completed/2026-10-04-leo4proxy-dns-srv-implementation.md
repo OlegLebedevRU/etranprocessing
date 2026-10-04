@@ -49,14 +49,20 @@ pipeline tests (12), certificate phase/startup/custom args passed x86/x64.
 совпадают с 1.10.0. Штатный publisher полностью скачал все 3 файла, sizes/SHA256
 matched. Setup SHA256 092d8e338a0d0fa30bc7578816fc6d21370b8592b49e90cb3f294815e4da343f,
 29687864 bytes. [Release record](../../../artifacts/l4tools/1.10.1.json).
-Следующий шаг оператора: новый l4setup.exe --smoke-only, ожидание ready/0 при
-успешных enabled TLS probes. Release 1.10.0 не перезаписывается.
+Оператор выполнил полный Upgrade 1.10.0 → 1.10.1 (не smoke-only), 14:18:05–46 UTC:
+drainage/rollback directory/payload swap прошли, SCM options сохранены, четыре
+службы RUNNING. Сертификат reused, hardware fingerprint matched. Local smoke,
+ffmpeg capture, l4desk и remote_input available; MQTT/HTTPS/RTP TLS valid, stream
+skipped (disabled). Итог ready/0. Pending reboot warning сохранился; reboot не проверен.
+Предоставленный /info: routes_active=true, policy flags allowed, MQTT source=srv,
+HTTPS source=policy. RTP counters=0 и endpoint пустой: живой media session не доказан.
+Release 1.10.0 не перезаписывается.
 
-Не выполнены: приёмка исправленного setup; clean enrollment через PIN, Win7
+Не выполнены: clean enrollment через PIN, Win7
 GUI/manual/cancel/repair/watchdog и full cold/warm outage всех каналов; video E2E.
-Существующий terminal cert не удалялся. Оператор установил службы 1.10.0;
+Существующий terminal cert не удалялся. Оператор установил службы 1.10.0 и обновил 1.10.1;
 после этого агент не переустанавливал и не останавливал local services.
-После clean l4setup оператор предоставляет summary/log для runtime acceptance.
+Основная установка/upgrade/TLS приёмка 773 подтверждена предоставленным логом и /info.
 CRL/OCSP не проверяются; IPv4/первый A-address остаются ограничением транспорта.
 DNS zone не менялась; SRV alias publishing prohibition не проверен отдельно.
 

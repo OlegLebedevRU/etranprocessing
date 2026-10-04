@@ -41,13 +41,16 @@ RTP probe_failed: child pipe exit race reproduced 5/5; direct installed proxy RT
 TLS valid. Fixed reader returns valid 5/5; signed setup 1.10.1 published.
 All 19 signatures/timestamps valid; complete HTTPS downloads matched sizes/hashes.
 Components re-signed, all 18 PE code/data/resource sections match 1.10.0.
+Operator Upgrade773 1.10.0 → 1.10.1, 14:18 UTC: ready/0, SCM args preserved,
+four services running, local smoke/capture/input available; MQTT/HTTPS/RTP TLS valid.
+Certificate reused. /info: MQTT source=srv, HTTPS source=policy, RTP counters zero.
 
 ## Ограничения / следующие проверки
 IPv4 и первый A-address; CRL/OCSP не проверяются. Локальное время влияет на trust.
 Cache: HKLM Endpoints REG_BINARY + ProgramData/Leo4Proxy/endpoints.cache, timestamp
 и policy JSON; ACL SYSTEM/Administrators. File storage degradation оставляет snapshot
 в памяти. Public root embedded; private keys remain in CNG/server mounts.
-Нужны clean 773 setup, GUI/manual/cancel/watchdog/repair, Win7/full outage всех
+Нужны clean certificate enrollment через PIN, GUI/manual/cancel/watchdog/repair, Win7/full outage всех
 каналов и видео E2E. Не считать TLS probe доказательством decoded frames.
 
 ## Источники

@@ -1,6 +1,6 @@
 # leo4proxy: проверка DNS/SRV-концепции и контекст реализации
 
-Статус: policy и media TLS внедрены; tools 1.10.0 установлены на 773, исправленный подписанный setup 1.10.1 опубликован, повторная приёмка остаётся за оператором.
+Статус: policy и media TLS внедрены; подписанный tools/setup 1.10.1 опубликован, Upgrade773 завершён ready/0 с valid MQTT/HTTPS/RTP TLS.
 Дата: 2026-10-04. Код сверялся в worktree на HEAD `c58f607`, leo4proxy `1.7.3`.
 Исходное ревью ниже относится к HEAD `c58f607`; текущий статус внедрения и runtime приведены в отдельном разделе.
 
@@ -70,8 +70,13 @@ SHA-256 прочитанной версии: `F8CA892F87215D7BF158E0A8D5FACCCCC2
   19 signatures/timestamps Valid; 1.10.1 опубликован из clean main 7259be4,
   полные HTTPS downloads всех трёх файлов совпали по sizes/SHA256.
   [Установщик 1.10.1](https://l4tools-generic.ar.cloud.ru/l4tools/1.10.1/l4setup.exe),
-  [release record](../artifacts/l4tools/1.10.1.json). Следующий шаг — --smoke-only;
-  релиз 1.10.0 остаётся immutable.
+  [release record](../artifacts/l4tools/1.10.1.json). Релиз 1.10.0 остаётся immutable.
+- Оператор выполнил полный Upgrade773 1.10.0 → 1.10.1 (не smoke-only),
+  14:18:05–46 UTC: ready/0; drainage, payload swap, сохранение SCM options и
+  четыре службы RUNNING. MQTT/HTTPS/RTP TLS valid, stream disabled/skipped;
+  local smoke, capture и remote_input available. Сертификат reused, PIN enrollment
+  не проверен. /info: MQTT source=srv, HTTPS source=policy, RTP counters=0 —
+  передача/декодирование видео ещё не подтверждены. Pending reboot остаётся предупреждением.
 
 ## Исходный task intake ревью
 
