@@ -1,9 +1,9 @@
 # leo4proxy: проверка DNS/SRV-концепции и контекст реализации
 
 Статус: policy и media TLS внедрены; подписанный tools/setup 1.10.1 опубликован, Upgrade773 завершён ready/0 с valid MQTT/HTTPS/RTP TLS.
-Кандидат 1.10.2 / proxy 1.8.1 исправляет обнаруженные сетевые/diagnostic defects;
+Подписанный опубликованный 1.10.2 / proxy 1.8.1 исправляет обнаруженные сетевые/diagnostic defects;
 [новая матрица](term_net-leo4proxy-resolving-reliability-matrix.md) отделяет локальные
-проверки от production evidence. Подпись/публикация кандидата ещё требуются.
+проверки от production evidence. [Запись выпуска 1.10.2](../artifacts/l4tools/1.10.2.json); Upgrade773 до 1.10.2 пока не проверен.
 Дата: 2026-10-04. Код сверялся в worktree на HEAD `c58f607`, leo4proxy `1.7.3`.
 Исходное ревью ниже относится к HEAD `c58f607`; текущий статус внедрения и runtime приведены в отдельном разделе.
 

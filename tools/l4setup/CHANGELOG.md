@@ -1,6 +1,6 @@
 # Changelog — Leo4 Setup (`l4setup`)
 
-## [1.10.2] — 2026-10-04 (candidate; awaiting signing)
+## [1.10.2] — 2026-10-04 (signed; published)
 
 - Make `--smoke-only` read-only for every installed-version/certificate state; reject conflicting mutating options and preserve state/crash markers.
 - Derive network evidence from actual upstream TLS; fail diagnostics on missing executable, unavailable SCM arguments, launch failure or certificate disappearance.

@@ -86,7 +86,7 @@ The package/inventory/hash gates still run; the unrelated capture source compari
 is skipped. Do not use the full component build gate for this explicitly limited flow.
 No live terminal checks are performed unless the operator requests them.
 
-### Proxy/setup network hardening candidate 1.10.2
+### Proxy/setup network hardening release 1.10.2
 
 Use the existing signed staging for unchanged components and replace only
 `leo4proxy/leo4proxy.exe` in each architecture with the fresh 1.8.1 build.
@@ -115,3 +115,9 @@ Known 1.10.1 source/documentation discrepancy: l4setup parses/logs --smoke-only,
 but its engine does not consult the flag when selecting the operation. Treat
 it as unsupported for guaranteeing diagnostics-only behavior. Use the installed
 proxy's read-only probes instead; a code fix requires a separate signed release.
+
+## Published 1.10.2
+
+[Publication record](../../artifacts/l4tools/1.10.2.json): clean main `d43e4d5`, signed setup and all 18 staged EXEs with timestamps, 122 payload files matched. All three full HTTPS downloads matched size/SHA256. Installer SHA256 `6270c908f0275dbb12591f0b377f594a1e959cbe325dc14b1ef467a35e7e4ff1`.
+
+These publication-status documentation edits were made after signing; embedded README snapshots remain unchanged. Do not repack the immutable release for text updates. Installed 773 is still 1.10.1; Upgrade1.10.2 and outage/Win7/PIN acceptance remain open.
