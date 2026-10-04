@@ -48,3 +48,5 @@
   NO_PROXY, new-CA standby, lifecycle/credentials safety, accepted UI, real policy/Upgrade/Repair and verified registry publication.
 
 - [L4 Tools 1.9.5: fresh-install correction and signed publication](2026-10-02-l4setup-fresh-install-fix.md) — Upgrade773 ready/0; full registry bytes verified; fresh x86 E2E remains untested.
+
+- [Media TLS, 2026-10-04](2026-10-04-media-tls.md) — canonical CA-пара, startup/deploy gate, image digest и runtime-проверки.

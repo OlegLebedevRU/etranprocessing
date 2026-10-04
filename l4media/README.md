@@ -317,4 +317,4 @@ media-nginx без зависимостей. Это нужно и после а�
 CA-пару `dev.leo4.ru`; `openssl verify -purpose sslserver -verify_hostname`
 и `nginx -t` прошли, выполнен reload только media-nginx. Это проверка TLS,
 а не доказательство доставки/декодирования видео. Дальнейшее состояние выпуска
-фиксируется в [handoff](../.agent-context/tasks/active/2026-10-04-media-tls.md).
+фиксируется в [handoff](../.agent-context/tasks/completed/2026-10-04-media-tls.md).

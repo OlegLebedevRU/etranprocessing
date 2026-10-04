@@ -14,5 +14,3 @@
 - [17E FIX transfer, 2026-09-27](2026-09-27-l4d-17e-fix-transfer.md) —
   опубликованные входы, byte bindings, адресная регистрация и критерии
   дальнейшей приёмки.
-
-- [Media TLS, 2026-10-04](2026-10-04-media-tls.md) — canonical CA-пара, startup/deploy gate и проверка выпуска.
