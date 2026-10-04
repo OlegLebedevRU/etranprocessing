@@ -221,6 +221,52 @@ static bool append_quoted_argument(wchar_t* command,size_t capacity,const wchar_
     }
     command[used++]=L'"'; command[used]=0; return true;
 }
+bool services_read_proxy_arguments(const wchar_t* dest,wchar_t* out,size_t capacity) {
+    if(!dest || !out || !capacity)return false;out[0]=0;
+    SC_HANDLE scm=OpenSCManagerW(NULL,NULL,SC_MANAGER_CONNECT);if(!scm)return false;
+    SC_HANDLE service=OpenServiceW(scm,SVC_NAME_LEO4PROXY,SERVICE_QUERY_CONFIG);bool ok=false;
+    if(service) {
+        DWORD bytes=0;QueryServiceConfigW(service,NULL,0,&bytes);
+        LPQUERY_SERVICE_CONFIGW config=bytes && bytes<=65536?(LPQUERY_SERVICE_CONFIGW)malloc(bytes):NULL;
+        if(config && QueryServiceConfigW(service,config,bytes,&bytes)) {
+            int count=0;LPWSTR* args=CommandLineToArgvW(config->lpBinaryPathName,&count);
+            wchar_t expected[MAX_PATH],expected_full[MAX_PATH],actual_full[MAX_PATH];
+            DWORD expected_length=0,actual_length=0;
+            if(swprintf_s(expected,MAX_PATH,L"%ls\\leo4proxy\\leo4proxy.exe",dest)>=0 && args && count) {
+                expected_length=GetFullPathNameW(expected,MAX_PATH,expected_full,NULL);
+                actual_length=GetFullPathNameW(args[0],MAX_PATH,actual_full,NULL);
+            }
+            if(expected_length && expected_length<MAX_PATH && actual_length && actual_length<MAX_PATH && !_wcsicmp(expected_full,actual_full)) {
+                ok=true;for(int n=1;n<count && ok;n++)ok=append_quoted_argument(out,capacity,args[n]);
+            }
+            if(args)LocalFree(args);
+        }
+        free(config);CloseServiceHandle(service);
+    }
+    CloseServiceHandle(scm);if(!ok)out[0]=0;return ok;
+}
+bool services_read_network_options(const wchar_t* dest,CliOptions* options) {
+    wchar_t command[2048];if(!options || !services_read_proxy_arguments(dest,command,2048))return false;
+    int count=0;LPWSTR* args=CommandLineToArgvW(command,&count);if(!args)return false;
+    const wchar_t* flags[]={L"--mqtt-remote",L"--http-remote",L"--stream-remote",L"--rtp-remote",L"--policy-bootstrap-ip"};
+    wchar_t* values[5]={0};bool no_srv=false,complete=true;
+    for(int n=0;n<count;n++) {
+        if(!_wcsicmp(args[n],L"--no-srv"))no_srv=true;
+        for(int c=0;c<5;c++)if(!_wcsicmp(args[n],flags[c])) {
+            if(n+1>=count)complete=false;else values[c]=args[++n];break;
+        }
+    }
+    wchar_t* subset[16]={L"l4setup"};int subset_count=1;
+    for(int c=0;c<5;c++)if(values[c]) {subset[subset_count++]=(wchar_t*)flags[c];subset[subset_count++]=values[c];}
+    if(no_srv)subset[subset_count++]=L"--no-srv";
+    CliOptions parsed={0};bool ok=complete && cli_parse(subset_count,subset,&parsed,NULL,0);
+    if(ok) {
+        memcpy(options->remote_endpoints,parsed.remote_endpoints,sizeof(parsed.remote_endpoints));
+        wcscpy_s(options->policy_bootstrap_ip,16,values[4]?parsed.policy_bootstrap_ip:L"");
+        options->no_srv=parsed.no_srv;
+    }
+    LocalFree(args);return ok;
+}
 static bool retain_non_network_arguments(wchar_t* command,size_t capacity,const wchar_t* previous) {
     int count=0; LPWSTR* args=CommandLineToArgvW(previous,&count);
     if (!args || !count) { if (args) LocalFree(args); return false; }

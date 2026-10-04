@@ -239,9 +239,15 @@ static INT_PTR CALLBACK network_proc(HWND dialog,UINT message,WPARAM wParam,LPAR
     (void)lParam;
     const int ids[]={IDC_NETWORK_MQTT,IDC_NETWORK_HTTP,IDC_NETWORK_STREAM,IDC_NETWORK_RTP};
     if (message==WM_INITDIALOG) {
-        SetDlgItemTextW(dialog,IDC_NETWORK_IP,context.opts->policy_bootstrap_ip);
-        for(int c=0;c<4;c++) SetDlgItemTextW(dialog,ids[c],context.opts->remote_endpoints[c]);
-        CheckDlgButton(dialog,IDC_NETWORK_NO_SRV,context.opts->no_srv?BST_CHECKED:BST_UNCHECKED);
+        CliOptions view=*context.opts;
+        if(!view.network_specified && context.installed_version[0] &&
+            !services_read_network_options(view.dest,&view)) {
+            MessageBoxW(dialog,L"Не удалось прочитать текущую конфигурацию Leo4Proxy из SCM.",L"Сеть",MB_OK|MB_ICONWARNING);
+            EndDialog(dialog,0);return TRUE;
+        }
+        SetDlgItemTextW(dialog,IDC_NETWORK_IP,view.policy_bootstrap_ip);
+        for(int c=0;c<4;c++) SetDlgItemTextW(dialog,ids[c],view.remote_endpoints[c]);
+        CheckDlgButton(dialog,IDC_NETWORK_NO_SRV,view.no_srv?BST_CHECKED:BST_UNCHECKED);
         return TRUE;
     }
     if (message==WM_COMMAND && LOWORD(wParam)==IDCANCEL) { EndDialog(dialog,0); return TRUE; }
@@ -259,7 +265,9 @@ static INT_PTR CALLBACK network_proc(HWND dialog,UINT message,WPARAM wParam,LPAR
         }
         memcpy(context.opts->remote_endpoints,parsed.remote_endpoints,sizeof(parsed.remote_endpoints));
         wcscpy_s(context.opts->policy_bootstrap_ip,16,values[0]); context.opts->no_srv=parsed.no_srv;
-        context.opts->network_specified=true; EndDialog(dialog,1); return TRUE;
+        context.opts->network_specified=true;
+        if(context.op_type==OP_VERIFY)context.op_type=OP_REPAIR;
+        EndDialog(dialog,1); return TRUE;
     }
     return FALSE;
 }
@@ -267,6 +275,7 @@ static INT_PTR CALLBACK dialog_proc(HWND dialog,UINT message,WPARAM wParam,LPARA
     switch(message) {
         case WM_INITDIALOG: {
             context.user_data=dialog; context.hWndParent=dialog;
+            if (context.opts->smoke_only) EnableWindow(GetDlgItem(dialog,IDC_BTN_NETWORK),FALSE);
             HDC dc=GetDC(dialog); dpi=(UINT)GetDeviceCaps(dc,LOGPIXELSY); ReleaseDC(dialog,dc);
             if(!dpi) dpi=96;
             fonts(dialog);
@@ -391,7 +400,12 @@ static INT_PTR CALLBACK dialog_proc(HWND dialog,UINT message,WPARAM wParam,LPARA
         }
         case WM_COMMAND: {
             int id=LOWORD(wParam);
-            if(id==IDC_BTN_NETWORK && !running && !finished) {DialogBoxParamW(context.hInstance,MAKEINTRESOURCEW(IDD_NETWORK_DIALOG),dialog,network_proc,0);return TRUE;}
+            if(id==IDC_BTN_NETWORK && !running && !finished && !context.opts->smoke_only) {
+                if(DialogBoxParamW(context.hInstance,MAKEINTRESOURCEW(IDD_NETWORK_DIALOG),dialog,network_proc,0)==1) {
+                    versions(dialog);SetDlgItemTextW(dialog,IDC_BTN_ACTION,operation_name());
+                }
+                return TRUE;
+            }
             if(id==IDC_BTN_DETAILS){copy_log(dialog);return TRUE;}
             if(id==IDCANCEL){request_close(dialog);return TRUE;}
             if(id==IDC_BTN_ACTION && !running && checked) {

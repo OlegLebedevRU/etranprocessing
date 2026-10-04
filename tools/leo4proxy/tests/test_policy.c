@@ -5,6 +5,16 @@
 ProxyStats g_proxyStats={0};
 
 static void response_tests(void) {
+    const char* framed[]={
+        "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}",
+        "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\n{}\r\n0\r\n\r\n"
+    };
+    for(int n=0;n<2;n++) {
+        assert(http_framed_complete(framed[n],strlen(framed[n])));
+        for(size_t k=0;k<strlen(framed[n]);k++) {char partial[128];memcpy(partial,framed[n],k);partial[k]=0;assert(!http_framed_complete(partial,k));}
+    }
+    const char* negative="HTTP/1.1 200 OK\r\nContent-Length: -1\r\n\r\n{}";
+    assert(!http_framed_complete(negative,strlen(negative)));
     bool media=false,https=false; char reasons[1024];
     const char* good="{\"v\":1,\"sn\":\"773\",\"mqtt_rtp_allowed\":false,\"outgoing_https_allowed\":false,\"stop_facts\":[\"terminal_inactive\",\"future_fact\"]}";
     assert(policy_response_parse(good,strlen(good),"773",&media,&https,reasons,sizeof(reasons)));

@@ -47,11 +47,20 @@ Certificate reused. /info перед запуском видео: MQTT source=sr
 RTP counters zero. После обновления оператор подтвердил работающий видеопоток;
 browser decode telemetry и расширенная outage/E2E matrix агентом не измерялись.
 
-## Ограничения / следующие проверки
+## Кандидат 1.10.2 / proxy 1.8.1
+В working tree исправлены read-only smoke-only, ложный DNS degraded, общий
+последовательный diagnostic budget, launch/no-certificate false readiness,
+SCM/mirror mismatch, resolving/TCP/TLS/policy-I/O deadlines, fallback reserve,
+endpoint/A deduplication и DNS pool saturation. Матрица и ограничения:
+[network reliability](../../docs/term_net-leo4proxy-resolving-reliability-matrix.md).
+Unsigned candidate требует operator signing; production пока 1.10.1.
+
+## Ограничения опубликованного 1.10.1 / следующие проверки
 Setup1.10.1 разбирает/logs --smoke-only, но engine не учитывает флаг: нельзя
 считать его гарантированно диагностическим. Проба network — DNS iot.leo4.ru,
 может дать degraded при работающем IP recovery. Source help proxy о insecure устарел.
-IPv4 и первый A-address; CRL/OCSP не проверяются. Локальное время влияет на trust.
+Опубликованный proxy 1.8.0 использует IPv4 и первый A-address; кандидат 1.8.1
+перебирает до 8 IPv4. CRL/OCSP не проверяются. Локальное время влияет на trust.
 Cache: HKLM Endpoints REG_BINARY + ProgramData/Leo4Proxy/endpoints.cache, timestamp
 и policy JSON; ACL SYSTEM/Administrators. File storage degradation оставляет snapshot
 в памяти. Public root embedded; private keys remain in CNG/server mounts.

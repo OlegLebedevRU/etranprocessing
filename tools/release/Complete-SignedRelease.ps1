@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$PfxPath,
     [string]$Version,
-    [ValidateSet('l4superv', 'l4setup')][string[]]$SignOnly,
+    [ValidateSet('l4superv', 'l4setup', 'leo4proxy')][string[]]$SignOnly,
     [string]$TimestampUrl = 'http://timestamp.digicert.com'
 )
 

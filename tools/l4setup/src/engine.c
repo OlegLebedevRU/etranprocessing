@@ -59,7 +59,7 @@ static bool wait_proxy_after_start(bool require_ready) {
         if (now >= deadline) break;
         int remaining = (int)(deadline - now);
         if (setup_proxy_probe(18443, require_ready, remaining < 1200 ? remaining : 1200)) return true;
-        Sleep(200);
+        now=GetTickCount64();if(now<deadline)Sleep((DWORD)(deadline-now<200?deadline-now:200));
     } while (GetTickCount64() < deadline);
     return false;
 }
@@ -139,13 +139,15 @@ bool engine_phase_check(SetupContext* ctx) {
     strncpy_s(ctx->target_arch, sizeof(ctx->target_arch), pinfo.target_arch, _TRUNCATE);
 
     // 3. Crash recovery check
-    unpack_recover_from_crash(ctx->opts->dest);
+    if (!ctx->opts->smoke_only) unpack_recover_from_crash(ctx->opts->dest);
 
     // 4. Version detection
     unpack_read_installed_version(ctx->opts->dest, ctx->installed_version, sizeof(ctx->installed_version));
     strncpy_s(ctx->target_version, sizeof(ctx->target_version), L4SETUP_VERSION_STRING, _TRUNCATE);
 
-    if (ctx->installed_version[0] != '\0') {
+    if (ctx->opts->smoke_only) {
+        ctx->op_type = OP_VERIFY;
+    } else if (ctx->installed_version[0] != '\0') {
         int cmp = version_compare(ctx->installed_version, ctx->target_version);
         if (cmp > 0) {
             log_err("Installed version (%s) is newer than package (%s). Downgrade blocked (code 29).",
@@ -156,7 +158,7 @@ bool engine_phase_check(SetupContext* ctx) {
             strncpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason), "downgrade_blocked", _TRUNCATE);
             return false;
         } else if (cmp == 0) {
-            if (ctx->opts->repair) {
+            if (ctx->opts->repair || ctx->opts->network_specified) {
                 ctx->op_type = OP_REPAIR;
             } else if (unpack_is_idempotent(ctx->opts->dest, ctx->target_version)) {
                 ctx->op_type = OP_VERIFY;
@@ -179,7 +181,7 @@ bool engine_phase_check(SetupContext* ctx) {
     ULARGE_INTEGER free_bytes, total_bytes, total_free;
     if (GetDiskFreeSpaceExW(ctx->opts->dest, &free_bytes, &total_bytes, &total_free) ||
         GetDiskFreeSpaceExW(L"C:\\", &free_bytes, &total_bytes, &total_free)) {
-        if (free_bytes.QuadPart < 104857600ULL) { // 100 MB
+        if (!ctx->opts->smoke_only && free_bytes.QuadPart < 104857600ULL) { // 100 MB
             log_err("Insufficient disk space on target drive (headroom < 100 MB required).");
             ctx->disk_space_ok = false;
             ctx->final_exit_code = 30;
@@ -203,7 +205,7 @@ bool engine_phase_check(SetupContext* ctx) {
     }
 
     // 7. Install/verify trusted Root CA certificate
-    if (install_root_ca_certificate_ex(ctx->opts->dest)) {
+    if (!ctx->opts->smoke_only && install_root_ca_certificate_ex(ctx->opts->dest)) {
         ctx->summary.ca_root_installed = true;
     }
 
@@ -215,6 +217,16 @@ bool engine_phase_check(SetupContext* ctx) {
         strncpy_s(ctx->sn, sizeof(ctx->sn), ci.sn, _TRUNCATE);
     }
     log_info("Initial certificate discovery state: %s, SN: %s", cert_state_to_str(st), ctx->sn[0] ? ctx->sn : "none");
+    if (ctx->opts->smoke_only) {
+        ctx->summary.cert.state = st;
+        ctx->summary.cert.reused = st == CERT_VALID || st == CERT_EXPIRING;
+        ctx->summary.cert.exit_code = st==CERT_STORE_ERROR ? 20 : ctx->summary.cert.reused ? 0 : 10;
+        strcpy_s(ctx->summary.cert.status,sizeof(ctx->summary.cert.status),st==CERT_STORE_ERROR?"failed":ctx->summary.cert.reused?"ready":"activation_required");
+        ctx->summary.cert.days_left = ci.days_left;
+        strcpy_s(ctx->summary.cert.sn, sizeof(ctx->summary.cert.sn), ci.sn);
+        strcpy_s(ctx->summary.cert.thumbprint, sizeof(ctx->summary.cert.thumbprint), ci.thumbprint_hex);
+        strcpy_s(ctx->summary.cert.not_after, sizeof(ctx->summary.cert.not_after), ci.not_after_utc);
+    }
 
     // Initialize summary data
     strncpy_s(ctx->summary.installer_version, sizeof(ctx->summary.installer_version), L4SETUP_VERSION_STRING, _TRUNCATE);
@@ -245,6 +257,10 @@ int engine_run_pipeline(SetupContext* ctx) {
         engine_write_summary(ctx);
         return 31;
     }
+
+    if (ctx->opts->smoke_only) goto verify_only;
+    /* GUI network settings can be selected after Check has chosen Verify. */
+    if(ctx->opts->network_specified && ctx->op_type==OP_VERIFY)ctx->op_type=OP_REPAIR;
 
     // ------------------------------------------------------------------------
     // Phase 2: Prepare
@@ -397,6 +413,9 @@ int engine_run_pipeline(SetupContext* ctx) {
     // ------------------------------------------------------------------------
     // Phase 6: Verify
     // ------------------------------------------------------------------------
+verify_only:
+    ; /* A label must precede a statement in C. */
+    ULONGLONG verify_deadline=GetTickCount64()+60000;
     log_info("=== Phase 6: Verify ===");
     strncpy_s(ctx->summary.phase, sizeof(ctx->summary.phase), "verify", _TRUNCATE);
     if (ctx->on_phase_change) {
@@ -404,9 +423,9 @@ int engine_run_pipeline(SetupContext* ctx) {
     }
 
     bool is_active_cert = (ctx->summary.cert.state == CERT_VALID || ctx->summary.cert.state == CERT_EXPIRING);
-    log_info("Waiting for Leo4Proxy after service startup (up to 15s, certificate required: %s)...",
-             is_active_cert ? "yes" : "no");
-    if (!wait_proxy_after_start(is_active_cert)) {
+    if(ctx->opts->smoke_only) log_info("Checking Leo4Proxy (single probe up to 1.2s, certificate required: %s)...",is_active_cert?"yes":"no");
+    else log_info("Waiting for Leo4Proxy after service startup (up to 15s, certificate required: %s)...",is_active_cert?"yes":"no");
+    if (!(ctx->opts->smoke_only ? setup_proxy_probe(18443, is_active_cert, 1200) : wait_proxy_after_start(is_active_cert))) {
         ctx->final_exit_code = 27;
         strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "failed");
         strcpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason), "proxy_ready_timeout");
@@ -415,18 +434,56 @@ int engine_run_pipeline(SetupContext* ctx) {
         return 27;
     }
     smoke_run_probes(ctx->opts->dest, is_active_cert, &ctx->summary.probes);
-    if (is_active_cert) smoke_probe_upstream(ctx->opts->dest,&ctx->summary.probes);
+    if (is_active_cert && !ctx->summary.probes.critical_failed) {
+        bool local_warnings=ctx->summary.probes.has_warnings;
+        int local_code=ctx->summary.probes.calculated_exit_code;
+        for (int attempt=0;attempt<3;attempt++) {
+            if (attempt) {
+                if (GetTickCount64()+15500>verify_deadline) break;
+                log_info("Upstream transport not ready; retrying after 5s for policy/network convergence...");
+                ULONGLONG pause_until=GetTickCount64()+5000;
+                while(!ctx->cancel_requested) {
+                    ULONGLONG now=GetTickCount64();if(now>=pause_until)break;
+                    Sleep((DWORD)(pause_until-now<100?pause_until-now:100));
+                }
+            }
+            if(ctx->cancel_requested) {
+                ctx->final_exit_code=31;strcpy_s(ctx->summary.status,sizeof(ctx->summary.status),"cancelled");
+                engine_write_summary(ctx);return 31;
+            }
+            ctx->summary.probes.has_warnings=local_warnings;
+            ctx->summary.probes.calculated_exit_code=local_code;
+            smoke_probe_upstream(ctx->opts->dest,&ctx->summary.probes);
+            bool retry=false, permanent=false;
+            for(int c=0;c<4;c++) {
+                const char* verdict=ctx->summary.probes.upstream_tls[c];
+                if(!strcmp(verdict,"probe_failed") || !strcmp(verdict,"timeout"))retry=true;
+                if(!strcmp(verdict,"cert_invalid") || !strcmp(verdict,"no_certificate"))permanent=true;
+            }
+            if(!retry || permanent)break;
+        }
+    }
+    const wchar_t* required_services[]={SVC_NAME_LEO4PROXY,SVC_NAME_MOSQUITTO,SVC_NAME_L4CON,SVC_NAME_L4SUPERV};
+    for (int n=0;n<4;n++) if (services_query_status(required_services[n])!=SERVICE_RUNNING) {
+        ctx->summary.probes.critical_failed=true;
+        ctx->summary.probes.calculated_exit_code=27;
+        summary_add_warning(&ctx->summary,"required_service_not_running");
+    }
 
     // Determine exit code and status
     bool upstream_failed = false;
     for (int channel = 0; channel < 4; ++channel) {
         const char* verdict = ctx->summary.probes.upstream_tls[channel];
-        if (!strcmp(verdict,"cert_invalid") || !strcmp(verdict,"probe_failed") || !strcmp(verdict,"timeout")) upstream_failed = true;
+        if (!strcmp(verdict,"cert_invalid") || !strcmp(verdict,"probe_failed") || !strcmp(verdict,"timeout") || !strcmp(verdict,"no_certificate")) upstream_failed = true;
     }
     if (ctx->summary.probes.critical_failed) {
         ctx->final_exit_code = 27;
         strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "failed");
         strncpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason), "critical_smoke_probe_failed", _TRUNCATE);
+    } else if (ctx->summary.cert.exit_code == 20) {
+        ctx->final_exit_code=20;
+        strcpy_s(ctx->summary.status,sizeof(ctx->summary.status),"failed");
+        strcpy_s(ctx->summary.error_reason,sizeof(ctx->summary.error_reason),"certificate_discovery_failed");
     } else if (ctx->summary.cert.exit_code == 10) {
         ctx->final_exit_code = 10;
         strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "activation_required");
@@ -451,7 +508,7 @@ int engine_run_pipeline(SetupContext* ctx) {
     strncpy_s(ctx->summary.phase, sizeof(ctx->summary.phase), "finish", _TRUNCATE);
     ctx->summary.exit_code = ctx->final_exit_code;
 
-    if (ctx->final_exit_code == 0 || ctx->final_exit_code == 10 || ctx->final_exit_code == 11 || ctx->final_exit_code == 12) {
+    if (!ctx->opts->smoke_only && (ctx->final_exit_code == 0 || ctx->final_exit_code == 10 || ctx->final_exit_code == 11 || ctx->final_exit_code == 12)) {
         // Clear crash marker
         unpack_clear_incomplete_marker(ctx->opts->dest);
 
