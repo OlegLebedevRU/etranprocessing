@@ -10,6 +10,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.dialects import postgresql
 
 from app.database import get_db
 from app.main import app
@@ -130,6 +131,12 @@ async def test_same_csr_recovery_survives_cache_reset(renewal):
     ) as client:
         first = await client.post("/api/certificates/renew", headers=headers, json=body)
         assert first.status_code == 200 and "<Result>OK</Result>" in first.text
+        locked_sql = str(
+            db.execute.call_args_list[0].args[0].compile(dialect=postgresql.dialect())
+        )
+        # PostgreSQL cannot lock the nullable, eagerly joined terminal type.
+        assert "LEFT OUTER JOIN terminal_types" in locked_sql
+        assert locked_sql.endswith("FOR UPDATE OF terminals")
         serial = terminal.cert_serial
         assert (
             serial != SERIAL
@@ -247,8 +254,6 @@ def test_policy_expiry_uses_already_loaded_certificate_date():
 async def test_provider_reuses_unfinished_pin_without_new_outbox(
     monkeypatch, pin_id, status
 ):
-    from sqlalchemy.dialects import postgresql
-
     from app.schemas.certificates import RenewalPinRequest
 
     target = Terminal(
@@ -286,6 +291,11 @@ async def test_provider_reuses_unfinished_pin_without_new_outbox(
         and not db.add.called
         and not db.commit.called
     )
+    locked_sql = str(
+        db.execute.call_args_list[0].args[0].compile(dialect=postgresql.dialect())
+    )
+    assert "LEFT OUTER JOIN terminal_types" in locked_sql
+    assert locked_sql.endswith("FOR UPDATE OF terminals")
     query = str(
         db.execute.call_args.args[0].compile(
             dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}

@@ -301,7 +301,7 @@ async def issue_renewal_pin(
                 Terminal.org_id == payload.tenant_id,
                 Terminal.sn == payload.sn,
             )
-            .with_for_update()
+            .with_for_update(of=Terminal)
         )
     ).scalar_one_or_none()
     if terminal is None:
@@ -541,7 +541,7 @@ async def _handle_setup(
             await db.execute(
                 select(Terminal)
                 .where(Terminal.id == terminal.id)
-                .with_for_update()
+                .with_for_update(of=Terminal)
                 .execution_options(populate_existing=True)
             )
         ).scalar_one()

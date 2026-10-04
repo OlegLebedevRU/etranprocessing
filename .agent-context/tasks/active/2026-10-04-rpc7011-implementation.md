@@ -131,3 +131,13 @@ Rollback: disable newUI first; restore prior compatible images through standard
 release path if necessary. Do not downgrade030 or oldserial blindly. If7011 has
 issued a certificate, reconcile the actual installed serial before any rollback.
 Keep signed published artifacts immutable and retain recovery state as applicable.
+
+## PB runtime correction after operator7011 attempt
+
+773 order returned503 before PIN creation. PostgreSQL rejected unqualified
+FOR UPDATE because Terminal eagerly LEFT JOINs optional terminal_types.
+Both providerPIN and renewSETUP now use FOR UPDATE OF terminals; PIN lock
+remains scoped to CertificatePin. Generated PostgreSQL SQL assertions added
+for both actual handler queries; PB176tests/quality passed. Scoped terminal
+lock executed successfully on production PostgreSQL and transaction rolled
+back without changing any certificate/PIN. PB-only image rollout follows.
