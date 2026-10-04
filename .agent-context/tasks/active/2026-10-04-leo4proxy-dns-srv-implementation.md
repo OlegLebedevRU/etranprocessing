@@ -43,11 +43,19 @@ cert reused (not reissued), MQTT/HTTPS TLS valid, stream disabled. Degraded/12
 MQTT/HTTPS/RTP strict valid. Setup-only 1.10.1 исправляет drain after exit и
 upstream error_reason для всех каналов. Детерминированные pipe tests (3) и
 pipeline tests (12), certificate phase/startup/custom args passed x86/x64.
-Подготовка 1.10.1 требует новой подписи setup; release 1.10.0 не перезаписывается.
+1.10.1 подписан и опубликован из clean main 7259be4bf2f7ed90ebdc3c61e7901392020df8d2.
+19 EXE signatures/timestamps Valid; 61/61 payload gate passed. Оператор повторно
+подписал компоненты: полные hashes изменены, все 18 PE code/data/resources
+совпадают с 1.10.0. Штатный publisher полностью скачал все 3 файла, sizes/SHA256
+matched. Setup SHA256 092d8e338a0d0fa30bc7578816fc6d21370b8592b49e90cb3f294815e4da343f,
+29687864 bytes. [Release record](../../../artifacts/l4tools/1.10.1.json).
+Следующий шаг оператора: новый l4setup.exe --smoke-only, ожидание ready/0 при
+успешных enabled TLS probes. Release 1.10.0 не перезаписывается.
 
 Не выполнены: приёмка исправленного setup; clean enrollment через PIN, Win7
 GUI/manual/cancel/repair/watchdog и full cold/warm outage всех каналов; video E2E.
-Существующий terminal cert не удалялся, local services не переустанавливались.
+Существующий terminal cert не удалялся. Оператор установил службы 1.10.0;
+после этого агент не переустанавливал и не останавливал local services.
 После clean l4setup оператор предоставляет summary/log для runtime acceptance.
 CRL/OCSP не проверяются; IPv4/первый A-address остаются ограничением транспорта.
 DNS zone не менялась; SRV alias publishing prohibition не проверен отдельно.

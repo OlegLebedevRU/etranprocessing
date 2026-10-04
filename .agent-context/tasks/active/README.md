@@ -15,4 +15,4 @@
   опубликованные входы, byte bindings, адресная регистрация и критерии
   дальнейшей приёмки.
 
-- [leo4proxy DNS/SRV/IP, 2026-10-04](2026-10-04-leo4proxy-dns-srv-implementation.md) — policy/media/tools 1.10.0 выпущены; install773 выявил false RTP verdict, setup-only 1.10.1 готов к подписи.
+- [leo4proxy DNS/SRV/IP, 2026-10-04](2026-10-04-leo4proxy-dns-srv-implementation.md) — policy/media выпущены; install773 выявил false RTP verdict, исправленный signed setup 1.10.1 опубликован, ожидается повторная приёмка.
