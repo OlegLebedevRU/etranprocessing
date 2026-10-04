@@ -36,7 +36,16 @@ leo4proxy transport/routing, l4setup SCM args, l4superv watchdog. MQTT-клие�
 Подпись и публикация завершены. Не rebuild components после подписи.
 Процедура: tools/release/README.md и native-windows-tool-change skill.
 
-Не выполнены: установка native release; clean 773 l4setup, Win7
+Install773/Windows10 x64 13:58 UTC: four services RUNNING, local smoke passed,
+cert reused (not reissued), MQTT/HTTPS TLS valid, stream disabled. Degraded/12
+с RTP probe_failed оказался pipe exit race в setup reader: live reader 5/5
+теряет финальную строку, исправленный 5/5 valid; прямой installed proxy probe
+MQTT/HTTPS/RTP strict valid. Setup-only 1.10.1 исправляет drain after exit и
+upstream error_reason для всех каналов. Детерминированные pipe tests (3) и
+pipeline tests (12), certificate phase/startup/custom args passed x86/x64.
+Подготовка 1.10.1 требует новой подписи setup; release 1.10.0 не перезаписывается.
+
+Не выполнены: приёмка исправленного setup; clean enrollment через PIN, Win7
 GUI/manual/cancel/repair/watchdog и full cold/warm outage всех каналов; video E2E.
 Существующий terminal cert не удалялся, local services не переустанавливались.
 После clean l4setup оператор предоставляет summary/log для runtime acceptance.

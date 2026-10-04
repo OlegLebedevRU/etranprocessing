@@ -61,6 +61,12 @@ SHA-256 прочитанной версии: `F8CA892F87215D7BF158E0A8D5FACCCCC2
   `d06a430e34dd38b8cb2cef05d8156e6d52471b7096291f7253ed9485fc5e1595`.
   [Установщик](https://l4tools-generic.ar.cloud.ru/l4tools/1.10.0/l4setup.exe),
   [release record](../artifacts/l4tools/1.10.0.json).
+- Install773/Windows10 x64: службы и local smoke прошли, сертификат reused.
+  False RTP probe_failed воспроизведён в setup pipe reader 5/5; после drain
+  финальных bytes на process exit — 5/5 valid. Прямой installed proxy strict
+  MQTT/HTTPS/RTP TLS valid. Setup-only 1.10.1 собран x86/x64, regression tests
+  passed, 61/61 payload files совпадают, компонентные EXE hashes не изменены;
+  новый установщик ожидает подписи, релиз 1.10.0 остаётся immutable.
 
 ## Исходный task intake ревью
 
