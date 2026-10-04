@@ -5,6 +5,9 @@ class Settings(BaseSettings):
     database_url: str = ""
     cors_origins: list[str] = []
     yookassa_enabled: bool = False
+    # Optional JSON endpoints map; production addresses are provisioned via env.
+    leo4proxy_endpoints: str = ""
+    leo4proxy_endpoints_ttl_seconds: int = 86400
 
     # Auto-populate cert_serial on licensebilling if unset (e.g. legacy migrated terminal)
     auto_set_cert_serial_on_licensebilling: bool = True

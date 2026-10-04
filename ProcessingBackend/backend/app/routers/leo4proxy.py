@@ -12,7 +12,7 @@ from app.services.leo4proxy_policy import get_leo4proxy_policy, subscription_all
 router = APIRouter()
 
 
-@router.get("/policy", response_model=Leo4ProxyPolicy)
+@router.get("/policy", response_model=Leo4ProxyPolicy, response_model_exclude_none=True)
 async def read_policy(
     response: Response,
     terminal: Terminal = Depends(get_current_terminal),
