@@ -61,17 +61,22 @@ static void run_case(int failure,int certificate,int expected,SetupOperationType
  memset(&written,0,sizeof(written));result=engine_run_pipeline(&ctx);
  CHECK(result==expected && written.exit_code==expected);
  if(expected==24) {CHECK(stage==5 || stage==6);CHECK(!written.probes.mosquitto_port[0]);CHECK(!strcmp(written.service_l4con,"stopped"));}
- if(!expected || expected==10 || expected==11) {CHECK(stage==7);CHECK(!strcmp(written.installed_version,"1.9.5"));}
+ if(!expected || expected==10 || expected==11 || expected==12) {CHECK(stage==7);CHECK(!strcmp(written.installed_version,"1.9.5"));}
  else CHECK(strcmp(written.installed_version,"1.9.5")!=0);
+ if(expected==12) CHECK(!strcmp(written.error_reason,"upstream_tls_failed"));
 }
 int main(void) {
  run_case(0,0,0,OP_INSTALL);run_case(0,10,10,OP_INSTALL);run_case(0,11,11,OP_INSTALL);
  run_case(0,0,0,OP_REPAIR);run_case(0,0,0,OP_UPGRADE);run_case(0,0,0,OP_VERIFY);
  run_case(1,0,22,OP_INSTALL);run_case(2,0,24,OP_INSTALL);run_case(3,0,24,OP_INSTALL);
  run_case(4,0,27,OP_INSTALL);run_case(5,0,31,OP_UPGRADE);
- printf("Pipeline regression: 11 cases, %d failures\n",errors);return errors?1:0;
+ run_case(6,0,12,OP_INSTALL);
+ printf("Pipeline regression: 12 cases, %d failures\n",errors);return errors?1:0;
 }
 
 void services_set_network_options(const CliOptions* options) { (void)options; }
 
-void smoke_probe_upstream(const wchar_t* dest, SmokeProbesResult* probes) { (void)dest; (void)probes; }
+void smoke_probe_upstream(const wchar_t* dest, SmokeProbesResult* probes) {
+ (void)dest;
+ if(fail==6) {strcpy_s(probes->upstream_tls[3],32,"probe_failed");probes->has_warnings=true;probes->calculated_exit_code=12;}
+}

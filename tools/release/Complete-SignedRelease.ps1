@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$PfxPath,
     [string]$Version,
-    [ValidateSet('l4superv')][string[]]$SignOnly,
+    [ValidateSet('l4superv', 'l4setup')][string[]]$SignOnly,
     [string]$TimestampUrl = 'http://timestamp.digicert.com'
 )
 
@@ -25,8 +25,9 @@ try {
             throw "Missing staged payload: $stage"
         }
         if ($SignOnly) {
-            # Incremental supervisor release: preserve every other signed EXE byte-for-byte.
+            # Incremental release: preserve unchanged staged EXEs byte-for-byte.
             foreach ($tool in $SignOnly) {
+                if ($tool -eq 'l4setup') { continue } # Setup is signed after rebuilding below.
                 & "$PSScriptRoot\Sign-Executables.ps1" -TargetPath "$stage\$tool\$tool.exe" -TimestampUrl $TimestampUrl
             }
         } else {

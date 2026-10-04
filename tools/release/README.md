@@ -66,6 +66,13 @@ manifest when embedded inventory hashes are stale; repack and re-sign setup.
 
 ## Incremental supervisor-only release
 
+For a setup-only fix, preserve both existing signed staging trees and use
+`Complete-SignedRelease.ps1 -PfxPath '<path to signing PFX>' -Version '<release version>' -SignOnly l4setup`.
+Update suite/setup version headers and run setup tests/builds for x86/x64 first.
+The script refreshes inventories, repacks the unchanged component bytes, rebuilds
+and signs setup. Component builds and signatures remain unchanged. The usual
+payload, timestamp, clean-checkpoint and complete-download publication gates apply.
+
 For a supervisor-only update, use `tools/l4superv/build.cmd supervisor`, reuse the
 previous signed outputs of every other tool, and rebuild staging/setup only.
 Use `Complete-SignedRelease.ps1 -PfxPath '<path to signing PFX>' -Version '<release version>' -SignOnly l4superv`.

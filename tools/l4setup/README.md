@@ -1,5 +1,10 @@
 ﻿# Leo4 Zero-Touch Setup (`l4setup`)
 
+1.10.1 исправляет потерю последних строк TLS diagnostics при завершении дочернего
+leo4proxy: pipe дочитывается после сигнала process exit. Настоящие ошибки TLS
+сохраняют degraded/12; причина upstream_tls_failed учитывает все четыре канала.
+Это setup-only выпуск: компоненты остаются подписанными байтами 1.10.0.
+
 For release 1.9.1, the Details panel lists the installed package version from
 `state.json` and the actual PE file versions of the installed tools. After an
 installation, the panel rereads `state.json` and refreshes this list.

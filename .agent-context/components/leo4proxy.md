@@ -34,8 +34,11 @@ Cert standby/hot-swap и credential ownership сохраняются.
 Backend 156 tests + quality passed, policy deployed; direct mTLS confirms endpoints.
 Media CA pair and guarded image deployed; [media evidence](../tasks/completed/2026-10-04-media-tls.md).
 Native x86/x64 build, admission/credential/certificate/loopback tests passed;
-strict numeric bootstrap GET valid in both architectures. Full tools 1.10.0 packaging gate passed (61 embedded files per arch); unsigned
-signing handoff prepared, not installed or published yet.
+strict numeric bootstrap GET valid in both architectures. Signed tools 1.10.0
+published, payload gate 61 files per arch. Install773/Windows10 x64: four services
+running, reused valid certificate, local smoke passed. Installer reported false
+RTP probe_failed: child pipe exit race reproduced 5/5; direct installed proxy RTP
+TLS valid. Fixed reader returns valid 5/5; setup-only 1.10.1 awaits signature.
 
 ## Ограничения / следующие проверки
 IPv4 и первый A-address; CRL/OCSP не проверяются. Локальное время влияет на trust.

@@ -52,7 +52,17 @@ void smoke_probe_upstream(const wchar_t* dest_dir, SmokeProbesResult* result) {
             }
             continue;
         }
-        if (WaitForSingleObject(process.hProcess,25)==WAIT_OBJECT_0) break;
+        if (WaitForSingleObject(process.hProcess,25)==WAIT_OBJECT_0) {
+            /* Exit may race the previous PeekNamedPipe: the child can flush its
+               final verdict just before signaling. Drain those bytes first. */
+            while (PeekNamedPipe(reader,NULL,0,NULL,&available,NULL) && available) {
+                char chunk[1024]; DWORD got=0;
+                if (!ReadFile(reader,chunk,available<sizeof(chunk)?available:sizeof(chunk),&got,NULL) || !got) break;
+                size_t copy=got; if (copy>sizeof(output)-1-used) copy=sizeof(output)-1-used;
+                memcpy(output+used,chunk,copy); used+=copy; output[used]=0;
+            }
+            break;
+        }
         if (GetTickCount64()>=deadline) { timed_out=true; TerminateProcess(process.hProcess,1); WaitForSingleObject(process.hProcess,1000); break; }
     }
     CloseHandle(reader); CloseHandle(process.hThread); CloseHandle(process.hProcess);

@@ -418,6 +418,11 @@ int engine_run_pipeline(SetupContext* ctx) {
     if (is_active_cert) smoke_probe_upstream(ctx->opts->dest,&ctx->summary.probes);
 
     // Determine exit code and status
+    bool upstream_failed = false;
+    for (int channel = 0; channel < 4; ++channel) {
+        const char* verdict = ctx->summary.probes.upstream_tls[channel];
+        if (!strcmp(verdict,"cert_invalid") || !strcmp(verdict,"probe_failed") || !strcmp(verdict,"timeout")) upstream_failed = true;
+    }
     if (ctx->summary.probes.critical_failed) {
         ctx->final_exit_code = 27;
         strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "failed");
@@ -433,7 +438,7 @@ int engine_run_pipeline(SetupContext* ctx) {
         strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "degraded");
         strcpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason),
                  strcmp(ctx->summary.probes.network, "unreachable") == 0 ? "network_unreachable" :
-                 (!strcmp(ctx->summary.probes.upstream_tls[1],"cert_invalid") || !strcmp(ctx->summary.probes.upstream_tls[1],"probe_failed") || !strcmp(ctx->summary.probes.upstream_tls[1],"timeout")) ? "upstream_tls_failed" : "l4desk_or_upstream_not_ready");
+                 upstream_failed ? "upstream_tls_failed" : "l4desk_or_upstream_not_ready");
     } else {
         ctx->final_exit_code = 0;
         strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "ready");
