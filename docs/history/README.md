@@ -35,6 +35,9 @@
 - **[`billing-implementation-plan-2026-08-19.md`](planning-and-research/billing-implementation-plan-2026-08-19.md)** (19.08.2026) — Исходный пошаговый план разработки лицензионного биллинга (актуальная архитектура: [`docs/etran_bill-licensing-architecture.md`](../etran_bill-licensing-architecture.md)).
 - **[`billing-cert-licensing-analysis-2026-08-18.md`](planning-and-research/billing-cert-licensing-analysis-2026-08-18.md)** (18.08.2026) — Сравнительный анализ привязки сертификатов и лицензий между легаси ASP.NET и новым FastAPI.
 - **[`legacy-listmenuservice-research.md`](planning-and-research/legacy-listmenuservice-research.md)** (21.08.2026) — Исследование легаси WCF/OWIN сервиса `ListMenuFile` для его переноса в FastAPI.
+- **[`legacy-terminal-integration-guide.md`](planning-and-research/legacy-terminal-integration-guide.md)** — Легаси-референс по интеграции и параметризации PlaterraTerminal (прототипы ТСП, БД Terminal, API ОСМП). Перенесён из `docs/` (2026-10-04, naming convention).
+- **[`terminal-tools-user-guide.md`](planning-and-research/terminal-tools-user-guide.md)** — Ранний маршрут ZIP-дистрибутива tools (`l4install_*`, `tools.zip`, `ffmpeg.zip`). Актуальный маршрут: [`term_tool-user-guide.md`](../../term_tool-user-guide.md).
+- **[`menu_arch-l4mcp-tenant-skill-library.md`](planning-and-research/menu_arch-l4mcp-tenant-skill-library.md)** — Концепция библиотеки тенантных скилов l4mcp (design, не реализовано).
 
 ### 4. `prompts-and-drafts/` — Архивные промпты и рабочие черновики
 Черновики задач, выгрузки контекста и исходные требования активной разработки (ранее располагавшиеся в `prompt-arch/`):

@@ -337,14 +337,19 @@ Certificate enrollment routes (PIN-based, no cert headers) on the terminal mTLS
 gateway `nginx-mutual-legacy` (:443):
 
 ```nginx
-# Exact/legacy-compatible entry points (all proxy to processing-backend:8000):
+# Public terminal-facing enrollment entry points → processing-backend:8000:
 location = /certificates/            { proxy_pass http://new_processing_backend/api/certificates/$is_args$args; }
 location = /certificates             { proxy_pass http://new_processing_backend/api/certificates$is_args$args; }
-location = /certificates/Dispatcher.ashx
-location ^~ /api/certificates/pins
-location ^~ /api/certificates/pins/
+location = /certificates/Dispatcher.ashx   # same rewrite to /api/certificates/
 location ~ ^/api/certificates(/.*)?$ { proxy_pass http://new_processing_backend/api/certificates$1$is_args$args; }
+
+# PIN issue API is service-internal (require_service_auth) — not on the public mTLS gateway:
+location = /api/certificates/pins    { return 404; }
+location ^~ /api/certificates/pins/  { return 404; }
 ```
+
+Также на gateway: `location = /api/leo4proxy/policy` → `processing-backend:8000/api/leo4proxy/policy`.
+Матрица выше — сокращение; авторитетный список location — сам `legacy_ssl.conf`.
 
 Common proxy headers: `Host`, `X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto`,
 `proxy_buffering off`. Full authoritative list — see `legacy_ssl.conf` itself.
