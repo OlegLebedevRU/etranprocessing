@@ -13,6 +13,7 @@
 #include "cert_store.h"
 #include "cert_discovery.h"
 #include "gui.h"
+#include "renewal.h"
 
 #define DEFAULT_KEY_NAME L"EtranTerminalKey"
 
@@ -40,6 +41,8 @@ static void print_usage(const char* prog_name) {
     printf("  %s --check [--sn <SN>] [--json] [--store <machine|user>]\n", prog_name);
     printf("  %s --status [--store <machine|user>] [--email <email>]\n\n", prog_name);
     printf("Options:\n");
+    printf("  --renew-authenticated    Renew through authenticated route; l4con Job only (timeout >= 120s)\n");
+    printf("  --pin-stdin              Read renewal PIN from stdin without prompt\n");
     printf("  --check                  Check certificate status in target store and exit\n");
     printf("  --sn <SN>                Expected terminal serial number / Common Name\n");
     printf("  --json                   Output in JSON format (used with --check)\n");
@@ -60,7 +63,7 @@ static void print_usage(const char* prog_name) {
     printf("  %s --status\n", prog_name);
 }
 
-int l4pin_run_cli(int argc, char* argv[]) {
+static int l4pin_run_cli_unlocked(int argc, char* argv[]) {
     // Set console output to UTF-8 for clean Russian/English text output
     SetConsoleOutputCP(CP_UTF8);
 
@@ -74,6 +77,8 @@ int l4pin_run_cli(int argc, char* argv[]) {
     bool check_mode = false;
     bool is_json = false;
     bool force_reissue = false;
+    bool renew_authenticated = false;
+    bool pin_stdin = false;
     char cli_sn[128] = { 0 };
     char filter_email[256] = { 0 };
 
@@ -85,6 +90,10 @@ int l4pin_run_cli(int argc, char* argv[]) {
             _stricmp(arg, "/h") == 0 || _stricmp(arg, "/?") == 0) {
             print_usage(argv[0]);
             return 0;
+        } else if (_stricmp(arg,"--renew-authenticated")==0) {
+            renew_authenticated=true;
+        } else if (_stricmp(arg,"--pin-stdin")==0) {
+            pin_stdin=true;
         } else if (_stricmp(arg, "--check") == 0 || _stricmp(arg, "-check") == 0 ||
                    _stricmp(arg, "/check") == 0) {
             check_mode = true;
@@ -224,7 +233,7 @@ int l4pin_run_cli(int argc, char* argv[]) {
     }
 
     if (pin[0] == '\0') {
-        printf("Enter terminal PIN code: ");
+        if (!pin_stdin) printf("Enter terminal PIN code: ");
         if (fgets(pin, sizeof(pin), stdin)) {
             char* p = strchr(pin, '\n');
             if (p) *p = '\0';
@@ -239,6 +248,12 @@ int l4pin_run_cli(int argc, char* argv[]) {
         return 1;
     }
 
+    if (renew_authenticated) {
+        if (!is_machine_store || status_mode || check_mode) return 2;
+        int result=renewal_run(pin,cli_url_provided?cli_url:"http://127.0.0.1:18443/api/certificates");
+        SecureZeroMemory(pin,sizeof(pin));return result;
+    }
+    if (pin_stdin) { SecureZeroMemory(pin,sizeof(pin)); return 2; }
     // -----------------------------------------------------------------------
     // Certificate Discovery & Guard (Contract 4.1)
     // -----------------------------------------------------------------------
@@ -468,6 +483,21 @@ int l4pin_run_cli(int argc, char* argv[]) {
     printf("[ACTION] Restart L4Superv, L4Con, Leo4Proxy and mosquitto to use the new identity.\n");
 
     return 0;
+}
+
+int l4pin_run_cli(int argc, char* argv[]) {
+    bool readonly=false;
+    for (int n=1;n<argc;n++) {
+        const char* a=argv[n];
+        if (!_stricmp(a,"--check") || !_stricmp(a,"--status") || !_stricmp(a,"--help") ||
+            !_stricmp(a,"-h") || !_stricmp(a,"/?") || !_stricmp(a,"--list") ||
+            !_stricmp(a,"-check") || !_stricmp(a,"/check") || !_stricmp(a,"-status") || !_stricmp(a,"-l")) readonly=true;
+    }
+    HANDLE lock=readonly?NULL:enrollment_lock();
+    if (!readonly && !lock) { fprintf(stderr,"Certificate enrollment is busy or unavailable.\n");return 6; }
+    int result=l4pin_run_cli_unlocked(argc,argv);
+    if (lock) { ReleaseMutex(lock);CloseHandle(lock); }
+    return result;
 }
 
 static bool process_is_elevated(void) {

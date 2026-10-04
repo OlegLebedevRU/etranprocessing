@@ -37,6 +37,8 @@ import {
   resolveTenantTimezone,
 } from "../../utils/timezone";
 
+import CertificateRenewal from "../../components/CertificateRenewal";
+
 const { Text } = Typography;
 
 interface DevicePassportTabProps {
@@ -664,6 +666,7 @@ export default function DevicePassportTab({
           size="small"
           column={1}
         >
+          <Descriptions.Item label="Продление"><CertificateRenewal deviceId={deviceId} /></Descriptions.Item>
           <Descriptions.Item label="Субъект (DN / Subject)">
             {details?.peer_cert_subject ? (
               <div style={{ wordBreak: "break-all" }}>

@@ -2,6 +2,19 @@
 
 Легковесный автономный MQTT-клиент диагностики и удалённой веб-консоли (роль `extra_service`) для Windows, предназначенный для выполнения команд Windows CLI (`cmd.exe` / `PowerShell`), потоковой передачи вывода (`dev/{SN}/out`) и управления через MQTT RPC (`7001` Exec, `7002` Cancel).
 
+## 1.10.0 / suite 1.11.0 (подготовка, не опубликовано)
+
+Строгие RPC7001/7002/7003/7011 через payload.dt, корректные MQTT status/result_uid,
+TSK/RSP dedup и capability queue poll после reconnect / каждые60 s простоя.
+7011 запускает установленный sibling l4pin с PIN stdin и Job120 s; protected
+renewal отвечает busy409 следующей команде. FIFO ожидания нет. Явная отмена и
+shutdown сохраняются. --timeout принимает только целое1–3600 s; для ручного
+l4pin --renew-authenticated нужен TTL с ≥100 s остатка при IPC grant.
+TCP connect5 s, CONNACK/frame10 s, send3 s; произвольный --host DNS не имеет
+гарантированного deadline, штатный localhost/literal не требует DNS.
+Presence extra_service и пользовательские события900–999 не меняются.
+[Контракты и матрица](../../docs/term_arch-rpc7011-flow-matrix.md).
+
 ---
 
 ## 1. Назначение и функциональность

@@ -237,6 +237,7 @@ async def list_terminals(
             .where(
                 CertificatePin.terminal_id.in_(terminal_ids),
                 CertificatePin.status == "pending",
+                CertificatePin.purpose == "setup",
             )
             .order_by(CertificatePin.id.desc())
         )
@@ -444,6 +445,7 @@ async def update_terminal(
         .where(
             CertificatePin.terminal_id == terminal.id,
             CertificatePin.status == "pending",
+            CertificatePin.purpose == "setup",
         )
         .order_by(CertificatePin.id.desc())
     )
@@ -480,6 +482,7 @@ async def generate_terminal_pin(
         .where(
             CertificatePin.terminal_id == terminal_id,
             CertificatePin.status == "pending",
+            CertificatePin.purpose == "setup",
         )
         .values(status="cancelled")
     )
@@ -608,6 +611,7 @@ async def set_terminal_status(
         .where(
             CertificatePin.terminal_id == terminal.id,
             CertificatePin.status == "pending",
+            CertificatePin.purpose == "setup",
         )
         .order_by(CertificatePin.id.desc())
     )

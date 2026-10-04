@@ -8,7 +8,7 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-CA_URL = os.getenv("CA_URL", "https://ca.internal/sign-csr")
+CA_URL = os.getenv("CA_URL", "")
 CA_TIMEOUT = int(os.getenv("CA_TIMEOUT", "30"))
 DEFAULT_VALIDITY_DAYS = int(os.getenv("CERT_VALIDITY_DAYS", "365"))
 
@@ -42,6 +42,8 @@ async def sign_csr(
     Returns:
         CAResponse with cert_pem, ca_pem, serial_number, not_valid_after
     """
+    if not CA_URL:
+        raise ValueError("CA_URL is required")
     days = exp_days or DEFAULT_VALIDITY_DAYS
 
     headers = {

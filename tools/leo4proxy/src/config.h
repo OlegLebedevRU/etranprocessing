@@ -14,7 +14,7 @@
 #include <windows.h>
 #include <stdbool.h>
 
-#define LEO4_PROXY_VERSION "1.8.1"
+#define LEO4_PROXY_VERSION "1.8.2"
 #define LEO4_SERVICE_NAME L"Leo4Proxy"
 #define LEO4_SERVICE_DISPLAY_NAME L"Leo4 IoT SChannel Proxy Service"
 #define LEO4_SERVICE_DESC L"Leo4 IoT SChannel mTLS Proxy for MQTT (18883), HTTPS (18443), Stream (8554) and RTP Tunnel (5004/5005) using Windows Certificate Store."

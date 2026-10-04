@@ -7,9 +7,11 @@ Terminal calls:
 Auth is PIN-based (not nginx headers). PIN is pre-allocated in certificate_pins table.
 """
 
+import asyncio
 import base64
 import hashlib
 import os
+import urllib.parse
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
@@ -19,10 +21,11 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.utils import int_to_bytes
 from cryptography.x509.oid import NameOID
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from sqlalchemy import select, update
+from sqlalchemy import and_, exists, or_, select, update
 from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.dependencies import require_service_auth
 from app.logging_config import cert_logger
@@ -36,6 +39,9 @@ from app.models import (
 from app.schemas.certificates import (
     IssueCertificatePinRequest,
     IssueCertificatePinResponse,
+    RenewalEnrollRequest,
+    RenewalPinRequest,
+    RenewalPinResponse,
 )
 from app.services.ca import sign_csr
 from app.services.cert_billing import (
@@ -43,6 +49,7 @@ from app.services.cert_billing import (
     generate_unique_pin,
     mask_pin,
 )
+from app.services.leo4proxy_policy import subscription_allowance
 
 router = APIRouter()
 
@@ -144,7 +151,11 @@ async def _check_setup_retry(
 
 
 async def _find_terminal_by_pin(
-    pin: str, db: AsyncSession, for_update: bool = False
+    pin: str,
+    db: AsyncSession,
+    for_update: bool = False,
+    purpose: str = "setup",
+    include_used: bool = False,
 ) -> Row[tuple[Terminal, CertificatePin]] | None:
     """Look up terminal via certificate_pins table. Returns (terminal, pin_row) or None.
 
@@ -155,7 +166,12 @@ async def _find_terminal_by_pin(
     stmt = (
         select(Terminal, CertificatePin)
         .join(CertificatePin, CertificatePin.terminal_id == Terminal.id)
-        .where(CertificatePin.pin == pin, CertificatePin.status == "pending")
+        .where(CertificatePin.pin == pin, CertificatePin.purpose == purpose)
+    )
+    stmt = stmt.where(
+        CertificatePin.status.in_(["pending", "used"])
+        if include_used
+        else CertificatePin.status == "pending"
     )
     if for_update:
         stmt = stmt.with_for_update(of=CertificatePin)
@@ -166,9 +182,12 @@ async def _find_terminal_by_pin(
         return None
 
     _terminal, cert_pin = row
+    if (cert_pin.purpose or "setup") != purpose:
+        return None
     if cert_pin.expires_at <= datetime.now(UTC):
-        cert_pin.status = "expired"
-        await db.commit()
+        if cert_pin.status == "pending":
+            cert_pin.status = "expired"
+            await db.commit()
         cert_logger.info("PIN expired: pin=%s", mask_pin(pin))
         return None
 
@@ -190,6 +209,166 @@ def _parse_ca_datetime(value: str) -> datetime | None:
 # ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
+
+
+def _renewal_identity(request: Request) -> tuple[str, str]:
+    """Only verified, live new-CA certificates from the dedicated proxy location."""
+    if request.headers.get("X-Client-Cert-Verified") != "SUCCESS":
+        raise HTTPException(401, "verified_certificate_required")
+    try:
+        cert = x509.load_pem_x509_certificate(
+            urllib.parse.unquote(request.headers.get("X-SSL-Client-Cert", "")).encode()
+        )
+        issuer = cert.issuer.get_attributes_for_oid(NameOID.COMMON_NAME)
+        subject = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+        now = datetime.now(UTC)
+        if (
+            len(issuer) != 1
+            or issuer[0].value != "iot.leo4.ru"
+            or len(subject) != 1
+            or not cert.not_valid_before_utc <= now < cert.not_valid_after_utc
+        ):
+            raise ValueError("invalid renewal certificate")
+        serial = request.headers.get("X-Client-Cert-Serial", "").upper()
+        if not serial or serial.lstrip("0") != format(cert.serial_number, "X").lstrip(
+            "0"
+        ):
+            raise ValueError("serial header mismatch")
+        return str(subject[0].value), serial
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(401, "live_new_ca_certificate_required") from exc
+
+
+async def _verify_renewal_owner(
+    terminal: Terminal,
+    identity: tuple[str, str],
+    db: AsyncSession,
+    recovery: CertificatePin | None = None,
+) -> None:
+    sn, serial = identity
+    accepted = {terminal.cert_serial}
+    if recovery:
+        current_issuance = await db.scalar(
+            select(
+                exists().where(
+                    TerminalCertHistory.pin_id == recovery.id,
+                    TerminalCertHistory.terminal_id == terminal.id,
+                    TerminalCertHistory.cert_serial == terminal.cert_serial,
+                )
+            )
+        )
+        if not current_issuance:
+            raise HTTPException(409, "renewal_recovery_superseded")
+        accepted.add(recovery.renewal_auth_serial)
+    if terminal.sn != sn or serial not in accepted:
+        raise HTTPException(401, "renewal_identity_mismatch")
+    if not terminal.is_active or not await subscription_allowance(db, terminal):
+        raise HTTPException(403, "terminal_renewal_not_allowed")
+
+
+@router.post("/renew")
+async def renew_certificate(
+    payload: RenewalEnrollRequest, request: Request, db: AsyncSession = Depends(get_db)
+) -> Response:
+    identity = _renewal_identity(request)
+    async with asyncio.timeout(60):
+        params = {
+            "pin": payload.pin,
+            "cpserial": payload.cpserial,
+            "v": "26",
+            "tosign": payload.tosign,
+        }
+        if payload.function == "check":
+            return await _handle_check(params, db, identity)
+        if not payload.csr:
+            raise HTTPException(422, "csr_required")
+        return await _handle_setup(params, request, db, identity, payload.csr.encode())
+
+
+@router.post("/renewal-pins", response_model=RenewalPinResponse, status_code=201)
+async def issue_renewal_pin(
+    payload: RenewalPinRequest,
+    db: AsyncSession = Depends(get_db),
+    _auth: str = Depends(require_service_auth),
+) -> RenewalPinResponse:
+    if not (settings.service_auth_token or settings.internal_service_key):
+        raise HTTPException(503, "renewal_service_auth_not_configured")
+    terminal = (
+        await db.execute(
+            select(Terminal)
+            .where(
+                Terminal.id == payload.terminal_id,
+                Terminal.org_id == payload.tenant_id,
+                Terminal.sn == payload.sn,
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if terminal is None:
+        raise HTTPException(404, "terminal_not_found")
+    if not terminal.is_active or not await subscription_allowance(db, terminal):
+        raise HTTPException(403, "terminal_renewal_not_allowed")
+    now = datetime.now(UTC)
+    if (
+        not terminal.cert_serial
+        or len(terminal.cert_serial) <= 20
+        or terminal.cert_not_valid_after is None
+        or terminal.cert_not_valid_after <= now
+    ):
+        raise HTTPException(409, "live_new_ca_certificate_required")
+    current_issuance = exists().where(
+        TerminalCertHistory.pin_id == CertificatePin.id,
+        TerminalCertHistory.terminal_id == terminal.id,
+        TerminalCertHistory.cert_serial == terminal.cert_serial,
+    )
+    reusable = (
+        select(CertificatePin)
+        .where(
+            CertificatePin.terminal_id == terminal.id,
+            CertificatePin.org_id == terminal.org_id,
+            CertificatePin.purpose == "renew",
+            CertificatePin.expires_at > now + timedelta(seconds=120),
+            or_(
+                CertificatePin.status == "pending",
+                and_(
+                    CertificatePin.status == "used",
+                    CertificatePin.used_at > now - timedelta(minutes=15),
+                    CertificatePin.renewal_response.is_not(None),
+                    current_issuance,
+                ),
+            ),
+        )
+        .order_by(CertificatePin.id.desc())
+        .limit(1)
+    )
+    if payload.pin_id:
+        reusable = reusable.where(CertificatePin.id == payload.pin_id)
+    pin = (await db.execute(reusable)).scalar_one_or_none()
+    if pin is None and payload.pin_id:
+        raise HTTPException(409, "renewal_pin_unavailable")
+    if pin is None:
+        pin = CertificatePin(
+            pin=await generate_unique_pin(db),
+            terminal_id=terminal.id,
+            org_id=terminal.org_id,
+            purpose="renew",
+            created_by="menubuilder",
+            creation_source="tenant",
+            payment_required=False,
+            status="pending",
+            expires_at=compute_pin_expiry(now),
+        )
+        db.add(pin)
+        await db.flush()
+        await db.commit()
+    return RenewalPinResponse(
+        pin_id=pin.id,
+        tenant_id=terminal.org_id,
+        terminal_id=terminal.id,
+        sn=terminal.sn,
+        pin=pin.pin,
+        expires_at=pin.expires_at,
+    )
 
 
 @router.get("")
@@ -225,7 +404,9 @@ async def certificates_handler(request: Request, db: AsyncSession = Depends(get_
 # ---------------------------------------------------------------------------
 
 
-async def _handle_check(params: dict, db: AsyncSession) -> Response:
+async def _handle_check(
+    params: dict, db: AsyncSession, renewal_identity: tuple[str, str] | None = None
+) -> Response:
     """PIN → terminal → return DN + sign."""
     pin = params.get("pin", "").strip()
     tosign = params.get("tosign", "")
@@ -233,7 +414,9 @@ async def _handle_check(params: dict, db: AsyncSession) -> Response:
     if not pin:
         return error_response("PIN не указан", code=2)
 
-    found = await _find_terminal_by_pin(pin, db)
+    found = await _find_terminal_by_pin(
+        pin, db, purpose="renew" if renewal_identity else "setup"
+    )
     if not found:
         pin_check = await db.execute(
             select(CertificatePin).where(CertificatePin.pin == pin)
@@ -254,6 +437,8 @@ async def _handle_check(params: dict, db: AsyncSession) -> Response:
         return error_response("Пин-код не существует", code=2)
 
     terminal, _pin_row = found
+    if renewal_identity:
+        await _verify_renewal_owner(terminal, renewal_identity, db)
 
     # sign = MD5(decode_base64(tosign) + SignKey)
     sign = ""
@@ -304,7 +489,13 @@ async def _handle_check(params: dict, db: AsyncSession) -> Response:
 # ---------------------------------------------------------------------------
 
 
-async def _handle_setup(params: dict, request: Request, db: AsyncSession) -> Response:
+async def _handle_setup(
+    params: dict,
+    request: Request,
+    db: AsyncSession,
+    renewal_identity: tuple[str, str] | None = None,
+    csr_body: bytes | None = None,
+) -> Response:
     """PIN lookup → CA sign → PKCS#7 chain → terminal."""
     pin = params.get("pin", "").strip()
     cpserial = params.get("cpserial", "")
@@ -312,9 +503,17 @@ async def _handle_setup(params: dict, request: Request, db: AsyncSession) -> Res
     if not pin:
         return error_response("PIN не указан", code=2)
 
-    found = await _find_terminal_by_pin(pin, db, for_update=True)
+    found = await _find_terminal_by_pin(
+        pin,
+        db,
+        for_update=True,
+        purpose="renew" if renewal_identity else "setup",
+        include_used=bool(renewal_identity),
+    )
     if not found:
-        retry_resp = await _check_setup_retry(pin, cpserial, db)
+        retry_resp = (
+            None if renewal_identity else await _check_setup_retry(pin, cpserial, db)
+        )
         if retry_resp:
             return retry_resp
 
@@ -337,8 +536,23 @@ async def _handle_setup(params: dict, request: Request, db: AsyncSession) -> Res
         return error_response("Пин-код не существует", code=2)
 
     terminal, cert_pin = found
+    if renewal_identity:
+        terminal = (
+            await db.execute(
+                select(Terminal)
+                .where(Terminal.id == terminal.id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one()
+        await _verify_renewal_owner(
+            terminal,
+            renewal_identity,
+            db,
+            cert_pin if cert_pin.status == "used" else None,
+        )
 
-    body = await request.body()
+    body = csr_body if csr_body is not None else await request.body()
     if not body:
         return error_response("PKCS10 не найден в теле запроса", code=4)
 
@@ -363,6 +577,17 @@ async def _handle_setup(params: dict, request: Request, db: AsyncSession) -> Res
     if not csr.is_signature_valid:
         cert_logger.warning("SETUP: CSR signature is invalid for pin=%s", mask_pin(pin))
         return error_response("Недействительная подпись CSR", code=4)
+
+    csr_hash = hashlib.sha256(csr.public_bytes(serialization.Encoding.DER)).hexdigest()
+    if renewal_identity and cert_pin.status == "used":
+        if (
+            cert_pin.renewal_csr_sha256 == csr_hash
+            and cert_pin.renewal_response
+            and cert_pin.used_at
+            and datetime.now(UTC) < cert_pin.used_at + timedelta(minutes=15)
+        ):
+            return ok_response(cert_pin.renewal_response)
+        raise HTTPException(409, "renewal_pin_consumed")
 
     # 2. Check CSR mismatch against terminal identity
     # Check OU (device_id) if present
@@ -413,14 +638,26 @@ async def _handle_setup(params: dict, request: Request, db: AsyncSession) -> Res
     )
 
     try:
-        ca_result = await sign_csr(
-            csr_pem=pkcs10_pem,
-            sign=cpserial,
-            cn=terminal.sn,
-        )
+        if renewal_identity:
+            remaining = (cert_pin.expires_at - datetime.now(UTC)).total_seconds()
+            if remaining <= 0:
+                raise HTTPException(410, "renewal_pin_expired")
+            async with asyncio.timeout(min(remaining, 60)):
+                ca_result = await sign_csr(
+                    csr_pem=pkcs10_pem, sign=cpserial, cn=terminal.sn
+                )
+        else:
+            ca_result = await sign_csr(
+                csr_pem=pkcs10_pem, sign=cpserial, cn=terminal.sn
+            )
+    except HTTPException:
+        raise
     except Exception as e:  # noqa: BLE001
         cert_logger.error("SETUP: CA failed: %s", e, exc_info=True)
         return error_response(f"Ошибка выпуска сертификата: {e}", code=1)
+
+    if renewal_identity and cert_pin.expires_at <= datetime.now(UTC):
+        raise HTTPException(410, "renewal_pin_expired")
 
     not_valid_after = _parse_ca_datetime(ca_result.not_valid_after)
 
@@ -428,13 +665,18 @@ async def _handle_setup(params: dict, request: Request, db: AsyncSession) -> Res
     terminal.cert_not_valid_after = not_valid_after
     cert_pin.status = "used"
     cert_pin.used_at = datetime.now(UTC)
+    pkcs7_b64 = _build_pkcs7_chain(ca_result.cert_pem, ca_result.ca_pem)
+    if renewal_identity:
+        cert_pin.renewal_auth_serial = renewal_identity[1]
+        cert_pin.renewal_csr_sha256 = csr_hash
+        cert_pin.renewal_response = pkcs7_b64
     db.add(
         TerminalCertHistory(
             terminal_id=terminal.id,
             cert_serial=ca_result.serial_number,
             not_valid_after=not_valid_after,
             pin_id=cert_pin.id,
-            source="setup",
+            source="renew" if renewal_identity else "setup",
         )
     )
 
@@ -451,7 +693,9 @@ async def _handle_setup(params: dict, request: Request, db: AsyncSession) -> Res
     audit = L4DeskAuditEvent(
         tenant_id=terminal.org_id,
         actor="terminal",
-        event_type="certificate_enrolled",
+        event_type="certificate_renewed"
+        if renewal_identity
+        else "certificate_enrolled",
         subject_type="terminal",
         subject_id=str(terminal.id),
         operation_id=None,
@@ -475,8 +719,8 @@ async def _handle_setup(params: dict, request: Request, db: AsyncSession) -> Res
         ca_result.not_valid_after,
     )
 
-    pkcs7_b64 = _build_pkcs7_chain(ca_result.cert_pem, ca_result.ca_pem)
-    _recent_setup_cache[pin] = (datetime.now(UTC), cpserial, pkcs7_b64)
+    if not renewal_identity:
+        _recent_setup_cache[pin] = (datetime.now(UTC), cpserial, pkcs7_b64)
     return ok_response(pkcs7_b64)
 
 

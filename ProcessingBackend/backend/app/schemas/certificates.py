@@ -6,6 +6,34 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class RenewalPinRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    tenant_id: int = Field(gt=0)
+    terminal_id: int = Field(gt=0)
+    sn: str = Field(min_length=1, max_length=100)
+    pin_id: int | None = Field(default=None, gt=0)
+
+
+class RenewalPinResponse(BaseModel):
+    """Internal provider response; plaintext never goes to the browser."""
+
+    pin_id: int
+    tenant_id: int
+    terminal_id: int
+    sn: str
+    pin: str = Field(repr=False)
+    expires_at: datetime
+
+
+class RenewalEnrollRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    function: Literal["check", "setup"]
+    pin: str = Field(pattern=r"^[0-9]{6}$", repr=False)
+    csr: str | None = Field(default=None, max_length=32768)
+    cpserial: str = Field(default="", max_length=128)
+    tosign: str = Field(default="", max_length=2048)
+
+
 class IssueCertificatePinRequest(BaseModel):
     """Request payload to idempotently issue a one-time certificate PIN."""
 

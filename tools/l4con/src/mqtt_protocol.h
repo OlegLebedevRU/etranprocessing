@@ -26,6 +26,14 @@ typedef struct {
     const char* value;
 } MqttUserProperty;
 
+typedef struct {
+    char method_code[16];
+    char correlation[40];
+    char payload_required[2];
+} MqttRpcMetadata;
+int mqtt_parse_rpc_metadata(const unsigned char* packet, uint32_t length,
+                            uint8_t flags, MqttRpcMetadata* out);
+
 int mqtt_encode_remaining_length(unsigned char* buf, uint32_t length);
 int mqtt_decode_remaining_length(const unsigned char* buf, size_t buf_len, uint32_t* out_length, int* out_bytes_used);
 

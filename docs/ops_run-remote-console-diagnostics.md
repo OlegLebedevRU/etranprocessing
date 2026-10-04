@@ -57,7 +57,7 @@ payload 1024 байта в console_send_event требуется l4con 1.9.4.
 |  - Исполнение процессов через CreateProcess (stdin=NUL, неинтерактивный режим)                     |
 |  - Перекодирование вывода из OEM CP866 / CP1251 в UTF-8                                            |
 |  - Потоковая отправка чанков вывода в dev/{SN}/out с монотонным seq и флагом eof                   |
-|  - Обработка RPC-методов: 7001 (Exec), 7002 (Cancel), 7003 (Ping/Pong), 7004 (Keepalive Lease)     |
+|  - Обработка RPC-методов: 7001 (Exec), 7002 (Cancel), 7003 (Ping/Pong), 7011 (Authenticated Renewal)     |
 |  - Прерывание дерева процессов (taskkill /F /T) при отмене (7002) или таймауте (ttl_sec)           |
 +----------------------------------------------------------------------------------------------------+
 ```
@@ -75,7 +75,7 @@ payload 1024 байта в console_send_event требуется l4con 1.9.4.
 | Направление | Топик | QoS | Retain | Назначение / Описание |
 |---|---|---|---|---|
 | **Server ➔ Device** | `srv/<SN>/tsk` | 1 | 0 | **Триггер/Анонс новой задачи**: оповещение агента о наличии задачи на исполнение или отмену. |
-| **Server ➔ Device** | `srv/<SN>/rsp` | 1 | 0 | **Тело задачи (RPC Payload)**: полные параметры исполнения команды (`7001`), отмены (`7002`), эхо (`7003`) или продления аренды (`7004`). |
+| **Server ➔ Device** | `srv/<SN>/rsp` | 1 | 0 | **Тело задачи (RPC Payload)**: полные параметры исполнения команды (`7001`), отмены (`7002`), эхо (`7003`) или authenticated renewal (`7011`). |
 | **Server ➔ Device** | `srv/<SN>/cmt` | 1 | 0 | **Подтверждение фиксации (Commit)**: опциональный ack завершения. |
 | **Device ➔ Server** | `dev/<SN>/req` | 0 / 1 | 0 | **Запрос параметров задачи**: отправляется агентом в ответ на `srv/<SN>/tsk` по `correlationData`. |
 | **Device ➔ Server** | `dev/<SN>/res` | 1 | 0 | **Финальный отчет о задаче**: результат выполнения, `status_code`, `exit_code`, `duration_ms`. |
@@ -85,7 +85,7 @@ payload 1024 байта в console_send_event требуется l4con 1.9.4.
 
 ---
 
-## 3. Регламент RPC-методов линейки диагностики (`7000..7009`)
+## 3. Регламент RPC-методов (`7000..7011`)
 
 | Метод RPC | Константа | Назначение |
 |---|---|---|
@@ -93,8 +93,9 @@ payload 1024 байта в console_send_event требуется l4con 1.9.4.
 | **7001** | `CMD_DIAG_EXEC` | Запуск неинтерактивной команды / пресета с `ttl_sec` и `max_output_bytes`. |
 | **7002** | `CMD_DIAG_CANCEL` | Принудительное прерывание выполнения / завершение активной сессии и остановка потока. |
 | **7003** | `CMD_DIAG_PING` | Прикладной эхо-запрос (RPC Ping/Pong) для замера сквозного RTT и подтверждения живости цикла агента. |
-| **7004** | `CMD_DIAG_SESSION_KEEPALIVE` | Продление аренды сессии (Session Lease). Если в течение N секунд keepalive от сервера не поступил, агент самостоятельно гасит фоновый процесс. |
-| **7005** | `CMD_DIAG_AGENT_STATUS` | Мгновенный опрос внутреннего состояния агента (список запущенных дочерних PID, память, время непрерывной работы). |
+| **7004** | `CMD_DIAG_SESSION_KEEPALIVE` | Резерв протокола; текущий l4con 1.10.0 не реализует, отвечает501. |
+| **7005** | `CMD_DIAG_AGENT_STATUS` | Резерв протокола; текущий l4con 1.10.0 не реализует, отвечает501. |
+| **7011** | Authenticated certificate renewal | Singleton renew dt; live terminal mTLS, PIN stdin, protected Job120 s. |
 
 ---
 
@@ -127,123 +128,62 @@ payload 1024 байта в console_send_event требуется l4con 1.9.4.
 
 ---
 
-### 4.2. Выполнение команды (`CMD_DIAG_EXEC` / Method `7001`)
+### 4.2. Канонический task flow (l4con 1.10.0 / tools 1.11.0)
 
-#### Шаг 1. Анонс задачи (Server ➔ `srv/<SN>/tsk`)
+IoT сам создаёт UUID task_id. TSK содержит id, header.method_code и
+payload_required. REQ передаёт correlationData=task_id. RSP содержит header и
+строгий payload.dt; параметры не размещаются рядом с id. session_id тоже UUID.
+Фактические producer fixtures: [7xxx](contracts/rpc7xxx-gate1.json),
+[7011](contracts/rpc7011-gate4.json).
+
 ```json
 {
-  "id": "b3b7e7e8-3482-446a-8b1e-61e8bf2803b9",
-  "method_code": 7001,
-  "correlationData": "b3b7e7e8-3482-446a-8b1e-61e8bf2803b9"
+  "id": "f4106499-d645-4e31-8913-c2b73f41937a",
+  "header": {"method_code": 7001},
+  "payload": {"dt": [{
+    "session_id": "ea9c98c0-bcd2-4e87-9ab5-2df74eab41e7",
+    "command_line": "ipconfig /all", "shell": "cmd",
+    "ttl_sec": 30, "max_output_bytes": 1048576
+  }]}
 }
 ```
 
-#### Шаг 2. Запрос параметров (Device ➔ `dev/<SN>/req`)
-```json
-{
-  "correlationData": "b3b7e7e8-3482-446a-8b1e-61e8bf2803b9"
-}
-```
+7001 требует параметров и исполняется после RSP. OUT содержит session_id, seq,
+data, eof и финальный exit_code. RES публикуется с MQTT5 properties
+correlationData, status_code, result_uid; одного body status_code недостаточно
+для корректной записи tasks. status: completed/timeout/cancelled/failed;
+коды 200/408/409/500 соответственно. IoT фиксирует результат и подтверждает CMT.
+Повторная доставка в пределах runtime cache возвращает прежний result_uid,
+а не запускает процесс заново. После перезапуска cache не является durable dedup.
 
-#### Шаг 3. Доставка параметров задачи (Server ➔ `srv/<SN>/rsp`)
-```json
-{
-  "id": "b3b7e7e8-3482-446a-8b1e-61e8bf2803b9",
-  "method_code": 7001,
-  "session_id": "sess_91823791283",
-  "command_line": "ipconfig /all",
-  "shell": "cmd",
-  "ttl_sec": 30,
-  "max_output_bytes": 1048576,
-  "topic": "dev/a4b0000773c82116d210826/out"
-}
-```
+### 4.3. Cancel7002 и Ping7003
 
-#### Шаг 4. Потоковый вывод (Device ➔ `dev/<SN>/out`)
-```json
-{
-  "session_id": "sess_91823791283",
-  "seq": 1,
-  "data": "Windows IP Configuration\r\n\r\n   Host Name . . . . . . . . . . . . : POS-TERMINAL-01\r\n",
-  "eof": false
-}
-```
-Финальный чанк по завершении процесса:
-```json
-{
-  "session_id": "sess_91823791283",
-  "seq": 2,
-  "data": "",
-  "eof": true,
-  "exit_code": 0
-}
-```
+7002 с `payload={"dt":[]}` и явно `payload_required=false` может отменить
+текущую монопольную команду по TSK. Далее REQ/RSP/RES соблюдаются без повторной
+отмены. Адресный вариант `{"dt":[{"session_id":"<UUID>"}]}` ждёт RSP,
+проверяет текущую сессию и отвечает404 при несовпадении. Собственный UUID cancel
+отличается от UUID exec. ACK cancel_requested означает запрос отмены;
+завершение exec подтверждается отдельно его RES/EOF. Forwarder не удаляется
+до результата/timeout. Явная отмена может прервать установку сертификата.
 
-#### Шаг 5. Финальный отчет о задаче (Device ➔ `dev/<SN>/res`)
-```json
-{
-  "correlationData": "b3b7e7e8-3482-446a-8b1e-61e8bf2803b9",
-  "task_id": "b3b7e7e8-3482-446a-8b1e-61e8bf2803b9",
-  "status_code": "200",
-  "status": "completed",
-  "exit_code": 0,
-  "duration_ms": 145
-}
-```
+7003 имеет `{"dt":[]}` и возвращает pong. 7004/7005 не реализованы l4con:
+валидная обёртка сама по себе не даёт поддержку метода; результат501.
+Методы не объявляются в capability poll.
 
----
+### 4.4. Продление7011
 
-### 4.3. Отмена активной команды и закрытие сессии (`CMD_DIAG_CANCEL` / Method `7002`)
+Форма «Заказать удалённое продление» создаёт/переиспользует renew PIN и
+синхронно ставит7011, возвращая реальный IoT task_id без PIN. Offline разрешён.
+l4con получает singleton dt с pin, pin_expires_at (UTC epoch), ttl_sec=120,
+запускает sibling l4pin напрямую с PIN stdin. Установка защищена от следующей
+exec/renew: busy409 вместо отмены или FIFO ожидания. Общий mutex не допускает
+одновременной установки. CLI --renew-authenticated требует разрешённый l4con
+Job и ≥100 s остатка TTL; l4pin имеет бюджет90 s.
 
-1. **Триггеры отправки 7002**:
-   - Нажатие пользователем кнопки «Прервать» в UI.
-   - Нажатие кнопки «Отключить» в UI во время активной сессии.
-   - Переключение между внутренними вкладками (Задачи/События/Консоль), если выключен переключатель «Сохранять сессию».
-   - Закрытие формы управления (Drawer) или уход со страницы.
-   - Реактивное подавление фантомного потока на бэкенде: если на бэкенд поступает чанк `dev/<SN>/out`, а сессия не найдена в реестре.
-2. **Формат задачи отмены** (`srv/<SN>/rsp`):
-```json
-{
-  "id": "cancel_b3b7e7e8",
-  "method_code": 7002,
-  "session_id": "sess_91823791283",
-  "task_id": "b3b7e7e8-3482-446a-8b1e-61e8bf2803b9",
-  "reason": "User cancelled or session closed"
-}
-```
-3. **Действия агента `l4con`**:
-   - Прерывание дерева дочерних процессов: `taskkill /F /T /PID <pid>` и `TerminateProcess`.
-   - Отправка финального чанка с `eof: true`, `exit_code: 130` в `dev/<SN>/out`.
-   - Ответ в `dev/<SN>/res`:
-```json
-{
-  "correlationData": "b3b7e7e8-3482-446a-8b1e-61e8bf2803b9",
-  "status_code": "200",
-  "status": "cancelled",
-  "exit_code": 130
-}
-```
-
----
-
-### 4.4. Прикладной эхо-запрос (`CMD_DIAG_PING` / Method `7003`)
-
-1. **Сервер отправляет пинг** в `srv/<SN>/rsp`:
-```json
-{
-  "id": "ping_91823",
-  "method_code": 7003
-}
-```
-2. **Агент мгновенно отвечает** в `dev/<SN>/res`:
-```json
-{
-  "correlationData": "ping_91823",
-  "status_code": "200",
-  "status": "pong",
-  "role": "extra_service"
-}
-```
+История/detail/export/logs/webhook маскируют PIN. MQTT RSP доставляет исходный
+payload только устройству; после result/delete/expiry credential payload
+scrubbed. Командная строка ручного l4pin также маскируется в истории.
+Полная [матрица переходов, таймингов и рисков](term_arch-rpc7011-flow-matrix.md).
 
 ---
 
@@ -323,9 +263,10 @@ user и viewer не получают console lease. Консоль взаимо�
     "method_code": 7001,
     "priority": 0,
     "ttl": 5,
-    "payload": {
-      "command_line": "l4sql --limit 3 tb_Variables"
-    }
+    "payload": {"dt": [{
+      "session_id": "ea9c98c0-bcd2-4e87-9ab5-2df74eab41e7",
+      "command_line": "l4sql --limit 3 tb_Variables", "ttl_sec": 30
+    }]}
   }
   ```
   *Ответ (`200 OK`)*: `{"id": "<task_uuid>", "created_at": 1788035386}`.
@@ -344,7 +285,7 @@ user и viewer не получают console lease. Консоль взаимо�
     "status": 3,
     "results": [
       {
-        "status_code": 501,
+        "status_code": 200,
         "result": {
           "status": "completed",
           "exit_code": 0,
@@ -362,10 +303,12 @@ user и viewer не получают console lease. Консоль взаимо�
 * Публикация в `srv/{SN}/rsp`:
   ```json
   {
-    "id": "loc-01",
-    "method_code": 7001,
-    "session_id": "loc-sess-1",
-    "command_line": "l4sql --limit 3 tb_Variables"
+    "id": "f4106499-d645-4e31-8913-c2b73f41937a",
+    "header": {"method_code": 7001},
+    "payload": {"dt": [{
+      "session_id": "ea9c98c0-bcd2-4e87-9ab5-2df74eab41e7",
+      "command_line": "l4sql --limit 3 tb_Variables", "ttl_sec": 30
+    }]}
   }
   ```
 

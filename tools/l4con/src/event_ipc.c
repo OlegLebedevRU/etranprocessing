@@ -9,6 +9,7 @@
 static SRWLOCK g_lock = SRWLOCK_INIT;
 static HANDLE g_job, g_thread, g_stop;
 static volatile bool* g_cancelled;
+static volatile LONG* g_protection;
 static ULONGLONG g_deadline, g_last;
 static bool g_used;
 static UserEventPublisher g_publish;
@@ -119,10 +120,25 @@ void event_job_register(HANDLE job, volatile bool* cancelled, ULONGLONG deadline
     ReleaseSRWLockExclusive(&g_lock);
 }
 
+void event_job_set_protection(HANDLE job, volatile LONG* protection) {
+    AcquireSRWLockExclusive(&g_lock);
+    if (g_job==job) g_protection=protection;
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
+bool event_job_cancel_replacement(volatile bool* cancelled, volatile LONG* protection) {
+    AcquireSRWLockExclusive(&g_lock);
+    bool allowed=!InterlockedCompareExchange(protection,0,0);
+    if (allowed) *cancelled=true;
+    ReleaseSRWLockExclusive(&g_lock);
+    return allowed;
+}
+
 void event_job_revoke(HANDLE job) {
     AcquireSRWLockExclusive(&g_lock);
     if (g_job == job) {
         g_job = NULL;
+        g_protection = NULL;
         g_cancelled = NULL;
     }
     ReleaseSRWLockExclusive(&g_lock);
@@ -155,7 +171,22 @@ static int dispatch_event(HANDLE pipe, const UserEvent* event) {
         WaitForSingleObject(g_stop, 0) != WAIT_OBJECT_0 &&
         WaitForSingleObject(process, 0) == WAIT_TIMEOUT &&
         IsProcessInJob(process, g_job, &member) && member) {
-        if (!event_rate_take(now, &g_last, &g_used)) result = EVENT_RATE_LIMIT;
+        if (event->version==2) {
+            wchar_t actual[MAX_PATH], expected[MAX_PATH]; DWORD size=MAX_PATH;
+            DWORD length=GetModuleFileNameW(NULL,expected,MAX_PATH);
+            wchar_t* slash=wcsrchr(expected,L'\\');
+            if (length && length<MAX_PATH && slash) {
+                *slash=0; slash=wcsrchr(expected,L'\\');
+                if (slash) {
+                    *slash=0;
+                    if (wcscat_s(expected,MAX_PATH,L"\\l4pin\\l4pin.exe")==0 &&
+                        QueryFullProcessImageNameW(process,0,actual,&size) &&
+                        !_wcsicmp(actual,expected) && g_protection && g_deadline-now>=100000) {
+                        InterlockedExchange(g_protection,1); result=EVENT_OK;
+                    }
+                }
+            }
+        } else if (!event_rate_take(now, &g_last, &g_used)) result = EVENT_RATE_LIMIT;
         else result = g_publish(event, g_context) ? EVENT_OK : EVENT_SEND_FAILED;
     }
     ReleaseSRWLockExclusive(&g_lock);
@@ -180,7 +211,9 @@ static DWORD WINAPI pipe_thread(void* context) {
         BOOL read = ReadFile(pipe, &event, sizeof(event), NULL, &operation);
         bool received = overlapped_done(pipe, &operation, read, g_stop, 1000, &bytes);
         int32_t result = EVENT_BAD_ARGS;
-        if (received && bytes == sizeof(event) && event_validate(&event))
+        if (received && bytes == sizeof(event) && (event_validate(&event) || (event.version==2 && event.code==7011 &&
+            event.exit_code==0 && !event.has_payload && !event.payload_len &&
+            !event.payload[0] && !event.correlation_id[0])))
             result = dispatch_event(pipe, &event);
         if (received) {
             ResetEvent(operation.hEvent);

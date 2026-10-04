@@ -113,7 +113,9 @@ def test_alembic_linear_history():
     script = ScriptDirectory.from_config(config)
 
     heads = script.get_heads()
-    assert heads == ["029"], f"Expected single head '029', got {heads}"
+    assert heads == ["030"], f"Expected single head '030', got {heads}"
+    rev_030 = script.get_revision("030")
+    assert rev_030 is not None and rev_030.down_revision == "029"
 
     rev_028 = script.get_revision("028")
     assert rev_028 is not None
@@ -124,6 +126,18 @@ def test_alembic_linear_history():
     assert rev_027.down_revision == "026", (
         f"Expected down_revision '026', got {rev_027.down_revision}"
     )
+
+
+def test_certificate_renewal_upgrade_sql_generation():
+    config = Config("alembic.ini")
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        command.upgrade(config, "029:030", sql=True)
+    sql = buf.getvalue()
+    for name in ("purpose", "renewal_auth_serial", "renewal_csr_sha256", "renewal_response"):
+        assert f"ADD COLUMN {name}" in sql
+    assert "DEFAULT 'setup' NOT NULL" in sql
+    assert "DROP TABLE" not in sql and "DROP COLUMN" not in sql
 
 
 def test_tenant_navigation_upgrade_sql_generation():

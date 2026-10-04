@@ -37,7 +37,7 @@ class Leo4ProxyPolicy(BaseModel):
     sn: str
     mqtt_rtp_allowed: bool
     outgoing_https_allowed: Literal[True] = True
-    stop_facts: list[Literal["terminal_inactive"]]
+    stop_facts: list[Literal["terminal_inactive", "certificate_expired"]]
     endpoints: (
         dict[Literal["mqtt", "https", "l4rtp", "l4stream"], Leo4ProxyEndpoint] | None
     ) = None

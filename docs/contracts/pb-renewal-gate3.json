@@ -1,0 +1,143 @@
+{
+  "contract": "pb-renewal-gate3",
+  "migration": "030",
+  "provider_path": "/api/certificates/renewal-pins",
+  "enrollment_path": "/api/certificates/renew",
+  "auth": "verified live iot.leo4.ru certificate; same SN/current serial; same-CSR old-serial recovery <=15min and PIN expiry",
+  "provider_request": {
+    "additionalProperties": false,
+    "properties": {
+      "tenant_id": {
+        "exclusiveMinimum": 0,
+        "title": "Tenant Id",
+        "type": "integer"
+      },
+      "terminal_id": {
+        "exclusiveMinimum": 0,
+        "title": "Terminal Id",
+        "type": "integer"
+      },
+      "sn": {
+        "maxLength": 100,
+        "minLength": 1,
+        "title": "Sn",
+        "type": "string"
+      },
+      "pin_id": {
+        "anyOf": [
+          {
+            "exclusiveMinimum": 0,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Pin Id"
+      }
+    },
+    "required": [
+      "tenant_id",
+      "terminal_id",
+      "sn"
+    ],
+    "title": "RenewalPinRequest",
+    "type": "object"
+  },
+  "provider_response": {
+    "description": "Internal provider response; plaintext never goes to the browser.",
+    "properties": {
+      "pin_id": {
+        "title": "Pin Id",
+        "type": "integer"
+      },
+      "tenant_id": {
+        "title": "Tenant Id",
+        "type": "integer"
+      },
+      "terminal_id": {
+        "title": "Terminal Id",
+        "type": "integer"
+      },
+      "sn": {
+        "title": "Sn",
+        "type": "string"
+      },
+      "pin": {
+        "title": "Pin",
+        "type": "string"
+      },
+      "expires_at": {
+        "format": "date-time",
+        "title": "Expires At",
+        "type": "string"
+      }
+    },
+    "required": [
+      "pin_id",
+      "tenant_id",
+      "terminal_id",
+      "sn",
+      "pin",
+      "expires_at"
+    ],
+    "title": "RenewalPinResponse",
+    "type": "object"
+  },
+  "enrollment_request": {
+    "additionalProperties": false,
+    "properties": {
+      "function": {
+        "enum": [
+          "check",
+          "setup"
+        ],
+        "title": "Function",
+        "type": "string"
+      },
+      "pin": {
+        "pattern": "^[0-9]{6}$",
+        "title": "Pin",
+        "type": "string"
+      },
+      "csr": {
+        "anyOf": [
+          {
+            "maxLength": 32768,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Csr"
+      },
+      "cpserial": {
+        "default": "",
+        "maxLength": 128,
+        "title": "Cpserial",
+        "type": "string"
+      },
+      "tosign": {
+        "default": "",
+        "maxLength": 2048,
+        "title": "Tosign",
+        "type": "string"
+      }
+    },
+    "required": [
+      "function",
+      "pin"
+    ],
+    "title": "RenewalEnrollRequest",
+    "type": "object"
+  },
+  "response": "XML CERTDATA check: DN/sign/provider; setup: PKCS7 base64",
+  "server_deadline_sec": 60,
+  "pin_expiry_contract": "provider expires_at is UTC datetime; server rechecks before and after CA; queue/execution must fit PIN lifetime",
+  "revision": "3.2",
+  "provider_reuse": "pending same-owner PIN, or used <=15min with persisted PKCS7 and history matching current certificate; >120s PIN lifetime",
+  "recovery": "same CSR only; current issuance history required, no restoration of superseded certificate"
+}

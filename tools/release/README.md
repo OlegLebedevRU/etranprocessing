@@ -121,3 +121,24 @@ proxy's read-only probes instead; a code fix requires a separate signed release.
 [Publication record](../../artifacts/l4tools/1.10.2.json): clean main `d43e4d5`, signed setup and all 18 staged EXEs with timestamps, 122 payload files matched. All three full HTTPS downloads matched size/SHA256. Installer SHA256 `6270c908f0275dbb12591f0b377f594a1e959cbe325dc14b1ef467a35e7e4ff1`.
 
 These publication-status documentation edits were made after signing; embedded README snapshots remain unchanged. Do not repack the immutable release for text updates. Operator Upgrade773 to 1.10.2 accepted at 2026-10-04 16:36 UTC: ready/0, proxy1.8.1, MQTT/HTTPS/RTP valid. Outage/Win7/PIN and post-upgrade video acceptance remain open.
+
+## RPC7011 incremental release 1.11.0 (unsigned preparation)
+
+Replace only staged leo4proxy1.8.2, l4con1.10.0 and l4pin1.8.0 for x86/x64.
+Keep all other signed components from1.10.2 byte-for-byte. Backup prior staging
+and setup under ignored tools/dist/.runtime-backup before replacement.
+Native builds/tests and setup tests must pass first. Refresh embedded inventory,
+ZIPs and unsigned setup; preserve the existing network-profile resource.
+
+In a regular Windows PowerShell session at this worktree, pass SignOnly as an
+actual array (not a comma-separated string through powershell.exe -File):
+
+```powershell
+& .\tools\release\Complete-SignedRelease.ps1 -PfxPath '<path to signing PFX>' -Version 1.11.0 -SignOnly @('leo4proxy', 'l4con', 'l4pin')
+```
+
+The script signs these six component EXEs and the universal setup, rebuilds
+inventories/payloads, verifies timestamps and preserves unrelated EXE bytes.
+Do not publish before post-sign verification. Schema030 / compatible PB, IoT
+and MenuBuilder plus upgraded terminal agent are required before enabling the
+UI flow. See [flow matrix](../../docs/term_arch-rpc7011-flow-matrix.md).

@@ -72,7 +72,7 @@ goto :summary
 :do_build_x86
 echo.
 echo [Build x86] 32-bit universal static binary (Windows 7 SP1+ compatible)...
-cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /i res /fo obj\x86\app.res res\app.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /I res /Foobj\x86\ src\main.c src\gui.c src\url_finder.c ..\leo4proxy\src\policy_json.c src\http_client.c src\xml_utils.c src\cng_crypto.c src\cert_store.c src\cert_discovery.c obj\x86\app.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\l4pin.exe ncrypt.lib crypt32.lib bcrypt.lib winhttp.lib advapi32.lib shell32.lib user32.lib gdi32.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /i res /fo obj\x86\app.res res\app.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /I res /Foobj\x86\ src\main.c src\renewal.c src\gui.c src\url_finder.c ..\leo4proxy\src\policy_json.c src\http_client.c src\xml_utils.c src\cng_crypto.c src\cert_store.c src\cert_discovery.c obj\x86\app.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\l4pin.exe ncrypt.lib crypt32.lib bcrypt.lib winhttp.lib advapi32.lib shell32.lib user32.lib gdi32.lib ole32.lib"
 if errorlevel 1 (
     echo [ERROR] x86 build failed!
     set BUILD_FAILED=1
@@ -86,7 +86,7 @@ exit /b 0
 :do_build_x64
 echo.
 echo [Build x64] 64-bit static binary...
-cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /i res /fo obj\x64\app.res res\app.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /I res /Foobj\x64\ src\main.c src\gui.c src\url_finder.c ..\leo4proxy\src\policy_json.c src\http_client.c src\xml_utils.c src\cng_crypto.c src\cert_store.c src\cert_discovery.c obj\x64\app.res /link /OUT:bin\x64\l4pin.exe ncrypt.lib crypt32.lib bcrypt.lib winhttp.lib advapi32.lib shell32.lib user32.lib gdi32.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /i res /fo obj\x64\app.res res\app.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /I res /Foobj\x64\ src\main.c src\renewal.c src\gui.c src\url_finder.c ..\leo4proxy\src\policy_json.c src\http_client.c src\xml_utils.c src\cng_crypto.c src\cert_store.c src\cert_discovery.c obj\x64\app.res /link /OUT:bin\x64\l4pin.exe ncrypt.lib crypt32.lib bcrypt.lib winhttp.lib advapi32.lib shell32.lib user32.lib gdi32.lib ole32.lib"
 if errorlevel 1 (
     echo [ERROR] x64 build failed!
     set BUILD_FAILED=1
@@ -138,7 +138,7 @@ if errorlevel 1 goto :tests_failed
 exit /b 0
 
 :do_gui_test
-cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && rc.exe /nologo /i res /fo obj\%1\app.res res\app.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\%1\ tests\test_gui_layout.c src\cert_discovery.c src\cert_store.c src\xml_utils.c obj\%1\app.res /link /OUT:bin\%1\test_gui_layout.exe ncrypt.lib crypt32.lib advapi32.lib user32.lib gdi32.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && rc.exe /nologo /i res /fo obj\%1\app.res res\app.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\%1\ tests\test_gui_layout.c src\cert_discovery.c src\cert_store.c src\xml_utils.c obj\%1\app.res /link /OUT:bin\%1\test_gui_layout.exe ncrypt.lib crypt32.lib advapi32.lib user32.lib gdi32.lib ole32.lib"
 if errorlevel 1 exit /b 1
 bin\%1\test_gui_layout.exe
 exit /b %ERRORLEVEL%

@@ -122,6 +122,12 @@ class CertificatePin(Base):
     )
     payment_required: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    purpose: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="setup", server_default="setup"
+    )
+    renewal_auth_serial: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    renewal_csr_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    renewal_response: Mapped[str | None] = mapped_column(Text, nullable=True)
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
@@ -143,6 +149,9 @@ class CertificatePin(Base):
         CheckConstraint(
             "status IN ('pending', 'used', 'expired', 'cancelled')",
             name="ck_certificate_pins_status",
+        ),
+        CheckConstraint(
+            "purpose IN ('setup', 'renew')", name="ck_certificate_pins_purpose"
         ),
         CheckConstraint(
             "creation_source IN ('tenant', 'global_admin', 'system')",

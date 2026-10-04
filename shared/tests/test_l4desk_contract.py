@@ -33,7 +33,20 @@ def test_expand_does_not_modify_existing_tables():
     configure_mappers()
     current = describe_metadata(Base.metadata)
     for name, expected in BASELINE.items():
-        assert current[name] == expected
+        if name == "certificate_pins":
+            additions = {
+                "purpose",
+                "renewal_auth_serial",
+                "renewal_csr_sha256",
+                "renewal_response",
+            }
+            assert [
+                c for c in current[name]["columns"] if c["name"] not in additions
+            ] == expected["columns"]
+            assert current[name]["indexes"] == expected["indexes"]
+            assert "ck_certificate_pins_purpose" in current[name]["ddl"]
+        else:
+            assert current[name] == expected
 
 
 def test_all_new_models_have_keys_and_named_financial_metadata():
@@ -118,7 +131,7 @@ def test_model_modules_are_declarative_only():
 
 def test_published_schema_matches_models():
     importlib.import_module("etranprocessing_db.l4desk")
-    path = HERE.parent / "docs" / "l4desk" / "schema-v029.json"
+    path = HERE.parent / "docs" / "l4desk" / "schema-v030.json"
     assert describe_metadata(Base.metadata) == json.loads(
         path.read_text(encoding="utf-8")
     )

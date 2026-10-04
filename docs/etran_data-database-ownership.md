@@ -38,7 +38,7 @@
 | `catalog_items` | catalog | MB | MB | MB |
 | `billing_orders` | billing | MB | MB | MB |
 | `billing_order_items` | billing | MB | MB | MB |
-| `certificate_pins` | billing/certificate | MB | MB | MB; PIN operations доступны через выделенный прикладной API |
+| `certificate_pins` | billing/certificate | PB для purpose=renew; прежние MB/PB flows setup | PB: renew purpose, consumption, same-CSR public response recovery; MB: существующие billing/admin setup PIN | MB читает состояние renew без plaintext; выдача renew PIN только через service-auth PB API |
 | `tsp` | payment reference | PB | PB/import pipeline | PB; MB read-only reporting/reference |
 | `tsp_parameter_codes` | payment reference | PB | PB/import pipeline | PB; MB read-only reporting/reference |
 | `payments` | payment ledger | PB | PB | PB; MB временно читает напрямую для reporting |

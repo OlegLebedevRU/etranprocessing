@@ -87,19 +87,29 @@ bool policy_record_prefer(const PolicyRecord* a,const PolicyRecord* b) {
     if (aa!=ba) return aa;
     return aa && a->offline_allowed_until>b->offline_allowed_until;
 }
+static const char* identity_denial_locked(void) {
+    if (!certificate) return "certificate_missing";
+    LONG validity=CertVerifyTimeValidity(NULL,certificate->pCertInfo);
+    if (validity>0) return "certificate_expired";
+    if (validity<0) return "certificate_not_yet_valid";
+    return NULL;
+}
 static void set_media_locked(bool allowed) {
+    const char* identity_denial=identity_denial_locked();
+    allowed=allowed && !identity_denial;
     if (media_allowed==allowed) return;
     media_allowed=allowed;
     if (!allowed) for (PolicySocket* n=sockets;n;n=n->next) shutdown(n->socket,SD_BOTH);
     printf("[POLICY] MQTT/RTP %s; facts=%s\n",allowed?"allowed":"denied",
-           allowed?"":(record.known && !record.allowed?(facts[0]?facts:"server_denied"):"policy_unavailable"));
+           allowed?"":(identity_denial?identity_denial:
+               (record.known && !record.allowed?(facts[0]?facts:"server_denied"):"policy_unavailable")));
 }
 static void expire_locked(void) {
     if (record.sn[0]) {
         if (utc_now()>=record.offline_allowed_until) remaining_ms=0;
         set_media_locked(policy_record_allowed(&record,utc_now()) &&
             GetTickCount64()-anchor_tick<remaining_ms);
-    }
+    } else set_media_locked(!identity_denial_locked());
 }
 bool policy_media_allowed(void) {
     AcquireSRWLockExclusive(&lock); expire_locked(); bool result=media_allowed && !stopping;
@@ -141,7 +151,8 @@ void policy_diagnostics(char* out,size_t size) {
         "\"stop_facts\":\"%s\",\"last_error\":\"%s\",\"storage_pending\":%s}",
         media_allowed?"true":"false",https_allowed?"true":"false",record.offline_allowed_until,
         record.last_success_at,record.generation,media_allowed?"":
-        (record.known && !record.allowed?(facts[0]?facts:"server_denied"):"policy_unavailable"),
+        (identity_denial_locked()?identity_denial_locked():
+        (record.known && !record.allowed?(facts[0]?facts:"server_denied"):"policy_unavailable")),
         last_error,dirty?"true":"false");
     ReleaseSRWLockExclusive(&lock);
 }
@@ -425,6 +436,7 @@ void policy_identity(const CertDetails* details) {
         ++identity_generation;
         if (wake_event) SetEvent(wake_event);
     }
+    expire_locked();
     ReleaseSRWLockExclusive(&lock);
 }
 bool policy_probe_media_allowed(const char* sn) {

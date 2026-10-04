@@ -181,7 +181,27 @@ static void udp_denial_test(void) {
     closesocket(sender); rtp_tunnel_stop(&server); WSACleanup();
 }
 int main(void) {
+    CERT_INFO cert_info={0}; CERT_CONTEXT context={0}; context.pCertInfo=&cert_info;
+    FILETIME now; GetSystemTimeAsFileTime(&now);
+    ULARGE_INTEGER ticks; ticks.LowPart=now.dwLowDateTime;ticks.HighPart=now.dwHighDateTime;
+    ticks.QuadPart-=600000000ULL;
+    cert_info.NotBefore.dwLowDateTime=ticks.LowPart;cert_info.NotBefore.dwHighDateTime=ticks.HighPart;
+    ticks.QuadPart+=1200000000ULL;
+    cert_info.NotAfter.dwLowDateTime=ticks.LowPart;cert_info.NotAfter.dwHighDateTime=ticks.HighPart;
+    certificate=&context;
     response_tests(); state_tests(); socket_tests(); storage_tests(); udp_denial_test();
+    record.allowed=true;record.known=true;record.offline_allowed_until=utc_now()+3600;
+    anchor_tick=GetTickCount64();remaining_ms=3600000;
+    cert_info.NotAfter=cert_info.NotBefore;
+    assert(!policy_media_allowed());
+    char diagnostics[1024];policy_diagnostics(diagnostics,sizeof(diagnostics));
+    assert(strstr(diagnostics,"certificate_expired"));
+    certificate=NULL;assert(!policy_media_allowed());
+    policy_diagnostics(diagnostics,sizeof(diagnostics));assert(strstr(diagnostics,"certificate_missing"));
+    ticks.QuadPart+=1200000000ULL;
+    cert_info.NotAfter.dwLowDateTime=ticks.LowPart;cert_info.NotAfter.dwHighDateTime=ticks.HighPart;
+    certificate=&context;assert(policy_media_allowed());
+    certificate=NULL;
     puts("policy tests passed: response/schema, grace, HTTPS paths, socket cancellation, registry/JSON recovery, UDP drain");
     return 0;
 }

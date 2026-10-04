@@ -324,6 +324,7 @@ int command_runner_execute(CommandContext* ctx,
                            int* out_exit_code,
                            uint64_t* out_duration_ms) {
     if (!ctx) return -1;
+    if (ctx->ttl_sec<1 || ctx->ttl_sec>3600) { if (out_exit_code) *out_exit_code=-1; return -1; }
 
     uint64_t start_ms = get_tick_ms();
     uint32_t seq = 0;
@@ -385,7 +386,16 @@ int command_runner_execute(CommandContext* ctx,
     wchar_t w_cmdline[23000];
     int command_length;
 
-    if (ctx->shell == SHELL_POWERSHELL) {
+    if (ctx->renewal_builtin) {
+        DWORD length=GetModuleFileNameW(NULL,shell_exe,MAX_PATH);
+        wchar_t* slash=wcsrchr(shell_exe,L'\\');
+        if (!length || length>=MAX_PATH || !slash) { CloseHandle(hReadPipe); CloseHandle(hWritePipe); return -1; }
+        *slash=0; slash=wcsrchr(shell_exe,L'\\');
+        if (!slash) { CloseHandle(hReadPipe); CloseHandle(hWritePipe); return -1; }
+        *slash=0;
+        if (wcscat_s(shell_exe,MAX_PATH,L"\\l4pin\\l4pin.exe")) { CloseHandle(hReadPipe); CloseHandle(hWritePipe); return -1; }
+        command_length=_snwprintf(w_cmdline,23000,L"\"%ls\" --renew-authenticated --pin-stdin",shell_exe);
+    } else if (ctx->shell == SHELL_POWERSHELL) {
         resolve_powershell_path(shell_exe, MAX_PATH);
         wchar_t encoded[21852]; /* 8192 UTF-16 units -> base64 plus NUL. */
         DWORD encoded_length = (DWORD)(sizeof(encoded) / sizeof(encoded[0]));
@@ -460,7 +470,7 @@ int command_runner_execute(CommandContext* ctx,
     PVOID wow64_old_val = NULL;
     BOOL wow64_disabled = disable_wow64_redirection(&wow64_old_val);
 
-    BOOL proc_created = CreateProcessW(NULL, w_cmdline, NULL, NULL, TRUE,
+    BOOL proc_created = CreateProcessW(ctx->renewal_builtin ? shell_exe : NULL, w_cmdline, NULL, NULL, TRUE,
                                        CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP | CREATE_SUSPENDED,
                                        NULL, w_workdir, &si, &pi);
     DWORD dwErr = GetLastError();
@@ -469,6 +479,15 @@ int command_runner_execute(CommandContext* ctx,
         revert_wow64_redirection(wow64_old_val);
     }
 
+    if (proc_created && ctx->renewal_builtin) {
+        DWORD written=0;
+        char input[8]; memcpy(input,ctx->renewal_pin,6); input[6]='\n'; input[7]=0;
+        if (!hStdInWrite || !WriteFile(hStdInWrite,input,7,&written,NULL) || written!=7) {
+            TerminateProcess(pi.hProcess,1);
+        }
+        SecureZeroMemory(input,sizeof(input));
+        SecureZeroMemory(ctx->renewal_pin,sizeof(ctx->renewal_pin));
+    }
     // Close stdin handles in parent process
     if (hStdInWrite != NULL) {
         CloseHandle(hStdInWrite);
@@ -510,7 +529,8 @@ int command_runner_execute(CommandContext* ctx,
     }
     ctx->hJob = job;
     if (job) event_job_register(job, &ctx->cancel_requested,
-                      GetTickCount64() + (ULONGLONG)ctx->ttl_sec * 1000);
+                      start_ms + (ULONGLONG)ctx->ttl_sec * 1000);
+    if (job) event_job_set_protection(job,&ctx->protected_renewal);
     else fprintf(stderr, "[CMD] Job isolation unavailable; user event sending is disabled for this command\n");
     if (ResumeThread(pi.hThread) == (DWORD)-1) {
         ctx->cancel_requested = true;
@@ -528,7 +548,7 @@ int command_runner_execute(CommandContext* ctx,
     command_runner_get_active_working_dir(cwd_utf8, sizeof(cwd_utf8));
 
     char prompt_data[512];
-    snprintf(prompt_data, sizeof(prompt_data), "%s> %s\r\n", cwd_utf8, ctx->command_line);
+    snprintf(prompt_data, sizeof(prompt_data), "%s> %s\r\n", cwd_utf8, strstr(ctx->command_line,"--renew-authenticated") ? "l4pin --renew-authenticated [PIN masked]" : ctx->command_line);
     char escaped_prompt[1024];
     json_escape_string(prompt_data, strlen(prompt_data), escaped_prompt, sizeof(escaped_prompt));
 
@@ -540,7 +560,7 @@ int command_runner_execute(CommandContext* ctx,
     if (callback) callback(ctx->out_topic, json_buf, strlen(json_buf), user_data);
 
     DWORD max_wait_ms = (DWORD)(ctx->ttl_sec * 1000);
-    uint64_t proc_start_tick = get_tick_ms();
+    uint64_t proc_start_tick = start_ms;
 
     while (true) {
         // 1. Check for cancellation

@@ -11,6 +11,15 @@ bool http_get_simple(const char* url,int timeout,char** body,size_t* length) {
 #define GOOD "{\"status\":\"ready\",\"certificate_found\":true,\"sn\":\"terminal-sn\",\"thumbprint\":\"0123456789012345678901234567890123456789\",\"serial\":\"serial\",\"not_after\":\"2027-10-02\"}"
 int main(void) {
     ProxyIdentity identity;int failures=0;
+    const char* bad_timeout[]={"0","-1","3601","text","120extra"};
+    for (int i=0;i<5;i++) {AppConfig config;config_init_defaults(&config);
+        char* argv[]={"l4con","--timeout",(char*)bad_timeout[i]};
+        if (config_parse_args(&config,3,argv,NULL)) failures++;
+    }
+    AppConfig config;config_init_defaults(&config);
+    char* valid[]={"l4con","--timeout","120"};
+    if (!config_parse_args(&config,3,valid,NULL) || config.default_cmd_timeout!=120) failures++;
+
     response=GOOD;if(config_query_identity_from_proxy(18443,&identity)||strcmp(identity.sn,"terminal-sn"))failures++;
     const char* invalid[]={NULL,"{\"nested\":" GOOD "}",GOOD "extra",
         "{\"status\":\"ready\",\"status\":\"ready\",\"certificate_found\":true}",

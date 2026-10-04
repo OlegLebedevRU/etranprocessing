@@ -150,6 +150,9 @@ async def csrf_protection_middleware(request: Request, call_next):
     return await call_next(request)
 
 
+from app.routers import certificate_renewal
+
+app.include_router(certificate_renewal.router)
 app.include_router(auth.router, prefix="/api", tags=["auth"])
 app.include_router(registration.router, prefix="/api", tags=["registration"])
 app.include_router(admin_users.router, prefix="/api", tags=["admin-users"])

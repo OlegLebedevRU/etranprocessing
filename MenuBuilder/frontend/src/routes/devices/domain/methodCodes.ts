@@ -264,6 +264,15 @@ export const METHOD_CATALOG_DEFINITIONS: MethodDefinition[] = [
       },
     ],
   },
+  { code: 7001, name: "CMD_DIAG_EXEC", label: "7001 - Исполнить команду l4con",
+    description: "Исполнение команды в одной сессии", dtFormat: "objectArray",
+    fields: [{ name: "session_id", label: "UUID сессии", type: "string", required: true },
+      { name: "command_line", label: "Команда", type: "string", required: true },
+      { name: "ttl_sec", label: "Время исполнения, с", type: "number", defaultValue: 30, validation: { min: 1, max: 3600 } }] },
+  { code: 7002, name: "CMD_DIAG_CANCEL", label: "7002 - Отменить текущую команду l4con",
+    description: "Без параметров отменяет текущую команду; адресная отмена передаёт session_id", dtFormat: "empty" },
+  { code: 7003, name: "CMD_DIAG_PING", label: "7003 - Проверить l4con",
+    description: "Проверка агента", dtFormat: "empty" },
   CUSTOM_METHOD_DEFINITION,
 ];
 
@@ -274,6 +283,8 @@ export function getMethodDefinition(code: number): MethodDefinition | undefined 
   if (code === CUSTOM_METHOD_CODE) {
     return CUSTOM_METHOD_DEFINITION;
   }
+  if (code === 7011) return { code, name: "CMD_CERT_RENEW", label: "7011 - Удалённое продление сертификата",
+    description: "Поставлено формой заказа продления", dtFormat: "empty" };
   return METHOD_CATALOG_DEFINITIONS.find((m) => m.code === code);
 }
 

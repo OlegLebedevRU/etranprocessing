@@ -121,8 +121,13 @@ bool config_parse_args(AppConfig* config, int argc, char* argv[], bool* out_is_s
             config->keepalive_sec = atoi(argv[++i]);
         } else if (_stricmp(argv[i], "--reconnect") == 0 && i + 1 < argc) {
             config->reconnect_sec = atoi(argv[++i]);
-        } else if (_stricmp(argv[i], "--timeout") == 0 && i + 1 < argc) {
-            config->default_cmd_timeout = atoi(argv[++i]);
+        } else if (_stricmp(argv[i], "--timeout") == 0) {
+            if (i+1>=argc) return false;
+            const char* value=argv[++i];
+            if (!*value || strlen(value)>4) return false;
+            for (const char* p=value;*p;p++) if (*p<'0' || *p>'9') return false;
+            config->default_cmd_timeout=atoi(value);
+            if (config->default_cmd_timeout<1 || config->default_cmd_timeout>3600) return false;
         } else if (_stricmp(argv[i], "--no-blacklist") == 0) {
             config->enable_blacklist = false;
         } else if (_stricmp(argv[i], "--verbose") == 0) {
@@ -137,7 +142,11 @@ bool config_parse_args(AppConfig* config, int argc, char* argv[], bool* out_is_s
             exit(0);
         }
     }
-    return true;
+    return config->default_cmd_timeout>=1 && config->default_cmd_timeout<=3600 &&
+        config->reconnect_sec>=1 && config->reconnect_sec<=300 &&
+        config->keepalive_sec>=5 && config->keepalive_sec<=3600 &&
+        config->mqtt_port>=1 && config->mqtt_port<=65535 &&
+        config->proxy_http_port>=1 && config->proxy_http_port<=65535;
 }
 
 void config_print_version(void) {

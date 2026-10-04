@@ -475,6 +475,18 @@ export async function updateDeviceTag(
   return data;
 }
 
+export function normalizeTask(item: TaskItem & { header?: Partial<TaskItem> }): TaskItem {
+  return { ...item, ...item.header, payload: maskTaskData(item.payload), results: maskTaskData(item.results) };
+}
+
+export function maskTaskData(value: any): any {
+  if (Array.isArray(value)) return value.map(maskTaskData);
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) =>
+    [key, (["pin", "password", "secret", "token", "private_key"].includes(key.toLowerCase()) ||
+      (key.toLowerCase() === "command_line" && typeof item === "string" && /l4pin/i.test(item))) ? "***" : maskTaskData(item)]));
+  return value;
+}
+
 export async function getDeviceTasks(
   orgId: number,
   deviceId: number,
@@ -484,7 +496,7 @@ export async function getDeviceTasks(
   const { data } = await client.get<TaskListResponse>("/internal/v1/device-tasks/", {
     params: { org_id: orgId, device_id: deviceId, page, size },
   });
-  return data;
+  return { ...data, items: (data.items || []).map(normalizeTask) };
 }
 
 export async function createDeviceTask(
@@ -501,7 +513,7 @@ export async function getTaskDetail(orgId: number, taskId: string): Promise<Task
   const { data } = await client.get<TaskItem>(`/internal/v1/device-tasks/${taskId}`, {
     params: { org_id: orgId },
   });
-  return data;
+  return normalizeTask(data);
 }
 
 export async function deleteDeviceTask(orgId: number, taskId: string): Promise<any> {

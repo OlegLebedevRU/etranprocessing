@@ -3,6 +3,7 @@
 import json
 import logging
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 from zoneinfo import ZoneInfo
 
 from etranprocessing_db.l4desk import (
@@ -55,14 +56,23 @@ def configured_endpoints() -> dict | None:
 def get_leo4proxy_policy(
     terminal: Terminal, subscription_allowed: bool = True
 ) -> Leo4ProxyPolicy:
-    allowed = terminal.is_active and subscription_allowed
+    expires = terminal.cert_not_valid_after
+    if expires is not None and expires.tzinfo is None:
+        expires = expires.replace(tzinfo=UTC)
+    certificate_expired = expires is not None and expires <= datetime.now(UTC)
+    allowed = terminal.is_active and subscription_allowed and not certificate_expired
+    stop_facts: list[Literal["terminal_inactive", "certificate_expired"]] = (
+        [] if terminal.is_active and subscription_allowed else ["terminal_inactive"]
+    )
+    if certificate_expired:
+        stop_facts.append("certificate_expired")
     endpoints = configured_endpoints()
     ttl = settings.leo4proxy_endpoints_ttl_seconds
     return Leo4ProxyPolicy(
         sn=terminal.sn,
         mqtt_rtp_allowed=allowed,
         outgoing_https_allowed=True,
-        stop_facts=[] if allowed else ["terminal_inactive"],
+        stop_facts=stop_facts,
         endpoints=endpoints,
         endpoints_ttl_seconds=max(300, min(ttl, 604800)) if endpoints else None,
     )

@@ -7,6 +7,7 @@
 
 #include "mqtt_client.h"
 #include "mqtt_protocol.h"
+#include "rpc_contract.h"
 #include "command_runner.h"
 #include "tool_inventory.h"
 #include "event_ipc.h"
@@ -31,6 +32,8 @@ typedef struct {
     CommandContext current_cmd;
     HANDLE hWorkerThread;
     bool connected;
+    struct { char id[40]; char result_uid[40]; char result[512]; int status; bool acted; } recent[64];
+    unsigned recent_next;
 } MqttClientState;
 static bool ascii_identifier(const char* value, bool hex_only);
 
@@ -179,7 +182,12 @@ static uint16_t get_next_packet_id(MqttClientState* state) {
 
 static bool socket_send_all(SOCKET sock, const unsigned char* buf, size_t len) {
     size_t total_sent = 0;
+    ULONGLONG deadline=GetTickCount64()+3000;
     while (total_sent < len) {
+        ULONGLONG now=GetTickCount64();
+        if (now>=deadline) return false;
+        DWORD remaining=(DWORD)(deadline-now);
+        if (setsockopt(sock,SOL_SOCKET,SO_SNDTIMEO,(const char*)&remaining,sizeof(remaining))) return false;
         int sent = send(sock, (const char*)(buf + total_sent), (int)(len - total_sent), 0);
         if (sent <= 0) return false;
         total_sent += (size_t)sent;
@@ -210,9 +218,35 @@ static bool send_publish_with_properties(MqttClientState* state, const char* top
     return ok;
 }
 
-static bool socket_recv_all(SOCKET sock, unsigned char* buf, size_t len) {
+static bool socket_connect_bounded(SOCKET sock,const struct sockaddr* address,int size,HANDLE stop) {
+    u_long nonblocking=1;
+    if (ioctlsocket(sock,FIONBIO,&nonblocking)) return false;
+    bool connected=connect(sock,address,size)==0;
+    int error=connected?0:WSAGetLastError();
+    ULONGLONG deadline=GetTickCount64()+5000;
+    while (!connected && (error==WSAEWOULDBLOCK || error==WSAEINPROGRESS) && GetTickCount64()<deadline) {
+        if (stop && WaitForSingleObject(stop,0)==WAIT_OBJECT_0) break;
+        fd_set writes,errors;FD_ZERO(&writes);FD_ZERO(&errors);FD_SET(sock,&writes);FD_SET(sock,&errors);
+        struct timeval wait={0,100000};
+        int ready=select(0,NULL,&writes,&errors,&wait);
+        if (ready<0) break;
+        if (ready>0) { int status=0,length=sizeof(status);
+            connected=!getsockopt(sock,SOL_SOCKET,SO_ERROR,(char*)&status,&length) && status==0;
+            break;
+        }
+    }
+    nonblocking=0;
+    if (ioctlsocket(sock,FIONBIO,&nonblocking)) connected=false;
+    return connected;
+}
+
+static bool socket_recv_all(SOCKET sock, unsigned char* buf, size_t len, ULONGLONG deadline) {
     size_t used = 0;
     while (used < len) {
+        ULONGLONG now=GetTickCount64();
+        if (now>=deadline) return false;
+        DWORD timeout=(DWORD)(deadline-now);
+        setsockopt(sock,SOL_SOCKET,SO_RCVTIMEO,(const char*)&timeout,sizeof(timeout));
         int received = recv(sock, (char*)buf + used, (int)(len - used), 0);
         if (received <= 0) return false;
         used += (size_t)received;
@@ -221,19 +255,20 @@ static bool socket_recv_all(SOCKET sock, unsigned char* buf, size_t len) {
 }
 
 static bool read_connack_v5(SOCKET sock, unsigned char* out_reason) {
+    ULONGLONG deadline=GetTickCount64()+10000;
     unsigned char fixed = 0, length_bytes[4], body[1024];
-    if (!socket_recv_all(sock, &fixed, 1) || fixed != MQTT_PKT_CONNACK) return false;
+    if (!socket_recv_all(sock, &fixed, 1, deadline) || fixed != MQTT_PKT_CONNACK) return false;
     uint32_t remaining = 0;
     int used = 0;
     do {
-        if (used == 4 || !socket_recv_all(sock, &length_bytes[used], 1)) return false;
+        if (used == 4 || !socket_recv_all(sock, &length_bytes[used], 1, deadline)) return false;
         used++;
     } while (length_bytes[used - 1] & 0x80);
     int parsed = 0;
     if (mqtt_decode_remaining_length(length_bytes, (size_t)used,
                                      &remaining, &parsed) != 0 ||
         remaining < 3 || remaining > sizeof(body) ||
-        !socket_recv_all(sock, body, remaining)) return false;
+        !socket_recv_all(sock, body, remaining, deadline)) return false;
     uint32_t properties_len = 0;
     int property_len_bytes = 0;
     if (mqtt_decode_remaining_length(body + 2, remaining - 2,
@@ -257,6 +292,43 @@ static void output_chunk_callback(const char* topic, const char* json_envelope, 
     send_publish_packet(state, topic, json_envelope, json_len, 1, 0);
 }
 
+static int rpc_recent(MqttClientState* state,const char* id,bool create) {
+    for (int n=0;n<64;n++) if (!strcmp(state->recent[n].id,id)) return n;
+    if (!create) return -1;
+    unsigned n=state->recent_next++%64;
+    if (!strcmp(state->recent[n].id,state->current_cmd.task_id_str) && state->current_cmd.is_running)
+        n=state->recent_next++%64;
+    memset(&state->recent[n],0,sizeof(state->recent[n]));
+    strcpy_s(state->recent[n].id,sizeof(state->recent[n].id),id);
+    GUID guid;
+    if (FAILED(CoCreateGuid(&guid))) return -1;
+    snprintf(state->recent[n].result_uid,sizeof(state->recent[n].result_uid),
+        "%08lX-%04hX-%04hX-%02X%02X-%02X%02X%02X%02X%02X%02X",
+        guid.Data1,guid.Data2,guid.Data3,guid.Data4[0],guid.Data4[1],guid.Data4[2],
+        guid.Data4[3],guid.Data4[4],guid.Data4[5],guid.Data4[6],guid.Data4[7]);
+    return (int)n;
+}
+static void rpc_result(MqttClientState* state,const char* id,int status,const char* result) {
+    char topic[160],uid[40],code[16];
+    EnterCriticalSection(&state->send_cs);
+    int n=rpc_recent(state,id,true);
+    if (n<0) {LeaveCriticalSection(&state->send_cs);return;}
+    strcpy_s(state->recent[n].result,sizeof(state->recent[n].result),result);
+    state->recent[n].status=status;
+    strcpy_s(uid,sizeof(uid),state->recent[n].result_uid);
+    LeaveCriticalSection(&state->send_cs);
+    snprintf(topic,sizeof(topic),"dev/%s/res",state->sn);
+    snprintf(code,sizeof(code),"%d",status);
+    const MqttUserProperty properties[]={ {"correlationData",id},{"status_code",code},
+        {"result_uid",uid},{"ext_id","0"} };
+    send_publish_with_properties(state,topic,result,strlen(result),1,0,properties,4);
+}
+static void rpc_status(MqttClientState* state,const char* id,int code,const char* status) {
+    char result[256];
+    snprintf(result,sizeof(result),"{\"correlationData\":\"%s\",\"status_code\":%d,\"status\":\"%s\"}",id,code,status);
+    rpc_result(state,id,code,result);
+}
+
 typedef struct {
     MqttClientState* state;
 } WorkerTaskParams;
@@ -272,7 +344,7 @@ static DWORD WINAPI command_worker_thread(LPVOID lpParam) {
     uint64_t duration_ms = 0;
 
     printf("[CMD] Executing: '%s' (Shell: %s, Timeout: %ds, Session: %s)\n",
-           ctx->command_line,
+           strstr(ctx->command_line,"--renew-authenticated") ? "l4pin --renew-authenticated [PIN masked]" : ctx->command_line,
            ctx->shell == SHELL_POWERSHELL ? "PowerShell" : "cmd",
            ctx->ttl_sec,
            ctx->session_id);
@@ -281,25 +353,12 @@ static DWORD WINAPI command_worker_thread(LPVOID lpParam) {
 
     printf("[CMD] Finished: exit_code=%d, duration=%llums\n", exit_code, duration_ms);
 
-    // Send final result to dev/<SN>/res
-    if (state->sock != INVALID_SOCKET) {
-        char res_topic[128];
-        snprintf(res_topic, sizeof(res_topic), "dev/%s/res", state->sn);
-
-        char res_payload[512];
-        if (strlen(ctx->task_id_str) > 0) {
-            snprintf(res_payload, sizeof(res_payload),
-                     "{\"corr_data\":\"%s\",\"correlationData\":\"%s\",\"status_code\":\"200\",\"status\":\"completed\",\"exit_code\":%d,\"duration_ms\":%llu}",
-                     ctx->task_id_str, ctx->task_id_str, exit_code, duration_ms);
-        } else {
-            snprintf(res_payload, sizeof(res_payload),
-                     "{\"task_id\":%d,\"status_code\":\"200\",\"status\":\"completed\",\"exit_code\":%d,\"duration_ms\":%llu}",
-                     ctx->task_id, exit_code, duration_ms);
-        }
-
-        send_publish_packet(state, res_topic, res_payload, strlen(res_payload), 1, 0);
-        printf("[RES] Published execution result to %s: %s\n", res_topic, res_payload);
-    }
+    int status=exit_code==0?200:exit_code==124?408:exit_code==130?409:500;
+    char result[512];
+    snprintf(result,sizeof(result),
+        "{\"correlationData\":\"%s\",\"status_code\":%d,\"status\":\"%s\",\"exit_code\":%d,\"duration_ms\":%llu}",
+        ctx->task_id_str,status,exit_code==0?"completed":exit_code==124?"timeout":exit_code==130?"cancelled":"failed",exit_code,duration_ms);
+    rpc_result(state,ctx->task_id_str,status,result);
 
     EnterCriticalSection(&state->send_cs);
     state->current_cmd.is_running = false;
@@ -309,146 +368,89 @@ static DWORD WINAPI command_worker_thread(LPVOID lpParam) {
     return 0;
 }
 
-static void handle_incoming_publish(MqttClientState* state, const char* topic, const char* payload, size_t payload_len, const AppConfig* config) {
-    char payload_str[65536];
-    if (payload_len >= sizeof(payload_str)) return; /* Never execute a partial JSON message. */
-    size_t copy_len = payload_len;
-    memcpy(payload_str, payload, copy_len);
-    payload_str[copy_len] = '\0';
-
-    if (config->verbose) {
-        printf("[MQTT] Recv Topic: %s | Payload: %s\n", topic, payload_str);
+static void handle_incoming_publish(MqttClientState* state,const char* topic,
+    const char* payload,size_t payload_len,const AppConfig* config,const MqttRpcMetadata* metadata) {
+    char tsk[160],rsp[160];
+    snprintf(tsk,sizeof(tsk),"srv/%s/tsk",state->sn);
+    snprintf(rsp,sizeof(rsp),"srv/%s/rsp",state->sn);
+    bool announcement=!strcmp(topic,tsk);
+    if (!announcement && strcmp(topic,rsp)) return;
+    RpcCommand command;
+    bool valid=rpc_contract_parse(payload,payload_len,announcement,metadata->method_code,
+                                  metadata->correlation,metadata->payload_required,&command);
+    if (!valid) {
+        if (!announcement && rpc_uuid(command.task_id)) rpc_status(state,command.task_id,400,"invalid_payload");
+        return;
     }
-
-    // 1. Task notification on srv/<SN>/tsk: request task details via dev/<SN>/req
-    if (strstr(topic, "/tsk") != NULL) {
-        char task_id_str[128] = {0};
-        json_extract_string(payload_str, "id", task_id_str, sizeof(task_id_str));
-        if (strlen(task_id_str) == 0) {
-            json_extract_string(payload_str, "task_id", task_id_str, sizeof(task_id_str));
+    if (announcement) {
+        if (command.method==7002 && !command.payload_required) {
+            EnterCriticalSection(&state->send_cs);
+            int n=rpc_recent(state,command.task_id,true);
+            if (n>=0 && !state->recent[n].acted) {
+                state->recent[n].acted=true;
+                if (state->current_cmd.is_running) command_runner_request_cancel(&state->current_cmd);
+            }
+            LeaveCriticalSection(&state->send_cs);
         }
-        if (strlen(task_id_str) == 0) {
-            json_extract_string(payload_str, "ext_task_id", task_id_str, sizeof(task_id_str));
-        }
-
-        if (strlen(task_id_str) > 0) {
-            char req_topic[128];
-            snprintf(req_topic, sizeof(req_topic), "dev/%s/req", state->sn);
-
-            char req_payload[256];
-            snprintf(req_payload, sizeof(req_payload), "{\"corr_data\":\"%s\",\"correlationData\":\"%s\"}", task_id_str, task_id_str);
-
-            send_publish_packet(state, req_topic, req_payload, strlen(req_payload), 0, 0);
-            printf("[REQ] Task announcement received. Requested task body: %s -> %s\n", req_topic, req_payload);
-        }
+        char req_topic[160],req[160];
+        snprintf(req_topic,sizeof(req_topic),"dev/%s/req",state->sn);
+        snprintf(req,sizeof(req),"{\"correlationData\":\"%s\"}",command.task_id);
+        const MqttUserProperty properties[]={{"correlationData",command.task_id}};
+        send_publish_with_properties(state,req_topic,req,strlen(req),0,0,properties,1);
+        return;
     }
-
-    // 2. Cancellation message (Method 7002)
-    int method_code = 0;
-    if (!json_extract_int(payload_str, "method_code", &method_code)) {
-        if (strstr(payload_str, "7001") != NULL) method_code = 7001;
-        else if (strstr(payload_str, "7002") != NULL) method_code = 7002;
-        else if (strstr(payload_str, "7003") != NULL) method_code = 7003;
-        else if (strstr(payload_str, "7004") != NULL) method_code = 7004;
+    char cached[512]={0}; int cached_status=0; bool acted=false;
+    EnterCriticalSection(&state->send_cs);
+    int n=rpc_recent(state,command.task_id,true);
+    if (n>=0) {
+        acted=state->recent[n].acted;
+        strcpy_s(cached,sizeof(cached),state->recent[n].result);
+        cached_status=state->recent[n].status;
+        state->recent[n].acted=true;
     }
-
-    if (method_code == 7002 || strstr(payload_str, "\"cancel\"") != NULL) {
-        // CMD_DIAG_CANCEL
-        char session_id[64] = {0};
-        char task_id_str[128] = {0};
-        json_extract_string(payload_str, "session_id", session_id, sizeof(session_id));
-        json_extract_string(payload_str, "id", task_id_str, sizeof(task_id_str));
-        if (strlen(task_id_str) == 0) json_extract_string(payload_str, "task_id", task_id_str, sizeof(task_id_str));
-        if (strlen(task_id_str) == 0) json_extract_string(payload_str, "corr_data", task_id_str, sizeof(task_id_str));
-        if (strlen(task_id_str) == 0) json_extract_string(payload_str, "correlationData", task_id_str, sizeof(task_id_str));
-
-        printf("[CANCEL] Cancellation requested for session: %s (task_id: %s)\n", session_id, task_id_str);
-
+    LeaveCriticalSection(&state->send_cs);
+    if (n<0) return;
+    if (*cached) {rpc_result(state,command.task_id,cached_status,cached);return;}
+    if (acted) {
+        if (command.method==7002 && command.empty) rpc_status(state,command.task_id,200,"cancel_requested");
+        return;
+    }
+    if (command.method==7002) {
+        bool matched=false;
         EnterCriticalSection(&state->send_cs);
-        if (state->current_cmd.is_running) {
-            command_runner_request_cancel(&state->current_cmd);
+        if (state->current_cmd.is_running && (command.empty || !strcmp(command.session_id,state->current_cmd.session_id))) {
+            command_runner_request_cancel(&state->current_cmd);matched=true;
         }
         LeaveCriticalSection(&state->send_cs);
-
-        if (state->sock != INVALID_SOCKET && strlen(task_id_str) > 0) {
-            char res_topic[128];
-            snprintf(res_topic, sizeof(res_topic), "dev/%s/res", state->sn);
-            char res_payload[256];
-            snprintf(res_payload, sizeof(res_payload),
-                     "{\"corr_data\":\"%s\",\"correlationData\":\"%s\",\"status_code\":\"200\",\"status\":\"cancelled\",\"exit_code\":130}",
-                     task_id_str, task_id_str);
-            send_publish_packet(state, res_topic, res_payload, strlen(res_payload), 1, 0);
-        }
+        rpc_status(state,command.task_id,matched?200:404,matched?"cancel_requested":"session_not_running");
         return;
     }
-
-    // 3. Application Ping / Pong (Method 7003)
-    if (method_code == 7003 || strstr(payload_str, "\"ping\"") != NULL) {
-        char task_id_str[128] = {0};
-        json_extract_string(payload_str, "id", task_id_str, sizeof(task_id_str));
-        if (strlen(task_id_str) == 0) json_extract_string(payload_str, "corr_data", task_id_str, sizeof(task_id_str));
-        if (strlen(task_id_str) == 0) json_extract_string(payload_str, "correlationData", task_id_str, sizeof(task_id_str));
-
-        printf("[PING] Application Ping received. Responding with Pong (7003)...\n");
-        if (state->sock != INVALID_SOCKET && strlen(task_id_str) > 0) {
-            char res_topic[128];
-            snprintf(res_topic, sizeof(res_topic), "dev/%s/res", state->sn);
-            char res_payload[256];
-            snprintf(res_payload, sizeof(res_payload),
-                     "{\"corr_data\":\"%s\",\"correlationData\":\"%s\",\"status_code\":\"200\",\"status\":\"pong\",\"role\":\"extra_service\"}",
-                     task_id_str, task_id_str);
-            send_publish_packet(state, res_topic, res_payload, strlen(res_payload), 1, 0);
-        }
-        return;
+    if (command.method==7003) {rpc_status(state,command.task_id,200,"pong");return;}
+    if (command.method!=7001 && command.method!=7011) {rpc_status(state,command.task_id,501,"unsupported_method");return;}
+    if (command.method==7011 && command.pin_expires_at<=(unsigned long long)time(NULL)+120) {
+        SecureZeroMemory(command.pin,sizeof(command.pin));
+        rpc_status(state,command.task_id,410,"pin_expired_or_insufficient_lifetime");return;
     }
-
-    // 4. Session Keepalive / Lease Renewal (Method 7004)
-    if (method_code == 7004 || strstr(payload_str, "\"keepalive\"") != NULL) {
-        char session_id[64] = {0};
-        char task_id_str[128] = {0};
-        json_extract_string(payload_str, "session_id", session_id, sizeof(session_id));
-        json_extract_string(payload_str, "id", task_id_str, sizeof(task_id_str));
-        if (strlen(task_id_str) == 0) json_extract_string(payload_str, "corr_data", task_id_str, sizeof(task_id_str));
-
-        printf("[KEEPALIVE] Session lease renewal received for session: %s\n", session_id);
-        if (state->sock != INVALID_SOCKET && strlen(task_id_str) > 0) {
-            char res_topic[128];
-            snprintf(res_topic, sizeof(res_topic), "dev/%s/res", state->sn);
-            char res_payload[256];
-            snprintf(res_payload, sizeof(res_payload),
-                     "{\"corr_data\":\"%s\",\"correlationData\":\"%s\",\"status_code\":\"200\",\"status\":\"keepalive_ack\"}",
-                     task_id_str, task_id_str);
-            send_publish_packet(state, res_topic, res_payload, strlen(res_payload), 1, 0);
-        }
-        return;
+    if (state->hWorkerThread && WaitForSingleObject(state->hWorkerThread,0)!=WAIT_OBJECT_0 &&
+        InterlockedCompareExchange(&state->current_cmd.protected_renewal,0,0)) {
+        SecureZeroMemory(command.pin,sizeof(command.pin));
+        rpc_status(state,command.task_id,409,"renewal_busy");return;
     }
-
-    // 5. Execution message (from srv/<SN>/rsp or method 7001)
-    if (method_code == 7001 || strstr(topic, "/rsp") != NULL) {
-        // CMD_DIAG_EXEC
-        char session_id[64] = {0};
-        char task_id_str[128] = {0};
-        char cmd_line[L4CON_COMMAND_UTF8_CAP] = {0};
-        bool command_invalid = false;
-        char shell_str[32] = {0};
-        char topic_out[128] = {0};
-        int task_id = 0;
-        int ttl_sec = config->default_cmd_timeout;
-        int max_bytes = 1048576;
-
-        json_extract_string(payload_str, "session_id", session_id, sizeof(session_id));
-        json_extract_string(payload_str, "id", task_id_str, sizeof(task_id_str));
-        if (strlen(task_id_str) == 0) {
-            json_extract_string(payload_str, "task_id", task_id_str, sizeof(task_id_str));
+    if (state->hWorkerThread) {
+        if (WaitForSingleObject(state->hWorkerThread,0)!=WAIT_OBJECT_0 &&
+            !event_job_cancel_replacement(&state->current_cmd.cancel_requested,&state->current_cmd.protected_renewal)) {
+            SecureZeroMemory(command.pin,sizeof(command.pin));
+            rpc_status(state,command.task_id,409,"renewal_busy");return;
         }
-        json_extract_int(payload_str, "task_id", &task_id);
-
-        // Try extracting command_line or command_id / args
-        int command_status = json_extract_string_strict(payload_str, "command_line", cmd_line, sizeof(cmd_line));
-        command_invalid = command_status < 0;
-        if (command_status == 0 || (command_status == 1 && strlen(cmd_line) == 0)) {
-            char command_id[128] = {0};
-            if (json_extract_string(payload_str, "command_id", command_id, sizeof(command_id)) && strlen(command_id) > 0) {
+        if (WaitForSingleObject(state->hWorkerThread,5000)!=WAIT_OBJECT_0) {
+            rpc_status(state,command.task_id,409,"busy");return;
+        }
+        CloseHandle(state->hWorkerThread);state->hWorkerThread=NULL;
+    }
+    char cmd_line[L4CON_COMMAND_UTF8_CAP];
+    strcpy_s(cmd_line,sizeof(cmd_line),command.command_line);
+    if (!*cmd_line) {
+        const char* command_id=command.command_id;
                 if (strcmp(command_id, "system_info") == 0) strncpy(cmd_line, "systeminfo", sizeof(cmd_line) - 1);
                 else if (strcmp(command_id, "network_config") == 0 || strcmp(command_id, "network_info") == 0 || strcmp(command_id, "ipconfig") == 0) strncpy(cmd_line, "ipconfig /all", sizeof(cmd_line) - 1);
                 else if (strcmp(command_id, "get_processes") == 0 || strcmp(command_id, "tasklist") == 0) strncpy(cmd_line, "tasklist", sizeof(cmd_line) - 1);
@@ -457,55 +459,34 @@ static void handle_incoming_publish(MqttClientState* state, const char* topic, c
                 else if (strcmp(command_id, "time") == 0) strncpy(cmd_line, "time /t & date /t", sizeof(cmd_line) - 1);
                 else if (strcmp(command_id, "echo") == 0) strncpy(cmd_line, "echo Leo4 l4con Diagnostic Agent Active", sizeof(cmd_line) - 1);
                 else if (strcmp(command_id, "ping_gateway") == 0) strncpy(cmd_line, "ping -n 4 127.0.0.1", sizeof(cmd_line) - 1);
-                else strncpy(cmd_line, command_id, sizeof(cmd_line) - 1);
-            }
-        }
-
-        if (!command_invalid && strlen(cmd_line) == 0) {
-            return; // Not a valid execution task
-        }
-
-        json_extract_string(payload_str, "shell", shell_str, sizeof(shell_str));
-        json_extract_int(payload_str, "ttl_sec", &ttl_sec);
-        json_extract_int(payload_str, "max_output_bytes", &max_bytes);
-        if (!json_extract_string(payload_str, "topic", topic_out, sizeof(topic_out)) || strlen(topic_out) == 0) {
-            snprintf(topic_out, sizeof(topic_out), "dev/%s/out", state->sn);
-        }
-
-        if (state->hWorkerThread) {
-            // Join the old worker before reusing its context or job registration.
-            command_runner_request_cancel(&state->current_cmd);
-            WaitForSingleObject(state->hWorkerThread, INFINITE);
-            CloseHandle(state->hWorkerThread);
-            state->hWorkerThread = NULL;
-        }
-        EnterCriticalSection(&state->send_cs);
-        command_runner_init_context(&state->current_cmd);
-        snprintf(state->current_cmd.session_id, sizeof(state->current_cmd.session_id), "%s", session_id);
-        state->current_cmd.task_id = task_id;
-        snprintf(state->current_cmd.task_id_str, sizeof(state->current_cmd.task_id_str), "%s", task_id_str);
-        snprintf(state->current_cmd.command_line, sizeof(state->current_cmd.command_line), "%s", cmd_line);
-        state->current_cmd.command_invalid = command_invalid;
-        state->current_cmd.shell = (_stricmp(shell_str, "powershell") == 0 || _stricmp(shell_str, "ps") == 0) ? SHELL_POWERSHELL : SHELL_CMD;
-        state->current_cmd.ttl_sec = ttl_sec > 0 ? ttl_sec : config->default_cmd_timeout;
-        state->current_cmd.max_output_bytes = max_bytes > 0 ? max_bytes : 1048576;
-        snprintf(state->current_cmd.out_topic, sizeof(state->current_cmd.out_topic), "%s", topic_out);
-        state->current_cmd.enable_blacklist = config->enable_blacklist;
-        state->current_cmd.is_running = true;
-
-        WorkerTaskParams* params = (WorkerTaskParams*)malloc(sizeof(WorkerTaskParams));
-        if (params) {
-            params->state = state;
-            HANDLE hThread = CreateThread(NULL, 0, command_worker_thread, params, 0, NULL);
-            if (hThread) {
-                state->hWorkerThread = hThread;
-            } else {
-                free(params);
-                state->current_cmd.is_running = false;
-            }
-        } else state->current_cmd.is_running = false;
-        LeaveCriticalSection(&state->send_cs);
+                else {rpc_status(state,command.task_id,400,"unknown_command_id");return;}
     }
+    EnterCriticalSection(&state->send_cs);
+    command_runner_init_context(&state->current_cmd);
+    strcpy_s(state->current_cmd.session_id,sizeof(state->current_cmd.session_id),command.session_id);
+    strcpy_s(state->current_cmd.task_id_str,sizeof(state->current_cmd.task_id_str),command.task_id);
+    strcpy_s(state->current_cmd.command_line,sizeof(state->current_cmd.command_line),cmd_line);
+    state->current_cmd.shell=(_stricmp(command.shell,"powershell")==0 || _stricmp(command.shell,"ps")==0)?SHELL_POWERSHELL:SHELL_CMD;
+    state->current_cmd.ttl_sec=command.ttl_sec?command.ttl_sec:config->default_cmd_timeout;
+    state->current_cmd.max_output_bytes=command.max_output_bytes;
+    snprintf(state->current_cmd.out_topic,sizeof(state->current_cmd.out_topic),"dev/%s/out",state->sn);
+    state->current_cmd.enable_blacklist=config->enable_blacklist;
+    state->current_cmd.renewal_builtin=command.method==7011;
+    if (state->current_cmd.renewal_builtin) {
+        strcpy_s(state->current_cmd.renewal_pin,7,command.pin);
+        InterlockedExchange(&state->current_cmd.protected_renewal,1);
+        SecureZeroMemory(command.pin,sizeof(command.pin));
+    }
+    state->current_cmd.is_running=true;
+    WorkerTaskParams* params=(WorkerTaskParams*)malloc(sizeof(*params));
+    if (params) {
+        params->state=state;
+        state->hWorkerThread=CreateThread(NULL,0,command_worker_thread,params,0,NULL);
+        if (!state->hWorkerThread) {free(params);state->current_cmd.is_running=false;}
+    } else state->current_cmd.is_running=false;
+    bool started=state->current_cmd.is_running;
+    LeaveCriticalSection(&state->send_cs);
+    if (!started) rpc_status(state,command.task_id,503,"worker_unavailable");
 }
 
 int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
@@ -635,6 +616,7 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
         saddr.sin_port = htons((u_short)config->mqtt_port);
         saddr.sin_addr.s_addr = inet_addr(config->mqtt_host);
 
+        if (!_stricmp(config->mqtt_host,"localhost")) saddr.sin_addr.s_addr=htonl(INADDR_LOOPBACK);
         if (saddr.sin_addr.s_addr == INADDR_NONE) {
             struct hostent* he = gethostbyname(config->mqtt_host);
             if (he && he->h_addr_list[0]) {
@@ -647,7 +629,7 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
             }
         }
 
-        if (connect(s, (struct sockaddr*)&saddr, sizeof(saddr)) != 0) {
+        if (!socket_connect_bounded(s,(struct sockaddr*)&saddr,sizeof(saddr),hStopEvent)) {
             fprintf(stderr, "[ERROR] connect() to %s:%d failed: %d\n", config->mqtt_host, config->mqtt_port, WSAGetLastError());
             closesocket(s);
             WaitForSingleObject(hStopEvent, config->reconnect_sec * 1000);
@@ -700,6 +682,7 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
             cert_event_sent = publish_certificate_connected_event(&state, config->proxy_http_port,
                                                                    true);
         }
+        time_t last_queue_poll = 0;
         time_t last_cert_event_attempt = time(NULL);
 
         // 4. Subscriptions (qos=1) - strictly srv/<SN>/tsk and srv/<SN>/rsp
@@ -719,6 +702,7 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
         }
 
         // Main Connection & Polling Loop
+        ULONGLONG frame_started = 0;
         time_t last_ping_time = time(NULL);
         time_t ping_interval = config->keepalive_sec > 4 ? config->keepalive_sec / 2 : 2;
 
@@ -726,6 +710,9 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
         size_t rx_buf_len = 0;
 
         while (WaitForSingleObject(hStopEvent, 0) != WAIT_OBJECT_0) {
+            if (rx_buf_len && frame_started && GetTickCount64()-frame_started>=10000) {
+                fprintf(stderr,"[MQTT] Partial packet deadline exceeded\n"); break;
+            }
             fd_set read_fds;
             FD_ZERO(&read_fds);
             FD_SET(s, &read_fds);
@@ -741,6 +728,7 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
             }
 
             if (sel_rc > 0 && FD_ISSET(s, &read_fds)) {
+                if (!rx_buf_len) frame_started=GetTickCount64();
                 int bytes_recvd = recv(s, (char*)(rx_buf + rx_buf_len), (int)(sizeof(rx_buf) - rx_buf_len), 0);
                 if (bytes_recvd <= 0) {
                     printf("[WARN] Socket disconnected by broker.\n");
@@ -786,7 +774,9 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
                                 LeaveCriticalSection(&state.send_cs);
                             }
 
-                            handle_incoming_publish(&state, topic_in, payload_ptr, payload_len, config);
+                            MqttRpcMetadata metadata;
+                            if (mqtt_parse_rpc_metadata(pkt_body, rem_len, pkt_flags, &metadata)==0)
+                                handle_incoming_publish(&state, topic_in, payload_ptr, payload_len, config, &metadata);
                         }
                     } else if (pkt_type == MQTT_PKT_PINGRESP) {
                         last_ping_time = time(NULL);
@@ -811,6 +801,14 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
                 cert_event_sent = publish_certificate_connected_event(&state,
                                                                        config->proxy_http_port,
                                                                        false);
+            }
+            if (now-last_queue_poll>=60 && !state.current_cmd.is_running) {
+                last_queue_poll=now;
+                char req_topic[160]; snprintf(req_topic,sizeof(req_topic),"dev/%s/req",state.sn);
+                const char* zero="00000000-0000-0000-0000-000000000000";
+                const char* body="{\"correlationData\":\"00000000-0000-0000-0000-000000000000\"}";
+                const MqttUserProperty props[]={{"correlationData",zero},{"rpc_methods","7001,7002,7003,7011"}};
+                send_publish_with_properties(&state,req_topic,body,strlen(body),0,0,props,2);
             }
             if (now - last_ping_time >= ping_interval) {
                 unsigned char ping_buf[2];
@@ -865,7 +863,10 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
     event_ipc_stop();
     if (state.hWorkerThread) {
         command_runner_request_cancel(&state.current_cmd);
-        WaitForSingleObject(state.hWorkerThread, INFINITE);
+        if (WaitForSingleObject(state.hWorkerThread,15000)!=WAIT_OBJECT_0) {
+            fprintf(stderr,"[ERROR] Worker did not stop within shutdown budget; terminating own agent\n");
+            ExitProcess(1); /* Do not free a context still used by the worker. Job handles close on exit. */
+        }
         CloseHandle(state.hWorkerThread);
     }
     DeleteCriticalSection(&state.send_cs);

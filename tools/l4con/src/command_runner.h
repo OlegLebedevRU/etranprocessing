@@ -32,6 +32,10 @@ typedef struct {
     char out_topic[128];
     bool enable_blacklist;
 
+    bool renewal_builtin;
+    char renewal_pin[7];
+    volatile LONG protected_renewal;
+
     // Runtime state
     volatile bool cancel_requested;
     volatile bool is_running;

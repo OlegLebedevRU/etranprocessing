@@ -205,6 +205,59 @@ int mqtt_build_disconnect(unsigned char* buf) {
     return 2;
 }
 
+static int metadata_string(const unsigned char* packet,size_t end,size_t* pos,
+                            const unsigned char** text,size_t* length) {
+    if (*pos+2>end) return -1;
+    *length=((size_t)packet[*pos]<<8)|packet[*pos+1]; *pos+=2;
+    if (*length>end-*pos) return -1;
+    *text=packet+*pos; *pos+=*length; return 0;
+}
+int mqtt_parse_rpc_metadata(const unsigned char* packet,uint32_t length,
+                            uint8_t flags,MqttRpcMetadata* out) {
+    memset(out,0,sizeof(*out));
+    if (length<2) return -1;
+    size_t pos=2+(((size_t)packet[0]<<8)|packet[1]);
+    if (((flags>>1)&3)>0) pos+=2;
+    if (pos>=length) return -1;
+    uint32_t property_length; int used;
+    if (mqtt_decode_remaining_length(packet+pos,length-pos,&property_length,&used)) return -1;
+    pos+=(size_t)used;
+    if (property_length>length-pos) return -1;
+    size_t end=pos+property_length;
+    while (pos<end) {
+        unsigned char id=packet[pos++];
+        const unsigned char *name,*value; size_t name_len,value_len;
+        if (id==0x26) {
+            if (metadata_string(packet,end,&pos,&name,&name_len) ||
+                metadata_string(packet,end,&pos,&value,&value_len)) return -1;
+            char* target=NULL; size_t cap=0;
+            if (name_len==11 && !memcmp(name,"method_code",11)) {target=out->method_code;cap=sizeof(out->method_code);}
+            else if (name_len==15 && !memcmp(name,"correlationData",15)) {target=out->correlation;cap=sizeof(out->correlation);}
+            else if (name_len==16 && !memcmp(name,"payload_required",16)) {target=out->payload_required;cap=sizeof(out->payload_required);}
+            if (target) {
+                if (!value_len || value_len>=cap || memchr(value,0,value_len)) return -1;
+                if (*target && (strlen(target)!=value_len || memcmp(target,value,value_len))) return -1;
+                memcpy(target,value,value_len);target[value_len]=0;
+            }
+        } else if (id==0x03 || id==0x08 || id==0x09) {
+            if (metadata_string(packet,end,&pos,&value,&value_len)) return -1;
+            if (id==0x09) {
+                if (!value_len || value_len>=sizeof(out->correlation) || memchr(value,0,value_len)) return -1;
+                if (*out->correlation && (strlen(out->correlation)!=value_len || memcmp(out->correlation,value,value_len))) return -1;
+                memcpy(out->correlation,value,value_len);out->correlation[value_len]=0;
+            }
+        } else if (id==0x01) { if (pos+1>end) return -1;pos++; }
+        else if (id==0x02) {if (pos+4>end) return -1;pos+=4;}
+        else if (id==0x23) {if (pos+2>end) return -1;pos+=2;}
+        else if (id==0x0b) {
+            uint32_t ignored;
+            if (mqtt_decode_remaining_length(packet+pos,end-pos,&ignored,&used)) return -1;
+            pos+=(size_t)used;
+        } else return -1;
+    }
+    return 0;
+}
+
 int mqtt_parse_publish(const unsigned char* var_header_and_payload,
                        uint32_t rem_len,
                        uint8_t pkt_flags,

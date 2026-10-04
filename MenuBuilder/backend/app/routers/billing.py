@@ -155,6 +155,7 @@ async def _get_pending_cert_pin(
         .where(
             CertificatePin.terminal_id == terminal_id,
             CertificatePin.status == "pending",
+            CertificatePin.purpose == "setup",
             CertificatePin.expires_at > as_of,
         )
         .order_by(CertificatePin.created_at.desc())
@@ -242,6 +243,7 @@ async def _get_all_terminal_billing(
         select(CertificatePin).where(
             CertificatePin.terminal_id.in_([t.id for t, _ in rows]),
             CertificatePin.status == "pending",
+            CertificatePin.purpose == "setup",
             CertificatePin.expires_at > as_of,
         )
     )
@@ -1094,6 +1096,7 @@ async def _apply_cert_pin_item(
         select(CertificatePin).where(
             CertificatePin.terminal_id == item.terminal_id,
             CertificatePin.status == "pending",
+            CertificatePin.purpose == "setup",
         )
     )
     pending_pin = result.scalar_one_or_none()
@@ -1257,6 +1260,7 @@ async def create_certificate_pin(
         select(CertificatePin).where(
             CertificatePin.terminal_id == terminal.id,
             CertificatePin.status == "pending",
+            CertificatePin.purpose == "setup",
         )
     )
     existing_pin = result.scalar_one_or_none()

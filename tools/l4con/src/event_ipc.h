@@ -29,5 +29,7 @@ bool event_rate_take(ULONGLONG now, ULONGLONG* last, bool* used);
 bool event_ipc_start(HANDLE stop, UserEventPublisher publish, void* context);
 void event_ipc_stop(void);
 void event_job_register(HANDLE job, volatile bool* cancelled, ULONGLONG deadline);
+void event_job_set_protection(HANDLE job, volatile LONG* protection);
+bool event_job_cancel_replacement(volatile bool* cancelled, volatile LONG* protection);
 void event_job_revoke(HANDLE job);
 #endif

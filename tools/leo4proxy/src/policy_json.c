@@ -104,7 +104,7 @@ bool policy_json_string(const PolicyJson* j, int n, char* out, size_t size) {
     out[used]=0; return true;
 }
 bool policy_json_parse(PolicyJson* j, const char* s, size_t len) {
-    if (!s || !len || len>16384 || memchr(s,0,len)) return false;
+    if (!s || !len || len>65535 || memchr(s,0,len)) return false;
     memset(j,0,sizeof(*j)); j->text=s; int p=0;
     if (value(j,(int)len,&p,0)!=0) return false;
     whitespace(s,(int)len,&p);

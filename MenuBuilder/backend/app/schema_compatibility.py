@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 logger = logging.getLogger(__name__)
 
-REQUIRED_ALEMBIC_REVISION = "029"
-COMPATIBLE_ALEMBIC_REVISIONS: set[str] = {"029"}
+REQUIRED_ALEMBIC_REVISION = "030"
+COMPATIBLE_ALEMBIC_REVISIONS: set[str] = {"030"}
 
 L4DESK_TABLES: list[str] = [
     "fin_accounts",
@@ -93,6 +93,19 @@ def check_schema_compatibility_sync(
     if "paid_until" not in terminal_columns:
         raise SchemaCompatibilityError(
             "Missing l4desk_terminals.paid_until; apply migration 029 before starting MenuBuilder."
+        )
+
+    if "certificate_pins" not in existing_tables:
+        raise SchemaCompatibilityError("Missing certificate_pins; apply migration 030.")
+    renewal_columns = {
+        column["name"] for column in inspector.get_columns("certificate_pins")
+    }
+    if (
+        not {"purpose", "renewal_auth_serial", "renewal_csr_sha256", "renewal_response"}
+        <= renewal_columns
+    ):
+        raise SchemaCompatibilityError(
+            "Missing authenticated renewal columns; apply migration 030 before starting MenuBuilder."
         )
 
     logger.info(
