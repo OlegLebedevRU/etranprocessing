@@ -1,5 +1,15 @@
 # Remote console: MenuBuilder → app1 → MQTT → l4con
 
+## 2026-10-05 contract correction
+
+DeployedIoT8c2be80/native suite1.11.0 use canonical payload.dt[] with method-aware
+cardinality. Parameterless7002 executes onTSK only when payload_required=false;
+REQ/RSP/RES still complete without reexecution. Addressedcancel/exec/renew waitRSP.
+7004/7005 are registered but this agent replies501; activepoll whitelist is
+7001/7002/7003/7011. Protectedrenew nextcommand busy409, noFIFO/cancelreplacement;
+ordinaryexec cancellation bounded5s. Real7003 returns200/pong; actual7011 open.
+[Actual matrix](../../docs/term_arch-rpc7011-flow-matrix.md).
+
 ## Назначение
 Контракт неинтерактивного cmd/powershell исполнения и вывода; не remote desktop ctl.
 

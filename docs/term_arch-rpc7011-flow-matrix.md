@@ -123,7 +123,9 @@ UTC epoch `pin_expires_at` и `ttl_sec=120`. Входные поля прове�
 ## Проверки и открытые acceptance gates
 
 - IoT: 523 passed / 7 skipped Windows,497 passed /33 skipped builder Linux; PB: 176 passed; shared: 65 passed.
-- MenuBuilder backend:626 passed /20 skipped; frontend tsc/Vite и7 DTO/redaction tests прошли.
+- MenuBuilder backend:626 passed /20 skipped; frontend tsc/Vite и все77 tests прошли локально и на builder.
+  Реальный компонент проверен в изолированном браузере: двойной клик,3 повтора
+  с тем же PIN identity и cooldown; issuance при этом эмулировалась.
 - Native x86/x64/default builds; runtime cancel/dedup/deadline, Job authority,
   DPAPI recovery, user-event IPC, policy expiry и resolving regressions прошли.
 - Миграция 029→030 прошла на production PostgreSQL; head030 подтверждён.
@@ -133,14 +135,15 @@ UTC epoch `pin_expires_at` и `ttl_sec=120`. Входные поля прове�
   trust debt между PB и CA, не отменяющий строгий terminal-facing mTLS renew route.
   CA issuance и PB commit не являются одной транзакцией: потеря результата CA
   до commit остаётся неоднозначной и требует отдельной проверки/операторского разбора.
-- Production activation только после schema030 и совместимых consumers, проверки
-  подписанного tools 1.11.0 на целевом устройстве и E2E принятия 7011. Не считать
-  прежний ready/0 на773 с1.10.2 доказательством этого нового flow.
+- Production: schema030, PB/IoT/MenuBuilder и подписанные tools1.11.0 внедрены;
+  оператор подтвердил установку773 ready/0. RPC7003 реально вернул RES200/pong
+  через новую цепочку. Actual7011 issuance/store/hotrotation acceptance ещё открыта.
+  [Ревизии, digests и результаты](../.agent-context/tasks/active/2026-10-04-rpc7011-implementation.md).
 
 ## Runtime correction at contract boundary
 
 A real PostgreSQL task-detail query exposed JSONB non-hashable uniqueness after
 adding redacted history payload. IoT8c2be80 deduplicates by task_id instead of the
 whole row. An actual SQLAlchemy ORM JSON result/join regression was added; Linux
-builder tests and real historical task/detail reads are required after rollout.
+builder tests and real historical task/detail reads passed after rollout.
 This source correction does not change signed native components.

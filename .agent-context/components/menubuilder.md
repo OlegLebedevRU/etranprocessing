@@ -1,5 +1,15 @@
 # MenuBuilder
 
+## 2026-10-05: RPC7011 authenticated renewal
+
+BFF and form deployed with schema030/PB/IoT; operator installed signed tools1.11.0.
+Action «Заказать удалённое продление» issues hidden purpose=renew PIN and queues
+real IoTtask synchronously; offline execution/reporting is asynchronous. Three
+manual repeats reusePIN, then3min cooldown; no outbox/new operation UUID.
+PIN masked in command history; fresh PB current-serial discovery confirms use.
+UI77tests/isolated browser and real7003 passed; actual7011 rotation remains open.
+[Release evidence](../tasks/active/2026-10-04-rpc7011-implementation.md).
+
 ## 2026-10-03: public auth CAPTCHA and subscription numbers
 
 Production backend c5db1c2 / frontend b066e59: runtime Yandex SmartCaptcha config,

@@ -23,84 +23,111 @@
 
 ## Current status — 2026-10-05
 
-Gates1–6 implemented locally in the two owned feature branches; Gate7 unsigned
-release preparation completed; waiting for mandatory operator signing. No production changes, commits or publication.
-Actual contracts: root docs/contracts/{rpc7xxx-gate1,pb-renewal-gate3,rpc7011-gate4}.json;
-PB contract revision3.2 reuses pending/same-current-issuance recovery PINs.
-Native consumer uses producer fixtures. Full timing/risk matrix:
-[implemented flow](../../../docs/term_arch-rpc7011-flow-matrix.md).
+Gates1–6 implemented, committed and deployed through builder → registry → production.
+Signed suite1.11.0 published and installed on773: ready/0. Gate7 actual7011
+certificate rotation acceptance remains open; operator was asked to use the UI.
+This is not a full7011 E2E completion claim.
 
-### Completed checks
-- IoT full pytest from repository root:522 passed,7 skipped. Ruff and Pyright
-  changed source passed. Original dirty IoT checkout untouched; generated
-  newline-only contract snapshots restored in task worktree.
-- PB full176 passed (20 existing warnings); Ruff/format/Pyright app passed.
-- Shared full65 passed; quality passed; schema030/source manifest and offline
-  029→030 SQL verified. No destructive migration statements.
-- MenuBuilder backend full626 passed,20 skipped (52 existing warnings); app quality
-  passed. Final frontend tsc/Vite passed;7 RPC DTO/masking tests passed including
-  manual l4pin command-argument redaction; cooldown timer added.
-- l4con1.10.0, l4pin1.8.0, leo4proxy1.8.2 x86/x64/default unified static builds.
-- Native both architectures: producer fixture, method validation, cancel addressing,
-  TSK/RSP dedup, status/result_uid, TTL, bounded TCP/partial packet receive,
-  protected busy/atomic replacement decision, actual child-process Job authority
-  (outsideJob/wrongexe/shortdeadline rejected), user-event IPC/lifecycle passed.
-- l4pin DPAPI CSR/public-response recovery fixture/corruption/strict endpoint,
-  certificate discovery/profile cleanup/http discovery/GUI tests passed.
-- Proxy existing2304-case resolving matrix per architecture, deadlines12,
-  upstream20, loopback Schannel rotation and missing/expired policy tests passed.
-- l4setup local readiness9, pipeline44, certificate2, upstream7 and SCM/desk tests
-  passed before new payload assembly. No real terminal certificate modified.
+## Actual deployed contracts / revisions
 
-### Flow invariants / limitations
-- IoT owns task UUID; no new operation_id/outbox/preassigned task UUID. Queue
-  response loss allows max3 manual repeats with samePIN; reused also after reopen.
-- IoT payload delivery remains raw; authorized history/results/logs/webhook masked,
-  SQL bind parameters hidden; raw7011 scrubbed on result/delete/expiry.
-- Local queue poll reconnect/idle60s with whitelist7001/7002/7003/7011. No7011FIFO.
-- Protected Job120s; l4pin90s; IPC requires≥100s remaining, directCLI denied.
-  Competing install uses common non-waiting mutex. Explicitcancel/shutdown allowed.
-- SameCSR durable recovery≤15min and PIN expiry; superseded issuance rejected.
-  CSR/key stored beforeSETUP, publicPKCS7 beforecertstore update.
-- UsedPIN is issuance only. Confirmation requires fresh current-serial PB mTLS
-  discovery afterused_at; manualcheck may inspectknownrealIoTtask once.
-- CustomMQTThost DNS lacks ceiling; normal127.0.0.1/localhost path bypassesDNS.
-- CA adapter retains existingverify=False trust debt; CA issuance/DBcommit not
-  a distributed transaction. Do not claim response-loss recovery beforeDBcommit.
+Root implementation checkpoint0b0c48d38971721f9762819093709a9628305784;
+frontend final9adae354a96d9e66b30a81f4aef0332a9752cabe;
+IoT accepted master8c2be800567f074b079bc0c61e993e98184bd897.
+Fixtures: docs/contracts/{rpc7xxx-gate1,pb-renewal-gate3,rpc7011-gate4}.json,
+PB revision3.2. Native consumes producer fixtures; no contract invented at stack entry.
 
-### Outstanding gates
-- Unsigned1.11.0 ready: both payloads65 files match staging;12 unchangedEXEs
-  retain exact hashes/Valid timestamped signatures;6 changedEXEs unsigned.
-  Networkprofile preserved. Setup x86/x64/default and manifest verified; signed=false.
-  Backup tools/dist/.runtime-backup/rpc7011-1.11.0-preparation retained for rollback.
-  Read-only changed/new text secret scan98 files found no credential matches.
-- Mandatory operator signature, then verify both payloads/all18EXEs/setup timestamp
-  and exact hashes; no rebuildafter signing/no unsigned publication.
-- RealPostgreSQLmigration030, multiworker lock contention, realCA/store/reboot/Win7
-  recovery and E2E7011 on773 remain unexecuted. Dockerdaemon unavailable locally.
-- Production activation waits migration030 +compatiblePB/IoT/MenuBuilder +signed
-  capabletools. Oldready/0 Upgrade773 to1.10.2 is not acceptance of thisflow.
+| Component | Production immutable digest |
+|---|---|
+| ProcessingBackend | sha256:09b29c2d57bf831bd3e699761974a77ae8581402c6345e933bedd4e4845fa646 |
+| MenuBuilder backend | sha256:1069e663926e496a780dfeb7cd68afe0dcd71bf187b96fe97e5af31afda483ae |
+| IoT app1 | sha256:0b51e5b174ce37087cd4f6b1a89291ae72361e2b65c0fe9c73052fe700085d74 |
+| MenuBuilder frontend | sha256:4d8a3fe0e99d112bb956570c47eb8d271f5ec6eb4eab6bad55663fe0e1d1829a |
 
-### Operator signing handoff
+Base compose.yaml and production base Compose contain these PB/MB/IoT image
+references in addition to the deployer's persistent override. Candidate config
+validated before replacement; only3 image entries changed, no service recreate.
+Frontend updated through live dist replacement; nginx-default was not restarted.
+PB migrated real PostgreSQL029→030; Alembic head030 verified before compatible consumers.
+Exact nginx renew location verifies mTLS/overwrites cert headers, timeout65s;
+PIN-provider routes return404 externally. nginx -t passed, media unaffected.
 
-Run from this worktree in regular Windows PowerShell:
+## Completed verification
 
-```powershell
-& .\tools\release\Complete-SignedRelease.ps1 -PfxPath '<path to signing PFX>' -Version 1.11.0 -SignOnly @('leo4proxy', 'l4con', 'l4pin')
-```
+- IoT full Windows523 passed/7 skipped, builder Linux497 passed/33 skipped;
+  Ruff/format/Pyright changed source passed. Original dirty IoT checkout untouched.
+- PB176 passed, shared65 passed, MenuBuilder backend626 passed/20 skipped;
+  required Ruff/format/Pyright passed. Existing warnings remain.
+- Frontend all77 tests plus tsc/Vite passed locally and on builder. Isolated browser
+  actual component: double click produces one POST; initial failure plus3 manual
+  repeats reuse pin_id, close form and disable action for3min; PIN not shown.
+  Preview mocked API, so this checks UI behavior, not certificate issuance.
+- Unified x86/x64/default native builds/tests: parsing/fixture, cancel addressing,
+  TSK/RSP dedup, status/result_uid, bounded network, protected busy, Job authority,
+  IPC/lifecycle, DPAPI CSR/public-response recovery and corruption tests passed.
+- Proxy2304 DNS/routing cases per architecture, deadline12/upstream20, loopback
+  Schannel rotation and missing/expired-cert policy tests passed.
+- l4setup readiness9/pipeline44/certificate2/upstream7 and SCM/desk checks passed.
+- Signed19EXEs Valid with timestamps;130 embedded files match staged content.
+  Twelve unchanged component EXEs preserve exact prior bytes/signatures.
+  Three complete HTTPS downloads match size/hash. Published record:
+  [1.11.0](../../../artifacts/l4tools/1.11.0.json).
+- Setup SHA2563ee234ff1f5ab716a0de43a1b9d26303f9ad11432adc939bbb1e7d73cc1960ac
+  unchanged after final docs/UI release. Do not rebuild/repack immutable tools.
+- Operator installation773 confirmed; local install_summary ready/0, suite1.11.0,
+  l4con1.10.0/l4pin1.8.0/proxy1.8.2, all4services Running, MQTT/HTTPS/RTP valid.
+- Real safe RPC7003 via tenant-scoped internal API, emptydt, TTL1min:
+  task_id bfd92378-606f-4f4e-9cb3-281d7f0b5f07, status3, RES200/pong.
+  RealIoTtask ID generated byIoT; no preallocated UUID or certificate side effect.
+- Real historical details now200: b5b6b450-d5c6-4c8c-a464-7ff32b721b4a(method7001)
+  and df6be987-cc9d-405d-ba07-354209650cb7(method50), status3 anddt payload.
+  Production JSONB uniqueness500 corrected in IoT8c2be80 by unique task ID;
+  actualSQLAlchemy JSON result/join regression verifies this boundary.
+- Service-key MB→PB invalid terminal0 gets422, not401; noPIN created.
+  Anonymous externalrenew401 / publicPIN-provider404; no insecure TLS bypass.
+- Final PB api/health, MB openapi.json, IoT docs200. Initial check used a wrong
+  PB /health URL and got404; corrected to actual /api/health, which passed.
+- nginx-default and mutual-nginx container IDs unchanged vs predeployment.
 
-Unsigned setup SHA256 04dc2c644a95267ea23a51eb44d2050d5ab46510e2db07f1f21ffde6ef7253b7
-is preparation evidence only; signing/repacking will change it. Do not publish this hash
-as a signed release or regenerate native tools after successful signing.
+## Flow invariants / remaining risk
 
-## Signed checkpoint / rollout started
+- IoT owns taskUUID; no operation_id/outbox/preassigned taskUUID. Max3 manual
+  repeats reuse samePIN; PB also reuses pending PIN after reopening.
+- RawPIN only device delivery; history/detail/export/log/webhook masked;
+  raw7011 scrubbed on result/delete/expiry. No test PIN/credential saved here.
+- Local idle poll60s, whitelist7001/7002/7003/7011. Protected renew has no FIFO:
+  next exec/renew busy409; explicitcancel/shutdown may interrupt. Ordinary exec
+  cancel-and-replace joins≤5s. Common installer mutex rejects parallel installers.
+- Job120s/l4pin90s/auth grant≥100s remaining; execution only PIN remaining>120s.
+  QueueTTL never exceeds PINexpiry, floor((remaining−5)/60), defaultPIN24h.
+- Durable sameCSR recovery≤15min/currentissuance/PINexpiry; different CSR or
+  superseded issuance refused. UsedPIN means issued; fresh current-serial PB
+  mTLS discovery after used_at confirms actual use, independently of lostRES.
+- Expired/missing/not-yet-valid cert locally denies MQTT/RTP even Policy down;
+  valid-cert72h offline grace retained. CustomMQTThost DNS still lacks ceiling;
+  standard local numeric endpoint bypasses DNS.
+- CA adapter retains existingverify=False trust debt. CA issuance and DBcommit
+  are not distributed atomic: loss ofCAresult beforecommit not promised recoverable.
+- [ ] Real7011 issuance/store/hotrotation/newserial/discovery confirmation on773.
+- [ ] Multiworker PostgreSQL contention, actualCAresponse-loss/store/reboot recovery,
+  Win7runtime; local fixtures do not prove these failure scenarios.
+- Full timing/failure matrix: [implemented flow](../../../docs/term_arch-rpc7011-flow-matrix.md).
 
-Operator signed1.11.0. All19EXEs Valid with timestamp;130 embedded files match
-staging. Signed setup SHA2563ee234ff1f5ab716a0de43a1b9d26303f9ad11432adc939bbb1e7d73cc1960ac.
-Changed signed first-party binaries synchronized; no component rebuild.
-IoT accepted master c151d93. etranprocessing implementation939bcf4 merged
-latestorigin/main bd0e893 (docs-only), without native source changes.
-[MCP Ops Readiness: UNAVAILABLE]; SSH preflight passed production RAM2114MiB,
-root42%,load0.26; builder RAM2733MiB,root57%,load0.01.
-Next: clean checkpoint/strict tools publication, PB030 migration/deploy, IoT
-registry release, MenuBuilder and explicit terminal upgrade/E2E acceptance.
+## Readiness / cleanup / rollback
+
+[MCP Ops Readiness: UNAVAILABLE]; SSH fallback used with existing authorization.
+Preflight production RAM2114MiB/root42%/load0.26; builder2733MiB/root57%/load0.01.
+Final production available RAM2238240KiB/root44%/load0.23; services healthy.
+No ad hoc JWT/test credentials, no secrets copied into containers. Read-only
+changed/new text scan found no real credentials. Existing service auth read by
+its configured client only; values were never printed.
+
+Owned browser rpc7011-ui closed; temporaryVite session30236 stopped; exact preview
+HTML/testscript removed. No broad process kill or wildcard retained-topic clearing.
+Safe ping task stays in normal command history as release acceptance evidence.
+Remote Compose and nginx prechange backups intentionally retained for rollback;
+local ignored pre-release signed artifacts retained. Original dirtyIoTcheckout intact.
+
+Rollback: disable newUI first; restore prior compatible images through standard
+release path if necessary. Do not downgrade030 or oldserial blindly. If7011 has
+issued a certificate, reconcile the actual installed serial before any rollback.
+Keep signed published artifacts immutable and retain recovery state as applicable.
