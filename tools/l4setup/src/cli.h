@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include <winsock2.h>
 #include <windows.h>
 #include <stdbool.h>
 
@@ -7,6 +8,10 @@ extern "C" {
 #endif
 
 typedef struct {
+    wchar_t policy_bootstrap_ip[16];
+    wchar_t remote_endpoints[4][256];
+    bool network_specified;
+    bool no_srv;
     wchar_t pin[64];
     bool pin_specified;
     bool force_reissue;

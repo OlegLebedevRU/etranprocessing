@@ -27,7 +27,9 @@ bool schannel_init_client_creds(PCCERT_CONTEXT pCert, int insecure_server, CredH
         cred.paCred = &pCert;
     }
 
-    if (insecure_server) {
+    /* All outbound callers perform explicit pinned-root validation. */
+    (void)insecure_server;
+    {
         cred.dwFlags |= SCH_CRED_MANUAL_CRED_VALIDATION |
                         SCH_CRED_IGNORE_NO_REVOCATION_CHECK |
                         SCH_CRED_IGNORE_REVOCATION_OFFLINE;
@@ -252,6 +254,11 @@ static bool perform_handshake(SChannelSession* session, CredHandle* hCred, const
     DWORD inTokenLen = 0;
 
     while (ss == SEC_I_CONTINUE_NEEDED || ss == SEC_E_INCOMPLETE_MESSAGE || ss == SEC_I_INCOMPLETE_CREDENTIALS) {
+        ULONGLONG now=GetTickCount64();
+        if (now>=session->handshake_deadline) return false;
+        DWORD remaining=(DWORD)(session->handshake_deadline-now);
+        setsockopt(session->sock,SOL_SOCKET,SO_RCVTIMEO,(const char*)&remaining,sizeof(remaining));
+        setsockopt(session->sock,SOL_SOCKET,SO_SNDTIMEO,(const char*)&remaining,sizeof(remaining));
         if (inTokenLen == 0 || ss == SEC_E_INCOMPLETE_MESSAGE) {
             int received = recv(session->sock, (char*)(inTokenBuf + inTokenLen), (int)(sizeof(inTokenBuf) - inTokenLen), 0);
             if (received <= 0) {
@@ -347,7 +354,7 @@ SOCKET tcp_connect(const char* host, int port, int timeout_ms) {
     return tcp_connect_impl(host, port, timeout_ms, NULL);
 }
 
-static bool schannel_connect_impl(SChannelSession* session, CredHandle* hCred, const char* host, int port, int timeout_ms, int insecure_server, bool media) {
+static bool schannel_connect_impl(SChannelSession* session, CredHandle* hCred, const char* host, const char* logical_name, int port, int timeout_ms, int insecure_server, bool media) {
     if (!session || !hCred || !host) return false;
     memset(session, 0, sizeof(SChannelSession));
     SecInvalidateHandle(&session->hCtx);
@@ -355,6 +362,7 @@ static bool schannel_connect_impl(SChannelSession* session, CredHandle* hCred, c
 
     strncpy_s(session->targetHost, sizeof(session->targetHost), host, _TRUNCATE);
     session->targetPort = port;
+    session->handshake_deadline=GetTickCount64()+(ULONGLONG)timeout_ms;
 
     // 1. Establish plain TCP connection
     if (media && !policy_media_allowed()) return false;
@@ -383,7 +391,9 @@ static bool schannel_connect_impl(SChannelSession* session, CredHandle* hCred, c
     }
 
     // 2. Perform SChannel mTLS Handshake
-    if (!perform_handshake(session, credential_handle(session->credential_lease), host, insecure_server) || (media && !policy_media_allowed())) {
+    bool handshake_ok=perform_handshake(session, credential_handle(session->credential_lease), logical_name, 1);
+    if (handshake_ok && !insecure_server) session->certificate_rejected=!schannel_verify_peer(session,logical_name);
+    if (!handshake_ok || session->certificate_rejected || (media && !policy_media_allowed())) {
         schannel_close(session);
         return false;
     }
@@ -410,10 +420,80 @@ static bool schannel_connect_impl(SChannelSession* session, CredHandle* hCred, c
 }
 
 bool schannel_connect(SChannelSession* session, CredHandle* hCred, const char* host, int port, int timeout_ms, int insecure_server) {
-    return schannel_connect_impl(session,hCred,host,port,timeout_ms,insecure_server,false);
+    return schannel_connect_impl(session,hCred,host,host,port,timeout_ms,insecure_server,false);
 }
 bool schannel_connect_media(SChannelSession* session, CredHandle* hCred, const char* host, int port, int timeout_ms, int insecure_server) {
-    return schannel_connect_impl(session,hCred,host,port,timeout_ms,insecure_server,true);
+    return schannel_connect_impl(session,hCred,host,host,port,timeout_ms,insecure_server,true);
+}
+
+bool schannel_verify_peer(SChannelSession* session,const char* name) {
+    PCCERT_CONTEXT peer=NULL;
+    if (QueryContextAttributesA(&session->hCtx,SECPKG_ATTR_REMOTE_CERT_CONTEXT,&peer)!=SEC_E_OK) return false;
+    HRSRC resource=FindResourceW(NULL,MAKEINTRESOURCEW(201),RT_RCDATA);
+    HGLOBAL data=resource?LoadResource(NULL,resource):NULL;
+    PCCERT_CONTEXT root=data?CertCreateCertificateContext(X509_ASN_ENCODING,
+        (BYTE*)LockResource(data),SizeofResource(NULL,resource)):NULL;
+    HCERTSTORE store=root?CertOpenStore(CERT_STORE_PROV_MEMORY,0,0,0,NULL):NULL;
+    HCERTCHAINENGINE engine=NULL; PCCERT_CHAIN_CONTEXT chain=NULL;
+    bool ok=false;
+    if (store && CertAddCertificateContextToStore(store,root,CERT_STORE_ADD_ALWAYS,NULL)) {
+        CERT_CHAIN_ENGINE_CONFIG config={0}; config.cbSize=sizeof(config); config.hExclusiveRoot=store;
+        /* Offline chain construction: no AIA/root discovery network operations. */
+        CERT_CHAIN_PARA para={0}; para.cbSize=sizeof(para);
+        LPSTR usage=szOID_PKIX_KP_SERVER_AUTH;
+        para.RequestedUsage.dwType=USAGE_MATCH_TYPE_AND;
+        para.RequestedUsage.Usage.cUsageIdentifier=1; para.RequestedUsage.Usage.rgpszUsageIdentifier=&usage;
+        if (CertCreateCertificateChainEngine(&config,&engine) &&
+            CertGetCertificateChain(engine,peer,NULL,peer->hCertStore,&para,
+                CERT_CHAIN_CACHE_ONLY_URL_RETRIEVAL|CERT_CHAIN_DISABLE_AIA, NULL,&chain)) {
+            wchar_t server[MAX_HOST_LEN];
+            if (MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,name,-1,server,MAX_HOST_LEN)) {
+                SSL_EXTRA_CERT_CHAIN_POLICY_PARA ssl={0}; ssl.cbSize=sizeof(ssl); ssl.dwAuthType=AUTHTYPE_SERVER; ssl.pwszServerName=server;
+                CERT_CHAIN_POLICY_PARA policy={0}; policy.cbSize=sizeof(policy); policy.pvExtraPolicyPara=&ssl;
+                CERT_CHAIN_POLICY_STATUS status={0}; status.cbSize=sizeof(status);
+                ok=CertVerifyCertificateChainPolicy(CERT_CHAIN_POLICY_SSL,chain,&policy,&status) && !status.dwError && !chain->TrustStatus.dwErrorStatus;
+                if (!ok) fprintf(stderr,"[TLS] cert_rejected name=%s error=0x%08lX chain=0x%08lX\n",name,status.dwError,chain->TrustStatus.dwErrorStatus);
+            }
+        }
+    }
+    if (chain) CertFreeCertificateChain(chain);
+    if (engine) CertFreeCertificateChainEngine(engine);
+    if (store) CertCloseStore(store,0);
+    if (root) CertFreeCertificateContext(root);
+    CertFreeCertificateContext(peer);
+    return ok;
+}
+bool schannel_connect_endpoint(SChannelSession* session,CredHandle* creds,const char* target,
+    const char* logical_name,int port,int timeout_ms,bool media) {
+    session->certificate_rejected=false;
+    ULONGLONG start=GetTickCount64();
+    char ip[16];
+    if (!endpoint_resolve_ipv4(target,ip,(DWORD)(timeout_ms<2000?timeout_ms:2000))) return false;
+    ULONGLONG elapsed=GetTickCount64()-start;
+    if (elapsed>=(ULONGLONG)timeout_ms) return false;
+    return schannel_connect_impl(session,creds,ip,logical_name,port,timeout_ms-(int)elapsed,0,media);
+}
+bool schannel_connect_channel(SChannelSession* session,CredHandle* creds,const ProxyConfig* config,
+    int channel,int timeout_ms,bool recovery) {
+    Leo4Endpoint candidates[ENDPOINT_MAX]; ULONGLONG deadline=GetTickCount64()+(ULONGLONG)timeout_ms;
+    int count=endpoints_candidates(config,channel,recovery,candidates);
+    bool media=channel!=ENDPOINT_HTTPS;
+    for (int n=0;n<count;n++) {
+        ULONGLONG now=GetTickCount64(); if (now>=deadline) break;
+        int remaining=(int)(deadline-now);
+        /* Bound each attempt so an unreachable primary cannot consume the whole budget. */
+        int share=remaining/(count-n);
+        int attempt=share>2500?2500:share;
+        if (attempt<1) break;
+        if (schannel_connect_endpoint(session,creds,candidates[n].host,endpoint_logical_name(config,channel),
+            candidates[n].port,attempt,media)) {
+            endpoints_connected(channel,&candidates[n]);
+            printf("[ENDPOINT] channel=%d target=%s:%d source=%s strict=true\n",channel,candidates[n].host,candidates[n].port,candidates[n].source);
+            return true;
+        }
+        if (media && !policy_media_allowed()) break;
+    }
+    return false;
 }
 
 bool schannel_accept(SChannelSession* session, const CredHandle* hServerCred, SOCKET clientSock) {

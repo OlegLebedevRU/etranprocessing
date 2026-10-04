@@ -18,6 +18,64 @@ static bool check_proxy_info(void) {
     return setup_proxy_probe(18443, false, 1200);
 }
 
+void smoke_probe_upstream(const wchar_t* dest_dir, SmokeProbesResult* result) {
+    wchar_t executable[MAX_PATH],path[MAX_PATH],args[2048]=L"",command[2400];
+    swprintf_s(executable,MAX_PATH,L"%ls\\leo4proxy\\leo4proxy.exe",dest_dir);
+    for (int c=0;c<4;c++) strcpy_s(result->upstream_tls[c],32,"not_run");
+    if (GetFileAttributesW(executable)==INVALID_FILE_ATTRIBUTES) return;
+    swprintf_s(path,MAX_PATH,L"%ls\\leo4proxy\\service-args.txt",dest_dir);
+    FILE* file=NULL; char stored[8192]={0};
+    if (_wfopen_s(&file,path,L"rb")==0 && file) {
+        size_t bytes=fread(stored,1,sizeof(stored)-1,file); fclose(file); stored[bytes]=0;
+        /* Diagnostic branch exits before --service handling; retain all custom args. */
+        MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,stored,-1,args,2048);
+    }
+    if (swprintf_s(command,2400,L"\"%ls\" --check-upstream %ls",executable,args)<0) return;
+    SECURITY_ATTRIBUTES attributes={sizeof(attributes),NULL,TRUE}; HANDLE reader=NULL,writer=NULL;
+    if (!CreatePipe(&reader,&writer,&attributes,0)) return;
+    SetHandleInformation(reader,HANDLE_FLAG_INHERIT,0);
+    HANDLE input=CreateFileW(L"NUL",GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_WRITE,&attributes,OPEN_EXISTING,0,NULL);
+    STARTUPINFOW startup={sizeof(startup)}; PROCESS_INFORMATION process={0};
+    startup.dwFlags=STARTF_USESTDHANDLES; startup.hStdOutput=writer; startup.hStdError=writer; startup.hStdInput=input;
+    bool started=CreateProcessW(executable,command,NULL,NULL,TRUE,CREATE_NO_WINDOW,NULL,dest_dir,&startup,&process)!=0;
+    CloseHandle(writer); if (input!=INVALID_HANDLE_VALUE) CloseHandle(input);
+    if (!started) { CloseHandle(reader); return; }
+    char output[8192]={0}; size_t used=0; ULONGLONG deadline=GetTickCount64()+8500; bool timed_out=false;
+    for (;;) {
+        if (GetTickCount64()>=deadline) { timed_out=true; TerminateProcess(process.hProcess,1); WaitForSingleObject(process.hProcess,1000); break; }
+        DWORD available=0;
+        if (PeekNamedPipe(reader,NULL,0,NULL,&available,NULL) && available) {
+            char chunk[1024]; DWORD got=0;
+            if (ReadFile(reader,chunk,available<sizeof(chunk)?available:sizeof(chunk),&got,NULL)) {
+                size_t copy=got; if (copy>sizeof(output)-1-used) copy=sizeof(output)-1-used;
+                memcpy(output+used,chunk,copy); used+=copy; output[used]=0;
+            }
+            continue;
+        }
+        if (WaitForSingleObject(process.hProcess,25)==WAIT_OBJECT_0) break;
+        if (GetTickCount64()>=deadline) { timed_out=true; TerminateProcess(process.hProcess,1); WaitForSingleObject(process.hProcess,1000); break; }
+    }
+    CloseHandle(reader); CloseHandle(process.hThread); CloseHandle(process.hProcess);
+    for (int c=0;c<4;c++) strcpy_s(result->upstream_tls[c],32,timed_out?"timeout":"probe_failed");
+    char* next=NULL;
+    for (char* line=strtok_s(output,"\r\n",&next);line;line=strtok_s(NULL,"\r\n",&next)) {
+        int channel=-1; char verdict[32]={0};
+        if (sscanf_s(line,"{\"v\":1,\"channel\":%d,\"verdict\":\"%31[a-z_]",&channel,verdict,(unsigned int)sizeof(verdict))==2 && channel>=0 && channel<4) {
+            const char* valid[]={"valid","skipped","policy_blocked","cert_invalid","probe_failed","timeout"};
+            for (int n=0;n<6;n++) if (!strcmp(verdict,valid[n])) strcpy_s(result->upstream_tls[channel],32,verdict);
+        }
+    }
+    if (strstr(output,"\"error\":\"no_certificate\""))
+        for (int c=0;c<4;c++) strcpy_s(result->upstream_tls[c],32,"no_certificate");
+    const char* names[]={"MQTT","HTTPS","Stream","RTP"};
+    for (int c=0;c<4;c++) {
+        log_info("Upstream %s TLS: %s",names[c],result->upstream_tls[c]);
+        if (!strcmp(result->upstream_tls[c],"cert_invalid") || !strcmp(result->upstream_tls[c],"probe_failed") || !strcmp(result->upstream_tls[c],"timeout")) {
+            result->has_warnings=true; if (!result->critical_failed) result->calculated_exit_code=12;
+        }
+    }
+}
+
 static bool check_mosquitto_port(void) {
     WSADATA wsa;
     if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) return false;

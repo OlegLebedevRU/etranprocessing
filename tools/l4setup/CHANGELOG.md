@@ -1,5 +1,11 @@
 # Changelog — Leo4 Setup (`l4setup`)
 
+## [1.10.0] — 2026-10-04
+
+- Add Auto/manual network settings and a signed build-time bootstrap IP profile. Preserve existing SCM options on Upgrade/Repair; mirror arguments atomically for watchdog recovery.
+- Run bounded upstream TLS diagnostics in the setup worker and record per-channel verdicts in install_summary.json.
+- Package leo4proxy 1.8.0 and l4superv 1.10.0 for both architectures.
+
 ## [1.9.7] — 2026-10-02
 
 - Package l4superv 1.9.6 with existing F12, Alt+F4 and Win+D actions enabled on all supervised terminals, including retained configuration after Upgrade/Repair.

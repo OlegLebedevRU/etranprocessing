@@ -28,6 +28,7 @@ Skills описывают **как работать**, карточки — **ч
 | System Architect | [Overview](system-overview.md), контракты изменяемого flow | architecture-decision-record, performance-and-resilience-risk-analysis | ADR + комплаенс контрактов + оценка рисков |
 
 ## Контракты
+- [leo4proxy](components/leo4proxy.md) — транспорт, policy и контекст DNS/SRV-внедрения; policy/media выпущены, native tools готовятся к подписи.
 - [MQTT topic matrix](contracts/mqtt-topic-matrix.md) — ctl, console, presence; не весь MQTT платформы.
 - [Lease lifecycle](contracts/lease-lifecycle.md) — fail-closed vs recovery.
 - [Remote control](contracts/remote-control.md) — UI/BFF/app1/input.

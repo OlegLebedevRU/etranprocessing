@@ -8,6 +8,7 @@
 
 #include "config.h"
 #include "policy.h"
+#include "endpoints.h"
 #define SECURITY_WIN32
 #include <security.h>
 #include <schnlsp.h>
@@ -24,6 +25,8 @@ typedef struct {
     int targetPort;
     bool isConnected;
     bool isHandshakeComplete;
+    ULONGLONG handshake_deadline;
+    bool certificate_rejected;
 
     /* Decryption buffer state */
     BYTE* recvBuf;
@@ -62,6 +65,11 @@ void schannel_free_creds(CredHandle* hCred);
  */
 bool schannel_connect(SChannelSession* session, CredHandle* hCred, const char* host, int port, int timeout_ms, int insecure_server);
 bool schannel_connect_media(SChannelSession* session, CredHandle* hCred, const char* host, int port, int timeout_ms, int insecure_server);
+bool schannel_connect_endpoint(SChannelSession* session, CredHandle* hCred, const char* target,
+    const char* logical_name, int port, int timeout_ms, bool media);
+bool schannel_connect_channel(SChannelSession* session, CredHandle* hCred, const ProxyConfig* config,
+    int channel, int timeout_ms, bool recovery);
+bool schannel_verify_peer(SChannelSession* session, const char* logical_name);
 
 /**
  * @brief Performs inbound SChannel TLS handshake on an accepted incoming client socket.

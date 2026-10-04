@@ -205,3 +205,19 @@ run_tests.cmd
 routes сохраняются. Legacy certsrv не активирует внешние MQTT/RTP:
 до действующего iot.leo4.ru стек остаётся в ожидании сертификата.
 Для каждого выпуска используйте [постоянный сценарий подписи](../release/README.md).
+
+## Сеть и TLS diagnostics (1.10.0)
+
+«Сеть…» задаёт bootstrap IP и manual host:port для отдельных каналов. Пустое поле
+канала означает Auto; проверка server certificate обязательна. При Upgrade/Repair
+без изменения настроек сохраняются текущие SCM options. При изменении сети
+сохраняются остальные CLI options. Для silent режима: `--policy-bootstrap-ip`,
+`--mqtt-remote`, `--http-remote`, `--stream-remote`, `--rtp-remote`, `--no-srv`,
+`--resolve-auto`. Bootstrap profile включается в подписываемый setup через
+build environment `L4TOOLS_POLICY_BOOTSTRAP_IP`; private pins/ключи в него не входят.
+
+После установки verify worker запускает ограниченную по времени TLS-диагностику
+leo4proxy, журнал показывает verdict каждого канала; результаты находятся в
+`install_summary.json` → `probes.upstream_tls`. Это TLS проверка с существующим
+terminal cert, а не видео E2E. `service-args.txt` зеркалирует SCM options для
+watchdog; существующий SCM ImagePath остаётся authoritative.

@@ -33,7 +33,7 @@ echo [1/2] Compiling test_l4setup.exe (x86)...
 set "TEST_ARCH=x86"
 if /i "%1"=="x64" set "TEST_ARCH=x64"
 call "%VS_DEV_CMD%" -arch=%TEST_ARCH% -no_logo
-cl.exe /nologo /O2 /MT /W4 /wd4100 /wd4127 /wd4244 /wd4702 /wd4706 /utf-8 /DWIN32_LEAN_AND_MEAN /D_WINSOCK_DEPRECATED_NO_WARNINGS /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /I res /I ..\l4pin\src /I ..\l4superv\src /Foobj\ tests\test_l4setup.c src\cli.c src\log.c src\unpack.c src\summary.c src\preflight.c ..\l4pin\src\cert_discovery.c ..\l4superv\src\miniz.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\test_l4setup.exe kernel32.lib user32.lib shell32.lib advapi32.lib crypt32.lib ncrypt.lib shlwapi.lib
+cl.exe /nologo /O2 /MT /W4 /wd4100 /wd4127 /wd4244 /wd4702 /wd4706 /utf-8 /DWIN32_LEAN_AND_MEAN /D_WINSOCK_DEPRECATED_NO_WARNINGS /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /I res /I ..\l4pin\src /I ..\l4superv\src /Foobj\ tests\test_l4setup.c src\cli.c src\log.c src\unpack.c src\summary.c src\preflight.c ..\l4pin\src\cert_discovery.c ..\l4superv\src\miniz.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\test_l4setup.exe ws2_32.lib kernel32.lib user32.lib shell32.lib advapi32.lib crypt32.lib ncrypt.lib shlwapi.lib
 if errorlevel 1 (
     echo [ERROR] Test compilation failed!
     exit /b 1
@@ -49,7 +49,7 @@ cl.exe /nologo /O2 /MT /W4 /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /D
 if errorlevel 1 exit /b 1
 bin\test_certificate_phase.exe
 if errorlevel 1 exit /b 1
-cl.exe /nologo /O2 /MT /W4 /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /I ..\l4superv\src /Foobj\ tests\test_service_start.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\test_service_start.exe kernel32.lib user32.lib advapi32.lib
+cl.exe /nologo /O2 /MT /W4 /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /I ..\l4superv\src /Foobj\ tests\test_service_start.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\test_service_start.exe kernel32.lib user32.lib advapi32.lib shell32.lib
 if errorlevel 1 exit /b 1
 bin\test_service_start.exe
 if errorlevel 1 exit /b 1

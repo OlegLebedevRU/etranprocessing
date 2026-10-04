@@ -6,6 +6,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 
 set(SOURCES
     src/main.c
+    src/endpoints.c
     src/policy.c
     src/policy_json.c
     src/cert_store.c
@@ -51,6 +52,7 @@ if(MSVC)
 endif()
 
 target_link_libraries(leo4proxy PRIVATE
+    dnsapi
     ws2_32
     crypt32
     ncrypt

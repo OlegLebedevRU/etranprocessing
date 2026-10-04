@@ -341,7 +341,9 @@ void proxy_config_init_defaults(ProxyConfig* config) {
 
     strncpy_s(config->cert_store_name, sizeof(config->cert_store_name), "MY", _TRUNCATE);
     config->is_machine_store = 1;      // Default: LocalMachine\MY
-    config->insecure_server_cert = 1;  // Default: ignore untrusted server CA for dev/migration
+    config->srv_enabled = 1;
+    config->policy_bootstrap_port = 443;
+    config->insecure_server_cert = 0;  // Default: ignore untrusted server CA for dev/migration
     config->cert_poll_interval = DEFAULT_CERT_POLL_INTERVAL; // Default: 30s poll in service mode
     config->drop_on_expire = 0;        // Compatibility flag; selection requires a valid new-CA certificate
 
@@ -418,6 +420,10 @@ static void print_usage(const char* exeName) {
     printf("OPERATIONAL COMMANDS:\n");
     printf("  --get-sn                Query Windows Store and output ONLY Device SN (exit 0)\n");
     printf("  --test-cert             Test certificate discovery and print full details\n");
+    printf("  --no-srv                Disable SRV discovery (strict TLS remains enabled)\n");
+    printf("  --policy-bootstrap-ip <IP> Numeric public IPv4 recovery policy target\n");
+    printf("  --check-policy-bootstrap Verify policy over bootstrap IP without DNS/cache writes\n");
+    printf("  --check-upstream        Probe enabled upstream TLS channels, emit JSON lines\n");
     printf("  --install               Install/update Windows Service with current arguments\n");
     printf("  --uninstall             Uninstall Windows Service\n");
     printf("  --start                 Start Windows Service\n");
@@ -507,6 +513,8 @@ int main(int argc, char* argv[]) {
     bool explicitStatus = false;
     bool getSnOnly = false;
     bool testCertOnly = false;
+    bool checkUpstream = false;
+    bool checkBootstrap = false;
 
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
@@ -516,6 +524,22 @@ int main(int argc, char* argv[]) {
         } else if (_stricmp(argv[i], "--version") == 0) {
             printf("Leo4Proxy version %s\n", LEO4_PROXY_VERSION);
             return 0;
+        } else if (_stricmp(argv[i], "--check-policy-bootstrap") == 0) {
+            checkBootstrap = true;
+        } else if (_stricmp(argv[i], "--check-upstream") == 0) {
+            checkUpstream = true;
+        } else if (_stricmp(argv[i], "--no-srv") == 0) {
+            config.srv_enabled = 0;
+        } else if (_stricmp(argv[i], "--policy-bootstrap-ip") == 0 && i+1<argc) {
+            if (!endpoint_ipv4(argv[i+1])) { fprintf(stderr,"Invalid public bootstrap IPv4\n"); return 2; }
+            strcpy_s(config.policy_bootstrap_ip,sizeof(config.policy_bootstrap_ip),argv[++i]);
+        } else if (_stricmp(argv[i], "--policy-bootstrap-port") == 0 && i+1<argc) {
+            config.policy_bootstrap_port=atoi(argv[++i]);
+            if (config.policy_bootstrap_port<1 || config.policy_bootstrap_port>65535) return 2;
+        } else if ((_stricmp(argv[i], "--mqtt-srv")==0 || _stricmp(argv[i], "--http-srv")==0 ||
+                    _stricmp(argv[i], "--stream-srv")==0 || _stricmp(argv[i], "--rtp-srv")==0) && i+1<argc) {
+            int channel=_stricmp(argv[i],"--mqtt-srv")==0?0:_stricmp(argv[i],"--http-srv")==0?1:_stricmp(argv[i],"--stream-srv")==0?2:3;
+            strcpy_s(config.srv_names[channel],MAX_HOST_LEN,argv[++i]);
         } else if (_stricmp(argv[i], "--service") == 0) {
             config.run_as_service = 1;
         } else if (_stricmp(argv[i], "--install") == 0) {
@@ -543,10 +567,12 @@ int main(int argc, char* argv[]) {
         } else if (_stricmp(argv[i], "--user-store") == 0) {
             config.is_machine_store = 0;
         } else if (_stricmp(argv[i], "--mqtt-remote") == 0 && i + 1 < argc) {
+            config.remote_explicit[0]=1;
             parse_host_port(argv[++i], config.mqtt_remote_host, sizeof(config.mqtt_remote_host), &config.mqtt_remote_port);
         } else if (_stricmp(argv[i], "--mqtt-local") == 0 && i + 1 < argc) {
             parse_host_port(argv[++i], config.mqtt_local_host, sizeof(config.mqtt_local_host), &config.mqtt_local_port);
         } else if (_stricmp(argv[i], "--http-remote") == 0 && i + 1 < argc) {
+            config.remote_explicit[1]=1;
             parse_host_port(argv[++i], config.http_remote_host, sizeof(config.http_remote_host), &config.http_remote_port);
         } else if (_stricmp(argv[i], "--http-local") == 0 && i + 1 < argc) {
             parse_host_port(argv[++i], config.http_local_host, sizeof(config.http_local_host), &config.http_local_port);
@@ -589,6 +615,7 @@ int main(int argc, char* argv[]) {
         } else if (_stricmp(argv[i], "--stream-local") == 0 && i + 1 < argc) {
             parse_host_port(argv[++i], config.stream_local_host, sizeof(config.stream_local_host), &config.stream_local_port);
         } else if (_stricmp(argv[i], "--stream-remote") == 0 && i + 1 < argc) {
+            config.remote_explicit[2]=1;
             parse_host_port(argv[++i], config.stream_remote_host, sizeof(config.stream_remote_host), &config.stream_remote_port);
         } else if (_stricmp(argv[i], "--stream-max-clients") == 0 && i + 1 < argc) {
             config.stream_max_clients = atoi(argv[++i]);
@@ -608,6 +635,7 @@ int main(int argc, char* argv[]) {
         } else if (_stricmp(argv[i], "--rtcp-port") == 0 && i + 1 < argc) {
             config.rtp_tunnel_rtcp_port = atoi(argv[++i]);
         } else if (_stricmp(argv[i], "--rtp-remote") == 0 && i + 1 < argc) {
+            config.remote_explicit[3]=1;
             parse_host_port(argv[++i], config.rtp_tunnel_remote_host, sizeof(config.rtp_tunnel_remote_host), &config.rtp_tunnel_remote_port);
         } else if (_stricmp(argv[i], "--rtp-idle-timeout") == 0 && i + 1 < argc) {
             config.rtp_tunnel_idle_timeout_sec = atoi(argv[++i]);
@@ -618,6 +646,51 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    for (int channel=0;channel<4;channel++) {
+        const char* name=endpoint_logical_name(&config,channel);
+        int port=channel==0?config.mqtt_remote_port:channel==1?config.http_remote_port:channel==2?config.stream_remote_port:config.rtp_tunnel_remote_port;
+        if (!endpoint_host_valid(name) || port<1 || port>65535) {
+            fprintf(stderr,"[ERROR] Invalid upstream host/port\n"); return 2;
+        }
+    }
+    if (checkBootstrap) {
+        WSADATA wsa; if (WSAStartup(MAKEWORD(2,2),&wsa)) return 2;
+        CertDetails details;
+        if (!cert_store_find_best_cert(&config,&details)) { WSACleanup(); return 2; }
+        bool ok=policy_probe_bootstrap(&config,&details);
+        if (!ok) printf("{\"v\":1,\"policy\":\"probe_failed\",\"source\":\"bootstrap_ip\"}\n");
+        cert_store_free_details(&details); WSACleanup(); return ok?0:1;
+    }
+    if (checkUpstream) {
+        WSADATA wsa; if (WSAStartup(MAKEWORD(2,2),&wsa)) return 2;
+        CertDetails details;
+        if (!cert_store_find_best_cert(&config,&details)) { printf("{\"v\":1,\"error\":\"no_certificate\"}\n"); WSACleanup(); return 2; }
+        endpoints_init(&config); endpoints_identity(details.sn);
+        CredHandle creds; bool acquired=schannel_init_client_creds(details.pCertContext,0,&creds); int failures=0;
+        bool admission=policy_probe_media_allowed(details.sn);
+        ULONGLONG deadline=GetTickCount64()+8000;
+        for (int channel=0;channel<4;channel++) {
+            bool enabled=channel!=2 || config.stream_proxy_enabled;
+            if (channel==3 && !config.rtp_tunnel_enabled) enabled=false;
+            SChannelSession session; bool success=false,rejected=false; Leo4Endpoint selected={0};
+            bool blocked=enabled && channel!=1 && !admission;
+            if (enabled && acquired && !blocked) {
+                /* Diagnostic mode must not create MQTT/media application traffic. */
+                Leo4Endpoint targets[ENDPOINT_MAX]; int count=endpoints_candidates(&config,channel,channel==1,targets);
+                for (int n=0;n<count && !success;n++) {
+                    ULONGLONG now=GetTickCount64(); if (now>=deadline) break;
+                    int share=(int)(deadline-now)/(count-n); if (share>2500) share=2500;
+                    success=schannel_connect_endpoint(&session,&creds,targets[n].host,endpoint_logical_name(&config,channel),targets[n].port,share,false);
+                    rejected=rejected || session.certificate_rejected;
+                    if (success) { selected=targets[n]; endpoints_connected(channel,&targets[n]); schannel_close(&session); }
+                }
+            }
+            printf("{\"v\":1,\"channel\":%d,\"verdict\":\"%s\",\"host\":\"%s\",\"port\":%d,\"source\":\"%s\",\"logical_name\":\"%s\",\"strict\":true}\n",channel,!enabled?"skipped":blocked?"policy_blocked":success?"valid":rejected?"cert_invalid":"probe_failed",selected.host,selected.port,selected.source,endpoint_logical_name(&config,channel));
+            if (enabled && !success) ++failures;
+        }
+        if (acquired) schannel_free_creds(&creds);
+        cert_store_free_details(&details); endpoints_shutdown(); WSACleanup(); return failures?1:0;
+    }
     // 1. Quick SN Query Mode
     if (getSnOnly) {
         CertDetails details;

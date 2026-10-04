@@ -1,0 +1,51 @@
+# leo4proxy
+
+## Назначение / владельцы
+Native Win32 proxy для MQTT/HTTPS/Stream/RTP. ProcessingBackend владеет admission
+policy; leo4proxy — transport и routing cache; l4setup — SCM settings;
+l4superv — запуск/watchdog и local diagnostics. БД не меняется.
+
+## Контракты
+- DNS SRV → bounded single-flight resolver → channel candidates.
+- mTLS GET /api/leo4proxy/policy → admission + optional endpoints/TTL.
+- l4setup → SCM ImagePath + leo4proxy/service-args.txt → watchdog/repair.
+- /_leo4/info endpoints.channels → l4superv HTTPS source/target diagnostics.
+
+## Инварианты
+Strict CA/name/time/serverAuth во всех исходящих каналах, включая IP. Numeric TCP
+сохраняет logical TLS/SNI/HTTP Host. Bootstrap используется только для GET policy;
+неверифицированный TLS и SPKI emergency не реализованы. No redirects/admission bypass.
+Routing cache отделён от deny/72h grace, bound к SN/TTL; stale IP только recovery GET.
+
+## State / реализация
+Explicit CLI → SRV → verified SRV LKG → fresh policy host → default → fresh policy IP.
+Для recovery GET добавляется provisioned bootstrap IP и допускается stale policy IP.
+SRV `.` fail-closed, 24 DNS slots, caller wait ≤2s, TTL 30–300s/negative 30s.
+Cert standby/hot-swap и credential ownership сохраняются.
+
+## Исходники
+- [endpoints.c](../../tools/leo4proxy/src/endpoints.c), [TLS](../../tools/leo4proxy/src/schannel_tls.c)
+- [policy](../../tools/leo4proxy/src/policy.c), [main](../../tools/leo4proxy/src/main.c)
+- [policy producer](../../ProcessingBackend/backend/app/services/leo4proxy_policy.py)
+- [setup services](../../tools/l4setup/src/services.c), [smoke](../../tools/l4setup/src/smoke.c)
+- [watchdog](../../tools/l4superv/src/orchestrator.c), [config](../../tools/l4superv/src/config.c)
+
+## Проверка / статус 2026-10-04
+Backend 156 tests + quality passed, policy deployed; direct mTLS confirms endpoints.
+Media CA pair and guarded image deployed; [media evidence](../tasks/completed/2026-10-04-media-tls.md).
+Native x86/x64 build, admission/credential/certificate/loopback tests passed;
+strict numeric bootstrap GET valid in both architectures. Full tools 1.10.0 packaging gate passed (61 embedded files per arch); unsigned
+signing handoff prepared, not installed or published yet.
+
+## Ограничения / следующие проверки
+IPv4 и первый A-address; CRL/OCSP не проверяются. Локальное время влияет на trust.
+Cache: HKLM Endpoints REG_BINARY + ProgramData/Leo4Proxy/endpoints.cache, timestamp
+и policy JSON; ACL SYSTEM/Administrators. File storage degradation оставляет snapshot
+в памяти. Public root embedded; private keys remain in CNG/server mounts.
+Нужны clean 773 setup, GUI/manual/cancel/watchdog/repair, Win7/full outage всех
+каналов и видео E2E. Не считать TLS probe доказательством decoded frames.
+
+## Источники
+[Implementation context](../../docs/term_net-leo4proxy-dns-srv-implementation-context.md),
+[admission](../../docs/term_arch-leo4proxy-server-permission.md).
+Первичное ревью HEAD c58f607: [historical handoff](../tasks/completed/2026-10-04-leo4proxy-dns-srv-review.md).

@@ -66,7 +66,7 @@ static unsigned __stdcall stream_client_worker(void* param) {
 
     /* Connect to cloud media ingress over mTLS */
     SChannelSession remoteTlsSession;
-    if (!schannel_connect_media(&remoteTlsSession, &hClientCred, config->stream_remote_host, config->stream_remote_port, 10000, config->insecure_server_cert)) {
+    if (!schannel_connect_channel(&remoteTlsSession, &hClientCred, config, ENDPOINT_STREAM, 10000, false)) {
         fprintf(stderr, "[STREAM-PROXY] Failed to establish mTLS connection to %s:%d\n",
                 config->stream_remote_host, config->stream_remote_port);
         closesocket(clientSock);

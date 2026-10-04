@@ -323,6 +323,7 @@ int engine_run_pipeline(SetupContext* ctx) {
             return 23;
         }
 
+        services_set_network_options(ctx->opts);
         if (!services_ensure_all_registered(ctx->opts->dest)) {
             log_err("Service registration failed (exit code 24). Initiating rollback...");
             unpack_rollback(ctx->opts->dest, ctx->installed_version[0] ? ctx->installed_version : "prev");
@@ -414,6 +415,7 @@ int engine_run_pipeline(SetupContext* ctx) {
         return 27;
     }
     smoke_run_probes(ctx->opts->dest, is_active_cert, &ctx->summary.probes);
+    if (is_active_cert) smoke_probe_upstream(ctx->opts->dest,&ctx->summary.probes);
 
     // Determine exit code and status
     if (ctx->summary.probes.critical_failed) {
@@ -430,7 +432,8 @@ int engine_run_pipeline(SetupContext* ctx) {
         ctx->final_exit_code = 12;
         strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "degraded");
         strcpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason),
-                 strcmp(ctx->summary.probes.network, "unreachable") == 0 ? "network_unreachable" : "l4desk_not_ready");
+                 strcmp(ctx->summary.probes.network, "unreachable") == 0 ? "network_unreachable" :
+                 (!strcmp(ctx->summary.probes.upstream_tls[1],"cert_invalid") || !strcmp(ctx->summary.probes.upstream_tls[1],"probe_failed") || !strcmp(ctx->summary.probes.upstream_tls[1],"timeout")) ? "upstream_tls_failed" : "l4desk_or_upstream_not_ready");
     } else {
         ctx->final_exit_code = 0;
         strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "ready");

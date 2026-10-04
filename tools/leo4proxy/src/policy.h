@@ -23,6 +23,8 @@ void policy_init(const ProxyConfig* config);
 void policy_identity(const CertDetails* details);
 void policy_stop(void);
 bool policy_media_allowed(void);
+bool policy_probe_media_allowed(const char* sn);
+bool policy_probe_bootstrap(const ProxyConfig* config, const CertDetails* cert);
 bool policy_https_path_allowed(const char* path);
 void policy_diagnostics(char* out, size_t size);
 /* Called with a nonblocking socket. Registration and connect share the policy lock. */

@@ -438,3 +438,25 @@ curl http://127.0.0.1:18443/_leo4/info
 ---
 
 Подробная документация по всем примерам: **`tools/leo4proxy/examples/README.md`**.
+
+## DNS/SRV и IP recovery (1.8.0)
+
+Auto: SRV → policy → default → policy IP, explicit `--*-remote` authoritative.
+SRV owners: `_mqtt._tls.dev.leo4.ru`, `_https._tcp.iot-processing.ru`,
+`_l4stream._tls.dev.leo4.ru`, `_l4rtp._tls.dev.leo4.ru`; override через `--*-srv`.
+`--no-srv` выключает только SRV. Root CA встроен; server identity проверяется
+для всех каналов, включая numeric IP; исходное logical имя сохраняется.
+Bootstrap задаётся `--policy-bootstrap-ip`/`--policy-bootstrap-port` и применим
+только к recovery GET policy. Policy endpoints/TTL приходят по strict mTLS.
+
+Диагностика без прикладного MQTT/video трафика:
+
+```cmd
+leo4proxy.exe --check-upstream --policy-bootstrap-ip <public-ip>
+leo4proxy.exe --check-policy-bootstrap --policy-bootstrap-ip <public-ip>
+```
+
+Первая команда выдаёт JSON verdicts enabled каналов (cached admission учитывается),
+вторая проверяет настоящий GET policy напрямую по IP, без DNS и изменения cache.
+CRL/OCSP в offline chain validation не проверяются. Срок и имя обязательны.
+Подробнее: [контекст](../../docs/term_net-leo4proxy-dns-srv-implementation-context.md).

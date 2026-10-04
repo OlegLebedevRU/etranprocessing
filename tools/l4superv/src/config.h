@@ -2,7 +2,7 @@
 #include <windows.h>
 #include <stdbool.h>
 
-#define L4_SUPERV_VERSION_STR L"1.9.6"
+#define L4_SUPERV_VERSION_STR L"1.10.0"
 #define L4_DEFAULT_BASE_PATH  L"C:\\l4tools"
 #define L4_DEFAULT_PROXY_URL  L"http://127.0.0.1:18443/_leo4/info"
 #define L4_DEFAULT_MOSQUITTO_PORT 1883
@@ -27,7 +27,7 @@ typedef struct {
     bool    auto_start_mosquitto;
     bool    auto_start_l4con;
     bool    auto_start_l4desk;
-    wchar_t leo4proxy_args[512];
+    wchar_t leo4proxy_args[2048];
     wchar_t l4con_args[512];
     wchar_t l4desk_args[512];
     wchar_t l4desk_mode[64];

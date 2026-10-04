@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ws2tcpip.h>
 
 void cli_init_defaults(CliOptions* opts) {
     if (!opts) return;
@@ -10,6 +11,12 @@ void cli_init_defaults(CliOptions* opts) {
     wcscpy_s(opts->dest, MAX_PATH, L"C:\\l4tools");
     opts->interactive = true;
     opts->silent = false;
+    HRSRC profile=FindResourceW(NULL,MAKEINTRESOURCEW(202),RT_RCDATA);
+    HGLOBAL payload=profile?LoadResource(NULL,profile):NULL;
+    if (payload && SizeofResource(NULL,profile)<16) {
+        char ip[16]={0}; memcpy(ip,LockResource(payload),SizeofResource(NULL,profile));
+        MultiByteToWideChar(CP_UTF8,0,ip,-1,opts->policy_bootstrap_ip,16);
+    }
 }
 
 static bool is_valid_6digit_pin(const wchar_t* pin) {
@@ -37,7 +44,28 @@ bool cli_parse(int argc, wchar_t* argv[], CliOptions* opts, char* err_buf, size_
     for (int i = 1; i < argc; i++) {
         const wchar_t* arg = argv[i];
 
-        if (_wcsicmp(arg, L"--preview-ui") == 0) {
+        if (_wcsicmp(arg,L"--policy-bootstrap-ip")==0 && i+1<argc) {
+            IN_ADDR address;
+            if (InetPtonW(AF_INET,argv[i+1],&address)!=1) return false;
+            unsigned long ip=ntohl(address.S_un.S_addr);
+            if ((ip>>24)==0 || (ip>>24)==127 || (ip>>24)>=224 || (ip>>24)==10 ||
+                (ip>>16)==0xa9fe || (ip>>16)==0xc0a8 || (ip>>20)==0xac1 || (ip>>22)==0x191) return false;
+            wcscpy_s(opts->policy_bootstrap_ip,16,argv[++i]); opts->network_specified=true;
+        } else if (_wcsicmp(arg,L"--no-srv")==0) {
+            opts->no_srv=true; opts->network_specified=true;
+        } else if ((_wcsicmp(arg,L"--mqtt-remote")==0 || _wcsicmp(arg,L"--http-remote")==0 ||
+                    _wcsicmp(arg,L"--stream-remote")==0 || _wcsicmp(arg,L"--rtp-remote")==0) && i+1<argc) {
+            int channel=_wcsicmp(arg,L"--mqtt-remote")==0?0:_wcsicmp(arg,L"--http-remote")==0?1:_wcsicmp(arg,L"--stream-remote")==0?2:3;
+            const wchar_t* value=argv[++i]; const wchar_t* colon=wcsrchr(value,L':');
+            if (!colon || colon==value || wcslen(value)>=256) return false;
+            wchar_t* end=NULL; long port=wcstol(colon+1,&end,10);
+            if (!end || *end || port<1 || port>65535) return false;
+            for (const wchar_t* c=value;c<colon;c++)
+                if (!((*c>=L'a'&&*c<=L'z') || (*c>=L'A'&&*c<=L'Z') || (*c>=L'0'&&*c<=L'9') || *c==L'.' || *c==L'-')) return false;
+            wcscpy_s(opts->remote_endpoints[channel],256,value); opts->network_specified=true;
+        } else if (_wcsicmp(arg,L"--resolve-auto")==0) {
+            memset(opts->remote_endpoints,0,sizeof(opts->remote_endpoints)); opts->no_srv=false; opts->network_specified=true;
+        } else if (_wcsicmp(arg, L"--preview-ui") == 0) {
             opts->preview_ui = true;
             explicit_interactive = true;
         } else if (_wcsicmp(arg, L"--version") == 0 || _wcsicmp(arg, L"-version") == 0 ||
@@ -167,6 +195,9 @@ void cli_print_usage(const wchar_t* prog_name) {
     wprintf(L"Leo4 Zero-Touch Setup (l4setup) v%ls\n\n", L4SETUP_VERSION_WSTRING);
     wprintf(L"Usage: %ls [options]\n\n", prog_name ? prog_name : L"l4setup.exe");
     wprintf(L"Options:\n");
+    wprintf(L"  --policy-bootstrap-ip <IP> Recovery policy IP, TLS name remains unchanged\n");
+    wprintf(L"  --resolve-auto / --no-srv  Automatic discovery / disable SRV\n");
+    wprintf(L"  --mqtt-remote / --http-remote / --stream-remote / --rtp-remote <host:port>\n");
     wprintf(L"  --pin, -p <PIN>    6-digit terminal certificate PIN code\n");
     wprintf(L"  --force-reissue    Allow certificate reissuance even if existing cert is valid\n");
     wprintf(L"  --no-pin           Do not ask for PIN; if certificate absent, enter standby\n");

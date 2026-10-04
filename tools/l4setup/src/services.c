@@ -1,10 +1,13 @@
 #include "services.h"
+static const CliOptions* network_options;
+void services_set_network_options(const CliOptions* options) { network_options=options; }
 #include "log.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <aclapi.h>
 #include <sddl.h>
+#include <shellapi.h>
 #include "mosquitto_log_acl.h"
 
 #pragma comment(lib, "advapi32.lib")
@@ -201,6 +204,37 @@ static bool register_or_update_service(
     return true;
 }
 
+static bool append_quoted_argument(wchar_t* command,size_t capacity,const wchar_t* argument) {
+    size_t used=wcslen(command),slashes=0;
+    if (used+3>=capacity) return false;
+    if (used) command[used++]=L' ';
+    command[used++]=L'"';
+    for (const wchar_t* p=argument;;p++) {
+        if (*p==L'\\') { ++slashes; continue; }
+        size_t copies=(*p==L'"' || !*p)?slashes*2:slashes;
+        if (used+copies+3>=capacity) return false;
+        while (copies--) command[used++]=L'\\';
+        slashes=0;
+        if (!*p) break;
+        if (*p==L'"') command[used++]=L'\\';
+        command[used++]=*p;
+    }
+    command[used++]=L'"'; command[used]=0; return true;
+}
+static bool retain_non_network_arguments(wchar_t* command,size_t capacity,const wchar_t* previous) {
+    int count=0; LPWSTR* args=CommandLineToArgvW(previous,&count);
+    if (!args || !count) { if (args) LocalFree(args); return false; }
+    command[0]=0; bool ok=true;
+    for (int n=0;n<count && ok;n++) {
+        if (n && (!_wcsicmp(args[n],L"--mqtt-remote") || !_wcsicmp(args[n],L"--http-remote") ||
+            !_wcsicmp(args[n],L"--stream-remote") || !_wcsicmp(args[n],L"--rtp-remote") ||
+            !_wcsicmp(args[n],L"--policy-bootstrap-ip") || !_wcsicmp(args[n],L"--bootstrap-port"))) { if (n+1<count) ++n; continue; }
+        if (n && !_wcsicmp(args[n],L"--no-srv")) continue;
+        ok=append_quoted_argument(command,capacity,args[n]);
+    }
+    LocalFree(args); return ok;
+}
+
 bool services_ensure_all_registered(const wchar_t* dest_dir) {
     if (!dest_dir) return false;
 
@@ -210,10 +244,46 @@ bool services_ensure_all_registered(const wchar_t* dest_dir) {
         return false;
     }
 
-    wchar_t cmd[MAX_PATH * 2];
+    wchar_t cmd[2048];
 
     // 1. Leo4Proxy
     swprintf_s(cmd, sizeof(cmd)/sizeof(wchar_t), L"\"%ls\\leo4proxy\\leo4proxy.exe\" --service --rtp-tunnel", dest_dir);
+    /* Preserve SCM arguments on an upgrade/repair unless network options were selected. */
+    bool preserved=false;
+    {
+        SC_HANDLE old=OpenServiceW(hSCM,SVC_NAME_LEO4PROXY,SERVICE_QUERY_CONFIG);
+        DWORD bytes=0;
+        if (old) {
+            QueryServiceConfigW(old,NULL,0,&bytes);
+            QUERY_SERVICE_CONFIGW* config=(QUERY_SERVICE_CONFIGW*)malloc(bytes);
+            if (config && QueryServiceConfigW(old,config,bytes,&bytes)) {
+                wchar_t expected[MAX_PATH]; swprintf_s(expected,MAX_PATH,L"\"%ls\\leo4proxy\\leo4proxy.exe\"",dest_dir);
+                if (!_wcsnicmp(config->lpBinaryPathName,expected,wcslen(expected))) {
+                    if (network_options && network_options->network_specified) {
+                        if (!retain_non_network_arguments(cmd,sizeof(cmd)/sizeof(wchar_t),config->lpBinaryPathName)) {
+                            free(config); CloseServiceHandle(old); CloseServiceHandle(hSCM); return false;
+                        }
+                    } else { wcscpy_s(cmd,sizeof(cmd)/sizeof(wchar_t),config->lpBinaryPathName); preserved=true; }
+                }
+            }
+            free(config); CloseServiceHandle(old);
+        }
+    }
+    if (!preserved && network_options) {
+        if (network_options->policy_bootstrap_ip[0]) {
+            wcscat_s(cmd,sizeof(cmd)/sizeof(wchar_t),L" --policy-bootstrap-ip ");
+            wcscat_s(cmd,sizeof(cmd)/sizeof(wchar_t),network_options->policy_bootstrap_ip);
+        }
+        if (network_options->no_srv) wcscat_s(cmd,sizeof(cmd)/sizeof(wchar_t),L" --no-srv");
+        const wchar_t* flags[]={L" --mqtt-remote ",L" --http-remote ",L" --stream-remote ",L" --rtp-remote "};
+        for (int c=0;c<4;c++) if (network_options->remote_endpoints[c][0]) {
+            wcscat_s(cmd,sizeof(cmd)/sizeof(wchar_t),flags[c]); wcscat_s(cmd,sizeof(cmd)/sizeof(wchar_t),network_options->remote_endpoints[c]);
+        }
+    }
+    if (preserved && network_options && network_options->policy_bootstrap_ip[0] && !wcsstr(cmd,L"--policy-bootstrap-ip")) {
+        wcscat_s(cmd,sizeof(cmd)/sizeof(wchar_t),L" --policy-bootstrap-ip ");
+        wcscat_s(cmd,sizeof(cmd)/sizeof(wchar_t),network_options->policy_bootstrap_ip);
+    }
     if (!register_or_update_service(
             hSCM,
             SVC_NAME_LEO4PROXY,
@@ -223,6 +293,26 @@ bool services_ensure_all_registered(const wchar_t* dest_dir) {
             NULL)) {
         CloseServiceHandle(hSCM);
         return false;
+    }
+
+    /* Mirror the successfully registered SCM arguments atomically for watchdog. */
+    wchar_t args_path[MAX_PATH],args_temp[MAX_PATH];
+    swprintf_s(args_path,MAX_PATH,L"%ls\\leo4proxy\\service-args.txt",dest_dir);
+    swprintf_s(args_temp,MAX_PATH,L"%ls.tmp",args_path);
+    const wchar_t* args=wcschr(cmd+1,L'"');
+    if (args) ++args;
+    while (args && *args==L' ') ++args;
+    char utf8[8192]={0};
+    int bytes=args?WideCharToMultiByte(CP_UTF8,0,args,-1,utf8,sizeof(utf8),NULL,NULL):0;
+    FILE* args_file=NULL; bool mirrored=false;
+    if (bytes>0 && _wfopen_s(&args_file,args_temp,L"wb")==0 && args_file) {
+        mirrored=fwrite(utf8,1,(size_t)bytes-1,args_file)==(size_t)bytes-1 && fflush(args_file)==0;
+        if (fclose(args_file)!=0) mirrored=false;
+        if (mirrored) mirrored=MoveFileExW(args_temp,args_path,MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)!=0;
+    }
+    if (!mirrored) {
+        DeleteFileW(args_temp); log_err("Cannot persist Leo4Proxy SCM arguments for watchdog.");
+        CloseServiceHandle(hSCM); return false;
     }
 
     // 2. Mosquitto

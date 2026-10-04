@@ -158,11 +158,8 @@ static unsigned __stdcall rtp_tunnel_worker_thread(void* param) {
                            config->rtp_tunnel_remote_host, config->rtp_tunnel_remote_port);
                 }
 
-                bool ok = schannel_connect_media(&remote, (CredHandle*)&server->hClientCred,
-                                          config->rtp_tunnel_remote_host,
-                                          config->rtp_tunnel_remote_port,
-                                          DEFAULT_RTP_TUNNEL_CONNECT_TIMEOUT,
-                                          config->insecure_server_cert);
+                bool ok = schannel_connect_channel(&remote, (CredHandle*)&server->hClientCred, config,
+                                          ENDPOINT_RTP, 10000, false);
                 if (!ok) {
                     fprintf(stderr, "[RTP-TUNNEL] Failed to establish mTLS connection to %s:%d\n",
                             config->rtp_tunnel_remote_host, config->rtp_tunnel_remote_port);

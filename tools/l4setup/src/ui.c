@@ -61,7 +61,8 @@ static void layout(HWND dialog) {
     place(dialog,IDC_PROGRESS_BAR,margin,px(compact?423:478),left,px(13));
     place(dialog,IDC_STATIC_STATUS,margin,px(compact?451:509),left,px(61));
     place(dialog,IDC_STATIC_ELAPSED,margin,bottom,left,px(35));
-    place(dialog,IDC_STATIC_LOG_TITLE,right,px(119),log_width-px(135),px(29));
+    place(dialog,IDC_STATIC_LOG_TITLE,right,px(119),log_width-px(245),px(29));
+    place(dialog,IDC_BTN_NETWORK,rc.right-margin-px(236),px(114),px(100),px(31));
     place(dialog,IDC_BTN_DETAILS,rc.right-margin-px(128),px(114),px(128),px(31));
     place(dialog,IDC_EDIT_DETAILS,right,px(159),log_width,bottom-px(168));
     place(dialog,IDC_STATIC_LOG_COUNTS,right,bottom-px(1),log_width-px(370),px(35));
@@ -234,6 +235,34 @@ static bool start_worker(HWND dialog,bool check) {
         SetDlgItemTextW(dialog,IDCANCEL,L"Закрыть"); return false;
     } return true;
 }
+static INT_PTR CALLBACK network_proc(HWND dialog,UINT message,WPARAM wParam,LPARAM lParam) {
+    (void)lParam;
+    const int ids[]={IDC_NETWORK_MQTT,IDC_NETWORK_HTTP,IDC_NETWORK_STREAM,IDC_NETWORK_RTP};
+    if (message==WM_INITDIALOG) {
+        SetDlgItemTextW(dialog,IDC_NETWORK_IP,context.opts->policy_bootstrap_ip);
+        for(int c=0;c<4;c++) SetDlgItemTextW(dialog,ids[c],context.opts->remote_endpoints[c]);
+        CheckDlgButton(dialog,IDC_NETWORK_NO_SRV,context.opts->no_srv?BST_CHECKED:BST_UNCHECKED);
+        return TRUE;
+    }
+    if (message==WM_COMMAND && LOWORD(wParam)==IDCANCEL) { EndDialog(dialog,0); return TRUE; }
+    if (message==WM_COMMAND && LOWORD(wParam)==IDOK) {
+        wchar_t values[5][256]; GetDlgItemTextW(dialog,IDC_NETWORK_IP,values[0],256);
+        for(int c=0;c<4;c++) GetDlgItemTextW(dialog,ids[c],values[c+1],256);
+        wchar_t* args[16]={L"l4setup",L"--resolve-auto"}; int count=2;
+        if(values[0][0]) {args[count++]=L"--policy-bootstrap-ip";args[count++]=values[0];}
+        const wchar_t* flags[]={L"--mqtt-remote",L"--http-remote",L"--stream-remote",L"--rtp-remote"};
+        for(int c=0;c<4;c++) if(values[c+1][0]) {args[count++]=(wchar_t*)flags[c];args[count++]=values[c+1];}
+        if(IsDlgButtonChecked(dialog,IDC_NETWORK_NO_SRV)==BST_CHECKED) args[count++]=L"--no-srv";
+        CliOptions parsed; char error[256]={0};
+        if(!cli_parse(count,args,&parsed,error,sizeof(error))) {
+            MessageBoxW(dialog,L"Введите IP и host:port без схемы; порт 1–65535.",L"Неверный адрес",MB_OK|MB_ICONWARNING);return TRUE;
+        }
+        memcpy(context.opts->remote_endpoints,parsed.remote_endpoints,sizeof(parsed.remote_endpoints));
+        wcscpy_s(context.opts->policy_bootstrap_ip,16,values[0]); context.opts->no_srv=parsed.no_srv;
+        context.opts->network_specified=true; EndDialog(dialog,1); return TRUE;
+    }
+    return FALSE;
+}
 static INT_PTR CALLBACK dialog_proc(HWND dialog,UINT message,WPARAM wParam,LPARAM lParam) {
     switch(message) {
         case WM_INITDIALOG: {
@@ -362,6 +391,7 @@ static INT_PTR CALLBACK dialog_proc(HWND dialog,UINT message,WPARAM wParam,LPARA
         }
         case WM_COMMAND: {
             int id=LOWORD(wParam);
+            if(id==IDC_BTN_NETWORK && !running && !finished) {DialogBoxParamW(context.hInstance,MAKEINTRESOURCEW(IDD_NETWORK_DIALOG),dialog,network_proc,0);return TRUE;}
             if(id==IDC_BTN_DETAILS){copy_log(dialog);return TRUE;}
             if(id==IDCANCEL){request_close(dialog);return TRUE;}
             if(id==IDC_BTN_ACTION && !running && checked) {

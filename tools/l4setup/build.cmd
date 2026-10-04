@@ -1,6 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
+if not exist res\network-profile.bin type nul >res\network-profile.bin
 set "VSCMD_SKIP_SENDTELEMETRY=1"
 
 echo =======================================================
@@ -33,8 +34,8 @@ if not exist obj mkdir obj
 if /i "%TARGET_CMD%"=="test" goto :run_tests
 if /i "%TARGET_CMD%"=="tests" goto :run_tests
 if "%TARGET_CMD%"=="" set "TARGET_CMD=all"
-set "RC_PAYLOAD_FLAGS="
-if exist "%~dp0res\payload_x86.bin" set "RC_PAYLOAD_FLAGS=/d EMBED_PAYLOAD_X86"
+set "RC_PAYLOAD_FLAGS=/d EMBED_NETWORK_PROFILE"
+if exist "%~dp0res\payload_x86.bin" set "RC_PAYLOAD_FLAGS=%RC_PAYLOAD_FLAGS% /d EMBED_PAYLOAD_X86"
 if exist "%~dp0res\payload_x64.bin" set "RC_PAYLOAD_FLAGS=%RC_PAYLOAD_FLAGS% /d EMBED_PAYLOAD_X64"
 set "SOURCES=src\main.c src\cli.c src\log.c src\uac.c src\preflight.c src\drainage.c src\unpack.c src\services.c src\cert_phase.c src\smoke.c src\proxy_probe.c ..\l4pin\src\http_client.c ..\leo4proxy\src\policy_json.c src\summary.c src\engine.c src\ui.c ..\l4pin\src\cert_discovery.c ..\l4superv\src\hardware_fingerprint.c ..\l4superv\src\miniz.c"
 if /i "%TARGET_CMD%"=="x64" goto :only_x64
