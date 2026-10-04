@@ -2,6 +2,12 @@
 
 All notable changes to the `leo4proxy` component will be documented in this file.
 
+## [1.8.2] - 2026-10-05 (suite1.11.0; signed and published)
+
+### Fixed
+- MQTT/RTP admission closes for missing, expired or not-yet-valid active certificate even when PB policy is unreachable.
+- Valid-certificate72h offline grace and normal certificate hot rotation preserved.
+
 ## [1.8.1] - 2026-10-04 (signed; published)
 
 - Share an absolute deadline across SRV/A/TCP/TLS; reserve recovery time for IP fallback and remove duplicate endpoints/IPv4 addresses.

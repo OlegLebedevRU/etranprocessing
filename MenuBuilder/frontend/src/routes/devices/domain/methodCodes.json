@@ -300,5 +300,50 @@
     "description": "Отправка произвольного кода RPC-команды и массива payload.dt в формате JSON",
     "dtFormat": "custom",
     "isCustom": true
+  },
+  {
+    "code": 7001,
+    "name": "CMD_DIAG_EXEC",
+    "label": "7001 - Исполнить команду l4con",
+    "description": "Исполнение команды в одной сессии",
+    "dtFormat": "objectArray",
+    "fields": [
+      {
+        "name": "session_id",
+        "label": "UUID сессии",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "command_line",
+        "label": "Команда",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "ttl_sec",
+        "label": "Время исполнения, с",
+        "type": "number",
+        "defaultValue": 30,
+        "validation": {
+          "min": 1,
+          "max": 3600
+        }
+      }
+    ]
+  },
+  {
+    "code": 7002,
+    "name": "CMD_DIAG_CANCEL",
+    "label": "7002 - Отменить текущую команду l4con",
+    "description": "Без параметров отменяет текущую команду; адресная отмена передаёт session_id",
+    "dtFormat": "empty"
+  },
+  {
+    "code": 7003,
+    "name": "CMD_DIAG_PING",
+    "label": "7003 - Проверить l4con",
+    "description": "Проверка агента",
+    "dtFormat": "empty"
   }
 ]

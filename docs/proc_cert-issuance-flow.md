@@ -2,6 +2,21 @@
 
 > **Authoritative Architecture Reference**: See **[`docs/etran_cert-infrastructure-architecture.md`](etran_cert-infrastructure-architecture.md)** for complete end-to-end mTLS reverse proxy routing, dual-issuer authentication rules, native C tooling (`tools/terminal-cert-installer`), and PowerShell testing scripts.
 
+## Authenticated renewal7011 (schema030 / suite1.11.0)
+
+The flows below describe ordinary purpose=setup enrollment, which remains
+anonymous/PIN-based. Renewal is separate: service-auth POST
+/api/certificates/renewal-pins creates/reuses purpose=renew PIN; terminal POST
+/api/certificates/renew requires a verified live new-CA certificate and same
+SN/current serial. Normal CHECK/SETUP rejects renew PINs.
+
+MenuBuilder queues7011 synchronously without exposing PIN; IoT owns task_id.
+l4con invokes l4pin directly with PIN stdin in a protected120s Job; l4pin has90s.
+PB commits serial/history and persisted PKCS7 together; same-CSR recovery is
+limited to15min and PIN expiry, and cannot restore a superseded issuance.
+UsedPIN is issuance; fresh successful current-serial mTLS discovery confirms use.
+[Implemented contract/timing/recovery matrix](term_arch-rpc7011-flow-matrix.md).
+
 ## Overview
 
 Certificates service handles terminal certificate enrollment via two legacy-compatible endpoints:

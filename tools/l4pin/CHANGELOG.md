@@ -2,6 +2,15 @@
 
 All notable changes to the `l4pin` (Leo4 Terminal Certificate Installer) component will be documented in this file.
 
+## [1.8.0] - 2026-10-05 (suite1.11.0; signed and published)
+
+### Added
+- Authenticated renew mode authorized only through l4con, strict POST/mTLS and a90s budget.
+- Shared non-waiting enrollment mutex; DPAPI-protected CSR/key-name and public-response recovery state.
+
+### Changed
+- Legacy GUI/setup remains separate; renewal preserves SN and uses dedicated purpose=renew PIN.
+
 ## [1.7.3] - 2026-10-02
 
 - Восстановлен потерянный в базовой ветке финальный GUI и сертификатный набор.

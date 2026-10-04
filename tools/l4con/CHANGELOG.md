@@ -2,6 +2,16 @@
 
 All notable changes to the `l4con` component will be documented in this file.
 
+## [1.10.0] - 2026-10-05 (suite1.11.0; signed and published)
+
+### Added
+- Canonical method-aware payload.dt consumer, RPC7011 native renewal and capability queue polling.
+- PIN stdin, actual Job/sibling executable authorization, protected renewal with busy409 instead of replacement cancellation.
+
+### Fixed
+- Addressed cancel, TSK/RSP duplicate execution, MQTT status_code/result_uid and unsupported-method results.
+- CLI timeout validation, bounded TCP connect/CONNACK/frame/send and safe worker shutdown.
+
 ## [1.9.5] - 2026-10-02
 
 - Use direct NO_PROXY and bounded complete-response discovery; validate root JSON identity fields.
