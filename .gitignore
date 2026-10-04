@@ -120,3 +120,6 @@ artifacts/stand_download_5b/
 
 # Independent local checkout used to prepare reviewed releases
 /.ui-release-checkout/
+
+# Generated public installation network profile; embedded in signed setup.
+tools/l4setup/res/network-profile.bin

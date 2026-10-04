@@ -328,6 +328,9 @@ static void handle_info_request_ext(SOCKET s, SChannelSession* tlsSession, const
         }
         char policyBuf[1536];
         policy_diagnostics(policyBuf, sizeof(policyBuf));
+        char endpoint_json[2048]; endpoints_diagnostics(endpoint_json,sizeof(endpoint_json));
+        char* endpoint_closing = strrchr(jsonBuf, '}');
+        if (endpoint_closing) snprintf(endpoint_closing,sizeof(jsonBuf)-(size_t)(endpoint_closing-jsonBuf),",\"endpoints\":%s}\n",endpoint_json);
         char* closing = strrchr(jsonBuf, '}');
         if (closing) snprintf(closing, sizeof(jsonBuf) - (size_t)(closing-jsonBuf), ",\n  \"policy\": %s\n}", policyBuf);
         send_http_response_ext(s, tlsSession, 200, "OK", "application/json; charset=utf-8", jsonBuf, cert_ready ? certDetails->sn : NULL);
@@ -615,7 +618,7 @@ static unsigned __stdcall http_client_worker(void* param) {
 
     // Connect to backend via SChannel
     SChannelSession remoteTlsSession;
-    if (!schannel_connect(&remoteTlsSession, &hClientCred, config->http_remote_host, config->http_remote_port, 10000, config->insecure_server_cert)) {
+    if (!schannel_connect_channel(&remoteTlsSession, &hClientCred, config, ENDPOINT_HTTPS, 10000, false)) {
         fprintf(stderr, "[HTTP-PROXY] Failed to establish mTLS connection to %s:%d\n",
                 config->http_remote_host, config->http_remote_port);
         const char* errJson = "{\"error\": \"Failed to connect to upstream backend\"}";

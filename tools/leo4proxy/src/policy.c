@@ -1,5 +1,7 @@
 #include "policy.h"
 #include "policy_json.h"
+#include "schannel_tls.h"
+#include "endpoints.h"
 #include <winhttp.h>
 #include <sddl.h>
 #include <shlobj.h>
@@ -236,44 +238,73 @@ static bool persist(const PolicyRecord* r) {
     }
     return registry_ok && file_ok;
 }
+static bool bootstrap_probe;
 static bool fetch(PCCERT_CONTEXT cert,char* text,DWORD capacity,DWORD* length) {
-    wchar_t host[MAX_HOST_LEN]; MultiByteToWideChar(CP_UTF8,0,settings.http_remote_host,-1,host,MAX_HOST_LEN);
-    HINTERNET session=WinHttpOpen(L"Leo4Proxy policy/1",WINHTTP_ACCESS_TYPE_NO_PROXY,NULL,NULL,0);
-    if (!session) return false;
-    WinHttpSetTimeouts(session,5000,5000,5000,5000);
-    DWORD protocols=WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2;
-    WinHttpSetOption(session,WINHTTP_OPTION_SECURE_PROTOCOLS,&protocols,sizeof(protocols));
-    HINTERNET connection=WinHttpConnect(session,host,(INTERNET_PORT)settings.http_remote_port,0);
-    HINTERNET request=connection?WinHttpOpenRequest(connection,L"GET",L"/api/leo4proxy/policy",NULL,
-        WINHTTP_NO_REFERER,WINHTTP_DEFAULT_ACCEPT_TYPES,WINHTTP_FLAG_SECURE):NULL;
-    bool ok=false; *length=0;
-    if (request) {
-        DWORD redirects=WINHTTP_OPTION_REDIRECT_POLICY_NEVER;
-        WinHttpSetOption(request,WINHTTP_OPTION_REDIRECT_POLICY,&redirects,sizeof(redirects));
-        if (settings.insecure_server_cert) {
-            DWORD flags=SECURITY_FLAG_IGNORE_UNKNOWN_CA|SECURITY_FLAG_IGNORE_CERT_CN_INVALID|
-                        SECURITY_FLAG_IGNORE_CERT_DATE_INVALID|SECURITY_FLAG_IGNORE_CERT_WRONG_USAGE;
-            WinHttpSetOption(request,WINHTTP_OPTION_SECURITY_FLAGS,&flags,sizeof(flags));
-        }
-        DWORD status=0,bytes=sizeof(status);
-        ok=WinHttpSetOption(request,WINHTTP_OPTION_CLIENT_CERT_CONTEXT,(void*)cert,sizeof(CERT_CONTEXT)) &&
-            WinHttpSendRequest(request,L"Accept: application/json\r\nCache-Control: no-cache\r\n",(DWORD)-1L,
-                WINHTTP_NO_REQUEST_DATA,0,0,0) && WinHttpReceiveResponse(request,NULL) &&
-            WinHttpQueryHeaders(request,WINHTTP_QUERY_STATUS_CODE|WINHTTP_QUERY_FLAG_NUMBER,NULL,&status,&bytes,NULL) && status==200;
-        wchar_t content_type[128]; bytes=sizeof(content_type);
-        if (ok) ok=WinHttpQueryHeaders(request,WINHTTP_QUERY_CONTENT_TYPE,NULL,content_type,&bytes,NULL) &&
-            !_wcsnicmp(content_type,L"application/json",16) && (content_type[16]==0 || content_type[16]==L';');
-        while (ok) {
-            DWORD available=0,read=0;
-            if (!WinHttpQueryDataAvailable(request,&available)) { ok=false; break; }
-            if (!available) break;
-            if (available>=capacity-*length || !WinHttpReadData(request,text+*length,available,&read) || !read) { ok=false; break; }
-            *length+=read;
-        }
-        WinHttpCloseHandle(request);
+    CredHandle creds; SChannelSession tls; *length=0;
+    if (!schannel_init_client_creds(cert,1,&creds)) return false;
+    bool connected=bootstrap_probe?
+        schannel_connect_endpoint(&tls,&creds,settings.policy_bootstrap_ip,settings.http_remote_host,
+            settings.policy_bootstrap_port,8000,false):
+        schannel_connect_channel(&tls,&creds,&settings,ENDPOINT_HTTPS,15000,true);
+    if (!connected) { schannel_free_creds(&creds); return false; }
+    DWORD timeout=5000;
+    setsockopt(tls.sock,SOL_SOCKET,SO_RCVTIMEO,(const char*)&timeout,sizeof(timeout));
+    setsockopt(tls.sock,SOL_SOCKET,SO_SNDTIMEO,(const char*)&timeout,sizeof(timeout));
+    char request[1024]; int len=snprintf(request,sizeof(request),
+        "GET /api/leo4proxy/policy HTTP/1.1\r\nHost: %s\r\nAccept: application/json\r\nConnection: close\r\nCache-Control: no-cache\r\n\r\n",settings.http_remote_host);
+    bool ok=len>0 && len<(int)sizeof(request) && schannel_send(&tls,request,len)==len;
+    char response[24577]; size_t used=0; ULONGLONG deadline=GetTickCount64()+10000;
+    while (ok && used<sizeof(response)-1) {
+        if (GetTickCount64()>=deadline) { ok=false; break; }
+        int got=schannel_recv(&tls,response+used,(int)(sizeof(response)-1-used));
+        if (got<0) { ok=false; break; }
+        if (!got) break;
+        used+=(size_t)got;
     }
-    if (connection) WinHttpCloseHandle(connection);
-    WinHttpCloseHandle(session); text[*length]=0; return ok;
+    response[used]=0;
+    schannel_close(&tls); schannel_free_creds(&creds);
+    /* HTTP GET is idempotent; never retry a request after receiving a denial. */
+    char* body=strstr(response,"\r\n\r\n");
+    if (!ok || !body || used==sizeof(response)-1 ||
+        (strncmp(response,"HTTP/1.1 200 ",13) && strncmp(response,"HTTP/1.0 200 ",13))) return false;
+    *body=0; body+=4;
+    bool json=false,chunked=false; unsigned long long declared=ULLONG_MAX;
+    for (char* line=strstr(response,"\r\n");line && *line;) {
+        line+=2; char* end=strstr(line,"\r\n"); if (end) *end=0;
+        if (!_strnicmp(line,"Content-Type:",13)) {
+            char* type=line+13; while (*type==' ' || *type=='\t') ++type;
+            json=!_strnicmp(type,"application/json",16) && (!type[16] || type[16]==';' || type[16]==' ');
+        }
+        if (!_strnicmp(line,"Content-Length:",15)) {
+            char* value=line+15; char* stop=NULL; unsigned long long number=strtoull(value,&stop,10);
+            if (!stop || *stop || declared!=ULLONG_MAX) return false;
+            declared=number;
+        }
+        if (!_strnicmp(line,"Transfer-Encoding:",18)) {
+            char* value=line+18; while (*value==' ') ++value;
+            if (_stricmp(value,"chunked")) return false; chunked=true;
+        }
+        if (!end) break; *end='\r'; line=end;
+    }
+    if (!json || (chunked && declared!=ULLONG_MAX)) return false;
+    size_t available=used-(size_t)(body-response);
+    if (!chunked) {
+        if (declared!=ULLONG_MAX && declared!=available) return false;
+        if (available>=capacity) return false;
+        memcpy(text,body,available); *length=(DWORD)available;
+    } else {
+        char* cursor=body; char* limit=body+available;
+        for (;;) {
+            char* end=strstr(cursor,"\r\n"); if (!end || end-cursor>16) return false;
+            *end=0; char* stop=NULL; unsigned long chunk=strtoul(cursor,&stop,16);
+            if (!stop || stop==cursor || *stop) return false;
+            cursor=end+2;
+            if (!chunk) { if (limit-cursor<2 || memcmp(cursor,"\r\n",2)) return false; break; }
+            if (chunk>=capacity-*length || (size_t)(limit-cursor)<(size_t)chunk+2 || memcmp(cursor+chunk,"\r\n",2)) return false;
+            memcpy(text+*length,cursor,chunk); *length+=chunk; cursor+=chunk+2;
+        }
+    }
+    text[*length]=0; return true;
 }
 static unsigned __stdcall run(void* unused) {
     (void)unused; ULONGLONG next_poll=0,next_save=0;
@@ -314,6 +345,7 @@ static unsigned __stdcall run(void* unused) {
             }
             ReleaseSRWLockExclusive(&lock);
             if (accepted) {
+                endpoints_accept(text,length,updated.sn);
                 bool stored=persist(&updated); next_save=GetTickCount64()+60000;
                 AcquireSRWLockExclusive(&lock);
                 if (record.generation==updated.generation && !strcmp(record.sn,updated.sn)) dirty=!stored;
@@ -329,12 +361,14 @@ static unsigned __stdcall run(void* unused) {
     return 0;
 }
 void policy_init(const ProxyConfig* config) {
-    settings=*config; init_storage();
+    settings=*config; init_storage(); endpoints_init(config);
     stop_event=CreateEventW(NULL,TRUE,FALSE,NULL); wake_event=CreateEventW(NULL,FALSE,FALSE,NULL);
     if (stop_event && wake_event) worker=(HANDLE)_beginthreadex(NULL,0,run,NULL,0,NULL);
     if (!worker) fprintf(stderr,"[POLICY] Cannot start polling worker; retry requires service restart\n");
 }
 void policy_identity(const CertDetails* details) {
+    /* Establish routing identity before waking the admission poll worker. */
+    endpoints_identity(details?details->sn:"");
     AcquireSRWLockExclusive(&lock);
     bool changed=details && strcmp(record.sn,details->sn)!=0;
     bool cert_changed=(!details && certificate) || (details && (!certificate ||
@@ -354,6 +388,24 @@ void policy_identity(const CertDetails* details) {
     }
     ReleaseSRWLockExclusive(&lock);
 }
+bool policy_probe_media_allowed(const char* sn) {
+    /* Standalone diagnostic only: read admission, without polling or updating it. */
+    init_storage();
+    PolicyRecord cached={0}; restore(sn,&cached);
+    bool allowed=policy_record_allowed(&cached,utc_now());
+    if (storage_sd) { LocalFree(storage_sd); storage_sd=NULL; storage_sa.lpSecurityDescriptor=NULL; }
+    return allowed;
+}
+bool policy_probe_bootstrap(const ProxyConfig* config, const CertDetails* cert) {
+    if (!config->policy_bootstrap_ip[0]) return false;
+    settings=*config; bootstrap_probe=true;
+    char body[16385],facts_text[1024]; DWORD length=0; bool media=false,https=false;
+    bool ok=fetch(cert->pCertContext,body,sizeof(body),&length) &&
+        policy_response_parse(body,length,cert->sn,&media,&https,facts_text,sizeof(facts_text));
+    bootstrap_probe=false;
+    if (ok) printf("{\"v\":1,\"policy\":\"valid\",\"source\":\"bootstrap_ip\",\"strict\":true,\"mqtt_allowed\":%s,\"https_allowed\":%s}\n",media?"true":"false",https?"true":"false");
+    return ok;
+}
 void policy_stop(void) {
     AcquireSRWLockExclusive(&lock); stopping=true;
     for (PolicySocket* n=sockets;n;n=n->next) shutdown(n->socket,SD_BOTH);
@@ -366,4 +418,5 @@ void policy_stop(void) {
     if (stop_event) CloseHandle(stop_event);
     if (wake_event) CloseHandle(wake_event);
     if (storage_sd) LocalFree(storage_sd);
+    endpoints_shutdown();
 }

@@ -1,5 +1,10 @@
 ﻿# Changelog — l4superv (Leo4 Supervisor & Orchestrator Suite)
 
+## [1.10.0] — 2026-10-04
+
+- Read preserved leo4proxy arguments from service-args.txt and use them if service registration must be restored. Existing SCM commands remain authoritative.
+- Report SCM argument discrepancies and HTTPS connection source/target from proxy diagnostics without rewriting user configuration.
+
 ## [1.9.6] — 2026-10-02
 
 - Enable existing F12, Alt+F4 and Win+D on every supervised l4desk launch. Append allow flags after configured arguments so retained configuration works after Upgrade/Repair.

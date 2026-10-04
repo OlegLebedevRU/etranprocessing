@@ -1,6 +1,8 @@
 #pragma once
 #include <windows.h>
 #include <stdbool.h>
+#include "cli.h"
+void services_set_network_options(const CliOptions* options);
 
 #ifdef __cplusplus
 extern "C" {

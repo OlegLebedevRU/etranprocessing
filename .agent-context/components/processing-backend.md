@@ -9,6 +9,12 @@ profile не включается в подписки. YooKassa OFF совпад
 [Release evidence](../tasks/completed/2026-10-03-l4desk-terminal-subscriptions-release.md).
 
 ## Назначение
+
+Сверка policy 2026-10-04, HEAD `c58f607` (статический код): permissions учитывают
+`is_active AND subscription_allowed`; клиент `tools/leo4proxy/src/policy.c` уже
+реализован. Указания ниже «по is_active» и «клиент пока не реализован» относятся
+к прежней сверке. [DNS/SRV packet](../../docs/term_net-leo4proxy-dns-srv-implementation-context.md)
+описывает только предложенное расширение endpoints, без runtime evidence.
 Терминальный payment/mTLS gateway и единая цепочка Alembic общей PostgreSQL-схемы.
 
 ## Границы ответственности
@@ -69,3 +75,12 @@ ProcessingBackend. Нужна отдельная authorization gate для оп�
   `test_licensebilling_contract.py`; runtime проверка старого сертификата
   не выполнялась.
 - Обновить при: terminal endpoints/auth, ownership, migration policy.
+
+## 2026-10-04: leo4proxy policy endpoints
+
+Optional endpoints/TTL producer выпущен (main PR #5; deployment baseline PR #10).
+Настройки LEO4PROXY_ENDPOINTS и TTL только из env; invalid routing не меняет
+admission. response_model_exclude_none сохраняет старый JSON без новых настроек.
+Ruff/format/pyright, 156 tests, deployed health и прямой authenticated mTLS GET
+прошли; возвращены 4 канала с public fallback IP и TTL 86400. Миграций нет.
+Native consumer/signing статус: [packet](../../docs/term_net-leo4proxy-dns-srv-implementation-context.md).

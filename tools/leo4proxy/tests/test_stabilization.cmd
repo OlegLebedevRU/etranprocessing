@@ -17,7 +17,7 @@ cmd /c ""%VS_CMD%" -arch=%1 -no_logo && cl /nologo /W4 /WX /MT /utf-8 /D_CRT_SEC
 if errorlevel 1 exit /b 1
 obj\%1\test_certificate_selection.exe
 if errorlevel 1 exit /b 1
-cmd /c ""%VS_CMD%" -arch=%1 -no_logo && cl /nologo /W4 /WX /MT /utf-8 /D_CRT_SECURE_NO_WARNINGS /DUNICODE /D_UNICODE /D_WIN32_WINNT=0x0601 /I src /Foobj\%1\ tests\test_tls_rotation.c src\cert_store.c src\schannel_tls.c src\credential_lifetime.c /Feobj\%1\test_tls_rotation.exe /link ws2_32.lib crypt32.lib ncrypt.lib advapi32.lib secur32.lib"
+cmd /c ""%VS_CMD%" -arch=%1 -no_logo && cl /nologo /W4 /WX /MT /utf-8 /D_CRT_SECURE_NO_WARNINGS /DUNICODE /D_UNICODE /D_WIN32_WINNT=0x0601 /I src /Foobj\%1\ tests\test_tls_rotation.c src\cert_store.c src\endpoints.c src\policy_json.c src\schannel_tls.c src\credential_lifetime.c /Feobj\%1\test_tls_rotation.exe /link dnsapi.lib ws2_32.lib crypt32.lib ncrypt.lib advapi32.lib shell32.lib secur32.lib"
 if errorlevel 1 exit /b 1
 obj\%1\test_tls_rotation.exe
 exit /b %errorlevel%

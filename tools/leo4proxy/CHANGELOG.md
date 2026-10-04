@@ -2,6 +2,13 @@
 
 All notable changes to the `leo4proxy` component will be documented in this file.
 
+## [1.8.0] - 2026-10-04
+
+- Add bounded SRV resolution and per-channel policy host/IP fallback, with explicit CLI precedence and SN-bound expiring cache.
+- Connect to numeric IPs while retaining logical TLS/SNI and HTTP Host; validate server identity against the embedded iot.leo4.ru CA on all outgoing channels.
+- Recover policy through provisioned bootstrap IP without DNS; preserve admission deny/grace and isolate routing storage.
+- Add read-only --check-upstream and --check-policy-bootstrap diagnostics; expose connected source/target in local info.
+
 ## [1.7.3] - 2026-10-02
 
 - Activate only currently valid iot.leo4.ru certificates with an accessible key;

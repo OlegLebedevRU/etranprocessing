@@ -72,6 +72,9 @@ if not exist "%~dp0l4setup\src" md "%~dp0l4setup\src"
     echo #define L4SETUP_VERSION_WSTRING L"%L4TOOLS_VERSION%"
 ) > "%~dp0l4setup\src\version.h"
 
+powershell.exe -NoProfile -Command "$profile=$env:L4TOOLS_POLICY_BOOTSTRAP_IP; if($profile -and $profile -notmatch '^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$'){exit 1}; [IO.File]::WriteAllText('%~dp0l4setup\res\network-profile.bin',$profile,[Text.Encoding]::ASCII)"
+if errorlevel 1 exit /b 1
+
 :: Step 2: Build all 7 components in order
 echo.
 echo [1/7] Building l4pin...

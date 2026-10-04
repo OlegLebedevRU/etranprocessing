@@ -32,6 +32,11 @@ bool proxy_client_query_info(const wchar_t* url, int timeout_ms, Leo4ProxyInfo* 
         policy_json_string(&json, policy_json_field(&json, 0, "not_after"), out_info->not_after, sizeof(out_info->not_after));
         int listeners = policy_json_field(&json, 0, "listeners");
         if (listeners >= 0) policy_json_string(&json, policy_json_field(&json, listeners, "http_local"), out_info->http_local, sizeof(out_info->http_local));
+        int endpoints=policy_json_field(&json,0,"endpoints");
+        int endpoint_channels=policy_json_field(&json,endpoints,"channels");
+        int https=policy_json_field(&json,endpoint_channels,"https");
+        policy_json_string(&json,policy_json_field(&json,https,"host"),out_info->https_connect_host,sizeof(out_info->https_connect_host));
+        policy_json_string(&json,policy_json_field(&json,https,"source"),out_info->https_endpoint_source,sizeof(out_info->https_endpoint_source));
         int upstreams = policy_json_field(&json, 0, "upstreams");
         if (upstreams >= 0) policy_json_string(&json, policy_json_field(&json, upstreams, "http_remote"), out_info->upstreams_http_remote, sizeof(out_info->upstreams_http_remote));
     }

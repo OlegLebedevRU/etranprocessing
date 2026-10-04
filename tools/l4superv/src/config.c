@@ -232,6 +232,15 @@ bool config_load_json(L4SupervConfig* cfg, const wchar_t* json_path) {
         }
     }
 
+    char proxy_args[2048];
+    if (json_get_string(buffer,"leo4proxy_args",proxy_args,sizeof(proxy_args)))
+        MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,proxy_args,-1,cfg->leo4proxy_args,2048);
+    wchar_t args_path[MAX_PATH]; swprintf_s(args_path,MAX_PATH,L"%ls\\leo4proxy\\service-args.txt",cfg->base_path);
+    FILE* args_file=NULL;
+    if (!_wfopen_s(&args_file,args_path,L"rb") && args_file) {
+        size_t len=fread(proxy_args,1,sizeof(proxy_args)-1,args_file); proxy_args[len]=0; fclose(args_file);
+        if (len) MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,proxy_args,-1,cfg->leo4proxy_args,2048);
+    }
     free(buffer);
     return true;
 }

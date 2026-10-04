@@ -6,6 +6,8 @@
 
 ## Индекс
 
+- [2026-10-04 — leo4proxy DNS/SRV review](2026-10-04-leo4proxy-dns-srv-review.md) — статическая проверка концепции, решения на согласование и контекст внедрения.
+
 - [2026-10-03 — landing login/register, SmartCaptcha и номера терминалов](2026-10-03-l4desk-auth-captcha.md):
   опубликовано; исправлен anonymous registration redirect; manual challenge/auth E2E не выполнялся.
 

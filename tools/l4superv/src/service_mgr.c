@@ -601,7 +601,7 @@ bool svc_ensure_all_installed_and_running(const wchar_t* base_path) {
     }
 
     wchar_t exe_path[MAX_PATH];
-    wchar_t cmd_line[MAX_PATH * 2];
+    wchar_t cmd_line[2048];
 
     // 1. Leo4Proxy
     svc_cleanup_foreign(SVC_NAME_LEO4PROXY, base_path);
@@ -611,6 +611,19 @@ bool svc_ensure_all_installed_and_running(const wchar_t* base_path) {
     }
     if (file_exists(exe_path)) {
         swprintf_s(cmd_line, sizeof(cmd_line)/sizeof(wchar_t), L"\"%s\" --service", exe_path);
+        wchar_t registered[2048];
+        if (svc_get_binary_path(SVC_NAME_LEO4PROXY,registered,2048) && wcsstr(registered,exe_path)) {
+            wcscpy_s(cmd_line,2048,registered);
+        } else {
+            wchar_t args_path[MAX_PATH]; swprintf_s(args_path,MAX_PATH,L"%ls\\leo4proxy\\service-args.txt",base_path);
+            FILE* file=NULL;
+            if (!_wfopen_s(&file,args_path,L"rb") && file) {
+                char utf8[1800]={0}; size_t len=fread(utf8,1,sizeof(utf8)-1,file); fclose(file);
+                wchar_t args[1800];
+                if (len && MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,utf8,-1,args,1800))
+                    swprintf_s(cmd_line,2048,L"\"%ls\" %ls",exe_path,args);
+            }
+        }
         svc_install(SVC_NAME_LEO4PROXY,
                     L"Leo4 mTLS Proxy Service",
                     cmd_line,
@@ -643,6 +656,19 @@ bool svc_ensure_all_installed_and_running(const wchar_t* base_path) {
     }
     if (file_exists(exe_path)) {
         swprintf_s(cmd_line, sizeof(cmd_line)/sizeof(wchar_t), L"\"%s\" --service", exe_path);
+        wchar_t registered[2048];
+        if (svc_get_binary_path(SVC_NAME_LEO4PROXY,registered,2048) && wcsstr(registered,exe_path)) {
+            wcscpy_s(cmd_line,2048,registered);
+        } else {
+            wchar_t args_path[MAX_PATH]; swprintf_s(args_path,MAX_PATH,L"%ls\\leo4proxy\\service-args.txt",base_path);
+            FILE* file=NULL;
+            if (!_wfopen_s(&file,args_path,L"rb") && file) {
+                char utf8[1800]={0}; size_t len=fread(utf8,1,sizeof(utf8)-1,file); fclose(file);
+                wchar_t args[1800];
+                if (len && MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,utf8,-1,args,1800))
+                    swprintf_s(cmd_line,2048,L"\"%ls\" %ls",exe_path,args);
+            }
+        }
         svc_install(SVC_NAME_L4CON,
                     L"Leo4 Diagnostic Console Agent",
                     cmd_line,

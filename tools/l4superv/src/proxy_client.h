@@ -3,6 +3,8 @@
 #include <stdbool.h>
 
 typedef struct {
+    char https_endpoint_source[24];
+    char https_connect_host[256];
     bool is_online;              // True if HTTP endpoint responded
     bool cert_ready;             // True if status == "ready" and SN is non-empty
     bool certificate_found;      // Direct value of "certificate_found" from _leo4/info

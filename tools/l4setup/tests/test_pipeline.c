@@ -71,3 +71,7 @@ int main(void) {
  run_case(4,0,27,OP_INSTALL);run_case(5,0,31,OP_UPGRADE);
  printf("Pipeline regression: 11 cases, %d failures\n",errors);return errors?1:0;
 }
+
+void services_set_network_options(const CliOptions* options) { (void)options; }
+
+void smoke_probe_upstream(const wchar_t* dest, SmokeProbesResult* probes) { (void)dest; (void)probes; }

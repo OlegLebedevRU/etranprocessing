@@ -131,6 +131,11 @@ bool summary_write_json(const InstallSummaryData* data, const wchar_t* dest_dir)
 
     // probes
     fprintf(fp, "  \"probes\": {\n");
+    fprintf(fp,"    \"upstream_tls\": {\"mqtt\":\"%s\",\"https\":\"%s\",\"l4stream\":\"%s\",\"l4rtp\":\"%s\"},\n",
+        data->probes.upstream_tls[0][0]?data->probes.upstream_tls[0]:"not_run",
+        data->probes.upstream_tls[1][0]?data->probes.upstream_tls[1]:"not_run",
+        data->probes.upstream_tls[2][0]?data->probes.upstream_tls[2]:"not_run",
+        data->probes.upstream_tls[3][0]?data->probes.upstream_tls[3]:"not_run");
     fprintf(fp, "    \"proxy_info\": \"%s\",\n", data->probes.proxy_info[0] ? data->probes.proxy_info : "not_run");
     fprintf(fp, "    \"mosquitto_port\": \"%s\",\n", data->probes.mosquitto_port[0] ? data->probes.mosquitto_port : "not_run");
     if (data->probes.remote_input[0]) {

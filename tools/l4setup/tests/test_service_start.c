@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <assert.h>
 static int queries, failed_callbacks;
 static ULONGLONG ticks;
 static SC_HANDLE WINAPI test_open(SC_HANDLE scm,LPCWSTR name,DWORD access) {
@@ -31,6 +32,12 @@ static void callback(const wchar_t* name,ServiceLifecycleStatus status,DWORD ela
     if(status==SVC_STATUS_FAILED)failed_callbacks++;
 }
 int main(void) {
+    wchar_t retained[2048];
+    assert(retain_non_network_arguments(retained,2048,L"\"C:\\Tools Space\\leo4proxy.exe\" --service --mqtt-local 127.0.0.1:1999 --http-remote old.example:443 --policy-bootstrap-ip 8.8.8.8 --no-srv --log \"C:\\Logs Space\\\\\""));
+    int argc=0; LPWSTR* argv=CommandLineToArgvW(retained,&argc);
+    assert(argv && argc==6 && !wcscmp(argv[2],L"--mqtt-local") && !wcscmp(argv[3],L"127.0.0.1:1999") && !wcscmp(argv[5],L"C:\\Logs Space\\"));
+    LocalFree(argv); assert(!wcsstr(retained,L"http-remote") && !wcsstr(retained,L"no-srv"));
+    puts("Service arguments: custom options and quoted paths preserved");
     bool ok=services_start_single_service((SC_HANDLE)1,SVC_NAME_MOSQUITTO,120,callback,NULL);
     bool passed=!ok && queries==2 && ticks==120000 && failed_callbacks==1;
     printf("Stopped/zero-exit startup regression: %s\n",passed?"PASS":"FAIL");return passed?0:1;

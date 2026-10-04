@@ -14,7 +14,7 @@
 #include <windows.h>
 #include <stdbool.h>
 
-#define LEO4_PROXY_VERSION "1.7.3"
+#define LEO4_PROXY_VERSION "1.8.0"
 #define LEO4_SERVICE_NAME L"Leo4Proxy"
 #define LEO4_SERVICE_DISPLAY_NAME L"Leo4 IoT SChannel Proxy Service"
 #define LEO4_SERVICE_DESC L"Leo4 IoT SChannel mTLS Proxy for MQTT (18883), HTTPS (18443), Stream (8554) and RTP Tunnel (5004/5005) using Windows Certificate Store."
@@ -66,6 +66,11 @@
 #define PROXY_BUFFER_SIZE   65536
 
 typedef struct {
+    int srv_enabled;
+    int remote_explicit[4];
+    char srv_names[4][MAX_HOST_LEN];
+    char policy_bootstrap_ip[16];
+    int policy_bootstrap_port;
     char mqtt_local_host[MAX_HOST_LEN];
     int  mqtt_local_port;
     char mqtt_remote_host[MAX_HOST_LEN];

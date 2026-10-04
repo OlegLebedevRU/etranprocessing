@@ -85,7 +85,7 @@ static unsigned __stdcall mqtt_client_worker(void* param) {
     }
 
     SChannelSession brokerTlsSession;
-    if (!schannel_connect_media(&brokerTlsSession, &hClientCred, config->mqtt_remote_host, config->mqtt_remote_port, 10000, config->insecure_server_cert)) {
+    if (!schannel_connect_channel(&brokerTlsSession, &hClientCred, config, ENDPOINT_MQTT, 10000, false)) {
         fprintf(stderr, "[MQTT-PROXY] Failed to establish mTLS connection to %s:%d\n",
                 config->mqtt_remote_host, config->mqtt_remote_port);
         if (isClientTls) schannel_close(&clientTlsSession);

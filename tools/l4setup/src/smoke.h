@@ -15,11 +15,13 @@ typedef struct {
     bool desktop_locked;
     char network[16];              // "reachable", "unreachable"
     char remote_input[32];         // "available", "session_unavailable", "desktop_locked", etc.
+    char upstream_tls[4][32];      // bounded leo4proxy diagnostic verdicts
 
     bool critical_failed;
     bool has_warnings;
     int calculated_exit_code;      // 0, 12, or 27
 } SmokeProbesResult;
+void smoke_probe_upstream(const wchar_t* dest_dir, SmokeProbesResult* out_result);
 
 /**
  * Run Phase 5 Smoke Tests:

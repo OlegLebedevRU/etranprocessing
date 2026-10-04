@@ -609,10 +609,21 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
 
     ULONGLONG t_activation_start = 0;
     bool was_standby = (strcmp(state->status, "active") != 0);
+    if (cfg->leo4proxy_args[0]) {
+        wchar_t scm_path[2048];
+        if (svc_get_binary_path(SVC_NAME_LEO4PROXY,scm_path,2048)) {
+            const wchar_t* args=scm_path[0]==L'"'?wcschr(scm_path+1,L'"'):wcschr(scm_path,L' ');
+            if (args && scm_path[0]==L'"') ++args;
+            while (args && *args==L' ') ++args;
+            if (!args || wcscmp(args,cfg->leo4proxy_args))
+                log_info("[WARN] leo4proxy_args_mismatch: SCM remains authoritative");
+        }
+    }
     // 2. Query Leo4Proxy
     Leo4ProxyInfo proxy_info;
     bool query_ok = proxy_client_query_info(cfg->proxy_url, 3000, &proxy_info);
     state->last_check = time(NULL);
+    if(query_ok && proxy_info.https_endpoint_source[0]) log_info("[ENDPOINT] HTTPS source=%s target=%s",proxy_info.https_endpoint_source,proxy_info.https_connect_host);
 
     /* A failed HTTP probe is not a certificate transition. Keep the last known
      * identity/bridge; service health is checked separately through SCM. */

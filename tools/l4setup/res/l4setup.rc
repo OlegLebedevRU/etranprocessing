@@ -40,6 +40,7 @@ BEGIN
     LTEXT "Ожидание проверки", IDC_STATIC_STATUS, 15, 348, 220, 40
     LTEXT "Прошло: 0 с", IDC_STATIC_ELAPSED, 15, 401, 220, 20
     LTEXT "Журнал установки", IDC_STATIC_LOG_TITLE, 255, 80, 300, 22
+    PUSHBUTTON "Сеть…", IDC_BTN_NETWORK, 480, 78, 90, 22
     PUSHBUTTON "Копировать", IDC_BTN_DETAILS, 587, 78, 90, 22
     CONTROL "", IDC_EDIT_DETAILS, "RICHEDIT50W", ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL | WS_BORDER | WS_TABSTOP, 255, 110, 422, 286
     LTEXT "Ошибки: 0   Предупреждения: 0", IDC_STATIC_LOG_COUNTS, 255, 410, 205, 22
@@ -86,3 +87,29 @@ PAYLOAD_X86 RCDATA "payload_x86.bin"
 #ifdef EMBED_PAYLOAD_X64
 PAYLOAD_X64 RCDATA "payload_x64.bin"
 #endif
+
+#ifdef EMBED_NETWORK_PROFILE
+202 RCDATA "network-profile.bin"
+#endif
+
+IDD_NETWORK_DIALOG DIALOGEX 0, 0, 390, 245
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Подключение к серверам"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT "Авто: SRV → policy → штатный адрес → резервные IP. Пустые поля каналов включают Авто.", -1, 12, 10, 360, 26
+    LTEXT "Policy bootstrap IP", -1, 12, 45, 125, 14
+    EDITTEXT IDC_NETWORK_IP, 145, 43, 225, 16, ES_AUTOHSCROLL
+    LTEXT "MQTT host:port", -1, 12, 72, 125, 14
+    EDITTEXT IDC_NETWORK_MQTT, 145, 70, 225, 16, ES_AUTOHSCROLL
+    LTEXT "HTTPS host:port", -1, 12, 99, 125, 14
+    EDITTEXT IDC_NETWORK_HTTP, 145, 97, 225, 16, ES_AUTOHSCROLL
+    LTEXT "Stream host:port", -1, 12, 126, 125, 14
+    EDITTEXT IDC_NETWORK_STREAM, 145, 124, 225, 16, ES_AUTOHSCROLL
+    LTEXT "RTP host:port", -1, 12, 153, 125, 14
+    EDITTEXT IDC_NETWORK_RTP, 145, 151, 225, 16, ES_AUTOHSCROLL
+    AUTOCHECKBOX "Отключить SRV", IDC_NETWORK_NO_SRV, 12, 181, 130, 15
+    LTEXT "Проверка сертификатов серверов обязательна, включая подключения по IP.", -1, 12, 201, 360, 16
+    DEFPUSHBUTTON "Применить", IDOK, 210, 224, 80, 16
+    PUSHBUTTON "Отмена", IDCANCEL, 300, 224, 70, 16
+END
