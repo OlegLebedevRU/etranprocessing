@@ -58,8 +58,13 @@ skipped (disabled). Итог ready/0. Pending reboot warning сохранилс�
 HTTPS source=policy. RTP counters=0 и endpoint пустой: живой media session не доказан.
 Release 1.10.0 не перезаписывается.
 
+Оператор дополнительно подтвердил работающий видеопоток после Upgrade773.
+Это operator runtime evidence; агент не измерял browser decode stats/first-frame
+и отдельные stop/reconnect/late-join сценарии в 1.10.1.
+
 Не выполнены: clean enrollment через PIN, Win7
-GUI/manual/cancel/repair/watchdog и full cold/warm outage всех каналов; video E2E.
+GUI/manual/cancel/repair/watchdog и full cold/warm outage всех каналов;
+расширенная video E2E matrix.
 Существующий terminal cert не удалялся. Оператор установил службы 1.10.0 и обновил 1.10.1;
 после этого агент не переустанавливал и не останавливал local services.
 Основная установка/upgrade/TLS приёмка 773 подтверждена предоставленным логом и /info.

@@ -1,8 +1,13 @@
 # Архитектура L4 Tools Suite, Принципы Оркестрации и Руководство по Расширению
 
+Сверено для tools **1.10.1** (2026-10-04). Установка — `l4setup.exe`,
+индивидуальные версии, routing/TLS и runtime evidence — в
+[руководстве инженера](term_tool-user-guide.md).
+
+
 Настоящий документ является архитектурным стандартом и практическим руководством по оркестрации, интеграции с облачным REST-RPC API и добавлению новых нативных утилит в комплекс системных служб и инструментов **L4 Tools Suite** (`C:\l4tools`).
 
-Актуальные решения для комплекта 1.9.6 — порядок SCM-переходов, сертификатное
+Исторические решения комплекта 1.9.6 — порядок SCM-переходов, сертификатное
 ожидание, локальный ready, ACL журналов и выпуск с timestamp — закреплены
 в [документе по стабилизации](term_arch-l4tools-stabilization-decisions.md).
 Сборка x86/x64 и локальные smoke-пробы не заменяют проверки перечисленных там
@@ -55,9 +60,10 @@
    * Автономный супервизор и сторожевой таймер (Watchdog) жизненного цикла служб.
    * Динамически переключает `mosquitto.conf` между локальным Standby-режимом (когда сертификата нет) и боевым mTLS Bridge (когда сертификат загружен).
    * Защищает от клонирования дисков (сверка Hardware Fingerprint) и контролирует пути запущенных процессов (`path_match`).
-4. **`l4install`** (`C:\l4tools\l4install.exe`):
-   * Автоматический установщик в 1 клик с повышением привилегий (UAC).
-   * Распаковывает `tools.zip`, регистрирует службы в Windows SCM и прописывает утилиты в системный `PATH`.
+4. **`l4setup`** (отдельный скачанный `l4setup.exe`):
+   * Установщик с UAC, встроенными payload x86/x64, certificate phase и verify worker.
+   * Распаковывает payload выбранной архитектуры, регистрирует службы и настраивает `PATH`.
+   * `l4install.exe` — сохранённый механизм старого ZIP-дистрибутива, не основной маршрут 1.10.1.
 5. **`l4con`** (`C:\l4tools\l4con\l4con.exe`):
    * Агент удалённой диагностики и интерактивной веб-консоли (RPC методы `7001` Exec, `7002` Cancel, `7003` Ping).
    * Автоматически настраивает рабочий каталог (`C:\l4tools`) и `PATH` для порождаемых процессов, выводя приглашение командной строки.
@@ -76,7 +82,7 @@
 Все утилиты размещаются строго в собственных поддиректориях первого уровня:
 ```text
 C:\l4tools\
-├── l4install.exe                    # Инсталлятор / менеджер обслуживания
+├── install_summary.json             # Итог l4setup; сам setup скачивается отдельно
 ├── l4superv.json                    # Конфигурация супервизора
 ├── state.json                       # Снимок состояния и аппаратный отпечаток
 ├── term_tool-user-guide.md          # Руководство пользователя для инженеров
@@ -90,6 +96,10 @@ C:\l4tools\
 │   └── l4superv.exe                 # Системный супервизор
 ├── leo4proxy\
 │   └── leo4proxy.exe                # mTLS-туннель
+├── l4desk\
+│   └── l4desk.exe                   # Агент пользовательской сессии
+├── l4capture\bin\l4capture.exe      # Native capture/encode/RTP
+├── ffmpeg\ffmpeg.exe                # FFmpeg выбранной архитектуры
 └── mosquitto\
     ├── mosquitto.exe                # Локальный брокер MQTT
     ├── mosquitto.conf               # Динамический конфиг
@@ -105,7 +115,7 @@ C:\l4tools\
    * В функции `command_runner_setup_environment()` обогащает переменную среды `PATH` путями:
      `C:\l4tools;C:\l4tools\l4sql;C:\l4tools\l4con;C:\l4tools\l4pin;C:\l4tools\l4superv;C:\l4tools\leo4proxy`.
    * Все дочерние процессы `cmd.exe` / `powershell.exe` мгновенно находят любую утилиту комплекса по короткому имени.
-2. **Уровень 2: В инсталляторе `l4install`**:
+2. **Уровень 2: В инсталляторе `l4setup` (`src/services.c`)**:
    * При развёртывании прописывает пути к утилитам в системную ветку реестра `HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment` (`Path`) и рассылает системное уведомление `WM_SETTINGCHANGE` для локальных сессий инженеров.
 
 ---
@@ -180,7 +190,17 @@ C:\l4tools\
 * `build.cmd x64` -> `bin\x64\<tool_name>.exe`.
 * `build.cmd` (или `all`) -> одновременная сборка обеих архитектур.
 
-### Шаг 3. Включение в процесс упаковки `pack_zip.cmd`
+### Шаг 3. Включение в актуальные payloads и legacy упаковку
+
+Для `l4setup` добавьте инструмент в `tools/build_dist.cmd` (build gate),
+`tools/release/Build-StagingPayloads.ps1` (отдельный staging x86/x64),
+`New-PayloadInventory.ps1` и `New-ReleaseManifest.ps1` (состав/версии/хэши).
+В каждой staging-архитектуре должен находиться её EXE, а не случайный default.
+Проверьте оба embedded payload через `Test-PayloadIntegrity.ps1`.
+Подпись с timestamp и immutable publication выполняются по
+[release runbook](../tools/release/README.md); после подписи компонентные сборки не повторяются.
+
+Для совместимости прежнего ZIP-маршрута также обновите `pack_zip.cmd`:
 В файле `tools/l4superv/pack_zip.cmd`:
 1. Добавить создание подкаталога в staging-зоне:
    ```cmd
@@ -193,7 +213,12 @@ C:\l4tools\
    )
    ```
 
-### Шаг 4. Обновление инсталлятора `l4install` (`installer_main.c`)
+### Шаг 4. Установка и совместимость старого l4install
+
+Для актуального setup проверьте `tools/l4setup/src/services.c` (PATH/SCM),
+`unpack.c` и `tools/release/New-PayloadInventory.ps1` (состав/проверки).
+Сохраняйте прежний packaging contract `tools/l4superv/src/installer_main.c`
+для legacy ZIP-маршрута; следующие пункты относятся к нему:
 1. В функции `install_files()` добавить создание директории:
    ```c
    swprintf_s(sub_dir, MAX_PATH, L"%ls\\<tool_name>", dest_dir);

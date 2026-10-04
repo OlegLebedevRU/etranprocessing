@@ -208,27 +208,26 @@ leo4proxy.exe [ОПЦИИ]
 
 ### Способ 1: Локальный JSON API (`GET /_leo4/info`)
 Любой клиент делает HTTP GET запрос на `http://127.0.0.1:18443/_leo4/info` и получает JSON:
+Пример сокращён, поля сертификата и счётчики опущены:
 ```json
 {
-  "status": "ok",
-  "version": "1.0.0",
+  "status": "ready",
+  "version": "1.8.0",
+  "certificate_found": true,
   "sn": "a4b0000773c82116d210826",
-  "email": "1.terminal@forpay.ru",
-  "subject": "CN=a4b0000773c82116d210826, O=1, OU=773, S=msk, C=ru, L=1, E=1.terminal@forpay.ru",
-  "issuer": "C=RU, S=Moscow, L=Moscow, O=Leo4, OU=IT, CN=iot.leo4.ru, E=iot@leo4.ru",
-  "serial": "20E0B7ED4A12548E80F8B987F04D075FE7C79878",
-  "thumbprint": "63DD6951F1ED0C12186118C5A5A6D9AAA6A3C68E",
-  "not_before": "2026-08-22 19:03:33 UTC",
-  "not_after": "2027-08-22 19:03:33 UTC",
-  "has_private_key": true,
-  "endpoints": {
-    "mqtt_local": "127.0.0.1:18883",
-    "mqtt_remote": "dev.leo4.ru:8883",
-    "http_local": "127.0.0.1:18443",
-    "http_remote": "https://iot-processing.ru:443"
-  }
+  "listeners": {"mqtt_local":"127.0.0.1:18883", "http_local":"127.0.0.1:18443"},
+  "upstreams": {"mqtt_remote":"dev.leo4.ru:8883", "http_remote":"https://iot-processing.ru:443"},
+  "endpoints": {"expires_at":1791209923, "channels": {
+    "mqtt":{"host":"dev.leo4.ru", "port":8883, "source":"srv"},
+    "https":{"host":"iot-processing.ru", "port":443, "source":"policy"},
+    "l4stream":{"host":"", "port":0, "source":""},
+    "l4rtp":{"host":"", "port":0, "source":""}
+  }}
 }
 ```
+Local listeners, логические upstreams и runtime routing endpoints — разные поля.
+Media endpoint заполняется работающей службой при установлении соединения,
+не отдельным diagnostic процессом.
 
 ### Способ 2: Plaintext SN API (`GET /_leo4/sn`)
 Запрос на `http://127.0.0.1:18443/_leo4/sn` возвращает чистый текст:
@@ -441,7 +440,7 @@ curl http://127.0.0.1:18443/_leo4/info
 
 ## DNS/SRV и IP recovery (1.8.0)
 
-Auto: SRV → policy → default → policy IP, explicit `--*-remote` authoritative.
+Auto: SRV → verified SRV LKG → fresh policy host → default → fresh policy IP, explicit `--*-remote` authoritative.
 SRV owners: `_mqtt._tls.dev.leo4.ru`, `_https._tcp.iot-processing.ru`,
 `_l4stream._tls.dev.leo4.ru`, `_l4rtp._tls.dev.leo4.ru`; override через `--*-srv`.
 `--no-srv` выключает только SRV. Root CA встроен; server identity проверяется
@@ -452,7 +451,7 @@ Bootstrap задаётся `--policy-bootstrap-ip`/`--policy-bootstrap-port` и 
 Диагностика без прикладного MQTT/video трафика:
 
 ```cmd
-leo4proxy.exe --check-upstream --policy-bootstrap-ip <public-ip>
+leo4proxy.exe --check-upstream --rtp-tunnel --policy-bootstrap-ip <public-ip>
 leo4proxy.exe --check-policy-bootstrap --policy-bootstrap-ip <public-ip>
 ```
 
@@ -460,3 +459,9 @@ leo4proxy.exe --check-policy-bootstrap --policy-bootstrap-ip <public-ip>
 вторая проверяет настоящий GET policy напрямую по IP, без DNS и изменения cache.
 CRL/OCSP в offline chain validation не проверяются. Срок и имя обязательны.
 Подробнее: [контекст](../../docs/term_net-leo4proxy-dns-srv-implementation-context.md).
+
+`--secure` оставлен для совместимости: strict TLS уже действует по умолчанию.
+Текст CLI help о default lax/insecure не отражает реализацию 1.8.0.
+Signed tools 1.10.1: Upgrade773 ready/0, enabled TLS valid; оператор подтвердил
+работу видеопотока. Состав и ограничения приёмки — в
+[руководстве инженера](../../docs/term_tool-user-guide.md).

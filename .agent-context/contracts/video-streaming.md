@@ -39,7 +39,10 @@ PIN/permission denial, supported H.264/SDP, no RTP vs no decode как разн�
 
 ## Известные риски и незавершённые вопросы
 mTLS termination не доказывает cert↔SN binding в media preamble; duplicate SN — не anti-clone.
-Архитектура отмечает пробелы fresh-frame telemetry и E2E; runtime здесь не проверялся.
+Архитектура отмечает пробелы fresh-frame telemetry и E2E. 2026-10-04 оператор
+подтвердил работающий видеопоток после Upgrade773 до tools 1.10.1 (ready/0,
+RTP TLS valid). Это operator evidence, не измерение fresh-frame/decode stats
+агентом и не полная stop/reconnect/late-join матрица.
 
 ## Источники и актуальность
 - Authoritative docs: [E2E](../../docs/etran_arch-video-remote-desktop-e2e.md),

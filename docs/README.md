@@ -51,7 +51,7 @@
 
 ## 4. Терминалы, оборудование и интеграции
 
-- **[leo4proxy DNS/SRV: контекст реализации](term_net-leo4proxy-dns-srv-implementation-context.md)** — проверка концепции по коду, расхождения TLS/fallback/SCM, предлагаемые решения и матрица приёмки; внедрение ожидает подтверждения.
+- **[leo4proxy DNS/SRV: контекст реализации](term_net-leo4proxy-dns-srv-implementation-context.md)** — реализованные SRV/policy/IP routing и strict TLS, выпущенный tools 1.10.1, Upgrade773 ready/0 и оставшиеся проверки.
 
 - **[Пользовательские события l4con](term_tool-l4con-user-events.md)** — тихий
   `--send-event` из удаленной консоли/l4mcp, теги 446–448 и ограничение потока.
@@ -62,7 +62,7 @@
 - **[L4 Tools: решения по стабилизации и риски](term_arch-l4tools-stabilization-decisions.md)** — принятые решения по сети, сертификатам, SCM-зависимостям, журналам, готовности и подписанному выпуску 1.9.6; границы проверок.
 - **[`term_arch-leo4proxy-server-permission.md`](term_arch-leo4proxy-server-permission.md)** — MQTT/RTP и исходящий HTTPS leo4proxy: терминальный API ProcessingBackend, запас 72 часа, локальное хранение и сохранение внутреннего контракта.
 - **[`term_tool-zero-touch-installer-and-remote-runtime-plan.md`](term_tool-zero-touch-installer-and-remote-runtime-plan.md)** — Архитектура и план перехода к Zero-Touch комплексу tools (Ревизия 4): единый установщик «нажал и забыл», преодоление любого начального состояния Windows-терминала (включая повторное использование уже установленного сертификата и отложенный ввод PIN с активным ожиданием), сквозной флоу «инсталляция-сертификация-старт», прямая публикация релизов в публичный Generic Artifact Registry, канал самообновления терминалов и завершение изолированных заданий 1–6 Этапа 1 (`prompts/prompt_step5_*`).
-- **[`term_tool-user-guide.md`](term_tool-user-guide.md)** — Авторитетное руководство сервисного инженера по развертыванию и эксплуатации комплекса Leo4 Tools: целевой процесс Zero-Touch (`l4setup`), матрица состояний Windows (S1–S10), коды возврата, структура отчета `install_summary.json`, откат и решение инцидентов.
+- **[`term_tool-user-guide.md`](term_tool-user-guide.md)** — Авторитетное руководство сервисного инженера по развертыванию и эксплуатации комплекса Leo4 Tools: актуальный релиз 1.10.1, настройки сети и TLS, Zero-Touch (`l4setup`), матрица состояний Windows (S1–S10), коды возврата, структура отчета `install_summary.json`, откат и решение инцидентов.
 - **[`term_run-l4mcp-binary-update.md`](term_run-l4mcp-binary-update.md)** — Пример промпта и проверенный сценарий адресного обновления l4capture и l4desk через l4mcp с хешами, резервными копиями и откатом.
 - **[`term_tool-developer-guide.md`](term_tool-developer-guide.md)** — Руководство разработчика терминальных клиентских приложений: спецификации протоколов взаимодействия с локальным супервайзером.
 - **[`term_conn-device-connection-and-audit.md`](term_conn-device-connection-and-audit.md)** — Спецификация REST API состояния связи терминалов: структура объекта `connection`, фиксация клонов устройств (`DEVICE_CLONE`) и коллизий сертификатов (`SN_COLLISION`), журнал аудита жизненного цикла.

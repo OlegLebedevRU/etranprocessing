@@ -1,4 +1,4 @@
-﻿# L4 Tools release signing
+# L4 Tools release signing
 
 For every `l4setup` build, pause after preparing the unsigned staging
 payloads. Give the operator the command below and wait for confirmation that
@@ -64,7 +64,9 @@ changes and appended certificates do not change those sections). This gate runs
 in both unsigned build and signed completion. Never regenerate only the external
 manifest when embedded inventory hashes are stale; repack and re-sign setup.
 
-## Incremental supervisor-only release
+## Incremental releases
+
+### Setup-only
 
 For a setup-only fix, preserve both existing signed staging trees and use
 `Complete-SignedRelease.ps1 -PfxPath '<path to signing PFX>' -Version '<release version>' -SignOnly l4setup`.
@@ -72,6 +74,8 @@ Update suite/setup version headers and run setup tests/builds for x86/x64 first.
 The script refreshes inventories, repacks the unchanged component bytes, rebuilds
 and signs setup. Component builds and signatures remain unchanged. The usual
 payload, timestamp, clean-checkpoint and complete-download publication gates apply.
+
+### Supervisor-only
 
 For a supervisor-only update, use `tools/l4superv/build.cmd supervisor`, reuse the
 previous signed outputs of every other tool, and rebuild staging/setup only.
@@ -81,3 +85,22 @@ same mandatory RFC3161 timestamp. Other staged EXEs keep their existing signatur
 The package/inventory/hash gates still run; the unrelated capture source comparison
 is skipped. Do not use the full component build gate for this explicitly limited flow.
 No live terminal checks are performed unless the operator requests them.
+
+## Published 1.10.1 and documentation updates
+
+[Publication record](../../artifacts/l4tools/1.10.1.json) records the signed setup
+and immutable source checkpoint. All three complete HTTPS downloads matched
+sizes/SHA-256 using the standard publisher. In the actual signing run components
+were re-signed too; all 18 PE code/data/resource sections matched 1.10.0, while
+complete EXE hashes changed. Operator Upgrade773 returned ready/0 and subsequently
+confirmed video working. This is not a Windows 7 or full outage acceptance result.
+
+Repository documentation was corrected after publication. These text updates
+are not inserted into the already-signed embedded payloads of 1.10.1; do not
+repack or overwrite that immutable release to update bundled README files.
+Current instructions are in the [engineer guide](../../docs/term_tool-user-guide.md).
+
+Known 1.10.1 source/documentation discrepancy: l4setup parses/logs --smoke-only,
+but its engine does not consult the flag when selecting the operation. Treat
+it as unsupported for guaranteeing diagnostics-only behavior. Use the installed
+proxy's read-only probes instead; a code fix requires a separate signed release.
