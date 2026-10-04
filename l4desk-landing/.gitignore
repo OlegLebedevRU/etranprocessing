@@ -1,0 +1,7 @@
+.env
+.env.*
+!.env.example
+.email-test.json
+__pycache__/
+*.pyc
+.preview/

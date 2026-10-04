@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="L4Desk — удалённый экран, консоль и состояние устройства в браузере. L4MCP и API для инженерных сценариев и AI-агентов. Экспериментальный preview." />
+  <title>L4Desk — откройте устройство и проверьте</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="css/styles.css?v=20261003-auth" />
+</head>
+<body>
+  <header class="site-header" id="top">
+    <div class="container header-inner">
+      <a class="logo" href="#top" aria-label="L4Desk">
+        <span class="logo-mark" aria-hidden="true">L4</span>
+        <span class="logo-text">L4Desk</span>
+      </a>
+      <nav class="nav" aria-label="Основная навигация">
+        <a href="#how">Как работает</a>
+        <a href="#browser">Браузер</a>
+        <a href="#connect">Подключение</a>
+        <a href="#ai">AI &amp; API</a>
+        <a href="#trust">Безопасность</a>
+      </nav>
+      <div class="header-auth" aria-label="Личный кабинет">
+        <a class="btn btn-ghost btn-sm" href="https://dev.leo4.ru:3000/login">Войти</a>
+        <a class="btn btn-primary btn-sm" href="https://dev.leo4.ru:3000/register">Регистрация</a>
+      </div>
+      <button class="nav-toggle" type="button" aria-label="Меню" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <!-- 1. Hero: hook B «Спросите парк, что случилось» -->
+    <section class="hero">
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span> L4Desk / remote operations preview</p>
+          <h1>Не гадайте, что с устройством. <em>Откройте и проверьте.</em></h1>
+          <p class="lead">
+            Экран, консоль и состояние удалённой машины — в одном браузере, даже со смартфона.
+            Когда нужен следующий шаг, подключите своего AI-агента через L4MCP или стройте сценарий через API.
+          </p>
+          <div class="hero-cta">
+            <a class="btn btn-primary" href="https://dev.leo4.ru:3000/register">Зарегистрироваться <span aria-hidden="true">↗</span></a>
+            <a class="btn btn-ghost" href="https://dev.leo4.ru:3000/login">Войти в кабинет</a>
+            <a class="btn btn-ghost" href="#how">Посмотреть интерфейс <span aria-hidden="true">↓</span></a>
+          </div>
+          <ul class="hero-pills" aria-label="Ключевые возможности">
+            <li>Браузер на ПК и смартфоне</li>
+            <li>Работающий L4MCP</li>
+            <li>REST API и вебхуки</li>
+          </ul>
+        </div>
+
+        <figure class="hero-illustration">
+          <img src="images/ai-fleet-1200.webp"
+               srcset="images/ai-fleet-640.webp 640w, images/ai-fleet-1200.webp 1200w, images/ai-fleet-1672.webp 1672w"
+               sizes="(max-width: 900px) 94vw, 50vw"
+               width="1672" height="941" loading="lazy" decoding="async" fetchpriority="low"
+               alt="Инженер и AI-агент работают с удалёнными терминалами через браузер: проверка, действие, сохранение результата" />
+          <figcaption>Вы — где удобно. Устройства — где угодно.<span>Иллюстрация сценария работы с L4Desk.</span></figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- 2. Проблема -->
+    <section class="section section-muted" id="problem">
+      <div class="container narrow">
+        <p class="section-kicker">01 / ЗАЧЕМ</p>
+        <h2>Устройство далеко. Контекст — рядом.</h2>
+        <p class="section-lead">
+          Сбой виден пользователю раньше, чем инженеру.
+          Для ответа приходится переключаться между системами:
+          мониторинг, удалённый доступ, консоль, тикеты, чаты.
+          L4Desk собирает этот путь вокруг выбранного устройства: от первого сигнала
+          до данных, с которыми можно принять решение и проверить результат.
+        </p>
+      </div>
+    </section>
+
+    <section class="section evidence-section" id="evidence">
+      <div class="container">
+        <header class="section-head">
+          <p class="section-kicker">02 / В РЕАЛЬНОМ ИНТЕРФЕЙСЕ</p>
+          <h2>Увидеть экран. Управлять ПК. Проверить результат.</h2>
+          <p class="section-lead">Удалённый экран и управление помогают работать с ПК так, будто он рядом. Консоль даёт второй путь — к точной диагностике. Эти кадры сняты на одном тестовом терминале; каждый можно открыть в полном размере.</p>
+        </header>
+        <div class="evidence-grid">
+          <figure class="evidence-shot evidence-video">
+            <div class="evidence-meta"><span>01 / УДАЛЁННЫЙ ЭКРАН И УПРАВЛЕНИЕ</span><span>HD · 1920×1080</span></div>
+            <img src="images/l4desk-hd-full-1200.webp"
+                 srcset="images/l4desk-hd-full-640.webp 640w, images/l4desk-hd-full-1200.webp 1200w, images/l4desk-hd-full-1920-preview.webp 1920w"
+                 sizes="(max-width: 640px) 94vw, (max-width: 1200px) 92vw, 1160px"
+                 data-full-src="images/l4desk-hd-full-1920.webp"
+                 width="1920" height="1200" loading="lazy" decoding="async"
+                 alt="Вся страница видеонаблюдения: HD-трансляция экрана Windows-ПК 1000009 в браузере, рядом кнопки удалённого управления" />
+            <figcaption>Реальная HD-трансляция: экран целевого ПК прямо в браузере, инструменты управления — рядом. Полный снимок страницы без ретуши.</figcaption>
+          </figure>
+          <figure class="evidence-shot evidence-console">
+            <div class="evidence-meta"><span>02 / WEB CONSOLE</span><span>Код возврата: 0</span></div>
+            <img src="images/l4desk-landing-console.png" alt="Веб-консоль выбранного терминала: команда echo L4Desk demo завершилась с кодом 0" loading="lazy" />
+            <figcaption>Удалённая консоль: команда, потоковый вывод и код завершения в одном окне.</figcaption>
+          </figure>
+          <figure class="evidence-shot evidence-terminal">
+            <div class="evidence-meta"><span>03 / DEVICE</span><span>1000009</span></div>
+            <img src="images/l4desk-landing-terminal-1000009.png" alt="Список терминалов с выбранным устройством 1000009" loading="lazy" />
+            <figcaption>Сначала выбираете точный узел. Действия не теряются в абстрактном «парке».</figcaption>
+          </figure>
+          <figure class="evidence-shot evidence-mcp">
+            <div class="evidence-meta"><span>04 / L4MCP</span><span>Другой путь интеграции</span></div>
+            <img src="images/l4desk-landing-mcp.png" alt="Страница подключения L4MCP с управлением API-токенами" loading="lazy" />
+            <figcaption>L4MCP даёт агенту инструменты для адресных задач. Этот кадр показывает страницу подключения, а не результат MCP-вызова.</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Одна ситуация, три способа действия -->
+    <section class="section" id="how">
+      <div class="container">
+        <header class="section-head">
+          <p class="section-kicker">03 / ВОЗМОЖНОСТИ</p>
+          <h2>Одна ситуация. Три способа разобраться.</h2>
+          <p class="section-lead">
+            Выберите, кто отвечает на сигнал. Один выбранный узел парка,
+            разные пути к результату.
+          </p>
+        </header>
+
+        <div class="role-tabs" data-tabs>
+          <div class="tab-list" role="tablist" aria-label="Кто действует">
+            <button class="tab is-active" role="tab" aria-selected="true" data-tab="operator">Оператор</button>
+            <button class="tab" role="tab" aria-selected="false" data-tab="agent">AI-агент</button>
+            <button class="tab" role="tab" aria-selected="false" data-tab="system">Моя система</button>
+          </div>
+
+          <div class="tab-panels">
+            <div class="tab-panel is-active" role="tabpanel" data-panel="operator">
+              <div class="panel-grid">
+                <div>
+                  <h3>Ваш удалённый ПК — в браузере</h3>
+                  <p>
+                    Смотрите экран и работайте с выбранным ПК из браузера —
+                    без отдельного приложения на рабочем месте оператора.
+                    Для диагностики откройте консоль того же устройства.
+                  </p>
+                  <ul class="check-list">
+                    <li>Экран устройства в HD в браузере</li>
+                    <li>Аренда консольного сеанса, потоковый вывод и код завершения команды</li>
+                    <li>Управление мышью и вводом на Windows-устройстве</li>
+                  </ul>
+                </div>
+                <figure class="shot-frame">
+                  <img src="images/l4desk-hd-full-1200.webp"
+                       srcset="images/l4desk-hd-full-640.webp 640w, images/l4desk-hd-full-1200.webp 1200w, images/l4desk-hd-full-1920-preview.webp 1920w"
+                       sizes="(max-width: 900px) 92vw, 560px"
+                       data-full-src="images/l4desk-hd-full-1920.webp"
+                       width="1920" height="1200" loading="lazy" decoding="async"
+                       alt="Удалённый Windows-ПК 1000009: реальная HD-трансляция и инструменты управления в браузере" />
+                  <figcaption>Ваш браузер — рабочее место для доступа к удалённому ПК. Реальная HD-трансляция, 1920×1080.</figcaption>
+                </figure>
+              </div>
+            </div>
+
+            <div class="tab-panel" role="tabpanel" data-panel="agent" hidden>
+              <div class="panel-grid">
+                <div>
+                  <h3>Удалённое управление через L4MCP</h3>
+                  <p>
+                    L4MCP — реальный harness удалённого управления для вашего AI-агента.
+                    Дайте агенту адресный инструмент: выполнить команду, получить вывод,
+                    прочитать код завершения и решить, нужен ли следующий шаг.
+                  </p>
+                  <ul class="check-list">
+                    <li>Атомарное выполнение команд с проверяемым кодом завершения</li>
+                    <li>Сохранённые результаты операций и история выбранного терминала, даже офлайн</li>
+                    <li>Точный идентификатор устройства и изоляция по организации</li>
+                  </ul>
+                </div>
+                <figure class="shot-frame">
+                  <img src="images/l4desk-landing-mcp.png?v=20260930b" alt="Скриншот: страница подключения L4MCP и API-токенов" loading="lazy" />
+                  <figcaption>Страница L4MCP: токены для агентов и интеграций</figcaption>
+                </figure>
+              </div>
+            </div>
+
+            <div class="tab-panel" role="tabpanel" data-panel="system" hidden>
+              <div class="panel-grid">
+                <div>
+                  <h3>API, события и вебхуки</h3>
+                  <p>
+                    API: создание задач для устройств, статус доставки,
+                    события и телеметрия, вебхуки на результат.
+                    Соберите сценарий в своём agent harness через function calling
+                    или MCP-обёртку.
+                  </p>
+                  <ul class="check-list">
+                    <li>Корреляция сигнала, задачи и события результата по устройству</li>
+                    <li>Программная работа с несколькими устройствами</li>
+                    <li>Бизнес-правила остаются у клиента</li>
+                  </ul>
+                </div>
+                <figure class="shot-frame shot-frame-code">
+                  <pre class="code-sample" tabindex="0"><code><span class="c-comment"># задача для выбранного устройства</span>
+POST /api/v1/devices/{id}/tasks
+{ <span class="c-key">"cmd"</span>: <span class="c-str">"diag.check"</span> }
+
+<span class="c-comment"># подтверждение результата — отдельным событием</span>
+webhook → { <span class="c-key">"event"</span>: <span class="c-str">"device.result"</span>, <span class="c-key">"ok"</span>: <span class="c-bool">true</span> }</code></pre>
+                  <figcaption>Схема интеграции: доставка и физический результат — разные состояния</figcaption>
+                </figure>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. Браузер: hook A + hook 1 -->
+    <section class="section section-dark" id="browser">
+      <div class="container">
+        <header class="section-head">
+          <h2>Парк не ждёт, пока вы вернётесь к ноутбуку</h2>
+          <p class="section-lead">
+            Увидели проблему — открыли устройство — начали разбираться.
+            Браузер на компьютере и на смартфоне. Мобильная раскладка
+            страницы видеонаблюдения, выдвижной список устройств,
+            адаптивные элементы управления.
+          </p>
+        </header>
+
+        <div class="hook hook-dual">
+          <div class="hook-dual-frame">
+            <figure class="shot-desktop">
+              <img src="images/l4desk-landing-hd-desktop.png?v=20260930b" alt="Десктопный браузер: HD-трансляция экрана терминала" loading="lazy" />
+            </figure>
+            <figure class="shot-mobile">
+              <img src="images/l4desk-landing-hd-mobile.png?v=20260930b" alt="Смартфон: та же HD-трансляция в мобильной раскладке" loading="lazy" />
+            </figure>
+            <div class="hook-badge live-badge">В эфире</div>
+          </div>
+          <p class="hook-caption">Один парк — два размера экрана. Откройте парк там, где вы сейчас.</p>
+        </div>
+
+        <div class="pill-row">
+          <span class="pill">Браузер</span>
+          <span class="pill">Экран устройства</span>
+          <span class="pill">Консоль</span>
+        </div>
+
+        <!-- Hook 2: вижу → управляю -->
+        <div class="hook hook-control">
+          <figure class="control-frame">
+            <img src="images/l4desk-landing-control.png?v=20260930b" alt="Скриншот: управление мышью активно, рамка видео" loading="lazy" />
+          </figure>
+          <div class="control-copy">
+            <h3>Сначала увидьте. Затем действуйте.</h3>
+            <p>
+              Наблюдение и управление — разные режимы одного экрана.
+              Включите управление, когда нужно повлиять на ситуацию;
+              вернитесь к просмотру, когда закончите.
+            </p>
+            <p class="note">
+              На управляемом Windows-устройстве нативный комплект устанавливается.
+              Без отдельного клиента удалённого доступа — на рабочем месте оператора.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. Путь подключения -->
+    <section class="section" id="connect">
+      <div class="container">
+        <header class="section-head">
+          <h2>Путь подключения — пять шагов</h2>
+          <p class="section-lead">
+            От создания устройства до online и первого сеанса.
+            Установщик работает на управляемом Windows-устройстве.
+          </p>
+        </header>
+        <ol class="steps">
+          <li>
+            <span class="step-num">1</span>
+            <h3>Создать устройство</h3>
+            <p>Зарегистрируйте терминал в парке и получите его идентификатор.</p>
+          </li>
+          <li>
+            <span class="step-num">2</span>
+            <h3>Получить PIN</h3>
+            <p>Выдайте PIN и сертификат устройства для защищённого подключения.</p>
+          </li>
+          <li>
+            <span class="step-num">3</span>
+            <h3>Установить комплект</h3>
+            <p>Единый установщик <code>l4setup</code> разворачивает утилиты и проверяет готовность.</p>
+          </li>
+          <li>
+            <span class="step-num">4</span>
+            <h3>Увидеть online</h3>
+            <p>Машиночитаемый итог установки и статус присутствия устройства.</p>
+          </li>
+          <li>
+            <span class="step-num">5</span>
+            <h3>Открыть консоль или экран</h3>
+            <p>Первый сеанс диагностики или удалённого просмотра из браузера.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- 6. AI и API -->
+    <section class="section section-muted" id="ai">
+      <div class="container">
+        <header class="section-head">
+          <h2>AI и API — без магии</h2>
+          <p class="section-lead">
+            Конкретный безопасный запрос к выбранному устройству и цикл задачи
+            с событием результата. Разделяем то, что уже работает в L4MCP,
+            и то, что можно построить через API.
+          </p>
+        </header>
+
+        <div class="split">
+          <article class="card">
+            <header>
+              <span class="card-tag tag-live">Работает в L4MCP</span>
+              <h3>Команды и сценарии на удалённых машинах</h3>
+            </header>
+            <p class="card-lead">
+              L4MCP — harness удалённого управления для вашего AI-агента.
+              Атомарные команды и целые сценарии выполняются на удалённых
+              компьютерах почти так же привычно, как на локальных.
+            </p>
+            <ul class="check-list">
+              <li>Атомарный вызов: команда → код завершения → результат</li>
+              <li>Запись результатов и поиск по истории конкретного терминала</li>
+              <li>Несколько шагов одной операции, связанные общим идентификатором</li>
+              <li>Адресные действия по выбранному устройству и проверяемый вывод</li>
+              <li>Вызовы из вашего agent harness через MCP</li>
+            </ul>
+          </article>
+
+          <article class="card">
+            <header>
+              <span class="card-tag tag-api">Можно построить через API</span>
+              <h3>Собственная интеграция</h3>
+            </header>
+            <ul class="check-list">
+              <li>Задачи для устройств и статус доставки</li>
+              <li>События, телеметрия, вебхуки</li>
+              <li>Function calling и MCP-обёртка в вашем harness</li>
+              <li>Массовые сценарии — как клиентский код, не как UI</li>
+            </ul>
+            <p class="note">Связывайте команду с отдельным событием результата там, где устройство его предоставляет.</p>
+          </article>
+        </div>
+
+        <article class="memory-panel">
+          <span class="card-tag tag-live">Новое в L4MCP</span>
+          <h3>Следующий сеанс начинается с контекста</h3>
+          <p>Агент может сохранить результат проверки и вернуться к нему в новом сеансе.
+            История выбранного терминала доступна даже тогда, когда устройство офлайн:
+            найдите предыдущие наблюдения, свяжите шаги одной операции и сравните результаты.</p>
+          <p class="note">История сохраняет переданные результаты. Фактическое состояние устройства подтверждается отдельной проверкой.</p>
+        </article>
+
+        <div class="hook hook-timeline">
+          <h3>От сигнала до подтверждения</h3>
+          <ol class="timeline">
+            <li><span>Событие</span></li>
+            <li><span>Решение</span></li>
+            <li><span>Команда</span></li>
+            <li><span>Событие результата</span></li>
+          </ol>
+          <p class="hook-caption">
+            Знайте не только то, что команда отправлена.
+            Узнайте, что произошло после неё.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section roadmap-section" id="roadmap">
+      <div class="container">
+        <header class="section-head">
+          <p class="section-kicker">В ПЛАНАХ / РАЗВИТИЕ L4MCP</p>
+          <h2>Больше контекста. Меньше подготовки перед каждой задачей.</h2>
+          <p class="section-lead">Развиваем L4MCP как среду работы вашего агента с удалёнными устройствами.
+            Ниже — направления, которые мы планируем добавить.</p>
+        </header>
+        <div class="roadmap-grid">
+          <article class="card"><span class="card-tag">Планируем</span><h3>Ваш агент, ваша среда</h3>
+            <p>Расширяем совместимость harness с разными агентами и способами работы,
+              чтобы подключение к парку вписывалось в привычный вам рабочий процесс.</p></article>
+          <article class="card"><span class="card-tag">Планируем</span><h3>Библиотеки промптов и скриптов</h3>
+            <p>Готовые инструкции и сценарии диагностики, которые можно выбирать под задачу
+              и адаптировать к устройствам и процедурам вашей команды.</p></article>
+          <article class="card"><span class="card-tag">Планируем</span><h3>Контекст, который можно подключить</h3>
+            <p>Предустановленные знания о работе с платформой и персонализированный контекст:
+              особенности вашего парка, правила обслуживания и инструкции организации.</p></article>
+          <article class="card"><span class="card-tag">Планируем</span><h3>Сводки, к которым можно вернуться</h3>
+            <p>Сохранённые исторические и событийные сводки по управляемым узлам и терминалам:
+              что менялось, какие наблюдения получены и с чего продолжить следующую проверку.</p></article>
+        </div>
+        <p class="note">Это анонс развития, без обещания конкретных сроков. Запись и чтение отдельных событий уже доступны; библиотеки, подключаемый контекст и готовые сводки — в планах.</p>
+      </div>
+    </section>
+
+    <!-- 7. Доверие: hook 4 -->
+    <section class="section" id="trust">
+      <div class="container">
+        <header class="section-head">
+          <h2>Две границы доверия</h2>
+          <p class="section-lead">
+            Устройства подтверждают свою подлинность сертификатами;
+            пользователи входят с токенами, подписанными RSA-ключом.
+          </p>
+        </header>
+
+        <div class="trust-flow" aria-label="Схема: устройства, L4Desk, операторы и агенты">
+          <article class="trust-side trust-devices">
+            <div class="trust-icons" aria-hidden="true">
+              <span class="trust-icon" title="ПК">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg>
+              </span>
+              <span class="trust-icon" title="Терминал">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h6M9 11h6M9 15h3"/></svg>
+              </span>
+              <span class="trust-icon" title="Сервер">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="6" rx="1"/><rect x="3" y="14" width="18" height="6" rx="1"/><circle cx="7" cy="7" r="1" fill="currentColor"/><circle cx="7" cy="17" r="1" fill="currentColor"/></svg>
+              </span>
+            </div>
+            <h3>Устройства</h3>
+            <p class="trust-items">ПК · терминалы · серверы</p>
+            <p>
+              Парк подтверждает подлинность сертификатами.
+              Взаимная TLS-аутентификация — на описанных
+              MQTT/HTTPS и медиасоединениях.
+            </p>
+          </article>
+
+          <div class="trust-link" aria-hidden="true">
+            <div class="trust-line"></div>
+            <div class="trust-boundary">
+              <span class="trust-boundary-label">Граница 1</span>
+              <code>Сертификат · mTLS</code>
+            </div>
+            <div class="trust-line"></div>
+          </div>
+
+          <div class="trust-hub">
+            <div class="trust-node">L4Desk</div>
+            <p class="trust-hub-caption">Выбранный узел парка</p>
+          </div>
+
+          <div class="trust-link" aria-hidden="true">
+            <div class="trust-line"></div>
+            <div class="trust-boundary">
+              <span class="trust-boundary-label">Граница 2</span>
+              <code>JWT RS256 · API-ключ</code>
+            </div>
+            <div class="trust-line"></div>
+          </div>
+
+          <article class="trust-side trust-clients">
+            <div class="trust-icons" aria-hidden="true">
+              <span class="trust-icon" title="Оператор">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="12" rx="1.5"/><path d="M8 21h8M12 17v4"/><circle cx="12" cy="11" r="2"/></svg>
+              </span>
+              <span class="trust-icon" title="AI-агент">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5" y="7" width="14" height="11" rx="2"/><path d="M12 3v4M9 12h.01M15 12h.01M9 15h6"/><path d="M3 11h2M19 11h2"/></svg>
+              </span>
+            </div>
+            <h3>Доступ</h3>
+            <p class="trust-items">Операторы · браузер<br />ИИ-агенты · MCP</p>
+            <p>
+              JWT с асимметричной подписью RS256 и проверкой токена.
+              Для API-интеграторов — организационные API-ключи.
+              Изоляция по организации и проверка конкретного устройства.
+            </p>
+          </article>
+        </div>
+        <p class="note note-center">
+          «Сквозной» относится к защите границы устройства и сервера.
+          Браузерный тракт устроен отдельно и не является одним непрерывным mTLS-сеансом.
+        </p>
+      </div>
+    </section>
+
+    <!-- 8. Сценарии по ролям -->
+    <section class="section section-muted" id="roles">
+      <div class="container">
+        <header class="section-head">
+          <h2>Кому это нужно</h2>
+        </header>
+        <div class="role-cards">
+          <article class="role-card">
+            <h3>Продуктолог</h3>
+            <p class="role-q">«Как встроить удалённую поддержку в мой продукт?»</p>
+            <p>Браузерный доступ для человека; задачи, события и вебхуки для приложения. Бизнес-правила остаются у клиента.</p>
+          </article>
+          <article class="role-card">
+            <h3>Саппорт-инженер</h3>
+            <p class="role-q">«Почему конкретный терминал не работает?»</p>
+            <p>Состояние устройства, удалённая консоль, потоковый вывод, экран и адресная диагностика.</p>
+          </article>
+          <article class="role-card">
+            <h3>Инженер / DIY</h3>
+            <p class="role-q">«Как связать событие устройства с действием?»</p>
+            <p>REST API, события, вебхуки; L4MCP как harness удалённого управления для вашего агента.</p>
+          </article>
+          <article class="role-card">
+            <h3>DevOps парка</h3>
+            <p class="role-q">«Как видеть и обслуживать много удалённых узлов?»</p>
+            <p>Проверка присутствия, адресные действия, единый способ получить результат. Массовую оркестрацию — через API.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- 9. Preview CTA -->
+    <section class="section section-cta" id="demo">
+      <div class="container narrow">
+        <header class="section-head">
+          <p class="section-kicker">L4DESK / PREVIEW</p>
+          <h2>Есть задача для удалённого устройства? Давайте начнём с неё.</h2>
+          <p class="section-lead">Расскажите, что хотите проверить или подключить. Сообщение получит команда L4Desk, а подтверждение обращения придёт на ваш email. Сервис в экспериментальном preview.</p>
+        </header>
+
+        <form class="preview-card contact-form" id="contact-form" action="/api/contact" method="post">
+          <div class="preview-options" aria-label="Что хочется обсудить">
+            <button type="button" class="preview-option is-active" data-preview-topic="экран и консоль" aria-pressed="true">Увидеть экран и консоль</button>
+            <button type="button" class="preview-option" data-preview-topic="AI-агент и L4MCP" aria-pressed="false">Подключить AI-агента</button>
+            <button type="button" class="preview-option" data-preview-topic="API и события" aria-pressed="false">Обсудить API</button>
+          </div>
+          <div class="contact-fields">
+            <label>Как к вам обращаться<input name="name" autocomplete="name" maxlength="100" required /></label>
+            <label>Ваш email<input name="email" type="email" autocomplete="email" maxlength="254" required /></label>
+            <label class="contact-message">Что хотите обсудить<textarea name="message" rows="4" minlength="1" maxlength="2000" required placeholder="Задача, тип устройств и что хотелось бы попробовать"></textarea></label>
+          </div>
+          <label class="contact-consent"><input type="checkbox" name="consent" required />
+            <span>Согласен на обработку указанных данных для ответа на обращение и получение email-подтверждения.</span></label>
+          <p class="note">Не отправляйте пароли, ключи доступа, PIN и другие секреты.</p>
+          <div style="height: 100px" id="captcha-container" class="smart-captcha" data-sitekey="ysc1_VbSsmUimGfekCT8aaUV3FLdYszcXiqThvipST2X67ad609f0"></div>
+          <div class="preview-actions">
+            <button class="btn btn-primary" type="submit" id="preview-interest">Отправить сообщение <span aria-hidden="true">↗</span></button>
+            <p class="form-status" id="form-status" role="status" aria-live="polite">Пройдите CAPTCHA перед отправкой.</p>
+          </div>
+          <p class="note">Можно написать напрямую: <a href="mailto:o.lebedev@platerra.ru">o.lebedev@platerra.ru</a>.</p>
+          <noscript><p>Для отправки через форму включите JavaScript или напишите нам по email.</p></noscript>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div class="logo">
+        <span class="logo-mark" aria-hidden="true">L4</span>
+        <span class="logo-text">L4Desk</span>
+      </div>
+      <p>Браузерный доступ к устройствам. Инструменты для вашего AI-агента.</p>
+      <p class="muted">© <span id="year">2026</span> L4Desk. Экспериментальный preview.<br />Powered by Platerra</p>
+    </div>
+  </footer>
+
+  <dialog class="image-dialog" id="image-dialog" aria-label="Изображение L4Desk">
+    <button class="dialog-close" type="button" aria-label="Закрыть изображение">×</button>
+    <img alt="" />
+    <p></p>
+  </dialog>
+  <script src="js/main.js?v=20261003-video"></script>
+</body>
+</html>

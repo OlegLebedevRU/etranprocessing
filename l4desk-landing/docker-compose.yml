@@ -1,0 +1,55 @@
+# L4Desk landing — single container: static site + nginx + certbot
+# Usage: DOMAIN=l4desk.ru EMAIL=you@example.com docker compose up -d --build
+name: l4desk-landing
+
+services:
+  landing:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: l4desk-landing:latest
+    container_name: l4desk-landing
+    restart: unless-stopped
+    depends_on:
+      contact:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-l4desk.ru}
+      EMAIL: ${EMAIL:-}
+      STAGING: ${STAGING:-0}
+      TZ: ${TZ:-UTC}
+    volumes:
+      # Persist ACME account, certs and webroot across rebuilds
+      - letsencrypt:/etc/letsencrypt
+      - certbot-webroot:/var/www/certbot
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+  contact:
+    build: ./contact
+    image: l4desk-contact:latest
+    restart: unless-stopped
+    env_file: .env.contact
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 96m
+    cpus: 0.5
+    pids_limit: 64
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/healthz', timeout=2)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  letsencrypt:
+  certbot-webroot:

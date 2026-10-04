@@ -1,0 +1,6 @@
+.env
+.env.*
+contact
+tests
+__pycache__
+*.pyc
