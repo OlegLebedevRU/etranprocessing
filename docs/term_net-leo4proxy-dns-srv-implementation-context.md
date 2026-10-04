@@ -1,6 +1,6 @@
 # leo4proxy: проверка DNS/SRV-концепции и контекст реализации
 
-Статус: план подтверждён; policy и media TLS выпущены, native tools готовятся к подписи.
+Статус: policy и media TLS внедрены; подписанные tools 1.10.0 опубликованы, чистая приёмка терминала 773 остаётся за оператором.
 Дата: 2026-10-04. Код сверялся в worktree на HEAD `c58f607`, leo4proxy `1.7.3`.
 Исходное ревью ниже относится к HEAD `c58f607`; текущий статус внедрения и runtime приведены в отдельном разделе.
 
@@ -53,9 +53,14 @@ SHA-256 прочитанной версии: `F8CA892F87215D7BF158E0A8D5FACCCCC2
   Runtime MQTT/RTP используют SRV, HTTPS — default; strict TLS valid в обеих архитектурах.
 - Не проверены на terminal Win7: чистая установка/удаление сертификата, Auto/manual
   GUI, cancel, полный cold/warm outage всех рабочих каналов и видео E2E.
-  Пользователь выполняет clean l4setup 773 после подписи; сертификат не удалялся.
-- Установка/публикация native release ждёт штатной подписи оператором; unsigned
-  staging не считается опубликованным tools release.
+  Пользователь выполняет clean l4setup 773; сертификат не удалялся.
+- Tools 1.10.0 опубликованы из clean main `68ad0ccd28bc2ffae239aa5a38512daf19475cab`.
+  19 EXE имеют Valid Authenticode и timestamp; payload gate 61/61 per arch passed.
+  Полные HTTPS downloads setup/manifest/SHA256SUMS через curl совпали по размерам
+  и SHA-256 после усечённого Python GET. Setup SHA-256:
+  `d06a430e34dd38b8cb2cef05d8156e6d52471b7096291f7253ed9485fc5e1595`.
+  [Установщик](https://l4tools-generic.ar.cloud.ru/l4tools/1.10.0/l4setup.exe),
+  [release record](../artifacts/l4tools/1.10.0.json).
 
 ## Исходный task intake ревью
 

@@ -15,4 +15,4 @@
   опубликованные входы, byte bindings, адресная регистрация и критерии
   дальнейшей приёмки.
 
-- [leo4proxy DNS/SRV/IP, 2026-10-04](2026-10-04-leo4proxy-dns-srv-implementation.md) — policy/media выпущены, tools 1.10.0 ждёт подписи.
+- [leo4proxy DNS/SRV/IP, 2026-10-04](2026-10-04-leo4proxy-dns-srv-implementation.md) — policy/media и подписанные tools 1.10.0 выпущены; ожидается ручная чистая приёмка 773.
