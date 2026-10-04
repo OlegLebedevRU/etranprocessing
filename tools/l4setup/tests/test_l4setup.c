@@ -139,7 +139,6 @@ static bool test_cli_parser(void) {
             L"--dest", L"D:\\TestTools",
             L"--force-reissue",
             L"--repair",
-            L"--smoke-only",
             L"--payload-dir", L"C:\\Payloads"
         };
         CliOptions opts;
@@ -148,9 +147,16 @@ static bool test_cli_parser(void) {
         TEST_ASSERT(opts.dest_specified, "dest_specified should be true");
         TEST_ASSERT(opts.force_reissue, "force_reissue match");
         TEST_ASSERT(opts.repair, "repair match");
-        TEST_ASSERT(opts.smoke_only, "smoke_only match");
         TEST_ASSERT(wcscmp(opts.payload_dir, L"C:\\Payloads") == 0, "payload_dir match");
         TEST_ASSERT(opts.payload_dir_specified, "payload_dir_specified match");
+        wchar_t* smoke[] = {L"l4setup.exe",L"--smoke-only",L"--dest",L"D:\\TestTools"};
+        TEST_ASSERT(cli_parse(4,smoke,&opts,NULL,0) && opts.smoke_only,"Read-only smoke accepts dest");
+        const wchar_t* flags[]={L"--repair",L"--force-reissue",L"--pin",L"--http-remote",L"--payload-dir"};
+        const wchar_t* values[]={NULL,NULL,L"123456",L"test.example.com:443",L"C:\\Payloads"};
+        for(int n=0;n<5;n++) {
+            wchar_t* conflict[]={L"l4setup.exe",L"--smoke-only",(wchar_t*)flags[n],(wchar_t*)values[n]};
+            TEST_ASSERT(!cli_parse(values[n]?4:3,conflict,&opts,NULL,0),"Smoke-only rejects mutating options");
+        }
     }
 
     // 6. Flags: --version and --help

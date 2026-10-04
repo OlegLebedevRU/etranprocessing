@@ -4,6 +4,13 @@
 
 ---
 
+**Выпуск 1.8.1 в signed tools 1.10.2**: единые resolving/TCP/TLS deadlines,
+резерв времени для IP fallback, дедупликация endpoints и перебор до 8 IPv4,
+eviction завершённых DNS cache slots, независимая диагностика каналов,
+bounded policy I/O и HTTP framing. Строгие CA/name/admission проверки сохранены.
+См. [матрицу надёжности](../../docs/term_net-leo4proxy-resolving-reliability-matrix.md).
+[Выпуск 1.10.2 опубликован](../../artifacts/l4tools/1.10.2.json). Операторский Upgrade773 до 1.10.2 подтверждён 16:36 UTC: ready/0, proxy 1.8.1, MQTT/HTTPS/RTP TLS valid.
+
 ## 1. Решаемая проблема
 
 1. **Non-Exportable ключи:** Все стандартные MQTT и HTTP библиотеки (Eclipse Paho C, Paho Python, Mosquitto, OpenSSL) требуют приватный ключ в виде незашифрованного PEM-файла на диске. В защищенной архитектуре терминалов приватные ключи генерируются внутри Windows CNG KSP (`MS_KEY_STORAGE_PROVIDER`) с запретом экспорта (`NCRYPT_ALLOW_EXPORT_NONE = 0`).

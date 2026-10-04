@@ -47,11 +47,21 @@ Certificate reused. /info перед запуском видео: MQTT source=sr
 RTP counters zero. После обновления оператор подтвердил работающий видеопоток;
 browser decode telemetry и расширенная outage/E2E matrix агентом не измерялись.
 
-## Ограничения / следующие проверки
+## Выпуск 1.10.2 / proxy 1.8.1
+В опубликованном выпуске исправлены read-only smoke-only, ложный DNS degraded, общий
+последовательный diagnostic budget, launch/no-certificate false readiness,
+SCM/mirror mismatch, resolving/TCP/TLS/policy-I/O deadlines, fallback reserve,
+endpoint/A deduplication и DNS pool saturation. Матрица и ограничения:
+[network reliability](../../docs/term_net-leo4proxy-resolving-reliability-matrix.md).
+Signed release опубликован из clean main d43e4d5; все 19 signatures/timestamps и 122 payload files проверены, три полных HTTPS downloads совпали по size/hash.
+[Publication record](../../artifacts/l4tools/1.10.2.json). Операторский Upgrade773 1.10.1 → 1.10.2, 2026-10-04 16:36 UTC: ready/0; proxy 1.8.1, четыре службы RUNNING, сертификат переиспользован, SCM args сохранены; MQTT/HTTPS/RTP TLS valid, Stream skipped. Видео после этого Upgrade отдельно не подтверждено.
+
+## Ограничения опубликованного 1.10.1 / следующие проверки
 Setup1.10.1 разбирает/logs --smoke-only, но engine не учитывает флаг: нельзя
 считать его гарантированно диагностическим. Проба network — DNS iot.leo4.ru,
 может дать degraded при работающем IP recovery. Source help proxy о insecure устарел.
-IPv4 и первый A-address; CRL/OCSP не проверяются. Локальное время влияет на trust.
+Опубликованный proxy 1.8.0 использует IPv4 и первый A-address; proxy 1.8.1
+перебирает до 8 IPv4. CRL/OCSP не проверяются. Локальное время влияет на trust.
 Cache: HKLM Endpoints REG_BINARY + ProgramData/Leo4Proxy/endpoints.cache, timestamp
 и policy JSON; ACL SYSTEM/Administrators. File storage degradation оставляет snapshot
 в памяти. Public root embedded; private keys remain in CNG/server mounts.

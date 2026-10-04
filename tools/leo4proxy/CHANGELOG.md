@@ -1,6 +1,14 @@
-﻿# Changelog — Leo4Proxy
+# Changelog — Leo4Proxy
 
 All notable changes to the `leo4proxy` component will be documented in this file.
+
+## [1.8.1] - 2026-10-04 (signed; published)
+
+- Share an absolute deadline across SRV/A/TCP/TLS; reserve recovery time for IP fallback and remove duplicate endpoints/IPv4 addresses.
+- Try up to eight IPv4 addresses per endpoint; evict completed DNS slots while keeping the 24-worker limit and numeric bypass.
+- Probe enabled channels concurrently with independent 8-second budgets; include elapsed time, attempts and last selected endpoint in JSON.
+- Bound partial writes and fragmented policy TLS reads; finish framed HTTP responses without waiting for EOF and reject malformed lengths/chunks.
+- Keep logical TLS identity, embedded CA and admission gates mandatory. Correct obsolete insecure-default help text.
 
 ## [1.8.0] - 2026-10-04
 

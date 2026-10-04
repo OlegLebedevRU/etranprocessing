@@ -26,6 +26,7 @@ typedef struct {
     bool isConnected;
     bool isHandshakeComplete;
     ULONGLONG handshake_deadline;
+    ULONGLONG io_deadline; /* Absolute bounded request I/O; zero for normal streams. */
     bool certificate_rejected;
 
     /* Decryption buffer state */

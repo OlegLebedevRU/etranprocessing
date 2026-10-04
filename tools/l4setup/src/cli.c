@@ -168,6 +168,11 @@ bool cli_parse(int argc, wchar_t* argv[], CliOptions* opts, char* err_buf, size_
         opts->silent = false;
     }
 
+    if (opts->smoke_only && (opts->repair || opts->force_reissue || opts->pin_specified || opts->network_specified || opts->payload_dir_specified)) {
+        if (err_buf && err_buf_size) snprintf(err_buf, err_buf_size, "--smoke-only cannot change PIN, network, payload or installation");
+        return false;
+    }
+
     // Validate PIN if specified
     if (opts->pin_specified) {
         if (!is_valid_6digit_pin(opts->pin)) {
@@ -206,7 +211,7 @@ void cli_print_usage(const wchar_t* prog_name) {
     wprintf(L"  --unattended       Alias for --silent\n");
     wprintf(L"  --dest, -d <DIR>   Target installation directory (default: C:\\l4tools)\n");
     wprintf(L"  --repair           Force reinstallation of binaries and services even if version matches\n");
-    wprintf(L"  --smoke-only       Execute only Phase 5 smoke checks on existing installation\n");
+    wprintf(L"  --smoke-only       Read-only health checks; no enrollment or service changes\n");
     wprintf(L"  --preview-ui       Read-only interactive UI preview; no installer operations\n");
     wprintf(L"  --version          Print version information and exit\n");
     wprintf(L"  --help, -h, /?     Show this help message and exit\n\n");

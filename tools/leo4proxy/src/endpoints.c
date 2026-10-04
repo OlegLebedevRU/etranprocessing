@@ -78,6 +78,7 @@ static unsigned __stdcall dns_worker(void* value) {
                 strcpy_s(entries[0].source,sizeof(entries[0].source),"srv_disabled");
                 count=1; break;
             }
+            if (!r->Data.SRV.pNameTarget || strlen(r->Data.SRV.pNameTarget)>=sizeof(e->host)) continue;
             strcpy_s(e->host,sizeof(e->host),r->Data.SRV.pNameTarget);
             size_t len=strlen(e->host); if (len && e->host[len-1]=='.') e->host[len-1]=0;
             if (!endpoint_host_valid(e->host) || !r->Data.SRV.wPort) continue;
@@ -98,16 +99,18 @@ static unsigned __stdcall dns_worker(void* value) {
     return 0;
 }
 static int dns_query(const char* name, WORD type, Leo4Endpoint* out, DWORD timeout) {
-    DnsSlot* slot=NULL; DnsSlot* free_slot=NULL;
+    DnsSlot* slot=NULL; DnsSlot* free_slot=NULL; DnsSlot* completed_slot=NULL;
     AcquireSRWLockExclusive(&dns_lock);
     if (!shutting_down) for (int n=0;n<DNS_SLOTS;n++) {
         DnsSlot* s=&slots[n];
         if (s->type==type && !_stricmp(s->name,name)) { slot=s; break; }
         if (!free_slot && !s->running && (!s->done || GetTickCount64()>=s->expires)) free_slot=s;
+        if (!s->running && (!completed_slot || s->expires<completed_slot->expires)) completed_slot=s;
     }
-    if (!shutting_down && !slot) slot=free_slot;
+    bool evicted=false;
+    if (!shutting_down && !slot) {slot=free_slot?free_slot:completed_slot;evicted=slot && !free_slot;}
     if (!slot) { ReleaseSRWLockExclusive(&dns_lock); return 0; }
-    if (!slot->running && (!slot->done || GetTickCount64()>=slot->expires)) {
+    if (!slot->running && (evicted || !slot->done || GetTickCount64()>=slot->expires)) {
         if (!slot->done) slot->done=CreateEventW(NULL,TRUE,FALSE,NULL);
         if (!slot->done) { ReleaseSRWLockExclusive(&dns_lock); return 0; }
         ResetEvent(slot->done); strcpy_s(slot->name,sizeof(slot->name),name); slot->type=type;
@@ -127,12 +130,22 @@ static int dns_query(const char* name, WORD type, Leo4Endpoint* out, DWORD timeo
     }
     ReleaseSRWLockShared(&dns_lock); return count;
 }
-bool endpoint_resolve_ipv4(const char* host,char out[16],DWORD timeout) {
+int endpoint_resolve_ipv4_all(const char* host,char out[8][16],DWORD timeout) {
     IN_ADDR address;
-    if (InetPtonA(AF_INET,host,&address)==1) { strcpy_s(out,16,host); return true; }
+    if (InetPtonA(AF_INET,host,&address)==1) { strcpy_s(out[0],16,host); return 1; }
     Leo4Endpoint entries[8];
-    if (!dns_query(host,DNS_TYPE_A,entries,timeout)) return false;
-    strcpy_s(out,16,entries[0].host); return true;
+    int count=dns_query(host,DNS_TYPE_A,entries,timeout), unique=0;
+    for (int n=0;n<count;n++) {
+        bool duplicate=false;
+        for (int k=0;k<unique;k++) if (!strcmp(out[k],entries[n].host)) duplicate=true;
+        if (!duplicate) strcpy_s(out[unique++],16,entries[n].host);
+    }
+    return unique;
+}
+bool endpoint_resolve_ipv4(const char* host,char out[16],DWORD timeout) {
+    char addresses[8][16];
+    if (!endpoint_resolve_ipv4_all(host,addresses,timeout)) return false;
+    strcpy_s(out,16,addresses[0]); return true;
 }
 const char* endpoint_logical_name(const ProxyConfig* c,int channel) {
     switch(channel) {
@@ -150,7 +163,7 @@ static int channel_port(const ProxyConfig* c,int channel) {
         default: return c->http_remote_port;
     }
 }
-int endpoints_candidates(const ProxyConfig* c,int channel,bool recovery,Leo4Endpoint* out) {
+int endpoints_candidates_timed(const ProxyConfig* c,int channel,bool recovery,Leo4Endpoint* out,DWORD timeout) {
     if (channel<0 || channel>=4) return 0;
     int count=0;
     if (c->srv_enabled && !c->remote_explicit[channel]) {
@@ -158,7 +171,7 @@ int endpoints_candidates(const ProxyConfig* c,int channel,bool recovery,Leo4Endp
         int len=snprintf(owner,sizeof(owner),"%s%s",services[channel],endpoint_logical_name(c,channel));
         if (c->srv_names[channel][0]) strcpy_s(owner,sizeof(owner),c->srv_names[channel]);
         else if (len<0 || len>=MAX_HOST_LEN) owner[0]=0;
-        if (owner[0]) count=dns_query(owner,DNS_TYPE_SRV,out,2000);
+        if (owner[0]) count=dns_query(owner,DNS_TYPE_SRV,out,timeout<2000?timeout:2000);
         if (count && !strcmp(out[0].source,"srv_disabled")) return 0;
         /* RFC 2782 weighted selection without replacement, priority first. */
         for (int n=0;n<count;n++) {
@@ -193,7 +206,33 @@ int endpoints_candidates(const ProxyConfig* c,int channel,bool recovery,Leo4Endp
         Leo4Endpoint bootstrap={0}; strcpy_s(bootstrap.host,sizeof(bootstrap.host),c->policy_bootstrap_ip);
         bootstrap.port=c->policy_bootstrap_port; strcpy_s(bootstrap.source,sizeof(bootstrap.source),"bootstrap_ip"); out[count++]=bootstrap;
     }
-    return count;
+    /* Keep the earliest source/order; aliases must not consume retry budgets. */
+    int unique=0;
+    for (int n=0;n<count;n++) {
+        bool duplicate=false;
+        for (int k=0;k<unique;k++) if (out[k].port==out[n].port && !_stricmp(out[k].host,out[n].host)) duplicate=true;
+        if (!duplicate) out[unique++]=out[n];
+    }
+    return unique;
+}
+int endpoints_candidates(const ProxyConfig* c,int channel,bool recovery,Leo4Endpoint* out) {
+    return endpoints_candidates_timed(c,channel,recovery,out,2000);
+}
+int endpoint_attempt_timeout(const Leo4Endpoint* candidates,int count,int index,int remaining_ms) {
+    if(!candidates || index<0 || index>=count || remaining_ms<=0)return 0;
+    int ips=0,primary=0;
+    for(int n=index;n<count;n++) {
+        if(!strcmp(candidates[n].source,"policy_ip") || !strcmp(candidates[n].source,"bootstrap_ip"))++ips;
+        else ++primary;
+    }
+    bool fallback=!strcmp(candidates[index].source,"policy_ip") || !strcmp(candidates[index].source,"bootstrap_ip");
+    int share;
+    if(ips && !fallback) {
+        int reserved=ips*1500;if(reserved>3000)reserved=3000;
+        if(remaining_ms<=reserved)return 0; /* Preserve recovery instead of spending it on DNS. */
+        share=(remaining_ms-reserved)/primary;
+    } else share=remaining_ms/(count-index);
+    return share>2500?2500:share;
 }
 static void clear_policy(void) { memset(policy_hosts,0,sizeof(policy_hosts)); memset(policy_ips,0,sizeof(policy_ips)); memset(ip_counts,0,sizeof(ip_counts)); }
 static bool parse_policy(const char* text,size_t len,const char* sn,unsigned long long received) {
@@ -235,9 +274,9 @@ void endpoints_identity(const char* sn) {
     AcquireSRWLockExclusive(&endpoint_lock);
     if (!strcmp(identity,sn)) { ReleaseSRWLockExclusive(&endpoint_lock); return; }
     strcpy_s(identity,sizeof(identity),sn); clear_policy(); memset(active,0,sizeof(active)); memset(active_until,0,sizeof(active_until)); received_at=expires_at=0; expires_tick=0;
-    char data[16385]; DWORD length=sizeof(data),type=0; HKEY key;
+    char data[16393]; DWORD length=sizeof(data),type=0; HKEY key;
     if (RegOpenKeyExW(HKEY_LOCAL_MACHINE,cache_key,0,KEY_QUERY_VALUE|KEY_WOW64_32KEY,&key)==ERROR_SUCCESS) {
-        if (RegQueryValueExW(key,L"Endpoints",NULL,&type,(BYTE*)data,&length)==ERROR_SUCCESS && type==REG_BINARY && length>8) {
+        if (RegQueryValueExW(key,L"Endpoints",NULL,&type,(BYTE*)data,&length)==ERROR_SUCCESS && type==REG_BINARY && length>8 && length<=16392) {
             unsigned long long received; memcpy(&received,data,8); parse_policy(data+8,length-8,sn,received);
         }
         RegCloseKey(key);
@@ -246,7 +285,7 @@ void endpoints_identity(const char* sn) {
         FILE* f=NULL;
         if (!_wfopen_s(&f,cache_file,L"rb") && f) {
             unsigned long long received;
-            if (fread(&received,8,1,f)==1) { size_t bytes=fread(data,1,sizeof(data)-1,f); parse_policy(data,bytes,sn,received); }
+            if (fread(&received,8,1,f)==1) { size_t bytes=fread(data,1,16385,f); if (bytes<=16384) parse_policy(data,bytes,sn,received); }
             fclose(f);
         }
     }

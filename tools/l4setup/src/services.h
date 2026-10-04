@@ -106,6 +106,9 @@ bool services_stop_all_in_order(
  * Query current SCM status of a service.
  */
 DWORD services_query_status(const wchar_t* svc_name);
+/* Read-only diagnostic arguments from authoritative SCM configuration. */
+bool services_read_proxy_arguments(const wchar_t* dest,wchar_t* out,size_t capacity);
+bool services_read_network_options(const wchar_t* dest,CliOptions* options);
 
 /**
  * Send user-defined control code (e.g. 128) to L4Superv service.

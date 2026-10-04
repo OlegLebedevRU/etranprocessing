@@ -21,6 +21,7 @@ static BOOL WINAPI fixture_next(HANDLE h, LPPROCESSENTRY32W p) { (void)h; (void)
 static BOOL WINAPI fixture_pid_session(DWORD pid, DWORD* session) { (void)pid; *session = 1; return TRUE; }
 static BOOL WINAPI fixture_close(HANDLE h) { (void)h; return TRUE; }
 bool setup_proxy_probe(int port, bool ready, int timeout) { (void)port; (void)ready; (void)timeout; return true; }
+bool services_read_proxy_arguments(const wchar_t* dest,wchar_t* out,size_t capacity) {(void)dest;wcscpy_s(out,capacity,L"--service --rtp-tunnel");return true;}
 void log_info(const char* format, ...) { (void)format; }
 void log_warn(const char* format, ...) { (void)format; }
 void log_err(const char* format, ...) { (void)format; }

@@ -13,7 +13,7 @@ typedef struct {
     bool l4desk_running;
     char ffmpeg_smoke_capture[16]; // "ok", "skipped", "fail"
     bool desktop_locked;
-    char network[16];              // "reachable", "unreachable"
+    char network[16];              // actual TLS evidence: "reachable", "unknown", "not_run"
     char remote_input[32];         // "available", "session_unavailable", "desktop_locked", etc.
     char upstream_tls[4][32];      // bounded leo4proxy diagnostic verdicts
 

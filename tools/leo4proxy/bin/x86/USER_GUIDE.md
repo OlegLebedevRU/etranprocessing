@@ -1,187 +1,92 @@
-# Leo4Proxy - User & Operator Guide
+# Leo4Proxy — руководство оператора
 
-## 1. Overview
+Опубликованный выпуск: leo4proxy **1.8.1** в signed tools **1.10.2**, 2026-10-04.
+Выпуск **1.8.1 / tools 1.10.2** уточняет network deadlines, IP fallback reserve
+и параллельную диагностику; [матрица](../../../../docs/term_net-leo4proxy-resolving-reliability-matrix.md).
+Подписи, timestamps, payload и полные HTTPS downloads проверены.
+Upgrade терминала 773 до 1.10.2 подтверждён оператором: ready/0, proxy 1.8.1, MQTT/HTTPS/RTP TLS valid.
+Установка всего suite: [руководство инженера](../../../../docs/term_tool-user-guide.md).
+Полный CLI и модули: [README](../../README.md).
 
-`leo4proxy` is a zero-dependency, high-performance Windows background service written in native C (Win32 / SChannel). It provides:
-1. **Forward mTLS Proxy**: Enables legacy terminal applications (HTTP/MQTT) to communicate with the processing center over mutual TLS (port `4443`) using client certificates stored in Windows `LocalMachine\MY`.
-2. **Reverse HTTPS Gateway**: Securely exposes local terminal interfaces over HTTPS (port `443`) with automatic mDNS / LLMNR local network discovery (`terminal.local`).
+## Установка и сертификат
 
-### Key Features
-- **Zero External Dependencies**: Pure Win32/SChannel. No OpenSSL, .NET runtime, or Visual C++ Redistributable required (`/MT` static binary).
-- **Universal Architecture**: Native **32-bit (x86)** and **64-bit (x64)** support across Windows 7 POSReady / 8 / 10 / 11.
-- **Resource Footprint**: Minimal memory (< 5 MB RAM) and near-zero CPU usage.
-- **Automated Service & Firewall**: Complete set of `.cmd` automation scripts with built-in UAC elevation and Windows Defender Firewall configuration.
+Запустите подписанный `l4setup.exe` из релиза 1.10.2. Существующий действующий
+сертификат переиспользуется; при отсутствии сертификата можно ввести PIN или
+отложить активацию. Без действующего terminal cert proxy остаётся в ожидании,
+локальная диагностика доступна; внешние MQTT/media не активируются.
+Клиентский сертификат находится в `LocalMachine\MY`, private key — в Windows CNG.
 
----
+Для отдельного администрирования proxy сохранены `leo4proxy_install_start.cmd`,
+`leo4proxy_start.cmd`, `leo4proxy_stop.cmd`, `leo4proxy_restart.cmd`,
+`leo4proxy_status.cmd`, `leo4proxy_stop_uninstall.cmd`. Они управляют службой;
+используйте l4setup для согласованной установки/обновления всего комплекса.
 
-## 2. Quick Start
+## Локальные и внешние адреса
 
-### Step 1: Install Client Certificate
-Before starting `leo4proxy`, ensure the terminal certificate is installed into `LocalMachine\MY` using `terminal-cert-installer` (see `install_cert.cmd`).
-
-### Step 2: Install and Start Leo4Proxy Service
-1. Right-click **`leo4proxy_install_start.cmd`** and select **Run as administrator** (or double-click and accept UAC elevation).
-2. The installer will automatically:
-   - Configure Windows Defender Firewall rules for inbound ports (`443/TCP`, `80/TCP`, `5353/UDP`, `5355/UDP`).
-   - Register the Windows Service `Leo4Proxy` set to Automatic startup (`start=auto`).
-   - Start the service.
-
-### Step 3: Verify Status
-Run **`leo4proxy_status.cmd`** to verify that the service is running and the certificate in `LocalMachine\MY` is recognized.
-
----
-
-## 3. Management Scripts
-
-| Script Name | Purpose | Description |
+| Канал | Локальный адрес | Логический upstream по умолчанию |
 |---|---|---|
-| **`leo4proxy_install_start.cmd`** | Full Setup | Installs firewall rules, registers Windows service, and starts it. |
-| **`leo4proxy_status.cmd`** | Diagnostic | Checks Windows Service status (SCM) and inspects certificate in store. |
-| **`leo4proxy_restart.cmd`** | Restart | Restarts the running `Leo4Proxy` service. |
-| **`leo4proxy_start.cmd`** | Start | Starts the installed service. |
-| **`leo4proxy_stop.cmd`** | Stop | Stops the service and any running standalone instances. |
-| **`leo4proxy_stop_uninstall.cmd`** | Removal | Stops service, removes it from SCM, and removes firewall rules. |
+| MQTT приложения | Mosquitto `127.0.0.1:1883` | bridge через proxy |
+| MQTT proxy | `127.0.0.1:18883` | `dev.leo4.ru:8883` |
+| HTTP proxy / metadata | `127.0.0.1:18443` | `iot-processing.ru:443` |
+| Reverse HTTPS | `0.0.0.0:443` | локальный `127.0.0.1:8000` |
+| RTP/RTCP tunnel | UDP `127.0.0.1:5004/5005` | `dev.leo4.ru:8443` |
+| TCP Stream (optional) | `127.0.0.1:8554` | `dev.leo4.ru:8443` |
 
----
+RTP включён штатными service args l4setup; отдельный запуск leo4proxy требует
+`--rtp-tunnel`. Stream по умолчанию выключен; `--stream` включает его отдельно.
+Не считайте отсутствие локального reverse backend на :8000 отказом MQTT/RTP.
+Discovery: имя из SAN DNS либо `leo4-<sn>.local`; фиксированное `terminal.local`
+не является общим именем всех устройств.
 
-## 4. Default Network Topology
+## Auto, policy и IP recovery
 
-```
-+-------------------------------------------------------------------------+
-| POS Terminal (Local Machine)                                            |
-|                                                                         |
-|  [Terminal App] ---> 127.0.0.1:1883 (MQTT) ----+                        |
-|  [Legacy App]   ---> 127.0.0.1:8080 (HTTP) ----+                        |
-|                                                |                        |
-|                                                v                        |
-|                                       +------------------+              |
-|                                       |    leo4proxy     |              |
-|                                       | (SChannel mTLS)  | ===(mTLS)===> Processing Center
-|                                       +------------------+               (iot.leo4.ru:4443)
-|                                                ^                        |
-|  [Local Browser / Admin] ---> :443 (HTTPS) ----+                        |
-|                                                |                        |
-|                                                v                        |
-|                                 127.0.0.1:8000 (Local Web UI)           |
-+-------------------------------------------------------------------------+
-```
+Auto: SRV → verified SRV LKG → fresh policy host → default → fresh policy IP.
+Ручной `--mqtt-remote`, `--http-remote`, `--stream-remote` или `--rtp-remote`
+приоритетнее Auto. SRV owners по умолчанию:
+`_mqtt._tls.dev.leo4.ru`, `_https._tcp.iot-processing.ru`,
+`_l4stream._tls.dev.leo4.ru`, `_l4rtp._tls.dev.leo4.ru`.
+`--no-srv` отключает только SRV, target `.` запрещает обход канала.
+Bootstrap IP задаётся `--policy-bootstrap-ip`, порт — `--policy-bootstrap-port`
+(default 443); он используется только для recovery GET policy.
 
-- **Local MQTT Proxy**: `127.0.0.1:1883` $\rightarrow$ Remote `iot.leo4.ru:4443` (with client certificate).
-- **Local HTTP Proxy**: `127.0.0.1:8080` $\rightarrow$ Remote `iot.leo4.ru:4443` (with client certificate).
-- **Reverse HTTPS Gateway**: `0.0.0.0:443` $\rightarrow$ Local `127.0.0.1:8000` (Terminal UI).
-- **LAN Discovery**: mDNS (`5353/UDP`) and LLMNR (`5355/UDP`) resolve `https://terminal.local`.
+При TCP к fallback IP сохраняются логическое имя TLS/SNI и HTTP Host.
+Проверка CA/name/time/serverAuth обязательна, встроенный CA — exclusive trust
+для исходящих каналов. `--secure` сохранён для совместимости; strict TLS уже
+действует по умолчанию. Текст старой CLI help про lax/insecure устарел.
+Сценарий отключения server certificate validation в релиз не включён.
+CRL/OCSP не проверяются, IPv4/первый A-address остаётся ограничением.
 
----
-
-## 5. Command-Line Reference
+## Диагностика без перезапуска служб
 
 ```cmd
-leo4proxy.exe [options]
+C:\l4tools\leo4proxy\leo4proxy.exe --get-sn
+C:\l4tools\leo4proxy\leo4proxy.exe --test-cert
+curl.exe --noproxy "*" http://127.0.0.1:18443/_leo4/info
+C:\l4tools\leo4proxy\leo4proxy.exe --check-upstream --rtp-tunnel --policy-bootstrap-ip 87.242.100.34
+C:\l4tools\leo4proxy\leo4proxy.exe --check-policy-bootstrap --policy-bootstrap-ip 87.242.100.34
 ```
 
-### Key Options
+`--get-sn` возвращает только SN. `--test-cert` проверяет выбранный сертификат и
+получение Schannel credentials, не доказывает соединение с upstream.
+`--check-upstream` делает TLS handshakes включённых каналов, учитывает cached
+admission и выдаёт JSON channel/verdict/host/port/source/logical_name/strict.
+Для отключённого канала — skipped. Диагностика не отправляет MQTT CONNECT или
+видеоданные; ручные service options следует передать также в probe.
+`--check-policy-bootstrap` выполняет настоящий mTLS GET policy через numeric IP,
+без DNS и записи cache. Admission deny остаётся обязательным.
 
-| Option | Description |
-|---|---|
-| `--status` | Check Windows service state and certificate availability |
-| `--test-cert` | Verify TLS handshake capability with SChannel and certificate |
-| `--get-sn` | Print certificate Subject Name, Serial, and Thumbprint |
-| `--console` | Run in foreground interactive console mode (with tray icon) |
-| `--verbose`, `-v` | Enable detailed diagnostic log output |
-| `--no-reverse` | Disable inbound reverse HTTPS gateway (forward proxy only) |
-| `--reverse-target <host:port>` | Target endpoint for reverse proxy (default: `127.0.0.1:8000`) |
-| `--cert-email <email>` | Select certificate matching specific email in `LocalMachine\MY` |
-| `--cert-thumbprint <hex>` | Select certificate matching specific SHA-1 thumbprint |
-| `--cert-poll-interval <sec>` | Polling interval in seconds for certificate changes in service mode (default: `30`) |
-| `--drop-on-expire` | Transition to standby mode if certificate expires and no valid replacement exists |
-| `--stream` | Enable local TCP -> mTLS video stream forwarder (default: disabled) |
-| `--no-stream` | Disable stream forwarder |
-| `--stream-local <ip:port>` | Local stream listener address (default: `127.0.0.1:8554`) |
-| `--stream-remote <host:port>` | Remote cloud media ingress (default: `dev.leo4.ru:8443`) |
-| `--stream-max-clients <n>` | Max concurrent streaming connections (default: `2`, min: 1) |
-| `--stream-idle-timeout <sec>` | Idle timeout in seconds before closing tunnel (default: `30`, 0 = disabled) |
-| `--rtp-tunnel` | Enable primary video RTP/RTCP UDP -> framed mTLS tunnel (default: disabled) |
-| `--no-rtp-tunnel` | Disable RTP tunnel |
-| `--rtp-local <ip[:rtp[:rtcp]]>` | Local loopback UDP address/ports (default: `127.0.0.1:5004/5005`) |
-| `--rtp-port <port>` | Local RTP UDP port (default: `5004`) |
-| `--rtcp-port <port>` | Local RTCP UDP port (default: `5005`) |
-| `--rtp-remote <host:port>` | Remote cloud video ingress (default: `dev.leo4.ru:8443`) |
-| `--rtp-idle-timeout <sec>` | Idle timeout before closing mTLS session (default: `30`, 0 = disabled) |
-| `--rtp-reconnect <sec>` | Initial reconnect backoff delay in seconds (default: `3`, doubles to 30) |
-| `--install` / `--uninstall` | Register or unregister Windows Service |
-| `--start` / `--stop` | Start or stop Windows Service |
-| `--help` | Display usage and all CLI flags |
+`/_leo4/info` показывает identity, listeners, логические upstreams, policy и
+`endpoints.channels`: выбранный target/source последнего служебного соединения.
+Media endpoint может быть пуст до первого потока; diagnostic процесс не обновляет
+endpoint работающей службы. RTP lazy connect открывает туннель по первому UDP.
+`routes_active=true` и TLS valid отдельно не доказывают показ видео.
 
----
+## Проверки релиза 1.10.1
 
-## 6. Видеопоток с камеры терминала (RTP Tunnel L4RTP/1 и Stream Forwarder)
-
-В `leo4proxy` поддерживаются два режима защищенной передачи видеопотока в облачный медиасервер:
-1. **Основной видеорежим (`--rtp-tunnel`)**: локальный RTP/RTCP по UDP -> framed mTLS/TCP туннель (протокол `L4RTP/1`, Lazy Connect, преамбула SN).
-2. **Опциональный legacy-режим (`--stream`)**: plain TCP forwarder в mTLS TCP.
-
----
-
-### 6.1. Основной режим: RTP/RTCP UDP -> framed mTLS/TCP (L4RTP/1)
-
-`ffmpeg` на терминале передает стандартные UDP датаграммы:
-- **RTP**: `127.0.0.1:5004` (UDP)
-- **RTCP**: `127.0.0.1:5005` (UDP)
-
-Прокси `leo4proxy` выполняет фрейминг датаграмм по протоколу `L4RTP/1` и отправляет их в **ОДНОМ** mTLS-соединении на единый внешний endpoint `dev.leo4.ru:8443`.
-
-```
-ffmpeg (USB Camera) ──UDP (5004/5005)──► leo4proxy ──L4RTP/1 mTLS──► dev.leo4.ru:8443 (Cloud Ingress)
-```
-
-#### Ключевые особенности:
-- **Преамбула SN**: сразу после TLS handshake прокси отправляет преамбулу с серийным номером (SN), взятым строго из клиентского сертификата (`certDetails->sn`).
-- **Lazy Connect**: исходящее TLS-соединение открывается только при приходе первого UDP-пакета от `ffmpeg` и закрывается по idle-таймауту (по умолчанию 30 с).
-- **Экспоненциальный Backoff**: при сетевых сбоях включается прерываемая пауза (3с -> 6с -> 30с) со сбросом поступающих UDP-пакетов без расхода памяти (`rtp_tunnel_dropped_no_upstream`).
-
-#### CLI-параметры RTP-туннеля:
-- `--rtp-tunnel`: включить основной режим (по умолчанию выключен).
-- `--no-rtp-tunnel`: выключить RTP-туннель.
-- `--rtp-local <ip[:rtp[:rtcp]]>`: локальные порты UDP (по умолчанию `127.0.0.1:5004/5005`).
-- `--rtp-port <port>` / `--rtcp-port <port>`: порты RTP и RTCP по отдельности.
-- `--rtp-remote <host:port>`: удаленный облачный шлюз (по умолчанию `dev.leo4.ru:8443`).
-- `--rtp-idle-timeout <sec>`: таймаут простоя в секундах до закрытия сессии (по умолчанию `30`).
-- `--rtp-reconnect <sec>`: начальная задержка backoff (по умолчанию `3`).
-
-#### Пример запуска ffmpeg:
-```cmd
-ffmpeg -f dshow -i video="USB Camera" -c:v libx264 -preset ultrafast -tune zerolatency -b:v 800k -f rtp rtp://127.0.0.1:5004?rtcpport=5005
-```
-Готовый скрипт: `tools/leo4proxy/examples/ffmpeg_rtp_tunnel_example.cmd`.
-
----
-
-### 6.2. Опциональный legacy-режим: Stream Forwarder (`--stream`)
-
-Обеспечивает прямое туннелирование TCP-потока (MPEG-TS / RTSP over TCP) от локального `ffmpeg`:
-```cmd
-leo4proxy.exe --install --stream --stream-remote dev.leo4.ru:8443
-ffmpeg -f dshow -i video="USB Camera" -c:v libx264 -preset ultrafast -tune zerolatency -b:v 800k -f mpegts tcp://127.0.0.1:8554
-```
-Готовый скрипт: `tools/leo4proxy/examples/ffmpeg_stream_example.cmd`.
-
----
-
-### 6.3. Диагностика через REST API
-Метрики передаваемых байтов и пакетов доступны через диагностический API:
-```bash
-curl http://127.0.0.1:18443/_leo4/info
-```
-
----
-
-## 7. Troubleshooting
-
-- **Service fails to start (`Error: No valid client certificate found`)**:
-  - Run `install_cert.cmd` from `terminal-cert-installer` to enroll a valid certificate.
-  - Run `leo4proxy_status.cmd` to verify certificate presence in `LocalMachine\MY`.
-- **Port 443 already in use**:
-  - Check if IIS or another web server is occupying port 443 (`netstat -ano | findstr :443`).
-  - Run `leo4proxy.exe --reverse-port 8443` or use `--no-reverse` if reverse proxy is not required.
-- **Firewall blocking incoming traffic**:
-  - Re-run `leo4proxy_install_start.cmd` with Administrator privileges to reset firewall rules.
+Upgrade773/Windows10 x64 прошёл ready/0; MQTT/HTTPS/RTP TLS valid,
+Stream disabled/skipped. Оператор подтвердил работу видео после обновления.
+При отказе диагностики читайте `C:\l4tools\install_summary.json` и
+`C:\l4tools\l4setup.log`: неверный сертификат — cert_invalid, сетевой/другой
+отказ — probe_failed, timeout — исчерпан бюджет. 1.10.1 исправляет потерю
+последней строки verdict из pipe. Cold/warm DNS outage, новое PIN enrollment
+и Win7 этим подтверждением не проверены.
