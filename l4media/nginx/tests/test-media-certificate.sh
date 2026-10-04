@@ -36,7 +36,29 @@ printf 'subjectAltName=DNS:dev.leo4.ru\nextendedKeyUsage=clientAuth\n' > client.
 openssl x509 -req -in server.csr -CA ca.pem -CAkey ca.key -CAserial ca.srl \
     -days 1 -extfile client.ext -out client.pem >/dev/null 2>&1
 MEDIA_SERVER_CERT="$fixture_dir/client.pem" reject client-only-purpose
-openssl x509 -req -in server.csr -CA ca.pem -CAkey ca.key -CAserial ca.srl \
-    -days -1 -extfile server.ext -out expired.pem >/dev/null 2>&1
+# OpenSSL 3.5 requires positive -days; issue an explicitly dated fixture instead.
+: > index.txt
+printf '01\n' > serial.txt
+cat > expired.cnf <<'EOF'
+[ca]
+default_ca=fixture
+[fixture]
+database=index.txt
+serial=serial.txt
+new_certs_dir=.
+certificate=ca.pem
+private_key=ca.key
+default_md=sha256
+default_days=1
+policy=subject
+[subject]
+commonName=supplied
+[server]
+subjectAltName=DNS:dev.leo4.ru
+extendedKeyUsage=serverAuth
+EOF
+openssl ca -batch -notext -config expired.cnf -extensions server \
+    -startdate 20200101000000Z -enddate 20200102000000Z \
+    -in server.csr -out expired.pem >/dev/null 2>&1
 MEDIA_SERVER_CERT="$fixture_dir/expired.pem" reject expired-certificate
 echo "PASS: media certificate gate"
