@@ -165,7 +165,7 @@ async def test_discovery_on_new_ca_serial_mismatch():
     req = _make_mock_request(
         path="/api/licensebilling",
         dn="CN=SN123,OU=773,O=1",
-        serial="NEW_SERIAL_456",
+        serial="F" * 40,
         issuer="CN=iot.leo4.ru",
     )
 
@@ -173,7 +173,7 @@ async def test_discovery_on_new_ca_serial_mismatch():
         id=10,
         device_id=773,
         sn="SN123",
-        cert_serial="OLD_SERIAL_123",
+        cert_serial="A" * 40,
         org_id=1,
         is_active=True,
     )

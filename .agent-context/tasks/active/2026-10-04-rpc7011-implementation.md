@@ -149,3 +149,25 @@ with returnedpin_id reused the same hiddenPIN. NoCSR/issuance happened in
 this check; this pendingPIN is reserved for the operator's retry, not orphan
 scratchdata. User asked to repeatUI order. Unrelated403 browserentries are
 unconfirmed: Response details no longer available, no authorization weakened.
+
+## Endpoint trust / leading-zero correction
+
+Real7011 task f79fe21f-200d-4ec2-a3da-d65926d1e71d returnedRES200/exit0 in2203ms,
+new certificate installed and proxy hotrotated. Numeric serial E6A80EDDF507030DF7982A76C29484EB45BAF4E
+is rendered by nginx/Windows as0E6A80EDDF507030DF7982A76C29484EB45BAF4E;
+DB issuance uses unpadded hex. Strict string comparison rejected identity.
+Fix: newCA identity compares uppercase/leading-zero-normalized numeric serial
+AND SN, discovery records the unchanged issuance representation. No serial
+write outsidesetup/renew; legacy auth branch unchanged. MB admission correction
+for20<hexlength<=40 follows this PB contract result.
+
+Global nginx trustedCA briefly enabled; user explicitly constrained changes
+to newroute. Exact prechange globalTLS configuration restored/reloaded.
+Final nginx delta onlyrenewlocation: requireclientcertificate (NONE denied),
+overwrite certificateheaders, retainoptional_no_ca unchanged. PBrenew verifies
+leaf signature directly with packaged publiciot.leo4.ru trustanchor, issuer/fullDN,
+validity/SN/currentserial; SUCCESS alone cannot authenticate a forged certificate.
+Trustedroot fingerprint matches existing ingressCA and terminalroot.
+PB181tests/quality passed, including forgedleaf withSUCCESS/FAILED header denial.
+Only publicCA resource packaged, no privatekeys or learned client trustanchor.
+CorrectedPBimage rollout and runtimeverifiednewroute remain to complete.

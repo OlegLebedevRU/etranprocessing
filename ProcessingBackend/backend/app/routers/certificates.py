@@ -13,9 +13,12 @@ import hashlib
 import os
 import urllib.parse
 from datetime import UTC, datetime, timedelta
+from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from cryptography import x509
+from cryptography.exceptions import InvalidSignature, UnsupportedAlgorithm
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.utils import int_to_bytes
@@ -211,14 +214,27 @@ def _parse_ca_datetime(value: str) -> datetime | None:
 # ---------------------------------------------------------------------------
 
 
+@lru_cache(maxsize=1)
+def _renewal_ca() -> x509.Certificate:
+    # Public trust anchor packaged with PB; not learned from client headers or a network response.
+    return x509.load_pem_x509_certificate(
+        (Path(__file__).parents[1] / "certs" / "iot_leo4_ca.crt").read_bytes()
+    )
+
+
 def _renewal_identity(request: Request) -> tuple[str, str]:
-    """Only verified, live new-CA certificates from the dedicated proxy location."""
-    if request.headers.get("X-Client-Cert-Verified") != "SUCCESS":
+    """Verify this route's client signature without changing the legacy TLS trust configuration."""
+    verified = request.headers.get("X-Client-Cert-Verified", "")
+    # Nginx optional_no_ca authenticates possession in TLS, then PB verifies the trust anchor.
+    # These headers must be overwritten by the dedicated ingress location.
+    if verified != "SUCCESS" and not verified.startswith("FAILED:"):
         raise HTTPException(401, "verified_certificate_required")
     try:
         cert = x509.load_pem_x509_certificate(
             urllib.parse.unquote(request.headers.get("X-SSL-Client-Cert", "")).encode()
         )
+        ca = _renewal_ca()
+        cert.verify_directly_issued_by(ca)
         issuer = cert.issuer.get_attributes_for_oid(NameOID.COMMON_NAME)
         subject = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
         now = datetime.now(UTC)
@@ -227,6 +243,7 @@ def _renewal_identity(request: Request) -> tuple[str, str]:
             or issuer[0].value != "iot.leo4.ru"
             or len(subject) != 1
             or not cert.not_valid_before_utc <= now < cert.not_valid_after_utc
+            or not ca.not_valid_before_utc <= now < ca.not_valid_after_utc
         ):
             raise ValueError("invalid renewal certificate")
         serial = request.headers.get("X-Client-Cert-Serial", "").upper()
@@ -235,7 +252,7 @@ def _renewal_identity(request: Request) -> tuple[str, str]:
         ):
             raise ValueError("serial header mismatch")
         return str(subject[0].value), serial
-    except (ValueError, TypeError) as exc:
+    except (ValueError, TypeError, InvalidSignature, UnsupportedAlgorithm) as exc:
         raise HTTPException(401, "live_new_ca_certificate_required") from exc
 
 
@@ -260,7 +277,8 @@ async def _verify_renewal_owner(
         if not current_issuance:
             raise HTTPException(409, "renewal_recovery_superseded")
         accepted.add(recovery.renewal_auth_serial)
-    if terminal.sn != sn or serial not in accepted:
+    accepted_values = {value.upper().lstrip("0") for value in accepted if value}
+    if terminal.sn != sn or serial.upper().lstrip("0") not in accepted_values:
         raise HTTPException(401, "renewal_identity_mismatch")
     if not terminal.is_active or not await subscription_allowance(db, terminal):
         raise HTTPException(403, "terminal_renewal_not_allowed")

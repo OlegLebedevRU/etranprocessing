@@ -20,6 +20,24 @@ from tests.test_certificate_pin_contract import _generate_csr, _mock_sign_csr
 
 SERIAL = "4" * 40
 SN = "fixture-sn"
+TEST_CA_KEY = rsa.generate_private_key(65537, 2048)
+TEST_CA_NAME = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "iot.leo4.ru")])
+TEST_CA = (
+    x509.CertificateBuilder()
+    .subject_name(TEST_CA_NAME)
+    .issuer_name(TEST_CA_NAME)
+    .public_key(TEST_CA_KEY.public_key())
+    .serial_number(1)
+    .not_valid_before(datetime.now(UTC) - timedelta(days=2))
+    .not_valid_after(datetime.now(UTC) + timedelta(days=2))
+    .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+    .sign(TEST_CA_KEY, hashes.SHA256())
+)
+
+
+@pytest.fixture(autouse=True)
+def renewal_trust_anchor(monkeypatch):
+    monkeypatch.setattr(module, "_renewal_ca", lambda: TEST_CA)
 
 
 @pytest.fixture
@@ -38,7 +56,7 @@ def identity_headers(*, expired=False, issuer="iot.leo4.ru", sn=SN, serial=SERIA
         .serial_number(int(serial, 16))
         .not_valid_before(now - timedelta(days=2))
         .not_valid_after(now + timedelta(days=-1 if expired else 1))
-        .sign(key, hashes.SHA256())
+        .sign(TEST_CA_KEY, hashes.SHA256())
     )
     return {
         "X-Client-Cert-Verified": "SUCCESS",
@@ -194,7 +212,11 @@ def test_renewal_proxy_is_explicit_and_service_pin_route_is_private():
     location = text.split("location = /api/certificates/renew {", 1)[1].split(
         "proxy_buffering off;", 1
     )[0]
-    assert "if ($ssl_client_verify != SUCCESS)" in location
+    assert "if ($ssl_client_verify = NONE)" in location
+    global_tls = text.split("location = /ssl-debug", 1)[0]
+    assert "ssl_verify_client optional_no_ca;" in global_tls
+    assert "\n    ssl_trusted_certificate " not in global_tls
+    assert "\n    ssl_client_certificate " not in global_tls
     assert "X-Client-Cert-Serial $ssl_client_serial" in location
     assert "X-SSL-Client-Cert $ssl_client_escaped_cert" in location
     assert "location = /api/certificates/renewal-pins { return 404; }" in text
@@ -317,3 +339,44 @@ async def test_recovery_cannot_restore_superseded_serial(monkeypatch):
     with pytest.raises(Exception) as denied:
         await module._verify_renewal_owner(target, (SN, "5" * 40), db, pin)
     assert denied.value.status_code == 409
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "verified", ["SUCCESS", "FAILED:unable to verify the first certificate"]
+)
+async def test_renewal_verifies_client_signature_independently_of_global_tls(
+    renewal, verified
+):
+    headers = identity_headers()
+    headers["X-Client-Cert-Verified"] = verified
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        good = await client.post(
+            "/api/certificates/renew",
+            headers=headers,
+            json={"function": "check", "pin": "123456"},
+        )
+        assert good.status_code == 200
+        forged_key = rsa.generate_private_key(65537, 2048)
+        now = datetime.now(UTC)
+        forged = (
+            x509.CertificateBuilder()
+            .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, SN)]))
+            .issuer_name(TEST_CA_NAME)
+            .public_key(forged_key.public_key())
+            .serial_number(int(SERIAL, 16))
+            .not_valid_before(now - timedelta(days=1))
+            .not_valid_after(now + timedelta(days=1))
+            .sign(forged_key, hashes.SHA256())
+        )
+        headers["X-SSL-Client-Cert"] = urllib.parse.quote(
+            forged.public_bytes(serialization.Encoding.PEM).decode()
+        )
+        denied = await client.post(
+            "/api/certificates/renew",
+            headers=headers,
+            json={"function": "check", "pin": "123456"},
+        )
+        assert denied.status_code == 401

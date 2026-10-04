@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 
 from cryptography import x509
 from fastapi import Depends, HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -154,16 +154,26 @@ async def get_current_terminal(
         )
 
     if is_new_ca:
-        # Strict auth for new CA: sn (CN) + cert_serial
+        # OpenSSL hex rendering can add a leading zero; compare the same numeric serial.
+        if (
+            not cert_serial
+            or len(cert_serial) > 40
+            or any(c not in "0123456789abcdefABCDEF" for c in cert_serial)
+        ):
+            raise HTTPException(401, "Invalid new CA certificate serial")
+        serial_value = cert_serial.upper().lstrip("0") or "0"
+        # Strict auth for new CA: sn (CN) + certificate serial, no identity fallback.
         result = await db.execute(
             select(Terminal).where(
                 Terminal.sn == cn,
-                Terminal.cert_serial == cert_serial,
+                func.ltrim(func.upper(Terminal.cert_serial), "0") == serial_value,
             )
         )
         terminal = result.scalar_one_or_none()
 
         if terminal:
+            # Discovery uses the issuance representation; do not rewrite terminals.cert_serial here.
+            cert_serial = terminal.cert_serial
             cert_not_valid_after = extract_cert_not_valid_after(request)
             if (
                 cert_not_valid_after

@@ -168,12 +168,15 @@ async def test_legacy_auth_does_not_overwrite_new_ca_serial():
 
 
 @pytest.mark.anyio
-async def test_new_ca_strict_auth_success():
+@pytest.mark.parametrize(
+    "wire_serial", ["52B8E528000400002E35", "052b8e528000400002e35"]
+)
+async def test_new_ca_strict_auth_success(wire_serial):
     """New CA (iot.leo4.ru) validates strictly by sn + cert_serial."""
     req = _make_mock_request(
         path="/api/licensebilling",
         dn="CN=a4b0000773c12345d210826,OU=773,O=1",
-        serial="52B8E528000400002E35",
+        serial=wire_serial,
         issuer="CN=iot.leo4.ru",
     )
 
@@ -201,6 +204,10 @@ async def test_new_ca_strict_auth_success():
 
     res = await get_current_terminal(req, mock_db)
     assert res is terminal
+    assert terminal.cert_serial == "52B8E528000400002E35"
+    query = mock_db.execute.call_args_list[0].args[0]
+    assert "ltrim(upper(terminals.cert_serial)" in str(query)
+    assert "52B8E528000400002E35" in query.compile().params.values()
 
 
 @pytest.mark.anyio
@@ -209,7 +216,7 @@ async def test_new_ca_strict_auth_mismatch_rejected():
     req = _make_mock_request(
         path="/api/licensebilling",
         dn="CN=a4b0000773c12345d210826,OU=773,O=1",
-        serial="WRONG_SERIAL",
+        serial="F" * 40,
         issuer="CN=iot.leo4.ru",
     )
 
@@ -342,3 +349,16 @@ async def test_end_to_end_licensebilling_auto_bind():
     assert resp.status_code == 200
     root = parse_xml(resp.text)
     assert get_text(root, "state") == "ok"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("serial", ["not_hex", "F" * 41])
+async def test_new_ca_malformed_serial_is_denied_without_lookup(serial):
+    req = _make_mock_request(
+        "/api/licensebilling", "CN=fixture-sn", serial, "CN=iot.leo4.ru"
+    )
+    db = AsyncMock()
+    with pytest.raises(HTTPException) as denied:
+        await get_current_terminal(req, db)
+    assert denied.value.status_code == 401
+    db.execute.assert_not_awaited()
