@@ -54,7 +54,10 @@ services:
       - ./iot-rpc-rest-app/crt/key_0000.pem:/crt/server_key.pem:ro
 
   processing-backend:
-    image: dev-leo4-ru.cr.cloud.ru/etran/processingbackend@sha256:bc0e5b131b4e47ec43e0695e7f87d8cc3e158bb26756bc2fb88023aa76a75a00
+    environment:
+      LEO4PROXY_ENDPOINTS: ${LEO4PROXY_ENDPOINTS:-}
+      LEO4PROXY_ENDPOINTS_TTL_SECONDS: ${LEO4PROXY_ENDPOINTS_TTL_SECONDS:-86400}
+    image: dev-leo4-ru.cr.cloud.ru/etran/processingbackend@sha256:264cc0588ba6e20712b4811bf9649db73940e8515cf04cdaa4d8f91288fa325b
     container_name: processing-backend
     restart: always
     env_file:
