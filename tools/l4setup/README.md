@@ -1,16 +1,19 @@
-﻿# Leo4 Zero-Touch Setup (`l4setup`)
+# Leo4 Zero-Touch Setup (`l4setup`)
 
 1.10.1 исправляет потерю последних строк TLS diagnostics при завершении дочернего
 leo4proxy: pipe дочитывается после сигнала process exit. Настоящие ошибки TLS
 сохраняют degraded/12; причина upstream_tls_failed учитывает все четыре канала.
-Это setup-only выпуск: компоненты остаются подписанными байтами 1.10.0.
+Изменён код только setup. При фактической подписи оператор повторно подписал
+компоненты: PE code/data/resources совпадают с 1.10.0, полные hashes изменились.
+Релиз опубликован; Upgrade773 подтверждён ready/0 и valid MQTT/HTTPS/RTP TLS.
+Оператор подтвердил работающий видеопоток.
 
-For release 1.9.1, the Details panel lists the installed package version from
+The Details panel lists the installed package version from
 `state.json` and the actual PE file versions of the installed tools. After an
 installation, the panel rereads `state.json` and refreshes this list.
 
 To sign a prepared release from a regular Windows PowerShell session, run
-`tools/release/Complete-SignedRelease.ps1 -PfxPath <PFX path> -Version 1.9.1`.
+`tools/release/Complete-SignedRelease.ps1 -PfxPath <PFX path> -Version 1.10.1`.
 This signs every staged EXE, rebuilds both embedded payloads, signs
 `l4setup.exe`, and regenerates the manifest and checksums. The private key
 stays outside the repository. If the PFX is encrypted, set
@@ -43,13 +46,18 @@ l4setup.exe [options]
 |---|---|
 | `--pin <PIN>`, `-p <PIN>` | 6-значный PIN-код терминала для выпуска сертификата. При наличии валидного сертификата игнорируется (если не передан `--force-reissue`). |
 | `--force-reissue` | Разрешить перевыпуск сертификата, даже если текущий сертификат валиден (требует `--pin`). |
-| `--no-pin` | Не запрашивать PIN. Если сертификат отсутствует, перевести терминал в режим ожидания PIN (`standby_waiting_pin`, код `10`). |
+| `--no-pin` | Не запрашивать PIN. Если сертификат отсутствует, перевести терминал в режим ожидания PIN (`activation_required`, код `10`). |
 | `--silent`, `/S` | Тихий режим без диалоговых окон. Без переданного `--pin` автоматически эквивалентен `--no-pin`. |
 | `--dest <DIR>`, `-d <DIR>` | Каталог установки (по умолчанию `C:\l4tools`, учитывается `state.json.installer_base_path`). |
 | `--repair` | Принудительная переустановка файлов и служб даже при совпадении версии. |
-| `--smoke-only` | Выполнить только Фазу 5 (smoke-проверки) на существующей установке и обновить `install_summary.json`. |
-| `--version` | Напечатать версию инсталлятора (`1.6.0`) и выйти с кодом `0` без запроса прав администратора. |
+| `--smoke-only` | В 1.10.1 разбирается/логируется, но engine не учитывает: режим определяется версией и целостностью. Не гарантирует отсутствие установки. |
+| `--version` | Напечатать версию инсталлятора (`1.10.1`) и выйти с кодом `0` без запроса прав администратора. |
 | `--help`, `-h`, `/?` | Показать справку по параметрам и кодам возврата. |
+| `--resolve-auto` / `--no-srv` | Убрать manual remote и включить SRV / отключить только SRV. |
+| `--policy-bootstrap-ip <IP>` | IPv4 recovery GET policy с прежним логическим TLS-именем. |
+| `--mqtt-remote`, `--http-remote`, `--stream-remote`, `--rtp-remote` `<host:port>` | Ручной upstream, приоритетнее Auto. |
+| `--preview-ui` | Предпросмотр GUI без изменения установки и сертификатов. |
+
 | `--payload-dir <DIR>` | *(Служебный флаг разработчика)* Указать каталог с исходными архивами `tools.zip` и `ffmpeg.zip`. |
 
 ---
@@ -59,17 +67,21 @@ l4setup.exe [options]
 | Код | Статус | Описание |
 |---|---|---|
 | `0` | `ready` | Установка и smoke-проверки успешно завершены; терминал активен. |
-| `10` | `standby_waiting_pin` | Терминал переведен в Standby, службы запущены, ожидается ввод PIN. |
+| `10` | `activation_required` | Терминал переведен в Standby, службы запущены, ожидается ввод PIN. |
 | `11` | `ready_for_online` | Сервер CA недоступен; PIN зашифрован DPAPI в `pending_pin.json`, службы запущены в ожидании сети. |
-| `12` | `ready_with_warnings` | Установка завершена, но smoke-проверки выявили предупреждения (`desktop_locked`, `ffmpeg_smoke_capture: skipped`, `l4desk` не запущен). |
+| `12` | `degraded` | Не прошла DNS-проба, ожидание l4desk или TLS-проба включённого upstream. `error_reason` уточняет причину. |
 | `20` | `failed` | Отказ в правах администратора / запрос UAC отклонен пользователем. |
 | `21` | `failed` | Неподдерживаемая версия ОС (< Windows 7 SP1 / NT 6.1). |
 | `22` | `failed` | Ошибка дренажа (активный стрим отклонен, посторонний процесс занимает порты `1883`/`18443`/`18883`). |
 | `23` | `failed` | Ошибка распаковки архива или файловой атомарной замены. |
 | `24` | `failed` | Ошибка регистрации или настройки служб Windows (SCM). |
 | `25` | `failed` | Ошибка выпуска сертификата (PIN отклонен CA-сервером). |
-| `26` | `failed` | Таймаут активации (`_leo4/info` не перешел в статус `ready` за 15 секунд). |
+| `26` | `failed` | Certificate discovery не подтвердил новый сертификат после enrollment. |
 | `27` | `failed` | Провал критической smoke-проверки (`proxy_info` или `mosquitto_port`). |
+| `28` | `failed` | Уже запущен другой l4setup. |
+| `29` | `failed` | Downgrade заблокирован: установленная версия новее пакета. |
+| `30` | `failed` | Недостаточно места: требуется минимум 100 MB headroom. |
+| `31` | `cancelled` | Отмена пользователем; проверьте phase и состояния служб в summary. |
 
 ---
 
@@ -102,9 +114,9 @@ l4setup.exe [options]
 {
   "schema": 2,
   "timestamp": "2026-09-12T18:00:00Z",
-  "installer_version": "1.9.5",
-  "installed_version": "1.9.5",
-  "target_version": "1.9.5",
+  "installer_version": "1.10.1",
+  "installed_version": "1.10.1",
+  "target_version": "1.10.1",
   "os": "Windows 10 Pro (10.0.19045) x64",
   "target_arch": "x64",
   "dest": "C:\\l4tools",
@@ -124,6 +136,7 @@ l4setup.exe [options]
     "ports_freed": []
   },
   "probes": {
+    "upstream_tls": {"mqtt":"valid", "https":"valid", "l4stream":"skipped", "l4rtp":"valid"},
     "proxy_info": "ok",
     "mosquitto_port": "ok",
     "user_session_id": 1,
@@ -167,12 +180,16 @@ startup. Only then does setup wait for proxy ready/standby and run smoke probes.
 cd tools\l4setup
 build.cmd
 ```
-Результат сборки: `tools\l4setup\bin\l4setup.exe` (x86, статический рантайм `/MT`, без сторонних DLL).
+Результат: `bin\x86\l4setup.exe`, `bin\x64\l4setup.exe` и universal
+`bin\l4setup.exe` (копия x86, статический `/MT`). Release version headers и
+embedded payloads готовятся штатным release flow; отдельный build.cmd
+не заменяет staging, подпись и payload integrity gate.
 
 ### Запуск unit-тестов
 ```cmd
 cd tools\l4setup
 run_tests.cmd
+run_tests.cmd x64
 ```
 Тестовый набор проверяет:
 - Все комбинации CLI-аргументов
@@ -211,7 +228,7 @@ routes сохраняются. Legacy certsrv не активирует внеш
 до действующего iot.leo4.ru стек остаётся в ожидании сертификата.
 Для каждого выпуска используйте [постоянный сценарий подписи](../release/README.md).
 
-## Сеть и TLS diagnostics (1.10.0)
+## Сеть и TLS diagnostics (1.10.0–1.10.1)
 
 «Сеть…» задаёт bootstrap IP и manual host:port для отдельных каналов. Пустое поле
 канала означает Auto; проверка server certificate обязательна. При Upgrade/Repair
@@ -226,3 +243,13 @@ leo4proxy, журнал показывает verdict каждого канала
 `install_summary.json` → `probes.upstream_tls`. Это TLS проверка с существующим
 terminal cert, а не видео E2E. `service-args.txt` зеркалирует SCM options для
 watchdog; существующий SCM ImagePath остаётся authoritative.
+
+Общий budget TLS diagnostics — 8 секунд, worker ждёт процесс до 8.5 секунд.
+Проба `network` проверяет DNS `iot.leo4.ru`, а не TCP/Internet: при отказе DNS
+возможен degraded/network_unreachable даже с успешным IP recovery.
+`--smoke-only` не ограничивает engine в 1.10.1. Verify выбирается автоматически
+только при совпадении версии и целостности; Prepare/certificate/service checks
+при этом сохраняются. Для диагностики без installer engine используйте
+`leo4proxy --check-upstream` и local /_leo4/info.
+Полный контракт verdicts и состав:
+[руководство инженера](../../docs/term_tool-user-guide.md).

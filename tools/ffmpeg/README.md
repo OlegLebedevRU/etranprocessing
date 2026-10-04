@@ -1,5 +1,20 @@
 # FFmpeg Media Engine Package for Leo4
 
+## Current delivery: tools 1.10.1
+
+The published installer is signed l4setup.exe with embedded x86/x64 payloads.
+Setup selects the host architecture and installs ffmpeg/ffmpeg.exe together with
+its LICENSE, SOURCES.md, VERSION.txt and log directory. The component's release
+version is 9.0; the EXE may have no PE version. There is no separate ffmpeg.zip
+for the operator to download for this release. See the
+[current engineer guide](../../docs/term_tool-user-guide.md).
+
+The standalone ffmpeg.zip tree and l4install-specific replacement sequence below
+are legacy packaging instructions; current setup uses suite staging/rollback and
+service drainage. Video after Upgrade773 to 1.10.1 is confirmed by the operator;
+that does not establish Windows 7 compatibility or a full outage matrix.
+
+
 ## 1. Overview
 
 `ffmpeg` is the low-latency media capture and RTP streaming engine for the Leo4 terminal remote desktop ecosystem. It is invoked on-demand by `l4desk.exe` in the active interactive user session to stream the kiosk display back to administrative operators via `leo4proxy` and `l4media`.

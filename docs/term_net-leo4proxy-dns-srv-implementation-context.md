@@ -52,7 +52,7 @@ SHA-256 прочитанной версии: `F8CA892F87215D7BF158E0A8D5FACCCCC2
   совпадают со staging. OpenH264 SDK восстановлен из локального release cache.
   Runtime MQTT/RTP используют SRV, HTTPS — default; strict TLS valid в обеих архитектурах.
 - Не проверены на terminal Win7: чистая установка/удаление сертификата, Auto/manual
-  GUI, cancel, полный cold/warm outage всех рабочих каналов и видео E2E.
+  GUI, cancel, полный cold/warm outage всех рабочих каналов и расширенная video E2E matrix.
   Пользователь выполняет clean l4setup 773; сертификат не удалялся.
 - Tools 1.10.0 опубликованы из clean main `68ad0ccd28bc2ffae239aa5a38512daf19475cab`.
   19 EXE имеют Valid Authenticode и timestamp; payload gate 61/61 per arch passed.
@@ -76,7 +76,9 @@ SHA-256 прочитанной версии: `F8CA892F87215D7BF158E0A8D5FACCCCC2
   четыре службы RUNNING. MQTT/HTTPS/RTP TLS valid, stream disabled/skipped;
   local smoke, capture и remote_input available. Сертификат reused, PIN enrollment
   не проверен. /info: MQTT source=srv, HTTPS source=policy, RTP counters=0 —
-  передача/декодирование видео ещё не подтверждены. Pending reboot остаётся предупреждением.
+  в этом снимке передача видео ещё не шла. После обновления оператор подтвердил
+  работающий видеопоток; agent decode telemetry/first-frame не измерялись.
+  Pending reboot остаётся предупреждением.
 
 ## Исходный task intake ревью
 

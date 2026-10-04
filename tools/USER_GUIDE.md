@@ -12,11 +12,15 @@
 
 Комплекс утилит развертывается с помощью единого установщика **`l4setup.exe`** (Single-Binary Bootstrapper), автоматически подбирающего разрядность и настраивающего окружение.
 
+Актуальный выпуск: **1.10.1** (2026-10-04); индивидуальные версии компонентов
+см. в руководстве инженера. Upgrade773 ready/0, MQTT/HTTPS/RTP TLS valid;
+видеопоток подтверждён оператором.
+
 ### 1.1. Получение дистрибутива
 Дистрибутив загружается напрямую из публичного Generic-реестра артефактов:
 ```cmd
-curl.exe -O https://l4tools-generic.ar.cloud.ru/l4tools/1.6.0/l4setup.exe
-curl.exe -O https://l4tools-generic.ar.cloud.ru/l4tools/1.6.0/SHA256SUMS
+curl.exe -O https://l4tools-generic.ar.cloud.ru/l4tools/1.10.1/l4setup.exe
+curl.exe -O https://l4tools-generic.ar.cloud.ru/l4tools/1.10.1/SHA256SUMS
 certutil -hashfile l4setup.exe SHA256
 ```
 
@@ -30,8 +34,12 @@ certutil -hashfile l4setup.exe SHA256
   l4setup.exe --silent
 
   :: Установка с первичным выпуском сертификата по PIN:
-  l4setup.exe --silent --pin 986821
+  l4setup.exe --silent --pin "%L4TOOLS_CERT_PIN%"
   ```
+
+`L4TOOLS_CERT_PIN` в примере должен быть заранее задан оператором в окружении.
+Проверьте `Get-AuthenticodeSignature .\l4setup.exe` в PowerShell: ожидаются
+`Valid` и непустой `TimeStamperCertificate`.
 
 После завершения установки в `C:\l4tools` формируются итоговые файлы:
 - `C:\l4tools\install_summary.json` — машиночитаемый отчет (статус `ready`, коды smoke-проб);
@@ -48,7 +56,7 @@ certutil -hashfile l4setup.exe SHA256
 | `l4superv.exe --status` | Просмотр статуса всех компонентов (`Leo4Proxy`, `mosquitto`, `L4Con`, `L4Superv`, `l4desk`), PID процессов и аппаратного профиля (`state.json`). |
 | `l4superv.exe --tick` | Отправка форс-такта оркестрации (`SERVICE_CONTROL 128`) работающей службе `L4Superv`. |
 | `l4superv.exe --check` | Однократный такт проверки конфигураций и синхронизации. |
-| `l4setup.exe --smoke-only` | Экспресс-диагностика работающего комплекса (проверка портов, захвата экрана и ответа proxy). |
+| `leo4proxy.exe --check-upstream --rtp-tunnel` | TLS-пробы enabled upstream без installer engine; передайте свои network options. |
 | `l4setup.exe --repair` | Принудительное восстановление поврежденных файлов и служб. |
 
 ---

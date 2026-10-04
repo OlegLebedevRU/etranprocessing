@@ -2,9 +2,44 @@
 
 Настоящее руководство предназначено для сервисных инженеров, технических специалистов и администраторов платёжных терминалов экосистемы **etranprocessing**. Документ описывает целевой процесс развертывания по принципу **Zero-Touch («Скачать → проверить хэш → запустить → прочитать итог»)**, поведение установщика во всех начальных состояниях Windows (S1–S10), диагностику, откат и решение типовых инцидентов.
 
-Уточнения для подписанного выпуска **1.9.6**: [стабилизация и риски](term_arch-l4tools-stabilization-decisions.md).
-Ниже матрица описывает целевое поведение; подтверждённые установки и непроверенные
-сценарии перечислены отдельно в этом документе по ссылке.
+## Выпуск 1.10.1 (2026-10-04)
+
+Пакет и установщик: **1.10.1**. Индивидуальные версии компонентов различаются:
+
+| Компонент | Версия в manifest |
+|---|---|
+| leo4proxy | 1.8.0.0 |
+| l4superv | 1.10.0 |
+| l4con | 1.9.5 |
+| l4desk | 1.9.3 |
+| l4pin | 1.7.3 |
+| l4sql | 1.7.6 |
+| l4capture | 1.0.0.0 |
+| mosquitto | 2.1.2 |
+| ffmpeg | 9.0 |
+
+Источник состава — `l4tools-release.json`; [запись публикации](../artifacts/l4tools/1.10.1.json)
+фиксирует Git SHA, размер setup **29687864 bytes** и SHA-256
+`092d8e338a0d0fa30bc7578816fc6d21370b8592b49e90cb3f294815e4da343f`.
+Полные HTTPS downloads и 19 Authenticode подписей с timestamp проверены.
+Некоторые сторонние EXE не содержат PE version: `null` в inventory не означает отсутствие файла.
+
+В 1.10.0 добавлены SRV/policy/IP routing, strict server TLS и настройки «Сеть…».
+1.10.1 исправляет потерю финального RTP verdict при завершении диагностического
+процесса и определяет `upstream_tls_failed` для любого из четырёх каналов.
+В фактическом выпуске компоненты повторно подписаны; код, данные и ресурсы всех
+18 компонентных EXE совпадают с 1.10.0, полные файловые hashes отличаются.
+
+Терминал 773 / Windows10 x64: первичная установка 1.10.0 с существующим сертификатом
+и полный Upgrade до 1.10.1 прошли; итог **ready / 0**, четыре службы RUNNING,
+MQTT/HTTPS/RTP TLS valid, Stream disabled/skipped. Оператор подтвердил работающий
+видеопоток после обновления. Это подтверждение оператора; browser decode telemetry
+и отдельная матрица потерь DNS/сети этим запуском не измерялись. Новый выпуск
+сертификата по PIN, Win7 и перезагрузка в рамках 1.10.1 не проверены.
+
+Исторические решения 1.9.6: [стабилизация и риски](term_arch-l4tools-stabilization-decisions.md).
+Матрица ниже описывает сценарии, а не утверждает, что все они проверены в 1.10.1.
+
 
 ---
 
@@ -31,15 +66,15 @@
 Дистрибутивные пакеты публикуются в публичном Generic-реестре артефактов и не хранятся в Git-репозитории.
 
 ### 2.1. Загрузка из реестра
-Дистрибутив конкретной версии (например, `1.6.0`) загружается по прямому HTTPS-адресу:
+Дистрибутив конкретной версии (`1.10.1`) загружается по прямому HTTPS-адресу:
 - **Установщик:** `https://l4tools-generic.ar.cloud.ru/l4tools/<semver>/l4setup.exe`
 - **Манифест релиза:** `https://l4tools-generic.ar.cloud.ru/l4tools/<semver>/l4tools-release.json`
 - **Контрольные суммы:** `https://l4tools-generic.ar.cloud.ru/l4tools/<semver>/SHA256SUMS`
 
 Пример загрузки через командную строку Windows:
 ```cmd
-curl.exe -O https://l4tools-generic.ar.cloud.ru/l4tools/1.6.0/l4setup.exe
-curl.exe -O https://l4tools-generic.ar.cloud.ru/l4tools/1.6.0/SHA256SUMS
+curl.exe -O https://l4tools-generic.ar.cloud.ru/l4tools/1.10.1/l4setup.exe
+curl.exe -O https://l4tools-generic.ar.cloud.ru/l4tools/1.10.1/SHA256SUMS
 ```
 
 ### 2.2. Проверка контрольной суммы (SHA-256)
@@ -49,7 +84,16 @@ curl.exe -O https://l4tools-generic.ar.cloud.ru/l4tools/1.6.0/SHA256SUMS
 certutil -hashfile l4setup.exe SHA256
 ```
 
-Сравните полученный хэш со строкой для `l4setup.exe` в файле `SHA256SUMS` (или заголовком `digest: sha-256=...` при выполнении `curl.exe -I https://l4tools-generic.ar.cloud.ru/l4tools/1.6.0/l4setup.exe`).
+Сравните хэш полного скачанного файла со строкой `l4setup.exe` в `SHA256SUMS`
+и хэшем выпуска выше. HEAD `digest` не заменяет проверку скачанных bytes.
+Проверьте подпись в PowerShell:
+
+```powershell
+$signature = Get-AuthenticodeSignature .\l4setup.exe
+$signature | Select-Object Status, TimeStamperCertificate
+```
+
+Для опубликованного 1.10.1 ожидаются `Status = Valid` и непустой timestamp certificate.
 
 **Что делать при несовпадении контрольной суммы:**
 1. Немедленно удалите поврежденный файл `l4setup.exe`.
@@ -75,10 +119,10 @@ certutil -hashfile l4setup.exe SHA256
 l4setup.exe --silent
 
 :: Автоматическая установка с первичным выпуском сертификата по PIN:
-l4setup.exe --silent --pin 986821
+l4setup.exe --silent --pin "%L4TOOLS_CERT_PIN%"
 ```
 
-> **Поведение `--silent` без `--pin`:**  
+> **Поведение `--silent` без `--pin`:**
 > Если ключ `--pin` не передан, режим `--silent` автоматически эквивалентен `--no-pin`: при наличии валидного сертификата он переиспользуется, а при отсутствии — установка успешно завершается в режиме `Standby` с активным ожиданием (код `10`).
 
 ### 3.3. Полный перечень параметров командной строки
@@ -95,9 +139,47 @@ l4setup.exe [ОПЦИИ]
 | `--silent` | `/S` | Тихий фоновый режим без открытия окон и интерактивных диалогов. |
 | `--dest <DIR>` | `-d` | Целевой каталог установки (по умолчанию `C:\l4tools`, либо значение `installer_base_path` из `state.json`). |
 | `--repair` | — | Принудительная переустановка файлов и служб даже при совпадении установленной версии. |
-| `--smoke-only` | — | Выполнить только smoke-пробы на существующей рабочей установке без распаковки и рестарта служб. |
-| `--version` | `-v` | Вывести версию установщика (из `VERSIONINFO`) и завершить работу с кодом `0` (не требует прав UAC). |
+| `--smoke-only` | — | В 1.10.1 разбирается/логируется, но engine не учитывает: режим определяется версией и целостностью. Не гарантирует диагностический запуск. |
+| `--version` | — | Вывести версию установщика (из `VERSIONINFO`) и завершить работу с кодом `0` (не требует прав UAC). |
 | `--help` | `-h`, `/?` | Вывести краткую справку по опциям и кодам возврата (не требует прав UAC). |
+| `--resolve-auto` | — | Убрать ручные адреса и включить SRV; bootstrap IP сохраняется. |
+| `--no-srv` | — | Отключить только SRV, сохранить policy/default/IP fallback. |
+| `--policy-bootstrap-ip <IP>` | — | Публичный IPv4 для recovery GET policy с прежним TLS-именем. |
+| `--mqtt-remote`, `--http-remote`, `--stream-remote`, `--rtp-remote` `<host:port>` | — | Ручной upstream; не включает выключенный канал. |
+| `--preview-ui` | — | Предпросмотр GUI без installer engine и изменения установки. |
+
+В примере silent/PIN переменная `L4TOOLS_CERT_PIN` должна быть заранее задана
+оператором в окружении; значение PIN не хранится в репозитории.
+
+### 3.4. Настройки сети и upstream TLS
+
+Диалог «Сеть…» задаёт Auto или manual host:port для канала, bootstrap IP и
+отключение SRV. В выпущенный setup bootstrap IP включён заранее.
+Upgrade/Repair без изменения сети сохраняет SCM options; изменение сети также
+сохраняет остальные CLI options. `leo4proxy/service-args.txt` зеркалирует SCM
+ImagePath для watchdog/repair, существующий SCM остаётся authoritative.
+
+Auto: SRV → verified SRV LKG → fresh policy host → default → fresh policy IP.
+Explicit remote приоритетнее Auto; SRV target `.` запрещает обход канала.
+Bootstrap IP используется только для recovery GET policy. Numeric fallback
+сохраняет логическое TLS/SNI/Host имя, проверки встроенного CA, имени, срока и
+serverAuth. Отключение проверки сертификата как «последний шанс» не реализовано.
+CRL/OCSP не проверяются; локальное время должно быть корректным.
+
+При активном client cert verify запускает `leo4proxy --check-upstream` с
+service args: общий budget 8 секунд, ожидание процесса до 8.5 секунд.
+`probes.upstream_tls` содержит mqtt/https/l4stream/l4rtp verdicts:
+`valid`, `skipped` (канал выключен), `policy_blocked`, `cert_invalid`,
+`probe_failed`, `timeout`; непроведённые пробы — `not_run`.
+Проверка делает TLS handshake, не MQTT CONNECT или video session.
+Media endpoint в `/_leo4/info` может быть пуст до первого потока: media
+connection служба открывает по требованию.
+
+`probes.network` отдельно проверяет только DNS-разрешение `iot.leo4.ru`.
+При работающем IP recovery отказ этой DNS-пробы всё ещё может дать
+`degraded / network_unreachable`: ограничение smoke 1.10.1.
+Смотрите также verdicts каналов, не только общий статус.
+
 
 ---
 
@@ -130,9 +212,9 @@ l4setup.exe [ОПЦИИ]
 ```json
 {
   "schema": 2,
-  "timestamp": "2026-09-12T21:00:00Z",
-  "installer_version": "1.9.6",
-  "installed_version": "1.9.6",
+  "timestamp": "2026-10-04T14:18:46Z",
+  "installer_version": "1.10.1",
+  "installed_version": "1.10.1",
   "os": "Windows 10 Home (10.0.19045) x64",
   "target_arch": "x64",
   "dest": "C:\\l4tools",
@@ -152,6 +234,7 @@ l4setup.exe [ОПЦИИ]
     "ports_freed": []
   },
   "probes": {
+    "upstream_tls": {"mqtt":"valid", "https":"valid", "l4stream":"skipped", "l4rtp":"valid"},
     "proxy_info": "ok",
     "mosquitto_port": "ok",
     "user_session_id": 1,
@@ -164,11 +247,12 @@ l4setup.exe [ОПЦИИ]
 ```
 
 #### Значения полей `status`:
-- **`ready`** (код `0`) — локальные критерии установщика выполнены. Это не подтверждение серверного MQTT, RTP или удалённого ввода E2E.
+- **`ready`** (код `0`) — критерии установщика выполнены, включая TLS-пробы включённых каналов при активном сертификате. Это не доказательство MQTT application flow, декодирования видео или удалённого ввода E2E.
 - **`activation_required`** (код `10`) — службы запущены в режиме Standby, комплекс ожидает активации; старое название — `standby_waiting_pin`.
 - **`ready_for_online`** (код `11`) — установка выполнена оффлайн, PIN зашифрован в `pending_pin.json`, ожидает подключения к сети.
-- **`degraded`** (код `12`) — DNS-проверка не прошла или l4desk не появился в действительной пользовательской сессии при активном сертификате; причина в `error_reason`. Старое название — `ready_with_warnings`.
-- **`failed`** (коды `20..27`) — критическая ошибка установки (см. таблицу кодов возврата).
+- **`degraded`** (код `12`) — DNS-проба не прошла, l4desk не появился в активной пользовательской сессии или TLS включённого upstream дал `cert_invalid`, `probe_failed` либо `timeout`; причина в `error_reason`. Старое название — `ready_with_warnings`.
+- **`failed`** (коды `20..30`) — критическая ошибка установки (см. таблицу кодов возврата).
+- **`cancelled`** (код `31`) — отмена на границе этапа, состояние служб проверяется по summary.
 
 Пример выше сокращён. Schema 2 также содержит `phase`, `error_reason` и фактические
 состояния `services`; непроведённые пробы обозначаются `not_run`, неизвестные
@@ -192,6 +276,10 @@ l4setup.exe [ОПЦИИ]
 | **`25`** | `ERR_CERT_FAILED` | Ошибка выпуска сертификата (неверный PIN, отклонен сервером CA). |
 | **`26`** | `ERR_TIMEOUT_ACTIVE` | Сертификат после активации не прошёл проверку в хранилище. |
 | **`27`** | `ERR_SMOKE_FAILED` | Прокси не готов после запуска служб или не прошла критическая локальная проба прокси/брокера. |
+| **`28`** | `SETUP_BUSY` | Уже работает другой экземпляр установщика. |
+| **`29`** | `DOWNGRADE_BLOCKED` | Установленная версия новее скачанного пакета. |
+| **`30`** | `PREFLIGHT_FAILED` | Недостаточно свободного места: engine требует минимум 100 MB headroom. |
+| **`31`** | `CANCELLED` | Отмена пользователем; проверьте итоговые состояния служб и phase в summary. |
 
 ### 5.3. Журнал установки `C:\l4tools\l4setup.log`
 В лог-файл поминутно записываются все фазы работы, вызовы подсистем и ошибки. Внимание: PIN-коды и секретные ключи **никогда** не записываются в лог и маскируются как `******`.
@@ -214,12 +302,24 @@ l4setup.exe --repair
 ```
 Инсталлятор принудительно перезапишет все бинарные файлы из встроенных ресурсов и перерегистрирует службы в Windows SCM. При этом действующий сертификат терминала сохраняется и не затрагивается.
 
-### 6.3. Экспресс-проверка без изменения файлов (`--smoke-only`)
-Для регулярной проверки здоровья запущенного комплекса:
+### 6.3. Ограничение `--smoke-only` в 1.10.1
+
+CLI разбирает `--smoke-only`, но engine не использует поле `smoke_only`.
+Операция определяется installed/target version и целостностью: при отличающейся
+версии возможен Upgrade, при повреждении — Repair, при отсутствии — Install.
+Даже Verify проходит Prepare, certificate phase и service start checks.
+Этот флаг не гарантирует отсутствие установочных изменений.
+
+Для проверки без installer engine используйте:
+
 ```cmd
-l4setup.exe --smoke-only
+curl.exe --noproxy "*" http://127.0.0.1:18443/_leo4/info
+C:\l4tools\leo4proxy\leo4proxy.exe --check-upstream --rtp-tunnel --policy-bootstrap-ip 87.242.100.34
 ```
-Выполняет только проверку локального API `leo4proxy`, порта 1883, сессии `l4desk` и тестовый захват кадра экрана FFmpeg, обновляя `install_summary.json`.
+
+Передайте свои network/service options в probe, если они отличаются.
+Проверка не пишет routing cache и не управляет службами, но делает TLS handshakes.
+При повторном запуске l4setup оценивайте выбранную операцию до нажатия кнопки.
 
 ---
 

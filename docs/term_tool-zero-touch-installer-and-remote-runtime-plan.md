@@ -1,5 +1,11 @@
 # Ревизия архитектуры управления видео / удаленным управлением и план перехода к Zero-Touch комплексу tools на Windows-терминале
 
+Исторический контекст: исходные версии и evidence ниже сохранены. Текущее
+состояние tools 1.10.1, сетевые настройки и состав выпуска:
+[руководство инженера](term_tool-user-guide.md) и
+[DNS/SRV implementation](term_net-leo4proxy-dns-srv-implementation-context.md).
+
+
 **Дата составления:** 12.09.2026  
 **Статус документа:** Проект / Архитектурный план на следующий этап  
 **Сфера:** `term` (Терминальный контур и киоски платёжной платформы etranprocessing)  
@@ -421,7 +427,7 @@ sequenceDiagram
 * `PUT`/`POST` на путь файла без токена → 405: публикация только авторизованным пользователем через отдельный endpoint загрузки. Контракт API реестра (уточнен архитектором):
   ```text
   Получить хэш:      curl --request HEAD --url https://l4tools-generic.ar.cloud.ru/<path>        # заголовок digest: sha-256=<hex>
-  Загрузить файл:    PUT  https://<key_id>:<key_secret>@l4tools-generic.ar.cloud.ru/upload/<path>  # Basic auth ключом сервисного аккаунта
+  Загрузить файл:    PUT  https://l4tools-generic.ar.cloud.ru/upload/<path>  # Basic auth ключом сервисного аккаунта
   Скачать файл:      GET  https://l4tools-generic.ar.cloud.ru/<path>                              # анонимно
   ```
   Т.е. публикация — один `curl -T` из builder без дополнительных клиентов (`oras`, `docker`), ключ `key_id/key_secret` хранится только на builder в `.env`.
