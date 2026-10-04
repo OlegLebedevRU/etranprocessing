@@ -1,0 +1,12 @@
+l4desk landing update
+site: l4desk.ru
+server: ssh user1@176.108.247.249 -i d:\.ssh\free-tier-cloud_ru
+captcha: D:\repo\platerra\Public\etranprocessing\l4desk-service\docs\landing\yacaptcha.txt
+alfa-source-docs: D:\repo\platerra\Public\etranprocessing\l4desk-service\docs\l4desk*.md
+images source: D:\repo\platerra\Public\etranprocessing\l4desk-service\docs\*.png
+main illustrations: AI-агент управляет парком через браузер.png or L4Desk_ удалённая помощь из браузера.png
+email sender: menubuilder email sender (grant policy only from l4desk.ru - 176.108.247.249)
+form post: via email sender.
+site-owner email address: l4desk@platerra.ru
+l4desk.ru mark: Powered by Platerra
+

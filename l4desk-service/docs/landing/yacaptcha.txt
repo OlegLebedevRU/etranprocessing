@@ -1,0 +1,48 @@
+server_key: ysc2_REDACTED
+
+Вставьте в секцию <head>:
+
+<script src="https://smartcaptcha.yandexcloud.net/captcha.js" defer></script>
+
+Добавьте на страницу контейнер:
+
+<div 
+  style="height: 100px"
+  id="captcha-container"
+  class="smart-captcha"
+  data-sitekey="ysc1_REDACTED"
+></div>
+
+
+##Python:
+import requests
+import sys
+import json
+
+
+SMARTCAPTCHA_SERVER_KEY = ""
+
+
+def check_captcha(token):
+    resp = requests.get(
+        "https://smartcaptcha.yandexcloud.net/validate",
+        {
+            "secret": SMARTCAPTCHA_SERVER_KEY,
+            "token": token,
+            "ip": "127.0.0.1"  # Нужно передать IP пользователя.
+                               # Как правильно получить IP зависит от вашего фреймворка и прокси.
+                               # Например, в Flask это может быть request.remote_addr
+        },
+        timeout=1
+    )
+    server_output = resp.content.decode()
+    if resp.status_code != 200:
+        print(f"Allow access due to an error: code={resp.status_code}; message={server_output}", file=sys.stderr)
+        return True
+    return json.loads(server_output)["status"] == "ok"
+
+token = "<token>"  # Например, request.form["smart-token"]
+if check_captcha(token):
+    print("Passed")
+else:
+    print("Robot")
