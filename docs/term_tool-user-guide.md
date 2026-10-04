@@ -2,24 +2,25 @@
 
 Настоящее руководство предназначено для сервисных инженеров, технических специалистов и администраторов платёжных терминалов экосистемы **etranprocessing**. Документ описывает целевой процесс развертывания по принципу **Zero-Touch («Скачать → проверить хэш → запустить → прочитать итог»)**, поведение установщика во всех начальных состояниях Windows (S1–S10), диагностику, откат и решение типовых инцидентов.
 
-## Кандидат 1.10.2: исправления resolving/network
+## Выпуск 1.10.2: исправления resolving/network
 
-Исходники и unsigned staging подготовлены для setup 1.10.2 / leo4proxy 1.8.1;
-подпись и публикация ещё требуются. `--smoke-only` теперь диагностический,
+Signed setup 1.10.2 / leo4proxy 1.8.1 опубликованы; подписи, timestamps,
+payload и полные HTTPS downloads проверены. `--smoke-only` теперь диагностический,
 каждый TLS канал имеет независимый budget 8 с, process ceiling — 9,5 с;
 `network` определяется фактическим TLS, а transport failures повторяются в
 пределах Verify. SCM ImagePath служит источником диагностических параметров.
 Расчёт задержек, 2304 routing сочетания, trust/admission/installer matrix и
 ограничения проверки — в [матрице надёжности](term_net-leo4proxy-resolving-reliability-matrix.md).
-Следующие разделы описывают **опубликованный 1.10.1**, включая его ограничения.
+Следующие инструкции относятся к 1.10.2; runtime evidence для установленного
+773 пока относится к 1.10.1. Исторические ограничения помечены отдельно.
 
-## Выпуск 1.10.1 (2026-10-04)
+## Состав выпуска 1.10.2 (2026-10-04)
 
-Пакет и установщик: **1.10.1**. Индивидуальные версии компонентов различаются:
+Пакет и установщик: **1.10.2**. Индивидуальные версии компонентов различаются:
 
 | Компонент | Версия в manifest |
 |---|---|
-| leo4proxy | 1.8.0.0 |
+| leo4proxy | 1.8.1.0 |
 | l4superv | 1.10.0 |
 | l4con | 1.9.5 |
 | l4desk | 1.9.3 |
@@ -29,9 +30,9 @@
 | mosquitto | 2.1.2 |
 | ffmpeg | 9.0 |
 
-Источник состава — `l4tools-release.json`; [запись публикации](../artifacts/l4tools/1.10.1.json)
-фиксирует Git SHA, размер setup **29687864 bytes** и SHA-256
-`092d8e338a0d0fa30bc7578816fc6d21370b8592b49e90cb3f294815e4da343f`.
+Источник состава — `l4tools-release.json`; [запись публикации](../artifacts/l4tools/1.10.2.json)
+фиксирует Git SHA, размер setup **29705272 bytes** и SHA-256
+`6270c908f0275dbb12591f0b377f594a1e959cbe325dc14b1ef467a35e7e4ff1`.
 Полные HTTPS downloads и 19 Authenticode подписей с timestamp проверены.
 Некоторые сторонние EXE не содержат PE version: `null` в inventory не означает отсутствие файла.
 
@@ -77,15 +78,15 @@ MQTT/HTTPS/RTP TLS valid, Stream disabled/skipped. Оператор подтве
 Дистрибутивные пакеты публикуются в публичном Generic-реестре артефактов и не хранятся в Git-репозитории.
 
 ### 2.1. Загрузка из реестра
-Дистрибутив конкретной версии (`1.10.1`) загружается по прямому HTTPS-адресу:
+Дистрибутив конкретной версии (`1.10.2`) загружается по прямому HTTPS-адресу:
 - **Установщик:** `https://l4tools-generic.ar.cloud.ru/l4tools/<semver>/l4setup.exe`
 - **Манифест релиза:** `https://l4tools-generic.ar.cloud.ru/l4tools/<semver>/l4tools-release.json`
 - **Контрольные суммы:** `https://l4tools-generic.ar.cloud.ru/l4tools/<semver>/SHA256SUMS`
 
 Пример загрузки через командную строку Windows:
 ```cmd
-curl.exe -O https://l4tools-generic.ar.cloud.ru/l4tools/1.10.1/l4setup.exe
-curl.exe -O https://l4tools-generic.ar.cloud.ru/l4tools/1.10.1/SHA256SUMS
+curl.exe -O https://l4tools-generic.ar.cloud.ru/l4tools/1.10.2/l4setup.exe
+curl.exe -O https://l4tools-generic.ar.cloud.ru/l4tools/1.10.2/SHA256SUMS
 ```
 
 ### 2.2. Проверка контрольной суммы (SHA-256)
@@ -104,7 +105,7 @@ $signature = Get-AuthenticodeSignature .\l4setup.exe
 $signature | Select-Object Status, TimeStamperCertificate
 ```
 
-Для опубликованного 1.10.1 ожидаются `Status = Valid` и непустой timestamp certificate.
+Для опубликованного 1.10.2 ожидаются `Status = Valid` и непустой timestamp certificate.
 
 **Что делать при несовпадении контрольной суммы:**
 1. Немедленно удалите поврежденный файл `l4setup.exe`.
@@ -150,7 +151,7 @@ l4setup.exe [ОПЦИИ]
 | `--silent` | `/S` | Тихий фоновый режим без открытия окон и интерактивных диалогов. |
 | `--dest <DIR>` | `-d` | Целевой каталог установки (по умолчанию `C:\l4tools`, либо значение `installer_base_path` из `state.json`). |
 | `--repair` | — | Принудительная переустановка файлов и служб даже при совпадении установленной версии. |
-| `--smoke-only` | — | В 1.10.1 разбирается/логируется, но engine не учитывает: режим определяется версией и целостностью. Не гарантирует диагностический запуск. |
+| `--smoke-only` | — | В 1.10.2 — read-only discovery/SCM/local/TLS; без CA/enrollment/config/services/state изменений. Пишет log/summary. Несовместим с PIN, repair, force-reissue, payload и network options. В 1.10.1 безопасный диагностический запуск не гарантировался. |
 | `--version` | — | Вывести версию установщика (из `VERSIONINFO`) и завершить работу с кодом `0` (не требует прав UAC). |
 | `--help` | `-h`, `/?` | Вывести краткую справку по опциям и кодам возврата (не требует прав UAC). |
 | `--resolve-auto` | — | Убрать ручные адреса и включить SRV; bootstrap IP сохраняется. |
@@ -186,9 +187,11 @@ service args: общий budget 8 секунд, ожидание процесс�
 Media endpoint в `/_leo4/info` может быть пуст до первого потока: media
 connection служба открывает по требованию.
 
-`probes.network` отдельно проверяет только DNS-разрешение `iot.leo4.ru`.
-При работающем IP recovery отказ этой DNS-пробы всё ещё может дать
-`degraded / network_unreachable`: ограничение smoke 1.10.1.
+`probes.network` в 1.10.2 выводится из фактических upstream TLS результатов:
+`reachable`, `unknown` или `not_run`. Каждый канал получает независимый 8-секундный
+budget; transport failures допускают до трёх попыток с паузой 5 с внутри Verify
+budget 60 с. Trust failures не повторяются автоматически. Нет отдельной DNS-пробы
+`iot.leo4.ru`, которая в 1.10.1 могла дать ложный degraded при работающем IP recovery.
 Смотрите также verdicts каналов, не только общий статус.
 
 
@@ -313,7 +316,15 @@ l4setup.exe --repair
 ```
 Инсталлятор принудительно перезапишет все бинарные файлы из встроенных ресурсов и перерегистрирует службы в Windows SCM. При этом действующий сертификат терминала сохраняется и не затрагивается.
 
-### 6.3. Ограничение `--smoke-only` в 1.10.1
+### 6.3. Диагностический запуск 1.10.2 и историческое ограничение 1.10.1
+
+В 1.10.2 выполните `l4setup.exe --smoke-only --dest C:\l4tools`. Этот режим
+не устанавливает сертификаты, не меняет службы/конфигурацию/state и не запускает
+enrollment; сохраняет только log/summary. Параметры upstream читаются из SCM.
+На установленном 1.10.1 проверка новой сборкой дала ready/0 без изменения четырёх
+service PID и installed_version. Это не проверка Upgrade до 1.10.2.
+
+История 1.10.1:
 
 CLI разбирает `--smoke-only`, но engine не использует поле `smoke_only`.
 Операция определяется installed/target version и целостностью: при отличающейся

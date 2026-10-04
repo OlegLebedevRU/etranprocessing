@@ -1,8 +1,9 @@
 # Надёжность resolving/network: tools 1.10.2, leo4proxy 1.8.1
 
-Кандидат выпуска от 2026-10-04; до подписи и публикации production остаётся
-**1.10.1 / leo4proxy 1.8.0**. Рабочее видео и ready/0 на 773 подтверждены
-оператором для 1.10.1. Ниже — расчёт по коду и локальные проверки кандидата,
+Подписанный выпуск **1.10.2 / leo4proxy 1.8.1** опубликован 2026-10-04;
+[запись публикации](../artifacts/l4tools/1.10.2.json). Установленный 773 остаётся
+на 1.10.1: для него оператор подтвердил рабочее видео и ready/0.
+Ниже — расчёт по коду и локальные проверки 1.10.2,
 а не результат аварийных испытаний production или оценка вероятности отказа.
 
 ## Порядок и границы времени
@@ -132,9 +133,9 @@ diagnostics 20; absolute I/O deadlines 12; actual loopback Schannel stalled
 handshake/retired credentials; policy/grace/cancellation/cache recovery; installer
 pipeline 44 (включая 30 read-only комбинаций, cold transport retry и same-version network change); local HTTP
 9; pipe/process failure и exit race 7. Все suites выполняются x86/x64.
-Точный итог сборки и подписи — в [task handoff](../.agent-context/tasks/active/2026-10-04-leo4proxy-network-reliability.md).
+Точный итог сборки и подписи — в [task handoff](../.agent-context/tasks/completed/2026-10-04-leo4proxy-network-reliability.md).
 
-Реальный Win64 smoke-only кандидата на установленном 1.10.1: ready/0, четыре
+Реальный Win64 smoke-only сборки 1.10.2 на установленном 1.10.1: ready/0, четыре
 службы сохранили PID/SCM/status, installed_version остался 1.10.1; включённые
 upstreams valid. Свежий proxy 1.8.1 отдельно проверил три TLS канала по 172 мс,
 stream skipped, и прямой bootstrap policy GET по IP — valid/strict. Это healthy

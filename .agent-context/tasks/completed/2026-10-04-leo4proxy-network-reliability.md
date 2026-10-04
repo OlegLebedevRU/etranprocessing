@@ -7,7 +7,7 @@
 - Security: embedded CA, logical TLS name, time/EKU and admission gates remain mandatory even when connecting to IP. No MQTT application traffic from TLS diagnostics.
 - Verification: bounded resolver/connect/handshake/I/O, independent diagnostic channels, launch failures, smoke-only absence of mutations; native tests and builds on both architectures.
 - No production deployment or installed-client mutation is required for these local checks. Signing remains an operator step under the release runbook.
-- Status: source implementation/tests and operator signing complete; clean-checkpoint/publication gates pending.
+- Status: completed: signed 1.10.2 published from clean main d43e4d5; installed-client Upgrade acceptance remains open.
 
 ## Delta / contracts
 
@@ -60,17 +60,14 @@
 - Published setup 1.10.1 retained under ignored runtime-backup; SHA256
   `092d8e338a0d0fa30bc7578816fc6d21370b8592b49e90cb3f294815e4da343f`.
 
-## Remaining release/runtime gates
+## Publication / remaining runtime gates
 
-- Operator signed staged proxy x86/x64 and setup using `Complete-SignedRelease.ps1`
-  with version 1.10.2. All 18 staged EXEs and setup have valid signatures and RFC3161 timestamps. Both payloads match all 122 staging files. Signed setup: 29,705,272 bytes; SHA256 `6270c908f0275dbb12591f0b377f594a1e959cbe325dc14b1ef467a35e7e4ff1`. No publish before signatures,
-  timestamps, exact payload checks, clean source checkpoint and full downloads.
-- Source/binary changes remain in the working tree until signed-artifact sync;
-  no production release record or deployment for candidate 1.10.2 yet.
-- Win7, clean PIN enrollment, real GUI clicks/cancel, full outage/video matrix
-  and application-stream resilience are not established by these native fixtures.
-- No services stopped, certificate stores changed or installed tools replaced.
-  Loopback fixture sockets/temporary KSP keys cleaned by tests. Release staging,
-  unsigned artifacts and prior signed backup intentionally retained for handoff.
+- Operator signing verified: all 18 staged EXEs and universal setup Valid with RFC3161 timestamps; both payloads matched all 122 staging files. Signed proxy binaries synchronized into tracked x86/x64/default outputs. No components rebuilt after signing.
+- PR18 merged; clean main source checkpoint `d43e4d51f842585d19871260e82832f1b3a92f5f`. Manifest refresh did not change setup bytes. Strict publisher passed without allow-dirty.
+- Published 1.10.2 on 2026-10-04 at 16:29 UTC. All three complete HTTPS GET downloads matched size/SHA256. [Publication record](../../../artifacts/l4tools/1.10.2.json).
+- Signed setup: 29,705,272 bytes; SHA256 `6270c908f0275dbb12591f0b377f594a1e959cbe325dc14b1ef467a35e7e4ff1`.
+- Publication-status documentation edits occur after signing; embedded README snapshots are retained unchanged. Immutable release is not repacked for these text changes.
+- Installed 773 remains 1.10.1. Upgrade to 1.10.2, Win7, clean PIN enrollment, real GUI clicks/cancel, full outage/video matrix and application-stream resilience are not established by these native fixtures.
+- No services stopped, certificate stores changed or installed tools replaced. Loopback fixture sockets/temporary KSP keys cleaned by tests. Release staging and previous signed backup retained for release recovery.
 - Backend/frontend checks N/A: no Python/shared/frontend source changes.
 - Detailed timing/reliability limits: [matrix](../../../docs/term_net-leo4proxy-resolving-reliability-matrix.md).

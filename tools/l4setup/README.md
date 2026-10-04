@@ -1,13 +1,13 @@
 # Leo4 Zero-Touch Setup (`l4setup`)
 
-**Кандидат 1.10.2**: исправлены read-only `--smoke-only`, DNS false degradation,
+**Опубликованный выпуск 1.10.2**: исправлены read-only `--smoke-only`, DNS false degradation,
 независимые TLS budgets, launch/missing-certificate failures и bounded transport
 retries при cold policy startup. Диагностика использует SCM ImagePath. Новые
 настройки сети при той же версии применяются через Repair; GUI загружает текущие
 SCM поля и сохраняет параметры остальных каналов. Новые
 бюджеты и проверенные сочетания: [матрица надёжности](../../docs/term_net-leo4proxy-resolving-reliability-matrix.md).
-Кандидат требует подписи/публикации; сведения ниже об эксплуатации 1.10.1
-сохраняются как описание опубликованного выпуска.
+[Запись публикации 1.10.2](../../artifacts/l4tools/1.10.2.json): подписи/timestamps, payload и полные HTTPS downloads проверены.
+Сведения ниже об эксплуатации 1.10.1 сохраняются как история; Upgrade773 до 1.10.2 ещё не проверен.
 
 1.10.1 исправляет потерю последних строк TLS diagnostics при завершении дочернего
 leo4proxy: pipe дочитывается после сигнала process exit. Настоящие ошибки TLS
@@ -59,7 +59,7 @@ l4setup.exe [options]
 | `--silent`, `/S` | Тихий режим без диалоговых окон. Без переданного `--pin` автоматически эквивалентен `--no-pin`. |
 | `--dest <DIR>`, `-d <DIR>` | Каталог установки (по умолчанию `C:\l4tools`, учитывается `state.json.installer_base_path`). |
 | `--repair` | Принудительная переустановка файлов и служб даже при совпадении версии. |
-| `--smoke-only` | В кандидате 1.10.2 — read-only discovery/SCM/local/TLS probes, без CA/enrollment/config/services/state изменений. В опубликованном 1.10.1 флаг ещё не ограничивает engine. |
+| `--smoke-only` | В 1.10.2 — read-only discovery/SCM/local/TLS probes, без CA/enrollment/config/services/state изменений. В опубликованном 1.10.1 флаг ещё не ограничивает engine. |
 | `--version` | Напечатать версию инсталлятора (`1.10.1`) и выйти с кодом `0` без запроса прав администратора. |
 | `--help`, `-h`, `/?` | Показать справку по параметрам и кодам возврата. |
 | `--resolve-auto` / `--no-srv` | Убрать manual remote и включить SRV / отключить только SRV. |

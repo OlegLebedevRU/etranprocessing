@@ -1,8 +1,8 @@
-﻿# Changelog — Leo4Proxy
+# Changelog — Leo4Proxy
 
 All notable changes to the `leo4proxy` component will be documented in this file.
 
-## [1.8.1] - 2026-10-04 (candidate; awaiting signing)
+## [1.8.1] - 2026-10-04 (signed; published)
 
 - Share an absolute deadline across SRV/A/TCP/TLS; reserve recovery time for IP fallback and remove duplicate endpoints/IPv4 addresses.
 - Try up to eight IPv4 addresses per endpoint; evict completed DNS slots while keeping the 24-worker limit and numeric bypass.

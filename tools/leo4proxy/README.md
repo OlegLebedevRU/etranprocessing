@@ -4,12 +4,12 @@
 
 ---
 
-**Кандидат 1.8.1 для tools 1.10.2**: единые resolving/TCP/TLS deadlines,
+**Выпуск 1.8.1 в signed tools 1.10.2**: единые resolving/TCP/TLS deadlines,
 резерв времени для IP fallback, дедупликация endpoints и перебор до 8 IPv4,
 eviction завершённых DNS cache slots, независимая диагностика каналов,
 bounded policy I/O и HTTP framing. Строгие CA/name/admission проверки сохранены.
 См. [матрицу надёжности](../../docs/term_net-leo4proxy-resolving-reliability-matrix.md).
-Production пока использует подписанный 1.8.0 из tools 1.10.1.
+[Выпуск 1.10.2 опубликован](../../artifacts/l4tools/1.10.2.json). На 773 пока установлен 1.8.0 из tools 1.10.1; Upgrade до 1.10.2 ещё не проверен.
 
 ## 1. Решаемая проблема
 

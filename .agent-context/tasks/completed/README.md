@@ -6,6 +6,8 @@
 
 ## Индекс
 
+- [2026-10-04 — tools 1.10.2 network reliability](2026-10-04-leo4proxy-network-reliability.md) — signed release опубликован, bounded resolving/TLS/policy, read-only smoke-only, x86/x64 failure matrix; Upgrade773 и outage/Win7/PIN acceptance ещё не проверены.
+
 - [2026-10-04 — tools 1.10.1 docs audit](2026-10-04-tools-docs-1101.md) — актуальные версии, установка/сеть/TLS, operator video evidence; документированы smoke-only и DNS-probe ограничения.
 
 - [2026-10-04 — leo4proxy DNS/SRV/IP release](2026-10-04-leo4proxy-dns-srv-implementation.md) — policy/media внедрены, signed tools 1.10.1 опубликованы; Upgrade773 ready/0, strict MQTT/HTTPS/RTP TLS valid, видео подтверждено оператором; enrollment/outage и расширенные E2E сценарии не проверены.
