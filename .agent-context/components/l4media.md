@@ -7,9 +7,9 @@ Compose монтирует canonical cert/key из iot-rpc-rest-app, без ко
 Entrypoint и pre-deploy gate отклоняют неверную пару; self-signed генерация удалена.
 После обновления файлов используется `l4media/deploy/reload-media.sh`: gate
 перед пересозданием только nginx, чтобы обновить file bind mounts.
-Production CA-пара установлена и nginx reload проверен; новый image ещё требует
-выпуска. CRL/OCSP и E2E видео этой проверкой не подтверждены.
-См. [активный handoff](../tasks/active/2026-10-04-media-tls.md).
+Production CA-пара и guarded image выпущены; gate/nginx -t и native TLS
+MQTT/HTTPS/RTP прошли. CRL/OCSP и E2E видео этой проверкой не подтверждены.
+См. [handoff выпуска](../tasks/completed/2026-10-04-media-tls.md).
 
 ## 2026-10-01: consolidation of accepted18D build flow
 

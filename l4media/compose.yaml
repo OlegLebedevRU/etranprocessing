@@ -2,7 +2,7 @@ name: l4media
 
 services:
   nginx:
-    image: dev-leo4-ru.cr.cloud.ru/etran/l4media-nginx@sha256:fb137647e25bed749f1cf87cc0398eb8f072a900b7dfa124222cb9655fe911bd
+    image: dev-leo4-ru.cr.cloud.ru/etran/l4media-nginx@sha256:039760bddf1a0ce6e663c7f5c959c6a8a9345852b7398e8f590b6e0783e1880d
     container_name: l4media-nginx
     restart: unless-stopped
     ports:
