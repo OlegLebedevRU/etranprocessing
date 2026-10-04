@@ -18,16 +18,20 @@ ProcessingBackend применяет общие Alembic. Runtime host не за�
 ## Инварианты
 - SSH из PowerShell всегда `ssh -n`; утверждённый ключ `d:\.ssh\id_ed25519`.
   Не отключать host key verification. Docker/compose на сервере через sudo.
-- `176.108.247.249` не использовать без прямого указания пользователя.
+- `176.108.247.249` — выделенный builder, штатный путь сборки/публикации релизов
+  (подтверждено владельцем 2026-10-04); изменения на нём — только через
+  согласованный установочный пакет из репозитория.
 - Правки локально → проверки → согласованный релиз; прямые server edits требуют
   отдельного подтверждения и плана backport, не «горячей» правки вне репозитория.
 - Общие schema changes: `alembic upgrade head` в processing-backend, затем restart
   menubuilder-backend при изменении shared models; порядок совместимости утвердить заранее.
 - Frontend code build локально: `npm --prefix MenuBuilder\frontend run build`.
   Доставлять только согласованные артефакты, не production secrets.
-- Для явно согласованного бета-контура действует [бета-регламент](../../docs/ops_run-beta-ci-cd.md):
-  `etran-beta.timer` на отдельном builder, frontend как artifact-only image,
-  production только pull по digest. GitHub Actions отключён для исключения двойного выпуска.
+- Действующий порядок деплоя — [бета-регламент](../../docs/ops_run-beta-ci-cd.md):
+  ручной адресный запуск launcher на выделенном builder, frontend как
+  artifact-only image, production только pull по digest. systemd-юниты
+  `etran-beta.service`/`etran-beta.timer` выпилены (2026-10-04); GitHub Actions
+  workflow удалён из репозитория — двойного выпуска больше нет.
 - Серверные владельцы ProcessingBackend, MenuBuilder backend/L4mcp, IoT app1,
   media ingress/nginx/Janus закрепляются по immutable registry digest без
   локального `build`. Штатный выпуск обновляет Compose image override;

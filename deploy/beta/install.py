@@ -1,4 +1,4 @@
-"""Install versioned beta launcher/tools. Does not enable automatic deployment."""
+"""Install versioned beta launcher/tools. Releases are triggered manually via launcher.py."""
 
 import argparse
 import hashlib
@@ -82,22 +82,11 @@ def main():
     for name in ["launcher.py", "versions.json"]:
         shutil.copyfile(SOURCE / name, target / name)
         (target / name).chmod(0o644)
-    for name in ["etran-beta.service", "etran-beta.timer"]:
-        shutil.copyfile(SOURCE / name, Path("/etc/systemd/system") / name)
-        (Path("/etc/systemd/system") / name).chmod(0o644)
     (target / "installed-revision").write_text(args.revision + "\n")
-    subprocess.run(
-        [
-            "systemd-analyze",
-            "verify",
-            "/etc/systemd/system/etran-beta.service",
-            "/etc/systemd/system/etran-beta.timer",
-        ],
-        check=True,
-    )
-    subprocess.run(["systemctl", "daemon-reload"], check=True)
     print(
-        "Installed; timer NOT enabled. Provision approved keys and perform the trial first."
+        "Installed. Releases are triggered manually: "
+        "sudo -n -u github-runner -H python3 /opt/etran-beta/launcher.py --component <component>. "
+        "Provision approved keys and perform the trial first."
     )
 
 

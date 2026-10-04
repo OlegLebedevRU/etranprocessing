@@ -43,10 +43,10 @@ nginx-mutual-legacy-nginx-mutual-1
 ssl_protocols TLSv1 TLSv1.1 TLSv1.2 TLSv1.3;
 ssl_ciphers DEFAULT:@SECLEVEL=0;
 ssl_prefer_server_ciphers on;
-listen 4443 ssl;
+listen 443 ssl default_server;
 
-ssl_certificate /crt/legacy_cert_dev_leo4_ru.crt;
-ssl_certificate_key /crt/server_key.pem;
+ssl_certificate /crt/iot-processing.ru.crt;
+ssl_certificate_key /crt/iot-processing.ru.key;
 
 ssl_verify_client optional_no_ca;
 ```

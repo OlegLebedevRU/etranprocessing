@@ -14,16 +14,16 @@ Terminal → Nginx (mutual TLS) → ProcessingBackend (FastAPI) → PostgreSQL
 
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
-| **Nginx** | nginx:alpine | SSL termination, client cert validation, reverse proxy |
+| **nginx-mutual-legacy** | nginx (container `nginx-mutual-legacy-nginx-mutual-1`, :443) | Terminal mTLS termination, client cert validation, reverse proxy into `user1_default` |
 | **ProcessingBackend** | FastAPI + SQLAlchemy + asyncpg | Payment processing API |
-| **PostgreSQL** | postgres:15 | Data storage |
+| **PostgreSQL** | Managed PostgreSQL 18 (10.0.0.7:5432, DB `etran`) | Data storage |
 
 ### Service Communication
 
 ```
 Terminal (HTTPS + Client Cert)
     ↓
-Nginx (iot-rpc-rest-app-nginx-mutual-1)
+Nginx (nginx-mutual-legacy-nginx-mutual-1, :443)
     - Validates client certificate
     - Forwards cert headers (X-Client-Cert-DN, X-Client-Cert-Serial)
     - Routes by URL path
@@ -33,8 +33,8 @@ ProcessingBackend (processing-backend)
     - Processes payment logic
     - Writes to PostgreSQL
     ↓
-PostgreSQL (iot-rpc-rest-app-pg-1)
-    - etranprocessing database
+PostgreSQL (Managed PostgreSQL 18, 10.0.0.7)
+    - etran database
 ```
 
 ## Project Structure
@@ -52,18 +52,32 @@ etranprocessing/
 │   │   │   ├── models.py                # Re-export from etranprocessing_db
 │   │   │   ├── logging_config.py        # Payment logging with rotation
 │   │   │   ├── routers/
-│   │   │   │   ├── payment.py           # Payment endpoints
-│   │   │   │   ├── tech_gate.py         # Legacy tech functions
-│   │   │   │   ├── licensebilling.py
-│   │   │   │   ├── certificates.py      # Certificate enrollment
-│   │   │   │   └── health.py
+│   │   │   │   ├── payment.py           # Payment endpoints (/api/payment)
+│   │   │   │   ├── tech_gate.py         # Legacy tech functions (/api/techgate)
+│   │   │   │   ├── gate_gauge.py        # Gauge telemetry (/api/gategauge)
+│   │   │   │   ├── licensebilling.py    # License billing (XML, /api/licensebilling + /licensebilling)
+│   │   │   │   ├── certificates.py      # Certificate enrollment + PIN (/api/certificates)
+│   │   │   │   ├── leo4proxy.py         # Terminal transport policy (/api/leo4proxy)
+│   │   │   │   ├── list_menu.py         # Terminal menu delivery (/api/ListMenuFile)
+│   │   │   │   ├── devices_legacy.py    # Legacy device endpoints
+│   │   │   │   └── health.py            # Health check (/api/health)
+│   │   │   ├── schemas/                 # Pydantic schemas
+│   │   │   ├── utils/
 │   │   │   └── services/
-│   │   │       └── payment_service.py   # Payment business logic
-│   │   ├── alembic/                     # Database migrations
+│   │   │       ├── payment_service.py   # Payment business logic
+│   │   │       ├── ca.py                # HTTP client to external CA
+│   │   │       ├── cert_billing.py      # PIN billing policy/generation/TTL
+│   │   │       ├── cert_discovery.py    # terminal_cert_discovery accumulator
+│   │   │       ├── companion_cert.py    # Companion certificate helpers
+│   │   │       ├── email_service.py     # Serverless email integration
+│   │   │       ├── gauge_engine.py      # Gauge state engine
+│   │   │       ├── leo4proxy_policy.py  # MQTT/RTP/HTTPS transport policy for leo4proxy
+│   │   │       └── sn.py                # Standard platform SN generator
+│   │   ├── alembic/                     # Database migrations (001–029; PB is the sole owner)
 │   │   ├── .env                         # Secrets (not in git)
 │   │   ├── .env.example                 # Template for developers
 │   │   └── pyproject.toml               # Dependencies
-│   ├── docker-compose.yaml              # Service orchestration
+│   ├── nginx-mutual-legacy/             # Terminal mTLS gateway configs (nginx)
 │   └── log/                             # Payment logs (persistent)
 ├── MenuBuilder/                         # Menu management, portal & billing API
 └── docs/                                # Consolidated documentation & architecture guides
@@ -269,6 +283,12 @@ emailAddress=1.terminal@forpay.ru,CN=A99D2F18001ECC93DF5CBE27F442C8FA,OU=773,O=1
 | O | `terminal.org_id` (informational) |
 | Serial | `terminal.cert_serial` |
 
+### Dual-Issuer Authentication (`get_current_terminal`)
+
+- **New CA (`iot.leo4.ru`, 40-hex serials)**: strict check `Terminal.sn == CN AND Terminal.cert_serial == Serial`; mismatch → `401` (`serial_mismatch`).
+- **Legacy CA (SubCA, serials ≤ 20 hex)**: lookup by `OU` (device_id) and `O` (org_id); `cert_serial` is auto-bound only when unset or still legacy — **a 40-char new CA serial is never overwritten**.
+- Every attempt (valid or not) is recorded in `terminal_cert_discovery`.
+
 ## Configuration
 
 ### Environment Variables (.env)
@@ -281,29 +301,27 @@ DATABASE_URL=postgresql+asyncpg://user:password@host:port/database
 CORS_ORIGINS=["http://localhost:8080","https://dev.leo4.ru:4443"]
 ```
 
-### Docker Compose
+### Docker Compose (production)
+
+Production runs from the unified `/home/user1/compose.yaml` on 87.242.100.34
+(Docker network `user1_default`); the service uses an **immutable registry image**,
+never a local build:
 
 ```yaml
 services:
   processing-backend:
-    build: ./backend
+    image: dev-leo4-ru.cr.cloud.ru/etran/processingbackend@sha256:<digest>
     container_name: processing-backend
     restart: always
     env_file:
-      - ./backend/.env
+      - ./ProcessingBackend/backend/.env
     volumes:
-      - ./log:/app/log    # Persistent logs
-    networks:
-      - pg_network
-      - processing_net
-
-networks:
-  pg_network:
-    external: true
-    name: iot-rpc-rest-app_pg_network
-  processing_net:
-    driver: bridge
+      - ./ProcessingBackend/keys:/function/storage/keys:ro
 ```
+
+Local development uses `docker-compose.yaml` in `ProcessingBackend/` (build from
+source, local PostgreSQL). The terminal mTLS gateway is `nginx-mutual-legacy`
+(port 443), not part of this compose file.
 
 ## Logging
 
@@ -327,24 +345,26 @@ ERROR: ext_id=..., error=...
 
 ### Deployment
 
+Deployment follows the release contract ([`ops_run-beta-ci-cd.md`](ops_run-beta-ci-cd.md)):
+accepted `main` SHA → build/publish on the builder → immutable digest in the
+private registry → digest pull on production. Never build or upload code on the
+production server.
+
 ```bash
-# Build and restart
-cd /home/user1/ProcessingBackend
-sudo docker compose up -d --build processing-backend
-
-# Check logs
+# Read-only checks on production (87.242.100.34)
 sudo docker logs processing-backend --tail 50
-
-# Check payment logs
 sudo docker exec processing-backend cat /app/log/payment.log
 ```
 
 ### Database Migrations
 
+Alembic is the only migration mechanism (001–029, owned by ProcessingBackend).
+Migrations are applied from the new PB image during the release:
+
 ```bash
-# Run migration script
-sudo docker cp migration.py processing-backend:/app/migration.py
-sudo docker exec processing-backend python /app/migration.py
+# During a release, from the new image on the production server:
+sudo docker exec processing-backend alembic upgrade head
+sudo docker exec processing-backend alembic current   # verify revision
 ```
 
 ### Monitoring

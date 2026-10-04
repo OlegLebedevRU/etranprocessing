@@ -539,7 +539,8 @@ When an unauthenticated terminal appears in discovery logs with `validation_stat
 
 1. **Query Legacy MS SQL (`172.17.100.1`)**:
    ```powershell
-   $connStr = 'Server=172.17.100.1;Database=Service;User Id=ai-agent;Password=ai-agent;TrustServerCertificate=True;Connect Timeout=10;'
+   # Credentials are taken from the private operator storage; never hardcode them in scripts or docs.
+   $connStr = 'Server=172.17.100.1;Database=Service;User Id=<LOGIN>;Password=<PASSWORD>;TrustServerCertificate=True;Connect Timeout=10;'
    $conn = New-Object System.Data.SqlClient.SqlConnection($connStr)
    $conn.Open()
    $cmd = $conn.CreateCommand()

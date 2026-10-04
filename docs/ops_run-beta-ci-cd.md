@@ -21,6 +21,14 @@ immutable OCI digest → production pull → Compose override одного се�
 возвращает предыдущий образ. Базовые Compose закрепляются по тем же digest и
 не содержат `build` для перечисленных ниже сервисов.
 
+> **Источник истины по digest'ам — базовый `compose.yaml` репозитория**
+> (обновляется скриптом релиза). Таблица ниже — срез на 2026-09-29,
+> приведён для истории выпуска; актуальные digest'ы после релиза подписок
+> 2026-10-03 (`8bb0359`) см. в `compose.yaml` (например,
+> `processingbackend@sha256:264cc058…`, `menubuilder-backend@sha256:0a67f0ff…`,
+> `app1@sha256:ab09311d…`). Сервисы `l4media-*` управляются отдельным
+> стеком `l4media/compose.yaml`, а не базовым `compose.yaml`.
+
 | Владелец / контейнер | Источник сборки | Production digest |
 | --- | --- | --- |
 | ProcessingBackend / `processing-backend` | `etranprocessing` main `7da3e07`, beta launcher | `dev-leo4-ru.cr.cloud.ru/etran/processingbackend@sha256:bc0e5b131b4e47ec43e0695e7f87d8cc3e158bb26756bc2fb88023aa76a75a00` |
@@ -73,8 +81,9 @@ launcher; IoT выпускать из его master по `docs/manual-app1-deplo
 - Production override: `/home/user1/.etran-ci/user1-images.json` указывает на
   этот digest. Базовый Compose закреплён на том же digest без `build`.
   Frontend остаётся отдельным `dist`, registry для него не обязателен.
-- `etran-beta.timer` сейчас disabled/inactive: публикация и деплой выполнены
-  адресным ручным запуском launcher; автоматическое наблюдение не включалось.
+- `etran-beta.timer` на момент выпуска был disabled/inactive: публикация и деплой
+  выполнены адресным ручным запуском launcher; автоматическое наблюдение не
+  включалось (с 2026-10-04 systemd-юниты выпилены из поставки полностью).
 
 ### Исторический ввод beta-контура (2026-09-11 UTC)
 
@@ -105,9 +114,11 @@ fixture ProcessingBackend): добавлен регрессионный тест
 - Builder: **176.108.247.249**, администрирование `user1`, исполнение `github-runner`.
 - Production: **87.242.100.34**, `user1`, Docker через `sudo -n`.
 - Registry: `dev-leo4-ru.cr.cloud.ru/etran`.
-- Оркестрация: свой `systemd timer`, без GitHub Actions/API/биллинга CI.
-- Ветка проверяется через 60 секунд после окончания предыдущей проверки; это
-  polling после push, а не входящий webhook. Публичный listener не создаётся.
+- Оркестрация: ручной адресный запуск launcher; без GitHub Actions/API/биллинга CI.
+  systemd-юниты `etran-beta.service`/`etran-beta.timer` выпилены из поставки
+  (2026-10-04), автоматический опрос ветки не используется.
+- Источник выпуска — принятый `main`; изменения проверяются при каждом ручном
+  запуске. Публичный listener не создаётся.
 - Worker и deploy-скрипт исполняются из checkout точного commit main. Установленный
   launcher — отдельная минимальная часть, его SHA записывается в `/opt/etran-beta/installed-revision`.
 - Образ получает уникальный тег `<полный-Git-SHA>-<UTC-build-id>`. Тег `latest`
@@ -134,7 +145,8 @@ Dockerfile выполняет `npm ci`, `npm test` и production build; `vitest`
 Переиспользуется `.github/ci/components.py`: пять образов, `shared/` выбирает оба
 backend; `.github/ci`, `deploy/beta` и корневой `.dockerignore` затрагивают все.
 Только Markdown не вызывает выпуск. Выпуски последовательные: ProcessingBackend
-перед MenuBuilder. Ошибка останавливает текущий цикл и повторяется timer позднее.
+перед MenuBuilder. Ошибка останавливает текущий цикл и повторяется ручным
+запуском позднее.
 
 База сравнения — последний **успешно развёрнутый** SHA каждого компонента.
 Checkpoint изменяется только после успешного удалённого деплоя; build-only его
@@ -154,31 +166,28 @@ Checkpoint изменяется только после успешного уд�
 сервисов. Повторная установка baseline запрещена; без этого шага auto-run закрыт.
 Уже выпущенный MenuBuilder всегда сравнивается с его настоящим release SHA.
 
-`builder.lock` защищает timer и ручной запуск одним lock. Production имеет
+`builder.lock` защищает от параллельных ручных запусков. Production имеет
 дополнительный lock. Состояние записывается атомарно с fsync.
 
 ## Файлы установки для согласования
 
 Все кодовые файлы ниже поставляются из одного reviewed commit, без ручных
-серверных правок исходников. Установщик `deploy/beta/install.py` не включает timer.
+серверных правок исходников. Установщик `deploy/beta/install.py` не устанавливает
+systemd-юниты; релизы запускаются вручную через launcher.
 
 | Builder: серверный путь | Источник/назначение |
 | --- | --- |
 | `/opt/etran-beta/launcher.py` | `deploy/beta/launcher.py`, root-owned 644 |
 | `/opt/etran-beta/versions.json` | версии инструментов из того же commit |
 | `/opt/etran-beta/installed-revision` | полный SHA установленного launcher |
-| `/etc/systemd/system/etran-beta.service` | точная копия `deploy/beta/etran-beta.service` |
-| `/etc/systemd/system/etran-beta.timer` | точная копия `deploy/beta/etran-beta.timer` |
 | `/home/github-runner/.docker/cli-plugins/docker-buildx` | проверенный бинарник Buildx |
 | `/home/github-runner/.local/bin/uv` | проверенный бинарник uv |
 | `/home/github-runner/etran-ci/keys/deploy` | отдельный закрытый ключ, 600; НЕ в Git |
 | `/home/github-runner/etran-ci/keys/known_hosts` | ранее проверенный ED25519 host key production |
 | `/home/github-runner/etran-ci/` | служебные Git worktree, состояния, артефакты и кэш, 700 |
 
-Стандартные настройки службы: `User=github-runner`, `Group=github-runner`,
-`UMask=0077`, `TimeoutStartSec=3600`, запуск `/usr/bin/python3 /opt/etran-beta/launcher.py`.
-Timer: `OnBootSec=60s`, `OnUnitInactiveSec=60s`, `AccuracySec=5s`.
-Полный точный текст unit-файлов хранится в `deploy/beta/`.
+Запуск релиза выполняется вручную от имени `github-runner`:
+`sudo -n -u github-runner -H python3 /opt/etran-beta/launcher.py --component <component>`.
 
 Production: добавить **только одну строку**, сохранив все прежние ключи,
 в `/home/user1/.ssh/authorized_keys`:
@@ -189,9 +198,10 @@ restrict ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFHkqt27oxPDykc9f79h7r2VtWHDWQZUtGk
 
 Это разовая настройка доступа, не файл образа. `restrict` запрещает forwarding
 и PTY, но разрешает выполнение команд пользователя и его Docker sudo-права.
-Старый ключ GitHub не удаляется автоматически; прежний workflow выключен
-условием `changes.if: false`, поэтому не возобновит выпуск при исправлении billing.
-При последующих деплоях `.ssh`, systemd и runtime `.env` не перезаписываются.
+Старый ключ GitHub не удаляется автоматически; GitHub Actions workflow
+(`.github/workflows/build-image.yml`) удалён из репозитория 2026-10-04, рудиментов
+этого пути в репозитории больше нет. При последующих деплоях `.ssh` и runtime
+`.env` не перезаписываются.
 
 Закрытый ключ подготовлен локально в `.beta-ci-secrets/` (Git ignore, ограниченный
 ACL) и после доставки должен быть удалён вместе с временной серверной копией.
@@ -223,8 +233,9 @@ ssh -n -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249 "sudo -n -u github-ru
 ```
 
 7. Проверить registry digest, health API, revision контейнера и неизменность ID
-   соседних сервисов. Выполнить `--start-monitoring` тем же launcher под
-   `github-runner`, затем `sudo systemctl enable --now etran-beta.timer`.
+   соседних сервисов. Автоматическое наблюдение (`--start-monitoring`) и
+   `etran-beta.timer` не используются: systemd-юниты выпилены, все релизы —
+   ручные адресные запуски launcher.
 
 Приватный Git доступ при необходимости задаётся отдельно read-only deploy key;
 при preflight репозиторий успешно читался без GitHub Actions. Registry credentials
@@ -237,17 +248,15 @@ ssh -n -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249 "sudo -n -u github-ru
 ```powershell
 # Только сборка/публикация без деплоя
 ssh -n -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249 "sudo -n -u github-runner -H python3 /opt/etran-beta/launcher.py --component menubuilder-frontend --build-only"
-# Последние логи и состояние таймера
-ssh -n -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249 "sudo journalctl -u etran-beta.service -n 100 --no-pager; systemctl status etran-beta.timer --no-pager"
-# Приостановить будущие автоматические выпуски (не прерывает текущий)
-ssh -n -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249 "sudo systemctl disable --now etran-beta.timer"
+# Последние успешные релизы и опубликованные образы (журналы на builder)
+ssh -n -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249 "sudo -n -u github-runner -H tail -n 20 /home/github-runner/etran-ci/releases.jsonl; sudo -n -u github-runner -H ls -t /home/github-runner/etran-ci/artifacts/menubuilder-frontend | head -n 5"
 ```
 
 В builder `state.json` хранит успешные releases, `artifacts/<component>/<SHA>.json`
-— опубликованные образы, `releases.jsonl` — журнал успешных деплоев. Ручной вывод
-сценария идёт в терминал, автоматический — в journald.
+— опубликованные образы, `releases.jsonl` — журнал успешных деплоев. Вывод
+сценария идёт в терминал запуска (ручной адресный запуск).
 
-Установленные launcher/service/версии инструментов обновляются отдельной
+Установленные launcher/версии инструментов обновляются отдельной
 согласованной установкой из нового commit. Worker всегда берётся из текущего
 main; нельзя менять его непосредственно на сервере. Иные уже существующие
 версии инструментов установщик не перезаписывает молча.
@@ -266,7 +275,7 @@ Frontend обновляет assets до `index.html`, сохраняет ста�
 перезапускает общий Nginx. Runtime routes l4media, Janus, `.env` и сертификаты
 автоматически не доставляются.
 
-Ручной откат образа и правила постоянного Compose override описаны в
-[предыдущем регламенте](ops_run-github-actions-ci-cd.md#выпуск-и-восстановление).
-Перед ручным откатом остановить timer; после него согласовать checkpoint builder
-с выбранной версией, чтобы автоматизация не вернула нежелательный выпуск.
+Ручной откат образа: вернуть в override/базовый Compose digest предыдущего
+образа и выполнить `up -d --no-deps --no-build` для затронутого сервиса;
+после отката согласовать checkpoint builder (`state.json`) с выбранной
+версией, чтобы очередной ручной выпуск не вернул нежелательный образ.

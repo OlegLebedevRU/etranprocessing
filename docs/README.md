@@ -15,6 +15,7 @@
 - **[`etran_data-database-ownership.md`](etran_data-database-ownership.md)** — Матрица владения базой данных PostgreSQL: разграничение прав на чтение/запись таблиц между `ProcessingBackend` и `MenuBuilder`, единый пакет `shared/etranprocessing_db`, правила создания Alembic-миграций.
 - **[`menu_auth-multi-tenant-architecture.md`](menu_auth-multi-tenant-architecture.md)** — Мультитенантная архитектура аутентификации и авторизации: единый централизованный JWT-токен (RS256), хранение в cookie `accessToken`, сессии в БД/in-memory, контекст тенанта и переключение организаций суперюзером.
 - **[`menu_auth-role-model-and-viewer.md`](menu_auth-role-model-and-viewer.md)** — Ролевая модель платформы, пользователь-наблюдатель (Viewer / роль 4), реестр permissions и управление пользователями тенанта для роли 3.
+- **[`menu_auth-smartcaptcha.md`](menu_auth-smartcaptcha.md)** — CAPTCHA (Yandex SmartCaptcha) при входе и регистрации: настройки окружения, контракт `/api/auth/captcha`, поведение UI и ограничения.
 - **[`etran_bill-licensing-architecture.md`](etran_bill-licensing-architecture.md)** — Авторитетная архитектура и математика лицензионного биллинга: статусы (`DISABLED`, `OVERDUE`, `DUE_SOON`, `ACTIVE`), независимый биллинг сертификатов, расчет периодов с сохранением дня якоря, корзина и чекаут.
 - **[`menu_bill-terminal-subscription.md`](menu_bill-terminal-subscription.md)** — Новая модель подписок L4Desk, коммерческий переключатель, отдельная статистика длительности и порядок перехода со старой финансовой модели.
 - **[`etran_cert-infrastructure-architecture.md`](etran_cert-infrastructure-architecture.md)** — Сквозная спецификация инфраструктуры сертификатов и mTLS: двухфакторный выпуск через PIN, терминальный установщик на C, проверка подлинности на Nginx и PowerShell-скрипты аудита.
@@ -22,6 +23,7 @@
 - **[`etran_arch-l4media-streaming-architecture.md`](etran_arch-l4media-streaming-architecture.md)** — Архитектура подсистемы видеотрансляций `l4media`: прием mTLS видеопотоков L4RTP/1 от киосков (`leo4proxy`), декапсуляция, Janus WebRTC Gateway и интеграция с `MenuBuilder`.
 - **[`etran_arch-l4media-resource-profiling-and-unit-budgets.md`](etran_arch-l4media-resource-profiling-and-unit-budgets.md)** — Профилирование аппаратных и сетевых ресурсов, юнит-бюджеты и расчет емкости стека видеотрансляций `l4media`: сравнительный анализ 480p против 720p и масштабирование на 2 одновременных стрима на сервере 87.242.100.34.
 - **[`etran_arch-video-remote-desktop-e2e.md`](etran_arch-video-remote-desktop-e2e.md)** — Единая E2E-архитектура видеонаблюдения и удаленного управления: краткая и детальная части, схемы media/control/signaling, оркестрация и контракты MenuBuilder/app1/l4desk, задачи надежности и развертывания, направления Linux и ESP32-P4.
+- **[`etran_arch-remote-input-control.md`](etran_arch-remote-input-control.md)** — Спецификация протокола удалённого ввода (remote input): аренда lease, input-аренда и capabilities, команды pointer/keyboard/shortcut, контракт l4desk-агента.
 - **[`menu_arch-l4mcp-v1.md`](menu_arch-l4mcp-v1.md)** — MCP-доступ ролей 1/3/5, безопасная проверка агента перед консолью, PIN и порядок подключения клиентов.
 - **[`menu_arch-l4mcp-user-events-plan.md`](menu_arch-l4mcp-user-events-plan.md)** — История событий900–999, tenant-контекст internal API, этапы MenuBuilder/l4mcp и E2E-проверки.
 - **[`menu_arch-l4mcp-scenario-practice.md`](menu_arch-l4mcp-scenario-practice.md)** — События как память удалённых сценариев, формат результатов и пример предупредительного обслуживания Windows-клиентов; предложения следующих этапов.
@@ -68,6 +70,11 @@
 - **[`term_conn-device-connection-and-audit.md`](term_conn-device-connection-and-audit.md)** — Спецификация REST API состояния связи терминалов: структура объекта `connection`, фиксация клонов устройств (`DEVICE_CLONE`) и коллизий сертификатов (`SN_COLLISION`), журнал аудита жизненного цикла.
 - **[`term_conn-schannel-mqtt-cert-store.md`](term_conn-schannel-mqtt-cert-store.md)** — Руководство по организации mTLS для MQTT с использованием неэкспортируемых сертификатов из Windows Certificate Store через Python SChannel TLS Proxy.
 - **[`term_dev-main-app-mqtt-client.md`](term_dev-main-app-mqtt-client.md)** — Краткая инструкция разработчика внутреннего MQTT-клиента основного приложения терминала (`main_app`, C#): параметры подключения, получение SN, сценарий LWT и соглашение по топикам.
+- **[`term_tool-event75-inventory.md`](term_tool-event75-inventory.md)** — Инвентаризация событий метода 75 (event75): состав, теги и потребители.
+- **[`legacy-terminal-integration-guide.md`](legacy-terminal-integration-guide.md)** — Легаси-референс по интеграции и параметризации терминала PlaterraTerminal (прототипы ТСП, БД Terminal, API ОСМП). Исторический материал без префикса стандарта именования (исключение осознанное).
+- **[`terminal-tools-user-guide.md`](terminal-tools-user-guide.md)** — Раннее руководство по терминальным утилитам (легаси-версия). Актуальным является [`term_tool-user-guide.md`](term_tool-user-guide.md); слияние/архивация — в плане актуализации.
+- **[`ingress_iot/`](ingress_iot/)** — Протокол remote-input для ingress IoT (`remote-input-protocol.md`).
+- **[`l4capture/`](l4capture/)** — Архитектура и handoff-журналы разработки l4capture (захват экрана, OpenH264, RTP).
 
 ---
 
@@ -76,9 +83,8 @@
 Регламенты развертывания, управления инфраструктурой и диагностических операций:
 
 - **[`ops_run-devops-runbook.md`](ops_run-devops-runbook.md)** — Регламент эксплуатации: инструкции по сборке и обновлению контейнеров, деплой на серверы, управление сертификатами, переключение legacy IIS и процедуры отката.
-- **[`ops_run-beta-ci-cd.md`](ops_run-beta-ci-cd.md)** — Автономный бета-CI/CD: выделенный builder, версионированные образы, systemd timer, установка и восстановление.
+- **[`ops_run-beta-ci-cd.md`](ops_run-beta-ci-cd.md)** — Автономный CI/CD на выделенном builder: версионированные immutable-образы, ручной адресный запуск релиза, установка и восстановление (единственный действующий порядок деплоя).
 - **[`ops_run-git-and-release-flow.md`](ops_run-git-and-release-flow.md)** — Выбор базовой ветки, вход в GitHub из нужного профиля Windows, builder/registry/production и безопасная очистка локальных копий.
-- **[`ops_run-github-actions-ci-cd.md`](ops_run-github-actions-ci-cd.md)** — Предыдущий вариант GitHub Actions (отключён для бета-перехода), общий механизм digest-деплоя и Compose override.
 - **[`ops_net-nginx-config-guide.md`](ops_net-nginx-config-guide.md)** — Справочник конфигурации Nginx: взаимная TLS-аутентификация (порт 4443), проксирование заголовков сертификатов, JWT-терминация (порт 443).
 - **[`ops_net-infrastructure-connections.md`](ops_net-infrastructure-connections.md)** — Инфраструктурный справочник: сетевые адреса целевого сервера (`87.242.100.34`), Managed PostgreSQL (`10.0.0.7`), порты, параметры БД и окружений.
 - **[`ops_run-remote-console-diagnostics.md`](ops_run-remote-console-diagnostics.md)** — Регламент удаленной диагностики терминалов и серверов через SSH, MQTT-каналы и операции с MCP Ops сервером (`server-ops`).

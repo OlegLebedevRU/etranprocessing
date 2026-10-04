@@ -1,5 +1,13 @@
 # Архитектурный анализ etranprocessing
 
+> **Примечание (2026-10-04):** срез отражает состояние на 2026-08-31 и не
+> охватывает последующие крупные изменения: вывод из эксплуатации старой
+> финансовой модели (retired finance API) и переход на подписки L4Desk
+> ([`menu_bill-terminal-subscription.md`](menu_bill-terminal-subscription.md)),
+> YooKassa, SmartCaptcha ([`menu_auth-smartcaptcha.md`](menu_auth-smartcaptcha.md)),
+> пользовательские события 900–999 и расширение L4Desk/video-областей.
+> Общие принципы (границы контуров, DB ownership, shared-пакеты) остаются верными.
+
 **Дата среза:** 2026-08-31, актуализировано после внедрения и production-проверки  
 **Граница решения:** `ProcessingBackend` + `MenuBuilder` + общие пакеты `shared/etranprocessing_db` и `shared/etranprocessing_gauge`.  
 **Источники:** актуальный код, контейнерная конфигурация и профильные документы из `docs/`. Исключённые пользователем каталоги в анализ не входили.

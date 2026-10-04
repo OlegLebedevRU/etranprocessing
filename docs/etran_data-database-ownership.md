@@ -1,7 +1,7 @@
 # Владение общей PostgreSQL-схемой
 
-**Владелец документа:** архитектура backend-платформы  
-**Проверено:** 2026-09-03  
+**Владелец документа:** архитектура backend-платформы
+**Проверено:** 2026-10-04 (добавлены таблицы L4Desk/fin ledger — миграции 027/029)
 **Область:** `shared/etranprocessing_db`, `ProcessingBackend`, `MenuBuilder`
 
 ## Правила владения
@@ -46,6 +46,26 @@
 | `balance_terminal_tsp` | balance ledger | PB | PB | PB; MB read-only monitoring/reporting |
 | `gate_gauge_records` | telemetry | PB | PB | PB; MB получает оперативное состояние через event bus, DB — только read-only fallback |
 | `tech_gate_records` | telemetry | PB | PB | PB; MB read-only monitoring/reporting |
+| `l4desk_registrations` | l4desk | MB | MB | MB |
+| `l4desk_tenant_profiles` | l4desk | MB | MB | MB |
+| `l4desk_memberships` | l4desk | MB | MB | MB |
+| `l4desk_terminals` | l4desk | MB | MB (включая `paid_until`, миграция 029) | MB; PB читает для certificate identity и вычисляемой transport policy (leo4proxy) |
+| `l4desk_audit_events` | l4desk audit | MB | MB; PB пишет события `certificate_pin_issued` из certificates router | MB |
+| `l4desk_remote_sessions` | l4desk | MB | MB | MB |
+| `fin_tariff_versions` | fin ledger | MB | MB | MB |
+| `fin_accounts` | fin ledger | MB | MB | MB |
+| `fin_ledger_transactions` | fin ledger | MB | MB | MB |
+| `fin_ledger_entries` | fin ledger | MB | MB | MB |
+| `fin_billing_profiles` | fin ledger | MB | MB | MB |
+| `fin_billing_cycles` | fin ledger | MB | MB | MB |
+| `fin_usage_daily` | fin ledger | MB | MB | MB |
+| `fin_terminal_monthly_charges` | fin ledger | MB | MB | MB |
+| `fin_payments` | fin ledger | MB | MB | MB |
+| `fin_manual_payments` | fin ledger | MB | MB | MB |
+| `fin_balance_projections` | fin ledger | MB | MB | MB |
+| `fin_notification_deliveries` | fin ledger | MB | MB | MB |
+| `fin_reconciliation_runs` | fin ledger | MB | MB | MB |
+| `fin_archive_batches` | fin ledger | MB | MB | MB |
 
 ## Совместимость shared schema
 

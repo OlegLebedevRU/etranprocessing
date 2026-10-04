@@ -58,27 +58,23 @@
 
 ## For DevOps
 
-### Deploy to Server
+### Deploy to Production
 
-1. **Upload code**
-   ```bash
-   scp -i d:\.ssh\id_ed25519 -r backend/app user1@87.242.100.34:/home/user1/ProcessingBackend/backend/
-   ```
+> ⚠️ **Never upload code or build images directly on the production server.**
+> Deployment is done exclusively through the release contract described in
+> [`ops_run-beta-ci-cd.md`](ops_run-beta-ci-cd.md) and
+> [`ops_run-git-and-release-flow.md`](ops_run-git-and-release-flow.md):
+> accepted full Git SHA on `main` → build/publish on the dedicated builder
+> (176.108.247.249) → immutable OCI digest in the private registry
+> `dev-leo4-ru.cr.cloud.ru/etran` → digest pull on production
+> (87.242.100.34) → health and image ID verification. Alembic migrations are
+> applied from the new ProcessingBackend image during the release
+> (`alembic upgrade head`), not by copying scripts to the server.
 
-2. **Rebuild container**
-   ```bash
-   ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker compose -f /home/user1/compose.yaml up -d --build processing-backend"
-   ```
-
-3. **Verify**
-   ```bash
-   ssh -n -i d:\.ssh\id_ed25519 user1@87.242.100.34 "sudo docker logs processing-backend --tail 10"
-   ```
-
-### Check Service Health
+### Check Service Health (read-only)
 
 ```bash
-# Container status
+# Container status (on the production server)
 sudo docker compose -f /home/user1/compose.yaml ps
 
 # API health
@@ -99,7 +95,7 @@ curl -k https://87.242.100.34:3000/api/health
 **Add new field to Model:**
 1. Edit `shared/etranprocessing_db/models/...` - add column
 2. Create migration script in `alembic/versions/`
-3. Run migration on server
+3. Apply the migration through the standard release flow (the new ProcessingBackend image runs `alembic upgrade head` during the release)
 
 **Add new endpoint:**
 1. Create/edit router in `app/routers/`

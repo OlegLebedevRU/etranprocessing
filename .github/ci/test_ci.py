@@ -32,7 +32,7 @@ class MatrixTests(unittest.TestCase):
 
     def test_ci_changes_select_all(self):
         for path in [
-            ".github/workflows/build-image.yml",
+            ".github/ci/beta.py",
             ".github/ci/deploy.py",
             ".dockerignore",
         ]:

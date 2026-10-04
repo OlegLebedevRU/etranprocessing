@@ -94,15 +94,16 @@
 * **База данных**: `etran` (для etranprocessing) и `iot_rpc` (для IoT платформы).
 * **Пользователи**: `etran_db_user` (БД `etran`), `leo4_db_user` (БД `iot_rpc`).
 * **Прямой доступ с сервера**: `psql -h 10.0.0.7 -U etran_db_user -d etran` (пароль из `~/.pgpass`).
-* **Ключевые таблицы**:
-  * `org_statuses` (`org_id`, `status_id`, `status_name`, `is_blocked`) — организации.
-  * `terminals` (`device_id`, `org_id`, `address`, `device_sn`, `status_id`, `cert_not_valid_after`) — терминалы.
-  * `licenses` (`id`, `terminal_id`, `license_until`, `is_active`) — лицензии терминалов.
+* **Ключевые таблицы** (актуальная схема `shared/etranprocessing_db`):
+  * `org_statuses` (`org_id`, `status` VARCHAR: `active`/`blocked`) — статус организаций.
+  * `terminals` (`id`, `device_id`, `sn`, `org_id`, `is_active`, `cert_serial`, `cert_not_valid_after`, `address`, `timezone`) — терминалы.
+  * `licenses` (`id`, `terminal_id`, `org_id`, `license_type`, `expires_at`, `balance`, `billing_period_months`) — лицензии терминалов.
   * `certificate_pins` (`id`, `terminal_id`, `pin`, `status`) — PIN-коды активации.
   * `menu_variants` (`id`, `org_id`, `name`, `created_at`) — варианты меню (например, «Легаси меню»).
   * `groups` (`id`, `menu_variant_id`, `org_id`, `number`, `name`, `parent_id`) — иерархические категории.
   * `services` (`id`, `menu_variant_id`, `group_id`, `tsp_code`, `name`, `printname`, `price`, `protypenumber`, `is_active`) — услуги.
   * `terminal_menu_bindings` (`terminal_id`, `menu_variant_id`) — привязка терминалов к меню.
+  * `l4desk_*`, `fin_*` (~20 таблиц, миграции 027/029) — домен L4Desk и финансового ядра; владение см. [`etran_data-database-ownership.md`](etran_data-database-ownership.md).
 
 ### 2.4. Внешний mTLS терминальный шлюз (nginx-mutual-legacy)
 * **Хост / IP**: `87.242.100.34`.

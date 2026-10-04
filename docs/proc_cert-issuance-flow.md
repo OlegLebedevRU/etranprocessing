@@ -229,7 +229,8 @@ CREATE UNIQUE INDEX uq_cert_pins_one_pending_per_terminal
     ON certificate_pins (terminal_id) WHERE status = 'pending';
 ```
 
-PIN creation now happens via `POST /api/terminals/{terminal_id}/certificate-pin` (tenant-scoped,
+PIN creation now happens via `POST /api/billing/terminals/{terminal_id}/certificate-pin`
+(MenuBuilder, tenant-scoped,
 org billing policy driven) or, for paid operations, after the corresponding billing order is
 confirmed — see [PIN-driven organizational billing](#pin-driven-organizational-billing).
 A `check`/`setup` request against an expired `pending` PIN is lazily marked `expired` and
@@ -275,7 +276,7 @@ invoked exclusively from this router's `setup` handler. The billing subject is t
 *permission to create a PIN* for a terminal, not certificate issuance itself.
 
 ```
-POST /api/terminals/{id}/certificate-pin (tenant, JWT)
+POST /api/billing/terminals/{id}/certificate-pin (MenuBuilder, tenant, JWT)
   → org_billing_settings.cert_billing_mode/cert_price_minor decide:
       mode=none            → PIN created immediately (pin_ready)
       per_operation, price=0 → PIN created immediately (pin_ready, audited)
@@ -305,45 +306,48 @@ See `app/services/cert_billing.py` for policy resolution, PIN generation/TTL, an
 ## File Structure
 
 ```
-ProcessingBackend/
-├── ca_sign_csr.py                          # CA serverless function (Yandex Cloud)
-├── ca_test.py                              # Local CA test script
-├── ca_requirements.txt                     # cryptography>=44.0.0
+etranprocessing/
 ├── docs/
-│   └── proc_cert-issuance-flow.md          # This document
-├── nginx-mutual-ssl.conf                   # location /api/certificates/
-└── backend/
-    ├── app/
-    │   ├── models.py                       # CertificatePin, TerminalCertHistory models
-    │   ├── routers/
-    │   │   ├── certificates.py             # check/setup endpoints
-    │   │   └── billing.py                  # POST .../certificate-pin, orders confirm/get
-    │   ├── services/
-    │   │   ├── ca.py                       # HTTP client to external CA
-    │   │   └── cert_billing.py             # PIN billing policy/generation/TTL
-    │   └── logging_config.py               # cert_logger
-    └── alembic/versions/
-        ├── 001_initial_payment_flow_tables.py
-        ├── 002_add_certificate_pins.py
-        └── 006_cert_billing.py
+│   └── proc_cert-issuance-flow.md                  # This document
+├── shared/etranprocessing_db/models/               # Declarative ORM models (CertificatePin, Terminal, TerminalCertHistory)
+├── ProcessingBackend/
+│   ├── ca_sign_csr.py                              # CA serverless function (Yandex Cloud)
+│   ├── ca_test.py                                  # Local CA test script
+│   ├── ca_requirements.txt                         # cryptography>=44.0.0
+│   ├── nginx-mutual-legacy/nginx-configs/
+│   │   └── legacy_ssl.conf                         # Terminal mTLS gateway: /api/certificates routes
+│   └── backend/
+│       ├── app/
+│       │   ├── routers/
+│       │   │   └── certificates.py                 # check/setup + PIN endpoints
+│       │   ├── services/
+│       │   │   ├── ca.py                           # HTTP client to external CA
+│       │   │   └── cert_billing.py                 # PIN billing policy/generation/TTL
+│       │   └── logging_config.py                   # cert_logger
+│       └── alembic/versions/                       # Full chain 001–029 (002, 006 for PINs/billing)
+└── MenuBuilder/backend/app/
+    └── routers/billing.py                          # POST /api/billing/terminals/{id}/certificate-pin, orders confirm/get
 ```
 
 ---
 
-## Nginx location (nginx-mutual-ssl.conf)
+## Nginx locations (`ProcessingBackend/nginx-mutual-legacy/nginx-configs/legacy_ssl.conf`)
+
+Certificate enrollment routes (PIN-based, no cert headers) on the terminal mTLS
+gateway `nginx-mutual-legacy` (:443):
 
 ```nginx
-# Certificates: /api/certificates/ (PIN-based, no cert headers)
-location ~ ^/api/certificates(/.*)?$ {
-    proxy_pass http://processing-backend:8000/api/certificates$1$is_args$args;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_buffering off;
-}
+# Exact/legacy-compatible entry points (all proxy to processing-backend:8000):
+location = /certificates/            { proxy_pass http://new_processing_backend/api/certificates/$is_args$args; }
+location = /certificates             { proxy_pass http://new_processing_backend/api/certificates$is_args$args; }
+location = /certificates/Dispatcher.ashx
+location ^~ /api/certificates/pins
+location ^~ /api/certificates/pins/
+location ~ ^/api/certificates(/.*)?$ { proxy_pass http://new_processing_backend/api/certificates$1$is_args$args; }
 ```
+
+Common proxy headers: `Host`, `X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto`,
+`proxy_buffering off`. Full authoritative list — see `legacy_ssl.conf` itself.
 
 No `X-Client-Cert-*` headers — terminal has no certificate during enrollment.
 
@@ -355,10 +359,10 @@ No `X-Client-Cert-*` headers — terminal has no certificate during enrollment.
 
 | Variable | Value | Description |
 |---|---|---|
-| `CA_URL` | `https://functions.yandexcloud.net/d4efqr7g0mlpqr8acktl` | External CA endpoint |
+| `CA_URL` | `<endpoint URL from the private operator storage>` | External CA endpoint (Yandex Cloud Functions) |
 | `CA_TIMEOUT` | `30` | HTTP timeout (seconds) |
 | `CERT_VALIDITY_DAYS` | `365` | Certificate validity |
-| `SIGN_KEY` | `EtranSignOK` | Key for MD5 sign computation |
+| `SIGN_KEY` | `<secret from the private operator storage>` | Key for MD5 sign computation |
 
 ### CA serverless function (env)
 

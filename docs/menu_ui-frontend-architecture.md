@@ -237,8 +237,13 @@ sequenceDiagram
 | Отчёты | `routes/reports.tsx`, `api/reports.ts` | Агрегаты, платежи, инкассации и фильтры периода |
 | Лицензии | `routes/billing.tsx`, `api/billing.ts`, `CheckoutModal.tsx`, `CertificatePinModal.tsx` | Состояние лицензий, корзина, деактивация и сертификатные PIN-коды |
 | Устройства | `routes/devices/*`, `api/devices.ts` | Паспорт, события, теги, задачи и консоль устройства |
-| Интеграции | `routes/integrations.tsx`, `api-connection.tsx`, `api-tokens.tsx`, `api/integrations.ts` | Витрина интеграций и настройки API-доступа |
+| Интеграции | `routes/integrations.tsx`, `api-connection.tsx`, `api/integrations.ts` | Витрина интеграций и настройки API-доступа |
 | Администрирование | `routes/admin-*.tsx`, `api/admin*.ts` | Организации, терминалы и пользователи |
+| Подписки L4Desk | `routes/licenses/`, `routes/l4desk/`, `api/subscriptions.ts`, `api/certificate-pin.ts`, `AdminSubscriptionsPanel.tsx` | Состояние подписок терминалов, покупка/история, административная коррекция сроков, статистика длительности console/video |
+| Видеонаблюдение | `routes/video-surveillance.tsx`, `components/video/*`, `api/video.ts`, `api/janusClient.ts` | Список терминалов, плеер WebRTC (Janus), панель удалённого управления |
+| Консоль (штатная) | `routes/console/ConsolePage.tsx` | Штатная веб-консоль diagnostics WebSocket |
+| MCP | `routes/mcp/*`, `api/hub.ts` | Страница MCP-токенов и инструкций подключения клиентов |
+| Настройки | `routes/settings/*`, `settings-layout.tsx`, `api/settings.ts`, `api/settingsUsers.ts` | Профиль организации, управление пользователями тенанта |
 
 Крупные файлы `billing.tsx`, `reports.tsx`, `variants.tsx` и `devices/index.tsx` объединяют orchestration, бизнес-представление и большой объём JSX. При развитии этих областей новые самостоятельные блоки следует выносить в feature-компоненты и hooks, не меняя публичный маршрут.
 
