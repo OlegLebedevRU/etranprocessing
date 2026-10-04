@@ -35,36 +35,19 @@ for var in JANUS_HOST JANUS_ADMIN_PORT JANUS_ADMIN_SECRET L4MEDIA_SERVICE_TOKEN 
     fi
 done
 
-mkdir -p crt
-if [ ! -f crt/server_certificate.pem ] || [ ! -f crt/server_key.pem ]; then
-    echo "Generating self-signed server TLS certificate (CN=87.242.100.34)..."
-    openssl req -x509 -newkey rsa:2048 -nodes \
-        -keyout crt/server_key.pem \
-        -out crt/server_certificate.pem \
-        -days 3650 \
-        -subj "/CN=87.242.100.34"
-    chmod 600 crt/server_key.pem
-    chmod 644 crt/server_certificate.pem
-    echo "Server certificate generated in crt/"
-else
-    echo "Server certificate already exists in crt/."
-fi
-
-echo "=== [3/6] Verifying CA client certificate ==="
-CA_PATH="/home/user1/iot-rpc-rest-app/crt/iot_leo4_ca.crt"
-if [ ! -f "${CA_PATH}" ]; then
-    echo "ERROR: CA certificate not found at ${CA_PATH}!" >&2
-    exit 1
-fi
-echo "CA certificate verified: ${CA_PATH}"
+echo "=== [3/6] Validating mounted CA-issued dev.leo4.ru certificate ==="
+# Paths come from Compose/private .env; never generate self-signed replacements.
+# Validate the selected release before stopping the currently running service.
+sudo docker compose -p l4media pull
+sudo docker compose -p l4media run --rm --no-deps \
+    --entrypoint /docker-entrypoint.d/40-verify-media-certificate.sh nginx
 
 echo "=== [4/6] Recording existing Docker containers state ==="
 sudo docker ps --format '{{.Names}} {{.Status}}' > /tmp/docker_ps_before_l4media.txt
 echo "Active containers before deploy recorded."
 
-echo "=== [5/6] Building and starting l4media stack ==="
-sudo docker compose -p l4media build
-sudo docker compose -p l4media up -d
+echo "=== [5/6] Pulling and starting l4media stack ==="
+sudo docker compose -p l4media up -d --no-build
 
 echo "=== [6/6] Verifying service statuses and external container isolation ==="
 sudo docker compose -p l4media ps
