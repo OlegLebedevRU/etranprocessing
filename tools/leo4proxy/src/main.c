@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file main.c
  * @brief Leo4Proxy - Unified Windows SChannel mTLS Proxy and Reverse HTTPS Gateway for Leo4 & Etranprocessing.
  */
@@ -11,6 +11,7 @@
 #include <signal.h>
 #include "cert_store.h"
 #include "schannel_tls.h"
+#include "upstream_probe.h"
 #include "mqtt_proxy.h"
 #include "stream_proxy.h"
 #include "rtp_tunnel.h"
@@ -343,7 +344,7 @@ void proxy_config_init_defaults(ProxyConfig* config) {
     config->is_machine_store = 1;      // Default: LocalMachine\MY
     config->srv_enabled = 1;
     config->policy_bootstrap_port = 443;
-    config->insecure_server_cert = 0;  // Default: ignore untrusted server CA for dev/migration
+    config->insecure_server_cert = 0;  // Strict embedded-CA and logical-name validation for every upstream
     config->cert_poll_interval = DEFAULT_CERT_POLL_INTERVAL; // Default: 30s poll in service mode
     config->drop_on_expire = 0;        // Compatibility flag; selection requires a valid new-CA certificate
 
@@ -448,7 +449,7 @@ static void print_usage(const char* exeName) {
     printf("  --http-remote <host:p>  Remote HTTPS Backend (default: %s:%d)\n", DEFAULT_HTTP_REMOTE_HOST, DEFAULT_HTTP_REMOTE_PORT);
     printf("  --http-local  <ip:port> Local HTTP listener (default: %s:%d)\n", DEFAULT_HTTP_LOCAL_HOST, DEFAULT_HTTP_LOCAL_PORT);
     printf("  --local-ssl             Enforce SSL/TLS on local listeners (default: auto-detect)\n");
-    printf("  --secure                Strict server CA validation (default: lax/insecure)\n\n");
+    printf("  --secure                Strict server CA validation (already the default)\n\n");
     printf("STREAM FORWARDER (Legacy TCP -> mTLS -> cloud media ingress):\n");
     printf("  --stream                   Enable local TCP -> mTLS stream forwarder (default: disabled)\n");
     printf("  --no-stream                Disable stream forwarder\n");
@@ -668,25 +669,17 @@ int main(int argc, char* argv[]) {
         endpoints_init(&config); endpoints_identity(details.sn);
         CredHandle creds; bool acquired=schannel_init_client_creds(details.pCertContext,0,&creds); int failures=0;
         bool admission=policy_probe_media_allowed(details.sn);
-        ULONGLONG deadline=GetTickCount64()+8000;
+        UpstreamProbe probes[ENDPOINT_CHANNELS]={0};
         for (int channel=0;channel<4;channel++) {
-            bool enabled=channel!=2 || config.stream_proxy_enabled;
-            if (channel==3 && !config.rtp_tunnel_enabled) enabled=false;
-            SChannelSession session; bool success=false,rejected=false; Leo4Endpoint selected={0};
-            bool blocked=enabled && channel!=1 && !admission;
-            if (enabled && acquired && !blocked) {
-                /* Diagnostic mode must not create MQTT/media application traffic. */
-                Leo4Endpoint targets[ENDPOINT_MAX]; int count=endpoints_candidates(&config,channel,channel==1,targets);
-                for (int n=0;n<count && !success;n++) {
-                    ULONGLONG now=GetTickCount64(); if (now>=deadline) break;
-                    int share=(int)(deadline-now)/(count-n); if (share>2500) share=2500;
-                    success=schannel_connect_endpoint(&session,&creds,targets[n].host,endpoint_logical_name(&config,channel),targets[n].port,share,false);
-                    rejected=rejected || session.certificate_rejected;
-                    if (success) { selected=targets[n]; endpoints_connected(channel,&targets[n]); schannel_close(&session); }
-                }
-            }
-            printf("{\"v\":1,\"channel\":%d,\"verdict\":\"%s\",\"host\":\"%s\",\"port\":%d,\"source\":\"%s\",\"logical_name\":\"%s\",\"strict\":true}\n",channel,!enabled?"skipped":blocked?"policy_blocked":success?"valid":rejected?"cert_invalid":"probe_failed",selected.host,selected.port,selected.source,endpoint_logical_name(&config,channel));
-            if (enabled && !success) ++failures;
+            probes[channel].config=&config; probes[channel].creds=&creds; probes[channel].channel=channel;
+            probes[channel].enabled=channel==2?config.stream_proxy_enabled:channel==3?config.rtp_tunnel_enabled:true;
+            probes[channel].admission=admission; probes[channel].acquired=acquired;
+        }
+        upstream_probe_all(probes);
+        for (int channel=0;channel<4;channel++) {
+            UpstreamProbe* p=&probes[channel];
+            printf("{\"v\":1,\"channel\":%d,\"verdict\":\"%s\",\"host\":\"%s\",\"port\":%d,\"source\":\"%s\",\"logical_name\":\"%s\",\"strict\":true,\"elapsed_ms\":%lu,\"attempts\":%d}\n",channel,p->verdict,p->selected.host,p->selected.port,p->selected.source,endpoint_logical_name(&config,channel),p->elapsed_ms,p->attempts);
+            if (strcmp(p->verdict,"valid") && strcmp(p->verdict,"skipped") && strcmp(p->verdict,"policy_blocked")) ++failures;
         }
         if (acquired) schannel_free_creds(&creds);
         cert_store_free_details(&details); endpoints_shutdown(); WSACleanup(); return failures?1:0;

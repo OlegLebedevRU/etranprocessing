@@ -63,7 +63,7 @@ goto :do_build_x64
 :do_build_x86
 echo.
 echo [Build x86] 32-bit static binary (Windows 7 SP1+ compatible)...
-cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\leo4proxy.res res\leo4proxy.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /D_CRT_SECURE_NO_WARNINGS /DUNICODE /D_UNICODE /I src /Foobj\x86\ src\main.c src\policy.c src\policy_json.c src\cert_store.c src\endpoints.c src\schannel_tls.c src\credential_lifetime.c src\mqtt_proxy.c src\stream_proxy.c src\rtp_tunnel.c src\http_proxy.c src\reverse_proxy.c src\discovery.c src\firewall.c src\service_mgr.c src\tray_icon.c obj\x86\leo4proxy.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\leo4proxy.exe dnsapi.lib ws2_32.lib crypt32.lib ncrypt.lib secur32.lib advapi32.lib shell32.lib user32.lib gdi32.lib iphlpapi.lib winhttp.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\leo4proxy.res res\leo4proxy.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /D_CRT_SECURE_NO_WARNINGS /DUNICODE /D_UNICODE /I src /Foobj\x86\ src\main.c src\policy.c src\policy_json.c src\cert_store.c src\endpoints.c src\schannel_tls.c src\upstream_probe.c src\credential_lifetime.c src\mqtt_proxy.c src\stream_proxy.c src\rtp_tunnel.c src\http_proxy.c src\reverse_proxy.c src\discovery.c src\firewall.c src\service_mgr.c src\tray_icon.c obj\x86\leo4proxy.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\leo4proxy.exe dnsapi.lib ws2_32.lib crypt32.lib ncrypt.lib secur32.lib advapi32.lib shell32.lib user32.lib gdi32.lib iphlpapi.lib winhttp.lib"
 if errorlevel 1 (
     echo [ERROR] x86 build failed!
     set BUILD_FAILED=1
@@ -77,7 +77,7 @@ goto :summary
 :do_build_x64
 echo.
 echo [Build x64] 64-bit static binary...
-cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /fo obj\x64\leo4proxy.res res\leo4proxy.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_CRT_SECURE_NO_WARNINGS /DUNICODE /D_UNICODE /I src /Foobj\x64\ src\main.c src\policy.c src\policy_json.c src\cert_store.c src\endpoints.c src\schannel_tls.c src\credential_lifetime.c src\mqtt_proxy.c src\stream_proxy.c src\rtp_tunnel.c src\http_proxy.c src\reverse_proxy.c src\discovery.c src\firewall.c src\service_mgr.c src\tray_icon.c obj\x64\leo4proxy.res /link /OUT:bin\x64\leo4proxy.exe dnsapi.lib ws2_32.lib crypt32.lib ncrypt.lib secur32.lib advapi32.lib shell32.lib user32.lib gdi32.lib iphlpapi.lib winhttp.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /fo obj\x64\leo4proxy.res res\leo4proxy.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_CRT_SECURE_NO_WARNINGS /DUNICODE /D_UNICODE /I src /Foobj\x64\ src\main.c src\policy.c src\policy_json.c src\cert_store.c src\endpoints.c src\schannel_tls.c src\upstream_probe.c src\credential_lifetime.c src\mqtt_proxy.c src\stream_proxy.c src\rtp_tunnel.c src\http_proxy.c src\reverse_proxy.c src\discovery.c src\firewall.c src\service_mgr.c src\tray_icon.c obj\x64\leo4proxy.res /link /OUT:bin\x64\leo4proxy.exe dnsapi.lib ws2_32.lib crypt32.lib ncrypt.lib secur32.lib advapi32.lib shell32.lib user32.lib gdi32.lib iphlpapi.lib winhttp.lib"
 if errorlevel 1 (
     echo [ERROR] x64 build failed!
     set BUILD_FAILED=1
@@ -108,9 +108,8 @@ if %BUILD_FAILED% equ 0 (
         copy /y "%%f" bin\x64\"%%f" >nul
     )
     if exist USER_GUIDE.md (
-        copy /y USER_GUIDE.md bin\USER_GUIDE.md >nul
-        copy /y USER_GUIDE.md bin\x86\USER_GUIDE.md >nul
-        copy /y USER_GUIDE.md bin\x64\USER_GUIDE.md >nul
+        powershell.exe -NoProfile -Command "$ErrorActionPreference='Stop'; $guide=[IO.File]::ReadAllText('USER_GUIDE.md'); $encoding=New-Object Text.UTF8Encoding($false); [IO.File]::WriteAllText('bin\USER_GUIDE.md',$guide.Replace('../../docs/','../../../docs/').Replace('(README.md)','(../README.md)'),$encoding); foreach($guideArch in @('x86','x64')) { [IO.File]::WriteAllText(('bin\'+$guideArch+'\USER_GUIDE.md'),$guide.Replace('../../docs/','../../../../docs/').Replace('(README.md)','(../../README.md)'),$encoding) }"
+        if errorlevel 1 set BUILD_FAILED=1
     )
 ) else (
     echo Unified Build FAILED with errors.

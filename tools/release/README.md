@@ -86,6 +86,17 @@ The package/inventory/hash gates still run; the unrelated capture source compari
 is skipped. Do not use the full component build gate for this explicitly limited flow.
 No live terminal checks are performed unless the operator requests them.
 
+### Proxy/setup network hardening candidate 1.10.2
+
+Use the existing signed staging for unchanged components and replace only
+`leo4proxy/leo4proxy.exe` in each architecture with the fresh 1.8.1 build.
+Suite/setup version is 1.10.2. Run proxy unified build/tests and setup tests
+for both architectures; refresh inventories, ZIPs and unsigned setup.
+Then run `Complete-SignedRelease.ps1 -PfxPath '<path to signing PFX>' -Version 1.10.2 -SignOnly leo4proxy`.
+This signs both changed proxy binaries and setup, preserving other EXEs.
+The same timestamp/payload/clean-checkpoint/publication gates apply.
+See the [resolving/network matrix](../../docs/term_net-leo4proxy-resolving-reliability-matrix.md).
+
 ## Published 1.10.1 and documentation updates
 
 [Publication record](../../artifacts/l4tools/1.10.1.json) records the signed setup

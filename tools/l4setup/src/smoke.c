@@ -1,5 +1,6 @@
 ﻿#include "smoke.h"
 #include "proxy_probe.h"
+#include "services.h"
 #include "log.h"
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -18,37 +19,51 @@ static bool check_proxy_info(void) {
     return setup_proxy_probe(18443, false, 1200);
 }
 
-void smoke_probe_upstream(const wchar_t* dest_dir, SmokeProbesResult* result) {
-    wchar_t executable[MAX_PATH],path[MAX_PATH],args[2048]=L"",command[2400];
-    swprintf_s(executable,MAX_PATH,L"%ls\\leo4proxy\\leo4proxy.exe",dest_dir);
-    for (int c=0;c<4;c++) strcpy_s(result->upstream_tls[c],32,"not_run");
-    if (GetFileAttributesW(executable)==INVALID_FILE_ATTRIBUTES) return;
-    swprintf_s(path,MAX_PATH,L"%ls\\leo4proxy\\service-args.txt",dest_dir);
-    FILE* file=NULL; char stored[8192]={0};
-    if (_wfopen_s(&file,path,L"rb")==0 && file) {
-        size_t bytes=fread(stored,1,sizeof(stored)-1,file); fclose(file); stored[bytes]=0;
-        /* Diagnostic branch exits before --service handling; retain all custom args. */
-        MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,stored,-1,args,2048);
+static void append_probe_output(char* output,size_t capacity,size_t* used,const char* chunk,size_t count) {
+    if (count>=capacity) { chunk+=count-(capacity-1); count=capacity-1; *used=0; }
+    if (*used+count>=capacity) {
+        size_t discard=*used+count-(capacity-1);
+        memmove(output,output+discard,*used-discard); *used-=discard;
     }
+    memcpy(output+*used,chunk,count); *used+=count; output[*used]=0;
+}
+
+void smoke_probe_upstream(const wchar_t* dest_dir, SmokeProbesResult* result) {
+    wchar_t executable[MAX_PATH],args[2048]=L"",command[2400];
+    swprintf_s(executable,MAX_PATH,L"%ls\\leo4proxy\\leo4proxy.exe",dest_dir);
+    /* Failure to launch diagnostics must never produce a healthy result. */
+    bool local_warnings=result->has_warnings;
+    result->has_warnings=true;
+    strcpy_s(result->network,sizeof(result->network),"unknown");
+    if (!result->critical_failed) result->calculated_exit_code=12;
+    for (int c=0;c<4;c++) strcpy_s(result->upstream_tls[c],32,"probe_failed");
+    if (GetFileAttributesW(executable)==INVALID_FILE_ATTRIBUTES) return;
+    /* A stale watchdog file must not validate different endpoints or disabled RTP. */
+    if(!services_read_proxy_arguments(dest_dir,args,2048))return;
     if (swprintf_s(command,2400,L"\"%ls\" --check-upstream %ls",executable,args)<0) return;
     SECURITY_ATTRIBUTES attributes={sizeof(attributes),NULL,TRUE}; HANDLE reader=NULL,writer=NULL;
     if (!CreatePipe(&reader,&writer,&attributes,0)) return;
-    SetHandleInformation(reader,HANDLE_FLAG_INHERIT,0);
+    if(!SetHandleInformation(reader,HANDLE_FLAG_INHERIT,0)) {CloseHandle(reader);CloseHandle(writer);return;}
     HANDLE input=CreateFileW(L"NUL",GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_WRITE,&attributes,OPEN_EXISTING,0,NULL);
+    HANDLE error_output=CreateFileW(L"NUL",GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,&attributes,OPEN_EXISTING,0,NULL);
+    if (input==INVALID_HANDLE_VALUE || error_output==INVALID_HANDLE_VALUE) {
+        if (input!=INVALID_HANDLE_VALUE) CloseHandle(input);
+        if (error_output!=INVALID_HANDLE_VALUE) CloseHandle(error_output);
+        CloseHandle(reader); CloseHandle(writer); return;
+    }
     STARTUPINFOW startup={sizeof(startup)}; PROCESS_INFORMATION process={0};
-    startup.dwFlags=STARTF_USESTDHANDLES; startup.hStdOutput=writer; startup.hStdError=writer; startup.hStdInput=input;
+    startup.dwFlags=STARTF_USESTDHANDLES; startup.hStdOutput=writer; startup.hStdError=error_output; startup.hStdInput=input;
     bool started=CreateProcessW(executable,command,NULL,NULL,TRUE,CREATE_NO_WINDOW,NULL,dest_dir,&startup,&process)!=0;
-    CloseHandle(writer); if (input!=INVALID_HANDLE_VALUE) CloseHandle(input);
+    CloseHandle(writer); CloseHandle(input); CloseHandle(error_output);
     if (!started) { CloseHandle(reader); return; }
-    char output[8192]={0}; size_t used=0; ULONGLONG deadline=GetTickCount64()+8500; bool timed_out=false;
+    char output[8192]={0}; size_t used=0; ULONGLONG deadline=GetTickCount64()+9500; bool timed_out=false;
     for (;;) {
         if (GetTickCount64()>=deadline) { timed_out=true; TerminateProcess(process.hProcess,1); WaitForSingleObject(process.hProcess,1000); break; }
         DWORD available=0;
         if (PeekNamedPipe(reader,NULL,0,NULL,&available,NULL) && available) {
             char chunk[1024]; DWORD got=0;
             if (ReadFile(reader,chunk,available<sizeof(chunk)?available:sizeof(chunk),&got,NULL)) {
-                size_t copy=got; if (copy>sizeof(output)-1-used) copy=sizeof(output)-1-used;
-                memcpy(output+used,chunk,copy); used+=copy; output[used]=0;
+                append_probe_output(output,sizeof(output),&used,chunk,got);
             }
             continue;
         }
@@ -58,8 +73,7 @@ void smoke_probe_upstream(const wchar_t* dest_dir, SmokeProbesResult* result) {
             while (PeekNamedPipe(reader,NULL,0,NULL,&available,NULL) && available) {
                 char chunk[1024]; DWORD got=0;
                 if (!ReadFile(reader,chunk,available<sizeof(chunk)?available:sizeof(chunk),&got,NULL) || !got) break;
-                size_t copy=got; if (copy>sizeof(output)-1-used) copy=sizeof(output)-1-used;
-                memcpy(output+used,chunk,copy); used+=copy; output[used]=0;
+                append_probe_output(output,sizeof(output),&used,chunk,got);
             }
             break;
         }
@@ -77,13 +91,16 @@ void smoke_probe_upstream(const wchar_t* dest_dir, SmokeProbesResult* result) {
     }
     if (strstr(output,"\"error\":\"no_certificate\""))
         for (int c=0;c<4;c++) strcpy_s(result->upstream_tls[c],32,"no_certificate");
+    bool upstream_failed=false, connected=false;
     const char* names[]={"MQTT","HTTPS","Stream","RTP"};
     for (int c=0;c<4;c++) {
         log_info("Upstream %s TLS: %s",names[c],result->upstream_tls[c]);
-        if (!strcmp(result->upstream_tls[c],"cert_invalid") || !strcmp(result->upstream_tls[c],"probe_failed") || !strcmp(result->upstream_tls[c],"timeout")) {
-            result->has_warnings=true; if (!result->critical_failed) result->calculated_exit_code=12;
-        }
+        if (!strcmp(result->upstream_tls[c],"valid")) connected=true;
+        if (!strcmp(result->upstream_tls[c],"cert_invalid") || !strcmp(result->upstream_tls[c],"probe_failed") || !strcmp(result->upstream_tls[c],"timeout") || !strcmp(result->upstream_tls[c],"no_certificate")) upstream_failed=true;
     }
+    strcpy_s(result->network,sizeof(result->network),connected?"reachable":"unknown");
+    result->has_warnings=upstream_failed || local_warnings;
+    if (!result->critical_failed) result->calculated_exit_code=result->has_warnings?12:0;
 }
 
 static bool check_mosquitto_port(void) {
@@ -103,7 +120,7 @@ static bool check_mosquitto_port(void) {
     memset(&sin, 0, sizeof(sin));
     sin.sin_family = AF_INET;
     sin.sin_port = htons(1883);
-    sin.sin_addr.s_addr = inet_addr("127.0.0.1");
+    InetPtonA(AF_INET,"127.0.0.1",&sin.sin_addr);
 
     connect(s, (struct sockaddr*)&sin, sizeof(sin));
 
@@ -163,7 +180,7 @@ static bool wait_l4desk_in_session(DWORD session_id) {
         if (WTSGetActiveConsoleSessionId() != session_id) return false;
         if (check_l4desk_in_session(session_id)) return true;
         if (GetTickCount64() >= deadline) return false;
-        Sleep(250);
+        ULONGLONG now=GetTickCount64();if(now<deadline)Sleep((DWORD)(deadline-now<250?deadline-now:250));
     }
 }
 
@@ -201,6 +218,7 @@ static void check_ffmpeg_capture(const wchar_t* dest_dir, int session_id, char* 
     DWORD wait_res = WaitForSingleObject(pi.hProcess, 10000);
     if (wait_res == WAIT_TIMEOUT) {
         TerminateProcess(pi.hProcess, 1);
+        WaitForSingleObject(pi.hProcess,1000);
         CloseHandle(pi.hProcess);
         CloseHandle(pi.hThread);
         strncpy_s(out_status, out_size, "skipped", _TRUNCATE);
@@ -217,18 +235,6 @@ static void check_ffmpeg_capture(const wchar_t* dest_dir, int session_id, char* 
     } else {
         strncpy_s(out_status, out_size, "skipped", _TRUNCATE);
     }
-}
-
-static bool check_network_reachability(void) {
-    ADDRINFOA hints, *res = NULL;
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    if (getaddrinfo("iot.leo4.ru", "443", &hints, &res) == 0 && res != NULL) {
-        freeaddrinfo(res);
-        return true;
-    }
-    return false;
 }
 
 static bool check_desktop_locked(void) {
@@ -248,7 +254,7 @@ bool smoke_run_probes(
     if (!out_result) return false;
     memset(out_result, 0, sizeof(SmokeProbesResult));
 
-    log_info("Executing Phase 5 Smoke Tests...");
+    log_info("Executing local smoke probes...");
 
     // 1. Probe proxy_info
     bool proxy_ok = check_proxy_info();
@@ -293,9 +299,8 @@ bool smoke_run_probes(
     }
     log_info("Smoke probe [remote_input]: %s", out_result->remote_input);
 
-    // 7. Network reachability check
-    bool net_ok = check_network_reachability();
-    strcpy_s(out_result->network, sizeof(out_result->network), net_ok ? "reachable" : "unreachable");
+    // Network evidence comes from actual upstream TLS, including DNS-free IP recovery.
+    strcpy_s(out_result->network, sizeof(out_result->network), "not_run");
     log_info("Smoke probe [network]: %s", out_result->network);
 
     // Evaluate
@@ -307,7 +312,7 @@ bool smoke_run_probes(
         return false;
     }
 
-    if (!net_ok || (is_active_status && session_id != 0 && session_id != MAXDWORD && !out_result->l4desk_running)) {
+    if (is_active_status && session_id != 0 && session_id != MAXDWORD && !out_result->l4desk_running) {
         out_result->has_warnings = true;
         out_result->calculated_exit_code = 12; // Degraded / ready with warnings
         log_warn("Smoke completed with degraded status (code 12).");

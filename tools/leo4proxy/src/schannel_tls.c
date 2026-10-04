@@ -104,32 +104,28 @@ void schannel_free_creds(CredHandle* hCred) {
 }
 
 static SOCKET tcp_connect_impl(const char* host, int port, int timeout_ms, PolicySocket* policy_node) {
-    struct addrinfo hints = { 0 };
-    struct addrinfo* res = NULL;
-    char port_str[16];
-    snprintf(port_str, sizeof(port_str), "%d", port);
-
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_protocol = IPPROTO_TCP;
-
-    if (getaddrinfo(host, port_str, &hints, &res) != 0 || !res) {
+    if (timeout_ms<=0 || port<1 || port>65535) return INVALID_SOCKET;
+    ULONGLONG deadline=GetTickCount64()+(ULONGLONG)timeout_ms;
+    char ip[16];
+    if (!endpoint_resolve_ipv4(host,ip,(DWORD)(timeout_ms<2000?timeout_ms:2000))) {
         fprintf(stderr, "[TCP] DNS lookup failed for '%s'\n", host);
         return INVALID_SOCKET;
     }
 
-    SOCKET s = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    if (GetTickCount64()>=deadline) return INVALID_SOCKET;
+    struct sockaddr_in address={0}; address.sin_family=AF_INET; address.sin_port=htons((u_short)port);
+    if (InetPtonA(AF_INET,ip,&address.sin_addr)!=1) return INVALID_SOCKET;
+    SOCKET s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (s == INVALID_SOCKET) {
-        freeaddrinfo(res);
         return INVALID_SOCKET;
     }
 
     // Set non-blocking for connect timeout
     u_long mode = 1;
-    ioctlsocket(s, FIONBIO, &mode);
+    if(ioctlsocket(s,FIONBIO,&mode)) {closesocket(s);return INVALID_SOCKET;}
 
-    int rc = policy_node ? policy_media_connect(policy_node, s, res->ai_addr, (int)res->ai_addrlen)
-                         : connect(s, res->ai_addr, (int)res->ai_addrlen);
+    int rc = policy_node ? policy_media_connect(policy_node, s, (struct sockaddr*)&address, sizeof(address))
+                         : connect(s, (struct sockaddr*)&address, sizeof(address));
     if (rc == SOCKET_ERROR) {
         int err = WSAGetLastError();
         if (err == WSAEWOULDBLOCK || err == WSAEINPROGRESS) {
@@ -140,34 +136,40 @@ static SOCKET tcp_connect_impl(const char* host, int port, int timeout_ms, Polic
             FD_SET(s, &err_fds);
 
             int sel = 0;
-            ULONGLONG deadline = GetTickCount64() + (ULONGLONG)timeout_ms;
             do {
                 FD_ZERO(&write_fds); FD_ZERO(&err_fds);
                 FD_SET(s, &write_fds); FD_SET(s, &err_fds);
-                struct timeval tv = {0, 100000};
+                ULONGLONG now=GetTickCount64();
+                if (now>=deadline) { sel=0; break; }
+                DWORD wait=(DWORD)(deadline-now); if (wait>100) wait=100;
+                struct timeval tv = {0, (long)wait*1000};
                 sel = select((int)s + 1, NULL, &write_fds, &err_fds, &tv);
                 if (policy_node && !policy_media_allowed()) { sel = -1; break; }
             } while (sel == 0 && GetTickCount64() < deadline);
-            if (sel <= 0 || FD_ISSET(s, &err_fds)) {
+            int socket_error=0, error_size=sizeof(socket_error);
+            if (sel <= 0 || FD_ISSET(s, &err_fds) ||
+                getsockopt(s,SOL_SOCKET,SO_ERROR,(char*)&socket_error,&error_size) || socket_error) {
                 if (policy_node) policy_socket_unregister(policy_node);
                 closesocket(s);
-                freeaddrinfo(res);
                 return INVALID_SOCKET;
             }
         } else {
             if (policy_node) policy_socket_unregister(policy_node);
             closesocket(s);
-            freeaddrinfo(res);
             return INVALID_SOCKET;
         }
     }
 
     // Switch back to blocking mode
     mode = 0;
-    ioctlsocket(s, FIONBIO, &mode);
+    if(ioctlsocket(s,FIONBIO,&mode)) {
+        if(policy_node)policy_socket_unregister(policy_node);closesocket(s);return INVALID_SOCKET;
+    }
 
     // Set receive/send timeouts
-    DWORD sockTimeout = (DWORD)timeout_ms;
+    ULONGLONG now=GetTickCount64();
+    if (now>=deadline) { if (policy_node) policy_socket_unregister(policy_node); closesocket(s); return INVALID_SOCKET; }
+    DWORD sockTimeout = (DWORD)(deadline-now);
     setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (const char*)&sockTimeout, sizeof(sockTimeout));
     setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, (const char*)&sockTimeout, sizeof(sockTimeout));
 
@@ -175,8 +177,27 @@ static SOCKET tcp_connect_impl(const char* host, int port, int timeout_ms, Polic
     BOOL nodelay = TRUE;
     setsockopt(s, IPPROTO_TCP, TCP_NODELAY, (const char*)&nodelay, sizeof(nodelay));
 
-    freeaddrinfo(res);
     return s;
+}
+
+static bool socket_deadline(SOCKET sock,ULONGLONG deadline) {
+    if (!deadline) return true;
+    ULONGLONG now=GetTickCount64();
+    if (now>=deadline) { WSASetLastError(WSAETIMEDOUT); return false; }
+    DWORD remaining=(DWORD)(deadline-now);
+    return !setsockopt(sock,SOL_SOCKET,SO_RCVTIMEO,(const char*)&remaining,sizeof(remaining)) &&
+           !setsockopt(sock,SOL_SOCKET,SO_SNDTIMEO,(const char*)&remaining,sizeof(remaining));
+}
+
+static int send_all_until(SOCKET sock,const BYTE* buf,int len,ULONGLONG deadline) {
+    int total=0;
+    while (total<len) {
+        if (!socket_deadline(sock,deadline)) return -1;
+        int sent=send(sock,(const char*)buf+total,len-total,0);
+        if (sent<=0) return sent;
+        total+=sent;
+    }
+    return total;
 }
 
 static int send_all(SOCKET s, const BYTE* buf, int len) {
@@ -236,7 +257,7 @@ static bool perform_handshake(SChannelSession* session, CredHandle* hCred, const
     }
 
     if (outBuffer.cbBuffer > 0 && outBuffer.pvBuffer) {
-        int sent = send_all(session->sock, (const BYTE*)outBuffer.pvBuffer, (int)outBuffer.cbBuffer);
+        int sent = send_all_until(session->sock, (const BYTE*)outBuffer.pvBuffer, (int)outBuffer.cbBuffer, session->handshake_deadline);
         FreeContextBuffer(outBuffer.pvBuffer);
         outBuffer.pvBuffer = NULL;
         if (sent <= 0) {
@@ -254,11 +275,7 @@ static bool perform_handshake(SChannelSession* session, CredHandle* hCred, const
     DWORD inTokenLen = 0;
 
     while (ss == SEC_I_CONTINUE_NEEDED || ss == SEC_E_INCOMPLETE_MESSAGE || ss == SEC_I_INCOMPLETE_CREDENTIALS) {
-        ULONGLONG now=GetTickCount64();
-        if (now>=session->handshake_deadline) return false;
-        DWORD remaining=(DWORD)(session->handshake_deadline-now);
-        setsockopt(session->sock,SOL_SOCKET,SO_RCVTIMEO,(const char*)&remaining,sizeof(remaining));
-        setsockopt(session->sock,SOL_SOCKET,SO_SNDTIMEO,(const char*)&remaining,sizeof(remaining));
+        if(!socket_deadline(session->sock,session->handshake_deadline))return false;
         if (inTokenLen == 0 || ss == SEC_E_INCOMPLETE_MESSAGE) {
             int received = recv(session->sock, (char*)(inTokenBuf + inTokenLen), (int)(sizeof(inTokenBuf) - inTokenLen), 0);
             if (received <= 0) {
@@ -309,7 +326,7 @@ static bool perform_handshake(SChannelSession* session, CredHandle* hCred, const
         }
 
         if (outBuffer.cbBuffer > 0 && outBuffer.pvBuffer) {
-            int sent = send_all(session->sock, (const BYTE*)outBuffer.pvBuffer, (int)outBuffer.cbBuffer);
+            int sent = send_all_until(session->sock, (const BYTE*)outBuffer.pvBuffer, (int)outBuffer.cbBuffer, session->handshake_deadline);
             FreeContextBuffer(outBuffer.pvBuffer);
             outBuffer.pvBuffer = NULL;
             if (sent <= 0) {
@@ -355,7 +372,7 @@ SOCKET tcp_connect(const char* host, int port, int timeout_ms) {
 }
 
 static bool schannel_connect_impl(SChannelSession* session, CredHandle* hCred, const char* host, const char* logical_name, int port, int timeout_ms, int insecure_server, bool media) {
-    if (!session || !hCred || !host) return false;
+    if (!session || !hCred || !host || timeout_ms<=0) return false;
     memset(session, 0, sizeof(SChannelSession));
     SecInvalidateHandle(&session->hCtx);
     session->sock = INVALID_SOCKET;
@@ -393,7 +410,7 @@ static bool schannel_connect_impl(SChannelSession* session, CredHandle* hCred, c
     // 2. Perform SChannel mTLS Handshake
     bool handshake_ok=perform_handshake(session, credential_handle(session->credential_lease), logical_name, 1);
     if (handshake_ok && !insecure_server) session->certificate_rejected=!schannel_verify_peer(session,logical_name);
-    if (!handshake_ok || session->certificate_rejected || (media && !policy_media_allowed())) {
+    if (!handshake_ok || session->certificate_rejected || GetTickCount64()>=session->handshake_deadline || (media && !policy_media_allowed())) {
         schannel_close(session);
         return false;
     }
@@ -465,26 +482,34 @@ bool schannel_verify_peer(SChannelSession* session,const char* name) {
 }
 bool schannel_connect_endpoint(SChannelSession* session,CredHandle* creds,const char* target,
     const char* logical_name,int port,int timeout_ms,bool media) {
-    session->certificate_rejected=false;
-    ULONGLONG start=GetTickCount64();
-    char ip[16];
-    if (!endpoint_resolve_ipv4(target,ip,(DWORD)(timeout_ms<2000?timeout_ms:2000))) return false;
-    ULONGLONG elapsed=GetTickCount64()-start;
-    if (elapsed>=(ULONGLONG)timeout_ms) return false;
-    return schannel_connect_impl(session,creds,ip,logical_name,port,timeout_ms-(int)elapsed,0,media);
+    if (!session || timeout_ms<=0) return false;
+    memset(session,0,sizeof(*session)); session->sock=INVALID_SOCKET; SecInvalidateHandle(&session->hCtx);
+    ULONGLONG deadline=GetTickCount64()+(ULONGLONG)timeout_ms;
+    char addresses[8][16]; bool rejected=false;
+    int count=endpoint_resolve_ipv4_all(target,addresses,(DWORD)(timeout_ms<2000?timeout_ms:2000));
+    for (int n=0;n<count;n++) {
+        ULONGLONG now=GetTickCount64(); if (now>=deadline) break;
+        int share=(int)(deadline-now)/(count-n); if (share<1) break;
+        if (schannel_connect_impl(session,creds,addresses[n],logical_name,port,share,0,media)) return true;
+        rejected=rejected || session->certificate_rejected;
+        if (media && !policy_media_allowed()) break;
+    }
+    session->certificate_rejected=rejected; return false;
 }
 bool schannel_connect_channel(SChannelSession* session,CredHandle* creds,const ProxyConfig* config,
     int channel,int timeout_ms,bool recovery) {
+    if(!session || !creds || !config)return false;
+    memset(session,0,sizeof(*session));session->sock=INVALID_SOCKET;SecInvalidateHandle(&session->hCtx);
     Leo4Endpoint candidates[ENDPOINT_MAX]; ULONGLONG deadline=GetTickCount64()+(ULONGLONG)timeout_ms;
-    int count=endpoints_candidates(config,channel,recovery,candidates);
+    if (timeout_ms<=0) return false;
+    int count=endpoints_candidates_timed(config,channel,recovery,candidates,(DWORD)timeout_ms);
     bool media=channel!=ENDPOINT_HTTPS;
     for (int n=0;n<count;n++) {
         ULONGLONG now=GetTickCount64(); if (now>=deadline) break;
         int remaining=(int)(deadline-now);
         /* Bound each attempt so an unreachable primary cannot consume the whole budget. */
-        int share=remaining/(count-n);
-        int attempt=share>2500?2500:share;
-        if (attempt<1) break;
+        int attempt=endpoint_attempt_timeout(candidates,count,n,remaining);
+        if (attempt<1) continue;
         if (schannel_connect_endpoint(session,creds,candidates[n].host,endpoint_logical_name(config,channel),
             candidates[n].port,attempt,media)) {
             endpoints_connected(channel,&candidates[n]);
@@ -684,7 +709,7 @@ int schannel_send(SChannelSession* session, const void* data, int len) {
         }
 
         int frameLen = (int)(buffers[0].cbBuffer + buffers[1].cbBuffer + buffers[2].cbBuffer);
-        int sent = send_all(session->sock, sendBuffer, frameLen);
+        int sent = send_all_until(session->sock, sendBuffer, frameLen, session->io_deadline);
         if (sent <= 0) {
             free(sendBuffer);
             return sent;
@@ -722,6 +747,7 @@ int schannel_recv(SChannelSession* session, void* out_data, int max_len) {
     }
 
     while (true) {
+        if (!socket_deadline(session->sock,session->io_deadline)) return -1;
         // If receive buffer is empty, read from network
         if (session->recvBufLen == 0) {
             int received = recv(session->sock, (char*)session->recvBuf, (int)session->recvBufAlloc, 0);
@@ -768,12 +794,14 @@ int schannel_recv(SChannelSession* session, void* out_data, int max_len) {
         if (ss == SEC_E_INCOMPLETE_MESSAGE) {
             // Need more data from socket
             if (session->recvBufAlloc - session->recvBufLen < 4096) {
+                if (session->recvBufAlloc>=65536) return -1;
                 session->recvBufAlloc += 16384;
                 BYTE* newBuf = (BYTE*)realloc(session->recvBuf, session->recvBufAlloc);
                 if (!newBuf) return -1;
                 session->recvBuf = newBuf;
             }
 
+            if (!socket_deadline(session->sock,session->io_deadline)) return -1;
             int received = recv(
                 session->sock,
                 (char*)(session->recvBuf + session->recvBufLen),
@@ -835,8 +863,10 @@ int schannel_recv(SChannelSession* session, void* out_data, int max_len) {
             if (plainLen > toReturn) {
                 DWORD remainder = plainLen - toReturn;
                 if (remainder > session->plainBufAlloc) {
-                    session->plainBufAlloc = remainder + 4096;
-                    session->plainBuf = (BYTE*)realloc(session->plainBuf, session->plainBufAlloc);
+                    BYTE* resized=(BYTE*)realloc(session->plainBuf,remainder+4096);
+                    if(!resized)return -1;
+                    session->plainBufAlloc=remainder+4096;
+                    session->plainBuf=resized;
                 }
                 if (session->plainBuf) {
                     memcpy(session->plainBuf, plainData + toReturn, remainder);
@@ -876,11 +906,11 @@ void schannel_close(SChannelSession* session) {
 
     if (session->sock != INVALID_SOCKET) {
         shutdown(session->sock, SD_SEND);
-        Sleep(10);
         char drainBuf[512];
         u_long nonblock = 1;
         ioctlsocket(session->sock, FIONBIO, &nonblock);
-        while (recv(session->sock, drainBuf, sizeof(drainBuf), 0) > 0) {}
+        /* A peer continuously sending bytes must not keep close/retry alive. */
+        for (int n=0;n<16;n++) if (recv(session->sock, drainBuf, sizeof(drainBuf), 0)<=0) break;
         closesocket(session->sock);
         session->sock = INVALID_SOCKET;
     }

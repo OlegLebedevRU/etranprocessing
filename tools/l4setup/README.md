@@ -1,5 +1,14 @@
 # Leo4 Zero-Touch Setup (`l4setup`)
 
+**Кандидат 1.10.2**: исправлены read-only `--smoke-only`, DNS false degradation,
+независимые TLS budgets, launch/missing-certificate failures и bounded transport
+retries при cold policy startup. Диагностика использует SCM ImagePath. Новые
+настройки сети при той же версии применяются через Repair; GUI загружает текущие
+SCM поля и сохраняет параметры остальных каналов. Новые
+бюджеты и проверенные сочетания: [матрица надёжности](../../docs/term_net-leo4proxy-resolving-reliability-matrix.md).
+Кандидат требует подписи/публикации; сведения ниже об эксплуатации 1.10.1
+сохраняются как описание опубликованного выпуска.
+
 1.10.1 исправляет потерю последних строк TLS diagnostics при завершении дочернего
 leo4proxy: pipe дочитывается после сигнала process exit. Настоящие ошибки TLS
 сохраняют degraded/12; причина upstream_tls_failed учитывает все четыре канала.
@@ -13,8 +22,8 @@ The Details panel lists the installed package version from
 installation, the panel rereads `state.json` and refreshes this list.
 
 To sign a prepared release from a regular Windows PowerShell session, run
-`tools/release/Complete-SignedRelease.ps1 -PfxPath <PFX path> -Version 1.10.1`.
-This signs every staged EXE, rebuilds both embedded payloads, signs
+`tools/release/Complete-SignedRelease.ps1 -PfxPath <PFX path> -Version 1.10.2 -SignOnly leo4proxy`.
+This incremental release signs changed leo4proxy EXEs, rebuilds both embedded payloads, signs
 `l4setup.exe`, and regenerates the manifest and checksums. The private key
 stays outside the repository. If the PFX is encrypted, set
 `L4TOOLS_SIGN_PFX_PASSWORD` in the process environment before running.
@@ -50,7 +59,7 @@ l4setup.exe [options]
 | `--silent`, `/S` | Тихий режим без диалоговых окон. Без переданного `--pin` автоматически эквивалентен `--no-pin`. |
 | `--dest <DIR>`, `-d <DIR>` | Каталог установки (по умолчанию `C:\l4tools`, учитывается `state.json.installer_base_path`). |
 | `--repair` | Принудительная переустановка файлов и служб даже при совпадении версии. |
-| `--smoke-only` | В 1.10.1 разбирается/логируется, но engine не учитывает: режим определяется версией и целостностью. Не гарантирует отсутствие установки. |
+| `--smoke-only` | В кандидате 1.10.2 — read-only discovery/SCM/local/TLS probes, без CA/enrollment/config/services/state изменений. В опубликованном 1.10.1 флаг ещё не ограничивает engine. |
 | `--version` | Напечатать версию инсталлятора (`1.10.1`) и выйти с кодом `0` без запроса прав администратора. |
 | `--help`, `-h`, `/?` | Показать справку по параметрам и кодам возврата. |
 | `--resolve-auto` / `--no-srv` | Убрать manual remote и включить SRV / отключить только SRV. |

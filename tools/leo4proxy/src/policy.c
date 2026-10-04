@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <limits.h>
+#include <ctype.h>
 
 static SRWLOCK lock=SRWLOCK_INIT;
 static PolicyRecord record;
@@ -239,6 +240,37 @@ static bool persist(const PolicyRecord* r) {
     return registry_ok && file_ok;
 }
 static bool bootstrap_probe;
+/* Finish a framed reply without relying on the peer closing its connection. */
+static bool http_framed_complete(const char* response,size_t used) {
+    const char* end=strstr(response,"\r\n\r\n");if(!end)return false;
+    const char* body=end+4;size_t available=used-(size_t)(body-response);
+    bool chunked=false;unsigned long declared=ULONG_MAX;
+    for(const char* line=strstr(response,"\r\n");line && line<end;) {
+        line+=2;const char* next=strstr(line,"\r\n");if(!next)return false;
+        if(!_strnicmp(line,"Content-Length:",15)) {
+            if(declared!=ULONG_MAX)return false;const char* value=line+15;while(*value==' ' || *value=='\t')++value;
+            if(*value<'0' || *value>'9')return false;
+            char* stop;declared=strtoul(value,&stop,10);if(stop!=next || declared>16384)return false;
+        }
+        if(!_strnicmp(line,"Transfer-Encoding:",18)) {
+            const char* value=line+18;while(*value==' ')++value;
+            if(next-value!=7 || _strnicmp(value,"chunked",7))return false;chunked=true;
+        }
+        line=next;
+    }
+    if(!chunked)return declared!=ULONG_MAX && available==declared;
+    if(declared!=ULONG_MAX)return false;
+    const char* cursor=body;const char* limit=response+used;
+    for(;;) {
+        const char* line=strstr(cursor,"\r\n");if(!line || line-cursor>16 || line==cursor)return false;
+        char size[17];size_t digits=(size_t)(line-cursor);memcpy(size,cursor,digits);size[digits]=0;
+        for(size_t n=0;n<digits;n++) if(!isxdigit((unsigned char)size[n]))return false;
+        char* stop;unsigned long amount=strtoul(size,&stop,16);if(*stop || amount>16384)return false;
+        cursor=line+2;if(!amount)return limit-cursor==2 && !memcmp(cursor,"\r\n",2);
+        if((size_t)(limit-cursor)<(size_t)amount+2 || memcmp(cursor+amount,"\r\n",2))return false;
+        cursor+=amount+2;
+    }
+}
 static bool fetch(PCCERT_CONTEXT cert,char* text,DWORD capacity,DWORD* length) {
     CredHandle creds; SChannelSession tls; *length=0;
     if (!schannel_init_client_creds(cert,1,&creds)) return false;
@@ -250,16 +282,19 @@ static bool fetch(PCCERT_CONTEXT cert,char* text,DWORD capacity,DWORD* length) {
     DWORD timeout=5000;
     setsockopt(tls.sock,SOL_SOCKET,SO_RCVTIMEO,(const char*)&timeout,sizeof(timeout));
     setsockopt(tls.sock,SOL_SOCKET,SO_SNDTIMEO,(const char*)&timeout,sizeof(timeout));
+    tls.io_deadline=GetTickCount64()+10000;
     char request[1024]; int len=snprintf(request,sizeof(request),
         "GET /api/leo4proxy/policy HTTP/1.1\r\nHost: %s\r\nAccept: application/json\r\nConnection: close\r\nCache-Control: no-cache\r\n\r\n",settings.http_remote_host);
     bool ok=len>0 && len<(int)sizeof(request) && schannel_send(&tls,request,len)==len;
-    char response[24577]; size_t used=0; ULONGLONG deadline=GetTickCount64()+10000;
+    char response[24577]; size_t used=0; ULONGLONG deadline=tls.io_deadline;
     while (ok && used<sizeof(response)-1) {
         if (GetTickCount64()>=deadline) { ok=false; break; }
         int got=schannel_recv(&tls,response+used,(int)(sizeof(response)-1-used));
         if (got<0) { ok=false; break; }
         if (!got) break;
         used+=(size_t)got;
+        response[used]=0;
+        if(http_framed_complete(response,used))break;
     }
     response[used]=0;
     schannel_close(&tls); schannel_free_creds(&creds);
@@ -276,8 +311,10 @@ static bool fetch(PCCERT_CONTEXT cert,char* text,DWORD capacity,DWORD* length) {
             json=!_strnicmp(type,"application/json",16) && (!type[16] || type[16]==';' || type[16]==' ');
         }
         if (!_strnicmp(line,"Content-Length:",15)) {
-            char* value=line+15; char* stop=NULL; unsigned long long number=strtoull(value,&stop,10);
-            if (!stop || *stop || declared!=ULLONG_MAX) return false;
+            char* value=line+15; while(*value==' ' || *value=='\t')++value;
+            if(*value<'0' || *value>'9')return false;
+            char* stop=NULL; unsigned long long number=strtoull(value,&stop,10);
+            if (!stop || *stop || number>16384 || declared!=ULLONG_MAX) return false;
             declared=number;
         }
         if (!_strnicmp(line,"Transfer-Encoding:",18)) {
@@ -296,10 +333,12 @@ static bool fetch(PCCERT_CONTEXT cert,char* text,DWORD capacity,DWORD* length) {
         char* cursor=body; char* limit=body+available;
         for (;;) {
             char* end=strstr(cursor,"\r\n"); if (!end || end-cursor>16) return false;
+            if(end==cursor)return false;
+            for(char* digit=cursor;digit<end;digit++) if(!isxdigit((unsigned char)*digit))return false;
             *end=0; char* stop=NULL; unsigned long chunk=strtoul(cursor,&stop,16);
             if (!stop || stop==cursor || *stop) return false;
             cursor=end+2;
-            if (!chunk) { if (limit-cursor<2 || memcmp(cursor,"\r\n",2)) return false; break; }
+            if (!chunk) { if (limit-cursor!=2 || memcmp(cursor,"\r\n",2)) return false; break; }
             if (chunk>=capacity-*length || (size_t)(limit-cursor)<(size_t)chunk+2 || memcmp(cursor+chunk,"\r\n",2)) return false;
             memcpy(text+*length,cursor,chunk); *length+=chunk; cursor+=chunk+2;
         }

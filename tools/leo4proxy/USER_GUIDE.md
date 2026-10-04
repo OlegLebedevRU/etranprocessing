@@ -1,6 +1,9 @@
 # Leo4Proxy — руководство оператора
 
-Сверено с leo4proxy **1.8.0** в signed tools **1.10.1**, 2026-10-04.
+Опубликованный выпуск: leo4proxy **1.8.0** в signed tools **1.10.1**, 2026-10-04.
+Кандидат **1.8.1 / tools 1.10.2** уточняет network deadlines, IP fallback reserve
+и параллельную диагностику; [матрица](../../docs/term_net-leo4proxy-resolving-reliability-matrix.md).
+Подпись/публикация кандидата ещё требуются.
 Установка всего suite: [руководство инженера](../../docs/term_tool-user-guide.md).
 Полный CLI и модули: [README](README.md).
 

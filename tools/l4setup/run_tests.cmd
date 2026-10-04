@@ -41,6 +41,10 @@ if errorlevel 1 (
 
 echo.
 echo [2/2] Running Unit Tests...
+cl.exe /nologo /O2 /MT /W4 /WX /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\ tests\test_proxy_probe.c src\proxy_probe.c ..\leo4proxy\src\policy_json.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\test_proxy_probe.exe ws2_32.lib
+if errorlevel 1 exit /b 1
+bin\test_proxy_probe.exe
+if errorlevel 1 exit /b 1
 cl.exe /nologo /O2 /MT /W4 /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\ tests\test_pipeline.c src\engine.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\test_pipeline.exe kernel32.lib advapi32.lib
 if errorlevel 1 exit /b 1
 bin\test_pipeline.exe
@@ -49,7 +53,7 @@ cl.exe /nologo /O2 /MT /W4 /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /D
 if errorlevel 1 exit /b 1
 bin\test_certificate_phase.exe
 if errorlevel 1 exit /b 1
-cl.exe /nologo /O2 /MT /W4 /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /I ..\l4superv\src /Foobj\ tests\test_service_start.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\test_service_start.exe kernel32.lib user32.lib advapi32.lib shell32.lib
+cl.exe /nologo /O2 /MT /W4 /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /I ..\l4superv\src /Foobj\ tests\test_service_start.c src\cli.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\test_service_start.exe kernel32.lib user32.lib advapi32.lib shell32.lib ws2_32.lib
 if errorlevel 1 exit /b 1
 bin\test_service_start.exe
 if errorlevel 1 exit /b 1
