@@ -9,7 +9,7 @@
 eviction завершённых DNS cache slots, независимая диагностика каналов,
 bounded policy I/O и HTTP framing. Строгие CA/name/admission проверки сохранены.
 См. [матрицу надёжности](../../docs/term_net-leo4proxy-resolving-reliability-matrix.md).
-[Выпуск 1.10.2 опубликован](../../artifacts/l4tools/1.10.2.json). На 773 пока установлен 1.8.0 из tools 1.10.1; Upgrade до 1.10.2 ещё не проверен.
+[Выпуск 1.10.2 опубликован](../../artifacts/l4tools/1.10.2.json). Операторский Upgrade773 до 1.10.2 подтверждён 16:36 UTC: ready/0, proxy 1.8.1, MQTT/HTTPS/RTP TLS valid.
 
 ## 1. Решаемая проблема
 

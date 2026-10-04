@@ -1,8 +1,9 @@
 # Надёжность resolving/network: tools 1.10.2, leo4proxy 1.8.1
 
 Подписанный выпуск **1.10.2 / leo4proxy 1.8.1** опубликован 2026-10-04;
-[запись публикации](../artifacts/l4tools/1.10.2.json). Установленный 773 остаётся
-на 1.10.1: для него оператор подтвердил рабочее видео и ready/0.
+[запись публикации](../artifacts/l4tools/1.10.2.json). Upgrade773 1.10.1 → 1.10.2 подтверждён операторским логом 16:36 UTC:
+ready/0, proxy 1.8.1, MQTT/HTTPS/RTP TLS valid. Рабочее видео отдельно
+подтверждено для 1.10.1; после Upgrade до 1.10.2 такого подтверждения ещё нет.
 Ниже — расчёт по коду и локальные проверки 1.10.2,
 а не результат аварийных испытаний production или оценка вероятности отказа.
 
@@ -156,3 +157,14 @@ SPOF остаются: общий bootstrap/policy/media хост, CA и private
 Лимиты establishment/diagnostics не являются новыми timeout контрактами для всех
 уже открытых application streams. Процент доступности нельзя вывести из матрицы
 без RTT/loss/failure/repair статистики инфраструктуры.
+
+## Operator Upgrade773 acceptance, 2026-10-04 16:36 UTC
+
+Upgrade 1.10.1 → 1.10.2 занял 48 с от Check до Finish; Verify — около 1 с.
+Службы остановлены в обратном порядке и запущены в прямом; четыре RUNNING,
+SCM аргументы сохранены, сертификат переиспользован, rollback/1.10.1 подготовлен.
+Local smoke/capture/input passed, proxy 1.8.1.0; MQTT/HTTPS/RTP TLS valid,
+Stream skipped; итог ready/0. `network: not_run` в локальном smoke выводится
+до TLS diagnostics и не обозначает отказ сети. Это healthy-path Upgrade;
+отказ DNS, IP fallback, cold retries и outage этим запуском не проверялись.
+PendingFileRenameOperations: предупреждение осталось; перезагрузка не подтверждена.

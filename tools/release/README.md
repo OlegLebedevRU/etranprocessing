@@ -120,4 +120,4 @@ proxy's read-only probes instead; a code fix requires a separate signed release.
 
 [Publication record](../../artifacts/l4tools/1.10.2.json): clean main `d43e4d5`, signed setup and all 18 staged EXEs with timestamps, 122 payload files matched. All three full HTTPS downloads matched size/SHA256. Installer SHA256 `6270c908f0275dbb12591f0b377f594a1e959cbe325dc14b1ef467a35e7e4ff1`.
 
-These publication-status documentation edits were made after signing; embedded README snapshots remain unchanged. Do not repack the immutable release for text updates. Installed 773 is still 1.10.1; Upgrade1.10.2 and outage/Win7/PIN acceptance remain open.
+These publication-status documentation edits were made after signing; embedded README snapshots remain unchanged. Do not repack the immutable release for text updates. Operator Upgrade773 to 1.10.2 accepted at 2026-10-04 16:36 UTC: ready/0, proxy1.8.1, MQTT/HTTPS/RTP valid. Outage/Win7/PIN and post-upgrade video acceptance remain open.

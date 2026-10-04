@@ -54,7 +54,7 @@ SCM/mirror mismatch, resolving/TCP/TLS/policy-I/O deadlines, fallback reserve,
 endpoint/A deduplication и DNS pool saturation. Матрица и ограничения:
 [network reliability](../../docs/term_net-leo4proxy-resolving-reliability-matrix.md).
 Signed release опубликован из clean main d43e4d5; все 19 signatures/timestamps и 122 payload files проверены, три полных HTTPS downloads совпали по size/hash.
-[Publication record](../../artifacts/l4tools/1.10.2.json). Установленный 773 пока 1.10.1; runtime Upgrade1.10.2 не проверен.
+[Publication record](../../artifacts/l4tools/1.10.2.json). Операторский Upgrade773 1.10.1 → 1.10.2, 2026-10-04 16:36 UTC: ready/0; proxy 1.8.1, четыре службы RUNNING, сертификат переиспользован, SCM args сохранены; MQTT/HTTPS/RTP TLS valid, Stream skipped. Видео после этого Upgrade отдельно не подтверждено.
 
 ## Ограничения опубликованного 1.10.1 / следующие проверки
 Setup1.10.1 разбирает/logs --smoke-only, но engine не учитывает флаг: нельзя

@@ -7,7 +7,7 @@
 - Security: embedded CA, logical TLS name, time/EKU and admission gates remain mandatory even when connecting to IP. No MQTT application traffic from TLS diagnostics.
 - Verification: bounded resolver/connect/handshake/I/O, independent diagnostic channels, launch failures, smoke-only absence of mutations; native tests and builds on both architectures.
 - No production deployment or installed-client mutation is required for these local checks. Signing remains an operator step under the release runbook.
-- Status: completed: signed 1.10.2 published from clean main d43e4d5; installed-client Upgrade acceptance remains open.
+- Status: completed: signed 1.10.2 published from clean main d43e4d5; operator Upgrade773 accepted ready/0 at 16:36 UTC.
 
 ## Delta / contracts
 
@@ -67,7 +67,7 @@
 - Published 1.10.2 on 2026-10-04 at 16:29 UTC. All three complete HTTPS GET downloads matched size/SHA256. [Publication record](../../../artifacts/l4tools/1.10.2.json).
 - Signed setup: 29,705,272 bytes; SHA256 `6270c908f0275dbb12591f0b377f594a1e959cbe325dc14b1ef467a35e7e4ff1`.
 - Publication-status documentation edits occur after signing; embedded README snapshots are retained unchanged. Immutable release is not repacked for these text changes.
-- Installed 773 remains 1.10.1. Upgrade to 1.10.2, Win7, clean PIN enrollment, real GUI clicks/cancel, full outage/video matrix and application-stream resilience are not established by these native fixtures.
+- Operator log confirms Upgrade773 1.10.1 → 1.10.2 at 2026-10-04 16:36:09–16:36:57 UTC: ready/0, proxy 1.8.1.0, four services RUNNING, valid certificate reused, SCM arguments preserved, rollback/1.10.1 prepared; MQTT/HTTPS/RTP valid, Stream skipped. Verify took about 1 second on this healthy network. Win7, clean PIN enrollment, GUI cancel, full outage/video matrix and application-stream resilience remain unverified. PendingFileRenameOperations warning remains; reboot was not reported.
 - No services stopped, certificate stores changed or installed tools replaced. Loopback fixture sockets/temporary KSP keys cleaned by tests. Release staging and previous signed backup retained for release recovery.
 - Backend/frontend checks N/A: no Python/shared/frontend source changes.
 - Detailed timing/reliability limits: [matrix](../../../docs/term_net-leo4proxy-resolving-reliability-matrix.md).

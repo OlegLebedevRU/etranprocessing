@@ -4,7 +4,7 @@
 Выпуск **1.8.1 / tools 1.10.2** уточняет network deadlines, IP fallback reserve
 и параллельную диагностику; [матрица](../../docs/term_net-leo4proxy-resolving-reliability-matrix.md).
 Подписи, timestamps, payload и полные HTTPS downloads проверены.
-Установленный терминал 773 пока остаётся на 1.10.1.
+Upgrade терминала 773 до 1.10.2 подтверждён оператором: ready/0, proxy 1.8.1, MQTT/HTTPS/RTP TLS valid.
 Установка всего suite: [руководство инженера](../../docs/term_tool-user-guide.md).
 Полный CLI и модули: [README](README.md).
 
