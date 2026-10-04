@@ -6,7 +6,8 @@ Suite1.11.0 signed/published; operator installed773 successfully. Local services
 Running, proxy1.8.2 ready; l4con1.10.0 and l4pin1.8.0 PE versions verified.
 Canonical payload.dt, status/result_uid, cancel addressing/dedup, protected
 renewal and bounded network/Job timers are implemented and tested x86/x64.
-Presence remains extra_service. Actual issuance/store-install7011 acceptance
+Presence remains extra_service. Actual7011 on773 returnedRES200/exit0, installed/hotrotated and was
+confirmed by fresh current-serial PB mTLS discovery. Fault/reboot/Win7 acceptance
 remains separate. [Matrix](../../docs/term_arch-rpc7011-flow-matrix.md).
 ## 2026-10-02: stabilization cascade (1.9.5)
 

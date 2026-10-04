@@ -173,8 +173,8 @@ Comprehensive documentation for the certificate subsystem, mTLS proxying, native
 
 ### Key Rules for Certificate Management:
 1. **Serial Number Update Invariant**:
-   - `terminals.cert_serial` for new CA certificates (`iot.leo4.ru`, 40 hex chars) is updated **EXCLUSIVELY** by ProcessingBackend issuance: `POST /api/certificates/?function=setup` or authenticated `POST /api/certificates/renew` with a purpose-bound renewal PIN. Recovery returns the same persisted same-CSR response without another serial update. MenuBuilder/IoT never overwrite it.
-   - For legacy certificates (`SubCA`, $\le 20$ chars), `dependencies.py` auto-binds serials if unset or legacy, but will **never** overwrite a 40-character new CA serial.
+   - `terminals.cert_serial` for new CA certificates (`iot.leo4.ru`, up to 40 hex chars; the CA may omit leading zeros) is updated **EXCLUSIVELY** by ProcessingBackend issuance: `POST /api/certificates/?function=setup` or authenticated `POST /api/certificates/renew` with a purpose-bound renewal PIN. Recovery returns the same persisted same-CSR response without another serial update. MenuBuilder/IoT never overwrite it.
+   - For legacy certificates (`SubCA`, $\le 20$ chars), `dependencies.py` auto-binds serials if unset or legacy, but will **never** overwrite a new CA serial longer than 20 hex characters.
 2. **Dual-Issuer Authentication (`get_current_terminal`)**:
    - **New CA (`iot.leo4.ru`)**: Strict check `Terminal.sn == CN AND Terminal.cert_serial == Serial`. Rejects on mismatch with `401 Unauthorized` (`serial_mismatch`).
    - **Legacy CA**: Lookup by `OU` (`device_id`) and `O` (`org_id`).

@@ -9,6 +9,15 @@ anonymous/PIN-based. Renewal is separate: service-auth POST
 /api/certificates/renewal-pins creates/reuses purpose=renew PIN; terminal POST
 /api/certificates/renew requires a verified live new-CA certificate and same
 SN/current serial. Normal CHECK/SETUP rejects renew PINs.
+Only the exact nginx renew location changes: global optional_no_ca and CA
+advertisement remain unchanged for legacy clients. PB verifies the presented
+TLS certificate signature directly against its packaged public iot.leo4.ru CA,
+then checks validity and ownership. Client-provided verification headers cannot
+replace cryptographic trust. The CA public resource must be updated deliberately
+if the authority rotates; never learn a trust anchor from the request.
+New-CA hex serials may omit leading zeros (21–40chars); authentication compares
+numeric hex equality, discovery keeps the issuance representation, no auth-route
+serial overwrite. MenuBuilder admission accepts the same variable width.
 
 MenuBuilder queues7011 synchronously without exposing PIN; IoT owns task_id.
 l4con invokes l4pin directly with PIN stdin in a protected120s Job; l4pin has90s.

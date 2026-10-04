@@ -137,7 +137,9 @@
   "response": "XML CERTDATA check: DN/sign/provider; setup: PKCS7 base64",
   "server_deadline_sec": 60,
   "pin_expiry_contract": "provider expires_at is UTC datetime; server rechecks before and after CA; queue/execution must fit PIN lifetime",
-  "revision": "3.2",
+  "revision": "3.3",
   "provider_reuse": "pending same-owner PIN, or used <=15min with persisted PKCS7 and history matching current certificate; >120s PIN lifetime",
-  "recovery": "same CSR only; current issuance history required, no restoration of superseded certificate"
+  "recovery": "same CSR only; current issuance history required, no restoration of superseded certificate",
+  "ingress_auth": "renew location requires presented TLS client cert; PB verifies direct signature with packaged public CA and live dates; global legacy optional_no_ca unchanged",
+  "serial_identity": "SN AND same numeric hex serial (case/leading-zero equivalence); no auth-side serial write"
 }

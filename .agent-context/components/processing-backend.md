@@ -6,8 +6,9 @@ Schema030/PB0b561ce deployed. Dedicated live-newCA/SN/serial renew route and
 purpose=renew PIN provider are separate from anonymous certificates/setup.
 FOR UPDATE OF terminals is mandatory for both renewal terminal locks because
 Terminal eagerly LEFT JOINs nullable terminal_types; unqualifiedlock failed
-on realPostgreSQL. PINprovider773201/samePINretry passed; actual7011 issuance
-remains open. [Evidence](../tasks/active/2026-10-04-rpc7011-implementation.md).
+on realPostgreSQL. PINprovider773201/samePINretry passed; actual7011 issuance/install/hotrotation and fresh authenticated discovery
+passed. FinalPBb928f5f trusts the CA only inside renew route; globalnginxTLS
+unchanged, newCA serial comparison allows leading-zero/case equivalence. [Evidence](../tasks/active/2026-10-04-rpc7011-implementation.md).
 
 ## 2026-10-03: production subscription transport policy
 

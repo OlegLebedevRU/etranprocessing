@@ -104,12 +104,12 @@ Terminal (CLI / C tool)              Nginx Proxy                ProcessingBacken
 
 ### 3.1. Golden Rule for `terminals.cert_serial` Updates
 
-1. **New CA (`iot.leo4.ru` / 40-character hex serial):**
-   - `terminals.cert_serial` is updated **EXCLUSIVELY** during the `certificates / setup` endpoint when a new certificate is generated and signed.
-   - **NO OTHER FLOW** (`licensebilling`, `payment`, `techgate`, `ListMenuFile`) can modify or overwrite the 40-character serial of a new CA certificate.
+1. **New CA (`iot.leo4.ru` / usually 40 hex characters, 21–40 without leading zeros):**
+   - `terminals.cert_serial` is updated **EXCLUSIVELY** during the `certificates / setup` endpoint or the authenticated purpose=renew `POST /api/certificates/renew` when a new certificate is generated and signed.
+   - **NO OTHER FLOW** (`licensebilling`, `payment`, `techgate`, `ListMenuFile`) can modify or overwrite the new-CA serial of a new CA certificate.
 2. **Legacy CA (`SubCA` / serial $\le 20$ hex characters):**
    - For backwards compatibility with migrated MSSQL terminals where `cert_serial` was `NULL`, `dependencies.py` automatically binds the serial on first legacy request (`source = "legacy_auth"`).
-   - If a terminal already has a 40-character new CA serial (`len(cert_serial) > 20`), the legacy auto-bind logic is **strictly inhibited** to prevent accidental regression.
+   - If a terminal already has a new CA serial (`len(cert_serial) > 20`), the legacy auto-bind logic is **strictly inhibited** to prevent accidental regression.
 
 ### 3.2. Dual-Issuer Branching Logic (`get_current_terminal`)
 

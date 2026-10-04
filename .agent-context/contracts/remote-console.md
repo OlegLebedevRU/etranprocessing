@@ -7,7 +7,8 @@ cardinality. Parameterless7002 executes onTSK only when payload_required=false;
 REQ/RSP/RES still complete without reexecution. Addressedcancel/exec/renew waitRSP.
 7004/7005 are registered but this agent replies501; activepoll whitelist is
 7001/7002/7003/7011. Protectedrenew nextcommand busy409, noFIFO/cancelreplacement;
-ordinaryexec cancellation bounded5s. Real7003 returns200/pong; actual7011 open.
+ordinaryexec cancellation bounded5s. Real7003 returns200/pong; actual7011 returned200/exit0 and currentserial discovery
+confirmed use. Final ingress change confined to renew location.
 [Actual matrix](../../docs/term_arch-rpc7011-flow-matrix.md).
 
 ## Назначение

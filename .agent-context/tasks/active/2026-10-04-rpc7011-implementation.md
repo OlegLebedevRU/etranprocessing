@@ -24,9 +24,11 @@
 ## Current status — 2026-10-05
 
 Gates1–6 implemented, committed and deployed through builder → registry → production.
-Signed suite1.11.0 published and installed on773: ready/0. Gate7 actual7011
-certificate rotation acceptance remains open; operator was asked to use the UI.
-This is not a full7011 E2E completion claim.
+Signed suite1.11.0 published and installed on773: ready/0. Real7011 happy path
+passed: queue, execution, issuance, install, hotrotation, current-serial mTLS
+discovery confirmation. Failure/reboot/Win7 gates below remain separate.
+First rotation occurred during temporarynginxtrustwindow; finalroute-onlyPB
+trust subsequently passed actualclientCHECK and currentserial authenticated discovery.
 
 ## Actual deployed contracts / revisions
 
@@ -38,8 +40,8 @@ PB revision3.2. Native consumes producer fixtures; no contract invented at stack
 
 | Component | Production immutable digest |
 |---|---|
-| ProcessingBackend | sha256:731f5f1355bbd2691edf0e62db8ca09402b2bc7aa56409ec95e49095c72579ad |
-| MenuBuilder backend | sha256:1069e663926e496a780dfeb7cd68afe0dcd71bf187b96fe97e5af31afda483ae |
+| ProcessingBackend | sha256:6a17f70ff84c7ea590cea7aedfde52f4ed85da780db76c2905c6b5bacb8146db |
+| MenuBuilder backend | sha256:6fab3cb0832f58ab370535c25d5d713df16add511c349f90cd376bdd8917fc3a |
 | IoT app1 | sha256:0b51e5b174ce37087cd4f6b1a89291ae72361e2b65c0fe9c73052fe700085d74 |
 | MenuBuilder frontend | sha256:4d8a3fe0e99d112bb956570c47eb8d271f5ec6eb4eab6bad55663fe0e1d1829a |
 
@@ -107,7 +109,7 @@ PIN-provider routes return404 externally. nginx -t passed, media unaffected.
   standard local numeric endpoint bypasses DNS.
 - CA adapter retains existingverify=False trust debt. CA issuance and DBcommit
   are not distributed atomic: loss ofCAresult beforecommit not promised recoverable.
-- [ ] Real7011 issuance/store/hotrotation/newserial/discovery confirmation on773.
+- [x] Real7011 issuance/store/hotrotation/newserial/discovery confirmation on773.
 - [ ] Multiworker PostgreSQL contention, actualCAresponse-loss/store/reboot recovery,
   Win7runtime; local fixtures do not prove these failure scenarios.
 - Full timing/failure matrix: [implemented flow](../../../docs/term_arch-rpc7011-flow-matrix.md).
@@ -183,3 +185,20 @@ and currentserial discovery is_validTrue afterused_at. Brief503 duringreload
 resolved onnextquery. UsedPIN302 and freshdiscovery confirm actualinstallation.
 MenuBuilder632tests/20skipped plusqualitypassed: accepts validnewCA21–40hex
 representation, denieslegacy≤20/malformed/too-long. MB-onlyrolloutfollows.
+
+
+## Final deployed state
+
+MB89008f297dc285136ce72688b3f9920cbc1011ea, digest
+sha256:6fab3cb0832f58ab370535c25d5d713df16add511c349f90cd376bdd8917fc3a.
+632passed/20skipped on Windows andbuilderLinux, requiredqualitypassed.
+PB181passed/quality onbothplatforms, sourceb928f5f. BothbaseCompose images
+pinnedtofinaldigests, configvalid, noextra service recreation. Finalhealth200.
+Nginxcomparisonasserts alltextoutside renewlocation byte-equivalent toprechange;
+anonymousrenew403, legacyanonymousCHECK200, rootCA signature validated byPB.
+Proxy ready/currentcertificate/mqttclient1/policyerror empty; no restartforrotation.
+FreshsuccessfulPBdiscovery afterPIN302used_at confirmsnewserial in DB issuance
+representation. UIuser should onlyclick «Проверить результат», no newissuance.
+No realoldSubCAterminal tested duringthiswindow; configpreservation/legacyunit
+coverage is notlegacyfleet E2E proof. TemporaryglobalCAtrust wasreverted promptly
+on user'sconstraint; it isnotpart ofcommittedfinalnginxconfiguration.

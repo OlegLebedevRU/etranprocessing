@@ -7,7 +7,8 @@ Action «Заказать удалённое продление» issues hidden 
 real IoTtask synchronously; offline execution/reporting is asynchronous. Three
 manual repeats reusePIN, then3min cooldown; no outbox/new operation UUID.
 PIN masked in command history; fresh PB current-serial discovery confirms use.
-UI77tests/isolated browser and real7003 passed; actual7011 rotation remains open.
+UI77tests/isolated browser and real7003 passed; actual7011 rotation/store/hotrotation
+and current-serial discovery passed. MB632tests includes variable-width serial admission.
 [Release evidence](../tasks/active/2026-10-04-rpc7011-implementation.md).
 
 ## 2026-10-03: public auth CAPTCHA and subscription numbers

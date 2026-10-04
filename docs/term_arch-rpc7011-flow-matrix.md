@@ -122,8 +122,8 @@ UTC epoch `pin_expires_at` и `ttl_sec=120`. Входные поля прове�
 
 ## Проверки и открытые acceptance gates
 
-- IoT: 523 passed / 7 skipped Windows,497 passed /33 skipped builder Linux; PB: 176 passed; shared: 65 passed.
-- MenuBuilder backend:626 passed /20 skipped; frontend tsc/Vite и все77 tests прошли локально и на builder.
+- IoT: 523 passed / 7 skipped Windows,497 passed /33 skipped builder Linux; PB: 181 passed; shared: 65 passed.
+- MenuBuilder backend:632 passed /20 skipped; frontend tsc/Vite и все77 tests прошли локально и на builder.
   Реальный компонент проверен в изолированном браузере: двойной клик,3 повтора
   с тем же PIN identity и cooldown; issuance при этом эмулировалась.
 - Native x86/x64/default builds; runtime cancel/dedup/deadline, Job authority,
@@ -137,7 +137,8 @@ UTC epoch `pin_expires_at` и `ttl_sec=120`. Входные поля прове�
   до commit остаётся неоднозначной и требует отдельной проверки/операторского разбора.
 - Production: schema030, PB/IoT/MenuBuilder и подписанные tools1.11.0 внедрены;
   оператор подтвердил установку773 ready/0. RPC7003 реально вернул RES200/pong
-  через новую цепочку. Actual7011 issuance/store/hotrotation acceptance ещё открыта.
+  через новую цепочку. Actual7011 issuance/store/hotrotation и fresh current-serial mTLS discovery
+  подтверждены на773, задачаf79fe21f-200d-4ec2-a3da-d65926d1e71d RES200/exit0.
   [Ревизии, digests и результаты](../.agent-context/tasks/active/2026-10-04-rpc7011-implementation.md).
 
 ## Runtime correction at contract boundary
@@ -158,3 +159,22 @@ queries with PostgreSQL dialect; production scoped-lock rollback passed.
 CorrectedPB0b561ce deployed, actual773 provider201 and samePIN retry passed.
 This preserves serialization/ownership checks; no broad lock removal or
 nullable-schema change. Real7011 issuance acceptance remains separate.
+
+
+## Route-only trust / serial representation acceptance
+
+Firstrealrenew succeeded duringbriefglobalnginxtrustwindow. Thatglobalchange
+was reverted onoperatorconstraint. Final nginxchange isconfined to exactrenew
+location; optional_no_ca/CAadvertisement andallotherlocations remainunchanged.
+PB verifiesdirectleafsignature withpackagedpublicCA, validity/SN/currentserial,
+independently ofSUCCESS/FAILED headers; forgedsignature testsdenied401.
+Actualcurrentclient renewCHECK passestrust thenrejectsnonexistentdummyPIN,
+anonymousrenew403; normalanonymoussetupCHECK200. Noadditional certificateissued
+for thisverification. LegacySubCAfleetwasnotlive-tested; unchangedconfiguration
+andunitcoverage cannotprovealllegacyhandshakes.
+
+ActualCAserial39hex versusnginx40hex leadingzero causedidentitymismatch after
+successfulinstall. NewCAauthnormalizescase/leadingzeros only; differentnumeric
+serialstilldenied, SNstillrequired. Discovery usesunchangedDBissuanceserial,
+confirmingcurrentcertafterused_at. MBaccepts21–40hexnewCAserials (legacy≤20denied).
+NoDBmanualserialrewrite, noadditionalrenewrequired, native artifacts unchanged.
