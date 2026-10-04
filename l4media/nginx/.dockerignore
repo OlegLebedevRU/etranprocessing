@@ -1,3 +1,6 @@
 **
 !nginx.conf
 !stream.conf
+!verify-media-certificate.sh
+!tests/
+!tests/test-media-certificate.sh
