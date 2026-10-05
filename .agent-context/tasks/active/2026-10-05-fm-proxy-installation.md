@@ -60,9 +60,23 @@
 ## Operator handoff
 Operator confirmed1.12.1 signed. Verified all19 timestamped EXEs, all130 embedded files and unchanged
 other component bytes. Final signed setup SHA256838615b489a3cf7fa344e4244c63d145ee34772d3cc747dbf2e70d926a71adaa.
-leo4proxy1.8.3.0/l4con1.11.1 match both architectures. No rebuild after signing; publication pending.
+leo4proxy1.8.3.0/l4con1.11.1 match both architectures. No rebuild after signing; publication completed below.
 
-From this worktree: `& .\tools\release\Prepare-FmSignedRelease.ps1 -Mode Sign -PfxPath '<external PFX path>'`.
+Historical signing command, do not rerun against the published packet:
+`& .\tools\release\Prepare-FmSignedRelease.ps1 -Mode Sign -PfxPath '<external PFX path>'`.
 Password only through L4TOOLS_SIGN_PFX_PASSWORD. New signature required by native-windows-tool-change
 after native source changes; do not rebuild the sealed components. After confirmation verify signatures,
 timestamp/payload hashes, synchronize signed outputs/checkpoint, then publish via strict release workflow.
+
+## Publication complete, 2026-10-05
+- Signed checkpoint e98d14fc312ec11df24a4ff4e63d4cb08f2e9449 accepted through PR33;
+  main merge3386e099642225e445c41fab6717e1996ffbf23c. Only manifest/checksums refreshed after signing.
+- Strict publisher verified clean source, all19 valid timestamped EXEs, all130 embedded files and
+  unchanged unrelated components. No unsigned/dirty bypass, rebuild or repack after signing.
+- Suite1.12.1 published at2026-10-05T16:55:31Z. Registry digests and all three complete public HTTPS
+  downloads verified by size/SHA256. Setup29775928 bytes,
+  SHA256838615b489a3cf7fa344e4244c63d145ee34772d3cc747dbf2e70d926a71adaa.
+- [Immutable publication record](../../../artifacts/l4tools/1.12.1.json) contains URLs and checksums.
+- Production PB correction remains deployed. Terminal installation, live S3-through-proxy transfer,
+  active common policy revocation and Windows7 acceptance are not confirmed by these release checks.
+- Earlier pending/unsigned entries above describe historical preparation, not current release status.
