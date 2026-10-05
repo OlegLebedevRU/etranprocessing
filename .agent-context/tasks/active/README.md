@@ -1,7 +1,6 @@
 # Active task packets
 
-- [Внедрение Classic/L4Desk](2026-10-05-licensing-implementation.md) — K0/K1/K2
-  локально, runtime не переключён; G8 по PIN settings/onboarding требует решения.
+- [Внедрение Classic/L4Desk](2026-10-05-licensing-implementation.md) — production031,52Classic/4L4Desk, split ON; K10 содержит digests, неизменные fingerprints и оставшиеся реальные E2E проверки.
 
 Здесь только короткие packets выполняемых задач по [handoff template](../handoff-template.md).
 Имя: `YYYY-MM-DD-task-slug.md`, без токенов, connection profile или приватного вывода.
