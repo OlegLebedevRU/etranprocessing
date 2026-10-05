@@ -1,5 +1,14 @@
 # File manager: общий сеанс и S3-only передача
 
+## Current deployment — FM v2, 2026-10-05
+
+PB/MB/frontend deployed from b8c609effd9c39ef3fa124b6a515a7c3a349f1b9;
+app1 from6209faf870d9d05028255c9e92f30017a33be781. Tools1.13.0 signed/published;
+installation1000007 pending l4con availability. Only v2 admitted. fmc/fmr binding
+and two consumers verified, bytes remain S3-only through Leo4Proxy. Local drives
+and privileged read enabled; upload ordinary desktop token only. No live v2
+terminal E2E acceptance yet. Older sections below describe the prior v1 review.
+
 Серверная часть deployed, 2026-10-05; suite1.12.1 signed/published. Live review 1000007:
 первая upload попытка failed, ручная повторная upload/download прошла с совпадением SHA-256;
 полная fault matrix не выполнена. [Аудит и целевой план](../../docs/etran_arch-l4fm-review-and-improvement-plan.md).

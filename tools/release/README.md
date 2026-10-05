@@ -197,7 +197,7 @@ Password only in L4TOOLS_SIGN_PFX_PASSWORD. A new signature is mandatory because
 Preserve other signed component bytes; do not rebuild after signing. Live Windows/provider/policy E2E
 remains distinct from local fixtures; publication completed through the existing strict signed-release workflow.
 
-## FM v2 release 1.13.0 — prepared, awaiting operator signature
+## FM v2 release 1.13.0 — signed and published
 
 Prepare-FmSignedRelease.ps1 uses signed 1.12.1 as the baseline, preserves other signed
 components and stages l4con1.12.0/l4superv1.11.0 plus setup1.13.0. The packet contains
@@ -215,3 +215,9 @@ Password only through L4TOOLS_SIGN_PFX_PASSWORD. Sign verifies sealed staging in
 signs changed components and rebuilt installer, and validates embedded payloads.
 After operator confirmation: verify all signatures/hashes, publish immutable1.13.0,
 then update terminal1000007 using the user-authorized l4mcp flow and verify FM.
+
+Publication record: [1.13.0](../../artifacts/l4tools/1.13.0.json). All19 timestamped
+signatures valid,128 embedded files match staging, all three complete HTTPS downloads
+verified. Setup SHA256 d9cb76c947d5358093e8b93bd4bd505259fb2987babcce705428c98184d71530.
+Commands above are preparation history; do not rerun/repack the immutable published packet.
+Terminal1000007 upgrade remains pending agent availability; publication does not prove installation.
