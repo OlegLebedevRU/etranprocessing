@@ -4,8 +4,10 @@
 
 Frontend 09b22e8 deployed: Save As with safe browser fallback/cancel, compact tree
 with readiness badge and address, bounded table, pointer folder rows. l4con 1.12.1
-sorts directories before files/natural names before pagination; suite 1.13.1 prepared
-but awaits operator signing/publication/install. Live terminal still suite 1.13.0.
+sorts directories before files/natural names before pagination; suite 1.13.1 signed,
+published and installed on 1000007 via l4mcp. Installer ready/exit0, services running,
+fresh PB registration confirms l4con 1.12.1/protocol2/filesystem_ready. Interactive
+FM navigation after this upgrade was not repeated (desktop locked).
 
 ## Current deployment — FM v2, 2026-10-05
 

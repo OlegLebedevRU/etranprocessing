@@ -237,3 +237,10 @@ Preparation/build/tests and embedded payload verification passed. Operator signi
 Password comes only from L4TOOLS_SIGN_PFX_PASSWORD. Signing uses the existing
 Complete-SignedRelease.ps1 and verifies the sealed inputs. Publication and terminal
 upgrade follow only after signature and payload verification. No publication yet.
+
+
+1.13.1 signed/published and remotely installed on 1000007 through l4mcp.
+[Publication record](../../artifacts/l4tools/1.13.1.json): full HTTPS GET checks passed.
+Setup ready/exit0, all services running; signed L4Con 1.12.1 and fresh PB v2
+registration verified. One-shot update task and temporary S3 object removed.
+The signed 1.13.1 packet is immutable; do not prepare or rebuild it again.

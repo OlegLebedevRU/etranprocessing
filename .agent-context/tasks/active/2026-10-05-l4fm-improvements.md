@@ -194,3 +194,32 @@ FilesPage-CkAKrx5T.js containing showSaveFilePicker and maxWidth:560,
 SHA256 b45f4e147f7a0496b4c7c39ff7a5d75384dea898171a95ad44606565d3080592.
 Local preview/browser closed. Tools 1.13.1 remain unsigned/unpublished; terminal
 1000007 remains at verified 1.13.0 until operator signing and upgrade.
+
+
+## Signed publication and remote installation 1.13.1
+
+Operator confirmed signing. Verified all 19 timestamped EXE signatures and 128
+embedded files against staging. Strict publisher uploaded 1.13.1 and verified full
+HTTPS GET bytes for setup/manifest/checksums. Setup SHA256
+ a17968be482e21e5c63dd9816d868a9a47438fe16424e817667be5edc2705682.
+Publication record: artifacts/l4tools/1.13.1.json; source 7e8baa3, clean.
+
+User explicitly requested update on 1000007 via l4mcp. Preflight ready. Staged
+private version-pinned S3 installer object, downloaded on terminal via explicit
+local Leo4Proxy (curl CONNECT), verified SHA256 and Authenticode there. No direct
+terminal HTTP fallback and no file relay through PB/IoT/MB. Local staging directory
+C:\ProgramData\L4Tools-Update-1.13.1-a17968be protected to SYSTEM/Administrators.
+One-shot SYSTEM scheduled task ran signed setup --silent outside L4Con's owned Job,
+allowing normal service drainage. No certificate reissue requested or performed.
+
+2026-10-05T20:38:34Z install_summary: installed/target/installer 1.13.1, x64,
+ready/exit0/finish, rollback none, cert reused, all four services running. Scheduled
+task LastTaskResult=0. L4Con 1.12.1 signature Valid; Mosquitto contract3 retains
+14 exact routes including fmc/fmr. Subsequent console request succeeded. PB
+fm_agents confirmed version1.12.1/protocol2/filesystem_ready=true, heartbeat age4.8s.
+Desktop was locked during install verification; live interactive FM navigation was
+not repeated in this run. Existing pending_reboot warning preserved.
+
+Removed completed scheduled task and exact temporary S3 object version (grant
+invalidated). Signed installer retained in protected update cache. No lingering
+update task or alternate network route. Installer/agent upgrade fulfilled.
