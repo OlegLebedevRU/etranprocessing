@@ -1,5 +1,12 @@
 # File manager: общий сеанс и S3-only передача
 
+## Explorer follow-up — 2026-10-05
+
+Frontend 09b22e8 deployed: Save As with safe browser fallback/cancel, compact tree
+with readiness badge and address, bounded table, pointer folder rows. l4con 1.12.1
+sorts directories before files/natural names before pagination; suite 1.13.1 prepared
+but awaits operator signing/publication/install. Live terminal still suite 1.13.0.
+
 ## Current deployment — FM v2, 2026-10-05
 
 PB/MB/frontend deployed from b8c609effd9c39ef3fa124b6a515a7c3a349f1b9;
