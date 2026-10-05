@@ -1,5 +1,9 @@
 ﻿# Changelog — l4superv (Leo4 Supervisor & Orchestrator Suite)
 
+## Unreleased — explicit MQTT bridge routes
+
+Shared generation/migration uses 14 exact own-SN routes, including fmc/fmr; wildcard and duplicate routes removed. Active config validation checks the complete set.
+
 ## [1.10.0] — 2026-10-04
 
 - Read preserved leo4proxy arguments from service-args.txt and use them if service registration must be restored. Existing SCM commands remain authoritative.

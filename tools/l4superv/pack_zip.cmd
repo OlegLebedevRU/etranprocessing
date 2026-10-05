@@ -69,6 +69,7 @@ if exist "%REPO_TOOLS%\mosquitto" (
     xcopy /e /y /q "D:\Platerra26\tools\mosquitto\*" "%STAGING%\mosquitto\" >nul
 )
 :: Clean any hardcoded config or backup files from development machine
+if exist "%STAGING%\mosquitto\acl.conf" del /f /q "%STAGING%\mosquitto\acl.conf" >nul 2>nul
 if exist "%STAGING%\mosquitto\mosquitto.conf" del /f /q "%STAGING%\mosquitto\mosquitto.conf" >nul 2>nul
 if exist "%STAGING%\mosquitto\mosquitto.conf.bak" del /f /q "%STAGING%\mosquitto\mosquitto.conf.bak" >nul 2>nul
 if exist "%STAGING%\mosquitto\install_mosquitto.ps1.bak" del /f /q "%STAGING%\mosquitto\install_mosquitto.ps1.bak" >nul 2>nul

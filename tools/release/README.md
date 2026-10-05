@@ -196,3 +196,22 @@ Historical signing command after preparation, from this worktree:
 Password only in L4TOOLS_SIGN_PFX_PASSWORD. A new signature is mandatory because native source changed.
 Preserve other signed component bytes; do not rebuild after signing. Live Windows/provider/policy E2E
 remains distinct from local fixtures; publication completed through the existing strict signed-release workflow.
+
+## FM v2 release 1.13.0 — prepared, awaiting operator signature
+
+Prepare-FmSignedRelease.ps1 uses signed 1.12.1 as the baseline, preserves other signed
+components and stages l4con1.12.0/l4superv1.11.0 plus setup1.13.0. The packet contains
+FM v2-only MQTT navigation/confirmed close, ordinary-user writes, Explorer drive policy,
+and explicit Mosquitto contract3 migration. Setup preserves terminal config/ACL and
+rolls the previous suite back on failed migration/start/critical health during upgrades.
+
+Operator command from this worktree:
+
+```powershell
+& .\tools\release\Prepare-FmSignedRelease.ps1 -Mode Sign -PfxPath '<external PFX path>'
+```
+
+Password only through L4TOOLS_SIGN_PFX_PASSWORD. Sign verifies sealed staging inputs,
+signs changed components and rebuilt installer, and validates embedded payloads.
+After operator confirmation: verify all signatures/hashes, publish immutable1.13.0,
+then update terminal1000007 using the user-authorized l4mcp flow and verify FM.

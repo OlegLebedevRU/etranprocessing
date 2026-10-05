@@ -1,4 +1,3 @@
-import json
 import secrets
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
@@ -141,9 +140,9 @@ def trusted_actor(request: Request) -> dict[str, str]:
 
 
 async def owned_operation(
-    identifier: UUID, request: Request, db: AsyncSession
+    identifier: UUID, request: Request, db: AsyncSession, *, lock: bool = True
 ) -> FileManagerOperation:
-    operation = await db.get(FileManagerOperation, identifier, with_for_update=True)
+    operation = await db.get(FileManagerOperation, identifier, with_for_update=lock)
     if operation is None or operation_actor(operation) != trusted_actor(request):
         raise HTTPException(404, "Operation not found")
     return operation
@@ -158,10 +157,7 @@ def public_operation(operation: FileManagerOperation) -> dict:
         "path": operation.path,
         "error_code": operation.error_code,
         "expires_at": operation.expires_at.isoformat(),
-        "entries": operation.data.get("entries", []),
-        "offset": operation.data.get("offset", 0),
-        "has_more": operation.data.get("has_more", False),
-        "roots": settings.file_manager_read_roots
+        "roots": operation.data.get("roots", settings.file_manager_read_roots)
         if operation.kind == "session"
         else [],
         "applied_expires_at": operation.data.get("applied_expires_at"),
@@ -250,7 +246,7 @@ async def register_session(
 async def operation_status(
     identifier: UUID, request: Request, db: AsyncSession = Depends(get_db)
 ):
-    operation = await owned_operation(identifier, request, db)
+    operation = await owned_operation(identifier, request, db, lock=False)
     await lease_request(operation.lease_id, operation_actor(operation))
     return public_operation(operation)
 
@@ -279,6 +275,10 @@ async def create_operation(
         terminal, await db.get(FileManagerAgent, terminal.id), now=now
     ).available:
         raise HTTPException(409, detail={"code": "fm_agent_unavailable"})
+    if body.kind == "upload":
+        agent = await db.get(FileManagerAgent, terminal.id)
+        if agent is None or "fs.write_user" not in agent.capabilities:
+            raise HTTPException(409, detail={"code": "fm_user_write_upgrade_required"})
     existing = await db.get(FileManagerOperation, body.id)
     if existing:
         if (
@@ -286,7 +286,6 @@ async def create_operation(
             or existing.lease_id != body.lease_id
             or existing.kind != body.kind
             or existing.path != body.path
-            or existing.data.get("offset", 0) != body.offset
         ):
             raise HTTPException(409, "Operation identity mismatch")
         return public_operation(existing)
@@ -302,7 +301,6 @@ async def create_operation(
         state="created",
         path=body.path,
         data={
-            "offset": body.offset,
             "agent_instance_id": session.data["agent_instance_id"],
             "cert_serial": session.data["cert_serial"],
         },
@@ -377,6 +375,8 @@ async def agent_ticket(
         "server_time": datetime.now(UTC).isoformat(),
         "read_roots": settings.file_manager_read_roots,
         "write_roots": settings.file_manager_write_roots,
+        "local_drives": settings.file_manager_local_drives,
+        "privileged_read": settings.file_manager_privileged_read,
     }
 
 
@@ -401,6 +401,20 @@ async def agent_result(
             **operation.data,
             "applied_expires_at": operation.data["ticket_expires_at"],
         }
+        if body.roots is not None:
+            import re
+
+            configured = {root.casefold() for root in settings.file_manager_read_roots}
+            if any(
+                root.casefold() not in configured
+                and not (
+                    settings.file_manager_local_drives
+                    and re.fullmatch(r"[A-Za-z]:\\", root)
+                )
+                for root in body.roots
+            ):
+                raise HTTPException(409, "Unexpected filesystem roots")
+            operation.data = {**operation.data, "roots": body.roots}
     if (
         body.state == "completed"
         and operation.kind in ("upload", "download")
@@ -415,17 +429,8 @@ async def agent_result(
         raise HTTPException(409, "Commit permission required")
     if body.state == "completed" and operation.kind == "download":
         raise HTTPException(409, "Browser receipt required")
-    if len(json.dumps(body.entries, ensure_ascii=False).encode()) > 61440:
-        raise HTTPException(413, "Listing too large")
-    if body.entries and (operation.kind != "list" or body.state != "completed"):
-        raise HTTPException(409, "Unexpected listing")
     operation.state = body.state
     operation.error_code = body.error_code
-    operation.data = {
-        **operation.data,
-        "entries": body.entries,
-        "has_more": body.has_more,
-    }
     operation.updated_at = datetime.now(UTC)
     await db.commit()
     return public_operation(operation)

@@ -49,13 +49,16 @@ int main(void) {
     assert(open_count==2 && opened_access==WINHTTP_ACCESS_TYPE_NAMED_PROXY && !wcscmp(opened_proxy,L"127.0.0.1:18443"));
     url="{\"url\":\"http://storage.example/file\"}";
     assert(policy_json_parse(&grant,url,strlen(url)));assert(!storage_io(&grant,NULL,false,0) && open_count==2);
-    const wchar_t* rejected[]={L"\\\\server\\share",L"\\\\?\\C:\\fixture",L"C:relative",L"C:\\fixture\\..\\outside",L"C:\\fixture\\file:ads",L"C:\\fixture\\NUL.txt",L"C:\\fixture\\COM1.log",L"C:\\fixture\\trailing.",L"C:\\fixture\\space ",L"C:\\Windows\\System32",L"C:\\fixture\\.ssh"};
+    const wchar_t* rejected[]={L"\\\\server\\share",L"\\\\?\\C:\\fixture",L"C:relative",L"C:\\fixture\\..\\outside",L"C:\\fixture\\file:ads",L"C:\\fixture\\NUL.txt",L"C:\\fixture\\COM1.log",L"C:\\fixture\\trailing.",L"C:\\fixture\\space ",L"C:\\fixture\\.ssh"};
     for(unsigned i=0;i<sizeof(rejected)/sizeof(rejected[0]);i++)assert(!valid_path(rejected[i]));
     assert(valid_path(L"C:\\fixture\\Отчёт.txt"));
+    assert(valid_path(L"C:\\"));assert(valid_path(L"C:\\Windows\\System32"));
     wchar_t temp[1024],root[1024],alias[1100];
     assert(GetTempPathW(1024,temp)>0);assert(GetTempFileNameW(temp,L"fm",0,root)>0);
     assert(DeleteFileW(root));assert(CreateDirectoryW(root,NULL));wcscpy_s(fm.root,1024,root);
     HANDLE handles[128];unsigned count=0;
+    assert(!open_directory(root,handles,&count));close_handles(handles,count);
+    fm.read_root_count=1;wcscpy_s(fm.read_roots[0],1024,root);
     assert(open_directory(root,handles,&count));close_handles(handles,count);
     wchar_t outside[1100];swprintf_s(outside,1100,L"%s-other",root);
     assert(!open_directory(outside,handles,&count));close_handles(handles,count);

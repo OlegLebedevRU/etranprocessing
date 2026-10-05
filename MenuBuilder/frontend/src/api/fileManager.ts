@@ -1,6 +1,7 @@
 import client from "./client";
 
 export interface FmReadiness {
+  capabilities?: string[];
   state: string; write_available?: boolean; compatible: boolean; available: boolean; mqtt_available: boolean;
   agent_version?: string; protocol_version?: number; last_seen_at?: string;
   valid_until?: string; server_time: string; missing_capabilities: string[];
@@ -22,9 +23,11 @@ export function fmApi(device: number, view: string, signal?: AbortSignal) {
   return {
     readiness: async () => (await client.get<FmReadiness>(`${base}/readiness`, options)).data,
     start: async () => (await client.post<{ lease_id: string; expires_at: string }>(`${base}/sessions`, {}, options)).data,
+    navigate: async (lease: string, path: string, offset = 0) =>
+      (await client.post<FmOperation>(`${base}/sessions/${lease}/navigation`, {path, offset}, options)).data,
     status: async (id: string) => (await client.get<FmOperation>(`${base}/operations/${id}`, options)).data,
-    create: async (lease_id: string, kind: "list" | "upload" | "download", path: string, offset = 0) =>
-      (await client.post<FmOperation>(`${base}/operations`, { id: crypto.randomUUID(), lease_id, kind, path, offset }, options)).data,
+    create: async (lease_id: string, kind: "upload" | "download", path: string) =>
+      (await client.post<FmOperation>(`${base}/operations`, { id: crypto.randomUUID(), lease_id, kind, path }, options)).data,
     signal: async (lease: string, action: "renew" | "stop" | "cancel", operation_id?: string) =>
       (await client.post(`${base}/sessions/${lease}/signals`, { action, operation_id }, options)).data as { expires_at: string; retry_after_sec?: number },
     manifest: async (id: string, size_bytes: number, sha256: string) =>
@@ -49,6 +52,10 @@ export function fmError(error: unknown): string {
   if (detail?.code === "fm_start_failed") return "Не удалось начать сеанс FM. Команды работы с файлами не выполнялись. Дождитесь освобождения терминала и повторите.";
   if (detail?.code === "lease_taken") return detail.scope === "files" ? "Терминал занят файловым менеджером или ожидает безопасного завершения предыдущего сеанса." : `Терминал занят: ${detail.scope === "console" ? "консоль" : "видео или удалённое управление"}. Завершите другой сеанс.`;
   if (detail?.code === "fm_commit_outcome_unknown" || detail?.code === "fm_transfer_busy_or_commit_unknown") return "Результат записи пока неизвестен. Проверьте файл после восстановления связи.";
+  const code = detail?.code || (error instanceof Error ? error.message : "");
+  if (["fm_path_denied", "fm_path_or_session_failed", "fm_control_or_path_failed"].includes(code)) return "Не удалось открыть путь или подтвердить операцию на терминале. Сеанс завершается; проверьте доступность каталога и права пользователя.";
+  if (code === "fm_user_unavailable") return "На терминале нет доступного обычного пользователя рабочего стола.";
+  if (code === "fm_ack_timeout") return "Агент не подтвердил выполнение вовремя. Операция остановлена, сеанс завершается.";
   return "Операция остановлена: не удалось подтвердить доставку или целостность. Проверьте состояние файла и начните заново.";
 }
 

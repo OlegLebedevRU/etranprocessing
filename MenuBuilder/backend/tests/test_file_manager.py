@@ -109,3 +109,11 @@ async def test_start_registers_pb_before_mqtt_signal_and_stops_on_failure():
     assert [target for target, _, _ in calls] == ["iot", "pb", "iot"]
     assert calls[-1][2] == {"action": "stop"}
     assert not any(body == {"action": "start"} for _, _, body in calls)
+
+
+def test_v1_listing_and_unconfirmed_close_are_rejected():
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        fm.OperationBody(id=uuid4(), lease_id=uuid4(), kind="list", path="C:\\")
+    with pytest.raises(ValidationError):
+        fm.SignalBody(action="stop", confirmed_close=False)

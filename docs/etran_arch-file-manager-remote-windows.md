@@ -1,6 +1,10 @@
 # FM: удалённые файлы Windows — архитектура и реализация
 
-Обновлено: 2026-10-05. Статус: **серверная часть развёрнута в production; l4tools 1.12.1 подписан и опубликован, установка и живой FM terminal E2E не подтверждены**.
+Обновлено: 2026-10-05. Статус: **серверная часть развёрнута в production; l4tools 1.12.1 подписан и опубликован; ограниченный live upload/download проверен на 1000007, полная fault matrix не выполнена**.
+Последующее [сквозное ревью и план v2](etran_arch-l4fm-review-and-improvement-plan.md)
+фиксирует реальные ошибки и согласованные изменения: отдельный FM MQTT-канал, автоматическая
+миграция Mosquitto новым l4setup, ordinary-user upload и Explorer navigation. Это целевой план;
+описанный ниже контракт первой версии не означает, что v2 уже реализован.
 Пакет и контрольные суммы: [publication record](../artifacts/l4tools/1.12.1.json).
 Фактические версии, проверки и ограничения: [production handoff](../.agent-context/tasks/active/2026-10-05-file-manager-production.md).
 Исходная ветка etranprocessing: `feat/rpc7011-renewal`, baseline `d8719971fa143cd2e5b8a191adb43681a3f23aba`.

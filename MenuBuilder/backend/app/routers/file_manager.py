@@ -41,9 +41,8 @@ class OperationBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: UUID
     lease_id: UUID
-    kind: Literal["list", "upload", "download"]
+    kind: Literal["upload", "download"]
     path: str = Field(max_length=1024)
-    offset: int = Field(default=0, ge=0, le=1_000_000)
 
 
 class SignalBody(BaseModel):
@@ -56,6 +55,12 @@ class ManifestBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
     size_bytes: int = Field(ge=0, le=64 * 1024 * 1024)
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class NavigationBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    path: str = Field(min_length=3, max_length=1024)
+    offset: int = Field(default=0, ge=0, le=1_000_000)
 
 
 async def fm_user(
@@ -245,7 +250,7 @@ async def create(
             f"/sessions/{body.lease_id}/signals",
             headers,
             {
-                "action": "list" if body.kind == "list" else "transfer",
+                "action": "transfer",
                 "operation_id": str(body.id),
             },
         )
@@ -265,13 +270,29 @@ async def signal(
         device_id, user, db, require_active=body.action == "renew"
     )
     headers = actor(user, terminal.org_id, x_fm_view_id)
-    lease = await upstream("iot", f"/sessions/{identifier}", headers)
+    closing_query = "?closing=true" if body.action in ("stop", "cancel") else ""
+    lease = await upstream("iot", f"/sessions/{identifier}{closing_query}", headers)
     if lease.get("device_id") != device_id:
         raise HTTPException(404, "Session not found")
     if body.action == "cancel" and body.operation_id is None:
         raise HTTPException(422, "Operation required")
-    if body.action == "cancel":
-        await upstream("pb", f"/operations/{body.operation_id}/abort", headers, {})
+    if body.action == "cancel" and not lease.get("closed"):
+        try:
+            await upstream("pb", f"/operations/{body.operation_id}/abort", headers, {})
+        except Exception:
+            # Abort metadata failure must not keep the terminal worker authorised.
+            try:
+                await upstream(
+                    "iot",
+                    f"/sessions/{identifier}/signals",
+                    headers,
+                    {"action": "stop"},
+                )
+            except Exception as cleanup_error:  # noqa: BLE001 - preserve the abort failure.
+                logger.warning(
+                    "FM close after abort failure: %s", type(cleanup_error).__name__
+                )
+            raise
     result = await upstream(
         "iot",
         f"/sessions/{identifier}/signals",
@@ -279,7 +300,9 @@ async def signal(
         body.model_dump(mode="json", exclude_none=True),
     )
     if body.action in ("stop", "cancel"):
-        result["retry_after_sec"] = drain_seconds(result["expires_at"])
+        result["retry_after_sec"] = (
+            0 if result.get("stopped") is True else drain_seconds(result["expires_at"])
+        )
     return result
 
 
@@ -349,4 +372,23 @@ async def received(
         f"/operations/{identifier}/received",
         actor(user, terminal.org_id, x_fm_view_id),
         body.model_dump(),
+    )
+
+
+@router.post("/devices/{device_id}/sessions/{identifier}/navigation")
+async def navigation(
+    device_id: int,
+    identifier: UUID,
+    body: NavigationBody,
+    x_fm_view_id: UUID = Header(),
+    user: dict = Depends(fm_user),
+    db: AsyncSession = Depends(get_db),
+):
+    terminal = await _verify_device_access(device_id, user, db, require_active=True)
+    headers = actor(user, terminal.org_id, x_fm_view_id)
+    lease = await upstream("iot", f"/sessions/{identifier}", headers)
+    if lease.get("device_id") != device_id:
+        raise HTTPException(404, "Session not found")
+    return await upstream(
+        "iot", f"/sessions/{identifier}/navigation", headers, body.model_dump()
     )

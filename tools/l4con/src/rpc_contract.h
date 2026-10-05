@@ -15,6 +15,9 @@ typedef struct {
     char fm_action[16];
     char fm_operation_id[40];
     unsigned long long fm_expires_at;
+    bool fm_navigation;
+    char fm_path[4096];
+    unsigned fm_offset;
     int ttl_sec;
     int max_output_bytes;
 } RpcCommand;

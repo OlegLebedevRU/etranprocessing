@@ -1,5 +1,9 @@
 # Changelog — ProcessingBackend
 
+## Unreleased — FM v2 only
+
+FM admission requires protocol v2 and MQTT navigation/user-write/drive capabilities; PB listing operations/results removed.
+
 ## 2026-10-05 — File manager
 
 FM agent mTLS metadata API, signed versioned S3 grants/checksum verification, additive migration032 and commit receipt reconciliation; file bodies never enter PB.

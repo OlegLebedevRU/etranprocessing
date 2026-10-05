@@ -233,7 +233,7 @@ int wmain(int argc, wchar_t* argv[]) {
         wchar_t conf[MAX_PATH];
         if (swprintf_s(conf, MAX_PATH, L"%ls\\mosquitto\\mosquitto.conf", argv[3]) < 0) return 2;
         DWORD attrs = GetFileAttributesW(conf);
-        if (attrs != INVALID_FILE_ATTRIBUTES) return (attrs & FILE_ATTRIBUTE_DIRECTORY) ? 1 : 0;
+        if (attrs != INVALID_FILE_ATTRIBUTES) return (attrs & FILE_ATTRIBUTE_DIRECTORY) ? 1 : (mosquitto_conf_migrate(argv[3]) ? 0 : 1);
         DWORD err = GetLastError();
         if (err != ERROR_FILE_NOT_FOUND && err != ERROR_PATH_NOT_FOUND) return 1;
         return mosquitto_conf_generate_standby(argv[3], L4_DEFAULT_MOSQUITTO_PORT) ? 0 : 1;

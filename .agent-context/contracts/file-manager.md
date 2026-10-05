@@ -1,6 +1,8 @@
 # File manager: общий сеанс и S3-only передача
 
-Серверная часть deployed, 2026-10-05; suite1.12.1 signed/published, live file-transfer E2E не выполнен.
+Серверная часть deployed, 2026-10-05; suite1.12.1 signed/published. Live review 1000007:
+первая upload попытка failed, ручная повторная upload/download прошла с совпадением SHA-256;
+полная fault matrix не выполнена. [Аудит и целевой план](../../docs/etran_arch-l4fm-review-and-improvement-plan.md).
 [Production evidence](../tasks/active/2026-10-05-file-manager-production.md).
 Пользователь подтвердил extra_service и tools/l4con.
 IoT baseline origin/master 8c2be80, отдельный checkout D:/work/iot.leo4.ru/iot-rpc-rest-app-fm.
@@ -15,7 +17,9 @@ IoT baseline origin/master 8c2be80, отдельный checkout D:/work/iot.leo4
   PB требует fs.proxy; setup автоматически создаёт C:\l4tools\fm, отдельный API env не нужен.
 - Single PUT 0–64 МиБ; SHA-256, versioned S3, GET закреплён за проверенным VersionId.
 - Fail-fast: ручное повторение с нуля, без resume/pause. Upload только CREATE_NEW/no-overwrite.
-- Revoked files lease удерживает слот до первоначального deadline + 5 с; Redis CAS не воскрешает её.
+- Revoked files lease удерживает слот до первоначального deadline + 5 с. В review обнаружена
+  статическая acquire/revoke race: WATCH только active key не защищает изменение lease hash;
+  отсутствие воскрешения через acquire пока не доказано и требует исправления.
 - FM start lock fix deployed: MB active-admission guard uses NO KEY UPDATE, permitting PB FK KEY SHARE
   insertion while serializing terminal changes. Failed start/stop/conflict expose safe drain countdown;
   UI refuses retry until it elapses. [Incident evidence](../tasks/active/2026-10-05-fm-start-lock.md).
@@ -24,3 +28,24 @@ IoT baseline origin/master 8c2be80, отдельный checkout D:/work/iot.leo4
 
 [Архитектура, API, F0–F8, release gates](../../docs/etran_arch-file-manager-remote-windows.md).
 [Evidence и незавершённые проверки](../tasks/active/2026-10-05-file-manager-implementation.md).
+
+Целевой v2 (не реализован): отдельные `srv/{SN}/fmc` / `dev/{SN}/fmr`, MQTT navigation
+без per-list PB round trip, общий lease и PB transfer authority сохраняются. Новый l4setup
+обязан автоматически заменить старый Mosquitto config актуальным с validation/rollback;
+l4superv использует тот же versioned contract. Upload только обычным desktop user,
+download допускает policy-bound read-only privileged broker. Explorer UI: терминалы по номеру,
+autolist, refresh после commit, drives. [Review handoff](../tasks/active/2026-10-05-l4fm-full-stack-review.md).
+
+## FM v2 only — решение пользователя 2026-10-05
+
+Поддержка FM v1 исключена из новой реализации. Readiness требует protocol_version=2,
+fs.mqtt_navigation, fs.write_user, fs.drives и прежние обязательные capabilities;
+старый агент отображается несовместимым и не допускается к acquire.
+Листинг выполняется только через srv/{SN}/fmc → dev/{SN}/fmr (envelope v=2).
+PB/MB не принимают kind=list и PB не принимает listing results. Stop/cancel всегда
+ожидают коррелированного подтверждения завершения дочернего процесса; optional
+confirmed_close удалён. Потеря ACK сохраняет deadline guard, не включает старый RPC.
+RPC 7020, 7022 и action=stop в 7023 отклоняются; 7021 transfer и 7023 start/renew сохраняются.
+HTTP prefix /v1 обозначает существующее пространство API, не поддержку протокола FM v1;
+смена URL не требуется для обязательной проверки версии и capabilities.
+Изменения локальные, без деплоя; общий implementation/release gate остаётся открытым.
