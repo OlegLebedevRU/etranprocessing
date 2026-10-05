@@ -13,10 +13,10 @@ ROOT = Path(__file__).parents[1]
 
 
 def test_source_package_provenance():
-    for name in ("package-source-v031.json", "schema-v031.json", "schema-v031.md"):
+    for name in ("package-source-v032.json", "schema-v032.json", "schema-v032.md"):
         assert b"\r\n" not in (ROOT / "docs" / "l4desk" / name).read_bytes()
     manifest = json.loads(
-        (ROOT / "docs" / "l4desk" / "package-source-v031.json").read_text(
+        (ROOT / "docs" / "l4desk" / "package-source-v032.json").read_text(
             encoding="utf-8"
         )
     )
@@ -85,6 +85,8 @@ from etranprocessing_db import l4desk
 from sqlalchemy.orm import configure_mappers
 configure_mappers()
 assert len(etranprocessing_db.Base.metadata.tables) == 54
+from etranprocessing_db import file_manager
+assert len(etranprocessing_db.Base.metadata.tables) == 56
 assert len(l4desk.__all__) == 23
 print(json.dumps(sorted(etranprocessing_db.Base.metadata.tables)))
 """

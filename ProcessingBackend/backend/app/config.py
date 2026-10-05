@@ -5,6 +5,16 @@ class Settings(BaseSettings):
     database_url: str = ""
     product_scope_split_enabled: bool = False
     cors_origins: list[str] = []
+    file_manager_service_key: str = ""
+    file_manager_iot_url: str = ""
+    file_manager_iot_key: str = ""
+    file_manager_s3_endpoint: str = ""
+    file_manager_s3_region: str = ""
+    file_manager_s3_bucket: str = ""
+    file_manager_s3_access_key: str = ""
+    file_manager_s3_secret_key: str = ""
+    file_manager_read_roots: list[str] = []
+    file_manager_write_roots: list[str] = []
     yookassa_enabled: bool = False
     # Optional JSON endpoints map; production addresses are provisioned via env.
     leo4proxy_endpoints: str = ""

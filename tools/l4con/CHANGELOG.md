@@ -1,5 +1,9 @@
 ﻿# Changelog — l4con (Leo4 Diagnostic Console Agent)
 
+## 2026-10-05 — File manager
+
+FM protocol v1: common exclusive session, MQTT RPC7020–7023, PB mTLS metadata, direct S3 SHA256/version-pinned transfers and no-overwrite commit receipts; requires configured FM root/API.
+
 All notable changes to the `l4con` component will be documented in this file.
 
 ## [1.10.0] - 2026-10-05 (suite1.11.0; signed and published)

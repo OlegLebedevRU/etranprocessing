@@ -39,6 +39,14 @@ int main(int argc,char** argv) {
     assert(rpc_contract_parse(fixture+j.tokens[token].start,(size_t)(j.tokens[token].end-j.tokens[token].start),false,"","","",&command));
     assert(command.method==7011 && command.ttl_sec==120 && !strcmp(command.pin,"000000") && command.pin_expires_at==4102444800ULL);
     assert(!strcmp(command.session_id,command.task_id));
+
+    const char* fm_start="{\"id\":\"135a4120-9ba6-4f6c-8cac-4baf5df8f1df\",\"header\":{\"method_code\":7023},\"payload\":{\"dt\":[{\"session_id\":\"135a4120-9ba6-4f6c-8cac-4baf5df8f1df\",\"action\":\"start\",\"expires_at\":4102444800,\"ttl_sec\":60}]}}";
+    assert(parse(fm_start,false,&command) && command.method==7023 && !strcmp(command.fm_action,"start"));
+    const char* fm_transfer="{\"id\":\"135a4120-9ba6-4f6c-8cac-4baf5df8f1df\",\"header\":{\"method_code\":7021},\"payload\":{\"dt\":[{\"session_id\":\"135a4120-9ba6-4f6c-8cac-4baf5df8f1df\",\"action\":\"transfer\",\"operation_id\":\"22222222-2222-4222-8222-222222222222\",\"expires_at\":4102444800,\"ttl_sec\":60}]}}";
+    assert(parse(fm_transfer,false,&command) && !strcmp(command.fm_operation_id,"22222222-2222-4222-8222-222222222222"));
+    char invalid_fm[2048];strcpy_s(invalid_fm,sizeof(invalid_fm),fm_transfer);
+    char* action=strstr(invalid_fm,"transfer");assert(action);memcpy(action,"unknown!",8);
+    assert(!parse(invalid_fm,false,&command));
     puts("RPC native consumer: producer fixture / malformed envelope / safe TSK default passed");
     return 0;
 }

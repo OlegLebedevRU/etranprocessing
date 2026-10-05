@@ -1,5 +1,9 @@
 # Changelog — MenuBuilder
 
+## 2026-10-05 — File manager
+
+Standalone Files in Classic/L4Desk, agent/MQTT preflight, common files lease, metadata BFF and direct S3 transfers up to64MiB with fail-fast cancellation.
+
 Значимые изменения административного backend и пользовательского web-интерфейса. Журнал фиксирует доступные возможности в их итоговом виде.
 
 ## Unreleased

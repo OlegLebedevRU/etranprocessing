@@ -1,0 +1,30 @@
+{
+  "package": "etranprocessing-db",
+  "version": "0.1.1",
+  "delivery": "git-source",
+  "source_root": "shared",
+  "normalization": "UTF-8, CRLF normalized to LF",
+  "files": {
+    "docs/l4desk/schema-v032.json": "be19756ffcbb811af8f2a2ac124b416aa3b605972ddcc3e24a24085d9dc574dd",
+    "docs/l4desk/schema-v032.md": "c895e733a9add7edbb5a03ab9d9df7bef893a6b259faec721d735e7b9f587bcf",
+    "etranprocessing_db/__init__.py": "043f21a04d9137f2eb021b7fa88040666256cb35e563af1fb7b74955a4378261",
+    "etranprocessing_db/base.py": "987edfd9dfe38b2c49492c7d1a4e774015d16b72e2281b018e4160be6b47d560",
+    "etranprocessing_db/file_manager.py": "bb4b227e7f9d0270dbd26486b0c59fbcb2946768ea0a56025d5b37a85d50097c",
+    "etranprocessing_db/l4desk.py": "a75ecd79403083de55f7edb929693bf4e5e5aafc2d820ab7b2b23d856a8afd72",
+    "etranprocessing_db/models/__init__.py": "7bad42ec3cc900f2d668185222de2f74e67f94dd823daa033d49d2ecd6c4a88b",
+    "etranprocessing_db/models/auth.py": "903916d7659e364c6f7c1fcee53c7491bcae5fdbae178005102acc77c45f3a1b",
+    "etranprocessing_db/models/billing.py": "00db90263129d4cf37418c4076aa449bc2385a8b50e286f2b3a13e3fd28bfe27",
+    "etranprocessing_db/models/catalog.py": "1a1ce3ed54a80743349282f7a43955c6e6ad5905d9d254f18b832ba2ac5393a6",
+    "etranprocessing_db/models/email.py": "2424e6bffb76f2b81ca2482c836dc7cf6c7f343030dd8e01935014879b670392",
+    "etranprocessing_db/models/finance.py": "fc9d1458da9a8c5d6a609c72f7a9a7b547f07a531988a2442f907714c382b4f5",
+    "etranprocessing_db/models/iot.py": "332242fc24e09db812ece65132487a5907b0d0c4766129a57d6ef5e31b3a5349",
+    "etranprocessing_db/models/l4desk.py": "64c91819c9c1cc41b809ff1b389d5a7b7b67c18b9d8cdb40b37516daf108cc31",
+    "etranprocessing_db/models/menu.py": "2b60bd44d4c0f4029391be6f0686f3890208f783ae73e466a4a86b9dd04add9c",
+    "etranprocessing_db/models/org.py": "54358031a2ac4315154b8901fc95836724e9cc4a9b493daf06df2741bc06c323",
+    "etranprocessing_db/models/payment.py": "8c4ff22f105a19d0bff9c77910e5e9f62a01c45a8798a105bf9c333afa5470fc",
+    "etranprocessing_db/models/telemetry.py": "dd20ccd8862cd0b36a11a03d2312595c29861856073620f6c02d6759b8cbb388",
+    "etranprocessing_db/models/terminal.py": "e4e2783865481f42308a16558cbf8a6ccf9aca90304adb60f073151680d97a89",
+    "pyproject.toml": "b5ce4072f33c7183a4db563b7a1a8fcad5e3b4360e46c4101653eda6dd267e31",
+    "uv.lock": "fd69b07afee90d75e99a4adcdd99309e6a9726e66af5ff38b4380551f48899c0"
+  }
+}

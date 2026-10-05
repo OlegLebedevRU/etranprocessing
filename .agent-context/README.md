@@ -35,6 +35,8 @@ Skills описывают **как работать**, карточки — **ч
 - [Video streaming](contracts/video-streaming.md), [l4media](components/l4media.md) — медиатракт.
 - [Remote console](contracts/remote-console.md) — RPC и stdout/stderr.
 
+- [File manager](contracts/file-manager.md) — локальный кандидат: общий IoT lease с video/console, MQTT control, PB HTTPS metadata, S3-only bulk; не runtime evidence.
+
 ## Каталог skills
 Каждый навык хранится как `.claude/skills/<name>/SKILL.md` с `name`/`description`.
 В JetBrains открывай нужный файл по ссылке; автоматическая загрузка не предполагается.

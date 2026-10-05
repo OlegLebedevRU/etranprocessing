@@ -113,7 +113,9 @@ def test_alembic_linear_history():
     script = ScriptDirectory.from_config(config)
 
     heads = script.get_heads()
-    assert heads == ["031"], f"Expected single head '031', got {heads}"
+    assert heads == ["032"], f"Expected single head '032', got {heads}"
+    rev_032 = script.get_revision("032")
+    assert rev_032 is not None and rev_032.down_revision == "031"
     rev_031 = script.get_revision("031")
     assert rev_031 is not None and rev_031.down_revision == "030"
     rev_030 = script.get_revision("030")
@@ -337,3 +339,18 @@ def test_specific_business_constraints():
     assert "fin_transaction_kind_ck" in ck_names_tx
     assert "fin_transaction_status_ck" in ck_names_tx
     assert "fin_transaction_balance_ck" in ck_names_tx
+
+
+def test_file_manager_migration_is_additive_and_fences_parallel_transfers():
+    config = Config("alembic.ini")
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        command.upgrade(config, "031:032", sql=True)
+    sql = buf.getvalue()
+    assert "CREATE TABLE fm_agents" in sql
+    assert "CREATE TABLE fm_operations" in sql
+    assert "CREATE UNIQUE INDEX" in sql
+    assert "67108864" in sql
+    assert "committing" in sql
+    assert "ALTER TABLE terminals" not in sql
+    assert "DROP TABLE" not in sql

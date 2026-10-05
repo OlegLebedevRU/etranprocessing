@@ -150,3 +150,22 @@ inventories/payloads, verifies timestamps and preserves unrelated EXE bytes.
 Do not publish before post-sign verification. Schema030 / compatible PB, IoT
 and MenuBuilder plus upgraded terminal agent are required before enabling the
 UI flow. See [flow matrix](../../docs/term_arch-rpc7011-flow-matrix.md).
+
+## FM incremental release 1.12.0 (prepared, unsigned)
+
+Run Prepare-FmSignedRelease.ps1 -Mode Prepare only against the verified signed1.11.0 staging.
+It backs up that baseline, builds/tests only l4con1.11.0 x86/x64, preserves all other signed
+components and the network profile, regenerates inventories/ZIPs and builds setup1.12.0.
+The ignored fm-signing-input.json seals all staged hashes and setup resources.
+
+The operator signs the already-prepared packet, with PFX outside the repository and password
+only in L4TOOLS_SIGN_PFX_PASSWORD:
+
+```powershell
+& .\tools\release\Prepare-FmSignedRelease.ps1 -Mode Sign -PfxPath '<external PFX path>'
+```
+
+Sign verifies the sealed input, delegates to Complete-SignedRelease.ps1 -SignOnly l4con,
+verifies payload/signatures/timestamps and preserved component bytes, and synchronizes
+signed l4con binaries into build-output paths. Publication is separate. Do not rebuild
+components after signing. FM root/API configuration is also separate from signing.

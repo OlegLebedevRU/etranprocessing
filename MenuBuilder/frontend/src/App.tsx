@@ -33,6 +33,7 @@ const ReportsPage = lazy(() => import("./routes/reports"));
 const IntegrationsPage = lazy(() => import("./routes/integrations"));
 const BillingPage = lazy(() => import("./routes/billing"));
 const DevicesPage = lazy(() => import("./routes/devices"));
+const FilesPage = lazy(() => import("./routes/files/FilesPage"));
 const ConsolePage = lazy(() => import("./routes/console/ConsolePage"));
 const McpPromoPage = lazy(() => import("./routes/mcp/McpPromoPage"));
 const LicensesPage = lazy(() => import("./routes/licenses/LicensesPage"));
@@ -296,6 +297,7 @@ export default function App() {
             <Route path="licenses" element={<SiteRoute site="l4desk" licenses><LicensesPage /></SiteRoute>} />
             <Route path="devices" element={<DevicesPage />} />
             <Route path="console" element={<ConsolePage />} />
+            <Route path="files" element={<FilesPage />} />
             <Route path="mcp" element={<McpPromoPage />} />
             <Route
               path="integrations"
