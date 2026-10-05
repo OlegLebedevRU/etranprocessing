@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@ant-design/icons": "^6.3.2",
+    "@noble/hashes": "^2.4.0",
     "antd": "^6.6.1",
     "axios": "^1.9.0",
     "react": "^19.1.0",

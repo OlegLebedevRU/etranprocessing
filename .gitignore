@@ -110,6 +110,7 @@ tools/dist/.stage/
 tools/dist/.runtime-backup/
 tools/dist/l4tools-release.json
 tools/dist/SHA256SUMS
+tools/dist/fm-signing-input.json
 tools/dist_win7_sp1/*
 !tools/dist_win7_sp1/README.md
 tools/l4setup/res/payload.rc

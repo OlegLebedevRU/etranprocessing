@@ -14,6 +14,7 @@ parser.add_argument("--expanded", action="store_true")
 args = parser.parse_args()
 if args.expanded:
     import etranprocessing_db.l4desk  # noqa: F401
+    import etranprocessing_db.file_manager  # noqa: F401
 
 args.output.parent.mkdir(parents=True, exist_ok=True)
 args.output.write_text(

@@ -70,7 +70,7 @@ def test_expand_does_not_modify_existing_tables():
 def test_all_new_models_have_keys_and_named_financial_metadata():
     module = importlib.import_module("etranprocessing_db.l4desk")
     tables = [
-        table for name, table in Base.metadata.tables.items() if name not in BASELINE
+        table for name, table in Base.metadata.tables.items() if name not in BASELINE and not name.startswith("fm_")
     ]
     assert len(tables) >= 22
     for table in tables:
@@ -117,7 +117,7 @@ def test_iot_baseline_contract():
 
 def test_model_modules_are_declarative_only():
     package = Path(__file__).parents[1] / "etranprocessing_db"
-    for name in ("l4desk.py", "models/l4desk.py", "models/finance.py", "models/iot.py"):
+    for name in ("l4desk.py", "file_manager.py", "models/l4desk.py", "models/finance.py", "models/iot.py"):
         tree = ast.parse((package / name).read_text(encoding="utf-8"))
         assert not any(
             isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
@@ -139,6 +139,7 @@ def test_model_modules_are_declarative_only():
                 in {
                     "__future__",
                     "datetime",
+                    "uuid",
                     "typing",
                     "sqlalchemy",
                     "etranprocessing_db",
@@ -149,7 +150,8 @@ def test_model_modules_are_declarative_only():
 
 def test_published_schema_matches_models():
     importlib.import_module("etranprocessing_db.l4desk")
-    path = HERE.parent / "docs" / "l4desk" / "schema-v031.json"
+    importlib.import_module("etranprocessing_db.file_manager")
+    path = HERE.parent / "docs" / "l4desk" / "schema-v032.json"
     assert describe_metadata(Base.metadata) == json.loads(
         path.read_text(encoding="utf-8")
     )

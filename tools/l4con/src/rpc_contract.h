@@ -12,6 +12,9 @@ typedef struct {
     char shell[32];
     char pin[7];
     unsigned long long pin_expires_at;
+    char fm_action[16];
+    char fm_operation_id[40];
+    unsigned long long fm_expires_at;
     int ttl_sec;
     int max_output_bytes;
 } RpcCommand;

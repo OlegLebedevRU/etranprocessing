@@ -1,5 +1,16 @@
 # MQTT: remote control, console и presence
 
+## Локальный кандидат FM, 2026-10-05
+
+RPC 7020 list / 7021 transfer / 7022 cancel / 7023 start-renew-stop;
+producer IoT и consumer l4con extra_service реализованы, live broker не проверялся.
+
+[FM](file-manager.md) использует существующий RPC transport для
+start/renew/stop/cancel и общий IoT session registry. Коды 7020–7023 сверены с исходниками и внесены во внешний method registry;
+развёртывание и live runtime delivery ещё не подтверждены. Новых топиков/presence не вводится, retain для действий false.
+Listing/progress/tickets идут через HTTPS PB, содержимое — только S3;
+ни MQTT, ни PB/IoT/MB не переносят file bytes.
+
 ## 2026-09-30 addition
 
 `l4con` (`extra_service`) publishes event 75 to `dev/{SN}/evt` with QoS 1

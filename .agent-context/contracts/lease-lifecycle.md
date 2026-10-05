@@ -1,5 +1,14 @@
 # Lease, watchdog и recovery
 
+## Локальный кандидат FM, 2026-10-05
+
+Требование: `files` занимает ту же монопольную session IoT и несовместим с
+console/stream/input/view, включая того же owner. Отдельной аренды PB нет.
+Release требует draining/stop barrier, а не локального UI detach. Контракт реализован в отдельном IoT checkout и проверен unit-тестами, без live MQTT E2E. [Карточка FM](file-manager.md)
+и [план](../../docs/etran_arch-file-manager-remote-windows.md) содержат ownership,
+MQTT lifecycle, PB HTTPS metadata и S3-only bulk. Действующие video/input
+правила ниже сохраняются; совместимость расширения проверяется отдельным release gate.
+
 ## Назначение
 Не смешивать продление аренды, безопасное истечение и восстановление FFmpeg.
 

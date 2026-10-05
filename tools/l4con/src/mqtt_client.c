@@ -8,6 +8,7 @@
 #include "mqtt_client.h"
 #include "mqtt_protocol.h"
 #include "rpc_contract.h"
+#include "file_manager.h"
 #include "command_runner.h"
 #include "tool_inventory.h"
 #include "event_ipc.h"
@@ -368,6 +369,10 @@ static DWORD WINAPI command_worker_thread(LPVOID lpParam) {
     return 0;
 }
 
+static void fm_rpc_result(void* context,const char* task_id,int status,const char* code) {
+    rpc_status((MqttClientState*)context,task_id,status,code);
+}
+
 static void handle_incoming_publish(MqttClientState* state,const char* topic,
     const char* payload,size_t payload_len,const AppConfig* config,const MqttRpcMetadata* metadata) {
     char tsk[160],rsp[160];
@@ -426,6 +431,12 @@ static void handle_incoming_publish(MqttClientState* state,const char* topic,
         return;
     }
     if (command.method==7003) {rpc_status(state,command.task_id,200,"pong");return;}
+    if (command.method>=7020 && command.method<=7023) {
+        if (!fm_enqueue(&command,state->current_cmd.is_running)) rpc_status(state,command.task_id,409,"fm_busy_or_disabled");
+        return;
+    }
+    if ((command.method==7001 || command.method==7011) && fm_busy()) {rpc_status(state,command.task_id,409,"fm_session_active");return;}
+
     if (command.method!=7001 && command.method!=7011) {rpc_status(state,command.task_id,501,"unsupported_method");return;}
     if (command.method==7011 && command.pin_expires_at<=(unsigned long long)time(NULL)+120) {
         SecureZeroMemory(command.pin,sizeof(command.pin));
@@ -591,6 +602,7 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
     printf("  RPC Sub Topic:   %s\n", tsk_sub_topic);
     printf("  Target Broker:   %s:%d (Keepalive: %ds)\n\n", config->mqtt_host, config->mqtt_port, config->keepalive_sec);
 
+    fm_start(state.sn,hStopEvent,fm_rpc_result,&state);
     bool cert_event_sent = false;
     if (!event_ipc_start(hStopEvent, publish_user_event, &state))
         fprintf(stderr, "[EVENT] Local event endpoint unavailable; console commands remain available\n");
@@ -672,6 +684,7 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
         printf("[%s] [OK] MQTT Connected successfully. (rc=0)\n", ts_buf);
         EnterCriticalSection(&state.send_cs);
         state.connected = true;
+        fm_connection(true);
         LeaveCriticalSection(&state.send_cs);
 
         // 3. Publish dev/{SN}/svc = svc_online (retain=1, qos=1)
@@ -710,6 +723,7 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
         size_t rx_buf_len = 0;
 
         while (WaitForSingleObject(hStopEvent, 0) != WAIT_OBJECT_0) {
+            fm_tick();
             if (rx_buf_len && frame_started && GetTickCount64()-frame_started>=10000) {
                 fprintf(stderr,"[MQTT] Partial packet deadline exceeded\n"); break;
             }
@@ -807,7 +821,7 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
                 char req_topic[160]; snprintf(req_topic,sizeof(req_topic),"dev/%s/req",state.sn);
                 const char* zero="00000000-0000-0000-0000-000000000000";
                 const char* body="{\"correlationData\":\"00000000-0000-0000-0000-000000000000\"}";
-                const MqttUserProperty props[]={{"correlationData",zero},{"rpc_methods","7001,7002,7003,7011"}};
+                const MqttUserProperty props[]={{"correlationData",zero},{"rpc_methods","7001,7002,7003,7011,7020,7021,7022,7023"}};
                 send_publish_with_properties(&state,req_topic,body,strlen(body),0,0,props,2);
             }
             if (now - last_ping_time >= ping_interval) {
@@ -845,6 +859,7 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
 
             EnterCriticalSection(&state.send_cs);
             state.connected = false;
+        fm_connection(false);
             state.sock = INVALID_SOCKET;
             closesocket(s);
             LeaveCriticalSection(&state.send_cs);
@@ -853,6 +868,7 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
 
         EnterCriticalSection(&state.send_cs);
         state.connected = false;
+        fm_connection(false);
         state.sock = INVALID_SOCKET;
         closesocket(s);
         LeaveCriticalSection(&state.send_cs);
@@ -860,6 +876,7 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
         WaitForSingleObject(hStopEvent, config->reconnect_sec * 1000);
     }
 
+    fm_shutdown();
     event_ipc_stop();
     if (state.hWorkerThread) {
         command_runner_request_cancel(&state.current_cmd);

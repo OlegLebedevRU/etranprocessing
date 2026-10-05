@@ -1,5 +1,9 @@
 # Changelog — ProcessingBackend
 
+## 2026-10-05 — File manager
+
+FM agent mTLS metadata API, signed versioned S3 grants/checksum verification, additive migration032 and commit receipt reconciliation; file bodies never enter PB.
+
 Значимые изменения терминального processing-контура. Журнал описывает текущее состояние продукта, а не последовательность промежуточных реализаций.
 
 ## Unreleased

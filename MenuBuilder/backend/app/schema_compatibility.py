@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 logger = logging.getLogger(__name__)
 
-REQUIRED_ALEMBIC_REVISION = "031"
-COMPATIBLE_ALEMBIC_REVISIONS: set[str] = {"031"}
+REQUIRED_ALEMBIC_REVISION = "032"
+COMPATIBLE_ALEMBIC_REVISIONS: set[str] = {"032"}
 
 L4DESK_TABLES: list[str] = [
     "fin_accounts",
@@ -113,6 +113,12 @@ def check_schema_compatibility_sync(
     }:
         raise SchemaCompatibilityError(
             "Missing terminals.l4desk_subscription_enabled; apply migration 031."
+        )
+
+    missing_fm = {"fm_agents", "fm_operations"} - existing_tables
+    if missing_fm:
+        raise SchemaCompatibilityError(
+            "Missing file-manager tables; apply migration 032."
         )
 
     logger.info(

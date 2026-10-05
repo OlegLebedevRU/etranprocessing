@@ -18,6 +18,7 @@ from app.routers import (
     billing,
     catalog,
     dashboard,
+    file_manager,
     groups,
     hub,
     integrations,
@@ -179,6 +180,7 @@ app.include_router(dashboard.router)
 app.include_router(monitoring.router)
 app.include_router(reports.router)
 app.include_router(video.router)
+app.include_router(file_manager.router)
 app.include_router(video_control.router)
 app.include_router(remote_sessions.router, prefix="/api/v1")
 app.include_router(remote_sessions.router, prefix="/api")

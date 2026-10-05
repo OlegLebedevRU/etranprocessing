@@ -90,6 +90,23 @@ bool rpc_contract_parse(const char* body,size_t length,bool announcement,
         return true;
     }
     if (!text(&j,item,"session_id",out->session_id,sizeof(out->session_id)) || !rpc_uuid(out->session_id)) return false;
+    if (out->method>=7020 && out->method<=7023) {
+        for (int key=item+1;key<j.tokens[item].next;key=j.tokens[key+1].next) {
+            char name[64];
+            if (!policy_json_string(&j,key,name,sizeof(name)) ||
+                (strcmp(name,"session_id") && strcmp(name,"operation_id") && strcmp(name,"action") &&
+                 strcmp(name,"expires_at") && strcmp(name,"ttl_sec"))) return false;
+        }
+        int expires=policy_json_field(&j,item,"expires_at");
+        if (!text(&j,item,"action",out->fm_action,sizeof(out->fm_action)) ||
+            !text(&j,item,"operation_id",out->fm_operation_id,sizeof(out->fm_operation_id)) ||
+            expires<0 || !policy_json_uint(&j,expires,&out->fm_expires_at) ||
+            !number(&j,item,"ttl_sec",&out->ttl_sec,30,90) || out->ttl_sec<30) return false;
+        if (out->method==7020) return !strcmp(out->fm_action,"list") && rpc_uuid(out->fm_operation_id);
+        if (out->method==7021) return !strcmp(out->fm_action,"transfer") && rpc_uuid(out->fm_operation_id);
+        if (out->method==7022) return !strcmp(out->fm_action,"cancel") && rpc_uuid(out->fm_operation_id);
+        return !out->fm_operation_id[0] && (!strcmp(out->fm_action,"start") || !strcmp(out->fm_action,"renew") || !strcmp(out->fm_action,"stop"));
+    }
     for (int key=item+1;key<j.tokens[item].next;key=j.tokens[key+1].next) {
         char name[128];
         if (!policy_json_string(&j,key,name,sizeof(name))) return false;
