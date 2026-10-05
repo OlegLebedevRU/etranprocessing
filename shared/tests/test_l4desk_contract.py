@@ -45,6 +45,24 @@ def test_expand_does_not_modify_existing_tables():
             ] == expected["columns"]
             assert current[name]["indexes"] == expected["indexes"]
             assert "ck_certificate_pins_purpose" in current[name]["ddl"]
+        elif name == "terminals":
+            assert [
+                c
+                for c in current[name]["columns"]
+                if c["name"] != "l4desk_subscription_enabled"
+            ] == expected["columns"]
+            assert current[name]["indexes"] == expected["indexes"]
+            column = Base.metadata.tables[name].c.l4desk_subscription_enabled
+            assert not column.nullable
+            assert str(column.server_default.arg) == "false"
+            assert column.default.arg is False
+            assert (
+                current[name]["ddl"].replace(
+                    "\tl4desk_subscription_enabled BOOLEAN DEFAULT false NOT NULL, \n",
+                    "",
+                )
+                == expected["ddl"]
+            )
         else:
             assert current[name] == expected
 
@@ -131,7 +149,7 @@ def test_model_modules_are_declarative_only():
 
 def test_published_schema_matches_models():
     importlib.import_module("etranprocessing_db.l4desk")
-    path = HERE.parent / "docs" / "l4desk" / "schema-v030.json"
+    path = HERE.parent / "docs" / "l4desk" / "schema-v031.json"
     assert describe_metadata(Base.metadata) == json.loads(
         path.read_text(encoding="utf-8")
     )

@@ -15,6 +15,8 @@ from app.database import get_db
 from app.main import app
 from app.routers.billing import BillingUser, get_current_billing_user
 
+pytestmark = pytest.mark.usefixtures("classic_yookassa")
+
 
 @pytest.fixture(autouse=True)
 def cleanup_overrides():

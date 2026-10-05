@@ -15,11 +15,13 @@ function storageKey(user: UserInfo | null): string {
 }
 
 export function isProfileAllowed(user: UserInfo | null, profile: NavigationProfile): boolean {
+  if (user?.role_id === 3 && !user.is_superuser && profile === "l4desk") return false;
   if ((user?.role_id === 5 || user?.role === "l4desk_owner") && profile === "classic") return false;
   return !user?.site_mode || user.site_mode === "both" || user.site_mode === profile;
 }
 
 export function getNavigationProfile(user: UserInfo | null): NavigationProfile {
+  if (user?.role_id === 3 && !user.is_superuser) return "classic";
   if (user?.role_id === 5 || user?.role === "l4desk_owner") return "l4desk";
   if (user?.site_mode === "classic" || user?.site_mode === "l4desk") {
     return user.site_mode;

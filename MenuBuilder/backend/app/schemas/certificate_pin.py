@@ -32,3 +32,9 @@ class PaymentRequiredResponse(BaseModel):
     amount_minor: int
     currency: str
     payment_url: str | None
+
+
+class RenewalPermissionResponse(BaseModel):
+    status: Literal["renew_ready"] = "renew_ready"
+    payment_required: Literal[False] = False
+    terminal_id: int

@@ -1,5 +1,9 @@
 # Shared DB: etranprocessing_db
 
+## Контракт031 (2026-10-05, локально проверен)
+
+Terminal.l4desk_subscription_enabled Boolean NOT NULL DEFAULT false; migration owner PB, нет backfill. v031 snapshots/package provenance опубликованы рядом с сохранёнными v030. Pure subscription evaluator — отдельный zero-dependency etranprocessing_access, вне ORM. Shared65tests, оба backend полные проверки, l4mcp downstream21tests, реальная030→031 migration прошли. Production ещё030; старый MB bridge030/031 выложен перед финальной миграцией. [Handoff](../tasks/active/2026-10-05-licensing-implementation.md).
+
 ## 2026-10-03: production schema029
 
 Аддитивная migration029 добавила nullable timestamptz `L4DeskTerminal.paid_until`.

@@ -3,6 +3,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     database_url: str = ""
+    product_scope_split_enabled: bool = False
     cors_origins: list[str] = []
     yookassa_enabled: bool = False
     # Optional JSON endpoints map; production addresses are provisioned via env.

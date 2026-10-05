@@ -6,6 +6,8 @@ from typing import Any
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
+from app.models import Org, Terminal
 from app.models_l4desk import (
     FinAccount,
     FinBalanceProjection,
@@ -228,6 +230,13 @@ class L4DeskRepository:
             .order_by(L4DeskTerminal.ordinal.asc(), L4DeskTerminal.created_at.asc())
             .limit(1)
         )
+        if settings.product_scope_split_enabled:
+            stmt = stmt.join(
+                Terminal, Terminal.id == L4DeskTerminal.runtime_terminal_id
+            ).where(
+                Terminal.org_id == tenant_id,
+                Terminal.l4desk_subscription_enabled.is_(True),
+            )
         res = await self.session.execute(stmt)
         return res.scalar_one_or_none()
 
@@ -421,6 +430,16 @@ class L4DeskRepository:
         sn: str,
         correlation_id: str,
     ) -> L4DeskTerminal:
+        runtime = None
+        if settings.product_scope_split_enabled:
+            from fastapi import HTTPException
+
+            await self.session.scalar(
+                select(Org.org_id).where(Org.org_id == tenant_id).with_for_update()
+            )
+            runtime = await self.session.get(Terminal, terminal_id)
+            if runtime is None or runtime.org_id != tenant_id or runtime.sn != sn:
+                raise HTTPException(409, "Несовпадение идентичности терминала")
         existing = await self.get_terminal(terminal_id, tenant_id)
         if existing is not None:
             return existing
@@ -440,7 +459,7 @@ class L4DeskRepository:
             operation_id=f"legacy-init-{terminal_id}",
             correlation_id=correlation_id,
             runtime_terminal_id=terminal_id,
-            device_id=terminal_id,
+            device_id=runtime.device_id if runtime is not None else terminal_id,
             provisioning_state="ready",
             pin_state="issued",
         )

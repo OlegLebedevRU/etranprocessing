@@ -16,6 +16,7 @@ dependencies = [
     "websockets>=12.0",
     "etranprocessing-db==0.1.1",
     "etranprocessing-gauge",
+    "etranprocessing-access==0.1.0",
 ]
 
 [tool.pytest.ini_options]
@@ -24,6 +25,7 @@ addopts = "-p no:cacheprovider --basetemp=.pytest_tmp"
 [tool.uv.sources]
 etranprocessing-db = { path = "../../shared", editable = true }
 etranprocessing-gauge = { path = "../../shared/etranprocessing_gauge", editable = true }
+etranprocessing-access = { path = "../../shared/etranprocessing_access", editable = true }
 
 [dependency-groups]
 dev = [

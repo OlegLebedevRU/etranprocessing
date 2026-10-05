@@ -39,10 +39,14 @@ import {
   listTerminalsSettings,
   onboardTerminal,
   retryTerminalOnboarding,
+  setTerminalActivity,
 } from "../../api/settings";
 import { useSession } from "../../session/SessionContext";
 import OnboardingWizardModal from "../../components/OnboardingWizardModal";
 import TerminalSettingsEditModal from "../../components/TerminalSettingsEditModal";
+import CertificatePinModal from "../../components/CertificatePinModal";
+import CertificateRenewal from "../../components/CertificateRenewal";
+import { useNavigationProfile } from "../../utils/navigationProfile";
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -68,6 +72,10 @@ export default function TerminalsSettingsPage() {
 
 function TenantTerminalsSettingsPage() {
   const { user } = useSession();
+  const [profile] = useNavigationProfile(user);
+  const classic = profile === "classic";
+  const [paidPinTerminal, setPaidPinTerminal] = useState<TerminalSettingsItem | null>(null);
+  const [renewalTerminal, setRenewalTerminal] = useState<TerminalSettingsItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [terminals, setTerminals] = useState<TerminalSettingsItem[]>([]);
   const [editingTerminal, setEditingTerminal] = useState<TerminalSettingsItem | null>(null);
@@ -180,10 +188,13 @@ function TenantTerminalsSettingsPage() {
       if (res.pin) {
         setPinDeliveryData(res);
         setPinDeliveryModalVisible(true);
+      } else if (classic && res.readiness?.certificate === "failed") {
+        setPaidPinTerminal(record);
       }
       fetchTerminals();
     } catch (err: any) {
-      message.error(err.response?.data?.detail || "Ошибка выполнения повторного запроса");
+      if (classic && err.response?.status === 402) setPaidPinTerminal(record);
+      else message.error(err.message || "Ошибка выполнения повторного запроса");
     } finally {
       setRetryingId(null);
     }
@@ -193,8 +204,13 @@ function TenantTerminalsSettingsPage() {
   const handleDelete = async (record: TerminalSettingsItem) => {
     setDeletingId(record.id);
     try {
-      const res = await deleteTerminal(record.id);
-      message.success(res.message || `Терминал ${record.sn} удален`);
+      if (classic) {
+        await setTerminalActivity(record.id, !record.is_active);
+        message.success(record.is_active ? "Терминал отключён" : "Терминал включён");
+      } else {
+        const res = await deleteTerminal(record.id);
+        message.success(res.message || `Терминал ${record.sn} удален`);
+      }
       fetchTerminals();
     } catch (err: any) {
       message.error(err.response?.data?.detail || "Ошибка удаления терминала");
@@ -366,6 +382,10 @@ function TenantTerminalsSettingsPage() {
 
         return (
           <Space size="small">
+            {!isRole4 && <Tooltip title="Продлить сертификат на терминале">
+              <Button size="small" icon={<SafetyCertificateOutlined />}
+                onClick={() => setRenewalTerminal(record)} />
+            </Tooltip>}
             <Tooltip title="Редактировать параметры терминала">
               <Button
                 size="small"
@@ -391,9 +411,10 @@ function TenantTerminalsSettingsPage() {
 
             {!isReadOnly && (
               <Popconfirm
-                title="Удалить терминал?"
-                description="Терминал будет отключен. Льгота бесплатного терминала автоматически перейдёт к следующему активному терминалу без ретро-пересчёта."
-                okText="Удалить"
+                title={classic ? (record.is_active ? "Отключить терминал?" : "Включить терминал?") : "Удалить терминал?"}
+                description={classic ? "Изменится административный статус. Терминал останется в списке; срок лицензии сохранится."
+                  : "Терминал будет отключен. Льгота бесплатного терминала автоматически перейдёт к следующему активному терминалу без ретро-пересчёта."}
+                okText={classic ? (record.is_active ? "Отключить" : "Включить") : "Удалить"}
                 cancelText="Отмена"
                 okButtonProps={{ danger: true, loading: isDeleting }}
                 onConfirm={() => handleDelete(record)}
@@ -401,9 +422,9 @@ function TenantTerminalsSettingsPage() {
                 <Button
                   size="small"
                   danger
-                  icon={<DeleteOutlined />}
+                  icon={classic ? (record.is_active ? <CloseCircleOutlined /> : <CheckCircleOutlined />) : <DeleteOutlined />}
                   loading={isDeleting}
-                />
+                >{classic ? (record.is_active ? "Отключить" : "Включить") : null}</Button>
               </Popconfirm>
             )}
           </Space>
@@ -414,6 +435,15 @@ function TenantTerminalsSettingsPage() {
 
   return (
     <div style={{ maxWidth: 1400, margin: "0 auto", paddingBottom: 40 }}>
+      <Modal title={`Сертификат терминала ${renewalTerminal?.device_id ?? ""}`} open={!!renewalTerminal}
+        onCancel={() => setRenewalTerminal(null)} footer={null} destroyOnHidden>
+        {renewalTerminal && <CertificateRenewal key={renewalTerminal.id} deviceId={renewalTerminal.device_id} />}
+      </Modal>
+      <CertificatePinModal open={!!paidPinTerminal} terminal={paidPinTerminal ? {
+        terminal_id: paidPinTerminal.id, device_id: paidPinTerminal.device_id,
+      } : null} onClose={() => setPaidPinTerminal(null)} onIssued={() => {
+        if (paidPinTerminal) void handleRetry(paidPinTerminal);
+      }} />
       <Card>
         <div
           style={{

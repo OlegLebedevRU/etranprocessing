@@ -4,6 +4,7 @@ import calendar
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
+from etranprocessing_access import subscription_allowed, subscription_state
 from fastapi import HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -73,56 +74,29 @@ def subscription_status(
     is_free = terminal.terminal_id == free_id
     if paid and terms and terms.get("paid_until") == paid.isoformat():
         grace = datetime.fromisoformat(terms["grace_until"])
-    state: Literal[
-        "free",
-        "active",
-        "grace",
-        "unpaid",
-        "expired",
-        "payments_disabled",
-        "admin_disabled",
-        "deleted",
-    ]
-    action = None
-    if terminal.deleted_at is not None:
-        state, reason, allowed = "deleted", "Терминал удалён", False
-    elif not runtime.is_active:
-        state, reason, allowed = (
-            "admin_disabled",
+    state = subscription_state(
+        deleted=terminal.deleted_at is not None,
+        admin_active=runtime.is_active,
+        is_free=is_free,
+        payments_enabled=enabled,
+        paid_until=paid,
+        grace_until=grace,
+        now=at,
+    )
+    reason, action = {
+        "deleted": ("Терминал удалён", None),
+        "admin_disabled": (
             "Отключён администратором. Оплата не отменяет отключение.",
-            False,
-        )
-    elif is_free:
-        state, reason, allowed = "free", "Бесплатно, без ограничения времени", True
-    elif not enabled:
-        state, reason, allowed = (
-            "payments_disabled",
-            "Платные подключения пока недоступны",
-            False,
-        )
-    elif paid is None:
-        state, reason, allowed, action = (
-            "unpaid",
-            "Требуется подписка",
-            False,
-            "Подключить",
-        )
-    elif at < paid:
-        state, reason, allowed, action = "active", "Подписка оплачена", True, "Продлить"
-    elif grace is not None and at < grace:
-        state, reason, allowed, action = (
-            "grace",
-            "Продлите подписку, чтобы сохранить доступ",
-            True,
-            "Продлить",
-        )
-    else:
-        state, reason, allowed, action = (
-            "expired",
-            "Подписка закончилась",
-            False,
-            "Восстановить доступ",
-        )
+            None,
+        ),
+        "free": ("Бесплатно, без ограничения времени", None),
+        "payments_disabled": ("Платные подключения пока недоступны", None),
+        "unpaid": ("Требуется подписка", "Подключить"),
+        "active": ("Подписка оплачена", "Продлить"),
+        "grace": ("Продлите подписку, чтобы сохранить доступ", "Продлить"),
+        "expired": ("Подписка закончилась", "Восстановить доступ"),
+    }[state]
+    allowed = subscription_allowed(state)
     return TerminalSubscription(
         terminal_id=terminal.terminal_id,
         device_id=runtime.device_id,
@@ -153,7 +127,7 @@ async def subscription_context(
     profile = await db.get(L4DeskTenantProfile, tenant_id)
     if profile is None:
         return None, None
-    free_id = await db.scalar(
+    stmt = (
         select(L4DeskTerminal.terminal_id)
         .where(
             L4DeskTerminal.tenant_id == tenant_id,
@@ -162,6 +136,14 @@ async def subscription_context(
         .order_by(L4DeskTerminal.ordinal)
         .limit(1)
     )
+    if settings.product_scope_split_enabled:
+        stmt = stmt.join(
+            Terminal, Terminal.id == L4DeskTerminal.runtime_terminal_id
+        ).where(
+            Terminal.org_id == tenant_id,
+            Terminal.l4desk_subscription_enabled.is_(True),
+        )
+    free_id = await db.scalar(stmt)
     return profile, free_id
 
 
@@ -179,6 +161,11 @@ async def list_subscriptions(
     )
     if not include_deleted:
         stmt = stmt.where(L4DeskTerminal.deleted_at.is_(None))
+    if settings.product_scope_split_enabled:
+        stmt = stmt.where(
+            Terminal.org_id == tenant_id,
+            Terminal.l4desk_subscription_enabled.is_(True),
+        )
     rows = (await db.execute(stmt)).all()
     terms = await subscription_terms(db, tenant_id)
     return [
@@ -197,8 +184,14 @@ async def list_subscriptions(
 async def check_terminal(
     db: AsyncSession, tenant_id: int, runtime: Terminal
 ) -> TerminalSubscription | None:
+    if runtime.org_id != tenant_id:
+        raise HTTPException(403, "Терминал принадлежит другой организации")
+    if settings.product_scope_split_enabled and not runtime.l4desk_subscription_enabled:
+        return None
     profile, free_id = await subscription_context(db, tenant_id)
     if profile is None:
+        if settings.product_scope_split_enabled:
+            raise HTTPException(403, "Не настроен профиль подписки терминала L4Desk")
         return (
             None  # Classic technical session records do not opt a tenant into billing.
         )
@@ -282,6 +275,11 @@ def record_terms(
 
 
 async def check_creation_limit(db: AsyncSession, tenant_id: int) -> None:
+    if settings.product_scope_split_enabled:
+        from app.services.product_scope import tenant_product
+
+        if await tenant_product(db, tenant_id) == "classic":
+            return
     profile = await db.get(L4DeskTenantProfile, tenant_id)
     if profile is None:
         return

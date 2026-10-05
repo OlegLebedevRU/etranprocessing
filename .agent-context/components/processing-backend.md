@@ -1,5 +1,34 @@
 # ProcessingBackend
 
+## Актуальное состояние 2026-10-05
+
+Локальные K6/K9 завершены: additive031, explicit subscription selector, shared pure evaluator, paid-purpose PIN validation/locking, released dry-run cutover module. Classic XML/server grace/legacy nginx unchanged. Полный suite234passed/1skipped, Ruff/Pyrightpassed; реальная PostgreSQL18 migration/concurrency/idempotency проверка прошла. Production пока030, final cutover впереди. Ниже — исторические срезы. [Handoff](../tasks/active/2026-10-05-licensing-implementation.md).
+
+Внедрение2026-10-05, K1: Classic формула/XML сохранены; actual dependency/XML
+проверены в32 комбинациях времени/admin/org/missing License. Targeted70passed,
+Ruff/Pyright прошли; runtime не деплоился. Классификация владельца52Classic/
+4L4Desk(3/4/1000/10000), текущий org-block сохранён; DB ещё не переключена.
+[Активный handoff](../tasks/active/2026-10-05-licensing-implementation.md).
+
+## 2026-10-05: аудит лицензий и transport policy
+
+Read-only текущие server functions: Classic licensebilling и MQTT/RTP policy
+не используют одну формулу. Policy читает admin flag, subscription allowance
+и известную дату сертификата; Classic expiry/OrgStatus/IoT security block
+в неё не входят. Profile отсутствует у1/339 и разрешает subscription allowance;
+добавление profile без явного enrollment меняет доступ всех терминалов tenant.
+У10000/device1000009 admin=true, policy deny по подписке, но stop_facts сообщает
+terminal_inactive. Это наблюдение серверного вычисления, не hardware E2E.
+[Анализ](../../docs/etran_arch-licensing-variants-audit-2026-10-05.md) содержит
+предложения; новый контракт/изменения данных не утверждены.
+
+Окончательное уточнение владельца, редакция 3: licensebilling — только Classic,
+без серверного grace; проверяет срок и общую административную блокировку.
+Три дня отсрочки и отключение определяет само терминальное приложение.
+Отсутствие grace в PB корректно, прежний вывод C20 о дефекте отозван.
+Серверные 3-дневные формулы paid_until/cycle принадлежат L4Desk.
+Терминальный код в этом аудите не проверялся; код PB не менялся.
+
 ## 2026-10-05: authenticated renewal / scoped locks
 
 Schema030/PB0b561ce deployed. Dedicated live-newCA/SN/serial renew route and

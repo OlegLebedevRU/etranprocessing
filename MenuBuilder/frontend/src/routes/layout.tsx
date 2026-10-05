@@ -38,6 +38,7 @@ const { Text } = Typography;
 const NAV_ITEMS = [
   { key: "monitoring", icon: <DashboardOutlined />, label: "Мониторинг" },
   { key: "video", icon: <VideoCameraOutlined />, label: "Видеонаблюдение" },
+  { key: "console", icon: <CodeOutlined />, label: "Консоль" },
   { key: "menu", icon: <AppstoreOutlined />, label: "Управление меню" },
   { key: "reports", icon: <FileTextOutlined />, label: "Отчёты" },
   { key: "billing", icon: <DollarOutlined />, label: "Лицензии" },

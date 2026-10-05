@@ -156,7 +156,14 @@ class RemoteSessionUseCase:
                     detail="Доступ к консоли запрещён для роли наблюдателя",
                 )
             # Allowed for superusers (role 1) and L4Desk users (role 5 in own tenant)
-            if not is_su and role_id != 5:
+            classic_operator = False
+            if settings.product_scope_split_enabled and role_id == 3:
+                from app.services.product_scope import tenant_product
+
+                classic_operator = (
+                    await tenant_product(self.db, terminal.org_id) == "classic"
+                )
+            if not is_su and role_id != 5 and not classic_operator:
                 user_perms = user.get("permissions") or []
                 if "console" not in user_perms and "*" not in user_perms:
                     raise HTTPException(

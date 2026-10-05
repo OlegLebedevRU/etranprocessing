@@ -298,15 +298,20 @@ async def create_terminal(
 
     # Initial License
     expires_at = body.license_expires_at or (datetime.now(UTC) + timedelta(days=365))
-    license_entry = License(
-        terminal_id=terminal.id,
-        org_id=body.org_id,
-        license_type="standard",
-        expires_at=expires_at,
-        billing_period_months=body.billing_period_months,
-        monthly_price_override_minor=body.monthly_price_override_minor,
+    license_entry = (
+        None
+        if terminal.l4desk_subscription_enabled
+        else License(
+            terminal_id=terminal.id,
+            org_id=body.org_id,
+            license_type="standard",
+            expires_at=expires_at,
+            billing_period_months=body.billing_period_months,
+            monthly_price_override_minor=body.monthly_price_override_minor,
+        )
     )
-    db.add(license_entry)
+    if license_entry is not None:
+        db.add(license_entry)
 
     # Sync provisioning if requested
     if body.iot_provisioned:
@@ -322,7 +327,8 @@ async def create_terminal(
 
     await db.commit()
     await db.refresh(terminal)
-    await db.refresh(license_entry)
+    if license_entry is not None:
+        await db.refresh(license_entry)
 
     # Fetch terminal type name
     tt_name = None
@@ -357,6 +363,9 @@ async def update_terminal(
         )
 
     if body.org_id is not None:
+        from app.services.product_scope import validate_terminal_transfer
+
+        await validate_terminal_transfer(db, terminal, body.org_id)
         org = await db.get(Org, body.org_id)
         if not org:
             raise HTTPException(
@@ -399,7 +408,10 @@ async def update_terminal(
     )
     lic = lic_res.scalars().first()
 
-    if lic:
+    from app.services.product_scope import tenant_product
+
+    classic_product = await tenant_product(db, terminal.org_id) == "classic"
+    if lic and classic_product:
         if body.org_id is not None:
             lic.org_id = body.org_id
         if body.license_expires_at is not None:
@@ -413,7 +425,9 @@ async def update_terminal(
             lic.monthly_price_override_minor = body.monthly_price_override_minor
         if body.is_active and lic.expires_at < datetime.now(UTC):
             lic.expires_at = datetime.now(UTC)
-    elif body.license_expires_at is not None or body.is_active is not None:
+    elif classic_product and (
+        body.license_expires_at is not None or body.is_active is not None
+    ):
         # Create license if none existed
         lic = License(
             terminal_id=terminal.id,
@@ -526,6 +540,10 @@ async def set_terminal_license(
             detail=f"Terminal with ID {terminal_id} not found",
         )
 
+    from app.services.product_scope import tenant_product
+
+    if await tenant_product(db, terminal.org_id) != "classic":
+        raise HTTPException(409, "Classic-лицензии не применяются к L4Desk")
     lic_res = await db.execute(
         select(License)
         .where(License.terminal_id == terminal_id)
@@ -580,7 +598,9 @@ async def set_terminal_status(
     )
     lic = lic_res.scalars().first()
     now = datetime.now(UTC)
-    if body.is_active:
+    from app.services.product_scope import tenant_product
+
+    if body.is_active and await tenant_product(db, terminal.org_id) == "classic":
         if lic:
             lic.expires_at = max(lic.expires_at, now)
         else:

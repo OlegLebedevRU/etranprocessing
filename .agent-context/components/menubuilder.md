@@ -1,5 +1,48 @@
 # MenuBuilder
 
+## Актуальное состояние 2026-10-05
+
+Локальные K2–K10 завершены: explicit product/enrollment, единая Classic certificate tariff, SU-only simulation, tenant-safe subscriptions, Classic disable/console, immutable product edits. Полный suite697passed/22skipped, Ruff/Pyrightpassed; UI build/78unit/2fake-REST Playwright passed. Bridge030/031 уже production b6772ba. Final images/cutover ещё не выпущены. Ниже — исторические срезы; актуальный контракт в [handoff](../tasks/active/2026-10-05-licensing-implementation.md).
+
+Внедрение2026-10-05, локальный K2: Classic provider больше не даёт общий mock.
+YooKassa под прежним флагом; flagOFF — административная simulation только SU,
+нулевые серверные заказы отдельно free. Order lock/audit и monotonic expiry;
+MB suite658passed/20skipped, qualitypassed. Runtime не выпущен. Новый G8:
+settings/onboarding PIN обходят Classic tariff, PB setup issuance погашает
+pending обоих purposes; зависимый этап остановлен до решения владельца.
+[Фактические K0/K1/K2 и G8](../tasks/active/2026-10-05-licensing-implementation.md).
+
+Редакция 5: [уточнение Classic и сертификатов](../../docs/etran_arch-licensing-variants-audit-2026-10-05.md#16-уточнение-охвата-classic-и-сертификатного-биллинга).
+Все подтверждённые Classic tenants — только Classic; общий remote без отдельного
+billing, технический учёт сохраняется. RPC7011 не проверяет Classic cert tariff
+для роли 3 — C21. G6 решён: связать RPC7011 с оплатой; эмуляция только для
+суперпользователя с серверной проверкой и audit. Контракт ещё не реализован.
+
+Редакция 4 аудита: [пошаговый план](../../docs/etran_arch-licensing-variants-audit-2026-10-05.md#15-детальный-план-внедрения-обособленные-продукты-общий-механизм-решений)
+разделяет новые Classic/L4Desk и сохраняет архивные модели. Реализация не начата;
+исторические both и охват org block требуют решения до переключения. Общий
+механизм решений не означает общую коммерческую формулу двух продуктов.
+
+## 2026-10-05: аудит вариантов лицензирования
+
+Read-only production/code audit: у tenants 1/339 оба license flags включены,
+но L4DeskTenantProfile отсутствует, поэтому subscriptions возвращает403.
+Technical L4DeskTerminal не равен явному коммерческому enrollment; создание
+profile переключает admission всего tenant и требует отдельного решения.
+Classic UI существует на /billing, подписки — /licenses. В текущем backend
+Classic get_payment_provider возвращает MockPaymentProvider; денежные операции
+в аудите не выполнялись. У10000 архивный entitlement=active не разрешает новую
+additional subscription. Решение пока предложено, код/данные не менялись.
+[Анализ и матрицы](../../docs/etran_arch-licensing-variants-audit-2026-10-05.md),
+[handoff](../tasks/completed/2026-10-05-licensing-architecture-audit.md).
+
+Редакция 2: владелец направляет Classic-пользователей только в Classic,
+L4Desk-разделы/API должны быть закрыты по product scope; мастер — нейтральный.
+773 (`Terminal.id=1`) после пользовательского DELETE и admin enable:
+08:53 UTC `is_active=true`, L4Desk `deleted_at` заполнен; settings-фильтр
+исключает его, admin Terminal list — нет. DELETE и enable используют разные
+lifecycle-переходы; штатный undelete не найден. Данные не восстанавливались.
+
 ## 2026-10-05: RPC7011 authenticated renewal
 
 BFF and form deployed with schema030/PB/IoT; operator installed signed tools1.11.0.

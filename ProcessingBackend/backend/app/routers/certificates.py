@@ -24,7 +24,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.utils import int_to_bytes
 from cryptography.x509.oid import NameOID
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from sqlalchemy import and_, exists, or_, select, update
+from sqlalchemy import and_, exists, or_, select, text, update
 from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -52,6 +52,7 @@ from app.services.cert_billing import (
     generate_unique_pin,
     mask_pin,
 )
+from app.services.certificate_permission import validate_pin_permission
 from app.services.leo4proxy_policy import subscription_allowance
 
 router = APIRouter()
@@ -334,6 +335,13 @@ async def issue_renewal_pin(
         or terminal.cert_not_valid_after <= now
     ):
         raise HTTPException(409, "live_new_ca_certificate_required")
+    paid_item = await validate_pin_permission(
+        db,
+        terminal,
+        "renew",
+        payload.order_item_id,
+        admin_override=payload.admin_override,
+    )
     current_issuance = exists().where(
         TerminalCertHistory.pin_id == CertificatePin.id,
         TerminalCertHistory.terminal_id == terminal.id,
@@ -361,10 +369,22 @@ async def issue_renewal_pin(
     )
     if payload.pin_id:
         reusable = reusable.where(CertificatePin.id == payload.pin_id)
+    if paid_item is not None:
+        reusable = reusable.where(CertificatePin.order_item_id == paid_item.id)
     pin = (await db.execute(reusable)).scalar_one_or_none()
     if pin is None and payload.pin_id:
         raise HTTPException(409, "renewal_pin_unavailable")
     if pin is None:
+        if (
+            paid_item is not None
+            and await db.scalar(
+                select(CertificatePin.id).where(
+                    CertificatePin.order_item_id == paid_item.id
+                )
+            )
+            is not None
+        ):
+            raise HTTPException(410, "certificate_paid_permission_consumed_or_expired")
         pin = CertificatePin(
             pin=await generate_unique_pin(db),
             terminal_id=terminal.id,
@@ -372,7 +392,8 @@ async def issue_renewal_pin(
             purpose="renew",
             created_by="menubuilder",
             creation_source="tenant",
-            payment_required=False,
+            payment_required=paid_item is not None,
+            order_item_id=paid_item.id if paid_item else None,
             status="pending",
             expires_at=compute_pin_expiry(now),
         )
@@ -765,6 +786,16 @@ async def issue_certificate_pin_endpoint(
     _auth: str = Depends(require_service_auth),
     db: AsyncSession = Depends(get_db),
 ) -> IssueCertificatePinResponse:
+    if settings.product_scope_split_enabled:
+        # Serialize the provider's operation replay before reading its audit fact.
+        for identity in (
+            f"pb-pin-operation:{payload.operation_id}",
+            f"pb-terminal-pin:{payload.terminal_id}",
+        ):
+            await db.execute(
+                text("SELECT pg_advisory_xact_lock(hashtextextended(:identity, 0))"),
+                {"identity": identity},
+            )
     # 1. Check idempotency first: has this operation_id already been executed?
     audit_res = await db.execute(
         select(L4DeskAuditEvent).where(
@@ -860,7 +891,9 @@ async def issue_certificate_pin_endpoint(
 
     # 2. Lookup terminal for new issuance
     term_res = await db.execute(
-        select(Terminal).where(Terminal.id == payload.terminal_id)
+        select(Terminal)
+        .where(Terminal.id == payload.terminal_id)
+        .with_for_update(of=Terminal)
     )
     terminal = term_res.scalar_one_or_none()
     if not terminal:
@@ -898,32 +931,54 @@ async def issue_certificate_pin_endpoint(
             },
         )
 
-    # 5. New issuance: expire any prior pending PINs for this terminal
-    await db.execute(
-        update(CertificatePin)
-        .where(
-            CertificatePin.terminal_id == terminal.id,
-            CertificatePin.status == "pending",
-        )
-        .values(status="expired")
-    )
-
     now = datetime.now(UTC)
-    pin_value = await generate_unique_pin(db)
-    expires_at = compute_pin_expiry(now=now, ttl_seconds=payload.ttl_seconds)
-
-    cert_pin = CertificatePin(
-        pin=pin_value,
-        terminal_id=terminal.id,
-        org_id=terminal.org_id,
-        created_by=f"op:{payload.operation_id[:90]}",
-        creation_source="tenant",
-        payment_required=False,
-        status="pending",
-        expires_at=expires_at,
+    paid_item = await validate_pin_permission(
+        db, terminal, "setup", payload.order_item_id
     )
-    db.add(cert_pin)
-    await db.flush()
+    cert_pin = None
+    if paid_item is not None:
+        cert_pin = await db.scalar(
+            select(CertificatePin).where(
+                CertificatePin.order_item_id == paid_item.id,
+                CertificatePin.terminal_id == terminal.id,
+                CertificatePin.org_id == terminal.org_id,
+                CertificatePin.purpose == "setup",
+            )
+        )
+        if (
+            cert_pin is None
+            or cert_pin.status != "pending"
+            or cert_pin.expires_at <= now
+        ):
+            raise HTTPException(410, "certificate_paid_permission_consumed_or_expired")
+        pin_value, expires_at = cert_pin.pin, cert_pin.expires_at
+    else:
+        # Purpose isolation: ordinary setup never expires a queued renewal.
+        await db.execute(
+            update(CertificatePin)
+            .where(
+                CertificatePin.terminal_id == terminal.id,
+                CertificatePin.org_id == terminal.org_id,
+                CertificatePin.status == "pending",
+                CertificatePin.purpose == "setup",
+            )
+            .values(status="expired")
+        )
+        pin_value = await generate_unique_pin(db)
+        expires_at = compute_pin_expiry(now=now, ttl_seconds=payload.ttl_seconds)
+        cert_pin = CertificatePin(
+            pin=pin_value,
+            terminal_id=terminal.id,
+            org_id=terminal.org_id,
+            created_by=f"op:{payload.operation_id[:90]}",
+            creation_source="tenant",
+            payment_required=False,
+            status="pending",
+            purpose="setup",
+            expires_at=expires_at,
+        )
+        db.add(cert_pin)
+        await db.flush()
 
     # Update L4DeskTerminal if it exists
     l4_res = await db.execute(

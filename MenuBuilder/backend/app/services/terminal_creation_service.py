@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Terminal
+from app.services.product_scope import tenant_product
 
 DEVICE_ID_MIN = 1_000_001
 DEVICE_ID_MAX = 1_999_999
@@ -89,6 +90,7 @@ async def create_terminal_business_record(
     Flushes the Terminal row so identity uniqueness is enforced before extras.
     """
     explicit_id = device_id is not None
+    product = await tenant_product(db, org_id)
     if explicit_id:
         validate_new_device_id(device_id)
         existing = await db.execute(
@@ -113,6 +115,7 @@ async def create_terminal_business_record(
             timezone=timezone.strip() if timezone else None,
             terminal_type_id=terminal_type_id,
             is_active=is_active,
+            l4desk_subscription_enabled=product == "l4desk",
             show_in_monitoring=True
             if show_in_monitoring is None
             else show_in_monitoring,

@@ -517,6 +517,8 @@ class RegistrationService:
             email_verified_at=now,
             site_mode="l4desk",
             default_site="l4desk",
+            classic_licenses_enabled=False,
+            l4desk_licenses_enabled=True,
         )
         self.session.add(org)
         # Flush org first to ensure org_id exists for foreign key constraints

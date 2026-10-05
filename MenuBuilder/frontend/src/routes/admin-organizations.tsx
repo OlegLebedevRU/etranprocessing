@@ -112,6 +112,8 @@ export default function AdminOrganizationsPage() {
     setCreateSubmitting(true);
     try {
       const payload: AdminOrgCreateInput = {
+        site_mode: "classic", default_site: "classic",
+        classic_licenses_enabled: true, l4desk_licenses_enabled: false,
         org_id: values.org_id ? Number(values.org_id) : undefined,
         org_name: values.org_name.trim(),
         name: values.name.trim(),
@@ -223,6 +225,11 @@ export default function AdminOrganizationsPage() {
         l4desk_licenses_enabled: Boolean(values.l4desk_licenses_enabled),
       };
 
+      if (editingOrg.site_mode === "l4desk") {
+        for (const key of ["monthly_price_minor", "currency", "billing_mode", "min_billing_periods",
+          "allowed_billing_periods", "default_selection_mode", "cert_billing_mode", "cert_price_minor",
+          "tenant_pin_creation_enabled", "cert_charge_primary_issue", "cert_charge_reissue"] as const) delete payload[key];
+      }
       await updateAdminOrganization(editingOrg.org_id, payload);
       message.success(`Организация #${editingOrg.org_id} успешно обновлена`);
       setEditModalOpen(false);
@@ -749,14 +756,14 @@ export default function AdminOrganizationsPage() {
           <Divider style={{ margin: "8px 0 12px", fontSize: 14 }}>Доступ к сайту</Divider>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <Form.Item name="site_mode" label="Версии сайта" rules={[{ required: true }]}>
-              <Select onChange={mode => editForm.setFieldValue("default_site", mode === "both" ? undefined : mode)} options={[
+              <Select disabled options={[
                 { value: "classic", label: "Только Classic" },
                 { value: "l4desk", label: "Только L4Desk" },
                 { value: "both", label: "Обе версии" },
               ]} />
             </Form.Item>
             <Form.Item name="default_site" label="Версия по умолчанию" tooltip="Если оставить пустым при выборе обеих версий, действуют прежние правила по роли пользователя">
-              <Select allowClear disabled={editSiteMode !== "both"} placeholder="По роли пользователя" options={[
+              <Select allowClear disabled={editSiteMode !== "both" || !!editingOrg} placeholder="По роли пользователя" options={[
                 { value: "classic", label: "Classic" },
                 { value: "l4desk", label: "L4Desk" },
               ]} />
@@ -764,13 +771,14 @@ export default function AdminOrganizationsPage() {
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <Form.Item name="classic_licenses_enabled" label="Лицензии в Classic" valuePropName="checked">
-              <Switch checkedChildren="Показать" unCheckedChildren="Скрыть" />
+              <Switch disabled checkedChildren="Показать" unCheckedChildren="Скрыть" />
             </Form.Item>
             <Form.Item name="l4desk_licenses_enabled" label="Лицензии в L4Desk" valuePropName="checked">
-              <Switch checkedChildren="Показать" unCheckedChildren="Скрыть" />
+              <Switch disabled checkedChildren="Показать" unCheckedChildren="Скрыть" />
             </Form.Item>
           </div>
-          <Divider style={{ margin: "8px 0 12px", fontSize: 14 }}>Организация и биллинг</Divider>
+          <p>Смена продукта организации выполняется только отдельной миграцией.</p>
+          <Divider style={{ margin: "8px 0 12px", fontSize: 14 }}>Организация</Divider>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <Form.Item
               name="org_name"
@@ -840,6 +848,7 @@ export default function AdminOrganizationsPage() {
             <Switch checkedChildren="Активна" unCheckedChildren="Отключена" />
           </Form.Item>
 
+          {editingOrg?.site_mode !== "l4desk" && <>
           <Divider style={{ margin: "16px 0 12px", fontSize: 14 }}>
             Лицензирование и биллинг
           </Divider>
@@ -973,6 +982,8 @@ export default function AdminOrganizationsPage() {
               <Switch checkedChildren="Да" unCheckedChildren="Нет" />
             </Form.Item>
           </div>
+          </>}
+          {editingOrg?.site_mode === "l4desk" && <p>Тарифы Classic для L4Desk заморожены. Подписки настраиваются в разделе L4Desk.</p>}
         </Form>
       </Modal>
     </Card>

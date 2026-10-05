@@ -7,14 +7,14 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import exists, select
 
 from app.auth import (
     get_current_user,
 )
 from app.config import settings
 from app.database import async_session
-from app.models import Org
+from app.models import Org, Terminal
 from app.services.jwt_issuer import jwt_issuer_client
 from app.services.smartcaptcha import verify_captcha
 from app.user_store import get_user_store
@@ -564,6 +564,19 @@ async def me(user: dict = Depends(get_current_user)):
         org_timezone = "Europe/Moscow"
 
     is_su = bool(user.get("is_superuser") or user.get("role") in ("superuser", "admin"))
+    if settings.product_scope_split_enabled and is_su and site_mode == "classic":
+        async with async_session() as session:
+            dev_enrollment = await session.scalar(
+                select(
+                    exists().where(
+                        Terminal.org_id == org_id,
+                        Terminal.l4desk_subscription_enabled.is_(True),
+                    )
+                )
+            )
+        if dev_enrollment:
+            site_mode = "both"
+            l4desk_licenses_enabled = True
     expires_at = None
     exp_val = user.get("exp")
     if exp_val is not None:

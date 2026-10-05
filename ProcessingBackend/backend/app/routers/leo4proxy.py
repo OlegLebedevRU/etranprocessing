@@ -1,5 +1,7 @@
 """Terminal policy polling, including authenticated inactive terminals."""
 
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,4 +21,7 @@ async def read_policy(
     db: AsyncSession = Depends(get_db),
 ) -> Leo4ProxyPolicy:
     response.headers["Cache-Control"] = "no-store"
-    return get_leo4proxy_policy(terminal, await subscription_allowance(db, terminal))
+    at = datetime.now(UTC)
+    return get_leo4proxy_policy(
+        terminal, await subscription_allowance(db, terminal, now=at), now=at
+    )

@@ -13,6 +13,7 @@ from sqlalchemy import (
     Integer,
     SmallInteger,
     String,
+    false,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -46,6 +47,9 @@ class Terminal(Base):
     )
     org_id: Mapped[int] = mapped_column(Integer, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    l4desk_subscription_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
     timezone: Mapped[str | None] = mapped_column(
         String(64), nullable=True, default=None, server_default=None
     )
