@@ -1,5 +1,11 @@
 # L4FM improvements — implementation in progress
 
+> Финализировано 2026-10-05: серверный FM v2 выпущен, frontend polish выпущен,
+> suite1.13.1 установлена на1000007. Ниже хронологический журнал: ранние «не
+> deployed»/«pending» относятся к соответствующему этапу, а не текущему состоянию.
+> [Итоговая архитектура и незакрытые проверки](../../../docs/etran_arch-file-manager-remote-windows.md).
+
+
 ## Task intake
 - User authorised implementation of the full-stack review and selected Ant Design Explorer UI.
 - Scope: MB frontend/BFF, PB policy/metadata, app1 lease/MQTT, native l4con, l4setup/l4superv.
@@ -223,3 +229,19 @@ not repeated in this run. Existing pending_reboot warning preserved.
 Removed completed scheduled task and exact temporary S3 object version (grant
 invalidated). Signed installer retained in protected update cache. No lingering
 update task or alternate network route. Installer/agent upgrade fulfilled.
+
+## Финализация архитектуры — 2026-10-06
+
+Канонический документ FM переписан по выпущенному v2; исходный v1 сохранён в
+`docs/history/2026-10-05-file-manager-v1.md`. Обновлены карточки FM/MQTT/lease,
+индексы и статус исходного ревью. В app1 добавлен `docs/file-manager-v2.md`,
+согласованы реестр методов и правила топиков. Зафиксированы права Windows,
+неопределённый commit, границы stop ACK, маршрутизация через proxy, UI/Save As,
+проверенные версии и P0/P1/P2 развития.
+
+Проверки этой задачи: относительные ссылки изменённых Markdown существуют;
+`git diff --check` пройден в обоих проектах. Только документация: новые тесты
+приложений, сборки, broker/terminal/server probes и деплой не выполнялись.
+Невыполненные fault/soak/privilege проверки перечислены в архитектуре, прошлое
+runtime evidence не выдается за повторную проверку. Базовые ветки синхронизируются
+через PR и fast-forward; посторонние локальные файлы сохраняются.
