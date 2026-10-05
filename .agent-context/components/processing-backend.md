@@ -1,5 +1,9 @@
 # ProcessingBackend
 
+## Production 2026-10-05: разделение применено
+
+Schema031;52Classic/4L4Desk, explicit enrollment11(включая только773 вorg1), split ON обоих consumers, YooKassa OFF. License/identity fingerprints неизменны. PB234/MB700 tests, quality/build passed. [Фактический release и ограничения E2E](../tasks/active/2026-10-05-licensing-implementation.md#k10--production-завершён-2026-10-05-1224-utc). Предыдущие разделы ниже — исторические срезы.
+
 ## Актуальное состояние 2026-10-05
 
 Локальные K6/K9 завершены: additive031, explicit subscription selector, shared pure evaluator, paid-purpose PIN validation/locking, released dry-run cutover module. Classic XML/server grace/legacy nginx unchanged. Полный suite234passed/1skipped, Ruff/Pyrightpassed; реальная PostgreSQL18 migration/concurrency/idempotency проверка прошла. Production пока030, final cutover впереди. Ниже — исторические срезы. [Handoff](../tasks/active/2026-10-05-licensing-implementation.md).

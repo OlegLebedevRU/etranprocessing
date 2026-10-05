@@ -1,5 +1,9 @@
 # MenuBuilder
 
+## Production 2026-10-05: разделение применено
+
+Schema031;52Classic/4L4Desk, explicit enrollment11(включая только773 вorg1), split ON обоих consumers, YooKassa OFF. License/identity fingerprints неизменны. PB234/MB700 tests, quality/build passed. [Фактический release и ограничения E2E](../tasks/active/2026-10-05-licensing-implementation.md#k10--production-завершён-2026-10-05-1224-utc). Предыдущие разделы ниже — исторические срезы.
+
 ## Актуальное состояние 2026-10-05
 
 Локальные K2–K10 завершены: explicit product/enrollment, единая Classic certificate tariff, SU-only simulation, tenant-safe subscriptions, Classic disable/console, immutable product edits. Полный suite697passed/22skipped, Ruff/Pyrightpassed; UI build/78unit/2fake-REST Playwright passed. Bridge030/031 уже production b6772ba. Final images/cutover ещё не выпущены. Ниже — исторические срезы; актуальный контракт в [handoff](../tasks/active/2026-10-05-licensing-implementation.md).

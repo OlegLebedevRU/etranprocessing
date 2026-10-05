@@ -1,5 +1,9 @@
 # Shared DB: etranprocessing_db
 
+## Production 2026-10-05: разделение применено
+
+Schema031;52Classic/4L4Desk, explicit enrollment11(включая только773 вorg1), split ON обоих consumers, YooKassa OFF. License/identity fingerprints неизменны. PB234/MB700 tests, quality/build passed. [Фактический release и ограничения E2E](../tasks/active/2026-10-05-licensing-implementation.md#k10--production-завершён-2026-10-05-1224-utc). Предыдущие разделы ниже — исторические срезы.
+
 ## Контракт031 (2026-10-05, локально проверен)
 
 Terminal.l4desk_subscription_enabled Boolean NOT NULL DEFAULT false; migration owner PB, нет backfill. v031 snapshots/package provenance опубликованы рядом с сохранёнными v030. Pure subscription evaluator — отдельный zero-dependency etranprocessing_access, вне ORM. Shared65tests, оба backend полные проверки, l4mcp downstream21tests, реальная030→031 migration прошли. Production ещё030; старый MB bridge030/031 выложен перед финальной миграцией. [Handoff](../tasks/active/2026-10-05-licensing-implementation.md).
