@@ -1,15 +1,15 @@
 # MQTT: remote control, console и presence
 
-## Локальный кандидат FM, 2026-10-05
+## L4FM v2 — выпущенный контракт 2026-10-05
 
-RPC 7020 list / 7021 transfer / 7022 cancel / 7023 start-renew-stop;
-producer IoT и consumer l4con extra_service реализованы, live broker не проверялся.
-
-[FM](file-manager.md) использует существующий RPC transport для
-start/renew/stop/cancel и общий IoT session registry. Коды 7020–7023 сверены с исходниками и внесены во внешний method registry;
-развёртывание и live runtime delivery ещё не подтверждены. Новых топиков/presence не вводится, retain для действий false.
-Listing/progress/tickets идут через HTTPS PB, содержимое — только S3;
-ни MQTT, ни PB/IoT/MB не переносят file bytes.
+[FM](file-manager.md): start/renew через RPC7023, transfer через7021;
+list/stop — отдельные srv/{SN}/fmc и dev/{SN}/fmr, envelope v=2.
+7020/7022/7023-stop отклоняются, v1 fallback отсутствует. PB обслуживает
+readiness/session/transfer metadata, но не list. File bytes только S3 через
+Leo4Proxy на терминале. app1 binding dev.*.fmr → fm_result_v1, shared Redis
+correlation; queue name не версия wire protocol. Mosquitto contract3 имеет
+14 явных собственных routes, без wildcard. Live базовый FM flow подтверждён
+на1000007/suite1.13.0, установка1.13.1 и fresh registration проверены отдельно.
 
 ## 2026-09-30 addition
 
@@ -37,6 +37,8 @@ app1 — серверные команды/lease; l4desk — ctl/input/FFmpeg; l
 | l4con → app1 | MQTT `dev/{SN}/req` | запрос тела задачи | 0/1 | false | correlationData |
 | l4con → app1 | MQTT `dev/{SN}/res` | итог status_code, exit_code, duration_ms | 1 | false | task_id, correlationData |
 | l4con → app1/UI | MQTT `dev/{SN}/out` | stdout/stderr, data, seq, eof | 0/1 | false | session_id; volatile, не долговечный журнал |
+| app1 → l4con | MQTT `srv/{SN}/fmc` | v2 list/stop: command_id, lease_id, expiry; path/offset только list | 1 (bridge) | false | UUID + SN + lease; 7с bounded exchange |
+| l4con → app1 | MQTT `dev/{SN}/fmr` | v2 completed/failed; до64 entries/24КиБ; correlationData | 1 | false | pending до publish, first valid reply wins; stop после worker exit |
 | extra_service (l4con) → server | MQTT `dev/{SN}/svc` | svc_online / svc_offline | 1 | true | выбранный тип клиента, LWT |
 | main_app → server | MQTT `dev/{SN}/app` | app_online / app_offline | 1 | true | выбранный тип клиента, LWT |
 
@@ -50,7 +52,7 @@ wire `command_id` в `cmd_id`. Схемы console RPC отличаются: не
 - `svc_desk` — существующий отдельный ctl presence; перенос на svc конфликтует с l4con.
 - Will до CONNECT; retained online после CONNACK; offline перед DISCONNECT.
 - MQTT device identity не даёт права публиковать server-side команды; проверяй ACL направления.
-- Политика QoS/retain указана по docs; ACL и доставка runtime в этой задаче не проверены.
+- Runtime evidence ограничено указанными flow/версиями; полная ACL/fault matrix не закрыта.
 
 ## State machine
 CONNECT/Will → CONNACK → subscribe/presence → commands/results → offline/DISCONNECT;

@@ -1,5 +1,13 @@
 # Lease, watchdog и recovery
 
+## L4FM v2 — 2026-10-05
+
+Files использует этот же registry и конфликтует с console/stream/input/view даже
+для того же owner. Acquire не продлевает старую files lease. Confirmed fmc/fmr
+stop освобождает слот только после worker exit; без ACK остаётся deadline+5с.
+Redis WATCH включает active и lease hash. [Полный FM контракт](file-manager.md).
+
+
 ## Локальный кандидат FM, 2026-10-05
 
 Требование: `files` занимает ту же монопольную session IoT и несовместим с
