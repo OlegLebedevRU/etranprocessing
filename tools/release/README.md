@@ -220,4 +220,20 @@ Publication record: [1.13.0](../../artifacts/l4tools/1.13.0.json). All19 timesta
 signatures valid,128 embedded files match staging, all three complete HTTPS downloads
 verified. Setup SHA256 d9cb76c947d5358093e8b93bd4bd505259fb2987babcce705428c98184d71530.
 Commands above are preparation history; do not rerun/repack the immutable published packet.
-Terminal1000007 upgrade remains pending agent availability; publication does not prove installation.
+Operator installation on 1000007 verified via l4mcp: suite 1.13.0 ready, services running, signed binaries and explicit MQTT routes valid. Live FM navigation, transfer/hash and close/reopen passed; see the FM improvements handoff for remaining checks.
+
+
+## Prepared 1.13.1: Explorer sorting
+
+The current Prepare-FmSignedRelease.ps1 targets 1.13.1, preserving the signed
+1.13.0 baseline in its private backup. L4Con 1.12.1 sorts complete listings before
+pagination; all other payload components keep their signed baseline binaries.
+Preparation/build/tests and embedded payload verification passed. Operator signing:
+
+```powershell
+& .\tools\release\Prepare-FmSignedRelease.ps1 -Mode Sign -PfxPath $env:L4TOOLS_SIGN_PFX
+```
+
+Password comes only from L4TOOLS_SIGN_PFX_PASSWORD. Signing uses the existing
+Complete-SignedRelease.ps1 and verifies the sealed inputs. Publication and terminal
+upgrade follow only after signature and payload verification. No publication yet.

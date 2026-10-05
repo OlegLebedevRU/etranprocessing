@@ -162,7 +162,7 @@ if not "%errorlevel%"=="0" set BUILD_FAILED=1
 exit /b 0
 
 :test_fm
-cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /W4 /WX /MT /utf-8 /D_CRT_SECURE_NO_WARNINGS /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /I src /Foobj\%1\ tests\test_file_manager.c src\rpc_contract.c src\mqtt_protocol.c ..\leo4proxy\src\policy_json.c ..\l4pin\src\cert_discovery.c /link /OUT:obj\%1\test_file_manager.exe winhttp.lib crypt32.lib bcrypt.lib advapi32.lib ole32.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /W4 /WX /MT /utf-8 /D_CRT_SECURE_NO_WARNINGS /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /I src /Foobj\%1\ tests\test_file_manager.c src\rpc_contract.c src\mqtt_protocol.c ..\leo4proxy\src\policy_json.c ..\l4pin\src\cert_discovery.c /link /OUT:obj\%1\test_file_manager.exe winhttp.lib crypt32.lib bcrypt.lib advapi32.lib ole32.lib shlwapi.lib"
 if not "%errorlevel%"=="0" set BUILD_FAILED=1
 if %BUILD_FAILED% equ 0 obj\%1\test_file_manager.exe
 if not "%errorlevel%"=="0" set BUILD_FAILED=1

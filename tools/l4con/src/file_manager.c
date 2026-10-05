@@ -15,6 +15,7 @@
 #include "../../leo4proxy/src/policy_json.h"
 #include "../../l4pin/src/cert_discovery.h"
 #include <winhttp.h>
+#include <shlwapi.h>
 #include <objbase.h>
 #include <wincrypt.h>
 #include <bcrypt.h>
@@ -194,34 +195,56 @@ static bool quote(const wchar_t* wide,char* target,size_t capacity) {
 static bool private_name(const wchar_t* name);
 static bool transfer_alive(void);
 
+/* Bound worker memory; never return a partially sorted listing. */
+#define FM_MAX_DIRECTORY_ENTRIES 65536u
+static int entry_order(const void* left,const void* right) {
+    const WIN32_FIND_DATAW* a=(const WIN32_FIND_DATAW*)left;
+    const WIN32_FIND_DATAW* b=(const WIN32_FIND_DATAW*)right;
+    bool ad=(a->dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)!=0;
+    bool bd=(b->dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)!=0;
+    if(ad!=bd)return ad?-1:1;
+    int order=StrCmpLogicalW(a->cFileName,b->cFileName);
+    return order?order:wcscmp(a->cFileName,b->cFileName);
+}
 static bool list_directory(const char* path,unsigned offset,char* result,size_t capacity) {
     wchar_t wide[1024],pattern[1030];HANDLE handles[128];unsigned count=0;
     if (!MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,path,-1,wide,1024)) return false;
     bool impersonated=user_enter();
     bool ok=impersonated && open_directory(wide,handles,&count);HANDLE find=INVALID_HANDLE_VALUE;
-    size_t used=0;unsigned entries=0,visible=0;bool more=false;
+    WIN32_FIND_DATAW* items=NULL;unsigned total=0,allocated=0;
     if (ok) {
         swprintf_s(pattern,1030,L"%s\\*",wide);WIN32_FIND_DATAW entry;
         find=FindFirstFileW(pattern,&entry);
         if (find==INVALID_HANDLE_VALUE && GetLastError()!=ERROR_FILE_NOT_FOUND) ok=false;
-        used=(size_t)snprintf(result,capacity,"{\"state\":\"completed\",\"entries\":[");
         if (find!=INVALID_HANDLE_VALUE) do {
-            if (!wcscmp(entry.cFileName,L".") || !wcscmp(entry.cFileName,L"..")) continue;
             if (!transfer_alive()) {ok=false;break;}
-            /* Hide reparse entries and private credential material. */
+            if (!wcscmp(entry.cFileName,L".") || !wcscmp(entry.cFileName,L"..")) continue;
             const wchar_t* extension=wcsrchr(entry.cFileName,L'.');
             if (private_name(entry.cFileName) || entry.dwFileAttributes&FILE_ATTRIBUTE_REPARSE_POINT ||
                 (extension && (!_wcsicmp(extension,L".key") || !_wcsicmp(extension,L".pfx") || !_wcsicmp(extension,L".p12") || !_wcsicmp(extension,L".pem"))) || !_wcsicmp(entry.cFileName,L".env")) continue;
-            if(++visible<=offset)continue;
-            if(entries==64) {more=true;break;}entries++;
-            char name[8192];if (!quote(entry.cFileName,name,sizeof(name))) {ok=false;break;}
-            unsigned long long size=((unsigned long long)entry.nFileSizeHigh<<32)|entry.nFileSizeLow;
-            int added=snprintf(result+used,capacity-used,"%s{\"name\":%s,\"directory\":%s,\"size_bytes\":%llu}",result[used-1]=='['?"":",",name,entry.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY?"true":"false",size);
-            if (added<0 || (size_t)added>=capacity-used) {ok=false;break;}used+=(size_t)added;
+            if(total==FM_MAX_DIRECTORY_ENTRIES) {ok=false;break;}
+            if(total==allocated) {
+                unsigned next=allocated?allocated*2:256;
+                WIN32_FIND_DATAW* grown=(WIN32_FIND_DATAW*)realloc(items,next*sizeof(*items));
+                if(!grown) {ok=false;break;}items=grown;allocated=next;
+            }
+            items[total++]=entry;
         } while (FindNextFileW(find,&entry));
-        if (find!=INVALID_HANDLE_VALUE && ok && !more && GetLastError()!=ERROR_NO_MORE_FILES) ok=false;
-        if (ok && used+22<capacity) {snprintf(result+used,capacity-used,"],\"has_more\":%s}",more?"true":"false");}else ok=false;
+        if (find!=INVALID_HANDLE_VALUE && ok && GetLastError()!=ERROR_NO_MORE_FILES) ok=false;
+        if(ok && total>1)qsort(items,total,sizeof(*items),entry_order);
+        if(ok && !transfer_alive())ok=false;
+        size_t used=(size_t)snprintf(result,capacity,"{\"state\":\"completed\",\"entries\":[");
+        if(used>=capacity)ok=false;
+        unsigned end=offset<total?offset+((total-offset)>64?64:total-offset):total;
+        for(unsigned i=offset;ok && i<end;i++) {
+            char name[8192];if (!quote(items[i].cFileName,name,sizeof(name))) {ok=false;break;}
+            unsigned long long size=((unsigned long long)items[i].nFileSizeHigh<<32)|items[i].nFileSizeLow;
+            int added=snprintf(result+used,capacity-used,"%s{\"name\":%s,\"directory\":%s,\"size_bytes\":%llu}",i==offset?"":",",name,items[i].dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY?"true":"false",size);
+            if (added<0 || (size_t)added>=capacity-used) {ok=false;break;}used+=(size_t)added;
+        }
+        if (ok && used+22<capacity)snprintf(result+used,capacity-used,"],\"has_more\":%s}",end<total?"true":"false");else ok=false;
     }
+    free(items);
     if (find!=INVALID_HANDLE_VALUE) FindClose(find);
     for (unsigned i=0;i<count;i++) CloseHandle(handles[i]);
     if(impersonated)RevertToSelf();return ok;

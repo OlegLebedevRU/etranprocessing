@@ -1,0 +1,15 @@
+.fm-tree .ant-tree-node-content-wrapper {
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
+  overflow: hidden;
+  flex: 1;
+}
+.fm-tree .ant-tree-title {
+  min-width: 0;
+  overflow: hidden;
+  flex: 1;
+}
+.fm-tree .ant-tree-iconEle {
+  flex: none;
+}

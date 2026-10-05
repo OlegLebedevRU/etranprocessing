@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type Key } from "react";
-import { Alert, Breadcrumb, Button, Card, Col, Empty, Input, Modal, Row, Space, Spin, Table, Tag, Tree, Typography, Upload } from "antd";
+import { Alert, Badge, Breadcrumb, Button, Card, Col, Empty, Input, Modal, Row, Space, Spin, Table, Tag, Tree, Typography, Upload } from "antd";
 import { ArrowLeftOutlined, ArrowRightOutlined, ArrowUpOutlined, DesktopOutlined, DownloadOutlined, FolderOutlined, HddOutlined, HomeOutlined, ReloadOutlined, UploadOutlined } from "@ant-design/icons";
 import { useSession } from "../../session/SessionContext";
 import { getDevices, type DeviceListItem } from "../../api/devices";
@@ -7,6 +7,8 @@ import { listTerminalsSettings } from "../../api/settings";
 import { selectableDevices } from "../../utils/terminalPresentation";
 import { fmApi, fmError, fmRetryAfter, fmReason, fmStorage, MAX_FM_BYTES, type FmEntry, type FmOperation, type FmReadiness } from "../../api/fileManager";
 import { fmJoin, fmParent, fmWithinRoot } from "./navigation";
+import { chooseDownloadTarget, saveVerifiedDownload } from "./saveDownload";
+import "./files.css";
 
 const { Text, Title } = Typography;
 type Active = { device: number; lease: string; abort: AbortController; operation?: string; expiresAt: number };
@@ -56,7 +58,7 @@ export default function FilesPage() {
 }
 
 function TenantFiles({ org }: { org: number }) {
-  const [devices, setDevices] = useState<DeviceListItem[]>([]);
+  const [devices, setDevices] = useState<(DeviceListItem & { terminalAddress?: string })[]>([]);
   const [availability, setAvailability] = useState<Record<number, FmReadiness>>({});
   const [device, setDevice] = useState<number>();
   const [roots, setRoots] = useState<Record<number, string[]>>({});
@@ -153,7 +155,7 @@ function TenantFiles({ org }: { org: number }) {
         for (let page = 2; page <= first.pages; page++) items.push(...(await getDevices(org, { page, size: 100 })).items);
         const online = selectableDevices(items, terminals.items).filter(item => item.status === "online");
         if (controller.signal.aborted) return;
-        setDevices(online); setLoading(false);
+        setDevices(online.map(item => ({ ...item, terminalAddress: terminals.items.find(terminal => terminal.device_id === item.device_id)?.address || undefined }))); setLoading(false);
         // Bounded concurrency; readiness inspection never acquires a session.
         let index = 0;
         await Promise.all(Array.from({ length: Math.min(4, online.length) }, async () => {
@@ -270,9 +272,17 @@ function TenantFiles({ org }: { org: number }) {
     transferRef.current = true; setPending(true); setError(""); setNotice("");
     setTransfer({ name: file?.name || target.split("\\").pop() || target, phase: "Подготовка и проверка файла…", closing: false });
     const step = (value: string) => { if (current.current === active) setTransfer(old => old && { ...old, phase: value }); };
-    const signal = AbortSignal.any([active.abort.signal, AbortSignal.timeout(90000)]);
-    const api = fmApi(active.device, view.current, signal);
     try {
+      const name = target.split("\\").pop() || "download";
+      const destination = kind === "download" ? await chooseDownloadTarget(name) : undefined;
+      if (current.current !== active) return;
+      active.abort.signal.throwIfAborted();
+      if (destination === null) {
+        setTransfer(undefined); transferRef.current = false; setPhase("Скачивание отменено");
+        return;
+      }
+      const signal = AbortSignal.any([active.abort.signal, AbortSignal.timeout(90000)]);
+      const api = fmApi(active.device, view.current, signal);
       const operation = await api.create(active.lease, kind, target); active.operation = operation.id;
       if (kind === "upload" && file) {
         const sha = await digest(file, signal); const grant = await api.manifest(operation.id, file.size, sha);
@@ -300,11 +310,14 @@ function TenantFiles({ org }: { org: number }) {
         await api.received(operation.id, size, sha);
         if (current.current !== active) return;
         active.operation = undefined;
-        const url = URL.createObjectURL(blob); const link = document.createElement("a");
-        link.href = url; link.download = target.split("\\").pop() || "download"; link.click();
-        setTimeout(() => URL.revokeObjectURL(url), 10000);
+        step("Сохранение проверенного файла…");
+        try { await saveVerifiedDownload(blob, name, destination, signal); }
+        catch {
+          if (current.current === active) setTransfer(old => old && { ...old, result: "Файл получен и проверен, но сохранить его не удалось. Проверьте доступ к выбранной папке и свободное место; затем повторите скачивание." });
+          return;
+        }
       }
-      if (mounted.current) { setTransfer(undefined); transferRef.current = false; setPhase("Файл проверен и передан"); }
+      if (mounted.current && current.current === active) { setTransfer(undefined); transferRef.current = false; setPhase("Файл проверен и передан"); }
     } catch (failure) { if (current.current === active) await fail(failure); }
     finally { setPending(false); }
   };
@@ -319,12 +332,18 @@ function TenantFiles({ org }: { org: number }) {
   };
 
   const selectedRoot = (device && roots[device]?.find(root => fmWithinRoot(path, [root]))) || "";
-  const treeData = [{ key: "all", title: "Обзор парка", icon: <HomeOutlined />, isLeaf: true }, ...devices.filter(item => `${item.device_id} ${item.description || ""}`.toLowerCase().includes(search.toLowerCase())).map(item => {
+  const treeData = [{ key: "all", title: "Обзор парка", icon: <HomeOutlined />, isLeaf: true }, ...devices.filter(item => `${item.device_id} ${item.description || ""} ${item.terminalAddress || ""}`.toLowerCase().includes(search.toLowerCase())).map(item => {
     const ready = availability[item.device_id];
     const remaining = Math.max(0, Math.ceil(((drains[item.device_id] || 0) - now) / 1000));
+    const status = remaining ? `Завершение ${remaining} с` : ready ? (fmReason[ready.state] || ready.state) : "Проверка…";
+    const usable = ready?.available && ready.compatible && ready.mqtt_available && !remaining;
     return {
       key: `t:${item.device_id}`, icon: <DesktopOutlined />, isLeaf: false,
-      title: <span title={item.description}><strong>{item.device_id}</strong> <Text type="secondary">{remaining ? `завершение ${remaining} с` : ready ? (fmReason[ready.state] || ready.state) : "проверка…"}</Text></span>,
+      title: <span style={{ display: "block", maxWidth: "100%" }}>
+        <span title={status}><strong>{item.device_id}</strong> <span role="img" aria-label={status}><Badge status={usable ? "success" : remaining || !ready ? "processing" : "warning"} /></span></span>
+        {item.terminalAddress && <Text type="secondary" title={item.terminalAddress} style={{ display: "block", paddingLeft: 12, fontSize: 11, lineHeight: "16px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.terminalAddress}</Text>}
+        {!usable && <Text type="secondary" style={{ display: "block", fontSize: 11 }}>{status}</Text>}
+      </span>,
       disabled: remaining > 0,
       children: roots[item.device_id]?.map(root => ({ key: `d:${item.device_id}:${root}`, title: root, icon: <HddOutlined />, isLeaf: true })),
     };
@@ -344,16 +363,16 @@ function TenantFiles({ org }: { org: number }) {
     {error && <Alert type="error" title={error} showIcon closable onClose={() => setError("")} />}
     {notice && <Alert type="info" title={notice} showIcon closable onClose={() => setNotice("")} />}
     <Row gutter={[16, 16]} style={{ width: "100%", margin: 0 }}>
-      <Col xs={24} md={8} lg={6}>
+      <Col xs={24} md={{ flex: "232px" }} style={{ minWidth: 0 }}>
         <Card title="Терминалы и диски" size="small" style={{ minHeight: 520 }} loading={loading}>
-          <Input.Search aria-label="Поиск терминала" placeholder="Номер или название" value={search} onChange={event => setSearch(event.target.value)} disabled={navigationDisabled} style={{ marginBottom: 16 }} />
-          {!devices.length ? <Empty description="Нет онлайн-терминалов" /> : <Tree blockNode showIcon showLine={{ showLeafIcon: false }} disabled={navigationDisabled}
+          <Input.Search aria-label="Поиск терминала" placeholder="Номер или адрес" value={search} onChange={event => setSearch(event.target.value)} disabled={navigationDisabled} style={{ marginBottom: 16 }} />
+          {!devices.length ? <Empty description="Нет онлайн-терминалов" /> : <Tree className="fm-tree" blockNode showIcon showLine={{ showLeafIcon: false }} disabled={navigationDisabled}
             treeData={treeData} expandedKeys={expanded} selectedKeys={[device ? selectedRoot ? `d:${device}:${selectedRoot}` : `t:${device}` : "all"]}
             onSelect={keys => { if (keys[0] !== undefined) onNode(String(keys[0])); }}
             onExpand={(keys, info) => { setExpanded(keys); if (info.expanded && String(info.node.key).startsWith("t:")) onNode(String(info.node.key)); }} />}
         </Card>
       </Col>
-      <Col xs={24} md={16} lg={18}>
+      <Col xs={24} md={{ flex: "1" }} style={{ minWidth: 0 }}>
         <Card size="small" style={{ minHeight: 520 }} title={<Breadcrumb items={crumbs} />} extra={connected && <Tag color="blue">Монопольный сеанс</Tag>}>
           <Space wrap style={{ marginBottom: 16 }}>
             <Button aria-label="Назад" icon={<ArrowLeftOutlined />} disabled={navigationDisabled || !connected || historyIndex === 0} onClick={() => void browse(history[historyIndex - 1], 0, historyIndex - 1)} />
@@ -375,17 +394,17 @@ function TenantFiles({ org }: { org: number }) {
             ]} /> : !path ? <Space orientation="vertical">
             {localRoots.length ? localRoots.map(root => <Button key={root} icon={<HddOutlined />} disabled={navigationDisabled} onClick={() => void browse(root)}>{root}</Button>) : <Empty description="Нет доступных дисков или каталогов" />}
           </Space> : <>
-            <Table<FmEntry> size="small" rowKey="name" dataSource={entries} loading={busy && !transfer} pagination={false}
+            <Table<FmEntry> size="small" style={{ maxWidth: 560 }} tableLayout="fixed" scroll={{ x: 520 }} rowKey="name" dataSource={entries} loading={busy && !transfer} pagination={false}
               rowSelection={{ type: "radio", selectedRowKeys: selectedFile ? [selectedFile] : [], onChange: keys => setSelectedFile(String(keys[0] || "")), getCheckboxProps: () => ({ disabled: navigationDisabled }) }}
-              onRow={item => ({ onDoubleClick: () => { if (item.directory && !navigationDisabled) void browse(fmJoin(path, item.name)); }, onKeyDown: event => { if (event.key === "Enter" && item.directory && !navigationDisabled) void browse(fmJoin(path, item.name)); }, tabIndex: navigationDisabled ? -1 : 0 })}
+              onRow={item => ({ style: { cursor: item.directory && !navigationDisabled ? "pointer" : undefined }, onDoubleClick: () => { if (item.directory && !navigationDisabled) void browse(fmJoin(path, item.name)); }, onKeyDown: event => { if (event.key === "Enter" && item.directory && !navigationDisabled) void browse(fmJoin(path, item.name)); }, tabIndex: navigationDisabled ? -1 : 0 })}
               columns={[
-                { title: "Имя", dataIndex: "name", render: (name: string, item: FmEntry) => <Space>{item.directory && <FolderOutlined />}<span>{name}</span></Space> },
-                { title: "Размер", dataIndex: "size_bytes", render: (size: number, item: FmEntry) => item.directory ? "—" : `${size.toLocaleString()} байт` },
-                { title: "", key: "actions", render: (_, item) => !item.directory && <Button icon={<DownloadOutlined />} disabled={navigationDisabled || item.size_bytes > MAX_FM_BYTES} onClick={() => void transferFile("download", fmJoin(path, item.name))}>Скачать</Button> },
+                { title: "Имя", dataIndex: "name", width: 260, ellipsis: true, render: (name: string, item: FmEntry) => <span title={name} style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.directory && <FolderOutlined style={{ marginRight: 8 }} />}{name}</span> },
+                { title: "Размер", dataIndex: "size_bytes", width: 100, align: "right", render: (size: number, item: FmEntry) => item.directory ? "—" : `${size.toLocaleString()} байт` },
+                { title: "", key: "actions", width: 128, render: (_, item) => !item.directory && <Button icon={<DownloadOutlined />} disabled={navigationDisabled || item.size_bytes > MAX_FM_BYTES} onClick={() => void transferFile("download", fmJoin(path, item.name))}>Скачать</Button> },
               ]} />
             <Space style={{ marginTop: 12 }}>
               <Button disabled={navigationDisabled || offset === 0} onClick={() => void browse(path, Math.max(0, offset - 64))}>Предыдущая страница</Button>
-              <Text>{offset + 1}–{offset + entries.length}</Text>
+              <Text>{entries.length ? offset + 1 : 0}–{offset + entries.length}</Text>
               <Button disabled={navigationDisabled || !more} onClick={() => void browse(path, offset + 64)}>Следующая страница</Button>
             </Space>
           </>}
