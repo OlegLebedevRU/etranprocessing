@@ -95,6 +95,7 @@
 - **[`ops_run-git-and-release-flow.md`](ops_run-git-and-release-flow.md)** — Выбор базовой ветки, вход в GitHub из нужного профиля Windows, builder/registry/production и безопасная очистка локальных копий.
 - **[`ops_net-nginx-config-guide.md`](ops_net-nginx-config-guide.md)** — Справочник конфигурации Nginx: взаимная TLS-аутентификация (порт 4443), проксирование заголовков сертификатов, JWT-терминация (порт 443).
 - **[`ops_net-infrastructure-connections.md`](ops_net-infrastructure-connections.md)** — Инфраструктурный справочник: сетевые адреса целевого сервера (`87.242.100.34`), Managed PostgreSQL (`10.0.0.7`), порты, параметры БД и окружений.
+- **[`ops_run-l4tools-update-via-l4mcp.md`](ops_run-l4tools-update-via-l4mcp.md)** — Проверенное обновление подписанной suite через l4mcp: точный промпт, S3 → Leo4Proxy, независимая SYSTEM-задача, проверка результата, границы атомарности и восстановление после потери ACK.
 - **[`ops_run-remote-console-diagnostics.md`](ops_run-remote-console-diagnostics.md)** — Регламент удаленной диагностики терминалов и серверов через SSH, MQTT-каналы и операции с MCP Ops сервером (`server-ops`).
 
 ---

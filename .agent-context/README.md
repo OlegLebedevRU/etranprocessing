@@ -37,6 +37,8 @@ Skills описывают **как работать**, карточки — **ч
 
 - [File manager](contracts/file-manager.md) — FM v2 server deployed; suite1.13.0 signed/published, separate fmc/fmr and Explorer UI. Suite installed on 1000007; live v2 navigation, transfer/hash and close/reopen verified. Fault/soak matrix pending.
 
+- [Обновление L4 Tools через l4mcp](../docs/ops_run-l4tools-update-via-l4mcp.md) — точный промпт и этапы; runtime 1000007, 1.13.0 → 1.13.1. Сначала reconcile существующей задачи, затем запуск; все terminal HTTP через Leo4Proxy.
+
 ## Каталог skills
 Каждый навык хранится как `.claude/skills/<name>/SKILL.md` с `name`/`description`.
 В JetBrains открывай нужный файл по ссылке; автоматическая загрузка не предполагается.

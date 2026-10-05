@@ -244,3 +244,11 @@ upgrade follow only after signature and payload verification. No publication yet
 Setup ready/exit0, all services running; signed L4Con 1.12.1 and fresh PB v2
 registration verified. One-shot update task and temporary S3 object removed.
 The signed 1.13.1 packet is immutable; do not prepare or rebuild it again.
+
+
+## Установка опубликованной suite через l4mcp
+
+[Runbook и точный промпт агенту](../../docs/ops_run-l4tools-update-via-l4mcp.md).
+Подпись/публикация и установка — отдельные этапы. Установщик доставляется через
+приватный S3/Leo4Proxy и запускается независимой SYSTEM-задачей; повторный запуск
+после потери ответа допускается только после выяснения состояния прежней задачи.
