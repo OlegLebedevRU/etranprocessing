@@ -57,7 +57,7 @@ services:
     environment:
       LEO4PROXY_ENDPOINTS: ${LEO4PROXY_ENDPOINTS:-}
       LEO4PROXY_ENDPOINTS_TTL_SECONDS: ${LEO4PROXY_ENDPOINTS_TTL_SECONDS:-86400}
-    image: dev-leo4-ru.cr.cloud.ru/etran/processingbackend@sha256:d7f59a27d9dd1847c929807dbad9625ede58177c3227894fd16cd475c222906a
+    image: dev-leo4-ru.cr.cloud.ru/etran/processingbackend@sha256:bdf0dba2fb8b07d544b222e7b63796423721a032aebd5ed31a26f56eb30b20ed
     container_name: processing-backend
     restart: always
     env_file:
@@ -76,7 +76,7 @@ services:
       MENUBUILDER_API_URL: ${L4MCP_MENUBUILDER_API_URL:-}
 
   menubuilder-backend:
-    image: dev-leo4-ru.cr.cloud.ru/etran/menubuilder-backend@sha256:9091f3ec30302ca91e3d7d26c81fd62c13ba062ef4929e49333f72b6f0f592a5
+    image: dev-leo4-ru.cr.cloud.ru/etran/menubuilder-backend@sha256:3e9252adb042dfd4ac1abc2f51868373a7a85d7d5a1de5c3076819617a4114cb
     container_name: menubuilder-backend
     restart: always
     env_file:
@@ -86,7 +86,7 @@ services:
       L4MCP_URL: ${L4MCP_URL:-}
 
   app1:
-    image: dev-leo4-ru.cr.cloud.ru/etran/app1@sha256:0b51e5b174ce37087cd4f6b1a89291ae72361e2b65c0fe9c73052fe700085d74
+    image: dev-leo4-ru.cr.cloud.ru/etran/app1@sha256:1547da7ced049cfcf23f1b002d81a3a4aafb35961ec5663cc26f85c8d4120059
     container_name: app1
     restart: always
     env_file:
