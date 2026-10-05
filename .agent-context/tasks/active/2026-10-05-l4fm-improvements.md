@@ -108,3 +108,72 @@ MB full rerun: 707 passed/22 skipped. Operator signed1.13.0; 19 EXEs valid with 
   Subsequent preflights reported terminal online but svc_online=false (l4con_offline).
   No download/task/install was dispatched. User asked asynchronously to inspect local services.
   Never bypass preflight or send commands through another terminal. Continue update on recovery.
+
+
+## Live acceptance on 1000007 after operator installation
+
+2026-10-05 20:00–20:08 UTC: operator installed suite 1.13.0 after removing
+antivirus that had intercepted L4Con. l4mcp preflight ready; signed L4Con 1.12.0,
+L4Superv 1.11.0 verified. L4Con/L4Superv/Leo4Proxy/Mosquitto running. Installer
+summary target/installed 1.13.0, ready/exit 0, no rollback; certificate reused,
+desktop agent and input available. Mosquitto contract 3 has 14 explicit own-SN
+routes including fmc/fmr, no wildcard.
+
+Live browser under authorised test account, L4Desk /files:
+- Initial Обзор парка has no session; terminal 1000007 shown ready.
+- Start returned active with C:, D:, G: roots.
+- C:\, C:\l4tools\fm, parent C:\l4tools, parent C:\ navigation succeeded;
+  renew/status remained healthy, no connection-lost error.
+- Uploaded 45-byte fm-check-20261005.txt; modal disabled navigation, committed
+  file appeared automatically without manual refresh.
+- Download completed; local original and downloaded SHA256 both
+  cd6b99af6c1b56604e779816ed9f58bb9a11c32dba4df2a99efd12df339f3462.
+- Home closed first lease; immediate second start succeeded; home closed again.
+  Subsequent console session admitted, demonstrating release of exclusive slot.
+- Cleanup of the exact hash-guarded test file through l4mcp was BLOCKED by command
+  security policy (exit 126). No bypass attempted. File remains at
+  C:\l4tools\fm\fm-check-20261005.txt; operator cleanup needed.
+- Test account logged out and browser closed. No new tool build/publication.
+
+This proves the basic live v2 navigation/transfer/close path on this terminal;
+full fault/soak matrix, privileged-read and user-token security acceptance, and
+Classic live UI remain unverified in this run.
+
+
+## Follow-up: Save As and Explorer presentation
+
+Task intake: frontend owns destination selection/rendering; l4con owns the complete
+sorted directory listing before MQTT pagination. PB/IoT/MB API contracts unchanged.
+No bytes through servers; checksum validation precedes local write, uploads remain
+ordinary-user only, no automatic transfer retry. Applied intake, frontend safety
+and native-windows-tool-change skills; extra_service choice remains authorised.
+
+Implemented native Save As on the initiating click, with browser-download fallback
+only for missing API or explicit blocked/unsupported picker. AbortError cancels
+without creating a transfer (also avoids bypassing sensitive-path denial). Local
+write/close failures abort the writable and report failure, never silently switch
+destination. Transfer timeout starts after the picker returns; lease renew continues.
+Navigation remains modal until save completion/result acknowledgement.
+
+Tree uses fixed 232px desktop column (including gutter), compact readiness badge,
+address from terminal settings with ellipsis/tooltip and an indented second line;
+search includes address. Nonready reasons remain visible. Folder rows use pointer.
+File table max 560px with bounded name/size/action columns and full-name tooltip.
+
+L4Con 1.12.1 sorts folders then files, StrCmpLogicalW name comparison with stable
+case-sensitive tie-break, before the 64-entry slice. Enumeration memory capped at
+65,536 visible entries (about 39 MiB); allocation/scan/limit failure returns no
+partial listing. Directory changes between requests are not a snapshot guarantee.
+Worker cancellation and owned Job termination remain in force. x86/x64 builds and
+native tests passed, including 130 shuffled entries spanning a page boundary.
+
+Suite 1.13.1 prepared from verified signed 1.13.0 baseline, which was backed up.
+Only L4Con and setup require new signatures; other payload binaries preserved.
+Setup regressions/build x86/x64 and 128 embedded file comparisons passed.
+Signing pending; do not publish unsigned packet or republish 1.13.0.
+Frontend 88 unit tests passed; initial browser run found a test-fixture collision
+with read-only window.closed (fixed to saveClosed). Next run 10 passed and Edge
+exited at newContext for unsupported test; isolated unsupported run passed.
+Final visual/build verification and frontend deployment recorded below when complete.
+[MCP Ops Readiness: UNAVAILABLE] connector absent; SSH resources healthy:
+production available RAM2124MiB/root50%/load0.05; builder2741MiB/root61%/load0.00.

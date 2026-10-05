@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 
 async function portal(page: Page, profile: "classic" | "l4desk", available = true, conflict = false) {
+  await page.addInitScript(() => Object.defineProperty(window, "showSaveFilePicker", { value: undefined, configurable: true }));
   const calls: Array<{path: string; method: string; body: any}> = [];
   const operations = new Map<string, any>();
   const fixtures = [10, 11];
@@ -12,7 +13,7 @@ async function portal(page: Page, profile: "classic" | "l4desk", available = tru
     let data: any = {};
     if (path === "/api/auth/me") data = { username: "fixture", org_id: 7, role_id: 3, is_superuser: false, site_mode: "both", timezone: "UTC", permissions: ["*"], session_id: "fixture-browser" };
     if (path === "/api/admin/tenants/available") data = [];
-    if (path === "/api/settings/terminals") data = { items: fixtures.map(id => ({ id, device_id: id, sn: `fixture${id}`, is_active: true })), total_count: 2 };
+    if (path === "/api/settings/terminals") data = { items: fixtures.map(id => ({ id, device_id: id, sn: `fixture${id}`, is_active: true, address: "ул. Тестовая, 15, помещение 10" })), total_count: 2 };
     if (path.includes("/internal/v1/devices")) data = { items: fixtures.map(id => ({ id, device_id: id, sn: `fixture${id}`, device_tags: [], connection: { device_id: id, last_checked_result: true, svc_connect: true, is_svc_available: true } })), pages: 1, total: 2 };
     if (path.endsWith("/readiness")) data = { state: available ? "ready" : "incompatible", available, compatible: available, mqtt_available: true, write_available: true, capabilities: ["fs.mqtt_navigation", "fs.write_user"], server_time: new Date().toISOString(), valid_until: new Date(Date.now() + 45000).toISOString(), missing_capabilities: [] };
     if (path.endsWith("/sessions") && request.method() === "POST") {
@@ -118,4 +119,41 @@ test("modal transfer blocks navigation and corrupt S3 data closes exactly once",
   expect(calls.filter(call => call.body?.action === "stop")).toHaveLength(0);
   await page.getByRole("button", { name: "Понятно" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+
+test("save picker cancellation sends no transfer and keeps session usable", async ({ page }) => {
+  const calls = await portal(page, "l4desk"); await openDisk(page);
+  await expect(page.getByRole("row", { name: /Reports/ })).toHaveCSS("cursor", "pointer");
+  await page.evaluate(() => Object.defineProperty(window, "showSaveFilePicker", { configurable: true, value: async () => { throw new DOMException("Cancelled", "AbortError"); } }));
+  await page.getByRole("button", { name: "Скачать", exact: false }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("status")).toHaveText("Скачивание отменено");
+  expect(calls.some(call => call.path.endsWith("/operations") && call.method === "POST")).toBe(false);
+  await expect(page.getByText("Монопольный сеанс", { exact: true })).toBeVisible();
+});
+
+
+for (const mode of ["picker", "blocked", "unsupported"] as const) test(`verified download saves with ${mode}`, async ({ page }) => {
+  await portal(page, "l4desk"); await openDisk(page);
+  await page.evaluate(mode => {
+    const state = window as any;
+    state.saved = ""; state.saveClosed = false;
+    if (mode === "picker") Object.defineProperty(window, "showSaveFilePicker", { configurable: true, value: async () => ({ createWritable: async () => ({ write: async (blob: Blob) => { state.saved = await blob.text(); }, close: async () => { state.saveClosed = true; }, abort: async () => {} }) }) });
+    if (mode === "blocked") Object.defineProperty(window, "showSaveFilePicker", { configurable: true, value: async () => { throw new DOMException("Blocked", "SecurityError"); } });
+  }, mode);
+  const sha = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+  await page.route("https://storage.example.invalid/**", route => route.fulfill({ body: "abc", headers: { "Access-Control-Allow-Origin": "*" } }));
+  await page.route("**/api/file-manager/v1/devices/10/operations/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.includes("22222222")) { await route.fallback(); return; }
+    if (path.endsWith("/download")) { await route.fulfill({ json: { url: "https://storage.example.invalid/object", headers: {}, size_bytes: 3, sha256: sha } }); return; }
+    await route.fulfill({ json: { state: "verifying", size_bytes: 3, sha256: sha } });
+  });
+  const download = mode === "picker" ? undefined : page.waitForEvent("download");
+  await page.getByRole("button", { name: "Скачать", exact: false }).click();
+  await expect(page.getByRole("status")).toHaveText("Файл проверен и передан");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  if (mode === "picker") expect(await page.evaluate(() => ({ saved: (window as any).saved, closed: (window as any).saveClosed }))).toEqual({ saved: "abc", closed: true });
+  else expect((await download!).suggestedFilename()).toBe("report.txt");
 });

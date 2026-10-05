@@ -37,6 +37,20 @@ static bool junction(const wchar_t* alias,const wchar_t* target) {
     if(handle!=INVALID_HANDLE_VALUE)CloseHandle(handle);return ok;
 }
 int main(void) {
+    /* Cross a 64-entry page boundary: directories always precede files,
+       regardless of enumeration order; numeric names use Explorer ordering. */
+    WIN32_FIND_DATAW sorted[130]={0};
+    for(unsigned i=0;i<130;i++) {
+        sorted[i].dwFileAttributes=i%2?FILE_ATTRIBUTE_DIRECTORY:FILE_ATTRIBUTE_NORMAL;
+        swprintf_s(sorted[i].cFileName,MAX_PATH,L"item%u",64-i/2);
+    }
+    qsort(sorted,130,sizeof(*sorted),entry_order);
+    assert(!wcscmp(sorted[2].cFileName,L"item2"));
+    assert(!wcscmp(sorted[10].cFileName,L"item10"));
+    assert(sorted[64].dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY);
+    assert(!(sorted[65].dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY));
+    assert(!wcscmp(sorted[65].cFileName,L"item0"));
+    assert(!wcscmp(sorted[129].cFileName,L"item64"));
     char* response=NULL;fm.proxy_port=18443;strcpy_s(fm.instance,sizeof(fm.instance),"fixture");
     strcpy_s(fm.api,sizeof(fm.api),"https://pb.example/api/file-manager/v1/agent");
     assert(!api("/hello","{}",&response) && open_count==0);
