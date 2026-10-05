@@ -1,6 +1,7 @@
 # FM: удалённые файлы Windows — архитектура и реализация
 
-Обновлено: 2026-10-05. Статус: **серверная часть развёрнута в production; агент подготовлен к подписи, живой terminal E2E не выполнен**.
+Обновлено: 2026-10-05. Статус: **серверная часть развёрнута в production; l4tools 1.12.1 подписан и опубликован, установка и живой FM terminal E2E не подтверждены**.
+Пакет и контрольные суммы: [publication record](../artifacts/l4tools/1.12.1.json).
 Фактические версии, проверки и ограничения: [production handoff](../.agent-context/tasks/active/2026-10-05-file-manager-production.md).
 Исходная ветка etranprocessing: `feat/rpc7011-renewal`, baseline `d8719971fa143cd2e5b8a191adb43681a3f23aba`.
 IoT сверён с `origin/master` (`8c2be80`); изменения изолированы в ветке `feature/file-manager`,

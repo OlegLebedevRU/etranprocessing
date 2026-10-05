@@ -171,7 +171,13 @@ verifies payload/signatures/timestamps and preserved component bytes, and synchr
 signed l4con binaries into build-output paths. Publication is separate. Do not rebuild
 components after signing. FM root/API configuration is also separate from signing.
 
-## FM automatic installation / proxy transport 1.12.1
+## FM automatic installation / proxy transport 1.12.1 (published)
+
+[Publication record](../../artifacts/l4tools/1.12.1.json): all19 timestamped signed EXEs valid,
+all130 embedded files match staging; all three complete HTTPS downloads verified.
+Setup SHA256 `838615b489a3cf7fa344e4244c63d145ee34772d3cc747dbf2e70d926a71adaa`.
+Preparation/signing steps below are historical; do not rerun against this published packet.
+Embedded README snapshots remain immutable. Installation and live terminal FM E2E remain open.
 
 Signed1.12.0 is preserved in the ignored runtime backup. Prepare now requires that signed baseline,
 updates only leo4proxy1.8.3/l4con1.11.1, builds/tests setup1.12.1 for x86/x64 and seals a new packet.
@@ -181,7 +187,7 @@ PB metadata uses loopback HTTP→proxy mTLS; storage uses restricted HTTPS CONNE
 proxy, without client certificate or bypass. PB policy provides the exact S3 host/port. Common
 MQTT/RTP/FM deny closes active storage sockets; absent/stale routing fails closed. PB requires fs.proxy.
 
-After preparation, from this worktree:
+Historical signing command after preparation, from this worktree:
 
 ```powershell
 & .\tools\release\Prepare-FmSignedRelease.ps1 -Mode Sign -PfxPath '<external PFX path>'
@@ -189,4 +195,4 @@ After preparation, from this worktree:
 
 Password only in L4TOOLS_SIGN_PFX_PASSWORD. A new signature is mandatory because native source changed.
 Preserve other signed component bytes; do not rebuild after signing. Live Windows/provider/policy E2E
-remains distinct from local fixtures; publication follows the existing strict signed-release workflow.
+remains distinct from local fixtures; publication completed through the existing strict signed-release workflow.

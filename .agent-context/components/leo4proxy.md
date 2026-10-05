@@ -1,11 +1,12 @@
 # leo4proxy
 
-## FM correction candidate 1.8.3, 2026-10-05
+## FM correction 1.8.3, published in suite 1.12.1, 2026-10-05
 
 PB metadata via the existing mTLS channel; local-only HTTPS CONNECT restricted to the exact
 storage authority supplied by verified PB policy. Common MQTT/RTP/FM deny closes active tunnel,
 missing/stale/identity-changed routing fails closed. Public numeric DNS target, no terminal cert
 on S3, no redirect/fallback/server file relay. Local fm_transport capability is required by l4con.
+Signed packet published; terminal installation and live FM transfer/policy acceptance remain open.
 [Verification/signing/deployment handoff](../tasks/active/2026-10-05-fm-proxy-installation.md).
 
 ## Назначение / владельцы
