@@ -79,3 +79,18 @@ CONNECT/Will → CONNACK → subscribe/presence → commands/results → offline
 - Code references: C renew/dedup просмотрены; app1 отсутствует, публикации/ACL не запускались.
 - Проверено: 2026-09-11, HEAD `63ce6a7`, документ + выборочный код, не runtime.
 - Обновить при: schema/topic/type/QoS/retain/ACL, версии producer или consumer.
+
+## Explicit Mosquitto routes — 2026-10-05 implementation
+
+Shared generator/migration now emits topic contract 3, without wildcard or overlapping bridge routes:
+- outbound `dev/{SN}/`: `app`, `svc`, `evt`, `req`, `res`, `out`, `ctl`, `fmr` (QoS 1);
+- inbound `srv/{SN}/`: `tsk`, `rsp`, `eva`, `cmt`, `ctl`, `fmc` (QoS 1).
+
+Sources checked: l4con MQTT publishers/subscriptions, l4desk ctl, app1
+core/config.py and core/services/device_task_processing.py (eva/cmt).
+Presence app/svc retained payloads are unchanged. Bridge routes do not change retain semantics.
+Known old own-SN wildcards are migration input only; emitted config has exactly 14 distinct routes.
+Foreign-SN, unknown routes and remapping are rejected without replacing the existing config.
+The active-config validator requires the exact route set, direction, QoS and SN; comments cannot
+satisfy routes, duplicates/wildcards invalidate the configuration. Setup uses supervisor's
+prepare-mosquitto path and therefore the same migration. Local builds/tests are not live broker evidence.

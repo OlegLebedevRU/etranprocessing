@@ -6,9 +6,19 @@ from app.config import settings
 from app.models import Terminal
 from app.schemas.file_manager import AgentReadiness
 
-FM_PROTOCOL_VERSION = 1
+FM_PROTOCOL_VERSION = 2
 FM_REQUIRED_CAPABILITIES = frozenset(
-    {"fs.session", "fs.list", "fs.read", "fs.write", "fs.cancel", "fs.proxy"}
+    {
+        "fs.session",
+        "fs.list",
+        "fs.read",
+        "fs.write",
+        "fs.cancel",
+        "fs.proxy",
+        "fs.mqtt_navigation",
+        "fs.write_user",
+        "fs.drives",
+    }
 )
 FM_HEARTBEAT_TTL_SECONDS = 45
 
@@ -66,7 +76,10 @@ def deployment_readiness(
 ) -> AgentReadiness:
     result = evaluate_readiness(terminal, agent, now=now)
     if result.available:
-        if not settings.file_manager_read_roots:
+        if (
+            not settings.file_manager_read_roots
+            and not settings.file_manager_local_drives
+        ):
             result.state, result.available = "policy_unconfigured", False
         elif not all(
             (
@@ -80,7 +93,11 @@ def deployment_readiness(
             )
         ):
             result.state, result.available = "storage_unavailable", False
-        result.write_available = result.available and bool(
-            settings.file_manager_write_roots
+        result.write_available = (
+            result.available
+            and bool(
+                settings.file_manager_write_roots or settings.file_manager_local_drives
+            )
+            and "fs.write_user" in result.capabilities
         )
     return result

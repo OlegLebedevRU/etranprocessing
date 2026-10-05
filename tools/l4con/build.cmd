@@ -65,7 +65,7 @@ goto :summary
 :do_build_x86
 echo.
 echo [Build x86] 32-bit static binary (Windows 7 SP1+ compatible)...
-cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\l4con.res res\l4con.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /I ..\l4pin\src /Foobj\x86\ src\main.c src\config.c ..\leo4proxy\src\policy_json.c ..\l4pin\src\http_client.c src\mqtt_protocol.c src\command_runner.c src\mqtt_client.c src\rpc_contract.c src\file_manager.c src\event_ipc.c src\tool_inventory.c src\service_mgr.c ..\l4pin\src\cert_discovery.c obj\x86\l4con.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\l4con.exe ws2_32.lib winhttp.lib advapi32.lib user32.lib shlwapi.lib ole32.lib shell32.lib crypt32.lib ncrypt.lib bcrypt.lib version.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\l4con.res res\l4con.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /I ..\l4pin\src /Foobj\x86\ src\main.c src\config.c ..\leo4proxy\src\policy_json.c ..\l4pin\src\http_client.c src\mqtt_protocol.c src\command_runner.c src\mqtt_client.c src\rpc_contract.c src\file_manager.c src\fm_process.c src\event_ipc.c src\tool_inventory.c src\service_mgr.c ..\l4pin\src\cert_discovery.c obj\x86\l4con.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\l4con.exe ws2_32.lib winhttp.lib advapi32.lib user32.lib shlwapi.lib ole32.lib shell32.lib crypt32.lib ncrypt.lib bcrypt.lib version.lib"
 if errorlevel 1 (
     echo [ERROR] x86 build failed!
     set BUILD_FAILED=1
@@ -78,7 +78,7 @@ exit /b 0
 :do_build_x64
 echo.
 echo [Build x64] 64-bit static binary...
-cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /fo obj\x64\l4con.res res\l4con.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /I ..\l4pin\src /Foobj\x64\ src\main.c src\config.c ..\leo4proxy\src\policy_json.c ..\l4pin\src\http_client.c src\mqtt_protocol.c src\command_runner.c src\mqtt_client.c src\rpc_contract.c src\file_manager.c src\event_ipc.c src\tool_inventory.c src\service_mgr.c ..\l4pin\src\cert_discovery.c obj\x64\l4con.res /link /OUT:bin\x64\l4con.exe ws2_32.lib winhttp.lib advapi32.lib user32.lib shlwapi.lib ole32.lib shell32.lib crypt32.lib ncrypt.lib bcrypt.lib version.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /fo obj\x64\l4con.res res\l4con.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /I ..\l4pin\src /Foobj\x64\ src\main.c src\config.c ..\leo4proxy\src\policy_json.c ..\l4pin\src\http_client.c src\mqtt_protocol.c src\command_runner.c src\mqtt_client.c src\rpc_contract.c src\file_manager.c src\fm_process.c src\event_ipc.c src\tool_inventory.c src\service_mgr.c ..\l4pin\src\cert_discovery.c obj\x64\l4con.res /link /OUT:bin\x64\l4con.exe ws2_32.lib winhttp.lib advapi32.lib user32.lib shlwapi.lib ole32.lib shell32.lib crypt32.lib ncrypt.lib bcrypt.lib version.lib"
 if errorlevel 1 (
     echo [ERROR] x64 build failed!
     set BUILD_FAILED=1
@@ -135,6 +135,7 @@ if not "%errorlevel%"=="0" set BUILD_FAILED=1
 call :test_discovery x86
 call :test_rpc x86
 call :test_fm x86
+call :test_fm_process x86
 exit /b 0
 
 :do_test_x64
@@ -143,6 +144,7 @@ if not "%errorlevel%"=="0" set BUILD_FAILED=1
 call :test_discovery x64
 call :test_rpc x64
 call :test_fm x64
+call :test_fm_process x64
 exit /b 0
 
 :test_discovery
@@ -163,5 +165,12 @@ exit /b 0
 cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /W4 /WX /MT /utf-8 /D_CRT_SECURE_NO_WARNINGS /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /I src /Foobj\%1\ tests\test_file_manager.c src\rpc_contract.c src\mqtt_protocol.c ..\leo4proxy\src\policy_json.c ..\l4pin\src\cert_discovery.c /link /OUT:obj\%1\test_file_manager.exe winhttp.lib crypt32.lib bcrypt.lib advapi32.lib ole32.lib"
 if not "%errorlevel%"=="0" set BUILD_FAILED=1
 if %BUILD_FAILED% equ 0 obj\%1\test_file_manager.exe
+if not "%errorlevel%"=="0" set BUILD_FAILED=1
+exit /b 0
+
+:test_fm_process
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /W4 /WX /MT /utf-8 /D_CRT_SECURE_NO_WARNINGS /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /I src /Foobj\%1\ tests\test_fm_process.c ..\leo4proxy\src\policy_json.c /link /OUT:obj\%1\test_fm_process.exe shell32.lib"
+if not "%errorlevel%"=="0" set BUILD_FAILED=1
+if %BUILD_FAILED% equ 0 obj\%1\test_fm_process.exe
 if not "%errorlevel%"=="0" set BUILD_FAILED=1
 exit /b 0

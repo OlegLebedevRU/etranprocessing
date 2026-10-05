@@ -47,6 +47,13 @@ int main(int argc,char** argv) {
     char invalid_fm[2048];strcpy_s(invalid_fm,sizeof(invalid_fm),fm_transfer);
     char* action=strstr(invalid_fm,"transfer");assert(action);memcpy(action,"unknown!",8);
     assert(!parse(invalid_fm,false,&command));
+    strcpy_s(invalid_fm,sizeof(invalid_fm),fm_transfer);
+    char* method=strstr(invalid_fm,"7021");assert(method);memcpy(method,"7020",4);
+    action=strstr(invalid_fm,"transfer");assert(action);memmove(action+4,action+8,strlen(action+8)+1);memcpy(action,"list",4);
+    assert(!parse(invalid_fm,false,&command));
+    strcpy_s(invalid_fm,sizeof(invalid_fm),fm_start);
+    action=strstr(invalid_fm,"start");assert(action);memmove(action+4,action+5,strlen(action+5)+1);memcpy(action,"stop",4);
+    assert(!parse(invalid_fm,false,&command));
     puts("RPC native consumer: producer fixture / malformed envelope / safe TSK default passed");
     return 0;
 }

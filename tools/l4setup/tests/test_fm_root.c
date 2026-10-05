@@ -7,8 +7,8 @@
 /* Keep the non-elevated test owner able to inspect/remove its temporary fixture.
  * Production uses only SYSTEM/admins; this fixture adds OWNER RIGHTS explicitly. */
 static BOOL WINAPI fixture_descriptor(LPCWSTR value,DWORD revision,PSECURITY_DESCRIPTOR* descriptor,PULONG size) {
-    assert(!wcscmp(value,L"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)"));
-    return ConvertStringSecurityDescriptorToSecurityDescriptorW(L"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;OW)",revision,descriptor,size);
+    assert(!wcscmp(value,L"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1301bf;;;IU)"));
+    return ConvertStringSecurityDescriptorToSecurityDescriptorW(L"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1301bf;;;IU)(A;OICI;FA;;;OW)",revision,descriptor,size);
 }
 #define ConvertStringSecurityDescriptorToSecurityDescriptorW fixture_descriptor
 #include "fm_root.h"
@@ -24,7 +24,7 @@ int main(void) {
     assert(setup_prepare_fm_root(root));assert(GetFileAttributesW(file)!=INVALID_FILE_ATTRIBUTES);
     PACL acl;PSECURITY_DESCRIPTOR sd;assert(GetNamedSecurityInfoW(root,SE_FILE_OBJECT,DACL_SECURITY_INFORMATION,NULL,NULL,&acl,NULL,&sd)==ERROR_SUCCESS);
     SECURITY_DESCRIPTOR_CONTROL control;DWORD revision;assert(GetSecurityDescriptorControl(sd,&control,&revision));
-    assert(control&SE_DACL_PROTECTED);assert(acl && acl->AceCount==3);LocalFree(sd);
+    assert(control&SE_DACL_PROTECTED);assert(acl && acl->AceCount==4);LocalFree(sd);
     swprintf_s(alias,MAX_PATH,L"%s\\alias",parent);assert(CreateDirectoryW(alias,NULL));
     struct {DWORD tag;WORD length,reserved,so,sl,po,pl;wchar_t path[512];} data={0};
     data.tag=IO_REPARSE_TAG_MOUNT_POINT;swprintf_s(data.path,512,L"\\??\\%s",root);

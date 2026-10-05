@@ -1,96 +1,121 @@
 import { test, expect, type Page } from "@playwright/test";
 
-async function portal(page: Page, profile: "classic"|"l4desk", available=true, conflict=false) {
-  const calls: Array<{path:string;method:string;body:any}> = [];
-  const lease="22222222-2222-4222-8222-222222222222";
+async function portal(page: Page, profile: "classic" | "l4desk", available = true, conflict = false) {
+  const calls: Array<{path: string; method: string; body: any}> = [];
+  const operations = new Map<string, any>();
+  const fixtures = [10, 11];
+  const lease = (id: string) => `22222222-2222-4222-8222-${id.padStart(12, "0")}`;
   await page.route("**/api/**", async route => {
-    const request=route.request(),path=new URL(request.url()).pathname;
-    calls.push({path,method:request.method(),body:request.postData()?request.postDataJSON():null});
-    let data:any={};
-    if(path==="/api/auth/me") data={username:"fixture",org_id:7,role_id:3,is_superuser:false,site_mode:"both",timezone:"UTC",permissions:["*"],session_id:"fixture-browser"};
-    if(path==="/api/admin/tenants/available")data=[];
-    if(path==="/api/settings/terminals")data={items:[{id:1,device_id:10,sn:"fixture",is_active:true}],total_count:1};
-    if(path.includes("/internal/v1/devices"))data={items:[{id:1,device_id:10,sn:"fixture",device_tags:[],connection:{device_id:10,last_checked_result:true,svc_connect:true,is_svc_available:true}}],pages:1,total:1};
-    if(path.endsWith("/readiness"))data={state:available?"ready":"incompatible",available,compatible:available,mqtt_available:true,server_time:new Date().toISOString(),valid_until:new Date(Date.now()+45000).toISOString(),agent_version:"1.0-fm",missing_capabilities:[]};
-    if(path.endsWith("/sessions") && request.method()==="POST") {
-      if(conflict) {await route.fulfill({status:409,json:{detail:{code:"lease_taken",scope:"console"}}});return calls;}
-      data={lease_id:lease,expires_at:new Date(Date.now()+60000).toISOString()};
+    const request = route.request(), path = new URL(request.url()).pathname;
+    const body = request.postData() ? request.postDataJSON() : null;
+    calls.push({ path, method: request.method(), body });
+    let data: any = {};
+    if (path === "/api/auth/me") data = { username: "fixture", org_id: 7, role_id: 3, is_superuser: false, site_mode: "both", timezone: "UTC", permissions: ["*"], session_id: "fixture-browser" };
+    if (path === "/api/admin/tenants/available") data = [];
+    if (path === "/api/settings/terminals") data = { items: fixtures.map(id => ({ id, device_id: id, sn: `fixture${id}`, is_active: true })), total_count: 2 };
+    if (path.includes("/internal/v1/devices")) data = { items: fixtures.map(id => ({ id, device_id: id, sn: `fixture${id}`, device_tags: [], connection: { device_id: id, last_checked_result: true, svc_connect: true, is_svc_available: true } })), pages: 1, total: 2 };
+    if (path.endsWith("/readiness")) data = { state: available ? "ready" : "incompatible", available, compatible: available, mqtt_available: true, write_available: true, capabilities: ["fs.mqtt_navigation", "fs.write_user"], server_time: new Date().toISOString(), valid_until: new Date(Date.now() + 45000).toISOString(), missing_capabilities: [] };
+    if (path.endsWith("/sessions") && request.method() === "POST") {
+      if (conflict) { await route.fulfill({ status: 409, json: { detail: { code: "lease_taken", scope: "console" } } }); return; }
+      data = { lease_id: lease(path.split("/").at(-2)!), expires_at: new Date(Date.now() + 60000).toISOString() };
     }
-    if(path.endsWith(`/operations/${lease}`))data={id:lease,lease_id:lease,kind:"session",state:"active",roots:["C:\\fixture"],entries:[]};
-    if(path.endsWith("/operations") && request.method()==="POST")data={...request.postDataJSON(),state:"created"};
-    if(path.includes("/operations/") && !path.endsWith(lease))data={id:path.split("/").pop(),lease_id:lease,kind:"list",state:"completed",entries:[{name:"report.txt",directory:false,size_bytes:3}]};
-    await route.fulfill({json:data});
+    if (path.includes("/operations/22222222")) data = { id: path.split("/").pop(), kind: "session", state: "active", roots: ["C:\\", "D:\\"], entries: [] };
+    if (path.endsWith("/navigation")) data = { state: "completed", entries: [{ name: "Reports", directory: true, size_bytes: 0 }, { name: "report.txt", directory: false, size_bytes: 3 }], has_more: false };
+    if (path.endsWith("/signals")) data = { retry_after_sec: 0, expires_at: new Date().toISOString() };
+    if (path.endsWith("/operations") && request.method() === "POST") { operations.set(body.id, body); data = { ...body, state: "created" }; }
+    if (path.includes("/operations/") && !path.includes("/operations/22222222")) data = { ...(operations.get(path.split("/").pop()!) || {}), state: "completed", entries: [] };
+    await route.fulfill({ json: data });
   });
   await page.goto(`/files?profile=${profile}`);
+  await expect(page.getByRole("tree").getByText("10", { exact: true })).toBeVisible();
   return calls;
 }
+async function openDisk(page: Page, id = 10) {
+  await page.getByRole("tree").getByText(String(id), { exact: true }).click();
+  await expect(page.getByText("Монопольный сеанс", { exact: true })).toBeVisible();
+  await page.getByRole("tree").getByText("C:\\", { exact: true }).click();
+  await expect(page.getByText("report.txt", { exact: true })).toBeVisible();
+}
 
-for(const profile of ["classic","l4desk"] as const) test(`FM is a standalone section in ${profile}`,async ({page})=>{
-  const calls=await portal(page,profile);
-  await expect(page.getByRole("menuitem",{name:"Файлы"})).toBeVisible();
-  await expect(page.getByRole("button",{name:"Начать сеанс"})).toBeEnabled();
-  expect(calls.some(call=>call.method==="POST")).toBe(false);
-  await page.getByRole("button",{name:"Начать сеанс"}).click();
-  await expect(page.getByText("Сессия активна",{exact:false})).toBeVisible();
-  await page.getByRole("button",{name:"Открыть",exact:true}).click();
-  await expect(page.getByText("report.txt",{exact:true})).toBeVisible();
-  await page.getByRole("button",{name:"Завершить сеанс"}).click();
-  await expect(page.getByRole("button",{name:"Начать сеанс"})).toBeVisible();
-  expect(calls.some(call=>call.body?.action==="stop")).toBe(true);
+for (const profile of ["classic", "l4desk"] as const) test(`Explorer starts at fleet home without a lease in ${profile}`, async ({ page }) => {
+  const calls = await portal(page, profile);
+  await expect(page.getByRole("tree").getByText("Обзор парка")).toBeVisible();
+  expect(calls.some(call => call.method === "POST")).toBe(false);
+  await openDisk(page);
+  expect(calls.some(call => call.path.endsWith("/navigation"))).toBe(true);
+  expect(calls.some(call => call.path.endsWith("/operations") && call.body?.kind === "list")).toBe(false);
+  await page.getByRole("row", { name: /Reports/ }).dblclick();
+  await expect(page.getByRole("textbox", { name: "Путь к каталогу" })).toHaveValue("C:\\Reports");
+  await page.getByRole("button", { name: "Вверх", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Путь к каталогу" })).toHaveValue("C:\\");
+  const loads = calls.filter(call => call.path === "/api/settings/terminals").length;
+  await page.getByRole("tree").getByText("Обзор парка").click();
+  await expect(page.getByText("Монопольный сеанс", { exact: true })).toHaveCount(0);
+  await expect.poll(() => calls.filter(call => call.path === "/api/settings/terminals").length).toBeGreaterThan(loads);
+  expect(calls.filter(call => call.body?.action === "stop")).toHaveLength(1);
+  expect(calls.filter(call => call.path.endsWith("/sessions") && call.method === "POST")).toHaveLength(1);
 });
 
-test("incompatible agent refuses start without sending commands",async ({page})=>{
-  const calls=await portal(page,"classic",false);
-  await expect(page.getByText("Требуется обновление агента",{exact:true})).toBeVisible();
-  await expect(page.getByRole("button",{name:"Начать сеанс"})).toBeDisabled();
-  expect(calls.some(call=>call.method==="POST")).toBe(false);
+test("incompatible agent is inspected without acquiring a lease", async ({ page }) => {
+  const calls = await portal(page, "classic", false);
+  await page.getByRole("tree").getByText("10", { exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("Требуется обновление агента");
+  expect(calls.some(call => call.method === "POST")).toBe(false);
 });
 
-test("occupied console shows refusal and never creates a file operation",async ({page})=>{
-  const calls=await portal(page,"l4desk",true,true);
-  await page.getByRole("button",{name:"Начать сеанс"}).click();
-  await expect(page.getByText(/Терминал занят: консоль/)).toBeVisible();
-  expect(calls.some(call=>call.path.endsWith("/operations") && call.method==="POST")).toBe(false);
+test("console conflict never creates a file operation", async ({ page }) => {
+  const calls = await portal(page, "l4desk", true, true);
+  await page.getByRole("tree").getByText("10", { exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("Терминал занят: консоль");
+  expect(calls.some(call => call.path.endsWith("/navigation"))).toBe(false);
 });
 
-test("failed start waits for safe drain before manual retry",async ({page})=>{
-  const calls=await portal(page,"l4desk");
-  await page.route("**/api/file-manager/v1/devices/10/sessions",async route=>{
-    await route.fulfill({status:503,json:{detail:{code:"fm_start_failed",retry_after_sec:2}}});
+test("terminal switch waits for previous close and drain", async ({ page }) => {
+  const calls = await portal(page, "l4desk");
+  await openDisk(page);
+  await page.route("**/api/file-manager/v1/devices/10/sessions/*/signals", async route => {
+    calls.push({ path: "close10", method: "POST", body: route.request().postDataJSON() });
+    await route.fulfill({ json: { retry_after_sec: 2, expires_at: new Date().toISOString() } });
   });
-  await page.getByRole("button",{name:"Начать сеанс"}).click();
-  await expect(page.getByText(/Не удалось начать сеанс FM/)).toBeVisible();
-  await expect(page.getByText(/Ожидается безопасное завершение сеанса/)).toBeVisible();
-  await expect(page.getByRole("button",{name:"Начать сеанс"})).toBeDisabled();
-  await expect(page.getByRole("button",{name:"Начать сеанс"})).toBeEnabled({timeout:5000});
-  expect(calls.some(call=>call.path.endsWith("/operations") && call.method==="POST")).toBe(false);
+  await page.getByRole("tree").getByText("11", { exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("Завершаем сеанс");
+  expect(calls.some(call => call.path.endsWith("/devices/11/sessions"))).toBe(false);
+  await expect(page.getByText("Монопольный сеанс", { exact: true })).toBeVisible({ timeout: 5000 });
+  expect(calls.findIndex(call => call.path === "close10")).toBeLessThan(calls.findIndex(call => call.path.endsWith("/devices/11/sessions")));
 });
 
-test("corrupt direct S3 download aborts the entire session without portal credentials",async ({page})=>{
-  const calls=await portal(page,"classic");
-  await page.getByRole("button",{name:"Начать сеанс"}).click();
-  await expect(page.getByRole("button",{name:"Открыть",exact:true})).toBeEnabled();
-  await page.getByRole("button",{name:"Открыть",exact:true}).click();
-  await expect(page.getByText("report.txt",{exact:true})).toBeVisible();
-  const operation="33333333-3333-4333-8333-333333333333";
-  const lease="22222222-2222-4222-8222-222222222222";
-  let storageHeaders: Record<string,string>={};
-  await page.route("https://storage.example.invalid/**",async route=>{
-    storageHeaders=await route.request().allHeaders();
-    await route.fulfill({body:"bad",headers:{"Access-Control-Allow-Origin":"*"}});
+test("domain navigation failure is preserved, not replaced with connection lost", async ({ page }) => {
+  await portal(page, "classic"); await openDisk(page);
+  await page.route("**/navigation", route => route.fulfill({ json: { state: "failed", error_code: "fm_path_or_session_failed" } }));
+  await page.getByRole("row", { name: /Reports/ }).dblclick();
+  await expect(page.getByRole("alert")).toContainText("Не удалось открыть путь");
+  await expect(page.getByText("Связь потеряна", { exact: false })).toHaveCount(0);
+});
+
+test("modal transfer blocks navigation and corrupt S3 data closes exactly once", async ({ page }) => {
+  const calls = await portal(page, "classic"); await openDisk(page);
+  let release: () => void = () => {};
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  let storageHeaders: Record<string, string> = {};
+  await page.route("https://storage.example.invalid/**", async route => {
+    storageHeaders = await route.request().allHeaders(); await pending;
+    await route.fulfill({ body: "bad", headers: { "Access-Control-Allow-Origin": "*" } });
   });
-  await page.route("**/api/file-manager/v1/devices/10/operations**",async route=>{
-    const path=new URL(route.request().url()).pathname;
-    if(path.endsWith(`/operations/${lease}`)){await route.fallback();return;}
-    if(path.endsWith("/operations")) {await route.fulfill({json:{id:operation,lease_id:lease,kind:"download",state:"created"}});return;}
-    if(path.endsWith("/download")) {await route.fulfill({json:{url:"https://storage.example.invalid/object",headers:{},size_bytes:3,sha256:"0".repeat(64)}});return;}
-    await route.fulfill({json:{id:operation,lease_id:lease,kind:"download",state:"verifying",size_bytes:3,sha256:"0".repeat(64)}});
+  await page.route("**/api/file-manager/v1/devices/10/operations/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.includes("22222222")) { await route.fallback(); return; }
+    if (path.endsWith("/download")) { await route.fulfill({ json: { url: "https://storage.example.invalid/object", headers: {}, size_bytes: 3, sha256: "0".repeat(64) } }); return; }
+    await route.fulfill({ json: { state: "verifying", size_bytes: 3, sha256: "0".repeat(64) } });
   });
-  await page.getByRole("button",{name:/Скачать/}).click();
-  await expect(page.getByText(/Операция остановлена: не удалось подтвердить/)).toBeVisible();
-  expect(storageHeaders.authorization).toBeUndefined();
-  expect(storageHeaders.cookie).toBeUndefined();
-  expect(storageHeaders["x-requested-with"]).toBeUndefined();
-  expect(calls.some(call=>call.body?.action==="cancel")).toBe(true);
-  expect(calls.some(call=>call.body?.action==="stop")).toBe(true);
+  await page.getByRole("button", { name: "Скачать", exact: false }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Вверх", exact: true })).toBeDisabled();
+  expect(calls.filter(call => call.path.endsWith("/sessions") && call.method === "POST")).toHaveLength(1);
+  release();
+  await expect(page.getByRole("dialog")).toContainText("Операция остановлена");
+  expect(storageHeaders.authorization).toBeUndefined(); expect(storageHeaders.cookie).toBeUndefined();
+  expect(calls.filter(call => call.body?.action === "cancel")).toHaveLength(1);
+  expect(calls.filter(call => call.body?.action === "stop")).toHaveLength(0);
+  await page.getByRole("button", { name: "Понятно" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 });

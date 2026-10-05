@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     file_manager_s3_secret_key: str = ""
     file_manager_read_roots: list[str] = []
     file_manager_write_roots: list[str] = []
+    file_manager_local_drives: bool = False
+    file_manager_privileged_read: bool = False
     yookassa_enabled: bool = False
     # Optional JSON endpoints map; production addresses are provisioned via env.
     leo4proxy_endpoints: str = ""

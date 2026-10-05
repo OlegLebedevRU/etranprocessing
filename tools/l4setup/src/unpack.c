@@ -611,15 +611,17 @@ bool unpack_payload(
 
     log_info("Prepared rollback directory: %ls", rollback_dir);
 
-    // Save existing user configuration files from mosquitto
-    wchar_t user_mosq_conf[MAX_PATH];
-    wchar_t user_mosq_conf_saved[MAX_PATH];
-    swprintf_s(user_mosq_conf, MAX_PATH, L"%ls\\mosquitto\\mosquitto.conf", dest_dir);
-    swprintf_s(user_mosq_conf_saved, MAX_PATH, L"%ls\\mosquitto.conf.user", staging_dir);
-    bool has_user_mosq_conf = false;
-    if (file_exists(user_mosq_conf)) {
-        CopyFileW(user_mosq_conf, user_mosq_conf_saved, FALSE);
-        has_user_mosq_conf = true;
+    /* Preserve terminal-owned configuration inside staging before any swap.
+     * Copy failure leaves the old suite untouched. Never package a fixture ACL. */
+    const wchar_t* config_names[]={L"mosquitto.conf",L"acl.conf"};
+    for(unsigned c=0;c<sizeof(config_names)/sizeof(config_names[0]);c++) {
+        wchar_t source[MAX_PATH],target[MAX_PATH];
+        swprintf_s(source,MAX_PATH,L"%ls\\mosquitto\\%ls",dest_dir,config_names[c]);
+        swprintf_s(target,MAX_PATH,L"%ls\\mosquitto\\%ls",staging_dir,config_names[c]);
+        if(file_exists(source) && !CopyFileW(source,target,FALSE)) {
+            log_err("Could not preserve terminal configuration (error %lu)",GetLastError());
+            recursive_delete(staging_dir);return false;
+        }
     }
 
     // Check that target files in dest_dir are not locked
@@ -677,11 +679,6 @@ bool unpack_payload(
         unpack_rollback(dest_dir, prev_version);
         recursive_delete(staging_dir);
         return false;
-    }
-
-    // Restore user mosquitto.conf if previously existed
-    if (has_user_mosq_conf && file_exists(user_mosq_conf_saved)) {
-        CopyFileW(user_mosq_conf_saved, user_mosq_conf, FALSE);
     }
 
     // Ensure log directories exist

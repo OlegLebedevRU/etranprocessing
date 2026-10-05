@@ -1,6 +1,8 @@
 #pragma once
 #include <windows.h>
 #include <stdbool.h>
+bool mosquitto_conf_install_candidate(const wchar_t* base_path);
+bool mosquitto_conf_migrate(const wchar_t* base_path);
 
 /**
  * Generate a Standby (Neutral / No-Bridge) mosquitto.conf in base_path/mosquitto/mosquitto.conf.

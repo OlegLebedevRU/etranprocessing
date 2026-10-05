@@ -57,20 +57,16 @@ class OperationCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: UUID
     lease_id: UUID
-    kind: Literal["list", "upload", "download"]
+    kind: Literal["upload", "download"]
     path: str = Field(max_length=1024)
-    offset: int = Field(default=0, ge=0, le=1_000_000)
 
 
 class AgentResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
     state: Literal["active", "completed", "failed", "cancelled"]
     grant_id: UUID | None = None
-    has_more: bool = False
+    roots: list[str] | None = Field(default=None, max_length=32)
     error_code: str | None = Field(default=None, max_length=64, pattern=r"^[a-z0-9_]+$")
-    entries: list[dict[str, str | int | bool]] = Field(
-        default_factory=list, max_length=500
-    )
 
 
 class SourceManifest(BaseModel):

@@ -35,7 +35,7 @@ Skills описывают **как работать**, карточки — **ч
 - [Video streaming](contracts/video-streaming.md), [l4media](components/l4media.md) — медиатракт.
 - [Remote console](contracts/remote-console.md) — RPC и stdout/stderr.
 
-- [File manager](contracts/file-manager.md) — сервер deployed; общий IoT lease с video/console, MQTT control, S3-only bulk; proxy/automatic-installation native correction awaits signing/E2E.
+- [File manager](contracts/file-manager.md) — сервер deployed, suite1.12.1 signed; live transfer проверен на 1000007 с ограничениями. Review выявил lease/cleanup/ACL риски; план отдельного FM MQTT-канала, автоматической миграции Mosquitto и Explorer UI ещё не реализован.
 
 ## Каталог skills
 Каждый навык хранится как `.claude/skills/<name>/SKILL.md` с `name`/`description`.

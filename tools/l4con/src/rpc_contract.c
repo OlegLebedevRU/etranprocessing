@@ -102,10 +102,10 @@ bool rpc_contract_parse(const char* body,size_t length,bool announcement,
             !text(&j,item,"operation_id",out->fm_operation_id,sizeof(out->fm_operation_id)) ||
             expires<0 || !policy_json_uint(&j,expires,&out->fm_expires_at) ||
             !number(&j,item,"ttl_sec",&out->ttl_sec,30,90) || out->ttl_sec<30) return false;
-        if (out->method==7020) return !strcmp(out->fm_action,"list") && rpc_uuid(out->fm_operation_id);
+        if (out->method==7020) return false; /* Retired PB-mediated FM listing. */
         if (out->method==7021) return !strcmp(out->fm_action,"transfer") && rpc_uuid(out->fm_operation_id);
-        if (out->method==7022) return !strcmp(out->fm_action,"cancel") && rpc_uuid(out->fm_operation_id);
-        return !out->fm_operation_id[0] && (!strcmp(out->fm_action,"start") || !strcmp(out->fm_action,"renew") || !strcmp(out->fm_action,"stop"));
+        if (out->method==7022) return false; /* Close is acknowledged on fmc/fmr. */
+        return !out->fm_operation_id[0] && (!strcmp(out->fm_action,"start") || !strcmp(out->fm_action,"renew"));
     }
     for (int key=item+1;key<j.tokens[item].next;key=j.tokens[key+1].next) {
         char name[128];

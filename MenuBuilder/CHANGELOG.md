@@ -1,5 +1,9 @@
 # Changelog — MenuBuilder
 
+## Unreleased — FM v2 only
+
+FM uses MQTT navigation and mandatory confirmed close only; legacy PB listing and optional unconfirmed close removed.
+
 ## 2026-10-05 — File manager
 
 Standalone Files in Classic/L4Desk, agent/MQTT preflight, common files lease, metadata BFF and direct S3 transfers up to64MiB with fail-fast cancellation.

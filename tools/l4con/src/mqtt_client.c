@@ -33,6 +33,8 @@ typedef struct {
     CommandContext current_cmd;
     HANDLE hWorkerThread;
     bool connected;
+    uint16_t fm_subscription;
+    ULONGLONG fm_subscription_deadline;
     struct { char id[40]; char result_uid[40]; char result[512]; int status; bool acted; } recent[64];
     unsigned recent_next;
 } MqttClientState;
@@ -372,10 +374,18 @@ static DWORD WINAPI command_worker_thread(LPVOID lpParam) {
 static void fm_rpc_result(void* context,const char* task_id,int status,const char* code) {
     rpc_status((MqttClientState*)context,task_id,status,code);
 }
+static bool fm_navigation_result(void* context,const char* id,const char* body) {
+    MqttClientState* state=(MqttClientState*)context;
+    char topic[160];snprintf(topic,sizeof(topic),"dev/%s/fmr",state->sn);
+    const MqttUserProperty properties[]={{"correlationData",id}};
+    return send_publish_with_properties(state,topic,body,strlen(body),1,0,properties,1);
+}
 
 static void handle_incoming_publish(MqttClientState* state,const char* topic,
     const char* payload,size_t payload_len,const AppConfig* config,const MqttRpcMetadata* metadata) {
-    char tsk[160],rsp[160];
+    char tsk[160],rsp[160],fmc[160];
+    snprintf(fmc,sizeof(fmc),"srv/%s/fmc",state->sn);
+    if(!strcmp(topic,fmc)) {fm_navigation(payload,payload_len,state->current_cmd.is_running);return;}
     snprintf(tsk,sizeof(tsk),"srv/%s/tsk",state->sn);
     snprintf(rsp,sizeof(rsp),"srv/%s/rsp",state->sn);
     bool announcement=!strcmp(topic,tsk);
@@ -603,6 +613,7 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
     printf("  Target Broker:   %s:%d (Keepalive: %ds)\n\n", config->mqtt_host, config->mqtt_port, config->keepalive_sec);
 
     fm_start(state.sn,config->proxy_http_port,hStopEvent,fm_rpc_result,&state);
+    fm_set_navigation_result(fm_navigation_result);
     bool cert_event_sent = false;
     if (!event_ipc_start(hStopEvent, publish_user_event, &state))
         fprintf(stderr, "[EVENT] Local event endpoint unavailable; console commands remain available\n");
@@ -684,7 +695,9 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
         printf("[%s] [OK] MQTT Connected successfully. (rc=0)\n", ts_buf);
         EnterCriticalSection(&state.send_cs);
         state.connected = true;
-        fm_connection(true);
+        // FM readiness starts only after the dedicated subscription is acknowledged.
+        state.fm_subscription=0;
+        state.fm_subscription_deadline=GetTickCount64()+5000;
         LeaveCriticalSection(&state.send_cs);
 
         // 3. Publish dev/{SN}/svc = svc_online (retain=1, qos=1)
@@ -699,19 +712,20 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
         time_t last_cert_event_attempt = time(NULL);
 
         // 4. Subscriptions (qos=1) - strictly srv/<SN>/tsk and srv/<SN>/rsp
-        const char* sub_suffixes[] = {"tsk", "rsp", NULL};
+        const char* sub_suffixes[] = {"tsk", "rsp", "fmc", NULL};
         for (int i = 0; sub_suffixes[i] != NULL; i++) {
             char sub_topic[128];
             snprintf(sub_topic, sizeof(sub_topic), "srv/%s/%s", state.sn, sub_suffixes[i]);
 
             EnterCriticalSection(&state.send_cs);
             uint16_t sub_pkt_id = get_next_packet_id(&state);
+            if(!strcmp(sub_suffixes[i],"fmc"))state.fm_subscription=sub_pkt_id;
             int sub_len = mqtt_build_subscribe(pkt_buf, sizeof(pkt_buf), sub_topic, sub_pkt_id, 1);
             if (sub_len > 0) {
                 socket_send_all(s, pkt_buf, (size_t)sub_len);
             }
             LeaveCriticalSection(&state.send_cs);
-            printf("[%s] [OK] Subscribed: %s (qos=1)\n", ts_buf, sub_topic);
+            printf("[%s] [MQTT] Subscription requested: %s (qos=1)\n", ts_buf, sub_topic);
         }
 
         // Main Connection & Polling Loop
@@ -724,6 +738,9 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
 
         while (WaitForSingleObject(hStopEvent, 0) != WAIT_OBJECT_0) {
             fm_tick();
+            if(state.fm_subscription && GetTickCount64()>=state.fm_subscription_deadline) {
+                fprintf(stderr,"[FM] SUBACK deadline exceeded\n");break;
+            }
             if (rx_buf_len && frame_started && GetTickCount64()-frame_started>=10000) {
                 fprintf(stderr,"[MQTT] Partial packet deadline exceeded\n"); break;
             }
@@ -789,8 +806,15 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
                             }
 
                             MqttRpcMetadata metadata;
-                            if (mqtt_parse_rpc_metadata(pkt_body, rem_len, pkt_flags, &metadata)==0)
+                            if (!(pkt_flags & 1) && mqtt_parse_rpc_metadata(pkt_body, rem_len, pkt_flags, &metadata)==0)
                                 handle_incoming_publish(&state, topic_in, payload_ptr, payload_len, config, &metadata);
+                        }
+                    } else if (pkt_type == MQTT_PKT_SUBACK && rem_len>=4) {
+                        uint16_t id=((uint16_t)pkt_body[0]<<8)|pkt_body[1];
+                        uint32_t properties=0;int consumed=0;
+                        if(id==state.fm_subscription && mqtt_decode_remaining_length(pkt_body+2,rem_len-2,&properties,&consumed)==0 &&
+                           (size_t)(2+consumed)+properties+1==rem_len && pkt_body[rem_len-1]==1) {
+                            state.fm_subscription=0;fm_connection(true);
                         }
                     } else if (pkt_type == MQTT_PKT_PINGRESP) {
                         last_ping_time = time(NULL);

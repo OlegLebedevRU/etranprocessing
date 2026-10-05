@@ -52,6 +52,17 @@ static void engine_write_summary(SetupContext* ctx) {
     summary_write_json(&ctx->summary, ctx->opts->dest);
 }
 
+static void rollback_failed_upgrade(SetupContext* ctx) {
+    if(ctx->op_type!=OP_UPGRADE && ctx->op_type!=OP_REPAIR)return;
+    if(!ctx->installed_version[0])return;
+    strcpy_s(ctx->summary.rollback,sizeof(ctx->summary.rollback),"failed");
+    /* Fence the new supervisor before restoring configuration and executables. */
+    if(!services_stop_all_in_order(ctx->sn,NULL,NULL))return;
+    if(!unpack_rollback(ctx->opts->dest,ctx->installed_version))return;
+    if(!services_start_all_in_order(NULL,NULL))return;
+    strcpy_s(ctx->summary.rollback,sizeof(ctx->summary.rollback),"restored");
+}
+
 static bool wait_proxy_after_start(bool require_ready) {
     ULONGLONG deadline = GetTickCount64() + 15000;
     do {
@@ -395,6 +406,7 @@ int engine_run_pipeline(SetupContext* ctx) {
         ctx->final_exit_code = 24;
         strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "failed");
         strcpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason), "mosquitto_configuration_failed");
+        rollback_failed_upgrade(ctx);
         engine_write_summary(ctx);
         return 24;
     }
@@ -406,6 +418,7 @@ int engine_run_pipeline(SetupContext* ctx) {
         ctx->final_exit_code = 24;
         strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "failed");
         strncpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason), "service_start_failed", _TRUNCATE);
+        rollback_failed_upgrade(ctx);
         engine_write_summary(ctx);
         return 24;
     }
@@ -480,6 +493,7 @@ verify_only:
         ctx->final_exit_code = 27;
         strcpy_s(ctx->summary.status, sizeof(ctx->summary.status), "failed");
         strncpy_s(ctx->summary.error_reason, sizeof(ctx->summary.error_reason), "critical_smoke_probe_failed", _TRUNCATE);
+        rollback_failed_upgrade(ctx);
     } else if (ctx->summary.cert.exit_code == 20) {
         ctx->final_exit_code=20;
         strcpy_s(ctx->summary.status,sizeof(ctx->summary.status),"failed");

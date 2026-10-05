@@ -1,5 +1,9 @@
 ﻿# Changelog — l4con (Leo4 Diagnostic Console Agent)
 
+## Unreleased — FM v2 only
+
+FM v2 hello and fmc/fmr envelopes; legacy RPC listing/cancel/stop rejected. Stop ACK follows owned worker process exit.
+
 ## 2026-10-05 — File manager
 
 FM protocol v1: common exclusive session, MQTT RPC7020–7023, PB mTLS metadata, direct S3 SHA256/version-pinned transfers and no-overwrite commit receipts; requires configured FM root/API.

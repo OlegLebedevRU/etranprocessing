@@ -22,12 +22,12 @@ def anyio_backend():
 
 def registered(now):
     return FileManagerAgent(terminal_id=1, tenant_id=7, agent_instance_id=uuid4(), agent_version="1.0",
-        protocol_version=1, capabilities=sorted(FM_REQUIRED_CAPABILITIES), filesystem_ready=True,
+        protocol_version=2, capabilities=sorted(FM_REQUIRED_CAPABILITIES), filesystem_ready=True,
         cert_serial="AB", last_seen_at=now)
 
 
 @pytest.mark.parametrize("change,state", [({}, "ready"), ({"tenant_id": 8}, "not_registered"),
-    ({"protocol_version": 2}, "incompatible"), ({"capabilities": ["fs.list"]}, "incompatible"),
+    ({"protocol_version": 1}, "incompatible"), ({"capabilities": ["fs.list"]}, "incompatible"),
     ({"capabilities": sorted(FM_REQUIRED_CAPABILITIES - {"fs.proxy"})}, "incompatible"),
     ({"filesystem_ready": False}, "filesystem_unavailable"), ({"cert_serial": "AC"}, "certificate_changed")])
 def test_readiness_requires_compatible_live_current_identity(change, state):
@@ -156,3 +156,23 @@ async def test_agent_restart_rejects_old_operation_before_lease_lookup(monkeypat
         await fm.agent_operation(op.id, terminal, db)
     assert error.value.status_code == 409
     lease.assert_not_awaited()
+
+
+def test_http_listing_is_not_a_transfer_operation():
+    from pydantic import ValidationError
+    from app.schemas.file_manager import OperationCreate
+    with pytest.raises(ValidationError):
+        OperationCreate(id=uuid4(), lease_id=uuid4(), kind="list", path="C:\\")
+    with pytest.raises(ValidationError):
+        AgentResult(state="completed", entries=[])
+
+
+@pytest.mark.parametrize("missing", ["fs.mqtt_navigation", "fs.write_user", "fs.drives"])
+def test_v2_requires_all_new_safety_capabilities(missing):
+    now = datetime.now(UTC)
+    terminal = Terminal(id=1, org_id=7, is_active=True, cert_serial="AB")
+    agent = registered(now)
+    agent.capabilities.remove(missing)
+    result = evaluate_readiness(terminal, agent, now=now)
+    assert result.state == "incompatible"
+    assert not result.available

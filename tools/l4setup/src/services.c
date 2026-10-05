@@ -20,7 +20,7 @@ bool services_prepare_mosquitto(const wchar_t* dest_dir) {
         return false;
     STARTUPINFOW si = { sizeof(si) };
     PROCESS_INFORMATION pi = { 0 };
-    log_info("Preparing missing Mosquitto configuration through l4superv (local-only bootstrap)...");
+    log_info("Migrating Mosquitto configuration to the current suite topic contract through l4superv...");
     if (!CreateProcessW(exe, command, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, dest_dir, &si, &pi)) {
         log_err("Cannot run l4superv configuration preparation (error %lu)", GetLastError());
         return false;
@@ -285,7 +285,7 @@ static bool retain_non_network_arguments(wchar_t* command,size_t capacity,const 
 bool services_ensure_all_registered(const wchar_t* dest_dir) {
     if (!dest_dir) return false;
     if (!setup_prepare_fm_root(L"C:\\l4tools\\fm")) {
-        log_err("Cannot safely prepare the dedicated file-manager directory.");return false;
+        log_err("Optional FM directory is unavailable; core suite service registration continues.");
     }
 
     SC_HANDLE hSCM = OpenSCManagerW(NULL, NULL, SC_MANAGER_ALL_ACCESS);
