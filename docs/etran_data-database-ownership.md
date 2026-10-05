@@ -1,7 +1,7 @@
 # Владение общей PostgreSQL-схемой
 
 **Владелец документа:** архитектура backend-платформы
-**Проверено:** 2026-10-04 (L4Desk/fin ledger — миграции 027/029; подписки L4Desk — логика MB, колонка `l4desk_terminals.paid_until`)
+**Проверено:** 2026-10-05 (schema031, explicit enrollment, Classic/L4Desk cutover и paid PIN consumer)
 **Область:** `shared/etranprocessing_db`, `ProcessingBackend`, `MenuBuilder`
 
 ## Правила владения
@@ -24,10 +24,10 @@
 | `users` | auth | MB | MB (включая `last_org_id`) | MB |
 | `user_sessions` | auth | MB | MB (включая `active_org_id`) | MB |
 | `orgs` | organization | MB | MB | MB; PB читает статус при terminal auth |
-| `org_billing_settings` | organization/billing | MB | MB | MB |
+| `org_billing_settings` | organization/billing | MB | MB; Classic-тариф L4Desk заморожен | MB; PB читает только тарифные права setup/renew PIN |
 | `org_statuses` | organization | MB | MB | MB; PB может читать справочное состояние |
 | `terminal_types` | terminal | MB | MB | MB и PB |
-| `terminals` | terminal | MB | MB; PB — только certificate identity/discovery поля в legacy enrollment flow | MB; PB читает auth/license context |
+| `terminals` | terminal | MB | MB; PB — только certificate identity/discovery поля в legacy enrollment flow | MB; PB читает auth/license context и explicit enrollment для transport policy |
 | `licenses` | terminal/billing | MB | MB | MB; PB читает `expires_at` при terminal auth |
 | `terminal_cert_history` | certificate audit | PB | PB | PB; MB — административное read-only представление |
 | `terminal_cert_discovery` | certificate discovery | PB | PB | PB; MB — административное read-only представление |
@@ -38,8 +38,8 @@
 | `terminal_menu_bindings` | menu assignment/delivery | MB | MB меняет assignment; PB меняет только `loaded_version` и `loaded_at` после выдачи | MB и PB |
 | `catalog_categories` | catalog | MB | MB | MB |
 | `catalog_items` | catalog | MB | MB | MB |
-| `billing_orders` | billing | MB | MB | MB |
-| `billing_order_items` | billing | MB | MB | MB |
+| `billing_orders` | billing | MB | MB | MB; PB читает tenant/status для paid PIN entitlement |
+| `billing_order_items` | billing | MB | MB | MB; PB читает terminal/operation/purpose для paid PIN entitlement |
 | `certificate_pins` | billing/certificate | PB для purpose=renew; прежние MB/PB flows setup | PB: renew purpose, consumption, same-CSR public response recovery; MB: существующие billing/admin setup PIN | MB читает состояние renew без plaintext; выдача renew PIN только через service-auth PB API |
 | `tsp` | payment reference | PB | PB/import pipeline | PB; MB read-only reporting/reference |
 | `tsp_parameter_codes` | payment reference | PB | PB/import pipeline | PB; MB read-only reporting/reference |
@@ -68,6 +68,20 @@
 | `fin_notification_deliveries` | fin ledger | MB | MB | MB |
 | `fin_reconciliation_runs` | fin ledger | MB | MB | MB |
 | `fin_archive_batches` | fin ledger | MB | MB | MB |
+
+## Scoped исключение операционной миграции 2026-10-05
+
+Владение runtime остаётся MB: классификация Org.site_mode/default_site/license flags и Terminal.l4desk_subscription_enabled. Первичное создание MB выставляет enrollment только для L4Desk; техническая запись сама enrollment не меняет. PB reader использует site_mode для тарифного admission и enrollment для transport policy; License не участвует в L4Desk pool.
+
+Отдельная согласованная data migration app.product_scope_cutover запускается оператором из released PB image, с reviewed JSON census и явным --apply. Это узкое исключение, не разрешение PB HTTP handlers менять организации/подписки:
+
+- orgs: только site_mode/default_site/classic_licenses_enabled/l4desk_licenses_enabled по manifest52/4;
+- terminals: только l4desk_subscription_enabled по approved products и runtime1/device773;
+- l4desk_terminals: технический device_id сверяется с runtime/SN/tenant; deleted_at сбрасывается только terminal_id1 после включения обоих readers;
+- l4desk_tenant_profiles: создаётся только отсутствующий tenant1 профиль для согласованного dev773;
+- l4desk_audit_events: product.scope_cutover только при изменениях.
+
+Миграция не меняет License, cert_serial, is_active, SN, org_id терминала и финансовую историю. Другие writers запрещены. Общий pure evaluator расположен в отдельном etranprocessing_access, вне декларативного ORM. Старый financial_core заморожен; живые usage/session accounting и subscription payment use-cases сохраняют MB ownership.
 
 ## Совместимость shared schema
 
