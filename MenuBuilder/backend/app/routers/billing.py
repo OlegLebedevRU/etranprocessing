@@ -6,10 +6,11 @@ All endpoints are tenant-scoped via JWT org_id claim.
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -21,9 +22,11 @@ from app.models import (
     BillingOrderItem,
     CertificatePin,
     License,
+    Org,
     OrgBillingSettings,
     Terminal,
 )
+from app.models_l4desk import L4DeskAuditEvent
 from app.schemas.billing import (
     BillingForecastMonthRead,
     BillingOrderRead,
@@ -43,7 +46,11 @@ from app.schemas.billing import (
     ReactivationCheckoutRequest,
     ReactivationCheckoutResponse,
 )
-from app.schemas.certificate_pin import PaymentRequiredResponse, PinReadyResponse
+from app.schemas.certificate_pin import (
+    PaymentRequiredResponse,
+    PinReadyResponse,
+    RenewalPermissionResponse,
+)
 from app.security.permissions import (
     PERMISSION_BILLING_VIEW,
     require_permission,
@@ -70,7 +77,8 @@ from app.services.cert_billing import (
     resolve_effective_price,
     resolve_operation_type,
 )
-from app.services.payment_provider import get_payment_provider
+from app.services.payment_provider import YooKassaPaymentProvider, get_payment_provider
+from app.services.yookassa import YooKassaError
 
 logger = logging.getLogger(__name__)
 
@@ -88,8 +96,27 @@ class BillingUser:
     is_superuser: bool = False
 
 
+async def _create_payment_checkout(
+    db: AsyncSession, order: BillingOrder, user: BillingUser
+) -> str:
+    provider = get_payment_provider(order, is_superuser=user.is_superuser)
+    if isinstance(provider, YooKassaPaymentProvider):
+        provider.email = await db.scalar(
+            select(Org.email).where(Org.org_id == user.org_id)
+        )
+    try:
+        url = await provider.create_checkout(
+            order.amount_minor, order.currency, str(order.id)
+        )
+    except YooKassaError as exc:
+        raise HTTPException(502, "Платёжный провайдер недоступен") from exc
+    order.payment_url = url
+    return url
+
+
 async def get_current_billing_user(
     user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> BillingUser:
     """Dependency: require active tenant context (org_id > 0)."""
     org_id = user.get("org_id")
@@ -98,6 +125,11 @@ async def get_current_billing_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Active organization context required",
         )
+    if settings.product_scope_split_enabled and not user.get("is_superuser"):
+        from app.services.product_scope import tenant_product
+
+        if await tenant_product(db, int(org_id)) != "classic":
+            raise HTTPException(403, "Classic-биллинг недоступен в L4Desk")
     return BillingUser(
         username=user.get("username", ""),
         org_id=int(org_id),
@@ -891,7 +923,6 @@ async def create_checkout(
         db, user.org_id, org_settings, body.items, as_of
     )
 
-    provider = get_payment_provider()
     import uuid
 
     order_id = uuid.uuid4()
@@ -933,16 +964,7 @@ async def create_checkout(
             )
         )
 
-    try:
-        payment_url = await provider.create_checkout(
-            amount_minor=total_amount,
-            currency=org_settings.currency,
-            order_id=str(order_id),
-        )
-        order.payment_url = payment_url
-    except Exception:
-        logger.exception("Payment provider error")
-        raise HTTPException(status_code=502, detail="Payment provider error")
+    payment_url = await _create_payment_checkout(db, order, user)
 
     await db.commit()
 
@@ -1030,7 +1052,6 @@ async def reactivation_checkout(
         now, billing_period_months * body.advance_periods
     )
 
-    provider = get_payment_provider()
     import uuid
 
     order_id = uuid.uuid4()
@@ -1059,16 +1080,7 @@ async def reactivation_checkout(
     )
     db.add(item)
 
-    try:
-        payment_url = await provider.create_checkout(
-            amount_minor=total_amount,
-            currency=org_settings.currency,
-            order_id=str(order_id),
-        )
-        order.payment_url = payment_url
-    except Exception:
-        logger.exception("Payment provider error")
-        raise HTTPException(status_code=502, detail="Payment provider error")
+    payment_url = await _create_payment_checkout(db, order, user)
 
     await db.commit()
 
@@ -1086,6 +1098,8 @@ async def _apply_cert_pin_item(
     db: AsyncSession, order: BillingOrder, item: BillingOrderItem
 ) -> None:
     """Create (or idempotently reuse) the CertificatePin for a paid cert_pin order item."""
+    if (item.cert_policy_snapshot or {}).get("purpose") == "renew":
+        return  # PB consumes the paid permission when ordering native renewal.
     existing = await db.execute(
         select(CertificatePin).where(CertificatePin.order_item_id == item.id)
     )
@@ -1095,8 +1109,10 @@ async def _apply_cert_pin_item(
     result = await db.execute(
         select(CertificatePin).where(
             CertificatePin.terminal_id == item.terminal_id,
+            CertificatePin.org_id == order.org_id,
             CertificatePin.status == "pending",
             CertificatePin.purpose == "setup",
+            CertificatePin.expires_at > datetime.now(UTC),
         )
     )
     pending_pin = result.scalar_one_or_none()
@@ -1132,6 +1148,7 @@ async def confirm_payment(
     order_id: str,
     user: BillingUser = Depends(get_current_billing_user),
     db: AsyncSession = Depends(get_db),
+    simulate: bool = False,
 ):
     """Confirm a pending payment. Updates license.expires_at for each item."""
     try:
@@ -1157,18 +1174,62 @@ async def confirm_payment(
             items_updated=0,
         )
 
-    provider = get_payment_provider()
-    if not await provider.verify_payment(str(order.id)):
+    provider = get_payment_provider(
+        order, is_superuser=user.is_superuser, simulate=simulate
+    )
+    expected_provider_id = order.provider_order_id
+    expected_amount, expected_currency = order.amount_minor, order.currency
+    # Authoritative verification does not hold a row lock or an open DB transaction.
+    await db.commit()
+    try:
+        verified = await provider.verify_payment(str(order_uuid))
+    except YooKassaError as exc:
+        raise HTTPException(502, "Платёжный провайдер недоступен") from exc
+    if not verified:
         raise HTTPException(status_code=402, detail="Payment verification failed")
 
     result = await db.execute(
-        select(BillingOrderItem).where(BillingOrderItem.order_id == order_uuid)
+        select(BillingOrder)
+        .where(BillingOrder.id == order_uuid, BillingOrder.org_id == user.org_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    order = result.scalar_one_or_none()
+    if order is None:
+        raise HTTPException(404, "Order not found")
+    if order.status != OrderStatus.PENDING:
+        return ConfirmPaymentResponse(
+            order_id=str(order.id),
+            status=OrderStatus(order.status),
+            paid_at=order.paid_at,
+            items_updated=0,
+        )
+    if (order.amount_minor, order.currency, order.provider_order_id) != (
+        expected_amount,
+        expected_currency,
+        expected_provider_id,
+    ):
+        raise HTTPException(409, "Заказ изменился во время подтверждения")
+
+    result = await db.execute(
+        select(BillingOrderItem)
+        .where(BillingOrderItem.order_id == order_uuid)
+        .order_by(BillingOrderItem.terminal_id)
     )
     items = result.scalars().all()
 
     now = datetime.now(UTC)
 
     for item in items:
+        locked_terminal = await db.scalar(
+            select(Terminal)
+            .where(Terminal.id == item.terminal_id, Terminal.org_id == order.org_id)
+            .with_for_update(of=Terminal)
+        )
+        if locked_terminal is None:
+            raise HTTPException(
+                409, "Терминал заказа больше не принадлежит организации"
+            )
         if item.operation == "cert_pin":
             await _apply_cert_pin_item(db, order, item)
             continue
@@ -1176,6 +1237,7 @@ async def confirm_payment(
         result = await db.execute(
             select(License).where(
                 License.terminal_id == item.terminal_id,
+                License.org_id == order.org_id,
             )
         )
         license_ = result.scalar_one_or_none()
@@ -1189,10 +1251,32 @@ async def confirm_payment(
             )
             db.add(license_)
         else:
-            license_.expires_at = item.new_expires_at
+            license_.expires_at = max(license_.expires_at, item.new_expires_at)
 
     order.status = OrderStatus.PAID
     order.paid_at = now
+    order.provider = provider.name
+    db.add(
+        L4DeskAuditEvent(
+            tenant_id=order.org_id,
+            actor=user.username,
+            event_type="classic.payment_confirmed",
+            subject_type="billing_order",
+            subject_id=str(order.id),
+            correlation_id=str(order.id),
+            outcome="simulated"
+            if order.provider == "simulation"
+            else "free"
+            if order.provider == "free"
+            else "paid",
+            details={
+                "provider": order.provider,
+                "provider_order_id": order.provider_order_id,
+                "amount_minor": order.amount_minor,
+                "currency": order.currency,
+            },
+        )
+    )
 
     await db.commit()
 
@@ -1240,9 +1324,10 @@ async def get_order(
 @router.post("/terminals/{terminal_id}/certificate-pin")
 async def create_certificate_pin(
     terminal_id: int,
+    purpose: Literal["setup", "renew"] = Query("setup"),
     user: BillingUser = Depends(get_current_billing_user),
     db: AsyncSession = Depends(get_db),
-) -> PinReadyResponse | PaymentRequiredResponse:
+) -> PinReadyResponse | PaymentRequiredResponse | RenewalPermissionResponse:
     """Request permission to create a PIN for a terminal (organizational cert billing)."""
     terminal = await _get_terminal_for_org(db, terminal_id, user.org_id)
     org_settings = await _get_org_settings(db, user.org_id)
@@ -1260,11 +1345,11 @@ async def create_certificate_pin(
         select(CertificatePin).where(
             CertificatePin.terminal_id == terminal.id,
             CertificatePin.status == "pending",
-            CertificatePin.purpose == "setup",
+            CertificatePin.purpose == purpose,
         )
     )
     existing_pin = result.scalar_one_or_none()
-    if existing_pin is not None:
+    if existing_pin is not None and purpose == "setup":
         if existing_pin.expires_at > now:
             return PinReadyResponse(
                 terminal_id=terminal.id,
@@ -1282,6 +1367,11 @@ async def create_certificate_pin(
                 BillingOrder.status == "pending",
                 BillingOrderItem.terminal_id == terminal.id,
                 BillingOrderItem.operation == "cert_pin",
+                func.coalesce(
+                    BillingOrderItem.cert_policy_snapshot["purpose"].as_string(),
+                    "setup",
+                )
+                == purpose,
             )
             .limit(1)
         )
@@ -1300,6 +1390,8 @@ async def create_certificate_pin(
     price_minor = 0 if is_master else resolve_effective_price(policy, operation)
 
     if price_minor <= 0:
+        if purpose == "renew":
+            return RenewalPermissionResponse(terminal_id=terminal.id)
         pin_value = await generate_unique_pin(db)
         expires_at = compute_pin_expiry(now)
         cert_pin = CertificatePin(
@@ -1330,7 +1422,6 @@ async def create_certificate_pin(
             expires_at=expires_at,
         )
 
-    provider = get_payment_provider()
     import uuid
 
     order_id = uuid.uuid4()
@@ -1362,20 +1453,14 @@ async def create_certificate_pin(
         amount_minor=price_minor,
         old_expires_at=billing.license_expires_at or now,
         new_expires_at=billing.license_expires_at or now,
-        cert_policy_snapshot=build_cert_policy_snapshot(policy, operation, price_minor),
+        cert_policy_snapshot={
+            **build_cert_policy_snapshot(policy, operation, price_minor),
+            "purpose": purpose,
+        },
     )
     db.add(item)
 
-    try:
-        payment_url = await provider.create_checkout(
-            amount_minor=price_minor,
-            currency=policy.currency,
-            order_id=str(order_id),
-        )
-        order.payment_url = payment_url
-    except Exception:
-        logger.exception("Payment provider error")
-        raise HTTPException(status_code=502, detail="Payment provider error")
+    payment_url = await _create_payment_checkout(db, order, user)
 
     await db.commit()
 

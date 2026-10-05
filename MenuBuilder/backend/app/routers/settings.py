@@ -623,6 +623,11 @@ def _visible_terminals_query(org_id: int) -> Select[tuple[Terminal]]:
         )
         .exists()
     )
+    if settings.product_scope_split_enabled:
+        return select(Terminal).where(
+            Terminal.org_id == org_id,
+            or_(Terminal.l4desk_subscription_enabled.is_(False), ~deleted),
+        )
     return select(Terminal).where(Terminal.org_id == org_id, ~deleted)
 
 
@@ -797,6 +802,11 @@ async def list_terminals_settings(
         l4 = l4_map.get(t.id)
         if l4:
             is_free = (l4.terminal_id == earliest_active_id) and (l4.deleted_at is None)
+            if (
+                settings.product_scope_split_enabled
+                and not t.l4desk_subscription_enabled
+            ):
+                is_free = False
             is_online = bool(
                 t.iot_is_online
                 or (
@@ -1054,6 +1064,13 @@ async def delete_terminal(
 ) -> dict[str, Any]:
     """Soft-delete terminal and automatically transfer free quota to next earliest terminal."""
     _check_settings_access(user)
+    if settings.product_scope_split_enabled:
+        from app.services.product_scope import tenant_product
+
+        if await tenant_product(db, int(user.get("org_id") or 0)) == "classic":
+            return await set_terminal_activity(
+                terminal_id, TerminalActivityRequest(is_active=False), user, db
+            )
     service = TerminalOnboardingService(db)
     return await service.delete_terminal(
         user=user,

@@ -14,9 +14,11 @@ from fastapi import HTTPException
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models import Terminal
 from app.models_l4desk import L4DeskAuditEvent, L4DeskTerminal
 from app.repositories.l4desk_repository import L4DeskRepository
+from app.services.certificate_permission import certificate_permission
 from app.services.terminal_onboarding_service import (
     IssueCertificatePinRequest,
     IssueCertificatePinResponse,
@@ -44,7 +46,14 @@ class TerminalPinService:
         if not terminal.sn:
             raise HTTPException(409, "У терминала отсутствует серийный номер")
         l4 = await self.db.get(L4DeskTerminal, terminal_id)
-        if l4 is not None and l4.deleted_at is not None:
+        if (
+            l4 is not None
+            and l4.deleted_at is not None
+            and (
+                not settings.product_scope_split_enabled
+                or terminal.l4desk_subscription_enabled
+            )
+        ):
             raise HTTPException(404, "Терминал удалён")
         return terminal
 
@@ -103,6 +112,12 @@ class TerminalPinService:
     ) -> IssueCertificatePinResponse:
         terminal = await self._owned_terminal(terminal_id, user)
         operation_id = str(request_id)
+        order_item_id = await certificate_permission(
+            self.db,
+            terminal,
+            purpose="setup",
+            is_superuser=bool(user.get("is_superuser")),
+        )
         lock = text("SELECT pg_advisory_xact_lock(hashtextextended(:identity, 0))")
         await self.db.execute(lock, {"identity": f"mb-pin-operation:{operation_id}"})
         await self.db.execute(lock, {"identity": f"mb-terminal-pin:{terminal.id}"})
@@ -162,6 +177,7 @@ class TerminalPinService:
                         terminal_id=terminal.id,
                         sn=terminal.sn,
                         actor=str(user.get("sub") or user.get("id")),
+                        order_item_id=order_item_id,
                     )
                 )
             response = self._validate_response(response, terminal, operation_id)

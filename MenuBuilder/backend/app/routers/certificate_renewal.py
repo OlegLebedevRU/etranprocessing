@@ -19,6 +19,7 @@ from app.models import CertificatePin, Terminal, TerminalCertDiscovery
 from app.models_l4desk import L4DeskAuditEvent
 from app.routers.video import _verify_device_access
 from app.security.permissions import require_readonly_guard, require_tenant_admin
+from app.services.certificate_permission import certificate_permission
 from app.services.iot_client import iot_client
 from app.services.subscriptions import check_terminal
 from app.services.terminal_onboarding_service import ProcessingBackendPinClient
@@ -30,6 +31,7 @@ router = APIRouter(prefix="/api/devices", tags=["certificate-renewal"])
 class RenewalOrderRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     pin_id: int | None = Field(default=None, gt=0)
+    order_id: UUID | None = None
 
 
 class ProviderPin(BaseModel):
@@ -117,6 +119,13 @@ async def order_renewal(
     reason = await admission(terminal, db)
     if reason:
         raise HTTPException(403, reason)
+    order_item_id = await certificate_permission(
+        db,
+        terminal,
+        purpose="renew",
+        is_superuser=bool(user.get("is_superuser")),
+        order_id=str(body.order_id) if body.order_id else None,
+    )
     if not iot_client.base_url or not iot_client.service_token:
         raise HTTPException(503, "Сервис очереди недоступен")
     provider = ProcessingBackendPinClient()
@@ -140,6 +149,8 @@ async def order_renewal(
                         "terminal_id": terminal.id,
                         "sn": terminal.sn,
                         "pin_id": body.pin_id,
+                        "order_item_id": order_item_id,
+                        "admin_override": bool(user.get("is_superuser")),
                     },
                 )
                 if issued.status_code not in (200, 201):
@@ -211,6 +222,8 @@ async def order_renewal(
         }
         if pin is not None:
             detail.update(pin_id=pin.pin_id, expires_at=pin.expires_at.isoformat())
+        if body.order_id is not None:
+            detail["order_id"] = str(body.order_id)
         raise HTTPException(502, detail) from exc
 
 

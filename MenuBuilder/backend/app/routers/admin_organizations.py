@@ -6,10 +6,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import require_superuser
+from app.config import settings
 from app.database import get_db
 from app.models import Org, OrgBillingSettings, OrgStatus
 from app.schemas import AdminOrgCreate, AdminOrgRead, AdminOrgUpdate
 from app.services.iot_client import iot_client
+from app.services.product_scope import validate_product_update
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +124,19 @@ async def create_organization(
     user: dict = Depends(require_superuser),
 ) -> AdminOrgRead:
     """Create a new organization with licensing parameters (Superuser only)."""
+    if settings.product_scope_split_enabled:
+        if "site_mode" in body.model_fields_set and body.site_mode != "classic":
+            raise HTTPException(
+                409, "Новые организации L4Desk создаются через регистрацию"
+            )
+        body = body.model_copy(
+            update={
+                "site_mode": "classic",
+                "default_site": "classic",
+                "classic_licenses_enabled": True,
+                "l4desk_licenses_enabled": False,
+            }
+        )
     # IoT reserves the ID before this database creates the matching org.
     if body.org_id is not None:
         # Check if already exists
@@ -233,6 +248,8 @@ async def update_organization(
         )
 
     # Update org fields
+    validate_product_update(org, body.model_dump(exclude_unset=True))
+    frozen_tariff = settings.product_scope_split_enabled and org.site_mode == "l4desk"
     if body.org_name is not None:
         org.org_name = body.org_name
     if body.name is not None:
@@ -267,7 +284,7 @@ async def update_organization(
 
     # Update billing settings
     bs = await db.get(OrgBillingSettings, org_id)
-    if not bs:
+    if not bs and not frozen_tariff:
         bs = OrgBillingSettings(
             org_id=org_id,
             monthly_price_minor=(
@@ -293,7 +310,7 @@ async def update_organization(
             ),
         )
         db.add(bs)
-    else:
+    elif bs and not frozen_tariff:
         if body.monthly_price_minor is not None:
             bs.monthly_price_minor = body.monthly_price_minor
         if body.currency is not None:
@@ -332,7 +349,8 @@ async def update_organization(
 
     await db.commit()
     await db.refresh(org)
-    await db.refresh(bs)
+    if bs is not None:
+        await db.refresh(bs)
 
     return AdminOrgRead(
         **_site_fields(org),

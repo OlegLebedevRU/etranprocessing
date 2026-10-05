@@ -328,6 +328,19 @@ async def sync_order(
                 raise HTTPException(
                     409, "Оплаченный терминал удалён; требуется проверка заказа"
                 )
+            if settings.product_scope_split_enabled:
+                from app.models import Terminal
+
+                runtime = await db.get(Terminal, terminal.runtime_terminal_id)
+                if (
+                    runtime is None
+                    or runtime.org_id != owner_id
+                    or not runtime.l4desk_subscription_enabled
+                ):
+                    raise HTTPException(
+                        409,
+                        "Терминал больше не участвует в подписке; требуется сверка платежа",
+                    )
             old = terminal.paid_until
             new_paid_until = add_months(
                 max(paid_at, old or paid_at), item["months"], snapshot["timezone"]

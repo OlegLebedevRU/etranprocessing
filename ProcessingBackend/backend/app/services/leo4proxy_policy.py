@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Literal
 from zoneinfo import ZoneInfo
 
+from etranprocessing_access import subscription_allowed, subscription_state
 from etranprocessing_db.l4desk import (
     L4DeskAuditEvent,
     L4DeskTenantProfile,
@@ -54,12 +55,15 @@ def configured_endpoints() -> dict | None:
 
 
 def get_leo4proxy_policy(
-    terminal: Terminal, subscription_allowed: bool = True
+    terminal: Terminal,
+    subscription_allowed: bool = True,
+    *,
+    now: datetime | None = None,
 ) -> Leo4ProxyPolicy:
     expires = terminal.cert_not_valid_after
     if expires is not None and expires.tzinfo is None:
         expires = expires.replace(tzinfo=UTC)
-    certificate_expired = expires is not None and expires <= datetime.now(UTC)
+    certificate_expired = expires is not None and expires <= (now or datetime.now(UTC))
     allowed = terminal.is_active and subscription_allowed and not certificate_expired
     stop_facts: list[Literal["terminal_inactive", "certificate_expired"]] = (
         [] if terminal.is_active and subscription_allowed else ["terminal_inactive"]
@@ -78,10 +82,17 @@ def get_leo4proxy_policy(
     )
 
 
-async def subscription_allowance(db: AsyncSession, terminal: Terminal) -> bool:
+async def subscription_allowance(
+    db: AsyncSession, terminal: Terminal, *, now: datetime | None = None
+) -> bool:
+    if (
+        settings.product_scope_split_enabled
+        and not terminal.l4desk_subscription_enabled
+    ):
+        return True
     profile = await db.get(L4DeskTenantProfile, terminal.org_id)
     if profile is None:
-        return True  # Classic session records are not a subscription enrollment.
+        return not settings.product_scope_split_enabled
     subscription = await db.scalar(
         select(L4DeskTerminal).where(
             L4DeskTerminal.terminal_id == terminal.id,
@@ -90,7 +101,7 @@ async def subscription_allowance(db: AsyncSession, terminal: Terminal) -> bool:
     )
     if subscription is None or subscription.deleted_at is not None:
         return False
-    free_id = await db.scalar(
+    stmt = (
         select(L4DeskTerminal.terminal_id)
         .where(
             L4DeskTerminal.tenant_id == terminal.org_id,
@@ -99,6 +110,14 @@ async def subscription_allowance(db: AsyncSession, terminal: Terminal) -> bool:
         .order_by(L4DeskTerminal.ordinal)
         .limit(1)
     )
+    if settings.product_scope_split_enabled:
+        stmt = stmt.join(
+            Terminal, Terminal.id == L4DeskTerminal.runtime_terminal_id
+        ).where(
+            Terminal.org_id == terminal.org_id,
+            Terminal.l4desk_subscription_enabled.is_(True),
+        )
+    free_id = await db.scalar(stmt)
     if free_id == terminal.id:
         return True
     if not settings.yookassa_enabled or subscription.paid_until is None:
@@ -122,4 +141,14 @@ async def subscription_allowance(db: AsyncSession, terminal: Terminal) -> bool:
     details = terms.details if terms else None
     if details and details.get("paid_until") == paid.isoformat():
         grace = datetime.fromisoformat(details["grace_until"])
-    return datetime.now(UTC) < grace
+    return subscription_allowed(
+        subscription_state(
+            deleted=False,
+            admin_active=True,
+            is_free=False,
+            payments_enabled=settings.yookassa_enabled,
+            paid_until=paid,
+            grace_until=grace,
+            now=now or datetime.now(UTC),
+        )
+    )

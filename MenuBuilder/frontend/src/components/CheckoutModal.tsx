@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Button,
@@ -17,9 +17,11 @@ import {
   createCheckout,
   confirmPayment,
   type BillingTerminal,
+  type CheckoutResponse,
 } from "../api/billing";
 import { requestCertificatePin } from "../api/certificate-pin";
 import { formatMoneyMinor, formatDate } from "../utils/billing";
+import { useSession } from "../session/SessionContext";
 
 const { Text } = Typography;
 
@@ -66,10 +68,19 @@ export default function CheckoutModal({
   onClose,
   onPaid,
 }: CheckoutModalProps) {
+  const { user } = useSession();
+  const generation = useRef(0);
+  const sending = useRef(false);
+  const [order, setOrder] = useState<CheckoutResponse | null>(null);
   const [paying, setPaying] = useState(false);
   const [paid, setPaid] = useState(false);
   const [pins, setPins] = useState<IssuedPin[]>([]);
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    generation.current += 1; sending.current = false;
+    setOrder(null); setPaid(false); setPins([]); setError(null); setPaying(false);
+    return () => { generation.current += 1; };
+  }, [open, user?.org_id]);
 
   const total = lines.reduce(
     (sum, l) => sum + l.licenseAmountMinor + l.certAmountMinor,
@@ -100,35 +111,46 @@ export default function CheckoutModal({
   const certsTotalMinor = certLines.reduce((sum, l) => sum + l.certAmountMinor, 0);
 
   const reset = () => {
+    setOrder(null);
     setPaid(false);
     setPins([]);
     setError(null);
   };
 
   const handleClose = () => {
+    if (sending.current) return;
     reset();
     onClose();
   };
 
-  const handlePay = async () => {
+  const handlePay = async (simulate = false) => {
+    if (sending.current) return;
+    const current = generation.current;
+    sending.current = true;
     setPaying(true);
     setError(null);
     try {
-      const checkout = await createCheckout({
+      if (!order) {
+        const checkout = await createCheckout({
         items: lines.map((l) => ({
           terminal_id: l.terminal.terminal_id,
           advance_periods: l.license ? advancePeriods : 0,
           include_license: l.license,
           include_cert_pin: l.cert,
         })),
-      });
-      await confirmPayment(checkout.order_id);
+        });
+        if (current === generation.current) setOrder(checkout);
+        return;
+      }
+      await confirmPayment(order.order_id, simulate);
+      if (current !== generation.current) return;
 
       const certLines = lines.filter((l) => l.cert);
       const issued: IssuedPin[] = [];
       for (const line of certLines) {
         try {
           const res = await requestCertificatePin(line.terminal.terminal_id);
+          if (current !== generation.current) return;
           if (res.status === "pin_ready") {
             issued.push({
               deviceId: line.terminal.device_id,
@@ -145,9 +167,9 @@ export default function CheckoutModal({
       setPaid(true);
       onPaid();
     } catch (e: unknown) {
-      setError(describePaymentError(e));
+      if (current === generation.current) setError(describePaymentError(e));
     } finally {
-      setPaying(false);
+      if (current === generation.current) { sending.current = false; setPaying(false); }
     }
   };
 
@@ -178,15 +200,19 @@ export default function CheckoutModal({
               <Button key="cancel" onClick={handleClose}>
                 Отмена
               </Button>,
+              order?.payment_url?.startsWith("https://") && <Button key="checkout" href={order.payment_url}
+                target="_blank" rel="noopener noreferrer" disabled={paying}>Перейти к оплате</Button>,
               <Button
                 key="pay"
                 type="primary"
                 loading={paying}
                 disabled={lines.length === 0}
-                onClick={handlePay}
+                onClick={() => void handlePay()}
               >
-                Оплатить {formatMoneyMinor(total)}
+                {order ? "Проверить оплату" : `Создать заказ ${formatMoneyMinor(total)}`}
               </Button>,
+              order && user?.is_superuser && <Button key="simulate" disabled={paying}
+                onClick={() => void handlePay(true)}>Эмулировать оплату</Button>,
             ]
       }
     >

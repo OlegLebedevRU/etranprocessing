@@ -219,8 +219,10 @@ export interface ConfirmPaymentResponse {
 
 export async function confirmPayment(
   orderId: string,
+  simulate = false,
 ): Promise<ConfirmPaymentResponse> {
-  const res = await client.post(`/billing/orders/${orderId}/confirm`);
+  const res = await client.post(`/billing/orders/${orderId}/confirm`, undefined,
+    simulate ? { params: { simulate: true } } : undefined);
   return res.data;
 }
 

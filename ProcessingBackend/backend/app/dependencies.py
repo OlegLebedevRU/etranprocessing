@@ -386,7 +386,10 @@ async def get_terminal_license_state(
     """
     Compute the terminal license state for the terminal-facing API.
     Returns TerminalLicenseState with license (if found) and computed state.
-    Never raises HTTPException — state is always computed, not thrown.
+    Classic only: no L4Desk subscription facts or server-side expiry grace.
+    Exact expiry remains valid here; the terminal owns its three-day grace.
+    Only the existing "blocked" org status denies; "inactive" is unchanged.
+    License denies are returned as state=error, not HTTPException.
     """
     # Check org status
     org_res = await db.execute(

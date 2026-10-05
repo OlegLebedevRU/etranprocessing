@@ -146,9 +146,18 @@ describe("L4Desk Navigation Profile & Route Resolution", () => {
     expect(isProfileAllowed(user, "l4desk")).toBe(false);
   });
 
-  it("Role 3 starts in Classic and may explicitly switch to L4Desk", () => {
+  it("Role 3 remains Classic despite stored, URL and tenant defaults", () => {
     const user: UserInfo = { username: "operator", org_id: 43, role_id: 3, site_mode: "both", default_site: "l4desk" };
     expect(getNavigationProfile(user)).toBe("classic");
+    expect(isProfileAllowed(user, "l4desk")).toBe(false);
+    setNavigationProfile("l4desk", user);
+    mockLocalStorage.setItem("app_nav_profile:43", "l4desk");
+    (globalThis as any).window.location.search = "?profile=l4desk";
+    expect(getNavigationProfile(user)).toBe("classic");
+  });
+
+  it("A superuser retains both scopes for the explicit dev tenant", () => {
+    const user: UserInfo = { username: "fixture-su", org_id: 1, role_id: 3, is_superuser: true, site_mode: "both" };
     expect(isProfileAllowed(user, "l4desk")).toBe(true);
     setNavigationProfile("l4desk", user);
     expect(getNavigationProfile(user)).toBe("l4desk");

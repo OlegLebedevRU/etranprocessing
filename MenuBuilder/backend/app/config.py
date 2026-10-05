@@ -17,6 +17,7 @@ nQIDAQAB
 
 class Settings(BaseSettings):
     database_url: str = ""
+    product_scope_split_enabled: bool = False
     smartcaptcha_enabled: bool = True
     smartcaptcha_site_key: str = ""
     smartcaptcha_secret_key: str = ""
@@ -170,6 +171,7 @@ class Settings(BaseSettings):
         False  # Disabled in 08B (permissive legacy policy)
     )
     remote_session_start_timeout_sec: float = 20.0
+    remote_session_stop_timeout_sec: float = Field(default=45.0, gt=0)
     remote_session_watchdog_ttl_sec: int = 600
 
     # IoT Contract Consumer v1 (L4Desk event feed)
@@ -203,7 +205,7 @@ class Settings(BaseSettings):
     l4desk_billing_enabled: bool = False
     l4desk_ui_enabled: bool = False
     schema_compatibility_check_enabled: bool = True
-    required_alembic_revision: str = "029"
+    required_alembic_revision: str = "031"
 
     # L4Desk Self-Registration & Security (L4D-05-MB)
     l4desk_registration_token_expire_hours: int = 24

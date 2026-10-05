@@ -30,6 +30,8 @@ from app.services.cert_billing import (
     resolve_operation_type,
 )
 
+pytestmark = pytest.mark.usefixtures("classic_yookassa")
+
 
 @pytest.fixture(autouse=True)
 def cleanup_overrides():
@@ -467,7 +469,7 @@ async def test_certificate_pin_idempotent_returns_existing_pending_order():
 @pytest.mark.anyio
 async def test_confirm_payment_cert_pin_creates_pin_not_license():
     """Confirming a cert_pin order creates a CertificatePin and does not touch licenses."""
-    user = _make_user()
+    user = BillingUser(username="testsuperuser", org_id=1, is_superuser=True)
     order_id = uuid.uuid4()
 
     order = MagicMock()
@@ -475,6 +477,10 @@ async def test_confirm_payment_cert_pin_creates_pin_not_license():
     order.org_id = 1
     order.status = "pending"
     order.paid_at = None
+    order.provider = None
+    order.provider_order_id = None
+    order.amount_minor = 500000
+    order.currency = "RUB"
 
     item = MagicMock()
     item.id = 42
@@ -508,7 +514,7 @@ async def test_confirm_payment_cert_pin_creates_pin_not_license():
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.post(f"/api/billing/orders/{order_id}/confirm")
+        resp = await client.post(f"/api/billing/orders/{order_id}/confirm?simulate=true")
 
     assert resp.status_code == 200
     data = resp.json()

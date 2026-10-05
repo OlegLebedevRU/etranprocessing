@@ -12,6 +12,8 @@ class RenewalPinRequest(BaseModel):
     terminal_id: int = Field(gt=0)
     sn: str = Field(min_length=1, max_length=100)
     pin_id: int | None = Field(default=None, gt=0)
+    order_item_id: int | None = Field(default=None, gt=0)
+    admin_override: bool = False
 
 
 class RenewalPinResponse(BaseModel):
@@ -38,6 +40,7 @@ class IssueCertificatePinRequest(BaseModel):
     """Request payload to idempotently issue a one-time certificate PIN."""
 
     model_config = ConfigDict(extra="ignore")
+    order_item_id: int | None = Field(default=None, gt=0)
 
     operation_id: str = Field(
         ...,

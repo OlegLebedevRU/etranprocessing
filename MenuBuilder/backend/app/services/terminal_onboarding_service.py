@@ -156,6 +156,7 @@ class IssueCertificatePinRequest(BaseModel):
     sn: str
     ttl_seconds: int = 86400
     actor: str | None = "menubuilder"
+    order_item_id: int | None = None
 
 
 class IssueCertificatePinResponse(BaseModel):
@@ -822,6 +823,16 @@ class TerminalOnboardingService:
         # ---------------------------------------------------------------------
         if l4_terminal.pin_state not in ("issued", "consumed"):
             try:
+                from app.services.certificate_permission import certificate_permission
+
+                runtime = await self.db.get(Terminal, l4_terminal.runtime_terminal_id)
+                order_item_id = None
+                if settings.product_scope_split_enabled:
+                    if runtime is None:
+                        raise HTTPException(409, "Терминал не найден")
+                    order_item_id = await certificate_permission(
+                        self.db, runtime, purpose="setup"
+                    )
                 pin_req = IssueCertificatePinRequest(
                     operation_id=l4_terminal.operation_id,
                     correlation_id=correlation_id,
@@ -830,6 +841,7 @@ class TerminalOnboardingService:
                     sn=l4_terminal.sn,
                     ttl_seconds=86400,
                     actor=actor,
+                    order_item_id=order_item_id,
                 )
                 pin_res = await self.pin_client.issue_pin(pin_req)
                 l4_terminal.pin_state = pin_res.status

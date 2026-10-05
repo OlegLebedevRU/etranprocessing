@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import UTC, datetime
 from typing import Any
 
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models_l4desk import L4DeskAuditEvent, L4DeskRemoteSession
 from app.repositories.l4desk_repository import L4DeskRepository
 from app.services.iot_client import iot_client
@@ -22,6 +25,33 @@ class RemoteSessionStopService:
        console запрещает новые commands, ждёт текущий response или IoT timeout, затем stop.
     IoT executes command-aware graceful stop for console and media teardown for video per H-L4D-07-IOT-v1.
     """
+
+    @staticmethod
+    async def _commercial_allows(
+        db: AsyncSession, tenant_id: int, runtime: Any
+    ) -> bool:
+        from app.services.subscriptions import check_terminal
+
+        if not runtime.is_active:
+            return False
+        try:
+            current = await check_terminal(db, tenant_id, runtime)
+        except HTTPException as exc:
+            if exc.status_code != 403:
+                raise
+            return (
+                False  # Invalid/missing enrollment metadata must not prevent cleanup.
+            )
+        return current is None or current.allowed
+
+    @staticmethod
+    async def _bounded_stop(
+        db: AsyncSession, session: L4DeskRemoteSession, iot_adapter: Any = None
+    ) -> bool:
+        async with asyncio.timeout(settings.remote_session_stop_timeout_sec):
+            return await RemoteSessionStopService._stop_provider_session(
+                db, session, iot_adapter
+            )
 
     @staticmethod
     async def _stop_provider_session(
@@ -136,13 +166,15 @@ class RemoteSessionStopService:
         repo = L4DeskRepository(db)
         if terminal_id is not None:
             from app.models import Terminal
-            from app.services.subscriptions import check_terminal
 
             runtime = await db.get(Terminal, terminal_id)
-            if runtime is not None:
-                current = await check_terminal(db, tenant_id, runtime)
-                if current is None or current.allowed:
-                    return []
+            if (
+                runtime is not None
+                and await RemoteSessionStopService._commercial_allows(
+                    db, tenant_id, runtime
+                )
+            ):
+                return []
         sessions = await repo.get_active_sessions_for_tenant(tenant_id)
         if terminal_id is not None:
             sessions = [s for s in sessions if s.terminal_id == terminal_id]
@@ -164,7 +196,7 @@ class RemoteSessionStopService:
             corr_id = session.correlation_id
 
             try:
-                confirmed = await RemoteSessionStopService._stop_provider_session(
+                confirmed = await RemoteSessionStopService._bounded_stop(
                     db, session, iot_adapter
                 )
                 await RemoteSessionStopService._close_after_stop(db, session, confirmed)
@@ -263,20 +295,22 @@ class RemoteSessionStopService:
                 or session.reason == "entitlement_blocked"
             ):
                 from app.models import Terminal
-                from app.services.subscriptions import check_terminal
 
                 runtime = await db.get(Terminal, session.terminal_id)
-                if runtime is not None:
-                    current = await check_terminal(db, session.tenant_id, runtime)
-                    if current is None or current.allowed:
-                        session.state = "active"
-                        session.reason = None
-                        continue
+                if (
+                    runtime is not None
+                    and await RemoteSessionStopService._commercial_allows(
+                        db, session.tenant_id, runtime
+                    )
+                ):
+                    session.state = "active"
+                    session.reason = None
+                    continue
             op_id = f"retry-stop-outbox-{session.operation_id}"
             corr_id = session.correlation_id
 
             try:
-                confirmed = await RemoteSessionStopService._stop_provider_session(
+                confirmed = await RemoteSessionStopService._bounded_stop(
                     db, session, iot_adapter
                 )
                 await RemoteSessionStopService._close_after_stop(db, session, confirmed)

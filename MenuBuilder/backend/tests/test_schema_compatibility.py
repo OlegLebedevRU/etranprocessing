@@ -26,7 +26,7 @@ from app.schema_compatibility import (
 )
 
 SCHEMA_JSON_PATH = (
-    Path(__file__).resolve().parents[3] / "shared/docs/l4desk/schema-v030.json"
+    Path(__file__).resolve().parents[3] / "shared/docs/l4desk/schema-v031.json"
 )
 
 
@@ -128,7 +128,7 @@ def test_startup_error_on_wrong_revision():
         sync_engine.connect() as conn,
         pytest.raises(
             SchemaCompatibilityError,
-            match=r"Database schema revision mismatch: expected one of \['030', '031'\]",
+            match=r"Database schema revision mismatch: expected one of \['031'\]",
         ),
     ):
         check_schema_compatibility_sync(conn)
@@ -139,7 +139,7 @@ def test_startup_error_on_missing_required_tables():
     sync_engine = create_engine("sqlite:///:memory:")
     with sync_engine.begin() as conn:
         conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32));"))
-        conn.execute(text("INSERT INTO alembic_version VALUES ('030');"))
+        conn.execute(text("INSERT INTO alembic_version VALUES ('031');"))
         # Only create 1 table instead of 23
         conn.execute(
             text("CREATE TABLE l4desk_registrations (id INTEGER PRIMARY KEY);")
@@ -155,13 +155,12 @@ def test_startup_error_on_missing_required_tables():
         check_schema_compatibility_sync(conn)
 
 
-@pytest.mark.parametrize("revision", ["030", "031"])
-def test_startup_success_when_revision_and_tables_match(revision):
+def test_startup_success_when_revision_and_tables_match():
     """check_schema_compatibility_sync succeeds cleanly when revision 029 and all tables exist."""
     sync_engine = create_engine("sqlite:///:memory:")
     with sync_engine.begin() as conn:
         conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32));"))
-        conn.execute(text("INSERT INTO alembic_version VALUES (:revision)"), {"revision": revision})
+        conn.execute(text("INSERT INTO alembic_version VALUES ('031');"))
         for t in L4DESK_TABLES:
             conn.execute(
                 text(
@@ -172,6 +171,11 @@ def test_startup_success_when_revision_and_tables_match(revision):
             )
 
     with sync_engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE IF NOT EXISTS terminals (id INTEGER PRIMARY KEY, l4desk_subscription_enabled BOOLEAN NOT NULL DEFAULT false);"
+            )
+        )
         conn.execute(
             text(
                 "CREATE TABLE certificate_pins (purpose TEXT, renewal_auth_serial TEXT, renewal_csr_sha256 TEXT, renewal_response TEXT);"
@@ -188,7 +192,7 @@ async def test_verify_schema_compatibility_async():
     sync_engine = create_engine("sqlite:///:memory:")
     with sync_engine.begin() as conn:
         conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32));"))
-        conn.execute(text("INSERT INTO alembic_version VALUES ('030');"))
+        conn.execute(text("INSERT INTO alembic_version VALUES ('031');"))
         for t in L4DESK_TABLES:
             conn.execute(
                 text(
@@ -199,6 +203,11 @@ async def test_verify_schema_compatibility_async():
             )
 
     with sync_engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE IF NOT EXISTS terminals (id INTEGER PRIMARY KEY, l4desk_subscription_enabled BOOLEAN NOT NULL DEFAULT false);"
+            )
+        )
         conn.execute(
             text(
                 "CREATE TABLE certificate_pins (purpose TEXT, renewal_auth_serial TEXT, renewal_csr_sha256 TEXT, renewal_response TEXT);"
@@ -262,7 +271,7 @@ def test_compatibility_against_migrated_db():
     with sync_engine.begin() as conn:
         # Setup alembic_version
         conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32));"))
-        conn.execute(text("INSERT INTO alembic_version VALUES ('030');"))
+        conn.execute(text("INSERT INTO alembic_version VALUES ('031');"))
 
         # Setup supporting legacy tables
         conn.execute(text("CREATE TABLE orgs (org_id INTEGER PRIMARY KEY, name TEXT);"))
@@ -270,13 +279,20 @@ def test_compatibility_against_migrated_db():
             text("CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT);")
         )
         conn.execute(
-            text("CREATE TABLE terminals (id INTEGER PRIMARY KEY, terminal_id TEXT);")
+            text(
+                "CREATE TABLE terminals (id INTEGER PRIMARY KEY, terminal_id TEXT, l4desk_subscription_enabled BOOLEAN NOT NULL DEFAULT false);"
+            )
         )
 
         tables_to_create = [
             Base.metadata.tables[t] for t in L4DESK_TABLES if t in Base.metadata.tables
         ]
         Base.metadata.create_all(conn, tables=tables_to_create)
+        conn.execute(
+            text(
+                "CREATE TABLE IF NOT EXISTS terminals (id INTEGER PRIMARY KEY, l4desk_subscription_enabled BOOLEAN NOT NULL DEFAULT false);"
+            )
+        )
         conn.execute(
             text(
                 "CREATE TABLE certificate_pins (purpose TEXT, renewal_auth_serial TEXT, renewal_csr_sha256 TEXT, renewal_response TEXT);"

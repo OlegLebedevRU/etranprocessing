@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 
 import pytest
 from etranprocessing_db import Base
-from sqlalchemy import select
+from sqlalchemy import create_mock_engine, select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.config import settings
@@ -50,9 +50,19 @@ async def pg(monkeypatch):
         )
     engine = create_async_engine(url)
     # The supplied DB must be dedicated to these tests. They never use DATABASE_URL.
+    # Batch identical SQLAlchemy-generated DDL: remote disposable DBs otherwise
+    # pay a network round trip for every table/index in every fixture.
+    statements = ["DROP SCHEMA public CASCADE", "CREATE SCHEMA public"]
+
+    def capture(statement, *args, **kwargs):
+        statements.append(str(statement.compile(dialect=ddl_engine.dialect)))
+
+    ddl_engine = create_mock_engine("postgresql://", capture, paramstyle="named")
+    Base.metadata.create_all(ddl_engine, checkfirst=False)
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(text("SELECT 1"))  # Start the tracked transaction.
+        raw = await conn.get_raw_connection()
+        await raw.driver_connection.execute(";\n".join(statements))
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as db:
         db.add(
@@ -95,6 +105,90 @@ async def pg(monkeypatch):
     yield factory, client
     set_yookassa_client_override(None)
     await engine.dispose()
+
+
+async def test_classic_concurrent_confirmation_applies_once_without_admin_unblock(
+    pg, monkeypatch
+):
+    from datetime import timedelta
+    from uuid import uuid4
+
+    from sqlalchemy import func
+
+    from app.models import BillingOrder, BillingOrderItem, License
+    from app.models_l4desk import L4DeskAuditEvent
+    from app.routers.billing import BillingUser, confirm_payment
+    from app.services.payment_provider import MockPaymentProvider
+
+    factory, _ = pg
+    monkeypatch.setattr(settings, "yookassa_enabled", False)
+    order_id = uuid4()
+    expiry = datetime.now(UTC) + timedelta(days=90)
+    async with factory() as db:
+        terminal = await db.get(Terminal, 1)
+        terminal.is_active = False
+        db.add(License(terminal_id=1, org_id=9911, expires_at=expiry))
+        db.add(
+            BillingOrder(
+                id=order_id,
+                org_id=9911,
+                status="pending",
+                amount_minor=100,
+                currency="RUB",
+            )
+        )
+        await db.flush()
+        db.add(
+            BillingOrderItem(
+                order_id=order_id,
+                terminal_id=1,
+                operation="renewal",
+                periods_due=0,
+                advance_periods=1,
+                billing_period_months=1,
+                monthly_price_minor=100,
+                amount_minor=100,
+                old_expires_at=expiry - timedelta(days=90),
+                new_expires_at=expiry - timedelta(days=60),
+            )
+        )
+        await db.commit()
+    ready = asyncio.Event()
+    count = 0
+
+    async def verified(self, _order_id):
+        nonlocal count
+        count += 1
+        if count == 2:
+            ready.set()
+        await ready.wait()
+        return True
+
+    monkeypatch.setattr(MockPaymentProvider, "verify_payment", verified)
+
+    async def request():
+        async with factory() as db:
+            return await confirm_payment(
+                str(order_id), BillingUser("fixture-su", 9911, True), db
+            )
+
+    async with asyncio.timeout(20):
+        responses = await asyncio.gather(request(), request())
+    assert sorted(response.items_updated for response in responses) == [0, 1]
+    async with factory() as db:
+        assert (await db.get(Terminal, 1)).is_active is False
+        assert (
+            await db.scalar(select(License.expires_at).where(License.terminal_id == 1))
+            == expiry
+        )
+        assert (
+            await db.scalar(
+                select(func.count())
+                .select_from(L4DeskAuditEvent)
+                .where(L4DeskAuditEvent.event_type == "classic.payment_confirmed")
+            )
+            == 1
+        )
 
 
 async def test_duration_replay_never_posts_money(pg):
@@ -153,6 +247,46 @@ async def test_success_replayed_by_two_consumers_extends_once(pg):
         assert terminal is not None
         assert terminal.paid_until == datetime(2026, 11, 3, 12, tzinfo=UTC)
         assert not list(await db.scalars(select(FinLedgerTransaction)))
+
+
+async def test_explicit_enrollment_isolated_from_classic_and_stale_payment(
+    pg, monkeypatch
+):
+    from fastapi import HTTPException
+
+    from app.services.subscriptions import check_terminal, list_subscriptions
+
+    factory, client = pg
+    order, _ = await make_order(factory)
+    async with factory() as db:
+        payment = await db.get(FinPayment, order["id"])
+        pid = payment.provider_payment_id
+        org = await db.get(Org, 9911)
+        org.site_mode = "classic"
+        enrolled = await db.get(Terminal, 2)
+        enrolled.l4desk_subscription_enabled = True
+        await db.commit()
+    monkeypatch.setattr(settings, "product_scope_split_enabled", True)
+    async with factory() as db:
+        states = await list_subscriptions(db, 9911)
+        assert len(states) == 1 and states[0].terminal_id == 2 and states[0].is_free
+        assert await check_terminal(db, 9911, await db.get(Terminal, 1)) is None
+        assert (await check_terminal(db, 9911, await db.get(Terminal, 2))).allowed
+        runtime = await db.get(Terminal, 2)
+        runtime.is_active = False
+        await db.commit()
+        assert (await check_terminal(db, 9911, runtime)).state == "admin_disabled"
+        runtime.l4desk_subscription_enabled = False
+        await db.commit()
+    client.set_payment_status(pid, "succeeded")
+    client.payments[pid]["captured_at"] = "2026-10-03T12:00:00Z"
+    async with factory() as db:
+        with pytest.raises(HTTPException) as exc:
+            await sync_order(db, order["id"], 9911)
+        assert exc.value.status_code == 409
+    async with factory() as db:
+        assert (await db.get(L4DeskTerminal, 2)).paid_until is None
+        assert (await db.get(Terminal, 2)).is_active is False
 
 
 async def test_limit_is_enforced_on_actual_database(pg):

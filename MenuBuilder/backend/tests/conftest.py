@@ -54,3 +54,23 @@ def mock_auth_org_policy(monkeypatch):
             return SimpleNamespace(first=lambda: row)
 
     monkeypatch.setattr("app.routers.auth.async_session", Session)
+
+
+@pytest.fixture
+def classic_yookassa(monkeypatch):
+    """Existing tariff tests use a configured provider, never tenant simulation."""
+    monkeypatch.setattr(settings, "yookassa_enabled", True)
+    monkeypatch.setattr(settings, "yookassa_receipt_enabled", False)
+    monkeypatch.setattr(settings, "yookassa_return_url_base", "https://example.invalid")
+
+    class Client:
+        async def create_payment(self, **kwargs):
+            amount = kwargs["amount_kopecks"]
+            return {
+                "id": "test-payment-id",
+                "amount": {"value": f"{amount // 100}.{amount % 100:02d}", "currency": "RUB"},
+                "metadata": kwargs["metadata"],
+                "confirmation": {"confirmation_url": "https://example.invalid/pay"},
+            }
+
+    monkeypatch.setattr("app.services.payment_provider.get_yookassa_client", lambda: Client())

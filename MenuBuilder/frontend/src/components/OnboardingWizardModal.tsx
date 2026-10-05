@@ -34,10 +34,12 @@ import { useNavigate } from "react-router";
 import {
   onboardTerminal,
   getTerminalReadiness,
+  retryTerminalOnboarding,
   type TerminalOnboardResponse,
   type TerminalReadiness,
 } from "../api/settings";
 import RefusalReasonCard from "./RefusalReasonCard";
+import CertificatePinModal from "./CertificatePinModal";
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -76,12 +78,21 @@ export default function OnboardingWizardModal({
   const [readiness, setReadiness] = useState<TerminalReadiness | null>(null);
   const [pollingActive, setPollingActive] = useState(false);
   const [sessionError, setSessionError] = useState<{ code: string; message: string } | null>(null);
+  const [pinModalOpen, setPinModalOpen] = useState(false);
 
   const [form] = Form.useForm();
   const pollTimerRef = useRef<number | null>(null);
+  const generation = useRef(0);
+  const pollingGeneration = useRef(0);
+  const creating = useRef(false);
 
   // Reset state on open/close
   useEffect(() => {
+    generation.current += 1;
+    pollingGeneration.current += 1;
+    creating.current = false; setLoading(false); setPinModalOpen(false);
+    if (pollTimerRef.current) { clearTimeout(pollTimerRef.current); pollTimerRef.current = null; }
+    setPollingActive(false);
     if (open) {
       setCurrentStep(0);
       setCreatedTerminal(null);
@@ -95,7 +106,8 @@ export default function OnboardingWizardModal({
       }
       setPollingActive(false);
     }
-  }, [open, form]);
+    return () => { generation.current += 1; };
+  }, [open, orgId, form]);
 
   // Clean up polling on unmount
   useEffect(() => {
@@ -107,6 +119,9 @@ export default function OnboardingWizardModal({
   }, []);
 
   const handleCreateTerminal = async (values: any) => {
+    if (creating.current) return;
+    const current = generation.current;
+    creating.current = true;
     setLoading(true);
     try {
       const resp = await onboardTerminal(
@@ -119,15 +134,17 @@ export default function OnboardingWizardModal({
         },
         orgId
       );
+      if (current !== generation.current) return;
       setCreatedTerminal(resp);
       setReadiness(resp.readiness);
       onTerminalCreated?.(resp);
-      message.success(`Терминал ${resp.device_id} успешно зарегистрирован! Получен одноразовый PIN-код.`);
+      message.success(resp.pin ? `Терминал ${resp.device_id} зарегистрирован. Получен одноразовый PIN.`
+        : `Терминал ${resp.device_id} зарегистрирован. Выдача PIN ещё не завершена.`);
       setCurrentStep(1);
     } catch (err: any) {
-      message.error(err.response?.data?.detail || "Ошибка при создании терминала");
+      if (current === generation.current) message.error(err.message || "Ошибка при создании терминала");
     } finally {
-      setLoading(false);
+      if (current === generation.current) { creating.current = false; setLoading(false); }
     }
   };
 
@@ -138,6 +155,8 @@ export default function OnboardingWizardModal({
 
   // Start polling when entering Step 2
   const startPolling = (terminalId: number) => {
+    const current = generation.current;
+    const pollEpoch = ++pollingGeneration.current;
     setPollingActive(true);
     if (pollTimerRef.current) {
       clearInterval(pollTimerRef.current);
@@ -146,6 +165,7 @@ export default function OnboardingWizardModal({
     const poll = async () => {
       try {
         const resp = await getTerminalReadiness(terminalId);
+        if (current !== generation.current || pollEpoch !== pollingGeneration.current) return;
         setReadiness(resp.readiness);
         if (resp.readiness.online === "online") {
           message.success("Терминал успешно вышел в онлайн!");
@@ -154,14 +174,28 @@ export default function OnboardingWizardModal({
             pollTimerRef.current = null;
           }
           setPollingActive(false);
+          return;
         }
       } catch {
         // quiet retry
       }
+      if (current === generation.current && pollEpoch === pollingGeneration.current)
+        pollTimerRef.current = window.setTimeout(poll, 3000);
     };
 
     void poll();
-    pollTimerRef.current = window.setInterval(poll, 3000);
+  };
+
+  const adoptPaidPin = async () => {
+    if (!createdTerminal) return;
+    const current = generation.current;
+    try {
+      const resp = await retryTerminalOnboarding(createdTerminal.terminal_id);
+      if (current !== generation.current) return;
+      setCreatedTerminal(resp); setReadiness(resp.readiness);
+    } catch (error: any) {
+      if (current === generation.current) message.error(error.message || "Не удалось завершить выдачу PIN");
+    }
   };
 
   const handleProceedToReadiness = () => {
@@ -196,7 +230,7 @@ export default function OnboardingWizardModal({
       title={
         <Space align="center">
           <DesktopOutlined style={{ color: "#1677ff", fontSize: 20 }} />
-          <span>Мастер подключения терминала L4Desk</span>
+          <span>Мастер подключения терминала</span>
         </Space>
       }
       open={open}
@@ -205,6 +239,9 @@ export default function OnboardingWizardModal({
       footer={null}
       destroyOnClose
     >
+      <CertificatePinModal open={pinModalOpen} terminal={createdTerminal ? {
+        terminal_id: createdTerminal.terminal_id, device_id: createdTerminal.device_id ?? createdTerminal.terminal_id,
+      } : null} onClose={() => setPinModalOpen(false)} onIssued={() => void adoptPaidPin()} />
       <div style={{ marginTop: 12, marginBottom: 24 }}>
         <Steps
           current={currentStep}
@@ -222,8 +259,8 @@ export default function OnboardingWizardModal({
       {currentStep === 0 && (
         <div>
           <Paragraph type="secondary">
-            Зарегистрируйте новый компьютер в системе L4Desk. Для него будет немедленно сгенерирован
-            одноразовый PIN-код для привязки установленного Агента.
+            Зарегистрируйте терминал и получите одноразовый PIN для установки агента.
+            Если тариф предусматривает оплату сертификата, она потребуется перед выдачей PIN.
           </Paragraph>
 
           <Form form={form} layout="vertical" onFinish={handleCreateTerminal}>
@@ -323,8 +360,10 @@ export default function OnboardingWizardModal({
               </Button>
             )}
             <div style={{ marginTop: 8, fontSize: 12, color: "#8c8c8c" }}>
-              Срок действия PIN: 24 часа. Код одноразовый и будет погашен при первом запуске Агента.
+              {createdTerminal.pin_expires_at ? `PIN действует до ${new Date(createdTerminal.pin_expires_at).toLocaleString()}. ` : ""}
+              Код одноразовый и используется при установке сертификата.
             </div>
+            {!createdTerminal.pin && <Button type="primary" onClick={() => setPinModalOpen(true)}>Получить PIN</Button>}
           </Card>
 
           {createdTerminal.sys && createdTerminal.sys !== "windows" ? (
@@ -355,7 +394,7 @@ export default function OnboardingWizardModal({
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  Скачать Агент L4Desk (v{createdTerminal.agent_version})
+                  Скачать агент (v{createdTerminal.agent_version})
                 </Button>
                 ) : (
                   <Text type="secondary">Агент v{createdTerminal.agent_version}: ссылка на загрузку пока не опубликована.</Text>

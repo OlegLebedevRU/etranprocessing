@@ -22,6 +22,20 @@ export interface PaymentRequiredResponse {
 
 export type CertificatePinResponse = PinReadyResponse | PaymentRequiredResponse;
 
+export interface RenewalPermissionResponse {
+  status: "renew_ready";
+  payment_required: false;
+  terminal_id: number;
+}
+
+export async function requestRenewalPermission(
+  terminalId: number,
+): Promise<RenewalPermissionResponse | PaymentRequiredResponse> {
+  const res = await client.post(`/billing/terminals/${terminalId}/certificate-pin`, undefined,
+    { params: { purpose: "renew" } });
+  return res.data;
+}
+
 /**
  * Request permission to create a certificate PIN for a terminal.
  *

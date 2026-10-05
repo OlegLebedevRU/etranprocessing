@@ -18,6 +18,7 @@ from app.models_l4desk import (
     L4DeskAuditEvent,
     L4DeskTerminal,
 )
+from app.services.product_scope import authorize_subscription_ui
 from app.services.subscription_payments import (
     SubscriptionItem,
     SubscriptionOrderRequest,
@@ -144,7 +145,9 @@ async def summary(
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    items = await list_subscriptions(db, tenant(user, org_id))
+    selected_tenant = tenant(user, org_id)
+    await authorize_subscription_ui(db, user, selected_tenant)
+    items = await list_subscriptions(db, selected_tenant)
     return {
         "payments_enabled": settings.is_yookassa_enabled,
         "month_price_kopecks": settings.subscription_month_price_kopecks,
@@ -160,6 +163,7 @@ async def subscription_quote(
     user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
+    await authorize_subscription_ui(db, user, tenant(user))
     if user.get("role_id") == 4:
         raise HTTPException(403, "Недостаточно прав для покупки")
     return await quote(db, tenant(user), body.items)
@@ -171,6 +175,7 @@ async def checkout(
     user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
+    await authorize_subscription_ui(db, user, tenant(user))
     if user.get("role_id") == 4:
         raise HTTPException(403, "Недостаточно прав для покупки")
     email = str(user.get("email") or user.get("username") or "")
@@ -191,6 +196,7 @@ async def orders(
     user: dict = Depends(require_tenant_context), db: AsyncSession = Depends(get_db)
 ):
     org_id = tenant(user)
+    await authorize_subscription_ui(db, user, org_id)
     rows = (
         await db.execute(
             select(FinPayment, L4DeskAuditEvent)
@@ -216,6 +222,7 @@ async def check_order(
     user: dict = Depends(require_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
+    await authorize_subscription_ui(db, user, tenant(user))
     if user.get("role_id") == 4:
         raise HTTPException(403, "Недостаточно прав")
     try:
@@ -273,6 +280,7 @@ async def usage(
     db: AsyncSession = Depends(get_db),
 ):
     org_id = tenant(user)
+    await authorize_subscription_ui(db, user, org_id)
     end = end or datetime.now(UTC).date()
     start = start or end - timedelta(days=29)
     if start > end or (end - start).days > 366:

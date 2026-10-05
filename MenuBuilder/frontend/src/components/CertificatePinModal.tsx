@@ -24,6 +24,7 @@ import {
 } from "../api/certificate-pin";
 import { confirmPayment } from "../api/billing";
 import { formatMoneyMinor } from "../utils/billing";
+import { useSession } from "../session/SessionContext";
 
 const { Text, Paragraph } = Typography;
 
@@ -55,6 +56,7 @@ export default function CertificatePinModal({
   onClose,
   onIssued,
 }: CertificatePinModalProps) {
+  const { user } = useSession();
   const [step, setStep] = useState<FlowStep>("checking");
   const [result, setResult] = useState<CertificatePinResponse | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -68,13 +70,17 @@ export default function CertificatePinModal({
   onIssuedRef.current = onIssued;
 
   const hasNotifiedRef = useRef(false);
+  const generation = useRef(0);
+  const sending = useRef(false);
 
   const load = useCallback(async () => {
     if (!terminalId) return;
+    const current = generation.current;
     setStep("checking");
     setErrorMsg(null);
     try {
       const res = await requestCertificatePin(terminalId);
+      if (current !== generation.current) return;
       setResult(res);
       setStep(res.status === "pin_ready" ? "pin_ready" : "payment_required");
       // Only notify parent if a new PIN was issued (not one that was already pending before opening)
@@ -84,6 +90,7 @@ export default function CertificatePinModal({
         onIssuedRef.current?.();
       }
     } catch (e: unknown) {
+      if (current !== generation.current) return;
       const msg = e instanceof Error ? e.message : "Ошибка получения PIN";
       setErrorMsg(msg);
       setStep("error");
@@ -94,23 +101,29 @@ export default function CertificatePinModal({
   loadRef.current = load;
 
   useEffect(() => {
+    generation.current += 1;
+    sending.current = false; setPaying(false);
     if (open && terminalId) {
       hasNotifiedRef.current = false;
       setRevealed(false);
       loadRef.current();
     }
-  }, [open, terminalId]);
+    return () => { generation.current += 1; };
+  }, [open, terminalId, user?.org_id]);
 
-  const handlePay = async () => {
-    if (result?.status !== "payment_required") return;
+  const handlePay = async (simulate = false) => {
+    if (result?.status !== "payment_required" || sending.current) return;
+    const current = generation.current;
+    sending.current = true;
     setPaying(true);
     setStep("paying");
     try {
-      // Mock payment provider: confirm immediately (matches billing.tsx pattern).
-      await confirmPayment(result.order_id);
+      await confirmPayment(result.order_id, simulate);
+      if (current !== generation.current) return;
       // The PIN is created server-side as part of payment confirmation.
       // Re-request is idempotent and returns the now-ready PIN.
       const res = await requestCertificatePin(result.terminal_id);
+      if (current !== generation.current) return;
       setResult(res);
       if (res.status === "pin_ready") {
         setStep("pin_ready");
@@ -123,11 +136,12 @@ export default function CertificatePinModal({
         setStep("payment_required");
       }
     } catch (e: unknown) {
+      if (current !== generation.current) return;
       const msg = e instanceof Error ? e.message : "Ошибка оплаты";
       setErrorMsg(msg);
-      setStep("error");
+      setStep("payment_required");
     } finally {
-      setPaying(false);
+      if (current === generation.current) { sending.current = false; setPaying(false); }
     }
   };
 
@@ -160,10 +174,15 @@ export default function CertificatePinModal({
               <Button key="cancel" onClick={onClose}>
                 Отмена
               </Button>,
-              <Button key="pay" type="primary" loading={paying} onClick={handlePay}>
-                Оплатить{" "}
-                {result?.status === "payment_required" &&
-                  formatMoneyMinor(result.amount_minor, result.currency)}
+              result?.status === "payment_required" && result.payment_url?.startsWith("https://") &&
+              <Button key="checkout" href={result.payment_url} target="_blank" rel="noopener noreferrer">
+                Перейти к оплате
+              </Button>,
+              <Button key="pay" type="primary" loading={paying} onClick={() => void handlePay()}>
+                Проверить оплату
+              </Button>,
+              user?.is_superuser && <Button key="simulate" disabled={paying} onClick={() => void handlePay(true)}>
+                Эмулировать оплату
               </Button>,
             ]
           : step === "error"
@@ -207,7 +226,7 @@ export default function CertificatePinModal({
         </div>
       )}
 
-      {step === "error" && errorMsg && (
+      {errorMsg && (
         <Alert type="error" showIcon message="Не удалось получить PIN" description={errorMsg} />
       )}
 
