@@ -602,7 +602,7 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
     printf("  RPC Sub Topic:   %s\n", tsk_sub_topic);
     printf("  Target Broker:   %s:%d (Keepalive: %ds)\n\n", config->mqtt_host, config->mqtt_port, config->keepalive_sec);
 
-    fm_start(state.sn,hStopEvent,fm_rpc_result,&state);
+    fm_start(state.sn,config->proxy_http_port,hStopEvent,fm_rpc_result,&state);
     bool cert_event_sent = false;
     if (!event_ipc_start(hStopEvent, publish_user_event, &state))
         fprintf(stderr, "[EVENT] Local event endpoint unavailable; console commands remain available\n");

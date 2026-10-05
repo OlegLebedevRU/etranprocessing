@@ -151,8 +151,9 @@ Do not publish before post-sign verification. Schema030 / compatible PB, IoT
 and MenuBuilder plus upgraded terminal agent are required before enabling the
 UI flow. See [flow matrix](../../docs/term_arch-rpc7011-flow-matrix.md).
 
-## FM incremental release 1.12.0 (prepared, unsigned)
+## FM incremental release 1.12.0 (signed locally, not published)
 
+Historical preparation below; the wrapper now targets1.12.1. Do not rerun against this signed packet.
 Run Prepare-FmSignedRelease.ps1 -Mode Prepare only against the verified signed1.11.0 staging.
 It backs up that baseline, builds/tests only l4con1.11.0 x86/x64, preserves all other signed
 components and the network profile, regenerates inventories/ZIPs and builds setup1.12.0.
@@ -169,3 +170,23 @@ Sign verifies the sealed input, delegates to Complete-SignedRelease.ps1 -SignOnl
 verifies payload/signatures/timestamps and preserved component bytes, and synchronizes
 signed l4con binaries into build-output paths. Publication is separate. Do not rebuild
 components after signing. FM root/API configuration is also separate from signing.
+
+## FM automatic installation / proxy transport 1.12.1
+
+Signed1.12.0 is preserved in the ignored runtime backup. Prepare now requires that signed baseline,
+updates only leo4proxy1.8.3/l4con1.11.1, builds/tests setup1.12.1 for x86/x64 and seals a new packet.
+The installer automatically creates/protects C:\l4tools\fm. Agent discovers the ready matching-SN
+local Leo4Proxy with fm_transport; L4FM_API_URL is no longer used. L4FM_ROOT is an optional admin override.
+PB metadata uses loopback HTTP→proxy mTLS; storage uses restricted HTTPS CONNECT through the same
+proxy, without client certificate or bypass. PB policy provides the exact S3 host/port. Common
+MQTT/RTP/FM deny closes active storage sockets; absent/stale routing fails closed. PB requires fs.proxy.
+
+After preparation, from this worktree:
+
+```powershell
+& .\tools\release\Prepare-FmSignedRelease.ps1 -Mode Sign -PfxPath '<external PFX path>'
+```
+
+Password only in L4TOOLS_SIGN_PFX_PASSWORD. A new signature is mandatory because native source changed.
+Preserve other signed component bytes; do not rebuild after signing. Live Windows/provider/policy E2E
+remains distinct from local fixtures; publication follows the existing strict signed-release workflow.

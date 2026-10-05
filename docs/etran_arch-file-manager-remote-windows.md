@@ -36,10 +36,12 @@ flowchart LR
   MB -->|общая аренда и сигнал| IOT[IoT / app1]
   IOT -->|MQTT RPC| A[l4con extra_service]
   MB -->|metadata| PB[ProcessingBackend]
-  A -->|mTLS metadata| PB
+  A -->|loopback metadata| LP[Leo4Proxy]
+  LP -->|mTLS metadata| PB
   PB -->|HEAD / versioning / presign| S3[S3]
   UI <-->|HTTPS file bytes| S3
-  A <-->|HTTPS file bytes| S3
+  A <-->|HTTPS via local CONNECT| LP
+  LP <-->|storage TCP / end-to-end TLS| S3
 ```
 
 | Стек | Реализованная ответственность |
@@ -53,6 +55,9 @@ flowchart LR
 
 Платёжные endpoints PB не используются для FM. Новые маршруты имеют отдельные prefixes;
 S3 SDK выполняет только control calls в threadpool, metadata timeout ограничен.
+На терминале весь HTTP проходит через Leo4Proxy. S3 CONNECT разрешён только для host/port из
+проверенной PB policy; TLS до S3 проверяется WinHTTP без terminal cert. Общий MQTT/RTP/FM deny
+закрывает FM metadata route и active storage socket. Отсутствующий/устаревший endpoint запрещает FM.
 Resource/latency влияние на payment должно быть измерено при canary, локальные тесты этого не доказывают.
 
 ## 3. Общая сессия и доставка
@@ -99,6 +104,8 @@ Legacy cert без новой CA не включает FM. Service key не пе
 
 Agent hello каждые 15 секунд объявляет protocol_version=1, instance UUID, version,
 filesystem_ready и capabilities `fs.session`, `fs.list`, `fs.read`, `fs.write`, `fs.cancel`.
+Исправление suite1.12.1 требует также `fs.proxy`: агент1.11.1 использует исключительно локальный Leo4Proxy1.8.3+.
+Агент проверяет ready/SN и `fm_transport` локального профиля до hello. Прежний прямой HTTP агент несовместим.
 Readiness проверяет tenant, active terminal, cert, capabilities, heartbeat моложе 45 секунд,
 настройки PB и текущую MQTT service availability в IoT. UI показывает причину отказа **до старта**.
 Freshness UI рассчитывает длительность относительно server_time, а не синхронность часов браузера.
@@ -174,13 +181,15 @@ Unmount/смена tenant отменяют запросы и отправляю�
 
 ## 7. Настройки и обязательные условия включения
 
-Все значения только из env/секрет-хранилища; defaults пустые. Не помещать реальные URLs/keys в tracked files.
+Серверные значения только из env/секрет-хранилища; defaults пустые. Не помещать реальные URLs/keys в tracked files.
+На терминале адрес API определяется автоматически через локальный Leo4Proxy; установщик создаёт защищённый
+`C:\l4tools\fm`. Ручная настройка FM при обычной установке не требуется.
 
 | Компонент | Переменные |
 |---|---|
 | PB | FILE_MANAGER_SERVICE_KEY, FILE_MANAGER_IOT_URL/KEY, FILE_MANAGER_S3_ENDPOINT/REGION/BUCKET/ACCESS_KEY/SECRET_KEY, FILE_MANAGER_READ_ROOTS/WRITE_ROOTS (JSON lists) |
 | MB | FILE_MANAGER_PB_URL, FILE_MANAGER_SERVICE_KEY; существующие IoT settings |
-| l4con | L4FM_API_URL (HTTPS agent prefix), L4FM_ROOT (один существующий локальный каталог) |
+| l4con | L4FM_API_URL больше не используется; L4FM_ROOT — только необязательный admin override, default C:\l4tools\fm; --proxy-port из существующего профиля |
 | IoT | Существующий mandatory internal service key и shared Redis lease registry |
 
 Пустые настройки запрещают start. Только read roots допускают read-only UI;

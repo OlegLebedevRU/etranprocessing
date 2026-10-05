@@ -4,6 +4,7 @@ import json
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import Literal
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 from etranprocessing_access import subscription_allowed, subscription_state
@@ -72,9 +73,29 @@ def get_leo4proxy_policy(
         stop_facts.append("certificate_expired")
     endpoints = configured_endpoints()
     ttl = settings.leo4proxy_endpoints_ttl_seconds
+    fm_endpoint = None
+    if settings.file_manager_service_key and settings.file_manager_s3_bucket:
+        try:
+            storage = urlsplit(settings.file_manager_s3_endpoint)
+            if (
+                storage.scheme == "https"
+                and storage.hostname
+                and not storage.username
+                and not storage.password
+                and storage.path in ("", "/")
+                and not storage.query
+                and not storage.fragment
+            ):
+                fm_endpoint = Leo4ProxyEndpoint(
+                    host=storage.hostname, port=storage.port or 443
+                )
+        except ValueError, ValidationError:
+            logger.warning("Invalid FM storage endpoint; transport remains disabled")
     return Leo4ProxyPolicy(
         sn=terminal.sn,
         mqtt_rtp_allowed=allowed,
+        fm_allowed=allowed and fm_endpoint is not None,
+        fm_storage_endpoint=fm_endpoint if allowed else None,
         outgoing_https_allowed=True,
         stop_facts=stop_facts,
         endpoints=endpoints,

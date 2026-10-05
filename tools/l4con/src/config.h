@@ -11,7 +11,7 @@
 #include <windows.h>
 
 #define L4CON_APP_NAME        "l4con"
-#define L4CON_APP_VERSION     "1.11.0"
+#define L4CON_APP_VERSION     "1.11.1"
 
 #define L4CON_SERVICE_NAME    L"L4Con"
 #define L4CON_DISPLAY_NAME    L"Leo4 Remote Diagnostics and Console Agent (l4con)"
@@ -56,5 +56,6 @@ void config_print_help(const char* exe_name);
 void config_print_version(void);
 int  config_query_sn_from_proxy(int proxy_port, char* out_sn, size_t out_sn_size);
 int  config_query_identity_from_proxy(int proxy_port, ProxyIdentity* out_identity);
+int  config_query_fm_api_from_proxy(int proxy_port, const char* expected_sn, char* output, size_t capacity);
 
 #endif /* L4CON_CONFIG_H */

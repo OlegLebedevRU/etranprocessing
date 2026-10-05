@@ -1,5 +1,13 @@
 # leo4proxy
 
+## FM correction candidate 1.8.3, 2026-10-05
+
+PB metadata via the existing mTLS channel; local-only HTTPS CONNECT restricted to the exact
+storage authority supplied by verified PB policy. Common MQTT/RTP/FM deny closes active tunnel,
+missing/stale/identity-changed routing fails closed. Public numeric DNS target, no terminal cert
+on S3, no redirect/fallback/server file relay. Local fm_transport capability is required by l4con.
+[Verification/signing/deployment handoff](../tasks/active/2026-10-05-fm-proxy-installation.md).
+
 ## Назначение / владельцы
 Native Win32 proxy для MQTT/HTTPS/Stream/RTP. ProcessingBackend владеет admission
 policy; leo4proxy — transport и routing cache; l4setup — SCM settings;

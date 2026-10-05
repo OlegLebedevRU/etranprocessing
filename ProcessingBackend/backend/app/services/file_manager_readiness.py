@@ -8,7 +8,7 @@ from app.schemas.file_manager import AgentReadiness
 
 FM_PROTOCOL_VERSION = 1
 FM_REQUIRED_CAPABILITIES = frozenset(
-    {"fs.session", "fs.list", "fs.read", "fs.write", "fs.cancel"}
+    {"fs.session", "fs.list", "fs.read", "fs.write", "fs.cancel", "fs.proxy"}
 )
 FM_HEARTBEAT_TTL_SECONDS = 45
 

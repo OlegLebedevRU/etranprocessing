@@ -34,37 +34,41 @@ set "TEST_ARCH=x86"
 if /i "%1"=="x64" set "TEST_ARCH=x64"
 call "%VS_DEV_CMD%" -arch=%TEST_ARCH% -no_logo
 cl.exe /nologo /O2 /MT /W4 /wd4100 /wd4127 /wd4244 /wd4702 /wd4706 /utf-8 /DWIN32_LEAN_AND_MEAN /D_WINSOCK_DEPRECATED_NO_WARNINGS /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /I res /I ..\l4pin\src /I ..\l4superv\src /Foobj\ tests\test_l4setup.c src\cli.c src\log.c src\unpack.c src\summary.c src\preflight.c ..\l4pin\src\cert_discovery.c ..\l4superv\src\miniz.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\test_l4setup.exe ws2_32.lib kernel32.lib user32.lib shell32.lib advapi32.lib crypt32.lib ncrypt.lib shlwapi.lib
-if errorlevel 1 (
+if not "%errorlevel%"=="0" (
     echo [ERROR] Test compilation failed!
     exit /b 1
 )
 
 echo.
 echo [2/2] Running Unit Tests...
+cl.exe /nologo /O2 /MT /W4 /WX /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\ tests\test_fm_root.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\test_fm_root.exe advapi32.lib
+if not "%errorlevel%"=="0" exit /b 1
+bin\test_fm_root.exe
+if not "%errorlevel%"=="0" exit /b 1
 cl.exe /nologo /O2 /MT /W4 /WX /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\ tests\test_proxy_probe.c src\proxy_probe.c ..\leo4proxy\src\policy_json.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\test_proxy_probe.exe ws2_32.lib
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 bin\test_proxy_probe.exe
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 cl.exe /nologo /O2 /MT /W4 /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\ tests\test_pipeline.c src\engine.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\test_pipeline.exe kernel32.lib advapi32.lib
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 bin\test_pipeline.exe
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 cl.exe /nologo /O2 /MT /W4 /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\ tests\test_certificate_phase.c src\cert_phase.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\test_certificate_phase.exe kernel32.lib user32.lib advapi32.lib crypt32.lib
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 bin\test_certificate_phase.exe
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 cl.exe /nologo /O2 /MT /W4 /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /I ..\l4superv\src /Foobj\ tests\test_service_start.c src\cli.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\test_service_start.exe kernel32.lib user32.lib advapi32.lib shell32.lib ws2_32.lib
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 bin\test_service_start.exe
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 cl.exe /nologo /O2 /MT /W4 /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\ tests\test_desk_startup_wait.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\test_desk_startup_wait.exe kernel32.lib user32.lib ws2_32.lib wtsapi32.lib winhttp.lib
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 bin\test_desk_startup_wait.exe
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 cl.exe /nologo /O2 /MT /W4 /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\ tests\test_upstream_pipe.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\test_upstream_pipe.exe kernel32.lib user32.lib ws2_32.lib wtsapi32.lib winhttp.lib
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 bin\test_upstream_pipe.exe
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 bin\test_l4setup.exe %*
 if errorlevel 1 (
     echo.

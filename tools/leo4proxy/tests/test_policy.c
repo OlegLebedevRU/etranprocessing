@@ -180,6 +180,26 @@ static void udp_denial_test(void) {
     assert(server.isRunning && server.rtpSocket==rtp && server.rtcpSocket==rtcp);
     closesocket(sender); rtp_tunnel_stop(&server); WSACleanup();
 }
+static void fm_policy_tests(void) {
+    record.known=true;record.allowed=true;record.offline_allowed_until=utc_now()+3600;
+    anchor_tick=GetTickCount64();remaining_ms=3600000;
+    const char* grant="{\"fm_allowed\":true,\"fm_storage_endpoint\":{\"host\":\"storage.example\",\"port\":443}}";
+    accept_fm_locked(grant,strlen(grant),true);
+    assert(policy_fm_authority_allowed("storage.example:443"));
+    assert(!policy_fm_authority_allowed("other.example:443"));
+    assert(policy_https_path_allowed("/api/file-manager/v1/agent/hello"));
+    record.allowed=false;assert(!policy_fm_authority_allowed("storage.example:443"));
+    assert(!policy_https_path_allowed("/api/file-manager/v1/agent/hello"));
+    assert(!policy_https_path_allowed("/api/%66ile-manager/v1/agent/hello"));
+    assert(!policy_https_path_allowed("/unrelated/../api//file-manager/v1/agent/hello"));
+    assert(!policy_https_path_allowed("/%2561pi/file-manager/v1/agent/hello"));
+    assert(policy_https_path_allowed("/api/payment"));
+    record.allowed=true;fm_authority_deadline=GetTickCount64();assert(!policy_fm_authority_allowed(NULL));
+    accept_fm_locked("{}",2,true);assert(!policy_fm_authority_allowed(NULL));
+    accept_fm_locked(grant,strlen(grant),false);assert(!policy_fm_authority_allowed(NULL));
+    const char* malformed="{\"fm_allowed\":true,\"fm_storage_endpoint\":{\"host\":\"https://storage.example\",\"port\":443}}";
+    accept_fm_locked(malformed,strlen(malformed),true);assert(!policy_fm_authority_allowed(NULL));
+}
 int main(void) {
     CERT_INFO cert_info={0}; CERT_CONTEXT context={0}; context.pCertInfo=&cert_info;
     FILETIME now; GetSystemTimeAsFileTime(&now);
@@ -189,7 +209,7 @@ int main(void) {
     ticks.QuadPart+=1200000000ULL;
     cert_info.NotAfter.dwLowDateTime=ticks.LowPart;cert_info.NotAfter.dwHighDateTime=ticks.HighPart;
     certificate=&context;
-    response_tests(); state_tests(); socket_tests(); storage_tests(); udp_denial_test();
+    response_tests(); state_tests(); socket_tests(); storage_tests(); udp_denial_test();fm_policy_tests();
     record.allowed=true;record.known=true;record.offline_allowed_until=utc_now()+3600;
     anchor_tick=GetTickCount64();remaining_ms=3600000;
     cert_info.NotAfter=cert_info.NotBefore;

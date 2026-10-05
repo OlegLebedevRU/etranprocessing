@@ -9,6 +9,7 @@ void services_set_network_options(const CliOptions* options) { network_options=o
 #include <sddl.h>
 #include <shellapi.h>
 #include "mosquitto_log_acl.h"
+#include "fm_root.h"
 
 #pragma comment(lib, "advapi32.lib")
 
@@ -283,6 +284,9 @@ static bool retain_non_network_arguments(wchar_t* command,size_t capacity,const 
 
 bool services_ensure_all_registered(const wchar_t* dest_dir) {
     if (!dest_dir) return false;
+    if (!setup_prepare_fm_root(L"C:\\l4tools\\fm")) {
+        log_err("Cannot safely prepare the dedicated file-manager directory.");return false;
+    }
 
     SC_HANDLE hSCM = OpenSCManagerW(NULL, NULL, SC_MANAGER_ALL_ACCESS);
     if (!hSCM) {

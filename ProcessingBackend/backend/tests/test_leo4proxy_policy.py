@@ -76,6 +76,7 @@ async def test_policy_uses_only_authenticated_terminal_activity(policy_db, is_ac
         "v": 1,
         "sn": SN,
         "mqtt_rtp_allowed": is_active,
+        "fm_allowed": False,
         "outgoing_https_allowed": True,
         "stop_facts": [] if is_active else ["terminal_inactive"],
     }
