@@ -177,3 +177,10 @@ exited at newContext for unsupported test; isolated unsupported run passed.
 Final visual/build verification and frontend deployment recorded below when complete.
 [MCP Ops Readiness: UNAVAILABLE] connector absent; SSH resources healthy:
 production available RAM2124MiB/root50%/load0.05; builder2741MiB/root61%/load0.00.
+
+Final local evidence: TypeScript/Vite build passed. Playwright CLI visual checks at
+1440px and 768px confirmed bounded layout; corrected intrinsic tree width/address
+overflow. Download fixtures now await download completion before closing context;
+all three save/picker-blocked/unsupported scenarios passed together. Other eight
+browser scenarios passed in the preceding run; 88 unit tests passed. Tracked-text
+secret scan matches were scanner patterns and synthetic fixtures, no credentials.

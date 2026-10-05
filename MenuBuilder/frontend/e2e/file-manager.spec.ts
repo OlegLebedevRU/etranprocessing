@@ -155,5 +155,5 @@ for (const mode of ["picker", "blocked", "unsupported"] as const) test(`verified
   await expect(page.getByRole("status")).toHaveText("Файл проверен и передан");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   if (mode === "picker") expect(await page.evaluate(() => ({ saved: (window as any).saved, closed: (window as any).saveClosed }))).toEqual({ saved: "abc", closed: true });
-  else expect((await download!).suggestedFilename()).toBe("report.txt");
+  else { const file = await download!; expect(file.suggestedFilename()).toBe("report.txt"); expect(await file.failure()).toBeNull(); }
 });
