@@ -58,6 +58,10 @@
   Post-commit sealed130 files/setup-resource hashes unchanged. Real1.12.1 signing/publication still pending.
 
 ## Operator handoff
+Operator confirmed1.12.1 signed. Verified all19 timestamped EXEs, all130 embedded files and unchanged
+other component bytes. Final signed setup SHA256838615b489a3cf7fa344e4244c63d145ee34772d3cc747dbf2e70d926a71adaa.
+leo4proxy1.8.3.0/l4con1.11.1 match both architectures. No rebuild after signing; publication pending.
+
 From this worktree: `& .\tools\release\Prepare-FmSignedRelease.ps1 -Mode Sign -PfxPath '<external PFX path>'`.
 Password only through L4TOOLS_SIGN_PFX_PASSWORD. New signature required by native-windows-tool-change
 after native source changes; do not rebuild the sealed components. After confirmation verify signatures,
