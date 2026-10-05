@@ -1,6 +1,8 @@
 """Tenant BFF. Control/metadata only; file bodies never enter this router."""
 
 import logging
+import math
+from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID
 
@@ -16,6 +18,12 @@ from app.security.permissions import require_permission
 from app.services.iot_client import iot_client
 
 logger = logging.getLogger(__name__)
+
+
+def drain_seconds(expires_at: str) -> int:
+    # IoT keeps the files slot until the last authorised deadline + 5 seconds.
+    deadline = datetime.fromisoformat(expires_at)
+    return max(0, math.ceil((deadline - datetime.now(UTC)).total_seconds() + 5))
 
 
 def no_store(response: Response) -> None:
@@ -95,6 +103,15 @@ async def upstream(
             )
         if response.status_code not in (200, 201):
             detail = response.json().get("detail", {"code": "fm_upstream_failed"})
+            if (
+                isinstance(detail, dict)
+                and detail.get("code") == "lease_taken"
+                and detail.get("scope") == "files"
+            ):
+                detail = {
+                    **detail,
+                    "retry_after_sec": drain_seconds(detail["expires_at"]),
+                }
             raise HTTPException(
                 response.status_code
                 if response.status_code in (401, 403, 404, 409, 422, 503)
@@ -102,7 +119,13 @@ async def upstream(
                 detail=detail,
             )
         return response.json()
-    except (httpx.RequestError, ValueError, TypeError) as exc:
+    except (httpx.RequestError, ValueError, TypeError, KeyError) as exc:
+        logger.warning(
+            "FM upstream unavailable target=%s path=%s error=%s",
+            target,
+            path,
+            type(exc).__name__,
+        )
         raise HTTPException(503, detail={"code": "fm_control_unavailable"}) from exc
 
 
@@ -161,7 +184,7 @@ async def start(
         await upstream(
             "iot", f"/sessions/{identifier}/signals", headers, {"action": "start"}
         )
-    except Exception:
+    except Exception as failure:
         try:
             await upstream(
                 "iot", f"/sessions/{identifier}/signals", headers, {"action": "stop"}
@@ -172,6 +195,14 @@ async def start(
                 type(exc).__name__,
                 extra={"lease_id": identifier},
             )
+        if isinstance(failure, HTTPException):
+            raise HTTPException(
+                failure.status_code,
+                detail={
+                    "code": "fm_start_failed",
+                    "retry_after_sec": drain_seconds(lease["expires_at"]),
+                },
+            ) from failure
         raise
     return lease
 
@@ -241,12 +272,15 @@ async def signal(
         raise HTTPException(422, "Operation required")
     if body.action == "cancel":
         await upstream("pb", f"/operations/{body.operation_id}/abort", headers, {})
-    return await upstream(
+    result = await upstream(
         "iot",
         f"/sessions/{identifier}/signals",
         headers,
         body.model_dump(mode="json", exclude_none=True),
     )
+    if body.action in ("stop", "cancel"):
+        result["retry_after_sec"] = drain_seconds(result["expires_at"])
+    return result
 
 
 @router.post("/devices/{device_id}/operations/{identifier}/manifest")

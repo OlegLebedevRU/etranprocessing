@@ -5,7 +5,7 @@ import { useSession } from "../../session/SessionContext";
 import { getDevices, type DeviceListItem } from "../../api/devices";
 import { listTerminalsSettings } from "../../api/settings";
 import { selectableDevices } from "../../utils/terminalPresentation";
-import { fmApi, fmError, fmReason, fmStorage, MAX_FM_BYTES, type FmEntry, type FmOperation, type FmReadiness } from "../../api/fileManager";
+import { fmApi, fmError, fmRetryAfter, fmReason, fmStorage, MAX_FM_BYTES, type FmEntry, type FmOperation, type FmReadiness } from "../../api/fileManager";
 
 const { Text, Title } = Typography;
 
@@ -52,10 +52,19 @@ function TenantFiles({org}: {org: number}) {
   const [busy,setBusy] = useState(false);
   const [phase,setPhase] = useState("");
   const [error,setError] = useState("");
+  const [drain,setDrain] = useState<{device:number;until:number}>();
+  const [now,setNow] = useState(Date.now());
   const view = useRef(crypto.randomUUID());
   const current = useRef<{ device?:number; lease?:string; operation?:string; abort?:AbortController }>({});
   const mounted = useRef(true);
   const generation = useRef(0);
+
+  useEffect(() => {
+    if(!drain)return;
+    const tick=()=>setNow(Date.now());tick();const timer=setInterval(tick,1000);
+    return ()=>clearInterval(timer);
+  },[drain]);
+  const retrySeconds=drain && drain.device===device?Math.max(0,Math.ceil((drain.until-now)/1000)):0;
 
   const end = useCallback(async (message = "") => {
     const active = current.current;
@@ -63,9 +72,10 @@ function TenantFiles({org}: {org: number}) {
     active.abort?.abort();
     if (mounted.current) { setLease(undefined);setBusy(false);setPhase("");setEntries([]);if(message)setError(message); }
     if (active.device && active.lease) {
+      if(mounted.current)setDrain({device:active.device,until:Date.now()+65000});
       const api = fmApi(active.device,view.current);
       try { if (active.operation) await api.signal(active.lease,"cancel",active.operation); } catch { /* Stop still follows; IoT expiry is the last bound. */ }
-      try { await api.signal(active.lease,"stop"); } catch { if(mounted.current)setError("Связь потеряна. Сессия закроется по таймауту; результат записи может быть неизвестен."); }
+      try { const stopped=await api.signal(active.lease,"stop");if(mounted.current && stopped.retry_after_sec!==undefined)setDrain({device:active.device,until:Date.now()+stopped.retry_after_sec*1000}); } catch { if(mounted.current)setError("Связь потеряна. Сессия закроется по таймауту; результат записи может быть неизвестен."); }
     }
   },[]);
 
@@ -129,7 +139,7 @@ function TenantFiles({org}: {org: number}) {
   };
 
   const start = async () => {
-    if(!device || busy)return;setBusy(true);setError("");setPhase("Ожидается подтверждение агента…");
+    if(!device || busy || retrySeconds>0)return;setBusy(true);setError("");setPhase("Ожидается подтверждение агента…");
     const abort=new AbortController();const run=++generation.current;
     current.current={device,abort};const api=fmApi(device,view.current,abort.signal);
     try {
@@ -139,7 +149,7 @@ function TenantFiles({org}: {org: number}) {
       const ready=await wait(api,session.lease_id,abort.signal,"active",10000);
       if(run!==generation.current)return;
       setRoots(ready.roots || []);setPath(ready.roots?.[0] || "");setPhase("Сессия активна");
-    } catch(error) { if(run===generation.current)await end(fmError(error)); }
+    } catch(error) { if(run===generation.current){const retry=fmRetryAfter(error);if(retry)setDrain({device,until:Date.now()+retry*1000});await end(fmError(error));} }
     finally {if(run===generation.current)setBusy(false);}
   };
 
@@ -179,11 +189,12 @@ function TenantFiles({org}: {org: number}) {
     <Title level={3} style={{margin:0}}>Файловый менеджер</Title>
     <Text type="secondary">Во время работы терминал занят файловым менеджером. Консоль, видео и удалённое управление доступны после завершения сеанса.</Text>
     {error && <Alert type="error" title={error} showIcon />}
+    {retrySeconds>0 && <Alert type="info" title={`Ожидается безопасное завершение сеанса: ${retrySeconds} с. Затем можно начать заново.`} showIcon />}
     <Card size="small"><Space wrap>
       <Select aria-label="Терминал" placeholder="Выберите терминал" style={{minWidth:260}} value={device} disabled={!!lease || busy} showSearch optionFilterProp="label" options={devices.map(item=>({value:item.device_id,label:`${item.description || item.sn} · ${item.device_id}`}))} onChange={value=>{setDevice(value);setEntries([]);setPath("");setError("");}} />
       <Tag color={fresh?"success":"warning"}>{readiness?fmReason[readiness.state] || readiness.state:"Проверка доступности…"}</Tag>
       {readiness?.agent_version && <Text type="secondary">Агент {readiness.agent_version}</Text>}
-      {!lease?<Button type="primary" disabled={!fresh || busy} loading={busy} onClick={()=>void start()}>Начать сеанс</Button>:<Button danger onClick={()=>void end()}>Завершить сеанс</Button>}
+      {!lease?<Button type="primary" disabled={!fresh || busy || retrySeconds>0} loading={busy} onClick={()=>void start()}>Начать сеанс</Button>:<Button danger onClick={()=>void end()}>Завершить сеанс</Button>}
     </Space></Card>
     <Card title="Файлы терминала" extra={lease && <Tag color="blue">Монопольная сессия</Tag>}>
       {!lease?<Empty description="Выберите доступный совместимый агент и начните сеанс." />:<Space orientation="vertical" style={{width:"100%"}}>

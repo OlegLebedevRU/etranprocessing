@@ -104,7 +104,7 @@ async def test_disabled_terminal_denies_new_video_access_but_allows_cleanup():
     assert error.value.status_code == 403
     sql = str(db.scalar.call_args.args[0].compile(dialect=postgresql.dialect()))
     assert "LEFT OUTER JOIN terminal_types" in sql
-    assert sql.endswith("FOR UPDATE OF terminals")
+    assert sql.endswith("FOR NO KEY UPDATE OF terminals")
     assert await _verify_device_access(9, user, db) is terminal
 
 

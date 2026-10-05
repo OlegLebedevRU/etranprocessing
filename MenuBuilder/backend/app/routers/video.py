@@ -196,7 +196,10 @@ async def _verify_device_access(
 ) -> Terminal:
     query = select(Terminal).where(Terminal.device_id == device_id)
     if require_active:
-        query = query.with_for_update(of=Terminal)
+        # Keep admission serialized with terminal updates, but allow PB to take
+        # the FK KEY SHARE lock when inserting an FM session/operation. FOR
+        # UPDATE here deadlocks across the BFF -> PB request boundary.
+        query = query.with_for_update(of=Terminal, key_share=True)
     terminal = await db.scalar(query)
     if not terminal:
         raise HTTPException(
