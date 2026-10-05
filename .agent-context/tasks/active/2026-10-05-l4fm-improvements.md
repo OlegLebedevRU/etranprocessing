@@ -85,3 +85,26 @@ unsigned1.13.0 prepared. Not signed/published yet. All secret-scan findings were
 marker strings and synthetic fixtures, no detected credential added.
 
 MB full rerun: 707 passed/22 skipped. Operator signed1.13.0; 19 EXEs valid with timestamps,128 embedded files match staging. Setup SHA256 d9cb76c947d5358093e8b93bd4bd505259fb2987babcce705428c98184d71530.
+
+## Production / publication evidence
+
+- Root PR37 merged: b8c609effd9c39ef3fa124b6a515a7c3a349f1b9 (source873c7ed).
+- IoT PR103 merged:6209faf870d9d05028255c9e92f30017a33be781.
+- Standard builder tests/build/registry/pull completed; production revision/image verified:
+  PB sha256:0124b851fb378b53710268a3614d7ba37dfda8da576e737e84737c498a4ac266;
+  MB sha256:8e1a589c8d95bc625b6d7a662416428f1fc7549ebc7c6f543cce9f3c491cd3b7;
+  frontend sha256:127cdefee6a13df6c724dfdeda858cc2213120a48776cd80be46d560b07d8a58;
+  app1 sha256:36fb27a6826927d1e27527d61a6c26a3a165c05a26882cd2e8d4bff99167387e.
+- Health checks passed after startup retries; frontend served index matched artifact.
+  Nginx/RabbitMQ/Redis/media/l4mcp containers not recreated.
+- FM v2 policy configured through deploy/configure_fm_v2.py; previous env backed up privately.
+  Local drives=true, privileged_read=true verified in running PB; no credentials logged.
+- RabbitMQ binding amq.topic→fm_result_v1 via dev.*.fmr, two consumers, zero backlog verified.
+  Queue name version is an internal label; accepted envelope v=2 only.
+- Strict publisher uploaded signed1.13.0 and checked complete HTTPS GET size/SHA256 for
+  installer, manifest, checksums. Release record artifacts/l4tools/1.13.0.json.
+- l4mcp token loaded privately from operator-provided path. Initial1000007 preflight ready;
+  readonly version/config console request ran; its local stdout serialization failed encoding.
+  Subsequent preflights reported terminal online but svc_online=false (l4con_offline).
+  No download/task/install was dispatched. User asked asynchronously to inspect local services.
+  Never bypass preflight or send commands through another terminal. Continue update on recovery.
