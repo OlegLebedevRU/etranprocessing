@@ -1,5 +1,12 @@
 # MenuBuilder
 
+## FM start correction, 2026-10-05
+
+Deployed main920e544: active-admission guard NO KEY UPDATE preserves terminal-change serialization
+and permits PB FM FK inserts; eliminates BFF/PB row-lock cycle. Failed-start message and safe drain
+countdown prevent confusing immediate retries. MB706passed/22skipped, quality passed; UI78unit,
+6browser/build passed. [Release and live acceptance](../tasks/active/2026-10-05-fm-start-lock.md).
+
 ## UI follow-up 2026-10-05: renew в L4Desk terminals
 
 Frontend68298fc выпущен: row action открывает общую CertificateRenewal дляSU/owner; offline queue доступна, server eligibility сохраняется. Local78unit +6fakeREST browser scenarios/buildpassed, deployedchunkпроверен. Backend/PIN/RPCконтрактне менялся. [Release evidence](../tasks/active/2026-10-05-licensing-implementation.md#follow-up-действие-renew-в-l4desk-terminals).

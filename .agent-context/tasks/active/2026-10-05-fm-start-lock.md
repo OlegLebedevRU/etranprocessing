@@ -40,5 +40,17 @@
 - PB/native/shared/IoT unchanged; no signing, terminal install, lease takeover or credential generation.
 
 ## Release / open verification
-- Accepted source, immutable deployed images and health: pending release below.
-- Operator start/list and live file-transfer acceptance after deploy remain open.
+- PR35 accepted main920e544cae772cd11bd1a6927f59bfca388c2145; installed builder launcher ran
+  only menubuilder-backend and menubuilder-frontend. Linux706passed/22skipped, quality passed;
+  frontend78unit/build passed. Both launcher invocations exit0.
+- MB digest sha256:99b88b0f639c52fa5ec41eea6206d08c2839b8cc6fa51291d5b43073b8db7871;
+  running container411fdf19499c7bd337925c248c4635ea476190f412d3890c9adba2c96a3208a7,
+  openapi200. Runtime compiled guard is FOR NO KEY UPDATE; drain calculator returns65 for a60s lease.
+- Frontend artifact sha256:512b01ee6193e896a468543a04c1b132a2b6c51ab9476080ef51242934f97d8b;
+  static deployment verified served index, nginx-default unchanged. Local CLI browser mock also
+  verified failed-start wording/countdown/disabled retry/re-enabled manual retry.
+- Production base Compose persisted from verified running MB digest via repository pin helper;
+  remote task helper removed. Initial startup health refusal recovered through standard retry.
+- PB068bfe2bc20f, app16d6668571e7c, nginx-defaultf57699a9f1ca, rabbitmq41777886db72 unchanged.
+  No migrations, MQTT client edits, signatures or terminal file mutations performed by this task.
+- Operator start/list requested after Ctrl+F5; live file-transfer acceptance remains open.

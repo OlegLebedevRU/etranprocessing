@@ -1,6 +1,6 @@
 # File manager: общий сеанс и S3-only передача
 
-Серверная часть deployed, 2026-10-05; native signing/terminal E2E не выполнены.
+Серверная часть deployed, 2026-10-05; suite1.12.1 signed/published, live file-transfer E2E не выполнен.
 [Production evidence](../tasks/active/2026-10-05-file-manager-production.md).
 Пользователь подтвердил extra_service и tools/l4con.
 IoT baseline origin/master 8c2be80, отдельный checkout D:/work/iot.leo4.ru/iot-rpc-rest-app-fm.
@@ -16,6 +16,9 @@ IoT baseline origin/master 8c2be80, отдельный checkout D:/work/iot.leo4
 - Single PUT 0–64 МиБ; SHA-256, versioned S3, GET закреплён за проверенным VersionId.
 - Fail-fast: ручное повторение с нуля, без resume/pause. Upload только CREATE_NEW/no-overwrite.
 - Revoked files lease удерживает слот до первоначального deadline + 5 с; Redis CAS не воскрешает её.
+- FM start lock fix deployed: MB active-admission guard uses NO KEY UPDATE, permitting PB FK KEY SHARE
+  insertion while serializing terminal changes. Failed start/stop/conflict expose safe drain countdown;
+  UI refuses retry until it elapses. [Incident evidence](../tasks/active/2026-10-05-fm-start-lock.md).
 - Неизвестный commit блокирует transfer до protected receipt reconciliation; receipt не возобновляет запись.
 - S3 cleanup: обязательный provider lifecycle, delete worker не реализован. Crash staging orphan cleanup остаётся gate.
 
