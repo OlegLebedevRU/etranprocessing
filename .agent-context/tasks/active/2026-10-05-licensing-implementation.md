@@ -166,3 +166,5 @@ Production-host отдельный контейнер codex-licensing-test-20261
 - Scope: только frontend иконтекст; Python/schema/native/providers не изменяются, production PIN/RPC тестовыми сценариями не создаются.
 
 - Final local validation: frontend build passed; unit78passed; Playwright6passed32.4s (4L4Desk +2Classic regression), fakeREST. Changed-file credential scan3files0matches, diffcheckpassed. Backend tests не перезапускались — Pythonкод/schemaне менялись.
+
+- Production follow-up: PR27 main68298fc7daf304cfde623243692e50e20962c19c; frontend digest327721ffb10529a89accf9d023dbefc67e35d2b5cae9d70d55ec8496f67aae5c. Builder78tests/buildpassed, standardregistry→static publishverified. Currententryindex-CSQLkaAU.js references L4DeskTerminalsPage-BATcb0e-.js with renewal action; nginx mountedindexmatchespublishedhash. IDsunchanged: nginx-defaultf57699a9f1ca,PB78c464b78d4c,MB18b13c023e00. No live PIN/order/RPC created. Resourcepreflight RAM2122MiB/root43.4%/load0.436 passed. No temporary credentials or custom services created.

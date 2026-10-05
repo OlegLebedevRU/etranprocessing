@@ -1,5 +1,9 @@
 # MenuBuilder
 
+## UI follow-up 2026-10-05: renew в L4Desk terminals
+
+Frontend68298fc выпущен: row action открывает общую CertificateRenewal дляSU/owner; offline queue доступна, server eligibility сохраняется. Local78unit +6fakeREST browser scenarios/buildpassed, deployedchunkпроверен. Backend/PIN/RPCконтрактне менялся. [Release evidence](../tasks/active/2026-10-05-licensing-implementation.md#follow-up-действие-renew-в-l4desk-terminals).
+
 ## Production 2026-10-05: разделение применено
 
 Schema031;52Classic/4L4Desk, explicit enrollment11(включая только773 вorg1), split ON обоих consumers, YooKassa OFF. License/identity fingerprints неизменны. PB234/MB700 tests, quality/build passed. [Фактический release и ограничения E2E](../tasks/active/2026-10-05-licensing-implementation.md#k10--production-завершён-2026-10-05-1224-utc). Предыдущие разделы ниже — исторические срезы.
