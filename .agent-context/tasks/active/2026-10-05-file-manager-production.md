@@ -1,5 +1,8 @@
 # FM production release — 2026-10-05
 
+Historical initial release below. Subsequent automatic-provisioning/Leo4Proxy policy correction
+and newer PB digest: [follow-up handoff](2026-10-05-fm-proxy-installation.md).
+
 ## Intake
 - User explicitly authorized production deploy and preparation of l4tools signing script.
 - Standard builder→registry→production flow; separate IoT master; only PB/MB/frontend/app1 and FM ingress.

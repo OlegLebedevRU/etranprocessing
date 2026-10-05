@@ -40,4 +40,25 @@
   unsigned candidate lives only in ignored staging/artifacts until operator signing.
 - Failed tests' eight exact empty fixture directories removed nonrecursively without ACL mutation.
 - [MCP Ops Readiness: UNAVAILABLE]; SSH fallback preflight available RAM2140MiB/root48%/load0.32.
-  Server producer release/verification pending below. Live terminal TLS/transfer/policy E2E not performed.
+  Live terminal TLS/transfer/policy E2E not performed.
+
+## Production server release
+- PR31 accepted main d7b590bd070b6cbc2467ccd2c02e4c3519435469. Standard installed builder launcher
+  processingbackend only: Linux quality checks/full265 passed1 skipped, immutable image built/published/pulled.
+- Running PB digest sha256:3a747c4b0fe004cde73b1648cdc63412a8b317585c4e7de40a5e4225a9fa8b03;
+  container068bfe2bc20fe68b6d6a70117b1d38f01ddfa28c7aa0b61f562bfad6bf99cc2e, health200.
+- Persistent production Compose pinned to verified running digest; compatible schema032 unchanged.
+  Read-only DB check fm_agents0/fm_operations0. No terminal operation, lease, test account or token created.
+- Runtime configured-policy/in-memory fixtures: active FM true, inactive FM false/endpoint absent,
+  former agent without fs.proxy incompatible, proxy-capable fixture ready. These are not authenticated
+  terminal transport or file-transfer E2E. Initial health refusal recovered through standard retry.
+- MB/app1/nginx/rabbitmq container IDs unchanged. No companion rebuild/recreation or nginx reload needed.
+- Task temporary pin helper removed remotely; protected env/backups and immutable builder receipts retained.
+- Final37-file source secret pattern scan0 matches; diff check and signing-wrapper AST parse passed.
+  Post-commit sealed130 files/setup-resource hashes unchanged. Real1.12.1 signing/publication still pending.
+
+## Operator handoff
+From this worktree: `& .\tools\release\Prepare-FmSignedRelease.ps1 -Mode Sign -PfxPath '<external PFX path>'`.
+Password only through L4TOOLS_SIGN_PFX_PASSWORD. New signature required by native-windows-tool-change
+after native source changes; do not rebuild the sealed components. After confirmation verify signatures,
+timestamp/payload hashes, synchronize signed outputs/checkpoint, then publish via strict release workflow.

@@ -9,6 +9,8 @@ PB владеет agent HTTPS metadata/tickets/results и transfer state/S3 cont
 Новая FM admission отдельна от terminal identity/transport policy.
 Сервер развёрнут, additive миграция 032 применена; native signing и terminal E2E остаются открытыми.
 [Production evidence](../tasks/active/2026-10-05-file-manager-production.md), [карточка](../contracts/file-manager.md).
+Follow-up PB policy/fs.proxy correction deployed from main d7b590b;
+[verification and native signing gate](../tasks/active/2026-10-05-fm-proxy-installation.md).
 
 ## Production 2026-10-05: разделение применено
 
