@@ -1,0 +1,43 @@
+# FM automatic provisioning / Leo4Proxy transport — 2026-10-05
+
+## Intake
+- User confirmed signing1.12.0; all19 timestamped EXEs valid, embedded130 files match staging.
+- User requires automatic FM setup, every terminal HTTP flow through Leo4Proxy and common MQTT/RTP/FM deny.
+- Owners: PB transport policy produces FM admission/storage endpoint; local Leo4Proxy forwards PB metadata
+  with existing mTLS and S3 HTTPS via restricted CONNECT; l4con owns files/hash/receipts; setup owns dedicated root.
+- No server file relay/fallback, no S3 client certificate, no insecure TLS, no arbitrary proxy destinations.
+- Existing extra_service choice persists. MQTT topics/presence and common IoT lease stay unchanged.
+- Signed1.12.0 must remain immutable; new1.12.1 packet and new operator signature required.
+- Check x86/x64 native builds, local isolated provisioning/discovery/tunnel/policy tests;
+  PB quality/full tests and standard accepted-source deployment for changed policy producer.
+- Live terminal transfer/policy fault E2E remains separate from local fixtures.
+
+## Work / evidence
+- Signed1.12.0 setup SHA256677b62f048814318ba9cb44673720f89c346b6e4f9d9359ef482f7c8e16ebf7a verified;
+  not published. Preparing separate1.12.1 instead of altering that signed artifact.
+- l4con1.11.1 discovers its loopback API from ready matching-SN Leo4Proxy; L4FM_API_URL no longer read.
+  Root defaults to C:\l4tools\fm, setup creates/protects it. Optional L4FM_ROOT is admin configuration.
+- PB metadata uses local HTTP→Leo4Proxy→existing PB mTLS. S3 HTTPS uses WinHTTP named loopback proxy
+  and restricted CONNECT, with end-to-end S3 TLS, no terminal certificate, cookie, authentication or redirect.
+- PB policy produces fm_allowed and exact path-style storage host/port; native proxy fails closed on
+  missing/stale/changed identity routing and common media deny. No arbitrary destination or server relay.
+- Active storage socket participates in common policy cancellation; its bridge also checks FM policy
+  every250ms, has45s deadline/70MiB TLS-wire bounds and one concurrent storage tunnel per process.
+- PB requires fs.proxy capability: the former direct-HTTP agent is reported incompatible before acquire.
+- Setup-root fixture initially failed WRITE_DAC-only ACL update (Win325); READ_CONTROL added.
+  Non-elevated fixture uses explicit OWNER RIGHTS only in test to inspect/remove its protected temp directory.
+  Production ACL remains SYSTEM/admins. Runner now propagates abnormal negative Windows exit codes.
+- PB local ruff check/format/pyright passed; full265 passed/1 skipped. Existing async-mock/deprecation
+  warnings remain; MB/frontend/shared unchanged, their checks not rerun.
+- Final unified leo4proxy/l4con x86/x64 builds/tests passed. Named-proxy routing fixture proves no direct
+  metadata/S3 fallback; CONNECT fixture checks authority/private-IP refusal, duplex bytes and active deny.
+  Native policy tests include encoded/dot-segment FM route bypass refusal. Local proxy capability gate passed.
+- Setup x86/x64 tests/build passed: dedicated root create/repair preserves data, protected fixture ACL,
+  junction refusal, pipeline44 cases and existing readiness/service/certificate regressions.
+- Suite1.12.1 unsigned setup SHA25621376a7071d45f9e08c0bf6df253eca0e1d436d0427b98ace4cfd4a1dfdecc86;
+  all130 embedded files match staging. Signing input sealed; only two components replaced.
+  Signed1.12.0 retained in runtime backup. Tracked proxy binaries restored to prior signed checkpoint;
+  unsigned candidate lives only in ignored staging/artifacts until operator signing.
+- Failed tests' eight exact empty fixture directories removed nonrecursively without ACL mutation.
+- [MCP Ops Readiness: UNAVAILABLE]; SSH fallback preflight available RAM2140MiB/root48%/load0.32.
+  Server producer release/verification pending below. Live terminal TLS/transfer/policy E2E not performed.

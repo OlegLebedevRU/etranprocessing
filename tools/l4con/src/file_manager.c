@@ -25,30 +25,13 @@ static struct {
     RpcCommand command;
     char sn[128],api[768],instance[40],lease[40];
     wchar_t root[1024];
+    int proxy_port;
     ULONGLONG deadline;
     FmResult result;
     void* context;
 } fm;
 
-static PCCERT_CONTEXT certificate(void) {
-    cert_info info={0};wchar_t sn[128];
-    if (!MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,fm.sn,-1,sn,128)) return NULL;
-    cert_state state=cert_discover(sn,&info);
-    if (state!=CERT_VALID && state!=CERT_EXPIRING) return NULL;
-    BYTE hash[20];DWORD size=sizeof(hash);
-    if (!CryptStringToBinaryA(info.thumbprint_hex,0,CRYPT_STRING_HEX,hash,&size,NULL,NULL)) return NULL;
-    CRYPT_HASH_BLOB blob={size,hash};
-    HCERTSTORE store=CertOpenStore(CERT_STORE_PROV_SYSTEM_W,0,0,CERT_SYSTEM_STORE_LOCAL_MACHINE|CERT_STORE_READONLY_FLAG,L"MY");
-    if (!store) return NULL;
-    PCCERT_CONTEXT cert=CertFindCertificateInStore(store,X509_ASN_ENCODING,0,CERT_FIND_SHA1_HASH,&blob,NULL);
-    CertCloseStore(store,0);
-    if (cert && (!cert_is_leo4_issuer(cert) || CertVerifyTimeValidity(NULL,cert->pCertInfo))) {
-        CertFreeCertificateContext(cert);return NULL;
-    }
-    return cert;
-}
-
-/* Strict HTTPS, no redirects, bounded metadata, no terminal key on storage calls. */
+/* Loopback Leo4Proxy only: it owns remote PB routing, mTLS and common policy. */
 static bool api(const char* suffix,const char* body,char** output) {
     *output=NULL;
     char combined[1024];wchar_t url[1024],host[256],path[768],headers[256],instance[40];
@@ -59,18 +42,18 @@ static bool api(const char* suffix,const char* body,char** output) {
     URL_COMPONENTS parts={sizeof(parts)};
     parts.dwExtraInfoLength=parts.dwUserNameLength=parts.dwPasswordLength=(DWORD)-1;
     parts.lpszHostName=host;parts.dwHostNameLength=256;parts.lpszUrlPath=path;parts.dwUrlPathLength=768;
-    if (!WinHttpCrackUrl(url,0,0,&parts) || parts.nScheme!=INTERNET_SCHEME_HTTPS || parts.dwExtraInfoLength || parts.dwUserNameLength || parts.dwPasswordLength) return false;
-    PCCERT_CONTEXT cert=certificate();if (!cert) return false;
+    if (!WinHttpCrackUrl(url,0,0,&parts) || parts.nScheme!=INTERNET_SCHEME_HTTP || wcscmp(host,L"127.0.0.1") ||
+        parts.nPort!=fm.proxy_port || parts.dwExtraInfoLength || parts.dwUserNameLength || parts.dwPasswordLength ||
+        wcsncmp(path,L"/api/file-manager/v1/agent/",27)) return false;
     HINTERNET session=WinHttpOpen(L"l4con FM",WINHTTP_ACCESS_TYPE_NO_PROXY,NULL,NULL,0);
     HINTERNET connection=session?WinHttpConnect(session,host,parts.nPort,0):NULL;
-    HINTERNET request=connection?WinHttpOpenRequest(connection,body?L"POST":L"GET",path,NULL,NULL,NULL,WINHTTP_FLAG_SECURE):NULL;
+    HINTERNET request=connection?WinHttpOpenRequest(connection,body?L"POST":L"GET",path,NULL,NULL,NULL,0):NULL;
     bool ok=false;char* data=NULL;DWORD used=0;
     ULONGLONG deadline=GetTickCount64()+5000;
     if (request) {
         DWORD disabled=WINHTTP_DISABLE_REDIRECTS;
         ok=WinHttpSetTimeouts(request,2000,2000,2000,2000) &&
            WinHttpSetOption(request,WINHTTP_OPTION_DISABLE_FEATURE,&disabled,sizeof(disabled)) &&
-           WinHttpSetOption(request,WINHTTP_OPTION_CLIENT_CERT_CONTEXT,(void*)cert,sizeof(CERT_CONTEXT)) &&
            WinHttpSendRequest(request,headers,(DWORD)-1L,(void*)body,body?(DWORD)strlen(body):0,body?(DWORD)strlen(body):0,0) &&
            WinHttpReceiveResponse(request,NULL);
         DWORD status=0,size=sizeof(status);
@@ -86,7 +69,7 @@ static bool api(const char* suffix,const char* body,char** output) {
         if (ok) {data[used]=0;*output=data;data=NULL;}
     }
     free(data);if (request) WinHttpCloseHandle(request);if (connection) WinHttpCloseHandle(connection);if (session) WinHttpCloseHandle(session);
-    CertFreeCertificateContext(cert);return ok;
+    return ok;
 }
 
 static bool alive(void) {
@@ -242,7 +225,7 @@ static bool hash_file(HANDLE file,char hex[65],unsigned long long* length) {
     if(hash)BCryptDestroyHash(hash);if(algorithm)BCryptCloseAlgorithmProvider(algorithm,0);return ok;
 }
 
-/* Direct S3 stream. No client certificate/cookie/auth header/redirect is sent. */
+/* S3 HTTPS through Leo4Proxy's policy-bound CONNECT; no client certificate or bypass. */
 static bool storage_io(const PolicyJson* grant,HANDLE file,bool upload,unsigned long long expected) {
     char address[8192],digest[128]={0};wchar_t url[8192],host[256],path[8192],extra[8192],headers[256]={0};
     if (!policy_json_string(grant,policy_json_field(grant,0,"url"),address,sizeof(address)) ||
@@ -257,12 +240,13 @@ static bool storage_io(const PolicyJson* grant,HANDLE file,bool upload,unsigned 
         wchar_t checksum[128];if (!MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,digest,-1,checksum,128)) return false;
         swprintf_s(headers,256,L"Content-Type: application/octet-stream\r\nx-amz-checksum-sha256: %s\r\n",checksum);
     }
-    HINTERNET session=WinHttpOpen(L"l4con FM storage",WINHTTP_ACCESS_TYPE_NO_PROXY,NULL,NULL,0);
+    wchar_t proxy[64];swprintf_s(proxy,64,L"127.0.0.1:%d",fm.proxy_port);
+    HINTERNET session=WinHttpOpen(L"l4con FM storage",WINHTTP_ACCESS_TYPE_NAMED_PROXY,proxy,WINHTTP_NO_PROXY_BYPASS,0);
     HINTERNET connection=session?WinHttpConnect(session,host,parts.nPort,0):NULL;
     HINTERNET request=connection?WinHttpOpenRequest(connection,upload?L"PUT":L"GET",path,NULL,NULL,NULL,WINHTTP_FLAG_SECURE):NULL;
     bool ok=false;ULONGLONG deadline=GetTickCount64()+45000;unsigned long long total=0;BYTE buffer[65536];
     if (request) {
-        DWORD disabled=WINHTTP_DISABLE_REDIRECTS;
+        DWORD disabled=WINHTTP_DISABLE_REDIRECTS|WINHTTP_DISABLE_AUTHENTICATION;
         ok=WinHttpSetTimeouts(request,3000,3000,3000,3000) && WinHttpSetOption(request,WINHTTP_OPTION_DISABLE_FEATURE,&disabled,sizeof(disabled)) &&
             transfer_alive() && WinHttpSendRequest(request,upload?headers:NULL,upload?(DWORD)-1L:0,NULL,0,upload?(DWORD)expected:0,0);
         if (upload) while (ok && total<expected) {
@@ -472,7 +456,10 @@ static DWORD WINAPI worker(void* unused) {
         EnterCriticalSection(&fm.lock);connected=fm.connected;LeaveCriticalSection(&fm.lock);
         if (connected && now-last_hello>=15000) {
             last_hello=now;char hello[512],*response=NULL;
-            snprintf(hello,sizeof(hello),"{\"agent_instance_id\":\"%s\",\"agent_version\":\"%s\",\"protocol_version\":1,\"capabilities\":[\"fs.session\",\"fs.list\",\"fs.read\",\"fs.write\",\"fs.cancel\"],\"filesystem_ready\":true}",fm.instance,L4CON_APP_VERSION);
+            /* Resolve from the existing local transport profile; retry while unavailable.
+             * Keep the selected origin fixed for this process, including active transfers. */
+            if (!fm.api[0] && config_query_fm_api_from_proxy(fm.proxy_port,fm.sn,fm.api,sizeof(fm.api))) continue;
+            snprintf(hello,sizeof(hello),"{\"agent_instance_id\":\"%s\",\"agent_version\":\"%s\",\"protocol_version\":1,\"capabilities\":[\"fs.session\",\"fs.list\",\"fs.read\",\"fs.write\",\"fs.cancel\",\"fs.proxy\"],\"filesystem_ready\":true}",fm.instance,L4CON_APP_VERSION);
             HANDLE handles[128];unsigned count=0;bool ready=open_directory(fm.root,handles,&count);
             for(unsigned i=0;i<count;i++)CloseHandle(handles[i]);
             if (!ready) {char* value=strstr(hello,"true}");if(value)strcpy_s(value,(size_t)(hello+sizeof(hello)-value),"false}");}
@@ -486,11 +473,13 @@ static DWORD WINAPI worker(void* unused) {
     return 0;
 }
 
-bool fm_start(const char* sn,HANDLE stop,FmResult result,void* context) {
+bool fm_start(const char* sn,int proxy_port,HANDLE stop,FmResult result,void* context) {
     ZeroMemory(&fm,sizeof(fm));
-    DWORD api_length=GetEnvironmentVariableA("L4FM_API_URL",fm.api,sizeof(fm.api));
     DWORD root_length=GetEnvironmentVariableW(L"L4FM_ROOT",fm.root,1024);
-    if (!api_length || api_length>=sizeof(fm.api) || !root_length || root_length>=1024 || !valid_path(fm.root)) return false;
+    if (root_length>=1024) return false;
+    if (!root_length) wcscpy_s(fm.root,1024,L"C:\\l4tools\\fm");
+    if (!valid_path(fm.root) || proxy_port<1 || proxy_port>65535) return false;
+    fm.proxy_port=proxy_port;
     size_t length=strlen(fm.api);while (length && fm.api[length-1]=='/') fm.api[--length]=0;
     GUID guid;if (FAILED(CoCreateGuid(&guid))) return false;
     snprintf(fm.instance,40,"%08lX-%04hX-%04hX-%02X%02X-%02X%02X%02X%02X%02X%02X",guid.Data1,guid.Data2,guid.Data3,guid.Data4[0],guid.Data4[1],guid.Data4[2],guid.Data4[3],guid.Data4[4],guid.Data4[5],guid.Data4[6],guid.Data4[7]);

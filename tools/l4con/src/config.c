@@ -66,6 +66,35 @@ int config_query_identity_from_proxy(int proxy_port, ProxyIdentity* out_identity
     if (valid) *out_identity = identity;
     free(body); return valid ? 0 : -1;
 }
+int config_query_fm_api_from_proxy(int proxy_port, const char* expected_sn, char* output, size_t capacity) {
+    if (!output || !capacity) return -1;
+    output[0]=0;
+    if (!expected_sn || !*expected_sn || proxy_port<1 || proxy_port>65535) return -1;
+    char url[128],origin[512],sn[128],status[32];
+    sprintf_s(url,sizeof(url),"http://127.0.0.1:%d/_leo4/info",proxy_port);
+    char* body=NULL;size_t length=0;
+    if (!http_get_simple(url,1200,&body,&length)) return -1;
+    PolicyJson json;bool certificate_found=false,routes_active=false,fm_transport=false;
+    bool valid=length<=65536 && policy_json_parse(&json,body,length) &&
+        policy_json_string(&json,policy_json_field(&json,0,"status"),status,sizeof(status)) && !strcmp(status,"ready") &&
+        policy_json_bool(&json,policy_json_field(&json,0,"certificate_found"),&certificate_found) && certificate_found &&
+        policy_json_bool(&json,policy_json_field(&json,0,"routes_active"),&routes_active) && routes_active &&
+        policy_json_bool(&json,policy_json_field(&json,0,"fm_transport"),&fm_transport) && fm_transport &&
+        policy_json_string(&json,policy_json_field(&json,0,"sn"),sn,sizeof(sn)) && !strcmp(sn,expected_sn) &&
+        policy_json_string(&json,policy_json_field(&json,policy_json_field(&json,0,"upstreams"),"http_remote"),origin,sizeof(origin));
+    if (valid) {
+        wchar_t wide[512];URL_COMPONENTS parts={sizeof(parts)};
+        parts.dwHostNameLength=parts.dwUrlPathLength=parts.dwExtraInfoLength=parts.dwUserNameLength=parts.dwPasswordLength=(DWORD)-1;
+        valid=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,origin,-1,wide,512) &&
+            WinHttpCrackUrl(wide,0,0,&parts) && parts.nScheme==INTERNET_SCHEME_HTTPS &&
+            parts.dwHostNameLength && !parts.dwUserNameLength && !parts.dwPasswordLength &&
+            !parts.dwExtraInfoLength && !parts.dwUrlPathLength;
+        if (valid) {int bytes=snprintf(output,capacity,"http://127.0.0.1:%d/api/file-manager/v1/agent",proxy_port);
+            valid=bytes>0 && (size_t)bytes<capacity;}
+    }
+    if (!valid) output[0]=0;
+    free(body);return valid?0:-1;
+}
 static void parse_uri(const char* uri, char* host, size_t host_len, int* port) {
     if (!uri) return;
     const char* p = uri;

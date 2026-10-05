@@ -16,6 +16,8 @@
 static SRWLOCK lock=SRWLOCK_INIT;
 static PolicyRecord record;
 static bool media_allowed=true, https_allowed=true, stopping=false, dirty=false;
+static char fm_authority[272];
+static ULONGLONG fm_authority_deadline;
 static char facts[1024], last_error[64]="not_polled";
 static PCCERT_CONTEXT certificate;
 static unsigned long long identity_generation;
@@ -100,7 +102,7 @@ static void set_media_locked(bool allowed) {
     if (media_allowed==allowed) return;
     media_allowed=allowed;
     if (!allowed) for (PolicySocket* n=sockets;n;n=n->next) shutdown(n->socket,SD_BOTH);
-    printf("[POLICY] MQTT/RTP %s; facts=%s\n",allowed?"allowed":"denied",
+    printf("[POLICY] MQTT/RTP/FM %s; facts=%s\n",allowed?"allowed":"denied",
            allowed?"":(identity_denial?identity_denial:
                (record.known && !record.allowed?(facts[0]?facts:"server_denied"):"policy_unavailable")));
 }
@@ -135,6 +137,35 @@ void policy_socket_unregister(PolicySocket* node) {
     ReleaseSRWLockExclusive(&lock);
 }
 bool policy_https_path_allowed(const char* path) {
+    /* Canonicalize the path before FM admission: encoded separators and dot
+     * segments must not bypass the common deny through nginx normalization. */
+    char decoded[1024],normalized[1024];size_t length=strcspn(path,"?");
+    if (!length || length>=sizeof(decoded)) return false;
+    memcpy(decoded,path,length);decoded[length]=0;
+    for(unsigned pass=0;pass<4 && strchr(decoded,'%');pass++) {
+        size_t out=0;
+        for(size_t i=0;decoded[i];i++) {
+            unsigned char value=(unsigned char)decoded[i];
+            if(value=='%') {
+                if(!decoded[i+1] || !decoded[i+2] || !isxdigit((unsigned char)decoded[i+1]) || !isxdigit((unsigned char)decoded[i+2])) return false;
+                char hex[]={decoded[i+1],decoded[i+2],0};value=(unsigned char)strtoul(hex,NULL,16);i+=2;
+            }
+            if(value<32 || value==127 || value=='\\' || value=='?' || value=='#') return false;
+            decoded[out++]=(char)value;
+        }
+        decoded[out]=0;
+    }
+    if(strchr(decoded,'%') || decoded[0]!='/') return false;
+    size_t used=0;const char* cursor=decoded;
+    while(*cursor) {
+        while(*cursor=='/')cursor++;if(!*cursor)break;
+        const char* end=strchr(cursor,'/');size_t part=end?(size_t)(end-cursor):strlen(cursor);
+        if(part==2 && !memcmp(cursor,"..",2)) {while(used && normalized[used-1]!='/')used--;if(used)used--;}
+        else if(!(part==1 && *cursor=='.')) {normalized[used++]='/';memcpy(normalized+used,cursor,part);used+=part;}
+        cursor+=part;
+    }
+    normalized[used]=0;
+    if (!strcmp(normalized,"/api/file-manager") || !strncmp(normalized,"/api/file-manager/",18)) return policy_fm_authority_allowed(NULL);
     AcquireSRWLockShared(&lock); bool allowed=https_allowed; ReleaseSRWLockShared(&lock);
     if (allowed) return true;
     const char* query=strchr(path,'?'); size_t len=query?(size_t)(query-path):strlen(path);
@@ -143,6 +174,25 @@ bool policy_https_path_allowed(const char* path) {
     const char* exceptions[]={"/api/certificates","/api/licensebilling","/licensebilling"};
     for (int k=0;k<3;k++) if (len==strlen(exceptions[k]) && !memcmp(path,exceptions[k],len)) return true;
     return false;
+}
+/* Missing extension, identity rotation or stale provider routing closes FM.
+ * Common media deny immediately shuts down registered storage tunnel sockets. */
+bool policy_fm_authority_allowed(const char* authority) {
+    AcquireSRWLockExclusive(&lock);expire_locked();
+    bool allowed=media_allowed && https_allowed && !stopping && fm_authority[0] &&
+        GetTickCount64()<fm_authority_deadline && (!authority || !_stricmp(authority,fm_authority));
+    ReleaseSRWLockExclusive(&lock);return allowed;
+}
+static void accept_fm_locked(const char* text,size_t length,bool allowed) {
+    fm_authority[0]=0;fm_authority_deadline=0;
+    PolicyJson json;bool enabled=false;char host[256];unsigned long long port=0;
+    if (!allowed || !policy_json_parse(&json,text,length) ||
+        !policy_json_bool(&json,policy_json_field(&json,0,"fm_allowed"),&enabled) || !enabled) return;
+    int endpoint=policy_json_field(&json,0,"fm_storage_endpoint");
+    if (!policy_json_string(&json,policy_json_field(&json,endpoint,"host"),host,sizeof(host)) || !endpoint_host_valid(host) ||
+        !policy_json_uint(&json,policy_json_field(&json,endpoint,"port"),&port) || !port || port>65535) return;
+    sprintf_s(fm_authority,sizeof(fm_authority),"%s:%u",host,(unsigned)port);
+    fm_authority_deadline=GetTickCount64()+2ULL*POLICY_POLL_SECONDS*1000;
 }
 void policy_diagnostics(char* out,size_t size) {
     AcquireSRWLockExclusive(&lock); expire_locked();
@@ -383,6 +433,7 @@ static unsigned __stdcall run(void* unused) {
                 https_allowed=ok?https:true;
                 strcpy_s(last_error,sizeof(last_error),ok?"":"api_unavailable_or_invalid");
                 if (ok) {
+                    accept_fm_locked(text,length,allowed);
                     record.known=true; record.allowed=allowed; record.last_success_at=utc_now();
                     record.offline_allowed_until=record.last_success_at+POLICY_GRACE_SECONDS; ++record.generation;
                     anchor_tick=GetTickCount64(); remaining_ms=POLICY_GRACE_SECONDS*1000;
@@ -431,6 +482,7 @@ void policy_identity(const CertDetails* details) {
         expire_locked();
     }
     if (cert_changed) {
+        fm_authority[0]=0;fm_authority_deadline=0;
         if (certificate) CertFreeCertificateContext(certificate);
         certificate=details?CertDuplicateCertificateContext(details->pCertContext):NULL;
         ++identity_generation;

@@ -36,6 +36,8 @@ class Leo4ProxyPolicy(BaseModel):
     v: Literal[1] = 1
     sn: str
     mqtt_rtp_allowed: bool
+    fm_allowed: bool = False
+    fm_storage_endpoint: Leo4ProxyEndpoint | None = None
     outgoing_https_allowed: Literal[True] = True
     stop_facts: list[Literal["terminal_inactive", "certificate_expired"]]
     endpoints: (

@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "fm_connect.h"
 
 ProxyStats g_proxyStats = { 0 };
 
@@ -152,6 +153,7 @@ static void handle_info_request_ext(SOCKET s, SChannelSession* tlsSession, const
                 "{\n"
                 "  \"status\": \"ready\",\n"
                 "  \"certificate_found\": true,\n"
+                "  \"fm_transport\": true,\n"
                 "  \"stream_enabled\": %s,\n"
                 "  \"rtp_tunnel_enabled\": %s,\n"
                 "  \"version\": \"%s\",\n"
@@ -252,6 +254,7 @@ static void handle_info_request_ext(SOCKET s, SChannelSession* tlsSession, const
                 "{\n"
                 "  \"status\": \"waiting_for_certificate\",\n"
                 "  \"certificate_found\": false,\n"
+                "  \"fm_transport\": true,\n"
                 "  \"stream_enabled\": %s,\n"
                 "  \"rtp_tunnel_enabled\": %s,\n"
                 "  \"version\": \"%s\",\n"
@@ -500,6 +503,15 @@ static unsigned __stdcall http_client_worker(void* param) {
     char path[1024] = { 0 };
     char version[32] = { 0 };
     sscanf_s(reqBuf, "%31s %1023s %31s", method, (unsigned)sizeof(method), path, (unsigned)sizeof(path), version, (unsigned)sizeof(version));
+
+    if (!strcmp(method,"CONNECT")) {
+        if (is_local && !isClientTls && cert_ready && !strcmp(version,"HTTP/1.1") && reqLen==(int)(headerEnd+4-reqBuf))
+            fm_connect_storage(clientSock,path);
+        else send_http_response_ext(clientSock,isClientTls?&clientTlsSession:NULL,403,"Forbidden","text/plain","",active_sn);
+        free(reqBuf);free(modifiedReq);
+        if(isClientTls)schannel_close(&clientTlsSession);else closesocket(clientSock);
+        return 0;
+    }
 
     // Handle CORS preflight OPTIONS
     if (_stricmp(method, "OPTIONS") == 0) {

@@ -1,5 +1,13 @@
 # l4con
 
+## FM correction candidate 1.11.1, 2026-10-05
+
+Automatic loopback API discovery from ready matching-SN Leo4Proxy with fm_transport, default
+root C:\l4tools\fm provisioned by setup. L4FM_API_URL removed. PB HTTP only loopback, S3 HTTPS
+only via named local proxy/CONNECT; no direct network fallback or terminal certificate on S3.
+fs.proxy compatibility gate requires the new transport. Existing extra_service presence unchanged.
+[Handoff](../tasks/active/2026-10-05-fm-proxy-installation.md).
+
 ## 2026-10-05: RPC7xxx /7011, l4con1.10.0
 
 Suite1.11.0 signed/published; operator installed773 successfully. Local services

@@ -8,7 +8,7 @@ param(
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $toolsRoot = [IO.Path]::GetFullPath("$PSScriptRoot\..")
-$version = '1.12.0'
+$version = '1.12.1'
 $stageRoot = "$toolsRoot\dist\.stage"
 $sealPath = "$toolsRoot\dist\fm-signing-input.json"
 
@@ -45,24 +45,37 @@ if ($Mode -eq 'Sign') {
     foreach ($resource in $seal.resources) {
         if ((Get-FileHash -LiteralPath "$toolsRoot\$($resource.path)" -Algorithm SHA256).Hash -ne $resource.sha256) { throw 'Setup resource changed.' }
     }
-    & "$PSScriptRoot\Complete-SignedRelease.ps1" -PfxPath $PfxPath -Version $version -SignOnly @('l4con') -TimestampUrl $TimestampUrl
+    & "$PSScriptRoot\Complete-SignedRelease.ps1" -PfxPath $PfxPath -Version $version -SignOnly @('leo4proxy', 'l4con') -TimestampUrl $TimestampUrl
     foreach ($entry in $seal.files) {
-        if ($entry.path -in @('l4con\l4con.exe', 'l4superv\package-components.json')) { continue }
+        if ($entry.path -in @('leo4proxy\leo4proxy.exe', 'l4con\l4con.exe', 'l4superv\package-components.json')) { continue }
         $path = "$stageRoot\$($entry.arch)\$($entry.path)"
         if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $entry.sha256) { throw "Unchanged component modified: $path" }
     }
     foreach ($arch in @('x86', 'x64')) {
-        Copy-Item -LiteralPath "$stageRoot\$arch\l4con\l4con.exe" -Destination "$toolsRoot\l4con\bin\$arch\l4con.exe" -Force
+        foreach ($tool in @('leo4proxy','l4con')) {
+            Copy-Item -LiteralPath "$stageRoot\$arch\$tool\$tool.exe" -Destination "$toolsRoot\$tool\bin\$arch\$tool.exe" -Force
+        }
     }
-    Copy-Item -LiteralPath "$toolsRoot\l4con\bin\x86\l4con.exe" -Destination "$toolsRoot\l4con\bin\l4con.exe" -Force
+    foreach ($tool in @('leo4proxy','l4con')) {
+        Copy-Item -LiteralPath "$toolsRoot\$tool\bin\x86\$tool.exe" -Destination "$toolsRoot\$tool\bin\$tool.exe" -Force
+    }
     Copy-Item -LiteralPath "$toolsRoot\dist\l4setup.exe" -Destination "$toolsRoot\l4setup\bin\x86\l4setup.exe" -Force
     Write-Host 'FM release signed and verified. Publication is a separate step; do not rebuild components.'
     return
 }
 
-if (Test-Path -LiteralPath $sealPath) { throw 'An FM signing packet already exists; preserve it and review before preparing again.' }
+if (Test-Path -LiteralPath $sealPath) {
+    $oldSeal = Get-Content -LiteralPath $sealPath -Raw | ConvertFrom-Json
+    if ($oldSeal.version -ne '1.12.0') { throw 'An FM signing packet already exists; preserve it and review before preparing again.' }
+}
 $previous = Get-Content -LiteralPath "$toolsRoot\dist\l4tools-release.json" -Raw | ConvertFrom-Json
-if ($previous.version -ne '1.11.0' -or -not $previous.signed) { throw 'Expected signed 1.11.0 baseline.' }
+if ($previous.version -ne '1.12.0' -or -not $previous.signed) { throw 'Expected signed 1.12.0 baseline.' }
+$baselineSetup = "$toolsRoot\dist\l4setup.exe"
+$baselineSignature = Get-AuthenticodeSignature -LiteralPath $baselineSetup
+if ($baselineSignature.Status -ne 'Valid' -or -not $baselineSignature.TimeStamperCertificate -or
+    (Get-FileHash -LiteralPath $baselineSetup -Algorithm SHA256).Hash.ToLowerInvariant() -ne $previous.files.'l4setup.exe'.sha256.ToLowerInvariant()) {
+    throw 'Signed baseline installer mismatch.'
+}
 foreach ($arch in @('x86', 'x64')) {
     foreach ($entry in $previous.component_artifacts.$arch) {
         $path = "$stageRoot\$arch\$($entry.path)"
@@ -77,37 +90,46 @@ Copy-Item -LiteralPath $stageRoot -Destination "$backup\stage" -Recurse
 foreach ($name in @('l4setup.exe', 'l4tools-release.json', 'SHA256SUMS')) {
     Copy-Item -LiteralPath "$toolsRoot\dist\$name" -Destination $backup
 }
-if ((Get-Content -LiteralPath "$toolsRoot\version.txt" -Raw).Trim() -ne $version) { throw 'Expected suite version 1.12.0.' }
+if (Test-Path -LiteralPath $sealPath) {
+    Copy-Item -LiteralPath $sealPath -Destination "$backup\fm-signing-input.json"
+    Remove-Item -LiteralPath $sealPath
+}
+if ((Get-Content -LiteralPath "$toolsRoot\version.txt" -Raw).Trim() -ne $version) { throw 'Expected suite version 1.12.1.' }
 $srcVersion = @'
 #pragma once
 #define L4SETUP_VERSION_MAJOR 1
 #define L4SETUP_VERSION_MINOR 12
-#define L4SETUP_VERSION_PATCH 0
+#define L4SETUP_VERSION_PATCH 1
 #define L4SETUP_VERSION_BUILD 0
-#define L4SETUP_VERSION_STRING "1.12.0"
-#define L4SETUP_VERSION_WSTRING L"1.12.0"
+#define L4SETUP_VERSION_STRING "1.12.1"
+#define L4SETUP_VERSION_WSTRING L"1.12.1"
 '@
 $resVersion = $srcVersion + @'
 
-#define L4TOOLS_VERSION "1.12.0"
-#define L4TOOLS_VERSION_RC 1,12,0,0
-#define VER_FILEVERSION 1,12,0,0
-#define VER_PRODUCTVERSION 1,12,0,0
-#define VER_FILEVERSION_STR "1.12.0.0\0"
-#define VER_PRODUCTVERSION_STR "1.12.0\0"
+#define L4TOOLS_VERSION "1.12.1"
+#define L4TOOLS_VERSION_RC 1,12,1,0
+#define VER_FILEVERSION 1,12,1,0
+#define VER_PRODUCTVERSION 1,12,1,0
+#define VER_FILEVERSION_STR "1.12.1.0\0"
+#define VER_PRODUCTVERSION_STR "1.12.1\0"
 '@
 $srcVersion | Set-Content -LiteralPath "$toolsRoot\l4setup\src\version.h" -Encoding ASCII
 $resVersion | Set-Content -LiteralPath "$toolsRoot\l4setup\res\version.h" -Encoding ASCII
-Push-Location "$toolsRoot\l4con"
-try {
-    & cmd.exe /c build.cmd all
-    if ($LASTEXITCODE -ne 0) { throw 'l4con build/tests failed.' }
-} finally { Pop-Location }
+foreach ($tool in @('leo4proxy','l4con')) {
+    Push-Location "$toolsRoot\$tool"
+    try {
+        & cmd.exe /c build.cmd all
+        if ($LASTEXITCODE -ne 0) { throw "$tool build/tests failed." }
+    } finally { Pop-Location }
+}
 foreach ($arch in @('x86', 'x64')) {
     $stage = "$stageRoot\$arch"
     $binary = "$toolsRoot\l4con\bin\$arch\l4con.exe"
-    if ((Get-Item -LiteralPath $binary).VersionInfo.ProductVersion -ne '1.11.0') { throw 'Unexpected FM agent version.' }
+    if ((Get-Item -LiteralPath $binary).VersionInfo.ProductVersion -ne '1.11.1') { throw 'Unexpected FM agent version.' }
     Copy-Item -LiteralPath $binary -Destination "$stage\l4con\l4con.exe" -Force
+    $proxyBinary = "$toolsRoot\leo4proxy\bin\$arch\leo4proxy.exe"
+    if ((Get-Item -LiteralPath $proxyBinary).VersionInfo.ProductVersion -ne '1.8.3.0') { throw 'Unexpected proxy version.' }
+    Copy-Item -LiteralPath $proxyBinary -Destination "$stage\leo4proxy\leo4proxy.exe" -Force
     & "$PSScriptRoot\New-PayloadInventory.ps1" -Stage $stage -Arch $arch -Version $version
     $payload = "$toolsRoot\l4setup\res\payload_$arch.bin"
     if (Test-Path -LiteralPath $payload) { Remove-Item -LiteralPath $payload -Force }
@@ -116,6 +138,10 @@ foreach ($arch in @('x86', 'x64')) {
 }
 Push-Location "$toolsRoot\l4setup"
 try {
+    & cmd.exe /c run_tests.cmd
+    if ($LASTEXITCODE -ne 0) { throw 'l4setup x86 tests failed.' }
+    & cmd.exe /c 'run_tests.cmd x64'
+    if ($LASTEXITCODE -ne 0) { throw 'l4setup x64 tests failed.' }
     & cmd.exe /c build.cmd all
     if ($LASTEXITCODE -ne 0) { throw 'l4setup build/tests failed.' }
 } finally { Pop-Location }

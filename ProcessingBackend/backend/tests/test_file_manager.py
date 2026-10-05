@@ -28,6 +28,7 @@ def registered(now):
 
 @pytest.mark.parametrize("change,state", [({}, "ready"), ({"tenant_id": 8}, "not_registered"),
     ({"protocol_version": 2}, "incompatible"), ({"capabilities": ["fs.list"]}, "incompatible"),
+    ({"capabilities": sorted(FM_REQUIRED_CAPABILITIES - {"fs.proxy"})}, "incompatible"),
     ({"filesystem_ready": False}, "filesystem_unavailable"), ({"cert_serial": "AC"}, "certificate_changed")])
 def test_readiness_requires_compatible_live_current_identity(change, state):
     now = datetime.now(UTC)

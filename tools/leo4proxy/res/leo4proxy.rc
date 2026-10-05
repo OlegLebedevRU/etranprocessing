@@ -7,8 +7,8 @@ IDI_TRAY_STOPPED ICON "tray_stopped.ico"
 201 RCDATA "iot_leo4_ca.cer"
 
 1 VERSIONINFO
-FILEVERSION 1,8,2,0
-PRODUCTVERSION 1,8,2,0
+FILEVERSION 1,8,3,0
+PRODUCTVERSION 1,8,3,0
 FILEFLAGSMASK 0x3fL
 FILEFLAGS 0x0L
 FILEOS VOS_NT_WINDOWS32
@@ -21,11 +21,11 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Leo4 / Platerra"
             VALUE "FileDescription", "Leo4 SChannel mTLS Proxy & Windows Service"
-            VALUE "FileVersion", "1.8.2.0"
+            VALUE "FileVersion", "1.8.3.0"
             VALUE "InternalName", "leo4proxy"
             VALUE "OriginalFilename", "leo4proxy.exe"
             VALUE "ProductName", "Leo4 IoT Platform Tools"
-            VALUE "ProductVersion", "1.8.2.0"
+            VALUE "ProductVersion", "1.8.3.0"
         END
     END
     BLOCK "VarFileInfo"
