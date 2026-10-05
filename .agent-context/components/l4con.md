@@ -1,5 +1,14 @@
 # l4con
 
+## Удалённое обновление suite — runtime 2026-10-05
+
+[Runbook с точным промптом](../../docs/ops_run-l4tools-update-via-l4mcp.md):
+1000007 обновлён 1.13.0 → 1.13.1, L4Con 1.12.1, ready/exit0.
+Доставка приватный S3 → local Leo4Proxy; SHA256/Authenticode на терминале;
+одноразовая SYSTEM-задача запускает l4setup --silent вне Job L4Con.
+При неизвестном результате сначала проверить задачу/summary/реальные версии,
+не создавать повторный запуск. Все детали и границы атомарности — в runbook.
+
 ## FM correction 1.11.1, published in suite 1.12.1, 2026-10-05
 
 Automatic loopback API discovery from ready matching-SN Leo4Proxy with fm_transport, default
