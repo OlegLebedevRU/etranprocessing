@@ -137,3 +137,53 @@ async def test_admin_product_switch_rejected_before_writes(monkeypatch):
     assert exc.value.status_code == 409
     db.commit.assert_not_called()
     db.execute.assert_not_called()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("superuser", [False, True])
+async def test_classic_billing_cannot_write_l4desk_even_as_superuser(
+    monkeypatch, superuser
+):
+    from app.routers.billing import get_current_billing_user
+
+    monkeypatch.setattr(settings, "product_scope_split_enabled", True)
+    db = AsyncMock()
+    db.get.return_value = Org(site_mode="l4desk")
+    with pytest.raises(HTTPException) as exc:
+        await get_current_billing_user(
+            user={"org_id": 10000, "is_superuser": superuser}, db=db
+        )
+    assert exc.value.status_code == 403
+    db.commit.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_subscription_correction_rejects_unenrolled_technical_row(monkeypatch):
+    from app.models_l4desk import L4DeskTerminal
+    from app.routers.subscriptions import SubscriptionCorrection, correct_subscription
+
+    monkeypatch.setattr(settings, "product_scope_split_enabled", True)
+    db = AsyncMock()
+    row = L4DeskTerminal(terminal_id=820, runtime_terminal_id=820, tenant_id=1)
+    db.get.side_effect = [
+        row,
+        row,
+        Terminal(id=820, org_id=1, l4desk_subscription_enabled=False),
+    ]
+    with pytest.raises(HTTPException) as exc:
+        await correct_subscription(
+            820,
+            SubscriptionCorrection(
+                paid_until=None,
+                reason="Administrative test correction",
+                operation_id="correction-test-20261005",
+            ),
+            user={"is_superuser": True},
+            db=db,
+        )
+    assert exc.value.status_code == 409
+    assert (
+        db.scalar.call_count == 1
+    )  # Existing tenant lock only, no financial audit lookup.
+    assert "l4desk_audit" not in str(db.scalar.call_args.args[0])
+    db.commit.assert_not_called()
