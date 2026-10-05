@@ -784,7 +784,7 @@ MB producer внедряется под выключенным product_scope_spl
 
 ## 20. Завершённая реализация разделения (2026-10-05)
 
-Этот раздел заменяет статусы «не реализовано» предыдущих промежуточных срезов. До production cutover перечисленные изменения проверены локально; фактический выпуск фиксируется отдельно в handoff.
+Этот раздел заменяет статусы «не реализовано» предыдущих промежуточных срезов. Production cutover завершён; фактический выпуск и ограничения E2E фиксируются в [handoff](../.agent-context/tasks/active/2026-10-05-licensing-implementation.md#k10--production-завершён-2026-10-05-1224-utc).
 
 ### Контракты по стекам
 
@@ -824,3 +824,10 @@ Renew выдача защищена Terminal FOR UPDATE; повторная оп
 Released PB module app.product_scope_cutover получает approved manifest через stdin, по умолчанию dry-run; --apply атомарен, lock_timeout5s/statement_timeout30s. Отдельный --finalize-dev допускается только при PB split ON. Проверяются полный org census, profile exceptions, runtime/SN/tenant bindings. License, cert_serial, is_active, платежная история не изменяются. Повтор без изменений не создаёт audit event.
 
 Откат после dev-finalize требует сначала удаления только вновь созданного profile org1 отдельной проверенной операцией, затем split OFF; иначе старый selector применит org1 profile ко всем Classic терминалам. Автоматический schema downgrade031 запрещён. Возврат образов выполняется только на совместимые031/bridge030-031. До finalization профиль org1 отсутствует и unenrolled Classic не меняет транспортную формулу.
+
+
+## 21. Проверенный итог production
+
+Schema031,52Classic/4L4Desk применены, split ON обоих readers, YooKassa OFF. Dev773 восстановлен только в техническом scope, единственный enrollment org1. License/identity checksums до и после совпадают. Смена продукта409; технический enrollment не наследуется всем Classic org1. SU выбранного tenant сохраняет администрирование и switch, обычные Classic users получают403 подписок.
+
+Последний обход закрыл два writer bypass: SU также не пишет Classic billing в L4Desk, административная subscription correction требует same-tenant bound enrolled runtime. Final MB700passed/22skipped, PB234passed/1skipped; matched immutable images и unchanged соседние containers подтверждены. Реальная оплата/новый paid PIN/native7011 остаются границей доказательства, а не завершённым E2E. Тайминги раздела20 остаются мягкими, без обещания общей wall-bound и без выдуманной вероятности надёжности.
