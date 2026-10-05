@@ -184,3 +184,13 @@ overflow. Download fixtures now await download completion before closing context
 all three save/picker-blocked/unsupported scenarios passed together. Other eight
 browser scenarios passed in the preceding run; 88 unit tests passed. Tracked-text
 secret scan matches were scanner patterns and synthetic fixtures, no credentials.
+
+Frontend deployed through builder/registry/pull from merged PR39, main
+09b22e8bf867db1bf4bcbd70559b585d93dccfcb, artifact
+sha256:81c485847233e61a33980a3726da4c1d741b7ccb1f7894a45d4175109a866e3e.
+Builder 88 unit tests/build passed. Production deployer verified revision and
+served index; nginx-default not restarted. Independent public HTTPS check found
+FilesPage-CkAKrx5T.js containing showSaveFilePicker and maxWidth:560,
+SHA256 b45f4e147f7a0496b4c7c39ff7a5d75384dea898171a95ad44606565d3080592.
+Local preview/browser closed. Tools 1.13.1 remain unsigned/unpublished; terminal
+1000007 remains at verified 1.13.0 until operator signing and upgrade.
