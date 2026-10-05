@@ -76,7 +76,7 @@ services:
       MENUBUILDER_API_URL: ${L4MCP_MENUBUILDER_API_URL:-}
 
   menubuilder-backend:
-    image: dev-leo4-ru.cr.cloud.ru/etran/menubuilder-backend@sha256:3e9252adb042dfd4ac1abc2f51868373a7a85d7d5a1de5c3076819617a4114cb
+    image: dev-leo4-ru.cr.cloud.ru/etran/menubuilder-backend@sha256:99b88b0f639c52fa5ec41eea6206d08c2839b8cc6fa51291d5b43073b8db7871
     container_name: menubuilder-backend
     restart: always
     env_file:
