@@ -1,5 +1,8 @@
 # FM implementation handoff — 2026-10-05
 
+Historical local verification snapshot below. Subsequent server deployment, provider/migration checks
+and remaining native/E2E gates: [production handoff](2026-10-05-file-manager-production.md).
+
 ## Контекст задачи / intake
 - Пользователь поручил внедрение FM после архитектурного анализа; extra_service и tools/l4con подтверждены.
 - Root: etranprocessing, feat/rpc7011-renewal, baseline d8719971fa143cd2e5b8a191adb43681a3f23aba; working tree без commit.

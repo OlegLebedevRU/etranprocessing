@@ -1,13 +1,14 @@
 # ProcessingBackend
 
-## Локальный кандидат FM, 2026-10-05
+## FM production, 2026-10-05
 
 [План файлового менеджера](../../docs/etran_arch-file-manager-remote-windows.md):
 PB владеет agent HTTPS metadata/tickets/results и transfer state/S3 control,
 без file bytes, server hashing или relay. Общая монопольная сессия с видео и
 консолью остаётся у IoT; MQTT start/stop/renew тоже его ответственность.
 Новая FM admission отдельна от terminal identity/transport policy.
-Код и additive миграция 032 реализованы; live migration/deploy/E2E не выполнены; [карточка](../contracts/file-manager.md).
+Сервер развёрнут, additive миграция 032 применена; native signing и terminal E2E остаются открытыми.
+[Production evidence](../tasks/active/2026-10-05-file-manager-production.md), [карточка](../contracts/file-manager.md).
 
 ## Production 2026-10-05: разделение применено
 

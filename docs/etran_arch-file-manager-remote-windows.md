@@ -1,6 +1,7 @@
 # FM: удалённые файлы Windows — архитектура и реализация
 
-Обновлено: 2026-10-05. Статус: локально реализованный кандидат; **не развёрнут и не подтверждён живым E2E**.
+Обновлено: 2026-10-05. Статус: **серверная часть развёрнута в production; агент подготовлен к подписи, живой terminal E2E не выполнен**.
+Фактические версии, проверки и ограничения: [production handoff](../.agent-context/tasks/active/2026-10-05-file-manager-production.md).
 Исходная ветка etranprocessing: `feat/rpc7011-renewal`, baseline `d8719971fa143cd2e5b8a191adb43681a3f23aba`.
 IoT сверён с `origin/master` (`8c2be80`); изменения изолированы в ветке `feature/file-manager`,
 checkout `D:/work/iot.leo4.ru/iot-rpc-rest-app-fm`. Исходный dirty checkout не изменялся.
@@ -233,9 +234,10 @@ Unit/mock browser/локальный Win32 результат не доказы�
 | Browser close/reload/JWT expiry | UI abort/stop, watchdog ограничивает незавершённую работу |
 | Payment traffic + FM | Не превышает согласованный latency/resource budget |
 
-Незакрытые условия: реальный provider/MQTT/Win7 E2E, PostgreSQL 18 migration, nginx runtime check,
-подписанная distribution, retention/lifecycle и нагрузка. Docker engine локально недоступен;
-миграция проверена генерацией SQL, а не применением на реальной БД.
+Provider probe проверил checksum rejection, zero-byte и pinned VersionId GET; versioning/CORS/lifecycle настроены.
+Миграция 031→032 проверена на disposable PostgreSQL 18 и применена в production; nginx -t и ingress gates проверены.
+Незакрытые условия: живой agent mTLS/MQTT transfer/error E2E, Win7/POSReady, подписанная distribution,
+фактическое истечение lifecycle и нагрузка. Подробности и границы доказательств — в production handoff.
 Crash до сохранения receipt может оставить staging partial; автоматическая безопасная уборка таких
 orphans пока не реализована. Нельзя считать это завершённым crash-cleanup: до широкого выпуска нужен
 отдельный reviewed cleanup или регламент уборки выделенного FM root. Неизвестный committing без

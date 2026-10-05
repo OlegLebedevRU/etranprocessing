@@ -1,6 +1,8 @@
 # File manager: общий сеанс и S3-only передача
 
-Локальный кандидат, 2026-10-05; не deployed/E2E. Пользователь подтвердил extra_service и tools/l4con.
+Серверная часть deployed, 2026-10-05; native signing/terminal E2E не выполнены.
+[Production evidence](../tasks/active/2026-10-05-file-manager-production.md).
+Пользователь подтвердил extra_service и tools/l4con.
 IoT baseline origin/master 8c2be80, отдельный checkout D:/work/iot.leo4.ru/iot-rpc-rest-app-fm.
 
 - IoT владеет единственной общей lease: files конфликтует с console/stream/input/view даже у одного owner.
