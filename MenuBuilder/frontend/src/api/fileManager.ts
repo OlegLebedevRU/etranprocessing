@@ -26,7 +26,7 @@ export function fmApi(device: number, view: string, signal?: AbortSignal) {
     create: async (lease_id: string, kind: "list" | "upload" | "download", path: string, offset = 0) =>
       (await client.post<FmOperation>(`${base}/operations`, { id: crypto.randomUUID(), lease_id, kind, path, offset }, options)).data,
     signal: async (lease: string, action: "renew" | "stop" | "cancel", operation_id?: string) =>
-      (await client.post(`${base}/sessions/${lease}/signals`, { action, operation_id }, options)).data as { expires_at: string },
+      (await client.post(`${base}/sessions/${lease}/signals`, { action, operation_id }, options)).data as { expires_at: string; retry_after_sec?: number },
     manifest: async (id: string, size_bytes: number, sha256: string) =>
       (await client.post<FmGrant>(`${base}/operations/${id}/manifest`, { size_bytes, sha256 }, options)).data,
     sourceComplete: async (id: string) => (await client.post(`${base}/operations/${id}/source-complete`, {}, options)).data,
@@ -46,9 +46,15 @@ export const fmReason: Record<string,string> = {
 
 export function fmError(error: unknown): string {
   const detail = (error as { response?: { data?: { detail?: { code?: string; scope?: string } } } })?.response?.data?.detail;
-  if (detail?.code === "lease_taken") return `Терминал занят: ${detail.scope === "files" ? "файловый менеджер" : detail.scope === "console" ? "консоль" : "видео или удалённое управление"}. Завершите другой сеанс.`;
+  if (detail?.code === "fm_start_failed") return "Не удалось начать сеанс FM. Команды работы с файлами не выполнялись. Дождитесь освобождения терминала и повторите.";
+  if (detail?.code === "lease_taken") return detail.scope === "files" ? "Терминал занят файловым менеджером или ожидает безопасного завершения предыдущего сеанса." : `Терминал занят: ${detail.scope === "console" ? "консоль" : "видео или удалённое управление"}. Завершите другой сеанс.`;
   if (detail?.code === "fm_commit_outcome_unknown" || detail?.code === "fm_transfer_busy_or_commit_unknown") return "Результат записи пока неизвестен. Проверьте файл после восстановления связи.";
   return "Операция остановлена: не удалось подтвердить доставку или целостность. Проверьте состояние файла и начните заново.";
+}
+
+export function fmRetryAfter(error: unknown): number {
+  const seconds = (error as { response?: { data?: { detail?: { retry_after_sec?: number } } } })?.response?.data?.detail?.retry_after_sec;
+  return typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0 ? Math.min(95, Math.ceil(seconds)) : 0;
 }
 
 // The signed S3 URL receives no portal credentials or auth interceptors.

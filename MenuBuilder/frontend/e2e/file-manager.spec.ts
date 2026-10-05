@@ -53,6 +53,19 @@ test("occupied console shows refusal and never creates a file operation",async (
   expect(calls.some(call=>call.path.endsWith("/operations") && call.method==="POST")).toBe(false);
 });
 
+test("failed start waits for safe drain before manual retry",async ({page})=>{
+  const calls=await portal(page,"l4desk");
+  await page.route("**/api/file-manager/v1/devices/10/sessions",async route=>{
+    await route.fulfill({status:503,json:{detail:{code:"fm_start_failed",retry_after_sec:2}}});
+  });
+  await page.getByRole("button",{name:"Начать сеанс"}).click();
+  await expect(page.getByText(/Не удалось начать сеанс FM/)).toBeVisible();
+  await expect(page.getByText(/Ожидается безопасное завершение сеанса/)).toBeVisible();
+  await expect(page.getByRole("button",{name:"Начать сеанс"})).toBeDisabled();
+  await expect(page.getByRole("button",{name:"Начать сеанс"})).toBeEnabled({timeout:5000});
+  expect(calls.some(call=>call.path.endsWith("/operations") && call.method==="POST")).toBe(false);
+});
+
 test("corrupt direct S3 download aborts the entire session without portal credentials",async ({page})=>{
   const calls=await portal(page,"classic");
   await page.getByRole("button",{name:"Начать сеанс"}).click();
