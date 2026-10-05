@@ -3,6 +3,7 @@ import {
   Alert,
   Button,
   Card,
+  Modal,
   Empty,
   Tooltip,
   Input,
@@ -42,6 +43,7 @@ import {
   type TerminalSettingsItem,
 } from "../../api/settings";
 import { useSession } from "../../session/SessionContext";
+import CertificateRenewal from "../../components/CertificateRenewal";
 import OnboardingWizardModal from "../../components/OnboardingWizardModal";
 import { getDevices, type DeviceListItem } from "../../api/devices";
 import TerminalSettingsEditModal from "../../components/TerminalSettingsEditModal";
@@ -77,6 +79,7 @@ function pinTag(item: TerminalSettingsItem) {
 export default function L4DeskTerminalsPage() {
   const { user } = useSession();
   const canChangeTerminals = !user?.is_superuser && (user?.role_id === 3 || user?.role_id === 5);
+  const canRenewCertificate = !!user?.is_superuser || [1, 3, 5].includes(user?.role_id ?? 0);
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [subscriptions, setSubscriptions] = useState<SubscriptionSummary | null>(null);
@@ -96,6 +99,7 @@ export default function L4DeskTerminalsPage() {
   const [listTenant, setListTenant] = useState<number | null | undefined>(user?.org_id);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [editingTerminal, setEditingTerminal] = useState<TerminalSettingsItem | null>(null);
+  const [renewalTerminal, setRenewalTerminal] = useState<TerminalSettingsItem | null>(null);
   const [retryingId, setRetryingId] = useState<number | null>(null);
   const [devices, setDevices] = useState<Map<number, DeviceListItem>>(new Map());
   const fetching = useRef(false);
@@ -171,6 +175,7 @@ export default function L4DeskTerminalsPage() {
     setActivityPending(null);
     setPresenceError(false);
     setEditingTerminal(null);
+    setRenewalTerminal(null);
     setRetryingId(null);
     setWizardOpen(false);
     pinOperations.current.clear();
@@ -324,7 +329,7 @@ export default function L4DeskTerminalsPage() {
     {
       title: "Действия",
       key: "actions",
-      width: 160,
+      width: 200,
       render: (_, r) => (
         <Space size={8}>
           <Tooltip title="Консоль"><Button style={{ width: 38, height: 38 }} disabled={!r.is_active || devices.get(r.device_id)?.is_blocked || subscriptions?.items.some(t => t.terminal_id === r.id && !t.allowed)} aria-label={`Консоль ${r.device_id}`} icon={<CodeOutlined style={{ fontSize: 21 }} />} onClick={() => navigate(`/console?device_id=${r.device_id}`)} /></Tooltip>
@@ -341,6 +346,10 @@ export default function L4DeskTerminalsPage() {
               {canChangeTerminals && canRetry(r) && <Button icon={<SyncOutlined />} loading={retryingId === r.id} onClick={() => void handleRetry(r)}>Повторить подключение</Button>}
             </Space>
           }><Button type="text" aria-label={`Подключение и PIN ${r.device_id}`} icon={<KeyOutlined />} /></Popover>
+          {canRenewCertificate && <Tooltip title="Продлить сертификат на терминале">
+            <Button type="text" disabled={!r.is_active} aria-label={`Продлить сертификат ${r.device_id}`}
+              icon={<SafetyCertificateOutlined />} onClick={() => setRenewalTerminal(r)} />
+          </Tooltip>}
         </Space>
       ),
     },
@@ -489,6 +498,13 @@ export default function L4DeskTerminalsPage() {
         onClose={() => setEditingTerminal(null)}
         onSaved={() => void fetchTerminals()}
       />
+
+      <Modal title={`Сертификат терминала ${renewalTerminal?.device_id ?? ""}`}
+        open={!!renewalTerminal && listTenant === user?.org_id}
+        onCancel={() => setRenewalTerminal(null)} footer={null} destroyOnHidden>
+        {renewalTerminal && listTenant === user?.org_id && <CertificateRenewal
+          key={`${user?.org_id}:${renewalTerminal.id}`} deviceId={renewalTerminal.device_id} />}
+      </Modal>
 
       <OnboardingWizardModal
         key={user?.org_id}

@@ -155,3 +155,14 @@ Production-host отдельный контейнер codex-licensing-test-20261
 - Ограничения evidence: реальная YooKassa оплата, role3 paid setup/7011 на живом терминале, authenticated browser tenant switch и native/video новый happy-path не выполнены. Предыдущая1.11.0 успешная ротация773 не считается проверкой нового платного флоу. HTTP auth границы покрыты existing tests, domain checks на production не подменяют auth E2E.
 
 - Базовый Compose в репозитории и production адресно закреплён на тех же двух digest; persistent image override совпадает. Это изменение не перезапускает сервисы.
+
+
+## Follow-up: действие renew в L4Desk terminals
+
+- Intake: frontend UI исправление; владелец MenuBuilder. User сообщил отсутствие действия уSU вL4Desk, inventory подтвердил отсутствие CertificateRenewal вL4DeskTerminalsPage при наличии вClassic/settings/passport.
+- Producer→consumer: выбранный row.device_id → общая CertificateRenewal → GET/POST /api/devices/{device_id}/certificate-renewal. Backend контракт, tariff/admission/TTL/IoT7011 не меняются.
+- UI: отдельный canRenewCertificate дляSU иroles1/3/5, независимый от запретаSU редактировать tenant settings. Кнопка встроке; административно inactive disabled; offline не блокирует. Eligibility/deny запрашивается общим компонентом только после открытия, нетN дополнительных проверок наlist render. Tenant change закрывает форму, компонент keytenant/runtimeID.
+- Local build и78unit passed. Browser fakeREST matrix: SU/owner queued offline; serverexpired denial; common inactive noGET/POST; Classic paidretry регрессия. Первоначальный SU fakeREST не возвращал arrayavailabletenants и ломал OrgSwitcher; fixture исправлен пофактическомуAPI. Finalbrowser/release результат ниже.
+- Scope: только frontend иконтекст; Python/schema/native/providers не изменяются, production PIN/RPC тестовыми сценариями не создаются.
+
+- Final local validation: frontend build passed; unit78passed; Playwright6passed32.4s (4L4Desk +2Classic regression), fakeREST. Changed-file credential scan3files0matches, diffcheckpassed. Backend tests не перезапускались — Pythonкод/schemaне менялись.
