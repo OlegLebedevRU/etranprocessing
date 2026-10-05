@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user, require_superuser, require_tenant_context
 from app.config import settings
 from app.database import get_db
+from app.models import Terminal
 from app.models_l4desk import (
     FinPayment,
     FinUsageDaily,
@@ -62,6 +63,17 @@ async def correct_subscription(
     terminal = await db.get(L4DeskTerminal, terminal_id, populate_existing=True)
     if terminal is None or terminal.deleted_at is not None:
         raise HTTPException(404, "Терминал не найден")
+    if settings.product_scope_split_enabled:
+        runtime = await db.get(Terminal, terminal.runtime_terminal_id)
+        if (
+            runtime is None
+            or runtime.id != terminal.terminal_id
+            or runtime.org_id != terminal.tenant_id
+            or not runtime.l4desk_subscription_enabled
+        ):
+            raise HTTPException(
+                409, "Корректируется только явно подключённая подписка L4Desk"
+            )
     previous = await db.scalar(
         select(L4DeskAuditEvent).where(
             L4DeskAuditEvent.tenant_id == terminal.tenant_id,

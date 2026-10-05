@@ -125,7 +125,7 @@ async def get_current_billing_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Active organization context required",
         )
-    if settings.product_scope_split_enabled and not user.get("is_superuser"):
+    if settings.product_scope_split_enabled:
         from app.services.product_scope import tenant_product
 
         if await tenant_product(db, int(org_id)) != "classic":
