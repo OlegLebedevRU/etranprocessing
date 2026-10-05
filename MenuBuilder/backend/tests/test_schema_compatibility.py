@@ -128,7 +128,7 @@ def test_startup_error_on_wrong_revision():
         sync_engine.connect() as conn,
         pytest.raises(
             SchemaCompatibilityError,
-            match=r"Database schema revision mismatch: expected one of \['030'\]",
+            match=r"Database schema revision mismatch: expected one of \['030', '031'\]",
         ),
     ):
         check_schema_compatibility_sync(conn)
@@ -155,12 +155,13 @@ def test_startup_error_on_missing_required_tables():
         check_schema_compatibility_sync(conn)
 
 
-def test_startup_success_when_revision_and_tables_match():
+@pytest.mark.parametrize("revision", ["030", "031"])
+def test_startup_success_when_revision_and_tables_match(revision):
     """check_schema_compatibility_sync succeeds cleanly when revision 029 and all tables exist."""
     sync_engine = create_engine("sqlite:///:memory:")
     with sync_engine.begin() as conn:
         conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32));"))
-        conn.execute(text("INSERT INTO alembic_version VALUES ('030');"))
+        conn.execute(text("INSERT INTO alembic_version VALUES (:revision)"), {"revision": revision})
         for t in L4DESK_TABLES:
             conn.execute(
                 text(

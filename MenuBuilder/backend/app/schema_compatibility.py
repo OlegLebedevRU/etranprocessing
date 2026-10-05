@@ -9,7 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 logger = logging.getLogger(__name__)
 
 REQUIRED_ALEMBIC_REVISION = "030"
-COMPATIBLE_ALEMBIC_REVISIONS: set[str] = {"030"}
+# Old ORM safely ignores the additive, DEFAULT-false enrollment column in 031.
+# Publish this bridge before applying 031; final consumers require that column.
+COMPATIBLE_ALEMBIC_REVISIONS: set[str] = {"030", "031"}
 
 L4DESK_TABLES: list[str] = [
     "fin_accounts",
