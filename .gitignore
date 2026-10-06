@@ -39,6 +39,10 @@ s3_cloud_ru.env
 sw_sign.env
 sw_sign.env.bak
 l4mcp_token.env
+.uv-cache/
+.release-test-tmp/
+.pytest_cache/
+.ruff_cache/
 ProcessingBackend/keys/ca.key
 
 # Logs
@@ -111,6 +115,7 @@ tools/dist/*.bin
 tools/dist/*.sha256
 tools/dist/.stage/
 tools/dist/.runtime-backup/
+tools/dist/.release/
 tools/dist/l4tools-release.json
 tools/dist/SHA256SUMS
 tools/dist/fm-signing-input.json

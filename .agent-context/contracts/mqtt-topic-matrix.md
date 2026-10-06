@@ -1,5 +1,13 @@
 # MQTT: remote control, console и presence
 
+## L4Update — принятая архитектура 2026-10-06, не реализовано
+
+[Update flow](../../docs/term_arch-l4update-flow.md): штатные RPC и EVT/EVA без
+новых топиков/MQTT-клиента. Один код события, весь update объект в одном числовом
+теге; номера пока не выделены. Барьер REQ/RSP+свежий EVT/EVA до/после переключений.
+Идентичные MQTT client ID одновременно запрещены, в том числе при временной пробе.
+Обновление путей/consumer новых703x требует отдельной реализации и verification.
+
 ## L4FM v2 — выпущенный контракт 2026-10-05
 
 [FM](file-manager.md): start/renew через RPC7023, transfer через7021;
