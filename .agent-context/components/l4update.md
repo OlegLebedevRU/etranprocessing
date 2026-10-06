@@ -5,10 +5,11 @@
 Добавлен [l4release](../../l4release/__main__.py): plan/prepare/release/verify,
 keys init, один build config, checkpoints и подпись через существующий PS.
 [Руководство](../../tools/release/README.md) и
-[packet](../tasks/active/2026-10-06-l4release-stage1.md) фиксируют проверки/ограничения.
+[packet](../tasks/completed/2026-10-06-l4release-stage1.md) фиксируют проверки/ограничения.
 Worker/layout/RPC/catalog ещё не реализованы. Full access устранил отказы OS gates;
 native builds/tests и unsigned packaging PASS, diagnostic timestamped signing PASS.
-OpenH264 vendor восстановлен и pinned. Полный signed candidate пока не опубликован.
+OpenH264 vendor восстановлен и pinned. Signed candidate 1.13.2 опубликован:
+19 EXE/оба payload проверены, anonymous full GET трёх файлов PASS.
 Terminal gate/promote пока явно отклоняются.
 
 ## Роль и границы

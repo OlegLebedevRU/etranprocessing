@@ -4,12 +4,13 @@
 
 **Accepted — 2026-10-06.** Решения согласованы владельцем в архитектурном
 диалоге. Это целевая архитектура и план реализации, а не описание уже работающего
-`l4update`. Реализация, выпуск и испытания по этому документу ещё не выполнены.
-Имена будущих команд и файлов ниже — контракт проекта, а не существующие команды.
+`l4update`. Новый terminal flow ещё не развёрнут; состояние реализации отдельных
+этапов отмечено ниже. Остальные будущие команды и файлы — контракт проекта.
 
 Прогресс этапа 1: [release foundation](../tools/release/README.md) реализует
-plan/prepare/release/verify/keys init; [packet](../.agent-context/tasks/active/2026-10-06-l4release-stage1.md)
-отделяет локальные проверки от ещё не подтверждённой полной сборки. Worker,
+plan/prepare/release/verify/keys init; [packet](../.agent-context/tasks/completed/2026-10-06-l4release-stage1.md)
+фиксирует полный build/sign/publish candidate 1.13.2, native gates и anonymous GET.
+Worker,
 новая раскладка, terminal gate/catalog/promote пока не внедрены.
 
 Текущий runtime-маршрут через l4mcp описан отдельно в

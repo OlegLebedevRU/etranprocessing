@@ -1,7 +1,5 @@
 # Active task packets
 
-- [L4Release — этап 1](2026-10-06-l4release-stage1.md) — единый uv-конвейер реализован; safety/publisher tests, full native validation ожидает рабочий OpenH264 vendor и publication credentials.
-
 - [Внедрение Classic/L4Desk](2026-10-05-licensing-implementation.md) — production031,52Classic/4L4Desk, split ON; K10 содержит digests, неизменные fingerprints и оставшиеся реальные E2E проверки.
 
 Здесь только короткие packets выполняемых задач по [handoff template](../handoff-template.md).
