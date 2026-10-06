@@ -4,6 +4,12 @@
 
 FM admission requires protocol v2 and MQTT navigation/user-write/drive capabilities; PB listing operations/results removed.
 
+## Unreleased
+
+### Fixed
+
+- `GET /api/ListMenuFile` принимает legacy-аутентификацию `Authorization: ClientCertificate <PEM|base64>` когда TLS client cert не предъявлен (клиенты `clsMenuCreator`). Fallback ограничен ListMenuFile; платёжные и прочие терминальные маршруты остаются строго mTLS.
+
 ## 2026-10-05 — File manager
 
 FM agent mTLS metadata API, signed versioned S3 grants/checksum verification, additive migration032 and commit receipt reconciliation; file bodies never enter PB.

@@ -12,7 +12,10 @@ from app.models import Terminal
 from app.routers import file_manager as fm
 from app.schemas.file_manager import AgentResult, SourceManifest
 from app.services import file_manager_storage as storage
-from app.services.file_manager_readiness import FM_REQUIRED_CAPABILITIES, evaluate_readiness
+from app.services.file_manager_readiness import (
+    FM_REQUIRED_CAPABILITIES,
+    evaluate_readiness,
+)
 
 
 @pytest.fixture
@@ -160,6 +163,7 @@ async def test_agent_restart_rejects_old_operation_before_lease_lookup(monkeypat
 
 def test_http_listing_is_not_a_transfer_operation():
     from pydantic import ValidationError
+
     from app.schemas.file_manager import OperationCreate
     with pytest.raises(ValidationError):
         OperationCreate(id=uuid4(), lease_id=uuid4(), kind="list", path="C:\\")

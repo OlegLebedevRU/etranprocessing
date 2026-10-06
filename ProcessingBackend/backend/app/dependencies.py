@@ -1,3 +1,4 @@
+import base64
 import logging
 import secrets
 import urllib.parse
@@ -15,6 +16,11 @@ from app.models import License, OrgStatus, Terminal, TerminalCertHistory
 from app.services.cert_discovery import record_terminal_discovery
 
 logger = logging.getLogger(__name__)
+
+# Legacy menu clients (clsMenuCreator) authenticate with
+# `Authorization: ClientCertificate <PEM|base64>` instead of TLS client cert.
+# Only ListMenuFile accepts this fallback; payment/gategauge stay mTLS-only.
+LEGACY_CLIENT_CERT_PATHS = frozenset({"/api/ListMenuFile"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,6 +87,80 @@ def extract_cert_not_valid_after(request: Request) -> datetime | None:
     return None
 
 
+def _load_x509_from_payload(payload: str) -> x509.Certificate | None:
+    """Load an X.509 cert from PEM text or base64(PEM|DER)."""
+    text = urllib.parse.unquote(payload).strip()
+    if not text:
+        return None
+
+    if "-----BEGIN CERTIFICATE-----" in text:
+        try:
+            return x509.load_pem_x509_certificate(text.encode("utf-8"))
+        except ValueError:
+            return None
+
+    # Single-line PEM: scheme payload may collapse newlines to spaces.
+    if "BEGIN CERTIFICATE" in text and "-----BEGIN CERTIFICATE-----" not in text:
+        compact = text.replace(" ", "").replace("\t", "")
+        rebuilt = compact.replace("-----BEGINCERTIFICATE-----", "")
+        rebuilt = rebuilt.replace("-----ENDCERTIFICATE-----", "")
+        pem = (
+            "-----BEGIN CERTIFICATE-----\n"
+            + "\n".join(rebuilt[i : i + 64] for i in range(0, len(rebuilt), 64))
+            + "\n-----END CERTIFICATE-----\n"
+        )
+        try:
+            return x509.load_pem_x509_certificate(pem.encode("utf-8"))
+        except ValueError:
+            return None
+
+    token = text.split()[0]
+    try:
+        raw = base64.b64decode(token, validate=False)
+    except ValueError, TypeError:
+        return None
+    if b"-----BEGIN CERTIFICATE-----" in raw:
+        try:
+            return x509.load_pem_x509_certificate(raw)
+        except ValueError:
+            return None
+    try:
+        return x509.load_der_x509_certificate(raw)
+    except ValueError:
+        return None
+
+
+def parse_authorization_client_certificate(
+    request: Request,
+) -> x509.Certificate | None:
+    """Parse legacy `Authorization: ClientCertificate <PEM|base64>` header.
+
+    Used by older menu clients that send the certificate in the Authorization
+    header instead of presenting it during the TLS handshake.
+    """
+    auth = request.headers.get("Authorization", "")
+    if not auth:
+        return None
+    parts = auth.split(None, 1)
+    if len(parts) != 2:
+        return None
+    scheme, payload = parts
+    if scheme.lower() != "clientcertificate":
+        return None
+    return _load_x509_from_payload(payload)
+
+
+def _cert_identity(cert: x509.Certificate) -> tuple[str, str, str, datetime]:
+    """Return (subject, serial, issuer, not_after) in the header convention."""
+    subject = cert.subject.rfc4514_string()
+    serial = format(cert.serial_number, "X")
+    issuer = cert.issuer.rfc4514_string()
+    not_after = getattr(cert, "not_valid_after_utc", None)
+    if not_after is None:
+        not_after = cert.not_valid_after.replace(tzinfo=UTC)
+    return subject, serial, issuer, not_after
+
+
 async def get_current_terminal(
     request: Request,
     db: AsyncSession = Depends(get_db),
@@ -107,6 +187,22 @@ async def get_current_terminal(
 
     cert_serial = request.headers.get("X-Client-Cert-Serial", "")
 
+    auth_cert: x509.Certificate | None = None
+    auth_issuer = ""
+    auth_not_after: datetime | None = None
+    if (not subject or not cert_serial) and endpoint in LEGACY_CLIENT_CERT_PATHS:
+        auth_cert = parse_authorization_client_certificate(request)
+        if auth_cert is not None:
+            cert_subject, cert_serial_val, cert_issuer, cert_not_after = _cert_identity(
+                auth_cert
+            )
+            if not subject:
+                subject = cert_subject
+            if not cert_serial:
+                cert_serial = cert_serial_val
+            auth_issuer = cert_issuer
+            auth_not_after = cert_not_after
+
     if not subject or not cert_serial:
         logger.debug(f"Missing cert headers. DN='{subject}', Serial='{cert_serial}'")
         await record_terminal_discovery(
@@ -129,7 +225,7 @@ async def get_current_terminal(
     o = parsed.get("O", "")
     l_val = parsed.get("L", "")
 
-    issuer = extract_cert_issuer(request)
+    issuer = extract_cert_issuer(request) or auth_issuer
     is_new_ca = bool(issuer and "iot.leo4.ru" in issuer.lower())
 
     logger.debug(
@@ -174,7 +270,9 @@ async def get_current_terminal(
         if terminal:
             # Discovery uses the issuance representation; do not rewrite terminals.cert_serial here.
             cert_serial = terminal.cert_serial
-            cert_not_valid_after = extract_cert_not_valid_after(request)
+            cert_not_valid_after = (
+                extract_cert_not_valid_after(request) or auth_not_after
+            )
             if (
                 cert_not_valid_after
                 and terminal.cert_not_valid_after != cert_not_valid_after
@@ -252,7 +350,7 @@ async def get_current_terminal(
 
     if matched_terminal:
         terminal = matched_terminal
-        cert_not_valid_after = extract_cert_not_valid_after(request)
+        cert_not_valid_after = extract_cert_not_valid_after(request) or auth_not_after
         if (
             cert_not_valid_after
             and terminal.cert_not_valid_after != cert_not_valid_after
