@@ -36,6 +36,9 @@ ENV/
 .env.local
 .env.*.local
 s3_cloud_ru.env
+sw_sign.env
+sw_sign.env.bak
+l4mcp_token.env
 ProcessingBackend/keys/ca.key
 
 # Logs
