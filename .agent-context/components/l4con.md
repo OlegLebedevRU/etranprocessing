@@ -1,5 +1,13 @@
 # l4con
 
+## Принятый L4Update flow — 2026-10-06, требование
+
+[Архитектура](../../docs/term_arch-l4update-flow.md): L4Con — единственный MQTT
+адаптер RPC703x/events, worker запускается вне command Job. Один event code/tag,
+барьеры REQ/RSP+свежий EVT/EVA, update-only обработка при применении, адаптация
+event75 к новым путям без изменения внешнего контракта. Пока не реализовано;
+текущие версии/runtime ниже не доказывают поддержку703x.
+
 ## Удалённое обновление suite — runtime 2026-10-05
 
 [Runbook с точным промптом](../../docs/ops_run-l4tools-update-via-l4mcp.md):

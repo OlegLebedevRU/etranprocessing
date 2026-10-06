@@ -1,9 +1,117 @@
 # L4 Tools release signing
 
-For every `l4setup` build, pause after preparing the unsigned staging
-payloads. Give the operator the command below and wait for confirmation that
-it completed. Resume release verification and publication only after checking
-the signatures of every staged EXE file (enumerated recursively in both architectures) and `tools/dist/l4setup.exe`.
+## Unified pipeline (stage 1)
+
+Run from the repository root with Python 3.14. The root uv project and lockfile
+own release dependencies; the existing `tools/pyproject.toml` contract-test project
+is independent. The ordered component plan is [config.toml](../../l4release/config.toml).
+
+```text
+uv run --locked python -m l4release plan --version <version>
+uv run --locked python -m l4release prepare --version <version>
+uv run --locked python -m l4release release --version <version> --env-file <base-project>/sw_sign.env --no-publish
+uv run --locked python -m l4release release --version <version> --env-file <base-project>/sw_sign.env
+```
+
+`plan` has no build/sign/publish effects. `prepare` is unsigned local validation,
+including existing native build gates and l4setup tests for both architectures.
+It works with dirty sources but never publishes. `release` requires a clean
+source checkpoint, automatically signs from the supplied env, rebuilds only
+the installer around signed payload, verifies every staged EXE and embedded
+payload, and publishes a **candidate**, using the existing strict publisher.
+`--no-publish` stops after signed verification. `verify --version ... --env-file ...`
+checks existing signed files without rebuilding/signing. Ordinary commands never
+call IoT or change terminal services.
+
+The owner explicitly approved automatic signing: the old mandatory operator pause
+is replaced by this pipeline. `Complete-SignedRelease.ps1` remains the signing
+implementation; its direct operator command below is an optional maintenance path.
+
+Terminal gate, admission/catalog and `promote` belong to subsequent implementation
+stages. The corresponding flags/command currently **fail before starting work**;
+publication does not imply transition admission or stable. Metadata signing/publication
+is not implemented in stage 1; Authenticode is mandatory. See the accepted
+[architecture](../../docs/term_arch-l4update-flow.md).
+
+### Credentials and key creation
+
+Use only the explicitly supplied `sw_sign.env` (default: repository root); no
+search or fallback into `.env` profiles. Relative secret-file paths are resolved
+against its directory. The file must not be tracked.
+
+```dotenv
+SW_SIGN_PFX=
+W_SIGN_PFX_PASSWORD=
+AR_GENERIC_KEY_ID=
+AR_GENERIC_KEY_SECRET=
+L4TOOLS_METADATA_KEY_PATH=
+L4TOOLS_METADATA_KEY_PASSWORD=
+IOT_API_KEY_773=
+```
+
+Registry fields are the existing Generic Registry **write** credentials. Read
+downloads are public. `W_SIGN_PFX_PASSWORD` is intentionally spelled exactly this
+way; blank is only suitable for an unencrypted PFX. IOT_API_KEY_773 is reserved
+for a later explicitly enabled terminal gate and is not passed to build children.
+
+For one-time metadata key creation, create a protected directory **outside Git**,
+set an absolute private PEM path and a separate password, then run:
+
+```text
+uv run --locked python -m l4release keys init --env-file <base-project>/sw_sign.env
+```
+
+This creates encrypted PKCS#8 RSA-3072 PEM, a sibling `.public.pem`, and prints
+only the public key ID after a sign/verify self-test. Existing files are never
+overwritten. Protect the directory with Windows ACL and retain an owner backup.
+Embedding that public key and signing catalogs are later stages, not a claimed
+runtime capability of the current tools.
+
+### Checkpoints, inputs and missing dependencies
+
+Reports/logs live under ignored `tools/dist/.release/<version>/`. A workspace
+lock excludes concurrent builds of different versions. Checkpoints bind exact
+source/config/dependency hashes and output bytes. Source changes invalidate reuse;
+review the change and use a fresh version/checkpoint. There is no dirty-release
+or failed-test bypass. After a signing failure, intact retained staging can be
+re-signed without rebuilding components. Signed checkpoints still undergo full
+signature/payload verification on every publication attempt. Changing PFX identity
+does not silently replace an existing release.
+
+Generated version headers/binaries are separated from source inputs. Only when
+the run started clean and input hashes remain unchanged can final manifest
+provenance mark the source checkpoint clean. No arbitrary caller-provided dirty
+override is available. Actual inputs digest and Git revision are recorded.
+
+Preflight checks native dependencies before building. In particular, the current
+l4capture build requires prepared `vendor/openh264` headers and x86/x64
+encoder/common/processing static libraries. Missing assets stop the pipeline;
+old EXEs are not substituted. The recovered working OpenH264 2.6.0.2502 dependency
+is pinned byte-for-byte in `l4release/openh264.lock.json`: four API headers and
+six static libraries, verified before every build. To populate another worktree:
+
+```text
+uv run --locked python -m l4release import-openh264 --source <working-vendor>/openh264
+```
+
+The import verifies all source hashes before copying and refuses to overwrite a
+different dependency. Keep these locked build assets in the build environment;
+this is recovery of existing libraries, not an attested rebuild from Cisco source.
+A source revision and a reproducible codec compilation recipe remain outstanding.
+
+Plan limits are maximum **child-command** times, not mandatory waits or measured
+typical duration. Hashing/filesystem operations and child cleanup are additional.
+Per-command actual duration is recorded. For restricted environments, set
+`UV_CACHE_DIR` to a writable local directory; the build_dist compatibility wrapper
+defaults it to repository `.uv-cache`.
+
+Windows PowerShell children rediscover their native module paths instead of
+inheriting PowerShell 7's `PSModulePath`. Native OS gates require an execution
+profile with access to the Windows desktop, key storage and test ACL operations.
+Codex's isolated Windows sandbox can deny those operations; use the appropriate
+local execution profile rather than bypassing tests.
+
+### Direct maintenance signing
 
 From the repository worktree in a regular Windows PowerShell session:
 
@@ -24,14 +132,17 @@ or failed Authenticode verification stops signing/publication. The timestamp
 preserves verification after the signing certificate expires; it does not
 make modified executables or revoked/untrusted signatures valid.
 
-The component build gate is `tools/build_dist.cmd <version>`. If a test fails,
+The compatibility build gate `tools/build_dist.cmd <version>` now delegates to
+`l4release prepare`; it has no independent component list. If a test fails,
 record the failure explicitly. An unsigned build or a failed signature check
 must not be published as a signed release.
 
 Do not run `tools/build_dist.cmd` after signing: it rebuilds unsigned components.
-The operator uses the existing `Complete-SignedRelease.ps1`; the agent then
-verifies the exact signed staging/payload/installer hashes and publishes those
-artifacts. Any source change after signing requires another build/sign/verify cycle.
+The pipeline uses `Complete-SignedRelease.ps1`, verifies the exact signed
+staging/payload/installer hashes, and publishes those artifacts. Direct incremental
+maintenance commands below remain available; they do not establish unified pipeline
+checkpoint evidence. Any source change after signing requires another
+build/sign/verify cycle and must not overwrite a published version.
 Component versions in the manifest come from staged PE resources and must agree
 between architectures. The universal installer remains x86; x64 is also built
 for compilation/compatibility checks.

@@ -1,0 +1,20 @@
+﻿{
+    "schema":  1,
+    "name":  "OpenH264",
+    "version":  "2.6.0.2502",
+    "source":  "https://github.com/cisco/openh264/tree/v2.6.0",
+    "build":  "MSVC /MT; meson + ninja + NASM 2.16.03",
+    "evidence":  "docs/l4capture/handoffs/L4C-03-OPENH264-CODEC-report.md; recovered existing l4capture-debug build assets, source revision not attested",
+    "files":  {
+                  "codec/api/wels/codec_api.h":  "96c67f617b826eecf92e531fad0cba5395af71391537befa9bda473b55767733",
+                  "codec/api/wels/codec_app_def.h":  "eec0169ac68ec830e98aa99104a57463765149d09059e100f595bc935d6a509c",
+                  "codec/api/wels/codec_def.h":  "8c09539f7cde485c45025315211a80e559f3e25eacf907fd6f96619b4f1fff50",
+                  "codec/api/wels/codec_ver.h":  "043ebdd84b3573a104a67a22e4db2a338441a4ab71417a8cffd3eb82acffb142",
+                  "builddir_x86/codec/encoder/libencoder.a":  "689efd1344d7c1cdc1b09aeb77b1b20d6c2552f2f99305af17eb1801d6428fb3",
+                  "builddir_x86/codec/common/libcommon.a":  "90d9ebe8846f96a94acaab94f0587b0e807ee0f80dd47ffe5d97e8b2c8d0331d",
+                  "builddir_x86/codec/processing/libprocessing.a":  "2d34b3f141396e689585828dea824869336250722a1feb715f7a1a55666fdf4e",
+                  "builddir_x64/codec/encoder/libencoder.a":  "d5bbad4ad8f92f323b651f2a5b0658dc6a67cba587c5e7fe41595c74f4f94400",
+                  "builddir_x64/codec/common/libcommon.a":  "4fdd18ed35157ab258c8990a00305bd92079dfca5bba55b1f0f8213a999c9023",
+                  "builddir_x64/codec/processing/libprocessing.a":  "c3edd5aeb9cde8323d0c1b0ac247216232731587ddcd9fc1c2c0795ceb10866e"
+              }
+}
