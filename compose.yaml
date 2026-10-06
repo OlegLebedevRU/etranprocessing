@@ -57,7 +57,7 @@ services:
     environment:
       LEO4PROXY_ENDPOINTS: ${LEO4PROXY_ENDPOINTS:-}
       LEO4PROXY_ENDPOINTS_TTL_SECONDS: ${LEO4PROXY_ENDPOINTS_TTL_SECONDS:-86400}
-    image: dev-leo4-ru.cr.cloud.ru/etran/processingbackend@sha256:0124b851fb378b53710268a3614d7ba37dfda8da576e737e84737c498a4ac266
+    image: dev-leo4-ru.cr.cloud.ru/etran/processingbackend@sha256:a1e3b4970a2bee9f59b3a6700e69e7b9bad6ae1d8a5f1e54dd92270551918ab7
     container_name: processing-backend
     restart: always
     env_file:
