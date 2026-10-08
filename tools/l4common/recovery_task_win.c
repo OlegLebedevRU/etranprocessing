@@ -40,10 +40,50 @@ static bool text_copy(BSTR value,wchar_t** result){
     *result=NULL;if(!value || SysStringLen(value)>=L4_RECOVERY_TASK_XML_LIMIT || wcslen(value)!=SysStringLen(value))return fail(ERROR_INVALID_DATA);
     *result=_wcsdup(value);return *result?true:fail(ERROR_NOT_ENOUGH_MEMORY);
 }
+static bool duration(const wchar_t* text,wchar_t out[32]){
+    if(!text || wcslen(text)>32 || text[0]!=L'P' || text[1]!=L'T')return fail(ERROR_INVALID_DATA);
+    DWORD total=0,previous=4;const wchar_t* p=text+2;bool any=false;
+    while(*p){DWORD value=0,rank=0,multiplier=0;if(*p<L'0'||*p>L'9')return fail(ERROR_INVALID_DATA);
+        do{value=value*10+(DWORD)(*p++-L'0');if(value>360)return fail(ERROR_INVALID_DATA);}while(*p>=L'0'&&*p<=L'9');
+        if(*p==L'H'){rank=3;multiplier=3600;}else if(*p==L'M'){rank=2;multiplier=60;}else if(*p==L'S'){rank=1;multiplier=1;}else return fail(ERROR_INVALID_DATA);
+        if(rank>=previous || value*multiplier>360-total)return fail(ERROR_INVALID_DATA);previous=rank;total+=value*multiplier;++p;any=true;
+    }
+    return any && total && swprintf_s(out,32,L"PT%luS",total)>0?true:fail(ERROR_INVALID_DATA);
+}
+static bool digits(const wchar_t* p,unsigned count,WORD* result){
+    WORD value=0;for(unsigned i=0;i<count;i++){if(p[i]<L'0'||p[i]>L'9')return false;value=(WORD)(value*10+p[i]-L'0');}*result=value;return true;
+}
+static bool boundary(const wchar_t* text,wchar_t out[32]){
+    size_t n=text?wcslen(text):0;SYSTEMTIME time={0};FILETIME file;WORD hours=0,minutes=0;
+    if((n!=20 && n!=25) || text[4]!=L'-'||text[7]!=L'-'||text[10]!=L'T'||text[13]!=L':'||text[16]!=L':' ||
+        !digits(text,4,&time.wYear)||!digits(text+5,2,&time.wMonth)||!digits(text+8,2,&time.wDay)||!digits(text+11,2,&time.wHour)||!digits(text+14,2,&time.wMinute)||!digits(text+17,2,&time.wSecond) || time.wYear<2000 || !SystemTimeToFileTime(&time,&file))return fail(ERROR_INVALID_DATA);
+    LONGLONG offset=0;
+    if(n==20){if(text[19]!=L'Z')return fail(ERROR_INVALID_DATA);}
+    else{if((text[19]!=L'+'&&text[19]!=L'-')||text[22]!=L':'||!digits(text+20,2,&hours)||!digits(text+23,2,&minutes)||hours>14||minutes>59||(hours==14&&minutes))return fail(ERROR_INVALID_DATA);offset=((LONGLONG)hours*60+minutes)*600000000LL;if(text[19]==L'-')offset=-offset;}
+    LONGLONG utc=(LONGLONG)(((ULONGLONG)file.dwHighDateTime<<32)|file.dwLowDateTime)-offset;if(utc<0)return fail(ERROR_INVALID_DATA);file.dwLowDateTime=(DWORD)utc;file.dwHighDateTime=(DWORD)((ULONGLONG)utc>>32);
+    if(!FileTimeToSystemTime(&file,&time)||time.wYear<2000||time.wYear>9999)return fail(ERROR_INVALID_DATA);
+    return swprintf_s(out,32,L"%04u-%02u-%02uT%02u:%02u:%02uZ",time.wYear,time.wMonth,time.wDay,time.wHour,time.wMinute,time.wSecond)>0?true:fail(ERROR_INVALID_DATA);
+}
+/* Scheduler registration rewrites duration/UTC spelling and inserts its SD.
+ * Normalize typed COM properties; the actual private task DACL is audited too. */
+static bool normalize(ITaskDefinition* definition){
+    ITaskSettings* settings=NULL;ITriggerCollection* triggers=NULL;IRegistrationInfo* registration=NULL;BSTR raw=NULL,value=NULL;VARIANT policy;VariantInit(&policy);wchar_t text[32];LONG count=0;bool ok=hr_ok(ITaskDefinition_get_Settings(definition,&settings))&&hr_ok(ITaskSettings_get_ExecutionTimeLimit(settings,&raw))&&duration(raw,text);
+    if(ok){value=SysAllocString(text);ok=value&&hr_ok(ITaskSettings_put_ExecutionTimeLimit(settings,value));}SysFreeString(raw);raw=NULL;SysFreeString(value);value=NULL;
+    if(ok)ok=hr_ok(ITaskDefinition_get_Triggers(definition,&triggers))&&hr_ok(ITriggerCollection_get_Count(triggers,&count))&&count>=1&&count<=8;
+    for(LONG i=1;ok&&i<=count;i++){ITrigger* trigger=NULL;ok=hr_ok(ITriggerCollection_get_Item(triggers,i,&trigger))&&hr_ok(ITrigger_get_StartBoundary(trigger,&raw));
+        if(ok&&raw&&*raw){ok=boundary(raw,text);if(ok){value=SysAllocString(text);ok=value&&hr_ok(ITrigger_put_StartBoundary(trigger,value));}}
+        SysFreeString(raw);raw=NULL;SysFreeString(value);value=NULL;if(trigger)ITrigger_Release(trigger);
+    }
+    if(ok)ok=hr_ok(ITaskDefinition_get_RegistrationInfo(definition,&registration))&&hr_ok(IRegistrationInfo_get_SecurityDescriptor(registration,&policy));
+    if(ok&&V_VT(&policy)!=VT_EMPTY&&V_VT(&policy)!=VT_NULL)ok=V_VT(&policy)==VT_BSTR&&V_BSTR(&policy)&&l4_recovery_task_check_acl(V_BSTR(&policy),false);
+    VariantClear(&policy);V_VT(&policy)=VT_BSTR;V_BSTR(&policy)=SysAllocString(L4_RECOVERY_TASK_SDDL);
+    if(ok)ok=V_BSTR(&policy)&&hr_ok(IRegistrationInfo_put_SecurityDescriptor(registration,policy));
+    DWORD error=GetLastError();VariantClear(&policy);if(registration)IRegistrationInfo_Release(registration);if(triggers)ITriggerCollection_Release(triggers);if(settings)ITaskSettings_Release(settings);return ok?true:fail(error?error:ERROR_INVALID_DATA);
+}
 static bool canonical(void* context,const wchar_t* xml,wchar_t** result){
     Scheduler* s=context;*result=NULL;if(!xml || wcslen(xml)>=L4_RECOVERY_TASK_XML_LIMIT)return fail(ERROR_INVALID_DATA);
     ITaskDefinition* definition=NULL;BSTR input=SysAllocString(xml),output=NULL;bool ok=input && hr_ok(ITaskService_NewTask(s->service,0,&definition));
-    if(ok)ok=hr_ok(ITaskDefinition_put_XmlText(definition,input)) && hr_ok(ITaskDefinition_get_XmlText(definition,&output)) && text_copy(output,result);
+    if(ok)ok=hr_ok(ITaskDefinition_put_XmlText(definition,input)) && normalize(definition) && hr_ok(ITaskDefinition_get_XmlText(definition,&output)) && text_copy(output,result);
     DWORD error=GetLastError();if(definition)ITaskDefinition_Release(definition);SysFreeString(input);SysFreeString(output);return ok?true:fail(error?error:ERROR_INVALID_DATA);
 }
 static bool folder(void* context,bool create){

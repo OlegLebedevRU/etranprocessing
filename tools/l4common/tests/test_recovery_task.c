@@ -6,10 +6,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <wchar.h>
 static unsigned checks,failures;
 #define CHECK(x) do{++checks;if(!(x)){++failures;printf("FAIL scheduler %u: %s (%lu)\n",__LINE__,#x,GetLastError());}}while(0)
 /* Native gate is read-only COM definition parsing. No folder/task registration. */
 bool l4_recovery_task_canonical_local(const wchar_t* xml,wchar_t** result);
+static wchar_t* replace_text(const wchar_t* xml,const wchar_t* old,const wchar_t* replacement){
+    const wchar_t* at=wcsstr(xml,old);if(!at)return NULL;size_t prefix=(size_t)(at-xml),size=wcslen(xml)-wcslen(old)+wcslen(replacement)+1;wchar_t* out=calloc(size,sizeof(wchar_t));if(!out)return NULL;
+    wmemcpy(out,xml,prefix);wcscpy_s(out+prefix,size-prefix,replacement);wcscat_s(out,size,at+wcslen(old));return out;
+}
 typedef struct {
     L4Journal* journal;L4Layout roots;const wchar_t* operation;bool present,unknown_create,bad_acl,bad_folder,bad_read,bad_create,terminal,drift;
     unsigned creates,reads,helpers;unsigned fail_helper;wchar_t* xml;
@@ -74,6 +79,16 @@ int main(void){
     CHECK(!l4_recovery_task_check_acl(L"O:SYG:SYD:P(A;;FR;;;SY)(A;;FA;;;BA)",false));
     wchar_t *normalized=NULL,*again=NULL;CHECK(l4_recovery_task_canonical_local(spec.xml,&normalized));
     if(normalized){CHECK(l4_recovery_task_canonical_local(normalized,&again));CHECK(again && !wcscmp(normalized,again));printf("Native TaskDefinition XML/normalization accepted; no task/folder writes\n");}
+    wchar_t *alternate=replace_text(spec.xml,L"PT4S",L"PT0M4S"),*canonical_alternate=NULL;
+    CHECK(alternate && l4_recovery_task_canonical_local(alternate,&canonical_alternate));CHECK(canonical_alternate && normalized && !wcscmp(canonical_alternate,normalized));free(alternate);free(canonical_alternate);canonical_alternate=NULL;
+    alternate=replace_text(spec.xml,L"PT4S",L"PT5S");CHECK(alternate && l4_recovery_task_canonical_local(alternate,&canonical_alternate));CHECK(canonical_alternate && normalized && wcscmp(canonical_alternate,normalized));free(alternate);free(canonical_alternate);canonical_alternate=NULL;
+    alternate=replace_text(spec.xml,L"PT4S",L"PT361S");CHECK(alternate && !l4_recovery_task_canonical_local(alternate,&canonical_alternate));free(alternate);free(canonical_alternate);canonical_alternate=NULL;
+    const wchar_t* start=wcsstr(spec.xml,L"<StartBoundary>");wchar_t original_boundary[21]={0};CHECK(start!=NULL);if(start)wmemcpy(original_boundary,start+15,20);
+    for(int offset=-180;offset<=180;offset+=180){ULONGLONG ticks=spec.deadline_utc+(LONGLONG)offset*600000000LL;FILETIME local={(DWORD)ticks,(DWORD)(ticks>>32)};SYSTEMTIME time;wchar_t alternate_boundary[32];CHECK(FileTimeToSystemTime(&local,&time));CHECK(swprintf_s(alternate_boundary,32,L"%04u-%02u-%02uT%02u:%02u:%02u%ls",time.wYear,time.wMonth,time.wDay,time.wHour,time.wMinute,time.wSecond,offset<0?L"-03:00":offset>0?L"+03:00":L"+00:00")>0);
+        alternate=replace_text(spec.xml,original_boundary,alternate_boundary);CHECK(alternate && l4_recovery_task_canonical_local(alternate,&canonical_alternate));CHECK(canonical_alternate && normalized && !wcscmp(canonical_alternate,normalized));free(alternate);free(canonical_alternate);canonical_alternate=NULL;
+    }
+    alternate=replace_text(spec.xml,original_boundary,L"2026-01-01T00:00:00+14:01");CHECK(alternate && !l4_recovery_task_canonical_local(alternate,&canonical_alternate));free(alternate);free(canonical_alternate);canonical_alternate=NULL;
+    alternate=replace_text(normalized,L"(A;;FA;;;BA)",L"(A;;FA;;;BU)");CHECK(alternate && !l4_recovery_task_canonical_local(alternate,&canonical_alternate));free(alternate);free(canonical_alternate);
     free(normalized);free(again);
     Model model={0};model.journal=j;model.roots=fixture.layout;model.operation=id;L4RecoveryTaskOps ops={&model,helper,folder,canonical,read_task,create_task};
     ULONGLONG seq=j->sequence;CHECK(!l4_recovery_task_run(j,&inventory,2100,false,&ops));CHECK(!model.creates && j->sequence==seq);
