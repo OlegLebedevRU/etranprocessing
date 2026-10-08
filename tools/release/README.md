@@ -6,6 +6,14 @@ Run from the repository root with Python 3.14. The root uv project and lockfile
 own release dependencies; the existing `tools/pyproject.toml` contract-test project
 is independent. The ordered component plan is [config.toml](../../l4release/config.toml).
 
+The pipeline starts with an administrative, isolated SCM regression for both
+architectures. It creates one unique stopped test service, verifies supervisor
+restart configuration rights, then deletes that service and checks its absence.
+It never starts the test service or opens a Tools Suite service. Run the pipeline
+from an elevated Windows session; missing SCM privileges fail this gate explicitly.
+Ordinary native `build.cmd all` does not run this test; its explicit entry is
+`tools/l4setup/build.cmd test-scm`.
+
 ```text
 uv run --locked python -m l4release plan --version <version>
 uv run --locked python -m l4release prepare --version <version>

@@ -31,6 +31,7 @@ if not defined VS_DEV_CMD (
 
 if not exist bin mkdir bin
 if not exist obj mkdir obj
+if /i "%TARGET_CMD%"=="test-scm" goto :run_scm_tests
 if /i "%TARGET_CMD%"=="test" goto :run_tests
 if /i "%TARGET_CMD%"=="tests" goto :run_tests
 if "%TARGET_CMD%"=="" set "TARGET_CMD=all"
@@ -55,4 +56,10 @@ cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && rc.exe /nologo %RC_PAYLOAD_FLAGS% /i
 exit /b %errorlevel%
 :run_tests
 call run_tests.cmd
+exit /b %errorlevel%
+
+:run_scm_tests
+call run_tests.cmd x86 scm
+if errorlevel 1 exit /b 1
+call run_tests.cmd x64 scm
 exit /b %errorlevel%
