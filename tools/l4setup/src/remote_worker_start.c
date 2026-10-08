@@ -33,10 +33,13 @@ static bool original_equal(const L4BootstrapPlan* a,const L4BootstrapPlan* b){
 }
 static bool environment(SetupRemoteWorkerLaunch* p){
     wchar_t windows[MAX_PATH],system[MAX_PATH];UINT n=GetWindowsDirectoryW(windows,MAX_PATH),m=GetSystemDirectoryW(system,MAX_PATH);
-    if(!n || n>=MAX_PATH || !m || m>=MAX_PATH)return fail(ERROR_BAD_PATHNAME);
+    if(!n || n>=MAX_PATH || !m || m>=MAX_PATH || n<3 || windows[1]!=L':' || windows[2]!=L'\\')return fail(ERROR_BAD_PATHNAME);
     /* Native facts only. No inherited credentials, COMSPEC or user-controlled PATH. */
     /* Sorted case-insensitively, explicitly terminated by a second NUL. */
     size_t used=0;int count=swprintf_s(p->environment,2048,L"PATH=%ls;%ls;%ls",system,windows,p->layout.launchers);if(count<0)return fail(ERROR_BUFFER_OVERFLOW);used=(size_t)count+1;
+    /* Known Folders expands the OS ProgramData path through SystemDrive even
+     * for SYSTEM. Derive it from the native Windows directory, never getenv. */
+    count=swprintf_s(p->environment+used,2048-used,L"SystemDrive=%.2ls",windows);if(count<0)return fail(ERROR_BUFFER_OVERFLOW);used+=(size_t)count+1;
     count=swprintf_s(p->environment+used,2048-used,L"SystemRoot=%ls",windows);if(count<0)return fail(ERROR_BUFFER_OVERFLOW);used+=(size_t)count+1;
     count=swprintf_s(p->environment+used,2048-used,L"WINDIR=%ls",windows);if(count<0)return fail(ERROR_BUFFER_OVERFLOW);used+=(size_t)count+1;
     if(used>=2048)return fail(ERROR_BUFFER_OVERFLOW);p->environment[used]=0;return true;

@@ -1,6 +1,10 @@
 /* Composition fixture. Source/publisher/helper/task evidence is modeled here;
  * actual private Job/child/handoff tests remain separate native gates. */
 #include "../src/remote_worker_start.c"
+#include <shlobj.h>
+#pragma comment(lib,"shell32.lib")
+#pragma comment(lib,"ole32.lib")
+#pragma comment(lib,"uuid.lib")
 static unsigned passed,failed,spawned,closed,transfers,communication,checks_seen;
 static int fault;static bool enabled=true;static BYTE hash[32];static volatile LONG late_cancel;
 static L4BootstrapPlan original;static L4RemoteRequest request;
@@ -43,7 +47,8 @@ const L4BootstrapPlan* setup_remote_worker_plan_source(const SetupRemoteWorkerPl
 const L4RemoteRequest* setup_remote_worker_plan_request(const SetupRemoteWorkerPlan* p){(void)p;return &request;}
 ULONGLONG setup_remote_worker_plan_sequence(const SetupRemoteWorkerPlan* p){(void)p;return 14;}
 bool l4_worker_start(L4Journal* j,const L4WorkerStart* r,L4WorkerJob** w,L4WorkerStartReport* s){(void)j;spawned++;CHECK(r->helper.size==helper.size);CHECK(wcsstr(r->command,L"--update-worker --source-version 1.13.6 --updater-version 1.13.5 --operation 12345678-1234-1234-1234-123456789abc --arch x86")!=NULL);CHECK(!wcscmp(r->directory,L"C:\\Program Files\\Leo4\\Tools\\setup\\1.13.5"));
-    unsigned entries=0;for(const wchar_t* e=r->environment;*e;e+=wcslen(e)+1){CHECK(wcsncmp(e,L"IOT_API_KEY",11)!=0 && wcsncmp(e,L"SW_SIGN",7)!=0);entries++;}CHECK(entries==3);*w=(L4WorkerJob*)1;s->stage=L4_START_RUNNING;s->plan_published=true;s->task_attempted=true;return true;}
+    unsigned entries=0;wchar_t windows[MAX_PATH];CHECK(GetWindowsDirectoryW(windows,MAX_PATH)>2);bool drive=false;
+    for(const wchar_t* e=r->environment;*e;e+=wcslen(e)+1){CHECK(wcsncmp(e,L"IOT_API_KEY",11)!=0 && wcsncmp(e,L"SW_SIGN",7)!=0);if(!wcsncmp(e,L"SystemDrive=",12)){CHECK(wcslen(e)==14 && !wcsncmp(e+12,windows,2));drive=true;}entries++;}CHECK(entries==4 && drive);*w=(L4WorkerJob*)1;s->stage=L4_START_RUNNING;s->plan_published=true;s->task_attempted=true;return true;}
 bool l4_worker_job_close(L4WorkerJob** w,DWORD t){(void)t;closed++;*w=NULL;return fault==11?fail(ERROR_TIMEOUT):true;}
 HANDLE l4_worker_job_process(const L4WorkerJob* w){(void)w;return observed_child;}
 bool setup_update_prepare_communication(L4Journal* j,ULONGLONG s,L4WorkerJob* w,const L4AccessActors* a,const L4BootstrapChecks* c,ULONGLONG ar,ULONGLONG d,const L4CommunicationBudget* b,DWORD t){(void)j;(void)s;(void)w;(void)a;(void)c;(void)ar;(void)d;(void)b;(void)t;communication++;if(fault==12)Sleep(150);if(fault==13)InterlockedExchange(&late_cancel,1);return fault==8?fail(ERROR_TIMEOUT):true;}
@@ -54,8 +59,25 @@ bool setup_remote_launch_failure_finish(L4Journal* j,DWORD error,DWORD stage,DWO
     (void)j;(void)cleanup;CHECK(error && stage>=L4_START_VALIDATE && stage<=L4_START_RUNNING);memset(result,0,sizeof(*result));
     return fault==11?fail(ERROR_WRITE_FAULT):true;
 }
+/* Real child and OS Known Folders under the production environment. No SCM,
+ * SYSTEM, recovery task, journal or installed suite mutation in this test. */
+static void known_folder_children(void){
+    SetupRemoteWorkerLaunch p={0};wcscpy_s(p.layout.launchers,MAX_PATH,L"C:\\Program Files\\Leo4\\Tools\\bin");CHECK(environment(&p));
+    wchar_t image[MAX_PATH],command[MAX_PATH+40],without_drive[2048]={0};CHECK(GetModuleFileNameW(NULL,image,MAX_PATH)>0);
+    size_t used=0;for(const wchar_t* entry=p.environment;*entry;entry+=wcslen(entry)+1)if(wcsncmp(entry,L"SystemDrive=",12)){
+        size_t size=wcslen(entry)+1;CHECK(used+size<2048);memcpy(without_drive+used,entry,size*sizeof(wchar_t));used+=size;
+    }
+    for(unsigned missing=0;missing<2;missing++){
+        swprintf_s(command,_countof(command),L"\"%ls\" --known-folders",image);STARTUPINFOW si={sizeof(si)};PROCESS_INFORMATION child={0};
+        bool created=CreateProcessW(image,command,NULL,NULL,FALSE,CREATE_UNICODE_ENVIRONMENT|CREATE_NO_WINDOW,missing?without_drive:p.environment,NULL,&si,&child)!=0;CHECK(created);
+        if(created){DWORD wait=WaitForSingleObject(child.hProcess,10000),code=STILL_ACTIVE;CHECK(wait==WAIT_OBJECT_0);CHECK(GetExitCodeProcess(child.hProcess,&code));CHECK(missing?code!=0:code==0);
+            if(wait!=WAIT_OBJECT_0){CHECK(TerminateProcess(child.hProcess,ERROR_CANCELLED));CHECK(WaitForSingleObject(child.hProcess,5000)==WAIT_OBJECT_0);}CloseHandle(child.hThread);CloseHandle(child.hProcess);}
+    }
+}
 int main(int argc,char** argv){
     if(argc==2 && !strcmp(argv[1],"--wait-child")){Sleep(300);return 9;}
+    if(argc==2 && !strcmp(argv[1],"--known-folders")){PWSTR path=NULL;HRESULT hr=SHGetKnownFolderPath(&FOLDERID_ProgramData,KF_FLAG_DONT_VERIFY,NULL,&path);bool ok=SUCCEEDED(hr)&&path&&wcslen(path)>2&&path[1]==L':'&&path[2]==L'\\';CoTaskMemFree(path);return ok?0:87;}
+    known_folder_children();
     engine.preflight=preflight;engine.execute=execute;request.target=L4_REMOTE_SUITE;strcpy_s(request.version,32,"latest");request.accepted_utc=1;asset.size=123;helper.size=456;
     L4Journal journal={0};journal.lock=(HANDLE)1;wcscpy_s(journal.directory,MAX_PATH,L"C:\\private\\12345678-1234-1234-1234-123456789abc");wcscpy_s(journal.layout.launchers,MAX_PATH,L"C:\\Program Files\\Leo4\\Tools\\bin");original.layout=journal.layout;
     SetupRemoteWorkerPolicy policy={0};policy.timeout_ms=10000;policy.cleanup_ms=1000;policy.recovery_ms=1000;policy.overhead_ms=2000;
