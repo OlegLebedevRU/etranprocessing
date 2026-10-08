@@ -15,9 +15,6 @@ const char* l4_route_arch(const L4RoutePlan* p){(void)p;return NULL;}
 const ULONGLONG* setup_operation_configs(const SetupOperationPlan* p,unsigned* n){(void)p;*n=0;return NULL;}
 const L4ServiceSwitch* setup_operation_switch(const SetupOperationPlan* p,unsigned h,unsigned s){(void)p;(void)h;(void)s;return NULL;}
 bool setup_manifest_verify(const SetupManifest* p){(void)p;return refuse();}
-bool l4_recovery_decode(const L4Layout* l,const BYTE* b,DWORD n,L4RecoveryPlan* p){(void)l;(void)b;(void)n;(void)p;return refuse();}
-bool l4_recovery_hash(const void* b,DWORD n,BYTE h[32]){(void)b;(void)n;(void)h;return refuse();}
-bool l4_recovery_result_decode(const L4RecoveryPlan* p,const BYTE h[32],const BYTE* b,DWORD n,L4RecoveryStatus* s,DWORD* e){(void)p;(void)h;(void)b;(void)n;(void)s;(void)e;return refuse();}
 bool l4_communication_plan_decode(const L4Layout* l,const BYTE* b,DWORD n,L4CommunicationPlan* p){(void)l;(void)b;(void)n;(void)p;return refuse();}
 bool l4_communication_decision_open(const L4Layout* l,const wchar_t* u,DWORD t,L4CommunicationDecision** p){(void)l;(void)u;(void)t;*p=NULL;return refuse();}
 bool l4_communication_decision_read(L4CommunicationDecision* p,L4CommunicationPhase* s,DWORD* e){(void)p;(void)s;(void)e;return refuse();}
