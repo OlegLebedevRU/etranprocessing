@@ -35,6 +35,16 @@ static bool create_task(void* context,const L4RecoveryTask* task){
 }
 static void reset(Model* m){m->creates=m->reads=m->helpers=0;m->unknown_create=m->bad_acl=m->bad_folder=m->bad_read=m->bad_create=m->terminal=m->drift=false;m->fail_helper=0;}
 int main(void){
+    CHECK(l4_recovery_task_system_account(L"S-1-5-18"));
+    CHECK(!l4_recovery_task_system_account(NULL));CHECK(!l4_recovery_task_system_account(L""));
+    CHECK(!l4_recovery_task_system_account(L"S-1-5-19"));CHECK(!l4_recovery_task_system_account(L"S-1-5-32-544"));
+    CHECK(!l4_recovery_task_system_account(L"L4-No-Such-System-Account-7031"));
+    BYTE system_sid[SECURITY_MAX_SID_SIZE];DWORD system_size=sizeof(system_sid);wchar_t account[256],domain[256],qualified[514];DWORD account_size=256,domain_size=256;SID_NAME_USE use;
+    CHECK(CreateWellKnownSid(WinLocalSystemSid,NULL,system_sid,&system_size));
+    CHECK(LookupAccountSidW(NULL,system_sid,account,&account_size,domain,&domain_size,&use));
+    CHECK(l4_recovery_task_system_account(account));
+    CHECK(swprintf_s(qualified,514,L"%ls\\%ls",domain,account)>0);CHECK(l4_recovery_task_system_account(qualified));
+    wchar_t oversized[514];for(unsigned i=0;i<513;i++)oversized[i]=L'x';oversized[513]=0;CHECK(!l4_recovery_task_system_account(oversized));
     UpdateFixture fixture;CHECK(update_fixture_init(&fixture));CHECK(update_fixture_put(&fixture,0));
     const wchar_t* id=L"17730000-0000-4000-8000-000000000001";L4Journal* j=NULL;CHECK(l4_journal_open(&fixture.layout,id,true,&j));if(!j)return 1;
     L4RecoveryPlan p={0};memcpy(&p.operation,j->header+8,16);p.worker_pid=GetCurrentProcessId();FILETIME e,k,u,t;CHECK(GetProcessTimes(GetCurrentProcess(),&p.worker_created,&e,&k,&u));

@@ -14,11 +14,22 @@ typedef struct {ITaskService* service;ITaskFolder* folder;HANDLE file;L4FileFenc
 static bool fail(DWORD error){SetLastError(error);return false;}
 static bool hr_ok(HRESULT hr){return SUCCEEDED(hr)?true:fail((DWORD)hr);}
 static bool missing(HRESULT hr){return hr==HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) || hr==HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND);}
+bool l4_recovery_task_system_account(const wchar_t* user){
+    if(!user || !*user || wcslen(user)>512)return fail(ERROR_ACCESS_DENIED);
+    PSID parsed=NULL;
+    if(ConvertStringSidToSidW(user,&parsed)){
+        bool ok=IsWellKnownSid(parsed,WinLocalSystemSid)!=0;LocalFree(parsed);
+        return ok?true:fail(ERROR_ACCESS_DENIED);
+    }
+    BYTE sid[SECURITY_MAX_SID_SIZE];wchar_t domain[256];DWORD size=sizeof(sid),length=256;SID_NAME_USE use;
+    bool ok=LookupAccountNameW(NULL,user,sid,&size,domain,&length,&use) && IsValidSid(sid) && IsWellKnownSid(sid,WinLocalSystemSid);
+    return ok?true:fail(ERROR_ACCESS_DENIED);
+}
 static bool principal(IRegisteredTask* task){
     ITaskDefinition* definition=NULL;IPrincipal* identity=NULL;BSTR user=NULL;TASK_LOGON_TYPE logon=TASK_LOGON_NONE;TASK_RUNLEVEL_TYPE level=TASK_RUNLEVEL_LUA;
     bool ok=hr_ok(IRegisteredTask_get_Definition(task,&definition)) && hr_ok(ITaskDefinition_get_Principal(definition,&identity)) &&
         hr_ok(IPrincipal_get_UserId(identity,&user)) && hr_ok(IPrincipal_get_LogonType(identity,&logon)) && hr_ok(IPrincipal_get_RunLevel(identity,&level));
-    if(ok)ok=user && (!wcscmp(user,L"S-1-5-18") || !_wcsicmp(user,L"SYSTEM") || !_wcsicmp(user,L"NT AUTHORITY\\SYSTEM")) && logon==TASK_LOGON_SERVICE_ACCOUNT && level==TASK_RUNLEVEL_HIGHEST;
+    if(ok)ok=l4_recovery_task_system_account(user) && logon==TASK_LOGON_SERVICE_ACCOUNT && level==TASK_RUNLEVEL_HIGHEST;
     DWORD error=GetLastError();SysFreeString(user);if(identity)IPrincipal_Release(identity);if(definition)ITaskDefinition_Release(definition);return ok?true:fail(error?error:ERROR_ACCESS_DENIED);
 }
 static bool system_user(void){HANDLE token=NULL;BYTE user[512];DWORD count=0;
