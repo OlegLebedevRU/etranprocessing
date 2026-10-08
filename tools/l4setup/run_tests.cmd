@@ -87,7 +87,7 @@ cl.exe /nologo /O2 /MT /W4 /WX /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x060
 if errorlevel 1 exit /b 1
 bin\test_remote_completion.exe
 if errorlevel 1 exit /b 1
-cl.exe /nologo /O2 /MT /W4 /WX /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /Foobj\ tests\test_remote_commit.c tests\remote_commit_admission_stubs.c src\remote_commit.c ..\l4common\journal_reader.c ..\l4common\journal.c ..\l4common\layout.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\test_remote_commit.exe ole32.lib advapi32.lib shell32.lib bcrypt.lib
+cl.exe /nologo /O2 /MT /W4 /WX /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /Foobj\ tests\test_remote_commit.c tests\remote_commit_admission_stubs.c ..\l4common\recovery_plan.c ..\l4common\journal_reader.c ..\l4common\journal.c ..\l4common\layout.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\test_remote_commit.exe ole32.lib advapi32.lib shell32.lib bcrypt.lib
 if errorlevel 1 exit /b 1
 bin\test_remote_commit.exe
 if errorlevel 1 exit /b 1

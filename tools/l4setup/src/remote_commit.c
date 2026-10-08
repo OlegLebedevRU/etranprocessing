@@ -64,7 +64,8 @@ static bool private_read(const L4JournalReader* reader,const wchar_t* leaf,DWORD
 static bool settled(const L4JournalReader* reader,const L4Layout* roots,const SetupRemoteCommit* value,const SetupOperationPlan* plan){
  Settled s={0};if(!l4_journal_reader_replay(reader,settled_visit,&s)||s.duplicate||!s.recovery||!s.communication||s.recovery>=s.commit||s.communication>=s.commit)return fail(ERROR_INVALID_DATA);
  BYTE *r=NULL,*actual=NULL,*result=NULL,*c=NULL;DWORD rn=0,an=0,n=0,cn=0;L4RecoveryPlan recovery={0};L4CommunicationPlan communication={0};BYTE digest[32];L4RecoveryStatus status;DWORD error=0;
- bool ok=l4_journal_reader_find(reader,66,s.recovery,&r,&rn)&&private_read(reader,L"supervisor.recovery",L4_RECOVERY_PLAN_LIMIT,&actual,&an)&&rn==an&&!memcmp(r,actual,rn)&&l4_recovery_decode(roots,r,rn,&recovery)&&l4_recovery_hash(r,rn,digest);
+ /* Result binds the validated plan content hash, excluding its trailing checksum. */
+ bool ok=l4_journal_reader_find(reader,66,s.recovery,&r,&rn)&&private_read(reader,L"supervisor.recovery",L4_RECOVERY_PLAN_LIMIT,&actual,&an)&&rn==an&&!memcmp(r,actual,rn)&&l4_recovery_decode(roots,r,rn,&recovery)&&l4_recovery_hash(r,rn-32,digest);
  free(actual);actual=NULL;if(ok)ok=private_read(reader,L"supervisor.result",L4_RECOVERY_RESULT_SIZE,&result,&n)&&l4_recovery_result_decode(&recovery,digest,result,n,&status,&error)&&status==L4_RECOVERY_COMMITTED&&!error;
  if(ok)ok=l4_journal_reader_find(reader,70,s.communication,&c,&cn)&&private_read(reader,L"communication.recovery",L4_COMMUNICATION_PLAN_LIMIT,&actual,&an)&&cn==an&&!memcmp(c,actual,cn)&&l4_communication_plan_decode(roots,c,cn,&communication);
  wchar_t id[40],operation[37];GUID guid;swprintf_s(id,40,L"{%hs}",value->operation);const L4ServiceSwitch* supervisor=setup_operation_switch(plan,0,3);
