@@ -25,10 +25,10 @@ void l4_active_updater_close(L4ActiveUpdater* updater){(void)updater;}
 const L4ActiveUpdaterInfo* l4_active_updater_info(const L4ActiveUpdater* updater){return updater?&updater->info:NULL;}
 const wchar_t* l4_active_updater_path(const L4ActiveUpdater* updater){return updater?updater->path:NULL;}
 /* Fixed local-sidecar gate only: ancestry/errors modeled, never host admission. */
-static bool purpose_ancestry=true;static unsigned purpose_index,purpose_calls;static DWORD purpose_error,purpose_attributes=FILE_ATTRIBUTE_NORMAL;
-static bool purpose_pin(const wchar_t* directory,const wchar_t* root,bool control,L4FileFence* fence){CHECK(directory && root && control && fence);if(!purpose_ancestry){SetLastError(ERROR_ACCESS_DENIED);return false;}return true;}
-static void purpose_unpin(L4FileFence* fence){CHECK(fence!=NULL);}
-static DWORD WINAPI purpose_file(const wchar_t* path){CHECK(path && wcsstr(path,L"acceptance."));purpose_calls++;if(purpose_calls==purpose_index){if(purpose_error){SetLastError(purpose_error);return INVALID_FILE_ATTRIBUTES;}return purpose_attributes;}SetLastError(ERROR_FILE_NOT_FOUND);return INVALID_FILE_ATTRIBUTES;}
+static bool purpose_ancestry=true,purpose_real_acl;static unsigned purpose_index,purpose_calls;static DWORD purpose_error,purpose_attributes=FILE_ATTRIBUTE_NORMAL;
+static bool purpose_pin(const wchar_t* directory,const wchar_t* root,bool control,L4FileFence* fence){if(purpose_real_acl)return l4_store_pin(directory,root,control,fence);CHECK(directory && root && (!control || !wcscmp(directory,root)) && fence);if(!purpose_ancestry){SetLastError(ERROR_ACCESS_DENIED);return false;}return true;}
+static void purpose_unpin(L4FileFence* fence){if(purpose_real_acl)l4_store_unpin(fence);else CHECK(fence!=NULL);}
+static DWORD WINAPI purpose_file(const wchar_t* path){if(purpose_real_acl)return GetFileAttributesW(path);CHECK(path && wcsstr(path,L"acceptance."));purpose_calls++;if(purpose_calls==purpose_index){if(purpose_error){SetLastError(purpose_error);return INVALID_FILE_ATTRIBUTES;}return purpose_attributes;}SetLastError(ERROR_FILE_NOT_FOUND);return INVALID_FILE_ATTRIBUTES;}
 #define l4_store_pin purpose_pin
 #define l4_store_unpin purpose_unpin
 #define GetFileAttributesW purpose_file
@@ -45,6 +45,17 @@ static void sd(const wchar_t* descriptor){if(service_sd)LocalFree(service_sd);se
 static void request(BYTE bytes[56]){memset(bytes,0,56);memcpy(bytes,"L4RPC031",8);l4_store_u32(bytes+8,1);l4_store_u32(bytes+12,L4_REMOTE_SUITE);memcpy(bytes+16,"latest",7);l4_store_u64(bytes+48,12345);}
 static void ack(BYTE bytes[112]){memset(bytes,0,112);memcpy(bytes,"L4RHST01",8);l4_store_u32(bytes+8,1);l4_store_u32(bytes+12,111);l4_store_u64(bytes+16,222);l4_store_u64(bytes+24,333);bytes[32]=1;
     l4_store_u64(bytes+64,12345);memcpy(bytes+72,"1.13.6",7);memcpy(bytes+104,"x86",4);}
+/* Actual canonical public ancestors/private UUID boundary. Host authority and
+ * SCM remain modeled; this invokes the real production sidecar absence gate. */
+static void purpose_acl(void){
+ wchar_t temp[MAX_PATH],data[MAX_PATH],update[MAX_PATH],ops[MAX_PATH],dir[MAX_PATH];CHECK(GetTempPathW(MAX_PATH,temp));
+ swprintf_s(data,MAX_PATH,L"%lsL4HostPurposeAcl-%lu-%llu",temp,GetCurrentProcessId(),GetTickCount64());swprintf_s(update,MAX_PATH,L"%ls\\update",data);swprintf_s(ops,MAX_PATH,L"%ls\\operations",update);swprintf_s(dir,MAX_PATH,L"%ls\\17730000-0000-4000-8000-000000000031",ops);
+ PSECURITY_DESCRIPTOR pub=NULL,priv=NULL,write=NULL;CHECK(ConvertStringSecurityDescriptorToSecurityDescriptorW(L"O:BAG:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;GRGX;;;BU)",SDDL_REVISION_1,&pub,NULL));CHECK(ConvertStringSecurityDescriptorToSecurityDescriptorW(L"O:BAG:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)",SDDL_REVISION_1,&priv,NULL));CHECK(ConvertStringSecurityDescriptorToSecurityDescriptorW(L"O:BAG:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;BU)",SDDL_REVISION_1,&write,NULL));
+ SECURITY_ATTRIBUTES readable={sizeof(readable),pub,FALSE},private={sizeof(private),priv,FALSE};CHECK(CreateDirectoryW(data,&readable));CHECK(CreateDirectoryW(update,&readable));CHECK(CreateDirectoryW(ops,&readable));CHECK(CreateDirectoryW(dir,&private));
+ L4Journal j={0};CHECK(l4_layout_from_roots(&j.layout,L"C:\\PurposeFixturePF",data,L"1.13.7"));wcscpy_s(j.directory,MAX_PATH,dir);j.lock=(HANDLE)(UINT_PTR)1;L4FileFence old={0};CHECK(!l4_store_pin(dir,ops,true,&old)&&GetLastError()==ERROR_ACCESS_DENIED);
+ purpose_real_acl=true;CHECK(no_local_purpose(&j));CHECK(SetFileSecurityW(dir,DACL_SECURITY_INFORMATION|PROTECTED_DACL_SECURITY_INFORMATION,pub));CHECK(!no_local_purpose(&j)&&GetLastError()==ERROR_ACCESS_DENIED);CHECK(SetFileSecurityW(dir,DACL_SECURITY_INFORMATION|PROTECTED_DACL_SECURITY_INFORMATION,priv));CHECK(SetFileSecurityW(ops,DACL_SECURITY_INFORMATION|PROTECTED_DACL_SECURITY_INFORMATION,write));CHECK(!no_local_purpose(&j)&&GetLastError()==ERROR_ACCESS_DENIED);CHECK(SetFileSecurityW(ops,DACL_SECURITY_INFORMATION|PROTECTED_DACL_SECURITY_INFORMATION,pub));CHECK(no_local_purpose(&j));purpose_real_acl=false;
+ CHECK(RemoveDirectoryW(dir));CHECK(RemoveDirectoryW(ops));CHECK(RemoveDirectoryW(update));CHECK(RemoveDirectoryW(data));LocalFree(pub);LocalFree(priv);LocalFree(write);
+}
 static void parse_tests(const L4Layout* layout){BYTE req[56],receipt[112];Snapshot scan={0};scan.layout=layout;request(req);ack(receipt);
     CHECK(snapshot_record(L4_RECORD_REMOTE_REQUEST,1,req,56,&scan));CHECK(!scan.ack);CHECK(snapshot_record(L4_RECORD_REMOTE_HOST_ACK,2,receipt,112,&scan));
     CHECK(scan.ack && scan.receipt.pid==111 && scan.receipt.birth==222 && !strcmp(scan.receipt.request.version,"latest") && !strcmp(scan.receipt.source_version,"1.13.6"));
@@ -76,7 +87,7 @@ static void parse_tests(const L4Layout* layout){BYTE req[56],receipt[112];Snapsh
         CHECK(!snapshot_record(L4_RECORD_REMOTE_REQUEST,sequence,req,size,&scan));
     }
 }
-int wmain(void){L4Layout layout;CHECK(l4_layout_from_roots(&layout,L"C:\\PF\\Leo4\\Tools",L"C:\\PD\\Leo4\\Tools",L"1.13.6"));
+int wmain(void){purpose_acl();L4Layout layout;CHECK(l4_layout_from_roots(&layout,L"C:\\PF\\Leo4\\Tools",L"C:\\PD\\Leo4\\Tools",L"1.13.6"));
     wchar_t service[80],image[MAX_PATH],command[1024];CHECK(l4_remote_host_identity(&layout,operation,"x86",service,image,command));
     CHECK(!wcscmp(service,L"L4UpdateHost_17730000-0000-4000-8000-000000000031"));CHECK(!wcscmp(image,L"C:\\PF\\Leo4\\Tools\\setup\\1.13.5\\l4setup.exe"));
     CHECK(wcsstr(command,L"--remote-controller --source-version 1.13.6 --updater-version 1.13.5 --operation ") && wcsstr(command,L"--arch x86"));
