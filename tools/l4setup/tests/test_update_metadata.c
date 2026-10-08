@@ -11,7 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-/* Semantic ownership/epoch tests perform real CNG + signed multi-hop file I/O.
+/* Stop/worker/communication ownership tests perform real CNG + signed multi-hop I/O.
  * Deadline/cancel tests below retain their explicit controlled budgets. */
 #define STOP_SEMANTIC_BUDGET_MS 10000u
 static unsigned check_count,failures,fetches;static wchar_t fixture[MAX_PATH];static char key_id[65];static BYTE public_key[412];static DWORD public_size;
@@ -38,7 +38,7 @@ static bool fixture_recovery(DWORD pid,const L4UpdateState* expected,DWORD timeo
 }
 #define l4_probe_recovery_call fixture_recovery
 static unsigned stop_captures,stop_confirms;
-static unsigned worker_fault,worker_checks;static ULONGLONG worker_sequence;static bool worker_capture;
+static unsigned worker_fault,worker_checks;static ULONGLONG worker_sequence;
 bool l4_worker_recheck(L4Journal* j,L4WorkerAdmission* out){
     memset(out,0,sizeof(*out));++worker_checks;if(worker_fault==1 || (worker_fault==7 && worker_checks==2)){SetLastError(ERROR_NOT_READY);return false;}
     SetupOperationPlan* p=NULL;if(!setup_update_load_operation(j,worker_sequence,&p))return false;const L4ServiceSwitch* s=setup_operation_switch(p,0,3);
@@ -51,7 +51,7 @@ bool l4_worker_recheck(L4Journal* j,L4WorkerAdmission* out){
 }
 static bool fixture_stop_state(const L4Layout* layout,L4UpdateState* state){(void)layout;if(!stop_state_ok){SetLastError(ERROR_INVALID_DATA);return false;}*state=stop_marker;return true;}
 bool setup_readiness_capture(L4Journal* j,const L4BootstrapPlan* source,const L4AccessActors* actors,const ULONGLONG* configs,unsigned count,const L4BootstrapChecks* checks,DWORD timeout,L4ReadinessSnapshot* snapshot){
-    CHECK(j && source && actors && configs && count==3 && checks && timeout && timeout<=(worker_capture?5000u:STOP_SEMANTIC_BUDGET_MS) && snapshot);++stop_captures;
+    CHECK(j && source && actors && configs && count==3 && checks && timeout && timeout<=STOP_SEMANTIC_BUDGET_MS && snapshot);++stop_captures;
     for(unsigned i=0;i<4;i++){snapshot->services[i].pid=123+i;snapshot->services[i].created.dwLowDateTime=100+i;}
     if(stop_capture_drift)stop_marker.generation++;return true;
 }
@@ -135,7 +135,7 @@ static bool fixture_inventory(const wchar_t* service,L4ServiceInventory* result)
 #define l4_journal_append fixture_append
 static unsigned communication_fault,communication_publishes,job_verifies;static L4Journal* communication_journal;static L4RecoveryPlan communication_supervisor_plan;
 static bool fixture_guard_open(const L4Layout* roots,const wchar_t* operation,DWORD timeout,L4RecoveryGuard** out){
-    CHECK(roots && operation && timeout && timeout<=5000);L4WorkerAdmission a={0};unsigned saved_fault=worker_fault;worker_fault=0;
+    CHECK(roots && operation && timeout && timeout<=STOP_SEMANTIC_BUDGET_MS);L4WorkerAdmission a={0};unsigned saved_fault=worker_fault;worker_fault=0;
     bool ok=l4_worker_recheck(communication_journal,&a);worker_fault=saved_fault;if(!ok)return false;
     memset(&communication_supervisor_plan,0,sizeof(communication_supervisor_plan));L4RecoveryPlan* r=&communication_supervisor_plan;
     memcpy(&r->operation,communication_journal->header+8,16);r->sequence=worker_sequence;r->worker_pid=GetCurrentProcessId();FILETIME e,k,u;
@@ -150,7 +150,7 @@ static bool fixture_guard_action(L4RecoveryGuard* guard,ULONGLONG now,bool boot,
     CHECK(guard && now && !boot);*action=communication_fault==2?L4_RECOVERY_REQUIRED:L4_RECOVERY_WAIT;return true;
 }
 static void fixture_guard_release(L4RecoveryGuard* guard){CHECK(guard);}
-static bool fixture_guard_relock(L4RecoveryGuard* guard,DWORD timeout){CHECK(guard && timeout && timeout<=5000);return true;}
+static bool fixture_guard_relock(L4RecoveryGuard* guard,DWORD timeout){CHECK(guard && timeout && timeout<=STOP_SEMANTIC_BUDGET_MS);return true;}
 static void fixture_guard_close(L4RecoveryGuard* guard){if(guard)CHECK(guard);}
 static bool fixture_job_verify(L4WorkerJob* job,const L4RecoveryPlan* plan){
     CHECK(job && plan);job_verifies++;return communication_fault!=1 && !(communication_fault==5 && job_verifies==2);
@@ -350,20 +350,20 @@ int wmain(int argc,wchar_t** argv){if(argc!=3)return 1;wcscpy_s(fixture,MAX_PATH
     CHECK(l4_config_rollback(journal,config));
     CHECK(setup_update_load_operation(journal,operation,&op));setup_operation_free(op);op=NULL;
     SetupStopGate* gate=NULL;unsigned preserved_fetches=fetches;
-    worker_sequence=operation;communication_journal=journal;worker_capture=true;
+    worker_sequence=operation;communication_journal=journal;
     FILETIME armed_time;fixture_time(&armed_time);ULONGLONG armed=((ULONGLONG)armed_time.dwHighDateTime<<32)|armed_time.dwLowDateTime;
     L4CommunicationBudget communication_budget={100,100,100,100,100,300000,100,301000};
     for(unsigned fault=0;fault<=9;fault++){identity_capture_ok=fault!=9;communication_fault=fault;communication_publishes=job_verifies=0;memset(&stop_marker,0,sizeof(stop_marker));scm_drift=fault==3;
         ULONGLONG until=armed+(fault==7?18000000000ull:fault==8?18000000000ull-(ULONGLONG)communication_budget.total_ms*10000:6000000000ull);
-        CHECK(setup_update_prepare_communication(journal,operation,(L4WorkerJob*)(UINT_PTR)1,&actors,&checks,armed,until,&communication_budget,5000)==(fault==0));
+        CHECK(setup_update_prepare_communication(journal,operation,(L4WorkerJob*)(UINT_PTR)1,&actors,&checks,armed,until,&communication_budget,STOP_SEMANTIC_BUDGET_MS)==(fault==0));
         CHECK(communication_publishes==((fault==0 || fault==6)?1u:0u) && !stop_marker.window);scm_drift=false;
     }
-    identity_capture_ok=true;communication_fault=0;worker_capture=false;stop_captures=0;worker_checks=0;
-    worker_sequence=operation;worker_capture=true;
+    identity_capture_ok=true;communication_fault=0;stop_captures=0;worker_checks=0;
+    worker_sequence=operation;
     for(unsigned fault=0;fault<=10;fault++){worker_fault=fault;worker_checks=0;memset(&stop_marker,0,sizeof(stop_marker));
-        CHECK(setup_update_worker_capture_stop(journal,operation,&actors,&checks,5000,&gate)==(fault==0));CHECK(fault?gate==NULL:gate!=NULL);
+        CHECK(setup_update_worker_capture_stop(journal,operation,&actors,&checks,STOP_SEMANTIC_BUDGET_MS,&gate)==(fault==0));CHECK(fault?gate==NULL:gate!=NULL);
         CHECK(!stop_marker.window && fetches==preserved_fetches);if(!fault)CHECK(worker_checks==2);setup_update_stop_gate_free(gate);gate=NULL;}
-    worker_fault=0;worker_capture=false;stop_captures=0;memset(&stop_marker,0,sizeof(stop_marker));
+    worker_fault=0;stop_captures=0;memset(&stop_marker,0,sizeof(stop_marker));
     stop_state_ok=false;CHECK(!setup_update_capture_stop(journal,operation,&actors,&checks,STOP_SEMANTIC_BUDGET_MS,&gate));CHECK(!gate && !stop_captures);stop_state_ok=true;
     stop_capture_drift=true;CHECK(!setup_update_capture_stop(journal,operation,&actors,&checks,STOP_SEMANTIC_BUDGET_MS,&gate));CHECK(!gate);stop_capture_drift=false;memset(&stop_marker,0,sizeof(stop_marker));
     CHECK(setup_update_capture_stop(journal,operation,&actors,&checks,STOP_SEMANTIC_BUDGET_MS,&gate));CHECK(gate);
@@ -397,7 +397,7 @@ int wmain(int argc,wchar_t** argv){if(argc!=3)return 1;wcscpy_s(fixture,MAX_PATH
     CloseHandle(workers[0]);CloseHandle(workers[1]);CloseHandle(go);setup_update_stop_gate_free(gate);gate=NULL;
     puts("Stop gate: two concurrent confirmation callers, exactly one consumes original gate PASS");
     memset(&stop_marker,0,sizeof(stop_marker));CHECK(l4_journal_append(journal,68,"fixture",7,NULL));
-    communication_publishes=job_verifies=0;CHECK(!setup_update_prepare_communication(journal,operation,(L4WorkerJob*)(UINT_PTR)1,&actors,&checks,armed,armed+6000000000ull,&communication_budget,5000));
+    communication_publishes=job_verifies=0;CHECK(!setup_update_prepare_communication(journal,operation,(L4WorkerJob*)(UINT_PTR)1,&actors,&checks,armed,armed+6000000000ull,&communication_budget,STOP_SEMANTIC_BUDGET_MS));
     CHECK(!communication_publishes && !job_verifies);
     BYTE* operation_record=NULL;DWORD operation_size=0;CHECK(l4_store_find_record(journal,L4_RECORD_OPERATION_PLAN,operation,&operation_record,&operation_size));
     ULONGLONG source_sequence=l4_store_get64(operation_record+12);free(operation_record);

@@ -8,6 +8,13 @@ generated_inputs = ["tools/version.txt", "tools/l4setup/src/version.h", "tools/l
 required_assets = ["tools/mosquitto/mosquitto.exe", "ffmpeg-win32/x86/ffmpeg.exe", "ffmpeg-win32/x64/ffmpeg.exe", "tools/l4capture/vendor/openh264/codec/api/wels/codec_api.h", "tools/l4capture/vendor/openh264/builddir_x86/codec/encoder/libencoder.a", "tools/l4capture/vendor/openh264/builddir_x86/codec/common/libcommon.a", "tools/l4capture/vendor/openh264/builddir_x86/codec/processing/libprocessing.a", "tools/l4capture/vendor/openh264/builddir_x64/codec/encoder/libencoder.a", "tools/l4capture/vendor/openh264/builddir_x64/codec/common/libcommon.a", "tools/l4capture/vendor/openh264/builddir_x64/codec/processing/libprocessing.a"]
 
 [[steps]]
+name = "scm-crash-rights"
+kind = "cmd"
+cwd = "tools/l4setup"
+args = ["build.cmd", "test-scm"]
+timeout = 120
+
+[[steps]]
 name = "version"
 kind = "powershell"
 cwd = "."

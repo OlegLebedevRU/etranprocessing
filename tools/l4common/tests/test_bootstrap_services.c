@@ -21,7 +21,7 @@ static L4Journal* active;static ULONGLONG tick,release_at;static unsigned delete
 static int service_number(const wchar_t* name){for(unsigned i=0;i<4;i++)if(!_wcsicmp(name,names[i]))return (int)i;return -1;}
 static void settle(Slot* s){if(s->stopped_at && tick>=s->stopped_at)s->state=SERVICE_STOPPED;if(s->exit_at && tick>=s->exit_at)s->dead=true;if(release_at && tick>=release_at)s->hold=false;if(s->marked && !s->handles && !s->hold)s->present=false;}
 static SC_HANDLE WINAPI mock_manager(LPCWSTR a,LPCWSTR b,DWORD rights){CHECK(!a&&!b);CHECK(rights==SC_MANAGER_CONNECT || rights==(SC_MANAGER_CONNECT|SC_MANAGER_CREATE_SERVICE));return (SC_HANDLE)(ULONG_PTR)1;}
-static SC_HANDLE WINAPI mock_open_service(SC_HANDLE h,LPCWSTR name,DWORD rights){CHECK(h==(SC_HANDLE)(ULONG_PTR)1);CHECK(rights==(SERVICE_QUERY_CONFIG|SERVICE_QUERY_STATUS|DELETE) || rights==(SERVICE_QUERY_CONFIG|SERVICE_QUERY_STATUS|DELETE|SERVICE_CHANGE_CONFIG) || rights==SERVICE_QUERY_STATUS || rights==(SERVICE_QUERY_CONFIG|SERVICE_QUERY_STATUS|SERVICE_START) || rights==(SERVICE_QUERY_CONFIG|SERVICE_QUERY_STATUS|SERVICE_STOP) || rights==(SERVICE_QUERY_CONFIG|SERVICE_QUERY_STATUS|SERVICE_CHANGE_CONFIG));
+static SC_HANDLE WINAPI mock_open_service(SC_HANDLE h,LPCWSTR name,DWORD rights){CHECK(h==(SC_HANDLE)(ULONG_PTR)1);CHECK(rights==(SERVICE_QUERY_CONFIG|SERVICE_QUERY_STATUS|DELETE) || rights==(SERVICE_QUERY_CONFIG|SERVICE_QUERY_STATUS|DELETE|SERVICE_CHANGE_CONFIG|SERVICE_START) || rights==SERVICE_QUERY_STATUS || rights==(SERVICE_QUERY_CONFIG|SERVICE_QUERY_STATUS|SERVICE_START) || rights==(SERVICE_QUERY_CONFIG|SERVICE_QUERY_STATUS|SERVICE_STOP) || rights==(SERVICE_QUERY_CONFIG|SERVICE_QUERY_STATUS|SERVICE_CHANGE_CONFIG));
     int i=service_number(name);if(i<0){SetLastError(ERROR_SERVICE_DOES_NOT_EXIST);return NULL;}Slot* s=&slots[i];settle(s);
     if(!s->present){SetLastError(ERROR_SERVICE_DOES_NOT_EXIST);return NULL;}if(s->marked){SetLastError(ERROR_SERVICE_MARKED_FOR_DELETE);return NULL;}
     ++s->handles;return (SC_HANDLE)s;}
@@ -29,7 +29,7 @@ static BOOL WINAPI mock_close_service(SC_HANDLE h){if(h==(SC_HANDLE)(ULONG_PTR)1
 static bool poison(void){HANDLE read_only=NULL;bool ok=DuplicateHandle(GetCurrentProcess(),active->file,GetCurrentProcess(),&read_only,GENERIC_READ,FALSE,0)!=0;
     CHECK(ok);if(ok){CloseHandle(active->file);active->file=read_only;}return ok;}
 static SC_HANDLE WINAPI mock_create_service(SC_HANDLE h,LPCWSTR name,LPCWSTR display,DWORD rights,DWORD type,DWORD start,DWORD error,LPCWSTR image,LPCWSTR group,LPDWORD tag,LPCWSTR dependencies,LPCWSTR account,LPCWSTR password){
-    CHECK(h==(SC_HANDLE)(ULONG_PTR)1);CHECK(rights==(DWORD)((SERVICE_QUERY_CONFIG|SERVICE_QUERY_STATUS|DELETE)|(!wcscmp(name,L"L4Superv")?SERVICE_CHANGE_CONFIG:0)));CHECK(type==SERVICE_WIN32_OWN_PROCESS && start==SERVICE_DEMAND_START && error==SERVICE_ERROR_NORMAL);
+    CHECK(h==(SC_HANDLE)(ULONG_PTR)1);CHECK(rights==(DWORD)((SERVICE_QUERY_CONFIG|SERVICE_QUERY_STATUS|DELETE)|(!wcscmp(name,L"L4Superv")?(SERVICE_CHANGE_CONFIG|SERVICE_START):0)));CHECK(type==SERVICE_WIN32_OWN_PROCESS && start==SERVICE_DEMAND_START && error==SERVICE_ERROR_NORMAL);
     CHECK(!group&&!tag&&!dependencies&&!password);CHECK(account && !wcscmp(account,L"LocalSystem"));
     int i=service_number(name);CHECK(i>=0);if(i<0)return NULL;
     if(i==race){slots[i].present=true;wcscpy_s(slots[i].display,128,L"Foreign operator service");race=-1;SetLastError(ERROR_SERVICE_EXISTS);return NULL;}

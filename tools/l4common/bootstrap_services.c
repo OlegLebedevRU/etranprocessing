@@ -38,7 +38,9 @@ static bool create_one(L4Journal* j,ULONGLONG sequence,const L4BootstrapPlan* pl
     swprintf_s(exe,_countof(exe),L"%ls.exe",components[index]);L4ReleaseFile file={components[index],exe,plan->sizes[index],{0}};memcpy(file.sha256,plan->sha256[index],32);
     L4ReleaseFence* pinned=NULL;if(!marker(j,sequence,plan->services[index],owner) || !l4_release_pin(&plan->layout,&file,&pinned,path))return false;
     bool ok=record(j,L4_RECORD_BOOTSTRAP_CREATE_INTENT,sequence,index);SC_HANDLE service=NULL;DWORD code=GetLastError();
-    DWORD rights=SERVICE_RIGHTS|(index==3?SERVICE_CHANGE_CONFIG:0);
+    /* SCM requires SERVICE_START when configuring SC_ACTION_RESTART, even
+     * though this provisional service remains STOPPED until activation. */
+    DWORD rights=SERVICE_RIGHTS|(index==3?(SERVICE_CHANGE_CONFIG|SERVICE_START):0);
     if(ok){service=OpenServiceW(manager,plan->services[index],rights);code=GetLastError();
         if(!service && code==ERROR_SERVICE_DOES_NOT_EXIST){
             /* Display marker is written atomically by CreateService, not as a second registry edit. */

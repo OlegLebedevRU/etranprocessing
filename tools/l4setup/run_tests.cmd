@@ -33,6 +33,7 @@ set "TEST_ARCH=x86"
 if /i "%1"=="x64" set "TEST_ARCH=x64"
 echo [1/2] Compiling test_l4setup.exe (%TEST_ARCH%)...
 call "%VS_DEV_CMD%" -arch=%TEST_ARCH% -no_logo
+if /i "%2"=="scm" goto :scm_rights_only
 cl.exe /nologo /O2 /MT /W4 /WX /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /Gy /Foobj\ tests\test_acceptance_local.c ..\l4common\journal.c ..\l4common\layout.c ..\leo4proxy\src\policy_json.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\test_acceptance_receipt.exe advapi32.lib bcrypt.lib ole32.lib shlwapi.lib
 if errorlevel 1 exit /b 1
 bin\test_acceptance_receipt.exe
@@ -347,3 +348,12 @@ echo.
 if errorlevel 1 exit /b 1
 echo [SUCCESS] All unit tests PASSED successfully!
 exit /b 0
+
+
+:scm_rights_only
+:: Explicit administrative isolated SCM regression. Never starts a service or
+:: touches suite service names. Prerequisite exit2 is NOT recorded as passed.
+cl.exe /nologo /O2 /MT /W4 /WX /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /Foobj\ ..\l4common\tests\test_supervisor_crash_rights_scm.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\test_supervisor_crash_rights_scm.exe advapi32.lib
+if errorlevel 1 exit /b 1
+bin\test_supervisor_crash_rights_scm.exe
+exit /b %errorlevel%
