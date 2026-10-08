@@ -71,11 +71,23 @@ static void test_subscribe(void) {
     CHECK(len > 0 && packet[0] == MQTT_PKT_SUBSCRIBE);
     CHECK(packet[2] == 0 && packet[3] == 7 && packet[4] == 0);
 }
+static void test_probe_expiry(void){
+    unsigned char packet[512];const MqttUserProperty properties[]={{"iot_probe","1"},{"correlationData","22222222-2222-4222-8222-222222222222"}};
+    int length=mqtt_build_publish_expiring(packet,sizeof(packet),"dev/test/req","{}",2,1,1,0,properties,2,10);
+    CHECK(length>0 && packet[0]==0x32);uint32_t remaining=0;int used=0;
+    CHECK(!mqtt_decode_remaining_length(packet+1,length-1,&remaining,&used));
+    const unsigned char* body=packet+1+used;size_t offset=2+strlen("dev/test/req")+2;uint32_t properties_size=0;
+    CHECK(!mqtt_decode_remaining_length(body+offset,remaining-(uint32_t)offset,&properties_size,&used));offset+=(size_t)used;
+    CHECK(properties_size>=5 && body[offset]==2 && !body[offset+1] && !body[offset+2] && !body[offset+3] && body[offset+4]==10);
+    MqttRpcMetadata metadata;CHECK(!mqtt_parse_rpc_metadata(body,remaining,2,&metadata));
+    CHECK(!strcmp(metadata.iot_probe,"1") && !strcmp(metadata.correlation,"22222222-2222-4222-8222-222222222222"));
+}
 
 int main(void) {
     test_connect();
     test_publish_properties_and_parse();
     test_subscribe();
+    test_probe_expiry();
     if (failures) return 1;
     puts("MQTT 5 protocol tests passed");
     return 0;

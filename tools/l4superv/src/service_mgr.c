@@ -1,5 +1,6 @@
 ﻿#include "service_mgr.h"
 #include <stdio.h>
+#include "../../l4common/layout.h"
 #include <stdlib.h>
 #include <string.h>
 #include <aclapi.h>
@@ -103,13 +104,14 @@ bool svc_inspect(const wchar_t* svc_name,
 
     if (relative_conf && relative_conf[0] != L'\0') {
         wchar_t conf_full[MAX_PATH];
-        swprintf_s(conf_full, MAX_PATH, L"%ls\\%ls", expected_base_path, relative_conf);
+        if (!l4_runtime_path(expected_base_path, L4_DATA_CONFIG, relative_conf, relative_conf, conf_full)) return false;
         w_to_utf8(conf_full, out_state->config_path, sizeof(out_state->config_path));
     }
 
     if (relative_log && relative_log[0] != L'\0') {
         wchar_t log_full[MAX_PATH];
-        swprintf_s(log_full, MAX_PATH, L"%ls\\%ls", expected_base_path, relative_log);
+        const wchar_t* data_log = !_wcsicmp(svc_name, SVC_NAME_MOSQUITTO) ? L"mosquitto\\mosquitto.log" : relative_log;
+        if (!l4_runtime_path(expected_base_path, L4_DATA_LOGS, data_log, relative_log, log_full)) return false;
         w_to_utf8(log_full, out_state->log_path, sizeof(out_state->log_path));
     }
 
@@ -418,9 +420,21 @@ bool svc_start(const wchar_t* svc_name) {
 }
 
 bool svc_configure_mosquitto_log(const wchar_t* base_path) {
-    wchar_t directory[MAX_PATH];
-    if (!base_path || swprintf_s(directory, MAX_PATH, L"%ls\\mosquitto\\log", base_path) < 0) {
+    wchar_t directory[MAX_PATH], portable[MAX_PATH];
+    if (!l4_runtime_path(base_path, L4_DATA_LOGS, L"mosquitto", L"mosquitto\\log", directory)) {
         SetLastError(ERROR_INVALID_PARAMETER); return false;
+    }
+    if (wcslen(base_path) + 15 >= MAX_PATH) return false;
+    swprintf_s(portable, MAX_PATH, L"%ls\\mosquitto\\log", base_path);
+    /* Installed ACL belongs to setup/updater and may grant a custom SCM
+     * account. Never replace it with the old SYSTEM-only runtime repair. */
+    if (_wcsicmp(directory, portable)) {
+        DWORD attrs = GetFileAttributesW(directory);
+        if (attrs == INVALID_FILE_ATTRIBUTES) return false;
+        if (!(attrs & FILE_ATTRIBUTE_DIRECTORY) || (attrs & FILE_ATTRIBUTE_REPARSE_POINT)) {
+            SetLastError(ERROR_INVALID_NAME); return false;
+        }
+        return l4_mosquitto_log_inherit(directory);
     }
     if (l4_mosquitto_log_acl(directory)) return true;
     DWORD error = GetLastError();
@@ -585,11 +599,22 @@ static bool file_exists(const wchar_t* path) {
 bool svc_ensure_all_installed_and_running(const wchar_t* base_path) {
     if (!base_path) return false;
 
+    wchar_t mapped[MAX_PATH], portable[MAX_PATH];
+    if (!l4_runtime_path(base_path, L4_DATA_CONFIG, L"l4superv.json", L"l4superv.json", mapped) ||
+        wcslen(base_path) + 15 >= MAX_PATH) return false;
+    swprintf_s(portable, MAX_PATH, L"%ls\\l4superv.json", base_path);
+    if (_wcsicmp(mapped, portable)) {
+        /* The immutable deployment engine owns explicit per-release SCM paths.
+         * Old 'foreign service cleanup' deletes account/dependency settings. */
+        SetLastError(ERROR_NOT_SUPPORTED);
+        return false;
+    }
+
     svc_configure_mosquitto_log(base_path);
 
     // Ensure MOSQUITTO_DIR system and process environment variable is set
     wchar_t mosq_dir[MAX_PATH];
-    swprintf_s(mosq_dir, MAX_PATH, L"%s\\mosquitto", base_path);
+    if (!l4_runtime_path(base_path, L4_DATA_CONFIG, L"mosquitto", L"mosquitto", mosq_dir)) return false;
     SetEnvironmentVariableW(L"MOSQUITTO_DIR", mosq_dir);
 
     HKEY hEnvKey;
@@ -615,7 +640,8 @@ bool svc_ensure_all_installed_and_running(const wchar_t* base_path) {
         if (svc_get_binary_path(SVC_NAME_LEO4PROXY,registered,2048) && wcsstr(registered,exe_path)) {
             wcscpy_s(cmd_line,2048,registered);
         } else {
-            wchar_t args_path[MAX_PATH]; swprintf_s(args_path,MAX_PATH,L"%ls\\leo4proxy\\service-args.txt",base_path);
+            wchar_t args_path[MAX_PATH];
+            if (!l4_runtime_path(base_path, L4_DATA_CONFIG, L"leo4proxy\\service-args.txt", L"leo4proxy\\service-args.txt", args_path)) return false;
             FILE* file=NULL;
             if (!_wfopen_s(&file,args_path,L"rb") && file) {
                 char utf8[1800]={0}; size_t len=fread(utf8,1,sizeof(utf8)-1,file); fclose(file);
@@ -660,7 +686,8 @@ bool svc_ensure_all_installed_and_running(const wchar_t* base_path) {
         if (svc_get_binary_path(SVC_NAME_LEO4PROXY,registered,2048) && wcsstr(registered,exe_path)) {
             wcscpy_s(cmd_line,2048,registered);
         } else {
-            wchar_t args_path[MAX_PATH]; swprintf_s(args_path,MAX_PATH,L"%ls\\leo4proxy\\service-args.txt",base_path);
+            wchar_t args_path[MAX_PATH];
+            if (!l4_runtime_path(base_path, L4_DATA_CONFIG, L"leo4proxy\\service-args.txt", L"leo4proxy\\service-args.txt", args_path)) return false;
             FILE* file=NULL;
             if (!_wfopen_s(&file,args_path,L"rb") && file) {
                 char utf8[1800]={0}; size_t len=fread(utf8,1,sizeof(utf8)-1,file); fclose(file);

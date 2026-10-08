@@ -10,6 +10,7 @@
 #include "l4capture/clock.h"
 #include "l4capture/limits.h"
 #include "l4capture/telemetry.h"
+#include "../src/encoder/mft_cache_path.h"
 
 /* Helper: create a synthetic NV12 frame */
 static l4c_raw_frame_t make_synthetic_nv12_frame(
@@ -562,4 +563,13 @@ int test_mf_stress_100_frames_zero_leak(void) {
         }
     }
     return 0;
+}
+
+int test_mf_cache_installed_path(void){
+ L4Layout layout;wchar_t exe[MAX_PATH],expected[MAX_PATH],actual[MAX_PATH];
+ if(!l4_layout_resolve(&layout,L"1.2.3") || !l4_layout_component(&layout,L"l4capture",L"bin\\l4capture.exe",exe) ||
+    !l4_layout_data_path(&layout,L"state\\l4capture\\mft_capability.ini",expected))return 1;
+ if(!l4c_mft_cache_path_for_exe(exe,actual,MAX_PATH) || wcscmp(actual,expected))return 2;
+ if(l4c_mft_cache_path_for_exe(exe,actual,8))return 3;
+ return 0;
 }

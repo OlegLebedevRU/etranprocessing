@@ -14,7 +14,7 @@ function Get-PayloadHash([string]$Path) {
 }
 $paths = @('leo4proxy\leo4proxy.exe', 'mosquitto\mosquitto.exe',
     'l4con\l4con.exe', 'l4superv\l4superv.exe', 'l4pin\l4pin.exe',
-    'l4desk\l4desk.exe', 'l4capture\bin\l4capture.exe', 'ffmpeg\ffmpeg.exe', 'l4sql\l4sql.exe')
+    'l4desk\l4desk.exe', 'l4capture\bin\l4capture.exe', 'ffmpeg\ffmpeg.exe', 'l4sql\l4sql.exe', 'l4launch\l4launch.exe')
 $entries = foreach ($relative in $paths) {
     $file = Get-Item -LiteralPath (Join-Path $Stage $relative)
     $productVersion = $file.VersionInfo.ProductVersion

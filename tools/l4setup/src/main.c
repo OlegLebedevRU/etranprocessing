@@ -12,6 +12,12 @@
 #include "uac.h"
 #include "engine.h"
 #include "ui.h"
+#include "layout_plan.h"
+#include "install_entry.h"
+#include "worker_entry.h"
+#include "remote_entry.h"
+#include "remote_controller.h"
+#include "acceptance_entry.h"
 
 static void init_console(void) {
     HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -128,6 +134,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
         return 1;
     }
 
+    DWORD worker_result=0;if(setup_worker_entry(argc,argv,setup_worker_compiled_engine(),&worker_result)){LocalFree(argv);return (int)worker_result;}
+    DWORD acceptance_result=0;if(setup_acceptance_entry(argc,argv,&acceptance_result)){LocalFree(argv);return (int)acceptance_result;}
+    DWORD remote_result=0;if(setup_remote_entry(argc,argv,setup_remote_controller_engine(),&remote_result)){LocalFree(argv);return (int)remote_result;}
+    DWORD fresh_result=0;if(setup_install_entry(argc,argv,&fresh_result)){LocalFree(argv);return (int)fresh_result;}
     CliOptions cli_opts;
     char cli_err[256] = { 0 };
     if (!cli_parse(argc, argv, &cli_opts, cli_err, sizeof(cli_err))) {
@@ -152,8 +162,18 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
     LocalFree(argv);
 
+    /* Read-only: before elevation, logger, state discovery or any install phase. */
+    if (cli_opts.layout_plan) return setup_print_layout_plan();
+
     if (cli_opts.preview_ui) {
         return ui_run_interactive_setup(hInstance, &cli_opts);
+    }
+
+    /* The versioned installer deliberately has no legacy install/migration
+     * fallback. Existing smoke diagnostics remain an explicit read-only action. */
+    if (!cli_opts.smoke_only) {
+        fprintf(stderr, "Use --fresh-help for the signed Windows-layout installer. Legacy installation and migration are disabled.\n");
+        return ERROR_NOT_SUPPORTED;
     }
 
     // 4. Elevation Check: Product Exit Code 20 (Win32 ERROR_ACCESS_DENIED is 5)

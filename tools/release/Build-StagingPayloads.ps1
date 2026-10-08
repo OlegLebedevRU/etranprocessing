@@ -41,7 +41,6 @@ Write-Host "======================================================="
 
 $defaultL4supervJson = @'
 {
-  "base_path": "C:\\l4tools",
   "proxy_url": "http://127.0.0.1:18443/_leo4/info",
   "poll_interval_sec": 15,
   "watchdog_interval_sec": 10,
@@ -74,7 +73,7 @@ foreach ($arch in @("x86", "x64")) {
     New-Item -ItemType Directory -Path $targetStage -Force | Out-Null
 
     # Required subdirectories
-    $subdirs = @("leo4proxy", "mosquitto\log", "l4con", "l4superv", "l4pin", "l4desk", "l4sql", "l4capture\bin", "ffmpeg\log", "crt")
+    $subdirs = @("leo4proxy", "mosquitto\log", "l4con", "l4superv", "l4pin", "l4desk", "l4sql", "l4launch", "l4capture\bin", "ffmpeg\log", "crt")
     foreach ($sub in $subdirs) {
         $p = "$targetStage\$sub"
         if (-not (Test-Path $p)) { New-Item -ItemType Directory -Path $p -Force | Out-Null }
@@ -174,6 +173,11 @@ foreach ($arch in @("x86", "x64")) {
             Copy-Item "$ToolsRoot\l4capture\$doc" "$targetStage\l4capture\" -Force
         }
     }
+
+    # Stable launcher template; only the new bootstrap will install copies into PF/bin.
+    $srcLaunch = "$ToolsRoot\l4launch\bin\$arch\l4launch.exe"
+    if (-not (Test-Path -LiteralPath $srcLaunch)) { throw "Binary not found: $srcLaunch" }
+    Copy-Item -LiteralPath $srcLaunch -Destination "$targetStage\l4launch\l4launch.exe" -Force
 
     # 8. ffmpeg
     $srcFfmpeg = "$RepoRoot\ffmpeg-win32\$arch\ffmpeg.exe"

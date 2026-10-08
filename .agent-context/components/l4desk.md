@@ -1,5 +1,13 @@
 # l4desk
 
+## Windows layout — source/local gates 2026-10-06
+
+EXE-derived installed binary root; config/l4desk policy, state/l4desk media state,
+logs/l4desk and logs/ffmpeg use ProgramData. Supervisor reads the same media state
+path. Installed CLI/environment redirects refused. [Packet](../tasks/active/2026-10-06-l4layout-stage2.md):
+x86/x64 builds/path gates and full x64 native tests PASS using temporary roots/fake
+FFmpeg. Installed writable ACL/live gate absent; svc_desk presence/ctl unchanged.
+
 ## 2026-10-02 stabilization1.9.3
 Bounded NO_PROXY SN discovery; ctl/presence/input contracts unchanged. x86/x64 build passed; signed1.9.4 suite installed773, local l4desk/capture probes passed. Remote injection E2E was not repeated. [Handoff](../tasks/completed/2026-10-02-l4tools-stabilization-ui-release.md).
 

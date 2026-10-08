@@ -1,5 +1,6 @@
 #include "config.h"
 #include <stdio.h>
+#include "../../l4common/layout.h"
 #include <stdlib.h>
 #include <string.h>
 #include <shlwapi.h>
@@ -88,9 +89,7 @@ void config_init_defaults(L4SupervConfig* cfg, const wchar_t* exe_path) {
     // 1. Check environment variable %L4_TOOLS_BASE_PATH%
     wchar_t env_path[MAX_PATH] = { 0 };
     DWORD env_len = GetEnvironmentVariableW(L"L4_TOOLS_BASE_PATH", env_path, MAX_PATH);
-    if (env_len > 0 && env_len < MAX_PATH) {
-        wcscpy_s(cfg->base_path, MAX_PATH, env_path);
-    } else if (exe_path && exe_path[0] != L'\0') {
+    if (exe_path && exe_path[0] != L'\0') {
         // Detect parent directory of tool
         wchar_t resolved[MAX_PATH] = { 0 };
         wcscpy_s(resolved, MAX_PATH, exe_path);
@@ -121,7 +120,16 @@ void config_init_defaults(L4SupervConfig* cfg, const wchar_t* exe_path) {
         wcscpy_s(cfg->base_path, MAX_PATH, L4_DEFAULT_BASE_PATH);
     }
 
-    swprintf_s(cfg->config_file, MAX_PATH, L"%s\\l4superv.json", cfg->base_path);
+    wchar_t portable_config[MAX_PATH] = {0};
+    if (wcslen(cfg->base_path) + 15 >= MAX_PATH ||
+        !l4_runtime_path(cfg->base_path, L4_DATA_CONFIG, L"l4superv.json", L"l4superv.json", cfg->config_file)) return;
+    swprintf_s(portable_config, MAX_PATH, L"%ls\\l4superv.json", cfg->base_path);
+    /* An installed executable pins its binary release. Environment override
+     * remains only for isolated portable builds, never a production redirect. */
+    if (!_wcsicmp(portable_config, cfg->config_file) && env_len > 0 && env_len < MAX_PATH) {
+        wcscpy_s(cfg->base_path, MAX_PATH, env_path);
+        if (!l4_runtime_path(cfg->base_path, L4_DATA_CONFIG, L"l4superv.json", L"l4superv.json", cfg->config_file)) return;
+    }
     wcscpy_s(cfg->proxy_url, 256, L4_DEFAULT_PROXY_URL);
     cfg->poll_interval_sec = L4_DEFAULT_POLL_INTERVAL_SEC;
     cfg->watchdog_interval_sec = L4_DEFAULT_WATCHDOG_INTERVAL_SEC;
@@ -129,7 +137,7 @@ void config_init_defaults(L4SupervConfig* cfg, const wchar_t* exe_path) {
     cfg->pending_pin_check_sec = L4_DEFAULT_PENDING_PIN_CHECK_SEC;
     cfg->watchdog_enabled = true;
     cfg->mosquitto_port = L4_DEFAULT_MOSQUITTO_PORT;
-    swprintf_s(cfg->mosquitto_template_path, MAX_PATH, L"%s\\mosquitto.conf.tmpl", cfg->base_path);
+    l4_runtime_path(cfg->base_path, L4_DATA_CONFIG, L"mosquitto.conf.tmpl", L"mosquitto.conf.tmpl", cfg->mosquitto_template_path);
     cfg->auto_reset_on_clone = true;
     cfg->auto_start_leo4proxy = true;
     cfg->auto_start_mosquitto = true;
@@ -170,7 +178,17 @@ bool config_load_json(L4SupervConfig* cfg, const wchar_t* json_path) {
 
     char val[MAX_PATH];
     if (json_get_string(buffer, "base_path", val, sizeof(val))) {
-        MultiByteToWideChar(CP_UTF8, 0, val, -1, cfg->base_path, MAX_PATH);
+        wchar_t selected[MAX_PATH], mapped[MAX_PATH], portable[MAX_PATH];
+        if (!MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, val, -1, selected, MAX_PATH) ||
+            wcslen(cfg->base_path) + 15 >= MAX_PATH ||
+            !l4_runtime_path(cfg->base_path, L4_DATA_CONFIG, L"l4superv.json", L"l4superv.json", mapped)) {
+            free(buffer); return false;
+        }
+        swprintf_s(portable, MAX_PATH, L"%ls\\l4superv.json", cfg->base_path);
+        if (_wcsicmp(mapped, portable) && _wcsicmp(selected, cfg->base_path)) {
+            free(buffer); SetLastError(ERROR_INVALID_DATA); return false;
+        }
+        wcscpy_s(cfg->base_path, MAX_PATH, selected);
     }
     if (json_get_string(buffer, "proxy_url", val, sizeof(val))) {
         MultiByteToWideChar(CP_UTF8, 0, val, -1, cfg->proxy_url, 256);
@@ -235,7 +253,10 @@ bool config_load_json(L4SupervConfig* cfg, const wchar_t* json_path) {
     char proxy_args[2048];
     if (json_get_string(buffer,"leo4proxy_args",proxy_args,sizeof(proxy_args)))
         MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,proxy_args,-1,cfg->leo4proxy_args,2048);
-    wchar_t args_path[MAX_PATH]; swprintf_s(args_path,MAX_PATH,L"%ls\\leo4proxy\\service-args.txt",cfg->base_path);
+    wchar_t args_path[MAX_PATH];
+    if (!l4_runtime_path(cfg->base_path, L4_DATA_CONFIG, L"leo4proxy\\service-args.txt", L"leo4proxy\\service-args.txt", args_path)) {
+        free(buffer); return false;
+    }
     FILE* args_file=NULL;
     if (!_wfopen_s(&args_file,args_path,L"rb") && args_file) {
         size_t len=fread(proxy_args,1,sizeof(proxy_args)-1,args_file); proxy_args[len]=0; fclose(args_file);
@@ -243,6 +264,19 @@ bool config_load_json(L4SupervConfig* cfg, const wchar_t* json_path) {
     }
     free(buffer);
     return true;
+}
+
+bool config_load_runtime(L4SupervConfig* cfg, const wchar_t* exe_path) {
+    if (!cfg) { SetLastError(ERROR_INVALID_PARAMETER); return false; }
+    config_init_defaults(cfg, exe_path);
+    if (!cfg->config_file[0] || !cfg->proxy_url[0]) { SetLastError(ERROR_INVALID_DATA); return false; }
+    DWORD attrs = GetFileAttributesW(cfg->config_file);
+    if (attrs == INVALID_FILE_ATTRIBUTES) {
+        DWORD error = GetLastError();
+        return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND;
+    }
+    if (attrs & FILE_ATTRIBUTE_DIRECTORY) { SetLastError(ERROR_INVALID_DATA); return false; }
+    return config_load_json(cfg, cfg->config_file);
 }
 
 bool config_save_json(const L4SupervConfig* cfg, const wchar_t* json_path) {

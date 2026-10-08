@@ -179,6 +179,16 @@ if exist "%REPO_TOOLS%\l4capture\ROLLBACK.md" (
     copy /y "%REPO_TOOLS%\l4capture\ROLLBACK.md" "%STAGING%\l4capture\ROLLBACK.md" >nul
 )
 
+:: Stable launcher template. It is not a legacy PATH entry or a service.
+md "%STAGING%\l4launch\x86"
+md "%STAGING%\l4launch\x64"
+if not exist "%REPO_TOOLS%\l4launch\bin\x86\l4launch.exe" exit /b 1
+if not exist "%REPO_TOOLS%\l4launch\bin\x64\l4launch.exe" exit /b 1
+copy /y "%REPO_TOOLS%\l4launch\bin\x86\l4launch.exe" "%STAGING%\l4launch\x86\l4launch.exe" >nul
+if errorlevel 1 exit /b 1
+copy /y "%REPO_TOOLS%\l4launch\bin\x64\l4launch.exe" "%STAGING%\l4launch\x64\l4launch.exe" >nul
+if errorlevel 1 exit /b 1
+
 :: 7. Stage User Guide in package root
 echo [7/8] Staging term_tool-user-guide.md in package root...
 if exist "%REPO_TOOLS%\..\docs\term_tool-user-guide.md" (

@@ -1,0 +1,28 @@
+[project]
+name = "l4tools-release-control"
+version = "0.0.0"
+description = "Local L4 Tools build, signing and publication control"
+requires-python = "==3.14.*"
+dependencies = ["cryptography>=46,<49"]
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "ruff>=0.13", "pyright>=1.1"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["l4release/tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pyright]
+pythonVersion = "3.14"
+include = ["l4release"]
+exclude = ["l4release/tests"]

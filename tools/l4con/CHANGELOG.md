@@ -1,6 +1,26 @@
 ﻿# Changelog — l4con (Leo4 Diagnostic Console Agent)
 
-## Unreleased — FM v2 only
+## Unreleased
+
+### Fixed
+
+- FM uses the physical console user's limited token when available. With UAC
+  disabled, an unlinked Default token retains that user's actual rights;
+  alternate sessions and linked-token failures remain refused. Console logon
+  identity is checked again before returning the token. FM policy and ACL grants
+  are unchanged.
+
+### Added
+
+- RPC7030–7033 admission is compiled in; a verified public catalog and measured
+  transition remain mandatory. RPC7031 task_id owns the operation; RPC7032 reads
+  that original operation. Result event76 carries its object in numeric tag449.
+
+- SYSTEM-only local diagnostic export of a fresh transport-probe's matched
+  REQ/RSP and EVT/EVA nonces, event ID and timestamps for compatibility tests.
+  Existing MQTT topics, client identity and ordinary probe responses are preserved.
+
+### Changed
 
 FM v2 hello and fmc/fmr envelopes; legacy RPC listing/cancel/stop rejected. Stop ACK follows owned worker process exit.
 

@@ -574,6 +574,10 @@ int wmain(int argc, wchar_t* argv[]) {
     swprintf_s(sub_dir, MAX_PATH, L"%ls\\l4capture", dest_dir); CreateDirectoryW(sub_dir, NULL);
     swprintf_s(sub_dir, MAX_PATH, L"%ls\\l4capture\\bin", dest_dir); CreateDirectoryW(sub_dir, NULL);
 
+    // Carry launcher template only; PF/bin activation belongs to the new bootstrap.
+    // Legacy installation must not expose it in PATH or register it as a service.
+    swprintf_s(sub_dir, MAX_PATH, L"%ls\\l4launch", dest_dir); CreateDirectoryW(sub_dir, NULL);
+
     // Register tools in system PATH for interactive sessions
     add_to_system_path(dest_dir);
 

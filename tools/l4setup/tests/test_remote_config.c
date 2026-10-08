@@ -1,0 +1,58 @@
+/* Isolated adapter orchestration fixture. Source/signed-manifest boundaries are
+ * explicit stubs; real file hashes/pins/config journal and ACL snapshots run. */
+#include "../src/remote_config.h"
+#include "../src/broker_config.h"
+#include "../../l4common/journal_internal.h"
+#include <stdio.h>
+#include <aclapi.h>
+#include <stdlib.h>
+#include <string.h>
+static L4Layout source_layout,target_layout;static L4BootstrapPlan fixture_plan;static L4Journal* owner;static L4ReleaseFile inventory[2][11];static const char* data[2][2]={{"old-supervisor","old-acl"},{"new-supervisor","new-acl"}};static SetupBrokerConfig baseline_broker;static BYTE pointer_bytes[9][160];static DWORD pointer_sizes[9];static const wchar_t* fixture_tools[]={L"leo4proxy",L"mosquitto",L"l4con",L"l4superv",L"l4desk",L"l4sql",L"l4pin",L"l4capture",L"ffmpeg"};static unsigned checks,failures;static int fault;
+#define CHECK(x) do{++checks;if(!(x)){++failures;printf("FAIL adapter %u: %s error=%lu\n",__LINE__,#x,GetLastError());}}while(0)
+static bool source_verify(SetupInstalledSource* s){if(s!=(SetupInstalledSource*)1||fault==1){SetLastError(ERROR_ACCESS_DENIED);return false;}return true;}
+static const L4BootstrapPlan* source_profile(const SetupInstalledSource* s){return s==(SetupInstalledSource*)1?&fixture_plan:NULL;}
+static const SetupManifest* source_manifest(const SetupInstalledSource* s){return s==(SetupInstalledSource*)1?(SetupManifest*)1:NULL;}
+static const char* source_arch(const SetupInstalledSource* s){(void)s;return "x86";}
+static bool source_owned(const SetupInstalledSource* s,const L4Journal* j){return s==(SetupInstalledSource*)1&&j==owner;}
+static bool source_bytes(SetupInstalledSource* s,unsigned index,BYTE** b,DWORD* n){(void)s;const char* p=index>=3?(const char*)pointer_bytes[index-3]:index==0?data[0][0]:index==2?data[0][1]:baseline_broker.bytes;*n=index>=3?pointer_sizes[index-3]:index==1?baseline_broker.size:(DWORD)strlen(p);*b=malloc(*n);if(!*b)return false;memcpy(*b,p,*n);return true;}
+static const L4Layout* manifest_layout(const SetupManifest* m){return m==(SetupManifest*)1?&source_layout:m==(SetupManifest*)2?&target_layout:NULL;}
+static const char* manifest_arch(const SetupManifest* m){(void)m;return fault==2?"x64":"x86";}
+static const L4ReleaseFile* manifest_files(const SetupManifest* m,unsigned* n){*n=11;return inventory[m==(SetupManifest*)1?0:1];}
+static bool manifest_verify(const SetupManifest* m){if(fault==3){SetLastError(ERROR_CRC);return false;}return l4_release_verify(manifest_layout(m),inventory[m==(SetupManifest*)1?0:1],11);}
+static bool manifest_config(const SetupManifest* m,unsigned index,wchar_t path[MAX_PATH],wchar_t dest[MAX_PATH]){const L4Layout* l=manifest_layout(m);const wchar_t* relative=index==0?L"config\\l4superv.json":L"config\\mosquitto\\acl.conf";return index<2&&l4_layout_component(l,L"templates",index==0?L"l4superv.json":L"mosquitto\\acl.conf",path)&&l4_layout_data_path(l,relative,dest);}
+#define setup_installed_source_verify source_verify
+#define setup_installed_source_plan source_profile
+#define setup_installed_source_manifest source_manifest
+#define setup_installed_source_arch source_arch
+#define setup_installed_source_config source_bytes
+#define setup_installed_source_owned_by source_owned
+#define setup_manifest_layout manifest_layout
+#define setup_manifest_arch manifest_arch
+#define setup_manifest_files manifest_files
+#define setup_manifest_verify manifest_verify
+#define setup_manifest_config manifest_config
+#include "../src/remote_config.c"
+static bool write_file(const wchar_t* path,const void* bytes,DWORD size){HANDLE file=CreateFileW(path,GENERIC_WRITE,0,NULL,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,NULL);if(file==INVALID_HANDLE_VALUE)return false;DWORD n=0;bool ok=WriteFile(file,bytes,size,&n,NULL)&&n==size;CloseHandle(file);return ok;}
+static bool grant_standard_read(const wchar_t* path,BYTE** sd,DWORD* size){
+ HANDLE file=CreateFileW(path,READ_CONTROL|WRITE_DAC,FILE_SHARE_READ,NULL,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,NULL);if(file==INVALID_HANDLE_VALUE)return false;
+ BYTE users[SECURITY_MAX_SID_SIZE];DWORD n=sizeof(users);PACL old=NULL,merged=NULL;PSECURITY_DESCRIPTOR descriptor=NULL;EXPLICIT_ACCESS_W ace={0};ace.grfAccessPermissions=FILE_GENERIC_READ;ace.grfAccessMode=GRANT_ACCESS;
+ bool ok=CreateWellKnownSid(WinBuiltinUsersSid,NULL,users,&n)&&GetSecurityInfo(file,SE_FILE_OBJECT,DACL_SECURITY_INFORMATION,NULL,NULL,&old,NULL,&descriptor)==ERROR_SUCCESS;BuildTrusteeWithSidW(&ace.Trustee,users);
+ if(ok)ok=SetEntriesInAclW(1,&ace,old,&merged)==ERROR_SUCCESS&&SetSecurityInfo(file,SE_FILE_OBJECT,DACL_SECURITY_INFORMATION|PROTECTED_DACL_SECURITY_INFORMATION,NULL,NULL,merged,NULL)==ERROR_SUCCESS&&l4_store_security(file,false,sd,size);
+ LocalFree(merged);LocalFree(descriptor);CloseHandle(file);return ok;
+}
+static bool publish(unsigned index){L4Layout* l=index?&target_layout:&source_layout;wchar_t base[MAX_PATH],relative[MAX_PATH],path[MAX_PATH],zip[MAX_PATH];swprintf_s(relative,MAX_PATH,L"update\\staging\\fixture%u\\templates\\mosquitto",index);if(!l4_layout_prepare_leaf(l,relative,NULL,NULL,false))return false;swprintf_s(base,MAX_PATH,L"%ls\\fixture%u",l->staging,index);
+ for(unsigned i=0;i<2;i++){inventory[index][i].component=L"templates";inventory[index][i].file=i?L"mosquitto\\acl.conf":L"l4superv.json";inventory[index][i].size=strlen(data[index][i]);if(!l4_store_hash(data[index][i],(DWORD)inventory[index][i].size,NULL,0,inventory[index][i].sha256))return false;swprintf_s(path,MAX_PATH,L"%ls\\templates\\%ls",base,inventory[index][i].file);if(!write_file(path,data[index][i],(DWORD)inventory[index][i].size))return false;}
+ for(unsigned i=0;i<9;i++){swprintf_s(relative,MAX_PATH,L"update\\staging\\fixture%u\\%ls%ls",index,fixture_tools[i],i==7?L"\\bin":L"");if(!l4_layout_prepare_leaf(l,relative,NULL,NULL,false))return false;inventory[index][i+2].component=fixture_tools[i];static wchar_t leaf[9][48];if(i==7)wcscpy_s(leaf[i],48,L"bin\\l4capture.exe");else swprintf_s(leaf[i],48,L"%ls.exe",fixture_tools[i]);inventory[index][i+2].file=leaf[i];const char* bits=index?"new-tool":"old-tool";inventory[index][i+2].size=strlen(bits);if(!l4_store_hash(bits,(DWORD)strlen(bits),NULL,0,inventory[index][i+2].sha256))return false;swprintf_s(path,MAX_PATH,L"%ls\\%ls\\%ls",base,fixture_tools[i],leaf[i]);if(!write_file(path,bits,(DWORD)strlen(bits)))return false;}
+ swprintf_s(zip,MAX_PATH,L"%ls\\fixture%u.zip",l->cache,index);BYTE digest[32];return write_file(zip,"zip",3)&&l4_store_hash("zip",3,NULL,0,digest)&&l4_release_publish(l,zip,digest,base,inventory[index],11);
+}
+static void cleanup(const wchar_t* root){wchar_t pattern[MAX_PATH],path[MAX_PATH];swprintf_s(pattern,MAX_PATH,L"%ls\\*",root);WIN32_FIND_DATAW d;HANDLE find=FindFirstFileW(pattern,&d);if(find!=INVALID_HANDLE_VALUE){do{if(!wcscmp(d.cFileName,L".")||!wcscmp(d.cFileName,L".."))continue;swprintf_s(path,MAX_PATH,L"%ls\\%ls",root,d.cFileName);if(d.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY){if(!(d.dwFileAttributes&FILE_ATTRIBUTE_REPARSE_POINT))cleanup(path);else RemoveDirectoryW(path);}else DeleteFileW(path);}while(FindNextFileW(find,&d));FindClose(find);}RemoveDirectoryW(root);}
+int wmain(void){wchar_t temp[MAX_PATH],root[MAX_PATH],pf[MAX_PATH],pd[MAX_PATH],path[MAX_PATH];CHECK(GetTempPathW(MAX_PATH,temp));swprintf_s(root,MAX_PATH,L"%lsl4remote-config-%lu-%llu",temp,GetCurrentProcessId(),GetTickCount64());CHECK(CreateDirectoryW(root,NULL));swprintf_s(pf,MAX_PATH,L"%ls\\PF",root);swprintf_s(pd,MAX_PATH,L"%ls\\PD",root);CHECK(l4_layout_from_roots(&source_layout,pf,pd,L"1.2.3"));CHECK(l4_layout_from_roots(&target_layout,pf,pd,L"1.2.4"));fixture_plan.layout=source_layout;CHECK(l4_layout_prepare(&source_layout));CHECK(l4_layout_prepare_leaf(&source_layout,L"config\\mosquitto",NULL,NULL,true));CHECK(publish(0));CHECK(publish(1));CHECK(setup_broker_render(&source_layout,"fixture773",&baseline_broker));
+ CHECK(l4_journal_open(&source_layout,L"17730000-0000-4000-8000-0000000000aa",true,&owner));if(!owner){cleanup(root);return 1;}ULONGLONG initial[12];CHECK(l4_config_prepare(owner,L"l4superv.json",data[0][0],(DWORD)strlen(data[0][0]),&initial[0]));CHECK(l4_config_prepare(owner,L"mosquitto\\mosquitto.conf",baseline_broker.bytes,baseline_broker.size,&initial[1]));CHECK(l4_config_prepare(owner,L"mosquitto\\acl.conf",data[0][1],(DWORD)strlen(data[0][1]),&initial[2]));CHECK(l4_layout_prepare_leaf(&source_layout,L"config\\launchers",NULL,NULL,false));for(unsigned i=0;i<9;i++){CHECK(l4_launcher_prepare(owner,&source_layout,fixture_tools[i],inventory[0],11,&initial[3+i]));BYTE* record=NULL;DWORD n=0;CHECK(l4_store_find_record(owner,20,initial[3+i],&record,&n));if(record){DWORD pathsize=l4_store_get32(record+8);pointer_sizes[i]=l4_store_get32(record+16);CHECK(pointer_sizes[i]<160);memcpy(pointer_bytes[i],record+24+pathsize,pointer_sizes[i]);free(record);}}for(unsigned i=0;i<12;i++)CHECK(l4_config_apply(owner,initial[i]));BYTE* actual_broker_sd=NULL;DWORD actual_broker_sd_size=0;CHECK(l4_layout_data_path(&source_layout,L"config\\mosquitto\\mosquitto.conf",path));CHECK(grant_standard_read(path,&actual_broker_sd,&actual_broker_sd_size));SetupRemoteConfigProposals proposals;CHECK(setup_remote_config_prepare(owner,(SetupInstalledSource*)1,(SetupManifest*)2,&proposals));CHECK(proposals.supervisor&&proposals.broker&&proposals.acl);CHECK(l4_config_verify(owner,proposals.supervisor,false));CHECK(l4_config_verify(owner,proposals.broker,false));CHECK(l4_config_verify(owner,proposals.acl,false));
+ /* No apply: old authenticated bytes remain. Current public broker SD preserved. */
+ for(unsigned i=0;i<12;i++)if(i!=1)CHECK(l4_config_verify(owner,initial[i],true));CHECK(!l4_config_verify(owner,initial[1],true));for(unsigned i=0;i<9;i++)CHECK(proposals.launchers[i]&&l4_config_verify(owner,proposals.launchers[i],false));BYTE* old=NULL;BYTE* next=NULL;DWORD os=0,ns=0;CHECK(l4_store_find_record(owner,20,initial[1],&old,&os));CHECK(l4_store_find_record(owner,20,proposals.broker,&next,&ns));DWORD oldsd=l4_store_get32(old+20),newsd=l4_store_get32(next+20);CHECK(oldsd!=newsd || memcmp(old+os-oldsd,next+ns-newsd,oldsd));CHECK(newsd==actual_broker_sd_size&&!memcmp(next+ns-newsd,actual_broker_sd,newsd));free(actual_broker_sd);free(old);free(next);
+ ULONGLONG before=owner->sequence;fault=1;CHECK(!setup_remote_config_prepare(owner,(SetupInstalledSource*)1,(SetupManifest*)2,&proposals));CHECK(owner->sequence==before&&!proposals.supervisor);fault=2;CHECK(!setup_remote_config_prepare(owner,(SetupInstalledSource*)1,(SetupManifest*)2,&proposals));CHECK(owner->sequence==before);fault=3;CHECK(!setup_remote_config_prepare(owner,(SetupInstalledSource*)1,(SetupManifest*)2,&proposals));CHECK(owner->sequence==before);fault=0;
+ CHECK(l4_layout_data_path(&source_layout,L"config\\l4superv.json",path));CHECK(write_file(path,"custom",6));CHECK(!setup_remote_config_prepare(owner,(SetupInstalledSource*)1,(SetupManifest*)2,&proposals));CHECK(owner->sequence==before);CHECK(write_file(path,data[0][0],(DWORD)strlen(data[0][0])));
+
+ CHECK(l4_layout_data_path(&source_layout,L"config\\launchers\\l4capture.target",path));CHECK(write_file(path,"custom",6));CHECK(!setup_remote_config_prepare(owner,(SetupInstalledSource*)1,(SetupManifest*)2,&proposals));CHECK(owner->sequence==before);CHECK(write_file(path,pointer_bytes[7],pointer_sizes[7]));
+ CHECK(!broker_identity(&source_layout,(BYTE*)"remote_clientid fake\n",21,(char[128]){0}));CHECK(broker_identity(&source_layout,(BYTE*)baseline_broker.bytes,baseline_broker.size,(char[128]){0}));
+ l4_journal_close(owner);cleanup(root);CHECK(GetFileAttributesW(root)==INVALID_FILE_ATTRIBUTES);printf("remote config proposals: %u checks, %u failures\n",checks,failures);return failures?1:0;}

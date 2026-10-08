@@ -1,4 +1,5 @@
 #include "tool_inventory.h"
+#include "../../l4common/layout.h"
 
 #include <windows.h>
 #include <wincrypt.h>
@@ -222,8 +223,8 @@ bool tool_inventory_package_version(char out[64]) {
     if (!inventory_root(root)) return false;
     /* A completed setup summary records the installed package.  state.json is
        also written by the supervisor and can contain a stale cached version. */
-    if (swprintf_s(path, MAX_PATH, L"%ls\\install_summary.json", root) >= 0 &&
+    if (l4_runtime_path(root, L4_DATA_STATE, L"install_summary.json", L"install_summary.json", path) &&
         read_json_version(path, true, out)) return true;
-    if (swprintf_s(path, MAX_PATH, L"%ls\\state.json", root) < 0) return false;
+    if (!l4_runtime_path(root, L4_DATA_STATE, L"state.json", L"state.json", path)) return false;
     return read_json_version(path, false, out);
 }

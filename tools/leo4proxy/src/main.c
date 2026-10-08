@@ -22,8 +22,11 @@
 #include "service_mgr.h"
 #include "tray_icon.h"
 #include "../res/resource.h"
+#include "../../l4common/layout.h"
+#include "../../l4common/proxy_certificate.h"
 
 static volatile bool g_consoleRunning = true;
+static wchar_t g_crash_path[MAX_PATH];
 
 typedef struct {
     ProxyConfig config;
@@ -259,14 +262,7 @@ static void pause_if_explorer(void) {
 
 static LONG WINAPI unhandled_exception_handler(EXCEPTION_POINTERS* pExp) {
     FILE* f = NULL;
-    wchar_t crash_path[MAX_PATH] = { 0 };
-    DWORD path_length = GetModuleFileNameW(NULL, crash_path, MAX_PATH);
-    wchar_t* separator = path_length && path_length < MAX_PATH ? wcsrchr(crash_path, L'\\') : NULL;
-    if (separator) {
-        *(separator + 1) = 0;
-        if (wcscat_s(crash_path, MAX_PATH, L"leo4proxy_crash.log") == 0)
-            _wfopen_s(&f, crash_path, L"a");
-    }
+    if (g_crash_path[0]) _wfopen_s(&f, g_crash_path, L"a");
     if (f) {
         fprintf(f, "\n=== LEO4PROXY CRASH REPORT ===\n");
         fprintf(f, "Exception Code:    0x%08lX\n", pExp->ExceptionRecord->ExceptionCode);
@@ -277,7 +273,7 @@ static LONG WINAPI unhandled_exception_handler(EXCEPTION_POINTERS* pExp) {
     fprintf(stderr, "\n===============================================================================\n");
     fprintf(stderr, "[FATAL] Unhandled Exception: 0x%08lX at address 0x%p\n",
             pExp->ExceptionRecord->ExceptionCode, pExp->ExceptionRecord->ExceptionAddress);
-    fprintf(stderr, "Crash details saved to leo4proxy_crash.log\n");
+    if (f) fwprintf(stderr, L"Crash details saved to %ls\n", g_crash_path);
     fprintf(stderr, "===============================================================================\n");
 
     return EXCEPTION_EXECUTE_HANDLER;
@@ -491,7 +487,65 @@ static void print_usage(const char* exeName) {
     printf("       ffmpeg -f dshow -i video=\"USB Camera\" -c:v libx264 -preset ultrafast -tune zerolatency -b:v 800k -f mpegts tcp://127.0.0.1:8554\n\n");
 }
 
+/* Deliberately separate from normal/service startup: no writable paths, policy
+ * polling, discovery, firewall, tray, media or remote connection. The updater
+ * owns this process in a job and authenticates both listening socket PIDs. */
+static bool probe_number(const char* value,unsigned minimum,unsigned maximum,unsigned* result) {
+    unsigned n=0;if(!value || !*value)return false;
+    for(const char* p=value;*p;++p) {
+        if(*p<'0' || *p>'9' || n>(maximum-(unsigned)(*p-'0'))/10)return false;
+        n=n*10+(unsigned)(*p-'0');
+    }
+    if(n<minimum || n>maximum)return false;*result=n;return true;
+}
+static int run_update_probe(int argc,char** argv) {
+    unsigned http,mqtt,duration;
+    /* Older binaries ignore unknown switches. The mandatory trailing --version
+     * makes them exit before ordinary proxy startup instead of touching live ports. */
+    L4ProxyCertificate profile;
+    if(!l4_proxy_certificate_probe(argc,argv,&profile) ||
+       !probe_number(argv[2],49152,65535,&http) || !probe_number(argv[3],49152,65535,&mqtt) ||
+       http==mqtt || !probe_number(argv[4],100,300000,&duration))return 2;
+    ProxyConfig config;proxy_config_init_defaults(&config);
+    strcpy_s(config.cert_email_pattern,sizeof(config.cert_email_pattern),profile.email);
+    strcpy_s(config.cert_thumbprint,sizeof(config.cert_thumbprint),profile.thumbprint);
+    config.is_machine_store=profile.machine?1:0;
+    config.update_probe=1;config.run_foreground=1;config.auto_local_ssl=0;
+    config.mqtt_local_port=(int)mqtt;config.http_local_port=(int)http;
+    config.reverse_proxy_enabled=0;config.discovery_enabled=0;config.stream_proxy_enabled=0;
+    config.rtp_tunnel_enabled=0;config.firewall_auto=0;config.auto_elevate=0;
+    WSADATA wsa;if(WSAStartup(MAKEWORD(2,2),&wsa))return 3;
+    CertDetails details={0};CredHandle client,server;SecInvalidateHandle(&client);SecInvalidateHandle(&server);
+    bool mqtt_started=false,http_started=false;int result=3;
+    MqttProxyServer mqtt_server={0};HttpProxyServer http_server={0};
+    if(!cert_store_find_best_cert(&config,&details) ||
+       !schannel_init_client_creds(details.pCertContext,0,&client) ||
+       !schannel_init_server_creds(details.pCertContext,&server))goto done;
+    g_proxyStats.cert_ready=1;
+    mqtt_started=mqtt_proxy_start(&mqtt_server,&config,&details,client,server);
+    if(!mqtt_started)goto done;
+    http_started=http_proxy_start(&http_server,&config,&details,client,server);
+    if(!http_started)goto done;
+    Sleep(duration);result=0;
+done:
+    if(http_started)http_proxy_stop(&http_server);
+    if(mqtt_started)mqtt_proxy_stop(&mqtt_server);
+    if(SecIsValidHandle(&server))schannel_free_creds(&server);
+    if(SecIsValidHandle(&client))schannel_free_creds(&client);
+    cert_store_free_details(&details);WSACleanup();return result;
+}
+
 int main(int argc, char* argv[]) {
+    /* Reject probe/service flag mixtures before any normal-startup side effect. */
+    for(int i=1;i<argc;++i)if(!_stricmp(argv[i],"--update-probe"))return run_update_probe(argc,argv);
+    /* Resolve while healthy, before an exception can corrupt allocator state. */
+    wchar_t exe[MAX_PATH];
+    DWORD length = GetModuleFileNameW(NULL, exe, MAX_PATH);
+    if (!length || length >= MAX_PATH || !l4_runtime_exe_path(exe, L"leo4proxy",
+        L4_DATA_LOGS, L"leo4proxy\\leo4proxy_crash.log", L"leo4proxy_crash.log", g_crash_path)) {
+        fprintf(stderr, "Cannot resolve diagnostic path (win32=%lu)\n", GetLastError());
+        return 1;
+    }
     // Install global unhandled exception filter
     SetUnhandledExceptionFilter(unhandled_exception_handler);
 

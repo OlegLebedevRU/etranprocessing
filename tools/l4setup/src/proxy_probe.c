@@ -2,6 +2,7 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include "../../leo4proxy/src/policy_json.h"
+#include "../../l4common/proxy_policy_gate.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,7 +16,7 @@ static bool socket_ready(SOCKET sock,bool writing,ULONGLONG deadline) {
     int error=0,length=sizeof(error);
     return !getsockopt(sock,SOL_SOCKET,SO_ERROR,(char*)&error,&length) && !error;
 }
-bool setup_proxy_probe(int port,bool require_ready,int timeout_ms) {
+static bool proxy_probe(int port,bool require_ready,int timeout_ms,const char* thumbprint,char* output,bool normal_policy) {
     if(timeout_ms<1 || port<1 || port>65535)return false;
     ULONGLONG deadline=GetTickCount64()+(ULONGLONG)timeout_ms;
     WSADATA wsa;if(WSAStartup(MAKEWORD(2,2),&wsa))return false;
@@ -59,8 +60,23 @@ bool setup_proxy_probe(int port,bool require_ready,int timeout_ms) {
             policy_json_string(&json,policy_json_field(&json,0,"status"),status,sizeof(status)) &&
             policy_json_bool(&json,policy_json_field(&json,0,"certificate_found"),&found);
         valid=valid && ((!strcmp(status,"ready") && found) || (!require_ready && !strcmp(status,"waiting_for_certificate") && !found));
+        if(valid && normal_policy){bool key=false,routes=false;char sn[128];
+            valid=policy_json_bool(&json,policy_json_field(&json,0,"has_private_key"),&key) && key &&
+                policy_json_bool(&json,policy_json_field(&json,0,"routes_active"),&routes) && routes &&
+                policy_json_string(&json,policy_json_field(&json,0,"sn"),sn,sizeof(sn)) && *sn &&
+                l4_proxy_policy_gate(&json,l4_proxy_policy_utc());
+        }
+        if(valid && (normal_policy || output || (thumbprint && *thumbprint))){char selected[64];valid=policy_json_string(&json,policy_json_field(&json,0,"thumbprint"),selected,sizeof(selected)) && strlen(selected)==40;
+            for(unsigned i=0;valid && i<40;i++)valid=(selected[i]>='0' && selected[i]<='9') || (selected[i]>='a' && selected[i]<='f') || (selected[i]>='A' && selected[i]<='F');
+            if(valid && thumbprint && *thumbprint)valid=!_stricmp(selected,thumbprint);
+            if(valid && output)strcpy_s(output,64,selected);
+        }
         break;
     }
 done:
     closesocket(sock);WSACleanup();return valid;
 }
+bool setup_proxy_probe(int port,bool require_ready,int timeout_ms){return proxy_probe(port,require_ready,timeout_ms,NULL,NULL,false);}
+bool setup_proxy_probe_certificate(int port,int timeout_ms,const char* thumbprint){return proxy_probe(port,true,timeout_ms,thumbprint,NULL,false);}
+bool setup_proxy_probe_thumbprint(int port,int timeout_ms,char output[64]){if(!output)return false;output[0]=0;return proxy_probe(port,true,timeout_ms,NULL,output,false);}
+bool setup_proxy_probe_policy(int port,int timeout_ms,const char* thumbprint){return proxy_probe(port,true,timeout_ms,thumbprint,NULL,true);}

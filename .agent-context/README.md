@@ -28,6 +28,7 @@ Skills описывают **как работать**, карточки — **ч
 | System Architect | [Overview](system-overview.md), контракты изменяемого flow | architecture-decision-record, performance-and-resilience-risk-analysis | ADR + комплаенс контрактов + оценка рисков |
 
 ## Контракты
+- [L4Update](components/l4update.md) — принятый RPC703x flow, новая Windows-раскладка и uv release-конвейер; native foundation и release-конвейер; update worker ещё не подключён, обязательный gate связи и стенд773/tenant1.
 - [leo4proxy](components/leo4proxy.md) — транспорт, policy и контекст DNS/SRV-внедрения; policy/media и signed tools 1.10.1 выпущены; Upgrade773 ready/0, видео подтверждено оператором.
 - [MQTT topic matrix](contracts/mqtt-topic-matrix.md) — ctl, console, presence; не весь MQTT платформы.
 - [Lease lifecycle](contracts/lease-lifecycle.md) — fail-closed vs recovery.

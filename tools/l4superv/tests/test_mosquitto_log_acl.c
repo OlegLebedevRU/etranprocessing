@@ -43,10 +43,25 @@ int main(void) {
     CHECK(!access_allowed(file, token, FILE_GENERIC_WRITE));
     CHECK(access_allowed(directory, token, FILE_GENERIC_READ | FILE_GENERIC_EXECUTE));
     CHECK(!access_allowed(directory, token, FILE_ADD_FILE));
-    CHECK(l4_set_log_acl(file, L"D:P(A;;GA;;;SY)")); /* Existing protected SYSTEM-only log. */
-    CHECK(l4_mosquitto_log_acl(directory));
+    BYTE user_buffer[sizeof(TOKEN_USER)+SECURITY_MAX_SID_SIZE]; DWORD user_bytes; LPWSTR user_sid=NULL;
+    CHECK(GetTokenInformation(original,TokenUser,user_buffer,sizeof(user_buffer),&user_bytes));
+    CHECK(ConvertSidToStringSidW(((TOKEN_USER*)user_buffer)->User.Sid,&user_sid));
+    wchar_t private_acl[256]; swprintf_s(private_acl,256,L"D:P(A;;GA;;;%ls)",user_sid);
+    LocalFree(user_sid);
+    CHECK(l4_set_log_acl(file,private_acl)); /* Mosquitto current-writer-only policy. */
+    CHECK(l4_mosquitto_log_inherit(directory));
     CHECK(access_allowed(file, token, FILE_GENERIC_READ));
     CHECK(!access_allowed(file, token, FILE_GENERIC_WRITE));
+    CHECK(!access_allowed(file, token, WRITE_DAC));
+    CHECK(!access_allowed(file, token, WRITE_OWNER));
+    CHECK(!access_allowed(file, token, DELETE));
+    CHECK(l4_mosquitto_log_inherit(directory)); /* Idempotent reconciliation. */
+    CHECK(access_allowed(file, token, FILE_GENERIC_READ));
+    wchar_t alias[MAX_PATH];
+    swprintf_s(alias, MAX_PATH, L"%ls\\alias.log", directory);
+    CHECK(CreateHardLinkW(alias, file, NULL));
+    CHECK(!l4_mosquitto_log_inherit(directory) && GetLastError() == ERROR_ACCESS_DENIED);
+    CHECK(DeleteFileW(alias));
     char content[9] = { 0 }; DWORD bytes = 0;
     HANDLE input = CreateFileW(file, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
     CHECK(input != INVALID_HANDLE_VALUE);
@@ -54,10 +69,12 @@ int main(void) {
         CHECK(ReadFile(input, content, 8, &bytes, NULL)); CloseHandle(input);
         CHECK(bytes == 8 && !strcmp(content, "retained"));
     }
-    if (token) CloseHandle(token);
-    if (restricted) CloseHandle(restricted);
-    if (original) CloseHandle(original);
+    CHECK(DeleteFileW(file));
+    CHECK(l4_mosquitto_log_inherit(directory)); /* Precreate/recreated rotation. */
+    CHECK(access_allowed(file, token, FILE_GENERIC_READ));
+    CHECK(!access_allowed(file, token, FILE_GENERIC_WRITE));
     CHECK(DeleteFileW(file)); CHECK(RemoveDirectoryW(directory)); CHECK(RemoveDirectoryW(root));
+    if (token) CloseHandle(token); if (restricted) CloseHandle(restricted); if (original) CloseHandle(original);
     printf("Mosquitto log ACL failures: %d\n", failures);
     return failures ? 1 : 0;
 }

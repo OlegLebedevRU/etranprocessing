@@ -1,5 +1,13 @@
 # MQTT: remote control, console и presence
 
+## L4Update — принятая архитектура 2026-10-06, не реализовано
+
+[Update flow](../../docs/term_arch-l4update-flow.md): штатные RPC и EVT/EVA без
+новых топиков/MQTT-клиента. Один код события, весь update объект в одном числовом
+теге; номера пока не выделены. Барьер REQ/RSP+свежий EVT/EVA до/после переключений.
+Идентичные MQTT client ID одновременно запрещены, в том числе при временной пробе.
+Обновление путей/consumer новых703x требует отдельной реализации и verification.
+
 ## L4FM v2 — выпущенный контракт 2026-10-05
 
 [FM](file-manager.md): start/renew через RPC7023, transfer через7021;
@@ -96,3 +104,16 @@ Foreign-SN, unknown routes and remapping are rejected without replacing the exis
 The active-config validator requires the exact route set, direction, QoS and SN; comments cannot
 satisfy routes, duplicates/wildcards invalidate the configuration. Setup uses supervisor's
 prepare-mosquitto path and therefore the same migration. Local builds/tests are not live broker evidence.
+
+
+## L4Con readiness barrier — 2026-10-06
+
+L4Con now subscribes QoS1 srv/{SN}/eva alongside existing tsk/rsp/fmc, tracking
+successful tsk/rsp/eva SUBACKs for local readiness. Its private native health IPC
+uses the existing production MQTT connection to send ordinary zero-UUID REQ, await
+valid RSP/NOP, force fresh existing event75, and validate EVA success by UUID,
+event_type_code=75 and dev_event_id. IoT producer checked in app-service/core/services/
+device_task_processing.py and device_events_collect.py: NOP method_code0/zeroUUID,
+EVA status success/error plus matching metadata. Presence remains extra_service;
+no duplicate CONNECT/client ID or backend change. Native packet/IPC evidence only;
+actual IoT/terminal gate remains pending. No new update event code/tag allocated here.

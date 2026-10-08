@@ -6,6 +6,10 @@
 
 ## Индекс
 
+- [2026-10-06 — L4Release stage 1](2026-10-06-l4release-stage1.md) — uv build/sign/setup/publish, signed candidate 1.13.2, native gates и anonymous GET проверены; runtime update ещё не внедрён.
+
+- [2026-10-06 — L4Update architecture](2026-10-06-l4update-architecture.md) — согласованный RPC703x flow, Windows layout, gates, watchdog/rollback и uv-конвейер; документ/статический аудит, без реализации/runtime.
+
 - [2026-10-05 — FM architecture, редакция 2](2026-10-05-file-manager-architecture.md) — docs-only: общая IoT сессия с видео/консолью, MQTT control, PB HTTPS metadata, S3-only bulk, UI и план по стекам; без runtime/code/deploy.
 
 - [2026-10-04 — tools 1.10.2 network reliability](2026-10-04-leo4proxy-network-reliability.md) — signed release опубликован, bounded resolving/TLS/policy, read-only smoke-only, x86/x64 failure matrix; Upgrade773 ready/0 подтверждён; outage/Win7/PIN acceptance ещё не проверены.

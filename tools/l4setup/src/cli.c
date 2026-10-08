@@ -65,6 +65,8 @@ bool cli_parse(int argc, wchar_t* argv[], CliOptions* opts, char* err_buf, size_
             wcscpy_s(opts->remote_endpoints[channel],256,value); opts->network_specified=true;
         } else if (_wcsicmp(arg,L"--resolve-auto")==0) {
             memset(opts->remote_endpoints,0,sizeof(opts->remote_endpoints)); opts->no_srv=false; opts->network_specified=true;
+        } else if (_wcsicmp(arg, L"--layout-plan") == 0) {
+            opts->layout_plan = true;
         } else if (_wcsicmp(arg, L"--preview-ui") == 0) {
             opts->preview_ui = true;
             explicit_interactive = true;
@@ -173,6 +175,13 @@ bool cli_parse(int argc, wchar_t* argv[], CliOptions* opts, char* err_buf, size_
         return false;
     }
 
+    if (opts->layout_plan && (opts->pin_specified || opts->force_reissue || opts->repair ||
+        opts->smoke_only || opts->network_specified || opts->dest_specified ||
+        opts->payload_dir_specified || opts->preview_ui || explicit_interactive || explicit_silent)) {
+        if (err_buf && err_buf_size) snprintf(err_buf, err_buf_size, "--layout-plan cannot be combined with installation options");
+        return false;
+    }
+
     // Validate PIN if specified
     if (opts->pin_specified) {
         if (!is_valid_6digit_pin(opts->pin)) {
@@ -200,6 +209,7 @@ void cli_print_usage(const wchar_t* prog_name) {
     wprintf(L"Leo4 Zero-Touch Setup (l4setup) v%ls\n\n", L4SETUP_VERSION_WSTRING);
     wprintf(L"Usage: %ls [options]\n\n", prog_name ? prog_name : L"l4setup.exe");
     wprintf(L"Options:\n");
+    wprintf(L"  --layout-plan     Print new Windows layout and current SCM inventory; no changes\n");
     wprintf(L"  --policy-bootstrap-ip <IP> Recovery policy IP, TLS name remains unchanged\n");
     wprintf(L"  --resolve-auto / --no-srv  Automatic discovery / disable SRV\n");
     wprintf(L"  --mqtt-remote / --http-remote / --stream-remote / --rtp-remote <host:port>\n");

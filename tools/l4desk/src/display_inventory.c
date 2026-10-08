@@ -3,6 +3,7 @@
 #endif
 
 #include "display_inventory.h"
+#include "../../l4common/layout.h"
 #include "desktop_state.h"
 #include "log.h"
 #include <windows.h>
@@ -190,8 +191,9 @@ static bool token_in_list(const char* list, const char* token) {
 
 static void apply_policy(const char* base_path, SystemInventory* inv) {
     char ini_path[MAX_PATH];
-    snprintf(ini_path, sizeof(ini_path), "%s\\l4desk\\l4desk_policy.ini",
-             (base_path && base_path[0]) ? base_path : "C:\\l4tools");
+    ini_path[0] = 0;
+    if (base_path && *base_path && !l4_runtime_path_ansi(base_path, L4_DATA_CONFIG,
+        L"l4desk\\l4desk_policy.ini", L"l4desk\\l4desk_policy.ini", ini_path)) return;
 
     /* Default profiles */
     strcpy_s(inv->allowed_profiles[0], sizeof(inv->allowed_profiles[0]), "default");

@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
     [string]$Version,
     [string]$DistDir,
@@ -346,6 +346,7 @@ $components = [ordered]@{
 }
 
 # Assemble Manifest
+. "$PSScriptRoot\Certificate-Identity.ps1"
 $manifest = [ordered]@{
     "schema" = 1
     "version" = $Version
@@ -355,6 +356,7 @@ $manifest = [ordered]@{
     "builder" = "windows-dev"
     "signed" = $isSigned
     "signature_status" = [string]$sig.Status
+    "publisher_certificate_sha256" = if ($isSigned) { Get-PublisherCertificateSha256 $sig.SignerCertificate } else { $null }
     "files" = [ordered]@{
         "l4setup.exe" = [ordered]@{
             "sha256" = $setupSha

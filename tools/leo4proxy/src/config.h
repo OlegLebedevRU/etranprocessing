@@ -130,6 +130,7 @@ typedef struct {
     int  run_as_service;
     int  run_foreground;
     int  verbose;
+    int  update_probe; /* Bounded local readiness only: never forward traffic. */
 } ProxyConfig;
 
 /* Runtime proxy metrics and status */

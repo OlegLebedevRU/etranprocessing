@@ -25,6 +25,7 @@ typedef struct {
     bool show_version;
     bool show_help;
     bool preview_ui;
+    bool layout_plan;
     wchar_t payload_dir[MAX_PATH];
     bool payload_dir_specified;
 } CliOptions;

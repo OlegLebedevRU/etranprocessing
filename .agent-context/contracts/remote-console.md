@@ -1,5 +1,14 @@
 # Remote console: MenuBuilder → app1 → MQTT → l4con
 
+## L4Update extension — принят 2026-10-06, не реализован
+
+[RPC703x architecture](../../docs/term_arch-l4update-flow.md) сохраняет транспорт,
+вводит typed plan/start/status/cancel подготовки; start даёт accepted и независимую
+операцию. Во время применения обычные работы дренируются/получают отказ, update
+RPC/events остаются. IoT registration/validation/polling whitelist ещё проверять;
+существующая capability не означает поддержку703x. REQ завершённой задачи даёт
+NOP с zero UUID; отдельный свежий EVT/EVA необходим для подтверждения барьера.
+
 ## 2026-10-05 contract correction
 
 DeployedIoT8c2be80/native suite1.11.0 use canonical payload.dt[] with method-aware

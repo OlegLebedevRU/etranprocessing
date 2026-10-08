@@ -200,7 +200,22 @@ static void fm_policy_tests(void) {
     const char* malformed="{\"fm_allowed\":true,\"fm_storage_endpoint\":{\"host\":\"https://storage.example\",\"port\":443}}";
     accept_fm_locked(malformed,strlen(malformed),true);assert(!policy_fm_authority_allowed(NULL));
 }
+static void storage_path_tests(void) {
+    L4Layout layout; wchar_t exe[MAX_PATH], expected[MAX_PATH];
+    assert(l4_layout_resolve(&layout,L"1.13.2"));
+    assert(l4_layout_component(&layout,L"leo4proxy",L"leo4proxy.exe",exe));
+    wcscpy_s(json_paths[1],MAX_PATH,L"C:\\legacy");
+    wcscpy_s(json_paths[2],MAX_PATH,L"C:\\legacy");
+    assert(init_storage_paths(exe));
+    swprintf_s(expected,MAX_PATH,L"%ls\\leo4proxy\\policy.json",layout.state);
+    assert(!wcscmp(json_paths[0],expected) && !json_paths[1][0] && !json_paths[2][0]);
+    assert(init_storage_paths(L"D:\\dev\\tools\\leo4proxy\\bin\\x64\\leo4proxy.exe"));
+    assert(!wcscmp(json_paths[0],L"D:\\dev\\tools\\leo4proxy\\bin\\x64\\policy-data\\policy.json"));
+    assert(!init_storage_paths(L"D:\\dev\\other\\leo4proxy.exe"));
+    storage_failed=true; assert(!policy_media_allowed()); storage_failed=false;
+}
 int main(void) {
+    storage_path_tests();
     CERT_INFO cert_info={0}; CERT_CONTEXT context={0}; context.pCertInfo=&cert_info;
     FILETIME now; GetSystemTimeAsFileTime(&now);
     ULARGE_INTEGER ticks; ticks.LowPart=now.dwLowDateTime;ticks.HighPart=now.dwHighDateTime;
@@ -220,8 +235,12 @@ int main(void) {
     policy_diagnostics(diagnostics,sizeof(diagnostics));assert(strstr(diagnostics,"certificate_missing"));
     ticks.QuadPart+=1200000000ULL;
     cert_info.NotAfter.dwLowDateTime=ticks.LowPart;cert_info.NotAfter.dwHighDateTime=ticks.HighPart;
-    certificate=&context;assert(policy_media_allowed());
+    certificate=&context;assert(policy_media_allowed());https_allowed=true;assert(policy_registry_allowed());
+    https_allowed=false;assert(!policy_registry_allowed());PolicySocket denied_node={0};struct sockaddr_in nowhere={0};
+    assert(policy_registry_connect(&denied_node,INVALID_SOCKET,(struct sockaddr*)&nowhere,sizeof(nowhere))==SOCKET_ERROR && WSAGetLastError()==WSAEACCES && !denied_node.registered);
+    https_allowed=true;stopping=true;assert(!policy_registry_allowed());stopping=false;
     certificate=NULL;
+    assert(!policy_registry_allowed());
     puts("policy tests passed: response/schema, grace, HTTPS paths, socket cancellation, registry/JSON recovery, UDP drain");
     return 0;
 }
