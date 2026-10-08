@@ -11,7 +11,7 @@ bool l4_worker_transfer(L4Journal** journal,L4WorkerJob* worker,const L4Recovery
  * Flush one receipt69, then return held journal. No marker/SCM/apply permission;
  * reload signed operation64/pre-stop admission before any actual update. Parent
  * must retain Job until terminal result; receipt is not an external RPC event. */
-bool l4_worker_accept(const wchar_t* operation,DWORD timeout_ms,L4Journal** journal);
+bool l4_worker_accept(const wchar_t* source_version,const wchar_t* operation,DWORD timeout_ms,L4Journal** journal);
 typedef struct {
     ULONGLONG sequence,generation,deadline_utc,old_size,new_size;
     DWORD supervisor_pid,start_type;FILETIME supervisor_created;

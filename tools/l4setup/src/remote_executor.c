@@ -8,6 +8,8 @@
 #include "../../l4common/journal_internal.h"
 #include "../../l4common/recovery_store.h"
 #include <bcrypt.h>
+#include <sddl.h>
+#include <stdio.h>
 #include <string.h>
 typedef struct {
  L4Journal* journal;const SetupOperationPlan* operation;SetupInstalledSource* source;
@@ -19,6 +21,17 @@ typedef struct {
  L4UpdateState state;ULONGLONG forward_end;
 } Executor;
 static bool fail(DWORD error){SetLastError(error);return false;}
+/* Diagnostic only: never a journal proof, admission input or clear authority.
+ * Keep original failure and recovery failure separately when completion refuses. */
+static void failure_diagnostic(L4Journal* j,DWORD line,DWORD original,DWORD recovery){
+ if(!j || !j->file || j->file==INVALID_HANDLE_VALUE || !j->lock || j->lock==INVALID_HANDLE_VALUE || j->poisoned)return;
+ DWORD saved=GetLastError();wchar_t path[MAX_PATH];PSECURITY_DESCRIPTOR sd=NULL;
+ if(swprintf_s(path,MAX_PATH,L"%ls\\executor.failure",j->directory)>0 && ConvertStringSecurityDescriptorToSecurityDescriptorW(L"O:SYG:SYD:P(A;;FA;;;SY)(A;;FA;;;BA)",SDDL_REVISION_1,&sd,NULL)){
+  SECURITY_ATTRIBUTES attrs={sizeof(attrs),sd,FALSE};HANDLE file=CreateFileW(path,GENERIC_WRITE,FILE_SHARE_READ,&attrs,CREATE_NEW,FILE_FLAG_OPEN_REPARSE_POINT|FILE_FLAG_WRITE_THROUGH,NULL);
+  if(file!=INVALID_HANDLE_VALUE){BYTE bytes[24]={0};DWORD fields[4]={1,line,original,recovery};memcpy(bytes,"L4XERR01",8);memcpy(bytes+8,fields,sizeof(fields));DWORD written=0;if(WriteFile(file,bytes,sizeof(bytes),&written,NULL) && written==sizeof(bytes))FlushFileBuffers(file);CloseHandle(file);}
+ }
+ if(sd)LocalFree(sd);SetLastError(saved);
+}
 static ULONGLONG utc(void){FILETIME t;GetSystemTimeAsFileTime(&t);return ((ULONGLONG)t.dwHighDateTime<<32)|t.dwLowDateTime;}
 static bool helper_equal(const L4RecoveryHelper* a,const L4RecoveryHelper* b){return a && b && a->size==b->size && !memcmp(a->sha256,b->sha256,32);}
 static DWORD budget(Executor* e,DWORD maximum,bool forward){ULONGLONG now=utc(),tick=GetTickCount64(),deadline=e->state.deadline_utc;if(forward){ULONGLONG reserve=(ULONGLONG)SETUP_REMOTE_RESTORE_RESERVE_MS*10000;if(deadline<=reserve)return 0;deadline-=reserve;}if(now>=deadline || (forward && tick>=e->forward_end))return 0;ULONGLONG available=(deadline-now)/10000;if(forward && e->forward_end-tick<available)available=e->forward_end-tick;return available>maximum?maximum:(DWORD)available;}
@@ -68,9 +81,9 @@ static bool rollback(Executor* e,DWORD error,L4RemoteOutcome* outcome){
  ULONGLONG tick=GetTickCount64();ms=budget(e,600000,false);if(tick>=end || !ms)return fail(ERROR_TIMEOUT);if(end-tick<ms)ms=(DWORD)(end-tick);return setup_remote_restore_finish(e->restore,e->journal,e->operation,e->transaction,e->services,error,ms,outcome);
 }
 static bool terminal_scan(DWORD kind,ULONGLONG sequence,const void* bytes,DWORD size,void* context){(void)sequence;(void)bytes;(void)size;if(kind==102 || kind==103 || kind==108)*(bool*)context=true;return true;}
-#define REQUIRE(x) do{SetLastError(0);if(!(x)){error=GetLastError()?GetLastError():ERROR_NOT_READY;goto done;}}while(0)
+#define REQUIRE(x) do{SetLastError(0);if(!(x)){error=GetLastError()?GetLastError():ERROR_NOT_READY;failure_line=__LINE__;goto done;}}while(0)
 static DWORD execute(L4Journal** owner,const SetupOperationPlan* op,const L4WorkerAdmission* admitted,const L4RecoveryHelper* helper){
- if(!owner || !*owner)return ERROR_INVALID_PARAMETER;Executor e;DWORD error=ERROR_NOT_READY;L4RemoteOutcome outcome={0};bool active=false,finishing=false;REQUIRE(initialize(&e,*owner,op,admitted,helper));
+ if(!owner || !*owner)return ERROR_INVALID_PARAMETER;Executor e;DWORD error=ERROR_NOT_READY,failure_line=0,recovery_error=0;L4RemoteOutcome outcome={0};bool active=false,finishing=false;REQUIRE(initialize(&e,*owner,op,admitted,helper));
  REQUIRE(setup_remote_completion_prepare(e.journal,e.source,op,&e.completion));REQUIRE(setup_remote_restore_prepare(e.journal,e.source,op,&e.restore));
  WORD ports[2];REQUIRE(BCryptGenRandom(NULL,(PUCHAR)ports,sizeof(ports),BCRYPT_USE_SYSTEM_PREFERRED_RNG)==0);ports[0]=(WORD)(49152+(ports[0]%16384));ports[1]=(WORD)(49152+(ports[1]%16384));if(ports[0]==ports[1])ports[1]=ports[0]==65535?49152:ports[0]+1;REQUIRE(setup_update_candidate_probe(e.journal,admitted->sequence,0,ports[0],ports[1],180000));
  REQUIRE(setup_update_worker_capture_stop(e.journal,admitted->sequence,&e.actors,&e.checks,300000,&e.stop));REQUIRE(setup_update_watch_ready(e.journal,e.stop,e.policy.communication_deadline_utc,60000));
@@ -78,8 +91,13 @@ static DWORD execute(L4Journal** owner,const SetupOperationPlan* op,const L4Work
  REQUIRE(l4_update_state_publish(e.journal,admitted->sequence,e.state.generation,1,e.policy.communication_deadline_utc));active=true;REQUIRE(l4_update_state_read(&e.journal->layout,&e.state));e.forward_end=GetTickCount64()+900000;
  REQUIRE(setup_update_confirm_stop(e.journal,e.stop,&e.actors,&e.checks,budget(&e,300000,true)));
  for(unsigned i=0;i<4;i++)REQUIRE(setup_remote_service_open(e.journal,setup_operation_switch_reference(op,0,i),setup_operation_switch(op,0,i),&e.state,budget(&e,60000,true),&e.services[i]));REQUIRE(setup_service_transaction_open(e.journal,op,e.services,&e.transaction));
- REQUIRE(pair_service(&e,0));REQUIRE(probe(&e,0,&e.mixed));REQUIRE(pair_service(&e,1));REQUIRE(fresh(&e,&e.mixed));REQUIRE(link_done(&e));
- REQUIRE(l4_update_state_publish(e.journal,admitted->sequence,e.state.generation,2,e.policy.supervisor_deadline_utc-(ULONGLONG)e.policy.overhead_ms*10000));REQUIRE(l4_update_state_read(&e.journal->layout,&e.state));e.forward_end=GetTickCount64()+1800000;
+ REQUIRE(pair_service(&e,0));
+ REQUIRE(probe(&e,0,&e.mixed));
+ REQUIRE(pair_service(&e,1));
+ REQUIRE(fresh(&e,&e.mixed));
+ REQUIRE(link_done(&e));
+ REQUIRE(l4_update_state_publish(e.journal,admitted->sequence,e.state.generation,2,e.policy.supervisor_deadline_utc-(ULONGLONG)e.policy.overhead_ms*10000));
+ REQUIRE(l4_update_state_read(&e.journal->layout,&e.state));e.forward_end=GetTickCount64()+1800000;
  for(unsigned i=0;i<4;i++)REQUIRE(setup_remote_service_rebind_state(e.services[i],&e.state,admitted->deadline_utc));REQUIRE(service(&e,2));REQUIRE(probe(&e,2,&e.target));
  REQUIRE(checkpoint(&e));REQUIRE(setup_service_transaction_execute(e.transaction,3,SETUP_SERVICE_ACTION_STOP,&e.state,budget(&e,60000,true)));REQUIRE(config(&e,0));for(unsigned a=2;a<=3;a++)REQUIRE(setup_service_transaction_execute(e.transaction,3,(SetupServiceAction)a,&e.state,budget(&e,60000,true)));REQUIRE(probe(&e,3,&e.target));for(unsigned i=3;i<12;i++)REQUIRE(config(&e,i));
  REQUIRE(checkpoint(&e));bool force_rollback=false;REQUIRE(setup_acceptance_forcepoint(e.journal,op,&force_rollback));if(force_rollback){error=ERROR_CANCELLED;goto done;}
@@ -92,7 +110,8 @@ done:
    L4RemoteOutcome required={0};required.result.result=L4_REMOTE_OUTCOME_RECOVERY_REQUIRED;required.result.error=original;
    setup_remote_outcome_append_bound(e.journal,op,&required,0,NULL,&outcome);cleanup(&e);return original;
   }
-  if(rollback(&e,original,&outcome))error=original;else{L4RemoteOutcome required={0};required.result.result=L4_REMOTE_OUTCOME_RECOVERY_REQUIRED;required.result.error=original;setup_remote_outcome_append_bound(e.journal,op,&required,0,NULL,&outcome);error=original;}}
+  if(rollback(&e,original,&outcome))error=original;else{recovery_error=GetLastError()?GetLastError():ERROR_RECOVERY_FAILURE;L4RemoteOutcome required={0};required.result.result=L4_REMOTE_OUTCOME_RECOVERY_REQUIRED;required.result.error=original;setup_remote_outcome_append_bound(e.journal,op,&required,0,NULL,&outcome);error=original;}}
+ if(error)failure_diagnostic(e.journal,failure_line,error,recovery_error);
  cleanup(&e);return error;
 }
 const SetupWorkerEngine* setup_remote_executor_engine(void){static const SetupWorkerEngine engine={preflight,execute};return &engine;}

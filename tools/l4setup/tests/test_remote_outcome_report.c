@@ -48,6 +48,11 @@ int wmain(void){
     swprintf_s(pf,MAX_PATH,L"%ls\\PF",root);swprintf_s(pd,MAX_PATH,L"%ls\\PD",root);L4Layout layout;CHECK(l4_layout_from_roots(&layout,pf,pd,L"1.13.6")&&l4_layout_prepare(&layout));
     L4Journal* j=NULL;L4RemoteRequest request;SetupOperationPlan op;ULONGLONG proof;BYTE hash[32];L4RemoteOutcome expected={0},out;expected.result.result=L4_REMOTE_OUTCOME_SUCCESS;
     CHECK(start(&layout,150,&j,&request));CHECK(ack(j,&request,false));CHECK(owned(j,&op,&proof,hash,false,102));ULONGLONG before=j->sequence;
+    /* Production worker must retain the original source layout after handoff.
+     * A neutral Known-Folders layout cannot authenticate the source ACK93. */
+    L4Layout original_layout=j->layout,neutral_layout;CHECK(l4_layout_from_roots(&neutral_layout,original_layout.binaries,original_layout.data,L"0.0.0"));
+    j->layout=neutral_layout;CHECK(!setup_remote_outcome_append_bound(j,&op,&expected,proof,hash,&out)&&j->sequence==before);
+    j->layout=original_layout;
     model_system=false;CHECK(!setup_remote_outcome_append_bound(j,&op,&expected,proof,hash,&out)&&j->sequence==before);model_system=true;model_session=1;
     CHECK(!setup_remote_outcome_append_bound(j,&op,&expected,proof,hash,&out)&&j->sequence==before);model_session=0;
     BYTE badhash[32];memcpy(badhash,hash,32);badhash[0]^=1;CHECK(!setup_remote_outcome_append_bound(j,&op,&expected,proof,badhash,&out)&&j->sequence==before);
