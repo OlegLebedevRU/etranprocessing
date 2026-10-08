@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import hashlib
 import hmac
 import json
@@ -66,7 +67,6 @@ class JwtIssuerClient:
         self._aud = settings.jwt_issuer_aud
         self._iss = settings.jwt_issuer_iss
         self._kid = settings.jwt_issuer_kid
-        self._timeout = settings.jwt_issuer_timeout_seconds
         self._inflight: dict[tuple[int, int], asyncio.Future[dict[str, Any]]] = {}
         self._token_cache: dict[tuple[int, int, Any], tuple[dict[str, Any], float]] = {}
 
@@ -113,8 +113,13 @@ class JwtIssuerClient:
         return self._kid
 
     @property
-    def timeout(self) -> float:
-        return self._timeout
+    def timeout(self) -> httpx.Timeout:
+        return httpx.Timeout(
+            connect=settings.jwt_issuer_connect_timeout_seconds,
+            read=settings.jwt_issuer_read_timeout_seconds,
+            write=settings.jwt_issuer_connect_timeout_seconds,
+            pool=settings.jwt_issuer_connect_timeout_seconds,
+        )
 
     @property
     def mock_enabled(self) -> bool:
@@ -334,31 +339,47 @@ class JwtIssuerClient:
         future: asyncio.Future[dict[str, Any]] = loop.create_future()
         self._inflight[inflight_key] = future
 
-        try:
-            result = await self._issue_tokens_with_retry(
-                user_id=user_id,
-                org_id=org_id,
-                role_id=role_id,
-                username=username,
-                role=role,
-                is_superuser=is_superuser,
-                sid=sid,
-                orig_sub=orig_sub,
-            )
-            if settings.jwt_issuer_token_cache_enabled:
-                exp_seconds = float(
-                    result.get("expiresIn")
-                    or result.get("expires_in")
-                    or settings.jwt_expire_minutes * 60
+        async def _produce() -> None:
+            try:
+                result = await self._issue_tokens_with_retry(
+                    user_id=user_id,
+                    org_id=org_id,
+                    role_id=role_id,
+                    username=username,
+                    role=role,
+                    is_superuser=is_superuser,
+                    sid=sid,
+                    orig_sub=orig_sub,
                 )
-                self._token_cache[cache_key] = (result, time.time() + exp_seconds)
-            future.set_result(result)
-            return result
-        except BaseException as exc:
-            future.set_exception(exc)
-            raise
-        finally:
-            self._inflight.pop(inflight_key, None)
+                if settings.jwt_issuer_token_cache_enabled:
+                    exp_seconds = float(
+                        result.get("expiresIn")
+                        or result.get("expires_in")
+                        or settings.jwt_expire_minutes * 60
+                    )
+                    self._token_cache[cache_key] = (result, time.time() + exp_seconds)
+                if not future.done():
+                    future.set_result(result)
+            except Exception as exc:  # noqa: BLE001 - propagate any producer failure to waiters
+                if not future.done():
+                    future.set_exception(exc)
+                    # Surface the exception so an unobserved future is not logged
+                    # as "exception was never retrieved" when all callers left.
+                    with contextlib.suppress(Exception):
+                        future.exception()
+            except asyncio.CancelledError as exc:
+                if not future.done():
+                    future.set_exception(exc)
+                    with contextlib.suppress(Exception):
+                        future.exception()
+                raise
+            finally:
+                self._inflight.pop(inflight_key, None)
+
+        # Producer is shielded from caller cancellation so a dropped login/refresh
+        # does not abort the outbound issuer request (serverless 499).
+        loop.create_task(_produce())
+        return await asyncio.shield(future)
 
     async def _issue_tokens_with_retry(
         self,
@@ -397,20 +418,45 @@ class JwtIssuerClient:
         )
 
         last_error: Exception | None = None
-        for attempt in range(2):
+        deadline = start_time + settings.jwt_issuer_total_timeout_seconds
+        # Retryable gateway codes: 499/408 are client/timeouts on the serverless side
+        # and are safe to retry while the shared HMAC payload stays valid.
+        retryable_statuses = frozenset({408, 429, 499})
+        max_attempts = 2
+        attempt = 0
+        while attempt < max_attempts:
+            attempt += 1
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            per_attempt = httpx.Timeout(
+                connect=min(
+                    settings.jwt_issuer_connect_timeout_seconds, max(remaining, 0.1)
+                ),
+                read=min(settings.jwt_issuer_read_timeout_seconds, remaining),
+                write=min(
+                    settings.jwt_issuer_connect_timeout_seconds, max(remaining, 0.1)
+                ),
+                pool=min(
+                    settings.jwt_issuer_connect_timeout_seconds, max(remaining, 0.1)
+                ),
+            )
             try:
-                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                async with httpx.AsyncClient(timeout=per_attempt) as client:
                     resp = await client.post(self.url, json=payload)
-                    if resp.status_code >= 500:
+                    if (
+                        resp.status_code >= 500
+                        or resp.status_code in retryable_statuses
+                    ):
                         logger.warning(
                             "JWT issuer at %s returned HTTP %s on attempt %d: %s",
                             self.url,
                             resp.status_code,
-                            attempt + 1,
+                            attempt,
                             resp.text,
                         )
-                        if attempt == 0:
-                            await asyncio.sleep(0.5)
+                        if attempt < max_attempts and time.monotonic() + 0.2 < deadline:
+                            await asyncio.sleep(0.2)
                             continue
                         took = time.monotonic() - start_time
                         logger.info(
@@ -464,31 +510,35 @@ class JwtIssuerClient:
                             detail=f"JWT issuer error: {data['error']}",
                         )
                     logger.info(
-                        "JWT issuer at %s successfully issued tokens for user_id=%s org_id=%s took=%.2fs",
+                        "JWT issuer at %s successfully issued tokens for user_id=%s org_id=%s took=%.2fs attempt=%d",
                         self.url,
                         user_id,
                         org_id or 0,
                         took,
+                        attempt,
                     )
                     return data
             except httpx.RequestError as exc:
+                # Includes httpx.TimeoutException (connect/read/write/pool).
                 last_error = exc
                 logger.warning(
-                    "Failed to connect to JWT issuer at %s on attempt %d: %s",
+                    "JWT issuer call to %s failed on attempt %d: %s",
                     self.url,
-                    attempt + 1,
+                    attempt,
                     exc,
                 )
-                if attempt == 0:
-                    await asyncio.sleep(0.5)
+                if attempt < max_attempts and time.monotonic() + 0.2 < deadline:
+                    await asyncio.sleep(0.2)
                     continue
+                break
 
         took = time.monotonic() - start_time
         logger.info(
-            "jwt issuer call user_id=%s org_id=%s took=%.2fs",
+            "jwt issuer call user_id=%s org_id=%s took=%.2fs attempts=%d",
             user_id,
             org_id or 0,
             took,
+            attempt,
         )
         if self.mock_enabled:
             return self._generate_mock_tokens(

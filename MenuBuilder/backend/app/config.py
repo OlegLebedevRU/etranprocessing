@@ -53,7 +53,13 @@ class Settings(BaseSettings):
     jwt_issuer_aud: str = "menubuilder"
     jwt_issuer_iss: str = "external-jwt-issuer"
     jwt_issuer_kid: str = "menubuilder-rs256-key-1"
-    jwt_issuer_timeout_seconds: float = 10.0
+    # Per-attempt HTTP timeouts. read must stay above the Yandex API Gateway /
+    # Cloud Function limit (30s) so the issuer can return a response instead of
+    # the client aborting first (which surfaces as 499 on the serverless side).
+    jwt_issuer_connect_timeout_seconds: float = 3.0
+    jwt_issuer_read_timeout_seconds: float = 32.0
+    # Wall-clock budget for all retry attempts (below default nginx 60s).
+    jwt_issuer_total_timeout_seconds: float = 50.0
     jwt_issuer_mock_enabled: bool = False
     jwt_issuer_token_cache_enabled: bool = False
     session_cleanup_enabled: bool = True

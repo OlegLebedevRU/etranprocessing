@@ -4,6 +4,10 @@
 
 FM uses MQTT navigation and mandatory confirmed close only; legacy PB listing and optional unconfirmed close removed.
 
+### Fixed
+
+- Вызов внешнего JWT issuer больше не обрывается на стороне serverless (HTTP 499) при медленном cold start или отмене login/refresh: read timeout 32 с (выше лимита Yandex 30 с), connect отдельно 3 с, общий бюджет 50 с; producer single-flight защищён от cancel вызывающего; HTTP 499/408/429 и таймауты httpx ретраятся.
+
 ## 2026-10-05 — File manager
 
 Standalone Files in Classic/L4Desk, agent/MQTT preflight, common files lease, metadata BFF and direct S3 transfers up to64MiB with fail-fast cancellation.

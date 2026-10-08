@@ -187,6 +187,111 @@ async def test_jwt_issuer_retry_on_network_error():
 
 
 @pytest.mark.anyio
+async def test_jwt_issuer_retry_on_timeout():
+    """ReadTimeout is retried and succeeds on attempt 2."""
+    client = JwtIssuerClient()
+    client.mock_enabled = False
+    client.secret = "TEST_SECRET"
+
+    call_count = 0
+
+    async def mock_post(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise httpx.ReadTimeout("issuer slow")
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "accessToken": "timeout_retry_token",
+            "refreshToken": "refresh_token",
+        }
+        return mock_resp
+
+    with (
+        patch("httpx.AsyncClient.post", side_effect=mock_post),
+        patch("asyncio.sleep", new_callable=AsyncMock),
+    ):
+        tokens = await client.issue_tokens(user_id=13, org_id=23, role_id=3)
+
+    assert call_count == 2
+    assert tokens["accessToken"] == "timeout_retry_token"
+
+
+@pytest.mark.anyio
+async def test_jwt_issuer_retry_on_499():
+    """HTTP 499 (client closed / gateway abort) is retryable like a transport failure."""
+    client = JwtIssuerClient()
+    client.mock_enabled = False
+    client.secret = "TEST_SECRET"
+
+    call_count = 0
+
+    async def mock_post(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        mock_resp = MagicMock()
+        if call_count == 1:
+            mock_resp.status_code = 499
+            mock_resp.text = "Client Closed Request"
+        else:
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = {
+                "accessToken": "499_retry_token",
+                "refreshToken": "refresh_token",
+            }
+        return mock_resp
+
+    with (
+        patch("httpx.AsyncClient.post", side_effect=mock_post),
+        patch("asyncio.sleep", new_callable=AsyncMock),
+    ):
+        tokens = await client.issue_tokens(user_id=14, org_id=24, role_id=3)
+
+    assert call_count == 2
+    assert tokens["accessToken"] == "499_retry_token"
+
+
+@pytest.mark.anyio
+async def test_caller_cancel_does_not_abort_issuer_request():
+    """Cancelling the login/refresh caller must not cancel the outbound issuer call."""
+    client = JwtIssuerClient()
+    client.mock_enabled = False
+    client.secret = "TEST_SECRET"
+
+    started = asyncio.Event()
+    release = asyncio.Event()
+    call_count = 0
+
+    async def mock_post(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        started.set()
+        await release.wait()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "accessToken": "survivor_token",
+            "refreshToken": "refresh_token",
+        }
+        return mock_resp
+
+    with patch("httpx.AsyncClient.post", side_effect=mock_post):
+        caller = asyncio.create_task(
+            client.issue_tokens(user_id=15, org_id=25, role_id=3)
+        )
+        await started.wait()
+        caller.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await caller
+        release.set()
+        # Allow the shielded producer to finish the HTTP call.
+        await asyncio.sleep(0.05)
+
+    assert call_count == 1
+
+
+@pytest.mark.anyio
 async def test_jwt_issuer_cache_hit_and_miss():
     """Verify in-process token cache hit and miss when jwt_issuer_token_cache_enabled is True."""
     client = JwtIssuerClient()
