@@ -12,4 +12,6 @@ typedef struct {
     bool (*create)(void*,const L4RecoveryTask*);
 } L4RecoveryTaskOps;
 bool l4_recovery_task_check_acl(const wchar_t* sddl,bool folder);
+/* Account names returned by Task Scheduler may be localized. Trust the SID. */
+bool l4_recovery_task_system_account(const wchar_t* user);
 bool l4_recovery_task_run(L4Journal* journal,const L4RecoveryHelper* helper,DWORD overhead_ms,bool arm,const L4RecoveryTaskOps* ops);

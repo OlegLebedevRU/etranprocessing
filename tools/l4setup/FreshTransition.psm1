@@ -244,11 +244,11 @@ function Invoke-L4BaselineRetention($Plan, [string]$Record) {
     try {
         $service = New-Object -ComObject 'Schedule.Service'; $service.Connect(); $folder = $service.GetFolder('\')
         $definition = $service.NewTask(0)
-        $definition.Principal.UserId = 'SYSTEM'; $definition.Principal.LogonType = 5; $definition.Principal.RunLevel = 1
+        $definition.Principal.UserId = 'S-1-5-18'; $definition.Principal.LogonType = 5; $definition.Principal.RunLevel = 1
         $definition.Settings.ExecutionTimeLimit = 'PT2M'; $definition.Settings.AllowDemandStart = $true
         $action = $definition.Actions.Create(0); $action.Path = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
         $action.Arguments = '-NoProfile -NonInteractive -EncodedCommand ' + $encoded
-        $task = $folder.RegisterTaskDefinition($taskName, $definition, 2, 'SYSTEM', $null, 5, 'D:P(A;;FA;;;SY)(A;;FA;;;BA)')
+        $task = $folder.RegisterTaskDefinition($taskName, $definition, 2, 'S-1-5-18', $null, 5, 'D:P(A;;FA;;;SY)(A;;FA;;;BA)')
         $null = $task.Run($null)
         $deadline = [DateTime]::UtcNow.AddSeconds(130)
         while (-not (Test-Path -LiteralPath $result)) {

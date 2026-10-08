@@ -8,8 +8,19 @@
 побайтово одинаковый технический релиз не вводится как отдельная архитектура.
 Первый локальный инженерный запуск использует подписанные X/Y без опубликованного
 перехода; этот допуск недоступен через RPC. Реальный producer приёмки и локальный
-entry ещё не готовы, поэтому RPC7031 закрыт. Ниже исторические checkpoints;
-они не отменяют это решение и не доказывают E2E.
+entry реализованы и прошли native gates; фактическая приёмка перехода ещё не
+выполнена, поэтому публичный допуск RPC7031 остаётся закрыт. Ниже исторические
+checkpoints; они не отменяют это решение и не доказывают E2E.
+
+2026-10-08 runtime: после исправления producer защищённых входных файлов (PR48,
+main f256b80) опубликован signed candidate1.13.13 и успешно установлен на773.
+Fresh operation a18cb6c2-245a-4fdf-b1cc-599c14b4f261 committed/error0; реальный
+updater-active содержит1.13.13/x86/этот origin. Все четыре службы Running/System,
+IoT7003 f13370f2-66b8-414e-a8a3-f7109a43a66c completed/200/pong. Mosquitto log
+имеет Users ReadAndExecute и доступен для shared read; конфиги/операции остаются
+защищены. Target1.13.14 проходит полный конвейер на том же reviewed source.
+Ещё требуются forced rollback, normal transition, signed catalog admission и
+реальный7031 с7032/event76. См. [актуальный handoff](../tasks/active/2026-10-08-rpc7031-readiness.md).
 
 
 2026-10-07 admitted worker signed pre-stop: read-only SYSTEM ticket/receipt/parent/
