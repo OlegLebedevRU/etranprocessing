@@ -45,7 +45,7 @@ override or extra RPC evidence schema was added.
 
 ## Verification and remaining work
 
-Full l4release187 passed; Ruff check/format PASS; Pyright0 errors. Synthetic RSA
+Full l4release200 passed; Ruff check/format PASS; Pyright0 errors. Synthetic RSA
 seals use ephemeral fixture keys. Native authority/SDK/SCM in Python composition
 fixtures are explicitly modeled. Actual Popen timeout policy has a regression
 test proving no kill. SDK actual native profile/KnownFolder query passed readonly.
@@ -54,3 +54,13 @@ No actual signing/publication/UAC/SCM/deployment/stand acceptance was invoked he
 Real two-run native acceptance, actual protected export integration, GAR mutable
 pair publication and subsequent RPC/event/live checks remain parent-owned gates.
 No MB/PB/legacy code or tests, no secret values read, no frozen helper changes.
+
+Source-cleanliness follow-up: shared read-only pipeline.source_status uses NUL
+porcelain and both rename paths; it excludes only configured generated_inputs and
+bin/obj/dist/__pycache__ path segments, with required_assets always retained. The
+same classifier backs input_snapshot. Bootstrap-seal and catalog cleanliness use
+it; release initial ALL-Git clean_at_start remains strict. Thirteen actual Git
+regressions verify generated/tracked outputs versus .inc/Python/required binary
+assets/renames. Current prepare7/dist reports were not changed. This source fix
+changes the input digest and requires a newly reviewed clean checkpoint before
+signing; it must not be spliced into an existing prepared report.

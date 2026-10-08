@@ -14,7 +14,7 @@ from .catalog_registry import CatalogRegistry, digest
 from .catalog_state import protect_state, state_directory
 from .common import ReleaseError, atomic_bytes, atomic_json, version_value
 from .metadata import key_id, load_public_key, load_signing_key, verify_bytes, verify_embedded_key
-from .pipeline import git, input_snapshot, read_config
+from .pipeline import git, input_snapshot, read_config, source_status
 from .runner import workspace_lock
 
 CURRENT = "l4tools/metadata/catalog.json"
@@ -33,7 +33,7 @@ def _checkpoint(root: Path) -> dict:
     config = read_config(root)
     return {
         "git_sha": git(root, "rev-parse", "HEAD"),
-        "clean": not bool(git(root, "status", "--porcelain", "--", *config["source_paths"])),
+        "clean": not bool(source_status(root, config)),
         "inputs_sha256": digest(canonical(input_snapshot(root, config))),
     }
 

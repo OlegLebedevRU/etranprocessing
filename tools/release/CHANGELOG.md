@@ -32,6 +32,8 @@
 
 - Expanded Setup gates retain all checks with a 900-second ceiling per
   architecture; the previous 300-second ceiling was below observed gate duration.
+- Supervisor unified build retains communication tests with a 600-second ceiling;
+  its measured build exceeded the former 300-second allowance.
 
 - `tools/build_dist.cmd` delegates ordinary preparation to the unified pipeline.
 - Automatic signing reads owner-approved `sw_sign.env`; manual signing is optional.

@@ -267,7 +267,7 @@ copy /y bin\x86\test_communication_scm.exe bin\test_communication_scm.exe >nul
 exit /b %errorlevel%
 
 :do_scm_test
-cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /WX /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /Foobj\%1\ tests\test_communication_scm.c ..\l4common\service_switch.c ..\l4common\communication_boot.c ..\l4common\communication_worker.c ..\l4common\recovery_plan.c ..\l4common\recovery_store.c ..\l4common\communication_plan.c ..\l4common\communication_store.c ..\l4common\communication_recovery.c ..\l4common\journal_codec.c ..\l4common\bootstrap.c ..\l4common\release.c src\miniz.c ..\l4common\config_transaction.c ..\l4common\update_state.c ..\l4common\update_state_store.c ..\l4common\layout.c ..\l4common\journal.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\%1\test_communication_scm.exe advapi32.lib crypt32.lib wintrust.lib bcrypt.lib ole32.lib shlwapi.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /WX /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /Foobj\%1\ tests\test_communication_scm.c ..\l4common\service_switch.c ..\l4common\communication_boot.c ..\l4common\communication_worker.c ..\l4common\recovery_plan.c ..\l4common\recovery_store.c ..\l4common\communication_plan.c ..\l4common\communication_store.c ..\l4common\communication_recovery.c ..\l4common\journal_codec.c ..\l4common\bootstrap.c ..\l4common\bootstrap_history.c ..\l4common\release.c src\miniz.c ..\l4common\config_transaction.c ..\l4common\update_state.c ..\l4common\update_state_store.c ..\l4common\layout.c ..\l4common\journal.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\%1\test_communication_scm.exe advapi32.lib crypt32.lib wintrust.lib bcrypt.lib ole32.lib shlwapi.lib"
 if errorlevel 1 exit /b 1
 if /i "%1"=="x86" (
     copy /y bin\x86\test_communication_scm.exe bin\test_communication_scm.exe >nul
@@ -288,7 +288,7 @@ if errorlevel 1 exit /b 1
 call :do_scm_test %1
 if errorlevel 1 exit /b 1
 
-cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /WX /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /Foobj\%1\ ..\l4common\tests\test_communication_boot.c ..\l4common\recovery_plan.c ..\l4common\recovery_store.c ..\l4common\communication_plan.c ..\l4common\communication_store.c ..\l4common\communication_recovery.c ..\l4common\journal_codec.c ..\l4common\bootstrap.c ..\l4common\release.c src\miniz.c ..\l4common\config_transaction.c ..\l4common\update_state.c ..\l4common\update_state_store.c ..\l4common\layout.c ..\l4common\journal.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\%1\test_communication_boot.exe advapi32.lib crypt32.lib wintrust.lib bcrypt.lib ole32.lib shlwapi.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /WX /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /Foobj\%1\ ..\l4common\tests\test_communication_boot.c ..\l4common\recovery_plan.c ..\l4common\recovery_store.c ..\l4common\communication_plan.c ..\l4common\communication_store.c ..\l4common\communication_recovery.c ..\l4common\journal_codec.c ..\l4common\bootstrap.c ..\l4common\bootstrap_history.c ..\l4common\release.c src\miniz.c ..\l4common\config_transaction.c ..\l4common\update_state.c ..\l4common\update_state_store.c ..\l4common\layout.c ..\l4common\journal.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\%1\test_communication_boot.exe advapi32.lib crypt32.lib wintrust.lib bcrypt.lib ole32.lib shlwapi.lib"
 if errorlevel 1 exit /b 1
 bin\%1\test_communication_boot.exe
 if errorlevel 1 exit /b 1
@@ -296,7 +296,7 @@ cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /WX /utf-
 if errorlevel 1 exit /b 1
 bin\%1\test_communication_signals.exe
 if errorlevel 1 exit /b 1
-cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /WX /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /Foobj\%1\ tests\test_communication_watch.c ..\l4common\communication_plan.c ..\l4common\communication_store.c ..\l4common\communication_recovery.c ..\l4common\journal_codec.c ..\l4common\bootstrap.c ..\l4common\release.c src\miniz.c ..\l4common\config_transaction.c ..\l4common\update_state.c ..\l4common\update_state_store.c ..\l4common\layout.c ..\l4common\journal.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\%1\test_communication_watch.exe advapi32.lib crypt32.lib wintrust.lib bcrypt.lib ole32.lib shlwapi.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /WX /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /Foobj\%1\ tests\test_communication_watch.c ..\l4common\communication_plan.c ..\l4common\communication_store.c ..\l4common\communication_recovery.c ..\l4common\journal_codec.c ..\l4common\bootstrap.c ..\l4common\bootstrap_history.c ..\l4common\release.c src\miniz.c ..\l4common\config_transaction.c ..\l4common\update_state.c ..\l4common\update_state_store.c ..\l4common\layout.c ..\l4common\journal.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\%1\test_communication_watch.exe advapi32.lib crypt32.lib wintrust.lib bcrypt.lib ole32.lib shlwapi.lib"
 if errorlevel 1 exit /b 1
 bin\%1\test_communication_watch.exe
 exit /b %errorlevel%

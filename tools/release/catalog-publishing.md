@@ -13,6 +13,10 @@ uv run --locked python -m l4release catalog-publish --plan <reviewed-plan.json> 
 
 The second command repeats admission and compares the entire reviewed plan against
 current evidence, public artifacts, catalog ancestry and a clean source checkpoint.
+Source cleanliness shares the input-snapshot classification: configured generated
+inputs and bin/obj/dist/__pycache__ segments are excluded, while required assets
+remain sources even when binary. Renames check both paths. Initial release
+clean_at_start still checks all Git changes before the build begins.
 Only then does it load the existing encrypted metadata signing key. It uses the
 existing `AR_GENERIC_KEY_ID` / `AR_GENERIC_KEY_SECRET` multipart PUT directory API.
 The metadata public key must match the compiled owner key; no new secret is needed.

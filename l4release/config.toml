@@ -27,7 +27,7 @@ name = "l4superv"
 kind = "cmd"
 cwd = "tools/l4superv"
 args = ["build.cmd", "all"]
-timeout = 300
+timeout = 600
 outputs = ["tools/l4superv/bin/x86/l4superv.exe", "tools/l4superv/bin/x64/l4superv.exe", "tools/l4superv/bin/l4superv.exe"]
 
 [[steps]]

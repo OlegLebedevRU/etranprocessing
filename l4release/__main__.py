@@ -124,7 +124,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.command == "bootstrap-seal":
                 from .bootstrap import seal_bootstrap
                 from .metadata import load_signing_key
-                from .pipeline import git, input_snapshot, publisher_module
+                from .pipeline import input_snapshot, publisher_module, source_status
                 from .runner import workspace_lock
 
                 output = args.output.resolve()
@@ -134,7 +134,7 @@ def main(argv: list[str] | None = None) -> int:
                 if not pfx.is_file() or pfx.resolve().is_relative_to(root):
                     raise ReleaseError("SW_SIGN_PFX must locate an external signing certificate")
                 with workspace_lock(pipeline.dist / ".release" / "workspace.lock"):
-                    if git(root, "status", "--porcelain", "--", *pipeline.config["source_paths"]):
+                    if source_status(root, pipeline.config):
                         raise ReleaseError(
                             "Bootstrap sealing requires a clean reviewed source checkpoint"
                         )

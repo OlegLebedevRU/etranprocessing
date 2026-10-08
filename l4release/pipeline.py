@@ -80,6 +80,56 @@ def git(root: Path, *args: str) -> str:
     return subprocess.check_output(["git", "-C", str(root), *args], encoding="utf-8").strip()
 
 
+def _source_input(name: str, config: dict) -> bool:
+    if name in config["required_assets"]:
+        return True
+    return (
+        bool(name)
+        and name not in config["generated_inputs"]
+        and not any(
+            part.lower() in ("bin", "obj", "dist", "__pycache__") for part in Path(name).parts
+        )
+    )
+
+
+def source_status(root: Path, config: dict) -> list[str]:
+    """Read-only source changes; generated build outputs never hide required assets."""
+    output = subprocess.check_output(
+        [
+            "git",
+            "-C",
+            str(root),
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+            "--",
+            *config["source_paths"],
+            *config["required_assets"],
+        ],
+        encoding="utf-8",
+    )
+    records = output.split("\0")
+    changes = []
+    index = 0
+    while index < len(records) - 1:
+        record = records[index]
+        index += 1
+        if len(record) < 4 or record[2] != " ":
+            raise ReleaseError("Malformed source status output")
+        names = [record[3:]]
+        # -z rename/copy records contain destination then original, both relevant.
+        if "R" in record[:2] or "C" in record[:2]:
+            if index >= len(records) - 1 or not records[index]:
+                raise ReleaseError("Incomplete source rename status")
+            names.append(records[index])
+            index += 1
+        changes.extend(name for name in names if _source_input(name, config))
+    if records[-1]:
+        raise ReleaseError("Unterminated source status output")
+    return sorted(set(changes))
+
+
 def input_snapshot(root: Path, config: dict) -> dict[str, str]:
     paths = git(
         root,
@@ -91,16 +141,9 @@ def input_snapshot(root: Path, config: dict) -> dict[str, str]:
         "--",
         *config["source_paths"],
     ).split("\0")
-    excluded = set(config["generated_inputs"])
     result = {}
     for name in sorted(set(paths) | set(config["required_assets"])):
-        if (
-            not name
-            or name in excluded
-            or any(
-                part.lower() in ("bin", "obj", "dist", "__pycache__") for part in Path(name).parts
-            )
-        ):
+        if not _source_input(name, config):
             continue
         path = contained(root, name)
         result[name] = file_hash(path) if path.is_file() else "missing"
