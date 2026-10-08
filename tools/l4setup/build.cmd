@@ -32,6 +32,7 @@ if not defined VS_DEV_CMD (
 if not exist bin mkdir bin
 if not exist obj mkdir obj
 if /i "%TARGET_CMD%"=="test-scm" goto :run_scm_tests
+if /i "%TARGET_CMD%"=="test-bundle-copy" goto :run_bundle_copy_tests
 if /i "%TARGET_CMD%"=="test" goto :run_tests
 if /i "%TARGET_CMD%"=="tests" goto :run_tests
 if "%TARGET_CMD%"=="" set "TARGET_CMD=all"
@@ -62,4 +63,10 @@ exit /b %errorlevel%
 call run_tests.cmd x86 scm
 if errorlevel 1 exit /b 1
 call run_tests.cmd x64 scm
+exit /b %errorlevel%
+
+:run_bundle_copy_tests
+call run_tests.cmd x86 bundle-copy
+if errorlevel 1 exit /b 1
+call run_tests.cmd x64 bundle-copy
 exit /b %errorlevel%

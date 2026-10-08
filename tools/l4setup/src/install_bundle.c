@@ -3,6 +3,7 @@
 #include "recovery_receipt.h"
 #include "../../l4common/journal_internal.h"
 #include <bcrypt.h>
+#include <sddl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -63,13 +64,15 @@ bool setup_bundle_self(const SetupInstallBundle* b,const wchar_t* self){
     HANDLE file=CreateFileW(self,GENERIC_READ|READ_CONTROL,FILE_SHARE_READ,NULL,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,NULL);if(file==INVALID_HANDLE_VALUE)return false;
     bool ok=held_hash(file,asset->size,asset->sha256) && setup_signed_executable_policy(file,self,setup_root_publisher(b->root),b->policy);DWORD code=GetLastError();CloseHandle(file);return ok?true:fail(code);
 }
-static bool copy_held(HANDLE source,const wchar_t* target,ULONGLONG size,const BYTE digest[32]){
-    HANDLE dest=CreateFileW(target,GENERIC_READ|GENERIC_WRITE|READ_CONTROL,FILE_SHARE_READ,NULL,CREATE_NEW,FILE_FLAG_OPEN_REPARSE_POINT,NULL);
+static bool private_destination(HANDLE dest){BYTE* sd=NULL;DWORD size=0;bool ok=l4_store_security(dest,true,&sd,&size);free(sd);return ok;}
+static bool copy_held(HANDLE source,const wchar_t* target,ULONGLONG size,const BYTE digest[32],bool private_dest){
+    PSECURITY_DESCRIPTOR sd=NULL;if(private_dest&&!ConvertStringSecurityDescriptorToSecurityDescriptorW(L"D:P(A;;FA;;;SY)(A;;FA;;;BA)",SDDL_REVISION_1,&sd,NULL))return false;
+    SECURITY_ATTRIBUTES attributes={sizeof(attributes),sd,FALSE};HANDLE dest=CreateFileW(target,GENERIC_READ|GENERIC_WRITE|READ_CONTROL,FILE_SHARE_READ,private_dest?&attributes:NULL,CREATE_NEW,FILE_FLAG_OPEN_REPARSE_POINT,NULL);DWORD opened_error=GetLastError();if(sd)LocalFree(sd);SetLastError(opened_error);
     if(dest==INVALID_HANDLE_VALUE){if(GetLastError()!=ERROR_FILE_EXISTS)return false;dest=CreateFileW(target,GENERIC_READ|READ_CONTROL,FILE_SHARE_READ,NULL,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,NULL);
-        if(dest==INVALID_HANDLE_VALUE)return false;bool ok=held_hash(dest,size,digest);DWORD code=GetLastError();CloseHandle(dest);return ok?true:fail(code);}
+        if(dest==INVALID_HANDLE_VALUE)return false;bool ok=(!private_dest||private_destination(dest))&&held_hash(dest,size,digest);DWORD code=GetLastError();CloseHandle(dest);return ok?true:fail(code);}
     LARGE_INTEGER zero={0};BYTE buffer[32768];DWORD read=0,written=0;ULONGLONG total=0;bool ok=SetFilePointerEx(source,zero,NULL,FILE_BEGIN)!=0;
     while(ok){ok=ReadFile(source,buffer,sizeof(buffer),&read,NULL)!=0;if(!ok || !read)break;total+=read;ok=total<=size && WriteFile(dest,buffer,read,&written,NULL) && written==read;}
-    if(ok)ok=total==size && FlushFileBuffers(dest) && held_hash(dest,size,digest);DWORD code=GetLastError();CloseHandle(dest);return ok?true:fail(code?code:ERROR_CRC);
+    if(ok)ok=total==size && FlushFileBuffers(dest) && (!private_dest||private_destination(dest)) && held_hash(dest,size,digest);DWORD code=GetLastError();CloseHandle(dest);return ok?true:fail(code?code:ERROR_CRC);
 }
 bool setup_bundle_stage(const SetupInstallBundle* b,L4Journal* j,wchar_t host[MAX_PATH]){
     if(!b || !j || j->sequence || j->poisoned || !host)return fail(ERROR_INVALID_PARAMETER);const wchar_t* operation=wcsrchr(j->directory,L'\\');wchar_t relative[MAX_PATH],inputs[MAX_PATH];
@@ -78,11 +81,11 @@ bool setup_bundle_stage(const SetupInstallBundle* b,L4Journal* j,wchar_t host[MA
     for(unsigned i=0;i<(b->bootstrap_ready?BUNDLE_FILES:7u);i++){wchar_t target[MAX_PATH];ULONGLONG size=0;BYTE digest[32];
         if(swprintf_s(target,MAX_PATH,L"%ls\\%ls",inputs,b->names[i])<0)return fail(ERROR_FILENAME_EXCED_RANGE);
         if(i<6 || i==7 || i==8){size=b->sizes[i];if(!l4_store_hash(b->documents[i],b->sizes[i],NULL,0,digest))return false;}else if(i==9){size=b->bootstrap.helper.size;memcpy(digest,b->bootstrap.helper.sha256,32);}else{const SetupRootAsset* a=setup_root_asset(b->root,2);size=a->size;memcpy(digest,a->sha256,32);}
-        if(!copy_held(b->files[i],target,size,digest))return false;
+        if(!copy_held(b->files[i],target,size,digest,true))return false;
     }
     wchar_t self[MAX_PATH];if(!GetModuleFileNameW(NULL,self,MAX_PATH) || !setup_bundle_self(b,self))return false;
     HANDLE input=CreateFileW(self,GENERIC_READ|READ_CONTROL,FILE_SHARE_READ,NULL,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,NULL);if(input==INVALID_HANDLE_VALUE)return false;
-    const SetupRootAsset* a=setup_root_installer(b->root);bool ok=copy_held(input,host,a->size,a->sha256);DWORD code=GetLastError();CloseHandle(input);return ok?setup_bundle_self(b,host):fail(code);
+    const SetupRootAsset* a=setup_root_installer(b->root);bool ok=copy_held(input,host,a->size,a->sha256,false);DWORD code=GetLastError();CloseHandle(input);return ok?setup_bundle_self(b,host):fail(code);
 }
 
 bool setup_bundle_cache(const SetupInstallBundle* b,const L4Layout* layout,L4CachedPackage** result){
