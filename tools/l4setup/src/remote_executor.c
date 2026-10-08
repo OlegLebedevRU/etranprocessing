@@ -91,8 +91,13 @@ static DWORD execute(L4Journal** owner,const SetupOperationPlan* op,const L4Work
  REQUIRE(l4_update_state_publish(e.journal,admitted->sequence,e.state.generation,1,e.policy.communication_deadline_utc));active=true;REQUIRE(l4_update_state_read(&e.journal->layout,&e.state));e.forward_end=GetTickCount64()+900000;
  REQUIRE(setup_update_confirm_stop(e.journal,e.stop,&e.actors,&e.checks,budget(&e,300000,true)));
  for(unsigned i=0;i<4;i++)REQUIRE(setup_remote_service_open(e.journal,setup_operation_switch_reference(op,0,i),setup_operation_switch(op,0,i),&e.state,budget(&e,60000,true),&e.services[i]));REQUIRE(setup_service_transaction_open(e.journal,op,e.services,&e.transaction));
- REQUIRE(pair_service(&e,0));REQUIRE(probe(&e,0,&e.mixed));REQUIRE(pair_service(&e,1));REQUIRE(fresh(&e,&e.mixed));REQUIRE(link_done(&e));
- REQUIRE(l4_update_state_publish(e.journal,admitted->sequence,e.state.generation,2,e.policy.supervisor_deadline_utc-(ULONGLONG)e.policy.overhead_ms*10000));REQUIRE(l4_update_state_read(&e.journal->layout,&e.state));e.forward_end=GetTickCount64()+1800000;
+ REQUIRE(pair_service(&e,0));
+ REQUIRE(probe(&e,0,&e.mixed));
+ REQUIRE(pair_service(&e,1));
+ REQUIRE(fresh(&e,&e.mixed));
+ REQUIRE(link_done(&e));
+ REQUIRE(l4_update_state_publish(e.journal,admitted->sequence,e.state.generation,2,e.policy.supervisor_deadline_utc-(ULONGLONG)e.policy.overhead_ms*10000));
+ REQUIRE(l4_update_state_read(&e.journal->layout,&e.state));e.forward_end=GetTickCount64()+1800000;
  for(unsigned i=0;i<4;i++)REQUIRE(setup_remote_service_rebind_state(e.services[i],&e.state,admitted->deadline_utc));REQUIRE(service(&e,2));REQUIRE(probe(&e,2,&e.target));
  REQUIRE(checkpoint(&e));REQUIRE(setup_service_transaction_execute(e.transaction,3,SETUP_SERVICE_ACTION_STOP,&e.state,budget(&e,60000,true)));REQUIRE(config(&e,0));for(unsigned a=2;a<=3;a++)REQUIRE(setup_service_transaction_execute(e.transaction,3,(SetupServiceAction)a,&e.state,budget(&e,60000,true)));REQUIRE(probe(&e,3,&e.target));for(unsigned i=3;i<12;i++)REQUIRE(config(&e,i));
  REQUIRE(checkpoint(&e));bool force_rollback=false;REQUIRE(setup_acceptance_forcepoint(e.journal,op,&force_rollback));if(force_rollback){error=ERROR_CANCELLED;goto done;}
