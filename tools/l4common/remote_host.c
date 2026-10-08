@@ -174,10 +174,12 @@ bool l4_remote_host_observe(const L4Layout* layout,const wchar_t* operation,DWOR
 /* An ordinary RPC must never borrow a staged owner-local trial purpose. UUID
  * knowledge is not authority. Check every fixed sidecar under original lock;
  * absence requires held private ancestry and exact FILE_NOT_FOUND. */
-static bool no_local_purpose(L4Journal* j){L4FileFence fence={0};if(!j||!j->lock||j->lock==INVALID_HANDLE_VALUE||!l4_store_pin(j->directory,j->layout.operations,true,&fence))return false;
- const wchar_t* leaves[]={L"acceptance.local",L"acceptance.catalog.json",L"acceptance.catalog.json.sig",L"acceptance.authorization.json",L"acceptance.authorization.json.sig"};bool ok=true;DWORD error=ERROR_ACCESS_DENIED;
+static bool no_local_purpose(L4Journal* j){L4FileFence ancestry={0},fence={0};if(!j||!j->lock||j->lock==INVALID_HANDLE_VALUE)return false;
+ bool ok=l4_store_pin(j->directory,j->layout.data,false,&ancestry)&&l4_store_pin(j->directory,j->directory,true,&fence);DWORD error=GetLastError();
+ if(!ok){l4_store_unpin(&fence);l4_store_unpin(&ancestry);return fail(error?error:ERROR_ACCESS_DENIED);}
+ const wchar_t* leaves[]={L"acceptance.local",L"acceptance.catalog.json",L"acceptance.catalog.json.sig",L"acceptance.authorization.json",L"acceptance.authorization.json.sig"};error=ERROR_ACCESS_DENIED;
  for(unsigned i=0;i<5;i++){wchar_t path[MAX_PATH];if(swprintf_s(path,MAX_PATH,L"%ls\\%ls",j->directory,leaves[i])<0){ok=false;error=ERROR_FILENAME_EXCED_RANGE;break;}DWORD attributes=GetFileAttributesW(path);if(attributes!=INVALID_FILE_ATTRIBUTES){ok=false;break;}DWORD e=GetLastError();if(e!=ERROR_FILE_NOT_FOUND){ok=false;error=e;break;}}
- l4_store_unpin(&fence);return ok?true:fail(error);
+ l4_store_unpin(&fence);l4_store_unpin(&ancestry);return ok?true:fail(error);
 }
 static bool launch(L4Journal** journal,const char* arch,DWORD timeout,L4RemoteHost** output,L4RemoteHostReceipt* receipt,bool local){if(output)*output=NULL;if(receipt)memset(receipt,0,sizeof(*receipt));
     if(!journal || !*journal || !output || !receipt || !timeout || timeout>300000)return fail(ERROR_INVALID_PARAMETER);ULONGLONG end=GetTickCount64()+timeout;L4Journal* j=*journal;L4RemoteRequest request={0};

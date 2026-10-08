@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-struct L4ActiveUpdater {L4Layout roots;L4ActiveUpdaterInfo info;wchar_t path[MAX_PATH];HANDLE pointer,image,root,signature;L4FileFence state,inputs,installer;L4JournalReader* history;};
+struct L4ActiveUpdater {L4Layout roots;L4ActiveUpdaterInfo info;wchar_t path[MAX_PATH];HANDLE pointer,image,root,signature;L4FileFence state,ancestry,inputs,installer;L4JournalReader* history;};
 static bool fail(DWORD code){SetLastError(code);return false;}
 static bool any(const BYTE* b){BYTE v=0;for(unsigned i=0;i<32;i++)v|=b[i];return v!=0;}
 static bool uuid(const char* s){if(!s||strlen(s)!=36)return false;bool nz=false;for(unsigned i=0;i<36;i++){
@@ -71,6 +71,11 @@ static bool root_claim(L4ActiveUpdater* a,const BYTE* bytes,DWORD size,const BYT
  if(d!=descriptor_size||s!=detached_size||!l4_store_hash(descriptor,d,NULL,0,actual)||memcmp(actual,descriptor_sha,32)||!l4_store_hash(descriptor+d,s,NULL,0,actual)||memcmp(actual,detached_sha,32)||
   !l4_metadata_verify_trusted(descriptor,d,descriptor+d,s,actual)||memcmp(actual,descriptor_sha,32))return fail(ERROR_CRC);return true;
 }
+static bool pin_inputs(L4ActiveUpdater* a,const L4Journal* view,wchar_t input[MAX_PATH]){
+ /* Public read on ProgramData ancestry is separate from private operation
+  * inputs. Both fences stay held through metadata/image admission. */
+ return swprintf_s(input,MAX_PATH,L"%ls\\inputs",view->directory)>0&&l4_store_pin(view->directory,a->roots.data,false,&a->ancestry)&&l4_store_pin(input,view->directory,true,&a->inputs);
+}
 static bool authenticate_history(L4ActiveUpdater* a,L4Journal* view){History h={0};if(!l4_journal_replay(view,records,&h)||!h.fresh||!h.bootstrap||h.bootstrap>=h.fresh)return fail(ERROR_INVALID_DATA);
  L4BootstrapPlan plan;bool committed=false,aborted=false;if(!l4_bootstrap_load(view,h.bootstrap,&plan)||!l4_bootstrap_terminal(view,h.bootstrap,&committed,&aborted)||!committed||aborted)return fail(ERROR_INVALID_DATA);
  const wchar_t* tail=wcsrchr(plan.layout.release,L'\\');char selected[32];if(!tail||!WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,tail+1,-1,selected,32,NULL,NULL)||strcmp(selected,a->info.version))return fail(ERROR_REVISION_MISMATCH);
@@ -85,13 +90,13 @@ static bool authenticate_history(L4ActiveUpdater* a,L4Journal* view){History h={
     (new_type==REG_SZ||new_type==REG_EXPAND_SZ)&&new_type==(old_type?old_type:REG_EXPAND_SZ)&&wcsnlen_s((wchar_t*)(path+24+old_size),new_size/2)==new_size/2-1;
   }free(path);
  }
- wchar_t input[MAX_PATH];if(ok)ok=swprintf_s(input,MAX_PATH,L"%ls\\inputs",view->directory)>0&&l4_store_pin(input,a->roots.data,true,&a->inputs);
+ wchar_t input[MAX_PATH];if(ok)ok=pin_inputs(a,view,input);
  if(ok){a->root=open_fixed(input,L"l4tools-release.json");a->signature=open_fixed(input,L"l4tools-release.json.sig");ok=a->root!=INVALID_HANDLE_VALUE&&a->signature!=INVALID_HANDLE_VALUE&&read_bytes(a->root,65535,&root,&rn)&&read_bytes(a->signature,384,&signature,&sn)&&root_claim(a,root,rn,signature,sn,receipt,n);}
  free(receipt);free(root);free(signature);if(!ok)return false;wchar_t installer[MAX_PATH];if(swprintf_s(installer,MAX_PATH,L"%ls\\setup\\%hs",a->roots.binaries,a->info.version)<0)return fail(ERROR_FILENAME_EXCED_RANGE);
  if(!l4_store_pin(installer,a->roots.binaries,false,&a->installer)||swprintf_s(a->path,MAX_PATH,L"%ls\\l4setup.exe",installer)<0)return false;
  a->image=open_fixed(installer,L"l4setup.exe");return a->image!=INVALID_HANDLE_VALUE&&held_image(a);
 }
-void l4_active_updater_close(L4ActiveUpdater* a){if(!a)return;DWORD error=GetLastError();HANDLE files[]={a->pointer,a->image,a->root,a->signature};for(unsigned i=0;i<4;i++)if(files[i]&&files[i]!=INVALID_HANDLE_VALUE)CloseHandle(files[i]);l4_store_unpin(&a->state);l4_store_unpin(&a->inputs);l4_store_unpin(&a->installer);l4_journal_reader_close(a->history);free(a);SetLastError(error);}
+void l4_active_updater_close(L4ActiveUpdater* a){if(!a)return;DWORD error=GetLastError();HANDLE files[]={a->pointer,a->image,a->root,a->signature};for(unsigned i=0;i<4;i++)if(files[i]&&files[i]!=INVALID_HANDLE_VALUE)CloseHandle(files[i]);l4_store_unpin(&a->state);l4_store_unpin(&a->inputs);l4_store_unpin(&a->ancestry);l4_store_unpin(&a->installer);l4_journal_reader_close(a->history);free(a);SetLastError(error);}
 bool l4_active_updater_open_fixed(const L4Layout* roots,L4ActiveUpdater** out){if(out)*out=NULL;if(!out||!system_roots(roots))return false;
  L4ActiveUpdater* a=calloc(1,sizeof(*a));if(!a)return fail(ERROR_NOT_ENOUGH_MEMORY);a->roots=*roots;BYTE* pointer=NULL;DWORD n=0;
  bool ok=l4_store_pin(roots->state,roots->data,false,&a->state);if(ok){a->pointer=open_fixed(roots->state,L"updater-active.json");ok=a->pointer!=INVALID_HANDLE_VALUE&&read_bytes(a->pointer,512,&pointer,&n)&&l4_active_updater_decode(pointer,n,&a->info);}free(pointer);

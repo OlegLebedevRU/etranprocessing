@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <string.h>
 #define INTENT_SIZE 320u
-struct SetupAcceptancePin {L4Journal* owner;const L4JournalReader* reader;L4Layout layout;wchar_t directory[MAX_PATH];L4FileFence fence;HANDLE files[5];BYTE intent[INTENT_SIZE],*catalog,*signature,*authorization,*authorization_signature;DWORD catalog_size,signature_size,authorization_size,authorization_signature_size;L4Catalog* parsed;SetupAcceptanceFacts facts;bool bound;};
+struct SetupAcceptancePin {L4Journal* owner;const L4JournalReader* reader;L4Layout layout;wchar_t directory[MAX_PATH];L4FileFence ancestry,fence;HANDLE files[5];BYTE intent[INTENT_SIZE],*catalog,*signature,*authorization,*authorization_signature;DWORD catalog_size,signature_size,authorization_size,authorization_signature_size;L4Catalog* parsed;SetupAcceptanceFacts facts;bool bound;};
 static bool fail(DWORD e){SetLastError(e);return false;}
 static ULONGLONG utc(void){FILETIME t;GetSystemTimeAsFileTime(&t);return ((ULONGLONG)t.dwHighDateTime<<32)|t.dwLowDateTime;}
 static bool primary_system(void){HANDLE thread=NULL,token=NULL;BYTE user[sizeof(TOKEN_USER)+SECURITY_MAX_SID_SIZE];DWORD n=0,session=~0u;TOKEN_TYPE type=TokenImpersonation;
@@ -53,10 +53,11 @@ static bool read_file(const wchar_t* path,DWORD maximum,bool private,HANDLE* hel
  BY_HANDLE_FILE_INFORMATION info;FILE_STREAM_INFO streams[128];LARGE_INTEGER length={0};BYTE* sd=NULL;DWORD sd_size=0;bool ok=GetFileInformationByHandle(*held,&info)&&info.nNumberOfLinks==1&&!(info.dwFileAttributes&(FILE_ATTRIBUTE_REPARSE_POINT|FILE_ATTRIBUTE_DIRECTORY))&&GetFileInformationByHandleEx(*held,FileStreamInfo,streams,sizeof(streams))&&!streams[0].NextEntryOffset&&streams[0].StreamNameLength==14&&!memcmp(streams[0].StreamName,L"::$DATA",14)&&GetFileSizeEx(*held,&length)&&length.QuadPart>0&&length.QuadPart<=maximum;
  if(ok&&private)ok=l4_store_security(*held,true,&sd,&sd_size);free(sd);if(!ok)return fail(ERROR_INVALID_DATA);*size=(DWORD)length.QuadPart;*bytes=malloc(*size);DWORD read=0;return *bytes&&ReadFile(*held,*bytes,*size,&read,NULL)&&read==*size?true:fail(ERROR_INVALID_DATA);
 }
-void setup_acceptance_close(SetupAcceptancePin* p){if(!p)return;DWORD e=GetLastError();for(unsigned i=0;i<5;i++)if(p->files[i]&&p->files[i]!=INVALID_HANDLE_VALUE)CloseHandle(p->files[i]);l4_store_unpin(&p->fence);l4_catalog_free(p->parsed);free(p->catalog);free(p->signature);free(p->authorization);free(p->authorization_signature);free(p);SetLastError(e);}
+void setup_acceptance_close(SetupAcceptancePin* p){if(!p)return;DWORD e=GetLastError();for(unsigned i=0;i<5;i++)if(p->files[i]&&p->files[i]!=INVALID_HANDLE_VALUE)CloseHandle(p->files[i]);l4_store_unpin(&p->fence);l4_store_unpin(&p->ancestry);l4_catalog_free(p->parsed);free(p->catalog);free(p->signature);free(p->authorization);free(p->authorization_signature);free(p);SetLastError(e);}
 const SetupAcceptanceFacts* setup_acceptance_facts(const SetupAcceptancePin* p){return p&&p->bound?&p->facts:NULL;}
 static bool open_inputs(SetupAcceptancePin* p,bool optional,SetupAcceptancePin** out){DWORD error=ERROR_INVALID_DATA;BYTE* intent=NULL;DWORD n=0;wchar_t path[MAX_PATH];
- if(!l4_store_pin(p->directory,p->layout.operations,true,&p->fence))goto done;
+ /* ProgramData ancestry permits public read; the UUID control boundary remains private. */
+ if(!l4_store_pin(p->directory,p->layout.data,false,&p->ancestry)||!l4_store_pin(p->directory,p->directory,true,&p->fence))goto done;
  if(swprintf_s(path,MAX_PATH,L"%ls\\acceptance.local",p->directory)<0)goto done;
  if(!read_file(path,INTENT_SIZE,true,&p->files[0],&intent,&n)){error=GetLastError();if(optional&&error==ERROR_FILE_NOT_FOUND){const wchar_t* leaves[]={L"acceptance.catalog.json",L"acceptance.catalog.json.sig",L"acceptance.authorization.json",L"acceptance.authorization.json.sig"};for(unsigned i=0;i<4;i++){if(swprintf_s(path,MAX_PATH,L"%ls\\%ls",p->directory,leaves[i])<0)goto done;DWORD attributes=GetFileAttributesW(path);if(attributes!=INVALID_FILE_ATTRIBUTES||GetLastError()!=ERROR_FILE_NOT_FOUND){error=ERROR_INVALID_STATE;goto done;}}setup_acceptance_close(p);return true;}goto done;}if(n!=INTENT_SIZE)goto done;memcpy(p->intent,intent,INTENT_SIZE);free(intent);intent=NULL;if(!decode(p)||!operator_matches(p))goto done;
  if(swprintf_s(path,MAX_PATH,L"%ls\\acceptance.catalog.json",p->directory)<0||!read_file(path,L4_METADATA_MAX_BYTES,true,&p->files[1],&p->catalog,&p->catalog_size))goto done;
