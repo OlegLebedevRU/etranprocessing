@@ -248,8 +248,8 @@ class Pipeline:
                 "Command limits only; hashing, filesystem I/O and cleanup are additional"
             ),
             "missing_assets": assets,
-            "terminal_gate": "not implemented; never invoked",
-            "promotion": "not implemented; candidate only",
+            "terminal_gate": "separate acceptance-plan/acceptance-run; never invoked by release",
+            "promotion": "separate promotion-plan/catalog-publish; candidate publication only",
         }
 
     def save(self) -> None:

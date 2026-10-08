@@ -2,6 +2,7 @@
 #include "updater_identity.h"
 #include "../../l4common/physical_console_token.h"
 #include "remote_commit.h"
+#include "../../l4common/active_updater.h"
 #include <bcrypt.h>
 #include "../../l4common/journal_reader_internal.h"
 #include "../../l4common/journal_internal.h"
@@ -78,14 +79,44 @@ static bool authenticate_current(SetupInstalledSource* s){diagnostic_stage="inve
  diagnostic_stage="physical-console-token";s->actors.desktop=l4_physical_console_token(&s->desktop_session,&s->desktop_auth);if(!s->actors.desktop)return false;
  return setup_installed_source_verify(s);
 }
+/* A negative terminal claim does not authorize a source. Authenticate the
+ * saved fresh metadata before allowing it to be excluded from discovery. */
+static bool fresh_history(SetupInstalledSource* s,const Saved* h,bool* eligible){
+ *eligible=false;if(!h||h->commit||!h->receipt||!h->bootstrap)return fail(ERROR_INVALID_DATA);
+ s->receipt=h->receipt;s->bootstrap=h->bootstrap;L4Journal* view=l4_journal_reader_codec_view(s->reader);bool committed=false,aborted=false;
+ if(!view||!l4_bootstrap_load(view,h->bootstrap,&s->plan))return false;
+ const wchar_t* version=wcsrchr(s->plan.layout.release,L'\\');if(!version||!WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,version+1,-1,s->version,sizeof(s->version),NULL,NULL)||
+  _wcsicmp(s->plan.layout.binaries,s->owner->layout.binaries)||_wcsicmp(s->plan.layout.data,s->owner->layout.data))return fail(ERROR_REVISION_MISMATCH);
+ if(!authenticate_metadata(s)||!l4_bootstrap_terminal(view,h->bootstrap,&committed,&aborted)||!l4_bootstrap_local_terminal(view,h->bootstrap,&s->local))return false;
+ if((committed&&aborted)||(s->local&&!committed))return fail(ERROR_INVALID_DATA);
+ strcpy_s(s->updater_version,64,s->version);wcscpy_s(s->updater_origin,40,s->operation);*eligible=committed&&!aborted;return true;
+}
+/* Historical recursion remains independent of the current anchor. Only outer
+ * source applicability uses its authenticated identity, for both fresh and102. */
+static bool updater_matches(const SetupInstalledSource* s,const L4ActiveUpdaterInfo* anchor){
+ char origin[37];const SetupRootManifest* root=setup_installed_source_updater_root(s);const BYTE* identity=root?setup_root_identity(root):NULL;
+ return anchor&&s->arch&&identity&&WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,s->updater_origin,-1,origin,37,NULL,NULL)&&
+  !strcmp(origin,anchor->origin)&&!strcmp(s->updater_version,anchor->version)&&!strcmp(s->arch,anchor->arch)&&!memcmp(identity,anchor->root_sha256,32);
+}
+/* The verified active updater selects the fresh base. Other fresh histories
+ * are only structurally audited, never admitted as source authority. This
+ * avoids requiring old aborted input packages to remain admissible forever. */
+static bool fresh_outer(SetupInstalledSource* s,const Saved* h,const L4ActiveUpdaterInfo* anchor,bool* applicable){
+ *applicable=false;if(!h||h->commit||!anchor)return fail(ERROR_INVALID_DATA);
+ char origin[37];if(!WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,s->operation,-1,origin,37,NULL,NULL))return false;
+ if(!strcmp(origin,anchor->origin)){bool eligible=false;if(!fresh_history(s,h,&eligible))return false;if(!eligible)return fail(ERROR_INVALID_DATA);*applicable=true;return true;}
+ if(!h->bootstrap)return h->receipt?fail(ERROR_INVALID_DATA):true;
+ s->bootstrap=h->bootstrap;s->receipt=h->receipt;L4Journal* view=l4_journal_reader_codec_view(s->reader);bool committed=false,aborted=false,local=false;
+ if(!view||!l4_bootstrap_load(view,h->bootstrap,&s->plan)||!l4_bootstrap_terminal(view,h->bootstrap,&committed,&aborted)||!l4_bootstrap_local_terminal(view,h->bootstrap,&local))return false;
+ if((committed&&aborted)||(local&&!committed)||((committed||aborted)&&!h->receipt))return fail(ERROR_INVALID_DATA);
+ if(h->receipt){L4CatalogRelease ignored;if(!receipt(s,&ignored))return false;}
+ return true;
+}
 static bool historical(SetupInstalledSource* s,wchar_t visited[HISTORY_LIMIT][40],unsigned depth){
  if(depth>=HISTORY_LIMIT)return fail(ERROR_TOO_MANY_NAMES);for(unsigned i=0;i<depth;i++)if(!wcscmp(visited[i],s->operation))return fail(ERROR_CIRCULAR_DEPENDENCY);wcscpy_s(visited[depth],40,s->operation);
  Saved h={0};if(!l4_journal_reader_replay(s->reader,saved,&h))return false;
  if(!h.commit){
-  if(!h.receipt||!h.bootstrap)return fail(ERROR_NOT_FOUND);s->receipt=h.receipt;s->bootstrap=h.bootstrap;L4Journal* view=l4_journal_reader_codec_view(s->reader);bool committed=false,aborted=false;
-  if(!view||!l4_bootstrap_load(view,h.bootstrap,&s->plan)||!l4_bootstrap_terminal(view,h.bootstrap,&committed,&aborted)||!l4_bootstrap_local_terminal(view,h.bootstrap,&s->local)||!committed||aborted)return fail(ERROR_INVALID_DATA);
-  const wchar_t* version=wcsrchr(s->plan.layout.release,L'\\');if(!version||!WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,version+1,-1,s->version,sizeof(s->version),NULL,NULL))return fail(ERROR_INVALID_DATA);
-  if(!authenticate_metadata(s))return false;strcpy_s(s->updater_version,64,s->version);wcscpy_s(s->updater_origin,40,s->operation);return true;
+  bool eligible=false;if(!fresh_history(s,&h,&eligible))return false;return eligible?true:fail(ERROR_INVALID_DATA);
  }
  if(h.receipt||h.bootstrap)return fail(ERROR_INVALID_DATA);
  if(!setup_remote_commit_admit_target(s->reader,&s->owner->layout,&s->committed,&s->remote))return false;
@@ -107,16 +138,18 @@ bool setup_installed_source_open(L4Journal* owner,SetupInstalledSource** result)
  if(!owner_version||!l4_layout_resolve(&expected,owner_version+1)||memcmp(&owner->layout,&expected,sizeof(expected)))return fail(ERROR_ACCESS_DENIED);
  diagnostic_stage="history-root";L4FileFence root={0};if(!l4_store_pin(owner->layout.operations,owner->layout.data,false,&root))return false;wchar_t pattern[MAX_PATH];if(swprintf_s(pattern,MAX_PATH,L"%ls\\*",owner->layout.operations)<0){l4_store_unpin(&root);return fail(ERROR_FILENAME_EXCED_RANGE);}
  WIN32_FIND_DATAW entry;HANDLE find=FindFirstFileW(pattern,&entry);if(find==INVALID_HANDLE_VALUE){DWORD code=GetLastError();l4_store_unpin(&root);return fail(code);}
- SetupInstalledSource* accepted=NULL;bool ok=true;unsigned count=0;const wchar_t* current=wcsrchr(owner->directory,L'\\');
+ L4ActiveUpdater* updater=NULL;if(!l4_active_updater_open(owner,&updater)||!l4_active_updater_verify(updater)){DWORD e=GetLastError();l4_active_updater_close(updater);FindClose(find);l4_store_unpin(&root);return fail(e?e:ERROR_ACCESS_DENIED);}
+ const L4ActiveUpdaterInfo* anchor=l4_active_updater_info(updater);if(!anchor){l4_active_updater_close(updater);FindClose(find);l4_store_unpin(&root);return fail(ERROR_INVALID_DATA);}SetupInstalledSource* accepted=NULL;bool ok=true;unsigned count=0;const wchar_t* current=wcsrchr(owner->directory,L'\\');
  do {if(!wcscmp(entry.cFileName,L".")||!wcscmp(entry.cFileName,L".."))continue;if(++count>HISTORY_LIMIT){ok=false;SetLastError(ERROR_TOO_MANY_NAMES);break;}if(!(entry.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY))continue;
  if(entry.dwFileAttributes&FILE_ATTRIBUTE_REPARSE_POINT){ok=false;SetLastError(ERROR_ACCESS_DENIED);break;}if(!canonical_id(entry.cFileName)){ok=false;SetLastError(ERROR_INVALID_NAME);break;}if(current&&!wcscmp(current+1,entry.cFileName))continue;
  SetupInstalledSource* s=calloc(1,sizeof(*s));if(!s){ok=false;SetLastError(ERROR_NOT_ENOUGH_MEMORY);break;}s->owner=owner;wcscpy_s(s->operation,40,entry.cFileName);wcscpy_s(diagnostic_operation,40,entry.cFileName);
  diagnostic_stage="history-snapshot";if(!l4_journal_reader_open(owner,s->operation,&s->reader)){setup_installed_source_close(s);ok=false;break;}diagnostic_stage="history-records";Saved history={0};if(!l4_journal_reader_replay(s->reader,saved,&history)){setup_installed_source_close(s);ok=false;break;}
- if(!history.commit&&(!history.receipt||!history.bootstrap)){setup_installed_source_close(s);continue;}
- wchar_t visited[HISTORY_LIMIT][40];diagnostic_stage="historical-authority";if(!historical(s,visited,0)){setup_installed_source_close(s);ok=false;break;}
+ if(!history.commit&&!history.receipt&&!history.bootstrap){setup_installed_source_close(s);continue;}
+ wchar_t visited[HISTORY_LIMIT][40];diagnostic_stage="historical-authority";if(!history.commit){bool applicable=false;if(!fresh_outer(s,&history,anchor,&applicable)){setup_installed_source_close(s);ok=false;break;}if(!applicable){setup_installed_source_close(s);continue;}}else if(!historical(s,visited,0)){setup_installed_source_close(s);ok=false;break;}
+ diagnostic_stage="updater-origin-applicability";if(!updater_matches(s,anchor)){setup_installed_source_close(s);continue;}
  diagnostic_stage="scm-applicability";bool applicable=true;for(unsigned i=0;i<4;i++)if(!profile(&s->plan,i)){applicable=false;break;}if(!applicable){setup_installed_source_close(s);continue;}
  if(!authenticate_current(s)){setup_installed_source_close(s);ok=false;break;}if(accepted){setup_installed_source_close(s);ok=false;SetLastError(ERROR_DUP_NAME);break;}accepted=s;
- }while(FindNextFileW(find,&entry));DWORD code=GetLastError();if(ok&&code!=ERROR_NO_MORE_FILES){ok=false;}FindClose(find);l4_store_unpin(&root);
+ }while(FindNextFileW(find,&entry));DWORD code=GetLastError();if(ok&&code!=ERROR_NO_MORE_FILES){ok=false;}FindClose(find);l4_store_unpin(&root);if(ok&&!l4_active_updater_verify(updater)){ok=false;code=GetLastError();}l4_active_updater_close(updater);
  if(!ok){setup_installed_source_close(accepted);return fail(code?code:ERROR_INVALID_DATA);}if(!accepted)return fail(ERROR_NOT_FOUND);*result=accepted;wcscpy_s(diagnostic_operation,40,accepted->operation);diagnostic_stage="accepted";return true;
 }
 const L4BootstrapPlan* setup_installed_source_plan(const SetupInstalledSource* s){return s?&s->plan:NULL;}
