@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 from l4release.__main__ import main
 from l4release.common import Redactor, ReleaseError, contained, file_hash, load_env, version_value
@@ -76,6 +77,40 @@ def test_duplicate_env_is_rejected_without_echoing_value(tmp_path):
     with pytest.raises(ReleaseError, match="Duplicate") as raised:
         load_env(path)
     assert "first-secret" not in str(raised.value)
+
+
+@pytest.mark.parametrize(
+    ("env", "expected"),
+    [
+        ({}, ""),
+        ({"W_SIGN_PFX_PASSWORD": "original"}, "original"),
+        ({"SW_SIGN_PFX_PASSWORD": "alias"}, "alias"),
+        ({"W_SIGN_PFX_PASSWORD": "", "SW_SIGN_PFX_PASSWORD": "alias"}, "alias"),
+        ({"W_SIGN_PFX_PASSWORD": "original", "SW_SIGN_PFX_PASSWORD": ""}, "original"),
+        ({"W_SIGN_PFX_PASSWORD": "same", "SW_SIGN_PFX_PASSWORD": "same"}, "same"),
+    ],
+)
+def test_signing_password_alias_is_literal_and_authoritative(monkeypatch, tmp_path, env, expected):
+    monkeypatch.setenv("W_SIGN_PFX_PASSWORD", "inherited-original")
+    monkeypatch.setenv("SW_SIGN_PFX_PASSWORD", "inherited-alias")
+    runner = Runner(tmp_path, env, tmp_path)
+    assert runner.env["L4TOOLS_SIGN_PFX_PASSWORD"] == expected
+    assert "W_SIGN_PFX_PASSWORD" not in runner.env
+    assert "SW_SIGN_PFX_PASSWORD" not in runner.env
+
+
+def test_conflicting_signing_aliases_refuse_without_echo_or_child(monkeypatch, tmp_path):
+    env = {
+        "W_SIGN_PFX_PASSWORD": "first-private-value",
+        "SW_SIGN_PFX_PASSWORD": "other-private-value",
+    }
+    path = tmp_path / "sw_sign.env"
+    path.write_text("\n".join(f"{key}={value}" for key, value in env.items()))
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: pytest.fail("no child may start"))
+    for action in (lambda: load_env(path), lambda: Runner(tmp_path, env, tmp_path)):
+        with pytest.raises(ReleaseError, match="Conflicting signing password aliases") as raised:
+            action()
+        assert not any(value in str(raised.value) for value in env.values())
 
 
 def test_redactor_covers_credentials_and_authorization():
@@ -235,6 +270,8 @@ def pipeline(tmp_path, monkeypatch):
     subject = Pipeline(
         tmp_path, "1.2.3", {"SW_SIGN_PFX": str(signing_fixture)}, tmp_path / "sw_sign.env"
     )
+    metadata_key = rsa.generate_private_key(public_exponent=65537, key_size=3072).public_key()
+    monkeypatch.setattr("l4release.pipeline.load_public_key", lambda *a: metadata_key)
     monkeypatch.setattr(subject, "preflight", lambda signed, publish: None)
     return subject
 
@@ -343,7 +380,8 @@ def test_signed_checkpoint_still_verifies_before_publishing(pipeline, monkeypatc
 
     class Publisher:
         @staticmethod
-        def verify_artifacts(path):
+        def verify_artifacts(path, **kwargs):
+            assert kwargs.get("require_metadata") is True
             calls.append("checksums")
 
     monkeypatch.setattr("l4release.pipeline.publisher_module", lambda root: Publisher())
@@ -352,3 +390,22 @@ def test_signed_checkpoint_still_verifies_before_publishing(pipeline, monkeypatc
     assert calls == ["verify-signed", "checksums", "publish"]
     assert result["status"] == "published_candidate"
     assert result["terminal_gate"] == result["promotion"] == "not_run"
+
+
+def test_metadata_failure_retains_signed_stage_for_retry(pipeline, monkeypatch):
+    stage = pipeline.dist / ".stage"
+    stage.mkdir(parents=True)
+    (stage / "fixture.exe").write_bytes(b"signed staging fixture")
+    monkeypatch.setattr(pipeline, "prepare", lambda: None)
+    calls = []
+    monkeypatch.setattr(pipeline, "ps", lambda name, *a, **k: calls.append(name))
+
+    def fail_metadata():
+        raise ReleaseError("metadata finalization failed")
+
+    monkeypatch.setattr(pipeline, "finalize_provenance", fail_metadata)
+    with pytest.raises(ReleaseError, match="metadata finalization"):
+        pipeline.execute(signed=True, publish=False)
+    assert calls == ["sign"]
+    assert pipeline.resumable("signing")
+    assert "signed" not in pipeline.report["checkpoints"]

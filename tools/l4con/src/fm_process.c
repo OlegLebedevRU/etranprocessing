@@ -12,7 +12,7 @@
 
 typedef struct { int kind,status;char id[40],body[24576]; } FmMessage;
 typedef struct {
-    DWORD magic;bool pending,navigation,console_busy,busy;
+    DWORD magic;bool pending,navigation,console_busy,busy,quiet;L4UpdateState quiet_state;
     ULONGLONG heartbeat;
     RpcCommand command;
     char request[8193];
@@ -21,6 +21,7 @@ typedef struct {
 } FmShared;
 typedef struct {
     HANDLE mapping,mutex,wake,stop,process,job;
+    L4UpdateConsumer* update;
     FmShared* shared;
     bool initialized,connected,terminating;
     ULONGLONG retry_at,deadline;
@@ -44,6 +45,7 @@ static bool close_child(void) {
     host.terminating=false;return true;
 }
 static bool start_child(void) {
+    L4UpdateState update;if(host.update && (!l4_update_consumer_read(host.update,&update) || update.window))return false;
     SECURITY_ATTRIBUTES security={sizeof(security),NULL,TRUE};
     host.mapping=CreateFileMappingW(INVALID_HANDLE_VALUE,&security,PAGE_READWRITE,0,sizeof(FmShared),NULL);
     host.mutex=CreateMutexW(&security,FALSE,NULL);host.wake=CreateEventW(&security,FALSE,FALSE,NULL);
@@ -92,7 +94,18 @@ bool fm_busy(void) {
     if(host.terminating)return true;
     if(!host.shared)return false;
     if(!lock_shared(host.mutex))return true;
-    bool busy=host.shared->busy || host.shared->pending;ReleaseMutex(host.mutex);return busy;
+    bool busy=host.shared->busy || host.shared->pending || host.shared->read_index!=host.shared->write_index;ReleaseMutex(host.mutex);return busy;
+}
+void fm_set_update_consumer(L4UpdateConsumer* consumer){host.update=consumer;}
+bool fm_update_quiet(const L4UpdateState* expected){
+    if(!expected || host.terminating)return false;
+    if(!host.process)return !host.shared;
+    if(!host.shared || !lock_shared(host.mutex))return false;
+    L4UpdateState* state=&host.shared->quiet_state;
+    bool quiet=host.shared->quiet && !host.shared->busy && !host.shared->pending && host.shared->read_index==host.shared->write_index &&
+        !memcmp(state->owner,expected->owner,40) && state->generation==expected->generation && state->window==expected->window &&
+        state->plan_sequence==expected->plan_sequence && state->deadline_utc==expected->deadline_utc;
+    ReleaseMutex(host.mutex);return quiet;
 }
 void fm_tick(void) {
     if(!host.initialized || !host.connected)return;
@@ -185,11 +198,16 @@ int fm_worker_main(int argc,wchar_t** argv) {
         shared->heartbeat=GetTickCount64();pending=shared->pending;
         if(pending) {command=shared->command;memcpy(request,shared->request,sizeof(request));navigation=shared->navigation;console_busy=shared->console_busy;shared->pending=false;}
         /* Keep busy asserted while moving a command from IPC to the worker. */
-        shared->busy=pending || fm_child_busy();ReleaseMutex(mutex);
+        shared->quiet=false;shared->busy=pending || fm_child_busy();ReleaseMutex(mutex);
         if(pending) {
             if(navigation)fm_child_navigation(request,strlen(request),console_busy);
             else if(!fm_child_enqueue(&command,console_busy))child_rpc(&child,command.task_id,409,"fm_busy_or_disabled");
         }
+        L4UpdateState observed={0};bool quiet=!pending && fm_child_update_quiet(&observed);
+        if(!lock_shared(mutex))break;
+        shared->quiet=quiet && !shared->pending && !shared->busy;
+        if(shared->quiet)shared->quiet_state=observed;
+        ReleaseMutex(mutex);
         WaitForSingleObject(wake,100);
     }
     SetEvent(stop);fm_child_shutdown();

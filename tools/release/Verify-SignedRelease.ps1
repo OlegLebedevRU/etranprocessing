@@ -4,6 +4,7 @@ param(
     [Parameter(Mandatory = $true)][string]$PfxPath
 )
 $ErrorActionPreference = 'Stop'
+. "$PSScriptRoot\Certificate-Identity.ps1"
 $toolsRoot = (Resolve-Path -LiteralPath "$PSScriptRoot\..").Path
 $dist = "$toolsRoot\dist"
 $certificate = [Security.Cryptography.X509Certificates.X509Certificate2]::new(
@@ -13,6 +14,8 @@ if (-not $certificate.HasPrivateKey) { throw 'Signing certificate has no private
 try {
     $manifest = Get-Content -LiteralPath "$dist\l4tools-release.json" -Raw | ConvertFrom-Json
     if ($manifest.version -ne $Version -or -not $manifest.signed) { throw 'Signed manifest/version mismatch.' }
+    $expectedPublisher = Get-PublisherCertificateSha256 $certificate
+    if ($manifest.publisher_certificate_sha256 -ne $expectedPublisher) { throw 'Manifest publisher certificate mismatch.' }
     $files = @()
     foreach ($arch in @('x86', 'x64')) {
         $stage = "$dist\.stage\$arch"
@@ -26,7 +29,7 @@ try {
         $signature = Get-AuthenticodeSignature -LiteralPath $file.FullName
         if ($signature.Status -ne 'Valid' -or -not $signature.TimeStamperCertificate -or
             -not $signature.SignerCertificate -or
-            $signature.SignerCertificate.Thumbprint -ne $certificate.Thumbprint) {
+            (Get-PublisherCertificateSha256 $signature.SignerCertificate) -ne $expectedPublisher) {
             throw "Invalid timestamped expected-publisher signature: $($file.FullName)"
         }
     }

@@ -12,6 +12,12 @@
 #include "command_runner.h"
 #include "tool_inventory.h"
 #include "event_ipc.h"
+#include "link_probe.h"
+#include "update_reporting.h"
+#include "update_admission.h"
+#include "../../l4common/probe_ipc.h"
+#include "../../l4common/update_state.h"
+#include "../../leo4proxy/src/policy_json.h"
 #include "../../l4pin/src/cert_discovery.h"
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -28,14 +34,21 @@
 typedef struct {
     SOCKET sock;
     CRITICAL_SECTION send_cs;
+    CRITICAL_SECTION probe_cs;
+    LinkProbe probe;
+    unsigned probe_ready;
+    uint16_t probe_subscriptions[3];
     uint16_t packet_id_seq;
     char sn[128];
     CommandContext current_cmd;
     HANDLE hWorkerThread;
     bool connected;
+    L4UpdateConsumer update;
+    L4UpdateReporting* reporting;
+    L4UpdateAdmission* admission;
     uint16_t fm_subscription;
     ULONGLONG fm_subscription_deadline;
-    struct { char id[40]; char result_uid[40]; char result[512]; int status; bool acted; } recent[64];
+    struct { char id[40]; char result_uid[40]; char result[2048]; int status; bool acted; } recent[64];
     unsigned recent_next;
 } MqttClientState;
 static bool ascii_identifier(const char* value, bool hex_only);
@@ -56,8 +69,12 @@ static void get_iso_timestamp(char* out_ts, size_t size) {
              st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
 }
 
-static bool publish_user_event(const UserEvent* event, void* context) {
+static bool update_busy(MqttClientState* state){
+    L4UpdateState update;return !l4_update_consumer_read(&state->update,&update) || update.window!=0;
+}
+static bool publish_user_event_locked(const UserEvent* event, void* context) {
     MqttClientState* state = (MqttClientState*)context;
+    if(update_busy(state))return false;
     GUID guid;
     if (FAILED(CoCreateGuid(&guid))) return false;
     unsigned id = guid.Data1 & 0x7fffffffU;
@@ -89,6 +106,11 @@ static bool publish_user_event(const UserEvent* event, void* context) {
     return ok;
 }
 
+static bool publish_user_event(const UserEvent* event,void* context){
+    MqttClientState* state=(MqttClientState*)context;AcquireSRWLockShared(&state->update.admission);
+    bool ok=publish_user_event_locked(event,context);ReleaseSRWLockShared(&state->update.admission);return ok;
+}
+
 static bool ascii_identifier(const char* value, bool hex_only) {
     if (!value || !value[0]) return false;
     for (const unsigned char* p = (const unsigned char*)value; *p; p++) {
@@ -98,7 +120,7 @@ static bool ascii_identifier(const char* value, bool hex_only) {
 }
 
 static bool publish_certificate_connected_event(MqttClientState* state, int proxy_port,
-                                                bool force) {
+                                                bool force, char* observed_correlation, unsigned* observed_id) {
     static char last_snapshot[512] = { 0 };
     char inventory[12000], digest[65];
     char package_version[64] = { 0 };
@@ -172,6 +194,8 @@ static bool publish_certificate_connected_event(MqttClientState* state, int prox
     };
     if (!send_publish_with_properties(state, topic, payload, (size_t)length,
                                       1, 0, event_properties, 4)) return false;
+    if(observed_correlation)strcpy_s(observed_correlation,40,correlation_id);
+    if(observed_id)*observed_id=event_id;
     strcpy_s(last_snapshot, sizeof(last_snapshot), snapshot);
     printf("[CERT] Published identity event 75 for SN %s (qos=1, retain=0)\n", state->sn);
     return true;
@@ -205,14 +229,24 @@ static bool send_publish_with_properties(MqttClientState* state, const char* top
                                          size_t property_count) {
     unsigned char buf[32768];
     EnterCriticalSection(&state->send_cs);
+    if (!state->connected || state->sock == INVALID_SOCKET) {LeaveCriticalSection(&state->send_cs);return false;}
+    uint16_t id=qos?get_next_packet_id(state):0;
+    int length=mqtt_build_publish_with_properties(buf,sizeof(buf),topic,payload,payload_len,id,qos,retain,properties,property_count);
+    bool ok=length>0 && socket_send_all(state->sock,buf,(size_t)length);
+    LeaveCriticalSection(&state->send_cs);return ok;
+}
+static bool send_probe(MqttClientState* state,const char* topic,const char* payload,
+                       const MqttUserProperty* properties,size_t count) {
+    unsigned char buf[32768];
+    EnterCriticalSection(&state->send_cs);
     if (!state->connected || state->sock == INVALID_SOCKET) {
         LeaveCriticalSection(&state->send_cs);
         return false;
     }
-    uint16_t pkt_id = (qos > 0) ? get_next_packet_id(state) : 0;
-    int pkt_len = mqtt_build_publish_with_properties(buf, sizeof(buf), topic, payload,
-                                                      payload_len, pkt_id, qos, retain,
-                                                      properties, property_count);
+    uint16_t pkt_id = get_next_packet_id(state);
+    int pkt_len = mqtt_build_publish_expiring(buf, sizeof(buf), topic, payload,
+                                                      strlen(payload), pkt_id, 1, 0,
+                                                      properties, count,10);
     bool ok = false;
     if (pkt_len > 0) {
         ok = socket_send_all(state->sock, buf, (size_t)pkt_len);
@@ -331,6 +365,17 @@ static void rpc_status(MqttClientState* state,const char* id,int code,const char
     snprintf(result,sizeof(result),"{\"correlationData\":\"%s\",\"status_code\":%d,\"status\":\"%s\"}",id,code,status);
     rpc_result(state,id,code,result);
 }
+static bool reporting_ready(void* context){MqttClientState* state=context;
+    EnterCriticalSection(&state->probe_cs);bool ready=state->probe.stage==LINK_IDLE || state->probe.stage==LINK_DONE || state->probe.stage==LINK_FAILED;LeaveCriticalSection(&state->probe_cs);
+    EnterCriticalSection(&state->send_cs);ready=ready && state->connected && state->sock!=INVALID_SOCKET;LeaveCriticalSection(&state->send_cs);return ready;
+}
+static void reporting_reply(void* context,const char* task,int code,const char* json){rpc_result(context,task,code,json);}
+static bool reporting_event(void* context,const char* json,unsigned id,const char* correlation){MqttClientState* state=context;
+    char timestamp[32],id_text[16],topic[160];if(!json_extract_string(json,"102",timestamp,sizeof(timestamp)))return false;
+    snprintf(id_text,sizeof(id_text),"%u",id);snprintf(topic,sizeof(topic),"dev/%s/evt",state->sn);
+    const MqttUserProperty properties[]={{"event_type_code","76"},{"dev_event_id",id_text},{"dev_timestamp",timestamp},{"correlationData",correlation}};
+    return send_publish_with_properties(state,topic,json,strlen(json),1,0,properties,4);
+}
 
 typedef struct {
     MqttClientState* state;
@@ -381,15 +426,130 @@ static bool fm_navigation_result(void* context,const char* id,const char* body) 
     return send_publish_with_properties(state,topic,body,strlen(body),1,0,properties,1);
 }
 
-static void handle_incoming_publish(MqttClientState* state,const char* topic,
+/* Includes queued/running FM writes, a live FM lease, and the worker's final
+ * result/cleanup interval after is_running clears. A link barrier must not be
+ * advertised while these consumers are still using the old connection. */
+static bool probe_work_busy(MqttClientState* state,bool file_manager_busy){
+    EnterCriticalSection(&state->send_cs);
+    bool busy=state->current_cmd.is_running || (state->hWorkerThread && WaitForSingleObject(state->hWorkerThread,0)!=WAIT_OBJECT_0);
+    LeaveCriticalSection(&state->send_cs);return busy || file_manager_busy || update_admission_busy(state->admission);
+}
+typedef struct {MqttClientState* state;const L4UpdateState* expected;} ConDrain;
+static bool drain_busy(void* context){
+    ConDrain* drain=context;return probe_work_busy(drain->state,fm_busy()) || !fm_update_quiet(drain->expected);
+}
+static DWORD drain_local(const L4UpdateState* expected,DWORD timeout,HANDLE cancel,void* context){
+    MqttClientState* state=(MqttClientState*)context;
+    ConDrain drain={state,expected};return l4_update_consumer_drain(&state->update,expected,timeout,cancel,drain_busy,&drain);
+}
+static DWORD probe_local_evidence(DWORD mode,DWORD timeout,HANDLE cancel,void* context,L4LinkProbeEvidence* evidence){
+    if(evidence)memset(evidence,0,sizeof(*evidence));
+    MqttClientState* state=(MqttClientState*)context;L4UpdateState update;
+    if(update_admission_busy(state->admission))return ERROR_BUSY;
+    if(!l4_update_consumer_read(&state->update,&update))return ERROR_INVALID_DATA;
+    EnterCriticalSection(&state->probe_cs);
+    if(state->probe_ready!=7){LeaveCriticalSection(&state->probe_cs);return ERROR_NOT_READY;}
+    if(!mode){LeaveCriticalSection(&state->probe_cs);return ERROR_SUCCESS;}
+    if(!link_probe_begin(&state->probe,GetTickCount64(),timeout)){LeaveCriticalSection(&state->probe_cs);return ERROR_BUSY;}
+    unsigned generation=state->probe.generation;LeaveCriticalSection(&state->probe_cs);
+    for(;;){
+        DWORD result=ERROR_IO_PENDING;EnterCriticalSection(&state->probe_cs);
+        if(state->probe.generation!=generation)result=ERROR_CANCELLED;
+        else if(state->probe.stage==LINK_DONE)result=!evidence || link_probe_evidence(&state->probe,evidence)?ERROR_SUCCESS:ERROR_INVALID_DATA;
+        else if(state->probe.stage==LINK_FAILED)result=state->probe.error?state->probe.error:ERROR_NOT_READY;
+        else if(GetTickCount64()>=state->probe.deadline || WaitForSingleObject(cancel,0)!=WAIT_TIMEOUT){
+            result=GetTickCount64()>=state->probe.deadline?ERROR_TIMEOUT:ERROR_CANCELLED;
+            state->probe.stage=LINK_FAILED;state->probe.error=result;
+        }
+        LeaveCriticalSection(&state->probe_cs);if(result!=ERROR_IO_PENDING)return result;
+        WaitForSingleObject(cancel,25);
+    }
+}
+static DWORD probe_local(DWORD mode,DWORD timeout,HANDLE cancel,void* context){
+    return probe_local_evidence(mode,timeout,cancel,context,NULL);
+}
+static DWORD evidence_local(DWORD timeout,HANDLE cancel,void* context,L4LinkProbeEvidence* evidence){
+    return probe_local_evidence(1,timeout,cancel,context,evidence);
+}
+static ULONGLONG probe_utc(void){FILETIME t;GetSystemTimeAsFileTime(&t);return ((ULONGLONG)t.dwHighDateTime<<32)|t.dwLowDateTime;}
+static void probe_disconnect(MqttClientState* state){
+    EnterCriticalSection(&state->probe_cs);state->probe_ready=0;memset(state->probe_subscriptions,0,sizeof(state->probe_subscriptions));
+    if(state->probe.stage!=LINK_IDLE && state->probe.stage!=LINK_DONE){state->probe.stage=LINK_FAILED;state->probe.error=ERROR_CONNECTION_ABORTED;}
+    LeaveCriticalSection(&state->probe_cs);
+}
+static void probe_tick(MqttClientState* state,const AppConfig* config){
+    (void)config;
+    bool work_busy=probe_work_busy(state,fm_busy());
+    EnterCriticalSection(&state->probe_cs);unsigned stage=state->probe.stage,generation=state->probe.generation;
+    if(stage!=LINK_IDLE && stage!=LINK_DONE && stage!=LINK_FAILED && GetTickCount64()>=state->probe.deadline){state->probe.stage=LINK_FAILED;state->probe.error=ERROR_TIMEOUT;stage=LINK_FAILED;}
+    if((stage==LINK_QUEUED || stage==LINK_NEED_EVENT) && work_busy){state->probe.stage=LINK_FAILED;state->probe.error=ERROR_BUSY;stage=LINK_FAILED;}
+    char nonce[40];strcpy_s(nonce,sizeof(nonce),state->probe.request_nonce);
+    if(stage==LINK_QUEUED){state->probe.stage=LINK_WAIT_RSP;strcpy_s(state->probe.evidence.request_nonce,40,nonce);state->probe.evidence.req_sent_utc=probe_utc();}
+    LeaveCriticalSection(&state->probe_cs);
+    bool ok=true;char correlation[40]={0};unsigned event_id=0;
+    if(stage==LINK_QUEUED){
+        char topic[160];snprintf(topic,sizeof(topic),"dev/%s/req",state->sn);
+        const char* body="{\"v\":1,\"type\":\"channel_probe\"}";
+        const MqttUserProperty properties[]={{"correlationData",nonce},{"iot_probe","1"}};
+        ok=send_probe(state,topic,body,properties,2);
+    }else if(stage==LINK_NEED_EVENT){
+        GUID id;ok=SUCCEEDED(CoCreateGuid(&id));
+        if(ok){event_id=id.Data1&0x7fffffffU;if(!event_id)event_id=1;
+            snprintf(correlation,sizeof(correlation),"%08lx-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",id.Data1,id.Data2,id.Data3,id.Data4[0],id.Data4[1],id.Data4[2],id.Data4[3],id.Data4[4],id.Data4[5],id.Data4[6],id.Data4[7]);
+            char topic[160],body[160],event[16];snprintf(topic,sizeof(topic),"dev/%s/evt",state->sn);snprintf(event,sizeof(event),"%u",event_id);
+            snprintf(body,sizeof(body),"{\"v\":1,\"type\":\"channel_probe\",\"request_nonce\":\"%s\"}",nonce);
+            const MqttUserProperty properties[]={{"correlationData",correlation},{"iot_probe","1"},{"event_type_code","0"},{"dev_event_id",event}};
+            EnterCriticalSection(&state->probe_cs);
+            if(state->probe.generation==generation && state->probe.stage==LINK_NEED_EVENT){
+                strcpy_s(state->probe.evidence.event_nonce,40,correlation);state->probe.evidence.event_id=event_id;state->probe.evidence.evt_sent_utc=probe_utc();
+            }
+            LeaveCriticalSection(&state->probe_cs);
+            ok=send_probe(state,topic,body,properties,4);
+        }
+    }
+    else return;
+    EnterCriticalSection(&state->probe_cs);
+    if(state->probe.generation==generation && state->probe.stage!=LINK_FAILED){
+        if(!ok){state->probe.stage=LINK_FAILED;state->probe.error=ERROR_NOT_READY;}
+        else if(stage==LINK_NEED_EVENT){strcpy_s(state->probe.correlation,40,correlation);state->probe.event_id=event_id;state->probe.stage=LINK_WAIT_EVA;}
+    }LeaveCriticalSection(&state->probe_cs);
+}
+
+static void update_navigation_reject(MqttClientState* state,const char* payload,size_t length){
+    PolicyJson json;char command[40],lease[40];unsigned long long version=0;
+    if(length>8192 || !policy_json_parse(&json,payload,length) ||
+       !policy_json_uint(&json,policy_json_field(&json,0,"v"),&version) || version!=2 ||
+       !policy_json_string(&json,policy_json_field(&json,0,"command_id"),command,sizeof(command)) || !rpc_uuid(command) ||
+       !policy_json_string(&json,policy_json_field(&json,0,"lease_id"),lease,sizeof(lease)) || !rpc_uuid(lease))return;
+    char response[256];snprintf(response,sizeof(response),"{\"v\":2,\"command_id\":\"%s\",\"lease_id\":\"%s\",\"state\":\"failed\",\"error_code\":\"update_in_progress\"}",command,lease);
+    fm_navigation_result(state,command,response);
+}
+static void handle_incoming_publish_locked(MqttClientState* state,const char* topic,
     const char* payload,size_t payload_len,const AppConfig* config,const MqttRpcMetadata* metadata) {
-    char tsk[160],rsp[160],fmc[160];
+    char tsk[160],rsp[160],fmc[160],eva[160];
+    snprintf(eva,sizeof(eva),"srv/%s/eva",state->sn);
+    if(!strcmp(topic,eva)){EnterCriticalSection(&state->probe_cs);link_probe_eva(&state->probe,GetTickCount64(),metadata,payload,payload_len);LeaveCriticalSection(&state->probe_cs);return;}
     snprintf(fmc,sizeof(fmc),"srv/%s/fmc",state->sn);
-    if(!strcmp(topic,fmc)) {fm_navigation(payload,payload_len,state->current_cmd.is_running);return;}
+    if(!strcmp(topic,fmc)) {
+        if(update_busy(state))update_navigation_reject(state,payload,payload_len);
+        else fm_navigation(payload,payload_len,state->current_cmd.is_running);
+        return;
+    }
     snprintf(tsk,sizeof(tsk),"srv/%s/tsk",state->sn);
     snprintf(rsp,sizeof(rsp),"srv/%s/rsp",state->sn);
     bool announcement=!strcmp(topic,tsk);
     if (!announcement && strcmp(topic,rsp)) return;
+    if(metadata->iot_probe[0]){
+        if(!announcement){EnterCriticalSection(&state->probe_cs);link_probe_rsp(&state->probe,GetTickCount64(),metadata,payload,payload_len);LeaveCriticalSection(&state->probe_cs);}
+        return;
+    }
+    if(!announcement){
+        PolicyJson json;unsigned long long method=1;
+        if(policy_json_parse(&json,payload,payload_len) && policy_json_uint(&json,policy_json_field(&json,0,"method_code"),&method) && !method &&
+           !strcmp(metadata->method_code,"0") && !strcmp(metadata->correlation,"00000000-0000-0000-0000-000000000000")){
+            return; /* Ordinary polling NOP is not nonce-correlated channel proof. */
+        }
+    }
     RpcCommand command;
     bool valid=rpc_contract_parse(payload,payload_len,announcement,metadata->method_code,
                                   metadata->correlation,metadata->payload_required,&command);
@@ -397,8 +557,9 @@ static void handle_incoming_publish(MqttClientState* state,const char* topic,
         if (!announcement && rpc_uuid(command.task_id)) rpc_status(state,command.task_id,400,"invalid_payload");
         return;
     }
+    bool updating=update_busy(state);
     if (announcement) {
-        if (command.method==7002 && !command.payload_required) {
+        if (command.method==7002 && !command.payload_required && !updating) {
             EnterCriticalSection(&state->send_cs);
             int n=rpc_recent(state,command.task_id,true);
             if (n>=0 && !state->recent[n].acted) {
@@ -414,7 +575,7 @@ static void handle_incoming_publish(MqttClientState* state,const char* topic,
         send_publish_with_properties(state,req_topic,req,strlen(req),0,0,properties,1);
         return;
     }
-    char cached[512]={0}; int cached_status=0; bool acted=false;
+    char cached[2048]={0}; int cached_status=0; bool acted=false;
     EnterCriticalSection(&state->send_cs);
     int n=rpc_recent(state,command.task_id,true);
     if (n>=0) {
@@ -426,8 +587,24 @@ static void handle_incoming_publish(MqttClientState* state,const char* topic,
     LeaveCriticalSection(&state->send_cs);
     if (n<0) return;
     if (*cached) {rpc_result(state,command.task_id,cached_status,cached);return;}
+    if(updating && (command.method<7030 || command.method>7033)){
+        SecureZeroMemory(command.pin,sizeof(command.pin));rpc_status(state,command.task_id,409,"update_in_progress");return;
+    }
     if (acted) {
         if (command.method==7002 && command.empty) rpc_status(state,command.task_id,200,"cancel_requested");
+        return;
+    }
+    if(command.method==7031){
+        if(updating)rpc_status(state,command.task_id,409,"update_in_progress");
+        else if(!strcmp(command.update_target,"updater"))rpc_status(state,command.task_id,501,"updater_engine_unavailable");
+        else if(!update_admission_enabled())rpc_status(state,command.task_id,501,"controller_engine_unavailable");
+        else if(!state->admission)rpc_status(state,command.task_id,503,"controller_admission_unavailable");
+        else if(!update_admission_submit(state->admission,&command))rpc_status(state,command.task_id,409,"controller_admission_busy");
+        return;
+    }
+    if(command.method==7032){
+        if(!state->reporting)rpc_status(state,command.task_id,503,"update_observer_unavailable");
+        else if(!update_reporting_status(state->reporting,command.task_id,command.update_operation_id))rpc_status(state,command.task_id,503,"update_observer_busy");
         return;
     }
     if (command.method==7002) {
@@ -510,6 +687,13 @@ static void handle_incoming_publish(MqttClientState* state,const char* topic,
     if (!started) rpc_status(state,command.task_id,503,"worker_unavailable");
 }
 
+static void handle_incoming_publish(MqttClientState* state,const char* topic,
+    const char* payload,size_t payload_len,const AppConfig* config,const MqttRpcMetadata* metadata){
+    AcquireSRWLockShared(&state->update.admission);
+    handle_incoming_publish_locked(state,topic,payload,payload_len,config,metadata);
+    ReleaseSRWLockShared(&state->update.admission);
+}
+
 int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
     if (!config) return 1;
 
@@ -536,7 +720,9 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
     MqttClientState state;
     memset(&state, 0, sizeof(state));
     InitializeCriticalSection(&state.send_cs);
+    InitializeCriticalSection(&state.probe_cs);
     state.sock = INVALID_SOCKET;
+    if(!l4_update_consumer_init(L"l4con",&state.update))fprintf(stderr,"[UPDATE] Cannot resolve protected state; ordinary admission closed\n");
 
     char ts_buf[64];
     get_iso_timestamp(ts_buf, sizeof(ts_buf));
@@ -564,7 +750,8 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
 
         while (!sn_resolved) {
             if (WaitForSingleObject(hStopEvent, 0) == WAIT_OBJECT_0) {
-                DeleteCriticalSection(&state.send_cs);
+                DeleteCriticalSection(&state.probe_cs);
+    DeleteCriticalSection(&state.send_cs);
                 if (hMutex) CloseHandle(hMutex);
                 return 0;
             }
@@ -582,7 +769,8 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
                    ts_buf, query_attempt, retry_delay_ms / 1000);
 
             if (WaitForSingleObject(hStopEvent, (DWORD)retry_delay_ms) == WAIT_OBJECT_0) {
-                DeleteCriticalSection(&state.send_cs);
+                DeleteCriticalSection(&state.probe_cs);
+    DeleteCriticalSection(&state.send_cs);
                 if (hMutex) CloseHandle(hMutex);
                 return 0;
             }
@@ -613,7 +801,14 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
     printf("  Target Broker:   %s:%d (Keepalive: %ds)\n\n", config->mqtt_host, config->mqtt_port, config->keepalive_sec);
 
     fm_start(state.sn,config->proxy_http_port,hStopEvent,fm_rpc_result,&state);
+    fm_set_update_consumer(&state.update);
     fm_set_navigation_result(fm_navigation_result);
+    L4ProbeServer* health=NULL;
+    if(state.update.enabled && !update_reporting_start(&state.update.layout,hStopEvent,reporting_ready,reporting_reply,reporting_event,&state,&state.reporting))
+        fprintf(stderr,"[UPDATE] Recorded-status/event76 observer unavailable\n");
+    if(state.update.enabled && !update_admission_start(&state.update.layout,hStopEvent,reporting_reply,&state,&state.admission))
+        fprintf(stderr,"[UPDATE] Controller admission endpoint unavailable\n");
+    if(!l4_probe_server_start_evidence(L"con",probe_local,drain_local,NULL,evidence_local,&state,&health))fprintf(stderr,"[HEALTH] Local readiness endpoint unavailable\n");
     bool cert_event_sent = false;
     if (!event_ipc_start(hStopEvent, publish_user_event, &state))
         fprintf(stderr, "[EVENT] Local event endpoint unavailable; console commands remain available\n");
@@ -706,19 +901,20 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
 
         if (!use_cli_sn) {
             cert_event_sent = publish_certificate_connected_event(&state, config->proxy_http_port,
-                                                                   true);
+                                                                   true,NULL,NULL);
         }
         time_t last_queue_poll = 0;
         time_t last_cert_event_attempt = time(NULL);
 
         // 4. Subscriptions (qos=1) - strictly srv/<SN>/tsk and srv/<SN>/rsp
-        const char* sub_suffixes[] = {"tsk", "rsp", "fmc", NULL};
+        const char* sub_suffixes[] = {"tsk", "rsp", "eva", "fmc", NULL};
         for (int i = 0; sub_suffixes[i] != NULL; i++) {
             char sub_topic[128];
             snprintf(sub_topic, sizeof(sub_topic), "srv/%s/%s", state.sn, sub_suffixes[i]);
 
             EnterCriticalSection(&state.send_cs);
             uint16_t sub_pkt_id = get_next_packet_id(&state);
+            if(i<3){EnterCriticalSection(&state.probe_cs);state.probe_subscriptions[i]=sub_pkt_id;LeaveCriticalSection(&state.probe_cs);}
             if(!strcmp(sub_suffixes[i],"fmc"))state.fm_subscription=sub_pkt_id;
             int sub_len = mqtt_build_subscribe(pkt_buf, sizeof(pkt_buf), sub_topic, sub_pkt_id, 1);
             if (sub_len > 0) {
@@ -737,7 +933,8 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
         size_t rx_buf_len = 0;
 
         while (WaitForSingleObject(hStopEvent, 0) != WAIT_OBJECT_0) {
-            fm_tick();
+            probe_tick(&state,config);
+            AcquireSRWLockShared(&state.update.admission);fm_tick();ReleaseSRWLockShared(&state.update.admission);
             if(state.fm_subscription && GetTickCount64()>=state.fm_subscription_deadline) {
                 fprintf(stderr,"[FM] SUBACK deadline exceeded\n");break;
             }
@@ -812,9 +1009,12 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
                     } else if (pkt_type == MQTT_PKT_SUBACK && rem_len>=4) {
                         uint16_t id=((uint16_t)pkt_body[0]<<8)|pkt_body[1];
                         uint32_t properties=0;int consumed=0;
+                        if(mqtt_decode_remaining_length(pkt_body+2,rem_len-2,&properties,&consumed)==0 && (size_t)(2+consumed)+properties+1==rem_len && pkt_body[rem_len-1]==1){
+                            EnterCriticalSection(&state.probe_cs);for(unsigned n=0;n<3;n++)if(id==state.probe_subscriptions[n])state.probe_ready|=1u<<n;LeaveCriticalSection(&state.probe_cs);
+                        }
                         if(id==state.fm_subscription && mqtt_decode_remaining_length(pkt_body+2,rem_len-2,&properties,&consumed)==0 &&
                            (size_t)(2+consumed)+properties+1==rem_len && pkt_body[rem_len-1]==1) {
-                            state.fm_subscription=0;fm_connection(true);
+                            state.fm_subscription=0;AcquireSRWLockShared(&state.update.admission);fm_connection(true);ReleaseSRWLockShared(&state.update.admission);
                         }
                     } else if (pkt_type == MQTT_PKT_PINGRESP) {
                         last_ping_time = time(NULL);
@@ -838,14 +1038,14 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
                 last_cert_event_attempt = now;
                 cert_event_sent = publish_certificate_connected_event(&state,
                                                                        config->proxy_http_port,
-                                                                       false);
+                                                                       false,NULL,NULL);
             }
             if (now-last_queue_poll>=60 && !state.current_cmd.is_running) {
                 last_queue_poll=now;
                 char req_topic[160]; snprintf(req_topic,sizeof(req_topic),"dev/%s/req",state.sn);
                 const char* zero="00000000-0000-0000-0000-000000000000";
                 const char* body="{\"correlationData\":\"00000000-0000-0000-0000-000000000000\"}";
-                const MqttUserProperty props[]={{"correlationData",zero},{"rpc_methods","7001,7002,7003,7011,7020,7021,7022,7023"}};
+                const MqttUserProperty props[]={{"correlationData",zero},{"rpc_methods","7001,7002,7003,7011,7021,7023,7030,7031,7032,7033"}};
                 send_publish_with_properties(&state,req_topic,body,strlen(body),0,0,props,2);
             }
             if (now - last_ping_time >= ping_interval) {
@@ -883,7 +1083,7 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
 
             EnterCriticalSection(&state.send_cs);
             state.connected = false;
-        fm_connection(false);
+        AcquireSRWLockShared(&state.update.admission);fm_connection(false);ReleaseSRWLockShared(&state.update.admission);
             state.sock = INVALID_SOCKET;
             closesocket(s);
             LeaveCriticalSection(&state.send_cs);
@@ -892,15 +1092,21 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
 
         EnterCriticalSection(&state.send_cs);
         state.connected = false;
-        fm_connection(false);
+        AcquireSRWLockShared(&state.update.admission);fm_connection(false);ReleaseSRWLockShared(&state.update.admission);
         state.sock = INVALID_SOCKET;
         closesocket(s);
         LeaveCriticalSection(&state.send_cs);
+        probe_disconnect(&state);
         printf("[WARN] Connection lost. Reconnecting in %d seconds...\n", config->reconnect_sec);
         WaitForSingleObject(hStopEvent, config->reconnect_sec * 1000);
     }
 
-    fm_shutdown();
+    probe_disconnect(&state);
+    /* Join local proof callbacks before the admission context can be freed. */
+    l4_probe_server_stop(health);
+    if(!update_admission_close(&state.admission,125000)){fprintf(stderr,"[UPDATE] Admission did not stop; terminating own agent without freeing its context\n");ExitProcess(1);}
+    if(!update_reporting_close(&state.reporting,15000)){fprintf(stderr,"[UPDATE] Reporter did not stop; terminating own agent without freeing its context\n");ExitProcess(1);}
+    AcquireSRWLockShared(&state.update.admission);fm_shutdown();ReleaseSRWLockShared(&state.update.admission);
     event_ipc_stop();
     if (state.hWorkerThread) {
         command_runner_request_cancel(&state.current_cmd);
@@ -910,6 +1116,7 @@ int mqtt_client_run(const AppConfig* config, HANDLE hStopEvent) {
         }
         CloseHandle(state.hWorkerThread);
     }
+    DeleteCriticalSection(&state.probe_cs);
     DeleteCriticalSection(&state.send_cs);
     if (hMutex) {
         CloseHandle(hMutex);

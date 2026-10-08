@@ -47,6 +47,28 @@ int main(int argc,char** argv) {
     char invalid_fm[2048];strcpy_s(invalid_fm,sizeof(invalid_fm),fm_transfer);
     char* action=strstr(invalid_fm,"transfer");assert(action);memcpy(action,"unknown!",8);
     assert(!parse(invalid_fm,false,&command));
+    char update[1024];
+    const char* task="135a4120-9ba6-4f6c-8cac-4baf5df8f1df";
+    const char* operation="22222222-2222-4222-8222-222222222222";
+    for(int method=7030;method<=7033;++method){
+        snprintf(update,sizeof(update),"{\"id\":\"%s\",\"header\":{\"method_code\":%d},\"payload\":{\"dt\":[{%s}]}}",task,method,
+            method<=7031?"\"version\":\"1.13.2\",\"target\":\"suite\"":"\"operation_id\":\"22222222-2222-4222-8222-222222222222\"");
+        assert(parse(update,false,&command));
+        if(method<=7031)assert(!strcmp(command.update_version,"1.13.2") && !strcmp(command.update_target,"suite"));
+        if(method==7031)assert(!strcmp(command.update_operation_id,task));
+        if(method>=7032)assert(!strcmp(command.update_operation_id,operation) && strcmp(command.update_operation_id,command.task_id));
+    }
+    const char* fields[]={"\"version\":\"latest\"","\"version\":\"1.13.2\",\"target\":\"updater\"",
+        "\"version\":\"../1.13.2\"","\"version\":\"01.13.2\"","\"version\":\"1.13.2-beta\"","\"version\":null",
+        "\"version\":\"1.13.2\",\"target\":null","\"version\":\"1.13.2\",\"url\":\"https://example.invalid\"",
+        "\"version\":\"1.13.2\",\"operation_id\":\"22222222-2222-4222-8222-222222222222\"","\"version\":\"1.13.2\",\"version\":\"latest\""};
+    for(unsigned k=0;k<sizeof(fields)/sizeof(fields[0]);++k){
+        snprintf(update,sizeof(update),"{\"id\":\"%s\",\"header\":{\"method_code\":7031},\"payload\":{\"dt\":[{%s}]}}",task,fields[k]);
+        assert(parse(update,false,&command)==(k<2));
+    }
+    puts("Update RPC7030-7033: strict version/target, original task identity, no URL/session/operation override PASS");
+    assert(!parse("{\"id\":\"00000000-0000-0000-0000-000000000000\",\"header\":{\"method_code\":7031},\"payload\":{\"dt\":[{\"version\":\"latest\"}]}}",false,&command));
+    assert(!parse("{\"id\":\"135a4120-9ba6-4f6c-8cac-4baf5df8f1df\",\"header\":{\"method_code\":7032},\"payload\":{\"dt\":[{\"operation_id\":\"00000000-0000-0000-0000-000000000000\"}]}}",false,&command));
     strcpy_s(invalid_fm,sizeof(invalid_fm),fm_transfer);
     char* method=strstr(invalid_fm,"7021");assert(method);memcpy(method,"7020",4);
     action=strstr(invalid_fm,"transfer");assert(action);memmove(action+4,action+8,strlen(action+8)+1);memcpy(action,"list",4);

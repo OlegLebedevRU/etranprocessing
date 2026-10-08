@@ -1,5 +1,45 @@
 # l4con
 
+2026-10-08 source/local: actual async7032 recorded-history observer and proactive
+event76/tag449 through the existing extra_service client; bounded in-memory
+delivery/retry, no outbox or delivery assertion. Strict private common94/95 reader,
+launch failure reports recovery_required. Unified x86/x64 and local TCP consumer
+gates PASS. [Packet](../tasks/active/2026-10-08-l4update-status-reporting.md).
+IoT PR105 remains separate from deployed runtime;7031/7030/7033 admission/apply
+and full watch failure acceptance are still pending. No installed773 evidence.
+
+2026-10-07 drain: existing SYS/BA-only health pipe v2 echoes exact original
+operation/window/generation/plan/deadline; bounded state/PID/expiry checks.
+Con admission fence covers dispatch/user events/FM parent lifecycle and waits
+for async command cleanup, FM lease/work/results plus child quiet snapshot;
+child hello/reconcile pauses under protected state, no new FM child during update.
+Superv fence waits complete cycle; unconfirmed owned PIN termination blocks ACK.
+Independent desk not acknowledged. Original SCM PID+creation must remain valid;
+controller repeats state/source/config/actor and fresh link before any stop.
+Local native gates only, no deployed703x/live apply/restart recovery evidence.
+
+2026-10-07 persistent admission: installed con reads fixed protected update.state
+on ordinary RPC/FMC/user-EVT admission, including after restart. Missing/unsafe
+fails closed; update blocks new work and announcement-side cancel; existing
+completed replay and fresh NOP/RSP/EVA continue. FMC uses existing v2 failed
+response/correlation. No new MQTT client/topic or RPC703x activation. Controller/watchdog and live acceptance remain required; live off.
+
+2026-10-07: existing fresh-link barrier refuses queued/running FM work, live FM
+lease and command-worker cleanup/result interval, not only is_running. Consumer
+tests use modeled FM busy plus isolated real command workers; no broker/SCM writes.
+Common update_guard native gate verifies local owner/window/deadline/admission/
+async drain semantics. It is not wired to service update activation: protected
+restart state, actual async ticket adapters, supervisor two-window separation,
+rollback owner and RPC703x remain required. No mutating probe IPC added.
+
+## Windows layout — source/local gates 2026-10-06
+
+Installed workspace → ProgramData/state/l4con/work, process PATH → stable bin
+launchers; FM private journal → state/l4con/fm-state, stable across release changes.
+Event75 package summary/state reads ProgramData/state. [Packet](../tasks/active/2026-10-06-l4layout-stage2.md):
+x86/x64 native builds and RPC/FM gates PASS; live install/launcher binaries/account
+ACL not ready. extra_service presence and backend contracts unchanged; RPC703x absent.
+
 ## Принятый L4Update flow — 2026-10-06, требование
 
 [Архитектура](../../docs/term_arch-l4update-flow.md): L4Con — единственный MQTT
@@ -133,3 +173,18 @@ output cap и reconnect. Сначала безопасный read-only preset в
 - Code references: entry points выше; код l4con не аудитировался.
 - Проверено: 2026-09-11, HEAD `63ce6a7`, документальная карта.
 - Обновить при: MQTT type, RPC/exec/cleanup, output или сборке.
+
+2026-10-08 FM token selection: physical console SID/session/AuthLUID повторно
+проверяются перед возвратом impersonation token; Limited предпочтителен, собственный
+несвязанный Default admin допускается по явному решению владельца для UAC-off.
+Private paths, ACL, write capabilities и SYSTEM fallback не расширены. Unified
+x86/x64 build и FM guard/Job fixtures PASS; token branch fixture 20/0 обеих arch.
+SYSTEM read-only probe на текущем стенде обнаружил Limited nonadmin (EnableLUA=1),
+поэтому текущая live ошибка FM не доказана как UAC-off; Default admin проверен моделью.
+
+
+2026-10-06 ACL foundation: private FM receipts используют shared access descriptor,
+owner/ACE только SYS/BA/own enabled owner-capable L4Con service SID. Ordinary user
+owner/ACE отклоняется (native regression обеих архитектур PASS). Common matrix даёт
+con/desktop Modify только shared work/fm; private fm-state закрыт от ordinary desktop.
+Installed ACL integration и non-SYSTEM live service SID ещё не проверены.

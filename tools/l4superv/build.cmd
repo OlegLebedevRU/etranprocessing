@@ -37,6 +37,9 @@ if not exist obj\x64 mkdir obj\x64
 
 set BUILD_FAILED=0
 
+if /i "%TARGET_ARCH%"=="communication-test" goto :build_communication_tests
+if /i "%TARGET_ARCH%"=="scm-test" goto :build_scm_tests
+if /i "%TARGET_ARCH%"=="stand-probe" goto :build_stand_probes
 if /i "%TARGET_ARCH%"=="supervisor" goto :build_supervisor_only
 if /i "%TARGET_ARCH%"=="all" goto :build_all
 if /i "%TARGET_ARCH%"=="x86" goto :build_x86
@@ -48,42 +51,53 @@ if /i "%TARGET_ARCH%"=="x64" goto :build_x64
 if /i "%TARGET_ARCH%"=="64" goto :build_x64
 if /i "%TARGET_ARCH%"=="test" goto :build_tests
 if /i "%TARGET_ARCH%"=="tests" goto :build_tests
-
-echo Unknown architecture "%TARGET_ARCH%". Valid options: all, x86, win7, x64, supervisor, test
+echo Unknown architecture "%TARGET_ARCH%". Valid options: all, x86, win7, x64, supervisor, communication-test, scm-test, stand-probe, test
 exit /b 1
 
 :build_supervisor_only
+call :do_communication_test x86
+if errorlevel 1 exit /b 1
+call :do_communication_test x64
+if errorlevel 1 exit /b 1
 call :do_build_supervisor_only x86
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 call :do_build_supervisor_only x64
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 copy /y bin\x86\l4superv.exe bin\l4superv.exe >nul
 exit /b %errorlevel%
 
 :do_build_supervisor_only
-cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && rc.exe /nologo /fo obj\%1\l4superv.res res\l4superv.rc && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_WIN32_WINNT=0x0601 /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\%1\ src\supervisor_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\proxy_client.c ..\l4pin\src\http_client.c ..\leo4proxy\src\policy_json.c src\session_proc.c src\orchestrator.c src\cert_discovery.c obj\%1\l4superv.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\%1\l4superv.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib wtsapi32.lib userenv.lib ncrypt.lib version.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && rc.exe /nologo /fo obj\%1\l4superv.res res\l4superv.rc && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_WIN32_WINNT=0x0601 /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\%1\ src\supervisor_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\proxy_client.c ..\l4pin\src\http_client.c ..\leo4proxy\src\policy_json.c src\session_proc.c src\orchestrator.c src\communication_signals.c src\communication_watch.c ..\l4common\proxy_certificate.c ..\l4common\communication_recovery.c ..\l4common\communication_plan.c ..\l4common\communication_store.c ..\l4common\communication_worker.c ..\l4common\communication_boot.c ..\l4common\recovery_plan.c src\communication_anchor.c ..\l4common\communication_runtime.c ..\l4common\communication_monitor.c ..\l4common\config_transaction.c ..\l4common\service_switch.c ..\l4common\release.c src\miniz.c ..\l4common\probe_ipc.c /DL4_COMMUNICATION_READER_ONLY ..\l4common\update_state.c ..\l4common\journal.c src\cert_discovery.c obj\%1\l4superv.res ..\l4common\layout.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\%1\l4superv.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib wtsapi32.lib userenv.lib ncrypt.lib version.lib bcrypt.lib ole32.lib iphlpapi.lib shell32.lib"
 exit /b %errorlevel%
 
-
 :build_all
+call :do_communication_test x86
+if errorlevel 1 exit /b 1
+call :do_communication_test x64
+if errorlevel 1 exit /b 1
 call :do_build_x86
 call :do_build_x64
 call :do_identity_test x86
-if errorlevel 1 goto :shutdown_test_failed
+if not "%errorlevel%"=="0" goto :shutdown_test_failed
 call :do_identity_test x64
-if errorlevel 1 goto :shutdown_test_failed
+if not "%errorlevel%"=="0" goto :shutdown_test_failed
 call :do_shutdown_test x86
-if errorlevel 1 goto :shutdown_test_failed
+if not "%errorlevel%"=="0" goto :shutdown_test_failed
 call :do_shutdown_test x64
-if errorlevel 1 goto :shutdown_test_failed
+if not "%errorlevel%"=="0" goto :shutdown_test_failed
 call :do_restart_status_test x86
-if errorlevel 1 goto :shutdown_test_failed
+if not "%errorlevel%"=="0" goto :shutdown_test_failed
 call :do_restart_status_test x64
-if errorlevel 1 goto :shutdown_test_failed
+if not "%errorlevel%"=="0" goto :shutdown_test_failed
 goto :summary
 
 :build_tests
+call :do_identity_test x86
+if errorlevel 1 exit /b 1
+call :do_identity_test x64
+if errorlevel 1 exit /b 1
 call :do_build_tests
+if not "%errorlevel%"=="0" exit /b 1
 exit /b %BUILD_FAILED%
 
 :build_x86
@@ -93,20 +107,20 @@ goto :summary
 :build_x64
 call :do_build_x64
 call :do_identity_test x86
-if errorlevel 1 goto :shutdown_test_failed
+if not "%errorlevel%"=="0" goto :shutdown_test_failed
 call :do_identity_test x64
-if errorlevel 1 goto :shutdown_test_failed
+if not "%errorlevel%"=="0" goto :shutdown_test_failed
 call :do_shutdown_test x86
-if errorlevel 1 goto :shutdown_test_failed
+if not "%errorlevel%"=="0" goto :shutdown_test_failed
 call :do_shutdown_test x64
-if errorlevel 1 goto :shutdown_test_failed
+if not "%errorlevel%"=="0" goto :shutdown_test_failed
 goto :summary
 
 :do_build_x86
 echo.
 echo [Build x86] 32-bit static binaries (Windows 7 SP1+ compatible)...
-cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\l4superv.res res\l4superv.rc && rc.exe /nologo /fo obj\x86\l4install.res res\l4install.rc && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_WIN32_WINNT=0x0601 /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x86\ src\supervisor_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\proxy_client.c ..\l4pin\src\http_client.c ..\leo4proxy\src\policy_json.c src\session_proc.c src\orchestrator.c src\cert_discovery.c obj\x86\l4superv.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\l4superv.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib wtsapi32.lib userenv.lib ncrypt.lib version.lib && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_WIN32_WINNT=0x0601 /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x86\ src\installer_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\miniz.c src\zip_extractor.c obj\x86\l4install.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\l4install_x86.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib shell32.lib version.lib"
-if errorlevel 1 (
+cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\l4superv.res res\l4superv.rc && rc.exe /nologo /fo obj\x86\l4install.res res\l4install.rc && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_WIN32_WINNT=0x0601 /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x86\ src\supervisor_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\proxy_client.c ..\l4pin\src\http_client.c ..\leo4proxy\src\policy_json.c src\session_proc.c src\orchestrator.c src\communication_signals.c src\communication_watch.c ..\l4common\proxy_certificate.c ..\l4common\communication_recovery.c ..\l4common\communication_plan.c ..\l4common\communication_store.c ..\l4common\communication_worker.c ..\l4common\communication_boot.c ..\l4common\recovery_plan.c src\communication_anchor.c ..\l4common\communication_runtime.c ..\l4common\communication_monitor.c ..\l4common\config_transaction.c ..\l4common\service_switch.c ..\l4common\release.c src\miniz.c ..\l4common\probe_ipc.c /DL4_COMMUNICATION_READER_ONLY ..\l4common\update_state.c ..\l4common\journal.c src\cert_discovery.c obj\x86\l4superv.res ..\l4common\layout.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\l4superv.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib wtsapi32.lib userenv.lib ncrypt.lib version.lib bcrypt.lib ole32.lib iphlpapi.lib shell32.lib && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_WIN32_WINNT=0x0601 /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x86\ src\installer_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\miniz.c src\zip_extractor.c obj\x86\l4install.res ..\l4common\layout.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\l4install_x86.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib shell32.lib version.lib"
+if not "%errorlevel%"=="0" (
     echo [ERROR] x86 build failed!
     set BUILD_FAILED=1
 ) else (
@@ -121,8 +135,8 @@ exit /b 0
 :do_build_x64
 echo.
 echo [Build x64] 64-bit static binaries...
-cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /fo obj\x64\l4superv.res res\l4superv.rc && rc.exe /nologo /fo obj\x64\l4install.res res\l4install.rc && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x64\ src\supervisor_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\proxy_client.c ..\l4pin\src\http_client.c ..\leo4proxy\src\policy_json.c src\session_proc.c src\orchestrator.c src\cert_discovery.c obj\x64\l4superv.res /link /OUT:bin\x64\l4superv.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib wtsapi32.lib userenv.lib ncrypt.lib version.lib && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x64\ src\installer_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\miniz.c src\zip_extractor.c obj\x64\l4install.res /link /OUT:bin\x64\l4install_x64.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib shell32.lib version.lib"
-if errorlevel 1 (
+cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /fo obj\x64\l4superv.res res\l4superv.rc && rc.exe /nologo /fo obj\x64\l4install.res res\l4install.rc && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x64\ src\supervisor_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\proxy_client.c ..\l4pin\src\http_client.c ..\leo4proxy\src\policy_json.c src\session_proc.c src\orchestrator.c src\communication_signals.c src\communication_watch.c ..\l4common\proxy_certificate.c ..\l4common\communication_recovery.c ..\l4common\communication_plan.c ..\l4common\communication_store.c ..\l4common\communication_worker.c ..\l4common\communication_boot.c ..\l4common\recovery_plan.c src\communication_anchor.c ..\l4common\communication_runtime.c ..\l4common\communication_monitor.c ..\l4common\config_transaction.c ..\l4common\service_switch.c ..\l4common\release.c src\miniz.c ..\l4common\probe_ipc.c /DL4_COMMUNICATION_READER_ONLY ..\l4common\update_state.c ..\l4common\journal.c src\cert_discovery.c obj\x64\l4superv.res ..\l4common\layout.c /link /OUT:bin\x64\l4superv.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib wtsapi32.lib userenv.lib ncrypt.lib version.lib bcrypt.lib ole32.lib iphlpapi.lib shell32.lib && cl.exe /nologo /W4 /O2 /utf-8 /MT /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /Foobj\x64\ src\installer_main.c src\config.c src\hardware_fingerprint.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\miniz.c src\zip_extractor.c obj\x64\l4install.res ..\l4common\layout.c /link /OUT:bin\x64\l4install_x64.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib shell32.lib version.lib"
+if not "%errorlevel%"=="0" (
     echo [ERROR] x64 build failed!
     set BUILD_FAILED=1
 ) else (
@@ -133,28 +147,32 @@ if errorlevel 1 (
 exit /b 0
 
 :do_build_tests
+call :do_identity_test x86
+if not "%errorlevel%"=="0" exit /b 1
+call :do_identity_test x64
+if not "%errorlevel%"=="0" exit /b 1
 echo.
 echo [Build and Run Tests] Unit and Component Tests (x64)...
-cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && cl.exe /nologo /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x64\ tests\test_pending_pin.c src\state_mgr.c src\service_mgr.c src\cert_discovery.c /link /OUT:bin\x64\test_pending_pin.exe advapi32.lib crypt32.lib user32.lib shlwapi.lib version.lib ncrypt.lib && cl.exe /nologo /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x64\ tests\test_wait_active_component.c src\orchestrator.c src\proxy_client.c ..\l4pin\src\http_client.c ..\leo4proxy\src\policy_json.c src\mosquitto_conf.c src\state_mgr.c src\service_mgr.c src\hardware_fingerprint.c src\session_proc.c src\config.c src\cert_discovery.c /link /OUT:bin\x64\test_wait_active_component.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib wtsapi32.lib userenv.lib ncrypt.lib version.lib && cl.exe /nologo /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x64\ tests\test_session_proc.c src\session_proc.c /link /OUT:bin\x64\test_session_proc.exe advapi32.lib user32.lib wtsapi32.lib userenv.lib shlwapi.lib"
-if errorlevel 1 (
+cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && cl.exe /nologo /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x64\ tests\test_pending_pin.c src\state_mgr.c src\service_mgr.c src\cert_discovery.c ..\l4common\layout.c /link /OUT:bin\x64\test_pending_pin.exe advapi32.lib crypt32.lib user32.lib shlwapi.lib version.lib ncrypt.lib && cl.exe /nologo /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x64\ tests\test_wait_active_component.c ..\l4common\probe_ipc.c ..\l4common\update_state.c ..\l4common\journal.c src\proxy_client.c ..\l4pin\src\http_client.c ..\leo4proxy\src\policy_json.c src\mosquitto_conf.c src\state_mgr.c src\service_mgr.c src\hardware_fingerprint.c src\session_proc.c src\config.c src\cert_discovery.c ..\l4common\layout.c /link /OUT:bin\x64\test_wait_active_component.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib wtsapi32.lib userenv.lib ncrypt.lib version.lib bcrypt.lib ole32.lib iphlpapi.lib shell32.lib && cl.exe /nologo /O2 /MT /W4 /utf-8 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x64\ tests\test_session_proc.c src\session_proc.c /link /OUT:bin\x64\test_session_proc.exe advapi32.lib user32.lib wtsapi32.lib userenv.lib shlwapi.lib"
+if not "%errorlevel%"=="0" (
     echo [ERROR] x64 test build failed!
     set BUILD_FAILED=1
     exit /b 1
 )
 bin\x64\test_pending_pin.exe
-if errorlevel 1 (
+if not "%errorlevel%"=="0" (
     echo [ERROR] test_pending_pin failed!
     set BUILD_FAILED=1
     exit /b 1
 )
 bin\x64\test_wait_active_component.exe
-if errorlevel 1 (
+if not "%errorlevel%"=="0" (
     echo [ERROR] test_wait_active_component failed!
     set BUILD_FAILED=1
     exit /b 1
 )
 bin\x64\test_session_proc.exe
-if errorlevel 1 (
+if not "%errorlevel%"=="0" (
     echo [ERROR] test_session_proc failed!
     set BUILD_FAILED=1
     exit /b 1
@@ -162,26 +180,26 @@ if errorlevel 1 (
 
 echo.
 echo [Build and Run Tests] Unit and Component Tests (x86)...
-cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x86\ tests\test_pending_pin.c src\state_mgr.c src\service_mgr.c src\cert_discovery.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\test_pending_pin.exe advapi32.lib crypt32.lib user32.lib shlwapi.lib version.lib ncrypt.lib && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x86\ tests\test_wait_active_component.c src\orchestrator.c src\proxy_client.c ..\l4pin\src\http_client.c ..\leo4proxy\src\policy_json.c src\mosquitto_conf.c src\state_mgr.c src\service_mgr.c src\hardware_fingerprint.c src\session_proc.c src\config.c src\cert_discovery.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\test_wait_active_component.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib wtsapi32.lib userenv.lib ncrypt.lib version.lib && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x86\ tests\test_session_proc.c src\session_proc.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\test_session_proc.exe advapi32.lib user32.lib wtsapi32.lib userenv.lib shlwapi.lib"
-if errorlevel 1 (
+cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x86\ tests\test_pending_pin.c src\state_mgr.c src\service_mgr.c src\cert_discovery.c ..\l4common\layout.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\test_pending_pin.exe advapi32.lib crypt32.lib user32.lib shlwapi.lib version.lib ncrypt.lib && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x86\ tests\test_wait_active_component.c ..\l4common\probe_ipc.c ..\l4common\update_state.c ..\l4common\journal.c src\proxy_client.c ..\l4pin\src\http_client.c ..\leo4proxy\src\policy_json.c src\mosquitto_conf.c src\state_mgr.c src\service_mgr.c src\hardware_fingerprint.c src\session_proc.c src\config.c src\cert_discovery.c ..\l4common\layout.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\test_wait_active_component.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib wtsapi32.lib userenv.lib ncrypt.lib version.lib bcrypt.lib ole32.lib iphlpapi.lib shell32.lib && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\x86\ tests\test_session_proc.c src\session_proc.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\test_session_proc.exe advapi32.lib user32.lib wtsapi32.lib userenv.lib shlwapi.lib"
+if not "%errorlevel%"=="0" (
     echo [ERROR] x86 test build failed!
     set BUILD_FAILED=1
     exit /b 1
 )
 bin\x86\test_pending_pin.exe
-if errorlevel 1 (
+if not "%errorlevel%"=="0" (
     echo [ERROR] test_pending_pin x86 failed!
     set BUILD_FAILED=1
     exit /b 1
 )
 bin\x86\test_wait_active_component.exe
-if errorlevel 1 (
+if not "%errorlevel%"=="0" (
     echo [ERROR] test_wait_active_component x86 failed!
     set BUILD_FAILED=1
     exit /b 1
 )
 bin\x86\test_session_proc.exe
-if errorlevel 1 (
+if not "%errorlevel%"=="0" (
     echo [ERROR] test_session_proc x86 failed!
     set BUILD_FAILED=1
     exit /b 1
@@ -189,24 +207,28 @@ if errorlevel 1 (
 exit /b 0
 
 :do_shutdown_test
-cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\%1\ tests\test_service_shutdown.c /link /OUT:bin\%1\test_service_shutdown.exe advapi32.lib user32.lib"
-if errorlevel 1 exit /b 1
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\%1\ tests\test_service_shutdown.c ..\l4common\layout.c /link /OUT:bin\%1\test_service_shutdown.exe advapi32.lib user32.lib"
+if not "%errorlevel%"=="0" exit /b 1
 bin\%1\test_service_shutdown.exe
 exit /b %ERRORLEVEL%
 
 :do_restart_status_test
-cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\%1\ tests\test_mosquitto_routes.c src\mosquitto_conf.c /link /OUT:bin\%1\test_mosquitto_routes.exe shlwapi.lib"
-if errorlevel 1 exit /b 1
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /WX /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\%1\ tests\test_windows_paths.c src\config.c src\service_mgr.c ..\l4common\layout.c /link /OUT:bin\%1\test_windows_paths.exe user32.lib shlwapi.lib"
+if not "%errorlevel%"=="0" exit /b 1
+bin\%1\test_windows_paths.exe
+if not "%errorlevel%"=="0" exit /b 1
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\%1\ tests\test_mosquitto_routes.c src\mosquitto_conf.c ..\l4common\layout.c /link /OUT:bin\%1\test_mosquitto_routes.exe shlwapi.lib"
+if not "%errorlevel%"=="0" exit /b 1
 bin\%1\test_mosquitto_routes.exe
-if errorlevel 1 exit /b 1
-cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\%1\ tests\test_mqtt_restart.c /link /OUT:bin\%1\test_mqtt_restart.exe advapi32.lib user32.lib && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\%1\ tests\test_process_discovery.c /link /OUT:bin\%1\test_process_discovery.exe advapi32.lib user32.lib wtsapi32.lib userenv.lib shlwapi.lib"
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\%1\ tests\test_mqtt_restart.c ..\l4common\layout.c /link /OUT:bin\%1\test_mqtt_restart.exe advapi32.lib user32.lib && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\%1\ tests\test_process_discovery.c /link /OUT:bin\%1\test_process_discovery.exe advapi32.lib user32.lib wtsapi32.lib userenv.lib shlwapi.lib"
+if not "%errorlevel%"=="0" exit /b 1
 bin\%1\test_mqtt_restart.exe
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 bin\%1\test_process_discovery.exe
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\%1\ tests\test_mosquitto_log_acl.c /link /OUT:bin\%1\test_mosquitto_log_acl.exe advapi32.lib"
-if errorlevel 1 exit /b 1
+if not "%errorlevel%"=="0" exit /b 1
 bin\%1\test_mosquitto_log_acl.exe
 exit /b %ERRORLEVEL%
 
@@ -215,10 +237,69 @@ set BUILD_FAILED=1
 goto :summary
 
 :do_identity_test
-cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\%1\ tests\test_identity_transition.c src\config.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\hardware_fingerprint.c src\session_proc.c src\cert_discovery.c /link /OUT:bin\%1\test_identity_transition.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib wtsapi32.lib userenv.lib ncrypt.lib version.lib"
-if errorlevel 1 exit /b 1
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I src /Foobj\%1\ tests\test_identity_transition.c ..\l4common\update_state_store.c ..\l4common\probe_ipc.c ..\l4common\update_state.c ..\l4common\journal.c src\config.c src\state_mgr.c src\service_mgr.c src\mosquitto_conf.c src\hardware_fingerprint.c src\session_proc.c src\cert_discovery.c ..\l4common\layout.c /link /OUT:bin\%1\test_identity_transition.exe advapi32.lib crypt32.lib winhttp.lib ws2_32.lib user32.lib shlwapi.lib wtsapi32.lib userenv.lib ncrypt.lib version.lib bcrypt.lib ole32.lib iphlpapi.lib shell32.lib"
+if not "%errorlevel%"=="0" exit /b 1
 bin\%1\test_identity_transition.exe
 exit /b %ERRORLEVEL%
+
+:build_stand_probes
+call :do_stand_probe x86
+if errorlevel 1 exit /b 1
+call :do_stand_probe x64
+exit /b %errorlevel%
+
+:do_stand_probe
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /WX /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /Foobj\%1\ tests\probe_installed_communication.c ..\l4common\probe_ipc.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\%1\probe_installed_communication.exe advapi32.lib"
+if errorlevel 1 exit /b 1
+if /i "%1"=="x86" (
+    copy /y bin\x86\probe_installed_communication.exe bin\probe_installed_communication.exe >nul
+    if errorlevel 1 exit /b 1
+)
+bin\%1\probe_installed_communication.exe --help
+exit /b %errorlevel%
+
+:build_scm_tests
+call :do_scm_test x86
+if errorlevel 1 exit /b 1
+call :do_scm_test x64
+if errorlevel 1 exit /b 1
+copy /y bin\x86\test_communication_scm.exe bin\test_communication_scm.exe >nul
+exit /b %errorlevel%
+
+:do_scm_test
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /WX /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /Foobj\%1\ tests\test_communication_scm.c ..\l4common\service_switch.c ..\l4common\communication_boot.c ..\l4common\communication_worker.c ..\l4common\recovery_plan.c ..\l4common\recovery_store.c ..\l4common\communication_plan.c ..\l4common\communication_store.c ..\l4common\communication_recovery.c ..\l4common\journal_codec.c ..\l4common\bootstrap.c ..\l4common\release.c src\miniz.c ..\l4common\config_transaction.c ..\l4common\update_state.c ..\l4common\update_state_store.c ..\l4common\layout.c ..\l4common\journal.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\%1\test_communication_scm.exe advapi32.lib crypt32.lib wintrust.lib bcrypt.lib ole32.lib shlwapi.lib"
+if errorlevel 1 exit /b 1
+if /i "%1"=="x86" (
+    copy /y bin\x86\test_communication_scm.exe bin\test_communication_scm.exe >nul
+    if errorlevel 1 exit /b 1
+)
+bin\%1\test_communication_scm.exe --help
+exit /b %errorlevel%
+
+:build_communication_tests
+call :do_communication_test x86
+if errorlevel 1 exit /b 1
+call :do_communication_test x64
+exit /b %errorlevel%
+
+:do_communication_test
+call :do_stand_probe %1
+if errorlevel 1 exit /b 1
+call :do_scm_test %1
+if errorlevel 1 exit /b 1
+
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /WX /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /Foobj\%1\ ..\l4common\tests\test_communication_boot.c ..\l4common\recovery_plan.c ..\l4common\recovery_store.c ..\l4common\communication_plan.c ..\l4common\communication_store.c ..\l4common\communication_recovery.c ..\l4common\journal_codec.c ..\l4common\bootstrap.c ..\l4common\release.c src\miniz.c ..\l4common\config_transaction.c ..\l4common\update_state.c ..\l4common\update_state_store.c ..\l4common\layout.c ..\l4common\journal.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\%1\test_communication_boot.exe advapi32.lib crypt32.lib wintrust.lib bcrypt.lib ole32.lib shlwapi.lib"
+if errorlevel 1 exit /b 1
+bin\%1\test_communication_boot.exe
+if errorlevel 1 exit /b 1
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /WX /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /Foobj\%1\ tests\test_communication_signals.c ..\l4common\proxy_certificate.c ..\leo4proxy\src\policy_json.c ..\l4common\layout.c ..\l4common\journal.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\%1\test_communication_signals.exe advapi32.lib ws2_32.lib iphlpapi.lib shell32.lib shlwapi.lib bcrypt.lib ole32.lib"
+if errorlevel 1 exit /b 1
+bin\%1\test_communication_signals.exe
+if errorlevel 1 exit /b 1
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /O2 /MT /W4 /WX /utf-8 /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /Foobj\%1\ tests\test_communication_watch.c ..\l4common\communication_plan.c ..\l4common\communication_store.c ..\l4common\communication_recovery.c ..\l4common\journal_codec.c ..\l4common\bootstrap.c ..\l4common\release.c src\miniz.c ..\l4common\config_transaction.c ..\l4common\update_state.c ..\l4common\update_state_store.c ..\l4common\layout.c ..\l4common\journal.c /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\%1\test_communication_watch.exe advapi32.lib crypt32.lib wintrust.lib bcrypt.lib ole32.lib shlwapi.lib"
+if errorlevel 1 exit /b 1
+bin\%1\test_communication_watch.exe
+exit /b %errorlevel%
 
 :summary
 echo.

@@ -1,17 +1,31 @@
 #include "config.h"
+#include "../../l4common/layout.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+bool config_set_runtime_paths(L4DeskConfig* cfg, const wchar_t* exe) {
+    wchar_t base[MAX_PATH]; BOOL substituted = FALSE;
+    if (!cfg || !l4_runtime_release_from_exe(exe, L"l4desk", base, &cfg->installed_layout)) return false;
+    if (!WideCharToMultiByte(CP_ACP, GetACP() == CP_UTF8 ? WC_ERR_INVALID_CHARS : WC_NO_BEST_FIT_CHARS, base, -1, cfg->base_path,
+        MAX_PATH, NULL, GetACP() == CP_UTF8 ? NULL : &substituted) || substituted) return false;
+    const char* env_base = getenv("L4_TOOLS_BASE_PATH");
+    if (!cfg->installed_layout && env_base && *env_base) {
+        if (strlen(env_base) >= MAX_PATH) return false;
+        strcpy_s(cfg->base_path, MAX_PATH, env_base);
+    }
+    return l4_runtime_path_ansi(cfg->base_path, L4_DATA_LOGS,
+        L"l4desk\\l4desk.log", L"l4desk\\log\\l4desk.log", cfg->log_file);
+}
 
 void config_init_defaults(L4DeskConfig* cfg) {
     if (!cfg) return;
     memset(cfg, 0, sizeof(L4DeskConfig));
 
-    const char* env_base = getenv("L4_TOOLS_BASE_PATH");
-    if (env_base && env_base[0] != '\0') {
-        strcpy_s(cfg->base_path, sizeof(cfg->base_path), env_base);
-    } else {
-        strcpy_s(cfg->base_path, sizeof(cfg->base_path), DEFAULT_BASE_PATH);
+    wchar_t exe[MAX_PATH];
+    DWORD length = GetModuleFileNameW(NULL, exe, MAX_PATH);
+    if (!length || length >= MAX_PATH || !config_set_runtime_paths(cfg, exe)) {
+        cfg->base_path[0] = cfg->log_file[0] = 0;
     }
 
     strcpy_s(cfg->mqtt_host, sizeof(cfg->mqtt_host), DEFAULT_MQTT_HOST);
@@ -21,7 +35,6 @@ void config_init_defaults(L4DeskConfig* cfg) {
     cfg->presence_interval_sec = DEFAULT_PRESENCE_INTERVAL_SEC;
     cfg->keepalive_sec = DEFAULT_KEEPALIVE_SEC;
     cfg->reconnect_sec = DEFAULT_RECONNECT_SEC;
-    snprintf(cfg->log_file, sizeof(cfg->log_file), "%s\\l4desk\\log\\l4desk.log", cfg->base_path);
     cfg->verbose = false;
     cfg->run_mode = false;
     cfg->console_mode = true;
@@ -41,7 +54,7 @@ void config_init_defaults(L4DeskConfig* cfg) {
 }
 
 bool config_parse_args(L4DeskConfig* cfg, int argc, char* argv[]) {
-    if (!cfg) return false;
+    if (!cfg || !cfg->base_path[0] || !cfg->log_file[0]) return false;
 
     for (int i = 1; i < argc; i++) {
         if (_stricmp(argv[i], "--help") == 0 || _stricmp(argv[i], "-h") == 0) {
@@ -57,7 +70,7 @@ bool config_parse_args(L4DeskConfig* cfg, int argc, char* argv[]) {
             printf("  --presence-interval <sec>  Periodic presence publish interval (default: %d)\n", DEFAULT_PRESENCE_INTERVAL_SEC);
             printf("  --keepalive <sec>          MQTT keepalive seconds (default: %d)\n", DEFAULT_KEEPALIVE_SEC);
             printf("  --reconnect <sec>          Initial reconnect backoff seconds (default: %d)\n", DEFAULT_RECONNECT_SEC);
-            printf("  --log <path>               Log file path (default: %s)\n", DEFAULT_LOG_FILE);
+            printf("  --log <path>               Log file path (default: %s)\n", cfg->log_file);
             printf("  --verbose, -v              Verbose logging\n");
             printf("  --version                  Show version\n");
             exit(0);
@@ -80,8 +93,12 @@ bool config_parse_args(L4DeskConfig* cfg, int argc, char* argv[]) {
             continue;
         }
         if (_stricmp(argv[i], "--base-path") == 0 && i + 1 < argc) {
-            strcpy_s(cfg->base_path, sizeof(cfg->base_path), argv[++i]);
-            snprintf(cfg->log_file, sizeof(cfg->log_file), "%s\\l4desk\\log\\l4desk.log", cfg->base_path);
+            const char* requested = argv[++i];
+            if (strlen(requested) >= MAX_PATH ||
+                (cfg->installed_layout && _stricmp(requested, cfg->base_path))) return false;
+            strcpy_s(cfg->base_path, MAX_PATH, requested);
+            if (!l4_runtime_path_ansi(cfg->base_path, L4_DATA_LOGS,
+                L"l4desk\\l4desk.log", L"l4desk\\log\\l4desk.log", cfg->log_file)) return false;
             continue;
         }
         if (_stricmp(argv[i], "--host") == 0 && i + 1 < argc) {
@@ -139,10 +156,13 @@ bool config_parse_args(L4DeskConfig* cfg, int argc, char* argv[]) {
             continue;
         }
         if (_stricmp(argv[i], "--log") == 0 && i + 1 < argc) {
-            strcpy_s(cfg->log_file, sizeof(cfg->log_file), argv[++i]);
+            const char* requested = argv[++i];
+            if (strlen(requested) >= MAX_PATH ||
+                (cfg->installed_layout && _stricmp(requested, cfg->log_file))) return false;
+            strcpy_s(cfg->log_file, MAX_PATH, requested);
             continue;
         }
     }
 
-    return true;
+    return cfg->base_path[0] && cfg->log_file[0];
 }

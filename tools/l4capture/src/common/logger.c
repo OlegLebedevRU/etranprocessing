@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include "l4capture/logger.h"
+#include "../../../l4common/layout.h"
 
 static FILE *g_log_fp = NULL;
 static wchar_t g_log_path[MAX_PATH];
@@ -44,8 +45,12 @@ static bool path_join_log(wchar_t *out, size_t cap, const wchar_t *dir, const wc
 
 static bool resolve_default_dir(wchar_t *dir, size_t cap)
 {
-    wchar_t *slash;
-    if (!GetModuleFileNameW(NULL, dir, (DWORD)cap)) return false;
+    wchar_t exe[MAX_PATH], path[MAX_PATH], *slash;
+    DWORD length = GetModuleFileNameW(NULL, exe, MAX_PATH);
+    if (!length || length >= MAX_PATH || !l4_runtime_exe_path(exe, L"l4capture",
+        L4_DATA_LOGS, L"l4capture\\l4capture.log", L"l4capture.log", path)) return false;
+    if (wcslen(path) >= cap) return false;
+    wcscpy_s(dir, cap, path);
     slash = wcsrchr(dir, L'\\');
     if (!slash) return false;
     slash[1] = L'\0';

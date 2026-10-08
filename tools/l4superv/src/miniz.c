@@ -1,6 +1,8 @@
 /* miniz.c - Deflate / Inflate and ZIP archive reader implementation */
 #include "miniz.h"
 #include <windows.h>
+#include <io.h>
+#include <fcntl.h>
 
 #define MZ_READ_LE16(p) ((mz_uint16)(((const mz_uint8 *)(p))[0]) | ((mz_uint16)(((const mz_uint8 *)(p))[1]) << 8))
 #define MZ_READ_LE32(p) ((mz_uint32)(((const mz_uint8 *)(p))[0]) | ((mz_uint32)(((const mz_uint8 *)(p))[1]) << 8) | ((mz_uint32)(((const mz_uint8 *)(p))[2]) << 16) | ((mz_uint32)(((const mz_uint8 *)(p))[3]) << 24))
@@ -200,6 +202,7 @@ static bool inflate_raw(const mz_uint8 *in_buf, size_t in_len, mz_uint8 *out_buf
 typedef struct {
     mz_uint64 local_header_ofs;
     mz_uint16 method;
+    mz_uint16 flags;
     mz_uint32 comp_size;
     mz_uint32 uncomp_size;
     mz_uint32 crc32;
@@ -213,16 +216,9 @@ typedef struct {
     zip_entry_internal *entries;
 } zip_internal_state;
 
-mz_bool mz_zip_reader_init_file(mz_zip_archive *pZip, const char *pFilename, mz_uint32 flags) {
-    (void)flags;
-    if (!pZip || !pFilename) return MZ_FALSE;
+static mz_bool init_stream(mz_zip_archive *pZip, FILE *f) {
+    if (!pZip || !f) { if(f)fclose(f); return MZ_FALSE; }
     memset(pZip, 0, sizeof(*pZip));
-
-    FILE *f = NULL;
-    if (fopen_s(&f, pFilename, "rb") != 0 || !f) {
-        return MZ_FALSE;
-    }
-
     fseek(f, 0, SEEK_END);
     long sz = ftell(f);
     if (sz < 22) {
@@ -239,7 +235,7 @@ mz_bool mz_zip_reader_init_file(mz_zip_archive *pZip, const char *pFilename, mz_
     }
 
     fseek(f, sz - search_len, SEEK_SET);
-    fread(search_buf, 1, search_len, f);
+    if (fread(search_buf, 1, search_len, f) != (size_t)search_len) { free(search_buf); fclose(f); return MZ_FALSE; }
 
     long eocd_pos = -1;
     for (long i = search_len - 22; i >= 0; i--) {
@@ -262,6 +258,7 @@ mz_bool mz_zip_reader_init_file(mz_zip_archive *pZip, const char *pFilename, mz_
         return MZ_FALSE;
     }
 
+    if (MZ_READ_LE16(eocd + 4) || MZ_READ_LE16(eocd + 6) || MZ_READ_LE16(eocd + 8) != MZ_READ_LE16(eocd + 10)) { fclose(f); return MZ_FALSE; }
     mz_uint16 total_entries = MZ_READ_LE16(eocd + 10);
     (void)MZ_READ_LE32(eocd + 12); // cd_size
     mz_uint32 cd_ofs = MZ_READ_LE32(eocd + 16);
@@ -276,12 +273,15 @@ mz_bool mz_zip_reader_init_file(mz_zip_archive *pZip, const char *pFilename, mz_
     state->num_entries = total_entries;
     state->entries = (zip_entry_internal *)calloc(total_entries, sizeof(zip_entry_internal));
 
+    if (!state->entries && total_entries) { free(state); fclose(f); return MZ_FALSE; }
+    if (cd_ofs > (mz_uint32)eocd_pos) { free(state->entries); free(state); fclose(f); return MZ_FALSE; }
     fseek(f, cd_ofs, SEEK_SET);
     for (mz_uint32 i = 0; i < total_entries; i++) {
         mz_uint8 chdr[46];
         if (fread(chdr, 1, 46, f) != 46 || MZ_READ_LE32(chdr) != 0x02014b50) {
-            break;
+            free(state->entries); free(state); fclose(f); return MZ_FALSE;
         }
+        state->entries[i].flags = MZ_READ_LE16(chdr + 8);
         state->entries[i].method = MZ_READ_LE16(chdr + 10);
         state->entries[i].crc32 = MZ_READ_LE32(chdr + 16);
         state->entries[i].comp_size = MZ_READ_LE32(chdr + 20);
@@ -291,13 +291,11 @@ mz_bool mz_zip_reader_init_file(mz_zip_archive *pZip, const char *pFilename, mz_
         mz_uint16 comment_len = MZ_READ_LE16(chdr + 32);
         state->entries[i].local_header_ofs = MZ_READ_LE32(chdr + 42);
 
-        if (fn_len < MAX_PATH) {
-            fread(state->entries[i].filename, 1, fn_len, f);
-            state->entries[i].filename[fn_len] = '\0';
-        } else {
-            fseek(f, fn_len, SEEK_CUR);
+        if (!fn_len || fn_len >= MAX_PATH || fread(state->entries[i].filename, 1, fn_len, f) != fn_len ||
+            memchr(state->entries[i].filename, 0, fn_len)) {
+            free(state->entries); free(state); fclose(f); return MZ_FALSE;
         }
-
+        state->entries[i].filename[fn_len] = '\0';
         size_t slen = strlen(state->entries[i].filename);
         if (slen > 0 && (state->entries[i].filename[slen - 1] == '/' || state->entries[i].filename[slen - 1] == '\\')) {
             state->entries[i].is_dir = MZ_TRUE;
@@ -310,6 +308,22 @@ mz_bool mz_zip_reader_init_file(mz_zip_archive *pZip, const char *pFilename, mz_
     pZip->m_pState = state;
     pZip->m_zip_mode = MZ_ZIP_MODE_READING;
     return MZ_TRUE;
+}
+
+mz_bool mz_zip_reader_init_file(mz_zip_archive *pZip, const char *pFilename, mz_uint32 flags) {
+    (void)flags; if (!pZip || !pFilename) return MZ_FALSE;
+    FILE *f = NULL; if (fopen_s(&f, pFilename, "rb") != 0 || !f) return MZ_FALSE;
+    return init_stream(pZip, f);
+}
+
+mz_bool mz_zip_reader_init_handle(mz_zip_archive *pZip, void *file_handle, mz_uint32 flags) {
+    (void)flags; if (!pZip || !file_handle || file_handle == INVALID_HANDLE_VALUE) return MZ_FALSE;
+    HANDLE owned = NULL;
+    if (!DuplicateHandle(GetCurrentProcess(), file_handle, GetCurrentProcess(), &owned, 0, FALSE, DUPLICATE_SAME_ACCESS)) return MZ_FALSE;
+    int fd = _open_osfhandle((intptr_t)owned, _O_RDONLY | _O_BINARY);
+    if (fd == -1) { CloseHandle(owned); return MZ_FALSE; }
+    FILE *f = _fdopen(fd, "rb"); if (!f) { _close(fd); return MZ_FALSE; }
+    return init_stream(pZip, f);
 }
 
 mz_bool mz_zip_reader_end(mz_zip_archive *pZip) {
@@ -334,6 +348,9 @@ mz_bool mz_zip_reader_file_stat(mz_zip_archive *pZip, mz_uint32 file_index, mz_z
     memset(pStat, 0, sizeof(*pStat));
     pStat->m_file_index = file_index;
     pStat->m_method = state->entries[file_index].method;
+    pStat->m_bit_flag = state->entries[file_index].flags;
+    pStat->m_is_encrypted = (pStat->m_bit_flag & 1) != 0;
+    pStat->m_is_supported = !pStat->m_is_encrypted && (pStat->m_method == 0 || pStat->m_method == 8);
     pStat->m_comp_size = state->entries[file_index].comp_size;
     pStat->m_uncomp_size = state->entries[file_index].uncomp_size;
     pStat->m_crc32 = state->entries[file_index].crc32;
@@ -356,7 +373,7 @@ void *mz_zip_reader_extract_file_to_heap(mz_zip_archive *pZip, mz_uint32 file_in
     if (file_index >= state->num_entries) return NULL;
 
     zip_entry_internal *ent = &state->entries[file_index];
-    if (ent->is_dir) return NULL;
+    if (ent->is_dir || (ent->flags & 1) || (ent->method == 0 && ent->comp_size != ent->uncomp_size)) return NULL;
 
     fseek(state->f, (long)ent->local_header_ofs, SEEK_SET);
     mz_uint8 lhdr[30];
@@ -368,7 +385,7 @@ void *mz_zip_reader_extract_file_to_heap(mz_zip_archive *pZip, mz_uint32 file_in
     mz_uint16 extra_len = MZ_READ_LE16(lhdr + 28);
     fseek(state->f, fn_len + extra_len, SEEK_CUR);
 
-    mz_uint8 *comp_data = (mz_uint8 *)malloc((size_t)ent->comp_size);
+    mz_uint8 *comp_data = (mz_uint8 *)malloc(ent->comp_size ? (size_t)ent->comp_size : 1);
     if (!comp_data) return NULL;
 
     if (fread(comp_data, 1, (size_t)ent->comp_size, state->f) != ent->comp_size) {

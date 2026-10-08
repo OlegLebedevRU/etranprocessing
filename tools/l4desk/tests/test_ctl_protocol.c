@@ -7,11 +7,14 @@
 #include <string.h>
 #include <assert.h>
 #include "ctl_protocol.h"
+#include "config.h"
 #include "json_min.h"
 #include "display_inventory.h"
 #include "input_inject.h"
 #include "dedup_cache.h"
 #include "ffmpeg_cmdline.h"
+
+static char g_test_root[MAX_PATH];
 
 #define ASSERT_TRUE(cond) do { \
     if (!(cond)) { \
@@ -224,7 +227,7 @@ static void test_protocol_payloads(void) {
     len = ctl_build_extended_presence_payload(buf, sizeof(buf), "online", true, &sm, &inv, &sinfo);
     ASSERT_TRUE(len > 0);
     ASSERT_TRUE(strstr(buf, "\"type\":\"presence\"") != NULL);
-    ASSERT_TRUE(strstr(buf, "\"version\":\"1.9.2\"") != NULL);
+    ASSERT_TRUE(strstr(buf, "\"version\":\"" L4DESK_VERSION_STR "\"") != NULL);
     ASSERT_TRUE(strstr(buf, "\"mouse_drag\"") != NULL);
     ASSERT_TRUE(strstr(buf, "\"mouse_wheel\"") != NULL);
     ASSERT_TRUE(strstr(buf, "\"inventory\"") != NULL);
@@ -374,7 +377,7 @@ static void test_command_handling_validation(void) {
     ASSERT_TRUE(strstr(resp, "\"stream_instance_id\":\"\"") == NULL);
 
     /* 9. Lease watchdog update verification */
-    ffmpeg_supervisor_init("C:\\l4tools", "TERM001");
+    ffmpeg_supervisor_init(g_test_root, "TERM_LAYOUT_FIXTURE");
     StreamStateInfo sinfo;
     ffmpeg_supervisor_get_info(&sinfo);
     ASSERT_TRUE(sinfo.lease_expires_at_ms == 0);
@@ -485,7 +488,7 @@ static void test_input_gate_and_shortcuts(void) {
     bool should_pub = false;
     uint8_t qos = 1;
 
-    ffmpeg_supervisor_init("C:\\l4tools", "TERM001");
+    ffmpeg_supervisor_init(g_test_root, "TERM_LAYOUT_FIXTURE");
 
     char start_res[32], start_err_code[64], start_err_msg[256];
     ffmpeg_supervisor_start("s_input_test", "lease_input", "desktop", "disp:11223344", "default", &inv,
@@ -585,6 +588,16 @@ static void test_input_gate_and_shortcuts(void) {
 }
 
 int main(void) {
+    char temp[MAX_PATH];
+    DWORD length = GetTempPathA(MAX_PATH, temp);
+    ASSERT_TRUE(length && length < MAX_PATH);
+    snprintf(g_test_root, MAX_PATH, "%sl4desk-protocol-%lu", temp, GetCurrentProcessId());
+    ASSERT_TRUE(CreateDirectoryA(g_test_root, NULL));
+    wchar_t fake[MAX_PATH];
+    ASSERT_TRUE(GetFullPathNameW(L"bin\\fake_ffmpeg.exe", MAX_PATH, fake, NULL));
+    ffmpeg_supervisor_set_custom_binary(fake);
+    ffmpeg_supervisor_set_media_backend("ffmpeg");
+    printf("FIXTURE_ROOT=%s\n", g_test_root);
     printf("=== Running l4desk Unit Tests (Protocol & Inventory & Input) ===\n");
     test_json_min();
     test_fnv1a_stability();

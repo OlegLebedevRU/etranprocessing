@@ -3,6 +3,7 @@
 #endif
 
 #include "command_runner.h"
+#include "../../l4common/layout.h"
 #include "event_ipc.h"
 #include "mqtt_protocol.h"
 #include <wincrypt.h>
@@ -15,7 +16,7 @@
 
 #pragma comment(lib, "shlwapi.lib")
 
-static wchar_t g_active_working_dir[MAX_PATH] = L"C:\\l4tools";
+static wchar_t g_active_working_dir[MAX_PATH];
 
 typedef BOOL (WINAPI *LPFN_WOW64DISABLEWOW64FSREDIRECTION)(PVOID*);
 typedef BOOL (WINAPI *LPFN_WOW64REVERTWOW64FSREDIRECTION)(PVOID);
@@ -79,86 +80,53 @@ static void resolve_taskkill_path(wchar_t* out_path, size_t out_max) {
     wcscpy_s(out_path, out_max, L"taskkill.exe");
 }
 
-void command_runner_setup_environment(void) {
-    wchar_t exe_path[MAX_PATH];
-    if (GetModuleFileNameW(NULL, exe_path, MAX_PATH) == 0) return;
-
-    // exe_dir: e.g. C:\l4tools\l4con\x86 or C:\l4tools\l4con or C:\l4tools\bin
-    wchar_t exe_dir[MAX_PATH];
-    wcscpy_s(exe_dir, MAX_PATH, exe_path);
-    PathRemoveFileSpecW(exe_dir);
-
-    // base_dir: e.g. C:\l4tools
-    wchar_t base_dir[MAX_PATH];
-    wcscpy_s(base_dir, MAX_PATH, exe_dir);
-
-    // Strip architecture subdir if present (e.g. \x86, \x64, \bin)
-    wchar_t* last_slash = wcsrchr(base_dir, L'\\');
-    if (last_slash && (_wcsicmp(last_slash + 1, L"x86") == 0 ||
-                       _wcsicmp(last_slash + 1, L"x64") == 0 ||
-                       _wcsicmp(last_slash + 1, L"bin") == 0)) {
-        *last_slash = L'\0';
-    }
-
-    // Strip tool subdir if present (e.g. \l4con)
-    last_slash = wcsrchr(base_dir, L'\\');
-    if (last_slash && (_wcsicmp(last_slash + 1, L"l4con") == 0 ||
-                       _wcsicmp(last_slash + 1, L"bin") == 0)) {
-        *last_slash = L'\0';
-    }
-
-    DWORD attr = GetFileAttributesW(base_dir);
-    if (attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY)) {
-        wcscpy_s(g_active_working_dir, MAX_PATH, base_dir);
+bool command_runner_paths(const wchar_t* exe, wchar_t work[MAX_PATH], wchar_t tools[MAX_PATH]) {
+    wchar_t release[MAX_PATH]; bool installed;
+    if (!l4_runtime_release_from_exe(exe, L"l4con", release, &installed)) return false;
+    if (installed) {
+        L4Layout layout;
+        if (!l4_layout_resolve(&layout, L"0.0.0") || !l4_runtime_path(release, L4_DATA_STATE,
+            L"l4con\\work", L"l4con\\work", work)) return false;
+        wcscpy_s(tools, MAX_PATH, layout.launchers);
     } else {
-        attr = GetFileAttributesW(L"C:\\l4tools");
-        if (attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY)) {
-            wcscpy_s(g_active_working_dir, MAX_PATH, L"C:\\l4tools");
-        } else {
-            wcscpy_s(g_active_working_dir, MAX_PATH, exe_dir);
+        wcscpy_s(work, MAX_PATH, release);
+        wcscpy_s(tools, MAX_PATH, release);
+    }
+    return true;
+}
+
+bool command_runner_setup_environment(void) {
+    wchar_t exe[MAX_PATH], work[MAX_PATH], tools[MAX_PATH], win_dir[MAX_PATH];
+    DWORD length = GetModuleFileNameW(NULL, exe, MAX_PATH);
+    if (!length || length >= MAX_PATH || !command_runner_paths(exe, work, tools)) return false;
+    DWORD attributes = GetFileAttributesW(work);
+    if (attributes == INVALID_FILE_ATTRIBUTES || !(attributes & FILE_ATTRIBUTE_DIRECTORY) ||
+        (attributes & FILE_ATTRIBUTE_REPARSE_POINT)) { SetLastError(ERROR_PATH_NOT_FOUND); return false; }
+    if (!GetWindowsDirectoryW(win_dir, MAX_PATH)) return false;
+    DWORD current_length = GetEnvironmentVariableW(L"PATH", NULL, 0);
+    wchar_t* current = (wchar_t*)calloc(current_length + 1, sizeof(wchar_t));
+    if (!current) { SetLastError(ERROR_NOT_ENOUGH_MEMORY); return false; }
+    if (current_length) {
+        DWORD copied = GetEnvironmentVariableW(L"PATH", current, current_length);
+        if (!copied || copied >= current_length) { free(current); SetLastError(ERROR_INSUFFICIENT_BUFFER); return false; }
+    }
+    wchar_t path[32767], portable[8192] = L"";
+    if (!_wcsicmp(work, tools)) {
+        if (swprintf_s(portable, _countof(portable),
+            L";%ls\\l4con;%ls\\l4sql;%ls\\l4pin;%ls\\l4superv;%ls\\leo4proxy;"
+            L"%ls\\l4con\\bin;%ls\\l4sql\\bin;%ls\\l4pin\\bin;%ls\\l4superv\\bin;%ls\\leo4proxy\\bin",
+            tools, tools, tools, tools, tools, tools, tools, tools, tools, tools) < 0) {
+            free(current); SetLastError(ERROR_INSUFFICIENT_BUFFER); return false;
         }
     }
-
-    // Set process working directory to base directory (e.g. C:\l4tools)
-    SetCurrentDirectoryW(g_active_working_dir);
-
-    // Read existing PATH
-    DWORD cur_len = GetEnvironmentVariableW(L"PATH", NULL, 0);
-    wchar_t* cur_path = NULL;
-    if (cur_len > 0) {
-        cur_path = (wchar_t*)malloc((cur_len + 1) * sizeof(wchar_t));
-        if (cur_path) {
-            GetEnvironmentVariableW(L"PATH", cur_path, cur_len + 1);
-        }
-    }
-
-    wchar_t win_dir[MAX_PATH];
-    if (GetWindowsDirectoryW(win_dir, MAX_PATH) == 0) {
-        wcscpy_s(win_dir, MAX_PATH, L"C:\\Windows");
-    }
-
-    // Build extended PATH with all tool directories and standard system directories
-    wchar_t new_path[8192];
-    _snwprintf(new_path, sizeof(new_path)/sizeof(wchar_t),
-               L"%ls;%ls\\l4con;%ls\\l4con\\x86;%ls\\l4con\\x64;"
-               L"%ls\\l4sql;%ls\\l4sql\\x86;%ls\\l4sql\\x64;"
-               L"%ls\\l4pin;%ls\\l4pin\\x86;%ls\\l4pin\\x64;"
-               L"%ls\\l4superv;%ls\\l4superv\\x86;%ls\\l4superv\\x64;"
-               L"%ls\\leo4proxy;%ls\\leo4proxy\\x86;%ls\\leo4proxy\\x64;"
-               L"%ls;%ls\\System32;%ls;%ls\\System32\\Wbem;%ls\\System32\\WindowsPowerShell\\v1.0;%ls\\Sysnative;%ls",
-               g_active_working_dir,
-               g_active_working_dir, g_active_working_dir, g_active_working_dir,
-               g_active_working_dir, g_active_working_dir, g_active_working_dir,
-               g_active_working_dir, g_active_working_dir, g_active_working_dir,
-               g_active_working_dir, g_active_working_dir, g_active_working_dir,
-               g_active_working_dir, g_active_working_dir, g_active_working_dir,
-               exe_dir,
-               win_dir, win_dir, win_dir, win_dir, win_dir,
-               cur_path ? cur_path : L"");
-
-    SetEnvironmentVariableW(L"PATH", new_path);
-
-    if (cur_path) free(cur_path);
+    int written = _snwprintf_s(path, _countof(path), _TRUNCATE,
+        L"%ls%ls;%ls\\System32;%ls\\System32\\Wbem;%ls\\System32\\WindowsPowerShell\\v1.0;%ls\\Sysnative;%ls",
+        tools, portable, win_dir, win_dir, win_dir, win_dir, current);
+    free(current);
+    if (written < 0) { SetLastError(ERROR_INSUFFICIENT_BUFFER); return false; }
+    if (!SetCurrentDirectoryW(work) || !SetEnvironmentVariableW(L"PATH", path)) return false;
+    wcscpy_s(g_active_working_dir, MAX_PATH, work);
+    return true;
 }
 
 void command_runner_get_active_working_dir(char* out_dir, size_t out_max) {

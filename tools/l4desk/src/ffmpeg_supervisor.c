@@ -3,6 +3,7 @@
 #endif
 
 #include "ffmpeg_supervisor.h"
+#include "../../l4common/layout.h"
 #include "ffmpeg_cmdline.h"
 #include "desktop_state.h"
 #include "input_inject.h"
@@ -55,7 +56,7 @@ typedef struct {
 static FFmpegSupervisorState g_sup;
 static CRITICAL_SECTION g_sup_cs;
 static bool g_sup_cs_inited = false;
-static char g_base_path[MAX_PATH] = "C:\\l4tools";
+static char g_base_path[MAX_PATH];
 static char g_sn[64] = "UNKNOWN";
 static wchar_t g_custom_ffmpeg_binary[MAX_PATH] = { 0 };
 static HANDLE g_hFfmpegMutex = NULL;
@@ -99,12 +100,14 @@ static void ensure_dir_exists(const char* dir) {
     CreateDirectoryA(tmp, NULL);
 }
 
-static void get_state_file_path(char* out, size_t max_len) {
-    snprintf(out, max_len, "%s\\l4desk\\state\\ffmpeg_state.json", g_base_path);
+static bool get_state_file_path(char* out, size_t max_len) {
+    return max_len >= MAX_PATH && l4_runtime_path_ansi(g_base_path, L4_DATA_STATE,
+        L"l4desk\\ffmpeg_state.json", L"l4desk\\state\\ffmpeg_state.json", out);
 }
 
-static void get_log_dir_path(char* out, size_t max_len) {
-    snprintf(out, max_len, "%s\\ffmpeg\\log", g_base_path);
+static bool get_log_dir_path(char* out, size_t max_len) {
+    return max_len >= MAX_PATH && l4_runtime_path_ansi(g_base_path, L4_DATA_LOGS,
+        L"ffmpeg", L"ffmpeg\\log", out);
 }
 
 static void rotate_logs(const char* base_log) {
@@ -169,10 +172,14 @@ static DWORD WINAPI log_reader_thread(LPVOID lpParam) {
 
 static void save_state_file(void) {
     char state_file[MAX_PATH];
-    get_state_file_path(state_file, sizeof(state_file));
+    if (!get_state_file_path(state_file, sizeof(state_file))) {
+        log_error("Cannot resolve media state path (win32=%lu)", GetLastError());
+        return;
+    }
 
     char state_dir[MAX_PATH];
-    snprintf(state_dir, sizeof(state_dir), "%s\\l4desk\\state", g_base_path);
+    strcpy_s(state_dir, MAX_PATH, state_file);
+    *strrchr(state_dir, '\\') = 0;
     ensure_dir_exists(state_dir);
 
     char tmp_file[MAX_PATH];
@@ -395,7 +402,11 @@ void ffmpeg_supervisor_reconcile(void) {
     EnterCriticalSection(&g_sup_cs);
 
     char state_file[MAX_PATH];
-    get_state_file_path(state_file, sizeof(state_file));
+    if (!get_state_file_path(state_file, sizeof(state_file))) {
+        log_error("Cannot resolve reconcile state path (win32=%lu)", GetLastError());
+        LeaveCriticalSection(&g_sup_cs);
+        return;
+    }
 
     FILE* f = NULL;
     if (fopen_s(&f, state_file, "rb") == 0 && f) {
@@ -448,6 +459,12 @@ static bool launch_ffmpeg_process(const wchar_t* cmdline,
                                   const char* stream_instance_id,
                                   char* out_err_code, size_t max_err_code,
                                   char* out_err_msg, size_t max_err_msg) {
+    char log_dir[MAX_PATH];
+    if (!get_log_dir_path(log_dir, sizeof(log_dir))) {
+        strcpy_s(out_err_code, max_err_code, "ffmpeg_integrity");
+        strcpy_s(out_err_msg, max_err_msg, "Cannot resolve media log directory");
+        return false;
+    }
     SECURITY_ATTRIBUTES sa;
     ZeroMemory(&sa, sizeof(sa));
     sa.nLength = sizeof(sa);
@@ -530,8 +547,6 @@ static bool launch_ffmpeg_process(const wchar_t* cmdline,
     g_sup.last_progress_time = time(NULL);
 
     // Start background log & progress reader
-    char log_dir[MAX_PATH];
-    get_log_dir_path(log_dir, sizeof(log_dir));
     ensure_dir_exists(log_dir);
 
     LogReaderContext* rctx = (LogReaderContext*)malloc(sizeof(LogReaderContext));

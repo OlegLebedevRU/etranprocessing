@@ -108,11 +108,18 @@ int mqtt_build_publish_with_properties(unsigned char* buf, size_t max_len,
                                        uint8_t qos, uint8_t retain,
                                        const MqttUserProperty* properties,
                                        size_t property_count) {
+    return mqtt_build_publish_expiring(buf,max_len,topic,payload,payload_len,packet_id,qos,retain,properties,property_count,0);
+}
+int mqtt_build_publish_expiring(unsigned char* buf,size_t max_len,const char* topic,
+    const void* payload,size_t payload_len,uint16_t packet_id,uint8_t qos,uint8_t retain,
+    const MqttUserProperty* properties,size_t property_count,uint32_t expiry_seconds) {
     if (!buf || !topic || qos > 1 || (property_count && !properties)) return -1;
     size_t topic_len = strlen(topic);
     if (topic_len > UINT16_MAX || (payload_len && !payload)) return -1;
     unsigned char property_buf[1024];
     size_t property_len = 0;
+    if(expiry_seconds){property_buf[property_len++]=0x02;
+        for(int shift=24;shift>=0;shift-=8)property_buf[property_len++]=(unsigned char)(expiry_seconds>>shift);}
     for (size_t i = 0; i < property_count; i++) {
         if (!properties[i].name || !properties[i].value) return -1;
         size_t name_len = strlen(properties[i].name);
@@ -234,6 +241,9 @@ int mqtt_parse_rpc_metadata(const unsigned char* packet,uint32_t length,
             if (name_len==11 && !memcmp(name,"method_code",11)) {target=out->method_code;cap=sizeof(out->method_code);}
             else if (name_len==15 && !memcmp(name,"correlationData",15)) {target=out->correlation;cap=sizeof(out->correlation);}
             else if (name_len==16 && !memcmp(name,"payload_required",16)) {target=out->payload_required;cap=sizeof(out->payload_required);}
+            else if (name_len==15 && !memcmp(name,"event_type_code",15)) {target=out->event_type_code;cap=sizeof(out->event_type_code);}
+            else if (name_len==12 && !memcmp(name,"dev_event_id",12)) {target=out->dev_event_id;cap=sizeof(out->dev_event_id);}
+            else if (name_len==9 && !memcmp(name,"iot_probe",9)) {target=out->iot_probe;cap=sizeof(out->iot_probe);}
             if (target) {
                 if (!value_len || value_len>=cap || memchr(value,0,value_len)) return -1;
                 if (*target && (strlen(target)!=value_len || memcmp(target,value,value_len))) return -1;

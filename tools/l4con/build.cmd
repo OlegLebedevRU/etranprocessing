@@ -65,7 +65,7 @@ goto :summary
 :do_build_x86
 echo.
 echo [Build x86] 32-bit static binary (Windows 7 SP1+ compatible)...
-cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\l4con.res res\l4con.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /I ..\l4pin\src /Foobj\x86\ src\main.c src\config.c ..\leo4proxy\src\policy_json.c ..\l4pin\src\http_client.c src\mqtt_protocol.c src\command_runner.c src\mqtt_client.c src\rpc_contract.c src\file_manager.c src\fm_process.c src\event_ipc.c src\tool_inventory.c src\service_mgr.c ..\l4pin\src\cert_discovery.c obj\x86\l4con.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\l4con.exe ws2_32.lib winhttp.lib advapi32.lib user32.lib shlwapi.lib ole32.lib shell32.lib crypt32.lib ncrypt.lib bcrypt.lib version.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\l4con.res res\l4con.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /I ..\l4pin\src /Foobj\x86\ src\main.c src\config.c ..\leo4proxy\src\policy_json.c ..\l4pin\src\http_client.c src\mqtt_protocol.c src\link_probe.c ..\l4common\probe_ipc.c ..\l4common\update_state.c ..\l4common\journal.c src\command_runner.c ..\l4common\layout.c ..\l4common\access.c src\mqtt_client.c src\rpc_contract.c src\update_event.c src\update_status.c src\update_reporting.c src\update_admission.c ..\l4common\remote_result.c ..\l4common\remote_outcome.c ..\l4common\remote_launch_failure.c ..\l4common\recovery_plan.c ..\l4common\communication_plan.c ..\l4common\communication_recovery.c ..\l4common\remote_status.c ..\l4common\remote_request.c ..\l4common\remote_host.c ..\l4common\active_updater.c ..\l4common\bootstrap_history.c ..\l4common\journal_codec.c ..\l4common\journal_reader.c ..\l4common\route_plan.c ..\l4common\catalog.c ..\l4common\catalog_floor.c ..\l4common\metadata.c src\file_manager.c src\fm_process.c src\event_ipc.c src\tool_inventory.c src\service_mgr.c ..\l4pin\src\cert_discovery.c obj\x86\l4con.res /link /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\l4con.exe ws2_32.lib winhttp.lib advapi32.lib user32.lib shlwapi.lib ole32.lib shell32.lib crypt32.lib ncrypt.lib bcrypt.lib version.lib"
 if errorlevel 1 (
     echo [ERROR] x86 build failed!
     set BUILD_FAILED=1
@@ -78,7 +78,7 @@ exit /b 0
 :do_build_x64
 echo.
 echo [Build x64] 64-bit static binary...
-cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /fo obj\x64\l4con.res res\l4con.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /I ..\l4pin\src /Foobj\x64\ src\main.c src\config.c ..\leo4proxy\src\policy_json.c ..\l4pin\src\http_client.c src\mqtt_protocol.c src\command_runner.c src\mqtt_client.c src\rpc_contract.c src\file_manager.c src\fm_process.c src\event_ipc.c src\tool_inventory.c src\service_mgr.c ..\l4pin\src\cert_discovery.c obj\x64\l4con.res /link /OUT:bin\x64\l4con.exe ws2_32.lib winhttp.lib advapi32.lib user32.lib shlwapi.lib ole32.lib shell32.lib crypt32.lib ncrypt.lib bcrypt.lib version.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /fo obj\x64\l4con.res res\l4con.rc && cl.exe /nologo /O2 /MT /W4 /utf-8 /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /DUNICODE /D_UNICODE /I src /I res /I ..\l4pin\src /Foobj\x64\ src\main.c src\config.c ..\leo4proxy\src\policy_json.c ..\l4pin\src\http_client.c src\mqtt_protocol.c src\link_probe.c ..\l4common\probe_ipc.c ..\l4common\update_state.c ..\l4common\journal.c src\command_runner.c ..\l4common\layout.c ..\l4common\access.c src\mqtt_client.c src\rpc_contract.c src\update_event.c src\update_status.c src\update_reporting.c src\update_admission.c ..\l4common\remote_result.c ..\l4common\remote_outcome.c ..\l4common\remote_launch_failure.c ..\l4common\recovery_plan.c ..\l4common\communication_plan.c ..\l4common\communication_recovery.c ..\l4common\remote_status.c ..\l4common\remote_request.c ..\l4common\remote_host.c ..\l4common\active_updater.c ..\l4common\bootstrap_history.c ..\l4common\journal_codec.c ..\l4common\journal_reader.c ..\l4common\route_plan.c ..\l4common\catalog.c ..\l4common\catalog_floor.c ..\l4common\metadata.c src\file_manager.c src\fm_process.c src\event_ipc.c src\tool_inventory.c src\service_mgr.c ..\l4pin\src\cert_discovery.c obj\x64\l4con.res /link /OUT:bin\x64\l4con.exe ws2_32.lib winhttp.lib advapi32.lib user32.lib shlwapi.lib ole32.lib shell32.lib crypt32.lib ncrypt.lib bcrypt.lib version.lib"
 if errorlevel 1 (
     echo [ERROR] x64 build failed!
     set BUILD_FAILED=1
@@ -134,8 +134,16 @@ cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && cl.exe /nologo /W4 /utf-8 /D_CRT_SE
 if not "%errorlevel%"=="0" set BUILD_FAILED=1
 call :test_discovery x86
 call :test_rpc x86
+call :test_update_event x86
+call :test_update_reporting x86
+call :test_update_admission x86
+call :test_active_updater x86
+call :test_fm_user x86
+call :test_link_evidence x86
 call :test_fm x86
 call :test_fm_process x86
+call :test_update_guard x86
+call :test_update_state x86
 exit /b 0
 
 :do_test_x64
@@ -143,8 +151,16 @@ cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && cl.exe /nologo /W4 /utf-8 /D_CRT_SE
 if not "%errorlevel%"=="0" set BUILD_FAILED=1
 call :test_discovery x64
 call :test_rpc x64
+call :test_update_event x64
+call :test_update_reporting x64
+call :test_update_admission x64
+call :test_active_updater x64
+call :test_fm_user x64
+call :test_link_evidence x64
 call :test_fm x64
 call :test_fm_process x64
+call :test_update_guard x64
+call :test_update_state x64
 exit /b 0
 
 :test_discovery
@@ -162,15 +178,66 @@ if not "%errorlevel%"=="0" set BUILD_FAILED=1
 exit /b 0
 
 :test_fm
-cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /W4 /WX /MT /utf-8 /D_CRT_SECURE_NO_WARNINGS /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /I src /Foobj\%1\ tests\test_file_manager.c src\rpc_contract.c src\mqtt_protocol.c ..\leo4proxy\src\policy_json.c ..\l4pin\src\cert_discovery.c /link /OUT:obj\%1\test_file_manager.exe winhttp.lib crypt32.lib bcrypt.lib advapi32.lib ole32.lib shlwapi.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /W4 /WX /MT /utf-8 /D_CRT_SECURE_NO_WARNINGS /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /I src /Foobj\%1\ tests\test_file_manager.c ..\l4common\update_state_store.c ..\l4common\update_state.c ..\l4common\journal.c ..\l4common\layout.c ..\l4common\access.c src\rpc_contract.c src\mqtt_protocol.c ..\leo4proxy\src\policy_json.c ..\l4pin\src\cert_discovery.c /link /OUT:obj\%1\test_file_manager.exe winhttp.lib crypt32.lib bcrypt.lib advapi32.lib ole32.lib shlwapi.lib shell32.lib"
 if not "%errorlevel%"=="0" set BUILD_FAILED=1
 if %BUILD_FAILED% equ 0 obj\%1\test_file_manager.exe
 if not "%errorlevel%"=="0" set BUILD_FAILED=1
 exit /b 0
 
 :test_fm_process
-cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /W4 /WX /MT /utf-8 /D_CRT_SECURE_NO_WARNINGS /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /I src /Foobj\%1\ tests\test_fm_process.c ..\leo4proxy\src\policy_json.c /link /OUT:obj\%1\test_fm_process.exe shell32.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /W4 /WX /MT /utf-8 /D_CRT_SECURE_NO_WARNINGS /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /I src /Foobj\%1\ tests\test_fm_process.c ..\l4common\update_state.c ..\l4common\journal.c ..\l4common\layout.c ..\leo4proxy\src\policy_json.c /link /OUT:obj\%1\test_fm_process.exe shell32.lib advapi32.lib bcrypt.lib ole32.lib"
 if not "%errorlevel%"=="0" set BUILD_FAILED=1
 if %BUILD_FAILED% equ 0 obj\%1\test_fm_process.exe
+if not "%errorlevel%"=="0" set BUILD_FAILED=1
+exit /b 0
+
+:test_update_guard
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /W4 /WX /MT /utf-8 /D_CRT_SECURE_NO_WARNINGS /D_WIN32_WINNT=0x0601 /Foobj\%1\ ..\l4common\tests\test_update_guard.c ..\l4common\update_guard.c /link /OUT:obj\%1\test_update_guard.exe"
+if not "%errorlevel%"=="0" set BUILD_FAILED=1
+if %BUILD_FAILED% equ 0 obj\%1\test_update_guard.exe
+if not "%errorlevel%"=="0" set BUILD_FAILED=1
+exit /b 0
+
+:test_update_state
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /W4 /WX /MT /utf-8 /D_CRT_SECURE_NO_WARNINGS /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /Foobj\%1\ ..\l4common\tests\test_update_state.c ..\l4common\update_state.c ..\l4common\journal.c ..\l4common\layout.c /link /OUT:obj\%1\test_update_state.exe advapi32.lib bcrypt.lib ole32.lib shell32.lib"
+if not "%errorlevel%"=="0" set BUILD_FAILED=1
+if %BUILD_FAILED% equ 0 obj\%1\test_update_state.exe
+if not "%errorlevel%"=="0" set BUILD_FAILED=1
+exit /b 0
+
+:test_update_event
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /W4 /WX /MT /utf-8 /D_CRT_SECURE_NO_WARNINGS /D_WIN32_WINNT=0x0601 /I src /Foobj\%1\ tests\test_update_event.c src\update_event.c src\update_status.c ..\l4common\remote_result.c ..\l4common\remote_outcome.c ..\l4common\remote_launch_failure.c src\rpc_contract.c src\mqtt_protocol.c ..\leo4proxy\src\policy_json.c /link /OUT:obj\%1\test_update_event.exe"
+if not "%errorlevel%"=="0" set BUILD_FAILED=1
+if %BUILD_FAILED% equ 0 obj\%1\test_update_event.exe
+if not "%errorlevel%"=="0" set BUILD_FAILED=1
+exit /b 0
+
+:test_update_reporting
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /W4 /WX /MT /utf-8 /D_CRT_SECURE_NO_WARNINGS /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /I src /Foobj\%1\ tests\test_update_reporting.c src\update_event.c src\update_status.c ..\l4common\remote_result.c ..\l4common\remote_outcome.c ..\l4common\remote_launch_failure.c src\rpc_contract.c src\mqtt_protocol.c ..\leo4proxy\src\policy_json.c /link /OUT:obj\%1\test_update_reporting.exe ole32.lib"
+if not "%errorlevel%"=="0" set BUILD_FAILED=1
+if %BUILD_FAILED% equ 0 obj\%1\test_update_reporting.exe
+if not "%errorlevel%"=="0" set BUILD_FAILED=1
+exit /b 0
+:test_update_admission
+call tests\test_update_admission.cmd %1
+if errorlevel 1 set BUILD_FAILED=1
+exit /b 0
+
+:test_active_updater
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /W4 /WX /MT /utf-8 /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /D_WIN32_WINNT=0x0601 /DUNICODE /D_UNICODE /Foobj\%1\ ..\l4common\tests\test_active_updater.c ..\l4common\bootstrap_history.c ..\l4common\journal_reader.c ..\l4common\journal_codec.c ..\l4common\journal.c ..\l4common\layout.c ..\leo4proxy\src\policy_json.c /link /OUT:obj\%1\test_active_updater.exe advapi32.lib bcrypt.lib shell32.lib ole32.lib"
+if errorlevel 1 set BUILD_FAILED=1
+if %BUILD_FAILED% equ 0 obj\%1\test_active_updater.exe
+if errorlevel 1 set BUILD_FAILED=1
+exit /b 0
+
+:test_fm_user
+call tests\test_fm_user.cmd %1
+if errorlevel 1 set BUILD_FAILED=1
+exit /b 0
+
+:test_link_evidence
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl.exe /nologo /W4 /WX /MT /utf-8 /D_CRT_SECURE_NO_WARNINGS /Foobj\%1\ tests\test_link_evidence.c ..\leo4proxy\src\policy_json.c /link /OUT:obj\%1\test_link_evidence.exe ole32.lib"
+if not "%errorlevel%"=="0" set BUILD_FAILED=1
+if %BUILD_FAILED% equ 0 obj\%1\test_link_evidence.exe
 if not "%errorlevel%"=="0" set BUILD_FAILED=1
 exit /b 0

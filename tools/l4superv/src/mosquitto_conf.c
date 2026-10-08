@@ -1,10 +1,41 @@
 #include "mosquitto_conf.h"
 #include "service_mgr.h"
 #include <stdio.h>
+#include "../../l4common/layout.h"
 #include <stdlib.h>
 #include <string.h>
 #include <shlwapi.h>
 #include <io.h>
+#include <aclapi.h>
+#pragma comment(lib, "advapi32.lib")
+
+/* Built-in configuration contains only local routing, never credentials.
+ * Custom templates and their replacements retain the private parent policy. */
+static bool config_policy(const wchar_t* source,const wchar_t* target,bool public_read) {
+    HANDLE input=CreateFileW(source,READ_CONTROL|FILE_READ_ATTRIBUTES,FILE_SHARE_READ,NULL,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,NULL);
+    if(input==INVALID_HANDLE_VALUE)return false;
+    PSECURITY_DESCRIPTOR sd=NULL;PACL acl=NULL,merged=NULL;
+    BY_HANDLE_FILE_INFORMATION source_info;
+    bool ok=GetFileInformationByHandle(input,&source_info) && source_info.nNumberOfLinks==1 &&
+        !(source_info.dwFileAttributes&(FILE_ATTRIBUTE_DIRECTORY|FILE_ATTRIBUTE_REPARSE_POINT));
+    if(ok)ok=GetSecurityInfo(input,SE_FILE_OBJECT,DACL_SECURITY_INFORMATION,NULL,NULL,&acl,NULL,&sd)==ERROR_SUCCESS && acl;
+    SECURITY_DESCRIPTOR_CONTROL flags=0;DWORD revision=0;
+    if(ok)ok=GetSecurityDescriptorControl(sd,&flags,&revision)!=0;
+    if(ok && public_read){BYTE users[SECURITY_MAX_SID_SIZE];DWORD size=sizeof(users);EXPLICIT_ACCESS_W access={0};
+        ok=CreateWellKnownSid(WinBuiltinUsersSid,NULL,users,&size)!=0;
+        access.grfAccessPermissions=FILE_GENERIC_READ;access.grfAccessMode=GRANT_ACCESS;BuildTrusteeWithSidW(&access.Trustee,users);
+        if(ok)ok=SetEntriesInAclW(1,&access,acl,&merged)==ERROR_SUCCESS;
+    }
+    HANDLE output=INVALID_HANDLE_VALUE;
+    if(ok){output=CreateFileW(target,WRITE_DAC|READ_CONTROL|FILE_READ_ATTRIBUTES,FILE_SHARE_READ,NULL,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,NULL);ok=output!=INVALID_HANDLE_VALUE;}
+    if(ok){BY_HANDLE_FILE_INFORMATION info;ok=GetFileInformationByHandle(output,&info) && info.nNumberOfLinks==1 &&
+        !(info.dwFileAttributes&(FILE_ATTRIBUTE_DIRECTORY|FILE_ATTRIBUTE_REPARSE_POINT));}
+    if(ok)ok=SetSecurityInfo(output,SE_FILE_OBJECT,DACL_SECURITY_INFORMATION|
+        ((flags&SE_DACL_PROTECTED)?PROTECTED_DACL_SECURITY_INFORMATION:UNPROTECTED_DACL_SECURITY_INFORMATION),
+        NULL,NULL,merged?merged:acl,NULL)==ERROR_SUCCESS;
+    DWORD error=GetLastError();if(output!=INVALID_HANDLE_VALUE)CloseHandle(output);CloseHandle(input);
+    if(merged)LocalFree(merged);if(sd)LocalFree(sd);if(!ok)SetLastError(error?error:ERROR_ACCESS_DENIED);return ok;
+}
 
 #pragma comment(lib, "shlwapi.lib")
 
@@ -32,9 +63,9 @@ static void write_routes(FILE* output,const char* sn) {
  * terminal's non-routing settings, reject foreign routes, publish atomically. */
 static bool migrate_config(const wchar_t* base_path,const wchar_t* source) {
     wchar_t target[MAX_PATH],candidate[MAX_PATH],backup[MAX_PATH];
-    swprintf_s(target,MAX_PATH,L"%s\\mosquitto\\mosquitto.conf",base_path);
-    swprintf_s(candidate,MAX_PATH,L"%s\\mosquitto\\mosquitto.conf.next",base_path);
-    swprintf_s(backup,MAX_PATH,L"%s\\mosquitto\\mosquitto.conf.previous",base_path);
+    if (!l4_runtime_path(base_path, L4_DATA_CONFIG, L"mosquitto\\mosquitto.conf", L"mosquitto\\mosquitto.conf", target)) return false;
+    if (!l4_runtime_path(base_path, L4_DATA_CONFIG, L"mosquitto\\mosquitto.conf.next", L"mosquitto\\mosquitto.conf.next", candidate)) return false;
+    if (!l4_runtime_path(base_path, L4_DATA_CONFIG, L"mosquitto\\mosquitto.conf.previous", L"mosquitto\\mosquitto.conf.previous", backup)) return false;
     FILE* input=NULL;
     if(_wfopen_s(&input,source,L"rb") || !input)return false;
     char line[4096],sn[128]={0};bool ok=true,bridge=false,listener=false,address=false;
@@ -86,18 +117,20 @@ static bool migrate_config(const wchar_t* base_path,const wchar_t* source) {
     if(ok && bridge && !routes)write_routes(output,sn);
     fclose(input);
     if(output) {ok=ok && !ferror(output) && fflush(output)==0 && _commit(_fileno(output))==0;if(fclose(output)!=0)ok=false;}
-    if(ok && GetFileAttributesW(target)!=INVALID_FILE_ATTRIBUTES)ok=CopyFileW(target,backup,FALSE)!=0;
+    if(ok)ok=config_policy(source,candidate,false);
+    if(ok && GetFileAttributesW(target)!=INVALID_FILE_ATTRIBUTES)
+        ok=CopyFileW(target,backup,FALSE)!=0 && config_policy(target,backup,false);
     if(ok)ok=MoveFileExW(candidate,target,MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)!=0;
     if(!ok)DeleteFileW(candidate);
     return ok;
 }
 
 bool mosquitto_conf_install_candidate(const wchar_t* base_path) {
-    wchar_t source[MAX_PATH];swprintf_s(source,MAX_PATH,L"%s\\mosquitto\\mosquitto.conf.candidate",base_path);
+    wchar_t source[MAX_PATH];if (!l4_runtime_path(base_path, L4_DATA_CONFIG, L"mosquitto\\mosquitto.conf.candidate", L"mosquitto\\mosquitto.conf.candidate", source)) return false;
     bool ok=migrate_config(base_path,source);DeleteFileW(source);return ok;
 }
 bool mosquitto_conf_migrate(const wchar_t* base_path) {
-    wchar_t source[MAX_PATH];swprintf_s(source,MAX_PATH,L"%s\\mosquitto\\mosquitto.conf",base_path);
+    wchar_t source[MAX_PATH];if (!l4_runtime_path(base_path, L4_DATA_CONFIG, L"mosquitto\\mosquitto.conf", L"mosquitto\\mosquitto.conf", source)) return false;
     return migrate_config(base_path,source);
 }
 
@@ -114,26 +147,28 @@ static void get_forward_slash_path(const wchar_t* in_path, char* out_buf, size_t
     }
 }
 
-static void ensure_log_dir_exists(const wchar_t* base_path) {
-    wchar_t mosq_dir[MAX_PATH];
-    swprintf_s(mosq_dir, MAX_PATH, L"%s\\mosquitto", base_path);
-    CreateDirectoryW(mosq_dir, NULL);
-
-    wchar_t log_dir[MAX_PATH];
-    swprintf_s(log_dir, MAX_PATH, L"%s\\mosquitto\\log", base_path);
-    CreateDirectoryW(log_dir, NULL);
-    svc_configure_mosquitto_log(base_path);
+static bool ensure_log_dir_exists(const wchar_t* base_path) {
+    wchar_t config[MAX_PATH], logs[MAX_PATH];
+    if (!l4_runtime_path(base_path, L4_DATA_CONFIG, L"mosquitto", L"mosquitto", config) ||
+        !l4_runtime_path(base_path, L4_DATA_LOGS, L"mosquitto", L"mosquitto\\log", logs)) return false;
+    if (!CreateDirectoryW(config, NULL) && GetLastError() != ERROR_ALREADY_EXISTS) return false;
+    if (!CreateDirectoryW(logs, NULL) && GetLastError() != ERROR_ALREADY_EXISTS) return false;
+    return svc_configure_mosquitto_log(base_path);
 }
 
 bool mosquitto_conf_generate_standby(const wchar_t* base_path, int port) {
     if (!base_path) return false;
-    ensure_log_dir_exists(base_path);
+    if (!ensure_log_dir_exists(base_path)) return false;
 
     wchar_t conf_path[MAX_PATH];
-    swprintf_s(conf_path, MAX_PATH, L"%s\\mosquitto\\mosquitto.conf.candidate", base_path);
+    if (!l4_runtime_path(base_path, L4_DATA_CONFIG, L"mosquitto\\mosquitto.conf.candidate", L"mosquitto\\mosquitto.conf.candidate", conf_path)) return false;
+    if(!DeleteFileW(conf_path) && GetLastError()!=ERROR_FILE_NOT_FOUND)return false;
 
     char base_fwd[MAX_PATH * 3] = { 0 };
     get_forward_slash_path(base_path, base_fwd, sizeof(base_fwd));
+    wchar_t log_path[MAX_PATH]; char log_fwd[MAX_PATH * 3] = {0};
+    if (!l4_runtime_path(base_path, L4_DATA_LOGS, L"mosquitto\\mosquitto.log", L"mosquitto\\log\\mosquitto.log", log_path)) return false;
+    get_forward_slash_path(log_path, log_fwd, sizeof(log_fwd));
 
     FILE* f = NULL;
     if (_wfopen_s(&f, conf_path, L"wb") != 0 || !f) {
@@ -147,7 +182,7 @@ bool mosquitto_conf_generate_standby(const wchar_t* base_path, int port) {
     fprintf(f, "listener %d 127.0.0.1\n", port > 0 ? port : 1883);
     fprintf(f, "allow_anonymous true\n\n");
     fprintf(f, "persistence false\n");
-    fprintf(f, "log_dest file %s/mosquitto/log/mosquitto.log\n", base_fwd);
+    fprintf(f, "log_dest file %s\n", log_fwd);
     fprintf(f, "log_type error\n");
     fprintf(f, "log_type warning\n");
     fprintf(f, "log_type notice\n");
@@ -158,7 +193,7 @@ bool mosquitto_conf_generate_standby(const wchar_t* base_path, int port) {
 
     bool written=!ferror(f) && fflush(f)==0 && _commit(_fileno(f))==0;
     if(fclose(f)!=0)written=false;
-    return written && mosquitto_conf_install_candidate(base_path);
+    return written && config_policy(conf_path,conf_path,true) && mosquitto_conf_install_candidate(base_path);
 }
 
 bool mosquitto_conf_generate_active(const wchar_t* base_path,
@@ -166,13 +201,17 @@ bool mosquitto_conf_generate_active(const wchar_t* base_path,
                                     const char* sn,
                                     const wchar_t* custom_tmpl_path) {
     if (!base_path || !sn || sn[0] == '\0') return false;
-    ensure_log_dir_exists(base_path);
+    if (!ensure_log_dir_exists(base_path)) return false;
 
     wchar_t conf_path[MAX_PATH];
-    swprintf_s(conf_path, MAX_PATH, L"%s\\mosquitto\\mosquitto.conf.candidate", base_path);
+    if (!l4_runtime_path(base_path, L4_DATA_CONFIG, L"mosquitto\\mosquitto.conf.candidate", L"mosquitto\\mosquitto.conf.candidate", conf_path)) return false;
+    if(!DeleteFileW(conf_path) && GetLastError()!=ERROR_FILE_NOT_FOUND)return false;
 
     char base_fwd[MAX_PATH * 3] = { 0 };
     get_forward_slash_path(base_path, base_fwd, sizeof(base_fwd));
+    wchar_t log_path[MAX_PATH]; char log_fwd[MAX_PATH * 3] = {0};
+    if (!l4_runtime_path(base_path, L4_DATA_LOGS, L"mosquitto\\mosquitto.log", L"mosquitto\\log\\mosquitto.log", log_path)) return false;
+    get_forward_slash_path(log_path, log_fwd, sizeof(log_fwd));
 
     // Check if custom template exists
     if (custom_tmpl_path && custom_tmpl_path[0] != L'\0' && PathFileExistsW(custom_tmpl_path)) {
@@ -189,6 +228,20 @@ bool mosquitto_conf_generate_active(const wchar_t* base_path,
                     tmpl_data[read_bytes] = '\0';
                     fclose(ft);
 
+                    /* The old macro means writable files beside EXEs. Refuse
+                     * it for a versioned install; use explicit data macros. */
+                    wchar_t config_dir[MAX_PATH], state_dir[MAX_PATH], portable_log[MAX_PATH];
+                    char config_fwd[MAX_PATH * 3] = {0}, state_fwd[MAX_PATH * 3] = {0};
+                    if (!l4_runtime_path(base_path, L4_DATA_CONFIG, L"mosquitto", L"mosquitto", config_dir) ||
+                        !l4_runtime_path(base_path, L4_DATA_STATE, L"mosquitto", L"mosquitto", state_dir) ||
+                        wcslen(base_path) + 30 >= MAX_PATH) { free(tmpl_data); return false; }
+                    swprintf_s(portable_log, MAX_PATH, L"%ls\\mosquitto\\log\\mosquitto.log", base_path);
+                    if (_wcsicmp(portable_log, log_path) && strstr(tmpl_data, "%BASE_PATH%")) {
+                        free(tmpl_data); SetLastError(ERROR_INVALID_DATA); return false;
+                    }
+                    get_forward_slash_path(config_dir, config_fwd, sizeof(config_fwd));
+                    get_forward_slash_path(state_dir, state_fwd, sizeof(state_fwd));
+
                     // Perform macro replacement (%SN%, %BASE_PATH%, %PORT%)
                     FILE* out_f = NULL;
                     if (_wfopen_s(&out_f, conf_path, L"wb") == 0 && out_f) {
@@ -198,6 +251,15 @@ bool mosquitto_conf_generate_active(const wchar_t* base_path,
                                 i += 4;
                             } else if (strncmp(tmpl_data + i, "%BASE_PATH%", 11) == 0) {
                                 fputs(base_fwd, out_f);
+                                i += 11;
+                            } else if (strncmp(tmpl_data + i, "%LOG_PATH%", 10) == 0) {
+                                fputs(log_fwd, out_f);
+                                i += 10;
+                            } else if (strncmp(tmpl_data + i, "%CONFIG_DIR%", 12) == 0) {
+                                fputs(config_fwd, out_f);
+                                i += 12;
+                            } else if (strncmp(tmpl_data + i, "%STATE_DIR%", 11) == 0) {
+                                fputs(state_fwd, out_f);
                                 i += 11;
                             } else if (strncmp(tmpl_data + i, "%PORT%", 6) == 0) {
                                 fprintf(out_f, "%d", port > 0 ? port : 1883);
@@ -249,7 +311,7 @@ bool mosquitto_conf_generate_active(const wchar_t* base_path,
     fprintf(f, "restart_timeout 5 60\n");
     fprintf(f, "keepalive_interval 60\n\n");
     fprintf(f, "persistence false\n");
-    fprintf(f, "log_dest file %s/mosquitto/log/mosquitto.log\n", base_fwd);
+    fprintf(f, "log_dest file %s\n", log_fwd);
     fprintf(f, "log_type error\n");
     fprintf(f, "log_type warning\n");
     fprintf(f, "log_type notice\n");
@@ -260,14 +322,14 @@ bool mosquitto_conf_generate_active(const wchar_t* base_path,
 
     bool written=!ferror(f) && fflush(f)==0 && _commit(_fileno(f))==0;
     if(fclose(f)!=0)written=false;
-    return written && mosquitto_conf_install_candidate(base_path);
+    return written && config_policy(conf_path,conf_path,true) && mosquitto_conf_install_candidate(base_path);
 }
 
 bool mosquitto_conf_is_standby(const wchar_t* base_path) {
     if (!base_path) return false;
 
     wchar_t conf_path[MAX_PATH];
-    swprintf_s(conf_path, MAX_PATH, L"%s\\mosquitto\\mosquitto.conf", base_path);
+    if (!l4_runtime_path(base_path, L4_DATA_CONFIG, L"mosquitto\\mosquitto.conf", L"mosquitto\\mosquitto.conf", conf_path)) return false;
 
     FILE* f = NULL;
     if (_wfopen_s(&f, conf_path, L"rb") != 0 || !f) {
@@ -304,7 +366,7 @@ bool mosquitto_conf_is_active_with_sn(const wchar_t* base_path, const char* sn) 
     if (!base_path || !sn || sn[0] == '\0') return false;
 
     wchar_t conf_path[MAX_PATH];
-    swprintf_s(conf_path, MAX_PATH, L"%s\\mosquitto\\mosquitto.conf", base_path);
+    if (!l4_runtime_path(base_path, L4_DATA_CONFIG, L"mosquitto\\mosquitto.conf", L"mosquitto\\mosquitto.conf", conf_path)) return false;
 
     FILE* f = NULL;
     if (_wfopen_s(&f, conf_path, L"rb") != 0 || !f) {

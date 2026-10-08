@@ -1,15 +1,20 @@
-﻿#ifndef WIN32_LEAN_AND_MEAN
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
+#include "../../l4common/probe_ipc.h"
+#include "../../l4common/update_state.h"
+#include "../../l4common/communication_plan.h"
+#include "communication_watch.h"
 #include <wincrypt.h>
 #include "orchestrator.h"
 #include "cert_discovery.h"
 #include "hardware_fingerprint.h"
 #include "service_mgr.h"
 #include "mosquitto_conf.h"
+#include "../../l4common/layout.h"
 #include "proxy_client.h"
 #include "session_proc.h"
 #include <stdio.h>
@@ -29,6 +34,15 @@ static time_t              g_l4desk_last_start_attempt = 0;
 static int                 g_l4desk_backoff_sec = 5;
 
 static HANDLE              g_hForceTickEvent = NULL;
+static L4UpdateConsumer    g_update_consumer;
+static HANDLE g_pending_pin_process;
+/* Retain exact owned process until termination is observed, including a failed
+ * timeout cleanup. Never turn a lost cleanup result into a successful drain. */
+static bool pending_pin_busy(void){
+    if(!g_pending_pin_process)return false;
+    if(WaitForSingleObject(g_pending_pin_process,0)!=WAIT_OBJECT_0)return true;
+    CloseHandle(g_pending_pin_process);g_pending_pin_process=NULL;return false;
+}
 static int                 g_proxy_cert_mismatch_ticks = 0;
 static ULONGLONG           g_last_proxy_identity_restart = 0;
 static DWORD               g_proxy_identity_retry_ms = 30000;
@@ -250,7 +264,7 @@ static bool process_pending_pin(const L4SupervConfig* cfg, const Leo4ProxyInfo* 
     if (p_force_tick) *p_force_tick = false;
 
     wchar_t pin_file[MAX_PATH];
-    swprintf_s(pin_file, MAX_PATH, L"%ls\\pending_pin.json", cfg->base_path);
+    if (!l4_runtime_path(cfg->base_path, L4_DATA_STATE, L"pending_pin.json", L"pending_pin.json", pin_file)) return false;
     if (!PathFileExistsW(pin_file)) {
         return false;
     }
@@ -427,7 +441,12 @@ static bool process_pending_pin(const L4SupervConfig* cfg, const Leo4ProxyInfo* 
     if (wait_res == WAIT_TIMEOUT) {
         log_info("[WARN] l4pin.exe execution timed out after 60s, terminating");
         TerminateProcess(pi.hProcess, 1);
-        WaitForSingleObject(pi.hProcess, 5000);
+        wait_res=WaitForSingleObject(pi.hProcess, 5000);
+    }
+    if(wait_res!=WAIT_OBJECT_0){
+        g_pending_pin_process=pi.hProcess;CloseHandle(pi.hThread);CloseHandle(hReadPipe);
+        log_info("[WARN] l4pin termination not confirmed; ordinary work and update drain blocked");
+        return false;
     }
 
     char out_buf[4096] = { 0 };
@@ -502,8 +521,7 @@ bool orchestrator_get_ffmpeg_status(const wchar_t* base_path, FFmpegStatus* out_
     memset(out_status, 0, sizeof(FFmpegStatus));
 
     wchar_t state_file[MAX_PATH];
-    swprintf_s(state_file, MAX_PATH, L"%ls\\l4desk\\state\\ffmpeg_state.json",
-               (base_path && base_path[0]) ? base_path : L"C:\\l4tools");
+    if (!l4_runtime_path(base_path, L4_DATA_STATE, L"l4desk\\ffmpeg_state.json", L"l4desk\\state\\ffmpeg_state.json", state_file)) return false;
 
     if (!PathFileExistsW(state_file)) {
         return false;
@@ -560,11 +578,28 @@ static void log_info(const char* fmt, ...) {
     fflush(stdout);
 }
 
-bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action_taken) {
+static bool orchestrator_step_locked(const L4SupervConfig* cfg, L4State* state, bool* p_action_taken) {
     if (!cfg || !state) return false;
     if (p_action_taken) *p_action_taken = false;
+    if(pending_pin_busy())return false;
+    L4UpdateState update;
+    if(!l4_update_consumer_read(&g_update_consumer,&update))return false;
+    if(update.window){
+        if(update.window==L4_UPDATE_COMMUNICATION)return false;
+        /* The updater owns changes. Window2 observes the established link only:
+         * no certificate transitions, config/state writes, PIN, desk or SCM repair. */
+        Leo4ProxyInfo info;
+        return !strcmp(state->status,"active") && state->sn[0] && state->thumbprint[0] &&
+            proxy_client_query_info(cfg->proxy_url,3000,&info) && info.cert_ready &&
+            !strcmp(state->sn,info.sn) && !_stricmp(state->thumbprint,info.thumbprint) &&
+            svc_is_running(SVC_NAME_LEO4PROXY) && svc_is_running(SVC_NAME_MOSQUITTO);
+    }
 
     // 0. Cert Discovery (LocalMachine\MY)
+    /* Reconcile Mosquitto's fixed diagnostic file after creation/rotation only
+     * in ordinary admission: active update windows return before this point. */
+    if (!svc_configure_mosquitto_log(cfg->base_path))
+        log_info("[WARN] Mosquitto diagnostic log access unavailable: %lu", GetLastError());
     cert_info cinfo;
     cert_state cs = cert_discover(NULL, &cinfo);
     strcpy_s(state->last_cert_state, sizeof(state->last_cert_state), cert_state_to_str(cs));
@@ -667,9 +702,19 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
             log_info("[STATE] Transitioning to ACTIVE (SN: %s, Thumbprint: %.8s...)",
                      proxy_info.sn, proxy_info.thumbprint);
 
-            if (!mosquitto_conf_generate_active(cfg->base_path, cfg->mosquitto_port,
+            /* Fresh setup has already installed and probed this exact link before
+             * starting us. Missing supervisor identity is not a reason to replace
+             * its broker config or restart the two journal-pinned service epochs.
+             * A known identity transition still takes the normal restart path. */
+            bool prepared_first_link = !state->sn[0] && !state->thumbprint[0] &&
+                (cs == CERT_VALID || cs == CERT_EXPIRING) && cinfo.cert_duplicates == 0 &&
+                !strcmp(cinfo.sn, proxy_info.sn) && !_stricmp(cinfo.thumbprint_hex, proxy_info.thumbprint) &&
+                mosquitto_conf_is_active_with_sn(cfg->base_path, proxy_info.sn) &&
+                svc_is_running(SVC_NAME_MOSQUITTO) && svc_is_running(SVC_NAME_L4CON);
+            if (!prepared_first_link &&
+                (!mosquitto_conf_generate_active(cfg->base_path, cfg->mosquitto_port,
                                                 proxy_info.sn, cfg->mosquitto_template_path) ||
-                !svc_restart_mqtt_stack()) {
+                 !svc_restart_mqtt_stack())) {
                 log_info("[CERT] MQTT configuration or restart failed; identity transition remains pending");
                 return false;
             }
@@ -777,7 +822,7 @@ bool orchestrator_step(const L4SupervConfig* cfg, L4State* state, bool* p_action
 
         // Process pending_pin.json in standby
         wchar_t pin_file_path[MAX_PATH];
-        swprintf_s(pin_file_path, MAX_PATH, L"%ls\\pending_pin.json", cfg->base_path);
+        if (!l4_runtime_path(cfg->base_path, L4_DATA_STATE, L"pending_pin.json", L"pending_pin.json", pin_file_path)) return false;
         bool has_pending_pin = PathFileExistsW(pin_file_path);
 
         time_t now = time(NULL);
@@ -941,6 +986,32 @@ service_health:
     return true;
 }
 
+bool orchestrator_step(const L4SupervConfig* cfg,L4State* state,bool* action){
+    AcquireSRWLockShared(&g_update_consumer.admission);
+    bool ok=orchestrator_step_locked(cfg,state,action);
+    ReleaseSRWLockShared(&g_update_consumer.admission);return ok;
+}
+/* PIN/config/SCM transitions are synchronous inside the complete cycle above.
+ * Persistent desk is a separate consumer, not a pending supervisor transition;
+ * updater owns its later stop. This ACK does not claim desk/input has drained. */
+static bool supervisor_busy(void* context){(void)context;return pending_pin_busy();}
+static DWORD drain_probe(const L4UpdateState* expected,DWORD timeout,HANDLE cancel,void* context){
+    (void)context;return l4_update_consumer_drain(&g_update_consumer,expected,timeout,cancel,supervisor_busy,NULL);
+}
+static DWORD recovery_probe(const L4UpdateState* expected,DWORD timeout,HANDLE cancel,void* context){
+    return supervisor_communication_watch_query(context,expected,timeout,cancel);
+}
+
+static volatile LONG health_cycle,health_active;
+static DWORD health_probe(DWORD mode,DWORD timeout,HANDLE cancel,void* context){
+    (void)context;if(mode)return ERROR_NOT_SUPPORTED;LONG before=InterlockedCompareExchange(&health_cycle,0,0);
+    if(g_hForceTickEvent)SetEvent(g_hForceTickEvent);ULONGLONG deadline=GetTickCount64()+timeout;
+    while(GetTickCount64()<deadline){
+        if(WaitForSingleObject(cancel,25)!=WAIT_TIMEOUT)return ERROR_CANCELLED;
+        if(InterlockedCompareExchange(&health_cycle,0,0)!=before)return InterlockedCompareExchange(&health_active,0,0)?ERROR_SUCCESS:ERROR_NOT_READY;
+    }return ERROR_TIMEOUT;
+}
+
 void orchestrator_run_loop(const L4SupervConfig* cfg, volatile bool* p_stop_flag) {
     if (!cfg) return;
 
@@ -957,14 +1028,33 @@ void orchestrator_run_loop(const L4SupervConfig* cfg, volatile bool* p_stop_flag
     log_info(" Watchdog:          %s", cfg->watchdog_enabled ? "Enabled" : "Disabled");
     log_info("=======================================================");
 
-    /* Run once as the service identity, including an existing SYSTEM-only log. */
-    svc_configure_mosquitto_log(cfg->base_path);
+    if(!l4_update_consumer_init(L"l4superv",&g_update_consumer))log_info("[UPDATE] Protected state unavailable; ordinary orchestration closed");
+    L4CommunicationWatch* communication=NULL;
+    if(!supervisor_communication_watch_start(&g_update_consumer,&communication))
+        log_info("[UPDATE] Independent communication monitor unavailable; admission closed");
+    /* Startup ACL writes obey the same persisted restriction as later cycles. */
+    L4UpdateState startup_update={0};
+    if(l4_update_consumer_read(&g_update_consumer,&startup_update) && !startup_update.window)
+        svc_configure_mosquitto_log(cfg->base_path);
+    if(startup_update.window==L4_UPDATE_COMMUNICATION){
+        wchar_t operation[40];L4CommunicationPin* recovery=NULL;
+        bool binding=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,startup_update.owner,-1,operation,40)!=0 &&
+            l4_communication_plan_open(&g_update_consumer.layout,operation,&recovery) &&
+            l4_communication_plan_matches(recovery,&startup_update);
+        log_info(binding?"[UPDATE] Protected communication plan matches active window; native owner performs startup reconciliation":
+            "[UPDATE] Communication recovery binding unavailable/mismatched; admission closed");
+        l4_communication_plan_close(recovery);
+    }
     L4State state;
     state_load(cfg->base_path, &state);
+    L4ProbeServer* health=NULL;InterlockedExchange(&health_active,0);
+    if(!l4_probe_server_start_update(L"superv",health_probe,drain_probe,recovery_probe,communication,&health))log_info("[HEALTH] Local readiness endpoint unavailable");
 
     while (!p_stop_flag || !(*p_stop_flag)) {
         bool action = false;
-        orchestrator_step(cfg, &state, &action);
+        bool healthy_step=orchestrator_step(cfg, &state, &action);
+        InterlockedExchange(&health_active,healthy_step && !strcmp(state.status,"active"));
+        InterlockedIncrement(&health_cycle);
 
         if (p_stop_flag && *p_stop_flag) break;
 
@@ -985,6 +1075,9 @@ void orchestrator_run_loop(const L4SupervConfig* cfg, volatile bool* p_stop_flag
         g_l4desk_session = 0;
     }
 
+    l4_probe_server_stop(health);
+    while(!supervisor_communication_watch_close(&communication,1000))
+        log_info("[UPDATE] Waiting for owned communication recovery to exit: %lu",GetLastError());
     state_cleanup(&state);
     if (g_hForceTickEvent) {
         CloseHandle(g_hForceTickEvent);

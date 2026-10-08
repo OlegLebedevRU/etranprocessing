@@ -1,6 +1,7 @@
 #include "config.h"
 #include "service_mgr.h"
 #include "state_mgr.h"
+#include "../../l4common/layout.h"
 #include "hardware_fingerprint.h"
 #include "mosquitto_conf.h"
 #include "orchestrator.h"
@@ -77,8 +78,13 @@ static void WINAPI ServiceMain(DWORD dwArgc, LPWSTR *lpszArgv) {
     GetModuleFileNameW(NULL, exe_path, MAX_PATH);
 
     L4SupervConfig cfg;
-    config_init_defaults(&cfg, exe_path);
-    config_load_json(&cfg, cfg.config_file);
+    if (!config_load_runtime(&cfg, exe_path)) {
+        g_svcStatus.dwCurrentState = SERVICE_STOPPED;
+        g_svcStatus.dwWin32ExitCode = ERROR_INVALID_DATA;
+        SetServiceStatus(g_svcStatusHandle, &g_svcStatus);
+        CloseHandle(g_svcStopEvent); g_svcStopEvent = NULL;
+        return;
+    }
 
     g_svcStatus.dwCurrentState = SERVICE_RUNNING;
     g_svcStatus.dwControlsAccepted = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN;
@@ -231,7 +237,7 @@ int wmain(int argc, wchar_t* argv[]) {
         if (argc != 4 || _wcsicmp(argv[2], L"--dest") != 0 ||
             !argv[3][0] || PathIsRelativeW(argv[3])) return 2;
         wchar_t conf[MAX_PATH];
-        if (swprintf_s(conf, MAX_PATH, L"%ls\\mosquitto\\mosquitto.conf", argv[3]) < 0) return 2;
+        if (!l4_runtime_path(argv[3], L4_DATA_CONFIG, L"mosquitto\\mosquitto.conf", L"mosquitto\\mosquitto.conf", conf)) return 2;
         DWORD attrs = GetFileAttributesW(conf);
         if (attrs != INVALID_FILE_ATTRIBUTES) return (attrs & FILE_ATTRIBUTE_DIRECTORY) ? 1 : (mosquitto_conf_migrate(argv[3]) ? 0 : 1);
         DWORD err = GetLastError();
@@ -244,8 +250,10 @@ int wmain(int argc, wchar_t* argv[]) {
     GetModuleFileNameW(NULL, exe_path, MAX_PATH);
 
     L4SupervConfig cfg;
-    config_init_defaults(&cfg, exe_path);
-    config_load_json(&cfg, cfg.config_file);
+    if (!config_load_runtime(&cfg, exe_path)) {
+        fprintf(stderr, "Supervisor configuration rejected (error %lu). No orchestration was started.\n", GetLastError());
+        return 1;
+    }
 
     if (argc > 1) {
         if (_wcsicmp(argv[1], L"--console") == 0 || _wcsicmp(argv[1], L"-f") == 0) {
@@ -319,7 +327,10 @@ int wmain(int argc, wchar_t* argv[]) {
         wprintf(L"===============================================================\n");
         wprintf(L"Registering and ensuring all services in %ls...\n", cfg.base_path);
 
-        svc_ensure_all_installed_and_running(cfg.base_path);
+        if (!svc_ensure_all_installed_and_running(cfg.base_path)) {
+            wprintf(L"Service setup refused (error %lu). Use l4setup for installed releases.\n", GetLastError());
+            return 1;
+        }
         print_status(&cfg);
 
         wprintf(L"\nTo run supervisor in console loop, use: l4superv.exe --console\n");

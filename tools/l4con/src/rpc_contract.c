@@ -35,6 +35,36 @@ static bool number(const PolicyJson* j,int object,const char* key,int* out,int l
     if (!policy_json_uint(j,token,&value) || value<(unsigned)low || value>(unsigned)high) return false;
     *out=(int)value; return true;
 }
+bool rpc_update_version(const char* value) {
+    if(!value || !*value)return false;
+    if (!strcmp(value,"latest")) return true;
+    for (unsigned part=0;part<3;++part) {
+        if (*value<'0' || *value>'9' || (*value=='0' && value[1]>='0' && value[1]<='9')) return false;
+        unsigned digits=0;
+        do { ++value; if (++digits>9) return false; } while (*value>='0' && *value<='9');
+        if (part<2 && *value++!='.') return false;
+    }
+    return !*value;
+}
+static bool update_request(const PolicyJson* j,int item,RpcCommand* out) {
+    const char* zero="00000000-0000-0000-0000-000000000000";
+    if(!_stricmp(out->task_id,zero))return false;
+    bool select=out->method==7030 || out->method==7031;
+    for (int key=item+1;key<j->tokens[item].next;key=j->tokens[key+1].next) {
+        char name[64];
+        if (!policy_json_string(j,key,name,sizeof(name)) ||
+            (select ? (strcmp(name,"version") && strcmp(name,"target")) : strcmp(name,"operation_id"))) return false;
+        /* Neither nullable producer fields nor implicit JSON coercions here. */
+        if (j->tokens[key+1].type!='"') return false;
+    }
+    if (!select) return text(j,item,"operation_id",out->update_operation_id,sizeof(out->update_operation_id)) && rpc_uuid(out->update_operation_id) && _stricmp(out->update_operation_id,zero)!=0;
+    strcpy_s(out->update_target,sizeof(out->update_target),"suite");
+    if (!text(j,item,"version",out->update_version,sizeof(out->update_version)) || !rpc_update_version(out->update_version) ||
+        !text(j,item,"target",out->update_target,sizeof(out->update_target)) ||
+        (strcmp(out->update_target,"suite") && strcmp(out->update_target,"updater"))) return false;
+    if (out->method==7031) strcpy_s(out->update_operation_id,sizeof(out->update_operation_id),out->task_id);
+    return true;
+}
 bool rpc_contract_parse(const char* body,size_t length,bool announcement,
                         const char* wire_method,const char* wire_correlation,
                         const char* wire_payload_required,RpcCommand* out) {
@@ -72,6 +102,7 @@ bool rpc_contract_parse(const char* body,size_t length,bool announcement,
     if (out->empty) return out->method==7002 || out->method==7003 || out->method==7004 || out->method==7005;
     int item=dt+1;
     if (j.tokens[item].type!='{' || j.tokens[item].next!=j.tokens[dt].next) return false;
+    if (out->method>=7030 && out->method<=7033) return update_request(&j,item,out);
     if (out->method==7011) {
         for (int key=item+1;key<j.tokens[item].next;key=j.tokens[key+1].next) {
             char name[64];

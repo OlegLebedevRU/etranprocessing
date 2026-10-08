@@ -55,6 +55,8 @@ typedef struct {
 } mz_zip_archive;
 
 mz_bool mz_zip_reader_init_file(mz_zip_archive *pZip, const char *pFilename, mz_uint32 flags);
+/* Duplicates an existing locked Windows file handle; never reopens a pathname. */
+mz_bool mz_zip_reader_init_handle(mz_zip_archive *pZip, void *file_handle, mz_uint32 flags);
 mz_bool mz_zip_reader_end(mz_zip_archive *pZip);
 mz_uint32 mz_zip_reader_get_num_files(mz_zip_archive *pZip);
 mz_bool mz_zip_reader_file_stat(mz_zip_archive *pZip, mz_uint32 file_index, mz_zip_archive_file_stat *pStat);

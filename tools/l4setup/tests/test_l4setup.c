@@ -47,6 +47,17 @@ static FILE* g_log = NULL;
 // 1. CLI Parser Tests
 // ---------------------------------------------------------------------------
 static bool test_cli_parser(void) {
+    {
+        wchar_t* plan[] = {L"l4setup.exe", L"--layout-plan"};
+        CliOptions opts;
+        TEST_ASSERT(cli_parse(2, plan, &opts, NULL, 0) && opts.layout_plan, "Read-only layout plan");
+        wchar_t* repair[] = {L"l4setup.exe", L"--layout-plan", L"--repair"};
+        TEST_ASSERT(!cli_parse(3, repair, &opts, NULL, 0), "Plan cannot repair");
+        wchar_t* dest[] = {L"l4setup.exe", L"--layout-plan", L"--dest", L"C:\\test"};
+        TEST_ASSERT(!cli_parse(4, dest, &opts, NULL, 0), "Plan cannot select legacy install destination");
+        wchar_t* pin[] = {L"l4setup.exe", L"--layout-plan", L"--pin", L"123456"};
+        TEST_ASSERT(!cli_parse(4, pin, &opts, NULL, 0), "Plan cannot activate a certificate");
+    }
     // 1. Defaults
     {
         wchar_t* argv[] = { L"l4setup.exe" };

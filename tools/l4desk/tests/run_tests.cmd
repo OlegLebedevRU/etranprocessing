@@ -39,7 +39,7 @@ if errorlevel 1 (
 
 echo.
 echo [2/4] Building and running test_ctl_protocol.exe...
-cl.exe /nologo /O2 /MT /W4 /utf-8 /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /I src /I include /Foobj\ tests\test_ctl_protocol.c src\ctl_protocol.c src\json_min.c src\desktop_state.c src\display_inventory.c src\input_inject.c src\dedup_cache.c src\ffmpeg_cmdline.c src\ffmpeg_supervisor.c src\log.c src\media_backend.c src\l4capture_adapter.c src\input_gate.c src\kiosk_focus.c src\kiosk_lifecycle.c /link /OUT:bin\test_ctl_protocol.exe ws2_32.lib winhttp.lib advapi32.lib user32.lib wtsapi32.lib ole32.lib oleaut32.lib gdi32.lib
+cl.exe /nologo /O2 /MT /W4 /utf-8 /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /I src /I include /Foobj\ tests\test_ctl_protocol.c src\ctl_protocol.c src\json_min.c src\desktop_state.c src\display_inventory.c src\input_inject.c src\dedup_cache.c src\ffmpeg_cmdline.c src\ffmpeg_supervisor.c ..\l4common\layout.c src\log.c src\media_backend.c src\l4capture_adapter.c src\input_gate.c src\kiosk_focus.c src\kiosk_lifecycle.c /link /OUT:bin\test_ctl_protocol.exe ws2_32.lib winhttp.lib advapi32.lib user32.lib wtsapi32.lib ole32.lib oleaut32.lib gdi32.lib
 if errorlevel 1 (
     echo [ERROR] Failed to build test_ctl_protocol.exe
     exit /b 1
@@ -53,7 +53,7 @@ if errorlevel 1 (
 
 echo.
 echo [3/4] Building and running test_orchestrator.exe...
-cl.exe /nologo /O2 /MT /W4 /utf-8 /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /I src /I include /Foobj\ tests\test_orchestrator.c src\ffmpeg_supervisor.c src\ffmpeg_cmdline.c src\display_inventory.c src\desktop_state.c src\input_inject.c src\json_min.c src\log.c src\media_backend.c src\l4capture_adapter.c src\input_gate.c src\kiosk_focus.c src\kiosk_lifecycle.c /link /OUT:bin\test_orchestrator.exe ws2_32.lib advapi32.lib user32.lib wtsapi32.lib ole32.lib oleaut32.lib gdi32.lib
+cl.exe /nologo /O2 /MT /W4 /utf-8 /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /I src /I include /Foobj\ tests\test_orchestrator.c src\ffmpeg_supervisor.c ..\l4common\layout.c src\ffmpeg_cmdline.c src\display_inventory.c src\desktop_state.c src\input_inject.c src\json_min.c src\log.c src\media_backend.c src\l4capture_adapter.c src\input_gate.c src\kiosk_focus.c src\kiosk_lifecycle.c /link /OUT:bin\test_orchestrator.exe ws2_32.lib advapi32.lib user32.lib wtsapi32.lib ole32.lib oleaut32.lib gdi32.lib
 if errorlevel 1 (
     echo [ERROR] Failed to build test_orchestrator.exe
     exit /b 1

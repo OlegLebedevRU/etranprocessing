@@ -75,6 +75,7 @@ extern int test_openh264_decoder_smoke(void);
 extern int test_openh264_memory_soak(void);
 
 extern int test_mf_probe_graceful(void);
+extern int test_mf_cache_installed_path(void);
 extern int test_mf_create_destroy(void);
 extern int test_mf_init_types_and_sdp_compat(void);
 extern int test_mf_color_convert_bgra_to_nv12(void);
@@ -227,6 +228,7 @@ static const test_entry_t all_tests[] = {
     TEST(test_openh264_memory_soak),
     /* Media Foundation hardware encoder tests */
     TEST(test_mf_probe_graceful),
+    TEST(test_mf_cache_installed_path),
     TEST(test_mf_capability_cache_persist),
     TEST(test_mf_create_destroy),
     TEST(test_mf_init_types_and_sdp_compat),

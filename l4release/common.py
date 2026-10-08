@@ -65,6 +65,15 @@ def atomic_json(path: Path, value: dict) -> None:
     atomic_bytes(path, (json.dumps(value, indent=2, ensure_ascii=False) + "\n").encode("utf-8"))
 
 
+def signing_password(env: dict[str, str]) -> str:
+    """Owner spelling and conventional alias; conflicting secrets never win silently."""
+    original = env.get("W_SIGN_PFX_PASSWORD", "")
+    alias = env.get("SW_SIGN_PFX_PASSWORD", "")
+    if original and alias and original != alias:
+        raise ReleaseError("Conflicting signing password aliases in the supplied env file")
+    return original or alias
+
+
 def load_env(path: Path, *, required: bool = True) -> dict[str, str]:
     """Literal dotenv subset: no interpolation, evaluation or fallback to other env files."""
     if not path.is_file():
@@ -87,6 +96,7 @@ def load_env(path: Path, *, required: bool = True) -> dict[str, str]:
         if key in result:
             raise ReleaseError(f"Duplicate signing env key: {key}")
         result[key] = value
+    signing_password(result)
     return result
 
 

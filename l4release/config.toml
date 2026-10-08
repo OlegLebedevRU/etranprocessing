@@ -78,6 +78,14 @@ timeout = 300
 outputs = ["tools/leo4proxy/bin/x86/leo4proxy.exe", "tools/leo4proxy/bin/x64/leo4proxy.exe", "tools/leo4proxy/bin/leo4proxy.exe"]
 
 [[steps]]
+name = "l4launch"
+kind = "cmd"
+cwd = "tools/l4launch"
+args = ["build.cmd", "all"]
+timeout = 300
+outputs = ["tools/l4launch/bin/x86/l4launch.exe", "tools/l4launch/bin/x64/l4launch.exe", "tools/l4launch/bin/l4launch.exe"]
+
+[[steps]]
 name = "stage"
 kind = "powershell"
 cwd = "."
@@ -89,14 +97,14 @@ name = "setup-test-x86"
 kind = "cmd"
 cwd = "tools/l4setup"
 args = ["run_tests.cmd", "x86"]
-timeout = 300
+timeout = 900
 
 [[steps]]
 name = "setup-test-x64"
 kind = "cmd"
 cwd = "tools/l4setup"
 args = ["run_tests.cmd", "x64"]
-timeout = 300
+timeout = 900
 
 [[steps]]
 name = "setup"

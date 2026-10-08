@@ -40,6 +40,7 @@
 #include "l4capture/telemetry.h"
 #include "l4capture/mft_event_gate.h"
 #include "l4capture/logger.h"
+#include "mft_cache_path.h"
 
 #define l4c_clock_monotonic_ms l4c_now_monotonic_ms
 
@@ -115,7 +116,7 @@ static bool s_test_injected_process_fail = false;
 static int s_probe_cached = -1;
 static bool probe_encoded_sequence(void);
 
-/* Persistent capability cache (mft_capability.ini next to exe).
+/* Persistent optional capability cache (installed: ProgramData/state/l4capture).
  * reason: ok | unavailable | timeout | negotiate_fail | runtime_fail */
 typedef enum {
     L4C_MFT_CACHE_MISS = 0,
@@ -142,15 +143,9 @@ void l4c_mf_encoder_test_inject_process_fail(bool fail) {
 }
 
 static bool mft_cache_path(wchar_t *out, size_t cap) {
-    wchar_t *slash;
-    if (!out || cap < 32) return false;
-    if (!GetModuleFileNameW(NULL, out, (DWORD)cap)) return false;
-    slash = wcsrchr(out, L'\\');
-    if (!slash) return false;
-    slash[1] = L'\0';
-    if (wcslen(out) + 20 >= cap) return false;
-    wcscat_s(out, cap, L"mft_capability.ini");
-    return true;
+    wchar_t exe[MAX_PATH];
+    DWORD length=GetModuleFileNameW(NULL,exe,MAX_PATH);
+    return length && length<MAX_PATH && l4c_mft_cache_path_for_exe(exe,out,cap);
 }
 
 static uint32_t mf_quality_max_qp(void) {

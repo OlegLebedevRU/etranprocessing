@@ -4,6 +4,16 @@
 
 ### Added
 
+- Elevated local acceptance entry delegates the production controller and worker;
+  fixed owner-signed trial purposes cannot be selected by ordinary RPC launch.
+  SYSTEM exports actual forward and whole-old restoration outcomes.
+- Explicit cold baseline replacement retains diagnostics and the signed monotonic
+  catalog floor before a clean install. It does not migrate old settings.
+
+- Reviewed `catalog-plan` / `catalog-publish` with signed pipeline compatibility,
+  authenticated complete endpoint inventories and protected monotonic publisher
+  state. Real pipeline acceptance collection and Registry publication acceptance remain
+  required before the first remote transition is admitted.
 - Root Python 3.14 uv project/lockfile and `l4release` plan, prepare, release,
   read-only artifact verification and one-time metadata key creation commands.
 - Declarative ordered build plan, native asset preflight, fresh x86/x64/universal
@@ -15,7 +25,20 @@
 
 ### Changed
 
+- Compatibility admission moves to the release pipeline with one real forward
+  transition and one forced rollback through the same executor. Removed unused
+  native six-mixture measurement foundation and its isolated fixture; terminal
+  channel barriers and independent restoration remain mandatory.
+
+- Expanded Setup gates retain all checks with a 900-second ceiling per
+  architecture; the previous 300-second ceiling was below observed gate duration.
+
 - `tools/build_dist.cmd` delegates ordinary preparation to the unified pipeline.
 - Automatic signing reads owner-approved `sw_sign.env`; manual signing is optional.
-- Terminal gate/promotion placeholders fail explicitly until later stages implement
-  transition evidence/catalog. No service, RPC or installer runtime change here.
+- Automatic terminal gate and stable promotion remain explicitly closed; reviewed
+  catalog publication is a separate command and requires measured evidence.
+
+### Fixed
+
+- Signing accepts `SW_SIGN_PFX_PASSWORD` and the historical
+  `W_SIGN_PFX_PASSWORD`; conflicting nonempty values refuse before signing.

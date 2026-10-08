@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "fm_connect.h"
+#include "registry_connect.h"
 
 ProxyStats g_proxyStats = { 0 };
 
@@ -127,7 +128,7 @@ static int send_http_response_ext(SOCKET s, SChannelSession* tlsSession, int sta
 
 static void handle_info_request_ext(SOCKET s, SChannelSession* tlsSession, const ProxyConfig* config, const CertDetails* certDetails, bool is_local) {
     bool cert_ready = (certDetails != NULL && certDetails->sn[0] != '\0' && g_proxyStats.cert_ready);
-    bool backend_online = tcp_probe_connect(config->reverse_target_host, config->reverse_target_port, 250);
+    bool backend_online = !config->update_probe && tcp_probe_connect(config->reverse_target_host, config->reverse_target_port, 250);
 
     if (is_local) {
         char jsonBuf[8192];
@@ -504,9 +505,18 @@ static unsigned __stdcall http_client_worker(void* param) {
     char version[32] = { 0 };
     sscanf_s(reqBuf, "%31s %1023s %31s", method, (unsigned)sizeof(method), path, (unsigned)sizeof(path), version, (unsigned)sizeof(version));
 
+    if (config->update_probe && (!is_local || isClientTls || strcmp(method,"GET") || strcmp(path,"/_leo4/info"))) {
+        send_http_response_ext(clientSock,isClientTls?&clientTlsSession:NULL,403,"Forbidden","text/plain","",active_sn);
+        free(reqBuf); free(modifiedReq);
+        if(isClientTls)schannel_close(&clientTlsSession);else closesocket(clientSock);
+        return 0;
+    }
+
     if (!strcmp(method,"CONNECT")) {
-        if (is_local && !isClientTls && cert_ready && !strcmp(version,"HTTP/1.1") && reqLen==(int)(headerEnd+4-reqBuf))
-            fm_connect_storage(clientSock,path);
+        if (is_local && !isClientTls && cert_ready && !strcmp(version,"HTTP/1.1") && reqLen==(int)(headerEnd+4-reqBuf)) {
+            if(!strcmp(path,L4_REGISTRY_AUTHORITY))registry_connect(clientSock,path);
+            else fm_connect_storage(clientSock,path);
+        }
         else send_http_response_ext(clientSock,isClientTls?&clientTlsSession:NULL,403,"Forbidden","text/plain","",active_sn);
         free(reqBuf);free(modifiedReq);
         if(isClientTls)schannel_close(&clientTlsSession);else closesocket(clientSock);
@@ -736,7 +746,7 @@ bool http_proxy_start(HttpProxyServer* server, const ProxyConfig* config, const 
     InitializeSRWLock(&server->identityLock);
 
     server->config = config;
-    policy_identity(certDetails);
+    if (!config->update_probe) policy_identity(certDetails);
     if (certDetails) server->identity = *certDetails;
     else memset(&server->identity, 0, sizeof(server->identity));
     server->certDetails = certDetails ? &server->identity : NULL;
@@ -758,13 +768,15 @@ bool http_proxy_start(HttpProxyServer* server, const ProxyConfig* config, const 
     }
 
     BOOL opt = TRUE;
-    setsockopt(server->listenSock, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt, sizeof(opt));
+    if (setsockopt(server->listenSock, SOL_SOCKET, config->update_probe ? SO_EXCLUSIVEADDRUSE : SO_REUSEADDR, (const char*)&opt, sizeof(opt))) {
+        closesocket(server->listenSock); server->listenSock=INVALID_SOCKET; server->isRunning=false; return false;
+    }
 
     if (bind(server->listenSock, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
         int err = WSAGetLastError();
         fprintf(stderr, "[HTTP-PROXY] Failed to bind to %s:%d (error: %d)\n",
                 config->http_local_host, config->http_local_port, err);
-        if (err == 10048) {
+        if (err == 10048 && !config->update_probe) {
             fprintf(stderr, "[HTTP-PROXY] Port %d is already in use! If Leo4Proxy is already running as a Windows Service, stop it first.\n",
                     config->http_local_port);
         }

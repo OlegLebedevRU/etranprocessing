@@ -8,7 +8,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from .common import Redactor, ReleaseError, atomic_bytes
+from .common import Redactor, ReleaseError, atomic_bytes, signing_password
 
 
 @contextmanager
@@ -53,14 +53,15 @@ class Runner:
         # The supplied env is authoritative; inherited signing/registry overrides are removed.
         for key in tuple(self.env):
             if (
-                key.startswith(("AR_GENERIC_", "L4TOOLS_SIGN_", "IOT_API_KEY"))
+                key.startswith(("AR_GENERIC_", "L4TOOLS_SIGN_", "IOT_API_KEY", "SW_SIGN_"))
+                or key == "W_SIGN_PFX_PASSWORD"
                 or key == "L4TOOLS_POLICY_BOOTSTRAP_IP"
             ):
                 self.env.pop(key)
         allowed = {"AR_GENERIC_KEY_ID", "AR_GENERIC_KEY_SECRET", "L4TOOLS_POLICY_BOOTSTRAP_IP"}
         self.env.update({key: value for key, value in env.items() if key in allowed})
         self.env["L4TOOLS_SIGN_PFX"] = env.get("SW_SIGN_PFX", "")
-        self.env["L4TOOLS_SIGN_PFX_PASSWORD"] = env.get("W_SIGN_PFX_PASSWORD", "")
+        self.env["L4TOOLS_SIGN_PFX_PASSWORD"] = signing_password(env)
 
     def run(self, name: str, kind: str, cwd: Path, args: list[str], timeout: int) -> None:
         child_env = self.env.copy()

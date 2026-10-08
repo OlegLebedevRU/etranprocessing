@@ -56,11 +56,12 @@ int main(int argc, char* argv[]) {
     AppConfig config;
     config_init_defaults(&config);
 
-    // Initialize tools base path, working directory and PATH environment
-    command_runner_setup_environment();
-
     bool is_service_cmd = false;
     config_parse_args(&config, argc, argv, &is_service_cmd);
+    if (!command_runner_setup_environment()) {
+        fprintf(stderr, "[FATAL] Cannot initialize runtime paths (win32=%lu)\n", GetLastError());
+        return 1;
+    }
 
     // 1. Service Management Commands
     for (int i = 1; i < argc; i++) {

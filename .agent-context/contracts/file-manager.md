@@ -42,7 +42,11 @@
 ## Данные и права
 
 - Single PUT 0–64 МиБ, SHA256, versioned S3 и exact VersionId GET.
-- Upload обычным desktop token, CREATE_NEW/no-overwrite; privileged write запрещён.
+- Upload токеном именно physical console user, CREATE_NEW/no-overwrite; агент
+  не создаёт повышение прав. Предпочитается его Limited token; при отсутствии
+  split-token допускается его собственный Default token, включая UAC-off admin.
+  Full token без проверенной Limited пары, чужие SID/session и неоднозначный
+  ответ TokenLinkedToken отклоняются. Это не снимает private-path/ACL ограничения.
 - Read-only SYSTEM fallback при AccessDenied только по policy; ACL/sharing/path
   ограничения не снимаются. Local fixed/removable drives разрешены policy.
 - Смена user session/LUID/instance/cert — fence. Receipt защищён в fm-state.

@@ -245,6 +245,7 @@ static unsigned __stdcall mqtt_listener_thread(void* param) {
             SOCKET clientSock = accept(server->listenSock, (struct sockaddr*)&clientAddr, &clientAddrLen);
 
             if (clientSock != INVALID_SOCKET) {
+                if (config->update_probe) { closesocket(clientSock); continue; }
                 // Reject non-loopback connections if binding to 127.0.0.1
                 char clientIp[64] = { 0 };
                 inet_ntop(AF_INET, &clientAddr.sin_addr, clientIp, sizeof(clientIp));
@@ -284,8 +285,8 @@ static unsigned __stdcall mqtt_listener_thread(void* param) {
 }
 
 bool mqtt_proxy_start(MqttProxyServer* server, const ProxyConfig* config, const CertDetails* certDetails, CredHandle hClientCred, CredHandle hServerCred) {
-    policy_identity(certDetails);
     if (!server || !config || !certDetails) return false;
+    if (!config->update_probe) policy_identity(certDetails);
     if (server->hThread) {
         if (WaitForSingleObject(server->hThread, 0) != WAIT_OBJECT_0) return false;
         CloseHandle(server->hThread);
@@ -315,13 +316,15 @@ bool mqtt_proxy_start(MqttProxyServer* server, const ProxyConfig* config, const 
     }
 
     BOOL opt = TRUE;
-    setsockopt(server->listenSock, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt, sizeof(opt));
+    if (setsockopt(server->listenSock, SOL_SOCKET, config->update_probe ? SO_EXCLUSIVEADDRUSE : SO_REUSEADDR, (const char*)&opt, sizeof(opt))) {
+        closesocket(server->listenSock); server->listenSock=INVALID_SOCKET; server->isRunning=false; return false;
+    }
 
     if (bind(server->listenSock, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
         int err = WSAGetLastError();
         fprintf(stderr, "[MQTT-PROXY] Failed to bind to %s:%d (error: %d)\n",
                 config->mqtt_local_host, config->mqtt_local_port, err);
-        if (err == 10048) {
+        if (err == 10048 && !config->update_probe) {
             fprintf(stderr, "[MQTT-PROXY] Port %d is already in use! If Leo4Proxy is already running as a Windows Service, stop it first.\n",
                     config->mqtt_local_port);
         }

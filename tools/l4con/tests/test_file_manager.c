@@ -12,6 +12,7 @@ static HINTERNET WINAPI fixture_open(LPCWSTR agent,DWORD access,LPCWSTR proxy,LP
 }
 #define WinHttpOpen fixture_open
 #include "../src/file_manager.c"
+#include "../../l4common/tests/update_state_fixture.h"
 
 int config_query_fm_api_from_proxy(int port,const char* sn,char* output,size_t capacity) {
     (void)port;(void)sn;(void)output;(void)capacity;return -1; /* This fixture exercises filesystem only. */
@@ -37,6 +38,18 @@ static bool junction(const wchar_t* alias,const wchar_t* target) {
     if(handle!=INVALID_HANDLE_VALUE)CloseHandle(handle);return ok;
 }
 int main(void) {
+    L4Layout layout; wchar_t exe[MAX_PATH], root_path[MAX_PATH], receipt[MAX_PATH], previous[MAX_PATH], expected[MAX_PATH];
+    assert(l4_layout_resolve(&layout,L"1.13.2"));
+    assert(l4_layout_component(&layout,L"l4con",L"l4con.exe",exe));
+    assert(fm_runtime_paths(exe,root_path,receipt));
+    swprintf_s(expected,MAX_PATH,L"%ls\\l4con\\fm",layout.state);
+    assert(!wcscmp(root_path,expected));
+    swprintf_s(expected,MAX_PATH,L"%ls\\l4con\\fm-state",layout.state);
+    assert(!wcscmp(receipt,expected)); wcscpy_s(previous,MAX_PATH,receipt);
+    assert(l4_layout_resolve(&layout,L"1.13.3"));
+    assert(l4_layout_component(&layout,L"l4con",L"l4con.exe",exe));
+    assert(fm_runtime_paths(exe,root_path,receipt) && !wcscmp(previous,receipt));
+
     /* Cross a 64-entry page boundary: directories always precede files,
        regardless of enumeration order; numeric names use Explorer ordering. */
     WIN32_FIND_DATAW sorted[130]={0};
@@ -92,7 +105,49 @@ int main(void) {
     if(!SetFileInformationByHandle(file,FileRenameInfo,&rename,sizeof(rename))) {
         fprintf(stderr,"Rename failed: error=%lu root=%ls\n",GetLastError(),root);CloseHandle(file);close_handles(handles,count);DeleteFileW(source);RemoveDirectoryW(root);return 1;
     }
-    CloseHandle(file);close_handles(handles,count);assert(DeleteFileW(target));assert(RemoveDirectoryW(root));
+    CloseHandle(file);close_handles(handles,count);assert(DeleteFileW(target));
+    /* Receipt trust must stay narrower than the desktop user's writable area. */
+    PSECURITY_DESCRIPTOR descriptor=NULL;
+    assert(l4_access_private_descriptor(L"L4Con",false,&descriptor));
+    SECURITY_ATTRIBUTES attributes={sizeof(attributes),descriptor,FALSE};
+    file=CreateFileW(source,GENERIC_READ|GENERIC_WRITE|READ_CONTROL|WRITE_DAC|WRITE_OWNER,0,&attributes,CREATE_NEW,0,NULL);
+    LocalFree(descriptor);assert(file!=INVALID_HANDLE_VALUE);assert(trusted_receipt(file));
+    HANDLE token=NULL;BYTE user[sizeof(TOKEN_USER)+SECURITY_MAX_SID_SIZE];DWORD size=0;
+    assert(OpenProcessToken(GetCurrentProcess(),TOKEN_QUERY,&token));
+    assert(GetTokenInformation(token,TokenUser,user,sizeof(user),&size));CloseHandle(token);
+    PSID user_sid=((TOKEN_USER*)user)->User.Sid;
+    assert(SetSecurityInfo(file,SE_FILE_OBJECT,OWNER_SECURITY_INFORMATION,user_sid,NULL,NULL,NULL)==ERROR_SUCCESS);
+    assert(!trusted_receipt(file));
+    assert(l4_access_private_descriptor(L"L4Con",false,&descriptor));
+    PSID owner=NULL;PACL acl=NULL;BOOL present=FALSE,defaulted=FALSE;
+    assert(GetSecurityDescriptorOwner(descriptor,&owner,&defaulted));
+    assert(GetSecurityDescriptorDacl(descriptor,&present,&acl,&defaulted) && present);
+    assert(SetSecurityInfo(file,SE_FILE_OBJECT,OWNER_SECURITY_INFORMATION|DACL_SECURITY_INFORMATION|PROTECTED_DACL_SECURITY_INFORMATION,owner,NULL,acl,NULL)==ERROR_SUCCESS);
+    LocalFree(descriptor);assert(trusted_receipt(file));
+    BYTE widened[1024];PACL unsafe=(PACL)widened;
+    assert(InitializeAcl(unsafe,sizeof(widened),ACL_REVISION));
+    assert(AddAccessAllowedAce(unsafe,ACL_REVISION,GENERIC_ALL,user_sid));
+    assert(SetSecurityInfo(file,SE_FILE_OBJECT,DACL_SECURITY_INFORMATION|PROTECTED_DACL_SECURITY_INFORMATION,NULL,NULL,unsafe,NULL)==ERROR_SUCCESS);
+    assert(!trusted_receipt(file));
+    CloseHandle(file);assert(DeleteFileW(source));assert(RemoveDirectoryW(root));
+    puts("FM: trusted private receipt accepted; ordinary account owner/ACE rejected");
     puts("FM: path aliases/ADS/device names/junction/ancestor handles/no-overwrite atomic rename passed");
+    UpdateFixture fixture;assert(update_fixture_init(&fixture));
+    fm.update.enabled=true;fm.update.layout=fixture.layout;fm.initialized=true;InitializeCriticalSection(&fm.lock);
+    assert(!background_begin()); /* Missing never starts hello/reconcile. */
+    assert(update_fixture_put(&fixture,0));assert(background_begin());
+    L4UpdateState maintenance,observed;assert(update_fixture_live(&fixture,&maintenance));
+    assert(!fm_child_update_quiet(&observed)); /* Already accepted background retains fence. */
+    ReleaseSRWLockShared(&fm.update.admission);
+    assert(!background_begin());assert(fm_child_update_quiet(&observed));assert(observed.generation==maintenance.generation && observed.deadline_utc==maintenance.deadline_utc);
+    fm.pending=true;assert(!fm_child_update_quiet(&observed));fm.pending=false;
+    fm.processing=true;assert(!fm_child_update_quiet(&observed));fm.processing=false;
+    fm.connected=true;strcpy_s(fm.lease,40,"17730000-0000-4000-8000-000000000001");fm.deadline=GetTickCount64()+1000;
+    assert(!fm_child_update_quiet(&observed));fm.lease[0]=0;fm.deadline=0;
+    assert(fm_child_update_quiet(&observed));
+    assert(update_fixture_put(&fixture,0));assert(!fm_child_update_quiet(&observed));
+    assert(update_fixture_dispose(&fixture));assert(!background_begin());assert(!fm_child_update_quiet(&observed));
+    DeleteCriticalSection(&fm.lock);fm.initialized=false;
+    puts("FM child quiet: active marker pauses hello/reconcile; accepted background, queue/lease/work retain drain; exact protected snapshot PASS");
     return 0;
 }

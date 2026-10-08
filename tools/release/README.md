@@ -1,6 +1,6 @@
 # L4 Tools release signing
 
-## Unified pipeline (stage 1)
+## Unified pipeline
 
 Run from the repository root with Python 3.14. The root uv project and lockfile
 own release dependencies; the existing `tools/pyproject.toml` contract-test project
@@ -27,10 +27,12 @@ The owner explicitly approved automatic signing: the old mandatory operator paus
 is replaced by this pipeline. `Complete-SignedRelease.ps1` remains the signing
 implementation; its direct operator command below is an optional maintenance path.
 
-Terminal gate, admission/catalog and `promote` belong to subsequent implementation
-stages. The corresponding flags/command currently **fail before starting work**;
-publication does not imply transition admission or stable. Metadata signing/publication
-is not implemented in stage 1; Authenticode is mandatory. See the accepted
+Candidate publication does not imply transition admission or stable. Authenticode
+and owner-signed metadata are mandatory. The explicit `acceptance-plan` and
+`acceptance-run` commands use the local engineer entry and the common native
+executor; `catalog-plan` and `catalog-publish` admit measured transitions.
+The historical `release --with-terminal-gate` and `promote` switches remain closed;
+ordinary release commands do not touch terminal services. See the accepted
 [architecture](../../docs/term_arch-l4update-flow.md).
 
 ### Credentials and key creation
@@ -49,9 +51,14 @@ L4TOOLS_METADATA_KEY_PASSWORD=
 IOT_API_KEY_773=
 ```
 
+`SW_SIGN_PFX_PASSWORD` is accepted as an alias for `W_SIGN_PFX_PASSWORD`.
+Set either spelling; if both contain different nonempty passwords, the pipeline
+refuses before signing without printing either value. A nonempty spelling takes
+precedence over a blank alias. Passwords from the shell environment are not used.
+
 Registry fields are the existing Generic Registry **write** credentials. Read
-downloads are public. `W_SIGN_PFX_PASSWORD` is intentionally spelled exactly this
-way; blank is only suitable for an unencrypted PFX. IOT_API_KEY_773 is reserved
+downloads are public. A blank signing password is only suitable for an unencrypted
+PFX. IOT_API_KEY_773 is reserved
 for a later explicitly enabled terminal gate and is not passed to build children.
 
 For one-time metadata key creation, create a protected directory **outside Git**,
@@ -64,10 +71,20 @@ uv run --locked python -m l4release keys init --env-file <base-project>/sw_sign.
 This creates encrypted PKCS#8 RSA-3072 PEM, a sibling `.public.pem`, and prints
 only the public key ID after a sign/verify self-test. Existing files are never
 overwritten. Protect the directory with Windows ACL and retain an owner backup.
-Embedding that public key and signing catalogs are later stages, not a claimed
-runtime capability of the current tools.
+The native verifier embeds the reviewed public key. Its identity must match the
+external signing key before release or catalog publication.
 
 ### Checkpoints, inputs and missing dependencies
+
+After completing a build/release, preview local scratch cleanup from the repository
+root with `./tools/release/Clean-BuildArtifacts.ps1`; add `-Apply` to remove it.
+The script uses the release workspace lock and selects only Git-ignored artifacts
+under explicit tools build/cache paths. It preserves tracked/untracked sources,
+vendor dependencies, frozen rollback binaries, final distribution files,
+install-kits, numbered release reports and retained installer evidence. It never
+touches Program Files/ProgramData or sibling signed release checkouts. Generated
+staging/components are removed, so an unfinished signing checkpoint should be
+completed before cleanup. Removal details are in ignored `.release/cleanup-last.json`.
 
 Reports/logs live under ignored `tools/dist/.release/<version>/`. A workspace
 lock excludes concurrent builds of different versions. Checkpoints bind exact
@@ -363,3 +380,151 @@ The signed 1.13.1 packet is immutable; do not prepare or rebuild it again.
 Подпись/публикация и установка — отдельные этапы. Установщик доставляется через
 приватный S3/Leo4Proxy и запускается независимой SYSTEM-задачей; повторный запуск
 после потери ответа допускается только после выяснения состояния прежней задачи.
+
+
+## New layout payloads (pipeline; installation still disabled)
+
+`uv run --locked python -m l4release` now produces additional fixed-name
+`l4tools-layout-{x86,x64}.zip` and `.json` assets. Each deterministic archive has a
+complete schema1 inventory: version/architecture/publisher certificate SHA256,
+archive SHA256 and every file's path/size/SHA256. Ten native executables and three
+configuration templates are mandatory. Old installation scripts, legacy inventory,
+unclassified configuration, runtime logs/state and private credentials are refused
+or explicitly excluded. Bounds match the native consumer:64 files,512MiB per file,
+1GiB total. Unsigned preparation has a null publisher; native admission refuses it.
+Signing rebuilds the assets from signed staging before sealing the checkpoint.
+
+Templates remain immutable inside the release; their ProgramData destinations are
+planned separately. `base_path` is removed from the supervisor template, allowing
+executable-derived release/ProgramData paths. No configuration is applied here.
+Publisher validates all four assets and their hashes/sizes/identities, uploads
+payloads before checksums and publishes `l4tools-release.json` last. Existing
+registry release prefixes suffice; no additional registry section is required.
+Historical three-file releases remain immutable and verifiable. No1.13.2 repack.
+
+
+## Detached metadata signature format
+
+The shared producer API `l4release.metadata.sign_bytes` signs exact document bytes
+using RSA3072, exponent65537, PKCS#1v1.5/SHA256. The sidecar `.sig` is exactly384
+raw signature bytes (big-endian RSA), without JSON/base64/envelope/canonicalization.
+Document bound is1..65535 bytes. `public_blob` produces the411-byte Windows public
+RSA blob; `key_id` remains SHA256 of DER SubjectPublicKeyInfo as in `keys init`.
+The owner-managed trust root must be embedded by a signed bootstrap build; a
+public blob received with metadata is never a trust root.
+
+`load_signing_key` reads the existing externally stored encrypted key through
+L4TOOLS_METADATA_KEY_PATH/L4TOOLS_METADATA_KEY_PASSWORD. It creates/rotates nothing.
+This library is not yet wired into release checkpoints/upload/metadata acquisition;
+unsigned existing releases are not retroactively given metadata signatures.
+Python/native integration uses ephemeral in-memory test keys and public artifacts,
+with real CNG verification on x86/x64. Owner secrets and published1.13.2 untouched.
+
+
+## Metadata signing wired into the release pipeline
+
+Signing preflight requires the existing encrypted metadata key, its public companion
+and a match with the compiled owner trust root in `tools/l4common/metadata_owner_key.h`.
+The pipeline pins the DER public-key ID in its report. After signed staging and final
+provenance it emits both layout `.json.sig` files, inventories their hashes/sizes,
+adds `metadata_signatures` (schema1, algorithm, key_id, fixed root signature name),
+signs exact final root bytes and writes checksums covering all signatures/documents.
+The root signature is outside its own document to avoid a circular digest.
+
+Signed checkpoints include all three signatures. Metadata finalization failure
+retains the signed staging checkpoint, preventing component rebuild on retry.
+Verification requires signed metadata and the independently configured public key.
+Publisher reads only the `.public.pem` companion; no private key/password is needed
+for publication checks. New layout publication refuses absent metadata signatures.
+Fixed upload set has10 files: setup,4 layout assets,3 signatures, checksums, root
+release document last. Full download/audit loops include signatures. Historical
+three-file verification remains available; published1.13.2 is unchanged.
+
+Initial owner key is now provisioned outside the repository with protected access;
+path/password live only in external sw_sign.env. Private key rotation is never
+automatic. Public root/header and non-JSON self-test signature are safe tracked
+inputs. No owner-signed release packet was created/published in this stage; tests
+use separate ephemeral keys for packet fixtures. Signed root/catalog parsing and
+revision/expiry storage and native acquisition APIs are implemented; prepared
+packages, worker connection and installation remain pending. The config loader
+requires the Registry authority to match the compiled native consumer before build/
+sign/publication; changing only the publication URL is rejected.
+
+
+## Signed catalog schema1 (local APIs; publication not enabled)
+
+`l4release.catalog` validates and signs exact catalog bytes using the same owner key.
+The exact root fields are schema/key_id/revision/issued_at/expires_at/stable/releases/
+transitions. Times are positive UTC Unix seconds; revision is positive u64. Each
+release has version/manifest_sha256/revoked. Each directed transition has from/to/
+arch/profile/evidence_sha256. Versions match native canonical three-part numeric
+layout (each part<=65535); profile is a bounded lowercase ASCII evidence identifier,
+separate from bundle architecture so x86-under-WOW64 is not proof of Win7/x86.
+Bounds24 releases and24 transitions fit the existing512-token native JSON reader.
+
+`stable=null` refuses latest; stable must name a present nonrevoked release. Route
+selection uses a shortest directed chain filtered by exact architecture/profile,
+with pinned root manifest hashes; no compatibility inference from compilation or
+transitivity. Revoked destinations/intermediates are excluded; a revoked installed
+version can leave only through an explicitly admitted edge. No-op requires exact
+installed digest. Duplicate releases/edges/JSON keys, zero/invalid digests, future/
+expired catalogs, revision rollback or same revision with different bytes refuse.
+Signatures are checked before document interpretation. Evidence/promotion commands
+and owner review of actual gate results remain required; catalog APIs fabricate none.
+
+Catalog publication uses the existing Registry prefix `l4tools/metadata/`;
+reviewed plan/publication commands are implemented. No catalog upload or promotion
+was performed during this source integration; actual acceptance is still required. Network acquisition
+and scoped773 trial admission remain pending. Native signed root release admission
+now consumes the exact finalizer format: catalog-pinned version/root hash, owner
+signature, clean signed source, both fixed-name architecture inventories and bounded
+sizes/hashes. Root-bound descriptor admission checks its signature, publisher and
+ZIP identity before handing off to the existing signed protected extraction gate.
+This local read-only admission does not establish connectivity, saved-operation
+recovery, service switching or terminal compatibility evidence.
+
+## Initial immutable recovery bootstrap
+
+`l4rollback` is outside normal suite/updater compilation and signing. The first
+bootstrap seal copies the owner-reviewed existing x86/x64 native bits, verifies
+their fixed approved size/hash and PE architecture, signs only those copies with
+the existing certificate and RFC3161 pipeline, then verifies the signed reference
+release's publisher. Its source/bin artifacts are never rebuilt or modified.
+
+After a clean reviewed source checkpoint and a verified signed reference release:
+
+```powershell
+uv run --locked python -m l4release bootstrap-seal --version <signed-reference-version> --env-file <external-sw_sign.env> --output <new-external-immutable-directory>
+```
+
+Add `L4TOOLS_BOOTSTRAP_DIR=<external-immutable-directory>` to the external
+`sw_sign.env`. Ordinary `install-kit` reuses the exact sealed assets without
+signing them again. An existing/partial seal is never overwritten or re-sealed.
+No bootstrap Registry upload is implemented by this command.
+
+The kit adds fixed `l4tools-bootstrap.json/.sig` and `l4rollback-x86.exe` /
+`l4rollback-x64.exe`. This independent owner-signed schema1 metadata binds the
+fresh release version/root hash and both helper identities; the kind
+`frozen-supervisor-helper` is fixed supervisor-only ABI1. Root/catalog schemas
+are unchanged. Native fresh verification requires owner signature, root binding,
+held helper hash and publisher Authenticode under the explicit local policy.
+
+Fresh SYSTEM installation creates protected `Program Files/Leo4/Tools/recovery`
+and keeps the original signed receipt and selected helper there. Existing complete
+identity can be reused, including a receipt bound to an earlier fresh root; helper
+size/hash/publisher must match exactly. No automatic replacement, ACL repair or
+partial-directory adoption occurs. A partial initial directory returns
+`ERROR_NOT_READY` and requires an owner-reviewed repair; it does not trigger suite
+mutation. Read-only fresh verification checks any existing helper before reporting
+success: absence under verified PF ancestry is allowed, partial/unsafe/mismatched
+identity is refused before the operator transition stops communication.
+Abort preserves this immutable bootstrap. Remote receipt loading remains
+strict and holds helper/receipt/ancestor handles for its owned lifetime. These gates
+do not enable the remote engine or prove a live watchdog/rollback cycle.
+
+Owner-signed catalog plan/publication and pipeline acceptance boundary:
+[catalog-publishing.md](catalog-publishing.md). Admission requires pipeline compatibility checks,
+one real forward transition and one forced rollback using the same executor.
+There is no separate six-mixture collector or byte-identity admission mode.
+The local acceptance entry and production report producer remain unimplemented;
+publication cannot treat unit fixtures or a caller-supplied PASS as admission.

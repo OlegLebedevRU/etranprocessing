@@ -42,6 +42,7 @@ cl.exe /nologo /O2 /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /DWIN32_LEAN_AND_MEAN /D
     "%ROOT%\src\common\deadline.c" ^
     "%ROOT%\src\common\pipeline.c" ^
     "%ROOT%\src\common\logger.c" ^
+    "%ROOT%\..\l4common\layout.c" ^
     "%ROOT%\src\ipc\ipc_protocol.c" ^
     "%ROOT%\src\ipc\ipc_pipe.c" ^
     "%ROOT%\src\safety\safety_gate.c" ^
@@ -88,6 +89,7 @@ link.exe /nologo /SUBSYSTEM:CONSOLE,6.01 /OUT:"%ROOT%\bin\l4capture_tests.exe" ^
     "%ROOT%\obj\test\deadline.obj" ^
     "%ROOT%\obj\test\pipeline.obj" ^
     "%ROOT%\obj\test\logger.obj" ^
+    "%ROOT%\obj\test\layout.obj" ^
     "%ROOT%\obj\test\ipc_protocol.obj" ^
     "%ROOT%\obj\test\ipc_pipe.obj" ^
     "%ROOT%\obj\test\safety_gate.obj" ^

@@ -27,6 +27,8 @@ bool policy_probe_media_allowed(const char* sn);
 bool policy_probe_bootstrap(const ProxyConfig* config, const CertDetails* cert);
 bool policy_https_path_allowed(const char* path);
 bool policy_fm_authority_allowed(const char* authority);
+bool policy_registry_allowed(void);
+int policy_registry_connect(PolicySocket* node,SOCKET socket,const struct sockaddr* address,int length);
 void policy_diagnostics(char* out, size_t size);
 /* Called with a nonblocking socket. Registration and connect share the policy lock. */
 int policy_media_connect(PolicySocket* node, SOCKET socket, const struct sockaddr* address, int length);

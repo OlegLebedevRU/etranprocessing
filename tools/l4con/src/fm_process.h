@@ -10,4 +10,5 @@ void fm_child_connection(bool);
 void fm_child_tick(void);
 void fm_child_set_navigation_result(FmNavigationResult);
 bool fm_child_navigation(const char*,size_t,bool);
+bool fm_child_update_quiet(L4UpdateState* observed);
 #endif

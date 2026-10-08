@@ -1,6 +1,7 @@
 #include "state_mgr.h"
 #include "service_mgr.h"
 #include <stdio.h>
+#include "../../l4common/layout.h"
 #include <stdlib.h>
 #include <string.h>
 #include <shlwapi.h>
@@ -272,7 +273,7 @@ bool state_load(const wchar_t* base_path, L4State* out_state) {
     state_init(out_state);
 
     wchar_t state_file[MAX_PATH];
-    swprintf_s(state_file, MAX_PATH, L"%s\\state.json", base_path);
+    if (!l4_runtime_path(base_path, L4_DATA_STATE, L"state.json", L"state.json", state_file)) return false;
 
     FILE* f = NULL;
     if (_wfopen_s(&f, state_file, L"rb") != 0 || !f) {
@@ -313,7 +314,7 @@ bool state_load(const wchar_t* base_path, L4State* out_state) {
     json_get_string(buf, "installer_summary_path", out_state->installer_summary_path, sizeof(out_state->installer_summary_path));
     if (out_state->installer_summary_path[0] == '\0') {
         wchar_t sum_path[MAX_PATH];
-        swprintf_s(sum_path, MAX_PATH, L"%ls\\install_summary.json", base_path);
+        if (!l4_runtime_path(base_path, L4_DATA_STATE, L"install_summary.json", L"install_summary.json", sum_path)) return false;
         if (PathFileExistsW(sum_path)) {
             w_to_utf8(sum_path, out_state->installer_summary_path, sizeof(out_state->installer_summary_path));
         }
@@ -374,7 +375,7 @@ bool state_save(const wchar_t* base_path, const L4State* state) {
     if (!base_path || !state) return false;
 
     wchar_t state_file[MAX_PATH];
-    swprintf_s(state_file, MAX_PATH, L"%s\\state.json", base_path);
+    if (!l4_runtime_path(base_path, L4_DATA_STATE, L"state.json", L"state.json", state_file)) return false;
 
     /* l4setup can replace state.json while the supervisor is running.  Read
        the installed package version at save time so a cached L4State does not
@@ -399,8 +400,8 @@ bool state_save(const wchar_t* base_path, const L4State* state) {
     }
 
     wchar_t temp_file[MAX_PATH];
-    if (swprintf_s(temp_file, MAX_PATH, L"%s\\state.json.superv.%lu.tmp",
-                   base_path, GetCurrentProcessId()) < 0) return false;
+    if (wcslen(state_file) + 32 >= MAX_PATH ||
+        swprintf_s(temp_file, MAX_PATH, L"%ls.superv.%lu.tmp", state_file, GetCurrentProcessId()) < 0) return false;
     FILE* f = NULL;
     if (_wfopen_s(&f, temp_file, L"wb") != 0 || !f) {
         return false;
@@ -419,7 +420,9 @@ bool state_save(const wchar_t* base_path, const L4State* state) {
     if (state->last_cert_state[0] != '\0') {
         fprintf(f, "  \"last_cert_state\": \"%s\",\n", state->last_cert_state);
     }
-    fprintf(f, "  \"installer_base_path\": "); write_json_escaped_string(f, state->installer_base_path[0] != '\0' ? state->installer_base_path : "C:\\l4tools"); fprintf(f, ",\n");
+    char actual_base[MAX_PATH * 3] = {0};
+    w_to_utf8(base_path, actual_base, sizeof(actual_base));
+    fprintf(f, "  \"installer_base_path\": "); write_json_escaped_string(f, actual_base); fprintf(f, ",\n");
     fprintf(f, "  \"services\": {\n");
     write_service_json(f, "mosquitto", &state->svc_mosquitto, false);
     write_service_json(f, "leo4proxy", &state->svc_leo4proxy, false);

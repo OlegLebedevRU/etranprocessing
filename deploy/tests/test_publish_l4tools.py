@@ -4,11 +4,11 @@
 import hashlib
 import io
 import json
-from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import MagicMock, patch
 import urllib.error
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import deploy.publish_l4tools as publish_l4tools
 
@@ -42,9 +42,7 @@ class TestPublishL4Tools(unittest.TestCase):
             "builder": "windows-dev",
             "files": {
                 "l4setup.exe": {
-                    "sha256": manifest_exe_sha
-                    if manifest_exe_sha is not None
-                    else exe_sha,
+                    "sha256": manifest_exe_sha if manifest_exe_sha is not None else exe_sha,
                     "size": len(exe_content),
                 }
             },
@@ -57,11 +55,9 @@ class TestPublishL4Tools(unittest.TestCase):
         manifest_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest().lower()
 
         if corrupt_sums:
-            sums_content = f"0000000000000000000000000000000000000000000000000000000000000000  l4setup.exe\n{manifest_sha}  l4tools-release.json\n"
+            sums_content = f"{'0' * 64}  l4setup.exe\n{manifest_sha}  l4tools-release.json\n"
         else:
-            sums_content = (
-                f"{exe_sha}  l4setup.exe\n{manifest_sha}  l4tools-release.json\n"
-            )
+            sums_content = f"{exe_sha}  l4setup.exe\n{manifest_sha}  l4tools-release.json\n"
 
         sums_path = self.artifacts_dir / "SHA256SUMS"
         sums_path.write_text(sums_content, encoding="utf-8")
@@ -87,9 +83,7 @@ class TestPublishL4Tools(unittest.TestCase):
             "Digest": "sha-256=abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
         }
         digest = publish_l4tools.parse_rfc3230_digest(headers)
-        self.assertEqual(
-            digest, "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
-        )
+        self.assertEqual(digest, "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
 
         headers_lower = {"digest": "SHA-256=ABCDEF1234567890"}
         digest_lower = publish_l4tools.parse_rfc3230_digest(headers_lower)
@@ -106,9 +100,7 @@ class TestPublishL4Tools(unittest.TestCase):
 
     def test_verify_artifacts_valid(self):
         self._create_sample_artifacts()
-        manifest, computed_sums, sizes = publish_l4tools.verify_artifacts(
-            self.artifacts_dir
-        )
+        manifest, computed_sums, sizes = publish_l4tools.verify_artifacts(self.artifacts_dir)
         self.assertEqual(manifest["version"], "1.6.0")
         self.assertIn("l4setup.exe", computed_sums)
         self.assertIn("l4tools-release.json", computed_sums)
@@ -135,9 +127,7 @@ class TestPublishL4Tools(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "dirty"):
             publish_l4tools.verify_artifacts(self.artifacts_dir, allow_dirty=False)
 
-        manifest, _, _ = publish_l4tools.verify_artifacts(
-            self.artifacts_dir, allow_dirty=True
-        )
+        manifest, _, _ = publish_l4tools.verify_artifacts(self.artifacts_dir, allow_dirty=True)
         self.assertTrue(manifest["dirty"])
 
     @patch("urllib.request.urlopen")
@@ -166,9 +156,7 @@ class TestPublishL4Tools(unittest.TestCase):
 
     def test_publish_dry_run(self):
         self._create_sample_artifacts()
-        with patch(
-            "deploy.publish_l4tools.check_remote_version", return_value=0
-        ) as mock_check:
+        with patch("deploy.publish_l4tools.check_remote_version", return_value=0) as mock_check:
             code = publish_l4tools.publish_release(
                 artifacts_dir=self.artifacts_dir,
                 dry_run=True,
@@ -181,7 +169,10 @@ class TestPublishL4Tools(unittest.TestCase):
 
     def test_publish_already_published_halts(self):
         self._create_sample_artifacts()
-        with patch("deploy.publish_l4tools.check_remote_version", return_value=2):
+        with (
+            patch("deploy.publish_l4tools.check_remote_version", return_value=2),
+            patch("deploy.publish_l4tools.verify_downloaded_artifacts", return_value=False),
+        ):
             code = publish_l4tools.publish_release(
                 artifacts_dir=self.artifacts_dir,
                 dry_run=False,
@@ -193,9 +184,7 @@ class TestPublishL4Tools(unittest.TestCase):
         self._create_sample_artifacts()
         exe_sha = publish_l4tools.compute_sha256(self.artifacts_dir / "l4setup.exe")
         sums_sha = publish_l4tools.compute_sha256(self.artifacts_dir / "SHA256SUMS")
-        manifest_sha = publish_l4tools.compute_sha256(
-            self.artifacts_dir / "l4tools-release.json"
-        )
+        manifest_sha = publish_l4tools.compute_sha256(self.artifacts_dir / "l4tools-release.json")
 
         sha_sequence = [exe_sha, sums_sha, manifest_sha]
 
@@ -299,9 +288,7 @@ class TestPublishL4Tools(unittest.TestCase):
 
     def test_record_release_skips_duplicate(self):
         self._create_sample_artifacts()
-        manifest, sha256_map, size_map = publish_l4tools.verify_artifacts(
-            self.artifacts_dir
-        )
+        manifest, sha256_map, size_map = publish_l4tools.verify_artifacts(self.artifacts_dir)
         record_dir = self.artifacts_dir / "artifacts"
         releases_file = self.artifacts_dir / "releases.jsonl"
 

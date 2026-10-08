@@ -10,6 +10,8 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include "file_manager.h"
+#include "../../l4common/layout.h"
+#include "../../l4common/access.h"
 #include "config.h"
 #include "mqtt_protocol.h"
 #include "../../leo4proxy/src/policy_json.h"
@@ -32,6 +34,7 @@
 #define FM_RESPONSE_LIMIT 65536
 static struct {
     CRITICAL_SECTION lock;
+    L4UpdateConsumer update;
     HANDLE thread,wake,stop;
     bool initialized,connected,pending,processing;
     RpcCommand command;
@@ -377,7 +380,7 @@ static bool save_receipt(HANDLE file,const wchar_t* path,const RpcCommand* comma
     wchar_t id[40];if (!MultiByteToWideChar(CP_UTF8,0,receipt.id,-1,id,40)) return false;
     swprintf_s(receipt_path,1100,L"%s\\.l4fm-%s.receipt",fm.journal,id);
     PSECURITY_DESCRIPTOR descriptor=NULL;
-    if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(L"D:P(A;;FA;;;SY)(A;;FA;;;BA)",SDDL_REVISION_1,&descriptor,NULL)) return false;
+    if (!l4_access_private_descriptor(L"L4Con",false,&descriptor)) return false;
     SECURITY_ATTRIBUTES attributes={sizeof(attributes),descriptor,FALSE};
     HANDLE handle=CreateFileW(receipt_path,GENERIC_WRITE,0,&attributes,CREATE_NEW,FILE_ATTRIBUTE_HIDDEN|FILE_FLAG_WRITE_THROUGH,NULL);
     LocalFree(descriptor);if(handle==INVALID_HANDLE_VALUE)return false;
@@ -386,15 +389,19 @@ static bool save_receipt(HANDLE file,const wchar_t* path,const RpcCommand* comma
 }
 
 static bool trusted_receipt(HANDLE handle) {
+    HANDLE token=NULL;BYTE service_sid[SECURITY_MAX_SID_SIZE];
+    if(!OpenProcessToken(GetCurrentProcess(),TOKEN_QUERY,&token))return false;
+    bool identity=l4_access_private_sid(token,L"L4Con",service_sid);CloseHandle(token);
+    if(!identity)return false;
     PSID owner=NULL;PACL acl=NULL;PSECURITY_DESCRIPTOR descriptor=NULL;
     if(GetSecurityInfo(handle,SE_FILE_OBJECT,OWNER_SECURITY_INFORMATION|DACL_SECURITY_INFORMATION,&owner,NULL,&acl,NULL,&descriptor)!=ERROR_SUCCESS)return false;
     SECURITY_DESCRIPTOR_CONTROL control=0;DWORD revision=0;
-    bool ok=owner && (IsWellKnownSid(owner,WinLocalSystemSid) || IsWellKnownSid(owner,WinBuiltinAdministratorsSid)) &&
+    bool ok=owner && (IsWellKnownSid(owner,WinLocalSystemSid) || IsWellKnownSid(owner,WinBuiltinAdministratorsSid) || EqualSid(owner,service_sid)) &&
         GetSecurityDescriptorControl(descriptor,&control,&revision) && (control&SE_DACL_PROTECTED) && acl && acl->AceCount>0;
     for(WORD i=0;ok && i<acl->AceCount;i++) {
         ACCESS_ALLOWED_ACE* ace=NULL;
         ok=GetAce(acl,i,(void**)&ace) && ace->Header.AceType==ACCESS_ALLOWED_ACE_TYPE &&
-            (IsWellKnownSid(&ace->SidStart,WinLocalSystemSid) || IsWellKnownSid(&ace->SidStart,WinBuiltinAdministratorsSid));
+            (IsWellKnownSid(&ace->SidStart,WinLocalSystemSid) || IsWellKnownSid(&ace->SidStart,WinBuiltinAdministratorsSid) || EqualSid(&ace->SidStart,service_sid));
     }
     LocalFree(descriptor);return ok;
 }
@@ -583,16 +590,22 @@ static void execute(const RpcCommand* command) {
     free(body);free(response);free(ticket);
 }
 
+static bool background_begin(void){
+    AcquireSRWLockShared(&fm.update.admission);L4UpdateState update;
+    if(l4_update_consumer_read(&fm.update,&update) && !update.window)return true;
+    ReleaseSRWLockShared(&fm.update.admission);return false;
+}
 static DWORD WINAPI worker(void* unused) {
     (void)unused;ULONGLONG last_hello=0;
     while (WaitForSingleObject(fm.stop,0)!=WAIT_OBJECT_0) {
         ULONGLONG now=GetTickCount64();bool connected;
         EnterCriticalSection(&fm.lock);connected=fm.connected;LeaveCriticalSection(&fm.lock);
-        if (connected && now-last_hello>=15000) {
+        bool background_allowed=background_begin();
+        if (background_allowed && connected && now-last_hello>=15000) {
             last_hello=now;char hello[512],*response=NULL;
             /* Resolve from the existing local transport profile; retry while unavailable.
              * Keep the selected origin fixed for this process, including active transfers. */
-            if (!fm.api[0] && config_query_fm_api_from_proxy(fm.proxy_port,fm.sn,fm.api,sizeof(fm.api))) continue;
+            if (!fm.api[0] && config_query_fm_api_from_proxy(fm.proxy_port,fm.sn,fm.api,sizeof(fm.api))) {ReleaseSRWLockShared(&fm.update.admission);continue;}
             snprintf(hello,sizeof(hello),"{\"agent_instance_id\":\"%s\",\"agent_version\":\"%s\",\"protocol_version\":2,\"capabilities\":[\"fs.session\",\"fs.list\",\"fs.read\",\"fs.write\",\"fs.cancel\",\"fs.proxy\",\"fs.mqtt_navigation\",\"fs.write_user\",\"fs.drives\"],\"filesystem_ready\":true}",fm.instance,L4CON_APP_VERSION);
             HANDLE handles[128];unsigned count=0;DWORD desktop_session;LUID desktop_auth;
             HANDLE desktop=fm_desktop_token(&desktop_session,&desktop_auth);
@@ -603,6 +616,7 @@ static DWORD WINAPI worker(void* unused) {
             if(!fm_busy())reconcile_receipts_at(fm.journal);
             if(!fm_busy())reconcile_receipts_at(fm.root);
         }
+        if(background_allowed)ReleaseSRWLockShared(&fm.update.admission);
         RpcCommand command;bool pending;
         EnterCriticalSection(&fm.lock);pending=fm.pending;if (pending) {command=fm.command;fm.pending=false;fm.processing=true;}LeaveCriticalSection(&fm.lock);
         if (pending) {execute(&command);EnterCriticalSection(&fm.lock);fm.processing=false;LeaveCriticalSection(&fm.lock);}
@@ -611,22 +625,30 @@ static DWORD WINAPI worker(void* unused) {
     return 0;
 }
 
+static bool fm_runtime_paths(const wchar_t* exe, wchar_t root[MAX_PATH], wchar_t journal[MAX_PATH]) {
+    wchar_t release[MAX_PATH]; bool installed;
+    return l4_runtime_release_from_exe(exe,L"l4con",release,&installed) &&
+        l4_runtime_path(release,L4_DATA_STATE,L"l4con\\fm",L"fm",root) &&
+        l4_runtime_path(release,L4_DATA_STATE,L"l4con\\fm-state",L"fm-state",journal);
+}
 bool fm_start(const char* sn,int proxy_port,HANDLE stop,FmResult result,void* context) {
     ZeroMemory(&fm,sizeof(fm));
+    if(!l4_update_consumer_init(L"l4con",&fm.update))return false;
+    wchar_t exe[MAX_PATH], root[MAX_PATH], journal[MAX_PATH];
+    DWORD exe_length=GetModuleFileNameW(NULL,exe,MAX_PATH);
+    if(!exe_length || exe_length>=MAX_PATH || !fm_runtime_paths(exe,root,journal)) return false;
     DWORD root_length=GetEnvironmentVariableW(L"L4FM_ROOT",fm.root,1024);
     if (root_length>=1024) return false;
-    if (!root_length) wcscpy_s(fm.root,1024,L"C:\\l4tools\\fm");
+    if (!root_length) wcscpy_s(fm.root,1024,root);
     if (!valid_path(fm.root) || proxy_port<1 || proxy_port>65535) return false;
-    if(!GetModuleFileNameW(NULL,fm.journal,1024))return false;
+    wcscpy_s(fm.journal,1024,journal);
     wchar_t* leaf=wcsrchr(fm.journal,L'\\');if(!leaf)return false;*leaf=0;
-    /* Stable suite metadata directory, outside subdirectories swapped on upgrade. */
-    leaf=wcsrchr(fm.journal,L'\\');if(!leaf)return false;*leaf=0;
     HANDLE ancestors[128];unsigned ancestor_count=0;
     bool journal_ok=checked_directory(fm.journal,ancestors,&ancestor_count,false);
     if(journal_ok) {
         wcscat_s(fm.journal,1024,L"\\fm-state");
         PSECURITY_DESCRIPTOR sd=NULL;
-        journal_ok=ConvertStringSecurityDescriptorToSecurityDescriptorW(L"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)",SDDL_REVISION_1,&sd,NULL)!=0;
+        journal_ok=l4_access_private_descriptor(L"L4Con",true,&sd)!=0;
         SECURITY_ATTRIBUTES attributes={sizeof(attributes),sd,FALSE};
         if(journal_ok && !CreateDirectoryW(fm.journal,&attributes) && GetLastError()!=ERROR_ALREADY_EXISTS)journal_ok=false;
         if(sd)LocalFree(sd);
@@ -675,4 +697,12 @@ void fm_shutdown(void) {
     fm_connection(false);SetEvent(fm.wake);
     if(WaitForSingleObject(fm.thread,5000)!=WAIT_OBJECT_0)return; /* Owned child exits immediately. */
     CloseHandle(fm.thread);CloseHandle(fm.wake);DeleteCriticalSection(&fm.lock);fm.initialized=false;
+}
+
+/* Child-only quiet snapshot: background hello/reconcile holds the shared side;
+ * ordinary accepted commands/leases/results are still reflected by fm_busy. */
+bool fm_child_update_quiet(L4UpdateState* observed){
+    if(!fm.initialized || !observed || !TryAcquireSRWLockExclusive(&fm.update.admission))return false;
+    bool ok=l4_update_consumer_read(&fm.update,observed) && observed->window && !fm_busy();
+    ReleaseSRWLockExclusive(&fm.update.admission);return ok;
 }

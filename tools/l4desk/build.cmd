@@ -55,17 +55,19 @@ call :do_build_x64
 goto :summary
 
 :build_x86
+set TARGET_ARCH=x86
 call :do_build_x86
 goto :summary
 
 :build_x64
+set TARGET_ARCH=x64
 call :do_build_x64
 goto :summary
 
 :do_build_x86
 echo.
 echo [Build x86] 32-bit static binary (Windows 7 SP1+ compatible)...
-cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\l4desk.res res\l4desk.rc && cl.exe /nologo /O2 /Zi /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /I src /I include /I res /Foobj\x86\ src\main.c src\config.c ..\l4pin\src\http_client.c src\sn_discovery.c src\log.c src\json_min.c src\desktop_state.c src\display_inventory.c src\input_inject.c src\dedup_cache.c src\ctl_protocol.c src\mqtt_protocol.c src\mqtt_client.c src\ffmpeg_cmdline.c src\ffmpeg_supervisor.c src\media_backend.c src\l4capture_adapter.c src\input_gate.c src\kiosk_focus.c src\kiosk_lifecycle.c obj\x86\l4desk.res /link /DEBUG /OPT:REF /OPT:ICF /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\l4desk.exe ws2_32.lib winhttp.lib advapi32.lib user32.lib wtsapi32.lib ole32.lib oleaut32.lib gdi32.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x86 -no_logo && rc.exe /nologo /fo obj\x86\l4desk.res res\l4desk.rc && cl.exe /nologo /O2 /Zi /MT /W4 /utf-8 /D_WIN32_WINNT=0x0601 /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /I src /I include /I res /Foobj\x86\ src\main.c src\config.c ..\l4pin\src\http_client.c src\sn_discovery.c src\log.c src\json_min.c src\desktop_state.c src\display_inventory.c src\input_inject.c src\dedup_cache.c src\ctl_protocol.c src\mqtt_protocol.c src\mqtt_client.c src\ffmpeg_cmdline.c src\ffmpeg_supervisor.c ..\l4common\layout.c src\media_backend.c src\l4capture_adapter.c src\input_gate.c src\kiosk_focus.c src\kiosk_lifecycle.c obj\x86\l4desk.res /link /DEBUG /OPT:REF /OPT:ICF /SUBSYSTEM:CONSOLE,6.01 /OUT:bin\x86\l4desk.exe ws2_32.lib winhttp.lib advapi32.lib user32.lib wtsapi32.lib ole32.lib oleaut32.lib gdi32.lib"
 if errorlevel 1 (
     echo [ERROR] x86 build failed!
     set BUILD_FAILED=1
@@ -78,7 +80,7 @@ exit /b 0
 :do_build_x64
 echo.
 echo [Build x64] 64-bit static binary...
-cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /fo obj\x64\l4desk.res res\l4desk.rc && cl.exe /nologo /O2 /Zi /MT /W4 /utf-8 /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /I src /I include /I res /Foobj\x64\ src\main.c src\config.c ..\l4pin\src\http_client.c src\sn_discovery.c src\log.c src\json_min.c src\desktop_state.c src\display_inventory.c src\input_inject.c src\dedup_cache.c src\ctl_protocol.c src\mqtt_protocol.c src\mqtt_client.c src\ffmpeg_cmdline.c src\ffmpeg_supervisor.c src\media_backend.c src\l4capture_adapter.c src\input_gate.c src\kiosk_focus.c src\kiosk_lifecycle.c obj\x64\l4desk.res /link /DEBUG /OPT:REF /OPT:ICF /OUT:bin\x64\l4desk.exe ws2_32.lib winhttp.lib advapi32.lib user32.lib wtsapi32.lib ole32.lib oleaut32.lib gdi32.lib"
+cmd /c ""%VS_DEV_CMD%" -arch=x64 -no_logo && rc.exe /nologo /fo obj\x64\l4desk.res res\l4desk.rc && cl.exe /nologo /O2 /Zi /MT /W4 /utf-8 /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DWIN32_LEAN_AND_MEAN /I src /I include /I res /Foobj\x64\ src\main.c src\config.c ..\l4pin\src\http_client.c src\sn_discovery.c src\log.c src\json_min.c src\desktop_state.c src\display_inventory.c src\input_inject.c src\dedup_cache.c src\ctl_protocol.c src\mqtt_protocol.c src\mqtt_client.c src\ffmpeg_cmdline.c src\ffmpeg_supervisor.c ..\l4common\layout.c src\media_backend.c src\l4capture_adapter.c src\input_gate.c src\kiosk_focus.c src\kiosk_lifecycle.c obj\x64\l4desk.res /link /DEBUG /OPT:REF /OPT:ICF /OUT:bin\x64\l4desk.exe ws2_32.lib winhttp.lib advapi32.lib user32.lib wtsapi32.lib ole32.lib oleaut32.lib gdi32.lib"
 if errorlevel 1 (
     echo [ERROR] x64 build failed!
     set BUILD_FAILED=1
@@ -88,6 +90,14 @@ if errorlevel 1 (
 exit /b 0
 
 :summary
+if %BUILD_FAILED% neq 0 goto :print_summary
+if /i "%TARGET_ARCH%"=="all" (
+    call :test_paths x86
+    call :test_paths x64
+) else (
+    call :test_paths %TARGET_ARCH%
+)
+:print_summary
 echo.
 echo =======================================================
 if %BUILD_FAILED% equ 0 (
@@ -117,3 +127,8 @@ if %BUILD_FAILED% equ 0 (
 
 echo =======================================================
 exit /b %BUILD_FAILED%
+
+:test_paths
+cmd /c ""%VS_DEV_CMD%" -arch=%1 -no_logo && cl /nologo /W4 /WX /MT /utf-8 /D_CRT_SECURE_NO_WARNINGS /D_WIN32_WINNT=0x0601 /DWIN32_LEAN_AND_MEAN /Foobj\%1\ tests\test_runtime_paths.c src\config.c ..\l4common\layout.c /Feobj\%1\test_runtime_paths.exe && obj\%1\test_runtime_paths.exe"
+if errorlevel 1 set BUILD_FAILED=1
+exit /b 0

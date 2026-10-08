@@ -26,6 +26,44 @@
 #pragma comment(lib, "shlwapi.lib")
 #pragma comment(lib, "version.lib")
 
+/* Keep real HTTP/config files, isolate every supervisor service/cert dependency. */
+#include "service_mgr.h"
+#include "cert_discovery.h"
+static bool fixture_service(const wchar_t* name) { (void)name; return true; }
+static bool fixture_mqtt_restart(void) { return true; }
+static bool fixture_binary(const wchar_t* name,wchar_t* path,size_t size) { (void)name;(void)path;(void)size;return false; }
+static bool fixture_log(const wchar_t* path) { (void)path;return true; }
+static void fixture_services(const wchar_t* path,L4State* state) { (void)path;(void)state; }
+static cert_state fixture_certificate(const wchar_t* sn,cert_info* info) {
+    (void)sn;memset(info,0,sizeof(*info));
+    strcpy_s(info->thumbprint_hex,sizeof(info->thumbprint_hex),"CC88419A4C3763150A4C0905261EC073C58CFC09");
+    return CERT_VALID;
+}
+#define svc_restart fixture_service
+#define svc_start fixture_service
+#define svc_exists fixture_service
+#define svc_is_running fixture_service
+#define svc_restart_mqtt_stack fixture_mqtt_restart
+#define svc_get_binary_path fixture_binary
+#define svc_configure_mosquitto_log fixture_log
+#define state_update_services fixture_services
+#define cert_discover fixture_certificate
+#include "../src/communication_watch.h"
+#include "../../l4common/communication_plan.h"
+static bool fake_plan_open(const L4Layout* r,const wchar_t* id,L4CommunicationPin** p){(void)r;(void)id;*p=NULL;SetLastError(ERROR_NOT_SUPPORTED);return false;}
+static bool fake_plan_matches(const L4CommunicationPin* p,const L4UpdateState* s){(void)p;(void)s;return false;}
+static void fake_plan_close(L4CommunicationPin* p){(void)p;}
+#define l4_communication_plan_open fake_plan_open
+#define l4_communication_plan_matches fake_plan_matches
+#define l4_communication_plan_close fake_plan_close
+static bool fake_watch_start(const L4UpdateConsumer* c,L4CommunicationWatch** w){(void)c;*w=NULL;SetLastError(ERROR_NOT_SUPPORTED);return false;}
+static bool fake_watch_close(L4CommunicationWatch** w,DWORD t){(void)t;*w=NULL;return true;}
+static DWORD fake_watch_query(L4CommunicationWatch* w,const L4UpdateState* s,DWORD t,HANDLE c){(void)w;(void)s;(void)t;(void)c;return ERROR_NOT_SUPPORTED;}
+#define supervisor_communication_watch_start fake_watch_start
+#define supervisor_communication_watch_close fake_watch_close
+#define supervisor_communication_watch_query fake_watch_query
+#include "../src/orchestrator.c"
+
 static volatile bool g_stub_cert_ready = false;
 static volatile bool g_stub_stop = false;
 static SOCKET g_server_sock = INVALID_SOCKET;

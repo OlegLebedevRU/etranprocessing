@@ -1,4 +1,5 @@
 #include "policy.h"
+#include "../../l4common/layout.h"
 #include "policy_json.h"
 #include "schannel_tls.h"
 #include "endpoints.h"
@@ -16,6 +17,7 @@
 static SRWLOCK lock=SRWLOCK_INIT;
 static PolicyRecord record;
 static bool media_allowed=true, https_allowed=true, stopping=false, dirty=false;
+static bool storage_failed;
 static char fm_authority[272];
 static ULONGLONG fm_authority_deadline;
 static char facts[1024], last_error[64]="not_polled";
@@ -107,6 +109,7 @@ static void set_media_locked(bool allowed) {
                (record.known && !record.allowed?(facts[0]?facts:"server_denied"):"policy_unavailable")));
 }
 static void expire_locked(void) {
+    if (storage_failed) { set_media_locked(false); https_allowed=false; return; }
     if (record.sn[0]) {
         if (utc_now()>=record.offline_allowed_until) remaining_ms=0;
         set_media_locked(policy_record_allowed(&record,utc_now()) &&
@@ -135,6 +138,16 @@ void policy_socket_unregister(PolicySocket* node) {
         node->registered=false; node->next=NULL;
     }
     ReleaseSRWLockExclusive(&lock);
+}
+bool policy_registry_allowed(void){
+    AcquireSRWLockExclusive(&lock);expire_locked();bool allowed=media_allowed && https_allowed && !stopping;
+    ReleaseSRWLockExclusive(&lock);return allowed;
+}
+int policy_registry_connect(PolicySocket* node,SOCKET s,const struct sockaddr* address,int length){
+    AcquireSRWLockExclusive(&lock);expire_locked();int rc=SOCKET_ERROR,error=WSAEACCES;
+    if(media_allowed && https_allowed && !stopping){node->socket=s;node->registered=true;node->next=sockets;sockets=node;
+        rc=connect(s,address,length);error=WSAGetLastError();}
+    ReleaseSRWLockExclusive(&lock);WSASetLastError(error);return rc;
 }
 bool policy_https_path_allowed(const char* path) {
     /* Canonicalize the path before FM admission: encoded separators and dot
@@ -206,7 +219,16 @@ void policy_diagnostics(char* out,size_t size) {
         last_error,dirty?"true":"false");
     ReleaseSRWLockExclusive(&lock);
 }
-static void init_storage(void) {
+static bool init_storage_paths(const wchar_t* exe) {
+    ZeroMemory(json_paths, sizeof(json_paths));
+    return l4_runtime_exe_path(exe, L"leo4proxy", L4_DATA_STATE,
+        L"leo4proxy\\policy.json", L"policy-data\\policy.json", json_paths[0]) &&
+        wcslen(json_paths[0]) + 4 < MAX_PATH;
+}
+static bool init_storage(void) {
+    wchar_t exe[MAX_PATH];
+    DWORD count = GetModuleFileNameW(NULL, exe, MAX_PATH);
+    if (!count || count >= MAX_PATH || !init_storage_paths(exe)) return false;
     HANDLE token=NULL; DWORD length=0;
     if (OpenProcessToken(GetCurrentProcess(),TOKEN_QUERY,&token)) {
         GetTokenInformation(token,TokenUser,NULL,0,&length);
@@ -221,15 +243,9 @@ static void init_storage(void) {
         free(user); CloseHandle(token);
     }
     storage_sa.lpSecurityDescriptor=storage_sd;
-    wchar_t base[MAX_PATH];
-    int folders[]={CSIDL_COMMON_APPDATA,CSIDL_LOCAL_APPDATA};
-    for (int k=0;k<2;k++) if (SUCCEEDED(SHGetFolderPathW(NULL,folders[k],NULL,SHGFP_TYPE_CURRENT,base)))
-        swprintf_s(json_paths[k],MAX_PATH,L"%s\\Leo4Proxy\\policy.json",base);
-    if (GetModuleFileNameW(NULL,base,MAX_PATH)) {
-        wchar_t* slash=wcsrchr(base,L'\\');
-        if (slash) { *slash=0; swprintf_s(json_paths[2],MAX_PATH,L"%s\\policy-data\\policy.json",base); }
-    }
+    return storage_sd != NULL;
 }
+
 static bool load_file(const wchar_t* path,char* text,DWORD size,DWORD* length) {
     HANDLE f=CreateFileW(path,GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,NULL);
     if (f==INVALID_HANDLE_VALUE) return false;
@@ -462,12 +478,21 @@ static unsigned __stdcall run(void* unused) {
     return 0;
 }
 void policy_init(const ProxyConfig* config) {
-    settings=*config; init_storage(); endpoints_init(config);
+    settings=*config;
+    if (!init_storage()) {
+        storage_failed=true;
+        media_allowed=https_allowed=false;
+        strcpy_s(last_error,sizeof(last_error),"storage_layout");
+        fprintf(stderr,"[POLICY] Cannot resolve protected storage; admission denied (win32=%lu)\n",GetLastError());
+        return;
+    }
+    endpoints_init(config);
     stop_event=CreateEventW(NULL,TRUE,FALSE,NULL); wake_event=CreateEventW(NULL,FALSE,FALSE,NULL);
     if (stop_event && wake_event) worker=(HANDLE)_beginthreadex(NULL,0,run,NULL,0,NULL);
     if (!worker) fprintf(stderr,"[POLICY] Cannot start polling worker; retry requires service restart\n");
 }
 void policy_identity(const CertDetails* details) {
+    if (storage_failed) return;
     /* Establish routing identity before waking the admission poll worker. */
     endpoints_identity(details?details->sn:"");
     AcquireSRWLockExclusive(&lock);
@@ -493,7 +518,7 @@ void policy_identity(const CertDetails* details) {
 }
 bool policy_probe_media_allowed(const char* sn) {
     /* Standalone diagnostic only: read admission, without polling or updating it. */
-    init_storage();
+    if (!init_storage()) return false;
     PolicyRecord cached={0}; restore(sn,&cached);
     bool allowed=policy_record_allowed(&cached,utc_now());
     if (storage_sd) { LocalFree(storage_sd); storage_sd=NULL; storage_sa.lpSecurityDescriptor=NULL; }

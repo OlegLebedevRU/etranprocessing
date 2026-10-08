@@ -5,16 +5,15 @@ Usage:
   python deploy/publish_l4tools.py verify <artifacts_dir> [--allow-dirty]
   python deploy/publish_l4tools.py check <version>
   python deploy/publish_l4tools.py publish <artifacts_dir> [--dry-run] [--allow-dirty]
-  python deploy/publish_l4tools.py record <artifacts_dir> [--record-dir <dir>] [--releases-file <path>]
+  python deploy/publish_l4tools.py record <artifacts_dir>
+      [--record-dir <dir>] [--releases-file <path>]
 """
 
 import argparse
 import base64
-from datetime import UTC, datetime
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import sys
 import time
@@ -22,10 +21,85 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from datetime import UTC, datetime
+from pathlib import Path
 
 DEFAULT_REGISTRY = "https://l4tools-generic.ar.cloud.ru"
 REQUIRED_FILES = ("l4setup.exe", "SHA256SUMS", "l4tools-release.json")
 UPLOAD_ORDER = ("l4setup.exe", "SHA256SUMS", "l4tools-release.json")
+LAYOUT_FILES = tuple(
+    f"l4tools-layout-{arch}.{suffix}" for arch in ("x86", "x64") for suffix in ("zip", "json")
+)
+SIGNATURE_FILES = tuple(f"l4tools-layout-{arch}.json.sig" for arch in ("x86", "x64")) + (
+    "l4tools-release.json.sig",
+)
+
+
+def artifact_upload_order(digests: dict[str, str]) -> tuple[str, ...]:
+    """Only fixed local artifact names; release manifest is published last."""
+    extra = tuple(name for name in LAYOUT_FILES if name in digests)
+    if extra and len(extra) != len(LAYOUT_FILES):
+        raise ValueError("Incomplete layout payload set")
+    signatures = tuple(name for name in SIGNATURE_FILES if name in digests)
+    if signatures and (len(signatures) != 3 or not extra):
+        raise ValueError("Incomplete metadata signature set")
+    return ("l4setup.exe", *extra, *signatures, "SHA256SUMS", "l4tools-release.json")
+
+
+def configured_metadata_public(env: dict[str, str], env_path: Path | None) -> object | None:
+    """Explicit local trust source. Never download a key or read the private key."""
+    value = env.get("L4TOOLS_METADATA_KEY_PATH")
+    if not value:
+        return None
+    from cryptography.hazmat.primitives import serialization
+
+    path = Path(value)
+    if not path.is_absolute():
+        if env_path is None:
+            raise ValueError("Relative metadata key requires an explicit env file")
+        path = env_path.resolve().parent / path
+    with path.with_suffix(".public.pem").open("rb") as stream:
+        data = stream.read(16385)
+    if len(data) > 16384:
+        raise ValueError("Metadata public key exceeds its bound")
+    return serialization.load_pem_public_key(data)
+
+
+def verify_metadata_signatures(artifacts_dir: Path, manifest: dict, trusted_public: object) -> None:
+    from cryptography.exceptions import InvalidSignature
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import padding, rsa
+
+    if not isinstance(trusted_public, rsa.RSAPublicKey):
+        raise ValueError("A locally trusted RSA metadata public key is required")
+    if trusted_public.key_size != 3072 or trusted_public.public_numbers().e != 65537:
+        raise ValueError("Metadata public key must be RSA3072/e65537")
+    identity = hashlib.sha256(
+        trusted_public.public_bytes(
+            serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+    ).hexdigest()
+    expected = {
+        "schema": 1,
+        "algorithm": "RSA3072-PKCS1v1.5-SHA256",
+        "key_id": identity,
+        "signature": "l4tools-release.json.sig",
+    }
+    if manifest.get("metadata_signatures") != expected:
+        raise ValueError("Metadata signature identity/format mismatch")
+    for name in SIGNATURE_FILES:
+        with (artifacts_dir / name.removesuffix(".sig")).open("rb") as stream:
+            document = stream.read(65536)
+        with (artifacts_dir / name).open("rb") as stream:
+            signature = stream.read(385)
+        if not 0 < len(document) <= 65535 or len(signature) != 384:
+            raise ValueError("Metadata document/signature size mismatch")
+        try:
+            trusted_public.verify(signature, document, padding.PKCS1v15(), hashes.SHA256())
+        except InvalidSignature as error:
+            raise ValueError("Metadata signature verification failed") from error
+
+
 DEFAULT_RECORD_DIR = Path("artifacts/l4tools")
 DEFAULT_RELEASES_FILE = Path("releases.jsonl")
 
@@ -62,9 +136,7 @@ def load_env_file(env_path: Path | None = None) -> dict[str, str]:
                         loaded[key] = val
                 break
             except Exception as ex:
-                print(
-                    f"[WARN] Failed to read env file {candidate}: {ex}", file=sys.stderr
-                )
+                print(f"[WARN] Failed to read env file {candidate}: {ex}", file=sys.stderr)
     return loaded
 
 
@@ -74,9 +146,7 @@ def get_credentials(
     """Retrieve AR_GENERIC_KEY_ID and AR_GENERIC_KEY_SECRET from env or .env file."""
     env = env_vars if env_vars is not None else load_env_file()
     key_id = os.environ.get("AR_GENERIC_KEY_ID") or env.get("AR_GENERIC_KEY_ID")
-    key_secret = os.environ.get("AR_GENERIC_KEY_SECRET") or env.get(
-        "AR_GENERIC_KEY_SECRET"
-    )
+    key_secret = os.environ.get("AR_GENERIC_KEY_SECRET") or env.get("AR_GENERIC_KEY_SECRET")
     return key_id, key_secret
 
 
@@ -127,7 +197,11 @@ def parse_rfc3230_digest(headers: dict[str, str]) -> str | None:
 
 
 def verify_artifacts(
-    artifacts_dir: Path, allow_dirty: bool = False
+    artifacts_dir: Path,
+    allow_dirty: bool = False,
+    *,
+    trusted_public: object | None = None,
+    require_metadata: bool = False,
 ) -> tuple[dict, dict[str, str], dict[str, int]]:
     """Verify presence, integrity and manifest validity of release artifacts.
 
@@ -137,8 +211,25 @@ def verify_artifacts(
     if not artifacts_dir.is_dir():
         raise FileNotFoundError(f"Artifacts directory not found: {artifacts_dir}")
 
+    manifest_file = artifacts_dir / "l4tools-release.json"
+    manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+    layout = manifest.get("layout_payloads")
+    signed_metadata = manifest.get("metadata_signatures") is not None
+    if require_metadata and not signed_metadata:
+        raise ValueError("Signed metadata is required")
+    if signed_metadata:
+        if layout is None or trusted_public is None:
+            raise ValueError("Signed metadata requires layout and a locally trusted public key")
+        verify_metadata_signatures(artifacts_dir, manifest, trusted_public)
+    if layout is not None and (not isinstance(layout, dict) or set(layout) != {"x86", "x64"}):
+        raise ValueError("Incomplete layout payload metadata")
+    required_files = (
+        *REQUIRED_FILES,
+        *(LAYOUT_FILES if layout is not None else ()),
+        *(SIGNATURE_FILES if signed_metadata else ()),
+    )
     # 1. Check required files
-    for filename in REQUIRED_FILES:
+    for filename in required_files:
         filepath = artifacts_dir / filename
         if not filepath.is_file():
             raise FileNotFoundError(f"Missing required artifact: {filepath}")
@@ -149,7 +240,7 @@ def verify_artifacts(
     computed_sums: dict[str, str] = {}
     sizes: dict[str, int] = {}
 
-    for filename in REQUIRED_FILES:
+    for filename in required_files:
         filepath = artifacts_dir / filename
         computed = compute_sha256(filepath)
         computed_sums[filename] = computed
@@ -160,7 +251,8 @@ def verify_artifacts(
                 raise ValueError(f"File {filename} is missing from SHA256SUMS")
             if computed != expected_sums[filename]:
                 raise ValueError(
-                    f"Checksum mismatch for {filename}: computed {computed} != expected {expected_sums[filename]}"
+                    f"Checksum mismatch for {filename}: computed "
+                    f"{computed} != expected {expected_sums[filename]}"
                 )
 
     # 3. Check manifest
@@ -181,13 +273,43 @@ def verify_artifacts(
         raise ValueError("Manifest is missing 'files.l4setup.exe.sha256'")
     if computed_sums["l4setup.exe"] != expected_exe_sha:
         raise ValueError(
-            f"Manifest sha256 mismatch for l4setup.exe: manifest={expected_exe_sha}, computed={computed_sums['l4setup.exe']}"
+            f"Manifest sha256 mismatch for l4setup.exe: "
+            f"manifest={expected_exe_sha}, computed={computed_sums['l4setup.exe']}"
         )
+    if layout is not None:
+        if signed_metadata:
+            for name in SIGNATURE_FILES[:2]:
+                if files_info.get(name) != {"sha256": computed_sums[name], "size": 384}:
+                    raise ValueError("Metadata signature inventory mismatch")
+        for arch in ("x86", "x64"):
+            entry = layout[arch]
+            for key, suffix in (("archive", "zip"), ("manifest", "json")):
+                name = f"l4tools-layout-{arch}.{suffix}"
+                if entry.get(key) != name or entry.get(key + "_sha256") != computed_sums[name]:
+                    raise ValueError("Layout artifact metadata mismatch")
+                if (
+                    files_info.get(name, {}).get("sha256") != computed_sums[name]
+                    or files_info.get(name, {}).get("size") != sizes[name]
+                ):
+                    raise ValueError("Layout artifact file inventory mismatch")
+        for arch in ("x86", "x64"):
+            descriptor = json.loads(
+                (artifacts_dir / f"l4tools-layout-{arch}.json").read_text(encoding="utf-8")
+            )
+            if (
+                descriptor.get("version") != version
+                or descriptor.get("arch") != arch
+                or descriptor.get("archive_sha256") != computed_sums[f"l4tools-layout-{arch}.zip"]
+                or descriptor.get("publisher_certificate_sha256")
+                != manifest.get("publisher_certificate_sha256")
+            ):
+                raise ValueError("Layout descriptor identity mismatch")
 
     is_dirty = manifest.get("dirty", False)
     if is_dirty and not allow_dirty:
         raise ValueError(
-            f"Manifest marks release {version} as dirty. Rebuild cleanly or use --allow-dirty for beta."
+            f"Manifest marks release {version} as dirty. "
+            f"Rebuild cleanly or use --allow-dirty for beta."
         )
 
     return manifest, computed_sums, sizes
@@ -213,20 +335,18 @@ def check_remote_version(
     headers = {}
     if key_id and key_secret:
         auth_str = f"{key_id}:{key_secret}"
-        headers["Authorization"] = "Basic " + base64.b64encode(auth_str.encode("utf-8")).decode("ascii")
+        headers["Authorization"] = "Basic " + base64.b64encode(auth_str.encode("utf-8")).decode(
+            "ascii"
+        )
     req = urllib.request.Request(check_url, headers=headers, method="HEAD")
     try:
         with urllib.request.urlopen(req, timeout=timeout) as response:
             if response.status == 200:
-                print(
-                    f"[CHECK] Version {version} is ALREADY published in registry: {check_url}"
-                )
+                print(f"[CHECK] Version {version} is ALREADY published in registry: {check_url}")
                 return 2
     except urllib.error.HTTPError as ex:
         if ex.code == 404:
-            print(
-                f"[CHECK] Version {version} is not yet published in registry (404 OK)"
-            )
+            print(f"[CHECK] Version {version} is not yet published in registry (404 OK)")
             return 0
         print(f"[ERROR] HTTP error during check for {check_url}: {ex.code} {ex.reason}")
         return 1
@@ -290,8 +410,8 @@ def upload_file_with_retry(
         f"--{boundary}\r\n"
         f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
         f"Content-Type: {content_type}\r\n\r\n"
-    ).encode("utf-8")
-    body_footer = f"\r\n--{boundary}--\r\n".encode("utf-8")
+    ).encode()
+    body_footer = f"\r\n--{boundary}--\r\n".encode()
     body = body_header + file_bytes + body_footer
 
     for attempt in range(1, max_retries + 1):
@@ -311,29 +431,34 @@ def upload_file_with_retry(
                 print(f"[UPLOAD] PUT {masked_url} -> HTTP {status}")
                 return status
         except urllib.error.HTTPError as ex:
-            # 4xx errors are client errors (e.g. 401 unauthorized, 403 forbidden, 409 conflict) -> DO NOT RETRY
+            # Client errors (401/403/409) must not be retried.
             if 400 <= ex.code < 500:
                 raise RuntimeError(
-                    f"HTTP {ex.code} {ex.reason} uploading {masked_url} (client error, not retrying)"
+                    f"HTTP {ex.code} {ex.reason} uploading "
+                    f"{masked_url} (client error, not retrying)"
                 ) from ex
             # 5xx errors can be retried
             if attempt == max_retries:
                 raise RuntimeError(
-                    f"HTTP {ex.code} {ex.reason} uploading {masked_url} after {max_retries} attempts"
+                    f"HTTP {ex.code} {ex.reason} uploading "
+                    f"{masked_url} after {max_retries} attempts"
                 ) from ex
             backoff = 2**attempt
             print(
-                f"[WARN] HTTP {ex.code} uploading {masked_url}. Retrying in {backoff}s (attempt {attempt}/{max_retries})..."
+                f"[WARN] HTTP {ex.code} uploading {masked_url}. Retrying "
+                f"in {backoff}s (attempt {attempt}/{max_retries})..."
             )
             time.sleep(backoff)
         except urllib.error.URLError as ex:
             if attempt == max_retries:
                 raise RuntimeError(
-                    f"Network error uploading {masked_url} after {max_retries} attempts: {ex.reason}"
+                    f"Network error uploading {masked_url} "
+                    f"after {max_retries} attempts: {ex.reason}"
                 ) from ex
             backoff = 2**attempt
             print(
-                f"[WARN] Network error uploading {masked_url}: {ex.reason}. Retrying in {backoff}s (attempt {attempt}/{max_retries})..."
+                f"[WARN] Network error uploading {masked_url}: {ex.reason}. "
+                f"Retrying in {backoff}s (attempt {attempt}/{max_retries})..."
             )
             time.sleep(backoff)
 
@@ -353,7 +478,9 @@ def verify_uploaded_digest(
     headers = {}
     if key_id and key_secret:
         auth_str = f"{key_id}:{key_secret}"
-        headers["Authorization"] = "Basic " + base64.b64encode(auth_str.encode("utf-8")).decode("ascii")
+        headers["Authorization"] = "Basic " + base64.b64encode(auth_str.encode("utf-8")).decode(
+            "ascii"
+        )
     req = urllib.request.Request(check_url, headers=headers, method="HEAD")
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -367,7 +494,8 @@ def verify_uploaded_digest(
 
             if not remote_digest:
                 print(
-                    f"[WARN] Registry did not return 'digest' header for {check_url}. HEAD HTTP {resp.status} verified."
+                    f"[WARN] Registry did not return 'digest' header "
+                    f"for {check_url}. HEAD HTTP {resp.status} verified."
                 )
                 return True
 
@@ -375,7 +503,8 @@ def verify_uploaded_digest(
                 print(f"[VERIFY] Digest match for {check_url}: {remote_digest}")
                 return True
             print(
-                f"[ERROR] Digest mismatch for {check_url}: remote={remote_digest} != local={expected_sha256.lower()}"
+                f"[ERROR] Digest mismatch for {check_url}: "
+                f"remote={remote_digest} != local={expected_sha256.lower()}"
             )
             return False
     except Exception as ex:
@@ -399,15 +528,15 @@ def verify_downloaded_artifacts(
     base_headers = {"User-Agent": "publish_l4tools-verify/1.0"}
     if key_id and key_secret:
         auth_str = f"{key_id}:{key_secret}"
-        base_headers["Authorization"] = "Basic " + base64.b64encode(auth_str.encode("utf-8")).decode("ascii")
+        base_headers["Authorization"] = "Basic " + base64.b64encode(
+            auth_str.encode("utf-8")
+        ).decode("ascii")
 
-    for filename in UPLOAD_ORDER:
+    for filename in artifact_upload_order(sha256_map):
         url = f"{registry_base}/l4tools/{version}/{filename}"
         expected_sha = sha256_map.get(filename, "").lower()
         expected_size = size_map.get(filename)
-        req = urllib.request.Request(
-            url, headers=base_headers
-        )
+        req = urllib.request.Request(url, headers=base_headers)
         hasher = hashlib.sha256()
         total_bytes = 0
         try:
@@ -428,19 +557,19 @@ def verify_downloaded_artifacts(
         computed_sha = hasher.hexdigest().lower()
         if expected_size is not None and total_bytes != expected_size:
             print(
-                f"[ERROR] Size mismatch for {url}: downloaded {total_bytes} != expected {expected_size}"
+                f"[ERROR] Size mismatch for {url}: downloaded "
+                f"{total_bytes} != expected {expected_size}"
             )
             return False
 
         if computed_sha != expected_sha:
             print(
-                f"[ERROR] SHA-256 mismatch for {url}: downloaded {computed_sha} != expected {expected_sha}"
+                f"[ERROR] SHA-256 mismatch for {url}: downloaded "
+                f"{computed_sha} != expected {expected_sha}"
             )
             return False
 
-        print(
-            f"[VERIFY-GET] OK: {filename} ({total_bytes} bytes, sha256={computed_sha})"
-        )
+        print(f"[VERIFY-GET] OK: {filename} ({total_bytes} bytes, sha256={computed_sha})")
 
     return True
 
@@ -469,7 +598,7 @@ def record_release(
         "registry_url": registry_base,
         "urls": {
             f: f"{registry_base.rstrip('/')}/l4tools/{version}/{f}"
-            for f in UPLOAD_ORDER
+            for f in artifact_upload_order(sha256_map)
         },
         "sha256": sha256_map,
         "size": size_map,
@@ -493,17 +622,15 @@ def record_release(
                         continue
                     try:
                         entry = json.loads(line)
-                        if (
-                            entry.get("component") == "l4tools"
-                            and entry.get("version") == version
-                        ):
+                        if entry.get("component") == "l4tools" and entry.get("version") == version:
                             already_recorded = True
                             break
                     except Exception:
                         pass
             if already_recorded:
                 print(
-                    f"[RECORD] Entry for {version} already exists in {releases_file}; skipping duplicate append."
+                    f"[RECORD] Entry for {version} already exists "
+                    f"in {releases_file}; skipping duplicate append."
                 )
             else:
                 journal_entry = {
@@ -547,9 +674,13 @@ def publish_release(
     # 1. Verify
     print(f"=== 1. Verifying artifacts in {artifacts_dir} ===")
     try:
+        env_data = load_env_file(env_file)
+        public = configured_metadata_public(env_data, env_file)
         manifest, sha256_map, size_map = verify_artifacts(
-            artifacts_dir, allow_dirty=allow_dirty
+            artifacts_dir, allow_dirty=allow_dirty, trusted_public=public
         )
+        if manifest.get("layout_payloads") is not None and not manifest.get("metadata_signatures"):
+            raise ValueError("New layout publication requires signed metadata")
     except Exception as ex:
         print(f"[ERROR] Verification failed: {ex}")
         return 1
@@ -557,12 +688,15 @@ def publish_release(
     version = manifest["version"]
     if expected_version and version != expected_version:
         print(
-            f"[ERROR] Version in manifest ({version}) does not match expected version ({expected_version}).",
+            (
+                f"[ERROR] Version in manifest ({version}) does "
+                f"not match expected version ({expected_version})."
+            ),
             file=sys.stderr,
         )
         return 1
     print(f"[OK] Artifacts verified for version {version}:")
-    for f in UPLOAD_ORDER:
+    for f in artifact_upload_order(sha256_map):
         print(f"  - {f}: {size_map[f]} bytes, sha256={sha256_map[f]}")
 
     # 2. Check
@@ -571,7 +705,8 @@ def publish_release(
         check_code = check_remote_version(version, registry_base=registry_base)
         if check_code == 2:
             print(
-                f"[CHECK] Version {version} already exists in registry. Verifying if all published artifacts are identical..."
+                f"[CHECK] Version {version} already exists in registry. "
+                f"Verifying if all published artifacts are identical..."
             )
             if verify_downloaded_artifacts(
                 version=version,
@@ -580,10 +715,12 @@ def publish_release(
                 registry_base=registry_base,
             ):
                 print(
-                    f"[INFO] Version {version} is already published with identical SHA-256 checksums."
+                    f"[INFO] Version {version} is already "
+                    f"published with identical SHA-256 checksums."
                 )
                 print(
-                    "[INFO] Idempotent publication confirmed; skipping upload, recording audit if missing."
+                    "[INFO] Idempotent publication confirmed; "
+                    "skipping upload, recording audit if missing."
                 )
                 if not dry_run:
                     record_release(
@@ -598,7 +735,8 @@ def publish_release(
                 return 0
             else:
                 print(
-                    f"[HALT] Version {version} already exists in registry with differing artifacts or partial publication. Overwrite is prohibited."
+                    f"[HALT] Version {version} already exists in registry with "
+                    f"differing artifacts or partial publication. Overwrite is prohibited."
                 )
                 return 2
         if check_code != 0:
@@ -606,7 +744,6 @@ def publish_release(
             return 1
 
     # 3. Credentials
-    env_data = load_env_file(env_file)
     key_id, key_secret = get_credentials(env_data)
 
     if dry_run:
@@ -616,7 +753,10 @@ def publish_release(
     else:
         if not key_id or not key_secret:
             print(
-                "[ERROR] Registry credentials missing! Set AR_GENERIC_KEY_ID and AR_GENERIC_KEY_SECRET in env or .env file.",
+                (
+                    "[ERROR] Registry credentials missing! Set AR_GENERIC_KEY_ID "
+                    "and AR_GENERIC_KEY_SECRET in env or .env file."
+                ),
                 file=sys.stderr,
             )
             return 1
@@ -625,7 +765,7 @@ def publish_release(
     print(f"\n=== 3. Uploading artifacts ({'DRY-RUN' if dry_run else 'LIVE'}) ===")
     registry_base = registry_base.rstrip("/")
 
-    for filename in UPLOAD_ORDER:
+    for filename in artifact_upload_order(sha256_map):
         filepath = artifacts_dir / filename
         upload_url = f"{registry_base}/upload/l4tools/{version}/"
         check_url = f"{registry_base}/l4tools/{version}/{filename}"
@@ -653,18 +793,21 @@ def publish_release(
         # Immediately verify digest
         if not verify_uploaded_digest(check_url, expected_sha):
             print(
-                f"[ERROR] Partial upload detected for version {version}! File {filename} digest mismatch."
+                f"[ERROR] Partial upload detected for version "
+                f"{version}! File {filename} digest mismatch."
             )
             return 3
 
     # 5. Full HTTPS GET byte verification
     print(
-        f"\n=== 4. Verifying downloaded bytes via HTTPS GET ({'DRY-RUN' if dry_run else 'LIVE'}) ==="
+        f"\n=== 4. Verifying downloaded bytes via HTTPS "
+        f"GET ({'DRY-RUN' if dry_run else 'LIVE'}) ==="
     )
     if dry_run:
-        for filename in UPLOAD_ORDER:
+        for filename in artifact_upload_order(sha256_map):
             print(
-                f"[DRY-RUN] GET {registry_base}/l4tools/{version}/{filename} -> compute sha256 == {sha256_map[filename]}"
+                f"[DRY-RUN] GET {registry_base}/l4tools/{version}/{filename} "
+                f"-> compute sha256 == {sha256_map[filename]}"
             )
     else:
         if not verify_downloaded_artifacts(
@@ -674,7 +817,8 @@ def publish_release(
             registry_base=registry_base,
         ):
             print(
-                f"[ERROR] HTTPS GET byte verification failed for version {version}! Publication incomplete; aborting record."
+                f"[ERROR] HTTPS GET byte verification failed for version "
+                f"{version}! Publication incomplete; aborting record."
             )
             return 3
 
@@ -696,7 +840,8 @@ def publish_release(
         )
 
     print(
-        f"\n[SUCCESS] Version {version} published successfully to {registry_base}/l4tools/{version}/"
+        f"\n[SUCCESS] Version {version} published "
+        f"successfully to {registry_base}/l4tools/{version}/"
     )
     return 0
 
@@ -705,9 +850,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Local publishing tool for l4tools releases to Generic Artifact Registry"
     )
-    parser.add_argument(
-        "--registry", default=DEFAULT_REGISTRY, help="Generic registry base URL"
-    )
+    parser.add_argument("--registry", default=DEFAULT_REGISTRY, help="Generic registry base URL")
     parser.add_argument(
         "--env-file", type=Path, default=None, help="Path to .env file with credentials"
     )
@@ -723,9 +866,7 @@ def main() -> int:
         action="store_true",
         help="Allow release built from dirty git tree",
     )
-    parser.add_argument(
-        "--skip-check", action="store_true", help="Skip remote pre-check"
-    )
+    parser.add_argument("--skip-check", action="store_true", help="Skip remote pre-check")
     parser.add_argument(
         "--record-dir",
         type=Path,
@@ -742,12 +883,8 @@ def main() -> int:
     subparsers = parser.add_subparsers(dest="command", required=False)
 
     # verify
-    sub_verify = subparsers.add_parser(
-        "verify", help="Verify release artifacts directory"
-    )
-    sub_verify.add_argument(
-        "dir", type=Path, help="Artifacts directory (e.g. tools/dist)"
-    )
+    sub_verify = subparsers.add_parser("verify", help="Verify release artifacts directory")
+    sub_verify.add_argument("dir", type=Path, help="Artifacts directory (e.g. tools/dist)")
     sub_verify.add_argument(
         "--allow-dirty",
         action="store_true",
@@ -761,12 +898,8 @@ def main() -> int:
     sub_check.add_argument("version", help="Release version (e.g. 1.6.0)")
 
     # publish
-    sub_publish = subparsers.add_parser(
-        "publish", help="Publish release artifacts to registry"
-    )
-    sub_publish.add_argument(
-        "dir", type=Path, help="Artifacts directory (e.g. tools/dist)"
-    )
+    sub_publish = subparsers.add_parser("publish", help="Publish release artifacts to registry")
+    sub_publish.add_argument("dir", type=Path, help="Artifacts directory (e.g. tools/dist)")
     sub_publish.add_argument(
         "--dry-run", action="store_true", help="Simulate upload without network changes"
     )
@@ -775,9 +908,7 @@ def main() -> int:
         action="store_true",
         help="Allow release built from dirty git tree",
     )
-    sub_publish.add_argument(
-        "--skip-check", action="store_true", help="Skip remote pre-check"
-    )
+    sub_publish.add_argument("--skip-check", action="store_true", help="Skip remote pre-check")
     sub_publish.add_argument(
         "--record-dir",
         type=Path,
@@ -792,12 +923,8 @@ def main() -> int:
     )
 
     # record
-    sub_record = subparsers.add_parser(
-        "record", help="Record release metadata for local artifacts"
-    )
-    sub_record.add_argument(
-        "dir", type=Path, help="Artifacts directory (e.g. tools/dist)"
-    )
+    sub_record = subparsers.add_parser("record", help="Record release metadata for local artifacts")
+    sub_record.add_argument("dir", type=Path, help="Artifacts directory (e.g. tools/dist)")
     sub_record.add_argument(
         "--allow-dirty",
         action="store_true",
@@ -831,10 +958,14 @@ def main() -> int:
     if args.command == "verify":
         try:
             manifest, sha256_map, size_map = verify_artifacts(
-                args.dir, allow_dirty=args.allow_dirty
+                args.dir,
+                allow_dirty=args.allow_dirty,
+                trusted_public=configured_metadata_public(
+                    load_env_file(args.env_file), args.env_file
+                ),
             )
             print(f"[OK] Artifacts verified for version {manifest['version']}:")
-            for f in UPLOAD_ORDER:
+            for f in artifact_upload_order(sha256_map):
                 print(f"  {f}: {size_map[f]} bytes, sha256={sha256_map[f]}")
             return 0
         except Exception as ex:
@@ -860,7 +991,11 @@ def main() -> int:
     if args.command == "record":
         try:
             manifest, sha256_map, size_map = verify_artifacts(
-                args.dir, allow_dirty=args.allow_dirty
+                args.dir,
+                allow_dirty=args.allow_dirty,
+                trusted_public=configured_metadata_public(
+                    load_env_file(args.env_file), args.env_file
+                ),
             )
             record_release(
                 version=manifest["version"],

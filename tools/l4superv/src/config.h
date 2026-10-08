@@ -42,6 +42,9 @@ void config_init_defaults(L4SupervConfig* cfg, const wchar_t* exe_path);
  * Load configuration from l4superv.json if it exists.
  */
 bool config_load_json(L4SupervConfig* cfg, const wchar_t* json_path);
+/* Missing config permits defaults; an existing unreadable/rejected config is
+ * a startup failure, never silently replaced with a different configuration. */
+bool config_load_runtime(L4SupervConfig* cfg, const wchar_t* exe_path);
 
 /**
  * Save configuration to l4superv.json.

@@ -75,7 +75,8 @@ int main(int argc, char* argv[]) {
 
     char test_dir[MAX_PATH];
     get_test_dir(test_dir, sizeof(test_dir));
-    CreateDirectoryA(test_dir, NULL);
+    ASSERT_TRUE(CreateDirectoryA(test_dir, NULL));
+    printf("FIXTURE_ROOT=%s\n", test_dir);
 
     wchar_t fake_bin[MAX_PATH];
     GetCurrentDirectoryW(MAX_PATH, fake_bin);

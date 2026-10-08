@@ -1,5 +1,16 @@
 # leo4proxy
 
+## Tools Registry transport — local implementation, not released
+
+Loopback CONNECT now has a separate fixed public tools Registry:443 branch.
+FM policy storage authority is unchanged; no PB/IoT extension. Common media/HTTPS/
+identity/stop policy gates registration and continuation. Public IPv4 resolved once
+then numeric TCP; one tunnel, bounded1500ms close handoff,10min lifetime,1MiB up/
+1GiB+16MiB down. TLS stays end-to-end in the native WinHTTP consumer; no terminal
+credential is attached to Registry. Real isolated loopback duplex/deny/close-handoff
+and policy/native x86/x64 build tests PASS. No live service replacement/public GET,
+owner signing/publication or terminal compatibility claim; packet records remaining gates.
+
 ## FM correction 1.8.3, published in suite 1.12.1, 2026-10-05
 
 PB metadata via the existing mTLS channel; local-only HTTPS CONNECT restricted to the exact

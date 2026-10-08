@@ -18,6 +18,9 @@ typedef struct {
     bool fm_navigation;
     char fm_path[4096];
     unsigned fm_offset;
+    char update_version[32];
+    char update_target[8];
+    char update_operation_id[40];
     int ttl_sec;
     int max_output_bytes;
 } RpcCommand;
@@ -25,4 +28,6 @@ bool rpc_contract_parse(const char* body, size_t length, bool announcement,
                         const char* wire_method, const char* wire_correlation,
                         const char* wire_payload_required, RpcCommand* out);
 bool rpc_uuid(const char* value);
+/* Canonical suite version grammar shared with update event validation. */
+bool rpc_update_version(const char* value);
 #endif

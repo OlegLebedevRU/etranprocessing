@@ -30,6 +30,9 @@ typedef struct {
     char method_code[16];
     char correlation[40];
     char payload_required[2];
+    char event_type_code[16];
+    char dev_event_id[16];
+    char iot_probe[2];
 } MqttRpcMetadata;
 int mqtt_parse_rpc_metadata(const unsigned char* packet, uint32_t length,
                             uint8_t flags, MqttRpcMetadata* out);
@@ -58,6 +61,9 @@ int mqtt_build_publish_with_properties(unsigned char* buf, size_t max_len,
                                        uint8_t qos, uint8_t retain,
                                        const MqttUserProperty* properties,
                                        size_t property_count);
+int mqtt_build_publish_expiring(unsigned char* buf,size_t max_len,const char* topic,
+    const void* payload,size_t payload_len,uint16_t packet_id,uint8_t qos,uint8_t retain,
+    const MqttUserProperty* properties,size_t property_count,uint32_t expiry_seconds);
 
 int mqtt_build_subscribe(unsigned char* buf, size_t max_len,
                          const char* topic,
