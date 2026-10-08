@@ -24,7 +24,7 @@ static BOOL WINAPI token_info(HANDLE token,TOKEN_INFORMATION_CLASS kind,LPVOID o
     if(kind==TokenType){*needed=sizeof(TOKEN_TYPE);*(TOKEN_TYPE*)out=fault==3?TokenImpersonation:TokenPrimary;return TRUE;}
     if(kind==TokenSessionId){*needed=sizeof(DWORD);*(DWORD*)out=fault==4?1:0;return TRUE;}SetLastError(ERROR_INVALID_PARAMETER);return FALSE;
 }
-bool l4_worker_accept(const wchar_t* uuid,DWORD timeout,L4Journal** j){(void)uuid;CHECK(timeout==150000);accepts++;
+bool l4_worker_accept(const wchar_t* version,const wchar_t* uuid,DWORD timeout,L4Journal** j){(void)uuid;CHECK(version && !wcscmp(version,L"1.13.6"));CHECK(timeout==150000);accepts++;
     if(fault==5){SetLastError(ERROR_ACCESS_DENIED);return false;}*j=pending;pending=NULL;return true;}
 bool l4_worker_recheck(L4Journal* j,L4WorkerAdmission* out){rechecks++;if(fault==6 || j->sequence!=1){SetLastError(ERROR_INVALID_STATE);return false;}
     *out=modeled_admission;if(fault==16 && rechecks==2)out->parent_created.dwLowDateTime++;if(fault==23 && rechecks==2)out->helper.sha256[0]^=1;return true;}

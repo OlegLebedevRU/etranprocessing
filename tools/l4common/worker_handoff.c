@@ -128,7 +128,7 @@ bool l4_worker_accept_checked(const L4Layout* roots,const wchar_t* operation,DWO
 }
 static bool audit(void* context,L4Journal* j,const L4RecoveryHelper* helper,DWORD overhead){(void)context;return l4_recovery_task_audit(j,helper,overhead);}
 bool l4_worker_transfer(L4Journal** j,L4WorkerJob* worker,const L4RecoveryHelper* helper,DWORD overhead){if(!system_user())return false;return l4_worker_transfer_checked(j,worker,helper,overhead,audit,NULL);}
-bool l4_worker_accept(const wchar_t* operation,DWORD timeout,L4Journal** out){if(out)*out=NULL;if(!system_user())return false;L4Layout roots;if(!l4_layout_resolve(&roots,L"0.0.0"))return false;return l4_worker_accept_checked(&roots,operation,timeout,out,audit,NULL);}
+bool l4_worker_accept(const wchar_t* source_version,const wchar_t* operation,DWORD timeout,L4Journal** out){if(out)*out=NULL;if(!system_user())return false;L4Layout roots;if(!l4_layout_resolve(&roots,source_version))return false;return l4_worker_accept_checked(&roots,operation,timeout,out,audit,NULL);}
 bool l4_worker_recheck_checked(L4Journal* j,L4WorkerAdmission* out,L4HandoffAudit check,void* context){if(!out)return fail(ERROR_INVALID_PARAMETER);memset(out,0,sizeof(*out));if(!j || !check)return fail(ERROR_INVALID_PARAMETER);bool ok=admit(j,check,context,out,NULL);if(!ok)memset(out,0,sizeof(*out));return ok;}
 bool l4_worker_recheck(L4Journal* j,L4WorkerAdmission* out){if(out)memset(out,0,sizeof(*out));if(!system_user())return false;return l4_worker_recheck_checked(j,out,audit,NULL);}
 bool l4_worker_recheck_active_checked(L4Journal* j,const L4UpdateState* state,L4WorkerAdmission* out,L4HandoffAudit check,void* context){

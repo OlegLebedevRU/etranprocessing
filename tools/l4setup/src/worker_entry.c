@@ -65,7 +65,7 @@ static DWORD execute(const WorkerEntry* entry){
     if(!entry->engine || !entry->engine->preflight || !entry->engine->execute)return ERROR_CALL_NOT_IMPLEMENTED;
     ULONGLONG end=GetTickCount64()+WORKER_STARTUP_MS;DWORD result=ERROR_NOT_READY;L4Journal* journal=NULL;SetupOperationPlan* plan=NULL;L4WorkerAdmission admission={0};
     L4FileFence parents={0};HANDLE file=INVALID_HANDLE_VALUE;SetupRecoveryReceipt* recovery=NULL;L4ActiveUpdater* updater=NULL;
-    REQUIRE(primary_system());REQUIRE(l4_worker_accept(entry->operation,WORKER_STARTUP_MS,&journal));REQUIRE(l4_worker_recheck(journal,&admission));
+    REQUIRE(primary_system());REQUIRE(l4_worker_accept(entry->version,entry->operation,WORKER_STARTUP_MS,&journal));REQUIRE(l4_worker_recheck(journal,&admission));
     REQUIRE(setup_update_load_operation(journal,admission.sequence,&plan));REQUIRE(binding(entry,plan,&admission));
     REQUIRE(l4_active_updater_open(journal,&updater));REQUIRE(l4_active_updater_verify(updater));
     const L4ActiveUpdaterInfo* info=l4_active_updater_info(updater);const wchar_t* path=l4_active_updater_path(updater);wchar_t selected[32];
