@@ -1,5 +1,5 @@
-/* Pure metadata/record boundary model. Production owner RSA verifier is tested
- * separately; no trusted-key injection, native file write, SCM or broker here. */
+/* Metadata verifier is modeled. ACL/fence regression uses actual directories,
+ * security descriptors and retained native handles; no SCM or broker. */
 #include "../metadata.h"
 #include "../journal_internal.h"
 #include <assert.h>
@@ -13,7 +13,20 @@ static bool fixture_signature(const void* bytes,DWORD n,const BYTE* signature,DW
 #include "../active_updater.c"
 #undef l4_metadata_verify_trusted
 static void hex(const BYTE bytes[32],char text[65]){for(unsigned i=0;i<32;i++)sprintf_s(text+2*i,65-2*i,"%02x",bytes[i]);}
-int main(void){L4ActiveUpdaterInfo info={0},decoded;strcpy_s(info.version,32,"1.13.6");strcpy_s(info.arch,8,"x64");strcpy_s(info.origin,37,"17730000-0000-4000-8000-000000000001");memset(info.root_sha256,0x11,32);
+static unsigned acl_checks;
+#define ACL_CHECK(x) do{++acl_checks;assert(x);}while(0)
+static void acl_regression(void){
+ wchar_t temp[MAX_PATH],parent[MAX_PATH],operation[MAX_PATH],inputs[MAX_PATH],result[MAX_PATH];ACL_CHECK(GetTempPathW(MAX_PATH,temp));
+ swprintf_s(parent,MAX_PATH,L"%lsL4UpdaterAcl-%lu-%llu",temp,GetCurrentProcessId(),GetTickCount64());swprintf_s(operation,MAX_PATH,L"%ls\\operation",parent);swprintf_s(inputs,MAX_PATH,L"%ls\\inputs",operation);
+ PSECURITY_DESCRIPTOR public_sd=NULL,private_sd=NULL;ACL_CHECK(ConvertStringSecurityDescriptorToSecurityDescriptorW(L"O:BAG:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;GRGX;;;BU)",SDDL_REVISION_1,&public_sd,NULL));ACL_CHECK(ConvertStringSecurityDescriptorToSecurityDescriptorW(L"O:BAG:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)",SDDL_REVISION_1,&private_sd,NULL));
+ SECURITY_ATTRIBUTES pub={sizeof(pub),public_sd,FALSE},priv={sizeof(priv),private_sd,FALSE};ACL_CHECK(CreateDirectoryW(parent,&pub));ACL_CHECK(CreateDirectoryW(operation,&priv));ACL_CHECK(CreateDirectoryW(inputs,&priv));
+ L4ActiveUpdater a={0};L4Journal j={0};wcscpy_s(a.roots.data,MAX_PATH,parent);wcscpy_s(j.directory,MAX_PATH,operation);L4FileFence old={0};
+ ACL_CHECK(!l4_store_pin(inputs,parent,true,&old)&&GetLastError()==ERROR_ACCESS_DENIED);ACL_CHECK(pin_inputs(&a,&j,result)&&!wcscmp(result,inputs)&&a.ancestry.count&&a.inputs.count);l4_store_unpin(&a.inputs);l4_store_unpin(&a.ancestry);
+ ACL_CHECK(SetFileSecurityW(operation,DACL_SECURITY_INFORMATION|PROTECTED_DACL_SECURITY_INFORMATION,public_sd));ACL_CHECK(!pin_inputs(&a,&j,result)&&GetLastError()==ERROR_ACCESS_DENIED);l4_store_unpin(&a.inputs);l4_store_unpin(&a.ancestry);
+ ACL_CHECK(SetFileSecurityW(operation,DACL_SECURITY_INFORMATION|PROTECTED_DACL_SECURITY_INFORMATION,private_sd));ACL_CHECK(SetFileSecurityW(inputs,DACL_SECURITY_INFORMATION|PROTECTED_DACL_SECURITY_INFORMATION,public_sd));ACL_CHECK(!pin_inputs(&a,&j,result)&&GetLastError()==ERROR_ACCESS_DENIED);l4_store_unpin(&a.inputs);l4_store_unpin(&a.ancestry);
+ ACL_CHECK(RemoveDirectoryW(inputs));ACL_CHECK(RemoveDirectoryW(operation));ACL_CHECK(RemoveDirectoryW(parent));LocalFree(public_sd);LocalFree(private_sd);
+}
+int main(void){acl_regression();L4ActiveUpdaterInfo info={0},decoded;strcpy_s(info.version,32,"1.13.6");strcpy_s(info.arch,8,"x64");strcpy_s(info.origin,37,"17730000-0000-4000-8000-000000000001");memset(info.root_sha256,0x11,32);
  char pointer[512];DWORD n=0;assert(l4_active_updater_encode(&info,pointer,512,&n)&&l4_active_updater_decode(pointer,n,&decoded));assert(!memcmp(&info,&decoded,sizeof(info)));
  assert(!l4_active_updater_decode(pointer,n-1,&decoded));char duplicate[600];sprintf_s(duplicate,600,"{\"schema\":1,%s",pointer+1);assert(!l4_active_updater_decode(duplicate,(DWORD)strlen(duplicate),&decoded));
  sprintf_s(duplicate,600,"{\"path\":\"C:/caller.exe\",%s",pointer+1);assert(!l4_active_updater_decode(duplicate,(DWORD)strlen(duplicate),&decoded));
@@ -30,5 +43,5 @@ int main(void){L4ActiveUpdaterInfo info={0},decoded;strcpy_s(info.version,32,"1.
  strcpy_s(active.info.arch,8,"x86");assert(!root_claim(&active,(BYTE*)root,(DWORD)length,signature,384,receipt,size));
  History history={0};assert(records(85,1,NULL,0,&history));assert(!records(85,2,NULL,0,&history));assert(!records(92,2,NULL,0,&history));assert(!records(102,2,NULL,0,&history));
  L4ActiveUpdater* output=(L4ActiveUpdater*)1;assert(!l4_active_updater_open(NULL,&output)&&!output);assert(!l4_active_updater_open_fixed(NULL,&output)&&!output);assert(!l4_active_updater_initialize_fresh(NULL,"x64"));assert(!l4_active_updater_verify(NULL));l4_active_updater_close(NULL);
- puts("PASS: updater fixed pointer, suite-independent version, signature-first nomination, descriptor/arch binding, fresh-only history and absent-owner refusal");return 0;
+ printf("PASS: actual updater ACL boundary %u checks; fixed pointer, suite-independent version, signature-first nomination, descriptor/arch binding, fresh-only history and absent-owner refusal\n",acl_checks);return 0;
 }
