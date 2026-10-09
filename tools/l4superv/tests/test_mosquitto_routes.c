@@ -5,6 +5,8 @@
 #include <aclapi.h>
 #include <sddl.h>
 #include "../src/mosquitto_conf.h"
+#include "../../l4common/layout.h"
+#include "../../l4setup/src/broker_config.c"
 bool svc_configure_mosquitto_log(const wchar_t* base) {(void)base;return true;}
 static wchar_t base[MAX_PATH],conf[MAX_PATH];
 static void public_read(const wchar_t* path,bool expected){
@@ -22,6 +24,18 @@ static void write_config(const char* routes) {
 }
 static void read_config(char* data,size_t cap) {
     FILE* f=NULL;assert(!_wfopen_s(&f,conf,L"rb") && f);size_t n=fread(data,1,cap-1,f);data[n]=0;assert(!ferror(f));fclose(f);
+}
+/* Portable supervisor and installed setup intentionally have different log
+ * roots. Every other byte must match; verify the portable log separately. */
+static void setup_profile_matches(const char* actual,const char* sn){
+    wchar_t pf[MAX_PATH],pd[MAX_PATH];L4Layout layout;SetupBrokerConfig expected;
+    swprintf_s(pf,MAX_PATH,L"%ls\\PF",base);swprintf_s(pd,MAX_PATH,L"%ls\\PD",base);
+    assert(l4_layout_from_roots(&layout,pf,pd,L"1.2.3"));
+    assert(sn?setup_broker_render(&layout,sn,&expected):setup_broker_render_standby(&layout,&expected));
+    const char* a=strstr(actual,"log_dest file ");const char* e=strstr(expected.bytes,"log_dest file ");
+    assert(a && e && a-actual==e-expected.bytes && !memcmp(actual,expected.bytes,(size_t)(a-actual)));
+    a=strchr(a,'\n');e=strchr(e,'\n');assert(a && e && !strcmp(a,e));
+    assert(strstr(actual,"/mosquitto/log/mosquitto.log\n"));
 }
 int main(void) {
     wchar_t temp[MAX_PATH],dir[MAX_PATH];assert(GetTempPathW(MAX_PATH,temp));
@@ -58,9 +72,20 @@ int main(void) {
     assert(mosquitto_conf_generate_active(base,1883,"fixture123",NULL));
     public_read(conf,true);wchar_t previous[MAX_PATH];swprintf_s(previous,MAX_PATH,L"%s\\mosquitto.conf.previous",dir);
     public_read(previous,false); /* Previous custom content retains privacy. */
+    read_config(first,sizeof(first));setup_profile_matches(first,"fixture123");
+    assert(mosquitto_conf_generate_standby(base,1883));
+    read_config(second,sizeof(second));setup_profile_matches(second,NULL);
+    assert(mosquitto_conf_generate_active(base,1883,"fixture123",NULL));
+    read_config(second,sizeof(second));assert(!strcmp(first,second));
+    assert(mosquitto_conf_migrate(base));read_config(second,sizeof(second));assert(!strcmp(first,second));
+    assert(!mosquitto_conf_generate_active(base,1883,"fixture123\ninclude_dir injected",NULL));
+    read_config(second,sizeof(second));assert(!strcmp(first,second));
+    assert(!mosquitto_conf_generate_active(base,70000,"fixture123",NULL));
+    read_config(second,sizeof(second));assert(!strcmp(first,second));
+    public_read(conf,true);public_read(previous,true); /* Built-in backup remains readable. */
     assert(DeleteFileW(custom));
     assert(DeleteFileW(conf));swprintf_s(conf,MAX_PATH,L"%s\\mosquitto.conf.previous",dir);assert(DeleteFileW(conf));
     swprintf_s(custom,MAX_PATH,L"%s\\log",dir);assert(RemoveDirectoryW(custom));
     assert(RemoveDirectoryW(dir));assert(RemoveDirectoryW(base));
-    puts("Mosquitto exact routes: old wildcard migration, all 14 routes, idempotence, foreign/unknown rejection passed");return 0;
+    puts("Mosquitto exact routes: setup/supervisor profile, active/standby/active identity, 14 routes, idempotence, ACL, foreign/unknown rejection passed");return 0;
 }
