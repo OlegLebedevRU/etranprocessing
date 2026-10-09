@@ -95,6 +95,10 @@ def test_windows_native_path_rejects_alias(value):
 class Response(io.BytesIO):
     status = 200
 
+    def __init__(self, data, length=None):
+        super().__init__(data)
+        self.headers = {"Content-Length": str(len(data) if length is None else length)}
+
 
 class Opener:
     def __init__(self, response):
@@ -130,6 +134,68 @@ def test_only_actual404_absent(tmp_path):
     client = registry(urllib.error.HTTPError("https://fixture.invalid", 403, "", {}, None))
     with pytest.raises(ReleaseError, match="403"):
         client.download("l4tools/metadata/catalog.json", tmp_path / "denied", 3)
+
+
+def test_short_http_body_restarts_only_owned_output(tmp_path):
+    client = registry(b"")
+    responses = iter([Response(b"12345", 6), Response(b"abc", 3)])
+    client.opener.open = lambda request, timeout: next(responses)
+    target = tmp_path / "owned"
+    assert client.download("l4tools/metadata/catalog.json", target, 6)
+    assert target.read_bytes() == b"abc"
+
+
+def test_short_http_body_refuses_after_three_attempts(tmp_path):
+    client = registry(b"")
+    calls = []
+
+    def short(request, timeout):
+        calls.append(request)
+        return Response(b"12", 3)
+
+    client.opener.open = short
+    with pytest.raises(ReleaseError, match="truncated after3 attempts"):
+        client.download("l4tools/metadata/catalog.json", tmp_path / "short", 3)
+    assert len(calls) == 3
+    assert all(not request.has_header("Authorization") for request in calls)
+
+
+def test_existing_output_is_never_truncated(tmp_path):
+    client = registry(b"new")
+    target = tmp_path / "existing"
+    target.write_bytes(b"operator-owned")
+    with pytest.raises(FileExistsError):
+        client.download("l4tools/metadata/catalog.json", target, 3)
+    assert target.read_bytes() == b"operator-owned"
+
+
+def test_explicit_incomplete_read_restarts(tmp_path):
+    import http.client
+
+    class Broken(Response):
+        def read(self, size=-1):
+            raise http.client.IncompleteRead(b"ab", 1)
+
+    client = registry(b"")
+    responses = iter([Broken(b"", 3), Response(b"xyz")])
+    client.opener.open = lambda request, timeout: next(responses)
+    target = tmp_path / "explicit"
+    assert client.download("l4tools/metadata/catalog.json", target, 3)
+    assert target.read_bytes() == b"xyz"
+
+
+def test_excess_body_does_not_retry(tmp_path):
+    client = registry(b"")
+    calls = []
+
+    def excess(request, timeout):
+        calls.append(request)
+        return Response(b"abc", 2)
+
+    client.opener.open = excess
+    with pytest.raises(ReleaseError, match="exceeds Content-Length"):
+        client.download("l4tools/metadata/catalog.json", tmp_path / "excess", 3)
+    assert len(calls) == 1
 
 
 def test_upload_exact_existing_multipart_directory_api():

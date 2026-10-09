@@ -204,7 +204,9 @@ def published_release(
             or path.stat().st_size != size
             or file_hash(path) != item["sha256"]
         ):
-            raise ReleaseError("Public release artifact differs from signed root inventory")
+            raise ReleaseError(
+                f"Public release artifact differs from signed root inventory: {version}/{name}"
+            )
     if not registry.download(f"l4tools/{version}/SHA256SUMS", directory / "SHA256SUMS", 65535):
         raise ReleaseError("Public release checksum inventory is absent")
     publisher_module(root).verify_artifacts(directory, trusted_public=public, require_metadata=True)
