@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 import hashlib
+import http.client
 import re
 import urllib.error
 import urllib.request
@@ -36,21 +38,56 @@ class CatalogRegistry:
         return relative
 
     def download(self, relative: str, target: Path, maximum: int) -> bool:
-        """Public exact bytes, bounded streaming. False only for actual404."""
+        """Public bounded streaming; at most three GETs for a truncated body.
+
+        Retry only an incomplete HTTP body, never a complete hash/signature
+        mismatch. Keep one exclusively created output handle across attempts.
+        False only for actual404. PUT and RPC behavior are unaffected.
+        """
         relative = self._relative(relative)
         request = urllib.request.Request(self.base + "/" + relative, method="GET")
         try:
-            with self.opener.open(request, timeout=120) as response:
-                if response.status != 200:
-                    raise ReleaseError("Catalog Registry GET did not return200")
-                total = 0
-                with target.open("xb") as stream:
-                    while block := response.read(min(1024 * 1024, maximum + 1 - total)):
-                        total += len(block)
-                        if total > maximum:
-                            raise ReleaseError("Catalog Registry artifact exceeds its signed bound")
-                        stream.write(block)
-                return True
+            with contextlib.ExitStack() as stack:
+                stream = None
+                for attempt in range(3):
+                    try:
+                        with self.opener.open(request, timeout=120) as response:
+                            if response.status != 200:
+                                raise ReleaseError("Catalog Registry GET did not return200")
+                            length = response.headers.get("Content-Length")
+                            if length is not None and (
+                                not length.isascii() or not length.isdigit()
+                            ):
+                                raise ReleaseError("Catalog Registry Content-Length is invalid")
+                            expected = int(length) if length is not None else None
+                            if expected is not None and expected > maximum:
+                                raise ReleaseError(
+                                    "Catalog Registry artifact exceeds its signed bound"
+                                )
+                            if stream is None:
+                                stream = stack.enter_context(target.open("xb"))
+                            else:
+                                stream.seek(0)
+                                stream.truncate()
+                            total = 0
+                            while block := response.read(min(1024 * 1024, maximum + 1 - total)):
+                                total += len(block)
+                                if total > maximum:
+                                    raise ReleaseError(
+                                        "Catalog Registry artifact exceeds its signed bound"
+                                    )
+                                stream.write(block)
+                            if expected is None or total == expected:
+                                return True
+                            if total > expected:
+                                raise ReleaseError("Catalog Registry body exceeds Content-Length")
+                    except http.client.IncompleteRead:
+                        pass  # Retry only HTTP's explicit incomplete-body indication.
+                    if attempt == 2:
+                        raise ReleaseError(
+                            f"Catalog Registry GET body truncated after3 attempts: {relative}"
+                        )
+                raise AssertionError("Bounded GET loop must return or refuse")
         except urllib.error.HTTPError as error:
             if error.code == 404:
                 return False
