@@ -1,1 +1,0 @@
-Borland Delphi 7 Enterprise

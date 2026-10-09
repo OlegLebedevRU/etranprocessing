@@ -131,5 +131,12 @@ artifacts/stand_download_5b/
 # Independent local checkout used to prepare reviewed releases
 /.ui-release-checkout/
 
+# Legacy / local-only trees — never push to remote
+/FRONT/
+/BACK/
+/migrate/
+/sqlFileExample/
+/stored-procedures/
+
 # Generated public installation network profile; embedded in signed setup.
 tools/l4setup/res/network-profile.bin
