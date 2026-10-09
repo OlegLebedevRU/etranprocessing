@@ -19,6 +19,7 @@ static unsigned events[32],count,workers;static int fault_mode;static L4ServiceS
 static HANDLE barrier_entered,barrier_finish;
 static DWORD states[2],selected;static wchar_t commands[2][2048];static DWORD fake_pids[]={900001,900002};
 static ULONGLONG stamp(void){FILETIME t;GetSystemTimeAsFileTime(&t);return ((ULONGLONG)t.dwHighDateTime<<32)|t.dwLowDateTime;}
+static DWORD observer_left(ULONGLONG end){ULONGLONG now=GetTickCount64();return now<end?(DWORD)(end-now):0;}
 static void record(unsigned code){CHECK(count<32);if(count<32)events[count++]=code;}
 static SC_HANDLE mock_manager(LPCWSTR a,LPCWSTR b,DWORD access){(void)a;(void)b;(void)access;return (SC_HANDLE)1;}
 static SC_HANDLE mock_service(SC_HANDLE manager,LPCWSTR name,DWORD access){(void)manager;(void)access;
@@ -110,8 +111,11 @@ static bool proof_worker(const L4CommunicationPlan* p){CHECK(p && p->worker_pid)
 #undef fail
 #undef IsWellKnownSid
 #undef OpenProcessToken
-static bool signal_probe(unsigned i,DWORD pid,DWORD ms,void* context){(void)context;CHECK(ms && pid==fake_pids[i]);record(i?9:4);return true;}
+static bool signal_probe(unsigned i,DWORD pid,DWORD ms,void* context){(void)context;CHECK(ms && pid==fake_pids[i]);
+    if(fault_mode==14 && !i){CHECK(ms>16000);Sleep(16000);}record(i?9:4);return true;}
 static bool signal_channels(DWORD pid,DWORD ms,void* context){(void)context;CHECK(pid==fake_pids[0] && ms);record(5);
+    /* Two independently valid phases take more than the old 30s observer wait. */
+    if(fault_mode==14){CHECK(ms>16000);Sleep(16000);}
     if(fault_mode==2){SetLastError(ERROR_NOT_READY);return false;}return true;}
 static bool signal_barrier(DWORD ms,void* context){(void)context;CHECK(ms);record(10);if(fault_mode==14){SetEvent(barrier_entered);CHECK(WaitForSingleObject(barrier_finish,ms)==WAIT_OBJECT_0);}if(fault_mode==1){SetLastError(ERROR_TIMEOUT);return false;}return true;}
 static void scenario(unsigned mode){
@@ -120,7 +124,7 @@ static void scenario(unsigned mode){
     CHECK(update_fixture_put(&fixture,0));const wchar_t* id=L"17730000-0000-4000-8000-000000000001";
     L4Journal* j=NULL;CHECK(l4_journal_open(&fixture.layout,id,true,&j));if(!j)return;
     L4CommunicationPlan p={0};memcpy(&p.operation,j->header+8,16);p.generation=1;
-    FILETIME now,exit,kernel,user;GetSystemTimeAsFileTime(&now);p.armed_utc=((ULONGLONG)now.dwHighDateTime<<32)|now.dwLowDateTime;p.deadline_utc=p.armed_utc+6000000000ull;
+    FILETIME exit,kernel,user;
 
     wchar_t exe[MAX_PATH],cmd[MAX_PATH+40];CHECK(GetModuleFileNameW(NULL,exe,MAX_PATH));swprintf_s(cmd,_countof(cmd),L"\"%ls\" --hold-fixture",exe);
     STARTUPINFOW startup={sizeof(startup)};PROCESS_INFORMATION child={0};CHECK(CreateProcessW(exe,cmd,NULL,NULL,FALSE,CREATE_NO_WINDOW,NULL,NULL,&startup,&child));
@@ -132,7 +136,6 @@ static void scenario(unsigned mode){
      * performance limit. Give each phase 30s and monitor-proof mode8 time to
      * inspect a live window. Missing-marker expiry still uses the original 1s.
      * Production budgets remain explicit caller input. */
-    p.armed_utc-=100000000ull;p.deadline_utc=stamp()+(mode==8?300000000ull:10000000ull);
     p.budget=(L4CommunicationBudget){30000,30000,30000,30000,30000,300000,30000,600000};
     BYTE* switches[2]={0},*configs[2]={0};const wchar_t* services[]={L"Leo4Proxy",L"mosquitto"};
     for(unsigned i=0;i<2;i++){L4ServiceSwitch s={0};CHECK(l4_layout_from_roots(&s.layout,fixture.layout.binaries,fixture.layout.data,L"1.13.3"));
@@ -154,6 +157,10 @@ static void scenario(unsigned mode){
 
     for(unsigned i=0;i<2;i++){CHECK(l4_switch_decode_bytes(&fixture.layout,p.switches[i],p.switch_size[i],&pair_mock[i]));
         wcscpy_s(commands[i],2048,pair_mock[i].after);states[i]=SERVICE_RUNNING;}
+    /* Start admission after building the real fixture records, not before
+     * their NTFS flush/hash work. Missing-marker expiry remains one second. */
+    DWORD admission_ms=mode==8?30000:1000;
+    p.armed_utc=stamp()-100000000ull;p.deadline_utc=stamp()+10000ull*admission_ms;
     CHECK(l4_communication_plan_prepare(j,&p,mode==11?GetCurrentProcess():child.hProcess));
     HANDLE leaked=NULL;CHECK(!OpenThreadToken(GetCurrentThread(),TOKEN_QUERY,TRUE,&leaked) && GetLastError()==ERROR_NO_TOKEN);if(leaked)CloseHandle(leaked);
     CHECK(l4_config_apply(j,p.config_sequence[0]) && l4_config_apply(j,p.config_sequence[1]));
@@ -169,6 +176,9 @@ static void scenario(unsigned mode){
     if(mode==14){barrier_entered=CreateEventW(NULL,TRUE,FALSE,NULL);barrier_finish=CreateEventW(NULL,TRUE,FALSE,NULL);CHECK(barrier_entered && barrier_finish);}
     if((mode>=6 && mode<=8) || mode>=12){L4CommunicationMonitor* monitor=NULL;CHECK(l4_communication_monitor_start(&fixture.layout,id,&signals,&monitor));
         CHECK(monitor);if(monitor){
+            /* One observer budget covers admission and the entire native plan.
+             * A 30s wait cannot prove entry to its final barrier. */
+            ULONGLONG observe_end=GetTickCount64()+admission_ms+p.budget.total_ms;
             if(mode==8){
                 CHECK(WaitForSingleObject(monitor->ready,1000)==WAIT_OBJECT_0);
                 CHECK(l4_communication_monitor_proof(monitor,monitor->pin,&state,1000,NULL));
@@ -185,12 +195,17 @@ static void scenario(unsigned mode){
             if(mode==12){Sleep(30);CHECK(l4_update_state_encode(&state,state_bytes));CHECK(l4_update_state_replace(&fixture.layout,state_bytes,false));}
             if(mode==13){L4UpdateState foreign=state;foreign.generation++;CHECK(l4_update_state_encode(&foreign,state_bytes));CHECK(l4_update_state_replace(&fixture.layout,state_bytes,false));}
             if(mode==14){
-                CHECK(WaitForSingleObject(barrier_entered,30000)==WAIT_OBJECT_0);CHECK(!l4_communication_monitor_close(&monitor,0) && monitor);SetEvent(barrier_finish);}
+                HANDLE events_to_wait[]={barrier_entered,monitor->thread};
+                DWORD observed=WaitForMultipleObjects(2,events_to_wait,FALSE,observer_left(observe_end));CHECK(observed==WAIT_OBJECT_0);
+                if(observed==WAIT_OBJECT_0)CHECK(!l4_communication_monitor_close(&monitor,0) && monitor);
+                else{bool done=false;L4CommunicationResult original={0};bool polled=l4_communication_monitor_poll(monitor,&done,&original);CHECK(polled);
+                    printf("monitor scenario14 before barrier: wait%lu done%d error%lu completed%u steps%u\n",observed,done,original.error,original.completed,count);}
+                SetEvent(barrier_finish);}
             if(mode==15){L4CommunicationDecision* d=NULL;CHECK(l4_communication_decision_open(&fixture.layout,id,1000,&d));
                 CHECK(l4_communication_decision_finish(d,L4_COMM_DEC_COMMITTED,0,stamp()));l4_communication_decision_close(d);}
             if(mode==8)CHECK(l4_communication_monitor_close(&monitor,30000));
-            else{bool done=false;ULONGLONG end=GetTickCount64()+30000;
-                do{CHECK(l4_communication_monitor_poll(monitor,&done,&result));if(!done)Sleep(20);}while(!done && GetTickCount64()<end);
+            else if(monitor){bool done=false;
+                do{bool polled=l4_communication_monitor_poll(monitor,&done,&result);CHECK(polled);if(!polled)break;if(!done)Sleep(20);}while(!done && observer_left(observe_end));
                 DWORD expected_error=(DWORD)(mode==7?ERROR_TIMEOUT:mode==13?ERROR_REVISION_MISMATCH:mode==15?ERROR_INVALID_STATE:0);
                 if(result.error!=expected_error)printf("monitor scenario%u observed error%lu expected%lu\n",mode,result.error,expected_error);
                 CHECK(done);CHECK(result.error==expected_error);CHECK(l4_communication_monitor_close(&monitor,30000));}
@@ -216,7 +231,9 @@ static void scenario(unsigned mode){
     for(unsigned i=0;i<2;i++){free(switches[i]);free(configs[i]);}free(con_bytes);CHECK(update_fixture_dispose(&fixture));
 }
 int wmain(int argc,wchar_t** argv){
-    if(argc==2 && !wcscmp(argv[1],L"--hold-fixture")){Sleep(60000);return 0;}
+    /* Parent owns termination at each scenario end. This bounded fallback
+     * covers the whole 900s native gate, not a shorter arbitrary 60s lifetime. */
+    if(argc==2 && !wcscmp(argv[1],L"--hold-fixture")){Sleep(900000);return 0;}
     for(unsigned i=0;i<16;i++)scenario(i);
     printf("Communication runtime/monitor: %u checks, %u failures; real journals/configs/decisions/thread, modeled SCM/images/SYSTEM/signals; no live services\n",checks,failures);return failures?1:0;
 }
