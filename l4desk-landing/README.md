@@ -47,7 +47,7 @@ l4desk-landing/
 
 ```powershell
 # Из каталога l4desk-landing чистого checkout
- tar -czf landing-release.tar.gz site contact docker docker-compose.yml .dockerignore
+ git -c core.autocrlf=false archive --format=tar.gz --output=landing-release.tar.gz HEAD:l4desk-landing site contact docker docker-compose.yml .dockerignore
  scp -i d:\.ssh\free-tier-cloud_ru landing-release.tar.gz user1@176.108.247.249:/home/user1/landing-release.tar.gz
  ssh -n -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249 "cd /home/user1/l4desk-landing && tar -xzf /home/user1/landing-release.tar.gz && sudo docker compose up -d --build --no-deps contact landing"
 ```
@@ -55,6 +55,8 @@ l4desk-landing/
 Получатель обращений задаётся в Compose: `CONTACT_OWNER_EMAIL`, по умолчанию
 `info@l4desk.ru`. Для смены переопределите переменную в окружении Compose
 или `.env`; она имеет приоритет над значением внутри `.env.contact`.
+Shell-скрипты закреплены с LF через `.gitattributes`; `core.autocrlf=false`
+при упаковке защищает все текстовые файлы от преобразований Windows.
 После публикации проверьте оба контейнера, `/healthz`, содержание страницы,
 все файлы статических ресурсов и фактического получателя внутри `contact`.
 
@@ -165,3 +167,7 @@ AI-иллюстрация предыдущего варианта сохране
 «не универсальный доступ» и т.п.).
 Скриншоты — адресная проверка устройства 1000009, не общая коммерческая доступность.
 Тональность: ясный, уверенный, конкретный — без магии и неподтверждённых обещаний.
+
+## Последняя проверенная публикация
+
+[Отчёт о публикации и данные отката](materials/history/deployment-20261009.md).
