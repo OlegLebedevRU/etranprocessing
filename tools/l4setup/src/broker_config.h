@@ -1,6 +1,7 @@
 #pragma once
 #include "../../l4common/layout.h"
-typedef struct { char bytes[8192]; DWORD size; } SetupBrokerConfig;
+#include "../../l4common/broker_profile.h"
+typedef L4BrokerProfile SetupBrokerConfig;
 /* Pure active-profile renderer. SN is captured from authenticated terminal
  * discovery by the local installer, never an RPC-selected bridge identity.
  * No service/client/file writes, template fallback or duplicate MQTT connection. */

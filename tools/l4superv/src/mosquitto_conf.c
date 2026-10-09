@@ -2,6 +2,7 @@
 #include "service_mgr.h"
 #include <stdio.h>
 #include "../../l4common/layout.h"
+#include "../../l4common/broker_profile.h"
 #include <stdlib.h>
 #include <string.h>
 #include <shlwapi.h>
@@ -156,6 +157,14 @@ static bool ensure_log_dir_exists(const wchar_t* base_path) {
     return svc_configure_mosquitto_log(base_path);
 }
 
+static bool write_profile(const wchar_t* path,const char* log,int port,const char* sn){
+    L4BrokerProfile profile;if(!l4_broker_profile_render(log,port>0?port:1883,sn,&profile))return false;
+    FILE* file=NULL;if(_wfopen_s(&file,path,L"wb") || !file)return false;
+    bool ok=fwrite(profile.bytes,1,profile.size,file)==profile.size && !ferror(file) &&
+        fflush(file)==0 && _commit(_fileno(file))==0;
+    if(fclose(file)!=0)ok=false;return ok;
+}
+
 bool mosquitto_conf_generate_standby(const wchar_t* base_path, int port) {
     if (!base_path) return false;
     if (!ensure_log_dir_exists(base_path)) return false;
@@ -164,36 +173,12 @@ bool mosquitto_conf_generate_standby(const wchar_t* base_path, int port) {
     if (!l4_runtime_path(base_path, L4_DATA_CONFIG, L"mosquitto\\mosquitto.conf.candidate", L"mosquitto\\mosquitto.conf.candidate", conf_path)) return false;
     if(!DeleteFileW(conf_path) && GetLastError()!=ERROR_FILE_NOT_FOUND)return false;
 
-    char base_fwd[MAX_PATH * 3] = { 0 };
-    get_forward_slash_path(base_path, base_fwd, sizeof(base_fwd));
     wchar_t log_path[MAX_PATH]; char log_fwd[MAX_PATH * 3] = {0};
     if (!l4_runtime_path(base_path, L4_DATA_LOGS, L"mosquitto\\mosquitto.log", L"mosquitto\\log\\mosquitto.log", log_path)) return false;
     get_forward_slash_path(log_path, log_fwd, sizeof(log_fwd));
 
-    FILE* f = NULL;
-    if (_wfopen_s(&f, conf_path, L"wb") != 0 || !f) {
-        return false;
-    }
-
-    fprintf(f, "# ==============================================================================\n");
-    fprintf(f, "# Mosquitto MQTT Broker Configuration (Standby / Neutral Mode - Local Only)\n");
-    fprintf(f, "# Generated automatically by l4superv (Waiting for Leo4 Certificate)\n");
-    fprintf(f, "# ==============================================================================\n\n");
-    fprintf(f, "listener %d 127.0.0.1\n", port > 0 ? port : 1883);
-    fprintf(f, "allow_anonymous true\n\n");
-    fprintf(f, "persistence false\n");
-    fprintf(f, "log_dest file %s\n", log_fwd);
-    fprintf(f, "log_type error\n");
-    fprintf(f, "log_type warning\n");
-    fprintf(f, "log_type notice\n");
-    fprintf(f, "log_type information\n");
-    fprintf(f, "log_type subscribe\n");
-    fprintf(f, "log_type unsubscribe\n");
-    fprintf(f, "connection_messages true\n");
-
-    bool written=!ferror(f) && fflush(f)==0 && _commit(_fileno(f))==0;
-    if(fclose(f)!=0)written=false;
-    return written && config_policy(conf_path,conf_path,true) && mosquitto_conf_install_candidate(base_path);
+    return write_profile(conf_path,log_fwd,port,NULL) &&
+        config_policy(conf_path,conf_path,true) && mosquitto_conf_install_candidate(base_path);
 }
 
 bool mosquitto_conf_generate_active(const wchar_t* base_path,
@@ -282,47 +267,8 @@ bool mosquitto_conf_generate_active(const wchar_t* base_path,
         }
     }
 
-    // Default built-in active template
-    FILE* f = NULL;
-    if (_wfopen_s(&f, conf_path, L"wb") != 0 || !f) {
-        return false;
-    }
-
-    fprintf(f, "# ==============================================================================\n");
-    fprintf(f, "# Mosquitto MQTT Broker Configuration (Active Bridge Mode)\n");
-    fprintf(f, "# Generated automatically by l4superv for Device SN: %s\n", sn);
-    fprintf(f, "# ==============================================================================\n\n");
-    fprintf(f, "# Local listener for internal terminal processes\n");
-    fprintf(f, "listener %d 127.0.0.1\n", port > 0 ? port : 1883);
-    fprintf(f, "allow_anonymous true\n\n");
-    fprintf(f, "# Bridge configuration to leo4proxy (Native SChannel mTLS tunnel)\n");
-    fprintf(f, "connection platerra-upstream\n");
-    fprintf(f, "bridge_protocol_version mqttv50\n");
-    fprintf(f, "address 127.0.0.1:18883\n\n");
-    fprintf(f, "# Remote client identifier for external broker\n");
-    fprintf(f, "remote_clientid %s\n\n", sn);
-    fprintf(f, "# Disable Mosquitto $SYS status topics (required for external broker compatibility)\n");
-    fprintf(f, "try_private false\n");
-    fprintf(f, "notifications false\n\n");
-    fprintf(f, "# Topic routing rules (topic <pattern> <direction> <QoS>)\n");
-    write_routes(f,sn);
-    fprintf(f, "# Connection reliability and keep-alive\n");
-    fprintf(f, "cleansession true\n");
-    fprintf(f, "restart_timeout 5 60\n");
-    fprintf(f, "keepalive_interval 60\n\n");
-    fprintf(f, "persistence false\n");
-    fprintf(f, "log_dest file %s\n", log_fwd);
-    fprintf(f, "log_type error\n");
-    fprintf(f, "log_type warning\n");
-    fprintf(f, "log_type notice\n");
-    fprintf(f, "log_type information\n");
-    fprintf(f, "log_type subscribe\n");
-    fprintf(f, "log_type unsubscribe\n");
-    fprintf(f, "connection_messages true\n");
-
-    bool written=!ferror(f) && fflush(f)==0 && _commit(_fileno(f))==0;
-    if(fclose(f)!=0)written=false;
-    return written && config_policy(conf_path,conf_path,true) && mosquitto_conf_install_candidate(base_path);
+    return write_profile(conf_path,log_fwd,port,sn) &&
+        config_policy(conf_path,conf_path,true) && mosquitto_conf_install_candidate(base_path);
 }
 
 bool mosquitto_conf_is_standby(const wchar_t* base_path) {
