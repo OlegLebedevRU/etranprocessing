@@ -18,6 +18,9 @@ bool l4_probe_server_start(const wchar_t* component,L4ProbeCallback callback,voi
 bool l4_probe_server_start_ex(const wchar_t* component,L4ProbeCallback callback,L4DrainCallback drain,void* context,L4ProbeServer** server);
 void l4_probe_server_stop(L4ProbeServer* server);
 bool l4_probe_call(const wchar_t* component,DWORD expected_pid,DWORD mode,DWORD timeout_ms);
+/* One deadline and one held process epoch: wait only for local health NOT_READY,
+ * then perform exactly one fresh channel exchange. Fresh failures never retry. */
+bool l4_probe_barrier_call(DWORD expected_pid,DWORD timeout_ms);
 /* Read-only v2 drain; exact operation/window/generation/plan/deadline echo.
  * Caller owns SCM PID/creation checks and repeats state before any stop. */
 bool l4_probe_drain_call(const wchar_t* component,DWORD expected_pid,const L4UpdateState* expected,DWORD timeout_ms);

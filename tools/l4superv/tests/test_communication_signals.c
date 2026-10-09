@@ -41,6 +41,7 @@ static HANDLE fake_process(DWORD access,BOOL inherit,DWORD pid){
     return OpenProcess(access,inherit,pid);
 }
 static bool fake_ipc(const wchar_t* n,DWORD pid,DWORD mode,DWORD ms){CHECK(!wcscmp(n,L"con") && pid==GetCurrentProcessId() && mode==1 && ms);++ipc_calls;return ipc_ok;}
+static bool fake_barrier(DWORD pid,DWORD ms){return fake_ipc(L"con",pid,1,ms);}
 static SC_HANDLE fake_manager(LPCWSTR a,LPCWSTR b,DWORD mask){(void)a;(void)b;CHECK(mask==SC_MANAGER_CONNECT);return (SC_HANDLE)1;}
 static SC_HANDLE fake_service(SC_HANDLE m,LPCWSTR n,DWORD mask){(void)m;CHECK(!wcscmp(n,L"L4Con") && mask==(SERVICE_QUERY_CONFIG|SERVICE_QUERY_STATUS));if(startup_case==9){SetLastError(ERROR_SERVICE_DOES_NOT_EXIST);return NULL;}return (SC_HANDLE)2;}
 static BOOL fake_close(SC_HANDLE s){(void)s;return TRUE;}
@@ -67,6 +68,7 @@ static BOOL fake_status(SC_HANDLE s,SC_STATUS_TYPE t,LPBYTE b,DWORD n,LPDWORD ne
 #define IsWellKnownSid fake_sid
 #define OpenProcess fake_process
 #define l4_probe_call fake_ipc
+#define l4_probe_barrier_call fake_barrier
 #define OpenSCManagerW fake_manager
 #define OpenServiceW fake_service
 #define CloseServiceHandle fake_close

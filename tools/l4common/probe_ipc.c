@@ -151,6 +151,34 @@ static bool call(const wchar_t* component,DWORD expected_pid,DWORD mode,const L4
 bool l4_probe_call(const wchar_t* component,DWORD expected_pid,DWORD mode,DWORD timeout_ms){
     if(mode>1){SetLastError(ERROR_INVALID_PARAMETER);return false;}return call(component,expected_pid,mode,NULL,timeout_ms,NULL);
 }
+static bool barrier_epoch(HANDLE process,const FILETIME* created){
+    FILETIME current,ended,kernel,user;
+    if(WaitForSingleObject(process,0)!=WAIT_TIMEOUT){SetLastError(ERROR_REVISION_MISMATCH);return false;}
+    if(!GetProcessTimes(process,&current,&ended,&kernel,&user))return false;
+    if(CompareFileTime(created,&current)){SetLastError(ERROR_REVISION_MISMATCH);return false;}return true;
+}
+bool l4_probe_barrier_call(DWORD expected_pid,DWORD timeout_ms){
+    if(!expected_pid || !timeout_ms || timeout_ms>300000){SetLastError(ERROR_INVALID_PARAMETER);return false;}
+    ULONGLONG deadline=GetTickCount64()+timeout_ms;
+    HANDLE process=OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION|SYNCHRONIZE,FALSE,expected_pid);if(!process)return false;
+    FILETIME created,ended,kernel,user;bool ok=GetProcessTimes(process,&created,&ended,&kernel,&user)!=0;DWORD code=GetLastError();
+    while(ok){
+        if(!left(deadline)){ok=false;code=ERROR_TIMEOUT;break;}
+        if(!barrier_epoch(process,&created)){ok=false;code=GetLastError();break;}
+        bool ready=l4_probe_call(L"con",expected_pid,0,left(deadline));code=GetLastError();
+        if(!barrier_epoch(process,&created)){ok=false;code=GetLastError();break;}
+        if(!left(deadline)){ok=false;code=ERROR_TIMEOUT;break;}
+        if(ready){
+            ok=l4_probe_call(L"con",expected_pid,1,left(deadline));code=GetLastError();
+            if(!barrier_epoch(process,&created)){ok=false;code=GetLastError();}
+            if(!left(deadline)){ok=false;code=ERROR_TIMEOUT;}break;
+        }
+        if(code!=ERROR_NOT_READY){ok=false;break;}
+        DWORD remaining=left(deadline),wait=remaining<25?remaining:25;
+        if(WaitForSingleObject(process,wait)!=WAIT_TIMEOUT){ok=false;code=ERROR_REVISION_MISMATCH;break;}
+    }
+    CloseHandle(process);if(!ok)SetLastError(code?code:ERROR_INVALID_DATA);return ok;
+}
 bool l4_probe_drain_call(const wchar_t* component,DWORD expected_pid,const L4UpdateState* expected,DWORD timeout_ms){
     if(!expected){SetLastError(ERROR_INVALID_PARAMETER);return false;}return call(component,expected_pid,2,expected,timeout_ms,NULL);
 }

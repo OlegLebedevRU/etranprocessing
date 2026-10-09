@@ -3,10 +3,51 @@
 #include <stdio.h>
 #include <string.h>
 #include <sddl.h>
+#include <limits.h>
 #ifndef L4_PROBE_PREFIX
 #define L4_PROBE_PREFIX L"L4HealthTest"
 #endif
 static volatile LONG calls;
+typedef struct {LONG health,fresh;LONG not_ready;DWORD health_error,fresh_error,delay;} BarrierFixture;
+static DWORD barrier_callback(DWORD mode,DWORD timeout,HANDLE cancel,void* context){
+    BarrierFixture* f=context;
+    if(!mode){LONG count=InterlockedIncrement(&f->health);if(f->health_error)return f->health_error;
+        return count<=f->not_ready?ERROR_NOT_READY:ERROR_SUCCESS;}
+    assert(mode==1 && f->health>f->not_ready);InterlockedIncrement(&f->fresh);
+    if(f->delay)WaitForSingleObject(cancel,timeout+f->delay);return f->fresh_error;
+}
+static DWORD dying_callback(DWORD mode,DWORD timeout,HANDLE cancel,void* context){
+    (void)timeout;(void)cancel;(void)context;assert(!mode);
+    if(InterlockedIncrement(&calls)==2)ExitProcess(0);return ERROR_NOT_READY;
+}
+static void test_barrier_process(void){
+    wchar_t image[MAX_PATH],command[MAX_PATH+40];assert(GetModuleFileNameW(NULL,image,MAX_PATH));
+    swprintf_s(command,MAX_PATH+40,L"\"%ls\" --barrier-child",image);STARTUPINFOW startup={sizeof(startup)};PROCESS_INFORMATION child={0};
+    assert(CreateProcessW(image,command,NULL,NULL,FALSE,CREATE_NO_WINDOW,NULL,NULL,&startup,&child));CloseHandle(child.hThread);
+    /* A pipe belonging to another actual process cannot satisfy our epoch. */
+    assert(!l4_probe_barrier_call(GetCurrentProcessId(),2000));assert(GetLastError()==ERROR_REVISION_MISMATCH);
+    assert(!l4_probe_barrier_call(child.dwProcessId,2000));
+    assert(WaitForSingleObject(child.hProcess,3000)==WAIT_OBJECT_0);DWORD exit_code=1;assert(GetExitCodeProcess(child.hProcess,&exit_code) && !exit_code);CloseHandle(child.hProcess);
+    puts("Barrier: actual child pipe PID mismatch and original process death refuse advancement PASS");
+}
+static void test_barrier(void){
+    BarrierFixture f={0};L4ProbeServer* server=NULL;DWORD pid=GetCurrentProcessId();
+    assert(l4_probe_server_start(L"con",barrier_callback,&f,&server));
+    f.not_ready=3;assert(l4_probe_barrier_call(pid,2000));assert(f.health==4 && f.fresh==1);
+    f=(BarrierFixture){0};f.not_ready=LONG_MAX;ULONGLONG start=GetTickCount64();
+    assert(!l4_probe_barrier_call(pid,150));assert(GetLastError()==ERROR_TIMEOUT);assert(f.health>1 && !f.fresh && GetTickCount64()-start<600);
+    f=(BarrierFixture){0};f.health_error=ERROR_ACCESS_DENIED;
+    assert(!l4_probe_barrier_call(pid,1000));assert(GetLastError()==ERROR_ACCESS_DENIED && f.health==1 && !f.fresh);
+    f=(BarrierFixture){0};f.not_ready=2;f.fresh_error=ERROR_NOT_READY;
+    assert(!l4_probe_barrier_call(pid,1000));assert(GetLastError()==ERROR_NOT_READY && f.health==3 && f.fresh==1);
+    f=(BarrierFixture){0};f.not_ready=2;f.delay=20;start=GetTickCount64();
+    assert(!l4_probe_barrier_call(pid,200));assert(GetLastError()==ERROR_TIMEOUT && f.health==3 && f.fresh==1 && GetTickCount64()-start<600);
+    l4_probe_server_stop(server);
+    assert(!l4_probe_barrier_call(0,100));assert(GetLastError()==ERROR_INVALID_PARAMETER);
+    assert(!l4_probe_barrier_call(pid,0));assert(GetLastError()==ERROR_INVALID_PARAMETER);
+    assert(!l4_probe_barrier_call(pid,300001));assert(GetLastError()==ERROR_INVALID_PARAMETER);
+    puts("Barrier: bounded NOT_READY health wait, one fresh exchange, hard failure and late response refusal PASS");
+}
 static DWORD evidence_callback(DWORD timeout,HANDLE cancel,void* context,L4LinkProbeEvidence* evidence){
     (void)timeout;(void)cancel;assert(context==&calls);InterlockedIncrement(&calls);memset(evidence,0,sizeof(*evidence));return ERROR_NOT_READY;
 }
@@ -54,7 +95,8 @@ static void test_evidence_replay(bool wrong_nonce){
     assert(!l4_probe_evidence_call(GetCurrentProcessId(),1000,&out));assert(GetLastError()==(DWORD)(wrong_nonce?ERROR_REVISION_MISMATCH:ERROR_INVALID_DATA));assert(!out.req_sent_utc);
     assert(WaitForSingleObject(thread,2000)==WAIT_OBJECT_0);CloseHandle(thread);CloseHandle(f.pipe);
 }
-int main(void){
+int main(int argc,char** argv){
+    if(argc==2 && !strcmp(argv[1],"--barrier-child")){L4ProbeServer* child=NULL;assert(l4_probe_server_start(L"con",dying_callback,NULL,&child));Sleep(10000);l4_probe_server_stop(child);return 1;}
     L4ProbeServer* server=NULL,*duplicate=NULL;assert(!l4_probe_server_start(L"invalid",callback,(void*)&calls,&server));
     assert(l4_probe_server_start(L"con",callback,(void*)&calls,&server));assert(!l4_probe_server_start(L"con",callback,(void*)&calls,&duplicate));
     assert(!l4_probe_call(L"con",GetCurrentProcessId()+1,0,1000));assert(GetLastError()==ERROR_REVISION_MISMATCH);
@@ -62,7 +104,8 @@ int main(void){
     BYTE admin[SECURITY_MAX_SID_SIZE];DWORD size=sizeof(admin);assert(CreateWellKnownSid(WinBuiltinAdministratorsSid,NULL,admin,&size));SID_AND_ATTRIBUTES disabled={admin,0};
     assert(CreateRestrictedToken(primary,DISABLE_MAX_PRIVILEGE,1,&disabled,0,NULL,0,NULL,&restricted));
     assert(DuplicateTokenEx(restricted,TOKEN_QUERY|TOKEN_IMPERSONATE,NULL,SecurityImpersonation,TokenImpersonation,&impersonation));
-    assert(SetThreadToken(NULL,impersonation));assert(!l4_probe_call(L"con",GetCurrentProcessId(),0,1000));assert(GetLastError()==ERROR_ACCESS_DENIED);assert(SetThreadToken(NULL,NULL));
+    assert(SetThreadToken(NULL,impersonation));assert(!l4_probe_call(L"con",GetCurrentProcessId(),0,1000));assert(GetLastError()==ERROR_ACCESS_DENIED);
+    assert(!l4_probe_barrier_call(GetCurrentProcessId(),1000));assert(GetLastError()==ERROR_ACCESS_DENIED);assert(SetThreadToken(NULL,NULL));
     CloseHandle(impersonation);CloseHandle(restricted);CloseHandle(primary);
     bool ok=l4_probe_call(L"con",GetCurrentProcessId(),0,1000);if(!ok)printf("IPC failure %lu, calls=%ld\n",GetLastError(),calls);assert(ok);assert(calls==1);
     ULONGLONG before=GetTickCount64();assert(!l4_probe_call(L"con",GetCurrentProcessId(),1,100));assert(GetTickCount64()-before<500);
@@ -98,7 +141,7 @@ int main(void){
     assert(GetLastError()==ERROR_ACCESS_DENIED || GetLastError()==ERROR_NOT_READY);assert(!evidence.req_sent_utc);
     assert(!l4_probe_evidence_call(GetCurrentProcessId(),1000,NULL));assert(GetLastError()==ERROR_INVALID_PARAMETER);
     l4_probe_server_stop(server);
-    test_evidence_replay(true);test_evidence_replay(false);
+    test_evidence_replay(true);test_evidence_replay(false);test_barrier();test_barrier_process();
     assert(!l4_probe_call(L"con",0,0,100));assert(!l4_probe_call(L"con",GetCurrentProcessId(),2,100));
     puts("Private probe IPC: actual pipe, duplicate/PID refusal, deadline/late success, stop/cleanup, v2 drain/recovery identity echo, unarmed/old supervisor refusal PASS");return 0;
 }
