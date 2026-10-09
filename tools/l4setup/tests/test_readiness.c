@@ -51,7 +51,9 @@ static bool broker_environment(const L4BootstrapPlan* plan){assert(plan);return 
 #undef CloseServiceHandle
 #undef QueryServiceConfigW
 #undef QueryServiceStatusEx
-static DWORD fixture(DWORD mode,DWORD timeout,HANDLE cancel,void* context){(void)timeout;(void)cancel;(void)context;assert(mode<=1);return ERROR_SUCCESS;}
+static unsigned health_wait,fresh_exchanges;
+static DWORD fixture(DWORD mode,DWORD timeout,HANDLE cancel,void* context){(void)timeout;(void)cancel;(void)context;assert(mode<=1);
+    if(!mode && health_wait){--health_wait;return ERROR_NOT_READY;}if(mode){assert(!health_wait);++fresh_exchanges;}return ERROR_SUCCESS;}
 static bool preflight_probe(const L4BootstrapPlan* p,unsigned index,DWORD timeout,void* context){(void)context;assert(p==&fixture_plan && index<4 && timeout && timeout<=1000);++probe_calls;return true;}
 static bool preflight_barrier(const L4BootstrapPlan* p,DWORD timeout,void* context){(void)context;assert(p==&fixture_plan && timeout && timeout<=1000);++barrier_calls;
     if(mutate_config)config_ok=false;if(mutate_service)drift=true;if(mutate_creation)created_drift=true;if(late_barrier)Sleep(30);return !deny_barrier;}
@@ -90,6 +92,7 @@ int main(void){
     wcscpy_s(fixture_plan.services[2],32,L"L4Con");wcscpy_s(fixture_plan.services[3],32,L"L4Superv");wcscpy_s(fixture_plan.commands[2],2048,L"fixture-con");wcscpy_s(fixture_plan.commands[3],2048,L"fixture-superv");
     L4ProbeServer *con=NULL,*superv=NULL;assert(l4_probe_server_start(L"con",fixture,NULL,&con));assert(l4_probe_server_start(L"superv",fixture,NULL,&superv));
     assert(checks.probe(&fixture_plan,2,1000,checks.context));assert(checks.probe(&fixture_plan,3,1000,checks.context));assert(checks.barrier(&fixture_plan,1000,checks.context));
+    unsigned previous_fresh=fresh_exchanges;health_wait=3;assert(checks.barrier(&fixture_plan,1000,checks.context));assert(!health_wait && fresh_exchanges==previous_fresh+1);
     l4_probe_server_stop(con);l4_probe_server_stop(superv);
     budgets[1]=299999;assert(!setup_readiness_checks(&context,budgets,1000,&checks));budgets[1]=300000;context.proxy_port=0;assert(!setup_readiness_checks(&context,budgets,1000,&checks));
     /* Pre-stop orchestration verdicts modeled; current process creation FILETIME

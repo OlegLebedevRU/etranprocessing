@@ -58,7 +58,7 @@ static bool probe(const L4BootstrapPlan* plan,unsigned index,DWORD timeout,void*
 }
 static bool barrier(const L4BootstrapPlan* plan,DWORD timeout,void* context){
     (void)context;DWORD pid=0,after=0;ULONGLONG deadline=GetTickCount64()+timeout;
-    bool ok=setup_broker_environment_verify(plan) && service_pid(plan,2,&pid) && left(deadline) && l4_probe_call(L"con",pid,1,left(deadline)) && service_pid(plan,2,&after) && pid==after && left(deadline) && setup_broker_environment_verify(plan) && left(deadline);
+    bool ok=setup_broker_environment_verify(plan) && service_pid(plan,2,&pid) && left(deadline) && l4_probe_barrier_call(pid,left(deadline)) && service_pid(plan,2,&after) && pid==after && left(deadline) && setup_broker_environment_verify(plan) && left(deadline);
     if(!ok && !GetLastError())SetLastError(ERROR_NOT_READY);return ok;
 }
 bool setup_readiness_checks(L4Readiness* context,const DWORD service_ms[4],DWORD barrier_ms,L4BootstrapChecks* checks){

@@ -147,7 +147,7 @@ static bool channels(DWORD pid,DWORD timeout,void* context){L4SignalProfile* p=c
     return timeout && info(p,pid,end,false) && tcp(pid,p->mqtt,end) && left(end)?true:fail(GetLastError()?GetLastError():ERROR_TIMEOUT);
 }
 static bool barrier(DWORD timeout,void* context){L4SignalProfile* p=context;ULONGLONG end=GetTickCount64()+timeout;
-    return timeout && con_live(p) && left(end) && l4_probe_call(L"con",p->con_pid,1,left(end)) && left(end) && con_live(p)?true:fail(GetLastError()?GetLastError():ERROR_TIMEOUT);
+    return timeout && con_live(p) && left(end) && l4_probe_barrier_call(p->con_pid,left(end)) && left(end) && con_live(p)?true:fail(GetLastError()?GetLastError():ERROR_TIMEOUT);
 }
 void supervisor_signals_close(L4SignalProfile* p){if(!p)return;if(p->con_process)CloseHandle(p->con_process);l4_release_unpin(p->con_fence);free(p);WSACleanup();}
 static bool signals_open(const L4Layout* roots,const L4CommunicationPin* pin,DWORD timeout,L4CommunicationBoot* boot,const L4UpdateState* expected,L4SignalProfile** output,L4CommunicationSignals* signals){
