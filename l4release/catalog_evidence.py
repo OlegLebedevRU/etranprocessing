@@ -155,8 +155,8 @@ def validate_acceptance(
 
     Native producer must verify the protected existing outcome proof authority,
     actual clear, shared backward-compatibility check and observed intermediate
-    states from the two executor runs before sealing. Export/sealing is not yet
-    implemented. Python summaries/hashes cannot independently mint that authority.
+    states from the two executor runs before sealing. Python summaries/hashes
+    cannot independently mint that authority.
     """
     verify_bytes(data, signature, public)
     report = fields(
@@ -240,8 +240,11 @@ def validate_acceptance(
     }
     _run(report["forward"], target, restored=False, **bounds)
     _run(report["forced_rollback"], source, restored=True, **bounds)
-    if report["forward"]["plan_sha256"] == report["forced_rollback"]["plan_sha256"]:
-        raise ReleaseError(
-            "Two executor attempts must retain distinct authenticated operation plans"
-        )
+    # Native record64 describes the action plan, not the operation UUID. The
+    # same signed endpoints can legitimately produce identical plan bytes.
+    # _run above requires distinct operation UUIDs; terminal proof/outcome
+    # records remain separate evidence for these two attempts.
+    for name in ("proof_sha256", "outcome_sha256"):
+        if report["forward"][name] == report["forced_rollback"][name]:
+            raise ReleaseError("Two executor attempts must retain distinct terminal evidence")
     return {"from": source.version, "to": target.version, "arch": arch, "profile": native_profile}

@@ -50,7 +50,7 @@ def acceptance(key, source, target):
     def run(installed, restored):
         return {
             "operation_id": str(uuid.uuid4()),
-            "plan_sha256": digest(("rollback" if restored else "forward").encode()),
+            "plan_sha256": digest(b"same signed endpoints and action plan"),
             "proof_kind": 108 if restored else 102,
             "proof_sha256": digest(("proof108" if restored else "proof102").encode()),
             "outcome_sha256": digest(("restored103" if restored else "success103").encode()),
@@ -107,6 +107,15 @@ def test_pipeline_forward_and_forced_restore_attestation(key):
     }
 
 
+def test_same_action_plan_keeps_distinct_operation_evidence(key):
+    source, target = endpoint("1.13.7"), endpoint("1.13.8")
+    report = acceptance(key, source, target)
+    forward, restored = report["forward"], report["forced_rollback"]
+    assert forward["plan_sha256"] == restored["plan_sha256"]
+    assert forward["operation_id"] != restored["operation_id"]
+    assert validated(report, key, source, target)["to"] == target.version
+
+
 @pytest.mark.parametrize(
     "fault",
     [
@@ -125,7 +134,8 @@ def test_pipeline_forward_and_forced_restore_attestation(key):
         "unknown_contract",
         "empty_check_hash",
         "duplicate_operation",
-        "duplicate_plan",
+        "duplicate_proof",
+        "duplicate_outcome",
         "future",
         "stale",
         "platform",
@@ -167,8 +177,10 @@ def test_pipeline_refuses_invalid_signed_attestation(key, fault):
         report["backward_compatibility"]["report_sha256"] = "0" * 64
     elif fault == "duplicate_operation":
         report["forced_rollback"]["operation_id"] = report["forward"]["operation_id"]
-    elif fault == "duplicate_plan":
-        report["forced_rollback"]["plan_sha256"] = report["forward"]["plan_sha256"]
+    elif fault == "duplicate_proof":
+        report["forced_rollback"]["proof_sha256"] = report["forward"]["proof_sha256"]
+    elif fault == "duplicate_outcome":
+        report["forced_rollback"]["outcome_sha256"] = report["forward"]["outcome_sha256"]
     elif fault == "future":
         report["finished_at"] = NOW + 1
     elif fault == "stale":
