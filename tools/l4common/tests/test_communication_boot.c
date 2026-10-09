@@ -159,9 +159,10 @@ static void scenario(unsigned mode){
     PROCESS_INFORMATION old={0};CHECK(CreateProcessW(exe,cmd,NULL,NULL,FALSE,CREATE_NO_WINDOW,NULL,NULL,&startup,&old));CHECK(old.hProcess);CloseHandle(old.hThread);
     p.supervisor_pid=old.dwProcessId;CHECK(GetProcessTimes(old.hProcess,&p.supervisor_created,&exit,&kernel,&user));
     p.armed_utc-=100000000ull;p.deadline_utc=stamp()+600000000ull;
-    /* Functional cases exercise real filesystem/hash/lock work before execute.
-     * Keep a bounded 5s admission reserve; only mode8 tests deliberate expiry. */
-    p.budget=(L4CommunicationBudget){mode==8?1000:5000,1000,1000,1000,1000,300000,1000,326000};
+    /* Real NTFS flush/hash/lock work belongs to functional fixtures, not a 1s
+     * performance assertion. Keep bounded 30s phases; mode8 still expires its
+     * original 1s admission reserve. Production policy is not changed here. */
+    p.budget=(L4CommunicationBudget){mode==8?1000:30000,30000,30000,30000,30000,300000,30000,600000};
     BYTE* switches[2]={0},*configs[2]={0};const wchar_t* services[]={L"Leo4Proxy",L"mosquitto"};
     for(unsigned i=0;i<2;i++){L4ServiceSwitch s={0};CHECK(l4_layout_from_roots(&s.layout,fixture.layout.binaries,fixture.layout.data,L"1.13.3"));
         wcscpy_s(s.service,32,services[i]);s.before.installed=true;wcscpy_s(s.before.account,256,L"LocalSystem");s.before.start_type=SERVICE_AUTO_START;
@@ -221,8 +222,9 @@ static void scenario(unsigned mode){
             if(mode==8){Sleep(p.budget.verify_ms+20);CHECK(!l4_communication_boot_remaining(permit));} /* Real admission/claim reserve cannot be renewed. */
             if(mode==4)fault_mode=1;if(mode==5)wcscpy_s(commands[2],2048,anchor.after);
             L4CommunicationSignals signals={signal_probe,signal_channels,signal_barrier,NULL};L4CommunicationResult result;
+            ULONGLONG admission_ms=GetTickCount64()-permit->started,execute_tick=GetTickCount64();
             bool ok=l4_communication_execute_boot(&fixture.layout,&state,&signals,permit,&result);
-            if((mode==4 && (count!=10 || workers!=1)) || ok!=(mode==0 || mode==1))printf("boot mode=%u outcome=%u completed=%u count=%u workers=%u error=%lu\n",mode,result.outcome,result.completed,count,workers,result.error);
+            if((mode==4 && (count!=10 || workers!=1)) || ok!=(mode==0 || mode==1))printf("boot mode=%u outcome=%u completed=%u count=%u workers=%u error=%lu admission_ms=%llu execution_ms=%llu\n",mode,result.outcome,result.completed,count,workers,result.error,admission_ms,GetTickCount64()-execute_tick);
             CHECK(ok==(mode==0 || mode==1));
             if(mode==0 || mode==1)CHECK(result.outcome==L4_COMM_VERIFIED && count==10 && workers==1);
             if(mode==4)CHECK(result.outcome==L4_COMM_CONNECTIVITY_UNCONFIRMED && count==10 && workers==1);

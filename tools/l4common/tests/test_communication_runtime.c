@@ -128,10 +128,12 @@ static void scenario(unsigned mode){
     p.worker_pid=child.dwProcessId;CHECK(GetProcessTimes(child.hProcess,&p.worker_created,&exit,&kernel,&user));
     p.supervisor_pid=GetCurrentProcessId();CHECK(GetProcessTimes(GetCurrentProcess(),&p.supervisor_created,&exit,&kernel,&user));
     if(mode==11){DWORD pid=p.worker_pid;FILETIME epoch=p.worker_created;p.worker_pid=p.supervisor_pid;p.worker_created=p.supervisor_created;p.supervisor_pid=pid;p.supervisor_created=epoch;}
-    /* Fixture-only margin for real NTFS/process scheduling under simultaneous
-     * native compilation. Production budgets remain explicit caller input. */
-    p.armed_utc-=100000000ull;p.deadline_utc=stamp()+10000000ull;
-    p.budget=(L4CommunicationBudget){2000,1000,1000,1000,1000,300000,1000,314000};
+    /* Functional cases exercise real NTFS flush/hash/lock work, not a 1s
+     * performance limit. Give each phase 30s and monitor-proof mode8 time to
+     * inspect a live window. Missing-marker expiry still uses the original 1s.
+     * Production budgets remain explicit caller input. */
+    p.armed_utc-=100000000ull;p.deadline_utc=stamp()+(mode==8?300000000ull:10000000ull);
+    p.budget=(L4CommunicationBudget){30000,30000,30000,30000,30000,300000,30000,600000};
     BYTE* switches[2]={0},*configs[2]={0};const wchar_t* services[]={L"Leo4Proxy",L"mosquitto"};
     for(unsigned i=0;i<2;i++){L4ServiceSwitch s={0};CHECK(l4_layout_from_roots(&s.layout,fixture.layout.binaries,fixture.layout.data,L"1.13.3"));
         wcscpy_s(s.service,32,services[i]);s.before.installed=true;wcscpy_s(s.before.account,256,L"LocalSystem");s.before.start_type=SERVICE_AUTO_START;
@@ -183,15 +185,15 @@ static void scenario(unsigned mode){
             if(mode==12){Sleep(30);CHECK(l4_update_state_encode(&state,state_bytes));CHECK(l4_update_state_replace(&fixture.layout,state_bytes,false));}
             if(mode==13){L4UpdateState foreign=state;foreign.generation++;CHECK(l4_update_state_encode(&foreign,state_bytes));CHECK(l4_update_state_replace(&fixture.layout,state_bytes,false));}
             if(mode==14){
-                CHECK(WaitForSingleObject(barrier_entered,5000)==WAIT_OBJECT_0);CHECK(!l4_communication_monitor_close(&monitor,0) && monitor);SetEvent(barrier_finish);}
+                CHECK(WaitForSingleObject(barrier_entered,30000)==WAIT_OBJECT_0);CHECK(!l4_communication_monitor_close(&monitor,0) && monitor);SetEvent(barrier_finish);}
             if(mode==15){L4CommunicationDecision* d=NULL;CHECK(l4_communication_decision_open(&fixture.layout,id,1000,&d));
                 CHECK(l4_communication_decision_finish(d,L4_COMM_DEC_COMMITTED,0,stamp()));l4_communication_decision_close(d);}
-            if(mode==8)CHECK(l4_communication_monitor_close(&monitor,5000));
-            else{bool done=false;ULONGLONG end=GetTickCount64()+5000;
+            if(mode==8)CHECK(l4_communication_monitor_close(&monitor,30000));
+            else{bool done=false;ULONGLONG end=GetTickCount64()+30000;
                 do{CHECK(l4_communication_monitor_poll(monitor,&done,&result));if(!done)Sleep(20);}while(!done && GetTickCount64()<end);
                 DWORD expected_error=(DWORD)(mode==7?ERROR_TIMEOUT:mode==13?ERROR_REVISION_MISMATCH:mode==15?ERROR_INVALID_STATE:0);
                 if(result.error!=expected_error)printf("monitor scenario%u observed error%lu expected%lu\n",mode,result.error,expected_error);
-                CHECK(done);CHECK(result.error==expected_error);CHECK(l4_communication_monitor_close(&monitor,5000));}
+                CHECK(done);CHECK(result.error==expected_error);CHECK(l4_communication_monitor_close(&monitor,30000));}
         }
         CHECK(workers==(mode==6 || mode==12 || mode==14?1u:0u));
         if(mode==14){CloseHandle(barrier_entered);CloseHandle(barrier_finish);barrier_entered=barrier_finish=NULL;}
