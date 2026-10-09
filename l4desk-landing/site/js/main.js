@@ -9,39 +9,25 @@
     toggle.addEventListener("click", () => {
       const open = nav.classList.toggle("is-open");
       toggle.setAttribute("aria-expanded", open ? "true" : "false");
+      toggle.setAttribute("aria-label", open ? "Закрыть меню" : "Открыть меню");
     });
     nav.querySelectorAll("a").forEach((link) => {
       link.addEventListener("click", () => {
         nav.classList.remove("is-open");
         toggle.setAttribute("aria-expanded", "false");
+        toggle.setAttribute("aria-label", "Открыть меню");
       });
     });
   }
 
-  // Role tabs: Оператор / AI-агент / Моя система
-  const tabsRoot = document.querySelector("[data-tabs]");
-  if (tabsRoot) {
-    const tabs = Array.from(tabsRoot.querySelectorAll("[data-tab]"));
-    const panels = Array.from(tabsRoot.querySelectorAll("[data-panel]"));
-
-    const activate = (key) => {
-      tabs.forEach((tab) => {
-        const on = tab.dataset.tab === key;
-        tab.classList.toggle("is-active", on);
-        tab.setAttribute("aria-selected", on ? "true" : "false");
-      });
-      panels.forEach((panel) => {
-        const on = panel.dataset.panel === key;
-        panel.classList.toggle("is-active", on);
-        if (on) panel.removeAttribute("hidden");
-        else panel.setAttribute("hidden", "");
-      });
-    };
-
-    tabs.forEach((tab) => {
-      tab.addEventListener("click", () => activate(tab.dataset.tab));
-    });
-  }
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && nav?.classList.contains("is-open")) {
+      nav.classList.remove("is-open");
+      toggle.setAttribute("aria-expanded", "false");
+      toggle.setAttribute("aria-label", "Открыть меню");
+      toggle.focus();
+    }
+  });
 
   // Select the topic for the contact form.
   const previewOptions = Array.from(document.querySelectorAll("[data-preview-topic]"));
@@ -131,34 +117,40 @@
     });
   }
 
-  // Open screenshots at their original resolution without navigating away.
+  // Links retain a full-size fallback when JavaScript is unavailable.
   const imageDialog = document.getElementById("image-dialog");
   if (imageDialog && typeof imageDialog.showModal === "function") {
-    document.querySelectorAll("figure img").forEach((img) => {
-      if (img.closest(".shot-mobile") && !img.complete) img.decoding = "async";
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "image-open";
-      button.setAttribute("aria-label", `Увеличить изображение: ${img.alt}`);
-      img.before(button);
-      button.append(img);
-      button.addEventListener("click", () => {
+    let opener;
+    document.querySelectorAll("[data-image-open]").forEach((link) => {
+      link.addEventListener("click", (event) => {
+        if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        opener = link;
+        const img = link.querySelector("img");
         const fullImage = imageDialog.querySelector("img");
-        fullImage.src = img.dataset.fullSrc || img.currentSrc || img.src;
+        fullImage.src = link.href;
         fullImage.alt = img.alt;
-        imageDialog.querySelector("p").textContent = img.closest("figure")?.querySelector("figcaption")?.textContent || img.alt;
+        imageDialog.querySelector("p").textContent = link.dataset.caption || img.alt;
         imageDialog.showModal();
+        document.body.style.overflow = "hidden";
       });
     });
     imageDialog.querySelector(".dialog-close").addEventListener("click", () => imageDialog.close());
     imageDialog.addEventListener("click", (event) => {
-      if (event.target === imageDialog) imageDialog.close();
+      if (event.target === imageDialog) {
+        const bounds = imageDialog.getBoundingClientRect();
+        if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) imageDialog.close();
+      }
+    });
+    imageDialog.addEventListener("close", () => {
+      document.body.style.overflow = "";
+      opener?.focus({ preventScroll: true });
     });
   }
 
   // Reveal only when a section enters the viewport; static content remains visible without JS.
   if ("IntersectionObserver" in window && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    const targets = document.querySelectorAll(".section-head, .evidence-shot, .role-card, .steps li, .card");
+    const targets = document.querySelectorAll(".section-head, .feature-card, .integration-card, .steps li");
     const observer = new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
         if (entry.isIntersecting) {

@@ -19,7 +19,7 @@ MAX_BODY = 16_384
 EMAIL_PATTERN = re.compile(
     r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,63}\Z"
 )
-TOPICS = {"экран и консоль", "AI-агент и L4MCP", "API и события"}
+TOPICS = {"экран и консоль", "файловый менеджер", "AI-агент и L4MCP", "API и события"}
 
 
 class ContactError(Exception):
@@ -50,11 +50,7 @@ def validate_form(data: dict) -> dict[str, str]:
         if not isinstance(value, str) or len(value) > limit or "\x00" in value:
             raise ContactError(400, "Проверьте поля формы и длину сообщения.")
         fields[name] = value.strip()
-    if (
-        not fields["name"]
-        or not fields["message"]
-        or not EMAIL_PATTERN.fullmatch(fields["email"])
-    ):
+    if not fields["name"] or not fields["message"] or not EMAIL_PATTERN.fullmatch(fields["email"]):
         raise ContactError(400, "Укажите имя, корректный email и сообщение.")
     if fields["topic"] not in TOPICS or data.get("consent") is not True:
         raise ContactError(400, "Выберите тему и согласитесь на обработку обращения.")
@@ -87,18 +83,14 @@ class Relay:
     def captcha(self, token: str, ip: str) -> None:
         query = urlencode({"secret": self.secret, "token": token, "ip": ip})
         try:
-            result = remote_json(
-                "https://smartcaptcha.yandexcloud.net/validate?" + query, 3
-            )
+            result = remote_json("https://smartcaptcha.yandexcloud.net/validate?" + query, 3)
         except Exception as exc:
             LOGGER.warning("CAPTCHA provider unavailable: %s", type(exc).__name__)
             raise ContactError(
                 503, "Проверка CAPTCHA временно недоступна. Повторите отправку позже."
             ) from exc
         if result.get("status") != "ok":
-            raise ContactError(
-                400, "CAPTCHA не подтверждена. Пройдите проверку ещё раз."
-            )
+            raise ContactError(400, "CAPTCHA не подтверждена. Пройдите проверку ещё раз.")
 
     def send(self, recipients: list[str], subject: str, message: str) -> None:
         request = Request(
@@ -129,9 +121,7 @@ class Relay:
                     raise ContactError(409, "Обновите страницу и повторите отправку.")
                 if existing[3] is not None:
                     return existing[3]
-                raise ContactError(
-                    409, "Обращение уже отправляется. Подождите немного."
-                )
+                raise ContactError(409, "Обращение уже отправляется. Подождите немного.")
             self.attempts = defaultdict(
                 list,
                 {
@@ -147,38 +137,39 @@ class Relay:
             )
             for bucket, period, limit in limits:
                 if sum(now - t < period for t in self.attempts[bucket]) >= limit:
-                    raise ContactError(
-                        429, "Слишком много обращений. Повторите отправку позже."
-                    )
+                    raise ContactError(429, "Слишком много обращений. Повторите отправку позже.")
             for bucket, _, _ in limits:
                 self.attempts[bucket].append(now)
             self.results[key] = (now, ip, fields["email"].lower(), None)
         try:
             self.captcha(fields["smart-token"], ip)
-            body = f"Обращение L4Desk\nID: {key}\nИмя: {fields['name']}\nEmail: {fields['email']}\nТема: {fields['topic']}\n\n{fields['message']}"
+            body = (
+                f"Обращение L4Desk\nID: {key}\nИмя: {fields['name']}\n"
+                f"Email: {fields['email']}\nТема: {fields['topic']}\n\n{fields['message']}"
+            )
             try:
                 self.send([self.owner], "L4Desk — новое обращение", body)
             except Exception as exc:
-                LOGGER.warning(
-                    "Owner email acceptance unconfirmed: %s", type(exc).__name__
-                )
+                LOGGER.warning("Owner email acceptance unconfirmed: %s", type(exc).__name__)
                 raise ContactError(
                     502,
-                    "Не удалось подтвердить отправку. Письмо могло быть принято; перед повтором проверьте доставку у владельца сайта.",
+                    "Не удалось подтвердить отправку. Письмо могло быть принято; "
+                    "перед повтором проверьте доставку у владельца сайта.",
                 ) from exc
             copy_sent = True
             if fields["email"].lower() != self.owner.lower():
                 try:
-                    # Fixed acknowledgement prevents relaying arbitrary visitor text to third parties.
+                    # A fixed acknowledgement never relays visitor text to third parties.
                     self.send(
                         [fields["email"]],
                         "L4Desk — ваше обращение принято",
-                        f"Спасибо за обращение в L4Desk!\n\nТема: {fields['topic']}\nНомер обращения: {key}\nМы получили сообщение и свяжемся с вами по этому email.\n\nЕсли вы не оставляли заявку, проигнорируйте это письмо.\nКоманда L4Desk · Powered by Platerra",
+                        f"Спасибо за обращение в L4Desk!\n\nТема: {fields['topic']}\n"
+                        f"Номер обращения: {key}\nМы получили сообщение и свяжемся с вами "
+                        "по этому email.\n\nЕсли вы не оставляли заявку, проигнорируйте "
+                        "это письмо.\nКоманда L4Desk · Powered by Platerra",
                     )
                 except Exception as exc:
-                    LOGGER.warning(
-                        "Acknowledgement acceptance unconfirmed: %s", type(exc).__name__
-                    )
+                    LOGGER.warning("Acknowledgement acceptance unconfirmed: %s", type(exc).__name__)
                     copy_sent = False
             result = {
                 "ok": True,
@@ -186,7 +177,10 @@ class Relay:
                 "request_id": key,
                 "message": "Обращение отправлено. Подтверждение отправлено на ваш email."
                 if copy_sent
-                else "Обращение отправлено владельцу. Подтверждение на ваш email отправить не удалось; повторять заявку не нужно.",
+                else (
+                    "Обращение отправлено владельцу. Подтверждение на ваш email "
+                    "отправить не удалось; повторять заявку не нужно."
+                ),
             }
             with self.lock:
                 self.results[key] = (now, ip, fields["email"].lower(), result)
@@ -238,13 +232,11 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(data, dict):
                 raise ContactError(400, "Некорректный запрос.")
             # The internal relay is not exposed; nginx overwrites this header.
-            result = self.relay.submit(
-                data, self.headers.get("X-Real-IP", self.client_address[0])
-            )
+            result = self.relay.submit(data, self.headers.get("X-Real-IP", self.client_address[0]))
             self.reply(200, result)
         except ContactError as exc:
             self.reply(exc.status, {"ok": False, "message": str(exc)})
-        except (ValueError, TimeoutError):
+        except ValueError, TimeoutError:
             self.reply(
                 400,
                 {"ok": False, "message": "Некорректный запрос. Повторите отправку."},

@@ -4,9 +4,9 @@
 и небольшой внутренний Python 3.14 relay для формы обращений.
 
 Источники текста и визуала:
-- `l4desk-service/docs/l4desk-landing-plan.md`
-- `l4desk-service/docs/l4desk-landing-visual-addendum.md`
-- скриншоты `l4desk-service/docs/l4desk-landing-*.png`
+- [редакционный бриф](materials/briefs/l4desk-landing-plan.md)
+- [визуальный бриф](materials/briefs/l4desk-landing-visual-addendum.md)
+- оригиналы скриншотов и иллюстраций — [materials/](materials/README.md); оптимизированные копии в `site/images/`
 
 ## Где что лежит
 
@@ -27,30 +27,37 @@ l4desk-landing/
 │   ├── css/styles.css
 │   ├── js/main.js
 │   ├── favicon.svg
-│   └── images/*.png      # 6 скриншотов UI
+│   └── images/           # WebP-превью и полные версии скриншотов
 ├── docker/
 │   ├── Dockerfile        # nginx:1.27-alpine + certbot
 │   ├── nginx.conf        # HTTP(ACME+301) + HTTPS
 │   └── entrypoint.sh     # self-signed → LE → renew loop
+├── materials/            # оригиналы, брифы и исторические патчи
 ├── docker-compose.yml
 └── README.md
 ```
 
 ## Цикл изменения контента
 
+Публикуйте из чистого checkout подтверждённого коммита. Перед доставкой:
+проверка Python relay (`ruff`, `pyright`, unit tests), JavaScript и браузерная
+проверка адаптивности. В дистрибутив включайте только `site/`, `contact/`,
+`docker/`, `docker-compose.yml` и `.dockerignore`. Материалы и секреты не
+нужны на сервере; `.env.contact` сохраняется отдельно.
+
 ```powershell
-# 1. правка локально
-notepad D:\repo\platerra\Public\etranprocessing\l4desk-landing\site\index.html
-
-# 2. копия на сервер
-scp -i d:\.ssh\free-tier-cloud_ru -r `
-  D:\repo\platerra\Public\etranprocessing\l4desk-landing `
-  user1@176.108.247.249:/home/user1/l4desk-landing
-
-# 3. пересборка + рестарт (сертификаты в volume — не теряются)
-ssh -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249 `
-  "cd /home/user1/l4desk-landing && sudo docker compose up -d --build"
+# Из каталога l4desk-landing чистого checkout
+ tar -czf landing-release.tar.gz site contact docker docker-compose.yml .dockerignore
+ scp -i d:\.ssh\free-tier-cloud_ru landing-release.tar.gz user1@176.108.247.249:/home/user1/landing-release.tar.gz
+ ssh -n -i d:\.ssh\free-tier-cloud_ru user1@176.108.247.249 "cd /home/user1/l4desk-landing && tar -xzf /home/user1/landing-release.tar.gz && sudo docker compose up -d --build --no-deps contact landing"
 ```
+
+Получатель обращений задаётся в Compose: `CONTACT_OWNER_EMAIL`, по умолчанию
+`info@l4desk.ru`. Для смены переопределите переменную в окружении Compose
+или `.env`; она имеет приоритет над значением внутри `.env.contact`.
+После публикации проверьте оба контейнера, `/healthz`, содержание страницы,
+все файлы статических ресурсов и фактического получателя внутри `contact`.
+
 
 Статика (`site/`) копируется внутрь Docker-образа и не подключена через bind mount.
 После её обновления выполните `sudo docker compose up -d --build --no-deps landing`.
@@ -106,43 +113,45 @@ docker compose up --build
 
 ## Краткий справочник разделов лендинга
 
-| # | Раздел / `id` | Суть | CTA / визуал |
-|---|---|---|---|
-| — | **Шапка** | Якоря + кнопка «О preview» | sticky |
-| 1 | **Hero** (`#top`) | «Не гадайте, что с устройством. Откройте и проверьте.» | схема: выбор → проверка → решение |
-| 2 | **Проблема** (`#problem`) | Сбой виден пользователю раньше инженера | — |
-| — | **Реальный интерфейс** (`#evidence`) | Консоль, выбранное устройство, L4MCP | крупные исходные кадры с увеличением |
-| 3 | **Три роли** (`#how`) | Табы **Оператор / AI-агент / Моя система** | скриншоты + код API |
-| 4 | **Браузер** (`#browser`) | ПК и смартфон; «Вижу → управляю» | dual-screen + control-кадр |
-| 5 | **Подключение** (`#connect`) | 5 шагов: создать → PIN → `l4setup` → online → сеанс | нумерованные карточки |
-| 6 | **AI & API** (`#ai`) | L4MCP: команды и сценарии на удалённых машинах vs API | 2 карточки + timeline |
-| 7 | **Доверие** (`#trust`) | Схема: устройства → L4Desk → операторы / агенты | 2 границы (mTLS, JWT) |
-| 8 | **Роли** (`#roles`) | Продуктолог / саппорт / DIY / DevOps | 4 карточки «его вопрос → ценность» |
-| 9 | **Preview** (`#demo`) | «Есть задача для удалённого устройства?» | выбор одного сценария; форма обращения с CAPTCHA |
-| — | **Футер** | Копирайт, экспериментальный preview | — |
+| Раздел | Содержание |
+|---|---|
+| Шапка | Возможности, файлы, AI/API, подключение; написать, вход, регистрация |
+| Hero | «Удалённое управление. В браузере», схема браузерного рабочего места |
+| `#how` / `#browser` | Четыре компактные карточки: экран, консоль, файлы, L4MCP |
+| `#files` | «Проводник для всего парка. Прямо в браузере», навигация и обмен файлами |
+| `#ai` / `#roadmap` | L4MCP, API и сворачиваемые направления развития |
+| `#connect` | Три шага от регистрации до рабочего сеанса |
+| `#trust` | Подлинность устройств, авторизация и контроль сеансов |
+| `#demo` | Форма обращения с CAPTCHA и выбором темы, включая файловый менеджер |
 
-**Где править:** заголовки секций — `site/index.html` (теги `<h2>`),
-визуальные хуки 1–4 — CSS в `site/css/styles.css`
-(`hook-dual`, `control-frame`, `hook-timeline`, `trust-flow`),
-логика табов, просмотра изображений и формы — `site/js/main.js`.
+**Где править:** тексты и структура — `site/index.html`, оформление —
+`site/css/styles.css`, меню, увеличение скриншотов и форма — `site/js/main.js`.
+
+Превью скриншотов имеют размеры 480 и 960 px и выбираются через `srcset`.
+Полные WebP сохраняют исходное разрешение и открываются по нажатию.
+Без JavaScript ссылка ведёт прямо к изображению. Кадр L4MCP отмечен как
+демонстрационный пример. Изображения в этой задаче не ретушировались.
+
+Для локальной проверки: `python -m http.server 8765 --bind 127.0.0.1 --directory site`.
+SmartCaptcha разрешает работу только на настроенных доменах: на localhost
+проверять форму с тестовым CAPTCHA-ответом и перехватом `/api/contact`, без отправки писем.
 
 ## Важное
 
 - **Правки только в local-репозитории**, затем scp + rebuild (принцип single source of truth).
 - Порты **80/443** заняты только этим контейнером; `menubuilder-frontend` остаётся на :3000.
-- DNS: `www` → `176.108.247.249` корректен; apex `l4desk.ru` в момент деплоя указывал
-  на `95.163.244.138` — **выровнять A-запись** на `176.108.247.249`.
+- DNS `l4desk.ru` и `www.l4desk.ru` проверен: оба адреса ведут на `176.108.247.249`.
 - Форма обращений подключена через внутренний relay; см. CONTACT-FLOW.md.
 
 ## Обращения и изменения 2026-10-03
 
 Форма отправляет сообщение владельцу и email-подтверждение посетителю через
 существующий sender. Используется серверная SmartCaptcha с отказом при ошибке
-проверки и ограничениями частоты. Контакт владельца временно заменён по решению
-пользователя после теста доставки. Настройка .env.contact, ограничения,
+проверки и ограничениями частоты. Контакт для обращений и публичный email — `info@l4desk.ru`. Настройка .env.contact, ограничения,
 проверки и будущая политика sender: [CONTACT-FLOW.md](CONTACT-FLOW.md).
 
-AI-иллюстрация подключена в WebP с адаптивными размерами и отложенной загрузкой.
+AI-иллюстрация предыдущего варианта сохранена в `materials/illustrations`;
+на текущем первом экране используется схема браузерного рабочего места.
 Описание L4MCP дополнено историей событий; планы развития вынесены отдельно.
 
 ## Редакционные границы

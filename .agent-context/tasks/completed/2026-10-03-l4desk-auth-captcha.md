@@ -21,7 +21,7 @@
 - CAPTCHA runtime config, серверная проверка домена/status, fail-closed 400/503,
   общий виджет с expiry/error/retry/reset, защита initial/resend регистрации.
 - Landing: кнопки регистрации/входа в header и hero; mobile сохраняет кнопки.
-  [Воспроизводимый патч](../../../l4desk-service/docs/landing-auth-buttons.patch).
+  [Воспроизводимый патч](../../../l4desk-landing/materials/history/landing-auth-buttons.patch).
 - Ruff check/format и Pyright app: PASS.
 - Backend полный suite с CAPTCHA: 613 PASS, 20 PostgreSQL-dependent SKIP.
 - Frontend TypeScript/Vite build и 70 Vitest: PASS.

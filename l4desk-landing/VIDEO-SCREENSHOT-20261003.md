@@ -18,7 +18,7 @@
 
 ## Съёмка
 
-Исходный снимок: `l4desk-service/docs/l4desk-landing-hd-full-20261003.png`.
+Исходный снимок: `materials/screenshots/l4desk-landing-hd-full-20261003.png`.
 Playwright/Edge, viewport 1920×1200, device scale factor 1,
 `full_page=True`. В кадр входит вся страница: навигация, выбранный терминал,
 панель управления и живой экран. Никаких масок, blur, crop или изменений

@@ -4,3 +4,7 @@ contact
 tests
 __pycache__
 *.pyc
+materials
+.preview
+.playwright-cli
+*.md

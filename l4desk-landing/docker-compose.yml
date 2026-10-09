@@ -37,6 +37,8 @@ services:
     image: l4desk-contact:latest
     restart: unless-stopped
     env_file: .env.contact
+    environment:
+      CONTACT_OWNER_EMAIL: ${CONTACT_OWNER_EMAIL:-info@l4desk.ru}
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
