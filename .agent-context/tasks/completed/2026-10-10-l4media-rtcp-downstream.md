@@ -43,10 +43,17 @@ Working-tree implementation, based on repository HEAD; 2026-10-10 local checks.
   UndefinedBehaviorSanitizer: exit0, no findings.
 - `git diff --check`: passed. Placeholder test credentials only; no real secrets.
 
+## Production deployment
+
+- Committed/pushed source e1da7090c93db93446c055a8304fbf56f9977102.
+- Standard beta launcher built linux/amd64 ingress on builder;32 CI tests and Docker make test gate passed.
+- Published/deployed immutable image digest sha256:b4dd78598c1ce7ea04ad14207429a14228b0ea49e40c7d9673f282f022a5f7a1.
+- Production container072bc9c575dd reports the exact source revision and digest. Independent GET /health on port9100 returned status=ok, routes=1, active_media_sessions=0.
+- Neighboring container IDs unchanged, including Janus1cd35cea4177 and media nginx8927aebcc8cc.
+
 ## Remaining work / limits
 
-- Release owner handles commit/push, source archive, builder image and beta
-  launcher deploy, production health and evidence in final release handoff.
+- Tools release/sign/publication is tracked in the standalone l4tools repository.
 - Local fake Janus sockets establish transport behavior; actual Janus PLI and
   browser IDR recovery require the corresponding new terminal tools and viewer.
 - Janus needs an initial upstream RTCP datagram to latch the return endpoint;
