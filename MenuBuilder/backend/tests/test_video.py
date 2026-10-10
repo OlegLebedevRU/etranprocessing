@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from httpx import ASGITransport, AsyncClient
 
 from app.auth import create_access_token
+from app.config import settings
 from app.database import get_db
 from app.main import app
 from app.models import Terminal
@@ -20,6 +21,12 @@ from app.routers.video import (
     set_mountpoint_stream_instance,
 )
 from app.services.iot_client import iot_client
+from app.services.media_orchestrator_client import (
+    MediaOrchestratorError,
+    MediaSessionConflictError,
+    MediaSessionNotFoundError,
+    media_orchestrator_client,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -67,9 +74,128 @@ def operator_token():
 
 
 @pytest.mark.anyio
-async def test_route_before_start_session_creation(mock_db_session, operator_token):
+@pytest.mark.parametrize("cold_cache", [False, True])
+async def test_second_viewer_reuses_lease_session_after_stream_start(
+    mock_db_session, operator_token, monkeypatch, cold_cache
+):
+    monkeypatch.setattr(settings, "l4desk_session_orchestration_enabled", True)
+    app.dependency_overrides[get_db] = lambda: mock_db_session
+    lease = {
+        "active": True,
+        "lease_id": "lease-1",
+        "scope": "stream",
+        "owner_user_id": "op_user",
+        "stream_instance_id": None,
+    }
+    active = {
+        "state": "active",
+        "sn": "sn0001",
+        "device_id": 1,
+        "mountpoint_id": 1,
+        "pin": "original-pin",
+        "ttl_sec": 600,
+    }
+    started = False
+
+    async def health(candidate):
+        if started and candidate == "lease-1":
+            return active
+        raise MediaSessionNotFoundError()
+
+    async def start(**kwargs):
+        nonlocal started
+        started = True
+        return active
+
+    with (
+        patch.object(
+            iot_client, "remote_input_status", AsyncMock(return_value={"lease": lease})
+        ),
+        patch.object(
+            media_orchestrator_client,
+            "get_session_health",
+            AsyncMock(side_effect=health),
+        ),
+        patch.object(
+            media_orchestrator_client, "start_session", AsyncMock(side_effect=start)
+        ) as create,
+        patch("app.routers.video._ensure_janus_mountpoint", AsyncMock()) as janus,
+        patch("app.routers.video._ensure_ingress_route", AsyncMock()) as route,
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            headers = {"Authorization": f"Bearer {operator_token}"}
+            first = await client.post(
+                "/api/v1/video/devices/1/session", headers=headers
+            )
+            lease["stream_instance_id"] = "stream-1"
+            if cold_cache:
+                _mountpoint_pins.clear()
+            second = await client.post(
+                "/api/v1/video/devices/1/session", headers=headers
+            )
+        assert first.status_code == second.status_code == 200
+        assert first.json()["pin"] == second.json()["pin"] == "original-pin"
+        assert first.json()["mountpoint_id"] == second.json()["mountpoint_id"] == 1
+        create.assert_awaited_once()
+        janus.assert_not_awaited()
+        route.assert_not_awaited()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "error",
+    [
+        MediaSessionConflictError(),
+        MediaOrchestratorError("unavailable", status_code=502),
+    ],
+)
+async def test_orchestrator_failure_never_falls_back_to_janus(
+    mock_db_session, operator_token, monkeypatch, error
+):
+    monkeypatch.setattr(settings, "l4desk_session_orchestration_enabled", True)
+    app.dependency_overrides[get_db] = lambda: mock_db_session
+    lease = {
+        "active": True,
+        "lease_id": "lease-1",
+        "scope": "stream",
+        "owner_user_id": "op_user",
+    }
+    with (
+        patch.object(
+            iot_client, "remote_input_status", AsyncMock(return_value={"lease": lease})
+        ),
+        patch.object(
+            media_orchestrator_client,
+            "get_session_health",
+            AsyncMock(side_effect=MediaSessionNotFoundError()),
+        ),
+        patch.object(
+            media_orchestrator_client, "start_session", AsyncMock(side_effect=error)
+        ),
+        patch("app.routers.video._ensure_janus_mountpoint", AsyncMock()) as janus,
+        patch("app.routers.video._ensure_ingress_route", AsyncMock()) as route,
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/api/v1/video/devices/1/session",
+                headers={"Authorization": f"Bearer {operator_token}"},
+            )
+        assert response.status_code == error.status_code
+        janus.assert_not_awaited()
+        route.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_route_before_start_session_creation(
+    mock_db_session, operator_token, monkeypatch
+):
     """Route-before-Start: session creation succeeds before stream_start when stream_instance_id is None."""
     app.dependency_overrides[get_db] = lambda: mock_db_session
+    monkeypatch.setattr(settings, "l4desk_session_orchestration_enabled", False)
 
     # Active stream lease exists, but stream is NOT yet started (stream_instance_id is None)
     op_status = {
@@ -120,11 +246,60 @@ async def test_route_before_start_session_creation(mock_db_session, operator_tok
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize(
+    "field,value", [("sn", "other-sn"), ("device_id", 2), ("mountpoint_id", 2)]
+)
+async def test_existing_media_identity_mismatch_is_rejected(
+    mock_db_session, operator_token, monkeypatch, field, value
+):
+    monkeypatch.setattr(settings, "l4desk_session_orchestration_enabled", True)
+    app.dependency_overrides[get_db] = lambda: mock_db_session
+    lease = {
+        "active": True,
+        "lease_id": "lease-1",
+        "scope": "stream",
+        "owner_user_id": "op_user",
+    }
+    existing = {
+        "state": "active",
+        "sn": "sn0001",
+        "device_id": 1,
+        "mountpoint_id": 1,
+        "pin": "private-pin",
+    }
+    existing[field] = value
+    with (
+        patch.object(
+            iot_client, "remote_input_status", AsyncMock(return_value={"lease": lease})
+        ),
+        patch.object(
+            media_orchestrator_client,
+            "get_session_health",
+            AsyncMock(return_value=existing),
+        ),
+        patch.object(media_orchestrator_client, "start_session", AsyncMock()) as start,
+        patch("app.routers.video._ensure_janus_mountpoint", AsyncMock()) as janus,
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/api/v1/video/devices/1/session",
+                headers={"Authorization": f"Bearer {operator_token}"},
+            )
+        assert response.status_code == 409
+        assert "private-pin" not in response.text
+        start.assert_not_awaited()
+        janus.assert_not_awaited()
+
+
+@pytest.mark.anyio
 async def test_pin_stability_on_repeated_session_creation(
-    mock_db_session, operator_token
+    mock_db_session, operator_token, monkeypatch
 ):
     """PIN stability: repeated create_video_session calls within the same lease return the identical PIN."""
     app.dependency_overrides[get_db] = lambda: mock_db_session
+    monkeypatch.setattr(settings, "l4desk_session_orchestration_enabled", False)
 
     op_status = {
         "sn": "sn0001",
@@ -257,6 +432,36 @@ async def test_janus_mountpoint_idempotent_reuse():
     for call in mock_client2.post.call_args_list:
         body = call.kwargs.get("json", {}).get("body", {})
         assert body.get("request") != "destroy"
+
+
+@pytest.mark.anyio
+async def test_unknown_janus_pin_never_destroys_live_mountpoint():
+    responses = [
+        AsyncMock(status_code=200, json=lambda: {"data": {"id": 100}}),
+        AsyncMock(status_code=200, json=lambda: {"data": {"id": 200}}),
+        AsyncMock(
+            status_code=200,
+            json=lambda: {
+                "plugindata": {"data": {"error_code": 456, "error": "already exists"}}
+            },
+        ),
+        AsyncMock(status_code=200),
+    ]
+    client = AsyncMock()
+    client.__aenter__.return_value = client
+    client.post.side_effect = responses
+    with (
+        patch("httpx.AsyncClient", return_value=client),
+        pytest.raises(HTTPException) as error,
+    ):
+        await _ensure_janus_mountpoint(1, 1, 50000, 50001, pin="new-pin")
+    assert error.value.status_code == 409
+    requests = [
+        call.kwargs.get("json", {}).get("body", {}).get("request")
+        for call in client.post.call_args_list
+    ]
+    assert requests.count("create") == 1
+    assert "destroy" not in requests
 
 
 @pytest.mark.anyio

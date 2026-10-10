@@ -24,7 +24,10 @@ from app.services.remote_session_use_case import RemoteSessionUseCase
 @pytest.fixture(autouse=True)
 def setup_flags(monkeypatch):
     # Duration persistence has dedicated unit and PostgreSQL contract tests.
-    monkeypatch.setattr("app.services.remote_session_metering.UsageService.record_session_usage", AsyncMock())
+    monkeypatch.setattr(
+        "app.services.remote_session_metering.UsageService.record_session_usage",
+        AsyncMock(),
+    )
     orig_orch = settings.l4desk_session_orchestration_enabled
     orig_policy = settings.l4desk_policy_enforcement_enabled
     settings.l4desk_session_orchestration_enabled = True
@@ -774,6 +777,8 @@ async def test_unified_api_remote_sessions_lifecycle():
 
 @pytest.mark.anyio
 async def test_legacy_video_session_endpoint_regression():
+    from app.services.media_orchestrator_client import MediaSessionNotFoundError
+
     db = MockRemoteSessionDb()
     term = Terminal(id=25, device_id=25, sn="SN-T25", org_id=1)
     db.add(term)
@@ -792,6 +797,10 @@ async def test_legacy_video_session_endpoint_regression():
                 "app.services.media_orchestrator_client.MediaOrchestratorClient.start_session",
                 new_callable=AsyncMock,
             ) as mock_media_start,
+            patch(
+                "app.services.media_orchestrator_client.MediaOrchestratorClient.get_session_health",
+                new=AsyncMock(side_effect=MediaSessionNotFoundError()),
+            ),
         ):
             mock_status.return_value = {
                 "lease": {

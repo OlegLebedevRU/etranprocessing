@@ -456,8 +456,11 @@ async def test_stream_start_stop_events_matrix(
 
 @pytest.mark.anyio
 async def test_video_session_pin_only_for_lease_holder(
-    mock_db_session, operator_token, viewer_with_permission_token
+    mock_db_session, operator_token, viewer_with_permission_token, monkeypatch
 ):
+    monkeypatch.setattr(
+        "app.routers.video.settings.l4desk_session_orchestration_enabled", False
+    )
     app.dependency_overrides[get_db] = lambda: mock_db_session
 
     # Status shows operator holds active stream lease
