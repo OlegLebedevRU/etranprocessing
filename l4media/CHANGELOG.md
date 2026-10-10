@@ -4,6 +4,8 @@
 
 ### Added
 
+- Janus RTCP feedback is returned to the originating L4RTP/1 client as type `0x02` frames over the existing TCP/mTLS connection. Per-stream connected UDP sockets isolate feedback; bounded nonblocking queues preserve partial TCP frames and discard unsent feedback on route changes/stop.
+
 - Consolidated the accepted 18D source-build/registry scripts and historical
   handoff into main without replacing newer ingress lifecycle code or rolling
   back pinned image digests. Optional image overrides come from private env;

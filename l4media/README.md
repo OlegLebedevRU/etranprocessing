@@ -318,3 +318,21 @@ CA-пару `dev.leo4.ru`; `openssl verify -purpose sslserver -verify_hostname`
 и `nginx -t` прошли, выполнен reload только media-nginx. Это проверка TLS,
 а не доказательство доставки/декодирования видео. Дальнейшее состояние выпуска
 фиксируется в [handoff](../.agent-context/tasks/completed/2026-10-04-media-tls.md).
+
+### RTCP feedback
+
+Ingress sends each stream's upstream RTCP through its own connected UDP socket.
+Janus learns this return endpoint from the first RTCP packet (normally an SR),
+then sends PLI/other RTCP feedback to that socket. Ingress returns valid RTCP
+as `type=0x02, flags=0x00, length=BE16, payload` frames over the same TCP
+connection; there is no reverse preamble. Older send-only clients retain their
+existing upstream behavior, but do not consume feedback. The terminal proxy
+must read these frames and deliver them to the original local RTCP sender.
+
+Feedback queues are bounded at 128 KiB per client; on saturation new packets
+are dropped. Route changes and stop close the UDP socket and discard untouched
+feedback frames. A TCP frame whose prefix was already sent is completed to
+preserve framing. Disconnect discards all state; epoll epoch/generation tags
+reject stale events after reconnect/rerouting. Feedback does not refresh RTP
+freshness or transport activity. Run `make test` in `ingress` for socket-level
+isolation, partial write, queue saturation, and lifecycle coverage.

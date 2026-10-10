@@ -1,5 +1,21 @@
 # l4media
 
+## 2026-10-10: downstream RTCP (local implementation)
+
+Ingress now sends upstream RTCP through a lazily created per-stream connected
+UDP socket and receives Janus feedback from that configured endpoint. Reverse
+L4RTP/1 is type0x02/flags0/BE16-length with no preamble. Epoch/generation-tagged
+epoll events avoid stale client/fd reuse. A bounded 128KiB feedback queue drops
+new packets at saturation; route changes/stop discard untouched frames and
+finish any already-started TCP frame. Disconnect destroys all feedback state.
+Feedback never refreshes RTP freshness or transport idle time. Legacy upward-only
+clients keep working but cannot request IDR through feedback until updated.
+WSL Linux warning-clean build, C unit groups, real-socket production-code tests,
+ASan/UBSan, six live regressions and reverse-feedback event-loop integration
+passed. Real Janus/browser E2E and deployment are coordinated separately by
+release owner; these local checks do not establish browser decode.
+See [RTCP handoff](../tasks/completed/2026-10-10-l4media-rtcp-downstream.md).
+
 ## 2026-10-04: server TLS invariant
 
 Media требует CA-issued `dev.leo4.ru` (serverAuth, сроки, соответствие ключа).

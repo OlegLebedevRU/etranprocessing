@@ -17,13 +17,17 @@ $(TARGET): $(OBJS)
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-test: $(TEST_TARGET)
+test: $(TEST_TARGET) test_feedback
 	./$(TEST_TARGET)
+	./test_feedback
 
 $(TEST_TARGET): $(TEST_SRCS)
 	$(CC) $(CFLAGS) -o $@ $^
 
+test_feedback: tests/test_feedback.c src/l4media_ingress.c src/media_lifecycle.h src/media_redis.h
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
+
 clean:
-	rm -f $(OBJS) $(TARGET) $(TEST_TARGET)
+	rm -f $(OBJS) $(TARGET) $(TEST_TARGET) test_feedback
 
 .PHONY: all clean test

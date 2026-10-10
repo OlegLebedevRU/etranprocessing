@@ -41,6 +41,8 @@
 #define MAX_ROUTES                512
 #define MAX_CLIENTS               128
 #define RX_BUFFER_SIZE            (128 * 1024)   /* 128 KB buffer per client */
+#define FEEDBACK_QUEUE_SIZE       (128 * 1024)
+#define FEEDBACK_BATCH_LIMIT      32
 #define HTTP_REQ_BUFFER_SIZE      8192
 #define HTTP_RESP_BUFFER_SIZE     (64 * 1024)    /* 64 KB response buffer */
 #define CLIENT_IDLE_TIMEOUT_SEC   120            /* Reap clients idle for >2 min */
@@ -86,6 +88,13 @@ typedef struct {
     struct sockaddr_in rtcp_target;
     int rtp_port;
     int rtcp_port;
+    int rtcp_fd;                   /* Connected per-stream Janus feedback socket */
+    uint64_t rtcp_generation;       /* Never reuse epoll identity after rerouting */
+    uint8_t tx_buf[FEEDBACK_QUEUE_SIZE];
+    size_t tx_len;
+    size_t tx_off;
+    size_t tx_first_end;
+    uint64_t feedback_dropped;
 
     /* Metrics & Time tracking */
     uint64_t rtp_packets;
@@ -106,6 +115,8 @@ static IngressClient* g_clients[MAX_CLIENTS];
 static int g_client_count = 0;
 static uint64_t g_next_epoch = 1;
 static int g_udp_sock = -1;
+static int g_epoll_fd = -1;
+static uint64_t g_next_rtcp_generation = 1;
 static struct in_addr g_janus_ip;
 static char g_janus_host[128] = "janus";
 static char g_routes_file[256] = "/etc/l4media/routes.conf";
@@ -158,12 +169,128 @@ static bool resolve_janus_host(void) {
     return true;
 }
 
+/* Epoch/generation tags avoid stale events referring to freed clients or reused fds. */
+static IngressClient* find_event_client(uint64_t tag) {
+    for (int i = 0; i < g_client_count; i++) {
+        IngressClient* c = g_clients[i];
+        if (((tag & 3) == 2 && c->epoch == (tag >> 2)) ||
+            ((tag & 3) == 3 && c->rtcp_fd >= 0 && c->rtcp_generation == (tag >> 2))) return c;
+    }
+    return NULL;
+}
+
+static bool update_feedback_interest(IngressClient* c) {
+    struct epoll_event ev = {0};
+    ev.events = EPOLLIN | EPOLLRDHUP | EPOLLERR;
+    if (c->tx_len > c->tx_off) ev.events |= EPOLLOUT;
+    ev.data.u64 = (c->epoch << 2) | 2;
+    return epoll_ctl(g_epoll_fd, EPOLL_CTL_MOD, c->fd, &ev) == 0;
+}
+
+static void reset_feedback(IngressClient* c) {
+    if (c->rtcp_fd >= 0) {
+        epoll_ctl(g_epoll_fd, EPOLL_CTL_DEL, c->rtcp_fd, NULL);
+        close(c->rtcp_fd);
+        c->rtcp_fd = -1;
+    }
+    /* Finish an already-started frame; dropping its tail would corrupt TCP framing.
+     * All untouched frames are discarded on route change/stop. */
+    if (c->tx_off && c->tx_off < c->tx_first_end) {
+        c->tx_len = c->tx_first_end;
+    } else {
+        c->tx_len = c->tx_off = c->tx_first_end = 0;
+    }
+    if (g_epoll_fd >= 0) update_feedback_interest(c);
+}
+
+static bool ensure_rtcp_socket(IngressClient* c) {
+    if (c->rtcp_fd >= 0) return true;
+    if (c->rtcp_port <= 0) return false;
+    int fd = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
+    if (fd < 0) return false;
+    /* connect filters feedback to the configured Janus IP and RTCP port. */
+    if (connect(fd, (struct sockaddr*)&c->rtcp_target, sizeof(c->rtcp_target)) < 0) {
+        close(fd);
+        return false;
+    }
+    struct epoll_event ev = {0};
+    c->rtcp_generation = g_next_rtcp_generation++;
+    ev.events = EPOLLIN;
+    ev.data.u64 = (c->rtcp_generation << 2) | 3;
+    if (epoll_ctl(g_epoll_fd, EPOLL_CTL_ADD, fd, &ev) < 0) {
+        close(fd);
+        return false;
+    }
+    c->rtcp_fd = fd;
+    return true;
+}
+
+static bool valid_rtcp(const uint8_t* data, size_t len) {
+    size_t off = 0;
+    while (off < len) {
+        if (len - off < 4 || (data[off] >> 6) != 2 || data[off + 1] < 192 || data[off + 1] > 223) return false;
+        size_t bytes = ((((size_t)data[off + 2] << 8) | data[off + 3]) + 1) * 4;
+        if (bytes > len - off) return false;
+        if (data[off] & 0x20) {
+            uint8_t padding = data[off + bytes - 1];
+            if (off + bytes != len || !padding || padding > bytes - 4) return false;
+        }
+        off += bytes;
+    }
+    return len >= 4;
+}
+
+static bool flush_feedback(IngressClient* c) {
+    while (c->tx_off < c->tx_len) {
+        if (!c->tx_first_end) {
+            c->tx_first_end = c->tx_off + 4 + (((size_t)c->tx_buf[c->tx_off + 2] << 8) | c->tx_buf[c->tx_off + 3]);
+        }
+        ssize_t n = send(c->fd, c->tx_buf + c->tx_off, c->tx_first_end - c->tx_off, MSG_NOSIGNAL);
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+            return false;
+        }
+        if (!n) return false;
+        c->tx_off += (size_t)n;
+        if (c->tx_off == c->tx_first_end) c->tx_first_end = 0;
+    }
+    if (c->tx_off == c->tx_len) c->tx_len = c->tx_off = c->tx_first_end = 0;
+    return update_feedback_interest(c);
+}
+
+static bool receive_feedback(IngressClient* c) {
+    uint8_t packet[MAX_RTP_PAYLOAD_SIZE];
+    for (int i = 0; i < FEEDBACK_BATCH_LIMIT; i++) {
+        ssize_t n = recv(c->rtcp_fd, packet, sizeof(packet), MSG_TRUNC);
+        if (n < 0) {
+            if (errno == EINTR) { i--; continue; }
+            /* UDP ICMP errors do not terminate the media TCP connection. */
+            break;
+        }
+        if ((size_t)n > sizeof(packet) || !valid_rtcp(packet, (size_t)n)) continue;
+        if (sizeof(c->tx_buf) - c->tx_len < (size_t)n + 4) {
+            c->feedback_dropped++;
+            continue;
+        }
+        uint8_t* out = c->tx_buf + c->tx_len;
+        out[0] = L4RTP_FRAME_RTCP;
+        out[1] = 0;
+        out[2] = (uint8_t)((size_t)n >> 8);
+        out[3] = (uint8_t)n;
+        memcpy(out + 4, packet, (size_t)n);
+        c->tx_len += (size_t)n + 4;
+    }
+    return flush_feedback(c);
+}
+
 /* Dynamically update active streaming client target sockets */
 static int update_client_targets_for_sn(const char* sn, int rtp_port, int rtcp_port) {
     int count = 0;
     for (int i = 0; i < g_client_count; i++) {
         IngressClient* c = g_clients[i];
         if (c && strcmp(c->sn, sn) == 0) {
+            reset_feedback(c);
             c->rtp_port = rtp_port;
             c->rtcp_port = rtcp_port;
             memset(&c->rtp_target, 0, sizeof(c->rtp_target));
@@ -344,6 +471,7 @@ static IngressClient* add_ingress_client(int epoll_fd, int client_fd, const char
     }
 
     c->fd = client_fd;
+    c->rtcp_fd = -1;
     c->state = STATE_PREAMBLE;
     c->epoch = g_next_epoch++;
     snprintf(c->peer_addr, sizeof(c->peer_addr), "%s:%d", peer_ip, peer_port);
@@ -360,7 +488,7 @@ static IngressClient* add_ingress_client(int epoll_fd, int client_fd, const char
     struct epoll_event ev;
     memset(&ev, 0, sizeof(ev));
     ev.events = EPOLLIN | EPOLLRDHUP | EPOLLERR;
-    ev.data.ptr = c;
+    ev.data.u64 = (c->epoch << 2) | 2;
 
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &ev) < 0) {
         perror("[INGRESS] epoll_ctl ADD client failed");
@@ -383,6 +511,7 @@ static void remove_ingress_client(int epoll_fd, IngressClient* c) {
            c->peer_addr, c->sn[0] ? c->sn : "unknown", c->epoch, (long)duration,
            c->rtp_packets, c->rtcp_packets, c->total_bytes);
 
+    reset_feedback(c);
     epoll_ctl(epoll_fd, EPOLL_CTL_DEL, c->fd, NULL);
     close(c->fd);
 
@@ -534,8 +663,9 @@ static void process_ingress_data(int epoll_fd, IngressClient* c) {
                 } else if (type == L4RTP_FRAME_RTCP) {
                     c->last_rtcp_time = time(NULL);
                     if (c->rtcp_port > 0) {
-                        sendto(g_udp_sock, payload, payload_len, 0,
-                               (struct sockaddr*)&c->rtcp_target, sizeof(c->rtcp_target));
+                        if (ensure_rtcp_socket(c)) {
+                            send(c->rtcp_fd, payload, payload_len, 0);
+                        }
                         c->rtcp_packets++;
                         c->total_bytes += payload_len;
                     } else {
@@ -1093,18 +1223,19 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    g_epoll_fd = epoll_fd;
     struct epoll_event ev;
 
     /* Ingress listener */
     memset(&ev, 0, sizeof(ev));
     ev.events = EPOLLIN;
-    ev.data.fd = ingress_listen_fd;
+    ev.data.u64 = 0;
     epoll_ctl(epoll_fd, EPOLL_CTL_ADD, ingress_listen_fd, &ev);
 
     /* Control listener */
     memset(&ev, 0, sizeof(ev));
     ev.events = EPOLLIN;
-    ev.data.fd = control_listen_fd;
+    ev.data.u64 = 1;
     epoll_ctl(epoll_fd, EPOLL_CTL_ADD, control_listen_fd, &ev);
 
     struct epoll_event events[MAX_EPOLL_EVENTS];
@@ -1182,7 +1313,7 @@ int main(int argc, char* argv[]) {
         }
 
         for (int i = 0; i < n_events; i++) {
-            if (events[i].data.fd == ingress_listen_fd) {
+            if (events[i].data.u64 == 0) {
                 /* Accept incoming ingress connection */
                 while (true) {
                     struct sockaddr_in peer;
@@ -1197,7 +1328,7 @@ int main(int argc, char* argv[]) {
                     inet_ntop(AF_INET, &peer.sin_addr, peer_ip, sizeof(peer_ip));
                     add_ingress_client(epoll_fd, client_fd, peer_ip, ntohs(peer.sin_port));
                 }
-            } else if (events[i].data.fd == control_listen_fd) {
+            } else if (events[i].data.u64 == 1) {
                 /* Accept control API connection */
                 while (true) {
                     struct sockaddr_in peer;
@@ -1210,23 +1341,21 @@ int main(int argc, char* argv[]) {
                     handle_control_request(client_fd);
                 }
             } else {
-                /* Ingress client activity */
-                IngressClient* c = (IngressClient*)events[i].data.ptr;
-
-                /* Safety check: ensure client is still registered in g_clients */
-                bool is_valid = false;
-                for (int k = 0; k < g_client_count; k++) {
-                    if (g_clients[k] == c) {
-                        is_valid = true;
-                        break;
-                    }
+                uint64_t tag = events[i].data.u64;
+                IngressClient* c = find_event_client(tag);
+                if (!c) continue;
+                if ((tag & 3) == 3) {
+                    if (!receive_feedback(c)) remove_ingress_client(epoll_fd, c);
+                    continue;
                 }
-                if (!is_valid) continue;
-
                 if (events[i].events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)) {
                     remove_ingress_client(epoll_fd, c);
-                } else if (events[i].events & EPOLLIN) {
-                    process_ingress_data(epoll_fd, c);
+                    continue;
+                }
+                if (events[i].events & EPOLLIN) process_ingress_data(epoll_fd, c);
+                c = find_event_client(tag); /* recv can disconnect/free the client */
+                if (c && (events[i].events & EPOLLOUT) && !flush_feedback(c)) {
+                    remove_ingress_client(epoll_fd, c);
                 }
             }
         }
