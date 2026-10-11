@@ -46,7 +46,7 @@ has no application ACK; a successful CA-path check does not establish MQTT autho
 
 ## Pending / release gates
 
-- Production build/pull/rollout, runtime local signer startup and health: not performed.
+- Production build and pull completed; image-only signer preflight passed with real encrypted key. Rollout remains pending: three standard release attempts stopped at Alembic before replacing ProcessingBackend.
 - New leaf through Windows Store/Schannel to fresh RabbitMQ TLS + MQTT authorization: not performed.
 - Real authenticated enrollment/renewal of a dedicated pilot and repeat/recovery: not performed.
 - Cloud function shutdown and deletion of its root key: not performed; needs cloud-owner path and checks for remaining external consumers.
@@ -57,5 +57,17 @@ has no application ACK; a successful CA-path check does not establish MQTT autho
 
 - Only public 773 DER was exported for transient profile comparison; its private key was never exported or modified.
 - Original operator CA material and password files remain untouched and ignored as appropriate.
-- Task temporary profile/test directories must be removed after final checks; no remote secrets or test identities have been created.
-- No production files, RabbitMQ config/permissions or terminal certificate store were changed.
+- Remote production issuer secrets are installed (directory0700, files0600, read-only mount); local originals are untouched. No test identities were created. Automatic review rejected local test-directory cleanup with "blocked by policy"; synthetic PKI temp directories/public DER remain.
+- Production Compose received only PB local-signer settings and the secrets mount, with a0600 backup. RabbitMQ config/permissions and terminal certificate store are unchanged.
+
+## Authorized release progress / external blocker
+
+- Implementation PR63 and preflight UID/GID fix PR64 are merged to main.
+- Latest tested release source: `10642e2f8606ad72ffeb880c7b9f2f8904be703c`; concurrent PR65 changed only unrelated release documentation and app1 Compose digest. PB/shared/CI source is unchanged versus `15a4833b2fa2ae7397abcf0a76e0e5a1892a281b`.
+- Latest published/pulled PB artifact: `sha256:3032c5ddddcb48bec049d2e7ec28551389760d09ddd6a7169534c632286b7029`. Earlier key/image preflight artifact: `sha256:935427bf0fe2ad209725e73c0ce15b324683be8b9fd23b75834cea7366e42019`.
+- Isolated preflight initially could not read user1-owned0600 secrets because all capabilities were dropped; fixed by explicitly using file-owner UID/GID. No secret permissions were broadened.
+- Deployment failed before container recreation on PostgreSQL connection reset/connection closed. Reproduced with new and old images and from the production host itself (TCP and PostgreSQL SSLRequest accepted; TLS handshake timed out/reset). Some read-only queries eventually succeeded; schema remained032. Running/candidate database URL components are identical; no credential values were printed.
+- Existing PB container remains `c9cd9e3c944e`, image `sha256:a1e3b4970a2bee9f59b3a6700e69e7b9bad6ae1d8a5f1e54dd92270551918ab7`, HTTP health200. No image pin/checkpoint was advanced after failure. Do not start terminal773 renewal as the new-issuer pilot until rollout is verified.
+- RabbitMQ, MenuBuilder, Nginx and other observed neighbors retained container IDs. app1 independently changed from `34b3cd1b52ac` to `23cf41dcbb78`; user confirmed parallel app1 work. This task did not deploy app1.
+- Task-owned remote public installer files were removed by delivery wrapper. Diagnostic containers exited; no diagnostic Python process remains in PB.
+- Resume via the authorized standard component launcher after PostgreSQL connectivity stabilizes. Verify local startup/key load, revision/digest, HTTP health and old-terminal behavior, then let the user initiate773 auto-renew in MenuBuilder.
