@@ -473,13 +473,7 @@ async def _handle_check(
         v,
     )
 
-    inner = (
-        f"<catype>SubCA</catype>"
-        f"<prov>{prov}</prov>"
-        f"<dn>{dn}</dn>"
-        f"<pin>{pin}</pin>"
-        f"<sign>{sign}</sign>"
-    )
+    inner = f"<catype>SubCA</catype><prov>{prov}</prov><dn>{dn}</dn><pin>{pin}</pin><sign>{sign}</sign>"
     return ok_response(inner)
 
 
@@ -1151,10 +1145,13 @@ def _build_pkcs7_chain(cert_pem: str, ca_pem: str) -> str:
     ContentInfo { SignedData { certificates[], no signers } }
     """
     leaf = x509.load_pem_x509_certificate(cert_pem.encode(), default_backend())
-    ca = x509.load_pem_x509_certificate(ca_pem.encode(), default_backend())
+    cas = x509.load_pem_x509_certificates(ca_pem.encode())
+    if not cas:
+        raise ValueError("CA chain is empty")
 
-    certs_der = leaf.public_bytes(serialization.Encoding.DER) + ca.public_bytes(
-        serialization.Encoding.DER
+    # CertificateSet is a DER SET OF: encoded elements must be sorted.
+    certs_der = b"".join(
+        sorted(cert.public_bytes(serialization.Encoding.DER) for cert in [leaf, *cas])
     )
 
     signed_data = _der_seq(

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from cryptography import x509
+from cryptography.exceptions import InvalidSignature, UnsupportedAlgorithm
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
 from app.models import License, OrgStatus, Terminal, TerminalCertHistory
+from app.services.ca_trust import is_terminal_issuing_dn, verify_terminal_chain
 from app.services.cert_discovery import record_terminal_discovery
+from app.services.terminal_certificate import verified_terminal_identity
 
 logger = logging.getLogger(__name__)
 
@@ -226,7 +229,36 @@ async def get_current_terminal(
     l_val = parsed.get("L", "")
 
     issuer = extract_cert_issuer(request) or auth_issuer
-    is_new_ca = bool(issuer and "iot.leo4.ru" in issuer.lower())
+    is_issuing_ca = bool(issuer and is_terminal_issuing_dn(issuer))
+    is_new_ca = bool(issuer and "iot.leo4.ru" in issuer.lower()) or is_issuing_ca
+    if is_issuing_ca:
+        if auth_cert is not None and endpoint in LEGACY_CLIENT_CERT_PATHS:
+            # Preserve the explicitly scoped ListMenuFile Authorization contract.
+            # All other paths still require TLS possession from the ingress.
+            try:
+                verify_terminal_chain(auth_cert)
+                cert_cn = auth_cert.subject.get_attributes_for_oid(
+                    x509.oid.NameOID.COMMON_NAME
+                )
+                if len(cert_cn) != 1:
+                    raise ValueError("Expected one terminal CN")
+                verified_cn, verified_serial = (
+                    str(cert_cn[0].value),
+                    format(auth_cert.serial_number, "X"),
+                )
+            except (
+                ValueError,
+                InvalidSignature,
+                UnsupportedAlgorithm,
+                x509.ExtensionNotFound,
+            ) as exc:
+                raise HTTPException(401, "live_new_ca_certificate_required") from exc
+        else:
+            verified_cn, verified_serial = verified_terminal_identity(request)
+        if cn != verified_cn or cert_serial.upper().lstrip(
+            "0"
+        ) != verified_serial.lstrip("0"):
+            raise HTTPException(401, "certificate_identity_mismatch")
 
     logger.debug(
         f"Cert Auth: Issuer='{issuer}', is_new_ca={is_new_ca}, CN='{cn}', OU='{ou}', O='{o}', L='{l_val}', Serial='{cert_serial}'"

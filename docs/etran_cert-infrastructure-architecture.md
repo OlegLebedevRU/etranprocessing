@@ -4,6 +4,72 @@ Authoritative reference for the **etranprocessing** certificate lifecycle, mutua
 
 ---
 
+## Terminal Issuing CA migration, 2026-10-11 — implementation awaiting release
+
+The offline root remains the existing `iot.leo4.ru` trust anchor. ProcessingBackend
+can use `CA_SIGNER_BACKEND=local` with the distinct Terminal Issuing CA 01.
+The encrypted issuing key and its password are runtime secrets, never image/build inputs.
+Root private keys are not accepted or needed by the signer. Existing directly
+root-issued leaf certificates remain supported. Historical serverless diagrams
+below describe the external compatibility provider, not the local signer.
+
+- Public issuing certificate: `ProcessingBackend/backend/app/certs/terminal_issuing_ca_01.crt`.
+- Local provider: `app/services/local_ca.py`; pinned public trust: `app/services/ca_trust.py`.
+- `CA_ISSUING_KEY_PATH`: encrypted PKCS#8 RSA key; matching certificate and chain are checked at startup.
+- `CA_ISSUING_KEY_PASSWORD_FILE`: raw one-line password, or dotenv with `ISSUER_KEY_PASS` / `CA_ISSUING_KEY_PASSWORD`. No dotenv interpolation. Alternatively use the secret-valued environment setting `CA_ISSUING_KEY_PASSWORD`.
+- Empty `CA_ISSUING_CERT_PATH` uses the packaged public issuer. Any configured replacement must chain to the existing pinned root and match the issuing key.
+- The application defaults to `external` until explicit provisioning; the deployment Compose configuration selects `local`. There is no automatic fallback on signing failure.
+
+The leaf profile was compared against the real terminal 773 certificate in the
+local Windows LocalMachine MY store: ordered Subject and all four extensions
+match (critical BasicConstraints CA=false and KeyUsage, noncritical serverAuth /
+clientAuth EKU and full terminal SAN). CSR SAN and arbitrary requested extensions
+are not copied. Requested CA privileges are rejected. `notBefore = issuance UTC
+minus one day`, including the first day of a new issuer; `notAfter` is issuance
+plus requested days, capped by issuer/root expiry. The normal requested period
+is 365 days, producing a 366-day leaf validity interval. Serials are positive
+159-bit values with a fixed high bit and 40 hex digits, preserving legacy separation.
+
+PKCS#7/PFX carry leaf, issuing CA and root. PKCS#7 CertificateSet uses DER SET
+ordering; consumers must select the leaf by identity/key, not position. Windows
+must have the intermediate available to send leaf + intermediate in TLS. The root
+remains a trust anchor, not a newly trusted intermediate. Windows installation /
+renewal of the new branch has not yet been demonstrated on a terminal.
+
+`optional_no_ca` on terminal HTTP ingress is intentional and unchanged. New
+issuer identities undergo pinned chain verification before strict SN/serial DB
+lookup, never legacy OU auto-bind. The established Authorization certificate
+fallback remains limited to ListMenuFile; new-chain certificates there are also
+cryptographically verified. Renewal and FM retain TLS possession checks.
+
+RabbitMQ is a separate certificate consumer. Read-only runtime inspection found
+RabbitMQ 4.3.5 / OTP 27.3.4.17, `verify_peer`, required peer certificates,
+`mqtt.ssl_cert_login=true`, username from common_name and internal auth backend.
+The broker root fingerprint matches PB, and broker-side Erlang PKIX verification
+accepted the new issuing certificate against that root. Explicit depth is unset;
+the documented default of one intermediate accommodates this hierarchy. This
+is CA-path evidence, not a new-leaf TLS handshake or MQTT CONNECT/pub/sub test.
+No RabbitMQ config, usernames, vhosts or permissions were changed.
+
+Release order: build-only the reviewed PB revision; provision issuer material
+with `deploy/provision_terminal_issuer.py`; validate it using that digest-pinned
+image; persist only PB environment/read-only mount via the reviewed installer;
+then release PB through the normal single-service image flow. Root and issuer
+passwords never enter SSH arguments or logs. Private delivery uses SSH stdin,
+an explicit bounded tar member list and private 0700/0600 files, without a public
+temporary secret archive. Installer dry-run is the default. Old secrets cannot
+be silently overwritten; rotation is explicit.
+
+Before broad issuance, validate a dedicated pilot through Windows chain building,
+fresh HTTPS and RabbitMQ TLS/MQTT connections, authorized and forbidden topics,
+and authenticated renewal. Do not impersonate an active MQTT client ID or publish
+presence during observation. After new-branch issuance, rollback must retain the
+new chain verifier; reverting to an old PB image can reject renewed terminals.
+Disabling cloud issuance/removing the cloud root key is a separate final cutover
+step and has not been performed here.
+
+---
+
 ## 1. High-Level Architecture & Request Routing
 
 ```

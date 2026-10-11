@@ -43,11 +43,9 @@ def create_pfx_bundle(
 
     cas: list[x509.Certificate] | None = None
     if ca_pem and ca_pem.strip():
-        ca_cert = x509.load_pem_x509_certificate(
+        cas = x509.load_pem_x509_certificates(
             ca_pem.encode("utf-8"),
-            backend=default_backend(),
         )
-        cas = [ca_cert]
 
     encryption = (
         BestAvailableEncryption(password.encode("utf-8"))

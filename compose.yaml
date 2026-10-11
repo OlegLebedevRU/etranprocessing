@@ -55,6 +55,10 @@ services:
 
   processing-backend:
     environment:
+      CA_SIGNER_BACKEND: local
+      CA_ISSUING_KEY_PATH: /run/secrets/terminal-ca/issuer.key.pem
+      CA_ISSUING_KEY_PASSWORD_FILE: /run/secrets/terminal-ca/issuer-password.env
+      CA_ISSUING_CERT_PATH: ""
       LEO4PROXY_ENDPOINTS: ${LEO4PROXY_ENDPOINTS:-}
       LEO4PROXY_ENDPOINTS_TTL_SECONDS: ${LEO4PROXY_ENDPOINTS_TTL_SECONDS:-86400}
     image: dev-leo4-ru.cr.cloud.ru/etran/processingbackend@sha256:a1e3b4970a2bee9f59b3a6700e69e7b9bad6ae1d8a5f1e54dd92270551918ab7
@@ -64,6 +68,7 @@ services:
       - ./ProcessingBackend/backend/.env
     volumes:
       - ./ProcessingBackend/keys:/function/storage/keys:ro
+      - ./ProcessingBackend/issuer-secrets:/run/secrets/terminal-ca:ro
 
   l4mcp:
     image: dev-leo4-ru.cr.cloud.ru/etran/l4mcp@sha256:7dcc28d19286d8ce99aedbdd4ccd2c4492ab0f7d7163416e9d9f947813069f4e
