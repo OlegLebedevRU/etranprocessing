@@ -47,3 +47,44 @@ Resume after database recovery with the existing0017 artifact, prove both
 OTA_OK→HELLO, then RPC163/gauge84 and explicit operator video/filter acceptance.
 All physical/runtime results remain pending. Do not mark the firmware deployed
 or restart shared infrastructure merely because `/docs` is healthy.
+
+## Live acceptance after recovery (supersedes the historical blocker)
+
+Database-backed task/event reads recovered after a controlled app1 restart.
+Both devices now run the same0017 binary; no second firmware was introduced.
+
+| Device | OTA task | OTA_OK →0017 HELLO event IDs |
+|---|---|---|
+| 4619 | `8c4570f8-4e14-47cd-9a98-c7d2ca87aef8` | 1358920 →1358921 |
+| 4623 | `561ceca7-bc7d-4ab0-81b6-b38726e8e708` | 1358922 →1358923 |
+
+The ambiguous4619 submission was recovered without resending OTA. Failed4623
+submission storage was reconciled before creating its successful task. Temporary
+HTTP binary copies were removed after both OTA_OK/HELLO pairs were confirmed.
+Firmware source is siplite PR38; subsequent PR39/40 changed documentation and
+OTA recovery tooling only. Contract and app1 image remain those recorded above.
+
+RPC160 on4619 returned200 and matching gauge84 with health readings, memory,
+temperature and camera-clock uptime. Missing FPS/frame samples stay unknown;
+the camera's absolute clock is outdated, so uptime is not NTP acceptance.
+Identity returned invalid_response: OpenIPC/Majestic versions remain unavailable
+for this installed status-page format. Do not represent this probe as healthy.
+RPC160 on4623 explicitly returned501 camera_network_unavailable, with gauge84;
+no camera is attached. Ethernet isolation and switch mode were preserved.
+
+RPC163 medium and HD writes/readback succeeded, with separate operator Есть
+confirmation of displayed video for both profiles. Original HD settings were
+restored. Dry-run made no changes; stale revision returned409; unsupported size
+and numeric GOP returned400 with matching gauge84 and unchanged configuration.
+
+After explicit operator readiness, Night RPC162 returned200 and matching84;
+night/ircut software metrics changed to1. Operator confirmed black-and-white
+video but could not determine filter sound. After another readiness confirmation,
+Day RPC162 returned200 and matching84, with night/ircut metrics restored to0.
+The operator confirmed restored color video in Day and no audible filter sound.
+Software/image switching passed; mechanical filter movement remains unconfirmed.
+No timed run or IR lamp test was
+performed. Initial HD + Day configuration is restored.
+
+Only documentation is changed by this handoff update. Concurrent
+ProcessingBackend work is outside this release and was not modified or reverted.
