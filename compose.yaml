@@ -86,7 +86,7 @@ services:
       L4MCP_URL: ${L4MCP_URL:-}
 
   app1:
-    image: dev-leo4-ru.cr.cloud.ru/etran/app1@sha256:36fb27a6826927d1e27527d61a6c26a3a165c05a26882cd2e8d4bff99167387e
+    image: dev-leo4-ru.cr.cloud.ru/etran/app1@sha256:6a65f94af2fec9f1d847eea55aaf32ea83a9558e6089b640439c4c279272fe97
     container_name: app1
     restart: always
     env_file:
