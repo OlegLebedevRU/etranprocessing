@@ -85,3 +85,18 @@ Completed: implementation and follow-up merged to main, runtime released and acc
 - Base sip/master and IoT/master match their remotes; etranprocessing/main
   fast-forwarded from4b95073 to13b5929, including all camera results. Its existing
   tracked edit and untracked user files retained; before/after diff hashes match.
+
+## Camera-flow documentation — 2026-10-12
+- Docs-only intake: describe implemented onboarding/network/video/RPC/power flow;
+  MB owns user-facing orchestration, IoT owns wire contracts, siplite owns camera
+  execution. No new protocol, firmware, DB, infrastructure or live operations.
+- Added docs/etran_arch-openipc-camera-flow.md with three Mermaid diagrams,
+  identifiers/ownership, topology, route-before-start, lease/media expiry,
+  stale-session reconciliation, RPC/RES/gauge correlation, capability failures,
+  power/readiness/fresh-frame distinctions and troubleshooting/buffer limits.
+- Linked from docs index, panel guide and video-streaming contract; corrected
+  existing contract's session/status paths to include /devices/ as implemented.
+- Static review against MB code, siplite0018 and local canonical IoT docs;
+  local Markdown links and whitespace verified. No credentials included.
+- Application tests/build/deploy not run: documentation-only task, as AGENTS
+  requires. Prior runtime acceptance is cited with its limits, not rerun.

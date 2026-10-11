@@ -8,13 +8,19 @@ MenuBuilder — viewing session/PIN/access, app1 — lease/control, l4desk — F
 leo4proxy — transport, l4media/Janus — ingress/WebRTC. DB ownership см. компонентную задачу.
 
 ## Внешние контракты
+
+OpenIPC через ESP32: [сквозной флоу камер](../../docs/etran_arch-openipc-camera-flow.md).
+Панель использует camera=openipc, cam:ip000001, существующий video control plane
+и отдельные RPC160..164 с gauge84. Питание, HTTP readiness и decoded frames
+проверяются раздельно.
+
 | Direction | Transport | Endpoint/topic | Main payload | Guarantees |
 |---|---|---|---|---|
-| UI → BFF | REST | /api/v1/video/{device_id}/session | mountpoint_id, sn, janus_ws, ttl, pin | авторизованный просмотр; PIN секрет |
+| UI → BFF | REST | /api/v1/video/devices/{device_id}/session | mountpoint_id, sn, janus_ws, session_ttl_sec, pin | авторизованный просмотр; PIN секрет |
 | BFF → ingress | REST | /api/v1/media/sessions/start | session_id, sn, lease_expires_at | Авторизованный app1 deadline (Unix seconds) ограничивает существующий media watchdog; отдельные600с не продлевают аренду. |
 | BFF → ingress | REST | /api/v1/media/sessions/renew | sn, lease_id, stream_instance_id?, lease_expires_at | Только после успешного video lease keepalive и совпадения эпохи; ID активной медиасессии должен совпасть с lease или stream ID. Истекшая сессия не оживляется. |
 | BFF → ingress | REST | /api/v1/media/sessions/stop | sn, lease_id, stream_instance_id?, reason | после подтверждённой остановки потока; удаляет маршрут и mountpoint только если ID активной медиасессии совпадает с ID аренды или потока, повторный вызов идемпотентен |
-| UI → BFF | REST | /api/v1/video/{device_id}/status | streaming, rtp_packets, bytes, idle_sec | transport stats, не decoded frame |
+| UI → BFF | REST | /api/v1/video/devices/{device_id}/status | streaming, rtp_packets, bytes, idle_sec | transport stats, не decoded frame |
 | FFmpeg → proxy → ingress | RTP / L4RTP/1 через TLS | media plane | encoded H.264/RTP | sequence/route, не control lease |
 | Janus ↔ browser | signaling + WebRTC | mountpoint/watch | SDP/ICE + video | успешный signaling не равен frame |
 
