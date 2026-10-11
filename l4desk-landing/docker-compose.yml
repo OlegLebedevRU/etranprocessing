@@ -35,6 +35,9 @@ services:
   contact:
     build: ./contact
     image: l4desk-contact:latest
+    networks:
+      default:
+        aliases: [l4desk-contact]
     restart: unless-stopped
     env_file: .env.contact
     environment:
