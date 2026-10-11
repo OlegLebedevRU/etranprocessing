@@ -4,7 +4,9 @@
 
 FM admission requires protocol v2 and MQTT navigation/user-write/drive capabilities; PB listing operations/results removed.
 
-## Unreleased
+## 2026-10-11 — Terminal Issuing CA
+
+Production выпущен из main `ba63536`; local signer и health проверены. Проверка обновления терминала773 и новых TLS/MQTT подключений остаётся за пилотом.
 
 ### Added
 

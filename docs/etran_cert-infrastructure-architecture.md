@@ -4,10 +4,13 @@ Authoritative reference for the **etranprocessing** certificate lifecycle, mutua
 
 ---
 
-## Terminal Issuing CA migration, 2026-10-11 — implementation awaiting release
+## Terminal Issuing CA migration, 2026-10-11 — production deployed; terminal pilot pending
 
-The offline root remains the existing `iot.leo4.ru` trust anchor. ProcessingBackend
-can use `CA_SIGNER_BACKEND=local` with the distinct Terminal Issuing CA 01.
+The root trust anchor remains the existing `iot.leo4.ru`. ProcessingBackend
+uses `CA_SIGNER_BACKEND=local` in production with the distinct Terminal Issuing CA 01.
+Production release source is main `ba63536b3e6e43d85d7d71ab0f8fe2b028eaade4`;
+runtime signer/key/root validation and health200 passed. The terminal773 pilot
+remains operator-owned and pending.
 The encrypted issuing key and its password are runtime secrets, never image/build inputs.
 Root private keys are not accepted or needed by the signer. Existing directly
 root-issued leaf certificates remain supported. Historical serverless diagrams
