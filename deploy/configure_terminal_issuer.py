@@ -145,6 +145,8 @@ def main() -> None:
         "--network",
         "none",
         "--read-only",
+        "--user",
+        f"{directory.stat().st_uid}:{directory.stat().st_gid}",
         "--cap-drop",
         "ALL",
         "--security-opt",
