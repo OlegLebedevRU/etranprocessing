@@ -1,10 +1,13 @@
 # MenuBuilder
 
-## JWT signer и native CAPTCHA, 2026-10-11 — ещё не выпущено
+## JWT signer и native CAPTCHA, 2026-10-11 — выпущено
 
 Приватный RS256 signer, public key lk-key-000003, internal HMAC отдельно от
 выключенного serverless резерва; provider native/SmartCaptcha/off. Local backend
-748passed/22skipped; runtime и frontend проверки ещё ожидаются.
+748passed/22skipped, frontend build/88unit/4browser; production45e69a7,
+paired signer health и новый public fingerprint подтверждены. Сайты прошли HTTPS
+и negative CAPTCHA acceptance после DNS correction03b9768/30f973b.
+Login/refresh/tenant switch с approved credentials и реальная email доставка не проверены.
 [Контракт и проверки](../tasks/active/2026-10-11-jwt-signer-native-captcha.md).
 
 ## FM start correction, 2026-10-05

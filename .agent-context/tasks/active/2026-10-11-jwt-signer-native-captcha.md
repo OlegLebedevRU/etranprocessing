@@ -1,50 +1,34 @@
-# JWT signer и native CAPTCHA
+# JWT signer и native CAPTCHA — выпуск 2026-10-11
 
-## Контекст задачи / intake
-- Владелец JWT/auth: MenuBuilder. Producer: backend identity/session → HMAC HTTP
-  → выделенный signer → RS256 → backend и nginx. Миграции БД не требуются.
-- Дополнительная задача пользователя: план native CAPTCHA из внешнего файла;
-  MenuBuilder, L4Desk landing, Platerra relay/UI; Leo4 только CTA/deep-link.
-- Исходная main: e72c046b3ae708230065fdfbd1e42423765c69cc.
-- Закрытый RSA уже размещён оператором вне repo/образа: root-only directory,
-  UID10001 file0400. Нет passphrase; пара проверена по DER SHA256 публичного ключа.
-- Serverless сохранён, но недоступен и выключен до восстановления на новом ключе.
-- [MCP Ops Readiness: UNAVAILABLE]; SSH с проверкой host key работает на обоих
-  разрешённых хостах. Временные SSH копии подготовлены оператором вне checkout.
-- Инварианты: отсутствующие секреты fail closed; нет публичного signer-порта;
-  tenant/session claims не объединяются; org claims string → auth boundary int.
-- Запрещённые каталоги legacy/tools/SQL не затрагиваются. Platerra — отдельный
-  чистый checkout внутри временной рабочей папки; исходная копия не изменяется.
+## Контекст и инварианты
+- Владелец auth: MenuBuilder. Identity/session → HMAC HTTP → отдельный signer → RS256 → backend/nginx. Миграции БД не требуются.
+- Выполнен пользовательский план native CAPTCHA для MenuBuilder, L4Desk и Platerra; Leo4 CTA/deep-link сохранён.
+- Закрытый RSA: каталог root:root0700, файл10001:10001/0400; без passphrase, вне Git и образов. Отсутствующие секреты fail closed; signer без публичных портов; tenant/session claims изолированы.
+- Serverless сохранён и выключен: функция/старый ключ недоступны. Включение допустимо после восстановления с новой парой ключей.
+- [MCP Ops Readiness: UNAVAILABLE]; штатный SSH с проверкой host keys. Запрещённые каталоги legacy/tools/SQL не исследовались. Исходный внешний Platerra checkout не изменялся.
 
-## Выполнено
-- Приватный signer, новая пара RS256 public consumers, внутренний приоритет,
-  отдельные HMAC secrets и сохранённый external reserve; response validation.
-- Native challenge v1 (HMAC/600s), три provider modes, UI и relay dispatch;
-  секреты env-only. Stateless/replay ограничения задокументированы.
-- Первый activation helper с rollback; последующие releases обновляют оба
-  MenuBuilder процесса одним digest и откатывают оба при ошибке.
+## Проверки реализации
+- [x] MenuBuilder backend748 passed/22 skipped, Ruff check/format и Pyright; CI release34 tests, paired rollback и Python3.12 AST regression.
+- [x] Frontend build, 88 Vitest tests, 4 Playwright auth scenarios.
+- [x] L4Desk relay11 и Platerra relay13 tests; Platerra build/check; L4Desk JS syntax; mocked contact browser smoke обоих сайтов и Leo4 topic.
+- [x] Secret scan35 task files: private keys/credentials не обнаружены; fixture secrets проверены.
+- Native challenge v1 HMAC/600s, provider native/smartcaptcha/off, секреты env-only; stateless replay в пределах TTL возможен, native слабее SmartCaptcha.
 
-## Проверено
-- [x] Полный MenuBuilder backend: 748 passed, 22 skipped, 52 прежних warnings.
-- [x] Ruff/Pyright app прошли; после изменения no-store route повтор обязательных
-  checks выполняется перед commit.
-- [x] CI release unit suite: 33 tests; paired rollback включён.
-- [x] L4Desk relay: 11 tests; Platerra relay: 13 tests.
-- [x] Platerra Node build/check; L4Desk JavaScript syntax.
-- [x] Production key pair SHA256 DER:
-  1048fafba06c30ab4fb6efee944dc64c2df413d335c2f7fa46d5a5daac17018f.
-- [ ] Frontend build/Vitest/browser — Windows ACL исправляет оператор.
-- [ ] Secret scan окончательного набора, commit, registry artifact и runtime release.
-- [ ] Login/refresh/tenant switch с approved short-lived credentials.
-  Из production signing secrets тестовые JWT не генерировать.
-- [ ] Реальная email доставка: в задаче не выполнялась; positive tests используют mocks.
+## Выпуск и runtime evidence
+- MenuBuilder backend/signer/frontend: опубликованный45e69a793e6c316750e286809a6a85acd8cb6989, штатный builder → registry → production. Первый builder run выявил несовместимый с Python3.12 except syntax; исправлено scoped Ruff targetpy312 и AST test до production.
+- Backend/signer digest: sha256:bdf5bb1c102baad6a07e643c18ff872144cd442d9754d8d4621519ace97f511f.
+- Frontend digest: sha256:6f0ec876c9079ecfdda92d9c2f4465cdb43259f3d46a0e9f990b4ae04500beab; static delivery проверена.
+- Signer Healthy: UID10001:10001, read-only, cap_drop ALL, no-new-privileges, только приватная сеть, без host ports. Backend/signer имеют одинаковый image ID и internal HMAC secret; mock/fallback выключены. Health200, неверный HMAC401.
+- DER public SHA256 пары и backend/nginx: 1048fafba06c30ab4fb6efee944dc64c2df413d335c2f7fa46d5a5daac17018f. Права закрытого ключа сохранены.
+- Platerra website/contact: опубликованный58d8939c1940c2b63191899e05be5f621ec00c29; L4Desk contact45e69a7.
+- Live acceptance выявил общий Docker DNS alias contact. Исправлен уникальным l4desk-contact в опубликованных etran03b976880c8042f547a927d9318a61f092447831 и Platerra30f973ba865cbd9af316d569e3978e79c8182c6b.
+- L4Desk landing из03b9768: image ID sha256:2c6f3519020ed412d1040e25847fb825d383c20348a52dc4954e874f0a9d9831; shared edge config30f973b применён. Contact code при DNS correction не менялся.
+- [x] После correction: четыре site containers Healthy, nginx -t/reload успешны; HTTPS health200 на L4Desk, Platerra, Leo4 с проверкой сертификатов.
+- [x] Обе публичные формы: native challenge200 + Cache-Control no-store, неверный ответ400; MenuBuilder CAPTCHA native200, отсутствие CAPTCHA400. Email не отправлялся.
+- Leo4/соседние builder backend-контейнеры и production nginx-default/прочие сервисы сохранили ID.
+- Защищённые rollback backups и runtime secrets оставлены на серверах. Временные материалы очищаются адресно; чужие untracked файлы сохраняются.
 
-## Release / риски / cleanup
-- Release выполняется совместным шагом после обеих реализаций по указанию пользователя.
-- MenuBuilder → builder/registry → production; сайты → существующий Compose на176.
-- Старые access JWT перестанут приниматься; refresh sessions сохраняются.
-- Native CAPTCHA слабее SmartCaptcha; rollback provider требует пересоздания
-  relay/backend для перечитывания env. Yandex settings сохраняются.
-- Временные SSH копии за пределами write scope удаляет оператор после release.
-- Ephemeral тестовые ключи и временные checkout внутри .release-test-tmp подлежат
-  адресной очистке после сохранения результата; чужие untracked файлы не удалять.
+## Невыполненные E2E и ограничения
+- [ ] Login/refresh/tenant switch с approved short-lived credentials: credentials не предоставлены; JWT из production private key не создавались.
+- [ ] Реальная email доставка: не выполнялась; positive tests используют mocks.
+- Старые access JWT после смены ключа больше не принимаются; refresh sessions сохраняются. SmartCaptcha settings сохранены; переключение provider требует пересоздания backend/relay.
