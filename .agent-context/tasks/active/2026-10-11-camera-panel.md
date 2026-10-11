@@ -72,3 +72,16 @@ Completed: implementation and follow-up merged to main, runtime released and acc
 - nginx-default and all neighboring services retained their IDs; MB and its
   coupled signer retained their accepted backend image and healthy state.
 - No further firmware/OTA required for this MenuBuilder-only stage.
+
+## Local cleanup and base folders — 2026-10-12
+- Added deploy/Clear-CameraPanelTemporary.ps1; default is preview, deletion
+  requires -Execute. Frozen manifest in sip/build/acceptance/camera-panel-cleanup.json.
+- Targets: owned pytest temporary directory, six scratch browser/RPC/PR files,
+  and two temporary diff copies used to verify preservation during base sync.
+  SHA256/file size/directory layout/link targets are checked before deletion.
+  pytest *current links are unlinked without traversal; no recursive deletion.
+- Parse/preview passed; actual deletion left for the operator as requested.
+  Logs, JSON evidence, screenshots, firmware, .env and other worktrees retained.
+- Base sip/master and IoT/master match their remotes; etranprocessing/main
+  fast-forwarded from4b95073 to13b5929, including all camera results. Its existing
+  tracked edit and untracked user files retained; before/after diff hashes match.
