@@ -11,7 +11,8 @@ leo4proxy — transport, l4media/Janus — ingress/WebRTC. DB ownership см. к
 | Direction | Transport | Endpoint/topic | Main payload | Guarantees |
 |---|---|---|---|---|
 | UI → BFF | REST | /api/v1/video/{device_id}/session | mountpoint_id, sn, janus_ws, ttl, pin | авторизованный просмотр; PIN секрет |
-| BFF → ingress | REST | /api/v1/media/sessions/renew | sn | только после успешного video lease keepalive; продлевает media TTL единственной активной сессии SN, истекшая сессия отклоняется |
+| BFF → ingress | REST | /api/v1/media/sessions/start | session_id, sn, lease_expires_at | Авторизованный app1 deadline (Unix seconds) ограничивает существующий media watchdog; отдельные600с не продлевают аренду. |
+| BFF → ingress | REST | /api/v1/media/sessions/renew | sn, lease_id, stream_instance_id?, lease_expires_at | Только после успешного video lease keepalive и совпадения эпохи; ID активной медиасессии должен совпасть с lease или stream ID. Истекшая сессия не оживляется. |
 | BFF → ingress | REST | /api/v1/media/sessions/stop | sn, lease_id, stream_instance_id?, reason | после подтверждённой остановки потока; удаляет маршрут и mountpoint только если ID активной медиасессии совпадает с ID аренды или потока, повторный вызов идемпотентен |
 | UI → BFF | REST | /api/v1/video/{device_id}/status | streaming, rtp_packets, bytes, idle_sec | transport stats, не decoded frame |
 | FFmpeg → proxy → ingress | RTP / L4RTP/1 через TLS | media plane | encoded H.264/RTP | sequence/route, не control lease |
@@ -22,6 +23,12 @@ leo4proxy — transport, l4media/Janus — ingress/WebRTC. DB ownership см. к
 - stream_instance_id не присутствует в L4RTP/1; не считать media заголовок ctl envelope.
 - Для реального «В эфире» нужны свежие RTP и browser decode stats, не cumulative counter.
 - lease_expired не восстанавливает FFmpeg; см. [lease](lease-lifecycle.md).
+- Ingress expiry uses the existing ttl_sec/renewed_at pair, including Redis restore;
+  authoritative app1 deadline is rounded down to whole Unix seconds (less than1s
+  early), never extended by HTTP transit/setup. Legacy internal callers without
+  a lease deadline retain their existing media TTL. Start/health also retire an
+  already expired session before reuse/conflict checks, without evicting an
+  unexpired session. No lease ownership moves into ingress.
 
 ## State machine
 session/route ready → authorized stream_start → running → receiving RTP → decoding;

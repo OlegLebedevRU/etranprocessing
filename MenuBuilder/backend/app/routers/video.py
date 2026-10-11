@@ -593,10 +593,12 @@ async def create_video_session(
         from app.services.media_orchestrator_client import (
             MediaOrchestratorError,
             MediaSessionNotFoundError,
+            media_lease_deadline,
             media_orchestrator_client,
         )
 
         try:
+            lease_deadline = media_lease_deadline(lease_info.get("expires_at"))
             media_res = None
             # Route-before-start uses the lease ID; after start the provider
             # also exposes a stream ID. Both refer to the same authorized lease.
@@ -630,6 +632,7 @@ async def create_video_session(
                     rtp_port=rtp_port,
                     rtcp_port=rtcp_port,
                     ttl_sec=600,
+                    lease_expires_at=lease_deadline,
                 )
             return VideoSessionResponse(
                 mountpoint_id=int(media_res.get("mountpoint_id") or mountpoint_id),

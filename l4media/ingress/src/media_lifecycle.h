@@ -690,6 +690,31 @@ static inline void stop_media_session(const char* session_id, const char* operat
     }
 }
 
+/* The existing persisted ttl/renewed pair encodes the authoritative lease deadline.
+ * Legacy management callers without a lease deadline retain their media TTL. */
+static inline bool media_lease_ttl(const char* body, time_t now, int* ttl, bool* bound) {
+    const char* value = NULL;
+    *bound = json_find_key(body, "lease_expires_at", &value);
+    if (!*bound) return true;
+    char* end = NULL;
+    errno = 0;
+    long long expiry = strtoll(value, &end, 10);
+    if (errno || end == value) return false;
+    while (*end == ' ' || *end == '\t' || *end == '\r' || *end == '\n') end++;
+    if ((*end != ',' && *end != '}') || expiry <= (long long)now ||
+        expiry - (long long)now > 7200) return false;
+    *ttl = (int)(expiry - (long long)now);
+    return true;
+}
+
+static inline void expire_media_session(MediaSession* s, time_t now) {
+    if (s && s->state == MEDIA_STATE_ACTIVE && s->ttl_sec > 0 &&
+        now - (s->renewed_at ? s->renewed_at : s->started_at) >= s->ttl_sec) {
+        int status = 0;
+        stop_media_session(s->session_id, "ttl-watchdog", "ttl_expired", NULL, 0, &status);
+    }
+}
+
 static inline void handle_media_session_start(const char* body, char* resp_body, size_t resp_sz,
                                               int* status_code, const char** status_text) {
     if (!body || !body[0]) {
@@ -727,11 +752,21 @@ static inline void handle_media_session_start(const char* body, char* resp_body,
     if (ttl_sec <= 0) ttl_sec = 600;
     if (ttl_sec < 10) ttl_sec = 10;
     if (ttl_sec > 7200) ttl_sec = 7200;
+    time_t request_at = time(NULL);
+    bool lease_bound = false;
+    if (!media_lease_ttl(body, request_at, &ttl_sec, &lease_bound)) {
+        *status_code = 409;
+        *status_text = "Conflict";
+        snprintf(resp_body, resp_sz, "{\"error\":\"invalid_lease_deadline\"}\n");
+        return;
+    }
 
     /* 1. Idempotency on session_id */
     MediaSession* existing = find_session_by_id(session_id);
+    expire_media_session(existing, request_at);
     if (existing) {
         if (existing->state == MEDIA_STATE_ACTIVE || existing->state == MEDIA_STATE_STARTING) {
+            if (lease_bound) { existing->ttl_sec = ttl_sec; existing->renewed_at = request_at; }
             /* A: reuse healthy mountpoint; recreate only on mismatch / after Janus wipe */
             char jerr[128] = {0};
             (void)janus_mountpoint_ensure(existing->mountpoint_id, existing->rtp_port,
@@ -781,6 +816,8 @@ static inline void handle_media_session_start(const char* body, char* resp_body,
 
     /* 2. Device mutual exclusion check */
     MediaSession* active_on_device = find_active_session_for_sn(sn);
+    expire_media_session(active_on_device, request_at);
+    active_on_device = find_active_session_for_sn(sn);
     if (active_on_device && strcmp(active_on_device->session_id, session_id) != 0) {
         *status_code = 409;
         *status_text = "Conflict";
@@ -861,6 +898,14 @@ static inline void handle_media_session_start(const char* body, char* resp_body,
     s->started_at = time(NULL);
     s->renewed_at = s->started_at;
     g_metric_sessions_started++;
+    if (lease_bound) s->renewed_at = request_at;
+    expire_media_session(s, time(NULL));
+    if (s->state == MEDIA_STATE_STOPPED) {
+        *status_code = 409;
+        *status_text = "Conflict";
+        snprintf(resp_body, resp_sz, "{\"error\":\"lease_expired\"}\n");
+        return;
+    }
     media_redis_save_session(s->session_id, s->operation_id, s->sn, s->device_id, s->mountpoint_id,
                              s->rtp_port, s->rtcp_port, s->pin, (int)s->state, s->ttl_sec,
                              s->created_at, s->started_at, s->renewed_at);
@@ -891,6 +936,24 @@ static inline void renew_media_session(const char* session_id, const char* body,
         snprintf(resp_body, resp_sz, "{\"error\":\"active_session_not_found\"}\n");
         return;
     }
+    int ttl = s->ttl_sec;
+    bool lease_bound = false;
+    char lease_id[64] = {0}, stream_id[64] = {0};
+    if (!media_lease_ttl(body, now, &ttl, &lease_bound)) {
+        *status_code = 409;
+        snprintf(resp_body, resp_sz, "{\"error\":\"invalid_lease_deadline\"}\n");
+        return;
+    }
+    if (lease_bound) {
+        json_get_string(body, "lease_id", lease_id, sizeof(lease_id));
+        json_get_string(body, "stream_instance_id", stream_id, sizeof(stream_id));
+        if (strcmp(s->session_id, lease_id) != 0 && strcmp(s->session_id, stream_id) != 0) {
+            *status_code = 409;
+            snprintf(resp_body, resp_sz, "{\"error\":\"session_mismatch\"}\n");
+            return;
+        }
+    }
+    s->ttl_sec = ttl;
     s->renewed_at = now;
     media_redis_save_session(s->session_id, s->operation_id, s->sn, s->device_id,
                              s->mountpoint_id, s->rtp_port, s->rtcp_port, s->pin,
@@ -961,6 +1024,7 @@ static inline void get_media_session_health(const char* session_id, char* resp_b
 
     time_t now = time(NULL);
     const char* state_str = "active";
+    expire_media_session(s, now);
     switch (s->state) {
         case MEDIA_STATE_STARTING: state_str = "starting"; break;
         case MEDIA_STATE_ACTIVE:   state_str = "active"; break;

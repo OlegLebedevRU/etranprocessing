@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -82,6 +83,7 @@ async def test_second_viewer_reuses_lease_session_after_stream_start(
     app.dependency_overrides[get_db] = lambda: mock_db_session
     lease = {
         "active": True,
+        "expires_at": (datetime.now(UTC) + timedelta(seconds=60)).isoformat(),
         "lease_id": "lease-1",
         "scope": "stream",
         "owner_user_id": "op_user",
@@ -158,6 +160,7 @@ async def test_orchestrator_failure_never_falls_back_to_janus(
     app.dependency_overrides[get_db] = lambda: mock_db_session
     lease = {
         "active": True,
+        "expires_at": (datetime.now(UTC) + timedelta(seconds=60)).isoformat(),
         "lease_id": "lease-1",
         "scope": "stream",
         "owner_user_id": "op_user",
@@ -256,6 +259,7 @@ async def test_existing_media_identity_mismatch_is_rejected(
     app.dependency_overrides[get_db] = lambda: mock_db_session
     lease = {
         "active": True,
+        "expires_at": (datetime.now(UTC) + timedelta(seconds=60)).isoformat(),
         "lease_id": "lease-1",
         "scope": "stream",
         "owner_user_id": "op_user",

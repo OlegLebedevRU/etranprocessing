@@ -17,9 +17,10 @@ $(TARGET): $(OBJS)
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-test: $(TEST_TARGET) test_feedback
+test: $(TEST_TARGET) test_feedback test_media_deadline
 	./$(TEST_TARGET)
 	./test_feedback
+	./test_media_deadline
 
 $(TEST_TARGET): $(TEST_SRCS)
 	$(CC) $(CFLAGS) -o $@ $^
@@ -27,7 +28,10 @@ $(TEST_TARGET): $(TEST_SRCS)
 test_feedback: tests/test_feedback.c src/l4media_ingress.c src/media_lifecycle.h src/media_redis.h
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
 
+test_media_deadline: tests/test_media_deadline.c src/l4media_ingress.c src/media_lifecycle.h src/media_redis.h
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
+
 clean:
-	rm -f $(OBJS) $(TARGET) $(TEST_TARGET) test_feedback
+	rm -f $(OBJS) $(TARGET) $(TEST_TARGET) test_feedback test_media_deadline
 
 .PHONY: all clean test
