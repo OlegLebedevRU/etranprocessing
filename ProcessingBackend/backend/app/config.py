@@ -1,7 +1,15 @@
+from typing import Literal
+
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
+    ca_signer_backend: Literal["external", "local"] = "external"
+    ca_issuing_key_path: str = ""
+    ca_issuing_cert_path: str = ""
+    ca_issuing_key_password: SecretStr = SecretStr("")
+    ca_issuing_key_password_file: str = ""
     database_url: str = ""
     product_scope_split_enabled: bool = False
     cors_origins: list[str] = []

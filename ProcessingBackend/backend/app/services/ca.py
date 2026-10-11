@@ -1,10 +1,16 @@
-"""HTTP client for external CA serverless function."""
+"""Explicitly selected local terminal signer or compatibility external CA client."""
 
+import asyncio
 import logging
 import os
 import urllib.parse
 
 import httpx
+from cryptography.hazmat.primitives import serialization
+
+from app.config import settings
+from app.services.ca_trust import terminal_issuer, terminal_root
+from app.services.local_ca import sign_terminal_csr
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +37,7 @@ async def sign_csr(
     cn: str = "",
     exp_days: int | None = None,
 ) -> CAResponse:
-    """Send PKCS10 CSR to external CA for signing.
+    """Sign PKCS10 using the configured provider, without automatic fallback.
 
     Args:
         csr_pem: PEM-encoded PKCS10 CSR
@@ -42,6 +48,23 @@ async def sign_csr(
     Returns:
         CAResponse with cert_pem, ca_pem, serial_number, not_valid_after
     """
+    if settings.ca_signer_backend == "local":
+        cert = await asyncio.to_thread(
+            sign_terminal_csr,
+            csr_pem,
+            sign,
+            cn,
+            DEFAULT_VALIDITY_DAYS if exp_days is None else exp_days,
+        )
+        chain = terminal_issuer().public_bytes(
+            serialization.Encoding.PEM
+        ) + terminal_root().public_bytes(serialization.Encoding.PEM)
+        return CAResponse(
+            cert_pem=cert.public_bytes(serialization.Encoding.PEM).decode(),
+            ca_pem=chain.decode(),
+            serial_number=format(cert.serial_number, "X"),
+            not_valid_after=cert.not_valid_after_utc.isoformat(),
+        )
     if not CA_URL:
         raise ValueError("CA_URL is required")
     days = exp_days or DEFAULT_VALIDITY_DAYS

@@ -6,6 +6,14 @@ FM admission requires protocol v2 and MQTT navigation/user-write/drive capabilit
 
 ## Unreleased
 
+### Added
+
+- Локальный Terminal Issuing CA signer с отдельным зашифрованным ключом, проверкой ключа/сертификата при запуске и явным выбором провайдера без автоматического fallback.
+
+### Changed
+
+- Терминальные сертификаты новой ветви сохраняют профиль действующего сертификата 773, включая serverAuth/clientAuth, SAN и notBefore на сутки раньше выдачи. PKCS#7/PFX содержат полную цепочку; аутентификация поддерживает прямую подпись прежним root и новую ветвь с прежней строгой привязкой SN/serial.
+
 ### Fixed
 
 - `GET /api/ListMenuFile` принимает legacy-аутентификацию `Authorization: ClientCertificate <PEM|base64>` когда TLS client cert не предъявлен (клиенты `clsMenuCreator`). Fallback ограничен ListMenuFile; платёжные и прочие терминальные маршруты остаются строго mTLS.

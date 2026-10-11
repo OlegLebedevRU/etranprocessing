@@ -38,6 +38,9 @@ ENV/
 s3_cloud_ru.env
 sw_sign.env
 sw_sign.env.bak
+ProcessingBackend/issuer_key_pass.env
+ProcessingBackend/issuer_key_pass.env.bak
+ProcessingBackend/issuer-secrets/
 l4mcp_token.env
 .uv-cache/
 .release-test-tmp/

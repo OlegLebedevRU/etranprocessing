@@ -2,21 +2,18 @@
 
 import urllib.parse
 from datetime import UTC, datetime
-from functools import lru_cache
-from pathlib import Path
 
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature, UnsupportedAlgorithm
 from cryptography.x509.oid import NameOID
 from fastapi import HTTPException, Request
 
+from app.services.ca_trust import terminal_root, verify_terminal_chain
 
-@lru_cache(maxsize=1)
+
 def terminal_ca() -> x509.Certificate:
     # Public trust anchor packaged with PB; not learned from client headers or a network response.
-    return x509.load_pem_x509_certificate(
-        (Path(__file__).parents[1] / "certs" / "iot_leo4_ca.crt").read_bytes()
-    )
+    return terminal_root()
 
 
 def verified_terminal_identity(
@@ -33,14 +30,11 @@ def verified_terminal_identity(
             urllib.parse.unquote(request.headers.get("X-SSL-Client-Cert", "")).encode()
         )
         ca = ca if ca is not None else terminal_ca()
-        cert.verify_directly_issued_by(ca)
-        issuer = cert.issuer.get_attributes_for_oid(NameOID.COMMON_NAME)
+        verify_terminal_chain(cert, ca)
         subject = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
         now = datetime.now(UTC)
         if (
-            len(issuer) != 1
-            or issuer[0].value != "iot.leo4.ru"
-            or len(subject) != 1
+            len(subject) != 1
             or not cert.not_valid_before_utc <= now < cert.not_valid_after_utc
             or not ca.not_valid_before_utc <= now < ca.not_valid_after_utc
         ):
@@ -51,5 +45,11 @@ def verified_terminal_identity(
         ):
             raise ValueError("serial header mismatch")
         return str(subject[0].value), serial
-    except (ValueError, TypeError, InvalidSignature, UnsupportedAlgorithm) as exc:
+    except (
+        ValueError,
+        TypeError,
+        InvalidSignature,
+        UnsupportedAlgorithm,
+        x509.ExtensionNotFound,
+    ) as exc:
         raise HTTPException(401, "live_new_ca_certificate_required") from exc

@@ -1,5 +1,17 @@
 # ProcessingBackend
 
+## 2026-10-11: Terminal Issuing CA — local implementation, not released
+
+Local signer and pinned root→issuer verification added; external remains the
+application default until explicit provisioning. Runtime key/password are
+read-only secrets; root private key never enters PB. Old root-issued leaves and
+strict SN/serial remain compatible; issuer branch cannot take legacy OU auto-bind.
+Full PKCS#7/PFX chain, exact observed 773 Subject/KU/EKU/SAN profile and notBefore
+minus one day. RabbitMQ runtime root/CN/internal-auth and issuer PKIX path checked,
+but new-leaf handshake, MQTT authorization and terminal install/renew are not E2E-proven.
+[Architecture](../../docs/etran_cert-infrastructure-architecture.md),
+[handoff](../tasks/active/2026-10-11-terminal-issuing-ca.md).
+
 ## FM production, 2026-10-05
 
 [План файлового менеджера](../../docs/etran_arch-file-manager-remote-windows.md):

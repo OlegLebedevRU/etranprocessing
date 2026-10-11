@@ -8,6 +8,8 @@
 !ProcessingBackend/backend/
 !ProcessingBackend/backend/**
 **/.env*
+**/*_pass.env*
+**/issuer-secrets
 **/.venv
 **/__pycache__
 **/.pytest_cache

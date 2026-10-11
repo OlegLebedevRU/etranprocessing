@@ -7,9 +7,15 @@ services:
     restart: always
     env_file:
       - ./backend/.env
+    environment:
+      CA_SIGNER_BACKEND: local
+      CA_ISSUING_KEY_PATH: /run/secrets/terminal-ca/issuer.key.pem
+      CA_ISSUING_KEY_PASSWORD_FILE: /run/secrets/terminal-ca/issuer-password.env
+      CA_ISSUING_CERT_PATH: ""
     volumes:
       - ./log:/app/log
       - ./keys:/function/storage/keys:ro
+      - ./issuer-secrets:/run/secrets/terminal-ca:ro
     networks:
       - pg_network
 

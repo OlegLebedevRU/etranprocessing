@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -13,6 +14,11 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if settings.ca_signer_backend == "local":
+        from app.services.local_ca import issuing_key
+
+        await asyncio.to_thread(issuing_key)
+        logger.info("Terminal issuing CA loaded; local signer ready")
     yield
     await engine.dispose()
 
