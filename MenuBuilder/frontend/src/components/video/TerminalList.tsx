@@ -17,6 +17,7 @@ export interface TerminalListProps {
   loading?: boolean;
   onRefresh?: () => void;
   maxHeight?: string | number;
+  initialFilter?: StatusFilter;
 }
 
 type StatusFilter = "all" | "online" | "offline";
@@ -30,10 +31,11 @@ export const TerminalList: React.FC<TerminalListProps> = ({
   loading = false,
   onRefresh,
   maxHeight = "calc(100vh - 220px)",
+  initialFilter = "online",
 }) => {
   const { token } = theme.useToken();
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("online");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialFilter);
 
   // Подсчет онлайн / офлайн
   const { onlineCount, offlineCount } = useMemo(() => {

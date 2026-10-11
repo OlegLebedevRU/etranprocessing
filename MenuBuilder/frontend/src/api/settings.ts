@@ -63,6 +63,7 @@ export interface TerminalSettingsItem {
 
 export interface OnboardTerminalPayload {
   sys?: "windows" | "linux" | "esp32";
+  camera?: "openipc" | null;
   name?: string | null;
   address?: string | null;
   note?: string | null;
@@ -73,6 +74,7 @@ export interface OnboardTerminalPayload {
 
 export interface TerminalOnboardResponse {
   sys?: "windows" | "linux" | "esp32" | null;
+  camera?: "openipc" | null;
   terminal_id: number;
   tenant_id: number;
   ordinal: number;

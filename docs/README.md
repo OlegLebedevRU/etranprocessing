@@ -11,6 +11,7 @@
 
 - [CAPTCHA providers](menu_auth-captcha-providers.md) — native/SmartCaptcha/off, контракт и переключение.
 - [Внутренний JWT signer](menu_ops-jwt-issuer-signer.md) — ротация ключа, приватная сеть и резерв.
+- [Камеры OpenIPC](menu_video-openipc-cameras.md) — создание Camera OpenIPC, теги, просмотр, настройки и подтверждение RPC событием84.
 
 Документы, фиксирующие базовые принципы построения системы, доменные модели, разграничение владения таблицами БД и безопасность:
 

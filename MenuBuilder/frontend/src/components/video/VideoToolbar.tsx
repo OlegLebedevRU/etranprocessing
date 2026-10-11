@@ -42,6 +42,8 @@ interface VideoToolbarProps {
   displayMode: "fit" | "native";
   onDisplayMode: (value: "fit" | "native") => void;
   onFullscreen: () => void;
+  cameraOnly?: boolean;
+  settingsBusy?: boolean;
 }
 
 export function VideoToolbar(props: VideoToolbarProps) {
@@ -66,7 +68,7 @@ export function VideoToolbar(props: VideoToolbarProps) {
     <div
       style={{ display: "flex", flexDirection: "column", gap: 12, width: 250 }}
     >
-      <label>
+      {!props.cameraOnly && <label>
         Качество{" "}
         <Select
           aria-label="Выбор качества трансляции"
@@ -79,7 +81,7 @@ export function VideoToolbar(props: VideoToolbarProps) {
           ]}
           style={{ width: "100%" }}
         />
-      </label>
+      </label>}
       <label>
         Масштаб{" "}
         <Segmented
@@ -124,7 +126,7 @@ export function VideoToolbar(props: VideoToolbarProps) {
           icon={<SwapOutlined />}
           onClick={props.onSelectTerminal}
         >
-          Сменить терминал
+        {props.cameraOnly ? "Выбрать камеру" : "Сменить терминал"}
         </Button>
         <Tooltip
           title={[props.name, props.address, device.sn]
@@ -137,7 +139,7 @@ export function VideoToolbar(props: VideoToolbarProps) {
           </Typography.Text>
         </Tooltip>
       </div>
-      {operator && (
+      {operator && !props.cameraOnly && (
         <div className="video-toolbar-source">
           <Select
             aria-label="Источник видео"
@@ -175,18 +177,18 @@ export function VideoToolbar(props: VideoToolbarProps) {
             <span>
               <Button
                 aria-label={
-                  active ? "Остановить трансляцию" : "Запустить трансляцию"
+                  props.cameraOnly ? active ? "Остановить просмотр" : "Начать просмотр" : active ? "Остановить трансляцию" : "Запустить трансляцию"
                 }
                 type="primary"
                 danger={active}
                 icon={active ? <StopOutlined /> : <PlayCircleOutlined />}
                 loading={stage === "starting" || stage === "stopping"}
                 disabled={
-                  !active && (device.status !== "online" || !hasSources)
+                  !active && (device.status !== "online" || !hasSources || !!props.settingsBusy)
                 }
                 onClick={active ? props.onStop : props.onStart}
               >
-                {active ? "Стоп" : "Запустить"}
+                {props.cameraOnly ? active ? "Остановить просмотр" : "Начать просмотр" : active ? "Стоп" : "Запустить"}
               </Button>
             </span>
           </Tooltip>
@@ -205,7 +207,7 @@ export function VideoToolbar(props: VideoToolbarProps) {
             {status}
           </span>
         </Tooltip>
-        {operator && <RemoteControlPanel {...props.control} compact />}
+        {operator && !props.cameraOnly && <RemoteControlPanel {...props.control} compact />}
         <Popover trigger="click" placement="bottomRight" content={settings}>
           <Button aria-label="Настройки видео" icon={<SettingOutlined />} />
         </Popover>

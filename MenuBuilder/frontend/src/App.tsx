@@ -264,6 +264,9 @@ export default function App() {
                 </ViewerGuard>
               }
             />
+            <Route path="cameras" element={<ViewerGuard permission={PERMISSION_VIDEO_VIEW}>
+              <VideoSurveillancePage cameraOnly />
+            </ViewerGuard>} />
             <Route
               path="menu"
               element={

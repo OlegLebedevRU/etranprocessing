@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 import httpx
 from fastapi import HTTPException, status
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -53,6 +53,13 @@ class TerminalOnboardRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     sys: Literal["windows", "linux", "esp32"] = "windows"
+    camera: Literal["openipc"] | None = None
+
+    @model_validator(mode="after")
+    def validate_camera_platform(self):
+        if self.camera is not None and self.sys != "esp32":
+            raise ValueError("OpenIPC camera requires the ESP32 platform")
+        return self
 
     name: str | None = Field(
         default=None,
@@ -78,6 +85,7 @@ class TerminalOnboardResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     sys: Literal["windows", "linux", "esp32"] | None = None
+    camera: Literal["openipc"] | None = None
 
     terminal_id: int
     tenant_id: int
@@ -267,7 +275,13 @@ class IotProvisioningClient:
             )
 
     async def provision_mqtt_access(
-        self, *, device_id: int, sn: str, tenant_id: int, platform: str | None = None
+        self,
+        *,
+        device_id: int,
+        sn: str,
+        tenant_id: int,
+        platform: str | None = None,
+        camera: Literal["openipc"] | None = None,
     ) -> None:
         """Reconcile the device's RabbitMQ account and topic ACL through IoT."""
         url = f"{self.base_url}/api/internal/v1/provisioning/terminals"
@@ -279,6 +293,10 @@ class IotProvisioningClient:
         }
         if platform is not None:
             payload["tags"]["sys"] = platform
+        if camera == "openipc":
+            if platform != "esp32":
+                raise ValueError("OpenIPC camera requires the ESP32 platform")
+            payload["tags"].update({"sys": "ESP32", "camera": "openipc"})
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             resp = await client.post(
                 url, json=payload, headers=self._headers(tenant_id)
@@ -519,6 +537,7 @@ class TerminalOnboardingService:
                 "sn": sn,
                 "device_id": next_device_id,
                 "sys": req.sys,
+                "camera": req.camera,
             },
         )
 
@@ -698,9 +717,9 @@ class TerminalOnboardingService:
     # Internal Saga Orchestration & Response Construction
     # -------------------------------------------------------------------------
 
-    async def _get_requested_platform(
+    async def _get_requested_profile(
         self, terminal: L4DeskTerminal
-    ) -> Literal["windows", "linux", "esp32"] | None:
+    ) -> tuple[Literal["windows", "linux", "esp32"] | None, Literal["openipc"] | None]:
         """Recover the immutable onboarding choice after a process/network failure."""
         result = await self.db.execute(
             select(L4DeskAuditEvent.details)
@@ -716,13 +735,16 @@ class TerminalOnboardingService:
         details = result.scalar_one_or_none()
         platform = details.get("sys") if isinstance(details, dict) else None
         # Historical requests did not select a platform: do not overwrite IoT tags.
+        camera = details.get("camera") if isinstance(details, dict) else None
+        if camera is not None and (camera != "openipc" or platform != "esp32"):
+            raise ValueError("Invalid persisted camera onboarding profile")
         if platform == "windows":
-            return "windows"
+            return "windows", None
         if platform == "linux":
-            return "linux"
+            return "linux", None
         if platform == "esp32":
-            return "esp32"
-        return None
+            return "esp32", "openipc" if camera == "openipc" else None
+        return None, None
 
     async def _run_saga_steps(
         self,
@@ -767,11 +789,13 @@ class TerminalOnboardingService:
                 ):
                     raise RuntimeError("IoT provisioning identity mismatch")
 
+                platform, camera = await self._get_requested_profile(l4_terminal)
                 await self.iot_client.provision_mqtt_access(
                     device_id=prov_res.device_id,
                     sn=l4_terminal.sn,
                     tenant_id=l4_terminal.tenant_id,
-                    platform=await self._get_requested_platform(l4_terminal),
+                    platform=platform,
+                    camera=camera,
                 )
 
                 l4_terminal.provisioning_state = "ready"
@@ -958,8 +982,10 @@ class TerminalOnboardingService:
         # Provider PIN semantics: if pin_state is consumed or expired, never return plain PIN
         effective_pin = plain_pin if cert_state == "issued" else None
 
+        platform, camera = await self._get_requested_profile(l4_terminal)
         return TerminalOnboardResponse(
-            sys=await self._get_requested_platform(l4_terminal),
+            sys=platform,
+            camera=camera,
             terminal_id=l4_terminal.terminal_id,
             tenant_id=l4_terminal.tenant_id,
             ordinal=l4_terminal.ordinal,

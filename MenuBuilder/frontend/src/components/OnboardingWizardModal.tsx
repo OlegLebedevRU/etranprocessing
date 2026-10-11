@@ -31,6 +31,7 @@ import {
   ArrowRightOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router";
+import { terminalKindOptions, terminalKindPayload } from "../utils/terminalKinds";
 import {
   onboardTerminal,
   getTerminalReadiness,
@@ -126,7 +127,7 @@ export default function OnboardingWizardModal({
     try {
       const resp = await onboardTerminal(
         {
-          sys: values.sys || "windows",
+          ...terminalKindPayload(values.sys || "windows"),
           name: values.name?.trim() || null,
           address: values.address?.trim() || null,
           note: values.note?.trim() || null,
@@ -265,7 +266,7 @@ export default function OnboardingWizardModal({
 
           <Form form={form} layout="vertical" onFinish={handleCreateTerminal}>
             <Form.Item name="sys" label="Тип терминала" initialValue="windows" rules={[{ required: true, message: "Выберите тип терминала" }]}>
-              <Select options={[{ value: "windows", label: "Windows" }, { value: "linux", label: "Linux" }, { value: "esp32", label: "ESP32" }]} />
+              <Select options={terminalKindOptions} />
             </Form.Item>
             <Form.Item
               name="name"
