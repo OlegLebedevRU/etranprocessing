@@ -1,0 +1,241 @@
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+from uuid import uuid4
+
+import pytest
+from fastapi import HTTPException
+from httpx import ASGITransport, AsyncClient
+from pydantic import ValidationError
+
+from app.auth import get_current_user
+from app.database import get_db
+from app.main import app
+from app.routers import cameras
+from app.services.camera_platform import camera_snapshot
+
+
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
+@pytest.fixture
+def context(monkeypatch):
+    terminal = SimpleNamespace(org_id=1, sn="fixture")
+    access = AsyncMock(return_value=terminal)
+    upstream = AsyncMock(
+        return_value={
+            "items": [
+                {
+                    "device_id": 4619,
+                    "device_tags": [{"tag": "camera", "value": "openipc"}],
+                }
+            ]
+        }
+    )
+    control = AsyncMock(
+        return_value={"agent": {"online": True}, "lease": {"active": False}}
+    )
+    monkeypatch.setattr(cameras, "_verify_device_access", access)
+    monkeypatch.setattr(cameras, "camera_request", upstream)
+    monkeypatch.setattr(cameras.iot_client, "remote_input_status", control)
+    return access, upstream, control
+
+
+@pytest.mark.anyio
+async def test_membership_and_tenant_denial_prevent_dispatch(context):
+    access, upstream, control = context
+    user = {"role_id": 3, "org_id": 1}
+    access.side_effect = HTTPException(403, "wrong tenant")
+    with pytest.raises(HTTPException) as error:
+        await cameras.camera_access(4619, user, AsyncMock())
+    assert error.value.status_code == 403
+    upstream.assert_not_awaited()
+    access.side_effect = None
+    upstream.return_value = {
+        "items": [
+            {"device_id": 4619, "device_tags": [{"tag": "sys", "value": "ESP32"}]}
+        ]
+    }
+    with pytest.raises(HTTPException) as error:
+        await cameras.camera_access(4619, user, AsyncMock())
+    assert error.value.status_code == 404
+    control.assert_not_awaited()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("active", [True, None])
+async def test_busy_or_unknown_lease_never_submits(context, active):
+    access, upstream, control = context
+    control.return_value = {"agent": {"online": True}, "lease": {"active": active}}
+    request = cameras.CameraCommand(
+        operation_id=uuid4(),
+        action="power",
+        value="restart",
+        expected_power_on=True,
+        allow_disruptive=True,
+    )
+    with pytest.raises(HTTPException) as error:
+        await cameras.command_camera(4619, request, {"org_id": 1}, AsyncMock())
+    assert error.value.status_code == 409
+    assert len(upstream.await_args_list) == 1  # membership read only
+    assert access.await_args.kwargs["require_active"] is True
+
+
+@pytest.mark.anyio
+async def test_unknown_lease_is_not_reported_as_idle(context):
+    _, _, control = context
+    control.return_value = {"agent": {"online": True}, "lease": {}}
+    result = await cameras.get_camera(4619, {"org_id": 1}, AsyncMock())
+    assert result["lease_active"] is None
+
+
+@pytest.mark.anyio
+async def test_idle_maps_only_fixed_camera_rpc(context):
+    _, upstream, _ = context
+    request = cameras.CameraCommand(
+        operation_id=uuid4(),
+        action="quality",
+        value="hd",
+        expected_revision="a" * 64,
+        allow_disruptive=True,
+    )
+    await cameras.command_camera(4619, request, {"org_id": 1}, AsyncMock())
+    call = upstream.await_args
+    assert call.args[:3] == ("POST", "device-tasks/", 1)
+    assert call.kwargs["body"] == {
+        "ext_task_id": str(request.operation_id),
+        "device_id": 4619,
+        "method_code": 163,
+        "ttl": 1,
+        "payload": {
+            "dt": [
+                {
+                    "camera_id": "cam:ip000001",
+                    "timeout_ms": 15000,
+                    "allow_disruptive": True,
+                    "expected_revision": "a" * 64,
+                    "preset": "hd",
+                }
+            ]
+        },
+    }
+
+
+@pytest.mark.anyio
+async def test_task_device_or_method_mismatch_is_hidden(context):
+    _, upstream, _ = context
+    upstream.side_effect = [
+        {
+            "items": [
+                {
+                    "device_id": 4619,
+                    "device_tags": [{"tag": "camera", "value": "openipc"}],
+                }
+            ]
+        },
+        {"header": {"device_id": 4623, "method_code": 164}},
+    ]
+    with pytest.raises(HTTPException) as error:
+        await cameras.get_camera_command(
+            4619, uuid4(), {"role_id": 3, "org_id": 1}, AsyncMock()
+        )
+    assert error.value.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_viewer_cannot_submit_even_refresh(context):
+    _, upstream, _ = context
+    app.dependency_overrides[get_current_user] = lambda: {
+        "role_id": 4,
+        "role": "viewer",
+        "org_id": 1,
+    }
+    app.dependency_overrides[get_db] = lambda: AsyncMock()
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/api/cameras/4619/commands",
+                json={"operation_id": str(uuid4()), "action": "refresh"},
+            )
+        assert response.status_code == 403
+        upstream.assert_not_awaited()
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.parametrize(
+    "item",
+    [
+        {"action": "power", "value": "restart"},
+        {
+            "action": "power",
+            "value": "off",
+            "expected_power_on": "true",
+            "allow_disruptive": True,
+        },
+        {
+            "action": "quality",
+            "value": "unknown",
+            "expected_revision": "a" * 64,
+            "allow_disruptive": True,
+        },
+        {"action": "refresh", "url": "http://localhost"},
+    ],
+)
+def test_invalid_commands_are_rejected(item):
+    with pytest.raises(ValidationError):
+        cameras.CameraCommand.model_validate({"operation_id": str(uuid4()), **item})
+
+
+@pytest.mark.anyio
+async def test_offline_terminal_never_queues_settings(context):
+    _, upstream, control = context
+    control.return_value = {"agent": {"online": False}, "lease": {"active": False}}
+    request = cameras.CameraCommand(
+        operation_id=uuid4(),
+        action="power",
+        value="on",
+        expected_power_on=False,
+        allow_disruptive=True,
+    )
+    with pytest.raises(HTTPException) as error:
+        await cameras.command_camera(4619, request, {"org_id": 1}, AsyncMock())
+    assert error.value.status_code == 409
+    assert len(upstream.await_args_list) == 1
+
+
+def test_gauge_snapshot_is_device_scoped():
+    snapshot = {"snapshot_id": "fixture", "cameras": []}
+    assert (
+        camera_snapshot(
+            {
+                "items": [
+                    {
+                        "device_id": 4619,
+                        "type": "84",
+                        "gauges": {"300": [{"450": snapshot}]},
+                    }
+                ]
+            },
+            4619,
+        )
+        == snapshot
+    )
+    assert (
+        camera_snapshot(
+            {
+                "items": [
+                    {
+                        "device_id": 4623,
+                        "type": "84",
+                        "gauges": {"300": [{"450": snapshot}]},
+                    }
+                ]
+            },
+            4619,
+        )
+        is None
+    )

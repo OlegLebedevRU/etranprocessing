@@ -47,6 +47,8 @@ import { selectableDevices } from "../utils/terminalPresentation";
 import { VideoPlayerScreen } from "../components/video/VideoPlayerScreen";
 import type { StreamStage } from "../components/video/StreamControls";
 import RefusalReasonCard from "../components/RefusalReasonCard";
+import { CameraSettings } from "../components/video/CameraSettings";
+import { isOpenIpcCamera } from "../utils/cameraState";
 
 const { Text } = Typography;
 
@@ -130,12 +132,12 @@ function formatVideoError(err: any): { title: string; message: string; code: str
   };
 }
 
-export default function VideoSurveillancePage() {
+export default function VideoSurveillancePage({ cameraOnly = false }: { cameraOnly?: boolean }) {
   const { user } = useSession();
-  return <TenantVideoSurveillancePage key={user?.org_id ?? "none"} />;
+  return <TenantVideoSurveillancePage key={`${user?.org_id ?? "none"}:${cameraOnly}`} cameraOnly={cameraOnly} />;
 }
 
-function TenantVideoSurveillancePage() {
+function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, loading: userLoading } = useSession();
@@ -165,6 +167,7 @@ function TenantVideoSurveillancePage() {
   const [terminalNames, setTerminalNames] = useState<Record<number, string>>({});
   const [loadingDevices, setLoadingDevices] = useState<boolean>(true);
   const [selectedDevice, setSelectedDevice] = useState<DeviceListItem | null>(null);
+  const [cameraSettingsBusy, setCameraSettingsBusy] = useState(false);
 
   // Мобильный / планшетный Drawer выбора терминала
   const [isDeviceDrawerOpen, setIsDeviceDrawerOpen] = useState(!searchParams.has("device_id") && !searchParams.has("sn"));
@@ -209,7 +212,10 @@ function TenantVideoSurveillancePage() {
     try {
       const [res, settingsData] = await Promise.all([
         getDevices(orgId, { page: 1, size: 100 }),
-        listTerminalsSettings({ org_id: orgId, all: true }),
+        listTerminalsSettings({ org_id: orgId, all: true }).catch(error => {
+          if (cameraOnly && error?.response?.status === 403) return { items: [] };
+          throw error;
+        }),
       ]);
       const settingsList = "items" in settingsData ? settingsData.items : [];
 
@@ -238,7 +244,7 @@ function TenantVideoSurveillancePage() {
       }
 
       if (currentGeneration !== deviceGeneration.current) return;
-      allItems = selectableDevices(allItems, settingsList);
+      allItems = cameraOnly ? allItems.filter(isOpenIpcCamera) : selectableDevices(allItems, settingsList);
       setTerminalAddresses(addrMap);
       setTerminalNames(Object.fromEntries(settingsList.map(item => [item.device_id, item.note || ""])));
       setDevices(allItems);
@@ -257,7 +263,7 @@ function TenantVideoSurveillancePage() {
     } finally {
       if (currentGeneration === deviceGeneration.current) setLoadingDevices(false);
     }
-  }, [orgId, searchParams]);
+  }, [orgId, searchParams, cameraOnly]);
 
   useEffect(() => {
     if (!userLoading) {
@@ -436,13 +442,13 @@ function TenantVideoSurveillancePage() {
 
         if (currentGeneration !== inventoryGeneration.current) return;
 
-        const displays: DisplaySource[] = (inv?.displays || []).filter(
+        const displays: DisplaySource[] = (cameraOnly ? [] : inv?.displays || []).filter(
           (d: DisplaySource) => d.policy !== "denied"
         );
         const cameras: CameraSource[] = inv?.cameras || [];
 
         // Fallback если дисплей не вернулся, но агент сообщает screen
-        if (displays.length === 0 && ctlStat?.agent?.screen) {
+        if (!cameraOnly && displays.length === 0 && ctlStat?.agent?.screen) {
           const sc = ctlStat.agent.screen;
           const w = sc.virtual_width || 1920;
           const h = sc.virtual_height || 1080;
@@ -479,7 +485,9 @@ function TenantVideoSurveillancePage() {
         }
 
         // Выбор источника по умолчанию
-        if (streamInfo?.source_id && (streamInfo.mode === "desktop" || streamInfo.mode === "usb-camera")) {
+        if (cameraOnly) {
+          setSelectedSourceKey("usb-camera:cam:ip000001");
+        } else if (streamInfo?.source_id && (streamInfo.mode === "desktop" || streamInfo.mode === "usb-camera")) {
           setSelectedSourceKey(`${streamInfo.mode}:${streamInfo.source_id}`);
         } else if (displays.length > 0) {
           const primary = displays.find((d: DisplaySource) => d.is_primary || d.primary) || displays[0];
@@ -493,7 +501,7 @@ function TenantVideoSurveillancePage() {
         if (currentGeneration === inventoryGeneration.current) setLoadingInventory(false);
       }
     },
-    []
+    [cameraOnly]
   );
 
   useEffect(() => {
@@ -631,7 +639,7 @@ function TenantVideoSurveillancePage() {
       setStatusText("Не запущена");
 
     // Автоматическое подключение для зрителя (viewer)
-      if (isViewer && canView && device.status === "online") {
+      if (!cameraOnly && isViewer && canView && device.status === "online") {
         void handleViewerConnect(device.device_id);
       }
     } finally {
@@ -709,6 +717,7 @@ function TenantVideoSurveillancePage() {
   // Запуск трансляции оператором
   const handleOperatorStart = async () => {
     if (!selectedDevice) return;
+    if (cameraOnly && cameraSettingsBusy) return;
     if (selectedDevice.status !== "online") {
       message.warning("Терминал не на связи (offline). Запуск трансляции невозможен.");
       return;
@@ -963,15 +972,21 @@ function TenantVideoSurveillancePage() {
         }}
       >
         {/* Левая панель списка терминалов (видна на Desktop) */}
+        {cameraOnly && !isMobile && <Card title="Камеры" size="small" style={{ width: 300, flexShrink: 0 }}>
+          <TerminalList initialFilter="all" devices={devices} terminalAddresses={terminalAddresses}
+            terminalNames={terminalNames} selectedDevice={selectedDevice}
+            onSelectDevice={device => void handleSelectDevice(device)} loading={loadingDevices} onRefresh={loadDevices} />
+        </Card>}
         <Drawer
-          title="Выбор терминала"
+          title={cameraOnly ? "Выбор камеры" : "Выбор терминала"}
           placement="left"
-          open={isDeviceDrawerOpen}
+          open={isDeviceDrawerOpen && (!cameraOnly || isMobile)}
           onClose={() => setIsDeviceDrawerOpen(false)}
           width={screens.xs ? "85%" : 360}
           styles={{ body: { padding: 12 } }}
         >
           <TerminalList
+            initialFilter={cameraOnly ? "all" : "online"}
             devices={devices}
             terminalAddresses={terminalAddresses}
             terminalNames={terminalNames}
@@ -1023,6 +1038,7 @@ function TenantVideoSurveillancePage() {
 
               {/* Источник и профиль доступны до запуска в одной компактной строке. */}
               <VideoToolbar
+                cameraOnly={cameraOnly} settingsBusy={cameraSettingsBusy}
                 device={selectedDevice} name={terminalNames[selectedDevice.device_id]} address={terminalAddresses[selectedDevice.device_id]}
                 inventory={inventory} source={selectedSourceKey} profile={selectedProfile}
                 onSource={setSelectedSourceKey} onProfile={setSelectedProfile} loadingInventory={loadingInventory}
@@ -1050,7 +1066,7 @@ function TenantVideoSurveillancePage() {
                 streamStage={streamStage}
                 errorMessage={bannerError?.message}
                 isViewer={isViewer}
-                isCameraMode={isCameraMode}
+                isCameraMode={cameraOnly || isCameraMode}
                 streamMode={activeStream?.mode}
                 onRetryStream={isOperator ? handleOperatorStart : () => handleViewerConnect(selectedDevice.device_id)}
                 onRefreshTerminal={() => fetchDeviceInfo(selectedDevice.device_id, true)}
@@ -1065,12 +1081,17 @@ function TenantVideoSurveillancePage() {
                   busyOwner: rc.busyOwner,
                 }}
               />
-
+              {cameraOnly && isViewer && <Button disabled={cameraSettingsBusy || streamStage === "starting" || streamStage === "stopping"}
+                onClick={() => void (isSessionActive ? stopSession("viewer_stop") : handleViewerConnect(selectedDevice.device_id))}>
+                {isSessionActive ? "Остановить просмотр" : "Начать просмотр"}</Button>}
+              {cameraOnly && <CameraSettings key={selectedDevice.device_id} device={selectedDevice.device_id}
+                org={orgId} operator={isOperator} viewing={isSessionActive || streamStage === "starting" || streamStage === "stopping"}
+                onBusy={setCameraSettingsBusy} />}
             </>
           ) : (
             <Card style={{ textAlign: "center", padding: "64px 24px" }}>
               <Text type="secondary" style={{ fontSize: 15 }}>
-                Выберите терминал в списке для начала видеонаблюдения
+                {cameraOnly ? "Выберите камеру в списке" : "Выберите терминал в списке для начала видеонаблюдения"}
               </Text>
               <div style={{ marginTop: 16 }}><Button type="primary" icon={<UnorderedListOutlined />} onClick={() => setIsDeviceDrawerOpen(true)}>Выбрать терминал</Button></div>
             </Card>

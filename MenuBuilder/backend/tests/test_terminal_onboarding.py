@@ -333,6 +333,7 @@ class FakeIotClient(IotProvisioningClient):
         self.calls: list[DeviceProvisionRequest] = []
         self.mqtt_calls: list[tuple[int, str, int]] = []
         self.platforms: list[str | None] = []
+        self.cameras: list[str | None] = []
 
     async def get_device_online(
         self, *, device_id: int, sn: str, tenant_id: int
@@ -360,10 +361,17 @@ class FakeIotClient(IotProvisioningClient):
         )
 
     async def provision_mqtt_access(
-        self, *, device_id: int, sn: str, tenant_id: int, platform: str | None = None
+        self,
+        *,
+        device_id: int,
+        sn: str,
+        tenant_id: int,
+        platform: str | None = None,
+        camera: Any = None,
     ) -> None:
         self.mqtt_calls.append((device_id, sn, tenant_id))
         self.platforms.append(platform)
+        self.cameras.append(camera)
         if self.mqtt_should_fail:
             raise RuntimeError("RabbitMQ account unavailable")
 
@@ -841,6 +849,86 @@ def test_platform_enum_rejects_unsupported_values():
 
     with pytest.raises(ValidationError):
         TerminalOnboardRequest(sys="android")
+
+
+@pytest.mark.anyio
+async def test_openipc_profile_survives_failed_mqtt_and_replay():
+    from app.services.terminal_onboarding_service import TerminalOnboardRequest
+
+    db = MockInMemoryDb()
+    iot = FakeIotClient()
+    iot.mqtt_should_fail = True
+    pin = FakePinClient()
+    user = {"org_id": 1000, "role_id": 5, "sub": "owner"}
+    service = TerminalOnboardingService(cast(Any, db), iot_client=iot, pin_client=pin)
+    created = await service.onboard_terminal(
+        user=user, req=TerminalOnboardRequest(sys="esp32", camera="openipc")
+    )
+    assert created.readiness.iot == "failed"
+    assert created.camera == "openipc"
+    iot.mqtt_should_fail = False
+    restarted = TerminalOnboardingService(cast(Any, db), iot_client=iot, pin_client=pin)
+    retried = await restarted.retry_terminal_saga(
+        user=user, terminal_id=created.terminal_id
+    )
+    assert retried.readiness.iot == "ready"
+    assert retried.sys == "esp32" and retried.camera == "openipc"
+    assert iot.platforms == ["esp32", "esp32"]
+    assert iot.cameras == ["openipc", "openipc"]
+    assert len(db.terminals) == 1
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "camera,expected",
+    [("openipc", {"sys": "ESP32", "camera": "openipc"}), (None, {"sys": "esp32"})],
+)
+async def test_camera_provisioning_emits_exact_tags(monkeypatch, camera, expected):
+    import httpx
+
+    from app.services import terminal_onboarding_service as module
+
+    real_client = httpx.AsyncClient
+
+    def handler(request):
+        payload = json.loads(request.content)
+        assert payload["tags"] == {"source": "etranprocessing", **expected}
+        return httpx.Response(
+            200,
+            json={
+                "success": True,
+                "device_id": 1000007,
+                "sn": "fixture",
+                "org_id": 1000,
+                "rmq_user_status": "ok",
+            },
+        )
+
+    monkeypatch.setattr(
+        module.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_client(transport=httpx.MockTransport(handler)),
+    )
+    await IotProvisioningClient(base_url="http://localhost").provision_mqtt_access(
+        device_id=1000007, sn="fixture", tenant_id=1000, platform="esp32", camera=camera
+    )
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"camera": "openipc"},
+        {"sys": "linux", "camera": "openipc"},
+        {"sys": "esp32", "camera": "other"},
+    ],
+)
+def test_camera_requires_supported_platform_and_driver(payload):
+    from pydantic import ValidationError
+
+    from app.services.terminal_onboarding_service import TerminalOnboardRequest
+
+    with pytest.raises(ValidationError):
+        TerminalOnboardRequest.model_validate(payload)
 
 
 @pytest.mark.anyio

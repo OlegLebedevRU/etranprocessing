@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { terminalKindOptions, terminalKindPayload } from "../../utils/terminalKinds";
 import {
   Alert,
   Button,
@@ -159,7 +160,7 @@ function TenantTerminalsSettingsPage() {
       const res = await onboardTerminal(
         {
           name: values.name?.trim() || undefined,
-          sys: values.sys || "windows",
+          ...terminalKindPayload(values.sys || "windows"),
           address: values.address?.trim() || undefined,
           note: values.note?.trim() || undefined,
           timezone: values.timezone || "Europe/Moscow",
@@ -555,7 +556,7 @@ function TenantTerminalsSettingsPage() {
           onFinish={handleOnboardSubmit}
         >
           <Form.Item name="sys" label="Тип терминала" initialValue="windows" rules={[{ required: true, message: "Выберите тип терминала" }]}>
-              <Select options={[{ value: "windows", label: "Windows" }, { value: "linux", label: "Linux" }, { value: "esp32", label: "ESP32" }]} />
+              <Select options={terminalKindOptions} />
             </Form.Item>
             <Form.Item
             name="name"

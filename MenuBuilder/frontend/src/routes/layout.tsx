@@ -151,6 +151,11 @@ export default function AppLayout() {
   }
 
   navItems = navItems.filter(item => item.key !== "monitoring" || hasPermission(currentUser, PERMISSION_MONITORING_VIEW));
+  if (hasPermission(currentUser, PERMISSION_VIDEO_VIEW)) {
+    const index = navItems.findIndex(item => item.key === "video");
+    navItems.splice(index < 0 ? navItems.length : index + 1, 0,
+      { key: "cameras", icon: <VideoCameraOutlined />, label: "Камеры" });
+  }
   const defaultSegment = navProfile === "l4desk" ? (isRole4 ? "video" : "terminals") : (isPlatformMode ? "admin" : "monitoring");
   const rawSegment = location.pathname.split("/")[1];
   const segment = rawSegment || defaultSegment;
