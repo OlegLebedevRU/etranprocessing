@@ -83,9 +83,7 @@ def publish_static(source, destination):
         raise ValueError("Incomplete frontend artifact")
     if any(path.is_symlink() for path in files):
         raise ValueError("Symlinks are not allowed in the frontend artifact")
-    for path in sorted(
-        files, key=lambda item: item.relative_to(source).as_posix() == "index.html"
-    ):
+    for path in sorted(files, key=lambda item: item.relative_to(source).as_posix() == "index.html"):
         target = destination / path.relative_to(source)
         if path.is_dir():
             target.mkdir(parents=True, exist_ok=True)
@@ -98,8 +96,12 @@ def publish_static(source, destination):
 
 
 def health(component, container):
-    if component in {"processingbackend", "menubuilder-backend"}:
-        endpoint = "api/health" if component == "processingbackend" else "openapi.json"
+    if component in {"processingbackend", "menubuilder-backend", "jwt-issuer-signer"}:
+        endpoint = {
+            "processingbackend": "api/health",
+            "menubuilder-backend": "openapi.json",
+            "jwt-issuer-signer": "health",
+        }[component]
         docker(
             "exec",
             container,
@@ -143,9 +145,7 @@ def health(component, container):
             "r=urllib.request.urlopen('http://127.0.0.1:8000/docs', timeout=5); "
             "assert r.status == 200",
         )
-    state = json.loads(
-        docker("inspect", "--format", "{{json .State}}", container, capture=True)
-    )
+    state = json.loads(docker("inspect", "--format", "{{json .State}}", container, capture=True))
     if not state["Running"] or state.get("Restarting"):
         raise RuntimeError("Container is not running")
 
@@ -155,7 +155,7 @@ def wait_healthy(component, container):
         try:
             health(component, container)
             return
-        except (subprocess.CalledProcessError, RuntimeError):
+        except subprocess.CalledProcessError, RuntimeError:
             if attempt == 23:
                 raise
             time.sleep(5)
@@ -164,9 +164,7 @@ def wait_healthy(component, container):
 def deploy_service(component, image, revision):
     spec = DEPLOY_COMPONENTS[component]
     override = STATE / (spec["project"] + "-images.json")
-    previous = (
-        json.loads(override.read_text()) if override.exists() else {"services": {}}
-    )
+    previous = json.loads(override.read_text()) if override.exists() else {"services": {}}
     base = [
         "sudo",
         "-n",
@@ -177,15 +175,22 @@ def deploy_service(component, image, revision):
         "-f",
         spec["compose"],
     ]
-    container = run(*base, "ps", "-q", spec["service"], capture=True)
-    if not container or "\n" in container:
-        raise RuntimeError("Expected exactly one existing service container")
-    old_image = docker(
-        "inspect", "--format", "{{.Config.Image}}", container, capture=True
-    )
-    previous = update_override(previous, spec["service"], old_image)
+    services = [spec["service"]]
+    if (
+        component == "menubuilder-backend"
+        and "jwt-issuer-signer" in run(*base, "config", "--services", capture=True).splitlines()
+    ):
+        services.insert(0, "jwt-issuer-signer")
+    updated = copy.deepcopy(previous)
+    for service in services:
+        container = run(*base, "ps", "-q", service, capture=True)
+        if not container or "\n" in container:
+            raise RuntimeError("Expected exactly one existing service container")
+        old_image = docker("inspect", "--format", "{{.Config.Image}}", container, capture=True)
+        previous = update_override(previous, service, old_image)
+        updated = update_override(updated, service, image)
     candidate = STATE / (component + "-candidate.json")
-    atomic_json(candidate, update_override(previous, spec["service"], image))
+    atomic_json(candidate, updated)
     command = compose_command(component, candidate)
     run(*command, "config", "--quiet")
     if component == "l4media-nginx":
@@ -222,20 +227,20 @@ def deploy_service(component, image, revision):
             "--no-build",
             "--pull",
             "never",
-            spec["service"],
+            *services,
         )
-        container = run(*command, "ps", "-q", spec["service"], capture=True)
-        wait_healthy(component, container)
-        actual = docker("inspect", "--format", "{{.Image}}", container, capture=True)
-        expected = docker(
-            "image", "inspect", "--format", "{{.Id}}", image, capture=True
-        )
-        if actual != expected:
-            raise RuntimeError("Running image does not match the published digest")
+        expected = docker("image", "inspect", "--format", "{{.Id}}", image, capture=True)
+        for service in services:
+            container = run(*command, "ps", "-q", service, capture=True)
+            wait_healthy(
+                "jwt-issuer-signer" if service == "jwt-issuer-signer" else component, container
+            )
+            actual = docker("inspect", "--format", "{{.Image}}", container, capture=True)
+            if actual != expected:
+                raise RuntimeError("Running image does not match the published digest")
     except Exception:
         print(
-            "Deployment failed; restoring the previous service image "
-            "(no schema downgrade).",
+            "Deployment failed; restoring the previous service image (no schema downgrade).",
             flush=True,
         )
         atomic_json(candidate, previous)
@@ -247,12 +252,15 @@ def deploy_service(component, image, revision):
             "--no-build",
             "--pull",
             "never",
-            spec["service"],
+            *services,
         )
-        container = run(*command, "ps", "-q", spec["service"], capture=True)
-        wait_healthy(component, container)
+        for service in services:
+            container = run(*command, "ps", "-q", service, capture=True)
+            wait_healthy(
+                "jwt-issuer-signer" if service == "jwt-issuer-signer" else component, container
+            )
         raise
-    atomic_json(override, update_override(previous, spec["service"], image))
+    atomic_json(override, updated)
     atomic_json(STATE / (component + "-previous.json"), previous)
     print(f"Verified {component}: revision={revision} image={image}", flush=True)
 
@@ -262,8 +270,7 @@ def deploy_frontend(image, revision):
         docker("inspect", "--format", "{{json .Mounts}}", "nginx-default", capture=True)
     )
     if not any(
-        mount["Source"] == str(STATIC)
-        and mount["Destination"] == "/usr/share/nginx/html"
+        mount["Source"] == str(STATIC) and mount["Destination"] == "/usr/share/nginx/html"
         for mount in mounts
     ):
         raise RuntimeError("Unexpected frontend mount; refusing to change live files")
@@ -318,11 +325,7 @@ def preflight():
         if line.startswith("MemAvailable:")
     )
     disk = shutil.disk_usage("/")
-    if (
-        available <= 300 * 1024
-        or disk.used / disk.total >= 0.9
-        or os.getloadavg()[0] >= 2.0
-    ):
+    if available <= 300 * 1024 or disk.used / disk.total >= 0.9 or os.getloadavg()[0] >= 2.0:
         raise RuntimeError(
             "Production resource safety thresholds exceeded; no deployment performed"
         )
@@ -352,9 +355,7 @@ def main():
             capture=True,
         )
         if revision != args.revision:
-            raise RuntimeError(
-                "Image revision label does not match the workflow commit"
-            )
+            raise RuntimeError("Image revision label does not match the workflow commit")
         if args.component == "menubuilder-frontend":
             deploy_frontend(image, args.revision)
         else:

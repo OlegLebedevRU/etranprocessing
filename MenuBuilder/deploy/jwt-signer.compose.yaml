@@ -1,0 +1,42 @@
+services:
+  jwt-issuer-signer:
+    image: ${MENUBUILDER_BACKEND_IMAGE:?Set the verified MenuBuilder image with @sha256 digest}
+    user: "10001:10001"
+    command: ["uvicorn", "app.jwt_signer:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--no-access-log"]
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      JWT_SIGNER_PRIVATE_KEY_FILE: /run/secrets/jwt_signer_private.pem
+      PYTHONDONTWRITEBYTECODE: "1"
+    env_file:
+      - path: ${JWT_SIGNER_ENV_FILE:?Set the dedicated signer environment file}
+        format: raw
+    volumes:
+      - type: bind
+        source: ${JWT_SIGNER_PRIVATE_KEY_HOST_FILE:?Set the protected host private key path}
+        target: /run/secrets/jwt_signer_private.pem
+        read_only: true
+        bind:
+          create_host_path: false
+    networks: [jwt_signer]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  menubuilder-backend:
+    environment:
+      JWT_ISSUER_INTERNAL_URL: ${JWT_ISSUER_INTERNAL_URL:?Set the signer URL on the private Docker network}
+      JWT_ISSUER_FALLBACK_ENABLED: ${JWT_ISSUER_FALLBACK_ENABLED:-false}
+    networks: [default, jwt_signer]
+    depends_on:
+      jwt-issuer-signer:
+        condition: service_healthy
+
+networks:
+  default: {}
+  jwt_signer:
+    internal: true

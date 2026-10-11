@@ -16,6 +16,7 @@ from app.config import settings
 from app.database import async_session
 from app.models import Org, Terminal
 from app.services.jwt_issuer import jwt_issuer_client
+from app.services.smartcaptcha import captcha_config as public_captcha_config
 from app.services.smartcaptcha import verify_captcha
 from app.user_store import get_user_store
 
@@ -150,13 +151,9 @@ def _set_auth_cookies(
 
 
 @router.get("/captcha")
-async def captcha_config():
-    return {
-        "enabled": settings.smartcaptcha_enabled,
-        "site_key": settings.smartcaptcha_site_key
-        if settings.smartcaptcha_enabled
-        else "",
-    }
+async def captcha_config(response: Response):
+    response.headers["Cache-Control"] = "no-store"
+    return public_captcha_config()
 
 
 @router.post("/login", response_model=TokenResponse)

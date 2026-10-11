@@ -15,7 +15,7 @@ from typing import Any
 
 import httpx
 from fastapi import HTTPException, status
-from jose import jwt
+from jose import JWTError, jwt
 
 from app.config import settings
 
@@ -52,7 +52,7 @@ ISSUER_V2_ACCESS_CLAIMS: frozenset[str] = frozenset(
 
 
 class JwtIssuerClient:
-    """Client for external RS256 JWT Issuer hosted on Yandex Cloud Function."""
+    """Client for the internal RS256 signer and optional serverless reserve."""
 
     def __init__(
         self,
@@ -67,7 +67,7 @@ class JwtIssuerClient:
         self._aud = settings.jwt_issuer_aud
         self._iss = settings.jwt_issuer_iss
         self._kid = settings.jwt_issuer_kid
-        self._inflight: dict[tuple[int, int], asyncio.Future[dict[str, Any]]] = {}
+        self._inflight: dict[tuple[Any, ...], asyncio.Future[dict[str, Any]]] = {}
         self._token_cache: dict[tuple[int, int, Any], tuple[dict[str, Any], float]] = {}
 
     def invalidate_cache_for_user(self, user_id: int) -> None:
@@ -78,7 +78,9 @@ class JwtIssuerClient:
 
     @property
     def url(self) -> str:
-        return self._url if self._url is not None else settings.jwt_issuer_url
+        if self._url is not None:
+            return self._url
+        return settings.jwt_issuer_internal_url or settings.jwt_issuer_url
 
     @url.setter
     def url(self, value: str) -> None:
@@ -86,11 +88,11 @@ class JwtIssuerClient:
 
     @property
     def secret(self) -> str:
-        return (
-            self._secret
-            if self._secret is not None
-            else settings.service_to_yc_service_secret
-        )
+        if self._secret is not None:
+            return self._secret
+        if self._url is None and settings.jwt_issuer_internal_url:
+            return settings.jwt_issuer_internal_secret
+        return settings.service_to_yc_service_secret
 
     @secret.setter
     def secret(self, value: str) -> None:
@@ -290,7 +292,15 @@ class JwtIssuerClient:
         """Issue access and refresh tokens from external jwt-issuer or mock in test mode."""
         effective_org_id = org_id or 0
         cache_key = (user_id, effective_org_id, sid)
-        inflight_key = (user_id, effective_org_id)
+        inflight_key = (
+            user_id,
+            effective_org_id,
+            role_id,
+            username,
+            is_superuser,
+            sid,
+            orig_sub,
+        )
 
         # Optional token cache lookup (serve if > 10 min remaining)
         if settings.jwt_issuer_token_cache_enabled and cache_key in self._token_cache:
@@ -304,7 +314,11 @@ class JwtIssuerClient:
                 )
                 return cached_data
 
-        if self.mock_enabled or not self.secret:
+        if not self.mock_enabled and (
+            not self.secret or self.secret == "CHANGE_ME_SERVICE_TO_SERVICE_SECRET"
+        ):
+            raise HTTPException(503, "JWT issuer authentication is not configured")
+        if self.mock_enabled:
             logger.info(
                 "Using mock JWT issuer (url=%s, mock_enabled=%s, has_secret=%s) for user_id=%s org_id=%s role_id=%s sid=%s",
                 self.url,
@@ -422,10 +436,46 @@ class JwtIssuerClient:
         # Retryable gateway codes: 499/408 are client/timeouts on the serverless side
         # and are safe to retry while the shared HMAC payload stays valid.
         retryable_statuses = frozenset({408, 429, 499})
-        max_attempts = 2
+        targets = [self.url, self.url]
+        if (
+            self._url is None
+            and settings.jwt_issuer_internal_url
+            and settings.jwt_issuer_fallback_enabled
+            and settings.jwt_issuer_url
+            and settings.jwt_issuer_url != self.url
+        ):
+            targets.extend([settings.jwt_issuer_url, settings.jwt_issuer_url])
+        max_attempts = len(targets)
+        reserve_payload = None
         attempt = 0
         while attempt < max_attempts:
             attempt += 1
+            target = targets[attempt - 1]
+            if attempt > 2 and reserve_payload is None:
+                reserve_secret = (
+                    self._secret
+                    if self._secret is not None
+                    else settings.service_to_yc_service_secret
+                )
+                if (
+                    not reserve_secret
+                    or reserve_secret == "CHANGE_ME_SERVICE_TO_SERVICE_SECRET"
+                ):
+                    raise HTTPException(
+                        503, "JWT reserve authentication is not configured"
+                    )
+                reserve_params = dict(payload["params"])
+                signed = f"{reserve_params['timestamp']}.{reserve_params['nonce']}.{reserve_params['requestBody']}"
+                reserve_params["signature"] = "sha256=" + base64.b64encode(
+                    hmac.new(
+                        reserve_secret.encode(), signed.encode(), hashlib.sha256
+                    ).digest()
+                ).decode("ascii")
+                reserve_payload = {"params": reserve_params}
+            is_internal = (
+                bool(settings.jwt_issuer_internal_url)
+                and target == settings.jwt_issuer_internal_url
+            )
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 break
@@ -433,7 +483,12 @@ class JwtIssuerClient:
                 connect=min(
                     settings.jwt_issuer_connect_timeout_seconds, max(remaining, 0.1)
                 ),
-                read=min(settings.jwt_issuer_read_timeout_seconds, remaining),
+                read=min(
+                    settings.jwt_issuer_internal_timeout_seconds
+                    if is_internal
+                    else settings.jwt_issuer_read_timeout_seconds,
+                    remaining,
+                ),
                 write=min(
                     settings.jwt_issuer_connect_timeout_seconds, max(remaining, 0.1)
                 ),
@@ -443,17 +498,18 @@ class JwtIssuerClient:
             )
             try:
                 async with httpx.AsyncClient(timeout=per_attempt) as client:
-                    resp = await client.post(self.url, json=payload)
+                    resp = await client.post(
+                        target, json=reserve_payload if attempt > 2 else payload
+                    )
                     if (
                         resp.status_code >= 500
                         or resp.status_code in retryable_statuses
                     ):
                         logger.warning(
-                            "JWT issuer at %s returned HTTP %s on attempt %d: %s",
-                            self.url,
+                            "JWT issuer at %s returned HTTP %s on attempt %d",
+                            target,
                             resp.status_code,
                             attempt,
-                            resp.text,
                         )
                         if attempt < max_attempts and time.monotonic() + 0.2 < deadline:
                             await asyncio.sleep(0.2)
@@ -464,7 +520,7 @@ class JwtIssuerClient:
                             user_id,
                             org_id or 0,
                             took,
-                            self.url,
+                            target,
                         )
                         raise HTTPException(
                             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -472,10 +528,9 @@ class JwtIssuerClient:
                         )
                     if resp.status_code != 200:
                         logger.error(
-                            "JWT issuer at %s returned HTTP %s: %s",
-                            self.url,
+                            "JWT issuer at %s returned HTTP %s",
+                            target,
                             resp.status_code,
-                            resp.text,
                         )
                         took = time.monotonic() - start_time
                         logger.info(
@@ -483,13 +538,18 @@ class JwtIssuerClient:
                             user_id,
                             org_id or 0,
                             took,
-                            self.url,
+                            target,
                         )
                         raise HTTPException(
                             status_code=status.HTTP_502_BAD_GATEWAY,
                             detail=f"JWT issuer service error: HTTP {resp.status_code}",
                         )
-                    data = resp.json()
+                    try:
+                        data = resp.json()
+                    except ValueError as exc:
+                        raise HTTPException(
+                            502, "JWT issuer returned an invalid response"
+                        ) from exc
                     took = time.monotonic() - start_time
                     if (
                         isinstance(data, dict)
@@ -499,19 +559,28 @@ class JwtIssuerClient:
                         data = data["body"]
                     if isinstance(data, dict) and "error" in data:
                         logger.error(
-                            "JWT issuer at %s returned error for user_id=%s role_id=%s: %s",
-                            self.url,
+                            "JWT issuer at %s rejected request for user_id=%s role_id=%s",
+                            target,
                             user_id,
                             role_id,
-                            data["error"],
                         )
                         raise HTTPException(
                             status_code=status.HTTP_502_BAD_GATEWAY,
-                            detail=f"JWT issuer error: {data['error']}",
+                            detail="JWT issuer rejected the request",
+                        )
+                    if settings.jwt_issuer_internal_url:
+                        self._validate_issued_tokens(
+                            data,
+                            user_id,
+                            org_id,
+                            role_id,
+                            is_superuser,
+                            sid,
+                            orig_sub or username or None,
                         )
                     logger.info(
                         "JWT issuer at %s successfully issued tokens for user_id=%s org_id=%s took=%.2fs attempt=%d",
-                        self.url,
+                        target,
                         user_id,
                         org_id or 0,
                         took,
@@ -522,10 +591,10 @@ class JwtIssuerClient:
                 # Includes httpx.TimeoutException (connect/read/write/pool).
                 last_error = exc
                 logger.warning(
-                    "JWT issuer call to %s failed on attempt %d: %s",
-                    self.url,
+                    "JWT issuer call to %s failed on attempt %d (%s)",
+                    target,
                     attempt,
-                    exc,
+                    type(exc).__name__,
                 )
                 if attempt < max_attempts and time.monotonic() + 0.2 < deadline:
                     await asyncio.sleep(0.2)
@@ -555,6 +624,59 @@ class JwtIssuerClient:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="JWT issuer service is temporarily unavailable",
         ) from last_error
+
+    def _validate_issued_tokens(
+        self,
+        data: Any,
+        user_id: int,
+        org_id: int | None,
+        role_id: int,
+        is_superuser: bool,
+        sid: int | str | None,
+        orig_sub: str | None,
+    ) -> None:
+        """Never accept a reserve response signed by an obsolete key."""
+        try:
+            if (
+                not isinstance(data, dict)
+                or not isinstance(data.get("refreshToken"), str)
+                or not data["refreshToken"]
+            ):
+                raise ValueError("Invalid token pair")
+            claims = jwt.decode(
+                data["accessToken"],
+                settings.jwt_public_key,
+                algorithms=["RS256"],
+                audience=self.aud,
+                issuer=self.iss,
+                options={"require_exp": True, "require_iat": True, "require_nbf": True},
+            )
+            if not ISSUER_V2_ACCESS_MANDATORY_CLAIMS.issubset(claims):
+                raise ValueError("Incomplete issuer claims")
+            if (claims["userId"], claims["orgId"], claims["roleId"]) != (
+                user_id,
+                org_id or 0,
+                role_id,
+            ):
+                raise ValueError("Issuer identity mismatch")
+            if (claims["sub"], claims["org"], claims["role"]) != (
+                str(user_id),
+                str(org_id or 0),
+                str(role_id),
+            ):
+                raise ValueError("Issuer identity alias mismatch")
+            if (
+                claims["is_superuser"] is not is_superuser
+                or claims["is_imp"] is not bool(is_superuser and (org_id or 0) > 0)
+                or claims["token_type"] != "tenant"
+            ):
+                raise ValueError("Issuer privilege mismatch")
+            if claims.get("sid") != sid or claims.get("orig_sub") != orig_sub:
+                raise ValueError("Issuer session mismatch")
+        except (JWTError, ValueError, KeyError, TypeError) as exc:
+            raise HTTPException(
+                502, "JWT issuer returned an invalid token pair"
+            ) from exc
 
 
 jwt_issuer_client = JwtIssuerClient()

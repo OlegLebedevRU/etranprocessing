@@ -83,7 +83,7 @@ async def test_login_requires_captcha_before_credentials():
                 response = await client.post("/api/auth/login", **kwargs)
                 assert response.status_code == 400
             config = (await client.get("/api/auth/captcha")).json()
-            assert config == {"enabled": True, "site_key": "test-client-key"}
+            assert config == {"provider": "smartcaptcha", "enabled": True, "site_key": "test-client-key"}
             assert "test-server-key" not in str(config)
         store.assert_not_called()
 

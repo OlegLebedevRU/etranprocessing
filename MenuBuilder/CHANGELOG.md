@@ -4,7 +4,19 @@
 
 FM uses MQTT navigation and mandatory confirmed close only; legacy PB listing and optional unconfirmed close removed.
 
+### Added
+
+- CAPTCHA providers `smartcaptcha/native/off`: подписанный native challenge для login/register/resend, UI без Yandex в native-режиме; прежние настройки сохранены для отката.
+
+- Внутренний RS256 JWT issuer-signer с совместимым HMAC-контрактом MenuBuilder, отдельной приватной сетью, non-root процессом и read-only подключением закрытого ключа. Повторы запросов идемпотентны; timestamp, nonce, issuer context и TTL проверяются.
+
+### Changed
+
+- Публичный ключ JWT в MenuBuilder и nginx заменён на `lk-key-000003_public.pem`. Внутренний URL имеет приоритет; serverless-путь сохранён как выключенный резерв до проверки нового ключа. Ответы внутреннего issuer/резерва проверяются по RS256 и контексту пользователя/сессии.
+
 ### Fixed
+
+- Отсутствие service secret в production возвращает ошибку конфигурации вместо выдачи mock JWT; параллельные запросы разных сессий и ролей больше не объединяются в одну выдачу.
 
 - Вызов внешнего JWT issuer больше не обрывается на стороне serverless (HTTP 499) при медленном cold start или отмене login/refresh: read timeout 32 с (выше лимита Yandex 30 с), connect отдельно 3 с, общий бюджет 50 с; producer single-flight защищён от cancel вызывающего; HTTP 499/408/429 и таймауты httpx ретраятся.
 

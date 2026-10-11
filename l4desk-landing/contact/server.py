@@ -14,6 +14,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+import native_captcha
+
 LOGGER = logging.getLogger("contact")
 MAX_BODY = 16_384
 EMAIL_PATTERN = re.compile(
@@ -65,6 +67,8 @@ def validate_form(data: dict) -> dict[str, str]:
 
 class Relay:
     def __init__(self) -> None:
+        self.provider = os.environ.get("CAPTCHA_PROVIDER", "smartcaptcha")
+        self.native_secret = os.environ.get("CAPTCHA_NATIVE_SECRET", "")
         self.secret = os.environ.get("SMARTCAPTCHA_SERVER_KEY", "")
         self.gateway = os.environ.get("EMAIL_GATEWAY_URL", "").rstrip("/")
         self.owner = os.environ.get("CONTACT_OWNER_EMAIL", "")
@@ -75,12 +79,30 @@ class Relay:
     @property
     def configured(self) -> bool:
         return bool(
-            self.secret
+            (
+                (self.provider == "smartcaptcha" and self.secret)
+                or (self.provider == "native" and self.native_secret)
+                or self.provider == "off"
+            )
             and self.gateway.startswith("https://")
             and EMAIL_PATTERN.fullmatch(self.owner)
         )
 
     def captcha(self, token: str, ip: str) -> None:
+        if self.provider == "off":
+            return
+        if self.provider == "native":
+            try:
+                native_captcha.verify(self.native_secret, token)
+            except RuntimeError as exc:
+                raise ContactError(503, "Проверка CAPTCHA временно недоступна.") from exc
+            except ValueError as exc:
+                raise ContactError(
+                    400, "CAPTCHA не подтверждена. Пройдите проверку ещё раз."
+                ) from exc
+            return
+        if self.provider != "smartcaptcha":
+            raise ContactError(503, "Проверка CAPTCHA временно недоступна.")
         query = urlencode({"secret": self.secret, "token": token, "ip": ip})
         try:
             result = remote_json("https://smartcaptcha.yandexcloud.net/validate?" + query, 3)
@@ -207,7 +229,17 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(encoded)
 
     def do_GET(self) -> None:
-        if self.path == "/healthz":
+        if self.path == "/api/captcha/challenge":
+            try:
+                result = {"provider": self.relay.provider}
+                if self.relay.provider == "native":
+                    result["challenge"] = native_captcha.challenge(self.relay.native_secret)
+                elif self.relay.provider not in {"smartcaptcha", "off"}:
+                    raise RuntimeError("Invalid CAPTCHA provider")
+                self.reply(200, result)
+            except RuntimeError:
+                self.reply(503, {"message": "Проверка CAPTCHA временно недоступна."})
+        elif self.path == "/healthz":
             self.reply(200, {"ok": True, "configured": self.relay.configured})
         else:
             self.reply(404, {"ok": False})

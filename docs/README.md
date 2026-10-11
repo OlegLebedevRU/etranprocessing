@@ -9,6 +9,9 @@
 
 ## 1. Архитектура системы и модели данных
 
+- [CAPTCHA providers](menu_auth-captcha-providers.md) — native/SmartCaptcha/off, контракт и переключение.
+- [Внутренний JWT signer](menu_ops-jwt-issuer-signer.md) — ротация ключа, приватная сеть и резерв.
+
 Документы, фиксирующие базовые принципы построения системы, доменные модели, разграничение владения таблицами БД и безопасность:
 
 - **[`etran_arch-architecture-analysis.md`](etran_arch-architecture-analysis.md)** — Комплексный архитектурный анализ платформы: обзор доменов `ProcessingBackend` и `MenuBuilder`, потоки данных, контракты очередей и оценка рисков.

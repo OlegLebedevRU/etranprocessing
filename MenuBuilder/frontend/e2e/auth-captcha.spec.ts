@@ -1,5 +1,40 @@
 import { expect, test } from "@playwright/test";
 
+test("native login challenge resets after rejected credentials and does not load Yandex", async ({ page }) => {
+  let challenges = 0;
+  const requests: unknown[] = [];
+  let yandexRequests = 0;
+  await page.route("https://**yandex**/**", route => { yandexRequests++; return route.abort(); });
+  await page.route("**/api/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/api/auth/captcha") {
+      challenges++;
+      return route.fulfill({ json: { enabled: true, provider: "native", site_key: "", challenge: {
+        question: "3 + 5", token: `fixture-challenge-${challenges}.fixture-signature`, expires_at: Math.floor(Date.now()/1000)+600,
+      } } });
+    }
+    if (path === "/api/auth/login") {
+      requests.push(route.request().postDataJSON());
+      return route.fulfill({ status: 401, json: { detail: "Invalid credentials" } });
+    }
+    return route.fulfill({ status: 401, json: { detail: "Unauthorized" } });
+  });
+  await page.goto("/login");
+  await page.getByPlaceholder("Логин").fill("user@example.test");
+  await page.getByPlaceholder("Пароль", { exact: true }).fill("fixture-password");
+  const submit = page.getByRole("button", { name: "Войти", exact: true });
+  await expect(submit).toBeDisabled();
+  await page.getByLabel("Сколько будет 3 + 5?").fill("8");
+  await expect(submit).toBeEnabled();
+  await submit.click();
+  await expect(submit).toBeDisabled();
+  await expect(page.getByLabel("Сколько будет 3 + 5?")).toHaveValue("");
+  expect(requests).toHaveLength(1);
+  expect((requests[0] as { captcha_token: string }).captcha_token).toMatch(/fixture-challenge-\d+\.fixture-signature\.8/);
+  expect(challenges).toBeGreaterThan(1);
+  expect(yandexRequests).toBe(0);
+});
+
 test("login requires CAPTCHA and resets it after failed credentials", async ({ page }) => {
   const requests: unknown[] = [];
   await page.route("**/api/**", async route => {

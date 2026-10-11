@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Button, Spin } from "antd";
+import { Alert, Button, Input, Spin } from "antd";
 import { getCaptchaConfig } from "../api/auth";
 
 interface CaptchaApi {
@@ -40,16 +40,30 @@ export function AuthCaptcha({ onChange }: { onChange: (token: string | null) => 
   const container = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error" | "disabled">("loading");
   const [attempt, setAttempt] = useState(0);
+  const [native, setNative] = useState<{ question: string; token: string } | null>(null);
+  const [answer, setAnswer] = useState("");
   useEffect(() => {
     let cancelled = false;
     let cleanup: (() => void) | undefined;
     onChange(null);
     setStatus("loading");
+    setNative(null);
+    setAnswer("");
     void (async () => {
       try {
         const config = await getCaptchaConfig();
         if (cancelled) return;
         if (!config.enabled) { setStatus("disabled"); onChange(""); return; }
+        if (config.provider === "native") {
+          if (!config.challenge) throw new Error("CAPTCHA unconfigured");
+          setNative(config.challenge);
+          setStatus("ready");
+          const timer = window.setTimeout(() => {
+            if (!cancelled) { onChange(null); setNative(null); setStatus("error"); }
+          }, Math.max(0, config.challenge.expires_at * 1000 - Date.now()));
+          cleanup = () => window.clearTimeout(timer);
+          return;
+        }
         if (!config.site_key) throw new Error("CAPTCHA unconfigured");
         const api = await loadCaptcha();
         if (cancelled || !container.current) return;
@@ -70,7 +84,17 @@ export function AuthCaptcha({ onChange }: { onChange: (token: string | null) => 
     return () => { cancelled = true; cleanup?.(); };
   }, [onChange, attempt]);
   return <div style={{ marginBottom: 16 }}>
-    <div ref={container} style={{ display: status === "disabled" ? "none" : "block", minHeight: status === "disabled" ? 0 : 100 }} />
+    <div ref={container} style={{ display: status === "disabled" || native ? "none" : "block", minHeight: status === "disabled" || native ? 0 : 100 }} />
+    {native && <div>
+      <label htmlFor="native-captcha-answer">Сколько будет {native.question}?</label>
+      <Input id="native-captcha-answer" inputMode="numeric" autoComplete="off" maxLength={3} value={answer}
+        onChange={event => {
+          const value = event.target.value;
+          setAnswer(value);
+          onChange(/^[0-9]{1,3}$/.test(value) ? `${native.token}.${value}` : null);
+        }} />
+      <Button type="link" onClick={() => setAttempt(value => value + 1)}>Другой пример</Button>
+    </div>}
     {status === "loading" && <Spin size="small" tip="Загрузка CAPTCHA" />}
     {status === "error" && <Alert type="error" showIcon message="Не удалось загрузить CAPTCHA. Проверьте соединение и повторите."
       action={<Button size="small" onClick={() => setAttempt(value => value + 1)}>Повторить</Button>} />}

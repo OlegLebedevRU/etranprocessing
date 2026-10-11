@@ -114,3 +114,9 @@ AI PNG: 1 574 702 байта, 1672×941. WebP: 36 026 / 86 176 / 132 970 бай�
 Команды из каталога лендинга:
 `python -m unittest discover -s tests`, Ruff/Pyright для `contact/`.
 Обновление: `sudo docker compose up -d --build contact landing`.
+# Native CAPTCHA
+
+`CAPTCHA_PROVIDER=native` и серверный `CAPTCHA_NATIVE_SECRET` включают арифметический
+challenge через `/api/captcha/challenge`. UI не загружает Yandex; relay проверяет
+HMAC, срок и ответ до email. SmartCaptcha сохранена для отката. Контракт и
+ограничения: [CAPTCHA providers](../docs/menu_auth-captcha-providers.md).

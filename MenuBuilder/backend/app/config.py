@@ -1,21 +1,16 @@
 import json
 from contextlib import suppress
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
-DEFAULT_JWT_PUBLIC_KEY = """-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqX393A/1A+OW9ISPrWbK
-/qodWp7xMd0clA7VwGoOK6fW0Q0m7iwUoBk6PfyaUZPToIlMMn07x3OR3Idf9rdH
-ZBTxYaIVBOTAC3/a9uLMi/ElLf8u1xxNffByUEbWL6lMViQgoSkxh2zLckSyvsyH
-S2TMrSh4Lcq8d+QOVupgh/dOguLn8BXgVHgLtsrGJ7DqL78mwbJ6emp+LV+zeUot
-xT03UwxmgFKr1AZnRGZI1Zp/xEUSYc1hX9ZzrF01jiNi1ln3NNxTqCWxpnlICxhh
-QNF68AUG012qLnykaKak+9TclImCG+i+Giuj+Qc5B4j6J46kfLVZA/Ra64ugTbZy
-nQIDAQAB
------END PUBLIC KEY-----"""
+from app.jwt_public_key import DEFAULT_JWT_PUBLIC_KEY
 
 
 class Settings(BaseSettings):
+    captcha_provider: Literal["", "smartcaptcha", "native", "off"] = ""
+    captcha_native_secret: str = ""
     file_manager_pb_url: str = ""
     file_manager_service_key: str = ""
     database_url: str = ""
@@ -44,7 +39,11 @@ class Settings(BaseSettings):
             return bytes.fromhex(self.jwt_secret_hex)
         return b""
 
-    # External JWT Issuer (Yandex Cloud Function / API Gateway)
+    # Internal JWT signer; retain the external issuer as an optional reserve.
+    jwt_issuer_internal_url: str = ""
+    jwt_issuer_internal_secret: str = ""
+    jwt_issuer_internal_timeout_seconds: float = Field(default=3.0, gt=0)
+    jwt_issuer_fallback_enabled: bool = False
     jwt_issuer_url: str = (
         "https://d5ducjnc3s38o5qqk84q.apigw.yandexcloud.net/etranprocessing/jwt"
     )

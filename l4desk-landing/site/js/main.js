@@ -48,9 +48,38 @@
     let requestId = crypto.randomUUID();
     let submitted = false;
     let loadingCaptcha = false;
-    const loadCaptcha = () => {
+    let captchaProvider = null;
+    let nativeChallenge = null;
+    let nativeAnswer = null;
+    const captchaContainer = document.getElementById("captcha-container");
+    const loadCaptcha = async () => {
       if (loadingCaptcha) return;
       loadingCaptcha = true;
+      try {
+        const response = await fetch("/api/captcha/challenge", { cache: "no-store", signal: AbortSignal.timeout(10000) });
+        if (!response.ok) throw new Error("CAPTCHA unavailable");
+        const config = await response.json();
+        if (!["native", "smartcaptcha", "off"].includes(config.provider)) throw new Error("Invalid provider");
+        captchaProvider = config.provider;
+        if (captchaProvider === "off") { captchaContainer.hidden = true; return; }
+        if (captchaProvider === "native") {
+          if (!config.challenge) throw new Error("Missing challenge");
+          nativeChallenge = config.challenge;
+          captchaContainer.classList.remove("smart-captcha");
+          captchaContainer.style.height = "auto";
+          captchaContainer.replaceChildren();
+          const label = document.createElement("label");
+          label.textContent = `Сколько будет ${nativeChallenge.question}?`;
+          nativeAnswer = document.createElement("input");
+          nativeAnswer.type = "text"; nativeAnswer.inputMode = "numeric";
+          nativeAnswer.maxLength = 3; nativeAnswer.autocomplete = "off";
+          label.append(nativeAnswer);
+          const retry = document.createElement("button");
+          retry.type = "button"; retry.textContent = "Другой пример";
+          retry.onclick = () => { loadingCaptcha = false; void loadCaptcha(); };
+          captchaContainer.append(label, retry);
+          return;
+        }
       const script = document.createElement("script");
       script.src = "https://smartcaptcha.yandexcloud.net/captcha.js";
       script.defer = true;
@@ -58,6 +87,16 @@
         status.textContent = "CAPTCHA не загрузилась. Обновите страницу или напишите нам по email.";
       };
       document.head.append(script);
+      } catch {
+        captchaProvider = null;
+        loadingCaptcha = false;
+        status.textContent = "CAPTCHA не загрузилась. Повторите проверку или напишите нам по email.";
+        captchaContainer.replaceChildren();
+        const retry = document.createElement("button");
+        retry.type = "button"; retry.textContent = "Повторить CAPTCHA";
+        retry.onclick = () => { void loadCaptcha(); };
+        captchaContainer.append(retry);
+      }
     };
     if ("IntersectionObserver" in window) {
       const captchaObserver = new IntersectionObserver((entries) => {
@@ -78,7 +117,10 @@
       event.preventDefault();
       if (submitted || previewButton.disabled || !form.reportValidity()) return;
       const values = new FormData(form);
-      const token = window.smartCaptcha?.getResponse() || values.get("smart-token");
+      const answer = nativeAnswer?.value || "";
+      const token = captchaProvider === "off" ? "off" : captchaProvider === "native"
+        ? (nativeChallenge && nativeChallenge.expires_at * 1000 > Date.now() && /^[0-9]{1,3}$/.test(answer) ? `${nativeChallenge.token}.${answer}` : null)
+        : captchaProvider === "smartcaptcha" ? (window.smartCaptcha?.getResponse() || values.get("smart-token")) : null;
       if (!token) {
         loadCaptcha();
         status.textContent = "Пройдите проверку CAPTCHA перед отправкой.";
@@ -111,7 +153,8 @@
         form.removeAttribute("aria-busy");
         if (!submitted) {
           previewButton.disabled = false;
-          window.smartCaptcha?.reset();
+          if (captchaProvider === "native") { loadingCaptcha = false; void loadCaptcha(); }
+          else window.smartCaptcha?.reset();
         }
       }
     });

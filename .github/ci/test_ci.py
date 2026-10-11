@@ -20,9 +20,7 @@ class MatrixTests(unittest.TestCase):
     def test_independent_components(self):
         for name, spec in COMPONENTS.items():
             with self.subTest(name=name):
-                self.assertEqual(
-                    self.selected([spec["directory"] + "/Dockerfile"]), {name}
-                )
+                self.assertEqual(self.selected([spec["directory"] + "/Dockerfile"]), {name})
 
     def test_shared_selects_both_backends(self):
         self.assertEqual(
@@ -54,9 +52,7 @@ class MatrixTests(unittest.TestCase):
     def test_dispatch_and_bootstrap(self):
         self.assertEqual(self.selected(event="workflow_dispatch"), set(COMPONENTS))
         for name in COMPONENTS:
-            self.assertEqual(
-                self.selected(event="workflow_dispatch", component=name), {name}
-            )
+            self.assertEqual(self.selected(event="workflow_dispatch", component=name), {name})
         self.assertEqual(
             self.selected([".dockerignore"], bootstrap="menubuilder-backend"),
             {"menubuilder-backend"},
@@ -81,6 +77,48 @@ class MatrixTests(unittest.TestCase):
 
 
 class DeploymentTests(unittest.TestCase):
+    def test_menu_release_rolls_back_both_signer_and_backend(self):
+        import json
+
+        with tempfile.TemporaryDirectory() as tmp:
+            state = Path(tmp)
+            calls = []
+
+            def execute(*args, capture=False):
+                calls.append(args)
+                if args[-2:] == ("config", "--services"):
+                    return "menubuilder-backend\njwt-issuer-signer\nprocessing-backend"
+                return args[-1] if capture else ""
+
+            def inspect(*args, capture=False):
+                if "{{.Config.Image}}" in args:
+                    return "previous-" + args[-1]
+                return "image-id"
+
+            with (
+                patch.object(deploy, "STATE", state),
+                patch.object(deploy, "run", side_effect=execute),
+                patch.object(deploy, "docker", side_effect=inspect),
+                patch.object(
+                    deploy,
+                    "wait_healthy",
+                    side_effect=[None, RuntimeError("backend failed"), None, None],
+                ) as health,
+                self.assertRaisesRegex(RuntimeError, "backend failed"),
+            ):
+                deploy.deploy_service("menubuilder-backend", "candidate-image", "a" * 40)
+            previous = json.loads((state / "menubuilder-backend-candidate.json").read_text())
+            for service in ("jwt-issuer-signer", "menubuilder-backend"):
+                self.assertEqual(previous["services"][service]["image"], "previous-" + service)
+            for call in (call for call in calls if "up" in call):
+                self.assertEqual(call[-2:], ("jwt-issuer-signer", "menubuilder-backend"))
+                self.assertIn("--no-deps", call)
+            self.assertEqual(
+                [call.args[0] for call in health.call_args_list],
+                ["jwt-issuer-signer", "menubuilder-backend"] * 2,
+            )
+            self.assertFalse((state / "user1-images.json").exists())
+
     def test_external_owner_uses_same_digest_only_deployment(self):
         ref = image_reference("app1", "a" * 40, "sha256:" + "b" * 64)
         self.assertEqual(ref, "dev-leo4-ru.cr.cloud.ru/etran/app1@sha256:" + "b" * 64)
@@ -96,9 +134,7 @@ class DeploymentTests(unittest.TestCase):
         self.assertIn("8001/health", docker.call_args_list[0].args[-1])
 
     def test_processing_health_uses_api_prefix(self):
-        with patch.object(
-            deploy, "docker", return_value='{"Running": true}'
-        ) as command:
+        with patch.object(deploy, "docker", return_value='{"Running": true}') as command:
             deploy.health("processingbackend", "container")
         self.assertIn("/api/health", command.call_args_list[0].args[-1])
 
@@ -122,14 +158,10 @@ class DeploymentTests(unittest.TestCase):
                 ),
                 self.assertRaisesRegex(RuntimeError, "unhealthy"),
             ):
-                deploy.deploy_service(
-                    "menubuilder-backend", "candidate-image", "a" * 40
-                )
+                deploy.deploy_service("menubuilder-backend", "candidate-image", "a" * 40)
             import json
 
-            candidate = json.loads(
-                (state / "menubuilder-backend-candidate.json").read_text()
-            )
+            candidate = json.loads((state / "menubuilder-backend-candidate.json").read_text())
             self.assertEqual(
                 candidate["services"]["menubuilder-backend"]["image"], "previous-image"
             )

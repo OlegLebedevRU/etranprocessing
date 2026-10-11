@@ -128,8 +128,11 @@ export async function getRegistrationStatus(): Promise<RegistrationStatusRespons
   return data;
 }
 
-export async function getCaptchaConfig(): Promise<{ enabled: boolean; site_key: string }> {
-  const { data } = await client.get<{ enabled: boolean; site_key: string }>("/auth/captcha");
+export async function getCaptchaConfig() {
+  const { data } = await client.get<{
+    enabled: boolean; site_key: string; provider?: "native" | "smartcaptcha" | "off";
+    challenge?: { question: string; token: string; expires_at: number };
+  }>("/auth/captcha");
   return data;
 }
 
