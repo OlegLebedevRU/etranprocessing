@@ -40,7 +40,8 @@ Off/on/restart each returned200 plus matching gauge84. Restart task
 01168220-d0ea-49d2-8f0f-333c2e949d88 applied power.restart. Subsequent RPC160
 task3e129af6-c644-4771-a1e0-3aa574b3c868 returned ready with uptime59s and
 Majestic10s, confirming reboot. Original HD1280x720/15FPS/1024kbps and Day
-were preserved. Operator stream confirmation is pending; no five-minute run.
+were preserved. Operator explicitly confirmed "Есть" for the stream after
+restart; no five-minute run.
 4623 remains switch mode with no attached camera and received no power write.
 
 Only Compose's app1 digest and this handoff are changed in etranprocessing.
