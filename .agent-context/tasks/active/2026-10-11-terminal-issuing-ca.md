@@ -62,6 +62,7 @@
 - PR63 implemented the signer; PR64 fixed isolated preflight to use the file-owner UID/GID after dropping all Linux capabilities. Secret permissions were not broadened.
 - Four prior standard releases stopped on PostgreSQL connection reset/closed errors before PB recreation. Failures also occurred from the old image and production host; running/candidate DB settings matched. No Alembic bypass was used.
 - On resume, a fresh bounded DB probe immediately returned SELECT1 and schema032; the standard release then completed. No DB/network fix was applied by this task.
+- After deployment, an optional fresh DB connection for the773 baseline timed out during PostgreSQL SSL negotiation, before querying any terminal row. DB connectivity remains intermittent; serial baseline was not re-verified through this query. Local773 still has its previous root-issued certificate. Treat this as an open infrastructure issue during the pilot.
 
 ## Cleanup / shared workspace
 
