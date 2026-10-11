@@ -32,3 +32,17 @@
 - [ ] Login/refresh/tenant switch с approved short-lived credentials: credentials не предоставлены; JWT из production private key не создавались.
 - [ ] Реальная email доставка: не выполнялась; positive tests используют mocks.
 - Старые access JWT после смены ключа больше не принимаются; refresh sessions сохраняются. SmartCaptcha settings сохранены; переключение provider требует пересоздания backend/relay.
+
+## Cleanup после выпуска
+- Удалён task staging на обоих серверах; защищённые rollback backups и runtime secrets сохранены.
+- Основная рабочая main синхронизирована с опубликованным c856a96 после проверки всех37 task files по Git blob hashes; пользовательские untracked файлы сохранены.
+- Автоматическая проверка исполнения отклонила локальный Remove-Item как blocked by policy. Локальные временные каталоги и обе временные SSH-копии остались; исходные SSH-ключи не изменены.
+- Оператору удалить только следующие точные цели после проверки, что release checkouts чистые и их HEAD опубликован:
+  - `D:\.ssh\id_ed25519_codex_jwt_task`
+  - `D:\.ssh\free-tier-cloud_ru_codex_jwt_task`
+  - `D:\repo\platerra\Public\etranprocessing\.release-test-tmp\jwt-signer`
+  - `D:\repo\platerra\Public\etranprocessing\.release-test-tmp\etran-jwt-native-release`
+  - `D:\repo\platerra\Public\etranprocessing\.release-test-tmp\platerra-native`
+  - `D:\repo\platerra\Public\etranprocessing\MenuBuilder\backend\.pytest_tmp_jwt_signer`
+  - `D:\repo\platerra\Public\etranprocessing\MenuBuilder\backend\.pytest_tmp_jwt_signer_full`
+- Нельзя удалять общий .release-test-tmp или применять git clean: чужие временные/untracked материалы не входят в эту задачу. Старые pytest-каталоги также ограничены Windows ACL.
