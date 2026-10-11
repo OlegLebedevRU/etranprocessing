@@ -2,73 +2,71 @@
 
 ## Task intake / scope
 
-- Implement local terminal signer in PB under the existing offline root; preserve certificate consumers.
-- Owner: PB issuance, renewal, strict terminal SN/serial and migrations (no schema migration needed).
+- Owner: ProcessingBackend issuance/renewal and strict terminal SN/serial authentication; no schema changes.
 - Producer → consumer: PB signer → PKCS#7/PFX → Windows Store → HTTP ingress/PB and RabbitMQ.
-- Boundaries: PB code/config, deployment distribution and certificate docs. No native client/MQTT client implementation or legacy code. Production rollout is explicitly authorized.
-- Invariants: root unchanged/offline target, optional_no_ca intentional, unchanged PIN/idempotency/serial ownership; no root key in PB, no secrets in Git/build; old and new paths accepted.
-- Release checkout is based on current origin/main `4b413ed`; concurrent Compose changes are preserved.
-- [MCP Ops Readiness: UNAVAILABLE]: no callable Ops tools; SSH read-only fallback resource check passed (RAM available about 2030 MiB, root 57%, load 0.05).
+- Authorized scope: implementation, main publication, standard builder release, private issuer provisioning and rollout of ProcessingBackend only. Terminal773 renewal is initiated by the user through MenuBuilder.
+- Invariants: existing root trust anchor, intentional optional_no_ca, unchanged PIN/idempotency/serial ownership; no root key in PB, no secrets in Git/build; old and new certificate paths accepted.
+- No native/MQTT client implementation, legacy edits, RabbitMQ changes or app1 deployment.
+- [MCP Ops Readiness: UNAVAILABLE]: no callable Ops tools. SSH fallback preflight passed: available RAM1900 MiB, root58%, load0.14.
+
+## Production release — verified 2026-10-11 19:04 UTC
+
+- Accepted source: main `ba63536b3e6e43d85d7d71ab0f8fe2b028eaade4`.
+- Standard builder → registry → production release succeeded; builder journal/checkpoint and production release record agree.
+- Image: `dev-leo4-ru.cr.cloud.ru/etran/processingbackend@sha256:2b58d28d6bdc251df0c547cecd340db5ae1111d5047b127bafc31971ea0c726d`.
+- Running PB container: `44ba94a5b40b` (previous `c9cd9e3c944e`). Runtime image/digest and OCI revision label checked.
+- Standard Alembic upgrade passed; schema remains032. No migration, DB credential or network configuration was changed.
+- Runtime check: `CA_SIGNER_BACKEND=local`, RSA4096 issuing key decrypts and matches the packaged public certificate; pinned root and issuer fingerprints match. This check did not issue a certificate.
+- HTTP health200 after startup; release health briefly retried while Uvicorn was starting.
+- Secrets mount is read-only. Host directory0700, encrypted key/password files0600. Password/key never entered Git, image, builder or command arguments.
+- Verified digest persisted in production base Compose and single-service override. Repository Compose is pinned to the same digest.
+- All neighbor container IDs stayed unchanged during this resumed release, including RabbitMQ, MenuBuilder, app1 and both Nginx containers. Earlier independent app1 work was confirmed by the user.
 
 ## Implemented
 
-- Encrypted RSA issuer loader with password-file support for the operator's named dotenv format, key match and pinned hierarchy validation at startup.
-- Explicit local/external selection, threaded local signing, no failure fallback.
-- Exact observed terminal 773 leaf profile; notBefore minus one day, expiry capped by CA lifetime, 40-digit positive serial.
-- Pinned new-issuer validation before strict DB auth; old root leaves and scoped ListMenuFile Authorization remain supported.
+- Encrypted RSA issuer loader with the operator's named dotenv password format, key match and pinned hierarchy validation at startup.
+- Explicit local/external selection; threaded local signing; no failure fallback. External remains the application compatibility default, while production explicitly selects local.
+- Exact observed terminal773 leaf profile; notBefore minus one day, expiry capped by CA lifetime, positive159-bit serial with40 hex digits.
+- Pinned new-issuer validation before strict DB authentication; old root leaves and endpoint-scoped ListMenuFile Authorization remain supported.
 - Complete multi-cert PKCS#7/PFX; canonical DER CertificateSet ordering.
-- Read-only secrets mounts and local signer environment in deployment Compose; secret exclusions in Git/Docker.
-- Reviewed installer and SSH stdin delivery scripts; dry-run default and conflicting-key overwrite refusal.
-
-## Contracts
-
-| Contract | Producer | Consumer | Compatibility |
-|---|---|---|---|
-| Setup/renew XML PKCS#7 | PB | Windows installer | Same XML; intermediate added; actual terminal install pending |
-| PFX chain | PB companion | Windows/PFX consumer | All chain certificates included; actual consumer install pending |
-| SN/serial auth | ingress/PB | PB handlers | New issuer uses strict branch, old root/legacy retained |
-| ListMenuFile Authorization | existing terminal consumer | PB | Existing endpoint-only exception preserved with new-chain verification |
-| Certificate CN login | terminal TLS | RabbitMQ MQTT | CN preserved, CA PKIX path verified; new-leaf handshake/CONNECT/ACL pending |
-
-MQTT schemas, QoS/retain, presence and topic ownership are unchanged. TLS exchange
-has no application ACK; a successful CA-path check does not establish MQTT authorization.
+- Git/Docker secret exclusions, reviewed private SSH-stdin delivery and provisioning scripts.
 
 ## Verification evidence
 
-- Operator-provided RSA4096 encrypted issuing key decrypted successfully and matches packaged public issuer.
 - Root SHA256: `47614a31ba32cda8e389ade576db2878c4a7cb8e09ac4f4d1e8774d629aa9d25`.
 - Issuer SHA256: `8d98c82fa2a3497e072dbb018afb0109615cbf90df7597c55485017250bff08d`.
-- Real local terminal 773 certificate thumbprint `311F02628A6088FAC5D7A7FAFF2D056C48FEFC02`: ordered Subject and all four extensions exactly equal to fixture-root local signer output; both validity intervals 366 days for 365-day issuance.
-- Production RabbitMQ read-only: version4.3.5/OTP27.3.4.17, verify_peer/required client cert, CN login, internal auth backend, same root. Erlang PKIX returned `issuer_chain_valid` for the new issuer against the broker root.
-- PB full suite: 309 passed, 1 skipped (existing), 20 existing FastAPI/mock warnings. New tests use isolated roots and encrypted fixture issuer keys, not production credentials.
-- Focused CA + installer suite: 38 passed; Ruff/Pyright passed for app and new code before final documentation edits.
-- Initial pytest temp setup failed on pre-existing Windows `.pytest_tmp` permissions; rerun used task-owned fresh temp dirs. No tests were excluded.
+- Real local773 certificate thumbprint `311F02628A6088FAC5D7A7FAFF2D056C48FEFC02`: ordered Subject and all four extensions exactly equal to fixture-root local signer output. Normal365-day issuance produces366-day leaf validity because notBefore is backdated one day.
+- PB full suite:309 passed,1 existing skip,20 existing FastAPI/mock warnings. Ruff, format and Pyright passed, including on the standard Linux builder.
+- Focused CA/deployment suite:38 passed; release CI suite:34 passed.
+- Production RabbitMQ read-only inspection:4.3.5/OTP27.3.4.17; verify_peer, required client certificate, CN login, internal auth backend and unchanged root. Broker-side Erlang PKIX accepted the issuing certificate against that root.
+- CA-path verification does not establish a new-leaf TLS handshake, Windows intermediate installation, MQTT CONNECT or topic authorization.
+- No real issuer-signed pilot certificate was generated outside the enrollment/renewal flow; no773 private key was exported or changed.
 
-## Pending / release gates
+## Pending terminal pilot / final cutover
 
-- Production build and pull completed; image-only signer preflight passed with real encrypted key. Rollout remains pending: four standard release attempts stopped at Alembic before replacing ProcessingBackend.
-- New leaf through Windows Store/Schannel to fresh RabbitMQ TLS + MQTT authorization: not performed.
-- Real authenticated enrollment/renewal of a dedicated pilot and repeat/recovery: not performed.
-- Cloud function shutdown and deletion of its root key: not performed; needs cloud-owner path and checks for remaining external consumers.
-- User explicitly confirmed publication to main, build on the standard builder, issuer-secret installation and rollout of ProcessingBackend only. Terminal 773 renewal remains operator-owned.
-- After any new leaf is issued, rollback must keep issuer-chain-aware verifier. Do not revert to pre-migration image.
+| Contract | Verified | Pending |
+|---|---|---|
+| Setup/renew XML PKCS#7 and PFX | Unit tests preserve profile and full chain | User-triggered773 renewal and Windows installation |
+| SN/serial authentication | Root/issuer and negative binding tests | Renewed773 authenticated HTTPS traffic |
+| ListMenuFile Authorization | Existing endpoint-only exception retained in tests | Actual consumer behavior after renewal |
+| RabbitMQ CN login | Existing root/runtime policy and intermediate PKIX | Fresh leaf+intermediate TLS, MQTT CONNECT and authorized/forbidden topics |
+| Recovery/idempotency | Existing issuance/renewal tests pass | Real same-CSR recovery/repeat if needed during pilot |
 
-## Cleanup
+- User can now initiate773 certificate auto-renew through MenuBuilder. Observe Subject/SAN/KU/EKU, issuer, one-day notBefore, new DB serial, full Windows chain, HTTPS and a fresh RabbitMQ connection.
+- Do not impersonate active MQTT client IDs or publish presence during observation. MQTT schemas/QoS/retain/topic ownership are unchanged.
+- After new-branch issuance, any rollback must retain the issuer-chain-aware verifier. Do not restore the pre-migration image.
+- Cloud function shutdown/deletion of its root key remains unperformed. It needs the cloud-owner path and checks for remaining external consumers; root must not be declared fully offline until that cutover is complete.
 
-- Only public 773 DER was exported for transient profile comparison; its private key was never exported or modified.
-- Original operator CA material and password files remain untouched and ignored as appropriate.
-- Remote production issuer secrets are installed (directory0700, files0600, read-only mount); local originals are untouched. No test identities were created. Automatic review rejected local test-directory cleanup with "blocked by policy"; synthetic PKI temp directories/public DER remain.
-- Production Compose received only PB local-signer settings and the secrets mount, with a0600 backup. RabbitMQ config/permissions and terminal certificate store are unchanged.
+## Earlier failed attempts / resolution
 
-## Authorized release progress / external blocker
+- PR63 implemented the signer; PR64 fixed isolated preflight to use the file-owner UID/GID after dropping all Linux capabilities. Secret permissions were not broadened.
+- Four prior standard releases stopped on PostgreSQL connection reset/closed errors before PB recreation. Failures also occurred from the old image and production host; running/candidate DB settings matched. No Alembic bypass was used.
+- On resume, a fresh bounded DB probe immediately returned SELECT1 and schema032; the standard release then completed. No DB/network fix was applied by this task.
 
-- Implementation PR63 and preflight UID/GID fix PR64 are merged to main.
-- Latest tested release source: `756f04e2f6363b0aab1089ab848e07557cc57c18`; concurrent PR65 changed only unrelated release documentation and app1 Compose digest. PB/shared/CI source is unchanged versus `15a4833b2fa2ae7397abcf0a76e0e5a1892a281b`.
-- Latest published/pulled PB artifact: `sha256:481f2c29df6d8d04004288370b077f4224ecd657181cccc7372af92d38c6b5ea`. Earlier key/image preflight artifact: `sha256:935427bf0fe2ad209725e73c0ce15b324683be8b9fd23b75834cea7366e42019`.
-- Isolated preflight initially could not read user1-owned0600 secrets because all capabilities were dropped; fixed by explicitly using file-owner UID/GID. No secret permissions were broadened.
-- Deployment failed before container recreation on PostgreSQL connection reset/connection closed. Reproduced with new and old images and from the production host itself (TCP and PostgreSQL SSLRequest accepted; TLS handshake timed out/reset). Some read-only queries eventually succeeded; schema remained032. Running/candidate database URL components are identical; no credential values were printed.
-- Existing PB container remains `c9cd9e3c944e`, image `sha256:a1e3b4970a2bee9f59b3a6700e69e7b9bad6ae1d8a5f1e54dd92270551918ab7`, HTTP health200. No image pin/checkpoint was advanced after failure. Do not start terminal773 renewal as the new-issuer pilot until rollout is verified.
-- RabbitMQ, MenuBuilder, Nginx and other observed neighbors retained container IDs. app1 independently changed from `34b3cd1b52ac` to `23cf41dcbb78`; user confirmed parallel app1 work. This task did not deploy app1.
-- Task-owned remote public installer files were removed by delivery wrapper. Diagnostic containers exited; no diagnostic Python process remains in PB.
-- Resume via the authorized standard component launcher after PostgreSQL connectivity stabilizes. Verify local startup/key load, revision/digest, HTTP health and old-terminal behavior, then let the user initiate773 auto-renew in MenuBuilder.- Final read-only `alembic current` eventually succeeded with `032 (head)`. The fourth standard release still failed with `asyncpg.exceptions.ConnectionDoesNotExistError: connection was closed in the middle of operation` before replacing the container. No Alembic bypass or database/network configuration change was made.
-- Shared local checkout is synchronized to accepted main; all four unrelated user-untracked paths are preserved. A task-labeled stash retains the already published implementation snapshot; release worktree is retained for resumption.
+## Cleanup / shared workspace
+
+- Local operator CA material and password files are untouched and ignored as appropriate.
+- Task-owned remote public installer/pinning scripts were removed; diagnostic containers exited and no diagnostic process remains in PB.
+- Automatic review rejected local synthetic PKI/test-directory/public-DER cleanup with `blocked by policy`; these temporary files remain. No deletion workaround was attempted.
+- Shared checkout was synchronized to accepted main; all four unrelated user-untracked paths were preserved.
+- A task-labeled stash retains the already published implementation snapshot; the clean release worktree remains available for the773 pilot follow-up.

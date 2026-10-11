@@ -1,9 +1,10 @@
 # ProcessingBackend
 
-## 2026-10-11: Terminal Issuing CA — local implementation, not released
+## 2026-10-11: Terminal Issuing CA — production deployed, terminal pilot pending
 
-Local signer and pinned root→issuer verification added; external remains the
-application default until explicit provisioning. Runtime key/password are
+Local signer and pinned root→issuer verification deployed from main `ba63536`.
+Production explicitly uses local; the application compatibility default is external.
+Runtime key/password are
 read-only secrets; root private key never enters PB. Old root-issued leaves and
 strict SN/serial remain compatible; issuer branch cannot take legacy OU auto-bind.
 Full PKCS#7/PFX chain, exact observed 773 Subject/KU/EKU/SAN profile and notBefore
