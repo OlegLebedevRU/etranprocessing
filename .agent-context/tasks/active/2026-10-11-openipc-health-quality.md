@@ -29,3 +29,21 @@ or physical filter movement; record the user's observations separately.
 Preserve4619 isolated camera networking and4623 switch mode. Do not clear
 another owner's lease. Before presets/filter writes, confirm no active stream;
 busy rejection is deliberate. No timed browser run is authorized for this pass.
+
+## External database blocker after staging
+
+Siplite PR38 merged master13221f79cd65bf0fa1e45fd74915634f968793d3;
+0017 BIN1230288/ELF13141628 bytes, SHA256
+961765a06168dd2b75dbd575208f57d3b0471447d46e54df11b7527c8975ce21.
+Host C tests/full ccache build passed; staged HTTP download matched the hash.
+No OTA task was submitted: the initial event API read timed out before POST.
+Subsequent event reads returned500. App1's startup HTTP check passed, but live
+RPC/database acceptance has not passed. Managed PostgreSQL10.0.0.7:5432
+responded to TCP/SSL; SQL sessions timed out/reset, with app1
+ConnectionResetError/ProtocolViolationError. The operator confirmed concurrent
+ProcessingBackend work and probable DB faults; causation is unproven.
+
+Resume after database recovery with the existing0017 artifact, prove both
+OTA_OK→HELLO, then RPC163/gauge84 and explicit operator video/filter acceptance.
+All physical/runtime results remain pending. Do not mark the firmware deployed
+or restart shared infrastructure merely because `/docs` is healthy.
