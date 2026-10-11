@@ -18,7 +18,7 @@
   through standard builder/registry route; no five-minute video run.
 
 ## Status
-Implementation complete; runtime release and panel acceptance pending.
+Implementation merged and released; final player copy correction pending release.
 
 ## Local validation
 - MenuBuilder backend: 773 passed, 22 skipped; Ruff and Pyright app passed.
@@ -33,3 +33,31 @@ Implementation complete; runtime release and panel acceptance pending.
 - Cleanup: automatic review rejected recursive removal of the verified owned
   backend/.pytest_tmp directory (`blocked by policy`, no detailed reason).
   It is untracked and excluded from commits/releases; user checkout untouched.
+
+## Merge and runtime
+- PR73 merged to main:74253e4339447e3cde4c8abd606152f4ac34ecfe.
+- Installed beta launcher built/tested/published/pulled this exact revision.
+- Backend digest:sha256:477f4be2d7acd2f361948254ca59596997b9456212388c53612ee93364c2ee07;
+  MenuBuilder and its standard coupled JWT signer healthy on this image.
+- Initial frontend digest:sha256:41382b31449640333ce81b276a6016d00757cfe078b6d3a0f6747be1cd0b830c;
+  live artifact verified; nginx-default not restarted.
+- app1, ProcessingBackend, ingress, media-nginx, Janus, RabbitMQ, Redis and
+  l4mcp container IDs remained unchanged.
+
+## Live acceptance
+- Fresh approved cookie session, org1: camera4619 state200, terminal online,
+  OpenIPC ready, power on. Camera4623 API404 (no camera tag).
+- Live Edge browser: no POST on selection, no page errors. Refresh generated
+  one RPC160 POST and confirmed result plus gauge84:
+  task97a94760-5cf4-4724-bec6-68f5fb95774d,
+  snapshot58046967-d744-4ad6-80f9-96db34099fc9.
+- Operator answered «Есть» for stream4619 in the new Cameras section.
+- With their active lease, unchanged-HD write rejected409/camera_busy before
+  task creation; no settings altered and no session takeover.
+- Medium/HD, Day/Night and physical power behavior already accepted on0018;
+  this stage did not switch the filter or power, create production terminals,
+  change licenses/certificates/DB schema, or perform a five-minute video soak.
+- Visual inspection found a desktop source-selection hint in the camera player;
+  follow-up uses the actual «Начать просмотр» action; original video page retained.
+- Evidence kept locally in sip/build/acceptance/camera-panel-*.json/log/png;
+  credentials remain only in the user's ignored .env, never copied into Git.

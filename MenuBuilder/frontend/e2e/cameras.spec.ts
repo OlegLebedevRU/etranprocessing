@@ -55,6 +55,7 @@ test("camera list uses explicit tags, includes offline, and never starts on sele
 
 test("quality applies with revision and correlated result, without stream commands", async ({ page }) => {
   const posts = await cameraPortal(page);
+  await expect(page.getByText("Нажмите «Начать просмотр» над плеером.", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Medium", exact: true }).click();
   await expect(page.getByText("Настройки применены и подтверждены камерой", { exact: true })).toBeVisible();
   expect(posts).toHaveLength(1);

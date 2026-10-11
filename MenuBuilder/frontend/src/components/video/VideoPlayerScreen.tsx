@@ -28,6 +28,7 @@ export interface VideoPlayerScreenProps {
   errorMessage?: string | null;
   isViewer: boolean;
   isCameraMode: boolean;
+  cameraOnly?: boolean;
   streamMode?: string;
   onRetryStream?: () => void;
   onRefreshTerminal?: () => void;
@@ -57,6 +58,7 @@ export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
   errorMessage,
   isViewer,
   isCameraMode,
+  cameraOnly,
   streamMode,
   onRetryStream,
   onRefreshTerminal,
@@ -418,7 +420,9 @@ export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
             Трансляция не запущена
           </div>
           <div style={{ color: "rgba(255, 255, 255, 0.6)", fontSize: 13, maxWidth: 440 }}>
-            {isViewer
+            {cameraOnly
+              ? isViewer ? "Нажмите «Начать просмотр», чтобы подключиться к потоку, запущенному оператором." : "Нажмите «Начать просмотр» над плеером."
+              : isViewer
               ? "Ожидание запуска видеотрансляции оператором терминала."
               : "Выберите источник видео над плеером и нажмите «Запустить трансляцию»."}
           </div>
