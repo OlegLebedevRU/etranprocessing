@@ -292,6 +292,11 @@ function TenantVideoSurveillancePage() {
         await keepaliveControlLease(deviceId, leaseId);
       },
       onReleaseRequest: async (deviceId, leaseId) => {
+        try {
+          await stopDeviceStream(deviceId, leaseId);
+        } catch (err) {
+          console.warn("Video route stop failed", err);
+        }
         await releaseControlLease(deviceId, leaseId);
       },
       onScopeChangeRequest: async (deviceId, scope) => {
@@ -361,8 +366,23 @@ function TenantVideoSurveillancePage() {
 
   // Остановка текущей медиасессии
   const stopSession = useCallback(async (reason = "normal") => {
+    // A lease can exist before stream_start registers the coordinator session.
+    const pendingLease = leaseRef.current;
+    const coordinatedLeaseId = coordinatorRef.current.session?.leaseId;
     await rcRef.current.disable("session_stopped");
     await coordinatorRef.current.stopSession(reason);
+    if (pendingLease && pendingLease.id !== coordinatedLeaseId) {
+      try {
+        await stopDeviceStream(pendingLease.deviceId, pendingLease.id);
+      } catch (err) {
+        console.warn("Pending video route stop failed", err);
+      }
+      try {
+        await releaseControlLease(pendingLease.deviceId, pendingLease.id);
+      } catch (err) {
+        console.warn("Pending video lease release failed", err);
+      }
+    }
 
     if (statsTimerRef.current) {
       clearInterval(statsTimerRef.current);
@@ -459,7 +479,7 @@ function TenantVideoSurveillancePage() {
         }
 
         // Выбор источника по умолчанию
-        if (streamInfo?.source_id && streamInfo?.mode) {
+        if (streamInfo?.source_id && (streamInfo.mode === "desktop" || streamInfo.mode === "usb-camera")) {
           setSelectedSourceKey(`${streamInfo.mode}:${streamInfo.source_id}`);
         } else if (displays.length > 0) {
           const primary = displays.find((d: DisplaySource) => d.is_primary || d.primary) || displays[0];

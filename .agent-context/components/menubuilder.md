@@ -242,6 +242,10 @@ backend test05 зарегистрирован с `org_id=10000`, ролью вл
 - Watch сверено 2026-09-26 по provider contract `H-L4D-17C-VIDEO-WATCH-IOT-01-v1` и локальному коду app1; BFF/UI проверены локальными тестами и сборкой, browser E2E не выполнялся.
 - Обновить при: auth, routes/DTO, UI timers/state, billing или ownership.
 
+## siplite video compatibility (2026-10-11, deployed UI + live browser)
+- Video route ignores presence state `stopped` as a source mode, cleans pending startup leases, and stops media before coordinated release even if stop fails. Frozen API contracts are unchanged.
+- Frontend build and callback/lifecycle tests pass. Live 4619 on firmware 0010 passes five-minute 1280x720 browser acceptance with zero freezes/RTP loss; stop and route unmount release owned leases without HTTP/JS errors. Sustained capture has 3014 RTP packets and zero gaps. Device fixes include PSRAM camera RX/TLS allocation, complete-frame DMA buffers and RX scheduling; upstream contracts and UI release remain unchanged. Details: [handoff](../tasks/active/2026-10-11-siplite-video-control.md).
+
 ## Video page step 1 (2026-09-29, local code and mocked browser)
 - MenuBuilder frontend labels `low` as Medium and `default` as HD. The wire values and terminal rate policy are unchanged; neither label proves a WAN limit.
 - The video page collapses navigation on entry and frees viewport space after device selection. The player uses decoded `videoWidth`/`videoHeight` for aspect ratio and offers browser-only Fit / Native size. Native size is unavailable while remote input is active; the overlay refreshes its coordinate geometry when control activates.
