@@ -18,7 +18,7 @@
   through standard builder/registry route; no five-minute video run.
 
 ## Status
-Implementation merged and released; final player copy correction pending release.
+Completed: implementation and follow-up merged to main, runtime released and accepted.
 
 ## Local validation
 - MenuBuilder backend: 773 passed, 22 skipped; Ruff and Pyright app passed.
@@ -61,3 +61,14 @@ Implementation merged and released; final player copy correction pending release
   follow-up uses the actual «Начать просмотр» action; original video page retained.
 - Evidence kept locally in sip/build/acceptance/camera-panel-*.json/log/png;
   credentials remain only in the user's ignored .env, never copied into Git.
+
+## Final follow-up release
+- PR74 merged:6dc51929ddcf16ccd20360466801f27518797581; base Compose now pins
+  the verified backend digest above. Only the frontend was released again.
+- Final frontend digest:sha256:72e28fab504766b3355519eb6e87b47d5c21d00d923237ae82f01c28053fa21d.
+- Builder repeated93 unit tests and production build; local final9 browser
+  tests passed. Read-only live Edge check confirmed the correct viewing hint,
+  zero automatic POSTs, no page errors, and disabled HD during the active lease.
+- nginx-default and all neighboring services retained their IDs; MB and its
+  coupled signer retained their accepted backend image and healthy state.
+- No further firmware/OTA required for this MenuBuilder-only stage.
