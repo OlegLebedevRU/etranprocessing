@@ -1,0 +1,3 @@
+# Host launcher/deployer uses Ubuntu Python 3.12; application images use 3.14.
+extend = "../../pyproject.toml"
+target-version = "py312"

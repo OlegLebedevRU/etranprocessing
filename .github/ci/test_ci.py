@@ -1,11 +1,11 @@
+import ast
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from components import COMPONENTS, EXTERNAL_COMPONENTS, select_components
-
 import deploy
+from components import COMPONENTS, EXTERNAL_COMPONENTS, select_components
 from deploy import compose_command, image_reference, publish_static, update_override
 
 
@@ -77,6 +77,9 @@ class MatrixTests(unittest.TestCase):
 
 
 class DeploymentTests(unittest.TestCase):
+    def test_deployer_syntax_is_compatible_with_builder_python(self):
+        ast.parse(Path(deploy.__file__).read_text(), feature_version=(3, 12))
+
     def test_menu_release_rolls_back_both_signer_and_backend(self):
         import json
 
