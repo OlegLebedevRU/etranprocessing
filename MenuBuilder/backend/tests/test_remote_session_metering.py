@@ -276,6 +276,7 @@ async def test_due_video_keepalive_waits_for_agent_ack_before_checkpoint(monkeyp
             "stream_instance_id": "stream-42",
             "stream_state": "running",
             "terminal_healthy": True,
+            "expires_at": (now + timedelta(seconds=60)).isoformat(),
         }
     )
     renew = AsyncMock(return_value={"status": "ok"})
@@ -295,7 +296,12 @@ async def test_due_video_keepalive_waits_for_agent_ack_before_checkpoint(monkeyp
         db=SimpleNamespace(),
     )
     assert keepalive.await_args.kwargs["wait_ack"] is True
-    renew.assert_awaited_once_with(sn="test-sn")
+    renew.assert_awaited_once_with(
+        sn="test-sn",
+        lease_id="lease-42",
+        stream_instance_id="stream-42",
+        lease_expires_at=int((now + timedelta(seconds=60)).timestamp()),
+    )
     assert checkpoint.await_args.kwargs["provider_session_id"] == "stream-42"
 
 
@@ -318,6 +324,7 @@ async def test_unconfirmed_keepalive_does_not_charge(monkeypatch):
             "stream_instance_id": "stream-42",
             "stream_state": "running",
             "terminal_healthy": False,
+            "expires_at": (now + timedelta(seconds=60)).isoformat(),
         }
     )
     checkpoint = AsyncMock()

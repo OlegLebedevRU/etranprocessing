@@ -46,7 +46,11 @@ from app.security.permissions import (
     require_permission,
 )
 from app.services.iot_client import iot_client
-from app.services.media_orchestrator_client import media_orchestrator_client
+from app.services.media_orchestrator_client import (
+    MediaOrchestratorError,
+    media_lease_deadline,
+    media_orchestrator_client,
+)
 from app.services.remote_session_metering import (
     checkpoint_due,
     checkpoint_remote_session,
@@ -1293,7 +1297,12 @@ async def keepalive_device_control_lease(
             and active_session.provider_session_id
             == str(result.get("stream_instance_id") or "")
         ):
-            await media_orchestrator_client.renew_session(sn=terminal.sn)
+            await media_orchestrator_client.renew_session(
+                sn=terminal.sn,
+                lease_id=body.lease_id,
+                stream_instance_id=str(result.get("stream_instance_id") or "") or None,
+                lease_expires_at=media_lease_deadline(result.get("expires_at")),
+            )
         provider_id = (
             str(result.get("stream_instance_id") or "")
             if isinstance(active_session, L4DeskRemoteSession)
@@ -1314,6 +1323,11 @@ async def keepalive_device_control_lease(
                 at=confirmed_at,
             )
         return result
+    except MediaOrchestratorError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": "media_session_unavailable", "lease_id": body.lease_id},
+        ) from exc
     except HTTPException as exc:
         if exc.status_code == status.HTTP_404_NOT_FOUND:
             raise HTTPException(

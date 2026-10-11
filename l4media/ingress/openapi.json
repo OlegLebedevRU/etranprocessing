@@ -192,11 +192,17 @@
           "content": { "application/json": { "schema": {
             "type": "object",
             "required": ["sn"],
-            "properties": { "sn": { "type": "string" } }
+            "properties": {
+              "sn": { "type": "string" },
+              "lease_id": { "type": "string" },
+              "stream_instance_id": { "type": "string", "nullable": true },
+              "lease_expires_at": { "type": "integer", "description": "Authoritative app1 lease expiry, Unix seconds; requires a matching lease_id or stream_instance_id. Overrides media TTL, future deadline at most7200 seconds away." }
+            }
           } } }
         },
         "responses": {
           "200": { "description": "Active media watchdog renewed; returns session_id" },
+          "409": { "description": "Invalid lease deadline or session identity mismatch; no renewal" },
           "404": { "description": "No active media session for SN" }
         }
       }
@@ -217,11 +223,17 @@
           "content": { "application/json": { "schema": {
             "type": "object",
             "required": ["sn"],
-            "properties": { "sn": { "type": "string" } }
+            "properties": {
+              "sn": { "type": "string" },
+              "lease_id": { "type": "string" },
+              "stream_instance_id": { "type": "string", "nullable": true },
+              "lease_expires_at": { "type": "integer", "description": "Authoritative app1 lease expiry, Unix seconds; requires a matching lease_id or stream_instance_id. Overrides media TTL." }
+            }
           } } }
         },
         "responses": {
           "200": { "description": "Watchdog deadline renewed" },
+          "409": { "description": "Invalid lease deadline or session identity mismatch; no renewal" },
           "404": { "description": "Session absent, expired, or device mismatch" }
         }
       }
@@ -393,6 +405,10 @@
             "type": "integer",
             "default": 600,
             "description": "Session time-to-live in seconds before automated cleanup"
+          },
+          "lease_expires_at": {
+            "type": "integer",
+            "description": "Optional authoritative app1 lease expiry, Unix seconds. Overrides ttl_sec, without a minimum10-second extension. Must be in the future and at most7200 seconds away. Existing TTL/renewed_at persistence stores this deadline without a schema change."
           }
         }
       },

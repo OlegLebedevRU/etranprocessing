@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
@@ -806,6 +806,9 @@ async def test_legacy_video_session_endpoint_regression():
                 "lease": {
                     "active": True,
                     "lease_id": "legacy-lease-25",
+                    "expires_at": (
+                        datetime.now(UTC) + timedelta(seconds=60)
+                    ).isoformat(),
                     "owner_user_id": "user_1",
                     "scope": "stream",
                     "stream_instance_id": "stream-25",

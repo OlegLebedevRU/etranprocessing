@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import time
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -9,6 +11,20 @@ import httpx
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def media_lease_deadline(expires_at: Any) -> int:
+    """Use the provider's lease deadline, never a separate signaling timeout."""
+    try:
+        expiry = datetime.fromisoformat(expires_at)
+        if expiry.tzinfo is None:
+            raise ValueError("Missing timezone")
+        deadline = int(expiry.timestamp())
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise MediaOrchestratorError("Invalid lease deadline", status_code=409) from exc
+    if deadline <= time.time():
+        raise MediaOrchestratorError("Lease already expired", status_code=409)
+    return deadline
 
 
 class MediaOrchestratorError(Exception):
@@ -181,6 +197,7 @@ class MediaOrchestratorClient:
         rtp_port: int | None = None,
         rtcp_port: int | None = None,
         ttl_sec: int = 600,
+        lease_expires_at: int | None = None,
     ) -> dict[str, Any]:
         """Start or replay on-demand media session idempotently."""
         payload = {
@@ -196,6 +213,8 @@ class MediaOrchestratorClient:
             payload["rtp_port"] = rtp_port
         if rtcp_port is not None:
             payload["rtcp_port"] = rtcp_port
+        if lease_expires_at is not None:
+            payload["lease_expires_at"] = lease_expires_at
 
         return await self._send_request(
             method="POST",
@@ -210,12 +229,24 @@ class MediaOrchestratorClient:
             path=f"/api/v1/media/sessions/{session_id}",
         )
 
-    async def renew_session(self, sn: str) -> dict[str, Any]:
+    async def renew_session(
+        self,
+        sn: str,
+        *,
+        lease_id: str,
+        stream_instance_id: str | None,
+        lease_expires_at: int,
+    ) -> dict[str, Any]:
         """Refresh the media watchdog after a verified control lease keepalive."""
         return await self._send_request(
             method="POST",
             path="/api/v1/media/sessions/renew",
-            json_data={"sn": sn},
+            json_data={
+                "sn": sn,
+                "lease_id": lease_id,
+                "stream_instance_id": stream_instance_id,
+                "lease_expires_at": lease_expires_at,
+            },
         )
 
     async def stop_session(

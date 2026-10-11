@@ -1,6 +1,7 @@
 import asyncio
 import json
 import time
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -216,6 +217,7 @@ async def test_video_keepalive_renews_matching_media_session(
     active = L4DeskRemoteSession(
         session_type="video", provider_session_id="provider-session-773"
     )
+    expiry = datetime.now(UTC) + timedelta(seconds=60)
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as ac:
@@ -227,6 +229,7 @@ async def test_video_keepalive_renews_matching_media_session(
                     "result": "ok",
                     "stream_instance_id": "provider-session-773",
                     "stream_state": "running",
+                    "expires_at": expiry.isoformat(),
                 },
             ) as lease_keepalive,
             patch.object(
@@ -247,7 +250,12 @@ async def test_video_keepalive_renews_matching_media_session(
             )
     assert resp.status_code == 200
     lease_keepalive.assert_awaited_once()
-    media_renew.assert_awaited_once_with(sn="sn0001")
+    media_renew.assert_awaited_once_with(
+        sn="sn0001",
+        lease_id="lease-773",
+        stream_instance_id="provider-session-773",
+        lease_expires_at=int(expiry.timestamp()),
+    )
 
 
 def test_ws_inbound_keepalive_and_release_with_generation(
