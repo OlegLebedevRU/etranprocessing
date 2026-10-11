@@ -1057,6 +1057,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
                 }}
               />
               <VideoPlayerScreen
+                cameraOnly={cameraOnly}
                 containerRef={playerContainerRef}
                 displayMode={displayMode} onDisplayMode={setDisplayMode}
                 onFrameStateChange={setFreshFrames} onResolutionChange={setVideoResolution}
