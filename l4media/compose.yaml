@@ -21,7 +21,7 @@ services:
       - ingress
 
   ingress:
-    image: ${L4MEDIA_INGRESS_IMAGE:-dev-leo4-ru.cr.cloud.ru/etran/l4media-ingress@sha256:1b9242b290d975e769acd3a35eb5d16a286f91e71b08356458643863c58b1cd7}
+    image: ${L4MEDIA_INGRESS_IMAGE:-dev-leo4-ru.cr.cloud.ru/etran/l4media-ingress@sha256:4ae0ef4e4080abb3ce8fd06f16ac3283d7a731111a5d5e8961f40fb3a370c057}
     container_name: l4media-ingress
     restart: unless-stopped
     environment:

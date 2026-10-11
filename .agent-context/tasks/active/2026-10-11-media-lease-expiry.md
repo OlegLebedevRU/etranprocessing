@@ -42,8 +42,36 @@ provider deadlines fail closed; BFF returns an explicit media-session error.
   full suite passed. No production secrets used in unit tests.
 
 ## Release / live acceptance
-Not yet completed. Release ingress first, then MenuBuilder; old clients remain
-compatible. No schema migration, frontend/nginx/Janus or neighboring container
-recreation. Check resource readiness and no active media before ingress restart.
-Record source SHA, immutable digests, behavior evidence and cleanup here after
-the actual release. Use the existing builder/registry/production launcher.
+PR60 merged as a05eb955ee13bf5c62f76e5e134f5d030980ae24. The standard builder /
+registry / production launcher released ingress first, then MenuBuilder from
+that exact revision, including their build/test gates. Production readiness:
+available RAM1982MiB, root56%, load0.15; active media0 before ingress restart.
+MCP Ops unavailable, standard authenticated SSH used. No schema migration or
+frontend/nginx/Janus release.
+
+| Component | Verified immutable digest | Production container |
+|---|---|---|
+| ingress | sha256:4ae0ef4e4080abb3ce8fd06f16ac3283d7a731111a5d5e8961f40fb3a370c057 | af757cb20e67 |
+| MenuBuilder | sha256:bae3f1801702a98b09167ae22422ed0033cc2965f8d6caa9c46ffeb9f520fca3 | 172e369c0648 |
+
+Live4619: an intentionally abandoned30-second owned stream lease expired,
+provider/terminal state became stopped/lease_expired, and the new session
+succeeded1.409seconds after its request (3.042seconds after old lease expiry,
+including polling/acquire/start). Media start returned29seconds TTL. The new
+stream stayed running/transport-connected through nine5-second keepalive cycles
+(45seconds, beyond its original lease window), with fresh RTP, then stop/release
+left no active test lease. This is real lease-loss recovery, not a mock or forced
+mountpoint deletion. A first run proved the same quick takeover but later hit
+an external TLS handshake timeout; retained as failed evidence, not acceptance.
+
+Deployed browser verification:90seconds,576 presented callbacks, maximum gap
+300.14ms, zero packet loss/dropped frames/freeze/NACK. Stop, new decoded frame
+on restart and route-unmount release passed. Different software-reported versus
+configured frame cadence remains a separate camera observation, not this fix.
+Final ingress health200, active media0. Neighboring container IDs unchanged,
+including app1 e238dc3ca6ed, Janus1cd35cea4177 and nginx8927aebcc8cc.
+Evidence retained in the siplite workspace's ignored build/acceptance directory:
+media-lease-expiry.json, video-browser-media-expiry.json, release logs and the
+original TLS-failed run. No PIN/cookie appears in the expiry evidence or logs.
+Runtime deadlines retained the provider ownership boundary and existing storage
+format. Whole-second expiry may be less than1second early; it never adds time.

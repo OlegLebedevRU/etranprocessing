@@ -1,14 +1,16 @@
 # l4media
 
-## 2026-10-11: lease-bounded media watchdog (local implementation)
+## 2026-10-11: lease-bounded media watchdog (deployed and verified)
 
 MenuBuilder forwards authoritative app1 lease_expires_at on media start/renew.
 Ingress stores the deadline with existing ttl_sec/renewed_at fields; Redis and
 lease ownership are unchanged. Deadline-aware renew checks lease/stream identity;
 expired sessions cannot be renewed and are stopped before start/health reuse.
 Unexpired conflicting sessions remain protected. Legacy internal callers keep
-their existing TTL semantics. Local C and backend tests passed; release/live
-acceptance is tracked in [expiry handoff](../tasks/active/2026-10-11-media-lease-expiry.md).
+their existing TTL semantics. Local C/backend tests, live4619 expiry→new session,
+45-second renew beyond initial lease, and90-second browser stop/restart/unmount
+passed. Source a05eb95; exact immutable digests and limitations in the
+[expiry handoff](../tasks/active/2026-10-11-media-lease-expiry.md).
 
 ## 2026-10-10: downstream RTCP (local implementation)
 
