@@ -5,6 +5,7 @@ import ipaddress
 import urllib.parse
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 import pytest
 from cryptography import x509
@@ -13,14 +14,17 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization import pkcs7, pkcs12
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
-from fastapi import HTTPException
+from fastapi import HTTPException, Response
 from starlette.requests import Request
 
 from app.config import settings
 from app.dependencies import get_current_terminal
 from app.models import Terminal
+from app.routers import file_manager as fm
 from app.routers.certificates import _build_pkcs7_chain
+from app.schemas.file_manager import AgentHello
 from app.services import ca, ca_trust, local_ca
+from app.services.file_manager_readiness import FM_REQUIRED_CAPABILITIES
 from app.services.terminal_certificate import verified_terminal_identity
 from app.utils.pfx import create_pfx_bundle
 
@@ -162,6 +166,71 @@ def request_for(
             ],
         }
     )
+
+
+def directly_root_signed(cert, configured):
+    builder = (
+        x509.CertificateBuilder()
+        .subject_name(cert.subject)
+        .issuer_name(configured[1].subject)
+        .public_key(cert.public_key())
+        .serial_number(cert.serial_number)
+        .not_valid_before(cert.not_valid_before_utc)
+        .not_valid_after(cert.not_valid_after_utc)
+    )
+    for ext in cert.extensions:
+        builder = builder.add_extension(ext.value, ext.critical)
+    return builder.sign(configured[2], hashes.SHA256())
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("mode", ["issuer", "root", "untrusted"])
+async def test_fm_registration_uses_verified_chain_not_immediate_issuer_name(
+    configured, monkeypatch, mode
+):
+    cert = local_ca.sign_terminal_csr(csr_pair()[1], "fixture-sign", SN, 365)
+    if mode == "root":
+        cert = directly_root_signed(cert, configured)
+    request = request_for(cert)
+    request.scope["path"] = "/api/file-manager/v1/agent/hello"
+    instance = uuid4()
+    request.scope["headers"].append((b"x-fm-agent-instance-id", str(instance).encode()))
+    if mode == "untrusted":
+        request.scope["headers"] = [
+            (name, b"NONE" if name == b"x-client-cert-verified" else value)
+            for name, value in request.scope["headers"]
+        ]
+    terminal = Terminal(
+        id=1,
+        org_id=1,
+        device_id=773,
+        sn=SN,
+        is_active=True,
+        cert_serial=format(cert.serial_number, "X"),
+    )
+    lookup = AsyncMock(return_value=terminal)
+    monkeypatch.setattr(fm, "get_current_terminal", lookup)
+    db = AsyncMock()
+    if mode == "untrusted":
+        with pytest.raises(HTTPException) as error:
+            await fm.fm_terminal(request, db)
+        assert error.value.status_code == 401
+        lookup.assert_not_awaited()
+        db.execute.assert_not_awaited()
+        return
+    authenticated = await fm.fm_terminal(request, db)
+    body = AgentHello(
+        agent_instance_id=instance,
+        agent_version="1.13.34",
+        protocol_version=2,
+        capabilities=sorted(FM_REQUIRED_CAPABILITIES),
+        filesystem_ready=True,
+    )
+    result = await fm.hello(body, request, Response(), authenticated, db)
+    assert result.available and result.state == "ready"
+    db.commit.assert_awaited_once()
+    values = db.execute.call_args.args[0].compile().params
+    assert values["cert_serial"] == terminal.cert_serial
 
 
 def test_profile_matches_terminal_773_and_one_day_backdating(configured):
@@ -344,10 +413,28 @@ async def test_local_signer_and_pkcs7_pfx_include_complete_chain(
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("mode", ["issuer", "root"])
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/payment/",
+        "/api/techgate/",
+        "/api/gategauge/",
+        "/api/licensebilling/",
+        "/licensebilling/",
+        "/api/ListMenuFile",
+        "/api/leo4proxy/policy",
+        "/api/devices/map_legacy_crt/",
+        "/api/v1/devices/map_legacy_crt/",
+        "/api/file-manager/v1/agent/hello",
+    ],
+)
 async def test_new_issuer_uses_strict_sn_serial_without_autobind(
-    configured, monkeypatch
+    configured, monkeypatch, mode, path
 ):
     cert = local_ca.sign_terminal_csr(csr_pair()[1], "", SN, 365)
+    if mode == "root":
+        cert = directly_root_signed(cert, configured)
     serial = format(cert.serial_number, "X")
     terminal = Terminal(
         id=773, org_id=1, device_id=773, sn=SN, cert_serial=serial, is_active=True
@@ -357,7 +444,9 @@ async def test_new_issuer_uses_strict_sn_serial_without_autobind(
     result.scalar_one_or_none.return_value = terminal
     db.execute.return_value = result
     monkeypatch.setattr("app.dependencies.record_terminal_discovery", AsyncMock())
-    assert await get_current_terminal(request_for(cert), db) is terminal
+    request = request_for(cert)
+    request.scope["path"] = path
+    assert await get_current_terminal(request, db) is terminal
     params = db.execute.call_args.args[0].compile().params
     assert SN in params.values() and serial in params.values()
     assert terminal.cert_serial == serial
