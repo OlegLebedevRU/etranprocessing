@@ -35,4 +35,8 @@ No additional root-only issuer gates found in application consumers. The root CN
 - Extended shared terminal authentication checks over ten endpoint paths for both root and issuer. These test auth dependency behavior, not all business operations end to end.
 - Existing legacy SubCA, wrong SN/serial, invalid leaf/issuer, expiry, ListMenuFile Authorization and renewal checks remain in the full suite.
 - Local PB suite: 333 passed, 1 skipped; Ruff check/format and Pyright app passed. Existing mock/deprecation warnings noted; no additional failures.
-- Release and passive live FM recovery evidence pending. Complete user-driven file operation acceptance remains separate.
+- PR 82 merged as cc81203d9e9babea37833d9538285b37eecc3b1d; standard builder released processingbackend digest sha256:bd7b18314f1574c40d20bc734eef6c47dd923b1b897b8150238bca1497fa373d. Builder tests/quality, Alembic and health verification passed (initial startup health probe retried successfully).
+- Production container f2995f9ab007 carries that revision/digest. All other container IDs unchanged, including app1, RabbitMQ, MB, and nginx.
+- Passive live observation 2026-10-12 12:10:55 UTC: device 1000007 FM hello last_seen 12:10:42, serial matches current terminal serial, protocol 2, compatible/available/write_available=true, state=ready. Device 773 also ready with matching current serial and fresh hello.
+- No native update, manual certificate registration, serial rewrite or terminal service restart needed. Complete user-driven file operation acceptance remains separate.
+- Changed-file credential scan matched only existing fixture-only test password. Automatic command review rejected cleanup of ignored local .pytest_tmp (both recursive and exact file-list deletion), reporting only blocked by policy. Test fixtures remain local and ignored; no production credentials were copied.
