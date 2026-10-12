@@ -2,20 +2,25 @@
 
 import asyncio
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import exists, select, true
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import resolve_org_id
 from app.database import get_db
-from app.models import CertificatePin, Terminal, TerminalCertDiscovery
+from app.models import (
+    CertificatePin,
+    Terminal,
+    TerminalCertDiscovery,
+    TerminalCertHistory,
+)
 from app.models_l4desk import L4DeskAuditEvent
 from app.routers.video import _verify_device_access
 from app.security.permissions import require_readonly_guard, require_tenant_admin
@@ -32,6 +37,7 @@ class RenewalOrderRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     pin_id: int | None = Field(default=None, gt=0)
     order_id: UUID | None = None
+    resume_installation: bool = False
 
 
 class ProviderPin(BaseModel):
@@ -79,6 +85,37 @@ async def admission(terminal: Terminal, db: AsyncSession) -> str | None:
     return None
 
 
+async def unconfirmed_renewal(
+    db: AsyncSession, terminal: Terminal, *, include_confirmed: bool = False
+) -> CertificatePin | None:
+    current = exists().where(
+        TerminalCertHistory.pin_id == CertificatePin.id,
+        TerminalCertHistory.terminal_id == terminal.id,
+        TerminalCertHistory.cert_serial == terminal.cert_serial,
+    )
+    observed = exists().where(
+        TerminalCertDiscovery.terminal_id == terminal.id,
+        TerminalCertDiscovery.sn == terminal.sn,
+        TerminalCertDiscovery.cert_serial == terminal.cert_serial,
+        TerminalCertDiscovery.is_valid.is_(True),
+        TerminalCertDiscovery.last_seen_at >= CertificatePin.used_at,
+    )
+    return await db.scalar(
+        select(CertificatePin)
+        .where(
+            CertificatePin.terminal_id == terminal.id,
+            CertificatePin.org_id == terminal.org_id,
+            CertificatePin.purpose == "renew",
+            CertificatePin.status == "used",
+            CertificatePin.used_at.is_not(None),
+            current,
+            true() if include_confirmed else ~observed,
+        )
+        .order_by(CertificatePin.id.desc())
+        .limit(1)
+    )
+
+
 def queue_body(device_id: int, pin: ProviderPin, now: datetime) -> dict:
     remaining = (pin.expires_at - now).total_seconds()
     ttl = min(44639, int((remaining - 5) // 60))
@@ -119,13 +156,23 @@ async def order_renewal(
     reason = await admission(terminal, db)
     if reason:
         raise HTTPException(403, reason)
-    order_item_id = await certificate_permission(
-        db,
-        terminal,
-        purpose="renew",
-        is_superuser=bool(user.get("is_superuser")),
-        order_id=str(body.order_id) if body.order_id else None,
-    )
+    unfinished = await unconfirmed_renewal(db, terminal)
+    if body.resume_installation:
+        if unfinished is None or body.pin_id != unfinished.id or body.order_id:
+            raise HTTPException(409, "Нет доступного выпуска для повторной установки")
+        order_item_id = None
+    else:
+        if unfinished is not None:
+            raise HTTPException(
+                409, "Сначала завершите установку уже выпущенного сертификата"
+            )
+        order_item_id = await certificate_permission(
+            db,
+            terminal,
+            purpose="renew",
+            is_superuser=bool(user.get("is_superuser")),
+            order_id=str(body.order_id) if body.order_id else None,
+        )
     if not iot_client.base_url or not iot_client.service_token:
         raise HTTPException(503, "Сервис очереди недоступен")
     provider = ProcessingBackendPinClient()
@@ -151,6 +198,7 @@ async def order_renewal(
                         "pin_id": body.pin_id,
                         "order_item_id": order_item_id,
                         "admin_override": bool(user.get("is_superuser")),
+                        "resume_installation": body.resume_installation,
                     },
                 )
                 if issued.status_code not in (200, 201):
@@ -193,6 +241,7 @@ async def order_renewal(
                         "task_id": str(task_id),
                         "pin_id": pin.pin_id,
                         "previous_serial": terminal.cert_serial,
+                        "resume_installation": body.resume_installation,
                     },
                 )
             )
@@ -237,6 +286,7 @@ async def renewal_status(
     response.headers["Cache-Control"] = "no-store"
     terminal = await owned_terminal(device_id, user, db)
     reason = await admission(terminal, db)
+    current = await unconfirmed_renewal(db, terminal, include_confirmed=True)
     latest = await db.scalar(
         select(CertificatePin)
         .where(
@@ -247,6 +297,7 @@ async def renewal_status(
         .order_by(CertificatePin.id.desc())
         .limit(1)
     )
+    latest = current or latest
     observed = None
     if latest is not None and latest.status == "used" and latest.used_at is not None:
         observed = await db.scalar(
@@ -261,6 +312,7 @@ async def renewal_status(
             .order_by(TerminalCertDiscovery.last_seen_at.desc())
             .limit(1)
         )
+    unfinished = current if observed is None else None
     state = (
         "none"
         if latest is None
@@ -275,6 +327,7 @@ async def renewal_status(
     task_id = None
     task_status = None
     result_code = None
+    exit_code = None
     if latest is not None:
         task_id = await db.scalar(
             select(L4DeskAuditEvent.correlation_id)
@@ -301,6 +354,11 @@ async def renewal_status(
                     task_status = data.get("status")
                     results = data.get("results") or []
                     result_code = results[0].get("status_code") if results else None
+                    exit_code = (
+                        (results[0].get("result") or {}).get("exit_code")
+                        if results
+                        else None
+                    )
                     if latest is not None and latest.status == "pending":
                         if task_status == 4:
                             state = "expired"
@@ -312,10 +370,31 @@ async def renewal_status(
             logger.info(
                 "Renewal task status temporarily unavailable device=%s", device_id
             )
+    if unfinished is not None:
+        if result_code is not None and result_code != 200:
+            state = "installation_failed"
+        elif task_status in (4, 5) or (
+            unfinished.used_at is not None
+            and unfinished.used_at <= datetime.now(UTC) - timedelta(minutes=5)
+        ):
+            state = "installation_unconfirmed"
+    recoverable = bool(
+        unfinished is not None
+        and reason is None
+        and unfinished.renewal_response
+        and unfinished.expires_at > datetime.now(UTC) + timedelta(seconds=120)
+        and not (task_id and task_status in (0, 1, 2) and result_code is None)
+    )
     return {
         "task_id": task_id,
         "task_status": task_status,
         "result_code": result_code,
+        "exit_code": exit_code,
+        "installation_pending": unfinished is not None,
+        "recovery_pin_id": unfinished.id if unfinished else None,
+        "recoverable": recoverable,
+        "requires_intervention": unfinished is not None
+        and state in ("installation_failed", "installation_unconfirmed"),
         "allowed": reason is None,
         "reason": reason,
         "status": state,

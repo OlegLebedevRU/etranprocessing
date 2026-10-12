@@ -270,9 +270,7 @@ def test_policy_expiry_uses_already_loaded_certificate_date():
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize(
-    "pin_id,status", [(None, "pending"), (8, "pending"), (None, "used"), (8, "used")]
-)
+@pytest.mark.parametrize("pin_id,status", [(None, "pending"), (8, "pending")])
 async def test_provider_reuses_unfinished_pin_without_new_outbox(
     monkeypatch, pin_id, status
 ):
@@ -301,6 +299,7 @@ async def test_provider_reuses_unfinished_pin_without_new_outbox(
     second.scalar_one_or_none.return_value = pin
     db = MagicMock()
     db.execute = AsyncMock(side_effect=[first, second])
+    db.scalar = AsyncMock(return_value=None)
     db.commit = AsyncMock()
     monkeypatch.setattr(module.settings, "internal_service_key", "test-internal")
     monkeypatch.setattr(module, "subscription_allowance", AsyncMock(return_value=True))
@@ -325,8 +324,8 @@ async def test_provider_reuses_unfinished_pin_without_new_outbox(
     )
     assert (
         "purpose = 'renew'" in query
-        and "terminal_cert_history.cert_serial" in query
-        and "used_at >" in query
+        and "status = 'pending'" in query
+        and "status = 'used'" not in query
     )
 
 
@@ -339,6 +338,71 @@ async def test_recovery_cannot_restore_superseded_serial(monkeypatch):
     with pytest.raises(Exception) as denied:
         await module._verify_renewal_owner(target, (SN, "5" * 40), db, pin)
     assert denied.value.status_code == 409
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "resume, pin_id, expired, expected",
+    [
+        (False, None, False, 409),
+        (True, 8, False, None),
+        (True, 9, False, 409),
+        (True, 8, True, 410),
+    ],
+)
+async def test_installation_recovery_never_issues_or_recharges(
+    monkeypatch, resume, pin_id, expired, expected
+):
+    from app.schemas.certificates import RenewalPinRequest
+
+    now = datetime.now(UTC)
+    target = Terminal(
+        id=3,
+        org_id=1,
+        sn=SN,
+        is_active=True,
+        cert_serial=SERIAL,
+        cert_not_valid_after=now + timedelta(days=30),
+    )
+    previous = CertificatePin(
+        id=8,
+        terminal_id=3,
+        org_id=1,
+        pin="000000",
+        purpose="renew",
+        status="used",
+        used_at=now - timedelta(hours=5),
+        renewal_response="cached-response",
+        expires_at=now + timedelta(seconds=60 if expired else 3600),
+    )
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = target
+    db = MagicMock(
+        execute=AsyncMock(return_value=result), scalar=AsyncMock(return_value=previous)
+    )
+    permission = AsyncMock()
+    signer = AsyncMock()
+    monkeypatch.setattr(module.settings, "internal_service_key", "test-internal")
+    monkeypatch.setattr(module, "subscription_allowance", AsyncMock(return_value=True))
+    monkeypatch.setattr(module, "validate_pin_permission", permission)
+    monkeypatch.setattr(module, "sign_csr", signer)
+    request = RenewalPinRequest(
+        tenant_id=1, terminal_id=3, sn=SN, pin_id=pin_id, resume_installation=resume
+    )
+    if expected:
+        with pytest.raises(Exception) as denied:
+            await module.issue_renewal_pin(request, db, "test")
+        assert denied.value.status_code == expected
+    else:
+        response = await module.issue_renewal_pin(request, db, "test")
+        assert response.pin_id == 8 and response.expires_at == previous.expires_at
+    permission.assert_not_awaited()
+    signer.assert_not_awaited()
+    db.add.assert_not_called()
+    db.commit.assert_not_called()
+    query = str(db.scalar.call_args.args[0].compile(dialect=postgresql.dialect()))
+    assert "terminal_cert_history.cert_serial" in query and "NOT (EXISTS" in query
+    assert "terminal_cert_discovery.is_valid IS true" in query
 
 
 @pytest.mark.anyio

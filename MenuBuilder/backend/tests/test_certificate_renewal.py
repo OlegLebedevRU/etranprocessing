@@ -65,7 +65,8 @@ def test_reject_insufficient_pin_lifetime(seconds):
 
 
 @pytest.mark.anyio
-async def test_offline_queue_and_lost_answer_manual_retry_same_pin(monkeypatch):
+@pytest.mark.parametrize("resume", [False, True])
+async def test_offline_queue_and_lost_answer_manual_retry_same_pin(monkeypatch, resume):
     target = terminal()
     calls = []
     queued_count = 0
@@ -104,6 +105,13 @@ async def test_offline_queue_and_lost_answer_manual_retry_same_pin(monkeypatch):
     monkeypatch.setattr(flow, "admission", AsyncMock(return_value=None))
     monkeypatch.setattr(
         flow,
+        "unconfirmed_renewal",
+        AsyncMock(return_value=SimpleNamespace(id=8) if resume else None),
+    )
+    permission = AsyncMock(return_value=None)
+    monkeypatch.setattr(flow, "certificate_permission", permission)
+    monkeypatch.setattr(
+        flow,
         "ProcessingBackendPinClient",
         lambda: SimpleNamespace(
             base_url="http://localhost", service_token="test", _headers=dict
@@ -121,18 +129,33 @@ async def test_offline_queue_and_lost_answer_manual_retry_same_pin(monkeypatch):
     db = SimpleNamespace(add=MagicMock(), commit=AsyncMock())
     user = {"org_id": 1, "sub": "fixture"}
     with pytest.raises(HTTPException) as lost:
-        await flow.order_renewal(773, flow.RenewalOrderRequest(), Response(), user, db)
+        await flow.order_renewal(
+            773,
+            flow.RenewalOrderRequest(
+                pin_id=8 if resume else None, resume_installation=resume
+            ),
+            Response(),
+            user,
+            db,
+        )
     assert lost.value.status_code == 502 and lost.value.detail["pin_id"] == 8
     assert "000000" not in json.dumps(lost.value.detail)
     assert not db.add.called
     result = await flow.order_renewal(
-        773, flow.RenewalOrderRequest(pin_id=8), Response(), user, db
+        773,
+        flow.RenewalOrderRequest(pin_id=8, resume_installation=resume),
+        Response(),
+        user,
+        db,
     )
     assert (
         result.task_id == UUID("135a4120-9ba6-4f6c-8cac-4baf5df8f1df")
         and "000000" not in result.model_dump_json()
     )
     assert calls[-2][1]["pin_id"] == 8 and calls[-1][1]["method_code"] == 7011
+    assert calls[-2][1]["resume_installation"] == resume
+    assert set(calls[-1][1]["payload"]["dt"][0]) == {"pin", "pin_expires_at", "ttl_sec"}
+    assert permission.await_count == (0 if resume else 2)
     audit = db.add.call_args.args[0]
     assert audit.operation_id == str(result.task_id) and "000000" not in json.dumps(
         audit.details
@@ -150,6 +173,7 @@ async def test_status_does_not_confirm_issuance_without_new_identity(monkeypatch
         status="used",
         expires_at=datetime.now(UTC) + timedelta(hours=1),
         used_at=datetime.now(UTC),
+        renewal_response="cached-response",
     )
     queries = []
 
@@ -169,8 +193,8 @@ async def test_status_does_not_confirm_issuance_without_new_identity(monkeypatch
         result["status"] == "issued_waiting_identity" and result["observed_at"] is None
     )
     assert (
-        "terminal_cert_discovery.cert_serial" in queries[1]
-        and "is_valid IS true" in queries[1]
+        "terminal_cert_discovery.cert_serial" in queries[2]
+        and "is_valid IS true" in queries[2]
     )
     assert "pin" not in result and "renewal_response" not in result
 
@@ -221,3 +245,107 @@ async def test_renewal_admission_denies_legacy_or_malformed_serial(monkeypatch, 
         await flow.admission(target, MagicMock())
         == "Требуется действующий сертификат нового CA"
     )
+
+
+@pytest.mark.anyio
+async def test_new_order_blocked_before_payment_when_previous_installation_unconfirmed(
+    monkeypatch,
+):
+    target = terminal()
+    monkeypatch.setattr(flow, "owned_terminal", AsyncMock(return_value=target))
+    monkeypatch.setattr(flow, "admission", AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        flow, "unconfirmed_renewal", AsyncMock(return_value=SimpleNamespace(id=327))
+    )
+    permission = AsyncMock()
+    monkeypatch.setattr(flow, "certificate_permission", permission)
+    with pytest.raises(HTTPException) as denied:
+        await flow.order_renewal(
+            773, flow.RenewalOrderRequest(), Response(), {"org_id": 1}, MagicMock()
+        )
+    assert denied.value.status_code == 409
+    permission.assert_not_awaited()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "observed_failure, expired", [(True, False), (False, False), (True, True)]
+)
+async def test_used_pin_failure_is_escalated_even_with_newer_unused_pin(
+    monkeypatch, observed_failure, expired
+):
+    target = terminal()
+    now = datetime.now(UTC)
+    pin = SimpleNamespace(
+        id=327,
+        status="used",
+        used_at=now - timedelta(hours=5),
+        renewal_response="cached",
+        expires_at=now + timedelta(seconds=60 if expired else 3600),
+    )
+    monkeypatch.setattr(flow, "owned_terminal", AsyncMock(return_value=target))
+    monkeypatch.setattr(flow, "admission", AsyncMock(return_value=None))
+    monkeypatch.setattr(flow, "unconfirmed_renewal", AsyncMock(return_value=pin))
+    monkeypatch.setattr(flow.iot_client, "base_url", "http://localhost")
+    monkeypatch.setattr(flow.iot_client, "service_token", "test")
+    db = SimpleNamespace(
+        scalar=AsyncMock(
+            side_effect=[
+                SimpleNamespace(id=328),
+                None,
+                "135a4120-9ba6-4f6c-8cac-4baf5df8f1df",
+            ]
+        )
+    )
+    real_client = httpx.AsyncClient
+    task = {
+        "header": {"device_id": 773},
+        "status": 3,
+        "results": [
+            {
+                "status_code": 500 if observed_failure else 200,
+                "result": {"exit_code": 5 if observed_failure else 0},
+            }
+        ],
+    }
+    monkeypatch.setattr(
+        flow.httpx,
+        "AsyncClient",
+        lambda **kw: real_client(
+            transport=httpx.MockTransport(lambda r: httpx.Response(200, json=task)),
+            **kw,
+        ),
+    )
+    result = await flow.renewal_status(773, Response(), {"org_id": 1}, db)
+    assert result["recovery_pin_id"] == 327 and result["installation_pending"]
+    assert result["status"] == (
+        "installation_failed" if observed_failure else "installation_unconfirmed"
+    )
+    assert result["requires_intervention"] and result["recoverable"] == (not expired)
+    assert "pin" not in result and "renewal_response" not in result
+
+
+@pytest.mark.anyio
+async def test_observed_current_certificate_wins_over_old_failure_and_newer_pin(
+    monkeypatch,
+):
+    target = terminal()
+    now = datetime.now(UTC)
+    pin = SimpleNamespace(
+        id=327,
+        status="used",
+        used_at=now - timedelta(hours=5),
+        renewal_response="cached",
+        expires_at=now + timedelta(hours=1),
+    )
+    monkeypatch.setattr(flow, "owned_terminal", AsyncMock(return_value=target))
+    monkeypatch.setattr(flow, "admission", AsyncMock(return_value=None))
+    monkeypatch.setattr(flow, "unconfirmed_renewal", AsyncMock(return_value=pin))
+    monkeypatch.setattr(flow.iot_client, "base_url", "")
+    db = SimpleNamespace(
+        scalar=AsyncMock(side_effect=[SimpleNamespace(id=328), now, None])
+    )
+    result = await flow.renewal_status(773, Response(), {"org_id": 1}, db)
+    assert result["status"] == "confirmed" and result["observed_at"] == now
+    assert not result["installation_pending"] and not result["recoverable"]
+    assert not result["requires_intervention"]

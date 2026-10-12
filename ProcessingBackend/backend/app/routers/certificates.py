@@ -20,7 +20,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.utils import int_to_bytes
 from cryptography.x509.oid import NameOID
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from sqlalchemy import and_, exists, or_, select, text, update
+from sqlalchemy import exists, select, text, update
 from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,6 +33,7 @@ from app.models import (
     L4DeskAuditEvent,
     L4DeskTerminal,
     Terminal,
+    TerminalCertDiscovery,
     TerminalCertHistory,
 )
 from app.schemas.certificates import (
@@ -264,6 +265,37 @@ async def renew_certificate(
         return await _handle_setup(params, request, db, identity, payload.csr.encode())
 
 
+async def _unconfirmed_renewal(
+    db: AsyncSession, terminal: Terminal
+) -> CertificatePin | None:
+    current = exists().where(
+        TerminalCertHistory.pin_id == CertificatePin.id,
+        TerminalCertHistory.terminal_id == terminal.id,
+        TerminalCertHistory.cert_serial == terminal.cert_serial,
+    )
+    observed = exists().where(
+        TerminalCertDiscovery.terminal_id == terminal.id,
+        TerminalCertDiscovery.sn == terminal.sn,
+        TerminalCertDiscovery.cert_serial == terminal.cert_serial,
+        TerminalCertDiscovery.is_valid.is_(True),
+        TerminalCertDiscovery.last_seen_at >= CertificatePin.used_at,
+    )
+    return await db.scalar(
+        select(CertificatePin)
+        .where(
+            CertificatePin.terminal_id == terminal.id,
+            CertificatePin.org_id == terminal.org_id,
+            CertificatePin.purpose == "renew",
+            CertificatePin.status == "used",
+            CertificatePin.used_at.is_not(None),
+            current,
+            ~observed,
+        )
+        .order_by(CertificatePin.id.desc())
+        .limit(1)
+    )
+
+
 @router.post("/renewal-pins", response_model=RenewalPinResponse, status_code=201)
 async def issue_renewal_pin(
     payload: RenewalPinRequest,
@@ -295,17 +327,34 @@ async def issue_renewal_pin(
         or terminal.cert_not_valid_after <= now
     ):
         raise HTTPException(409, "live_new_ca_certificate_required")
+    unfinished = await _unconfirmed_renewal(db, terminal)
+    if payload.resume_installation:
+        if (
+            unfinished is None
+            or payload.pin_id != unfinished.id
+            or not unfinished.renewal_response
+        ):
+            raise HTTPException(409, "renewal_installation_not_available")
+        if unfinished.expires_at <= now + timedelta(seconds=120):
+            raise HTTPException(410, "renewal_installation_requires_intervention")
+        # Queue the original PIN only. This never extends the enrollment endpoint's
+        # 15-minute response-fetch window or creates another certificate/serial.
+        return RenewalPinResponse(
+            pin_id=unfinished.id,
+            tenant_id=terminal.org_id,
+            terminal_id=terminal.id,
+            sn=terminal.sn,
+            pin=unfinished.pin,
+            expires_at=unfinished.expires_at,
+        )
+    if unfinished is not None:
+        raise HTTPException(409, "renewal_installation_unconfirmed")
     paid_item = await validate_pin_permission(
         db,
         terminal,
         "renew",
         payload.order_item_id,
         admin_override=payload.admin_override,
-    )
-    current_issuance = exists().where(
-        TerminalCertHistory.pin_id == CertificatePin.id,
-        TerminalCertHistory.terminal_id == terminal.id,
-        TerminalCertHistory.cert_serial == terminal.cert_serial,
     )
     reusable = (
         select(CertificatePin)
@@ -314,15 +363,7 @@ async def issue_renewal_pin(
             CertificatePin.org_id == terminal.org_id,
             CertificatePin.purpose == "renew",
             CertificatePin.expires_at > now + timedelta(seconds=120),
-            or_(
-                CertificatePin.status == "pending",
-                and_(
-                    CertificatePin.status == "used",
-                    CertificatePin.used_at > now - timedelta(minutes=15),
-                    CertificatePin.renewal_response.is_not(None),
-                    current_issuance,
-                ),
-            ),
+            CertificatePin.status == "pending",
         )
         .order_by(CertificatePin.id.desc())
         .limit(1)
@@ -686,7 +727,7 @@ async def _handle_setup(
     audit = L4DeskAuditEvent(
         tenant_id=terminal.org_id,
         actor="terminal",
-        event_type="certificate_renewed"
+        event_type="certificate_renewal_issued"
         if renewal_identity
         else "certificate_enrolled",
         subject_type="terminal",
@@ -695,6 +736,8 @@ async def _handle_setup(
         correlation_id=f"cpserial:{cpserial}",
         outcome="success",
         details={
+            "stage": "issued",
+            "installation": "unconfirmed",
             "sn": terminal.sn,
             "pin_masked": mask_pin(pin),
             "cert_serial": ca_result.serial_number,
