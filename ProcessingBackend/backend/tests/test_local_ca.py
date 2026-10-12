@@ -17,7 +17,7 @@ from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 from fastapi import HTTPException, Response
 from starlette.requests import Request
 
-from app.config import settings
+from app.config import Settings, settings
 from app.dependencies import get_current_terminal
 from app.models import Terminal
 from app.routers import file_manager as fm
@@ -30,6 +30,15 @@ from app.utils.pfx import create_pfx_bundle
 
 SN = "a4b0000773c82116d210826"
 PASSWORD = "fixture-only-password"
+
+
+def test_local_signer_is_default_and_external_requires_explicit_selection(monkeypatch):
+    monkeypatch.delenv("CA_SIGNER_BACKEND", raising=False)
+    assert Settings(_env_file=None).ca_signer_backend == "local"
+    assert (
+        Settings(ca_signer_backend="external", _env_file=None).ca_signer_backend
+        == "external"
+    )
 
 
 @pytest.fixture
