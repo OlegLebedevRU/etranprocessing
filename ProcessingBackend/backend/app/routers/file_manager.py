@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
-from app.dependencies import extract_cert_issuer, get_current_terminal
+from app.dependencies import get_current_terminal
 from app.models import Terminal
 from app.schemas.file_manager import (
     AgentHello,
@@ -82,8 +82,8 @@ async def hello(
         != request.headers.get("X-FM-Agent-Instance-Id", "").lower()
     ):
         raise HTTPException(403, "Agent instance mismatch")
-    if "iot.leo4.ru" not in extract_cert_issuer(request).lower():
-        raise HTTPException(403, detail={"code": "fm_certificate_upgrade_required"})
+    # fm_terminal already verifies the pinned root/issuer chain and live identity.
+    # Immediate issuer names differ between root-issued and issuing-CA leaves.
     if not terminal.is_active:
         raise HTTPException(403, detail={"code": "terminal_inactive"})
     now = datetime.now(UTC)
