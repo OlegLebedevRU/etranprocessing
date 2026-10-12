@@ -151,11 +151,17 @@ export default function DevicePassportTab({
   const handleUnblock = async () => {
     setUnblocking(true);
     try {
-      await triggerDeviceProvisioning(deviceId);
-      message.success(
-        "Команда повторного провиженинга успешно отправлена. Блокировка снята!"
-      );
-      await fetchDeviceData();
+      const result = await triggerDeviceProvisioning(orgId, deviceId, sn);
+      if (!result.success || result.error) {
+        throw new Error(result.error || "Повторный провиженинг не выполнен");
+      }
+      const updated = await getDeviceRaw(orgId, deviceId);
+      setDevice(updated);
+      if (!updated || updated.connection?.is_blocked !== false) {
+        message.warning("Провиженинг выполнен, но снятие блокировки пока не подтверждено");
+      } else {
+        message.success("Провиженинг выполнен. Снятие блокировки подтверждено");
+      }
     } catch (err: any) {
       message.error(
         err?.message || "Не удалось выполнить повторный провиженинг устройства"

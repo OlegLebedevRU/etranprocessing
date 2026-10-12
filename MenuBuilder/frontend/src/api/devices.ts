@@ -1,4 +1,9 @@
 import client from "./client";
+import {
+  getAdminTerminals,
+  provisionTerminalToIot,
+  type ProvisionTerminalResponse,
+} from "./admin";
 
 export interface DeviceTagItem {
   tag: string;
@@ -459,9 +464,26 @@ export async function getDeviceRaw(
   }
 }
 
-export async function triggerDeviceProvisioning(deviceId: number): Promise<any> {
-  const { data } = await client.post(`/admin/terminals/${deviceId}/iot-provision`);
-  return data;
+export async function triggerDeviceProvisioning(
+  orgId: number,
+  deviceId: number,
+  sn: string
+): Promise<ProvisionTerminalResponse> {
+  const { items } = await getAdminTerminals({
+    org_id: orgId,
+    search: String(deviceId),
+    page_size: 100,
+  });
+  const matches = items.filter(
+    (terminal) =>
+      terminal.device_id === deviceId &&
+      terminal.org_id === orgId &&
+      terminal.sn === sn
+  );
+  if (matches.length !== 1) {
+    throw new Error("Не удалось однозначно определить запись терминала для провиженинга");
+  }
+  return provisionTerminalToIot(matches[0].id);
 }
 
 export async function updateDeviceTag(
