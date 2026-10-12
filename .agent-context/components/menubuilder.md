@@ -1,5 +1,17 @@
 # MenuBuilder
 
+## Certificate installation recovery, 2026-10-12 — released
+
+main b152e35 delivered via builder for PB/MB/frontend. Used-PIN command failure
+is shown separately from issuance; five minutes without verified current identity
+escalates. New orders are blocked while the current issued renewal is unconfirmed.
+Explicit retry uses its original unexpired PIN and saved native PKCS7/key through
+unchanged RPC7011; no additional payment, issuance, native release or RabbitMQ
+configuration change. Local PB311/MB779 tests, quality,93frontend unit and6fakeREST
+browser tests passed. Deployed read-only selectors correctly choose773 PIN327
+despite newer unused328. Owner-triggered install/hot rotation/RabbitMQ not yet
+verified. [Delivery and limits](../tasks/active/2026-10-12-renewal-install-recovery.md).
+
 ## JWT signer и native CAPTCHA, 2026-10-11 — выпущено
 
 Приватный RS256 signer, public key lk-key-000003, internal HMAC отдельно от
