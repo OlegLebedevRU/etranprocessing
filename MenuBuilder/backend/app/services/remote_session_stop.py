@@ -42,7 +42,14 @@ class RemoteSessionStopService:
             return (
                 False  # Invalid/missing enrollment metadata must not prevent cleanup.
             )
-        return current is None or current.allowed
+        return (
+            current is None
+            or current.allowed
+            or (
+                getattr(current, "user_disabled", False)
+                and current.state in {"free", "active", "grace"}
+            )
+        )
 
     @staticmethod
     async def _bounded_stop(

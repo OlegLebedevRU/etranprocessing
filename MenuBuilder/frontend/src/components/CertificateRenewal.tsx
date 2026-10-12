@@ -94,6 +94,7 @@ export default function CertificateRenewal({ deviceId }: { deviceId: number }) {
     } finally { if (current === generation.current) { sending.current = false; setBusy(false); } }
   };
   return <Space orientation="vertical">
+    <Typography.Text type="secondary">Нужен агент с поддержкой RPC 7011; постановка команды не подтверждает её выполнение.</Typography.Text>
     <Typography.Text>{snapshot ? labels[snapshot.status] || snapshot.status : "Проверка доступности…"}</Typography.Text>
     <Space wrap>
       <Button type="primary" disabled={!snapshot?.allowed || snapshot?.installation_pending || Date.now() < cooldown} onClick={() => {

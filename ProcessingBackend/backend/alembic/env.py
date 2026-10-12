@@ -8,6 +8,10 @@ with contextlib.suppress(ImportError):
 
 from etranprocessing_db.base import Base
 from etranprocessing_db.file_manager import FileManagerAgent  # noqa: F401
+from etranprocessing_db.inventory import (  # noqa: F401
+    TerminalToolsInventory,
+    TerminalToolsInventoryInbox,
+)
 from etranprocessing_db.models import (  # noqa: F401
     ApiToken,
     BalanceTerminalTsp,

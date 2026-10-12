@@ -45,6 +45,9 @@ interface DevicePassportTabProps {
   deviceId: number;
   sn: string;
   orgId: number;
+  snapshot?: DeviceRawResult | null;
+  onRefresh?: () => Promise<void>;
+  readOnly?: boolean;
 }
 
 function formatBytes(bytes?: number): string {
@@ -120,6 +123,9 @@ export default function DevicePassportTab({
   deviceId,
   sn,
   orgId,
+  snapshot,
+  onRefresh,
+  readOnly = false,
 }: DevicePassportTabProps) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -129,6 +135,10 @@ export default function DevicePassportTab({
   const tenantTz = resolveTenantTimezone();
 
   const fetchDeviceData = useCallback(async () => {
+    if (snapshot !== undefined) {
+      if (onRefresh) await onRefresh();
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -142,10 +152,11 @@ export default function DevicePassportTab({
     } finally {
       setLoading(false);
     }
-  }, [orgId, deviceId]);
+  }, [orgId, deviceId, snapshot, onRefresh]);
 
   useEffect(() => {
-    fetchDeviceData();
+    if (snapshot !== undefined) setDevice(snapshot);
+    else void fetchDeviceData();
   }, [fetchDeviceData]);
 
   const handleUnblock = async () => {
@@ -311,7 +322,7 @@ export default function DevicePassportTab({
             type="error"
             message={error}
             showIcon
-            action={
+            action={!readOnly &&
               <Button
                 size="small"
                 type="primary"
@@ -672,7 +683,7 @@ export default function DevicePassportTab({
           size="small"
           column={1}
         >
-          <Descriptions.Item label="Продление"><CertificateRenewal deviceId={deviceId} /></Descriptions.Item>
+          {!readOnly && <Descriptions.Item label="Продление"><CertificateRenewal deviceId={deviceId} /></Descriptions.Item>}
           <Descriptions.Item label="Субъект (DN / Subject)">
             {details?.peer_cert_subject ? (
               <div style={{ wordBreak: "break-all" }}>

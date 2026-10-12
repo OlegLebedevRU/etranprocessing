@@ -37,7 +37,7 @@ async def test_complete_transport_matrix_matches_shared_decision(monkeypatch):
         db = AsyncMock()
         db.get.return_value = SimpleNamespace(timezone="UTC")
         db.scalar.side_effect = [
-            SimpleNamespace(deleted_at=at if deleted else None, paid_until=paid),
+            SimpleNamespace(user_disabled_at=None, deleted_at=at if deleted else None, paid_until=paid),
             773 if free else 774,
             None,
         ]

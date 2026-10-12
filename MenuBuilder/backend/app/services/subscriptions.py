@@ -36,6 +36,7 @@ class TerminalSubscription(BaseModel):
     reason: str
     action: str | None = None
     is_free: bool = False
+    user_disabled: bool = False
 
 
 def add_months(at: datetime, months: int, timezone: str) -> datetime:
@@ -96,7 +97,10 @@ def subscription_status(
         "grace": ("Продлите подписку, чтобы сохранить доступ", "Продлить"),
         "expired": ("Подписка закончилась", "Восстановить доступ"),
     }[state]
-    allowed = subscription_allowed(state)
+    user_disabled = terminal.user_disabled_at is not None
+    allowed = subscription_allowed(state) and not user_disabled
+    if user_disabled:
+        reason = "Отключён от L4Desk. Новые использования запрещены; оплаченный срок продолжает истекать."
     return TerminalSubscription(
         terminal_id=terminal.terminal_id,
         device_id=runtime.device_id,
@@ -108,6 +112,7 @@ def subscription_status(
         reason=reason,
         action=action,
         is_free=is_free,
+        user_disabled=user_disabled,
     )
 
 

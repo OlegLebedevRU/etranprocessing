@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 logger = logging.getLogger(__name__)
 
-REQUIRED_ALEMBIC_REVISION = "032"
-COMPATIBLE_ALEMBIC_REVISIONS: set[str] = {"032", "033"}
+REQUIRED_ALEMBIC_REVISION = "033"
+COMPATIBLE_ALEMBIC_REVISIONS: set[str] = {"033"}
 
 L4DESK_TABLES: list[str] = [
     "fin_accounts",
@@ -94,6 +94,10 @@ def check_schema_compatibility_sync(
         raise SchemaCompatibilityError(
             "Missing l4desk_terminals.paid_until; apply migration 029 before starting MenuBuilder."
         )
+    if "user_disabled_at" not in terminal_columns:
+        raise SchemaCompatibilityError(
+            "Missing l4desk_terminals.user_disabled_at; apply migration 033."
+        )
 
     if "certificate_pins" not in existing_tables:
         raise SchemaCompatibilityError("Missing certificate_pins; apply migration 030.")
@@ -114,6 +118,13 @@ def check_schema_compatibility_sync(
         raise SchemaCompatibilityError(
             "Missing terminals.l4desk_subscription_enabled; apply migration 031."
         )
+
+    missing_inventory = {
+        "terminal_tools_inventory",
+        "terminal_tools_inventory_inbox",
+    } - existing_tables
+    if missing_inventory:
+        raise SchemaCompatibilityError("Missing inventory tables; apply migration 033.")
 
     missing_fm = {"fm_agents", "fm_operations"} - existing_tables
     if missing_fm:

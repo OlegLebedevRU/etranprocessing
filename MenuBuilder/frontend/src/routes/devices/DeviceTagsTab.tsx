@@ -11,6 +11,7 @@ interface DeviceTagsTabProps {
   orgId: number;
   tags: DeviceTagItem[];
   onTagsUpdated: () => void;
+  readOnly?: boolean;
 }
 
 export default function DeviceTagsTab({
@@ -18,6 +19,7 @@ export default function DeviceTagsTab({
   orgId,
   tags,
   onTagsUpdated,
+  readOnly = false,
 }: DeviceTagsTabProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTag, setEditingTag] = useState<DeviceTagItem | null>(null);
@@ -93,7 +95,7 @@ export default function DeviceTagsTab({
       key: "actions",
       width: 100,
       align: "center",
-      render: (_, record) => (
+      render: (_, record) => !readOnly && (
         <Space size={4}>
           <Button
             type="text"
@@ -129,7 +131,7 @@ export default function DeviceTagsTab({
         <Text type="secondary">
           Метаданные, переменные конфигурации и служебные теги устройства #{deviceId}
         </Text>
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenAdd}>
+        <Button disabled={readOnly} type="primary" icon={<PlusOutlined />} onClick={handleOpenAdd}>
           Добавить тег
         </Button>
       </div>

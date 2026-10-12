@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type Key } from "react";
 import { Alert, Badge, Breadcrumb, Button, Card, Col, Empty, Input, Modal, Row, Space, Spin, Table, Tag, Tree, Typography, Upload } from "antd";
 import { ArrowLeftOutlined, ArrowRightOutlined, ArrowUpOutlined, DesktopOutlined, DownloadOutlined, FolderOutlined, HddOutlined, HomeOutlined, ReloadOutlined, UploadOutlined } from "@ant-design/icons";
+import { useSearchParams } from "react-router";
 import { useSession } from "../../session/SessionContext";
 import { getDevices, type DeviceListItem } from "../../api/devices";
 import { listTerminalsSettings } from "../../api/settings";
@@ -52,15 +53,19 @@ async function wait(api: ReturnType<typeof fmApi>, id: string, signal: AbortSign
 
 export default function FilesPage() {
   const { user } = useSession();
+  const [params] = useSearchParams();
+  const rawTarget = params.get("device_id");
+  const target = rawTarget && /^[1-9][0-9]*$/.test(rawTarget) && Number.isSafeInteger(Number(rawTarget)) ? Number(rawTarget) : undefined;
+  if (rawTarget !== null && target === undefined) return <Alert type="warning" title="Некорректный номер терминала" />;
   if (!user || ![1, 2, 3, 5].includes(user.role_id ?? 0)) return <Alert type="warning" title="Для файлового менеджера нужны права управления терминалом." />;
   if (typeof user.org_id !== "number" || user.org_id <= 0) return <Alert type="info" title="Выберите организацию для работы с файлами терминала." />;
-  return <TenantFiles key={user.org_id} org={user.org_id} />;
+  return <TenantFiles key={`${user.org_id}:${target ?? "all"}`} org={user.org_id} target={target} />;
 }
 
-function TenantFiles({ org }: { org: number }) {
+function TenantFiles({ org, target }: { org: number; target?: number }) {
   const [devices, setDevices] = useState<(DeviceListItem & { terminalAddress?: string })[]>([]);
   const [availability, setAvailability] = useState<Record<number, FmReadiness>>({});
-  const [device, setDevice] = useState<number>();
+  const [device, setDevice] = useState<number | undefined>(target);
   const [roots, setRoots] = useState<Record<number, string[]>>({});
   const [expanded, setExpanded] = useState<Key[]>([]);
   const [path, setPath] = useState("");
@@ -148,12 +153,12 @@ function TenantFiles({ org }: { org: number }) {
     const controller = lifetime.current;
     let refreshing = false;
     const load = async () => {
-      if (refreshing) return; refreshing = true;
+      if (refreshing || document.visibilityState !== "visible") return; refreshing = true;
       try {
-        const [first, terminals] = await Promise.all([getDevices(org, { page: 1, size: 100 }), listTerminalsSettings({ org_id: org, all: true })]);
+        const [first, terminals] = await Promise.all([getDevices(org, { page: 1, size: target ? 1 : 100, deviceId: target }), listTerminalsSettings({ org_id: org, all: !target, device_filter: target ? String(target) : undefined })]);
         const items = [...first.items];
-        for (let page = 2; page <= first.pages; page++) items.push(...(await getDevices(org, { page, size: 100 })).items);
-        const online = selectableDevices(items, terminals.items).filter(item => item.status === "online");
+        for (let page = 2; !target && page <= first.pages; page++) items.push(...(await getDevices(org, { page, size: 100 })).items);
+        const online = target ? items.filter(item => item.device_id === target && terminals.items.some(t => t.device_id === target)) : selectableDevices(items, terminals.items).filter(item => item.status === "online");
         if (controller.signal.aborted) return;
         setDevices(online.map(item => ({ ...item, terminalAddress: terminals.items.find(terminal => terminal.device_id === item.device_id)?.address || undefined }))); setLoading(false);
         // Bounded concurrency; readiness inspection never acquires a session.
@@ -176,7 +181,7 @@ function TenantFiles({ org }: { org: number }) {
     const unload = (event: BeforeUnloadEvent) => { if (current.current || locked.current || transferRef.current) { event.preventDefault(); event.returnValue = ""; } };
     window.addEventListener("beforeunload", unload);
     return () => { mounted.current = false; controller.abort(); clearInterval(timer); clearInterval(tick); window.removeEventListener("beforeunload", unload); void close(); };
-  }, [org, close]);
+  }, [org, target, close]);
 
   useEffect(() => {
     if (!connected) return;
@@ -361,6 +366,7 @@ function TenantFiles({ org }: { org: number }) {
     <Title level={3} style={{ margin: 0 }}>Файловый менеджер</Title>
     <Text type="secondary">Выберите терминал и диск. На время работы файловый менеджер занимает общую сессию с консолью и видео.</Text>
     {error && <Alert type="error" title={error} showIcon closable onClose={() => setError("")} />}
+    {target && availability[target] && !availability[target].available && <Alert type="info" showIcon title={fmReason[availability[target].state] || "Файловый менеджер недоступен"} />}
     {notice && <Alert type="info" title={notice} showIcon closable onClose={() => setNotice("")} />}
     <Row gutter={[16, 16]} style={{ width: "100%", margin: 0 }}>
       <Col xs={24} md={{ flex: "232px" }} style={{ minWidth: 0 }}>
@@ -375,6 +381,7 @@ function TenantFiles({ org }: { org: number }) {
       <Col xs={24} md={{ flex: "1" }} style={{ minWidth: 0 }}>
         <Card size="small" style={{ minHeight: 520 }} title={<Breadcrumb items={crumbs} />} extra={connected && <Tag color="blue">Монопольный сеанс</Tag>}>
           <Space wrap style={{ marginBottom: 16 }}>
+            {device && !connected && <Button type="primary" disabled={navigationDisabled || !devices.some(item => item.device_id === device) || availability[device]?.available !== true} onClick={() => void select(device)}>Подключиться к терминалу {device}</Button>}
             <Button aria-label="Назад" icon={<ArrowLeftOutlined />} disabled={navigationDisabled || !connected || historyIndex === 0} onClick={() => void browse(history[historyIndex - 1], 0, historyIndex - 1)} />
             <Button aria-label="Вперёд" icon={<ArrowRightOutlined />} disabled={navigationDisabled || !connected || historyIndex >= history.length - 1} onClick={() => void browse(history[historyIndex + 1], 0, historyIndex + 1)} />
             <Button aria-label="Вверх" icon={<ArrowUpOutlined />} disabled={navigationDisabled || !connected || !path} onClick={() => void browse(fmParent(path, localRoots))} />

@@ -35,6 +35,7 @@ from app.routers import (
     settings_users,
     subscriptions,
     terminal_bindings,
+    terminal_inventory,
     video,
     video_control,
 )
@@ -186,6 +187,7 @@ app.include_router(video_control.router)
 app.include_router(remote_sessions.router, prefix="/api/v1")
 app.include_router(remote_sessions.router, prefix="/api")
 app.include_router(iot_consumer.router)
+app.include_router(terminal_inventory.router)
 app.include_router(subscriptions.router, prefix="/api/v1")
 app.include_router(subscriptions.router, prefix="/api", include_in_schema=False)
 app.include_router(hub.router)

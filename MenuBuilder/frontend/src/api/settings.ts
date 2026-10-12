@@ -1,4 +1,5 @@
 import client from "./client";
+import type { Subscription } from "./subscriptions";
 
 export interface ProfileSettings {
   username: string;
@@ -59,6 +60,12 @@ export interface TerminalSettingsItem {
   pin_masked?: string | null;
   last_error?: string | null;
   operation_id?: string | null;
+  user_disabled?: boolean;
+  presence?: "online" | "offline" | "disabled" | "unknown";
+  iot_blocked?: boolean;
+  suite_version?: string | null;
+  inventory_published_at?: string | null;
+  subscription?: Subscription | null;
 }
 
 export interface OnboardTerminalPayload {
@@ -104,9 +111,13 @@ export interface TerminalSettingsListResponse {
   total_count: number;
   page: number;
   page_size: number;
+  can_create?: boolean;
+  presence_unavailable?: boolean;
 }
 
 export interface ListTerminalsSettingsParams {
+  l4desk?: boolean;
+  status_filter?: "all" | "online" | "offline" | "disabled";
   all?: boolean;
   org_id?: number;
   search?: string;
@@ -173,12 +184,13 @@ export async function confirmEmailToken(
 }
 
 export async function listTerminalsSettings(
-  params?: ListTerminalsSettingsParams | number
+  params?: ListTerminalsSettingsParams | number,
+  signal?: AbortSignal,
 ): Promise<TerminalSettingsListResponse> {
   const queryParams = typeof params === "number" ? { org_id: params } : params;
   const { data, headers } = await client.get<TerminalSettingsListResponse | TerminalSettingsItem[]>(
     "/settings/terminals",
-    { params: queryParams }
+    { params: queryParams, signal }
   );
   if (Array.isArray(data)) {
     const rawTotal = headers ? headers["x-total-count"] : undefined;
@@ -204,6 +216,10 @@ export async function updateTerminalSettings(
 export async function setTerminalActivity(terminalId: number, isActive: boolean): Promise<{ id: number; is_active: boolean }> {
   const { data } = await client.patch(`/settings/terminals/${terminalId}/activity`, { is_active: isActive });
   return data;
+}
+
+export async function setL4DeskActivity(terminalId: number, enabled: boolean): Promise<{ id: number; is_active: boolean; user_disabled: boolean }> {
+  return (await client.patch(`/settings/terminals/${terminalId}/activity`, { is_active: enabled, scope: "l4desk" })).data;
 }
 
 export async function getTerminalOnboardingStatus(): Promise<OnboardingStatusResponse> {

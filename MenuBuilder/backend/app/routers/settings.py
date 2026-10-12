@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 import secrets
 from datetime import UTC, datetime, timedelta
-from typing import Any
-from uuid import UUID
+from typing import Any, Literal
+from uuid import UUID, uuid4
 
+from etranprocessing_db.inventory import TerminalToolsInventory
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import Select, String, cast, desc, func, or_, select
@@ -16,7 +18,7 @@ from app.auth import get_current_user
 from app.config import settings
 from app.database import get_db
 from app.models import CertificatePin, EmailVerification, Org, Terminal, User
-from app.models_l4desk import L4DeskTerminal
+from app.models_l4desk import L4DeskAuditEvent, L4DeskTerminal
 from app.repositories.l4desk_repository import L4DeskRepository
 from app.security.permissions import (
     PERMISSION_SETTINGS_TERMINALS_VIEW,
@@ -25,6 +27,7 @@ from app.security.permissions import (
 )
 from app.services.cert_billing import mask_pin
 from app.services.email_service import send_email_with_logging
+from app.services.subscriptions import TerminalSubscription, list_subscriptions
 from app.services.terminal_onboarding_service import (
     IssueCertificatePinResponse,
     TerminalOnboardingService,
@@ -33,6 +36,7 @@ from app.services.terminal_onboarding_service import (
     TerminalReadiness,
 )
 from app.services.terminal_pin_service import TerminalPinService
+from app.services.terminal_presence import presence_snapshot
 from app.user_store import verify_password
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -139,6 +143,12 @@ class TerminalSettingsItem(BaseModel):
     pin_masked: str | None = None
     last_error: str | None = None
     operation_id: str | None = None
+    user_disabled: bool = False
+    presence: Literal["online", "offline", "disabled", "unknown"] = "unknown"
+    iot_blocked: bool = False
+    suite_version: str | None = None
+    inventory_published_at: datetime | None = None
+    subscription: TerminalSubscription | None = None
 
 
 class TerminalSettingsListResponse(BaseModel):
@@ -146,6 +156,8 @@ class TerminalSettingsListResponse(BaseModel):
     total_count: int
     page: int
     page_size: int
+    can_create: bool = True
+    presence_unavailable: bool = False
 
 
 class RenewTerminalPinRequest(BaseModel):
@@ -160,6 +172,7 @@ class UpdateTerminalSettingsRequest(BaseModel):
 
 class TerminalActivityRequest(BaseModel):
     is_active: bool
+    scope: Literal["administrative", "l4desk"] = "administrative"
 
 
 @router.patch("/terminals/{terminal_id}/activity")
@@ -182,6 +195,40 @@ async def set_terminal_activity(
     )
     if terminal is None:
         raise HTTPException(404, "Терминал не найден")
+    if req.scope == "l4desk":
+        if not terminal.l4desk_subscription_enabled:
+            raise HTTPException(409, "Терминал не подключён к L4Desk")
+        l4 = await db.scalar(
+            select(L4DeskTerminal)
+            .where(
+                L4DeskTerminal.terminal_id == terminal.id,
+                L4DeskTerminal.tenant_id == org_id,
+                L4DeskTerminal.deleted_at.is_(None),
+            )
+            .with_for_update()
+        )
+        if l4 is None:
+            raise HTTPException(404, "Подключение L4Desk не найдено")
+        if (l4.user_disabled_at is None) != req.is_active:
+            l4.user_disabled_at = None if req.is_active else datetime.now(UTC)
+            db.add(
+                L4DeskAuditEvent(
+                    tenant_id=org_id,
+                    actor=str(user.get("sub") or user.get("id")),
+                    event_type="terminal.l4desk_activity_changed",
+                    correlation_id=str(uuid4()),
+                    subject_type="terminal",
+                    subject_id=str(terminal.id),
+                    outcome="applied",
+                    details={"enabled": req.is_active},
+                )
+            )
+            await db.commit()
+        return {
+            "id": terminal.id,
+            "is_active": terminal.is_active,
+            "user_disabled": l4.user_disabled_at is not None,
+        }
     if terminal.is_active != req.is_active:
         if not req.is_active:
             active = await L4DeskRepository(db).get_active_session_by_terminal_id(
@@ -689,6 +736,8 @@ async def list_terminals_settings(
     ),
     db: AsyncSession = Depends(get_db),
     response: Response = None,  # type: ignore[assignment]
+    l4desk: bool = Query(False),
+    status_filter: Literal["all", "online", "offline", "disabled"] = Query("all"),
 ) -> TerminalSettingsListResponse:
     """List terminals for current organization with search, sorting and pagination."""
     is_su = bool(user.get("is_superuser") or user.get("role_id") == 1)
@@ -708,6 +757,57 @@ async def list_terminals_settings(
         )
 
     query = _visible_terminals_query(effective_org_id)
+    is_l4desk = l4desk is True
+    connections: dict[int, dict[str, Any]] = {}
+    presence_unavailable = False
+    finance: dict[int, TerminalSubscription] = {}
+    can_create = True
+    disabled_ids: set[int] = set()
+    if is_l4desk:
+        query = query.where(Terminal.l4desk_subscription_enabled.is_(True))
+        subscriptions = await list_subscriptions(db, effective_org_id)
+        finance = {item.terminal_id: item for item in subscriptions}
+        can_create = len(subscriptions) < 3 or any(
+            item.state == "active" and not item.is_free for item in subscriptions
+        )
+        disabled_ids = {
+            item.terminal_id for item in subscriptions if item.user_disabled
+        }
+        ids = list(
+            (
+                await db.scalars(
+                    select(Terminal.device_id).where(
+                        Terminal.org_id == effective_org_id,
+                        Terminal.l4desk_subscription_enabled.is_(True),
+                    )
+                )
+            ).all()
+        )
+        try:
+            connections = await presence_snapshot(effective_org_id, ids)
+        except Exception as exc:  # noqa: BLE001 - Isolate provider failures from metadata reads.
+            logging.getLogger(__name__).warning(
+                "Terminal presence unavailable: %s", type(exc).__name__
+            )
+            presence_unavailable = True
+        if ids and len(connections) < len(set(ids)):
+            presence_unavailable = True
+        disabled = or_(Terminal.is_active.is_(False), Terminal.id.in_(disabled_ids))
+        online_ids = [
+            identifier
+            for identifier, item in connections.items()
+            if item.get("is_online") is True and not item.get("is_blocked")
+        ]
+        if status_filter == "disabled":
+            query = query.where(disabled)
+        elif status_filter == "online":
+            query = query.where(~disabled, Terminal.device_id.in_(online_ids))
+        elif status_filter == "offline":
+            query = query.where(
+                ~disabled,
+                Terminal.device_id.in_(connections),
+                Terminal.device_id.not_in(online_ids),
+            )
 
     if device_filter and device_filter.strip():
         query = query.where(_device_filter_condition(device_filter))
@@ -771,6 +871,19 @@ async def list_terminals_settings(
     res = await db.execute(query)
     rows = res.all()
     terminals = [row[0] for row in rows]
+    inventory = {}
+    if is_l4desk and terminals:
+        snapshots = (
+            await db.scalars(
+                select(TerminalToolsInventory).where(
+                    TerminalToolsInventory.tenant_id == effective_org_id,
+                    TerminalToolsInventory.terminal_id.in_(
+                        [item.id for item in terminals]
+                    ),
+                )
+            )
+        ).all()
+        inventory = {item.terminal_id: item for item in snapshots}
     pin_times = {row[0].id: row[1] for row in rows}
 
     # Enrich with L4Desk metadata
@@ -878,6 +991,29 @@ async def list_terminals_settings(
                 pin_masked=pin_msk,
                 last_error=last_err,
                 operation_id=op_id,
+                user_disabled=bool(
+                    l4
+                    and t.l4desk_subscription_enabled
+                    and l4.user_disabled_at is not None
+                ),
+                presence=(
+                    "disabled"
+                    if not t.is_active or t.id in disabled_ids
+                    else "unknown"
+                    if t.device_id not in connections
+                    else "online"
+                    if connections[t.device_id].get("is_online") is True
+                    and not connections[t.device_id].get("is_blocked")
+                    else "offline"
+                ),
+                iot_blocked=bool(connections.get(t.device_id, {}).get("is_blocked")),
+                suite_version=inventory[t.id].suite_version
+                if t.id in inventory and inventory[t.id].sn == t.sn
+                else None,
+                inventory_published_at=inventory[t.id].published_at
+                if t.id in inventory and inventory[t.id].sn == t.sn
+                else None,
+                subscription=finance.get(t.id),
             )
         )
 
@@ -889,6 +1025,8 @@ async def list_terminals_settings(
         total_count=total_count,
         page=cur_page if not should_fetch_all else 1,
         page_size=cur_page_size if not should_fetch_all else total_count,
+        can_create=can_create,
+        presence_unavailable=presence_unavailable,
     )
 
 

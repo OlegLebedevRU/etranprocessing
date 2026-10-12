@@ -140,6 +140,7 @@ class L4DeskTerminal(Base):
     first_online_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_online_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     paid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    user_disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

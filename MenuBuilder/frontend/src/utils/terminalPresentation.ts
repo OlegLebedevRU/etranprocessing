@@ -5,10 +5,11 @@ export type TerminalStatus = "online" | "offline" | "disabled" | "unknown";
 export type TerminalFilter = "all" | "online" | "offline" | "disabled";
 
 export function terminalStatus(
-  terminal: Pick<TerminalSettingsItem, "is_active">,
+  terminal: Pick<TerminalSettingsItem, "is_active" | "user_disabled" | "presence">,
   device?: DeviceListItem,
 ): TerminalStatus {
-  if (!terminal.is_active) return "disabled";
+  if (!terminal.is_active || terminal.user_disabled) return "disabled";
+  if (terminal.presence && terminal.presence !== "unknown") return terminal.presence;
   if (!device?.connection) return "unknown";
   return device.status === "online" ? "online" : "offline";
 }
@@ -66,7 +67,7 @@ export function selectableDevices(
   terminals: TerminalSettingsItem[],
 ): DeviceListItem[] {
   const active = new Set(
-    terminals.filter((item) => item.is_active).map((item) => item.device_id),
+    terminals.filter((item) => item.is_active && !item.user_disabled).map((item) => item.device_id),
   );
   return devices
     .filter((item) => active.has(item.device_id))

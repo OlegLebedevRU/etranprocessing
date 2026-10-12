@@ -45,7 +45,11 @@ async def reconcile_sessions() -> None:
                     else []
                 )
                 for state in states:
-                    if not state.allowed:
+                    if not state.allowed and state.state not in {
+                        "free",
+                        "active",
+                        "grace",
+                    }:
                         await RemoteSessionStopService.stop_sessions_for_blocked_tenant(
                             db,
                             tenant_id,

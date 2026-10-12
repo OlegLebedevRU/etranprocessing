@@ -224,7 +224,9 @@ async def _verify_device_access(
             raise HTTPException(
                 403,
                 detail={
-                    "code": f"subscription_{subscription.state}",
+                    "code": "terminal_user_disabled"
+                    if subscription.user_disabled
+                    else f"subscription_{subscription.state}",
                     "message": subscription.reason,
                 },
             )

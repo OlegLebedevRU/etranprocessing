@@ -13,10 +13,10 @@ ROOT = Path(__file__).parents[1]
 
 
 def test_source_package_provenance():
-    for name in ("package-source-v032.json", "schema-v032.json", "schema-v032.md"):
+    for name in ("package-source-v033.json", "schema-v033.json", "schema-v033.md"):
         assert b"\r\n" not in (ROOT / "docs" / "l4desk" / name).read_bytes()
     manifest = json.loads(
-        (ROOT / "docs" / "l4desk" / "package-source-v032.json").read_text(
+        (ROOT / "docs" / "l4desk" / "package-source-v033.json").read_text(
             encoding="utf-8"
         )
     )

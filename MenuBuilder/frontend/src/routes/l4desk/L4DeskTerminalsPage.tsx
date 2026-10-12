@@ -1,15 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   Button,
   Card,
   Modal,
+  Drawer,
+  Dropdown,
+  Grid,
+  Radio,
   Empty,
   Tooltip,
   Input,
   Pagination,
-  Popconfirm,
-  Popover,
+
   Segmented,
   Select,
   Space,
@@ -24,6 +27,9 @@ import {
   CodeOutlined,
   DesktopOutlined,
   EditOutlined,
+  FolderOutlined,
+  InfoCircleOutlined,
+  MoreOutlined,
   PoweroffOutlined,
   PlusOutlined,
   KeyOutlined,
@@ -38,18 +44,17 @@ import {
   retryTerminalOnboarding,
   getTerminalPin,
   renewTerminalPin,
-  setTerminalActivity,
+  setL4DeskActivity,
   type TerminalPin,
   type TerminalSettingsItem,
 } from "../../api/settings";
 import { useSession } from "../../session/SessionContext";
 import CertificateRenewal from "../../components/CertificateRenewal";
 import OnboardingWizardModal from "../../components/OnboardingWizardModal";
-import { getDevices, type DeviceListItem } from "../../api/devices";
+import TerminalSummary from "../../components/TerminalSummary";
 import TerminalSettingsEditModal from "../../components/TerminalSettingsEditModal";
-import { certificatePresentation, filterTerminals, terminalStatus, type TerminalFilter } from "../../utils/terminalPresentation";
+import { certificatePresentation, terminalStatus, type TerminalFilter } from "../../utils/terminalPresentation";
 
-import { getSubscriptions, type SubscriptionSummary } from "../../api/subscriptions";
 import { subscriptionLabels } from "../../utils/subscriptionPresentation";
 
 const { Text, Title } = Typography;
@@ -82,7 +87,10 @@ export default function L4DeskTerminalsPage() {
   const canRenewCertificate = !!user?.is_superuser || [1, 3, 5].includes(user?.role_id ?? 0);
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [subscriptions, setSubscriptions] = useState<SubscriptionSummary | null>(null);
+  const [canCreate, setCanCreate] = useState(false);
+  const screens = Grid.useBreakpoint();
+  const [summary, setSummary] = useState<TerminalSettingsItem | null>(null);
+  const [certMode, setCertMode] = useState("auto");
   const [terminals, setTerminals] = useState<TerminalSettingsItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(1);
@@ -101,139 +109,109 @@ export default function L4DeskTerminalsPage() {
   const [editingTerminal, setEditingTerminal] = useState<TerminalSettingsItem | null>(null);
   const [renewalTerminal, setRenewalTerminal] = useState<TerminalSettingsItem | null>(null);
   const [retryingId, setRetryingId] = useState<number | null>(null);
-  const [devices, setDevices] = useState<Map<number, DeviceListItem>>(new Map());
   const fetching = useRef(false);
   const generation = useRef(0);
+  const tenantGeneration = useRef(0);
   const [pins, setPins] = useState<Map<number, TerminalPin | null>>(new Map());
   const [issuingPin, setIssuingPin] = useState<number | null>(null);
   const pinOperations = useRef(new Map<number, string>());
 
+  const abort = useRef<AbortController | null>(null);
   const fetchTerminals = useCallback(async (silent = false) => {
-    if (fetching.current) return;
+    if (fetching.current) return null;
     const currentGeneration = generation.current;
     fetching.current = true;
+    const controller = new AbortController(); abort.current = controller;
     if (!silent) setLoading(true);
     try {
-      const data = await listTerminalsSettings({
-        org_id: user?.org_id || undefined,
-        search: search || undefined,
-        device_filter: deviceFilter || undefined,
-        sort_by: sortBy,
-        sort_order: sortOrder,
-        all: true,
-      });
-      if (currentGeneration !== generation.current) return;
-      setListTenant(user?.org_id);
-      setTerminals(data.items || []);
-      setTotalCount(data.total_count);
-      const finance = await getSubscriptions().catch(() => null);
-      if (currentGeneration !== generation.current) return;
-      setSubscriptions(finance);
-      // Use the management screen's connection view; database flags are not live presence.
-      try {
-        const current = new Map<number, DeviceListItem>();
-        const missing = new Set(data.items.map(item => item.device_id));
-        let page = 1;
-        while (missing.size) {
-          const result = await getDevices({ orgId: user?.org_id ?? undefined, page, size: 100 });
-          for (const device of result.items) {
-            if (missing.delete(device.device_id)) current.set(device.device_id, device);
-          }
-          if (page >= result.pages || result.items.length === 0) break;
-          page += 1;
-        }
-        if (currentGeneration === generation.current) { setDevices(current); setPresenceError(false); }
-      } catch {
-        if (currentGeneration === generation.current) { setDevices(new Map()); setPresenceError(true); }
-      }
+      const data = await listTerminalsSettings({ org_id: user?.org_id || undefined,
+        l4desk: true, search: search || undefined, device_filter: deviceFilter || undefined,
+        sort_by: sortBy, sort_order: sortOrder, status_filter: statusFilter, page, page_size: pageSize }, controller.signal);
+      if (currentGeneration !== generation.current) return false;
+      setListTenant(user?.org_id); setTerminals(data.items || []); setTotalCount(data.total_count);
+      setCanCreate(data.can_create === true); setPresenceError(data.presence_unavailable === true);
+      const lastPage = Math.max(1, Math.ceil(data.total_count / pageSize));
+      if (page > lastPage) setPage(lastPage);
+      return !data.presence_unavailable;
     } catch (error: any) {
-      if (currentGeneration === generation.current) {
-        setTerminals([]);
-        setTotalCount(0);
-        setPins(new Map());
-        setDevices(new Map());
-        const detail = error?.response?.data?.detail;
-        message.error(typeof detail === "string" ? detail : "Не удалось загрузить список терминалов");
+      if (currentGeneration === generation.current && !controller.signal.aborted) {
+        setPresenceError(true);
+        message.error(typeof error?.response?.data?.detail === "string" ? error.response.data.detail : "Не удалось загрузить список терминалов");
       }
+      return false;
     } finally {
-      if (currentGeneration === generation.current) {
-        setLoading(false);
-        fetching.current = false;
-      }
+      if (currentGeneration === generation.current) { setLoading(false); fetching.current = false; }
     }
-  }, [user?.org_id, search, deviceFilter, sortBy, sortOrder]);
+  }, [user?.org_id, search, deviceFilter, sortBy, sortOrder, statusFilter, page, pageSize]);
 
   useEffect(() => {
-    generation.current += 1;
-    fetching.current = false;
-    setTerminals([]);
-    setTotalCount(0);
-    setPins(new Map());
-    setSubscriptions(null);
-    setDevices(new Map());
-    setIssuingPin(null);
-    setActivityPending(null);
-    setPresenceError(false);
-    setEditingTerminal(null);
-    setRenewalTerminal(null);
-    setRetryingId(null);
-    setWizardOpen(false);
-    pinOperations.current.clear();
-    void fetchTerminals();
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") void fetchTerminals(true);
-    }, 30_000);
-    return () => {
-      generation.current += 1;
-      window.clearInterval(timer);
+    generation.current++; fetching.current = false; abort.current?.abort();
+    setTerminals([]); setTotalCount(0); setCanCreate(false);
+    let disposed = false; let timer: number | undefined; let failures = 0;
+    const run = async () => {
+      if (document.visibilityState !== "visible") return;
+      const ok = await fetchTerminals();
+      if (disposed || ok === null) return;
+      failures = ok ? 0 : Math.min(3, failures + 1);
+      timer = window.setTimeout(run, 30_000 * 2 ** failures + Math.random() * 3000);
     };
+    const visible = () => { if (document.visibilityState === "visible") { window.clearTimeout(timer); void run(); } };
+    void run(); document.addEventListener("visibilitychange", visible);
+    return () => { disposed = true; generation.current++; abort.current?.abort(); window.clearTimeout(timer); document.removeEventListener("visibilitychange", visible); };
   }, [fetchTerminals]);
+  const refreshCurrent = useRef(fetchTerminals); refreshCurrent.current = fetchTerminals;
+  useEffect(() => {
+    tenantGeneration.current++; setPins(new Map());
+    setSummary(null); setEditingTerminal(null); setRenewalTerminal(null); setWizardOpen(false);
+    setActivityPending(null); setIssuingPin(null); setRetryingId(null); pinOperations.current.clear();
+    return () => { tenantGeneration.current++; };
+  }, [user?.org_id]);
 
   const handleRetry = async (record: TerminalSettingsItem) => {
-    const currentGeneration = generation.current;
+    const currentGeneration = tenantGeneration.current;
     setRetryingId(record.id);
     try {
       await retryTerminalOnboarding(record.id);
-      if (currentGeneration !== generation.current) return;
+      if (currentGeneration !== tenantGeneration.current) return;
       message.success(`Повторное подключение терминала ${record.device_id ?? ""} запущено`);
-      void fetchTerminals();
+      void refreshCurrent.current();
     } catch (err: any) {
-      if (currentGeneration !== generation.current) return;
+      if (currentGeneration !== tenantGeneration.current) return;
       message.error(err.response?.data?.detail || "Ошибка повторного provisioning");
     } finally {
-      if (currentGeneration === generation.current) setRetryingId(null);
+      if (currentGeneration === tenantGeneration.current) setRetryingId(null);
     }
   };
 
   const handleActivity = async (record: TerminalSettingsItem) => {
     if (activityPending !== null) return;
-    const currentGeneration = generation.current;
+    const currentGeneration = tenantGeneration.current;
     setActivityPending(record.id);
     try {
-      const updated = await setTerminalActivity(record.id, !record.is_active);
-      if (currentGeneration !== generation.current) return;
-      setTerminals(previous => previous.map(item => item.id === record.id ? { ...item, is_active: updated.is_active } : item));
-      message.success(updated.is_active ? "Терминал включён" : "Терминал отключён");
+      const updated = await setL4DeskActivity(record.id, !!record.user_disabled);
+      if (currentGeneration !== tenantGeneration.current) return;
+      setTerminals(previous => previous.map(item => item.id === record.id ? { ...item, user_disabled: updated.user_disabled } : item));
+      message.success(updated.user_disabled ? "Будущие использования терминала отключены" : "Терминал включён");
+      void refreshCurrent.current(true);
     } catch (error: any) {
-      if (currentGeneration === generation.current) message.error(error?.response?.data?.detail || "Не удалось изменить состояние терминала");
+      if (currentGeneration === tenantGeneration.current) message.error(error?.response?.data?.detail || "Не удалось изменить состояние терминала");
     } finally {
-      if (currentGeneration === generation.current) setActivityPending(null);
+      if (currentGeneration === tenantGeneration.current) setActivityPending(null);
     }
   };
 
   const loadPin = async (record: TerminalSettingsItem) => {
-    const currentGeneration = generation.current;
+    const currentGeneration = tenantGeneration.current;
     try {
       const pin = await getTerminalPin(record.id);
-      if (currentGeneration === generation.current) setPins(previous => new Map(previous).set(record.id, pin));
+      if (currentGeneration === tenantGeneration.current) setPins(previous => new Map(previous).set(record.id, pin));
     } catch {
-      if (currentGeneration === generation.current) setPins(previous => new Map(previous).set(record.id, null));
+      if (currentGeneration === tenantGeneration.current) setPins(previous => new Map(previous).set(record.id, null));
     }
   };
 
-  const filtered = useMemo(() => filterTerminals(terminals, devices, statusFilter), [terminals, devices, statusFilter]);
-  const currentPage = Math.min(page, Math.max(1, Math.ceil(filtered.length / pageSize)));
-  const visibleRows = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const currentPage = page;
+  const visibleRows = terminals;
 
   const canRetry = (item: TerminalSettingsItem) =>
     item.provisioning_state === "failed" ||
@@ -243,7 +221,7 @@ export default function L4DeskTerminalsPage() {
 
   const handleNewPin = async (record: TerminalSettingsItem) => {
     if (issuingPin !== null) return;
-    const currentGeneration = generation.current;
+    const currentGeneration = tenantGeneration.current;
     const storageKey = `l4desk-pin-operation:${user?.org_id}:${record.id}`;
     const operation = pinOperations.current.get(record.id) ?? sessionStorage.getItem(storageKey) ?? crypto.randomUUID();
     sessionStorage.setItem(storageKey, operation);
@@ -252,127 +230,73 @@ export default function L4DeskTerminalsPage() {
     try {
       const pin = await renewTerminalPin(record.id, operation);
       sessionStorage.removeItem(storageKey);
-      if (currentGeneration !== generation.current) return;
+      if (currentGeneration !== tenantGeneration.current) return;
       setPins(previous => new Map(previous).set(record.id, pin));
       setTerminals(previous => previous.map(item => item.id === record.id ? {...item, pin_state: pin.status} : item));
       pinOperations.current.delete(record.id);
       message.success("PIN получен");
       if (sortBy === "last_pin_issued_at") {
         setPage(1);
-        void fetchTerminals(true);
+        void refreshCurrent.current(true);
       }
     } catch (error: any) {
-      if (currentGeneration !== generation.current) return;
+      if (currentGeneration !== tenantGeneration.current) return;
       if (error.response?.status === 409) {
         sessionStorage.removeItem(storageKey);
         pinOperations.current.delete(record.id);
         message.error("Запрос заменён. Обновите список перед получением нового PIN.");
-        void fetchTerminals(true);
+        void refreshCurrent.current(true);
       } else {
         message.error("Не удалось получить PIN. Повторите запрос — операция сохранена.");
       }
     } finally {
-      if (currentGeneration === generation.current) setIssuingPin(null);
+      if (currentGeneration === tenantGeneration.current) setIssuingPin(null);
     }
   };
 
+  const identity = (r: TerminalSettingsItem) => <div style={{ minWidth: 0, overflowWrap: "anywhere" }}>
+    <Text strong copyable={{ text: String(r.device_id) }}>{r.device_id}</Text>
+    <div><Text ellipsis={{ tooltip: r.note || undefined }}>{r.note || "—"}</Text></div>
+    {r.address && <Text type="secondary" ellipsis={{ tooltip: r.address }}>{r.address}</Text>}
+    <div><Text type="secondary" copyable={{ text: r.sn }} style={{ fontSize: 11 }}>{r.sn}</Text></div>
+  </div>;
+  const status = (r: TerminalSettingsItem) => {
+    const value = terminalStatus(r);
+    const cert = certificatePresentation(r);
+    return <Space orientation="vertical" size={2}>
+      <Tooltip title={r.iot_blocked ? "Соединение заблокировано IoT" : value === "unknown" ? "Данные о связи недоступны" : undefined}>
+        <Tag color={value === "online" ? "success" : "default"}>{({online: "Онлайн", offline: "Оффлайн", disabled: "Откл.", unknown: "Неизвестен"})[value]}</Tag>
+      </Tooltip>
+      <Tooltip title={cert.hint}><Tag color={cert.color}>{cert.text}</Tag></Tooltip>
+    </Space>;
+  };
+  const activation = (r: TerminalSettingsItem) => <Space orientation="vertical" size={2}>
+    {r.subscription ? <Tooltip title={r.subscription.reason}><Button type="link" size="small" style={{ padding: 0 }} onClick={() => navigate("/licenses")}>{subscriptionLabels[r.subscription.state]}</Button></Tooltip> : <Text type="secondary">Подписка неизвестна</Text>}
+    <Tooltip title={r.inventory_published_at ? `${Date.now() - Date.parse(r.inventory_published_at) > 86400_000 ? "Сведения старше суток. " : ""}Опубликовано терминалом: ${new Date(r.inventory_published_at).toLocaleString("ru-RU")}. Последняя подтверждённая версия.` : "Установленная версия ещё не подтверждена"}>
+      <Text type="secondary">L4 Tools: {r.suite_version || "—"}</Text>
+    </Tooltip>
+  </Space>;
+  const actions = (r: TerminalSettingsItem) => {
+    const disabled = !r.is_active || !!r.user_disabled || !!r.iot_blocked || r.subscription?.allowed !== true;
+    return <Space size={4} wrap>
+      <Tooltip title="Консоль"><Button disabled={disabled} aria-label={`Консоль ${r.device_id}`} icon={<CodeOutlined />} onClick={() => navigate(`/console?device_id=${r.device_id}`)} /></Tooltip>
+      <Tooltip title="Экран терминала"><Button disabled={disabled} aria-label={`Экран терминала ${r.device_id}`} icon={<VideoCameraOutlined />} onClick={() => navigate(`/video?device_id=${r.device_id}`)} /></Tooltip>
+      <Tooltip title="Файловый менеджер"><Button disabled={disabled} aria-label={`Файловый менеджер ${r.device_id}`} icon={<FolderOutlined />} onClick={() => navigate(`/files?device_id=${r.device_id}`)} /></Tooltip>
+      <Tooltip title="Сводка"><Button aria-label={`Сводка ${r.device_id}`} icon={<InfoCircleOutlined />} onClick={() => setSummary(r)} /></Tooltip>
+      <Dropdown trigger={["click"]} menu={{ items: [
+        ...(canChangeTerminals ? [{ key: "edit", label: "Редактировать", icon: <EditOutlined />, onClick: () => setEditingTerminal(r) }] : []),
+        ...(canRenewCertificate || canChangeTerminals ? [{ key: "certificate", label: "Сертификат и PIN", icon: <SafetyCertificateOutlined />, onClick: () => { setCertMode(canRenewCertificate ? "auto" : "pin"); setRenewalTerminal(r); if (canChangeTerminals) void loadPin(r); } }] : []),
+        ...(canChangeTerminals && canRetry(r) ? [{ key: "retry", label: "Повторить подключение", icon: <SyncOutlined />, disabled: retryingId !== null, onClick: () => void handleRetry(r) }] : []),
+        ...(canChangeTerminals ? [{ type: "divider" as const }, { key: "activity", label: r.user_disabled ? "Включить терминал" : "Отключить терминал", icon: <PoweroffOutlined />, danger: !r.user_disabled, disabled: activityPending !== null,
+          onClick: () => { Modal.confirm({ title: `${r.user_disabled ? "Включить" : "Отключить"} терминал ${r.device_id}?`, content: r.user_disabled ? "Будущие использования снова будут разрешены при действующей подписке." : "Будущие использования, включая MQTT, RTP и файловый менеджер, будут запрещены после применения политики. Текущие соединения завершаются естественно. Оплаченный срок сохраняется.", okText: r.user_disabled ? "Включить" : "Отключить", cancelText: "Отмена", onOk: () => handleActivity(r) }); } }] : []),
+      ] }}><Button aria-label={`Другие действия ${r.device_id}`} icon={<MoreOutlined />} /></Dropdown>
+    </Space>;
+  };
   const columns: ColumnsType<TerminalSettingsItem> = [
-    {
-      title: "Терминал",
-      dataIndex: "device_id",
-      key: "device_id",
-      width: 105,
-      render: (v: number | null) => (
-        <Text strong copyable={v != null ? { text: String(v) } : false} style={{ whiteSpace: "nowrap" }}>
-          {v ?? "—"}
-        </Text>
-      ),
-    },
-    {
-      title: "Название / адрес",
-      key: "label",
-      width: 310,
-      render: (_, r) => (
-        <div style={{ minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Text ellipsis={{ tooltip: r.note || undefined }} style={{ flex: 1, minWidth: 0 }}>{r.note || "—"}</Text>
-            {canChangeTerminals && <Tooltip title="Редактировать"><Button type="text" aria-label={`Редактировать ${r.device_id}`} icon={<EditOutlined />} onClick={() => setEditingTerminal(r)} /></Tooltip>}
-          </div>
-          {r.address && (
-            <Text type="secondary" ellipsis={{ tooltip: r.address }} style={{ display: "block", fontSize: 12 }}>
-              {r.address}
-            </Text>
-          )}
-        </div>
-      ),
-    },
-    {
-      title: "Статус",
-      key: "status",
-      width: 95,
-      render: (_, r) => {
-        const status = terminalStatus(r, devices.get(r.device_id));
-        const device = devices.get(r.device_id);
-        const labels = { online: "Онлайн", offline: "Оффлайн", disabled: "Откл.", unknown: "Неизвестен" };
-        return <Tooltip title={device?.is_blocked ? "Соединение заблокировано IoT" : status === "unknown" ? "Данные о связи недоступны" : undefined}><Tag color={status === "online" ? "success" : "default"}>{labels[status]}</Tag></Tooltip>;
-      },
-    },
-    {
-      title: "Активация",
-      key: "activation",
-      width: 145,
-      render: (_, r) => {
-        const cert = certificatePresentation(r);
-        return <Tooltip title={cert.hint}><Tag color={cert.color}>{cert.text}</Tag></Tooltip>;
-      },
-    },
-    {
-      title: "Действия",
-      key: "actions",
-      width: 200,
-      render: (_, r) => (
-        <Space size={8}>
-          <Tooltip title="Консоль"><Button style={{ width: 38, height: 38 }} disabled={!r.is_active || devices.get(r.device_id)?.is_blocked || subscriptions?.items.some(t => t.terminal_id === r.id && !t.allowed)} aria-label={`Консоль ${r.device_id}`} icon={<CodeOutlined style={{ fontSize: 21 }} />} onClick={() => navigate(`/console?device_id=${r.device_id}`)} /></Tooltip>
-          <Tooltip title="Видео"><Button style={{ width: 38, height: 38 }} disabled={!r.is_active || devices.get(r.device_id)?.is_blocked || subscriptions?.items.some(t => t.terminal_id === r.id && !t.allowed)} aria-label={`Видео ${r.device_id}`} icon={<VideoCameraOutlined style={{ fontSize: 21 }} />} onClick={() => navigate(`/video?device_id=${r.device_id}`)} /></Tooltip>
-          <Popover trigger="click" title={`Подключение №${r.device_id}`} onOpenChange={open => { if (open) void loadPin(r); }} content={
-            <Space direction="vertical">
-              <Text>IoT: {r.provisioning_state || "pending"}</Text>
-              {pinTag({ ...r, pin_state: pins.get(r.id)?.status ?? r.pin_state })}
-              {r.last_pin_issued_at && <Text type="secondary">Последний PIN: {new Date(r.last_pin_issued_at).toLocaleString("ru-RU")}</Text>}
-              {pins.get(r.id)?.status === "issued" && pins.get(r.id)?.pin && <Text copyable={{ text: pins.get(r.id)!.pin! }}>{pins.get(r.id)!.pin}</Text>}
-              {pins.has(r.id) && !pins.get(r.id) && <Text type="secondary">PIN недоступен</Text>}
-              {r.last_error && <Text type="danger">{r.last_error}</Text>}
-              {canChangeTerminals && <Button icon={<KeyOutlined />} loading={issuingPin === r.id} disabled={issuingPin !== null && issuingPin !== r.id} onClick={() => void handleNewPin(r)}>Новый PIN</Button>}
-              {canChangeTerminals && canRetry(r) && <Button icon={<SyncOutlined />} loading={retryingId === r.id} onClick={() => void handleRetry(r)}>Повторить подключение</Button>}
-            </Space>
-          }><Button type="text" aria-label={`Подключение и PIN ${r.device_id}`} icon={<KeyOutlined />} /></Popover>
-          {canRenewCertificate && <Tooltip title="Продлить сертификат на терминале">
-            <Button type="text" disabled={!r.is_active} aria-label={`Продлить сертификат ${r.device_id}`}
-              icon={<SafetyCertificateOutlined />} onClick={() => setRenewalTerminal(r)} />
-          </Tooltip>}
-        </Space>
-      ),
-    },
-    {
-      title: "Подписка", key: "subscription", width: 170,
-      render: (_, r) => { const state = subscriptions?.items.find(t => t.terminal_id === r.id); return state ? <Tooltip title={state.reason}><Button type="link" onClick={() => navigate("/licenses")}>{subscriptionLabels[state.state]}</Button></Tooltip> : "—"; },
-    },
-    {
-      title: "",
-      key: "activity",
-      width: 65,
-      render: (_, r) => canChangeTerminals && (
-        <div style={{ paddingLeft: 12, borderLeft: "1px solid #d9d9d9" }}>
-          <Popconfirm title={`${r.is_active ? "Отключить" : "Включить"} терминал №${r.device_id}?`} description={r.is_active ? "Новые сеансы консоли и видео будут недоступны." : undefined} okText={r.is_active ? "Отключить" : "Включить"} cancelText="Отмена" onConfirm={() => handleActivity(r)}>
-            <Tooltip title={r.is_active ? "Отключить терминал" : "Включить терминал"}><Button danger={r.is_active} loading={activityPending === r.id} disabled={activityPending !== null} aria-label={`${r.is_active ? "Отключить" : "Включить"} ${r.device_id}`} icon={<PoweroffOutlined />} /></Tooltip>
-          </Popconfirm>
-        </div>
-      ),
-    },
-    {
-      title: "SN", dataIndex: "sn", key: "sn", width: 115,
-      render: (sn: string) => <Text type="secondary" copyable={{ text: sn }} ellipsis={{ tooltip: sn }} style={{ display: "block", width: 86, fontFamily: "monospace", fontSize: 11 }}>{sn}</Text>,
-    },
+    { title: "Терминал / адрес", key: "terminal", render: (_, r) => identity(r) },
+    { title: "Состояние", key: "status", width: 155, render: (_, r) => status(r) },
+    { title: "Подписка / версия", key: "activation", width: 170, render: (_, r) => activation(r) },
+    { title: "Действия", key: "actions", width: 190, render: (_, r) => actions(r) },
   ];
 
   return (
@@ -404,7 +328,7 @@ export default function L4DeskTerminalsPage() {
             {canChangeTerminals && <Button
               type="primary"
               icon={<PlusOutlined />}
-              disabled={subscriptions !== null && !subscriptions.can_create}
+              disabled={!canCreate}
               onClick={() => setWizardOpen(true)}
             >
               Подключить терминал
@@ -412,7 +336,7 @@ export default function L4DeskTerminalsPage() {
           </Space>
         </div>
       </Card>
-      {subscriptions && !subscriptions.can_create && <Alert style={{marginBottom: 16}} type="info" title="Созданы три терминала" description="Для добавления следующих нужна активная подписка дополнительного терминала." action={<Button onClick={() => navigate("/licenses")}>Открыть подписки</Button>} />}
+      {!canCreate && !loading && <Alert style={{marginBottom: 16}} type="info" title="Созданы три терминала" description="Для добавления следующих нужна активная подписка дополнительного терминала." action={<Button onClick={() => navigate("/licenses")}>Открыть подписки</Button>} />}
 
       <Card size="small" style={{ marginBottom: 16 }}>
         <Segmented<TerminalFilter>
@@ -468,7 +392,7 @@ export default function L4DeskTerminalsPage() {
             size="small"
             current={currentPage}
             pageSize={pageSize}
-            total={filtered.length}
+            total={totalCount}
             showSizeChanger
             pageSizeOptions={["20", "50", "100"]}
             showTotal={(total, range) => `${range[0]}–${range[1]} из ${total}`}
@@ -479,7 +403,7 @@ export default function L4DeskTerminalsPage() {
 
       {presenceError && <Alert type="warning" showIcon message="Данные о связи недоступны. Обновите список или выберите «Все»." style={{ marginBottom: 12 }} />}
         <Card styles={{ body: { padding: 12 } }}>
-          <Table
+          {screens.xl ? <Table
             rowKey="id"
             columns={columns}
             dataSource={listTenant === user?.org_id ? visibleRows : []}
@@ -487,9 +411,14 @@ export default function L4DeskTerminalsPage() {
             pagination={false}
             size="small"
             tableLayout="fixed"
-            scroll={{ x: 980 }}
             locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={totalCount === 0 ? "Терминалы по запросу не найдены" : statusFilter === "online" ? "Нет терминалов онлайн" : "Нет терминалов по выбранному фильтру"} /> }}
-          />
+          /> : <Space orientation="vertical" style={{ width: "100%" }}>
+            {listTenant === user?.org_id && visibleRows.map(r => <Card key={r.id} size="small">
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 16, justifyContent: "space-between" }}>{identity(r)}{status(r)}{activation(r)}</div>
+              <div style={{ marginTop: 12 }}>{actions(r)}</div>
+            </Card>)}
+            {!loading && !visibleRows.length && <Empty description="Терминалы по запросу не найдены" />}
+          </Space>}
         </Card>
 
       <TerminalSettingsEditModal
@@ -499,12 +428,22 @@ export default function L4DeskTerminalsPage() {
         onSaved={() => void fetchTerminals()}
       />
 
-      <Modal title={`Сертификат терминала ${renewalTerminal?.device_id ?? ""}`}
-        open={!!renewalTerminal && listTenant === user?.org_id}
-        onCancel={() => setRenewalTerminal(null)} footer={null} destroyOnHidden>
-        {renewalTerminal && listTenant === user?.org_id && <CertificateRenewal
-          key={`${user?.org_id}:${renewalTerminal.id}`} deviceId={renewalTerminal.device_id} />}
-      </Modal>
+      {summary && listTenant === user?.org_id && user?.org_id && <TerminalSummary key={`${user.org_id}:${summary.id}`} terminal={summary} orgId={user.org_id} canEdit={canChangeTerminals} onClose={() => setSummary(null)} />}
+      <Drawer title={`Сертификат терминала ${renewalTerminal?.device_id ?? ""}`} open={!!renewalTerminal && listTenant === user?.org_id}
+        onClose={() => setRenewalTerminal(null)} destroyOnHidden width="min(680px, 100vw)">
+        {renewalTerminal && <Space orientation="vertical" style={{ width: "100%" }}>
+          <Radio.Group value={certMode} onChange={e => setCertMode(e.target.value)} options={[
+            ...(canRenewCertificate ? [{ value: "auto", label: "Продление на терминале" }] : []),
+            ...(canChangeTerminals ? [{ value: "pin", label: "PIN для ручной установки" }] : [])]} />
+          {certMode === "auto" ? <CertificateRenewal key={`${user?.org_id}:${renewalTerminal.id}`} deviceId={renewalTerminal.device_id} /> : <>
+            <Alert type="info" title="Ручная установка сертификата" description="PIN предназначен для установки оператором. Не запускайте ручную установку одновременно с удалённым продлением: оба меняют действующий сертификат терминала." />
+            {pinTag({ ...renewalTerminal, pin_state: pins.get(renewalTerminal.id)?.status ?? renewalTerminal.pin_state })}
+            {pins.get(renewalTerminal.id)?.expires_at && <Text type="secondary">Срок PIN: {new Date(pins.get(renewalTerminal.id)!.expires_at).toLocaleString("ru-RU")}</Text>}
+            {pins.get(renewalTerminal.id)?.status === "issued" && pins.get(renewalTerminal.id)?.pin && <Text copyable>{pins.get(renewalTerminal.id)!.pin}</Text>}
+            <Button icon={<KeyOutlined />} loading={issuingPin === renewalTerminal.id} disabled={issuingPin !== null} onClick={() => void handleNewPin(renewalTerminal)}>Получить новый PIN</Button>
+          </>}
+        </Space>}
+      </Drawer>
 
       <OnboardingWizardModal
         key={user?.org_id}

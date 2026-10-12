@@ -26,7 +26,7 @@ from app.schema_compatibility import (
 )
 
 SCHEMA_JSON_PATH = (
-    Path(__file__).resolve().parents[3] / "shared/docs/l4desk/schema-v031.json"
+    Path(__file__).resolve().parents[3] / "shared/docs/l4desk/schema-v033.json"
 )
 
 
@@ -128,7 +128,7 @@ def test_startup_error_on_wrong_revision():
         sync_engine.connect() as conn,
         pytest.raises(
             SchemaCompatibilityError,
-            match=r"Database schema revision mismatch: expected one of \['032', '033'\]",
+            match=r"Database schema revision mismatch: expected one of \['033'\]",
         ),
     ):
         check_schema_compatibility_sync(conn)
@@ -139,7 +139,7 @@ def test_startup_error_on_missing_required_tables():
     sync_engine = create_engine("sqlite:///:memory:")
     with sync_engine.begin() as conn:
         conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32));"))
-        conn.execute(text("INSERT INTO alembic_version VALUES ('032');"))
+        conn.execute(text("INSERT INTO alembic_version VALUES ('033');"))
         # Only create 1 table instead of 23
         conn.execute(
             text("CREATE TABLE l4desk_registrations (id INTEGER PRIMARY KEY);")
@@ -160,12 +160,12 @@ def test_startup_success_when_revision_and_tables_match():
     sync_engine = create_engine("sqlite:///:memory:")
     with sync_engine.begin() as conn:
         conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32));"))
-        conn.execute(text("INSERT INTO alembic_version VALUES ('032');"))
-        for t in [*L4DESK_TABLES, "fm_agents", "fm_operations"]:
+        conn.execute(text("INSERT INTO alembic_version VALUES ('033');"))
+        for t in [*L4DESK_TABLES, "fm_agents", "fm_operations", "terminal_tools_inventory", "terminal_tools_inventory_inbox"]:
             conn.execute(
                 text(
                     f"CREATE TABLE {t} (id INTEGER PRIMARY KEY"
-                    + (", paid_until TIMESTAMP" if t == "l4desk_terminals" else "")
+                    + (", paid_until TIMESTAMP, user_disabled_at TIMESTAMP" if t == "l4desk_terminals" else "")
                     + ");"
                 )
             )
@@ -192,12 +192,12 @@ async def test_verify_schema_compatibility_async():
     sync_engine = create_engine("sqlite:///:memory:")
     with sync_engine.begin() as conn:
         conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32));"))
-        conn.execute(text("INSERT INTO alembic_version VALUES ('032');"))
-        for t in [*L4DESK_TABLES, "fm_agents", "fm_operations"]:
+        conn.execute(text("INSERT INTO alembic_version VALUES ('033');"))
+        for t in [*L4DESK_TABLES, "fm_agents", "fm_operations", "terminal_tools_inventory", "terminal_tools_inventory_inbox"]:
             conn.execute(
                 text(
                     f"CREATE TABLE {t} (id INTEGER PRIMARY KEY"
-                    + (", paid_until TIMESTAMP" if t == "l4desk_terminals" else "")
+                    + (", paid_until TIMESTAMP, user_disabled_at TIMESTAMP" if t == "l4desk_terminals" else "")
                     + ");"
                 )
             )
@@ -271,7 +271,7 @@ def test_compatibility_against_migrated_db():
     with sync_engine.begin() as conn:
         # Setup alembic_version
         conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32));"))
-        conn.execute(text("INSERT INTO alembic_version VALUES ('032');"))
+        conn.execute(text("INSERT INTO alembic_version VALUES ('033');"))
 
         # Setup supporting legacy tables
         conn.execute(text("CREATE TABLE orgs (org_id INTEGER PRIMARY KEY, name TEXT);"))
@@ -302,6 +302,8 @@ def test_compatibility_against_migrated_db():
     with sync_engine.begin() as conn:
         conn.execute(text("CREATE TABLE fm_agents (terminal_id INTEGER PRIMARY KEY);"))
         conn.execute(text("CREATE TABLE fm_operations (id TEXT PRIMARY KEY);"))
+        conn.execute(text("CREATE TABLE terminal_tools_inventory (terminal_id INTEGER PRIMARY KEY);"))
+        conn.execute(text("CREATE TABLE terminal_tools_inventory_inbox (event_uuid TEXT PRIMARY KEY);"))
 
     with sync_engine.connect() as conn:
         check_schema_compatibility_sync(conn)

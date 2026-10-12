@@ -190,6 +190,7 @@ class IotPlatformClient:
     async def get_terminals_status(
         self,
         device_ids: list[int],
+        org_id: int | None = None,
     ) -> list[dict[str, Any]]:
         """Query status for a list of device IDs from Leo4 IoT Platform."""
         if not device_ids:
@@ -200,7 +201,9 @@ class IotPlatformClient:
         url = f"{self.base_url}/api/internal/v1/provisioning/terminals/status"
         payload = {"device_ids": device_ids}
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            resp = await client.post(url, json=payload, headers=self._get_headers())
+            resp = await client.post(
+                url, json=payload, headers=self._get_headers(org_id=org_id)
+            )
             resp.raise_for_status()
         return resp.json().get("statuses", [])
 

@@ -14,6 +14,7 @@ export interface Subscription {
     | "admin_disabled"
     | "deleted";
   allowed: boolean;
+  user_disabled?: boolean;
   is_free: boolean;
   paid_until: string | null;
   grace_until: string | null;

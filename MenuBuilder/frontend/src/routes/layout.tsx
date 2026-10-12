@@ -38,7 +38,7 @@ const { Text } = Typography;
 
 const NAV_ITEMS = [
   { key: "monitoring", icon: <DashboardOutlined />, label: "Мониторинг" },
-  { key: "video", icon: <VideoCameraOutlined />, label: "Видеонаблюдение" },
+  { key: "video", icon: <VideoCameraOutlined />, label: "Экран терминала" },
   { key: "console", icon: <CodeOutlined />, label: "Консоль" },
   { key: "files", icon: <FolderOutlined />, label: "Файлы" },
   { key: "menu", icon: <AppstoreOutlined />, label: "Управление меню" },
@@ -50,7 +50,7 @@ const NAV_ITEMS = [
 
 const L4DESK_NAV_ITEMS = [
   { key: "terminals", icon: <DesktopOutlined />, label: "Терминалы" },
-  { key: "video", icon: <VideoCameraOutlined />, label: "Видеонаблюдение" },
+  { key: "video", icon: <VideoCameraOutlined />, label: "Экран терминала" },
   { key: "console", icon: <CodeOutlined />, label: "Консоль" },
   { key: "files", icon: <FolderOutlined />, label: "Файлы" },
   { key: "settings", icon: <SettingOutlined />, label: "Настройки" },
@@ -90,7 +90,7 @@ export default function AppLayout() {
       {
         key: "video",
         icon: <VideoCameraOutlined />,
-        label: "Видеонаблюдение",
+        label: "Экран терминала",
       },
       {
         key: "settings",
@@ -114,7 +114,7 @@ export default function AppLayout() {
     if (hasPermission(currentUser, PERMISSION_MONITORING_VIEW)) {
       navItems.push({ key: "monitoring", icon: <DashboardOutlined />, label: "Мониторинг" });
     }
-    navItems.push({ key: "video", icon: <VideoCameraOutlined />, label: "Видеонаблюдение" });
+    navItems.push({ key: "video", icon: <VideoCameraOutlined />, label: "Экран терминала" });
     if (hasAnyReportPermission(currentUser)) {
       navItems.push({ key: "reports", icon: <FileTextOutlined />, label: "Отчёты" });
     }
@@ -154,7 +154,7 @@ export default function AppLayout() {
   if (hasPermission(currentUser, PERMISSION_VIDEO_VIEW)) {
     const index = navItems.findIndex(item => item.key === "video");
     navItems.splice(index < 0 ? navItems.length : index + 1, 0,
-      { key: "cameras", icon: <VideoCameraOutlined />, label: "Камеры" });
+      { key: "cameras", icon: <VideoCameraOutlined />, label: "IP-камеры" });
   }
   const defaultSegment = navProfile === "l4desk" ? (isRole4 ? "video" : "terminals") : (isPlatformMode ? "admin" : "monitoring");
   const rawSegment = location.pathname.split("/")[1];

@@ -60,12 +60,18 @@ def get_leo4proxy_policy(
     subscription_allowed: bool = True,
     *,
     now: datetime | None = None,
+    user_disabled: bool = False,
 ) -> Leo4ProxyPolicy:
     expires = terminal.cert_not_valid_after
     if expires is not None and expires.tzinfo is None:
         expires = expires.replace(tzinfo=UTC)
     certificate_expired = expires is not None and expires <= (now or datetime.now(UTC))
-    allowed = terminal.is_active and subscription_allowed and not certificate_expired
+    allowed = (
+        terminal.is_active
+        and subscription_allowed
+        and not user_disabled
+        and not certificate_expired
+    )
     stop_facts: list[Literal["terminal_inactive", "certificate_expired"]] = (
         [] if terminal.is_active and subscription_allowed else ["terminal_inactive"]
     )
@@ -104,7 +110,11 @@ def get_leo4proxy_policy(
 
 
 async def subscription_allowance(
-    db: AsyncSession, terminal: Terminal, *, now: datetime | None = None
+    db: AsyncSession,
+    terminal: Terminal,
+    *,
+    now: datetime | None = None,
+    ignore_user_disable: bool = False,
 ) -> bool:
     if (
         settings.product_scope_split_enabled
@@ -121,6 +131,8 @@ async def subscription_allowance(
         )
     )
     if subscription is None or subscription.deleted_at is not None:
+        return False
+    if subscription.user_disabled_at is not None and not ignore_user_disable:
         return False
     stmt = (
         select(L4DeskTerminal.terminal_id)

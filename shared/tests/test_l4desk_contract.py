@@ -70,7 +70,7 @@ def test_expand_does_not_modify_existing_tables():
 def test_all_new_models_have_keys_and_named_financial_metadata():
     module = importlib.import_module("etranprocessing_db.l4desk")
     tables = [
-        table for name, table in Base.metadata.tables.items() if name not in BASELINE and not name.startswith("fm_")
+        table for name, table in Base.metadata.tables.items() if name not in BASELINE and not name.startswith(("fm_", "terminal_tools_inventory"))
     ]
     assert len(tables) >= 22
     for table in tables:
@@ -151,7 +151,8 @@ def test_model_modules_are_declarative_only():
 def test_published_schema_matches_models():
     importlib.import_module("etranprocessing_db.l4desk")
     importlib.import_module("etranprocessing_db.file_manager")
-    path = HERE.parent / "docs" / "l4desk" / "schema-v032.json"
+    importlib.import_module("etranprocessing_db.inventory")
+    path = HERE.parent / "docs" / "l4desk" / "schema-v033.json"
     assert describe_metadata(Base.metadata) == json.loads(
         path.read_text(encoding="utf-8")
     )

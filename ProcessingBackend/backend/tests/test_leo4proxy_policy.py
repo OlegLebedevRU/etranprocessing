@@ -51,6 +51,16 @@ def cert_headers(sn=SN, serial=SERIAL):
     }
 
 
+def test_user_disable_denies_future_transports_without_stop_facts():
+    from app.services.leo4proxy_policy import get_leo4proxy_policy
+    terminal = Terminal(sn=SN, is_active=True)
+    policy = get_leo4proxy_policy(terminal, True, user_disabled=True)
+    assert not policy.mqtt_rtp_allowed and not policy.fm_allowed
+    assert policy.outgoing_https_allowed and policy.stop_facts == []
+    terminal.is_active = False
+    assert get_leo4proxy_policy(terminal, True, user_disabled=True).stop_facts == ["terminal_inactive"]
+
+
 @pytest.mark.anyio
 @pytest.mark.parametrize("is_active", [True, False])
 async def test_policy_uses_only_authenticated_terminal_activity(policy_db, is_active):

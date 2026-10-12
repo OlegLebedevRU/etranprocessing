@@ -26,7 +26,7 @@ async function l4deskPortal(page: Page, superuser: boolean, active = true, denia
           expires_at: "2026-10-12T00:00:00Z", status: "queued" };
       } else data = recovery ? { allowed: true, status: "installation_failed", installation_pending: true,
         recovery_pin_id: 327, recoverable: recovery.recoverable, requires_intervention: true, exit_code: 5 }
-        : { allowed: !denial, reason: denial, status: queued ? "pending" : "none" };
+        : { allowed: active && !denial, reason: denial, status: queued ? "pending" : "none" };
     }
     await route.fulfill({ json: data });
   });
@@ -40,19 +40,21 @@ for (const superuser of [true, false]) {
   test(`L4Desk ${superuser ? "superuser" : "owner"} queues authenticated renewal for an offline terminal`, async ({ page }) => {
     const calls = await l4deskPortal(page, superuser);
     expect(calls.some(c => c.path.endsWith("/certificate-renewal"))).toBe(false);
-    await page.getByRole("button", { name: "Продлить сертификат 773", exact: true }).click();
+    await page.getByRole("button", { name: "Другие действия 773", exact: true }).click();
+    await page.getByText("Сертификат и PIN", { exact: true }).click();
     await page.getByRole("button", { name: "Продлить сертификат на терминале", exact: true }).click();
     await page.getByRole("button", { name: "Заказать продление", exact: true }).click();
     await expect(page.getByText("22222222-2222-4222-8222-222222222222", { exact: true })).toBeVisible();
     await expect(page.getByText("Ожидает терминал", { exact: true })).toBeVisible();
     expect(calls.filter(c => c.method === "POST")).toEqual([{ path: "/api/devices/773/certificate-renewal", method: "POST", body: { resume_installation: false } }]);
-    expect(calls.some(c => c.path.includes("/billing/") || c.path.endsWith("/pin"))).toBe(false);
+    expect(calls.some(c => c.path.includes("/billing/") || (c.path.endsWith("/pin") && c.method === "POST"))).toBe(false);
   });
 }
 
 test("L4Desk renewal uses the server denial and issues no command", async ({ page }) => {
   const calls = await l4deskPortal(page, true, true, "Сертификат истёк: используйте обычную выдачу PIN");
-  await page.getByRole("button", { name: "Продлить сертификат 773", exact: true }).click();
+  await page.getByRole("button", { name: "Другие действия 773", exact: true }).click();
+    await page.getByText("Сертификат и PIN", { exact: true }).click();
   await expect(page.getByRole("button", { name: "Продлить сертификат на терминале", exact: true })).toBeDisabled();
   await expect(page.getByText("Сертификат истёк: используйте обычную выдачу PIN", { exact: true })).toBeVisible();
   expect(calls.some(c => c.method === "POST")).toBe(false);
@@ -60,13 +62,16 @@ test("L4Desk renewal uses the server denial and issues no command", async ({ pag
 
 test("L4Desk administratively disabled terminal cannot open renewal", async ({ page }) => {
   const calls = await l4deskPortal(page, true, false);
-  await expect(page.getByRole("button", { name: "Продлить сертификат 773", exact: true })).toBeDisabled();
-  expect(calls.some(c => c.path.endsWith("/certificate-renewal"))).toBe(false);
+  await page.getByRole("button", { name: "Другие действия 773", exact: true }).click();
+  await page.getByText("Сертификат и PIN", { exact: true }).click();
+  await expect(page.getByRole("button", { name: "Продлить сертификат на терминале", exact: true })).toBeDisabled();
+  expect(calls.some(c => c.method === "POST")).toBe(false);
 });
 
 test("Failed installation blocks a new order and resumes the original issuance without payment", async ({ page }) => {
   const calls = await l4deskPortal(page, true, true, undefined, { recoverable: true });
-  await page.getByRole("button", { name: "Продлить сертификат 773", exact: true }).click();
+  await page.getByRole("button", { name: "Другие действия 773", exact: true }).click();
+    await page.getByText("Сертификат и PIN", { exact: true }).click();
   await expect(page.getByRole("button", { name: "Продлить сертификат на терминале", exact: true })).toBeDisabled();
   await expect(page.getByText("Сертификат выпущен, но установка завершилась ошибкой", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Повторить установку выпущенного сертификата", exact: true }).click();
@@ -79,7 +84,8 @@ test("Failed installation blocks a new order and resumes the original issuance w
 
 test("Expired recovery escalates without offering a new issuance or sending a command", async ({ page }) => {
   const calls = await l4deskPortal(page, true, true, undefined, { recoverable: false });
-  await page.getByRole("button", { name: "Продлить сертификат 773", exact: true }).click();
+  await page.getByRole("button", { name: "Другие действия 773", exact: true }).click();
+    await page.getByText("Сертификат и PIN", { exact: true }).click();
   await expect(page.getByRole("button", { name: "Продлить сертификат на терминале", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Повторить установку выпущенного сертификата", exact: true })).toBeDisabled();
   await expect(page.getByText(/Повторная установка сейчас недоступна/)).toBeVisible();

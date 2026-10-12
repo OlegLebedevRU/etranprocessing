@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -7,6 +7,7 @@ from sqlalchemy.dialects import postgresql
 from starlette.requests import Request
 
 from app.models import Terminal
+from app.models_l4desk import L4DeskTerminal
 from app.routers.settings import TerminalActivityRequest, set_terminal_activity
 from app.routers.video import _verify_device_access
 from app.security.permissions import PERMISSION_MONITORING_VIEW, require_permission
@@ -46,6 +47,48 @@ async def test_activity_retry_sets_target_without_toggling_and_preserves_identit
         sql = str(db.scalar.call_args.args[0].compile(dialect=postgresql.dialect()))
         assert "LEFT OUTER JOIN terminal_types" in sql
         assert sql.endswith("FOR UPDATE OF terminals")
+
+
+@pytest.mark.anyio
+async def test_l4desk_disable_is_idempotent_and_preserves_administration_and_payment():
+    from datetime import UTC, datetime
+
+    terminal = Terminal(
+        id=7,
+        org_id=10000,
+        is_active=False,
+        cert_serial="authority",
+        l4desk_subscription_enabled=True,
+    )
+    paid = datetime(2027, 1, 1, tzinfo=UTC)
+    subscription = L4DeskTerminal(
+        terminal_id=7, tenant_id=10000, ordinal=1, paid_until=paid
+    )
+    db = AsyncMock()
+    db.add = MagicMock()
+    db.scalar.side_effect = [
+        terminal,
+        subscription,
+        terminal,
+        subscription,
+        terminal,
+        subscription,
+    ]
+    with patch("app.routers.settings.L4DeskRepository") as repo:
+        for enabled in (False, False, True):
+            result = await set_terminal_activity(
+                7,
+                TerminalActivityRequest(is_active=enabled, scope="l4desk"),
+                {"org_id": 10000, "role_id": 5},
+                db,
+            )
+            assert result["user_disabled"] is not enabled
+            assert result["is_active"] is False
+        repo.assert_not_called()  # No session/connection scan or stop/revoke.
+    assert subscription.paid_until == paid and subscription.ordinal == 1
+    assert terminal.cert_serial == "authority" and terminal.l4desk_subscription_enabled
+    assert db.commit.await_count == 2
+    assert db.add.call_args.args[0].correlation_id
 
 
 @pytest.mark.anyio
