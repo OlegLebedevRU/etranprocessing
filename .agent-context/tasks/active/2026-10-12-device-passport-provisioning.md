@@ -22,4 +22,7 @@
 - Local frontend build passed; 100 unit tests passed, including seven identity/route regression cases. Diff whitespace and changed-file credential scan passed.
 - No Python/backend/shared code changes; no backend tests required for this change.
 - No live provisioning, certificate issuance, service restart or incident reset performed by agent.
-- Release evidence and owner live acceptance: pending.
+- PR 80 merged as ae32e9247ad7b309a17ba166a32be6e8b23ecddd. Standard builder menubuilder-frontend release completed; immutable digest sha256:3c42ceffc2e4cde63dc78b844d5dd676954823b1d63a552d3d62d34b705220f1.
+- Builder repeated 100 frontend tests and build; verified production revision. All container IDs unchanged, including app1, RabbitMQ, MenuBuilder backend and nginx-default.
+- Public frontend returned HTTP 200; served devices-Bji895km.js contains the new identity lookup and no obsolete iot-provision call. Production OpenAPI confirms existing provision-iot route.
+- Owner-triggered live provisioning and incident clearance remain pending. No proof yet that app1 provisioning clears the detector state or restores broker membership.
