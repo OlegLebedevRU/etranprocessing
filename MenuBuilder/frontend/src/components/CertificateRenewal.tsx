@@ -6,9 +6,12 @@ import { requestRenewalPermission, type PaymentRequiredResponse } from "../api/c
 import { useSession } from "../session/SessionContext";
 import { formatMoneyMinor } from "../utils/billing";
 
-type Snapshot = { allowed: boolean; reason?: string; status: string; expires_at?: string; observed_at?: string };
+type Snapshot = { allowed: boolean; reason?: string; status: string; expires_at?: string; observed_at?: string;
+  installation_pending?: boolean; recovery_pin_id?: number; recoverable?: boolean; requires_intervention?: boolean; exit_code?: number };
 const labels: Record<string, string> = { none: "Продление ещё не заказывалось", pending: "Ожидает терминал",
   issued_waiting_identity: "Сертификат выпущен; ожидается подтверждение использования", confirmed: "Новый сертификат используется терминалом",
+  installation_failed: "Сертификат выпущен, но установка завершилась ошибкой",
+  installation_unconfirmed: "Сертификат выпущен, установка не подтверждена — требуется вмешательство",
   failed: "Команда завершилась ошибкой; подробности в истории команд", cancelled: "Команда отменена",
   expired: "Срок ожидания истёк" };
 
@@ -16,6 +19,7 @@ export default function CertificateRenewal({ deviceId }: { deviceId: number }) {
   const { user } = useSession();
   const [snapshot, setSnapshot] = useState<Snapshot>();
   const [open, setOpen] = useState(false);
+  const [resumeInstallation, setResumeInstallation] = useState(false);
   const [busy, setBusy] = useState(false);
   const [pinId, setPinId] = useState<number>();
   const [taskId, setTaskId] = useState<string>();
@@ -34,6 +38,7 @@ export default function CertificateRenewal({ deviceId }: { deviceId: number }) {
     catch { if (current === generation.current) setSnapshot({ allowed: false, reason: "Проверка продления недоступна", status: "none" }); }
   };
   useEffect(() => { generation.current += 1; sending.current = false; setBusy(false); setSnapshot(undefined); setOpen(false);
+    setPinId(undefined); setTaskId(undefined); setFailed(false); setRetries(0); setResumeInstallation(false);
     setPayment(undefined); setOrderId(undefined); setPaymentConfirmed(false); setCooldown(0); void refresh();
     return () => { generation.current += 1; }; }, [deviceId, user?.org_id]);
   useEffect(() => {
@@ -54,10 +59,10 @@ export default function CertificateRenewal({ deviceId }: { deviceId: number }) {
         setPaymentConfirmed(true);
       }
       const { data } = await client.post<{ task_id: string; pin_id: number; expires_at: string }>(endpoint,
-        { pin_id: pinId, order_id: orderId });
+        { pin_id: pinId, order_id: orderId, resume_installation: resumeInstallation });
       if (current !== generation.current) return;
       setPinId(data.pin_id); setTaskId(data.task_id); setFailed(false);
-      message.success("Продление поставлено в очередь"); void refresh();
+      message.success(resumeInstallation ? "Повторная установка поставлена в очередь" : "Продление поставлено в очередь"); void refresh();
     } catch (error: any) {
       if (current !== generation.current) return;
       const detail = error.response?.data?.detail;
@@ -72,6 +77,9 @@ export default function CertificateRenewal({ deviceId }: { deviceId: number }) {
           if (current === generation.current) message.error(paymentError.message || "Оплата недоступна");
         }
         return;
+      }
+      if (error.response?.status === 409 || error.response?.status === 410) {
+        message.error(typeof detail === "string" ? detail : "Требуется вмешательство оператора"); void refresh(); return;
       }
       if (detail?.pin_id) setPinId(detail.pin_id);
       if (detail?.order_id) setOrderId(detail.order_id);
@@ -88,14 +96,23 @@ export default function CertificateRenewal({ deviceId }: { deviceId: number }) {
   return <Space orientation="vertical">
     <Typography.Text>{snapshot ? labels[snapshot.status] || snapshot.status : "Проверка доступности…"}</Typography.Text>
     <Space wrap>
-      <Button type="primary" disabled={!snapshot?.allowed || Date.now() < cooldown} onClick={() => {
-        setPinId(undefined); setTaskId(undefined); setFailed(false); setRetries(0);
+      <Button type="primary" disabled={!snapshot?.allowed || snapshot?.installation_pending || Date.now() < cooldown} onClick={() => {
+        setResumeInstallation(false); setPinId(undefined); setTaskId(undefined); setFailed(false); setRetries(0);
         setPayment(undefined); setOrderId(undefined); setPaymentConfirmed(false); setOpen(true);
       }}>Продлить сертификат на терминале</Button>
+      {snapshot?.installation_pending && <Button type="primary" disabled={!snapshot.recoverable || Date.now() < cooldown} onClick={() => {
+        setResumeInstallation(true); setPinId(snapshot.recovery_pin_id); setTaskId(undefined); setFailed(false); setRetries(0);
+        setPayment(undefined); setOrderId(undefined); setPaymentConfirmed(false); setOpen(true);
+      }}>Повторить установку выпущенного сертификата</Button>}
       <Button onClick={() => void refresh()}>Проверить результат</Button>
     </Space>
+    {snapshot?.installation_pending && <Alert type={snapshot.requires_intervention ? "error" : "warning"} showIcon
+      title="Новый выпуск заблокирован до завершения установки"
+      description={snapshot.recoverable
+        ? `Можно повторить установку прежнего сертификата с сохранённым ключом. ${snapshot.exit_code != null ? `Код ошибки команды: ${snapshot.exit_code}.` : ""}`
+        : "Повторная установка сейчас недоступна. Сохраните историю команды и обратитесь к оператору; не удаляйте сохранённые данные продления."} />}
     {snapshot?.reason && <Typography.Text type="secondary">{snapshot.reason}</Typography.Text>}
-    <Modal title="Удалённое продление сертификата" open={open} onCancel={() => { if (!busy) setOpen(false); }}
+    <Modal title={resumeInstallation ? "Повторная установка сертификата" : "Удалённое продление сертификата"} open={open} onCancel={() => { if (!busy) setOpen(false); }}
       closable={!busy} mask={{ closable: !busy }} footer={<Space>
         <Button disabled={busy} onClick={() => setOpen(false)}>Закрыть</Button>
         {!taskId && payment && !paymentConfirmed && <>
@@ -105,12 +122,12 @@ export default function CertificateRenewal({ deviceId }: { deviceId: number }) {
           {user?.is_superuser && <Button disabled={busy} onClick={() => void send(true, true)}>Эмулировать оплату</Button>}
         </>}
         {!taskId && (!payment || paymentConfirmed) && <Button type="primary" loading={busy} onClick={() => void send()}>
-          {failed ? `Повторить (${retries + 1}/3)` : "Заказать продление"}</Button>}
+          {failed ? `Повторить (${retries + 1}/3)` : resumeInstallation ? "Повторить установку" : "Заказать продление"}</Button>}
       </Space>}>
       {payment && !paymentConfirmed && <Alert type="warning" showIcon title="Требуется оплата сертификата"
         description={formatMoneyMinor(payment.amount_minor, payment.currency)} style={{ marginBottom: 12 }} />}
-      <Alert type={taskId ? "success" : "info"} showIcon title={taskId ? "Команда поставлена в очередь" : "Сервер создаст PIN и поставит команду в очередь"}
-        description="Терминал может быть оффлайн. Он выполнит продление после подключения, пока срок ожидания не истёк. Результат доступен по кнопке проверки и в истории команд." />
+      <Alert type={taskId ? "success" : "info"} showIcon title={taskId ? "Команда поставлена в очередь" : resumeInstallation ? "Установить ранее выпущенный сертификат" : "Сервер создаст PIN и поставит команду в очередь"}
+        description={resumeInstallation ? "Команда использует прежнюю заявку, сохранённый сертификат и ключ. Новый сертификат не выпускается. Если данные восстановления отсутствуют, требуется вмешательство оператора." : "Терминал может быть оффлайн. Он выполнит продление после подключения, пока срок ожидания не истёк. Результат доступен по кнопке проверки и в истории команд."} />
       {taskId && <Typography.Paragraph copyable>{taskId}</Typography.Paragraph>}
       {snapshot?.expires_at && <Typography.Text>Срок ожидания: {new Date(snapshot.expires_at).toLocaleString()}</Typography.Text>}
     </Modal>

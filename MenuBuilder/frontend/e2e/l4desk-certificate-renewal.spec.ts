@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function l4deskPortal(page: Page, superuser: boolean, active = true, denial?: string) {
+async function l4deskPortal(page: Page, superuser: boolean, active = true, denial?: string, recovery?: { recoverable: boolean }) {
   const calls: Array<{ path: string; method: string; body: unknown }> = [];
   let queued = false;
   await page.route("**/api/**", async route => {
@@ -24,7 +24,9 @@ async function l4deskPortal(page: Page, superuser: boolean, active = true, denia
         queued = true;
         data = { task_id: "22222222-2222-4222-8222-222222222222", pin_id: 9,
           expires_at: "2026-10-12T00:00:00Z", status: "queued" };
-      } else data = { allowed: !denial, reason: denial, status: queued ? "pending" : "none" };
+      } else data = recovery ? { allowed: true, status: "installation_failed", installation_pending: true,
+        recovery_pin_id: 327, recoverable: recovery.recoverable, requires_intervention: true, exit_code: 5 }
+        : { allowed: !denial, reason: denial, status: queued ? "pending" : "none" };
     }
     await route.fulfill({ json: data });
   });
@@ -43,7 +45,7 @@ for (const superuser of [true, false]) {
     await page.getByRole("button", { name: "Заказать продление", exact: true }).click();
     await expect(page.getByText("22222222-2222-4222-8222-222222222222", { exact: true })).toBeVisible();
     await expect(page.getByText("Ожидает терминал", { exact: true })).toBeVisible();
-    expect(calls.filter(c => c.method === "POST")).toEqual([{ path: "/api/devices/773/certificate-renewal", method: "POST", body: {} }]);
+    expect(calls.filter(c => c.method === "POST")).toEqual([{ path: "/api/devices/773/certificate-renewal", method: "POST", body: { resume_installation: false } }]);
     expect(calls.some(c => c.path.includes("/billing/") || c.path.endsWith("/pin"))).toBe(false);
   });
 }
@@ -60,4 +62,26 @@ test("L4Desk administratively disabled terminal cannot open renewal", async ({ p
   const calls = await l4deskPortal(page, true, false);
   await expect(page.getByRole("button", { name: "Продлить сертификат 773", exact: true })).toBeDisabled();
   expect(calls.some(c => c.path.endsWith("/certificate-renewal"))).toBe(false);
+});
+
+test("Failed installation blocks a new order and resumes the original issuance without payment", async ({ page }) => {
+  const calls = await l4deskPortal(page, true, true, undefined, { recoverable: true });
+  await page.getByRole("button", { name: "Продлить сертификат 773", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Продлить сертификат на терминале", exact: true })).toBeDisabled();
+  await expect(page.getByText("Сертификат выпущен, но установка завершилась ошибкой", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Повторить установку выпущенного сертификата", exact: true }).click();
+  await page.getByRole("button", { name: "Повторить установку", exact: true }).click();
+  await expect(page.getByText("22222222-2222-4222-8222-222222222222", { exact: true })).toBeVisible();
+  expect(calls.filter(c => c.method === "POST")).toEqual([{ path: "/api/devices/773/certificate-renewal",
+    method: "POST", body: { pin_id: 327, resume_installation: true } }]);
+  expect(calls.some(c => c.path.includes("/billing/") || c.path.endsWith("/pin"))).toBe(false);
+});
+
+test("Expired recovery escalates without offering a new issuance or sending a command", async ({ page }) => {
+  const calls = await l4deskPortal(page, true, true, undefined, { recoverable: false });
+  await page.getByRole("button", { name: "Продлить сертификат 773", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Продлить сертификат на терминале", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Повторить установку выпущенного сертификата", exact: true })).toBeDisabled();
+  await expect(page.getByText(/Повторная установка сейчас недоступна/)).toBeVisible();
+  expect(calls.some(c => c.method === "POST")).toBe(false);
 });

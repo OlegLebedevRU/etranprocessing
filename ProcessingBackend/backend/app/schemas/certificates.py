@@ -14,6 +14,7 @@ class RenewalPinRequest(BaseModel):
     pin_id: int | None = Field(default=None, gt=0)
     order_item_id: int | None = Field(default=None, gt=0)
     admin_override: bool = False
+    resume_installation: bool = False
 
 
 class RenewalPinResponse(BaseModel):
