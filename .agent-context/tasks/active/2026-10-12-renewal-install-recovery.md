@@ -46,6 +46,34 @@ failure, confirmation precedence, expired/wrong PIN refusal, no issuance/payment
 effects, lost queue response and unchanged RPC fields. Local final validation:
 PB311passed/1skipped, MB779passed/22skipped; Ruff check/format and Pyright pass
 in both modified backends. Frontend build,93unit and6fake-REST browser tests pass.
-Changed tracked-file secret scan has no findings. Builder delivery pending.
+Changed tracked-file secret scan has no findings.
 Live owner recovery, certificate store install, identity hot rotation and RabbitMQ
 use are not yet verified. Release order: PB → MB backend → frontend via builder.
+
+## Delivered 2026-10-12
+
+PR78 merged; source main b152e353d7c49ffce7d0448392ef1156f8eefef5.
+All three explicit builder launches exited0 with normal full checks, immutable
+publication/pull and runtime verification. Initial launcher typo
+processing-backend was refused before deployment; corrected to processingbackend.
+
+| Component | Verified digest |
+|---|---|
+| ProcessingBackend | 590c1551876b906655e4d6d2142b06144d22cbb467259662c0d2c63d346065e8 |
+| MenuBuilder backend / paired JWT signer | 6e1317bd6d33377634172b5c32aeca9c88816062dc070f34f361657077919ebf |
+| MenuBuilder frontend | 075080c440fa81702cb8bc93f2c3bc3834a44e3b4ace35707ae0ac62f62cc4b6 |
+
+PB health, MB OpenAPI and signer health verified. Frontend served index matched
+the artifact; nginx was not restarted. app1/rabbitmq/other unrelated container
+IDs match the preflight snapshot. There is no native build/install requirement
+for this server/UI change; RPC7011 remains byte-schema compatible with suite34.
+
+Production read-only transactions executed the deployed PB/MB selection helpers:
+device773/current issuance327/latest PIN328/observed new identity false/
+original PIN has >120s remaining. Current serial remains49267C2D17CE9DF8871018E2D8C7A69CAFDF0A1F.
+No PIN value, response blob or key was printed. No queue/issuance/store/serial
+change, recovery execution or terminal service restart was performed by agent.
+Owner should refresh UI and choose repeat installation for773. Original PIN
+expires2026-10-12T19:16:05Z; after that automatic recovery is unavailable and
+requires intervention. Live installation/hot rotation/RabbitMQ acceptance remain
+not run. No ad hoc user tokens or synthetic authenticated endpoint checks used.
