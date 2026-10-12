@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    ca_signer_backend: Literal["external", "local"] = "external"
+    ca_signer_backend: Literal["external", "local"] = "local"
     ca_issuing_key_path: str = ""
     ca_issuing_cert_path: str = ""
     ca_issuing_key_password: SecretStr = SecretStr("")
