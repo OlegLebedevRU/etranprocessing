@@ -36,7 +36,7 @@ Scoped credential scan162 tracked/new frontend files: no markers.
 [MCP Ops Readiness: UNAVAILABLE]; standard SSH preflight2048MiB available,
 root66%, load .23; release uses authorized builder/production runbook.
 Backend code unchanged; backend tests/linters not run under project scope rules.
-Real production PIN/RPC writes not performed. 
+Real production PIN/RPC writes not performed.
 
 ## Release evidence
 Source mainc3e464e8e69e3a67a6de510f3244c1a3d8ab4131 pushed and independently
