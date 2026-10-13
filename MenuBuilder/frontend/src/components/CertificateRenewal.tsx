@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Button, Modal, Space, Typography, message } from "antd";
+import { Alert, Button, Card, Modal, Space, Typography, message } from "antd";
 import client from "../api/client";
 import { confirmPayment } from "../api/billing";
 import { requestRenewalPermission, type PaymentRequiredResponse } from "../api/certificate-pin";
@@ -15,7 +15,7 @@ const labels: Record<string, string> = { none: "Продление ещё не �
   failed: "Команда завершилась ошибкой; подробности в истории команд", cancelled: "Команда отменена",
   expired: "Срок ожидания истёк" };
 
-export default function CertificateRenewal({ deviceId }: { deviceId: number }) {
+export default function CertificateRenewal({ deviceId, confirmation = "modal", onInteractionChange }: { deviceId: number; confirmation?: "modal" | "inline"; onInteractionChange?: (locked: boolean) => void }) {
   const { user } = useSession();
   const [snapshot, setSnapshot] = useState<Snapshot>();
   const [open, setOpen] = useState(false);
@@ -32,6 +32,8 @@ export default function CertificateRenewal({ deviceId }: { deviceId: number }) {
   const sending = useRef(false);
   const generation = useRef(0);
   const endpoint = `/devices/${deviceId}/certificate-renewal`;
+  useEffect(() => { onInteractionChange?.(busy || open); }, [busy, open, onInteractionChange]);
+  useEffect(() => () => onInteractionChange?.(false), [onInteractionChange]);
   const refresh = async () => {
     const current = generation.current;
     try { const { data } = await client.get<Snapshot>(endpoint); if (current === generation.current) setSnapshot(data); }
@@ -93,6 +95,26 @@ export default function CertificateRenewal({ deviceId }: { deviceId: number }) {
       } else message.error(error.message || "Постановка не подтверждена. Можно повторить вручную.");
     } finally { if (current === generation.current) { sending.current = false; setBusy(false); } }
   };
+  const confirmationTitle = resumeInstallation ? "Повторная установка сертификата" : "Удалённое продление сертификата";
+  const confirmationFooter = <Space>
+        <Button disabled={busy} onClick={() => setOpen(false)}>Закрыть</Button>
+        {!taskId && payment && !paymentConfirmed && <>
+          {payment.payment_url?.startsWith("https://") && <Button href={payment.payment_url}
+            target="_blank" rel="noopener noreferrer" disabled={busy}>Перейти к оплате</Button>}
+          <Button type="primary" loading={busy} onClick={() => void send(true)}>Проверить оплату и поставить в очередь</Button>
+          {user?.is_superuser && <Button disabled={busy} onClick={() => void send(true, true)}>Эмулировать оплату</Button>}
+        </>}
+        {!taskId && (!payment || paymentConfirmed) && <Button type="primary" loading={busy} onClick={() => void send()}>
+          {failed ? `Повторить (${retries + 1}/3)` : resumeInstallation ? "Повторить установку" : "Заказать продление"}</Button>}
+      </Space>;
+  const confirmationBody = <>
+      {payment && !paymentConfirmed && <Alert type="warning" showIcon title="Требуется оплата сертификата"
+        description={formatMoneyMinor(payment.amount_minor, payment.currency)} style={{ marginBottom: 12 }} />}
+      <Alert type={taskId ? "success" : "info"} showIcon title={taskId ? "Команда поставлена в очередь" : resumeInstallation ? "Установить ранее выпущенный сертификат" : "Сервер создаст PIN и поставит команду в очередь"}
+        description={resumeInstallation ? "Команда использует прежнюю заявку, сохранённый сертификат и ключ. Новый сертификат не выпускается. Если данные восстановления отсутствуют, требуется вмешательство оператора." : "Терминал может быть оффлайн. Он выполнит продление после подключения, пока срок ожидания не истёк. Результат доступен по кнопке проверки и в истории команд."} />
+      {taskId && <Typography.Paragraph copyable>{taskId}</Typography.Paragraph>}
+      {snapshot?.expires_at && <Typography.Text>Срок ожидания: {new Date(snapshot.expires_at).toLocaleString()}</Typography.Text>}
+</>;
   return <Space orientation="vertical">
     <Typography.Text type="secondary">Нужен агент с поддержкой RPC 7011; постановка команды не подтверждает её выполнение.</Typography.Text>
     <Typography.Text>{snapshot ? labels[snapshot.status] || snapshot.status : "Проверка доступности…"}</Typography.Text>
@@ -113,24 +135,10 @@ export default function CertificateRenewal({ deviceId }: { deviceId: number }) {
         ? `Можно повторить установку прежнего сертификата с сохранённым ключом. ${snapshot.exit_code != null ? `Код ошибки команды: ${snapshot.exit_code}.` : ""}`
         : "Повторная установка сейчас недоступна. Сохраните историю команды и обратитесь к оператору; не удаляйте сохранённые данные продления."} />}
     {snapshot?.reason && <Typography.Text type="secondary">{snapshot.reason}</Typography.Text>}
-    <Modal title={resumeInstallation ? "Повторная установка сертификата" : "Удалённое продление сертификата"} open={open} onCancel={() => { if (!busy) setOpen(false); }}
-      closable={!busy} mask={{ closable: !busy }} footer={<Space>
-        <Button disabled={busy} onClick={() => setOpen(false)}>Закрыть</Button>
-        {!taskId && payment && !paymentConfirmed && <>
-          {payment.payment_url?.startsWith("https://") && <Button href={payment.payment_url}
-            target="_blank" rel="noopener noreferrer" disabled={busy}>Перейти к оплате</Button>}
-          <Button type="primary" loading={busy} onClick={() => void send(true)}>Проверить оплату и поставить в очередь</Button>
-          {user?.is_superuser && <Button disabled={busy} onClick={() => void send(true, true)}>Эмулировать оплату</Button>}
-        </>}
-        {!taskId && (!payment || paymentConfirmed) && <Button type="primary" loading={busy} onClick={() => void send()}>
-          {failed ? `Повторить (${retries + 1}/3)` : resumeInstallation ? "Повторить установку" : "Заказать продление"}</Button>}
-      </Space>}>
-      {payment && !paymentConfirmed && <Alert type="warning" showIcon title="Требуется оплата сертификата"
-        description={formatMoneyMinor(payment.amount_minor, payment.currency)} style={{ marginBottom: 12 }} />}
-      <Alert type={taskId ? "success" : "info"} showIcon title={taskId ? "Команда поставлена в очередь" : resumeInstallation ? "Установить ранее выпущенный сертификат" : "Сервер создаст PIN и поставит команду в очередь"}
-        description={resumeInstallation ? "Команда использует прежнюю заявку, сохранённый сертификат и ключ. Новый сертификат не выпускается. Если данные восстановления отсутствуют, требуется вмешательство оператора." : "Терминал может быть оффлайн. Он выполнит продление после подключения, пока срок ожидания не истёк. Результат доступен по кнопке проверки и в истории команд."} />
-      {taskId && <Typography.Paragraph copyable>{taskId}</Typography.Paragraph>}
-      {snapshot?.expires_at && <Typography.Text>Срок ожидания: {new Date(snapshot.expires_at).toLocaleString()}</Typography.Text>}
-    </Modal>
+    {confirmation === "inline" ? open && <Card title={confirmationTitle}>
+      <Space orientation="vertical" style={{ width: "100%" }}>{confirmationBody}{confirmationFooter}</Space>
+    </Card> : <Modal title={confirmationTitle} open={open} onCancel={() => { if (!busy) setOpen(false); }}
+      closable={!busy} mask={{ closable: !busy }} footer={confirmationFooter}>{confirmationBody}</Modal>}
+
   </Space>;
 }

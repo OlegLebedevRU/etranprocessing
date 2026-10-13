@@ -464,13 +464,13 @@ async def test_settings_terminals_flow(role3_headers, superuser_headers):
         )
         assert resp_su_list.status_code == 200
 
-        # 3. Superuser patch terminal -> 403 Forbidden
+        # 3. Superuser can update descriptive fields in the active tenant
         resp_su_patch = await client.patch(
             "/api/settings/terminals/1",
             json={"address": "New Address"},
             headers=superuser_headers,
         )
-        assert resp_su_patch.status_code == 403
+        assert resp_su_patch.status_code == 200
 
         # 4. Role 3 patch terminal of own org -> Success
         resp_patch = await client.patch(
@@ -499,7 +499,13 @@ async def test_settings_terminals_flow(role3_headers, superuser_headers):
         assert cleared.json()["timezone"] is None
 
         owner_token = create_access_token(
-            {"sub": "owner", "org_id": 10, "role": "l4desk_owner", "role_id": 5, "token_type": "tenant"}
+            {
+                "sub": "owner",
+                "org_id": 10,
+                "role": "l4desk_owner",
+                "role_id": 5,
+                "token_type": "tenant",
+            }
         )
         owner_update = await client.patch(
             "/api/settings/terminals/1",
@@ -578,3 +584,62 @@ async def test_settings_terminals_pagination_and_comma_search(role3_headers):
         assert resp_search.status_code == 200
         data_search = resp_search.json()
         assert len(data_search["items"]) == 2
+
+
+@pytest.mark.anyio
+async def test_superuser_edit_is_limited_to_selected_tenant():
+    from types import SimpleNamespace
+
+    from sqlalchemy import create_engine
+
+    from app.routers.settings import (
+        UpdateTerminalSettingsRequest,
+        update_terminal_settings,
+    )
+
+    engine = create_engine("sqlite://")
+    terminal = Terminal(
+        id=7,
+        org_id=2000,
+        device_id=773,
+        sn="fixture",
+        is_active=True,
+        cert_serial="authority",
+    )
+    with engine.begin() as conn:
+        Terminal.__table__.create(conn)
+        conn.execute(
+            Terminal.__table__.insert().values(
+                id=7, org_id=2000, device_id=773, sn="fixture", is_active=True
+            )
+        )
+
+        async def execute(stmt):
+            ids = conn.execute(stmt.with_only_columns(Terminal.id)).scalars().all()
+            return SimpleNamespace(scalar_one_or_none=lambda: terminal if ids else None)
+
+        db = SimpleNamespace(execute=execute, commit=AsyncMock(), refresh=AsyncMock())
+        from fastapi import HTTPException
+
+        with pytest.raises(HTTPException) as error:
+            await update_terminal_settings(
+                7,
+                UpdateTerminalSettingsRequest(address="changed"),
+                {"org_id": 1000, "role_id": 1, "is_superuser": True},
+                db,
+            )
+        assert error.value.status_code == 404
+        db.commit.assert_not_awaited()
+        result = await update_terminal_settings(
+            7,
+            UpdateTerminalSettingsRequest(address="changed"),
+            {"org_id": 2000, "role_id": 1, "is_superuser": True},
+            db,
+        )
+        assert (
+            result.address == "changed"
+            and terminal.org_id == 2000
+            and terminal.sn == "fixture"
+            and terminal.cert_serial == "authority"
+        )
+        db.commit.assert_awaited_once()

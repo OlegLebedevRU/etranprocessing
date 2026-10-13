@@ -195,6 +195,10 @@ async def set_terminal_activity(
     )
     if terminal is None:
         raise HTTPException(404, "Терминал не найден")
+    if not terminal.is_active and (req.scope == "l4desk" or req.is_active):
+        raise HTTPException(
+            403, "Терминал отключён администратором; изменение пользователем запрещено"
+        )
     if req.scope == "l4desk":
         if not terminal.l4desk_subscription_enabled:
             raise HTTPException(409, "Терминал не подключён к L4Desk")
@@ -1032,9 +1036,8 @@ async def update_terminal_settings(
     user: dict[str, Any] = Depends(require_readonly_guard),
     db: AsyncSession = Depends(get_db),
 ) -> TerminalSettingsItem:
-    """Update terminal address, note, and timezone only (role 3 only, superuser and role 4 are blocked)."""
+    """Update descriptive fields within the active tenant for owner/admin or superuser."""
     _check_settings_access(user)
-    _ensure_not_superuser(user)
 
     org_id = int(user.get("org_id", 0))
     if org_id <= 0:
@@ -1097,7 +1100,6 @@ async def get_terminal_pin(
     db: AsyncSession = Depends(get_db),
 ) -> IssueCertificatePinResponse | None:
     _check_settings_access(user)
-    _ensure_not_superuser(user)
     response.headers["Cache-Control"] = "no-store"
     return await TerminalPinService(db).current(terminal_id, user)
 
@@ -1111,7 +1113,6 @@ async def renew_terminal_pin(
     db: AsyncSession = Depends(get_db),
 ) -> IssueCertificatePinResponse:
     _check_settings_access(user)
-    _ensure_not_superuser(user)
     response.headers["Cache-Control"] = "no-store"
     return await TerminalPinService(db).issue(terminal_id, user, req.operation_id)
 

@@ -167,7 +167,7 @@ async def test_newer_intent_prevents_old_request_issuing_pin():
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("role_id, is_superuser", [(1, True), (4, False)])
+@pytest.mark.parametrize("role_id, is_superuser", [(4, False)])
 @pytest.mark.parametrize("method", ["GET", "POST"])
 async def test_settings_pin_denies_readonly_roles(role_id, is_superuser, method):
     from httpx import ASGITransport, AsyncClient
@@ -218,3 +218,58 @@ async def test_missing_sn_cannot_issue_a_pin_or_fabricate_provider_identity():
     assert query.params["org_id_1"] == 1000
     provider.get_by_operation.assert_not_awaited()
     provider.issue_pin.assert_not_awaited()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("tenant", [1000, 2000])
+async def test_superuser_can_use_pin_routes_in_selected_tenant(monkeypatch, tenant):
+    from types import SimpleNamespace
+
+    from httpx import ASGITransport, AsyncClient
+
+    from app.auth import get_current_user
+    from app.database import get_db
+    from app.main import app
+    from app.routers import settings as router
+
+    user = {"org_id": tenant, "role_id": 1, "is_superuser": True, "is_imp": True}
+    service = SimpleNamespace(current=AsyncMock(return_value=None), issue=AsyncMock())
+    operation = uuid4()
+    terminal = Terminal(id=41, org_id=tenant, sn="fixture")
+    service.issue.return_value = response(terminal, operation)
+    monkeypatch.setattr(router, "TerminalPinService", lambda db: service)
+    app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[get_db] = lambda: AsyncMock()
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            assert (
+                await client.get("/api/settings/terminals/41/pin")
+            ).status_code == 200
+            assert (
+                await client.post(
+                    "/api/settings/terminals/41/pin",
+                    json={"operation_id": str(operation)},
+                )
+            ).status_code == 200
+        service.current.assert_awaited_once_with(41, user)
+        service.issue.assert_awaited_once_with(41, user, operation)
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.anyio
+async def test_superuser_pin_lookup_does_not_bypass_active_tenant():
+    db = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = None
+    db.execute.return_value = result
+    provider = AsyncMock()
+    with pytest.raises(HTTPException) as error:
+        await TerminalPinService(db, provider).current(
+            41, {"org_id": 2000, "is_superuser": True, "role_id": 1}
+        )
+    assert error.value.status_code == 404
+    assert db.execute.await_args.args[0].compile().params["org_id_1"] == 2000
+    provider.get_by_operation.assert_not_awaited()

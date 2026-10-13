@@ -42,6 +42,7 @@ for (const superuser of [true, false]) {
     expect(calls.some(c => c.path.endsWith("/certificate-renewal"))).toBe(false);
     await page.getByRole("button", { name: "Другие действия 773", exact: true }).click();
     await page.getByText("Сертификат и PIN", { exact: true }).click();
+    await page.getByRole("button", { name: "Выбрать удалённое продление", exact: true }).click();
     await page.getByRole("button", { name: "Продлить сертификат на терминале", exact: true }).click();
     await page.getByRole("button", { name: "Заказать продление", exact: true }).click();
     await expect(page.getByText("22222222-2222-4222-8222-222222222222", { exact: true })).toBeVisible();
@@ -55,6 +56,7 @@ test("L4Desk renewal uses the server denial and issues no command", async ({ pag
   const calls = await l4deskPortal(page, true, true, "Сертификат истёк: используйте обычную выдачу PIN");
   await page.getByRole("button", { name: "Другие действия 773", exact: true }).click();
     await page.getByText("Сертификат и PIN", { exact: true }).click();
+    await page.getByRole("button", { name: "Выбрать удалённое продление", exact: true }).click();
   await expect(page.getByRole("button", { name: "Продлить сертификат на терминале", exact: true })).toBeDisabled();
   await expect(page.getByText("Сертификат истёк: используйте обычную выдачу PIN", { exact: true })).toBeVisible();
   expect(calls.some(c => c.method === "POST")).toBe(false);
@@ -64,6 +66,7 @@ test("L4Desk administratively disabled terminal cannot open renewal", async ({ p
   const calls = await l4deskPortal(page, true, false);
   await page.getByRole("button", { name: "Другие действия 773", exact: true }).click();
   await page.getByText("Сертификат и PIN", { exact: true }).click();
+    await page.getByRole("button", { name: "Выбрать удалённое продление", exact: true }).click();
   await expect(page.getByRole("button", { name: "Продлить сертификат на терминале", exact: true })).toBeDisabled();
   expect(calls.some(c => c.method === "POST")).toBe(false);
 });
@@ -72,6 +75,7 @@ test("Failed installation blocks a new order and resumes the original issuance w
   const calls = await l4deskPortal(page, true, true, undefined, { recoverable: true });
   await page.getByRole("button", { name: "Другие действия 773", exact: true }).click();
     await page.getByText("Сертификат и PIN", { exact: true }).click();
+    await page.getByRole("button", { name: "Выбрать удалённое продление", exact: true }).click();
   await expect(page.getByRole("button", { name: "Продлить сертификат на терминале", exact: true })).toBeDisabled();
   await expect(page.getByText("Сертификат выпущен, но установка завершилась ошибкой", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Повторить установку выпущенного сертификата", exact: true }).click();
@@ -86,8 +90,22 @@ test("Expired recovery escalates without offering a new issuance or sending a co
   const calls = await l4deskPortal(page, true, true, undefined, { recoverable: false });
   await page.getByRole("button", { name: "Другие действия 773", exact: true }).click();
     await page.getByText("Сертификат и PIN", { exact: true }).click();
+    await page.getByRole("button", { name: "Выбрать удалённое продление", exact: true }).click();
   await expect(page.getByRole("button", { name: "Продлить сертификат на терминале", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Повторить установку выпущенного сертификата", exact: true })).toBeDisabled();
   await expect(page.getByText(/Повторная установка сейчас недоступна/)).toBeVisible();
   expect(calls.some(c => c.method === "POST")).toBe(false);
+});
+
+
+test("shared renewal keeps modal confirmation in Classic settings", async ({page})=>{
+  const calls=await l4deskPortal(page,true);
+  await page.goto("/settings/terminals?profile=classic");
+  await page.getByRole("button").filter({has:page.locator(".anticon-safety-certificate")}).click();
+  await expect(page.getByRole("dialog",{name:"Сертификат терминала 773",exact:true})).toBeVisible();
+  await page.getByRole("button",{name:"Продлить сертификат на терминале",exact:true}).click();
+  await expect(page.getByRole("dialog",{name:"Удалённое продление сертификата",exact:true})).toBeVisible();
+  await page.getByRole("button",{name:"Заказать продление",exact:true}).click();
+  await expect(page.getByText("22222222-2222-4222-8222-222222222222",{exact:true})).toBeVisible();
+  expect(calls.filter(c=>c.method==="POST"&&c.path.endsWith("/certificate-renewal"))).toHaveLength(1);
 });

@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, Button, Form, Input, Modal, Select, Space, message } from "antd";
 import { updateTerminalSettings, type TerminalSettingsItem } from "../api/settings";
+import { useSession } from "../session/SessionContext";
 import { TIMEZONE_OPTIONS } from "../utils/timezone";
 
 type Values = { address?: string; note?: string; timezone?: string };
@@ -18,6 +19,12 @@ export default function TerminalSettingsEditModal({
 }) {
   const [form] = Form.useForm<Values>();
   const [saving, setSaving] = useState(false);
+  const { user } = useSession();
+  const generation = useRef(0);
+  useEffect(() => {
+    generation.current++; setSaving(false);
+    return () => { generation.current++; };
+  }, [terminal?.id, user?.org_id]);
 
   useEffect(() => {
     if (terminal) {
@@ -31,6 +38,7 @@ export default function TerminalSettingsEditModal({
 
   const save = async (values: Values) => {
     if (!terminal || readOnly) return;
+    const current = generation.current;
     setSaving(true);
     try {
       await updateTerminalSettings(terminal.id, {
@@ -38,13 +46,14 @@ export default function TerminalSettingsEditModal({
         note: values.note?.trim() || null,
         timezone: values.timezone || null,
       });
+      if (current !== generation.current) return;
       message.success(`Терминал ${terminal.device_id} обновлён`);
       onSaved();
       onClose();
     } catch (error: any) {
-      message.error(error.response?.data?.detail || "Ошибка сохранения терминала");
+      if (current === generation.current) message.error(error.response?.data?.detail || "Ошибка сохранения терминала");
     } finally {
-      setSaving(false);
+      if (current === generation.current) setSaving(false);
     }
   };
 

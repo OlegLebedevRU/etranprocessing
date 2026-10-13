@@ -56,7 +56,7 @@ async def test_l4desk_disable_is_idempotent_and_preserves_administration_and_pay
     terminal = Terminal(
         id=7,
         org_id=10000,
-        is_active=False,
+        is_active=True,
         cert_serial="authority",
         l4desk_subscription_enabled=True,
     )
@@ -83,7 +83,7 @@ async def test_l4desk_disable_is_idempotent_and_preserves_administration_and_pay
                 db,
             )
             assert result["user_disabled"] is not enabled
-            assert result["is_active"] is False
+            assert result["is_active"] is True
         repo.assert_not_called()  # No session/connection scan or stop/revoke.
     assert subscription.paid_until == paid and subscription.ordinal == 1
     assert terminal.cert_serial == "authority" and terminal.l4desk_subscription_enabled
@@ -185,3 +185,45 @@ async def test_role5_cannot_read_monitoring_even_with_explicit_permission():
     assert error.value.status_code == 403
     user = {"role_id": 3, "org_id": 10000}
     assert await check(request, user) == user
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("role", [3, 5])
+@pytest.mark.parametrize("enabled", [True, False])
+async def test_admin_disable_blocks_user_l4desk_switch_before_subscription_write(
+    role, enabled
+):
+    terminal = Terminal(
+        id=7, org_id=10000, is_active=False, l4desk_subscription_enabled=True
+    )
+    db = AsyncMock()
+    db.add = MagicMock()
+    db.scalar.return_value = terminal
+    with pytest.raises(HTTPException) as error:
+        await set_terminal_activity(
+            7,
+            TerminalActivityRequest(is_active=enabled, scope="l4desk"),
+            {"org_id": 10000, "role_id": role},
+            db,
+        )
+    assert error.value.status_code == 403
+    assert "администратором" in error.value.detail
+    db.scalar.assert_awaited_once()
+    db.add.assert_not_called()
+    db.commit.assert_not_awaited()
+    assert terminal.is_active is False
+
+
+@pytest.mark.anyio
+async def test_user_cannot_bypass_admin_disable_with_administrative_scope():
+    db = AsyncMock()
+    db.scalar.return_value = Terminal(id=7, org_id=10000, is_active=False)
+    with pytest.raises(HTTPException) as error:
+        await set_terminal_activity(
+            7,
+            TerminalActivityRequest(is_active=True, scope="administrative"),
+            {"org_id": 10000, "role_id": 5},
+            db,
+        )
+    assert error.value.status_code == 403
+    db.commit.assert_not_awaited()

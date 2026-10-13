@@ -4,10 +4,8 @@ import {
   Button,
   Card,
   Modal,
-  Drawer,
   Dropdown,
   Grid,
-  Radio,
   Empty,
   Tooltip,
   Input,
@@ -23,7 +21,6 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
-  ClockCircleOutlined,
   CodeOutlined,
   DesktopOutlined,
   EditOutlined,
@@ -32,7 +29,6 @@ import {
   MoreOutlined,
   PoweroffOutlined,
   PlusOutlined,
-  KeyOutlined,
   ReloadOutlined,
   SafetyCertificateOutlined,
   SyncOutlined,
@@ -42,14 +38,11 @@ import { useNavigate } from "react-router";
 import {
   listTerminalsSettings,
   retryTerminalOnboarding,
-  getTerminalPin,
-  renewTerminalPin,
   setL4DeskActivity,
-  type TerminalPin,
   type TerminalSettingsItem,
 } from "../../api/settings";
 import { useSession } from "../../session/SessionContext";
-import CertificateRenewal from "../../components/CertificateRenewal";
+import TerminalCertificateDrawer from "../../components/TerminalCertificateDrawer";
 import OnboardingWizardModal from "../../components/OnboardingWizardModal";
 import TerminalSummary from "../../components/TerminalSummary";
 import TerminalSettingsEditModal from "../../components/TerminalSettingsEditModal";
@@ -59,38 +52,17 @@ import { subscriptionLabels } from "../../utils/subscriptionPresentation";
 
 const { Text, Title } = Typography;
 
-function pinTag(item: TerminalSettingsItem) {
-  if (item.pin_state === "issued") {
-    return (
-      <Tag icon={<SafetyCertificateOutlined />} color="processing">
-        PIN выдан
-      </Tag>
-    );
-  }
-  if (item.pin_state === "consumed") {
-    return (
-      <Tag icon={<SafetyCertificateOutlined />} color="success">
-        PIN активирован
-      </Tag>
-    );
-  }
-  return (
-    <Tag icon={<ClockCircleOutlined />} color="default">
-      PIN: {item.pin_state || "pending"}
-    </Tag>
-  );
-}
-
 export default function L4DeskTerminalsPage() {
   const { user } = useSession();
-  const canChangeTerminals = !user?.is_superuser && (user?.role_id === 3 || user?.role_id === 5);
+  const isSuperuser = !!user?.is_superuser || user?.role_id === 1;
+  const canChangeTerminals = isSuperuser || user?.role_id === 3 || user?.role_id === 5;
+  const canChangeActivity = !isSuperuser && (user?.role_id === 3 || user?.role_id === 5);
   const canRenewCertificate = !!user?.is_superuser || [1, 3, 5].includes(user?.role_id ?? 0);
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [canCreate, setCanCreate] = useState(false);
   const screens = Grid.useBreakpoint();
   const [summary, setSummary] = useState<TerminalSettingsItem | null>(null);
-  const [certMode, setCertMode] = useState("auto");
   const [terminals, setTerminals] = useState<TerminalSettingsItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(1);
@@ -112,9 +84,6 @@ export default function L4DeskTerminalsPage() {
   const fetching = useRef(false);
   const generation = useRef(0);
   const tenantGeneration = useRef(0);
-  const [pins, setPins] = useState<Map<number, TerminalPin | null>>(new Map());
-  const [issuingPin, setIssuingPin] = useState<number | null>(null);
-  const pinOperations = useRef(new Map<number, string>());
 
   const abort = useRef<AbortController | null>(null);
   const fetchTerminals = useCallback(async (silent = false) => {
@@ -136,7 +105,7 @@ export default function L4DeskTerminalsPage() {
     } catch (error: any) {
       if (currentGeneration === generation.current && !controller.signal.aborted) {
         setPresenceError(true);
-        message.error(typeof error?.response?.data?.detail === "string" ? error.response.data.detail : "Не удалось загрузить список терминалов");
+        if (!silent) message.error(typeof error?.response?.data?.detail === "string" ? error.response.data.detail : "Не удалось загрузить список терминалов");
       }
       return false;
     } finally {
@@ -148,22 +117,22 @@ export default function L4DeskTerminalsPage() {
     generation.current++; fetching.current = false; abort.current?.abort();
     setTerminals([]); setTotalCount(0); setCanCreate(false);
     let disposed = false; let timer: number | undefined; let failures = 0;
-    const run = async () => {
+    const run = async (silent = true) => {
       if (document.visibilityState !== "visible") return;
-      const ok = await fetchTerminals();
+      const ok = await fetchTerminals(silent);
       if (disposed || ok === null) return;
       failures = ok ? 0 : Math.min(3, failures + 1);
       timer = window.setTimeout(run, 30_000 * 2 ** failures + Math.random() * 3000);
     };
     const visible = () => { if (document.visibilityState === "visible") { window.clearTimeout(timer); void run(); } };
-    void run(); document.addEventListener("visibilitychange", visible);
+    void run(false); document.addEventListener("visibilitychange", visible);
     return () => { disposed = true; generation.current++; abort.current?.abort(); window.clearTimeout(timer); document.removeEventListener("visibilitychange", visible); };
   }, [fetchTerminals]);
   const refreshCurrent = useRef(fetchTerminals); refreshCurrent.current = fetchTerminals;
   useEffect(() => {
-    tenantGeneration.current++; setPins(new Map());
+    tenantGeneration.current++;
     setSummary(null); setEditingTerminal(null); setRenewalTerminal(null); setWizardOpen(false);
-    setActivityPending(null); setIssuingPin(null); setRetryingId(null); pinOperations.current.clear();
+    setActivityPending(null); setRetryingId(null);
     return () => { tenantGeneration.current++; };
   }, [user?.org_id]);
 
@@ -174,7 +143,7 @@ export default function L4DeskTerminalsPage() {
       await retryTerminalOnboarding(record.id);
       if (currentGeneration !== tenantGeneration.current) return;
       message.success(`Повторное подключение терминала ${record.device_id ?? ""} запущено`);
-      void refreshCurrent.current();
+      void refreshCurrent.current(true);
     } catch (err: any) {
       if (currentGeneration !== tenantGeneration.current) return;
       message.error(err.response?.data?.detail || "Ошибка повторного provisioning");
@@ -184,7 +153,7 @@ export default function L4DeskTerminalsPage() {
   };
 
   const handleActivity = async (record: TerminalSettingsItem) => {
-    if (activityPending !== null) return;
+    if (activityPending !== null || !record.is_active || !canChangeActivity) return;
     const currentGeneration = tenantGeneration.current;
     setActivityPending(record.id);
     try {
@@ -200,16 +169,6 @@ export default function L4DeskTerminalsPage() {
     }
   };
 
-  const loadPin = async (record: TerminalSettingsItem) => {
-    const currentGeneration = tenantGeneration.current;
-    try {
-      const pin = await getTerminalPin(record.id);
-      if (currentGeneration === tenantGeneration.current) setPins(previous => new Map(previous).set(record.id, pin));
-    } catch {
-      if (currentGeneration === tenantGeneration.current) setPins(previous => new Map(previous).set(record.id, null));
-    }
-  };
-
   const currentPage = page;
   const visibleRows = terminals;
 
@@ -218,41 +177,6 @@ export default function L4DeskTerminalsPage() {
     item.provisioning_state === "pending" ||
     item.pin_state === "failed" ||
     item.pin_state === "pending";
-
-  const handleNewPin = async (record: TerminalSettingsItem) => {
-    if (issuingPin !== null) return;
-    const currentGeneration = tenantGeneration.current;
-    const storageKey = `l4desk-pin-operation:${user?.org_id}:${record.id}`;
-    const operation = pinOperations.current.get(record.id) ?? sessionStorage.getItem(storageKey) ?? crypto.randomUUID();
-    sessionStorage.setItem(storageKey, operation);
-    pinOperations.current.set(record.id, operation);
-    setIssuingPin(record.id);
-    try {
-      const pin = await renewTerminalPin(record.id, operation);
-      sessionStorage.removeItem(storageKey);
-      if (currentGeneration !== tenantGeneration.current) return;
-      setPins(previous => new Map(previous).set(record.id, pin));
-      setTerminals(previous => previous.map(item => item.id === record.id ? {...item, pin_state: pin.status} : item));
-      pinOperations.current.delete(record.id);
-      message.success("PIN получен");
-      if (sortBy === "last_pin_issued_at") {
-        setPage(1);
-        void refreshCurrent.current(true);
-      }
-    } catch (error: any) {
-      if (currentGeneration !== tenantGeneration.current) return;
-      if (error.response?.status === 409) {
-        sessionStorage.removeItem(storageKey);
-        pinOperations.current.delete(record.id);
-        message.error("Запрос заменён. Обновите список перед получением нового PIN.");
-        void refreshCurrent.current(true);
-      } else {
-        message.error("Не удалось получить PIN. Повторите запрос — операция сохранена.");
-      }
-    } finally {
-      if (currentGeneration === tenantGeneration.current) setIssuingPin(null);
-    }
-  };
 
   const identity = (r: TerminalSettingsItem) => <div style={{ minWidth: 0, overflowWrap: "anywhere" }}>
     <Text strong copyable={{ text: String(r.device_id) }}>{r.device_id}</Text>
@@ -264,9 +188,12 @@ export default function L4DeskTerminalsPage() {
     const value = terminalStatus(r);
     const cert = certificatePresentation(r);
     return <Space orientation="vertical" size={2}>
-      <Tooltip title={r.iot_blocked ? "Соединение заблокировано IoT" : value === "unknown" ? "Данные о связи недоступны" : undefined}>
-        <Tag color={value === "online" ? "success" : "default"}>{({online: "Онлайн", offline: "Оффлайн", disabled: "Откл.", unknown: "Неизвестен"})[value]}</Tag>
-      </Tooltip>
+      {!r.is_active && <Tooltip title="Доступ отключён администратором. Пользователь не может изменить это ограничение."><Tag color="error">Отключено администратором</Tag></Tooltip>}
+      {r.user_disabled && <Tooltip title="Запрещены будущие использования в L4Desk. Оплаченный срок сохранён."><Tag color="warning">Отключено пользователем</Tag></Tooltip>}
+      {r.iot_blocked && <Tooltip title="Соединение заблокировано сервисом IoT"><Tag color="error">Заблокировано IoT</Tag></Tooltip>}
+      {r.is_active && !r.user_disabled && !r.iot_blocked && <Tooltip title={value === "unknown" ? "Сведения о связи этого устройства не подтверждены" : undefined}>
+        <Tag color={value === "online" ? "success" : "default"}>{({online: "Онлайн", offline: "Оффлайн", disabled: "Отключено", unknown: "Связь неизвестна"})[value]}</Tag>
+      </Tooltip>}
       <Tooltip title={cert.hint}><Tag color={cert.color}>{cert.text}</Tag></Tooltip>
     </Space>;
   };
@@ -285,16 +212,16 @@ export default function L4DeskTerminalsPage() {
       <Tooltip title="Сводка"><Button aria-label={`Сводка ${r.device_id}`} icon={<InfoCircleOutlined />} onClick={() => setSummary(r)} /></Tooltip>
       <Dropdown trigger={["click"]} menu={{ items: [
         ...(canChangeTerminals ? [{ key: "edit", label: "Редактировать", icon: <EditOutlined />, onClick: () => setEditingTerminal(r) }] : []),
-        ...(canRenewCertificate || canChangeTerminals ? [{ key: "certificate", label: "Сертификат и PIN", icon: <SafetyCertificateOutlined />, onClick: () => { setCertMode(canRenewCertificate ? "auto" : "pin"); setRenewalTerminal(r); if (canChangeTerminals) void loadPin(r); } }] : []),
-        ...(canChangeTerminals && canRetry(r) ? [{ key: "retry", label: "Повторить подключение", icon: <SyncOutlined />, disabled: retryingId !== null, onClick: () => void handleRetry(r) }] : []),
-        ...(canChangeTerminals ? [{ type: "divider" as const }, { key: "activity", label: r.user_disabled ? "Включить терминал" : "Отключить терминал", icon: <PoweroffOutlined />, danger: !r.user_disabled, disabled: activityPending !== null,
+        ...(canRenewCertificate || canChangeTerminals ? [{ key: "certificate", label: "Сертификат и PIN", icon: <SafetyCertificateOutlined />, onClick: () => setRenewalTerminal(r) }] : []),
+        ...(canChangeActivity && canRetry(r) ? [{ key: "retry", label: "Повторить подключение", icon: <SyncOutlined />, disabled: retryingId !== null, onClick: () => void handleRetry(r) }] : []),
+        ...(canChangeActivity ? [{ type: "divider" as const }, { key: "activity", label: r.user_disabled ? "Включить терминал" : "Отключить терминал", icon: <PoweroffOutlined />, danger: !r.user_disabled, disabled: activityPending !== null || !r.is_active,
           onClick: () => { Modal.confirm({ title: `${r.user_disabled ? "Включить" : "Отключить"} терминал ${r.device_id}?`, content: r.user_disabled ? "Будущие использования снова будут разрешены при действующей подписке." : "Будущие использования, включая MQTT, RTP и файловый менеджер, будут запрещены после применения политики. Текущие соединения завершаются естественно. Оплаченный срок сохраняется.", okText: r.user_disabled ? "Включить" : "Отключить", cancelText: "Отмена", onOk: () => handleActivity(r) }); } }] : []),
       ] }}><Button aria-label={`Другие действия ${r.device_id}`} icon={<MoreOutlined />} /></Dropdown>
     </Space>;
   };
   const columns: ColumnsType<TerminalSettingsItem> = [
     { title: "Терминал / адрес", key: "terminal", render: (_, r) => identity(r) },
-    { title: "Состояние", key: "status", width: 155, render: (_, r) => status(r) },
+    { title: "Доступ и связь", key: "status", width: 210, render: (_, r) => status(r) },
     { title: "Подписка / версия", key: "activation", width: 170, render: (_, r) => activation(r) },
     { title: "Действия", key: "actions", width: 190, render: (_, r) => actions(r) },
   ];
@@ -325,7 +252,7 @@ export default function L4DeskTerminalsPage() {
             <Button icon={<ReloadOutlined spin={loading} />} onClick={() => void fetchTerminals()}>
               Обновить
             </Button>
-            {canChangeTerminals && <Button
+            {canChangeActivity && <Button
               type="primary"
               icon={<PlusOutlined />}
               disabled={!canCreate}
@@ -425,25 +352,15 @@ export default function L4DeskTerminalsPage() {
         terminal={editingTerminal}
         readOnly={!canChangeTerminals}
         onClose={() => setEditingTerminal(null)}
-        onSaved={() => void fetchTerminals()}
+        onSaved={() => void refreshCurrent.current(true)}
       />
 
       {summary && listTenant === user?.org_id && user?.org_id && <TerminalSummary key={`${user.org_id}:${summary.id}`} terminal={summary} orgId={user.org_id} canEdit={canChangeTerminals} onClose={() => setSummary(null)} />}
-      <Drawer title={`Сертификат терминала ${renewalTerminal?.device_id ?? ""}`} open={!!renewalTerminal && listTenant === user?.org_id}
-        onClose={() => setRenewalTerminal(null)} destroyOnHidden width="min(680px, 100vw)">
-        {renewalTerminal && <Space orientation="vertical" style={{ width: "100%" }}>
-          <Radio.Group value={certMode} onChange={e => setCertMode(e.target.value)} options={[
-            ...(canRenewCertificate ? [{ value: "auto", label: "Продление на терминале" }] : []),
-            ...(canChangeTerminals ? [{ value: "pin", label: "PIN для ручной установки" }] : [])]} />
-          {certMode === "auto" ? <CertificateRenewal key={`${user?.org_id}:${renewalTerminal.id}`} deviceId={renewalTerminal.device_id} /> : <>
-            <Alert type="info" title="Ручная установка сертификата" description="PIN предназначен для установки оператором. Не запускайте ручную установку одновременно с удалённым продлением: оба меняют действующий сертификат терминала." />
-            {pinTag({ ...renewalTerminal, pin_state: pins.get(renewalTerminal.id)?.status ?? renewalTerminal.pin_state })}
-            {pins.get(renewalTerminal.id)?.expires_at && <Text type="secondary">Срок PIN: {new Date(pins.get(renewalTerminal.id)!.expires_at).toLocaleString("ru-RU")}</Text>}
-            {pins.get(renewalTerminal.id)?.status === "issued" && pins.get(renewalTerminal.id)?.pin && <Text copyable>{pins.get(renewalTerminal.id)!.pin}</Text>}
-            <Button icon={<KeyOutlined />} loading={issuingPin === renewalTerminal.id} disabled={issuingPin !== null} onClick={() => void handleNewPin(renewalTerminal)}>Получить новый PIN</Button>
-          </>}
-        </Space>}
-      </Drawer>
+      {renewalTerminal && listTenant === user?.org_id && user?.org_id && <TerminalCertificateDrawer
+        key={`${user.org_id}:${renewalTerminal.id}`} terminal={renewalTerminal} orgId={user.org_id}
+        canRenew={canRenewCertificate} canIssuePin={canChangeTerminals}
+        onClose={() => setRenewalTerminal(null)} onPinIssued={() => void refreshCurrent.current(true)} />}
+
 
       <OnboardingWizardModal
         key={user?.org_id}
