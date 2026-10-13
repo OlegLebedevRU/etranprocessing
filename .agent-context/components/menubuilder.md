@@ -1,5 +1,15 @@
 # MenuBuilder
 
+## Certificate chooser operation state, 2026-10-13 — released
+
+mainc3e464e delivered through builder for frontend. Existing renewal/PIN reads run
+on drawer open and are shared across chooser/detail. Pending or unconfirmed renewal
+shows Check and blocks a new start; recovery remains distinct. Active manual PIN
+is displayed below its option, blocking manual entry and competing renewal. Failed
+reads disable unsafe choices; accepted operations fence earlier responses. A matched
+verified PIN read resolves the ambiguous UUID without another POST. Classic keeps
+its modal. [Evidence and limits](../tasks/completed/2026-10-13-certificate-chooser-state.md).
+
 ## Manual PIN administrative permission, 2026-10-13 — released
 
 main5301d23 forwards normalized authenticated SU admin_override through the internal

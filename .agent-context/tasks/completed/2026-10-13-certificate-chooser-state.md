@@ -36,5 +36,16 @@ Scoped credential scan162 tracked/new frontend files: no markers.
 [MCP Ops Readiness: UNAVAILABLE]; standard SSH preflight2048MiB available,
 root66%, load .23; release uses authorized builder/production runbook.
 Backend code unchanged; backend tests/linters not run under project scope rules.
-Real production PIN/RPC writes not performed. Push/release evidence pending.
+Real production PIN/RPC writes not performed. 
+
+## Release evidence
+Source mainc3e464e8e69e3a67a6de510f3244c1a3d8ab4131 pushed and independently
+verified with git ls-remote. Standard builder launcher targeted menubuilder-frontend;
+100 unit tests and TypeScript/Vite build passed there, release exit0.
+Immutable digestebaa44f6588a947baa55bef58a993ef26dbe495745da55702f269e5ba29600da.
+Production release record and image OCI revision independently match source/digest;
+served Nginx index matches the installed release. Nginx was not restarted.
+No authenticated production issuance/RPC smoke; operator verifies with their normal
+session. Existing MB/PB backend release5301d23 retained. No migrations/IoT release.
+
 Existing .pytest_tmp from preceding incident retained (previous approval rejection).
