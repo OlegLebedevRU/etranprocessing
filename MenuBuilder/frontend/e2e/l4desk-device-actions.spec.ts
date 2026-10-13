@@ -1,8 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function portal(page: Page, options: { superuser?: boolean; tenant?: number; adminDisabled?: boolean; userDisabled?: boolean; blocked?: boolean } = {}) {
+async function portal(page: Page, options: { superuser?: boolean; tenant?: number; adminDisabled?: boolean; userDisabled?: boolean; blocked?: boolean; pinIssued?: boolean } = {}) {
   const calls: { path: string; method: string; body: any; url: URL }[] = [];
-  let issued = false;
+  let issued = !!options.pinIssued;
   let note = "До обновления";
   let hold: (() => void) | undefined;
   let pauseNext = false;
@@ -50,7 +50,7 @@ for (const tenant of [1, 1000]) test(`superuser edits and issues manual PIN in a
   await page.getByText("Сертификат и PIN", { exact: true }).click();
   await expect(page.getByRole("button", { name: "Выбрать удалённое продление", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Выбрать ручную установку", exact: true })).toBeVisible();
-  expect(calls.some(c => c.path.endsWith("/pin") || c.path.endsWith("/certificate-renewal"))).toBe(false);
+  expect(calls.some(c => c.method === "POST")).toBe(false);
   await page.getByRole("button", { name: "Выбрать ручную установку", exact: true }).click();
   await page.getByRole("button", { name: "Выдать PIN для ручной установки", exact: true }).click();
   await expect(page.getByRole("button", { name: "Выбрать другой способ", exact: true })).toBeDisabled();
@@ -59,7 +59,7 @@ for (const tenant of [1, 1000]) test(`superuser edits and issues manual PIN in a
   const pinPosts = calls.filter(c => c.method === "POST" && c.path.endsWith("/pin"));
   expect(pinPosts).toHaveLength(1);
   expect(pinPosts[0].body.operation_id).toMatch(/^[0-9a-f-]{36}$/);
-  expect(calls.some(c => c.path.endsWith("/certificate-renewal"))).toBe(false);
+  expect(calls.some(c => c.method === "POST" && c.path.endsWith("/certificate-renewal"))).toBe(false);
 });
 
 for (const userDisabled of [false, true]) test(`admin disable blocks user toggle with userDisabled=${userDisabled}`, async ({ page }) => {
@@ -106,7 +106,7 @@ test("certificate chooser fits a narrow screen and requires explicit flow select
   await expect(page.getByRole("button",{name:"Выбрать удалённое продление",exact:true})).toBeVisible();
   await expect(page.getByRole("button",{name:"Выбрать ручную установку",exact:true})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
-  expect(calls.some(c=>c.path.endsWith("/pin")||c.path.endsWith("/certificate-renewal"))).toBe(false);
+  expect(calls.some(c=>c.method === "POST")).toBe(false);
   await expect.poll(async () => {
     const box=await page.locator(".ant-drawer-content-wrapper").boundingBox();
     return !!box && Math.abs(box.x)<1 && box.width<=391;
@@ -136,4 +136,158 @@ test("manual PIN retry preserves operation after an ambiguous response", async (
   await page.getByRole("dialog").last().getByRole("button",{name:"Повторить запрос PIN",exact:true}).click();
   await expect(page.getByText("012345",{exact:true})).toBeVisible();
   expect(operations).toHaveLength(2);expect(operations[0]).toBe(operations[1]);
+});
+
+
+async function openCertificateChooser(page: Page) {
+  await page.getByRole("button", { name: "Другие действия 773", exact: true }).click();
+  await page.getByText("Сертификат и PIN", { exact: true }).click();
+}
+
+test("existing manual PIN is shown under its option and prevents another issuance", async ({ page }) => {
+  const { calls } = await portal(page, { superuser: true, pinIssued: true });
+  await openCertificateChooser(page);
+  const summary = page.locator(".ant-card").filter({ has: page.getByText("PIN для ручной установки", { exact: true }) });
+  await expect(summary.getByText("012345", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Выбрать ручную установку", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Выбрать удалённое продление", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Выдать PIN для ручной установки", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Проверить PIN", exact: true }).click();
+  await expect.poll(() => calls.filter(c => c.path.endsWith("/pin")).length).toBe(2);
+  expect(calls.some(c => c.method === "POST")).toBe(false);
+  expect(await page.evaluate(() => JSON.stringify(sessionStorage).includes("012345"))).toBe(false);
+  await page.screenshot({ path: "test-results/certificate-issued-pin.png", fullPage: true });
+});
+
+for (const status of ["expired", "consumed"]) test(`${status} manual PIN permits a new flow without exposing old plaintext`, async ({ page }) => {
+  const { calls } = await portal(page);
+  await page.route("**/api/settings/terminals/7/pin", route => route.fulfill({ json: {
+    pin: "654321", status, operation_id: "fixture", expires_at: "2027-10-01T00:00:00Z",
+  } }));
+  await openCertificateChooser(page);
+  await expect(page.getByText(status === "expired" ? "PIN истёк" : "PIN использован", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Выбрать ручную установку", exact: true })).toBeEnabled();
+  await expect(page.getByText("654321", { exact: true })).toHaveCount(0);
+  expect(calls.some(c => c.method === "POST")).toBe(false);
+});
+
+for (const state of ["pending", "issued_waiting_identity"]) test(`active renewal ${state} is checked on the chooser without another start`, async ({ page }) => {
+  const { calls } = await portal(page);
+  let status = state;
+  let checks = 0;
+  await page.route("**/api/devices/773/certificate-renewal", async route => {
+    expect(route.request().method()).toBe("GET");
+    checks++;
+    await route.fulfill({ json: { allowed: true, status } });
+  });
+  await openCertificateChooser(page);
+  await expect(page.getByRole("button", { name: "Проверить", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Выбрать удалённое продление", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Выбрать ручную установку", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Продлить сертификат на терминале", exact: true })).toHaveCount(0);
+  status = "confirmed";
+  await page.getByRole("button", { name: "Проверить", exact: true }).click();
+  await expect(page.getByText("Новый сертификат используется терминалом", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Выбрать удалённое продление", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Выбрать ручную установку", exact: true })).toBeEnabled();
+  expect(checks).toBe(2);
+  expect(calls.some(c => c.method === "POST")).toBe(false);
+});
+
+test("failed renewal read keeps known active state and prevents manual issuance", async ({ page }) => {
+  const { calls } = await portal(page);
+  let checks = 0;
+  await page.route("**/api/devices/773/certificate-renewal", route => {
+    expect(route.request().method()).toBe("GET");
+    checks++;
+    return checks === 1 ? route.fulfill({ json: { allowed: true, status: "pending" } })
+      : route.fulfill({ status: 503, json: { detail: "unavailable" } });
+  });
+  await openCertificateChooser(page);
+  await expect(page.getByText("Ожидает терминал", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Проверить", exact: true }).click();
+  await expect(page.getByText("Проверка продления недоступна", { exact: true })).toBeVisible();
+  await expect(page.getByText("Ожидает терминал", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Выбрать ручную установку", exact: true })).toBeDisabled();
+  expect(calls.some(c => c.method === "POST")).toBe(false);
+});
+
+test("unavailable PIN state fails closed and can be checked again", async ({ page }) => {
+  const { calls } = await portal(page);
+  let failed = true;
+  await page.route("**/api/settings/terminals/7/pin", route => {
+    expect(route.request().method()).toBe("GET");
+    return failed ? route.fulfill({ status: 503, json: { detail: "unavailable" } }) : route.fulfill({ json: null });
+  });
+  await openCertificateChooser(page);
+  await expect(page.getByText("Не удалось проверить текущий PIN", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Выбрать ручную установку", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Выбрать удалённое продление", exact: true })).toBeDisabled();
+  failed = false;
+  await page.getByRole("button", { name: "Проверить PIN", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Выбрать ручную установку", exact: true })).toBeEnabled();
+  expect(calls.some(c => c.method === "POST")).toBe(false);
+});
+
+
+test("late status read cannot reopen renewal after queue acceptance", async ({ page }) => {
+  await portal(page);
+  let checks = 0;
+  let posts = 0;
+  let releasePost: (() => void) | undefined;
+  let releaseOldRead: (() => void) | undefined;
+  let oldReadReturned = false;
+  await page.route("**/api/devices/773/certificate-renewal", async route => {
+    if (route.request().method() === "POST") {
+      posts++;
+      await new Promise<void>(resolve => { releasePost = resolve; });
+      await route.fulfill({ json: { task_id: "22222222-2222-4222-8222-222222222222", pin_id: 9,
+        expires_at: "2027-10-01T00:00:00Z", status: "queued" } });
+      return;
+    }
+    checks++;
+    if (checks === 2) {
+      await new Promise<void>(resolve => { releaseOldRead = resolve; });
+      await route.fulfill({ json: { allowed: true, status: "none" } });
+      oldReadReturned = true;
+    } else await route.fulfill({ json: { allowed: true, status: checks === 1 ? "none" : "pending" } });
+  });
+  await openCertificateChooser(page);
+  await page.getByRole("button", { name: "Выбрать удалённое продление", exact: true }).click();
+  await page.getByRole("button", { name: "Продлить сертификат на терминале", exact: true }).click();
+  await page.getByRole("button", { name: "Заказать продление", exact: true }).click();
+  await expect.poll(() => posts).toBe(1);
+  await page.getByRole("button", { name: "Проверить результат", exact: true }).click();
+  await expect.poll(() => checks).toBe(2);
+  releasePost!();
+  await expect(page.getByText("Ожидает терминал", { exact: true })).toBeVisible();
+  releaseOldRead!();
+  await expect.poll(() => oldReadReturned).toBe(true);
+  await page.getByRole("button", { name: "Закрыть", exact: true }).click();
+  await page.getByRole("button", { name: "Выбрать другой способ", exact: true }).click();
+  await expect(page.getByText("Ожидает терминал", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Выбрать удалённое продление", exact: true })).toBeDisabled();
+  expect(posts).toBe(1);
+});
+
+
+test("verified PIN read resolves an ambiguous operation without another issuance", async ({ page }) => {
+  await portal(page);
+  const operation = "22222222-2222-4222-8222-222222222222";
+  const key = "l4desk-pin-operation:1:7";
+  await page.evaluate(({ key, operation }) => sessionStorage.setItem(key, operation), { key, operation });
+  let status = "issued";
+  await page.route("**/api/settings/terminals/7/pin", route => {
+    expect(route.request().method()).toBe("GET");
+    return route.fulfill({ json: { pin: "012345", status, operation_id: operation, expires_at: "2027-10-01T00:00:00Z" } });
+  });
+  await openCertificateChooser(page);
+  await expect(page.getByText("012345", { exact: true })).toBeVisible();
+  expect(await page.evaluate(key => sessionStorage.getItem(key), key)).toBeNull();
+  await expect(page.getByRole("button", { name: "Выбрать ручную установку", exact: true })).toBeDisabled();
+  status = "consumed";
+  await page.getByRole("button", { name: "Проверить PIN", exact: true }).click();
+  await expect(page.getByText("PIN использован", { exact: true })).toBeVisible();
+  await expect(page.getByText("012345", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Выбрать удалённое продление", exact: true })).toBeEnabled();
 });

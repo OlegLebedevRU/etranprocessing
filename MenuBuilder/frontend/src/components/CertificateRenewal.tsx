@@ -6,8 +6,8 @@ import { requestRenewalPermission, type PaymentRequiredResponse } from "../api/c
 import { useSession } from "../session/SessionContext";
 import { formatMoneyMinor } from "../utils/billing";
 
-type Snapshot = { allowed: boolean; reason?: string; status: string; expires_at?: string; observed_at?: string;
-  installation_pending?: boolean; recovery_pin_id?: number; recoverable?: boolean; requires_intervention?: boolean; exit_code?: number };
+import { isRenewalInProgress, useCertificateRenewalState, type CertificateRenewalState } from "../hooks/useCertificateRenewalState";
+
 const labels: Record<string, string> = { none: "Продление ещё не заказывалось", pending: "Ожидает терминал",
   issued_waiting_identity: "Сертификат выпущен; ожидается подтверждение использования", confirmed: "Новый сертификат используется терминалом",
   installation_failed: "Сертификат выпущен, но установка завершилась ошибкой",
@@ -15,9 +15,14 @@ const labels: Record<string, string> = { none: "Продление ещё не �
   failed: "Команда завершилась ошибкой; подробности в истории команд", cancelled: "Команда отменена",
   expired: "Срок ожидания истёк" };
 
-export default function CertificateRenewal({ deviceId, confirmation = "modal", onInteractionChange }: { deviceId: number; confirmation?: "modal" | "inline"; onInteractionChange?: (locked: boolean) => void }) {
+export default function CertificateRenewal({ deviceId, confirmation = "modal", onInteractionChange, state, onSelect, blockedReason }: {
+  deviceId: number; confirmation?: "modal" | "inline"; onInteractionChange?: (locked: boolean) => void;
+  state?: CertificateRenewalState; onSelect?: () => void; blockedReason?: string;
+}) {
   const { user } = useSession();
-  const [snapshot, setSnapshot] = useState<Snapshot>();
+  const localState = useCertificateRenewalState(deviceId, !state);
+  const { snapshot, loading, loadFailed, refresh, markQueued } = state ?? localState;
+  const inProgress = isRenewalInProgress(snapshot);
   const [open, setOpen] = useState(false);
   const [resumeInstallation, setResumeInstallation] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -34,14 +39,9 @@ export default function CertificateRenewal({ deviceId, confirmation = "modal", o
   const endpoint = `/devices/${deviceId}/certificate-renewal`;
   useEffect(() => { onInteractionChange?.(busy || open); }, [busy, open, onInteractionChange]);
   useEffect(() => () => onInteractionChange?.(false), [onInteractionChange]);
-  const refresh = async () => {
-    const current = generation.current;
-    try { const { data } = await client.get<Snapshot>(endpoint); if (current === generation.current) setSnapshot(data); }
-    catch { if (current === generation.current) setSnapshot({ allowed: false, reason: "Проверка продления недоступна", status: "none" }); }
-  };
-  useEffect(() => { generation.current += 1; sending.current = false; setBusy(false); setSnapshot(undefined); setOpen(false);
+  useEffect(() => { generation.current += 1; sending.current = false; setBusy(false); setOpen(false);
     setPinId(undefined); setTaskId(undefined); setFailed(false); setRetries(0); setResumeInstallation(false);
-    setPayment(undefined); setOrderId(undefined); setPaymentConfirmed(false); setCooldown(0); void refresh();
+    setPayment(undefined); setOrderId(undefined); setPaymentConfirmed(false); setCooldown(0);
     return () => { generation.current += 1; }; }, [deviceId, user?.org_id]);
   useEffect(() => {
     if (!cooldown) return;
@@ -49,7 +49,8 @@ export default function CertificateRenewal({ deviceId, confirmation = "modal", o
     return () => window.clearTimeout(timer);
   }, [cooldown]);
   const send = async (checkPayment = false, simulate = false) => {
-    if (sending.current || taskId) return;
+    if (sending.current || taskId || blockedReason || loading || loadFailed ||
+      (resumeInstallation ? !snapshot?.recoverable : !snapshot?.allowed || inProgress)) return;
     const current = generation.current;
     sending.current = true; setBusy(true);
     const next = failed ? retries + 1 : 0;
@@ -63,7 +64,7 @@ export default function CertificateRenewal({ deviceId, confirmation = "modal", o
       const { data } = await client.post<{ task_id: string; pin_id: number; expires_at: string }>(endpoint,
         { pin_id: pinId, order_id: orderId, resume_installation: resumeInstallation });
       if (current !== generation.current) return;
-      setPinId(data.pin_id); setTaskId(data.task_id); setFailed(false);
+      setPinId(data.pin_id); setTaskId(data.task_id); setFailed(false); markQueued(data.expires_at);
       message.success(resumeInstallation ? "Повторная установка поставлена в очередь" : "Продление поставлено в очередь"); void refresh();
     } catch (error: any) {
       if (current !== generation.current) return;
@@ -115,19 +116,31 @@ export default function CertificateRenewal({ deviceId, confirmation = "modal", o
       {taskId && <Typography.Paragraph copyable>{taskId}</Typography.Paragraph>}
       {snapshot?.expires_at && <Typography.Text>Срок ожидания: {new Date(snapshot.expires_at).toLocaleString()}</Typography.Text>}
 </>;
+  if (onSelect) return <Space orientation="vertical" style={{ width: "100%" }}>
+    <Typography.Text>{snapshot ? labels[snapshot.status] || snapshot.status : "Проверка продления…"}</Typography.Text>
+    {snapshot?.reason && <Typography.Text type="secondary">{snapshot.reason}</Typography.Text>}
+    {blockedReason && <Typography.Text type="secondary">{blockedReason}</Typography.Text>}
+    <Space wrap>
+      <Button type="primary" aria-label="Выбрать удалённое продление" loading={!snapshot && loading} disabled={loading || loadFailed || inProgress || !!blockedReason}
+        onClick={onSelect}>Выбрать удалённое продление</Button>
+      <Button aria-label="Проверить" loading={loading} onClick={() => void refresh()}>Проверить</Button>
+      {snapshot?.installation_pending && <Button disabled={!!blockedReason} onClick={onSelect}>Открыть восстановление установки</Button>}
+    </Space>
+    {inProgress && <Typography.Text type="secondary">Повторный запуск недоступен, пока текущая заявка не завершена.</Typography.Text>}
+  </Space>;
   return <Space orientation="vertical">
     <Typography.Text type="secondary">Нужен агент с поддержкой RPC 7011; постановка команды не подтверждает её выполнение.</Typography.Text>
     <Typography.Text>{snapshot ? labels[snapshot.status] || snapshot.status : "Проверка доступности…"}</Typography.Text>
     <Space wrap>
-      <Button type="primary" disabled={!snapshot?.allowed || snapshot?.installation_pending || Date.now() < cooldown} onClick={() => {
+      <Button type="primary" disabled={loading || !snapshot?.allowed || inProgress || !!blockedReason || Date.now() < cooldown} onClick={() => {
         setResumeInstallation(false); setPinId(undefined); setTaskId(undefined); setFailed(false); setRetries(0);
         setPayment(undefined); setOrderId(undefined); setPaymentConfirmed(false); setOpen(true);
       }}>Продлить сертификат на терминале</Button>
-      {snapshot?.installation_pending && <Button type="primary" disabled={!snapshot.recoverable || Date.now() < cooldown} onClick={() => {
+      {snapshot?.installation_pending && <Button type="primary" disabled={loading || loadFailed || !snapshot.recoverable || !!blockedReason || Date.now() < cooldown} onClick={() => {
         setResumeInstallation(true); setPinId(snapshot.recovery_pin_id); setTaskId(undefined); setFailed(false); setRetries(0);
         setPayment(undefined); setOrderId(undefined); setPaymentConfirmed(false); setOpen(true);
       }}>Повторить установку выпущенного сертификата</Button>}
-      <Button onClick={() => void refresh()}>Проверить результат</Button>
+      <Button aria-label="Проверить результат" loading={loading} onClick={() => void refresh()}>Проверить результат</Button>
     </Space>
     {snapshot?.installation_pending && <Alert type={snapshot.requires_intervention ? "error" : "warning"} showIcon
       title="Новый выпуск заблокирован до завершения установки"
