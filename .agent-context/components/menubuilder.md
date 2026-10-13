@@ -1,5 +1,14 @@
 # MenuBuilder
 
+## Devices visibility correction, 2026-10-13
+
+Plan12 enrollment-only list restriction is removed: L4Desk devices retain the
+organization visibility query regardless of enrollment. Finance/admission stays
+separate; count/status filters precede pagination. Section label is Устройства.
+Terminal screen selects exact sys=windows after existing visibility checks;
+IP-camera tags and Windows USB sources remain separate. Release evidence:
+[handoff](../tasks/completed/2026-10-13-devices-list-correction.md).
+
 ## Certificate installation recovery, 2026-10-12 — released
 
 main b152e35 delivered via builder for PB/MB/frontend. Used-PIN command failure
