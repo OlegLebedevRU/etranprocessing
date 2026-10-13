@@ -1,5 +1,12 @@
 # MenuBuilder
 
+## Manual PIN administrative permission, 2026-10-13 — released
+
+main5301d23 forwards normalized authenticated SU admin_override through the internal
+setup PIN contract, matching remote renewal. Provider payment/policy refusals stay
+402/403 etc., no longer false503; raw provider bodies are not exposed. Tenant/SN
+binding, UUID replay and purpose isolation remain. [Evidence and limits](../tasks/completed/2026-10-13-manual-pin-773.md).
+
 ## L4Desk device workflows, 2026-10-13 — released
 
 main41157ff delivered through builder for MB backend/frontend. SU can edit device

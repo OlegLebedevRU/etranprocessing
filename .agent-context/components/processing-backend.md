@@ -1,5 +1,13 @@
 # ProcessingBackend
 
+## Manual PIN administrative permission, 2026-10-13 — released
+
+main5301d23 adds defaultfalse admin_override to the service-auth setup PIN request,
+reusing existing validate_pin_permission used by renewal. Trusted MB derives the
+flag from normalized JWT permissions; tenant/SN binding and replay remain.
+Audit records override without plaintext PIN. No schema/tariff changes.
+[Evidence and limits](../tasks/completed/2026-10-13-manual-pin-773.md).
+
 ## 2026-10-11: Terminal Issuing CA — production deployed, terminal pilot pending
 
 Local signer and pinned root→issuer verification deployed from main `ba63536`.
