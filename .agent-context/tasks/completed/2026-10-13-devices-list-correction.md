@@ -42,3 +42,17 @@ Existing licensing/transport admission rules were not changed by this correction
 MCP Ops unavailable; SSH preflight: 2038 MiB available RAM, root 63%, load .37.
 Read-only credential scan: 1448 scoped tracked files; only previously reviewed
 synthetic key markers/scanner constants matched. No credentials in this change.
+
+
+## Presence warning follow-up
+
+A successful batch with some unknown/unprovisioned device observations was
+incorrectly marked as a complete provider outage. Live diagnosis: 134 requested,
+134 provider responses, 19 bound/provisioned observations accepted for presence.
+Removed the cardinality-based global failure flag; individual unknown rows remain
+unknown. Provider exceptions still set presence_unavailable and the warning/backoff.
+No tenant/binding/admission rules changed and no fabricated offline state introduced.
+MB Ruff check/format and Pyright passed; 14 focused tests passed, including complete,
+partial and failed provider responses under all/online/disabled pagination.
+MCP Ops unavailable; SSH preflight passed (2047 MiB available, root64%, load .18).
+Pending: backend builder release and production verification of warning flag.

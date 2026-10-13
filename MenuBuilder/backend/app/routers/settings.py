@@ -784,8 +784,8 @@ async def list_terminals_settings(
                 "Terminal presence unavailable: %s", type(exc).__name__
             )
             presence_unavailable = True
-        if ids and len(connections) < len(set(ids)):
-            presence_unavailable = True
+        # Missing/unprovisioned device observations are row-level unknown states,
+        # not evidence that the presence provider is unavailable.
         disabled = or_(Terminal.is_active.is_(False), Terminal.id.in_(disabled_ids))
         online_ids = [
             identifier

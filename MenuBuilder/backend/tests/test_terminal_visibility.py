@@ -94,8 +94,9 @@ def test_latest_pin_sort_uses_issue_time_and_keeps_unissued_last():
     "status_filter,expected",
     [("all", [773, 4623, 4624]), ("online", [773, 4623]), ("disabled", [4624])],
 )
+@pytest.mark.parametrize("provider", ["complete", "partial", "failed"])
 async def test_l4desk_list_keeps_unenrolled_devices_and_filters_before_pagination(
-    monkeypatch, status_filter, expected
+    monkeypatch, status_filter, expected, provider
 ):
     from types import SimpleNamespace
     from unittest.mock import AsyncMock, MagicMock
@@ -168,7 +169,13 @@ async def test_l4desk_list_keeps_unenrolled_devices_and_filters_before_paginatio
 
         async def presence(tenant, ids):
             assert tenant == 1000 and set(ids) == {773, 4623, 4624}
-            return {i: {"is_online": True, "is_blocked": False} for i in ids}
+            if provider == "failed":
+                raise TimeoutError("fixture provider unavailable")
+            return {
+                i: {"is_online": True, "is_blocked": False}
+                for i in ids
+                if provider != "partial" or i == 773
+            }
 
         monkeypatch.setattr(router, "list_subscriptions", AsyncMock(return_value=[]))
         monkeypatch.setattr(router, "presence_snapshot", presence)
@@ -176,7 +183,9 @@ async def test_l4desk_list_keeps_unenrolled_devices_and_filters_before_paginatio
         repo.get_earliest_active_terminal_id = AsyncMock(return_value=None)
         monkeypatch.setattr(router, "L4DeskRepository", lambda db: repo)
         db = SimpleNamespace(execute=execute, scalars=scalars)
-        for page, identifier in enumerate(expected, 1):
+        if status_filter == "online" and provider != "complete":
+            expected = [773] if provider == "partial" else []
+        for page, identifier in enumerate(expected or [None], 1):
             result = await router.list_terminals_settings(
                 org_id=None,
                 search=None,
@@ -193,4 +202,9 @@ async def test_l4desk_list_keeps_unenrolled_devices_and_filters_before_paginatio
                 status_filter=status_filter,
             )
             assert result.total_count == len(expected)
-            assert [item.device_id for item in result.items] == [identifier]
+            assert [item.device_id for item in result.items] == (
+                [] if identifier is None else [identifier]
+            )
+            assert result.presence_unavailable == (provider == "failed")
+            if provider == "partial" and identifier == 4623:
+                assert result.items[0].presence == "unknown"
