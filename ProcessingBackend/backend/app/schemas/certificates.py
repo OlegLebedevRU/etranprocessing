@@ -42,6 +42,7 @@ class IssueCertificatePinRequest(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
     order_item_id: int | None = Field(default=None, gt=0)
+    admin_override: bool = False
 
     operation_id: str = Field(
         ...,

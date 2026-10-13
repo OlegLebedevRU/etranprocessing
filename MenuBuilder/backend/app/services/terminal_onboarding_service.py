@@ -165,6 +165,7 @@ class IssueCertificatePinRequest(BaseModel):
     ttl_seconds: int = 86400
     actor: str | None = "menubuilder"
     order_item_id: int | None = None
+    admin_override: bool = False
 
 
 class IssueCertificatePinResponse(BaseModel):
@@ -381,9 +382,18 @@ class ProcessingBackendPinClient:
                     status_code=status.HTTP_409_CONFLICT,
                     detail=f"{err_code}: {err_msg}",
                 )
-            error_text = resp.text[:200]
+            # Translate definitive admission refusals without exposing provider bodies.
+            refusal_messages = {
+                402: "Для этой операции требуется подтверждённая оплата сертификата",
+                403: "Выдача PIN запрещена политикой сертификатов",
+                404: "Терминал не найден в сервисе сертификатов",
+                410: "Оплаченное разрешение использовано или истекло",
+                422: "Сервис сертификатов отклонил параметры заявки",
+            }
+            if message := refusal_messages.get(resp.status_code):
+                raise HTTPException(resp.status_code, message)
             raise RuntimeError(
-                f"ProcessingBackend PIN issue returned HTTP {resp.status_code}: {error_text}"
+                f"ProcessingBackend PIN issue returned HTTP {resp.status_code}"
             )
 
     async def get_by_operation(

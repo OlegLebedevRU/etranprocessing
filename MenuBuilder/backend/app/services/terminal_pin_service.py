@@ -178,6 +178,7 @@ class TerminalPinService:
                         sn=terminal.sn,
                         actor=str(user.get("sub") or user.get("id")),
                         order_item_id=order_item_id,
+                        admin_override=bool(user.get("is_superuser")),
                     )
                 )
             response = self._validate_response(response, terminal, operation_id)

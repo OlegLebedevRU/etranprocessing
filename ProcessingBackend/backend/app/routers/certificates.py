@@ -930,7 +930,11 @@ async def issue_certificate_pin_endpoint(
 
     now = datetime.now(UTC)
     paid_item = await validate_pin_permission(
-        db, terminal, "setup", payload.order_item_id
+        db,
+        terminal,
+        "setup",
+        payload.order_item_id,
+        admin_override=payload.admin_override,
     )
     cert_pin = None
     if paid_item is not None:
@@ -998,6 +1002,7 @@ async def issue_certificate_pin_endpoint(
         details={
             "sn": terminal.sn,
             "pin_id": cert_pin.id,
+            "admin_override": payload.admin_override,
             "pin_masked": mask_pin(pin_value),
             "expires_at": expires_at.isoformat(),
             "ttl_seconds": payload.ttl_seconds,

@@ -273,3 +273,42 @@ async def test_superuser_pin_lookup_does_not_bypass_active_tenant():
     assert error.value.status_code == 404
     assert db.execute.await_args.args[0].compile().params["org_id_1"] == 2000
     provider.get_by_operation.assert_not_awaited()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("superuser", [False, True])
+async def test_manual_pin_propagates_only_trusted_admin_permission(monkeypatch, superuser):
+    import app.services.terminal_pin_service as module
+
+    db, provider, terminal, service = fixtures()
+    permission = AsyncMock(return_value=None)
+    monkeypatch.setattr(module, "certificate_permission", permission)
+    operation = uuid4()
+    provider.get_by_operation.return_value = None
+    provider.issue_pin.return_value = response(terminal, operation)
+    await service.issue(terminal.id, {"org_id": 1000, "is_superuser": superuser}, operation)
+    assert provider.issue_pin.await_args.args[0].admin_override is superuser
+    assert permission.await_args.kwargs["is_superuser"] is superuser
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("status_code", [402, 403, 404, 410, 422])
+async def test_provider_refusal_is_not_reported_as_service_outage(monkeypatch, status_code):
+    import httpx
+    import app.services.terminal_onboarding_service as module
+
+    real_client = httpx.AsyncClient
+    def refuse(request):
+        if request.method == "GET":
+            return httpx.Response(404)
+        return httpx.Response(status_code, json={"detail": "untrusted provider body"})
+    monkeypatch.setattr(module.httpx, "AsyncClient", lambda **kwargs:
+        real_client(transport=httpx.MockTransport(refuse), **kwargs))
+    db, _, terminal, service = fixtures()
+    service.provider = module.ProcessingBackendPinClient(base_url="http://localhost", service_token="")
+    with pytest.raises(HTTPException) as error:
+        await service.issue(terminal.id, {"org_id": 1000}, uuid4())
+    assert error.value.status_code == status_code
+    assert "untrusted provider body" not in str(error.value.detail)
+    assert db.commit.await_count == 1
+    db.rollback.assert_awaited_once()

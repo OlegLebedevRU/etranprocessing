@@ -836,3 +836,38 @@ async def test_row_locking_concurrency_protection():
     stmt = mock_db.execute.call_args[0][0]
     sql_compiled = str(stmt)
     assert "FOR UPDATE" in sql_compiled
+
+
+@pytest.mark.anyio
+async def test_setup_admin_override_is_authenticated_and_bypasses_classic_payment(test_env, monkeypatch):
+    from app.models import Org, OrgBillingSettings
+
+    db, terminal = test_env
+    monkeypatch.setattr(settings, "product_scope_split_enabled", True)
+    monkeypatch.setattr(settings, "service_auth_token", "fixture-internal-key")
+    monkeypatch.setattr(settings, "internal_service_key", "")
+    monkeypatch.setattr(db, "get", AsyncMock(return_value=Org(site_mode="classic")), raising=False)
+    monkeypatch.setattr(db, "scalar", AsyncMock(return_value=OrgBillingSettings(
+        billing_mode="prepaid", tenant_pin_creation_enabled=True,
+        cert_billing_mode="per_operation", cert_price_minor=100,
+        cert_charge_primary_issue=True, cert_charge_reissue=True,
+    )), raising=False)
+    request = {"operation_id": "manual-admin-permission", "tenant_id": terminal.org_id,
+               "terminal_id": terminal.id, "sn": terminal.sn}
+    headers = {"X-Internal-Service-Key": "fixture-internal-key"}
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        refused = await client.post("/api/certificates/pins/issue", json=request, headers=headers)
+        assert refused.status_code == 402
+        assert not db.pins
+        request["admin_override"] = True
+        unauthenticated = await client.post("/api/certificates/pins/issue", json=request)
+        assert unauthenticated.status_code == 401
+        assert not db.pins
+        issued = await client.post("/api/certificates/pins/issue", json=request, headers=headers)
+        assert issued.status_code == 201
+        replayed = await client.post("/api/certificates/pins/issue", json=request, headers=headers)
+        assert replayed.status_code == 200
+        assert replayed.json()["replayed"] is True
+        assert replayed.json()["pin"] == issued.json()["pin"]
+        assert len(db.pins) == 1
+        assert db.audit_events[0].details["admin_override"] is True
