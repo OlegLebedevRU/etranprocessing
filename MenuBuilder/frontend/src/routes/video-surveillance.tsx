@@ -244,7 +244,8 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
       }
 
       if (currentGeneration !== deviceGeneration.current) return;
-      allItems = cameraOnly ? allItems.filter(isOpenIpcCamera) : selectableDevices(allItems, settingsList);
+      allItems = cameraOnly ? allItems.filter(isOpenIpcCamera) : selectableDevices(allItems, settingsList)
+        .filter(device => device.tags.some(tag => tag.tag === "sys" && tag.value === "windows"));
       setTerminalAddresses(addrMap);
       setTerminalNames(Object.fromEntries(settingsList.map(item => [item.device_id, item.note || ""])));
       setDevices(allItems);

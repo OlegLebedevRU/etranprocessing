@@ -318,7 +318,7 @@ export default function L4DeskTerminalsPage() {
           <Space align="center">
             <DesktopOutlined style={{ fontSize: 20, color: "#1677ff" }} />
             <Title level={4} style={{ margin: 0, fontSize: 16 }}>
-              Терминалы
+              Устройства
             </Title>
           </Space>
           <Space wrap>

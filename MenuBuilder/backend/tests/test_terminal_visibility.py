@@ -87,3 +87,110 @@ def test_latest_pin_sort_uses_issue_time_and_keeps_unissued_last():
             )
         )
         assert db.execute(query).scalars().all() == [775, 773, 774]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "status_filter,expected",
+    [("all", [773, 4623, 4624]), ("online", [773, 4623]), ("disabled", [4624])],
+)
+async def test_l4desk_list_keeps_unenrolled_devices_and_filters_before_pagination(
+    monkeypatch, status_filter, expected
+):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.config import settings
+    from app.models import CertificatePin
+    from app.routers import settings as router
+
+    monkeypatch.setattr(settings, "product_scope_split_enabled", True)
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        Terminal.__table__.create(conn)
+        CertificatePin.__table__.create(conn)
+        conn.execute(
+            text(
+                "CREATE TABLE l4desk_terminals (terminal_id INTEGER, tenant_id INTEGER, deleted_at TEXT)"
+            )
+        )
+        rows = [
+            Terminal(
+                id=i,
+                device_id=i,
+                org_id=1000,
+                sn=f"fixture{i}",
+                is_active=i != 4624,
+                l4desk_subscription_enabled=i == 773,
+                iot_provisioned=True,
+            )
+            for i in [773, 4623, 4624]
+        ]
+        for item in rows:
+            conn.execute(
+                Terminal.__table__.insert().values(
+                    id=item.id,
+                    org_id=item.org_id,
+                    device_id=item.device_id,
+                    sn=item.sn,
+                    is_active=item.is_active,
+                    l4desk_subscription_enabled=item.l4desk_subscription_enabled,
+                )
+            )
+        conn.execute(
+            Terminal.__table__.insert().values(
+                id=9,
+                org_id=2000,
+                device_id=9,
+                sn="foreign",
+                is_active=True,
+                l4desk_subscription_enabled=True,
+            )
+        )
+        by_id = {item.id: item for item in rows}
+
+        async def execute(stmt):
+            if stmt.column_descriptions[0].get("entity") is Terminal:
+                ids = conn.execute(stmt.with_only_columns(Terminal.id)).scalars().all()
+                return SimpleNamespace(all=lambda: [(by_id[i], None) for i in ids])
+            if "count(" in str(stmt):
+                count = conn.execute(stmt).scalar_one()
+                return SimpleNamespace(scalar_one=lambda: count)
+            result = MagicMock()
+            result.scalars.return_value.all.return_value = []
+            return result
+
+        async def scalars(stmt):
+            if stmt.column_descriptions[0].get("entity") is Terminal:
+                ids = conn.execute(stmt).scalars().all()
+                return SimpleNamespace(all=lambda: ids)
+            return SimpleNamespace(all=list)
+
+        async def presence(tenant, ids):
+            assert tenant == 1000 and set(ids) == {773, 4623, 4624}
+            return {i: {"is_online": True, "is_blocked": False} for i in ids}
+
+        monkeypatch.setattr(router, "list_subscriptions", AsyncMock(return_value=[]))
+        monkeypatch.setattr(router, "presence_snapshot", presence)
+        repo = MagicMock()
+        repo.get_earliest_active_terminal_id = AsyncMock(return_value=None)
+        monkeypatch.setattr(router, "L4DeskRepository", lambda db: repo)
+        db = SimpleNamespace(execute=execute, scalars=scalars)
+        for page, identifier in enumerate(expected, 1):
+            result = await router.list_terminals_settings(
+                org_id=None,
+                search=None,
+                device_filter=None,
+                sort_by="device_id",
+                sort_order="asc",
+                page=page,
+                page_size=1,
+                fetch_all=False,
+                user={"org_id": 1000, "role_id": 5},
+                db=db,
+                response=None,
+                l4desk=True,
+                status_filter=status_filter,
+            )
+            assert result.total_count == len(expected)
+            assert [item.device_id for item in result.items] == [identifier]

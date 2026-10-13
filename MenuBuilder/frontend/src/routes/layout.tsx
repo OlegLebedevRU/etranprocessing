@@ -49,7 +49,7 @@ const NAV_ITEMS = [
 ];
 
 const L4DESK_NAV_ITEMS = [
-  { key: "terminals", icon: <DesktopOutlined />, label: "Терминалы" },
+  { key: "terminals", icon: <DesktopOutlined />, label: "Устройства" },
   { key: "video", icon: <VideoCameraOutlined />, label: "Экран терминала" },
   { key: "console", icon: <CodeOutlined />, label: "Консоль" },
   { key: "files", icon: <FolderOutlined />, label: "Файлы" },

@@ -764,7 +764,8 @@ async def list_terminals_settings(
     can_create = True
     disabled_ids: set[int] = set()
     if is_l4desk:
-        query = query.where(Terminal.l4desk_subscription_enabled.is_(True))
+        # L4Desk enriches the organization list; enrollment controls admission,
+        # not whether a device remains visible in this screen.
         subscriptions = await list_subscriptions(db, effective_org_id)
         finance = {item.terminal_id: item for item in subscriptions}
         can_create = len(subscriptions) < 3 or any(
@@ -774,14 +775,7 @@ async def list_terminals_settings(
             item.terminal_id for item in subscriptions if item.user_disabled
         }
         ids = list(
-            (
-                await db.scalars(
-                    select(Terminal.device_id).where(
-                        Terminal.org_id == effective_org_id,
-                        Terminal.l4desk_subscription_enabled.is_(True),
-                    )
-                )
-            ).all()
+            (await db.scalars(query.with_only_columns(Terminal.device_id))).all()
         )
         try:
             connections = await presence_snapshot(effective_org_id, ids)

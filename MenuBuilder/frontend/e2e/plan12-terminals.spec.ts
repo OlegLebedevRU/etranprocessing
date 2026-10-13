@@ -76,3 +76,42 @@ test("disable writes only the L4Desk scope and disables future actions", async (
   expect(calls.filter(c => c.method === "PATCH").map(c => c.body)).toEqual([{ is_active: false, scope: "l4desk" }]);
   expect(calls.some(c => /stop|revoke|rabbitmq/.test(c.path))).toBe(false);
 });
+
+
+test("Devices keeps unenrolled and disabled rows without requiring inventory", async ({ page }) => {
+  await portal(page);
+  await page.route("**/api/settings/terminals?*", async route => route.fulfill({ json: {
+    items: [773,4623,4624].map(id => ({ id, device_id:id, sn:`fixture${id}`, is_active:id!==4624,
+      user_disabled:false, presence:id===4624?"disabled":"online", subscription:id===773?{state:"free",allowed:true}:null })),
+    total_count:3,page:1,page_size:20,can_create:true } }));
+  await page.getByText("Все", {exact:true}).click();
+  await expect(page.getByRole("heading", {name:"Устройства",exact:true})).toBeVisible();
+  await expect(page.getByRole("button", {name:"Сводка 4623",exact:true})).toBeVisible();
+  await expect(page.getByRole("button", {name:"Сводка 4624",exact:true})).toBeVisible();
+});
+
+test("Terminal screen accepts only sys=windows and never starts a stream on selection", async ({ page }) => {
+  const posts:string[]=[];
+  await page.route("**/api/**", async route => {
+    const request=route.request(); const path=new URL(request.url()).pathname;
+    if(request.method()==="POST") posts.push(path);
+    let data:unknown={};
+    if(path==="/api/auth/me") data={ username:"fixture",org_id:1,role_id:5,is_superuser:false,site_mode:"l4desk",permissions:["*"],session_id:"fixture" };
+    if(path==="/api/admin/tenants/available") data=[];
+    if(path==="/api/settings/terminals") data={items:[773,4623,4624,4625].map(id=>({id,device_id:id,sn:`fixture${id}`,is_active:true})),total_count:4};
+    if(path==="/api/internal/v1/devices/") data={items:[773,4623,4624,4625].map((id,index)=>({id,device_id:id,sn:`fixture${id}`,
+      device_tags:index===3?[]:[{tag:"sys",value:["windows","ESP32","linux"][index]}],
+      connection:{last_checked_result:true,is_svc_available:true,svc_connect:true}})),total:4,pages:1};
+    if(path.endsWith("/inventory")) data={displays:[],cameras:[]};
+    if(path.endsWith("/stream-state")) data={streams:[]};
+    if(path.endsWith("/control/status")) data={agent:{online:true},lease:{active:false}};
+    await route.fulfill({json:data});
+  });
+  await page.setViewportSize({width:1440,height:900});
+  await page.goto("/video?device_id=4623");
+  await expect(page.getByRole("button", {name:/Терминал №773,/})).toBeVisible();
+  for(const id of [4623,4624,4625]) await expect(page.getByRole("button", {name:new RegExp(`Терминал №${id},`)})).toHaveCount(0);
+  await page.getByRole("button", {name:/Терминал №773,/}).click();
+  await expect(page).toHaveURL(/device_id=773/);
+  expect(posts).toEqual([]);
+});

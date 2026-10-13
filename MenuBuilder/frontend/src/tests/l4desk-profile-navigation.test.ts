@@ -179,7 +179,7 @@ describe("L4Desk Navigation Profile & Route Resolution", () => {
     );
   });
 
-  it("L4Desk nav source puts Терминалы above Видеонаблюдение and has no nested settings terminals", async () => {
+  it("L4Desk nav source puts Устройства above Экран терминала and has no nested settings terminals", async () => {
     // @ts-ignore
     const fs = await import("node:fs");
     const layoutSource = fs.readFileSync(
