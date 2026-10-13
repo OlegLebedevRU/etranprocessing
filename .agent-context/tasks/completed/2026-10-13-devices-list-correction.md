@@ -55,4 +55,10 @@ No tenant/binding/admission rules changed and no fabricated offline state introd
 MB Ruff check/format and Pyright passed; 14 focused tests passed, including complete,
 partial and failed provider responses under all/online/disabled pagination.
 MCP Ops unavailable; SSH preflight passed (2047 MiB available, root64%, load .18).
-Pending: backend builder release and production verification of warning flag.
+Released through builder from accepted main 56bbe38b752645a63bd7afbe993a194559efa3fb.
+Immutable backend digest c7d1f20bedc2de0ff18a92ec68eeec0bf7d46533b06e4dc3c630a885765f0c7a.
+Builder quality and full suite passed (797 passed, 22 skipped, 819 collected).
+Production health passed. Read-only execution of list function after deployment:
+online=3 and all=134 both return presence_unavailable=false; unknown row states
+remain. This is service/DB verification, not a user-authenticated UI smoke test.
+No frontend code/image changed; no physical terminal commands or credentials created.
