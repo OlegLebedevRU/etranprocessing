@@ -1,5 +1,17 @@
 # MenuBuilder
 
+## L4Desk device workflows, 2026-10-13 — released
+
+main41157ff delivered through builder for MB backend/frontend. SU can edit device
+descriptions and read/issue PIN within any active tenant; profile settings remain
+read-only for SU. User activity cannot override administrative disable, including
+forged administrative re-enable. Polling is silent like Classic monitoring and
+preserves rows/forms. Status distinguishes admin/user/IoT restrictions. Certificate
+drawer requires deliberate remote/manual choice; shared renewal supports inline
+confirmation while Classic keeps default modal. Manual retries retain UUID and
+PIN plaintext stays out of persistent browser storage.
+[Release and verification limits](../tasks/completed/2026-10-13-l4desk-device-workflows.md).
+
 ## Devices visibility correction, 2026-10-13
 
 Plan12 enrollment-only list restriction is removed: L4Desk devices retain the

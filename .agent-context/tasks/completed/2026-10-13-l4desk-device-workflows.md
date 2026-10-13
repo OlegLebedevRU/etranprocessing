@@ -35,10 +35,30 @@ mobile chooser cases passed after adding explicit accessible labels to icon butt
 Ambiguous PIN retry preserved the same operation UUID in browser; mobile chooser
 was visually inspected at 390px after animation settled. Eight new browser cases
 passed; default Classic modal confirmation is checked separately. Builder release
-and live health/served-file verification remain pending.
+and live health/served-file verification completed below.
 Initial browser failures were exact accessible-name mismatches, not API authorization.
 MCP Ops unavailable; SSH preflight healthy (2041 MiB available, root64%, load .22).
 No production PIN issuance, edit, toggle or physical terminal command was performed.
 
 Credential scan: 1452 scoped tracked/addition files; reviewed synthetic key markers
 only. Local pytest scratch removed; source worktree retained for review.
+
+
+## Release evidence
+Accepted main source 41157fff75206033aed6928ae5c24782c04af7d7; push independently
+verified with git ls-remote. Both components built/deployed via standard builder launcher.
+Backend immutable digest e15881c6350b5e7a60610a5e178fd0b61ce537355eb83f51d486a520ef9c76f4.
+Frontend immutable digest 2503665c91b9e8f985ded83ba144ae5a7edfd841a9bd17919bb4a0bae079fe63.
+Builder backend quality/full suite: 804 passed, 22 skipped (826 collected).
+Builder frontend: 100 unit tests and build passed. 24 unique relevant browser
+scenarios verified across targeted runs, including Classic modal confirmation;
+mobile chooser visually reviewed after animation settled, with no horizontal overflow.
+Production release records independently match source SHA/digests. Deployer verified
+backend HTTP health, image revision and served frontend index without Nginx restart.
+Published bundle independently checked for chooser/access status text.
+Read-only live handler verification with an inactive nonenrolled device under a
+locked row: both L4Desk user enable/disable denied with403 before any state write;
+transaction rolled back. This is service/DB evidence, not an authenticated UI smoke.
+No actual production PIN issuance, certificate RPC, edit or toggle performed; these
+writes are validated in local API/browser tests with synthetic/mocked providers.
+Original user changes preserved. Normal immutable rollback/release artifacts retained.
