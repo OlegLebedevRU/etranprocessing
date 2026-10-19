@@ -1,5 +1,10 @@
 # CAPTCHA providers
 
+На 2026-10-19 портал, L4Desk и Platerra используют `smartcaptcha`.
+Compose L4Desk задаёт `${CAPTCHA_PROVIDER:-smartcaptcha}`; ключи остаются
+в защищённых env-файлах. После изменения провайдера пересоздаётся только
+backend/relay с прежним образом. [Проверки переключения](../.agent-context/tasks/completed/2026-10-19-smartcaptcha.md).
+
 `CAPTCHA_PROVIDER=smartcaptcha|native|off` выбирает провайдера. Пустое значение
 MenuBuilder сохраняет прежнюю семантику `SMARTCAPTCHA_ENABLED`; relay по умолчанию
 использует SmartCaptcha. Неизвестный провайдер закрывает проверку.
