@@ -1,0 +1,24 @@
+{
+  "source_revision": "d6b97c5ddf349a8d09d0a16d21d40a596955d472",
+  "image_id": "sha256:b4b0c76aae6af771cca402c545f512e3b672d90e891f8f28e0245428ee6fe0b5",
+  "janus_image": "dev-leo4-ru.cr.cloud.ru/l4media-janus@sha256:93265665a92482ec1de2c9571a08d27c87b1dee06efc000f717ed42dfe2438ae",
+  "checks": [
+    "auth",
+    "strict_request",
+    "openapi",
+    "runtime_probe",
+    "prepare_replay",
+    "descriptor_conflict",
+    "redis_crash_reload",
+    "three_H265_SDP_offers",
+    "L4RTP_forward_health",
+    "stale_stop",
+    "janus_failure_and_restart",
+    "stopped_crash_reload_no_resurrection"
+  ],
+  "decoded_video": false,
+  "contract_revision": "hevc-contract/2.0.0",
+  "contract_sha256": "f065b967cd10c2c709fb394ef9e6c2ecf74f77de060d88c9a821cc9069766ac4",
+  "artifact_kind": "builder-local candidate; not registry manifest",
+  "production_deployed": false
+}
