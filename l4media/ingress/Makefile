@@ -44,4 +44,4 @@ clean:
 .PHONY: all clean test contract-check
 
 contract-check:
-	@sha256sum -c spec/SHA256SUMS --quiet
+	@sha256sum -c spec/SHA256SUMS > /dev/null
