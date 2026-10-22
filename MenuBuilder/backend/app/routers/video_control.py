@@ -62,6 +62,7 @@ from app.services.remote_session_metering import (
 from app.services.remote_session_policy import get_remote_session_policy
 from app.services.video_contract import (
     VideoContractOrchestrator,
+    load_video_status,
     make_stop_command,
     media_identity,
     stream_descriptor,
@@ -941,8 +942,8 @@ async def start_device_stream(
 
     lease_id = body.lease_id
     if not lease_id:
-        status_data = await iot_client.remote_input_status(
-            terminal.sn, org_id=org_id, user=user
+        status_data = await load_video_status(
+            iot_client, terminal.sn, org_id=org_id, user=user
         )
         lease_info = status_data.get("lease") or {}
         if not lease_info.get("active") or not lease_info.get("lease_id"):
@@ -988,8 +989,8 @@ async def start_device_stream(
     extended = None
     prepared = None
     if body.codec_policy is not None:
-        current = await iot_client.remote_input_status(
-            terminal.sn, org_id=org_id, user=user
+        current = await load_video_status(
+            iot_client, terminal.sn, org_id=org_id, user=user
         )
         extended = await VideoContractOrchestrator(
             iot_client, media_orchestrator_client
@@ -1126,8 +1127,8 @@ async def start_device_stream(
         logger.exception("Local video session persistence failed for %s", terminal.sn)
         try:
             if extended:
-                snapshot = await iot_client.remote_input_status(
-                    terminal.sn, org_id=org_id, user=user
+                snapshot = await load_video_status(
+                    iot_client, terminal.sn, org_id=org_id, user=user
                 )
                 stop = make_stop_command(terminal.sn, lease_id, snapshot)
                 if (
@@ -1194,8 +1195,8 @@ async def stop_device_stream(
     status_data: dict[str, Any] | None = None
     lease_id = body.lease_id if body else None
     if not lease_id:
-        status_data = await iot_client.remote_input_status(
-            terminal.sn, org_id=org_id, user=user
+        status_data = await load_video_status(
+            iot_client, terminal.sn, org_id=org_id, user=user
         )
         lease_info = status_data.get("lease") or {}
         if not lease_info.get("active") or not lease_info.get("lease_id"):
@@ -1213,8 +1214,8 @@ async def stop_device_stream(
         or settings.video_contract_v2_enabled
     ) and status_data is None:
         try:
-            status_data = await iot_client.remote_input_status(
-                terminal.sn, org_id=org_id, user=user
+            status_data = await load_video_status(
+                iot_client, terminal.sn, org_id=org_id, user=user
             )
         except HTTPException:
             if settings.video_contract_v2_enabled or (
@@ -1380,14 +1381,17 @@ async def stop_device_stream(
 )
 async def get_device_stream_state(
     device_id: int,
+    contract_version: Literal[2] | None = Query(None),
     user: dict[str, Any] = Depends(require_permission(PERMISSION_VIDEO_VIEW)),
     db: AsyncSession = Depends(get_db),
 ) -> StreamStateResponse:
     """Get presence stream state and ingress RTP status."""
     terminal = await _verify_device_access(device_id, user, db)
     org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
-    status_data = await iot_client.remote_input_status(
-        terminal.sn, org_id=org_id, user=user
+    status_data = (
+        await load_video_status(iot_client, terminal.sn, org_id=org_id, user=user)
+        if contract_version == 2
+        else await iot_client.remote_input_status(terminal.sn, org_id=org_id, user=user)
     )
     lease_info = status_data.get("lease") or {}
     stream_info = (status_data.get("agent") or {}).get("stream")
@@ -1445,8 +1449,8 @@ async def keepalive_device_control_lease(
             if settings.video_contract_v2_enabled or str(
                 active_session.operation_id or ""
             ).startswith("op-stream-v2-"):
-                provider_status = await iot_client.remote_input_status(
-                    terminal.sn, org_id=org_id, user=user
+                provider_status = await load_video_status(
+                    iot_client, terminal.sn, org_id=org_id, user=user
                 )
             descriptor = stream_descriptor(provider_status or {})
             if descriptor is not None:

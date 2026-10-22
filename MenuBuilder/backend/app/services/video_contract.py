@@ -18,6 +18,8 @@ from uuid import UUID, uuid4, uuid5
 from fastapi import HTTPException
 from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import ValidationError
+from pydantic import BaseModel, ConfigDict
+from pydantic import ValidationError as ModelValidationError
 
 from app.config import settings
 from app.services.iot_client import IotPlatformClient
@@ -40,6 +42,68 @@ VALIDATORS = {
     )
     for key in SCHEMA["$defs"]
 }
+
+
+class IotVideoState(BaseModel):
+    """Authorized HTTP projection, distinct from the frozen MQTT READY event."""
+
+    model_config = ConfigDict(extra="forbid")
+    version: Literal[2]
+    sn: str
+    lease_id: UUID
+    agent_instance_id: UUID
+    operation_id: UUID
+    command_id: UUID
+    stream_instance_id: UUID
+    confirmation: Literal["agent_ready"] | None = None
+    result: str
+    state: Literal["starting", "running", "stopping", "stopped", "failed"]
+    resolved_codec: Literal["h264", "h265"]
+    descriptor: dict[str, Any]
+    actual_descriptor: dict[str, Any] | None = None
+    error: dict[str, Any] | None = None
+    reason: str | None = None
+
+
+def validate_iot_state(value: dict[str, Any]) -> dict[str, Any]:
+    try:
+        result = IotVideoState.model_validate(value).model_dump(mode="json")
+    except ModelValidationError as exc:
+        raise HTTPException(502, detail={"code": "invalid_video_contract"}) from exc
+    validate_video("descriptor", result["descriptor"])
+    if result["actual_descriptor"] is not None:
+        validate_video("descriptor", result["actual_descriptor"])
+    if result["error"] is not None:
+        validate_video("error_detail", result["error"])
+    return result
+
+
+async def load_video_status(
+    iot: IotPlatformClient, sn: str, *, org_id: int, user: dict[str, Any]
+) -> dict[str, Any]:
+    """Enrich an authorized lease snapshot via IoT's full video-state reader."""
+    status = await iot.remote_input_status(sn, org_id=org_id, user=user)
+    lease = status.get("lease") or {}
+    if not settings.video_contract_v2_enabled or not lease.get("lease_id"):
+        return status
+    try:
+        raw = await iot.remote_video_v2(
+            sn, "state", lease_id=str(lease["lease_id"]), org_id=org_id, user=user
+        )
+    except HTTPException as exc:
+        if exc.status_code == 404:
+            return status  # Existing v1 lease has no v2 record.
+        raise
+    stream = validate_iot_state(raw)
+    if stream["sn"] != sn or stream["lease_id"] != str(lease["lease_id"]):
+        raise HTTPException(409, detail={"code": "lease_mismatch"})
+    descriptor = stream["descriptor"]
+    stream.update(
+        mode=descriptor["source_type"],
+        source_id=descriptor["source_id"],
+        profile=descriptor["profile_id"],
+    )
+    return dict(status, agent=dict(status.get("agent") or {}, stream=stream))
 
 
 def validate_video(definition: str, value: dict[str, Any]) -> dict[str, Any]:
@@ -159,6 +223,7 @@ def select_hevc_profile(
     profile_id: str,
     now_ms: int,
     agent_id: str | None = None,
+    allow_test_camera: bool = False,
 ) -> tuple[dict[str, Any] | None, str]:
     if not capability:
         return None, "capability_unavailable"
@@ -182,8 +247,14 @@ def select_hevc_profile(
     for entry in capability["video"]:
         if (
             entry["codec"] == "h265"
-            and entry["backend"] == "media_foundation"
-            and entry["hardware"]
+            and (
+                (entry["backend"] == "media_foundation" and entry["hardware"])
+                or (
+                    allow_test_camera
+                    and entry["backend"] == "camera"
+                    and source_id.startswith("test-")
+                )
+            )
             and entry["status"] == "ready"
             and entry["probe_evidence"] == "encoded_sequence"
         ):
@@ -212,6 +283,8 @@ class VideoContractOrchestrator:
             or not settings.l4desk_session_orchestration_enabled
         ):
             return {"hevc_available": False, "reason_code": reason}
+        if sn not in settings.video_hevc_allowed_sns:
+            return {"hevc_available": False, "reason_code": "disabled_by_policy"}
         if not (
             0 < settings.video_proxy_rtp_port <= 65535
             and 0 < settings.video_proxy_rtcp_port <= 65535
@@ -221,13 +294,20 @@ class VideoContractOrchestrator:
             inventory = await self.iot.remote_video_v2(
                 sn, "inventory", org_id=org_id, user=user
             )
-            validate_video("capabilities_ack", inventory)
-            if inventory["sn"] != sn:
+            if (
+                set(inventory) != {"negotiated_v2", "video_capabilities"}
+                or inventory["negotiated_v2"] is not True
+            ):
                 return {"hevc_available": False, "reason_code": "capability_mismatch"}
             capability = inventory["video_capabilities"]
             server = await self.media.video_v2("capabilities")
             track, reason = select_hevc_profile(
-                capability, server, source_id, profile_id, int(time.time() * 1000)
+                capability,
+                server,
+                source_id,
+                profile_id,
+                int(time.time() * 1000),
+                allow_test_camera=sn in settings.video_test_camera_sns,
             )
             return {
                 "hevc_available": track is not None,
@@ -387,16 +467,17 @@ class VideoContractOrchestrator:
             ):
                 raise HTTPException(409, detail={"code": "descriptor_mismatch"})
             producer_attempted = True
-            ready = await self.iot.remote_video_v2(
-                sn,
-                "start",
-                payload=command,
-                lease_id=lease_id,
-                org_id=org_id,
-                user=user,
+            ready = validate_iot_state(
+                await self.iot.remote_video_v2(
+                    sn,
+                    "start",
+                    payload=command,
+                    lease_id=lease_id,
+                    org_id=org_id,
+                    user=user,
+                )
             )
             if ready.get("state") == "failed":
-                validate_video("error", ready)
                 if any(
                     ready[key] != command[key]
                     for key in (
@@ -410,9 +491,12 @@ class VideoContractOrchestrator:
                 raise HTTPException(
                     502, detail={"code": ready["reason"], "error": ready["error"]}
                 )
-            validate_video("ready", ready)
             if (
-                any(
+                ready["state"] != "running"
+                or ready["confirmation"] != "agent_ready"
+                or ready["resolved_codec"] != "h265"
+                or ready["descriptor"] != descriptor
+                or any(
                     ready[key] != command[key]
                     for key in (
                         "sn",

@@ -348,7 +348,7 @@ export async function stopDeviceStream(
 }
 
 export async function getDeviceStreamState(deviceId: number): Promise<StreamStateResponse> {
-  const { data } = await client.get<StreamStateResponse>(`/v1/video/devices/${deviceId}/stream/state`);
+  const { data } = await client.get<StreamStateResponse>(`/v1/video/devices/${deviceId}/stream/state`, { params: { contract_version: 2 } });
   return data;
 }
 

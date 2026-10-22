@@ -598,7 +598,7 @@ class IotPlatformClient:
 
         if not self.base_url or not settings.remote_control_enabled:
             raise HTTPException(503, detail={"code": "remote_control_unavailable"})
-        prefix = f"{self.base_url}/api/internal/v2/remote-input"
+        prefix = f"{self.base_url}/api/internal/v1/remote-input"
         headers = self._get_headers(org_id=org_id, user=user)
         try:
             async with httpx.AsyncClient(
@@ -606,12 +606,18 @@ class IotPlatformClient:
             ) as client:
                 if action == "inventory":
                     response = await client.get(
-                        f"{prefix}/devices/{quote(sn, safe='')}/inventory",
+                        f"{prefix}/devices/{quote(sn, safe='')}/video-capabilities",
+                        headers=headers,
+                    )
+                elif action == "state" and lease_id:
+                    response = await client.get(
+                        f"{prefix}/lease/{quote(lease_id, safe='')}/video-state",
                         headers=headers,
                     )
                 elif action in ("start", "stop") and lease_id:
+                    suffix = "stream/start" if action == "start" else "video-stop"
                     response = await client.post(
-                        f"{prefix}/lease/{quote(lease_id, safe='')}/stream/{action}",
+                        f"{prefix}/lease/{quote(lease_id, safe='')}/{suffix}",
                         json=payload,
                         headers=headers,
                     )

@@ -20,6 +20,7 @@ from app.security.permissions import PERMISSION_VIDEO_VIEW, require_permission
 from app.services.iot_client import iot_client
 from app.services.media_orchestrator_client import media_orchestrator_client
 from app.services.video_contract import (
+    load_video_status,
     media_identity,
     stream_descriptor,
     validate_video,
@@ -542,8 +543,8 @@ async def create_video_session(
     org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
 
     # Verify that caller holds active lease on app1
-    status_data = await iot_client.remote_input_status(
-        terminal.sn, org_id=org_id, user=user
+    status_data = await load_video_status(
+        iot_client, terminal.sn, org_id=org_id, user=user
     )
     lease_info = status_data.get("lease") or {}
     if not lease_info.get("active"):

@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from app.config import settings
 from app.services.video_contract import (
     VideoContractOrchestrator,
+    load_video_status,
     select_hevc_profile,
     validate_video,
 )
@@ -46,6 +47,7 @@ def context(monkeypatch):
     status = {"lease": lease, "agent": {"online": True, "stream": {"state": "stopped"}}}
     for key, value in {
         "video_contract_v2_enabled": True,
+        "video_hevc_allowed_sns": [cap["sn"]],
         "l4desk_session_orchestration_enabled": True,
         "video_proxy_rtp_port": 5004,
         "video_proxy_rtcp_port": 5005,
@@ -81,10 +83,20 @@ def context(monkeypatch):
     async def iot(sn, action, **kwargs):
         trace.append(("iot", action, copy.deepcopy(kwargs)))
         if action == "inventory":
-            return cap
+            return {
+                "negotiated_v2": True,
+                "video_capabilities": cap["video_capabilities"],
+            }
         if action == "start":
             command = kwargs["payload"]
-            value = fixture("hevc_ready")
+            value = {
+                "version": 2,
+                "result": "started",
+                "state": "running",
+                "resolved_codec": "h265",
+                "confirmation": "agent_ready",
+                "descriptor": command["descriptor"],
+            }
             value.update(
                 {
                     key: command[key]
@@ -207,3 +219,97 @@ def test_frozen_vectors_and_schema_bytes():
         else:
             with pytest.raises(HTTPException):
                 validate_video(value["definition"], value["payload"])
+
+
+def test_camera_requires_explicit_test_policy(context):
+    _, _, _, cap = context
+    capability = copy.deepcopy(cap["video_capabilities"])
+    capability["source_id"] = "test-rtsp-camera"
+    capability["video"][0].update(backend="camera", hardware=False)
+    server = fixture("media_capabilities")
+    now = int(time.time() * 1000)
+    args = (capability, server, "test-rtsp-camera", "low", now)
+    assert select_hevc_profile(*args)[0] is None
+    assert select_hevc_profile(*args, allow_test_camera=True)[0] is not None
+    assert capability["video"][0]["hardware"] is False
+
+
+@pytest.mark.anyio
+async def test_full_state_reader_preserves_epoch_and_does_not_hide_denial(context):
+    service, args, _, _ = context
+    started = await service.start(**args)
+    command = next(
+        call.kwargs["payload"]
+        for call in service.iot.remote_video_v2.call_args_list
+        if call.args[1] == "start"
+    )
+    view = {
+        "version": 2,
+        "result": "started",
+        "state": "running",
+        "resolved_codec": "h265",
+        "confirmation": "agent_ready",
+        "descriptor": started["descriptor"],
+        "actual_descriptor": started["descriptor"],
+        **{
+            key: command[key]
+            for key in (
+                "sn",
+                "lease_id",
+                "stream_instance_id",
+                "agent_instance_id",
+                "operation_id",
+                "command_id",
+            )
+        },
+    }
+    service.iot.remote_input_status = AsyncMock(return_value=args["status"])
+    service.iot.remote_video_v2.side_effect = None
+    service.iot.remote_video_v2.return_value = view
+    snapshot = await load_video_status(
+        service.iot, args["sn"], org_id=1, user=args["user"]
+    )
+    assert (
+        snapshot["agent"]["stream"]["stream_instance_id"]
+        == started["stream_instance_id"]
+    )
+    assert (
+        snapshot["agent"]["stream"]["agent_instance_id"] == command["agent_instance_id"]
+    )
+    service.iot.remote_video_v2.side_effect = HTTPException(403)
+    with pytest.raises(HTTPException) as denied:
+        await load_video_status(service.iot, args["sn"], org_id=1, user=args["user"])
+    assert denied.value.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_http_adapter_uses_negotiated_routes_without_legacy_retry(monkeypatch):
+    import httpx
+
+    from app.services.iot_client import IotPlatformClient
+
+    monkeypatch.setattr(settings, "remote_control_enabled", True)
+    calls = []
+
+    def respond(request):
+        calls.append((request.method, request.url.path))
+        return httpx.Response(200, json={})
+
+    original = httpx.AsyncClient
+    monkeypatch.setattr(
+        "app.services.iot_client.httpx.AsyncClient",
+        lambda **kwargs: original(transport=httpx.MockTransport(respond), **kwargs),
+    )
+    client = IotPlatformClient(
+        base_url="http://localhost", service_token="synthetic-test-only"
+    )
+    for action in ("inventory", "state", "start", "stop"):
+        await client.remote_video_v2(
+            "test-source", action, lease_id="lease", payload={}, org_id=1
+        )
+    assert calls == [
+        ("GET", "/api/internal/v1/remote-input/devices/test-source/video-capabilities"),
+        ("GET", "/api/internal/v1/remote-input/lease/lease/video-state"),
+        ("POST", "/api/internal/v1/remote-input/lease/lease/stream/start"),
+        ("POST", "/api/internal/v1/remote-input/lease/lease/video-stop"),
+    ]
