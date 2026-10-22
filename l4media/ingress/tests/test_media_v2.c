@@ -7,6 +7,7 @@
 
 static json_t* fake_mounts;
 static int fake_failure, creates, destroys;
+static bool fake_chunked;
 static int fake_janus(const char* body, char* output, size_t size) {
     if (fake_failure) return -1;
     json_error_t error;
@@ -34,7 +35,8 @@ static int fake_janus(const char* body, char* output, size_t size) {
     } else if (!strcmp(verb, "list")) reply = json_pack("{s:s,s:[]}", "streaming", "list", "list");
     assert(reply);
     char* text = json_dumps(reply, JSON_COMPACT);
-    snprintf(output, size, "HTTP/1.1 200 OK\r\n\r\n%s", text);
+    if (fake_chunked) snprintf(output, size, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n%zx\r\n%s\r\n0\r\n\r\n", strlen(text), text);
+    else snprintf(output, size, "HTTP/1.1 200 OK\r\n\r\n%s", text);
     free(text); json_decref(reply); json_decref(envelope); return 0;
 }
 
@@ -71,6 +73,7 @@ int main(void) {
     printf("PASS: %zu frozen schema vectors against C validator\n", paths.gl_pathc); globfree(&paths);
     assert(!media_v2_parse("{\"contract_version\":2,\"contract_version\":2}", "media_start"));
     fake_mounts = json_object(); g_janus_test_request = fake_janus;
+    fake_chunked = true; /* Real pinned Janus uses chunked HTTP responses. */
     char output[16384]; int status;
     json_t* start = fixture("media_start");
     json_object_set_new(start, "lease_expires_at", json_integer(time(NULL) + 60));

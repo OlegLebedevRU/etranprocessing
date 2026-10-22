@@ -103,6 +103,7 @@ def main():
         # Crash/reload uses real Redis and restores exact descriptor, never implicit H264.
         docker("kill", "--signal", "KILL", ingress)
         docker("start", ingress)
+        base = f"http://127.0.0.1:{port(ingress, 9100)}"
         wait_ready(base, "/health")
         restored = http(base, health_path, token=token)
         assert restored["descriptor"] == prepared["descriptor"]
