@@ -10,6 +10,7 @@ import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from components import COMPONENTS, REGISTRY, select_components
 from deploy import atomic_json, image_reference
@@ -210,6 +211,25 @@ def load_artifact(path, component, revision):
     return artifact
 
 
+def build_transport_args():
+    proxy = os.environ.get("ETRAN_BUILD_HTTPS_PROXY", "")
+    if not proxy:
+        return []
+    parsed = urlsplit(proxy)
+    if (
+        parsed.scheme != "http"
+        or parsed.hostname not in {"127.0.0.1", "localhost"}
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+        or parsed.port is None
+    ):
+        raise ValueError("Build transport requires an unauthenticated loopback proxy")
+    return ["--build-arg", "HTTPS_PROXY=" + proxy]
+
+
 def build(component, revision):
     directory = HOME / "artifacts" / component
     directory.mkdir(parents=True, exist_ok=True)
@@ -253,6 +273,7 @@ def build(component, revision):
         "--metadata-file",
         metadata,
         "--provenance=mode=min",
+        *build_transport_args(),
         "--push",
         spec["context"],
     )
