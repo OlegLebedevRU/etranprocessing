@@ -6,7 +6,7 @@ The synthetic RTP below proves forwarding/counters only, never decoded video.
 """
 import json
 import os
-from pathlib import Path
+import re
 import secrets
 import socket
 import struct
@@ -16,6 +16,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 JANUS = "dev-leo4-ru.cr.cloud.ru/l4media-janus@sha256:93265665a92482ec1de2c9571a08d27c87b1dee06efc000f717ed42dfe2438ae"
@@ -55,8 +56,16 @@ def wait_ready(base, path, token=None):
 def main():
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True, cwd=ROOT).strip()
     prefix = "hevc-smoke-" + uuid.uuid4().hex[:10]
-    image = "l4media-ingress-candidate:" + revision[:12]
-    docker("build", "--build-arg", f"SOURCE_REVISION={revision}", "-t", image, str(ROOT / "l4media/ingress"), capture=False)
+    image = os.environ.get("L4MEDIA_TEST_IMAGE")
+    checkout_revision = revision
+    if image:
+        if not re.fullmatch(r"[A-Za-z0-9./:_-]+@sha256:[0-9a-f]{64}", image):
+            raise ValueError("Acceptance image must use an immutable registry digest")
+        docker("pull", image, capture=False)
+        revision = json.loads(docker("image", "inspect", image))[0]["Config"]["Labels"]["org.opencontainers.image.revision"]
+    else:
+        image = "l4media-ingress-candidate:" + revision[:12]
+        docker("build", "--build-arg", f"SOURCE_REVISION={revision}", "-t", image, str(ROOT / "l4media/ingress"), capture=False)
     token, secret = secrets.token_hex(32), secrets.token_hex(32)
     names = []
     docker("network", "create", prefix)
@@ -141,7 +150,7 @@ def main():
         wait_ready(base, "/health")
         assert http(base, health_path, token=token)["state"] == "stopped"
         assert http(base, "/api/v2/media/sessions/start", request, token)["state"] == "stopped"
-        print(json.dumps({"source_revision": revision, "image_id": docker("image", "inspect", image, "--format", "{{.Id}}"), "janus_image": JANUS, "checks": ["auth", "strict_request", "openapi", "runtime_probe", "prepare_replay", "descriptor_conflict", "redis_crash_reload", "three_H265_SDP_offers", "L4RTP_forward_health", "stale_stop", "janus_failure_and_restart", "stopped_crash_reload_no_resurrection"], "decoded_video": False}))
+        print(json.dumps({"source_revision": revision, "checkout_revision": checkout_revision, "tested_image": image, "image_id": docker("image", "inspect", image, "--format", "{{.Id}}"), "janus_image": JANUS, "checks": ["auth", "strict_request", "openapi", "runtime_probe", "prepare_replay", "descriptor_conflict", "redis_crash_reload", "three_H265_SDP_offers", "L4RTP_forward_health", "stale_stop", "janus_failure_and_restart", "stopped_crash_reload_no_resurrection"], "decoded_video": False}))
     finally:
         for name in reversed(names):
             subprocess.run(["docker", "rm", "-f", name], check=False, stdout=subprocess.DEVNULL)
