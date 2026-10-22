@@ -3,7 +3,7 @@ import logging
 import secrets
 import time
 import uuid
-from typing import Any, Literal
+from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -535,7 +535,7 @@ async def _get_ingress_status(sn: str) -> dict[str, Any]:
 )
 async def create_video_session(
     device_id: int,
-    contract_version: Literal[2] | None = Query(None),
+    contract_version: int | None = Query(None, ge=2, le=2),
     user: dict[str, Any] = Depends(require_permission(PERMISSION_VIDEO_VIEW)),
     db: AsyncSession = Depends(get_db),
 ) -> VideoSessionResponse | JSONResponse:
