@@ -30,7 +30,7 @@ export interface UseRemoteControlOptions {
   leaseId?: string | null;
   streamMode?: string | null;
   sharedLease?: boolean;
-  onStreamState?: (event: { state?: string; reason?: string; stream_instance_id?: string }) => void;
+  onStreamState?: (event: { state?: string; reason?: string; stream_instance_id?: string; error?: import("../utils/sessionLifecycle").StreamStateEvent["error"] }) => void;
   onLeaseLost?: (reason: string) => void;
   onErrorMessage?: (msg: string) => void;
   onClickResult?: (result: ClickResult) => void;
@@ -332,6 +332,7 @@ export function useRemoteControl({
                   state: data.state,
                   reason: data.reason,
                   stream_instance_id: data.stream_instance_id,
+                  error: data.error,
                 });
               }
               return;

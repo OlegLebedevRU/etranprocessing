@@ -6,6 +6,18 @@ export interface VideoSessionResponse {
   janus_ws: string;
   session_ttl_sec: number;
   pin?: string;
+  stream_instance_id?: string;
+  resolved_codec?: "h264" | "h265";
+  descriptor?: VideoDescriptor;
+}
+
+export type CodecPolicy = "auto" | "h264" | "h265";
+export interface VideoDescriptor {
+  descriptor_revision: string;
+  source_type: string;
+  source_id: string;
+  profile_id: string;
+  tracks: { codec: "h264" | "h265" }[];
 }
 
 export interface VideoStatusResponse {
@@ -19,10 +31,12 @@ export interface VideoStatusResponse {
 }
 
 export async function createVideoSession(
-  deviceId: number
+  deviceId: number,
+  contractVersion?: 2
 ): Promise<VideoSessionResponse> {
   const { data } = await client.post<VideoSessionResponse>(
-    `/v1/video/devices/${deviceId}/session`
+    `/v1/video/devices/${deviceId}/session`, undefined,
+    { params: contractVersion ? { contract_version: contractVersion } : undefined }
   );
   return data;
 }
@@ -74,9 +88,13 @@ export interface CameraSource {
 export interface DeviceInventory {
   displays: DisplaySource[];
   cameras: CameraSource[];
+  video_codecs?: { hevc_available: boolean; reason_code: string };
 }
 
 export interface StreamPresenceInfo {
+  descriptor?: VideoDescriptor;
+  actual_descriptor?: VideoDescriptor;
+  error?: { code?: string; codec?: string; current_stream_terminated?: boolean; auto_restart_allowed?: boolean };
   state?: "stopped" | "starting" | "running" | "stopping" | "failed" | string;
   mode?: "desktop" | "usb-camera" | string;
   source_id?: string;
@@ -133,6 +151,9 @@ export interface ControlLease {
 }
 
 export interface StreamStartResponse {
+  resolved_codec?: "h264" | "h265";
+  descriptor?: VideoDescriptor;
+  media?: VideoSessionResponse;
   stream_instance_id: string;
   result: "started" | "already_running" | "switched" | string;
   state?: string;
@@ -193,6 +214,7 @@ export type ControlWsOutbound =
       source_id?: string;
       stream_instance_id?: string;
       reason?: string;
+      error?: StreamPresenceInfo["error"];
     }
   | {
       type: "click_result" | "action_result";
@@ -284,10 +306,11 @@ export async function releaseControlLease(
 
 export async function getDeviceInventory(
   deviceId: number,
-  refresh = false
+  refresh = false,
+  video?: { source_id: string; profile_id: string }
 ): Promise<DeviceInventory> {
   const { data } = await client.get<DeviceInventory>(`/v1/video/devices/${deviceId}/inventory`, {
-    params: { refresh: refresh ? 1 : 0 },
+    params: { refresh: refresh ? 1 : 0, ...(video ? { contract_version: 2, ...video } : {}) },
   });
   return data;
 }
@@ -299,6 +322,7 @@ export async function startDeviceStream(
     source_id: string;
     profile?: string;
     lease_id?: string;
+    codec_policy?: CodecPolicy;
   }
 ): Promise<StreamStartResponse> {
   const { data } = await client.post<StreamStartResponse>(
@@ -324,7 +348,7 @@ export async function stopDeviceStream(
 }
 
 export async function getDeviceStreamState(deviceId: number): Promise<StreamStateResponse> {
-  const { data } = await client.get<StreamStateResponse>(`/v1/video/devices/${deviceId}/stream/state`);
+  const { data } = await client.get<StreamStateResponse>(`/v1/video/devices/${deviceId}/stream/state`, { params: { contract_version: 2 } });
   return data;
 }
 

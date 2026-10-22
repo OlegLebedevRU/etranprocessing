@@ -29,6 +29,7 @@ typedef struct {
     char sn[128];
     char peer_addr[64];
     uint64_t epoch;
+    unsigned keyframe_feedback_interval_ms;
 
     int rtp_port;
     int rtcp_port;

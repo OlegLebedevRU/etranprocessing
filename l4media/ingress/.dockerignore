@@ -6,3 +6,6 @@
 !tests/**
 !routes.conf
 !openapi.json
+!openapi-v2.json
+!spec/
+!spec/**
