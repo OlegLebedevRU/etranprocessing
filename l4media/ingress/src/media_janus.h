@@ -39,7 +39,22 @@ static inline json_t* mj_request(json_t* request) {
     if (text && response && janus_admin_request(text, response, 65536) == 0) {
         const char* body = strstr(response, "\r\n\r\n");
         json_error_t error;
-        result = json_loads(body ? body + 4 : response, JSON_REJECT_DUPLICATES, &error);
+        if (body && strcasestr(response, "Transfer-Encoding: chunked")) {
+            char decoded[65536]; size_t used = 0;
+            const char* chunk = body + 4; bool valid = false;
+            while (*chunk) {
+                char* end; errno = 0;
+                unsigned long count = strtoul(chunk, &end, 16);
+                const char* line = strstr(chunk, "\r\n");
+                if (errno || end == chunk || !line || end > line) break;
+                chunk = line + 2;
+                if (!count) { valid = true; break; }
+                if (count >= sizeof(decoded) - used || strlen(chunk) < count + 2 ||
+                    chunk[count] != '\r' || chunk[count + 1] != '\n') break;
+                memcpy(decoded + used, chunk, count); used += count; chunk += count + 2;
+            }
+            if (valid) { decoded[used] = 0; result = json_loads(decoded, JSON_REJECT_DUPLICATES, &error); }
+        } else result = json_loads(body ? body + 4 : response, JSON_REJECT_DUPLICATES, &error);
     }
     free(text); free(response);
     return result;
