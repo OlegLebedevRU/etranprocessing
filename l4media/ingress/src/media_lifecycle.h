@@ -29,6 +29,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
+#include "media_schema.h"
 #include "media_redis.h"
 
 #define MAX_MEDIA_SESSIONS        128
@@ -56,7 +57,13 @@ typedef struct {
     uint32_t mountpoint_id;
     int rtp_port;
     int rtcp_port;
-    char pin[64];
+    char pin[513];
+    int contract_version; /* zero/one is the unchanged legacy H264 adapter */
+    char lease_id[37];
+    char stream_instance_id[37];
+    char descriptor[MEDIA_DESCRIPTOR_LIMIT];
+    char v2_request[8192];
+    uint32_t route_generation;
     MediaSessionState state;
     int ttl_sec;
     time_t created_at;
@@ -82,6 +89,7 @@ static uint64_t g_metric_orphans_routes = 0;
 
 static MediaSession g_media_sessions[MAX_MEDIA_SESSIONS];
 static int g_media_session_count = 0;
+static uint32_t g_route_generation = 0;
 
 static inline int media_active_session_count(void) {
     int count = 0;
@@ -211,7 +219,13 @@ static inline bool check_service_auth(const char* req_buf) {
 /* Janus Admin HTTP API Client                                               */
 /* ========================================================================= */
 
+#ifdef L4MEDIA_TESTING
+static int (*g_janus_test_request)(const char*, char*, size_t) = NULL;
+#endif
 static inline int janus_admin_request(const char* body, char* resp_buf, size_t resp_buf_sz) {
+#ifdef L4MEDIA_TESTING
+    if (g_janus_test_request) return g_janus_test_request(body, resp_buf, resp_buf_sz);
+#endif
     if (!resp_buf || resp_buf_sz == 0) return -1;
     resp_buf[0] = '\0';
 
@@ -296,143 +310,7 @@ static inline int janus_destroy_mountpoint(uint32_t mountpoint_id, char* err_buf
     return 0;
 }
 
-static inline int janus_create_mountpoint(uint32_t mountpoint_id, int rtp_port, int rtcp_port,
-                                          const char* pin, char* err_buf, size_t err_sz) {
-    char req[1024];
-    if (pin && pin[0]) {
-        snprintf(req, sizeof(req),
-                 "{\"janus\":\"message_plugin\",\"transaction\":\"mp_cr_%" PRIu32 "\","
-                 "\"admin_secret\":\"%s\",\"plugin\":\"janus.plugin.streaming\","
-                 "\"request\":{\"request\":\"create\",\"type\":\"rtp\",\"id\":%" PRIu32 ","
-                 "\"name\":\"dev-%" PRIu32 "\",\"description\":\"L4Desk stream %" PRIu32 "\","
-                 "\"video\":true,\"audio\":false,\"videoport\":%d,\"videortcpport\":%d,"
-                 "\"videopt\":96,\"videocodec\":\"h264\",\"videofmtp\":\"profile-level-id=42e01f;packetization-mode=1\","
-                 "\"pin\":\"%s\"}}",
-                 mountpoint_id, g_janus_admin_secret, mountpoint_id, mountpoint_id, mountpoint_id,
-                 rtp_port, rtcp_port, pin);
-    } else {
-        snprintf(req, sizeof(req),
-                 "{\"janus\":\"message_plugin\",\"transaction\":\"mp_cr_%" PRIu32 "\","
-                 "\"admin_secret\":\"%s\",\"plugin\":\"janus.plugin.streaming\","
-                 "\"request\":{\"request\":\"create\",\"type\":\"rtp\",\"id\":%" PRIu32 ","
-                 "\"name\":\"dev-%" PRIu32 "\",\"description\":\"L4Desk stream %" PRIu32 "\","
-                 "\"video\":true,\"audio\":false,\"videoport\":%d,\"videortcpport\":%d,"
-                 "\"videopt\":96,\"videocodec\":\"h264\",\"videofmtp\":\"profile-level-id=42e01f;packetization-mode=1\"}}",
-                 mountpoint_id, g_janus_admin_secret, mountpoint_id, mountpoint_id, mountpoint_id,
-                 rtp_port, rtcp_port);
-    }
-
-    char* resp = (char*)malloc(16384);
-    if (!resp) return -1;
-    int res = janus_admin_request(req, resp, 16384);
-    if (res != 0) {
-        if (err_buf && err_sz > 0) lifecycle_safe_strcpy(err_buf, "Janus connection failed", err_sz);
-        free(resp);
-        return -1;
-    }
-
-    const char* b = strstr(resp, "\r\n\r\n");
-    if (!b) b = resp;
-
-    if (strstr(b, "\"streaming\":\"created\"")) {
-        free(resp);
-        return 0;
-    }
-
-    /* Already exists: reuse. Never destroy a live mountpoint here —
-     * a watcher's WebRTC track dies with the mountpoint (static frame).
-     * Mismatch handling is janus_mountpoint_ensure()'s job. */
-    if (strstr(b, "already exists") || strstr(b, "456")) {
-        printf("[INGRESS JANUS] Mountpoint %" PRIu32 " already exists, reusing\n", mountpoint_id);
-        free(resp);
-        return 0;
-    }
-
-    if (err_buf && err_sz > 0) {
-        char reason[128] = {0};
-        json_get_string(b, "error", reason, sizeof(reason));
-        if (reason[0]) {
-            lifecycle_safe_strcpy(err_buf, reason, err_sz);
-        } else {
-            lifecycle_safe_strcpy(err_buf, "Janus streaming mountpoint creation failed", err_sz);
-        }
-    }
-    free(resp);
-    return -1;
-}
-
-typedef struct {
-    bool found;
-    int videoport;
-    int videortcpport;
-    char pin[64];
-    bool has_pin;
-} JanusMountpointInfo;
-
-/* Probe Janus streaming info for one mountpoint id (ports + pin). */
-static inline int janus_get_mountpoint_info(uint32_t mountpoint_id, JanusMountpointInfo* out) {
-    if (!out) return -1;
-    memset(out, 0, sizeof(*out));
-
-    char req[512];
-    snprintf(req, sizeof(req),
-             "{\"janus\":\"message_plugin\",\"transaction\":\"mp_info_%" PRIu32 "\","
-             "\"admin_secret\":\"%s\",\"plugin\":\"janus.plugin.streaming\","
-             "\"request\":{\"request\":\"info\",\"id\":%" PRIu32 "}}",
-             mountpoint_id, g_janus_admin_secret, mountpoint_id);
-
-    char* resp = (char*)malloc(65536);
-    if (!resp) return -1;
-    int res = janus_admin_request(req, resp, 65536);
-    if (res != 0) {
-        free(resp);
-        return -1;
-    }
-
-    const char* b = strstr(resp, "\r\n\r\n");
-    if (!b) b = resp;
-
-    /* Janus info: {"streaming":"info","info":{"id":N,"pin":"...","media":[{"port":P,"rtcpport":Q}]}} */
-    if (!strstr(b, "\"streaming\":\"info\"") && !strstr(b, "\"streaming\": \"info\"")) {
-        free(resp);
-        return 0; /* not found / wrong shape */
-    }
-
-    out->found = true;
-    /* ports live under media[] as "port"/"rtcpport" */
-    json_get_int(b, "port", &out->videoport);
-    json_get_int(b, "rtcpport", &out->videortcpport);
-    if (json_get_string(b, "pin", out->pin, sizeof(out->pin)) && out->pin[0]) {
-        out->has_pin = true;
-    }
-    free(resp);
-    return 0;
-}
-
-/*
- * A: ensure mountpoint exists and matches (ports + pin).
- * Healthy match → reuse (no destroy). Mismatch → destroy + create.
- * Never destroys a healthy mountpoint under a live watcher.
- */
-static inline int janus_mountpoint_ensure(uint32_t mountpoint_id, int rtp_port, int rtcp_port,
-                                          const char* pin, char* err_buf, size_t err_sz) {
-    JanusMountpointInfo info;
-    if (janus_get_mountpoint_info(mountpoint_id, &info) == 0 && info.found) {
-        const char* want_pin = (pin && pin[0]) ? pin : "";
-        const char* have_pin = info.has_pin ? info.pin : "";
-        bool ports_ok = (info.videoport == rtp_port && info.videortcpport == rtcp_port);
-        bool pin_ok = (strcmp(want_pin, have_pin) == 0);
-        if (ports_ok && pin_ok) {
-            printf("[INGRESS JANUS] Mountpoint %" PRIu32 " healthy, reusing (ports %d/%d)\n",
-                   mountpoint_id, rtp_port, rtcp_port);
-            return 0;
-        }
-        printf("[INGRESS JANUS] Mountpoint %" PRIu32 " mismatch (ports %d/%d pin %s), recreating\n",
-               mountpoint_id, info.videoport, info.videortcpport, info.has_pin ? "set" : "none");
-        janus_destroy_mountpoint(mountpoint_id, NULL, 0);
-    }
-    return janus_create_mountpoint(mountpoint_id, rtp_port, rtcp_port, pin, err_buf, err_sz);
-}
+#include "media_janus.h"
 
 static inline int janus_list_mountpoints(uint32_t* ids, int max_ids, int* out_count) {
     if (!ids || max_ids <= 0 || !out_count) return -1;
@@ -624,10 +502,13 @@ static inline void media_redis_restore_one(const char* session_id, const char* o
     }
 }
 
+static inline void media_v2_restore(void);
+
 static inline void media_redis_bootstrap(void) {
     media_redis_init(getenv("REDIS_URL"));
     if (!media_redis_ok()) return;
     int n = media_redis_restore_sessions(media_redis_restore_one, NULL);
+    media_v2_restore();
     printf("[MEDIA REDIS] restored %d session record(s)\n", n);
 }
 
@@ -708,7 +589,7 @@ static inline bool media_lease_ttl(const char* body, time_t now, int* ttl, bool*
 }
 
 static inline void expire_media_session(MediaSession* s, time_t now) {
-    if (s && s->state == MEDIA_STATE_ACTIVE && s->ttl_sec > 0 &&
+    if (s && (s->state == MEDIA_STATE_ACTIVE || s->state == MEDIA_STATE_STARTING) && s->ttl_sec > 0 &&
         now - (s->renewed_at ? s->renewed_at : s->started_at) >= s->ttl_sec) {
         int status = 0;
         stop_media_session(s->session_id, "ttl-watchdog", "ttl_expired", NULL, 0, &status);
@@ -764,13 +645,29 @@ static inline void handle_media_session_start(const char* body, char* resp_body,
     /* 1. Idempotency on session_id */
     MediaSession* existing = find_session_by_id(session_id);
     expire_media_session(existing, request_at);
+    if (existing && existing->contract_version == 2) {
+        *status_code = 409; *status_text = "Conflict";
+        snprintf(resp_body, resp_sz, "{\"error\":\"session_busy\"}\n");
+        return;
+    }
     if (existing) {
         if (existing->state == MEDIA_STATE_ACTIVE || existing->state == MEDIA_STATE_STARTING) {
-            if (lease_bound) { existing->ttl_sec = ttl_sec; existing->renewed_at = request_at; }
-            /* A: reuse healthy mountpoint; recreate only on mismatch / after Janus wipe */
+            if (existing->contract_version == 2 || strcmp(existing->sn, sn) ||
+                (operation_id[0] && strcmp(existing->operation_id, operation_id))) {
+                *status_code = 409; *status_text = "Conflict";
+                snprintf(resp_body, resp_sz, "{\"error\":\"session_busy\"}\n");
+                return;
+            }
             char jerr[128] = {0};
-            (void)janus_mountpoint_ensure(existing->mountpoint_id, existing->rtp_port,
+            int ensure_result = janus_mountpoint_ensure(existing->mountpoint_id, existing->rtp_port,
                                           existing->rtcp_port, existing->pin, jerr, sizeof(jerr));
+            if (ensure_result) {
+                *status_code = ensure_result == -2 ? 409 : 502;
+                *status_text = ensure_result == -2 ? "Conflict" : "Bad Gateway";
+                snprintf(resp_body, resp_sz, "{\"error\":\"janus_error\"}\n");
+                return;
+            }
+            if (lease_bound) { existing->ttl_sec = ttl_sec; existing->renewed_at = request_at; }
             int _clients_updated = 0;
             upsert_route(existing->sn, existing->rtp_port, existing->rtcp_port, &_clients_updated);
             media_redis_save_session(existing->session_id, existing->operation_id, existing->sn,
@@ -1247,5 +1144,7 @@ static inline void handle_openapi_spec(char* resp_body, size_t resp_sz, int* sta
     snprintf(resp_body, resp_sz,
              "{\"openapi\":\"3.0.3\",\"info\":{\"title\":\"l4media API\",\"version\":\"1.0.0\"}}\n");
 }
+
+#include "media_v2.h"
 
 #endif /* MEDIA_LIFECYCLE_H */
