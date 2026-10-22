@@ -1,4 +1,5 @@
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,6 +14,16 @@ DIGEST = "sha256:" + "d" * 64
 
 
 class SelectionTests(unittest.TestCase):
+    def test_build_transport_rejects_credentials_before_command_logging(self):
+        with (
+            patch.dict(
+                os.environ,
+                {"ETRAN_BUILD_HTTPS_PROXY": "http://user:secret@localhost:1234"},
+            ),
+            self.assertRaisesRegex(ValueError, "unauthenticated loopback"),
+        ):
+            beta.build_transport_args()
+
     def test_old_sparse_launcher_materializes_frozen_contracts(self):
         with tempfile.TemporaryDirectory() as directory:
             with (
