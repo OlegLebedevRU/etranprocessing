@@ -86,6 +86,7 @@ def main():
                 "ProcessingBackend/nginx-mutual-legacy/nginx-configs",
                 "shared",
                 "l4media",
+                "contracts",
                 "nginx-configs",
                 "docs",
             )

@@ -124,7 +124,8 @@ def check_resources():
         or available < 800 * 1024
     ):
         raise RuntimeError(
-            "Builder needs >=2 GiB free disk, <90% disk usage and >=800 MiB available RAM; no automatic prune"
+            "Builder needs >=2 GiB free disk, <90% disk usage and >=800 MiB available RAM; "
+            "no automatic prune"
         )
 
 
@@ -153,7 +154,21 @@ def prepare_builder():
     execute("docker", "buildx", "inspect", "etran-beta", "--bootstrap")
 
 
+def ensure_contract_sources():
+    # Older installed launchers omit this directory from their sparse checkout.
+    # Materialize immutable inputs through Git, without patching the launcher.
+    if (ROOT / "contracts/hevc-v2/fixtures").is_dir():
+        return
+    if (
+        execute("git", "config", "--bool", "core.sparseCheckout", capture=True)
+        != "true"
+    ):
+        raise RuntimeError("Frozen contract build inputs are missing")
+    execute("git", "sparse-checkout", "add", "contracts")
+
+
 def test_component(component):
+    ensure_contract_sources()
     execute(sys.executable, "-m", "unittest", "discover", "-s", ".github/ci", "-v")
     if component in {"processingbackend", "menubuilder-backend", "l4mcp"}:
         directory = ROOT / COMPONENTS[component]["directory"]

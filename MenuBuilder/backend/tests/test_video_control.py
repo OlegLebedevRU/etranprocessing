@@ -1,5 +1,6 @@
 import asyncio
 import json
+import threading
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -629,7 +630,12 @@ def test_ws_relay_happy_path_and_release(org1_operator_token, mock_db_session):
         async def __aexit__(self, *args):
             pass
 
-    mock_release = AsyncMock(return_value=None)
+    release_completed = threading.Event()
+
+    async def record_release(*args, **kwargs):
+        release_completed.set()
+
+    mock_release = AsyncMock(side_effect=record_release)
 
     class FakeUpstreamWs:
         def __init__(self):
@@ -717,6 +723,11 @@ def test_ws_relay_happy_path_and_release(org1_operator_token, mock_db_session):
 
         # Send release
         ws.send_json({"type": "release"})
+        # Keep dependency patches alive until the ASGI cleanup has completed.
+        # Closing the TestClient context immediately races the async finally.
+        with pytest.raises(WebSocketDisconnect):
+            ws.receive_json()
+        assert release_completed.wait(timeout=5)
 
     # Upon disconnect, remote_input_release should have been called
     mock_release.assert_awaited_once()

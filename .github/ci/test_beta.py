@@ -13,6 +13,24 @@ DIGEST = "sha256:" + "d" * 64
 
 
 class SelectionTests(unittest.TestCase):
+    def test_old_sparse_launcher_materializes_frozen_contracts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with (
+                patch.object(beta, "ROOT", Path(directory)),
+                patch.object(beta, "execute", side_effect=["true", ""]) as execute,
+            ):
+                beta.ensure_contract_sources()
+                self.assertEqual(
+                    execute.call_args_list[-1].args,
+                    ("git", "sparse-checkout", "add", "contracts"),
+                )
+            with (
+                patch.object(beta, "ROOT", Path(directory)),
+                patch.object(beta, "execute", return_value="false"),
+                self.assertRaisesRegex(RuntimeError, "build inputs"),
+            ):
+                beta.ensure_contract_sources()
+
     def test_monitoring_commission_preserves_real_releases(self):
         state = self.state()
         result = beta.start_monitoring(
@@ -112,9 +130,9 @@ class ReleaseTests(unittest.TestCase):
                 patch.object(
                     beta, "deploy_artifact", side_effect=RuntimeError("failed")
                 ),
+                self.assertRaisesRegex(RuntimeError, "failed"),
             ):
-                with self.assertRaisesRegex(RuntimeError, "failed"):
-                    beta.release("menubuilder-backend", B, state, state_file)
+                beta.release("menubuilder-backend", B, state, state_file)
             self.assertEqual(json.loads(state_file.read_text()), state)
 
     def test_success_updates_only_target_and_writes_journal(self):
