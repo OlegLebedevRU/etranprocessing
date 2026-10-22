@@ -34,6 +34,9 @@ descriptor describes the normalized output, including actual Level4.0.
 This fixed test adapter must be reprobed if the camera settings change.
 
 READY follows actual matching SPS and an IDR access unit forwarded as RTP.
+The adapter logs command type/version and remaining TTL without payloads. If a
+command arrives at most two seconds before the local clock reaches its issue
+time, it waits for that time without extending the original expiry window.
 Each manual start creates a new FFmpeg process/SSRC and live timestamps; there
 is no packet-loop replay. STOP and lease expiry terminate the owned producer.
 G0 has no normal STOP ACK/stopped envelope: physical exit is recorded locally,
