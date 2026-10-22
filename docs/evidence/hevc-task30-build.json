@@ -1,0 +1,12 @@
+{
+  "source_revision": "20bfac2bb3ad633f84eae3f91348e532fc09bff9",
+  "contract_revision": "hevc-contract/2.0.0",
+  "contract_sha256": "f065b967cd10c2c709fb394ef9e6c2ecf74f77de060d88c9a821cc9069766ac4",
+  "backend_image_id": "sha256:6478517348497b588e85380dd2cd8ebd63e8ba6c82f07570c08fa364d586d479",
+  "frontend_image_id": "sha256:c28783f0a9ce867dac3386a8b63859acafbc3e320f041c9e50032624214a15ef",
+  "asset_manifest_sha256": "daacb7eb568eafe2c29aa4b7bdb44ceaf4ba896f81e8529fbb954776ad2f6bcd",
+  "asset_manifest": "hevc-task30-assets.json",
+  "artifact_kind": "builder-local candidate; not registry manifest",
+  "production_deployed": false,
+  "decoded_video": false
+}
