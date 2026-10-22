@@ -1,6 +1,6 @@
 {
-  "source_revision": "d6b97c5ddf349a8d09d0a16d21d40a596955d472",
-  "image_id": "sha256:b4b0c76aae6af771cca402c545f512e3b672d90e891f8f28e0245428ee6fe0b5",
+  "source_revision": "58a73c742a47856a13833cab9a3ceca1bc7aa795",
+  "image_id": "sha256:3006625d661770891575f0ae490bf398ec52d270250038d8183c50e47107eee5",
   "janus_image": "dev-leo4-ru.cr.cloud.ru/l4media-janus@sha256:93265665a92482ec1de2c9571a08d27c87b1dee06efc000f717ed42dfe2438ae",
   "checks": [
     "auth",
