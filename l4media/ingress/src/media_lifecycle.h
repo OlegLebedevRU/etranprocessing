@@ -290,65 +290,30 @@ static inline int janus_admin_request(const char* body, char* resp_buf, size_t r
     return 0;
 }
 
-static inline int janus_destroy_mountpoint(uint32_t mountpoint_id, char* err_buf, size_t err_sz) {
-    char req[512];
-    snprintf(req, sizeof(req),
-             "{\"janus\":\"message_plugin\",\"transaction\":\"mp_del_%" PRIu32 "\","
-             "\"admin_secret\":\"%s\",\"plugin\":\"janus.plugin.streaming\","
-             "\"request\":{\"request\":\"destroy\",\"id\":%" PRIu32 "}}",
-             mountpoint_id, g_janus_admin_secret, mountpoint_id);
-
-    char* resp = (char*)malloc(16384);
-    if (!resp) return -1;
-    int res = janus_admin_request(req, resp, 16384);
-    if (res != 0) {
-        if (err_buf && err_sz > 0) lifecycle_safe_strcpy(err_buf, "Janus connection failed", err_sz);
-        free(resp);
-        return -1;
-    }
-    free(resp);
-    return 0;
-}
-
 #include "media_janus.h"
+
+static inline int janus_destroy_mountpoint(uint32_t id, char* err_buf, size_t err_sz) {
+    json_t* request = json_pack("{s:s,s:i}", "request", "destroy", "id", (int)id);
+    json_t* response = mj_request(request); json_decref(request);
+    const char* outcome = json_string_value(mj_find(response, "streaming", 0));
+    bool ok = (outcome && !strcmp(outcome, "destroyed")) || json_integer_value(mj_find(response, "error_code", 0)) == 455;
+    if (!ok && err_buf && err_sz) lifecycle_safe_strcpy(err_buf, "Janus destroy failed", err_sz);
+    json_decref(response); return ok ? 0 : -1;
+}
 
 static inline int janus_list_mountpoints(uint32_t* ids, int max_ids, int* out_count) {
     if (!ids || max_ids <= 0 || !out_count) return -1;
     *out_count = 0;
-
-    char req[512];
-    snprintf(req, sizeof(req),
-             "{\"janus\":\"message_plugin\",\"transaction\":\"mp_list\","
-             "\"admin_secret\":\"%s\",\"plugin\":\"janus.plugin.streaming\","
-             "\"request\":{\"request\":\"list\"}}",
-             g_janus_admin_secret);
-
-    char* resp = (char*)malloc(65536);
-    if (!resp) return -1;
-    int res = janus_admin_request(req, resp, 65536);
-    if (res != 0) {
-        free(resp);
-        return -1;
+    json_t* request = json_pack("{s:s}", "request", "list");
+    json_t* response = mj_request(request); json_decref(request);
+    json_t* list = mj_find(response, "list", 0);
+    if (!json_is_array(list) || json_array_size(list) > (size_t)max_ids) { json_decref(response); return -1; }
+    for (size_t i = 0; i < json_array_size(list); i++) {
+        json_int_t id = json_integer_value(json_object_get(json_array_get(list, i), "id"));
+        if (id <= 0 || id > INT32_MAX) { json_decref(response); return -1; }
+        ids[(*out_count)++] = (uint32_t)id;
     }
-
-    const char* b = strstr(resp, "\r\n\r\n");
-    if (!b) b = resp;
-
-    int count = 0;
-    const char* p = b;
-    while ((p = strstr(p, "\"id\":")) != NULL && count < max_ids) {
-        p += 5;
-        while (*p == ' ' || *p == '\t') p++;
-        char* end = NULL;
-        unsigned long v = strtoul(p, &end, 10);
-        if (end > p) {
-            ids[count++] = (uint32_t)v;
-            p = end;
-        }
-    }
-    *out_count = count;
-    free(resp);
-    return 0;
+    json_decref(response); return 0;
 }
 
 /* ========================================================================= */

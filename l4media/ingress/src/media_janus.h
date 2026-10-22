@@ -66,6 +66,9 @@ static inline int janus_get_mountpoint_info(uint32_t id, JanusMountpointInfo* ou
     json_t* response = mj_request(request); json_decref(request);
     if (!response) return -1;
     json_t* info = mj_find(response, "info", 0);
+    if (!info && json_integer_value(mj_find(response, "error_code", 0)) != 455) {
+        json_decref(response); return -1;
+    }
     if (info) {
         json_t* media = json_object_get(info, "media");
         json_t* video = NULL;
