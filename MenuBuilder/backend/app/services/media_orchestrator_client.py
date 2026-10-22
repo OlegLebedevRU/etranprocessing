@@ -187,6 +187,26 @@ class MediaOrchestratorClient:
                 code="network_error",
             ) from exc
 
+    async def video_v2(
+        self, action: str, payload: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        if action == "capabilities":
+            return await self._send_request("GET", "/api/v2/media/capabilities")
+        if action == "health" and payload:
+            query = {
+                key: value
+                for key, value in payload.items()
+                if key not in ("contract_version", "session_id")
+            }
+            return await self._send_request(
+                "GET", f"/api/v2/media/sessions/{payload['session_id']}", params=query
+            )
+        if action not in ("start", "stop", "renew"):
+            raise ValueError("Unknown media v2 action")
+        return await self._send_request(
+            "POST", f"/api/v2/media/sessions/{action}", json_data=payload
+        )
+
     async def start_session(
         self,
         session_id: str,

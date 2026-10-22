@@ -18,6 +18,7 @@ import {
 import {
   acquireControlLease,
   CameraSource,
+  CodecPolicy,
   changeControlScope,
   ClickResult,
   createVideoSession,
@@ -182,6 +183,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
   const [loadingInventory, setLoadingInventory] = useState<boolean>(false);
   const [selectedSourceKey, setSelectedSourceKey] = useState<string>("");
   const [selectedProfile, setSelectedProfile] = useState<string>("low");
+  const [codecPolicy, setCodecPolicy] = useState<CodecPolicy>("auto");
 
   // Статус потока
   const [activeStream, setActiveStream] = useState<StreamPresenceInfo | null>(null);
@@ -298,7 +300,8 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
       onKeepaliveRequest: async (deviceId, leaseId) => {
         await keepaliveControlLease(deviceId, leaseId);
       },
-      onReleaseRequest: async (deviceId, leaseId) => {
+      onReleaseRequest: async (deviceId, leaseId, publisherOwned) => {
+        if (publisherOwned === false) return;
         try {
           await stopDeviceStream(deviceId, leaseId);
         } catch (err) {
@@ -512,6 +515,19 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
     return () => { inventoryGeneration.current += 1; };
   }, [selectedDevice?.device_id, canView, fetchDeviceInfo]);
 
+  useEffect(() => {
+    if (!selectedDevice || cameraOnly || !canView || !selectedSourceKey) return;
+    let disposed = false;
+    const source_id = selectedSourceKey.slice(selectedSourceKey.indexOf(":") + 1);
+    void getDeviceInventory(selectedDevice.device_id, false, { source_id, profile_id: selectedProfile })
+      .then((result) => {
+        if (!disposed) setInventory((current) => current ? { ...current, video_codecs: result.video_codecs } : current);
+      }).catch(() => {
+        if (!disposed) setInventory((current) => current ? { ...current, video_codecs: undefined } : current);
+      });
+    return () => { disposed = true; };
+  }, [selectedDevice?.device_id, selectedSourceKey, selectedProfile, cameraOnly, canView]);
+
   // IoT watch is an invalidation feed. REST remains the authoritative snapshot.
   useEffect(() => {
     const deviceId = selectedDevice?.device_id;
@@ -657,18 +673,17 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
       setStatusText("Запрос аренды для просмотра...");
 
       try {
-        const leaseRes = await acquireControlLease(deviceId, "view");
-        setActiveLeaseId(leaseRes.lease_id);
-        leaseRef.current = { id: leaseRes.lease_id, deviceId };
+        const sessionData = await createVideoSession(deviceId, 2);
+        if (!sessionData.stream_instance_id) throw new Error("Publisher epoch unavailable");
         coordinatorRef.current.startSession({
           deviceId,
-          leaseId: leaseRes.lease_id,
-          streamInstanceId: "viewer",
-          keepaliveIntervalMs: (leaseRes.keepalive_sec ? Math.min(leaseRes.keepalive_sec / 2, 5) : 5) * 1000,
+          leaseId: "",
+          streamInstanceId: sessionData.stream_instance_id,
+          publisherOwned: false,
         });
+        setActiveStream({ stream_instance_id: sessionData.stream_instance_id, descriptor: sessionData.descriptor });
 
         setStatusText("Подключение к медиапотоку...");
-        const sessionData = await createVideoSession(deviceId);
         const wsUrl = getJanusWsUrl(sessionData.janus_ws);
 
         const client = new JanusStreamingClient({
@@ -685,7 +700,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
             if (status === "connecting") {
               setStatusText("Соединение с медиасервером...");
             } else if (status === "streaming" || status === "webrtcup") {
-              setStatusText("В эфире");
+              setStatusText("Ожидание изображения");
               setStreamStage("running");
               setIsSessionActive(true);
             }
@@ -701,7 +716,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
         janusClientRef.current = client;
         setIsSessionActive(true);
         setStreamStage("running");
-        setStatusText("В эфире");
+        setStatusText("Ожидание изображения");
       } catch (err: any) {
         const formatted = formatVideoError(err);
         setBannerError({ code: "viewer_connect_failed", message: formatted.message });
@@ -737,7 +752,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
 
       // 2. Route-before-Start: подготовка медиаканала (ingress и Janus mountpoint) ДО запуска FFmpeg
       setStatusText("Подготовка медиаканала (маршрутизация)...");
-      const sessionData = await createVideoSession(selectedDevice.device_id);
+      const legacySession = cameraOnly ? await createVideoSession(selectedDevice.device_id) : undefined;
 
       // 3. Определение режима и запуск видеопотока на терминале
       const colonIdx = selectedSourceKey.indexOf(":");
@@ -750,7 +765,10 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
         source_id: source_id || "0",
         profile: selectedProfile,
         lease_id: leaseRes.lease_id,
+        ...(!cameraOnly ? { codec_policy: codecPolicy } : {}),
       });
+      const sessionData = legacySession || startRes.media;
+      if (!sessionData) throw new Error("Media route unavailable");
 
       // Запуск координатора сессии (generation tracking и неперекрывающийся keepalive)
       coordinatorRef.current.startSession({
@@ -778,7 +796,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
           if (status === "connecting") {
             setStatusText("Соединение с медиасервером...");
           } else if (status === "streaming" || status === "webrtcup") {
-            setStatusText("В эфире");
+            setStatusText("Ожидание изображения");
             setStreamStage("running");
             setIsSessionActive(true);
           }
@@ -799,10 +817,11 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
         mode,
         source_id,
         stream_instance_id: startRes.stream_instance_id,
+        descriptor: startRes.descriptor,
       });
       setStreamStage("running");
       setIsSessionActive(true);
-      setStatusText("В эфире");
+      setStatusText("Ожидание изображения");
       message.success("Трансляция успешно запущена");
 
       // Decoded frames come from the local WebRTC connection; no HTTP status poll.
@@ -828,7 +847,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
             lastFrameGrowthTimeRef.current = now;
             setStatusText(`В эфире (${Math.round(decoded / elapsed)} кадр/сек)`);
           } else if (now - lastFrameGrowthTimeRef.current > 15000) {
-            setStatusText("В эфире (кадры не поступают)");
+            setStatusText("Ожидание изображения (кадры не поступают)");
           }
         } catch (e) {
           console.warn("WebRTC stats error", e);
@@ -1042,6 +1061,8 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
                 cameraOnly={cameraOnly} settingsBusy={cameraSettingsBusy}
                 device={selectedDevice} name={terminalNames[selectedDevice.device_id]} address={terminalAddresses[selectedDevice.device_id]}
                 inventory={inventory} source={selectedSourceKey} profile={selectedProfile}
+                codecPolicy={codecPolicy} onCodecPolicy={setCodecPolicy}
+                activeCodec={(activeStream?.actual_descriptor || activeStream?.descriptor)?.tracks[0]?.codec}
                 onSource={setSelectedSourceKey} onProfile={setSelectedProfile} loadingInventory={loadingInventory}
                 onRefresh={() => fetchDeviceInfo(selectedDevice.device_id, true)}
                 onSelectTerminal={() => setIsDeviceDrawerOpen(true)}
@@ -1083,7 +1104,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
                   busyOwner: rc.busyOwner,
                 }}
               />
-              {cameraOnly && isViewer && <Button disabled={cameraSettingsBusy || streamStage === "starting" || streamStage === "stopping"}
+              {isViewer && <Button disabled={cameraSettingsBusy || streamStage === "starting" || streamStage === "stopping"}
                 onClick={() => void (isSessionActive ? stopSession("viewer_stop") : handleViewerConnect(selectedDevice.device_id))}>
                 {isSessionActive ? "Остановить просмотр" : "Начать просмотр"}</Button>}
               {cameraOnly && <CameraSettings key={selectedDevice.device_id} device={selectedDevice.device_id}

@@ -3,13 +3,14 @@ import logging
 import secrets
 import time
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import JSONResponse
 
 from app.auth import resolve_org_id
 from app.config import settings
@@ -17,6 +18,12 @@ from app.database import get_db
 from app.models import Terminal
 from app.security.permissions import PERMISSION_VIDEO_VIEW, require_permission
 from app.services.iot_client import iot_client
+from app.services.media_orchestrator_client import media_orchestrator_client
+from app.services.video_contract import (
+    media_identity,
+    stream_descriptor,
+    validate_video,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -527,9 +534,10 @@ async def _get_ingress_status(sn: str) -> dict[str, Any]:
 )
 async def create_video_session(
     device_id: int,
+    contract_version: Literal[2] | None = Query(None),
     user: dict[str, Any] = Depends(require_permission(PERMISSION_VIDEO_VIEW)),
     db: AsyncSession = Depends(get_db),
-) -> VideoSessionResponse:
+) -> VideoSessionResponse | JSONResponse:
     terminal = await _verify_device_access(device_id, user, db, require_active=True)
     org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
 
@@ -580,6 +588,46 @@ async def create_video_session(
         if lease_info.get("stream_instance_id")
         else None
     )
+    descriptor = stream_descriptor(status_data)
+    if descriptor is not None:
+        if not lease_id or not stream_instance_id:
+            raise HTTPException(409, detail={"code": "stream_identity_unavailable"})
+        media = validate_video(
+            "media_health",
+            await media_orchestrator_client.video_v2(
+                "health",
+                media_identity(terminal.sn, lease_id, stream_instance_id, descriptor),
+            ),
+        )
+        from app.services.video_contract import verify_media_response
+
+        verify_media_response(
+            media,
+            media_identity(terminal.sn, lease_id, stream_instance_id, descriptor),
+            descriptor,
+        )
+        if media["state"] not in ("active", "starting"):
+            raise HTTPException(410, detail={"code": "producer_stopped"})
+        response = VideoSessionResponse(
+            mountpoint_id=media["mountpoint_id"],
+            sn=terminal.sn,
+            janus_ws=media["janus_ws"],
+            pin=media.get("pin"),
+            session_ttl_sec=600,
+        )
+        if contract_version == 2:
+            return JSONResponse(
+                dict(
+                    response.model_dump(),
+                    stream_instance_id=stream_instance_id,
+                    descriptor=descriptor,
+                    resolved_codec=descriptor["tracks"][0]["codec"],
+                )
+            )
+        return response
+    if contract_version == 2 and not stream_instance_id:
+        raise HTTPException(409, detail={"code": "stream_identity_unavailable"})
+
     pin = get_or_create_mountpoint_pin(
         device_id,
         stream_instance_id=stream_instance_id,
@@ -596,7 +644,6 @@ async def create_video_session(
             MediaOrchestratorError,
             MediaSessionNotFoundError,
             media_lease_deadline,
-            media_orchestrator_client,
         )
 
         try:
@@ -625,6 +672,10 @@ async def create_video_session(
                     media_res = existing
                     break
             if media_res is None:
+                if contract_version == 2:
+                    raise HTTPException(
+                        409, detail={"code": "publisher_route_unavailable"}
+                    )
                 media_res = await media_orchestrator_client.start_session(
                     session_id=session_id,
                     operation_id=f"op-media-{device_id}-{session_id}",
@@ -636,13 +687,22 @@ async def create_video_session(
                     ttl_sec=600,
                     lease_expires_at=lease_deadline,
                 )
-            return VideoSessionResponse(
+            response = VideoSessionResponse(
                 mountpoint_id=int(media_res.get("mountpoint_id") or mountpoint_id),
                 sn=str(media_res.get("sn") or terminal.sn),
                 janus_ws=str(media_res.get("janus_ws") or "/janus-ws"),
                 session_ttl_sec=int(media_res.get("ttl_sec") or 600),
                 pin=media_res.get("pin"),
             )
+            if contract_version == 2:
+                return JSONResponse(
+                    dict(
+                        response.model_dump(),
+                        stream_instance_id=stream_instance_id,
+                        resolved_codec="h264",
+                    )
+                )
+            return response
         except MediaOrchestratorError as media_err:
             # The orchestrator owns this mountpoint. A fallback must never
             # bypass its conflict/unavailability by destroying live viewers.
@@ -651,18 +711,35 @@ async def create_video_session(
                 detail="Не удалось подключиться к управляемой медиасессии",
             ) from media_err
 
-    await _ensure_ingress_route(terminal.sn, rtp_port, rtcp_port)
-    await _ensure_janus_mountpoint(
-        mountpoint_id, device_id, rtp_port, rtcp_port, pin=pin
-    )
+    if contract_version == 2:
+        cached = _mountpoint_pins.get(device_id) or {}
+        if (
+            cached.get("janus_pin") != pin
+            or cached.get("stream_instance_id") != stream_instance_id
+        ):
+            raise HTTPException(409, detail={"code": "publisher_route_unavailable"})
+    else:
+        await _ensure_ingress_route(terminal.sn, rtp_port, rtcp_port)
+        await _ensure_janus_mountpoint(
+            mountpoint_id, device_id, rtp_port, rtcp_port, pin=pin
+        )
 
-    return VideoSessionResponse(
+    response = VideoSessionResponse(
         mountpoint_id=mountpoint_id,
         sn=terminal.sn,
         janus_ws="/janus-ws",
         session_ttl_sec=600,
         pin=pin,
     )
+    if contract_version == 2:
+        return JSONResponse(
+            dict(
+                response.model_dump(),
+                stream_instance_id=stream_instance_id,
+                resolved_codec="h264",
+            )
+        )
+    return response
 
 
 @router.get(

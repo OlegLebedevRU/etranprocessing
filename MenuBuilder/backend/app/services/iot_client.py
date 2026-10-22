@@ -583,6 +583,50 @@ class IotPlatformClient:
             )
             return {"released": 0}
 
+    async def remote_video_v2(
+        self,
+        sn: str,
+        action: str,
+        *,
+        payload: dict[str, Any] | None = None,
+        lease_id: str | None = None,
+        org_id: int | None = None,
+        user: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Explicit v2 adapter; no retry against a legacy endpoint on refusal."""
+        from urllib.parse import quote
+
+        if not self.base_url or not settings.remote_control_enabled:
+            raise HTTPException(503, detail={"code": "remote_control_unavailable"})
+        prefix = f"{self.base_url}/api/internal/v2/remote-input"
+        headers = self._get_headers(org_id=org_id, user=user)
+        try:
+            async with httpx.AsyncClient(
+                timeout=settings.iot_rpc_stream_start_timeout_seconds
+            ) as client:
+                if action == "inventory":
+                    response = await client.get(
+                        f"{prefix}/devices/{quote(sn, safe='')}/inventory",
+                        headers=headers,
+                    )
+                elif action in ("start", "stop") and lease_id:
+                    response = await client.post(
+                        f"{prefix}/lease/{quote(lease_id, safe='')}/stream/{action}",
+                        json=payload,
+                        headers=headers,
+                    )
+                else:
+                    raise ValueError("Unknown CTL v2 action")
+                response.raise_for_status()
+                return response.json()
+        except httpx.HTTPStatusError as exc:
+            self._handle_app1_http_error(exc)
+            raise
+        except (httpx.RequestError, ValueError) as exc:
+            raise HTTPException(
+                502, detail={"code": "video_control_unavailable"}
+            ) from exc
+
     async def remote_input_inventory(
         self,
         sn: str,

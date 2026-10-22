@@ -1,0 +1,209 @@
+import copy
+import json
+import time
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
+from fastapi import HTTPException
+
+from app.config import settings
+from app.services.video_contract import (
+    VideoContractOrchestrator,
+    select_hevc_profile,
+    validate_video,
+)
+
+FIXTURES = Path(__file__).resolve().parents[3] / "contracts/hevc-v2/fixtures"
+
+
+def fixture(name):
+    return json.loads((FIXTURES / f"{name}.json").read_text())["payload"]
+
+
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
+@pytest.fixture
+def context(monkeypatch):
+    now = int(time.time() * 1000)
+    cap = fixture("capabilities")
+    cap["video_capabilities"].update(
+        checked_at_ms=now - 1000, valid_until_ms=now + 59000
+    )
+    lease = {
+        "active": True,
+        "lease_id": "00000000-0000-4000-8000-000000000001",
+        "scope": "stream",
+        "owner_user_id": "8",
+        "owner_session_id": "owned",
+        "expires_at": (datetime.now(UTC) + timedelta(seconds=60)).isoformat(),
+    }
+    status = {"lease": lease, "agent": {"online": True, "stream": {"state": "stopped"}}}
+    for key, value in {
+        "video_contract_v2_enabled": True,
+        "l4desk_session_orchestration_enabled": True,
+        "video_proxy_rtp_port": 5004,
+        "video_proxy_rtcp_port": 5005,
+    }.items():
+        monkeypatch.setattr(settings, key, value)
+    trace = []
+
+    async def media(action, payload=None):
+        trace.append(("media", action, copy.deepcopy(payload)))
+        if action == "capabilities":
+            return fixture("media_capabilities")
+        if action == "start":
+            value = fixture("media_response")
+            value.update(
+                {
+                    key: payload[key]
+                    for key in (
+                        "session_id",
+                        "operation_id",
+                        "publisher",
+                        "lease_id",
+                        "descriptor",
+                    )
+                }
+            )
+            value.update(
+                stream_instance_id=payload["publisher"]["stream_instance_id"],
+                pin="synthetic-pin",
+            )
+            return value
+        return {}
+
+    async def iot(sn, action, **kwargs):
+        trace.append(("iot", action, copy.deepcopy(kwargs)))
+        if action == "inventory":
+            return cap
+        if action == "start":
+            command = kwargs["payload"]
+            value = fixture("hevc_ready")
+            value.update(
+                {
+                    key: command[key]
+                    for key in (
+                        "sn",
+                        "lease_id",
+                        "stream_instance_id",
+                        "command_id",
+                        "operation_id",
+                        "agent_instance_id",
+                    )
+                }
+            )
+            value["actual_descriptor"] = command["descriptor"]
+            return value
+        return {}
+
+    service = VideoContractOrchestrator(
+        SimpleNamespace(remote_video_v2=AsyncMock(side_effect=iot)),
+        SimpleNamespace(video_v2=AsyncMock(side_effect=media)),
+    )
+    args = {
+        "sn": cap["sn"],
+        "lease_id": lease["lease_id"],
+        "policy": "h265",
+        "mode": "desktop",
+        "source_id": "display-0",
+        "profile_id": "low",
+        "status": status,
+        "org_id": 1,
+        "user": {"sub": "8", "session_id": "owned"},
+    }
+    return service, args, trace, cap
+
+
+@pytest.mark.anyio
+async def test_prepare_before_exact_ready(context):
+    service, args, trace, _ = context
+    result = await service.start(**args)
+    assert result["resolved_codec"] == "h265"
+    actions = [(owner, action) for owner, action, _ in trace]
+    assert actions.index(("media", "start")) < actions.index(("iot", "start"))
+    command = next(
+        value["payload"]
+        for owner, action, value in trace
+        if (owner, action) == ("iot", "start")
+    )
+    assert command["recovery_policy"] == "stop_on_failure"
+    assert command["descriptor"] == result["descriptor"]
+
+
+@pytest.mark.anyio
+async def test_unknown_auto_and_explicit_fail_closed(context):
+    service, args, trace, _ = context
+    service.iot.remote_video_v2.side_effect = HTTPException(404)
+    assert await service.start(**dict(args, policy="auto")) is None
+    with pytest.raises(HTTPException) as error:
+        await service.start(**args)
+    assert error.value.status_code == 422
+    assert not any((owner, action) == ("media", "start") for owner, action, _ in trace)
+
+
+@pytest.mark.anyio
+async def test_ack_not_ready_compensates_exact_epoch(context):
+    service, args, trace, _ = context
+    original = service.iot.remote_video_v2.side_effect
+
+    async def unconfirmed(sn, action, **kwargs):
+        if action == "start":
+            return {"result": "accepted"}
+        return await original(sn, action, **kwargs)
+
+    service.iot.remote_video_v2.side_effect = unconfirmed
+    with pytest.raises(HTTPException):
+        await service.start(**args)
+    start = next(
+        value for owner, action, value in trace if (owner, action) == ("media", "start")
+    )
+    stop = next(
+        value for owner, action, value in trace if (owner, action) == ("media", "stop")
+    )
+    assert stop["stream_instance_id"] == start["publisher"]["stream_instance_id"]
+    assert stop["lease_id"] == args["lease_id"]
+    assert sum((owner, action) == ("media", "start") for owner, action, _ in trace) == 1
+
+
+@pytest.mark.anyio
+async def test_no_owner_session_bypass(context):
+    service, args, trace, _ = context
+    args["user"].update(session_id="other", is_superuser=True)
+    with pytest.raises(HTTPException) as error:
+        await service.start(**args)
+    assert error.value.status_code == 403
+    assert not trace
+
+
+def test_stale_and_unverified_capabilities(context):
+    _, _, _, cap = context
+    capability = cap["video_capabilities"]
+    server = fixture("media_capabilities")
+    now = capability["valid_until_ms"]
+    assert select_hevc_profile(capability, server, "display-0", "low", now)[0] is None
+    server["hevc_runtime_verified"] = False
+    server["codecs"] = ["h264"]
+    server["formats"] = server["formats"][:1]
+    assert (
+        select_hevc_profile(capability, server, "display-0", "low", now - 1000)[0]
+        is None
+    )
+
+
+def test_frozen_vectors_and_schema_bytes():
+    assert (FIXTURES.parent / "hevc.schema.json").read_bytes() == (
+        Path(__file__).resolve().parents[1] / "app/contracts/hevc.schema.json"
+    ).read_bytes()
+    for path in FIXTURES.glob("*.json"):
+        value = json.loads(path.read_text())
+        if value["valid"]:
+            validate_video(value["definition"], value["payload"])
+        else:
+            with pytest.raises(HTTPException):
+                validate_video(value["definition"], value["payload"])
