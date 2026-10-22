@@ -298,6 +298,7 @@ class Source:
                 "auto_restart_allowed": False,
                 "attempt": 0,
             }
+            (self.args.state_dir / "last-failure.json").write_text(json.dumps(value), encoding="utf-8")
             self.publish(value, "error")
         self.record(
             "stream_" + state,
@@ -522,6 +523,15 @@ class Source:
         announced = False
         try:
             while not self.halt.is_set() and not (self.args.state_dir / "STOP").exists():
+                replay = self.args.state_dir / "REPLAY_LAST_FAILURE"
+                previous = self.args.state_dir / "last-failure.json"
+                if replay.exists():
+                    replay.unlink()
+                    if previous.exists():
+                        stale = json.loads(previous.read_text(encoding="utf-8"))
+                        if stale["sn"] == self.args.sn:
+                            self.publish(stale, "error")
+                            self.record("stale_failure_replayed", stream_instance_id=stale["stream_instance_id"])
                 if time.monotonic() - last_presence >= 30:
                     self.publish(self.presence(True), retain=True)
                     last_presence = time.monotonic()

@@ -335,6 +335,13 @@ class VideoContractOrchestrator:
         org_id: int,
         user: dict[str, Any],
     ) -> dict[str, Any] | None:
+        if not (status.get("lease") or {}).get("owner_session_id"):
+            lease = await self.iot.remote_video_v2(
+                sn, "lease", lease_id=lease_id, org_id=org_id, user=user
+            )
+            if lease.get("sn") != sn or str(lease.get("lease_id")) != lease_id:
+                raise HTTPException(409, detail={"code": "lease_mismatch"})
+            status = dict(status, lease=lease)
         deadline = verify_publisher_lease(status, lease_id, user)
         stream = (status.get("agent") or {}).get("stream") or {}
         if stream.get("state") in ("running", "starting", "restarting"):

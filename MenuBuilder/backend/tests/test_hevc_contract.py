@@ -134,6 +134,29 @@ def context(monkeypatch):
 
 
 @pytest.mark.anyio
+async def test_start_reads_publisher_context_without_changing_legacy_status(context):
+    service, args, trace, _ = context
+    lease = dict(args["status"]["lease"], sn=args["sn"])
+    del args["status"]["lease"]["owner_session_id"]
+    original = service.iot.remote_video_v2.side_effect
+
+    async def iot(sn, action, **kwargs):
+        if action == "lease":
+            return lease
+        return await original(sn, action, **kwargs)
+
+    service.iot.remote_video_v2.side_effect = iot
+    await service.start(**args)
+    assert "owner_session_id" not in args["status"]["lease"]
+    lease["owner_session_id"] = "other"
+    trace.clear()
+    with pytest.raises(HTTPException) as denied:
+        await service.start(**args)
+    assert denied.value.status_code == 403
+    assert trace == []
+
+
+@pytest.mark.anyio
 async def test_prepare_before_exact_ready(context):
     service, args, trace, _ = context
     result = await service.start(**args)
@@ -316,12 +339,13 @@ async def test_http_adapter_uses_negotiated_routes_without_legacy_retry(monkeypa
     client = IotPlatformClient(
         base_url="http://localhost", service_token="synthetic-test-only"
     )
-    for action in ("inventory", "state", "start", "stop"):
+    for action in ("inventory", "lease", "state", "start", "stop"):
         await client.remote_video_v2(
             "test-source", action, lease_id="lease", payload={}, org_id=1
         )
     assert calls == [
         ("GET", "/api/internal/v1/remote-input/devices/test-source/video-capabilities"),
+        ("GET", "/api/internal/v1/remote-input/lease/lease/video-lease"),
         ("GET", "/api/internal/v1/remote-input/lease/lease/video-state"),
         ("POST", "/api/internal/v1/remote-input/lease/lease/stream/start"),
         ("POST", "/api/internal/v1/remote-input/lease/lease/video-stop"),

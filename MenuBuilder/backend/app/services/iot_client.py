@@ -609,9 +609,10 @@ class IotPlatformClient:
                         f"{prefix}/devices/{quote(sn, safe='')}/video-capabilities",
                         headers=headers,
                     )
-                elif action == "state" and lease_id:
+                elif action in ("state", "lease") and lease_id:
+                    suffix = "video-state" if action == "state" else "video-lease"
                     response = await client.get(
-                        f"{prefix}/lease/{quote(lease_id, safe='')}/video-state",
+                        f"{prefix}/lease/{quote(lease_id, safe='')}/{suffix}",
                         headers=headers,
                     )
                 elif action in ("start", "stop") and lease_id:

@@ -809,7 +809,7 @@ async def change_device_control_scope(
 async def get_device_inventory(
     device_id: int,
     refresh: int = Query(0, ge=0, le=1),
-    contract_version: Literal[2] | None = Query(None),
+    contract_version: int | None = Query(None, ge=2, le=2),
     source_id: str = Query("", max_length=63),
     profile_id: Literal["low", "default"] = Query("low"),
     user: dict[str, Any] = Depends(require_permission(PERMISSION_VIDEO_VIEW)),
@@ -1381,7 +1381,7 @@ async def stop_device_stream(
 )
 async def get_device_stream_state(
     device_id: int,
-    contract_version: Literal[2] | None = Query(None),
+    contract_version: int | None = Query(None, ge=2, le=2),
     user: dict[str, Any] = Depends(require_permission(PERMISSION_VIDEO_VIEW)),
     db: AsyncSession = Depends(get_db),
 ) -> StreamStateResponse:

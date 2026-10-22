@@ -291,6 +291,73 @@ def mock_db_session():
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("method", "path", "expected"),
+    [("GET", "inventory", 200), ("GET", "stream/state", 200), ("POST", "session", 403)],
+)
+async def test_contract_version_is_coerced_at_http_boundary(
+    mock_db_session, org1_operator_headers, method, path, expected
+):
+    app.dependency_overrides[get_db] = lambda: mock_db_session
+    snapshot = {"agent": {}, "lease": {"active": False}}
+    ingress = {
+        "streaming": False,
+        "rtp_packets": 0,
+        "bytes": 0,
+        "idle_sec": None,
+        "sn": "sn0001",
+        "last_rtp_at": None,
+        "last_activity": None,
+        "transport_connected": False,
+        "fresh_rtp": False,
+        "media_state": "disconnected",
+    }
+    with (
+        patch.object(
+            iot_client,
+            "remote_input_inventory",
+            new=AsyncMock(return_value={"displays": [], "cameras": []}),
+        ),
+        patch.object(
+            iot_client, "remote_input_status", new=AsyncMock(return_value=snapshot)
+        ),
+        patch(
+            "app.routers.video_control.load_video_status",
+            new=AsyncMock(return_value=snapshot),
+        ),
+        patch(
+            "app.routers.video.load_video_status", new=AsyncMock(return_value=snapshot)
+        ),
+        patch(
+            "app.routers.video_control._get_ingress_status",
+            new=AsyncMock(return_value=ingress),
+        ),
+        patch(
+            "app.routers.video_control.VideoContractOrchestrator.availability",
+            new=AsyncMock(
+                return_value={
+                    "hevc_available": False,
+                    "reason_code": "disabled_by_policy",
+                }
+            ),
+        ),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            for version in (None, "2", "3"):
+                response = await client.request(
+                    method,
+                    f"/api/v1/video/devices/1/{path}",
+                    params={"contract_version": version} if version else {},
+                    headers=org1_operator_headers,
+                )
+                assert response.status_code == (422 if version == "3" else expected), (
+                    response.text
+                )
+
+
+@pytest.mark.anyio
 async def test_control_status_viewer_allowed(mock_db_session, org1_viewer_headers):
     app.dependency_overrides[get_db] = lambda: mock_db_session
 

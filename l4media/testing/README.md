@@ -41,6 +41,9 @@ without inventing a wire event. Failures use the frozen producer error envelope
 and never restart or switch codec. Old relay callbacks are bound to their epoch.
 
 Create the exact `--fail-file` to trigger a controlled producer failure. Create
+`REPLAY_LAST_FAILURE` in `--state-dir` after a later manual start to resend the
+previous epoch's schema-valid error through the same MQTT connection. Verify
+that the current stream keeps decoding and no producer restart occurs. Create
 `STOP` inside `--state-dir` for orderly adapter shutdown and offline presence.
 Then restore the installed supervisor/l4desk and verify the legacy H.264 flow.
 The source only supports the negotiated test HEVC path; use the real installed
