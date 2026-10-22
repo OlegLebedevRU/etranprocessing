@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
@@ -280,6 +281,18 @@ async def test_full_state_reader_preserves_epoch_and_does_not_hide_denial(contex
     with pytest.raises(HTTPException) as denied:
         await load_video_status(service.iot, args["sn"], org_id=1, user=args["user"])
     assert denied.value.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_legacy_view_state_does_not_require_publisher_reader(monkeypatch):
+    monkeypatch.setattr(settings, "video_contract_v2_enabled", True)
+    legacy = {"lease": {"lease_id": str(uuid4()), "scope": "view"}, "agent": {}}
+    iot = SimpleNamespace(
+        remote_input_status=AsyncMock(return_value=legacy),
+        remote_video_v2=AsyncMock(side_effect=HTTPException(403)),
+    )
+    assert await load_video_status(iot, "legacy", org_id=1, user={}) == legacy
+    iot.remote_video_v2.assert_not_awaited()
 
 
 @pytest.mark.anyio
