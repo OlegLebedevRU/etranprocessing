@@ -516,6 +516,8 @@ static inline void media_redis_bootstrap(void) {
 /* Lifecycle Operations & Endpoints Handlers                                 */
 /* ========================================================================= */
 
+static inline void mv_persist(MediaSession* session);
+
 static inline void stop_media_session(const char* session_id, const char* operation_id, const char* reason,
                                       char* resp_body, size_t resp_sz, int* status_code) {
     (void)operation_id;
@@ -555,6 +557,7 @@ static inline void stop_media_session(const char* session_id, const char* operat
     s->stopped_at = now;
     lifecycle_safe_strcpy(s->stop_reason, reason && reason[0] ? reason : "user_closed", sizeof(s->stop_reason));
     media_redis_drop_session(s->session_id, s->sn, s->mountpoint_id);
+    if (s->contract_version == 2) mv_persist(s);
     g_metric_sessions_stopped++;
 
     long duration = (long)(s->stopped_at - s->started_at);
