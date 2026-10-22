@@ -89,6 +89,7 @@ def main():
             diagnostic({"request":"info", "id":1987654321})
         assert caps["hevc_runtime_verified"] and caps["dependencies_ready"], caps
         http(base, "/api/v2/media/capabilities", expected=401)
+        http(base, "/api/v2/media/sessions/start", dict(unexpected=True), token, 400)
         spec = http(base, "/api/v2/openapi.json")
         assert spec["openapi"] == "3.1.0"
         request = json.loads((ROOT / "contracts/hevc-v2/fixtures/media_start.json").read_text())["payload"]
@@ -126,9 +127,21 @@ def main():
             assert health["transport"]["rtp_fresh"] and health["state"] == "active", health
         stale = dict(identity, stream_instance_id=str(uuid.uuid4()), reason="stale")
         http(base, "/api/v2/media/sessions/stop", stale, token, 409)
+        docker("stop", janus)
+        http(base, "/api/v2/media/sessions/start", request, token, 502)
+        docker("start", janus)
+        janus_base = f"http://127.0.0.1:{port(janus, 8088)}"
+        wait_ready(janus_base, "/janus/info")
+        http(base, "/api/v2/media/sessions/start", request, token)
         http(base, "/api/v2/media/sessions/stop", dict(identity, reason="smoke_complete"), token)
         assert http(base, health_path, token=token)["state"] == "stopped"
-        print(json.dumps({"source_revision": revision, "image_id": docker("image", "inspect", image, "--format", "{{.Id}}"), "janus_image": JANUS, "checks": ["auth", "openapi", "runtime_probe", "prepare_replay", "descriptor_conflict", "redis_crash_reload", "three_H265_SDP_offers", "L4RTP_forward_health", "stale_stop", "stop"], "decoded_video": False}))
+        docker("kill", "--signal", "KILL", ingress)
+        docker("start", ingress)
+        base = f"http://127.0.0.1:{port(ingress, 9100)}"
+        wait_ready(base, "/health")
+        assert http(base, health_path, token=token)["state"] == "stopped"
+        assert http(base, "/api/v2/media/sessions/start", request, token)["state"] == "stopped"
+        print(json.dumps({"source_revision": revision, "image_id": docker("image", "inspect", image, "--format", "{{.Id}}"), "janus_image": JANUS, "checks": ["auth", "strict_request", "openapi", "runtime_probe", "prepare_replay", "descriptor_conflict", "redis_crash_reload", "three_H265_SDP_offers", "L4RTP_forward_health", "stale_stop", "janus_failure_and_restart", "stopped_crash_reload_no_resurrection"], "decoded_video": False}))
     finally:
         for name in reversed(names):
             subprocess.run(["docker", "rm", "-f", name], check=False, stdout=subprocess.DEVNULL)
