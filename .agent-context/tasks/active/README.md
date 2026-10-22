@@ -63,3 +63,5 @@
 - [17E FIX transfer, 2026-09-27](2026-09-27-l4d-17e-fix-transfer.md) —
   опубликованные входы, byte bindings, адресная регистрация и критерии
   дальнейшей приёмки.
+
+- [HEVC TASK-00: contracts and fixtures](2026-10-22-hevc-contracts-p0.md) — isolated contract package; offline evidence only.
