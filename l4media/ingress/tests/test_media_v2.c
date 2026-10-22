@@ -86,6 +86,14 @@ int main(void) {
     assert(session && session->state == MEDIA_STATE_STARTING && session->pin[0]);
     assert(strstr(output, "\"codec\":\"h265\""));
     assert(find_route(session->sn));
+    char health_path[1024];
+    snprintf(health_path, sizeof(health_path), "/api/v2/media/sessions/%s?sn=hevc%%2Dfixture&lease_id=%s&stream_instance_id=%s&descriptor_revision=%s",
+        session->session_id, session->lease_id, session->stream_instance_id,
+        mv_string(json_object_get(start, "descriptor"), "descriptor_revision"));
+    media_v2_http("GET", health_path, NULL, output, sizeof(output), &status);
+    assert(status == 200 && strstr(output, "\"transport\""));
+    char encoded[] = "a%3Ab"; assert(mv_query_decode(encoded) && !strcmp(encoded, "a:b"));
+    char invalid_escape[] = "%00"; assert(!mv_query_decode(invalid_escape));
     int before = creates;
     request("/api/v2/media/sessions/start", start, 200, output); assert(before == creates);
     fake_failure = 1;

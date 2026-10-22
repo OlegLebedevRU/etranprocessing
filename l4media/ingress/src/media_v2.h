@@ -319,6 +319,21 @@ static inline void media_v2_restore(void) {
     freeReplyObject(keys);
 }
 
+static inline bool mv_query_decode(char* text) {
+    char* output = text;
+    for (char* input = text; *input; input++) {
+        unsigned char value = (unsigned char)*input;
+        if (value == '%') {
+            if (!input[1] || !input[2] || !isxdigit((unsigned char)input[1]) || !isxdigit((unsigned char)input[2])) return false;
+            char digits[3] = {input[1], input[2], 0};
+            value = (unsigned char)strtoul(digits, NULL, 16); input += 2;
+            if (!value) return false;
+        } else if (value == '+') value = ' ';
+        *output++ = (char)value;
+    }
+    *output = 0; return true;
+}
+
 static inline void media_v2_http(const char* method, const char* path, const char* body,
                                 char* response, size_t size, int* status) {
     if (!g_media_schema) { mv_error("unsupported", 503, response, size, status); return; }
@@ -361,6 +376,7 @@ static inline void media_v2_http(const char* method, const char* path, const cha
         for (char* part = strtok_r(args, "&", &save); part; part = strtok_r(NULL, "&", &save)) {
             char* equal = strchr(part, '=');
             if (!equal) { valid = false; break; } *equal++ = 0;
+            if (!mv_query_decode(part) || !mv_query_decode(equal)) { valid = false; break; }
             if (json_object_get(request, part)) { valid = false; break; }
             json_object_set_new(request, part, json_string(equal));
         }
