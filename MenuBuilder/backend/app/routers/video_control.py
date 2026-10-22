@@ -1779,7 +1779,24 @@ async def watch_device_status_ws(websocket: WebSocket, device_id: int) -> None:
                     raw = await upstream_ws.recv()
                     event = json.loads(raw)
                     if isinstance(event, dict) and event.get("type") == "invalidate":
-                        await websocket.send_json({"type": "invalidate"})
+                        notice: dict[str, Any] = {"type": "invalidate"}
+                        if event.get("kind") == "stream" and event.get("state") in (
+                            "failed",
+                            "stopped",
+                        ):
+                            try:
+                                stream_id = str(uuid.UUID(event["stream_instance_id"]))
+                            except KeyError, ValueError, TypeError, AttributeError:
+                                stream_id = ""
+                            if stream_id:
+                                notice["stream"] = {
+                                    "stream_instance_id": stream_id,
+                                    "state": event["state"],
+                                    "reason": str(
+                                        event.get("reason") or event["state"]
+                                    )[:256],
+                                }
+                        await websocket.send_json(notice)
 
             tasks = [
                 asyncio.create_task(browser_to_upstream()),

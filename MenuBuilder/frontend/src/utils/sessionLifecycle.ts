@@ -159,7 +159,7 @@ export class SessionLifecycleCoordinator {
     const state = event.state?.toLowerCase();
     if (state === "stopped" || state === "failed") {
       const reason = event.error?.codec === "h265"
-        ? `Аппаратное кодирование остановлено; можно повторить запуск после проверки (${event.error.code || event.reason || state})`
+        ? `Поток H.265 остановлен; можно повторить запуск после проверки (${event.error.code || event.reason || state})`
         : event.reason || state;
 
       // Stop session immediately without waiting for HTTP keepalive 404

@@ -188,6 +188,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
   // Статус потока
   const [activeStream, setActiveStream] = useState<StreamPresenceInfo | null>(null);
   const [streamStage, setStreamStage] = useState<StreamStage>("idle");
+  const terminalFailureRef = useRef(false);
   const [bannerError, setBannerError] = useState<{
     code: string;
     message: string;
@@ -313,6 +314,10 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
         await changeControlScope(deviceId, scope);
       },
       onSessionTerminated: (reason, details) => {
+        terminalFailureRef.current = details?.code === "failed";
+        if (terminalFailureRef.current) {
+          setBannerError({ code: "stream_failed", message: `Поток остановлен: ${reason}. Повторный запуск выполняется вручную.` });
+        }
         message.warning(`Трансляция остановлена терминалом: ${reason || "остановлена"}`);
         setStatusText(`Остановлена (${reason || "терминал"})`);
         setStreamStage(details?.code === "failed" ? "failed" : "idle");
@@ -376,6 +381,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
 
   // Остановка текущей медиасессии
   const stopSession = useCallback(async (reason = "normal") => {
+    terminalFailureRef.current = false;
     // A lease can exist before stream_start registers the coordinator session.
     const pendingLease = leaseRef.current;
     const coordinatedLeaseId = coordinatorRef.current.session?.leaseId;
@@ -484,7 +490,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
           setStreamStage("starting");
         } else if (streamInfo?.state === "stopping") {
           setStreamStage("stopping");
-        } else {
+        } else if (!terminalFailureRef.current) {
           setStreamStage("idle");
         }
 
@@ -509,6 +515,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
   );
 
   useEffect(() => {
+    terminalFailureRef.current = false;
     setInventory(null);
     setSelectedSourceKey("");
     if (selectedDevice && canView) void fetchDeviceInfo(selectedDevice.device_id);
@@ -559,6 +566,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
         if (control?.agent) rcRef.current.setPresence(control.agent);
         const stream = state?.stream || control?.agent?.stream;
         const activeSession = coordinatorRef.current.session;
+        if (!activeSession && terminalFailureRef.current) return;
         if (
           stream &&
           activeSession &&
@@ -600,7 +608,13 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
       };
       socket.onmessage = (event) => {
         try {
-          if (JSON.parse(event.data)?.type === "invalidate") void refresh();
+          const notice = JSON.parse(event.data);
+          if (notice?.type === "invalidate") {
+            // A terminal hint only closes the matching local epoch. REST remains
+            // authoritative for live state and every subsequent manual START.
+            if (notice.stream) coordinatorRef.current.handleStreamStateEvent(notice.stream);
+            void refresh();
+          }
         } catch {
           socket?.close();
         }
@@ -667,6 +681,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
   // Подключение зрителя (Viewer)
   const handleViewerConnect = useCallback(
     async (deviceId: number) => {
+      terminalFailureRef.current = false;
       setBannerError(null);
       setRefusalNotice(null);
       setStreamStage("starting");
@@ -732,6 +747,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
 
   // Запуск трансляции оператором
   const handleOperatorStart = async () => {
+    terminalFailureRef.current = false;
     if (!selectedDevice) return;
     if (cameraOnly && cameraSettingsBusy) return;
     if (selectedDevice.status !== "online") {

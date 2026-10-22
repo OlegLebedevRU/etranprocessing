@@ -149,6 +149,8 @@ class Source:
                 return result
 
             value = json.loads(message.payload, object_pairs_hook=unique)
+            self.record("command_received", version=value.get("v"), command_type=value.get("type"),
+                        remaining_ms=value.get("expires_at_ms", now_ms()) - now_ms())
             self.commands.put_nowait(value)
         except ValueError, queue.Full:
             self.record("invalid_command")
@@ -419,7 +421,13 @@ class Source:
         if kind not in definitions:
             return
         validate(definitions[kind], value)
+        ahead = value["issued_at_ms"] - now_ms()
+        if 0 < ahead <= 2000:
+            # Preserve the command's original window when clocks differ slightly.
+            self.record("waiting_for_issued_at", wait_ms=ahead)
+            self.halt.wait(ahead / 1000)
         if not value["issued_at_ms"] <= now_ms() < value["expires_at_ms"]:
+            self.record("command_outside_window", command_type=kind)
             return
         if kind == "inventory_get":
             cap = self.probe()

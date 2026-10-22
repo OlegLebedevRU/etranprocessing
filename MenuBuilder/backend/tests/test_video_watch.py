@@ -190,3 +190,40 @@ def test_watch_relays_only_invalidate_and_rejects_browser_input() -> None:
     assert connect.call_args.kwargs["additional_headers"]["X-Org-Id"] == "1"
     keepalive.assert_not_awaited()
     release.assert_not_awaited()
+
+
+def test_watch_preserves_terminal_epoch_without_relaying_private_fields() -> None:
+    client = TestClient(app)
+    upstream = _UpstreamContext()
+    stream_id = "00000000-0000-4000-8000-000000000001"
+    upstream.messages.put_nowait(
+        json.dumps(
+            {
+                "type": "invalidate",
+                "kind": "stream",
+                "state": "failed",
+                "reason": "producer_lost",
+                "stream_instance_id": stream_id,
+                "pin": "synthetic-private-value",
+                "data": {"unexpected": True},
+            }
+        )
+    )
+    with (
+        patch("app.routers.video_control.async_session", return_value=_DbContext()),
+        patch.object(iot_client, "service_token", "placeholder"),
+        patch("app.routers.video_control.websockets.connect", return_value=upstream),
+        client.websocket_connect(
+            WATCH_PATH, cookies={"accessToken": _viewer_token()}
+        ) as socket,
+    ):
+        assert socket.receive_json() == {"type": "invalidate"}
+        assert socket.receive_json() == {"type": "invalidate"}
+        assert socket.receive_json() == {
+            "type": "invalidate",
+            "stream": {
+                "state": "failed",
+                "reason": "producer_lost",
+                "stream_instance_id": stream_id,
+            },
+        }
