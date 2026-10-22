@@ -84,7 +84,11 @@ async def load_video_status(
     """Enrich an authorized lease snapshot via IoT's full video-state reader."""
     status = await iot.remote_input_status(sn, org_id=org_id, user=user)
     lease = status.get("lease") or {}
-    if not settings.video_contract_v2_enabled or not lease.get("lease_id"):
+    if (
+        not settings.video_contract_v2_enabled
+        or not lease.get("lease_id")
+        or lease.get("scope") == "view"
+    ):
         return status
     try:
         raw = await iot.remote_video_v2(
