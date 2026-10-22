@@ -1,5 +1,16 @@
 # l4media
 
+## 2026-10-22: HEVC server readiness
+
+G-SERVER-READY passed on the target MenuBuilder with a real1920×1080@20 camera
+through the existing proxy/TLS/L4RTP path: H.265 decoded frames, readable optical
+table, three authorized same-owner subscriptions, late join/detach, shared failure,
+no auto restart and stale-error isolation. Old agent/old request H.264 and new
+Auto fallback passed. Exact revisions/digests, runtime flag overrides, cleanup,
+rollback evidence and limits are in the
+[TASK-40 handoff](../tasks/completed/2026-10-22-hevc-task40-server-ready.md).
+Test camera exceptions are cleared; native hardware readiness remains TASK-50.
+
 ## 2026-10-11: lease-bounded media watchdog (deployed and verified)
 
 MenuBuilder forwards authoritative app1 lease_expires_at on media start/renew.

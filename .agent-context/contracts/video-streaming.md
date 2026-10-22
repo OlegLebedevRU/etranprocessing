@@ -66,4 +66,12 @@ RTP TLS valid). Это operator evidence, не измерение fresh-frame/de
 
 ## HEVC P0 — 2026-10-22
 
-Нормативный [contract 2.0.0](../../docs/etran_arch-hevc-contracts.md) и fixtures закрепляются в TASK-00. Новые v2 API/кодек пока не реализованы; существующие v1 paths не меняются. [Handoff](../tasks/active/2026-10-22-hevc-contracts-p0.md) отделяет offline evidence от runtime.
+Нормативный [contract 2.0.0](../../docs/etran_arch-hevc-contracts.md) и fixtures
+зафиксированы TASK-00. [P0 handoff](../tasks/active/2026-10-22-hevc-contracts-p0.md)
+содержит исходное offline evidence. Последующий
+[TASK-40 handoff](../tasks/completed/2026-10-22-hevc-task40-server-ready.md)
+фиксирует реальный deployed HEVC decode и H.264 regression. G0 неизменён;
+новые HTTP projection не являются MQTT READY. Publisher context читается по
+exact owner/session, terminal watch hints закрывают только совпадающий epoch;
+новый START и live state остаются REST-authoritative. Разрешение независимых
+viewer leases и native hardware probe серверной проверкой не расширялись.
