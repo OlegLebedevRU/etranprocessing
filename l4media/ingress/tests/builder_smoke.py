@@ -70,7 +70,7 @@ def main():
         mounts = []
         for filename in ("janus.jcfg", "janus.transport.http.jcfg", "janus.plugin.streaming.jcfg"):
             mounts += ["-v", f"{ROOT / 'l4media/janus' / filename}:/usr/local/etc/janus/{filename}:ro"]
-        janus = run("janus", "-p", "127.0.0.1::8088", "-e", f"JANUS_ADMIN_SECRET={secret}", *mounts, JANUS)
+        janus = run("janus", "-p", "127.0.0.1::8088", "-p", "127.0.0.1::7088", "-e", f"JANUS_ADMIN_SECRET={secret}", *mounts, JANUS)
         ingress = run("ingress", "-p", "127.0.0.1::9100", "-p", "127.0.0.1::9000", "-e", "JANUS_HOST=janus", "-e", f"JANUS_ADMIN_SECRET={secret}", "-e", f"L4MEDIA_SERVICE_TOKEN={token}", "-e", "L4MEDIA_HEVC_ENABLED=1", "-e", f"L4MEDIA_SOURCE_REVISION={revision}", "-e", "REDIS_URL=redis://redis:6379/2", image)
         base = f"http://127.0.0.1:{port(ingress, 9100)}"
         wait_ready(base, "/health")
@@ -79,6 +79,14 @@ def main():
             if caps["hevc_runtime_verified"]:
                 break
             time.sleep(1)
+        if not caps["hevc_runtime_verified"]:
+            admin = f"http://127.0.0.1:{port(janus, 7088)}"
+            def diagnostic(request):
+                response = http(admin, "/admin", {"janus":"message_plugin", "transaction":"diagnostic", "admin_secret":secret, "plugin":"janus.plugin.streaming", "request":request})
+                text = json.dumps(response).replace(secret, "REDACTED").replace(token, "REDACTED")
+                print("JANUS diagnostic:", text)
+            diagnostic({"request":"create", "type":"rtp", "id":1987654321, "audio":False, "video":True, "videoport":6300, "videortcpport":6301, "videopt":96, "videocodec":"h265", "videofmtp":"profile-space=0;profile-id=1;tier-flag=0;level-id=93;sprop-max-don-diff=0"})
+            diagnostic({"request":"info", "id":1987654321})
         assert caps["hevc_runtime_verified"] and caps["dependencies_ready"], caps
         http(base, "/api/v2/media/capabilities", expected=401)
         spec = http(base, "/api/v2/openapi.json")
