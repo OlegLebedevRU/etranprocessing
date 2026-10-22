@@ -141,7 +141,7 @@ static inline void media_redis_save_session(const char* session_id, const char* 
     if (!media_redis_ok() || !session_id || !session_id[0]) return;
     /* pin may be empty — use "-" so strtok-style parsers never collapse fields. */
     const char* pin_out = (pin && pin[0]) ? pin : "-";
-    char val[512];
+    char val[2048];
     snprintf(val, sizeof(val), "%s|%s|%s|%u|%u|%d|%d|%s|%d|%d|%ld|%ld|%ld",
              session_id ? session_id : "",
              operation_id ? operation_id : "",
@@ -215,8 +215,10 @@ static inline int media_redis_restore_sessions(media_redis_restore_fn fn, void* 
     int n = 0;
     for (size_t i = 0; i < r->elements; i++) {
         if (r->element[i]->type != REDIS_REPLY_STRING || !r->element[i]->str) continue;
-        char val[512];
+        char val[2048];
         if (!media_redis_get(r->element[i]->str, val, sizeof(val))) continue;
+        /* JSON v2 (including damaged/incomplete records) is never legacy H264. */
+        if (val[0] == '{' || val[0] == '[') continue;
 
         /* Split on '|' keeping empty fields (strtok_r would collapse "||"). */
         char* fields[13];

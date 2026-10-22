@@ -96,3 +96,7 @@ Python regression suite `tests/test_ingress_regression.py` (6 сценариев
 - Code references: l4media_ingress.c, ingress/Makefile, janus.jcfg, nginx.conf.
 - Актуализировано: 2026-09-11, реализация Шага 4, деплой на 87.242.100.34.
 - Обновить при: ingress protocol/routes, Janus/ICE, TLS trust boundary или deployment.
+
+## HEVC P0 — 2026-10-22
+
+[Media/siplite contract](../../docs/etran_arch-hevc-media-siplite-contract.md) фиксирует descriptor и совместимость. Это specification/offline evidence, не реализация /api/v2 и не подтверждение Janus HEVC runtime. [Handoff](../tasks/active/2026-10-22-hevc-contracts-p0.md).

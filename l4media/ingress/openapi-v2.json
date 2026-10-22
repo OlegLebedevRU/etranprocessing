@@ -1,0 +1,1507 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "l4media HEVC service API",
+    "version": "2.0.0"
+  },
+  "paths": {
+    "/api/v2/media/sessions/start": {
+      "post": {
+        "security": [
+          {
+            "ServiceTokenAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/media_start"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "media_response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/media_response"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "media_response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/media_response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rejection"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rejection"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rejection"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rejection"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rejection"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rejection"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rejection"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/media/sessions/stop": {
+      "post": {
+        "security": [
+          {
+            "ServiceTokenAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/media_stop"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "media_response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/media_response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rejection"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rejection"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rejection"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rejection"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rejection"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/media/sessions/renew": {
+      "post": {
+        "security": [
+          {
+            "ServiceTokenAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/media_renew"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "media_response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/media_response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rejection"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rejection"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rejection"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rejection"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rejection"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/media/capabilities": {
+      "get": {
+        "security": [
+          {
+            "ServiceTokenAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "media_capabilities",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/media_capabilities"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rejection"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rejection"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/media/sessions/{session_id}": {
+      "get": {
+        "security": [
+          {
+            "ServiceTokenAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sn",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9._-]+$"
+            }
+          },
+          {
+            "name": "lease_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "minLength": 36,
+              "maxLength": 36
+            }
+          },
+          {
+            "name": "stream_instance_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "minLength": 36,
+              "maxLength": 36
+            }
+          },
+          {
+            "name": "descriptor_revision",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "minLength": 36,
+              "maxLength": 36
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "media_health",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/media_health"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rejection"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rejection"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "rejection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/rejection"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "descriptor": {
+        "type": "object",
+        "properties": {
+          "descriptor_revision": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "source_type": {
+            "enum": [
+              "desktop",
+              "usb-camera",
+              "camera",
+              "test"
+            ]
+          },
+          "source_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 63
+          },
+          "geometry_generation": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "profile_id": {
+            "enum": [
+              "default",
+              "low"
+            ]
+          },
+          "tracks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/track"
+            },
+            "minItems": 1,
+            "maxItems": 1
+          }
+        },
+        "required": [
+          "descriptor_revision",
+          "source_type",
+          "source_id",
+          "geometry_generation",
+          "profile_id",
+          "tracks"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "profile_id": {
+                  "const": "low"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "tracks": {
+                  "items": {
+                    "properties": {
+                      "fps": {
+                        "maximum": 15
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "h264_track": {
+        "type": "object",
+        "properties": {
+          "track_id": {
+            "const": "video-main"
+          },
+          "kind": {
+            "const": "video"
+          },
+          "direction": {
+            "const": "producer_to_viewers"
+          },
+          "bit_depth": {
+            "const": 8
+          },
+          "chroma": {
+            "const": "420"
+          },
+          "clock_rate": {
+            "const": 90000
+          },
+          "payload_type": {
+            "type": "integer",
+            "minimum": 96,
+            "maximum": 127
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 1920,
+            "multipleOf": 2
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 1080,
+            "multipleOf": 2
+          },
+          "fps": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 25
+          },
+          "feedback": {
+            "type": "object",
+            "properties": {
+              "pli": {
+                "type": "boolean"
+              },
+              "fir": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "pli",
+              "fir"
+            ],
+            "additionalProperties": false
+          },
+          "max_b_frames": {
+            "const": 0
+          },
+          "keyframe_interval_ms": {
+            "type": "integer",
+            "minimum": 250,
+            "maximum": 5000
+          },
+          "repeat_parameter_sets": {
+            "const": true
+          },
+          "codec": {
+            "const": "h264"
+          },
+          "codec_profile": {
+            "const": "baseline"
+          },
+          "packetization": {
+            "const": "rfc6184"
+          },
+          "profile_level_id": {
+            "type": "string",
+            "pattern": "^42[0-9a-f]{4}$"
+          },
+          "packetization_mode": {
+            "const": 1
+          }
+        },
+        "required": [
+          "track_id",
+          "kind",
+          "direction",
+          "bit_depth",
+          "chroma",
+          "clock_rate",
+          "payload_type",
+          "width",
+          "height",
+          "fps",
+          "feedback",
+          "max_b_frames",
+          "keyframe_interval_ms",
+          "repeat_parameter_sets",
+          "codec",
+          "codec_profile",
+          "packetization",
+          "profile_level_id",
+          "packetization_mode"
+        ],
+        "additionalProperties": false
+      },
+      "h265_track": {
+        "type": "object",
+        "properties": {
+          "track_id": {
+            "const": "video-main"
+          },
+          "kind": {
+            "const": "video"
+          },
+          "direction": {
+            "const": "producer_to_viewers"
+          },
+          "bit_depth": {
+            "const": 8
+          },
+          "chroma": {
+            "const": "420"
+          },
+          "clock_rate": {
+            "const": 90000
+          },
+          "payload_type": {
+            "type": "integer",
+            "minimum": 96,
+            "maximum": 127
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 1920,
+            "multipleOf": 2
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 1080,
+            "multipleOf": 2
+          },
+          "fps": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 25
+          },
+          "feedback": {
+            "type": "object",
+            "properties": {
+              "pli": {
+                "type": "boolean"
+              },
+              "fir": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "pli",
+              "fir"
+            ],
+            "additionalProperties": false
+          },
+          "max_b_frames": {
+            "const": 0
+          },
+          "keyframe_interval_ms": {
+            "type": "integer",
+            "minimum": 250,
+            "maximum": 5000
+          },
+          "repeat_parameter_sets": {
+            "const": true
+          },
+          "codec": {
+            "const": "h265"
+          },
+          "codec_profile": {
+            "const": "main"
+          },
+          "packetization": {
+            "const": "rfc7798"
+          },
+          "profile_space": {
+            "const": 0
+          },
+          "profile_id": {
+            "const": 1
+          },
+          "tier_flag": {
+            "const": 0
+          },
+          "level_id": {
+            "enum": [
+              30,
+              60,
+              63,
+              90,
+              93,
+              120
+            ]
+          },
+          "sprop_max_don_diff": {
+            "const": 0
+          }
+        },
+        "required": [
+          "track_id",
+          "kind",
+          "direction",
+          "bit_depth",
+          "chroma",
+          "clock_rate",
+          "payload_type",
+          "width",
+          "height",
+          "fps",
+          "feedback",
+          "max_b_frames",
+          "keyframe_interval_ms",
+          "repeat_parameter_sets",
+          "codec",
+          "codec_profile",
+          "packetization",
+          "profile_space",
+          "profile_id",
+          "tier_flag",
+          "level_id",
+          "sprop_max_don_diff"
+        ],
+        "additionalProperties": false
+      },
+      "media_capabilities": {
+        "type": "object",
+        "properties": {
+          "contract_version": {
+            "const": 2
+          },
+          "media_contract_versions": {
+            "type": "array",
+            "items": {
+              "enum": [
+                1,
+                2
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 2,
+            "uniqueItems": true
+          },
+          "server_revision": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "dependencies_ready": {
+            "type": "boolean"
+          },
+          "hevc_runtime_verified": {
+            "type": "boolean"
+          },
+          "codecs": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "h264",
+                "h265"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 2,
+            "uniqueItems": true
+          },
+          "formats": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "codec": {
+                      "const": "h264"
+                    },
+                    "codec_profile": {
+                      "const": "baseline"
+                    },
+                    "packetization": {
+                      "const": "rfc6184"
+                    },
+                    "clock_rate": {
+                      "const": 90000
+                    }
+                  },
+                  "required": [
+                    "codec",
+                    "codec_profile",
+                    "packetization",
+                    "clock_rate"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "codec": {
+                      "const": "h265"
+                    },
+                    "codec_profile": {
+                      "const": "main"
+                    },
+                    "packetization": {
+                      "const": "rfc7798"
+                    },
+                    "clock_rate": {
+                      "const": 90000
+                    }
+                  },
+                  "required": [
+                    "codec",
+                    "codec_profile",
+                    "packetization",
+                    "clock_rate"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 2,
+            "uniqueItems": true
+          },
+          "max_video_tracks": {
+            "const": 1
+          },
+          "audio_supported": {
+            "const": false
+          },
+          "reverse_rtcp": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "contract_version",
+          "media_contract_versions",
+          "server_revision",
+          "dependencies_ready",
+          "hevc_runtime_verified",
+          "codecs",
+          "formats",
+          "max_video_tracks",
+          "audio_supported",
+          "reverse_rtcp"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "codecs": {
+                  "contains": {
+                    "const": "h265"
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "hevc_runtime_verified": {
+                  "const": true
+                },
+                "dependencies_ready": {
+                  "const": true
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "codecs": {
+                  "contains": {
+                    "const": "h264"
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "formats": {
+                  "contains": {
+                    "properties": {
+                      "codec": {
+                        "const": "h264"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "formats": {
+                  "contains": {
+                    "properties": {
+                      "codec": {
+                        "const": "h264"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "codecs": {
+                  "contains": {
+                    "const": "h264"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "codecs": {
+                  "contains": {
+                    "const": "h265"
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "formats": {
+                  "contains": {
+                    "properties": {
+                      "codec": {
+                        "const": "h265"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "formats": {
+                  "contains": {
+                    "properties": {
+                      "codec": {
+                        "const": "h265"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "codecs": {
+                  "contains": {
+                    "const": "h265"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "media_health": {
+        "type": "object",
+        "properties": {
+          "contract_version": {
+            "const": 2
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "stream_instance_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "route_generation": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "state": {
+            "enum": [
+              "starting",
+              "active",
+              "stopped",
+              "failed"
+            ]
+          },
+          "descriptor": {
+            "$ref": "#/components/schemas/descriptor"
+          },
+          "publisher": {
+            "type": "object",
+            "properties": {
+              "sn": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9._-]+$"
+              },
+              "stream_instance_id": {
+                "type": "string",
+                "format": "uuid",
+                "minLength": 36,
+                "maxLength": 36
+              }
+            },
+            "required": [
+              "sn",
+              "stream_instance_id"
+            ],
+            "additionalProperties": false
+          },
+          "lease_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "mountpoint_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "rtp_port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "rtcp_port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "janus_ws": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^/"
+          },
+          "pin": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "transport": {
+            "type": "object",
+            "properties": {
+              "connected": {
+                "type": "boolean"
+              },
+              "rtp_packets": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "bytes": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "last_rtp_at_ms": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5000000000000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "rtp_fresh": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "connected",
+              "rtp_packets",
+              "bytes",
+              "last_rtp_at_ms",
+              "rtp_fresh"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "contract_version",
+          "session_id",
+          "stream_instance_id",
+          "route_generation",
+          "state",
+          "descriptor",
+          "publisher",
+          "lease_id",
+          "operation_id",
+          "mountpoint_id",
+          "rtp_port",
+          "rtcp_port",
+          "janus_ws",
+          "transport"
+        ],
+        "additionalProperties": false
+      },
+      "media_renew": {
+        "type": "object",
+        "properties": {
+          "contract_version": {
+            "const": 2
+          },
+          "sn": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9._-]+$"
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "lease_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "stream_instance_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "descriptor_revision": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "lease_expires_at": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000000000
+          }
+        },
+        "required": [
+          "contract_version",
+          "sn",
+          "session_id",
+          "lease_id",
+          "stream_instance_id",
+          "descriptor_revision",
+          "lease_expires_at"
+        ],
+        "additionalProperties": false
+      },
+      "media_response": {
+        "type": "object",
+        "properties": {
+          "contract_version": {
+            "const": 2
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "stream_instance_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "route_generation": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "state": {
+            "enum": [
+              "starting",
+              "active",
+              "stopped",
+              "failed"
+            ]
+          },
+          "descriptor": {
+            "$ref": "#/components/schemas/descriptor"
+          },
+          "publisher": {
+            "type": "object",
+            "properties": {
+              "sn": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9._-]+$"
+              },
+              "stream_instance_id": {
+                "type": "string",
+                "format": "uuid",
+                "minLength": 36,
+                "maxLength": 36
+              }
+            },
+            "required": [
+              "sn",
+              "stream_instance_id"
+            ],
+            "additionalProperties": false
+          },
+          "lease_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "mountpoint_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "rtp_port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "rtcp_port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "janus_ws": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^/"
+          },
+          "pin": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "contract_version",
+          "session_id",
+          "stream_instance_id",
+          "route_generation",
+          "state",
+          "descriptor",
+          "publisher",
+          "lease_id",
+          "operation_id",
+          "mountpoint_id",
+          "rtp_port",
+          "rtcp_port",
+          "janus_ws"
+        ],
+        "additionalProperties": false
+      },
+      "media_start": {
+        "type": "object",
+        "properties": {
+          "contract_version": {
+            "const": 2
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "publisher": {
+            "type": "object",
+            "properties": {
+              "sn": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9._-]+$"
+              },
+              "stream_instance_id": {
+                "type": "string",
+                "format": "uuid",
+                "minLength": 36,
+                "maxLength": 36
+              }
+            },
+            "required": [
+              "sn",
+              "stream_instance_id"
+            ],
+            "additionalProperties": false
+          },
+          "lease_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "lease_expires_at": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000000000
+          },
+          "descriptor": {
+            "$ref": "#/components/schemas/descriptor"
+          },
+          "pin": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "contract_version",
+          "session_id",
+          "operation_id",
+          "publisher",
+          "lease_id",
+          "lease_expires_at",
+          "descriptor"
+        ],
+        "additionalProperties": false
+      },
+      "media_stop": {
+        "type": "object",
+        "properties": {
+          "contract_version": {
+            "const": 2
+          },
+          "sn": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9._-]+$"
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "lease_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "stream_instance_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "descriptor_revision": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 96
+          }
+        },
+        "required": [
+          "contract_version",
+          "sn",
+          "session_id",
+          "lease_id",
+          "stream_instance_id",
+          "descriptor_revision",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "rejection": {
+        "type": "object",
+        "properties": {
+          "contract_version": {
+            "const": 2
+          },
+          "code": {
+            "enum": [
+              "invalid_payload",
+              "unauthorized",
+              "forbidden",
+              "lease_invalid",
+              "lease_mismatch",
+              "expired",
+              "stale_capability",
+              "capability_mismatch",
+              "unsupported",
+              "codec_mismatch",
+              "descriptor_mismatch",
+              "conflict",
+              "busy",
+              "producer_lost",
+              "janus_unavailable",
+              "capacity_exhausted"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          }
+        },
+        "required": [
+          "contract_version",
+          "code",
+          "message"
+        ],
+        "additionalProperties": false
+      },
+      "track": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/h264_track"
+          },
+          {
+            "$ref": "#/components/schemas/h265_track"
+          }
+        ]
+      }
+    },
+    "securitySchemes": {
+      "ServiceTokenAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Media-Service-Token"
+      },
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

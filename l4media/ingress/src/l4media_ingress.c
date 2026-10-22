@@ -43,7 +43,7 @@
 #define RX_BUFFER_SIZE            (128 * 1024)   /* 128 KB buffer per client */
 #define FEEDBACK_QUEUE_SIZE       (128 * 1024)
 #define FEEDBACK_BATCH_LIMIT      32
-#define HTTP_REQ_BUFFER_SIZE      8192
+#define HTTP_REQ_BUFFER_SIZE      (40 * 1024)
 #define HTTP_RESP_BUFFER_SIZE     (64 * 1024)    /* 64 KB response buffer */
 #define CLIENT_IDLE_TIMEOUT_SEC   120            /* Reap clients idle for >2 min */
 #define RTP_STALE_DEADLINE_SEC    10             /* Threshold for media freshness */
@@ -95,6 +95,8 @@ typedef struct {
     size_t tx_off;
     size_t tx_first_end;
     uint64_t feedback_dropped;
+    uint64_t keyframe_feedback_at_ms;
+    unsigned keyframe_feedback_interval_ms; /* v2 publisher only; legacy is unchanged */
 
     /* Metrics & Time tracking */
     uint64_t rtp_packets;
@@ -188,6 +190,8 @@ static bool update_feedback_interest(IngressClient* c) {
 }
 
 static void reset_feedback(IngressClient* c) {
+    c->keyframe_feedback_at_ms = 0;
+    c->keyframe_feedback_interval_ms = 0;
     if (c->rtcp_fd >= 0) {
         epoll_ctl(g_epoll_fd, EPOLL_CTL_DEL, c->rtcp_fd, NULL);
         close(c->rtcp_fd);
@@ -259,6 +263,24 @@ static bool flush_feedback(IngressClient* c) {
     return update_feedback_interest(c);
 }
 
+static size_t coalesce_feedback(IngressClient* c, uint8_t* packet, size_t length, uint64_t now_ms) {
+    if (!c->keyframe_feedback_interval_ms) return length;
+    size_t read_at = 0, written = 0;
+    while (read_at < length) {
+        size_t bytes = ((((size_t)packet[read_at + 2] << 8) | packet[read_at + 3]) + 1) * 4;
+        unsigned fmt = packet[read_at] & 31;
+        bool keyframe = packet[read_at + 1] == 206 && (fmt == 1 || fmt == 4);
+        bool limited = keyframe && c->keyframe_feedback_at_ms &&
+            now_ms - c->keyframe_feedback_at_ms < c->keyframe_feedback_interval_ms;
+        if (!limited) {
+            memmove(packet + written, packet + read_at, bytes); written += bytes;
+            if (keyframe) c->keyframe_feedback_at_ms = now_ms;
+        } else c->feedback_dropped++;
+        read_at += bytes;
+    }
+    return written;
+}
+
 static bool receive_feedback(IngressClient* c) {
     uint8_t packet[MAX_RTP_PAYLOAD_SIZE];
     for (int i = 0; i < FEEDBACK_BATCH_LIMIT; i++) {
@@ -273,6 +295,10 @@ static bool receive_feedback(IngressClient* c) {
             c->feedback_dropped++;
             continue;
         }
+        struct timespec clock_now; clock_gettime(CLOCK_MONOTONIC, &clock_now);
+        n = (ssize_t)coalesce_feedback(c, packet, (size_t)n,
+            (uint64_t)clock_now.tv_sec * 1000 + (uint64_t)clock_now.tv_nsec / 1000000);
+        if (!n) continue;
         uint8_t* out = c->tx_buf + c->tx_len;
         out[0] = L4RTP_FRAME_RTCP;
         out[1] = 0;
@@ -597,6 +623,8 @@ static void process_ingress_data(int epoll_fd, IngressClient* c) {
 
             /* Route lookup */
             const RouteEntry* route = find_route(c->sn);
+            MediaSession* media_owner = find_active_session_for_sn(c->sn);
+            c->keyframe_feedback_interval_ms = media_owner && media_owner->contract_version == 2 ? 500 : 0;
             if (route) {
                 c->rtp_port = route->rtp_port;
                 c->rtcp_port = route->rtcp_port;
@@ -657,6 +685,11 @@ static void process_ingress_data(int epoll_fd, IngressClient* c) {
                                (struct sockaddr*)&c->rtp_target, sizeof(c->rtp_target));
                         c->rtp_packets++;
                         c->total_bytes += payload_len;
+                        MediaSession* active = find_active_session_for_sn(c->sn);
+                        if (active && active->contract_version == 2 && active->state == MEDIA_STATE_STARTING) {
+                            active->state = MEDIA_STATE_ACTIVE;
+                            mv_persist(active);
+                        }
                     } else {
                         c->unrouted_packets++;
                     }
@@ -818,6 +851,12 @@ static size_t format_session_json(char* buf, size_t buf_size, const IngressClien
 }
 
 /* HTTP Control API on port 9100 */
+static void reject_control_framing(int fd) {
+    const char* response = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+    (void)send(fd, response, strlen(response), MSG_NOSIGNAL);
+    close(fd);
+}
+
 static void handle_control_request(int client_fd) {
     /* Set socket timeout to prevent slowloris hang */
     struct timeval tv;
@@ -834,6 +873,15 @@ static void handle_control_request(int client_fd) {
     }
     req_buf[n] = '\0';
 
+    /* Headers may span TCP reads; reject incomplete/oversized framing rather
+     * than interpreting a truncated prefix as an authenticated JSON command. */
+    while (!strstr(req_buf, "\r\n\r\n") && !strstr(req_buf, "\n\n")) {
+        if (n >= 8192) { reject_control_framing(client_fd); return; }
+        ssize_t more = recv(client_fd, req_buf + n, sizeof(req_buf) - 1 - (size_t)n, 0);
+        if (more <= 0) { reject_control_framing(client_fd); return; }
+        n += more; req_buf[n] = 0;
+    }
+
     /* Parse headers boundary and check Content-Length to read full body */
     const char* hdr_end = strstr(req_buf, "\r\n\r\n");
     int header_len = 0;
@@ -849,7 +897,18 @@ static void handle_control_request(int client_fd) {
     if (cl_hdr) {
         cl_hdr += 15;
         while (*cl_hdr == ' ' || *cl_hdr == '\t') cl_hdr++;
-        content_len = atoi(cl_hdr);
+        char* end = NULL; errno = 0;
+        long parsed = strtol(cl_hdr, &end, 10);
+        while (*end == ' ' || *end == '\t') end++;
+        if (errno || end == cl_hdr || (*end != '\r' && *end != '\n') || parsed < 0 || parsed > MEDIA_V2_BODY_LIMIT) {
+            reject_control_framing(client_fd); return;
+        }
+        content_len = (int)parsed;
+    }
+    const char* duplicate = cl_hdr ? strcasestr(cl_hdr, "Content-Length:") : NULL;
+    const char* transfer = strcasestr(req_buf, "Transfer-Encoding:");
+    if ((duplicate && duplicate < req_buf + header_len) || (transfer && transfer < req_buf + header_len)) {
+        reject_control_framing(client_fd); return;
     }
 
     if (header_len > 0 && content_len > 0) {
@@ -863,9 +922,13 @@ static void handle_control_request(int client_fd) {
         }
     }
 
+    if (n - header_len != content_len || memchr(req_buf, '\0', (size_t)n)) {
+        reject_control_framing(client_fd); return;
+    }
+
     char method[16] = {0};
-    char path[256] = {0};
-    sscanf(req_buf, "%15s %255s", method, path);
+    char path[2048] = {0};
+    sscanf(req_buf, "%15s %2047s", method, path);
 
     const char* body = strstr(req_buf, "\r\n\r\n");
     if (body) {
@@ -1051,12 +1114,34 @@ static void handle_control_request(int client_fd) {
     else if (strcmp(method, "GET") == 0 && strcmp(path, "/api/v1/openapi.json") == 0) {
         handle_openapi_spec(resp_body, HTTP_RESP_BUFFER_SIZE, &status_code, &status_text);
     }
+    else if (strcmp(method, "GET") == 0 && strcmp(path, "/api/v2/openapi.json") == 0) {
+        FILE* spec = fopen("/etc/l4media/openapi-v2.json", "r");
+        if (!spec) { status_code = 503; status_text = "Service Unavailable"; }
+        else {
+            size_t n = fread(resp_body, 1, HTTP_RESP_BUFFER_SIZE - 1, spec);
+            resp_body[n] = 0;
+            if (fgetc(spec) != EOF) { status_code = 503; status_text = "Service Unavailable"; resp_body[0] = 0; }
+            fclose(spec);
+        }
+    }
+    else if (strncmp(path, "/api/v2/media/", 14) == 0) {
+        if (!check_service_auth(req_buf)) mv_error("unauthorized", 401, resp_body, HTTP_RESP_BUFFER_SIZE, &status_code);
+        else media_v2_http(method, path, body, resp_body, HTTP_RESP_BUFFER_SIZE, &status_code);
+        status_text = status_code == 200 ? "OK" : status_code == 201 ? "Created" :
+            status_code == 400 ? "Bad Request" : status_code == 401 ? "Unauthorized" :
+            status_code == 409 ? "Conflict" : status_code == 410 ? "Gone" :
+            status_code == 422 ? "Unprocessable Entity" : status_code == 502 ? "Bad Gateway" : "Service Unavailable";
+    }
     else if (strncmp(path, "/api/v1/media/", 14) == 0) {
         if (!check_service_auth(req_buf)) {
             status_code = 401;
             status_text = "Unauthorized";
             snprintf(resp_body, HTTP_RESP_BUFFER_SIZE,
                      "{\"error\":\"unauthorized\",\"detail\":\"Invalid or missing service authentication token\"}\n");
+        }
+        else if (media_v1_conflicts(path, body)) {
+            status_code = 409; status_text = "Conflict";
+            snprintf(resp_body, HTTP_RESP_BUFFER_SIZE, "{\"error\":\"session_busy\"}\n");
         }
         else if (strcmp(method, "POST") == 0 && strcmp(path, "/api/v1/media/sessions/start") == 0) {
             handle_media_session_start(body, resp_body, HTTP_RESP_BUFFER_SIZE, &status_code, &status_text);
@@ -1196,6 +1281,10 @@ int main(int argc, char* argv[]) {
     printf("[INGRESS] Target Janus host: %s\n", g_janus_host);
     printf("[INGRESS] Routes file: %s\n", g_routes_file);
 
+    if (!media_schema_load("/etc/l4media/hevc.schema.json"))
+        fprintf(stderr, "[INGRESS] v2 contract schema unavailable; v2 requests fail closed\n");
+    const char* hevc_enabled = getenv("L4MEDIA_HEVC_ENABLED");
+    g_media_hevc_enabled = hevc_enabled && !strcmp(hevc_enabled, "1");
     resolve_janus_host();
     load_routes(g_routes_file);
     media_redis_bootstrap();
@@ -1263,7 +1352,7 @@ int main(int argc, char* argv[]) {
         /* Check media sessions TTL expiration */
         for (int i = 0; i < g_media_session_count; i++) {
             MediaSession* ms = &g_media_sessions[i];
-            if (ms->state == MEDIA_STATE_ACTIVE && ms->ttl_sec > 0) {
+            if ((ms->state == MEDIA_STATE_ACTIVE || ms->state == MEDIA_STATE_STARTING) && ms->ttl_sec > 0) {
                 if (now - (ms->renewed_at ? ms->renewed_at : ms->started_at) >= ms->ttl_sec) {
                     printf("[INGRESS TTL] Media session %s (SN: %s) expired after %d seconds TTL\n",
                            ms->session_id, ms->sn, ms->ttl_sec);

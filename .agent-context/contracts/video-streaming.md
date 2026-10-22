@@ -63,3 +63,7 @@ RTP TLS valid). Это operator evidence, не измерение fresh-frame/de
 - Code references: точки входа выше; media plane не аудитировался.
 - Проверено: 2026-09-11, HEAD `63ce6a7`, документальная карточка.
 - Обновить при: media framing, codec, session/PIN, routing/signaling или telemetry.
+
+## HEVC P0 — 2026-10-22
+
+Нормативный [contract 2.0.0](../../docs/etran_arch-hevc-contracts.md) и fixtures закрепляются в TASK-00. Новые v2 API/кодек пока не реализованы; существующие v1 paths не меняются. [Handoff](../tasks/active/2026-10-22-hevc-contracts-p0.md) отделяет offline evidence от runtime.

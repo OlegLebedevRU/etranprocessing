@@ -70,3 +70,5 @@ SSH host verification или обязательный readiness. Legacy-навы
   Устаревшую карточку пометь явно; безопасность не ослабляй по старому тексту.
 - [Active packets](tasks/active/README.md) и [completed handoffs](tasks/completed/README.md)
   хранят краткие результаты; длинные исторические отчёты — в docs/history.
+
+- [HEVC contract 2.0.0](../docs/etran_arch-hevc-contracts.md) — TASK-00 schemas/fixtures, без product implementation или deploy.
