@@ -21,6 +21,7 @@ from fastapi import (
 )
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import JSONResponse
 
 from app.auth import (
     decode_token,
@@ -38,6 +39,7 @@ from app.routers.video import (
     _mountpoint_pins,
     _verify_device_access,
     clear_mountpoint_pin,
+    create_video_session,
     set_mountpoint_stream_instance,
 )
 from app.security.permissions import (
@@ -58,6 +60,12 @@ from app.services.remote_session_metering import (
     initial_metering_cursor,
 )
 from app.services.remote_session_policy import get_remote_session_policy
+from app.services.video_contract import (
+    VideoContractOrchestrator,
+    make_stop_command,
+    media_identity,
+    stream_descriptor,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -210,6 +218,7 @@ class KeepaliveRequest(BaseModel):
 
 
 class StreamStartRequest(BaseModel):
+    codec_policy: Literal["auto", "h264", "h265"] | None = None
     mode: Literal["desktop", "usb-camera"]
     source_id: str
     profile: str = "default"
@@ -799,6 +808,9 @@ async def change_device_control_scope(
 async def get_device_inventory(
     device_id: int,
     refresh: int = Query(0, ge=0, le=1),
+    contract_version: Literal[2] | None = Query(None),
+    source_id: str = Query("", max_length=63),
+    profile_id: Literal["low", "default"] = Query("low"),
     user: dict[str, Any] = Depends(require_permission(PERMISSION_VIDEO_VIEW)),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
@@ -872,7 +884,19 @@ async def get_device_inventory(
         if "camera_id" not in c and "id" in c:
             c["camera_id"] = str(c["id"])
 
-    return {"displays": displays, "cameras": cameras}
+    result: dict[str, Any] = {"displays": displays, "cameras": cameras}
+    if contract_version == 2:
+        selected = source_id or str(
+            (displays[0] if displays else {}).get("desktop_id") or ""
+        )
+        available = await VideoContractOrchestrator(
+            iot_client, media_orchestrator_client
+        ).availability(terminal.sn, selected, profile_id, org_id, user)
+        result["video_codecs"] = {
+            "hevc_available": available["hevc_available"],
+            "reason_code": available["reason_code"],
+        }
+    return result
 
 
 @router.post(
@@ -885,7 +909,7 @@ async def start_device_stream(
     body: StreamStartRequest,
     user: dict[str, Any] = Depends(require_operator_user),
     db: AsyncSession = Depends(get_db),
-) -> StreamStartResponse:
+) -> StreamStartResponse | JSONResponse:
     """Start or switch media stream on terminal (requires stream lease)."""
     terminal = await _verify_device_access(device_id, user, db, require_active=True)
     org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
@@ -961,14 +985,40 @@ async def start_device_stream(
                 if resolved_id:
                     source_id = resolved_id
 
-    try:
-        res = await iot_client.remote_input_stream_start(
+    extended = None
+    prepared = None
+    if body.codec_policy is not None:
+        current = await iot_client.remote_input_status(
+            terminal.sn, org_id=org_id, user=user
+        )
+        extended = await VideoContractOrchestrator(
+            iot_client, media_orchestrator_client
+        ).start(
+            sn=terminal.sn,
             lease_id=lease_id,
+            policy=body.codec_policy,
             mode=body.mode,
             source_id=source_id,
-            profile=body.profile,
+            profile_id=body.profile,
+            status=current,
             org_id=org_id,
             user=user,
+        )
+        if extended is None:
+            # New H264 requests keep the existing route-before-start adapter.
+            prepared = await create_video_session(device_id, user=user, db=db)
+    try:
+        res = (
+            extended
+            if extended is not None
+            else await iot_client.remote_input_stream_start(
+                lease_id=lease_id,
+                mode=body.mode,
+                source_id=source_id,
+                profile=body.profile,
+                org_id=org_id,
+                user=user,
+            )
         )
         stream_inst_id = str(res.get("stream_instance_id", ""))
         if stream_inst_id:
@@ -993,7 +1043,9 @@ async def start_device_stream(
                 session = await repo.create_remote_session(
                     tenant_id=terminal.org_id,
                     terminal_id=terminal.id,
-                    operation_id=f"op-stream-{stream_inst_id}",
+                    operation_id=f"op-stream-v2-{stream_inst_id}"
+                    if extended
+                    else f"op-stream-{stream_inst_id}",
                     correlation_id=f"corr-stream-{stream_inst_id}",
                     session_type="video",
                     requested_by_user_id=user_db_id,
@@ -1008,11 +1060,39 @@ async def start_device_stream(
                 # epoch keeps its metering cursor and takes the new stream id.
                 active_sess.provider_session_id = stream_inst_id
                 await db.commit()
-        return StreamStartResponse(
+        response = StreamStartResponse(
             stream_instance_id=stream_inst_id,
             result=str(res.get("result", "")),
             state=res.get("state"),
         )
+        if body.codec_policy is not None:
+            payload = response.model_dump()
+            payload["resolved_codec"] = (
+                extended["resolved_codec"] if extended else "h264"
+            )
+            if extended:
+                payload["descriptor"] = extended["descriptor"]
+                raw_media = extended["media"]
+                payload["media"] = {
+                    "mountpoint_id": raw_media["mountpoint_id"],
+                    "sn": terminal.sn,
+                    "janus_ws": raw_media["janus_ws"],
+                    "pin": raw_media["pin"],
+                    "session_ttl_sec": 600,
+                    "stream_instance_id": stream_inst_id,
+                    "descriptor": extended["descriptor"],
+                }
+            elif prepared:
+                prepared_payload = (
+                    json.loads(bytes(prepared.body))
+                    if isinstance(prepared, JSONResponse)
+                    else prepared.model_dump()
+                )
+                payload["media"] = dict(
+                    prepared_payload, stream_instance_id=stream_inst_id
+                )
+            return JSONResponse(payload)
+        return response
     except HTTPException as exc:
         err_detail = (
             str(exc.detail)
@@ -1021,7 +1101,11 @@ async def start_device_stream(
             if isinstance(exc.detail, dict)
             else ""
         )
-        if exc.status_code == status.HTTP_409_CONFLICT and "unsupported" in err_detail:
+        if (
+            extended is None
+            and exc.status_code == status.HTTP_409_CONFLICT
+            and "unsupported" in err_detail
+        ):
             logger.warning(
                 "Terminal %s stream_start not supported by agent (%s), proceeding in legacy streaming mode",
                 terminal.sn,
@@ -1040,11 +1124,38 @@ async def start_device_stream(
         # Stop that stream so it cannot continue without a billing record.
         logger.exception("Local video session persistence failed for %s", terminal.sn)
         try:
-            await iot_client.remote_input_stream_stop(
-                lease_id=lease_id,
-                org_id=org_id,
-                user=user,
-            )
+            if extended:
+                snapshot = await iot_client.remote_input_status(
+                    terminal.sn, org_id=org_id, user=user
+                )
+                stop = make_stop_command(terminal.sn, lease_id, snapshot)
+                if (
+                    stop
+                    and stop["stream_instance_id"] == extended["stream_instance_id"]
+                ):
+                    await iot_client.remote_video_v2(
+                        terminal.sn,
+                        "stop",
+                        payload=stop,
+                        lease_id=lease_id,
+                        org_id=org_id,
+                        user=user,
+                    )
+                identity = media_identity(
+                    terminal.sn,
+                    lease_id,
+                    extended["stream_instance_id"],
+                    extended["descriptor"],
+                )
+                await media_orchestrator_client.video_v2(
+                    "stop", dict(identity, reason="persistence_failed")
+                )
+            else:
+                await iot_client.remote_input_stream_stop(
+                    lease_id=lease_id,
+                    org_id=org_id,
+                    user=user,
+                )
         except Exception:
             logger.exception("Compensating video stop failed for %s", terminal.sn)
         raise
@@ -1096,12 +1207,20 @@ async def stop_device_stream(
     active_before = await L4DeskRepository(db).get_active_session_by_terminal_id(
         terminal.id
     )
-    if isinstance(active_before, L4DeskRemoteSession) and status_data is None:
+    if (
+        isinstance(active_before, L4DeskRemoteSession)
+        or settings.video_contract_v2_enabled
+    ) and status_data is None:
         try:
             status_data = await iot_client.remote_input_status(
                 terminal.sn, org_id=org_id, user=user
             )
         except HTTPException:
+            if settings.video_contract_v2_enabled or (
+                active_before
+                and str(active_before.operation_id).startswith("op-stream-v2-")
+            ):
+                raise
             logger.warning(
                 "Could not verify provider epoch before video stop for %s", terminal.sn
             )
@@ -1123,12 +1242,23 @@ async def stop_device_stream(
         and active_before.provider_session_id == provider_stream_id
     )
 
+    v2_stop = make_stop_command(terminal.sn, lease_id, status_data or {})
     try:
-        res = await iot_client.remote_input_stream_stop(
-            lease_id=lease_id,
-            org_id=org_id,
-            user=user,
-        )
+        if v2_stop is not None:
+            res = await iot_client.remote_video_v2(
+                terminal.sn,
+                "stop",
+                payload=v2_stop,
+                lease_id=lease_id,
+                org_id=org_id,
+                user=user,
+            )
+        else:
+            res = await iot_client.remote_input_stream_stop(
+                lease_id=lease_id,
+                org_id=org_id,
+                user=user,
+            )
         stop_confirmed_at = datetime.now(UTC)
         clear_mountpoint_pin(device_id, lease_id=lease_id)
         if body and body.destroy_mountpoint:
@@ -1163,7 +1293,17 @@ async def stop_device_stream(
             and active_sess.session_type == "video"
             else None
         )
-        await _stop_active_media_session(terminal.sn, lease_id, stream_instance_id)
+        if v2_stop is not None:
+            descriptor = stream_descriptor(status_data or {})
+            assert descriptor is not None
+            identity = media_identity(
+                terminal.sn, lease_id, v2_stop["stream_instance_id"], descriptor
+            )
+            await media_orchestrator_client.video_v2(
+                "stop", dict(identity, reason="publisher_stopped")
+            )
+        else:
+            await _stop_active_media_session(terminal.sn, lease_id, stream_instance_id)
         return StreamStopResponse(result=str(res.get("result", "stopped")))
     except HTTPException as exc:
         err_detail = (
@@ -1188,11 +1328,14 @@ async def stop_device_stream(
             c in err_detail
             for c in ("owner", "tenant", "epoch", "session", "instance", "mode")
         )
-        if (exc.status_code == status.HTTP_409_CONFLICT and is_known_stopped) or (
-            exc.status_code == status.HTTP_504_GATEWAY_TIMEOUT
-            and any(
-                c in err_detail
-                for c in ("unsupported", "terminal_timeout", "already", "no active")
+        if v2_stop is None and (
+            (exc.status_code == status.HTTP_409_CONFLICT and is_known_stopped)
+            or (
+                exc.status_code == status.HTTP_504_GATEWAY_TIMEOUT
+                and any(
+                    c in err_detail
+                    for c in ("unsupported", "terminal_timeout", "already", "no active")
+                )
             )
         ):
             clear_mountpoint_pin(device_id, lease_id=lease_id)
@@ -1297,12 +1440,41 @@ async def keepalive_device_control_lease(
             and active_session.provider_session_id
             == str(result.get("stream_instance_id") or "")
         ):
-            await media_orchestrator_client.renew_session(
-                sn=terminal.sn,
-                lease_id=body.lease_id,
-                stream_instance_id=str(result.get("stream_instance_id") or "") or None,
-                lease_expires_at=media_lease_deadline(result.get("expires_at")),
-            )
+            provider_status = None
+            if settings.video_contract_v2_enabled or str(
+                active_session.operation_id or ""
+            ).startswith("op-stream-v2-"):
+                provider_status = await iot_client.remote_input_status(
+                    terminal.sn, org_id=org_id, user=user
+                )
+            descriptor = stream_descriptor(provider_status or {})
+            if descriptor is not None:
+                current_stream = str(
+                    ((provider_status or {}).get("agent") or {})
+                    .get("stream", {})
+                    .get("stream_instance_id")
+                    or ""
+                )
+                if current_stream != str(result.get("stream_instance_id") or ""):
+                    raise HTTPException(409, detail={"code": "stream_mismatch"})
+                identity = media_identity(
+                    terminal.sn, body.lease_id, current_stream, descriptor
+                )
+                await media_orchestrator_client.video_v2(
+                    "renew",
+                    dict(
+                        identity,
+                        lease_expires_at=media_lease_deadline(result.get("expires_at")),
+                    ),
+                )
+            else:
+                await media_orchestrator_client.renew_session(
+                    sn=terminal.sn,
+                    lease_id=body.lease_id,
+                    stream_instance_id=str(result.get("stream_instance_id") or "")
+                    or None,
+                    lease_expires_at=media_lease_deadline(result.get("expires_at")),
+                )
         provider_id = (
             str(result.get("stream_instance_id") or "")
             if isinstance(active_session, L4DeskRemoteSession)

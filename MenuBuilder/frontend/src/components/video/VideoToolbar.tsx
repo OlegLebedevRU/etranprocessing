@@ -8,7 +8,7 @@ import {
   SettingOutlined,
 } from "@ant-design/icons";
 import type { DeviceListItem } from "../../api/devices";
-import type { DeviceInventory } from "../../api/video";
+import type { CodecPolicy, DeviceInventory } from "../../api/video";
 import { getCameraName, getDisplayName } from "./SourceSelector";
 import {
   RemoteControlPanel,
@@ -24,6 +24,9 @@ interface VideoToolbarProps {
   inventory: DeviceInventory | null;
   source: string;
   profile: string;
+  codecPolicy?: CodecPolicy;
+  onCodecPolicy?: (value: CodecPolicy) => void;
+  activeCodec?: string;
   onSource: (value: string) => void;
   onProfile: (value: string) => void;
   loadingInventory: boolean;
@@ -82,6 +85,25 @@ export function VideoToolbar(props: VideoToolbarProps) {
           style={{ width: "100%" }}
         />
       </label>}
+      {!props.cameraOnly && operator && <label>
+        Кодек общего потока
+        <Select<CodecPolicy>
+          aria-label="Кодек общего потока"
+          value={props.codecPolicy || "auto"}
+          onChange={props.onCodecPolicy}
+          disabled={active}
+          style={{ width: "100%" }}
+          options={[
+            { value: "auto", label: "Auto" },
+            { value: "h264", label: "H.264" },
+            { value: "h265", label: "H.265", disabled: !inventory?.video_codecs?.hevc_available },
+          ]}
+        />
+        {!inventory?.video_codecs?.hevc_available && <Typography.Text type="secondary">
+          H.265 недоступен: {inventory?.video_codecs?.reason_code || "capability_unavailable"}
+        </Typography.Text>}
+      </label>}
+      {props.activeCodec && <Typography.Text>Общий поток: {props.activeCodec === "h265" ? "H.265" : "H.264"}</Typography.Text>}
       <label>
         Масштаб{" "}
         <Segmented

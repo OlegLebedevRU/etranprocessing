@@ -17,6 +17,7 @@ dependencies = [
     "etranprocessing-db==0.1.1",
     "etranprocessing-gauge",
     "etranprocessing-access==0.1.0",
+    "jsonschema==4.26.0",
 ]
 
 [tool.pytest.ini_options]

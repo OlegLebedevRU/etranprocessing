@@ -11,11 +11,12 @@ export interface SessionConfig {
   leaseId: string;
   streamInstanceId: string;
   keepaliveIntervalMs?: number;
+  publisherOwned?: boolean;
 }
 
 export interface SessionCallbacks {
   onKeepaliveRequest: (deviceId: number, leaseId: string) => Promise<void>;
-  onReleaseRequest: (deviceId: number, leaseId: string) => Promise<void>;
+  onReleaseRequest: (deviceId: number, leaseId: string, publisherOwned?: boolean) => Promise<void>;
   onScopeChangeRequest?: (deviceId: number, scope: "stream" | "input") => Promise<void>;
   onSessionTerminated: (reason: string, details?: { code?: string; status?: number }) => void;
   onLeaseLost: (status: number, message: string) => void;
@@ -25,6 +26,7 @@ export interface StreamStateEvent {
   state?: string;
   reason?: string;
   stream_instance_id?: string;
+  error?: { code?: string; codec?: string; current_stream_terminated?: boolean; auto_restart_allowed?: boolean };
 }
 
 export class SessionLifecycleCoordinator {
@@ -75,7 +77,9 @@ export class SessionLifecycleCoordinator {
     this.isTearingDown = false;
     this.consecutiveFailures = 0;
 
-    this.scheduleNextKeepalive(epoch, config.keepaliveIntervalMs ?? this.defaultIntervalMs);
+    if (config.publisherOwned !== false) {
+      this.scheduleNextKeepalive(epoch, config.keepaliveIntervalMs ?? this.defaultIntervalMs);
+    }
     return epoch;
   }
 
@@ -99,7 +103,11 @@ export class SessionLifecycleCoordinator {
 
     if (sessionToRelease) {
       try {
-        await this.callbacks.onReleaseRequest(sessionToRelease.deviceId, sessionToRelease.leaseId);
+        if (sessionToRelease.publisherOwned === false) {
+          await this.callbacks.onReleaseRequest(sessionToRelease.deviceId, sessionToRelease.leaseId, false);
+        } else {
+          await this.callbacks.onReleaseRequest(sessionToRelease.deviceId, sessionToRelease.leaseId);
+        }
       } catch (err) {
         // Safe logging without credentials
         console.warn(`[SessionLifecycle gen=${this.generation}] Release request failed:`, err);
@@ -114,7 +122,7 @@ export class SessionLifecycleCoordinator {
    * destroying the underlying stream lease.
    */
   public async detachInput(): Promise<void> {
-    if (!this.currentSession || this.isTearingDown) {
+    if (!this.currentSession || this.isTearingDown || this.currentSession.publisherOwned === false) {
       return;
     }
 
@@ -150,8 +158,9 @@ export class SessionLifecycleCoordinator {
 
     const state = event.state?.toLowerCase();
     if (state === "stopped" || state === "failed") {
-      const reason = event.reason || state;
-      const stoppedInstanceId = event.stream_instance_id || this.currentSession.streamInstanceId;
+      const reason = event.error?.codec === "h265"
+        ? `Аппаратное кодирование остановлено; можно повторить запуск после проверки (${event.error.code || event.reason || state})`
+        : event.reason || state;
 
       // Stop session immediately without waiting for HTTP keepalive 404
       void this.stopSession(`terminal_${state}`);
