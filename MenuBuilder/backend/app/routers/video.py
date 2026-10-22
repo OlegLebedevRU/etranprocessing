@@ -599,6 +599,13 @@ async def create_video_session(
                 media_identity(terminal.sn, lease_id, stream_instance_id, descriptor),
             ),
         )
+        from app.services.video_contract import verify_media_response
+
+        verify_media_response(
+            media,
+            media_identity(terminal.sn, lease_id, stream_instance_id, descriptor),
+            descriptor,
+        )
         if media["state"] not in ("active", "starting"):
             raise HTTPException(410, detail={"code": "producer_stopped"})
         response = VideoSessionResponse(

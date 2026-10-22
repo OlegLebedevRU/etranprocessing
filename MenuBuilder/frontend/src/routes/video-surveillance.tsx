@@ -1104,7 +1104,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
                   busyOwner: rc.busyOwner,
                 }}
               />
-              {cameraOnly && isViewer && <Button disabled={cameraSettingsBusy || streamStage === "starting" || streamStage === "stopping"}
+              {isViewer && <Button disabled={cameraSettingsBusy || streamStage === "starting" || streamStage === "stopping"}
                 onClick={() => void (isSessionActive ? stopSession("viewer_stop") : handleViewerConnect(selectedDevice.device_id))}>
                 {isSessionActive ? "Остановить просмотр" : "Начать просмотр"}</Button>}
               {cameraOnly && <CameraSettings key={selectedDevice.device_id} device={selectedDevice.device_id}

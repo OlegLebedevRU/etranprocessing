@@ -1103,6 +1103,7 @@ async def start_device_stream(
         )
         if (
             extended is None
+            and body.codec_policy is None
             and exc.status_code == status.HTTP_409_CONFLICT
             and "unsupported" in err_detail
         ):

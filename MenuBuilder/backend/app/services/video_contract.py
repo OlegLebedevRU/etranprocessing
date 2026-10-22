@@ -79,6 +79,22 @@ def _media_session_id(stream_id: str) -> str:
         raise HTTPException(502, detail={"code": "invalid_video_contract"}) from exc
 
 
+def verify_media_response(
+    media: dict[str, Any], identity: dict[str, Any], descriptor: dict[str, Any]
+) -> None:
+    if (
+        any(
+            media.get(key) != identity[key]
+            for key in ("session_id", "lease_id", "stream_instance_id")
+        )
+        or media.get("publisher", {}).get("sn") != identity["sn"]
+        or media.get("publisher", {}).get("stream_instance_id")
+        != identity["stream_instance_id"]
+        or media.get("descriptor") != descriptor
+    ):
+        raise HTTPException(409, detail={"code": "descriptor_mismatch"})
+
+
 def stream_descriptor(status: dict[str, Any]) -> dict[str, Any] | None:
     stream = (status.get("agent") or {}).get("stream") or {}
     descriptor = stream.get("actual_descriptor") or stream.get("descriptor")
@@ -253,6 +269,7 @@ class VideoContractOrchestrator:
                 media = validate_video(
                     "media_health", await self.media.video_v2("health", identity)
                 )
+                verify_media_response(media, identity, existing)
                 if (
                     media["state"] not in ("starting", "active")
                     or media["descriptor"] != existing
@@ -357,8 +374,10 @@ class VideoContractOrchestrator:
             media = validate_video(
                 "media_response", await self.media.video_v2("start", request)
             )
+            verify_media_response(media, identity, descriptor)
             if (
-                media["session_id"] != identity["session_id"]
+                media["operation_id"] != operation_id
+                or media["session_id"] != identity["session_id"]
                 or media["stream_instance_id"] != stream_id
                 or media["descriptor"] != descriptor
                 or media["lease_id"] != lease_id
