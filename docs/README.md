@@ -9,7 +9,7 @@
 
 ## 1. Архитектура системы и модели данных
 
-- [siplite ↔ l4media: H.265 и camera-схемы](etran_arch-siplite-hevc-integration-contract.md) — H.265 как основной режим, relay готового потока, расширение camera validation с сохранением совместимости l4capture; снимки текущих schema/OpenAPI и синтетический camera payload.
+- [siplite H.265 и camera control](etran_arch-siplite-hevc-integration-contract.md) — negotiated camera schema, Auto до START и стабильный локальный API; [machine package](../contracts/siplite-camera-v1/README.md). Снимки frozen schema/OpenAPI сохранены.
 
 - [Локеры — архитектура MVP](etran_arch-lockers-mvp.md) — согласованные бизнес-правила, ответственность PB/MB/IoT/siplite, многоуровневые Mermaid-схемы, состояния и NVS.
 - [Локеры — контракты и выделенный Scalar](etran_arch-lockers-contracts.md) — проект API, `/lockers/docs`, отдельная OpenAPI-схема, автономные разрешения и сверка.

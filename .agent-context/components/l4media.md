@@ -1,15 +1,10 @@
 # l4media
 
-## 2026-10-23: контракт siplite HEVC (документ, без новой реализации)
+## 2026-10-23 siplite camera extension
 
-[Контракт интеграции](../../docs/etran_arch-siplite-hevc-integration-contract.md):
-H.265 — основной режим новой camera-интеграции, H.264 — явная совместимость и
-прежние установки. siplite передаёт готовый поток, не кодирует его. Согласовано
-расширять camera-схемы по фактическим потокам, сохраняя desktop/l4capture schemas.
-Приложены неизменённые schema/OpenAPI `hevc-contract/2.0.0` и camera-example;
-расширение пока только проект. Исходные TASK-40/60 handoffs подтверждают серверный
-HEVC тракт, но не приёмку siplite firmware. Нового runtime/deploy не выполнялось.
-Локальные исторические разделы ниже не являются полным статусом HEVC внедрения.
+[Contract](../../docs/etran_arch-siplite-hevc-integration-contract.md) и [machine package](../../contracts/siplite-camera-v1/README.md) вводят negotiated camera1.0.0 отдельно от frozen2.0.0. Архивный native SPS:2592×1944, Main8/420, level153; свежая read-only проба23.10:1920×1080@20, level123. Camera Auto допускает H.264 только до START, explicit H.265 не подменяется. siplite передаёт готовый bitstream без encode/transcode. Desktop/l4capture schemas и исходные frozen snapshots сохранены.
+
+Это contract/offline validation; новые runtime readers/writers и decode на4623 ещё не проверены. Исходные TASK-40/60 handoffs подтверждают серверный HEVC тракт, но не приёмку siplite firmware. Нового deploy не выполнялось; исторические разделы ниже не являются полным статусом внедрения.
 
 ## 2026-10-22: HEVC server readiness
 

@@ -1,13 +1,13 @@
 # siplite ↔ l4media: интеграция камер с основным режимом H.265
 
-Редакция документа: `siplite-hevc/1.0`, 2026-10-23.
+Редакция документа: `siplite-hevc/1.1`, 2026-10-23.
 Статус: контракт на реализацию siplite и согласованное расширение серверных схем для камер.
 Базовый реализованный wire contract: `hevc-contract/2.0.0`, `contract_version=2`.
-Расширение camera-схем ниже является проектом; оно ещё не реализовано и не включено в этот frozen revision.
+Машинное расширение camera-схем зафиксировано отдельно как `siplite-camera/1.0.0`: [package и negotiation](../contracts/siplite-camera-v1/README.md). Это контракт к реализации readers/writers, не свидетельство их развёртывания. Frozen revision не изменён.
 
 ## 1. Принятые решения и граница работ
 
-**H.265 — основной режим новой интеграции.** H.264 сохраняется как явно выбираемый режим совместимости и как прежний рабочий путь существующих установок. Новая версия не переводит действующий H.264 publisher на другой кодек без отдельного действия владельца. Ошибка H.265 не вызывает автоматический переход на H.264.
+**H.265 — основной режим новой интеграции.** H.264 сохраняется как явно выбираемый режим совместимости и как прежний рабочий путь существующих установок. Новая версия не переводит действующий H.264 publisher на другой кодек без отдельного действия владельца. По уточнению заказчика camera Auto автоматически выбирает H.264 только **до START** при подтверждённой недоступности H.265 и готовом H.264 тракте. Явный запрос H.265 не подменяется; после START runtime-ошибка H.265 не вызывает автоматический переход на H.264 или новый START.
 
 Камеры уже способны выдавать H.265. Камера кодирует изображение, siplite принимает готовый поток и передаёт его в существующий медиатранспорт. siplite не должен реализовывать encoder, транскодирование, Media Foundation, GPU probe или изменение качества через повторное кодирование. Допускаются разбор RTP/параметрических наборов и необходимая перепакетизация без изменения закодированного изображения.
 
@@ -88,7 +88,11 @@ TASK-40 подтвердил готовый поток камеры HEVC Main, 8
 
 Приложенный синтетический пример показывает уже соответствующий v2 поток Level 4.0 и не является записью камеры. Ни этот пример, ни набор TASK-40 не задают обязательные настройки для остальных камер. Bitrate и качество подбираются и измеряются отдельно; desktop MFT results не переносятся на камеры.
 
-## 5. Целевое расширение схем для камер
+## 5. Расширение схем для камер
+
+Нормативная новая revision — `siplite-camera/1.0.0`, wire остаётся `contract_version=2`. [hevc.schema.json](../contracts/siplite-camera-v1/hevc.schema.json) и [OpenAPI](../contracts/siplite-camera-v1/openapi-v2.json) задают отдельную camera-ветку. Запрос `X-L4-Camera-Contract: siplite-camera/1.0.0` явно согласует projection; capabilities сообщают camera_contract_revisions/camera_formats. Расширенный descriptor содержит camera_contract_revision. Без negotiation сохраняется frozen v2.
+
+Начальная machine matrix представляет native2592×1944/Main8/420/level153 и ограниченный H.264 baseline/main/high; это допустимое описание, не подтверждение runtime decode. Архивный SPS камеры имеет level153 (5.1), а не примерный level123 (4.1). Никакая metadata normalization не разрешена. Для неподтверждённых форматов runtime_verified=false и START не допускается.
 
 ### Разделение camera и desktop
 
@@ -116,7 +120,7 @@ Camera-схема должна представлять фактические c
 4. Проверить, что desktop definitions и прежние запросы/ответы l4capture сохраняют совместимость. Если потребуется смена wire version, оставить dual readers старой версии.
 5. Развернуть совместимые readers до camera writers; включать новый camera-формат только после negotiation и decode-проверки. Новая firmware не должна зависеть от неразвёрнутой схемы без явного отказа.
 
-Номер новой schema/wire версии здесь не назначен: он фиксируется вместе с точной машинной delta. Готовность расширять схему — согласованное направление работ, а не свидетельство его внедрения.
+Новая schema revision и точная machine delta находятся в отдельном camera package; wire2 и frozen2.0.0 сохранены. Развёртывание readers, camera writers и реальная приёмка учитываются отдельно в release handoff.
 
 ## 6. Service API и descriptor
 
@@ -144,9 +148,9 @@ JSON: UTF-8, ≤32768 bytes, duplicate keys и неизвестные поля �
 
 ## 7. Запуск, смена настроек и прекращение потока
 
-1. Авторизованный запрос новой интеграции выбирает H.265. Оператор может явно выбрать H.264. Старый legacy запрос сохраняет H.264; глобальное значение desktop Auto этим решением не меняется.
+1. Авторизованный новый camera запрос по умолчанию использует Auto с приоритетом H.265. До media prepare/START выбрать H.265 при свежей готовности камеры, relay, server/Janus и браузера; при подтверждённой недоступности H.265 и готовом H.264 выбрать H.264 с видимой причиной. Unknown/auth/timeout не являются несовместимостью. Явный H.265 не подменять. Старые legacy H.264 и desktop Auto сохраняют семантику.
 2. Камерный адаптер определяет текущий/подготавливаемый выход камеры и поддержку relay. При необходимости настройки применяются по реально доступному camera API с readback; изменять активную камеру под зрителями нельзя.
-3. Orchestrator проверяет lease, source, формат и server capability; фиксирует concrete descriptor. Для H.265 путь не продолжается через implicit H.264 v1. Если UI использует existing Auto, его разрешённый pre-START выбор не должен выдаваться за успешный explicit H.265.
+3. Orchestrator проверяет lease, source, формат и server capability; фиксирует concrete descriptor. Для H.265 путь не продолжается через implicit H.264 v1. Auto selection и причина фиксируются до START; resolved codec всегда concrete и совпадает с actual descriptor. Автоматическое H.264 решение не выдаётся за успешный explicit H.265.
 4. Service API готовит route/mountpoint; затем producer получает START той же эпохи. Если камера уже отправляет UDP, relay до разрешённой эпохи не публикует поток на новый route.
 5. Адаптер подтверждает actual format. READY означает готовность пересылать заявленный поток; fresh RTP и browser decode подтверждаются отдельно. Для siplite не вводится требование Windows `encoded_sequence` probe.
 6. Ошибка после media prepare вызывает scoped compensation/STOP. Повторы не создают второго publisher. Lease renew не меняет descriptor и не заменяется RTP keepalive.
@@ -180,7 +184,7 @@ Watcher join/leave не меняет publisher codec/deadline и не созда
 |---|---|
 | Новые server + siplite, запрос нового camera потока | По умолчанию H.265, честный descriptor, проверенный decode |
 | Явный H.264 / прежняя установка | Рабочий H.264 путь и прежний legacy wire сохраняются |
-| H.265 недоступен / camera extension не согласован | Явный отказ, без подмены формата и скрытого fallback |
+| H.265 недоступен / camera extension не согласован | Explicit H.265 — отказ; Auto может выбрать готовый H.264 только до START по согласованной policy |
 | Runtime HEVC failure | Завершение текущего stream; ручной новый START |
 | Старый/новый l4capture | Прежние desktop schemas, profiles, v1/v2 negotiation и encoder policy |
 | Old server + camera writer с новыми полями | Новые поля не посылаются без negotiation; текущая схема либо отказ |
@@ -208,6 +212,8 @@ Redis сохраняет полный descriptor/identity/deadline. Восста
 Критерии измерения latency/quality и выбранные настройки камеры фиксируются по факту реализации; desktop бюджеты не переносятся на камеры автоматически. Существующие security/lease deadlines при этом сохраняются. Результаты разделяются на schema/static, integration и реальный camera/browser E2E; NOT RUN не считается PASS.
 
 ## 11. Источники и оставшаяся реализация
+
+Camera RPC/gauge84 и закрытый credential flow — upstream IoT `docs/siplite-camera-control.md`. Постоянный local API для tool l4siplite задан [local schema](../contracts/siplite-camera-v1/local-camera.schema.json); камера подключается только к physical port2 в switch/ports. Дополнительные сеты управления отложены. Cloud credentials в descriptor/media route не попадают.
 
 - Локальный пакет исследования: `D:/.codex/hevc-plan/siplite-task60/` (README, frozen package, OpenAPI); immutable server source указан в разделе 3.
 - Результаты: `D:/.codex/hevc-plan/TASK-40-HANDOFF.md`, `TASK-60-HANDOFF.md`, `TASK-60-ACCEPTANCE.md`; evidence датировано 2026-10-22/23, live-проверка в этой задаче не выполнялась.
