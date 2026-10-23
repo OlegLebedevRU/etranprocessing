@@ -3,9 +3,10 @@ import { Alert, Button, Card, Collapse, Descriptions, Modal, Space, Typography }
 import { commandCamera, getCamera, getCameraCommand, type CameraCommand, type CameraObservation, type CameraProbe, type CameraPatch } from "../../api/cameras";
 import { CameraFields } from "./CameraFields";
 import { CameraConnection } from "./CameraConnection";
+import { CameraCredentials } from "./CameraCredentials";
 import { configFresh, observationAge, powerFresh } from "../../utils/cameraState";
 
-type Pending = { until: number; task?: string; action?: CameraCommand["action"] };
+type Pending = { until: number; task?: string; action?: CameraCommand["action"]; operation?: string; cancellation?: string };
 const pause = (signal: AbortSignal) => new Promise<void>((resolve, reject) => {
   const abort = () => { clearTimeout(timer); reject(new Error("aborted")); };
   const timer = setTimeout(() => { signal.removeEventListener("abort", abort); resolve(); }, 1000);
@@ -24,9 +25,22 @@ export function CameraSettings({ device, org, operator, viewing, onBusy }: {
   const [data, setData] = useState<CameraObservation | null>(null);
   const [notice, setNotice] = useState("");
   const [working, setWorking] = useState(false);
+  const [credentialBusy, setCredentialBusy] = useState(false);
+  const [credentialLockUntil, setCredentialLockUntil] = useState(() => { try { const item = JSON.parse(sessionStorage.getItem(`camera-credentials:${org}:${device}`) || "null");
+    return Number.isFinite(item?.until) && item.until <= Date.now() + 90000 ? item.until : 0;
+  } catch { return 0; } });
+  const onCredentialBusy = useCallback((value: boolean) => {
+    setCredentialBusy(value);
+    if (!value) { try { const item = JSON.parse(sessionStorage.getItem(`camera-credentials:${org}:${device}`) || "null");
+      setCredentialLockUntil(Number.isFinite(item?.until) && item.until <= Date.now() + 90000 ? item.until : 0);
+    } catch { setCredentialLockUntil(0); } }
+  }, [org, device]);
   const [now, setNow] = useState(Date.now());
   const lifecycle = useRef<AbortController | null>(null);
   const mutation = useRef(false);
+  const cancelling = useRef(false);
+  const cancelled = useRef<string | null>(null);
+  const [cancelWorking, setCancelWorking] = useState(false);
   const confirmation = useRef<{ destroy: () => void } | null>(null);
   const saved = useCallback((item: Pending | null) => {
     // If durable blocking cannot be saved, do not send a disruptive command.
@@ -34,7 +48,7 @@ export function CameraSettings({ device, org, operator, viewing, onBusy }: {
     else { try { sessionStorage.removeItem(key); } catch { /* No command is sent during cleanup. */ } }
     setPending(item);
   }, [key]);
-  const busy = working || !!pending && pending.until > now;
+  const busy = working || credentialBusy || credentialLockUntil > now || !!pending && pending.until > now;
   useEffect(() => { onBusy(busy); return () => onBusy(false); }, [busy, onBusy]);
   useEffect(() => {
     const controller = new AbortController(); lifecycle.current = controller;
@@ -69,8 +83,9 @@ export function CameraSettings({ device, org, operator, viewing, onBusy }: {
     mutation.current = true; setWorking(true); setNotice("");
     let accepted = false;
     let submitting = true;
+    const operation = crypto.randomUUID();
     try {
-      const command: CameraCommand = { ...connection, operation_id: crypto.randomUUID(), action, value };
+      const command: CameraCommand = { ...connection, operation_id: operation, action, value };
       if (action !== "refresh") command.allow_disruptive = true;
       if (action === "quality" || action === "day_night" || action === "patch") {
         if (!configValid || !camera?.revision) throw new Error("Обновите состояние камеры");
@@ -85,7 +100,7 @@ export function CameraSettings({ device, org, operator, viewing, onBusy }: {
         if (!camera?.revision) throw new Error("Обновите состояние камеры");
         command.expected_revision = camera.revision;
       }
-      const lock = { until: Date.now() + 90000, action };
+      const lock = { until: Date.now() + 90000, action, operation: command.operation_id };
       saved(lock);
       accepted = true; // POST may commit even when its response is lost.
       const task = await commandCamera(device, command);
@@ -95,9 +110,15 @@ export function CameraSettings({ device, org, operator, viewing, onBusy }: {
       const deadline = Date.now() + 45000;
       let result;
       while (Date.now() < deadline) {
+        if (cancelled.current === command.operation_id) return false;
         const current = await getCameraCommand(device, task.id, signal);
+        if (cancelled.current === operation) return false;
         if (current.results?.length) { result = current.results[0]; break; }
         if ([4, 5, 6, 7].includes(current.status)) throw new Error("Команда завершилась без подтверждённого результата");
+        if (action === "discover") {
+          const progress = await getCamera(device, signal);
+          if (!signal.aborted && progress.snapshot?.operation_id === task.id) setData(progress);
+        }
         await pause(signal);
       }
       if (!result) throw new Error("Результат команды пока не подтверждён");
@@ -105,8 +126,9 @@ export function CameraSettings({ device, org, operator, viewing, onBusy }: {
       let correlated = false;
       const eventDeadline = Date.now() + 10000;
       while (Date.now() < eventDeadline) {
+        if (cancelled.current === command.operation_id) return false;
         const state = await getCamera(device, signal);
-        if (signal.aborted) return false;
+        if (signal.aborted || cancelled.current === operation) return false;
         setData(state);
         if (state.snapshot?.operation_id === task.id && state.snapshot.snapshot_id === body.snapshot_id) {
           correlated = true; break;
@@ -125,7 +147,7 @@ export function CameraSettings({ device, org, operator, viewing, onBusy }: {
           action === "refresh" ? "Состояние обновлено" : "Настройки применены и подтверждены камерой");
       return !failure;
     } catch (error: any) {
-      if (signal.aborted) return false;
+      if (signal.aborted || cancelled.current === operation) return false;
       // Definite admission denial happens before task creation; a lost response stays blocked.
       const status = error?.response?.status;
       if (!accepted || submitting && status && status >= 400 && status < 500) saved(null);
@@ -135,6 +157,45 @@ export function CameraSettings({ device, org, operator, viewing, onBusy }: {
       mutation.current = false;
       if (!signal.aborted) setWorking(false);
     }
+  }
+  async function cancelDiscovery() {
+    const target = pending;
+    if (!operator || !target?.operation || target.action !== "discover" || target.cancellation || cancelling.current || !lifecycle.current) return;
+    const signal = lifecycle.current.signal;
+    if (signal.aborted) return;
+    cancelling.current = true; setCancelWorking(true);
+    const operation = crypto.randomUUID();
+    let submitting = true;
+    try {
+      saved({ ...target, cancellation: operation });
+      const task = await commandCamera(device, { action: "cancel_discovery", operation_id: operation,
+        target_operation_id: target.operation, allow_disruptive: true });
+      submitting = false;
+      if (task.id !== operation) throw new Error("Не подтверждён идентификатор отмены");
+      const deadline = Date.now() + 30000;
+      while (Date.now() < deadline) {
+        const current = await getCameraCommand(device, task.id, signal);
+        const result = current.results?.[0];
+        if (result) {
+          const body = typeof result.result === "string" ? JSON.parse(result.result) : result.result;
+          const state = await getCamera(device, signal);
+          if (result.status_code !== 200) throw new Error("Отмена поиска не подтверждена");
+          if (body.operation_id === operation && state.snapshot?.operation_id === operation && state.snapshot.snapshot_id === body.snapshot_id) {
+            cancelled.current = target.operation;
+            if (!signal.aborted) { setData(state); saved(null); setNotice("Отмена поиска подтверждена"); }
+            return;
+          }
+        } else if ([4, 5, 6, 7].includes(current.status)) break;
+        await pause(signal);
+      }
+      throw new Error("Результат отмены пока не подтверждён. Автоматического повтора нет.");
+    } catch (error: any) {
+      if (!signal.aborted) {
+        const status = error?.response?.status;
+        if (submitting && status >= 400 && status < 500) saved(target);
+        setNotice(error?.response?.data?.detail?.message || error?.message || "Результат отмены неизвестен; повтор не отправлен");
+      }
+    } finally { cancelling.current = false; if (!signal.aborted) setCancelWorking(false); }
   }
   function power(action: string) {
     if (action === "on") { void apply("power", action); return; }
@@ -164,8 +225,12 @@ export function CameraSettings({ device, org, operator, viewing, onBusy }: {
       <Collapse items={[{ key: "connection", label: "Подключение камеры", children:
         <CameraConnection camera={camera} disabled={settingsBlocked} searching={busy && pending?.action === "discover"}
           onSearch={() => void apply("discover")}
-          onBind={(candidate_mac, discovery_generation) => void apply("bind", undefined, undefined, undefined, { candidate_mac, discovery_generation })}
-          onClearCredentials={() => void apply("clear_credentials")} /> }]} />
+          cancelAvailable={operator && !!pending?.operation && !pending.cancellation && pending.until > now}
+          cancelling={cancelWorking} onCancel={() => void cancelDiscovery()}
+          onBind={(candidate_mac, discovery_generation) => void apply("bind", undefined, undefined, undefined, { candidate_mac, discovery_generation })} /> }]} />
+      <Collapse items={[{ key: "credentials", label: "Логин и пароль", children:
+        <CameraCredentials key={device} device={device} org={org} camera={camera} operator={operator} disabled={settingsBlocked}
+          onBusy={onCredentialBusy} /> }]} />
       <Collapse items={[{ key: "native-settings", label: "Видео и изображение", children:
         <CameraFields key={device} camera={camera} disabled={settingsBlocked || !configValid}
           onApply={(patch, revision) => apply("patch", undefined, patch, revision)} /> }]} />

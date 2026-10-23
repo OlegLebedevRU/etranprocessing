@@ -5,17 +5,20 @@
 [Implementation checkpoint](../../docs/etran_arch-siplite-camera-menubuilder.md):
 separate camera schemas, negotiated extended-epoch reads, native settings drafts,
 port2 discovery/binding guards, native main_app/CTL-v1 START, pre-START codec
-selection and stock-only illumination UI. Backend891passed/22skipped, frontend
-build/105unit/13browser fixtures passed before vault integration. Credential
-entry and PKI/vault rollout remain; no new camera decode evidence or UI deploy.
+selection and stock-only illumination UI. Operator credential entry persists
+encrypted intent before dispatch and promotes only matching RES+gauge84;
+search cancellation has a separate targeted UUID. Backend952passed/25skipped,
+frontend105unit/15browser fixtures passed before final guard/cancel follow-ups.
+No new camera decode evidence or TASK40 UI deploy.
 
-## Camera vault services, 2026-10-23 — source only, not deployed
+## Camera vault services, 2026-10-23 — deployed482e099/schema034
 
 Standalone camera_credential_vault/recipient helpers store encrypted active/pending
 intent and durable receipts, wrap DEKs under a stable runtime KEK, and recover
 credentials internally for a new manual operation after certificate rotation.
-No camera router/UI/IoT dispatch integration is included. Root validates scoped
-RES+gauge84 before confirm. [Helper and rollout contract](../../docs/etran_arch-camera-credential-storage.md).
+TASK35 helpers are deployed; TASK40 router/UI integration remains a local
+candidate. The private stable server KEK and backup must survive deployments
+and TLS renewals. [Helper and rollout contract](../../docs/etran_arch-camera-credential-storage.md).
 
 ## Certificate chooser operation state, 2026-10-13 — released
 

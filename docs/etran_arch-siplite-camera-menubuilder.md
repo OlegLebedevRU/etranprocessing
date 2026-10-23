@@ -2,8 +2,8 @@
 
 This change integrates accepted `siplite-camera/1.0.0` readers and the deployed
 TASK-30 main_app/CTL-v1 adapter. It is a local TASK-40 checkpoint, not deployed.
-TASK-35 supplies the existing-PKI public recipient lookup and certificate-independent
-encrypted credential vault; its runtime rollout and protected entry remain separate.
+TASK-35 public-recipient lookup and certificate-independent encrypted vault are
+deployed from482e099; this candidate adds their authenticated UI/API workflow.
 
 Implemented locally:
 
@@ -18,8 +18,18 @@ Implemented locally:
 - Capability-driven video/image editor. Polling preserves local changes;
   revision conflict blocks stale Apply; only edited fields are sent. Viewer,
   active-view, stale/offline and ambiguous POST restrictions are preserved.
-- Port2 search/candidate UI and return-to-native credential action. The
-  credential-entry writer and cancel-while-scan UI are not implemented yet.
+- Port2 search/candidate UI displays correlated discovery progress. Cancel uses
+  a distinct operation UUID targeting the scan, with independent RES+gauge84
+  confirmation. Lost responses do not trigger automatic mutation retries.
+- Operator-only write-only credential endpoint bounds input, suppresses secret
+  reflection in validation errors, and persists encrypted intent before network
+  dispatch. IoT task UUID equals operation UUID; replay observes the existing
+  task without resealing or extending the original deadline. Explicit manual
+  redelivery uses a new UUID and current verified terminal certificate.
+- Credential promotion/clear requires matching independently read RES+gauge84.
+  Failed or ambiguous delivery preserves the previous active server profile.
+  Generic command clear cannot bypass vault reconciliation. Browser storage
+  contains only operation metadata; login/password are cleared after submission.
 - Stock-only illumination explanation, without physical controls/probes.
   Cloudflare STUN is the default; additional supplied ICE/TURN servers remain.
 - Separate camera START path carries exact media descriptor/epoch to app1.
@@ -31,13 +41,14 @@ Implemented locally:
   Failed preparation/start compensates only its own epoch. Repeated active
   START reads the existing epoch without changing the shared codec.
 
-Validation: backend full891passed/22skipped; app Ruff/format/Pyright passed.
-Frontend build/105unit tests and13camera browser fixtures passed, including
+Validation before final clear-endpoint guard: backend full952passed/25skipped;
+final guard and credential boundary follow-up38passed. App Ruff/format/Pyright
+passed. Frontend build/105unit tests and16camera browser fixtures passed, including
 explicit H265 refusal without a legacy route or H264 START. Earlier stale-preview
 assertion failure was resolved by rebuilding changed source. Fixtures do not
 establish real camera relay/decode or post-START actual-descriptor proof.
 
-Remaining: protected credential entry using accepted/deployed TASK-35 helpers,
-scan cancellation/progress and final runtime/browser acceptance. No device
-writer or production flag was enabled. Deploy only after reader and credential
-gates; do not infer camera readiness from the new UI or ACK alone.
+Remaining: final source/release verification and production UI/browser smoke.
+TASK60/70 own actual firmware control and real camera relay/decode acceptance.
+No device writer or production flag was enabled. Do not infer camera readiness
+from the UI or ACK alone.

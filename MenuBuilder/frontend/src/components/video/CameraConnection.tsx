@@ -7,9 +7,10 @@ const states: Record<string, string> = {
   ready: "Камера найдена", not_found: "Подходящая камера не найдена", cancelled: "Поиск отменён", failed: "Поиск завершился с ошибкой",
 };
 
-export function CameraConnection({ camera, disabled, searching, onSearch, onBind, onClearCredentials }: {
+export function CameraConnection({ camera, disabled, searching, onSearch, onBind, onCancel, cancelAvailable, cancelling }: {
   camera?: CameraState; disabled: boolean; searching: boolean;
-  onSearch: () => void; onBind: (mac: string, generation: number) => void; onClearCredentials: () => void;
+  onSearch: () => void; onBind: (mac: string, generation: number) => void;
+  onCancel: () => void; cancelAvailable: boolean; cancelling: boolean;
 }) {
   const discovery = camera?.discovery;
   const negotiated = camera?.camera_contract_revision === "siplite-camera/1.0.0";
@@ -18,8 +19,10 @@ export function CameraConnection({ camera, disabled, searching, onSearch, onBind
   return <Space orientation="vertical" style={{ width: "100%" }}>
     <Typography.Text>Камера подключается к port-2. Режим сети: {discovery?.ethernet_mode ?? "неизвестен"}.</Typography.Text>
     <Typography.Text>{searching ? "Поиск камеры выполняется…" : states[discovery?.state ?? ""] ?? "Состояние поиска неизвестно"}</Typography.Text>
+    {searching && <Typography.Text type="secondary">{states[discovery?.state ?? ""] ?? "Ожидаем состояние поиска"}</Typography.Text>}
     <Button disabled={disabled || !canScan} loading={searching} onClick={onSearch}>Найти камеру на port-2</Button>
-    {discovery?.state === "auth_required" && <Alert type="warning" showIcon title="Камера найдена, но доступ не подтверждён. Укажите её логин и пароль, когда смена учётных данных станет доступна." />}
+    {searching && <Button disabled={!cancelAvailable} loading={cancelling} onClick={onCancel}>Остановить поиск</Button>}
+    {discovery?.state === "auth_required" && <Alert type="warning" showIcon title="Камера найдена, но доступ не подтверждён. Откройте «Логин и пароль» и укажите учётные данные камеры." />}
     <List size="small" dataSource={discovery?.candidates ?? []} locale={{ emptyText: "Подтверждённых кандидатов пока нет" }} renderItem={candidate =>
       <List.Item actions={[<Button key="bind" disabled={disabled || !canBind || !candidate.port_verified}
         onClick={() => onBind(candidate.mac, discovery!.generation)}>Выбрать</Button>]}>
@@ -28,7 +31,6 @@ export function CameraConnection({ camera, disabled, searching, onSearch, onBind
           {candidate.auth === "required" && <Tag color="orange">Нужен пароль</Tag>}</Space>
       </List.Item>} />
     <Typography.Text type="secondary">Учётные данные: {camera?.auth_source === "custom" ? "пользовательские" : camera?.auth_source === "native" ? "штатные" : "не подтверждены"}. Пароль не отображается.</Typography.Text>
-    <Button disabled={disabled || !canBind || camera?.auth_source !== "custom"} onClick={onClearCredentials}>Вернуть штатные учётные данные</Button>
     {!negotiated && <Typography.Text type="secondary">Поиск и привязка станут доступны после обновления терминала.</Typography.Text>}
   </Space>;
 }

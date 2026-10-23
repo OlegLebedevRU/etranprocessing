@@ -6,16 +6,34 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from etranprocessing_db.camera_credentials import (
+    CameraCredentialProfile,
+    CameraCredentialReceipt,
+)
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import require_tenant_context
 from app.database import get_db
+from app.routers.camera_request_route import CameraRequestRoute
 from app.routers.video import _verify_device_access
 from app.routers.video_control import require_operator_user
 from app.security.permissions import PERMISSION_VIDEO_VIEW, require_permission
 from app.services.camera_contract import CAMERA_REVISION, validate_camera_rpc
+from app.services.camera_credential_recipient import (
+    RecipientUnavailable,
+    fetch_credential_recipient,
+)
+from app.services.camera_credential_vault import CameraCredentialVault, VaultError
+from app.services.camera_credential_vault_config import CameraCredentialVaultSettings
+from app.services.camera_credential_workflow import (
+    dispatch_credentials,
+    parse_credential_change,
+    reconcile_credentials,
+    scope_for,
+)
 from app.services.camera_platform import (
     camera_main_app_online,
     camera_request,
@@ -23,7 +41,9 @@ from app.services.camera_platform import (
 )
 from app.services.iot_client import iot_client
 
-router = APIRouter(prefix="/api/cameras", tags=["cameras"])
+router = APIRouter(
+    prefix="/api/cameras", tags=["cameras"], route_class=CameraRequestRoute
+)
 
 
 class CameraCommand(BaseModel):
@@ -174,6 +194,7 @@ async def require_camera_extension(
     if (
         not fresh
         or camera.get("stale")
+        and method in (161, 162, 163)
         or camera.get("camera_contract_revision") != CAMERA_REVISION
         or method not in (camera.get("capabilities") or {}).get("methods", [])
     ):
@@ -254,6 +275,9 @@ async def command_camera(
     user: dict[str, Any] = Depends(require_operator_user),
     db: AsyncSession = Depends(get_db),
 ):
+    if body.action == "clear_credentials":
+        # Clearing must also update the encrypted server profile after RES/gauge84.
+        raise HTTPException(409, detail={"code": "use_camera_credentials_endpoint"})
     terminal = await camera_access(device_id, user, db, write=body.action != "refresh")
     if body.action != "refresh":
         control = await iot_client.remote_input_status(
@@ -350,4 +374,110 @@ async def get_camera_command(
         166,
     ):
         raise HTTPException(404, "Команда камеры не найдена")
+    if header.get("method_code") == 166:
+        await reconcile_credentials(
+            db, terminal=terminal, user=user, operation_id=task_id, task=task
+        )
     return task
+
+
+@router.get("/{device_id}/credentials")
+async def credential_metadata(
+    device_id: int,
+    user: dict[str, Any] = Depends(require_operator_user),
+    db: AsyncSession = Depends(get_db),
+):
+    terminal = await camera_access(device_id, user, db)
+    try:
+        metadata = await CameraCredentialVault().safe_metadata(
+            db, scope=scope_for(terminal)
+        )
+    except VaultError as error:
+        if error.status_code != 404:
+            raise HTTPException(
+                error.status_code, detail={"code": error.code}
+            ) from None
+        metadata = {
+            "has_active": False,
+            "version": 0,
+            "active_operation_id": None,
+            "pending_operation_id": None,
+        }
+    last = await db.scalar(
+        select(CameraCredentialReceipt)
+        .join(CameraCredentialProfile)
+        .where(
+            CameraCredentialProfile.terminal_id == terminal.id,
+            CameraCredentialProfile.tenant_id == terminal.org_id,
+            CameraCredentialProfile.device_id == device_id,
+            CameraCredentialProfile.sn == terminal.sn,
+            CameraCredentialProfile.camera_id == "cam:ip000001",
+            CameraCredentialReceipt.version == metadata["version"],
+        )
+    )
+    metadata["last_operation_id"] = (
+        str(last.operation_id)
+        if last is not None
+        and last.kind == "replace"
+        and last.state in ("active", "pending", "failed")
+        else None
+    )
+    metadata["last_state"] = last.state if last is not None else None
+    metadata["latest_operation_id"] = (
+        str(last.operation_id) if last is not None else None
+    )
+    metadata["latest_state"] = last.state if last is not None else None
+    # Read-only metadata helper locks identity/profile; release before provider I/O.
+    await db.commit()
+    try:
+        CameraCredentialVaultSettings().key()
+        vault_ready = True
+    except ValueError:
+        vault_ready = False
+    try:
+        await fetch_credential_recipient(
+            tenant_id=terminal.org_id, device_id=device_id, sn=terminal.sn
+        )
+        recipient_ready = True
+    except RecipientUnavailable:
+        recipient_ready = False
+    return {**metadata, "vault_ready": vault_ready, "recipient_ready": recipient_ready}
+
+
+@router.post("/{device_id}/credentials")
+async def change_credentials(
+    device_id: int,
+    request: Request,
+    user: dict[str, Any] = Depends(require_operator_user),
+    db: AsyncSession = Depends(get_db),
+):
+    terminal = await camera_access(device_id, user, db, write=True)
+    control = await iot_client.remote_input_status(
+        terminal.sn, org_id=terminal.org_id, user=user
+    )
+    if (control.get("lease") or {}).get("active") is not False:
+        raise HTTPException(
+            409,
+            detail={"code": "camera_busy", "message": "Сначала остановите просмотр"},
+        )
+    if await camera_main_app_online(terminal.sn, terminal.org_id, user) is not True:
+        raise HTTPException(409, detail={"code": "camera_terminal_offline"})
+    camera = await require_camera_extension(device_id, terminal.org_id, user, 166)
+    if (
+        request.headers.get("content-type", "").split(";", 1)[0].lower()
+        != "application/json"
+    ):
+        raise HTTPException(415, detail={"code": "invalid_camera_credentials"})
+    raw = bytearray()
+    async for chunk in request.stream():
+        if len(raw) + len(chunk) > 4096:
+            raise HTTPException(413, detail={"code": "invalid_camera_credentials"})
+        raw.extend(chunk)
+    try:
+        change = parse_credential_change(raw)
+    finally:
+        raw[:] = b"\0" * len(raw)
+        raw.clear()
+    return await dispatch_credentials(
+        db, terminal=terminal, user=user, change=change, camera=camera
+    )

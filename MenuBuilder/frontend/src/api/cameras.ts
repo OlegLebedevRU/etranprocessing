@@ -44,10 +44,29 @@ export interface CameraCommand {
   target_operation_id?: string; candidate_mac?: string; discovery_generation?: number;
 }
 export interface CameraResult {
-  status_code: number; result: { status?: string; error?: string; snapshot_id?: string;
+  status_code: number; result: { status?: string; error?: string; snapshot_id?: string; operation_id?: string;
     applied_fields?: string[]; field_errors?: { field?: string; reason?: string }[] } | string;
 }
 export interface CameraTask { id: string; status: number; results?: CameraResult[] }
+
+export interface CameraCredentialMetadata {
+  vault_ready: boolean; recipient_ready: boolean; has_active: boolean;
+  active_operation_id?: string | null; pending_operation_id?: string | null;
+  last_operation_id?: string | null; last_state?: string | null;
+  latest_operation_id?: string | null; latest_state?: string | null;
+}
+export interface CameraCredentialChange {
+  action: "replace" | "redeliver" | "clear"; operation_id: string; expected_revision: string;
+  expires_at_ms: number; allow_disruptive: true;
+  username?: string; password?: string; source_operation_id?: string;
+}
+export async function getCameraCredentialMetadata(device: number, signal?: AbortSignal): Promise<CameraCredentialMetadata> {
+  return (await client.get(`/cameras/${device}/credentials`, { signal })).data;
+}
+export async function changeCameraCredentials(device: number, body: CameraCredentialChange): Promise<{ id: string; state: string }> {
+  const config: AxiosRequestConfig & { _retry: boolean } = { _retry: true };
+  return (await client.post(`/cameras/${device}/credentials`, body, config)).data;
+}
 
 export async function getCamera(device: number, signal?: AbortSignal): Promise<CameraObservation> {
   return (await client.get(`/cameras/${device}`, { signal })).data;

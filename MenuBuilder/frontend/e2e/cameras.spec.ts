@@ -1,16 +1,20 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function cameraPortal(page: Page, options: { viewer?: boolean; busy?: boolean; offline?: boolean; stale?: boolean; lost?: boolean; unauthorized?: boolean; native?: boolean; revisionAfterPoll?: boolean; rejectStart?: boolean } = {}) {
+async function cameraPortal(page: Page, options: { viewer?: boolean; busy?: boolean; offline?: boolean; stale?: boolean; lost?: boolean; unauthorized?: boolean; native?: boolean; revisionAfterPoll?: boolean; rejectStart?: boolean; credentialReady?: boolean; credentialLost?: boolean; credentialUnauthorized?: boolean; searchWaiting?: boolean } = {}) {
   const posts: { path: string; body: any }[] = [];
   let operation = "";
   let config: any = { video0: { size: "1280x720", fps: 15, bitrate: 1024 }, nightMode: { lightMonitor: false } };
   let reads = 0;
   let power = true;
+  let credentialState: "active" | "cleared" | null = null;
+  let searchOperation = "";
+  let cancelled = false;
   const snapshot = () => ({ snapshot_id: "fixture-snapshot", operation_id: operation, observed_at:
     new Date(Date.now() - (options.stale ? 400000 : 0)).toISOString(), cameras: [{
       camera_id: "cam:ip000001", status: "ready", revision: (options.revisionAfterPoll && reads > 1 ? "b" : "a").repeat(64), config,
       ...(options.native ? { camera_contract_revision: "siplite-camera/1.0.0" } : {}),
-      ...(options.native ? { discovery: { generation: 2, state: "ready", physical_port: 2, ethernet_mode: "switch", candidates: [
+      auth_source: credentialState === "active" ? "custom" : "native",
+      ...(options.native ? { discovery: { generation: 2, state: cancelled ? "cancelled" : searchOperation && options.searchWaiting ? "resolving_ip" : "ready", physical_port: 2, ethernet_mode: "switch", candidates: [
         { candidate_id: "verified", mac: "02:00:00:00:00:01", ip: "192.0.2.10", native_api: "supported", auth: "verified", port_verified: true },
         { candidate_id: "unverified", mac: "02:00:00:00:00:02", ip: "192.0.2.11", native_api: "unknown", auth: "unknown", port_verified: false },
       ] } } : {}),
@@ -39,17 +43,31 @@ async function cameraPortal(page: Page, options: { viewer?: boolean; busy?: bool
     if (path.endsWith("/control/lease") && request.method() === "POST") data = { lease_id: "11111111-1111-4111-8111-111111111111", keepalive_sec: 10 };
     if (path.endsWith("/stream/start") && options.rejectStart) { await route.fulfill({ status: 422, json: { detail: { code: "camera_h265_unsupported", message: "H.265 недоступен для выбранного источника" } } }); return; }
     if (path === "/api/cameras/4619") { reads++; data = { device_id: 4619, terminal_online: !options.offline, lease_active: !!options.busy, snapshot: snapshot() }; }
+    if (path === "/api/cameras/4619/credentials") {
+      if (request.method() === "POST") {
+        if (options.credentialUnauthorized) { await route.fulfill({ status: 401, json: { detail: "denied" } }); return; }
+        if (options.credentialLost) { await route.abort("failed"); return; }
+        operation = body.operation_id;
+        credentialState = body.action === "clear" ? "cleared" : "active";
+        data = { id: operation, state: credentialState };
+      } else data = { vault_ready: !!options.credentialReady, recipient_ready: !!options.credentialReady, has_active: credentialState === "active",
+        active_operation_id: credentialState === "active" ? operation : null, pending_operation_id: null,
+        last_operation_id: credentialState === "active" ? operation : null, latest_operation_id: operation || null, latest_state: credentialState };
+    }
     if (path.endsWith("/commands") && request.method() === "POST") {
       if (options.unauthorized) { await route.fulfill({ status: 401, json: { detail: "Сессия истекла" } }); return; }
       if (options.lost) { await route.abort("failed"); return; }
-      operation = "22222222-2222-4222-8222-222222222222";
+      operation = ["discover", "cancel_discovery", "bind"].includes(body.action) ? body.operation_id : "22222222-2222-4222-8222-222222222222";
+      if (body.action === "discover") searchOperation = operation;
+      if (body.action === "cancel_discovery") cancelled = true;
       if (body.action === "quality") config = { ...config, video0: { size: "640x360", fps: 10, bitrate: 768 } };
       if (body.action === "power" && body.value === "off") power = false;
       if (body.action === "patch") for (const [section, fields] of Object.entries(body.patch)) config[section] = { ...config[section], ...fields as object };
       data = { id: operation };
     }
     if (path.includes("/commands/")) data = { id: operation, status: 3, results: [{ status_code: 200,
-      result: { status: "ok", snapshot_id: "fixture-snapshot", applied_fields: [] } }] };
+      result: { status: "ok", operation_id: operation, snapshot_id: "fixture-snapshot", applied_fields: [] } }] };
+    if (options.searchWaiting && searchOperation && path.endsWith(`/commands/${searchOperation}`)) data = { id: searchOperation, status: 2, results: [] };
     await route.fulfill({ json: data });
   });
   await page.goto("/cameras?device_id=4619");
@@ -92,6 +110,19 @@ test("discovery is explicit and an unverified port candidate cannot be bound", a
   expect(posts[0].body.action).toBe("discover");
 });
 
+test("discovery progress and cancellation use a distinct targeted operation", async ({ page }) => {
+  const posts = await cameraPortal(page, { native: true, searchWaiting: true });
+  await page.getByText("Подключение камеры", { exact: true }).click();
+  await page.getByRole("button", { name: "Найти камеру на port-2", exact: true }).click();
+  await expect(page.getByText("Ищем IP камеры…", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Остановить поиск", exact: true }).click();
+  await expect(page.getByText("Отмена поиска подтверждена", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Найти камеру на port-2", exact: true })).toBeEnabled();
+  expect(posts).toHaveLength(2);
+  expect(posts[1].body).toMatchObject({ action: "cancel_discovery", target_operation_id: posts[0].body.operation_id });
+  expect(posts[1].body.operation_id).not.toBe(posts[0].body.operation_id);
+});
+
 test("explicit camera HEVC refusal never creates a legacy route or H264 restart", async ({ page }) => {
   await page.addInitScript(() => Object.defineProperty(RTCRtpReceiver, "getCapabilities", { value: () => ({ codecs: [{ mimeType: "video/H264" }, { mimeType: "video/H265" }] }) }));
   const posts = await cameraPortal(page, { native: true, rejectStart: true });
@@ -105,6 +136,34 @@ test("explicit camera HEVC refusal never creates a legacy route or H264 restart"
   expect(starts).toHaveLength(1);
   expect(starts[0].body).toMatchObject({ mode: "camera", profile: "default", source_id: "cam:ip000001", codec_policy: "h265", browser_codecs: { h264: true, h265: true } });
   expect(posts.some(item => item.path.endsWith("/sessions"))).toBe(false);
+});
+
+test("credential entry uses the private endpoint and clears secrets from UI/storage", async ({ page }) => {
+  const posts = await cameraPortal(page, { native: true, credentialReady: true });
+  await page.getByText("Логин и пароль", { exact: true }).click();
+  await page.getByRole("textbox", { name: "Логин камеры", exact: true }).fill("private-fixture-login");
+  await page.getByLabel("Пароль камеры", { exact: true }).fill("private-fixture-password");
+  await page.getByRole("button", { name: "Сохранить и применить", exact: true }).click();
+  await expect(page.getByText("Применение и сохранение учётных данных подтверждены", { exact: true })).toBeVisible();
+  expect(posts.filter(item => item.path.endsWith("/credentials"))).toHaveLength(1);
+  expect(posts[0].body).toMatchObject({ action: "replace", username: "private-fixture-login", password: "private-fixture-password" });
+  await expect(page.getByLabel("Пароль камеры", { exact: true })).toHaveValue("");
+  await expect(page.getByRole("textbox", { name: "Логин камеры", exact: true })).toHaveValue("");
+  const stored = await page.evaluate(() => JSON.stringify({ ...sessionStorage, ...localStorage }));
+  expect(stored).not.toContain("private-fixture");
+});
+
+test("lost credential response blocks viewing after reload without repeating POST", async ({ page }) => {
+  const posts = await cameraPortal(page, { native: true, credentialReady: true, credentialLost: true });
+  await page.getByText("Логин и пароль", { exact: true }).click();
+  await page.getByRole("textbox", { name: "Логин камеры", exact: true }).fill("private-fixture-login");
+  await page.getByLabel("Пароль камеры", { exact: true }).fill("private-fixture-password");
+  await page.getByRole("button", { name: "Сохранить и применить", exact: true }).click();
+  await expect(page.getByText("Ответ не подтверждён. Автоматического повтора нет.", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Начать просмотр", exact: true })).toBeDisabled();
+  expect(posts.filter(item => item.path.endsWith("/credentials"))).toHaveLength(1);
+  expect(await page.evaluate(() => JSON.stringify({ ...sessionStorage, ...localStorage }))).not.toContain("private-fixture");
 });
 
 test("camera list uses explicit tags, includes offline, and never starts on selection", async ({ page }) => {
