@@ -21,6 +21,8 @@ export interface CameraState {
   camera_contract_revision?: string;
   auth_source?: "native" | "custom" | "none";
   has_credentials?: boolean;
+  actual_track?: { codec: "h264" | "h265"; codec_profile?: string; width: number; height: number; fps: number;
+    level_id?: number; bit_depth?: number; chroma?: string } | null;
   discovery?: { generation: number; state: string; physical_port: 2; ethernet_mode: "switch" | "ports";
     candidates: { candidate_id: string; mac: string; ip: string | null; native_api: string; auth: string; port_verified: boolean }[] };
   config?: { [section: string]: Record<string, CameraValue | undefined> | undefined;

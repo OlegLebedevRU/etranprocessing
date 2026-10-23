@@ -1,9 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function cameraPortal(page: Page, options: { viewer?: boolean; busy?: boolean; offline?: boolean; stale?: boolean; lost?: boolean; unauthorized?: boolean; native?: boolean; revisionAfterPoll?: boolean; rejectStart?: boolean; credentialReady?: boolean; credentialLost?: boolean; credentialUnauthorized?: boolean; searchWaiting?: boolean } = {}) {
+async function cameraPortal(page: Page, options: { viewer?: boolean; busy?: boolean; offline?: boolean; stale?: boolean; lost?: boolean; unauthorized?: boolean; native?: boolean; nativeAuto?: boolean; revisionAfterPoll?: boolean; rejectStart?: boolean; credentialReady?: boolean; credentialLost?: boolean; credentialUnauthorized?: boolean; searchWaiting?: boolean } = {}) {
   const posts: { path: string; body: any }[] = [];
   let operation = "";
   let config: any = { video0: { size: "1280x720", fps: 15, bitrate: 1024 }, nightMode: { lightMonitor: false } };
+  if (options.nativeAuto) config.video0 = { codec: "h265", size: "", fps: 0, bitrate: 0 };
   let reads = 0;
   let power = true;
   let credentialState: "active" | "cleared" | null = null;
@@ -13,6 +14,7 @@ async function cameraPortal(page: Page, options: { viewer?: boolean; busy?: bool
     new Date(Date.now() - (options.stale ? 400000 : 0)).toISOString(), cameras: [{
       camera_id: "cam:ip000001", status: "ready", revision: (options.revisionAfterPoll && reads > 1 ? "b" : "a").repeat(64), config,
       ...(options.native ? { camera_contract_revision: "siplite-camera/1.0.0" } : {}),
+      ...(options.nativeAuto ? { actual_track: { codec: "h265", width: 2592, height: 1944, fps: 20, level_id: 153, bit_depth: 8, chroma: "420" } } : {}),
       auth_source: credentialState === "active" ? "custom" : "native",
       ...(options.native ? { discovery: { generation: 2, state: cancelled ? "cancelled" : searchOperation && options.searchWaiting ? "resolving_ip" : "ready", physical_port: 2, ethernet_mode: "switch", candidates: [
         { candidate_id: "verified", mac: "02:00:00:00:00:01", ip: "192.0.2.10", native_api: "supported", auth: "verified", port_verified: true },
@@ -20,7 +22,7 @@ async function cameraPortal(page: Page, options: { viewer?: boolean; busy?: bool
       ] } } : {}),
       power: { enabled: power, observed_at: new Date().toISOString() },
       capabilities: { ...(options.native ? { methods: [160, 161, 165, 166], fields: [
-          { path: "video0.fps", type: "integer", read: true, write: true, disruptive: true, reason: null, minimum: 1, maximum: 30, values: [] },
+          { path: "video0.fps", type: "integer", read: true, write: true, disruptive: true, reason: null, minimum: 0, maximum: 30, values: [] },
           { path: "video0.size", type: "string", read: true, write: true, disruptive: true, reason: null, minimum: null, maximum: null, values: [] },
         ] } : {}), quality: { presets: [{ id: "medium", available: true }, { id: "hd", available: true }] },
         day_night: { write: true, modes: ["auto", "day", "night"] }, power: { available: true, actions: ["on", "off", "restart"] } },
@@ -86,6 +88,31 @@ test("native field draft survives polling and sends only the changed field", asy
   expect(posts).toHaveLength(1);
   expect(posts[0].body).toMatchObject({ action: "patch", expected_revision: "a".repeat(64), patch: { video0: { fps: 20 } } });
   expect(Object.keys(posts[0].body.patch.video0)).toEqual(["fps"]);
+});
+
+test("native automatic settings display SPS separately and never copy actual size into a patch", async ({ page }) => {
+  const posts = await cameraPortal(page, { native: true, nativeAuto: true });
+  await expect(page.getByText("H.265 · Native · FPS: Auto · Битрейт: Auto", { exact: true })).toBeVisible();
+  await expect(page.getByText("H.265 · 2592×1944 · 20 FPS · Level 5.1 · 8-bit · 420", { exact: true })).toBeVisible();
+  await page.getByText("Видео и изображение", { exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Размер кадра", exact: true })).toHaveValue("");
+  await expect(page.getByRole("spinbutton", { name: "Частота кадров, FPS", exact: true })).toHaveValue("0");
+  await page.getByRole("spinbutton", { name: "Частота кадров, FPS", exact: true }).fill("15");
+  await page.getByRole("button", { name: "Применить изменения", exact: true }).click();
+  await expect(page.getByText("Настройки применены и подтверждены камерой", { exact: true })).toBeVisible();
+  expect(posts).toHaveLength(1);
+  expect(posts[0].body.patch).toEqual({ video0: { fps: 15 } });
+});
+
+test("returning to native sends empty size and zero FPS unchanged", async ({ page }) => {
+  const posts = await cameraPortal(page, { native: true });
+  await page.getByText("Видео и изображение", { exact: true }).click();
+  await page.getByRole("textbox", { name: "Размер кадра", exact: true }).fill("");
+  await page.getByRole("spinbutton", { name: "Частота кадров, FPS", exact: true }).fill("0");
+  await page.getByRole("button", { name: "Применить изменения", exact: true }).click();
+  await expect(page.getByText("Настройки применены и подтверждены камерой", { exact: true })).toBeVisible();
+  expect(posts).toHaveLength(1);
+  expect(posts[0].body.patch).toEqual({ video0: { size: "", fps: 0 } });
 });
 
 test("new camera revision preserves the draft and blocks stale apply", async ({ page }) => {

@@ -51,6 +51,6 @@ export function CameraFields({ camera, disabled, onApply }: {
       <Button type="primary" disabled={blocked || !changed || conflict} onClick={async () => { if (draft && await onApply(cameraPatch(draft.values, fields), draft.revision)) setDraft(null); }}>Применить изменения</Button>
       <Button disabled={!draft || disabled} onClick={() => setDraft(null)}>Перечитать / отменить правки</Button>
     </Space>
-    <Typography.Text type="secondary">Применяются только изменённые поля. Пустой размер — Native, если камера разрешает автоматический выбор. Для изменений сначала остановите просмотр.</Typography.Text>
+    <Typography.Text type="secondary">Применяются только изменённые поля. Пустой размер — Native: Majestic берёт фактический размер источника. Нулевые FPS и битрейт означают Auto, если камера их поддерживает. Наблюдаемый формат показан отдельно и не записывается вместо Auto. Для изменений сначала остановите просмотр.</Typography.Text>
   </Space>;
 }
