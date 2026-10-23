@@ -56,6 +56,11 @@ and both old/new production-C tests before producing an ingress image.
 
 ## Validation and release
 
+The reader is deployed from accepted source daee873; see the
+[G20 release handoff](../.agent-context/tasks/completed/2026-10-23-siplite-g20-camera-reader.md)
+for the immutable image, production lifecycle checks, rollback and remaining
+camera/browser acceptance. No new device writers were enabled by this release.
+
 New C tests cover the13 media vectors, header boundaries/duplicates, feature
 gates, actual level123/153 descriptors, H.264 High, no down-projection,
 feature-off cleanup and stale epochs. An isolated real Redis additionally
