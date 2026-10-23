@@ -1,5 +1,9 @@
 # l4media
 
+## TASK 20 camera reader
+
+[Reader implementation](../../docs/etran_arch-siplite-camera-media-reader.md): отдельная negotiated schema, camera-only profile/level/raster, Janus fmtp probes, safe feature-off cleanup и Redis restore с сохранением revision. Локальная сборка GCC с Werror и production-C camera/legacy тесты прошли; отдельный изолированный реальный Redis подтвердил restore и отказ без reader. Production deploy и browser decode новой camera-ветки пока не выполнены.
+
 ## 2026-10-23 siplite camera extension
 
 [Contract](../../docs/etran_arch-siplite-hevc-integration-contract.md) и [machine package](../../contracts/siplite-camera-v1/README.md) вводят negotiated camera1.0.0 отдельно от frozen2.0.0. Архивный native SPS:2592×1944, Main8/420, level153; свежая read-only проба23.10:1920×1080@20, level123. Camera Auto допускает H.264 только до START, explicit H.265 не подменяется. siplite передаёт готовый bitstream без encode/transcode. Desktop/l4capture schemas и исходные frozen snapshots сохранены.

@@ -9,6 +9,7 @@
 #define MEDIA_V2_BODY_LIMIT 32768
 #define MEDIA_DESCRIPTOR_LIMIT 4096
 static json_t* g_media_schema = NULL;
+static json_t* g_media_camera_schema = NULL;
 
 static inline bool ms_equal(const json_t* a, const json_t* b) {
     if (json_is_number(a) && json_is_number(b)) return json_number_value(a) == json_number_value(b);
@@ -48,18 +49,23 @@ static inline bool ms_pattern(const char* pattern, const char* value) {
                   (*p >= '0' && *p <= '9') || *p == '.' || *p == '_' || *p == '-')) return false;
         return value[0] != 0;
     }
-    if (!strcmp(pattern, "^42[0-9a-f]{4}$"))
-        return strlen(value) == 6 && value[0] == '4' && value[1] == '2' &&
-            strspn(value + 2, "0123456789abcdef") == 4;
+    if (!strcmp(pattern, "^42[0-9a-f]{4}$") || !strcmp(pattern, "^4d[0-9a-f]{4}$") ||
+        !strcmp(pattern, "^64[0-9a-f]{4}$") || !strcmp(pattern, "^(42|4d|64)[0-9a-f]{4}$")) {
+        if (strlen(value) != 6 || strspn(value + 2, "0123456789abcdef") != 4) return false;
+        if (!strcmp(pattern, "^(42|4d|64)[0-9a-f]{4}$"))
+            return !strncmp(value, "42", 2) || !strncmp(value, "4d", 2) || !strncmp(value, "64", 2);
+        return !strncmp(value, pattern + 1, 2);
+    }
     return false; /* New schema keywords/patterns need explicit implementation. */
 }
 
-static bool ms_validate(const json_t* schema, const json_t* value, int depth) {
+static bool ms_validate_root(const json_t* root, const json_t* schema, const json_t* value, int depth) {
     if (!schema || !value || depth > 48) return false;
+    if (json_is_boolean(schema)) return json_is_true(schema);
     const char* reference = json_string_value(json_object_get(schema, "$ref"));
     if (reference) {
         if (strncmp(reference, "#/$defs/", 8)) return false;
-        if (!ms_validate(json_object_get(json_object_get(g_media_schema, "$defs"), reference + 8), value, depth + 1)) return false;
+        if (!ms_validate_root(root, json_object_get(json_object_get(root, "$defs"), reference + 8), value, depth + 1)) return false;
     }
     json_t* choice = json_object_get(schema, "const");
     if (choice && !ms_equal(choice, value)) return false;
@@ -108,8 +114,15 @@ static bool ms_validate(const json_t* schema, const json_t* value, int depth) {
         const char* key; json_t* item;
         json_object_foreach((json_t*)value, key, item) {
             json_t* subschema = json_object_get(properties, key);
-            if (subschema && !ms_validate(subschema, item, depth + 1)) return false;
+            if (subschema && !ms_validate_root(root, subschema, item, depth + 1)) return false;
             if (!subschema && json_is_false(json_object_get(schema, "additionalProperties"))) return false;
+        }
+        json_t* dependencies = json_object_get(schema, "dependentRequired");
+        json_t* required;
+        json_object_foreach(dependencies, key, required) {
+            if (!json_object_get(value, key)) continue;
+            for (size_t i = 0; i < json_array_size(required); i++)
+                if (!json_object_get(value, json_string_value(json_array_get(required, i)))) return false;
         }
     }
     if (json_is_array(value)) {
@@ -120,8 +133,8 @@ static bool ms_validate(const json_t* schema, const json_t* value, int depth) {
         json_t* contains = json_object_get(schema, "contains"); bool found = false;
         for (size_t i = 0; i < size; i++) {
             json_t* item = json_array_get(value, i);
-            if (items && !ms_validate(items, item, depth + 1)) return false;
-            if (contains && ms_validate(contains, item, depth + 1)) found = true;
+            if (items && !ms_validate_root(root, items, item, depth + 1)) return false;
+            if (contains && ms_validate_root(root, contains, item, depth + 1)) found = true;
             if (json_is_true(json_object_get(schema, "uniqueItems")))
                 for (size_t j = 0; j < i; j++) if (ms_equal(item, json_array_get(value, j))) return false;
         }
@@ -133,14 +146,28 @@ static bool ms_validate(const json_t* schema, const json_t* value, int depth) {
         if (!list) continue;
         size_t matches = 0;
         for (size_t i = 0; i < json_array_size(list); i++)
-            matches += ms_validate(json_array_get(list, i), value, depth + 1) ? 1 : 0;
+            matches += ms_validate_root(root, json_array_get(list, i), value, depth + 1) ? 1 : 0;
         if ((k == 0 && matches != json_array_size(list)) || (k == 1 && matches == 0) || (k == 2 && matches != 1)) return false;
     }
     choice = json_object_get(schema, "if");
-    if (choice && ms_validate(choice, value, depth + 1)) {
-        choice = json_object_get(schema, "then");
-        if (choice && !ms_validate(choice, value, depth + 1)) return false;
+    if (choice) {
+        choice = json_object_get(schema, ms_validate_root(root, choice, value, depth + 1) ? "then" : "else");
+        if (choice && !ms_validate_root(root, choice, value, depth + 1)) return false;
     }
+    choice = json_object_get(schema, "not");
+    if (choice && ms_validate_root(root, choice, value, depth + 1)) return false;
+    return true;
+}
+
+static inline bool ms_validate(const json_t* schema, const json_t* value, int depth) {
+    return ms_validate_root(g_media_schema, schema, value, depth);
+}
+
+static inline bool media_camera_schema_load(const char* path) {
+    json_error_t error;
+    json_t* schema = json_load_file(path, JSON_REJECT_DUPLICATES, &error);
+    if (!schema) return false;
+    json_decref(g_media_camera_schema); g_media_camera_schema = schema;
     return true;
 }
 
@@ -152,12 +179,16 @@ static inline bool media_schema_load(const char* path) {
     return true;
 }
 
-static inline json_t* media_v2_parse(const char* body, const char* definition) {
-    if (!body || strlen(body) > MEDIA_V2_BODY_LIMIT || !g_media_schema) return NULL;
+static inline json_t* media_parse_schema(json_t* root, const char* body, const char* definition) {
+    if (!body || strlen(body) > MEDIA_V2_BODY_LIMIT || !root) return NULL;
     json_error_t error;
     json_t* value = json_loads(body, JSON_REJECT_DUPLICATES, &error);
-    json_t* schema = json_object_get(json_object_get(g_media_schema, "$defs"), definition);
-    if (value && ms_validate(schema, value, 0)) return value;
+    json_t* schema = json_object_get(json_object_get(root, "$defs"), definition);
+    if (value && ms_validate_root(root, schema, value, 0)) return value;
     json_decref(value); return NULL;
+}
+
+static inline json_t* media_v2_parse(const char* body, const char* definition) {
+    return media_parse_schema(g_media_schema, body, definition);
 }
 #endif

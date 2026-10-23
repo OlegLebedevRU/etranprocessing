@@ -20,11 +20,12 @@ $(TARGET): $(OBJS)
 
 $(OBJS): $(HEADERS)
 
-test: contract-check $(TEST_TARGET) test_feedback test_media_deadline test_media_v2
+test: contract-check $(TEST_TARGET) test_feedback test_media_deadline test_media_v2 test_media_camera
 	./$(TEST_TARGET)
 	./test_feedback
 	./test_media_deadline
 	./test_media_v2
+	./test_media_camera
 
 $(TEST_TARGET): $(TEST_SRCS) $(HEADERS)
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
@@ -35,13 +36,17 @@ test_feedback: tests/test_feedback.c src/l4media_ingress.c $(HEADERS)
 test_media_deadline: tests/test_media_deadline.c src/l4media_ingress.c $(HEADERS)
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
 
-test_media_v2: tests/test_media_v2.c src/l4media_ingress.c $(HEADERS)
+test_media_v2: tests/test_media_v2.c tests/test_media_common.h src/l4media_ingress.c $(HEADERS)
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
+
+test_media_camera: tests/test_media_camera.c tests/test_media_common.h src/l4media_ingress.c $(HEADERS)
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
 
 clean:
-	rm -f $(OBJS) $(TARGET) $(TEST_TARGET) test_feedback test_media_deadline test_media_v2
+	rm -f $(OBJS) $(TARGET) $(TEST_TARGET) test_feedback test_media_deadline test_media_v2 test_media_camera
 
 .PHONY: all clean test contract-check
 
 contract-check:
 	@sha256sum -c spec/SHA256SUMS > /dev/null
+	@sha256sum -c spec/camera-v1/SHA256SUMS > /dev/null
