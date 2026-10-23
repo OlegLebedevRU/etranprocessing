@@ -162,7 +162,24 @@ async def test_hevc_availability_does_not_require_pilot_sn(context, sn):
     assert result["hevc_available"] is True
     assert result["reason_code"] == "ready"
     service.iot.remote_video_v2.assert_awaited_once_with(
-        sn, "inventory", org_id=args["org_id"], user=args["user"]
+        sn, "inventory", org_id=args["org_id"], user=args["user"], source_id=None
+    )
+
+
+@pytest.mark.anyio
+async def test_desktop_availability_probes_selected_source(context):
+    service, args, _, cap = context
+    cap["video_capabilities"]["source_id"] = "disp:secondary"
+    result = await service.availability(
+        args["sn"], "disp:secondary", args["profile_id"], args["org_id"], args["user"]
+    )
+    assert result["hevc_available"] is True
+    service.iot.remote_video_v2.assert_awaited_once_with(
+        args["sn"],
+        "inventory",
+        org_id=args["org_id"],
+        user=args["user"],
+        source_id="disp:secondary",
     )
 
 
@@ -396,3 +413,36 @@ async def test_http_adapter_uses_negotiated_routes_without_legacy_retry(monkeypa
         ("POST", "/api/internal/v1/remote-input/lease/lease/stream/start"),
         ("POST", "/api/internal/v1/remote-input/lease/lease/video-stop"),
     ]
+
+
+@pytest.mark.anyio
+async def test_http_adapter_preserves_source_and_separate_camera_contract(monkeypatch):
+    import httpx
+
+    from app.services.iot_client import IotPlatformClient
+
+    monkeypatch.setattr(settings, "remote_control_enabled", True)
+    requests = []
+
+    def respond(request):
+        requests.append(request)
+        return httpx.Response(200, json={})
+
+    original = httpx.AsyncClient
+    monkeypatch.setattr(
+        "app.services.iot_client.httpx.AsyncClient",
+        lambda **kwargs: original(transport=httpx.MockTransport(respond), **kwargs),
+    )
+    client = IotPlatformClient(
+        base_url="http://localhost", service_token="synthetic-test-only"
+    )
+    await client.remote_video_v2(
+        "test-source", "inventory", source_id="disp:secondary", org_id=1
+    )
+    assert requests[0].url.params["source_id"] == "disp:secondary"
+    assert "X-L4-Camera-Contract" not in requests[0].headers
+    await client.remote_video_v2(
+        "test-camera", "inventory", camera_contract=True, org_id=1
+    )
+    assert "source_id" not in requests[1].url.params
+    assert "X-L4-Camera-Contract" in requests[1].headers
