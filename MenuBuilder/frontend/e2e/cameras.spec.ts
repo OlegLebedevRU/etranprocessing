@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 async function cameraPortal(page: Page, options: { viewer?: boolean; busy?: boolean; offline?: boolean; stale?: boolean; lost?: boolean; unauthorized?: boolean; native?: boolean; nativeAuto?: boolean; revisionAfterPoll?: boolean; rejectStart?: boolean; credentialReady?: boolean; credentialLost?: boolean; credentialUnauthorized?: boolean; searchWaiting?: boolean } = {}) {
   const posts: { path: string; body: any }[] = [];
   let operation = "";
-  let config: any = { video0: { size: "1280x720", fps: 15, bitrate: 1024 }, nightMode: { lightMonitor: false } };
+  let config: any = { video0: { size: "1280x720", fps: 15, bitrate: 1024 }, image: { luminance: 50 }, nightMode: { lightMonitor: false } };
   if (options.nativeAuto) config.video0 = { codec: "h265", size: "", fps: 0, bitrate: 0 };
   let reads = 0;
   let power = true;
@@ -24,6 +24,7 @@ async function cameraPortal(page: Page, options: { viewer?: boolean; busy?: bool
       capabilities: { ...(options.native ? { methods: [160, 161, 165, 166], fields: [
           { path: "video0.fps", type: "integer", read: true, write: true, disruptive: true, reason: null, minimum: 0, maximum: 30, values: [] },
           { path: "video0.size", type: "string", read: true, write: true, disruptive: true, reason: null, minimum: null, maximum: null, values: [] },
+          { path: "image.luminance", type: "integer", read: true, write: true, disruptive: false, reason: null, minimum: 0, maximum: 100, values: [] },
         ] } : {}), quality: { presets: [{ id: "medium", available: true }, { id: "hd", available: true }] },
         day_night: { write: true, modes: ["auto", "day", "night"] }, power: { available: true, actions: ["on", "off", "restart"] } },
     }] });
@@ -113,6 +114,17 @@ test("returning to native sends empty size and zero FPS unchanged", async ({ pag
   await expect(page.getByText("Настройки применены и подтверждены камерой", { exact: true })).toBeVisible();
   expect(posts).toHaveLength(1);
   expect(posts[0].body.patch).toEqual({ video0: { size: "", fps: 0 } });
+});
+
+test("native image brightness sends the canonical luminance field including zero", async ({ page }) => {
+  const posts = await cameraPortal(page, { native: true });
+  await page.getByText("Видео и изображение", { exact: true }).click();
+  await expect(page.getByRole("spinbutton", { name: "Яркость", exact: true })).toHaveValue("50");
+  await page.getByRole("spinbutton", { name: "Яркость", exact: true }).fill("0");
+  await page.getByRole("button", { name: "Применить изменения", exact: true }).click();
+  await expect(page.getByText("Настройки применены и подтверждены камерой", { exact: true })).toBeVisible();
+  expect(posts).toHaveLength(1);
+  expect(posts[0].body.patch).toEqual({ image: { luminance: 0 } });
 });
 
 test("new camera revision preserves the draft and blocks stale apply", async ({ page }) => {
