@@ -318,11 +318,12 @@ export async function getDeviceInventory(
 export async function startDeviceStream(
   deviceId: number,
   payload: {
-    mode: "desktop" | "usb-camera";
+    mode: "desktop" | "usb-camera" | "camera";
     source_id: string;
     profile?: string;
     lease_id?: string;
     codec_policy?: CodecPolicy;
+    browser_codecs?: { h264: boolean | null; h265: boolean | null; checked_at_ms: number; valid_until_ms: number };
   }
 ): Promise<StreamStartResponse> {
   const { data } = await client.post<StreamStartResponse>(

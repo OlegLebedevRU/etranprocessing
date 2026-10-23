@@ -146,9 +146,15 @@ class MediaOrchestratorClient:
         path: str,
         params: dict[str, Any] | None = None,
         json_data: dict[str, Any] | None = None,
+        *,
+        camera_contract: bool = False,
     ) -> dict[str, Any]:
         url = f"{self.base_url}{path}"
         headers = self._get_headers()
+        if camera_contract:
+            from app.services.camera_contract import CAMERA_REVISION
+
+            headers["X-L4-Camera-Contract"] = CAMERA_REVISION
         clean_params = {k: v for k, v in (params or {}).items() if v is not None}
 
         try:
@@ -188,10 +194,16 @@ class MediaOrchestratorClient:
             ) from exc
 
     async def video_v2(
-        self, action: str, payload: dict[str, Any] | None = None
+        self,
+        action: str,
+        payload: dict[str, Any] | None = None,
+        *,
+        camera_contract: bool = False,
     ) -> dict[str, Any]:
         if action == "capabilities":
-            return await self._send_request("GET", "/api/v2/media/capabilities")
+            return await self._send_request(
+                "GET", "/api/v2/media/capabilities", camera_contract=camera_contract
+            )
         if action == "health" and payload:
             query = {
                 key: value
@@ -199,12 +211,18 @@ class MediaOrchestratorClient:
                 if key not in ("contract_version", "session_id")
             }
             return await self._send_request(
-                "GET", f"/api/v2/media/sessions/{payload['session_id']}", params=query
+                "GET",
+                f"/api/v2/media/sessions/{payload['session_id']}",
+                params=query,
+                camera_contract=camera_contract,
             )
         if action not in ("start", "stop", "renew"):
             raise ValueError("Unknown media v2 action")
         return await self._send_request(
-            "POST", f"/api/v2/media/sessions/{action}", json_data=payload
+            "POST",
+            f"/api/v2/media/sessions/{action}",
+            json_data=payload,
+            camera_contract=camera_contract,
         )
 
     async def start_session(

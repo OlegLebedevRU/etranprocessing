@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
@@ -12,6 +13,146 @@ from app.database import get_db
 from app.main import app
 from app.routers import cameras
 from app.services.camera_platform import camera_snapshot
+
+
+def test_native_patch_uses_accepted_schema_and_larger_deadline():
+    command = cameras.CameraCommand(
+        operation_id=uuid4(),
+        action="patch",
+        expected_revision="a" * 64,
+        allow_disruptive=True,
+        patch={
+            "video0": {"codec": "h265", "size": "2592x1944"},
+            "image": {"mirror": True},
+        },
+    )
+    code, item = command.rpc()
+    assert code == 161 and item["timeout_ms"] == 30000
+    assert item["patch"] == command.patch
+    with pytest.raises(HTTPException) as error:
+        cameras.CameraCommand(
+            operation_id=uuid4(),
+            action="patch",
+            expected_revision="a" * 64,
+            allow_disruptive=True,
+            patch={"credentials": {"password": "private-input"}},
+        )
+    assert error.value.detail == {"code": "invalid_camera_command"}
+
+
+def test_discovery_cancel_and_binding_preserve_separate_identities():
+    target = uuid4()
+    command = cameras.CameraCommand(
+        operation_id=uuid4(),
+        action="cancel_discovery",
+        target_operation_id=target,
+        allow_disruptive=True,
+    )
+    code, item = command.rpc()
+    assert code == 165 and item["action"] == "cancel"
+    assert item["operation_id"] != item["target_operation_id"] == str(target)
+    bind = cameras.CameraCommand(
+        operation_id=uuid4(),
+        action="bind",
+        expected_revision="a" * 64,
+        candidate_mac="02:00:00:00:00:01",
+        discovery_generation=2,
+        allow_disruptive=True,
+    )
+    assert bind.rpc()[0] == 166
+    with pytest.raises(HTTPException):
+        cameras.CameraCommand(
+            operation_id=uuid4(),
+            action="bind",
+            expected_revision="a" * 64,
+            allow_disruptive=True,
+        )
+
+
+@pytest.mark.anyio
+async def test_discovery_rest_opt_in_and_task_identity_are_explicit(
+    context, monkeypatch
+):
+    _, upstream, _ = context
+    monkeypatch.setattr(cameras, "require_camera_extension", AsyncMock(return_value={}))
+    command = cameras.CameraCommand(
+        operation_id=uuid4(), action="discover", allow_disruptive=True
+    )
+    await cameras.command_camera(4619, command, {"org_id": 1}, AsyncMock())
+    task = upstream.await_args.kwargs["body"]
+    assert task["camera_contract_revision"] == "siplite-camera/1.0.0"
+    assert task["method_code"] == 165
+    assert task["payload"]["dt"][0]["operation_id"] == str(command.operation_id)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("verified,generation", [(False, 2), (True, 1)])
+async def test_binding_rejects_unverified_port_or_stale_discovery(
+    context, monkeypatch, verified, generation
+):
+    _, upstream, _ = context
+    gate = AsyncMock(
+        return_value={
+            "revision": "a" * 64,
+            "discovery": {
+                "generation": generation,
+                "candidates": [{"mac": "02:00:00:00:00:01", "port_verified": verified}],
+            },
+        }
+    )
+    monkeypatch.setattr(cameras, "require_camera_extension", gate)
+    command = cameras.CameraCommand(
+        operation_id=uuid4(),
+        action="bind",
+        expected_revision="a" * 64,
+        candidate_mac="02:00:00:00:00:01",
+        discovery_generation=2,
+        allow_disruptive=True,
+    )
+    with pytest.raises(HTTPException) as error:
+        await cameras.command_camera(4619, command, {"org_id": 1}, AsyncMock())
+    assert error.value.detail == {"code": "camera_candidate_changed"}
+    assert all(call.args[0] == "GET" for call in upstream.await_args_list)
+
+
+@pytest.mark.anyio
+async def test_extended_writer_requires_fresh_advertised_method(context):
+    _, upstream, _ = context
+    camera = {
+        "camera_id": "cam:ip000001",
+        "camera_contract_revision": "siplite-camera/1.0.0",
+        "capabilities": {"methods": [160, 161]},
+        "revision": "a" * 64,
+    }
+    snapshot = {"observed_at": datetime.now(UTC).isoformat(), "cameras": [camera]}
+    upstream.return_value = {
+        "items": [
+            {"device_id": 4619, "type": 84, "gauges": {"300": [{"450": snapshot}]}}
+        ]
+    }
+    assert await cameras.require_camera_extension(4619, 1, {}, 161) == camera
+    snapshot["observed_at"] = "2000-01-01T00:00:00Z"
+    with pytest.raises(HTTPException) as error:
+        await cameras.require_camera_extension(4619, 1, {}, 161)
+    assert error.value.status_code == 409
+
+
+@pytest.mark.anyio
+async def test_patch_revision_conflict_stops_before_task_creation(context, monkeypatch):
+    _, upstream, _ = context
+    gate = AsyncMock(return_value={"revision": "b" * 64})
+    monkeypatch.setattr(cameras, "require_camera_extension", gate)
+    body = cameras.CameraCommand(
+        operation_id=uuid4(),
+        action="patch",
+        expected_revision="a" * 64,
+        allow_disruptive=True,
+        patch={"video0": {"codec": "h265"}},
+    )
+    with pytest.raises(HTTPException) as error:
+        await cameras.command_camera(4619, body, {"org_id": 1}, AsyncMock())
+    assert error.value.status_code == 409
+    assert all(call.args[0] == "GET" for call in upstream.await_args_list)
 
 
 @pytest.fixture

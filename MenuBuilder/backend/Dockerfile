@@ -19,6 +19,7 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 # Verify the same application source in an isolated build container.
 FROM runtime AS verification
 COPY contracts/hevc-v2/ /workspace/contracts/hevc-v2/
+COPY contracts/siplite-camera-v1/ /workspace/contracts/siplite-camera-v1/
 COPY MenuBuilder/nginx.conf /workspace/MenuBuilder/nginx.conf
 COPY MenuBuilder/backend/tests/ ./tests/
 RUN uv sync --locked --no-editable --no-cache

@@ -2,6 +2,7 @@ export interface JanusClientOptions {
   wsUrl: string;
   mountpointId: number;
   pin?: string;
+  iceServers?: RTCIceServer[];
   onRemoteTrack: (stream: MediaStream) => void;
   onStatusChange?: (status: string) => void;
   onError?: (error: Error | string) => void;
@@ -22,6 +23,7 @@ export class JanusStreamingClient {
   private wsUrl: string;
   private mountpointId: number;
   private pin?: string;
+  private iceServers: RTCIceServer[];
   private onRemoteTrack: (stream: MediaStream) => void;
   private onStatusChange?: (status: string) => void;
   private onError?: (error: Error | string) => void;
@@ -38,6 +40,7 @@ export class JanusStreamingClient {
     this.wsUrl = options.wsUrl;
     this.mountpointId = options.mountpointId;
     this.pin = options.pin;
+    this.iceServers = [{ urls: "stun:stun.cloudflare.com:3478" }, ...(options.iceServers ?? [])];
     this.onRemoteTrack = options.onRemoteTrack;
     this.onStatusChange = options.onStatusChange;
     this.onError = options.onError;
@@ -204,7 +207,7 @@ export class JanusStreamingClient {
 
     // 3. Setup RTCPeerConnection
     this.pc = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+      iceServers: this.iceServers,
     });
 
     this.pc.onicecandidate = (event) => {

@@ -22,6 +22,12 @@ from pydantic import BaseModel, ConfigDict
 from pydantic import ValidationError as ModelValidationError
 
 from app.config import settings
+from app.services.camera_contract import (
+    MEDIA_VALIDATORS,
+    extended_camera,
+    media_contract_options,
+)
+from app.services.camera_video import CameraVideoState
 from app.services.iot_client import IotPlatformClient
 from app.services.media_orchestrator_client import (
     MediaOrchestratorClient,
@@ -67,13 +73,16 @@ class IotVideoState(BaseModel):
 
 def validate_iot_state(value: dict[str, Any]) -> dict[str, Any]:
     try:
-        result = IotVideoState.model_validate(value).model_dump(mode="json")
+        model = (
+            CameraVideoState if "camera_contract_revision" in value else IotVideoState
+        )
+        result = model.model_validate(value).model_dump(mode="json")
     except ModelValidationError as exc:
         raise HTTPException(502, detail={"code": "invalid_video_contract"}) from exc
     validate_video("descriptor", result["descriptor"])
     if result["actual_descriptor"] is not None:
         validate_video("descriptor", result["actual_descriptor"])
-    if result["error"] is not None:
+    if result.get("error") is not None:
         validate_video("error_detail", result["error"])
     return result
 
@@ -114,7 +123,12 @@ def validate_video(definition: str, value: dict[str, Any]) -> dict[str, Any]:
     try:
         if len(json.dumps(value, ensure_ascii=False).encode()) > 32768:
             raise ValueError("oversize")
-        VALIDATORS[definition].validate(value)
+        validators = (
+            MEDIA_VALIDATORS
+            if extended_camera(value) or "camera_contract_revisions" in value
+            else VALIDATORS
+        )
+        validators[definition].validate(value)
     except (ValidationError, ValueError, TypeError) as exc:
         # Provider payloads may contain PINs: never return/log the validation instance.
         raise HTTPException(
@@ -179,6 +193,13 @@ def make_stop_command(
         return None
     agent = status.get("agent") or {}
     stream = agent.get("stream") or {}
+    if extended_camera(descriptor):
+        return dict(
+            media_identity(
+                sn, lease_id, str(stream.get("stream_instance_id") or ""), descriptor
+            ),
+            reason="user_stop",
+        )
     now = int(time.time() * 1000)
     return validate_video(
         "stop",
@@ -359,7 +380,10 @@ class VideoContractOrchestrator:
                 stream_id = str(stream.get("stream_instance_id") or "")
                 identity = media_identity(sn, lease_id, stream_id, existing)
                 media = validate_video(
-                    "media_health", await self.media.video_v2("health", identity)
+                    "media_health",
+                    await self.media.video_v2(
+                        "health", identity, **media_contract_options(existing)
+                    ),
                 )
                 verify_media_response(media, identity, existing)
                 if (
@@ -464,7 +488,10 @@ class VideoContractOrchestrator:
         producer_attempted = False
         try:
             media = validate_video(
-                "media_response", await self.media.video_v2("start", request)
+                "media_response",
+                await self.media.video_v2(
+                    "start", request, **media_contract_options(descriptor)
+                ),
             )
             verify_media_response(media, identity, descriptor)
             if (
@@ -553,7 +580,9 @@ class VideoContractOrchestrator:
                     )
             with contextlib.suppress(MediaOrchestratorError):
                 await self.media.video_v2(
-                    "stop", dict(identity, reason="partial_start_failed")
+                    "stop",
+                    dict(identity, reason="partial_start_failed"),
+                    **media_contract_options(descriptor),
                 )
             raise
 
