@@ -13,6 +13,7 @@ from sqlalchemy import (
     Integer,
     SmallInteger,
     String,
+    Text,
     false,
     func,
 )
@@ -42,6 +43,7 @@ class Terminal(Base):
     device_id: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
     sn: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     cert_serial: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    credential_recipient_pem: Mapped[str | None] = mapped_column(Text, nullable=True)
     cert_not_valid_after: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
