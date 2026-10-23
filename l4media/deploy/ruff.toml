@@ -1,0 +1,7 @@
+# These release utilities run with the Ubuntu builder/production system Python.
+target-version = "py312"
+line-length = 120
+
+[lint]
+select = ["E", "F", "W", "UP", "I"]
+ignore = ["E501"]
