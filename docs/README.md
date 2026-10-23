@@ -9,6 +9,8 @@
 
 ## 1. Архитектура системы и модели данных
 
+- [l4media camera reader](etran_arch-siplite-camera-media-reader.md) — negotiated schema, Janus format probes, Redis restore и совместимость старых клиентов.
+
 - [siplite H.265 и camera control](etran_arch-siplite-hevc-integration-contract.md) — negotiated camera schema, Auto до START и стабильный локальный API; [machine package](../contracts/siplite-camera-v1/README.md). Снимки frozen schema/OpenAPI сохранены.
 
 - [Локеры — архитектура MVP](etran_arch-lockers-mvp.md) — согласованные бизнес-правила, ответственность PB/MB/IoT/siplite, многоуровневые Mermaid-схемы, состояния и NVS.

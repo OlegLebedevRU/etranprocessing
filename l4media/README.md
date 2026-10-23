@@ -1,5 +1,8 @@
 # Подпроект `l4media`: Серверный Alpha-MVP для видеостримов L4RTP/1 и WebRTC
 
+Negotiated siplite camera reader, configuration and verification:
+[camera reader](../docs/etran_arch-siplite-camera-media-reader.md).
+
 > 📖 **Полная архитектурная спецификация:**  
 > Детальное описание архитектуры, матрицы портов, формата видеопотока и способов интеграции с `MenuBuilder` представлено в **[`ARCHITECTURE.md`](ARCHITECTURE.md)** и **[`docs/etran_arch-l4media-streaming-architecture.md`](../docs/etran_arch-l4media-streaming-architecture.md)**.  
 > 📊 **Профилирование ресурсов, юнит-бюджеты и расчет емкости (480p vs 720p):** **[`docs/etran_arch-l4media-resource-profiling-and-unit-budgets.md`](../docs/etran_arch-l4media-resource-profiling-and-unit-budgets.md)**.
