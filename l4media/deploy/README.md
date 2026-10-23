@@ -56,6 +56,14 @@ contracts in an internal Docker network without production credentials or
 published ports. Test containers, network and synthetic secrets are cleaned up.
 Browser decoded video remains a separate production acceptance check.
 
+The layer scanner recognizes legacy Docker `*/layer.tar` exports and current
+Docker/containerd save archives whose compatibility manifest references
+`blobs/sha256/*`. It reads every required layer plus additional saved tar/gzip
+blobs, so a later whiteout cannot conceal earlier private material. Known image
+metadata is distinguished from layers; missing/corrupt layers, unknown blobs and
+unsupported export layouts still fail publication. Whole exports spool to a
+temporary file instead of consuming an image-sized RAM buffer.
+
 ## Private configuration and coordinated activation
 
 The private media `.env` must provide distinct randomly generated credentials
