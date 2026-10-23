@@ -7,5 +7,6 @@
 !routes.conf
 !openapi.json
 !openapi-v2.json
+!openapi-camera-v1.json
 !spec/
 !spec/**
