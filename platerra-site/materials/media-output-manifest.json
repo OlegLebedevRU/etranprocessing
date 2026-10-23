@@ -1,0 +1,52 @@
+[
+  {
+    "name": "hmi-panel",
+    "processed_source": "materials\\processed\\hmi-retouched.png",
+    "processed_sha256": "d9162d69ff6693a7d46343108d56c4fde439e793d1ca9dabe860dd70cabb1f8b",
+    "webp_bytes": {
+      "480": 9968,
+      "960": 27206,
+      "full": 50460
+    }
+  },
+  {
+    "name": "io24-board",
+    "processed_source": "materials\\processed\\io24-retouched.png",
+    "processed_sha256": "cef77771fac5b732d794aa91632c7873d42c32822f8eba71fd262516d121689e",
+    "webp_bytes": {
+      "480": 19574,
+      "960": 65518,
+      "full": 124364
+    }
+  },
+  {
+    "name": "industrial-cabinet",
+    "processed_source": "materials\\processed\\industrial-frame.png",
+    "processed_sha256": "a50c7bacd666416571328ec3c00da92476077da08baf1f5d5b3305a861c669d9",
+    "webp_bytes": {
+      "480": 33580,
+      "960": 51254,
+      "full": 62128
+    }
+  },
+  {
+    "name": "terminal-locker",
+    "processed_source": "materials\\processed\\locker-frame.png",
+    "processed_sha256": "213608df4a8f0987c0897fc4b334196c55678dc08c3b5a4ef382891616d90d23",
+    "webp_bytes": {
+      "480": 14700,
+      "960": 19782,
+      "full": 23918
+    }
+  },
+  {
+    "name": "vending-mechanism",
+    "processed_source": "materials\\processed\\vending-retouched.png",
+    "processed_sha256": "c3516cc7f5ad642757bd36a4270ced7a765027030e2bfcf89792ade41b2ca7f5",
+    "webp_bytes": {
+      "480": 40232,
+      "960": 77172,
+      "full": 91238
+    }
+  }
+]

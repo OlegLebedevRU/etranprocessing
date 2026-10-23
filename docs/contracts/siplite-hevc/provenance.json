@@ -1,0 +1,14 @@
+{
+    "document_revision":  "siplite-hevc/1.0",
+    "created_date":  "2026-10-23",
+    "baseline_contract":  "hevc-contract/2.0.0",
+    "baseline_full_package_aggregate_sha256":  "f065b967cd10c2c709fb394ef9e6c2ecf74f77de060d88c9a821cc9069766ac4",
+    "server_source_sha":  "dcd3ea1c04a6be1e3fe3047f3d5a3bec8747081d",
+    "source_bundle_sha256":  "ffa96432488ff2fc962e261078667cd5334d58e213cc2fc21b99ff2a6ae45ad6",
+    "scope":  "Unchanged baseline schema/OpenAPI snapshots plus a derived synthetic camera payload. Not the full frozen package. Camera schema extension is design only.",
+    "files":  {
+                  "hevc.schema.json":  "73b08353a6d6e1665a8e8e85e7bfc185a5fe01af6e5704fea74cc3e710bbaa36",
+                  "openapi-v2.json":  "9ca0340130fdc8926207ce2e27b73ad483f685c0da4319e1458a757af1d33a41",
+                  "media-start-camera-h265.json":  "525c00e32761e8ae3cf55a14d03be1f10855b96baaacb2abb37c6946591a4540"
+              }
+}

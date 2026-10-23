@@ -1,0 +1,7 @@
+dist/
+.preview/
+.playwright-cli/
+materials/legacy-*.txt
+node_modules/
+.env*
+!.env.example
