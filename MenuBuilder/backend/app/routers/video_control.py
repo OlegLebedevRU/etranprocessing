@@ -221,10 +221,11 @@ class KeepaliveRequest(BaseModel):
 
 class StreamStartRequest(BaseModel):
     codec_policy: Literal["auto", "h264", "h265"] | None = None
-    mode: Literal["desktop", "usb-camera"]
+    mode: Literal["desktop", "usb-camera", "camera"]
     source_id: str
     profile: str = "default"
     lease_id: str | None = None
+    browser_codecs: dict[str, Any] | None = None
 
 
 class StreamStopRequest(BaseModel):
@@ -665,9 +666,9 @@ async def acquire_device_control_lease(
                 terminal.sn, org_id=org_id, user=user
             )
             stream_info = (status_data.get("agent") or {}).get("stream") or {}
-            if (
-                stream_info.get("state") == "running"
-                and stream_info.get("mode") == "usb-camera"
+            if stream_info.get("state") == "running" and stream_info.get("mode") in (
+                "usb-camera",
+                "camera",
             ):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -766,9 +767,9 @@ async def change_device_control_scope(
     )
     if body.scope == "input":
         stream_info = (status_data.get("agent") or {}).get("stream") or {}
-        if (
-            stream_info.get("state") == "running"
-            and stream_info.get("mode") == "usb-camera"
+        if stream_info.get("state") == "running" and stream_info.get("mode") in (
+            "usb-camera",
+            "camera",
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -989,7 +990,31 @@ async def start_device_stream(
 
     extended = None
     prepared = None
-    if body.codec_policy is not None:
+    if body.mode == "camera":
+        from pydantic import ValidationError
+
+        from app.services.camera_video import BrowserCodecs, NativeCameraVideo
+
+        try:
+            browser = (
+                BrowserCodecs.model_validate(body.browser_codecs)
+                if body.browser_codecs is not None
+                else None
+            )
+        except ValidationError:
+            raise HTTPException(
+                422, detail={"code": "camera_browser_capabilities_invalid"}
+            ) from None
+        extended = await NativeCameraVideo(iot_client, media_orchestrator_client).start(
+            terminal=terminal,
+            lease_id=lease_id,
+            policy=body.codec_policy or "auto",
+            source_id=source_id,
+            profile_id=body.profile,
+            browser=browser,
+            user=user,
+        )
+    elif body.codec_policy is not None:
         current = await load_video_status(
             iot_client, terminal.sn, org_id=org_id, user=user
         )
@@ -1067,13 +1092,16 @@ async def start_device_stream(
             result=str(res.get("result", "")),
             state=res.get("state"),
         )
-        if body.codec_policy is not None:
+        if body.codec_policy is not None or body.mode == "camera":
             payload = response.model_dump()
             payload["resolved_codec"] = (
                 extended["resolved_codec"] if extended else "h264"
             )
             if extended:
                 payload["descriptor"] = extended["descriptor"]
+                if body.mode == "camera":
+                    payload["confirmation"] = extended.get("confirmation")
+                    payload["codec_reason"] = extended.get("codec_reason")
                 raw_media = extended["media"]
                 payload["media"] = {
                     "mountpoint_id": raw_media["mountpoint_id"],
@@ -1600,7 +1628,7 @@ async def send_device_control_event(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Ввод не разрешён: требуется аренда со scope input",
             )
-        if stream_info.get("mode") == "usb-camera":
+        if stream_info.get("mode") in ("usb-camera", "camera"):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Ввод запрещён в режиме трансляции камеры",
@@ -1897,7 +1925,7 @@ async def control_ws_proxy(
 
     agent_info = status_res.get("agent") or {}
     stream_info = agent_info.get("stream") or {}
-    is_camera = stream_info.get("mode") == "usb-camera"
+    is_camera = stream_info.get("mode") in ("usb-camera", "camera")
     is_input_scope = lease_info.get("scope", "input") == "input"
     has_stream_lease = is_input_scope and bool(lease_info.get("stream_instance_id"))
 

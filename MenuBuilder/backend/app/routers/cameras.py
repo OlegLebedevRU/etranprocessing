@@ -16,7 +16,11 @@ from app.routers.video import _verify_device_access
 from app.routers.video_control import require_operator_user
 from app.security.permissions import PERMISSION_VIDEO_VIEW, require_permission
 from app.services.camera_contract import CAMERA_REVISION, validate_camera_rpc
-from app.services.camera_platform import camera_request, camera_snapshot
+from app.services.camera_platform import (
+    camera_main_app_online,
+    camera_request,
+    camera_snapshot,
+)
 from app.services.iot_client import iot_client
 
 router = APIRouter(prefix="/api/cameras", tags=["cameras"])
@@ -228,9 +232,12 @@ async def get_camera(
     control = await iot_client.remote_input_status(
         sn=terminal.sn, org_id=terminal.org_id, user=user
     )
+    main_online = await camera_main_app_online(terminal.sn, terminal.org_id, user)
     return {
         "device_id": device_id,
-        "terminal_online": (control.get("agent") or {}).get("online") is True,
+        "terminal_online": main_online
+        if main_online is not None
+        else (control.get("agent") or {}).get("online") is True,
         "snapshot": camera_snapshot(gauges, device_id),
         "lease_active": (
             active
@@ -252,7 +259,11 @@ async def command_camera(
         control = await iot_client.remote_input_status(
             sn=terminal.sn, org_id=terminal.org_id, user=user
         )
-        if (control.get("agent") or {}).get("online") is not True:
+        if (control.get("agent") or {}).get(
+            "online"
+        ) is not True and await camera_main_app_online(
+            terminal.sn, terminal.org_id, user
+        ) is not True:
             raise HTTPException(
                 409,
                 {"code": "camera_terminal_offline", "message": "Терминал не в сети"},

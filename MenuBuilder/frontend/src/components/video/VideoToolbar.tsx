@@ -85,7 +85,7 @@ export function VideoToolbar(props: VideoToolbarProps) {
           style={{ width: "100%" }}
         />
       </label>}
-      {!props.cameraOnly && operator && <label>
+      {operator && <label>
         Кодек общего потока
         <Select<CodecPolicy>
           aria-label="Кодек общего потока"
@@ -94,12 +94,13 @@ export function VideoToolbar(props: VideoToolbarProps) {
           disabled={active}
           style={{ width: "100%" }}
           options={[
-            { value: "auto", label: "Auto" },
+            { value: "auto", label: props.cameraOnly ? "Auto · H.265 приоритет" : "Auto" },
             { value: "h264", label: "H.264" },
-            { value: "h265", label: "H.265", disabled: !inventory?.video_codecs?.hevc_available },
+            { value: "h265", label: "H.265", disabled: !props.cameraOnly && !inventory?.video_codecs?.hevc_available },
           ]}
         />
-        {!inventory?.video_codecs?.hevc_available && <Typography.Text type="secondary">
+        {props.cameraOnly && <Typography.Text type="secondary">Совместимость камеры и браузера проверяется перед запуском.</Typography.Text>}
+        {!props.cameraOnly && !inventory?.video_codecs?.hevc_available && <Typography.Text type="secondary">
           H.265 недоступен: {inventory?.video_codecs?.reason_code || "capability_unavailable"}
         </Typography.Text>}
       </label>}

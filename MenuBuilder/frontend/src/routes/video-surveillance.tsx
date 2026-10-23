@@ -50,6 +50,7 @@ import type { StreamStage } from "../components/video/StreamControls";
 import RefusalReasonCard from "../components/RefusalReasonCard";
 import { CameraSettings } from "../components/video/CameraSettings";
 import { isOpenIpcCamera } from "../utils/cameraState";
+import { browserVideoCodecs } from "../utils/browserVideoCodecs";
 
 const { Text } = Typography;
 
@@ -496,7 +497,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
 
         // Выбор источника по умолчанию
         if (cameraOnly) {
-          setSelectedSourceKey("usb-camera:cam:ip000001");
+          setSelectedSourceKey("camera:cam:ip000001");
         } else if (streamInfo?.source_id && (streamInfo.mode === "desktop" || streamInfo.mode === "usb-camera")) {
           setSelectedSourceKey(`${streamInfo.mode}:${streamInfo.source_id}`);
         } else if (displays.length > 0) {
@@ -768,7 +769,6 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
 
       // 2. Route-before-Start: подготовка медиаканала (ingress и Janus mountpoint) ДО запуска FFmpeg
       setStatusText("Подготовка медиаканала (маршрутизация)...");
-      const legacySession = cameraOnly ? await createVideoSession(selectedDevice.device_id) : undefined;
 
       // 3. Определение режима и запуск видеопотока на терминале
       const colonIdx = selectedSourceKey.indexOf(":");
@@ -777,13 +777,14 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
       setStatusText("Запуск видеопотока на терминале...");
 
       const startRes = await startDeviceStream(selectedDevice.device_id, {
-        mode: mode as "desktop" | "usb-camera",
+        mode: cameraOnly ? "camera" : mode as "desktop" | "usb-camera",
         source_id: source_id || "0",
-        profile: selectedProfile,
+        profile: cameraOnly ? "default" : selectedProfile,
         lease_id: leaseRes.lease_id,
-        ...(!cameraOnly ? { codec_policy: codecPolicy } : {}),
+        codec_policy: codecPolicy,
+        ...(cameraOnly ? { browser_codecs: browserVideoCodecs() } : {}),
       });
-      const sessionData = legacySession || startRes.media;
+      const sessionData = startRes.media;
       if (!sessionData) throw new Error("Media route unavailable");
 
       // Запуск координатора сессии (generation tracking и неперекрывающийся keepalive)

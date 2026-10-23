@@ -1,9 +1,9 @@
 # MenuBuilder camera extension — local implementation checkpoint
 
-This change prepares MenuBuilder for accepted `siplite-camera/1.0.0` readers.
-It is not the full TASK-40 release and has not been deployed. TASK-30 owns the
-native main_app producer adapter. TASK-35 supplies the existing-PKI public
-recipient lookup and certificate-independent encrypted credential vault.
+This change integrates accepted `siplite-camera/1.0.0` readers and the deployed
+TASK-30 main_app/CTL-v1 adapter. It is a local TASK-40 checkpoint, not deployed.
+TASK-35 supplies the existing-PKI public recipient lookup and certificate-independent
+encrypted credential vault; its runtime rollout and protected entry remain separate.
 
 Implemented locally:
 
@@ -22,19 +22,22 @@ Implemented locally:
   credential-entry writer and cancel-while-scan UI are not implemented yet.
 - Stock-only illumination explanation, without physical controls/probes.
   Cloudflare STUN is the default; additional supplied ICE/TURN servers remain.
+- Separate camera START path carries exact media descriptor/epoch to app1.
+  Auto uses camera/server/relay/browser observations before media prepare;
+  unknown or stale support never authorizes fallback. Explicit H265 fails
+  without H264 restart. Codec changes are bounded before START with correlated
+  RES+gauge84, fresh actual track and one shared preparation deadline.
+- Native command_ack is distinct from READY/actual_descriptor/RTP/decode.
+  Failed preparation/start compensates only its own epoch. Repeated active
+  START reads the existing epoch without changing the shared codec.
 
-Validation at this checkpoint: backend full suite884passed/22skipped before
-the final REST opt-in regression, then66focused camera/contract tests passed; app Ruff,
-format and Pyright passed. Frontend build and102unit tests passed. Existing
-camera browser scenarios passed; the three new draft/conflict/discovery cases
-passed against the rebuilt preview on an isolated local port. A stale preview
-initially failed the new success-message assertion; rebuilding the changed
-source resolved that failure. These are fixture tests, not camera decode.
+Validation: backend full891passed/22skipped; app Ruff/format/Pyright passed.
+Frontend build/105unit tests and13camera browser fixtures passed, including
+explicit H265 refusal without a legacy route or H264 START. Earlier stale-preview
+assertion failure was resolved by rebuilding changed source. Fixtures do not
+establish real camera relay/decode or post-START actual-descriptor proof.
 
-Remaining before TASK-40 completion: integrate the accepted TASK-30 native
-camera inventory/state/CTL adapter, browser/server/camera/relay Auto selection
-before START, explicit H264/H265 behavior, protected credential entry using
-TASK-35 helpers, scan cancellation and final runtime/browser acceptance.
-The current camera UI still uses the old stream-start path; do not interpret
-this checkpoint as the new H265 producer being ready. No device writer or
-production flag was enabled. Deploy only after reader and credential gates.
+Remaining: protected credential entry using accepted/deployed TASK-35 helpers,
+scan cancellation/progress and final runtime/browser acceptance. No device
+writer or production flag was enabled. Deploy only after reader and credential
+gates; do not infer camera readiness from the new UI or ACK alone.

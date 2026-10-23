@@ -11,6 +11,20 @@ from fastapi import HTTPException
 from app.services.iot_client import iot_client
 
 
+async def camera_main_app_online(
+    sn: str, org_id: int, user: dict[str, Any]
+) -> bool | None:
+    try:
+        value = await iot_client.remote_video_v2(
+            sn, "inventory", org_id=org_id, user=user, camera_contract=True
+        )
+    except HTTPException:
+        return None
+    if value.get("camera_contract_revision") != "siplite-camera/1.0.0":
+        return None
+    return value.get("main_app_online") is True
+
+
 async def camera_request(
     method: str,
     path: str,

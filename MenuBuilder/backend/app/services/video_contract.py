@@ -27,6 +27,7 @@ from app.services.camera_contract import (
     extended_camera,
     media_contract_options,
 )
+from app.services.camera_video import CameraVideoState
 from app.services.iot_client import IotPlatformClient
 from app.services.media_orchestrator_client import (
     MediaOrchestratorClient,
@@ -72,13 +73,16 @@ class IotVideoState(BaseModel):
 
 def validate_iot_state(value: dict[str, Any]) -> dict[str, Any]:
     try:
-        result = IotVideoState.model_validate(value).model_dump(mode="json")
+        model = (
+            CameraVideoState if "camera_contract_revision" in value else IotVideoState
+        )
+        result = model.model_validate(value).model_dump(mode="json")
     except ModelValidationError as exc:
         raise HTTPException(502, detail={"code": "invalid_video_contract"}) from exc
     validate_video("descriptor", result["descriptor"])
     if result["actual_descriptor"] is not None:
         validate_video("descriptor", result["actual_descriptor"])
-    if result["error"] is not None:
+    if result.get("error") is not None:
         validate_video("error_detail", result["error"])
     return result
 
@@ -189,6 +193,13 @@ def make_stop_command(
         return None
     agent = status.get("agent") or {}
     stream = agent.get("stream") or {}
+    if extended_camera(descriptor):
+        return dict(
+            media_identity(
+                sn, lease_id, str(stream.get("stream_instance_id") or ""), descriptor
+            ),
+            reason="user_stop",
+        )
     now = int(time.time() * 1000)
     return validate_video(
         "stop",

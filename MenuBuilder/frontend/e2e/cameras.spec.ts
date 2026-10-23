@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function cameraPortal(page: Page, options: { viewer?: boolean; busy?: boolean; offline?: boolean; stale?: boolean; lost?: boolean; unauthorized?: boolean; native?: boolean; revisionAfterPoll?: boolean } = {}) {
+async function cameraPortal(page: Page, options: { viewer?: boolean; busy?: boolean; offline?: boolean; stale?: boolean; lost?: boolean; unauthorized?: boolean; native?: boolean; revisionAfterPoll?: boolean; rejectStart?: boolean } = {}) {
   const posts: { path: string; body: any }[] = [];
   let operation = "";
   let config: any = { video0: { size: "1280x720", fps: 15, bitrate: 1024 }, nightMode: { lightMonitor: false } };
@@ -36,6 +36,8 @@ async function cameraPortal(page: Page, options: { viewer?: boolean; busy?: bool
     if (path === "/api/settings/terminals") data = { items: [{ id: 1, device_id: 4619, sn: "fixture-4619", note: "Вход", address: "Первый этаж", is_active: true }], total_count: 1 };
     if (path.endsWith("/inventory")) data = { displays: [], cameras: [{ camera_id: "cam:ip000001", available: true }] };
     if (path.endsWith("/control/status")) data = { agent: { online: !options.offline }, lease: { active: !!options.busy } };
+    if (path.endsWith("/control/lease") && request.method() === "POST") data = { lease_id: "11111111-1111-4111-8111-111111111111", keepalive_sec: 10 };
+    if (path.endsWith("/stream/start") && options.rejectStart) { await route.fulfill({ status: 422, json: { detail: { code: "camera_h265_unsupported", message: "H.265 недоступен для выбранного источника" } } }); return; }
     if (path === "/api/cameras/4619") { reads++; data = { device_id: 4619, terminal_online: !options.offline, lease_active: !!options.busy, snapshot: snapshot() }; }
     if (path.endsWith("/commands") && request.method() === "POST") {
       if (options.unauthorized) { await route.fulfill({ status: 401, json: { detail: "Сессия истекла" } }); return; }
@@ -88,6 +90,21 @@ test("discovery is explicit and an unverified port candidate cannot be bound", a
   await expect(page.getByText("Поиск завершён. Выберите камеру с подтверждённым port-2.", { exact: true })).toBeVisible();
   expect(posts).toHaveLength(1);
   expect(posts[0].body.action).toBe("discover");
+});
+
+test("explicit camera HEVC refusal never creates a legacy route or H264 restart", async ({ page }) => {
+  await page.addInitScript(() => Object.defineProperty(RTCRtpReceiver, "getCapabilities", { value: () => ({ codecs: [{ mimeType: "video/H264" }, { mimeType: "video/H265" }] }) }));
+  const posts = await cameraPortal(page, { native: true, rejectStart: true });
+  await page.getByRole("button", { name: "Настройки видео", exact: true }).click();
+  await page.getByRole("combobox", { name: "Кодек общего потока", exact: true }).click();
+  await page.getByText("H.265", { exact: true }).last().click();
+  await page.getByRole("button", { name: "Настройки видео", exact: true }).click();
+  await page.getByRole("button", { name: "Начать просмотр", exact: true }).click();
+  await expect(page.getByText("H.265 недоступен для выбранного источника").first()).toBeVisible();
+  const starts = posts.filter(item => item.path.endsWith("/stream/start"));
+  expect(starts).toHaveLength(1);
+  expect(starts[0].body).toMatchObject({ mode: "camera", profile: "default", source_id: "cam:ip000001", codec_policy: "h265", browser_codecs: { h264: true, h265: true } });
+  expect(posts.some(item => item.path.endsWith("/sessions"))).toBe(false);
 });
 
 test("camera list uses explicit tags, includes offline, and never starts on selection", async ({ page }) => {
