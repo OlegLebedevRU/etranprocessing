@@ -26,7 +26,7 @@ from app.schema_compatibility import (
 )
 
 SCHEMA_JSON_PATH = (
-    Path(__file__).resolve().parents[3] / "shared/docs/l4desk/schema-v033.json"
+    Path(__file__).resolve().parents[3] / "shared/docs/l4desk/schema-v034.json"
 )
 
 
@@ -117,18 +117,22 @@ def test_startup_error_on_empty_alembic_version_table():
         check_schema_compatibility_sync(conn)
 
 
-def test_startup_error_on_wrong_revision():
+@pytest.mark.parametrize("revision", ["026", "033"])
+def test_startup_error_on_wrong_revision(revision):
     """check_schema_compatibility_sync must raise SchemaCompatibilityError on outdated or wrong revision."""
     sync_engine = create_engine("sqlite:///:memory:")
     with sync_engine.begin() as conn:
         conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32));"))
-        conn.execute(text("INSERT INTO alembic_version VALUES ('026');"))
+        conn.execute(
+            text("INSERT INTO alembic_version VALUES (:revision)"),
+            {"revision": revision},
+        )
 
     with (
         sync_engine.connect() as conn,
         pytest.raises(
             SchemaCompatibilityError,
-            match=r"Database schema revision mismatch: expected one of \['033'\]",
+            match=r"Database schema revision mismatch: expected one of \['034'\]",
         ),
     ):
         check_schema_compatibility_sync(conn)
@@ -139,7 +143,7 @@ def test_startup_error_on_missing_required_tables():
     sync_engine = create_engine("sqlite:///:memory:")
     with sync_engine.begin() as conn:
         conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32));"))
-        conn.execute(text("INSERT INTO alembic_version VALUES ('033');"))
+        conn.execute(text("INSERT INTO alembic_version VALUES ('034');"))
         # Only create 1 table instead of 23
         conn.execute(
             text("CREATE TABLE l4desk_registrations (id INTEGER PRIMARY KEY);")
@@ -155,17 +159,33 @@ def test_startup_error_on_missing_required_tables():
         check_schema_compatibility_sync(conn)
 
 
-def test_startup_success_when_revision_and_tables_match():
+@pytest.mark.parametrize("missing_target", ["column", "table"])
+def test_startup_success_when_revision_and_tables_match(missing_target):
     """check_schema_compatibility_sync succeeds cleanly when revision 029 and all tables exist."""
     sync_engine = create_engine("sqlite:///:memory:")
     with sync_engine.begin() as conn:
         conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32));"))
-        conn.execute(text("INSERT INTO alembic_version VALUES ('033');"))
-        for t in [*L4DESK_TABLES, "fm_agents", "fm_operations", "terminal_tools_inventory", "terminal_tools_inventory_inbox"]:
+        conn.execute(
+            text("INSERT INTO alembic_version VALUES (:revision)"),
+            {"revision": "034"},
+        )
+        for t in [
+            *L4DESK_TABLES,
+            "fm_agents",
+            "fm_operations",
+            "terminal_tools_inventory",
+            "terminal_tools_inventory_inbox",
+            "camera_credential_profiles",
+            "camera_credential_receipts",
+        ]:
             conn.execute(
                 text(
                     f"CREATE TABLE {t} (id INTEGER PRIMARY KEY"
-                    + (", paid_until TIMESTAMP, user_disabled_at TIMESTAMP" if t == "l4desk_terminals" else "")
+                    + (
+                        ", paid_until TIMESTAMP, user_disabled_at TIMESTAMP"
+                        if t == "l4desk_terminals"
+                        else ""
+                    )
                     + ");"
                 )
             )
@@ -173,7 +193,7 @@ def test_startup_success_when_revision_and_tables_match():
     with sync_engine.begin() as conn:
         conn.execute(
             text(
-                "CREATE TABLE IF NOT EXISTS terminals (id INTEGER PRIMARY KEY, l4desk_subscription_enabled BOOLEAN NOT NULL DEFAULT false);"
+                "CREATE TABLE IF NOT EXISTS terminals (id INTEGER PRIMARY KEY, l4desk_subscription_enabled BOOLEAN NOT NULL DEFAULT false, credential_recipient_pem TEXT);"
             )
         )
         conn.execute(
@@ -184,6 +204,17 @@ def test_startup_success_when_revision_and_tables_match():
     with sync_engine.connect() as conn:
         # Should complete without error
         check_schema_compatibility_sync(conn)
+        conn.execute(
+            text(
+                "ALTER TABLE terminals DROP COLUMN credential_recipient_pem"
+                if missing_target == "column"
+                else "DROP TABLE camera_credential_receipts"
+            )
+        )
+        with pytest.raises(
+            SchemaCompatibilityError, match="Missing camera credential vault schema"
+        ):
+            check_schema_compatibility_sync(conn)
 
 
 @pytest.mark.anyio
@@ -192,12 +223,24 @@ async def test_verify_schema_compatibility_async():
     sync_engine = create_engine("sqlite:///:memory:")
     with sync_engine.begin() as conn:
         conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32));"))
-        conn.execute(text("INSERT INTO alembic_version VALUES ('033');"))
-        for t in [*L4DESK_TABLES, "fm_agents", "fm_operations", "terminal_tools_inventory", "terminal_tools_inventory_inbox"]:
+        conn.execute(text("INSERT INTO alembic_version VALUES ('034');"))
+        for t in [
+            *L4DESK_TABLES,
+            "fm_agents",
+            "fm_operations",
+            "terminal_tools_inventory",
+            "terminal_tools_inventory_inbox",
+            "camera_credential_profiles",
+            "camera_credential_receipts",
+        ]:
             conn.execute(
                 text(
                     f"CREATE TABLE {t} (id INTEGER PRIMARY KEY"
-                    + (", paid_until TIMESTAMP, user_disabled_at TIMESTAMP" if t == "l4desk_terminals" else "")
+                    + (
+                        ", paid_until TIMESTAMP, user_disabled_at TIMESTAMP"
+                        if t == "l4desk_terminals"
+                        else ""
+                    )
                     + ");"
                 )
             )
@@ -205,7 +248,7 @@ async def test_verify_schema_compatibility_async():
     with sync_engine.begin() as conn:
         conn.execute(
             text(
-                "CREATE TABLE IF NOT EXISTS terminals (id INTEGER PRIMARY KEY, l4desk_subscription_enabled BOOLEAN NOT NULL DEFAULT false);"
+                "CREATE TABLE IF NOT EXISTS terminals (id INTEGER PRIMARY KEY, l4desk_subscription_enabled BOOLEAN NOT NULL DEFAULT false, credential_recipient_pem TEXT);"
             )
         )
         conn.execute(
@@ -271,7 +314,7 @@ def test_compatibility_against_migrated_db():
     with sync_engine.begin() as conn:
         # Setup alembic_version
         conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32));"))
-        conn.execute(text("INSERT INTO alembic_version VALUES ('033');"))
+        conn.execute(text("INSERT INTO alembic_version VALUES ('034');"))
 
         # Setup supporting legacy tables
         conn.execute(text("CREATE TABLE orgs (org_id INTEGER PRIMARY KEY, name TEXT);"))
@@ -280,7 +323,7 @@ def test_compatibility_against_migrated_db():
         )
         conn.execute(
             text(
-                "CREATE TABLE terminals (id INTEGER PRIMARY KEY, terminal_id TEXT, l4desk_subscription_enabled BOOLEAN NOT NULL DEFAULT false);"
+                "CREATE TABLE terminals (id INTEGER PRIMARY KEY, terminal_id TEXT, l4desk_subscription_enabled BOOLEAN NOT NULL DEFAULT false, credential_recipient_pem TEXT);"
             )
         )
 
@@ -290,7 +333,7 @@ def test_compatibility_against_migrated_db():
         Base.metadata.create_all(conn, tables=tables_to_create)
         conn.execute(
             text(
-                "CREATE TABLE IF NOT EXISTS terminals (id INTEGER PRIMARY KEY, l4desk_subscription_enabled BOOLEAN NOT NULL DEFAULT false);"
+                "CREATE TABLE IF NOT EXISTS terminals (id INTEGER PRIMARY KEY, l4desk_subscription_enabled BOOLEAN NOT NULL DEFAULT false, credential_recipient_pem TEXT);"
             )
         )
         conn.execute(
@@ -302,8 +345,26 @@ def test_compatibility_against_migrated_db():
     with sync_engine.begin() as conn:
         conn.execute(text("CREATE TABLE fm_agents (terminal_id INTEGER PRIMARY KEY);"))
         conn.execute(text("CREATE TABLE fm_operations (id TEXT PRIMARY KEY);"))
-        conn.execute(text("CREATE TABLE terminal_tools_inventory (terminal_id INTEGER PRIMARY KEY);"))
-        conn.execute(text("CREATE TABLE terminal_tools_inventory_inbox (event_uuid TEXT PRIMARY KEY);"))
+        conn.execute(
+            text(
+                "CREATE TABLE terminal_tools_inventory (terminal_id INTEGER PRIMARY KEY);"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE TABLE terminal_tools_inventory_inbox (event_uuid TEXT PRIMARY KEY);"
+            )
+        )
+
+    with sync_engine.begin() as conn:
+        conn.execute(
+            text("CREATE TABLE camera_credential_profiles (id TEXT PRIMARY KEY)")
+        )
+        conn.execute(
+            text(
+                "CREATE TABLE camera_credential_receipts (operation_id TEXT PRIMARY KEY)"
+            )
+        )
 
     with sync_engine.connect() as conn:
         check_schema_compatibility_sync(conn)

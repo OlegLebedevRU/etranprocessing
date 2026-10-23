@@ -4,10 +4,18 @@
 
 [Implementation checkpoint](../../docs/etran_arch-siplite-camera-menubuilder.md):
 separate camera schemas, negotiated extended-epoch reads, native settings drafts,
-port2 discovery/binding guards and stock-only illumination UI. Backend884passed/
-22skipped, final66focused checks, frontend build/102unit and browser fixtures
-passed. Native producer/Auto orchestration and protected credential entry remain;
-TASK-30 and PKI/vault TASK-35 gate deployment. This is not new camera decode evidence.
+port2 discovery/binding guards, native main_app/CTL-v1 START, pre-START codec
+selection and stock-only illumination UI. Backend891passed/22skipped, frontend
+build/105unit/13browser fixtures passed before vault integration. Credential
+entry and PKI/vault rollout remain; no new camera decode evidence or UI deploy.
+
+## Camera vault services, 2026-10-23 — source only, not deployed
+
+Standalone camera_credential_vault/recipient helpers store encrypted active/pending
+intent and durable receipts, wrap DEKs under a stable runtime KEK, and recover
+credentials internally for a new manual operation after certificate rotation.
+No camera router/UI/IoT dispatch integration is included. Root validates scoped
+RES+gauge84 before confirm. [Helper and rollout contract](../../docs/etran_arch-camera-credential-storage.md).
 
 ## Certificate chooser operation state, 2026-10-13 — released
 

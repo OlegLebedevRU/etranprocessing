@@ -6,6 +6,11 @@
 
 ## Правила владения
 
+- Camera vault v1: MB is the sole writer of `camera_credential_profiles` and
+  `camera_credential_receipts`. PB owns migration034 and the verified public
+  `terminals.credential_recipient_pem` collector; MB reads recipients through
+  PB service-auth API only. [Contract](etran_arch-camera-credential-storage.md).
+
 - Владелец таблицы определяет её инварианты и единственный создаёт Alembic migration proposal. Физически все миграции остаются в `ProcessingBackend/backend/alembic`.
 - Наличие ORM-модели в `etranprocessing_db` не даёт сервису права записи. Пакет остаётся только декларативным контрактом схемы.
 - Запись не-владельца запрещена, кроме явно указанных ниже use-case/column scoped исключений.

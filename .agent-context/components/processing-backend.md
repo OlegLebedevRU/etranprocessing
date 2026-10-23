@@ -1,5 +1,12 @@
 # ProcessingBackend
 
+## Camera credential recipient, 2026-10-23 — source only, not deployed
+
+PB owns additive034 and verified public Terminal.credential_recipient_pem collection.
+The tenant-scoped service-auth recipient endpoint checks current pinned chain,
+SN/serial/expiry and administrative disable; no legacy or gauge-key trust promotion.
+No independent CRL/OCSP authority exists. [Contract and rollout bridge](../../docs/etran_arch-camera-credential-storage.md).
+
 ## Manual PIN administrative permission, 2026-10-13 — released
 
 main5301d23 adds defaultfalse admin_override to the service-auth setup PIN request,

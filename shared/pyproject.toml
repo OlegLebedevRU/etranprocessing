@@ -31,6 +31,8 @@ include = [
     "/docs/l4desk/schema-v032.md",
     "/docs/l4desk/schema-v033.json",
     "/docs/l4desk/schema-v033.md",
+    "/docs/l4desk/schema-v034.json",
+    "/docs/l4desk/schema-v034.md",
 ]
 
 [dependency-groups]

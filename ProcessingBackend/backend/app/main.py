@@ -81,6 +81,7 @@ app.add_middleware(
 )
 
 from app.routers import (
+    camera_credential_recipient,
     certificates,
     devices_legacy,
     file_manager,
@@ -94,6 +95,7 @@ from app.routers import (
 )
 
 app.include_router(health.router, prefix="/api", tags=["health"])
+app.include_router(camera_credential_recipient.router)
 app.include_router(file_manager.agent_router)
 app.include_router(file_manager.internal_router)
 app.include_router(leo4proxy.router, prefix="/api/leo4proxy", tags=["leo4proxy"])

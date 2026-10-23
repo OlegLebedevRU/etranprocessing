@@ -1,5 +1,7 @@
 # Документация экосистемы etranprocessing
 
+- [Camera credential storage v1](etran_arch-camera-credential-storage.md) — PB recipient API, encrypted vault, migration and rollout boundary.
+
 Центральный навигатор по технической, архитектурной и эксплуатационной документации платформы процессинга платежей и управления терминалами `etranprocessing`.
 
 > 📌 **Стандарт именования файлов:** Все активные документы в каталоге `docs/` именуются по обязательному правилу двух мнемокодов с разделителем `{СФЕРА}_{ФЛОУ}-{дескриптивное-имя}.md`.  
