@@ -25,6 +25,26 @@ def fixture(name):
     return json.loads((FIXTURES / f"{name}.json").read_text())["payload"]
 
 
+@pytest.mark.parametrize("reason", ["probe_timeout", "encoder_busy", "no_hardware_mft"])
+def test_hevc_unavailable_reason_does_not_become_profile_unsupported(reason):
+    cap = fixture("capabilities")["video_capabilities"]
+    now = int(time.time() * 1000)
+    cap.update(checked_at_ms=now, valid_until_ms=now + 60000)
+    cap["video"][0].update(
+        status="unsupported"
+        if reason == "no_hardware_mft"
+        else "temporarily_unavailable",
+        reason_code=reason,
+        profiles=[],
+        probe_evidence="none",
+    )
+    track, actual = select_hevc_profile(
+        cap, fixture("media_capabilities"), cap["source_id"], "low", now
+    )
+    assert track is None
+    assert actual == reason
+
+
 @pytest.fixture
 def anyio_backend():
     return "asyncio"

@@ -248,7 +248,10 @@ def select_hevc_profile(
         or "h265" not in server["codecs"]
     ):
         return None, "server_hevc_unavailable"
+    unavailable_reason = None
     for entry in capability["video"]:
+        if entry["codec"] == "h265" and entry["status"] != "ready":
+            unavailable_reason = entry["reason_code"] or "capability_unavailable"
         if (
             entry["codec"] == "h265"
             and (
@@ -265,7 +268,7 @@ def select_hevc_profile(
             for profile in entry["profiles"]:
                 if profile["profile_id"] == profile_id:
                     return copy.deepcopy(profile["track"]), "ready"
-    return None, "profile_unsupported"
+    return None, unavailable_reason or "profile_unsupported"
 
 
 class VideoContractOrchestrator:
