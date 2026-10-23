@@ -140,7 +140,7 @@ def wait_ready(expected_image: str, enabled: bool) -> dict[str, Any]:
             if "camera_formats" in old:
                 raise ValueError("Legacy capabilities were expanded without negotiation")
             return caps
-        except OSError, ValueError, KeyError, StopIteration:
+        except (OSError, ValueError, KeyError, StopIteration):
             if time.monotonic() >= deadline:
                 raise
             time.sleep(1)

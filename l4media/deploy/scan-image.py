@@ -48,7 +48,7 @@ def metadata_blob(archive: tarfile.TarFile, member: tarfile.TarInfo) -> bool:
     try:
         with stream:
             value = json.load(stream)
-    except ValueError, UnicodeError:
+    except (ValueError, UnicodeError):
         return False
     return isinstance(value, dict) and (
         "architecture" in value
