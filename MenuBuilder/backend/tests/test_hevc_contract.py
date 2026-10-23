@@ -68,7 +68,6 @@ def context(monkeypatch):
     status = {"lease": lease, "agent": {"online": True, "stream": {"state": "stopped"}}}
     for key, value in {
         "video_contract_v2_enabled": True,
-        "video_hevc_allowed_sns": [cap["sn"]],
         "l4desk_session_orchestration_enabled": True,
         "video_proxy_rtp_port": 5004,
         "video_proxy_rtcp_port": 5005,
@@ -151,6 +150,33 @@ def context(monkeypatch):
         "user": {"sub": "8", "session_id": "owned"},
     }
     return service, args, trace, cap
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("sn", ["new-desktop-terminal", "new-camera-terminal"])
+async def test_hevc_availability_does_not_require_pilot_sn(context, sn):
+    service, args, _, _ = context
+    result = await service.availability(
+        sn, args["source_id"], args["profile_id"], args["org_id"], args["user"]
+    )
+    assert result["hevc_available"] is True
+    assert result["reason_code"] == "ready"
+    service.iot.remote_video_v2.assert_awaited_once_with(
+        sn, "inventory", org_id=args["org_id"], user=args["user"]
+    )
+
+
+@pytest.mark.anyio
+async def test_hevc_orchestration_disabled_still_denies_before_probe(
+    context, monkeypatch
+):
+    service, args, trace, _ = context
+    monkeypatch.setattr(settings, "l4desk_session_orchestration_enabled", False)
+    result = await service.availability(
+        args["sn"], args["source_id"], args["profile_id"], args["org_id"], args["user"]
+    )
+    assert result == {"hevc_available": False, "reason_code": "disabled_by_policy"}
+    assert not trace
 
 
 @pytest.mark.anyio

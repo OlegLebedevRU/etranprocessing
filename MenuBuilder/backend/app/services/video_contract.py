@@ -290,8 +290,6 @@ class VideoContractOrchestrator:
             or not settings.l4desk_session_orchestration_enabled
         ):
             return {"hevc_available": False, "reason_code": reason}
-        if sn not in settings.video_hevc_allowed_sns:
-            return {"hevc_available": False, "reason_code": "disabled_by_policy"}
         if not (
             0 < settings.video_proxy_rtp_port <= 65535
             and 0 < settings.video_proxy_rtcp_port <= 65535

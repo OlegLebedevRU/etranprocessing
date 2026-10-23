@@ -10,7 +10,6 @@ from app.jwt_public_key import DEFAULT_JWT_PUBLIC_KEY
 
 class Settings(BaseSettings):
     video_contract_v2_enabled: bool = False
-    video_hevc_allowed_sns: list[str] = []
     video_test_camera_sns: list[str] = []
     video_proxy_rtp_port: int = Field(default=0, ge=0, le=65535)
     video_proxy_rtcp_port: int = Field(default=0, ge=0, le=65535)
