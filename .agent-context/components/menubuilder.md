@@ -1,23 +1,20 @@
 # MenuBuilder
 
-## Siplite camera — local TASK-40 checkpoint, not deployed
+## Siplite camera — deployed TASK40, 2026-10-24
 
-[Implementation checkpoint](../../docs/etran_arch-siplite-camera-menubuilder.md):
-separate camera schemas, negotiated extended-epoch reads, native settings drafts,
-port2 discovery/binding guards, native main_app/CTL-v1 START, pre-START codec
-selection and stock-only illumination UI. Operator credential entry persists
-encrypted intent before dispatch and promotes only matching RES+gauge84;
-search cancellation has a separate targeted UUID. Backend952passed/25skipped,
-credential boundary follow-up38passed; frontend105unit/16browser fixtures passed.
-No new camera decode evidence or TASK40 UI deploy.
+[Implementation](../../docs/etran_arch-siplite-camera-menubuilder.md): source
+b60088f, PR100. Native main_app START, H265-first pre-START Auto, settings drafts,
+port2 discovery/cancel and encrypted credential orchestration. Builder953passed/
+25skipped, frontend105unit/16browser fixtures passed. Ordinary browser4623 reads200,
+vault/recipient ready; old firmware controls are disabled. No mutations/decode.
+[Release](../tasks/completed/2026-10-24-siplite-task40-menubuilder.md).
 
 ## Camera vault services, 2026-10-23 — deployed482e099/schema034
 
 Standalone camera_credential_vault/recipient helpers store encrypted active/pending
 intent and durable receipts, wrap DEKs under a stable runtime KEK, and recover
 credentials internally for a new manual operation after certificate rotation.
-TASK35 helpers are deployed; TASK40 router/UI integration remains a local
-candidate. The private stable server KEK and backup must survive deployments
+TASK35 helpers and TASK40 router/UI integration are deployed. The private stable server KEK and backup must survive deployments
 and TLS renewals. [Helper and rollout contract](../../docs/etran_arch-camera-credential-storage.md).
 
 ## Certificate chooser operation state, 2026-10-13 — released

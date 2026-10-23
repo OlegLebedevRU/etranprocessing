@@ -1,11 +1,11 @@
-# MenuBuilder camera extension — local implementation checkpoint
+# MenuBuilder camera extension — deployed TASK40
 
 This change integrates accepted `siplite-camera/1.0.0` readers and the deployed
-TASK-30 main_app/CTL-v1 adapter. It is a local TASK-40 checkpoint, not deployed.
+TASK-30 main_app/CTL-v1 adapter. TASK40 is deployed from b60088fbe113be61de6e2b8b6b4705d0f3870cc7 (PR100).
 TASK-35 public-recipient lookup and certificate-independent encrypted vault are
-deployed from482e099; this candidate adds their authenticated UI/API workflow.
+deployed from482e099; TASK40 adds their authenticated UI/API workflow.
 
-Implemented locally:
+Implemented:
 
 - Separate byte-identical camera RPC/media schema mirrors, bounded validation
   and safe errors. Existing desktop schema remains unchanged.
@@ -41,14 +41,21 @@ Implemented locally:
   Failed preparation/start compensates only its own epoch. Repeated active
   START reads the existing epoch without changing the shared codec.
 
-Validation before final clear-endpoint guard: backend full952passed/25skipped;
-final guard and credential boundary follow-up38passed. App Ruff/format/Pyright
-passed. Frontend build/105unit tests and16camera browser fixtures passed, including
-explicit H265 refusal without a legacy route or H264 START. Earlier stale-preview
-assertion failure was resolved by rebuilding changed source. Fixtures do not
-establish real camera relay/decode or post-START actual-descriptor proof.
+Validation: accepted Linux builder953passed/25skipped; Ruff/format/Pyright
+passed. Frontend105unit tests and production build passed. Local16camera browser
+fixtures passed, including explicitH265 refusal, credential loss and targeted
+cancellation. Frozen packages unchanged; source review36files passed.
 
-Remaining: final source/release verification and production UI/browser smoke.
-TASK60/70 own actual firmware control and real camera relay/decode acceptance.
-No device writer or production flag was enabled. Do not infer camera readiness
-from the UI or ACK alone.
+Production browser smoke on camera4623: ordinary authenticated reads200, vault
+and verified recipient ready, terminal online/lease idle. The existing firmware
+does not advertise camera revision, so new controls are disabled with a reason.
+Chrome advertisesH265. No camera mutations or JavaScript errors occurred.
+
+Both images passed all-layer scans and were activated by immutable digest.
+Existing Compose overlays, environment/mounts and stable private KEK survived;
+11BFF neighbors unchanged. Frontend static publication restarted no containers.
+See [release handoff](../.agent-context/tasks/completed/2026-10-24-siplite-task40-menubuilder.md).
+
+TASK50 server-ready and TASK60/70 actual firmware/local API/tool/camera decode
+acceptance remain. Camera writers remain disabled; this smoke started no stream.
+Do not infer actual camera readiness or decode from UI/command_ack alone.
