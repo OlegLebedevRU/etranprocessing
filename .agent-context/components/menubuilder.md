@@ -8,7 +8,7 @@ port2 discovery/binding guards, native main_app/CTL-v1 START, pre-START codec
 selection and stock-only illumination UI. Operator credential entry persists
 encrypted intent before dispatch and promotes only matching RES+gauge84;
 search cancellation has a separate targeted UUID. Backend952passed/25skipped,
-frontend105unit/15browser fixtures passed before final guard/cancel follow-ups.
+credential boundary follow-up38passed; frontend105unit/16browser fixtures passed.
 No new camera decode evidence or TASK40 UI deploy.
 
 ## Camera vault services, 2026-10-23 — deployed482e099/schema034
