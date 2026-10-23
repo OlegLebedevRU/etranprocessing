@@ -1,5 +1,7 @@
 # HEVC: фиксированный контракт 2.0.0 (TASK-00)
 
+Source-selection extension,2026-10-24: see [hevc-source-probe/1.0](hevc-selected-display-probe.md). The frozen2.0.0 package remains unchanged.
+
 Дата: 2026-10-22. Revision: `hevc-contract/2.0.0`. Уровень доказательства:
 static + offline conformance, без integration/deployed/real-hardware.
 Нормативная машинная форма — [пакет](../contracts/hevc-v2/README.md),

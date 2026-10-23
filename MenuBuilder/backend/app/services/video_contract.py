@@ -318,7 +318,11 @@ class VideoContractOrchestrator:
             return {"hevc_available": False, "reason_code": "transport_not_configured"}
         try:
             inventory = await self.iot.remote_video_v2(
-                sn, "inventory", org_id=org_id, user=user
+                sn,
+                "inventory",
+                org_id=org_id,
+                user=user,
+                source_id=source_id if source_id.startswith("disp:") else None,
             )
             if (
                 set(inventory) != {"negotiated_v2", "video_capabilities"}
