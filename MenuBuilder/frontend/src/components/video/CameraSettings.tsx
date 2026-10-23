@@ -4,7 +4,7 @@ import { commandCamera, getCamera, getCameraCommand, type CameraCommand, type Ca
 import { CameraFields } from "./CameraFields";
 import { CameraConnection } from "./CameraConnection";
 import { CameraCredentials } from "./CameraCredentials";
-import { configFresh, observationAge, powerFresh } from "../../utils/cameraState";
+import { cameraObservedFormat, cameraVideoSettings, configFresh, observationAge, powerFresh } from "../../utils/cameraState";
 
 type Pending = { until: number; task?: string; action?: CameraCommand["action"]; operation?: string; cancellation?: string };
 const pause = (signal: AbortSignal) => new Promise<void>((resolve, reject) => {
@@ -212,7 +212,8 @@ export function CameraSettings({ device, org, operator, viewing, onBusy }: {
       { key: "power", label: "Питание", children: powerValid ? camera?.power?.enabled ? "Включено" : "Выключено" : "Неизвестно / устарело" },
       { key: "camera", label: "Камера", children: configValid && camera?.status === "ready" ? "Доступна" : "Недоступна / нет актуальных данных" },
       { key: "age", label: "Настройки", children: observationAge(snapshot?.observed_at, !!camera?.config && !camera?.stale, now, snapshot?.freshness_max_age_sec ?? 330) },
-      { key: "quality", label: "Видео", children: configValid ? `${camera?.config?.video0?.size} · ${camera?.config?.video0?.fps} FPS · ${camera?.config?.video0?.bitrate} кбит/с` : "Неизвестно" },
+      { key: "quality", label: "Режим видео", children: configValid ? cameraVideoSettings(camera) : "Неизвестно" },
+      { key: "actual", label: "Проба потока", children: cameraObservedFormat(snapshot, camera, now) },
       { key: "mode", label: "День / ночь", children: configValid && camera?.config?.nightMode?.lightMonitor ? "Auto" :
         configValid && probeAge(camera?.telemetry) === "Актуально" && [0, 1].includes(camera?.telemetry?.metrics?.night_enabled ?? -1) ?
           camera?.telemetry?.metrics?.night_enabled === 1 ? "Night" : "Day" : "Неизвестно" },
