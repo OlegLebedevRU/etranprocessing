@@ -9,6 +9,8 @@
 
 ## 1. Архитектура системы и модели данных
 
+- [siplite H.265 и camera control](etran_arch-siplite-hevc-integration-contract.md) — negotiated camera schema, Auto до START и стабильный локальный API; [machine package](../contracts/siplite-camera-v1/README.md).
+
 - [CAPTCHA providers](menu_auth-captcha-providers.md) — native/SmartCaptcha/off, контракт и переключение.
 - [Внутренний JWT signer](menu_ops-jwt-issuer-signer.md) — ротация ключа, приватная сеть и резерв.
 - [Камеры OpenIPC](menu_video-openipc-cameras.md) — создание Camera OpenIPC, теги, просмотр, настройки и подтверждение RPC событием84.

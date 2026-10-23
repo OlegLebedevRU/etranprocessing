@@ -1,5 +1,9 @@
 # l4media
 
+## 2026-10-23 siplite camera extension
+
+[Contract](../../docs/etran_arch-siplite-hevc-integration-contract.md) и [machine package](../../contracts/siplite-camera-v1/README.md) вводят negotiated camera1.0.0 отдельно от frozen2.0.0. Native camera SPS:2592×1944, Main8/420, level153. Camera Auto допускает H.264 только до START, explicit H.265 не подменяется. Это contract/offline validation; новые runtime readers/writers и decode на4623 ещё не проверены.
+
 ## 2026-10-22: HEVC server readiness
 
 G-SERVER-READY passed on the target MenuBuilder with a real1920×1080@20 camera
