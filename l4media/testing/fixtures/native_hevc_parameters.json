@@ -1,0 +1,8 @@
+{
+  "description": "Real native VPS/SPS/PPS metadata only; no coded camera pictures. Decoder observations in unit tests are synthetic.",
+  "parameter_sets": {
+    "32": "40010c01ffff016000000300b00000030000030099ac0c00000300040000030052a8",
+    "33": "420101016000000300b00000030000030099a00144200799636bb932fcdc040404100000030010000003014a10",
+    "34": "4401c0f2b03b34"
+  }
+}

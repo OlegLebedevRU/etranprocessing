@@ -1,0 +1,1035 @@
+{
+  "$defs": {
+    "CameraInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "available": {
+          "default": true,
+          "title": "Available",
+          "type": "boolean"
+        },
+        "camera_id": {
+          "title": "Camera Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "camera_id",
+        "name"
+      ],
+      "title": "CameraInfo",
+      "type": "object"
+    },
+    "DisplayInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "desktop_id": {
+          "title": "Desktop Id",
+          "type": "string"
+        },
+        "height": {
+          "title": "Height",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "policy": {
+          "default": "input",
+          "enum": [
+            "input",
+            "view",
+            "denied"
+          ],
+          "title": "Policy",
+          "type": "string"
+        },
+        "primary": {
+          "default": false,
+          "title": "Primary",
+          "type": "boolean"
+        },
+        "session_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Session Id"
+        },
+        "width": {
+          "title": "Width",
+          "type": "integer"
+        },
+        "x": {
+          "default": 0,
+          "title": "X",
+          "type": "integer"
+        },
+        "y": {
+          "default": 0,
+          "title": "Y",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "desktop_id",
+        "name",
+        "width",
+        "height"
+      ],
+      "title": "DisplayInfo",
+      "type": "object"
+    },
+    "InventoryInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "cameras": {
+          "items": {
+            "$ref": "#/$defs/CameraInfo"
+          },
+          "title": "Cameras",
+          "type": "array"
+        },
+        "displays": {
+          "items": {
+            "$ref": "#/$defs/DisplayInfo"
+          },
+          "title": "Displays",
+          "type": "array"
+        }
+      },
+      "title": "InventoryInfo",
+      "type": "object"
+    },
+    "ScreenInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "virtual_height": {
+          "title": "Virtual Height",
+          "type": "integer"
+        },
+        "virtual_width": {
+          "title": "Virtual Width",
+          "type": "integer"
+        },
+        "virtual_x": {
+          "default": 0,
+          "title": "Virtual X",
+          "type": "integer"
+        },
+        "virtual_y": {
+          "default": 0,
+          "title": "Virtual Y",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "virtual_width",
+        "virtual_height"
+      ],
+      "title": "ScreenInfo",
+      "type": "object"
+    },
+    "StreamInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "ffmpeg_pid": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ffmpeg Pid"
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "enum": [
+                "desktop",
+                "usb-camera",
+                "stopped"
+              ],
+              "type": "string"
+            },
+            {
+              "const": "",
+              "type": "string"
+            }
+          ],
+          "default": "stopped",
+          "title": "Mode"
+        },
+        "profile": {
+          "default": "default",
+          "title": "Profile",
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "restart_count": {
+          "default": 0,
+          "title": "Restart Count",
+          "type": "integer"
+        },
+        "source_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Id"
+        },
+        "started_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Started At"
+        },
+        "state": {
+          "default": "stopped",
+          "enum": [
+            "stopped",
+            "starting",
+            "running",
+            "stopping",
+            "restarting",
+            "failed",
+            "source_unavailable",
+            "session_unavailable"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "stream_instance_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "const": "",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stream Instance Id"
+        }
+      },
+      "title": "StreamInfo",
+      "type": "object"
+    },
+    "ack": {
+      "additionalProperties": false,
+      "properties": {
+        "applied_deadline_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Applied Deadline Ms"
+        },
+        "code": {
+          "anyOf": [
+            {
+              "enum": [
+                "interactive_desktop_unavailable",
+                "lease_invalid",
+                "expired",
+                "duplicate",
+                "invalid_sn",
+                "invalid_payload",
+                "unsupported",
+                "inject_failed",
+                "lease_mismatch",
+                "desktop_mismatch",
+                "stream_mismatch",
+                "source_not_allowed",
+                "source_unavailable",
+                "session_unavailable",
+                "busy_transition",
+                "ffmpeg_missing",
+                "ffmpeg_integrity",
+                "input_not_allowed_in_camera_mode",
+                "invalid_profile",
+                "desktop_locked",
+                "action_blocked_policy",
+                "action_blocked_winlogon_guard",
+                "insufficient_integrity",
+                "input_injection_failed"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Code"
+        },
+        "command_id": {
+          "format": "uuid",
+          "title": "Command Id",
+          "type": "string"
+        },
+        "expires_at_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expires At Ms"
+        },
+        "inventory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InventoryInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "lease_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lease Id"
+        },
+        "message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Message"
+        },
+        "result": {
+          "default": "injected",
+          "enum": [
+            "injected",
+            "started",
+            "already_running",
+            "switched",
+            "stopped",
+            "already_stopped",
+            "inventory",
+            "renewed",
+            "accepted",
+            "nack"
+          ],
+          "title": "Result",
+          "type": "string"
+        },
+        "sn": {
+          "title": "Sn",
+          "type": "string"
+        },
+        "state": {
+          "anyOf": [
+            {
+              "enum": [
+                "stopped",
+                "starting",
+                "running",
+                "stopping",
+                "restarting",
+                "failed",
+                "source_unavailable",
+                "session_unavailable"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "State"
+        },
+        "stream_instance_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stream Instance Id"
+        },
+        "terminal_time_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Terminal Time Ms"
+        },
+        "type": {
+          "const": "ack",
+          "default": "ack",
+          "title": "Type",
+          "type": "string"
+        },
+        "v": {
+          "const": 1,
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command_id",
+        "sn"
+      ],
+      "title": "CtlAck",
+      "type": "object"
+    },
+    "inventory_get": {
+      "additionalProperties": false,
+      "properties": {
+        "command_id": {
+          "format": "uuid",
+          "title": "Command Id",
+          "type": "string"
+        },
+        "expires_at_ms": {
+          "title": "Expires At Ms",
+          "type": "integer"
+        },
+        "issued_at_ms": {
+          "title": "Issued At Ms",
+          "type": "integer"
+        },
+        "lease_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lease Id"
+        },
+        "sn": {
+          "title": "Sn",
+          "type": "string"
+        },
+        "type": {
+          "const": "inventory_get",
+          "default": "inventory_get",
+          "title": "Type",
+          "type": "string"
+        },
+        "v": {
+          "const": 1,
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command_id",
+        "sn",
+        "issued_at_ms",
+        "expires_at_ms"
+      ],
+      "title": "InventoryGetCommand",
+      "type": "object"
+    },
+    "lease_renew": {
+      "additionalProperties": false,
+      "properties": {
+        "command_id": {
+          "format": "uuid",
+          "title": "Command Id",
+          "type": "string"
+        },
+        "expires_at_ms": {
+          "title": "Expires At Ms",
+          "type": "integer"
+        },
+        "issued_at_ms": {
+          "title": "Issued At Ms",
+          "type": "integer"
+        },
+        "lease_id": {
+          "format": "uuid",
+          "title": "Lease Id",
+          "type": "string"
+        },
+        "sn": {
+          "title": "Sn",
+          "type": "string"
+        },
+        "stream_instance_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stream Instance Id"
+        },
+        "ttl_sec": {
+          "default": 60,
+          "title": "Ttl Sec",
+          "type": "integer"
+        },
+        "type": {
+          "const": "lease_renew",
+          "default": "lease_renew",
+          "title": "Type",
+          "type": "string"
+        },
+        "v": {
+          "const": 1,
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command_id",
+        "lease_id",
+        "sn",
+        "issued_at_ms",
+        "expires_at_ms"
+      ],
+      "title": "CameraRenewCommand",
+      "type": "object"
+    },
+    "nack": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "enum": [
+            "interactive_desktop_unavailable",
+            "lease_invalid",
+            "expired",
+            "duplicate",
+            "invalid_sn",
+            "invalid_payload",
+            "unsupported",
+            "inject_failed",
+            "lease_mismatch",
+            "desktop_mismatch",
+            "stream_mismatch",
+            "source_not_allowed",
+            "source_unavailable",
+            "session_unavailable",
+            "busy_transition",
+            "ffmpeg_missing",
+            "ffmpeg_integrity",
+            "input_not_allowed_in_camera_mode",
+            "invalid_profile",
+            "desktop_locked",
+            "action_blocked_policy",
+            "action_blocked_winlogon_guard",
+            "insufficient_integrity",
+            "input_injection_failed"
+          ],
+          "title": "Code",
+          "type": "string"
+        },
+        "command_id": {
+          "format": "uuid",
+          "title": "Command Id",
+          "type": "string"
+        },
+        "lease_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lease Id"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "sn": {
+          "title": "Sn",
+          "type": "string"
+        },
+        "terminal_time_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Terminal Time Ms"
+        },
+        "type": {
+          "const": "nack",
+          "default": "nack",
+          "title": "Type",
+          "type": "string"
+        },
+        "v": {
+          "const": 1,
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command_id",
+        "sn",
+        "code",
+        "message"
+      ],
+      "title": "CtlNack",
+      "type": "object"
+    },
+    "presence": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "anyOf": [
+            {
+              "const": "l4desk",
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": "l4desk",
+          "title": "Agent"
+        },
+        "capabilities": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Capabilities"
+        },
+        "desktop_available": {
+          "default": false,
+          "title": "Desktop Available",
+          "type": "boolean"
+        },
+        "inventory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InventoryInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "online": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Online"
+        },
+        "screen": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScreenInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "session_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Session Id"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "enum": [
+                "online",
+                "offline"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": "online",
+          "title": "Status"
+        },
+        "stream": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StreamInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "timestamp": {
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "type": {
+          "const": "presence",
+          "default": "presence",
+          "title": "Type",
+          "type": "string"
+        },
+        "v": {
+          "const": 1,
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        }
+      },
+      "required": [
+        "timestamp"
+      ],
+      "title": "CtlPresence",
+      "type": "object"
+    },
+    "stream_event": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "sn": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sn"
+        },
+        "state": {
+          "enum": [
+            "stopped",
+            "starting",
+            "running",
+            "stopping",
+            "restarting",
+            "failed",
+            "source_unavailable",
+            "session_unavailable"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "stream_instance_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stream Instance Id"
+        },
+        "timestamp": {
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "type": {
+          "const": "stream_event",
+          "default": "stream_event",
+          "title": "Type",
+          "type": "string"
+        },
+        "v": {
+          "const": 1,
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "state",
+        "timestamp"
+      ],
+      "title": "CtlStreamEvent",
+      "type": "object"
+    },
+    "stream_start": {
+      "additionalProperties": false,
+      "properties": {
+        "command_id": {
+          "format": "uuid",
+          "title": "Command Id",
+          "type": "string"
+        },
+        "expires_at_ms": {
+          "title": "Expires At Ms",
+          "type": "integer"
+        },
+        "issued_at_ms": {
+          "title": "Issued At Ms",
+          "type": "integer"
+        },
+        "lease_id": {
+          "format": "uuid",
+          "title": "Lease Id",
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "desktop",
+            "usb-camera"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "profile": {
+          "default": "default",
+          "title": "Profile",
+          "type": "string"
+        },
+        "sn": {
+          "title": "Sn",
+          "type": "string"
+        },
+        "source_id": {
+          "title": "Source Id",
+          "type": "string"
+        },
+        "stream_instance_id": {
+          "format": "uuid",
+          "title": "Stream Instance Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "stream_start",
+          "default": "stream_start",
+          "title": "Type",
+          "type": "string"
+        },
+        "v": {
+          "const": 1,
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command_id",
+        "lease_id",
+        "sn",
+        "mode",
+        "source_id",
+        "stream_instance_id",
+        "issued_at_ms",
+        "expires_at_ms"
+      ],
+      "title": "StreamStartCommand",
+      "type": "object"
+    },
+    "stream_stop": {
+      "additionalProperties": false,
+      "properties": {
+        "command_id": {
+          "format": "uuid",
+          "title": "Command Id",
+          "type": "string"
+        },
+        "expires_at_ms": {
+          "title": "Expires At Ms",
+          "type": "integer"
+        },
+        "issued_at_ms": {
+          "title": "Issued At Ms",
+          "type": "integer"
+        },
+        "lease_id": {
+          "format": "uuid",
+          "title": "Lease Id",
+          "type": "string"
+        },
+        "sn": {
+          "title": "Sn",
+          "type": "string"
+        },
+        "stream_instance_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stream Instance Id"
+        },
+        "type": {
+          "const": "stream_stop",
+          "default": "stream_stop",
+          "title": "Type",
+          "type": "string"
+        },
+        "v": {
+          "const": 1,
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command_id",
+        "lease_id",
+        "sn",
+        "issued_at_ms",
+        "expires_at_ms"
+      ],
+      "title": "StreamStopCommand",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Acceptance implementation mirror, not a new wire contract; CTLv1 remains unchanged.",
+  "x-reference-sha256": {
+    "CameraRenewCommand": "9c0f1f386b486a88e9ffb77a1024b08e1a03ba89318172aefa2286ffefe88692",
+    "schemas.py": "032ec66731dc6bb6e0e8c37e6e8b46d3e10f80307b862a2986d860a2865afab3"
+  }
+}
