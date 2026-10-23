@@ -1,0 +1,10 @@
+services:
+  platerra:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${PLATERRA_PORT:-8088}:80"
+    mem_limit: 64m
+    cpus: 0.50

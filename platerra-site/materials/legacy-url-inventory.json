@@ -1,0 +1,212 @@
+[
+  {
+    "kind": "page",
+    "url": "https://platerra.ru/sample-page/",
+    "review": "pending"
+  },
+  {
+    "kind": "page",
+    "url": "https://platerra.ru/blog-page/",
+    "review": "pending"
+  },
+  {
+    "kind": "page",
+    "url": "https://platerra.ru/contacts/",
+    "review": "pending"
+  },
+  {
+    "kind": "page",
+    "url": "https://platerra.ru/prices-page/",
+    "review": "pending"
+  },
+  {
+    "kind": "page",
+    "url": "https://platerra.ru/our-projects/",
+    "review": "pending"
+  },
+  {
+    "kind": "page",
+    "url": "https://platerra.ru/our-team/",
+    "review": "pending"
+  },
+  {
+    "kind": "page",
+    "url": "https://platerra.ru/",
+    "review": "pending"
+  },
+  {
+    "kind": "page",
+    "url": "https://platerra.ru/image-credits/",
+    "review": "pending"
+  },
+  {
+    "kind": "projects",
+    "url": "https://platerra.ru/projects/worksync-ai-powered-team-collaboration-tool/",
+    "review": "pending"
+  },
+  {
+    "kind": "projects",
+    "url": "https://platerra.ru/projects/edumind-personalized-learning-hub/",
+    "review": "pending"
+  },
+  {
+    "kind": "projects",
+    "url": "https://platerra.ru/projects/medassist-virtual-health-companion/",
+    "review": "pending"
+  },
+  {
+    "kind": "projects",
+    "url": "https://platerra.ru/projects/finvision-predictive-finance-dashboard/",
+    "review": "pending"
+  },
+  {
+    "kind": "projects",
+    "url": "https://platerra.ru/projects/retailsense-smart-store-analytics/",
+    "review": "pending"
+  },
+  {
+    "kind": "projects",
+    "url": "https://platerra.ru/projects/novahire-ai-recruitment-platform/",
+    "review": "pending"
+  },
+  {
+    "kind": "projects",
+    "url": "https://platerra.ru/projects/greentrack-sustainable-supply-chain-monitor/",
+    "review": "pending"
+  },
+  {
+    "kind": "projects",
+    "url": "https://platerra.ru/projects/travelmate-intelligent-trip-planner/",
+    "review": "pending"
+  },
+  {
+    "kind": "projects",
+    "url": "https://platerra.ru/projects/legalease-ai-contract-analyzer/",
+    "review": "pending"
+  },
+  {
+    "kind": "projects",
+    "url": "https://platerra.ru/projects/leo4-iot-platform/",
+    "review": "pending"
+  },
+  {
+    "kind": "projects",
+    "url": "https://platerra.ru/projects/pos-vending-yellowstone/",
+    "review": "pending"
+  },
+  {
+    "kind": "projects",
+    "url": "https://platerra.ru/projects/puntopago-self-service/",
+    "review": "pending"
+  },
+  {
+    "kind": "services",
+    "url": "https://platerra.ru/services/prototyping-ux-design/",
+    "review": "pending"
+  },
+  {
+    "kind": "services",
+    "url": "https://platerra.ru/services/ai-accelerated-product-development/",
+    "review": "pending"
+  },
+  {
+    "kind": "services",
+    "url": "https://platerra.ru/services/cloud-architecture-devops/",
+    "review": "pending"
+  },
+  {
+    "kind": "services",
+    "url": "https://platerra.ru/services/ai-integration-automation/",
+    "review": "pending"
+  },
+  {
+    "kind": "services",
+    "url": "https://platerra.ru/services/custom-software-app-development/",
+    "review": "pending"
+  },
+  {
+    "kind": "services",
+    "url": "https://platerra.ru/services/startup-growth-consulting/",
+    "review": "pending"
+  },
+  {
+    "kind": "services",
+    "url": "https://platerra.ru/services/intelligent-data-insights/",
+    "review": "pending"
+  },
+  {
+    "kind": "services",
+    "url": "https://platerra.ru/services/smart-workflow-automation/",
+    "review": "pending"
+  },
+  {
+    "kind": "services",
+    "url": "https://platerra.ru/services/innovation-strategy-consulting/",
+    "review": "pending"
+  },
+  {
+    "kind": "post",
+    "url": "https://platerra.ru/2024/12/10/hello-world/",
+    "review": "pending"
+  },
+  {
+    "kind": "post",
+    "url": "https://platerra.ru/2025/12/10/siplite-%d0%ba%d0%be%d0%bd%d1%82%d1%80%d0%be%d0%bb%d0%bb%d0%b5%d1%80/",
+    "review": "pending"
+  },
+  {
+    "kind": "post",
+    "url": "https://platerra.ru/2025/04/11/3-campaigns-that-bombed-and-why-were-proud/",
+    "review": "pending"
+  },
+  {
+    "kind": "post",
+    "url": "https://platerra.ru/2025/04/10/how-custom-apps-transform-businesses/",
+    "review": "pending"
+  },
+  {
+    "kind": "post",
+    "url": "https://platerra.ru/2025/04/12/why-your-logo-doesnt-matter-and-what-does/",
+    "review": "pending"
+  },
+  {
+    "kind": "post",
+    "url": "https://platerra.ru/2025/04/13/the-hidden-bias-in-ai-driven-marketing/",
+    "review": "pending"
+  },
+  {
+    "kind": "post",
+    "url": "https://platerra.ru/2025/04/08/how-ai-is-reshaping-software-development/",
+    "review": "pending"
+  },
+  {
+    "kind": "post",
+    "url": "https://platerra.ru/2025/04/07/how-mobile-apps-improve-customer-loyalty-and-brand-trust/",
+    "review": "pending"
+  },
+  {
+    "kind": "post",
+    "url": "https://platerra.ru/2025/04/05/cloud-based-applications-as-the-new-normal/",
+    "review": "pending"
+  },
+  {
+    "kind": "post",
+    "url": "https://platerra.ru/2025/04/04/top-ux-mistakes-that-can-kill-your-app/",
+    "review": "pending"
+  },
+  {
+    "kind": "post",
+    "url": "https://platerra.ru/2025/04/02/the-role-of-mobile-applications-in-digital-marketing/",
+    "review": "pending"
+  },
+  {
+    "kind": "post",
+    "url": "https://platerra.ru/2026/05/12/vending-methodology/",
+    "review": "pending"
+  },
+  {
+    "kind": "post",
+    "url": "https://platerra.ru/2026/05/16/%d0%ba%d0%b0%d0%ba-%d1%81%d0%b4%d0%b5%d0%bb%d0%b0%d1%82%d1%8c-%d1%81%d0%b2%d0%be%d0%b5%d0%b3%d0%be-ai-%d0%b0%d0%b3%d0%b5%d0%bd%d1%82%d0%b0/",
+    "review": "pending"
+  }
+]

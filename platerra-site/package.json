@@ -1,0 +1,7 @@
+{
+  "name": "platerra-site",
+  "private": true,
+  "type": "module",
+  "scripts": { "build": "node build.mjs", "check": "node --check build.mjs && node --check src/main.js && node --check src/content.mjs && node --check src/projects.mjs && node --check src/icons.mjs && node --check src/templates.mjs" },
+  "engines": { "node": ">=22" }
+}

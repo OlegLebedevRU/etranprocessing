@@ -1,0 +1,203 @@
+{
+  "archive_workspace": "D:\\work\\iot.leo4.ru\\platerra.ru",
+  "projects": [
+    {
+      "id": "puntopago",
+      "title": "Софт для сети терминалов Puntopago.net (300 точек, Панама)",
+      "source_url": "https://platerra.ru/projects/soft-dlya-seti-terminalov-puntopago-net-300-tochek-panama-/",
+      "archive_url": "https://web.archive.org/web/20200924110713id_/https://platerra.ru/projects/soft-dlya-seti-terminalov-puntopago-net-300-tochek-panama-/",
+      "timestamp": "20200924110713",
+      "local_source": "recovered/projects/projects-20200924110713-projects-soft-dlya-seti-terminalov-puntopago-net-300-tochek-panama/metadata.json",
+      "evidence": "recovered title; only minimal scope stated",
+      "excerpts": []
+    },
+    {
+      "id": "fincher",
+      "title": "Сеть терминалов самоинкассации — Системы самообслуживания",
+      "source_url": "https://platerra.ru/portfolio/%D1%81%D0%B5%D1%82%D1%8C-%D1%82%D0%B5%D1%80%D0%BC%D0%B8%D0%BD%D0%B0%D0%BB%D0%BE%D0%B2-%D1%81%D0%B0%D0%BC%D0%BE%D0%B8%D0%BD%D0%BA%D0%B0%D1%81%D1%81%D0%B0%D1%86%D0%B8%D0%B8/",
+      "archive_url": "https://web.archive.org/web/20190717152552id_/https://platerra.ru/portfolio/%D1%81%D0%B5%D1%82%D1%8C-%D1%82%D0%B5%D1%80%D0%BC%D0%B8%D0%BD%D0%B0%D0%BB%D0%BE%D0%B2-%D1%81%D0%B0%D0%BC%D0%BE%D0%B8%D0%BD%D0%BA%D0%B0%D1%81%D1%81%D0%B0%D1%86%D0%B8%D0%B8/",
+      "timestamp": "20190717152552",
+      "local_source": "recovered/portfolio/portfolio-20190717152552-portfolio-d1-81-d0-b5-d1-82-d1-8c-d1-82-d0-b5-d1-80-d0-bc-d0-b8-d0-bd-d0-b0-d0-bb-d0-be-d0-b2-d/metadata.json",
+      "evidence": "title + recovered text",
+      "excerpts": [
+        "Решение для НКО ФИНЧЕР (г.Москва и МО). У кредитной организации появилась задача упростить процесс инкассации для своих клиентов, распределенных по разным районам города. Решение состояло в том, чтобы установить на территории клиентов специальные терминалы для внесения наличных в количестве 30 штук, чтобы клиенты могли инкассировать кассу в них. А инкассаторы в плановом режиме, без необходимости согласовывать выделенное время с клиентом производят выемку наличных уже из терминалов. Для решения создан выделенный сервер процессинга для сбора и обработки транзакций внесения наличных, а также для сбора транзакций выемки кассет. Для контроля активности сети терминалов также внедрена система технического мониторинга состояния связи и оборудования терминалов.",
+        "Софт для терминалов с функцией приема купюр, интерфейсом авторизации клиентов и контроля доступа инкассаторов.",
+        "Процессинговая система для приема и обработки данных по операциям самоинкассации и контролю изъятия кассет."
+      ]
+    },
+    {
+      "id": "bank",
+      "title": "Автоматизация банка — Системы самообслуживания",
+      "source_url": "https://platerra.ru/portfolio/%D0%BF%D1%80%D0%B8%D0%B5%D0%BC-%D0%BA%D1%80%D0%B5%D0%B4%D0%B8%D1%82%D0%BE%D0%B2-%D0%B2-%D0%B1%D0%B0%D0%BD%D0%BA%D0%B5/",
+      "archive_url": "https://web.archive.org/web/20190717142132id_/https://platerra.ru/portfolio/%D0%BF%D1%80%D0%B8%D0%B5%D0%BC-%D0%BA%D1%80%D0%B5%D0%B4%D0%B8%D1%82%D0%BE%D0%B2-%D0%B2-%D0%B1%D0%B0%D0%BD%D0%BA%D0%B5/",
+      "timestamp": "20190717142132",
+      "local_source": "recovered/portfolio/portfolio-20190717142132-portfolio-d0-bf-d1-80-d0-b8-d0-b5-d0-bc-d0-ba-d1-80-d0-b5-d0-b4-d0-b8-d1-82-d0-be-d0-b2-d0-b2-d/metadata.json",
+      "evidence": "title + recovered text",
+      "excerpts": [
+        "Решение для Банка (г.Рязань) — организация сбора наличных платежей для клиентов юрлиц. У банка возникла задача внедрить для своих клиентов ВУЗов сервис по сбору наличных платежей за услуги обучения. Для решения задачи решено использовать сеть терминалов самообслуживания и интегрировать процессинг платежей с банковской АБС. В результате решения на сеть терминалов банка установлено программное обеспечение FORPAY Terminal, со специальном интерфейсом, позволяющим принимать и обрабатывать оплату за обучение в различные ВУЗы города. Транзакции оплаты собираются в едином процессинговом центре FORPAY.Net и посредством сервиса интеграции передаются выгрузкой в АБС банка."
+      ]
+    },
+    {
+      "id": "xfit",
+      "title": "Автоматизация приема платежей фитнес-клубов сети X-fit — Системы самообслуживания",
+      "source_url": "https://platerra.ru/portfolio/%D1%82%D0%B5%D1%80%D0%BC%D0%B8%D0%BD%D0%B0%D0%BB%D1%8B-%D0%B4%D0%BB%D1%8F-%D1%84%D0%B8%D1%82%D0%BD%D0%B5%D1%81-%D0%BA%D0%BB%D1%83%D0%B1%D0%BE%D0%B2-x-fit/",
+      "archive_url": "https://web.archive.org/web/20190717142129id_/https://platerra.ru/portfolio/%D1%82%D0%B5%D1%80%D0%BC%D0%B8%D0%BD%D0%B0%D0%BB%D1%8B-%D0%B4%D0%BB%D1%8F-%D1%84%D0%B8%D1%82%D0%BD%D0%B5%D1%81-%D0%BA%D0%BB%D1%83%D0%B1%D0%BE%D0%B2-x-fit/",
+      "timestamp": "20190717142129",
+      "local_source": "recovered/portfolio/portfolio-20190717142129-portfolio-d1-82-d0-b5-d1-80-d0-bc-d0-b8-d0-bd-d0-b0-d0-bb-d1-8b-d0-b4-d0-bb-d1-8f-d1-84-d0-b8-d/metadata.json",
+      "evidence": "recovered title; only minimal scope stated",
+      "excerpts": []
+    },
+    {
+      "id": "airport",
+      "title": "Терминалы для аэропорта (г. Белгород) — Системы самообслуживания",
+      "source_url": "https://platerra.ru/portfolio/%D1%82%D0%B5%D1%80%D0%BC%D0%B8%D0%BD%D0%B0%D0%BB-%D0%B4%D0%BB%D1%8F-%D0%B0%D1%8D%D1%80%D0%BE%D0%BF%D0%BE%D1%80%D1%82%D0%B0-%D0%B3-%D0%B1%D0%B5%D0%BB%D0%B3%D0%BE%D1%80%D0%BE%D0%B4/",
+      "archive_url": "https://web.archive.org/web/20190717143700id_/https://platerra.ru/portfolio/%D1%82%D0%B5%D1%80%D0%BC%D0%B8%D0%BD%D0%B0%D0%BB-%D0%B4%D0%BB%D1%8F-%D0%B0%D1%8D%D1%80%D0%BE%D0%BF%D0%BE%D1%80%D1%82%D0%B0-%D0%B3-%D0%B1%D0%B5%D0%BB%D0%B3%D0%BE%D1%80%D0%BE%D0%B4/",
+      "timestamp": "20190717143700",
+      "local_source": "recovered/portfolio/portfolio-20190717143700-portfolio-d1-82-d0-b5-d1-80-d0-bc-d0-b8-d0-bd-d0-b0-d0-bb-d0-b4-d0-bb-d1-8f-d0-b0-d1-8d-d1-80-d/metadata.json",
+      "evidence": "recovered title; only minimal scope stated",
+      "excerpts": []
+    },
+    {
+      "id": "utility",
+      "title": "Автоматизация сбора платежей для управляющей компании — Системы самообслуживания",
+      "source_url": "https://platerra.ru/portfolio/%D1%83%D0%BF%D1%80%D0%B0%D0%B2%D0%BB%D1%8F%D1%8E%D1%89%D0%B8%D0%B5-%D0%BA%D0%BE%D0%BC%D0%BF%D0%B0%D0%BD%D0%B8%D0%B8-%D0%B6%D0%BA-%D0%B8-%D1%82%D1%81%D0%B6/",
+      "archive_url": "https://web.archive.org/web/20190717150602id_/https://platerra.ru/portfolio/%D1%83%D0%BF%D1%80%D0%B0%D0%B2%D0%BB%D1%8F%D1%8E%D1%89%D0%B8%D0%B5-%D0%BA%D0%BE%D0%BC%D0%BF%D0%B0%D0%BD%D0%B8%D0%B8-%D0%B6%D0%BA-%D0%B8-%D1%82%D1%81%D0%B6/",
+      "timestamp": "20190717150602",
+      "local_source": "recovered/portfolio/portfolio-20190717150602-portfolio-d1-83-d0-bf-d1-80-d0-b0-d0-b2-d0-bb-d1-8f-d1-8e-d1-89-d0-b8-d0-b5-d0-ba-d0-be-d0-bc-d/metadata.json",
+      "evidence": "recovered title; only minimal scope stated",
+      "excerpts": []
+    },
+    {
+      "id": "taxi",
+      "title": "Автоматизация таксопарков — Системы самообслуживания",
+      "source_url": "https://platerra.ru/portfolio/%D1%82%D0%B5%D1%80%D0%BC%D0%B8%D0%BD%D0%B0%D0%BB%D1%8B-%D0%B4%D0%BB%D1%8F-%D1%81%D0%BB%D1%83%D0%B6%D0%B1-%D1%82%D0%B0%D0%BA%D1%81%D0%B8/",
+      "archive_url": "https://web.archive.org/web/20190717150213id_/https://platerra.ru/portfolio/%D1%82%D0%B5%D1%80%D0%BC%D0%B8%D0%BD%D0%B0%D0%BB%D1%8B-%D0%B4%D0%BB%D1%8F-%D1%81%D0%BB%D1%83%D0%B6%D0%B1-%D1%82%D0%B0%D0%BA%D1%81%D0%B8/",
+      "timestamp": "20190717150213",
+      "local_source": "recovered/portfolio/portfolio-20190717150213-portfolio-d1-82-d0-b5-d1-80-d0-bc-d0-b8-d0-bd-d0-b0-d0-bb-d1-8b-d0-b4-d0-bb-d1-8f-d1-81-d0-bb-d/metadata.json",
+      "evidence": "recovered title; only minimal scope stated",
+      "excerpts": []
+    },
+    {
+      "id": "provider",
+      "title": "Сеть терминалов для провайдера — Системы самообслуживания",
+      "source_url": "https://platerra.ru/portfolio/%D1%81%D0%B5%D1%82%D1%8C-%D1%82%D0%B5%D1%80%D0%BC%D0%B8%D0%BD%D0%B0%D0%BB%D0%BE%D0%B2-%D0%B4%D0%BB%D1%8F-%D0%BF%D1%80%D0%BE%D0%B2%D0%B0%D0%B9%D0%B4%D0%B5%D1%80%D0%B0/",
+      "archive_url": "https://web.archive.org/web/20190717152252id_/https://platerra.ru/portfolio/%D1%81%D0%B5%D1%82%D1%8C-%D1%82%D0%B5%D1%80%D0%BC%D0%B8%D0%BD%D0%B0%D0%BB%D0%BE%D0%B2-%D0%B4%D0%BB%D1%8F-%D0%BF%D1%80%D0%BE%D0%B2%D0%B0%D0%B9%D0%B4%D0%B5%D1%80%D0%B0/",
+      "timestamp": "20190717152252",
+      "local_source": "recovered/portfolio/portfolio-20190717152252-portfolio-d1-81-d0-b5-d1-82-d1-8c-d1-82-d0-b5-d1-80-d0-bc-d0-b8-d0-bd-d0-b0-d0-bb-d0-be-d0-b2-d/metadata.json",
+      "evidence": "recovered title; only minimal scope stated",
+      "excerpts": []
+    },
+    {
+      "id": "cashier",
+      "title": "Система Электронный кассир",
+      "source_url": "https://platerra.ru/projects/sisteme-elkassir/",
+      "archive_url": "https://web.archive.org/web/20200924113156id_/https://platerra.ru/projects/sisteme-elkassir/",
+      "timestamp": "20200924113156",
+      "local_source": "recovered/projects/projects-20200924113156-projects-sisteme-elkassir/metadata.json",
+      "evidence": "title + recovered text",
+      "excerpts": [
+        "Нет агентов и посредников в расчетах с клиентами, либо полный контроль над агентами, использующими автокассу.",
+        "Вместе с безупречным приемом наличных средств решаются задачи печати кассового чека, надежного хранения наличных в сейфе аппарата, экспорта кассовых операций в систему учета, печати инкассационных документов.",
+        "Опционально к автокассе может подключаться инфокиоск с сенсорным интерфейсом для каталога товаров и услуг, а также для предварительного заполнения форм и печати документа со штрих-кодом, который распознается автокассой (клиенту не нужно повторно не заполнять формы)."
+      ]
+    },
+    {
+      "id": "beauty",
+      "title": "Электронные кассиры для салонов красоты",
+      "source_url": "https://platerra.ru/projects/proekty-avtomatizatsii-salonov-krasoty/",
+      "archive_url": "https://web.archive.org/web/20201027212856id_/https://platerra.ru/projects/proekty-avtomatizatsii-salonov-krasoty/",
+      "timestamp": "20201027212856",
+      "local_source": "recovered/projects/projects-20201027212856-projects-proekty-avtomatizatsii-salonov-krasoty/metadata.json",
+      "evidence": "title + recovered text",
+      "excerpts": [
+        "Мы автоматизировали более 200 салонов красоты и парикмахерских. И осуществляем постоянную поддержку работы наших серверов и систем клиентов в режиме 24/7.",
+        "Наши клиенты -- это сети экспресс-парикмахерских, салоны красоты и многофункциональные парикмахерские.",
+        "В сенсорном интерфейсе терминала содержится Ваш прайс (меню услуг). Клиент выбирает услугу и вносит в терминал наличные или вводит банковскую карту. Печатается фискальный чек и отдельно печатается квитанция со штрих-кодом, которая передается мастеру."
+      ]
+    },
+    {
+      "id": "courier",
+      "title": "Терминалы инкассации для курьеров",
+      "source_url": "https://platerra.ru/projects/terminaly-inkassatsii-dlya-kurerov/",
+      "archive_url": "https://web.archive.org/web/20200924113514id_/https://platerra.ru/projects/terminaly-inkassatsii-dlya-kurerov/",
+      "timestamp": "20200924113514",
+      "local_source": "recovered/projects/projects-20200924113514-projects-terminaly-inkassatsii-dlya-kurerov/metadata.json",
+      "evidence": "recovered title; only minimal scope stated",
+      "excerpts": []
+    },
+    {
+      "id": "rzd",
+      "title": "Автоматизация камер хранения РЖД — Системы самообслуживания",
+      "source_url": "https://platerra.ru/portfolio/%D0%B0%D0%B2%D1%82%D0%BE%D0%BC%D0%B0%D1%82%D0%B8%D0%B7%D0%B0%D1%86%D0%B8%D1%8F-%D0%BA%D0%B0%D0%BC%D0%B5%D1%80-%D1%85%D1%80%D0%B0%D0%BD%D0%B5%D0%BD%D0%B8%D1%8F-%D1%80%D0%B6%D0%B4/",
+      "archive_url": "https://web.archive.org/web/20190717142226id_/https://platerra.ru/portfolio/%D0%B0%D0%B2%D1%82%D0%BE%D0%BC%D0%B0%D1%82%D0%B8%D0%B7%D0%B0%D1%86%D0%B8%D1%8F-%D0%BA%D0%B0%D0%BC%D0%B5%D1%80-%D1%85%D1%80%D0%B0%D0%BD%D0%B5%D0%BD%D0%B8%D1%8F-%D1%80%D0%B6%D0%B4/",
+      "timestamp": "20190717142226",
+      "local_source": "recovered/portfolio/portfolio-20190717142226-portfolio-d0-b0-d0-b2-d1-82-d0-be-d0-bc-d0-b0-d1-82-d0-b8-d0-b7-d0-b0-d1-86-d0-b8-d1-8f-d0-ba-d/metadata.json",
+      "evidence": "title + recovered text",
+      "excerpts": [
+        "Решена задача внедрения новейших автоматических систем платного хранения с удобным интерфейсом использования и оплаты.",
+        "Информационные терминалы коммуникации с пользователями (информирование о статусе хранения, оставшемся времени и сумме к доплате)"
+      ]
+    },
+    {
+      "id": "ikea",
+      "title": "Автоматические камеры хранения для сотрудников ИКЕЯ — Системы самообслуживания",
+      "source_url": "https://platerra.ru/portfolio/%D0%B0%D0%B2%D1%82%D0%BE%D0%BC%D0%B0%D1%82%D0%B8%D1%87%D0%B5%D1%81%D0%BA%D0%B8%D0%B5-%D0%BA%D0%B0%D0%BC%D0%B5%D1%80%D1%8B-%D1%85%D1%80%D0%B0%D0%BD%D0%B5%D0%BD%D0%B8%D1%8F-%D0%B4%D0%BB%D1%8F-%D1%81/",
+      "archive_url": "https://web.archive.org/web/20190717144709id_/https://platerra.ru/portfolio/%D0%B0%D0%B2%D1%82%D0%BE%D0%BC%D0%B0%D1%82%D0%B8%D1%87%D0%B5%D1%81%D0%BA%D0%B8%D0%B5-%D0%BA%D0%B0%D0%BC%D0%B5%D1%80%D1%8B-%D1%85%D1%80%D0%B0%D0%BD%D0%B5%D0%BD%D0%B8%D1%8F-%D0%B4%D0%BB%D1%8F-%D1%81/",
+      "timestamp": "20190717144709",
+      "local_source": "recovered/portfolio/portfolio-20190717144709-portfolio-d0-b0-d0-b2-d1-82-d0-be-d0-bc-d0-b0-d1-82-d0-b8-d1-87-d0-b5-d1-81-d0-ba-d0-b8-d0-b5-d/metadata.json",
+      "evidence": "recovered title; only minimal scope stated",
+      "excerpts": []
+    },
+    {
+      "id": "leroy",
+      "title": "Системы хранения и контроля использования гаджетов для Леруа Мерлен",
+      "source_url": "https://platerra.ru/projects/sistemy-khraneniya-i-kontrolya-ispolzovaniya-gadzhetov-dlya-lerua-merlen/",
+      "archive_url": "https://web.archive.org/web/20200924115506id_/https://platerra.ru/projects/sistemy-khraneniya-i-kontrolya-ispolzovaniya-gadzhetov-dlya-lerua-merlen/",
+      "timestamp": "20200924115506",
+      "local_source": "recovered/projects/projects-20200924115506-projects-sistemy-khraneniya-i-kontrolya-ispolzovaniya-gadzhetov-dlya-lerua-merlen/metadata.json",
+      "evidence": "recovered title; only minimal scope stated",
+      "excerpts": []
+    },
+    {
+      "id": "post",
+      "title": "Пилотный проект почтомата для Почты РФ",
+      "source_url": "https://platerra.ru/projects/pilotnyy-proekt-pochtomata-dlya-pochty-rf/",
+      "archive_url": "https://web.archive.org/web/20200924110923id_/https://platerra.ru/projects/pilotnyy-proekt-pochtomata-dlya-pochty-rf/",
+      "timestamp": "20200924110923",
+      "local_source": "recovered/projects/projects-20200924110923-projects-pilotnyy-proekt-pochtomata-dlya-pochty-rf/metadata.json",
+      "evidence": "recovered title; only minimal scope stated",
+      "excerpts": []
+    },
+    {
+      "id": "parcel",
+      "title": "Система управления постаматами — Системы самообслуживания",
+      "source_url": "https://platerra.ru/portfolio/%D1%81%D0%B8%D1%81%D1%82%D0%B5%D0%BC%D0%B0-%D1%83%D0%BF%D1%80%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F-%D0%BF%D0%BE%D1%81%D1%82%D0%B0%D0%BC%D0%B0%D1%82%D0%B0%D0%BC%D0%B8/",
+      "archive_url": "https://web.archive.org/web/20190717142229id_/https://platerra.ru/portfolio/%D1%81%D0%B8%D1%81%D1%82%D0%B5%D0%BC%D0%B0-%D1%83%D0%BF%D1%80%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F-%D0%BF%D0%BE%D1%81%D1%82%D0%B0%D0%BC%D0%B0%D1%82%D0%B0%D0%BC%D0%B8/",
+      "timestamp": "20190717142229",
+      "local_source": "recovered/portfolio/portfolio-20190717142229-portfolio-d1-81-d0-b8-d1-81-d1-82-d0-b5-d0-bc-d0-b0-d1-83-d0-bf-d1-80-d0-b0-d0-b2-d0-bb-d0-b5-d/metadata.json",
+      "evidence": "title + recovered text",
+      "excerpts": [
+        "Система регистрации и управления сущностями процесса доставки посылок через постаматы (основные сущности — посылки, получатели, роли, узлы).",
+        "Назначение системы — обеспечивает управление PKI инфраструктурой, целостность логической схемы сети, надежный учет и идентификацию логических узлов в условиях возможной турбулентности узлов на уровне железа (перемещения, текущие ремонты и т.п.). Предоставляет удобный и простой инструмент для администрирования узлов (добавление, изменение узла, простая процедура привязки “железа” к логической инфраструктуре). Системой осуществляется упрощенная, безопасная и автоматизированная процедура выдачи и замены ssl-сертификатов узлов, посредством эмиссии одноразовых установочных пин-кодов.",
+        "Система состоит из программной надстройка над Microsoft CA, базы данных ms sql, набора веб-сервисов и апи для узлов, программных компонентов для узлов (совместимо со всеми версиями windows), решений для встраивания административных панелей в портал управления. Также, в составе системы используется политика применения системы."
+      ]
+    },
+    {
+      "id": "industrial",
+      "title": "ПО для систем промышленного вендинга",
+      "source_url": "https://platerra.ru/projects/po-dlya-sistem-promyshlennogo-vendinga/",
+      "archive_url": "https://web.archive.org/web/20200924104858id_/https://platerra.ru/projects/po-dlya-sistem-promyshlennogo-vendinga/",
+      "timestamp": "20200924104858",
+      "local_source": "recovered/projects/projects-20200924104858-projects-po-dlya-sistem-promyshlennogo-vendinga/metadata.json",
+      "evidence": "recovered title; only minimal scope stated",
+      "excerpts": []
+    },
+    {
+      "id": "trailquipt",
+      "title": "Trailquipt — POS-vending система",
+      "source_url": "https://platerra.ru/projects/pos-vending-yellowstone/",
+      "local_source": "materials/legacy-pos-vending-yellowstone.txt",
+      "evidence": "previous public page read during first redesign; rental, sale, return, locker and payment described"
+    }
+  ]
+}

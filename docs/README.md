@@ -9,7 +9,11 @@
 
 ## 1. Архитектура системы и модели данных
 
-- [siplite H.265 и camera control](etran_arch-siplite-hevc-integration-contract.md) — negotiated camera schema, Auto до START и стабильный локальный API; [machine package](../contracts/siplite-camera-v1/README.md).
+- [siplite H.265 и camera control](etran_arch-siplite-hevc-integration-contract.md) — negotiated camera schema, Auto до START и стабильный локальный API; [machine package](../contracts/siplite-camera-v1/README.md). Снимки frozen schema/OpenAPI сохранены.
+
+- [Локеры — архитектура MVP](etran_arch-lockers-mvp.md) — согласованные бизнес-правила, ответственность PB/MB/IoT/siplite, многоуровневые Mermaid-схемы, состояния и NVS.
+- [Локеры — контракты и выделенный Scalar](etran_arch-lockers-contracts.md) — проект API, `/lockers/docs`, отдельная OpenAPI-схема, автономные разрешения и сверка.
+- [Локеры — расхождения и административные процедуры](etran_run-lockers-reconciliation.md) — реестр допустимых гонок, ограничения и действия менеджера; тестовый запуск.
 
 - [CAPTCHA providers](menu_auth-captcha-providers.md) — native/SmartCaptcha/off, контракт и переключение.
 - [Внутренний JWT signer](menu_ops-jwt-issuer-signer.md) — ротация ключа, приватная сеть и резерв.

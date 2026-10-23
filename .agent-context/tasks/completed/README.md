@@ -6,6 +6,10 @@
 
 ## Индекс
 
+- [2026-10-23 — контракт siplite HEVC](2026-10-23-siplite-hevc-contract.md) — H.265 основной режим, relay готового camera stream, проект расширения camera-схем с совместимостью l4capture; schema/OpenAPI snapshots, без firmware/deploy.
+
+- [2026-10-18 — архитектура локеров](2026-10-18-lockers-architecture.md) — документация MVP, контракты и отдельный Scalar, реестр расхождений; без реализации и runtime-проверок.
+
 - [2026-10-06 — L4Release stage 1](2026-10-06-l4release-stage1.md) — uv build/sign/setup/publish, signed candidate 1.13.2, native gates и anonymous GET проверены; runtime update ещё не внедрён.
 
 - [2026-10-06 — L4Update architecture](2026-10-06-l4update-architecture.md) — согласованный RPC703x flow, Windows layout, gates, watchdog/rollback и uv-конвейер; документ/статический аудит, без реализации/runtime.

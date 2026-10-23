@@ -1,0 +1,51 @@
+{
+  "sources": [
+    {
+      "path": "D:\\work\\img\\l4-hmi_photo_2026-10-09_16-03-39.jpg",
+      "bytes": 186607,
+      "sha256": "063255ccbd261f4fa425b1c866c75a89f37aa9fbca23448a69e23ed230f01705"
+    },
+    {
+      "path": "D:\\work\\img\\l4_hmi_industrial_vending_impl_video_2.mp4",
+      "bytes": 15648899,
+      "sha256": "dec8e952f6eb1e1142c0000945b890fe98042b31016e0d793b1bc793465ad7b7"
+    },
+    {
+      "path": "D:\\work\\img\\l4_hmi_industrial_vending_impl_video_2026-10-09_16-04-32.mp4",
+      "bytes": 8701195,
+      "sha256": "ccc2e5c215c76379eed91d6ccf35bef55e7b724cb6898c8c166babd4a0914439"
+    },
+    {
+      "path": "D:\\work\\img\\leo4-board-io24-hw.jpg",
+      "bytes": 1456721,
+      "sha256": "400b831bcf4c5f8519e57778f77fd1723e4b01a7d113ec3466fd44e5b1c88930"
+    },
+    {
+      "path": "D:\\work\\img\\platerraterminal_locker_with_two_factors_auth_proximity&driverlicense_video_2026-10-09_16-06-02.mp4",
+      "bytes": 3511616,
+      "sha256": "78ef7bf814072004f9e54e0a2682257fd18e715c814bf8aa708e464ad63268d1"
+    },
+    {
+      "path": "D:\\work\\img\\Platerraterminal_vending_IMG_3938.MOV",
+      "bytes": 18122694,
+      "sha256": "1246f2e34e70b350d7f0171d99c9f0de25afd0561a0e8c2fc1c1ad82562cbcf6"
+    }
+  ],
+  "selected_frames": [
+    {
+      "source": "D:\\work\\img\\l4_hmi_industrial_vending_impl_video_2.mp4",
+      "timestamp_seconds": 14.01,
+      "original": "materials/originals/media/industrial-frame-14.01s.jpg"
+    },
+    {
+      "source": "D:\\work\\img\\platerraterminal_locker_with_two_factors_auth_proximity&driverlicense_video_2026-10-09_16-06-02.mp4",
+      "timestamp_seconds": 13.18,
+      "original": "materials/originals/media/locker-frame-13.18s.jpg"
+    },
+    {
+      "source": "D:\\work\\img\\Platerraterminal_vending_IMG_3938.MOV",
+      "timestamp_seconds": 55.64,
+      "original": "materials/originals/media/vending-frame-55.64s.jpg"
+    }
+  ]
+}

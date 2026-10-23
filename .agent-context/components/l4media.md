@@ -2,7 +2,9 @@
 
 ## 2026-10-23 siplite camera extension
 
-[Contract](../../docs/etran_arch-siplite-hevc-integration-contract.md) и [machine package](../../contracts/siplite-camera-v1/README.md) вводят negotiated camera1.0.0 отдельно от frozen2.0.0. Native camera SPS:2592×1944, Main8/420, level153. Camera Auto допускает H.264 только до START, explicit H.265 не подменяется. Это contract/offline validation; новые runtime readers/writers и decode на4623 ещё не проверены.
+[Contract](../../docs/etran_arch-siplite-hevc-integration-contract.md) и [machine package](../../contracts/siplite-camera-v1/README.md) вводят negotiated camera1.0.0 отдельно от frozen2.0.0. Архивный native SPS:2592×1944, Main8/420, level153; свежая read-only проба23.10:1920×1080@20, level123. Camera Auto допускает H.264 только до START, explicit H.265 не подменяется. siplite передаёт готовый bitstream без encode/transcode. Desktop/l4capture schemas и исходные frozen snapshots сохранены.
+
+Это contract/offline validation; новые runtime readers/writers и decode на4623 ещё не проверены. Исходные TASK-40/60 handoffs подтверждают серверный HEVC тракт, но не приёмку siplite firmware. Нового deploy не выполнялось; исторические разделы ниже не являются полным статусом внедрения.
 
 ## 2026-10-22: HEVC server readiness
 
