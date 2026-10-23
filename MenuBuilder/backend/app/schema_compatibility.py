@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 logger = logging.getLogger(__name__)
 
-REQUIRED_ALEMBIC_REVISION = "033"
-COMPATIBLE_ALEMBIC_REVISIONS: set[str] = {"033", "034"}
+REQUIRED_ALEMBIC_REVISION = "034"
+COMPATIBLE_ALEMBIC_REVISIONS: set[str] = {"034"}
 
 L4DESK_TABLES: list[str] = [
     "fin_accounts",
@@ -130,6 +130,16 @@ def check_schema_compatibility_sync(
     if missing_fm:
         raise SchemaCompatibilityError(
             "Missing file-manager tables; apply migration 032."
+        )
+
+    if (
+        "credential_recipient_pem"
+        not in {column["name"] for column in inspector.get_columns("terminals")}
+        or not {"camera_credential_profiles", "camera_credential_receipts"}
+        <= existing_tables
+    ):
+        raise SchemaCompatibilityError(
+            "Missing camera credential vault schema; apply migration 034."
         )
 
     logger.info(

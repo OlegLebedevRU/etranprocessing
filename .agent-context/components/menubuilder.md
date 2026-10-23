@@ -1,5 +1,13 @@
 # MenuBuilder
 
+## Camera vault services, 2026-10-23 — source only, not deployed
+
+Standalone camera_credential_vault/recipient helpers store encrypted active/pending
+intent and durable receipts, wrap DEKs under a stable runtime KEK, and recover
+credentials internally for a new manual operation after certificate rotation.
+No camera router/UI/IoT dispatch integration is included. Root validates scoped
+RES+gauge84 before confirm. [Helper and rollout contract](../../docs/etran_arch-camera-credential-storage.md).
+
 ## Certificate chooser operation state, 2026-10-13 — released
 
 mainc3e464e delivered through builder for frontend. Existing renewal/PIN reads run

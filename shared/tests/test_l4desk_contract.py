@@ -49,7 +49,8 @@ def test_expand_does_not_modify_existing_tables():
             assert [
                 c
                 for c in current[name]["columns"]
-                if c["name"] != "l4desk_subscription_enabled"
+                if c["name"]
+                not in {"l4desk_subscription_enabled", "credential_recipient_pem"}
             ] == expected["columns"]
             assert current[name]["indexes"] == expected["indexes"]
             column = Base.metadata.tables[name].c.l4desk_subscription_enabled
@@ -57,10 +58,12 @@ def test_expand_does_not_modify_existing_tables():
             assert str(column.server_default.arg) == "false"
             assert column.default.arg is False
             assert (
-                current[name]["ddl"].replace(
+                current[name]["ddl"]
+                .replace(
                     "\tl4desk_subscription_enabled BOOLEAN DEFAULT false NOT NULL, \n",
                     "",
                 )
+                .replace("\tcredential_recipient_pem TEXT, \n", "")
                 == expected["ddl"]
             )
         else:
@@ -70,7 +73,12 @@ def test_expand_does_not_modify_existing_tables():
 def test_all_new_models_have_keys_and_named_financial_metadata():
     module = importlib.import_module("etranprocessing_db.l4desk")
     tables = [
-        table for name, table in Base.metadata.tables.items() if name not in BASELINE and not name.startswith(("fm_", "terminal_tools_inventory"))
+        table
+        for name, table in Base.metadata.tables.items()
+        if name not in BASELINE
+        and not name.startswith(
+            ("fm_", "terminal_tools_inventory", "camera_credential_")
+        )
     ]
     assert len(tables) >= 22
     for table in tables:
@@ -117,7 +125,14 @@ def test_iot_baseline_contract():
 
 def test_model_modules_are_declarative_only():
     package = Path(__file__).parents[1] / "etranprocessing_db"
-    for name in ("l4desk.py", "file_manager.py", "models/l4desk.py", "models/finance.py", "models/iot.py"):
+    for name in (
+        "l4desk.py",
+        "file_manager.py",
+        "camera_credentials.py",
+        "models/l4desk.py",
+        "models/finance.py",
+        "models/iot.py",
+    ):
         tree = ast.parse((package / name).read_text(encoding="utf-8"))
         assert not any(
             isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
@@ -152,7 +167,8 @@ def test_published_schema_matches_models():
     importlib.import_module("etranprocessing_db.l4desk")
     importlib.import_module("etranprocessing_db.file_manager")
     importlib.import_module("etranprocessing_db.inventory")
-    path = HERE.parent / "docs" / "l4desk" / "schema-v033.json"
+    importlib.import_module("etranprocessing_db.camera_credentials")
+    path = HERE.parent / "docs" / "l4desk" / "schema-v034.json"
     assert describe_metadata(Base.metadata) == json.loads(
         path.read_text(encoding="utf-8")
     )

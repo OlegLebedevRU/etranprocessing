@@ -1,5 +1,13 @@
 # Shared DB: etranprocessing_db
 
+## Camera vault034, 2026-10-23 — source only, not deployed
+
+PB owns migration034 and verified public recipient column. MB owns declarative
+camera_credential_profiles/receipts via standalone crypto services; no business
+logic or extra dependencies in ORM. Snapshot/provenance v034 published in source.
+Local checks plus isolated PostgreSQL18 upgrade/downgrade/reupgrade passed.
+[Storage and rollout contract](../../docs/etran_arch-camera-credential-storage.md).
+
 ## Production 2026-10-05: разделение применено
 
 Schema031;52Classic/4L4Desk, explicit enrollment11(включая только773 вorg1), split ON обоих consumers, YooKassa OFF. License/identity fingerprints неизменны. PB234/MB700 tests, quality/build passed. [Фактический release и ограничения E2E](../tasks/active/2026-10-05-licensing-implementation.md#k10--production-завершён-2026-10-05-1224-utc). Предыдущие разделы ниже — исторические срезы.

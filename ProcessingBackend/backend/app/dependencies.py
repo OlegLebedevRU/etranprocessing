@@ -15,6 +15,7 @@ from app.config import settings
 from app.database import get_db
 from app.models import License, OrgStatus, Terminal, TerminalCertHistory
 from app.services.ca_trust import is_terminal_issuing_dn, verify_terminal_chain
+from app.services.camera_credential_recipient import observed_recipient
 from app.services.cert_discovery import record_terminal_discovery
 from app.services.terminal_certificate import verified_terminal_identity
 
@@ -301,6 +302,9 @@ async def get_current_terminal(
 
         if terminal:
             # Discovery uses the issuance representation; do not rewrite terminals.cert_serial here.
+            public_pem = observed_recipient(request, terminal)
+            if public_pem is not None:
+                terminal.credential_recipient_pem = public_pem
             cert_serial = terminal.cert_serial
             cert_not_valid_after = (
                 extract_cert_not_valid_after(request) or auth_not_after
