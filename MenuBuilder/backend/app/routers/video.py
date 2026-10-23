@@ -17,6 +17,7 @@ from app.config import settings
 from app.database import get_db
 from app.models import Terminal
 from app.security.permissions import PERMISSION_VIDEO_VIEW, require_permission
+from app.services.camera_contract import media_contract_options
 from app.services.iot_client import iot_client
 from app.services.media_orchestrator_client import media_orchestrator_client
 from app.services.video_contract import (
@@ -598,6 +599,7 @@ async def create_video_session(
             await media_orchestrator_client.video_v2(
                 "health",
                 media_identity(terminal.sn, lease_id, stream_instance_id, descriptor),
+                **media_contract_options(descriptor),
             ),
         )
         from app.services.video_contract import verify_media_response

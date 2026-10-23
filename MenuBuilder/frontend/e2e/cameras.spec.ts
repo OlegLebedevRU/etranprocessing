@@ -1,15 +1,24 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function cameraPortal(page: Page, options: { viewer?: boolean; busy?: boolean; offline?: boolean; stale?: boolean; lost?: boolean; unauthorized?: boolean } = {}) {
+async function cameraPortal(page: Page, options: { viewer?: boolean; busy?: boolean; offline?: boolean; stale?: boolean; lost?: boolean; unauthorized?: boolean; native?: boolean; revisionAfterPoll?: boolean } = {}) {
   const posts: { path: string; body: any }[] = [];
   let operation = "";
-  let config = { video0: { size: "1280x720", fps: 15, bitrate: 1024 }, nightMode: { lightMonitor: false } };
+  let config: any = { video0: { size: "1280x720", fps: 15, bitrate: 1024 }, nightMode: { lightMonitor: false } };
+  let reads = 0;
   let power = true;
   const snapshot = () => ({ snapshot_id: "fixture-snapshot", operation_id: operation, observed_at:
     new Date(Date.now() - (options.stale ? 400000 : 0)).toISOString(), cameras: [{
-      camera_id: "cam:ip000001", status: "ready", revision: "a".repeat(64), config,
+      camera_id: "cam:ip000001", status: "ready", revision: (options.revisionAfterPoll && reads > 1 ? "b" : "a").repeat(64), config,
+      ...(options.native ? { camera_contract_revision: "siplite-camera/1.0.0" } : {}),
+      ...(options.native ? { discovery: { generation: 2, state: "ready", physical_port: 2, ethernet_mode: "switch", candidates: [
+        { candidate_id: "verified", mac: "02:00:00:00:00:01", ip: "192.0.2.10", native_api: "supported", auth: "verified", port_verified: true },
+        { candidate_id: "unverified", mac: "02:00:00:00:00:02", ip: "192.0.2.11", native_api: "unknown", auth: "unknown", port_verified: false },
+      ] } } : {}),
       power: { enabled: power, observed_at: new Date().toISOString() },
-      capabilities: { quality: { presets: [{ id: "medium", available: true }, { id: "hd", available: true }] },
+      capabilities: { ...(options.native ? { methods: [160, 161, 165, 166], fields: [
+          { path: "video0.fps", type: "integer", read: true, write: true, disruptive: true, reason: null, minimum: 1, maximum: 30, values: [] },
+          { path: "video0.size", type: "string", read: true, write: true, disruptive: true, reason: null, minimum: null, maximum: null, values: [] },
+        ] } : {}), quality: { presets: [{ id: "medium", available: true }, { id: "hd", available: true }] },
         day_night: { write: true, modes: ["auto", "day", "night"] }, power: { available: true, actions: ["on", "off", "restart"] } },
     }] });
   await page.route("**/api/**", async route => {
@@ -27,13 +36,14 @@ async function cameraPortal(page: Page, options: { viewer?: boolean; busy?: bool
     if (path === "/api/settings/terminals") data = { items: [{ id: 1, device_id: 4619, sn: "fixture-4619", note: "Вход", address: "Первый этаж", is_active: true }], total_count: 1 };
     if (path.endsWith("/inventory")) data = { displays: [], cameras: [{ camera_id: "cam:ip000001", available: true }] };
     if (path.endsWith("/control/status")) data = { agent: { online: !options.offline }, lease: { active: !!options.busy } };
-    if (path === "/api/cameras/4619") data = { device_id: 4619, terminal_online: !options.offline, lease_active: !!options.busy, snapshot: snapshot() };
+    if (path === "/api/cameras/4619") { reads++; data = { device_id: 4619, terminal_online: !options.offline, lease_active: !!options.busy, snapshot: snapshot() }; }
     if (path.endsWith("/commands") && request.method() === "POST") {
       if (options.unauthorized) { await route.fulfill({ status: 401, json: { detail: "Сессия истекла" } }); return; }
       if (options.lost) { await route.abort("failed"); return; }
       operation = "22222222-2222-4222-8222-222222222222";
       if (body.action === "quality") config = { ...config, video0: { size: "640x360", fps: 10, bitrate: 768 } };
       if (body.action === "power" && body.value === "off") power = false;
+      if (body.action === "patch") for (const [section, fields] of Object.entries(body.patch)) config[section] = { ...config[section], ...fields as object };
       data = { id: operation };
     }
     if (path.includes("/commands/")) data = { id: operation, status: 3, results: [{ status_code: 200,
@@ -44,6 +54,41 @@ async function cameraPortal(page: Page, options: { viewer?: boolean; busy?: bool
   await expect(page.getByText("Состояние и настройки камеры", { exact: true })).toBeVisible();
   return posts;
 }
+
+test("native field draft survives polling and sends only the changed field", async ({ page }) => {
+  const posts = await cameraPortal(page, { native: true });
+  await page.getByText("Видео и изображение", { exact: true }).click();
+  await page.getByRole("spinbutton", { name: "Частота кадров, FPS" }).fill("20");
+  await page.waitForTimeout(5500);
+  await expect(page.getByRole("spinbutton", { name: "Частота кадров, FPS" })).toHaveValue("20");
+  await page.getByRole("button", { name: "Применить изменения", exact: true }).click();
+  await expect(page.getByText("Настройки применены и подтверждены камерой", { exact: true })).toBeVisible();
+  expect(posts).toHaveLength(1);
+  expect(posts[0].body).toMatchObject({ action: "patch", expected_revision: "a".repeat(64), patch: { video0: { fps: 20 } } });
+  expect(Object.keys(posts[0].body.patch.video0)).toEqual(["fps"]);
+});
+
+test("new camera revision preserves the draft and blocks stale apply", async ({ page }) => {
+  const posts = await cameraPortal(page, { native: true, revisionAfterPoll: true });
+  await page.getByText("Видео и изображение", { exact: true }).click();
+  await page.getByRole("spinbutton", { name: "Частота кадров, FPS" }).fill("20");
+  await expect(page.getByText(/Ваши правки сохранены/)).toBeVisible({ timeout: 10000 });
+  await expect(page.getByRole("spinbutton", { name: "Частота кадров, FPS" })).toHaveValue("20");
+  await expect(page.getByRole("button", { name: "Применить изменения", exact: true })).toBeDisabled();
+  expect(posts).toEqual([]);
+});
+
+test("discovery is explicit and an unverified port candidate cannot be bound", async ({ page }) => {
+  const posts = await cameraPortal(page, { native: true });
+  await page.getByText("Подключение камеры", { exact: true }).click();
+  await expect(page.getByText("192.0.2.10", { exact: true })).toBeVisible();
+  await expect(page.getByRole("listitem").filter({ hasText: "192.0.2.11" }).getByRole("button", { name: "Выбрать", exact: true })).toBeDisabled();
+  expect(posts).toEqual([]);
+  await page.getByRole("button", { name: "Найти камеру на port-2", exact: true }).click();
+  await expect(page.getByText("Поиск завершён. Выберите камеру с подтверждённым port-2.", { exact: true })).toBeVisible();
+  expect(posts).toHaveLength(1);
+  expect(posts[0].body.action).toBe("discover");
+});
 
 test("camera list uses explicit tags, includes offline, and never starts on selection", async ({ page }) => {
   const posts = await cameraPortal(page, { offline: true });

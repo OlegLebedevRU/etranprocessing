@@ -45,6 +45,7 @@ l4mcp_token.env
 .uv-cache/
 .release-test-tmp/
 .pytest_cache/
+.pytest_tmp/
 .ruff_cache/
 ProcessingBackend/keys/ca.key
 

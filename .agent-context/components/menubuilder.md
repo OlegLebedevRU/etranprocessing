@@ -1,5 +1,14 @@
 # MenuBuilder
 
+## Siplite camera — local TASK-40 checkpoint, not deployed
+
+[Implementation checkpoint](../../docs/etran_arch-siplite-camera-menubuilder.md):
+separate camera schemas, negotiated extended-epoch reads, native settings drafts,
+port2 discovery/binding guards and stock-only illumination UI. Backend884passed/
+22skipped, final66focused checks, frontend build/102unit and browser fixtures
+passed. Native producer/Auto orchestration and protected credential entry remain;
+TASK-30 and PKI/vault TASK-35 gate deployment. This is not new camera decode evidence.
+
 ## Certificate chooser operation state, 2026-10-13 — released
 
 mainc3e464e delivered through builder for frontend. Existing renewal/PIN reads run

@@ -22,6 +22,11 @@ from pydantic import BaseModel, ConfigDict
 from pydantic import ValidationError as ModelValidationError
 
 from app.config import settings
+from app.services.camera_contract import (
+    MEDIA_VALIDATORS,
+    extended_camera,
+    media_contract_options,
+)
 from app.services.iot_client import IotPlatformClient
 from app.services.media_orchestrator_client import (
     MediaOrchestratorClient,
@@ -114,7 +119,12 @@ def validate_video(definition: str, value: dict[str, Any]) -> dict[str, Any]:
     try:
         if len(json.dumps(value, ensure_ascii=False).encode()) > 32768:
             raise ValueError("oversize")
-        VALIDATORS[definition].validate(value)
+        validators = (
+            MEDIA_VALIDATORS
+            if extended_camera(value) or "camera_contract_revisions" in value
+            else VALIDATORS
+        )
+        validators[definition].validate(value)
     except (ValidationError, ValueError, TypeError) as exc:
         # Provider payloads may contain PINs: never return/log the validation instance.
         raise HTTPException(
@@ -359,7 +369,10 @@ class VideoContractOrchestrator:
                 stream_id = str(stream.get("stream_instance_id") or "")
                 identity = media_identity(sn, lease_id, stream_id, existing)
                 media = validate_video(
-                    "media_health", await self.media.video_v2("health", identity)
+                    "media_health",
+                    await self.media.video_v2(
+                        "health", identity, **media_contract_options(existing)
+                    ),
                 )
                 verify_media_response(media, identity, existing)
                 if (
@@ -464,7 +477,10 @@ class VideoContractOrchestrator:
         producer_attempted = False
         try:
             media = validate_video(
-                "media_response", await self.media.video_v2("start", request)
+                "media_response",
+                await self.media.video_v2(
+                    "start", request, **media_contract_options(descriptor)
+                ),
             )
             verify_media_response(media, identity, descriptor)
             if (
@@ -553,7 +569,9 @@ class VideoContractOrchestrator:
                     )
             with contextlib.suppress(MediaOrchestratorError):
                 await self.media.video_v2(
-                    "stop", dict(identity, reason="partial_start_failed")
+                    "stop",
+                    dict(identity, reason="partial_start_failed"),
+                    **media_contract_options(descriptor),
                 )
             raise
 

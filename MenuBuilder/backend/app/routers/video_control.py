@@ -47,6 +47,7 @@ from app.security.permissions import (
     PERMISSION_VIDEO_VIEW,
     require_permission,
 )
+from app.services.camera_contract import media_contract_options
 from app.services.iot_client import iot_client
 from app.services.media_orchestrator_client import (
     MediaOrchestratorError,
@@ -1150,7 +1151,9 @@ async def start_device_stream(
                     extended["descriptor"],
                 )
                 await media_orchestrator_client.video_v2(
-                    "stop", dict(identity, reason="persistence_failed")
+                    "stop",
+                    dict(identity, reason="persistence_failed"),
+                    **media_contract_options(extended["descriptor"]),
                 )
             else:
                 await iot_client.remote_input_stream_stop(
@@ -1302,7 +1305,9 @@ async def stop_device_stream(
                 terminal.sn, lease_id, v2_stop["stream_instance_id"], descriptor
             )
             await media_orchestrator_client.video_v2(
-                "stop", dict(identity, reason="publisher_stopped")
+                "stop",
+                dict(identity, reason="publisher_stopped"),
+                **media_contract_options(descriptor),
             )
         else:
             await _stop_active_media_session(terminal.sn, lease_id, stream_instance_id)
@@ -1471,6 +1476,7 @@ async def keepalive_device_control_lease(
                         identity,
                         lease_expires_at=media_lease_deadline(result.get("expires_at")),
                     ),
+                    **media_contract_options(descriptor),
                 )
             else:
                 await media_orchestrator_client.renew_session(

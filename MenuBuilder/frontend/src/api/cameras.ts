@@ -1,6 +1,14 @@
 import client from "./client";
 import type { AxiosRequestConfig } from "axios";
 
+export type CameraValue = string | number | boolean;
+export type CameraPatch = Record<string, Record<string, CameraValue>>;
+export interface CameraField {
+  path: string; type: "boolean" | "integer" | "number" | "string";
+  read: boolean; write: boolean; disruptive: boolean; reason: string | null;
+  minimum: number | null; maximum: number | null; values: CameraValue[];
+}
+
 export interface CameraProbe {
   status?: string; observed_at?: string; enabled?: boolean | null; state?: string;
   openipc_version?: string; majestic_version?: string;
@@ -10,10 +18,18 @@ export interface CameraProbe {
 }
 export interface CameraState {
   camera_id: string; status?: string; stale?: boolean; revision?: string | null;
-  config?: { video0?: { size?: string; fps?: number; bitrate?: number }; nightMode?: { lightMonitor?: boolean } } | null;
+  camera_contract_revision?: string;
+  auth_source?: "native" | "custom" | "none";
+  has_credentials?: boolean;
+  discovery?: { generation: number; state: string; physical_port: 2; ethernet_mode: "switch" | "ports";
+    candidates: { candidate_id: string; mac: string; ip: string | null; native_api: string; auth: string; port_verified: boolean }[] };
+  config?: { [section: string]: Record<string, CameraValue | undefined> | undefined;
+    video0?: { codec?: string; size?: string; fps?: number; bitrate?: number }; nightMode?: { lightMonitor?: boolean } } | null;
   identity?: CameraProbe | null; power?: CameraProbe | null;
   telemetry?: CameraProbe & { health?: CameraProbe | null };
-  capabilities?: { quality?: { presets?: { id: "medium" | "hd"; available: boolean }[] };
+  capabilities?: { methods?: number[]; fields?: CameraField[];
+    illumination?: { white: string; ir: string; global_enable: string; pwm: string };
+    quality?: { presets?: { id: "medium" | "hd"; available: boolean }[] };
     day_night?: { write?: boolean; modes?: string[] }; power?: { available?: boolean; actions?: string[] } };
 }
 export interface CameraSnapshot {
@@ -22,8 +38,10 @@ export interface CameraSnapshot {
 }
 export interface CameraObservation { device_id: number; snapshot: CameraSnapshot | null; lease_active: boolean | null; terminal_online: boolean }
 export interface CameraCommand {
-  operation_id: string; action: "refresh" | "quality" | "day_night" | "power";
+  operation_id: string; action: "refresh" | "quality" | "day_night" | "power" | "patch" | "discover" | "cancel_discovery" | "bind" | "unbind" | "clear_credentials";
   value?: string; expected_revision?: string; expected_power_on?: boolean; allow_disruptive?: boolean;
+  patch?: CameraPatch;
+  target_operation_id?: string; candidate_mac?: string; discovery_generation?: number;
 }
 export interface CameraResult {
   status_code: number; result: { status?: string; error?: string; snapshot_id?: string;
