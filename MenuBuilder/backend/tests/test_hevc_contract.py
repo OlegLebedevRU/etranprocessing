@@ -328,6 +328,74 @@ async def test_unknown_auto_and_explicit_fail_closed(context):
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize(
+    "policy,hevc", [("h264", True), ("h264", False), ("auto", False)]
+)
+async def test_h264_uses_existing_adapter_without_hevc_probe(context, policy, hevc):
+    service, args, trace, _ = context
+    now = int(time.time() * 1000)
+    args.update(
+        policy=policy,
+        browser_codecs={
+            "h264": True,
+            "h265": hevc,
+            "checked_at_ms": now,
+            "valid_until_ms": now + 60000,
+        },
+    )
+    assert await service.start(**args) is None
+    assert trace == []
+    args["user"]["session_id"] = "other"
+    with pytest.raises(HTTPException) as error:
+        await service.start(**args)
+    assert error.value.status_code == 403
+    assert trace == []
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "no_hardware_mft",
+        "profile_unsupported",
+        "os_api_unavailable",
+        "server_hevc_unavailable",
+    ],
+)
+async def test_auto_without_hevc_selects_existing_h264_adapter(context, reason):
+    service, args, trace, _ = context
+    service.availability = AsyncMock(
+        return_value={"hevc_available": False, "reason_code": reason}
+    )
+    assert await service.start(**dict(args, policy="auto")) is None
+    assert trace == []
+    with pytest.raises(HTTPException) as error:
+        await service.start(**args)
+    assert error.value.detail["code"] == reason
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "change",
+    [{"h264": False}, {"h264": None}, {"valid_until_ms": 1}, {"unexpected": True}],
+)
+async def test_h264_adapter_preserves_browser_admission(context, change):
+    service, args, trace, _ = context
+    now = int(time.time() * 1000)
+    browser = {
+        "h264": True,
+        "h265": False,
+        "checked_at_ms": now,
+        "valid_until_ms": now + 60000,
+    }
+    browser.update(change)
+    with pytest.raises(HTTPException) as error:
+        await service.start(**dict(args, policy="h264", browser_codecs=browser))
+    assert error.value.status_code == 422
+    assert trace == []
+
+
+@pytest.mark.anyio
 async def test_ack_not_ready_compensates_exact_epoch(context):
     service, args, trace, _ = context
     original = service.iot.remote_video_v2.side_effect

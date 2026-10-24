@@ -37,6 +37,28 @@ from app.services.media_orchestrator_client import (
 
 logger = logging.getLogger(__name__)
 CodecPolicy = Literal["auto", "h264", "h265"]
+
+
+def verify_browser_codec(browser_codecs: dict[str, Any] | None, codec: str) -> None:
+    if browser_codecs is None:
+        return
+    from app.services.camera_video import BrowserCodecs
+
+    try:
+        browser = BrowserCodecs.model_validate(browser_codecs)
+    except ModelValidationError as exc:
+        raise HTTPException(
+            422, detail={"code": "browser_capabilities_invalid"}
+        ) from exc
+    now_ms = int(time.time() * 1000)
+    if not (
+        browser.checked_at_ms - 5000 <= now_ms < browser.valid_until_ms
+        and 0 < browser.valid_until_ms - browser.checked_at_ms <= 60000
+        and getattr(browser, codec) is True
+    ):
+        raise HTTPException(422, detail={"code": "browser_codec_unsupported"})
+
+
 SCHEMA = json.loads(
     (Path(__file__).parent.parent / "contracts/media-v3.schema.json").read_text(
         encoding="utf-8"
@@ -464,16 +486,21 @@ class VideoContractOrchestrator:
             if policy == "h265":
                 raise HTTPException(409, detail={"code": "conflict"})
             return None
+        # Desktop/USB H264 still uses the existing route-before-start adapter.
+        # Native v3 publishes HEVC evidence only; absence of H264 in that
+        # capability does not mean the established H264 producer is unavailable.
+        if policy == "h264" or (
+            policy == "auto" and (browser_codecs or {}).get("h265") is False
+        ):
+            verify_browser_codec(browser_codecs, "h264")
+            return None
         available = await self.availability(
             sn,
             source_id,
             profile_id,
             org_id,
             user,
-            codec="h264"
-            if policy == "h264"
-            or (policy == "auto" and (browser_codecs or {}).get("h265") is False)
-            else "h265",
+            codec="h265",
         )
         if policy == "auto" and available["reason_code"] in (
             "no_hardware_mft",
@@ -481,9 +508,8 @@ class VideoContractOrchestrator:
             "os_api_unavailable",
             "server_hevc_unavailable",
         ):
-            available = await self.availability(
-                sn, source_id, profile_id, org_id, user, codec="h264"
-            )
+            verify_browser_codec(browser_codecs, "h264")
+            return None
         if (
             source_id.startswith("disp:")
             and available.get("hevc_available")
@@ -508,22 +534,7 @@ class VideoContractOrchestrator:
                 },
             )
         resolved_codec = available["track"]["codec"]
-        if browser_codecs is not None:
-            try:
-                from app.services.camera_video import BrowserCodecs
-
-                browser = BrowserCodecs.model_validate(browser_codecs)
-            except ModelValidationError as exc:
-                raise HTTPException(
-                    422, detail={"code": "browser_capabilities_invalid"}
-                ) from exc
-            now_ms = int(time.time() * 1000)
-            if not (
-                browser.checked_at_ms - 5000 <= now_ms < browser.valid_until_ms
-                and 0 < browser.valid_until_ms - browser.checked_at_ms <= 60000
-                and getattr(browser, resolved_codec) is True
-            ):
-                raise HTTPException(422, detail={"code": "browser_codec_unsupported"})
+        verify_browser_codec(browser_codecs, resolved_codec)
         capability = available["capability"]
         agent = status.get("agent") or {}
         if (

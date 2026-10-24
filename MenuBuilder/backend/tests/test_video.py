@@ -135,11 +135,13 @@ async def test_second_viewer_reuses_lease_session_after_stream_start(
             if cold_cache:
                 _mountpoint_pins.clear()
             second = await client.post(
-                "/api/v1/video/devices/1/session", headers=headers
+                "/api/v1/video/devices/1/session?contract_version=3", headers=headers
             )
         assert first.status_code == second.status_code == 200
         assert first.json()["pin"] == second.json()["pin"] == "original-pin"
         assert first.json()["mountpoint_id"] == second.json()["mountpoint_id"] == 1
+        assert second.json()["resolved_codec"] == "h264"
+        assert "descriptor" not in second.json()
         create.assert_awaited_once()
         janus.assert_not_awaited()
         route.assert_not_awaited()

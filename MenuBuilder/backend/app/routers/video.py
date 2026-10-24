@@ -628,9 +628,8 @@ async def create_video_session(
                 )
             )
         return response
-    if contract_version == 3:
-        raise HTTPException(409, detail={"code": "descriptor_unavailable"})
-
+    # H264 publishers have no v3 descriptor. Modern viewers may attach to
+    # their existing authorized route, but must never create a replacement.
     pin = get_or_create_mountpoint_pin(
         device_id,
         stream_instance_id=stream_instance_id,
