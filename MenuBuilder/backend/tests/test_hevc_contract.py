@@ -331,7 +331,9 @@ async def test_unknown_auto_and_explicit_fail_closed(context):
 @pytest.mark.parametrize(
     "policy,hevc", [("h264", True), ("h264", False), ("auto", False)]
 )
-async def test_h264_uses_existing_adapter_without_hevc_probe(context, policy, hevc):
+async def test_h264_uses_existing_adapter_without_native_h264_capability(
+    context, policy, hevc
+):
     service, args, trace, _ = context
     now = int(time.time() * 1000)
     args.update(
@@ -344,7 +346,8 @@ async def test_h264_uses_existing_adapter_without_hevc_probe(context, policy, he
         },
     )
     assert await service.start(**args) is None
-    assert trace == []
+    assert not any(action == "start" for _, action, _ in trace)
+    trace.clear()
     args["user"]["session_id"] = "other"
     with pytest.raises(HTTPException) as error:
         await service.start(**args)
@@ -363,10 +366,16 @@ async def test_h264_uses_existing_adapter_without_hevc_probe(context, policy, he
     ],
 )
 async def test_auto_without_hevc_selects_existing_h264_adapter(context, reason):
-    service, args, trace, _ = context
-    service.availability = AsyncMock(
-        return_value={"hevc_available": False, "reason_code": reason}
-    )
+    service, args, trace, cap = context
+
+    async def availability(*args, codec="h265", **kwargs):
+        return {
+            "hevc_available": False,
+            "reason_code": reason if codec == "h265" else "profile_unsupported",
+            "capability": cap["video_capabilities"],
+        }
+
+    service.availability = AsyncMock(side_effect=availability)
     assert await service.start(**dict(args, policy="auto")) is None
     assert trace == []
     with pytest.raises(HTTPException) as error:
@@ -392,7 +401,7 @@ async def test_h264_adapter_preserves_browser_admission(context, change):
     with pytest.raises(HTTPException) as error:
         await service.start(**dict(args, policy="h264", browser_codecs=browser))
     assert error.value.status_code == 422
-    assert trace == []
+    assert not any(action == "start" for _, action, _ in trace)
 
 
 @pytest.mark.anyio

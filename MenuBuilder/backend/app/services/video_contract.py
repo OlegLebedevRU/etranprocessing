@@ -486,27 +486,40 @@ class VideoContractOrchestrator:
             if policy == "h265":
                 raise HTTPException(409, detail={"code": "conflict"})
             return None
-        # Desktop/USB H264 still uses the existing route-before-start adapter.
-        # Native v3 publishes HEVC evidence only; absence of H264 in that
-        # capability does not mean the established H264 producer is unavailable.
-        if policy == "h264" or (
-            policy == "auto" and (browser_codecs or {}).get("h265") is False
-        ):
-            verify_browser_codec(browser_codecs, "h264")
-            return None
+        requested_codec = (
+            "h264"
+            if policy == "h264"
+            or (policy == "auto" and (browser_codecs or {}).get("h265") is False)
+            else "h265"
+        )
         available = await self.availability(
             sn,
             source_id,
             profile_id,
             org_id,
             user,
-            codec="h265",
+            codec=requested_codec,
         )
         if policy == "auto" and available["reason_code"] in (
             "no_hardware_mft",
             "profile_unsupported",
             "os_api_unavailable",
             "server_hevc_unavailable",
+        ):
+            requested_codec = "h264"
+            available = await self.availability(
+                sn, source_id, profile_id, org_id, user, codec="h264"
+            )
+        # Native 1.13.54 advertises only HEVC through v3. Its existing H264
+        # adapter remains usable. Prefer a real v3 H264 track when advertised;
+        # never mask a stale/mismatched capability or a declared encoder failure.
+        if (
+            requested_codec == "h264"
+            and available["reason_code"] == "profile_unsupported"
+            and available.get("capability")
+            and not any(
+                entry["codec"] == "h264" for entry in available["capability"]["video"]
+            )
         ):
             verify_browser_codec(browser_codecs, "h264")
             return None
