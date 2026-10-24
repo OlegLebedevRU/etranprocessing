@@ -8,13 +8,16 @@
   HEVC failed before reaching the retained H264 adapter.
 - Invariants: authenticated device access, publisher lease and owner/session
   binding, browser support, route-before-START, no fallback after producer failure.
-- Change: H264 selects the existing adapter; Auto does so on explicit browser
-  non-support or the existing definitive HEVC unsupported reasons. Unknown,
-  stale, busy and mismatched capabilities still fail closed for Auto.
+- Change: H264 keeps a real advertised v3 track. If an otherwise valid capability
+  contains no H264 entry, select the existing adapter. Auto negotiates H264 on
+  explicit browser non-support or the existing definitive HEVC unsupported
+  reasons. Unknown, stale, busy and mismatched capabilities still fail closed.
 - Modern viewer attachment accepts an existing authorized H264 route without
   inventing a v3 descriptor. It cannot create a replacement route.
 - Wire contracts: unchanged. H264 response has resolved_codec=h264 and no
   descriptor; native v3 HEVC and camera negotiation are unchanged.
 - Validation: targeted routing/admission and viewer tests, backend quality checks,
   backend-only deployment, browser H264 and HEVC on terminal773.
-- Status: implementation in progress; deployment and live acceptance pending.
+- Checks: 84 initial focused tests; after retaining advertised v3 H264 support,
+  82 HEVC/media-v3/viewer tests pass, Ruff and Pyright pass.
+- Status: deployment and live acceptance pending.
