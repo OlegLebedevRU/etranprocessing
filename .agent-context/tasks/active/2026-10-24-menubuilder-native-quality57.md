@@ -86,8 +86,9 @@ Automatic approval review rejected push/PR creation because it exports source
 to a public GitHub destination without explicit payload/destination approval.
 Read-only GitHub metadata confirms the configured origin
 `OlegLebedevRU/etranprocessing` is PUBLIC. No push or PR creation was executed;
-explicit user approval is required for publishing this branch and opening its PR.
-This is separate from the still-pending deployment signal after IoT.
+The user subsequently explicitly authorized all repository actions, including
+publishing this branch and opening its PR. The publication approval boundary is
+resolved. This is separate from the still-pending deployment signal after IoT.
 
 No deployment, builder invocation,
 new container, native installation, broker connection or terminal stream was
