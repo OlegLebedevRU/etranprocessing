@@ -47,4 +47,3 @@ and scoped deployer. Exact merged source SHA, immutable digest, health, capabili
 and unchanged neighbour IDs are delivered in the final stage1 receipt to coordinator.
 Original production overlays include `hevc-task40-media-flags.json` and
 `camera-reader-candidate.json`; scoped rollout retains both. Only ingress is replaced.
-
