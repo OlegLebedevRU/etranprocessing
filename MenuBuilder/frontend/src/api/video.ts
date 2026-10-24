@@ -290,8 +290,8 @@ export async function changeControlScope(
   return data;
 }
 
-export async function keepaliveControlLease(deviceId: number, leaseId: string): Promise<void> {
-  await client.post(`/v1/video/devices/${deviceId}/control/keepalive`, { lease_id: leaseId });
+export async function keepaliveControlLease(deviceId: number, leaseId: string, signal?: AbortSignal): Promise<void> {
+  await client.post(`/v1/video/devices/${deviceId}/control/keepalive`, { lease_id: leaseId }, { signal, timeout: 8000 });
 }
 
 export async function releaseControlLease(

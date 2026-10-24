@@ -6,6 +6,20 @@ import {
 } from "../utils/sessionLifecycle";
 
 describe("SessionLifecycleCoordinator & Reproduction Tests", () => {
+  it("bounds a hung renew before retrying or closing the session", async () => {
+    vi.useFakeTimers();
+    const renew = vi.fn(() => new Promise<void>(() => {}));
+    const lost = vi.fn();
+    const coordinator = new SessionLifecycleCoordinator({
+      onKeepaliveRequest: renew, onReleaseRequest: vi.fn().mockResolvedValue(undefined),
+      onSessionTerminated: vi.fn(), onLeaseLost: lost,
+    });
+    coordinator.startSession({ deviceId: 773, leaseId: "lease", streamInstanceId: "stream" });
+    await vi.advanceTimersByTimeAsync(33000);
+    expect(renew).toHaveBeenCalledTimes(3);
+    expect(lost).toHaveBeenCalledTimes(1);
+    expect(coordinator.isActive).toBe(false);
+  });
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -42,7 +56,7 @@ describe("SessionLifecycleCoordinator & Reproduction Tests", () => {
     // Advance 5 seconds -> first keepalive
     await vi.advanceTimersByTimeAsync(5000);
     expect(keepaliveMock).toHaveBeenCalledTimes(1);
-    expect(keepaliveMock).toHaveBeenLastCalledWith(773, "lease-773-abc");
+    expect(keepaliveMock).toHaveBeenLastCalledWith(773, "lease-773-abc", expect.any(AbortSignal));
 
     // 2. Operator disables remote input (detach input)
     await coordinator.detachInput();

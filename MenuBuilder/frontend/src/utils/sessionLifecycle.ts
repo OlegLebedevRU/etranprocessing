@@ -15,7 +15,7 @@ export interface SessionConfig {
 }
 
 export interface SessionCallbacks {
-  onKeepaliveRequest: (deviceId: number, leaseId: string) => Promise<void>;
+  onKeepaliveRequest: (deviceId: number, leaseId: string, signal?: AbortSignal) => Promise<void>;
   onReleaseRequest: (deviceId: number, leaseId: string, publisherOwned?: boolean) => Promise<void>;
   onScopeChangeRequest?: (deviceId: number, scope: "stream" | "input") => Promise<void>;
   onSessionTerminated: (reason: string, details?: { code?: string; status?: number }) => void;
@@ -34,6 +34,7 @@ export class SessionLifecycleCoordinator {
   private currentSession: SessionConfig | null = null;
   private keepaliveTimer: ReturnType<typeof setTimeout> | null = null;
   private isRenewing = false;
+  private renewal: AbortController | null = null;
   private isTearingDown = false;
   private consecutiveFailures = 0;
   private readonly maxConsecutiveFailures = 3;
@@ -72,6 +73,8 @@ export class SessionLifecycleCoordinator {
     const epoch = this.generation;
 
     this.clearKeepaliveTimer();
+    this.renewal?.abort();
+    this.renewal = null;
     this.currentSession = { ...config };
     this.isRenewing = false;
     this.isTearingDown = false;
@@ -94,8 +97,11 @@ export class SessionLifecycleCoordinator {
 
     // Invalidate generation immediately to drop any in-flight keepalive responses
     this.generation += 1;
+    const epoch = this.generation;
     this.isTearingDown = true;
     this.clearKeepaliveTimer();
+    this.renewal?.abort();
+    this.renewal = null;
 
     const sessionToRelease = this.currentSession;
     this.currentSession = null;
@@ -114,7 +120,7 @@ export class SessionLifecycleCoordinator {
       }
     }
 
-    this.isTearingDown = false;
+    if (epoch === this.generation) this.isTearingDown = false;
   }
 
   /**
@@ -186,7 +192,9 @@ export class SessionLifecycleCoordinator {
       return;
     }
 
+    const scheduled = performance.now();
     this.keepaliveTimer = setTimeout(() => {
+      console.debug("[SessionLifecycle] renew timer", { epoch, lateMs: Math.round(performance.now() - scheduled - delayMs) });
       void this.executeKeepaliveTick(epoch, delayMs);
     }, delayMs);
   }
@@ -204,9 +212,23 @@ export class SessionLifecycleCoordinator {
 
     this.isRenewing = true;
     const { deviceId, leaseId } = this.currentSession;
+    const controller = new AbortController();
+    this.renewal = controller;
+    const started = performance.now();
+    let deadline: ReturnType<typeof setTimeout> | undefined;
 
     try {
-      await this.callbacks.onKeepaliveRequest(deviceId, leaseId);
+      // Bound the entire operation, including an auth-refresh queue. The aborted
+      // signal also prevents a queued Axios retry from sending an obsolete renew.
+      await Promise.race([
+        this.callbacks.onKeepaliveRequest(deviceId, leaseId, controller.signal),
+        new Promise<never>((_, reject) => {
+          deadline = setTimeout(() => {
+            controller.abort();
+            reject(new Error("Lease renewal timed out"));
+          }, 8000);
+        }),
+      ]);
 
       // Verify epoch hasn't changed during the async request
       if (epoch !== this.generation || this.isTearingDown || !this.currentSession) {
@@ -219,7 +241,6 @@ export class SessionLifecycleCoordinator {
     } catch (error: any) {
       // Check generation again: if session was stopped or changed, ignore error completely
       if (epoch !== this.generation || this.isTearingDown || !this.currentSession) {
-        this.isRenewing = false;
         return;
       }
 
@@ -249,6 +270,10 @@ export class SessionLifecycleCoordinator {
         // Retry sooner on transient error (e.g. 2s)
         this.scheduleNextKeepalive(epoch, 2000);
       }
+    } finally {
+      clearTimeout(deadline);
+      if (this.renewal === controller) this.renewal = null;
+      console.debug("[SessionLifecycle] renew completed", { epoch, elapsedMs: Math.round(performance.now() - started), aborted: controller.signal.aborted });
     }
   }
 }
