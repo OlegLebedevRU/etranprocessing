@@ -596,6 +596,7 @@ class IotPlatformClient:
         org_id: int | None = None,
         user: dict[str, Any] | None = None,
         camera_contract: bool = False,
+        camera_readiness: str | None = None,
     ) -> dict[str, Any]:
         """Explicit v2 adapter; no retry against a legacy endpoint on refusal."""
         from urllib.parse import quote
@@ -604,6 +605,11 @@ class IotPlatformClient:
             raise HTTPException(503, detail={"code": "remote_control_unavailable"})
         prefix = f"{self.base_url}/api/internal/v1/remote-input"
         headers = self._get_headers(org_id=org_id, user=user)
+        if camera_readiness is not None:
+            from app.services.camera_admission import RUNTIME_HEADERS
+
+            headers.update(RUNTIME_HEADERS)
+            headers["X-L4-Camera-Readiness"] = camera_readiness
         if (
             camera_contract
             or action == "state"

@@ -150,6 +150,9 @@ class Settings(BaseSettings):
     iot_rpc_timeout_seconds: float = 10.0
     iot_rpc_stream_start_timeout_seconds: float = 20.0
     iot_rpc_inventory_timeout_seconds: float = 10.0
+    camera_monotonic_runtime_enabled: bool = False
+    # Independent Fernet key, shared by BFF workers; provision through environment.
+    camera_admission_ticket_key: str = ""
 
     @property
     def internal_api_base_url(self) -> str:

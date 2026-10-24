@@ -7,7 +7,7 @@ import copy
 import json
 import time
 from typing import Any, Literal, NoReturn
-from uuid import UUID, uuid4
+from uuid import UUID, uuid4, uuid5
 
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict
@@ -238,9 +238,19 @@ class NativeCameraVideo:
         refuse("camera_codec_apply_timeout", 504)
 
     async def start(
-        self, *, terminal, lease_id, policy, source_id, profile_id, browser, user
+        self,
+        *,
+        terminal,
+        lease_id,
+        policy,
+        source_id,
+        profile_id,
+        browser,
+        user,
+        admission_ticket=None,
     ):
         from app.config import settings
+        from app.services.camera_admission import CameraAdmission, unseal
         from app.services.video_contract import (
             media_identity,
             validate_iot_state,
@@ -254,6 +264,16 @@ class NativeCameraVideo:
             or not settings.l4desk_session_orchestration_enabled
         ):
             refuse("camera_control_disabled")
+
+        admission = None
+        if admission_ticket is not None or settings.camera_monotonic_runtime_enabled:
+            admission = unseal(admission_ticket, terminal, user, "ready")
+            if (
+                admission["descriptor"]["source_id"] != source_id
+                or admission["policy"] != policy
+            ):
+                refuse("camera_preparation_selection_changed")
+            await CameraAdmission(self.iot, self.media).check(admission, terminal, user)
 
         if source_id != "cam:ip000001" or profile_id != "default":
             refuse("camera_source_mismatch", 422)
@@ -301,76 +321,89 @@ class NativeCameraVideo:
             )
             verify_media_response(media, identity, descriptor)
             return {**previous, "media": media, "result": "already_running"}
-        browser = validate_browser(browser, int(time.time() * 1000))
-        view = await self.inventory(terminal.sn, terminal.org_id, user)
-        if (
-            view.get("main_app_online") is not True
-            or view.get("fresh") is not True
-            or not (view.get("producer_adapter") or {}).get("ready")
-        ):
-            refuse(
-                (view.get("producer_adapter") or {}).get("reason")
-                or "camera_capabilities_unavailable"
-            )
-        server = validate_video(
-            "media_capabilities",
-            await self.media.video_v2("capabilities", camera_contract=True),
-        )
-        camera = view["camera"]
-        prepare_deadline = min(time.time() + 30, deadline - 15)
-        # At most H265 then H264, entirely before media prepare/START. Never retry an ambiguous write.
-        for _ in range(2):
-            codec, reason = resolve_camera_codec(policy, camera, server, browser)
-            if camera["actual_track"]["codec"] == codec:
-                break
-            try:
-                async with asyncio.timeout(max(0, prepare_deadline - time.time())):
-                    await self.switch_codec(
-                        terminal=terminal,
-                        lease_id=lease_id,
-                        codec=codec,
-                        camera=camera,
-                        user=user,
-                        deadline=prepare_deadline,
-                    )
-                    view = await self.inventory(terminal.sn, terminal.org_id, user)
-            except TimeoutError:
-                refuse("camera_codec_apply_timeout", 504)
+        if admission:
+            descriptor = admission["descriptor"]
+            codec = descriptor["tracks"][0]["codec"]
+            reason = admission["codec_reason"]
+        else:
+            browser = validate_browser(browser, int(time.time() * 1000))
+            view = await self.inventory(terminal.sn, terminal.org_id, user)
             if (
                 view.get("main_app_online") is not True
                 or view.get("fresh") is not True
                 or not (view.get("producer_adapter") or {}).get("ready")
             ):
-                refuse("camera_codec_apply_unconfirmed")
+                refuse(
+                    (view.get("producer_adapter") or {}).get("reason")
+                    or "camera_capabilities_unavailable"
+                )
+            server = validate_video(
+                "media_capabilities",
+                await self.media.video_v2("capabilities", camera_contract=True),
+            )
             camera = view["camera"]
-        codec, reason = resolve_camera_codec(policy, camera, server, browser)
-        if camera["actual_track"]["codec"] != codec or not server_accepts(
-            server, camera["actual_track"]
-        ):
-            refuse("camera_actual_format_unsupported", 422)
-        browser = validate_browser(browser, int(time.time() * 1000))
-        descriptor = validate_video(
-            "descriptor",
-            {
-                "descriptor_revision": str(uuid4()),
-                "source_type": "camera",
-                "source_id": source_id,
-                "geometry_generation": max(
-                    1, view["camera"]["discovery"]["generation"]
-                ),
-                "profile_id": "default",
-                "camera_contract_revision": CAMERA_REVISION,
-                "tracks": [copy.deepcopy(camera["actual_track"])],
-            },
+            prepare_deadline = min(time.time() + 30, deadline - 15)
+            # At most H265 then H264, entirely before media prepare/START. Never retry an ambiguous write.
+            for _ in range(2):
+                codec, reason = resolve_camera_codec(policy, camera, server, browser)
+                if camera["actual_track"]["codec"] == codec:
+                    break
+                try:
+                    async with asyncio.timeout(max(0, prepare_deadline - time.time())):
+                        await self.switch_codec(
+                            terminal=terminal,
+                            lease_id=lease_id,
+                            codec=codec,
+                            camera=camera,
+                            user=user,
+                            deadline=prepare_deadline,
+                        )
+                        view = await self.inventory(terminal.sn, terminal.org_id, user)
+                except TimeoutError:
+                    refuse("camera_codec_apply_timeout", 504)
+                if (
+                    view.get("main_app_online") is not True
+                    or view.get("fresh") is not True
+                    or not (view.get("producer_adapter") or {}).get("ready")
+                ):
+                    refuse("camera_codec_apply_unconfirmed")
+                camera = view["camera"]
+            codec, reason = resolve_camera_codec(policy, camera, server, browser)
+            if camera["actual_track"]["codec"] != codec or not server_accepts(
+                server, camera["actual_track"]
+            ):
+                refuse("camera_actual_format_unsupported", 422)
+            browser = validate_browser(browser, int(time.time() * 1000))
+            descriptor = validate_video(
+                "descriptor",
+                {
+                    "descriptor_revision": str(uuid4()),
+                    "source_type": "camera",
+                    "source_id": source_id,
+                    "geometry_generation": max(
+                        1, view["camera"]["discovery"]["generation"]
+                    ),
+                    "profile_id": "default",
+                    "camera_contract_revision": CAMERA_REVISION,
+                    "tracks": [copy.deepcopy(camera["actual_track"])],
+                },
+            )
+        # The same admitted attempt cannot allocate another route/producer when
+        # its response is lost. IoT's durable nonce consumption remains authority.
+        stream_id = (
+            str(uuid5(UUID(admission["nonce"]), lease_id))
+            if admission
+            else str(uuid4())
         )
-        stream_id = str(uuid4())
         identity = media_identity(terminal.sn, lease_id, stream_id, descriptor)
         request = validate_video(
             "media_start",
             {
                 "contract_version": 2,
                 "session_id": identity["session_id"],
-                "operation_id": str(uuid4()),
+                "operation_id": str(uuid5(UUID(stream_id), "camera-start"))
+                if admission
+                else str(uuid4()),
                 "publisher": {"sn": terminal.sn, "stream_instance_id": stream_id},
                 "lease_id": lease_id,
                 "lease_expires_at": deadline,
@@ -388,6 +421,8 @@ class NativeCameraVideo:
                 "state"
             ] not in ("starting", "active"):
                 refuse("camera_media_prepare_unconfirmed")
+            if admission:
+                unseal(admission_ticket, terminal, user, "ready")
             attempted = True
             state = validate_iot_state(
                 await self.iot.remote_video_v2(
@@ -395,6 +430,7 @@ class NativeCameraVideo:
                     "start",
                     lease_id=lease_id,
                     payload=request,
+                    **({"camera_readiness": admission["nonce"]} if admission else {}),
                     org_id=terminal.org_id,
                     user=user,
                     camera_contract=True,

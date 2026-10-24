@@ -1,5 +1,14 @@
 # MenuBuilder
 
+## Camera runtime141 — implementation candidate, 2026-10-24
+
+New camera UI/BFF orders prepare, enrollment, fresh readiness, then lease/media/START.
+Gate defaults off; Native Auto cadence remains unnegotiated and refused. Opaque
+short-lived tickets bind preparation to tenant/device/user/session; IoT141 owns
+durable nonce consumption and producer fences. PR109 renew behavior is preserved.
+This is local contract/mock evidence, not deployed firmware/video acceptance.
+[Implementation and cross-owner handoff](../tasks/active/2026-10-24-menubuilder-camera-runtime141.md).
+
 ## Siplite camera — deployed TASK40, 2026-10-24
 
 [Implementation](../../docs/etran_arch-siplite-camera-menubuilder.md): source

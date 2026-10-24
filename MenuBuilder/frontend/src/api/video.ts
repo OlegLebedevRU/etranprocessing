@@ -1,4 +1,5 @@
 import client from "./client";
+import type { AxiosRequestConfig } from "axios";
 
 export interface VideoSessionResponse {
   mountpoint_id: number;
@@ -276,7 +277,7 @@ export async function acquireControlLease(
     scope,
     ttl_sec: ttlSec,
     session_id: sessionId,
-  });
+  }, { _retry: true, timeout: 10000 } as AxiosRequestConfig);
   return data;
 }
 
@@ -323,12 +324,14 @@ export async function startDeviceStream(
     profile?: string;
     lease_id?: string;
     codec_policy?: CodecPolicy;
+    camera_admission_ticket?: string;
     browser_codecs?: { h264: boolean | null; h265: boolean | null; checked_at_ms: number; valid_until_ms: number };
   }
 ): Promise<StreamStartResponse> {
   const { data } = await client.post<StreamStartResponse>(
     `/v1/video/devices/${deviceId}/stream/start`,
-    payload
+    payload,
+    { _retry: true, timeout: 25000 } as AxiosRequestConfig
   );
   return data;
 }

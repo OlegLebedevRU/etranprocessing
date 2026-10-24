@@ -61,7 +61,7 @@ export function VideoToolbar(props: VideoToolbarProps) {
     : running
       ? "Ожидание кадров"
       : stage === "starting"
-        ? "Подключение…"
+        ? props.statusText || "Подключение…"
         : stage === "stopping"
           ? "Остановка…"
           : stage === "failed"
@@ -77,7 +77,7 @@ export function VideoToolbar(props: VideoToolbarProps) {
           aria-label="Выбор качества трансляции"
           value={props.profile}
           onChange={props.onProfile}
-          disabled={active}
+          disabled={active || stage === "starting" || stage === "stopping"}
           options={[
             { label: "Medium", value: "low" },
             { label: "HD", value: "default" },
@@ -91,7 +91,7 @@ export function VideoToolbar(props: VideoToolbarProps) {
           aria-label="Кодек общего потока"
           value={props.codecPolicy || "auto"}
           onChange={props.onCodecPolicy}
-          disabled={active}
+          disabled={active || stage === "starting" || stage === "stopping"}
           style={{ width: "100%" }}
           options={[
             { value: "auto", label: props.cameraOnly ? "Auto · H.265 приоритет" : "Auto" },
@@ -172,7 +172,7 @@ export function VideoToolbar(props: VideoToolbarProps) {
             value={props.source || undefined}
             onChange={props.onSource}
             loading={props.loadingInventory}
-            disabled={active || !hasSources}
+            disabled={active || stage === "starting" || stage === "stopping" || !hasSources}
             style={{ width: "100%" }}
             options={[
               ...(inventory?.displays || []).map((display, index) => ({
@@ -202,18 +202,18 @@ export function VideoToolbar(props: VideoToolbarProps) {
             <span>
               <Button
                 aria-label={
-                  props.cameraOnly ? active ? "Остановить просмотр" : "Начать просмотр" : active ? "Остановить трансляцию" : "Запустить трансляцию"
+                  stage === "starting" ? "Отменить запуск" : props.cameraOnly ? active ? "Остановить просмотр" : "Начать просмотр" : active ? "Остановить трансляцию" : "Запустить трансляцию"
                 }
                 type="primary"
                 danger={active}
                 icon={active ? <StopOutlined /> : <PlayCircleOutlined />}
-                loading={stage === "starting" || stage === "stopping"}
+                loading={stage === "stopping"}
                 disabled={
-                  !active && (device.status !== "online" || !hasSources || !!props.settingsBusy)
+                  stage !== "starting" && !active && (device.status !== "online" || !hasSources || !!props.settingsBusy)
                 }
-                onClick={active ? props.onStop : props.onStart}
+                onClick={active || stage === "starting" ? props.onStop : props.onStart}
               >
-                {props.cameraOnly ? active ? "Остановить просмотр" : "Начать просмотр" : active ? "Стоп" : "Запустить"}
+                {stage === "starting" ? "Отменить запуск" : props.cameraOnly ? active ? "Остановить просмотр" : "Начать просмотр" : active ? "Стоп" : "Запустить"}
               </Button>
             </span>
           </Tooltip>

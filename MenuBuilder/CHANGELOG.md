@@ -6,6 +6,11 @@ FM uses MQTT navigation and mandatory confirmed close only; legacy PB listing an
 
 ### Added
 
+- Gated camera admission through prepare, enrollment and fresh readiness before
+  lease/media/START, with opaque owner-bound BFF tickets and explicit IoT141
+  revision headers. The gate defaults off; Native Auto cadence remains blocked
+  pending cross-owner negotiation.
+
 - CAPTCHA providers `smartcaptcha/native/off`: подписанный native challenge для login/register/resend, UI без Yandex в native-режиме; прежние настройки сохранены для отката.
 
 - Внутренний RS256 JWT issuer-signer с совместимым HMAC-контрактом MenuBuilder, отдельной приватной сетью, non-root процессом и read-only подключением закрытого ключа. Повторы запросов идемпотентны; timestamp, nonce, issuer context и TTL проверяются.
@@ -28,6 +33,10 @@ FM uses MQTT navigation and mandatory confirmed close only; legacy PB listing an
 - Публичный ключ JWT в MenuBuilder и nginx заменён на `lk-key-000003_public.pem`. Внутренний URL имеет приоритет; serverless-путь сохранён как выключенный резерв до проверки нового ключа. Ответы внутреннего issuer/резерва проверяются по RS256 и контексту пользователя/сессии.
 
 ### Fixed
+
+- Cancel pending video starts on STOP/selection changes, ignore late responses,
+  and disable automatic auth replay of START/lease mutations. Camera preparation
+  shows its current stage and remains cancellable before a lease exists.
 
 - Отсутствие service secret в production возвращает ошибку конфигурации вместо выдачи mock JWT; параллельные запросы разных сессий и ролей больше не объединяются в одну выдачу.
 

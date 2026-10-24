@@ -50,6 +50,9 @@ import type { StreamStage } from "../components/video/StreamControls";
 import RefusalReasonCard from "../components/RefusalReasonCard";
 import { CameraSettings } from "../components/video/CameraSettings";
 import { isOpenIpcCamera } from "../utils/cameraState";
+import { getCamera } from "../api/cameras";
+import { CameraAttempt } from "../utils/cameraAttempt";
+import { admitCamera } from "../utils/cameraAdmission";
 import { browserVideoCodecs } from "../utils/browserVideoCodecs";
 
 const { Text } = Typography;
@@ -62,10 +65,21 @@ function formatVideoError(err: any): { title: string; message: string; code: str
   const status = err?.response?.status;
   const raw = typeof detail === "string" ? detail : (detail?.message || err?.message || "");
 
+  const cameraErrors: Record<string, string> = {
+    camera_runtime_disabled: "Новый режим камеры ещё не включён на сервере.",
+    camera_runtime_not_configured: "Сервер камеры ещё не настроен для нового режима.",
+    camera_physical_binding_unverified: "Сведения о камере устарели или её подключение к port-2 не подтверждено. Обновите поиск камеры.",
+    camera_native_auto_not_negotiated: "Режим Native Auto пока не согласован между камерой и сервером.",
+    camera_not_enrolled: "Терминал ещё не подтвердил подключение камеры. Проверьте обновление терминала.",
+    camera_preparation_expired: "Время подготовки камеры истекло. Проверьте её состояние перед новым запуском.",
+    camera_readiness_unconfirmed: "Готовность камеры не подтверждена. Автоматический повтор отключён.",
+    camera_admission_unconfirmed: "Ответ терминала не получен. Проверьте состояние перед новым запуском.",
+    camera_actual_format_unsupported: "Текущий формат камеры не поддерживается. Проверьте настройки камеры.",
+  };
   if (typeof detail === "object" && detail?.code) {
     return {
       title: "Сессия отклонена",
-      message: detail.message || raw,
+      message: cameraErrors[detail.code] || detail.message || raw,
       code: detail.code,
     };
   }
@@ -190,6 +204,12 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
   const [activeStream, setActiveStream] = useState<StreamPresenceInfo | null>(null);
   const [streamStage, setStreamStage] = useState<StreamStage>("idle");
   const terminalFailureRef = useRef(false);
+  const startAttemptRef = useRef<CameraAttempt | null>(null);
+  const playbackAttemptRef = useRef<CameraAttempt | null>(null);
+  useEffect(() => () => {
+    startAttemptRef.current?.cancel();
+    playbackAttemptRef.current?.cancel();
+  }, [selectedDevice?.device_id, selectedSourceKey, selectedProfile, codecPolicy]);
   const [bannerError, setBannerError] = useState<{
     code: string;
     message: string;
@@ -382,6 +402,8 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
 
   // Остановка текущей медиасессии
   const stopSession = useCallback(async (reason = "normal") => {
+    startAttemptRef.current?.cancel();
+    playbackAttemptRef.current?.cancel();
     terminalFailureRef.current = false;
     // A lease can exist before stream_start registers the coordinator session.
     const pendingLease = leaseRef.current;
@@ -565,6 +587,8 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
         if (disposed) return;
         if (!state && !control) throw new Error("Status endpoints unavailable");
         if (control?.agent) rcRef.current.setPresence(control.agent);
+        // A read-only watch snapshot must not erase the pre-lease admission UI.
+        if (startAttemptRef.current && !startAttemptRef.current.signal.aborted) return;
         const stream = state?.stream || control?.agent?.stream;
         const activeSession = coordinatorRef.current.session;
         if (!activeSession && terminalFailureRef.current) return;
@@ -748,6 +772,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
 
   // Запуск трансляции оператором
   const handleOperatorStart = async () => {
+    if (startAttemptRef.current || coordinatorRef.current.session) return;
     terminalFailureRef.current = false;
     if (!selectedDevice) return;
     if (cameraOnly && cameraSettingsBusy) return;
@@ -759,11 +784,33 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
     setBannerError(null);
     setRefusalNotice(null);
     setStreamStage("starting");
-    setStatusText("Запрос аренды терминала...");
+    setStatusText("Проверка камеры…");
+    const attempt = new CameraAttempt();
+    startAttemptRef.current = attempt;
+    playbackAttemptRef.current = attempt;
+    const deviceId = selectedDevice.device_id;
+    let ownedLease: string | undefined;
+    let admissionTicket: string | undefined;
 
     try {
+      if (cameraOnly) {
+        const observation = await attempt.wait(getCamera(deviceId, attempt.signal));
+        const camera = observation.snapshot?.cameras.find(c => c.camera_id === "cam:ip000001");
+        const candidates = camera?.discovery?.candidates.filter(c => c.port_verified && c.auth === "verified") ?? [];
+        if (!camera?.discovery || candidates.length !== 1) throw new Error("Выберите одну подтверждённую камеру на port-2 и обновите сведения");
+        const ready = await admitCamera(deviceId, {
+          source_id: "cam:ip000001", physical_camera_mac: candidates[0].mac,
+          discovery_generation: camera.discovery.generation, codec_policy: codecPolicy,
+          browser_codecs: browserVideoCodecs(),
+        }, attempt, setStatusText);
+        admissionTicket = ready.ticket;
+      }
+      attempt.check();
+      setStatusText("Запуск видео…");
       // 1. Оператор запрашивает аренду со scope 'stream'
-      const leaseRes = await acquireControlLease(selectedDevice.device_id, "stream");
+      const leaseRes = await acquireControlLease(selectedDevice.device_id, "stream", cameraOnly ? 60 : undefined);
+      ownedLease = leaseRes.lease_id;
+      attempt.check();
       setActiveLeaseId(leaseRes.lease_id);
       leaseRef.current = { id: leaseRes.lease_id, deviceId: selectedDevice.device_id };
 
@@ -782,8 +829,9 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
         profile: cameraOnly ? "default" : selectedProfile,
         lease_id: leaseRes.lease_id,
         codec_policy: codecPolicy,
-        ...(cameraOnly ? { browser_codecs: browserVideoCodecs() } : {}),
+        ...(cameraOnly ? { browser_codecs: browserVideoCodecs(), camera_admission_ticket: admissionTicket } : {}),
       });
+      attempt.check();
       const sessionData = startRes.media;
       if (!sessionData) throw new Error("Media route unavailable");
 
@@ -804,12 +852,14 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
         mountpointId: sessionData.mountpoint_id,
         pin: sessionData.pin,
         onRemoteTrack: (stream) => {
+          if (attempt.signal.aborted) return;
           if (videoRef.current) {
             videoRef.current.srcObject = stream;
             videoRef.current.play().catch(() => {});
           }
         },
         onStatusChange: (status) => {
+          if (attempt.signal.aborted) return;
           if (status === "connecting") {
             setStatusText("Соединение с медиасервером...");
           } else if (status === "streaming" || status === "webrtcup") {
@@ -819,14 +869,16 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
           }
         },
         onError: (err) => {
+          if (attempt.signal.aborted) return;
           const errMsg = typeof err === "string" ? err : err.message;
           message.error(errMsg);
           setStatusText(`Ошибка медиасервера: ${errMsg}`);
         },
       });
 
-      await client.start();
       janusClientRef.current = client;
+      await client.start();
+      attempt.check();
 
       // Успешный запуск
       setActiveStream({
@@ -839,7 +891,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
       setStreamStage("running");
       setIsSessionActive(true);
       setStatusText("Ожидание изображения");
-      message.success("Трансляция успешно запущена");
+      // HTTP/ACK/signaling is not decoded video; freshFrames drives the live badge.
 
       // Decoded frames come from the local WebRTC connection; no HTTP status poll.
       prevFramesRef.current = null;
@@ -873,6 +925,18 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
         }
       }, 5000);
     } catch (err: any) {
+      if (attempt.signal.aborted) {
+        if (ownedLease) {
+          await stopDeviceStream(deviceId, ownedLease).catch(() => {});
+          await releaseControlLease(deviceId, ownedLease).catch(() => {});
+        }
+        if (attempt.timedOut && startAttemptRef.current === attempt) {
+          await stopSession("start_timeout");
+          setStreamStage("failed");
+          setStatusText("Время запуска истекло. Проверьте состояние терминала перед новым запуском.");
+        }
+        return;
+      }
       const formatted = formatVideoError(err);
       setBannerError({ code: "start_failed", message: formatted.message });
       message.error(formatted.message);
@@ -881,11 +945,15 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
       await stopSession("start_failed");
       setStreamStage("failed");
       setStatusText(formatted.message);
+    } finally {
+      attempt.finish();
+      if (startAttemptRef.current === attempt) startAttemptRef.current = null;
     }
   };
 
   // Остановка трансляции оператором
   const handleOperatorStop = async () => {
+    startAttemptRef.current?.cancel();
     if (!selectedDevice) return;
     setStreamStage("stopping");
     try {
