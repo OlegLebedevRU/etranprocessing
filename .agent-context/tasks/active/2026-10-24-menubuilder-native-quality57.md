@@ -1,9 +1,9 @@
-# MenuBuilder native quality57 — stage 3, awaiting deployment signal
+# MenuBuilder native quality57 — stage 3 deployed, 2026-10-24 UTC
 
 ## Task intake
 
-- Scope: MenuBuilder backend/frontend only, implementation now; deployment only
-  after the owner's explicit signal following IoT. No IoT/native/media source,
+- Scope: MenuBuilder backend/frontend only. Owner explicitly authorized deployment
+  after IoT stage2. No IoT/native/media source,
   camera gates/firmware, broker, infrastructure or shared database changes.
 - Branch: `feat/menubuilder-native-quality57`, isolated worktree based on
   `origin/main` `6af7ec7c09cbf38d72a201640e0406e8d1dcd114` (includes PR109).
@@ -17,7 +17,8 @@
   geometry identity, measured probe memory and fresh cheap applicability check,
   exact descriptors and codecs, camera boot/enrollment protections, input safety.
 - Skills: repo-intake-and-routing, frontend-remote-control-safety; local checks
-  follow verification-matrix. No production access or live terminal sessions.
+  follow verification-matrix. Production SSH/build/release authorized; no live
+  terminal sessions, lease creation or native installation.
 
 ## Contract and implementation
 
@@ -68,34 +69,74 @@
 
 | Layer | Result | Limits |
 |---|---|---|
-| Backend full suite | 986 passed,25 skipped before cold-start addendum | Existing deprecation/mock warnings; no production DB |
+| Backend full suite | Final accepted SHA on builder:990 passed,25 skipped | Existing deprecation/mock warnings; no production DB |
 | Backend focused follow-up | 155 passed after addendum; final codec/contract rerun54 passed | Native size/profile matrix, strict versions, codec/browser, state, lease deadlines and cold budget |
-| Ruff check/format, Pyright app | Passed after final code changes; Pyright0 errors/warnings | Changed MenuBuilder only |
-| Frontend unit suite | 119 passed after addendum | Mocked API and lifecycle/SSR |
-| Frontend TypeScript/Vite | Passed after addendum | Existing large vendor chunk warning |
+| Ruff check/format, Pyright app | Passed locally and on builder; Pyright0 errors/warnings | Exact accepted main SHA |
+| Frontend unit suite | 119 passed locally and in builder image build | Mocked API and lifecycle/SSR |
+| Frontend TypeScript/Vite | Passed locally and in builder image build | Existing large vendor chunk warning |
 | Browser regression | 2 local fake-API Playwright scenarios passed | Refresh keeps HEVC; busy remains deferred; no commands sent |
 | playwright-cli isolated smoke | Passed: low→default→low, version3, zero writes/page errors | Own localhost browser, fake3000x2000 source; no actual video decode |
 | Read-only secret scan | 504 tracked/new MenuBuilder files, zero findings | Private PEM, tracked env, GitHub/cloud keys, authenticated non-local DB URLs |
-| Production release/smoke | Not run | Owner signal required after IoT |
+| Release tooling | 36 CI unit tests passed on builder | GitHub Actions job did not start because account billing is locked |
+| Published image scan | Backend10 layers, frontend1 layer; zero findings | Full Docker-save layer scan from exact source checkout |
+| Production release/smoke | Backend and frontend exact revision/digests verified; OpenAPI200, unauthenticated inventory401 | No native START/READY or decode claim |
 | Native/browser acceptance773 | Not run | Coordinator owns live session after native installation |
 
-## Delivery and remaining work
+## Delivered revision and production evidence
 
-Implementation commit: `03a8bd7fdd8a81f256084ab4ed18886c47246540`.
-Automatic approval review rejected push/PR creation because it exports source
-to a public GitHub destination without explicit payload/destination approval.
-Read-only GitHub metadata confirms the configured origin
-`OlegLebedevRU/etranprocessing` is PUBLIC. No push or PR creation was executed;
-The user subsequently explicitly authorized all repository actions, including
-publishing this branch and opening its PR. The publication approval boundary is
-resolved. This is separate from the still-pending deployment signal after IoT.
+Implementation `03a8bd7fdd8a81f256084ab4ed18886c47246540` is merged through
+[PR116](https://github.com/OlegLebedevRU/etranprocessing/pull/116).
+Accepted/deployed main: `d8f48ccc75c227c59065627d07d6dcdbd9dc0868`.
+Software release follows IoT `f54e7db8169b1a44de69cedde6b273aacc665d98` and media
+stage1. MCP Ops tools were unavailable; SSH resource preflight passed on both
+hosts, then the existing builder launcher built/published the exact accepted SHA.
+No launcher/tool installation or infrastructure changes were made.
 
-No deployment, builder invocation,
-new container, native installation, broker connection or terminal stream was
-started. Deployed SHA/digests are intentionally absent until the owner's signal.
-At release, use the existing exact-SHA builder/deployer for MenuBuilder backend
-and frontend only; retain operator overrides and verify header/version smoke.
-No separate rollback/idle-window work is required by the task packet.
+| Component | Published and deployed immutable digest |
+|---|---|
+| menubuilder-backend | `sha256:b26ba5097e3ddc03f744d86121a735fa6bb2a6cdb1c8f08575a4331bd04a2ddb` |
+| menubuilder-frontend artifact | `sha256:59faed59bab33563c91e83ed46b965e7e1e9b96ac9656d18a76745fe64f160aa` |
+
+Production pull uses the standard exact-source deployer with its exclusive lock,
+revision/image-ID and health checks. A scoped adapter preserves the existing four
+operator overlays and current environment. It excludes signer from the standard
+deployer's paired-service discovery: only `menubuilder-backend` was recreated.
+The adapter guards the observed backend ID against concurrent replacement and
+validates the effective engine environment before rollout. The normal AUTH_USERS
+Compose dollar escaping was checked by hash in a short-lived one-off Python
+process; no application entrypoint, ports or dependencies ran in that probe.
+
+All12 neighboring container IDs/images/environment and mount contents are
+unchanged, including app1, JWT signer, Redis, broker, media and Nginx. Docker
+returns Mounts in varying map iteration order: initial order-sensitive hash
+alerts were resolved by matching the original full-content SHA over bounded
+permutations/observed rotations. No differing mount content was accepted.
+Backend running=true, restart_count=0; schema/configuration and all47 environment
+entries are preserved. No migrations or new credentials were required.
+
+Frontend was published assets-first/index-last. The standard deployer compared
+served HTTPS index bytes with the extracted immutable artifact. Nginx was not
+restarted. The first registry read returned not-found before any live file write;
+retry of the same already validated digest succeeded, without fallback or rebuild.
+Live video-route assets contain `contract_version:3`, inventory timeout45000 and
+desktop START timeout120000. Fingerprints:
+
+- index SHA256: `4c606bf347adb1492b65822b016ff003f17c0dd40977dc4a6b9baf47f1a1cb69`.
+- manifest SHA256: `269f12a66ad3247210efd3c4fd0729684acdcfee92e002ef94514ab037843f3d`.
+- video route: `assets/video-surveillance-BIvJNTqI.js`.
+
+Read-only smoke from the actual deployed BFF confirms OpenAPI200, unauthenticated
+inventory401 and inventory/state query version3. Its real media HTTP client
+receives/validates contract_version3 with dependencies_ready=true. Its real IoT
+HTTP adapter receives contract_version3, negotiated_v2=false, capability=null,
+matching the deliberately disabled desktop gates. Runtime schema SHA matches the
+coordinator pin; both desktop command expiration expressions use35s clipped to
+the unchanged lease deadline. No device clock comparison or TTL extension.
+
+This is software deployment/negative negotiation evidence. Desktop flag activation,
+native installation, positive capability/START/READY and browser decode/traffic
+acceptance on773 remain exclusively with the coordinator. No live stream, lease,
+competing MQTT client, firmware change or camera gate activation was performed.
 
 Commands: `pytest -q --tb=short`; focused pytest files `test_media_v3`,
 `test_hevc_contract`, `test_video_control`, `test_video`, `test_media_lease_deadline`,
@@ -106,7 +147,13 @@ session `mb-native-quality57`. Native size fixtures cover800x600,1024x768,
 1280x1024,1920x1080,3000x2000 with both quality policies. Historical v2 vectors
 are tested directly against the unchanged frozen v2 schema, not the active v3.
 
-Temporary preview on localhost5197 and own browser session are stopped. Scratch
-driver/scan report are removed after recording their sanitized results here.
-Keep isolated Python/npm dependencies, build output, worktree and PR for subsequent
-authorized deployment. No production test credential or remote artifact exists.
+Temporary localhost preview and own browser are stopped; one-off engine probe
+and static extraction containers were removed. No test credential was issued.
+Sanitized source/log/receipt evidence is retained locally under
+`.scratch/native-quality57-release/` and production task artifacts under
+`/home/user1/.etran-ci/native-quality57/menubuilder-d8f48cc/`. They include exact
+deployer/adapter sources, before/after hashes, smoke and frontend fingerprints;
+no raw environment/credential values are included. Builder's immutable artifacts
+remain in its standard component/SHA artifact directories. Release metadata on
+production names the exact revision and both digests; build-only did not advance
+the launcher's own release checkpoint. No automatic monitoring is enabled.
