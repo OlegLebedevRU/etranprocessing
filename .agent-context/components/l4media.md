@@ -6,6 +6,8 @@ Negotiated `l4-media/3.0.0` uses the coordinator schema pinned at
 `b86ca6f066fcdecb09cf7145a7fb23d87b77311a53c7ea04f0fb6e8a905b2818`.
 Desktop/USB/IP sources share concrete tracks; lifecycle and Redis retain explicit versions.
 Janus format probes do not establish browser acceptance.
+Stage1 deployed 2026-10-24 from `2e37e960`: health/v3 format probes passed;
+all neighbour container IDs preserved. IoT may proceed with stage2.
 See [stage 1 handoff](../tasks/active/2026-10-24-native-quality57-media.md) for release evidence.
 
 ## TASK 20 camera reader

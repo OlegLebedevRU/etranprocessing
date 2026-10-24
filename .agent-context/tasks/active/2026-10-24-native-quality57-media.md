@@ -42,8 +42,34 @@
 - NOT RUN: real773/native/browser acceptance; downstream IoT/MenuBuilder/native owners must
   deploy v3 first. Local mocks and capabilities are not decoded-frame evidence.
 
-Release follows PR publication and merge through the standard builder (build-only)
-and scoped deployer. Exact merged source SHA, immutable digest, health, capabilities
-and unchanged neighbour IDs are delivered in the final stage1 receipt to coordinator.
-Original production overlays include `hevc-task40-media-flags.json` and
-`camera-reader-candidate.json`; scoped rollout retains both. Only ingress is replaced.
+## Deployed stage 1 (2026-10-24, smoke 19:27:59 UTC)
+- Implementation PR113: https://github.com/OlegLebedevRU/etranprocessing/pull/113
+- Packaging PR114: https://github.com/OlegLebedevRU/etranprocessing/pull/114
+- Deployed source: `2e37e960c200aaa1352515229726a8d7eb2c4c3b` (accepted main).
+- Registry digest: `sha256:3d7535bc8a11d9046b8a91cfdb9a899b0406bac237438b6255833e1511a86fe8`.
+- Builder: standard launcher, `--component l4media-ingress --build-only`; 36 release
+  tests and full Alpine GCC Werror suite/build passed before publication.
+- First build at 7a725322 stopped before publication/deployment because the Docker
+  context excluded openapi-v3.json. PR114 fixed that allowlist; the final build passed.
+- Production: tracked scoped deployer from the deployed SHA, with
+  `--media-v3 --allow-interruptions`; only ingress replaced. Existing HEVC/camera
+  flags and all four Compose files retained. RestartCount=0, image and OCI revision matched.
+- Independent runtime schema checksum exactly equals the coordinator SHA above.
+- `/health`: `{"status":"ok","routes":1,"active_media_sessions":0}`.
+- Authenticated capabilities with `X-L4-Media-Contract: l4-media/3.0.0`:
+  `contract_version=3`, `media_contract_versions=[3]`, exact deployed server_revision,
+  `dependencies_ready=true`, `hevc_runtime_verified=true`, H264 baseline/main/high
+  (RFC6184/90000), H265 Main (RFC7798/90000), one video track, reverse RTCP, no audio.
+- Receipt: `.agent-context/tasks/active/2026-10-24-native-quality57-media-receipt.json`.
+- All 12 neighbour container IDs unchanged: app1, MenuBuilder, signer, ProcessingBackend,
+  nginx media/default/mTLS, Janus, l4mcp, RabbitMQ, Redis and the existing mock gateway.
+  Janus/nginx/DB/broker were not recreated. No terminal stream/test credentials were created.
+- Cleanup: isolated test Redis stopped by EXIT trap. No production test sessions remain;
+  standard release receipt/overrides persist. Temporary uploaded release archive/helper
+  removed after deployment; local sanitized evidence retained in the isolated worktree.
+
+## Handoff to stage 2
+Media stage 1 is deployed and ready for IoT v3 integration. Use the exact header and
+pinned common descriptor; existing URL paths are unchanged. Do not infer v3 support
+from old envelopes or silently downgrade. Desktop/native/browser773 and camera
+acceptance remain unverified here and belong to their respective owners/coordinator.
