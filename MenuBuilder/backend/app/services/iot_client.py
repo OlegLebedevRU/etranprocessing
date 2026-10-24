@@ -592,6 +592,7 @@ class IotPlatformClient:
         lease_id: str | None = None,
         source_id: str | None = None,
         profile_id: str | None = None,
+        refresh: bool = False,
         org_id: int | None = None,
         user: dict[str, Any] | None = None,
         camera_contract: bool = False,
@@ -616,17 +617,17 @@ class IotPlatformClient:
                 timeout=settings.iot_rpc_stream_start_timeout_seconds
             ) as client:
                 if action == "inventory":
+                    inventory_params: dict[str, str | bool] = {}
+                    if source_id:
+                        inventory_params["source_id"] = source_id
+                    if profile_id:
+                        inventory_params["profile_id"] = profile_id
+                    if refresh:
+                        inventory_params["refresh"] = True
                     response = await client.get(
                         f"{prefix}/devices/{quote(sn, safe='')}/video-capabilities",
                         headers=headers,
-                        params=(
-                            dict(
-                                source_id=source_id,
-                                **({"profile_id": profile_id} if profile_id else {}),
-                            )
-                            if source_id
-                            else None
-                        ),
+                        params=inventory_params or None,
                     )
                 elif action in ("state", "lease") and lease_id:
                     suffix = "video-state" if action == "state" else "video-lease"

@@ -150,3 +150,5 @@
 - [План внедрения HEVC](etran_arch-hevc-rollout-plan.md).
 - [Фиксированный контракт 2.0.0](etran_arch-hevc-contracts.md).
 - [l4media/siplite contract](etran_arch-hevc-media-siplite-contract.md).
+
+- [HEVC monotonic admission / firmware handoff](menu_arch-hevc-monotonic-time.md) — lease, TTL, START and unchanged camera CTLv1 boundary.

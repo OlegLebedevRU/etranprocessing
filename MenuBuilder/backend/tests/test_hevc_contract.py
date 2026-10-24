@@ -188,6 +188,7 @@ async def test_hevc_availability_does_not_require_pilot_sn(context, sn):
         user=args["user"],
         source_id=None,
         profile_id=None,
+        refresh=False,
     )
 
 
@@ -206,7 +207,49 @@ async def test_desktop_availability_probes_selected_source(context):
         user=args["user"],
         source_id="disp:secondary",
         profile_id=args["profile_id"],
+        refresh=False,
     )
+
+
+@pytest.mark.anyio
+async def test_desktop_start_reconfirms_context_before_publishing(context):
+    service, args, trace, cap = context
+    args["source_id"] = "disp:secondary"
+    cap["video_capabilities"]["source_id"] = args["source_id"]
+    cap["video_capabilities"]["admission_clock"] = "issuer_monotonic_v1"
+    result = await service.start(**args)
+    assert result["resolved_codec"] == "h265"
+    queries = [entry for entry in trace if entry[:2] == ("iot", "inventory")]
+    assert (
+        len(queries) == 2
+        and queries[0][2]["refresh"] is False
+        and queries[1][2]["refresh"] is True
+    )
+    assert queries[0][2]["profile_id"] == args["profile_id"]
+    assert trace.index(queries[0]) < next(
+        i for i, entry in enumerate(trace) if entry[:2] == ("iot", "start")
+    )
+
+
+@pytest.mark.anyio
+async def test_non_desktop_availability_does_not_enable_desktop_time_handshake(context):
+    service, args, _, cap = context
+    source = cap["video_capabilities"]["source_id"]
+    assert not source.startswith("disp:")
+    await service.availability(
+        args["sn"], source, args["profile_id"], args["org_id"], args["user"], fresh=True
+    )
+    assert service.iot.remote_video_v2.call_args.kwargs["refresh"] is False
+
+
+@pytest.mark.anyio
+async def test_legacy_desktop_start_does_not_force_another_hardware_probe(context):
+    service, args, trace, cap = context
+    args["source_id"] = "disp:legacy"
+    cap["video_capabilities"]["source_id"] = args["source_id"]
+    await service.start(**args)
+    queries = [entry for entry in trace if entry[:2] == ("iot", "inventory")]
+    assert len(queries) == 1 and queries[0][2]["refresh"] is False
 
 
 @pytest.mark.anyio
