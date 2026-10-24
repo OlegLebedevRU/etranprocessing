@@ -81,7 +81,15 @@
 
 ## Delivery and remaining work
 
-The PR identifies the final source revision. No deployment, builder invocation,
+Implementation commit: `03a8bd7fdd8a81f256084ab4ed18886c47246540`.
+Automatic approval review rejected push/PR creation because it exports source
+to a public GitHub destination without explicit payload/destination approval.
+Read-only GitHub metadata confirms the configured origin
+`OlegLebedevRU/etranprocessing` is PUBLIC. No push or PR creation was executed;
+explicit user approval is required for publishing this branch and opening its PR.
+This is separate from the still-pending deployment signal after IoT.
+
+No deployment, builder invocation,
 new container, native installation, broker connection or terminal stream was
 started. Deployed SHA/digests are intentionally absent until the owner's signal.
 At release, use the existing exact-SHA builder/deployer for MenuBuilder backend
