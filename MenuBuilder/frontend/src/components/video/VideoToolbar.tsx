@@ -101,7 +101,9 @@ export function VideoToolbar(props: VideoToolbarProps) {
         />
         {props.cameraOnly && <Typography.Text type="secondary">Совместимость камеры и браузера проверяется перед запуском.</Typography.Text>}
         {!props.cameraOnly && !inventory?.video_codecs?.hevc_available && <Typography.Text type="secondary">
-          H.265 недоступен: {inventory?.video_codecs?.reason_code || "capability_unavailable"}
+          {inventory?.video_codecs?.reason_code === "encoder_busy"
+            ? "Кодировщик занят, проверка H.265 отложена"
+            : `H.265 недоступен: ${inventory?.video_codecs?.reason_code || "capability_unavailable"}`}
         </Typography.Text>}
       </label>}
       {props.activeCodec && <Typography.Text>Общий поток: {props.activeCodec === "h265" ? "H.265" : "H.264"}</Typography.Text>}

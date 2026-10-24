@@ -25,6 +25,26 @@ def fixture(name):
     return json.loads((FIXTURES / f"{name}.json").read_text())["payload"]
 
 
+def test_remembered_measurement_uses_current_check_for_freshness():
+    cap = fixture("capabilities")["video_capabilities"]
+    now = int(time.time() * 1000)
+    cap.update(
+        measured_at_ms=now - 86400000, checked_at_ms=now, valid_until_ms=now + 60000
+    )
+    track, reason = select_hevc_profile(
+        cap, fixture("media_capabilities"), cap["source_id"], "low", now
+    )
+    assert track is not None and reason == "ready"
+    _, reason = select_hevc_profile(
+        cap, fixture("media_capabilities"), cap["source_id"], "low", now + 60000
+    )
+    assert reason == "stale_capability"
+    cap["measured_at_ms"] = now + 1
+    with pytest.raises(HTTPException) as exc:
+        validate_video("capabilities", cap)
+    assert exc.value.detail["code"] == "invalid_video_contract"
+
+
 @pytest.mark.parametrize("reason", ["probe_timeout", "encoder_busy", "no_hardware_mft"])
 def test_hevc_unavailable_reason_does_not_become_profile_unsupported(reason):
     cap = fixture("capabilities")["video_capabilities"]
@@ -162,7 +182,12 @@ async def test_hevc_availability_does_not_require_pilot_sn(context, sn):
     assert result["hevc_available"] is True
     assert result["reason_code"] == "ready"
     service.iot.remote_video_v2.assert_awaited_once_with(
-        sn, "inventory", org_id=args["org_id"], user=args["user"], source_id=None
+        sn,
+        "inventory",
+        org_id=args["org_id"],
+        user=args["user"],
+        source_id=None,
+        profile_id=None,
     )
 
 
@@ -180,6 +205,7 @@ async def test_desktop_availability_probes_selected_source(context):
         org_id=args["org_id"],
         user=args["user"],
         source_id="disp:secondary",
+        profile_id=args["profile_id"],
     )
 
 
