@@ -1,0 +1,67 @@
+{
+  "revision": "2e37e960c200aaa1352515229726a8d7eb2c4c3b",
+  "image": "dev-leo4-ru.cr.cloud.ru/etran/l4media-ingress@sha256:3d7535bc8a11d9046b8a91cfdb9a899b0406bac237438b6255833e1511a86fe8",
+  "image_id": "sha256:3d7535bc8a11d9046b8a91cfdb9a899b0406bac237438b6255833e1511a86fe8",
+  "camera_enabled": true,
+  "media_contract": "l4-media/3.0.0",
+  "previous_image": "dev-leo4-ru.cr.cloud.ru/etran/l4media-ingress@sha256:ed9e89876673b8b993f6077b260027f48bff769766a38b706ca1afddb6194ed3",
+  "preserved_compose_files": [
+    "/home/user1/l4media/compose.yaml",
+    "/home/user1/.etran-ci/l4media-images.json",
+    "/home/user1/.etran-ci/hevc-task40-media-flags.json",
+    "/home/user1/.etran-ci/camera-reader-candidate.json"
+  ],
+  "capabilities": {
+    "audio_supported": false,
+    "codecs": [
+      "h264",
+      "h265"
+    ],
+    "contract_version": 3,
+    "dependencies_ready": true,
+    "formats": [
+      {
+        "clock_rate": 90000,
+        "codec": "h264",
+        "codec_profile": "baseline",
+        "packetization": "rfc6184"
+      },
+      {
+        "clock_rate": 90000,
+        "codec": "h264",
+        "codec_profile": "main",
+        "packetization": "rfc6184"
+      },
+      {
+        "clock_rate": 90000,
+        "codec": "h264",
+        "codec_profile": "high",
+        "packetization": "rfc6184"
+      },
+      {
+        "clock_rate": 90000,
+        "codec": "h265",
+        "codec_profile": "main",
+        "packetization": "rfc7798"
+      }
+    ],
+    "hevc_runtime_verified": true,
+    "max_video_tracks": 1,
+    "media_contract_versions": [
+      3
+    ],
+    "reverse_rtcp": true,
+    "server_revision": "2e37e960c200aaa1352515229726a8d7eb2c4c3b"
+  },
+  "neighbours_unchanged": true,
+  "schema_sha256": "b86ca6f066fcdecb09cf7145a7fb23d87b77311a53c7ea04f0fb6e8a905b2818",
+  "smoke_utc": "2026-10-24T19:27:59Z",
+  "health": {
+    "status": "ok",
+    "routes": 1,
+    "active_media_sessions": 0
+  },
+  "restart_count": 0,
+  "container_id": "4565f64c3ca1",
+  "browser_acceptance": false
+}
