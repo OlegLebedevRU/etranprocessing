@@ -44,7 +44,8 @@ SCHEMA = json.loads(
 )
 SCHEMA["$defs"]["capabilities"] = json.loads(
     (
-        Path(__file__).parent.parent / "contracts/hevc_capabilities_memory.schema.json"
+        Path(__file__).parent.parent
+        / "contracts/hevc_capabilities_monotonic.schema.json"
     ).read_text(encoding="utf-8")
 )
 VALIDATORS = {
@@ -315,6 +316,8 @@ class VideoContractOrchestrator:
         profile_id: str,
         org_id: int,
         user: dict[str, Any],
+        *,
+        fresh: bool = False,
     ) -> dict[str, Any]:
         reason = "disabled_by_policy"
         if (
@@ -335,6 +338,7 @@ class VideoContractOrchestrator:
                 user=user,
                 source_id=source_id if source_id.startswith("disp:") else None,
                 profile_id=profile_id if source_id.startswith("disp:") else None,
+                refresh=fresh and source_id.startswith("disp:"),
             )
             if (
                 set(inventory) != {"negotiated_v2", "video_capabilities"}
@@ -427,6 +431,15 @@ class VideoContractOrchestrator:
         if policy == "h264":
             return None
         available = await self.availability(sn, source_id, profile_id, org_id, user)
+        if (
+            source_id.startswith("disp:")
+            and available.get("hevc_available")
+            and (available.get("capability") or {}).get("admission_clock")
+            == "issuer_monotonic_v1"
+        ):
+            available = await self.availability(
+                sn, source_id, profile_id, org_id, user, fresh=True
+            )
         if not available["hevc_available"]:
             if policy == "h265":
                 raise HTTPException(

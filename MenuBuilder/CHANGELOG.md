@@ -12,6 +12,10 @@ FM uses MQTT navigation and mandatory confirmed close only; legacy PB listing an
 
 ### Changed
 
+- HEVC desktop admission uses issuer-relative durations and a local monotonic
+  anchor instead of device UTC. Explicit admission_clock capability gates
+  a fresh cheap START confirmation; camera CTLv1 remains unchanged.
+
 - Desktop HEVC capability accepts retained measurements with a fresh applicability
   check and forwards the selected profile. Inventory refresh reloads codec state;
   unknown encoder_busy is displayed as a deferred check instead of absent H.265.
