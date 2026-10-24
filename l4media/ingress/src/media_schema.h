@@ -8,6 +8,7 @@
 
 #define MEDIA_V2_BODY_LIMIT 32768
 #define MEDIA_DESCRIPTOR_LIMIT 4096
+static json_t* g_media_v3_schema = NULL;
 static json_t* g_media_schema = NULL;
 static json_t* g_media_camera_schema = NULL;
 
@@ -161,6 +162,14 @@ static bool ms_validate_root(const json_t* root, const json_t* schema, const jso
 
 static inline bool ms_validate(const json_t* schema, const json_t* value, int depth) {
     return ms_validate_root(g_media_schema, schema, value, depth);
+}
+
+static inline bool media_v3_schema_load(const char* path) {
+    json_error_t error;
+    json_t* schema = json_load_file(path, JSON_REJECT_DUPLICATES, &error);
+    if (!schema) return false;
+    json_decref(g_media_v3_schema); g_media_v3_schema = schema;
+    return true;
 }
 
 static inline bool media_camera_schema_load(const char* path) {

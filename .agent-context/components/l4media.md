@@ -1,5 +1,13 @@
 # l4media
 
+## Native quality57: unified media v3
+
+Negotiated `l4-media/3.0.0` uses the coordinator schema pinned at
+`b86ca6f066fcdecb09cf7145a7fb23d87b77311a53c7ea04f0fb6e8a905b2818`.
+Desktop/USB/IP sources share concrete tracks; lifecycle and Redis retain explicit versions.
+Janus format probes do not establish browser acceptance.
+See [stage 1 handoff](../tasks/active/2026-10-24-native-quality57-media.md) for release evidence.
+
 ## TASK 20 camera reader
 
 [Reader implementation](../../docs/etran_arch-siplite-camera-media-reader.md): отдельная negotiated schema, camera-only profile/level/raster, Janus fmtp probes, safe feature-off cleanup и Redis restore с сохранением revision. Развёрнут source daee873; production lifecycle и legacy projection прошли. Exact image, проверки и ограничения: [G20 handoff](../tasks/completed/2026-10-23-siplite-g20-camera-reader.md). Camera-to-siplite RTP и browser decode новой ветки остаются TASK-60/70.

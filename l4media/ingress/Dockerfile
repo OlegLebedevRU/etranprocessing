@@ -31,6 +31,8 @@ COPY routes.conf /etc/l4media/routes.conf
 COPY openapi.json /etc/l4media/openapi.json
 COPY openapi-v2.json /etc/l4media/openapi-v2.json
 COPY openapi-camera-v1.json /etc/l4media/openapi-camera-v1.json
+COPY openapi-v3.json /etc/l4media/openapi-v3.json
+COPY spec/media-v3/media.schema.json /etc/l4media/media-v3.schema.json
 COPY spec/hevc.schema.json /etc/l4media/hevc.schema.json
 COPY spec/camera-v1/hevc.schema.json /etc/l4media/camera-v1.schema.json
 

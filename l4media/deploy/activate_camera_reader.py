@@ -85,13 +85,15 @@ def atomic_json(path: Path, value: dict[str, Any]) -> None:
     temporary.replace(path)
 
 
-def get(container: dict[str, Any], path: str, negotiated: bool = False) -> dict[str, Any]:
+def get(container: dict[str, Any], path: str, negotiated: bool | str = False) -> dict[str, Any]:
     values = environment(container)
     address = next(
         value["IPAddress"] for value in container["NetworkSettings"]["Networks"].values() if value.get("IPAddress")
     )
     headers = {"X-Media-Service-Token": values.get("L4MEDIA_SERVICE_TOKEN", "")}
-    if negotiated:
+    if negotiated == "media-v3":
+        headers["X-L4-Media-Contract"] = "l4-media/3.0.0"
+    elif negotiated:
         headers["X-L4-Camera-Contract"] = CAMERA_REVISION
     request = urllib.request.Request("http://" + address + ":9100" + path, headers=headers)
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -146,7 +148,36 @@ def wait_ready(expected_image: str, enabled: bool) -> dict[str, Any]:
             time.sleep(1)
 
 
-def activate(image: str, revision: str, enabled: bool) -> dict[str, Any]:
+def wait_ready_v3(expected_image: str, revision: str) -> dict[str, Any]:
+    deadline = time.monotonic() + 45
+    while True:
+        try:
+            container = inspect()
+            if container["Image"] != expected_image:
+                raise ValueError("Running image differs from the selected registry image")
+            if get(container, "/health").get("status") != "ok":
+                raise ValueError("Ingress health failed")
+            caps = get(container, "/api/v2/media/capabilities", "media-v3")
+            if caps.get("contract_version") != 3 or caps.get("media_contract_versions") != [3]:
+                raise ValueError("Unified media v3 unavailable")
+            if caps.get("server_revision") != revision or not caps.get("dependencies_ready"):
+                raise ValueError("Media revision/dependencies mismatch")
+            if not caps.get("formats"):
+                raise ValueError("No verified media formats")
+            if environment(container).get("L4MEDIA_HEVC_ENABLED") == "1" and (
+                not caps.get("hevc_runtime_verified") or "h265" not in caps.get("codecs", [])
+            ):
+                raise ValueError("Media HEVC Janus format probe failed")
+            return caps
+        except (OSError, ValueError, KeyError, StopIteration):
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(1)
+
+
+def activate(
+    image: str, revision: str, enabled: bool, *, media_v3: bool = False, allow_interruptions: bool = False
+) -> dict[str, Any]:
     import fcntl
 
     home = Path.home()
@@ -157,7 +188,7 @@ def activate(image: str, revision: str, enabled: bool) -> dict[str, Any]:
     with (state / "deploy.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         before = inspect()
-        if get(before, "/health").get("active_media_sessions", 1):
+        if not allow_interruptions and get(before, "/health").get("active_media_sessions", 1):
             raise ValueError("Active streams exist; ingress activation must wait")
         adjacent = neighbours()
         labels = before["Config"].get("Labels", {})
@@ -178,11 +209,11 @@ def activate(image: str, revision: str, enabled: bool) -> dict[str, Any]:
         atomic_json(state / "camera-reader-previous.json", rollback)
         atomic_json(candidate, desired)
         run(*command, "config", "--quiet")
-        if get(inspect(), "/health").get("active_media_sessions", 1):
+        if not allow_interruptions and get(inspect(), "/health").get("active_media_sessions", 1):
             raise ValueError("A stream started during preparation; activation cancelled")
         try:
             run(*command, "up", "-d", "--no-deps", "--no-build", "--pull", "never", "ingress")
-            caps = wait_ready(metadata["Id"], enabled)
+            caps = wait_ready_v3(metadata["Id"], revision) if media_v3 else wait_ready(metadata["Id"], enabled)
             if neighbours() != adjacent:
                 raise ValueError("Unrelated container identity changed during activation")
         except Exception:
@@ -196,6 +227,7 @@ def activate(image: str, revision: str, enabled: bool) -> dict[str, Any]:
             "image": image,
             "image_id": metadata["Id"],
             "camera_enabled": enabled,
+            "media_contract": "l4-media/3.0.0" if media_v3 else CAMERA_REVISION,
             "previous_image": before["Config"]["Image"],
             "preserved_compose_files": files,
             "capabilities": caps,
@@ -210,10 +242,30 @@ def main() -> None:
     parser.add_argument("--image", required=True)
     parser.add_argument("--revision", required=True)
     parser.add_argument("--camera-enabled", choices=["0", "1"], default="1")
+    parser.add_argument("--media-v3", action="store_true", help="Verify unified media v3; preserve camera flag")
+    parser.add_argument(
+        "--allow-interruptions", action="store_true", help="Owner-authorized immediate ingress replacement"
+    )
     args = parser.parse_args()
     # Validate metadata before any Docker operation or deployment-state write.
     candidate_config({}, args.image, args.revision, {}, args.camera_enabled == "1")
-    print(json.dumps(activate(args.image, args.revision, args.camera_enabled == "1"), indent=2))
+    enabled = (
+        environment(inspect()).get("L4MEDIA_CAMERA_CONTRACT_ENABLED") == "1"
+        if args.media_v3
+        else args.camera_enabled == "1"
+    )
+    print(
+        json.dumps(
+            activate(
+                args.image,
+                args.revision,
+                enabled,
+                media_v3=args.media_v3,
+                allow_interruptions=args.allow_interruptions,
+            ),
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":

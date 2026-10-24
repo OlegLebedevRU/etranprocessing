@@ -522,7 +522,7 @@ static inline void stop_media_session(const char* session_id, const char* operat
     s->stopped_at = now;
     lifecycle_safe_strcpy(s->stop_reason, reason && reason[0] ? reason : "user_closed", sizeof(s->stop_reason));
     media_redis_drop_session(s->session_id, s->sn, s->mountpoint_id);
-    if (s->contract_version == 2) mv_persist(s);
+    if ((s->contract_version == 2 || s->contract_version == 3)) mv_persist(s);
     g_metric_sessions_stopped++;
 
     long duration = (long)(s->stopped_at - s->started_at);
@@ -613,14 +613,14 @@ static inline void handle_media_session_start(const char* body, char* resp_body,
     /* 1. Idempotency on session_id */
     MediaSession* existing = find_session_by_id(session_id);
     expire_media_session(existing, request_at);
-    if (existing && existing->contract_version == 2) {
+    if (existing && (existing->contract_version == 2 || existing->contract_version == 3)) {
         *status_code = 409; *status_text = "Conflict";
         snprintf(resp_body, resp_sz, "{\"error\":\"session_busy\"}\n");
         return;
     }
     if (existing) {
         if (existing->state == MEDIA_STATE_ACTIVE || existing->state == MEDIA_STATE_STARTING) {
-            if (existing->contract_version == 2 || strcmp(existing->sn, sn) ||
+            if ((existing->contract_version == 2 || existing->contract_version == 3) || strcmp(existing->sn, sn) ||
                 (operation_id[0] && strcmp(existing->operation_id, operation_id))) {
                 *status_code = 409; *status_text = "Conflict";
                 snprintf(resp_body, resp_sz, "{\"error\":\"session_busy\"}\n");

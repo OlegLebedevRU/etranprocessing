@@ -4,6 +4,10 @@
 
 ### Added
 
+- Negotiated `l4-media/3.0.0` uses one immutable versioned descriptor for desktop, USB and IP cameras, including native 3000x2000 HEVC. The existing URLs select the pinned shared schema through `X-L4-Media-Contract`. Runtime format probes, lifecycle identity and Redis restore retain the selected version.
+
+- Negotiated `l4-media/3.0.0` accepts one immutable, versioned descriptor for desktop, USB and IP cameras, including native 3000x2000 HEVC. Existing management URLs select the exact shared schema via `X-L4-Media-Contract`; runtime Janus format probes, lifecycle identity and Redis restore retain the selected version. Frozen v2/camera schemas and RTP handling are unchanged.
+
 - Janus RTCP feedback is returned to the originating L4RTP/1 client as type `0x02` frames over the existing TCP/mTLS connection. Per-stream connected UDP sockets isolate feedback; bounded nonblocking queues preserve partial TCP frames and discard unsent feedback on route changes/stop.
 
 - Consolidated the accepted 18D source-build/registry scripts and historical
