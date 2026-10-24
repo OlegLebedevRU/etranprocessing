@@ -42,6 +42,11 @@ SCHEMA = json.loads(
         encoding="utf-8"
     )
 )
+SCHEMA["$defs"]["capabilities"] = json.loads(
+    (
+        Path(__file__).parent.parent / "contracts/hevc_capabilities_memory.schema.json"
+    ).read_text(encoding="utf-8")
+)
 VALIDATORS = {
     key: Draft202012Validator(
         dict(SCHEMA, oneOf=[{"$ref": f"#/$defs/{key}"}]), format_checker=FormatChecker()
@@ -129,6 +134,12 @@ def validate_video(definition: str, value: dict[str, Any]) -> dict[str, Any]:
             else VALIDATORS
         )
         validators[definition].validate(value)
+        if (
+            definition == "capabilities"
+            and "measured_at_ms" in value
+            and value["measured_at_ms"] > value["checked_at_ms"]
+        ):
+            raise ValueError("measurement cannot follow applicability check")
     except (ValidationError, ValueError, TypeError) as exc:
         # Provider payloads may contain PINs: never return/log the validation instance.
         raise HTTPException(
@@ -323,6 +334,7 @@ class VideoContractOrchestrator:
                 org_id=org_id,
                 user=user,
                 source_id=source_id if source_id.startswith("disp:") else None,
+                profile_id=profile_id if source_id.startswith("disp:") else None,
             )
             if (
                 set(inventory) != {"negotiated_v2", "video_capabilities"}

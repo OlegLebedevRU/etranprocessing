@@ -524,7 +524,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
   }, [selectedDevice?.device_id, canView, fetchDeviceInfo]);
 
   useEffect(() => {
-    if (!selectedDevice || cameraOnly || !canView || !selectedSourceKey) return;
+    if (!selectedDevice || cameraOnly || !canView || !selectedSourceKey || loadingInventory) return;
     let disposed = false;
     const source_id = selectedSourceKey.slice(selectedSourceKey.indexOf(":") + 1);
     void getDeviceInventory(selectedDevice.device_id, false, { source_id, profile_id: selectedProfile })
@@ -534,7 +534,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
         if (!disposed) setInventory((current) => current ? { ...current, video_codecs: undefined } : current);
       });
     return () => { disposed = true; };
-  }, [selectedDevice?.device_id, selectedSourceKey, selectedProfile, cameraOnly, canView]);
+  }, [selectedDevice?.device_id, selectedSourceKey, selectedProfile, cameraOnly, canView, loadingInventory]);
 
   // IoT watch is an invalidation feed. REST remains the authoritative snapshot.
   useEffect(() => {

@@ -591,6 +591,7 @@ class IotPlatformClient:
         payload: dict[str, Any] | None = None,
         lease_id: str | None = None,
         source_id: str | None = None,
+        profile_id: str | None = None,
         org_id: int | None = None,
         user: dict[str, Any] | None = None,
         camera_contract: bool = False,
@@ -618,7 +619,14 @@ class IotPlatformClient:
                     response = await client.get(
                         f"{prefix}/devices/{quote(sn, safe='')}/video-capabilities",
                         headers=headers,
-                        params={"source_id": source_id} if source_id else None,
+                        params=(
+                            dict(
+                                source_id=source_id,
+                                **({"profile_id": profile_id} if profile_id else {}),
+                            )
+                            if source_id
+                            else None
+                        ),
                     )
                 elif action in ("state", "lease") and lease_id:
                     suffix = "video-state" if action == "state" else "video-lease"

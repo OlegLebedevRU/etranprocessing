@@ -1,6 +1,7 @@
 # Документация экосистемы etranprocessing
 
 - [Camera credential storage v1](etran_arch-camera-credential-storage.md) — PB recipient API, encrypted vault, migration and rollout boundary.
+- [Desktop HEVC probe memory](menu_arch-hevc-probe-memory.md) — applicability snapshots, saved probes, stack changes and checks.
 
 Центральный навигатор по технической, архитектурной и эксплуатационной документации платформы процессинга платежей и управления терминалами `etranprocessing`.
 

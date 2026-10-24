@@ -12,6 +12,10 @@ FM uses MQTT navigation and mandatory confirmed close only; legacy PB listing an
 
 ### Changed
 
+- Desktop HEVC capability accepts retained measurements with a fresh applicability
+  check and forwards the selected profile. Inventory refresh reloads codec state;
+  unknown encoder_busy is displayed as a deferred check instead of absent H.265.
+
 - Публичный ключ JWT в MenuBuilder и nginx заменён на `lk-key-000003_public.pem`. Внутренний URL имеет приоритет; serverless-путь сохранён как выключенный резерв до проверки нового ключа. Ответы внутреннего issuer/резерва проверяются по RS256 и контексту пользователя/сессии.
 
 ### Fixed
