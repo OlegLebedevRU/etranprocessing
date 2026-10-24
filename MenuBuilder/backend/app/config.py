@@ -151,6 +151,7 @@ class Settings(BaseSettings):
     iot_rpc_stream_start_timeout_seconds: float = 20.0
     iot_rpc_inventory_timeout_seconds: float = 10.0
     camera_monotonic_runtime_enabled: bool = False
+    camera_native_auto_enabled: bool = False
     # Independent Fernet key, shared by BFF workers; provision through environment.
     camera_admission_ticket_key: str = ""
 

@@ -17,6 +17,13 @@ from uuid import UUID, uuid4
 from cryptography.fernet import Fernet, InvalidToken
 
 from app.config import settings
+from app.services.camera_contract import (
+    CADENCE_REVISION,
+    CAMERA11_HEADERS,
+    CAMERA11_REVISION,
+    CAMERA_REVISION,
+    MEDIA11_VALIDATORS,
+)
 from app.services.camera_platform import camera_request
 from app.services.camera_video import (
     NativeCameraVideo,
@@ -86,12 +93,31 @@ def physical_camera(view, mac, generation):
     return camera
 
 
+def observed_camera(view, camera):
+    observation = view.get("camera_observation")
+    if (
+        not MEDIA11_VALIDATORS["camera_observation"].is_valid(observation)
+        or not MEDIA11_VALIDATORS["camera_capabilities"].is_valid(
+            view.get("camera_capabilities")
+        )
+        or observation["source_id"] != camera.get("camera_id")
+    ):
+        refuse("camera_native_auto_not_negotiated")
+    return {
+        **camera,
+        "actual_track": observation["actual_track"],
+        "geometry_generation": observation["geometry_generation"],
+    }
+
+
 class CameraAdmission:
     def __init__(self, iot, media):
         self.native = NativeCameraVideo(iot, media)
         self.media = media
 
-    async def request(self, terminal, user, action, body=None):
+    async def request(
+        self, terminal, user, action, body=None, *, revision=CAMERA_REVISION
+    ):
         path = f"remote-input/devices/{quote(terminal.sn, safe='')}/camera/admission"
         if action:
             path += f"/{action}"
@@ -103,7 +129,9 @@ class CameraAdmission:
                     terminal.org_id,
                     user,
                     body=body,
-                    headers=RUNTIME_HEADERS,
+                    headers=CAMERA11_HEADERS
+                    if revision == CAMERA11_REVISION
+                    else RUNTIME_HEADERS,
                 )
         except TimeoutError:
             refuse("camera_admission_unconfirmed", 504)
@@ -112,25 +140,37 @@ class CameraAdmission:
         cipher()
         owner = scope(terminal, user)
         browser = validate_browser(selection.browser_codecs, int(time.time() * 1000))
-        view = await self.native.inventory(terminal.sn, terminal.org_id, user)
+        revision = (
+            CAMERA11_REVISION
+            if settings.camera_native_auto_enabled
+            else CAMERA_REVISION
+        )
+        view = await self.native.inventory(terminal.sn, terminal.org_id, user, revision)
         camera = physical_camera(
             view, selection.physical_camera_mac, selection.discovery_generation
         )
         if camera.get("camera_id") != selection.source_id:
             refuse("camera_source_mismatch")
-        # Native/Auto cadence has no agreed third-revision negotiation in IoT141.
+        if revision == CAMERA11_REVISION:
+            camera = observed_camera(view, camera)
+        # No inference of policy support from Native configuration sentinels.
         config = (camera.get("config") or {}).get("video0") or {}
-        if config.get("fps") == 0 or config.get("size") == "":
+        if revision == CAMERA_REVISION and (
+            config.get("fps") == 0 or config.get("size") == ""
+        ):
             refuse("camera_native_auto_not_negotiated")
         server = validate_video(
             "media_capabilities",
-            await self.media.video_v2("capabilities", camera_contract=True),
+            await self.media.video_v2(
+                "capabilities",
+                camera_contract=True if revision == CAMERA_REVISION else revision,
+            ),
         )
         codec, reason = resolve_camera_codec(
-            selection.codec_policy, camera, server, browser
+            selection.codec_policy, camera, server, browser, revision
         )
         if camera["actual_track"]["codec"] != codec or not server_accepts(
-            server, camera["actual_track"]
+            server, camera["actual_track"], revision
         ):
             # Changing camera configuration would require a separate authorized
             # operation. Never acquire a stream lease merely to probe a format.
@@ -141,9 +181,16 @@ class CameraAdmission:
                 "descriptor_revision": str(uuid4()),
                 "source_type": "camera",
                 "source_id": selection.source_id,
-                "geometry_generation": max(1, selection.discovery_generation),
+                "geometry_generation": camera["geometry_generation"]
+                if revision == CAMERA11_REVISION
+                else max(1, selection.discovery_generation),
                 "profile_id": "default",
-                "camera_contract_revision": "siplite-camera/1.0.0",
+                "camera_contract_revision": revision,
+                **(
+                    {"cadence_revision": CADENCE_REVISION}
+                    if revision == CAMERA11_REVISION
+                    else {}
+                ),
                 "tracks": [copy.deepcopy(camera["actual_track"])],
             },
         )
@@ -158,6 +205,7 @@ class CameraAdmission:
                 "descriptor": descriptor,
                 "physical_camera_mac": selection.physical_camera_mac,
             },
+            revision=revision,
         )
         if response.get("configured") is not True:
             refuse("camera_prepare_unconfirmed")
@@ -177,8 +225,18 @@ class CameraAdmission:
         }
 
     async def check(self, value, terminal, user):
-        view = await self.native.inventory(terminal.sn, terminal.org_id, user)
+        revision = value["descriptor"]["camera_contract_revision"]
+        if revision == CAMERA11_REVISION and not settings.camera_native_auto_enabled:
+            refuse("camera_native_auto_not_negotiated")
+        view = await self.native.inventory(terminal.sn, terminal.org_id, user, revision)
         camera = physical_camera(view, value["mac"], value["generation"])
+        if revision == CAMERA11_REVISION:
+            camera = observed_camera(view, camera)
+            if (
+                camera["geometry_generation"]
+                != value["descriptor"]["geometry_generation"]
+            ):
+                refuse("camera_descriptor_changed")
         if (
             camera.get("actual_track") != value["descriptor"]["tracks"][0]
             or camera.get("camera_id") != value["descriptor"]["source_id"]
@@ -188,20 +246,29 @@ class CameraAdmission:
     async def enrollment(self, terminal, user, ticket):
         value = unseal(ticket, terminal, user, "prepared")
         await self.check(value, terminal, user)
-        response = await self.request(terminal, user, "")
+        response = await self.request(
+            terminal, user, "", revision=value["descriptor"]["camera_contract_revision"]
+        )
         unseal(ticket, terminal, user, "prepared")
         return {"enrolled": response.get("enrolled") is True}
 
     async def readiness(self, terminal, user, ticket):
         value = unseal(ticket, terminal, user, "prepared")
         await self.check(value, terminal, user)
-        state = await self.request(terminal, user, "")
+        state = await self.request(
+            terminal, user, "", revision=value["descriptor"]["camera_contract_revision"]
+        )
         unseal(ticket, terminal, user, "prepared")
         if state.get("enrolled") is not True:
             refuse("camera_not_enrolled")
         # Original readiness budget includes HTTP transit; never restart it on receipt.
         deadline = time.time() + 5
-        query = await self.request(terminal, user, "readiness")
+        query = await self.request(
+            terminal,
+            user,
+            "readiness",
+            revision=value["descriptor"]["camera_contract_revision"],
+        )
         try:
             parsed_nonce = UUID(query["readiness_nonce"])
             nonce = str(parsed_nonce)

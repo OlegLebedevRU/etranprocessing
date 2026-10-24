@@ -147,14 +147,14 @@ class MediaOrchestratorClient:
         params: dict[str, Any] | None = None,
         json_data: dict[str, Any] | None = None,
         *,
-        camera_contract: bool = False,
+        camera_contract: bool | str = False,
     ) -> dict[str, Any]:
         url = f"{self.base_url}{path}"
         headers = self._get_headers()
         if camera_contract:
-            from app.services.camera_contract import CAMERA_REVISION
+            from app.services.camera_contract import camera_headers
 
-            headers["X-L4-Camera-Contract"] = CAMERA_REVISION
+            headers.update(camera_headers(camera_contract))
         clean_params = {k: v for k, v in (params or {}).items() if v is not None}
 
         try:
@@ -198,7 +198,7 @@ class MediaOrchestratorClient:
         action: str,
         payload: dict[str, Any] | None = None,
         *,
-        camera_contract: bool = False,
+        camera_contract: bool | str = False,
     ) -> dict[str, Any]:
         if action == "capabilities":
             return await self._send_request(

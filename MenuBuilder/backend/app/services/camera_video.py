@@ -26,7 +26,7 @@ class BrowserCodecs(BaseModel):
 
 class CameraVideoState(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    camera_contract_revision: Literal["siplite-camera/1.0.0"]
+    camera_contract_revision: Literal["siplite-camera/1.0.0", "siplite-camera/1.1.0"]
     version: Literal[2]
     sn: str
     lease_id: UUID
@@ -55,10 +55,10 @@ def validate_browser(browser: BrowserCodecs | None, now_ms: int) -> BrowserCodec
     return browser
 
 
-def server_accepts(server: dict, track: dict) -> bool:
-    if CAMERA_REVISION not in server.get(
-        "camera_contract_revisions", []
-    ) or not server.get("dependencies_ready"):
+def server_accepts(server: dict, track: dict, revision: str = CAMERA_REVISION) -> bool:
+    if revision not in server.get("camera_contract_revisions", []) or not server.get(
+        "dependencies_ready"
+    ):
         return False
     for fmt in server.get("camera_formats", []):
         if (
@@ -84,7 +84,11 @@ def server_accepts(server: dict, track: dict) -> bool:
 
 
 def resolve_camera_codec(
-    policy: str, camera: dict, server: dict, browser: BrowserCodecs
+    policy: str,
+    camera: dict,
+    server: dict,
+    browser: BrowserCodecs,
+    revision: str = CAMERA_REVISION,
 ) -> tuple[str, str]:
     if policy not in ("auto", "h264", "h265"):
         refuse("camera_codec_policy_invalid", 422)
@@ -113,13 +117,13 @@ def resolve_camera_codec(
             value.get("runtime_verified") is True for value in formats
         ):
             return "unknown"
-        if track["codec"] == codec and not server_accepts(server, track):
+        if track["codec"] == codec and not server_accepts(server, track, revision):
             return "unsupported"
         return "ready"
 
-    if CAMERA_REVISION not in server.get(
-        "camera_contract_revisions", []
-    ) or not server.get("dependencies_ready"):
+    if revision not in server.get("camera_contract_revisions", []) or not server.get(
+        "dependencies_ready"
+    ):
         refuse("camera_server_unavailable")
     if policy in ("auto", "h265"):
         hevc = available("h265")
@@ -141,11 +145,15 @@ class NativeCameraVideo:
     def __init__(self, iot, media):
         self.iot, self.media = iot, media
 
-    async def inventory(self, sn, org_id, user):
+    async def inventory(self, sn, org_id, user, revision=CAMERA_REVISION):
         value = await self.iot.remote_video_v2(
-            sn, "inventory", org_id=org_id, user=user, camera_contract=True
+            sn,
+            "inventory",
+            org_id=org_id,
+            user=user,
+            camera_contract=True if revision == CAMERA_REVISION else revision,
         )
-        if value.get("camera_contract_revision") != CAMERA_REVISION:
+        if value.get("camera_contract_revision") != revision:
             refuse("camera_contract_not_negotiated")
         return value
 
@@ -275,6 +283,13 @@ class NativeCameraVideo:
                 refuse("camera_preparation_selection_changed")
             await CameraAdmission(self.iot, self.media).check(admission, terminal, user)
 
+        revision = (
+            admission["descriptor"]["camera_contract_revision"]
+            if admission
+            else CAMERA_REVISION
+        )
+        selected_contract = True if revision == CAMERA_REVISION else revision
+
         if source_id != "cam:ip000001" or profile_id != "default":
             refuse("camera_source_mismatch", 422)
         authority = await self.iot.remote_video_v2(
@@ -283,7 +298,7 @@ class NativeCameraVideo:
             lease_id=lease_id,
             org_id=terminal.org_id,
             user=user,
-            camera_contract=True,
+            camera_contract=selected_contract,
         )
         deadline = verify_publisher_lease({"lease": authority}, lease_id, user)
         if authority.get("scope") != "stream" or authority.get("sn") != terminal.sn:
@@ -296,7 +311,7 @@ class NativeCameraVideo:
                     lease_id=lease_id,
                     org_id=terminal.org_id,
                     user=user,
-                    camera_contract=True,
+                    camera_contract=selected_contract,
                 )
             )
         except HTTPException as error:
@@ -304,7 +319,7 @@ class NativeCameraVideo:
                 raise
             previous = None
         if previous and previous["state"] in ("starting", "running"):
-            if previous.get("camera_contract_revision") != CAMERA_REVISION:
+            if previous.get("camera_contract_revision") != revision:
                 refuse("conflict")
             descriptor = previous["descriptor"]
             if descriptor["source_id"] != source_id or policy not in (
@@ -317,7 +332,9 @@ class NativeCameraVideo:
             )
             media = validate_video(
                 "media_health",
-                await self.media.video_v2("health", identity, camera_contract=True),
+                await self.media.video_v2(
+                    "health", identity, camera_contract=selected_contract
+                ),
             )
             verify_media_response(media, identity, descriptor)
             return {**previous, "media": media, "result": "already_running"}
@@ -339,7 +356,9 @@ class NativeCameraVideo:
                 )
             server = validate_video(
                 "media_capabilities",
-                await self.media.video_v2("capabilities", camera_contract=True),
+                await self.media.video_v2(
+                    "capabilities", camera_contract=selected_contract
+                ),
             )
             camera = view["camera"]
             prepare_deadline = min(time.time() + 30, deadline - 15)
@@ -414,7 +433,9 @@ class NativeCameraVideo:
         try:
             media = validate_video(
                 "media_response",
-                await self.media.video_v2("start", request, camera_contract=True),
+                await self.media.video_v2(
+                    "start", request, camera_contract=selected_contract
+                ),
             )
             verify_media_response(media, identity, descriptor)
             if media["operation_id"] != request["operation_id"] or media[
@@ -433,7 +454,7 @@ class NativeCameraVideo:
                     **({"camera_readiness": admission["nonce"]} if admission else {}),
                     org_id=terminal.org_id,
                     user=user,
-                    camera_contract=True,
+                    camera_contract=selected_contract,
                 )
             )
             if (
@@ -462,12 +483,12 @@ class NativeCameraVideo:
                         payload={**identity, "reason": "partial_start_failed"},
                         org_id=terminal.org_id,
                         user=user,
-                        camera_contract=True,
+                        camera_contract=selected_contract,
                     )
             with contextlib.suppress(Exception):
                 await self.media.video_v2(
                     "stop",
                     {**identity, "reason": "partial_start_failed"},
-                    camera_contract=True,
+                    camera_contract=selected_contract,
                 )
             raise

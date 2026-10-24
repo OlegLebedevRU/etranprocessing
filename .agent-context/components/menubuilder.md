@@ -1,5 +1,14 @@
 # MenuBuilder
 
+## Camera Native Auto 1.1 candidate, 2026-10-24
+
+Separate camera1.1/cadence0.1/enrollment0.2/admission0.2 negotiation; all four
+headers and fresh device/IoT/media capabilities are required. Descriptor copies
+device geometry and actual track, including cadence in canonical hashes. Gates
+remain off; no production or firmware acceptance is claimed.
+[Package](../../contracts/siplite-camera-v1.1/README.md) and
+[handoff](../tasks/active/2026-10-24-menubuilder-camera-native-auto11.md).
+
 ## Camera runtime141 — implementation candidate, 2026-10-24
 
 New camera UI/BFF orders prepare, enrollment, fresh readiness, then lease/media/START.

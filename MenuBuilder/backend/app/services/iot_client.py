@@ -595,7 +595,7 @@ class IotPlatformClient:
         refresh: bool = False,
         org_id: int | None = None,
         user: dict[str, Any] | None = None,
-        camera_contract: bool = False,
+        camera_contract: bool | str = False,
         camera_readiness: str | None = None,
     ) -> dict[str, Any]:
         """Explicit v2 adapter; no retry against a legacy endpoint on refusal."""
@@ -615,9 +615,9 @@ class IotPlatformClient:
             or action == "state"
             or (payload or {}).get("contract_version") == 2
         ):
-            from app.services.camera_contract import CAMERA_REVISION
+            from app.services.camera_contract import camera_headers
 
-            headers["X-L4-Camera-Contract"] = CAMERA_REVISION
+            headers.update(camera_headers(camera_contract or True))
         try:
             async with httpx.AsyncClient(
                 timeout=settings.iot_rpc_stream_start_timeout_seconds
