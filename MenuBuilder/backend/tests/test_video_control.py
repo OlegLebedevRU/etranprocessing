@@ -345,16 +345,16 @@ async def test_contract_version_is_coerced_at_http_boundary(
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
-            for version in (None, "2", "3"):
+            for version in (None, "3", "2", "4"):
                 response = await client.request(
                     method,
                     f"/api/v1/video/devices/1/{path}",
                     params={"contract_version": version} if version else {},
                     headers=org1_operator_headers,
                 )
-                assert response.status_code == (422 if version == "3" else expected), (
-                    response.text
-                )
+                assert response.status_code == (
+                    422 if version in ("2", "4") else expected
+                ), response.text
 
 
 @pytest.mark.anyio

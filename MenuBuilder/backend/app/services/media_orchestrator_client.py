@@ -148,6 +148,7 @@ class MediaOrchestratorClient:
         json_data: dict[str, Any] | None = None,
         *,
         camera_contract: bool = False,
+        media_contract: bool = False,
     ) -> dict[str, Any]:
         url = f"{self.base_url}{path}"
         headers = self._get_headers()
@@ -155,6 +156,8 @@ class MediaOrchestratorClient:
             from app.services.camera_contract import CAMERA_REVISION
 
             headers["X-L4-Camera-Contract"] = CAMERA_REVISION
+        if media_contract:
+            headers["X-L4-Media-Contract"] = "l4-media/3.0.0"
         clean_params = {k: v for k, v in (params or {}).items() if v is not None}
 
         try:
@@ -202,7 +205,10 @@ class MediaOrchestratorClient:
     ) -> dict[str, Any]:
         if action == "capabilities":
             return await self._send_request(
-                "GET", "/api/v2/media/capabilities", camera_contract=camera_contract
+                "GET",
+                "/api/v2/media/capabilities",
+                camera_contract=camera_contract,
+                media_contract=not camera_contract,
             )
         if action == "health" and payload:
             query = {
@@ -215,6 +221,7 @@ class MediaOrchestratorClient:
                 f"/api/v2/media/sessions/{payload['session_id']}",
                 params=query,
                 camera_contract=camera_contract,
+                media_contract=not camera_contract,
             )
         if action not in ("start", "stop", "renew"):
             raise ValueError("Unknown media v2 action")
@@ -223,6 +230,7 @@ class MediaOrchestratorClient:
             f"/api/v2/media/sessions/{action}",
             json_data=payload,
             camera_contract=camera_contract,
+            media_contract=not camera_contract,
         )
 
     async def start_session(

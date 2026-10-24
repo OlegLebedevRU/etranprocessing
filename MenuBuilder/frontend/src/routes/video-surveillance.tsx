@@ -689,7 +689,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
       setStatusText("Запрос аренды для просмотра...");
 
       try {
-        const sessionData = await createVideoSession(deviceId, 2);
+        const sessionData = await createVideoSession(deviceId, 3);
         if (!sessionData.stream_instance_id) throw new Error("Publisher epoch unavailable");
         coordinatorRef.current.startSession({
           deviceId,
@@ -782,7 +782,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
         profile: cameraOnly ? "default" : selectedProfile,
         lease_id: leaseRes.lease_id,
         codec_policy: codecPolicy,
-        ...(cameraOnly ? { browser_codecs: browserVideoCodecs() } : {}),
+        browser_codecs: browserVideoCodecs(),
       });
       const sessionData = startRes.media;
       if (!sessionData) throw new Error("Media route unavailable");

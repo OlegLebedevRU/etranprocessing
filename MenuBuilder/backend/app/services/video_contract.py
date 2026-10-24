@@ -1,4 +1,4 @@
-"""HEVC contract 2.0.0 validation and pre-START negotiation.
+"""Unified media 3.0.0 validation and pre-START negotiation.
 
 This layer does not acquire leases or authorize users. Its caller must verify
 the device/tenant and the live publisher lease before preparing any media route.
@@ -38,15 +38,9 @@ from app.services.media_orchestrator_client import (
 logger = logging.getLogger(__name__)
 CodecPolicy = Literal["auto", "h264", "h265"]
 SCHEMA = json.loads(
-    (Path(__file__).parent.parent / "contracts/hevc.schema.json").read_text(
+    (Path(__file__).parent.parent / "contracts/media-v3.schema.json").read_text(
         encoding="utf-8"
     )
-)
-SCHEMA["$defs"]["capabilities"] = json.loads(
-    (
-        Path(__file__).parent.parent
-        / "contracts/hevc_capabilities_monotonic.schema.json"
-    ).read_text(encoding="utf-8")
 )
 VALIDATORS = {
     key: Draft202012Validator(
@@ -61,6 +55,7 @@ class IotVideoState(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     version: Literal[2]
+    contract_version: Literal[3]
     sn: str
     lease_id: UUID
     agent_instance_id: UUID
@@ -88,6 +83,10 @@ def validate_iot_state(value: dict[str, Any]) -> dict[str, Any]:
     validate_video("descriptor", result["descriptor"])
     if result["actual_descriptor"] is not None:
         validate_video("descriptor", result["actual_descriptor"])
+        if result["actual_descriptor"] != result["descriptor"]:
+            raise HTTPException(409, detail={"code": "descriptor_mismatch"})
+    if result["resolved_codec"] != result["descriptor"]["tracks"][0]["codec"]:
+        raise HTTPException(409, detail={"code": "descriptor_mismatch"})
     if result.get("error") is not None:
         validate_video("error_detail", result["error"])
     return result
@@ -105,9 +104,18 @@ async def load_video_status(
         or lease.get("scope") == "view"
     ):
         return status
+    current_stream = (status.get("agent") or {}).get("stream") or {}
+    state_options: dict[str, Any] = {}
+    if current_stream.get("mode") == "camera" or extended_camera(current_stream):
+        state_options["camera_contract"] = True
     try:
         raw = await iot.remote_video_v2(
-            sn, "state", lease_id=str(lease["lease_id"]), org_id=org_id, user=user
+            sn,
+            "state",
+            lease_id=str(lease["lease_id"]),
+            org_id=org_id,
+            user=user,
+            **state_options,
         )
     except HTTPException as exc:
         if exc.status_code == 404:
@@ -131,7 +139,8 @@ def validate_video(definition: str, value: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("oversize")
         validators = (
             MEDIA_VALIDATORS
-            if extended_camera(value) or "camera_contract_revisions" in value
+            if (extended_camera(value) or "camera_contract_revisions" in value)
+            and value.get("contract_version", 2) == 2
             else VALIDATORS
         )
         validators[definition].validate(value)
@@ -157,7 +166,7 @@ def media_identity(
     sn: str, lease_id: str, stream_id: str, descriptor: dict[str, Any]
 ) -> dict[str, Any]:
     return {
-        "contract_version": 2,
+        "contract_version": 2 if extended_camera(descriptor) else 3,
         "sn": sn,
         "lease_id": lease_id,
         "session_id": _media_session_id(stream_id),
@@ -261,6 +270,7 @@ def select_hevc_profile(
     now_ms: int,
     agent_id: str | None = None,
     allow_test_camera: bool = False,
+    codec: str = "h265",
 ) -> tuple[dict[str, Any] | None, str]:
     if not capability:
         return None, "capability_unavailable"
@@ -277,18 +287,19 @@ def select_hevc_profile(
     validate_video("media_capabilities", server)
     if (
         not server["dependencies_ready"]
-        or not server["hevc_runtime_verified"]
-        or "h265" not in server["codecs"]
+        or (codec == "h265" and not server["hevc_runtime_verified"])
+        or codec not in server["codecs"]
     ):
         return None, "server_hevc_unavailable"
     unavailable_reason = None
     for entry in capability["video"]:
-        if entry["codec"] == "h265" and entry["status"] != "ready":
+        if entry["codec"] == codec and entry["status"] != "ready":
             unavailable_reason = entry["reason_code"] or "capability_unavailable"
         if (
-            entry["codec"] == "h265"
+            entry["codec"] == codec
             and (
                 (entry["backend"] == "media_foundation" and entry["hardware"])
+                or (codec == "h264" and entry["backend"] in ("openh264", "ffmpeg"))
                 or (
                     allow_test_camera
                     and entry["backend"] == "camera"
@@ -300,7 +311,21 @@ def select_hevc_profile(
         ):
             for profile in entry["profiles"]:
                 if profile["profile_id"] == profile_id:
-                    return copy.deepcopy(profile["track"]), "ready"
+                    track = profile["track"]
+                    if any(
+                        all(
+                            track[key] == fmt[key]
+                            for key in (
+                                "codec",
+                                "codec_profile",
+                                "packetization",
+                                "clock_rate",
+                            )
+                        )
+                        for fmt in server["formats"]
+                    ):
+                        return copy.deepcopy(track), "ready"
+                    return None, "server_format_unsupported"
     return None, unavailable_reason or "profile_unsupported"
 
 
@@ -318,6 +343,7 @@ class VideoContractOrchestrator:
         user: dict[str, Any],
         *,
         fresh: bool = False,
+        codec: str = "h265",
     ) -> dict[str, Any]:
         reason = "disabled_by_policy"
         if (
@@ -341,7 +367,9 @@ class VideoContractOrchestrator:
                 refresh=fresh and source_id.startswith("disp:"),
             )
             if (
-                set(inventory) != {"negotiated_v2", "video_capabilities"}
+                set(inventory)
+                != {"contract_version", "negotiated_v2", "video_capabilities"}
+                or inventory["contract_version"] != 3
                 or inventory["negotiated_v2"] is not True
             ):
                 return {"hevc_available": False, "reason_code": "capability_mismatch"}
@@ -354,6 +382,7 @@ class VideoContractOrchestrator:
                 profile_id,
                 int(time.time() * 1000),
                 allow_test_camera=sn in settings.video_test_camera_sns,
+                codec=codec,
             )
             return {
                 "hevc_available": track is not None,
@@ -361,8 +390,14 @@ class VideoContractOrchestrator:
                 "capability": capability,
                 "track": track,
             }
-        except HTTPException, MediaOrchestratorError:
-            return {"hevc_available": False, "reason_code": "capability_unavailable"}
+        except HTTPException as exc:
+            code = exc.detail.get("code") if isinstance(exc.detail, dict) else None
+            return {
+                "hevc_available": False,
+                "reason_code": code or "capability_unavailable",
+            }
+        except MediaOrchestratorError:
+            return {"hevc_available": False, "reason_code": "server_unavailable"}
 
     async def start(
         self,
@@ -376,6 +411,7 @@ class VideoContractOrchestrator:
         status: dict[str, Any],
         org_id: int,
         user: dict[str, Any],
+        browser_codecs: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         if not (status.get("lease") or {}).get("owner_session_id"):
             lease = await self.iot.remote_video_v2(
@@ -428,9 +464,26 @@ class VideoContractOrchestrator:
             if policy == "h265":
                 raise HTTPException(409, detail={"code": "conflict"})
             return None
-        if policy == "h264":
-            return None
-        available = await self.availability(sn, source_id, profile_id, org_id, user)
+        available = await self.availability(
+            sn,
+            source_id,
+            profile_id,
+            org_id,
+            user,
+            codec="h264"
+            if policy == "h264"
+            or (policy == "auto" and (browser_codecs or {}).get("h265") is False)
+            else "h265",
+        )
+        if policy == "auto" and available["reason_code"] in (
+            "no_hardware_mft",
+            "profile_unsupported",
+            "os_api_unavailable",
+            "server_hevc_unavailable",
+        ):
+            available = await self.availability(
+                sn, source_id, profile_id, org_id, user, codec="h264"
+            )
         if (
             source_id.startswith("disp:")
             and available.get("hevc_available")
@@ -438,18 +491,39 @@ class VideoContractOrchestrator:
             == "issuer_monotonic_v1"
         ):
             available = await self.availability(
-                sn, source_id, profile_id, org_id, user, fresh=True
+                sn,
+                source_id,
+                profile_id,
+                org_id,
+                user,
+                fresh=True,
+                codec=available["track"]["codec"],
             )
         if not available["hevc_available"]:
-            if policy == "h265":
+            raise HTTPException(
+                422,
+                detail={
+                    "code": available["reason_code"],
+                    "message": "Unsupported source format for the selected quality policy",
+                },
+            )
+        resolved_codec = available["track"]["codec"]
+        if browser_codecs is not None:
+            try:
+                from app.services.camera_video import BrowserCodecs
+
+                browser = BrowserCodecs.model_validate(browser_codecs)
+            except ModelValidationError as exc:
                 raise HTTPException(
-                    422,
-                    detail={
-                        "code": available["reason_code"],
-                        "message": "H.265 недоступен для выбранного источника",
-                    },
-                )
-            return None
+                    422, detail={"code": "browser_capabilities_invalid"}
+                ) from exc
+            now_ms = int(time.time() * 1000)
+            if not (
+                browser.checked_at_ms - 5000 <= now_ms < browser.valid_until_ms
+                and 0 < browser.valid_until_ms - browser.checked_at_ms <= 60000
+                and getattr(browser, resolved_codec) is True
+            ):
+                raise HTTPException(422, detail={"code": "browser_codec_unsupported"})
         capability = available["capability"]
         agent = status.get("agent") or {}
         if (
@@ -466,6 +540,7 @@ class VideoContractOrchestrator:
         descriptor = validate_video(
             "descriptor",
             {
+                "contract_version": 3,
                 "descriptor_revision": str(uuid4()),
                 "source_type": mode,
                 "source_id": source_id,
@@ -478,7 +553,7 @@ class VideoContractOrchestrator:
         request = validate_video(
             "media_start",
             {
-                "contract_version": 2,
+                "contract_version": 3,
                 "session_id": identity["session_id"],
                 "operation_id": operation_id,
                 "publisher": {"sn": sn, "stream_instance_id": stream_id},
@@ -488,6 +563,7 @@ class VideoContractOrchestrator:
             },
         )
         now = int(time.time() * 1000)
+        start_budget_ms = 35000 if mode == "desktop" else 10000
         command = validate_video(
             "start",
             {
@@ -501,10 +577,10 @@ class VideoContractOrchestrator:
                 "agent_instance_id": capability["agent_instance_id"],
                 "capability_revision": capability["capability_revision"],
                 "issued_at_ms": now,
-                "expires_at_ms": min(now + 10000, deadline * 1000),
+                "expires_at_ms": min(now + start_budget_ms, deadline * 1000),
                 "lease_expires_at_ms": deadline * 1000,
                 "codec_policy": policy,
-                "resolved_codec": "h265",
+                "resolved_codec": resolved_codec,
                 "descriptor": descriptor,
                 "delivery": {
                     "host": "localhost",
@@ -539,7 +615,7 @@ class VideoContractOrchestrator:
             if deadline * 1000 <= now:
                 raise HTTPException(410, detail={"code": "expired"})
             command["issued_at_ms"] = now
-            command["expires_at_ms"] = min(now + 10000, deadline * 1000)
+            command["expires_at_ms"] = min(now + start_budget_ms, deadline * 1000)
             producer_attempted = True
             ready = validate_iot_state(
                 await self.iot.remote_video_v2(
@@ -568,7 +644,7 @@ class VideoContractOrchestrator:
             if (
                 ready["state"] != "running"
                 or ready["confirmation"] != "agent_ready"
-                or ready["resolved_codec"] != "h265"
+                or ready["resolved_codec"] != resolved_codec
                 or ready["descriptor"] != descriptor
                 or any(
                     ready[key] != command[key]
@@ -584,7 +660,7 @@ class VideoContractOrchestrator:
                 or ready["actual_descriptor"] != descriptor
             ):
                 raise HTTPException(409, detail={"code": "descriptor_mismatch"})
-            return self._result(stream_id, "h265", descriptor, media, "started")
+            return self._result(stream_id, resolved_codec, descriptor, media, "started")
         except HTTPException, MediaOrchestratorError:
             if producer_attempted:
                 stop = {
