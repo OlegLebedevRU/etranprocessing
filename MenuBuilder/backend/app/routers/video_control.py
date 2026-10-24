@@ -220,6 +220,7 @@ class KeepaliveRequest(BaseModel):
 
 
 class StreamStartRequest(BaseModel):
+    camera_admission_ticket: str | None = None
     codec_policy: Literal["auto", "h264", "h265"] | None = None
     mode: Literal["desktop", "usb-camera", "camera"]
     source_id: str
@@ -1013,6 +1014,7 @@ async def start_device_stream(
             profile_id=body.profile,
             browser=browser,
             user=user,
+            admission_ticket=body.camera_admission_ticket,
         )
     elif body.codec_policy is not None:
         current = await load_video_status(

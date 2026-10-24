@@ -39,11 +39,66 @@ from app.services.camera_platform import (
     camera_request,
     camera_snapshot,
 )
+from app.services.camera_video import BrowserCodecs
 from app.services.iot_client import iot_client
 
 router = APIRouter(
     prefix="/api/cameras", tags=["cameras"], route_class=CameraRequestRoute
 )
+
+
+class CameraPrepare(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    source_id: Literal["cam:ip000001"]
+    physical_camera_mac: str = Field(pattern=r"^([0-9a-f]{2}:){5}[0-9a-f]{2}$")
+    discovery_generation: int = Field(strict=True, ge=0, le=2147483647)
+    codec_policy: Literal["auto", "h264", "h265"]
+    browser_codecs: BrowserCodecs
+
+
+class CameraAdmissionTicket(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    ticket: str = Field(min_length=1, max_length=8192)
+
+
+def admission_service():
+    from app.services.camera_admission import CameraAdmission
+    from app.services.media_orchestrator_client import media_orchestrator_client
+
+    return CameraAdmission(iot_client, media_orchestrator_client)
+
+
+@router.post("/{device_id}/admission/prepare")
+async def prepare_admission(
+    device_id: int,
+    body: CameraPrepare,
+    user: dict = Depends(require_operator_user),
+    db: AsyncSession = Depends(get_db),
+):
+    terminal = await _verify_device_access(device_id, user, db, require_active=True)
+    return await admission_service().prepare(terminal, user, body)
+
+
+@router.post("/{device_id}/admission/enrollment")
+async def enrollment_admission(
+    device_id: int,
+    body: CameraAdmissionTicket,
+    user: dict = Depends(require_operator_user),
+    db: AsyncSession = Depends(get_db),
+):
+    terminal = await _verify_device_access(device_id, user, db, require_active=True)
+    return await admission_service().enrollment(terminal, user, body.ticket)
+
+
+@router.post("/{device_id}/admission/readiness")
+async def readiness_admission(
+    device_id: int,
+    body: CameraAdmissionTicket,
+    user: dict = Depends(require_operator_user),
+    db: AsyncSession = Depends(get_db),
+):
+    terminal = await _verify_device_access(device_id, user, db, require_active=True)
+    return await admission_service().readiness(terminal, user, body.ticket)
 
 
 class CameraCommand(BaseModel):

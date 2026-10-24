@@ -33,6 +33,7 @@ async def camera_request(
     *,
     params: dict[str, Any] | None = None,
     body: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     if not iot_client.base_url or not iot_client.service_token:
         raise HTTPException(503, "Сервис камеры не настроен")
@@ -43,7 +44,10 @@ async def camera_request(
                 f"{iot_client.base_url}/api/internal/v1/{path}",
                 params=params,
                 json=body,
-                headers=iot_client._get_headers(org_id=org_id, user=user),
+                headers={
+                    **iot_client._get_headers(org_id=org_id, user=user),
+                    **(headers or {}),
+                },
             )
             response.raise_for_status()
             data = response.json()
