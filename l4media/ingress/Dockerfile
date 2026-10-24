@@ -9,6 +9,7 @@ COPY src/ ./src/
 COPY tests/ ./tests/
 COPY spec/ ./spec/
 COPY openapi-camera-v1.json ./
+COPY openapi-camera-v1.1.json ./
 
 RUN make test CFLAGS="-O2 -Wall -Wextra -Werror -pedantic -std=c11 -D_GNU_SOURCE"
 RUN make CFLAGS="-O2 -Wall -Wextra -Werror -pedantic -std=c11 -D_GNU_SOURCE" LDFLAGS="-lhiredis -ljansson"
@@ -33,6 +34,8 @@ COPY openapi-v2.json /etc/l4media/openapi-v2.json
 COPY openapi-camera-v1.json /etc/l4media/openapi-camera-v1.json
 COPY spec/hevc.schema.json /etc/l4media/hevc.schema.json
 COPY spec/camera-v1/hevc.schema.json /etc/l4media/camera-v1.schema.json
+COPY spec/camera-v1.1/hevc.schema.json /etc/l4media/camera-v1.1.schema.json
+COPY openapi-camera-v1.1.json /etc/l4media/openapi-camera-v1.1.json
 
 EXPOSE 9000 9100
 

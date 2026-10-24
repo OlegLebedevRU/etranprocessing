@@ -249,11 +249,15 @@ static inline void mv_start(json_t* request, char* response, size_t size, int* s
     *status = 201; mv_response(session, false, response, size);
 }
 
-static inline void mv_update(json_t* request, bool stop, bool health, bool camera_negotiated,
+static inline void mv_update(json_t* request, bool stop, bool health, int camera_negotiated,
                              char* response, size_t size, int* status) {
     MediaSession* session = find_session_by_id(mv_string(request, "session_id"));
     if (!mv_identity(session, request)) { mv_error("lease_mismatch", 409, response, size, status); return; }
-    if (mc_session_extended(session) && !camera_negotiated) {
+    json_error_t selection_error;
+    json_t* selected_descriptor = json_loads(session->descriptor, JSON_REJECT_DUPLICATES, &selection_error);
+    int selected_revision = mc_descriptor_revision(selected_descriptor);
+    json_decref(selected_descriptor);
+    if (selected_revision != camera_negotiated) {
         mv_error("unsupported", 422, response, size, status); return;
     }
     expire_media_session(session, time(NULL));
@@ -298,7 +302,7 @@ static inline void media_v2_restore(void) {
         if (!keys->element[i]->str || !media_redis_get(keys->element[i]->str, serialized, sizeof(serialized)) || serialized[0] != '{') continue;
         json_error_t error; json_t* record = json_loads(serialized, JSON_REJECT_DUPLICATES, &error);
         json_t* request = json_object_get(record, "request");
-        json_t* schema = mc_extended(request) ? g_media_camera_schema : g_media_schema;
+        json_t* schema = mc_schema(mc_descriptor_revision(json_object_get(request, "descriptor")));
         if (mv_integer(record, "format_version") != 2 || !schema ||
             !ms_validate_root(schema, json_object_get(json_object_get(schema, "$defs"), "media_start"), request, 0)) {
             json_decref(record); continue; /* New record without a descriptor is never implicit H264. */
@@ -347,11 +351,11 @@ static inline bool mv_query_decode(char* text) {
 }
 
 static inline void media_v2_http_contract(const char* method, const char* path, const char* body,
-                                bool camera_negotiated, char* response, size_t size, int* status) {
+                                int camera_negotiated, char* response, size_t size, int* status) {
     if (!g_media_schema) { mv_error("unsupported", 503, response, size, status); return; }
-    if (camera_negotiated && !g_media_camera_schema) { mv_error("unsupported", 503, response, size, status); return; }
+    if (camera_negotiated && !mc_schema(camera_negotiated)) { mv_error("unsupported", 503, response, size, status); return; }
     if (!strcmp(method, "GET") && !strcmp(path, "/api/v2/media/capabilities")) {
-        if (camera_negotiated && !g_media_camera_enabled) { mv_error("unsupported", 422, response, size, status); return; }
+        if (camera_negotiated && (!g_media_camera_enabled || (camera_negotiated == 2 && !g_media_camera11_enabled))) { mv_error("unsupported", 422, response, size, status); return; }
         mv_probe();
         if (camera_negotiated) mc_probe();
         const char* revision = getenv("L4MEDIA_SOURCE_REVISION");
@@ -366,6 +370,12 @@ static inline void media_v2_http_contract(const char* method, const char* path, 
                 "codec", "h265", "codec_profile", "main", "packetization", "rfc7798", "clock_rate", 90000));
         }
         if (camera_negotiated) mc_capabilities(value);
+        if (camera_negotiated == 2) {
+            json_object_set_new(value, "camera_contract_revisions", json_pack("[s]", MEDIA_CAMERA11_REVISION));
+            json_object_set_new(value, "camera_cadence_revisions", json_pack("[s]", MEDIA_CAMERA_CADENCE));
+            json_object_set_new(value, "camera_enrollment_revisions", json_pack("[s]", "camera-enrollment/0.2.0-proposed"));
+            json_object_set_new(value, "camera_admission_revisions", json_pack("[s]", "camera-ctl-monotonic/0.2.0-proposed"));
+        }
         *status = 200; mv_output(value, response, size); return;
     }
     const char* definition = NULL; bool stop = false;
@@ -375,7 +385,7 @@ static inline void media_v2_http_contract(const char* method, const char* path, 
         else if (!strcmp(path, "/api/v2/media/sessions/stop")) { definition = "media_stop"; stop = true; }
     }
     if (definition) {
-        json_t* root = camera_negotiated ? g_media_camera_schema : g_media_schema;
+        json_t* root = mc_schema(camera_negotiated);
         if (!camera_negotiated && !strcmp(definition, "media_start") && body && strlen(body) <= MEDIA_V2_BODY_LIMIT) {
             json_error_t error;
             json_t* raw = json_loads(body, JSON_REJECT_DUPLICATES, &error);
@@ -384,7 +394,9 @@ static inline void media_v2_http_contract(const char* method, const char* path, 
         }
         json_t* request = media_parse_schema(root, body, definition);
         if (!request) { mv_error("invalid_payload", 400, response, size, status); return; }
-        if (!strcmp(definition, "media_start")) mv_start(request, response, size, status);
+        if (!strcmp(definition, "media_start") && camera_negotiated == 2 && !g_media_camera11_enabled)
+            mv_error("unsupported", 422, response, size, status);
+        else if (!strcmp(definition, "media_start")) mv_start(request, response, size, status);
         else mv_update(request, stop, false, camera_negotiated, response, size, status);
         json_decref(request); return;
     }

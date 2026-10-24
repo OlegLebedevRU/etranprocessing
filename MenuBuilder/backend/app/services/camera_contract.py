@@ -4,13 +4,33 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 from uuid import UUID
 
 from fastapi import HTTPException
 from jsonschema import Draft202012Validator, FormatChecker
 
 CAMERA_REVISION = "siplite-camera/1.0.0"
+CAMERA11_REVISION = "siplite-camera/1.1.0"
+CADENCE_REVISION = "camera-cadence/0.1.0-proposed"
+CAMERA11_HEADERS = {
+    "X-L4-Camera-Contract": CAMERA11_REVISION,
+    "X-L4-Camera-Cadence": CADENCE_REVISION,
+    "X-L4-Camera-Enrollment": "camera-enrollment/0.2.0-proposed",
+    "X-L4-Camera-Admission": "camera-ctl-monotonic/0.2.0-proposed",
+}
+
+
+def camera_headers(selection: bool | str) -> dict[str, str]:
+    if selection == CAMERA11_REVISION:
+        return dict(CAMERA11_HEADERS)
+    if selection is True or selection == CAMERA_REVISION:
+        return {"X-L4-Camera-Contract": CAMERA_REVISION}
+    if not selection:
+        return {}
+    raise HTTPException(422, detail={"code": "camera_contract_not_negotiated"})
+
+
 CONTRACTS = Path(__file__).parents[1] / "contracts"
 RPC_SCHEMA = json.loads(
     (CONTRACTS / "camera-rpc.schema.json").read_text(encoding="utf-8")
@@ -34,13 +54,46 @@ MEDIA_VALIDATORS = {
 }
 
 
+MEDIA11_SCHEMA = json.loads(
+    (CONTRACTS / "camera-media-v1.1.schema.json").read_text(encoding="utf-8")
+)
+MEDIA11_VALIDATORS = {
+    key: Draft202012Validator(
+        dict(MEDIA11_SCHEMA, oneOf=[{"$ref": f"#/$defs/{key}"}]),
+        format_checker=FormatChecker(),
+    )
+    for key in MEDIA11_SCHEMA["$defs"]
+}
+
+
+def camera11_selected(value: dict[str, Any]) -> bool:
+    descriptor = value.get("descriptor", value)
+    return (
+        isinstance(descriptor, dict)
+        and descriptor.get("camera_contract_revision") == CAMERA11_REVISION
+        or CAMERA11_REVISION in value.get("camera_contract_revisions", [])
+    )
+
+
 def extended_camera(value: dict[str, Any]) -> bool:
     descriptor = value.get("descriptor", value)
     return isinstance(descriptor, dict) and "camera_contract_revision" in descriptor
 
 
-def media_contract_options(descriptor: dict[str, Any]) -> dict[str, bool]:
-    return {"camera_contract": True} if extended_camera(descriptor) else {}
+class MediaContractOptions(TypedDict, total=False):
+    camera_contract: bool | str
+
+
+def media_contract_options(descriptor: dict[str, Any]) -> MediaContractOptions:
+    return (
+        {
+            "camera_contract": CAMERA11_REVISION
+            if camera11_selected(descriptor)
+            else True
+        }
+        if extended_camera(descriptor)
+        else {}
+    )
 
 
 def _bounded(value: Any, depth: int = 0) -> bool:

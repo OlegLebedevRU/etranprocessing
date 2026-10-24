@@ -944,7 +944,7 @@ static void handle_control_request(int client_fd) {
             "HTTP/1.1 204 No Content\r\n"
             "Access-Control-Allow-Origin: *\r\n"
             "Access-Control-Allow-Methods: GET, PUT, POST, DELETE, OPTIONS\r\n"
-            "Access-Control-Allow-Headers: Content-Type, X-Media-Service-Token, Authorization, X-L4-Camera-Contract\r\n"
+            "Access-Control-Allow-Headers: Content-Type, X-Media-Service-Token, Authorization, X-L4-Camera-Contract, X-L4-Camera-Cadence, X-L4-Camera-Enrollment, X-L4-Camera-Admission\r\n"
             "Content-Length: 0\r\n"
             "Connection: close\r\n"
             "\r\n";
@@ -1116,7 +1116,7 @@ static void handle_control_request(int client_fd) {
     }
     else if (strcmp(method, "GET") == 0 && strcmp(path, "/api/v2/openapi.json") == 0) {
         int negotiated = media_camera_header(req_buf);
-        FILE* spec = negotiated < 0 ? NULL : fopen(negotiated ?
+        FILE* spec = negotiated < 0 ? NULL : fopen(negotiated == 2 ? "/etc/l4media/openapi-camera-v1.1.json" : negotiated ?
             "/etc/l4media/openapi-camera-v1.json" : "/etc/l4media/openapi-v2.json", "r");
         if (negotiated < 0) {
             mv_error("unsupported", 422, resp_body, HTTP_RESP_BUFFER_SIZE, &status_code);
@@ -1135,7 +1135,7 @@ static void handle_control_request(int client_fd) {
         else {
             int negotiated = media_camera_header(req_buf);
             if (negotiated < 0) mv_error("unsupported", 422, resp_body, HTTP_RESP_BUFFER_SIZE, &status_code);
-            else media_v2_http_contract(method, path, body, negotiated == 1, resp_body, HTTP_RESP_BUFFER_SIZE, &status_code);
+            else media_v2_http_contract(method, path, body, negotiated, resp_body, HTTP_RESP_BUFFER_SIZE, &status_code);
         }
         status_text = status_code == 200 ? "OK" : status_code == 201 ? "Created" :
             status_code == 400 ? "Bad Request" : status_code == 401 ? "Unauthorized" :
@@ -1230,7 +1230,7 @@ static void handle_control_request(int client_fd) {
                        "Content-Type: application/json; charset=utf-8\r\n"
                        "Access-Control-Allow-Origin: *\r\n"
                        "Access-Control-Allow-Methods: GET, PUT, POST, DELETE, OPTIONS\r\n"
-                       "Access-Control-Allow-Headers: Content-Type, X-Media-Service-Token, Authorization, X-L4-Camera-Contract\r\n"
+                       "Access-Control-Allow-Headers: Content-Type, X-Media-Service-Token, Authorization, X-L4-Camera-Contract, X-L4-Camera-Cadence, X-L4-Camera-Enrollment, X-L4-Camera-Admission\r\n"
                        "Content-Length: %zu\r\n"
                        "Connection: close\r\n"
                        "\r\n"
@@ -1297,6 +1297,10 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "[INGRESS] camera contract unavailable; negotiated camera requests fail closed\n");
     const char* hevc_enabled = getenv("L4MEDIA_HEVC_ENABLED");
     g_media_hevc_enabled = hevc_enabled && !strcmp(hevc_enabled, "1");
+    if (!media_camera11_schema_load("/etc/l4media/camera-v1.1.schema.json"))
+        fprintf(stderr, "[INGRESS] camera1.1 schema unavailable; requests fail closed\n");
+    const char* camera11_enabled = getenv("L4MEDIA_CAMERA_NATIVE_AUTO_ENABLED");
+    g_media_camera11_enabled = camera11_enabled && !strcmp(camera11_enabled, "1");
     const char* camera_enabled = getenv("L4MEDIA_CAMERA_CONTRACT_ENABLED");
     g_media_camera_enabled = camera_enabled && !strcmp(camera_enabled, "1");
     resolve_janus_host();

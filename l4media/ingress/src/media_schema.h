@@ -10,6 +10,7 @@
 #define MEDIA_DESCRIPTOR_LIMIT 4096
 static json_t* g_media_schema = NULL;
 static json_t* g_media_camera_schema = NULL;
+static json_t* g_media_camera11_schema = NULL;
 
 static inline bool ms_equal(const json_t* a, const json_t* b) {
     if (json_is_number(a) && json_is_number(b)) return json_number_value(a) == json_number_value(b);
@@ -168,6 +169,14 @@ static inline bool media_camera_schema_load(const char* path) {
     json_t* schema = json_load_file(path, JSON_REJECT_DUPLICATES, &error);
     if (!schema) return false;
     json_decref(g_media_camera_schema); g_media_camera_schema = schema;
+    return true;
+}
+
+static inline bool media_camera11_schema_load(const char* path) {
+    json_error_t error;
+    json_t* schema = json_load_file(path, JSON_REJECT_DUPLICATES, &error);
+    if (!schema) return false;
+    json_decref(g_media_camera11_schema); g_media_camera11_schema = schema;
     return true;
 }
 

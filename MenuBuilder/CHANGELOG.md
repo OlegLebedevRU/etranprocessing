@@ -6,6 +6,10 @@ FM uses MQTT navigation and mandatory confirmed close only; legacy PB listing an
 
 ### Added
 
+- Separately gated Native Auto camera1.1 negotiation with typed device observation,
+  exact geometry, cadence-bound descriptors and four revision headers. All three
+  peers must explicitly support the bundle; frozen1.0 remains unchanged.
+
 - Gated camera admission through prepare, enrollment and fresh readiness before
   lease/media/START, with opaque owner-bound BFF tickets and explicit IoT141
   revision headers. The gate defaults off; Native Auto cadence remains blocked

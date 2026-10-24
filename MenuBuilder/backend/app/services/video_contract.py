@@ -23,7 +23,9 @@ from pydantic import ValidationError as ModelValidationError
 
 from app.config import settings
 from app.services.camera_contract import (
+    MEDIA11_VALIDATORS,
     MEDIA_VALIDATORS,
+    camera11_selected,
     extended_camera,
     media_contract_options,
 )
@@ -86,6 +88,10 @@ def validate_iot_state(value: dict[str, Any]) -> dict[str, Any]:
     except ModelValidationError as exc:
         raise HTTPException(502, detail={"code": "invalid_video_contract"}) from exc
     validate_video("descriptor", result["descriptor"])
+    if "camera_contract_revision" in result and result[
+        "camera_contract_revision"
+    ] != result["descriptor"].get("camera_contract_revision"):
+        raise HTTPException(502, detail={"code": "invalid_video_contract"})
     if result["actual_descriptor"] is not None:
         validate_video("descriptor", result["actual_descriptor"])
     if result.get("error") is not None:
@@ -107,7 +113,12 @@ async def load_video_status(
         return status
     try:
         raw = await iot.remote_video_v2(
-            sn, "state", lease_id=str(lease["lease_id"]), org_id=org_id, user=user
+            sn,
+            "state",
+            lease_id=str(lease["lease_id"]),
+            org_id=org_id,
+            user=user,
+            **media_contract_options((status.get("agent") or {}).get("stream") or {}),
         )
     except HTTPException as exc:
         if exc.status_code == 404:
@@ -130,7 +141,9 @@ def validate_video(definition: str, value: dict[str, Any]) -> dict[str, Any]:
         if len(json.dumps(value, ensure_ascii=False).encode()) > 32768:
             raise ValueError("oversize")
         validators = (
-            MEDIA_VALIDATORS
+            MEDIA11_VALIDATORS
+            if camera11_selected(value)
+            else MEDIA_VALIDATORS
             if extended_camera(value) or "camera_contract_revisions" in value
             else VALIDATORS
         )
