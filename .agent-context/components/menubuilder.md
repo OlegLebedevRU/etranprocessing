@@ -1,12 +1,15 @@
 # MenuBuilder
 
-## Native quality57 stage 3 — local candidate, 2026-10-24
+## Native quality57 stage 3 — deployed, 2026-10-24
 
 Common desktop media v3 retains CTL2 and `low/default` quality policies while
 forwarding concrete source tracks without resizing. Mixed versions fail closed;
 camera-specific admission remains separate. Cold desktop START allows 35 s, clipped
 to the existing lease deadline; HTTP/UI waits accommodate native activation.
-Deployment awaits the owner's signal after IoT; no live 773 acceptance is claimed.
+Main `d8f48cc` delivered backend and static frontend through builder/registry/pull;
+990 backend/119 frontend tests and quality checks passed. Live HTTP validates
+media/IoT version3; capabilities remain empty with IoT desktop flags disabled.
+All12 neighbors including signer are unchanged; no live773 acceptance is claimed.
 [Implementation and verification](../tasks/active/2026-10-24-menubuilder-native-quality57.md).
 
 ## Siplite camera — deployed TASK40, 2026-10-24
