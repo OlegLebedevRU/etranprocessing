@@ -299,8 +299,8 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
   // Координатор сессии управляет generation/эпохами, keepalive и событиями терминала
   const coordinatorRef = useRef<SessionLifecycleCoordinator>(
     new SessionLifecycleCoordinator({
-      onKeepaliveRequest: async (deviceId, leaseId) => {
-        await keepaliveControlLease(deviceId, leaseId);
+      onKeepaliveRequest: async (deviceId, leaseId, signal) => {
+        await keepaliveControlLease(deviceId, leaseId, signal);
       },
       onReleaseRequest: async (deviceId, leaseId, publisherOwned) => {
         if (publisherOwned === false) return;

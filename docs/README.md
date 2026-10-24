@@ -1,5 +1,8 @@
 # Документация экосистемы etranprocessing
 
+- [Session lifecycle55](menu_arch-session-lifecycle55.md) — bounded keepalive and STOP semantics.
+- [Native Auto cadence proposal](etran_arch-native-auto-cadence.md) — original-RTP FPS observation and parser handoff.
+
 - [Camera credential storage v1](etran_arch-camera-credential-storage.md) — PB recipient API, encrypted vault, migration and rollout boundary.
 - [Desktop HEVC probe memory](menu_arch-hevc-probe-memory.md) — applicability snapshots, saved probes, stack changes and checks.
 

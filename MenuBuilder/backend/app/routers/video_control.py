@@ -1276,6 +1276,9 @@ async def stop_device_stream(
     )
 
     v2_stop = make_stop_command(terminal.sn, lease_id, status_data or {})
+    # V2 STOP closes server authority; publication does not confirm producer exit.
+    if v2_stop is not None:
+        local_epoch_confirmed = False
     try:
         if v2_stop is not None:
             res = await iot_client.remote_video_v2(

@@ -12,6 +12,11 @@ FM uses MQTT navigation and mandatory confirmed close only; legacy PB listing an
 
 ### Changed
 
+- Bound video keepalive including authentication wait, cancel obsolete renewals,
+  preserve generation isolation, and distinguish server STOP from producer exit.
+- Prepare producer START timing after media allocation. Add a review-only native
+  Auto FPS cadence definition and parser conformance examples.
+
 - HEVC desktop admission uses issuer-relative durations and a local monotonic
   anchor instead of device UTC. Explicit admission_clock capability gates
   a fresh cheap START confirmation; camera CTLv1 remains unchanged.

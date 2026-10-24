@@ -534,6 +534,12 @@ class VideoContractOrchestrator:
                 or media["state"] not in ("starting", "active")
             ):
                 raise HTTPException(409, detail={"code": "descriptor_mismatch"})
+            # Media preparation must not consume the producer START budget.
+            now = int(time.time() * 1000)
+            if deadline * 1000 <= now:
+                raise HTTPException(410, detail={"code": "expired"})
+            command["issued_at_ms"] = now
+            command["expires_at_ms"] = min(now + 10000, deadline * 1000)
             producer_attempted = True
             ready = validate_iot_state(
                 await self.iot.remote_video_v2(
