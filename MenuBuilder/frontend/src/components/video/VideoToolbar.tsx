@@ -85,6 +85,9 @@ export function VideoToolbar(props: VideoToolbarProps) {
           style={{ width: "100%" }}
         />
       </label>}
+      {!props.cameraOnly && <Typography.Text type="secondary">
+        Medium — умеренный трафик; HD — выше детализация. Формат задаёт источник.
+      </Typography.Text>}
       {operator && <label>
         Кодек общего потока
         <Select<CodecPolicy>

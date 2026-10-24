@@ -13,11 +13,12 @@ export interface VideoSessionResponse {
 
 export type CodecPolicy = "auto" | "h264" | "h265";
 export interface VideoDescriptor {
+  contract_version: 3;
   descriptor_revision: string;
   source_type: string;
   source_id: string;
   profile_id: string;
-  tracks: { codec: "h264" | "h265" }[];
+  tracks: { codec: "h264" | "h265"; width: number; height: number; fps: number; codec_profile: string; level_id?: number }[];
 }
 
 export interface VideoStatusResponse {
@@ -32,7 +33,7 @@ export interface VideoStatusResponse {
 
 export async function createVideoSession(
   deviceId: number,
-  contractVersion?: 2
+  contractVersion?: 3
 ): Promise<VideoSessionResponse> {
   const { data } = await client.post<VideoSessionResponse>(
     `/v1/video/devices/${deviceId}/session`, undefined,
@@ -310,7 +311,8 @@ export async function getDeviceInventory(
   video?: { source_id: string; profile_id: string }
 ): Promise<DeviceInventory> {
   const { data } = await client.get<DeviceInventory>(`/v1/video/devices/${deviceId}/inventory`, {
-    params: { refresh: refresh ? 1 : 0, ...(video ? { contract_version: 2, ...video } : {}) },
+    params: { refresh: refresh ? 1 : 0, ...(video ? { contract_version: 3, ...video } : {}) },
+    ...(video ? { timeout: 45000 } : {}),
   });
   return data;
 }
@@ -328,7 +330,10 @@ export async function startDeviceStream(
 ): Promise<StreamStartResponse> {
   const { data } = await client.post<StreamStartResponse>(
     `/v1/video/devices/${deviceId}/stream/start`,
-    payload
+    payload,
+    // Cold capability discovery, media preparation and READY run sequentially.
+    // A timeout is reported to the operator; it never triggers another START.
+    payload.mode === "desktop" ? { timeout: 120000 } : undefined
   );
   return data;
 }
@@ -349,7 +354,7 @@ export async function stopDeviceStream(
 }
 
 export async function getDeviceStreamState(deviceId: number): Promise<StreamStateResponse> {
-  const { data } = await client.get<StreamStateResponse>(`/v1/video/devices/${deviceId}/stream/state`, { params: { contract_version: 2 } });
+  const { data } = await client.get<StreamStateResponse>(`/v1/video/devices/${deviceId}/stream/state`, { params: { contract_version: 3 } });
   return data;
 }
 

@@ -1,5 +1,14 @@
 # MenuBuilder
 
+## Native quality57 stage 3 — local candidate, 2026-10-24
+
+Common desktop media v3 retains CTL2 and `low/default` quality policies while
+forwarding concrete source tracks without resizing. Mixed versions fail closed;
+camera-specific admission remains separate. Cold desktop START allows 35 s, clipped
+to the existing lease deadline; HTTP/UI waits accommodate native activation.
+Deployment awaits the owner's signal after IoT; no live 773 acceptance is claimed.
+[Implementation and verification](../tasks/active/2026-10-24-menubuilder-native-quality57.md).
+
 ## Siplite camera — deployed TASK40, 2026-10-24
 
 [Implementation](../../docs/etran_arch-siplite-camera-menubuilder.md): source

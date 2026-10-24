@@ -140,6 +140,9 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
               aria-label="Выбор качества трансляции"
             />
           </Space>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            Medium — умеренный трафик; HD — выше детализация. Формат задаёт источник.
+          </Text>
 
           <Button
             size="small"

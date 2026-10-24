@@ -22,7 +22,16 @@ FIXTURES = Path(__file__).resolve().parents[3] / "contracts/hevc-v2/fixtures"
 
 
 def fixture(name):
-    return json.loads((FIXTURES / f"{name}.json").read_text())["payload"]
+    value = json.loads((FIXTURES / f"{name}.json").read_text())["payload"]
+    if name == "capabilities":
+        value["video_capabilities"]["contract_version"] = 3
+    if name.startswith("media_"):
+        value["contract_version"] = 3
+    if name == "media_capabilities":
+        value["media_contract_versions"] = [3]
+    if isinstance(value.get("descriptor"), dict):
+        value["descriptor"]["contract_version"] = 3
+    return value
 
 
 def test_remembered_measurement_uses_current_check_for_freshness():
@@ -124,6 +133,7 @@ def context(monkeypatch):
         trace.append(("iot", action, copy.deepcopy(kwargs)))
         if action == "inventory":
             return {
+                "contract_version": 3,
                 "negotiated_v2": True,
                 "video_capabilities": cap["video_capabilities"],
             }
@@ -131,9 +141,10 @@ def context(monkeypatch):
             command = kwargs["payload"]
             value = {
                 "version": 2,
+                "contract_version": 3,
                 "result": "started",
                 "state": "running",
-                "resolved_codec": "h265",
+                "resolved_codec": command["resolved_codec"],
                 "confirmation": "agent_ready",
                 "descriptor": command["descriptor"],
             }
@@ -308,7 +319,8 @@ async def test_prepare_before_exact_ready(context):
 async def test_unknown_auto_and_explicit_fail_closed(context):
     service, args, trace, _ = context
     service.iot.remote_video_v2.side_effect = HTTPException(404)
-    assert await service.start(**dict(args, policy="auto")) is None
+    with pytest.raises(HTTPException):
+        await service.start(**dict(args, policy="auto"))
     with pytest.raises(HTTPException) as error:
         await service.start(**args)
     assert error.value.status_code == 422
@@ -368,13 +380,16 @@ def test_frozen_vectors_and_schema_bytes():
     assert (FIXTURES.parent / "hevc.schema.json").read_bytes() == (
         Path(__file__).resolve().parents[1] / "app/contracts/hevc.schema.json"
     ).read_bytes()
+    from jsonschema import Draft202012Validator, FormatChecker
+
+    schema = json.loads((FIXTURES.parent / "hevc.schema.json").read_text())
     for path in FIXTURES.glob("*.json"):
         value = json.loads(path.read_text())
-        if value["valid"]:
-            validate_video(value["definition"], value["payload"])
-        else:
-            with pytest.raises(HTTPException):
-                validate_video(value["definition"], value["payload"])
+        validator = Draft202012Validator(
+            dict(schema, oneOf=[{"$ref": f"#/$defs/{value['definition']}"}]),
+            format_checker=FormatChecker(),
+        )
+        assert validator.is_valid(value["payload"]) == value["valid"]
 
 
 def test_camera_requires_explicit_test_policy(context):
@@ -401,6 +416,7 @@ async def test_full_state_reader_preserves_epoch_and_does_not_hide_denial(contex
     )
     view = {
         "version": 2,
+        "contract_version": 3,
         "result": "started",
         "state": "running",
         "resolved_codec": "h265",
@@ -461,6 +477,10 @@ async def test_http_adapter_uses_negotiated_routes_without_legacy_retry(monkeypa
 
     def respond(request):
         calls.append((request.method, request.url.path))
+        assert request.headers["X-L4-Media-Contract"] == "l4-media/3.0.0"
+        assert "X-L4-Camera-Contract" not in request.headers
+        if request.url.path.endswith(("video-capabilities", "stream/start")):
+            assert request.extensions["timeout"]["read"] >= 40
         return httpx.Response(200, json={})
 
     original = httpx.AsyncClient

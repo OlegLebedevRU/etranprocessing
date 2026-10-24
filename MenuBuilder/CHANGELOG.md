@@ -12,6 +12,14 @@ FM uses MQTT navigation and mandatory confirmed close only; legacy PB listing an
 
 ### Changed
 
+- Desktop video selects the shared media 3.0.0 contract. Medium/HD (`low/default`)
+  request quality policies while the source supplies concrete native geometry,
+  cadence and codec facts. Mixed versions and unsupported formats fail explicitly;
+  existing camera admission and playback remain unchanged.
+- Desktop v3 START allows up to 35 seconds before and after media preparation,
+  bounded by the existing lease deadline. Capability/READY HTTP and UI waits
+  accommodate cold native activation without retrying START or extending leases.
+
 - Bound video keepalive including authentication wait, cancel obsolete renewals,
   preserve generation isolation, and distinguish server STOP from producer exit.
 - Prepare producer START timing after media allocation. Add a review-only native

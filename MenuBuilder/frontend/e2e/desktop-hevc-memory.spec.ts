@@ -25,7 +25,7 @@ async function desktop(page: Page, busy = false) {
     if (path.endsWith("/inventory")) {
       data = { displays: [{ id: "disp:fixture", desktop_id: "disp:fixture", name: "DISPLAY1",
         width: 1920, height: 1080, primary: true, policy: "input" }], cameras: [] };
-      if (url.searchParams.get("contract_version") === "2") {
+      if (url.searchParams.get("contract_version") === "3") {
         capabilityReads.push(url.searchParams.get("source_id") || "");
         data.video_codecs = { hevc_available: !busy, reason_code: busy ? "encoder_busy" : "ready" };
       }
@@ -35,6 +35,7 @@ async function desktop(page: Page, busy = false) {
   await page.goto("/video?device_id=773");
   await page.getByRole("button", { name: "Настройки видео", exact: true }).click();
   await expect(page.getByRole("combobox", { name: "Кодек общего потока" })).toBeVisible();
+  await expect(page.getByText("Medium — умеренный трафик; HD — выше детализация. Формат задаёт источник.", { exact: true })).toBeVisible();
   return { writes, capabilityReads };
 }
 

@@ -811,7 +811,7 @@ async def change_device_control_scope(
 async def get_device_inventory(
     device_id: int,
     refresh: int = Query(0, ge=0, le=1),
-    contract_version: int | None = Query(None, ge=2, le=2),
+    contract_version: int | None = Query(None, ge=3, le=3),
     source_id: str = Query("", max_length=63),
     profile_id: Literal["low", "default"] = Query("low"),
     user: dict[str, Any] = Depends(require_permission(PERMISSION_VIDEO_VIEW)),
@@ -888,7 +888,7 @@ async def get_device_inventory(
             c["camera_id"] = str(c["id"])
 
     result: dict[str, Any] = {"displays": displays, "cameras": cameras}
-    if contract_version == 2:
+    if contract_version == 3:
         selected = source_id or str(
             (displays[0] if displays else {}).get("desktop_id") or ""
         )
@@ -1015,6 +1015,8 @@ async def start_device_stream(
             user=user,
         )
     elif body.codec_policy is not None:
+        if body.browser_codecs is None:
+            raise HTTPException(422, detail={"code": "browser_capabilities_required"})
         current = await load_video_status(
             iot_client, terminal.sn, org_id=org_id, user=user
         )
@@ -1027,6 +1029,7 @@ async def start_device_stream(
             mode=body.mode,
             source_id=source_id,
             profile_id=body.profile,
+            browser_codecs=body.browser_codecs,
             status=current,
             org_id=org_id,
             user=user,
@@ -1417,7 +1420,7 @@ async def stop_device_stream(
 )
 async def get_device_stream_state(
     device_id: int,
-    contract_version: int | None = Query(None, ge=2, le=2),
+    contract_version: int | None = Query(None, ge=3, le=3),
     user: dict[str, Any] = Depends(require_permission(PERMISSION_VIDEO_VIEW)),
     db: AsyncSession = Depends(get_db),
 ) -> StreamStateResponse:
@@ -1426,7 +1429,7 @@ async def get_device_stream_state(
     org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
     status_data = (
         await load_video_status(iot_client, terminal.sn, org_id=org_id, user=user)
-        if contract_version == 2
+        if contract_version == 3
         else await iot_client.remote_input_status(terminal.sn, org_id=org_id, user=user)
     )
     lease_info = status_data.get("lease") or {}

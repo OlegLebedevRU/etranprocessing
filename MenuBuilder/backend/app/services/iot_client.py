@@ -604,18 +604,19 @@ class IotPlatformClient:
             raise HTTPException(503, detail={"code": "remote_control_unavailable"})
         prefix = f"{self.base_url}/api/internal/v1/remote-input"
         headers = self._get_headers(org_id=org_id, user=user)
-        if (
-            camera_contract
-            or action == "state"
-            or (payload or {}).get("contract_version") == 2
-        ):
+        if camera_contract or (payload or {}).get("contract_version") == 2:
             from app.services.camera_contract import CAMERA_REVISION
 
             headers["X-L4-Camera-Contract"] = CAMERA_REVISION
+        if not camera_contract and (payload or {}).get("contract_version") != 2:
+            headers["X-L4-Media-Contract"] = "l4-media/3.0.0"
+        timeout = settings.iot_rpc_stream_start_timeout_seconds
+        if "X-L4-Media-Contract" in headers and action in ("inventory", "start"):
+            # The native cold probe/READY is bounded at 30s, IoT at 35s.
+            # Leave HTTP transit/validation headroom without changing lease TTL.
+            timeout = max(timeout, 40.0)
         try:
-            async with httpx.AsyncClient(
-                timeout=settings.iot_rpc_stream_start_timeout_seconds
-            ) as client:
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 if action == "inventory":
                     inventory_params: dict[str, str | bool] = {}
                     if source_id:

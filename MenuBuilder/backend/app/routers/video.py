@@ -536,7 +536,7 @@ async def _get_ingress_status(sn: str) -> dict[str, Any]:
 )
 async def create_video_session(
     device_id: int,
-    contract_version: int | None = Query(None, ge=2, le=2),
+    contract_version: int | None = Query(None, ge=3, le=3),
     user: dict[str, Any] = Depends(require_permission(PERMISSION_VIDEO_VIEW)),
     db: AsyncSession = Depends(get_db),
 ) -> VideoSessionResponse | JSONResponse:
@@ -618,7 +618,7 @@ async def create_video_session(
             pin=media.get("pin"),
             session_ttl_sec=600,
         )
-        if contract_version == 2:
+        if contract_version == 3:
             return JSONResponse(
                 dict(
                     response.model_dump(),
@@ -628,8 +628,8 @@ async def create_video_session(
                 )
             )
         return response
-    if contract_version == 2 and not stream_instance_id:
-        raise HTTPException(409, detail={"code": "stream_identity_unavailable"})
+    if contract_version == 3:
+        raise HTTPException(409, detail={"code": "descriptor_unavailable"})
 
     pin = get_or_create_mountpoint_pin(
         device_id,
@@ -675,7 +675,7 @@ async def create_video_session(
                     media_res = existing
                     break
             if media_res is None:
-                if contract_version == 2:
+                if contract_version == 3:
                     raise HTTPException(
                         409, detail={"code": "publisher_route_unavailable"}
                     )
@@ -697,7 +697,7 @@ async def create_video_session(
                 session_ttl_sec=int(media_res.get("ttl_sec") or 600),
                 pin=media_res.get("pin"),
             )
-            if contract_version == 2:
+            if contract_version == 3:
                 return JSONResponse(
                     dict(
                         response.model_dump(),
@@ -714,7 +714,7 @@ async def create_video_session(
                 detail="Не удалось подключиться к управляемой медиасессии",
             ) from media_err
 
-    if contract_version == 2:
+    if contract_version == 3:
         cached = _mountpoint_pins.get(device_id) or {}
         if (
             cached.get("janus_pin") != pin
@@ -734,7 +734,7 @@ async def create_video_session(
         session_ttl_sec=600,
         pin=pin,
     )
-    if contract_version == 2:
+    if contract_version == 3:
         return JSONResponse(
             dict(
                 response.model_dump(),
