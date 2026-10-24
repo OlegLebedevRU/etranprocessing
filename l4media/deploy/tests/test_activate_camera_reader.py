@@ -138,3 +138,68 @@ def test_activation_waits_for_active_streams_before_pull(tmp_path, monkeypatch):
     monkeypatch.setattr(release, "docker", lambda *_: pytest.fail("Docker mutation before drain"))
     with pytest.raises(ValueError, match="Active streams"):
         release.activate(release.REGISTRY + "sha256:" + "a" * 64, "b" * 40, True)
+
+
+def test_v3_activation_allows_authorized_interruption_and_keeps_overlays(tmp_path, monkeypatch):
+    monkeypatch.setitem(sys.modules, "fcntl", SimpleNamespace(flock=lambda *_: None, LOCK_EX=2, LOCK_NB=4))
+    monkeypatch.setattr(release.Path, "home", lambda: tmp_path)
+    state = tmp_path / ".etran-ci"
+    state.mkdir()
+    files = [str(tmp_path / "l4media/compose.yaml"), str(state / "hevc-flags.json")]
+    before = {
+        "Image": "old-id",
+        "Config": {
+            "Image": "old-image",
+            "Env": ["L4MEDIA_HEVC_ENABLED=1", "L4MEDIA_CAMERA_CONTRACT_ENABLED=1"],
+            "Labels": {"com.docker.compose.project.config_files": ",".join(files)},
+        },
+    }
+    monkeypatch.setattr(release, "inspect", lambda: before)
+    monkeypatch.setattr(release, "get", lambda *_: pytest.fail("Authorized release must not wait for idle"))
+    monkeypatch.setattr(release, "neighbours", lambda: {"janus": "same"})
+    revision = "b" * 40
+    monkeypatch.setattr(
+        release,
+        "docker",
+        lambda *args: (
+            ""
+            if args[0] == "pull"
+            else json.dumps([{"Id": "new-id", "Config": {"Labels": {"org.opencontainers.image.revision": revision}}}])
+        ),
+    )
+    commands = []
+    monkeypatch.setattr(release, "run", lambda *args: commands.append(args) or "")
+    monkeypatch.setattr(release, "wait_ready_v3", lambda image, rev: {"contract_version": 3})
+    receipt = release.activate(
+        release.REGISTRY + "sha256:" + "a" * 64, revision, True, media_v3=True, allow_interruptions=True
+    )
+    assert receipt["media_contract"] == "l4-media/3.0.0"
+    assert receipt["neighbours_unchanged"]
+    up = [command for command in commands if "up" in command]
+    assert len(up) == 1 and up[0][-1] == "ingress" and "--no-deps" in up[0]
+    assert str(state / "hevc-flags.json") in up[0]
+    desired = json.loads((state / "l4media-images.json").read_text())
+    assert desired["services"]["ingress"]["environment"]["L4MEDIA_CAMERA_CONTRACT_ENABLED"] == "1"
+
+
+def test_v3_readiness_requires_exact_revision_and_verified_hevc(monkeypatch):
+    container = {"Image": "new-id", "Config": {"Env": ["L4MEDIA_HEVC_ENABLED=1"]}}
+    monkeypatch.setattr(release, "inspect", lambda: container)
+    monkeypatch.setattr(release.time, "monotonic", lambda: 0)
+    caps = {
+        "contract_version": 3,
+        "media_contract_versions": [3],
+        "server_revision": "b" * 40,
+        "dependencies_ready": True,
+        "hevc_runtime_verified": True,
+        "codecs": ["h265"],
+        "formats": [{"codec": "h265"}],
+    }
+    monkeypatch.setattr(release, "get", lambda _, path, *selection: {"status": "ok"} if path == "/health" else caps)
+    assert release.wait_ready_v3("new-id", "b" * 40) == caps
+    # Expire the retry deadline immediately for deterministic rejection.
+    times = iter([0, 46])
+    monkeypatch.setattr(release.time, "monotonic", lambda: next(times))
+    caps["server_revision"] = "c" * 40
+    with pytest.raises(ValueError, match="revision/dependencies"):
+        release.wait_ready_v3("new-id", "b" * 40)

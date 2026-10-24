@@ -81,16 +81,17 @@ static inline void mv_probe(void) {
 }
 
 #include "media_camera.h"
+#include "media_v3.h"
 
 static inline void mv_persist(MediaSession* session) {
-    if (!media_redis_ok() || session->contract_version != 2) return;
+    if (!media_redis_ok() || (session->contract_version != 2 && session->contract_version != 3)) return;
     json_error_t error;
     json_t* request = json_loads(session->v2_request, JSON_REJECT_DUPLICATES, &error);
     if (!request) return;
     json_object_set_new(request, "lease_expires_at", json_integer(session->renewed_at + session->ttl_sec));
     json_object_set_new(request, "pin", json_string(session->pin));
     json_t* record = json_pack("{s:i,s:o,s:i,s:i,s:i,s:i,s:i,s:I,s:I,s:I,s:s}",
-        "format_version", 2, "request", request, "mountpoint_id", (int)session->mountpoint_id,
+        "format_version", session->contract_version, "request", request, "mountpoint_id", (int)session->mountpoint_id,
         "rtp_port", session->rtp_port, "rtcp_port", session->rtcp_port, "state", (int)session->state,
         "route_generation", (int)session->route_generation,
         "created_at", (json_int_t)session->created_at, "started_at", (json_int_t)session->started_at,
@@ -116,7 +117,7 @@ static inline bool mv_fill(MediaSession* session, json_t* request) {
     if (!descriptor || !serialized || strlen(descriptor) >= sizeof(session->descriptor) || strlen(serialized) >= sizeof(session->v2_request)) {
         free(descriptor); free(serialized); return false;
     }
-    session->contract_version = 2;
+    session->contract_version = (int)mv_integer(request, "contract_version");
     lifecycle_safe_strcpy(session->session_id, mv_string(request, "session_id"), sizeof(session->session_id));
     lifecycle_safe_strcpy(session->operation_id, mv_string(request, "operation_id"), sizeof(session->operation_id));
     lifecycle_safe_strcpy(session->lease_id, mv_string(request, "lease_id"), sizeof(session->lease_id));
@@ -130,10 +131,10 @@ static inline bool mv_fill(MediaSession* session, json_t* request) {
 }
 
 static inline bool mv_identity(MediaSession* session, json_t* request) {
-    if (!session || session->contract_version != 2) return false;
+    if (!session || (session->contract_version != 2 && session->contract_version != 3)) return false;
     json_error_t error;
     json_t* descriptor = json_loads(session->descriptor, JSON_REJECT_DUPLICATES, &error);
-    bool match = descriptor && !strcmp(session->sn, mv_string(request, "sn")) &&
+    bool match = descriptor && session->contract_version == mv_integer(request, "contract_version") && !strcmp(session->sn, mv_string(request, "sn")) &&
         !strcmp(session->session_id, mv_string(request, "session_id")) &&
         !strcmp(session->lease_id, mv_string(request, "lease_id")) &&
         !strcmp(session->stream_instance_id, mv_string(request, "stream_instance_id")) &&
@@ -147,7 +148,7 @@ static inline void mv_response(MediaSession* session, bool health, char* respons
     const char* state = session->state == MEDIA_STATE_ACTIVE ? "active" :
         session->state == MEDIA_STATE_STARTING ? "starting" : session->state == MEDIA_STATE_FAILED ? "failed" : "stopped";
     json_t* value = json_pack("{s:i,s:s,s:s,s:i,s:s,s:o,s:{s:s,s:s},s:s,s:s,s:i,s:i,s:i,s:s,s:s}",
-        "contract_version", 2, "session_id", session->session_id, "stream_instance_id", session->stream_instance_id,
+        "contract_version", session->contract_version, "session_id", session->session_id, "stream_instance_id", session->stream_instance_id,
         "route_generation", (int)session->route_generation, "state", state, "descriptor", descriptor,
         "publisher", "sn", session->sn, "stream_instance_id", session->stream_instance_id,
         "lease_id", session->lease_id, "operation_id", session->operation_id,
@@ -178,14 +179,14 @@ static inline void mv_start(json_t* request, char* response, size_t size, int* s
     if (!mv_fill(&candidate, request)) { mv_error("invalid_payload", 400, response, size, status); return; }
     for (int i = 0; i < g_media_session_count; i++) {
         MediaSession* other = &g_media_sessions[i];
-        if (other->contract_version == 2 && strcmp(other->session_id, candidate.session_id) &&
+        if ((other->contract_version == 2 || other->contract_version == 3) && strcmp(other->session_id, candidate.session_id) &&
             (!strcmp(other->operation_id, candidate.operation_id) || !strcmp(other->stream_instance_id, candidate.stream_instance_id))) {
             mv_error("conflict", 409, response, size, status); return;
         }
     }
     MediaSession* session = find_session_by_id(candidate.session_id);
     if (session) {
-        bool same = session->contract_version == 2 && !strcmp(session->sn, candidate.sn) &&
+        bool same = session->contract_version == candidate.contract_version && !strcmp(session->sn, candidate.sn) &&
             !strcmp(session->lease_id, candidate.lease_id) && !strcmp(session->stream_instance_id, candidate.stream_instance_id) &&
             !strcmp(session->operation_id, candidate.operation_id) && !strcmp(session->descriptor, candidate.descriptor) &&
             (!json_object_get(request, "pin") || !strcmp(session->pin, candidate.pin));
@@ -202,6 +203,10 @@ static inline void mv_start(json_t* request, char* response, size_t size, int* s
     if (owner) { mv_error("conflict", 409, response, size, status); return; }
     const char* codec; int pt; char fmtp[256];
     mv_format(json_object_get(request, "descriptor"), &codec, &pt, fmtp, sizeof(fmtp));
+    if (candidate.contract_version == 3 && !m3_track_ready(json_array_get(
+            json_object_get(json_object_get(request, "descriptor"), "tracks"), 0))) {
+        mv_error("unsupported", 422, response, size, status); return;
+    }
     if (mc_extended(request) && !mc_track_ready(json_array_get(
             json_object_get(json_object_get(request, "descriptor"), "tracks"), 0))) {
         mv_error("unsupported", 422, response, size, status); return;
@@ -279,18 +284,18 @@ static inline bool media_v1_conflicts(const char* path, const char* body) {
         char* end = strpbrk(id, "/?"); if (end) *end = 0;
     }
     MediaSession* session = find_session_by_id(id);
-    if (session && session->contract_version == 2) return true;
+    if (session && (session->contract_version == 2 || session->contract_version == 3)) return true;
     if (body) {
         json_get_string(body, "session_id", id, sizeof(id));
         json_get_string(body, "sn", sn, sizeof(sn));
     }
     session = find_session_by_id(id);
     if (!session) session = find_active_session_for_sn(sn);
-    return session && session->contract_version == 2;
+    return session && (session->contract_version == 2 || session->contract_version == 3);
 }
 
 static inline void media_v2_restore(void) {
-    if (!media_redis_ok() || !g_media_schema) return;
+    if (!media_redis_ok()) return;
     redisReply* keys = redisCommand(g_media_redis, "KEYS " MEDIA_REDIS_PREFIX_SESSION "*");
     if (!keys || keys->type != REDIS_REPLY_ARRAY) { if (keys) freeReplyObject(keys); return; }
     for (size_t i = 0; i < keys->elements; i++) {
@@ -298,8 +303,9 @@ static inline void media_v2_restore(void) {
         if (!keys->element[i]->str || !media_redis_get(keys->element[i]->str, serialized, sizeof(serialized)) || serialized[0] != '{') continue;
         json_error_t error; json_t* record = json_loads(serialized, JSON_REJECT_DUPLICATES, &error);
         json_t* request = json_object_get(record, "request");
-        json_t* schema = mc_extended(request) ? g_media_camera_schema : g_media_schema;
-        if (mv_integer(record, "format_version") != 2 || !schema ||
+        int version = (int)mv_integer(request, "contract_version");
+        json_t* schema = version == 3 ? g_media_v3_schema : mc_extended(request) ? g_media_camera_schema : g_media_schema;
+        if ((version != 2 && version != 3) || mv_integer(record, "format_version") != version || !schema ||
             !ms_validate_root(schema, json_object_get(json_object_get(schema, "$defs"), "media_start"), request, 0)) {
             json_decref(record); continue; /* New record without a descriptor is never implicit H264. */
         }
@@ -346,13 +352,17 @@ static inline bool mv_query_decode(char* text) {
     *output = 0; return true;
 }
 
-static inline void media_v2_http_contract(const char* method, const char* path, const char* body,
-                                bool camera_negotiated, char* response, size_t size, int* status) {
-    if (!g_media_schema) { mv_error("unsupported", 503, response, size, status); return; }
+static inline void media_v2_http_selected(const char* method, const char* path, const char* body,
+                                int selection, char* response, size_t size, int* status) {
+    bool camera_negotiated = selection == 1;
+    bool unified = selection == 3;
+    json_t* selected_schema = unified ? g_media_v3_schema : camera_negotiated ? g_media_camera_schema : g_media_schema;
+    if (!selected_schema) { mv_error("unsupported", 503, response, size, status); return; }
     if (camera_negotiated && !g_media_camera_schema) { mv_error("unsupported", 503, response, size, status); return; }
     if (!strcmp(method, "GET") && !strcmp(path, "/api/v2/media/capabilities")) {
         if (camera_negotiated && !g_media_camera_enabled) { mv_error("unsupported", 422, response, size, status); return; }
         mv_probe();
+        if (unified) m3_probe();
         if (camera_negotiated) mc_probe();
         const char* revision = getenv("L4MEDIA_SOURCE_REVISION");
         json_t* value = json_pack("{s:i,s:[i,i],s:s,s:b,s:b,s:[s],s:[{s:s,s:s,s:s,s:i}],s:i,s:b,s:b}",
@@ -365,6 +375,12 @@ static inline void media_v2_http_contract(const char* method, const char* path, 
             json_array_append_new(json_object_get(value, "formats"), json_pack("{s:s,s:s,s:s,s:i}",
                 "codec", "h265", "codec_profile", "main", "packetization", "rfc7798", "clock_rate", 90000));
         }
+        if (unified) {
+            m3_capabilities(value);
+            if (!json_array_size(json_object_get(value, "formats"))) {
+                json_decref(value); mv_error("janus_unavailable", 503, response, size, status); return;
+            }
+        }
         if (camera_negotiated) mc_capabilities(value);
         *status = 200; mv_output(value, response, size); return;
     }
@@ -375,7 +391,7 @@ static inline void media_v2_http_contract(const char* method, const char* path, 
         else if (!strcmp(path, "/api/v2/media/sessions/stop")) { definition = "media_stop"; stop = true; }
     }
     if (definition) {
-        json_t* root = camera_negotiated ? g_media_camera_schema : g_media_schema;
+        json_t* root = selected_schema;
         if (!camera_negotiated && !strcmp(definition, "media_start") && body && strlen(body) <= MEDIA_V2_BODY_LIMIT) {
             json_error_t error;
             json_t* raw = json_loads(body, JSON_REJECT_DUPLICATES, &error);
@@ -394,7 +410,7 @@ static inline void media_v2_http_contract(const char* method, const char* path, 
         char* args = strchr(query, '?');
         if (!args) { mv_error("invalid_payload", 400, response, size, status); return; }
         *args++ = 0;
-        json_t* request = json_pack("{s:i,s:s}", "contract_version", 2, "session_id", query);
+        json_t* request = json_pack("{s:i,s:s}", "contract_version", unified ? 3 : 2, "session_id", query);
         bool valid = true; char* save = NULL;
         for (char* part = strtok_r(args, "&", &save); part; part = strtok_r(NULL, "&", &save)) {
             char* equal = strchr(part, '=');
@@ -403,12 +419,18 @@ static inline void media_v2_http_contract(const char* method, const char* path, 
             if (json_object_get(request, part)) { valid = false; break; }
             json_object_set_new(request, part, json_string(equal));
         }
-        valid = valid && ms_validate(json_object_get(json_object_get(g_media_schema, "$defs"), "media_identity"), request, 0);
+        valid = valid && ms_validate_root(selected_schema, json_object_get(json_object_get(selected_schema, "$defs"), "media_identity"), request, 0);
         if (valid) mv_update(request, false, true, camera_negotiated, response, size, status);
         else mv_error("invalid_payload", 400, response, size, status);
         json_decref(request); return;
     }
     mv_error("unsupported", 404, response, size, status);
+}
+
+static inline void media_v2_http_contract(const char* method, const char* path, const char* body,
+                                int selection, char* response, size_t size, int* status) {
+    media_v2_http_selected(method, path, body, selection, response, size, status);
+    if (selection == 3 && *status >= 400) m3_error_envelope(response, size);
 }
 
 static inline void media_v2_http(const char* method, const char* path, const char* body,
