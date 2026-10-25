@@ -1,5 +1,14 @@
 # MenuBuilder
 
+## Camera UUID4 attempt boundary — preparation only, 2026-10-25
+
+Actual START reached the camera CTLv1 boundary but failed because BFF generated
+UUID5 operation/stream IDs while frozen admission0.2 requires UUID4. Candidate
+allocates random IDs once in the encrypted prepare ticket and retains them
+through readiness/duplicates. MEDIA session UUID5 and desktop identity stay
+unchanged. Cross-contract regression validates actual BFF request IDs against
+the byte-exact frozen camera CTL schema. No config writers or UI receipt change.
+
 ## Camera cadence0.2 / observation1.3 — preparation only, 2026-10-25
 
 PR122 proposes exact camera1.3/cadence0.2/enrollment0.4 dispatch and observation

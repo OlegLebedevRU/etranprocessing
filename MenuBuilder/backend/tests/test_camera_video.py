@@ -230,6 +230,10 @@ def ready_start_args(args, camera):
             {
                 "scope": scope(args["terminal"], args["user"]),
                 "contracts": dict(CAMERA_MEDIA_HEADERS),
+                "attempt_ids": {
+                    "stream_instance_id": str(uuid4()),
+                    "operation_id": str(uuid4()),
+                },
                 "stage": "ready",
                 "deadline": time.time() + 5,
                 "descriptor": descriptor,

@@ -64,6 +64,21 @@ def unseal(ticket, terminal, user, stage):
         refuse("camera_preparation_owner_mismatch", 403)
     if value.get("contracts") != CAMERA_MEDIA_HEADERS:
         refuse("camera_preparation_contract_changed")
+    try:
+        identifiers = value["attempt_ids"]
+        if not isinstance(identifiers, dict) or set(identifiers) != {
+            "stream_instance_id",
+            "operation_id",
+        }:
+            raise ValueError("Invalid camera attempt identity")
+        for identifier in identifiers.values():
+            parsed = UUID(identifier)
+            if parsed.version != 4 or str(parsed) != identifier:
+                raise ValueError("Camera CTLv1 requires canonical UUID4")
+        if len(set(identifiers.values())) != 2:
+            raise ValueError("Camera attempt identifiers must be distinct")
+    except KeyError, ValueError, TypeError, AttributeError:
+        refuse("camera_preparation_identity_invalid")
     if value.get("stage") != stage or time.time() >= value.get("deadline", 0):
         refuse("camera_preparation_expired")
     return value
@@ -234,6 +249,12 @@ class CameraAdmission:
                 {
                     "scope": owner,
                     "contracts": dict(CAMERA_MEDIA_HEADERS),
+                    # Allocate once per explicit preparation, not per START or
+                    # worker. Readiness reseals and duplicate STARTs retain these.
+                    "attempt_ids": {
+                        "stream_instance_id": str(uuid4()),
+                        "operation_id": str(uuid4()),
+                    },
                     "stage": "prepared",
                     "deadline": deadline,
                     "descriptor": descriptor,

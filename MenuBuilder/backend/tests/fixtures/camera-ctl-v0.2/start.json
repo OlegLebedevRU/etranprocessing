@@ -1,0 +1,26 @@
+{
+  "v": 1,
+  "camera_admission_revision": "camera-ctl-monotonic/0.2.0-proposed",
+  "sn": "synthetic-4623",
+  "issuer_epoch": "00000000-0000-4000-8000-000000000002",
+  "readiness_nonce": "00000000-0000-4000-8000-000000000003",
+  "binding": {
+    "boot_id": "00000000-0000-4000-8000-000000000001",
+    "source_id": "cam:ip000001",
+    "physical_camera_mac": "02:00:00:00:00:01",
+    "path_generation": "port2-rtsp-1",
+    "codec": "h265",
+    "descriptor_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "lease_id": "00000000-0000-4000-8000-000000000004",
+  "stream_instance_id": "00000000-0000-4000-8000-000000000005",
+  "command_seq": 1,
+  "issued_at_ms": 1800000000000,
+  "expires_at_ms": 1800000060000,
+  "type": "stream_start",
+  "command_id": "00000000-0000-4000-8000-000000000006",
+  "mode": "usb-camera",
+  "source_id": "cam:ip000001",
+  "profile": "default",
+  "admission_seq": 1
+}
