@@ -196,8 +196,13 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
   // Источники видео (дисплеи, камеры)
   const [inventory, setInventory] = useState<DeviceInventory | null>(null);
   const [loadingInventory, setLoadingInventory] = useState<boolean>(false);
+  const [inventoryDeviceId, setInventoryDeviceId] = useState<number | null>(null);
   const [selectedSourceKey, setSelectedSourceKey] = useState<string>("");
   const [selectedProfile, setSelectedProfile] = useState<string>("low");
+  const nativeStartReady = !loadingInventory
+    && inventoryDeviceId === selectedDevice?.device_id
+    && selectedSourceKey === "camera:cam:ip000001"
+    && !!inventory?.cameras.some(camera => (camera.id || camera.camera_id) === "cam:ip000001" && camera.available !== false);
   const [codecPolicy, setCodecPolicy] = useState<CodecPolicy>("auto");
 
   // Статус потока
@@ -499,6 +504,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
 
         const normalizedInv: DeviceInventory = { displays, cameras };
         setInventory(normalizedInv);
+        setInventoryDeviceId(deviceId);
 
         if (ctlStat?.agent) {
           rcRef.current.setPresence(ctlStat.agent);
@@ -775,7 +781,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
     if (startAttemptRef.current || coordinatorRef.current.session) return;
     terminalFailureRef.current = false;
     if (!selectedDevice) return;
-    if (cameraOnly && cameraSettingsBusy) return;
+    if (cameraOnly && (cameraSettingsBusy || !nativeStartReady)) return;
     if (selectedDevice.status !== "online") {
       message.warning("Терминал не на связи (offline). Запуск трансляции невозможен.");
       return;
@@ -826,7 +832,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
 
       const startRes = await startDeviceStream(selectedDevice.device_id, {
         mode: cameraOnly ? "camera" : mode as "desktop" | "usb-camera",
-        source_id: source_id || "0",
+        source_id: cameraOnly ? "cam:ip000001" : source_id || "0",
         profile: selectedProfile,
         lease_id: leaseRes.lease_id,
         codec_policy: codecPolicy,
@@ -1145,7 +1151,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
 
               {/* Источник и профиль доступны до запуска в одной компактной строке. */}
               <VideoToolbar
-                cameraOnly={cameraOnly} settingsBusy={cameraSettingsBusy}
+                cameraOnly={cameraOnly} settingsBusy={cameraSettingsBusy} cameraStartReady={nativeStartReady}
                 device={selectedDevice} name={terminalNames[selectedDevice.device_id]} address={terminalAddresses[selectedDevice.device_id]}
                 inventory={inventory} source={selectedSourceKey} profile={selectedProfile}
                 codecPolicy={codecPolicy} onCodecPolicy={setCodecPolicy}

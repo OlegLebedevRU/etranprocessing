@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function cameraPortal(page: Page, options: { viewer?: boolean; busy?: boolean; offline?: boolean; stale?: boolean; lost?: boolean; unauthorized?: boolean; native?: boolean; nativeAuto?: boolean; revisionAfterPoll?: boolean; rejectStart?: boolean; credentialReady?: boolean; credentialLost?: boolean; credentialUnauthorized?: boolean; searchWaiting?: boolean; enrollmentWaiting?: boolean; runtimeDisabled?: boolean } = {}) {
+async function cameraPortal(page: Page, options: { inventoryGate?: () => Promise<void>; viewer?: boolean; busy?: boolean; offline?: boolean; stale?: boolean; lost?: boolean; unauthorized?: boolean; native?: boolean; nativeAuto?: boolean; revisionAfterPoll?: boolean; rejectStart?: boolean; credentialReady?: boolean; credentialLost?: boolean; credentialUnauthorized?: boolean; searchWaiting?: boolean; enrollmentWaiting?: boolean; runtimeDisabled?: boolean } = {}) {
   const posts: { path: string; body: any }[] = [];
   let operation = "";
   let config: any = { video0: { size: "1280x720", fps: 15, bitrate: 1024 }, nightMode: { lightMonitor: false } };
@@ -46,7 +46,7 @@ async function cameraPortal(page: Page, options: { viewer?: boolean; busy?: bool
     }
     if (path.endsWith("/admission/enrollment")) data = { enrolled: !options.enrollmentWaiting };
     if (path.endsWith("/admission/readiness")) data = { ticket: "opaque-ready" };
-    if (path.endsWith("/inventory")) data = { displays: [], cameras: [{ camera_id: "cam:ip000001", available: true }] };
+    if (path.endsWith("/inventory")) { await options.inventoryGate?.(); data = { displays: [], cameras: [{ camera_id: "cam:ip000001", available: true }] }; }
     if (path.endsWith("/control/status")) data = { agent: { online: !options.offline }, lease: { active: !!options.busy } };
     if (path.endsWith("/control/lease") && request.method() === "POST") data = { lease_id: "11111111-1111-4111-8111-111111111111", keepalive_sec: 10 };
     if (path.endsWith("/stream/start") && options.rejectStart) { await route.fulfill({ status: 422, json: { detail: { code: "camera_h265_unsupported", message: "H.265 недоступен для выбранного источника" } } }); return; }
@@ -338,3 +338,42 @@ for (const [profile, label] of [["low", "Medium"], ["default", "HD"]] as const) 
     expect(posts.filter(p => p.path.endsWith("/commands"))).toEqual([]);
   });
 }
+
+
+test("native inventory refresh blocks START until the selected source resolves", async ({ page }) => {
+  let release: (() => void) | undefined;
+  let pending = false;
+  const posts = await cameraPortal(page, { native: true, rejectStart: true,
+    inventoryGate: () => pending ? new Promise<void>(resolve => { release = resolve; }) : Promise.resolve() });
+  const start = page.getByRole("button", { name: "Начать просмотр", exact: true });
+  await expect(start).toBeEnabled();
+  pending = true;
+  await page.getByRole("button", { name: "Настройки видео", exact: true }).click();
+  await page.getByRole("button", { name: /Обновить источники и статус/ }).click();
+  await expect.poll(() => !!release).toBe(true);
+  await expect(start).toBeDisabled();
+  expect(posts.filter(p => /\/(admission\/prepare|control\/lease|stream\/start)$/.test(p.path))).toEqual([]);
+  pending = false; release!();
+  await page.getByRole("button", { name: "Настройки видео", exact: true }).click();
+  await expect(start).toBeEnabled();
+  await start.click();
+  await expect.poll(() => posts.filter(p => p.path.endsWith("/stream/start")).length).toBe(1);
+  expect(posts.find(p => p.path.endsWith("/stream/start"))?.body).toMatchObject({ mode: "camera", source_id: "cam:ip000001", camera_admission_ticket: "opaque-ready" });
+  expect(posts.filter(p => p.path.endsWith("/admission/prepare"))).toHaveLength(1);
+});
+
+test("first native START waits for initial inventory and never uses a legacy source", async ({ page }) => {
+  let release: (() => void) | undefined;
+  const posts = await cameraPortal(page, { native: true, rejectStart: true,
+    inventoryGate: () => new Promise<void>(resolve => { release = resolve; }) });
+  const start = page.getByRole("button", { name: "Начать просмотр", exact: true });
+  await expect.poll(() => !!release).toBe(true);
+  await expect(start).toBeDisabled();
+  expect(posts).toEqual([]);
+  release!();
+  await expect(start).toBeEnabled();
+  await start.click();
+  await expect.poll(() => posts.filter(p => p.path.endsWith("/stream/start")).length).toBe(1);
+  expect(posts.find(p => p.path.endsWith("/stream/start"))?.body).toMatchObject({ mode: "camera", source_id: "cam:ip000001", camera_admission_ticket: "opaque-ready" });
+  expect(posts.filter(p => p.path.endsWith("/admission/prepare"))).toHaveLength(1);
+});

@@ -6,6 +6,8 @@
   validation in BFF. Native Auto and the common media3 track remain unchanged.
 - Retain explicit stored camera13 lifecycle selection; new validated START uses
   camera14 marker. Mixed state revisions and old admission tickets fail closed.
+- Native START waits for current-device inventory and the selected native source;
+  pending refresh cannot start an attempt or use an empty legacy source fallback.
 
 ## Unreleased — camera lifecycle revision forwarding
 
