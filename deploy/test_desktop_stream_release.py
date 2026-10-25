@@ -57,6 +57,24 @@ class DesktopReleaseTests(unittest.TestCase):
             {"FLAG": "true"},
         )
 
+    def test_existing_dollars_are_escaped_in_forward_and_rollback_only(self):
+        self.obj["Config"]["Env"].append("AUTH_USERS=fixture$literal$$value")
+        for restore in (False, True):
+            env = candidate(self.obj, "menubuilder-backend", "image", restore=restore)["services"][
+                "menubuilder-backend"
+            ]["environment"]
+            self.assertEqual(env["AUTH_USERS"], "fixture$$literal$$$$value")
+        self.assertEqual(self.obj["Config"]["Env"][-1], "AUTH_USERS=fixture$literal$$value")
+
+    def test_compose_escaped_json_is_checked_against_exact_engine_value(self):
+        check_environment(
+            {"AUTH_USERS": "fixture$literal"}, {"AUTH_USERS": "fixture$$literal"}, {}, {}
+        )
+        with self.assertRaisesRegex(RuntimeError, "AUTH_USERS"):
+            check_environment(
+                {"AUTH_USERS": "fixture$literal"}, {"AUTH_USERS": "other$$literal"}, {}, {}
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

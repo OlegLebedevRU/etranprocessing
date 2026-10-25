@@ -50,18 +50,30 @@ def compose(obj, overlay):
 
 def candidate(obj, service, image, restore=False):
     old = environment(obj)
-    values = {key: old.get(key) for key in FLAGS[service]} if restore else FLAGS[service]
+    values = {key: old.get(key) for key in FLAGS[service]} if restore else dict(FLAGS[service])
+    # Engine values are already interpolated. Preserve literal dollars when
+    # feeding those same values back through Compose, including password hashes.
+    # This private runtime overlay is generated from existing environment only;
+    # no secret value is logged or stored in the repository.
+    values.update({key: value.replace("$", "$$") for key, value in old.items() if "$" in value})
     return {"services": {service: {"image": image, "environment": values}}}
 
 
 def check_environment(old, rendered, image_defaults, changes):
+    expected = dict(old, **changes)
     effective = dict(image_defaults)
     for key, value in rendered.items():
         if value is None:
             effective.pop(key, None)
         else:
-            effective[key] = str(value)
-    expected = dict(old, **changes)
+            value = str(value)
+            wanted = expected.get(key)
+            # Some Compose versions retain dollar escaping in config JSON.
+            # Only accept the exact escaped form of the expected engine value;
+            # runtime verification below still requires byte-for-byte equality.
+            if wanted is not None and "$" in wanted and value == wanted.replace("$", "$$"):
+                value = wanted
+            effective[key] = value
     if effective != expected:
         keys = sorted(
             key
