@@ -28,9 +28,13 @@ CLOCK_REALTIME receipt sample and the local monotonic clock. Receipt UTC rounds
 up to milliseconds; monotonic is sampled before UTC so neither truncated
 subseconds nor sampling delay can extend the absolute deadline. Existing-session
 START replays never recapture a timer.
-Renewals map newer absolute expiry into the same original issuer coordinate;
-unchanged/older expiry cannot lengthen it. Queue/network/setup residence consumes
-the original remaining interval. An expired lease cannot be renewed, and equality
+IP-camera renewals map newer absolute expiry into the same original issuer
+coordinate; unchanged/older expiry cannot lengthen it. Desktop/USB instead keep
+their existing live-UTC expiry protocol: each different expiry maps its precise
+remaining receipt interval into a new monotonic deadline, including a smaller
+absolute expiry after UTC rollback. Exact expiry replay is idempotent for every
+source. The old monotonic lease must still be live after processing; expiry
+cannot be revived. Queue/network/setup residence consumes the budget, and equality
 means expiry. The existing maximum admission interval remains7200 seconds.
 
 The active watchdog, per-packet gate, transport idle timeout and RTP-freshness
@@ -41,8 +45,8 @@ reuse that deadline on the same kernel boot and unchanged monotonic clock namesp
 restore a stopped session without an active route. There is no fresh TTL after
 restart. V1/v2 deadline semantics are retained.
 
-The absolute lease deadline belongs to a fixed issuer coordinate during one
-attempt. A changed issuer time origin is an authority/attempt change, not an
+The IP-camera absolute lease deadline belongs to a fixed issuer coordinate during
+one attempt. A changed issuer time origin is an authority/attempt change, not an
 implicit request for another full TTL. This does not make arbitrary independent
 wall clocks interchangeable at initial media admission.
 

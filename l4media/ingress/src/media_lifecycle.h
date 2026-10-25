@@ -160,7 +160,7 @@ static inline bool media_realtime_receipt_ms(uint64_t *result) {
     *result = (uint64_t)ts.tv_sec * 1000 + ((uint64_t)ts.tv_nsec + 999999) / 1000000;
     return true;
 }
-static inline bool media_v3_begin_deadline(MediaSession *s, int64_t expiry) {
+static inline bool media_v3_receipt_deadline(int64_t expiry, uint64_t *deadline) {
     uint64_t now, wall_ms;
     /* Sample monotonic BEFORE UTC: syscall/setup delay consumes the budget,
      * rather than shifting the absolute deadline later when samples differ. */
@@ -173,17 +173,37 @@ static inline bool media_v3_begin_deadline(MediaSession *s, int64_t expiry) {
     uint64_t remaining = expiry_ms - wall_ms;
     if (now > (uint64_t)INT64_MAX - remaining)
         return false;
+    *deadline = now + remaining;
+    return true;
+}
+static inline bool media_v3_begin_deadline(MediaSession *s, int64_t expiry) {
+    uint64_t deadline;
+    if (!media_v3_receipt_deadline(expiry, &deadline))
+        return false;
     s->issuer_expiry_utc = expiry;
-    s->monotonic_deadline_ms = now + remaining;
+    s->monotonic_deadline_ms = deadline;
     return true;
 }
 static inline bool media_v3_renew_deadline(MediaSession *s, int64_t expiry) {
     uint64_t now;
     if (!media_monotonic_ms(&now) || !s->monotonic_deadline_ms || now >= s->monotonic_deadline_ms)
         return false;
-    /* The issuer coordinate is fixed for this attempt. A delayed/replayed
-     * renewal cannot restart its remaining duration after a wall-clock jump. */
-    if (expiry <= s->issuer_expiry_utc)
+    /* An exact replay is idempotent for every source. Camera renewals use
+     * their stable per-attempt issuer coordinate. Desktop/USB continue to
+     * export live-UTC expiry, including a smaller timestamp after a rollback. */
+    if (expiry == s->issuer_expiry_utc)
+        return true;
+    if (!s->camera_source) {
+        uint64_t candidate;
+        if (!media_v3_receipt_deadline(expiry, &candidate) || !media_monotonic_ms(&now) ||
+            now >= s->monotonic_deadline_ms || candidate <= now)
+            return false;
+        s->issuer_expiry_utc = expiry;
+        s->monotonic_deadline_ms = candidate;
+        s->ttl_sec = (int)((candidate - now + 999) / 1000);
+        return true;
+    }
+    if (expiry < s->issuer_expiry_utc)
         return true;
     uint64_t delta = (uint64_t)expiry - (uint64_t)s->issuer_expiry_utc;
     if (delta > 7200 || s->monotonic_deadline_ms > (uint64_t)INT64_MAX - delta * 1000)

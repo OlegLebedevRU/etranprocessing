@@ -1,0 +1,59 @@
+{
+  "contract": "l4-media/3.0.0",
+  "vectors": [
+    {
+      "name": "utc_forward",
+      "source_type": "desktop",
+      "profile_id": "low",
+      "initial_utc_seconds": 1800000000,
+      "utc_jump_seconds": 3600,
+      "receipt_utc_seconds": 1800003602,
+      "receipt_monotonic_ms": 7000,
+      "expected_remaining_ms": 60000,
+      "expected_deadline_monotonic_ms": 67000,
+      "request": {
+        "method": "POST",
+        "path": "/api/v2/media/sessions/renew",
+        "headers": {
+          "x-l4-media-contract": "l4-media/3.0.0"
+        },
+        "body": {
+          "contract_version": 3,
+          "sn": "hevc-fixture",
+          "lease_id": "00000000-0000-4000-8000-000000000001",
+          "session_id": "f68fe928-8611-5a85-aa9b-1f373d143fbc",
+          "stream_instance_id": "00000000-0000-4000-8000-000000000002",
+          "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+          "lease_expires_at": 1800003662
+        }
+      }
+    },
+    {
+      "name": "utc_backward",
+      "source_type": "desktop",
+      "profile_id": "low",
+      "initial_utc_seconds": 1800000000,
+      "utc_jump_seconds": -3600,
+      "receipt_utc_seconds": 1799996402,
+      "receipt_monotonic_ms": 7000,
+      "expected_remaining_ms": 60000,
+      "expected_deadline_monotonic_ms": 67000,
+      "request": {
+        "method": "POST",
+        "path": "/api/v2/media/sessions/renew",
+        "headers": {
+          "x-l4-media-contract": "l4-media/3.0.0"
+        },
+        "body": {
+          "contract_version": 3,
+          "sn": "hevc-fixture",
+          "lease_id": "00000000-0000-4000-8000-000000000001",
+          "session_id": "f68fe928-8611-5a85-aa9b-1f373d143fbc",
+          "stream_instance_id": "00000000-0000-4000-8000-000000000002",
+          "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+          "lease_expires_at": 1799996462
+        }
+      }
+    }
+  ]
+}

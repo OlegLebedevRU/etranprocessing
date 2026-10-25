@@ -162,7 +162,7 @@ int main(void) {
     assert(test_mono == before_sample + 200 && late.monotonic_deadline_ms == before_sample + 1000);
     realtime_read_delay = 0;
     /* An incoming command gets only its seven remaining seconds, never60. */
-    MediaSession budget = {0};
+    MediaSession budget = {.camera_source=true};
     assert(media_v3_begin_deadline(&budget, (int64_t)test_wall + 7));
     assert(budget.monotonic_deadline_ms == test_mono + 7000);
     assert(!media_v3_begin_deadline(&budget, (int64_t)test_wall));

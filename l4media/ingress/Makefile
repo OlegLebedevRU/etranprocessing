@@ -20,7 +20,7 @@ $(TARGET): $(OBJS)
 
 $(OBJS): $(HEADERS)
 
-test: contract-check $(TEST_TARGET) test_feedback test_media_deadline test_media_v2 test_media_camera test_media_v3 test_media_v3_clock test_media_v3_camera_connection
+test: contract-check $(TEST_TARGET) test_feedback test_media_deadline test_media_v2 test_media_camera test_media_v3 test_media_v3_clock test_media_v3_camera_connection test_media_v3_desktop_clock
 	./$(TEST_TARGET)
 	./test_feedback
 	./test_media_deadline
@@ -29,6 +29,7 @@ test: contract-check $(TEST_TARGET) test_feedback test_media_deadline test_media
 	./test_media_v3
 	./test_media_v3_clock
 	./test_media_v3_camera_connection
+	./test_media_v3_desktop_clock
 
 $(TEST_TARGET): $(TEST_SRCS) $(HEADERS)
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
@@ -54,8 +55,11 @@ test_media_v3_clock: tests/test_media_v3_clock.c tests/test_media_common.h src/l
 test_media_v3_camera_connection: tests/test_media_v3_camera_connection.c src/l4media_ingress.c $(HEADERS)
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
 
+test_media_v3_desktop_clock: tests/test_media_v3_desktop_clock.c tests/fixtures/desktop-renew-vectors.json tests/test_media_common.h src/l4media_ingress.c $(HEADERS)
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
+
 clean:
-	rm -f $(OBJS) $(TARGET) $(TEST_TARGET) test_feedback test_media_deadline test_media_v2 test_media_camera test_media_v3 test_media_v3_clock test_media_v3_camera_connection
+	rm -f $(OBJS) $(TARGET) $(TEST_TARGET) test_feedback test_media_deadline test_media_v2 test_media_camera test_media_v3 test_media_v3_clock test_media_v3_camera_connection test_media_v3_desktop_clock
 
 .PHONY: all clean test contract-check
 
