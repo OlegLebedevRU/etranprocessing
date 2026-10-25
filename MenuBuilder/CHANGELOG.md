@@ -1,5 +1,22 @@
 # Changelog — MenuBuilder
 
+## Unreleased — desktop streaming compatibility
+
+### Fixed
+
+- Keep pre-HEVC agents on the authorized CTL-v1 H.264 path for Auto/H.264;
+  native H.264 descriptors retain their existing path. Unknown browser codec
+  APIs do not block legacy SDP negotiation, and a cold probe cannot expire the
+  browser report during the same START request.
+- Separate codec availability from native transport configuration, explain
+  server negotiation/configuration refusals, and clean up a prepared legacy
+  media route when START is refused or times out.
+
+### Added
+
+- Explicit desktop-only Compose overlay for proxy delivery ports and IoT HEVC
+  chain flags; applying it remains a separate deployment step.
+
 ## Unreleased — native nominal camera cohort1.4
 
 - Prepare the exact camera1.4/cadence0.3/enrollment0.5 cohort without achieved-FPS

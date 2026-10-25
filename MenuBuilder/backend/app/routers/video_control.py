@@ -1164,6 +1164,10 @@ async def start_device_stream(
             if isinstance(exc.detail, dict)
             else ""
         )
+        if prepared is not None:
+            # A rejected legacy START must not leave its prepared route behind.
+            # The media API checks the lease identity before removing anything.
+            await _stop_active_media_session(terminal.sn, lease_id, None)
         if (
             extended is None
             and body.codec_policy is None

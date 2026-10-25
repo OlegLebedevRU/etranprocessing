@@ -1,5 +1,15 @@
 # MenuBuilder
 
+## Desktop compatibility patches — 2026-10-25, not deployed
+
+`fix/desktop-stream-compat` separates CTL-v1/H264 from native desktop negotiation,
+keeps native H264 descriptors, separates capability from delivery-port readiness,
+and explains configuration/negotiation failures. Explicit overlay prepares ports
+and app1 desktop flags; it is not active. Local backend1151passed/25skipped,
+final focused88passed, UI130unit/build,4fake-API browser checks and CLI smoke pass.
+Legacy checked by producer/consumer code; owner-visible773 decode after deployment
+remains the acceptance gate. [Implementation and release handoff](../tasks/active/2026-10-25-desktop-stream-compat-patches.md).
+
 ## Native nominal cohort1.4 — preparation only
 
 New START/admission selects observation1.4, cadence0.3 declared nominal SDP,

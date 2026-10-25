@@ -1,4 +1,5 @@
 import React from "react";
+import { videoErrorMessage } from "../utils/videoErrors";
 import { Alert, Button, Space, Tag, Typography } from "antd";
 import {
   WarningOutlined,
@@ -32,6 +33,13 @@ export interface RefusalReasonInfo {
 export function classifyRefusalReason(code?: string, rawMessage?: string): RefusalReasonInfo {
   const c = (code || "").toLowerCase();
   const m = (rawMessage || "").toLowerCase();
+  const videoMessage = videoErrorMessage(c);
+  if (videoMessage) {
+    return {
+      type: "unknown", title: "Трансляция недоступна", description: videoMessage,
+      badge: "Видео", color: c === "encoder_busy" ? "warning" : "error",
+    };
+  }
 
   // 1. Session conflict
   if (

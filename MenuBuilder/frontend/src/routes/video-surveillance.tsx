@@ -54,6 +54,7 @@ import { getCamera } from "../api/cameras";
 import { CameraAttempt } from "../utils/cameraAttempt";
 import { admitCamera } from "../utils/cameraAdmission";
 import { browserVideoCodecs } from "../utils/browserVideoCodecs";
+import { videoErrorMessage } from "../utils/videoErrors";
 
 const { Text } = Typography;
 
@@ -79,7 +80,7 @@ function formatVideoError(err: any): { title: string; message: string; code: str
   if (typeof detail === "object" && detail?.code) {
     return {
       title: "Сессия отклонена",
-      message: cameraErrors[detail.code] || detail.message || raw,
+      message: videoErrorMessage(detail.code) || cameraErrors[detail.code] || detail.message || raw,
       code: detail.code,
     };
   }
@@ -950,7 +951,7 @@ function TenantVideoSurveillancePage({ cameraOnly }: { cameraOnly: boolean }) {
         return;
       }
       const formatted = formatVideoError(err);
-      setBannerError({ code: "start_failed", message: formatted.message });
+      setBannerError({ code: formatted.code || "start_failed", message: formatted.message });
       message.error(formatted.message);
       setActiveStream(null);
       setIsSessionActive(false);
