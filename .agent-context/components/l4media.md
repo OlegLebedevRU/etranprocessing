@@ -1,5 +1,13 @@
 # l4media
 
+## Camera media-v3 preparation (not deployed)
+
+[Ingress preparation](../../l4media/docs/camera-media-v3-preparation.md) adds v3
+monotonic active deadlines and camera-only TLS route-generation fencing without
+changing frozen schemas or desktop/USB transport reuse. This is source/test
+preparation only; production remains the separately recorded2e37e960 image.
+
+
 ## Native quality57: unified media v3
 
 Negotiated `l4-media/3.0.0` uses the coordinator schema pinned at

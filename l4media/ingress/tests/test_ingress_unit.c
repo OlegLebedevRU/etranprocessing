@@ -29,6 +29,8 @@ typedef struct {
     char sn[128];
     char peer_addr[64];
     uint64_t epoch;
+    bool camera_route_revoked;
+    uint32_t camera_route_generation;
     unsigned keyframe_feedback_interval_ms;
 
     int rtp_port;
@@ -42,6 +44,7 @@ typedef struct {
     time_t connect_time;
     time_t last_activity;
     time_t last_rtp_time;
+    uint64_t last_rtp_monotonic_ms;
     time_t last_rtcp_time;
 } IngressClient;
 
@@ -60,6 +63,7 @@ typedef struct {
 static RouteTable g_routes;
 static IngressClient* g_clients[128];
 static int g_client_count = 0;
+static uint64_t g_next_epoch=1;
 static struct in_addr g_janus_ip;
 static char g_janus_host[128] = "127.0.0.1";
 static time_t g_server_start_time = 0;

@@ -64,8 +64,13 @@ typedef struct {
     char descriptor[MEDIA_DESCRIPTOR_LIMIT];
     char v2_request[8192];
     uint32_t route_generation;
+    bool camera_source; /* Derived from a validated v3 descriptor, not the preamble. */
+    uint64_t minimum_camera_connection_epoch;
     MediaSessionState state;
     int ttl_sec;
+    /* v3 only: wall time describes the issuer coordinate, never an active timer. */
+    uint64_t monotonic_deadline_ms;
+    int64_t issuer_expiry_utc;
     time_t created_at;
     time_t started_at;
     time_t renewed_at;
@@ -75,6 +80,142 @@ typedef struct {
     uint64_t final_bytes;
     time_t last_rtp_at;
 } MediaSession;
+
+/* CLOCK_MONOTONIC is kernel-wide. A persisted anchor is reusable only on the
+ * same kernel boot; unknown boot/anchor must not restart an issuer TTL. */
+#ifdef L4MEDIA_TESTING
+static uint64_t (*g_media_test_monotonic_ms)(void);
+static bool (*g_media_test_realtime)(struct timespec *);
+static const char *g_media_test_boot_id;
+#endif
+static uint64_t g_media_monotonic_last;
+static bool g_media_monotonic_failed;
+static inline bool media_monotonic_ms(uint64_t *result) {
+    uint64_t now;
+#ifdef L4MEDIA_TESTING
+    if (g_media_test_monotonic_ms)
+        now = g_media_test_monotonic_ms();
+    else
+#endif
+    {
+        struct timespec ts;
+        if (clock_gettime(CLOCK_MONOTONIC, &ts) || ts.tv_sec < 0 || ts.tv_nsec < 0 || ts.tv_nsec >= 1000000000L ||
+            (uint64_t)ts.tv_sec > ((uint64_t)INT64_MAX - 999) / 1000) {
+            g_media_monotonic_failed = true;
+            return false;
+        }
+        now = (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
+    }
+    if (g_media_monotonic_failed || now < g_media_monotonic_last || now > (uint64_t)INT64_MAX) {
+        g_media_monotonic_failed = true;
+        return false;
+    }
+    g_media_monotonic_last = now;
+    *result = now;
+    return true;
+}
+static inline const char *media_monotonic_boot_id(void) {
+#ifdef L4MEDIA_TESTING
+    if (g_media_test_boot_id)
+        return g_media_test_boot_id;
+#endif
+    static char boot[37];
+    static bool attempted;
+    if (!attempted) {
+        attempted = true;
+        FILE *f = fopen("/proc/sys/kernel/random/boot_id", "r");
+        if (f) {
+            size_t n = fread(boot, 1, 36, f);
+            fclose(f);
+            if (n != 36)
+                boot[0] = 0;
+        }
+        for (unsigned i = 0; boot[0] && i < 36; ++i) {
+            char c = boot[i];
+            if ((i == 8 || i == 13 || i == 18 || i == 23) ? c != '-'
+                                                          : !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')))
+                boot[0] = 0;
+        }
+    }
+    return boot[0] ? boot : NULL;
+}
+/* One precise receipt UTC sample, rounded conservatively upwards to the
+ * timer's millisecond domain. Never combine seconds from time() with a later
+ * fractional sample, or grant the truncated part of a second again. */
+static inline bool media_realtime_receipt_ms(uint64_t *result) {
+    struct timespec ts;
+#ifdef L4MEDIA_TESTING
+    if (g_media_test_realtime) {
+        if (!g_media_test_realtime(&ts))
+            return false;
+    } else
+#endif
+    {
+        if (clock_gettime(CLOCK_REALTIME, &ts))
+            return false;
+    }
+    if (ts.tv_sec < 0 || ts.tv_nsec < 0 || ts.tv_nsec >= 1000000000L ||
+        (uint64_t)ts.tv_sec > ((uint64_t)INT64_MAX - 1000) / 1000)
+        return false;
+    *result = (uint64_t)ts.tv_sec * 1000 + ((uint64_t)ts.tv_nsec + 999999) / 1000000;
+    return true;
+}
+static inline bool media_v3_receipt_deadline(int64_t expiry, uint64_t *deadline) {
+    uint64_t now, wall_ms;
+    /* Sample monotonic BEFORE UTC: syscall/setup delay consumes the budget,
+     * rather than shifting the absolute deadline later when samples differ. */
+    if (expiry <= 0 || (uint64_t)expiry > (uint64_t)INT64_MAX / 1000 || !media_monotonic_ms(&now) ||
+        !media_realtime_receipt_ms(&wall_ms) || !media_monotonic_boot_id())
+        return false;
+    uint64_t expiry_ms = (uint64_t)expiry * 1000;
+    if (expiry_ms <= wall_ms || expiry_ms - wall_ms > 7200000)
+        return false;
+    uint64_t remaining = expiry_ms - wall_ms;
+    if (now > (uint64_t)INT64_MAX - remaining)
+        return false;
+    *deadline = now + remaining;
+    return true;
+}
+static inline bool media_v3_begin_deadline(MediaSession *s, int64_t expiry) {
+    uint64_t deadline;
+    if (!media_v3_receipt_deadline(expiry, &deadline))
+        return false;
+    s->issuer_expiry_utc = expiry;
+    s->monotonic_deadline_ms = deadline;
+    return true;
+}
+static inline bool media_v3_renew_deadline(MediaSession *s, int64_t expiry) {
+    uint64_t now;
+    if (!media_monotonic_ms(&now) || !s->monotonic_deadline_ms || now >= s->monotonic_deadline_ms)
+        return false;
+    /* An exact replay is idempotent for every source. Camera renewals use
+     * their stable per-attempt issuer coordinate. Desktop/USB continue to
+     * export live-UTC expiry, including a smaller timestamp after a rollback. */
+    if (expiry == s->issuer_expiry_utc)
+        return true;
+    if (!s->camera_source) {
+        uint64_t candidate;
+        if (!media_v3_receipt_deadline(expiry, &candidate) || !media_monotonic_ms(&now) ||
+            now >= s->monotonic_deadline_ms || candidate <= now)
+            return false;
+        s->issuer_expiry_utc = expiry;
+        s->monotonic_deadline_ms = candidate;
+        s->ttl_sec = (int)((candidate - now + 999) / 1000);
+        return true;
+    }
+    if (expiry < s->issuer_expiry_utc)
+        return true;
+    uint64_t delta = (uint64_t)expiry - (uint64_t)s->issuer_expiry_utc;
+    if (delta > 7200 || s->monotonic_deadline_ms > (uint64_t)INT64_MAX - delta * 1000)
+        return false;
+    uint64_t candidate = s->monotonic_deadline_ms + delta * 1000;
+    if (candidate <= now || candidate - now > 7200000)
+        return false;
+    s->issuer_expiry_utc = expiry;
+    s->monotonic_deadline_ms = candidate;
+    s->ttl_sec = (int)((candidate - now + 999) / 1000);
+    return true;
+}
 
 /* Lifecycle configuration and metrics */
 static int g_janus_admin_port = DEFAULT_JANUS_ADMIN_PORT;
@@ -557,8 +698,14 @@ static inline bool media_lease_ttl(const char* body, time_t now, int* ttl, bool*
 }
 
 static inline void expire_media_session(MediaSession* s, time_t now) {
-    if (s && (s->state == MEDIA_STATE_ACTIVE || s->state == MEDIA_STATE_STARTING) && s->ttl_sec > 0 &&
-        now - (s->renewed_at ? s->renewed_at : s->started_at) >= s->ttl_sec) {
+    if (!s || (s->state != MEDIA_STATE_ACTIVE && s->state != MEDIA_STATE_STARTING))
+        return;
+    uint64_t monotonic = 0;
+    bool expired =
+        s->contract_version == 3
+            ? (!media_monotonic_ms(&monotonic) || !s->monotonic_deadline_ms || monotonic >= s->monotonic_deadline_ms)
+            : (s->ttl_sec > 0 && now - (s->renewed_at ? s->renewed_at : s->started_at) >= s->ttl_sec);
+    if (expired) {
         int status = 0;
         stop_media_session(s->session_id, "ttl-watchdog", "ttl_expired", NULL, 0, &status);
     }

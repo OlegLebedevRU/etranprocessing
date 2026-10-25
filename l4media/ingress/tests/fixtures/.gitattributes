@@ -1,0 +1,2 @@
+# Preserve the shared captured fixture's exact bytes and pinned SHA256.
+desktop-renew-vectors.json -text whitespace=cr-at-eol
