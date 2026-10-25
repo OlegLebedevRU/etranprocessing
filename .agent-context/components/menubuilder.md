@@ -1,5 +1,14 @@
 # MenuBuilder
 
+## Native nominal cohort1.4 — preparation only
+
+New START/admission selects observation1.4, cadence0.3 declared nominal SDP,
+enrollment0.5 and unchanged media3/admission0.2. BFF does not enforce achieved
+FPS tolerances/windows or GOP105%. Server-owned camera14 markers select this
+cohort; existing camera13 markers retain exact old headers for lifecycle reads,
+STOP and clock/keepalive compensation. Mixed states/old preparation tickets fail
+closed. No DB or frozen common schema change; deployment remains coordinated.
+
 ## Camera lifecycle context — preparation only, 2026-10-25
 
 Native START uses historical CTLv1 usb-camera presence, so generic readers lost

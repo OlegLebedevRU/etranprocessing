@@ -47,6 +47,7 @@ interface VideoToolbarProps {
   onFullscreen: () => void;
   cameraOnly?: boolean;
   settingsBusy?: boolean;
+  cameraStartReady?: boolean;
 }
 
 export function VideoToolbar(props: VideoToolbarProps) {
@@ -197,7 +198,9 @@ export function VideoToolbar(props: VideoToolbarProps) {
             title={
               !active && device.status !== "online"
                 ? "Терминал оффлайн"
-                : !active && !hasSources
+                : !active && props.cameraOnly && props.cameraStartReady === false
+                  ? "Источник камеры пока не подтверждён"
+                  : !active && !hasSources
                   ? "Нет доступных источников"
                   : undefined
             }
@@ -212,7 +215,7 @@ export function VideoToolbar(props: VideoToolbarProps) {
                 icon={active ? <StopOutlined /> : <PlayCircleOutlined />}
                 loading={stage === "stopping"}
                 disabled={
-                  stage !== "starting" && !active && (device.status !== "online" || !hasSources || !!props.settingsBusy)
+                  stage !== "starting" && !active && (device.status !== "online" || !hasSources || !!props.settingsBusy || props.cameraOnly && props.cameraStartReady === false)
                 }
                 onClick={active || stage === "starting" ? props.onStop : props.onStart}
               >

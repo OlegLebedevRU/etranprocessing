@@ -1,3 +1,22 @@
+## Native nominal candidate1.4 (2026-10-25; preparation only)
+
+Current candidate selects camera1.4/cadence0.3/enrollment0.5 and unchanged media3/
+admission0.2. Exact observation packet contracts/siplite-camera-v1.4 retains the
+common track shape and old frozen packets. FPS is declared nominal from the
+authenticated selected camera SDP, not an achieved-rate limit. No2%/window/
+unique-F/GOP105% checks are added by BFF. IoT/firmware own full bitstream and
+nominal authority proof; one complete GOP/two verified IDR+PS boundaries and
+bounded30s IO acquisition do not grant a new readiness or lease budget.
+
+New validated START stores camera14 marker. Existing server-owned camera13
+markers retain their exact old five-header selection for state, STOP, lease
+clock and keepalive compensation; no silent renegotiation. Mixed state revisions
+or old tickets attempting new admission fail closed. Desktop context unchanged.
+No DB, common schema or camera configuration change.
+
+The preceding sections describe the previously deployed1.3 baseline; they are
+retained for review context, not fallback authority for a new1.4 attempt.
+
 # Camera adapter for common media-v3
 
 Status: implementation candidate for review, not deployed or hardware accepted.

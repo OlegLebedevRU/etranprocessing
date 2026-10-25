@@ -49,8 +49,6 @@ from app.security.permissions import (
     require_permission,
 )
 from app.services.camera_contract import (
-    CAMERA_MEDIA_REVISION,
-    CAMERA_SESSION_PREFIX,
     camera_result_state_options,
     camera_session_operation_id,
     camera_session_state_options,
@@ -1115,7 +1113,7 @@ async def start_device_stream(
                 # epoch keeps its metering cursor and takes the new stream id.
                 active_sess.provider_session_id = stream_inst_id
                 if camera_context or str(active_sess.operation_id).startswith(
-                    CAMERA_SESSION_PREFIX
+                    "op-stream-v2-camera"
                 ):
                     active_sess.operation_id = session_operation
                 await db.commit()
@@ -1327,7 +1325,10 @@ async def stop_device_stream(
                 terminal.sn,
                 "stop",
                 payload=v2_stop,
-                **media_contract_options(stream_descriptor(status_data or {}) or {}),
+                **media_contract_options(
+                    stream_descriptor(status_data or {}) or {},
+                    camera_contract=camera_context.get("camera_contract"),
+                ),
                 lease_id=lease_id,
                 org_id=org_id,
                 user=user,
@@ -1381,7 +1382,9 @@ async def stop_device_stream(
             await media_orchestrator_client.video_v2(
                 "stop",
                 dict(identity, reason="publisher_stopped"),
-                **media_contract_options(descriptor),
+                **media_contract_options(
+                    descriptor, camera_contract=camera_context.get("camera_contract")
+                ),
             )
         else:
             await _stop_active_media_session(terminal.sn, lease_id, stream_instance_id)
@@ -1557,6 +1560,11 @@ async def keepalive_device_control_lease(
                     terminal.sn, body.lease_id, current_stream, descriptor
                 )
                 if descriptor["source_type"] == "camera":
+                    selected_camera = camera_context.get("camera_contract")
+                    if selected_camera is None:
+                        raise HTTPException(
+                            409, detail={"code": "camera_session_context_missing"}
+                        )
                     try:
                         clock_id = (
                             ((provider_status or {}).get("agent") or {}).get("stream")
@@ -1573,7 +1581,7 @@ async def keepalive_device_control_lease(
                             lease_id=body.lease_id,
                             org_id=org_id,
                             user=user,
-                            camera_contract=CAMERA_MEDIA_REVISION,
+                            camera_contract=selected_camera,
                         )
                         elapsed_ms = (
                             time.monotonic_ns() - queried_at + 999999
@@ -1597,7 +1605,7 @@ async def keepalive_device_control_lease(
                                 payload={**identity, "reason": "media_clock_changed"},
                                 org_id=org_id,
                                 user=user,
-                                camera_contract=CAMERA_MEDIA_REVISION,
+                                camera_contract=selected_camera,
                             )
                         with contextlib.suppress(Exception):
                             await media_orchestrator_client.video_v2(

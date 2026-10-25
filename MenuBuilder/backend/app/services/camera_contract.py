@@ -12,17 +12,28 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 CAMERA_REVISION = "siplite-camera/1.0.0"
-CAMERA_MEDIA_REVISION = "siplite-camera/1.3.0"
-CADENCE_REVISION = "camera-cadence/0.2.0-proposed"
+CAMERA_MEDIA_REVISION = "siplite-camera/1.4.0"
+CADENCE_REVISION = "camera-cadence/0.3.0-proposed"
 MEDIA_REVISION = "l4-media/3.0.0"
 CAMERA_MEDIA_HEADERS = {
     "X-L4-Media-Contract": MEDIA_REVISION,
     "X-L4-Camera-Contract": CAMERA_MEDIA_REVISION,
     "X-L4-Camera-Cadence": CADENCE_REVISION,
-    "X-L4-Camera-Enrollment": "camera-enrollment/0.4.0-proposed",
+    "X-L4-Camera-Enrollment": "camera-enrollment/0.5.0-proposed",
     "X-L4-Camera-Admission": "camera-ctl-monotonic/0.2.0-proposed",
 }
-CAMERA_SESSION_PREFIX = "op-stream-v2-camera13-"
+CAMERA_SESSION_PREFIX = "op-stream-v2-camera14-"
+PREVIOUS_CAMERA_REVISION = "siplite-camera/1.3.0"
+PREVIOUS_CAMERA_HEADERS = {
+    **CAMERA_MEDIA_HEADERS,
+    "X-L4-Camera-Contract": PREVIOUS_CAMERA_REVISION,
+    "X-L4-Camera-Cadence": "camera-cadence/0.2.0-proposed",
+    "X-L4-Camera-Enrollment": "camera-enrollment/0.4.0-proposed",
+}
+CAMERA_SESSION_REVISIONS = {
+    CAMERA_SESSION_PREFIX: CAMERA_MEDIA_REVISION,
+    "op-stream-v2-camera13-": PREVIOUS_CAMERA_REVISION,
+}
 
 
 class CameraStateOptions(TypedDict, total=False):
@@ -65,17 +76,24 @@ def camera_session_state_options(session: Any) -> CameraStateOptions:
     if not operation.startswith("op-stream-v2-camera"):
         return {}
     stream = session.provider_session_id
-    if not stream or operation != camera_session_operation_id(stream):
+    revision = next(
+        (
+            revision
+            for prefix, revision in CAMERA_SESSION_REVISIONS.items()
+            if stream and operation == prefix + stream
+        ),
+        None,
+    )
+    if revision is None or not stream:
         raise HTTPException(409, detail={"code": "camera_session_context_changed"})
-    return {
-        "camera_contract": CAMERA_MEDIA_REVISION,
-        "expected_stream_instance_id": stream,
-    }
+    return {"camera_contract": revision, "expected_stream_instance_id": stream}
 
 
 def camera_headers(selection: bool | str) -> dict[str, str]:
     if selection is True or selection == CAMERA_MEDIA_REVISION:
         return dict(CAMERA_MEDIA_HEADERS)
+    if selection == PREVIOUS_CAMERA_REVISION:
+        return dict(PREVIOUS_CAMERA_HEADERS)
     if not selection:
         return {}
     raise HTTPException(422, detail={"code": "camera_contract_not_negotiated"})
@@ -105,7 +123,7 @@ MEDIA_VALIDATORS = {
 
 
 OBSERVATION_SCHEMA = json.loads(
-    (CONTRACTS / "camera-v1.3.schema.json").read_text(encoding="utf-8")
+    (CONTRACTS / "camera-v1.4.schema.json").read_text(encoding="utf-8")
 )
 COMMON_MEDIA_SCHEMA = json.loads(
     (CONTRACTS / "media-v3.schema.json").read_text(encoding="utf-8")
@@ -136,9 +154,11 @@ class MediaContractOptions(TypedDict, total=False):
     camera_contract: bool | str
 
 
-def media_contract_options(descriptor: dict[str, Any]) -> MediaContractOptions:
+def media_contract_options(
+    descriptor: dict[str, Any], *, camera_contract: str | None = None
+) -> MediaContractOptions:
     return (
-        {"camera_contract": CAMERA_MEDIA_REVISION}
+        {"camera_contract": camera_contract or CAMERA_MEDIA_REVISION}
         if extended_camera(descriptor)
         else {}
     )

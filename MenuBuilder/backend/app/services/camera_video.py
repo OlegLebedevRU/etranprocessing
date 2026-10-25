@@ -9,7 +9,7 @@ from typing import Any, Literal, NoReturn
 from uuid import UUID
 
 from fastapi import HTTPException
-from pydantic import UUID4, BaseModel, ConfigDict
+from pydantic import UUID4, BaseModel, ConfigDict, model_validator
 
 from app.services.camera_contract import CAMERA_MEDIA_REVISION, MEDIA_REVISION
 from app.services.camera_media_clock import camera_media_deadline
@@ -28,8 +28,10 @@ class CameraVideoState(BaseModel):
     version: Literal[2]
     contract_version: Literal[3]
     media_contract_revision: Literal["l4-media/3.0.0"]
-    camera_contract_revision: Literal["siplite-camera/1.3.0"]
-    cadence_revision: Literal["camera-cadence/0.2.0-proposed"]
+    camera_contract_revision: Literal["siplite-camera/1.3.0", "siplite-camera/1.4.0"]
+    cadence_revision: Literal[
+        "camera-cadence/0.2.0-proposed", "camera-cadence/0.3.0-proposed"
+    ]
     media_clock_id: UUID4
     sn: str
     lease_id: UUID
@@ -43,6 +45,16 @@ class CameraVideoState(BaseModel):
     confirmation: Literal["command_ack"] | None = None
     actual_descriptor: None = None
     reason: str | None = None
+
+    @model_validator(mode="after")
+    def exact_camera_bundle(self):
+        expected = {
+            "siplite-camera/1.3.0": "camera-cadence/0.2.0-proposed",
+            "siplite-camera/1.4.0": "camera-cadence/0.3.0-proposed",
+        }
+        if self.cadence_revision != expected[self.camera_contract_revision]:
+            raise ValueError("Mixed camera state revisions")
+        return self
 
 
 def refuse(code: str, status: int = 409) -> NoReturn:
