@@ -1,14 +1,15 @@
 # MenuBuilder
 
-## Desktop compatibility patches — 2026-10-25, not deployed
+## Desktop compatibility — deployed, 2026-10-26
 
-`fix/desktop-stream-compat` separates CTL-v1/H264 from native desktop negotiation,
-keeps native H264 descriptors, separates capability from delivery-port readiness,
-and explains configuration/negotiation failures. Explicit overlay prepares ports
-and app1 desktop flags; it is not active. Local backend1151passed/25skipped,
-final focused88passed, UI130unit/build,4fake-API browser checks and CLI smoke pass.
-Legacy checked by producer/consumer code; owner-visible773 decode after deployment
-remains the acceptance gate. [Implementation and release handoff](../tasks/active/2026-10-25-desktop-stream-compat-patches.md).
+Application main3b59799 deployed with accepted helpera449ec0; BFF ports5004/5005
+and app1 desktop flags restored while preserving app1 image/camera cohort and12
+neighbor container IDs. Owner-visible Chrome773 passed H264/H265/Auto at both
+profiles; HEVC decoded3000x2000, fresh frames and renewals beyond60s TTL verified.
+Six leases released, final stopped/no active slot. Edge lacking H265 correctly
+requires H264. Builder1155passed/25skipped, UI130unit/build and scoped checks pass.
+Old agent checked by code/contracts only, as agreed. [Release and actual live
+evidence](../tasks/completed/2026-10-26-desktop-stream-recovery.md).
 
 ## Native nominal cohort1.4 — preparation only
 

@@ -1,5 +1,13 @@
 # Desktop streaming patches — ready for release review
 
+## Subsequent release and acceptance
+
+Owner authorized execution on2026-10-26 local date. Application3b59799 deployed
+with helpera449ec0, runtime settings verified, and six owner-visible Chrome773
+codec/profile scenarios passed. Final STOP/release and neighbor checks passed.
+See [completed release evidence](../completed/2026-10-26-desktop-stream-recovery.md).
+The preparation-only statements below are historical and no longer the task status.
+
 ## Task intake
 
 - Owner direction: implement the audited correction; legacy agents are verified
