@@ -91,9 +91,9 @@ def context(monkeypatch):
         ],
     )
     caps = {
-        "camera_contract_revisions": ["siplite-camera/1.3.0"],
-        "camera_cadence_revisions": ["camera-cadence/0.2.0-proposed"],
-        "camera_enrollment_revisions": ["camera-enrollment/0.4.0-proposed"],
+        "camera_contract_revisions": ["siplite-camera/1.4.0"],
+        "camera_cadence_revisions": ["camera-cadence/0.3.0-proposed"],
+        "camera_enrollment_revisions": ["camera-enrollment/0.5.0-proposed"],
         "camera_admission_revisions": ["camera-ctl-monotonic/0.2.0-proposed"],
         "media_contract_versions": [3],
         "quality_options": [{"profile_id": "low"}, {"profile_id": "default"}],
@@ -115,22 +115,22 @@ def context(monkeypatch):
 
     async def iot(sn, action, **kwargs):
         trace.append(("iot", action, kwargs))
-        assert kwargs["camera_contract"] == "siplite-camera/1.3.0"
+        assert kwargs["camera_contract"] == "siplite-camera/1.4.0"
         if action == "lease":
             return lease
         if action == "state":
             raise HTTPException(404)
         if action == "inventory":
             return {
-                "camera_contract_revision": "siplite-camera/1.3.0",
+                "camera_contract_revision": "siplite-camera/1.4.0",
                 "media_clock_id": lease["media_clock_id"],
                 "contract_version": 3,
                 "media_contract_revision": "l4-media/3.0.0",
                 "camera_capabilities": caps,
                 "camera_observation": {
-                    "camera_contract_revision": "siplite-camera/1.3.0",
+                    "camera_contract_revision": "siplite-camera/1.4.0",
                     "media_contract_revision": "l4-media/3.0.0",
-                    "cadence_revision": "camera-cadence/0.2.0-proposed",
+                    "cadence_revision": "camera-cadence/0.3.0-proposed",
                     "source_id": camera["camera_id"],
                     "geometry_generation": camera["geometry_generation"],
                     "actual_track": camera["actual_track"],
@@ -144,11 +144,11 @@ def context(monkeypatch):
         if action == "start":
             value = kwargs["payload"]
             return {
-                "camera_contract_revision": "siplite-camera/1.3.0",
+                "camera_contract_revision": "siplite-camera/1.4.0",
                 "media_clock_id": lease["media_clock_id"],
                 "contract_version": 3,
                 "media_contract_revision": "l4-media/3.0.0",
-                "cadence_revision": "camera-cadence/0.2.0-proposed",
+                "cadence_revision": "camera-cadence/0.3.0-proposed",
                 "version": 2,
                 "sn": sn,
                 "lease_id": value["lease_id"],

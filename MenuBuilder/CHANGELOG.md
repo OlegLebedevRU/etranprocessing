@@ -1,5 +1,12 @@
 # Changelog — MenuBuilder
 
+## Unreleased — native nominal camera cohort1.4
+
+- Prepare the exact camera1.4/cadence0.3/enrollment0.5 cohort without achieved-FPS
+  validation in BFF. Native Auto and the common media3 track remain unchanged.
+- Retain explicit stored camera13 lifecycle selection; new validated START uses
+  camera14 marker. Mixed state revisions and old admission tickets fail closed.
+
 ## Unreleased — camera lifecycle revision forwarding
 
 - Persist camera13 context in the existing server-owned video session marker

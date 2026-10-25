@@ -50,7 +50,7 @@ async def lifecycle(admission, monkeypatch):
         session_type="video",
         state="active",
         provider_session_id=stream,
-        operation_id=f"op-stream-v2-camera13-{stream}",
+        operation_id=f"op-stream-v2-camera14-{stream}",
     )
     # This is the native CTLv1 presence token, NOT a desktop USB classification.
     status = {
@@ -66,7 +66,7 @@ async def lifecycle(admission, monkeypatch):
         },
     }
     seen = []
-    protocol = SimpleNamespace(record="camera")
+    protocol = SimpleNamespace(record="camera", headers=CAMERA_MEDIA_HEADERS)
     health = fixture("media_health")
     health.update(
         {
@@ -100,9 +100,7 @@ async def lifecycle(admission, monkeypatch):
             if protocol.record == "desktop":
                 assert not any(k.startswith("x-l4-camera-") for k in request.headers)
                 return httpx.Response(404, json={"detail": "not_found"})
-            if any(
-                request.headers.get(k) != v for k, v in CAMERA_MEDIA_HEADERS.items()
-            ):
+            if any(request.headers.get(k) != v for k, v in protocol.headers.items()):
                 return httpx.Response(
                     422, json={"detail": "camera3_incomplete_revision_bundle"}
                 )
@@ -168,8 +166,18 @@ async def lifecycle(admission, monkeypatch):
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("action", ["state", "stop", "stop_without_lease", "keepalive"])
-async def test_native_usb_presence_uses_stored_camera_bundle(lifecycle, action):
+@pytest.mark.parametrize("cohort", ["current", "previous"])
+async def test_native_usb_presence_uses_stored_camera_bundle(lifecycle, action, cohort):
     value = lifecycle
+    if cohort == "previous":
+        from app.services.camera_contract import PREVIOUS_CAMERA_HEADERS
+
+        value.protocol.headers = PREVIOUS_CAMERA_HEADERS
+        value.session.operation_id = (
+            f"op-stream-v2-camera13-{value.session.provider_session_id}"
+        )
+        value.state["camera_contract_revision"] = "siplite-camera/1.3.0"
+        value.state["cadence_revision"] = "camera-cadence/0.2.0-proposed"
     if action == "state":
         await video_control.get_device_stream_state(4623, 3, value.user, AsyncMock())
     elif action.startswith("stop"):
@@ -191,7 +199,7 @@ async def test_native_usb_presence_uses_stored_camera_bundle(lifecycle, action):
     for request in state_calls:
         assert all(
             request["headers"].get(k.lower()) == v
-            for k, v in CAMERA_MEDIA_HEADERS.items()
+            for k, v in value.protocol.headers.items()
         )
     if action.startswith("stop"):
         assert any(r["path"].endswith("/video-stop") for r in value.seen)
@@ -207,6 +215,48 @@ async def test_mountpoint_reader_uses_the_same_stored_context(lifecycle):
     assert any(
         r["method"] == "GET" and r["path"].startswith("/api/v2/media/")
         for r in lifecycle.seen
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "camera,cadence",
+    [
+        ("siplite-camera/1.3.0", "camera-cadence/0.3.0-proposed"),
+        ("siplite-camera/1.4.0", "camera-cadence/0.2.0-proposed"),
+    ],
+)
+async def test_state_never_mixes_old_and_new_cadence(lifecycle, camera, cadence):
+    lifecycle.state.update(camera_contract_revision=camera, cadence_revision=cadence)
+    with pytest.raises(HTTPException) as error:
+        await video_control.get_device_stream_state(
+            4623, 3, lifecycle.user, AsyncMock()
+        )
+    assert error.value.status_code == 502
+    assert not any(
+        r["path"].endswith(("/video-stop", "/sessions/renew")) for r in lifecycle.seen
+    )
+
+
+@pytest.mark.anyio
+async def test_old_stored_context_never_reinterprets_new_state(lifecycle):
+    from app.services.camera_contract import PREVIOUS_CAMERA_HEADERS
+
+    lifecycle.session.operation_id = (
+        "op-stream-v2-camera13-" + lifecycle.session.provider_session_id
+    )
+    lifecycle.protocol.headers = PREVIOUS_CAMERA_HEADERS
+    with pytest.raises(HTTPException) as error:
+        await video_control.keepalive_device_control_lease(
+            4623,
+            video_control.KeepaliveRequest(lease_id=lifecycle.args["lease_id"]),
+            lifecycle.user,
+            AsyncMock(),
+        )
+    assert error.value.status_code == 409
+    assert error.value.detail["code"] == "camera_contract_not_negotiated"
+    assert not any(
+        r["path"].endswith(("/video-lease", "/sessions/renew")) for r in lifecycle.seen
     )
 
 
@@ -296,7 +346,7 @@ async def test_marker_and_unpersisted_start_compensation_use_validated_result(
         await video_control.start_device_stream(4623, body, lifecycle.user, AsyncMock())
         assert (
             lifecycle.repository.create_remote_session.await_args.kwargs["operation_id"]
-            == "op-stream-v2-camera13-" + lifecycle.state["stream_instance_id"]
+            == "op-stream-v2-camera14-" + lifecycle.state["stream_instance_id"]
         )
 
 
@@ -308,7 +358,7 @@ async def test_stop_captures_old_context_before_db_row_changes(lifecycle):
         id=lifecycle.session.id,
         session_type="video",
         provider_session_id=new_stream,
-        operation_id="op-stream-v2-camera13-" + new_stream,
+        operation_id="op-stream-v2-camera14-" + new_stream,
     )
     lifecycle.repository.get_active_session_by_terminal_id.side_effect = [
         lifecycle.session,
@@ -350,7 +400,7 @@ def test_generic_operation_namespace_cannot_forge_a_camera_session():
         remote_sessions.SessionStartRequest(
             device_id=4623,
             session_type="video",
-            operation_id="op-stream-v2-camera13-" + str(uuid4()),
+            operation_id="op-stream-v2-camera14-" + str(uuid4()),
         )
 
 
@@ -386,7 +436,7 @@ async def test_reserved_namespace_is_rejected_by_actual_route_before_provider_io
             json={
                 "device_id": 4623,
                 "session_type": "video",
-                "operation_id": "op-stream-v2-camera13-" + str(uuid4()),
+                "operation_id": "op-stream-v2-camera14-" + str(uuid4()),
             },
         )
     assert response.status_code == 422

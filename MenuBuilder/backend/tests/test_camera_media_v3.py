@@ -3,6 +3,7 @@ import copy
 import hashlib
 import json
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -178,7 +179,7 @@ async def test_iot_exact_five_header_bundle(action, monkeypatch):
         assert seen[0].headers["X-L4-Camera-Readiness"] == "test-nonce"
 
 
-@pytest.mark.parametrize("revision", ["siplite-camera/1.2.0", "siplite-camera/1.4.0"])
+@pytest.mark.parametrize("revision", ["siplite-camera/1.2.0", "siplite-camera/1.5.0"])
 def test_unknown_or_old_adapter_revision_is_not_downgraded(revision):
     with pytest.raises(HTTPException):
         camera_headers(revision)
@@ -192,20 +193,39 @@ def test_schema_copies_are_exact():
         ).hexdigest()
         == "b86ca6f066fcdecb09cf7145a7fb23d87b77311a53c7ea04f0fb6e8a905b2818"
     )
+    assert (root / "contracts/siplite-camera-v1.4/camera.schema.json").read_bytes() == (
+        root / "MenuBuilder/backend/app/contracts/camera-v1.4.schema.json"
+    ).read_bytes()
     assert (root / "contracts/siplite-camera-v1.3/camera.schema.json").read_bytes() == (
         root / "MenuBuilder/backend/app/contracts/camera-v1.3.schema.json"
     ).read_bytes()
 
 
 @pytest.mark.anyio
+async def test_previous_preparation_ticket_requires_fresh_current_enrollment(admission):
+    from app.services.camera_contract import PREVIOUS_CAMERA_HEADERS
+
+    service, args, _, selection, *_ = admission
+    prepared = await service.prepare(args["terminal"], args["user"], selection)
+    value = unseal(prepared["ticket"], args["terminal"], args["user"], "prepared")
+    value["contracts"] = PREVIOUS_CAMERA_HEADERS
+    ticket = seal(value)
+    service.request = AsyncMock(side_effect=AssertionError("No old preparation IO"))
+    with pytest.raises(HTTPException) as error:
+        await service.enrollment(args["terminal"], args["user"], ticket)
+    assert error.value.status_code == 409
+    service.request.assert_not_awaited()
+
+
+@pytest.mark.anyio
 @pytest.mark.parametrize("nominal", [25, 120])
-async def test_camera13_nominal_parse_bounds_do_not_inherit_desktop_geometry_budget(
+async def test_camera14_nominal_parse_bounds_do_not_inherit_desktop_geometry_budget(
     admission, nominal
 ):
     service, args, camera, selection, calls, *_ = admission
     root = Path(__file__).resolve().parents[3]
     track = json.loads(
-        (root / "contracts/siplite-camera-v1.3/example-observation.json").read_text()
+        (root / "contracts/siplite-camera-v1.4/example-observation.json").read_text()
     )["actual_track"]
     track["fps"] = nominal
     camera["actual_track"] = track
