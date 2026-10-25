@@ -12,19 +12,17 @@ observation and admission HTTP adapter select the exact new bundle:
 | Header | Value |
 | --- | --- |
 | X-L4-Media-Contract | l4-media/3.0.0 |
-| X-L4-Camera-Contract | siplite-camera/1.2.0 |
-| X-L4-Camera-Cadence | camera-cadence/0.1.0-proposed |
-| X-L4-Camera-Enrollment | camera-enrollment/0.3.0-proposed |
+| X-L4-Camera-Contract | siplite-camera/1.3.0 |
+| X-L4-Camera-Cadence | camera-cadence/0.2.0-proposed |
+| X-L4-Camera-Enrollment | camera-enrollment/0.4.0-proposed |
 | X-L4-Camera-Admission | camera-ctl-monotonic/0.2.0-proposed |
 
 This bundle belongs to BFF→IoT inventory, prepare/enrollment/readiness and
 stream lifecycle requests. BFF→MEDIA sends ONLY the common media header plus
 existing service authentication. Existing /api/v2/media paths carry envelopes3.
-No old camera selector is accepted as a v3 fallback. Frozen camera1.0/1.1 and
-common schema files remain unchanged. The new observation1.2 exists because
-frozen1.1 capabilities can select only enrollment0.2 and its old descriptor.
+No old camera selector is accepted as a v3 fallback. Frozen camera1.0/1.1/1.2 and common schema files remain unchanged. New observation1.3 retains the1.2 shape and selects the new measured nominal cadence0.2/enrollment0.4 policy; old1.2 constants cannot select those revisions.
 
-Canonical observation packet: contracts/siplite-camera-v1.2/. It externally
+Canonical observation packet: contracts/siplite-camera-v1.3/. It externally
 references the exact common track and quality_options definition; its manifest
 pins common schema SHA b86ca6f066fcdecb09cf7145a7fb23d87b77311a53c7ea04f0fb6e8a905b2818.
 No camera track or descriptor fork is maintained. Authority markers stay outside
@@ -33,12 +31,12 @@ the strict common descriptor and outside media service requests.
 ## Admission and quality
 
 Before acquiring a stream lease the BFF checks fresh main_app status, verified
-authenticated physical port2/MAC/discovery, independently validated camera1.2
+authenticated physical port2/MAC/discovery, independently validated camera1.3
 observation/capabilities, actual device geometry and media/browser codec support.
 It constructs one concrete descriptor3 and prepares its exact binding in IoT.
 A fresh gauge alone is not readiness or proof of post-START producer activity.
 
-The encrypted BFF ticket is scoped to tenant, terminal, user and session. One
+The encrypted BFF ticket is scoped to tenant, terminal, user and session, and binds all five exact revision headers. Pre1.3 tickets without that binding or with any old/mixed selector fail closed before provider IO. One
 original30s preparation/enrollment wait includes provider I/O and polling; polls
 do not extend it. Each wire enrollment exchange retains its independent5s
 budget. The readiness ticket uses an original5s deadline anchored before issuing
@@ -108,3 +106,9 @@ This source change does not provision them. Exact IoT/MEDIA revisions and packet
 hashes must agree before a separate owner-approved MEDIA→IoT→MenuBuilder deploy.
 Firmware installation, writers and allowlist activation require the coordinator's
 separate stage. Offline fixtures are not live acceptance on terminal4623 or773.
+
+## Cadence0.2 representation
+
+The producer selects a unique nominal integer FPS1..120 from validated original RTP using the external cadence0.2 policy. Common track FPS is not an actual rounded mean. The frozen ceil(max acquired GOP) interval is a nominal acquisition reference, not instantaneous cadence or a guaranteed maximum. Earlier fully validated IDR+PS intervals are allowed under the external asymmetric policy, while upper105%/5s, fullAU, repeatedPS, noB, source/geometry/path and continuous revocation checks remain mandatory. No optional telemetry/hint fields or common schema fork is introduced. Camera20/30 geometry FPS budgets are removed only on this new revision; schema bounds do not promise terminal resource support.
+
+This1.3 implementation remains a review candidate. Existing1.2 release flags/secrets are not changed by this patch; source preparation does not advertise1.3 runtime support or authorize deployment/activation. UI trusted-receipt metadata work remains separate and cannot substitute for producer proof.

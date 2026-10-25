@@ -62,6 +62,8 @@ def unseal(ticket, terminal, user, stage):
         refuse("camera_preparation_invalid", 409)
     if value.get("scope") != scope(terminal, user):
         refuse("camera_preparation_owner_mismatch", 403)
+    if value.get("contracts") != CAMERA_MEDIA_HEADERS:
+        refuse("camera_preparation_contract_changed")
     if value.get("stage") != stage or time.time() >= value.get("deadline", 0):
         refuse("camera_preparation_expired")
     return value
@@ -124,13 +126,6 @@ def observed_camera(view, camera):
             view.get("camera_capabilities")
         )
         or observation["source_id"] != camera.get("camera_id")
-        or observation["actual_track"]["fps"]
-        > (
-            20
-            if observation["actual_track"]["width"] > 1920
-            or observation["actual_track"]["height"] > 1080
-            else 30
-        )
     ):
         refuse("camera_native_auto_not_negotiated")
     return {
@@ -238,6 +233,7 @@ class CameraAdmission:
             "ticket": seal(
                 {
                     "scope": owner,
+                    "contracts": dict(CAMERA_MEDIA_HEADERS),
                     "stage": "prepared",
                     "deadline": deadline,
                     "descriptor": descriptor,

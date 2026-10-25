@@ -1,5 +1,16 @@
 # MenuBuilder
 
+## Camera cadence0.2 / observation1.3 — preparation only, 2026-10-25
+
+PR122 proposes exact camera1.3/cadence0.2/enrollment0.4 dispatch and observation
+validation, preserving commonmedia3/admission0.2 and deployed1.2 frozen bytes.
+Tickets bind the entire selected bundle, rejecting older or mixed tickets before
+provider IO. Camera nominal FPS no longer inherits the old20/30 geometry budget;
+producer cadence proof/resource checks remain separate. No new observer/hint
+fields, UI freshness bypass, config writes, desktop change or deployment.
+Canonical packet: contracts/siplite-camera-v1.3/. Prior1.2 was deployed from
+fd4e6a6; this1.3 candidate must not be advertised until coordinated owner rollout.
+
 ## Camera common media-v3 — preparation only, 2026-10-25
 
 Candidate integrates common media3 descriptor/track/envelopes through camera

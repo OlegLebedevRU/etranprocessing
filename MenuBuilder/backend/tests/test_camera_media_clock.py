@@ -176,7 +176,7 @@ async def test_camera_keepalive_uses_fixed_export_after_forward_backward_utc_jum
             assert renew.await_args.args[1]["contract_version"] == 3
             assert (
                 camera_lease.await_args.kwargs["camera_contract"]
-                == "siplite-camera/1.2.0"
+                == "siplite-camera/1.3.0"
             )
         assert observed == [1000000007, 1000000015, 1000000015]
         # Lost/retired anchor is terminal even when generic UTC keepalive looks valid.
