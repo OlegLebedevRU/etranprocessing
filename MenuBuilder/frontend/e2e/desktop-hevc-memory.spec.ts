@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function desktop(page: Page, busy = false) {
+async function desktop(page: Page, busy = false, reason?: string) {
   const writes: string[] = [];
   const capabilityReads: string[] = [];
   await page.route("**/api/**", async route => {
@@ -27,7 +27,7 @@ async function desktop(page: Page, busy = false) {
         width: 1920, height: 1080, primary: true, policy: "input" }], cameras: [] };
       if (url.searchParams.get("contract_version") === "3") {
         capabilityReads.push(url.searchParams.get("source_id") || "");
-        data.video_codecs = { hevc_available: !busy, reason_code: busy ? "encoder_busy" : "ready" };
+        data.video_codecs = { hevc_available: !busy && !reason, reason_code: reason || (busy ? "encoder_busy" : "ready") };
       }
     }
     await route.fulfill({ json: data });
@@ -55,5 +55,38 @@ test("unknown busy is a deferred check rather than absence of HEVC", async ({ pa
   const observed = await desktop(page, true);
   await expect(page.getByText("Кодировщик занят, проверка H.265 отложена", { exact: true })).toBeVisible();
   await expect(page.getByText("H.265 недоступен: encoder_busy", { exact: true })).toHaveCount(0);
+  expect(observed.writes).toEqual([]);
+});
+
+test("desktop transport rejection shows configuration cause and releases the pending lease", async ({ page }) => {
+  const observed = await desktop(page);
+  const actions: string[] = [];
+  await page.route("**/api/v1/video/devices/773/**", async route => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (request.method() === "GET") return route.fallback();
+    actions.push(`${request.method()} ${path.split("/773/")[1]}`);
+    if (path.endsWith("/control/lease")) return route.fulfill({ json: {
+      lease_id: "desktop-fixture-lease", expires_at: new Date(Date.now() + 60000).toISOString(), keepalive_sec: 15,
+    } });
+    if (path.endsWith("/stream/start")) return route.fulfill({ status: 503, json: {
+      detail: { code: "transport_not_configured", message: "Unsupported source format for the selected quality policy" },
+    } });
+    return route.fulfill({ json: { result: "stopped" } });
+  });
+  // Close the settings popover before starting.
+  await page.getByRole("button", { name: "Настройки видео", exact: true }).click();
+  await page.getByRole("button", { name: "Запустить трансляцию", exact: true }).click();
+  await expect(page.getByText("На сервере не настроены порты видеотранспорта. Обратитесь к администратору.", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Unsupported source format", { exact: false })).toHaveCount(0);
+  await expect.poll(() => actions.filter(action => action.startsWith("DELETE control/lease/")).length).toBe(1);
+  expect(actions.filter(action => action === "POST stream/start")).toHaveLength(1);
+  expect(actions).toContain("POST stream/stop");
+  expect(observed.writes).toEqual([]); // All writes were intercepted by this fixture.
+});
+
+test("server negotiation outage is explained without misreporting a missing GPU", async ({ page }) => {
+  const observed = await desktop(page, false, "negotiation_unavailable");
+  await expect(page.getByText("Сервер не подтвердил готовность нового режима видео. Проверьте его настройки или выберите H.264.", { exact: true })).toBeVisible();
   expect(observed.writes).toEqual([]);
 });

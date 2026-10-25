@@ -1,0 +1,14 @@
+# Explicit opt-in overlay for desktop streaming; apply with the current image
+# and all existing operator overlays. These ports are terminal-local proxy
+# listeners, not Janus ingress ports. No camera policy is changed here.
+services:
+  menubuilder-backend:
+    environment:
+      VIDEO_CONTRACT_V2_ENABLED: "true"
+      L4DESK_SESSION_ORCHESTRATION_ENABLED: "true"
+      VIDEO_PROXY_RTP_PORT: ${VIDEO_PROXY_RTP_PORT:-5004}
+      VIDEO_PROXY_RTCP_PORT: ${VIDEO_PROXY_RTCP_PORT:-5005}
+  app1:
+    environment:
+      APP_CONFIG__REMOTE_INPUT__VIDEO_V2_ENABLED: "true"
+      APP_CONFIG__REMOTE_INPUT__VIDEO_HEVC_CHAIN_READY: "true"

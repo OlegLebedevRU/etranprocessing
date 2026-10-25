@@ -94,7 +94,14 @@ def context(monkeypatch):
         "owner_session_id": "owned",
         "expires_at": (datetime.now(UTC) + timedelta(seconds=60)).isoformat(),
     }
-    status = {"lease": lease, "agent": {"online": True, "stream": {"state": "stopped"}}}
+    status = {
+        "lease": lease,
+        "agent": {
+            "online": True,
+            "capabilities": ["video_contract_v2"],
+            "stream": {"state": "stopped"},
+        },
+    }
     for key, value in {
         "video_contract_v2_enabled": True,
         "l4desk_session_orchestration_enabled": True,
@@ -386,7 +393,7 @@ async def test_auto_without_hevc_selects_existing_h264_adapter(context, reason):
 @pytest.mark.anyio
 @pytest.mark.parametrize(
     "change",
-    [{"h264": False}, {"h264": None}, {"valid_until_ms": 1}, {"unexpected": True}],
+    [{"h264": False}, {"h264": "true"}, {"unexpected": True}],
 )
 async def test_h264_adapter_preserves_browser_admission(context, change):
     service, args, trace, _ = context

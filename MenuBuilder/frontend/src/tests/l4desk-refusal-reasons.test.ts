@@ -5,6 +5,14 @@ import {
 } from "../components/RefusalReasonCard";
 
 describe("L4Desk Rejection & Refusal Reason Classification", () => {
+  it("keeps video configuration failures distinct from source format and session conflicts", () => {
+    const transport = classifyRefusalReason("transport_not_configured", "Unsupported source format");
+    expect(transport.description).toContain("порты видеотранспорта");
+    expect(transport.description).not.toContain("Unsupported source format");
+    expect(classifyRefusalReason("legacy_h264_only").description).toContain("H.264");
+    expect(classifyRefusalReason("encoder_busy").type).not.toBe("session_conflict");
+    expect(classifyRefusalReason("negotiation_unavailable").description).toContain("готовность");
+  });
   it("Reason 1: Classifies session conflict correctly", () => {
     const res1 = classifyRefusalReason("session_busy");
     expect(res1.type).toBe("session_conflict");

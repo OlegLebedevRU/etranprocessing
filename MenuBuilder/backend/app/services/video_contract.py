@@ -38,7 +38,13 @@ logger = logging.getLogger(__name__)
 CodecPolicy = Literal["auto", "h264", "h265"]
 
 
-def verify_browser_codec(browser_codecs: dict[str, Any] | None, codec: str) -> None:
+def verify_browser_codec(
+    browser_codecs: dict[str, Any] | None,
+    codec: str,
+    *,
+    observed_at_ms: int | None = None,
+    legacy: bool = False,
+) -> None:
     if browser_codecs is None:
         return
     from app.services.camera_video import BrowserCodecs
@@ -49,7 +55,13 @@ def verify_browser_codec(browser_codecs: dict[str, Any] | None, codec: str) -> N
         raise HTTPException(
             422, detail={"code": "browser_capabilities_invalid"}
         ) from exc
-    now_ms = int(time.time() * 1000)
+    # A browser report is a negotiation hint, not a lease or authorization token.
+    # Legacy H264 still negotiates SDP when the capability API is unavailable.
+    if legacy:
+        if browser.h264 is False:
+            raise HTTPException(422, detail={"code": "browser_codec_unsupported"})
+        return
+    now_ms = observed_at_ms if observed_at_ms is not None else int(time.time() * 1000)
     if not (
         browser.checked_at_ms - 5000 <= now_ms < browser.valid_until_ms
         and 0 < browser.valid_until_ms - browser.checked_at_ms <= 60000
@@ -382,11 +394,6 @@ class VideoContractOrchestrator:
             or not settings.l4desk_session_orchestration_enabled
         ):
             return {"hevc_available": False, "reason_code": reason}
-        if not (
-            0 < settings.video_proxy_rtp_port <= 65535
-            and 0 < settings.video_proxy_rtcp_port <= 65535
-        ):
-            return {"hevc_available": False, "reason_code": "transport_not_configured"}
         try:
             inventory = await self.iot.remote_video_v2(
                 sn,
@@ -401,9 +408,16 @@ class VideoContractOrchestrator:
                 set(inventory)
                 != {"contract_version", "negotiated_v2", "video_capabilities"}
                 or inventory["contract_version"] != 3
-                or inventory["negotiated_v2"] is not True
+                or not isinstance(inventory["negotiated_v2"], bool)
             ):
                 return {"hevc_available": False, "reason_code": "capability_mismatch"}
+            if not inventory["negotiated_v2"]:
+                return {
+                    "hevc_available": False,
+                    "reason_code": "negotiation_unavailable"
+                    if inventory["video_capabilities"] is None
+                    else "capability_mismatch",
+                }
             capability = inventory["video_capabilities"]
             server = await self.media.video_v2("capabilities")
             track, reason = select_hevc_profile(
@@ -444,6 +458,7 @@ class VideoContractOrchestrator:
         user: dict[str, Any],
         browser_codecs: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
+        observed_at_ms = int(time.time() * 1000)
         if not (status.get("lease") or {}).get("owner_session_id"):
             lease = await self.iot.remote_video_v2(
                 sn, "lease", lease_id=lease_id, org_id=org_id, user=user
@@ -495,12 +510,40 @@ class VideoContractOrchestrator:
             if policy == "h265":
                 raise HTTPException(409, detail={"code": "conflict"})
             return None
+        agent = status.get("agent") or {}
+        if not agent.get("online") or agent.get("stale"):
+            raise HTTPException(409, detail={"code": "offline"})
+        protocols = agent.get("capabilities")
+        if protocols is not None and (
+            not isinstance(protocols, list)
+            or any(not isinstance(item, str) for item in protocols)
+        ):
+            raise HTTPException(502, detail={"code": "invalid_video_contract"})
+        # Presence is authoritative about advertised protocols. Absence of the
+        # opt-in contract is normal for agents predating HEVC, not a v3 error.
+        if "video_contract_v2" not in (protocols or []):
+            if policy == "h265":
+                raise HTTPException(422, detail={"code": "legacy_h264_only"})
+            verify_browser_codec(browser_codecs, "h264", legacy=True)
+            return None
         requested_codec = (
             "h264"
             if policy == "h264"
-            or (policy == "auto" and (browser_codecs or {}).get("h265") is False)
+            or (
+                policy == "auto"
+                and browser_codecs is not None
+                and browser_codecs.get("h265") is not True
+            )
             else "h265"
         )
+        # Explicit H264 selection can use CTL v1 without enabling HEVC policy.
+        # Route preparation and app1 still authorize/serialize the legacy START.
+        if requested_codec == "h264" and (
+            not settings.video_contract_v2_enabled
+            or not settings.l4desk_session_orchestration_enabled
+        ):
+            verify_browser_codec(browser_codecs, "h264", legacy=True)
+            return None
         available = await self.availability(
             sn,
             source_id,
@@ -509,6 +552,14 @@ class VideoContractOrchestrator:
             user,
             codec=requested_codec,
         )
+        if (
+            requested_codec == "h264"
+            and available["reason_code"] == "negotiation_unavailable"
+        ):
+            # This is a deliberate H264 request, not an inference that a false
+            # negotiated_v2 proves an old agent. Never use it for explicit HEVC.
+            verify_browser_codec(browser_codecs, "h264", legacy=True)
+            return None
         if policy == "auto" and available["reason_code"] in (
             "no_hardware_mft",
             "profile_unsupported",
@@ -523,6 +574,13 @@ class VideoContractOrchestrator:
         # adapter remains usable. Prefer a real v3 H264 track when advertised;
         # never mask a stale/mismatched capability or a declared encoder failure.
         if (
+            agent.get("agent_instance_id")
+            and available.get("capability")
+            and available["capability"]["agent_instance_id"]
+            != agent["agent_instance_id"]
+        ):
+            raise HTTPException(409, detail={"code": "capability_mismatch"})
+        if (
             requested_codec == "h264"
             and available["reason_code"] == "profile_unsupported"
             and available.get("capability")
@@ -530,7 +588,7 @@ class VideoContractOrchestrator:
                 entry["codec"] == "h264" for entry in available["capability"]["video"]
             )
         ):
-            verify_browser_codec(browser_codecs, "h264")
+            verify_browser_codec(browser_codecs, "h264", legacy=True)
             return None
         if (
             source_id.startswith("disp:")
@@ -552,11 +610,18 @@ class VideoContractOrchestrator:
                 422,
                 detail={
                     "code": available["reason_code"],
-                    "message": "Unsupported source format for the selected quality policy",
+                    "message": "Не удалось согласовать видеопоток с терминалом",
                 },
             )
         resolved_codec = available["track"]["codec"]
-        verify_browser_codec(browser_codecs, resolved_codec)
+        verify_browser_codec(
+            browser_codecs, resolved_codec, observed_at_ms=observed_at_ms
+        )
+        if not (
+            0 < settings.video_proxy_rtp_port <= 65535
+            and 0 < settings.video_proxy_rtcp_port <= 65535
+        ):
+            raise HTTPException(503, detail={"code": "transport_not_configured"})
         capability = available["capability"]
         agent = status.get("agent") or {}
         if (
