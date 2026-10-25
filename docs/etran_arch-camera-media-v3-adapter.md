@@ -43,6 +43,22 @@ budget. The readiness ticket uses an original5s deadline anchored before issuing
 the query. Device R/I and issuer monotonic admission, durable floor and replay
 state remain owned by IoT/firmware. The BFF never gives a delayed START a new TTL.
 
+Camera preparation allocates independent random UUID4 stream_instance_id and
+operation_id once, storing them inside that existing encrypted attempt ticket.
+Readiness resealing and repeated/concurrent START retain those identifiers; a
+new explicit preparation receives new ones. Missing, noncanonical, non-v4 or
+colliding identifiers reject before provider IO. An existing running record must
+match the ticket's operation/command/stream identity as well as its descriptor.
+Existing authoritative lease/owner checks precede route creation, and the IoT
+record/readiness fence still prevents crossing lease or admission attempts.
+
+IoT copies operation_id into camera CTLv1 command_id and publisher stream ID into
+stream_instance_id unchanged: frozen admission0.2 requires UUID4 for both.
+Common MEDIA session_id remains the existing UUID5 derived from stream ID so
+health/renew/STOP reconstruct the same identity; it is not on the camera CTL
+wire. Desktop UUID behavior and common/frozen schemas remain unchanged. No DB,
+worker-local cache, UUID bit conversion or new attempt on retry is introduced.
+
 Medium selects profile low, HD selects default. These are immutable quality
 policies, not RPC163 presets. The selected profile must be supported by BOTH
 producer observation and projected capabilities. Both may use one native track.

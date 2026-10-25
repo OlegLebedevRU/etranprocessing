@@ -1,5 +1,13 @@
 # Changelog — MenuBuilder
 
+## Unreleased — camera CTLv1 attempt identifiers
+
+- Allocate random UUID4 operation and stream IDs once in the encrypted camera
+  preparation ticket, preserving them through readiness and duplicate START.
+  Camera CTLv1 rejects the previous UUID5 values copied from common media START.
+- Reject old/malformed tickets and conflicting running-attempt identities before
+  creating another route. Common MEDIA session UUID5 and desktop IDs are unchanged.
+
 ## Unreleased — camera measured nominal cadence adapter
 
 - Add exact observation1.3/cadence0.2/enrollment0.4 selection with the same common

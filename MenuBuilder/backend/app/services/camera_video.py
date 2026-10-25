@@ -6,7 +6,7 @@ import asyncio
 import contextlib
 import time
 from typing import Any, Literal, NoReturn
-from uuid import UUID, uuid5
+from uuid import UUID
 
 from fastapi import HTTPException
 from pydantic import UUID4, BaseModel, ConfigDict
@@ -188,6 +188,7 @@ class NativeCameraVideo:
             refuse("camera_source_mismatch", 422)
         validate_browser(browser, int(time.time() * 1000))
         admission = unseal(admission_ticket, terminal, user, "ready")
+        attempt_ids = admission["attempt_ids"]
         descriptor = validate_video("descriptor", admission["descriptor"])
         if (
             descriptor["source_id"] != source_id
@@ -234,6 +235,9 @@ class NativeCameraVideo:
             if (
                 previous["descriptor"] != descriptor
                 or previous["resolved_codec"] != descriptor["tracks"][0]["codec"]
+                or previous["stream_instance_id"] != attempt_ids["stream_instance_id"]
+                or previous["operation_id"] != attempt_ids["operation_id"]
+                or previous["command_id"] != attempt_ids["operation_id"]
             ):
                 refuse("conflict")
             identity = media_identity(
@@ -260,14 +264,14 @@ class NativeCameraVideo:
             )
             verify_media_response(media, identity, descriptor)
             return {**previous, "media": media, "result": "already_running"}
-        stream_id = str(uuid5(UUID(admission["nonce"]), lease_id))
+        stream_id = attempt_ids["stream_instance_id"]
         identity = media_identity(terminal.sn, lease_id, stream_id, descriptor)
         request = validate_video(
             "media_start",
             {
                 "contract_version": 3,
                 "session_id": identity["session_id"],
-                "operation_id": str(uuid5(UUID(stream_id), "camera-start")),
+                "operation_id": attempt_ids["operation_id"],
                 "publisher": {"sn": terminal.sn, "stream_instance_id": stream_id},
                 "lease_id": lease_id,
                 "lease_expires_at": deadline,
