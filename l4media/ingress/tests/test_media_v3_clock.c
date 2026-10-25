@@ -1,7 +1,11 @@
 /* Deterministic production v3 lifecycle, independent wall/monotonic clocks. */
 #include <time.h>
+#include <stdint.h>
 static time_t test_wall = 1800000000;
 static unsigned long long test_mono = 1000000;
+static long test_nsec = 900000000;
+static unsigned realtime_samples;
+static uint64_t realtime_read_delay;
 static time_t test_time(time_t *output) {
     if (output)
         *output = test_wall;
@@ -16,6 +20,13 @@ static time_t test_time(time_t *output) {
 #include <assert.h>
 #include "test_media_common.h"
 static uint64_t monotonic(void) { return (uint64_t)test_mono; }
+static bool realtime(struct timespec *output) {
+    ++realtime_samples;
+    output->tv_sec = test_wall;
+    output->tv_nsec = test_nsec;
+    test_mono += realtime_read_delay;
+    return true;
+}
 static void send_v3(const char *method, const char *path, json_t *value, int expected) {
     char *body = value ? json_dumps(value, JSON_COMPACT) : NULL;
     char output[16384];
@@ -56,6 +67,7 @@ int main(void) {
     assert(media_camera_schema_load("spec/camera-v1/hevc.schema.json"));
     assert(media_v3_schema_load("spec/media-v3/media.schema.json"));
     g_media_test_monotonic_ms = monotonic;
+    g_media_test_realtime = realtime;
     g_media_test_boot_id = "11111111-1111-4111-8111-111111111111";
     fake_mounts = json_object();
     g_janus_test_request = fake_janus;
@@ -65,7 +77,8 @@ int main(void) {
     json_t *start = start_request();
     send_v3("POST", "/api/v2/media/sessions/start", start, 201);
     MediaSession *s = find_session_by_id(mv_string(start, "session_id"));
-    assert(s && s->monotonic_deadline_ms == 1007000);
+    /* Receipt T+0.900s, expiry T+7s: only6.100s remain, never7s. */
+    assert(s && s->monotonic_deadline_ms == 1006100 && realtime_samples == 1);
     uint64_t original = s->monotonic_deadline_ms;
     IngressClient telemetry = {0};
     strcpy(telemetry.sn, s->sn);
@@ -103,6 +116,10 @@ int main(void) {
     json_object_set_new(renew, "lease_expires_at", json_integer(s->issuer_expiry_utc));
     send_v3("POST", "/api/v2/media/sessions/renew", renew, 200);
     assert(s->monotonic_deadline_ms == original);
+    int64_t unchanged_anchor = s->issuer_expiry_utc;
+    json_object_set_new(renew, "lease_expires_at", json_integer(unchanged_anchor - 2));
+    send_v3("POST", "/api/v2/media/sessions/renew", renew, 200);
+    assert(s->issuer_expiry_utc == unchanged_anchor && s->monotonic_deadline_ms == original);
     json_object_set_new(renew, "lease_expires_at", json_integer(s->issuer_expiry_utc + 3));
     send_v3("POST", "/api/v2/media/sessions/renew", renew, 200);
     assert(s->monotonic_deadline_ms == original + 3000);
@@ -120,11 +137,35 @@ int main(void) {
     assert(s->state == MEDIA_STATE_STOPPED && !find_route(s->sn));
     send_v3("POST", "/api/v2/media/sessions/renew", renew, 410);
     assert(s->state == MEDIA_STATE_STOPPED);
+    /* A queued START keeps the original absolute expiry. Delay consumes its
+     * fractional remaining interval, including equality and sub-ms rounding. */
+    int64_t original_expiry = (int64_t)test_wall + 7;
+    MediaSession late = {0};
+    test_wall += 5;
+    test_mono += 5000;
+    test_nsec = 500000000;
+    assert(media_v3_begin_deadline(&late, original_expiry));
+    assert(late.monotonic_deadline_ms == test_mono + 1500);
+    test_wall += 2;
+    test_mono += 1500;
+    test_nsec = 0;
+    assert(!media_v3_begin_deadline(&late, original_expiry));
+    assert(!media_v3_begin_deadline(&late, 0));
+    test_nsec = 1;
+    assert(!media_v3_begin_deadline(&late, original_expiry));
+    assert(media_v3_begin_deadline(&late, (int64_t)test_wall + 1));
+    assert(late.monotonic_deadline_ms == test_mono + 999);
+    test_nsec = 0;
+    realtime_read_delay = 200;
+    uint64_t before_sample = test_mono;
+    assert(media_v3_begin_deadline(&late, (int64_t)test_wall + 1));
+    assert(test_mono == before_sample + 200 && late.monotonic_deadline_ms == before_sample + 1000);
+    realtime_read_delay = 0;
     /* An incoming command gets only its seven remaining seconds, never60. */
     MediaSession budget = {0};
-    assert(media_v3_begin_deadline(&budget, (int64_t)test_wall + 7, test_wall));
+    assert(media_v3_begin_deadline(&budget, (int64_t)test_wall + 7));
     assert(budget.monotonic_deadline_ms == test_mono + 7000);
-    assert(!media_v3_begin_deadline(&budget, (int64_t)test_wall, test_wall));
+    assert(!media_v3_begin_deadline(&budget, (int64_t)test_wall));
     json_t *record = json_pack("{s:I,s:s}", "monotonic_deadline_ms", (json_int_t)budget.monotonic_deadline_ms,
                                "monotonic_boot_id", g_media_test_boot_id);
     MediaSession restored = {0};
@@ -153,6 +194,6 @@ int main(void) {
     json_decref(g_media_camera_schema);
     json_decref(g_media_v3_schema);
     puts("PASS v3 original remaining TTL, wall forward/backward jumps, duplicate START/renew, identity fences, "
-         "equality expiry and clock regression");
+         "fractional receipt/late START, stale anchor isolation, equality expiry and clock regression");
     return 0;
 }

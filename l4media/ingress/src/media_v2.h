@@ -240,7 +240,7 @@ static inline void mv_start(json_t* request, char* response, size_t size, int* s
         }
         *status = 200; mv_response(session, false, response, size); return;
     }
-    if (candidate.contract_version == 3 && !media_v3_begin_deadline(&candidate, deadline, now)) {
+    if (candidate.contract_version == 3 && !media_v3_begin_deadline(&candidate, deadline)) {
         mv_error("expired", 410, response, size, status);
         return;
     }

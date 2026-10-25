@@ -57,7 +57,7 @@ int main(void) {
     owner->camera_source = true;
     owner->route_generation = 1;
     owner->state = MEDIA_STATE_ACTIVE;
-    assert(media_v3_begin_deadline(owner, (int64_t)time(NULL) + 60, time(NULL)));
+    assert(media_v3_begin_deadline(owner, (int64_t)time(NULL) + 60));
     int changed;
     assert(upsert_route("A", ntohs(a.sin_port), ntohs(a.sin_port), &changed));
     int old[2];

@@ -23,8 +23,11 @@ camera settings, SPS or RTP timestamps. Tests exercise H265Main8/4202592x1944@20
 level153, exact Janus fmtp and both policies with no new media pipeline.
 
 ## Active deadlines
-V3 START captures the remaining issuer deadline once using receipt UTC and the
-local monotonic clock. Existing-session START replays never recapture a timer.
+V3 START captures the remaining issuer deadline once using one precise
+CLOCK_REALTIME receipt sample and the local monotonic clock. Receipt UTC rounds
+up to milliseconds; monotonic is sampled before UTC so neither truncated
+subseconds nor sampling delay can extend the absolute deadline. Existing-session
+START replays never recapture a timer.
 Renewals map newer absolute expiry into the same original issuer coordinate;
 unchanged/older expiry cannot lengthen it. Queue/network/setup residence consumes
 the original remaining interval. An expired lease cannot be renewed, and equality

@@ -85,6 +85,7 @@ typedef struct {
  * same kernel boot; unknown boot/anchor must not restart an issuer TTL. */
 #ifdef L4MEDIA_TESTING
 static uint64_t (*g_media_test_monotonic_ms)(void);
+static bool (*g_media_test_realtime)(struct timespec *);
 static const char *g_media_test_boot_id;
 #endif
 static uint64_t g_media_monotonic_last;
@@ -138,12 +139,38 @@ static inline const char *media_monotonic_boot_id(void) {
     }
     return boot[0] ? boot : NULL;
 }
-static inline bool media_v3_begin_deadline(MediaSession *s, int64_t expiry, time_t wall) {
-    uint64_t now;
-    if (wall < 0 || expiry <= (int64_t)wall || expiry - (int64_t)wall > 7200 || !media_monotonic_ms(&now) ||
-        !media_monotonic_boot_id())
+/* One precise receipt UTC sample, rounded conservatively upwards to the
+ * timer's millisecond domain. Never combine seconds from time() with a later
+ * fractional sample, or grant the truncated part of a second again. */
+static inline bool media_realtime_receipt_ms(uint64_t *result) {
+    struct timespec ts;
+#ifdef L4MEDIA_TESTING
+    if (g_media_test_realtime) {
+        if (!g_media_test_realtime(&ts))
+            return false;
+    } else
+#endif
+    {
+        if (clock_gettime(CLOCK_REALTIME, &ts))
+            return false;
+    }
+    if (ts.tv_sec < 0 || ts.tv_nsec < 0 || ts.tv_nsec >= 1000000000L ||
+        (uint64_t)ts.tv_sec > ((uint64_t)INT64_MAX - 1000) / 1000)
         return false;
-    uint64_t remaining = (uint64_t)(expiry - (int64_t)wall) * 1000;
+    *result = (uint64_t)ts.tv_sec * 1000 + ((uint64_t)ts.tv_nsec + 999999) / 1000000;
+    return true;
+}
+static inline bool media_v3_begin_deadline(MediaSession *s, int64_t expiry) {
+    uint64_t now, wall_ms;
+    /* Sample monotonic BEFORE UTC: syscall/setup delay consumes the budget,
+     * rather than shifting the absolute deadline later when samples differ. */
+    if (expiry <= 0 || (uint64_t)expiry > (uint64_t)INT64_MAX / 1000 || !media_monotonic_ms(&now) ||
+        !media_realtime_receipt_ms(&wall_ms) || !media_monotonic_boot_id())
+        return false;
+    uint64_t expiry_ms = (uint64_t)expiry * 1000;
+    if (expiry_ms <= wall_ms || expiry_ms - wall_ms > 7200000)
+        return false;
+    uint64_t remaining = expiry_ms - wall_ms;
     if (now > (uint64_t)INT64_MAX - remaining)
         return false;
     s->issuer_expiry_utc = expiry;
