@@ -30,6 +30,28 @@ the strict common descriptor and outside media service requests.
 
 ## Admission and quality
 
+After validated native START, the existing internal video-session operation_id
+stores `op-stream-v2-camera13-<provider stream UUID>`. The URL-safe marker is
+shorter than the128-character column and preserves the existing op-stream-v2
+consumer prefix; no suffix UUID parser or DB migration is involved. It is never
+inferred from request mode, one source_type value or usb-camera presence alone.
+Desktop and ordinary USB sessions retain their existing operation identifiers.
+Generic remote-session requests reserve the `op-stream-v2-camera*` namespace
+with normal request validation before provider IO, so a client-supplied generic
+operation identifier cannot manufacture the internal camera routing marker.
+
+Generic state, mountpoint, lease-less/explicit STOP and keepalive readers use
+that server-owned marker and exact provider ID to select the full camera bundle.
+The returned state must match SN, lease and captured stream; stale context cannot
+target a replacement stream. STOP captures context before closing its local row.
+Post-START persistence compensation uses the already validated native result,
+since no stored marker may exist yet. IoT shared lease keepalive keeps its normal
+owner/generation/ACK path; its subsequent full-state/clock lookup and MEDIA renew
+must both complete. MEDIA receives only its common header, never camera headers.
+Old pre-marker camera sessions require a fresh explicit attempt, not source-hint
+fallback. Existing actor/readiness/lease and expected-provider cleanup fences
+remain mandatory. This marker is routing context, not a new authority grant.
+
 Before acquiring a stream lease the BFF checks fresh main_app status, verified
 authenticated physical port2/MAC/discovery, independently validated camera1.3
 observation/capabilities, actual device geometry and media/browser codec support.

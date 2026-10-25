@@ -4,7 +4,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import require_tenant_context
@@ -29,6 +29,13 @@ class SessionStartRequest(BaseModel):
     source_id: str = "0"
     profile: str = "480p"
     start_terminal_stream: bool = True
+
+    @field_validator("operation_id")
+    @classmethod
+    def reserve_camera_session_namespace(cls, value: str | None) -> str | None:
+        if value and value.startswith("op-stream-v2-camera"):
+            raise ValueError("Camera session operation namespace is server-owned")
+        return value
 
 
 class SessionStopRequest(BaseModel):

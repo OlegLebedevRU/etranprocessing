@@ -22,6 +22,55 @@ CAMERA_MEDIA_HEADERS = {
     "X-L4-Camera-Enrollment": "camera-enrollment/0.4.0-proposed",
     "X-L4-Camera-Admission": "camera-ctl-monotonic/0.2.0-proposed",
 }
+CAMERA_SESSION_PREFIX = "op-stream-v2-camera13-"
+
+
+class CameraStateOptions(TypedDict, total=False):
+    camera_contract: str
+    expected_stream_instance_id: str
+
+
+def camera_result_state_options(value: dict[str, Any]) -> CameraStateOptions:
+    """Context from the validated native START result, never request mode alone."""
+    descriptor = value.get("descriptor") or {}
+    stream = value.get("stream_instance_id")
+    if (
+        value.get("version") == 2
+        and value.get("contract_version") == 3
+        and value.get("camera_contract_revision") == CAMERA_MEDIA_REVISION
+        and isinstance(descriptor, dict)
+        and descriptor.get("source_type") == "camera"
+        and descriptor.get("source_id") == "cam:ip000001"
+        and isinstance(stream, str)
+        and stream
+    ):
+        return {
+            "camera_contract": CAMERA_MEDIA_REVISION,
+            "expected_stream_instance_id": stream,
+        }
+    return {}
+
+
+def camera_session_operation_id(stream: str) -> str:
+    return CAMERA_SESSION_PREFIX + stream
+
+
+def camera_session_state_options(session: Any) -> CameraStateOptions:
+    """Read the server-owned session marker, retaining its exact provider epoch."""
+    from app.models_l4desk import L4DeskRemoteSession
+
+    if not isinstance(session, L4DeskRemoteSession) or session.session_type != "video":
+        return {}
+    operation = str(session.operation_id or "")
+    if not operation.startswith("op-stream-v2-camera"):
+        return {}
+    stream = session.provider_session_id
+    if not stream or operation != camera_session_operation_id(stream):
+        raise HTTPException(409, detail={"code": "camera_session_context_changed"})
+    return {
+        "camera_contract": CAMERA_MEDIA_REVISION,
+        "expected_stream_instance_id": stream,
+    }
 
 
 def camera_headers(selection: bool | str) -> dict[str, str]:

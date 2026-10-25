@@ -16,8 +16,12 @@ from app.auth import resolve_org_id
 from app.config import settings
 from app.database import get_db
 from app.models import Terminal
+from app.repositories.l4desk_repository import L4DeskRepository
 from app.security.permissions import PERMISSION_VIDEO_VIEW, require_permission
-from app.services.camera_contract import media_contract_options
+from app.services.camera_contract import (
+    camera_session_state_options,
+    media_contract_options,
+)
 from app.services.iot_client import iot_client
 from app.services.media_orchestrator_client import media_orchestrator_client
 from app.services.video_contract import (
@@ -544,8 +548,15 @@ async def create_video_session(
     org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
 
     # Verify that caller holds active lease on app1
+    active_session = await L4DeskRepository(db).get_active_session_by_terminal_id(
+        terminal.id
+    )
     status_data = await load_video_status(
-        iot_client, terminal.sn, org_id=org_id, user=user
+        iot_client,
+        terminal.sn,
+        org_id=org_id,
+        user=user,
+        **camera_session_state_options(active_session),
     )
     lease_info = status_data.get("lease") or {}
     if not lease_info.get("active"):

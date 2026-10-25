@@ -48,7 +48,14 @@ from app.security.permissions import (
     PERMISSION_VIDEO_VIEW,
     require_permission,
 )
-from app.services.camera_contract import CAMERA_MEDIA_REVISION, media_contract_options
+from app.services.camera_contract import (
+    CAMERA_MEDIA_REVISION,
+    CAMERA_SESSION_PREFIX,
+    camera_result_state_options,
+    camera_session_operation_id,
+    camera_session_state_options,
+    media_contract_options,
+)
 from app.services.camera_media_clock import camera_media_deadline
 from app.services.iot_client import iot_client
 from app.services.media_orchestrator_client import (
@@ -948,7 +955,11 @@ async def start_device_stream(
     lease_id = body.lease_id
     if not lease_id:
         status_data = await load_video_status(
-            iot_client, terminal.sn, org_id=org_id, user=user
+            iot_client,
+            terminal.sn,
+            org_id=org_id,
+            user=user,
+            **camera_session_state_options(active_sess),
         )
         lease_info = status_data.get("lease") or {}
         if not lease_info.get("active") or not lease_info.get("lease_id"):
@@ -1022,7 +1033,11 @@ async def start_device_stream(
         if body.browser_codecs is None:
             raise HTTPException(422, detail={"code": "browser_capabilities_required"})
         current = await load_video_status(
-            iot_client, terminal.sn, org_id=org_id, user=user
+            iot_client,
+            terminal.sn,
+            org_id=org_id,
+            user=user,
+            **camera_session_state_options(active_sess),
         )
         extended = await VideoContractOrchestrator(
             iot_client, media_orchestrator_client
@@ -1056,6 +1071,14 @@ async def start_device_stream(
         )
         stream_inst_id = str(res.get("stream_instance_id", ""))
         if stream_inst_id:
+            camera_context = camera_result_state_options(extended or {})
+            session_operation = (
+                camera_session_operation_id(stream_inst_id)
+                if camera_context
+                else f"op-stream-v2-{stream_inst_id}"
+                if extended
+                else f"op-stream-{stream_inst_id}"
+            )
             set_mountpoint_stream_instance(device_id, stream_inst_id)
             await repo.ensure_l4desk_terminal(
                 terminal_id=terminal.id,
@@ -1077,9 +1100,7 @@ async def start_device_stream(
                 session = await repo.create_remote_session(
                     tenant_id=terminal.org_id,
                     terminal_id=terminal.id,
-                    operation_id=f"op-stream-v2-{stream_inst_id}"
-                    if extended
-                    else f"op-stream-{stream_inst_id}",
+                    operation_id=session_operation,
                     correlation_id=f"corr-stream-{stream_inst_id}",
                     session_type="video",
                     requested_by_user_id=user_db_id,
@@ -1093,6 +1114,13 @@ async def start_device_stream(
                 # A deliberate source switch under one still-active provider
                 # epoch keeps its metering cursor and takes the new stream id.
                 active_sess.provider_session_id = stream_inst_id
+                if camera_context or str(active_sess.operation_id).startswith(
+                    CAMERA_SESSION_PREFIX
+                ):
+                    active_sess.operation_id = session_operation
+                await db.commit()
+            elif camera_context and active_sess.operation_id != session_operation:
+                active_sess.operation_id = session_operation
                 await db.commit()
         response = StreamStartResponse(
             stream_instance_id=stream_inst_id,
@@ -1164,7 +1192,11 @@ async def start_device_stream(
         try:
             if extended:
                 snapshot = await load_video_status(
-                    iot_client, terminal.sn, org_id=org_id, user=user
+                    iot_client,
+                    terminal.sn,
+                    org_id=org_id,
+                    user=user,
+                    **camera_result_state_options(extended),
                 )
                 stop = make_stop_command(terminal.sn, lease_id, snapshot)
                 if (
@@ -1232,10 +1264,15 @@ async def stop_device_stream(
     org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
 
     status_data: dict[str, Any] | None = None
+    active_before = await L4DeskRepository(db).get_active_session_by_terminal_id(
+        terminal.id
+    )
+    # Capture before STOP can close the local row or a new epoch can replace it.
+    camera_context = camera_session_state_options(active_before)
     lease_id = body.lease_id if body else None
     if not lease_id:
         status_data = await load_video_status(
-            iot_client, terminal.sn, org_id=org_id, user=user
+            iot_client, terminal.sn, org_id=org_id, user=user, **camera_context
         )
         lease_info = status_data.get("lease") or {}
         if not lease_info.get("active") or not lease_info.get("lease_id"):
@@ -1245,16 +1282,13 @@ async def stop_device_stream(
             )
         lease_id = str(lease_info["lease_id"])
 
-    active_before = await L4DeskRepository(db).get_active_session_by_terminal_id(
-        terminal.id
-    )
     if (
         isinstance(active_before, L4DeskRemoteSession)
         or settings.video_contract_v2_enabled
     ) and status_data is None:
         try:
             status_data = await load_video_status(
-                iot_client, terminal.sn, org_id=org_id, user=user
+                iot_client, terminal.sn, org_id=org_id, user=user, **camera_context
             )
         except HTTPException:
             if settings.video_contract_v2_enabled or (
@@ -1433,8 +1467,19 @@ async def get_device_stream_state(
     """Get presence stream state and ingress RTP status."""
     terminal = await _verify_device_access(device_id, user, db)
     org_id = terminal.org_id if user.get("is_superuser") else resolve_org_id(user)
+    active_session = (
+        await L4DeskRepository(db).get_active_session_by_terminal_id(terminal.id)
+        if contract_version == 3
+        else None
+    )
     status_data = (
-        await load_video_status(iot_client, terminal.sn, org_id=org_id, user=user)
+        await load_video_status(
+            iot_client,
+            terminal.sn,
+            org_id=org_id,
+            user=user,
+            **camera_session_state_options(active_session),
+        )
         if contract_version == 3
         else await iot_client.remote_input_status(terminal.sn, org_id=org_id, user=user)
     )
@@ -1475,6 +1520,7 @@ async def keepalive_device_control_lease(
         active_session = await L4DeskRepository(db).get_active_session_by_terminal_id(
             terminal.id
         )
+        camera_context = camera_session_state_options(active_session)
         needs_checkpoint = checkpoint_due(active_session, datetime.now(UTC))
         result = await iot_client.remote_input_keepalive(
             lease_id=body.lease_id,
@@ -1495,7 +1541,7 @@ async def keepalive_device_control_lease(
                 active_session.operation_id or ""
             ).startswith("op-stream-v2-"):
                 provider_status = await load_video_status(
-                    iot_client, terminal.sn, org_id=org_id, user=user
+                    iot_client, terminal.sn, org_id=org_id, user=user, **camera_context
                 )
             descriptor = stream_descriptor(provider_status or {})
             if descriptor is not None:
