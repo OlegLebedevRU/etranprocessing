@@ -1,6 +1,7 @@
 # ruff: noqa: F811
 import copy
 import hashlib
+import json
 from pathlib import Path
 
 import httpx
@@ -10,7 +11,7 @@ from test_camera_admission import admission, anyio_backend, ready_ticket  # noqa
 from test_camera_video import context  # noqa: F401
 
 from app.config import settings
-from app.services.camera_admission import unseal
+from app.services.camera_admission import seal, unseal
 from app.services.camera_contract import (
     CAMERA_MEDIA_HEADERS,
     CAMERA_MEDIA_REVISION,
@@ -177,7 +178,7 @@ async def test_iot_exact_five_header_bundle(action, monkeypatch):
         assert seen[0].headers["X-L4-Camera-Readiness"] == "test-nonce"
 
 
-@pytest.mark.parametrize("revision", ["siplite-camera/1.1.0", "siplite-camera/1.3.0"])
+@pytest.mark.parametrize("revision", ["siplite-camera/1.2.0", "siplite-camera/1.4.0"])
 def test_unknown_or_old_adapter_revision_is_not_downgraded(revision):
     with pytest.raises(HTTPException):
         camera_headers(revision)
@@ -191,9 +192,99 @@ def test_schema_copies_are_exact():
         ).hexdigest()
         == "b86ca6f066fcdecb09cf7145a7fb23d87b77311a53c7ea04f0fb6e8a905b2818"
     )
-    assert (root / "contracts/siplite-camera-v1.2/camera.schema.json").read_bytes() == (
-        root / "MenuBuilder/backend/app/contracts/camera-v1.2.schema.json"
+    assert (root / "contracts/siplite-camera-v1.3/camera.schema.json").read_bytes() == (
+        root / "MenuBuilder/backend/app/contracts/camera-v1.3.schema.json"
     ).read_bytes()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("nominal", [25, 120])
+async def test_camera13_nominal_parse_bounds_do_not_inherit_desktop_geometry_budget(
+    admission, nominal
+):
+    service, args, camera, selection, calls, *_ = admission
+    root = Path(__file__).resolve().parents[3]
+    track = json.loads(
+        (root / "contracts/siplite-camera-v1.3/example-observation.json").read_text()
+    )["actual_track"]
+    track["fps"] = nominal
+    camera["actual_track"] = track
+    prepared = await service.prepare(args["terminal"], args["user"], selection)
+    value = unseal(prepared["ticket"], args["terminal"], args["user"], "prepared")
+    assert value["descriptor"]["tracks"] == [track]
+    assert value["contracts"] == CAMERA_MEDIA_HEADERS
+    assert calls == ["prepare"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("old_field", [None, *CAMERA_MEDIA_HEADERS])
+@pytest.mark.parametrize("stage", ["prepared", "ready"])
+async def test_prepared_ticket_cannot_cross_the_exact_revision_selection(
+    admission, old_field, stage
+):
+    service, args, _, selection, calls, *_ = admission
+    prepared = await service.prepare(args["terminal"], args["user"], selection)
+    value = unseal(prepared["ticket"], args["terminal"], args["user"], "prepared")
+    value["stage"] = stage
+    if old_field is None:
+        value.pop("contracts")  # Pre1.3 BFF tickets did not bind revisions.
+    else:
+        value["contracts"][old_field] = "old-or-mixed-revision"
+    with pytest.raises(HTTPException, match="camera_preparation_contract_changed"):
+        if stage == "prepared":
+            await service.enrollment(args["terminal"], args["user"], seal(value))
+        else:
+            await service.native.start(**args, admission_ticket=seal(value))
+    assert calls == ["prepare"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("camera_contract_revision", "siplite-camera/1.2.0"),
+        ("cadence_revision", "camera-cadence/0.1.0-proposed"),
+    ],
+)
+async def test_old_observation_cannot_be_reinterpreted_under_cadence02(
+    admission, field, value
+):
+    service, args, _, selection, calls, *_ = admission
+    original = service.native.iot.remote_video_v2.side_effect
+
+    async def old_observation(sn, action, **kwargs):
+        result = await original(sn, action, **kwargs)
+        if action == "inventory":
+            result = copy.deepcopy(result)
+            result["camera_observation"][field] = value
+        return result
+
+    service.native.iot.remote_video_v2.side_effect = old_observation
+    with pytest.raises(HTTPException, match="camera_native_auto_not_negotiated"):
+        await service.prepare(args["terminal"], args["user"], selection)
+    assert calls == []
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observation", [None, {}])
+async def test_fresh_receipt_cannot_replace_missing_cadence_proof(
+    admission, observation
+):
+    service, args, _, selection, calls, *_ = admission
+    original = service.native.iot.remote_video_v2.side_effect
+
+    async def no_proof(sn, action, **kwargs):
+        result = await original(sn, action, **kwargs)
+        if action == "inventory":
+            result = copy.deepcopy(result)
+            result["fresh"] = True
+            result["camera_observation"] = observation
+        return result
+
+    service.native.iot.remote_video_v2.side_effect = no_proof
+    with pytest.raises(HTTPException, match="camera_native_auto_not_negotiated"):
+        await service.prepare(args["terminal"], args["user"], selection)
+    assert calls == []
 
 
 @pytest.mark.anyio

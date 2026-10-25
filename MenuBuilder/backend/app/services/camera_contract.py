@@ -12,14 +12,14 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 CAMERA_REVISION = "siplite-camera/1.0.0"
-CAMERA_MEDIA_REVISION = "siplite-camera/1.2.0"
-CADENCE_REVISION = "camera-cadence/0.1.0-proposed"
+CAMERA_MEDIA_REVISION = "siplite-camera/1.3.0"
+CADENCE_REVISION = "camera-cadence/0.2.0-proposed"
 MEDIA_REVISION = "l4-media/3.0.0"
 CAMERA_MEDIA_HEADERS = {
     "X-L4-Media-Contract": MEDIA_REVISION,
     "X-L4-Camera-Contract": CAMERA_MEDIA_REVISION,
     "X-L4-Camera-Cadence": CADENCE_REVISION,
-    "X-L4-Camera-Enrollment": "camera-enrollment/0.3.0-proposed",
+    "X-L4-Camera-Enrollment": "camera-enrollment/0.4.0-proposed",
     "X-L4-Camera-Admission": "camera-ctl-monotonic/0.2.0-proposed",
 }
 
@@ -56,7 +56,7 @@ MEDIA_VALIDATORS = {
 
 
 OBSERVATION_SCHEMA = json.loads(
-    (CONTRACTS / "camera-v1.2.schema.json").read_text(encoding="utf-8")
+    (CONTRACTS / "camera-v1.3.schema.json").read_text(encoding="utf-8")
 )
 COMMON_MEDIA_SCHEMA = json.loads(
     (CONTRACTS / "media-v3.schema.json").read_text(encoding="utf-8")

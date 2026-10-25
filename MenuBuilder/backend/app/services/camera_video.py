@@ -28,8 +28,8 @@ class CameraVideoState(BaseModel):
     version: Literal[2]
     contract_version: Literal[3]
     media_contract_revision: Literal["l4-media/3.0.0"]
-    camera_contract_revision: Literal["siplite-camera/1.2.0"]
-    cadence_revision: Literal["camera-cadence/0.1.0-proposed"]
+    camera_contract_revision: Literal["siplite-camera/1.3.0"]
+    cadence_revision: Literal["camera-cadence/0.2.0-proposed"]
     media_clock_id: UUID4
     sn: str
     lease_id: UUID

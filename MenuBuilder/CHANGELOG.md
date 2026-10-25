@@ -1,5 +1,16 @@
 # Changelog — MenuBuilder
 
+## Unreleased — camera measured nominal cadence adapter
+
+- Add exact observation1.3/cadence0.2/enrollment0.4 selection with the same common
+  media3 track and unchanged admission0.2. Historical packets remain immutable.
+- Bind encrypted preparation/readiness tickets to the full revision selection;
+  old or mixed tickets cannot acquire the new cadence interpretation.
+- Keep nominal FPS under common parsing bounds while leaving full stream proof
+  to the explicit producer policy; remove the old camera20/30 geometry budget.
+- This candidate does not deploy, activate, rewrite camera Auto/RTP or change
+  desktop request budgets, clock semantics or configuration writers.
+
 ## Unreleased — camera media-v3 adapter
 
 ### Added
