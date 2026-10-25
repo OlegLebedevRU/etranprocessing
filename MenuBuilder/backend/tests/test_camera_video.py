@@ -37,6 +37,13 @@ def context(monkeypatch):
 
     monkeypatch.setattr(settings, "video_contract_v2_enabled", True)
     monkeypatch.setattr(settings, "l4desk_session_orchestration_enabled", True)
+    from cryptography.fernet import Fernet
+
+    monkeypatch.setattr(settings, "camera_monotonic_runtime_enabled", True)
+    monkeypatch.setattr(settings, "camera_native_auto_enabled", True)
+    monkeypatch.setattr(
+        settings, "camera_admission_ticket_key", Fernet.generate_key().decode()
+    )
     sample = fixture("current_hevc_level41")
     camera = {
         "camera_id": "cam:ip000001",
@@ -50,16 +57,47 @@ def context(monkeypatch):
             ]
         },
     }
-    server = fixture("negotiated_capabilities")
-    server["camera_formats"][0]["runtime_verified"] = True
-    h264_format = dict(
-        server["camera_formats"][0],
-        codec="h264",
-        codec_profiles=["baseline", "main", "high"],
-        packetization="rfc6184",
-        level_ids=[],
+    server = {
+        "contract_version": 3,
+        "media_contract_versions": [3],
+        "server_revision": "test-media3",
+        "dependencies_ready": True,
+        "hevc_runtime_verified": True,
+        "codecs": ["h264", "h265"],
+        "formats": [
+            {
+                "codec": "h265",
+                "codec_profile": "main",
+                "packetization": "rfc7798",
+                "clock_rate": 90000,
+            },
+            {
+                "codec": "h264",
+                "codec_profile": "high",
+                "packetization": "rfc6184",
+                "clock_rate": 90000,
+            },
+        ],
+        "max_video_tracks": 1,
+        "audio_supported": False,
+        "reverse_rtcp": True,
+    }
+    camera["geometry_generation"] = 7
+    camera["discovery"].update(
+        state="ready",
+        physical_port=2,
+        candidates=[
+            {"mac": "02:00:00:00:00:01", "port_verified": True, "auth": "verified"}
+        ],
     )
-    server["camera_formats"].append(h264_format)
+    caps = {
+        "camera_contract_revisions": ["siplite-camera/1.2.0"],
+        "camera_cadence_revisions": ["camera-cadence/0.1.0-proposed"],
+        "camera_enrollment_revisions": ["camera-enrollment/0.3.0-proposed"],
+        "camera_admission_revisions": ["camera-ctl-monotonic/0.2.0-proposed"],
+        "media_contract_versions": [3],
+        "quality_options": [{"profile_id": "low"}, {"profile_id": "default"}],
+    }
     lease_id = str(uuid4())
     lease = {
         "sn": "fixture",
@@ -69,19 +107,35 @@ def context(monkeypatch):
         "owner_user_id": "8",
         "owner_session_id": "owned",
         "expires_at": (datetime.now(UTC) + timedelta(seconds=90)).isoformat(),
+        "media_lease_expires_at": int(time.time()) + 7,
+        "media_remaining_ms": 7000,
+        "media_clock_id": str(uuid4()),
     }
     trace = []
 
     async def iot(sn, action, **kwargs):
         trace.append(("iot", action, kwargs))
-        assert kwargs["camera_contract"] is True
+        assert kwargs["camera_contract"] == "siplite-camera/1.2.0"
         if action == "lease":
             return lease
         if action == "state":
             raise HTTPException(404)
         if action == "inventory":
             return {
-                "camera_contract_revision": "siplite-camera/1.0.0",
+                "camera_contract_revision": "siplite-camera/1.2.0",
+                "media_clock_id": lease["media_clock_id"],
+                "contract_version": 3,
+                "media_contract_revision": "l4-media/3.0.0",
+                "camera_capabilities": caps,
+                "camera_observation": {
+                    "camera_contract_revision": "siplite-camera/1.2.0",
+                    "media_contract_revision": "l4-media/3.0.0",
+                    "cadence_revision": "camera-cadence/0.1.0-proposed",
+                    "source_id": camera["camera_id"],
+                    "geometry_generation": camera["geometry_generation"],
+                    "actual_track": camera["actual_track"],
+                    "capabilities": caps,
+                },
                 "main_app_online": True,
                 "fresh": True,
                 "camera": camera,
@@ -90,7 +144,11 @@ def context(monkeypatch):
         if action == "start":
             value = kwargs["payload"]
             return {
-                "camera_contract_revision": "siplite-camera/1.0.0",
+                "camera_contract_revision": "siplite-camera/1.2.0",
+                "media_clock_id": lease["media_clock_id"],
+                "contract_version": 3,
+                "media_contract_revision": "l4-media/3.0.0",
+                "cadence_revision": "camera-cadence/0.1.0-proposed",
                 "version": 2,
                 "sn": sn,
                 "lease_id": value["lease_id"],
@@ -109,7 +167,7 @@ def context(monkeypatch):
 
     async def media(action, payload=None, **kwargs):
         trace.append(("media", action, payload))
-        assert kwargs["camera_contract"] is True
+        assert not kwargs.get("camera_contract")
         if action == "capabilities":
             return server
         if action == "start":
@@ -127,7 +185,8 @@ def context(monkeypatch):
                 }
             )
             response.update(
-                stream_instance_id=payload["publisher"]["stream_instance_id"]
+                contract_version=3,
+                stream_instance_id=payload["publisher"]["stream_instance_id"],
             )
             return response
         return {}
@@ -150,6 +209,36 @@ def context(monkeypatch):
         "user": {"sub": "8", "session_id": "owned"},
     }
     return service, args, camera, server, trace
+
+
+def ready_start_args(args, camera):
+    from app.services.camera_admission import scope, seal
+
+    descriptor = {
+        "contract_version": 3,
+        "descriptor_revision": str(uuid4()),
+        "source_type": "camera",
+        "source_id": args["source_id"],
+        "geometry_generation": camera["geometry_generation"],
+        "profile_id": args["profile_id"],
+        "tracks": [copy.deepcopy(camera["actual_track"])],
+    }
+    return {
+        **args,
+        "admission_ticket": seal(
+            {
+                "scope": scope(args["terminal"], args["user"]),
+                "stage": "ready",
+                "deadline": time.time() + 5,
+                "descriptor": descriptor,
+                "mac": "02:00:00:00:00:01",
+                "generation": 1,
+                "codec_reason": "test",
+                "policy": args["policy"],
+                "nonce": str(uuid4()),
+            }
+        ),
+    }
 
 
 def test_auto_prefers_hevc_but_never_treats_unknown_as_incompatibility(context):
@@ -182,8 +271,8 @@ def test_expired_browser_observation_is_not_reused(context):
 
 @pytest.mark.anyio
 async def test_native_order_and_ack_is_not_ready(context):
-    service, args, _, _, trace = context
-    result = await service.start(**args)
+    service, args, camera, _, trace = context
+    result = await service.start(**ready_start_args(args, camera))
     assert (
         result["resolved_codec"] == "h265" and result["confirmation"] == "command_ack"
     )
@@ -193,12 +282,12 @@ async def test_native_order_and_ack_is_not_ready(context):
     assert result["descriptor"]["tracks"][0]["level_id"] == 123
     stop = make_stop_command("fixture", args["lease_id"], {"agent": {"stream": result}})
     assert stop["stream_instance_id"] == result["stream_instance_id"]
-    assert stop["contract_version"] == 2 and "agent_instance_id" not in stop
+    assert stop["contract_version"] == 3 and "agent_instance_id" not in stop
 
 
 @pytest.mark.anyio
 async def test_unconfirmed_producer_compensates_only_the_created_epoch(context):
-    service, args, _, _, trace = context
+    service, args, camera, _, trace = context
     original = service.iot.remote_video_v2.side_effect
 
     async def wrong(sn, action, **kwargs):
@@ -210,7 +299,7 @@ async def test_unconfirmed_producer_compensates_only_the_created_epoch(context):
 
     service.iot.remote_video_v2.side_effect = wrong
     with pytest.raises(HTTPException):
-        await service.start(**args)
+        await service.start(**ready_start_args(args, camera))
     request = next(item[2] for item in trace if item[:2] == ("media", "start"))
     stop = next(item[2] for item in trace if item[:2] == ("media", "stop"))
     assert stop["stream_instance_id"] == request["publisher"]["stream_instance_id"]

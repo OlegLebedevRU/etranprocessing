@@ -23,7 +23,6 @@ from pydantic import ValidationError as ModelValidationError
 
 from app.config import settings
 from app.services.camera_contract import (
-    MEDIA_VALIDATORS,
     extended_camera,
     media_contract_options,
 )
@@ -103,6 +102,11 @@ def validate_iot_state(value: dict[str, Any]) -> dict[str, Any]:
     except ModelValidationError as exc:
         raise HTTPException(502, detail={"code": "invalid_video_contract"}) from exc
     validate_video("descriptor", result["descriptor"])
+    if (
+        "camera_contract_revision" in result
+        and result["descriptor"]["source_type"] != "camera"
+    ):
+        raise HTTPException(502, detail={"code": "invalid_video_contract"})
     if result["actual_descriptor"] is not None:
         validate_video("descriptor", result["actual_descriptor"])
         if result["actual_descriptor"] != result["descriptor"]:
@@ -159,13 +163,7 @@ def validate_video(definition: str, value: dict[str, Any]) -> dict[str, Any]:
     try:
         if len(json.dumps(value, ensure_ascii=False).encode()) > 32768:
             raise ValueError("oversize")
-        validators = (
-            MEDIA_VALIDATORS
-            if (extended_camera(value) or "camera_contract_revisions" in value)
-            and value.get("contract_version", 2) == 2
-            else VALIDATORS
-        )
-        validators[definition].validate(value)
+        VALIDATORS[definition].validate(value)
         if (
             definition == "capabilities"
             and "measured_at_ms" in value
@@ -188,7 +186,7 @@ def media_identity(
     sn: str, lease_id: str, stream_id: str, descriptor: dict[str, Any]
 ) -> dict[str, Any]:
     return {
-        "contract_version": 2 if extended_camera(descriptor) else 3,
+        "contract_version": 3,
         "sn": sn,
         "lease_id": lease_id,
         "session_id": _media_session_id(stream_id),

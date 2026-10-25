@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function cameraPortal(page: Page, options: { viewer?: boolean; busy?: boolean; offline?: boolean; stale?: boolean; lost?: boolean; unauthorized?: boolean; native?: boolean; nativeAuto?: boolean; revisionAfterPoll?: boolean; rejectStart?: boolean; credentialReady?: boolean; credentialLost?: boolean; credentialUnauthorized?: boolean; searchWaiting?: boolean } = {}) {
+async function cameraPortal(page: Page, options: { viewer?: boolean; busy?: boolean; offline?: boolean; stale?: boolean; lost?: boolean; unauthorized?: boolean; native?: boolean; nativeAuto?: boolean; revisionAfterPoll?: boolean; rejectStart?: boolean; credentialReady?: boolean; credentialLost?: boolean; credentialUnauthorized?: boolean; searchWaiting?: boolean; enrollmentWaiting?: boolean; runtimeDisabled?: boolean } = {}) {
   const posts: { path: string; body: any }[] = [];
   let operation = "";
   let config: any = { video0: { size: "1280x720", fps: 15, bitrate: 1024 }, nightMode: { lightMonitor: false } };
@@ -40,6 +40,12 @@ async function cameraPortal(page: Page, options: { viewer?: boolean; busy?: bool
       device_tags: device_id === 4619 ? [{ tag: "sys", value: "ESP32" }, { tag: "camera", value: "openipc" }] : [{ tag: "sys", value: "ESP32" }],
     })), pages: 1, total: 2, stats: {} };
     if (path === "/api/settings/terminals") data = { items: [{ id: 1, device_id: 4619, sn: "fixture-4619", note: "Вход", address: "Первый этаж", is_active: true }], total_count: 1 };
+    if (path.endsWith("/admission/prepare")) {
+      if (options.runtimeDisabled) { await route.fulfill({ status: 503, json: { detail: { code: "camera_runtime_disabled" } } }); return; }
+      data = { ticket: "opaque-prepared" };
+    }
+    if (path.endsWith("/admission/enrollment")) data = { enrolled: !options.enrollmentWaiting };
+    if (path.endsWith("/admission/readiness")) data = { ticket: "opaque-ready" };
     if (path.endsWith("/inventory")) data = { displays: [], cameras: [{ camera_id: "cam:ip000001", available: true }] };
     if (path.endsWith("/control/status")) data = { agent: { online: !options.offline }, lease: { active: !!options.busy } };
     if (path.endsWith("/control/lease") && request.method() === "POST") data = { lease_id: "11111111-1111-4111-8111-111111111111", keepalive_sec: 10 };
@@ -161,7 +167,7 @@ test("explicit camera HEVC refusal never creates a legacy route or H264 restart"
   await expect(page.getByText("H.265 недоступен для выбранного источника").first()).toBeVisible();
   const starts = posts.filter(item => item.path.endsWith("/stream/start"));
   expect(starts).toHaveLength(1);
-  expect(starts[0].body).toMatchObject({ mode: "camera", profile: "default", source_id: "cam:ip000001", codec_policy: "h265", browser_codecs: { h264: true, h265: true } });
+  expect(starts[0].body).toMatchObject({ mode: "camera", profile: "low", source_id: "cam:ip000001", codec_policy: "h265", browser_codecs: { h264: true, h265: true } });
   expect(posts.some(item => item.path.endsWith("/sessions"))).toBe(false);
 });
 
@@ -270,3 +276,42 @@ test("camera command 401 never refreshes or replays POST", async ({ page }) => {
   await expect(page.getByText("Сессия истекла", { exact: true })).toBeVisible();
   expect(posts).toHaveLength(1);
 });
+
+
+test("camera admission can be cancelled before lease and never sends START", async ({ page }) => {
+  const posts = await cameraPortal(page, { native: true, enrollmentWaiting: true });
+  await page.getByRole("button", { name: "Начать просмотр", exact: true }).click();
+  await expect.poll(() => posts.filter(p => p.path.endsWith("/admission/enrollment")).length).toBeGreaterThan(0);
+  await page.getByText("Отменить запуск", { exact: true }).click();
+  await page.waitForTimeout(800);
+  expect(posts.filter(p => /\/(control\/lease|stream\/start|admission\/readiness)$/.test(p.path))).toEqual([]);
+  expect(posts.filter(p => p.path.endsWith("/admission/prepare"))).toHaveLength(1);
+});
+
+test("disabled runtime fails visibly without obtaining a lease", async ({ page }) => {
+  const posts = await cameraPortal(page, { native: true, runtimeDisabled: true });
+  await page.getByRole("button", { name: "Начать просмотр", exact: true }).click();
+  await expect(page.getByText("Новый режим камеры ещё не включён на сервере.").first()).toBeVisible();
+  expect(posts.filter(p => p.path.endsWith("/control/lease") || p.path.endsWith("/stream/start"))).toEqual([]);
+});
+
+for (const [profile, label] of [["low", "Medium"], ["default", "HD"]] as const) {
+  test(`camera ${label} chooses common quality policy without RPC163 or automatic retry`, async ({ page }) => {
+    const posts = await cameraPortal(page, { native: true, nativeAuto: true, rejectStart: true });
+    await page.getByRole("button", { name: "Настройки видео", exact: true }).click();
+    await page.getByRole("combobox", { name: "Выбор качества трансляции" }).click();
+    await page.locator(".ant-select-dropdown:visible").getByText(label, { exact: true }).click();
+    await page.getByRole("button", { name: "Настройки видео", exact: true }).click();
+    await page.getByRole("button", { name: "Начать просмотр", exact: true }).click();
+    await expect.poll(() => posts.filter(p => p.path.endsWith("/stream/start")).length).toBe(1);
+    const prepare = posts.find(p => p.path.endsWith("/admission/prepare"));
+    const start = posts.find(p => p.path.endsWith("/stream/start"));
+    expect(prepare?.body.profile_id).toBe(profile);
+    expect(start?.body.profile).toBe(profile);
+    expect(start?.body.camera_admission_ticket).toBe("opaque-ready");
+    await page.waitForTimeout(800);
+    expect(posts.filter(p => p.path.endsWith("/admission/prepare"))).toHaveLength(1);
+    expect(posts.filter(p => p.path.endsWith("/stream/start"))).toHaveLength(1);
+    expect(posts.filter(p => p.path.endsWith("/commands"))).toEqual([]);
+  });
+}

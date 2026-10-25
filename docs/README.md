@@ -155,3 +155,5 @@
 - [l4media/siplite contract](etran_arch-hevc-media-siplite-contract.md).
 
 - [HEVC monotonic admission / firmware handoff](menu_arch-hevc-monotonic-time.md) — lease, TTL, START and unchanged camera CTLv1 boundary.
+
+- [Camera adapter for common media-v3](etran_arch-camera-media-v3-adapter.md) — exact1.2/0.3 proposal selection, common descriptor and quality policy, review-only rollout.

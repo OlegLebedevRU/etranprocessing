@@ -4,13 +4,34 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 from uuid import UUID
 
 from fastapi import HTTPException
 from jsonschema import Draft202012Validator, FormatChecker
+from referencing import Registry, Resource
 
 CAMERA_REVISION = "siplite-camera/1.0.0"
+CAMERA_MEDIA_REVISION = "siplite-camera/1.2.0"
+CADENCE_REVISION = "camera-cadence/0.1.0-proposed"
+MEDIA_REVISION = "l4-media/3.0.0"
+CAMERA_MEDIA_HEADERS = {
+    "X-L4-Media-Contract": MEDIA_REVISION,
+    "X-L4-Camera-Contract": CAMERA_MEDIA_REVISION,
+    "X-L4-Camera-Cadence": CADENCE_REVISION,
+    "X-L4-Camera-Enrollment": "camera-enrollment/0.3.0-proposed",
+    "X-L4-Camera-Admission": "camera-ctl-monotonic/0.2.0-proposed",
+}
+
+
+def camera_headers(selection: bool | str) -> dict[str, str]:
+    if selection is True or selection == CAMERA_MEDIA_REVISION:
+        return dict(CAMERA_MEDIA_HEADERS)
+    if not selection:
+        return {}
+    raise HTTPException(422, detail={"code": "camera_contract_not_negotiated"})
+
+
 CONTRACTS = Path(__file__).parents[1] / "contracts"
 RPC_SCHEMA = json.loads(
     (CONTRACTS / "camera-rpc.schema.json").read_text(encoding="utf-8")
@@ -34,13 +55,44 @@ MEDIA_VALIDATORS = {
 }
 
 
+OBSERVATION_SCHEMA = json.loads(
+    (CONTRACTS / "camera-v1.2.schema.json").read_text(encoding="utf-8")
+)
+COMMON_MEDIA_SCHEMA = json.loads(
+    (CONTRACTS / "media-v3.schema.json").read_text(encoding="utf-8")
+)
+OBSERVATION_REGISTRY = Registry().with_resource(
+    "urn:leo4:l4-media:3.0.0", Resource.from_contents(COMMON_MEDIA_SCHEMA)
+)
+OBSERVATION_VALIDATORS = {
+    key: Draft202012Validator(
+        dict(OBSERVATION_SCHEMA, oneOf=[{"$ref": f"#/$defs/{key}"}]),
+        format_checker=FormatChecker(),
+        registry=OBSERVATION_REGISTRY,
+    )
+    for key in OBSERVATION_SCHEMA["$defs"]
+}
+
+
 def extended_camera(value: dict[str, Any]) -> bool:
     descriptor = value.get("descriptor", value)
-    return isinstance(descriptor, dict) and "camera_contract_revision" in descriptor
+    return isinstance(descriptor, dict) and (
+        "camera_contract_revision" in descriptor
+        or descriptor.get("contract_version") == 3
+        and descriptor.get("source_type") == "camera"
+    )
 
 
-def media_contract_options(descriptor: dict[str, Any]) -> dict[str, bool]:
-    return {"camera_contract": True} if extended_camera(descriptor) else {}
+class MediaContractOptions(TypedDict, total=False):
+    camera_contract: bool | str
+
+
+def media_contract_options(descriptor: dict[str, Any]) -> MediaContractOptions:
+    return (
+        {"camera_contract": CAMERA_MEDIA_REVISION}
+        if extended_camera(descriptor)
+        else {}
+    )
 
 
 def _bounded(value: Any, depth: int = 0) -> bool:

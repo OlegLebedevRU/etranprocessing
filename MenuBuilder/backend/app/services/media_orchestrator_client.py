@@ -147,15 +147,10 @@ class MediaOrchestratorClient:
         params: dict[str, Any] | None = None,
         json_data: dict[str, Any] | None = None,
         *,
-        camera_contract: bool = False,
         media_contract: bool = False,
     ) -> dict[str, Any]:
         url = f"{self.base_url}{path}"
         headers = self._get_headers()
-        if camera_contract:
-            from app.services.camera_contract import CAMERA_REVISION
-
-            headers["X-L4-Camera-Contract"] = CAMERA_REVISION
         if media_contract:
             headers["X-L4-Media-Contract"] = "l4-media/3.0.0"
         clean_params = {k: v for k, v in (params or {}).items() if v is not None}
@@ -201,14 +196,19 @@ class MediaOrchestratorClient:
         action: str,
         payload: dict[str, Any] | None = None,
         *,
-        camera_contract: bool = False,
+        camera_contract: bool | str = False,
     ) -> dict[str, Any]:
+        # Validate an internal camera selection without sending it to MEDIA.
+        # Unknown selectors must not silently choose the common contract.
+        if camera_contract:
+            from app.services.camera_contract import camera_headers
+
+            camera_headers(camera_contract)
         if action == "capabilities":
             return await self._send_request(
                 "GET",
                 "/api/v2/media/capabilities",
-                camera_contract=camera_contract,
-                media_contract=not camera_contract,
+                media_contract=True,
             )
         if action == "health" and payload:
             query = {
@@ -220,8 +220,7 @@ class MediaOrchestratorClient:
                 "GET",
                 f"/api/v2/media/sessions/{payload['session_id']}",
                 params=query,
-                camera_contract=camera_contract,
-                media_contract=not camera_contract,
+                media_contract=True,
             )
         if action not in ("start", "stop", "renew"):
             raise ValueError("Unknown media v2 action")
@@ -229,8 +228,7 @@ class MediaOrchestratorClient:
             "POST",
             f"/api/v2/media/sessions/{action}",
             json_data=payload,
-            camera_contract=camera_contract,
-            media_contract=not camera_contract,
+            media_contract=True,
         )
 
     async def start_session(

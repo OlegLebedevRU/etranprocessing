@@ -1,1 +1,2 @@
 *.json text eol=lf
+camera-v1.2.schema.json -text -eol whitespace=cr-at-eol

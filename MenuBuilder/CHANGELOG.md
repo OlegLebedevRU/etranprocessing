@@ -1,10 +1,33 @@
 # Changelog — MenuBuilder
 
+## Unreleased — camera media-v3 adapter
+
+### Added
+- Camera1.2 observation and enrollment0.3 selection for the shared media-v3
+  descriptor/track, with separate port2/boot/issuer readiness and admission.
+- Pre-lease camera preparation with one original30s wait, strict5s readiness,
+  cancellable UI and correlation-safe compensation of an ambiguous START.
+
+### Changed
+- Camera Medium/HD now select low/default media policies without fixed-size
+  presets or camera configuration writes. Native Auto remains unchanged.
+- Media HTTP always selects the common v3 header; camera authority headers
+  remain on IoT requests. Legacy camera-media v2 is rejected on the v3 flow.
+
 ## Unreleased — FM v2 only
 
 FM uses MQTT navigation and mandatory confirmed close only; legacy PB listing and optional unconfirmed close removed.
 
 ### Added
+
+- Separately gated Native Auto camera1.1 negotiation with typed device observation,
+  exact geometry, cadence-bound descriptors and four revision headers. All three
+  peers must explicitly support the bundle; frozen1.0 remains unchanged.
+
+- Gated camera admission through prepare, enrollment and fresh readiness before
+  lease/media/START, with opaque owner-bound BFF tickets and explicit IoT141
+  revision headers. The gate defaults off; Native Auto cadence remains blocked
+  pending cross-owner negotiation.
 
 - CAPTCHA providers `smartcaptcha/native/off`: подписанный native challenge для login/register/resend, UI без Yandex в native-режиме; прежние настройки сохранены для отката.
 
@@ -40,6 +63,9 @@ FM uses MQTT navigation and mandatory confirmed close only; legacy PB listing an
 - Restore desktop H.264 and Auto without HEVC through the existing H.264
   route-before-START adapter. HEVC-only native v3 capabilities no longer reject
   this path; modern viewers can attach to its existing authorized media route.
+- Cancel pending video starts on STOP/selection changes, ignore late responses,
+  and disable automatic auth replay of START/lease mutations. Camera preparation
+  shows its current stage and remains cancellable before a lease exists.
 
 - Отсутствие service secret в production возвращает ошибку конфигурации вместо выдачи mock JWT; параллельные запросы разных сессий и ролей больше не объединяются в одну выдачу.
 

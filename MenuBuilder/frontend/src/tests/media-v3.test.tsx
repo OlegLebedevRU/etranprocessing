@@ -30,7 +30,7 @@ describe("media v3 quality policies", () => {
         const payload = { mode: "desktop" as const, source_id: "disp:primary", profile, codec_policy: "h265" as const };
         const response = await startDeviceStream(1, payload);
         expect(response.descriptor).toEqual(descriptor);
-        expect(client.post).toHaveBeenLastCalledWith("/v1/video/devices/1/stream/start", payload, { timeout: 120000 });
+        expect(client.post).toHaveBeenLastCalledWith("/v1/video/devices/1/stream/start", payload, { _retry: true, timeout: 120000 });
       });
     }
   }

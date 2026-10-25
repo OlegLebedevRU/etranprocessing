@@ -1,5 +1,6 @@
 import client from "./client";
 import type { AxiosRequestConfig } from "axios";
+import type { browserVideoCodecs } from "../utils/browserVideoCodecs";
 
 export type CameraValue = string | number | boolean;
 export type CameraPatch = Record<string, Record<string, CameraValue>>;
@@ -72,6 +73,26 @@ export async function changeCameraCredentials(device: number, body: CameraCreden
 
 export async function getCamera(device: number, signal?: AbortSignal): Promise<CameraObservation> {
   return (await client.get(`/cameras/${device}`, { signal })).data;
+}
+
+export interface CameraPreparation {
+  source_id: "cam:ip000001"; physical_camera_mac: string; discovery_generation: number;
+  codec_policy: "auto" | "h264" | "h265";
+  profile_id: "low" | "default";
+  browser_codecs: ReturnType<typeof browserVideoCodecs>;
+}
+export interface CameraAdmissionTicket { ticket: string }
+export async function prepareCamera(device: number, body: CameraPreparation, signal: AbortSignal): Promise<CameraAdmissionTicket> {
+  return (await client.post(`/cameras/${device}/admission/prepare`, body,
+    { signal, timeout: 8000, _retry: true } as AxiosRequestConfig)).data;
+}
+export async function cameraEnrollment(device: number, body: CameraAdmissionTicket, signal: AbortSignal): Promise<{ enrolled: boolean }> {
+  return (await client.post(`/cameras/${device}/admission/enrollment`, body,
+    { signal, timeout: 5000, _retry: true } as AxiosRequestConfig)).data;
+}
+export async function cameraReadiness(device: number, body: CameraAdmissionTicket, signal: AbortSignal): Promise<CameraAdmissionTicket> {
+  return (await client.post(`/cameras/${device}/admission/readiness`, body,
+    { signal, timeout: 6500, _retry: true } as AxiosRequestConfig)).data;
 }
 export async function commandCamera(device: number, body: CameraCommand): Promise<{ id: string }> {
   // The shared auth interceptor otherwise replays POST after a 401. A camera

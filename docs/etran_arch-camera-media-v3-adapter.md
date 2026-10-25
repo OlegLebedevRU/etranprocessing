@@ -1,0 +1,102 @@
+# Camera adapter for common media-v3
+
+Status: implementation candidate for review, not deployed or hardware accepted.
+The existing main_app camera control adapter is distinct from desktop CTL2.
+No Windows binding, new pipeline, transcoding or STM32 change is introduced.
+
+## Exact boundary
+
+Camera RPC/config/local API remains siplite-camera/1.0.0. Camera measured
+observation and admission HTTP adapter select the exact new bundle:
+
+| Header | Value |
+| --- | --- |
+| X-L4-Media-Contract | l4-media/3.0.0 |
+| X-L4-Camera-Contract | siplite-camera/1.2.0 |
+| X-L4-Camera-Cadence | camera-cadence/0.1.0-proposed |
+| X-L4-Camera-Enrollment | camera-enrollment/0.3.0-proposed |
+| X-L4-Camera-Admission | camera-ctl-monotonic/0.2.0-proposed |
+
+This bundle belongs to BFF→IoT inventory, prepare/enrollment/readiness and
+stream lifecycle requests. BFF→MEDIA sends ONLY the common media header plus
+existing service authentication. Existing /api/v2/media paths carry envelopes3.
+No old camera selector is accepted as a v3 fallback. Frozen camera1.0/1.1 and
+common schema files remain unchanged. The new observation1.2 exists because
+frozen1.1 capabilities can select only enrollment0.2 and its old descriptor.
+
+Canonical observation packet: contracts/siplite-camera-v1.2/. It externally
+references the exact common track and quality_options definition; its manifest
+pins common schema SHA b86ca6f066fcdecb09cf7145a7fb23d87b77311a53c7ea04f0fb6e8a905b2818.
+No camera track or descriptor fork is maintained. Authority markers stay outside
+the strict common descriptor and outside media service requests.
+
+## Admission and quality
+
+Before acquiring a stream lease the BFF checks fresh main_app status, verified
+authenticated physical port2/MAC/discovery, independently validated camera1.2
+observation/capabilities, actual device geometry and media/browser codec support.
+It constructs one concrete descriptor3 and prepares its exact binding in IoT.
+A fresh gauge alone is not readiness or proof of post-START producer activity.
+
+The encrypted BFF ticket is scoped to tenant, terminal, user and session. One
+original30s preparation/enrollment wait includes provider I/O and polling; polls
+do not extend it. Each wire enrollment exchange retains its independent5s
+budget. The readiness ticket uses an original5s deadline anchored before issuing
+the query. Device R/I and issuer monotonic admission, durable floor and replay
+state remain owned by IoT/firmware. The BFF never gives a delayed START a new TTL.
+
+Medium selects profile low, HD selects default. These are immutable quality
+policies, not RPC163 presets. The selected profile must be supported by BOTH
+producer observation and projected capabilities. Both may use one native track.
+Neither choice writes size/FPS/bitrate, and Native Auto sentinels remain config.
+The CTLv1 profile token remains default under frozen admission0.2; the chosen
+media quality is bound through the full common descriptor hash, not that token.
+
+Auto prefers H265. Unknown compatibility is a refusal, not evidence to fallback.
+Confirmed incompatibility can select an already observed compatible H264 format
+before START. An unobserved codec requires separately authorized camera config
+or probing; viewing does not grant camera-write authority. Explicit H265 never
+becomes H264, and no post-START failure creates a new codec/attempt automatically.
+
+Camera START prepares the media route first, then consumes the exact IoT readiness
+nonce. Stable nonce/lease-derived stream identity prevents duplicate allocation.
+Cancellation, stale selection, failed/ambiguous START compensate only the same
+identity. State keeps command_ack distinct from actual_descriptor, which remains
+null until independently proven. RTP freshness and browser decoding are separate.
+
+## Stable camera media clock
+
+The camera-only IoT video-lease response adds media_lease_expires_at (integer
+seconds in one fixed attempt coordinate), media_remaining_ms (authoritative
+Redis PTTL residual1..60000) and media_clock_id (UUID4). Generic desktop lease
+UTC semantics are unchanged. BFF camera START validates the same owner/session,
+SN and stream scope and subtracts its complete local monotonic HTTP roundtrip
+from the residual availability check; it sends the existing fixed expiry value
+unchanged in the common media request. It never maps it using current UTC or
+starts a new budget from receipt.
+
+Camera state captures media_clock_id at START. BFF requires the returned state
+to retain the originally observed ID. During keepalive it loads that immutable
+state ID, re-reads the authoritative camera export and compares IDs before media
+renew. Missing/changed clock authority retires/compensates only the exact old
+stream/lease/descriptor identity and cannot create another START. Diagnostic
+last_rtp_at_ms and the generic keepalive expires_at are not camera lease clocks.
+Cross-stack-oriented local tests cover7s/15s residuals, forward/backward UTC
+values, duplicate exports, roundtrip equality expiry and lost clock anchors.
+They do not claim an actual distributed server clock-jump acceptance.
+
+## UI and rollout
+
+The camera toolbar exposes the same Medium/HD policy choices as the desktop.
+Physical camera settings and legacy RPC163 buttons remain separate, gated by
+advertised writer capabilities and explicit configuration permission. Preparation
+shows its stage, is cancellable before a lease exists, and ignores late replies.
+Selection/profile changes cancel that preparation. Authentication middleware must
+not replay ambiguous lease or START mutations.
+
+Default gates camera_monotonic_runtime_enabled and camera_native_auto_enabled
+remain false; camera_admission_ticket_key remains empty until owner provisioning.
+This source change does not provision them. Exact IoT/MEDIA revisions and packet
+hashes must agree before a separate owner-approved MEDIA→IoT→MenuBuilder deploy.
+Firmware installation, writers and allowlist activation require the coordinator's
+separate stage. Offline fixtures are not live acceptance on terminal4623 or773.

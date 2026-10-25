@@ -191,8 +191,8 @@ async def test_http_media_selection_and_camera_isolation():
         assert "X-L4-Camera-Contract" not in request.headers
         if request.method == "POST":
             assert json.loads(request.content)["contract_version"] == 3
-    assert "X-L4-Media-Contract" not in requests[-1].headers
-    assert "X-L4-Camera-Contract" in requests[-1].headers
+    assert requests[-1].headers["X-L4-Media-Contract"] == "l4-media/3.0.0"
+    assert "X-L4-Camera-Contract" not in requests[-1].headers
 
 
 @pytest.mark.anyio

@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import time
 import uuid
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -47,7 +48,8 @@ from app.security.permissions import (
     PERMISSION_VIDEO_VIEW,
     require_permission,
 )
-from app.services.camera_contract import media_contract_options
+from app.services.camera_contract import CAMERA_MEDIA_REVISION, media_contract_options
+from app.services.camera_media_clock import camera_media_deadline
 from app.services.iot_client import iot_client
 from app.services.media_orchestrator_client import (
     MediaOrchestratorError,
@@ -220,6 +222,7 @@ class KeepaliveRequest(BaseModel):
 
 
 class StreamStartRequest(BaseModel):
+    camera_admission_ticket: str | None = None
     codec_policy: Literal["auto", "h264", "h265"] | None = None
     mode: Literal["desktop", "usb-camera", "camera"]
     source_id: str
@@ -1013,6 +1016,7 @@ async def start_device_stream(
             profile_id=body.profile,
             browser=browser,
             user=user,
+            admission_ticket=body.camera_admission_ticket,
         )
     elif body.codec_policy is not None:
         if body.browser_codecs is None:
@@ -1171,6 +1175,7 @@ async def start_device_stream(
                         terminal.sn,
                         "stop",
                         payload=stop,
+                        **media_contract_options(extended["descriptor"]),
                         lease_id=lease_id,
                         org_id=org_id,
                         user=user,
@@ -1288,6 +1293,7 @@ async def stop_device_stream(
                 terminal.sn,
                 "stop",
                 payload=v2_stop,
+                **media_contract_options(stream_descriptor(status_data or {}) or {}),
                 lease_id=lease_id,
                 org_id=org_id,
                 user=user,
@@ -1504,13 +1510,58 @@ async def keepalive_device_control_lease(
                 identity = media_identity(
                     terminal.sn, body.lease_id, current_stream, descriptor
                 )
+                if descriptor["source_type"] == "camera":
+                    try:
+                        clock_id = (
+                            ((provider_status or {}).get("agent") or {}).get("stream")
+                            or {}
+                        ).get("media_clock_id")
+                        if not isinstance(clock_id, str):
+                            raise HTTPException(
+                                409, detail={"code": "camera_media_clock_unavailable"}
+                            )
+                        queried_at = time.monotonic_ns()
+                        authority = await iot_client.remote_video_v2(
+                            terminal.sn,
+                            "lease",
+                            lease_id=body.lease_id,
+                            org_id=org_id,
+                            user=user,
+                            camera_contract=CAMERA_MEDIA_REVISION,
+                        )
+                        elapsed_ms = (
+                            time.monotonic_ns() - queried_at + 999999
+                        ) // 1000000
+                        expiry = camera_media_deadline(
+                            authority,
+                            sn=terminal.sn,
+                            lease_id=body.lease_id,
+                            user=user,
+                            roundtrip_ms=elapsed_ms,
+                            expected_clock_id=clock_id,
+                        )
+                    except HTTPException:
+                        # A retired/missing fixed clock cannot renew or remap this
+                        # attempt. Scope both compensations to its exact identity.
+                        with contextlib.suppress(Exception):
+                            await iot_client.remote_video_v2(
+                                terminal.sn,
+                                "stop",
+                                lease_id=body.lease_id,
+                                payload={**identity, "reason": "media_clock_changed"},
+                                org_id=org_id,
+                                user=user,
+                                camera_contract=CAMERA_MEDIA_REVISION,
+                            )
+                        with contextlib.suppress(Exception):
+                            await media_orchestrator_client.video_v2(
+                                "stop", {**identity, "reason": "media_clock_changed"}
+                            )
+                        raise
+                else:
+                    expiry = media_lease_deadline(result.get("expires_at"))
                 await media_orchestrator_client.video_v2(
-                    "renew",
-                    dict(
-                        identity,
-                        lease_expires_at=media_lease_deadline(result.get("expires_at")),
-                    ),
-                    **media_contract_options(descriptor),
+                    "renew", dict(identity, lease_expires_at=expiry)
                 )
             else:
                 await media_orchestrator_client.renew_session(
