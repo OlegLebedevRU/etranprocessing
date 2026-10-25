@@ -18,7 +18,9 @@ for name, expected in manifest["files"].items():
     assert hashlib.sha256((ROOT / name).read_bytes()).hexdigest() == expected, name
 schema = json.loads((ROOT / "camera.schema.json").read_text(encoding="utf-8"))
 media = json.loads(MEDIA.read_text(encoding="utf-8"))
-registry = Registry().with_resource(manifest["external_resource"], Resource.from_contents(media))
+registry = Registry().with_resource(
+    manifest["external_resource"], Resource.from_contents(media)
+)
 
 
 def validator(name):
@@ -29,10 +31,14 @@ def validator(name):
     )
 
 
-observation = json.loads((ROOT / "example-observation.json").read_text(encoding="utf-8"))
+observation = json.loads(
+    (ROOT / "example-observation.json").read_text(encoding="utf-8")
+)
 v = validator("camera_observation")
 v.validate(observation)
-v.validate(json.loads((ROOT / "example-h264-observation.json").read_text(encoding="utf-8")))
+v.validate(
+    json.loads((ROOT / "example-h264-observation.json").read_text(encoding="utf-8"))
+)
 cases = 2
 for field, value in [
     ("camera_contract_revision", "siplite-camera/1.1.0"),
