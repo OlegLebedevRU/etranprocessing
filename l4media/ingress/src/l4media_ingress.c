@@ -78,6 +78,8 @@ typedef struct {
     char sn[128];
     char peer_addr[64];
     uint64_t epoch;                 /* Monotonic connection epoch ID */
+    uint32_t camera_route_generation;
+    bool camera_route_revoked;
 
     /* Buffer for partial TCP frame accumulation */
     uint8_t rx_buf[RX_BUFFER_SIZE];
@@ -106,6 +108,8 @@ typedef struct {
     uint64_t total_bytes;
     time_t connect_time;
     time_t last_activity;           /* Last byte received over transport (TCP) */
+    uint64_t last_activity_monotonic_ms;
+    uint64_t last_rtp_monotonic_ms;
     time_t last_rtp_time;           /* Last RTP media frame packet received (0 if none) */
     time_t last_rtcp_time;          /* Last RTCP packet received (0 if none) */
 } IngressClient;
@@ -244,7 +248,11 @@ static bool valid_rtcp(const uint8_t* data, size_t len) {
     return len >= 4;
 }
 
+static bool camera_connection_current(IngressClient *c);
+
 static bool flush_feedback(IngressClient* c) {
+    if (!camera_connection_current(c))
+        return false;
     while (c->tx_off < c->tx_len) {
         if (!c->tx_first_end) {
             c->tx_first_end = c->tx_off + 4 + (((size_t)c->tx_buf[c->tx_off + 2] << 8) | c->tx_buf[c->tx_off + 3]);
@@ -282,6 +290,8 @@ static size_t coalesce_feedback(IngressClient* c, uint8_t* packet, size_t length
 }
 
 static bool receive_feedback(IngressClient* c) {
+    if (!camera_connection_current(c))
+        return false;
     uint8_t packet[MAX_RTP_PAYLOAD_SIZE];
     for (int i = 0; i < FEEDBACK_BATCH_LIMIT; i++) {
         ssize_t n = recv(c->rtcp_fd, packet, sizeof(packet), MSG_TRUNC);
@@ -317,6 +327,15 @@ static int update_client_targets_for_sn(const char* sn, int rtp_port, int rtcp_p
         IngressClient* c = g_clients[i];
         if (c && strcmp(c->sn, sn) == 0) {
             reset_feedback(c);
+            if (c->camera_route_generation || c->camera_route_revoked) {
+                c->camera_route_revoked = true;
+                c->rtp_port = 0;
+                c->rtcp_port = 0;
+                memset(&c->rtp_target, 0, sizeof(c->rtp_target));
+                memset(&c->rtcp_target, 0, sizeof(c->rtcp_target));
+                count++;
+                continue;
+            }
             c->rtp_port = rtp_port;
             c->rtcp_port = rtcp_port;
             memset(&c->rtp_target, 0, sizeof(c->rtp_target));
@@ -435,6 +454,30 @@ static bool delete_route(const char* sn, int* out_clients_updated) {
 
 #include "media_lifecycle.h"
 
+static bool camera_connection_current(IngressClient *c) {
+    if (c->camera_route_revoked)
+        return false;
+    if (!c->camera_route_generation)
+        return true;
+    MediaSession *owner = find_active_session_for_sn(c->sn);
+    if (owner && owner->contract_version == 3)
+        expire_media_session(owner, time(NULL));
+    bool current = owner && (owner->state == MEDIA_STATE_STARTING || owner->state == MEDIA_STATE_ACTIVE) &&
+                   owner->camera_source && owner->route_generation == c->camera_route_generation &&
+                   c->epoch >= owner->minimum_camera_connection_epoch;
+    if (!current)
+        c->camera_route_revoked = true;
+    return current;
+}
+static bool ingress_client_idle(IngressClient *c, time_t wall) {
+    MediaSession *owner = c ? find_active_session_for_sn(c->sn) : NULL;
+    uint64_t mono = 0;
+    return c && (owner && owner->contract_version == 3
+                     ? (!media_monotonic_ms(&mono) || mono < c->last_activity_monotonic_ms ||
+                        mono - c->last_activity_monotonic_ms > (uint64_t)CLIENT_IDLE_TIMEOUT_SEC * 1000)
+                     : wall - c->last_activity > CLIENT_IDLE_TIMEOUT_SEC);
+}
+
 /* Socket Listeners */
 static int create_tcp_listener(int port) {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -484,6 +527,10 @@ static int create_udp_socket(void) {
 
 /* Ingress Client Handling */
 static IngressClient* add_ingress_client(int epoll_fd, int client_fd, const char* peer_ip, int peer_port) {
+    if (!g_next_epoch || g_next_epoch > (UINT64_MAX >> 2)) {
+        close(client_fd);
+        return NULL;
+    }
     if (g_client_count >= MAX_CLIENTS) {
         fprintf(stderr, "[INGRESS] Max clients (%d) reached, rejecting %s:%d\n", MAX_CLIENTS, peer_ip, peer_port);
         close(client_fd);
@@ -503,6 +550,7 @@ static IngressClient* add_ingress_client(int epoll_fd, int client_fd, const char
     snprintf(c->peer_addr, sizeof(c->peer_addr), "%s:%d", peer_ip, peer_port);
     c->connect_time = time(NULL);
     c->last_activity = c->connect_time;
+    (void)media_monotonic_ms(&c->last_activity_monotonic_ms);
     c->last_rtp_time = 0;
     c->last_rtcp_time = 0;
 
@@ -556,6 +604,10 @@ static void remove_ingress_client(int epoll_fd, IngressClient* c) {
 
 /* Process incoming bytes on Ingress client */
 static void process_ingress_data(int epoll_fd, IngressClient* c) {
+    if (!camera_connection_current(c)) {
+        remove_ingress_client(epoll_fd, c);
+        return;
+    }
     while (true) {
         if (c->rx_len >= sizeof(c->rx_buf)) {
             fprintf(stderr, "[INGRESS] Buffer overflow from %s, disconnecting\n", c->peer_addr);
@@ -580,6 +632,7 @@ static void process_ingress_data(int epoll_fd, IngressClient* c) {
 
         c->rx_len += (size_t)n;
         c->last_activity = time(NULL);
+        (void)media_monotonic_ms(&c->last_activity_monotonic_ms);
 
         /* Parse state machine: PREAMBLE */
         if (c->state == STATE_PREAMBLE) {
@@ -610,6 +663,15 @@ static void process_ingress_data(int epoll_fd, IngressClient* c) {
             memcpy(c->sn, c->rx_buf + 8, sn_len);
             c->sn[sn_len] = '\0';
 
+            /* Reject pre-prepare sockets before they can displace the current
+             * same-SN publisher with a delayed preamble. */
+            MediaSession *preamble_owner = find_active_session_for_sn(c->sn);
+            if (preamble_owner && preamble_owner->camera_source &&
+                c->epoch < preamble_owner->minimum_camera_connection_epoch) {
+                remove_ingress_client(epoll_fd, c);
+                return;
+            }
+
             /* Close any existing active connection with the same SN */
             for (int i = 0; i < g_client_count; i++) {
                 IngressClient* old_c = g_clients[i];
@@ -625,6 +687,13 @@ static void process_ingress_data(int epoll_fd, IngressClient* c) {
             const RouteEntry* route = find_route(c->sn);
             MediaSession* media_owner = find_active_session_for_sn(c->sn);
             c->keyframe_feedback_interval_ms = media_owner && (media_owner->contract_version == 2 || media_owner->contract_version == 3) ? 500 : 0;
+            if (media_owner && media_owner->camera_source) {
+                if (c->epoch < media_owner->minimum_camera_connection_epoch) {
+                    remove_ingress_client(epoll_fd, c);
+                    return;
+                }
+                c->camera_route_generation = media_owner->route_generation;
+            }
             if (route) {
                 c->rtp_port = route->rtp_port;
                 c->rtcp_port = route->rtcp_port;
@@ -678,8 +747,16 @@ static void process_ingress_data(int epoll_fd, IngressClient* c) {
                 }
 
                 const uint8_t* payload = c->rx_buf + off + 4;
+                if (!camera_connection_current(c)) {
+                    remove_ingress_client(epoll_fd, c);
+                    return;
+                }
+                MediaSession *deadline_owner = find_active_session_for_sn(c->sn);
+                if (deadline_owner && deadline_owner->contract_version == 3)
+                    expire_media_session(deadline_owner, time(NULL));
                 if (type == L4RTP_FRAME_RTP) {
                     c->last_rtp_time = time(NULL);
+                    (void)media_monotonic_ms(&c->last_rtp_monotonic_ms);
                     if (c->rtp_port > 0) {
                         sendto(g_udp_sock, payload, payload_len, 0,
                                (struct sockaddr*)&c->rtp_target, sizeof(c->rtp_target));
@@ -1361,7 +1438,7 @@ int main(int argc, char* argv[]) {
         /* Check idle clients timeout */
         for (int i = 0; i < g_client_count; i++) {
             IngressClient* c = g_clients[i];
-            if (c && (now - c->last_activity > CLIENT_IDLE_TIMEOUT_SEC)) {
+            if (c && (!camera_connection_current(c) || ingress_client_idle(c, now))) {
                 printf("[INGRESS] Client %s (SN: '%s') timed out after %lds idle\n",
                        c->peer_addr, c->sn[0] ? c->sn : "pending", (long)(now - c->last_activity));
                 remove_ingress_client(epoll_fd, c);
@@ -1369,20 +1446,9 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        /* Check media sessions TTL expiration */
-        for (int i = 0; i < g_media_session_count; i++) {
-            MediaSession* ms = &g_media_sessions[i];
-            if ((ms->state == MEDIA_STATE_ACTIVE || ms->state == MEDIA_STATE_STARTING) && ms->ttl_sec > 0) {
-                if (now - (ms->renewed_at ? ms->renewed_at : ms->started_at) >= ms->ttl_sec) {
-                    printf("[INGRESS TTL] Media session %s (SN: %s) expired after %d seconds TTL\n",
-                           ms->session_id, ms->sn, ms->ttl_sec);
-                    char dummy_resp[512];
-                    int dummy_status = 0;
-                    stop_media_session(ms->session_id, "ttl-watchdog", "ttl_expired",
-                                       dummy_resp, sizeof(dummy_resp), &dummy_status);
-                }
-            }
-        }
+        /* v3 expiry is monotonic even when wall-clock reconciliation pauses. */
+        for (int i = 0; i < g_media_session_count; i++)
+            expire_media_session(&g_media_sessions[i], now);
 
         /* Periodic reconciliation every 60s */
         static time_t last_reconcile = 0;
@@ -1453,6 +1519,10 @@ int main(int argc, char* argv[]) {
                 uint64_t tag = events[i].data.u64;
                 IngressClient* c = find_event_client(tag);
                 if (!c) continue;
+                if (!camera_connection_current(c)) {
+                    remove_ingress_client(epoll_fd, c);
+                    continue;
+                }
                 if ((tag & 3) == 3) {
                     if (!receive_feedback(c)) remove_ingress_client(epoll_fd, c);
                     continue;

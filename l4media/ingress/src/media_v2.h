@@ -88,7 +88,9 @@ static inline void mv_persist(MediaSession* session) {
     json_error_t error;
     json_t* request = json_loads(session->v2_request, JSON_REJECT_DUPLICATES, &error);
     if (!request) return;
-    json_object_set_new(request, "lease_expires_at", json_integer(session->renewed_at + session->ttl_sec));
+    json_object_set_new(request, "lease_expires_at",
+                        json_integer(session->contract_version == 3 ? session->issuer_expiry_utc
+                                                                    : session->renewed_at + session->ttl_sec));
     json_object_set_new(request, "pin", json_string(session->pin));
     json_t* record = json_pack("{s:i,s:o,s:i,s:i,s:i,s:i,s:i,s:I,s:I,s:I,s:s}",
         "format_version", session->contract_version, "request", request, "mountpoint_id", (int)session->mountpoint_id,
@@ -96,6 +98,11 @@ static inline void mv_persist(MediaSession* session) {
         "route_generation", (int)session->route_generation,
         "created_at", (json_int_t)session->created_at, "started_at", (json_int_t)session->started_at,
         "renewed_at", (json_int_t)session->renewed_at, "stop_reason", session->stop_reason);
+    if (session->contract_version == 3) {
+        const char *boot = media_monotonic_boot_id();
+        json_object_set_new(record, "monotonic_deadline_ms", json_integer((json_int_t)session->monotonic_deadline_ms));
+        json_object_set_new(record, "monotonic_boot_id", boot ? json_string(boot) : json_null());
+    }
     char* value = json_dumps(record, JSON_COMPACT | JSON_SORT_KEYS);
     if (value) {
         char key[192]; snprintf(key, sizeof(key), MEDIA_REDIS_PREFIX_SESSION "%s", session->session_id);
@@ -118,6 +125,8 @@ static inline bool mv_fill(MediaSession* session, json_t* request) {
         free(descriptor); free(serialized); return false;
     }
     session->contract_version = (int)mv_integer(request, "contract_version");
+    session->camera_source = session->contract_version == 3 &&
+                             !strcmp(mv_string(json_object_get(request, "descriptor"), "source_type"), "camera");
     lifecycle_safe_strcpy(session->session_id, mv_string(request, "session_id"), sizeof(session->session_id));
     lifecycle_safe_strcpy(session->operation_id, mv_string(request, "operation_id"), sizeof(session->operation_id));
     lifecycle_safe_strcpy(session->lease_id, mv_string(request, "lease_id"), sizeof(session->lease_id));
@@ -128,6 +137,19 @@ static inline bool mv_fill(MediaSession* session, json_t* request) {
     lifecycle_safe_strcpy(session->descriptor, descriptor, sizeof(session->descriptor));
     lifecycle_safe_strcpy(session->v2_request, serialized, sizeof(session->v2_request));
     free(descriptor); free(serialized); return true;
+}
+
+static inline bool mv_restore_deadline(MediaSession *s, json_t *record, int64_t expiry) {
+    uint64_t now = 0;
+    const char *boot = media_monotonic_boot_id();
+    int64_t saved = mv_integer(record, "monotonic_deadline_ms");
+    s->issuer_expiry_utc = expiry;
+    s->monotonic_deadline_ms = saved > 0 ? (uint64_t)saved : 0;
+    if (!boot || strcmp(boot, mv_string(record, "monotonic_boot_id")) || !media_monotonic_ms(&now) ||
+        s->monotonic_deadline_ms <= now || s->monotonic_deadline_ms - now > 7200000)
+        return false;
+    s->ttl_sec = (int)((s->monotonic_deadline_ms - now + 999) / 1000);
+    return true;
 }
 
 static inline bool mv_identity(MediaSession* session, json_t* request) {
@@ -160,8 +182,17 @@ static inline void mv_response(MediaSession* session, bool health, char* respons
         for (int i = 0; i < g_client_count; i++) {
             IngressClient* client = g_clients[i];
             if (client && !strcmp(client->sn, session->sn) && session->state != MEDIA_STATE_STOPPED) {
+                if(session->camera_source && (client->camera_route_revoked ||
+                    client->camera_route_generation!=session->route_generation ||
+                    client->epoch<session->minimum_camera_connection_epoch))continue;
                 connected = true; packets = client->rtp_packets; bytes = client->total_bytes; last = client->last_rtp_time;
-                fresh = packets && last && time(NULL) - last <= RTP_STALE_DEADLINE_SEC; break;
+                if (session->contract_version == 3) {
+                    uint64_t monotonic;
+                    fresh = packets && media_monotonic_ms(&monotonic) && monotonic >= client->last_rtp_monotonic_ms &&
+                            monotonic - client->last_rtp_monotonic_ms <= (uint64_t)RTP_STALE_DEADLINE_SEC * 1000;
+                } else
+                    fresh = packets && last && time(NULL) - last <= RTP_STALE_DEADLINE_SEC;
+                break;
             }
         }
         json_t* transport = json_pack("{s:b,s:I,s:I,s:o,s:b}", "connected", connected,
@@ -172,11 +203,22 @@ static inline void mv_response(MediaSession* session, bool health, char* respons
     mv_output(value, response, size);
 }
 
+/* L4RTP/1 identifies SN only. A new camera attempt must wait for a new
+ * authenticated transport instead of inheriting buffered data from an old one. */
+static inline void media_revoke_camera_clients(const char *sn) {
+    for (int i = 0; i < g_client_count; ++i)
+        if (g_clients[i] && !strcmp(g_clients[i]->sn, sn))
+            g_clients[i]->camera_route_revoked = true;
+}
+
 static inline void mv_start(json_t* request, char* response, size_t size, int* status) {
     time_t now = time(NULL); long long deadline = mv_integer(request, "lease_expires_at");
-    if (deadline <= now || deadline - now > 7200) { mv_error("expired", 410, response, size, status); return; }
     MediaSession candidate; memset(&candidate, 0, sizeof(candidate));
     if (!mv_fill(&candidate, request)) { mv_error("invalid_payload", 400, response, size, status); return; }
+    if (candidate.contract_version != 3 && (deadline <= now || deadline - now > 7200)) {
+        mv_error("expired", 410, response, size, status);
+        return;
+    }
     for (int i = 0; i < g_media_session_count; i++) {
         MediaSession* other = &g_media_sessions[i];
         if ((other->contract_version == 2 || other->contract_version == 3) && strcmp(other->session_id, candidate.session_id) &&
@@ -197,6 +239,10 @@ static inline void mv_start(json_t* request, char* response, size_t size, int* s
             if (result) { mv_error(result == -2 ? "conflict" : "janus_unavailable", result == -2 ? 409 : 502, response, size, status); return; }
         }
         *status = 200; mv_response(session, false, response, size); return;
+    }
+    if (candidate.contract_version == 3 && !media_v3_begin_deadline(&candidate, deadline, now)) {
+        mv_error("expired", 410, response, size, status);
+        return;
     }
     MediaSession* owner = find_active_session_for_sn(candidate.sn);
     expire_media_session(owner, now); owner = find_active_session_for_sn(candidate.sn);
@@ -241,6 +287,10 @@ static inline void mv_start(json_t* request, char* response, size_t size, int* s
         mv_error("descriptor_mismatch", 409, response, size, status); return;
     }
     int changed = 0;
+    if (candidate.camera_source) {
+        candidate.minimum_camera_connection_epoch = g_next_epoch;
+        media_revoke_camera_clients(candidate.sn);
+    }
     if (!upsert_route(candidate.sn, candidate.rtp_port, candidate.rtcp_port, &changed)) {
         janus_destroy_mountpoint(candidate.mountpoint_id, NULL, 0);
         mv_error("capacity_exhausted", 503, response, size, status); return;
@@ -270,8 +320,20 @@ static inline void mv_update(json_t* request, bool stop, bool health, bool camer
         if (session->state != MEDIA_STATE_ACTIVE && session->state != MEDIA_STATE_STARTING) {
             mv_error("expired", 410, response, size, status); return;
         }
-        if (deadline <= now || deadline - now > 7200) { mv_error("expired", 410, response, size, status); return; }
-        session->ttl_sec = (int)(deadline - now); session->renewed_at = now; mv_persist(session);
+        if (session->contract_version == 3) {
+            if (!media_v3_renew_deadline(session, deadline)) {
+                mv_error("expired", 410, response, size, status);
+                return;
+            }
+        } else {
+            if (deadline <= now || deadline - now > 7200) {
+                mv_error("expired", 410, response, size, status);
+                return;
+            }
+            session->ttl_sec = (int)(deadline - now);
+        }
+        session->renewed_at = now;
+        mv_persist(session);
     }
     *status = 200; mv_response(session, health, response, size);
 }
@@ -322,10 +384,19 @@ static inline void media_v2_restore(void) {
         bool live = stored_state == MEDIA_STATE_ACTIVE || stored_state == MEDIA_STATE_STARTING;
         if (!candidate.pin[0] || candidate.rtp_port < 1 || candidate.rtp_port > 65535 || candidate.rtcp_port < 1 ||
             candidate.rtcp_port > 65535 || !candidate.mountpoint_id || !candidate.route_generation ||
-            deadline - candidate.renewed_at <= 0 || deadline - candidate.renewed_at > 7200 ||
-            find_active_session_for_sn(candidate.sn)) { json_decref(record); continue; }
-        candidate.ttl_sec = (int)(deadline - candidate.renewed_at);
-        candidate.state = live && deadline > time(NULL) ? MEDIA_STATE_STARTING : MEDIA_STATE_STOPPED;
+            (version != 3 && (deadline - candidate.renewed_at <= 0 || deadline - candidate.renewed_at > 7200)) ||
+            find_active_session_for_sn(candidate.sn)) {
+            json_decref(record);
+            continue;
+        }
+        candidate.ttl_sec = version == 3 ? 1 : (int)(deadline - candidate.renewed_at);
+        if (version == 3) {
+            bool anchored = mv_restore_deadline(&candidate, record, deadline);
+            candidate.state = live && anchored ? MEDIA_STATE_STARTING : MEDIA_STATE_STOPPED;
+        } else
+            candidate.state = live && deadline > time(NULL) ? MEDIA_STATE_STARTING : MEDIA_STATE_STOPPED;
+        if (candidate.camera_source)
+            candidate.minimum_camera_connection_epoch = g_next_epoch;
         MediaSession* session = allocate_session_slot();
         int changed;
         if (session && (candidate.state == MEDIA_STATE_STOPPED || upsert_route(candidate.sn, candidate.rtp_port, candidate.rtcp_port, &changed))) {
