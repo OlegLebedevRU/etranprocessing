@@ -1,6 +1,6 @@
 # Video streaming: control, media, signaling
 
-## Desktop compatibility correction — 2026-10-25, local only
+## Desktop compatibility correction — deployed 2026-10-26
 
 Fresh authorized presence without video_contract_v2 uses retained CTL-v1 H264
 for Auto/H264; explicit HEVC is unsupported. Native H264/HEVC descriptors retain
@@ -10,7 +10,10 @@ adapter, but invalid/stale/mixed data or uncertain START never cause a retry.
 Capability discovery is independent of delivery-port configuration; native START
 still requires configured ports before prepare. Legacy browser API unknown can
 negotiate H264 through SDP. Lease ownership/TTL, route-before-START, epoch binding
-and camera isolation are unchanged. [Evidence and pending live gate](../tasks/active/2026-10-25-desktop-stream-compat-patches.md).
+and camera isolation are unchanged. Owner-visible Chrome773 verified both codecs
+and Auto at both profiles, native3000x2000 decode, renewals beyondTTL and clean
+STOP/release. Old-binary E2E remains unavailable by agreement.
+[Release and live evidence](../tasks/completed/2026-10-26-desktop-stream-recovery.md).
 
 ## Назначение
 Различать запущенный процесс, доставку RTP и свежий декодированный кадр пользователя.

@@ -6,6 +6,8 @@
 
 ## Индекс
 
+- [2026-10-26 — desktop streaming recovery](2026-10-26-desktop-stream-recovery.md) — code/config deployed; owner-visible773 Chrome H264/H265/Auto, both profiles, fresh frames/TTL/STOP verified; legacy by code, no old-binary E2E.
+
 - [2026-10-23 — контракт siplite HEVC](2026-10-23-siplite-hevc-contract.md) — H.265 основной режим, relay готового camera stream, проект расширения camera-схем с совместимостью l4capture; schema/OpenAPI snapshots, без firmware/deploy.
 
 - [2026-10-18 — архитектура локеров](2026-10-18-lockers-architecture.md) — документация MVP, контракты и отдельный Scalar, реестр расхождений; без реализации и runtime-проверок.
