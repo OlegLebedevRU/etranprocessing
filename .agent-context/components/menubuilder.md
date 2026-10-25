@@ -1,5 +1,16 @@
 # MenuBuilder
 
+## Camera common media-v3 — preparation only, 2026-10-25
+
+Candidate integrates common media3 descriptor/track/envelopes through camera
+observation/HTTP adapter1.2, full-offer enrollment0.3 and admission0.2/cadence0.1.
+Camera RPC/config remains1.0; native quality low/default never invokes RPC163.
+Media receives only its common header, IoT receives the exact five-header
+camera bundle. Gates stay false and ticket key stays unprovisioned. This is
+source/offline preparation, not deployment, firmware installation or live
+browser decode acceptance. [Contract and rollout boundaries](../../docs/etran_arch-camera-media-v3-adapter.md).
+
+
 ## Native quality57 stage 3 — deployed, 2026-10-24
 
 Common desktop media v3 retains CTL2 and `low/default` quality policies while

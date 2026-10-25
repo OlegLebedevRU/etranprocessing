@@ -112,6 +112,11 @@ def test_video_reader_accepts_concrete_camera_and_rejects_unknown_revision():
             "payload"
         ]
     )
+    # Frozen v1 remains independently verifiable, but cannot enter the current v3 flow.
+    with pytest.raises(HTTPException):
+        validate_video("media_start", payload)
+    payload["contract_version"] = payload["descriptor"]["contract_version"] = 3
+    payload["descriptor"].pop("camera_contract_revision")
     assert validate_video("media_start", payload) == payload
     payload["descriptor"]["camera_contract_revision"] = "unknown"
     with pytest.raises(HTTPException) as error:
@@ -135,9 +140,8 @@ async def test_negotiation_is_explicit_on_every_media_operation(action, negotiat
         )
         assert await client.video_v2(
             action,
-            {"session_id": "isolated", "contract_version": 2},
+            {"session_id": "isolated", "contract_version": 3},
             camera_contract=negotiated,
         ) == {"ok": True}
-    assert seen[0].headers.get("X-L4-Camera-Contract") == (
-        "siplite-camera/1.0.0" if negotiated else None
-    )
+    assert "X-L4-Camera-Contract" not in seen[0].headers
+    assert seen[0].headers["X-L4-Media-Contract"] == "l4-media/3.0.0"

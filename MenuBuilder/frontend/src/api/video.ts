@@ -1,4 +1,5 @@
 import client from "./client";
+import type { AxiosRequestConfig } from "axios";
 
 export interface VideoSessionResponse {
   mountpoint_id: number;
@@ -277,7 +278,7 @@ export async function acquireControlLease(
     scope,
     ttl_sec: ttlSec,
     session_id: sessionId,
-  });
+  }, { _retry: true, timeout: 10000 } as AxiosRequestConfig);
   return data;
 }
 
@@ -325,15 +326,15 @@ export async function startDeviceStream(
     profile?: string;
     lease_id?: string;
     codec_policy?: CodecPolicy;
+    camera_admission_ticket?: string;
     browser_codecs?: { h264: boolean | null; h265: boolean | null; checked_at_ms: number; valid_until_ms: number };
   }
 ): Promise<StreamStartResponse> {
   const { data } = await client.post<StreamStartResponse>(
     `/v1/video/devices/${deviceId}/stream/start`,
     payload,
-    // Cold capability discovery, media preparation and READY run sequentially.
-    // A timeout is reported to the operator; it never triggers another START.
-    payload.mode === "desktop" ? { timeout: 120000 } : undefined
+    // No auth interceptor replay after an ambiguous accepted camera/desktop START.
+    { _retry: true, timeout: payload.mode === "desktop" ? 120000 : 40000 } as AxiosRequestConfig
   );
   return data;
 }
