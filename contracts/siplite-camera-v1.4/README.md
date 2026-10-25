@@ -21,31 +21,33 @@ Camera authority revisions remain outside the common descriptor. Revision
 changes require fresh full enrollment/readiness, never reinterpret old offers.
 Boot/issuer/floor, physical binding, R/I and lease deadlines remain unchanged.
 
-Normative cadence0.3 and enrollment0.5 are owned by IoT in its corresponding
-versioned packets. Cadence0.3 uses original RTP timestamps and unique integer
-nominal F1..120. Every overlapping4s window, and every overlapping32s window
-once available, satisfies the checked-integer count rule
-`100*abs(90000*N-F*D) <= 2*F*D + 9000000`, where D is the actual RTP span and N
-the AU interval count. This is2% plus one AU count quantum, not a larger FPS
-percentage or a rounded mean. Latest predecessor at/before T-span defines each
-window. First32s checking has no new grace and does not delay READY.
+Normative cadence0.3 and enrollment0.5 are owned by IoT in their corresponding
+versioned packets. Cadence0.3 obtains declared nominal FPS from the authenticated,
+selected video media section of the actual camera SDP (`a=framerate`, exact
+integer1..120). The parser/source adapter must bind the metadata to that selected
+track and camera session; unrelated media sections, ambiguous/invalid values,
+configuration Auto sentinel and arbitrary rounded achieved means are not nominal
+authority. Real source evidence for the current camera declares framerate20.
+This is a declared target, not an achieved-rate ceiling. Common track.fps carries
+that nominal integer; actual delivered FPS is telemetry and cannot kill a valid
+stream merely for differing from the target.
 
-Acquisition retains original10s deadline, at least4s and two complete GOPs,
-unique-only candidate intersection and first eligible complete-GOP boundary.
-Eliminated candidates never return. F and maximum completed acquisition GOP G0
-freeze at READY. Common keyframe_interval_ms is ceil(G0/90), an acquisition
-reference rather than exact repeated duration or guaranteed maximum. Earlier
-positive fully validated IDR+PS entries remain valid; later spans remain bounded
-by105% G0 and five seconds. Full AU/no-B/repeated PS and AU interval checks stay
-mandatory. Bounded4096-timestamp history uses32KiB PSRAM; missing required
-history or overflow fails closed. Canonical owner oracle defines edge arithmetic.
+There are no2% tolerances,4s/32s rate windows, inferred unique-F candidates,
+constant-rate lattice or105% GOP growth requirement in this new policy. READY
+requires one complete validated GOP with two verified IDR+parameter-set boundaries,
+real SPS/profile/level/geometry, full AU, no B frames and supported packetization.
+Observed nominal GOP is represented within250..5000ms; that scalar is not an
+instantaneous equality or constant-runtime-GOP promise. A bounded30s IO acquisition
+budget supports discovery and a5s GOP and is not an FPS gate or a new lease budget.
+Full bitstream/PS/codec/geometry/physical-port2 authority and lease safeguards stay
+mandatory; source/authority changes retire the attempt. Owner vectors define the
+exact missing/invalid metadata and GOP observation behavior.
 
-Native Auto size="", fps=0 and bitrate=0 remain camera configuration. Common
-track.fps is confirmed nominal policy output, not measured rational FPS. RTP
+Native Auto size="", fps=0 and bitrate=0 remain camera configuration. RTP
 timestamps and camera settings must not be rewritten to pass admission. No
-desktop20/30FPS geometry budgets are camera limits. No telemetry/hint fields
-are added. Medium/HD remain low/default policy choices; both may use one
-confirmed native format. ACK, fresh RTP and browser decode are separate proofs.
+desktop20/30FPS geometry budgets are camera limits. No telemetry/hint fields are
+added. Medium/HD remain low/default policy choices; both may use one confirmed
+native format. ACK, fresh RTP and browser decode are separate proofs.
 
 Gauge84 media_observations carries this object; legacy camera1.0 actual_track
 may remain null. manifest.json pins raw schema/example bytes and common3 SHA.
