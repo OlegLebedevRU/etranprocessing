@@ -14,8 +14,8 @@ const pause = (signal: AbortSignal) => new Promise<void>((resolve, reject) => {
   if (signal.aborted) abort();
 });
 
-export function CameraSettings({ device, org, operator, viewing, onBusy }: {
-  device: number; org: number; operator: boolean; viewing: boolean; onBusy: (busy: boolean) => void;
+export function CameraSettings({ device, org, operator, viewing, freshFrames = false, onBusy }: {
+  device: number; org: number; operator: boolean; viewing: boolean; freshFrames?: boolean; onBusy: (busy: boolean) => void;
 }) {
   const key = `camera-command:${org}:${device}`;
   const [pending, setPending] = useState<Pending | null>(() => {
@@ -210,7 +210,7 @@ export function CameraSettings({ device, org, operator, viewing, onBusy }: {
     {(viewing || data?.lease_active) && <Alert title="Для изменения настроек остановите просмотр. Чужая сессия не завершается." type="warning" />}
     <Descriptions size="small" column={{ xs: 1, sm: 2, md: 3 }} items={[
       { key: "power", label: "Питание", children: powerValid ? camera?.power?.enabled ? "Включено" : "Выключено" : "Неизвестно / устарело" },
-      { key: "camera", label: "Камера", children: configValid && camera?.status === "ready" ? "Доступна" : "Недоступна / нет актуальных данных" },
+      { key: "camera", label: "Камера", children: freshFrames ? "Поток получен" : configValid && camera?.status === "ready" ? "Доступна" : "Неизвестно / нет свежих данных управления" },
       { key: "age", label: "Настройки", children: observationAge(snapshot?.observed_at, !!camera?.config && !camera?.stale, now, snapshot?.freshness_max_age_sec ?? 330) },
       { key: "quality", label: "Режим видео", children: configValid ? cameraVideoSettings(camera) : "Неизвестно" },
       { key: "actual", label: "Проба потока", children: cameraObservedFormat(snapshot, camera, now) },
